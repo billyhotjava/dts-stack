@@ -9,6 +9,7 @@ import { RuntimeActionPanel } from './components/RuntimeActionPanel';
 import { ScreenRuntimeProvider } from './ScreenRuntimeContext';
 import type { ScreenConfig, ScreenTheme } from './types';
 import { resolveScreenTheme } from './screenThemes';
+import { applyThemeCssVariables } from './themes/screenCssVariables';
 import { normalizeScreenConfig } from './specV2';
 import { buildComponentMap, isComponentEffectivelyVisible } from './componentHierarchy';
 import { safeCssBackgroundUrl } from './sanitize';
@@ -270,6 +271,10 @@ export default function PublicScreenPage() {
 
     const rawTheme = screen.theme as ScreenTheme | undefined;
     const screenTheme = resolveScreenTheme(rawTheme, screen.backgroundColor);
+    const publicCanvasRef = useRef<HTMLDivElement>(null);
+    useEffect(() => {
+        if (publicCanvasRef.current) applyThemeCssVariables(publicCanvasRef.current, screenTheme);
+    }, [screenTheme]);
     const carouselTransition = screen.carouselConfig?.transition ?? 'fade';
     const carouselDuration = screen.carouselConfig?.transitionDuration ?? 800;
     const screenWidth = contentBounds.width;
@@ -294,6 +299,7 @@ export default function PublicScreenPage() {
                         <div className="screen-runtime__stage" style={{ width: stageWidth, height: stageHeight }}>
                             <div className="screen-runtime__canvas-shell">
                             <div
+                                ref={publicCanvasRef}
                                 className={`screen-runtime__canvas ${carousel.transitioning ? 'is-transitioning' : ''}`}
                                 style={{
                                     width: screenWidth,

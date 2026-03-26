@@ -31,6 +31,7 @@ export interface ColumnEntry {
     source: string;
     alias?: string;
     align?: ColumnAlign;
+    headerAlign?: ColumnAlign;
     width?: number;
     wrap?: boolean;
     formatter?: ColumnFormatter;
@@ -48,6 +49,7 @@ export interface ResolvedColumnMeta {
     key: string;
     title: string;
     align: ColumnAlign;
+    headerAlign?: ColumnAlign;
     width?: number;
     wrap: boolean;
     formatter: ColumnFormatter;
@@ -306,6 +308,10 @@ export function resolveBoundTableData(
     options?: { defaultAlign?: ColumnAlign },
 ): ResolvedTableData {
     const defaultAlign = options?.defaultAlign ?? 'left';
+    const rawHeaderAlign = config.headerAlign;
+    const globalHeaderAlign: ColumnAlign | undefined =
+        rawHeaderAlign === 'left' || rawHeaderAlign === 'center' || rawHeaderAlign === 'right'
+            ? rawHeaderAlign : undefined;
     const sourceCols = config._sourceColumns as SourceColumnMeta[] | undefined;
     const columnsConfig = config.columns as ColumnEntry[] | undefined;
     const allData = (config.data as Array<Array<unknown>> | undefined) || [];
@@ -319,10 +325,13 @@ export function resolveBoundTableData(
 
         const columnMeta = effectiveColumns.map((col): ResolvedColumnMeta => {
             const sc = sourceMetaByName.get(col.source);
+            const colHeaderAlign = col.headerAlign === 'left' || col.headerAlign === 'center' || col.headerAlign === 'right'
+                ? col.headerAlign : undefined;
             return {
                 key: col.source,
                 title: col.alias || sc?.displayName || col.source,
                 align: normalizeColumnAlign(col.align, defaultAlign),
+                headerAlign: colHeaderAlign ?? globalHeaderAlign,
                 width: clampColumnWidth(col.width),
                 wrap: col.wrap === true,
                 formatter: normalizeColumnFormatter(col.formatter),
@@ -358,6 +367,7 @@ export function resolveBoundTableData(
         key: String(idx),
         title,
         align: defaultAlign,
+        headerAlign: globalHeaderAlign,
         wrap: false,
         formatter: 'auto',
     }));

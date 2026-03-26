@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { resolveGanttBaselineRange } from "./projectGanttBoard.helpers";
+import { resolveGanttBaselineRange, resolveGanttSideTextStyle } from "./projectGanttBoard.helpers";
 
 test("resolveGanttBaselineRange prefers explicit baseline dates and normalizes reversed ranges", () => {
 	const range = resolveGanttBaselineRange({
@@ -23,5 +23,11 @@ test("resolveGanttBaselineRange falls back to plan date when baseline dates are 
 	assert.deepEqual(range, {
 		startDate: "2026-03-08",
 		endDate: "2026-03-08",
+	});
+});
+
+test("resolveGanttSideTextStyle returns inline color when template provides an explicit side text color", () => {
+	assert.deepEqual(resolveGanttSideTextStyle("#ffffff"), {
+		color: "#ffffff",
 	});
 });

@@ -1,5 +1,4 @@
 import { memo, useMemo, useEffect, useRef, useState, useCallback, type ComponentType, type MouseEvent as ReactMouseEvent } from 'react';
-import { analyticsApi, type ScreenListItem } from '../../../api/analyticsApi';
 import type { CardData, ScreenComponent } from '../types';
 import { DRILLABLE_TYPES } from '../types';
 import { useCardDataSource } from '../hooks/useCardDataSource';
@@ -7,6 +6,7 @@ import { useDrillDown } from '../hooks/useDrillDown';
 import { useScreenRuntime } from '../ScreenRuntimeContext';
 import { mapCardDataToConfig } from '../hooks/cardDataMapper';
 import { applyFieldMapping } from '../hooks/fieldMappingTransform';
+import { useComponentData } from '../renderers/DataLayer';
 import type { ChartMarkArea, ChartMarkLine, FieldMapping, SeriesConditionalColor } from '../types';
 import { getThemeTokens } from '../screenThemes';
 import { isSafeSrcUrl } from '../sanitize';
@@ -21,28 +21,28 @@ import { renderMarkdownToHtml } from '../renderers/shared/markdownUtils';
 import {
     resolveTextColor, estimateVisualTextWidth, truncateTextByVisualWidth,
     normalizeParameterBindings, resolveDataSourceType,
-    resolveInteractionValue, resolveInteractionMappedValue,
-    resolveInteractionUrlTemplate, resolveFilterOptions, resolveTabOptions,
+    resolveFilterOptions, resolveTabOptions,
     resolveComponentVariableVisibility, resolveFilterOptionsFromData,
     normalizeFilterDebounceMs, normalizeCarouselItems, resolveCarouselItemsFromData,
     resolveFilterDefaultValue, resolveDateRangeDefaultValues,
 } from '../renderers/shared/chartUtils';
 import { resolveChartTitleLayout } from '../renderers/shared/chartTitleLayout';
 import {
-    buildActionRuntimeParams,
     buildTableRowActionParams,
-    normalizeScreenActionType,
     resolvePreferredDrillValue,
-    resolveActionMappingValues,
-    resolveActionTemplateText,
 } from '../renderers/shared/actionUtils';
-import type { ComponentInteractionMapping, ScreenComponentAction } from '../types';
+import { useComponentInteractions } from '../renderers/InteractionLayer';
 import {
     compareTableValues, resolveTableConditionalStyle,
     normalizeColumnAlign, formatTableCell, clampColumnWidth, normalizeColumnFormatter,
     ThemedScrollTable, resolveBoundTableData,
 } from '../renderers/shared/tableUtils';
-import { ProjectGanttBoard, type ProjectGanttTask } from '../../project-cockpit/components/ProjectGanttBoard';
+import { renderFilter } from '../renderers/FilterRenderer';
+import { renderECharts } from '../renderers/EChartsRenderer';
+import { renderBasic } from '../renderers/BasicRenderer';
+import { renderDataV } from '../renderers/DataVRenderer';
+import { renderTable } from '../renderers/TableRenderer';
+
 import { DelayReasonMatrix } from '../../project-cockpit/components/DelayReasonMatrix';
 
 const ECHART_COMPONENT_TYPES = new Set([
@@ -50,6 +50,7 @@ const ECHART_COMPONENT_TYPES = new Set([
     'bar-chart',
     'pie-chart',
     'gauge-chart',
+    'gantt-chart',
     'radar-chart',
     'funnel-chart',
     'scatter-chart',
@@ -188,53 +189,9 @@ const DATAV_COMPONENT_TYPES = new Set([
     'digital-flop',
 ]);
 
-const SCREEN_REF_PREFIX = 'screen-ref:';
-const SCREEN_REF_CACHE_TTL_MS = 30_000;
-let screenRefCache: { expiresAt: number; items: ScreenListItem[] } | null = null;
-
-function parseScreenReferenceUrl(targetUrl: string): { screenName: string; fallbackUrl: string } | null {
-    if (!targetUrl.startsWith(SCREEN_REF_PREFIX)) {
-        return null;
-    }
-    const raw = targetUrl.slice(SCREEN_REF_PREFIX.length);
-    const [screenNamePart, fallbackPart = ''] = raw.split('|', 2);
-    const screenName = decodeURIComponent(screenNamePart || '').trim();
-    const fallbackUrl = decodeURIComponent(fallbackPart || '').trim() || '/analytics/screens';
-    if (!screenName) {
-        return { screenName: '', fallbackUrl };
-    }
-    return { screenName, fallbackUrl };
-}
-
-async function resolveScreenReferenceUrl(targetUrl: string): Promise<string> {
-    const parsed = parseScreenReferenceUrl(targetUrl);
-    if (!parsed) {
-        return targetUrl;
-    }
-    if (!parsed.screenName) {
-        return parsed.fallbackUrl;
-    }
-    try {
-        const now = Date.now();
-        let items = screenRefCache && screenRefCache.expiresAt > now ? screenRefCache.items : null;
-        if (!items) {
-            items = await analyticsApi.listScreens();
-            screenRefCache = { expiresAt: now + SCREEN_REF_CACHE_TTL_MS, items };
-        }
-        const exact = items
-            .filter((item) => String(item.name || '').trim() === parsed.screenName)
-            .sort((a, b) => new Date(String(b.updatedAt || 0)).getTime() - new Date(String(a.updatedAt || 0)).getTime())[0];
-        if (exact?.id != null) {
-            return `/analytics/screens/${encodeURIComponent(String(exact.id))}/preview`;
-        }
-    } catch (error) {
-        console.error('Failed to resolve screen reference jump target:', error);
-    }
-    return parsed.fallbackUrl;
-}
-
 // Utility functions, table components, and types extracted to renderers/shared/:
 // - chartUtils.ts, tableUtils.tsx, markdownUtils.ts, geoJsonCache.ts
+// - InteractionLayer.tsx (interaction hook + screen-reference URL resolution)
 
 export const ComponentRenderer = memo(function ComponentRenderer({ component, mode = 'preview', theme, onConfigMeta }: ComponentRendererProps) {
     const { type, config, width, height, dataSource, drillDown } = component;
@@ -395,92 +352,22 @@ export const ComponentRenderer = memo(function ComponentRenderer({ component, mo
         } as Record<number, ComponentType<{ color?: string[]; style?: React.CSSProperties }>>;
     }, [dataViewModule]);
 
-    const dataSourceType = useMemo(() => resolveDataSourceType(dataSource), [dataSource]);
-    const sourceBindings = useMemo(() => {
-        if (dataSourceType === "card") {
-            return normalizeParameterBindings(dataSource?.cardConfig?.parameterBindings);
-        }
-        if (dataSourceType === "metric") {
-            return normalizeParameterBindings(dataSource?.metricConfig?.parameterBindings);
-        }
-        if (dataSourceType === "sql") {
-            const sqlConfig = dataSource?.sqlConfig ?? dataSource?.databaseConfig;
-            return normalizeParameterBindings(sqlConfig?.parameterBindings);
-        }
-        return [];
-    }, [dataSource, dataSourceType]);
+    const {
+        cardData, cardLoading, cardError, effectiveConfig,
+        drillState, drillRuntimeEnabled, drillActive,
+        mergedQueryParameters, visibleByVariableRule, bindingParameters,
+    } = useComponentData(component, mode, runtime);
 
-    const bindingParameters = useMemo(() => {
-        if (!sourceBindings.length) return [] as Array<{ name: string; value: string }>;
-        const out: Array<{ name: string; value: string }> = [];
-        for (const item of sourceBindings) {
-            let value = item.value ?? "";
-            if (item.variableKey) {
-                value = runtime.values[item.variableKey] ?? "";
-            }
-            if ((item.name || "").trim().length === 0) continue;
-            out.push({ name: item.name, value: String(value ?? "") });
-        }
-        return out;
-    }, [sourceBindings, runtime.values]);
-
-    // Drill runtime state should remain available for template-defined drill paths
-    // even when the current component is static and only uses breadcrumb/context state.
-    const drillRuntimeEnabled = mode === "preview" && drillDown?.enabled === true;
-    const drillActive = drillRuntimeEnabled && DRILLABLE_TYPES.has(type);
-    const rootCardId = dataSourceType === "card" ? dataSource?.cardConfig?.cardId : undefined;
-    const drillState = useDrillDown(
-        drillRuntimeEnabled ? rootCardId : undefined,
-        drillRuntimeEnabled ? drillDown : undefined,
-    );
-
-    const mergedQueryParameters = useMemo(() => {
-        const merged = new Map<string, string>();
-        for (const item of bindingParameters) {
-            const name = (item.name || "").trim();
-            if (!name) continue;
-            merged.set(name, String(item.value ?? ""));
-        }
-        for (const item of (drillRuntimeEnabled ? (drillState.queryParameters ?? []) : [])) {
-            const name = (item.name || "").trim();
-            if (!name) continue;
-            merged.set(name, String(item.value ?? ""));
-        }
-        return Array.from(merged.entries()).map(([name, value]) => ({ name, value }));
-    }, [bindingParameters, drillRuntimeEnabled, drillState.queryParameters]);
-
-    const queryContext = useMemo(() => ({
-        source: "screen-component",
-        componentId: component.id,
-        componentType: type,
-        mode,
-        globalVariables: runtime.values,
-        ...(runtime.runtimeMeta ? { runtimeMeta: runtime.runtimeMeta } : {}),
-    }), [component.id, mode, runtime.runtimeMeta, runtime.values, type]);
-    const visibleByVariableRule = mode !== 'preview'
-        || resolveComponentVariableVisibility(config, runtime.values);
-
-    // Card data source hook — pass drill overrides when active
-    const { data: cardData, loading: cardLoading, error: cardError } = useCardDataSource(
-        visibleByVariableRule ? dataSource : undefined,
-        drillRuntimeEnabled ? drillState.effectiveCardId : undefined,
-        mergedQueryParameters.length > 0 ? mergedQueryParameters : undefined,
-        queryContext,
-    );
-
-    // Merge card data into config: card data overrides data fields only, not display fields
-    const effectiveConfig = useMemo(() => {
-        if (!cardData) return config;
-        const fieldMapping = config._fieldMapping as FieldMapping | undefined;
-        const useFieldMapping = config._useFieldMapping !== false && fieldMapping
-            && (fieldMapping.dimension || (fieldMapping.measures && fieldMapping.measures.length > 0));
-        if (useFieldMapping) {
-            const mapped = applyFieldMapping(type, fieldMapping, cardData);
-            return { ...config, ...mapped };
-        }
-        const mapped = mapCardDataToConfig(type, cardData, config);
-        return { ...config, ...mapped };
-    }, [config, cardData, type]);
+    const {
+        scheduleFilterVariableUpdate,
+        interactionMappings,
+        interactionJump,
+        componentActions,
+        navigateToResolvedUrl,
+        executeComponentActions,
+        echartsClickHandler,
+        filterVariableTimersRef,
+    } = useComponentInteractions(component, mode, runtime, drillState, drillRuntimeEnabled, drillActive);
 
     // Persist _sourceColumns to saved config so PropertyPanel can read them
     const onConfigMetaRef = useRef(onConfigMeta);
@@ -607,8 +494,6 @@ export const ComponentRenderer = memo(function ComponentRenderer({ component, mo
     const filterInputRuntimeValue = filterInputVariableKey ? (runtime.values[filterInputVariableKey] ?? '') : '';
     const filterInputDefaultValue = String(effectiveConfig.defaultValue ?? '').trim();
     const [filterInputDraft, setFilterInputDraft] = useState(filterInputRuntimeValue);
-    const filterVariableTimersRef = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map());
-
     useEffect(() => {
         setFilterInputDraft(filterInputRuntimeValue);
     }, [filterInputRuntimeValue, filterInputVariableKey]);
@@ -725,242 +610,6 @@ export const ComponentRenderer = memo(function ComponentRenderer({ component, mo
         type,
     ]);
 
-    const scheduleFilterVariableUpdate = (
-        key: string,
-        value: string,
-        source: string,
-        debounceMsRaw: unknown,
-        immediate = false,
-    ) => {
-        const safeKey = String(key || '').trim();
-        if (!safeKey) return;
-        const debounceMs = normalizeFilterDebounceMs(debounceMsRaw);
-        const currentTimer = filterVariableTimersRef.current.get(safeKey);
-        if (currentTimer) {
-            clearTimeout(currentTimer);
-            filterVariableTimersRef.current.delete(safeKey);
-        }
-        if (immediate || debounceMs <= 0) {
-            runtime.setVariable(safeKey, value, source);
-            return;
-        }
-        const timer = setTimeout(() => {
-            filterVariableTimersRef.current.delete(safeKey);
-            runtime.setVariable(safeKey, value, `${source}:debounced`);
-        }, debounceMs);
-        filterVariableTimersRef.current.set(safeKey, timer);
-    };
-
-    const interactionMappings = useMemo(() => (
-        mode === "preview" && component.interaction?.enabled
-            ? (component.interaction.mappings ?? []).filter((m): m is ComponentInteractionMapping => !!m && !!m.variableKey && !!m.sourcePath)
-            : []
-    ), [component.interaction, mode]);
-    const interactionJump = useMemo<{ template: string; openMode: 'self' | 'new-tab' } | null>(() => {
-        if (mode !== 'preview' || component.interaction?.enabled !== true || component.interaction?.jumpEnabled !== true) {
-            return null;
-        }
-        const template = String(component.interaction.jumpUrlTemplate || '').trim();
-        if (!template) return null;
-        return {
-            template,
-            openMode: component.interaction.jumpOpenMode === 'self' ? 'self' : 'new-tab',
-        };
-    }, [component.interaction, mode]);
-    const componentActions = useMemo(() => (
-        mode === 'preview'
-            ? (component.actions ?? []).filter((action): action is ScreenComponentAction => normalizeScreenActionType(action?.type) !== null)
-            : []
-    ), [component.actions, mode]);
-
-    const navigateToResolvedUrl = useCallback(async (targetUrl: string, openMode: 'self' | 'new-tab', source: string) => {
-        const resolvedTargetUrl = await resolveScreenReferenceUrl(targetUrl);
-        runtime.trackEvent({
-            kind: 'jump',
-            key: 'jumpUrl',
-            value: resolvedTargetUrl,
-            source,
-            meta: `openMode=${openMode};raw=${targetUrl}`,
-        });
-        if (openMode === 'self') {
-            if (resolvedTargetUrl.startsWith('/') || (() => { try { return new URL(resolvedTargetUrl).origin === window.location.origin; } catch { return false; } })()) {
-                window.location.assign(resolvedTargetUrl);
-            }
-            return;
-        }
-        window.open(resolvedTargetUrl, '_blank', 'noopener,noreferrer');
-    }, [runtime]);
-
-    const executeComponentActions = useCallback((params: Record<string, unknown>) => {
-        if (mode !== 'preview' || componentActions.length === 0) {
-            return;
-        }
-        const actionParams = buildActionRuntimeParams(runtime.values, params);
-        for (const action of componentActions) {
-            const actionType = normalizeScreenActionType(action.type);
-            if (!actionType) {
-                continue;
-            }
-            const mappedValues = resolveActionMappingValues(actionParams, action.mappings);
-            for (const [key, value] of Object.entries(mappedValues)) {
-                runtime.setVariable(key, value, `action:${component.id}:${actionType}`);
-            }
-            if (actionType === 'set-variable') {
-                runtime.trackEvent({
-                    kind: 'action',
-                    key: actionType,
-                    value: Object.keys(mappedValues).join(','),
-                    source: `action:${component.id}`,
-                    meta: action.label || undefined,
-                });
-                continue;
-            }
-            if (actionType === 'drill-down') {
-                if (!drillRuntimeEnabled || !drillState.canDrillDown) {
-                    continue;
-                }
-                const clickedValue = resolvePreferredDrillValue(actionParams);
-                if (!clickedValue) {
-                    continue;
-                }
-                runtime.trackEvent({
-                    kind: 'drill-down',
-                    key: 'drillValue',
-                    value: clickedValue,
-                    source: `action:${component.id}`,
-                    meta: action.label || undefined,
-                });
-                drillState.handleDrill(clickedValue);
-                continue;
-            }
-            if (actionType === 'drill-up') {
-                if (!drillRuntimeEnabled || drillState.breadcrumbs.length <= 0) {
-                    continue;
-                }
-                const nextDepth = Math.max(0, drillState.breadcrumbs.length - 2);
-                runtime.trackEvent({
-                    kind: 'drill-up',
-                    key: 'drillDepth',
-                    value: String(nextDepth),
-                    source: `action:${component.id}`,
-                    meta: action.label || undefined,
-                });
-                drillState.handleRollUp(nextDepth);
-                continue;
-            }
-            if (actionType === 'jump-url') {
-                const template = String(action.jumpUrlTemplate || '').trim();
-                const targetUrl = resolveInteractionUrlTemplate(template, actionParams);
-                if (!targetUrl) {
-                    continue;
-                }
-                navigateToResolvedUrl(targetUrl, action.jumpOpenMode === 'self' ? 'self' : 'new-tab', `action:${component.id}`);
-                continue;
-            }
-            if (actionType === 'open-panel') {
-                const title = resolveActionTemplateText(action.panelTitle || action.label || '详情', actionParams);
-                const body = resolveActionTemplateText(action.panelBodyTemplate || '', actionParams);
-                runtime.trackEvent({
-                    kind: 'panel',
-                    key: 'open-panel',
-                    value: title,
-                    source: `panel:${component.id}`,
-                    meta: action.label || undefined,
-                });
-                runtime.openPanel(title || '详情', body, component.name || component.id);
-                continue;
-            }
-            if (actionType === 'emit-intent') {
-                const intentName = String(action.intentName || action.label || 'intent').trim() || 'intent';
-                const payload = resolveActionTemplateText(action.intentPayloadTemplate || '', actionParams) || JSON.stringify(mappedValues);
-                runtime.trackEvent({
-                    kind: 'intent',
-                    key: intentName,
-                    value: payload,
-                    source: `intent:${component.id}`,
-                    meta: action.label || undefined,
-                });
-            }
-        }
-    }, [
-        component.id,
-        component.name,
-        componentActions,
-        drillRuntimeEnabled,
-        drillState.breadcrumbs.length,
-        drillState.canDrillDown,
-        drillState.handleDrill,
-        drillState.handleRollUp,
-        mode,
-        navigateToResolvedUrl,
-        runtime,
-    ]);
-
-    // ECharts click handler for drill-down + variable interaction
-    const echartsClickHandler = useMemo(() => {
-        const canDrill = drillActive && drillState.canDrillDown;
-        const canInteract = interactionMappings.length > 0;
-        const canJump = !!interactionJump;
-        const canAction = componentActions.length > 0;
-        if (!canDrill && !canInteract && !canJump && !canAction) return undefined;
-
-        return {
-            click: (params: Record<string, unknown>) => {
-                if (canDrill) {
-                    const value = (params.name as string | undefined)
-                        ?? ((params.data as Record<string, unknown> | undefined)?.name as string | undefined);
-                    if (value) {
-                        const clicked = String(value);
-                        runtime.trackEvent({
-                            kind: 'drill-down',
-                            key: 'drillValue',
-                            value: clicked,
-                            source: `drill:${component.id}`,
-                            meta: `depth=${drillState.breadcrumbs.length}`,
-                        });
-                        drillState.handleDrill(clicked);
-                    }
-                }
-
-                if (canInteract) {
-                    for (const mapping of interactionMappings) {
-                        const rawNextValue = resolveInteractionValue(params, mapping.sourcePath);
-                        const nextValue = resolveInteractionMappedValue(rawNextValue, mapping);
-                        if (nextValue != null) {
-                            runtime.setVariable(mapping.variableKey, nextValue, `interaction:${component.id}`);
-                        }
-                    }
-                }
-
-                if (canJump && interactionJump) {
-                    const targetUrl = resolveInteractionUrlTemplate(
-                        interactionJump.template,
-                        buildActionRuntimeParams(runtime.values, params),
-                    );
-                    if (targetUrl) {
-                        navigateToResolvedUrl(targetUrl, interactionJump.openMode, `interaction:${component.id}`);
-                    }
-                }
-
-                if (canAction) {
-                    executeComponentActions(params);
-                }
-            },
-        };
-    }, [
-        component.id,
-        drillActive,
-        drillState.breadcrumbs.length,
-        drillState.canDrillDown,
-        drillState.handleDrill,
-        executeComponentActions,
-        interactionJump,
-        interactionMappings,
-        componentActions.length,
-        navigateToResolvedUrl,
-        runtime,
-    ]);
-
     const content = useMemo(() => {
         const c = effectiveConfig;
         if (runtimePlugin) {
@@ -980,8 +629,8 @@ export const ComponentRenderer = memo(function ComponentRenderer({ component, mo
                 </PluginRenderBoundary>
             );
         }
-        const axisFontSize = (c.axisFontSize as number) || 12;
-        const legendFontSize = (c.legendFontSize as number) || 12;
+        const axisFontSize = (c.axisFontSize as number) || 15;
+        const legendFontSize = (c.legendFontSize as number) || 15;
         const seriesColors = Array.isArray(c.seriesColors)
             ? (c.seriesColors as string[]).filter((color) => typeof color === 'string' && color.trim().length > 0)
             : [];
@@ -1144,7 +793,7 @@ export const ComponentRenderer = memo(function ComponentRenderer({ component, mo
             text: titleText,
             width,
             height,
-            fontSize: (c.titleFontSize as number) || 14,
+            fontSize: (c.titleFontSize as number) || 18,
             color: t.textPrimary,
             positionRaw: c.titlePosition,
             offsetX: titleOffsetX,
@@ -1802,1704 +1451,107 @@ export const ComponentRenderer = memo(function ComponentRenderer({ component, mo
         };
 
         switch (type) {
-            // ==================== ECharts 图表 ====================
+            // ==================== ECharts 图表 (delegated to EChartsRenderer) ====================
             case 'line-chart':
-                return renderEChartWithHandles({
-                    ...themeOptions,
-                    ...chartMotionOption,
-                    title: chartTitleLayout.titleOption,
-                    legend: legendConfig,
-                    tooltip: {
-                        ...themeOptions.tooltip,
-                        trigger: 'axis',
-                        confine: true,
-                        axisPointer: { type: 'line' },
-                        formatter: axisTooltipFormatter,
-                    },
-                    xAxis: {
-                        type: 'category',
-                        data: c.xAxisData as string[],
-                        axisLine: { lineStyle: { color: t.echarts.axisLineColor } },
-                        axisLabel: {
-                            color: t.echarts.axisLabelColor,
-                            fontSize: axisFontSize,
-                            rotate: xAxisLabelRotate,
-                            hideOverlap: true,
-                            formatter: formatXAxisLabel,
-                            interval: xAxisLabelInterval,
-                        },
-                    },
-                    yAxis: {
-                        type: 'value',
-                        axisLine: { lineStyle: { color: t.echarts.axisLineColor } },
-                        axisLabel: { color: t.echarts.axisLabelColor, fontSize: axisFontSize },
-                        splitLine: { lineStyle: { color: t.echarts.splitLineColor } },
-                    },
-                    series: (Array.isArray(c.series) ? c.series as Array<{ name: string; data: number[] }> : []).map((s, idx) => {
-                        const lineStackMode = String(c.stackMode ?? 'off');
-                        const stackGroup = lineStackMode !== 'off' ? 'stack' : undefined;
-                        return {
-                            name: s.name,
-                            type: 'line' as const,
-                            data: s.data,
-                            smooth: true,
-                            stack: stackGroup,
-                            showSymbol: !isCompactCanvas || xAxisCategoryCount <= 24,
-                            label: {
-                                show: axisSeriesLabelShow && (resolvedAxisSeriesLabelStrategy === 'all' || idx === 0),
-                                position: axisLineLabelPosition,
-                                color: t.textPrimary,
-                                fontSize: seriesLabelFontSize,
-                                distance: isTinyCanvas ? 2 : 6,
-                                formatter: axisSeriesLabelFormatter,
-                            },
-                            labelLayout: {
-                                hideOverlap: true,
-                                moveOverlap: 'shiftY',
-                            },
-                            areaStyle: {
-                                opacity: stackGroup ? 0.6 : 0.3,
-                                ...(seriesColors[idx] ? { color: seriesColors[idx] } : {}),
-                            },
-                            ...(seriesColors[idx]
-                                ? { lineStyle: { color: seriesColors[idx] }, itemStyle: { color: seriesColors[idx] } }
-                                : {}),
-                        };
-                    }),
-                    grid: axisGrid,
-                }, echartsClickHandler);
-
-            case 'bar-chart': {
-                const barHorizontal = Boolean(c.horizontal);
-                const barStackMode = String(c.stackMode ?? 'off');
-                const barStackGroup = barStackMode !== 'off' ? 'stack' : undefined;
-                const categoryAxisConfig = {
-                    type: 'category' as const,
-                    data: c.xAxisData as string[],
-                    axisLine: { lineStyle: { color: t.echarts.axisLineColor } },
-                    axisLabel: {
-                        color: t.echarts.axisLabelColor,
-                        fontSize: axisFontSize,
-                        rotate: barHorizontal ? 0 : xAxisLabelRotate,
-                        hideOverlap: true,
-                        formatter: formatXAxisLabel,
-                        interval: xAxisLabelInterval,
-                    },
-                };
-                const valueAxisConfig = {
-                    type: 'value' as const,
-                    axisLine: { lineStyle: { color: t.echarts.axisLineColor } },
-                    axisLabel: { color: t.echarts.axisLabelColor, fontSize: axisFontSize },
-                    splitLine: { lineStyle: { color: t.echarts.splitLineColor } },
-                };
-                return renderEChartWithHandles({
-                    ...themeOptions,
-                    ...chartMotionOption,
-                    title: chartTitleLayout.titleOption,
-                    legend: legendConfig,
-                    tooltip: {
-                        ...themeOptions.tooltip,
-                        trigger: 'axis',
-                        confine: true,
-                        axisPointer: { type: 'shadow' },
-                        formatter: axisTooltipFormatter,
-                    },
-                    xAxis: barHorizontal ? valueAxisConfig : categoryAxisConfig,
-                    yAxis: barHorizontal ? categoryAxisConfig : valueAxisConfig,
-                    series: (Array.isArray(c.series) ? c.series as Array<{ name: string; data: number[] }> : []).map((s, idx) => ({
-                        name: s.name,
-                        type: 'bar',
-                        data: s.data,
-                        stack: barStackGroup,
-                        label: {
-                            show: axisSeriesLabelShow && (resolvedAxisSeriesLabelStrategy === 'all' || idx === 0),
-                            position: barHorizontal ? 'right' : axisBarLabelPosition,
-                            color: axisBarLabelColor,
-                            fontSize: seriesLabelFontSize,
-                            distance: isTinyCanvas ? 2 : 6,
-                            formatter: axisSeriesLabelFormatter,
-                        },
-                        labelLayout: {
-                            hideOverlap: true,
-                        },
-                        itemStyle: {
-                            borderRadius: barHorizontal ? [0, 4, 4, 0] : [4, 4, 0, 0],
-                            color: seriesColors[idx]
-                                ? seriesColors[idx]
-                                : {
-                                    type: 'linear',
-                                    x: 0, y: 0, x2: barHorizontal ? 1 : 0, y2: barHorizontal ? 0 : 1,
-                                    colorStops: [
-                                        { offset: 0, color: t.barGradient[0] },
-                                        { offset: 1, color: t.barGradient[1] },
-                                    ],
-                                },
-                        },
-                    })),
-                    grid: axisGrid,
-                }, echartsClickHandler);
-            }
-
+            case 'bar-chart':
             case 'pie-chart':
-                return renderEChartWithHandles({
-                    ...themeOptions,
-                    ...chartMotionOption,
-                    ...(seriesColors.length > 0 ? { color: seriesColors } : {}),
-                    title: chartTitleLayout.titleOption,
-                    legend: legendConfig,
-                    tooltip: { trigger: 'item', formatter: '{b}: {c} ({d}%)' },
-                    series: [{
-                        type: 'pie',
-                        center: [plotCenterX, plotCenterY],
-                        radius: [pieInnerRadius, pieOuterRadius],
-                        avoidLabelOverlap: true,
-                        label: {
-                            show: pieLabelShow,
-                            position: pieLabelPosition,
-                            color: t.pieLabelColor,
-                            fontSize: seriesLabelFontSize,
-                            formatter: pieLabelPosition === 'inside' ? '{d}%' : '{b}: {d}%',
-                        },
-                        labelLine: {
-                            show: pieLabelShow && pieLabelPosition !== 'inside',
-                            length: seriesLabelLineLength,
-                            length2: seriesLabelLineLength2,
-                        },
-                        minShowLabelAngle: seriesLabelMinAngle,
-                        labelLayout: pieLabelPosition === 'inside'
-                            ? { hideOverlap: true }
-                            : { hideOverlap: true, moveOverlap: 'shiftY' },
-                        data: c.data as Array<{ name: string; value: number }>,
-                    }],
-                }, echartsClickHandler);
-
             case 'gauge-chart':
-                return renderEChartWithHandles({
-                    ...themeOptions,
-                    ...chartMotionOption,
-                    series: [{
-                        type: 'gauge',
-                        min: c.min as number,
-                        max: c.max as number,
-                        progress: { show: true, width: 18 },
-                        axisLine: { lineStyle: { width: 18, color: [[1, t.gauge.axisLineColor]] } },
-                        axisTick: { show: false },
-                        splitLine: { length: 10, lineStyle: { width: 2, color: t.gauge.splitLineColor } },
-                        axisLabel: { distance: 25, color: t.gauge.axisLabelColor, fontSize: 12 },
-                        pointer: { icon: 'path://M12.8,0.7l12,40.1H0.7L12.8,0.7z', length: '12%', width: 10, itemStyle: { color: 'auto' } },
-                        anchor: { show: true, showAbove: true, size: 18, itemStyle: { borderWidth: 6 } },
-                        title: { show: true, offsetCenter: [0, '70%'], fontSize: (c.titleFontSize as number) || 14, color: t.gauge.titleColor },
-                        detail: { valueAnimation: true, fontSize: 28, offsetCenter: [0, '45%'], color: t.gauge.detailColor, formatter: '{value}%' },
-                        data: [{ value: c.value != null ? Number(c.value) : 0, name: c.title as string }],
-                    }],
-                });
-
-            case 'gantt-chart': {
-                /* eslint-disable @typescript-eslint/no-explicit-any */
-                const tasks = Array.isArray(c.tasks) ? (c.tasks as Array<Record<string, any>>) : [];
-                const ganttRenderMode = String(c.renderMode ?? '').trim().toLowerCase();
-                if (ganttRenderMode === 'board') {
-                    const onTaskClick = mode === 'preview' && componentActions.length > 0
-                        ? (task: ProjectGanttTask) => {
-                            executeComponentActions({
-                                data: task,
-                                name: task.name,
-                                ...task,
-                            });
-                        }
-                        : undefined;
-                    return (
-                        <ProjectGanttBoard
-                            tasks={tasks as ProjectGanttTask[]}
-                            maxHeight={height}
-                            onTaskClick={onTaskClick}
-                        />
-                    );
-                }
-                if (!tasks.length) {
-                    return renderEChartWithHandles({ ...themeOptions, title: { text: '暂无数据', left: 'center', top: 'center', textStyle: { color: t.textSecondary, fontSize: 14 } } });
-                }
-
-                const sorted = [...tasks].sort((a, b) => String(a.planDate ?? '').localeCompare(String(b.planDate ?? '')));
-                const categories = sorted.map((tk) => String(tk.name ?? ''));
-
-                const allDates = sorted.flatMap((tk) => [tk.planDate, tk.actualDate].filter(Boolean).map(String));
-                if (!allDates.length) {
-                    return renderEChartWithHandles({ ...themeOptions, title: { text: '无有效日期数据', left: 'center', top: 'center', textStyle: { color: t.textSecondary, fontSize: 14 } } });
-                }
-                const minDate = allDates.reduce((a, b) => (a < b ? a : b));
-                const maxDate = allDates.reduce((a, b) => (a > b ? a : b));
-                const today = new Date().toISOString().slice(0, 10);
-
-                const getBarColor = (tk: Record<string, any>) => {
-                    if (tk.isCompleted && !tk.isOverdue) return '#52c41a';
-                    if (tk.isCompleted && tk.isOverdue) return '#faad14';
-                    if (tk.isIncomplete) return '#ff4d4f';
-                    return '#1890ff';
-                };
-
-                // Build bar data: each bar is [startTime, endTime, categoryIndex]
-                // Using xAxis=time, yAxis=category, bar series type for compatibility
-                const barSeries: any[] = [];
-                sorted.forEach((tk, idx) => {
-                    const start = new Date(String(tk.planDate)).getTime();
-                    const end = tk.actualDate ? new Date(String(tk.actualDate)).getTime() : Date.now();
-                    barSeries.push({
-                        value: [start, idx, end - start, tk.delayDays],
-                        itemStyle: { color: getBarColor(tk) },
-                        _task: tk,
-                    });
-                });
-
-                const xMax = maxDate > today ? maxDate : today;
-                const ganttOption: Record<string, unknown> = {
-                    ...themeOptions,
-                    tooltip: {
-                        trigger: 'item',
-                        formatter: (params: any) => {
-                            const tk = params.data?._task;
-                            if (!tk) return '';
-                            return [
-                                `<b>${tk.name}</b>`,
-                                tk.majorProjectName ? `重大项目: ${tk.majorProjectName}` : '',
-                                tk.subprojectName ? `子项目: ${tk.subprojectName}` : '',
-                                `类型: ${tk.type}`,
-                                `责任人: ${tk.owner}`,
-                                tk.status ? `状态: ${tk.status}` : '',
-                                `计划: ${tk.planDate}`,
-                                tk.actualDate ? `实际: ${tk.actualDate}` : '实际: 未完成',
-                                tk.delayDays ? `超期: ${tk.delayDays}天` : '',
-                                `风险: ${tk.riskLevel}`,
-                            ].filter(Boolean).join('<br/>');
-                        },
-                    },
-                    grid: { left: 120, right: 40, top: 30, bottom: 50 },
-                    xAxis: {
-                        type: 'time',
-                        min: minDate,
-                        max: xMax,
-                        axisLabel: { color: t.textSecondary, fontSize: 11 },
-                        splitLine: { lineStyle: { color: t.echarts.splitLineColor, type: 'dashed' } },
-                    },
-                    yAxis: {
-                        type: 'category',
-                        data: categories,
-                        inverse: true,
-                        axisLabel: {
-                            color: t.textPrimary,
-                            fontSize: 11,
-                            width: 100,
-                            overflow: 'truncate' as const,
-                        },
-                        splitLine: { show: false },
-                    },
-                    dataZoom: [{ type: 'inside', xAxisIndex: 0 }],
-                    series: [
-                        {
-                            type: 'custom',
-                            renderItem: (params: any, api: any) => {
-                                const startVal = api.value(0);
-                                const catIdx = api.value(1);
-                                const duration = api.value(2);
-                                const endVal = startVal + duration;
-                                const startPx = api.coord([startVal, catIdx]);
-                                const endPx = api.coord([endVal, catIdx]);
-                                const categoryHeight = typeof api.size === 'function' ? api.size([0, 1])[1] : 30;
-                                const barHeight = categoryHeight * 0.6;
-                                const style = typeof api.style === 'function' ? api.style() : {};
-                                // 里程碑节点画菱形
-                                if (params.data?._task?.type === '里程碑节点') {
-                                    const sz = Math.min(categoryHeight * 0.7, 16);
-                                    return {
-                                        type: 'diamond',
-                                        shape: { cx: startPx[0], cy: startPx[1], width: sz, height: sz },
-                                        style,
-                                    };
-                                }
-                                return {
-                                    type: 'rect',
-                                    shape: {
-                                        x: startPx[0],
-                                        y: startPx[1] - barHeight / 2,
-                                        width: Math.max(endPx[0] - startPx[0], 4),
-                                        height: barHeight,
-                                        r: [2, 2, 2, 2],
-                                    },
-                                    style,
-                                };
-                            },
-                            encode: { x: [0], y: 1 },
-                            data: barSeries,
-                            markLine: {
-                                silent: true,
-                                symbol: 'none',
-                                lineStyle: { color: '#ff4d4f', type: 'dashed', width: 2 },
-                                data: [{ xAxis: new Date(today).getTime() }],
-                                label: { formatter: '今日', position: 'start', color: '#ff4d4f', fontSize: 11 },
-                            },
-                        },
-                    ],
-                };
-                /* eslint-enable @typescript-eslint/no-explicit-any */
-
-                return renderEChartWithHandles(ganttOption, echartsClickHandler);
-            }
-
+            case 'gantt-chart':
             case 'radar-chart':
-                {
-                    const mappedSeries = Array.isArray(c.series)
-                        ? (c.series as Array<{ name?: string; data?: number[] }>)
-                        : [];
-                    const radarSeries = mappedSeries.length > 0
-                        ? mappedSeries.map((item, index) => ({
-                            name: item.name,
-                            value: Array.isArray(item.data) ? item.data : [],
-                            areaStyle: { opacity: Math.max(0.14, 0.32 - (index * 0.08)) },
-                        }))
-                        : [{ value: c.data as number[], areaStyle: { opacity: 0.3 } }];
-                return renderEChartWithHandles({
-                    ...themeOptions,
-                    ...chartMotionOption,
-                    ...(seriesColors.length > 0 ? { color: seriesColors } : {}),
-                    title: chartTitleLayout.titleOption,
-                    legend: legendConfig,
-                    radar: {
-                        indicator: c.indicator as Array<{ name: string; max: number }>,
-                        center: [plotCenterX, plotCenterY],
-                        radius: radarRadius,
-                        axisName: { color: t.radar.axisNameColor },
-                        splitLine: { lineStyle: { color: t.radar.splitLineColor } },
-                        splitArea: { areaStyle: { color: ['transparent'] } },
-                    },
-                    series: [{
-                        type: 'radar',
-                        data: radarSeries,
-                    }],
-                }, echartsClickHandler);
-                }
-
             case 'funnel-chart':
-                return renderEChartWithHandles({
-                    ...themeOptions,
-                    ...chartMotionOption,
-                    ...(seriesColors.length > 0 ? { color: seriesColors } : {}),
-                    title: chartTitleLayout.titleOption,
-                    legend: legendConfig,
-                    series: [{
-                        type: 'funnel',
-                        left: funnelLeft,
-                        right: funnelRight,
-                        top: funnelTop,
-                        bottom: funnelBottom,
-                        min: 0,
-                        max: 100,
-                        sort: 'descending',
-                        gap: 2,
-                        label: {
-                            show: funnelLabelShow,
-                            position: funnelLabelPosition,
-                            color: t.funnelLabelColor,
-                            fontSize: seriesLabelFontSize,
-                            formatter: funnelLabelPosition === 'right' ? '{b}: {c}' : '{b}',
-                        },
-                        labelLine: {
-                            show: funnelLabelShow && funnelLabelPosition === 'right',
-                            length: seriesLabelLineLength,
-                            length2: seriesLabelLineLength2,
-                        },
-                        data: c.data as Array<{ name: string; value: number }>,
-                    }],
-                }, echartsClickHandler);
-
-            case 'scatter-chart': {
-                /* eslint-disable @typescript-eslint/no-explicit-any */
-                const RISK_COLORS: Record<string, string> = { '高': '#ff4d4f', '中': '#faad14', '低': '#52c41a' };
-                const scatterSeries = c.series as Array<{ name: string; data: number[][] }> | undefined;
-                const scatterData = c.data as number[][] | undefined;
-                const builtSeries = scatterSeries?.length
-                    ? scatterSeries.map((s, idx) => ({
-                        name: s.name,
-                        type: 'scatter' as const,
-                        data: s.data,
-                        symbolSize: (val: number[]) => Math.max((val[2] ?? 1) * 8, 8),
-                        itemStyle: { color: RISK_COLORS[s.name] || seriesColors[idx] || t.scatterColor },
-                    }))
-                    : [{
-                        type: 'scatter' as const,
-                        data: scatterData || [],
-                        symbolSize: 10,
-                        itemStyle: { color: seriesColors[0] || t.scatterColor },
-                    }];
-                return renderEChartWithHandles({
-                    ...themeOptions,
-                    ...chartMotionOption,
-                    title: chartTitleLayout.titleOption,
-                    legend: legendConfig,
-                    tooltip: {
-                        ...themeOptions.tooltip,
-                        formatter: (params: any) => {
-                            const d = params.data || [];
-                            return `${params.seriesName}<br/>超期: ${d[0]}天<br/>节点数: ${d[2] ?? 1}`;
-                        },
-                    },
-                    xAxis: {
-                        name: (c as any).xAxisName || '',
-                        axisLine: { lineStyle: { color: t.echarts.axisLineColor } },
-                        axisLabel: { color: t.echarts.axisLabelColor, fontSize: axisFontSize },
-                        splitLine: { lineStyle: { color: t.echarts.splitLineColor } },
-                    },
-                    yAxis: {
-                        name: (c as any).yAxisName || '',
-                        type: 'value' as const,
-                        axisLine: { lineStyle: { color: t.echarts.axisLineColor } },
-                        axisLabel: {
-                            color: t.echarts.axisLabelColor,
-                            fontSize: axisFontSize,
-                            formatter: (v: number) => ['', '低', '中', '高'][v] || String(v),
-                        },
-                        splitLine: { lineStyle: { color: t.echarts.splitLineColor } },
-                        min: 0,
-                        max: 4,
-                        interval: 1,
-                    },
-                    series: builtSeries,
-                    grid: axisGrid,
-                }, echartsClickHandler);
-                /* eslint-enable @typescript-eslint/no-explicit-any */
-            }
-
-            case 'combo-chart': {
-                const comboSeries = Array.isArray(c.series) ? (c.series as Array<{ name: string; type: 'bar' | 'line'; yAxisIndex?: number; data: number[] }>) : [];
-                const comboYAxis = Array.isArray(c.yAxis) ? (c.yAxis as Array<{ name?: string; min?: number; max?: number }>) : [{}];
-                return renderEChartWithHandles({
-                    ...themeOptions,
-                    ...chartMotionOption,
-                    title: chartTitleLayout.titleOption,
-                    legend: legendConfig,
-                    tooltip: {
-                        ...themeOptions.tooltip,
-                        trigger: 'axis',
-                        confine: true,
-                        axisPointer: { type: 'cross' },
-                        formatter: axisTooltipFormatter,
-                    },
-                    xAxis: {
-                        type: 'category',
-                        data: c.xAxisData as string[],
-                        axisLine: { lineStyle: { color: t.echarts.axisLineColor } },
-                        axisLabel: {
-                            color: t.echarts.axisLabelColor,
-                            fontSize: axisFontSize,
-                            rotate: xAxisLabelRotate,
-                            hideOverlap: true,
-                            formatter: formatXAxisLabel,
-                            interval: xAxisLabelInterval,
-                        },
-                    },
-                    yAxis: comboYAxis.map((y, i) => ({
-                        type: 'value',
-                        name: y.name,
-                        nameTextStyle: { color: t.echarts.axisLabelColor, fontSize: axisFontSize },
-                        min: y.min,
-                        max: y.max,
-                        position: i === 0 ? 'left' : 'right',
-                        axisLine: { show: true, lineStyle: { color: t.echarts.axisLineColor } },
-                        axisLabel: { color: t.echarts.axisLabelColor, fontSize: axisFontSize },
-                        splitLine: { show: i === 0, lineStyle: { color: t.echarts.splitLineColor } },
-                    })),
-                    series: comboSeries.map((s, idx) => ({
-                        name: s.name,
-                        type: s.type || 'bar',
-                        yAxisIndex: s.yAxisIndex || 0,
-                        data: s.data,
-                        smooth: s.type === 'line',
-                        label: {
-                            show: axisSeriesLabelShow && (resolvedAxisSeriesLabelStrategy === 'all' || idx === 0),
-                            position: s.type === 'line' ? axisLineLabelPosition : axisBarLabelPosition,
-                            color: t.textPrimary,
-                            fontSize: seriesLabelFontSize,
-                        },
-                        labelLayout: { hideOverlap: true },
-                        ...(s.type === 'bar' ? {
-                            itemStyle: {
-                                borderRadius: [4, 4, 0, 0],
-                                color: seriesColors[idx] || {
-                                    type: 'linear', x: 0, y: 0, x2: 0, y2: 1,
-                                    colorStops: [{ offset: 0, color: t.barGradient[0] }, { offset: 1, color: t.barGradient[1] }],
-                                },
-                            },
-                        } : {
-                            lineStyle: seriesColors[idx] ? { color: seriesColors[idx] } : {},
-                            itemStyle: seriesColors[idx] ? { color: seriesColors[idx] } : {},
-                            areaStyle: { opacity: 0.15, ...(seriesColors[idx] ? { color: seriesColors[idx] } : {}) },
-                        }),
-                    })),
-                    grid: axisGrid,
-                }, echartsClickHandler);
-            }
-
+            case 'scatter-chart':
+            case 'combo-chart':
             case 'treemap-chart':
-                return renderEChartWithHandles({
-                    ...themeOptions,
-                    ...chartMotionOption,
-                    title: chartTitleLayout.titleOption,
-                    tooltip: { formatter: '{b}: {c}' },
-                    series: [{
-                        type: 'treemap',
-                        data: c.data as Array<{ name: string; value?: number; children?: unknown[] }>,
-                        leafDepth: 1,
-                        roam: false,
-                        breadcrumb: { show: true, itemStyle: { textStyle: { color: t.textPrimary } } },
-                        label: { show: true, color: '#fff', fontSize: seriesLabelFontSize || 12 },
-                        upperLabel: { show: true, height: 20, color: '#fff', fontSize: 11 },
-                        levels: [
-                            { itemStyle: { borderColor: t.echarts.splitLineColor, borderWidth: 2, gapWidth: 2 } },
-                            { itemStyle: { borderColor: t.echarts.splitLineColor, borderWidth: 1, gapWidth: 1 }, upperLabel: { show: true } },
-                        ],
-                    }],
-                }, echartsClickHandler);
-
             case 'sunburst-chart':
-                return renderEChartWithHandles({
-                    ...themeOptions,
-                    ...chartMotionOption,
-                    title: chartTitleLayout.titleOption,
-                    tooltip: { trigger: 'item', formatter: '{b}: {c}' },
-                    series: [{
-                        type: 'sunburst',
-                        data: c.data as Array<{ name: string; value?: number; children?: unknown[] }>,
-                        radius: ['15%', '90%'],
-                        label: { show: true, color: t.textPrimary, fontSize: seriesLabelFontSize || 11, rotate: 'radial' },
-                        itemStyle: { borderWidth: 1, borderColor: t.echarts.splitLineColor },
-                        emphasis: { focus: 'ancestor' },
-                    }],
-                }, echartsClickHandler);
-
             case 'wordcloud-chart':
-                return renderEChartWithHandles({
-                    ...themeOptions,
-                    title: chartTitleLayout.titleOption,
-                    tooltip: { show: true, formatter: '{b}: {c}' },
-                    series: [{
-                        type: 'wordCloud',
-                        shape: (c.shape as string) || 'circle',
-                        sizeRange: (c.fontSizeRange as [number, number]) || [14, 60],
-                        rotationRange: (c.rotationRange as [number, number]) || [-45, 45],
-                        rotationStep: 15,
-                        gridSize: 8,
-                        drawOutOfBound: false,
-                        textStyle: {
-                            fontFamily: 'sans-serif',
-                            color: () => t.echarts.colorPalette[Math.floor(Math.random() * t.echarts.colorPalette.length)],
-                        },
-                        data: (c.data as Array<{ name: string; value: number }>)?.map(d => ({
-                            name: d.name,
-                            value: d.value,
-                        })) || [],
-                    }],
+            case 'waterfall-chart':
+            case 'map-chart':
+                return renderECharts({
+                    type, c, t, width, height, mode, componentId: component.id, runtime,
+                    EChart, renderEChartWithHandles,
+                    themeOptions, chartMotionOption, chartTitleLayout, legendConfig, axisGrid, seriesColors,
+                    axisFontSize, seriesLabelFontSize,
+                    xAxisLabelRotate, xAxisLabelInterval, formatXAxisLabel,
+                    axisSeriesLabelShow, resolvedAxisSeriesLabelStrategy, axisSeriesLabelFormatter,
+                    axisLineLabelPosition, axisBarLabelPosition, axisBarLabelColor, axisTooltipFormatter,
+                    isCompactCanvas, isTinyCanvas, xAxisCategoryCount,
+                    plotCenterX, plotCenterY, pieInnerRadius, pieOuterRadius, pieLabelShow, pieLabelPosition,
+                    radarRadius,
+                    funnelLeft, funnelRight, funnelTop, funnelBottom, funnelLabelShow, funnelLabelPosition,
+                    seriesLabelLineLength, seriesLabelLineLength2, seriesLabelMinAngle,
+                    echartsClickHandler, componentActions, executeComponentActions,
+                    mapDrillRegion, setMapDrillRegion, mapReadyVersion, hasMapFn,
                 });
 
-            case 'waterfall-chart': {
-                const waterfallData = (c.data as Array<{ name: string; value: number; isTotal?: boolean }>) || [];
-                const wfCategories = waterfallData.map(d => d.name);
-                let runningTotal = 0;
-                const transparentBars: number[] = [];
-                const positiveBars: (number | '-')[] = [];
-                const negativeBars: (number | '-')[] = [];
-                for (const item of waterfallData) {
-                    if (item.isTotal) {
-                        transparentBars.push(0);
-                        positiveBars.push(item.value >= 0 ? item.value : '-');
-                        negativeBars.push(item.value < 0 ? Math.abs(item.value) : '-');
-                        runningTotal = item.value;
-                    } else {
-                        if (item.value >= 0) {
-                            transparentBars.push(runningTotal);
-                            positiveBars.push(item.value);
-                            negativeBars.push('-');
-                        } else {
-                            transparentBars.push(runningTotal + item.value);
-                            positiveBars.push('-');
-                            negativeBars.push(Math.abs(item.value));
-                        }
-                        runningTotal += item.value;
-                    }
-                }
-                return renderEChartWithHandles({
-                    ...themeOptions,
-                    ...chartMotionOption,
-                    title: chartTitleLayout.titleOption,
-                    legend: { show: false },
-                    tooltip: {
-                        ...themeOptions.tooltip,
-                        trigger: 'axis',
-                        confine: true,
-                        axisPointer: { type: 'shadow' },
-                        formatter: (params: unknown) => {
-                            const items = params as Array<{ seriesName: string; value: unknown; dataIndex: number }>;
-                            const idx = items[0]?.dataIndex ?? 0;
-                            const d = waterfallData[idx];
-                            return d ? `${d.name}: ${d.value >= 0 ? '+' : ''}${d.value}` : '';
-                        },
-                    },
-                    xAxis: {
-                        type: 'category',
-                        data: wfCategories,
-                        axisLine: { lineStyle: { color: t.echarts.axisLineColor } },
-                        axisLabel: { color: t.echarts.axisLabelColor, fontSize: axisFontSize, rotate: xAxisLabelRotate },
-                    },
-                    yAxis: {
-                        type: 'value',
-                        axisLine: { lineStyle: { color: t.echarts.axisLineColor } },
-                        axisLabel: { color: t.echarts.axisLabelColor, fontSize: axisFontSize },
-                        splitLine: { lineStyle: { color: t.echarts.splitLineColor } },
-                    },
-                    series: [
-                        {
-                            name: '辅助',
-                            type: 'bar',
-                            stack: 'waterfall',
-                            data: transparentBars,
-                            itemStyle: { borderColor: 'transparent', color: 'transparent' },
-                            emphasis: { itemStyle: { borderColor: 'transparent', color: 'transparent' } },
-                        },
-                        {
-                            name: '增加',
-                            type: 'bar',
-                            stack: 'waterfall',
-                            data: positiveBars,
-                            itemStyle: { color: '#10b981', borderRadius: [4, 4, 0, 0] },
-                            label: {
-                                show: true,
-                                position: 'top',
-                                color: t.textPrimary,
-                                fontSize: seriesLabelFontSize,
-                                formatter: (p: { value: unknown }) => p.value === '-' ? '' : `+${p.value}`,
-                            },
-                        },
-                        {
-                            name: '减少',
-                            type: 'bar',
-                            stack: 'waterfall',
-                            data: negativeBars,
-                            itemStyle: { color: '#ef4444', borderRadius: [4, 4, 0, 0] },
-                            label: {
-                                show: true,
-                                position: 'bottom',
-                                color: t.textPrimary,
-                                fontSize: seriesLabelFontSize,
-                                formatter: (p: { value: unknown; dataIndex: number }) => {
-                                    if (p.value === '-') return '';
-                                    const d = waterfallData[p.dataIndex];
-                                    return d ? String(d.value) : '';
-                                },
-                            },
-                        },
-                    ],
-                    grid: axisGrid,
-                }, echartsClickHandler);
-            }
-
-            case 'map-chart': {
-                const title = String(c.title ?? '区域地图');
-                const mapScope = String(c.mapScope ?? 'china');
-                const defaultRegions = mapScope === 'world'
-                    ? [
-                        { name: 'China', code: 'CN', value: 260 },
-                        { name: 'United States of America', code: 'US', value: 180 },
-                        { name: 'Russia', code: 'RU', value: 150 },
-                        { name: 'India', code: 'IN', value: 140 },
-                        { name: 'Brazil', code: 'BR', value: 110 },
-                        { name: 'Australia', code: 'AU', value: 90 },
-                    ]
-                    : [
-                        { name: '北京市', code: '110000', value: 120 },
-                        { name: '上海市', code: '310000', value: 180 },
-                        { name: '广东省', code: '440000', value: 140 },
-                        { name: '浙江省', code: '330000', value: 95 },
-                        { name: '四川省', code: '510000', value: 72 },
-                        { name: '湖北省', code: '420000', value: 88 },
-                    ];
-                const regions = Array.isArray(c.regions) && c.regions.length > 0 ? c.regions as Array<Record<string, unknown>> : defaultRegions;
-                const getChildren = (item: unknown): Array<Record<string, unknown>> => {
-                    if (!item || typeof item !== 'object') return [];
-                    const raw = (item as Record<string, unknown>).children;
-                    if (!Array.isArray(raw)) return [];
-                    return raw.filter((node): node is Record<string, unknown> => !!node && typeof node === 'object');
-                };
-                const activeRegion = mapDrillRegion
-                    ? regions.find((item) => String(item.name ?? '') === mapDrillRegion)
-                    : undefined;
-                const canRegionDrill = c.enableRegionDrill !== false;
-                const drillRows = getChildren(activeRegion);
-                const listRows = drillRows.length > 0 ? drillRows : regions;
-
-                const maxValue = Math.max(1, ...listRows.map((item) => Number(item.value ?? 0)));
-                const minValue = Math.min(...listRows.map((item) => Number(item.value ?? 0)));
-                const mapName = String(c.mapName || mapScope || `dts-${mapScope}`).trim();
-                const usingGeoMap = !mapDrillRegion && Boolean(EChart) && Boolean(hasMapFn?.(mapName)) && mapReadyVersion >= 0;
-                const regionCodeVariableKey = String(c.regionCodeVariableKey ?? '').trim();
-                const resolveRegionCode = (item: Record<string, unknown> | undefined): string => {
-                    if (!item) return '';
-                    const candidate = item.code ?? item.adcode ?? item.regionCode ?? item.id;
-                    return String(candidate ?? '').trim();
-                };
-
-                if (usingGeoMap) {
-                    const mapMode = String(c.mapMode ?? 'region');
-                    const baseTitle = chartTitleLayout.titleOption;
-                    const mapClickHandler = (params: Record<string, unknown>) => {
-                        const regionName = String(params.name ?? '');
-                        const row = params.data && typeof params.data === 'object'
-                            ? (params.data as Record<string, unknown>)
-                            : undefined;
-                        const clickedCode = String(row?.code ?? row?.adcode ?? '').trim();
-                        const target = clickedCode
-                            ? regions.find((item) => resolveRegionCode(item) === clickedCode)
-                                || regions.find((item) => String(item.name ?? '') === regionName)
-                            : regions.find((item) => String(item.name ?? '') === regionName);
-                        if (canRegionDrill && target && getChildren(target).length > 0) {
-                            setMapDrillRegion(regionName);
-                        }
-                        const variableKey = String(c.regionVariableKey ?? '').trim();
-                        if (variableKey && regionName) {
-                            runtime.setVariable(variableKey, regionName, `map-chart:${component.id}`);
-                        }
-                        const code = resolveRegionCode(target);
-                        if (regionCodeVariableKey && code) {
-                            runtime.setVariable(regionCodeVariableKey, code, `map-chart:${component.id}`);
-                        }
-                    };
-
-                    // Build mapMode-specific ECharts options
-                    let mapOption: Record<string, unknown>;
-                    if (mapMode === 'bubble' || mapMode === 'scatter') {
-                        const scatterData = (c.scatterData as Array<{ name: string; value: [number, number, number] }>) || [];
-                        const sizeRange = (c.bubbleSizeRange as [number, number]) || (mapMode === 'scatter' ? [6, 6] : [8, 40]);
-                        const maxMag = Math.max(1, ...scatterData.map(d => Math.abs(d.value?.[2] ?? 0)));
-                        mapOption = {
-                            ...themeOptions, ...chartMotionOption,
-                            title: baseTitle,
-                            tooltip: { trigger: 'item', formatter: (p: Record<string, unknown>) => {
-                                const d = p.data as Record<string, unknown> | undefined;
-                                return d ? `${d.name}: ${(d.value as number[])?.[2] ?? ''}` : '';
-                            }},
-                            geo: { map: mapName, roam: true, label: { show: false }, itemStyle: { areaColor: '#1e293b', borderColor: t.echarts.splitLineColor }, emphasis: { itemStyle: { areaColor: '#334155' } } },
-                            series: [{
-                                type: 'scatter', coordinateSystem: 'geo',
-                                data: scatterData.map(d => ({ name: d.name, value: d.value })),
-                                symbolSize: (val: number[]) => { const mag = val?.[2] ?? 0; return sizeRange[0] + (sizeRange[1] - sizeRange[0]) * (Math.abs(mag) / maxMag); },
-                                itemStyle: { color: (c.bubbleColor as string) || t.echarts.colorPalette[0] },
-                                label: { show: mapMode === 'scatter', formatter: '{b}', color: t.textPrimary, fontSize: 10 },
-                            }],
-                        };
-                    } else if (mapMode === 'heatmap') {
-                        const heatmapData = (c.heatmapData as Array<[number, number, number]>) || [];
-                        mapOption = {
-                            ...themeOptions, ...chartMotionOption,
-                            title: baseTitle,
-                            tooltip: { show: true },
-                            geo: { map: mapName, roam: true, label: { show: false }, itemStyle: { areaColor: '#1e293b', borderColor: t.echarts.splitLineColor }, emphasis: { itemStyle: { areaColor: '#334155' } } },
-                            visualMap: { show: true, min: 0, max: Math.max(1, ...heatmapData.map(d => d[2] || 0)), left: 6, bottom: 8, itemWidth: 10, itemHeight: 60, textStyle: { color: t.textSecondary, fontSize: 10 }, inRange: { color: ['#3b82f6', '#f59e0b', '#ef4444'] } },
-                            series: [{
-                                type: 'heatmap', coordinateSystem: 'geo',
-                                data: heatmapData,
-                                pointSize: (c.heatmapRadius as number) || 20,
-                                blurSize: ((c.heatmapRadius as number) || 20) * 1.5,
-                            }],
-                        };
-                    } else if (mapMode === 'flow') {
-                        const flowData = (c.flowData as Array<{ from: { name: string; coord: [number, number] }; to: { name: string; coord: [number, number] }; value?: number }>) || [];
-                        const curveness = (c.flowLineStyle as Record<string, unknown>)?.curveness as number ?? 0.2;
-                        const flowColor = (c.flowLineStyle as Record<string, unknown>)?.color as string ?? t.echarts.colorPalette[0];
-                        const showEffect = c.showFlowEffect !== false;
-                        const endpoints = new Map<string, [number, number]>();
-                        for (const f of flowData) {
-                            if (f.from?.name && f.from?.coord) endpoints.set(f.from.name, f.from.coord);
-                            if (f.to?.name && f.to?.coord) endpoints.set(f.to.name, f.to.coord);
-                        }
-                        mapOption = {
-                            ...themeOptions, ...chartMotionOption,
-                            title: baseTitle,
-                            tooltip: { trigger: 'item' },
-                            geo: { map: mapName, roam: true, label: { show: false }, itemStyle: { areaColor: '#1e293b', borderColor: t.echarts.splitLineColor }, emphasis: { itemStyle: { areaColor: '#334155' } } },
-                            series: [
-                                {
-                                    type: 'lines', coordinateSystem: 'geo',
-                                    data: flowData.map(f => ({ coords: [f.from.coord, f.to.coord], value: f.value })),
-                                    lineStyle: { color: flowColor, width: 1.5, curveness, opacity: 0.6 },
-                                    effect: showEffect ? { show: true, period: 4, trailLength: 0.2, symbol: 'arrow', symbolSize: 6, color: flowColor } : undefined,
-                                },
-                                {
-                                    type: 'effectScatter', coordinateSystem: 'geo',
-                                    data: Array.from(endpoints.entries()).map(([name, coord]) => ({ name, value: coord })),
-                                    symbolSize: 6,
-                                    rippleEffect: { brushType: 'stroke', scale: 3 },
-                                    itemStyle: { color: flowColor },
-                                    label: { show: true, formatter: '{b}', position: 'right', color: t.textPrimary, fontSize: 10 },
-                                },
-                            ],
-                        };
-                    } else {
-                        // Default: region fill map
-                        mapOption = {
-                            ...themeOptions, ...chartMotionOption,
-                            title: baseTitle,
-                            visualMap: {
-                                min: Number.isFinite(minValue) ? minValue : 0,
-                                max: Number.isFinite(maxValue) ? maxValue : 100,
-                                text: ['高', '低'], left: 6, bottom: 8, itemWidth: 10, itemHeight: 60,
-                                textStyle: { color: t.textSecondary, fontSize: 10 },
-                                inRange: { color: ['#93c5fd', '#3b82f6', '#1d4ed8'] },
-                            },
-                            tooltip: { trigger: 'item', formatter: '{b}: {c}' },
-                            series: [{
-                                type: 'map', map: mapName, roam: true,
-                                label: { show: true, color: t.textPrimary, fontSize: 10 },
-                                emphasis: { label: { color: t.textPrimary } },
-                                data: regions.map((item) => ({
-                                    name: String(item.name ?? ''),
-                                    value: Number(item.value ?? 0),
-                                    code: resolveRegionCode(item),
-                                })),
-                            }],
-                        };
-                    }
-
-                    return (
-                        <div style={{ width: '100%', height: '100%', position: 'relative' }}>
-                            <EChart
-                                style={{ width: '100%', height: '100%' }}
-                                option={mapOption}
-                                onEvents={{ click: mapClickHandler }}
-                            />
-                        </div>
-                    );
-                }
-
-                return (
-                    <div style={{ width: '100%', height: '100%', display: 'flex', flexDirection: 'column', gap: 10 }}>
-                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                            <div style={{ color: t.textPrimary, fontSize: 14, fontWeight: 600 }}>{title}</div>
-                            {mapDrillRegion ? (
-                                <button
-                                    type="button"
-                                    onClick={() => setMapDrillRegion(null)}
-                                    style={{
-                                        border: '1px solid rgba(148,163,184,0.4)',
-                                        background: 'rgba(15,23,42,0.45)',
-                                        color: t.textPrimary,
-                                        borderRadius: 4,
-                                        fontSize: 11,
-                                        cursor: 'pointer',
-                                        padding: '2px 8px',
-                                    }}
-                                >
-                                    返回上级
-                                </button>
-                            ) : null}
-                        </div>
-                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(120px, 1fr))', gap: 8 }}>
-                            {listRows.map((item, index) => {
-                                const value = Number(item.value ?? 0);
-                                const ratio = maxValue <= 0 ? 0 : Math.max(0, Math.min(1, value / maxValue));
-                                const colorAlpha = 0.18 + ratio * 0.46;
-                                const name = String(item.name ?? `区域${index + 1}`);
-                                const hasChild = getChildren(item).length > 0;
-                                return (
-                                    <button
-                                        key={`${name}_${index}`}
-                                        type="button"
-                                        onClick={() => {
-                                            if (canRegionDrill && hasChild) {
-                                                setMapDrillRegion(name);
-                                            }
-                                            const variableKey = String(c.regionVariableKey ?? '').trim();
-                                            if (variableKey) {
-                                                runtime.setVariable(variableKey, name, `map-grid:${component.id}`);
-                                            }
-                                            const code = resolveRegionCode(item);
-                                            if (regionCodeVariableKey && code) {
-                                                runtime.setVariable(regionCodeVariableKey, code, `map-grid:${component.id}`);
-                                            }
-                                        }}
-                                        style={{
-                                            border: '1px solid rgba(148,163,184,0.25)',
-                                            borderRadius: 8,
-                                            background: `rgba(59,130,246,${colorAlpha.toFixed(3)})`,
-                                            color: t.textPrimary,
-                                            textAlign: 'left',
-                                            padding: '8px 10px',
-                                            minHeight: 56,
-                                            cursor: 'pointer',
-                                        }}
-                                    >
-                                        <div style={{ fontSize: 12, fontWeight: 600 }}>{name}</div>
-                                        <div style={{ marginTop: 4, fontSize: 12, color: t.textSecondary }}>
-                                            {Number.isFinite(value) ? value.toLocaleString('zh-CN') : '-'}
-                                        </div>
-                                    </button>
-                                );
-                            })}
-                        </div>
-                    </div>
-                );
-            }
-
-            // ==================== 基础组件 ====================
+            // ==================== 基础 + 形状 + 媒体组件 ====================
             case 'number-card':
-                return (
-                    <div style={{
-                        width: '100%',
-                        height: '100%',
-                        display: 'flex',
-                        flexDirection: 'column',
-                        justifyContent: 'center',
-                        alignItems: 'center',
-                        background: (c.backgroundColor as string) || t.numberCard.background,
-                        borderRadius: t.cardBorderRadius,
-                        border: t.numberCard.border,
-                        boxShadow: t.cardShadow,
-                    }}>
-                        <div style={{
-                            fontSize: (c.titleFontSize as number) || 12,
-                            color: resolveTextColor(c.titleColor as string | undefined, t.numberCard.titleColor),
-                            marginBottom: 8,
-                        }}>
-                            {c.title as string}
-                        </div>
-                        <div style={{
-                            fontSize: (c.valueFontSize as number) || 32,
-                            fontWeight: 'bold',
-                            color: resolveTextColor(c.valueColor as string | undefined, t.numberCard.valueColor),
-                        }}>
-                            {c.prefix as string}
-                            {c.value != null ? Number(c.value).toLocaleString('zh-CN') : '-'}
-                            {c.suffix as string}
-                        </div>
-                    </div>
-                );
-
             case 'title':
-                return (
-                    <div style={{
-                        width: '100%',
-                        height: '100%',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: c.textAlign as string,
-                        fontSize: c.fontSize as number,
-                        fontWeight: c.fontWeight as string,
-                        color: resolveTextColor(c.color as string | undefined, t.textPrimary),
-                    }}>
-                        {c.text as string}
-                    </div>
-                );
-
-            case 'markdown-text': {
-                const markdown = String(c.markdown ?? '');
-                const html = renderMarkdownToHtml(markdown);
-                return (
-                    <div
-                        style={{
-                            width: '100%',
-                            height: '100%',
-                            overflow: 'auto',
-                            color: resolveTextColor(c.color as string | undefined, t.textPrimary),
-                            fontSize: (c.fontSize as number) || 14,
-                            lineHeight: Number(c.lineHeight || 1.6),
-                            padding: 8,
-                        }}
-                        dangerouslySetInnerHTML={{ __html: html }}
-                    />
-                );
-            }
-
-            case 'richtext': {
-                const rtContent = String(c.content ?? '');
-                // Sanitize: strip script/iframe/style/on* attributes
-                const sanitizedRtHtml = rtContent
-                    .replace(/<script[\s\S]*?<\/script>/gi, '')
-                    .replace(/<iframe[\s\S]*?<\/iframe>/gi, '')
-                    .replace(/<style[\s\S]*?<\/style>/gi, '')
-                    .replace(/\bon\w+\s*=\s*["'][^"']*["']/gi, '')
-                    .replace(/\bon\w+\s*=\s*\S+/gi, '')
-                    .replace(/<a\s/gi, '<a rel="noreferrer" target="_blank" ');
-                const rtPadding = Number(c.padding ?? 12);
-                const rtOverflow = String(c.overflow ?? 'hidden');
-                const rtVAlign = String(c.verticalAlign ?? 'top');
-                const alignMap: Record<string, string> = { top: 'flex-start', middle: 'center', bottom: 'flex-end' };
-                return (
-                    <div
-                        style={{
-                            width: '100%',
-                            height: '100%',
-                            padding: rtPadding,
-                            overflow: rtOverflow as 'hidden' | 'visible' | 'scroll',
-                            display: 'flex',
-                            flexDirection: 'column',
-                            justifyContent: alignMap[rtVAlign] ?? 'flex-start',
-                            boxSizing: 'border-box',
-                        }}
-                        dangerouslySetInnerHTML={{ __html: sanitizedRtHtml }}
-                    />
-                );
-            }
-
-            case 'datetime': {
-                const formatted = (c.format as string)
-                    .replace('YYYY', String(currentTime.getFullYear()))
-                    .replace('MM', String(currentTime.getMonth() + 1).padStart(2, '0'))
-                    .replace('DD', String(currentTime.getDate()).padStart(2, '0'))
-                    .replace('HH', String(currentTime.getHours()).padStart(2, '0'))
-                    .replace('mm', String(currentTime.getMinutes()).padStart(2, '0'))
-                    .replace('ss', String(currentTime.getSeconds()).padStart(2, '0'));
-                return (
-                    <div style={{
-                        width: '100%',
-                        height: '100%',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        fontSize: c.fontSize as number,
-                        color: resolveTextColor(c.color as string | undefined, t.textPrimary),
-                        fontFamily: 'monospace',
-                    }}>
-                        {formatted}
-                    </div>
-                );
-            }
-
-            case 'countdown': {
-                const targetVariableKey = String(c.targetVariableKey || '').trim();
-                const runtimeTarget = targetVariableKey ? String(runtime.values[targetVariableKey] || '').trim() : '';
-                const configuredTarget = String(c.targetTime || '').trim();
-                const targetRaw = runtimeTarget || configuredTarget;
-                const targetMillis = Date.parse(targetRaw);
-                const hasTarget = Number.isFinite(targetMillis);
-                const remaining = hasTarget ? Math.max(0, targetMillis - currentTime.getTime()) : 0;
-                const dayMs = 24 * 3600 * 1000;
-                const hourMs = 3600 * 1000;
-                const minuteMs = 60 * 1000;
-                const days = Math.floor(remaining / dayMs);
-                const hours = Math.floor((remaining % dayMs) / hourMs);
-                const minutes = Math.floor((remaining % hourMs) / minuteMs);
-                const seconds = Math.floor((remaining % minuteMs) / 1000);
-                const showDays = c.showDays !== false;
-                const accentColor = (c.accentColor as string) || t.accentColor;
-                const labelColor = resolveTextColor(c.color as string | undefined, t.textSecondary);
-                return (
-                    <div style={{ width: '100%', height: '100%', display: 'flex', flexDirection: 'column', justifyContent: 'center', gap: 8 }}>
-                        <div style={{ fontSize: 12, color: labelColor }}>
-                            {String(c.title || '倒计时')}
-                        </div>
-                        {!hasTarget ? (
-                            <div style={{ fontSize: 13, color: labelColor, opacity: 0.8 }}>
-                                请配置目标时间或绑定目标时间变量
-                            </div>
-                        ) : null}
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 10, color: accentColor, fontWeight: 700 }}>
-                            {showDays ? <span style={{ fontSize: 26 }}>{String(days).padStart(2, '0')}天</span> : null}
-                            <span style={{ fontSize: 26 }}>{String(hours).padStart(2, '0')}:</span>
-                            <span style={{ fontSize: 26 }}>{String(minutes).padStart(2, '0')}:</span>
-                            <span style={{ fontSize: 26 }}>{String(seconds).padStart(2, '0')}</span>
-                        </div>
-                    </div>
-                );
-            }
-
-            case 'marquee': {
-                const text = String(c.text || '');
-                const speed = Math.max(10, Number(c.speed || 40));
-                const keyframesName = `dts_marquee_${component.id.replace(/[^a-zA-Z0-9_]/g, '_')}`;
-                return (
-                    <div
-                        style={{
-                            width: '100%',
-                            height: '100%',
-                            overflow: 'hidden',
-                            display: 'flex',
-                            alignItems: 'center',
-                            background: (c.backgroundColor as string) || 'transparent',
-                            color: resolveTextColor(c.color as string | undefined, t.textPrimary),
-                            fontSize: (c.fontSize as number) || 14,
-                            whiteSpace: 'nowrap',
-                            position: 'relative',
-                        }}
-                    >
-                        <style>{`@keyframes ${keyframesName} { from { transform: translateX(100%); } to { transform: translateX(-100%); } }`}</style>
-                        <div style={{ display: 'inline-block', paddingLeft: '100%', animation: `${keyframesName} ${speed}s linear infinite` }}>
-                            {text}
-                        </div>
-                    </div>
-                );
-            }
-
-            case 'carousel': {
-                const items = carouselItems;
-                const hasItems = items.length > 0;
-                const index = hasItems ? (carouselIndex % items.length) : 0;
-                const currentItem = hasItems ? items[index] : '暂无轮播内容';
-                const cardTitle = String(c.title || '轮播卡片');
-                const cardColor = resolveTextColor(c.color as string | undefined, t.textPrimary);
-                const titleColor = resolveTextColor(c.titleColor as string | undefined, t.textSecondary);
-                const backgroundColor = String(c.backgroundColor || t.cardBackground);
-                const fontSize = Math.max(12, Number(c.fontSize || 24));
-                const showDots = c.showDots !== false;
-                const showControls = c.showControls !== false;
-                const pauseOnHover = c.pauseOnHover !== false;
-                const canFlip = hasItems && items.length > 1;
-                return (
-                    <div
-                        style={{
-                            width: '100%',
-                            height: '100%',
-                            border: '1px solid rgba(148,163,184,0.3)',
-                            borderRadius: 10,
-                            background: backgroundColor,
-                            padding: 12,
-                            display: 'flex',
-                            flexDirection: 'column',
-                            justifyContent: 'space-between',
-                            boxSizing: 'border-box',
-                            overflow: 'hidden',
-                        }}
-                        onMouseEnter={() => {
-                            if (pauseOnHover) {
-                                setCarouselPaused(true);
-                            }
-                        }}
-                        onMouseLeave={() => {
-                            if (pauseOnHover) {
-                                setCarouselPaused(false);
-                            }
-                        }}
-                    >
-                        <div style={{ fontSize: 12, color: titleColor, letterSpacing: 0.4 }}>
-                            {cardTitle}
-                        </div>
-                        <div style={{ flex: 1, display: 'grid', gridTemplateColumns: showControls ? '28px 1fr 28px' : '1fr', alignItems: 'center', gap: 8 }}>
-                            {showControls && (
-                                <button
-                                    type="button"
-                                    onClick={() => {
-                                        if (!canFlip) return;
-                                        setCarouselIndex((prev) => (prev - 1 + items.length) % items.length);
-                                    }}
-                                    style={{
-                                        width: 28,
-                                        height: 28,
-                                        borderRadius: '50%',
-                                        border: '1px solid rgba(148,163,184,0.4)',
-                                        background: 'rgba(15,23,42,0.45)',
-                                        color: cardColor,
-                                        cursor: canFlip ? 'pointer' : 'default',
-                                        opacity: canFlip ? 1 : 0.45,
-                                    }}
-                                    title="上一条"
-                                >
-                                    {'<'}
-                                </button>
-                            )}
-                            <div
-                                style={{
-                                    display: 'flex',
-                                    alignItems: 'center',
-                                    color: cardColor,
-                                    fontSize,
-                                    fontWeight: 600,
-                                    lineHeight: 1.35,
-                                    transition: 'opacity 0.2s ease',
-                                    wordBreak: 'break-word',
-                                    opacity: hasItems ? 1 : 0.7,
-                                }}
-                            >
-                                {currentItem}
-                            </div>
-                            {showControls && (
-                                <button
-                                    type="button"
-                                    onClick={() => {
-                                        if (!canFlip) return;
-                                        setCarouselIndex((prev) => (prev + 1) % items.length);
-                                    }}
-                                    style={{
-                                        width: 28,
-                                        height: 28,
-                                        borderRadius: '50%',
-                                        border: '1px solid rgba(148,163,184,0.4)',
-                                        background: 'rgba(15,23,42,0.45)',
-                                        color: cardColor,
-                                        cursor: canFlip ? 'pointer' : 'default',
-                                        opacity: canFlip ? 1 : 0.45,
-                                    }}
-                                    title="下一条"
-                                >
-                                    {'>'}
-                                </button>
-                            )}
-                        </div>
-                        {showDots && hasItems && (
-                            <div style={{ display: 'flex', gap: 6, justifyContent: 'flex-end', alignItems: 'center' }}>
-                                {items.map((_, dotIdx) => (
-                                    <span
-                                        key={`dot-${dotIdx}`}
-                                        style={{
-                                            width: dotIdx === index ? 16 : 6,
-                                            height: 6,
-                                            borderRadius: 999,
-                                            background: dotIdx === index ? '#38bdf8' : 'rgba(148,163,184,0.45)',
-                                            transition: 'all 0.2s ease',
-                                        }}
-                                    />
-                                ))}
-                            </div>
-                        )}
-                    </div>
-                );
-            }
-
-            case 'progress-bar': {
-                const value = c.value as number;
-                return (
-                    <div style={{
-                        width: '100%',
-                        height: '100%',
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: 8,
-                    }}>
-                        <div style={{
-                            flex: 1,
-                            height: 12,
-                            background: t.progressBar.trackBg,
-                            borderRadius: 6,
-                            overflow: 'hidden',
-                        }}>
-                            <div style={{
-                                width: `${value}%`,
-                                height: '100%',
-                                background: `linear-gradient(90deg, ${t.progressBar.fillGradient[0]} 0%, ${t.progressBar.fillGradient[1]} 100%)`,
-                                borderRadius: 6,
-                                transition: 'width 0.3s ease',
-                            }} />
-                        </div>
-                        {Boolean(c.showLabel) && (
-                            <span style={{ color: t.progressBar.labelColor, fontSize: 12, minWidth: 40 }}>{value}%</span>
-                        )}
-                    </div>
-                );
-            }
-
-            case 'tab-switcher': {
-                const options = tabOptions;
-                const label = String(c.label ?? '切换');
-                const activeValue = tabRuntimeValue || tabDefaultValue || options[0]?.value || '';
-                const activeTextColor = String(c.activeTextColor || '#0f172a');
-                const activeBackgroundColor = String(c.activeBackgroundColor || '#38bdf8');
-                const inactiveTextColor = String(c.inactiveTextColor || t.textSecondary);
-                const inactiveBackgroundColor = String(c.inactiveBackgroundColor || 'rgba(15,23,42,0.45)');
-                const compact = c.compact === true;
-                return (
-                    <div style={{ width: '100%', height: '100%', display: 'flex', flexDirection: 'column', gap: 6 }}>
-                        <div style={{ fontSize: 12, color: t.textSecondary }}>{label}</div>
-                        <div style={{ display: 'flex', gap: compact ? 4 : 8, flexWrap: 'wrap', alignItems: 'center' }}>
-                            {options.map((option) => {
-                                const active = option.value === activeValue;
-                                return (
-                                    <button
-                                        key={option.value}
-                                        type="button"
-                                        onClick={() => {
-                                            if (!tabVariableKey) return;
-                                            runtime.setVariable(tabVariableKey, option.value, `tab-switcher:${component.id}`);
-                                        }}
-                                        style={{
-                                            border: '1px solid rgba(148,163,184,0.3)',
-                                            background: active ? activeBackgroundColor : inactiveBackgroundColor,
-                                            color: active ? activeTextColor : inactiveTextColor,
-                                            borderRadius: 999,
-                                            padding: compact ? '3px 10px' : '6px 14px',
-                                            fontSize: compact ? 11 : 12,
-                                            cursor: tabVariableKey ? 'pointer' : 'default',
-                                            whiteSpace: 'nowrap',
-                                            transition: 'all 0.2s ease',
-                                        }}
-                                    >
-                                        {option.label}
-                                    </button>
-                                );
-                            })}
-                            {options.length === 0 && (
-                                <span style={{ fontSize: 12, color: t.textSecondary }}>请在属性中配置 Tab 选项</span>
-                            )}
-                        </div>
-                    </div>
-                );
-            }
-
-            case 'filter-input': {
-                const label = String(c.label ?? '筛选');
-                const scopeHint = String(c.scopeHint ?? '').trim();
-                const variableKey = String(c.variableKey ?? '').trim();
-                const placeholder = String(c.placeholder ?? '请输入');
-                const value = variableKey ? filterInputDraft : '';
-                const labelColor = String(c.labelColor || t.textSecondary);
-                const inputTextColor = String(c.inputTextColor || t.textPrimary);
-                const inputBorderColor = String(c.inputBorderColor || 'rgba(148,163,184,0.4)');
-                const inputBackground = String(c.inputBackground || (theme === 'glacier' ? '#ffffff' : 'rgba(15,23,42,0.65)'));
-                const debounceMs = normalizeFilterDebounceMs(c.debounceMs);
-                return (
-                    <div style={{ width: '100%', height: '100%', display: 'flex', flexDirection: 'column', gap: 6 }}>
-                        <div style={{ fontSize: 12, color: labelColor }}>{label}</div>
-                        {scopeHint ? <div style={{ fontSize: 10, color: t.textSecondary }}>{scopeHint}</div> : null}
-                        <input
-                            type="text"
-                            value={value}
-                            onChange={(e) => {
-                                const nextValue = e.target.value;
-                                setFilterInputDraft(nextValue);
-                                if (!variableKey) return;
-                                scheduleFilterVariableUpdate(variableKey, nextValue, `filter-input:${component.id}`, debounceMs);
-                            }}
-                            onBlur={() => {
-                                if (!variableKey) return;
-                                scheduleFilterVariableUpdate(variableKey, filterInputDraft, `filter-input:${component.id}`, debounceMs, true);
-                            }}
-                            placeholder={placeholder}
-                            style={{
-                                width: '100%',
-                                height: 34,
-                                borderRadius: 6,
-                                border: `1px solid ${inputBorderColor}`,
-                                background: inputBackground,
-                                color: inputTextColor,
-                                padding: '0 10px',
-                                outline: 'none',
-                            }}
-                        />
-                    </div>
-                );
-            }
-
-            case 'filter-select': {
-                const label = String(c.label ?? '筛选');
-                const scopeHint = String(c.scopeHint ?? '').trim();
-                const variableKey = filterSelectVariableKey;
-                const placeholder = String(c.placeholder ?? '请选择');
-                const options = filterSelectOptions;
-                const value = variableKey ? (runtime.values[variableKey] ?? '') : '';
-                const labelColor = String(c.labelColor || t.textSecondary);
-                const inputTextColor = String(c.inputTextColor || t.textPrimary);
-                const inputBorderColor = String(c.inputBorderColor || 'rgba(148,163,184,0.4)');
-                const inputBackground = String(c.inputBackground || (theme === 'glacier' ? '#ffffff' : 'rgba(15,23,42,0.65)'));
-                return (
-                    <div style={{ width: '100%', height: '100%', display: 'flex', flexDirection: 'column', gap: 6 }}>
-                        <div style={{ fontSize: 12, color: labelColor }}>{label}</div>
-                        {scopeHint ? <div style={{ fontSize: 10, color: t.textSecondary }}>{scopeHint}</div> : null}
-                        <select
-                            value={value}
-                            onChange={(e) => variableKey && runtime.setVariable(variableKey, e.target.value, `filter-select:${component.id}`)}
-                            style={{
-                                width: '100%',
-                                height: 34,
-                                borderRadius: 6,
-                                border: `1px solid ${inputBorderColor}`,
-                                background: inputBackground,
-                                color: inputTextColor,
-                                padding: '0 10px',
-                                outline: 'none',
-                            }}
-                        >
-                            <option value="">{placeholder}</option>
-                            {options.map((option) => (
-                                <option key={option.value} value={option.value}>{option.label}</option>
-                            ))}
-                        </select>
-                    </div>
-                );
-            }
-
-            case 'filter-date-range': {
-                const label = String(c.label ?? '日期区间');
-                const scopeHint = String(c.scopeHint ?? '').trim();
-                const startKey = filterDateStartKey;
-                const endKey = filterDateEndKey;
-                const startValue = startKey ? (runtime.values[startKey] ?? '') : '';
-                const endValue = endKey ? (runtime.values[endKey] ?? '') : '';
-                const labelColor = String(c.labelColor || t.textSecondary);
-                const inputTextColor = String(c.inputTextColor || t.textPrimary);
-                const inputBorderColor = String(c.inputBorderColor || 'rgba(148,163,184,0.4)');
-                const inputBackground = String(c.inputBackground || (theme === 'glacier' ? '#ffffff' : 'rgba(15,23,42,0.65)'));
-                return (
-                    <div style={{ width: '100%', height: '100%', display: 'flex', flexDirection: 'column', gap: 6 }}>
-                        <div style={{ fontSize: 12, color: labelColor }}>{label}</div>
-                        {scopeHint ? <div style={{ fontSize: 10, color: t.textSecondary }}>{scopeHint}</div> : null}
-                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 16px 1fr', alignItems: 'center', gap: 4 }}>
-                            <input
-                                type="date"
-                                value={startValue}
-                                onChange={(e) => startKey && runtime.setVariable(startKey, e.target.value, `filter-date-range:start:${component.id}`)}
-                                style={{
-                                    width: '100%',
-                                    height: 34,
-                                    borderRadius: 6,
-                                    border: `1px solid ${inputBorderColor}`,
-                                    background: inputBackground,
-                                    color: inputTextColor,
-                                    padding: '0 8px',
-                                    outline: 'none',
-                                }}
-                            />
-                            <span style={{ textAlign: 'center', color: t.textSecondary }}>~</span>
-                            <input
-                                type="date"
-                                value={endValue}
-                                onChange={(e) => endKey && runtime.setVariable(endKey, e.target.value, `filter-date-range:end:${component.id}`)}
-                                style={{
-                                    width: '100%',
-                                    height: 34,
-                                    borderRadius: 6,
-                                    border: `1px solid ${inputBorderColor}`,
-                                    background: inputBackground,
-                                    color: inputTextColor,
-                                    padding: '0 8px',
-                                    outline: 'none',
-                                }}
-                            />
-                        </div>
-                    </div>
-                );
-            }
-
-            case 'shape': {
-                const shapeType = String(c.shapeType || 'rect');
-                const fillColor = String(c.fillColor || 'rgba(59,130,246,0.2)');
-                const borderColor = String(c.borderColor || '#60a5fa');
-                const borderWidth = Math.max(0, Number(c.borderWidth || 2));
-                const radius = Math.max(0, Number(c.radius || 8));
-                if (shapeType === 'line' || shapeType === 'arrow') {
-                    return (
-                        <svg width="100%" height="100%" viewBox="0 0 100 100" preserveAspectRatio="none">
-                            {shapeType === 'arrow' ? (
-                                <defs>
-                                    <marker id={`arrow_${component.id}`} markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto">
-                                        <path d="M0,0 L0,6 L6,3 z" fill={borderColor} />
-                                    </marker>
-                                </defs>
-                            ) : null}
-                            <line
-                                x1="8"
-                                y1="50"
-                                x2="92"
-                                y2="50"
-                                stroke={borderColor}
-                                strokeWidth={borderWidth || 2}
-                                markerEnd={shapeType === 'arrow' ? `url(#arrow_${component.id})` : undefined}
-                            />
-                        </svg>
-                    );
-                }
-                if (shapeType === 'circle') {
-                    return (
-                        <div style={{ width: '100%', height: '100%', borderRadius: '50%', background: fillColor, border: `${borderWidth}px solid ${borderColor}` }} />
-                    );
-                }
-                return (
-                    <div style={{ width: '100%', height: '100%', borderRadius: radius, background: fillColor, border: `${borderWidth}px solid ${borderColor}` }} />
-                );
-            }
-
+            case 'markdown-text':
+            case 'richtext':
+            case 'datetime':
+            case 'countdown':
+            case 'marquee':
+            case 'carousel':
+            case 'progress-bar':
+            case 'tab-switcher':
+            case 'shape':
             case 'container':
-                return (
-                    <div style={{
-                        width: '100%',
-                        height: '100%',
-                        border: `${Math.max(0, Number(c.borderWidth || 1))}px solid ${String(c.borderColor || 'rgba(148,163,184,0.35)')}`,
-                        borderRadius: Math.max(0, Number(c.radius || 10)),
-                        background: String(c.backgroundColor || t.cardBackground),
-                        padding: Math.max(0, Number(c.padding || 12)),
-                        boxSizing: 'border-box',
-                        color: resolveTextColor(c.titleColor as string | undefined, t.textPrimary),
-                    }}>
-                        <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 8 }}>
-                            {String(c.title || '容器')}
-                        </div>
-                        <div style={{ fontSize: 12, color: t.textSecondary }}>
-                            容器组件：可用于分组布局与内容分区
-                        </div>
-                    </div>
-                );
-
             case 'image':
-                return isSafeSrcUrl(c.src) ? (
-                    <img
-                        src={c.src as string}
-                        alt=""
-                        style={{
-                            width: '100%',
-                            height: '100%',
-                            objectFit: c.fit as 'cover' | 'contain' | 'fill',
-                        }}
-                    />
-                ) : (
-                    <div style={{
-                        width: '100%',
-                        height: '100%',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        background: t.placeholder.background,
-                        border: t.placeholder.border,
-                        borderRadius: 4,
-                        color: t.placeholder.color,
-                        fontSize: 14,
-                    }}>
-                        图片
-                    </div>
-                );
-
             case 'video':
-                return isSafeSrcUrl(c.src) ? (
-                    <video
-                        src={c.src as string}
-                        autoPlay={c.autoplay as boolean}
-                        loop={c.loop as boolean}
-                        muted={c.muted as boolean}
-                        style={{ width: '100%', height: '100%', objectFit: 'cover' }}
-                    />
-                ) : (
-                    <div style={{
-                        width: '100%',
-                        height: '100%',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        background: t.placeholder.background,
-                        border: t.placeholder.border,
-                        borderRadius: 4,
-                        color: t.placeholder.color,
-                        fontSize: 14,
-                    }}>
-                        视频
-                    </div>
-                );
-
             case 'iframe':
-                return isSafeSrcUrl(c.src) ? (
-                    <iframe
-                        src={c.src as string}
-                        sandbox="allow-scripts allow-same-origin"
-                        style={{ width: '100%', height: '100%', border: 'none' }}
-                        title="Embedded content"
-                    />
-                ) : (
-                    <div style={{
-                        width: '100%',
-                        height: '100%',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        background: t.placeholder.background,
-                        border: t.placeholder.border,
-                        borderRadius: 4,
-                        color: t.placeholder.color,
-                        fontSize: 14,
-                    }}>
-                        iframe
-                    </div>
-                );
+                return renderBasic(type, {
+                    c, t, component, runtime,
+                    currentTime,
+                    carouselItems, carouselIndex, setCarouselIndex, setCarouselPaused,
+                    tabOptions, tabRuntimeValue, tabDefaultValue, tabVariableKey,
+                });
 
-            // ==================== DataV 边框组件 ====================
-            case 'border-box': {
-                const boxType = (c.boxType as number) || 1;
-                const BorderBoxComponent = borderBoxComponents?.[boxType] || borderBoxComponents?.[1];
-                if (!BorderBoxComponent) return renderUnavailableState('DataV 运行时未就绪');
-                const colors = c.color as string[] | undefined;
-                return (
-                    <BorderBoxComponent color={colors}>
-                        <div style={{ width: '100%', height: '100%', padding: 16 }}>
-                            {c.children as React.ReactNode}
-                        </div>
-                    </BorderBoxComponent>
-                );
-            }
+            // ==================== Filter 组件 (delegated to FilterRenderer) ====================
+            case 'filter-input':
+            case 'filter-select':
+            case 'filter-date-range':
+                return renderFilter(type, {
+                    c, t, theme, component, runtime,
+                    filterInputDraft, setFilterInputDraft,
+                    filterSelectVariableKey, filterSelectOptions,
+                    filterDateStartKey, filterDateEndKey,
+                    scheduleFilterVariableUpdate,
+                });
 
-            // ==================== DataV 装饰组件 ====================
-            case 'decoration': {
-                const decorationType = (c.decorationType as number) || 1;
-                const DecorationComponent = decorationComponents?.[decorationType] || decorationComponents?.[1];
-                if (!DecorationComponent) return renderUnavailableState('DataV 运行时未就绪');
-                const colors = c.color as string[] | undefined;
-                return (
-                    <DecorationComponent color={colors} style={{ width: '100%', height: '100%' }} />
-                );
-            }
+            // ==================== DataV 组件 (delegated to DataVRenderer) ====================
+            case 'border-box':
+            case 'decoration':
+                return renderDataV({ type, c, borderBoxComponents, decorationComponents, renderUnavailableState });
+
+            // ==================== Table-family (delegated to TableRenderer) ====================
+            case 'scroll-board':
+            case 'table':
+            case 'scroll-ranking':
+                return renderTable({
+                    type,
+                    c,
+                    t,
+                    width,
+                    height,
+                    theme,
+                    mode,
+                    component,
+                    runtime: runtime as any,
+                    cardData,
+                    tableSort,
+                    setTableSort,
+                    tablePage,
+                    setTablePage,
+                    drillState: drillState as any,
+                    drillActive,
+                    drillRuntimeEnabled,
+                    componentActions: componentActions as any,
+                    executeComponentActions,
+                    dataViewModule: dataViewModule as Record<string, React.ComponentType<Record<string, unknown>>> | null,
+                    renderUnavailableState,
+                });
 
             // ==================== DataV 数据展示组件 ====================
-            case 'scroll-board': {
-                const { header: displayHeader, data: displayData, columnMeta } = resolveBoundTableData(c, { defaultAlign: 'center' });
-                const filteredConfig = { ...c, header: displayHeader, data: displayData, _columnMeta: columnMeta };
-                const canRunScrollBoardActions = mode === 'preview' && componentActions.length > 0;
-                const canRunScrollBoardDefaultDrill = mode === 'preview' && !canRunScrollBoardActions && drillRuntimeEnabled && drillState.canDrillDown;
-                const handleScrollBoardRowClick = (row: string[]) => {
-                    const params = buildTableRowActionParams(displayHeader, row);
-                    if (canRunScrollBoardActions) {
-                        executeComponentActions(params);
-                        return;
-                    }
-                    if (!canRunScrollBoardDefaultDrill) {
-                        return;
-                    }
-                    const clickedValue = resolvePreferredDrillValue(params);
-                    if (!clickedValue) {
-                        return;
-                    }
-                    runtime.trackEvent({
-                        kind: 'drill-down',
-                        key: 'drillValue',
-                        value: clickedValue,
-                        source: `drill:${component.id}:scroll-board`,
-                        meta: `depth=${drillState.breadcrumbs.length}`,
-                    });
-                    drillState.handleDrill(clickedValue);
-                };
-
-                // DataV ScrollBoard 硬编码 color:#fff 且无法通过 CSS/style 覆盖
-                // 非 legacy-dark 主题使用自定义表格组件
-                if (theme && theme !== 'legacy-dark') {
-                    return (
-                        <ThemedScrollTable
-                            config={filteredConfig}
-                            tokens={t}
-                            isRowInteractive={canRunScrollBoardActions || canRunScrollBoardDefaultDrill}
-                            onRowClick={handleScrollBoardRowClick}
-                        />
-                    );
-                }
-                if (!ScrollBoard) return renderUnavailableState('DataV 运行时未就绪');
-                const allHaveWidth = columnMeta.length > 0 && columnMeta.every((col) => typeof col.width === 'number');
-                const columnWidth = allHaveWidth
-                    ? columnMeta.map((col) => Math.max(40, Math.round((width * Number(col.width)) / 100)))
-                    : undefined;
-                return (
-                    <ScrollBoard
-                        config={{
-                            header: displayHeader,
-                            data: displayData,
-                            rowNum: c.rowNum as number,
-                            headerBGC: c.headerBGC as string,
-                            oddRowBGC: c.oddRowBGC as string,
-                            evenRowBGC: c.evenRowBGC as string,
-                            waitTime: c.waitTime as number || 2000,
-                            headerHeight: 35,
-                            align: columnMeta.map((col) => col.align || 'center'),
-                            ...(columnWidth ? { columnWidth } : {}),
-                        }}
-                        style={{ width: '100%', height: '100%' }}
-                    />
-                );
-            }
 
             case 'table': {
                 const tableRenderMode = String(c.renderMode ?? '').trim().toLowerCase();
@@ -3556,7 +1608,7 @@ export const ComponentRenderer = memo(function ComponentRenderer({ component, mo
                     );
                 }
                 const { header: displayHeader, data: displayData, columnMeta } = resolveBoundTableData(c, { defaultAlign: 'left' });
-                const fontSize = (c.fontSize as number) || 13;
+                const fontSize = (c.fontSize as number) || 16;
                 const headerColor = resolveTextColor(c.headerColor as string | undefined, t.textPrimary);
                 const headerBackground = (c.headerBackground as string) || 'rgba(148, 163, 184, 0.16)';
                 const bodyColor = resolveTextColor(c.bodyColor as string | undefined, t.textSecondary);
@@ -3599,7 +1651,7 @@ export const ComponentRenderer = memo(function ComponentRenderer({ component, mo
                                                 borderBottom: '1px solid ' + borderColor,
                                                 borderRight: i < displayHeader.length - 1 ? '1px solid ' + borderColor : 'none',
                                                 padding: '8px 10px',
-                                                textAlign: columnMeta[i]?.align || 'left',
+                                                textAlign: columnMeta[i]?.headerAlign ?? columnMeta[i]?.align ?? 'left',
                                                 fontWeight: 600,
                                                 whiteSpace: columnMeta[i]?.wrap ? 'normal' : 'nowrap',
                                                 overflow: 'hidden',

@@ -8,6 +8,7 @@ import { RuntimeActionPanel } from './components/RuntimeActionPanel';
 import { ScreenRuntimeProvider } from './ScreenRuntimeContext';
 import type { ScreenConfig, ScreenTheme } from './types';
 import { resolveScreenTheme } from './screenThemes';
+import { applyThemeCssVariables } from './themes/screenCssVariables';
 import { normalizeScreenConfig } from './specV2';
 import { buildComponentMap, isComponentEffectivelyVisible } from './componentHierarchy';
 import { safeCssBackgroundUrl } from './sanitize';
@@ -258,6 +259,17 @@ export default function ScreenPreviewPage() {
         [components, scale],
     );
 
+    const canvasRef = useRef<HTMLDivElement>(null);
+    const rawTheme = (!loading && !error && screen) ? (screen as { theme?: string }).theme as ScreenTheme | undefined : undefined;
+    const screenTheme = resolveScreenTheme(rawTheme, screen?.backgroundColor);
+
+    // Inject CSS Variables for theme — ensures theme switching takes effect immediately
+    useEffect(() => {
+        if (canvasRef.current) {
+            applyThemeCssVariables(canvasRef.current, screenTheme);
+        }
+    }, [screenTheme]);
+
     // ── Early returns MUST be after all hooks ──
     if (loading) {
         return (
@@ -285,8 +297,6 @@ export default function ScreenPreviewPage() {
         );
     }
 
-    const rawTheme = (screen as { theme?: string }).theme as ScreenTheme | undefined;
-    const screenTheme = resolveScreenTheme(rawTheme, screen.backgroundColor);
     const screenWidth = contentBounds.width;
     const screenHeight = contentBounds.height;
     const stageWidth = Math.max(1, screenWidth * scale);
@@ -309,6 +319,7 @@ export default function ScreenPreviewPage() {
                     <div className="screen-runtime__stage" style={{ width: stageWidth, height: stageHeight }}>
                         <div className="screen-runtime__canvas-shell">
                         <div
+                            ref={canvasRef}
                             className="screen-runtime__canvas"
                             style={{
                                 width: screenWidth,

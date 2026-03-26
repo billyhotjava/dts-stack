@@ -722,3 +722,46 @@
 .gpmc--fullscreen .gpmc__topbar-title {
   font-size: 28px;
 }
+
+/* ── Drill page — white text override ── */
+.gpmc-drill {
+  --gpmc-text: #ffffff;
+  --gpmc-muted: rgba(255, 255, 255, 0.78);
+  --gpmc-matrix-text: #ffffff;
+}
+
+.gpmc-drill .gpmc__table th {
+  color: rgba(255, 255, 255, 0.78);
+}
+
+.gpmc-drill .gpmc__table td {
+  color: #ffffff;
+}
+
+.gpmc-drill .gpmc__kpi-label {
+  color: rgba(255, 255, 255, 0.78);
+}
+
+.gpmc-drill .gpmc__kpi-value {
+  color: #ffffff;
+}
+
+.gpmc-drill .gpmc__kpi-sub {
+  color: rgba(255, 255, 255, 0.78);
+}
+
+.gpmc-drill .gpmc__panel-title {
+  color: #ffffff;
+}
+
+.gpmc-drill .gpmc__panel-subtitle {
+  color: rgba(255, 255, 255, 0.78);
+}
+
+.gpmc-drill .gpmc__breadcrumb {
+  color: rgba(255, 255, 255, 0.78);
+}
+
+.gpmc-drill .gpmc__breadcrumb-current {
+  color: #ffffff;
+}

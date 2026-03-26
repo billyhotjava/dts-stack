@@ -11,7 +11,7 @@ interface Breadcrumb {
     depth: number;
 }
 
-interface DrillState {
+export interface DrillState {
     effectiveCardId: number | undefined;
     queryParameters: Array<{ name: string; value: string }> | undefined;
     breadcrumbs: Breadcrumb[];

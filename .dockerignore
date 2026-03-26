@@ -18,6 +18,8 @@
 
 logs
 logs/
+backups
+backups/
 data
 data/
 services/dts-pg/data

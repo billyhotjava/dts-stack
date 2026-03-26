@@ -155,6 +155,9 @@ const THEME_OPTIONS: { value: ScreenTheme | ''; label: string }[] = [
     { value: '', label: '经典深蓝' },
     { value: 'titanium', label: '钛合金灰' },
     { value: 'glacier', label: '冰川白' },
+    { value: 'light-business', label: '商务浅色' },
+    { value: 'dark-command', label: '指挥深色' },
+    { value: 'brand-custom', label: '自定义' },
 ];
 
 const BATCH_ACTION_OPTIONS = [

@@ -31,3 +31,8 @@ export function resolveGanttBaselineRange(source: BaselineRangeSource): { startD
 		? { startDate, endDate }
 		: { startDate: endDate, endDate: startDate };
 }
+
+export function resolveGanttSideTextStyle(sideTextColor?: string): { color: string } | undefined {
+	const normalizedColor = sideTextColor?.trim();
+	return normalizedColor ? { color: normalizedColor } : undefined;
+}

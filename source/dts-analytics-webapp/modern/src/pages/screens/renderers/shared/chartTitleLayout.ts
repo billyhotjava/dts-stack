@@ -60,6 +60,7 @@ export function resolveChartTitleLayout(input: ResolveChartTitleLayoutInput) {
             textStyle: {
                 color: input.color,
                 fontSize,
+                fontWeight: 'bold',
             },
         },
         handleRect: {

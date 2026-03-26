@@ -267,10 +267,92 @@ const glacierTheme: ScreenThemeTokens = {
     errorBg: 'rgba(255,255,255,0.95)',
 };
 
+// ── Light Business theme (for PC dashboard / daily analysis) ──
+const lightBusinessTheme: ScreenThemeTokens = {
+    ...glacierTheme,
+    canvasBackground: '#f3f6fb',
+    cardBackground: '#ffffff',
+    cardBorder: '1px solid rgba(148,163,184,0.24)',
+    cardShadow: '0 8px 24px rgba(15,35,95,0.08)',
+    textPrimary: '#15243a',
+    textSecondary: '#6c7a90',
+    textMuted: '#94a3b8',
+    accentColor: '#0b57d0',
+    echarts: {
+        ...glacierTheme.echarts,
+        axisLineColor: '#d9e2ef',
+        axisLabelColor: '#6c7a90',
+        splitLineColor: '#edf1f6',
+        tooltipBg: 'rgba(255,255,255,0.96)',
+        tooltipBorder: '#d9e2ef',
+        colorPalette: ['#0b57d0', '#0f9d58', '#f9ab00', '#d93025', '#00acc1', '#7c3aed'],
+    },
+    barGradient: ['#0b57d0', '#1a73e8'],
+    numberCard: {
+        background: '#ffffff',
+        border: '1px solid rgba(148,163,184,0.24)',
+        titleColor: '#6c7a90',
+        valueColor: '#15243a',
+    },
+    scrollBoard: { headerBg: '#fafcff', oddRowBg: '#ffffff', evenRowBg: '#f8fafc', textColor: '#15243a' },
+    progressBar: { trackBg: '#edf2f7', fillGradient: ['#0b57d0', '#1a73e8'], labelColor: '#15243a' },
+    breadcrumb: { background: 'rgba(255,255,255,0.9)', textColor: '#6c7a90', linkColor: '#0b57d0' },
+    gauge: { axisLineColor: '#d9e2ef', splitLineColor: '#edf1f6', axisLabelColor: '#6c7a90', titleColor: '#15243a', detailColor: '#0b57d0' },
+    radar: { axisNameColor: '#6c7a90', splitLineColor: '#edf1f6' },
+    placeholder: { background: '#f9fafb', border: '2px dashed #d1d5db', color: '#9ca3af' },
+    pieLabelColor: '#15243a',
+    funnelLabelColor: '#15243a',
+    errorBg: 'rgba(255,255,255,0.95)',
+};
+
+// ── Dark Command theme (sci-fi command center) ──
+const darkCommandTheme: ScreenThemeTokens = {
+    ...legacyDarkTheme,
+    canvasBackground: '#050a14',
+    cardBackground: 'rgba(10,22,40,0.7)',
+    cardBorder: '1px solid rgba(34,195,255,0.12)',
+    cardShadow: '0 0 20px rgba(34,195,255,0.08)',
+    textPrimary: '#e6f0ff',
+    textSecondary: '#8da2c3',
+    textMuted: '#6b8ab5',
+    accentColor: '#22c3ff',
+    echarts: {
+        ...legacyDarkTheme.echarts,
+        axisLineColor: 'rgba(34,195,255,0.15)',
+        axisLabelColor: '#6b8ab5',
+        splitLineColor: 'rgba(34,195,255,0.08)',
+        tooltipBg: 'rgba(5,10,20,0.9)',
+        tooltipBorder: 'rgba(34,195,255,0.2)',
+        colorPalette: ['#22c3ff', '#3ddc97', '#ffb74d', '#ff6b7a', '#a78bfa', '#54e3ff'],
+    },
+    barGradient: ['#22c3ff', '#1a8fd4'],
+    numberCard: {
+        background: 'rgba(10,22,40,0.7)',
+        border: '1px solid rgba(34,195,255,0.15)',
+        titleColor: '#6b8ab5',
+        valueColor: '#e6f0ff',
+    },
+    scrollBoard: { headerBg: 'rgba(17,34,56,0.8)', oddRowBg: 'rgba(10,22,40,0.5)', evenRowBg: 'rgba(16,35,58,0.5)', textColor: '#c8ddf5' },
+    progressBar: { trackBg: 'rgba(19,39,63,0.8)', fillGradient: ['#22c3ff', '#1a8fd4'], labelColor: '#e6f0ff' },
+    breadcrumb: { background: 'rgba(5,10,20,0.85)', textColor: '#6b8ab5', linkColor: '#22c3ff' },
+    gauge: { axisLineColor: 'rgba(34,195,255,0.2)', splitLineColor: 'rgba(34,195,255,0.1)', axisLabelColor: '#6b8ab5', titleColor: '#e6f0ff', detailColor: '#22c3ff' },
+    radar: { axisNameColor: '#6b8ab5', splitLineColor: 'rgba(34,195,255,0.1)' },
+    placeholder: { background: 'rgba(10,22,40,0.5)', border: '2px dashed rgba(34,195,255,0.2)', color: '#6b8ab5' },
+    pieLabelColor: '#c8ddf5',
+    funnelLabelColor: '#e6f0ff',
+    errorBg: 'rgba(10,22,40,0.9)',
+};
+
+// ── Brand Custom theme (user-editable, defaults to light) ──
+const brandCustomTheme: ScreenThemeTokens = { ...lightBusinessTheme };
+
 const themeMap: Record<ScreenTheme, ScreenThemeTokens> = {
     'legacy-dark': legacyDarkTheme,
     'titanium': titaniumTheme,
     'glacier': glacierTheme,
+    'light-business': lightBusinessTheme,
+    'dark-command': darkCommandTheme,
+    'brand-custom': brandCustomTheme,
 };
 
 function parseHexColorToRgb(color: string): [number, number, number] | null {

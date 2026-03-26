@@ -147,7 +147,17 @@ export function ScreenRuntimeProvider({
         setVariable: (key: string, value: string, source?: string) => {
             const safeKey = (key || '').trim();
             if (!safeKey) return;
-            setValues((prev) => ({ ...prev, [safeKey]: value }));
+            // Cascade: clear dependent variables when parent changes
+            const dependents = normalizedDefinitions
+                .filter((v) => v.dependsOn === safeKey)
+                .map((v) => v.key);
+            setValues((prev) => {
+                const next = { ...prev, [safeKey]: value };
+                for (const dep of dependents) {
+                    next[dep] = '';
+                }
+                return next;
+            });
             setEvents((prev) => {
                 const next: RuntimeVariableEvent = {
                     id: prev.length > 0 ? prev[0].id + 1 : 1,

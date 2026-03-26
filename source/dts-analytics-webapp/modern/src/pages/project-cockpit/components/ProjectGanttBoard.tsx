@@ -1,6 +1,6 @@
 import "./ProjectGanttBoard.css";
 import { useState } from "react";
-import { getGanttOwnerLabelPlacement, resolveGanttBaselineRange } from "./projectGanttBoard.helpers";
+import { getGanttOwnerLabelPlacement, resolveGanttBaselineRange, resolveGanttSideTextStyle } from "./projectGanttBoard.helpers";
 
 export type ProjectGanttTask = {
 	id?: string;
@@ -22,6 +22,8 @@ type Props = {
 	tasks: ProjectGanttTask[];
 	maxHeight?: number;
 	onTaskClick?: (task: ProjectGanttTask) => void;
+	sideTextColor?: string;
+	dark?: boolean;
 };
 
 function toDateValue(value?: string) {
@@ -49,8 +51,9 @@ function groupByProject(tasks: ProjectGanttTask[]): GroupedProject[] {
 	return Array.from(map.entries()).map(([name, items]) => ({ name, tasks: items }));
 }
 
-export function ProjectGanttBoard({ tasks, maxHeight, onTaskClick }: Props) {
+export function ProjectGanttBoard({ tasks, maxHeight, onTaskClick, sideTextColor, dark }: Props) {
 	const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(new Set());
+	const sideTextStyle = resolveGanttSideTextStyle(sideTextColor);
 
 	if (tasks.length === 0) {
 		return <div className="project-cockpit__empty-block">当前筛选范围暂无执行任务。</div>;
@@ -170,8 +173,8 @@ export function ProjectGanttBoard({ tasks, maxHeight, onTaskClick }: Props) {
 					) : null}
 				</div>
 				<div className="project-cockpit__gantt-side">
-					<span>{task.planDate || "--"}</span>
-					<span>{task.actualDate || "进行中"}</span>
+					<span style={sideTextStyle}>{task.planDate || "--"}</span>
+					<span style={sideTextStyle}>{task.actualDate || "进行中"}</span>
 					{deviationLabel ? (
 						<span style={{ color: deviationColor, fontWeight: 600, fontSize: 12 }}>{deviationLabel}</span>
 					) : null}
@@ -181,7 +184,7 @@ export function ProjectGanttBoard({ tasks, maxHeight, onTaskClick }: Props) {
 	};
 
 	return (
-		<div className="project-cockpit__gantt" style={{ maxHeight: maxHeight ?? 520, overflowY: "auto" }}>
+		<div className={`project-cockpit__gantt${dark ? " project-cockpit__gantt--dark" : ""}`} style={{ maxHeight: maxHeight ?? 520, overflowY: "auto" }}>
 			{useGroups
 				? groups.map((group) => {
 						const collapsed = collapsedGroups.has(group.name);

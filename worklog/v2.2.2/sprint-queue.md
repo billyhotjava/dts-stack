@@ -81,6 +81,18 @@
 
 **统计**: READY=5, IN_PROGRESS=2, DONE=2, BLOCKED=0
 
+## Sprint-15: 大屏设计系统重构 (202603)
+
+| Feature | Task 数 | 状态 |
+|---------|---------|------|
+| F1-渲染器分层拆分 | 3 | READY |
+| F2-主题系统重构 | 3 | READY |
+| F3-数据联动与下钻 | 4 | READY |
+| F4-布局自适应 | 2 | READY |
+| F5-编辑器体验增强 | 5 | READY |
+
+**统计**: READY=17, IN_PROGRESS=0, DONE=0, BLOCKED=0
+
 ## Sprint-14: GPMC Phase 2 信息架构与模板化交付 (202603)
 
 | Feature | Task 数 | 状态 |

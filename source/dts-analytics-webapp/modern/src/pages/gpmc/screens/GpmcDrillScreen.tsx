@@ -362,7 +362,7 @@ export default function GpmcDrillScreen({ domain }: { domain: GpmcBoardScreenId 
 	const config = DRILL_CONFIGS[domain];
 
 	return (
-		<div style={{ display: "flex", flexDirection: "column", gap: 18 }}>
+		<div className="gpmc-drill" style={{ display: "flex", flexDirection: "column", gap: 18 }}>
 			<div className="gpmc__breadcrumb">
 				<span className="gpmc__breadcrumb-link" onClick={() => setLayer("strategic")}>
 					战略层

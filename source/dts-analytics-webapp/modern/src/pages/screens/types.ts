@@ -1,6 +1,6 @@
 // Screen Designer Component Types
 
-export type ScreenTheme = 'legacy-dark' | 'titanium' | 'glacier';
+export type ScreenTheme = 'legacy-dark' | 'titanium' | 'glacier' | 'light-business' | 'dark-command' | 'brand-custom';
 
 export interface ScreenGlobalVariable {
     key: string;
@@ -8,6 +8,8 @@ export interface ScreenGlobalVariable {
     type: 'string' | 'number' | 'date';
     defaultValue?: string;
     description?: string;
+    /** When this parent variable changes, clear this variable and reload its options */
+    dependsOn?: string;
 }
 
 export interface CardParameterBinding {
@@ -35,6 +37,7 @@ export type ScreenActionType =
     | 'set-variable'
     | 'drill-down'
     | 'drill-up'
+    | 'drill-view'
     | 'jump-url'
     | 'open-panel'
     | 'emit-intent';
@@ -50,6 +53,10 @@ export interface ScreenComponentAction {
     panelBodyTemplate?: string;
     intentName?: string;
     intentPayloadTemplate?: string;
+    /** drill-view: target view ID for in-page drill navigation */
+    drillViewId?: string;
+    /** drill-view: breadcrumb label */
+    drillViewLabel?: string;
 }
 
 export interface DrillLevel {
