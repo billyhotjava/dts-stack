@@ -34,4 +34,8 @@
             <column name="uuid"/>
         </createIndex>
     </changeSet>
+
+    <changeSet id="0036-drop-screen-uploaded-dataset" author="billy">
+        <dropTable tableName="screen_uploaded_dataset"/>
+    </changeSet>
 </databaseChangeLog>
