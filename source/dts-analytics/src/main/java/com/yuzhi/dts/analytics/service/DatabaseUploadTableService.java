@@ -135,7 +135,8 @@ public class DatabaseUploadTableService {
             for (int r = 0; r < rows.size(); r++) {
                 List<Object> row = rows.get(r);
                 for (int c = 0; c < columns.size(); c++) {
-                    Object value = c < row.size() ? row.get(c) : null;
+                    Object raw = c < row.size() ? row.get(c) : null;
+                    Object value = coerceValue(raw, columns.get(c).type());
                     ps.setObject(c + 1, value);
                 }
                 ps.addBatch();
@@ -164,7 +165,7 @@ public class DatabaseUploadTableService {
         if (name == null || name.isBlank()) {
             name = "untitled";
         }
-        String sanitized = name.toLowerCase(Locale.ROOT).replaceAll("[^a-z0-9]", "_");
+        String sanitized = name.toLowerCase(Locale.ROOT).replaceAll("[^a-z0-9\\u4e00-\\u9fff]", "_");
         // Remove leading/trailing underscores and collapse consecutive underscores
         sanitized = sanitized.replaceAll("_+", "_").replaceAll("^_|_$", "");
         if (sanitized.isEmpty()) {
@@ -177,6 +178,45 @@ public class DatabaseUploadTableService {
         }
         String datePrefix = "upload_" + LocalDate.now().format(DATE_FMT) + "_";
         return datePrefix + sanitized;
+    }
+
+    /**
+     * Coerce a raw JSON value (String/Number/Boolean/null) to the Java type
+     * that matches the declared column type, so PreparedStatement.setObject
+     * sends the correct PG wire type.
+     */
+    private static Object coerceValue(Object raw, String colType) {
+        if (raw == null) return null;
+        String str = String.valueOf(raw).trim();
+        if (str.isEmpty() || "null".equalsIgnoreCase(str)) return null;
+
+        String type = (colType == null) ? "text" : colType.toLowerCase(Locale.ROOT);
+        try {
+            return switch (type) {
+                case "number" -> {
+                    // Handle integers sent as "45350.0" or "45350"
+                    yield Double.parseDouble(str);
+                }
+                case "date" -> {
+                    // Excel serial date number → convert to java.sql.Date
+                    if (str.matches("^\\d+(\\.\\d+)?$")) {
+                        // Excel epoch: 1900-01-01 = serial 1 (with the famous leap year bug)
+                        long serial = Math.round(Double.parseDouble(str));
+                        java.time.LocalDate date = java.time.LocalDate.of(1899, 12, 30).plusDays(serial);
+                        yield java.sql.Date.valueOf(date);
+                    }
+                    // ISO or slash-separated date string
+                    yield java.sql.Date.valueOf(str.replace("/", "-"));
+                }
+                case "boolean" -> {
+                    yield "true".equalsIgnoreCase(str) || "是".equals(str) || "1".equals(str);
+                }
+                default -> str;
+            };
+        } catch (Exception e) {
+            // If conversion fails, fall back to null for typed columns, or raw string for text
+            return "text".equals(type) ? str : null;
+        }
     }
 
     public record ColumnDef(String name, String displayName, String type) {}
