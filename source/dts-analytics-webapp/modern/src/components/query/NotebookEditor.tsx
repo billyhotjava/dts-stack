@@ -229,14 +229,11 @@ export function NotebookEditor({ databaseId, initialDatasetQuery, onDatasetQuery
 			}
 		}
 
-		// limit
-		const clampedLimit = clampLimit(limit);
-		if (clampedLimit !== 200) {
-			query["limit"] = clampedLimit;
-		}
+		// limit — always include
+		query["limit"] = clampLimit(limit);
 
-		return { type: "query", query };
-	}, [sourceTableId, joins, selectedFields, filters, aggregations, groupByFields, orderByKey, orderByDir, limit, isSummarized]);
+		return { type: "query", database: databaseId, query };
+	}, [databaseId, sourceTableId, joins, selectedFields, filters, aggregations, groupByFields, orderByKey, orderByDir, limit, isSummarized]);
 
 	// ---- emit changes ----
 	useEffect(() => {
@@ -380,6 +377,14 @@ export function NotebookEditor({ databaseId, initialDatasetQuery, onDatasetQuery
 		}
 		setSourceTableId(tableId);
 		setSourceTableDetail(detail);
+		// Default: select first 12 fields of source table
+		if (detail.fields) {
+			const first12 = detail.fields
+				.filter((f) => typeof f.id === "number" && f.id > 0)
+				.slice(0, 12)
+				.map((f) => ({ fieldId: f.id, joinAlias: null } as FieldRef));
+			setSelectedFields(first12);
+		}
 	}, [sourceTableId, locale]);
 
 	// ---- join deletion cascade ----

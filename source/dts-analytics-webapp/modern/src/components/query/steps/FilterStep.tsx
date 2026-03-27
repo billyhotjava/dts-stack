@@ -102,7 +102,7 @@ export function FilterStep({ locale, allFields, filters, onFiltersChange }: Prop
 						className="btn"
 						type="button"
 						onClick={() => removeFilter(r.id)}
-						disabled={filters.length <= 1}
+						disabled={false}
 					>
 						{t(locale, "builder.remove")}
 					</button>
