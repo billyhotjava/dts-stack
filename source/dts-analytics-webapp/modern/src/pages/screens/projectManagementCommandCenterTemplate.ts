@@ -4,22 +4,23 @@ import { SCREEN_SCHEMA_VERSION } from './specV2';
 
 const SCREEN_WIDTH = 1920;
 const SCREEN_HEIGHT = 1080;
-const BG = '#eef5fb';
+const BG = '#eaf2fb';
+const HEADER_BAR_BG = '#044B8C';
 const PANEL_BG = 'rgba(255, 255, 255, 0.94)';
-const PANEL_BORDER = 'rgba(148, 163, 184, 0.24)';
-const TITLE_COLOR = '#16324f';
-const SUBTITLE_COLOR = '#5b7088';
-const BODY_COLOR = '#35526b';
-const ACCENT = '#3b82f6';
+const PANEL_BORDER = '#d6e4f0';
+const TITLE_COLOR = '#1a5276';
+const SUBTITLE_COLOR = '#566573';
+const BODY_COLOR = '#1c2833';
+const ACCENT = '#2980b9';
 const INPUT_BG = 'rgba(255, 255, 255, 0.96)';
-const INPUT_BORDER = 'rgba(148, 163, 184, 0.42)';
+const INPUT_BORDER = '#d6e4f0';
 const KPI_BG = '#ffffff';
-const LINE_SERIES_COLORS = ['#3b82f6', '#38bdf8', '#f4b740'];
-const BAR_SERIES_COLORS = ['#2563eb', '#60a5fa', '#f4b740'];
-const PIE_SERIES_COLORS = ['#60a5fa', '#38bdf8', '#f4b740', '#fb7185', '#818cf8'];
-const TABLE_HEADER_BG = 'rgba(219, 234, 254, 0.96)';
+const LINE_SERIES_COLORS = ['#2980b9', '#1e8449', '#d4850a'];
+const BAR_SERIES_COLORS = ['#2980b9', '#1e8449', '#d4850a'];
+const PIE_SERIES_COLORS = ['#2980b9', '#1e8449', '#d4850a', '#c0392b', '#8e44ad'];
+const TABLE_HEADER_BG = '#dce6f0';
 const TABLE_BODY_BG = 'rgba(255, 255, 255, 0.96)';
-const TABLE_EVEN_ROW_BG = 'rgba(241, 245, 249, 0.96)';
+const TABLE_EVEN_ROW_BG = '#f5f9fd';
 
 function createComponent(
     id: string,
@@ -92,7 +93,7 @@ function createTitle(id: string, text: string, x: number, y: number, width: numb
         text,
         fontSize,
         fontWeight: '700',
-        color: TITLE_COLOR,
+        color: '#ffffff',
         textAlign: 'center',
     });
 }
@@ -102,7 +103,7 @@ function createSubtitle(id: string, text: string, x: number, y: number, width: n
         text,
         fontSize: 15,
         fontWeight: '500',
-        color: SUBTITLE_COLOR,
+        color: 'rgba(255,255,255,0.8)',
         textAlign: 'center',
     });
 }
@@ -122,10 +123,10 @@ function createFilterInput(id: string, label: string, variableKey: string, x: nu
         label,
         variableKey,
         placeholder: '全部',
-        labelColor: SUBTITLE_COLOR,
-        inputBackground: INPUT_BG,
-        inputBorderColor: INPUT_BORDER,
-        inputTextColor: TITLE_COLOR,
+        labelColor: 'rgba(255,255,255,0.85)',
+        inputBackground: 'rgba(255,255,255,0.15)',
+        inputBorderColor: 'rgba(255,255,255,0.3)',
+        inputTextColor: '#ffffff',
     });
 }
 
@@ -149,10 +150,10 @@ function createFilterSelect(
         optionSourceMode: 'data',
         dataOptionValueField: 'value',
         dataOptionLabelField: 'label',
-        labelColor: SUBTITLE_COLOR,
-        inputBackground: INPUT_BG,
-        inputBorderColor: INPUT_BORDER,
-        inputTextColor: TITLE_COLOR,
+        labelColor: 'rgba(255,255,255,0.85)',
+        inputBackground: 'rgba(255,255,255,0.15)',
+        inputBorderColor: 'rgba(255,255,255,0.3)',
+        inputTextColor: '#ffffff',
     }, buildFilterOptionsDataSource(filterResponsePath));
 }
 
@@ -166,10 +167,10 @@ function createRiskSelect(id: string, x: number, y: number, width: number): Scre
             { label: '中', value: '中' },
             { label: '低', value: '低' },
         ],
-        labelColor: SUBTITLE_COLOR,
-        inputBackground: INPUT_BG,
-        inputBorderColor: INPUT_BORDER,
-        inputTextColor: TITLE_COLOR,
+        labelColor: 'rgba(255,255,255,0.85)',
+        inputBackground: 'rgba(255,255,255,0.15)',
+        inputBorderColor: 'rgba(255,255,255,0.3)',
+        inputTextColor: '#ffffff',
     });
 }
 
@@ -178,10 +179,10 @@ function createDateRange(id: string, x: number, y: number, width: number): Scree
         label: '统计周期',
         startKey: 'dateFrom',
         endKey: 'dateTo',
-        labelColor: SUBTITLE_COLOR,
-        inputBackground: INPUT_BG,
-        inputBorderColor: INPUT_BORDER,
-        inputTextColor: TITLE_COLOR,
+        labelColor: 'rgba(255,255,255,0.85)',
+        inputBackground: 'rgba(255,255,255,0.15)',
+        inputBorderColor: 'rgba(255,255,255,0.3)',
+        inputTextColor: '#ffffff',
     });
 }
 
@@ -189,7 +190,7 @@ function createDatetime(id: string): ScreenComponent {
     return createComponent(id, 'datetime', '系统时间', 1670, 30, 210, 36, 65, {
         format: 'YYYY-MM-DD HH:mm:ss',
         fontSize: 18,
-        color: ACCENT,
+        color: '#ffffff',
     });
 }
 
@@ -487,8 +488,14 @@ function createKpiRow(defs: KpiDef[], y: number, height: number): ScreenComponen
 }
 
 function createCommonHeader(pageTitle: string, pageIndex: number): ScreenComponent[] {
-    // Layout: left=filters | center=title | right=date+time
+    // Layout: header bar background + left=filters | center=title | right=date+time
     return [
+        // Header bar background
+        createComponent(`pmcc-header-bar-${pageIndex}`, 'border-box', '标题栏背景', 0, 0, SCREEN_WIDTH, 100, 50, {
+            backgroundColor: HEADER_BAR_BG,
+            borderWidth: 0,
+            borderRadius: 0,
+        }),
         // Left: filters (dropdown selects with dynamic options from API)
         createFilterSelect(`pmcc-major-${pageIndex}`, '项目', 'majorProjectId', 32, 24, 180, 'filters.majorProjects'),
         createFilterSelect(`pmcc-dept-${pageIndex}`, '责任科室', 'deptId', 228, 24, 180, 'filters.depts'),
