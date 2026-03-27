@@ -1652,6 +1652,8 @@ export const analyticsApi = {
 		fetchJson<TableSummary[]>(`/analytics/api/table?db_id=${encodeURIComponent(String(dbId))}`),
 	getTable: (tableId: string | number) =>
 		fetchJson<TableDetail>(`/analytics/api/table/${encodeURIComponent(String(tableId))}`),
+	getTableFks: (tableId: string | number) =>
+		fetchJson<Array<{ origin_id: number; origin: { id: number; name: string; table_id: number }; destination_id: number; destination: { id: number; name: string; table_id: number } }>>(`/analytics/api/table/${encodeURIComponent(String(tableId))}/fks`),
 	getField: (fieldId: string | number) =>
 		fetchJson<FieldDetail>(`/analytics/api/field/${encodeURIComponent(String(fieldId))}`),
 	getFieldValues: (fieldId: string | number) =>
