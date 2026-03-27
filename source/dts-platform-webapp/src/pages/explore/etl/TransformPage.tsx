@@ -15,6 +15,7 @@ import {
 	type IngestionExecutionDTO,
 } from "@/api/ingestion";
 import { formatTimestamp } from "@/utils/format";
+import { normalizeText } from "@/utils/textUtils";
 
 type ExecutionProgressView = {
 	percent: number;
@@ -89,8 +90,6 @@ export default function TransformPage() {
 			setLoading(false);
 		}
 	};
-
-	const normalizeText = (value?: string) => String(value || "").trim();
 
 	const mapExecutionProgress = (execution: IngestionExecutionDTO | null, elapsedMs: number): ExecutionProgressView => {
 		if (!execution) {
@@ -243,7 +242,7 @@ export default function TransformPage() {
 			paused: { color: "warning", text: "暂停" },
 			deleted: { color: "error", text: "已删除" },
 		};
-		const config = statusMap[status || "draft"];
+		const config = statusMap[status || "draft"] ?? { color: "default", text: status || "unknown" };
 		return <Tag color={config.color}>{config.text}</Tag>;
 	};
 

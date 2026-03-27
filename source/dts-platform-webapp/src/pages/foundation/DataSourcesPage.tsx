@@ -28,6 +28,7 @@ import dataSourcesService, {
 	type InfraDataSource,
 } from "@/api/services/dataSourcesService";
 import jdbcDriversService, { type InfraJdbcDriver } from "@/api/services/jdbcDriversService";
+import { formatTime } from "@/utils/textUtils";
 type UploadRequestOption = Parameters<NonNullable<import("antd").UploadProps["customRequest"]>>[0];
 
 const { Text } = Typography;
@@ -90,13 +91,6 @@ const parseJson = (value?: string) => {
 	return JSON.parse(text);
 };
 
-const formatTime = (value?: string) => {
-	if (!value) return "-";
-	const date = new Date(value);
-	if (Number.isNaN(date.getTime())) return value;
-	return date.toLocaleString("zh-CN");
-};
-
 const omitReaderType = (props?: Record<string, any>) => {
 	if (!props) return undefined;
 	const { readerType, reader, driverClass, driverVersion, ...rest } = props;
@@ -155,8 +149,7 @@ export default function DataSourcesPage() {
 		try {
 			const data = await dataSourcesService.list();
 			setList(Array.isArray(data) ? data : []);
-		} catch (error: any) {
-			message.error(error?.message || "加载数据源失败");
+		} catch {
 			setList([]);
 		} finally {
 			setLoading(false);
@@ -168,8 +161,7 @@ export default function DataSourcesPage() {
 		try {
 			const data = await jdbcDriversService.list();
 			setDrivers(Array.isArray(data) ? data : []);
-		} catch (error: any) {
-			message.error(error?.message || "加载驱动列表失败");
+		} catch {
 			setDrivers([]);
 		} finally {
 			setDriversLoading(false);
@@ -256,8 +248,8 @@ export default function DataSourcesPage() {
 					await dataSourcesService.remove(record.id);
 					message.success("已删除数据源");
 					loadList();
-				} catch (error: any) {
-					message.error(error?.message || "删除失败");
+				} catch {
+					// handled by global interceptor
 				}
 			},
 		});
@@ -371,7 +363,6 @@ export default function DataSourcesPage() {
 			loadList();
 		} catch (error: any) {
 			if (error?.errorFields) return;
-			message.error(error?.message || "保存失败");
 		} finally {
 			setSaving(false);
 		}
@@ -411,7 +402,6 @@ export default function DataSourcesPage() {
 			message.success("文件已上传，请选择 Sheet 并解析");
 			options.onSuccess?.(resp as any);
 		} catch (error: any) {
-			message.error(error?.message || "文件上传失败");
 			options.onError?.(error);
 		} finally {
 			setExcelUploading(false);
@@ -460,8 +450,8 @@ export default function DataSourcesPage() {
 			applyExcelResultToForm(resp);
 			message.success("解析完成，字段配置已填充");
 			setExcelModalOpen(false);
-		} catch (error: any) {
-			message.error(error?.message || "解析失败");
+		} catch {
+			// handled by global interceptor
 		} finally {
 			setExcelParsing(false);
 		}

@@ -9,8 +9,11 @@ import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
+import java.util.ArrayList;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentLinkedQueue;
+import java.util.concurrent.atomic.AtomicLong;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.boot.web.client.RestTemplateBuilder;
@@ -18,6 +21,7 @@ import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
+import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
 import org.springframework.web.client.RestClientException;
@@ -32,6 +36,8 @@ public class AuditTrailService {
     private static final Duration DEFAULT_READ_TIMEOUT = Duration.ofSeconds(5);
     private static final Duration READ_DEDUPE_WINDOW = Duration.ofSeconds(2);
     private static final int READ_DEDUPE_MAX_SIZE = 2048;
+    private static final int FAILOVER_QUEUE_MAX_SIZE = 10_000;
+    private static final int RETRY_BATCH_SIZE = 100;
 
     public static final class PendingAuditEvent {
         public Instant occurredAt;
@@ -63,6 +69,8 @@ public class AuditTrailService {
     private final RestTemplate restTemplate;
     private final URI ingestEndpoint;
     private final ConcurrentHashMap<String, Long> recentReadEvents = new ConcurrentHashMap<>();
+    private final ConcurrentLinkedQueue<Map<String, Object>> failedEventQueue = new ConcurrentLinkedQueue<>();
+    private final AtomicLong droppedEventCount = new AtomicLong(0);
 
     public AuditTrailService(
         AuditProperties properties,
@@ -247,7 +255,65 @@ public class AuditTrailService {
                 body.get("module"),
                 ex.getMessage()
             );
+            enqueueFailedEvent(body);
         }
+    }
+
+    private void enqueueFailedEvent(Map<String, Object> body) {
+        while (failedEventQueue.size() >= FAILOVER_QUEUE_MAX_SIZE) {
+            Map<String, Object> dropped = failedEventQueue.poll();
+            if (dropped != null) {
+                long total = droppedEventCount.incrementAndGet();
+                if (total % 100 == 1) {
+                    log.warn("Audit failover queue full (max={}), dropping oldest events. Total dropped so far: {}", FAILOVER_QUEUE_MAX_SIZE, total);
+                }
+            }
+        }
+        failedEventQueue.offer(body);
+    }
+
+    @Scheduled(fixedDelay = 30000)
+    public void retryFailedEvents() {
+        if (ingestEndpoint == null) {
+            return;
+        }
+        int queueSize = failedEventQueue.size();
+        if (queueSize == 0) {
+            return;
+        }
+
+        int toProcess = Math.min(queueSize, RETRY_BATCH_SIZE);
+        List<Map<String, Object>> batch = new ArrayList<>(toProcess);
+        for (int i = 0; i < toProcess; i++) {
+            Map<String, Object> event = failedEventQueue.poll();
+            if (event == null) {
+                break;
+            }
+            batch.add(event);
+        }
+
+        HttpHeaders headers = new HttpHeaders();
+        headers.setContentType(MediaType.APPLICATION_JSON);
+
+        int succeeded = 0;
+        int failed = 0;
+        for (Map<String, Object> body : batch) {
+            try {
+                ResponseEntity<Void> response = restTemplate.postForEntity(ingestEndpoint, new HttpEntity<>(body, headers), Void.class);
+                if (response.getStatusCode().is2xxSuccessful()) {
+                    succeeded++;
+                } else {
+                    failed++;
+                    enqueueFailedEvent(body);
+                }
+            } catch (RestClientException ex) {
+                failed++;
+                enqueueFailedEvent(body);
+            }
+        }
+
+        int pending = failedEventQueue.size();
+        log.info("Retried {} audit events, {} succeeded, {} still pending", batch.size(), succeeded, pending);
     }
 
     private boolean shouldSkipByDedupe(PendingAuditEvent event) {

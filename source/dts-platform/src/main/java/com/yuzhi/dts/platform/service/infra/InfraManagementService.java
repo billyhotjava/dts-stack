@@ -89,7 +89,7 @@ public class InfraManagementService {
     private static final String TYPE_POSTGRES = "POSTGRES";
     private static final String STATUS_ACTIVE = "ACTIVE";
     private static final String SOURCE_ADMIN_DATA_LAKE = "admin-data-lake";
-    private static final String BIADMIN_NAME = "数仓 (biadmin)";
+
     private static final String DEFAULT_FILE_SCHEMA = "ods";
     private static final String DATASET_TYPE_FILE = "file";
     private static final String SETTINGS_KEY_CATALOG_SYNC = "catalogSyncOnDataSource";
@@ -238,22 +238,10 @@ public class InfraManagementService {
         if (dto == null) {
             return Integer.MIN_VALUE;
         }
-        int score = 0;
+        int score = DataSourceScorer.scoreDataSource(dto.name(), dto.jdbcUrl(), dto.type(), dto.status());
+        // Context-specific bonuses: Chinese name hints and description hints
         String name = normalizeLower(dto.name());
-        String type = normalizeLower(dto.type());
-        String jdbcUrl = normalizeLower(dto.jdbcUrl());
         String description = normalizeLower(dto.description());
-        String status = normalizeLower(dto.status());
-
-        if (BIADMIN_NAME.equalsIgnoreCase(name)) {
-            score += 100;
-        }
-        if (StringUtils.hasText(name) && name.contains("biadmin")) {
-            score += 80;
-        }
-        if (StringUtils.hasText(jdbcUrl) && jdbcUrl.contains("/biadmin")) {
-            score += 70;
-        }
         if (StringUtils.hasText(name) && (name.contains("默认数据湖") || name.contains("默认湖") || name.contains("数仓"))) {
             score += 40;
         }
@@ -262,17 +250,6 @@ public class InfraManagementService {
         }
         if (StringUtils.hasText(description) && (description.contains("临时数据源") || description.contains("平台自用"))) {
             score += 30;
-        }
-        if ("postgres".equalsIgnoreCase(type) || "postgresql".equalsIgnoreCase(type)) {
-            score += 50;
-        } else if (StringUtils.hasText(type)) {
-            score += 20;
-        }
-        if (STATUS_ACTIVE.equalsIgnoreCase(status)) {
-            score += 5;
-        }
-        if (StringUtils.hasText(jdbcUrl)) {
-            score += 5;
         }
         return score;
     }

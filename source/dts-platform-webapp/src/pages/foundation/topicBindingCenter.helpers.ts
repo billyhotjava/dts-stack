@@ -11,6 +11,8 @@ export type TopicTemplateSummary = TopicBindingTemplateView & {
 	missingRequiredCount: number;
 };
 
+import { normalizeText } from "@/utils/textUtils";
+
 export type TopicSourceCandidate = {
 	id?: string;
 	schema?: string;
@@ -23,8 +25,6 @@ export type TopicSourceCandidate = {
 	sourceDataSourceName?: string;
 	sourceSnippet?: string;
 };
-
-const normalizeText = (value?: string | null) => String(value || "").trim();
 
 export function buildTopicTemplateSummaries(
 	templates: TopicBindingTemplateView[],

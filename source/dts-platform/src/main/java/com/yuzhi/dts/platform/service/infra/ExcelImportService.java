@@ -64,6 +64,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
 import org.springframework.web.multipart.MultipartFile;
 import org.springframework.web.server.ResponseStatusException;
@@ -238,7 +239,7 @@ public class ExcelImportService {
 
         auditService.auditAction(
             "INFRA_EXCEL_IMPORT",
-            ctx.errorCount > 0 ? AuditStage.SUCCESS : AuditStage.SUCCESS,
+            ctx.errorCount > 0 ? AuditStage.FAIL : AuditStage.SUCCESS,
             entity.getId().toString(),
             Map.of(
                 "summary",
@@ -322,6 +323,7 @@ public class ExcelImportService {
         return new ExcelImportErrorPreviewResponse(entity.getId(), errorCount, resolvedLimit, rows);
     }
 
+    @Transactional
     public ProjectCockpitBatchLoadResponse loadProjectCockpitBatch(UUID fileId, String operator, String ownerDept, boolean privileged) {
         if (fileId == null) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "fileId 不能为空");
@@ -515,6 +517,9 @@ public class ExcelImportService {
             int rejectedRowCount = 0;
             int warningRowCount = 0;
             int issueCount = 0;
+            final int BATCH_SIZE = 500;
+            List<InfraProjectCockpitRow> rowBatch = new ArrayList<>(BATCH_SIZE);
+            List<InfraProjectCockpitIssue> issueBatch = new ArrayList<>(BATCH_SIZE);
             while ((line = reader.readLine()) != null) {
                 sourceRowNo++;
                 List<String> values = normalizeRow(
@@ -549,12 +554,20 @@ public class ExcelImportService {
                 row.setParseStatus(assessment.parseStatus());
                 row.setRawPayload(writeProps(payloadJson));
                 row.setProps(writeProps(Map.of("sheetName", blankToEmpty(batch.getSheetName()))));
-                projectCockpitRowRepository.save(row);
+                rowBatch.add(row);
                 for (ProjectCockpitIssueDescriptor descriptor : assessment.issues()) {
                     InfraProjectCockpitIssue issue = buildProjectCockpitIssue(batch, sourceRowNo, descriptor, payload);
-                    projectCockpitIssueRepository.save(issue);
+                    issueBatch.add(issue);
                     logProjectCockpitIssue(batch, issue);
                     issueCount++;
+                }
+                if (rowBatch.size() >= BATCH_SIZE) {
+                    projectCockpitRowRepository.saveAll(rowBatch);
+                    rowBatch.clear();
+                }
+                if (issueBatch.size() >= BATCH_SIZE) {
+                    projectCockpitIssueRepository.saveAll(issueBatch);
+                    issueBatch.clear();
                 }
                 if (assessment.hasWarnings()) {
                     warningRowCount++;
@@ -569,6 +582,12 @@ public class ExcelImportService {
                     acceptedRowCount++;
                     writeCsvLine(acceptedWriter, values, batch.getDelimiter());
                 }
+            }
+            if (!rowBatch.isEmpty()) {
+                projectCockpitRowRepository.saveAll(rowBatch);
+            }
+            if (!issueBatch.isEmpty()) {
+                projectCockpitIssueRepository.saveAll(issueBatch);
             }
             return new ProjectCockpitLoadStats(
                 loadedRowCount,

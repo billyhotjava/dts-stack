@@ -13,12 +13,12 @@ export type BuildSummaryLike = {
 	failures?: Array<{ name?: string; message?: string; status?: string }>;
 };
 
+import { normalizeText } from "@/utils/textUtils";
+
 export type BuildStatusPresentation = {
 	type: "success" | "error" | "warning" | "info";
 	message: string;
 };
-
-const normalizeText = (value?: string) => String(value || "").trim();
 
 const normalizeLower = (value?: string) => normalizeText(value).toLowerCase();
 

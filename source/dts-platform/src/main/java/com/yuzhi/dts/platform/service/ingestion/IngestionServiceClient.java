@@ -14,6 +14,7 @@ import java.time.Duration;
 import java.time.Instant;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.function.BiFunction;
 import java.util.function.Supplier;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -301,27 +302,7 @@ public class IngestionServiceClient {
         Map<String, ?> params,
         RestTemplate client
     ) {
-        if (!isEnabled()) {
-            return new ApiResponse<>(503, "ingestion service disabled", null);
-        }
-        URI uri = buildAbsoluteUri(path, params);
-        try {
-            HttpEntity<?> entity = payload == null ? new HttpEntity<>(defaultHeaders()) : new HttpEntity<>(payload, defaultHeaders());
-            Supplier<ResponseEntity<Object>> supplier = () -> client.exchange(uri, method, entity, Object.class);
-            ResponseEntity<Object> response = Retry.decorateSupplier(retry,
-                CircuitBreaker.decorateSupplier(circuitBreaker, supplier)).get();
-            Object body = response.getBody();
-            if (body == null) {
-                if (response.getStatusCode().is2xxSuccessful()) {
-                    return new ApiResponse<>(ResultStatus.SUCCESS.getCode(), "OK", null);
-                }
-                return new ApiResponse<>(response.getStatusCode().value(), "ingestion service empty response", null);
-            }
-            if (body instanceof ApiResponse<?> apiResponse) {
-                @SuppressWarnings("unchecked")
-                ApiResponse<Map<String, Object>> casted = (ApiResponse<Map<String, Object>>) apiResponse;
-                return casted;
-            }
+        return doExchange(path, method, payload, params, client, (body, statusCode) -> {
             if (body instanceof Map<?, ?> map) {
                 Map<String, Object> payloadMap = new java.util.LinkedHashMap<>();
                 map.forEach((key, value) -> payloadMap.put(String.valueOf(key), value));
@@ -329,30 +310,16 @@ public class IngestionServiceClient {
                 if (unwrapped != null) {
                     return unwrapped;
                 }
-                if (response.getStatusCode().is2xxSuccessful()) {
+                if (statusCode.is2xxSuccessful()) {
                     return new ApiResponse<>(ResultStatus.SUCCESS.getCode(), resolveFallbackMessage(payloadMap), payloadMap);
                 }
-                return new ApiResponse<>(response.getStatusCode().value(), resolveFallbackMessage(payloadMap), payloadMap);
+                return new ApiResponse<>(statusCode.value(), resolveFallbackMessage(payloadMap), payloadMap);
             }
-            if (response.getStatusCode().is2xxSuccessful()) {
+            if (statusCode.is2xxSuccessful()) {
                 return new ApiResponse<>(ResultStatus.SUCCESS.getCode(), "ok", Map.of("value", body));
             }
-            return new ApiResponse<>(response.getStatusCode().value(), "ok", Map.of("value", body));
-        } catch (io.github.resilience4j.circuitbreaker.CallNotPermittedException ex) {
-            LOG.warn("Ingestion API {} blocked by circuit breaker (state=OPEN)", path);
-            return new ApiResponse<>(503, "数据采集服务暂时不可用，请稍后重试", null);
-        } catch (HttpStatusCodeException ex) {
-            LOG.warn("Ingestion API {} failed status={} body={}", path, ex.getStatusCode().value(), ex.getResponseBodyAsString());
-            return new ApiResponse<>(ex.getStatusCode().value(), "ingestion service error", null);
-        } catch (Exception ex) {
-            Throwable cause = ex.getCause() != null ? ex.getCause() : ex;
-            if (cause instanceof HttpStatusCodeException hsce) {
-                LOG.warn("Ingestion API {} failed after retries status={}", path, hsce.getStatusCode().value());
-                return new ApiResponse<>(hsce.getStatusCode().value(), "ingestion service error", null);
-            }
-            LOG.warn("Ingestion API {} error after retries: {}", path, cause.getMessage());
-            return new ApiResponse<>(500, "ingestion service error", null);
-        }
+            return new ApiResponse<>(statusCode.value(), "ok", Map.of("value", body));
+        });
     }
 
     private ApiResponse<Object> exchangeObject(
@@ -361,6 +328,38 @@ public class IngestionServiceClient {
         Object payload,
         Map<String, ?> params,
         RestTemplate client
+    ) {
+        return doExchange(path, method, payload, params, client, (body, statusCode) -> {
+            if (body instanceof Map<?, ?> map) {
+                ApiResponse<Object> unwrapped = unwrapApiResponseMap(map);
+                if (unwrapped != null) {
+                    return unwrapped;
+                }
+                if (statusCode.is2xxSuccessful()) {
+                    return new ApiResponse<>(ResultStatus.SUCCESS.getCode(), resolveFallbackMessage(map), body);
+                }
+            }
+            if (statusCode.is2xxSuccessful()) {
+                return new ApiResponse<>(ResultStatus.SUCCESS.getCode(), "ok", body);
+            }
+            return new ApiResponse<>(statusCode.value(), "ok", body);
+        });
+    }
+
+    /**
+     * Shared exchange method that encapsulates circuit breaker decoration, retry, error handling,
+     * and delegates response body unwrapping to the caller-supplied function.
+     *
+     * @param bodyHandler receives the non-null response body and HTTP status code, returns the final ApiResponse
+     */
+    @SuppressWarnings("unchecked")
+    private <T> ApiResponse<T> doExchange(
+        String path,
+        HttpMethod method,
+        Object payload,
+        Map<String, ?> params,
+        RestTemplate client,
+        BiFunction<Object, org.springframework.http.HttpStatusCode, ApiResponse<T>> bodyHandler
     ) {
         if (!isEnabled()) {
             return new ApiResponse<>(503, "ingestion service disabled", null);
@@ -379,23 +378,9 @@ public class IngestionServiceClient {
                 return new ApiResponse<>(response.getStatusCode().value(), "ingestion service empty response", null);
             }
             if (body instanceof ApiResponse<?> apiResponse) {
-                @SuppressWarnings("unchecked")
-                ApiResponse<Object> casted = (ApiResponse<Object>) apiResponse;
-                return casted;
+                return (ApiResponse<T>) apiResponse;
             }
-            if (body instanceof Map<?, ?> map) {
-                ApiResponse<Object> unwrapped = unwrapApiResponseMap(map);
-                if (unwrapped != null) {
-                    return unwrapped;
-                }
-                if (response.getStatusCode().is2xxSuccessful()) {
-                    return new ApiResponse<>(ResultStatus.SUCCESS.getCode(), resolveFallbackMessage(map), body);
-                }
-            }
-            if (response.getStatusCode().is2xxSuccessful()) {
-                return new ApiResponse<>(ResultStatus.SUCCESS.getCode(), "ok", body);
-            }
-            return new ApiResponse<>(response.getStatusCode().value(), "ok", body);
+            return bodyHandler.apply(body, response.getStatusCode());
         } catch (io.github.resilience4j.circuitbreaker.CallNotPermittedException ex) {
             LOG.warn("Ingestion API {} blocked by circuit breaker (state=OPEN)", path);
             return new ApiResponse<>(503, "数据采集服务暂时不可用，请稍后重试", null);

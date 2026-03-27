@@ -3,15 +3,9 @@ import { Alert, Button, Card, Form, Input, Modal, Space, Table, Tag, Typography,
 import { PlusOutlined, ReloadOutlined, EditOutlined, DeleteOutlined, InboxOutlined } from "@ant-design/icons";
 type UploadRequestOption = Parameters<NonNullable<import("antd").UploadProps["customRequest"]>>[0];
 import jdbcDriversService, { type InfraJdbcDriver, type JdbcDriverUpdatePayload } from "@/api/services/jdbcDriversService";
+import { formatTime } from "@/utils/textUtils";
 
 const { Text } = Typography;
-
-const formatTime = (value?: string) => {
-	if (!value) return "-";
-	const date = new Date(value);
-	if (Number.isNaN(date.getTime())) return value;
-	return date.toLocaleString("zh-CN");
-};
 
 const renderJdk = (value?: string) => {
 	if (!value) return "-";
@@ -33,8 +27,7 @@ export default function JdbcDriversPage() {
 		try {
 			const data = await jdbcDriversService.list();
 			setList(Array.isArray(data) ? data : []);
-		} catch (error: any) {
-			message.error(error?.message || "加载驱动列表失败");
+		} catch {
 			setList([]);
 		} finally {
 			setLoading(false);
@@ -65,7 +58,6 @@ export default function JdbcDriversPage() {
 			loadList();
 			options.onSuccess?.({});
 		} catch (error: any) {
-			message.error(error?.message || "上传失败");
 			options.onError?.(error);
 		} finally {
 			setUploading(false);
@@ -98,7 +90,6 @@ export default function JdbcDriversPage() {
 			loadList();
 		} catch (error: any) {
 			if (error?.errorFields) return;
-			message.error(error?.message || "更新失败");
 		} finally {
 			setSaving(false);
 		}
@@ -114,8 +105,8 @@ export default function JdbcDriversPage() {
 					await jdbcDriversService.remove(record.id);
 					message.success("驱动已删除");
 					loadList();
-				} catch (error: any) {
-					message.error(error?.message || "删除失败");
+				} catch {
+					// handled by global interceptor
 				}
 			},
 		});

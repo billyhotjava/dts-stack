@@ -6,20 +6,20 @@ const SCREEN_WIDTH = 1920;
 const SCREEN_HEIGHT = 1080;
 const BG = '#eaf2fb';
 const HEADER_BAR_BG = '#044B8C';
-const PANEL_BG = 'rgba(255, 255, 255, 0.94)';
-const PANEL_BORDER = '#d6e4f0';
-const TITLE_COLOR = '#1a5276';
-const SUBTITLE_COLOR = '#566573';
-const BODY_COLOR = '#1c2833';
-const ACCENT = '#2980b9';
-const INPUT_BG = 'rgba(255, 255, 255, 0.96)';
-const INPUT_BORDER = '#d6e4f0';
+const PANEL_BG = '#ffffff';
+const PANEL_BORDER = 'rgba(148, 163, 184, 0.24)';
+const TITLE_COLOR = '#0f172a';
+const SUBTITLE_COLOR = '#334155';
+const BODY_COLOR = '#334155';
+const ACCENT = '#044B8C';
+const INPUT_BG = 'rgba(255, 255, 255, 0.18)';
+const INPUT_BORDER = 'rgba(255, 255, 255, 0.32)';
 const KPI_BG = '#ffffff';
-const LINE_SERIES_COLORS = ['#2980b9', '#1e8449', '#d4850a'];
-const BAR_SERIES_COLORS = ['#2980b9', '#1e8449', '#d4850a'];
-const PIE_SERIES_COLORS = ['#2980b9', '#1e8449', '#d4850a', '#c0392b', '#8e44ad'];
-const TABLE_HEADER_BG = '#dce6f0';
-const TABLE_BODY_BG = 'rgba(255, 255, 255, 0.96)';
+const LINE_SERIES_COLORS = ['#044B8C', '#2f7bc4', '#f0a33e'];
+const BAR_SERIES_COLORS = ['#044B8C', '#2f7bc4', '#f0a33e'];
+const PIE_SERIES_COLORS = ['#044B8C', '#2f7bc4', '#5aa6d6', '#d86d5f', '#7a8fb8'];
+const TABLE_HEADER_BG = '#dbe9f6';
+const TABLE_BODY_BG = 'rgba(255, 255, 255, 0.98)';
 const TABLE_EVEN_ROW_BG = '#f5f9fd';
 
 function createComponent(
@@ -124,8 +124,8 @@ function createFilterInput(id: string, label: string, variableKey: string, x: nu
         variableKey,
         placeholder: '全部',
         labelColor: 'rgba(255,255,255,0.85)',
-        inputBackground: 'rgba(255,255,255,0.15)',
-        inputBorderColor: 'rgba(255,255,255,0.3)',
+        inputBackground: INPUT_BG,
+        inputBorderColor: INPUT_BORDER,
         inputTextColor: '#ffffff',
     });
 }
@@ -151,8 +151,8 @@ function createFilterSelect(
         dataOptionValueField: 'value',
         dataOptionLabelField: 'label',
         labelColor: 'rgba(255,255,255,0.85)',
-        inputBackground: 'rgba(255,255,255,0.15)',
-        inputBorderColor: 'rgba(255,255,255,0.3)',
+        inputBackground: INPUT_BG,
+        inputBorderColor: INPUT_BORDER,
         inputTextColor: '#ffffff',
     }, buildFilterOptionsDataSource(filterResponsePath));
 }
@@ -168,8 +168,8 @@ function createRiskSelect(id: string, x: number, y: number, width: number): Scre
             { label: '低', value: '低' },
         ],
         labelColor: 'rgba(255,255,255,0.85)',
-        inputBackground: 'rgba(255,255,255,0.15)',
-        inputBorderColor: 'rgba(255,255,255,0.3)',
+        inputBackground: INPUT_BG,
+        inputBorderColor: INPUT_BORDER,
         inputTextColor: '#ffffff',
     });
 }
@@ -180,8 +180,8 @@ function createDateRange(id: string, x: number, y: number, width: number): Scree
         startKey: 'dateFrom',
         endKey: 'dateTo',
         labelColor: 'rgba(255,255,255,0.85)',
-        inputBackground: 'rgba(255,255,255,0.15)',
-        inputBorderColor: 'rgba(255,255,255,0.3)',
+        inputBackground: INPUT_BG,
+        inputBorderColor: INPUT_BORDER,
         inputTextColor: '#ffffff',
     });
 }

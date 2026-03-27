@@ -1,4 +1,5 @@
 import type { FileUploadResult, IngestionTaskDTO } from "@/api/ingestion";
+import { normalizeText } from "@/utils/textUtils";
 import type { ExtraColumnDef } from "./steps/types";
 
 type DraftPayload = {
@@ -27,8 +28,6 @@ export type TransformEditRestoreState = {
 	extraColumns: ExtraColumnDef[];
 	mappingTables: string[];
 };
-
-const normalizeText = (value?: string) => String(value || "").trim();
 
 const normalizeSourceCategory = (value?: string): "file" | "database" | undefined => {
 	const text = normalizeText(value).toLowerCase();

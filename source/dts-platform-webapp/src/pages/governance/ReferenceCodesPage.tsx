@@ -27,10 +27,9 @@ import {
 	updateReferenceCodeItem,
 	updateReferenceCodeMapping,
 } from "@/api/platformApi";
+import { normalizeText, formatDateTime } from "@/utils/textUtils";
 
 const { Text } = Typography;
-
-const normalizeText = (value?: string) => String(value || "").trim();
 
 type ReferenceCodeDirectory = {
 	codeTypeId?: string;
@@ -158,13 +157,6 @@ const parseIntOr = (value: string | null, fallback: number) => {
 	const parsed = Number.parseInt(String(value || ""), 10);
 	return Number.isFinite(parsed) && parsed >= 0 ? parsed : fallback;
 };
-const formatDateTime = (value?: string) => {
-	if (!value) return "-";
-	const date = new Date(value);
-	if (Number.isNaN(date.getTime())) return value;
-	return date.toLocaleString("zh-CN", { hour12: false });
-};
-
 const parseStructuredRows = (raw: string): StructuredImportRow[] => {
 	const lines = raw
 		.split(/\r?\n/)

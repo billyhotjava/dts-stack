@@ -20,6 +20,7 @@ import { useSearchParams } from "react-router";
 import { EmptyState } from "@/components/empty-state";
 import { useGovernanceManageAccess } from "@/hooks/useModuleManageAccess";
 import { createDomain, deleteDomain, getDomainTree, updateDomain } from "@/api/platformApi";
+import { normalizeText } from "@/utils/textUtils";
 
 const { Sider, Content } = Layout;
 const { Title, Text } = Typography;
@@ -35,8 +36,6 @@ type DomainNode = {
 	parentId?: string | null;
 	children?: DomainNode[];
 };
-
-const normalizeText = (value?: string) => String(value || "").trim();
 
 const buildDomainIndex = (nodes: DomainNode[], map: Map<string, DomainNode>) => {
 	nodes.forEach((node) => {

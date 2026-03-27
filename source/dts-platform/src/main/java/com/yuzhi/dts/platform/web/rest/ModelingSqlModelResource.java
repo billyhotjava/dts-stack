@@ -8,6 +8,7 @@ import com.yuzhi.dts.platform.repository.modeling.ModelingSqlModelRepository;
 import com.yuzhi.dts.platform.repository.service.InfraDataSourceRepository;
 import com.yuzhi.dts.platform.service.audit.AuditService;
 import com.yuzhi.dts.platform.service.modeling.DataStandardSecurity;
+import com.yuzhi.dts.platform.service.modeling.ModelGenerationService;
 import com.yuzhi.dts.platform.service.modeling.ModelingSqlModelService;
 import com.yuzhi.dts.platform.service.modeling.ModelingSqlModelService.SqlModelDto;
 import com.yuzhi.dts.platform.service.modeling.ModelingSqlModelService.SqlModelContractImpact;
@@ -18,6 +19,7 @@ import com.yuzhi.dts.platform.service.modeling.ModelingSqlModelService.SqlModelG
 import com.yuzhi.dts.platform.service.modeling.ModelingSqlModelService.SqlModelOdsGenerateRequest;
 import com.yuzhi.dts.platform.service.modeling.ModelingSqlModelService.SqlModelOdsGenerateResult;
 import com.yuzhi.dts.platform.service.modeling.ModelingSqlModelService.SqlModelRequest;
+import com.yuzhi.dts.platform.service.infra.DataSourceScorer;
 import com.yuzhi.dts.platform.web.rest.ApiResponses;
 import com.yuzhi.dts.platform.web.rest.ApiResponse;
 import jakarta.validation.Valid;
@@ -53,16 +55,15 @@ import org.slf4j.LoggerFactory;
 
 @RestController
 @RequestMapping("/api/modeling/sql-models")
-@Transactional
 public class ModelingSqlModelResource {
 
     private static final String MODELING_MAINTAINER_EXPRESSION =
         "hasAnyAuthority(T(com.yuzhi.dts.platform.security.AuthoritiesConstants).CATALOG_MAINTAINERS)";
     private static final String STATUS_ACTIVE = "ACTIVE";
-    private static final String BIADMIN_NAME = "数仓 (biadmin)";
     private static final Logger LOG = LoggerFactory.getLogger(ModelingSqlModelResource.class);
 
     private final ModelingSqlModelService sqlModelService;
+    private final ModelGenerationService generationService;
     private final ModelingSqlModelRepository sqlModelRepository;
     private final InfraOdsTableMappingRepository odsTableMappingRepository;
     private final CatalogDatasetRepository datasetRepository;
@@ -72,6 +73,7 @@ public class ModelingSqlModelResource {
 
     public ModelingSqlModelResource(
         ModelingSqlModelService sqlModelService,
+        ModelGenerationService generationService,
         ModelingSqlModelRepository sqlModelRepository,
         InfraOdsTableMappingRepository odsTableMappingRepository,
         CatalogDatasetRepository datasetRepository,
@@ -80,6 +82,7 @@ public class ModelingSqlModelResource {
         DataStandardSecurity security
     ) {
         this.sqlModelService = sqlModelService;
+        this.generationService = generationService;
         this.sqlModelRepository = sqlModelRepository;
         this.odsTableMappingRepository = odsTableMappingRepository;
         this.datasetRepository = datasetRepository;
@@ -89,6 +92,7 @@ public class ModelingSqlModelResource {
     }
 
     @GetMapping
+    @Transactional(readOnly = true)
     public ApiResponse<List<SqlModelDto>> list(
         @RequestParam(required = false) UUID planId,
         @RequestParam(required = false) String keyword,
@@ -100,6 +104,7 @@ public class ModelingSqlModelResource {
     }
 
     @GetMapping("/{id}")
+    @Transactional(readOnly = true)
     public ApiResponse<SqlModelDto> get(
         @PathVariable UUID id,
         @RequestHeader(value = "X-Active-Dept", required = false) String activeDept
@@ -110,6 +115,7 @@ public class ModelingSqlModelResource {
     }
 
     @GetMapping("/{id}/columns")
+    @Transactional(readOnly = true)
     public ApiResponse<List<Map<String, Object>>> listColumns(
         @PathVariable UUID id,
         @RequestHeader(value = "X-Active-Dept", required = false) String activeDept
@@ -120,6 +126,7 @@ public class ModelingSqlModelResource {
     }
 
     @GetMapping("/{id}/contract-impact")
+    @Transactional(readOnly = true)
     public ApiResponse<SqlModelContractImpact> contractImpact(
         @PathVariable UUID id,
         @RequestHeader(value = "X-Active-Dept", required = false) String activeDept
@@ -130,6 +137,7 @@ public class ModelingSqlModelResource {
     }
 
     @PostMapping
+    @Transactional
     @PreAuthorize(MODELING_MAINTAINER_EXPRESSION)
     public ApiResponse<SqlModelDto> create(
         @Valid @RequestBody SqlModelRequest request,
@@ -141,6 +149,7 @@ public class ModelingSqlModelResource {
     }
 
     @PostMapping(value = "/import", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    @Transactional
     @PreAuthorize(MODELING_MAINTAINER_EXPRESSION)
     public ApiResponse<SqlModelDto> importModel(
         @RequestParam UUID planId,
@@ -177,12 +186,13 @@ public class ModelingSqlModelResource {
             ownerDept,
             null
         );
-        SqlModelDto dto = sqlModelService.importFromFiles(request, sqlText, csvText, activeDept);
+        SqlModelDto dto = generationService.importFromFiles(request, sqlText, csvText, activeDept);
         auditService.audit("IMPORT", "modeling.sql-model", dto.id().toString());
         return ApiResponses.ok(dto);
     }
 
     @PostMapping(value = "/batch-import", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    @Transactional
     @PreAuthorize(MODELING_MAINTAINER_EXPRESSION)
     public ApiResponse<ModelingSqlModelService.BatchImportResult> batchImport(
         @RequestParam UUID planId,
@@ -197,7 +207,7 @@ public class ModelingSqlModelResource {
         Path tempFile = Files.createTempFile("batch-import-", ".zip");
         try {
             archive.transferTo(tempFile);
-            ModelingSqlModelService.BatchImportResult result = sqlModelService.batchImportFromArchive(
+            ModelingSqlModelService.BatchImportResult result = generationService.batchImportFromArchive(
                 planId, sourceDataSourceId, skipExisting, tempFile, activeDept
             );
             auditService.audit("BATCH_IMPORT", "modeling.sql-model",
@@ -209,39 +219,43 @@ public class ModelingSqlModelResource {
     }
 
     @PostMapping("/generate-from-ods")
+    @Transactional
     @PreAuthorize(MODELING_MAINTAINER_EXPRESSION)
     public ApiResponse<SqlModelOdsGenerateResult> generateFromOds(
         @Valid @RequestBody SqlModelOdsGenerateRequest request,
         @RequestHeader(value = "X-Active-Dept", required = false) String activeDept
     ) {
-        SqlModelOdsGenerateResult result = sqlModelService.generateFromOds(request, activeDept);
+        SqlModelOdsGenerateResult result = generationService.generateFromOds(request, activeDept);
         auditService.audit("GENERATE", "modeling.sql-model", "ods");
         return ApiResponses.ok(result);
     }
 
     @PostMapping("/governance/preview")
+    @Transactional
     @PreAuthorize(MODELING_MAINTAINER_EXPRESSION)
     public ApiResponse<SqlModelGovernancePreviewResult> previewGovernance(
         @RequestBody SqlModelGovernancePreviewRequest request,
         @RequestHeader(value = "X-Active-Dept", required = false) String activeDept
     ) {
-        SqlModelGovernancePreviewResult result = sqlModelService.previewGovernance(request, activeDept);
+        SqlModelGovernancePreviewResult result = generationService.previewGovernance(request, activeDept);
         auditService.audit("READ", "modeling.sql-model.governance.preview", request != null && request.planId() != null ? request.planId().toString() : "all");
         return ApiResponses.ok(result);
     }
 
     @PostMapping("/governance/execute")
+    @Transactional
     @PreAuthorize(MODELING_MAINTAINER_EXPRESSION)
     public ApiResponse<SqlModelGovernanceExecuteResult> executeGovernance(
         @RequestBody SqlModelGovernanceExecuteRequest request,
         @RequestHeader(value = "X-Active-Dept", required = false) String activeDept
     ) {
-        SqlModelGovernanceExecuteResult result = sqlModelService.executeGovernance(request, activeDept);
+        SqlModelGovernanceExecuteResult result = generationService.executeGovernance(request, activeDept);
         auditService.audit("DELETE", "modeling.sql-model.governance.execute", "requested=" + result.requested() + ",deleted=" + result.deleted());
         return ApiResponses.ok(result);
     }
 
     @PutMapping("/{id}")
+    @Transactional
     @PreAuthorize(MODELING_MAINTAINER_EXPRESSION)
     public ApiResponse<SqlModelDto> update(
         @PathVariable UUID id,
@@ -254,6 +268,7 @@ public class ModelingSqlModelResource {
     }
 
     @DeleteMapping("/{id}")
+    @Transactional
     @PreAuthorize(MODELING_MAINTAINER_EXPRESSION)
     public ApiResponse<Void> delete(
         @PathVariable UUID id,
@@ -270,6 +285,7 @@ public class ModelingSqlModelResource {
      * sourceSnippet 示例: {{ source('public', 'ods_patent_info') }}
      */
     @GetMapping("/dbt/sources")
+    @Transactional(readOnly = true)
     public ApiResponse<List<Map<String, Object>>> listDbtSources(
         @RequestParam(required = false) String keyword,
         @RequestParam(required = false) UUID sourceDataSourceId,
@@ -485,32 +501,7 @@ public class ModelingSqlModelResource {
         if (source == null) {
             return Integer.MIN_VALUE;
         }
-        int score = 0;
-        String name = source.getName() == null ? "" : source.getName().trim().toLowerCase(Locale.ROOT);
-        String type = source.getType() == null ? "" : source.getType().trim().toLowerCase(Locale.ROOT);
-        String jdbcUrl = source.getJdbcUrl() == null ? "" : source.getJdbcUrl().trim().toLowerCase(Locale.ROOT);
-        String status = source.getStatus() == null ? "" : source.getStatus().trim().toLowerCase(Locale.ROOT);
-        if (BIADMIN_NAME.equalsIgnoreCase(source.getName())) {
-            score += 100;
-        }
-        if (name.contains("biadmin")) {
-            score += 80;
-        }
-        if (jdbcUrl.contains("/biadmin")) {
-            score += 70;
-        }
-        if ("postgres".equals(type) || "postgresql".equals(type)) {
-            score += 50;
-        } else if (StringUtils.hasText(type)) {
-            score += 20;
-        }
-        if ("active".equals(status)) {
-            score += 5;
-        }
-        if (StringUtils.hasText(jdbcUrl)) {
-            score += 5;
-        }
-        return score;
+        return DataSourceScorer.scoreDataSource(source.getName(), source.getJdbcUrl(), source.getType(), source.getStatus());
     }
 
     /**
@@ -519,6 +510,7 @@ public class ModelingSqlModelResource {
      * refSnippet 示例: {{ ref('dwd_patent') }}
      */
     @GetMapping("/dbt/refs")
+    @Transactional(readOnly = true)
     public ApiResponse<List<Map<String, Object>>> listDbtRefs(
         @RequestParam(required = false) String keyword,
         @RequestParam(required = false) String layer,

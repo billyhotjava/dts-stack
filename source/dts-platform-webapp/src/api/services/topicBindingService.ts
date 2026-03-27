@@ -1,4 +1,5 @@
 import apiClient from "../apiClient";
+import { withModelingRequestTimeout } from "../modelingRequestTimeout";
 
 export type TopicBindingTemplateView = {
 	templateCode: string;
@@ -59,10 +60,12 @@ export type BindTopicOdsTablePayload = {
 export default {
 	listTemplates: () => apiClient.get<TopicBindingTemplateView[]>({ url: "/topic-bindings/templates" }),
 	getStatus: (selector?: string) =>
-		apiClient.get<TopicBindingDiagnostics>({
-			url: "/topic-bindings/status",
-			params: selector ? { selector } : undefined,
-		}),
+		apiClient.get<TopicBindingDiagnostics>(
+			withModelingRequestTimeout({
+				url: "/topic-bindings/status",
+				params: selector ? { selector } : undefined,
+			}),
+		),
 	bindOdsTable: (payload: BindTopicOdsTablePayload) =>
 		apiClient.post<TopicBindingView>({ url: "/topic-bindings/ods", data: payload }),
 };

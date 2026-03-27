@@ -5,6 +5,8 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.yuzhi.dts.platform.config.DbtProperties;
 import com.yuzhi.dts.platform.service.ops.ExternalRunLogService;
 import java.io.File;
+import java.io.IOException;
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Instant;
 import java.util.ArrayList;
@@ -30,6 +32,11 @@ public class DbtRunResultService {
     private final DbtProperties properties;
     private final DbtConfigService configService;
     private final ExternalRunLogService externalRunLogService;
+
+    /* manifest.json cache — avoids re-parsing a 10-50 MB file on every call */
+    private volatile Map<String, ManifestNode> cachedManifestNodes;
+    private volatile long cachedManifestModTime = -1;
+    private volatile Path cachedManifestPath;
 
     public DbtRunResultService(
         ObjectMapper objectMapper,
@@ -144,7 +151,7 @@ public class DbtRunResultService {
                 command = argsAsCommand(raw.get("args"));
             }
             List<Map<String, Object>> results = asList(raw.get("results"));
-            Map<String, ManifestNode> manifestNodes = readManifestNodes(projectDir + MANIFEST_PATH);
+            Map<String, ManifestNode> manifestNodes = readManifestNodesCached(projectDir + MANIFEST_PATH);
 
             int total = results.size();
             int success = 0;
@@ -304,7 +311,7 @@ public class DbtRunResultService {
         try {
             Map<String, Object> raw = objectMapper.readValue(runResultsFile, new TypeReference<>() {});
             List<Map<String, Object>> results = asList(raw.get("results"));
-            Map<String, ManifestNode> manifestNodes = readManifestNodes(projectDir + MANIFEST_PATH);
+            Map<String, ManifestNode> manifestNodes = readManifestNodesCached(projectDir + MANIFEST_PATH);
 
             List<DbtTestDetail> details = new ArrayList<>();
             for (Map<String, Object> result : results) {
@@ -482,7 +489,7 @@ public class DbtRunResultService {
         String resourceType = normalized.startsWith("dbt test") ? "test" : "model";
         String selector = extractSelector(command);
         int count = 0;
-        for (ManifestNode node : readManifestNodes(manifestPath).values()) {
+        for (ManifestNode node : readManifestNodesCached(manifestPath).values()) {
             if (!resourceType.equalsIgnoreCase(node.resourceType())) {
                 continue;
             }
@@ -566,6 +573,30 @@ public class DbtRunResultService {
         }
         java.util.Collections.sort(tokens);
         return String.join(",", tokens);
+    }
+
+    private Map<String, ManifestNode> readManifestNodesCached(String manifestPath) {
+        Path path = Path.of(manifestPath);
+        try {
+            if (!Files.exists(path)) {
+                return Map.of();
+            }
+            long modTime = Files.getLastModifiedTime(path).toMillis();
+            Path cachedPath = this.cachedManifestPath;
+            Map<String, ManifestNode> cached = this.cachedManifestNodes;
+            if (cached != null && cachedPath != null
+                && cachedPath.equals(path) && modTime == this.cachedManifestModTime) {
+                return cached;
+            }
+            Map<String, ManifestNode> nodes = readManifestNodes(manifestPath);
+            this.cachedManifestNodes = nodes;
+            this.cachedManifestModTime = modTime;
+            this.cachedManifestPath = path;
+            return nodes;
+        } catch (IOException ex) {
+            LOG.debug("Failed to check manifest modification time, reading directly: {}", ex.getMessage());
+            return readManifestNodes(manifestPath);
+        }
     }
 
     private Map<String, ManifestNode> readManifestNodes(String manifestPath) {

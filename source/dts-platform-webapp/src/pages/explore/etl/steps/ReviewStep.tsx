@@ -9,10 +9,9 @@ import {
 	Typography,
 } from "antd";
 import type { IngestionFormContext } from "./types";
+import { normalizeText } from "@/utils/textUtils";
 
 const { Text } = Typography;
-
-const normalizeText = (value?: string) => String(value || "").trim();
 
 const jsonValidator = (label: string) => (_: any, value: string) => {
 	if (!normalizeText(value)) return Promise.resolve();

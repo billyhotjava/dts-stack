@@ -5,10 +5,9 @@ import { useNavigate, useSearchParams } from "react-router";
 import { EmptyState } from "@/components/empty-state";
 import { useGovernanceManageAccess } from "@/hooks/useModuleManageAccess";
 import { createModelTemplate, deleteModelTemplate, getModelTemplateReferences, listModelTemplates, updateModelTemplate } from "@/api/platformApi";
+import { normalizeText } from "@/utils/textUtils";
 
 const { Text } = Typography;
-
-const normalizeText = (value?: string) => String(value || "").trim();
 
 type ModelingTemplate = {
 	id?: string;

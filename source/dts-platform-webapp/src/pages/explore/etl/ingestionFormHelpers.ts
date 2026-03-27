@@ -6,6 +6,9 @@ import type {
 	TableInfo,
 } from "@/api/ingestion";
 import type { InfraDataSource } from "@/api/services/dataSourcesService";
+import { normalizeText } from "@/utils/textUtils";
+
+export { normalizeText };
 
 export const DRAFT_STORAGE_KEY = "ingestion_task_draft";
 export const CONNECTION_KEYS = [
@@ -64,8 +67,6 @@ export const JDBC_READER_BY_URL: Record<string, string> = {
 };
 
 export const TABLE_PLACEHOLDER = "${table}";
-
-export const normalizeText = (value?: string) => String(value || "").trim();
 
 export type AsyncRunProgressStatus = "active" | "success" | "exception";
 

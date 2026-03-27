@@ -39,6 +39,7 @@ import {
 	triggerQualityRun,
 	listDatasets,
 } from "@/api/platformApi";
+import { formatTime } from "@/utils/textUtils";
 
 const SEVERITY_OPTIONS = [
 	{ label: "低", value: "LOW" },
@@ -104,12 +105,6 @@ type QualityRuleVersion = {
 	createdDate?: string;
 };
 
-const formatTime = (value?: string) => {
-	if (!value) return "-";
-	const dt = new Date(value);
-	if (Number.isNaN(dt.getTime())) return value;
-	return dt.toLocaleString("zh-CN", { hour12: false });
-};
 const parseJsonText = (value?: string) => {
 	try {
 		return value ? JSON.parse(value) : undefined;

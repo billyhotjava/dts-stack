@@ -13,10 +13,9 @@ import {
 	listGlossaryTerms,
 	updateGlossaryTerm,
 } from "@/api/platformApi";
+import { normalizeText } from "@/utils/textUtils";
 
 const { Text } = Typography;
-
-const normalizeText = (value?: string) => String(value || "").trim();
 
 type GlossaryTerm = {
 	id?: string;

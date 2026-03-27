@@ -3,10 +3,13 @@ package com.yuzhi.dts.platform.service.development;
 import com.yuzhi.dts.platform.domain.development.DevScriptAsset;
 import com.yuzhi.dts.platform.domain.development.DevScriptRun;
 import com.yuzhi.dts.platform.domain.development.DevScriptVersion;
+import com.yuzhi.dts.platform.security.DepartmentUtils;
 import com.yuzhi.dts.platform.repository.development.DevScriptAssetRepository;
 import com.yuzhi.dts.platform.repository.development.DevScriptRunRepository;
 import com.yuzhi.dts.platform.repository.development.DevScriptVersionRepository;
 import com.yuzhi.dts.platform.service.audit.AuditService;
+import com.yuzhi.dts.platform.service.modeling.DataStandardSecurity;
+import com.yuzhi.dts.platform.service.security.OrganizationVisibilityService;
 import com.yuzhi.dts.platform.service.development.dto.ScriptAssetResponse;
 import com.yuzhi.dts.platform.service.development.dto.ScriptCreateRequest;
 import com.yuzhi.dts.platform.service.development.dto.ScriptRunRequest;
@@ -35,43 +38,58 @@ public class ScriptStudioService {
     private final DevScriptVersionRepository versionRepository;
     private final DevScriptRunRepository runRepository;
     private final AuditService auditService;
+    private final OrganizationVisibilityService organizationVisibilityService;
+    private final DataStandardSecurity security;
 
     public ScriptStudioService(
         DevScriptAssetRepository assetRepository,
         DevScriptVersionRepository versionRepository,
         DevScriptRunRepository runRepository,
-        AuditService auditService
+        AuditService auditService,
+        OrganizationVisibilityService organizationVisibilityService,
+        DataStandardSecurity security
     ) {
         this.assetRepository = assetRepository;
         this.versionRepository = versionRepository;
         this.runRepository = runRepository;
         this.auditService = auditService;
+        this.organizationVisibilityService = organizationVisibilityService;
+        this.security = security;
     }
 
     @Transactional(readOnly = true)
-    public List<ScriptAssetResponse> listScripts() {
-        return assetRepository.findByEnabledTrueOrderByLastModifiedDateDesc().stream().map(this::toAssetResponse).toList();
+    public List<ScriptAssetResponse> listScripts(String activeDeptHeader) {
+        String activeDept = security.resolveActiveDept(activeDeptHeader);
+        boolean instituteScope = security.hasInstituteScope();
+        return assetRepository
+            .findByEnabledTrueOrderByLastModifiedDateDesc()
+            .stream()
+            .filter(asset -> isOwnerDeptVisible(asset != null ? asset.getOwnerDept() : null, activeDept, instituteScope))
+            .map(this::toAssetResponse)
+            .toList();
     }
 
     @Transactional(readOnly = true)
-    public List<ScriptVersionResponse> listVersions(UUID scriptId) {
-        requireAsset(scriptId);
+    public List<ScriptVersionResponse> listVersions(UUID scriptId, String activeDeptHeader) {
+        requireReadableAsset(scriptId, activeDeptHeader);
         return versionRepository.findByAsset_IdOrderByVersionNoDesc(scriptId).stream().map(this::toVersionResponse).toList();
     }
 
     @Transactional(readOnly = true)
-    public List<ScriptRunResponse> listRuns(UUID scriptId) {
-        requireAsset(scriptId);
+    public List<ScriptRunResponse> listRuns(UUID scriptId, String activeDeptHeader) {
+        requireReadableAsset(scriptId, activeDeptHeader);
         return runRepository.findTop50ByAsset_IdOrderByCreatedDateDesc(scriptId).stream().map(this::toRunResponse).toList();
     }
 
     @Transactional(readOnly = true)
-    public ScriptRunResponse getRun(UUID runId) {
-        return toRunResponse(requireRun(runId));
+    public ScriptRunResponse getRun(UUID runId, String activeDeptHeader) {
+        DevScriptRun run = requireRun(runId);
+        ensureReadable(run.getAsset(), activeDeptHeader);
+        return toRunResponse(run);
     }
 
     @Transactional
-    public ScriptAssetResponse createScript(ScriptCreateRequest request, Principal principal) {
+    public ScriptAssetResponse createScript(ScriptCreateRequest request, String activeDeptHeader, Principal principal) {
         if (request == null || !StringUtils.hasText(request.name())) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "脚本名称不能为空");
         }
@@ -85,7 +103,7 @@ public class ScriptStudioService {
         asset.setScriptType(normalizeScriptType(request.scriptType()));
         asset.setStatus("DRAFT");
         asset.setLatestVersionNo(1);
-        asset.setOwnerDept(trimToNull(request.ownerDept()));
+        asset.setOwnerDept(resolveOwnerDeptForUpsert(request.ownerDept(), null, activeDeptHeader));
         asset.setEnabled(Boolean.TRUE);
         asset = assetRepository.save(asset);
 
@@ -102,8 +120,8 @@ public class ScriptStudioService {
     }
 
     @Transactional
-    public ScriptAssetResponse updateScript(UUID scriptId, ScriptUpdateRequest request, Principal principal) {
-        DevScriptAsset asset = requireAsset(scriptId);
+    public ScriptAssetResponse updateScript(UUID scriptId, ScriptUpdateRequest request, String activeDeptHeader, Principal principal) {
+        DevScriptAsset asset = requireWritableAsset(scriptId, activeDeptHeader);
         if (request != null) {
             if (StringUtils.hasText(request.name())) {
                 asset.setName(request.name().trim());
@@ -117,8 +135,8 @@ public class ScriptStudioService {
             if (StringUtils.hasText(request.status())) {
                 asset.setStatus(normalizeAssetStatus(request.status()));
             }
-            if (request.ownerDept() != null) {
-                asset.setOwnerDept(trimToNull(request.ownerDept()));
+            if (request.ownerDept() != null || !security.hasInstituteScope()) {
+                asset.setOwnerDept(resolveOwnerDeptForUpsert(request.ownerDept(), asset.getOwnerDept(), activeDeptHeader));
             }
             if (request.enabled() != null) {
                 asset.setEnabled(request.enabled());
@@ -130,8 +148,8 @@ public class ScriptStudioService {
     }
 
     @Transactional
-    public ScriptVersionResponse saveVersion(UUID scriptId, ScriptSaveVersionRequest request, Principal principal) {
-        DevScriptAsset asset = requireAsset(scriptId);
+    public ScriptVersionResponse saveVersion(UUID scriptId, ScriptSaveVersionRequest request, String activeDeptHeader, Principal principal) {
+        DevScriptAsset asset = requireWritableAsset(scriptId, activeDeptHeader);
         if (request == null || !StringUtils.hasText(request.content())) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "脚本内容不能为空");
         }
@@ -161,8 +179,8 @@ public class ScriptStudioService {
     }
 
     @Transactional
-    public ScriptRunResponse runScript(UUID scriptId, ScriptRunRequest request, Principal principal) {
-        DevScriptAsset asset = requireAsset(scriptId);
+    public ScriptRunResponse runScript(UUID scriptId, ScriptRunRequest request, String activeDeptHeader, Principal principal) {
+        DevScriptAsset asset = requireWritableAsset(scriptId, activeDeptHeader);
         DevScriptVersion version = resolveVersion(scriptId, request != null ? request.versionNo() : null);
 
         DevScriptRun run = new DevScriptRun();
@@ -255,6 +273,18 @@ public class ScriptStudioService {
         return assetRepository
             .findById(scriptId)
             .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "脚本不存在"));
+    }
+
+    private DevScriptAsset requireReadableAsset(UUID scriptId, String activeDeptHeader) {
+        DevScriptAsset asset = requireAsset(scriptId);
+        ensureReadable(asset, activeDeptHeader);
+        return asset;
+    }
+
+    private DevScriptAsset requireWritableAsset(UUID scriptId, String activeDeptHeader) {
+        DevScriptAsset asset = requireAsset(scriptId);
+        ensureReadable(asset, activeDeptHeader);
+        return asset;
     }
 
     private DevScriptRun requireRun(UUID runId) {
@@ -379,6 +409,43 @@ public class ScriptStudioService {
             return null;
         }
         return value.trim();
+    }
+
+    private void ensureReadable(DevScriptAsset asset, String activeDeptHeader) {
+        String activeDept = security.resolveActiveDept(activeDeptHeader);
+        boolean instituteScope = security.hasInstituteScope();
+        if (!isOwnerDeptVisible(asset != null ? asset.getOwnerDept() : null, activeDept, instituteScope)) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "当前账号无权访问该脚本");
+        }
+    }
+
+    private boolean isOwnerDeptVisible(String ownerDept, String activeDept, boolean instituteScope) {
+        String trimmedOwner = trimToNull(ownerDept);
+        if (trimmedOwner == null) {
+            return true;
+        }
+        if (instituteScope) {
+            return true;
+        }
+        if (organizationVisibilityService.isRoot(trimmedOwner)) {
+            return true;
+        }
+        if (!StringUtils.hasText(activeDept)) {
+            return false;
+        }
+        return DepartmentUtils.matches(trimmedOwner, activeDept);
+    }
+
+    private String resolveOwnerDeptForUpsert(String requestedOwnerDept, String existingOwnerDept, String activeDeptHeader) {
+        if (security.hasInstituteScope()) {
+            String resolved = trimToNull(requestedOwnerDept);
+            return resolved != null ? resolved : trimToNull(existingOwnerDept);
+        }
+        String activeDept = trimToNull(security.resolveActiveDept(activeDeptHeader));
+        if (activeDept == null) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "缺少当前部门上下文");
+        }
+        return activeDept;
     }
 
     private String resolveMessage(Exception ex) {

@@ -60,3 +60,7 @@ dts:
         username: ${DTS_ANALYTICS_PROJECT_COCKPIT_WAREHOUSE_USERNAME:${PG_USER_BIADMIN:biadmin}}
         password: ${DTS_ANALYTICS_PROJECT_COCKPIT_WAREHOUSE_PASSWORD:${PG_PWD_BIADMIN:}}
         driver-class-name: ${DTS_ANALYTICS_PROJECT_COCKPIT_WAREHOUSE_DRIVER:org.postgresql.Driver}
+  admin:
+    enabled: ${DTS_ADMIN_ENABLED:true}
+    base-url: ${DTS_ADMIN_BASE_URL:http://dts-admin:8081}
+    api-path: ${DTS_ADMIN_API_PATH:/api}

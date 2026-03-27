@@ -53,6 +53,7 @@ import {
 	archiveDimension,
 	listDatasets,
 } from "@/api/platformApi";
+import { formatDateTime } from "@/utils/textUtils";
 
 const STATUS_OPTIONS = [
 	{ label: "草稿", value: "DRAFT" },
@@ -159,13 +160,6 @@ const prettyJson = (value: any) => {
 		return String(value);
 	}
 };
-const formatDateTime = (value?: string | null) => {
-	if (!value) return "-";
-	const d = new Date(value);
-	if (Number.isNaN(d.getTime())) return String(value);
-	return d.toLocaleString("zh-CN", { hour12: false });
-};
-
 export default function Page() {
 	const [searchParams, setSearchParams] = useSearchParams();
 	const initialTabKey = searchParams.get("tab") === "dimensions" ? "dimensions" : "indicators";

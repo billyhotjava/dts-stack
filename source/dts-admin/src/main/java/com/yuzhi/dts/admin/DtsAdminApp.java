@@ -28,7 +28,8 @@ import tech.jhipster.config.JHipsterConstants;
     com.yuzhi.dts.admin.config.IngestionIntegrationProperties.class,
     com.yuzhi.dts.admin.config.InfraSecurityProperties.class,
     com.yuzhi.dts.admin.config.PersonnelSyncProperties.class,
-    com.yuzhi.dts.admin.config.MdmGatewayProperties.class
+    com.yuzhi.dts.admin.config.MdmGatewayProperties.class,
+    com.yuzhi.dts.admin.config.AuditRetentionProperties.class
 })
 public class DtsAdminApp {
 

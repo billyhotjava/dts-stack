@@ -10,12 +10,11 @@ import {
 	Typography,
 } from "antd";
 import type { IngestionFormContext } from "./types";
+import { normalizeText } from "@/utils/textUtils";
 
 const { Text } = Typography;
 
 type SyncModeValue = "full_refresh" | "incremental" | "cdc" | "backfill";
-
-const normalizeText = (value?: string) => String(value || "").trim();
 
 const normalizeSyncModeValue = (value?: string): SyncModeValue | null => {
 	const text = normalizeText(value).toLowerCase();

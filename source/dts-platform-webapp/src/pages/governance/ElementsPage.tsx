@@ -15,10 +15,10 @@ import {
 	listReferenceCodes,
 	updateMetadataStandard,
 } from "@/api/platformApi";
+import { normalizeText } from "@/utils/textUtils";
 
 const { Text } = Typography;
 
-const normalizeText = (value?: string) => String(value || "").trim();
 const normalizeUpper = (value?: string) => normalizeText(value).toUpperCase();
 
 type MetadataStandard = {

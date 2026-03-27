@@ -30,6 +30,7 @@ import {
 } from "@/api/platformApi";
 import { useGovernanceManageAccess } from "@/hooks/useModuleManageAccess";
 import { useActiveDept } from "@/store/contextStore";
+import { formatDateTime } from "@/utils/textUtils";
 
 type IssueAction = {
 	id?: string;
@@ -94,12 +95,6 @@ const splitCsv = (raw?: string) =>
 		.split(",")
 		.map((item) => item.trim())
 		.filter(Boolean);
-
-const formatDateTime = (value?: string) => {
-	if (!value) return "-";
-	const date = dayjs(value);
-	return date.isValid() ? date.format("YYYY-MM-DD HH:mm:ss") : value;
-};
 
 const formatDurationHours = (value?: number) => {
 	if (value == null) return "-";

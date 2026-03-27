@@ -150,6 +150,8 @@ function injectChartAnnotations(
 // - chartUtils.ts, tableUtils.tsx, markdownUtils.ts, geoJsonCache.ts
 // - InteractionLayer.tsx (interaction hook + screen-reference URL resolution)
 
+const SCREEN_UI_FONT_FAMILY = '"Lato", "Open Sans Variable", "Inter Variable", system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, "PingFang SC", "Microsoft YaHei", "Noto Sans CJK SC", "Noto Sans", sans-serif';
+
 export const ComponentRenderer = memo(function ComponentRenderer({ component, mode = 'preview', theme, onConfigMeta }: ComponentRendererProps) {
     const { type, config, width, height, dataSource, drillDown } = component;
 
@@ -167,12 +169,12 @@ export const ComponentRenderer = memo(function ComponentRenderer({ component, mo
     const themeOptions = useMemo(() => ({
         backgroundColor: "transparent",
         color: t.echarts.colorPalette,
-        textStyle: { color: t.textPrimary },
-        legend: { textStyle: { color: t.textPrimary } },
+        textStyle: { color: t.textPrimary, fontFamily: SCREEN_UI_FONT_FAMILY },
+        legend: { textStyle: { color: t.textPrimary, fontFamily: SCREEN_UI_FONT_FAMILY } },
         tooltip: {
             backgroundColor: t.echarts.tooltipBg,
             borderColor: t.echarts.tooltipBorder,
-            textStyle: { color: t.textPrimary },
+            textStyle: { color: t.textPrimary, fontFamily: SCREEN_UI_FONT_FAMILY },
         },
     }), [t]);
 

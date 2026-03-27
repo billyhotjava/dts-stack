@@ -1,6 +1,5 @@
 import type { IngestionExecutionDTO } from "@/api/ingestion";
-
-const normalizeText = (value?: string) => String(value || "").trim();
+import { normalizeText } from "@/utils/textUtils";
 
 export type AsyncRunProgressStatus = "active" | "success" | "exception";
 

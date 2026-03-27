@@ -16,6 +16,7 @@ import {
 	type ScriptType,
 	type ScriptVersion,
 } from "@/api/script-studio";
+import { formatTime } from "@/utils/textUtils";
 
 type ScriptStatusFilter = "ALL" | ScriptType;
 
@@ -31,20 +32,6 @@ const initialCreateForm: CreateFormState = {
 	description: "",
 	scriptType: "PYTHON",
 	content: "# 输入脚本内容\n",
-};
-
-const formatTime = (value?: string | null) => {
-	if (!value) {
-		return "-";
-	}
-	return new Date(value).toLocaleString("zh-CN", {
-		year: "numeric",
-		month: "2-digit",
-		day: "2-digit",
-		hour: "2-digit",
-		minute: "2-digit",
-		second: "2-digit",
-	});
 };
 
 const formatDuration = (value?: number | null) => {
@@ -113,9 +100,8 @@ export default function ScriptStudioPage() {
 			if (selectedId && !data.some((item) => item.id === selectedId)) {
 				setSelectedId(data.length > 0 ? data[0].id : null);
 			}
-		} catch (error: unknown) {
-			const err = error as { message?: string };
-			message.error(err?.message || "加载脚本失败");
+		} catch {
+			// handled by global interceptor
 		} finally {
 			setScriptsLoading(false);
 		}
@@ -143,9 +129,8 @@ export default function ScriptStudioPage() {
 			const data = await listScriptVersions(scriptId);
 			setVersions(data);
 			setEditorContent(data.length > 0 ? data[0].content || "" : "");
-		} catch (error: unknown) {
-			const err = error as { message?: string };
-			message.error(err?.message || "加载版本失败");
+		} catch {
+			// handled by global interceptor
 		} finally {
 			setVersionsLoading(false);
 		}
@@ -156,9 +141,8 @@ export default function ScriptStudioPage() {
 		try {
 			const data = await listScriptRuns(scriptId);
 			setRuns(data);
-		} catch (error: unknown) {
-			const err = error as { message?: string };
-			message.error(err?.message || "加载运行记录失败");
+		} catch {
+			// handled by global interceptor
 		} finally {
 			setRunsLoading(false);
 		}
@@ -239,9 +223,8 @@ export default function ScriptStudioPage() {
 			setCreateForm(initialCreateForm);
 			setSelectedId(created.id);
 			await loadScripts();
-		} catch (error: unknown) {
-			const err = error as { message?: string };
-			message.error(err?.message || "创建脚本失败");
+		} catch {
+			// handled by global interceptor
 		} finally {
 			setCreating(false);
 		}
@@ -267,9 +250,8 @@ export default function ScriptStudioPage() {
 			message.success("已保存新版本");
 			await loadVersions(selectedId);
 			await loadScripts();
-		} catch (error: unknown) {
-			const err = error as { message?: string };
-			message.error(err?.message || "保存版本失败");
+		} catch {
+			// handled by global interceptor
 		} finally {
 			setSavingVersion(false);
 		}
@@ -287,9 +269,8 @@ export default function ScriptStudioPage() {
 			message.success(`已触发运行，executionId=${run.executionId}`);
 			setRuns((prev) => [run, ...prev]);
 			startRunPolling(run.id, selectedId);
-		} catch (error: unknown) {
-			const err = error as { message?: string };
-			message.error(err?.message || "触发运行失败");
+		} catch {
+			// handled by global interceptor
 		} finally {
 			setRunning(false);
 		}

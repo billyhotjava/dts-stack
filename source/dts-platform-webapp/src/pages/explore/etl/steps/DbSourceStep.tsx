@@ -15,10 +15,9 @@ import {
 } from "antd";
 import type { TableInfo } from "@/api/ingestion";
 import type { IngestionFormContext } from "./types";
+import { normalizeText } from "@/utils/textUtils";
 
 const { Text } = Typography;
-
-const normalizeText = (value?: string) => String(value || "").trim();
 
 const buildTableKey = (table: TableInfo) =>
 	normalizeText(table.schema) ? `${table.schema}.${table.name}` : table.name;

@@ -1,4 +1,5 @@
 import api from "@/api/apiClient";
+import { withModelingRequestTimeout } from "@/api/modelingRequestTimeout";
 
 // Catalog
 export const getCatalogSummary = () => api.get({ url: "/catalog/summary" });
@@ -69,7 +70,7 @@ export const searchCatalog = (params: {
 	limit?: number;
 }) =>
 	api.get({ url: "/catalog/search", params });
-export const getDbtConfig = () => api.get({ url: "/etl/dbt/config" });
+export const getDbtConfig = () => api.get(withModelingRequestTimeout({ url: "/etl/dbt/config" }));
 export const updateDbtConfig = (data: any) => api.put({ url: "/etl/dbt/config", data });
 
 // dbt project file management
@@ -85,11 +86,12 @@ export const deleteDbtFile = (path: string) =>
 export const renameDbtFile = (data: { oldPath: string; newPath: string }) =>
 	api.put({ url: "/etl/dbt/files/rename", data });
 export const listDbtModels = () => api.get({ url: "/etl/dbt/models" });
-export const syncDbtModels = () => api.post({ url: "/etl/dbt/models/sync" });
-export const getDbtSyncStatus = (params?: { models?: string }) => api.get({ url: "/etl/dbt/sync/status", params });
+export const syncDbtModels = () => api.post(withModelingRequestTimeout({ url: "/etl/dbt/models/sync" }));
+export const getDbtSyncStatus = (params?: { models?: string }) =>
+	api.get(withModelingRequestTimeout({ url: "/etl/dbt/sync/status", params }));
 export const checkDagReady = (params?: { selector?: string }) => api.get({ url: "/etl/dbt/dag/ready", params });
 export const listDbtRuns = (limit = 20, params?: { dagId?: string; selector?: string }) =>
-	api.get({ url: "/etl/dbt/runs", params: { limit, ...(params || {}) } });
+	api.get(withModelingRequestTimeout({ url: "/etl/dbt/runs", params: { limit, ...(params || {}) } }));
 export const triggerDbtRun = (data: any) => api.post({ url: "/etl/dbt/run", data });
 export const triggerDbtCompile = (data?: any) => api.post({ url: "/etl/dbt/compile", data });
 export const triggerDbtTest = (data?: any) => api.post({ url: "/etl/dbt/test", data });
@@ -99,13 +101,13 @@ export const checkDbtReleaseGate = (data?: any) => api.post({ url: "/etl/dbt/rel
 
 // dbt execution log (from Airflow)
 export const getDbtRunLog = (dagRunId: string, params?: { dagId?: string; taskId?: string; tryNumber?: number }) =>
-	api.get({ url: `/etl/dbt/runs/${dagRunId}/logs`, params });
+	api.get(withModelingRequestTimeout({ url: `/etl/dbt/runs/${dagRunId}/logs`, params }));
 
 // dbt data preview
 export const previewDbtModel = (model: string, limit = 100) =>
-	api.get({ url: "/etl/dbt/preview", params: { model, limit } });
+	api.get(withModelingRequestTimeout({ url: "/etl/dbt/preview", params: { model, limit } }));
 export const getDbtOutputRelation = (modelId: string) =>
-	api.get({ url: "/etl/dbt/output", params: { modelId } });
+	api.get(withModelingRequestTimeout({ url: "/etl/dbt/output", params: { modelId } }));
 export const truncateDbtOutputRelation = (data: { modelId: string }) =>
 	api.post({ url: "/etl/dbt/output/truncate", data });
 export const rebuildDbtOutputRelation = (data: { modelId: string; target?: string; vars?: Record<string, any> }) =>
@@ -122,25 +124,29 @@ export const revertDbtFile = (path: string) =>
 	api.post({ url: "/etl/dbt/git/revert", data: { path } });
 export const getDbtFileAtCommit = (path: string, commitHash: string) =>
 	api.get({ url: "/etl/dbt/git/file-at-commit", params: { path, commitHash } });
-export const listSqlModels = (params?: any) => api.get({ url: "/modeling/sql-models", params });
-export const getSqlModel = (id: string) => api.get({ url: `/modeling/sql-models/${id}` });
-export const listSqlModelColumns = (id: string) => api.get({ url: `/modeling/sql-models/${id}/columns` });
-export const getSqlModelContractImpact = (id: string) => api.get({ url: `/modeling/sql-models/${id}/contract-impact` });
-export const createSqlModel = (data: any) => api.post({ url: "/modeling/sql-models", data });
-export const updateSqlModel = (id: string, data: any) => api.put({ url: `/modeling/sql-models/${id}`, data });
-export const deleteSqlModel = (id: string) => api.delete({ url: `/modeling/sql-models/${id}` });
-export const importSqlModel = (data: FormData) => api.post({ url: "/modeling/sql-models/import", data });
+export const listSqlModels = (params?: any) => api.get(withModelingRequestTimeout({ url: "/modeling/sql-models", params }));
+export const getSqlModel = (id: string) => api.get(withModelingRequestTimeout({ url: `/modeling/sql-models/${id}` }));
+export const listSqlModelColumns = (id: string) =>
+	api.get(withModelingRequestTimeout({ url: `/modeling/sql-models/${id}/columns` }));
+export const getSqlModelContractImpact = (id: string) =>
+	api.get(withModelingRequestTimeout({ url: `/modeling/sql-models/${id}/contract-impact` }));
+export const createSqlModel = (data: any) => api.post(withModelingRequestTimeout({ url: "/modeling/sql-models", data }));
+export const updateSqlModel = (id: string, data: any) =>
+	api.put(withModelingRequestTimeout({ url: `/modeling/sql-models/${id}`, data }));
+export const deleteSqlModel = (id: string) => api.delete(withModelingRequestTimeout({ url: `/modeling/sql-models/${id}` }));
+export const importSqlModel = (data: FormData) => api.post(withModelingRequestTimeout({ url: "/modeling/sql-models/import", data }));
 export const batchImportSqlModels = (data: FormData) =>
-	api.post({ url: "/modeling/sql-models/batch-import", data });
-export const generateSqlModelsFromOds = (data: any) => api.post({ url: "/modeling/sql-models/generate-from-ods", data });
+	api.post(withModelingRequestTimeout({ url: "/modeling/sql-models/batch-import", data }));
+export const generateSqlModelsFromOds = (data: any) =>
+	api.post(withModelingRequestTimeout({ url: "/modeling/sql-models/generate-from-ods", data }));
 export const previewSqlModelGovernance = (data: any) =>
-	api.post({ url: "/modeling/sql-models/governance/preview", data });
+	api.post(withModelingRequestTimeout({ url: "/modeling/sql-models/governance/preview", data }));
 export const executeSqlModelGovernance = (data: any) =>
-	api.post({ url: "/modeling/sql-models/governance/execute", data });
+	api.post(withModelingRequestTimeout({ url: "/modeling/sql-models/governance/execute", data }));
 export const listDbtSources = (params?: { keyword?: string; sourceDataSourceId?: string }) =>
-	api.get({ url: "/modeling/sql-models/dbt/sources", params });
+	api.get(withModelingRequestTimeout({ url: "/modeling/sql-models/dbt/sources", params }));
 export const listDbtRefs = (params?: { keyword?: string; layer?: string }) =>
-	api.get({ url: "/modeling/sql-models/dbt/refs", params });
+	api.get(withModelingRequestTimeout({ url: "/modeling/sql-models/dbt/refs", params }));
 export const listAirflowJobs = (limit = 50) => api.get({ url: "/etl/airflow/jobs", params: { limit } });
 export const listAirflowJobRuns = (dagId: string, limit = 20) =>
 	api.get({ url: `/etl/airflow/jobs/${dagId}/runs`, params: { limit } });
@@ -337,7 +343,8 @@ export const deleteReferenceCodeMapping = (id: string, mapId: string | number) =
 export const syncReferenceCodeSeeds = () => api.post({ url: "/governance/reference-codes/seeds" });
 
 // Modeling (planning / glossary / templates)
-export const listModelingPlans = (params: any = {}) => api.get<any[]>({ url: "/modeling/plans", params });
+export const listModelingPlans = (params: any = {}) =>
+	api.get<any[]>(withModelingRequestTimeout({ url: "/modeling/plans", params }));
 export const getModelingPlan = (id: string) => api.get({ url: `/modeling/plans/${id}` });
 export const createModelingPlan = (data: any) => api.post({ url: "/modeling/plans", data });
 export const updateModelingPlan = (id: string, data: any) => api.put({ url: `/modeling/plans/${id}`, data });
@@ -356,7 +363,9 @@ export const getGlossaryTermReferences = (id: string) =>
 
 export const listModelTemplates = () => api.get<any[]>({ url: "/modeling/templates" });
 export const listTemplateLayers = () =>
-	api.get<{ layer: string; name: string; description: string }[]>({ url: "/modeling/templates/layers" });
+	api.get<{ layer: string; name: string; description: string }[]>(
+		withModelingRequestTimeout({ url: "/modeling/templates/layers" }),
+	);
 export const getModelTemplate = (id: string) => api.get({ url: `/modeling/templates/${id}` });
 export const createModelTemplate = (data: any) => api.post({ url: "/modeling/templates", data });
 export const updateModelTemplate = (id: string, data: any) => api.put({ url: `/modeling/templates/${id}`, data });

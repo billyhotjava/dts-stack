@@ -1,6 +1,5 @@
 import type { IngestionTaskTemplateDTO, IngestionTemplateRenderDTO } from "@/api/ingestion";
-
-const normalizeText = (value?: string) => String(value || "").trim();
+import { normalizeText } from "@/utils/textUtils";
 
 const normalizeSourceCategory = (value?: string): "file" | "database" | undefined => {
 	const text = normalizeText(value).toLowerCase();

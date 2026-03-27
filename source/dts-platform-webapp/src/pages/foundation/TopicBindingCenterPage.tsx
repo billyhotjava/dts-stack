@@ -26,10 +26,9 @@ import {
 	selectPreferredTopicSource,
 	type TopicSourceCandidate,
 } from "./topicBindingCenter.helpers";
+import { normalizeText } from "@/utils/textUtils";
 
 const { Paragraph, Text, Title } = Typography;
-
-const normalizeText = (value?: string | null) => String(value || "").trim();
 
 const buildTopicSourceKey = (candidate?: TopicSourceCandidate) =>
 	candidate ? `${normalizeText(candidate.sourceDataSourceId)}|${normalizeText(candidate.schema)}|${normalizeText(candidate.table)}` : "";
@@ -54,8 +53,7 @@ export default function TopicBindingCenterPage() {
 			setTemplates(nextTemplates);
 			setDiagnostics(statusResp || null);
 			setSelectedTemplateCode((current) => current || nextTemplates[0]?.templateCode);
-		} catch (error: any) {
-			message.error(error?.message || "加载专题绑定中心失败");
+		} catch {
 			setTemplates([]);
 			setDiagnostics(null);
 		} finally {
@@ -68,8 +66,7 @@ export default function TopicBindingCenterPage() {
 		try {
 			const resp = (await listDbtSources()) as TopicSourceCandidate[];
 			setSources(Array.isArray(resp) ? resp : []);
-		} catch (error: any) {
-			message.error(error?.message || "加载 ODS 候选表失败");
+		} catch {
 			setSources([]);
 		} finally {
 			setSourcesLoading(false);
@@ -163,8 +160,8 @@ export default function TopicBindingCenterPage() {
 			message.success("专题绑定已更新");
 			closeBindingModal();
 			await loadTemplatesAndStatus();
-		} catch (error: any) {
-			message.error(error?.message || "专题绑定失败");
+		} catch {
+			// handled by global interceptor
 		} finally {
 			setBindingSubmitting(false);
 		}

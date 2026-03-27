@@ -250,6 +250,10 @@ auditing:
   hmac-key: ${AUDIT_HMAC_KEY:${AUDIT_ENCRYPTION_KEY:}}
   forward-enabled: ${AUDIT_FORWARD_ENABLED:false}
   forward-retry-interval: ${AUDIT_FORWARD_RETRY_INTERVAL:60000}
+  retention:
+    enabled: ${AUDIT_RETENTION_CLEANUP_ENABLED:true}
+    days: ${AUDIT_RETENTION_DAYS:180}
+    batch-size: ${AUDIT_RETENTION_BATCH_SIZE:5000}
 
 
 dts:

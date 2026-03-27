@@ -15,6 +15,7 @@ import dataSourcesService, { type InfraDataSource } from "@/api/services/dataSou
 import { listSqlModels } from "@/api/platformApi";
 import RollbackImpactModal, { type RollbackRequest } from "@/components/rollback/RollbackImpactModal";
 import ExecutionHistoryTable from "./components/ExecutionHistoryTable";
+import { normalizeText } from "@/utils/textUtils";
 
 const { Text } = Typography;
 
@@ -221,7 +222,6 @@ export default function TransformDetailPage() {
 		}
 	};
 
-	const normalizeText = (value?: string) => String(value || "").trim();
 	const showRealtimeStatusCard = normalizeText(task?.syncMode).toLowerCase() === "cdc";
 
 	const parseModelNames = (selector?: string) => {
@@ -459,7 +459,7 @@ export default function TransformDetailPage() {
 			paused: { color: "warning", text: "暂停" },
 			deleted: { color: "error", text: "已删除" },
 		};
-		const config = statusMap[status || "draft"];
+		const config = statusMap[status || "draft"] ?? { color: "default", text: status || "unknown" };
 		return <Tag color={config.color}>{config.text}</Tag>;
 	};
 

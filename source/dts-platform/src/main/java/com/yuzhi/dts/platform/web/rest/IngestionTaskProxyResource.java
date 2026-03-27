@@ -246,8 +246,7 @@ public class IngestionTaskProxyResource {
     @PreAuthorize(INFRA_MAINTAINER_EXPRESSION)
     public ResponseEntity<ApiResponse<Map<String, Object>>> executeTaskAsync(@PathVariable("id") Long id) {
         ApiResponse<Map<String, Object>> response = ingestionClient.executeTaskAsync(id);
-        int status = response == null || response.getStatus() <= 0 ? 202 : response.getStatus();
-        return ResponseEntity.status(status).body(response);
+        return buildAsyncProxyResponse(response);
     }
 
     @PostMapping("/tasks/{id}/executions/{executionId}/retry")
@@ -277,8 +276,7 @@ public class IngestionTaskProxyResource {
         @RequestParam(value = "mode", required = false, defaultValue = "FAILED_ONLY") String mode
     ) {
         ApiResponse<Map<String, Object>> response = ingestionClient.retryExecutionAsync(id, executionId, Map.of("mode", mode));
-        int status = response == null || response.getStatus() <= 0 ? 202 : response.getStatus();
-        return ResponseEntity.status(status).body(response);
+        return buildAsyncProxyResponse(response);
     }
 
     @PostMapping("/tasks/{id}/dag/rebuild")
@@ -422,6 +420,19 @@ public class IngestionTaskProxyResource {
             );
         }
         return ResponseEntity.ok(response);
+    }
+
+    private ResponseEntity<ApiResponse<Map<String, Object>>> buildAsyncProxyResponse(ApiResponse<Map<String, Object>> response) {
+        if (response == null) {
+            return ResponseEntity.ok(new ApiResponse<>(200, "accepted", null));
+        }
+        int status = response.getStatus();
+        if (status >= 200 && status < 300) {
+            ApiResponse<Map<String, Object>> normalized = new ApiResponse<>(200, response.getMessage(), response.getData());
+            normalized.setCode(response.getCode());
+            return ResponseEntity.ok(normalized);
+        }
+        return ResponseEntity.status(status > 0 ? status : 500).body(response);
     }
 
     private Map<String, Object> applyDefaultDestinationPayload(

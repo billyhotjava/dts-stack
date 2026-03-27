@@ -1,12 +1,15 @@
 package com.yuzhi.dts.platform.service.modeling;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyCollection;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.lenient;
+import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -38,8 +41,11 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 import java.util.ArrayList;
+import java.util.concurrent.Executor;
+import java.util.concurrent.RejectedExecutionException;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipOutputStream;
 import org.junit.jupiter.api.BeforeEach;
@@ -51,6 +57,7 @@ import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.Spy;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 @ExtendWith(MockitoExtension.class)
 class ModelingSqlModelServiceTest {
@@ -100,11 +107,20 @@ class ModelingSqlModelServiceTest {
     @Mock
     private AuditService auditService;
 
+    @Mock
+    private ModelFileService fileService;
+
+    @Mock
+    private Executor taskExecutor;
+
     @Spy
     private ObjectMapper objectMapper = new ObjectMapper();
 
     @InjectMocks
     private ModelingSqlModelService service;
+
+    @InjectMocks
+    private ModelGenerationService generationService;
 
     @TempDir
     Path tempDir;
@@ -197,6 +213,7 @@ class ModelingSqlModelServiceTest {
             new DbtConfigService.DbtWorkspaceStatus(true, "ok", Map.of())
         );
         lenient().when(dbtConfigService.loadConfig()).thenReturn(view);
+        setField(generationService, "coreService", service);
     }
 
     @Test
@@ -239,7 +256,7 @@ class ModelingSqlModelServiceTest {
             true
         );
 
-        ModelingSqlModelService.SqlModelOdsGenerateResult result = service.generateFromOds(request, "D1");
+        ModelingSqlModelService.SqlModelOdsGenerateResult result = generationService.generateFromOds(request, "D1");
 
         assertThat(result.modelsCreated()).isEqualTo(1);
         assertThat(result.skipped()).isEmpty();
@@ -291,7 +308,7 @@ class ModelingSqlModelServiceTest {
             true
         );
 
-        ModelingSqlModelService.SqlModelOdsGenerateResult result = service.generateFromOds(request, "D1");
+        ModelingSqlModelService.SqlModelOdsGenerateResult result = generationService.generateFromOds(request, "D1");
 
         assertThat(result.mappingsTotal()).isEqualTo(2);
         assertThat(result.modelsCreated()).isEqualTo(1);
@@ -314,7 +331,7 @@ class ModelingSqlModelServiceTest {
         when(dataSourceRepository.findByStatusIgnoreCase(anyString())).thenReturn(List.of(warehouse));
         when(dataSourceRepository.findById(warehouseId)).thenReturn(Optional.of(warehouse));
 
-        service.syncWorkspaceModels("D1");
+        generationService.syncWorkspaceModels("D1");
 
         List<ModelingSqlModelService.SqlModelDto> models = service.list(null, "cockpit", "D1");
 
@@ -344,7 +361,7 @@ class ModelingSqlModelServiceTest {
         when(dataSourceRepository.findByStatusIgnoreCase(anyString())).thenReturn(List.of(warehouse));
         when(dataSourceRepository.findById(warehouseId)).thenReturn(Optional.of(warehouse));
 
-        service.syncWorkspaceModels("D1");
+        generationService.syncWorkspaceModels("D1");
 
         List<ModelingSqlModelService.SqlModelDto> models = service.list(null, "major_project", "D1");
 
@@ -391,7 +408,7 @@ class ModelingSqlModelServiceTest {
             """.formatted(sourceId)
         );
 
-        ModelingSqlModelService.BatchImportResult result = service.batchImportFromArchive(
+        ModelingSqlModelService.BatchImportResult result = generationService.batchImportFromArchive(
             planId,
             sourceId,
             false,
@@ -429,7 +446,7 @@ class ModelingSqlModelServiceTest {
             "select 1 as metric"
         );
 
-        ModelingSqlModelService.BatchImportResult result = service.batchImportFromArchive(
+        ModelingSqlModelService.BatchImportResult result = generationService.batchImportFromArchive(
             planId,
             sourceId,
             false,
@@ -468,7 +485,7 @@ class ModelingSqlModelServiceTest {
             "id,name\n1,demo\n"
         );
 
-        ModelingSqlModelService.BatchImportResult result = service.batchImportFromArchive(planId, sourceId, false, archive, "D1");
+        ModelingSqlModelService.BatchImportResult result = generationService.batchImportFromArchive(planId, sourceId, false, archive, "D1");
 
         assertThat(result.imported()).isEqualTo(1);
         assertThat(tempDir.resolve("models/project_management_sources.yml")).exists();
@@ -491,8 +508,8 @@ class ModelingSqlModelServiceTest {
             "select '一般节点' as label"
         );
 
-        ModelingSqlModelService.BatchImportResult first = service.batchImportFromArchive(planId, sourceId, false, archive, "D1");
-        ModelingSqlModelService.BatchImportResult second = service.batchImportFromArchive(planId, sourceId, false, archive, "D1");
+        ModelingSqlModelService.BatchImportResult first = generationService.batchImportFromArchive(planId, sourceId, false, archive, "D1");
+        ModelingSqlModelService.BatchImportResult second = generationService.batchImportFromArchive(planId, sourceId, false, archive, "D1");
 
         assertThat(first.imported()).isEqualTo(1);
         assertThat(second.imported()).isEqualTo(1);
@@ -634,7 +651,7 @@ class ModelingSqlModelServiceTest {
         storedModels.add(legacyProgramModel);
         storedModels.add(cleanModel);
 
-        ModelingSqlModelService.SqlModelGovernancePreviewResult preview = service.previewGovernance(
+        ModelingSqlModelService.SqlModelGovernancePreviewResult preview = generationService.previewGovernance(
             new ModelingSqlModelService.SqlModelGovernancePreviewRequest(
                 planId,
                 List.of("duplicate-model", "preset:project-management-legacy-program"),
@@ -695,7 +712,7 @@ class ModelingSqlModelServiceTest {
         storedModels.add(duplicate);
         storedModels.add(legacy);
 
-        ModelingSqlModelService.SqlModelGovernanceExecuteResult result = service.executeGovernance(
+        ModelingSqlModelService.SqlModelGovernanceExecuteResult result = generationService.executeGovernance(
             new ModelingSqlModelService.SqlModelGovernanceExecuteRequest(List.of(duplicate.getId(), legacy.getId()), true),
             "D1"
         );
@@ -727,7 +744,7 @@ class ModelingSqlModelServiceTest {
             "select 1 as metric"
         );
 
-        ModelingSqlModelService.BatchImportResult result = service.batchImportFromArchive(
+        ModelingSqlModelService.BatchImportResult result = generationService.batchImportFromArchive(
             planId,
             missingSourceId,
             false,
@@ -757,7 +774,7 @@ class ModelingSqlModelServiceTest {
             "select 1 as metric"
         );
 
-        ModelingSqlModelService.BatchImportResult result = service.batchImportFromArchive(
+        ModelingSqlModelService.BatchImportResult result = generationService.batchImportFromArchive(
             planId,
             adminLakeId,
             false,
@@ -843,8 +860,108 @@ class ModelingSqlModelServiceTest {
             null
         );
 
-        assertThatThrownBy(() -> service.importFromFiles(request, "select 1 as metric", null, "D1"))
+        assertThatThrownBy(() -> generationService.importFromFiles(request, "select 1 as metric", null, "D1"))
             .isInstanceOf(IllegalStateException.class);
+    }
+
+    @Test
+    void deleteShouldDeferFileCleanupUntilAfterCommit() {
+        UUID modelId = UUID.randomUUID();
+        ModelingSqlModel model = new ModelingSqlModel();
+        model.setId(modelId);
+        model.setName("dwd_patent");
+        model.setOwnerDept("D1");
+        model.setModelPath("models/dwd/dwd_patent.sql");
+        storedModels.add(model);
+        when(fileService.canDeleteModelPathAfterRemoving(eq("models/dwd/dwd_patent.sql"), any())).thenReturn(true);
+
+        ArgumentCaptor<Runnable> runnableCaptor = ArgumentCaptor.forClass(Runnable.class);
+
+        TransactionSynchronizationManager.initSynchronization();
+        try {
+            service.delete(modelId, "D1");
+
+            verify(repo).delete(model);
+            verify(fileService, never()).deleteFileIfChanged(anyString(), any());
+            verify(taskExecutor, never()).execute(any(Runnable.class));
+            assertThat(TransactionSynchronizationManager.getSynchronizations()).hasSize(1);
+
+            TransactionSynchronizationManager.getSynchronizations().forEach(sync -> sync.afterCommit());
+
+            verify(taskExecutor).execute(runnableCaptor.capture());
+            verify(fileService, never()).deleteFileIfChanged(anyString(), any());
+        } finally {
+            TransactionSynchronizationManager.clearSynchronization();
+        }
+
+        runnableCaptor.getValue().run();
+
+        verify(fileService).deleteFileIfChanged("models/dwd/dwd_patent.sql", null);
+    }
+
+    @Test
+    void executeGovernanceShouldDeferFileCleanupUntilAfterCommit() {
+        UUID modelId = UUID.randomUUID();
+        ModelingSqlModel model = new ModelingSqlModel();
+        model.setId(modelId);
+        model.setPlanId(planId);
+        model.setName("biz_ads_patent");
+        model.setOwnerDept("D1");
+        model.setModelPath("models/ads/biz_ads_patent.sql");
+        storedModels.add(model);
+        when(fileService.canDeleteModelPathAfterRemoving("models/ads/biz_ads_patent.sql", Set.of(modelId))).thenReturn(true);
+
+        ArgumentCaptor<Runnable> runnableCaptor = ArgumentCaptor.forClass(Runnable.class);
+
+        TransactionSynchronizationManager.initSynchronization();
+        try {
+            ModelingSqlModelService.SqlModelGovernanceExecuteResult result = generationService.executeGovernance(
+                new ModelingSqlModelService.SqlModelGovernanceExecuteRequest(List.of(modelId), true),
+                "D1"
+            );
+
+            assertThat(result.deleted()).isEqualTo(1);
+            verify(repo).delete(model);
+            verify(fileService, never()).deleteFileIfChanged(anyString(), any());
+            verify(taskExecutor, never()).execute(any(Runnable.class));
+            assertThat(TransactionSynchronizationManager.getSynchronizations()).hasSize(1);
+
+            TransactionSynchronizationManager.getSynchronizations().forEach(sync -> sync.afterCommit());
+
+            verify(taskExecutor).execute(runnableCaptor.capture());
+            verify(fileService, never()).deleteFileIfChanged(anyString(), any());
+        } finally {
+            TransactionSynchronizationManager.clearSynchronization();
+        }
+
+        runnableCaptor.getValue().run();
+
+        verify(fileService).deleteFileIfChanged("models/ads/biz_ads_patent.sql", null);
+    }
+
+    @Test
+    void deleteShouldNotBubbleWhenCleanupSubmissionFailsAfterCommit() {
+        UUID modelId = UUID.randomUUID();
+        ModelingSqlModel model = new ModelingSqlModel();
+        model.setId(modelId);
+        model.setName("dwd_patent");
+        model.setOwnerDept("D1");
+        model.setModelPath("models/dwd/dwd_patent.sql");
+        storedModels.add(model);
+        when(fileService.canDeleteModelPathAfterRemoving("models/dwd/dwd_patent.sql", Set.of(modelId))).thenReturn(true);
+        doThrow(new RejectedExecutionException("queue-full")).when(taskExecutor).execute(any(Runnable.class));
+
+        TransactionSynchronizationManager.initSynchronization();
+        try {
+            service.delete(modelId, "D1");
+
+            assertThatCode(() -> TransactionSynchronizationManager.getSynchronizations().forEach(sync -> sync.afterCommit()))
+                .doesNotThrowAnyException();
+        } finally {
+            TransactionSynchronizationManager.clearSynchronization();
+        }
+
+        verify(fileService, never()).deleteFileIfChanged(anyString(), any());
     }
 
     private InfraOdsTableMapping mapping(UUID id, UUID connectionId, String schema, String table, String entityCode) {

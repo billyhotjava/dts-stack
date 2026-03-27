@@ -1,4 +1,5 @@
 import type { FileUploadResult } from "@/api/ingestion";
+import { normalizeText } from "@/utils/textUtils";
 
 type SheetOption = { index: number; name: string };
 
@@ -20,8 +21,6 @@ type ParsedFileResult = {
 	errorCount?: number;
 	sheetName?: string;
 };
-
-const normalizeText = (value?: string) => String(value || "").trim();
 
 const normalizeIdentifier = (value?: string) => {
 	const text = normalizeText(value).toLowerCase();

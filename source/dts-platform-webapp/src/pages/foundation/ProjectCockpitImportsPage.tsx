@@ -36,11 +36,11 @@ import {
 	type TopicSourceCandidate,
 } from "./topicBindingCenter.helpers";
 import { selectRecommendedProjectCockpitBinding } from "./projectCockpitImportBinding.helpers";
+import { normalizeText } from "@/utils/textUtils";
 
 type UploadRequestOption = Parameters<NonNullable<import("antd").UploadProps["customRequest"]>>[0];
 
 const { Paragraph, Text, Title } = Typography;
-const normalizeText = (value?: string | null) => String(value || "").trim();
 const buildTopicSourceKey = (candidate?: TopicSourceCandidate) =>
 	candidate ? `${normalizeText(candidate.sourceDataSourceId)}|${normalizeText(candidate.schema)}|${normalizeText(candidate.table)}` : "";
 const resolveBatchStatusColor = (status?: string) => {

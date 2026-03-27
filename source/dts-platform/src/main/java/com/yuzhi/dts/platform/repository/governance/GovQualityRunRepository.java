@@ -19,4 +19,8 @@ public interface GovQualityRunRepository extends JpaRepository<GovQualityRun, UU
     long countByRuleIdAndCreatedDateAfter(UUID ruleId, Instant since);
 
     List<GovQualityRun> findTop100ByStatusOrderByCreatedDateDesc(String status);
+
+    long countByDatasetIdNotIn(java.util.Collection<UUID> datasetIds);
+
+    List<GovQualityRun> findByDatasetIdNotIn(java.util.Collection<UUID> datasetIds, Pageable pageable);
 }

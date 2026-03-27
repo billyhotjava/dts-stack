@@ -139,6 +139,16 @@ public class AuditLoggingFilter extends OncePerRequestFilter {
                 boolean fallbackRequested = consumeFallbackRequest();
                 PendingAuditEvent event = buildEvent(wrapper, responseWrapper, System.nanoTime() - start);
                 boolean suppressed = shouldSuppressAudit(wrapper, event);
+                // Auto-enable fallback for write operations (POST/PUT/DELETE/PATCH)
+                // so that even if business code forgets to call AuditService, a basic HTTP-level
+                // audit record is still captured
+                if (!fallbackRequested && !alreadyAudited) {
+                    String method = wrapper.getMethod();
+                    if ("POST".equalsIgnoreCase(method) || "PUT".equalsIgnoreCase(method)
+                            || "DELETE".equalsIgnoreCase(method) || "PATCH".equalsIgnoreCase(method)) {
+                        fallbackRequested = true;
+                    }
+                }
                 if (fallbackRequested && !alreadyAudited && !suppressed) {
                     AuditTrailService svc = auditServiceProvider.getIfAvailable();
                     if (svc != null) {

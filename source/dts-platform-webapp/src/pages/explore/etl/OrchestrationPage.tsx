@@ -11,6 +11,7 @@ import {
 	triggerAirflowJob,
 	visitExternalLink,
 } from "@/api/platformApi";
+import { formatDateTime } from "@/utils/textUtils";
 
 const { Text } = Typography;
 
@@ -77,20 +78,6 @@ const resolveProject = (dagId: string, tags: string[]) => {
 		return `${tokens[0]}_${tokens[1]}`;
 	}
 	return tokens[0] || "default";
-};
-
-const formatDateTime = (value?: string) => {
-	if (!value) {
-		return "-";
-	}
-	return new Date(value).toLocaleString("zh-CN", {
-		year: "numeric",
-		month: "2-digit",
-		day: "2-digit",
-		hour: "2-digit",
-		minute: "2-digit",
-		second: "2-digit",
-	});
 };
 
 const formatDuration = (value?: number) => {

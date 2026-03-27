@@ -5,6 +5,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.yuzhi.dts.platform.config.DbtProperties;
 import com.yuzhi.dts.platform.domain.service.InfraDataSource;
 import com.yuzhi.dts.platform.repository.service.InfraDataSourceRepository;
+import com.yuzhi.dts.platform.service.infra.DataSourceScorer;
 import com.yuzhi.dts.platform.service.infra.InfraSecretService;
 import jakarta.annotation.PostConstruct;
 import java.io.IOException;
@@ -90,6 +91,19 @@ public class DbtConfigService {
         InfraDataSourceDto target = resolveTarget(config);
         DbtWorkspaceStatus workspaceStatus = withBootstrapDetail(validateWorkspace(config, false), bootstrap);
         return new DbtConfigView(true, config, profileStatus, target, workspaceStatus);
+    }
+
+    /**
+     * Lightweight method that only reads the config file to resolve the project directory.
+     * Does NOT validate workspace, probe file system, or bootstrap directories.
+     * Use this when you only need the project path (e.g., for file deletion).
+     */
+    public String resolveProjectDir() {
+        if (!properties.isEnabled()) {
+            return null;
+        }
+        DbtWorkspaceConfig config = readConfig();
+        return config != null ? config.projectDir() : null;
     }
 
     public DbtConfigView saveConfig(DbtWorkspaceConfigRequest request) {
@@ -438,32 +452,12 @@ public class DbtConfigService {
     }
 
     private int scoreTargetSource(InfraDataSource source, String preferredDatabase) {
-        int score = 0;
-        String name = stringValue(source.getName());
-        String type = stringValue(source.getType());
-        String jdbcUrl = stringValue(source.getJdbcUrl());
-        String status = stringValue(source.getStatus());
-        String normalizedName = name == null ? "" : name.toLowerCase();
-        String normalizedType = type == null ? "" : type.toLowerCase();
-        String normalizedUrl = jdbcUrl == null ? "" : jdbcUrl.toLowerCase();
+        int score = DataSourceScorer.scoreDataSource(source.getName(), source.getJdbcUrl(), source.getType(), source.getStatus());
+        // Context-specific bonus: preferred database match in JDBC URL
+        String normalizedUrl = source.getJdbcUrl() == null ? "" : source.getJdbcUrl().toLowerCase();
         String normalizedDatabase = preferredDatabase == null ? "" : preferredDatabase.toLowerCase();
-        if (normalizedName.contains("biadmin")) {
-            score += 100;
-        }
-        if (normalizedUrl.contains("/biadmin")) {
-            score += 90;
-        }
         if (StringUtils.hasText(normalizedDatabase) && normalizedUrl.contains("/" + normalizedDatabase)) {
             score += 120;
-        }
-        if ("postgres".equals(normalizedType) || "postgresql".equals(normalizedType)) {
-            score += 40;
-        }
-        if ("active".equalsIgnoreCase(status)) {
-            score += 10;
-        }
-        if (StringUtils.hasText(jdbcUrl)) {
-            score += 5;
         }
         return score;
     }

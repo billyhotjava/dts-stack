@@ -10,6 +10,7 @@ import {
     type IngestionIncrementalStateDTO,
 } from "@/api/ingestion";
 import { formatTimestamp, formatNumber } from "@/utils/format";
+import { normalizeText } from "@/utils/textUtils";
 
 type ExecutionProgressView = {
     percent: number;
@@ -94,8 +95,6 @@ export default function ExecutionHistoryTable({ taskId }: ExecutionHistoryTableP
             }
         };
     }, []);
-
-    const normalizeText = (value?: string) => String(value || "").trim();
 
     const loadTask = async () => {
         try {

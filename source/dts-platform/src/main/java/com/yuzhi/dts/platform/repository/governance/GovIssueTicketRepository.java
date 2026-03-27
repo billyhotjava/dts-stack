@@ -29,4 +29,8 @@ public interface GovIssueTicketRepository extends JpaRepository<GovIssueTicket, 
         UUID sourceRefId,
         List<String> statuses
     );
+
+    long countByDatasetIdNotIn(java.util.Collection<UUID> datasetIds);
+
+    List<GovIssueTicket> findByDatasetIdNotIn(java.util.Collection<UUID> datasetIds, org.springframework.data.domain.Pageable pageable);
 }

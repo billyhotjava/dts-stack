@@ -27,6 +27,7 @@ import {
 	type QueryDatasetAsset,
 	type QueryDatasetVersion,
 } from "@/api/sql-workbench";
+import { formatTime } from "@/utils/textUtils";
 
 const { Text } = Typography;
 const { TextArea } = Input;
@@ -34,13 +35,6 @@ const { TextArea } = Input;
 type CreateVersionFormValues = {
 	sqlText: string;
 	changeSummary?: string;
-};
-
-const formatTime = (value?: string | null) => {
-	if (!value) return "-";
-	const parsed = new Date(value);
-	if (Number.isNaN(parsed.getTime())) return value;
-	return parsed.toLocaleString("zh-CN");
 };
 
 const datasetStatusTag = (value?: string | null) => {

@@ -50,4 +50,12 @@ public interface CatalogDatasetRepository extends JpaRepository<CatalogDataset, 
     long countByCreatedBy(String createdBy);
 
     long countByCreatedDateAfter(Instant since);
+
+    long countByEnabledTrue();
+
+    long countByLifecycleStatusIgnoreCase(String lifecycleStatus);
+
+    long countByEnabledTrueAndSnapshotTimeIsNull();
+
+    long countByOwnerDeptIsNull();
 }

@@ -3,6 +3,8 @@ import type { ScreenThemeTokens } from '../screenThemes';
 import type { ReactEChartsComponent } from './types';
 import { ProjectGanttBoard, type ProjectGanttTask } from '../../project-cockpit/components/ProjectGanttBoard';
 
+const SCREEN_UI_FONT_FAMILY = '"Lato", "Open Sans Variable", "Inter Variable", system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, "PingFang SC", "Microsoft YaHei", "Noto Sans CJK SC", "Noto Sans", sans-serif';
+
 function isLightColor(hex: string): boolean {
     const c = hex.replace('#', '');
     if (c.length < 6) return false;
@@ -719,7 +721,7 @@ export function renderECharts(props: EChartsRendererProps): ReactNode | null {
                     gridSize: 8,
                     drawOutOfBound: false,
                     textStyle: {
-                        fontFamily: 'sans-serif',
+                        fontFamily: SCREEN_UI_FONT_FAMILY,
                         color: () => t.echarts.colorPalette[Math.floor(Math.random() * t.echarts.colorPalette.length)],
                     },
                     data: (c.data as Array<{ name: string; value: number }>)?.map(d => ({

@@ -109,8 +109,8 @@ class IngestionTaskProxyResourceTest {
             .thenReturn(new ApiResponse<>(202, "accepted", Map.of("taskId", 5, "status", "submitted", "async", true)));
 
         mockMvc.perform(post("/api/ingestion/tasks/5/execute/async"))
-            .andExpect(status().isAccepted())
-            .andExpect(jsonPath("$.status").value(202))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.status").value(200))
             .andExpect(jsonPath("$.data.taskId").value(5))
             .andExpect(jsonPath("$.data.status").value("submitted"))
             .andExpect(jsonPath("$.data.async").value(true));
@@ -124,8 +124,8 @@ class IngestionTaskProxyResourceTest {
             .thenReturn(new ApiResponse<>(202, "accepted", Map.of("taskId", 1, "executionId", 2, "status", "submitted", "async", true)));
 
         mockMvc.perform(post("/api/ingestion/tasks/1/executions/2/retry/async").param("mode", "FAILED_ONLY"))
-            .andExpect(status().isAccepted())
-            .andExpect(jsonPath("$.status").value(202))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.status").value(200))
             .andExpect(jsonPath("$.data.taskId").value(1))
             .andExpect(jsonPath("$.data.executionId").value(2))
             .andExpect(jsonPath("$.data.status").value("submitted"))

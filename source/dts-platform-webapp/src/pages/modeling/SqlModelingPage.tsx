@@ -17,14 +17,12 @@ import {
 	Modal,
 	Select,
 	Space,
-	Switch,
 	Table,
 	Tabs,
 	Tag,
 	Tooltip,
 	Tree,
 	Typography,
-	Upload,
 	Popconfirm,
 	Segmented,
 	Skeleton,
@@ -94,6 +92,12 @@ import {
 import dataSourcesService, { type InfraDataSource } from "@/api/services/dataSourcesService";
 import topicBindingService, { type TopicBindingDiagnostics } from "@/api/services/topicBindingService";
 import BatchImportModal from "./BatchImportModal";
+import GovernanceModal from "./components/GovernanceModal";
+import ModelEditDrawer from "./components/ModelEditDrawer";
+import ImportModelModal from "./components/ImportModelModal";
+import OdsGenerateModal from "./components/OdsGenerateModal";
+import SnippetDrawer from "./components/SnippetDrawer";
+import OutputRelationModal from "./components/OutputRelationModal";
 import { useRouter } from "@/routes/hooks";
 import { buildArchivePayload, collectUnassignedModelIds } from "./sqlModelArchive.helpers";
 import { resolveBatchImportNavigation } from "./batchImportNavigation.helpers";
@@ -106,29 +110,47 @@ import {
 	matchesTriggeredBuildSummary,
 } from "./sqlModelBuild.helpers";
 import {
+	applyDeletedModelSelection,
+	applyManualModelSelection,
+	resolveRunsRequestAfterSelection,
+} from "./sqlModelDeleteFlow.helpers";
+import {
 	createPrimaryModelingActions,
 	createSecondaryModelingActions,
 	shouldRenderInlineGitCommit,
 } from "./modelingToolbar.helpers";
+import type {
+	DbtConfigView,
+	DbtRunSummary,
+	DbtSyncStatus,
+	DbtOutputRelation,
+	SqlModel,
+	ProjectSpace,
+	DagRun,
+	ModelColumn,
+	DbtSourceItem,
+	DbtRefItem,
+	SqlModelOdsGenerateResult,
+	DbtQualityGateResult,
+	DbtReleaseGateResult,
+	SqlModelContractImpact,
+	SqlModelGovernancePreviewItem,
+	SqlModelGovernancePreviewResult,
+	SqlModelGovernanceExecuteResult,
+	OdsSkippedSeverity,
+	OdsSkippedEntry,
+} from "./sqlModeling.types";
+
+import { normalizeText, formatDateTime } from "@/utils/textUtils";
 
 const { Text } = Typography;
 const { DirectoryTree } = Tree;
-
-const formatDateTime = (value?: string) => {
-	if (!value) return "-";
-	try {
-		return new Date(value).toLocaleString();
-	} catch {
-		return value;
-	}
-};
 
 const syncTag = (synced?: boolean) => {
 	if (synced == null) return <Tag>未知</Tag>;
 	return synced ? <Tag color="green">已同步</Tag> : <Tag color="red">失败</Tag>;
 };
 
-const normalizeText = (value?: string) => String(value || "").trim();
 const normalizeUpper = (value?: string) => normalizeText(value).toUpperCase();
 const normalizeLower = (value?: string) => normalizeText(value).toLowerCase();
 const resolveTopicBindingSelector = (model?: { dagSelector?: string; name?: string }) => {
@@ -174,292 +196,6 @@ const prettyJson = (raw?: string) => {
 	}
 };
 
-type DbtConfigView = {
-	enabled?: boolean;
-	config?: {
-		enabled?: boolean;
-		projectDir?: string;
-		profilesDir?: string;
-		profileName?: string;
-		targetName?: string;
-		targetDataSourceId?: string;
-		database?: string;
-		schema?: string;
-		vars?: Record<string, any>;
-	};
-	profileStatus?: { generated?: boolean; message?: string; profilePath?: string };
-	workspaceStatus?: { ok?: boolean; message?: string; detail?: Record<string, any> };
-	target?: { id?: string; name?: string; type?: string };
-};
-
-type DbtSyncArtifactStatus = {
-	lastSyncAt?: string;
-	lastModifiedAt?: number;
-	synced?: boolean;
-	message?: string;
-};
-
-type DbtSyncStats = {
-	lastSyncAt?: string;
-	datasetsCreated?: number;
-	datasetsUpdated?: number;
-	odsUpdated?: number;
-	columnsUpdated?: number;
-	lineageCreated?: number;
-	lineageRemoved?: number;
-	message?: string;
-};
-
-type DbtRunFailure = {
-	uniqueId?: string;
-	name?: string;
-	resourceType?: string;
-	path?: string;
-	status?: string;
-	message?: string;
-	executionTime?: number;
-};
-
-type DbtRunSummary = {
-	present?: boolean;
-	projectDir?: string;
-	runResultsPath?: string;
-	manifestPath?: string;
-	invocationId?: string;
-	generatedAt?: string;
-	command?: string;
-	status?: string;
-	total?: number;
-	success?: number;
-	failed?: number;
-	skipped?: number;
-	failures?: DbtRunFailure[];
-	dagRunId?: string;
-	dagId?: string;
-};
-
-type DbtSyncStatus = {
-	manifest?: DbtSyncArtifactStatus | null;
-	runResults?: DbtSyncArtifactStatus | null;
-	stats?: DbtSyncStats | null;
-	latestRun?: DbtRunSummary | null;
-};
-
-type DbtOutputRelation = {
-	modelId?: string;
-	modelName?: string;
-	selector?: string;
-	database?: string;
-	schema?: string;
-	identifier?: string;
-	qualifiedName?: string;
-	materialized?: string;
-	relationType?: string;
-	exists?: boolean;
-	truncateAllowed?: boolean;
-	downstreamRefCount?: number;
-	message?: string;
-};
-
-type SqlModel = {
-	id?: string;
-	planId?: string;
-	planName?: string;
-	name?: string;
-	alias?: string;
-	layer?: string;
-	sourceDataSourceId?: string;
-	sourceDataSourceName?: string;
-	sourceSystem?: string;
-	dagSelector?: string;
-	tags?: string;
-	materialized?: string;
-	schemaName?: string;
-	description?: string;
-	sql?: string;
-	enabled?: boolean;
-	modelPath?: string;
-	ownerDept?: string;
-	status?: string;
-	semanticContract?: string;
-	contractVersion?: string;
-	contractUpdatedAt?: string;
-	metricCount?: number;
-	dimensionCount?: number;
-	createdDate?: string;
-	lastModifiedDate?: string;
-};
-
-type ProjectSpace = {
-	id?: string;
-	name?: string;
-	domain?: string;
-	scope?: string;
-	status?: string;
-	version?: string;
-	versionNotes?: string;
-	owner?: string;
-	ownerDept?: string;
-	tags?: string;
-	content?: string;
-	createdDate?: string;
-	lastModifiedDate?: string;
-};
-
-type DagRun = {
-	dag_id?: string;
-	dag_run_id?: string;
-	state?: string;
-	execution_date?: string;
-	start_date?: string;
-	end_date?: string;
-	conf?: {
-		models?: string;
-		target?: string;
-		operation?: string;
-		[key: string]: any;
-	};
-};
-
-type ModelColumn = {
-	name?: string;
-	dataType?: string;
-	comment?: string;
-	status?: string;
-};
-
-type DbtSourceItem = {
-	id?: string;
-	schema?: string;
-	table?: string;
-	description?: string;
-	systemCode?: string;
-	bizCode?: string;
-	entityCode?: string;
-	sourceDataSourceId?: string;
-	sourceDataSourceName?: string;
-	sourceSnippet?: string;
-};
-
-type DbtRefItem = {
-	id?: string;
-	name?: string;
-	layer?: string;
-	description?: string;
-	tags?: string;
-	sourceSystem?: string;
-	refSnippet?: string;
-};
-
-type SqlModelOdsGenerateResult = {
-	mappingsTotal?: number;
-	modelsCreated?: number;
-	modelsUpdated?: number;
-	createdModels?: string[];
-	updatedModels?: string[];
-	skipped?: string[];
-	qualityTemplatesGenerated?: number;
-	qualitySkipped?: string[];
-};
-
-type DbtQualityGateResult = {
-	selector?: string;
-	selectedModels?: string[];
-	blocking?: boolean;
-	warning?: boolean;
-	latestStatus?: string;
-	latestCommand?: string;
-	latestGeneratedAt?: string;
-	latestFailedCount?: number;
-	blockers?: string[];
-	warnings?: string[];
-};
-
-type DbtReleaseGateResult = {
-	selector?: string;
-	strictMode?: boolean;
-	gitRef?: string;
-	commitSha?: string;
-	decision?: string;
-	blocking?: boolean;
-	warning?: boolean;
-	blockers?: string[];
-	warnings?: string[];
-	buildEvidence?: {
-		invocationId?: string;
-		command?: string;
-		status?: string;
-		generatedAt?: string;
-		runResultsPath?: string;
-	};
-};
-
-type SqlModelContractImpact = {
-	modelId?: string;
-	modelName?: string;
-	contractVersion?: string;
-	contractUpdatedAt?: string;
-	metricCount?: number;
-	dimensionCount?: number;
-	fieldCount?: number;
-	impactedDatasetCount?: number;
-	impactedReportCount?: number;
-	impactedDatasets?: Array<{
-		id?: string;
-		name?: string;
-		status?: string;
-		publishedVersion?: number;
-	}>;
-	impactedReports?: Array<{
-		id?: string;
-		title?: string;
-		code?: string;
-		queryDatasetId?: string;
-		enabled?: boolean;
-	}>;
-};
-
-type SqlModelGovernancePreviewItem = {
-	modelId?: string;
-	planId?: string;
-	planName?: string;
-	name?: string;
-	layer?: string;
-	status?: string;
-	modelPath?: string;
-	ruleHits?: string[];
-	downstreamRefCount?: number;
-	datasetBindingCount?: number;
-	reportBindingCount?: number;
-	fileDeleteSafe?: boolean;
-	suggestedAction?: string;
-};
-
-type SqlModelGovernancePreviewResult = {
-	total?: number;
-	items?: SqlModelGovernancePreviewItem[];
-};
-
-type SqlModelGovernanceExecuteResult = {
-	requested?: number;
-	deleted?: number;
-	skipped?: number;
-	items?: Array<{
-		modelId?: string;
-		name?: string;
-		result?: string;
-		message?: string;
-	}>;
-};
-
-type OdsSkippedSeverity = "error" | "warn" | "info";
-
-type OdsSkippedEntry = {
-	raw: string;
-	reason: string;
-	severity: OdsSkippedSeverity;
-};
-
 const parseOdsSkippedEntry = (item?: string): OdsSkippedEntry => {
 	const raw = normalizeText(item);
 	const match = raw.match(/\(([^()]*)\)\s*$/);
@@ -495,16 +231,6 @@ const layerTag = (layer?: string) => {
 	if (!layer) return <Tag>未分层</Tag>;
 	const color = layer === "ODS" ? "blue" : layer === "DWD" ? "cyan" : layer === "DWS" ? "purple" : layer === "ADS" ? "geekblue" : "default";
 	return <Tag color={color}>{layer}</Tag>;
-};
-
-const governanceRuleLabel = (rule?: string) => {
-	if (rule === "duplicate-model") return "重复模型";
-	if (rule === "preset:project-management-legacy-program") return "项目管理旧 program 模型";
-	if (rule === "sql-keyword") return "SQL 关键字";
-	if (rule === "name-pattern") return "模型名匹配";
-	if (rule === "path-pattern") return "路径匹配";
-	if (rule === "tag-match") return "标签匹配";
-	return rule || "未知规则";
 };
 
 const resolveModelKey = (model: SqlModel, fallback: string) => model.id || model.name || fallback;
@@ -558,6 +284,7 @@ export default function SqlModelingPage() {
 	const [opsSubTab, setOpsSubTab] = useState("compile");
 	const [keyword, setKeyword] = useState("");
 	const [activeModelKey, setActiveModelKey] = useState<string | null>(null);
+	const [suppressAutoSelect, setSuppressAutoSelect] = useState(false);
 	const [dbtSources, setDbtSources] = useState<DbtSourceItem[]>([]);
 	const [dbtRefs, setDbtRefs] = useState<DbtRefItem[]>([]);
 	const [sourcesLoading, setSourcesLoading] = useState(false);
@@ -623,7 +350,6 @@ export default function SqlModelingPage() {
 				vars: cfg?.vars ? JSON.stringify(cfg.vars, null, 2) : "",
 			});
 		} catch (err: any) {
-			toast.error(err?.message || "加载 dbt 配置失败");
 			setPageLoadError(true);
 		} finally {
 			setConfigLoading(false);
@@ -647,7 +373,6 @@ export default function SqlModelingPage() {
 				}
 			}
 		} catch (err: any) {
-			toast.error(err?.message || "加载同步状态失败");
 			setDbtSyncStatus(null);
 		}
 	}, []);
@@ -660,7 +385,6 @@ export default function SqlModelingPage() {
 			setSqlModels(nextModels);
 			return nextModels;
 		} catch (err: any) {
-			toast.error(err?.message || "加载模型失败");
 			setPageLoadError(true);
 			return [];
 		} finally {
@@ -686,7 +410,6 @@ export default function SqlModelingPage() {
 			const resp = await dataSourcesService.list();
 			setDataSources(Array.isArray(resp) ? resp : []);
 		} catch (err: any) {
-			toast.error(err?.message || "加载数据源失败");
 		}
 	}, []);
 
@@ -716,7 +439,6 @@ export default function SqlModelingPage() {
 			const resp = (await listModelingPlans()) as ProjectSpace[];
 			setSpaces(Array.isArray(resp) ? resp : []);
 		} catch (err: any) {
-			toast.error(err?.message || "加载项目空间失败");
 			setPageLoadError(true);
 		} finally {
 			setSpacesLoading(false);
@@ -733,7 +455,6 @@ export default function SqlModelingPage() {
 			const list = Array.isArray(resp?.dag_runs) ? (resp.dag_runs as DagRun[]) : [];
 			setRuns(list);
 		} catch (err: any) {
-			toast.error(err?.message || "加载运行记录失败");
 		} finally {
 			setRunsLoading(false);
 		}
@@ -749,7 +470,6 @@ export default function SqlModelingPage() {
 			const resp = (await listSqlModelColumns(modelId)) as ModelColumn[];
 			setModelColumns(Array.isArray(resp) ? resp : []);
 		} catch (err: any) {
-			toast.error(err?.message || "加载模型字段失败");
 			setModelColumns([]);
 		} finally {
 			setColumnsLoading(false);
@@ -766,7 +486,6 @@ export default function SqlModelingPage() {
 			const resp = (await getSqlModelContractImpact(modelId)) as SqlModelContractImpact;
 			setContractImpact(resp || null);
 		} catch (err: any) {
-			toast.error(err?.message || "加载语义契约影响面失败");
 			setContractImpact(null);
 		} finally {
 			setContractImpactLoading(false);
@@ -784,7 +503,6 @@ export default function SqlModelingPage() {
 			setDbtSources(Array.isArray(resp) ? resp : []);
 		} catch (err: any) {
 			if (requestSeq !== dbtSourcesReqSeqRef.current) return;
-			toast.error(err?.message || "加载源表列表失败");
 			setDbtSources([]);
 		} finally {
 			if (requestSeq === dbtSourcesReqSeqRef.current) {
@@ -799,7 +517,6 @@ export default function SqlModelingPage() {
 			const resp = (await listDbtRefs()) as DbtRefItem[];
 			setDbtRefs(Array.isArray(resp) ? resp : []);
 		} catch (err: any) {
-			toast.error(err?.message || "加载引用模型列表失败");
 			setDbtRefs([]);
 		} finally {
 			setRefsLoading(false);
@@ -817,7 +534,6 @@ export default function SqlModelingPage() {
 			const resp = await topicBindingService.getStatus(normalizedSelector);
 			setTopicDiagnostics(resp || null);
 		} catch (err: any) {
-			toast.error(err?.message || "加载专题绑定诊断失败");
 			setTopicDiagnostics(null);
 		} finally {
 			setTopicDiagnosticsLoading(false);
@@ -854,7 +570,6 @@ export default function SqlModelingPage() {
 			const rows: any[][] = Array.isArray(resp?.rows) ? resp.rows : [];
 			setPreviewData({ columns, rows });
 		} catch (err: any) {
-			toast.error(err?.message || "数据预览失败");
 			setPreviewData(null);
 		} finally {
 			setPreviewLoading(false);
@@ -894,7 +609,6 @@ export default function SqlModelingPage() {
 			setGitCommitOpen(false);
 			void loadGitInfo();
 		} catch (err: any) {
-			toast.error(err?.message || "Git 提交失败");
 		} finally {
 			setGitCommitting(false);
 		}
@@ -913,7 +627,6 @@ export default function SqlModelingPage() {
 			toast.success(`已还原: ${path}`);
 			void loadGitInfo();
 		} catch (err: any) {
-			toast.error(err?.message || "还原失败");
 		} finally {
 			setGitReverting(null);
 		}
@@ -946,7 +659,6 @@ export default function SqlModelingPage() {
 			const resp = (await getDbtOutputRelation(activeModel.id)) as DbtOutputRelation;
 			setOutputRelation(resp || null);
 		} catch (err: any) {
-			toast.error(err?.message || "加载产出表信息失败");
 			setOutputModalOpen(false);
 			setOutputAction(null);
 		} finally {
@@ -1025,7 +737,6 @@ export default function SqlModelingPage() {
 			}
 			void loadAuditLogs(dbtConfig?.config?.targetDataSourceId);
 		} catch (err: any) {
-			toast.error(err?.message || (outputAction === "truncate" ? "清空产出表失败" : "重建产出表失败"));
 		} finally {
 			setOutputRelationSubmitting(false);
 		}
@@ -1086,7 +797,6 @@ export default function SqlModelingPage() {
 			toast.success("dbt 配置已保存");
 			await loadConfig();
 		} catch (err: any) {
-			toast.error(err?.message || "保存失败");
 		} finally {
 			setConfigSaving(false);
 		}
@@ -1284,7 +994,6 @@ export default function SqlModelingPage() {
 			setRunOpen(false);
 			void loadRuns({ dagId: dagId || undefined, selector: modelsSelector });
 		} catch (err: any) {
-			toast.error(err?.message || "触发失败");
 		} finally {
 			setRunSubmitting(false);
 		}
@@ -1379,7 +1088,6 @@ export default function SqlModelingPage() {
 				toast.warning(`dbt ${operation} 仍在运行，请稍后刷新结果`);
 			}
 		} catch (err: any) {
-			toast.error(err?.message || `dbt ${operation} 触发失败`);
 		} finally {
 			setBuildTriggering(null);
 		}
@@ -1400,7 +1108,6 @@ export default function SqlModelingPage() {
 			void loadSyncStatus();
 			await loadModels();
 		} catch (err: any) {
-			toast.error(err?.message || "同步模型失败");
 		} finally {
 			setSyncingModels(false);
 		}
@@ -1457,7 +1164,6 @@ export default function SqlModelingPage() {
 				toast.info("未命中待治理模型");
 			}
 		} catch (err: any) {
-			toast.error(err?.message || "治理预览失败");
 		} finally {
 			setGovernancePreviewLoading(false);
 		}
@@ -1483,7 +1189,6 @@ export default function SqlModelingPage() {
 			setGovernanceSelection([]);
 			setGovernanceOpen(false);
 		} catch (err: any) {
-			toast.error(err?.message || "执行模型治理失败");
 		} finally {
 			setGovernanceExecuting(false);
 		}
@@ -1508,7 +1213,6 @@ export default function SqlModelingPage() {
 			setActiveSpaceKey(`space-${planId}`);
 			await loadModels();
 		} catch (err: any) {
-			toast.error(err?.message || "归档失败");
 		} finally {
 			setArchiveSubmitting(false);
 		}
@@ -1547,7 +1251,6 @@ export default function SqlModelingPage() {
 			setActiveSpaceKey(`space-${planId}`);
 			await loadModels();
 		} catch (err: any) {
-			toast.error(err?.message || "批量归档失败");
 		} finally {
 			setArchiveSubmitting(false);
 		}
@@ -1651,7 +1354,6 @@ export default function SqlModelingPage() {
 			setModelDrawerOpen(false);
 			await loadModels();
 		} catch (err: any) {
-			toast.error(err?.message || "保存模型失败");
 		} finally {
 			setModelSubmitting(false);
 		}
@@ -1691,7 +1393,6 @@ export default function SqlModelingPage() {
 			setImportOpen(false);
 			await loadModels();
 		} catch (err: any) {
-			toast.error(err?.message || "导入失败");
 		} finally {
 			setImportSubmitting(false);
 		}
@@ -1844,7 +1545,6 @@ export default function SqlModelingPage() {
 			setActiveSpaceKey(`space-${values.planId}`);
 			await loadModels();
 		} catch (err: any) {
-			toast.error(err?.message || "生成失败");
 		} finally {
 			setOdsGenerateSubmitting(false);
 		}
@@ -1858,11 +1558,15 @@ export default function SqlModelingPage() {
 			onOk: async () => {
 				try {
 					await deleteSqlModel(activeModel.id as string);
+					const nextSelection = applyDeletedModelSelection({
+						activeModelKey,
+						deletedModelKey: activeModel.id as string,
+					});
+					setActiveModelKey(nextSelection.nextActiveModelKey);
+					setSuppressAutoSelect(nextSelection.suppressAutoSelect);
 					toast.success("模型已删除");
-					setActiveModelKey(null);
 					await loadModels();
 				} catch (err: any) {
-					toast.error(err?.message || "删除失败");
 				}
 			},
 		});
@@ -1889,7 +1593,6 @@ export default function SqlModelingPage() {
 			toast.success("SQL 已保存");
 			await loadModels();
 		} catch (err: any) {
-			toast.error(err?.message || "保存失败");
 		}
 	};
 
@@ -2017,18 +1720,24 @@ export default function SqlModelingPage() {
 	}, [models]);
 
 	useEffect(() => {
+		if (suppressAutoSelect) {
+			return;
+		}
 		if (!activeModelKey && models.length > 0) {
 			const key = resolveModelKey(models[0], "model-0");
 			setActiveModelKey(key);
 		}
-	}, [activeModelKey, models]);
+	}, [activeModelKey, models, suppressAutoSelect]);
 
 	useEffect(() => {
+		if (suppressAutoSelect) {
+			return;
+		}
 		if (activeModelKey && !modelKeyMap.has(activeModelKey) && models.length > 0) {
 			const key = resolveModelKey(models[0], "model-0");
 			setActiveModelKey(key);
 		}
-	}, [activeModelKey, modelKeyMap, models]);
+	}, [activeModelKey, modelKeyMap, models, suppressAutoSelect]);
 
 	const activeModel = useMemo(() => {
 		if (!activeModelKey) return null;
@@ -2039,6 +1748,7 @@ export default function SqlModelingPage() {
 		() => resolveDbtSelector(activeModel?.dagSelector) || (activeModel?.name ? `model:${activeModel.name}` : undefined),
 		[activeModel?.dagSelector, activeModel?.name],
 	);
+	const activeRunsRequest = useMemo(() => resolveRunsRequestAfterSelection(activeRunsSelector), [activeRunsSelector]);
 
 	useEffect(() => {
 		setSqlDraft(activeModel?.sql || "");
@@ -2057,8 +1767,12 @@ export default function SqlModelingPage() {
 	}, [activeModel?.dagSelector, activeModel?.name, loadTopicDiagnostics]);
 
 	useEffect(() => {
-		void loadRuns({ selector: activeRunsSelector });
-	}, [activeRunsSelector, loadRuns]);
+		if (!activeRunsRequest.shouldLoadRuns) {
+			setRuns([]);
+			return;
+		}
+		void loadRuns({ selector: activeRunsRequest.selector });
+	}, [activeRunsRequest.selector, activeRunsRequest.shouldLoadRuns, loadRuns]);
 
 	const sqlDirty = !!activeModel && sqlDraft !== (activeModel?.sql || "");
 
@@ -2588,16 +2302,21 @@ export default function SqlModelingPage() {
 									const key = String(keys[0] || "");
 									if (!key) return;
 									if (key.startsWith("space-")) {
+										setSuppressAutoSelect(false);
 										setActiveSpaceKey(key);
 										setActiveModelKey(null);
 										return;
 									}
 									if (key.startsWith("layer-")) return;
 									if (key.startsWith("model:")) {
-										setActiveModelKey(key.replace("model:", ""));
+										const nextSelection = applyManualModelSelection(key.replace("model:", ""));
+										setSuppressAutoSelect(nextSelection.suppressAutoSelect);
+										setActiveModelKey(nextSelection.nextActiveModelKey);
 										return;
 									}
-									setActiveModelKey(key);
+									const nextSelection = applyManualModelSelection(key);
+									setSuppressAutoSelect(nextSelection.suppressAutoSelect);
+									setActiveModelKey(nextSelection.nextActiveModelKey);
 								}}
 							/>
 							{modelsLoading ? (
@@ -3157,7 +2876,7 @@ export default function SqlModelingPage() {
 												<div className="p-4 text-sm text-muted-foreground">暂无运行记录。</div>
 											) : (
 												<Table
-													rowKey={(row) => row.dag_run_id || Math.random().toString(36)}
+													rowKey={(row, index) => row.dag_run_id || `row-${index}`}
 													size="small"
 													pagination={false}
 													columns={runColumns}
@@ -3492,443 +3211,45 @@ export default function SqlModelingPage() {
 
 			</div>
 
-			<Drawer
+			<ModelEditDrawer
 				open={modelDrawerOpen}
-				title={editingModel ? "编辑模型" : "新建模型"}
-				width={720}
 				onClose={() => setModelDrawerOpen(false)}
-				footer={
-					<Space>
-						<Button onClick={() => setModelDrawerOpen(false)}>取消</Button>
-						<Button type="primary" onClick={submitModel} loading={modelSubmitting}>
-							保存
-						</Button>
-					</Space>
-				}
-			>
-				<Form layout="vertical" form={modelForm} disabled={modelSubmitting}>
-					{/* 基本信息 */}
-					<div className="mb-4 pb-2 border-b border-border">
-						<div className="text-sm font-semibold text-foreground">基本信息</div>
-					</div>
-					<div className="grid gap-4 md:grid-cols-2">
-						<Form.Item name="planId" label="项目空间" rules={[{ required: true, message: "请选择项目空间" }]}>
-							<Select
-								placeholder="选择项目空间"
-								options={spaces.map((space) => ({ label: space.name || "未命名", value: space.id }))}
-							/>
-						</Form.Item>
-						<Form.Item
-							name="layer"
-							label="数仓分层"
-							rules={[{ required: true, message: "请选择分层" }]}
-							tooltip="选择模型所在的数仓层级，系统会自动添加对应标签"
-						>
-							<Select
-								placeholder="选择分层"
-								options={layers.map((l) => ({
-									label: `${l.layer} - ${l.description || l.name}`,
-									value: l.layer,
-								}))}
-							/>
-						</Form.Item>
-					</div>
-					<div className="grid gap-4 md:grid-cols-2">
-						<Form.Item
-							name="name"
-							label="模型名称"
-							rules={[{ required: true, message: "请输入模型名称" }]}
-							tooltip="建议以分层前缀开头，如 dwd_sales_order"
-						>
-							<Input placeholder="例如 dwd_sales_order" />
-						</Form.Item>
-						<Form.Item
-							name="sourceDataSourceId"
-							label="来源数据源"
-							tooltip="选择数据来源系统，用于自动生成调度标签；Excel/手工录入场景可不选"
-						>
-							<Select
-								placeholder="选择来源数据源（可选）"
-								showSearch
-								allowClear
-								optionFilterProp="label"
-								options={dataSources.map((ds) => ({
-									label: ds?.name || ds?.id,
-									value: ds?.id,
-								}))}
-							/>
-						</Form.Item>
-					</div>
-					<Form.Item name="description" label="模型说明">
-						<Input.TextArea rows={2} placeholder="描述模型的业务含义和用途" />
-					</Form.Item>
+				onSubmit={submitModel}
+				submitting={modelSubmitting}
+				isEditing={!!editingModel}
+				spaces={spaces}
+				dataSources={dataSources}
+				layers={layers}
+				form={modelForm}
+			/>
 
-					{/* dbt 配置 */}
-					<div className="mb-4 mt-6 pb-2 border-b border-border">
-						<div className="text-sm font-semibold text-foreground">dbt 配置</div>
-						<div className="text-xs text-muted-foreground mt-1">
-							以下配置会自动生成 dbt 的 config 块，您无需手动编写
-						</div>
-					</div>
-					<div className="grid gap-4 md:grid-cols-3">
-						<Form.Item
-							name="materialized"
-							label="物化方式"
-							tooltip="table: 全量重建表；view: 视图；incremental: 增量更新"
-						>
-							<Select
-								placeholder="选择物化方式"
-								options={[
-									{ label: "table（推荐）", value: "table" },
-									{ label: "view", value: "view" },
-									{ label: "incremental", value: "incremental" },
-								]}
-							/>
-						</Form.Item>
-						<Form.Item
-							name="alias"
-							label="物理表别名"
-							tooltip="如果物理表名需要与模型名不同，在此指定"
-						>
-							<Input placeholder="可选，默认使用模型名" />
-						</Form.Item>
-						<Form.Item
-							name="schemaName"
-							label="目标 Schema"
-							tooltip="模型输出的目标 Schema，留空使用默认配置"
-						>
-							<Input placeholder="留空使用默认" />
-						</Form.Item>
-					</div>
-					<Form.Item
-						name="tags"
-						label="标签"
-						tooltip="用于调度选择器和分组管理，系统会自动添加来源系统和分层标签"
-					>
-						<Input placeholder="多个标签用逗号分隔，如: daily,core" />
-					</Form.Item>
-					<Form.Item
-						name="semanticContract"
-						label="语义契约 (JSON)"
-						tooltip="可选：定义 metrics/dimensions 元信息，发布与看板绑定会展示契约版本"
-					>
-						<Input.TextArea
-							rows={4}
-							className="font-mono text-sm"
-							placeholder='{"metrics":[{"code":"order_cnt","name":"订单数"}],"dimensions":[{"code":"dept","name":"部门"}]}'
-						/>
-					</Form.Item>
-
-					{/* SQL 编辑 */}
-					<div className="mb-4 mt-6 pb-2 border-b border-border">
-						<div className="text-sm font-semibold text-foreground">SQL 定义</div>
-						<div className="text-xs text-muted-foreground mt-1">
-							只需编写 SELECT 语句，使用 {"{{ source('schema', 'table') }}"} 引用源表，使用 {"{{ ref('model') }}"} 引用其他模型
-						</div>
-					</div>
-					<Form.Item name="sql" rules={[{ required: true, message: "请输入 SQL" }]}>
-						<Input.TextArea
-							rows={12}
-							className="font-mono text-sm"
-							placeholder={`SELECT
-  id,
-  name,
-  created_at
-FROM {{ source('public', 'ods_your_table') }}
-WHERE status = 'active'`}
-						/>
-					</Form.Item>
-
-					{/* 状态管理 */}
-					<div className="mb-4 mt-6 pb-2 border-b border-border">
-						<div className="text-sm font-semibold text-foreground">状态管理</div>
-					</div>
-					<div className="grid gap-4 md:grid-cols-2">
-						<Form.Item name="status" label="模型状态">
-							<Select
-								placeholder="选择状态"
-								options={[
-									{ label: "草稿 - 开发中", value: "DRAFT" },
-									{ label: "就绪 - 可上线", value: "READY" },
-									{ label: "暂停 - 暂停调度", value: "PAUSED" },
-								]}
-							/>
-						</Form.Item>
-						<Form.Item name="enabled" label="启用调度" valuePropName="checked">
-							<Switch checkedChildren="启用" unCheckedChildren="禁用" />
-						</Form.Item>
-					</div>
-				</Form>
-			</Drawer>
-
-			<Modal
+			<ImportModelModal
 				open={importOpen}
-				title="导入模型 (SQL + CSV)"
-				onCancel={() => setImportOpen(false)}
-				footer={
-					<Space>
-						<Button onClick={() => setImportOpen(false)}>取消</Button>
-						<Button type="primary" onClick={submitImport} loading={importSubmitting}>
-							导入
-						</Button>
-					</Space>
-				}
-			>
-				<Form layout="vertical" form={importForm} disabled={importSubmitting}>
-					<div className="grid gap-4 md:grid-cols-2">
-						<Form.Item name="planId" label="项目空间" rules={[{ required: true, message: "请选择项目空间" }]}>
-							<Select
-								placeholder="选择项目空间"
-								options={spaces.map((space) => ({ label: space.name || "未命名", value: space.id }))}
-							/>
-						</Form.Item>
-						<Form.Item name="layer" label="分层" rules={[{ required: true, message: "请选择分层" }]}>
-							<Select
-								placeholder="选择分层"
-								options={[
-									{ label: "ODS", value: "ODS" },
-									{ label: "DWD", value: "DWD" },
-									{ label: "DWS", value: "DWS" },
-									{ label: "ADS", value: "ADS" },
-								]}
-							/>
-						</Form.Item>
-					</div>
-					<div className="grid gap-4 md:grid-cols-2">
-						<Form.Item name="name" label="模型名称" rules={[{ required: true, message: "请输入模型名称" }]}>
-							<Input placeholder="例如 dwd_sales_order" />
-						</Form.Item>
-						<Form.Item name="alias" label="物理表别名">
-							<Input placeholder="可选" />
-						</Form.Item>
-					</div>
-					<Form.Item
-						name="sourceDataSourceId"
-						label="来源数据源"
-						rules={[{ required: true, message: "请选择来源数据源" }]}
-					>
-						<Select
-							placeholder="选择来源数据源"
-							options={dataSources.map((ds) => ({
-								label: ds?.name || ds?.id,
-								value: ds?.id,
-							}))}
-						/>
-					</Form.Item>
-					<div className="grid gap-4 md:grid-cols-2">
-						<Form.Item name="schemaName" label="目标 Schema">
-							<Input placeholder="例如 ods" />
-						</Form.Item>
-						<Form.Item name="materialized" label="物化方式">
-							<Select
-								placeholder="选择物化方式"
-								options={[
-									{ label: "table", value: "table" },
-									{ label: "view", value: "view" },
-									{ label: "incremental", value: "incremental" },
-								]}
-							/>
-						</Form.Item>
-					</div>
-					<div className="grid gap-4 md:grid-cols-2">
-						<Form.Item name="tags" label="标签 (逗号分隔)">
-							<Input placeholder="如 sales,ods" />
-						</Form.Item>
-						<Form.Item name="status" label="状态">
-							<Select
-								placeholder="选择状态"
-								options={[
-									{ label: "草稿", value: "DRAFT" },
-									{ label: "已发布", value: "PUBLISHED" },
-								]}
-							/>
-						</Form.Item>
-					</div>
-					<Form.Item name="description" label="描述">
-						<Input.TextArea rows={2} placeholder="模型说明" />
-					</Form.Item>
-					<div className="grid gap-4 md:grid-cols-2">
-						<Form.Item name="enabled" label="启用" valuePropName="checked">
-							<Switch />
-						</Form.Item>
-						<Form.Item name="ownerDept" label="归属部门">
-							<Input placeholder="可选" />
-						</Form.Item>
-					</div>
-					<Form.Item label="SQL 文件" required>
-						<Upload
-							accept=".sql"
-							beforeUpload={() => false}
-							maxCount={1}
-							fileList={sqlFileList}
-							onChange={({ fileList }) => setSqlFileList(fileList.slice(-1))}
-						>
-							<Button>选择 SQL</Button>
-						</Upload>
-					</Form.Item>
-					<Form.Item label="CSV 文件 (可选)">
-						<Upload
-							accept=".csv"
-							beforeUpload={() => false}
-							maxCount={1}
-							fileList={csvFileList}
-							onChange={({ fileList }) => setCsvFileList(fileList.slice(-1))}
-						>
-							<Button>选择 CSV</Button>
-						</Upload>
-					</Form.Item>
-				</Form>
-			</Modal>
+				onClose={() => setImportOpen(false)}
+				onSubmit={submitImport}
+				submitting={importSubmitting}
+				spaces={spaces}
+				dataSources={dataSources}
+				sqlFileList={sqlFileList}
+				onSqlFileListChange={setSqlFileList}
+				csvFileList={csvFileList}
+				onCsvFileListChange={setCsvFileList}
+				form={importForm}
+			/>
 
-			<Modal
+			<GovernanceModal
 				open={governanceOpen}
-				title="模型治理"
-				width={1100}
-				onCancel={() => setGovernanceOpen(false)}
-				footer={
-					<Space>
-						<Button onClick={() => setGovernanceOpen(false)}>关闭</Button>
-						<Button onClick={handleGovernancePreview} loading={governancePreviewLoading}>
-							预览命中
-						</Button>
-						<Button
-							type="primary"
-							danger
-							onClick={handleGovernanceExecute}
-							loading={governanceExecuting}
-							disabled={!governanceSelection.length}
-						>
-							执行治理
-						</Button>
-					</Space>
-				}
-			>
-				<Form layout="vertical" form={governanceForm}>
-					<div className="grid gap-4 md:grid-cols-2">
-						<Form.Item name="planId" label="项目空间" rules={[{ required: true, message: "请选择项目空间" }]}>
-							<Select
-								placeholder="选择项目空间"
-								options={spaces.map((space) => ({ label: space.name || "未命名", value: space.id }))}
-							/>
-						</Form.Item>
-						<Form.Item name="layer" label="分层">
-							<Select
-								allowClear
-								placeholder="可选"
-								options={[
-									{ label: "ODS", value: "ODS" },
-									{ label: "DWD", value: "DWD" },
-									{ label: "DWS", value: "DWS" },
-									{ label: "ADS", value: "ADS" },
-								]}
-							/>
-						</Form.Item>
-					</div>
-					<Form.Item
-						name="ruleKeys"
-						label="治理规则"
-						rules={[{ required: true, message: "请至少选择一个治理规则" }]}
-					>
-						<Checkbox.Group
-							options={[
-								{ label: "重复模型", value: "duplicate-model" },
-								{ label: "项目管理旧 program 模型", value: "preset:project-management-legacy-program" },
-								{ label: "SQL 关键字", value: "sql-keyword" },
-								{ label: "模型名匹配", value: "name-pattern" },
-								{ label: "路径匹配", value: "path-pattern" },
-								{ label: "标签匹配", value: "tag-match" },
-							]}
-						/>
-					</Form.Item>
-					<div className="grid gap-4 md:grid-cols-3">
-						<Form.Item name="sqlKeywords" label="SQL 关键字">
-							<Input.TextArea rows={2} placeholder={"program_id, program_name"} />
-						</Form.Item>
-						<Form.Item name="namePattern" label="模型名匹配">
-							<Input placeholder="例如 major_project" />
-						</Form.Item>
-						<Form.Item name="modelPathPattern" label="路径匹配">
-							<Input placeholder="例如 models/ads/prj1/" />
-						</Form.Item>
-					</div>
-					<div className="grid gap-4 md:grid-cols-2">
-						<Form.Item name="tag" label="标签匹配">
-							<Input placeholder="例如 project-management" />
-						</Form.Item>
-						<Form.Item name="deleteFiles" label="同时清理无引用 dbt 文件" valuePropName="checked">
-							<Switch checkedChildren="清理文件" unCheckedChildren="仅删记录" />
-						</Form.Item>
-					</div>
-				</Form>
-				<div className="mt-4">
-					<Table<SqlModelGovernancePreviewItem>
-						size="small"
-						rowKey={(record) => record.modelId || record.modelPath || record.name || Math.random().toString()}
-						loading={governancePreviewLoading}
-						dataSource={governancePreview}
-						rowSelection={{
-							selectedRowKeys: governanceSelection,
-							onChange: (keys) => setGovernanceSelection(keys.map((key) => String(key))),
-						}}
-						pagination={{ pageSize: 8, hideOnSinglePage: true }}
-						columns={[
-							{
-								title: "模型",
-								dataIndex: "name",
-								render: (_, record) => (
-									<div>
-										<div className="font-medium">{record.name || "-"}</div>
-										<div className="text-xs text-muted-foreground">{record.modelPath || "-"}</div>
-									</div>
-								),
-							},
-							{
-								title: "分层",
-								dataIndex: "layer",
-								width: 90,
-								render: (value) => layerTag(value),
-							},
-							{
-								title: "状态",
-								dataIndex: "status",
-								width: 90,
-								render: (value) => <Tag>{value || "-"}</Tag>,
-							},
-							{
-								title: "命中规则",
-								dataIndex: "ruleHits",
-								render: (value: string[] | undefined) => (
-									<Space wrap size={[4, 4]}>
-										{(value || []).map((rule) => (
-											<Tag key={rule}>{governanceRuleLabel(rule)}</Tag>
-										))}
-									</Space>
-								),
-							},
-							{
-								title: "影响",
-								width: 180,
-								render: (_, record) => (
-									<div className="text-xs leading-6">
-										<div>下游 ref: {record.downstreamRefCount || 0}</div>
-										<div>数据集: {record.datasetBindingCount || 0}</div>
-										<div>报表: {record.reportBindingCount || 0}</div>
-									</div>
-								),
-							},
-							{
-								title: "建议动作",
-								width: 140,
-								render: (_, record) => (
-									<Tag color={record.fileDeleteSafe ? "green" : "gold"}>
-										{record.fileDeleteSafe ? "删记录+文件" : "仅删记录"}
-									</Tag>
-								),
-							},
-						]}
-					/>
-				</div>
-			</Modal>
+				onClose={() => setGovernanceOpen(false)}
+				onPreview={handleGovernancePreview}
+				onExecute={handleGovernanceExecute}
+				previewLoading={governancePreviewLoading}
+				executing={governanceExecuting}
+				preview={governancePreview}
+				selection={governanceSelection}
+				onSelectionChange={setGovernanceSelection}
+				spaces={spaces}
+				form={governanceForm}
+			/>
 
 			<BatchImportModal
 				open={batchImportOpen}
@@ -4027,313 +3348,41 @@ WHERE status = 'active'`}
 				</Form>
 			</Modal>
 
-			<Modal
+			<OdsGenerateModal
 				open={odsGenerateOpen}
-				title="从 ODS 一键生成 DWD / DWS / ADS"
-				onCancel={() => setOdsGenerateOpen(false)}
-				footer={
-					<Space>
-						<Button onClick={() => setOdsGenerateOpen(false)}>取消</Button>
-						<Button type="primary" onClick={submitOdsGenerate} loading={odsGenerateSubmitting}>
-							开始生成
-						</Button>
-					</Space>
-				}
-			>
-				<Form layout="vertical" form={odsGenerateForm} disabled={odsGenerateSubmitting}>
-					<div className="grid gap-4 md:grid-cols-2">
-						<Form.Item name="planId" label="项目空间" rules={[{ required: true, message: "请选择项目空间" }]}>
-							<Select
-								placeholder="选择项目空间"
-								options={spaces.map((space) => ({ label: space.name || "未命名", value: space.id }))}
-							/>
-						</Form.Item>
-						<Form.Item name="sourceDataSourceId" label="来源数据源（可选）">
-							<Select
-								allowClear
-								placeholder={sourcesLoading ? "加载可用来源..." : "按 ODS 映射自动识别"}
-								options={odsSourceFilterOptions}
-							/>
-						</Form.Item>
-					</div>
-					<Form.Item
-						name="mappingIds"
-						label="选择 ODS 表"
-						rules={[{ required: true, message: "请至少选择一个 ODS 表" }]}
-					>
-						<Select
-							mode="multiple"
-							showSearch
-							optionFilterProp="label"
-							placeholder={sourcesLoading ? "ODS 列表加载中..." : "选择一个或多个 ODS 表"}
-							options={odsSourceOptions}
-						/>
-					</Form.Item>
-					{!sourcesLoading && odsSourceOptions.length === 0 && (
-						<Alert
-							type="warning"
-							showIcon
-							message="未发现 ODS 映射"
-							description={
-								<div>
-									请先在数据集成中完成 ODS 接入，然后回到本页刷新后选择映射。
-									<Button type="link" size="small" onClick={() => router.push("/foundation/data-sources")}>
-										去 ODS 接入
-									</Button>
-								</div>
-							}
-							className="mb-4"
-						/>
-					)}
-					<div className="grid gap-4 md:grid-cols-2">
-						<Form.Item name="schemaName" label="目标 Schema">
-							<Input placeholder="可选，留空使用默认 schema" />
-						</Form.Item>
-						<Form.Item name="materialized" label="物化方式">
-							<Select
-								allowClear
-								placeholder="默认 table"
-								options={[
-									{ label: "table", value: "table" },
-									{ label: "view", value: "view" },
-									{ label: "incremental", value: "incremental" },
-								]}
-							/>
-						</Form.Item>
-					</div>
-					<div className="grid gap-4 md:grid-cols-2">
-						<Form.Item name="status" label="状态">
-							<Select
-								allowClear
-								placeholder="默认 DRAFT"
-								options={[
-									{ label: "草稿", value: "DRAFT" },
-									{ label: "就绪", value: "READY" },
-									{ label: "已发布", value: "PUBLISHED" },
-								]}
-							/>
-						</Form.Item>
-						<Form.Item name="enabled" label="启用" valuePropName="checked">
-							<Switch />
-						</Form.Item>
-					</div>
-					<div className="grid gap-4 md:grid-cols-2">
-						<Form.Item name="tags" label="额外标签 (逗号分隔)">
-							<Input placeholder="可选，如 finance,patent" />
-						</Form.Item>
-						<Form.Item name="ownerDept" label="归属部门">
-							<Input placeholder="可选" />
-						</Form.Item>
-					</div>
-					<Form.Item label="生成分层">
-						<Space size={24}>
-							<Form.Item name="createDwd" valuePropName="checked" noStyle>
-								<Checkbox>DWD</Checkbox>
-							</Form.Item>
-							<Form.Item name="createDws" valuePropName="checked" noStyle>
-								<Checkbox>DWS</Checkbox>
-							</Form.Item>
-							<Form.Item name="createAds" valuePropName="checked" noStyle>
-								<Checkbox>ADS</Checkbox>
-							</Form.Item>
-						</Space>
-					</Form.Item>
-					<Form.Item name="overwriteExisting" valuePropName="checked">
-						<Checkbox>已存在模型时覆盖更新</Checkbox>
-					</Form.Item>
-					<div className="rounded border border-border bg-muted/40 px-3 py-2 text-xs text-muted-foreground">
-						<div className="font-medium text-foreground">生成说明</div>
-						<ol className="mt-1 list-decimal pl-4">
-							<li>先选择项目空间与 ODS 映射，至少选择 1 张 ODS 表。</li>
-							<li>默认按映射自动生成 DWD / DWS / ADS 三层模型。</li>
-							<li>建议先勾选 DWD，再按需勾选 DWS、ADS。</li>
-						</ol>
-					</div>
-				</Form>
-			</Modal>
+				onClose={() => setOdsGenerateOpen(false)}
+				onSubmit={submitOdsGenerate}
+				submitting={odsGenerateSubmitting}
+				spaces={spaces}
+				sourcesLoading={sourcesLoading}
+				odsSourceOptions={odsSourceOptions}
+				odsSourceFilterOptions={odsSourceFilterOptions}
+				form={odsGenerateForm}
+			/>
 
-			<Drawer
+			<SnippetDrawer
 				open={snippetDrawerOpen}
-				title={snippetTab === "source" ? "插入源表 (ODS)" : "插入模型引用"}
-				width={560}
 				onClose={() => setSnippetDrawerOpen(false)}
-			>
-				<div className="mb-4">
-					<Input
-						placeholder={snippetTab === "source" ? "搜索源表..." : "搜索模型..."}
-						value={snippetKeyword}
-						onChange={(e) => setSnippetKeyword(e.target.value)}
-					/>
-				</div>
-				<Tabs
-					activeKey={snippetTab}
-					onChange={(key) => setSnippetTab(key as "source" | "ref")}
-					items={[
-						{
-							key: "source",
-							label: "ODS 源表",
-							children: sourcesLoading ? (
-								<div className="text-center text-sm text-muted-foreground py-8">加载中...</div>
-							) : filteredDbtSources.length === 0 ? (
-								<EmptyState title="暂无源表" description="请先在数据集成中配置 ODS 表映射。" compact />
-							) : (
-								<div className="max-h-[400px] overflow-y-auto space-y-2">
-									{filteredDbtSources.map((item, idx) => (
-										<Card
-											key={`${item.schema}-${item.table}-${idx}`}
-											size="small"
-											className="cursor-pointer hover:border-primary transition-colors"
-											onClick={() => insertSnippet(item.sourceSnippet || `{{ source('${item.schema}', '${item.table}') }}`)}
-										>
-											<div className="flex items-center justify-between">
-												<div>
-													<div className="font-medium text-foreground">
-														{item.table}
-													</div>
-													<div className="text-xs text-muted-foreground">
-														Schema: {item.schema} {item.systemCode ? `· 系统: ${item.systemCode}` : ""}
-													</div>
-													{item.description && (
-														<div className="text-xs text-muted-foreground mt-1">{item.description}</div>
-													)}
-												</div>
-												<Button size="small" type="link">
-													插入
-												</Button>
-											</div>
-											<div className="mt-2 rounded bg-muted px-2 py-1 font-mono text-xs text-muted-foreground">
-												{item.sourceSnippet || `{{ source('${item.schema}', '${item.table}') }}`}
-											</div>
-										</Card>
-									))}
-								</div>
-							),
-						},
-						{
-							key: "ref",
-							label: "模型引用",
-							children: refsLoading ? (
-								<div className="text-center text-sm text-muted-foreground py-8">加载中...</div>
-							) : filteredDbtRefs.length === 0 ? (
-								<EmptyState title="暂无模型" description="请先创建 SQL 模型。" compact />
-							) : (
-								<div className="max-h-[400px] overflow-y-auto space-y-2">
-									{filteredDbtRefs.map((item, idx) => (
-										<Card
-											key={`${item.id || item.name}-${idx}`}
-											size="small"
-											className="cursor-pointer hover:border-primary transition-colors"
-											onClick={() => insertSnippet(item.refSnippet || `{{ ref('${item.name}') }}`)}
-										>
-											<div className="flex items-center justify-between">
-												<div>
-													<div className="flex items-center gap-2">
-														<span className="font-medium text-foreground">{item.name}</span>
-														{layerTag(item.layer)}
-													</div>
-													<div className="text-xs text-muted-foreground">
-														{item.sourceSystem ? `来源: ${item.sourceSystem}` : ""}
-														{item.tags ? ` · 标签: ${item.tags}` : ""}
-													</div>
-													{item.description && (
-														<div className="text-xs text-muted-foreground mt-1">{item.description}</div>
-													)}
-												</div>
-												<Button size="small" type="link">
-													插入
-												</Button>
-											</div>
-											<div className="mt-2 rounded bg-muted px-2 py-1 font-mono text-xs text-muted-foreground">
-												{item.refSnippet || `{{ ref('${item.name}') }}`}
-											</div>
-										</Card>
-									))}
-								</div>
-							),
-						},
-					]}
-				/>
-				</Drawer>
-				<Modal
+				snippetTab={snippetTab}
+				onSnippetTabChange={(tab) => setSnippetTab(tab)}
+				snippetKeyword={snippetKeyword}
+				onSnippetKeywordChange={setSnippetKeyword}
+				sourcesLoading={sourcesLoading}
+				refsLoading={refsLoading}
+				filteredSources={filteredDbtSources}
+				filteredRefs={filteredDbtRefs}
+				onInsertSnippet={insertSnippet}
+			/>
+				<OutputRelationModal
 					open={outputModalOpen}
-					title={outputAction === "rebuild" ? "重建产出表" : "清空产出表"}
-					onCancel={() => {
-						if (outputRelationSubmitting) {
-							return;
-						}
-						setOutputModalOpen(false);
-						setOutputAction(null);
-					}}
-					onOk={() => void submitOutputAction()}
-					confirmLoading={outputRelationSubmitting}
-					okText={outputAction === "rebuild" ? "确认重建" : "确认清空"}
-					okButtonProps={{
-						danger: outputAction === "rebuild",
-						disabled: outputRelationLoading || !activeModel?.id || (outputAction === "truncate" && !!outputRelation?.exists && !outputRelation?.truncateAllowed),
-					}}
-				>
-					<Space direction="vertical" size={12} className="w-full">
-						{outputRelationLoading ? (
-							<div className="py-6 text-center text-sm text-muted-foreground">正在分析当前模型产出 relation...</div>
-						) : outputRelation ? (
-							<>
-								<Alert
-									type={outputAction === "rebuild" ? "warning" : "info"}
-									showIcon
-									message={outputRelation.message || (outputAction === "rebuild" ? "将通过 dbt --full-refresh 安全重建产出 relation" : "将清空当前模型产出表数据")}
-								/>
-								<div className="rounded-md border border-border bg-muted/30 p-3 text-sm">
-									<div>
-										<Text type="secondary">模型</Text>
-										<div className="font-medium">{outputRelation.modelName || activeModel?.name || "-"}</div>
-									</div>
-									<div className="mt-2">
-										<Text type="secondary">产出 relation</Text>
-										<div className="font-mono">{outputRelation.qualifiedName || "-"}</div>
-									</div>
-									<div className="mt-2 grid grid-cols-2 gap-3">
-										<div>
-											<Text type="secondary">物化方式</Text>
-											<div>{outputRelation.materialized || "-"}</div>
-										</div>
-										<div>
-											<Text type="secondary">检测类型</Text>
-											<div>{outputRelation.relationType || (outputRelation.exists ? "-" : "未生成")}</div>
-										</div>
-										<div>
-											<Text type="secondary">当前状态</Text>
-											<div>{outputRelation.exists ? "已存在" : "不存在"}</div>
-										</div>
-										<div>
-											<Text type="secondary">下游引用</Text>
-											<div>{outputRelation.downstreamRefCount ?? 0}</div>
-										</div>
-									</div>
-									<div className="mt-2">
-										<Text type="secondary">构建选择器</Text>
-										<div className="font-mono">{outputRelation.selector || activeModel?.dagSelector || "-"}</div>
-									</div>
-								</div>
-								{outputAction === "truncate" && outputRelation.exists && !outputRelation.truncateAllowed ? (
-									<Alert
-										type="error"
-										showIcon
-										message="当前产出 relation 为视图，不支持清空。请改用「重建产出表」。"
-									/>
-								) : null}
-								{outputAction === "rebuild" ? (
-									<Alert
-										type="warning"
-										showIcon
-										message="重建将使用 dbt --full-refresh 安全地重建产出表，构建失败时不会丢失原有数据。"
-									/>
-								) : null}
-							</>
-						) : (
-							<Alert type="error" showIcon message="未能加载当前模型的产出 relation 信息" />
-						)}
-					</Space>
-				</Modal>
+					onClose={() => { setOutputModalOpen(false); setOutputAction(null); }}
+					onSubmit={() => void submitOutputAction()}
+					submitting={outputRelationSubmitting}
+					loading={outputRelationLoading}
+					outputAction={outputAction}
+					outputRelation={outputRelation}
+					activeModel={activeModel}
+				/>
 			</div>
 		);
 	}

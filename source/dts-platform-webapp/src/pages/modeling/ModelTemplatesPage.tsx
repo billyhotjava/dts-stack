@@ -24,19 +24,10 @@ import {
 	restoreModelingPlan,
 	updateModelingPlan,
 } from "@/api/platformApi";
+import { normalizeText, formatDateTime } from "@/utils/textUtils";
 
 const { Text } = Typography;
 
-const formatDateTime = (value?: string) => {
-	if (!value) return "-";
-	try {
-		return new Date(value).toLocaleString();
-	} catch {
-		return value;
-	}
-};
-
-const normalizeText = (value?: string) => String(value || "").trim();
 const normalizeUpper = (value?: string) => normalizeText(value).toUpperCase();
 
 type ProjectSpace = {

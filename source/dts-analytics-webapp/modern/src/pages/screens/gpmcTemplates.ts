@@ -7,11 +7,12 @@ import type { GpmcScreenId } from '../gpmc/GpmcApp';
 const SCREEN_WIDTH = 1920;
 const SCREEN_HEIGHT = 1080;
 const BG = '#eaf2fb';
+const HEADER_BAR_BG = '#044B8C';
 const PANEL_BG = 'rgba(255, 255, 255, 0.96)';
 const PANEL_BORDER = 'rgba(148, 163, 184, 0.24)';
-const TITLE_COLOR = '#16324f';
-const SUBTITLE_COLOR = '#5b7088';
-const BODY_COLOR = '#35526b';
+const TITLE_COLOR = '#0f172a';
+const SUBTITLE_COLOR = '#334155';
+const BODY_COLOR = '#334155';
 const ACCENT = '#3b82f6';
 const SUCCESS = '#1e8449';
 const WARNING = '#d4850a';
@@ -20,7 +21,7 @@ const INFO = '#38bdf8';
 const KPI_BG = '#ffffff';
 const INPUT_BG = 'rgba(255, 255, 255, 0.98)';
 const INPUT_BORDER = 'rgba(148, 163, 184, 0.42)';
-const TABLE_HEADER_BG = 'rgba(219, 234, 254, 0.96)';
+const TABLE_HEADER_BG = '#dbe9f6';
 const TABLE_BODY_BG = 'rgba(255, 255, 255, 0.98)';
 const TABLE_EVEN_ROW_BG = 'rgba(241, 245, 249, 0.98)';
 const ANALYTICS_BASENAME = '/analytics';
@@ -28,10 +29,18 @@ const SCREEN_REF_PREFIX = 'screen-ref:';
 const STRATEGIC_BG = '#eaf2fb';
 const STRATEGIC_PANEL_BG = 'rgba(255, 255, 255, 0.96)';
 const STRATEGIC_PANEL_BORDER = 'rgba(148, 163, 184, 0.24)';
-const STRATEGIC_TEXT = '#1c2833';
-const STRATEGIC_MUTED = '#909eab';
+const STRATEGIC_TEXT = '#0f172a';
+const STRATEGIC_MUTED = '#475569';
 const STRATEGIC_NAV_BG = 'rgba(255, 255, 255, 0.96)';
 const STRATEGIC_NAV_ACTIVE_BG = 'rgba(59, 130, 246, 0.12)';
+const HEADER_TEXT = '#ffffff';
+const HEADER_SUBTEXT = 'rgba(255, 255, 255, 0.82)';
+const HEADER_INPUT_BG = 'rgba(255, 255, 255, 0.18)';
+const HEADER_INPUT_BORDER = 'rgba(255, 255, 255, 0.32)';
+const HEADER_TAB_BG = 'rgba(255, 255, 255, 0.14)';
+const HEADER_TAB_ACTIVE_BG = 'rgba(255, 255, 255, 0.22)';
+const HEADER_TAB_BORDER = 'rgba(255, 255, 255, 0.26)';
+const HEADER_TAB_ACTIVE_BORDER = 'rgba(255, 255, 255, 0.42)';
 
 function createComponent(
 	id: string,
@@ -104,7 +113,7 @@ function createTitle(id: string, text: string, y = 24): ScreenComponent {
 		text,
 		fontSize: 36,
 		fontWeight: '700',
-		color: TITLE_COLOR,
+		color: HEADER_TEXT,
 		textAlign: 'flex-start',
 	});
 }
@@ -114,7 +123,7 @@ function createStrategicTitle(id: string, text: string, x: number, y: number, wi
 		text,
 		fontSize,
 		fontWeight: '800',
-		color: STRATEGIC_TEXT,
+		color: HEADER_TEXT,
 		textAlign: 'flex-start',
 	});
 }
@@ -124,8 +133,18 @@ function createStrategicSubtitle(id: string, text: string, x: number, y: number,
 		text,
 		fontSize: 16,
 		fontWeight: '500',
-		color: STRATEGIC_MUTED,
+		color: HEADER_SUBTEXT,
 		textAlign: 'flex-start',
+	});
+}
+
+function createHeaderBar(id: string): ScreenComponent {
+	return createComponent(id, 'shape', id, 0, 0, SCREEN_WIDTH, 100, 5, {
+		shapeType: 'rect',
+		fillColor: HEADER_BAR_BG,
+		borderColor: HEADER_BAR_BG,
+		borderWidth: 0,
+		radius: 0,
 	});
 }
 
@@ -198,7 +217,7 @@ function createStrategicNumberCard(
 		precision: options?.precision ?? 0,
 		titleFontSize: 17,
 		valueFontSize: 34,
-		titleColor: '#909eab',
+		titleColor: '#475569',
 		valueColor: options?.valueColor ?? STRATEGIC_TEXT,
 		backgroundColor: '#ffffff',
 	}, actions);
@@ -218,10 +237,10 @@ function createFilterSelect(
 		variableKey,
 		options,
 		placeholder: '全部',
-		labelColor: '#909eab',
-		inputBackground: INPUT_BG,
-		inputBorderColor: INPUT_BORDER,
-		inputTextColor: TITLE_COLOR,
+		labelColor: HEADER_SUBTEXT,
+		inputBackground: HEADER_INPUT_BG,
+		inputBorderColor: HEADER_INPUT_BORDER,
+		inputTextColor: HEADER_TEXT,
 	});
 }
 
@@ -237,10 +256,10 @@ function createFilterInput(
 		label,
 		variableKey,
 		placeholder: '输入关键词',
-		labelColor: '#909eab',
-		inputBackground: INPUT_BG,
-		inputBorderColor: INPUT_BORDER,
-		inputTextColor: TITLE_COLOR,
+		labelColor: HEADER_SUBTEXT,
+		inputBackground: HEADER_INPUT_BG,
+		inputBorderColor: HEADER_INPUT_BORDER,
+		inputTextColor: HEADER_TEXT,
 	});
 }
 
@@ -249,10 +268,10 @@ function createDateRange(id: string, x: number, y: number, width: number): Scree
 		label: '统计周期',
 		startKey: 'dateFrom',
 		endKey: 'dateTo',
-		labelColor: '#909eab',
-		inputBackground: INPUT_BG,
-		inputBorderColor: INPUT_BORDER,
-		inputTextColor: TITLE_COLOR,
+		labelColor: HEADER_SUBTEXT,
+		inputBackground: HEADER_INPUT_BG,
+		inputBorderColor: HEADER_INPUT_BORDER,
+		inputTextColor: HEADER_TEXT,
 	});
 }
 
@@ -305,12 +324,12 @@ const gpmcScreenNames: Record<GpmcScreenId, string> = {
 function createTopicTabs(screen: GpmcScreenId, x: number, y: number, dark = false): ScreenComponent[] {
 	const width = dark ? 132 : 116;
 	const gap = dark ? 12 : 10;
-	const activeFill = dark ? STRATEGIC_NAV_ACTIVE_BG : 'rgba(59, 130, 246, 0.12)';
-	const inactiveFill = dark ? STRATEGIC_NAV_BG : 'rgba(255, 255, 255, 0.96)';
-	const activeBorder = dark ? 'rgba(59, 130, 246, 0.30)' : 'rgba(59, 130, 246, 0.30)';
-	const inactiveBorder = dark ? 'rgba(148, 163, 184, 0.22)' : 'rgba(148, 163, 184, 0.22)';
-	const activeText = dark ? ACCENT : ACCENT;
-	const inactiveText = dark ? TITLE_COLOR : TITLE_COLOR;
+	const activeFill = dark ? HEADER_TAB_ACTIVE_BG : HEADER_TAB_ACTIVE_BG;
+	const inactiveFill = dark ? HEADER_TAB_BG : HEADER_TAB_BG;
+	const activeBorder = dark ? HEADER_TAB_ACTIVE_BORDER : HEADER_TAB_ACTIVE_BORDER;
+	const inactiveBorder = dark ? HEADER_TAB_BORDER : HEADER_TAB_BORDER;
+	const activeText = HEADER_TEXT;
+	const inactiveText = HEADER_TEXT;
 	return gpmcTopicTabs.flatMap((item, index) => {
 		const active = item.screen === screen;
 		const left = x + index * (width + gap);
@@ -439,9 +458,9 @@ function createStrategicTable(
 		data,
 		fontSize: 16,
 		headerAlign: 'center',
-		headerColor: '#1c2833',
-		headerBackground: '#dce6f0',
-		bodyColor: '#566573',
+		headerColor: TITLE_COLOR,
+		headerBackground: TABLE_HEADER_BG,
+		bodyColor: BODY_COLOR,
 		bodyBackground: '#ffffff',
 		oddRowBackground: '#ffffff',
 		evenRowBackground: '#f5f9fd',
@@ -473,8 +492,9 @@ function createGanttBoard(
 function createHeader(title: string, _subtitle: string, screen: GpmcScreenId) {
 	const assist = getGpmcAssistContent(screen, screen === 'overview' ? 'strategic' : 'control');
 	return [
+		createHeaderBar(`${title}-header-bar`),
 		createTitle(`${title}-title`, title),
-		...createTopicTabs(screen, 44, 78, false),
+		...createTopicTabs(screen, 44, 78, true),
 		createDateRange(`${title}-date`, 1260, 28, 320),
 		createFilterSelect(`${title}-dept`, '事业部/科室', 'deptId', 940, 28, 150, ['全部', '工程建设中心', '数字化事业部', '研发中心', '生产制造中心']),
 		createFilterInput(`${title}-project`, '项目编号/项目名称', 'projectNo', 1104, 28, 140),
@@ -505,8 +525,9 @@ function createHeader(title: string, _subtitle: string, screen: GpmcScreenId) {
 function createDarkHeader(title: string, screen: GpmcScreenId) {
 	const assist = getGpmcAssistContent(screen, 'control');
 	return [
+		createHeaderBar(`${title}-header-bar`),
 		createStrategicTitle(`${title}-title`, title, 44, 24, 720, 32),
-		...createTopicTabs(screen, 44, 78, false),
+		...createTopicTabs(screen, 44, 78, true),
 		createDateRange(`${title}-date`, 1260, 28, 320),
 		createFilterSelect(`${title}-dept`, '事业部/科室', 'deptId', 940, 28, 150, ['全部', '工程建设中心', '数字化事业部', '研发中心', '生产制造中心']),
 		createFilterInput(`${title}-project`, '项目编号/项目名称', 'projectNo', 1104, 28, 140),
@@ -588,6 +609,7 @@ const strategicOverviewTemplate: ScreenTemplate = {
 		globalVariables: commonVariables,
 		schemaVersion: SCREEN_SCHEMA_VERSION,
 		components: [
+			createHeaderBar('gpmc-overview-header-bar'),
 			createStrategicPanel('gpmc-overview-weekly-panel', 36, 136, 320, 236),
 			createStrategicPanel('gpmc-overview-stage-panel', 36, 386, 320, 176),
 			createStrategicPanel('gpmc-overview-quality-panel', 36, 576, 320, 142),
@@ -603,10 +625,10 @@ const strategicOverviewTemplate: ScreenTemplate = {
 				text: '项目运营管理中心',
 				fontSize: 36,
 				fontWeight: '800',
-				color: '#1e293b',
+				color: HEADER_TEXT,
 				textAlign: 'center',
 			}),
-			...createTopicTabs('overview', 534, 82, false),
+			...createTopicTabs('overview', 534, 82, true),
 			...createAssistTrigger('gpmc-overview-assist-explanation', '说明', 1742, 40, ACCENT, getGpmcAssistContent('overview', 'strategic').explanation.title, flattenAssistCardBody(getGpmcAssistContent('overview', 'strategic').explanation)),
 			...createAssistTrigger('gpmc-overview-assist-guide', '导览', 1818, 40, SUCCESS, getGpmcAssistContent('overview', 'strategic').guide!.title, flattenAssistCardBody(getGpmcAssistContent('overview', 'strategic').guide!)),
 			createStrategicNumberCard('gpmc-overview-kpi-total', '项目总数', 376, 136, 184, 128, { valueColor: STRATEGIC_TEXT }, [jumpSelfAction(buildScreenReference(gpmcScreenNames.execution, '/gpmc/execution'))]),
