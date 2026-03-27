@@ -258,28 +258,34 @@ const techDataCenterTemplate: ScreenTemplate = {
         backgroundColor: '#eaf2fb', theme: 'glacier',
         components: [
             // ===== 顶部区域 =====
+            // 标题栏背景
+            createComponent('header-bar', 'border-box', '标题栏背景', 0, 0, 1920, 72, 90, {
+                backgroundColor: '#044B8C',
+                borderWidth: 0,
+                borderRadius: 0,
+            }),
             // 主标题
             createComponent('title-main', 'title', '主标题', 760, 15, 400, 60, 100, {
                 text: '智能数据监控中心',
                 fontSize: 42,
                 fontWeight: 'bold',
-                color: '#2980b9',
+                color: '#ffffff',
                 textAlign: 'center',
             }),
             // 标题装饰
             createComponent('deco-title-left', 'decoration', '标题装饰左', 300, 35, 400, 40, 99, {
                 decorationType: 3,
-                color: ['#2980b9', '#1a5276'],
+                color: ['#ffffff', '#88bbdd'],
             }),
             createComponent('deco-title-right', 'decoration', '标题装饰右', 1220, 35, 400, 40, 99, {
                 decorationType: 3,
-                color: ['#2980b9', '#1a5276'],
+                color: ['#ffffff', '#88bbdd'],
             }),
             // 日期时间
             createComponent('datetime-top', 'datetime', '日期时间', 1650, 25, 230, 40, 98, {
                 format: 'YYYY-MM-DD HH:mm:ss',
                 fontSize: 18,
-                color: '#909eab',
+                color: '#ffffff',
             }),
 
             // ===== 顶部数据卡片区 =====
@@ -594,25 +600,30 @@ const patentDataCenterTemplate: ScreenTemplate = {
             // =============================================================
             //  顶部标题区  y: 0–80
             // =============================================================
+            createComponent('patent-header-bar', 'border-box', '标题栏背景', 0, 0, 1920, 72, 90, {
+                backgroundColor: '#044B8C',
+                borderWidth: 0,
+                borderRadius: 0,
+            }),
             createComponent('patent-title', 'title', '主标题', 660, 12, 600, 55, 100, {
                 text: '专利数据中心',
                 fontSize: 38,
                 fontWeight: 'bold',
-                color: '#2980b9',
+                color: '#ffffff',
                 textAlign: 'center',
             }),
             createComponent('patent-deco-left', 'decoration', '标题装饰左', 200, 30, 400, 35, 99, {
                 decorationType: 3,
-                color: ['#2980b9', '#1a5276'],
+                color: ['#ffffff', '#88bbdd'],
             }),
             createComponent('patent-deco-right', 'decoration', '标题装饰右', 1320, 30, 400, 35, 99, {
                 decorationType: 3,
-                color: ['#2980b9', '#1a5276'],
+                color: ['#ffffff', '#88bbdd'],
             }),
             createComponent('patent-datetime', 'datetime', '日期时间', 1660, 22, 220, 35, 98, {
                 format: 'YYYY-MM-DD HH:mm:ss',
                 fontSize: 16,
-                color: '#909eab',
+                color: '#ffffff',
             }),
 
             // =============================================================
@@ -865,11 +876,16 @@ const patentTitaniumTemplate: ScreenTemplate = {
         backgroundColor: '#eaf2fb',
         theme: 'glacier',
         components: [
+            createComponent('ti-header-bar', 'border-box', '标题栏背景', 0, 0, 1920, 72, 90, {
+                backgroundColor: '#044B8C',
+                borderWidth: 0,
+                borderRadius: 0,
+            }),
             createComponent('ti-title', 'title', '主标题', 660, 15, 600, 50, 100, {
-                text: '专利数据中心', fontSize: 34, fontWeight: '600', color: '#1e293b', textAlign: 'center',
+                text: '专利数据中心', fontSize: 34, fontWeight: '600', color: '#ffffff', textAlign: 'center',
             }),
             createComponent('ti-datetime', 'datetime', '日期时间', 1660, 22, 220, 35, 98, {
-                format: 'YYYY-MM-DD HH:mm:ss', fontSize: 16, color: '#909eab',
+                format: 'YYYY-MM-DD HH:mm:ss', fontSize: 16, color: '#ffffff',
             }),
             createComponent('ti-kpi-1', 'number-card', '申请总量', 40, 78, 280, 90, 50, {
                 title: '申请总量', value: 12586, prefix: '', suffix: '件',
@@ -1001,11 +1017,16 @@ const businessLightTemplate: ScreenTemplate = {
         theme: 'glacier',
         components: [
             // ===== 顶部标题栏 =====
+            createComponent('bl-header-bar', 'border-box', '标题栏背景', 0, 0, 1920, 72, 90, {
+                backgroundColor: '#044B8C',
+                borderWidth: 0,
+                borderRadius: 0,
+            }),
             createComponent('bl-title', 'title', '主标题', 660, 18, 600, 44, 100, {
-                text: 'Innovation Dashboard', fontSize: 24, fontWeight: '650', color: '#1f2328', textAlign: 'center',
+                text: 'Innovation Dashboard', fontSize: 24, fontWeight: '650', color: '#ffffff', textAlign: 'center',
             }),
             createComponent('bl-datetime', 'datetime', '日期时间', 1660, 24, 220, 32, 98, {
-                format: 'YYYY-MM-DD HH:mm:ss', fontSize: 13, color: '#6b7280',
+                format: 'YYYY-MM-DD HH:mm:ss', fontSize: 13, color: '#ffffff',
             }),
 
             // ===== KPI 指标卡 =====
@@ -1106,10 +1127,11 @@ const smartCityTemplate: ScreenTemplate = {
     config: {
         name: '智慧城市总览', description: '智慧城市数据大屏', width: 1920, height: 1080, backgroundColor: '#eaf2fb', theme: 'glacier',
         components: [
-            createComponent('sc-title', 'title', '主标题', 660, 12, 600, 55, 100, { text: '智慧城市运营中心', fontSize: 36, fontWeight: 'bold', color: '#2980b9', textAlign: 'center' }),
-            createComponent('sc-deco-l', 'decoration', '装饰左', 200, 30, 400, 35, 99, { decorationType: 3, color: ['#2980b9', '#1a5276'] }),
-            createComponent('sc-deco-r', 'decoration', '装饰右', 1320, 30, 400, 35, 99, { decorationType: 3, color: ['#2980b9', '#1a5276'] }),
-            createComponent('sc-dt', 'datetime', '时间', 1660, 22, 220, 35, 98, { format: 'YYYY-MM-DD HH:mm:ss', fontSize: 16, color: '#909eab' }),
+            createComponent('sc-header-bar', 'border-box', '标题栏背景', 0, 0, 1920, 72, 90, { backgroundColor: '#044B8C', borderWidth: 0, borderRadius: 0 }),
+            createComponent('sc-title', 'title', '主标题', 660, 12, 600, 55, 100, { text: '智慧城市运营中心', fontSize: 36, fontWeight: 'bold', color: '#ffffff', textAlign: 'center' }),
+            createComponent('sc-deco-l', 'decoration', '装饰左', 200, 30, 400, 35, 99, { decorationType: 3, color: ['#ffffff', '#88bbdd'] }),
+            createComponent('sc-deco-r', 'decoration', '装饰右', 1320, 30, 400, 35, 99, { decorationType: 3, color: ['#ffffff', '#88bbdd'] }),
+            createComponent('sc-dt', 'datetime', '时间', 1660, 22, 220, 35, 98, { format: 'YYYY-MM-DD HH:mm:ss', fontSize: 16, color: '#ffffff' }),
             createComponent('sc-kpi-1', 'number-card', '常住人口', 40, 80, 220, 85, 50, { title: '常住人口(万)', value: 1862, prefix: '', suffix: '' }),
             createComponent('sc-kpi-2', 'number-card', '今日车流', 280, 80, 220, 85, 50, { title: '今日车流(万)', value: 342, prefix: '', suffix: '' }),
             createComponent('sc-kpi-3', 'number-card', '空气质量', 1420, 80, 220, 85, 50, { title: '空气质量(AQI)', value: 45, prefix: '', suffix: '' }),
@@ -1133,7 +1155,8 @@ const govServiceTemplate: ScreenTemplate = {
     config: {
         name: '政务服务大屏', description: '政务服务运营数据', width: 1920, height: 1080, backgroundColor: '#eaf2fb', theme: 'glacier',
         components: [
-            createComponent('gs-title', 'title', '主标题', 560, 12, 800, 55, 100, { text: '政务服务运营大屏', fontSize: 36, fontWeight: 'bold', color: '#2980b9', textAlign: 'center' }),
+            createComponent('gs-header-bar', 'border-box', '标题栏背景', 0, 0, 1920, 72, 90, { backgroundColor: '#044B8C', borderWidth: 0, borderRadius: 0 }),
+            createComponent('gs-title', 'title', '主标题', 560, 12, 800, 55, 100, { text: '政务服务运营大屏', fontSize: 36, fontWeight: 'bold', color: '#ffffff', textAlign: 'center' }),
             createComponent('gs-kpi-1', 'number-card', '累计办件', 40, 85, 290, 85, 50, { title: '累计办件量', value: 1286534, prefix: '', suffix: '' }),
             createComponent('gs-kpi-2', 'number-card', '今日办件', 350, 85, 290, 85, 50, { title: '今日办件', value: 3256, prefix: '', suffix: '' }),
             createComponent('gs-kpi-3', 'number-card', '满意度', 660, 85, 290, 85, 50, { title: '群众满意度', value: 98.6, prefix: '', suffix: '%' }),
@@ -1159,8 +1182,9 @@ const productionMonitorTemplate: ScreenTemplate = {
     config: {
         name: '生产监控大屏', description: '生产线实时监控', width: 1920, height: 1080, backgroundColor: '#eaf2fb', theme: 'glacier',
         components: [
-            createComponent('pm-title', 'title', '主标题', 560, 12, 800, 55, 100, { text: '智能制造监控中心', fontSize: 36, fontWeight: 'bold', color: '#2980b9', textAlign: 'center' }),
-            createComponent('pm-dt', 'datetime', '时间', 1660, 22, 220, 35, 98, { format: 'YYYY-MM-DD HH:mm:ss', fontSize: 16, color: '#909eab' }),
+            createComponent('pm-header-bar', 'border-box', '标题栏背景', 0, 0, 1920, 72, 90, { backgroundColor: '#044B8C', borderWidth: 0, borderRadius: 0 }),
+            createComponent('pm-title', 'title', '主标题', 560, 12, 800, 55, 100, { text: '智能制造监控中心', fontSize: 36, fontWeight: 'bold', color: '#ffffff', textAlign: 'center' }),
+            createComponent('pm-dt', 'datetime', '时间', 1660, 22, 220, 35, 98, { format: 'YYYY-MM-DD HH:mm:ss', fontSize: 16, color: '#ffffff' }),
             createComponent('pm-g1', 'gauge-chart', 'OEE', 40, 85, 220, 220, 50, { title: 'OEE', value: 87.5, min: 0, max: 100 }),
             createComponent('pm-g2', 'gauge-chart', '可用率', 280, 85, 220, 220, 50, { title: '可用率', value: 95.2, min: 0, max: 100 }),
             createComponent('pm-g3', 'gauge-chart', '性能率', 520, 85, 220, 220, 50, { title: '性能率', value: 92.1, min: 0, max: 100 }),
@@ -1188,7 +1212,8 @@ const energyManagementTemplate: ScreenTemplate = {
     config: {
         name: '能源管理大屏', description: '企业能源管理数据', width: 1920, height: 1080, backgroundColor: '#eaf2fb', theme: 'glacier',
         components: [
-            createComponent('em-title', 'title', '主标题', 560, 12, 800, 55, 100, { text: '能源管理监控平台', fontSize: 36, fontWeight: 'bold', color: '#10b981', textAlign: 'center' }),
+            createComponent('em-header-bar', 'border-box', '标题栏背景', 0, 0, 1920, 72, 90, { backgroundColor: '#044B8C', borderWidth: 0, borderRadius: 0 }),
+            createComponent('em-title', 'title', '主标题', 560, 12, 800, 55, 100, { text: '能源管理监控平台', fontSize: 36, fontWeight: 'bold', color: '#ffffff', textAlign: 'center' }),
             createComponent('em-kpi-1', 'number-card', '总能耗', 40, 85, 290, 85, 50, { title: '今日总能耗(kWh)', value: 128560, prefix: '', suffix: '' }),
             createComponent('em-kpi-2', 'number-card', '碳排放', 350, 85, 290, 85, 50, { title: '碳排放(tCO2)', value: 86.2, prefix: '', suffix: '' }),
             createComponent('em-kpi-3', 'number-card', '节能率', 660, 85, 290, 85, 50, { title: '节能达成率', value: 92.5, prefix: '', suffix: '%' }),
@@ -1212,8 +1237,9 @@ const salesRealtimeTemplate: ScreenTemplate = {
     config: {
         name: '销售实时大屏', description: '销售数据实时监控', width: 1920, height: 1080, backgroundColor: '#eaf2fb', theme: 'glacier',
         components: [
-            createComponent('sr-title', 'title', '主标题', 560, 12, 800, 55, 100, { text: '全渠道销售实时监控', fontSize: 36, fontWeight: 'bold', color: '#d4850a', textAlign: 'center' }),
-            createComponent('sr-dt', 'datetime', '时间', 1660, 22, 220, 35, 98, { format: 'YYYY-MM-DD HH:mm:ss', fontSize: 16, color: '#d4850a' }),
+            createComponent('sr-header-bar', 'border-box', '标题栏背景', 0, 0, 1920, 72, 90, { backgroundColor: '#044B8C', borderWidth: 0, borderRadius: 0 }),
+            createComponent('sr-title', 'title', '主标题', 560, 12, 800, 55, 100, { text: '全渠道销售实时监控', fontSize: 36, fontWeight: 'bold', color: '#ffffff', textAlign: 'center' }),
+            createComponent('sr-dt', 'datetime', '时间', 1660, 22, 220, 35, 98, { format: 'YYYY-MM-DD HH:mm:ss', fontSize: 16, color: '#ffffff' }),
             createComponent('sr-kpi-gmv', 'number-card', 'GMV', 560, 80, 340, 100, 50, { title: '今日GMV', value: 8956234, prefix: '¥', suffix: '', valueFontSize: 42, valueColor: '#d4850a' }),
             createComponent('sr-kpi-1', 'number-card', '订单量', 40, 80, 240, 85, 50, { title: '今日订单', value: 42568, prefix: '', suffix: '' }),
             createComponent('sr-kpi-2', 'number-card', '客单价', 300, 80, 240, 85, 50, { title: '客单价', value: 210, prefix: '¥', suffix: '' }),
@@ -1236,7 +1262,8 @@ const storeOperationTemplate: ScreenTemplate = {
     config: {
         name: '门店运营看板', description: '门店运营数据看板', width: 1920, height: 1080, backgroundColor: '#eaf2fb', theme: 'glacier',
         components: [
-            createComponent('so-title', 'title', '主标题', 560, 12, 800, 55, 100, { text: '门店运营分析看板', fontSize: 36, fontWeight: 'bold', color: '#2980b9', textAlign: 'center' }),
+            createComponent('so-header-bar', 'border-box', '标题栏背景', 0, 0, 1920, 72, 90, { backgroundColor: '#044B8C', borderWidth: 0, borderRadius: 0 }),
+            createComponent('so-title', 'title', '主标题', 560, 12, 800, 55, 100, { text: '门店运营分析看板', fontSize: 36, fontWeight: 'bold', color: '#ffffff', textAlign: 'center' }),
             createComponent('so-kpi-1', 'number-card', '总营收', 40, 85, 290, 85, 50, { title: '今日总营收', value: 856200, prefix: '¥', suffix: '' }),
             createComponent('so-kpi-2', 'number-card', '客流量', 350, 85, 290, 85, 50, { title: '今日客流', value: 12860, prefix: '', suffix: '' }),
             createComponent('so-kpi-3', 'number-card', '坪效', 660, 85, 290, 85, 50, { title: '坪效(元/㎡)', value: 285, prefix: '', suffix: '' }),
@@ -1259,7 +1286,8 @@ const financeMonitorTemplate: ScreenTemplate = {
     config: {
         name: '资金监控大屏', description: '资金监控数据大屏', width: 1920, height: 1080, backgroundColor: '#eaf2fb', theme: 'glacier',
         components: [
-            createComponent('fm-title', 'title', '主标题', 560, 12, 800, 55, 100, { text: '资金监控中心', fontSize: 36, fontWeight: 'bold', color: '#d4850a', textAlign: 'center' }),
+            createComponent('fm-header-bar', 'border-box', '标题栏背景', 0, 0, 1920, 72, 90, { backgroundColor: '#044B8C', borderWidth: 0, borderRadius: 0 }),
+            createComponent('fm-title', 'title', '主标题', 560, 12, 800, 55, 100, { text: '资金监控中心', fontSize: 36, fontWeight: 'bold', color: '#ffffff', textAlign: 'center' }),
             createComponent('fm-kpi-1', 'number-card', '总资产', 40, 85, 290, 85, 50, { title: '管理总资产(亿)', value: 1256.8, prefix: '¥', suffix: '' }),
             createComponent('fm-kpi-2', 'number-card', '今日流入', 350, 85, 290, 85, 50, { title: '今日流入(万)', value: 86520, prefix: '¥', suffix: '' }),
             createComponent('fm-kpi-3', 'number-card', '今日流出', 660, 85, 290, 85, 50, { title: '今日流出(万)', value: 72350, prefix: '¥', suffix: '' }),
@@ -1280,7 +1308,8 @@ const riskAlertTemplate: ScreenTemplate = {
     config: {
         name: '风控预警大屏', description: '风控预警数据大屏', width: 1920, height: 1080, backgroundColor: '#eaf2fb', theme: 'glacier',
         components: [
-            createComponent('ra-title', 'title', '主标题', 560, 12, 800, 55, 100, { text: '风控预警监控中心', fontSize: 36, fontWeight: 'bold', color: '#c0392b', textAlign: 'center' }),
+            createComponent('ra-header-bar', 'border-box', '标题栏背景', 0, 0, 1920, 72, 90, { backgroundColor: '#044B8C', borderWidth: 0, borderRadius: 0 }),
+            createComponent('ra-title', 'title', '主标题', 560, 12, 800, 55, 100, { text: '风控预警监控中心', fontSize: 36, fontWeight: 'bold', color: '#ffffff', textAlign: 'center' }),
             createComponent('ra-kpi-1', 'number-card', '待处理告警', 40, 85, 290, 85, 50, { title: '待处理告警', value: 23, prefix: '', suffix: '条', valueColor: '#c0392b' }),
             createComponent('ra-kpi-2', 'number-card', '今日新增', 350, 85, 290, 85, 50, { title: '今日新增', value: 8, prefix: '', suffix: '条' }),
             createComponent('ra-kpi-3', 'number-card', '处置率', 660, 85, 290, 85, 50, { title: '处置率', value: 94.5, prefix: '', suffix: '%' }),
@@ -1305,7 +1334,8 @@ const campusDataTemplate: ScreenTemplate = {
     config: {
         name: '校园数据大屏', description: '校园数据可视化大屏', width: 1920, height: 1080, backgroundColor: '#eaf2fb', theme: 'glacier',
         components: [
-            createComponent('cd-title', 'title', '主标题', 560, 12, 800, 55, 100, { text: '智慧校园数据中心', fontSize: 36, fontWeight: 'bold', color: '#8b5cf6', textAlign: 'center' }),
+            createComponent('cd-header-bar', 'border-box', '标题栏背景', 0, 0, 1920, 72, 90, { backgroundColor: '#044B8C', borderWidth: 0, borderRadius: 0 }),
+            createComponent('cd-title', 'title', '主标题', 560, 12, 800, 55, 100, { text: '智慧校园数据中心', fontSize: 36, fontWeight: 'bold', color: '#ffffff', textAlign: 'center' }),
             createComponent('cd-kpi-1', 'number-card', '在校生', 40, 85, 290, 85, 50, { title: '在校学生', value: 12860, prefix: '', suffix: '人' }),
             createComponent('cd-kpi-2', 'number-card', '教师', 350, 85, 290, 85, 50, { title: '教职工', value: 856, prefix: '', suffix: '人' }),
             createComponent('cd-kpi-3', 'number-card', '班级', 660, 85, 290, 85, 50, { title: '教学班级', value: 420, prefix: '', suffix: '个' }),
@@ -1325,7 +1355,8 @@ const hospitalOperationTemplate: ScreenTemplate = {
     config: {
         name: '医院运营大屏', description: '医院运营数据大屏', width: 1920, height: 1080, backgroundColor: '#eaf2fb', theme: 'glacier',
         components: [
-            createComponent('ho-title', 'title', '主标题', 560, 12, 800, 55, 100, { text: '智慧医院运营大屏', fontSize: 36, fontWeight: 'bold', color: '#10b981', textAlign: 'center' }),
+            createComponent('ho-header-bar', 'border-box', '标题栏背景', 0, 0, 1920, 72, 90, { backgroundColor: '#044B8C', borderWidth: 0, borderRadius: 0 }),
+            createComponent('ho-title', 'title', '主标题', 560, 12, 800, 55, 100, { text: '智慧医院运营大屏', fontSize: 36, fontWeight: 'bold', color: '#ffffff', textAlign: 'center' }),
             createComponent('ho-kpi-1', 'number-card', '门诊量', 40, 85, 290, 85, 50, { title: '今日门诊量', value: 3256, prefix: '', suffix: '人次' }),
             createComponent('ho-kpi-2', 'number-card', '住院', 350, 85, 290, 85, 50, { title: '在院患者', value: 1286, prefix: '', suffix: '人' }),
             createComponent('ho-kpi-3', 'number-card', '手术', 660, 85, 290, 85, 50, { title: '今日手术', value: 86, prefix: '', suffix: '台' }),
@@ -1350,7 +1381,8 @@ const opsKpiTemplate: ScreenTemplate = {
     config: {
         name: '运营指标中心', description: '核心运营指标看板', width: 1920, height: 1080, backgroundColor: '#eaf2fb', theme: 'glacier',
         components: [
-            createComponent('ok-title', 'title', '主标题', 560, 12, 800, 55, 100, { text: '运营指标中心', fontSize: 36, fontWeight: 'bold', color: '#2980b9', textAlign: 'center' }),
+            createComponent('ok-header-bar', 'border-box', '标题栏背景', 0, 0, 1920, 72, 90, { backgroundColor: '#044B8C', borderWidth: 0, borderRadius: 0 }),
+            createComponent('ok-title', 'title', '主标题', 560, 12, 800, 55, 100, { text: '运营指标中心', fontSize: 36, fontWeight: 'bold', color: '#ffffff', textAlign: 'center' }),
             createComponent('ok-kpi-1', 'number-card', 'DAU', 40, 85, 280, 90, 50, { title: '日活用户(DAU)', value: 128560, prefix: '', suffix: '' }),
             createComponent('ok-kpi-2', 'number-card', 'MAU', 340, 85, 280, 90, 50, { title: '月活用户(MAU)', value: 2856000, prefix: '', suffix: '' }),
             createComponent('ok-kpi-3', 'number-card', '留存率', 640, 85, 280, 90, 50, { title: '次日留存率', value: 42.5, prefix: '', suffix: '%' }),
