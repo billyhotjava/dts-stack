@@ -6,16 +6,16 @@ import type { GpmcScreenId } from '../gpmc/GpmcApp';
 
 const SCREEN_WIDTH = 1920;
 const SCREEN_HEIGHT = 1080;
-const BG = '#eef5fb';
+const BG = '#eaf2fb';
 const PANEL_BG = 'rgba(255, 255, 255, 0.96)';
 const PANEL_BORDER = 'rgba(148, 163, 184, 0.24)';
 const TITLE_COLOR = '#16324f';
 const SUBTITLE_COLOR = '#5b7088';
 const BODY_COLOR = '#35526b';
 const ACCENT = '#3b82f6';
-const SUCCESS = '#16a34a';
-const WARNING = '#f59e0b';
-const DANGER = '#ef4444';
+const SUCCESS = '#1e8449';
+const WARNING = '#d4850a';
+const DANGER = '#c0392b';
 const INFO = '#38bdf8';
 const KPI_BG = '#ffffff';
 const INPUT_BG = 'rgba(255, 255, 255, 0.98)';
@@ -25,11 +25,11 @@ const TABLE_BODY_BG = 'rgba(255, 255, 255, 0.98)';
 const TABLE_EVEN_ROW_BG = 'rgba(241, 245, 249, 0.98)';
 const ANALYTICS_BASENAME = '/analytics';
 const SCREEN_REF_PREFIX = 'screen-ref:';
-const STRATEGIC_BG = '#F4F7FB';
+const STRATEGIC_BG = '#eaf2fb';
 const STRATEGIC_PANEL_BG = 'rgba(255, 255, 255, 0.96)';
 const STRATEGIC_PANEL_BORDER = 'rgba(148, 163, 184, 0.24)';
-const STRATEGIC_TEXT = '#0f172a';
-const STRATEGIC_MUTED = '#64748b';
+const STRATEGIC_TEXT = '#1c2833';
+const STRATEGIC_MUTED = '#909eab';
 const STRATEGIC_NAV_BG = 'rgba(255, 255, 255, 0.96)';
 const STRATEGIC_NAV_ACTIVE_BG = 'rgba(59, 130, 246, 0.12)';
 
@@ -198,7 +198,7 @@ function createStrategicNumberCard(
 		precision: options?.precision ?? 0,
 		titleFontSize: 17,
 		valueFontSize: 34,
-		titleColor: '#64748b',
+		titleColor: '#909eab',
 		valueColor: options?.valueColor ?? STRATEGIC_TEXT,
 		backgroundColor: '#ffffff',
 	}, actions);
@@ -218,7 +218,7 @@ function createFilterSelect(
 		variableKey,
 		options,
 		placeholder: '全部',
-		labelColor: '#64748b',
+		labelColor: '#909eab',
 		inputBackground: INPUT_BG,
 		inputBorderColor: INPUT_BORDER,
 		inputTextColor: TITLE_COLOR,
@@ -237,7 +237,7 @@ function createFilterInput(
 		label,
 		variableKey,
 		placeholder: '输入关键词',
-		labelColor: '#64748b',
+		labelColor: '#909eab',
 		inputBackground: INPUT_BG,
 		inputBorderColor: INPUT_BORDER,
 		inputTextColor: TITLE_COLOR,
@@ -249,7 +249,7 @@ function createDateRange(id: string, x: number, y: number, width: number): Scree
 		label: '统计周期',
 		startKey: 'dateFrom',
 		endKey: 'dateTo',
-		labelColor: '#64748b',
+		labelColor: '#909eab',
 		inputBackground: INPUT_BG,
 		inputBorderColor: INPUT_BORDER,
 		inputTextColor: TITLE_COLOR,
@@ -439,12 +439,12 @@ function createStrategicTable(
 		data,
 		fontSize: 16,
 		headerAlign: 'center',
-		headerColor: '#0f172a',
-		headerBackground: '#dbeafe',
-		bodyColor: '#334155',
+		headerColor: '#1c2833',
+		headerBackground: '#dce6f0',
+		bodyColor: '#566573',
 		bodyBackground: '#ffffff',
 		oddRowBackground: '#ffffff',
-		evenRowBackground: '#f8fafc',
+		evenRowBackground: '#f5f9fd',
 		borderColor: STRATEGIC_PANEL_BORDER,
 		enableSort: true,
 		enablePagination: true,
@@ -611,10 +611,10 @@ const strategicOverviewTemplate: ScreenTemplate = {
 			...createAssistTrigger('gpmc-overview-assist-guide', '导览', 1818, 40, SUCCESS, getGpmcAssistContent('overview', 'strategic').guide!.title, flattenAssistCardBody(getGpmcAssistContent('overview', 'strategic').guide!)),
 			createStrategicNumberCard('gpmc-overview-kpi-total', '项目总数', 376, 136, 184, 128, { valueColor: STRATEGIC_TEXT }, [jumpSelfAction(buildScreenReference(gpmcScreenNames.execution, '/gpmc/execution'))]),
 			createStrategicNumberCard('gpmc-overview-kpi-active', '进行中项目', 572, 136, 184, 74, { valueColor: STRATEGIC_TEXT }, [jumpSelfAction(buildScreenReference(gpmcScreenNames.execution, '/gpmc/execution'))]),
-			createStrategicNumberCard('gpmc-overview-kpi-delay', '延期项目', 768, 136, 184, 11, { valueColor: '#ef4444' }, [jumpSelfAction(buildScreenReference(gpmcScreenNames.execution, '/gpmc/execution'))]),
+			createStrategicNumberCard('gpmc-overview-kpi-delay', '延期项目', 768, 136, 184, 11, { valueColor: '#c0392b' }, [jumpSelfAction(buildScreenReference(gpmcScreenNames.execution, '/gpmc/execution'))]),
 			createStrategicNumberCard('gpmc-overview-kpi-budget', '年度预算总额', 964, 136, 184, 36.8, { suffix: ' 亿元', precision: 1, valueColor: STRATEGIC_TEXT }, [jumpSelfAction(buildScreenReference(gpmcScreenNames.cost, '/gpmc/cost'))]),
-			createStrategicNumberCard('gpmc-overview-kpi-progress', '平均进度达成率', 1160, 136, 184, 78, { suffix: '%', precision: 0, valueColor: '#16a34a' }, [jumpSelfAction(buildScreenReference(gpmcScreenNames.execution, '/gpmc/execution'))]),
-			createStrategicNumberCard('gpmc-overview-kpi-risk', '高风险项目占比', 1356, 136, 184, 9.4, { suffix: '%', precision: 1, valueColor: '#ef4444' }, [jumpSelfAction(buildScreenReference(gpmcScreenNames.risk, '/gpmc/risk'))]),
+			createStrategicNumberCard('gpmc-overview-kpi-progress', '平均进度达成率', 1160, 136, 184, 78, { suffix: '%', precision: 0, valueColor: '#1e8449' }, [jumpSelfAction(buildScreenReference(gpmcScreenNames.execution, '/gpmc/execution'))]),
+			createStrategicNumberCard('gpmc-overview-kpi-risk', '高风险项目占比', 1356, 136, 184, 9.4, { suffix: '%', precision: 1, valueColor: '#c0392b' }, [jumpSelfAction(buildScreenReference(gpmcScreenNames.risk, '/gpmc/risk'))]),
 			createBarChart(
 				'gpmc-overview-weekly-chart',
 				'周度完成趋势',
@@ -684,11 +684,11 @@ const strategicOverviewTemplate: ScreenTemplate = {
 				min: 0,
 				max: 100,
 			}),
-			createStrategicNumberCard('gpmc-overview-gauge-progress', '进度', 418, 598, 96, 78, { suffix: '%', valueColor: '#2563eb' }),
-			createStrategicNumberCard('gpmc-overview-gauge-quality', '质量', 528, 598, 96, 76, { suffix: '%', valueColor: '#16a34a' }),
-			createStrategicNumberCard('gpmc-overview-gauge-cost', '成本', 638, 598, 96, 93, { suffix: '%', valueColor: '#d97706' }),
-			createStrategicNumberCard('gpmc-overview-gauge-risk', '风险', 748, 598, 96, 62, { suffix: '%', valueColor: '#ef4444' }),
-			createStrategicNumberCard('gpmc-overview-gauge-resource', '资源', 858, 598, 96, 87, { suffix: '%', valueColor: '#509EE3' }),
+			createStrategicNumberCard('gpmc-overview-gauge-progress', '进度', 418, 598, 96, 78, { suffix: '%', valueColor: '#1a5276' }),
+			createStrategicNumberCard('gpmc-overview-gauge-quality', '质量', 528, 598, 96, 76, { suffix: '%', valueColor: '#1e8449' }),
+			createStrategicNumberCard('gpmc-overview-gauge-cost', '成本', 638, 598, 96, 93, { suffix: '%', valueColor: '#d4850a' }),
+			createStrategicNumberCard('gpmc-overview-gauge-risk', '风险', 748, 598, 96, 62, { suffix: '%', valueColor: '#c0392b' }),
+			createStrategicNumberCard('gpmc-overview-gauge-resource', '资源', 858, 598, 96, 87, { suffix: '%', valueColor: '#2980b9' }),
 			createLineChart(
 				'gpmc-overview-quality-trend',
 				'质量闭环趋势',
@@ -832,17 +832,17 @@ const executionBoardTemplate: ScreenTemplate = {
 			createStrategicPanel('gpmc-execution-right-bottom', 954, 528, 930, 240),
 			createStrategicPanel('gpmc-execution-bottom', 36, 786, 1848, 220),
 			...createDarkHeader('项目执行监控', 'execution'),
-			createStrategicNumberCard('gpmc-execution-kpi-completion', '整体完成率', 58, 126, 260, 72.4, { suffix: '%', precision: 1, valueColor: '#2563eb' }),
-			createStrategicNumberCard('gpmc-execution-kpi-milestone', '里程碑达成率', 332, 126, 260, 68, { suffix: '%', valueColor: '#d97706' }),
-			createStrategicNumberCard('gpmc-execution-kpi-overdue', '延期任务数', 606, 126, 260, 37, { valueColor: '#ef4444' }),
-			createStrategicNumberCard('gpmc-execution-kpi-max-delay', '最大延期天数', 880, 126, 260, 28, { suffix: ' 天', valueColor: '#ef4444' }, [jumpAction(buildGpmcTemplateJump('/gpmc/drill/execution'))]),
+			createStrategicNumberCard('gpmc-execution-kpi-completion', '整体完成率', 58, 126, 260, 72.4, { suffix: '%', precision: 1, valueColor: '#1a5276' }),
+			createStrategicNumberCard('gpmc-execution-kpi-milestone', '里程碑达成率', 332, 126, 260, 68, { suffix: '%', valueColor: '#d4850a' }),
+			createStrategicNumberCard('gpmc-execution-kpi-overdue', '延期任务数', 606, 126, 260, 37, { valueColor: '#c0392b' }),
+			createStrategicNumberCard('gpmc-execution-kpi-max-delay', '最大延期天数', 880, 126, 260, 28, { suffix: ' 天', valueColor: '#c0392b' }, [jumpAction(buildGpmcTemplateJump('/gpmc/drill/execution'))]),
 			createStrategicNumberCard('gpmc-execution-kpi-due-soon', '近期到期', 1154, 126, 260, 15, { valueColor: STRATEGIC_TEXT }),
-			createStrategicNumberCard('gpmc-execution-kpi-blocked', '阻塞链路', 1428, 126, 260, 6, { valueColor: '#d97706' }),
-			createStrategicNumberCard('gpmc-execution-kpi-owner', '责任人聚焦', 1702, 126, 166, 12, { valueColor: '#509EE3' }),
+			createStrategicNumberCard('gpmc-execution-kpi-blocked', '阻塞链路', 1428, 126, 260, 6, { valueColor: '#d4850a' }),
+			createStrategicNumberCard('gpmc-execution-kpi-owner', '责任人聚焦', 1702, 126, 166, 12, { valueColor: '#2980b9' }),
 			createComponent('gpmc-execution-gantt', 'gantt-chart', '任务执行甘特', 56, 288, 860, 460, 15, {
 				title: '任务执行甘特',
 				renderMode: 'board',
-				sideTextColor: '#0f172a',
+				sideTextColor: '#1c2833',
 				tasks: [
 					{ name: '需求分析', type: '一般任务', planDate: '2026-01-06', actualDate: '2026-02-15', owner: '张伟', riskLevel: '低', majorProjectName: '制造协同平台', subprojectName: '平台基础', status: '已完成', isCompleted: true, isOverdue: false },
 					{ name: '系统设计', type: '一般任务', planDate: '2026-02-10', actualDate: '2026-03-20', owner: '李娜', riskLevel: '低', majorProjectName: '制造协同平台', subprojectName: '平台基础', status: '已完成', isCompleted: true, isOverdue: false },
@@ -936,12 +936,12 @@ const qualityBoardTemplate: ScreenTemplate = {
 			createStrategicPanel('gpmc-quality-right', 914, 268, 970, 360),
 			createStrategicPanel('gpmc-quality-bottom', 36, 646, 1848, 360),
 			...createDarkHeader('质量信息与跟进措施', 'quality'),
-			createStrategicNumberCard('gpmc-quality-kpi-new', '新增质量问题', 58, 126, 260, 23, { valueColor: '#ef4444' }),
-			createStrategicNumberCard('gpmc-quality-kpi-existing', '现存质量问题', 332, 126, 260, 47, { valueColor: '#d97706' }),
-			createStrategicNumberCard('gpmc-quality-kpi-close', '归零完成率', 606, 126, 260, 68.3, { suffix: '%', precision: 1, valueColor: '#16a34a' }),
-			createStrategicNumberCard('gpmc-quality-kpi-no-plan', '未提交归零计划', 880, 126, 260, 8, { valueColor: '#ef4444' }, [jumpAction(buildGpmcTemplateJump('/gpmc/drill/quality'))]),
-			createStrategicNumberCard('gpmc-quality-kpi-high', '高优未关', 1154, 126, 260, 37, { valueColor: '#ef4444' }),
-			createStrategicNumberCard('gpmc-quality-kpi-measure', '措施覆盖率', 1428, 126, 260, 76, { suffix: '%', valueColor: '#509EE3' }),
+			createStrategicNumberCard('gpmc-quality-kpi-new', '新增质量问题', 58, 126, 260, 23, { valueColor: '#c0392b' }),
+			createStrategicNumberCard('gpmc-quality-kpi-existing', '现存质量问题', 332, 126, 260, 47, { valueColor: '#d4850a' }),
+			createStrategicNumberCard('gpmc-quality-kpi-close', '归零完成率', 606, 126, 260, 68.3, { suffix: '%', precision: 1, valueColor: '#1e8449' }),
+			createStrategicNumberCard('gpmc-quality-kpi-no-plan', '未提交归零计划', 880, 126, 260, 8, { valueColor: '#c0392b' }, [jumpAction(buildGpmcTemplateJump('/gpmc/drill/quality'))]),
+			createStrategicNumberCard('gpmc-quality-kpi-high', '高优未关', 1154, 126, 260, 37, { valueColor: '#c0392b' }),
+			createStrategicNumberCard('gpmc-quality-kpi-measure', '措施覆盖率', 1428, 126, 260, 76, { suffix: '%', valueColor: '#2980b9' }),
 			createStrategicNumberCard('gpmc-quality-kpi-projects', '问题项目数', 1702, 126, 166, 15, { valueColor: STRATEGIC_TEXT }),
 			createPieChart(
 				'gpmc-quality-category',
@@ -1036,12 +1036,12 @@ const techStateBoardTemplate: ScreenTemplate = {
 			createStrategicPanel('gpmc-tech-right', 914, 268, 970, 360),
 			createStrategicPanel('gpmc-tech-bottom', 36, 646, 1848, 360),
 			...createDarkHeader('技术状态与跟进', 'tech-state'),
-			createStrategicNumberCard('gpmc-tech-kpi-change', '技术状态变更数', 58, 126, 260, 18, { valueColor: '#d97706' }),
-			createStrategicNumberCard('gpmc-tech-kpi-sign', '文件签署完成率', 332, 126, 260, 82, { suffix: '%', valueColor: '#16a34a' }),
-			createStrategicNumberCard('gpmc-tech-kpi-pending', '未闭环项', 606, 126, 260, 7, { valueColor: '#ef4444' }),
-			createStrategicNumberCard('gpmc-tech-kpi-cover', '措施覆盖率', 880, 126, 260, 76, { suffix: '%', valueColor: '#509EE3' }),
-			createStrategicNumberCard('gpmc-tech-kpi-level1', 'Ⅰ类更改', 1154, 126, 260, 4, { valueColor: '#ef4444' }),
-			createStrategicNumberCard('gpmc-tech-kpi-unsigned', '未签署项', 1428, 126, 260, 2, { valueColor: '#d97706' }),
+			createStrategicNumberCard('gpmc-tech-kpi-change', '技术状态变更数', 58, 126, 260, 18, { valueColor: '#d4850a' }),
+			createStrategicNumberCard('gpmc-tech-kpi-sign', '文件签署完成率', 332, 126, 260, 82, { suffix: '%', valueColor: '#1e8449' }),
+			createStrategicNumberCard('gpmc-tech-kpi-pending', '未闭环项', 606, 126, 260, 7, { valueColor: '#c0392b' }),
+			createStrategicNumberCard('gpmc-tech-kpi-cover', '措施覆盖率', 880, 126, 260, 76, { suffix: '%', valueColor: '#2980b9' }),
+			createStrategicNumberCard('gpmc-tech-kpi-level1', 'Ⅰ类更改', 1154, 126, 260, 4, { valueColor: '#c0392b' }),
+			createStrategicNumberCard('gpmc-tech-kpi-unsigned', '未签署项', 1428, 126, 260, 2, { valueColor: '#d4850a' }),
 			createStrategicNumberCard('gpmc-tech-kpi-projects', '涉及项目', 1702, 126, 166, 9, { valueColor: STRATEGIC_TEXT }),
 			createStrategicTable(
 				'gpmc-tech-change-list',
@@ -1123,12 +1123,12 @@ const costBoardTemplate: ScreenTemplate = {
 			createStrategicPanel('gpmc-cost-bottom', 36, 646, 1848, 360),
 			...createDarkHeader('成本与预算控制', 'cost'),
 			createStrategicNumberCard('gpmc-cost-kpi-budget', '年度预算总额', 58, 126, 260, 36.8, { suffix: ' 亿', precision: 1, valueColor: STRATEGIC_TEXT }),
-			createStrategicNumberCard('gpmc-cost-kpi-actual', '累计执行额', 332, 126, 260, 26.1, { suffix: ' 亿', precision: 1, valueColor: '#2563eb' }),
-			createStrategicNumberCard('gpmc-cost-kpi-rate', '预算执行率', 606, 126, 260, 70.9, { suffix: '%', precision: 1, valueColor: '#16a34a' }),
-			createStrategicNumberCard('gpmc-cost-kpi-gap', '预算偏差', 880, 126, 260, 0.72, { suffix: ' 亿', precision: 2, valueColor: '#ef4444' }),
-			createStrategicNumberCard('gpmc-cost-kpi-eff', '预算效率', 1154, 126, 260, 0.93, { precision: 2, valueColor: '#509EE3' }),
-			createStrategicNumberCard('gpmc-cost-kpi-burn', '燃尽率', 1428, 126, 260, 71, { suffix: '%', valueColor: '#d97706' }),
-			createStrategicNumberCard('gpmc-cost-kpi-projects', '偏差项目数', 1702, 126, 166, 8, { valueColor: '#ef4444' }),
+			createStrategicNumberCard('gpmc-cost-kpi-actual', '累计执行额', 332, 126, 260, 26.1, { suffix: ' 亿', precision: 1, valueColor: '#1a5276' }),
+			createStrategicNumberCard('gpmc-cost-kpi-rate', '预算执行率', 606, 126, 260, 70.9, { suffix: '%', precision: 1, valueColor: '#1e8449' }),
+			createStrategicNumberCard('gpmc-cost-kpi-gap', '预算偏差', 880, 126, 260, 0.72, { suffix: ' 亿', precision: 2, valueColor: '#c0392b' }),
+			createStrategicNumberCard('gpmc-cost-kpi-eff', '预算效率', 1154, 126, 260, 0.93, { precision: 2, valueColor: '#2980b9' }),
+			createStrategicNumberCard('gpmc-cost-kpi-burn', '燃尽率', 1428, 126, 260, 71, { suffix: '%', valueColor: '#d4850a' }),
+			createStrategicNumberCard('gpmc-cost-kpi-projects', '偏差项目数', 1702, 126, 166, 8, { valueColor: '#c0392b' }),
 			withConfig(
 				createLineChart(
 				'gpmc-cost-monthly',
@@ -1146,7 +1146,7 @@ const costBoardTemplate: ScreenTemplate = {
 				[jumpAction(buildGpmcTemplateJump('/gpmc/drill/cost'))],
 				),
 				{
-					seriesColors: ['#509EE3', '#36B37E', '#F59E0B'],
+					seriesColors: ['#2980b9', '#1e8449', '#d4850a'],
 				},
 			),
 			createBarChart(
@@ -1217,12 +1217,12 @@ const riskBoardTemplate: ScreenTemplate = {
 			createStrategicPanel('gpmc-risk-bottom', 36, 646, 1848, 360),
 			...createDarkHeader('风险与预警中心', 'risk'),
 			createStrategicNumberCard('gpmc-risk-kpi-total', '风险总数', 58, 126, 260, 89, { valueColor: STRATEGIC_TEXT }),
-			createStrategicNumberCard('gpmc-risk-kpi-high', '高风险', 332, 126, 260, 14, { valueColor: '#ef4444' }),
-			createStrategicNumberCard('gpmc-risk-kpi-mid', '中风险', 606, 126, 260, 31, { valueColor: '#d97706' }),
-			createStrategicNumberCard('gpmc-risk-kpi-close', '风险闭环率', 880, 126, 260, 62.4, { suffix: '%', precision: 1, valueColor: '#16a34a' }),
-			createStrategicNumberCard('gpmc-risk-kpi-freq', '变更频率', 1154, 126, 260, 3.2, { suffix: ' 次/周', precision: 1, valueColor: '#509EE3' }),
-			createStrategicNumberCard('gpmc-risk-kpi-days', '平均闭环天数', 1428, 126, 260, 18.5, { suffix: ' 天', precision: 1, valueColor: '#d97706' }),
-			createStrategicNumberCard('gpmc-risk-kpi-alert', '预警项目数', 1702, 126, 166, 12, { valueColor: '#ef4444' }),
+			createStrategicNumberCard('gpmc-risk-kpi-high', '高风险', 332, 126, 260, 14, { valueColor: '#c0392b' }),
+			createStrategicNumberCard('gpmc-risk-kpi-mid', '中风险', 606, 126, 260, 31, { valueColor: '#d4850a' }),
+			createStrategicNumberCard('gpmc-risk-kpi-close', '风险闭环率', 880, 126, 260, 62.4, { suffix: '%', precision: 1, valueColor: '#1e8449' }),
+			createStrategicNumberCard('gpmc-risk-kpi-freq', '变更频率', 1154, 126, 260, 3.2, { suffix: ' 次/周', precision: 1, valueColor: '#2980b9' }),
+			createStrategicNumberCard('gpmc-risk-kpi-days', '平均闭环天数', 1428, 126, 260, 18.5, { suffix: ' 天', precision: 1, valueColor: '#d4850a' }),
+			createStrategicNumberCard('gpmc-risk-kpi-alert', '预警项目数', 1702, 126, 166, 12, { valueColor: '#c0392b' }),
 			createBarChart(
 				'gpmc-risk-matrix',
 				'风险矩阵（概率 × 影响）',
