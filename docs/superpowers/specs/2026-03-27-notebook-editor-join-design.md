@@ -203,7 +203,7 @@ Existing aggregation + group-by logic with updated field reference model:
 Same as existing sort/limit logic. Changes:
 - Sort field dropdown uses merged field list (or aggregation results when summarized)
 
-## 6. MBQL Output Format
+## 7. MBQL Output Format
 
 ### Example: Query with JOIN
 
@@ -260,7 +260,7 @@ Map to backend `MbqlToSqlService` expected values:
 }
 ```
 
-## 7. Component Architecture
+## 8. Component Architecture
 
 ### File Structure
 
@@ -311,9 +311,9 @@ type JoinConditionOp = "=" | "!=" | ">" | ">=" | "<" | "<=";
 
 type JoinCondition = {
   id: string;
-  leftFieldId: number | null;
+  leftField: FieldRef | null;    // source table or earlier join's field
   op: JoinConditionOp;
-  rightFieldId: number | null;
+  rightFieldId: number | null;   // always current joined table's field (bare id)
 };
 
 type JoinConfig = {
@@ -440,4 +440,7 @@ notebook.join.addCondition / notebook.join.conditionCombine
 notebook.source.searchPlaceholder / notebook.source.tables
 notebook.source.savedQuestions / notebook.source.models
 notebook.source.recommended / notebook.source.otherTables
+
+notebook.columns.title / notebook.columns.disabled
+notebook.columns.selected / notebook.columns.selectAll
 ```
