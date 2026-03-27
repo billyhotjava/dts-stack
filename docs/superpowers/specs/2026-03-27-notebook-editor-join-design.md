@@ -24,23 +24,30 @@ Refactor the flat-layout `QueryBuilder.tsx` into a **Notebook Editor** with coll
 
 ## 2. Notebook Step Flow
 
-Five collapsible step cards, rendered top to bottom:
+Six collapsible step cards, rendered top to bottom:
 
 | Step | Title | Required | Description |
 |------|-------|----------|-------------|
 | 1 | Select Data | Yes | Pick source table, saved question, or model |
 | 2 | Join | No | Configure up to 3 table joins |
-| 3 | Filter | No | Add WHERE conditions |
-| 4 | Summarize | No | Aggregations + GROUP BY |
-| 5 | Sort & Limit | No | ORDER BY + LIMIT |
+| 3 | Pick Columns | No | Select which columns to return (disabled when summarizing) |
+| 4 | Filter | No | Add WHERE conditions |
+| 5 | Summarize | No | Aggregations + GROUP BY |
+| 6 | Sort & Limit | No | ORDER BY + LIMIT |
 
 ### Step Behavior
 
 - Each step is a collapsible card (`StepCard` component)
 - Completed steps collapse to a single summary line
 - Click summary to re-expand for editing
-- Steps 2-5 appear only after Step 1 is completed
+- Steps 2-6 appear only after Step 1 is completed
 - Data flows top-down: changes in earlier steps may invalidate later steps
+
+### Known Limitations
+
+- **Self-joins:** The same table can be joined multiple times. Aliases are disambiguated (see Section 4).
+- **Single ORDER BY:** Only one sort column supported. Multi-column sorting is deferred to a future iteration.
+- **Join targets are physical tables only:** Saved questions and models can be used as the primary data source (Step 1), but join targets (Step 2) are limited to physical tables in the same database.
 
 ## 3. Step 1: Data Source Selector
 
@@ -87,6 +94,30 @@ Each join is rendered as a card within Step 2 containing:
 - All other tables available below under "Other Tables"
 - When a recommended table is selected, join condition auto-fills from FK metadata
 
+**FK API:** `GET /analytics/api/table/{tableId}/fks` — returns an array of FK relationships. Response shape:
+
+```json
+[
+  {
+    "origin_id": 45,        // FK field ID in source table
+    "origin": { "id": 45, "name": "customer_id", "table_id": 10 },
+    "destination_id": 15,   // PK field ID in target table
+    "destination": { "id": 15, "name": "id", "table_id": 5 }
+  }
+]
+```
+
+A new `analyticsApi.getTableFks(tableId)` method must be added to the frontend API client. This endpoint already exists in the backend — no backend changes needed.
+
+### Alias Generation
+
+Join aliases are generated from the table name with deduplication:
+- First join of table `orders` → alias `"orders"`
+- Second join of same table → alias `"orders_2"`
+- Third → `"orders_3"`
+
+Aliases are **immutable once assigned** to avoid invalidating downstream field references in filters, aggregations, and sort. Deleting a join removes all downstream references that use its alias.
+
 ### Join Types
 
 | Type | Default/Advanced | Label (zh) | Description |
@@ -129,9 +160,18 @@ Switching from advanced back to default keeps only the first condition (with con
 
 ### Collapsed Summary
 
-After configuration, each join collapses to: `🔗 LEFT JOIN orders ON id = customer_id`
+After configuration, each join collapses to: `LEFT JOIN orders ON id = customer_id`
 
-## 5. Steps 3-5: Filter, Summarize, Sort & Limit
+## 5. Step 3: Pick Columns
+
+When not summarizing (Step 5 has no aggregations), users can select which columns to include in the output. Uses the merged field list from all tables.
+
+- Default: first 12 fields of the source table are selected (same as existing behavior)
+- Joined table fields are unselected by default — user opts in
+- When Step 5 has aggregations, this step is disabled (greyed out with hint text) — output columns are determined by GROUP BY + aggregation results
+- MBQL output: `"fields": [["field", id, {}], ["field", id, {"join-alias": "xxx"}], ...]`
+
+## 6. Steps 4-6: Filter, Summarize, Sort & Limit
 
 ### Merged Field List
 
@@ -141,19 +181,24 @@ All steps share a unified field list built from the source table plus all config
 - Grouped by table using `<optgroup>` in dropdowns
 - Source table fields first, then joined tables in order of addition
 - Implemented as shared `FieldPicker` component
+- `FieldPicker` emits a `FieldRef` (not a bare `fieldId`) so downstream steps always know which table a field belongs to
 
-### Step 3: Filter
+### Step 4: Filter
 
-Same as existing filter logic. Changes:
-- Field dropdown uses merged field list
-- MBQL field references include `{"join-alias": "xxx"}` for joined table fields
+Existing filter logic with updated field reference model:
+- Field dropdown uses merged field list via `FieldPicker`
+- `FilterRow` is updated to use `FieldRef` instead of bare `fieldId` (see Section 8 type definitions)
+- MBQL serialization: source table fields → `["field", id, {}]`, joined fields → `["field", id, {"join-alias": "xxx"}]`
+- Filter combination remains AND-only (same as existing behavior)
 
-### Step 4: Summarize
+### Step 5: Summarize
 
-Same as existing aggregation + group-by logic. Changes:
+Existing aggregation + group-by logic with updated field reference model:
+- `AggregationRow` updated to use `FieldRef` instead of bare `fieldId`
+- `groupByFieldIds` changed to `FieldRef[]`
 - Field dropdown uses merged field list for both aggregation targets and group-by fields
 
-### Step 5: Sort & Limit
+### Step 6: Sort & Limit
 
 Same as existing sort/limit logic. Changes:
 - Sort field dropdown uses merged field list (or aggregation results when summarized)
@@ -225,9 +270,10 @@ components/query/
 ├── steps/
 │   ├── DataSourceStep.tsx    — Step 1: data source with search
 │   ├── JoinStep.tsx          — Step 2: join configuration
-│   ├── FilterStep.tsx        — Step 3: filters
-│   ├── SummarizeStep.tsx     — Step 4: aggregations + group by
-│   └── SortLimitStep.tsx     — Step 5: order by + limit
+│   ├── PickColumnsStep.tsx   — Step 3: column selection
+│   ├── FilterStep.tsx        — Step 4: filters
+│   ├── SummarizeStep.tsx     — Step 5: aggregations + group by
+│   └── SortLimitStep.tsx     — Step 6: order by + limit
 ├── shared/
 │   ├── FieldPicker.tsx       — Unified field selector with optgroup
 │   ├── TableSearchPicker.tsx — Searchable table picker (Steps 1 & 2)
@@ -239,6 +285,26 @@ components/query/
 
 ```typescript
 // notebookTypes.ts
+
+// --- Field References ---
+
+/** Identifies a field across tables. joinAlias=null means source table. */
+type FieldRef = {
+  fieldId: number;
+  joinAlias: string | null;
+};
+
+/** A field from the merged field list (source + all joins). */
+type MergedField = {
+  fieldId: number;
+  name: string;
+  displayName: string;
+  baseType?: string;
+  tableAlias: string | null;  // null = source table
+  tableName: string;
+};
+
+// --- JOIN Types ---
 
 type JoinType = "left-join" | "inner-join" | "right-join" | "full-join";
 type JoinConditionOp = "=" | "!=" | ">" | ">=" | "<" | "<=";
@@ -253,37 +319,51 @@ type JoinCondition = {
 type JoinConfig = {
   id: string;
   sourceTableId: number | null;
-  alias: string;
+  alias: string;              // generated from table name, immutable (see Section 4)
   strategy: JoinType;
   conditions: JoinCondition[];
   conditionCombine: "and" | "or";
   tableDetail?: TableDetail;
 };
 
-type MergedField = {
-  fieldId: number;
-  name: string;
-  displayName: string;
-  baseType?: string;
-  tableAlias: string | null;  // null = source table
-  tableName: string;
+// --- Filter & Aggregation (updated for multi-table) ---
+
+type FilterOp =
+  | "=" | "!=" | ">" | ">=" | "<" | "<="
+  | "between" | "in"
+  | "is-null" | "not-null"
+  | "contains" | "starts-with" | "ends-with"
+  | "is-empty" | "not-empty";
+
+type FilterRow = {
+  id: string;
+  field: FieldRef | null;     // was: fieldId: number | null
+  op: FilterOp;
+  value1: string;
+  value2: string;
 };
+
+type AggregationOp = "count" | "sum" | "avg" | "min" | "max";
+
+type AggregationRow = {
+  id: string;
+  op: AggregationOp;
+  field: FieldRef | null;     // was: fieldId: number | null
+};
+
+// --- Top-level State ---
 
 type NotebookState = {
   sourceTableId: number | null;
   sourceTableDetail?: TableDetail;
-  joins: JoinConfig[];
-  filters: FilterRow[];
-  aggregations: AggregationRow[];
-  groupByFieldIds: FieldRef[];
-  orderByKey: string;
+  joins: JoinConfig[];                // max 3
+  selectedFields: FieldRef[];         // Step 3: Pick Columns
+  filters: FilterRow[];               // Step 4: Filter
+  aggregations: AggregationRow[];     // Step 5: Summarize
+  groupByFields: FieldRef[];          // Step 5: GROUP BY
+  orderByKey: string;                 // Step 6: Sort
   orderByDir: "asc" | "desc";
-  limit: number;
-};
-
-type FieldRef = {
-  fieldId: number;
-  joinAlias: string | null;
+  limit: number;                      // Step 6: Limit
 };
 ```
 
@@ -295,11 +375,12 @@ NotebookEditor (state owner)
   ├─ Computes currentDatasetQuery: MBQL from full state
   ├─ Calls onDatasetQueryChange(mbql) on state changes
   │
-  ├─ DataSourceStep → sets sourceTableId, loads sourceTableDetail
-  ├─ JoinStep → modifies joins[], loads join tableDetails
-  ├─ FilterStep → modifies filters[] (uses allFields)
-  ├─ SummarizeStep → modifies aggregations[], groupByFieldIds (uses allFields)
-  └─ SortLimitStep → modifies orderByKey, orderByDir, limit (uses allFields)
+  ├─ DataSourceStep    → sets sourceTableId, loads sourceTableDetail
+  ├─ JoinStep          → modifies joins[], loads join tableDetails
+  ├─ PickColumnsStep   → modifies selectedFields[] (uses allFields, disabled when summarizing)
+  ├─ FilterStep        → modifies filters[] (uses allFields, emits FieldRef per filter)
+  ├─ SummarizeStep     → modifies aggregations[], groupByFields[] (uses allFields, emits FieldRef)
+  └─ SortLimitStep     → modifies orderByKey, orderByDir, limit (uses allFields)
 ```
 
 ### Integration Point
@@ -315,13 +396,15 @@ NotebookEditor (state owner)
 
 Same props interface as existing `QueryBuilder`. Old component preserved for cleanup later.
 
-## 8. Backward Compatibility
+## 9. Backward Compatibility
 
 - Existing saved queries (MBQL without `joins`) load correctly — `joins` defaults to `[]`
 - `NotebookEditor.applyInitialDatasetQuery()` parses the `joins` array if present
+- Existing `fields` arrays in MBQL are parsed into `selectedFields: FieldRef[]` (with `joinAlias: null`)
 - Field references without `join-alias` metadata continue to work as source table fields
+- Old `FilterRow` (bare `fieldId`) is migrated on parse: `fieldId` → `{ fieldId, joinAlias: null }`
 
-## 9. Interaction Details
+## 10. Interaction Details
 
 | Scenario | Behavior |
 |----------|----------|
@@ -333,7 +416,7 @@ Same props interface as existing `QueryBuilder`. Old component preserved for cle
 | Advanced conditions expanded | Multi-condition editor appears, first condition preserved |
 | Advanced conditions collapsed | Keep only first condition (confirmation if >1 exists) |
 
-## 10. Error Handling
+## 11. Error Handling
 
 | Error | Handling |
 |-------|----------|
@@ -341,7 +424,7 @@ Same props interface as existing `QueryBuilder`. Old component preserved for cle
 | Incomplete join condition | Join excluded from MBQL output, card shows warning border |
 | Join table selected but no condition | Warning hint: "Please select join condition" |
 
-## 11. Internationalization
+## 12. Internationalization
 
 All user-facing strings support zh-CN and en locales. New i18n keys:
 
