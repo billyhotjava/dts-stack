@@ -13,7 +13,7 @@ import { ChartRenderer, type VisualizationType } from "../components/charts";
 import { EmptyState } from "../components/EmptyState";
 import { ErrorNotice } from "../components/ErrorNotice";
 import { PageContainer, PageHeader, Breadcrumb } from "../components/PageContainer/PageContainer";
-import { QueryBuilder } from "../components/query/QueryBuilder";
+import { NotebookEditor } from "../components/query/NotebookEditor";
 import { Card, CardHeader, CardBody, CardFooter } from "../ui/Card/Card";
 import { Button } from "../ui/Button/Button";
 import { Input, TextArea } from "../ui/Input/Input";
@@ -399,7 +399,7 @@ export default function CardEditorPage() {
 				<CardHeader title={mode === "builder" ? t(locale, "questions.mode.builder") : t(locale, "questions.mode.sql")} />
 				<CardBody>
 					{mode === "builder" ? (
-						<QueryBuilder
+						<NotebookEditor
 							databaseId={databaseId}
 							initialDatasetQuery={builderInitialDatasetQuery}
 							onDatasetQueryChange={(dq) => setBuilderDatasetQuery(dq)}
