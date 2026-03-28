@@ -47,8 +47,21 @@ export function LoginForm({ className, ...props }: React.ComponentPropsWithoutRe
 
 	const selectedCert = pkiCerts.find((item) => item.id === selectedCertId);
 
+	// URL ?mode=admin 强制显示密码登录（opadmin 无 PKI 证书的紧急通道）
+	const isAdminMode: boolean = (() => {
+		try {
+			const params = new URLSearchParams(location.search || "");
+			return params.get("mode") === "admin";
+		} catch {
+			return false;
+		}
+	})();
+
 	// 简单开关：默认隐藏账号/密码，仅保留证书登录按钮（仍保留密码登录后端能力）
 	const hidePasswordForm: boolean = (() => {
+		// 0) ?mode=admin 强制显示密码表单
+		if (isAdminMode) return false;
+
 		// 1) 运行时注入配置（容器 entrypoint 生成的 /runtime-config.js）优先
 		try {
 			const rc: any = (typeof window !== "undefined" && (window as any).__RUNTIME_CONFIG__) || {};
@@ -177,6 +190,12 @@ export function LoginForm({ className, ...props }: React.ComponentPropsWithoutRe
 		const normalizedUsername = trimmedUsername.toLowerCase();
 		if (["sysadmin", "authadmin", "auditadmin"].includes(normalizedUsername)) {
 			toast.error("系统管理角色用户不能登录业务平台", { position: "top-center" });
+			return;
+		}
+
+		// ?mode=admin 通道仅允许 opadmin 账号
+		if (isAdminMode && normalizedUsername !== "opadmin") {
+			toast.error("此登录通道仅供运维管理员使用，请使用证书登录", { position: "top-center" });
 			return;
 		}
 
@@ -413,8 +432,9 @@ export function LoginForm({ className, ...props }: React.ComponentPropsWithoutRe
 				<form onSubmit={form.handleSubmit(handleFinish)} className="space-y-4">
 					<div className="flex flex-col items-center gap-1 text-center">
 						<h1 className="text-2xl font-bold">{bilingual("sys.login.signInFormTitle")}</h1>
-						<p className="text-sm text-muted-foreground">(业务端)</p>
-						{/* <p className="text-balance text-sm text-muted-foreground">{bilingual("sys.login.signInFormDescription")}</p> */}
+						<p className="text-sm text-muted-foreground">
+							{isAdminMode ? "(运维管理员登录)" : "(业务端)"}
+						</p>
 					</div>
 
 					{!hidePasswordForm && (
@@ -493,10 +513,12 @@ export function LoginForm({ className, ...props }: React.ComponentPropsWithoutRe
 							{bilingual("sys.login.loginButton")}
 						</Button>
 					)}
+					{!isAdminMode && (
 					<Button type="button" variant="outline" className="w-full" onClick={handlePkiLogin} disabled={loading}>
 						{loading && <Loader2 className="animate-spin mr-2" />}
 						证书登录
 					</Button>
+				)}
 				</form>
 			</Form>
 			<Dialog open={pkiDialogOpen} onOpenChange={handlePkiDialogOpenChange}>
