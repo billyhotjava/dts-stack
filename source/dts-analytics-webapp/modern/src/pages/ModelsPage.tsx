@@ -2,10 +2,9 @@ import { Link } from "react-router";
 import { useEffect, useMemo, useState } from "react";
 import { analyticsApi, type CardListItem } from "../api/analyticsApi";
 import { PageContainer, PageHeader, EmptyState } from "../components/PageContainer/PageContainer";
-import { Card } from "../ui/Card/Card";
+import { Card, Tag } from "antd";
 import { Button } from "../ui/Button/Button";
 import { SearchInput } from "../ui/Input/Input";
-import { Badge } from "../ui/Badge/Badge";
 import { CardSkeleton } from "../ui/Loading/Skeleton";
 import { CardGrid } from "../components/DashboardGrid/DashboardGrid";
 import { ErrorNotice } from "../components/ErrorNotice";
@@ -100,7 +99,7 @@ export default function ModelsPage() {
 				title={t(locale, "models.title")}
 				actions={
 					<Link to="/questions/new">
-						<Button variant="primary" icon={<PlusIcon />}>
+						<Button color="blue" icon={<PlusIcon />}>
 							{t(locale, "questions.new")}
 						</Button>
 					</Link>
@@ -155,7 +154,7 @@ export default function ModelsPage() {
 					description={t(locale, "models.emptyDesc")}
 					action={
 						<Link to="/questions/new">
-							<Button variant="primary" icon={<PlusIcon />}>
+							<Button color="blue" icon={<PlusIcon />}>
 								{t(locale, "questions.new")}
 							</Button>
 						</Link>
@@ -181,7 +180,7 @@ export default function ModelsPage() {
 				<CardGrid columns={3} gap="md">
 					{filteredModels.map((c) => (
 						<Link key={c.id} to={`/questions/${c.id}`} style={{ textDecoration: "none" }}>
-							<Card variant="hoverable" padding="md">
+							<Card hoverable>
 								<div className="model-card">
 									<div className="model-card__icon">
 										<ModelCardIcon />
@@ -192,9 +191,9 @@ export default function ModelsPage() {
 											<p className="model-card__desc">{c.description}</p>
 										)}
 										{c.display && (
-											<Badge size="sm" variant="default">
+											<Tag>
 												{c.display}
-											</Badge>
+											</Tag>
 										)}
 									</div>
 								</div>
@@ -206,7 +205,7 @@ export default function ModelsPage() {
 
 			{/* List View */}
 			{state.state === "loaded" && filteredModels.length > 0 && viewMode === "list" && (
-				<Card padding="none">
+				<Card styles={{ body: { padding: 0 } }}>
 					<table className="table">
 						<thead>
 							<tr>
@@ -228,9 +227,9 @@ export default function ModelsPage() {
 									</td>
 									<td>
 										{c.display && (
-											<Badge size="sm" variant="default">
+											<Tag>
 												{c.display}
-											</Badge>
+											</Tag>
 										)}
 									</td>
 									<td className="muted">{c.id}</td>

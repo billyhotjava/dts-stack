@@ -4,8 +4,7 @@ import { analyticsApi, type FieldDetail, type FieldValuesResponse } from "../api
 import { PageContainer, PageHeader, Breadcrumb } from "../components/PageContainer/PageContainer";
 import { EmptyState } from "../components/EmptyState";
 import { ErrorNotice } from "../components/ErrorNotice";
-import { Card } from "antd";
-import { Badge } from "../ui/Badge/Badge";
+import { Card, Tag } from "antd";
 import { Spinner } from "../ui/Loading/Spinner";
 import { getEffectiveLocale, t, type Locale } from "../i18n";
 import "./page.css";
@@ -106,14 +105,14 @@ export default function FieldDetailPage() {
 							<div className="field-detail-row">
 								<span className="field-detail-label">{t(locale, "field.baseType")}</span>
 								<span className="field-detail-value">
-									<Badge variant="default" size="sm">{String(fieldState.value.base_type ?? "-")}</Badge>
+									<Tag>{String(fieldState.value.base_type ?? "-")}</Tag>
 								</span>
 							</div>
 							<div className="field-detail-row">
 								<span className="field-detail-label">{t(locale, "field.semanticType")}</span>
 								<span className="field-detail-value">
 									{fieldState.value.semantic_type ? (
-										<Badge variant="info" size="sm">{String(fieldState.value.semantic_type)}</Badge>
+										<Tag color="processing">{String(fieldState.value.semantic_type)}</Tag>
 									) : "-"}
 								</span>
 							</div>
@@ -129,10 +128,10 @@ export default function FieldDetailPage() {
 				title={t(locale, "field.values")}
 				extra={
 						valuesState.state === "loaded" && (
-							<Badge variant="default">
+							<Tag>
 								{Array.isArray(valuesState.value.values) ? valuesState.value.values.length : 0}
 								{valuesState.value.has_more_values ? "+" : ""}
-							</Badge>
+							</Tag>
 						)
 					}
 			>

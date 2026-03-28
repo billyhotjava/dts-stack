@@ -3,9 +3,8 @@ import { analyticsApi, type MetricLensCompare, type MetricLensDetail, type Metri
 import { ErrorNotice } from "../components/ErrorNotice";
 import { PageContainer, PageHeader } from "../components/PageContainer/PageContainer";
 import { getEffectiveLocale, t, type Locale } from "../i18n";
-import { Badge } from "../ui/Badge/Badge";
 import { Button } from "../ui/Button/Button";
-import { Card } from "antd";
+import { Card, Tag } from "antd";
 import { NativeSelect } from "../ui/Input/Select";
 import { Spinner } from "../ui/Loading/Spinner";
 import "./page.css";
@@ -108,7 +107,7 @@ export default function MetricLensPage() {
 			<PageHeader
 				title={t(locale, "metricLens.title")}
 				actions={
-					<Button variant="secondary" size="sm" onClick={() => void Promise.all([loadList(), loadConflicts()])}>
+					<Button variant="secondary" onClick={() => void Promise.all([loadList(), loadConflicts()])}>
 						{t(locale, "common.refresh")}
 					</Button>
 				}
@@ -117,7 +116,7 @@ export default function MetricLensPage() {
 			<div className="grid2" style={{ marginBottom: "var(--spacing-lg)" }}>
 				<Card
 					title="指标清单"
-					extra={listState.state === "loaded" ? <Badge>{listState.value.length}</Badge> : null}
+					extra={listState.state === "loaded" ? <Tag>{listState.value.length}</Tag> : null}
 				>
 						{listState.state === "loading" && (
 							<div className="loading-container" style={{ padding: "var(--spacing-lg)" }}>
@@ -246,7 +245,7 @@ export default function MetricLensPage() {
 								options={versionOptions}
 								disabled={versions.length === 0}
 							/>
-							<Button variant="primary" onClick={() => void runCompare()} disabled={!leftVersion || !rightVersion || !selectedMetricId}>
+							<Button color="blue" onClick={() => void runCompare()} disabled={!leftVersion || !rightVersion || !selectedMetricId}>
 								执行对比
 							</Button>
 						</div>

@@ -1,6 +1,6 @@
 import { useState, useCallback } from "react";
 import type { ProjectCockpitTreeNode } from "../../../api/analyticsApi";
-import { Badge } from "../../../ui/Badge/Badge";
+import { Tag } from "antd";
 
 type Props = {
 	tree: ProjectCockpitTreeNode[];
@@ -54,18 +54,17 @@ function TreeNode({
 					<div className="project-cockpit__tree-node-main">
 						<div className="project-cockpit__tree-node-title">
 							<span>{node.name}</span>
-							<Badge
-								size="sm"
-								variant={
+							<Tag
+								color={
 									node.riskLevel === "高"
 										? "error"
 										: node.riskLevel === "中"
 											? "warning"
-											: "default"
+											: undefined
 								}
 							>
 								{node.riskLevel || "未知"}
-							</Badge>
+							</Tag>
 						</div>
 						<div className="project-cockpit__tree-node-meta">
 							<span>{node.status || "推进中"}</span>

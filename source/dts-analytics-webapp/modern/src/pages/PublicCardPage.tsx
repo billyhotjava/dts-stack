@@ -5,8 +5,7 @@ import { ChartRenderer, type VisualizationType, type VisualizationSettings } fro
 import { PageContainer, PageHeader, Breadcrumb } from "../components/PageContainer/PageContainer";
 import { EmptyState } from "../components/EmptyState";
 import { ErrorNotice } from "../components/ErrorNotice";
-import { Card, CardBody } from "../ui/Card/Card";
-import { Badge } from "../ui/Badge/Badge";
+import { Card, Tag } from "antd";
 import { Spinner } from "../ui/Loading/Spinner";
 import { getEffectiveLocale, t, type Locale } from "../i18n";
 import "./page.css";
@@ -74,38 +73,32 @@ export default function PublicCardPage() {
 			{query.state === "error" && <ErrorNotice locale={locale} error={query.error} />}
 
 			<Card style={{ marginBottom: "var(--spacing-lg)" }}>
-				<CardBody>
-					<p className="text-muted" style={{ margin: 0 }}>
-						{t(locale, "share.note")}
-					</p>
-				</CardBody>
+				<p className="text-muted" style={{ margin: 0 }}>
+					{t(locale, "share.note")}
+				</p>
 			</Card>
 
 			{query.state === "loading" && (
 				<Card>
-					<CardBody>
-						<div className="loading-container" style={{ padding: "var(--spacing-xl)" }}>
-							<Spinner size="lg" />
-						</div>
-					</CardBody>
+					<div className="loading-container" style={{ padding: "var(--spacing-xl)" }}>
+						<Spinner size="lg" />
+					</div>
 				</Card>
 			)}
 			{query.state === "loaded" && (
 				<Card>
-					<CardBody>
-						{Array.isArray(query.value?.data?.cols) && Array.isArray(query.value?.data?.rows) ? (
-							<ChartRenderer
-								data={{
-									cols: (query.value.data?.cols ?? []) as { name: string; display_name?: string; base_type?: string }[],
-									rows: (query.value.data?.rows ?? []) as any[][]
-								}}
-								display={card.state === "loaded" ? (card.value.display as VisualizationType) || "table" : "table"}
-								settings={card.state === "loaded" ? (card.value.visualization_settings as VisualizationSettings) || {} : {}}
-							/>
-						) : (
-							<EmptyState title={t(locale, "common.empty")} />
-						)}
-					</CardBody>
+					{Array.isArray(query.value?.data?.cols) && Array.isArray(query.value?.data?.rows) ? (
+						<ChartRenderer
+							data={{
+								cols: (query.value.data?.cols ?? []) as { name: string; display_name?: string; base_type?: string }[],
+								rows: (query.value.data?.rows ?? []) as any[][]
+							}}
+							display={card.state === "loaded" ? (card.value.display as VisualizationType) || "table" : "table"}
+							settings={card.state === "loaded" ? (card.value.visualization_settings as VisualizationSettings) || {} : {}}
+						/>
+					) : (
+						<EmptyState title={t(locale, "common.empty")} />
+					)}
 				</Card>
 			)}
 		</PageContainer>

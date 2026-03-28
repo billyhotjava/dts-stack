@@ -4,8 +4,7 @@ import { analyticsApi, type CollectionItem } from "../api/analyticsApi";
 import { PageContainer, PageHeader, Breadcrumb } from "../components/PageContainer/PageContainer";
 import { EmptyState } from "../components/EmptyState";
 import { ErrorNotice } from "../components/ErrorNotice";
-import { Card, CardBody } from "../ui/Card/Card";
-import { Badge } from "../ui/Badge/Badge";
+import { Card, Tag } from "antd";
 import { Spinner } from "../ui/Loading/Spinner";
 import { getEffectiveLocale, t, type Locale } from "../i18n";
 import "./page.css";
@@ -69,11 +68,9 @@ export default function CollectionItemsPage() {
 
 			{state.state === "loading" && (
 				<Card>
-					<CardBody>
-						<div className="loading-container" style={{ padding: "var(--spacing-xl)" }}>
-							<Spinner size="lg" />
-						</div>
-					</CardBody>
+					<div className="loading-container" style={{ padding: "var(--spacing-xl)" }}>
+						<Spinner size="lg" />
+					</div>
 				</Card>
 			)}
 			{state.state === "error" && <ErrorNotice locale={locale} error={state.error} />}
@@ -90,9 +87,9 @@ export default function CollectionItemsPage() {
 								<div className="collection-item__content">
 									<span className="collection-item__name">{item.name ?? "-"}</span>
 									<span className="collection-item__meta">
-										<Badge variant={item.model === "dashboard" ? "info" : "success"} size="sm">
+										<Tag color={item.model === "dashboard" ? "processing" : "success"}>
 											{item.model === "dashboard" ? t(locale, "dashboards.title") : t(locale, "questions.title")}
-										</Badge>
+										</Tag>
 										<span className="text-muted">{t(locale, "common.id")}: {item.id}</span>
 									</span>
 								</div>

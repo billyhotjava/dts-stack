@@ -4,10 +4,9 @@ import { analyticsApi, type CardDetail, type CardQueryResponse, type Explainabil
 import { ChartRenderer, type VisualizationType, type VisualizationSettings } from "../components/charts";
 import { PageContainer, PageHeader } from "../components/PageContainer/PageContainer";
 import { ErrorNotice } from "../components/ErrorNotice";
-import { Card, Collapse } from "antd";
+import { Card, Collapse, Tag } from "antd";
 import { Button } from "../ui/Button/Button";
 import { Input } from "../ui/Input/Input";
-import { Badge } from "../ui/Badge/Badge";
 import { Spinner } from "../ui/Loading/Spinner";
 import { getEffectiveLocale, t, type Locale } from "../i18n";
 import { writeTextToClipboard } from "../hooks/clipboard";
@@ -140,7 +139,7 @@ export default function CardDetailPage() {
 									{t(locale, "share.create")}
 								</Button>
 								<Link to={`/questions/${encodeURIComponent(String(state.value.id))}/edit`}>
-									<Button variant="primary" icon={<EditIcon />}>
+									<Button color="blue" icon={<EditIcon />}>
 										{t(locale, "questions.edit")}
 									</Button>
 								</Link>
@@ -228,7 +227,7 @@ export default function CardDetailPage() {
 					<Card
 						title={t(locale, "questions.queryResult")}
 						extra={
-								<Button variant="tertiary" size="sm" onClick={() => setShowRaw((v) => !v)}>
+								<Button variant="tertiary" onClick={() => setShowRaw((v) => !v)}>
 									{t(locale, "questions.queryRaw")}
 								</Button>
 							}
@@ -245,7 +244,7 @@ export default function CardDetailPage() {
 								<>
 									{queryState.value?.data?.native_form?.query && (
 										<div style={{ marginBottom: "var(--spacing-md)" }}>
-											<Badge variant="default" size="sm">{t(locale, "questions.querySql")}</Badge>
+											<Tag>{t(locale, "questions.querySql")}</Tag>
 											<pre style={{ whiteSpace: "pre-wrap", fontSize: 12, margin: "var(--spacing-sm) 0 0", padding: "var(--spacing-sm)", background: "var(--color-bg-tertiary)", borderRadius: "var(--radius-sm)" }}>
 												{String(queryState.value.data.native_form.query)}
 											</pre>

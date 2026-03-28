@@ -4,9 +4,8 @@ import { analyticsApi, type TableDetail } from "../api/analyticsApi";
 import { PageContainer, PageHeader, Breadcrumb } from "../components/PageContainer/PageContainer";
 import { EmptyState } from "../components/EmptyState";
 import { ErrorNotice } from "../components/ErrorNotice";
-import { Card } from "antd";
+import { Card, Tag } from "antd";
 import { Button } from "../ui/Button/Button";
-import { Badge } from "../ui/Badge/Badge";
 import { Spinner } from "../ui/Loading/Spinner";
 import { getEffectiveLocale, t, type Locale } from "../i18n";
 import "./page.css";
@@ -77,7 +76,7 @@ export default function TableDetailPage() {
 				}
 				actions={
 					<Link to={newQuestionHref}>
-						<Button variant="primary" icon={<PlusIcon />}>
+						<Button color="blue" icon={<PlusIcon />}>
 							{t(locale, "questions.new")}
 						</Button>
 					</Link>
@@ -103,7 +102,7 @@ export default function TableDetailPage() {
 					{Array.isArray(state.value.fields) && state.value.fields.length > 0 ? (
 						<Card
 							title={<span style={{ display: "inline-flex", alignItems: "center", gap: 8 }}><FieldIcon />{t(locale, "builder.fields")}</span>}
-							extra={<Badge variant="default">{state.value.fields.length}</Badge>}
+							extra={<Tag>{state.value.fields.length}</Tag>}
 						>
 								<table className="table">
 									<thead>
@@ -126,11 +125,11 @@ export default function TableDetailPage() {
 												</td>
 												<td>{String(f.id)}</td>
 												<td>
-													<Badge variant="default" size="sm">{String(f.base_type ?? "-")}</Badge>
+													<Tag>{String(f.base_type ?? "-")}</Tag>
 												</td>
 												<td>
 													{f.semantic_type ? (
-														<Badge variant="info" size="sm">{String(f.semantic_type)}</Badge>
+														<Tag color="processing">{String(f.semantic_type)}</Tag>
 													) : (
 														<span className="text-muted">-</span>
 													)}

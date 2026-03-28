@@ -5,8 +5,7 @@ import { ChartRenderer, type VisualizationType, type VisualizationSettings } fro
 import { PageContainer, PageHeader, Breadcrumb } from "../components/PageContainer/PageContainer";
 import { EmptyState } from "../components/EmptyState";
 import { ErrorNotice } from "../components/ErrorNotice";
-import { Card } from "antd";
-import { Badge } from "../ui/Badge/Badge";
+import { Card, Tag } from "antd";
 import { Spinner } from "../ui/Loading/Spinner";
 import { getEffectiveLocale, t, type Locale } from "../i18n";
 import "./page.css";
@@ -122,11 +121,11 @@ export default function PublicDashboardPage() {
 						return (
 							<Card key={String(dc.id)} style={{ gridColumn, gridRow, overflow: "hidden" }}
 								title={cardId ? <Link to={`/questions/${cardId}`}>{String(name)}</Link> : String(name)}
-								extra={<Badge variant="default" size="sm">card</Badge>}
+								extra={<Tag>card</Tag>}
 							>
 									{!result || result.state === "loading" ? (
 										<div className="loading-container" style={{ padding: "var(--spacing-md)" }}>
-											<Spinner size="sm" />
+											<Spinner />
 										</div>
 									) : result.state === "error" ? (
 										<ErrorNotice locale={locale} error={result.error} />

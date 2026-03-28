@@ -3,8 +3,7 @@ import { analyticsApi, type Metric, type PlatformMetric } from "../api/analytics
 import { PageContainer, PageHeader } from "../components/PageContainer/PageContainer";
 import { EmptyState } from "../components/EmptyState";
 import { ErrorNotice } from "../components/ErrorNotice";
-import { Card, CardHeader, CardBody, StatCard } from "../ui/Card/Card";
-import { Badge } from "../ui/Badge/Badge";
+import { Card, Statistic, Tag } from "antd";
 import { Spinner } from "../ui/Loading/Spinner";
 import { getEffectiveLocale, t, type Locale } from "../i18n";
 import "./page.css";
@@ -64,38 +63,19 @@ export default function MetricsPage() {
 
 			{/* Summary Stats */}
 			<div className="grid3" style={{ marginBottom: "var(--spacing-lg)" }}>
-				<StatCard
-					label={t(locale, "metrics.analytics")}
-					value={localMetrics.state === "loaded" ? localMetrics.value.length : "-"}
-					icon={<MetricIcon />}
-				/>
-				<StatCard
-					label={t(locale, "metrics.platform")}
-					value={platformMetrics.state === "loaded" ? platformMetrics.value.length : "-"}
-					icon={<MetricIcon />}
-				/>
-				<StatCard
-					label={t(locale, "common.total")}
-					value={
-						localMetrics.state === "loaded" && platformMetrics.state === "loaded"
-							? localMetrics.value.length + platformMetrics.value.length
-							: "-"
-					}
-					icon={<MetricIcon />}
-				/>
+				<Card><Statistic title={t(locale, "metrics.analytics")} value={localMetrics.state === "loaded" ? localMetrics.value.length : "-"} prefix={<MetricIcon />} /></Card>
+				<Card><Statistic title={t(locale, "metrics.platform")} value={platformMetrics.state === "loaded" ? platformMetrics.value.length : "-"} prefix={<MetricIcon />} /></Card>
+				<Card><Statistic title={t(locale, "common.total")} value={localMetrics.state === "loaded" && platformMetrics.state === "loaded" ? localMetrics.value.length + platformMetrics.value.length : "-"} prefix={<MetricIcon />} /></Card>
 			</div>
 
 			{/* Analytics Metrics */}
 			<Card style={{ marginBottom: "var(--spacing-lg)" }}>
-				<CardHeader
-					title={t(locale, "metrics.analytics")}
-					action={
-						localMetrics.state === "loaded" && (
-							<Badge variant="default">{localMetrics.value.length}</Badge>
-						)
-					}
-				/>
-				<CardBody>
+				<div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "var(--spacing-md)" }}>
+					<div style={{ fontWeight: 600, fontSize: "var(--font-size-md)" }}>{t(locale, "metrics.analytics")}</div>
+					<div>{localMetrics.state === "loaded" && (
+							<Tag>{localMetrics.value.length}</Tag>
+						)}</div>
+				</div>
 					{localMetrics.state === "loading" && (
 						<div className="loading-container" style={{ padding: "var(--spacing-lg)" }}>
 							<Spinner size="md" />
@@ -123,20 +103,16 @@ export default function MetricsPage() {
 							</tbody>
 						</table>
 					)}
-				</CardBody>
 			</Card>
 
 			{/* Platform Metrics */}
 			<Card>
-				<CardHeader
-					title={t(locale, "metrics.platform")}
-					action={
-						platformMetrics.state === "loaded" && (
-							<Badge variant="default">{platformMetrics.value.length}</Badge>
-						)
-					}
-				/>
-				<CardBody>
+				<div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "var(--spacing-md)" }}>
+					<div style={{ fontWeight: 600, fontSize: "var(--font-size-md)" }}>{t(locale, "metrics.platform")}</div>
+					<div>{platformMetrics.state === "loaded" && (
+							<Tag>{platformMetrics.value.length}</Tag>
+						)}</div>
+				</div>
 					{platformMetrics.state === "loading" && (
 						<div className="loading-container" style={{ padding: "var(--spacing-lg)" }}>
 							<Spinner size="md" />
@@ -164,7 +140,6 @@ export default function MetricsPage() {
 							</tbody>
 						</table>
 					)}
-				</CardBody>
 			</Card>
 		</PageContainer>
 	);

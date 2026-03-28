@@ -5,10 +5,9 @@ import UploadedDataEditor from "../components/UploadedDataEditor";
 import { PageContainer, PageHeader, Breadcrumb } from "../components/PageContainer/PageContainer";
 import { EmptyState } from "../components/EmptyState";
 import { ErrorNotice } from "../components/ErrorNotice";
-import { Card, CardHeader, CardBody, CardFooter } from "../ui/Card/Card";
+import { Card, Tag } from "antd";
 import { Button } from "../ui/Button/Button";
 import { SearchInput } from "../ui/Input/Input";
-import { Badge } from "../ui/Badge/Badge";
 import { Spinner } from "../ui/Loading/Spinner";
 import { getEffectiveLocale, t, type Locale } from "../i18n";
 import "./page.css";
@@ -174,7 +173,6 @@ export default function DatabaseNewPage() {
 						{t(locale, 'data.tabOther')}
 					</button>
 				</div>
-				<CardBody>
 					{error ? <ErrorNotice locale={locale} error={error} /> : null}
 					{okMessage && (
 						<div style={{
@@ -223,8 +221,7 @@ export default function DatabaseNewPage() {
 							{state.state === "loaded" && filtered.length > 0 && (
 								<div className="grid3">
 									{filtered.map((item) => (
-										<Card key={item.id} variant="hoverable" style={{ height: "100%" }}>
-											<CardBody>
+										<Card key={item.id} hoverable style={{ height: "100%" }}>
 												<div style={{ display: "flex", alignItems: "flex-start", gap: "var(--spacing-md)" }}>
 													<div style={{
 														display: "flex",
@@ -253,19 +250,19 @@ export default function DatabaseNewPage() {
 														) : null}
 													</div>
 													<div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: "var(--spacing-xs)" }}>
-														<Badge variant="default" size="sm">
+														<Tag>
 															{item.type || "JDBC"}
-														</Badge>
+														</Tag>
 														{item.status ? (
-															<Badge variant={item.status === "active" ? "success" : "default"} size="sm">
+															<Tag color={item.status === "active" ? "success" : undefined}>
 																{item.status}
-															</Badge>
+															</Tag>
 														) : null}
 													</div>
 												</div>
 												<div style={{ display: "flex", justifyContent: "flex-end", marginTop: "var(--spacing-md)" }}>
 													<Button
-														variant="primary"
+														color="blue"
 														icon={<PlusIcon />}
 														loading={importingId === item.id}
 														onClick={() => importSource(item)}
@@ -273,7 +270,6 @@ export default function DatabaseNewPage() {
 														{t(locale, "data.import")}
 													</Button>
 												</div>
-											</CardBody>
 										</Card>
 									))}
 								</div>
@@ -329,14 +325,13 @@ export default function DatabaseNewPage() {
 							)}
 						</div>
 					)}
-				</CardBody>
-				<CardFooter align="between">
+				<div style={{ display: "flex", justifyContent: "space-between", padding: "var(--spacing-md)", borderTop: "1px solid var(--color-border)" }}>
 					<Link to="/data">
 						<Button variant="tertiary">
 							{t(locale, "common.open")} {t(locale, "data.title")}
 						</Button>
 					</Link>
-				</CardFooter>
+				</div>
 			</Card>
 		</PageContainer>
 	);

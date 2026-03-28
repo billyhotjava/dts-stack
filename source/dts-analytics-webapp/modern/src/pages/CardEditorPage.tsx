@@ -14,11 +14,10 @@ import { EmptyState } from "../components/EmptyState";
 import { ErrorNotice } from "../components/ErrorNotice";
 import { PageContainer, PageHeader, Breadcrumb } from "../components/PageContainer/PageContainer";
 import { NotebookEditor } from "../components/query/NotebookEditor";
-import { Card } from "antd";
+import { Card, Tag } from "antd";
 import { Button } from "../ui/Button/Button";
 import { Input, TextArea } from "../ui/Input/Input";
 import { NativeSelect } from "../ui/Input/Select";
-import { Badge } from "../ui/Badge/Badge";
 import { Spinner } from "../ui/Loading/Spinner";
 import { getEffectiveLocale, t, type Locale } from "../i18n";
 import "./page.css";
@@ -334,7 +333,7 @@ export default function CardEditorPage() {
 							title={t(locale, "questions.noDb")}
 							action={
 								<Link to="/data/new">
-									<Button variant="primary">{t(locale, "data.add")}</Button>
+									<Button color="blue">{t(locale, "data.add")}</Button>
 								</Link>
 							}
 						/>
@@ -410,7 +409,7 @@ export default function CardEditorPage() {
 				<div style={{ display: "flex", justifyContent: "space-between", paddingTop: "var(--spacing-md)", marginTop: "var(--spacing-md)", borderTop: "1px solid var(--color-border)" }}>
 					<div style={{ display: "flex", gap: "var(--spacing-sm)", alignItems: "center" }}>
 						<Button
-							variant="primary"
+							color="blue"
 							icon={<PlayIcon />}
 							onClick={run}
 							disabled={dbEmpty || !canRun || runState?.state === "loading"}
@@ -445,12 +444,12 @@ export default function CardEditorPage() {
 				extra={
 					<div style={{ display: "flex", gap: "var(--spacing-xs)", alignItems: "center" }}>
 						{runState?.state === "loaded" && (
-							<Badge variant="default" size="sm" style={{ marginRight: "var(--spacing-sm)" }}>
+							<Tag style={{ marginRight: "var(--spacing-sm)" }}>
 								{runState.value.row_count ?? (runState.value.data?.rows as any[] | undefined)?.length ?? 0} {t(locale, "questions.resultRows")}
 								{runState.value.running_time != null && (
 									<> &middot; {runState.value.running_time}ms</>
 								)}
-							</Badge>
+							</Tag>
 						)}
 						{VISUALIZATION_TYPES.map((vt) => (
 							<Button
@@ -525,9 +524,9 @@ export default function CardEditorPage() {
 								fontSize: "var(--font-size-sm)",
 								color: "var(--color-text-secondary)",
 							}}>
-								<Badge variant={runState.value.error ? "error" : "success"} size="sm">
+								<Tag color={runState.value.error ? "error" : "success"}>
 									{runState.value.error ? t(locale, "questions.status.failed") : t(locale, "questions.status.completed")}
-								</Badge>
+								</Tag>
 								<span>
 									{runState.value.row_count ?? (runState.value.data?.rows as any[] | undefined)?.length ?? 0} {t(locale, "questions.resultRows")}
 								</span>

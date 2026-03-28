@@ -4,11 +4,10 @@ import { analyticsApi, type DashboardCard, type DashboardDetail, type DashboardQ
 import { PageContainer, PageHeader } from "../components/PageContainer/PageContainer";
 import { ErrorNotice } from "../components/ErrorNotice";
 import { ChartRenderer, type VisualizationType, type VisualizationSettings } from "../components/charts";
-import { Card, Collapse } from "antd";
+import { Card, Collapse, Tag } from "antd";
 import { Button } from "../ui/Button/Button";
 import { Input } from "../ui/Input/Input";
 import { NativeSelect } from "../ui/Input/Select";
-import { Badge } from "../ui/Badge/Badge";
 import { Spinner } from "../ui/Loading/Spinner";
 import { getEffectiveLocale, t, type Locale } from "../i18n";
 import { writeTextToClipboard } from "../hooks/clipboard";
@@ -218,7 +217,7 @@ export default function DashboardDetailPage() {
 									{t(locale, "share.create")}
 								</Button>
 								<Link to={`/dashboards/${encodeURIComponent(String(state.value.id))}/edit`}>
-									<Button variant="primary" icon={<EditIcon />}>
+									<Button color="blue" icon={<EditIcon />}>
 										{t(locale, "dashboards.edit")}
 									</Button>
 								</Link>
@@ -263,7 +262,7 @@ export default function DashboardDetailPage() {
 						<Card style={{ marginBottom: "var(--spacing-lg)" }}
 							title={<span style={{ display: "inline-flex", alignItems: "center", gap: 8 }}><FilterIcon />{t(locale, "filter.title")}</span>}
 							extra={
-									<Button variant="tertiary" size="sm" onClick={() => setParamValues({})}>
+									<Button variant="tertiary" onClick={() => setParamValues({})}>
 										{t(locale, "filter.clear")}
 									</Button>
 								}
@@ -309,11 +308,11 @@ export default function DashboardDetailPage() {
 							return (
 								<Card key={dc.id} style={{ gridColumn, gridRow, overflow: "hidden" }}
 									title={cardId ? <Link to={`/questions/${cardId}`}>{String(name)}</Link> : String(name)}
-									extra={<Badge variant="default" size="sm">card</Badge>}
+									extra={<Tag>card</Tag>}
 								>
 										{!result || result.state === "loading" ? (
 											<div className="loading-container" style={{ padding: "var(--spacing-md)" }}>
-												<Spinner size="sm" />
+												<Spinner />
 											</div>
 										) : result.state === "error" ? (
 											<ErrorNotice locale={locale} error={result.error} />

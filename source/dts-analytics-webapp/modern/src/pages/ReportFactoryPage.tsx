@@ -3,9 +3,8 @@ import { analyticsApi, type ReportRunItem, type ReportTemplateItem } from "../ap
 import { ErrorNotice } from "../components/ErrorNotice";
 import { PageContainer, PageHeader } from "../components/PageContainer/PageContainer";
 import { getEffectiveLocale, t, type Locale } from "../i18n";
-import { Badge } from "../ui/Badge/Badge";
 import { Button } from "../ui/Button/Button";
-import { Card } from "antd";
+import { Card, Tag } from "antd";
 import { Input, TextArea } from "../ui/Input/Input";
 import { NativeSelect } from "../ui/Input/Select";
 import { Spinner } from "../ui/Loading/Spinner";
@@ -186,7 +185,7 @@ export default function ReportFactoryPage() {
 			<PageHeader
 				title={t(locale, "reportFactory.title")}
 				actions={
-					<Button variant="secondary" size="sm" onClick={() => void Promise.all([loadTemplates(), loadRuns()])}>
+					<Button variant="secondary" onClick={() => void Promise.all([loadTemplates(), loadRuns()])}>
 						{t(locale, "common.refresh")}
 					</Button>
 				}
@@ -195,7 +194,7 @@ export default function ReportFactoryPage() {
 			{Boolean(actionError) ? <ErrorNotice locale={locale} error={actionError} /> : null}
 			{actionMessage && (
 				<div style={{ marginBottom: "var(--spacing-md)" }}>
-					<Badge variant="success">{actionMessage}</Badge>
+					<Tag color="success">{actionMessage}</Tag>
 				</div>
 			)}
 
@@ -222,7 +221,7 @@ export default function ReportFactoryPage() {
 							/>
 						</div>
 					<div style={{ display: "flex", justifyContent: "flex-end", paddingTop: "var(--spacing-md)", marginTop: "var(--spacing-md)", borderTop: "1px solid var(--color-border)" }}>
-						<Button variant="primary" onClick={createTemplate} loading={saving}>
+						<Button color="blue" onClick={createTemplate} loading={saving}>
 							创建模板
 						</Button>
 					</div>
@@ -264,7 +263,7 @@ export default function ReportFactoryPage() {
 							/>
 						</div>
 					<div style={{ display: "flex", justifyContent: "flex-end", paddingTop: "var(--spacing-md)", marginTop: "var(--spacing-md)", borderTop: "1px solid var(--color-border)" }}>
-						<Button variant="primary" onClick={generateReport} loading={saving}>
+						<Button color="blue" onClick={generateReport} loading={saving}>
 							生成报告
 						</Button>
 					</div>
@@ -273,7 +272,7 @@ export default function ReportFactoryPage() {
 
 			<Card style={{ marginBottom: "var(--spacing-lg)" }}
 				title="模板列表"
-				extra={templates.state === "loaded" ? <Badge>{templates.value.length}</Badge> : null}
+				extra={templates.state === "loaded" ? <Tag>{templates.value.length}</Tag> : null}
 			>
 					{templates.state === "loading" && (
 						<div className="loading-container" style={{ padding: "var(--spacing-lg)" }}>
@@ -311,7 +310,7 @@ export default function ReportFactoryPage() {
 			<div className="grid2">
 				<Card
 					title="生成任务"
-					extra={runs.state === "loaded" ? <Badge>{runs.value.length}</Badge> : null}
+					extra={runs.state === "loaded" ? <Tag>{runs.value.length}</Tag> : null}
 				>
 						{runs.state === "loading" && (
 							<div className="loading-container" style={{ padding: "var(--spacing-lg)" }}>
@@ -342,7 +341,7 @@ export default function ReportFactoryPage() {
 												<td>{row.status || "-"}</td>
 												<td>
 													<div style={{ display: "flex", gap: "var(--spacing-xs)", flexWrap: "wrap" }}>
-														<Button size="sm" variant="tertiary" onClick={() => void openRunDetail(row.id)}>
+														<Button variant="tertiary" onClick={() => void openRunDetail(row.id)}>
 															详情
 														</Button>
 														<a

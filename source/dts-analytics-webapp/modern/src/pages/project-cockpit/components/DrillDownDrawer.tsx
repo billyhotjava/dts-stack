@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Drawer } from "../../../ui/Drawer/Drawer";
-import { Badge } from "../../../ui/Badge/Badge";
+import { Tag } from "antd";
 import { Button } from "../../../ui/Button/Button";
 import { Input } from "../../../ui/Input/Input";
 import { Spinner } from "../../../ui/Loading/Spinner";
@@ -29,8 +29,8 @@ type ColumnDef = {
 
 function riskBadge(level?: string) {
 	if (!level) return null;
-	const variant = level === "高" ? "error" : level === "中" ? "warning" : "default";
-	return <Badge size="sm" variant={variant}>{level}</Badge>;
+	const color = level === "高" ? "error" : level === "中" ? "warning" : undefined;
+	return <Tag color={color}>{level}</Tag>;
 }
 
 function buildColumns(target: DrillTarget): ColumnDef[] {
@@ -210,10 +210,10 @@ export function DrillDownDrawer() {
 			size="lg"
 			footer={
 				<div style={{ display: "flex", gap: 8 }}>
-					<Button variant="secondary" size="sm" onClick={handleExportCsv} disabled={filtered.length === 0}>
+					<Button variant="secondary" onClick={handleExportCsv} disabled={filtered.length === 0}>
 						导出 CSV
 					</Button>
-					<Button variant="tertiary" size="sm" onClick={closeDrill}>
+					<Button variant="tertiary" onClick={closeDrill}>
 						关闭
 					</Button>
 				</div>

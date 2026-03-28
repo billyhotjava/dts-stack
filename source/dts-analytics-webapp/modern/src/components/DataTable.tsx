@@ -1,12 +1,13 @@
 import { type ReactNode, useCallback, useMemo, useState } from "react";
 import { Button } from "../ui/Button/Button";
-import { Badge } from "../ui/Badge/Badge";
+import { Tag } from "antd";
 
 type Props = {
 	cols: Array<Record<string, unknown>>;
 	rows: unknown[];
 	maxRows?: number;
 	pageSize?: number;
+	onRowClick?: (row: unknown[], rowIndex: number) => void;
 };
 
 type SortState = {
@@ -71,7 +72,7 @@ function SortIcon({ direction }: { direction: "asc" | "desc" | null }) {
 	);
 }
 
-export function DataTable({ cols, rows, maxRows = 5000, pageSize = 50 }: Props) {
+export function DataTable({ cols, rows, maxRows = 5000, pageSize = 50, onRowClick }: Props) {
 	const [sort, setSort] = useState<SortState>(null);
 	const [page, setPage] = useState(0);
 
@@ -137,8 +138,13 @@ export function DataTable({ cols, rows, maxRows = 5000, pageSize = 50 }: Props) 
 					<tbody>
 						{paginatedRows.map((row, rIdx) => {
 							const cells = Array.isArray(row) ? row : [];
+							const globalIdx = page * pageSize + rIdx;
 							return (
-								<tr key={rIdx}>
+								<tr
+									key={rIdx}
+									onClick={onRowClick ? () => onRowClick(cells, globalIdx) : undefined}
+									style={onRowClick ? { cursor: "pointer" } : undefined}
+								>
 									{cols.map((_, cIdx) => (
 										<td key={cIdx}>{renderCell(cells[cIdx])}</td>
 									))}
@@ -167,9 +173,9 @@ export function DataTable({ cols, rows, maxRows = 5000, pageSize = 50 }: Props) 
 					color: "var(--color-text-secondary, #666)",
 				}}>
 					<div>
-						<Badge variant="default" size="sm">
+						<Tag>
 							{safeRows.length.toLocaleString()} rows
-						</Badge>
+						</Tag>
 						{safeRows.length < (Array.isArray(rows) ? rows.length : 0) && (
 							<span style={{ marginLeft: "var(--spacing-xs, 4px)" }}>
 								(truncated from {(Array.isArray(rows) ? rows.length : 0).toLocaleString()})

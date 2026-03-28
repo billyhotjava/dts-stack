@@ -10,11 +10,10 @@ import {
 import { EmptyState } from "../components/EmptyState";
 import { ErrorNotice } from "../components/ErrorNotice";
 import { PageContainer, PageHeader, Breadcrumb } from "../components/PageContainer/PageContainer";
-import { Card } from "antd";
+import { Card, Tag } from "antd";
 import { Button } from "../ui/Button/Button";
 import { Input } from "../ui/Input/Input";
 import { NativeSelect } from "../ui/Input/Select";
-import { Badge } from "../ui/Badge/Badge";
 import { Spinner } from "../ui/Loading/Spinner";
 import { getEffectiveLocale, t, type Locale } from "../i18n";
 import "./page.css";
@@ -245,7 +244,7 @@ export default function DashboardEditorPage() {
 					</div>
 				<div style={{ display: "flex", justifyContent: "flex-end", paddingTop: "var(--spacing-md)", marginTop: "var(--spacing-md)", borderTop: "1px solid var(--color-border)" }}>
 					<Button
-						variant="primary"
+						color="blue"
 						icon={<SaveIcon />}
 						onClick={save}
 						disabled={!name.trim() || saveState?.state === "loading"}
@@ -259,7 +258,7 @@ export default function DashboardEditorPage() {
 			<Card
 				title={t(locale, "common.cards")}
 				extra={
-						<Badge variant="default">{dashcards.length}</Badge>
+						<Tag>{dashcards.length}</Tag>
 					}
 			>
 					<div style={{ display: "flex", gap: "var(--spacing-sm)", alignItems: "flex-end", marginBottom: "var(--spacing-md)" }}>
@@ -307,7 +306,7 @@ export default function DashboardEditorPage() {
 										<tr key={`${dc.id}:${idx}`}>
 											<td>
 												{dc.id && dc.id > 0 ? (
-													<Badge variant="default" size="sm">{String(dc.id)}</Badge>
+													<Tag>{String(dc.id)}</Tag>
 												) : (
 													<span className="text-muted">-</span>
 												)}

@@ -5,7 +5,6 @@ import { ErrorNotice } from "../components/ErrorNotice";
 import { PageContainer } from "../components/PageContainer/PageContainer";
 import { Card } from "antd";
 import { Button } from "../ui/Button/Button";
-import { Badge } from "../ui/Badge/Badge";
 import { Spinner } from "../ui/Loading/Spinner";
 import { getEffectiveLocale, t, type Locale } from "../i18n";
 import "./page.css";

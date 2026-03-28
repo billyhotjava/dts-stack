@@ -1,5 +1,4 @@
-import { Badge } from "../../../ui/Badge/Badge";
-import { Card, CardBody } from "../../../ui/Card/Card";
+import { Card, Tag } from "antd";
 
 type TrendInfo = {
 	rate: number;
@@ -47,26 +46,23 @@ export function HealthScoreCard({
 	return (
 		<Card
 			className={`project-cockpit__metric-card${onDrill ? " project-cockpit__metric-card--drillable" : ""}`}
-			shadow="sm"
 			onClick={onDrill}
 			style={onDrill ? { cursor: "pointer" } : undefined}
 			role={onDrill ? "button" : undefined}
 			tabIndex={onDrill ? 0 : undefined}
 		>
-			<CardBody>
-				<div className="project-cockpit__metric-label-row">
-					<span className="project-cockpit__metric-label">{label}</span>
-					<Badge size="sm" variant={tone}>
-						{tone === "error" ? "重点" : tone === "warning" ? "跟踪" : "指标"}
-					</Badge>
-				</div>
-				<div className="project-cockpit__metric-value">
-					{value}
-					{unit ? <span className="project-cockpit__metric-unit">{unit}</span> : null}
-					{trend ? <TrendIndicator trend={trend} polarity={trendPolarity} /> : null}
-				</div>
-				{hint ? <div className="project-cockpit__metric-hint">{hint}</div> : null}
-			</CardBody>
+			<div className="project-cockpit__metric-label-row">
+				<span className="project-cockpit__metric-label">{label}</span>
+				<Tag color={tone}>
+					{tone === "error" ? "重点" : tone === "warning" ? "跟踪" : "指标"}
+				</Tag>
+			</div>
+			<div className="project-cockpit__metric-value">
+				{value}
+				{unit ? <span className="project-cockpit__metric-unit">{unit}</span> : null}
+				{trend ? <TrendIndicator trend={trend} polarity={trendPolarity} /> : null}
+			</div>
+			{hint ? <div className="project-cockpit__metric-hint">{hint}</div> : null}
 		</Card>
 	);
 }

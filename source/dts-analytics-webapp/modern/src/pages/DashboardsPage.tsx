@@ -2,10 +2,9 @@ import { Link } from "react-router";
 import { useEffect, useMemo, useState } from "react";
 import { analyticsApi, type DashboardListItem } from "../api/analyticsApi";
 import { PageContainer, PageHeader, EmptyState } from "../components/PageContainer/PageContainer";
-import { Card, CardBody } from "../ui/Card/Card";
+import { Card } from "antd";
 import { Button } from "../ui/Button/Button";
 import { Input, SearchInput } from "../ui/Input/Input";
-import { Badge } from "../ui/Badge/Badge";
 import { Spinner } from "../ui/Loading/Spinner";
 import { CardSkeleton } from "../ui/Loading/Skeleton";
 import { CardGrid } from "../components/DashboardGrid/DashboardGrid";
@@ -177,7 +176,7 @@ export default function DashboardsPage() {
 				<CardGrid columns={3} gap="md">
 					{filteredDashboards.map((d) => (
 						<Link key={d.id} data-testid={`analytics-dashboard-card-${d.id}`} to={`/dashboards/${d.id}`} style={{ textDecoration: "none" }}>
-							<Card variant="hoverable" padding="md">
+							<Card hoverable>
 								<div className="dashboard-card">
 									<div className="dashboard-card__icon">
 										<DashboardIcon />
@@ -197,7 +196,7 @@ export default function DashboardsPage() {
 
 			{/* List View */}
 			{state.state === "loaded" && filteredDashboards.length > 0 && viewMode === "list" && (
-				<Card padding="none">
+				<Card styles={{ body: { padding: 0 } }}>
 					<table className="table">
 						<thead>
 							<tr>

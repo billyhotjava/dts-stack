@@ -4,8 +4,7 @@ import { analyticsApi, type TrashResponse } from "../api/analyticsApi";
 import { PageContainer, PageHeader } from "../components/PageContainer/PageContainer";
 import { EmptyState } from "../components/EmptyState";
 import { ErrorNotice } from "../components/ErrorNotice";
-import { Card, CardBody } from "../ui/Card/Card";
-import { Badge } from "../ui/Badge/Badge";
+import { Card, Tag } from "antd";
 import { Spinner } from "../ui/Loading/Spinner";
 import { getEffectiveLocale, t, type Locale } from "../i18n";
 import "./page.css";
@@ -75,27 +74,23 @@ export default function TrashPage() {
 
 			{state.state === "loading" && (
 				<Card>
-					<CardBody>
-						<div className="loading-container" style={{ padding: "var(--spacing-xl)" }}>
-							<Spinner size="lg" />
-						</div>
-					</CardBody>
+					<div className="loading-container" style={{ padding: "var(--spacing-xl)" }}>
+						<Spinner size="lg" />
+					</div>
 				</Card>
 			)}
 			{state.state === "error" && <ErrorNotice locale={locale} error={state.error} />}
 			{state.state === "loaded" && items.length === 0 && (
 				<Card>
-					<CardBody>
-						<div style={{ display: "flex", flexDirection: "column", alignItems: "center", padding: "var(--spacing-xl)", textAlign: "center" }}>
-							<div style={{ color: "var(--color-text-tertiary)", marginBottom: "var(--spacing-md)" }}>
-								<TrashIcon />
-							</div>
-							<h3 style={{ margin: 0, color: "var(--color-text-secondary)" }}>{t(locale, "common.empty")}</h3>
-							<p className="text-muted" style={{ marginTop: "var(--spacing-sm)" }}>
-								{t(locale, "trash.emptyDesc")}
-							</p>
+					<div style={{ display: "flex", flexDirection: "column", alignItems: "center", padding: "var(--spacing-xl)", textAlign: "center" }}>
+						<div style={{ color: "var(--color-text-tertiary)", marginBottom: "var(--spacing-md)" }}>
+							<TrashIcon />
 						</div>
-					</CardBody>
+						<h3 style={{ margin: 0, color: "var(--color-text-secondary)" }}>{t(locale, "common.empty")}</h3>
+						<p className="text-muted" style={{ marginTop: "var(--spacing-sm)" }}>
+							{t(locale, "trash.emptyDesc")}
+						</p>
+					</div>
 				</Card>
 			)}
 			{state.state === "loaded" && items.length > 0 && (
@@ -110,9 +105,9 @@ export default function TrashPage() {
 								<div className="trash-item__content">
 									<span className="trash-item__name">{it.name ?? "-"}</span>
 									<span className="trash-item__meta">
-										<Badge variant={it.model === "dashboard" ? "info" : "success"} size="sm">
+										<Tag color={it.model === "dashboard" ? "processing" : "success"}>
 											{it.model === "dashboard" ? t(locale, "dashboards.title") : t(locale, "questions.title")}
-										</Badge>
+										</Tag>
 										<span className="text-muted">{t(locale, "common.id")}: {it.id}</span>
 									</span>
 								</div>

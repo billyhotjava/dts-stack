@@ -4,10 +4,9 @@ import { analyticsApi, type DatabaseMetadataResponse } from "../api/analyticsApi
 import { PageContainer, PageHeader, Breadcrumb } from "../components/PageContainer/PageContainer";
 import { EmptyState } from "../components/EmptyState";
 import { ErrorNotice } from "../components/ErrorNotice";
-import { Card, CardHeader, CardBody, CollapsibleCard } from "../ui/Card/Card";
+import { Card, Collapse, Tag } from "antd";
 import { Button } from "../ui/Button/Button";
 import { SearchInput } from "../ui/Input/Input";
-import { Badge } from "../ui/Badge/Badge";
 import { Spinner } from "../ui/Loading/Spinner";
 import { getEffectiveLocale, t, type Locale } from "../i18n";
 import "./page.css";
@@ -141,7 +140,6 @@ export default function DatabaseDetailPage() {
 			/>
 
 			<Card style={{ marginBottom: "var(--spacing-lg)" }}>
-				<CardBody>
 					<div style={{ display: "flex", alignItems: "center", gap: "var(--spacing-md)" }}>
 						<div style={{ flex: 1, maxWidth: 520 }}>
 							<SearchInput
@@ -151,26 +149,23 @@ export default function DatabaseDetailPage() {
 							/>
 						</div>
 						{q.trim() && (
-							<Button variant="tertiary" size="sm" icon={<ClearIcon />} onClick={() => setQ("")}>
+							<Button variant="tertiary" icon={<ClearIcon />} onClick={() => setQ("")}>
 								{t(locale, "builder.remove")}
 							</Button>
 						)}
 						<div style={{ marginLeft: "auto" }}>
-							<Badge variant="default">
+							<Tag>
 								{t(locale, "data.tables")}: {filteredTables.length}
-							</Badge>
+							</Tag>
 						</div>
 					</div>
-				</CardBody>
 			</Card>
 
 			{state.state === "loading" && (
 				<Card>
-					<CardBody>
 						<div className="loading-container" style={{ padding: "var(--spacing-xl)" }}>
 							<Spinner size="lg" />
 						</div>
-					</CardBody>
 				</Card>
 			)}
 			{state.state === "error" && <ErrorNotice locale={locale} error={state.error} />}
@@ -179,7 +174,7 @@ export default function DatabaseDetailPage() {
 					title={t(locale, "common.empty")}
 					description={t(locale, "data.metaEmpty")}
 					action={
-						<Button variant="primary" icon={<SyncIcon />} loading={syncing} onClick={syncSchema}>
+						<Button color="blue" icon={<SyncIcon />} loading={syncing} onClick={syncSchema}>
 							{syncing ? t(locale, "data.syncing") : t(locale, "data.sync")}
 						</Button>
 					}
@@ -191,47 +186,57 @@ export default function DatabaseDetailPage() {
 			{state.state === "loaded" && filteredTables.length > 0 && (
 				<>
 					{tablesBySchema.map(([schema, list]) => (
-						<CollapsibleCard
+						<Collapse
 							key={schema}
-							title={schema}
-							subtitle={`${list.length} ${t(locale, "data.tables")}`}
-							defaultOpen={tablesBySchema.length <= 1}
+							defaultActiveKey={tablesBySchema.length <= 1 ? ["panel"] : []}
 							style={{ marginBottom: "var(--spacing-md)" }}
-						>
-							<div className="table-list">
-								{list.map((tb) => (
-									<div key={String(tb?.id ?? tb?.name ?? Math.random())} className="table-list-item">
-										<div className="table-list-item__icon">
-											<TableIcon />
-										</div>
-										<div className="table-list-item__content">
-											{tb?.id ? (
-												<Link to={`/data/${encodeURIComponent(String(dbId))}/tables/${encodeURIComponent(String(tb.id))}`} className="table-list-item__name">
-													{tb?.name ?? "-"}
-												</Link>
-											) : (
-												<span className="table-list-item__name">{tb?.name ?? "-"}</span>
-											)}
-											<span className="table-list-item__id text-muted">ID: {String(tb?.id ?? "-")}</span>
-										</div>
-										{tb?.id && (
-											<Link to={`/questions/new?db=${encodeURIComponent(String(dbId))}&table=${encodeURIComponent(String(tb.id))}`}>
-												<Button variant="tertiary" size="sm" icon={<PlusIcon />}>
-													{t(locale, "questions.new")}
-												</Button>
-											</Link>
-										)}
+							items={[{
+								key: "panel",
+								label: `${schema} (${list.length} ${t(locale, "data.tables")})`,
+								children: (
+									<div className="table-list">
+										{list.map((tb) => (
+											<div key={String(tb?.id ?? tb?.name ?? Math.random())} className="table-list-item">
+												<div className="table-list-item__icon">
+													<TableIcon />
+												</div>
+												<div className="table-list-item__content">
+													{tb?.id ? (
+														<Link to={`/data/${encodeURIComponent(String(dbId))}/tables/${encodeURIComponent(String(tb.id))}`} className="table-list-item__name">
+															{tb?.name ?? "-"}
+														</Link>
+													) : (
+														<span className="table-list-item__name">{tb?.name ?? "-"}</span>
+													)}
+													<span className="table-list-item__id text-muted">ID: {String(tb?.id ?? "-")}</span>
+												</div>
+												{tb?.id && (
+													<Link to={`/questions/new?db=${encodeURIComponent(String(dbId))}&table=${encodeURIComponent(String(tb.id))}`}>
+														<Button variant="tertiary" icon={<PlusIcon />}>
+															{t(locale, "questions.new")}
+														</Button>
+													</Link>
+												)}
+											</div>
+										))}
 									</div>
-								))}
-							</div>
-						</CollapsibleCard>
+								),
+							}]}
+						/>
 					))}
 
-					<CollapsibleCard title="Raw JSON" defaultOpen={false}>
-						<pre style={{ whiteSpace: "pre-wrap", fontSize: 12, margin: 0, overflow: "auto" }}>
-							{JSON.stringify(state.value, null, 2)}
-						</pre>
-					</CollapsibleCard>
+					<Collapse
+						defaultActiveKey={[]}
+						items={[{
+							key: "panel",
+							label: "Raw JSON",
+							children: (
+								<pre style={{ whiteSpace: "pre-wrap", fontSize: 12, margin: 0, overflow: "auto" }}>
+									{JSON.stringify(state.value, null, 2)}
+								</pre>
+							),
+						}]}
+					/>
 				</>
 			)}
 

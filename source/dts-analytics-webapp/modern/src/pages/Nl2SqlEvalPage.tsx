@@ -10,9 +10,8 @@ import {
 import { ErrorNotice } from "../components/ErrorNotice";
 import { PageContainer, PageHeader } from "../components/PageContainer/PageContainer";
 import { getEffectiveLocale, t, type Locale } from "../i18n";
-import { Badge } from "../ui/Badge/Badge";
 import { Button } from "../ui/Button/Button";
-import { Card } from "antd";
+import { Card, Tag } from "antd";
 import { Input, TextArea } from "../ui/Input/Input";
 import { NativeSelect } from "../ui/Input/Select";
 import { Spinner } from "../ui/Loading/Spinner";
@@ -216,7 +215,7 @@ export default function Nl2SqlEvalPage() {
 			<PageHeader
 				title={t(locale, "nl2sqlEval.title")}
 				actions={
-					<Button variant="secondary" size="sm" onClick={() => void Promise.all([loadCases(), loadRuns()])}>
+					<Button variant="secondary" onClick={() => void Promise.all([loadCases(), loadRuns()])}>
 						{t(locale, "common.refresh")}
 					</Button>
 				}
@@ -225,7 +224,7 @@ export default function Nl2SqlEvalPage() {
 			{Boolean(actionError) ? <ErrorNotice locale={locale} error={actionError} /> : null}
 			{actionMessage && (
 				<div style={{ marginBottom: "var(--spacing-md)" }}>
-					<Badge variant="success">{actionMessage}</Badge>
+					<Tag color="success">{actionMessage}</Tag>
 				</div>
 			)}
 
@@ -239,7 +238,7 @@ export default function Nl2SqlEvalPage() {
 							<TextArea label="Expected(JSON)" value={caseExpected} onChange={(event) => setCaseExpected(event.target.value)} rows={3} />
 						</div>
 					<div style={{ display: "flex", justifyContent: "flex-end", paddingTop: "var(--spacing-md)", marginTop: "var(--spacing-md)", borderTop: "1px solid var(--color-border)" }}>
-						<Button variant="primary" onClick={createCase} loading={saving}>
+						<Button color="blue" onClick={createCase} loading={saving}>
 							创建样例
 						</Button>
 					</div>
@@ -257,7 +256,7 @@ export default function Nl2SqlEvalPage() {
 					<div style={{ display: "flex", justifyContent: "flex-end", paddingTop: "var(--spacing-md)", marginTop: "var(--spacing-md)", borderTop: "1px solid var(--color-border)" }}>
 						<div style={{ display: "flex", gap: "var(--spacing-sm)" }}>
 							<Button variant="secondary" onClick={runEval} loading={saving}>执行评测</Button>
-							<Button variant="primary" onClick={runEvalGated} loading={saving}>执行 Gated</Button>
+							<Button color="blue" onClick={runEvalGated} loading={saving}>执行 Gated</Button>
 						</div>
 					</div>
 				</Card>
@@ -265,7 +264,7 @@ export default function Nl2SqlEvalPage() {
 
 			<Card style={{ marginBottom: "var(--spacing-lg)" }}
 				title="样例列表"
-				extra={casesState.state === "loaded" ? <Badge>{casesState.value.length}</Badge> : null}
+				extra={casesState.state === "loaded" ? <Tag>{casesState.value.length}</Tag> : null}
 			>
 					{casesState.state === "loading" && (
 						<div className="loading-container" style={{ padding: "var(--spacing-lg)" }}>
@@ -303,7 +302,7 @@ export default function Nl2SqlEvalPage() {
 			<div className="grid2">
 				<Card
 					title="Run 历史与对比"
-					extra={runsState.state === "loaded" ? <Badge>{runsState.value.length}</Badge> : null}
+					extra={runsState.state === "loaded" ? <Tag>{runsState.value.length}</Tag> : null}
 				>
 						{runsState.state === "loading" && (
 							<div className="loading-container" style={{ padding: "var(--spacing-lg)" }}>
@@ -317,7 +316,7 @@ export default function Nl2SqlEvalPage() {
 									<NativeSelect label="Baseline Run" value={baselineRunId} onChange={(event) => setBaselineRunId(event.target.value)} options={runOptions} />
 									<NativeSelect label="Candidate Run" value={candidateRunId} onChange={(event) => setCandidateRunId(event.target.value)} options={runOptions} />
 								</div>
-								<Button variant="primary" onClick={() => void compareRuns()} disabled={!baselineRunId || !candidateRunId}>
+								<Button color="blue" onClick={() => void compareRuns()} disabled={!baselineRunId || !candidateRunId}>
 									执行 Run 对比
 								</Button>
 								<table className="table">

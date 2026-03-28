@@ -3,9 +3,8 @@ import { analyticsApi, type ExploreSessionItem } from "../api/analyticsApi";
 import { PageContainer, PageHeader } from "../components/PageContainer/PageContainer";
 import { ErrorNotice } from "../components/ErrorNotice";
 import { getEffectiveLocale, t, type Locale } from "../i18n";
-import { Badge } from "../ui/Badge/Badge";
 import { Button } from "../ui/Button/Button";
-import { Card } from "antd";
+import { Card, Tag } from "antd";
 import { Input, TextArea } from "../ui/Input/Input";
 import { Spinner } from "../ui/Loading/Spinner";
 import "./page.css";
@@ -304,7 +303,7 @@ export default function ExploreSessionsPage() {
 							/>
 							包含归档
 						</label>
-						<Button variant="secondary" size="sm" onClick={() => void loadSessions()}>
+						<Button variant="secondary" onClick={() => void loadSessions()}>
 							{t(locale, "common.refresh")}
 						</Button>
 					</div>
@@ -314,7 +313,7 @@ export default function ExploreSessionsPage() {
 			{Boolean(actionError) ? <ErrorNotice locale={locale} error={actionError} /> : null}
 			{actionMessage && (
 				<div style={{ marginBottom: "var(--spacing-md)" }}>
-					<Badge variant="success">{actionMessage}</Badge>
+					<Tag color="success">{actionMessage}</Tag>
 				</div>
 			)}
 
@@ -330,7 +329,7 @@ export default function ExploreSessionsPage() {
 							<Input label="标签（逗号分隔）" value={tags} onChange={(event) => setTags(event.target.value)} placeholder="产线,告警,复盘" />
 						</div>
 					<div style={{ display: "flex", justifyContent: "flex-end", paddingTop: "var(--spacing-md)", marginTop: "var(--spacing-md)", borderTop: "1px solid var(--color-border)" }}>
-						<Button variant="primary" onClick={createSession} loading={saving}>
+						<Button color="blue" onClick={createSession} loading={saving}>
 							创建会话
 						</Button>
 					</div>
@@ -338,7 +337,7 @@ export default function ExploreSessionsPage() {
 
 				<Card
 					title="会话列表"
-					extra={sessions.state === "loaded" ? <Badge>{sessions.value.length}</Badge> : null}
+					extra={sessions.state === "loaded" ? <Tag>{sessions.value.length}</Tag> : null}
 				>
 						{sessions.state === "loading" && (
 							<div className="loading-container" style={{ padding: "var(--spacing-lg)" }}>
@@ -371,7 +370,7 @@ export default function ExploreSessionsPage() {
 												<td>
 													<div style={{ display: "flex", alignItems: "center", gap: "var(--spacing-xs)" }}>
 														<span>{row.title || "未命名会话"}</span>
-														{row.archived ? <Badge size="sm">archived</Badge> : null}
+														{row.archived ? <Tag>archived</Tag> : null}
 													</div>
 												</td>
 												<td>{row.stepCount ?? (Array.isArray(row.steps) ? row.steps.length : 0)}</td>
@@ -390,9 +389,9 @@ export default function ExploreSessionsPage() {
 				extra={
 						currentSession ? (
 							<div style={{ display: "flex", gap: "var(--spacing-xs)", flexWrap: "wrap" }}>
-								<Button size="sm" variant="tertiary" onClick={cloneSession} loading={saving}>复制</Button>
-								<Button size="sm" variant="tertiary" onClick={shareSession} loading={saving}>分享</Button>
-								<Button size="sm" variant="danger" onClick={archiveSession} loading={saving}>归档</Button>
+								<Button variant="tertiary" onClick={cloneSession} loading={saving}>复制</Button>
+								<Button variant="tertiary" onClick={shareSession} loading={saving}>分享</Button>
+								<Button variant="danger" onClick={archiveSession} loading={saving}>归档</Button>
 							</div>
 						) : null
 					}
@@ -414,7 +413,7 @@ export default function ExploreSessionsPage() {
 									<div className="small muted">标签</div>
 									<div style={{ display: "flex", gap: "var(--spacing-xs)", flexWrap: "wrap" }}>
 										{Array.isArray(currentSession.tags) && currentSession.tags.length > 0
-											? currentSession.tags.map((tag, idx) => <Badge key={`${String(tag)}-${idx}`} size="sm">{String(tag)}</Badge>)
+											? currentSession.tags.map((tag, idx) => <Tag key={`${String(tag)}-${idx}`}>{String(tag)}</Tag>)
 											: <span>-</span>}
 									</div>
 								</div>
@@ -442,7 +441,7 @@ export default function ExploreSessionsPage() {
 
 							<div style={{ display: "flex", gap: "var(--spacing-sm)", alignItems: "center", flexWrap: "wrap" }}>
 								<Button variant="secondary" onClick={updateConclusion} loading={saving}>更新结论</Button>
-								<Button variant="primary" onClick={appendStep} loading={saving}>追加步骤</Button>
+								<Button color="blue" onClick={appendStep} loading={saving}>追加步骤</Button>
 								<Input
 									label="重放步骤序号"
 									type="number"

@@ -4,10 +4,9 @@ import { analyticsApi, type SearchItem } from "../api/analyticsApi";
 import { PageContainer, PageHeader } from "../components/PageContainer/PageContainer";
 import { EmptyState } from "../components/EmptyState";
 import { ErrorNotice } from "../components/ErrorNotice";
-import { Card, CardBody } from "../ui/Card/Card";
+import { Card, Tag } from "antd";
 import { SearchInput } from "../ui/Input/Input";
 import { Button } from "../ui/Button/Button";
-import { Badge } from "../ui/Badge/Badge";
 import { Spinner } from "../ui/Loading/Spinner";
 import { getEffectiveLocale, t, type Locale } from "../i18n";
 import "./page.css";
@@ -117,79 +116,71 @@ export default function SearchPage() {
 			/>
 
 			<Card style={{ marginBottom: "var(--spacing-lg)" }}>
-				<CardBody>
-					<form onSubmit={handleSubmit}>
-						<div style={{ display: "flex", gap: "var(--spacing-sm)" }}>
-							<div style={{ flex: "1 1 360px" }}>
-								<SearchInput
-									value={value}
-									onChange={(e) => setValue(e.target.value)}
-									placeholder={t(locale, "search.placeholder")}
-									size="lg"
-								/>
-							</div>
-							<Button variant="primary" type="submit" icon={<SearchIcon />}>
-								{t(locale, "search.button")}
-							</Button>
+				<form onSubmit={handleSubmit}>
+					<div style={{ display: "flex", gap: "var(--spacing-sm)" }}>
+						<div style={{ flex: "1 1 360px" }}>
+							<SearchInput
+								value={value}
+								onChange={(e) => setValue(e.target.value)}
+								placeholder={t(locale, "search.placeholder")}
+								size="lg"
+							/>
 						</div>
-					</form>
-				</CardBody>
+						<Button color="blue" type="submit" icon={<SearchIcon />}>
+							{t(locale, "search.button")}
+						</Button>
+					</div>
+				</form>
 			</Card>
 
 			{state.state === "idle" && (
 				<Card>
-					<CardBody>
-						<p className="text-muted" style={{ textAlign: "center", margin: 0 }}>
-							{t(locale, "search.placeholder")}
-						</p>
-					</CardBody>
+					<p className="text-muted" style={{ textAlign: "center", margin: 0 }}>
+						{t(locale, "search.placeholder")}
+					</p>
 				</Card>
 			)}
 			{state.state === "loading" && (
 				<Card>
-					<CardBody>
-						<div className="loading-container" style={{ padding: "var(--spacing-xl)" }}>
-							<Spinner size="lg" />
-						</div>
-					</CardBody>
+					<div className="loading-container" style={{ padding: "var(--spacing-xl)" }}>
+						<Spinner size="lg" />
+					</div>
 				</Card>
 			)}
 			{state.state === "error" && <ErrorNotice locale={locale} error={state.error} />}
 			{state.state === "loaded" && (
 				<Card>
-					<CardBody>
-						<div style={{ marginBottom: "var(--spacing-md)" }}>
-							<Badge variant="default">
-								{t(locale, "search.total")}: {state.value.total}
-							</Badge>
+					<div style={{ marginBottom: "var(--spacing-md)" }}>
+						<Tag>
+							{t(locale, "search.total")}: {state.value.total}
+						</Tag>
+					</div>
+					{state.value.data.length === 0 ? (
+						<EmptyState title={t(locale, "common.empty")} />
+					) : (
+						<div className="search-results">
+							{state.value.data.map((item) => (
+								<Link
+									key={`${item.model}:${item.id}`}
+									to={resultHref(item)}
+									className="search-result-item"
+								>
+									<div className="search-result-icon">
+										{resultIcon(item.model)}
+									</div>
+									<div className="search-result-content">
+										<span className="search-result-name">{item.name ?? "-"}</span>
+										<span className="search-result-meta">
+											<Tag color={item.model === "dashboard" ? "processing" : item.model === "card" ? "success" : undefined}>
+												{item.model === "dashboard" ? t(locale, "dashboards.title") : item.model === "card" ? t(locale, "questions.title") : item.model === "collection" ? t(locale, "collections.title") : item.model}
+											</Tag>
+											<span className="text-muted">{t(locale, "common.id")}: {String(item.id)}</span>
+										</span>
+									</div>
+								</Link>
+							))}
 						</div>
-						{state.value.data.length === 0 ? (
-							<EmptyState title={t(locale, "common.empty")} />
-						) : (
-							<div className="search-results">
-								{state.value.data.map((item) => (
-									<Link
-										key={`${item.model}:${item.id}`}
-										to={resultHref(item)}
-										className="search-result-item"
-									>
-										<div className="search-result-icon">
-											{resultIcon(item.model)}
-										</div>
-										<div className="search-result-content">
-											<span className="search-result-name">{item.name ?? "-"}</span>
-											<span className="search-result-meta">
-												<Badge variant={item.model === "dashboard" ? "info" : item.model === "card" ? "success" : "default"} size="sm">
-													{item.model === "dashboard" ? t(locale, "dashboards.title") : item.model === "card" ? t(locale, "questions.title") : item.model === "collection" ? t(locale, "collections.title") : item.model}
-												</Badge>
-												<span className="text-muted">{t(locale, "common.id")}: {String(item.id)}</span>
-											</span>
-										</div>
-									</Link>
-								))}
-							</div>
-						)}
-					</CardBody>
+					)}
 				</Card>
 			)}
 

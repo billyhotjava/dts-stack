@@ -4,9 +4,8 @@ import { analyticsApi, type DatabaseListItem } from "../api/analyticsApi";
 import { PageContainer, PageHeader } from "../components/PageContainer/PageContainer";
 import { EmptyState } from "../components/EmptyState";
 import { ErrorNotice } from "../components/ErrorNotice";
-import { Card, CardBody } from "../ui/Card/Card";
+import { Card, Tag } from "antd";
 import { Button } from "../ui/Button/Button";
-import { Badge } from "../ui/Badge/Badge";
 import { Spinner } from "../ui/Loading/Spinner";
 import { getEffectiveLocale, t, type Locale } from "../i18n";
 import "./page.css";
@@ -81,7 +80,7 @@ export default function DataPage() {
 				title={t(locale, "data.title")}
 				actions={
 					<Link to="/data/new">
-						<Button variant="primary" icon={<PlusIcon />}>
+						<Button color="blue" icon={<PlusIcon />}>
 							{t(locale, "data.add")}
 						</Button>
 					</Link>
@@ -90,11 +89,9 @@ export default function DataPage() {
 
 			{state.state === "loading" && (
 				<Card>
-					<CardBody>
-						<div className="loading-container" style={{ padding: "var(--spacing-xl)" }}>
-							<Spinner size="lg" />
-						</div>
-					</CardBody>
+					<div className="loading-container" style={{ padding: "var(--spacing-xl)" }}>
+						<Spinner size="lg" />
+					</div>
 				</Card>
 			)}
 			{state.state === "error" && <ErrorNotice locale={locale} error={state.error} />}
@@ -103,7 +100,7 @@ export default function DataPage() {
 					title={t(locale, "data.empty")}
 					action={
 						<Link to="/data/new">
-							<Button variant="primary" icon={<PlusIcon />}>
+							<Button color="blue" icon={<PlusIcon />}>
 								{t(locale, "data.add")}
 							</Button>
 						</Link>
@@ -113,38 +110,36 @@ export default function DataPage() {
 			{state.state === "loaded" && state.value.length > 0 && (
 				<div className="grid3">
 					{state.value.map((db) => (
-						<Card key={db.id} variant="hoverable" style={{ height: "100%" }}>
-							<CardBody>
-								<div style={{ display: "flex", alignItems: "flex-start", gap: "var(--spacing-md)" }}>
-									<Link to={`/data/${db.id}`} style={{ textDecoration: "none", display: "flex", alignItems: "center", justifyContent: "center", width: 40, height: 40, borderRadius: "var(--radius-md)", background: "var(--color-bg-hover)", color: "var(--color-brand)", flexShrink: 0 }}>
-										<DatabaseIcon />
+						<Card key={db.id} hoverable style={{ height: "100%" }}>
+							<div style={{ display: "flex", alignItems: "flex-start", gap: "var(--spacing-md)" }}>
+								<Link to={`/data/${db.id}`} style={{ textDecoration: "none", display: "flex", alignItems: "center", justifyContent: "center", width: 40, height: 40, borderRadius: "var(--radius-md)", background: "var(--color-bg-hover)", color: "var(--color-brand)", flexShrink: 0 }}>
+									<DatabaseIcon />
+								</Link>
+								<div style={{ flex: 1, minWidth: 0 }}>
+									<Link to={`/data/${db.id}`} style={{ textDecoration: "none" }}>
+										<h3 style={{ margin: 0, fontSize: "var(--font-size-md)", fontWeight: "var(--font-weight-semibold)", color: "var(--color-text-primary)" }}>
+											{db.name ?? `db:${db.id}`}
+										</h3>
 									</Link>
-									<div style={{ flex: 1, minWidth: 0 }}>
-										<Link to={`/data/${db.id}`} style={{ textDecoration: "none" }}>
-											<h3 style={{ margin: 0, fontSize: "var(--font-size-md)", fontWeight: "var(--font-weight-semibold)", color: "var(--color-text-primary)" }}>
-												{db.name ?? `db:${db.id}`}
-											</h3>
-										</Link>
-										<p className="text-muted" style={{ margin: "var(--spacing-xs) 0 0", fontSize: "var(--font-size-sm)" }}>
-											{t(locale, "common.id")}: {db.id}
-										</p>
-									</div>
-									<Badge variant="default" size="sm">
-										{db.engine ?? "-"}
-									</Badge>
+									<p className="text-muted" style={{ margin: "var(--spacing-xs) 0 0", fontSize: "var(--font-size-sm)" }}>
+										{t(locale, "common.id")}: {db.id}
+									</p>
 								</div>
-								<div style={{ display: "flex", gap: "var(--spacing-xs)", marginTop: "var(--spacing-md)", justifyContent: "flex-end" }}>
-									<Button
-										variant="tertiary"
-										size="sm"
-										icon={<TrashIcon />}
-										onClick={() => setConfirmDeleteId(db.id)}
-										style={{ color: "var(--color-error)" }}
-									>
-										{t(locale, "data.delete")}
-									</Button>
-								</div>
-							</CardBody>
+								<Tag>
+									{db.engine ?? "-"}
+								</Tag>
+							</div>
+							<div style={{ display: "flex", gap: "var(--spacing-xs)", marginTop: "var(--spacing-md)", justifyContent: "flex-end" }}>
+								<Button
+									variant="tertiary"
+									size="sm"
+									icon={<TrashIcon />}
+									onClick={() => setConfirmDeleteId(db.id)}
+									style={{ color: "var(--color-error)" }}
+								>
+									{t(locale, "data.delete")}
+								</Button>
+							</div>
 						</Card>
 					))}
 				</div>
@@ -162,32 +157,30 @@ export default function DataPage() {
 					zIndex: 1000,
 				}}>
 					<Card style={{ maxWidth: 400, width: "90%" }}>
-						<CardBody>
-							<h3 style={{ margin: "0 0 var(--spacing-md)", fontSize: "var(--font-size-lg)", fontWeight: "var(--font-weight-semibold)" }}>
+						<h3 style={{ margin: "0 0 var(--spacing-md)", fontSize: "var(--font-size-lg)", fontWeight: "var(--font-weight-semibold)" }}>
+							{t(locale, "data.delete")}
+						</h3>
+						<p style={{ margin: "0 0 var(--spacing-lg)", color: "var(--color-text-secondary)" }}>
+							{t(locale, "data.deleteConfirm")}
+						</p>
+						<div style={{ display: "flex", gap: "var(--spacing-sm)", justifyContent: "flex-end" }}>
+							<Button
+								variant="secondary"
+								onClick={() => setConfirmDeleteId(null)}
+								disabled={deleting !== null}
+							>
+								{t(locale, "common.cancel")}
+							</Button>
+							<Button
+								color="blue"
+								loading={deleting === confirmDeleteId}
+								disabled={deleting !== null}
+								onClick={() => handleDelete(confirmDeleteId)}
+								style={{ background: "var(--color-error)" }}
+							>
 								{t(locale, "data.delete")}
-							</h3>
-							<p style={{ margin: "0 0 var(--spacing-lg)", color: "var(--color-text-secondary)" }}>
-								{t(locale, "data.deleteConfirm")}
-							</p>
-							<div style={{ display: "flex", gap: "var(--spacing-sm)", justifyContent: "flex-end" }}>
-								<Button
-									variant="secondary"
-									onClick={() => setConfirmDeleteId(null)}
-									disabled={deleting !== null}
-								>
-									{t(locale, "common.cancel")}
-								</Button>
-								<Button
-									variant="primary"
-									loading={deleting === confirmDeleteId}
-									disabled={deleting !== null}
-									onClick={() => handleDelete(confirmDeleteId)}
-									style={{ background: "var(--color-error)" }}
-								>
-									{t(locale, "data.delete")}
-								</Button>
-							</div>
-						</CardBody>
+							</Button>
+						</div>
 					</Card>
 				</div>
 			)}
