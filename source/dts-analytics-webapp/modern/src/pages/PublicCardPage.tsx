@@ -62,7 +62,7 @@ export default function PublicCardPage() {
 				title={card.state === "loaded" ? card.value.name ?? "-" : t(locale, "loading")}
 				breadcrumbs={
 					<Breadcrumb items={[
-						{ label: t(locale, "nav.analyze"), href: "/analyze" },
+						{ label: t(locale, "nav.home"), href: "/" },
 						{ label: "Share" }
 					]} />
 				}

@@ -29,8 +29,7 @@ export function createRoutes() {
 				children: [
 					{ path: "/", lazy: lazyComponent(() => import("./pages/HomePage")) },
 					{ path: "/modern", Component: ModernAliasRedirect },
-					{ path: "/analyze", lazy: lazyComponent(() => import("./pages/AnalyzePage")) },
-					{ path: "/collections", lazy: lazyComponent(() => import("./pages/CollectionsPage")) },
+		{ path: "/collections", lazy: lazyComponent(() => import("./pages/CollectionsPage")) },
 					{ path: "/collections/:id", lazy: lazyComponent(() => import("./pages/CollectionItemsPage")) },
 					{ path: "/dashboards", lazy: lazyComponent(() => import("./pages/DashboardsPage")) },
 					{ path: "/dashboards/new", lazy: lazyComponent(() => import("./pages/DashboardEditorPage")) },

@@ -1700,6 +1700,12 @@ export const analyticsApi = {
 	createCard: (body: unknown) => sendJson<CardDetail>("/analytics/api/card", body),
 	updateCard: (id: string | number, body: unknown) =>
 		requestJson<CardDetail>(`/analytics/api/card/${encodeURIComponent(String(id))}`, "PUT", body),
+	deleteCard: (id: string | number) =>
+		requestJson<void>(`/analytics/api/card/${encodeURIComponent(String(id))}`, "DELETE"),
+	deleteDashboard: (id: string | number) =>
+		requestJson<void>(`/analytics/api/dashboard/${encodeURIComponent(String(id))}`, "DELETE"),
+	updateDashboard: (id: string | number, body: unknown) =>
+		requestJson<DashboardDetail>(`/analytics/api/dashboard/${encodeURIComponent(String(id))}`, "PUT", body),
 	queryCard: (id: string | number, body?: unknown) =>
 		sendJson<CardQueryResponse>(`/analytics/api/card/${encodeURIComponent(String(id))}/query`, body ?? {}),
 	runDatasetQuery: (body: unknown) => sendJson<CardQueryResponse>("/analytics/api/dataset", body),

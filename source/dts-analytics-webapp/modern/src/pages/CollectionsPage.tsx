@@ -4,7 +4,7 @@ import { analyticsApi, type CollectionListItem } from "../api/analyticsApi";
 import { PageContainer, PageHeader } from "../components/PageContainer/PageContainer";
 import { EmptyState } from "../components/EmptyState";
 import { ErrorNotice } from "../components/ErrorNotice";
-import { Spin, Card } from "antd";
+import { Spin, Card, Tag } from "antd";
 import { getEffectiveLocale, t, type Locale } from "../i18n";
 import "./page.css";
 
@@ -77,7 +77,9 @@ export default function CollectionsPage() {
 									</div>
 									<div style={{ flex: 1, minWidth: 0 }}>
 										<h3 style={{ margin: 0, fontSize: "var(--font-size-md)", fontWeight: "var(--font-weight-semibold)" }}>
-											{c.id === "root" ? t(locale, "collections.rootName") : (c.name ?? "-")}
+											{c.id === "root" ? (
+											<>{t(locale, "collections.rootName")} <Tag color="blue">个人</Tag></>
+										) : (c.name ?? "-")}
 										</h3>
 										<p className="text-muted" style={{ margin: "var(--spacing-xs) 0 0", fontSize: "var(--font-size-sm)" }}>
 											{t(locale, "common.id")}: {String(c.id)}

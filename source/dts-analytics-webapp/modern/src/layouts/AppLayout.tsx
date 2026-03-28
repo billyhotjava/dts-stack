@@ -5,7 +5,6 @@ import { Layout, Menu, Button, Dropdown as AntDropdown, Space, Tooltip } from "a
 import type { MenuProps } from "antd";
 import {
 	HomeOutlined,
-	LineChartOutlined,
 	QuestionCircleOutlined,
 	DashboardOutlined,
 	FolderOutlined,
@@ -34,9 +33,7 @@ type RouteNavMeta = {
 };
 
 const ROUTE_NAV_MAP: RouteNavMeta[] = [
-	{ path: "/collections/root", section: "nav.section.core", nav: "nav.myCollection" },
 	{ path: "/", section: "nav.section.core", nav: "nav.home" },
-	{ path: "/analyze", section: "nav.section.core", nav: "nav.analyze" },
 	{ path: "/questions", section: "nav.section.core", nav: "nav.questions" },
 	{ path: "/dashboards", section: "nav.section.core", nav: "nav.dashboards" },
 	{ path: "/collections", section: "nav.section.core", nav: "nav.collections" },
@@ -127,8 +124,6 @@ function HeaderIntro() {
 // ── Determine which menu key is active based on current path ──
 
 const MENU_PATHS = [
-	"/collections/root",
-	"/analyze",
 	"/questions",
 	"/dashboards",
 	"/collections",
@@ -184,11 +179,9 @@ export function AppLayout() {
 			label: t(locale, "nav.section.core"),
 			children: [
 				{ key: "/", icon: <HomeOutlined />, label: t(locale, "nav.home") },
-				{ key: "/analyze", icon: <LineChartOutlined />, label: t(locale, "nav.analyze") },
 				{ key: "/questions", icon: <QuestionCircleOutlined />, label: t(locale, "nav.questions") },
 				{ key: "/dashboards", icon: <DashboardOutlined />, label: t(locale, "nav.dashboards") },
 				{ key: "/collections", icon: <FolderOutlined />, label: t(locale, "nav.collections") },
-				{ key: "/collections/root", icon: <FolderOutlined />, label: t(locale, "nav.myCollection") },
 			],
 		},
 		{ type: "divider" },
