@@ -1,8 +1,7 @@
 import { useState } from "react";
 import type { Locale } from "../../i18n";
 import { ErrorNotice } from "../../components/ErrorNotice";
-import { Input, Spin, Button, Card, Tag, Select } from "antd";
-import { Tab, TabList, TabPanel, TabPanels, Tabs } from "../../ui/Tabs/Tabs";
+import { Input, Spin, Button, Card, Tag, Select, Tabs } from "antd";
 import type {
 	ProjectCockpitOption,
 	ProjectCockpitSettingsResponse,
@@ -217,42 +216,32 @@ export function ProjectCockpitLayout({
 			{summaryError ? <ErrorNotice locale={locale} error={summaryError} /> : null}
 
 			<Tabs
-				value={queryState.theme}
-				onChange={(value) => setTheme(value as ProjectCockpitTheme)}
-				variant="pill"
+				activeKey={queryState.theme}
+				onChange={(key) => setTheme(key as ProjectCockpitTheme)}
 				className="project-cockpit__tabs"
-			>
-				<TabList aria-label="项目看板主题">
-					{THEME_ITEMS.map((item) => (
-						<Tab key={item.id} value={item.id}>
-							{item.label}
-						</Tab>
-					))}
-				</TabList>
-				<TabPanels>
-					<TabPanel value="overview">
-						{summaryLoading && !summary ? (
-							<div className="project-cockpit__loading-card">
-								<Spin size="large" />
-							</div>
-						) : (
-							<OverviewTrendView summary={summary} summaryLoading={summaryLoading} locale={locale} />
-						)}
-					</TabPanel>
-					<TabPanel value="execution">
-						<ExecutionView locale={locale} />
-					</TabPanel>
-					<TabPanel value="risk">
-						<RiskAttributionView locale={locale} />
-					</TabPanel>
-					<TabPanel value="tree">
-						<MajorProjectTreeView locale={locale} />
-					</TabPanel>
-					<TabPanel value="support">
-						<DataSupportView locale={locale} />
-					</TabPanel>
-				</TabPanels>
-			</Tabs>
+				items={THEME_ITEMS.map((item) => ({
+					key: item.id,
+					label: item.label,
+					children:
+						item.id === "overview" ? (
+							summaryLoading && !summary ? (
+								<div className="project-cockpit__loading-card">
+									<Spin size="large" />
+								</div>
+							) : (
+								<OverviewTrendView summary={summary} summaryLoading={summaryLoading} locale={locale} />
+							)
+						) : item.id === "execution" ? (
+							<ExecutionView locale={locale} />
+						) : item.id === "risk" ? (
+							<RiskAttributionView locale={locale} />
+						) : item.id === "tree" ? (
+							<MajorProjectTreeView locale={locale} />
+						) : item.id === "support" ? (
+							<DataSupportView locale={locale} />
+						) : null,
+				}))}
+			/>
 			<DrillDownDrawer />
 		</div>
 	);

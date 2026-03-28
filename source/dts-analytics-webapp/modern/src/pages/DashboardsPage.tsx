@@ -2,8 +2,7 @@ import { Link } from "react-router";
 import { useEffect, useMemo, useState } from "react";
 import { analyticsApi, type DashboardListItem } from "../api/analyticsApi";
 import { PageContainer, PageHeader, EmptyState } from "../components/PageContainer/PageContainer";
-import { Button, Card, Input } from "antd";
-import { CardSkeleton } from "../ui/Loading/Skeleton";
+import { Button, Card, Input, Skeleton } from "antd";
 import { CardGrid } from "../components/DashboardGrid/DashboardGrid";
 import { ErrorNotice } from "../components/ErrorNotice";
 import { getEffectiveLocale, t, type Locale } from "../i18n";
@@ -132,7 +131,7 @@ export default function DashboardsPage() {
 			{state.state === "loading" && (
 				<CardGrid columns={3} gap="md">
 					{[1, 2, 3, 4, 5, 6].map((i) => (
-						<CardSkeleton key={i} lines={2} />
+						<Card key={i}><Skeleton active paragraph={{ rows: 2 }} /></Card>
 					))}
 				</CardGrid>
 			)}

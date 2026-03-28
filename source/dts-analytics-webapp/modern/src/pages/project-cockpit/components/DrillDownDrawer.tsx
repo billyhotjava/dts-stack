@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Drawer } from "../../../ui/Drawer/Drawer";
-import { Input, Spin, Button, Tag } from "antd";
+import { Drawer, Input, Spin, Button, Tag } from "antd";
 import { analyticsApi, type ProjectCockpitDrillItem } from "../../../api/analyticsApi";
 import { useProjectCockpitContext, type DrillTarget } from "../ProjectCockpitContext";
 import "./DrillDownDrawer.css";
@@ -200,11 +199,10 @@ export function DrillDownDrawer() {
 
 	return (
 		<Drawer
-			isOpen={isOpen}
+			open={isOpen}
 			onClose={closeDrill}
-			title={title}
-			description={subtitle || undefined}
-			size="large"
+			title={subtitle ? <div><div>{title}</div><div style={{ fontSize: 12, color: "var(--color-text-secondary)", fontWeight: 400 }}>{subtitle}</div></div> : title}
+			width={640}
 			footer={
 				<div style={{ display: "flex", gap: 8 }}>
 					<Button type="default" onClick={handleExportCsv} disabled={filtered.length === 0}>
