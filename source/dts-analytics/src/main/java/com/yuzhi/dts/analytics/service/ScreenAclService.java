@@ -14,6 +14,11 @@ import java.util.Set;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+/**
+ * @deprecated Superseded by platform-centralized asset_grant table (Sprint-19).
+ * Screen permissions now managed via platform AssetGrantResource.
+ */
+@Deprecated(since = "2.2.2", forRemoval = true)
 @Service
 @Transactional
 public class ScreenAclService {

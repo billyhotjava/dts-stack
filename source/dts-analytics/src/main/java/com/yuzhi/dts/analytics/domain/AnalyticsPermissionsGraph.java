@@ -9,6 +9,13 @@ import jakarta.persistence.Table;
 import java.io.Serializable;
 import java.time.Instant;
 
+/**
+ * @deprecated Superseded by platform-centralized asset permission model (Sprint-19).
+ * Permission checks now go through PlatformPermissionClient → platform AssetPermissionService.
+ * This entity and its table will be removed in a future release.
+ */
+@Deprecated(since = "2.2.2", forRemoval = true)
+
 @Entity
 @Table(name = "analytics_permissions_graph")
 public class AnalyticsPermissionsGraph implements Serializable {

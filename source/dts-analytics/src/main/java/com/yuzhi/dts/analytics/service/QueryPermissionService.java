@@ -25,7 +25,11 @@ import org.springframework.transaction.annotation.Transactional;
  *
  * <p>Implements permission checking for database, table, and field access.
  * Permissions are determined by group membership and the permissions graph.
+ *
+ * @deprecated Superseded by platform-centralized asset permission model (Sprint-19).
+ * Permission checks now go through PlatformPermissionFilter → PlatformPermissionClient.
  */
+@Deprecated(since = "2.2.2", forRemoval = true)
 @Service
 public class QueryPermissionService {
 
