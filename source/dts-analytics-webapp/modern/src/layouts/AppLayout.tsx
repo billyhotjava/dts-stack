@@ -1,4 +1,4 @@
-import { Link, Outlet, useLocation } from "react-router";
+import { Link, Outlet, useLocation, useNavigate } from "react-router";
 import { ErrorBoundary } from "../components/ErrorBoundary";
 import {
 	SidebarProvider,
@@ -7,10 +7,17 @@ import {
 	SidebarItem,
 	SidebarDivider,
 } from "../components/SidebarNav/SidebarNav";
-import { ThemeToggle } from "../ui/ThemeToggle/ThemeToggle";
-import { Dropdown, DropdownItem, DropdownSeparator } from "../ui/Dropdown/Dropdown";
+import { Layout, Button, Dropdown as AntDropdown, Space, Tooltip } from "antd";
+import {
+	AppstoreOutlined,
+	SearchOutlined,
+	UserOutlined,
+	LogoutOutlined,
+} from "@ant-design/icons";
 import { getEffectiveLocale, t } from "../i18n";
 import "./layout.css";
+
+const { Header } = Layout;
 
 // Icons
 const HomeIcon = () => (
@@ -142,20 +149,6 @@ const Nl2SqlEvalIcon = () => (
 	</svg>
 );
 
-const UserIcon = () => (
-	<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-		<path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2" />
-		<circle cx="12" cy="7" r="4" />
-	</svg>
-);
-
-const LogoutIcon = () => (
-	<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-		<path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
-		<polyline points="16 17 21 12 16 7" />
-		<line x1="21" y1="12" x2="9" y2="12" />
-	</svg>
-);
 
 const ChevronRightIcon = () => (
 	<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -249,6 +242,7 @@ function HeaderIntro() {
 
 export function AppLayout() {
 	const locale = getEffectiveLocale();
+	const navigate = useNavigate();
 	const userInfo = getUserInfo();
 	const displayName = userInfo.fullName || userInfo.username || "用户";
 
@@ -320,40 +314,6 @@ export function AppLayout() {
 		</Link>
 	);
 
-	const UserMenu = (
-		<Dropdown
-			trigger={
-				<button className="header-user-trigger" type="button">
-					<UserIcon />
-				</button>
-			}
-			placement="bottom-end"
-		>
-			<div className="header-user-info">
-				<div className="header-user-info__avatar">
-					<UserIcon />
-				</div>
-				<div className="header-user-info__details">
-					<div className="header-user-info__name">{displayName}</div>
-					{userInfo.email && (
-						<div className="header-user-info__email">
-							{userInfo.email}
-							{userInfo.username ? `（${userInfo.username}）` : null}
-						</div>
-					)}
-				</div>
-			</div>
-			<DropdownSeparator />
-			<DropdownItem
-				icon={<LogoutIcon />}
-				danger
-				onClick={handleLogout}
-			>
-				退出
-			</DropdownItem>
-			</Dropdown>
-		);
-
 	return (
 		<SidebarProvider>
 			<div className="layout">
@@ -390,27 +350,65 @@ export function AppLayout() {
 				</SidebarNav>
 
 				<main className="main">
-					<header className="main-header">
-						<div className="main-header__left">
+					<Header
+						style={{
+							display: "flex",
+							alignItems: "center",
+							justifyContent: "space-between",
+							padding: "0 16px",
+							background: "#fff",
+							borderBottom: "1px solid #f0f0f0",
+							height: 48,
+							lineHeight: "48px",
+						}}
+					>
+						<div style={{ flex: 1 }}>
 							<HeaderIntro />
 						</div>
-						<div className="main-header__right">
-							<Link to="/search" className="header-action-chip">
-								<SearchIcon />
-								<span>全局搜索</span>
-							</Link>
-							<Link to="/screens" className="header-action-chip">
-								<ScreenIcon />
-								<span>大屏工厂</span>
-							</Link>
-							<Link to="/project-cockpit" className="header-action-chip">
-								<ProjectCockpitIcon />
-								<span>项目看板</span>
-							</Link>
-							<ThemeToggle className="header-theme-toggle" showLabel={false} />
-							{UserMenu}
-						</div>
-					</header>
+
+						<Space size={8}>
+							<Tooltip title={t(locale, "nav.search")}>
+								<Button
+									type="text"
+									icon={<SearchOutlined />}
+									onClick={() => navigate("/search")}
+								/>
+							</Tooltip>
+
+							<Tooltip title="切换应用">
+								<Button
+									type="text"
+									icon={<AppstoreOutlined />}
+									onClick={() => {
+										localStorage.removeItem("dts.portal.preferredApp");
+										window.location.href = "/portal";
+									}}
+								/>
+							</Tooltip>
+
+							<AntDropdown
+								menu={{
+									items: [
+										{
+											key: "user-info",
+											label: displayName,
+											disabled: true,
+										},
+										{ type: "divider" },
+										{
+											key: "logout",
+											icon: <LogoutOutlined />,
+											label: "退出登录",
+											onClick: handleLogout,
+										},
+									],
+								}}
+								placement="bottomRight"
+							>
+								<Button type="text" icon={<UserOutlined />} />
+							</AntDropdown>
+						</Space>
+					</Header>
 					<div className="main-content">
 						<ErrorBoundary>
 							<Outlet />
