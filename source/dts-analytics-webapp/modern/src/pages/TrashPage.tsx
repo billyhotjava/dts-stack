@@ -1,10 +1,9 @@
-import { useEffect, useMemo, useState } from "react";
-import { Link } from "react-router";
-import { analyticsApi, type TrashResponse } from "../api/analyticsApi";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { analyticsApi, type TrashItem, type TrashResponse } from "../api/analyticsApi";
 import { PageContainer, PageHeader } from "../components/PageContainer/PageContainer";
-import { EmptyState } from "../components/EmptyState";
 import { ErrorNotice } from "../components/ErrorNotice";
-import { Spin, Card, Tag } from "antd";
+import { Button, Spin, Tag, Checkbox, message } from "antd";
+import { UndoOutlined } from "@ant-design/icons";
 import { getEffectiveLocale, t, type Locale } from "../i18n";
 import "./page.css";
 
@@ -22,158 +21,138 @@ const TrashIcon = () => (
 	</svg>
 );
 
-const DashboardIcon = () => (
-	<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-		<rect width="7" height="9" x="3" y="3" rx="1" />
-		<rect width="7" height="5" x="14" y="3" rx="1" />
-		<rect width="7" height="9" x="14" y="12" rx="1" />
-		<rect width="7" height="5" x="3" y="16" rx="1" />
-	</svg>
-);
-
-const CardIcon = () => (
-	<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-		<rect width="18" height="18" x="3" y="3" rx="2" />
-		<path d="M3 9h18" />
-		<path d="M9 21V9" />
-	</svg>
-);
-
 export default function TrashPage() {
 	const locale: Locale = useMemo(() => getEffectiveLocale(), []);
 	const [state, setState] = useState<LoadState<TrashResponse>>({ state: "loading" });
+	const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
 
-	useEffect(() => {
-		let cancelled = false;
+	const loadTrash = useCallback(() => {
+		setState({ state: "loading" });
 		analyticsApi
 			.getTrash()
 			.then((value) => {
-				if (cancelled) return;
 				setState({ state: "loaded", value });
 			})
 			.catch((e) => {
-				if (cancelled) return;
 				setState({ state: "error", error: e });
 			});
-		return () => {
-			cancelled = true;
-		};
 	}, []);
 
-	const items = useMemo(() => {
+	useEffect(() => {
+		loadTrash();
+	}, [loadTrash]);
+
+	const allItems: TrashItem[] = useMemo(() => {
 		if (state.state !== "loaded") return [];
 		return [...(state.value.dashboards ?? []), ...(state.value.cards ?? [])];
 	}, [state]);
+
+	const loading = state.state === "loading";
+
+	const restoreItem = async (model: string, id: number) => {
+		if (model === "card") {
+			await analyticsApi.updateCard(id, { archived: false });
+		} else {
+			await analyticsApi.updateDashboard(id, { archived: false });
+		}
+		message.success("已恢复");
+		loadTrash();
+	};
+
+	const handleBatchRestore = async () => {
+		const items = Array.from(selectedIds).map((key) => {
+			const [model, idStr] = key.split("-");
+			return { model, id: Number(idStr) };
+		});
+		const results = await Promise.allSettled(
+			items.map((it) =>
+				it.model === "card"
+					? analyticsApi.updateCard(it.id, { archived: false })
+					: analyticsApi.updateDashboard(it.id, { archived: false }),
+			),
+		);
+		const failed = results.filter((r) => r.status === "rejected").length;
+		if (failed > 0) message.warning(`${items.length - failed} 项已恢复，${failed} 项失败`);
+		else message.success(`${items.length} 项已恢复`);
+		setSelectedIds(new Set());
+		loadTrash();
+	};
 
 	return (
 		<PageContainer>
 			<PageHeader
 				title={t(locale, "trash.title")}
+				actions={
+					selectedIds.size > 0 ? (
+						<Button icon={<UndoOutlined />} onClick={handleBatchRestore}>
+							恢复选中项 ({selectedIds.size})
+						</Button>
+					) : undefined
+				}
 			/>
 
-			{state.state === "loading" && (
-				<Card>
-					<div className="loading-container" style={{ padding: "var(--spacing-xl)" }}>
-						<Spin size="large" />
-					</div>
-				</Card>
+			{loading && (
+				<div className="loading-container" style={{ padding: "var(--spacing-xl)", textAlign: "center" }}>
+					<Spin size="large" />
+				</div>
 			)}
 			{state.state === "error" && <ErrorNotice locale={locale} error={state.error} />}
-			{state.state === "loaded" && items.length === 0 && (
-				<Card>
-					<div style={{ display: "flex", flexDirection: "column", alignItems: "center", padding: "var(--spacing-xl)", textAlign: "center" }}>
-						<div style={{ color: "var(--color-text-tertiary)", marginBottom: "var(--spacing-md)" }}>
-							<TrashIcon />
-						</div>
-						<h3 style={{ margin: 0, color: "var(--color-text-secondary)" }}>{t(locale, "common.empty")}</h3>
-						<p className="text-muted" style={{ marginTop: "var(--spacing-sm)" }}>
-							{t(locale, "trash.emptyDesc")}
-						</p>
+			{state.state === "loaded" && allItems.length === 0 && (
+				<div style={{ display: "flex", flexDirection: "column", alignItems: "center", padding: "var(--spacing-xl)", textAlign: "center" }}>
+					<div style={{ color: "var(--color-text-tertiary)", marginBottom: "var(--spacing-md)" }}>
+						<TrashIcon />
 					</div>
-				</Card>
+					<h3 style={{ margin: 0, color: "var(--color-text-secondary)" }}>{t(locale, "common.empty")}</h3>
+					<p className="text-muted" style={{ marginTop: "var(--spacing-sm)" }}>
+						{t(locale, "trash.emptyDesc")}
+					</p>
+				</div>
 			)}
-			{state.state === "loaded" && items.length > 0 && (
-				<div className="trash-items">
-					{items.map((it) => {
-						const href = it.model === "dashboard" ? `/dashboards/${it.id}` : `/questions/${it.id}`;
+			{state.state === "loaded" && allItems.length > 0 && (
+				<div style={{ background: "var(--color-bg-primary)", border: "1px solid var(--color-border)", borderRadius: "var(--radius-md)" }}>
+					<div style={{ display: "flex", alignItems: "center", gap: 12, padding: "8px 12px", borderBottom: "1px solid #f0f0f0", background: "#fafafa", borderRadius: "var(--radius-md) var(--radius-md) 0 0" }}>
+						<Checkbox
+							checked={allItems.length > 0 && selectedIds.size === allItems.length}
+							indeterminate={selectedIds.size > 0 && selectedIds.size < allItems.length}
+							onChange={() => {
+								if (selectedIds.size === allItems.length) setSelectedIds(new Set());
+								else setSelectedIds(new Set(allItems.map((it) => `${it.model}-${it.id}`)));
+							}}
+						/>
+						<span style={{ fontWeight: 500, color: "#666" }}>全选</span>
+					</div>
+					{allItems.map((it) => {
+						const key = `${it.model}-${it.id}`;
 						return (
-							<Link key={`${it.model}:${it.id}`} to={href} className="trash-item">
-								<div className="trash-item__icon">
-									{it.model === "dashboard" ? <DashboardIcon /> : <CardIcon />}
-								</div>
-								<div className="trash-item__content">
-									<span className="trash-item__name">{it.name ?? "-"}</span>
-									<span className="trash-item__meta">
-										<Tag color={it.model === "dashboard" ? "processing" : "success"}>
-											{it.model === "dashboard" ? t(locale, "dashboards.title") : t(locale, "questions.title")}
-										</Tag>
-										<span className="text-muted">{t(locale, "common.id")}: {it.id}</span>
+							<div key={key} style={{ display: "flex", alignItems: "center", gap: 12, padding: "8px 12px", borderBottom: "1px solid #f0f0f0" }}>
+								<Checkbox
+									checked={selectedIds.has(key)}
+									onChange={() => {
+										setSelectedIds((prev) => {
+											const next = new Set(prev);
+											if (next.has(key)) next.delete(key);
+											else next.add(key);
+											return next;
+										});
+									}}
+								/>
+								<Tag color={it.model === "dashboard" ? "blue" : "green"}>
+									{it.model === "dashboard" ? "仪表盘" : "查询"}
+								</Tag>
+								<span style={{ flex: 1 }}>{it.name ?? "-"}</span>
+								{it.updated_at && (
+									<span style={{ color: "#999", fontSize: 12 }}>
+										{new Date(it.updated_at).toLocaleDateString()}
 									</span>
-								</div>
-							</Link>
+								)}
+								<Button type="link" size="small" icon={<UndoOutlined />} onClick={() => restoreItem(it.model, it.id)}>
+									恢复
+								</Button>
+							</div>
 						);
 					})}
 				</div>
 			)}
-
-			<style>{`
-				.trash-items {
-					display: flex;
-					flex-direction: column;
-					gap: var(--spacing-xs);
-					background: var(--color-bg-primary);
-					border: 1px solid var(--color-border);
-					border-radius: var(--radius-md);
-					padding: var(--spacing-sm);
-				}
-
-				.trash-item {
-					display: flex;
-					align-items: center;
-					gap: var(--spacing-md);
-					padding: var(--spacing-sm) var(--spacing-md);
-					border-radius: var(--radius-md);
-					text-decoration: none;
-					color: inherit;
-					transition: background-color var(--transition-fast);
-				}
-
-				.trash-item:hover {
-					background: var(--color-bg-hover);
-				}
-
-				.trash-item__icon {
-					display: flex;
-					align-items: center;
-					justify-content: center;
-					width: 32px;
-					height: 32px;
-					border-radius: var(--radius-sm);
-					background: var(--color-bg-tertiary);
-					color: var(--color-text-secondary);
-					flex-shrink: 0;
-				}
-
-				.trash-item__content {
-					display: flex;
-					flex-direction: column;
-					gap: var(--spacing-xs);
-					flex: 1;
-					min-width: 0;
-				}
-
-				.trash-item__name {
-					font-weight: var(--font-weight-medium);
-					color: var(--color-text-primary);
-				}
-
-				.trash-item__meta {
-					display: flex;
-					align-items: center;
-					gap: var(--spacing-sm);
-					font-size: var(--font-size-sm);
-				}
-			`}</style>
 		</PageContainer>
 	);
 }
