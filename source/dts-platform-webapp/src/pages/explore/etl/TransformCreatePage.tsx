@@ -17,12 +17,11 @@ import {
 } from "@/api/ingestion";
 import dataSourcesService, { type ExcelImportErrorRow, type InfraDataSource } from "@/api/services/dataSourcesService";
 import { listTables as sqlListTables, listColumns as sqlListColumns, type TableInfo as SqlTableInfo, type ColumnInfo } from "@/api/sql-workbench";
-import FileBasicStep from "./steps/FileBasicStep";
-import { FileTargetStep } from "./steps/FileTargetStep";
-import { DbBasicStep } from "./steps/DbBasicStep";
-import { DbSourceStep } from "./steps/DbSourceStep";
-import { DbTargetStep } from "./steps/DbTargetStep";
-import { ReviewStep } from "./steps/ReviewStep";
+import { DbUnifiedStep } from "./steps/DbUnifiedStep";
+import FileUnifiedStep from "./steps/FileUnifiedStep";
+import { UnifiedReviewStep } from "./steps/UnifiedReviewStep";
+import { getOrgTree, type OrgNode } from "@/api/services/directoryService";
+import { useActiveDept } from "@/store/contextStore";
 import type { ExtraColumnDef } from "./steps/types";
 import { resolveAsyncRunPollHint, resolveCreatedTaskId } from "./transformCreateAsyncRun.helpers";
 import { loadTransformCreateBootstrap } from "./transformCreateBootstrap.helpers";
@@ -42,6 +41,7 @@ import {
 } from "./transformCreateState.helpers";
 import { useTransformAsyncRunProgress } from "./useTransformAsyncRunProgress";
 import {
+	buildAutoSyncPrefix,
 	DRAFT_STORAGE_KEY,
 	GENERIC_JDBC_READER,
 	SYNC_MODE_LABELS,
@@ -127,6 +127,9 @@ export default function TransformCreatePage() {
 	const [currentStep, setCurrentStep] = useState(0);
 	const [dataSources, setDataSources] = useState<InfraDataSource[]>([]);
 	const [loadingDataSources, setLoadingDataSources] = useState(false);
+	const activeDept = useActiveDept();
+	const [deptOptions, setDeptOptions] = useState<{ label: string; value: string }[]>([]);
+	const [loadingDeptOptions, setLoadingDeptOptions] = useState(false);
 	const [connectorCapabilities, setConnectorCapabilities] = useState<IngestionConnectorCapabilityDTO[]>([]);
 	const [capabilityLoadFailed, setCapabilityLoadFailed] = useState(false);
 	const [taskTemplates, setTaskTemplates] = useState<IngestionTaskTemplateDTO[]>([]);
@@ -225,9 +228,24 @@ export default function TransformCreatePage() {
 			priority: "MEDIUM",
 			rejectPolicy: "REJECT",
 			windowTimezone: "Asia/Shanghai",
+			ownerDept: activeDept || undefined,
 		}),
-		[]
+		[activeDept]
 	);
+
+	const tableMappingPreview = useMemo(() => {
+		const vals = form.getFieldsValue(true);
+		const prefix = normalizeText(vals?.syncPrefix);
+		const tables = mergeTableSelections(
+			selectedTableKeys,
+			splitLines(vals?.readerTables),
+		);
+		if (!tables.length) return [];
+		return tables.map((source) => {
+			const base = source.includes(".") ? source.split(".").pop() || source : source;
+			return { source, target: prefix ? `${prefix}${base}` : base };
+		});
+	}, [form, selectedTableKeys]);
 
 	const handleCreateTaskResult = (result: any, runNow: boolean, taskName: string) => {
 		const createdTaskId = resolveCreatedTaskId(result);
@@ -343,6 +361,24 @@ export default function TransformCreatePage() {
 	}, [form]);
 
 	useEffect(() => {
+		let active = true;
+		setLoadingDeptOptions(true);
+		getOrgTree()
+			.then((nodes: OrgNode[]) => {
+				if (!active) return;
+				const flatten = (list: OrgNode[]): { label: string; value: string }[] =>
+					list.flatMap((n) => [
+						...(n.deptCode ? [{ label: n.name, value: n.deptCode }] : []),
+						...(n.children ? flatten(n.children) : []),
+					]);
+				setDeptOptions(flatten(nodes));
+			})
+			.catch(() => {})
+			.finally(() => { if (active) setLoadingDeptOptions(false); });
+		return () => { active = false; };
+	}, []);
+
+	useEffect(() => {
 		if (!selectedDataSource) {
 			if (!selectedDataSourceId && sourceCategory !== "file" && form.getFieldValue("readerType")) {
 				form.setFieldValue("readerType", undefined);
@@ -372,6 +408,13 @@ export default function TransformCreatePage() {
 			const sourceSystem = normalizeText(form.getFieldValue("sourceSystem")) || resolveSourceSystemFromDataSource(selectedDataSource);
 			if (sourceSystem) {
 				form.setFieldValue("dbtDagSelector", `tab:${normalizeTag(sourceSystem)}`);
+			}
+		}
+		const currentSyncPrefix = normalizeText(form.getFieldValue("syncPrefix"));
+		if (!currentSyncPrefix) {
+			const autoPrefix = buildAutoSyncPrefix(selectedDataSource);
+			if (autoPrefix) {
+				form.setFieldValue("syncPrefix", autoPrefix);
 			}
 		}
 	}, [form, selectedDataSource, selectedDataSourceId, sourceCategory]);
@@ -486,17 +529,14 @@ export default function TransformCreatePage() {
 	const supportsBackfill = useMemo(() => supportedSyncModes.has("backfill"), [supportedSyncModes]);
 	const dbStepItems = useMemo(
 		() => [
-			{ key: "basic", title: "基础信息" },
-			{ key: "reader", title: "源端配置" },
-			{ key: "writer", title: "目标配置" },
+			{ key: "unified", title: "数据源与表选择" },
 			{ key: "review", title: "预览与执行" },
 		],
 		[]
 	);
 	const fileStepItems = useMemo(
 		() => [
-			{ key: "basic", title: "基础信息" },
-			{ key: "writer", title: "目标配置" },
+			{ key: "unified", title: "上传与配置" },
 			{ key: "review", title: "预览与执行" },
 		],
 		[]
@@ -990,10 +1030,8 @@ export default function TransformCreatePage() {
 		if (values?.sourceCategory === "file") {
 			switch (stepIndex) {
 				case 0:
-					return ["name"];
+					return ["name", "ownerDept"];
 				case 1:
-					return ["writerType", "fileTableName"];
-				case 2:
 					return ["airflowEnabled", "runNow"];
 				default:
 					return [];
@@ -1001,17 +1039,11 @@ export default function TransformCreatePage() {
 		}
 		switch (stepIndex) {
 			case 0:
-				return ["editorMode", "name", "description", "sourceSystem"];
+				return isJsonMode
+					? ["name", "ownerDept", "sourceDataSourceId", "readerType", "readerConfig"]
+					: ["name", "ownerDept", "sourceDataSourceId", "readerType"];
 			case 1:
-				return isJsonMode
-					? ["sourceDataSourceId", "readerType", "readerConfig"]
-					: ["sourceDataSourceId", "readerType", "readerTables"];
-			case 2:
-				return isJsonMode
-					? ["writerType", "writerConfig"]
-					: ["writerType", "writerTables"];
-			case 3:
-				return ["jobConfig", "airflowEnabled", "runNow"];
+				return ["airflowEnabled", "runNow"];
 			default:
 				return [];
 		}
@@ -1213,6 +1245,7 @@ export default function TransformCreatePage() {
 						name: taskName,
 						description: normalizeText(mergedValues.description) || undefined,
 						owner: userInfo?.username || userInfo?.login,
+						ownerDept: normalizeText(mergedValues.ownerDept) || undefined,
 						source: {
 							type: resolvedReaderType,
 							config: readerConfig,
@@ -1360,6 +1393,7 @@ export default function TransformCreatePage() {
 					name: taskName,
 					description: normalizeText(mergedValues.description) || undefined,
 					owner: userInfo?.username || userInfo?.login,
+					ownerDept: normalizeText(mergedValues.ownerDept) || undefined,
 					source: {
 						dataSourceId: isFileSource ? undefined : sourceDataSourceId,
 						type: normalizeText(resolvedReaderType) || undefined,
@@ -1547,9 +1581,9 @@ export default function TransformCreatePage() {
 					) : null}
 					{isFileFlow ? (
 						<>
-							{/* ===== 文件上传模式 ===== */}
+							{/* ===== 文件上传模式（精简 2 步） ===== */}
 							{currentStep === 0 && (
-								<FileBasicStep
+								<FileUnifiedStep
 									form={form}
 									fileUploadResult={fileUploadResult}
 									setFileUploadResult={setFileUploadResult}
@@ -1650,33 +1684,36 @@ export default function TransformCreatePage() {
 									applyOdsMapping={applyOdsMapping}
 									unmatchedOdsFields={unmatchedOdsFields}
 									validateCronExpression={validateCronExpression}
+									deptOptions={deptOptions}
+									loadingDeptOptions={loadingDeptOptions}
+									extraColumns={extraColumns}
+									setExtraColumns={setExtraColumns}
 								/>
 							)}
 							{currentStep === 1 && (
-								<FileTargetStep
+								<UnifiedReviewStep
 									form={form}
+									isFileFlow={true}
 									defaultDestinationStatus={defaultDestinationStatus}
 									extraColumns={extraColumns}
 									setExtraColumns={setExtraColumns}
-									fileUploadResult={fileUploadResult}
-								/>
-							)}
-							{currentStep === 2 && (
-								<ReviewStep
-									form={form}
-									isFileFlow={true}
+									editorMode={editorMode}
 									previewState={previewState}
 									sqlModels={sqlModels}
 									loadingSqlModels={loadingSqlModels}
 									onNavigateToModeling={() => router.push("/modeling/sql")}
+									formValues={form.getFieldsValue(true)}
+									loadingDefaultDestination={loadingDefaultDestination}
+									defaultDestinationError={defaultDestinationError}
+									tableMappingPreview={tableMappingPreview}
 								/>
 							)}
 						</>
 					) : (
 						<>
-							{/* ===== 数据库模式 ===== */}
+							{/* ===== 数据库模式（精简 2 步） ===== */}
 							{currentStep === 0 && (
-								<DbBasicStep
+								<DbUnifiedStep
 									form={form}
 									editorMode={editorMode}
 									setEditorMode={(mode) => form.setFieldValue("editorMode", mode)}
@@ -1684,54 +1721,45 @@ export default function TransformCreatePage() {
 									syncModeOptions={syncModeOptions}
 									sourceCategory={sourceCategory}
 									setSourceCategory={setSourceCategory}
+									selectedTableKeys={selectedTableKeys}
+									setSelectedTableKeys={setSelectedTableKeys}
+									selectedDataSource={selectedDataSource ?? null}
+									dataSources={dataSources}
 									activeCapabilitySet={activeCapabilitySet}
 									supportsIncremental={supportsIncremental}
 									supportsCdc={supportsCdc}
 									supportsBackfill={supportsBackfill}
 									capabilityLoadFailed={capabilityLoadFailed}
-								/>
-							)}
-							{currentStep === 1 && (
-								<DbSourceStep
-									form={form}
-									selectedTableKeys={selectedTableKeys}
-									setSelectedTableKeys={setSelectedTableKeys}
-									editorMode={editorMode}
-									selectedDataSource={selectedDataSource ?? null}
 									availableTables={discoveredTables}
 									loadingTables={discoveringTables}
 									discoveredTableKeys={discoveredTableKeys}
 									discoverError={discoverError}
 									loadingDataSources={loadingDataSources}
-									dataSources={dataSources}
 									onDiscoverTables={handleDiscoverTables}
 									onApplyTables={handleApplyTables}
 									syncSelectedTablesToForm={syncSelectedTablesToForm}
 									readerTablesValidator={readerTablesValidator}
 									readerTypeValidator={readerTypeValidator}
+									deptOptions={deptOptions}
+									loadingDeptOptions={loadingDeptOptions}
 								/>
 							)}
-							{currentStep === 2 && (
-								<DbTargetStep
+							{currentStep === 1 && (
+								<UnifiedReviewStep
 									form={form}
+									isFileFlow={false}
 									defaultDestinationStatus={defaultDestinationStatus}
 									extraColumns={extraColumns}
 									setExtraColumns={setExtraColumns}
 									editorMode={editorMode}
-									formValues={form.getFieldsValue(true)}
-									loadingDefaultDestination={loadingDefaultDestination}
-									defaultDestinationError={defaultDestinationError}
-									resolveSelectedTables={() => selectedTableKeys}
-								/>
-							)}
-							{currentStep === 3 && (
-								<ReviewStep
-									form={form}
-									isFileFlow={false}
 									previewState={previewState}
 									sqlModels={sqlModels}
 									loadingSqlModels={loadingSqlModels}
 									onNavigateToModeling={() => router.push("/modeling/sql")}
+									formValues={form.getFieldsValue(true)}
+									loadingDefaultDestination={loadingDefaultDestination}
+									defaultDestinationError={defaultDestinationError}
+									tableMappingPreview={tableMappingPreview}
 								/>
 							)}
 						</>

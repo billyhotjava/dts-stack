@@ -400,6 +400,17 @@ export const resolveSourceSystemFromDataSource = (source?: InfraDataSource | nul
 	return direct || normalizeText(source.name);
 };
 
+export const buildAutoSyncPrefix = (source?: InfraDataSource | null): string => {
+	const systemCode = resolveSourceSystemFromDataSource(source);
+	if (!systemCode) return "";
+	const normalized = systemCode
+		.toLowerCase()
+		.replace(/[^a-z0-9]/g, "_")
+		.replace(/_+/g, "_")
+		.replace(/^_|_$/g, "");
+	return normalized ? `ods_${normalized}_` : "";
+};
+
 export const resolveReaderTypeFromDataSource = (source?: InfraDataSource | null) => {
 	if (!source) return "";
 	const props = source.props || {};
@@ -1061,6 +1072,7 @@ export const mapTaskToForm = (task: IngestionTaskDTO) => {
 	const columnSuffix = normalizeText(destinationConfig._columnSuffix);
 	const scheduleState = parseSyncSchedule(task.syncSchedule);
 	return {
+		ownerDept: (task as any).ownerDept || undefined,
 		editorMode: isFileReader ? "visual" : "json",
 		sourceCategory: isFileReader ? "file" : "database",
 		syncMode: task.syncMode || "full_refresh",
