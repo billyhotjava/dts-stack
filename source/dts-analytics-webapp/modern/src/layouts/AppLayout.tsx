@@ -316,7 +316,7 @@ export function AppLayout() {
 								icon={<AppstoreOutlined />}
 								onClick={() => {
 									localStorage.removeItem("dts.portal.preferredApp");
-									window.location.href = "/portal";
+									window.location.href = "/#/portal";
 								}}
 							/>
 						</Tooltip>

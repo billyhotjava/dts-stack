@@ -1,10 +1,13 @@
 import { Button, Tooltip } from "antd";
 import { AppstoreOutlined } from "@ant-design/icons";
+import { useNavigate } from "react-router";
 
 export function AppSwitcher() {
+	const navigate = useNavigate();
+
 	const handleSwitch = () => {
 		localStorage.removeItem("dts.portal.preferredApp");
-		window.location.href = "/portal";
+		navigate("/portal", { replace: true });
 	};
 
 	return (
