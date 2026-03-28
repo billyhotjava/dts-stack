@@ -30,4 +30,4 @@ export { ChartSettings, ChartSettingsPanel } from './ChartSettings';
 export type { ChartSettingsData, ChartSettingsProps, ChartSettingsPanelProps } from './ChartSettings';
 
 // Types
-export type { VisualizationType, VisualizationSettings } from './ChartRenderer';
+export type { VisualizationType, VisualizationSettings, SeriesClickParams } from './ChartRenderer';

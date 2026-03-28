@@ -5,9 +5,8 @@ import UploadedDataEditor from "../components/UploadedDataEditor";
 import { PageContainer, PageHeader, Breadcrumb } from "../components/PageContainer/PageContainer";
 import { EmptyState } from "../components/EmptyState";
 import { ErrorNotice } from "../components/ErrorNotice";
-import { Button, Card, Tag } from "antd";
+import { Spin, Button, Card, Tag } from "antd";
 import { SearchInput } from "../ui/Input/Input";
-import { Spinner } from "../ui/Loading/Spinner";
 import { getEffectiveLocale, t, type Locale } from "../i18n";
 import "./page.css";
 
@@ -206,7 +205,7 @@ export default function DatabaseNewPage() {
 
 							{state.state === "loading" && (
 								<div className="loading-container" style={{ padding: "var(--spacing-xl)" }}>
-									<Spinner size="large" />
+									<Spin size="large" />
 								</div>
 							)}
 

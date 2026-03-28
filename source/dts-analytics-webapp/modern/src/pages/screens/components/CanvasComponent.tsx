@@ -3,6 +3,7 @@ import { useScreen } from '../ScreenContext';
 import { ComponentRenderer } from './ComponentRenderer';
 import type { ScreenComponent, ScreenTheme } from '../types';
 import { collectContainerSubtreeIds } from '../componentHierarchy';
+import { resolveComponentAppearanceStyle } from '../componentAppearance';
 
 interface CanvasComponentProps {
     component: ScreenComponent;
@@ -367,6 +368,7 @@ export function CanvasComponent({ component, isSelected, theme }: CanvasComponen
                 height: component.height,
                 zIndex: component.zIndex,
                 cursor: isDragging ? 'grabbing' : isResizing ? 'default' : 'move',
+                ...resolveComponentAppearanceStyle(component.config),
             }}
             onMouseDown={handleMouseDown}
         >

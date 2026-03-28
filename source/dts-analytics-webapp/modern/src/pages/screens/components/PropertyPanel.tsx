@@ -1646,6 +1646,121 @@ export function PropertyPanel({ activeTab = 'style' }: { activeTab?: PropertyPan
                     </div>
                 )}
 
+                {/* Component Appearance */}
+                {isStyleTab && shouldRenderSection('component-appearance', '外观', '背景', '圆角', '边框', '透明') && (() => {
+                    const cc = selectedComponent.config;
+                    const setCC = handleConfigChange;
+                    return (
+                    <div className="property-section">
+                        <div className="property-section-title property-section-title-collapsible">
+                            <button
+                                type="button"
+                                className="property-section-toggle"
+                                onClick={() => toggleSection('component-appearance')}
+                            >
+                                {isSectionCollapsed('component-appearance') ? '▸' : '▾'} 组件外观
+                            </button>
+                        </div>
+                        {!isSectionCollapsed('component-appearance') ? (
+                            <>
+                                <div className="property-row">
+                                    <label className="property-label">背景色</label>
+                                    <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+                                        <input
+                                            type="color"
+                                            className="property-color-input"
+                                            value={String(cc.componentBgColor || 'transparent') === 'transparent' ? '#000000' : String(cc.componentBgColor || '#000000')}
+                                            onChange={(e) => setCC('componentBgColor', e.target.value)}
+                                        />
+                                        <input
+                                            type="text"
+                                            className="property-input"
+                                            style={{ flex: 1 }}
+                                            value={String(cc.componentBgColor || '')}
+                                            onChange={(e) => setCC('componentBgColor', e.target.value)}
+                                            placeholder="transparent"
+                                        />
+                                        {cc.componentBgColor ? (
+                                            <button type="button" className="property-btn-small" onClick={() => setCC('componentBgColor', '')}>清除</button>
+                                        ) : null}
+                                    </div>
+                                </div>
+                                <div className="property-row">
+                                    <label className="property-label">背景透明度</label>
+                                    <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+                                        <input
+                                            type="range"
+                                            min={0}
+                                            max={100}
+                                            step={1}
+                                            value={Number(cc.componentBgOpacity ?? 100)}
+                                            onChange={(e) => setCC('componentBgOpacity', Number(e.target.value))}
+                                            style={{ flex: 1 }}
+                                        />
+                                        <span style={{ fontSize: 11, minWidth: 32, textAlign: 'right' }}>{Number(cc.componentBgOpacity ?? 100)}%</span>
+                                    </div>
+                                </div>
+                                <div className="property-row">
+                                    <label className="property-label">圆角</label>
+                                    <input
+                                        type="number"
+                                        className="property-input"
+                                        value={Number(cc.componentBorderRadius ?? 0)}
+                                        onChange={(e) => setCC('componentBorderRadius', Math.max(0, Number(e.target.value) || 0))}
+                                        min={0}
+                                        max={100}
+                                        placeholder="0"
+                                    />
+                                </div>
+                                <div className="property-row">
+                                    <label className="property-label">边框</label>
+                                    <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+                                        <input
+                                            type="number"
+                                            className="property-input"
+                                            style={{ width: 50 }}
+                                            value={Number(cc.componentBorderWidth ?? 0)}
+                                            onChange={(e) => setCC('componentBorderWidth', Math.max(0, Number(e.target.value) || 0))}
+                                            min={0}
+                                            max={20}
+                                            placeholder="0"
+                                        />
+                                        <input
+                                            type="color"
+                                            className="property-color-input"
+                                            value={String(cc.componentBorderColor || '#ffffff')}
+                                            onChange={(e) => setCC('componentBorderColor', e.target.value)}
+                                        />
+                                        <select
+                                            className="property-input"
+                                            style={{ flex: 1 }}
+                                            value={String(cc.componentBorderStyle || 'solid')}
+                                            onChange={(e) => setCC('componentBorderStyle', e.target.value)}
+                                        >
+                                            <option value="solid">实线</option>
+                                            <option value="dashed">虚线</option>
+                                            <option value="dotted">点线</option>
+                                        </select>
+                                    </div>
+                                </div>
+                                <div className="property-row">
+                                    <label className="property-label">内边距</label>
+                                    <input
+                                        type="number"
+                                        className="property-input"
+                                        value={Number(cc.componentPadding ?? 0)}
+                                        onChange={(e) => setCC('componentPadding', Math.max(0, Number(e.target.value) || 0))}
+                                        min={0}
+                                        max={100}
+                                        placeholder="0"
+                                    />
+                                </div>
+                            </>
+                        ) : null}
+                    </div>
+                    );
+                })()}
+
                 {/* Position & Size */}
                 {isStyleTab && shouldRenderSection('position-size', '位置', '尺寸', 'x', 'y', '宽', '高') && (
                     <div className="property-section">

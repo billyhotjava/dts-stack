@@ -4,8 +4,7 @@ import { analyticsApi, type FieldDetail, type FieldValuesResponse } from "../api
 import { PageContainer, PageHeader, Breadcrumb } from "../components/PageContainer/PageContainer";
 import { EmptyState } from "../components/EmptyState";
 import { ErrorNotice } from "../components/ErrorNotice";
-import { Card, Tag } from "antd";
-import { Spinner } from "../ui/Loading/Spinner";
+import { Spin, Card, Tag } from "antd";
 import { getEffectiveLocale, t, type Locale } from "../i18n";
 import "./page.css";
 
@@ -86,7 +85,7 @@ export default function FieldDetailPage() {
 			{fieldState.state === "loading" && (
 				<Card>
 						<div className="loading-container" style={{ padding: "var(--spacing-xl)" }}>
-							<Spinner size="lg" />
+							<Spin size="large" />
 						</div>
 				</Card>
 			)}
@@ -137,7 +136,7 @@ export default function FieldDetailPage() {
 			>
 					{valuesState.state === "loading" && (
 						<div className="loading-container" style={{ padding: "var(--spacing-lg)" }}>
-							<Spinner size="md" />
+							<Spin />
 						</div>
 					)}
 					{valuesState.state === "error" && <ErrorNotice locale={locale} error={valuesState.error} />}

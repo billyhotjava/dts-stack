@@ -5,7 +5,7 @@ import { analyticsApi, type ProjectCockpitRiskAttributionResponse } from "../../
 import { ErrorNotice } from "../../../components/ErrorNotice";
 import { DataTable } from "../../../components/DataTable";
 import { ChartRenderer } from "../../../components/charts/ChartRenderer";
-import { Spinner } from "../../../ui/Loading/Spinner";
+import { Spin } from "antd";
 import { DelayReasonMatrix, HealthScoreCard, TrendPanel } from "../components";
 import { useProjectCockpitContext } from "../ProjectCockpitContext";
 
@@ -128,7 +128,7 @@ export default function RiskAttributionView({ locale }: { locale: Locale }) {
 			<div className="project-cockpit__two-column">
 				<TrendPanel title="风险等级分布">
 					{loading ? (
-						<div className="project-cockpit__loading-card"><Spinner size="lg" /></div>
+						<div className="project-cockpit__loading-card"><Spin size="large" /></div>
 					) : (
 						<div className="project-cockpit__chart-block">
 							<ChartRenderer

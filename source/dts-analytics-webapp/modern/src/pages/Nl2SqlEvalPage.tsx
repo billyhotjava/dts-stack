@@ -10,10 +10,9 @@ import {
 import { ErrorNotice } from "../components/ErrorNotice";
 import { PageContainer, PageHeader } from "../components/PageContainer/PageContainer";
 import { getEffectiveLocale, t, type Locale } from "../i18n";
-import { Button, Card, Tag } from "antd";
+import { Spin, Button, Card, Tag } from "antd";
 import { Input, TextArea } from "../ui/Input/Input";
 import { NativeSelect } from "../ui/Input/Select";
-import { Spinner } from "../ui/Loading/Spinner";
 import "./page.css";
 
 type LoadState<T> =
@@ -267,7 +266,7 @@ export default function Nl2SqlEvalPage() {
 			>
 					{casesState.state === "loading" && (
 						<div className="loading-container" style={{ padding: "var(--spacing-lg)" }}>
-							<Spinner size="md" />
+							<Spin />
 						</div>
 					)}
 					{casesState.state === "error" && <ErrorNotice locale={locale} error={casesState.error} />}
@@ -305,7 +304,7 @@ export default function Nl2SqlEvalPage() {
 				>
 						{runsState.state === "loading" && (
 							<div className="loading-container" style={{ padding: "var(--spacing-lg)" }}>
-								<Spinner size="md" />
+								<Spin />
 							</div>
 						)}
 						{runsState.state === "error" && <ErrorNotice locale={locale} error={runsState.error} />}
@@ -345,7 +344,7 @@ export default function Nl2SqlEvalPage() {
 				<Card title="执行与对比结果">
 						{compareState?.state === "loading" && (
 							<div className="loading-container" style={{ padding: "var(--spacing-lg)" }}>
-								<Spinner size="md" />
+								<Spin />
 							</div>
 						)}
 						{compareState?.state === "error" && <ErrorNotice locale={locale} error={compareState.error} />}

@@ -4,8 +4,7 @@ import { analyticsApi, type CardListItem, type DashboardListItem } from "../api/
 import { PageContainer, PageHeader } from "../components/PageContainer/PageContainer";
 import { EmptyState } from "../components/EmptyState";
 import { ErrorNotice } from "../components/ErrorNotice";
-import { Button, Card } from "antd";
-import { Spinner } from "../ui/Loading/Spinner";
+import { Spin, Button, Card } from "antd";
 import { getEffectiveLocale, t, type Locale } from "../i18n";
 import "./page.css";
 
@@ -117,7 +116,7 @@ export default function AnalyzePage() {
 				>
 						{dashboards.state === "loading" && (
 							<div className="loading-container" style={{ padding: "var(--spacing-lg)" }}>
-								<Spinner size="md" />
+								<Spin />
 							</div>
 						)}
 						{dashboards.state === "error" && <ErrorNotice locale={locale} error={dashboards.error} />}
@@ -167,7 +166,7 @@ export default function AnalyzePage() {
 				>
 						{cards.state === "loading" && (
 							<div className="loading-container" style={{ padding: "var(--spacing-lg)" }}>
-								<Spinner size="md" />
+								<Spin />
 							</div>
 						)}
 						{cards.state === "error" && <ErrorNotice locale={locale} error={cards.error} />}

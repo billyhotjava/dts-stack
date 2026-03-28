@@ -3,8 +3,7 @@ import { analyticsApi, type Metric, type PlatformMetric } from "../api/analytics
 import { PageContainer, PageHeader } from "../components/PageContainer/PageContainer";
 import { EmptyState } from "../components/EmptyState";
 import { ErrorNotice } from "../components/ErrorNotice";
-import { Card, Statistic, Tag } from "antd";
-import { Spinner } from "../ui/Loading/Spinner";
+import { Spin, Card, Statistic, Tag } from "antd";
 import { getEffectiveLocale, t, type Locale } from "../i18n";
 import "./page.css";
 
@@ -78,7 +77,7 @@ export default function MetricsPage() {
 				</div>
 					{localMetrics.state === "loading" && (
 						<div className="loading-container" style={{ padding: "var(--spacing-lg)" }}>
-							<Spinner size="md" />
+							<Spin />
 						</div>
 					)}
 					{localMetrics.state === "error" && <ErrorNotice locale={locale} error={localMetrics.error} />}
@@ -115,7 +114,7 @@ export default function MetricsPage() {
 				</div>
 					{platformMetrics.state === "loading" && (
 						<div className="loading-container" style={{ padding: "var(--spacing-lg)" }}>
-							<Spinner size="md" />
+							<Spin />
 						</div>
 					)}
 					{platformMetrics.state === "error" && <ErrorNotice locale={locale} error={platformMetrics.error} />}

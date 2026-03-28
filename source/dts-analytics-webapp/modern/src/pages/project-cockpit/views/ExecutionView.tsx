@@ -5,7 +5,7 @@ import { analyticsApi, type ProjectCockpitExecutionResponse } from "../../../api
 import { ErrorNotice } from "../../../components/ErrorNotice";
 import { DataTable } from "../../../components/DataTable";
 import { ChartRenderer } from "../../../components/charts/ChartRenderer";
-import { Spinner } from "../../../ui/Loading/Spinner";
+import { Spin } from "antd";
 import {
 	ExecutionKpiPanel,
 	ProjectGanttBoard,
@@ -106,7 +106,7 @@ export default function ExecutionView({ locale }: { locale: Locale }) {
 			<div className="project-cockpit__two-column">
 				<TrendPanel title="项目甘特图">
 					{loading ? (
-						<div className="project-cockpit__loading-card"><Spinner size="lg" /></div>
+						<div className="project-cockpit__loading-card"><Spin size="large" /></div>
 					) : (
 						<ProjectGanttBoard tasks={data?.ganttTasks ?? []} />
 					)}

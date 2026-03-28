@@ -4,9 +4,8 @@ import { analyticsApi, type DatabaseMetadataResponse } from "../api/analyticsApi
 import { PageContainer, PageHeader, Breadcrumb } from "../components/PageContainer/PageContainer";
 import { EmptyState } from "../components/EmptyState";
 import { ErrorNotice } from "../components/ErrorNotice";
-import { Button, Card, Collapse, Tag } from "antd";
+import { Spin, Button, Card, Collapse, Tag } from "antd";
 import { SearchInput } from "../ui/Input/Input";
-import { Spinner } from "../ui/Loading/Spinner";
 import { getEffectiveLocale, t, type Locale } from "../i18n";
 import "./page.css";
 
@@ -163,7 +162,7 @@ export default function DatabaseDetailPage() {
 			{state.state === "loading" && (
 				<Card>
 						<div className="loading-container" style={{ padding: "var(--spacing-xl)" }}>
-							<Spinner size="large" />
+							<Spin size="large" />
 						</div>
 				</Card>
 			)}

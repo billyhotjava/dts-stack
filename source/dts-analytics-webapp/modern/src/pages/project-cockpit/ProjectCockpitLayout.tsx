@@ -1,8 +1,7 @@
 import { useState } from "react";
 import type { Locale } from "../../i18n";
 import { ErrorNotice } from "../../components/ErrorNotice";
-import { Button, Card, Tag } from "antd";
-import { Spinner } from "../../ui/Loading/Spinner";
+import { Spin, Button, Card, Tag } from "antd";
 import { Tab, TabList, TabPanel, TabPanels, Tabs } from "../../ui/Tabs/Tabs";
 import { NativeSelect } from "../../ui/Input/Select";
 import { Input } from "../../ui/Input/Input";
@@ -223,7 +222,7 @@ export function ProjectCockpitLayout({
 					<TabPanel value="overview">
 						{summaryLoading && !summary ? (
 							<div className="project-cockpit__loading-card">
-								<Spinner size="large" />
+								<Spin size="large" />
 							</div>
 						) : (
 							<OverviewTrendView summary={summary} summaryLoading={summaryLoading} locale={locale} />

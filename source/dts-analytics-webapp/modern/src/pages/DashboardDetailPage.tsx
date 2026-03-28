@@ -4,10 +4,9 @@ import { analyticsApi, type DashboardCard, type DashboardDetail, type DashboardQ
 import { PageContainer, PageHeader } from "../components/PageContainer/PageContainer";
 import { ErrorNotice } from "../components/ErrorNotice";
 import { ChartRenderer, type VisualizationType, type VisualizationSettings } from "../components/charts";
-import { Button, Card, Collapse, Tag } from "antd";
+import { Spin, Button, Card, Collapse, Tag } from "antd";
 import { Input } from "../ui/Input/Input";
 import { NativeSelect } from "../ui/Input/Select";
-import { Spinner } from "../ui/Loading/Spinner";
 import { getEffectiveLocale, t, type Locale } from "../i18n";
 import { writeTextToClipboard } from "../hooks/clipboard";
 import "./page.css";
@@ -186,7 +185,7 @@ export default function DashboardDetailPage() {
 			<div data-testid="analytics-dashboard-detail">
 			{state.state === "loading" && (
 				<div className="loading-container">
-					<Spinner size="large" />
+					<Spin size="large" />
 				</div>
 			)}
 			{state.state === "error" && <ErrorNotice locale={locale} error={state.error} />}
@@ -311,7 +310,7 @@ export default function DashboardDetailPage() {
 								>
 										{!result || result.state === "loading" ? (
 											<div className="loading-container" style={{ padding: "var(--spacing-md)" }}>
-												<Spinner />
+												<Spin />
 											</div>
 										) : result.state === "error" ? (
 											<ErrorNotice locale={locale} error={result.error} />

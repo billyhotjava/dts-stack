@@ -3,8 +3,7 @@ import { Link } from "react-router";
 import { analyticsApi, type CurrentUser, type DashboardListItem, type CardListItem, type ScreenListItem } from "../api/analyticsApi";
 import { ErrorNotice } from "../components/ErrorNotice";
 import { PageContainer } from "../components/PageContainer/PageContainer";
-import { Button, Card } from "antd";
-import { Spinner } from "../ui/Loading/Spinner";
+import { Spin, Button, Card } from "antd";
 import { getEffectiveLocale, t, type Locale } from "../i18n";
 import "./page.css";
 
@@ -221,7 +220,7 @@ export default function HomePage() {
 				>
 						{dashboards.state === "loading" && (
 							<div className="loading-state">
-								<Spinner size="md" />
+								<Spin />
 							</div>
 						)}
 						{dashboards.state === "error" && (
@@ -264,7 +263,7 @@ export default function HomePage() {
 				>
 						{questions.state === "loading" && (
 							<div className="loading-state">
-								<Spinner size="md" />
+								<Spin />
 							</div>
 						)}
 						{questions.state === "error" && (
@@ -307,7 +306,7 @@ export default function HomePage() {
 				>
 						{screens.state === "loading" && (
 							<div className="loading-state">
-								<Spinner size="md" />
+								<Spin />
 							</div>
 						)}
 						{screens.state === "error" && (

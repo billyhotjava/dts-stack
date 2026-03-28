@@ -1,8 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Drawer } from "../../../ui/Drawer/Drawer";
-import { Button, Tag } from "antd";
+import { Spin, Button, Tag } from "antd";
 import { Input } from "../../../ui/Input/Input";
-import { Spinner } from "../../../ui/Loading/Spinner";
 import { analyticsApi, type ProjectCockpitDrillItem } from "../../../api/analyticsApi";
 import { useProjectCockpitContext, type DrillTarget } from "../ProjectCockpitContext";
 import "./DrillDownDrawer.css";
@@ -232,7 +231,7 @@ export function DrillDownDrawer() {
 			</div>
 			{loading ? (
 				<div className="drill-down-drawer__loading">
-					<Spinner size="md" />
+					<Spin />
 				</div>
 			) : filtered.length === 0 ? (
 				<div className="drill-down-drawer__empty">暂无数据</div>

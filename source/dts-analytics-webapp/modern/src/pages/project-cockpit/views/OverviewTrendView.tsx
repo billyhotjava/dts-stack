@@ -5,12 +5,11 @@ import { analyticsApi, type ProjectCockpitSummaryResponse, type ProjectCockpitTr
 import { ErrorNotice } from "../../../components/ErrorNotice";
 import { DataTable } from "../../../components/DataTable";
 import { ChartRenderer } from "../../../components/charts/ChartRenderer";
-import { Spinner } from "../../../ui/Loading/Spinner";
 import { HealthScoreCard, TrendPanel } from "../components";
 import { useProjectCockpitContext } from "../ProjectCockpitContext";
 import { buildOverviewTrendSnapshot, computeWeeklyKpiTrend } from "./overviewTrendView.helpers";
 import { exportChartPng, exportCsv } from "../utils/csvExport";
-import { Button } from "antd";
+import { Spin, Button } from "antd";
 
 type Props = {
 	summary: ProjectCockpitSummaryResponse | null;
@@ -150,7 +149,7 @@ export default function OverviewTrendView({ summary, summaryLoading, locale }: P
 					}
 				>
 					{loading ? (
-						<div className="project-cockpit__loading-card"><Spinner size="large" /></div>
+						<div className="project-cockpit__loading-card"><Spin size="large" /></div>
 					) : (
 						<div className="project-cockpit__chart-block">
 							<ChartRenderer
@@ -228,7 +227,7 @@ export default function OverviewTrendView({ summary, summaryLoading, locale }: P
 
 				<TrendPanel title="重点预警">
 					{summaryLoading ? (
-						<div className="project-cockpit__loading-card"><Spinner size="large" /></div>
+						<div className="project-cockpit__loading-card"><Spin size="large" /></div>
 					) : (
 						<div className="project-cockpit__alert-list">
 							{(summary?.alerts ?? []).map((item, index) => (

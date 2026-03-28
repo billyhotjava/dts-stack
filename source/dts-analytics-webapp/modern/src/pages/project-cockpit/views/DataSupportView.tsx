@@ -7,7 +7,7 @@ import {
 } from "../../../api/analyticsApi";
 import { ErrorNotice } from "../../../components/ErrorNotice";
 import { DataTable } from "../../../components/DataTable";
-import { Spinner } from "../../../ui/Loading/Spinner";
+import { Spin } from "antd";
 import { DataSupportCard } from "../components";
 import { useProjectCockpitContext } from "../ProjectCockpitContext";
 import { buildDataSupportSnapshot } from "./dataSupportView.helpers";
@@ -102,7 +102,7 @@ export default function DataSupportView({ locale }: { locale: Locale }) {
 			<div className="project-cockpit__support-grid">
 				<DataSupportCard title="批次与覆盖情况">
 					{loading ? (
-						<div className="project-cockpit__loading-card"><Spinner size="lg" /></div>
+						<div className="project-cockpit__loading-card"><Spin size="large" /></div>
 					) : (
 						<div className="project-cockpit__checklist-list">
 							<div className="project-cockpit__checklist-item">

@@ -423,6 +423,17 @@ export type Metric = {
 	creator_id?: number;
 	table_id?: number | null;
 	definition?: unknown;
+	// Structured metric fields
+	baseTableId?: number | null;
+	aggregation?: string | null;
+	expressionField?: string | null;
+	filterJson?: string | null;
+	timeDimension?: string | null;
+	timeGrain?: string | null;
+	displayName?: string | null;
+	unit?: string | null;
+	tags?: string | null;
+	visibility?: string | null;
 };
 
 export type PlatformMetric = {
@@ -1706,6 +1717,14 @@ export const analyticsApi = {
 	search: (q: string) =>
 		fetchJson<SearchResponse>(`/analytics/api/search?q=${encodeURIComponent(String(q ?? ""))}&limit=25&offset=0`),
 	listMetrics: () => fetchJson<Metric[]>("/analytics/api/metric"),
+	getMetric: (id: string | number) =>
+		fetchJson<Metric>("/analytics/api/metric/" + encodeURIComponent(String(id))),
+	createMetric: (body: Partial<Metric>) =>
+		sendJson<Metric>("/analytics/api/metric", body),
+	updateMetric: (id: string | number, body: Partial<Metric>) =>
+		requestJson<Metric>("/analytics/api/metric/" + encodeURIComponent(String(id)), "PUT", body),
+	deleteMetric: (id: string | number) =>
+		requestJson<void>("/analytics/api/metric/" + encodeURIComponent(String(id)), "DELETE"),
 	listMetricVersions: (metricId: string | number) =>
 		fetchJson<string[]>("/analytics/api/query-trace/metric/" + encodeURIComponent(String(metricId)) + "/versions"),
 	getQueryTraceFailureSummary: (days = 7, topN = 10, chain?: string) => {

@@ -23,6 +23,7 @@ import {
     syncDeviceModeToWindowUrl,
     type DeviceMode,
 } from './deviceMode';
+import { resolveComponentAppearanceStyle } from './componentAppearance';
 import './ScreenRuntimeShell.css';
 
 export default function PublicScreenPage() {
@@ -333,6 +334,7 @@ export default function PublicScreenPage() {
                                                 width: component.width,
                                                 height: component.height,
                                                 zIndex: component.zIndex,
+                                                ...resolveComponentAppearanceStyle(component.config),
                                             }}
                                         >
                                             <ComponentRenderer component={component} mode="preview" theme={screenTheme} />

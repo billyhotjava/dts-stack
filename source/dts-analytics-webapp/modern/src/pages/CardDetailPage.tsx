@@ -4,9 +4,8 @@ import { analyticsApi, type CardDetail, type CardQueryResponse, type Explainabil
 import { ChartRenderer, type VisualizationType, type VisualizationSettings } from "../components/charts";
 import { PageContainer, PageHeader } from "../components/PageContainer/PageContainer";
 import { ErrorNotice } from "../components/ErrorNotice";
-import { Button, Card, Collapse, Tag } from "antd";
+import { Spin, Button, Card, Collapse, Tag } from "antd";
 import { Input } from "../ui/Input/Input";
-import { Spinner } from "../ui/Loading/Spinner";
 import { getEffectiveLocale, t, type Locale } from "../i18n";
 import { writeTextToClipboard } from "../hooks/clipboard";
 import "./page.css";
@@ -109,7 +108,7 @@ export default function CardDetailPage() {
 		<PageContainer>
 			{state.state === "loading" && (
 				<div className="loading-container">
-					<Spinner size="large" />
+					<Spin size="large" />
 				</div>
 			)}
 			{state.state === "error" && <ErrorNotice locale={locale} error={state.error} />}
@@ -233,7 +232,7 @@ export default function CardDetailPage() {
 					>
 							{queryState?.state === "loading" && (
 								<div className="loading-container" style={{ padding: "var(--spacing-lg)" }}>
-									<Spinner size="md" />
+									<Spin />
 								</div>
 							)}
 							{queryState?.state === "error" && (

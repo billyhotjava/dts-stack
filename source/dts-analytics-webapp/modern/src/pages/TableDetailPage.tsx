@@ -4,8 +4,7 @@ import { analyticsApi, type TableDetail } from "../api/analyticsApi";
 import { PageContainer, PageHeader, Breadcrumb } from "../components/PageContainer/PageContainer";
 import { EmptyState } from "../components/EmptyState";
 import { ErrorNotice } from "../components/ErrorNotice";
-import { Button, Card, Tag } from "antd";
-import { Spinner } from "../ui/Loading/Spinner";
+import { Spin, Button, Card, Tag } from "antd";
 import { getEffectiveLocale, t, type Locale } from "../i18n";
 import "./page.css";
 
@@ -85,7 +84,7 @@ export default function TableDetailPage() {
 			{state.state === "loading" && (
 				<Card>
 						<div className="loading-container" style={{ padding: "var(--spacing-xl)" }}>
-							<Spinner size="large" />
+							<Spin size="large" />
 						</div>
 				</Card>
 			)}

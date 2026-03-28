@@ -24,6 +24,7 @@ import {
     syncDeviceModeToWindowUrl,
     type DeviceMode,
 } from './deviceMode';
+import { resolveComponentAppearanceStyle } from './componentAppearance';
 import './ScreenRuntimeShell.css';
 
 const PREVIEW_BATCH_SIZE = 20;
@@ -356,7 +357,7 @@ export default function ScreenPreviewPage() {
                         position: 'relative', overflow: 'hidden',
                     }}>
                         {visibleSortedComponents.map((comp) => (
-                            <div key={comp.id} style={{ position: 'absolute', left: comp.x, top: comp.y, width: comp.width, height: comp.height, zIndex: comp.zIndex, ...resolveEntryAnimationStyle(comp.config) }}>
+                            <div key={comp.id} style={{ position: 'absolute', left: comp.x, top: comp.y, width: comp.width, height: comp.height, zIndex: comp.zIndex, ...resolveEntryAnimationStyle(comp.config), ...resolveComponentAppearanceStyle(comp.config) }}>
                                 <ComponentRenderer component={comp} mode="preview" theme={screenTheme} />
                             </div>
                         ))}
@@ -397,6 +398,7 @@ export default function ScreenPreviewPage() {
                                             height: component.height,
                                             zIndex: component.zIndex,
                                             ...resolveEntryAnimationStyle(component.config),
+                                            ...resolveComponentAppearanceStyle(component.config),
                                         }}
                                     >
                                         <ComponentRenderer component={component} mode="preview" theme={screenTheme} />

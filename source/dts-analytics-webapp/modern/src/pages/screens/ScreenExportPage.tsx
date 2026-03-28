@@ -10,6 +10,7 @@ import { normalizeScreenConfig, buildScreenPayload } from './specV2';
 import { resolveScreenTheme } from './screenThemes';
 import { escapeHtml, safeCssBackgroundUrl } from './sanitize';
 import type { ScreenConfig, ScreenTheme } from './types';
+import { resolveComponentAppearanceStyle } from './componentAppearance';
 import './ScreenRuntimeShell.css';
 
 function parseFormat(raw: string | null): 'png' | 'pdf' | 'json' {
@@ -564,6 +565,7 @@ export default function ScreenExportPage() {
                                         width: component.width,
                                         height: component.height,
                                         zIndex: component.zIndex,
+                                        ...resolveComponentAppearanceStyle(component.config),
                                     }}
                                 >
                                     <ComponentRenderer component={component} mode="preview" theme={screenTheme} />

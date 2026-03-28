@@ -3,9 +3,8 @@ import { analyticsApi, type MetricLensCompare, type MetricLensDetail, type Metri
 import { ErrorNotice } from "../components/ErrorNotice";
 import { PageContainer, PageHeader } from "../components/PageContainer/PageContainer";
 import { getEffectiveLocale, t, type Locale } from "../i18n";
-import { Button, Card, Tag } from "antd";
+import { Spin, Button, Card, Tag } from "antd";
 import { NativeSelect } from "../ui/Input/Select";
-import { Spinner } from "../ui/Loading/Spinner";
 import "./page.css";
 
 type LoadState<T> =
@@ -119,7 +118,7 @@ export default function MetricLensPage() {
 				>
 						{listState.state === "loading" && (
 							<div className="loading-container" style={{ padding: "var(--spacing-lg)" }}>
-								<Spinner size="md" />
+								<Spin />
 							</div>
 						)}
 						{listState.state === "error" && <ErrorNotice locale={locale} error={listState.error} />}
@@ -166,7 +165,7 @@ export default function MetricLensPage() {
 				<Card title="冲突检测">
 						{conflictState.state === "loading" && (
 							<div className="loading-container" style={{ padding: "var(--spacing-lg)" }}>
-								<Spinner size="md" />
+								<Spin />
 							</div>
 						)}
 						{conflictState.state === "error" && <ErrorNotice locale={locale} error={conflictState.error} />}
@@ -201,7 +200,7 @@ export default function MetricLensPage() {
 						{detailState == null && <div className="muted">选择指标查看详情。</div>}
 						{detailState?.state === "loading" && (
 							<div className="loading-container" style={{ padding: "var(--spacing-lg)" }}>
-								<Spinner size="md" />
+								<Spin />
 							</div>
 						)}
 						{detailState?.state === "error" && <ErrorNotice locale={locale} error={detailState.error} />}
@@ -250,7 +249,7 @@ export default function MetricLensPage() {
 						</div>
 						{compareState?.state === "loading" && (
 							<div className="loading-container" style={{ padding: "var(--spacing-lg)" }}>
-								<Spinner size="md" />
+								<Spin />
 							</div>
 						)}
 						{compareState?.state === "error" && <ErrorNotice locale={locale} error={compareState.error} />}

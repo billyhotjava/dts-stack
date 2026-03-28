@@ -4,7 +4,6 @@ import { analyticsApi, type DashboardListItem } from "../api/analyticsApi";
 import { PageContainer, PageHeader, EmptyState } from "../components/PageContainer/PageContainer";
 import { Button, Card } from "antd";
 import { Input, SearchInput } from "../ui/Input/Input";
-import { Spinner } from "../ui/Loading/Spinner";
 import { CardSkeleton } from "../ui/Loading/Skeleton";
 import { CardGrid } from "../components/DashboardGrid/DashboardGrid";
 import { ErrorNotice } from "../components/ErrorNotice";

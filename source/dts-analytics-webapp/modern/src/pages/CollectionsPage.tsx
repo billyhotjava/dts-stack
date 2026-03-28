@@ -4,8 +4,7 @@ import { analyticsApi, type CollectionListItem } from "../api/analyticsApi";
 import { PageContainer, PageHeader } from "../components/PageContainer/PageContainer";
 import { EmptyState } from "../components/EmptyState";
 import { ErrorNotice } from "../components/ErrorNotice";
-import { Card, CardBody } from "../ui/Card/Card";
-import { Spinner } from "../ui/Loading/Spinner";
+import { Spin, Card } from "antd";
 import { getEffectiveLocale, t, type Locale } from "../i18n";
 import "./page.css";
 
@@ -50,11 +49,9 @@ export default function CollectionsPage() {
 
 			{state.state === "loading" && (
 				<Card>
-					<CardBody>
-						<div className="loading-container" style={{ padding: "var(--spacing-xl)" }}>
-							<Spinner size="lg" />
-						</div>
-					</CardBody>
+					<div className="loading-container" style={{ padding: "var(--spacing-xl)" }}>
+						<Spin size="large" />
+					</div>
 				</Card>
 			)}
 			{state.state === "error" && <ErrorNotice locale={locale} error={state.error} />}
@@ -63,32 +60,30 @@ export default function CollectionsPage() {
 				<div className="grid3">
 					{state.value.map((c) => (
 						<Link key={String(c.id)} to={`/collections/${encodeURIComponent(String(c.id))}`} style={{ textDecoration: "none" }}>
-							<Card variant="hoverable" style={{ height: "100%" }}>
-								<CardBody>
-									<div style={{ display: "flex", alignItems: "center", gap: "var(--spacing-md)" }}>
-										<div style={{
-											display: "flex",
-											alignItems: "center",
-											justifyContent: "center",
-											width: 40,
-											height: 40,
-											borderRadius: "var(--radius-md)",
-											background: "var(--color-bg-hover)",
-											color: "var(--color-brand)",
-											flexShrink: 0
-										}}>
-											<FolderIcon />
-										</div>
-										<div style={{ flex: 1, minWidth: 0 }}>
-											<h3 style={{ margin: 0, fontSize: "var(--font-size-md)", fontWeight: "var(--font-weight-semibold)" }}>
-												{c.id === "root" ? t(locale, "collections.rootName") : (c.name ?? "-")}
-											</h3>
-											<p className="text-muted" style={{ margin: "var(--spacing-xs) 0 0", fontSize: "var(--font-size-sm)" }}>
-												{t(locale, "common.id")}: {String(c.id)}
-											</p>
-										</div>
+							<Card hoverable style={{ height: "100%" }}>
+								<div style={{ display: "flex", alignItems: "center", gap: "var(--spacing-md)" }}>
+									<div style={{
+										display: "flex",
+										alignItems: "center",
+										justifyContent: "center",
+										width: 40,
+										height: 40,
+										borderRadius: "var(--radius-md)",
+										background: "var(--color-bg-hover)",
+										color: "var(--color-brand)",
+										flexShrink: 0
+									}}>
+										<FolderIcon />
 									</div>
-								</CardBody>
+									<div style={{ flex: 1, minWidth: 0 }}>
+										<h3 style={{ margin: 0, fontSize: "var(--font-size-md)", fontWeight: "var(--font-weight-semibold)" }}>
+											{c.id === "root" ? t(locale, "collections.rootName") : (c.name ?? "-")}
+										</h3>
+										<p className="text-muted" style={{ margin: "var(--spacing-xs) 0 0", fontSize: "var(--font-size-sm)" }}>
+											{t(locale, "common.id")}: {String(c.id)}
+										</p>
+									</div>
+								</div>
 							</Card>
 						</Link>
 					))}

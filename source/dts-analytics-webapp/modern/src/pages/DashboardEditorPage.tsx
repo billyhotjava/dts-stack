@@ -13,7 +13,6 @@ import { PageContainer, PageHeader, Breadcrumb } from "../components/PageContain
 import { Button, Card, Tag } from "antd";
 import { Input } from "../ui/Input/Input";
 import { NativeSelect } from "../ui/Input/Select";
-import { Spinner } from "../ui/Loading/Spinner";
 import { getEffectiveLocale, t, type Locale } from "../i18n";
 import "./page.css";
 

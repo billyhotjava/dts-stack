@@ -7,7 +7,7 @@ import {
 	type ProjectCockpitTreeResponse,
 } from "../../../api/analyticsApi";
 import { ErrorNotice } from "../../../components/ErrorNotice";
-import { Spinner } from "../../../ui/Loading/Spinner";
+import { Spin } from "antd";
 import {
 	HealthScoreCard,
 	ProjectTreeDetailPanel,
@@ -120,7 +120,7 @@ export default function MajorProjectTreeView({ locale }: { locale: Locale }) {
 			<div className="project-cockpit__tree-layout">
 				<TrendPanel title="项目树状进度">
 					{loading ? (
-						<div className="project-cockpit__loading-card"><Spinner size="lg" /></div>
+						<div className="project-cockpit__loading-card"><Spin size="large" /></div>
 					) : (
 						<ProjectTreeProgressBoard
 							tree={data?.tree ?? []}

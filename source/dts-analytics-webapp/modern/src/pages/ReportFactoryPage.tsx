@@ -3,10 +3,9 @@ import { analyticsApi, type ReportRunItem, type ReportTemplateItem } from "../ap
 import { ErrorNotice } from "../components/ErrorNotice";
 import { PageContainer, PageHeader } from "../components/PageContainer/PageContainer";
 import { getEffectiveLocale, t, type Locale } from "../i18n";
-import { Button, Card, Tag } from "antd";
+import { Spin, Button, Card, Tag } from "antd";
 import { Input, TextArea } from "../ui/Input/Input";
 import { NativeSelect } from "../ui/Input/Select";
-import { Spinner } from "../ui/Loading/Spinner";
 import "./page.css";
 
 type LoadState<T> =
@@ -275,7 +274,7 @@ export default function ReportFactoryPage() {
 			>
 					{templates.state === "loading" && (
 						<div className="loading-container" style={{ padding: "var(--spacing-lg)" }}>
-							<Spinner size="md" />
+							<Spin />
 						</div>
 					)}
 					{templates.state === "error" && <ErrorNotice locale={locale} error={templates.error} />}
@@ -313,7 +312,7 @@ export default function ReportFactoryPage() {
 				>
 						{runs.state === "loading" && (
 							<div className="loading-container" style={{ padding: "var(--spacing-lg)" }}>
-								<Spinner size="md" />
+								<Spin />
 							</div>
 						)}
 						{runs.state === "error" && <ErrorNotice locale={locale} error={runs.error} />}
@@ -373,7 +372,7 @@ export default function ReportFactoryPage() {
 						{selectedRun == null && <div className="muted">点击左侧“详情”查看任务信息。</div>}
 						{selectedRun?.state === "loading" && (
 							<div className="loading-container" style={{ padding: "var(--spacing-lg)" }}>
-								<Spinner size="md" />
+								<Spin />
 							</div>
 						)}
 						{selectedRun?.state === "error" && <ErrorNotice locale={locale} error={selectedRun.error} />}

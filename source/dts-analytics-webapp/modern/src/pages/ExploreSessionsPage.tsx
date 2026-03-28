@@ -3,9 +3,8 @@ import { analyticsApi, type ExploreSessionItem } from "../api/analyticsApi";
 import { PageContainer, PageHeader } from "../components/PageContainer/PageContainer";
 import { ErrorNotice } from "../components/ErrorNotice";
 import { getEffectiveLocale, t, type Locale } from "../i18n";
-import { Button, Card, Tag } from "antd";
+import { Spin, Button, Card, Tag } from "antd";
 import { Input, TextArea } from "../ui/Input/Input";
-import { Spinner } from "../ui/Loading/Spinner";
 import "./page.css";
 
 type LoadState<T> =
@@ -340,7 +339,7 @@ export default function ExploreSessionsPage() {
 				>
 						{sessions.state === "loading" && (
 							<div className="loading-container" style={{ padding: "var(--spacing-lg)" }}>
-								<Spinner size="md" />
+								<Spin />
 							</div>
 						)}
 						{sessions.state === "error" && <ErrorNotice locale={locale} error={sessions.error} />}
@@ -397,7 +396,7 @@ export default function ExploreSessionsPage() {
 			>
 					{selectedSession?.state === "loading" && (
 						<div className="loading-container" style={{ padding: "var(--spacing-lg)" }}>
-							<Spinner size="md" />
+							<Spin />
 						</div>
 					)}
 					{selectedSession?.state === "error" && <ErrorNotice locale={locale} error={selectedSession.error} />}

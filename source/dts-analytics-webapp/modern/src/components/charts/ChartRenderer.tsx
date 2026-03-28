@@ -1,6 +1,6 @@
-import React, { useState, useEffect, lazy, Suspense } from 'react';
+import React, { useState, useEffect, useMemo, useCallback, lazy, Suspense } from 'react';
 import { DataTable } from '../DataTable';
-import { Spinner } from '../../ui/Loading/Spinner';
+import { Spin } from 'antd';
 import type { ReferenceLine } from './LineChart';
 import './ChartComponents.css';
 
@@ -51,7 +51,18 @@ export interface VisualizationSettings {
   'table.pivot'?: boolean;
   'table.pivot_column'?: string;
   'table.cell_column'?: string;
+  'click_behavior'?: {
+    type: 'auto-filter' | 'detail' | 'link' | 'none';
+    linkUrl?: string;
+    linkNewTab?: boolean;
+  };
   [key: string]: any;
+}
+
+export interface SeriesClickParams {
+  dimensionName: string;
+  dimensionValue: string;
+  seriesName?: string;
 }
 
 interface ChartRendererProps {
@@ -65,6 +76,7 @@ interface ChartRendererProps {
   error?: unknown;
   className?: string;
   style?: React.CSSProperties;
+  onSeriesClick?: (params: SeriesClickParams, event?: React.MouseEvent) => void;
 }
 
 const DEFAULT_COLORS = ['#509EE3', '#88BF4D', '#F9D45C', '#F2A86F', '#EF8C8C', '#98D9D9'];
@@ -76,12 +88,13 @@ export function ChartRenderer({
   loading = false,
   error,
   className,
-  style
+  style,
+  onSeriesClick,
 }: ChartRendererProps) {
   if (loading) {
     return (
       <div className={`chart-container ${className || ''}`} style={style}>
-        <div className="chart-container__loading"><Spinner size="lg" /></div>
+        <div className="chart-container__loading"><Spin size="large" /></div>
       </div>
     );
   }
@@ -120,6 +133,33 @@ export function ChartRenderer({
     : data.cols.map((_, i) => i).filter(i => i !== effectiveXIdx).slice(0, 5);
 
   const labels = data.rows.map(row => String(row[effectiveXIdx] ?? ''));
+
+  const dimensionColName = data.cols[effectiveXIdx]?.name ?? '';
+
+  const echartsEvents = useMemo(() => {
+    if (!onSeriesClick) return undefined;
+    return {
+      click: (params: Record<string, unknown>) => {
+        // For pie charts, the "name" is the dimension value directly
+        // For axis charts, use dataIndex to look up the label
+        let dimValue: string;
+        if (display === 'pie') {
+          dimValue = String(params.name ?? '');
+        } else {
+          const idx = typeof params.dataIndex === 'number' ? params.dataIndex : -1;
+          dimValue = idx >= 0 && idx < labels.length ? labels[idx] : String(params.name ?? '');
+        }
+        // Extract the native mouse event from the ECharts event wrapper
+        const eEvent = params.event as { event?: { event?: MouseEvent } } | undefined;
+        const nativeEvent = eEvent?.event?.event;
+        onSeriesClick({
+          dimensionName: dimensionColName,
+          dimensionValue: dimValue,
+          seriesName: typeof params.seriesName === 'string' ? params.seriesName : undefined,
+        }, nativeEvent as unknown as React.MouseEvent | undefined);
+      },
+    };
+  }, [onSeriesClick, display, dimensionColName, labels]);
 
   const content = (() => {
     switch (display) {
@@ -161,7 +201,7 @@ export function ChartRenderer({
           yAxis: { type: 'value', axisLabel: { fontSize: 11 } },
           series,
         };
-        return <Suspense fallback={<Spinner size="md" />}><EChartsRuntime option={option} style={{ width: '100%', height: '100%', minHeight: 260 }} /></Suspense>;
+        return <Suspense fallback={<Spin />}><EChartsRuntime option={option} style={{ width: '100%', height: '100%', minHeight: 260 }} onEvents={echartsEvents} /></Suspense>;
       }
 
       case 'bar':
@@ -188,7 +228,7 @@ export function ChartRenderer({
           yAxis: isHorizontal ? categoryAxis : valueAxis,
           series,
         };
-        return <Suspense fallback={<Spinner size="md" />}><EChartsRuntime option={option} style={{ width: '100%', height: '100%', minHeight: 260 }} /></Suspense>;
+        return <Suspense fallback={<Spin />}><EChartsRuntime option={option} style={{ width: '100%', height: '100%', minHeight: 260 }} onEvents={echartsEvents} /></Suspense>;
       }
 
       case 'pie': {
@@ -217,7 +257,7 @@ export function ChartRenderer({
             emphasis: { itemStyle: { shadowBlur: 10, shadowOffsetX: 0, shadowColor: 'rgba(0, 0, 0, 0.3)' } },
           }],
         };
-        return <Suspense fallback={<Spinner size="md" />}><EChartsRuntime option={option} style={{ width: '100%', height: '100%', minHeight: 260 }} /></Suspense>;
+        return <Suspense fallback={<Spin />}><EChartsRuntime option={option} style={{ width: '100%', height: '100%', minHeight: 260 }} onEvents={echartsEvents} /></Suspense>;
       }
 
       case 'scalar':
