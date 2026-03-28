@@ -111,3 +111,24 @@
 | F1-导入导出增强 | 7 | READY |
 
 **统计**: READY=7, IN_PROGRESS=0, DONE=0, BLOCKED=0
+
+## Sprint-19: 统一资产权限管控 (202603)
+
+| Feature | Task 数 | 状态 |
+|---------|---------|------|
+| F1-资产权限数据模型与服务 | 5 | READY |
+| F2-Analytics权限统一 | 4 | READY |
+| F3-前端权限管理界面 | 5 | READY |
+| F4-Analytics前端适配 | 3 | READY |
+| F5-数据迁移与集成测试 | 3 | READY |
+
+**统计**: READY=20, IN_PROGRESS=0, DONE=0, BLOCKED=0
+
+## Sprint-20: 逻辑建模批量删除与文件浏览器重构 (202603)
+
+| Feature | Task 数 | 状态 |
+|---------|---------|------|
+| F1-企业级文件浏览器重构 | 4 | READY |
+| F2-统一批量删除链路 | 4 | READY |
+
+**统计**: READY=8, IN_PROGRESS=0, DONE=0, BLOCKED=0
