@@ -10,8 +10,7 @@ import {
 import { EmptyState } from "../components/EmptyState";
 import { ErrorNotice } from "../components/ErrorNotice";
 import { PageContainer, PageHeader, Breadcrumb } from "../components/PageContainer/PageContainer";
-import { Button, Card, Input, Tag } from "antd";
-import { NativeSelect } from "../ui/Input/Select";
+import { Button, Card, Input, Tag, Select } from "antd";
 import { getEffectiveLocale, t, type Locale } from "../i18n";
 import "./page.css";
 
@@ -224,13 +223,16 @@ export default function DashboardEditorPage() {
 							/>
 						</div>
 
-						<NativeSelect
-							label={t(locale, "questions.collection")}
-							value={collectionId ? String(collectionId) : ""}
-							onChange={(e) => setCollectionId(e.target.value ? Number.parseInt(e.target.value, 10) || null : null)}
-							options={collectionOptions}
-							disabled={collections.state !== "loaded"}
-						/>
+						<div>
+							<label style={{ display: "block", marginBottom: 4, fontWeight: 500 }}>{t(locale, "questions.collection")}</label>
+							<Select
+								value={collectionId ? String(collectionId) : ""}
+								onChange={(value) => setCollectionId(value ? Number.parseInt(value, 10) || null : null)}
+								options={collectionOptions}
+								disabled={collections.state !== "loaded"}
+								style={{ width: "100%" }}
+							/>
+						</div>
 					</div>
 
 					<div style={{ marginTop: "var(--spacing-md)" }}>
@@ -264,12 +266,13 @@ export default function DashboardEditorPage() {
 			>
 					<div style={{ display: "flex", gap: "var(--spacing-sm)", alignItems: "flex-end", marginBottom: "var(--spacing-md)" }}>
 						<div style={{ flex: 1, maxWidth: 300 }}>
-							<NativeSelect
-								label={t(locale, "dashboards.selectCard")}
+							<label style={{ display: "block", marginBottom: 4, fontWeight: 500 }}>{t(locale, "dashboards.selectCard")}</label>
+							<Select
 								value={selectedCardId ? String(selectedCardId) : ""}
-								onChange={(e) => setSelectedCardId(Number.parseInt(e.target.value, 10) || null)}
+								onChange={(value) => setSelectedCardId(Number.parseInt(value, 10) || null)}
 								options={cardOptions}
 								disabled={cards.state !== "loaded"}
+								style={{ width: "100%" }}
 							/>
 						</div>
 						<Button

@@ -10,8 +10,7 @@ import {
 import { ErrorNotice } from "../components/ErrorNotice";
 import { PageContainer, PageHeader } from "../components/PageContainer/PageContainer";
 import { getEffectiveLocale, t, type Locale } from "../i18n";
-import { Input, Spin, Button, Card, Tag } from "antd";
-import { NativeSelect } from "../ui/Input/Select";
+import { Input, Spin, Button, Card, Tag, Select } from "antd";
 import "./page.css";
 
 type LoadState<T> =
@@ -331,8 +330,14 @@ export default function Nl2SqlEvalPage() {
 						{runsState.state === "loaded" && (
 							<div className="col" style={{ gap: "var(--spacing-sm)" }}>
 								<div className="grid2">
-									<NativeSelect label="Baseline Run" value={baselineRunId} onChange={(event) => setBaselineRunId(event.target.value)} options={runOptions} />
-									<NativeSelect label="Candidate Run" value={candidateRunId} onChange={(event) => setCandidateRunId(event.target.value)} options={runOptions} />
+									<div>
+										<label style={{ display: "block", marginBottom: 4, fontWeight: 500 }}>Baseline Run</label>
+										<Select value={baselineRunId} onChange={(value) => setBaselineRunId(value)} options={runOptions} style={{ width: "100%" }} />
+									</div>
+									<div>
+										<label style={{ display: "block", marginBottom: 4, fontWeight: 500 }}>Candidate Run</label>
+										<Select value={candidateRunId} onChange={(value) => setCandidateRunId(value)} options={runOptions} style={{ width: "100%" }} />
+									</div>
 								</div>
 								<Button type="primary" onClick={() => void compareRuns()} disabled={!baselineRunId || !candidateRunId}>
 									执行 Run 对比

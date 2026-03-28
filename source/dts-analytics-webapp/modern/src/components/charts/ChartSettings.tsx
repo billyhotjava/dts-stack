@@ -1,6 +1,5 @@
 import { ReactNode, useState } from 'react';
-import { Input } from 'antd';
-import { NativeSelect } from '../../ui/Input/Select';
+import { Input, Select } from 'antd';
 import { Toggle, Checkbox } from '../../ui/Input/Checkbox';
 import { Tabs, TabList, Tab, TabPanels, TabPanel } from '../../ui/Tabs/Tabs';
 import './ChartComponents.css';
@@ -87,17 +86,20 @@ export function ChartSettings({
                 />
               </div>
               {settings.showLegend && (
-                <NativeSelect
-                  label="Legend Position"
-                  value={settings.legendPosition || 'bottom'}
-                  onChange={(e) => updateSetting('legendPosition', e.target.value as ChartSettingsData['legendPosition'])}
-                  options={[
-                    { value: 'top', label: 'Top' },
-                    { value: 'bottom', label: 'Bottom' },
-                    { value: 'left', label: 'Left' },
-                    { value: 'right', label: 'Right' },
-                  ]}
-                />
+                <div>
+                  <label style={{ display: "block", marginBottom: 4, fontWeight: 500 }}>Legend Position</label>
+                  <Select
+                    value={settings.legendPosition || 'bottom'}
+                    onChange={(value) => updateSetting('legendPosition', value as ChartSettingsData['legendPosition'])}
+                    options={[
+                      { value: 'top', label: 'Top' },
+                      { value: 'bottom', label: 'Bottom' },
+                      { value: 'left', label: 'Left' },
+                      { value: 'right', label: 'Right' },
+                    ]}
+                    style={{ width: "100%" }}
+                  />
+                </div>
               )}
             </div>
           </TabPanel>
@@ -148,16 +150,19 @@ export function ChartSettings({
           {/* Style Tab */}
           <TabPanel value="style">
             <div className="chart-settings__section">
-              <NativeSelect
-                label="Color Palette"
-                value={settings.colorPalette || 'default'}
-                onChange={(e) => updateSetting('colorPalette', e.target.value)}
-                options={[
-                  { value: 'default', label: 'Default' },
-                  { value: 'pastel', label: 'Pastel' },
-                  { value: 'categorical', label: 'Categorical' },
-                ]}
-              />
+              <div>
+                <label style={{ display: "block", marginBottom: 4, fontWeight: 500 }}>Color Palette</label>
+                <Select
+                  value={settings.colorPalette || 'default'}
+                  onChange={(value) => updateSetting('colorPalette', value)}
+                  options={[
+                    { value: 'default', label: 'Default' },
+                    { value: 'pastel', label: 'Pastel' },
+                    { value: 'categorical', label: 'Categorical' },
+                  ]}
+                  style={{ width: "100%" }}
+                />
+              </div>
               {(chartType === 'line' || chartType === 'area') && (
                 <div className="chart-settings__row">
                   <Toggle

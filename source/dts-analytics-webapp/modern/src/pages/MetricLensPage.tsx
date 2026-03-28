@@ -3,8 +3,7 @@ import { analyticsApi, type MetricLensCompare, type MetricLensDetail, type Metri
 import { ErrorNotice } from "../components/ErrorNotice";
 import { PageContainer, PageHeader } from "../components/PageContainer/PageContainer";
 import { getEffectiveLocale, t, type Locale } from "../i18n";
-import { Spin, Button, Card, Tag } from "antd";
-import { NativeSelect } from "../ui/Input/Select";
+import { Spin, Button, Card, Tag, Select } from "antd";
 import "./page.css";
 
 type LoadState<T> =
@@ -127,12 +126,15 @@ export default function MetricLensPage() {
 						)}
 						{listState.state === "loaded" && listState.value.length > 0 && (
 							<>
-								<NativeSelect
-									label="选择指标"
-									value={selectedMetricId}
-									onChange={(event) => setSelectedMetricId(event.target.value)}
-									options={metricOptions}
-								/>
+								<div>
+									<label style={{ display: "block", marginBottom: 4, fontWeight: 500 }}>选择指标</label>
+									<Select
+										value={selectedMetricId}
+										onChange={(value) => setSelectedMetricId(value)}
+										options={metricOptions}
+										style={{ width: "100%" }}
+									/>
+								</div>
 								<table className="table" style={{ marginTop: "var(--spacing-md)" }}>
 									<thead>
 										<tr>
@@ -229,20 +231,26 @@ export default function MetricLensPage() {
 
 				<Card title="版本对比">
 						<div className="col" style={{ gap: "var(--spacing-sm)", marginBottom: "var(--spacing-sm)" }}>
-							<NativeSelect
-								label="左版本"
-								value={leftVersion}
-								onChange={(event) => setLeftVersion(event.target.value)}
-								options={versionOptions}
-								disabled={versions.length === 0}
-							/>
-							<NativeSelect
-								label="右版本"
-								value={rightVersion}
-								onChange={(event) => setRightVersion(event.target.value)}
-								options={versionOptions}
-								disabled={versions.length === 0}
-							/>
+							<div>
+								<label style={{ display: "block", marginBottom: 4, fontWeight: 500 }}>左版本</label>
+								<Select
+									value={leftVersion}
+									onChange={(value) => setLeftVersion(value)}
+									options={versionOptions}
+									disabled={versions.length === 0}
+									style={{ width: "100%" }}
+								/>
+							</div>
+							<div>
+								<label style={{ display: "block", marginBottom: 4, fontWeight: 500 }}>右版本</label>
+								<Select
+									value={rightVersion}
+									onChange={(value) => setRightVersion(value)}
+									options={versionOptions}
+									disabled={versions.length === 0}
+									style={{ width: "100%" }}
+								/>
+							</div>
 							<Button type="primary" onClick={() => void runCompare()} disabled={!leftVersion || !rightVersion || !selectedMetricId}>
 								执行对比
 							</Button>

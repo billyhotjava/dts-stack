@@ -14,8 +14,7 @@ import { EmptyState } from "../components/EmptyState";
 import { ErrorNotice } from "../components/ErrorNotice";
 import { PageContainer, PageHeader, Breadcrumb } from "../components/PageContainer/PageContainer";
 import { NotebookEditor } from "../components/query/NotebookEditor";
-import { Input, Spin, Button, Card, Tag } from "antd";
-import { NativeSelect } from "../ui/Input/Select";
+import { Input, Spin, Button, Card, Tag, Select } from "antd";
 import { getEffectiveLocale, t, type Locale } from "../i18n";
 import "./page.css";
 
@@ -348,21 +347,27 @@ export default function CardEditorPage() {
 							/>
 						</div>
 
-						<NativeSelect
-							label={t(locale, "questions.database")}
-							value={databaseId ? String(databaseId) : ""}
-							onChange={(e) => setDatabaseId(Number.parseInt(e.target.value, 10) || null)}
-							options={databaseOptions}
-							disabled={databases.state !== "loaded"}
-						/>
+						<div>
+							<label style={{ display: "block", marginBottom: 4, fontWeight: 500 }}>{t(locale, "questions.database")}</label>
+							<Select
+								value={databaseId ? String(databaseId) : ""}
+								onChange={(value) => setDatabaseId(Number.parseInt(value, 10) || null)}
+								options={databaseOptions}
+								disabled={databases.state !== "loaded"}
+								style={{ width: "100%" }}
+							/>
+						</div>
 
-						<NativeSelect
-							label={t(locale, "questions.collection")}
-							value={collectionId ? String(collectionId) : ""}
-							onChange={(e) => setCollectionId(e.target.value ? Number.parseInt(e.target.value, 10) || null : null)}
-							options={collectionOptions}
-							disabled={collections.state !== "loaded"}
-						/>
+						<div>
+							<label style={{ display: "block", marginBottom: 4, fontWeight: 500 }}>{t(locale, "questions.collection")}</label>
+							<Select
+								value={collectionId ? String(collectionId) : ""}
+								onChange={(value) => setCollectionId(value ? Number.parseInt(value, 10) || null : null)}
+								options={collectionOptions}
+								disabled={collections.state !== "loaded"}
+								style={{ width: "100%" }}
+							/>
+						</div>
 					</div>
 
 					<div style={{ marginTop: "var(--spacing-md)", display: "flex", alignItems: "center", gap: "var(--spacing-sm)" }}>

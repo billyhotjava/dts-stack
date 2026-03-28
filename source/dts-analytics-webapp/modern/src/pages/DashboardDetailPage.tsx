@@ -4,8 +4,7 @@ import { analyticsApi, type DashboardCard, type DashboardDetail, type DashboardQ
 import { PageContainer, PageHeader } from "../components/PageContainer/PageContainer";
 import { ErrorNotice } from "../components/ErrorNotice";
 import { ChartRenderer, type VisualizationType, type VisualizationSettings } from "../components/charts";
-import { Input, Spin, Button, Card, Collapse, Tag } from "antd";
-import { NativeSelect } from "../ui/Input/Select";
+import { Input, Spin, Button, Card, Collapse, Tag, Select } from "antd";
 import { getEffectiveLocale, t, type Locale } from "../i18n";
 import { writeTextToClipboard } from "../hooks/clipboard";
 import "./page.css";
@@ -267,14 +266,15 @@ export default function DashboardDetailPage() {
 								<div style={{ display: "flex", flexWrap: "wrap", gap: "var(--spacing-md)" }}>
 									{dashboardParams.map((p) => (
 										<div key={p.id} style={{ minWidth: 200, flex: "1 1 200px", maxWidth: 300 }}>
-											<NativeSelect
-												label={p.name || p.slug || p.id}
+											<label style={{ display: "block", marginBottom: 4, fontWeight: 500 }}>{p.name || p.slug || p.id}</label>
+											<Select
 												value={paramValues[p.id] ?? ""}
-												onChange={(e) => setParamValues((prev) => ({ ...prev, [p.id]: e.target.value }))}
+												onChange={(value) => setParamValues((prev) => ({ ...prev, [p.id]: value }))}
 												options={[
 													{ value: "", label: t(locale, "filter.all") },
 													...(paramOptions[p.id] ?? []).map((v) => ({ value: String(v), label: String(v) }))
 												]}
+												style={{ width: "100%" }}
 											/>
 										</div>
 									))}

@@ -1,9 +1,8 @@
 import { useState } from "react";
 import type { Locale } from "../../i18n";
 import { ErrorNotice } from "../../components/ErrorNotice";
-import { Input, Spin, Button, Card, Tag } from "antd";
+import { Input, Spin, Button, Card, Tag, Select } from "antd";
 import { Tab, TabList, TabPanel, TabPanels, Tabs } from "../../ui/Tabs/Tabs";
-import { NativeSelect } from "../../ui/Input/Select";
 import type {
 	ProjectCockpitOption,
 	ProjectCockpitSettingsResponse,
@@ -140,24 +139,33 @@ export function ProjectCockpitLayout({
 			{filterOpen ? (
 				<Card className="project-cockpit__filter-card">
 					<div className="project-cockpit__filter-bar">
-						<NativeSelect
-							label="项目"
-							value={queryState.majorProjectId}
-							onChange={(event) => updateQueryState({ majorProjectId: event.target.value })}
-							options={optionList(filters?.majorProjects)}
-						/>
-						<NativeSelect
-							label="责任科室"
-							value={queryState.deptId}
-							onChange={(event) => updateQueryState({ deptId: event.target.value })}
-							options={optionList(filters?.depts)}
-						/>
-						<NativeSelect
-							label="风险等级"
-							value={queryState.riskLevel}
-							onChange={(event) => updateQueryState({ riskLevel: event.target.value })}
-							options={optionList(filters?.riskLevels)}
-						/>
+						<div>
+							<label style={{ display: "block", marginBottom: 4, fontWeight: 500 }}>项目</label>
+							<Select
+								value={queryState.majorProjectId}
+								onChange={(value) => updateQueryState({ majorProjectId: value })}
+								options={optionList(filters?.majorProjects)}
+								style={{ width: "100%" }}
+							/>
+						</div>
+						<div>
+							<label style={{ display: "block", marginBottom: 4, fontWeight: 500 }}>责任科室</label>
+							<Select
+								value={queryState.deptId}
+								onChange={(value) => updateQueryState({ deptId: value })}
+								options={optionList(filters?.depts)}
+								style={{ width: "100%" }}
+							/>
+						</div>
+						<div>
+							<label style={{ display: "block", marginBottom: 4, fontWeight: 500 }}>风险等级</label>
+							<Select
+								value={queryState.riskLevel}
+								onChange={(value) => updateQueryState({ riskLevel: value })}
+								options={optionList(filters?.riskLevels)}
+								style={{ width: "100%" }}
+							/>
+						</div>
 						<Button
 							type="text"
 							size="small"

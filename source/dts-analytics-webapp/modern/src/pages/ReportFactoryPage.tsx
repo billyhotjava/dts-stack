@@ -3,8 +3,7 @@ import { analyticsApi, type ReportRunItem, type ReportTemplateItem } from "../ap
 import { ErrorNotice } from "../components/ErrorNotice";
 import { PageContainer, PageHeader } from "../components/PageContainer/PageContainer";
 import { getEffectiveLocale, t, type Locale } from "../i18n";
-import { Input, Spin, Button, Card, Tag } from "antd";
-import { NativeSelect } from "../ui/Input/Select";
+import { Input, Spin, Button, Card, Tag, Select } from "antd";
 import "./page.css";
 
 type LoadState<T> =
@@ -232,19 +231,25 @@ export default function ReportFactoryPage() {
 
 				<Card title="报告生成">
 						<div className="col" style={{ gap: "var(--spacing-sm)" }}>
-							<NativeSelect
-								label="模板"
-								value={generateTemplateId}
-								onChange={(event) => setGenerateTemplateId(event.target.value)}
-								options={templateOptions}
-							/>
-							<div className="grid2">
-								<NativeSelect
-									label="来源类型"
-									value={sourceType}
-									onChange={(event) => setSourceType(event.target.value)}
-									options={sourceTypeOptions}
+							<div>
+								<label style={{ display: "block", marginBottom: 4, fontWeight: 500 }}>模板</label>
+								<Select
+									value={generateTemplateId}
+									onChange={(value) => setGenerateTemplateId(value)}
+									options={templateOptions}
+									style={{ width: "100%" }}
 								/>
+							</div>
+							<div className="grid2">
+								<div>
+									<label style={{ display: "block", marginBottom: 4, fontWeight: 500 }}>来源类型</label>
+									<Select
+										value={sourceType}
+										onChange={(value) => setSourceType(value)}
+										options={sourceTypeOptions}
+										style={{ width: "100%" }}
+									/>
+								</div>
 								<div>
 									<label style={{ display: "block", marginBottom: 4, fontWeight: 500 }}>来源ID</label>
 									<Input
@@ -254,12 +259,15 @@ export default function ReportFactoryPage() {
 									/>
 								</div>
 							</div>
-							<NativeSelect
-								label="输出格式"
-								value={outputFormat}
-								onChange={(event) => setOutputFormat(event.target.value)}
-								options={formatOptions}
-							/>
+							<div>
+								<label style={{ display: "block", marginBottom: 4, fontWeight: 500 }}>输出格式</label>
+								<Select
+									value={outputFormat}
+									onChange={(value) => setOutputFormat(value)}
+									options={formatOptions}
+									style={{ width: "100%" }}
+								/>
+							</div>
 							<div>
 								<label style={{ display: "block", marginBottom: 4, fontWeight: 500 }}>分发配置(JSON)</label>
 								<Input.TextArea
