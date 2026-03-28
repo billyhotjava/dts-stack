@@ -3,8 +3,7 @@ import { Link } from "react-router";
 import { analyticsApi, type CurrentUser, type DashboardListItem, type CardListItem, type ScreenListItem } from "../api/analyticsApi";
 import { ErrorNotice } from "../components/ErrorNotice";
 import { PageContainer } from "../components/PageContainer/PageContainer";
-import { Card } from "antd";
-import { Button } from "../ui/Button/Button";
+import { Button, Card } from "antd";
 import { Spinner } from "../ui/Loading/Spinner";
 import { getEffectiveLocale, t, type Locale } from "../i18n";
 import "./page.css";
@@ -214,7 +213,7 @@ export default function HomePage() {
 					title={t(locale, "home.recentDashboards")}
 					extra={
 						<Link to="/dashboards">
-							<Button variant="tertiary" size="sm" icon={<ArrowRightIcon />} iconPosition="right">
+							<Button type="text" size="small" icon={<ArrowRightIcon />} iconPosition="end">
 								{t(locale, "common.viewAll")}
 							</Button>
 						</Link>
@@ -232,7 +231,7 @@ export default function HomePage() {
 							<div className="empty-state-small">
 								<p>{t(locale, "common.empty")}</p>
 								<Link to="/dashboards/new">
-									<Button variant="primary" size="sm" icon={<PlusIcon />}>
+									<Button type="primary" size="small" icon={<PlusIcon />}>
 										{t(locale, "dashboards.new")}
 									</Button>
 								</Link>
@@ -257,7 +256,7 @@ export default function HomePage() {
 					title={t(locale, "home.recentQuestions")}
 					extra={
 						<Link to="/questions">
-							<Button variant="tertiary" size="sm" icon={<ArrowRightIcon />} iconPosition="right">
+							<Button type="text" size="small" icon={<ArrowRightIcon />} iconPosition="end">
 								{t(locale, "common.viewAll")}
 							</Button>
 						</Link>
@@ -275,7 +274,7 @@ export default function HomePage() {
 							<div className="empty-state-small">
 								<p>{t(locale, "common.empty")}</p>
 								<Link to="/questions/new">
-									<Button variant="primary" size="sm" icon={<PlusIcon />}>
+									<Button type="primary" size="small" icon={<PlusIcon />}>
 										{t(locale, "questions.new")}
 									</Button>
 								</Link>
@@ -300,7 +299,7 @@ export default function HomePage() {
 					title={t(locale, "home.publishedScreens")}
 					extra={
 						<Link to="/screens">
-							<Button variant="tertiary" size="sm" icon={<ArrowRightIcon />} iconPosition="right">
+							<Button type="text" size="small" icon={<ArrowRightIcon />} iconPosition="end">
 								{t(locale, "common.viewAll")}
 							</Button>
 						</Link>
@@ -318,7 +317,7 @@ export default function HomePage() {
 							<div className="empty-state-small">
 								<p>{t(locale, "home.noPublishedScreens")}</p>
 								<Link to="/screens">
-									<Button variant="primary" size="sm" icon={<PlusIcon />}>
+									<Button type="primary" size="small" icon={<PlusIcon />}>
 										{t(locale, "home.openScreenCenter")}
 									</Button>
 								</Link>

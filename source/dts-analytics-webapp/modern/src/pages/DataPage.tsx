@@ -4,8 +4,7 @@ import { analyticsApi, type DatabaseListItem } from "../api/analyticsApi";
 import { PageContainer, PageHeader } from "../components/PageContainer/PageContainer";
 import { EmptyState } from "../components/EmptyState";
 import { ErrorNotice } from "../components/ErrorNotice";
-import { Card, Tag } from "antd";
-import { Button } from "../ui/Button/Button";
+import { Button, Card, Tag } from "antd";
 import { Spinner } from "../ui/Loading/Spinner";
 import { getEffectiveLocale, t, type Locale } from "../i18n";
 import "./page.css";
@@ -80,7 +79,7 @@ export default function DataPage() {
 				title={t(locale, "data.title")}
 				actions={
 					<Link to="/data/new">
-						<Button color="blue" icon={<PlusIcon />}>
+						<Button type="primary" icon={<PlusIcon />}>
 							{t(locale, "data.add")}
 						</Button>
 					</Link>
@@ -90,7 +89,7 @@ export default function DataPage() {
 			{state.state === "loading" && (
 				<Card>
 					<div className="loading-container" style={{ padding: "var(--spacing-xl)" }}>
-						<Spinner size="lg" />
+						<Spinner size="large" />
 					</div>
 				</Card>
 			)}
@@ -100,7 +99,7 @@ export default function DataPage() {
 					title={t(locale, "data.empty")}
 					action={
 						<Link to="/data/new">
-							<Button color="blue" icon={<PlusIcon />}>
+							<Button type="primary" icon={<PlusIcon />}>
 								{t(locale, "data.add")}
 							</Button>
 						</Link>
@@ -131,8 +130,8 @@ export default function DataPage() {
 							</div>
 							<div style={{ display: "flex", gap: "var(--spacing-xs)", marginTop: "var(--spacing-md)", justifyContent: "flex-end" }}>
 								<Button
-									variant="tertiary"
-									size="sm"
+									type="text"
+									size="small"
 									icon={<TrashIcon />}
 									onClick={() => setConfirmDeleteId(db.id)}
 									style={{ color: "var(--color-error)" }}
@@ -165,14 +164,14 @@ export default function DataPage() {
 						</p>
 						<div style={{ display: "flex", gap: "var(--spacing-sm)", justifyContent: "flex-end" }}>
 							<Button
-								variant="secondary"
+								type="default"
 								onClick={() => setConfirmDeleteId(null)}
 								disabled={deleting !== null}
 							>
 								{t(locale, "common.cancel")}
 							</Button>
 							<Button
-								color="blue"
+								type="primary"
 								loading={deleting === confirmDeleteId}
 								disabled={deleting !== null}
 								onClick={() => handleDelete(confirmDeleteId)}

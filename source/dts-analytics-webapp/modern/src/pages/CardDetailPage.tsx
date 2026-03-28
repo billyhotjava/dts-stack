@@ -4,8 +4,7 @@ import { analyticsApi, type CardDetail, type CardQueryResponse, type Explainabil
 import { ChartRenderer, type VisualizationType, type VisualizationSettings } from "../components/charts";
 import { PageContainer, PageHeader } from "../components/PageContainer/PageContainer";
 import { ErrorNotice } from "../components/ErrorNotice";
-import { Card, Collapse, Tag } from "antd";
-import { Button } from "../ui/Button/Button";
+import { Button, Card, Collapse, Tag } from "antd";
 import { Input } from "../ui/Input/Input";
 import { Spinner } from "../ui/Loading/Spinner";
 import { getEffectiveLocale, t, type Locale } from "../i18n";
@@ -110,7 +109,7 @@ export default function CardDetailPage() {
 		<PageContainer>
 			{state.state === "loading" && (
 				<div className="loading-container">
-					<Spinner size="lg" />
+					<Spinner size="large" />
 				</div>
 			)}
 			{state.state === "error" && <ErrorNotice locale={locale} error={state.error} />}
@@ -121,7 +120,7 @@ export default function CardDetailPage() {
 						actions={
 							<>
 								<Button
-									variant="secondary"
+									type="default"
 									icon={<ShareIcon />}
 									loading={shareBusy}
 									onClick={async () => {
@@ -139,11 +138,11 @@ export default function CardDetailPage() {
 									{t(locale, "share.create")}
 								</Button>
 								<Link to={`/questions/${encodeURIComponent(String(state.value.id))}/edit`}>
-									<Button color="blue" icon={<EditIcon />}>
+									<Button type="primary" icon={<EditIcon />}>
 										{t(locale, "questions.edit")}
 									</Button>
 								</Link>
-								<Button variant="tertiary" onClick={explain} loading={explainState?.state === "loading"}>
+								<Button type="text" onClick={explain} loading={explainState?.state === "loading"}>
 									Explain
 								</Button>
 							</>
@@ -155,8 +154,8 @@ export default function CardDetailPage() {
 							title={t(locale, "share.title")}
 							extra={
 									<Button
-										variant="secondary"
-										size="sm"
+										type="default"
+										size="small"
 										icon={shareCopied ? <CheckIcon /> : <CopyIcon />}
 										onClick={async () => {
 											const link = `${window.location.origin}/analytics/public/card/${encodeURIComponent(shareUuid)}`;
@@ -207,8 +206,8 @@ export default function CardDetailPage() {
 							title="Explainability"
 							extra={
 									<Button
-										variant="tertiary"
-										size="sm"
+										type="text"
+										size="small"
 										onClick={() => {
 											const text = explainState.value.copyJson ?? JSON.stringify(explainState.value.explainCard ?? {}, null, 2);
 											void writeTextToClipboard(text);
@@ -227,7 +226,7 @@ export default function CardDetailPage() {
 					<Card
 						title={t(locale, "questions.queryResult")}
 						extra={
-								<Button variant="tertiary" onClick={() => setShowRaw((v) => !v)}>
+								<Button type="text" onClick={() => setShowRaw((v) => !v)}>
 									{t(locale, "questions.queryRaw")}
 								</Button>
 							}

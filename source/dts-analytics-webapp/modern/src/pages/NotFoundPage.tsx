@@ -1,8 +1,7 @@
 import { useMemo } from "react";
 import { Link } from "react-router";
 import { PageContainer } from "../components/PageContainer/PageContainer";
-import { Card, CardBody } from "../ui/Card/Card";
-import { Button } from "../ui/Button/Button";
+import { Button, Card } from "antd";
 import { getEffectiveLocale, t, type Locale } from "../i18n";
 import "./page.css";
 
@@ -27,24 +26,22 @@ export default function NotFoundPage() {
 	return (
 		<PageContainer>
 			<Card>
-				<CardBody>
-					<div style={{ display: "flex", flexDirection: "column", alignItems: "center", padding: "var(--spacing-2xl)", textAlign: "center" }}>
-						<div style={{ color: "var(--color-text-tertiary)", marginBottom: "var(--spacing-lg)" }}>
-							<AlertIcon />
-						</div>
-						<h1 style={{ margin: 0, fontSize: "var(--font-size-2xl)", fontWeight: "var(--font-weight-bold)", color: "var(--color-text-primary)" }}>
-							{t(locale, "notfound.title")}
-						</h1>
-						<p className="text-muted" style={{ marginTop: "var(--spacing-md)", marginBottom: "var(--spacing-xl)", maxWidth: 400 }}>
-							{t(locale, "notfound.desc")}
-						</p>
-						<Link to="/">
-							<Button variant="primary" icon={<HomeIcon />}>
-								{t(locale, "nav.home")}
-							</Button>
-						</Link>
+				<div style={{ display: "flex", flexDirection: "column", alignItems: "center", padding: "var(--spacing-2xl)", textAlign: "center" }}>
+					<div style={{ color: "var(--color-text-tertiary)", marginBottom: "var(--spacing-lg)" }}>
+						<AlertIcon />
 					</div>
-				</CardBody>
+					<h1 style={{ margin: 0, fontSize: "var(--font-size-2xl)", fontWeight: "var(--font-weight-bold)", color: "var(--color-text-primary)" }}>
+						{t(locale, "notfound.title")}
+					</h1>
+					<p className="text-muted" style={{ marginTop: "var(--spacing-md)", marginBottom: "var(--spacing-xl)", maxWidth: 400 }}>
+						{t(locale, "notfound.desc")}
+					</p>
+					<Link to="/">
+						<Button type="primary" icon={<HomeIcon />}>
+							{t(locale, "nav.home")}
+						</Button>
+					</Link>
+				</div>
 			</Card>
 		</PageContainer>
 	);

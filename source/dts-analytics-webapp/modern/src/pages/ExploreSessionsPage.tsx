@@ -3,8 +3,7 @@ import { analyticsApi, type ExploreSessionItem } from "../api/analyticsApi";
 import { PageContainer, PageHeader } from "../components/PageContainer/PageContainer";
 import { ErrorNotice } from "../components/ErrorNotice";
 import { getEffectiveLocale, t, type Locale } from "../i18n";
-import { Button } from "../ui/Button/Button";
-import { Card, Tag } from "antd";
+import { Button, Card, Tag } from "antd";
 import { Input, TextArea } from "../ui/Input/Input";
 import { Spinner } from "../ui/Loading/Spinner";
 import "./page.css";
@@ -303,7 +302,7 @@ export default function ExploreSessionsPage() {
 							/>
 							包含归档
 						</label>
-						<Button variant="secondary" onClick={() => void loadSessions()}>
+						<Button type="default" onClick={() => void loadSessions()}>
 							{t(locale, "common.refresh")}
 						</Button>
 					</div>
@@ -329,7 +328,7 @@ export default function ExploreSessionsPage() {
 							<Input label="标签（逗号分隔）" value={tags} onChange={(event) => setTags(event.target.value)} placeholder="产线,告警,复盘" />
 						</div>
 					<div style={{ display: "flex", justifyContent: "flex-end", paddingTop: "var(--spacing-md)", marginTop: "var(--spacing-md)", borderTop: "1px solid var(--color-border)" }}>
-						<Button color="blue" onClick={createSession} loading={saving}>
+						<Button type="primary" onClick={createSession} loading={saving}>
 							创建会话
 						</Button>
 					</div>
@@ -389,9 +388,9 @@ export default function ExploreSessionsPage() {
 				extra={
 						currentSession ? (
 							<div style={{ display: "flex", gap: "var(--spacing-xs)", flexWrap: "wrap" }}>
-								<Button variant="tertiary" onClick={cloneSession} loading={saving}>复制</Button>
-								<Button variant="tertiary" onClick={shareSession} loading={saving}>分享</Button>
-								<Button variant="danger" onClick={archiveSession} loading={saving}>归档</Button>
+								<Button type="text" onClick={cloneSession} loading={saving}>复制</Button>
+								<Button type="text" onClick={shareSession} loading={saving}>分享</Button>
+								<Button danger onClick={archiveSession} loading={saving}>归档</Button>
 							</div>
 						) : null
 					}
@@ -440,8 +439,8 @@ export default function ExploreSessionsPage() {
 							</div>
 
 							<div style={{ display: "flex", gap: "var(--spacing-sm)", alignItems: "center", flexWrap: "wrap" }}>
-								<Button variant="secondary" onClick={updateConclusion} loading={saving}>更新结论</Button>
-								<Button color="blue" onClick={appendStep} loading={saving}>追加步骤</Button>
+								<Button type="default" onClick={updateConclusion} loading={saving}>更新结论</Button>
+								<Button type="primary" onClick={appendStep} loading={saving}>追加步骤</Button>
 								<Input
 									label="重放步骤序号"
 									type="number"
@@ -450,7 +449,7 @@ export default function ExploreSessionsPage() {
 									onChange={(event) => setReplayIndex(Number.parseInt(event.target.value, 10) || 0)}
 									style={{ width: 160 }}
 								/>
-								<Button variant="tertiary" onClick={replayStep} loading={saving}>执行重放</Button>
+								<Button type="text" onClick={replayStep} loading={saving}>执行重放</Button>
 							</div>
 
 							<div>

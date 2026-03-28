@@ -14,8 +14,7 @@ import { EmptyState } from "../components/EmptyState";
 import { ErrorNotice } from "../components/ErrorNotice";
 import { PageContainer, PageHeader, Breadcrumb } from "../components/PageContainer/PageContainer";
 import { NotebookEditor } from "../components/query/NotebookEditor";
-import { Card, Tag } from "antd";
-import { Button } from "../ui/Button/Button";
+import { Button, Card, Tag } from "antd";
 import { Input, TextArea } from "../ui/Input/Input";
 import { NativeSelect } from "../ui/Input/Select";
 import { Spinner } from "../ui/Loading/Spinner";
@@ -333,7 +332,7 @@ export default function CardEditorPage() {
 							title={t(locale, "questions.noDb")}
 							action={
 								<Link to="/data/new">
-									<Button color="blue">{t(locale, "data.add")}</Button>
+									<Button type="primary">{t(locale, "data.add")}</Button>
 								</Link>
 							}
 						/>
@@ -368,16 +367,16 @@ export default function CardEditorPage() {
 
 					<div style={{ marginTop: "var(--spacing-md)", display: "flex", alignItems: "center", gap: "var(--spacing-sm)" }}>
 						<Button
-							variant={mode === "builder" ? "primary" : "secondary"}
-							size="sm"
+							type={mode === "builder" ? "primary" : "default"}
+							size="small"
 							onClick={() => setMode("builder")}
 							disabled={dbEmpty}
 						>
 							{t(locale, "questions.mode.builder")}
 						</Button>
 						<Button
-							variant={mode === "sql" ? "primary" : "secondary"}
-							size="sm"
+							type={mode === "sql" ? "primary" : "default"}
+							size="small"
 							onClick={() => setMode("sql")}
 							disabled={dbEmpty}
 						>
@@ -409,7 +408,7 @@ export default function CardEditorPage() {
 				<div style={{ display: "flex", justifyContent: "space-between", paddingTop: "var(--spacing-md)", marginTop: "var(--spacing-md)", borderTop: "1px solid var(--color-border)" }}>
 					<div style={{ display: "flex", gap: "var(--spacing-sm)", alignItems: "center" }}>
 						<Button
-							color="blue"
+							type="primary"
 							icon={<PlayIcon />}
 							onClick={run}
 							disabled={dbEmpty || !canRun || runState?.state === "loading"}
@@ -418,7 +417,7 @@ export default function CardEditorPage() {
 							{t(locale, "questions.run")}
 						</Button>
 						<Button
-							variant="secondary"
+							type="default"
 							icon={<SaveIcon />}
 							onClick={save}
 							disabled={dbEmpty || !canSave || saveState?.state === "loading"}
@@ -427,7 +426,7 @@ export default function CardEditorPage() {
 							{t(locale, "questions.save")}
 						</Button>
 						<Button
-							variant="tertiary"
+							type="text"
 							onClick={explain}
 							disabled={!cardId || explainState?.state === "loading"}
 							loading={explainState?.state === "loading"}
@@ -454,8 +453,8 @@ export default function CardEditorPage() {
 						{VISUALIZATION_TYPES.map((vt) => (
 							<Button
 								key={vt.value}
-								variant={displayType === vt.value ? "primary" : "tertiary"}
-								size="sm"
+								type={displayType === vt.value ? "primary" : "text"}
+								size="small"
 								onClick={() => setDisplayType(vt.value)}
 							>
 								{t(locale, `vis.${vt.value}`)}
@@ -469,7 +468,7 @@ export default function CardEditorPage() {
 					)}
 					{runState?.state === "loading" && (
 						<div className="loading-container" style={{ padding: "var(--spacing-xl)" }}>
-							<Spinner size="lg" />
+							<Spinner size="large" />
 						</div>
 					)}
 					{runState?.state === "error" && <ErrorNotice locale={locale} error={runState.error} />}
@@ -484,8 +483,8 @@ export default function CardEditorPage() {
 							}}>
 								<strong>Explainability</strong>
 								<Button
-									variant="tertiary"
-									size="sm"
+									type="text"
+									size="small"
 									onClick={() => {
 										const text = explainState.value.copyJson ?? JSON.stringify(explainState.value.explainCard ?? {}, null, 2);
 										if (navigator.clipboard?.writeText) {
@@ -535,8 +534,8 @@ export default function CardEditorPage() {
 								)}
 								{runState.value?.data?.native_form?.query && (
 									<Button
-										variant="tertiary"
-										size="sm"
+										type="text"
+										size="small"
 										onClick={() => setShowSql((v) => !v)}
 										style={{ marginLeft: "auto" }}
 									>

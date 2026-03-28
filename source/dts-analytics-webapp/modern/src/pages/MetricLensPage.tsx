@@ -3,8 +3,7 @@ import { analyticsApi, type MetricLensCompare, type MetricLensDetail, type Metri
 import { ErrorNotice } from "../components/ErrorNotice";
 import { PageContainer, PageHeader } from "../components/PageContainer/PageContainer";
 import { getEffectiveLocale, t, type Locale } from "../i18n";
-import { Button } from "../ui/Button/Button";
-import { Card, Tag } from "antd";
+import { Button, Card, Tag } from "antd";
 import { NativeSelect } from "../ui/Input/Select";
 import { Spinner } from "../ui/Loading/Spinner";
 import "./page.css";
@@ -107,7 +106,7 @@ export default function MetricLensPage() {
 			<PageHeader
 				title={t(locale, "metricLens.title")}
 				actions={
-					<Button variant="secondary" onClick={() => void Promise.all([loadList(), loadConflicts()])}>
+					<Button type="default" onClick={() => void Promise.all([loadList(), loadConflicts()])}>
 						{t(locale, "common.refresh")}
 					</Button>
 				}
@@ -245,7 +244,7 @@ export default function MetricLensPage() {
 								options={versionOptions}
 								disabled={versions.length === 0}
 							/>
-							<Button color="blue" onClick={() => void runCompare()} disabled={!leftVersion || !rightVersion || !selectedMetricId}>
+							<Button type="primary" onClick={() => void runCompare()} disabled={!leftVersion || !rightVersion || !selectedMetricId}>
 								执行对比
 							</Button>
 						</div>

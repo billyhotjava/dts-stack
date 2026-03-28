@@ -4,8 +4,7 @@ import { analyticsApi, type DashboardCard, type DashboardDetail, type DashboardQ
 import { PageContainer, PageHeader } from "../components/PageContainer/PageContainer";
 import { ErrorNotice } from "../components/ErrorNotice";
 import { ChartRenderer, type VisualizationType, type VisualizationSettings } from "../components/charts";
-import { Card, Collapse, Tag } from "antd";
-import { Button } from "../ui/Button/Button";
+import { Button, Card, Collapse, Tag } from "antd";
 import { Input } from "../ui/Input/Input";
 import { NativeSelect } from "../ui/Input/Select";
 import { Spinner } from "../ui/Loading/Spinner";
@@ -187,7 +186,7 @@ export default function DashboardDetailPage() {
 			<div data-testid="analytics-dashboard-detail">
 			{state.state === "loading" && (
 				<div className="loading-container">
-					<Spinner size="lg" />
+					<Spinner size="large" />
 				</div>
 			)}
 			{state.state === "error" && <ErrorNotice locale={locale} error={state.error} />}
@@ -199,7 +198,7 @@ export default function DashboardDetailPage() {
 							<>
 								<Button
 									data-testid="analytics-dashboard-share"
-									variant="secondary"
+									type="default"
 									icon={<ShareIcon />}
 									loading={shareBusy}
 									onClick={async () => {
@@ -217,7 +216,7 @@ export default function DashboardDetailPage() {
 									{t(locale, "share.create")}
 								</Button>
 								<Link to={`/dashboards/${encodeURIComponent(String(state.value.id))}/edit`}>
-									<Button color="blue" icon={<EditIcon />}>
+									<Button type="primary" icon={<EditIcon />}>
 										{t(locale, "dashboards.edit")}
 									</Button>
 								</Link>
@@ -230,8 +229,8 @@ export default function DashboardDetailPage() {
 							title={t(locale, "share.title")}
 							extra={
 									<Button
-										variant="secondary"
-										size="sm"
+										type="default"
+										size="small"
 										icon={shareCopied ? <CheckIcon /> : <CopyIcon />}
 										onClick={async () => {
 											const link = `${window.location.origin}/analytics/public/dashboard/${encodeURIComponent(shareUuid)}`;
@@ -262,7 +261,7 @@ export default function DashboardDetailPage() {
 						<Card style={{ marginBottom: "var(--spacing-lg)" }}
 							title={<span style={{ display: "inline-flex", alignItems: "center", gap: 8 }}><FilterIcon />{t(locale, "filter.title")}</span>}
 							extra={
-									<Button variant="tertiary" onClick={() => setParamValues({})}>
+									<Button type="text" onClick={() => setParamValues({})}>
 										{t(locale, "filter.clear")}
 									</Button>
 								}

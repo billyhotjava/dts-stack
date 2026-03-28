@@ -1,8 +1,7 @@
 import { useState } from "react";
 import type { Locale } from "../../i18n";
 import { ErrorNotice } from "../../components/ErrorNotice";
-import { Button } from "../../ui/Button/Button";
-import { Card, Tag } from "antd";
+import { Button, Card, Tag } from "antd";
 import { Spinner } from "../../ui/Loading/Spinner";
 import { Tab, TabList, TabPanel, TabPanels, Tabs } from "../../ui/Tabs/Tabs";
 import { NativeSelect } from "../../ui/Input/Select";
@@ -107,8 +106,8 @@ export function ProjectCockpitLayout({
 					<div className="project-cockpit__period-actions">
 						{canPublish ? (
 							<Button
-								color="blue"
-								size="sm"
+								type="primary"
+								size="small"
 								loading={settingsSaving}
 								disabled={!hasPeriod || settingsLoading}
 								onClick={() => {
@@ -158,8 +157,8 @@ export function ProjectCockpitLayout({
 							options={optionList(filters?.riskLevels)}
 						/>
 						<Button
-							variant="tertiary"
-							size="sm"
+							type="text"
+							size="small"
 							onClick={() => updateQueryState(createProjectCockpitScopeResetPatch(queryState))}
 						>
 							重置
@@ -188,8 +187,8 @@ export function ProjectCockpitLayout({
 							</div>
 							{spotlight?.majorProjectId ? (
 								<Button
-									color="blue"
-									size="sm"
+									type="primary"
+									size="small"
 									onClick={() =>
 										updateQueryState({
 											theme: "tree",
@@ -224,7 +223,7 @@ export function ProjectCockpitLayout({
 					<TabPanel value="overview">
 						{summaryLoading && !summary ? (
 							<div className="project-cockpit__loading-card">
-								<Spinner size="lg" />
+								<Spinner size="large" />
 							</div>
 						) : (
 							<OverviewTrendView summary={summary} summaryLoading={summaryLoading} locale={locale} />

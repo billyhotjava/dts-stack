@@ -1,8 +1,7 @@
 import { useMemo } from "react";
 import { Link, useParams } from "react-router";
 import { PageContainer, PageHeader, Breadcrumb } from "../components/PageContainer/PageContainer";
-import { Card, CardBody, CardFooter } from "../ui/Card/Card";
-import { Button } from "../ui/Button/Button";
+import { Button, Card } from "antd";
 import { getEffectiveLocale, t, type Locale } from "../i18n";
 import "./page.css";
 
@@ -31,7 +30,6 @@ export default function DatabaseEditPage() {
 			/>
 
 			<Card>
-				<CardBody>
 					<div style={{ display: "flex", gap: "var(--spacing-md)", alignItems: "center" }}>
 						<div style={{
 							display: "flex",
@@ -54,12 +52,11 @@ export default function DatabaseEditPage() {
 							</p>
 						</div>
 					</div>
-				</CardBody>
-				<CardFooter align="between">
+				<div style={{ display: "flex", justifyContent: "space-between", paddingTop: "var(--spacing-md)", marginTop: "var(--spacing-md)", borderTop: "1px solid var(--color-border)" }}>
 					<Link to="/data">
-						<Button variant="tertiary">{t(locale, "common.open")} {t(locale, "data.title")}</Button>
+						<Button type="text">{t(locale, "common.open")} {t(locale, "data.title")}</Button>
 					</Link>
-				</CardFooter>
+				</div>
 			</Card>
 		</PageContainer>
 	);

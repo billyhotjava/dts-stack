@@ -4,8 +4,7 @@ import { analyticsApi, type CardListItem, type DashboardListItem } from "../api/
 import { PageContainer, PageHeader } from "../components/PageContainer/PageContainer";
 import { EmptyState } from "../components/EmptyState";
 import { ErrorNotice } from "../components/ErrorNotice";
-import { Card } from "antd";
-import { Button } from "../ui/Button/Button";
+import { Button, Card } from "antd";
 import { Spinner } from "../ui/Loading/Spinner";
 import { getEffectiveLocale, t, type Locale } from "../i18n";
 import "./page.css";
@@ -88,17 +87,17 @@ export default function AnalyzePage() {
 			<Card style={{ marginBottom: "var(--spacing-lg)" }}>
 					<div style={{ display: "flex", gap: "var(--spacing-sm)", flexWrap: "wrap" }}>
 						<Link to="/questions/new">
-							<Button variant="primary" icon={<PlusIcon />}>
+							<Button type="primary" icon={<PlusIcon />}>
 								{t(locale, "questions.new")}
 							</Button>
 						</Link>
 						<Link to="/dashboards/new">
-							<Button variant="secondary" icon={<PlusIcon />}>
+							<Button type="default" icon={<PlusIcon />}>
 								{t(locale, "dashboards.new")}
 							</Button>
 						</Link>
 						<Link to="/search">
-							<Button variant="tertiary" icon={<SearchIcon />}>
+							<Button type="text" icon={<SearchIcon />}>
 								{t(locale, "nav.search")}
 							</Button>
 						</Link>
@@ -110,7 +109,7 @@ export default function AnalyzePage() {
 					title={t(locale, "dashboards.title")}
 					extra={
 						<Link to="/dashboards">
-							<Button variant="tertiary" size="sm" icon={<ArrowRightIcon />} iconPosition="right">
+							<Button type="text" size="small" icon={<ArrowRightIcon />} iconPosition="end">
 								{t(locale, "common.open")}
 							</Button>
 						</Link>
@@ -127,7 +126,7 @@ export default function AnalyzePage() {
 								title={t(locale, "common.empty")}
 								action={
 									<Link to="/dashboards/new">
-										<Button variant="primary" size="sm" icon={<PlusIcon />}>
+										<Button type="primary" size="small" icon={<PlusIcon />}>
 											{t(locale, "dashboards.new")}
 										</Button>
 									</Link>
@@ -160,7 +159,7 @@ export default function AnalyzePage() {
 					title={t(locale, "questions.title")}
 					extra={
 						<Link to="/questions">
-							<Button variant="tertiary" size="sm" icon={<ArrowRightIcon />} iconPosition="right">
+							<Button type="text" size="small" icon={<ArrowRightIcon />} iconPosition="end">
 								{t(locale, "common.open")}
 							</Button>
 						</Link>
@@ -177,7 +176,7 @@ export default function AnalyzePage() {
 								title={t(locale, "common.empty")}
 								action={
 									<Link to="/questions/new">
-										<Button variant="primary" size="sm" icon={<PlusIcon />}>
+										<Button type="primary" size="small" icon={<PlusIcon />}>
 											{t(locale, "questions.new")}
 										</Button>
 									</Link>

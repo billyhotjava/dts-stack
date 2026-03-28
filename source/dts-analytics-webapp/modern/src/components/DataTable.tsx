@@ -1,6 +1,5 @@
 import { type ReactNode, useCallback, useMemo, useState } from "react";
-import { Button } from "../ui/Button/Button";
-import { Tag } from "antd";
+import { Button, Tag } from "antd";
 
 type Props = {
 	cols: Array<Record<string, unknown>>;
@@ -184,16 +183,16 @@ export function DataTable({ cols, rows, maxRows = 5000, pageSize = 50, onRowClic
 					</div>
 					<div style={{ display: "flex", alignItems: "center", gap: "var(--spacing-sm, 8px)" }}>
 						<Button
-							variant="tertiary"
-							size="sm"
+							type="text"
+							size="small"
 							onClick={() => setPage(0)}
 							disabled={page === 0}
 						>
 							First
 						</Button>
 						<Button
-							variant="tertiary"
-							size="sm"
+							type="text"
+							size="small"
 							onClick={() => setPage(Math.max(0, page - 1))}
 							disabled={page === 0}
 						>
@@ -203,16 +202,16 @@ export function DataTable({ cols, rows, maxRows = 5000, pageSize = 50, onRowClic
 							{page + 1} / {totalPages}
 						</span>
 						<Button
-							variant="tertiary"
-							size="sm"
+							type="text"
+							size="small"
 							onClick={() => setPage(Math.min(totalPages - 1, page + 1))}
 							disabled={page >= totalPages - 1}
 						>
 							Next
 						</Button>
 						<Button
-							variant="tertiary"
-							size="sm"
+							type="text"
+							size="small"
 							onClick={() => setPage(totalPages - 1)}
 							disabled={page >= totalPages - 1}
 						>

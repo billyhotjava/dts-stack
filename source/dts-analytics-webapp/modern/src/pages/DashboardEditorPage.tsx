@@ -10,8 +10,7 @@ import {
 import { EmptyState } from "../components/EmptyState";
 import { ErrorNotice } from "../components/ErrorNotice";
 import { PageContainer, PageHeader, Breadcrumb } from "../components/PageContainer/PageContainer";
-import { Card, Tag } from "antd";
-import { Button } from "../ui/Button/Button";
+import { Button, Card, Tag } from "antd";
 import { Input } from "../ui/Input/Input";
 import { NativeSelect } from "../ui/Input/Select";
 import { Spinner } from "../ui/Loading/Spinner";
@@ -244,7 +243,7 @@ export default function DashboardEditorPage() {
 					</div>
 				<div style={{ display: "flex", justifyContent: "flex-end", paddingTop: "var(--spacing-md)", marginTop: "var(--spacing-md)", borderTop: "1px solid var(--color-border)" }}>
 					<Button
-						color="blue"
+						type="primary"
 						icon={<SaveIcon />}
 						onClick={save}
 						disabled={!name.trim() || saveState?.state === "loading"}
@@ -272,7 +271,7 @@ export default function DashboardEditorPage() {
 							/>
 						</div>
 						<Button
-							variant="secondary"
+							type="default"
 							icon={<PlusIcon />}
 							onClick={addSelectedCard}
 							disabled={!selectedCardId}
@@ -314,8 +313,8 @@ export default function DashboardEditorPage() {
 											<td>{cardName}</td>
 											<td>
 												<Button
-													variant="tertiary"
-													size="sm"
+													type="text"
+													size="small"
 													icon={<TrashIcon />}
 													onClick={() => removeDashcardAt(idx)}
 												>

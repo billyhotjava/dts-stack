@@ -4,8 +4,7 @@ import { analyticsApi, type DatabaseMetadataResponse } from "../api/analyticsApi
 import { PageContainer, PageHeader, Breadcrumb } from "../components/PageContainer/PageContainer";
 import { EmptyState } from "../components/EmptyState";
 import { ErrorNotice } from "../components/ErrorNotice";
-import { Card, Collapse, Tag } from "antd";
-import { Button } from "../ui/Button/Button";
+import { Button, Card, Collapse, Tag } from "antd";
 import { SearchInput } from "../ui/Input/Input";
 import { Spinner } from "../ui/Loading/Spinner";
 import { getEffectiveLocale, t, type Locale } from "../i18n";
@@ -129,7 +128,7 @@ export default function DatabaseDetailPage() {
 				}
 				actions={
 					<Button
-						variant="secondary"
+						type="default"
 						icon={<SyncIcon />}
 						loading={syncing}
 						onClick={syncSchema}
@@ -149,7 +148,7 @@ export default function DatabaseDetailPage() {
 							/>
 						</div>
 						{q.trim() && (
-							<Button variant="tertiary" icon={<ClearIcon />} onClick={() => setQ("")}>
+							<Button type="text" icon={<ClearIcon />} onClick={() => setQ("")}>
 								{t(locale, "builder.remove")}
 							</Button>
 						)}
@@ -164,7 +163,7 @@ export default function DatabaseDetailPage() {
 			{state.state === "loading" && (
 				<Card>
 						<div className="loading-container" style={{ padding: "var(--spacing-xl)" }}>
-							<Spinner size="lg" />
+							<Spinner size="large" />
 						</div>
 				</Card>
 			)}
@@ -174,7 +173,7 @@ export default function DatabaseDetailPage() {
 					title={t(locale, "common.empty")}
 					description={t(locale, "data.metaEmpty")}
 					action={
-						<Button color="blue" icon={<SyncIcon />} loading={syncing} onClick={syncSchema}>
+						<Button type="primary" icon={<SyncIcon />} loading={syncing} onClick={syncSchema}>
 							{syncing ? t(locale, "data.syncing") : t(locale, "data.sync")}
 						</Button>
 					}
@@ -212,7 +211,7 @@ export default function DatabaseDetailPage() {
 												</div>
 												{tb?.id && (
 													<Link to={`/questions/new?db=${encodeURIComponent(String(dbId))}&table=${encodeURIComponent(String(tb.id))}`}>
-														<Button variant="tertiary" icon={<PlusIcon />}>
+														<Button type="text" icon={<PlusIcon />}>
 															{t(locale, "questions.new")}
 														</Button>
 													</Link>

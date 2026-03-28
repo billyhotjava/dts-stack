@@ -6,11 +6,11 @@ import { ErrorNotice } from "../../../components/ErrorNotice";
 import { DataTable } from "../../../components/DataTable";
 import { ChartRenderer } from "../../../components/charts/ChartRenderer";
 import { Spinner } from "../../../ui/Loading/Spinner";
-import { Button } from "../../../ui/Button/Button";
 import { HealthScoreCard, TrendPanel } from "../components";
 import { useProjectCockpitContext } from "../ProjectCockpitContext";
 import { buildOverviewTrendSnapshot, computeWeeklyKpiTrend } from "./overviewTrendView.helpers";
 import { exportChartPng, exportCsv } from "../utils/csvExport";
+import { Button } from "antd";
 
 type Props = {
 	summary: ProjectCockpitSummaryResponse | null;
@@ -138,8 +138,8 @@ export default function OverviewTrendView({ summary, summaryLoading, locale }: P
 					subtitle={`最近周度变化：${snapshot.lastWeekLabel || "--"}，完成率 ${snapshot.lastWeekCompletionRate}%`}
 					action={
 						<Button
-							variant="tertiary"
-							size="sm"
+							type="text"
+							size="small"
 							onClick={() => {
 								const svg = document.querySelector<SVGSVGElement>(".project-cockpit__chart-block svg");
 								exportChartPng(svg, "项目趋势");
@@ -150,7 +150,7 @@ export default function OverviewTrendView({ summary, summaryLoading, locale }: P
 					}
 				>
 					{loading ? (
-						<div className="project-cockpit__loading-card"><Spinner size="lg" /></div>
+						<div className="project-cockpit__loading-card"><Spinner size="large" /></div>
 					) : (
 						<div className="project-cockpit__chart-block">
 							<ChartRenderer
@@ -206,8 +206,8 @@ export default function OverviewTrendView({ summary, summaryLoading, locale }: P
 					title="项目排名"
 					action={
 						<Button
-							variant="tertiary"
-							size="sm"
+							type="text"
+							size="small"
 							onClick={() => {
 								const cols = [
 									{ key: "majorProjectName", label: "项目" },
@@ -228,7 +228,7 @@ export default function OverviewTrendView({ summary, summaryLoading, locale }: P
 
 				<TrendPanel title="重点预警">
 					{summaryLoading ? (
-						<div className="project-cockpit__loading-card"><Spinner size="lg" /></div>
+						<div className="project-cockpit__loading-card"><Spinner size="large" /></div>
 					) : (
 						<div className="project-cockpit__alert-list">
 							{(summary?.alerts ?? []).map((item, index) => (

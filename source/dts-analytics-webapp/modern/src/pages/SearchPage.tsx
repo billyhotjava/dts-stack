@@ -4,9 +4,8 @@ import { analyticsApi, type SearchItem } from "../api/analyticsApi";
 import { PageContainer, PageHeader } from "../components/PageContainer/PageContainer";
 import { EmptyState } from "../components/EmptyState";
 import { ErrorNotice } from "../components/ErrorNotice";
-import { Card, Tag } from "antd";
+import { Button, Card, Tag } from "antd";
 import { SearchInput } from "../ui/Input/Input";
-import { Button } from "../ui/Button/Button";
 import { Spinner } from "../ui/Loading/Spinner";
 import { getEffectiveLocale, t, type Locale } from "../i18n";
 import "./page.css";
@@ -123,10 +122,10 @@ export default function SearchPage() {
 								value={value}
 								onChange={(e) => setValue(e.target.value)}
 								placeholder={t(locale, "search.placeholder")}
-								size="lg"
+								size="large"
 							/>
 						</div>
-						<Button color="blue" type="submit" icon={<SearchIcon />}>
+						<Button type="primary" htmlType="submit" icon={<SearchIcon />}>
 							{t(locale, "search.button")}
 						</Button>
 					</div>
@@ -143,7 +142,7 @@ export default function SearchPage() {
 			{state.state === "loading" && (
 				<Card>
 					<div className="loading-container" style={{ padding: "var(--spacing-xl)" }}>
-						<Spinner size="lg" />
+						<Spinner size="large" />
 					</div>
 				</Card>
 			)}

@@ -2,8 +2,7 @@ import { Link } from "react-router";
 import { useEffect, useMemo, useState } from "react";
 import { analyticsApi, type DashboardListItem } from "../api/analyticsApi";
 import { PageContainer, PageHeader, EmptyState } from "../components/PageContainer/PageContainer";
-import { Card } from "antd";
-import { Button } from "../ui/Button/Button";
+import { Button, Card } from "antd";
 import { Input, SearchInput } from "../ui/Input/Input";
 import { Spinner } from "../ui/Loading/Spinner";
 import { CardSkeleton } from "../ui/Loading/Skeleton";
@@ -94,7 +93,7 @@ export default function DashboardsPage() {
 				title={t(locale, "dashboards.title")}
 				actions={
 					<Link to="/dashboards/new">
-						<Button variant="primary" icon={<PlusIcon />}>
+						<Button type="primary" icon={<PlusIcon />}>
 							{t(locale, "dashboards.new")}
 						</Button>
 					</Link>
@@ -114,15 +113,15 @@ export default function DashboardsPage() {
 				</div>
 				<div style={{ marginLeft: "auto", display: "flex", gap: "var(--spacing-xs)" }}>
 					<Button
-						variant={viewMode === "grid" ? "primary" : "secondary"}
-						size="sm"
+						type={viewMode === "grid" ? "primary" : "default"}
+						size="small"
 						icon={<GridIcon />}
 						onClick={() => setViewMode("grid")}
 						aria-label={t(locale, "common.viewAll")}
 					/>
 					<Button
-						variant={viewMode === "list" ? "primary" : "secondary"}
-						size="sm"
+						type={viewMode === "list" ? "primary" : "default"}
+						size="small"
 						icon={<ListIcon />}
 						onClick={() => setViewMode("list")}
 						aria-label={t(locale, "common.viewAll")}
@@ -150,7 +149,7 @@ export default function DashboardsPage() {
 					description={t(locale, "dashboards.emptyDesc")}
 					action={
 						<Link to="/dashboards/new">
-							<Button variant="primary" icon={<PlusIcon />}>
+							<Button type="primary" icon={<PlusIcon />}>
 								{t(locale, "dashboards.new")}
 							</Button>
 						</Link>
@@ -164,7 +163,7 @@ export default function DashboardsPage() {
 					title={t(locale, "common.noResults")}
 					description={t(locale, "common.noResultsDesc")}
 					action={
-						<Button variant="secondary" onClick={() => setSearchQuery("")}>
+						<Button type="default" onClick={() => setSearchQuery("")}>
 							{t(locale, "common.clearSearch")}
 						</Button>
 					}

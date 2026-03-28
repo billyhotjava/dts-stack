@@ -5,8 +5,7 @@ import UploadedDataEditor from "../components/UploadedDataEditor";
 import { PageContainer, PageHeader, Breadcrumb } from "../components/PageContainer/PageContainer";
 import { EmptyState } from "../components/EmptyState";
 import { ErrorNotice } from "../components/ErrorNotice";
-import { Card, Tag } from "antd";
-import { Button } from "../ui/Button/Button";
+import { Button, Card, Tag } from "antd";
 import { SearchInput } from "../ui/Input/Input";
 import { Spinner } from "../ui/Loading/Spinner";
 import { getEffectiveLocale, t, type Locale } from "../i18n";
@@ -200,14 +199,14 @@ export default function DatabaseNewPage() {
 									placeholder={t(locale, "search.placeholder")}
 									onClear={() => setQuery("")}
 								/>
-								<Button variant="secondary" onClick={reload}>
+								<Button type="default" onClick={reload}>
 									{t(locale, "common.refresh")}
 								</Button>
 							</div>
 
 							{state.state === "loading" && (
 								<div className="loading-container" style={{ padding: "var(--spacing-xl)" }}>
-									<Spinner size="lg" />
+									<Spinner size="large" />
 								</div>
 							)}
 
@@ -262,7 +261,7 @@ export default function DatabaseNewPage() {
 												</div>
 												<div style={{ display: "flex", justifyContent: "flex-end", marginTop: "var(--spacing-md)" }}>
 													<Button
-														color="blue"
+														type="primary"
 														icon={<PlusIcon />}
 														loading={importingId === item.id}
 														onClick={() => importSource(item)}
@@ -327,7 +326,7 @@ export default function DatabaseNewPage() {
 					)}
 				<div style={{ display: "flex", justifyContent: "space-between", padding: "var(--spacing-md)", borderTop: "1px solid var(--color-border)" }}>
 					<Link to="/data">
-						<Button variant="tertiary">
+						<Button type="text">
 							{t(locale, "common.open")} {t(locale, "data.title")}
 						</Button>
 					</Link>

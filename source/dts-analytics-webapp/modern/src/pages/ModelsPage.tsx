@@ -2,8 +2,7 @@ import { Link } from "react-router";
 import { useEffect, useMemo, useState } from "react";
 import { analyticsApi, type CardListItem } from "../api/analyticsApi";
 import { PageContainer, PageHeader, EmptyState } from "../components/PageContainer/PageContainer";
-import { Card, Tag } from "antd";
-import { Button } from "../ui/Button/Button";
+import { Button, Card, Tag } from "antd";
 import { SearchInput } from "../ui/Input/Input";
 import { CardSkeleton } from "../ui/Loading/Skeleton";
 import { CardGrid } from "../components/DashboardGrid/DashboardGrid";
@@ -99,7 +98,7 @@ export default function ModelsPage() {
 				title={t(locale, "models.title")}
 				actions={
 					<Link to="/questions/new">
-						<Button color="blue" icon={<PlusIcon />}>
+						<Button type="primary" icon={<PlusIcon />}>
 							{t(locale, "questions.new")}
 						</Button>
 					</Link>
@@ -118,15 +117,15 @@ export default function ModelsPage() {
 				</div>
 				<div style={{ marginLeft: "auto", display: "flex", gap: "var(--spacing-xs)" }}>
 					<Button
-						variant={viewMode === "grid" ? "primary" : "secondary"}
-						size="sm"
+						type={viewMode === "grid" ? "primary" : "default"}
+						size="small"
 						icon={<GridIcon />}
 						onClick={() => setViewMode("grid")}
 						aria-label="Grid view"
 					/>
 					<Button
-						variant={viewMode === "list" ? "primary" : "secondary"}
-						size="sm"
+						type={viewMode === "list" ? "primary" : "default"}
+						size="small"
 						icon={<ListIcon />}
 						onClick={() => setViewMode("list")}
 						aria-label="List view"
@@ -154,7 +153,7 @@ export default function ModelsPage() {
 					description={t(locale, "models.emptyDesc")}
 					action={
 						<Link to="/questions/new">
-							<Button color="blue" icon={<PlusIcon />}>
+							<Button type="primary" icon={<PlusIcon />}>
 								{t(locale, "questions.new")}
 							</Button>
 						</Link>
@@ -168,7 +167,7 @@ export default function ModelsPage() {
 					title={t(locale, "common.noResults")}
 					description={t(locale, "common.noResultsDesc")}
 					action={
-						<Button variant="secondary" onClick={() => setSearchQuery("")}>
+						<Button type="default" onClick={() => setSearchQuery("")}>
 							{t(locale, "common.clearSearch")}
 						</Button>
 					}

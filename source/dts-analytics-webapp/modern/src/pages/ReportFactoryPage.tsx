@@ -3,8 +3,7 @@ import { analyticsApi, type ReportRunItem, type ReportTemplateItem } from "../ap
 import { ErrorNotice } from "../components/ErrorNotice";
 import { PageContainer, PageHeader } from "../components/PageContainer/PageContainer";
 import { getEffectiveLocale, t, type Locale } from "../i18n";
-import { Button } from "../ui/Button/Button";
-import { Card, Tag } from "antd";
+import { Button, Card, Tag } from "antd";
 import { Input, TextArea } from "../ui/Input/Input";
 import { NativeSelect } from "../ui/Input/Select";
 import { Spinner } from "../ui/Loading/Spinner";
@@ -185,7 +184,7 @@ export default function ReportFactoryPage() {
 			<PageHeader
 				title={t(locale, "reportFactory.title")}
 				actions={
-					<Button variant="secondary" onClick={() => void Promise.all([loadTemplates(), loadRuns()])}>
+					<Button type="default" onClick={() => void Promise.all([loadTemplates(), loadRuns()])}>
 						{t(locale, "common.refresh")}
 					</Button>
 				}
@@ -221,7 +220,7 @@ export default function ReportFactoryPage() {
 							/>
 						</div>
 					<div style={{ display: "flex", justifyContent: "flex-end", paddingTop: "var(--spacing-md)", marginTop: "var(--spacing-md)", borderTop: "1px solid var(--color-border)" }}>
-						<Button color="blue" onClick={createTemplate} loading={saving}>
+						<Button type="primary" onClick={createTemplate} loading={saving}>
 							创建模板
 						</Button>
 					</div>
@@ -263,7 +262,7 @@ export default function ReportFactoryPage() {
 							/>
 						</div>
 					<div style={{ display: "flex", justifyContent: "flex-end", paddingTop: "var(--spacing-md)", marginTop: "var(--spacing-md)", borderTop: "1px solid var(--color-border)" }}>
-						<Button color="blue" onClick={generateReport} loading={saving}>
+						<Button type="primary" onClick={generateReport} loading={saving}>
 							生成报告
 						</Button>
 					</div>
@@ -341,7 +340,7 @@ export default function ReportFactoryPage() {
 												<td>{row.status || "-"}</td>
 												<td>
 													<div style={{ display: "flex", gap: "var(--spacing-xs)", flexWrap: "wrap" }}>
-														<Button variant="tertiary" onClick={() => void openRunDetail(row.id)}>
+														<Button type="text" onClick={() => void openRunDetail(row.id)}>
 															详情
 														</Button>
 														<a

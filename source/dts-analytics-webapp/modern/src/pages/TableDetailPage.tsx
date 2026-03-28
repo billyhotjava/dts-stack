@@ -4,8 +4,7 @@ import { analyticsApi, type TableDetail } from "../api/analyticsApi";
 import { PageContainer, PageHeader, Breadcrumb } from "../components/PageContainer/PageContainer";
 import { EmptyState } from "../components/EmptyState";
 import { ErrorNotice } from "../components/ErrorNotice";
-import { Card, Tag } from "antd";
-import { Button } from "../ui/Button/Button";
+import { Button, Card, Tag } from "antd";
 import { Spinner } from "../ui/Loading/Spinner";
 import { getEffectiveLocale, t, type Locale } from "../i18n";
 import "./page.css";
@@ -76,7 +75,7 @@ export default function TableDetailPage() {
 				}
 				actions={
 					<Link to={newQuestionHref}>
-						<Button color="blue" icon={<PlusIcon />}>
+						<Button type="primary" icon={<PlusIcon />}>
 							{t(locale, "questions.new")}
 						</Button>
 					</Link>
@@ -86,7 +85,7 @@ export default function TableDetailPage() {
 			{state.state === "loading" && (
 				<Card>
 						<div className="loading-container" style={{ padding: "var(--spacing-xl)" }}>
-							<Spinner size="lg" />
+							<Spinner size="large" />
 						</div>
 				</Card>
 			)}

@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Drawer } from "../../../ui/Drawer/Drawer";
-import { Tag } from "antd";
-import { Button } from "../../../ui/Button/Button";
+import { Button, Tag } from "antd";
 import { Input } from "../../../ui/Input/Input";
 import { Spinner } from "../../../ui/Loading/Spinner";
 import { analyticsApi, type ProjectCockpitDrillItem } from "../../../api/analyticsApi";
@@ -207,13 +206,13 @@ export function DrillDownDrawer() {
 			onClose={closeDrill}
 			title={title}
 			description={subtitle || undefined}
-			size="lg"
+			size="large"
 			footer={
 				<div style={{ display: "flex", gap: 8 }}>
-					<Button variant="secondary" onClick={handleExportCsv} disabled={filtered.length === 0}>
+					<Button type="default" onClick={handleExportCsv} disabled={filtered.length === 0}>
 						导出 CSV
 					</Button>
-					<Button variant="tertiary" onClick={closeDrill}>
+					<Button type="text" onClick={closeDrill}>
 						关闭
 					</Button>
 				</div>
