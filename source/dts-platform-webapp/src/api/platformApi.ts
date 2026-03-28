@@ -134,6 +134,8 @@ export const createSqlModel = (data: any) => api.post(withModelingRequestTimeout
 export const updateSqlModel = (id: string, data: any) =>
 	api.put(withModelingRequestTimeout({ url: `/modeling/sql-models/${id}`, data }));
 export const deleteSqlModel = (id: string) => api.delete(withModelingRequestTimeout({ url: `/modeling/sql-models/${id}` }));
+export const batchDeleteSqlModels = (data: { modelIds: string[] }) =>
+	api.post(withModelingRequestTimeout({ url: "/modeling/sql-models/batch-delete", data }));
 export const importSqlModel = (data: FormData) => api.post(withModelingRequestTimeout({ url: "/modeling/sql-models/import", data }));
 export const batchImportSqlModels = (data: FormData) =>
 	api.post(withModelingRequestTimeout({ url: "/modeling/sql-models/batch-import", data }));
@@ -626,3 +628,47 @@ export const rollbackExecute = (data: {
 
 export const getRollbackAuditLog = (params: { taskId?: number; dataSourceId?: string }) =>
 	api.get({ url: "/rollback/audit-log", params });
+
+// Asset Ownership
+export const listAssetOwnership = (params: {
+	assetType?: string;
+	ownerDeptCode?: string;
+	keyword?: string;
+	page?: number;
+	size?: number;
+}) => api.get({ url: "/asset-ownership", params });
+export const updateAssetOwnership = (id: number, data: { ownerDeptCode: string; assignedBy?: string }) =>
+	api.put({ url: `/asset-ownership/${id}`, data });
+export const batchUpdateAssetOwnership = (data: { ids: number[]; ownerDeptCode: string; assignedBy?: string }) =>
+	api.post({ url: "/asset-ownership/batch", data });
+
+// Asset Grant
+export const listAssetGrants = (params: { assetType: string; assetId: string }) =>
+	api.get({ url: "/asset-grants", params });
+export const createAssetGrant = (data: {
+	assetType: string;
+	assetId: string;
+	granteeType: string;
+	granteeId: string;
+	permission: string;
+	validFrom?: string;
+	validTo?: string;
+	grantReason?: string;
+}) => api.post({ url: "/asset-grants", data });
+export const deleteAssetGrant = (id: number) => api.delete({ url: `/asset-grants/${id}` });
+export const listMyGrants = (params?: { page?: number; size?: number }) =>
+	api.get({ url: "/asset-grants/my", params });
+export const listGrantedByMe = (params?: { page?: number; size?: number }) =>
+	api.get({ url: "/asset-grants/granted-by-me", params });
+
+// Asset Permission Audit
+export const listPermissionAudit = (params: {
+	action?: string;
+	operator?: string;
+	targetUser?: string;
+	oaReference?: string;
+	dateFrom?: string;
+	dateTo?: string;
+	page?: number;
+	size?: number;
+}) => api.get({ url: "/asset-permission-audit", params });

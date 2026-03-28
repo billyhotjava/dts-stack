@@ -1,5 +1,6 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router";
+import { getOrgTree, type OrgNode } from "@/api/services/directoryService";
 import {
 	Button,
 	Card,
@@ -121,7 +122,23 @@ export default function DataSourcesPage() {
 	const [excelParseResult, setExcelParseResult] = useState<ExcelImportParseResponse | null>(null);
 	const [rollbackOpen, setRollbackOpen] = useState(false);
 	const [rollbackRequest, setRollbackRequest] = useState<RollbackRequest | null>(null);
+	const [deptOptions, setDeptOptions] = useState<{ label: string; value: string }[]>([]);
 	const [form] = Form.useForm();
+
+	const loadDepts = useCallback(async () => {
+		try {
+			const tree = (await getOrgTree()) as OrgNode[];
+			const flat: { label: string; value: string }[] = [];
+			const walk = (nodes: OrgNode[]) => {
+				for (const n of nodes) {
+					if (n.deptCode) flat.push({ label: n.name, value: n.deptCode });
+					if (n.children) walk(n.children);
+				}
+			};
+			walk(Array.isArray(tree) ? tree : []);
+			setDeptOptions(flat);
+		} catch { /* ignore */ }
+	}, []);
 
 	const showImpact = (impact: DataSourceUpdateImpact | null) => {
 		if (!impact || !impact.connectionChanged) {
@@ -171,6 +188,7 @@ export default function DataSourcesPage() {
 	useEffect(() => {
 		loadList();
 		loadDrivers();
+		loadDepts();
 	}, []);
 
 	useEffect(() => {
@@ -631,6 +649,13 @@ export default function DataSourcesPage() {
 					)}
 					<Form.Item name="description" label="描述">
 						<Input.TextArea rows={2} placeholder="可选" />
+					</Form.Item>
+					<Form.Item name="ownerDept" label="归属部门" rules={[{ required: true, message: "请选择归属部门" }]}>
+						<Select showSearch placeholder="选择归属部门" options={deptOptions}
+							filterOption={(input, option) =>
+								(option?.label ?? "").toLowerCase().includes(input.toLowerCase())
+							}
+						/>
 					</Form.Item>
 					<Form.Item
 						name="propsJson"

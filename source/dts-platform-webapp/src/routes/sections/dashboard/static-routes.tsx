@@ -8,6 +8,10 @@ const TransformDetailPage = lazy(() => import("@/pages/explore/etl/TransformDeta
 const TransformExecutionHistoryPage = lazy(() => import("@/pages/explore/etl/TransformExecutionHistoryPage"));
 const ProjectCockpitImportsPage = lazy(() => import("@/pages/foundation/ProjectCockpitImportsPage"));
 const TopicBindingCenterPage = lazy(() => import("@/pages/foundation/TopicBindingCenterPage"));
+const AssetOwnershipPage = lazy(() => import("@/pages/governance/AssetOwnershipPage"));
+const AssetGrantPage = lazy(() => import("@/pages/governance/AssetGrantPage"));
+const MyGrantsPage = lazy(() => import("@/pages/governance/MyGrantsPage"));
+const PermissionAuditPage = lazy(() => import("@/pages/governance/PermissionAuditPage"));
 
 export const STATIC_DASHBOARD_ROUTES: RouteObject[] = [
 	{
@@ -63,6 +67,38 @@ export const STATIC_DASHBOARD_ROUTES: RouteObject[] = [
 		element: (
 			<Suspense fallback={<LineLoading />}>
 				<TopicBindingCenterPage />
+			</Suspense>
+		),
+	},
+	{
+		path: "governance/asset-ownership",
+		element: (
+			<Suspense fallback={<LineLoading />}>
+				<AssetOwnershipPage />
+			</Suspense>
+		),
+	},
+	{
+		path: "governance/asset-grants",
+		element: (
+			<Suspense fallback={<LineLoading />}>
+				<AssetGrantPage />
+			</Suspense>
+		),
+	},
+	{
+		path: "my/asset-grants",
+		element: (
+			<Suspense fallback={<LineLoading />}>
+				<MyGrantsPage />
+			</Suspense>
+		),
+	},
+	{
+		path: "governance/permission-audit",
+		element: (
+			<Suspense fallback={<LineLoading />}>
+				<PermissionAuditPage />
 			</Suspense>
 		),
 	},

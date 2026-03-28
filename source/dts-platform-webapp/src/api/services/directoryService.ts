@@ -12,6 +12,7 @@ export interface DirectoryRole {
 export interface OrgNode {
   id: number;
   name: string;
+  deptCode?: string;
   parentId?: number;
   children?: OrgNode[];
 }
