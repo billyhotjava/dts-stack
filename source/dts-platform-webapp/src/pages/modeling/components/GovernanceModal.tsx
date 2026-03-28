@@ -27,6 +27,8 @@ export type GovernanceModalProps = {
 	preview: SqlModelGovernancePreviewItem[];
 	selection: string[];
 	onSelectionChange: (keys: string[]) => void;
+	onSelectAllPreview: () => void;
+	onClearSelection: () => void;
 	spaces: ProjectSpace[];
 	form: ReturnType<typeof Form.useForm>[0];
 };
@@ -41,6 +43,8 @@ export default function GovernanceModal({
 	preview,
 	selection,
 	onSelectionChange,
+	onSelectAllPreview,
+	onClearSelection,
 	spaces,
 	form,
 }: GovernanceModalProps) {
@@ -126,6 +130,17 @@ export default function GovernanceModal({
 				</div>
 			</Form>
 			<div className="mt-4">
+				<div className="mb-3 flex items-center justify-between rounded-md border border-border bg-muted/20 px-3 py-2">
+					<div className="text-xs text-muted-foreground">已选 {selection.length} 个命中模型</div>
+					<Space size="small">
+						<Button size="small" onClick={onSelectAllPreview} disabled={!preview.length}>
+							全选命中
+						</Button>
+						<Button size="small" onClick={onClearSelection} disabled={!selection.length}>
+							清空选择
+						</Button>
+					</Space>
+				</div>
 				<Table<SqlModelGovernancePreviewItem>
 					size="small"
 					rowKey={(record, index) => record.modelId || record.modelPath || record.name || `record-${index}`}

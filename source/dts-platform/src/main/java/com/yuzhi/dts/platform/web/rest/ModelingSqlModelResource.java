@@ -279,6 +279,22 @@ public class ModelingSqlModelResource {
         return ApiResponses.ok(null);
     }
 
+    @PostMapping("/batch-delete")
+    @Transactional
+    @PreAuthorize(MODELING_MAINTAINER_EXPRESSION)
+    public ApiResponse<ModelingSqlModelService.BatchDeleteResult> batchDelete(
+        @RequestBody ModelingSqlModelService.BatchDeleteRequest request,
+        @RequestHeader(value = "X-Active-Dept", required = false) String activeDept
+    ) {
+        ModelingSqlModelService.BatchDeleteResult result = sqlModelService.deleteBatch(request, activeDept);
+        auditService.audit(
+            "DELETE",
+            "modeling.sql-model.batch",
+            "requested=" + result.requested() + ",deleted=" + result.deleted() + ",failed=" + result.failed()
+        );
+        return ApiResponses.ok(result);
+    }
+
     /**
      * 获取可用的 ODS 源表列表（用于 SQL 编辑器 source() 函数选择器）
      * 返回格式：[{schema, table, description, sourceSnippet}]

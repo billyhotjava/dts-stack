@@ -328,6 +328,30 @@ public class ModelingSqlModelService {
         }
     }
 
+    @Transactional
+    public BatchDeleteResult deleteBatch(BatchDeleteRequest request, String activeDeptHeader) {
+        List<UUID> requestedIds = request == null || request.modelIds() == null
+            ? List.of()
+            : request.modelIds().stream().filter(Objects::nonNull).distinct().toList();
+        List<BatchDeleteFailure> failures = new ArrayList<>();
+        int deleted = 0;
+        for (UUID id : requestedIds) {
+            try {
+                delete(id, activeDeptHeader);
+                deleted++;
+            } catch (Exception ex) {
+                failures.add(new BatchDeleteFailure(id, trimToNull(ex.getMessage()) != null ? ex.getMessage() : "删除失败"));
+            }
+        }
+        return new BatchDeleteResult(requestedIds.size(), deleted, failures.size(), failures);
+    }
+
+    public record BatchDeleteRequest(List<UUID> modelIds) {}
+
+    public record BatchDeleteFailure(UUID modelId, String message) {}
+
+    public record BatchDeleteResult(int requested, int deleted, int failed, List<BatchDeleteFailure> failures) {}
+
     // ── Package-visible methods used by ModelGenerationService ──────────
 
     void ensureWorkspaceWritable() {

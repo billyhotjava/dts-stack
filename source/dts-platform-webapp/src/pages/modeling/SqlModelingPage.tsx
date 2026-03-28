@@ -20,7 +20,6 @@ import {
 	Tabs,
 	Tag,
 	Tooltip,
-	Tree,
 	Typography,
 	Popconfirm,
 	Segmented,
@@ -58,6 +57,7 @@ import {
 	createSqlModel,
 	updateSqlModel,
 	deleteSqlModel,
+	batchDeleteSqlModels,
 	importSqlModel,
 	generateSqlModelsFromOds,
 	previewSqlModelGovernance,
@@ -91,7 +91,9 @@ import {
 import dataSourcesService, { type InfraDataSource } from "@/api/services/dataSourcesService";
 import topicBindingService, { type TopicBindingDiagnostics } from "@/api/services/topicBindingService";
 import BatchImportModal from "./BatchImportModal";
+import BatchDeleteResultModal from "./components/BatchDeleteResultModal";
 import GovernanceModal from "./components/GovernanceModal";
+import ModelFileBrowser from "./components/ModelFileBrowser";
 import ModelEditDrawer from "./components/ModelEditDrawer";
 import ImportModelModal from "./components/ImportModelModal";
 import OdsGenerateModal from "./components/OdsGenerateModal";
@@ -109,10 +111,22 @@ import {
 	matchesTriggeredBuildSummary,
 } from "./sqlModelBuild.helpers";
 import {
+	applyBatchDeletedModelSelection,
 	applyDeletedModelSelection,
 	applyManualModelSelection,
 	resolveRunsRequestAfterSelection,
 } from "./sqlModelDeleteFlow.helpers";
+import {
+	EMPTY_BULK_SELECTION,
+	applyBulkSelectionChange,
+	clearDeletedBulkSelection,
+	deriveSelectedModelIdsFromCheckedKeys,
+	type BulkSelectionState,
+} from "./sqlModelBulkSelection.helpers";
+import {
+	buildSqlModelBatchDeleteDetail,
+	type SqlModelBatchDeleteDetail,
+} from "./sqlModelBatchDeleteResult.helpers";
 import {
 	createPrimaryModelingActions,
 	createSecondaryModelingActions,
@@ -136,6 +150,7 @@ import type {
 	SqlModelGovernancePreviewItem,
 	SqlModelGovernancePreviewResult,
 	SqlModelGovernanceExecuteResult,
+	SqlModelBatchDeleteResult,
 	OdsSkippedSeverity,
 	OdsSkippedEntry,
 } from "./sqlModeling.types";
@@ -143,7 +158,6 @@ import type {
 import { normalizeText, formatDateTime } from "@/utils/textUtils";
 
 const { Text } = Typography;
-const { DirectoryTree } = Tree;
 
 const syncTag = (synced?: boolean) => {
 	if (synced == null) return <Tag>未知</Tag>;
@@ -263,7 +277,6 @@ export default function SqlModelingPage() {
 	const [archiveSubmitting, setArchiveSubmitting] = useState(false);
 	const [sqlFileList, setSqlFileList] = useState<UploadFile[]>([]);
 	const [csvFileList, setCsvFileList] = useState<UploadFile[]>([]);
-	const [batchArchiveSelection, setBatchArchiveSelection] = useState<string[]>([]);
 	const [odsGenerateOpen, setOdsGenerateOpen] = useState(false);
 	const [odsGenerateSubmitting, setOdsGenerateSubmitting] = useState(false);
 	const [syncingModels, setSyncingModels] = useState(false);
@@ -318,7 +331,9 @@ export default function SqlModelingPage() {
 	const [governancePreviewLoading, setGovernancePreviewLoading] = useState(false);
 	const [governanceExecuting, setGovernanceExecuting] = useState(false);
 	const [governancePreview, setGovernancePreview] = useState<SqlModelGovernancePreviewItem[]>([]);
-	const [governanceSelection, setGovernanceSelection] = useState<string[]>([]);
+	const [bulkSelection, setBulkSelection] = useState<BulkSelectionState>(EMPTY_BULK_SELECTION);
+	const [batchDeleteResult, setBatchDeleteResult] = useState<SqlModelBatchDeleteDetail | null>(null);
+	const [batchDeleteResultOpen, setBatchDeleteResultOpen] = useState(false);
 	const [auditLogs, setAuditLogs] = useState<any[]>([]);
 	const [auditLogsLoading, setAuditLogsLoading] = useState(false);
 	const [form] = Form.useForm();
@@ -1123,7 +1138,9 @@ export default function SqlModelingPage() {
 		if (!canBatchArchive) return;
 		batchArchiveForm.resetFields();
 		batchArchiveForm.setFieldsValue({ planId: defaultArchivePlanId });
-		setBatchArchiveSelection(collectUnassignedModelIds(unassignedModels));
+		setBulkSelection((current) =>
+			applyBulkSelectionChange(current, collectUnassignedModelIds(unassignedModels), "list"),
+		);
 		setBatchArchiveOpen(true);
 	};
 
@@ -1135,7 +1152,7 @@ export default function SqlModelingPage() {
 			deleteFiles: true,
 		});
 		setGovernancePreview([]);
-		setGovernanceSelection([]);
+		setBulkSelection(EMPTY_BULK_SELECTION);
 		setGovernanceOpen(true);
 	};
 
@@ -1158,7 +1175,13 @@ export default function SqlModelingPage() {
 			})) as SqlModelGovernancePreviewResult;
 			const items = Array.isArray(resp?.items) ? resp.items : [];
 			setGovernancePreview(items);
-			setGovernanceSelection(items.map((item) => item.modelId || "").filter(Boolean));
+			setBulkSelection((current) =>
+				applyBulkSelectionChange(
+					current,
+					items.map((item) => String(item.modelId || "").trim()).filter(Boolean),
+					"governance",
+				),
+			);
 			if (!items.length) {
 				toast.info("未命中待治理模型");
 			}
@@ -1169,7 +1192,7 @@ export default function SqlModelingPage() {
 	};
 
 	const handleGovernanceExecute = async () => {
-		if (!governanceSelection.length) {
+		if (!bulkSelection.selectedIds.length) {
 			toast.error("请至少选择一个待治理模型");
 			return;
 		}
@@ -1177,7 +1200,7 @@ export default function SqlModelingPage() {
 		setGovernanceExecuting(true);
 		try {
 			const resp = (await executeSqlModelGovernance({
-				modelIds: governanceSelection,
+				modelIds: bulkSelection.selectedIds,
 				deleteFiles: values.deleteFiles !== false,
 			})) as SqlModelGovernanceExecuteResult;
 			const deleted = Number(resp?.deleted || 0);
@@ -1185,7 +1208,7 @@ export default function SqlModelingPage() {
 			toast.success(`治理完成：删除 ${deleted} 个，跳过 ${skipped} 个`);
 			await loadModels();
 			setGovernancePreview([]);
-			setGovernanceSelection([]);
+			setBulkSelection(EMPTY_BULK_SELECTION);
 			setGovernanceOpen(false);
 		} catch (err: any) {
 		} finally {
@@ -1571,6 +1594,60 @@ export default function SqlModelingPage() {
 		});
 	};
 
+	const removeSelectedModels = () => {
+		if (!bulkSelection.selectedIds.length) {
+			toast.error("请至少选择一个模型");
+			return;
+		}
+		const requestedIds = [...bulkSelection.selectedIds];
+		const selectedSnapshot = selectedModels.map((model) => ({
+			id: model.id,
+			name: model.name,
+			layer: model.layer,
+			planName: model.planName,
+			modelPath: model.modelPath,
+		}));
+		const layerSummary =
+			Array.from(new Set(selectedModels.map((model) => model.layer || inferLayer(model.name)))).join("、") || "未分层";
+		Modal.confirm({
+			title: "批量删除模型？",
+			content: `确认删除已选 ${bulkSelection.selectedIds.length} 个模型吗？涉及分层：${layerSummary}。`,
+			okText: "确认删除",
+			okButtonProps: { danger: true },
+			onOk: async () => {
+				try {
+					const resp = (await batchDeleteSqlModels({
+						modelIds: requestedIds,
+					})) as SqlModelBatchDeleteResult;
+					const failedIds = new Set(
+						(resp?.failures || []).map((failure) => String(failure?.modelId || "").trim()).filter(Boolean),
+					);
+					const deletedIds = requestedIds.filter((id) => !failedIds.has(id));
+					const nextSelection = applyBatchDeletedModelSelection({
+						activeModelKey,
+						deletedModelKeys: deletedIds,
+					});
+					setActiveModelKey(nextSelection.nextActiveModelKey);
+					setSuppressAutoSelect(nextSelection.suppressAutoSelect);
+					setBulkSelection((current) => clearDeletedBulkSelection(current, deletedIds));
+					setBatchDeleteResult(
+						buildSqlModelBatchDeleteDetail({
+							requestedIds,
+							models: selectedSnapshot,
+							result: resp,
+						}),
+					);
+					setBatchDeleteResultOpen(true);
+					const deleted = Number(resp?.deleted || 0);
+					const failed = Number(resp?.failed || 0);
+					toast[failed > 0 ? "warning" : "success"](`已删除 ${deleted} 个模型${failed > 0 ? `，失败 ${failed} 个` : ""}`);
+					await loadModels();
+				} catch (err: any) {
+				}
+			},
+		});
+	};
+
 	const saveSqlDraft = async () => {
 		if (!activeModel?.id) return;
 		try {
@@ -1823,6 +1900,8 @@ export default function SqlModelingPage() {
 		() => filteredModels.filter((model) => !model.planId),
 		[filteredModels],
 	);
+	const unassignedModelIds = useMemo(() => collectUnassignedModelIds(unassignedModels), [unassignedModels]);
+	const unassignedModelIdSet = useMemo(() => new Set(unassignedModelIds), [unassignedModelIds]);
 
 
 	const buildLayerNodes = useCallback((input: SqlModel[]) => {
@@ -1960,6 +2039,22 @@ export default function SqlModelingPage() {
 	const activeLayerNodes = useMemo(() => buildLayerNodes(activeSpaceModels), [buildLayerNodes, activeSpaceModels]);
 	const canArchiveActiveModel = !!activeModel?.id && !activeModel?.planId && spaces.length > 0;
 	const canBatchArchive = unassignedModels.length > 0 && spaces.length > 0;
+	const checkedModelKeys = useMemo(() => bulkSelection.selectedIds.map((id) => `model:${id}`), [bulkSelection.selectedIds]);
+	const batchArchiveSelection = useMemo(
+		() => bulkSelection.selectedIds.filter((id) => unassignedModelIdSet.has(id)),
+		[bulkSelection.selectedIds, unassignedModelIdSet],
+	);
+	const visibleModelIds = useMemo(
+		() => activeSpaceModels.map((model) => String(model.id || "").trim()).filter(Boolean),
+		[activeSpaceModels],
+	);
+	const selectedModels = useMemo(() => {
+		const selectedIdSet = new Set(bulkSelection.selectedIds);
+		return sqlModels.filter((model) => {
+			const id = String(model.id || "").trim();
+			return !!id && selectedIdSet.has(id);
+		});
+	}, [bulkSelection.selectedIds, sqlModels]);
 
 	const treeData = useMemo(() => {
 		const nodes = spaces.map((space, idx) => {
@@ -1980,6 +2075,14 @@ export default function SqlModelingPage() {
 		}
 		return nodes;
 	}, [spaces, activeSpaceKey, filteredModels, buildLayerNodes, unassignedModels]);
+
+	useEffect(() => {
+		const existingIds = new Set(sqlModels.map((model) => String(model.id || "").trim()).filter(Boolean));
+		setBulkSelection((current) => {
+			const deletedIds = current.selectedIds.filter((id) => !existingIds.has(id));
+			return deletedIds.length ? clearDeletedBulkSelection(current, deletedIds) : current;
+		});
+	}, [sqlModels]);
 
 	// 模型操作下拉菜单
 	const modelMenuItems = [
@@ -2052,6 +2155,12 @@ export default function SqlModelingPage() {
 							模型 <DownOutlined className="text-xs" />
 						</Button>
 					</Dropdown>
+					<Button onClick={openGovernanceModal} disabled={!workspaceOk}>
+						模型治理
+					</Button>
+					<Button danger icon={<DeleteOutlined />} onClick={removeSelectedModels} disabled={!bulkSelection.selectedIds.length}>
+						批量删除
+					</Button>
 					{/* 保存按钮 */}
 					<Button
 						icon={<SaveOutlined />}
@@ -2204,64 +2313,45 @@ export default function SqlModelingPage() {
 				</div>
 			)}
 			<div className="flex flex-1 min-h-0 overflow-hidden">
-				<div className="w-64 min-w-[256px] max-w-[256px] border-r border-border bg-muted p-4 overflow-x-auto overflow-y-auto [&_.ant-tree-title]:block [&_.ant-tree-title]:whitespace-nowrap [&_.ant-tree-switcher]:flex-shrink-0">
-					<div className="mb-3 text-xs font-bold uppercase text-muted-foreground">项目目录</div>
-					<Input
-						size="small"
-						placeholder="搜索模型..."
-						value={keyword}
-						onChange={(event) => setKeyword(event.target.value)}
-						className="mb-3"
-					/>
-					{spacesLoading ? (
-						<div style={{ padding: 16 }}>
-							<Skeleton active paragraph={{ rows: 8 }} />
-						</div>
-					) : treeData.length === 0 ? (
-						<EmptyState title="暂无项目空间" description="请先在项目空间管理中创建项目空间。" />
-					) : (
-						<>
-							<DirectoryTree
-								defaultExpandAll
-								treeData={treeData}
-								selectedKeys={
-									activeModelKey
-										? [`model:${activeModelKey}`]
-										: activeSpaceKey
-											? [activeSpaceKey]
-											: []
-								}
-								onSelect={(keys) => {
-									const key = String(keys[0] || "");
-									if (!key) return;
-									if (key.startsWith("space-")) {
-										setSuppressAutoSelect(false);
-										setActiveSpaceKey(key);
-										setActiveModelKey(null);
-										return;
-									}
-									if (key.startsWith("layer-")) return;
-									if (key.startsWith("model:")) {
-										const nextSelection = applyManualModelSelection(key.replace("model:", ""));
-										setSuppressAutoSelect(nextSelection.suppressAutoSelect);
-										setActiveModelKey(nextSelection.nextActiveModelKey);
-										return;
-									}
-									const nextSelection = applyManualModelSelection(key);
-									setSuppressAutoSelect(nextSelection.suppressAutoSelect);
-									setActiveModelKey(nextSelection.nextActiveModelKey);
-								}}
-							/>
-							{modelsLoading ? (
-								<div className="mt-3">
-									<Skeleton active paragraph={{ rows: 3 }} title={false} />
-								</div>
-							) : activeLayerNodes.length === 0 ? (
-								<div className="mt-3 text-xs text-muted-foreground">当前项目暂无模型。</div>
-							) : null}
-						</>
-					)}
-				</div>
+				<ModelFileBrowser
+					keyword={keyword}
+					onKeywordChange={setKeyword}
+					treeData={treeData}
+					selectedKeys={activeModelKey ? [`model:${activeModelKey}`] : activeSpaceKey ? [activeSpaceKey] : []}
+					checkedKeys={checkedModelKeys}
+					onSelect={(keys: React.Key[]) => {
+						const key = String(keys[0] || "");
+						if (!key) return;
+						if (key.startsWith("space-")) {
+							setSuppressAutoSelect(false);
+							setActiveSpaceKey(key);
+							setActiveModelKey(null);
+							return;
+						}
+						if (key.startsWith("layer-")) return;
+						if (key.startsWith("model:")) {
+							const nextSelection = applyManualModelSelection(key.replace("model:", ""));
+							setSuppressAutoSelect(nextSelection.suppressAutoSelect);
+							setActiveModelKey(nextSelection.nextActiveModelKey);
+							return;
+						}
+						const nextSelection = applyManualModelSelection(key);
+						setSuppressAutoSelect(nextSelection.suppressAutoSelect);
+						setActiveModelKey(nextSelection.nextActiveModelKey);
+					}}
+					onCheck={(keys: string[]) =>
+						setBulkSelection((current) =>
+							applyBulkSelectionChange(current, deriveSelectedModelIdsFromCheckedKeys(keys), "tree"),
+						)
+					}
+					selectedCount={bulkSelection.selectedIds.length}
+					onSelectAllCurrent={() => setBulkSelection((current) => applyBulkSelectionChange(current, visibleModelIds, "tree"))}
+					onClearSelection={() => setBulkSelection(EMPTY_BULK_SELECTION)}
+					onBatchDelete={removeSelectedModels}
+					batchDeleteDisabled={!bulkSelection.selectedIds.length}
+					loading={spacesLoading}
+					showEmptyModelsHint={!modelsLoading && treeData.length > 0 && activeLayerNodes.length === 0}
+				/>
 
 				<div className="flex flex-1 flex-col">
 					<div className="flex items-center justify-between border-b border-border bg-muted/20 px-4 py-1.5">

@@ -3,6 +3,11 @@ export type DeleteModelSelectionInput = {
 	deletedModelKey: string | null;
 };
 
+export type BatchDeleteModelSelectionInput = {
+	activeModelKey: string | null;
+	deletedModelKeys: string[];
+};
+
 export type DeleteModelSelectionState = {
 	nextActiveModelKey: string | null;
 	suppressAutoSelect: boolean;
@@ -32,6 +37,27 @@ export function applyManualModelSelection(nextActiveModelKey: string | null): De
 	return {
 		nextActiveModelKey,
 		suppressAutoSelect: false,
+	};
+}
+
+export function applyBatchDeletedModelSelection(input: BatchDeleteModelSelectionInput): DeleteModelSelectionState {
+	const activeModelKey = input.activeModelKey ?? null;
+	if (!activeModelKey) {
+		return {
+			nextActiveModelKey: null,
+			suppressAutoSelect: false,
+		};
+	}
+	const deletedSet = new Set((input.deletedModelKeys || []).map((key) => String(key || "").trim()).filter(Boolean));
+	if (!deletedSet.has(activeModelKey)) {
+		return {
+			nextActiveModelKey: activeModelKey,
+			suppressAutoSelect: false,
+		};
+	}
+	return {
+		nextActiveModelKey: null,
+		suppressAutoSelect: true,
 	};
 }
 

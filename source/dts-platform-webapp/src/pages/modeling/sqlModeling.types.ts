@@ -276,6 +276,16 @@ export type SqlModelGovernanceExecuteResult = {
 	}>;
 };
 
+export type SqlModelBatchDeleteResult = {
+	requested?: number;
+	deleted?: number;
+	failed?: number;
+	failures?: Array<{
+		modelId?: string;
+		message?: string;
+	}>;
+};
+
 export type OdsSkippedSeverity = "error" | "warn" | "info";
 
 export type OdsSkippedEntry = {
