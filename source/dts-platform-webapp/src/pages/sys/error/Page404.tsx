@@ -11,7 +11,7 @@ export default function Page404() {
 	const { t } = useTranslation();
 	const navigate = useNavigate();
 	const { accessToken } = useUserToken();
-	const homePath = GLOBAL_CONFIG.defaultRoute || "/dashboard/workbench";
+	const homePath = GLOBAL_CONFIG.defaultRoute || "/portal";
 
 	// If user is authenticated, auto-redirect to the unified home
 	useEffect(() => {

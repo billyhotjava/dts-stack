@@ -58,7 +58,7 @@ export function DynamicMenuResolver({ base }: Props) {
 	const normalizedBase = base ? normalizeMenuPath(base) : "";
 	const menusLoaded = Array.isArray(menus) && menus.length > 0;
 	const fallbackMenuPath = useMemo(() => firstAccessibleMenuPath(Array.isArray(menus) ? menus : []), [menus]);
-	const defaultRoute = GLOBAL_CONFIG.defaultRoute || "/dashboard/workbench";
+	const defaultRoute = GLOBAL_CONFIG.defaultRoute || "/portal";
 
 	const redirectToFallback = () => {
 		if (fallbackMenuPath && fallbackMenuPath !== pathname) {
