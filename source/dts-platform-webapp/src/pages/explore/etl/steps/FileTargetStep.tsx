@@ -43,13 +43,13 @@ const fileTableNameValidator = (_: any, value: string) => {
 	return Promise.resolve();
 };
 
-export const FileTargetStep: React.FC<FileTargetStepProps> = ({
+export const FileTargetStep = ({
 	form,
 	defaultDestinationStatus,
 	extraColumns,
 	setExtraColumns,
 	fileUploadResult,
-}) => {
+}: FileTargetStepProps) => {
 	return (
 		<>
 			<Divider orientation="left">目标配置</Divider>

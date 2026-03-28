@@ -79,14 +79,14 @@ const downloadTemplate = () => {
 	URL.revokeObjectURL(url);
 };
 
-const BatchImportModal: React.FC<BatchImportModalProps> = ({
+const BatchImportModal = ({
 	open,
 	onClose,
 	onSuccess,
 	spaces,
 	dataSources,
 	activeSpaceId,
-}) => {
+}: BatchImportModalProps) => {
 	const [activeTab, setActiveTab] = useState("zip");
 	const [zipForm] = Form.useForm();
 	const [fileForm] = Form.useForm();

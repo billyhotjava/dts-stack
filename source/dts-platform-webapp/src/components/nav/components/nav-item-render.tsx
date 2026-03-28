@@ -11,7 +11,7 @@ type NavItemRendererProps = {
  * Renderer for Navigation Items.
  * Handles disabled, external link, clickable child container, and internal link logic.
  */
-export const NavItemRenderer: React.FC<NavItemRendererProps> = ({ item, className, children }) => {
+export const NavItemRenderer = ({ item, className, children }: NavItemRendererProps) => {
 	const { disabled, hasChild, path, onClick } = item;
 
 	if (disabled) {

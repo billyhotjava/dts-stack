@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
-import type { ApexOptions } from "apexcharts";
+import type { EChartsOption } from "echarts";
 import { Alert, Button, Card, Col, Empty, InputNumber, Row, Select, Space, Statistic, Table, Tabs, Tag, Typography } from "antd";
 import { ReloadOutlined } from "@ant-design/icons";
 import type { ColumnsType } from "antd/es/table";
@@ -185,25 +185,24 @@ export default function OpsOverviewPage() {
 		new Set(ingestionTasks.map((item) => String(item.sourceType || "").trim()).filter(Boolean)),
 	).map((item) => ({ label: item, value: item }));
 
-	const trendSeries = useMemo(
-		() => [
-			{ name: "总运行", data: trend.map((item) => item.totalRuns ?? 0) },
-			{ name: "成功", data: trend.map((item) => item.successRuns ?? 0) },
-			{ name: "失败", data: trend.map((item) => item.failedRuns ?? 0) },
-		],
-		[trend],
-	);
-
-	const trendOptions = useMemo<ApexOptions>(
+	const trendOption = useMemo<EChartsOption>(
 		() => ({
-			chart: { type: "line", toolbar: { show: false } },
-			stroke: { curve: "smooth", width: 2 },
-			markers: { size: 3 },
-			xaxis: { categories: trend.map((item) => item.date) },
-			yaxis: { min: 0, forceNiceScale: true },
-			legend: { position: "top", horizontalAlign: "left" },
-			colors: ["#1677ff", "#52c41a", "#ff4d4f"],
-			grid: { borderColor: "#f0f0f0" },
+			color: ["#1677ff", "#52c41a", "#ff4d4f"],
+			tooltip: { trigger: "axis" },
+			legend: { top: 0, left: 0 },
+			grid: { top: 40, right: 16, bottom: 24, left: 16, containLabel: true },
+			xAxis: {
+				type: "category",
+				data: trend.map((item) => item.date),
+				axisLine: { show: false },
+				axisTick: { show: false },
+			},
+			yAxis: { type: "value", min: 0, splitLine: { lineStyle: { type: "dashed" } } },
+			series: [
+				{ name: "总运行", type: "line", smooth: true, data: trend.map((item) => item.totalRuns ?? 0) },
+				{ name: "成功", type: "line", smooth: true, data: trend.map((item) => item.successRuns ?? 0) },
+				{ name: "失败", type: "line", smooth: true, data: trend.map((item) => item.failedRuns ?? 0) },
+			],
 		}),
 		[trend],
 	);
@@ -305,7 +304,7 @@ export default function OpsOverviewPage() {
 				}
 			>
 				{trend.length ? (
-					<Chart type="line" height={320} options={trendOptions} series={trendSeries} />
+					<Chart option={trendOption} height={320} />
 				) : (
 					<EmptyState title="暂无趋势数据" description="当前筛选条件下没有可用运行数据。" />
 				)}

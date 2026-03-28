@@ -34,7 +34,7 @@ export type DbTargetStepProps = Pick<
 	resolveSelectedTables: () => string[];
 };
 
-export const DbTargetStep: React.FC<DbTargetStepProps> = ({
+export const DbTargetStep = ({
 	form,
 	defaultDestinationStatus,
 	extraColumns,
@@ -44,7 +44,7 @@ export const DbTargetStep: React.FC<DbTargetStepProps> = ({
 	loadingDefaultDestination,
 	defaultDestinationError,
 	resolveSelectedTables,
-}) => {
+}: DbTargetStepProps) => {
 	const writerTablesValidator = (_: any, value: string) => {
 		const mode = normalizeText(form.getFieldValue("tableSelectionMode")) || "all";
 		if (mode === "all") {

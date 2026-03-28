@@ -22,7 +22,7 @@ interface SortableContainerProps {
 	renderOverlay?: (activeId: string | number) => React.ReactNode;
 }
 
-const SortableContainer: React.FC<SortableContainerProps> = ({ items, onSortEnd, children, renderOverlay }) => {
+const SortableContainer = ({ items, onSortEnd, children, renderOverlay }: SortableContainerProps) => {
 	const [activeId, setActiveId] = React.useState<string | number | null>(null);
 
 	// 配置拖拽传感器
