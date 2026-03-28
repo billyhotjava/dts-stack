@@ -16,8 +16,10 @@
 		"validate:screen-plugin-boundary": "node scripts/validate-screen-plugin-boundary.mjs"
 	},
 	"dependencies": {
+		"@ant-design/icons": "^6.1.1",
 		"@jiaminghi/data-view-react": "^1.2.5",
 		"@ungap/structured-clone": "^1.3.0",
+		"antd": "^5.22.1",
 		"echarts": "^6.0.0",
 		"echarts-for-react": "^3.0.6",
 		"echarts-wordcloud": "^2.1.0",
