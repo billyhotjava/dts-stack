@@ -10,8 +10,7 @@ import {
 import { ErrorNotice } from "../components/ErrorNotice";
 import { PageContainer, PageHeader } from "../components/PageContainer/PageContainer";
 import { getEffectiveLocale, t, type Locale } from "../i18n";
-import { Spin, Button, Card, Tag } from "antd";
-import { Input, TextArea } from "../ui/Input/Input";
+import { Input, Spin, Button, Card, Tag } from "antd";
 import { NativeSelect } from "../ui/Input/Select";
 import "./page.css";
 
@@ -229,11 +228,26 @@ export default function Nl2SqlEvalPage() {
 			<div className="grid2" style={{ marginBottom: "var(--spacing-lg)" }}>
 				<Card title="评测样例管理">
 						<div className="col" style={{ gap: "var(--spacing-sm)" }}>
-							<Input label={t(locale, "common.name")} value={caseName} onChange={(event) => setCaseName(event.target.value)} placeholder="制造日报趋势评测" />
-							<Input label="业务域" value={caseDomain} onChange={(event) => setCaseDomain(event.target.value)} placeholder="manufacturing" />
-							<TextArea label="Prompt" value={casePrompt} onChange={(event) => setCasePrompt(event.target.value)} rows={3} />
-							<TextArea label={t(locale, "common.description")} value={caseNotes} onChange={(event) => setCaseNotes(event.target.value)} rows={2} />
-							<TextArea label="Expected(JSON)" value={caseExpected} onChange={(event) => setCaseExpected(event.target.value)} rows={3} />
+							<div>
+								<label style={{ display: "block", marginBottom: 4, fontWeight: 500 }}>{t(locale, "common.name")}</label>
+								<Input value={caseName} onChange={(event) => setCaseName(event.target.value)} placeholder="制造日报趋势评测" />
+							</div>
+							<div>
+								<label style={{ display: "block", marginBottom: 4, fontWeight: 500 }}>业务域</label>
+								<Input value={caseDomain} onChange={(event) => setCaseDomain(event.target.value)} placeholder="manufacturing" />
+							</div>
+							<div>
+								<label style={{ display: "block", marginBottom: 4, fontWeight: 500 }}>Prompt</label>
+								<Input.TextArea value={casePrompt} onChange={(event) => setCasePrompt(event.target.value)} rows={3} />
+							</div>
+							<div>
+								<label style={{ display: "block", marginBottom: 4, fontWeight: 500 }}>{t(locale, "common.description")}</label>
+								<Input.TextArea value={caseNotes} onChange={(event) => setCaseNotes(event.target.value)} rows={2} />
+							</div>
+							<div>
+								<label style={{ display: "block", marginBottom: 4, fontWeight: 500 }}>Expected(JSON)</label>
+								<Input.TextArea value={caseExpected} onChange={(event) => setCaseExpected(event.target.value)} rows={3} />
+							</div>
 						</div>
 					<div style={{ display: "flex", justifyContent: "flex-end", paddingTop: "var(--spacing-md)", marginTop: "var(--spacing-md)", borderTop: "1px solid var(--color-border)" }}>
 						<Button type="primary" onClick={createCase} loading={saving}>
@@ -248,8 +262,14 @@ export default function Nl2SqlEvalPage() {
 								<input type="checkbox" checked={enabledOnly} onChange={(event) => setEnabledOnly(event.target.checked)} />
 								仅执行 enabled 样例
 							</label>
-							<Input label="样例上限" value={limit} onChange={(event) => setLimit(event.target.value)} />
-							<Input label="指定 CaseIds(逗号分隔，可选)" value={caseIdsCsv} onChange={(event) => setCaseIdsCsv(event.target.value)} placeholder="1,2,5" />
+							<div>
+								<label style={{ display: "block", marginBottom: 4, fontWeight: 500 }}>样例上限</label>
+								<Input value={limit} onChange={(event) => setLimit(event.target.value)} />
+							</div>
+							<div>
+								<label style={{ display: "block", marginBottom: 4, fontWeight: 500 }}>指定 CaseIds(逗号分隔，可选)</label>
+								<Input value={caseIdsCsv} onChange={(event) => setCaseIdsCsv(event.target.value)} placeholder="1,2,5" />
+							</div>
 						</div>
 					<div style={{ display: "flex", justifyContent: "flex-end", paddingTop: "var(--spacing-md)", marginTop: "var(--spacing-md)", borderTop: "1px solid var(--color-border)" }}>
 						<div style={{ display: "flex", gap: "var(--spacing-sm)" }}>

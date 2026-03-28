@@ -4,8 +4,7 @@ import { analyticsApi, type SearchItem } from "../api/analyticsApi";
 import { PageContainer, PageHeader } from "../components/PageContainer/PageContainer";
 import { EmptyState } from "../components/EmptyState";
 import { ErrorNotice } from "../components/ErrorNotice";
-import { Spin, Button, Card, Tag } from "antd";
-import { SearchInput } from "../ui/Input/Input";
+import { Input, Spin, Button, Card, Tag } from "antd";
 import { getEffectiveLocale, t, type Locale } from "../i18n";
 import "./page.css";
 
@@ -117,11 +116,13 @@ export default function SearchPage() {
 				<form onSubmit={handleSubmit}>
 					<div style={{ display: "flex", gap: "var(--spacing-sm)" }}>
 						<div style={{ flex: "1 1 360px" }}>
-							<SearchInput
+							<Input.Search
 								value={value}
 								onChange={(e) => setValue(e.target.value)}
 								placeholder={t(locale, "search.placeholder")}
 								size="large"
+								allowClear
+								onSearch={() => {}}
 							/>
 						</div>
 						<Button type="primary" htmlType="submit" icon={<SearchIcon />}>

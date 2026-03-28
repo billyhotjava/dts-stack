@@ -1,5 +1,5 @@
 import { ReactNode, useState } from 'react';
-import { Input } from '../../ui/Input/Input';
+import { Input } from 'antd';
 import { NativeSelect } from '../../ui/Input/Select';
 import { Toggle, Checkbox } from '../../ui/Input/Checkbox';
 import { Tabs, TabList, Tab, TabPanels, TabPanel } from '../../ui/Tabs/Tabs';
@@ -63,18 +63,22 @@ export function ChartSettings({
           {/* Display Tab */}
           <TabPanel value="display">
             <div className="chart-settings__section">
-              <Input
-                label="Title"
-                value={settings.title || ''}
-                onChange={(e) => updateSetting('title', e.target.value)}
-                placeholder="Chart title"
-              />
-              <Input
-                label="Subtitle"
-                value={settings.subtitle || ''}
-                onChange={(e) => updateSetting('subtitle', e.target.value)}
-                placeholder="Optional subtitle"
-              />
+              <div>
+                <label style={{ display: "block", marginBottom: 4, fontWeight: 500 }}>Title</label>
+                <Input
+                  value={settings.title || ''}
+                  onChange={(e) => updateSetting('title', e.target.value)}
+                  placeholder="Chart title"
+                />
+              </div>
+              <div>
+                <label style={{ display: "block", marginBottom: 4, fontWeight: 500 }}>Subtitle</label>
+                <Input
+                  value={settings.subtitle || ''}
+                  onChange={(e) => updateSetting('subtitle', e.target.value)}
+                  placeholder="Optional subtitle"
+                />
+              </div>
               <div className="chart-settings__row">
                 <Toggle
                   label="Show Legend"
@@ -101,18 +105,22 @@ export function ChartSettings({
           {/* Axes Tab */}
           <TabPanel value="axes">
             <div className="chart-settings__section">
-              <Input
-                label="X-Axis Label"
-                value={settings.xAxisLabel || ''}
-                onChange={(e) => updateSetting('xAxisLabel', e.target.value)}
-                placeholder="X-axis label"
-              />
-              <Input
-                label="Y-Axis Label"
-                value={settings.yAxisLabel || ''}
-                onChange={(e) => updateSetting('yAxisLabel', e.target.value)}
-                placeholder="Y-axis label"
-              />
+              <div>
+                <label style={{ display: "block", marginBottom: 4, fontWeight: 500 }}>X-Axis Label</label>
+                <Input
+                  value={settings.xAxisLabel || ''}
+                  onChange={(e) => updateSetting('xAxisLabel', e.target.value)}
+                  placeholder="X-axis label"
+                />
+              </div>
+              <div>
+                <label style={{ display: "block", marginBottom: 4, fontWeight: 500 }}>Y-Axis Label</label>
+                <Input
+                  value={settings.yAxisLabel || ''}
+                  onChange={(e) => updateSetting('yAxisLabel', e.target.value)}
+                  placeholder="Y-axis label"
+                />
+              </div>
               <div className="chart-settings__row">
                 <Checkbox
                   label="Show X-Axis"
@@ -180,20 +188,24 @@ export function ChartSettings({
             {/* Goal Line Settings */}
             <div className="chart-settings__section">
               <h4 className="chart-settings__section-title">Goal Line</h4>
-              <Input
-                label="Goal Value"
-                type="number"
-                value={settings.goalValue?.toString() || ''}
-                onChange={(e) => updateSetting('goalValue', e.target.value ? Number(e.target.value) : undefined)}
-                placeholder="Enter goal value"
-              />
-              {settings.goalValue !== undefined && (
+              <div>
+                <label style={{ display: "block", marginBottom: 4, fontWeight: 500 }}>Goal Value</label>
                 <Input
-                  label="Goal Label"
-                  value={settings.goalLabel || ''}
-                  onChange={(e) => updateSetting('goalLabel', e.target.value)}
-                  placeholder="Goal label"
+                  type="number"
+                  value={settings.goalValue?.toString() || ''}
+                  onChange={(e) => updateSetting('goalValue', e.target.value ? Number(e.target.value) : undefined)}
+                  placeholder="Enter goal value"
                 />
+              </div>
+              {settings.goalValue !== undefined && (
+                <div>
+                  <label style={{ display: "block", marginBottom: 4, fontWeight: 500 }}>Goal Label</label>
+                  <Input
+                    value={settings.goalLabel || ''}
+                    onChange={(e) => updateSetting('goalLabel', e.target.value)}
+                    placeholder="Goal label"
+                  />
+                </div>
               )}
             </div>
           </TabPanel>

@@ -3,8 +3,7 @@ import { analyticsApi, type ReportRunItem, type ReportTemplateItem } from "../ap
 import { ErrorNotice } from "../components/ErrorNotice";
 import { PageContainer, PageHeader } from "../components/PageContainer/PageContainer";
 import { getEffectiveLocale, t, type Locale } from "../i18n";
-import { Spin, Button, Card, Tag } from "antd";
-import { Input, TextArea } from "../ui/Input/Input";
+import { Input, Spin, Button, Card, Tag } from "antd";
 import { NativeSelect } from "../ui/Input/Select";
 import "./page.css";
 
@@ -199,24 +198,30 @@ export default function ReportFactoryPage() {
 			<div className="grid2" style={{ marginBottom: "var(--spacing-lg)" }}>
 				<Card title="模板管理">
 						<div className="col" style={{ gap: "var(--spacing-sm)" }}>
-							<Input
-								label={t(locale, "common.name")}
-								value={templateName}
-								onChange={(event) => setTemplateName(event.target.value)}
-								placeholder="周报模板"
-							/>
-							<TextArea
-								label={t(locale, "common.description")}
-								value={templateDesc}
-								onChange={(event) => setTemplateDesc(event.target.value)}
-								rows={3}
-							/>
-							<Input
-								label="章节(逗号分隔)"
-								value={templateSections}
-								onChange={(event) => setTemplateSections(event.target.value)}
-								placeholder="问题背景,关键洞察,风险与建议"
-							/>
+							<div>
+								<label style={{ display: "block", marginBottom: 4, fontWeight: 500 }}>{t(locale, "common.name")}</label>
+								<Input
+									value={templateName}
+									onChange={(event) => setTemplateName(event.target.value)}
+									placeholder="周报模板"
+								/>
+							</div>
+							<div>
+								<label style={{ display: "block", marginBottom: 4, fontWeight: 500 }}>{t(locale, "common.description")}</label>
+								<Input.TextArea
+									value={templateDesc}
+									onChange={(event) => setTemplateDesc(event.target.value)}
+									rows={3}
+								/>
+							</div>
+							<div>
+								<label style={{ display: "block", marginBottom: 4, fontWeight: 500 }}>章节(逗号分隔)</label>
+								<Input
+									value={templateSections}
+									onChange={(event) => setTemplateSections(event.target.value)}
+									placeholder="问题背景,关键洞察,风险与建议"
+								/>
+							</div>
 						</div>
 					<div style={{ display: "flex", justifyContent: "flex-end", paddingTop: "var(--spacing-md)", marginTop: "var(--spacing-md)", borderTop: "1px solid var(--color-border)" }}>
 						<Button type="primary" onClick={createTemplate} loading={saving}>
@@ -240,12 +245,14 @@ export default function ReportFactoryPage() {
 									onChange={(event) => setSourceType(event.target.value)}
 									options={sourceTypeOptions}
 								/>
-								<Input
-									label="来源ID"
-									value={sourceId}
-									onChange={(event) => setSourceId(event.target.value)}
-									placeholder="输入 sessionId 或 screenId"
-								/>
+								<div>
+									<label style={{ display: "block", marginBottom: 4, fontWeight: 500 }}>来源ID</label>
+									<Input
+										value={sourceId}
+										onChange={(event) => setSourceId(event.target.value)}
+										placeholder="输入 sessionId 或 screenId"
+									/>
+								</div>
 							</div>
 							<NativeSelect
 								label="输出格式"
@@ -253,12 +260,14 @@ export default function ReportFactoryPage() {
 								onChange={(event) => setOutputFormat(event.target.value)}
 								options={formatOptions}
 							/>
-							<TextArea
-								label="分发配置(JSON)"
-								value={distributionJson}
-								onChange={(event) => setDistributionJson(event.target.value)}
-								rows={3}
-							/>
+							<div>
+								<label style={{ display: "block", marginBottom: 4, fontWeight: 500 }}>分发配置(JSON)</label>
+								<Input.TextArea
+									value={distributionJson}
+									onChange={(event) => setDistributionJson(event.target.value)}
+									rows={3}
+								/>
+							</div>
 						</div>
 					<div style={{ display: "flex", justifyContent: "flex-end", paddingTop: "var(--spacing-md)", marginTop: "var(--spacing-md)", borderTop: "1px solid var(--color-border)" }}>
 						<Button type="primary" onClick={generateReport} loading={saving}>

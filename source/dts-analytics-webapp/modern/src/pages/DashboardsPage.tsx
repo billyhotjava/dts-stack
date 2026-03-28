@@ -2,8 +2,7 @@ import { Link } from "react-router";
 import { useEffect, useMemo, useState } from "react";
 import { analyticsApi, type DashboardListItem } from "../api/analyticsApi";
 import { PageContainer, PageHeader, EmptyState } from "../components/PageContainer/PageContainer";
-import { Button, Card } from "antd";
-import { Input, SearchInput } from "../ui/Input/Input";
+import { Button, Card, Input } from "antd";
 import { CardSkeleton } from "../ui/Loading/Skeleton";
 import { CardGrid } from "../components/DashboardGrid/DashboardGrid";
 import { ErrorNotice } from "../components/ErrorNotice";
@@ -102,12 +101,13 @@ export default function DashboardsPage() {
 			{/* Filter Bar */}
 			<div className="filterBar">
 				<div style={{ flex: 1, maxWidth: 320 }}>
-					<SearchInput
+					<Input.Search
 						data-testid="analytics-dashboard-search"
 						placeholder={t(locale, "common.search")}
 						value={searchQuery}
 						onChange={(e) => setSearchQuery(e.target.value)}
-						onClear={() => setSearchQuery("")}
+						allowClear
+						onSearch={() => {}}
 					/>
 				</div>
 				<div style={{ marginLeft: "auto", display: "flex", gap: "var(--spacing-xs)" }}>

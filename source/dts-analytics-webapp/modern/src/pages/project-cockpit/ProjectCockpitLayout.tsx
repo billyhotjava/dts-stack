@@ -1,10 +1,9 @@
 import { useState } from "react";
 import type { Locale } from "../../i18n";
 import { ErrorNotice } from "../../components/ErrorNotice";
-import { Spin, Button, Card, Tag } from "antd";
+import { Input, Spin, Button, Card, Tag } from "antd";
 import { Tab, TabList, TabPanel, TabPanels, Tabs } from "../../ui/Tabs/Tabs";
 import { NativeSelect } from "../../ui/Input/Select";
-import { Input } from "../../ui/Input/Input";
 import type {
 	ProjectCockpitOption,
 	ProjectCockpitSettingsResponse,
@@ -87,20 +86,24 @@ export function ProjectCockpitLayout({
 						<div className="project-cockpit__period-status">{publishedLabel}</div>
 					</div>
 					<div className="project-cockpit__period-inputs">
-						<Input
-							type="date"
-							label="t1 统计开始"
-							value={effectiveQueryState.dateFrom}
-							onChange={(event) => updateQueryState({ dateFrom: event.target.value })}
-							disabled={settingsLoading}
-						/>
-						<Input
-							type="date"
-							label="t2 统计结束"
-							value={effectiveQueryState.dateTo}
-							onChange={(event) => updateQueryState({ dateTo: event.target.value })}
-							disabled={settingsLoading}
-						/>
+						<div>
+							<label style={{ display: "block", marginBottom: 4, fontWeight: 500 }}>t1 统计开始</label>
+							<Input
+								type="date"
+								value={effectiveQueryState.dateFrom}
+								onChange={(event) => updateQueryState({ dateFrom: event.target.value })}
+								disabled={settingsLoading}
+							/>
+						</div>
+						<div>
+							<label style={{ display: "block", marginBottom: 4, fontWeight: 500 }}>t2 统计结束</label>
+							<Input
+								type="date"
+								value={effectiveQueryState.dateTo}
+								onChange={(event) => updateQueryState({ dateTo: event.target.value })}
+								disabled={settingsLoading}
+							/>
+						</div>
 					</div>
 					<div className="project-cockpit__period-actions">
 						{canPublish ? (

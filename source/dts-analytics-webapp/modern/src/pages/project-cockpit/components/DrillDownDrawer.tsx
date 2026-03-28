@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Drawer } from "../../../ui/Drawer/Drawer";
-import { Spin, Button, Tag } from "antd";
-import { Input } from "../../../ui/Input/Input";
+import { Input, Spin, Button, Tag } from "antd";
 import { analyticsApi, type ProjectCockpitDrillItem } from "../../../api/analyticsApi";
 import { useProjectCockpitContext, type DrillTarget } from "../ProjectCockpitContext";
 import "./DrillDownDrawer.css";

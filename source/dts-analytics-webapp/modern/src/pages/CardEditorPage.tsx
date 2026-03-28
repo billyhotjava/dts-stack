@@ -14,8 +14,7 @@ import { EmptyState } from "../components/EmptyState";
 import { ErrorNotice } from "../components/ErrorNotice";
 import { PageContainer, PageHeader, Breadcrumb } from "../components/PageContainer/PageContainer";
 import { NotebookEditor } from "../components/query/NotebookEditor";
-import { Spin, Button, Card, Tag } from "antd";
-import { Input, TextArea } from "../ui/Input/Input";
+import { Input, Spin, Button, Card, Tag } from "antd";
 import { NativeSelect } from "../ui/Input/Select";
 import { getEffectiveLocale, t, type Locale } from "../i18n";
 import "./page.css";
@@ -340,12 +339,14 @@ export default function CardEditorPage() {
 
 			<Card style={{ marginBottom: "var(--spacing-lg)" }} title={t(locale, "questions.settings")}>
 					<div className="form-grid" style={{ gridTemplateColumns: "1fr 260px 260px" }}>
-						<Input
-							label={t(locale, "common.name")}
-							value={name}
-							onChange={(e) => setName(e.target.value)}
-							placeholder="My Question"
-						/>
+						<div>
+							<label style={{ display: "block", marginBottom: 4, fontWeight: 500 }}>{t(locale, "common.name")}</label>
+							<Input
+								value={name}
+								onChange={(e) => setName(e.target.value)}
+								placeholder="My Question"
+							/>
+						</div>
 
 						<NativeSelect
 							label={t(locale, "questions.database")}
@@ -395,14 +396,16 @@ export default function CardEditorPage() {
 							onDatasetQueryChange={(dq) => setBuilderDatasetQuery(dq)}
 						/>
 					) : (
-						<TextArea
-							label={t(locale, "questions.sql")}
-							value={sql}
-							onChange={(e) => setSql(e.target.value)}
-							placeholder="SELECT * FROM table"
-							rows={10}
-							style={{ fontFamily: "ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace" }}
-						/>
+						<div>
+							<label style={{ display: "block", marginBottom: 4, fontWeight: 500 }}>{t(locale, "questions.sql")}</label>
+							<Input.TextArea
+								value={sql}
+								onChange={(e) => setSql(e.target.value)}
+								placeholder="SELECT * FROM table"
+								rows={10}
+								style={{ fontFamily: "ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace" }}
+							/>
+						</div>
 					)}
 				<div style={{ display: "flex", justifyContent: "space-between", paddingTop: "var(--spacing-md)", marginTop: "var(--spacing-md)", borderTop: "1px solid var(--color-border)" }}>
 					<div style={{ display: "flex", gap: "var(--spacing-sm)", alignItems: "center" }}>

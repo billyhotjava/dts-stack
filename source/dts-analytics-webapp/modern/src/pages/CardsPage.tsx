@@ -2,8 +2,7 @@ import { Link } from "react-router";
 import { useEffect, useMemo, useState, type JSX } from "react";
 import { analyticsApi, type CardListItem } from "../api/analyticsApi";
 import { PageContainer, PageHeader, EmptyState } from "../components/PageContainer/PageContainer";
-import { Button, Card, Tag } from "antd";
-import { SearchInput } from "../ui/Input/Input";
+import { Button, Card, Input, Tag } from "antd";
 import { CardSkeleton } from "../ui/Loading/Skeleton";
 import { CardGrid } from "../components/DashboardGrid/DashboardGrid";
 import { ErrorNotice } from "../components/ErrorNotice";
@@ -141,11 +140,12 @@ export default function CardsPage() {
 			{/* Filter Bar */}
 			<div className="filterBar">
 				<div style={{ flex: 1, maxWidth: 320 }}>
-					<SearchInput
+					<Input.Search
 						placeholder={t(locale, "common.search")}
 						value={searchQuery}
 						onChange={(e) => setSearchQuery(e.target.value)}
-						onClear={() => setSearchQuery("")}
+						allowClear
+						onSearch={() => {}}
 					/>
 				</div>
 				<div style={{ marginLeft: "auto", display: "flex", gap: "var(--spacing-xs)" }}>

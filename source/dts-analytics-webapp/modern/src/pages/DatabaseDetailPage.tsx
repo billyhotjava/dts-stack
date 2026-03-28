@@ -4,8 +4,7 @@ import { analyticsApi, type DatabaseMetadataResponse } from "../api/analyticsApi
 import { PageContainer, PageHeader, Breadcrumb } from "../components/PageContainer/PageContainer";
 import { EmptyState } from "../components/EmptyState";
 import { ErrorNotice } from "../components/ErrorNotice";
-import { Spin, Button, Card, Collapse, Tag } from "antd";
-import { SearchInput } from "../ui/Input/Input";
+import { Input, Spin, Button, Card, Collapse, Tag } from "antd";
 import { getEffectiveLocale, t, type Locale } from "../i18n";
 import "./page.css";
 
@@ -140,10 +139,12 @@ export default function DatabaseDetailPage() {
 			<Card style={{ marginBottom: "var(--spacing-lg)" }}>
 					<div style={{ display: "flex", alignItems: "center", gap: "var(--spacing-md)" }}>
 						<div style={{ flex: 1, maxWidth: 520 }}>
-							<SearchInput
+							<Input.Search
 								value={q}
 								onChange={(e) => setQ(e.target.value)}
 								placeholder={t(locale, "search.placeholder")}
+							allowClear
+								onSearch={() => {}}
 							/>
 						</div>
 						{q.trim() && (

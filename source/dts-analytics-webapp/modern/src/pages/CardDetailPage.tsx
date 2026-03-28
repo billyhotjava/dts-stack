@@ -4,8 +4,7 @@ import { analyticsApi, type CardDetail, type CardQueryResponse, type Explainabil
 import { ChartRenderer, type VisualizationType, type VisualizationSettings } from "../components/charts";
 import { PageContainer, PageHeader } from "../components/PageContainer/PageContainer";
 import { ErrorNotice } from "../components/ErrorNotice";
-import { Spin, Button, Card, Collapse, Tag } from "antd";
-import { Input } from "../ui/Input/Input";
+import { Input, Spin, Button, Card, Collapse, Tag } from "antd";
 import { getEffectiveLocale, t, type Locale } from "../i18n";
 import { writeTextToClipboard } from "../hooks/clipboard";
 import "./page.css";

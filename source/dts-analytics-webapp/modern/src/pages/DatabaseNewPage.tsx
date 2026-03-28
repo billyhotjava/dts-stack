@@ -5,8 +5,7 @@ import UploadedDataEditor from "../components/UploadedDataEditor";
 import { PageContainer, PageHeader, Breadcrumb } from "../components/PageContainer/PageContainer";
 import { EmptyState } from "../components/EmptyState";
 import { ErrorNotice } from "../components/ErrorNotice";
-import { Spin, Button, Card, Tag } from "antd";
-import { SearchInput } from "../ui/Input/Input";
+import { Input, Spin, Button, Card, Tag } from "antd";
 import { getEffectiveLocale, t, type Locale } from "../i18n";
 import "./page.css";
 
@@ -191,12 +190,12 @@ export default function DatabaseNewPage() {
 					{activeTab === 'platform' && (
 						<>
 							<div style={{ display: "flex", gap: "var(--spacing-sm)", marginBottom: "var(--spacing-md)" }}>
-								<SearchInput
-									label={t(locale, "common.search")}
+								<Input.Search
 									value={query}
 									onChange={(e) => setQuery(e.target.value)}
 									placeholder={t(locale, "search.placeholder")}
-									onClear={() => setQuery("")}
+									allowClear
+									onSearch={() => {}}
 								/>
 								<Button type="default" onClick={reload}>
 									{t(locale, "common.refresh")}

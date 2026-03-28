@@ -10,8 +10,7 @@ import {
 import { EmptyState } from "../components/EmptyState";
 import { ErrorNotice } from "../components/ErrorNotice";
 import { PageContainer, PageHeader, Breadcrumb } from "../components/PageContainer/PageContainer";
-import { Button, Card, Tag } from "antd";
-import { Input } from "../ui/Input/Input";
+import { Button, Card, Input, Tag } from "antd";
 import { NativeSelect } from "../ui/Input/Select";
 import { getEffectiveLocale, t, type Locale } from "../i18n";
 import "./page.css";
@@ -216,12 +215,14 @@ export default function DashboardEditorPage() {
 
 			<Card style={{ marginBottom: "var(--spacing-lg)" }} title={t(locale, "dashboards.settings")}>
 					<div className="form-grid" style={{ gridTemplateColumns: "1fr 260px" }}>
-						<Input
-							label={t(locale, "common.name")}
-							value={name}
-							onChange={(e) => setName(e.target.value)}
-							placeholder="My Dashboard"
-						/>
+						<div>
+							<label style={{ display: "block", marginBottom: 4, fontWeight: 500 }}>{t(locale, "common.name")}</label>
+							<Input
+								value={name}
+								onChange={(e) => setName(e.target.value)}
+								placeholder="My Dashboard"
+							/>
+						</div>
 
 						<NativeSelect
 							label={t(locale, "questions.collection")}
@@ -233,12 +234,14 @@ export default function DashboardEditorPage() {
 					</div>
 
 					<div style={{ marginTop: "var(--spacing-md)" }}>
-						<Input
-							label={t(locale, "common.description")}
-							value={description}
-							onChange={(e) => setDescription(e.target.value)}
-							placeholder={t(locale, "common.descPlaceholder")}
-						/>
+						<div>
+							<label style={{ display: "block", marginBottom: 4, fontWeight: 500 }}>{t(locale, "common.description")}</label>
+							<Input
+								value={description}
+								onChange={(e) => setDescription(e.target.value)}
+								placeholder={t(locale, "common.descPlaceholder")}
+							/>
+						</div>
 					</div>
 				<div style={{ display: "flex", justifyContent: "flex-end", paddingTop: "var(--spacing-md)", marginTop: "var(--spacing-md)", borderTop: "1px solid var(--color-border)" }}>
 					<Button

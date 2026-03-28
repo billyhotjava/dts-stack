@@ -3,8 +3,7 @@ import { analyticsApi, type ExploreSessionItem } from "../api/analyticsApi";
 import { PageContainer, PageHeader } from "../components/PageContainer/PageContainer";
 import { ErrorNotice } from "../components/ErrorNotice";
 import { getEffectiveLocale, t, type Locale } from "../i18n";
-import { Spin, Button, Card, Tag } from "antd";
-import { Input, TextArea } from "../ui/Input/Input";
+import { Input, Spin, Button, Card, Tag } from "antd";
 import "./page.css";
 
 type LoadState<T> =
@@ -318,13 +317,28 @@ export default function ExploreSessionsPage() {
 			<div className="grid2" style={{ marginBottom: "var(--spacing-lg)" }}>
 				<Card title="新建分析会话">
 						<div className="col" style={{ gap: "var(--spacing-sm)" }}>
-							<Input label={t(locale, "common.name")} value={title} onChange={(event) => setTitle(event.target.value)} placeholder="产线告警波动复盘" />
-							<TextArea label="问题描述" value={question} onChange={(event) => setQuestion(event.target.value)} rows={3} />
-							<div className="grid2">
-								<Input label="项目标识" value={projectKey} onChange={(event) => setProjectKey(event.target.value)} placeholder="project-a" />
-								<Input label="部门" value={dept} onChange={(event) => setDept(event.target.value)} placeholder="制造一部" />
+							<div>
+								<label style={{ display: "block", marginBottom: 4, fontWeight: 500 }}>{t(locale, "common.name")}</label>
+								<Input value={title} onChange={(event) => setTitle(event.target.value)} placeholder="产线告警波动复盘" />
 							</div>
-							<Input label="标签（逗号分隔）" value={tags} onChange={(event) => setTags(event.target.value)} placeholder="产线,告警,复盘" />
+							<div>
+								<label style={{ display: "block", marginBottom: 4, fontWeight: 500 }}>问题描述</label>
+								<Input.TextArea value={question} onChange={(event) => setQuestion(event.target.value)} rows={3} />
+							</div>
+							<div className="grid2">
+								<div>
+									<label style={{ display: "block", marginBottom: 4, fontWeight: 500 }}>项目标识</label>
+									<Input value={projectKey} onChange={(event) => setProjectKey(event.target.value)} placeholder="project-a" />
+								</div>
+								<div>
+									<label style={{ display: "block", marginBottom: 4, fontWeight: 500 }}>部门</label>
+									<Input value={dept} onChange={(event) => setDept(event.target.value)} placeholder="制造一部" />
+								</div>
+							</div>
+							<div>
+								<label style={{ display: "block", marginBottom: 4, fontWeight: 500 }}>标签（逗号分隔）</label>
+								<Input value={tags} onChange={(event) => setTags(event.target.value)} placeholder="产线,告警,复盘" />
+							</div>
 						</div>
 					<div style={{ display: "flex", justifyContent: "flex-end", paddingTop: "var(--spacing-md)", marginTop: "var(--spacing-md)", borderTop: "1px solid var(--color-border)" }}>
 						<Button type="primary" onClick={createSession} loading={saving}>
@@ -418,36 +432,49 @@ export default function ExploreSessionsPage() {
 							</div>
 
 							<div className="grid2">
-								<TextArea
-									label="结论"
-									value={String(currentSession.conclusion ?? "")}
-									onChange={(event) => {
-										if (selectedSession?.state !== "loaded") return;
-										setSelectedSession({
-											state: "loaded",
-											value: { ...selectedSession.value, conclusion: event.target.value },
-										});
-									}}
-									rows={4}
-								/>
+								<div>
+									<label style={{ display: "block", marginBottom: 4, fontWeight: 500 }}>结论</label>
+									<Input.TextArea
+										value={String(currentSession.conclusion ?? "")}
+										onChange={(event) => {
+											if (selectedSession?.state !== "loaded") return;
+											setSelectedSession({
+												state: "loaded",
+												value: { ...selectedSession.value, conclusion: event.target.value },
+											});
+										}}
+										rows={4}
+									/>
+								</div>
 								<div className="col" style={{ gap: "var(--spacing-sm)" }}>
-									<Input label="追加步骤标题" value={stepTitle} onChange={(event) => setStepTitle(event.target.value)} placeholder="筛选华北区域并下钻" />
-									<Input label="步骤类型" value={stepType} onChange={(event) => setStepType(event.target.value)} placeholder="action" />
-									<TextArea label="步骤参数(JSON)" value={stepParams} onChange={(event) => setStepParams(event.target.value)} rows={4} />
+									<div>
+										<label style={{ display: "block", marginBottom: 4, fontWeight: 500 }}>追加步骤标题</label>
+										<Input value={stepTitle} onChange={(event) => setStepTitle(event.target.value)} placeholder="筛选华北区域并下钻" />
+									</div>
+									<div>
+										<label style={{ display: "block", marginBottom: 4, fontWeight: 500 }}>步骤类型</label>
+										<Input value={stepType} onChange={(event) => setStepType(event.target.value)} placeholder="action" />
+									</div>
+									<div>
+										<label style={{ display: "block", marginBottom: 4, fontWeight: 500 }}>步骤参数(JSON)</label>
+										<Input.TextArea value={stepParams} onChange={(event) => setStepParams(event.target.value)} rows={4} />
+									</div>
 								</div>
 							</div>
 
 							<div style={{ display: "flex", gap: "var(--spacing-sm)", alignItems: "center", flexWrap: "wrap" }}>
 								<Button type="default" onClick={updateConclusion} loading={saving}>更新结论</Button>
 								<Button type="primary" onClick={appendStep} loading={saving}>追加步骤</Button>
-								<Input
-									label="重放步骤序号"
-									type="number"
-									min={0}
-									value={String(replayIndex)}
-									onChange={(event) => setReplayIndex(Number.parseInt(event.target.value, 10) || 0)}
-									style={{ width: 160 }}
-								/>
+								<div>
+									<label style={{ display: "block", marginBottom: 4, fontWeight: 500 }}>重放步骤序号</label>
+									<Input
+										type="number"
+										min={0}
+										value={String(replayIndex)}
+										onChange={(event) => setReplayIndex(Number.parseInt(event.target.value, 10) || 0)}
+										style={{ width: 160 }}
+									/>
+								</div>
 								<Button type="text" onClick={replayStep} loading={saving}>执行重放</Button>
 							</div>
 
