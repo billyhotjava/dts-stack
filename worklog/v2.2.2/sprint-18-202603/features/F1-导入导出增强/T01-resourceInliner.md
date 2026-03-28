@@ -46,6 +46,14 @@ export async function inlineResources(spec: Record<string, unknown>): Promise<{
 - [ ] 已有 data: 前缀的不重复处理
 - [ ] 单张图片 fetch 失败时，其他图片仍正常内联
 
+## 实施步骤
+
+> 详见 `implementation-plan.md` Task 1
+
+- [ ] 创建 `pages/screens/utils/resourceInliner.ts`，完整代码见 plan
+- [ ] TypeScript 编译验证通过
+- [ ] 提交: `feat(F1/T01): add resourceInliner for Base64 image inlining on export`
+
 ## 完成标准
 - [ ] 函数通过上述验证
 - [ ] 返回 inlinedCount 和 errors 供调用者使用

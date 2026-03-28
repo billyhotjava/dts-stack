@@ -66,5 +66,17 @@ const [importModalState, setImportModalState] = useState<{
 - [ ] 含内联资源的 JSON 导入后资源正确还原
 - [ ] 校验失败时无法确认导入
 
+## 实施步骤
+
+> 详见 `implementation-plan.md` Task 5
+
+- [ ] 添加 `ImportPreviewModal` 和 `countInlinedResources` import
+- [ ] 添加 `importPreview` state
+- [ ] 重写 `handleImportJson` 改为打开预览 Modal
+- [ ] 添加 `handleImportConfirm` 回调（替换当前 / 创建新大屏）
+- [ ] 在 JSX 中渲染 `ImportPreviewModal`
+- [ ] TypeScript 编译验证通过
+- [ ] 提交: `feat(F1/T05): enhance import flow with preview modal and action selection`
+
 ## 完成标准
 - [ ] 导入流程从"无确认直接覆盖"升级为"预览+选择+确认"

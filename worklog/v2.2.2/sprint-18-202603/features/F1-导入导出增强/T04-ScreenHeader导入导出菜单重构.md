@@ -52,6 +52,18 @@
 - [ ] 导出 JSON 按钮一键触发（不需要先选格式再执行）
 - [ ] 导出 PNG/PDF 按钮一键触发
 
+## 实施步骤
+
+> 详见 `implementation-plan.md` Task 4
+
+- [ ] 添加 `inlineResources` import
+- [ ] 在"主题"菜单之后插入新的"导入导出" HeaderMenu (`tools-io`)
+- [ ] 将"版本导出"菜单改名为"版本"，移除导出相关项
+- [ ] 移除"编辑"菜单中的"导入JSON"按钮
+- [ ] 增强 `handleExportJson` 调用 `inlineResources` 内联资源
+- [ ] TypeScript 编译验证通过
+- [ ] 提交: `feat(F1/T04): add consolidated import/export menu, inline resources on JSON export`
+
 ## 完成标准
 - [ ] 导入导出入口从 4 步简化为 2 步
 - [ ] 菜单结构清晰，导入导出操作集中

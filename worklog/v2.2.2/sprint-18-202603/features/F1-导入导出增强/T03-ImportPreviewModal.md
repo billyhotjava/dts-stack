@@ -58,6 +58,16 @@ type ImportPreviewModalProps = {
 - [ ] mode="marketplace" 时只显示"注册为模板"和"创建为大屏"
 - [ ] 点击确认调用正确的回调
 
+## 实施步骤
+
+> 详见 `implementation-plan.md` Task 3
+
+- [ ] 创建 `pages/screens/components/ImportPreviewModal.tsx`，完整代码见 plan
+- [ ] 使用现有 `Modal` 组件 (`ui/Modal/Modal`)
+- [ ] 支持 radio group 选择导入方式
+- [ ] TypeScript 编译验证通过
+- [ ] 提交: `feat(F1/T03): add ImportPreviewModal for import preview and action selection`
+
 ## 完成标准
 - [ ] 组件在两种 mode 下正确渲染
 - [ ] 校验错误时阻断导入

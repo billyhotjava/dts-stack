@@ -41,6 +41,16 @@ export async function restoreResources(spec: Record<string, unknown>): Promise<{
 - [ ] 单张上传失败时保留 Base64 原值，其他图片仍正常还原
 - [ ] 返回 restoredCount 和 errors
 
+## 实施步骤
+
+> 详见 `implementation-plan.md` Task 2
+
+MVP 简化：无图片上传 API，仅统计 Base64 资源数量。浏览器原生渲染 data: URL，无需还原。
+
+- [ ] 创建 `pages/screens/utils/resourceRestorer.ts`，导出 `countInlinedResources` 函数
+- [ ] TypeScript 编译验证通过
+- [ ] 提交: `feat(F1/T02): add countInlinedResources for import preview`
+
 ## 完成标准
-- [ ] 函数通过上述验证
-- [ ] 与 resourceInliner 互为逆操作
+- [ ] 函数正确统计 spec 中的 data:image Base64 资源数量
+- [ ] 后续有上传 API 时可扩展为真正的还原功能
