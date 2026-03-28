@@ -1,8 +1,9 @@
 import { Link } from "react-router";
-import { useEffect, useMemo, useState, type JSX } from "react";
+import { useCallback, useEffect, useMemo, useState, type JSX } from "react";
 import { analyticsApi, type CardListItem } from "../api/analyticsApi";
 import { PageContainer, PageHeader, EmptyState } from "../components/PageContainer/PageContainer";
-import { Button, Card, Input, Skeleton, Tag } from "antd";
+import { Button, Card, Checkbox, Dropdown, Input, Modal, Skeleton, Tag, message } from "antd";
+import { EllipsisOutlined, DeleteOutlined } from "@ant-design/icons";
 import { CardGrid } from "../components/DashboardGrid/DashboardGrid";
 import { ErrorNotice } from "../components/ErrorNotice";
 import { getEffectiveLocale, t, type Locale } from "../i18n";
@@ -95,23 +96,22 @@ export default function CardsPage() {
 	const [state, setState] = useState<LoadState<CardListItem[]>>({ state: "loading" });
 	const [viewMode, setViewMode] = useState<"grid" | "list">("grid");
 	const [searchQuery, setSearchQuery] = useState("");
+	const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
 
-	useEffect(() => {
-		let cancelled = false;
+	const loadCards = useCallback(() => {
 		analyticsApi
 			.listCards()
 			.then((value) => {
-				if (cancelled) return;
 				setState({ state: "loaded", value });
 			})
 			.catch((e) => {
-				if (cancelled) return;
 				setState({ state: "error", error: e });
 			});
-		return () => {
-			cancelled = true;
-		};
 	}, []);
+
+	useEffect(() => {
+		loadCards();
+	}, [loadCards]);
 
 	const filteredCards = useMemo(() => {
 		if (state.state !== "loaded") return [];
@@ -122,6 +122,56 @@ export default function CardsPage() {
 			(c.description || "").toLowerCase().includes(query)
 		);
 	}, [state, searchQuery]);
+
+	/* ---- Delete handlers ---- */
+	const handleDelete = (id: number, name: string) => {
+		Modal.confirm({
+			title: "移至回收站",
+			content: `确定将「${name}」移至回收站？`,
+			okText: "确定",
+			cancelText: "取消",
+			okButtonProps: { danger: true },
+			onOk: async () => {
+				await analyticsApi.deleteCard(id);
+				message.success("已移至回收站");
+				setSelectedIds((prev) => { const n = new Set(prev); n.delete(id); return n; });
+				loadCards();
+			},
+		});
+	};
+
+	const handleBatchDelete = () => {
+		if (selectedIds.size === 0) return;
+		Modal.confirm({
+			title: "批量移至回收站",
+			content: `确定将 ${selectedIds.size} 项移至回收站？`,
+			okText: "确定",
+			cancelText: "取消",
+			okButtonProps: { danger: true },
+			onOk: async () => {
+				const ids = Array.from(selectedIds);
+				const results = await Promise.allSettled(ids.map((id) => analyticsApi.deleteCard(id)));
+				const failed = results.filter((r) => r.status === "rejected").length;
+				if (failed > 0) message.warning(`${ids.length - failed} 项已移至回收站，${failed} 项失败`);
+				else message.success(`${ids.length} 项已移至回收站`);
+				setSelectedIds(new Set());
+				loadCards();
+			},
+		});
+	};
+
+	/* ---- Selection helpers ---- */
+	const toggleSelect = (id: number) => {
+		setSelectedIds((prev) => {
+			const next = new Set(prev);
+			if (next.has(id)) next.delete(id); else next.add(id);
+			return next;
+		});
+	};
+	const toggleSelectAll = () => {
+		if (selectedIds.size === filteredCards.length) setSelectedIds(new Set());
+		else setSelectedIds(new Set(filteredCards.map((c) => c.id)));
+	};
 
 	return (
 		<PageContainer>
@@ -135,6 +185,20 @@ export default function CardsPage() {
 					</Link>
 				}
 			/>
+
+			{/* Batch Action Bar */}
+			{selectedIds.size > 0 && (
+				<div style={{ display: "flex", alignItems: "center", gap: 12, padding: "8px 12px", background: "#f0f5ff", borderRadius: 6, marginBottom: 8 }}>
+					<Checkbox
+						checked={selectedIds.size === filteredCards.length}
+						indeterminate={selectedIds.size > 0 && selectedIds.size < filteredCards.length}
+						onChange={toggleSelectAll}
+					/>
+					<span>已选 {selectedIds.size} 项</span>
+					<Button size="small" danger icon={<DeleteOutlined />} onClick={handleBatchDelete}>移至回收站</Button>
+					<Button size="small" type="text" onClick={() => setSelectedIds(new Set())}>取消选择</Button>
+				</div>
+			)}
 
 			{/* Filter Bar */}
 			<div className="filterBar">
@@ -210,23 +274,57 @@ export default function CardsPage() {
 			{state.state === "loaded" && filteredCards.length > 0 && viewMode === "grid" && (
 				<CardGrid columns={3} gap="md">
 					{filteredCards.map((c) => (
-						<Link key={c.id} to={`/questions/${c.id}`} style={{ textDecoration: "none" }}>
-							<Card hoverable>
-								<div className="question-card">
-									<div className="question-card__icon">
-										{getDisplayTypeIcon(c.display)}
+						<div key={c.id} style={{ position: "relative" }}>
+							<div
+								className="question-card__checkbox"
+								style={{ position: "absolute", top: 12, left: 12, zIndex: 1 }}
+								onClick={(e) => e.stopPropagation()}
+							>
+								<Checkbox
+									checked={selectedIds.has(c.id)}
+									onChange={() => toggleSelect(c.id)}
+								/>
+							</div>
+							<div
+								className="question-card__actions"
+								style={{ position: "absolute", top: 12, right: 12, zIndex: 1 }}
+								onClick={(e) => e.preventDefault()}
+							>
+								<Dropdown
+									menu={{
+										items: [
+											{
+												key: "delete",
+												icon: <DeleteOutlined />,
+												label: "移至回收站",
+												danger: true,
+												onClick: () => handleDelete(c.id, c.name || t(locale, "common.untitled")),
+											},
+										],
+									}}
+									trigger={["click"]}
+								>
+									<Button type="text" size="small" icon={<EllipsisOutlined />} onClick={(e) => e.stopPropagation()} />
+								</Dropdown>
+							</div>
+							<Link to={`/questions/${c.id}`} style={{ textDecoration: "none" }}>
+								<Card hoverable>
+									<div className="question-card">
+										<div className="question-card__icon">
+											{getDisplayTypeIcon(c.display)}
+										</div>
+										<div className="question-card__content">
+											<h3 className="question-card__title">{c.name || t(locale, "common.untitled")}</h3>
+											{c.display && (
+												<Tag>
+													{c.display}
+												</Tag>
+											)}
+										</div>
 									</div>
-									<div className="question-card__content">
-										<h3 className="question-card__title">{c.name || t(locale, "common.untitled")}</h3>
-										{c.display && (
-											<Tag>
-												{c.display}
-											</Tag>
-										)}
-									</div>
-								</div>
-							</Card>
-						</Link>
+								</Card>
+							</Link>
+						</div>
 					))}
 				</CardGrid>
 			)}
@@ -237,14 +335,28 @@ export default function CardsPage() {
 					<table className="table">
 						<thead>
 							<tr>
+								<th style={{ width: 40 }}>
+									<Checkbox
+										checked={selectedIds.size === filteredCards.length}
+										indeterminate={selectedIds.size > 0 && selectedIds.size < filteredCards.length}
+										onChange={toggleSelectAll}
+									/>
+								</th>
 								<th>{t(locale, "common.name")}</th>
 								<th>{t(locale, "common.type")}</th>
 								<th style={{ width: 80 }}>{t(locale, "common.id")}</th>
+								<th style={{ width: 48 }} />
 							</tr>
 						</thead>
 						<tbody>
 							{filteredCards.map((c) => (
 								<tr key={String(c.id)}>
+									<td>
+										<Checkbox
+											checked={selectedIds.has(c.id)}
+											onChange={() => toggleSelect(c.id)}
+										/>
+									</td>
 									<td>
 										<Link to={`/questions/${c.id}`} className="link">
 											{c.name || t(locale, "common.untitled")}
@@ -258,6 +370,24 @@ export default function CardsPage() {
 										)}
 									</td>
 									<td className="muted">{c.id}</td>
+									<td>
+										<Dropdown
+											menu={{
+												items: [
+													{
+														key: "delete",
+														icon: <DeleteOutlined />,
+														label: "移至回收站",
+														danger: true,
+														onClick: () => handleDelete(c.id, c.name || t(locale, "common.untitled")),
+													},
+												],
+											}}
+											trigger={["click"]}
+										>
+											<Button type="text" size="small" icon={<EllipsisOutlined />} />
+										</Dropdown>
+									</td>
 								</tr>
 							))}
 						</tbody>
