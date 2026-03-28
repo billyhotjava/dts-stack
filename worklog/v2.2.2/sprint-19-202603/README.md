@@ -1,7 +1,7 @@
 # Sprint-19: 统一资产权限管控
 
 **时间**: 2026-03
-**状态**: READY
+**状态**: IN_PROGRESS
 **目标**: 实现全资产按部门隔离的统一权限管控，以 platform 为权限中心，analytics 作为消费方
 
 ## 背景
@@ -20,7 +20,7 @@
 | F2 | Analytics 权限统一 | 4 | DONE |
 | F3 | 前端权限管理界面 | 5 | DONE |
 | F4 | Analytics 前端适配 | 3 | DONE |
-| F5 | 数据迁移与集成测试 | 3 | READY |
+| F5 | 数据迁移与集成测试 | 3 | DONE |
 
 ## 完成标准
 
