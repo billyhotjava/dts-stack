@@ -8,7 +8,11 @@ import {
     TEMPLATE_CATEGORY_ORDER,
     type ScreenTemplate,
 } from '../screenTemplates';
-import { SCREEN_SCHEMA_VERSION } from '../specV2';
+import { SCREEN_SCHEMA_VERSION, normalizeScreenConfig, validateScreenPayload, buildScreenPayload } from '../specV2';
+import { inlineResources } from '../utils/resourceInliner';
+import { ImportPreviewModal } from './ImportPreviewModal';
+import { countInlinedResources } from '../utils/resourceRestorer';
+import type { ScreenConfig } from '../types';
 import '../ScreenDesigner.css';
 
 export type TemplateSelection =
@@ -188,6 +192,15 @@ export function TemplateGallery({ onSelect, onClose }: TemplateGalleryProps) {
     const [dialogState, setDialogState] = useState<TemplateGalleryDialogState | null>(null);
     const [dialogLoading, setDialogLoading] = useState(false);
     const [dialogError, setDialogError] = useState<string | null>(null);
+    const [importPreview, setImportPreview] = useState<{
+        fileName: string;
+        parsedSpec: ScreenConfig;
+        rawPayload: Record<string, unknown>;
+        templateMeta?: { name: string; description?: string; category?: string; tags?: string[] };
+        validation: { errors: string[]; warnings: string[] };
+        resourcesInlined: boolean;
+        inlinedResourceCount: number;
+    } | null>(null);
 
     const loadAssetTemplates = () => {
         setLoading(true);
@@ -361,38 +374,29 @@ export function TemplateGallery({ onSelect, onClose }: TemplateGalleryProps) {
                 return;
             }
 
+            // Template import — show preview modal
             const rawTemplate = (payload.template || payload) as Record<string, unknown>;
             const rawConfig = (rawTemplate.config || payload.config || payload) as Record<string, unknown>;
-
-            const body = {
+            const templateMeta = {
                 name: typeof rawTemplate.name === 'string' ? rawTemplate.name : file.name.replace(/\.[^.]+$/, ''),
-                description: typeof rawTemplate.description === 'string' ? rawTemplate.description : '',
+                description: typeof rawTemplate.description === 'string' ? rawTemplate.description : undefined,
                 category: typeof rawTemplate.category === 'string' ? rawTemplate.category : 'custom',
-                thumbnail: typeof rawTemplate.thumbnail === 'string' ? rawTemplate.thumbnail : '🧩',
-                tags: Array.isArray(rawTemplate.tags) ? rawTemplate.tags : [],
-                visibilityScope: typeof rawTemplate.visibilityScope === 'string' ? rawTemplate.visibilityScope : 'team',
-                listed: typeof rawTemplate.listed === 'boolean' ? rawTemplate.listed : true,
-                themePack: rawTemplate.themePack && typeof rawTemplate.themePack === 'object' ? rawTemplate.themePack : undefined,
-                config: {
-                    schemaVersion: typeof rawConfig.schemaVersion === 'number' ? rawConfig.schemaVersion : SCREEN_SCHEMA_VERSION,
-                    width: typeof rawConfig.width === 'number' ? rawConfig.width : 1920,
-                    height: typeof rawConfig.height === 'number' ? rawConfig.height : 1080,
-                    backgroundColor: typeof rawConfig.backgroundColor === 'string' ? rawConfig.backgroundColor : '#1e1f26',
-                    backgroundImage: typeof rawConfig.backgroundImage === 'string' ? rawConfig.backgroundImage : null,
-                    theme: typeof rawConfig.theme === 'string' ? rawConfig.theme : null,
-                    themePack: rawConfig.themePack && typeof rawConfig.themePack === 'object' ? rawConfig.themePack : undefined,
-                    components: Array.isArray(rawConfig.components) ? rawConfig.components : [],
-                    globalVariables: Array.isArray(rawConfig.globalVariables) ? rawConfig.globalVariables : [],
-                },
+                tags: Array.isArray(rawTemplate.tags) ? rawTemplate.tags as string[] : undefined,
             };
 
-            const created = await analyticsApi.createScreenTemplate(body);
-            await loadAssetTemplates();
-            setSelectedKey(`asset:${String(created.id)}`);
-            setActionNotice({
-                tone: 'success',
-                title: '模板包导入成功',
-                message: `模板已导入到资产中心，资产 ID=${String(created.id)}`,
+            const normalized = normalizeScreenConfig(rawConfig, {});
+            const validation = validateScreenPayload(buildScreenPayload(normalized.config));
+            const resourcesInlined = payload.resourcesInlined === true;
+            const inlinedResourceCount = resourcesInlined ? countInlinedResources(rawConfig) : 0;
+
+            setImportPreview({
+                fileName: file.name,
+                parsedSpec: normalized.config,
+                rawPayload: payload,
+                templateMeta,
+                validation,
+                resourcesInlined,
+                inlinedResourceCount,
             });
         } catch (err) {
             console.error('Failed to import package:', err);
@@ -404,7 +408,7 @@ export function TemplateGallery({ onSelect, onClose }: TemplateGalleryProps) {
         }
     };
 
-    const handleExportTemplate = () => {
+    const handleExportTemplate = async () => {
         if (!selectedSelection) {
             setActionNotice({
                 tone: 'error',
@@ -413,16 +417,82 @@ export function TemplateGallery({ onSelect, onClose }: TemplateGalleryProps) {
             });
             return;
         }
-        const pack = asTemplatePackage(selectedSelection);
-        const name = selectedSelection.kind === 'builtin'
-            ? selectedSelection.template.name
-            : (selectedSelection.template.name || `template-${String(selectedSelection.template.id)}`);
-        downloadJson(`${name || 'screen-template'}.json`, pack);
-        setActionNotice({
-            tone: 'success',
-            title: '模板包已导出',
-            message: `${name || 'screen-template'}.json 已开始下载。`,
-        });
+        try {
+            const pack = asTemplatePackage(selectedSelection);
+            const rawSpec = (pack.template as Record<string, unknown>)?.config as Record<string, unknown> | undefined;
+            let resourcesInlined = false;
+            if (rawSpec && typeof rawSpec === 'object') {
+                const { spec: inlinedSpec, inlinedCount, errors: inlineErrors } = await inlineResources(rawSpec);
+                if (inlineErrors.length > 0) {
+                    console.warn('[template-export] Resource inlining warnings:', inlineErrors);
+                }
+                if (inlinedCount > 0) {
+                    (pack.template as Record<string, unknown>).config = inlinedSpec;
+                    resourcesInlined = true;
+                }
+            }
+            (pack as Record<string, unknown>).resourcesInlined = resourcesInlined;
+
+            const name = selectedSelection.kind === 'builtin'
+                ? selectedSelection.template.name
+                : (selectedSelection.template.name || `template-${String(selectedSelection.template.id)}`);
+            const blob = new Blob([JSON.stringify(pack, null, 2)], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `${name}-template.json`;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+            setActionNotice({ tone: 'success', title: '模板包已导出', message: `${name}-template.json` });
+        } catch (err) {
+            console.error('Failed to export template:', err);
+            setActionNotice({ tone: 'error', title: '导出失败', message: err instanceof Error ? err.message : '未知错误' });
+        }
+    };
+
+    const handleImportConfirm = async (action: 'replace' | 'create-screen' | 'register-template') => {
+        if (!importPreview) return;
+        const { parsedSpec, rawPayload, templateMeta } = importPreview;
+
+        try {
+            if (action === 'register-template') {
+                const rawTemplate = (rawPayload.template || rawPayload) as Record<string, unknown>;
+                const body = {
+                    name: templateMeta?.name || '导入模板',
+                    description: templateMeta?.description || '',
+                    category: templateMeta?.category || 'custom',
+                    thumbnail: typeof rawTemplate.thumbnail === 'string' ? rawTemplate.thumbnail : '📦',
+                    tags: templateMeta?.tags || [],
+                    visibilityScope: typeof rawTemplate.visibilityScope === 'string' ? rawTemplate.visibilityScope : 'team',
+                    listed: typeof rawTemplate.listed === 'boolean' ? rawTemplate.listed : true,
+                    config: buildScreenPayload(parsedSpec),
+                };
+                const created = await analyticsApi.createScreenTemplate(body);
+                await loadAssetTemplates();
+                setSelectedKey(`asset:${String(created.id)}`);
+                setActionNotice({
+                    tone: 'success',
+                    title: '模板导入成功',
+                    message: `模板已注册，ID=${String(created.id)}`,
+                });
+            } else if (action === 'create-screen') {
+                const spec = buildScreenPayload(parsedSpec);
+                const created = await analyticsApi.createScreen(spec);
+                window.location.href = `/analytics/screens/${String(created.id)}/edit`;
+                return;
+            }
+            setImportPreview(null);
+        } catch (err) {
+            console.error('Import action failed:', err);
+            setActionNotice({
+                tone: 'error',
+                title: '导入操作失败',
+                message: err instanceof Error ? err.message : '未知错误',
+            });
+            setImportPreview(null);
+        }
     };
 
     const updateDialogField = (key: string, value: string) => {
@@ -886,6 +956,20 @@ export function TemplateGallery({ onSelect, onClose }: TemplateGalleryProps) {
                         style={{ display: 'none' }}
                         onChange={handleImport}
                     />
+                    {importPreview && (
+                        <ImportPreviewModal
+                            isOpen={!!importPreview}
+                            onClose={() => setImportPreview(null)}
+                            fileName={importPreview.fileName}
+                            parsedSpec={importPreview.parsedSpec}
+                            templateMeta={importPreview.templateMeta}
+                            validation={importPreview.validation}
+                            resourcesInlined={importPreview.resourcesInlined}
+                            inlinedResourceCount={importPreview.inlinedResourceCount}
+                            mode="marketplace"
+                            onConfirm={handleImportConfirm}
+                        />
+                    )}
                 </div>
 
                 <div className="template-gallery-content">
