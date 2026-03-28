@@ -105,14 +105,16 @@
 **统计**: READY=0, IN_PROGRESS=0, DONE=12, BLOCKED=0
 
 ## Sprint-18: 大屏编辑器导入导出功能完善 (202603)
+**状态**: DONE
 
 | Feature | Task 数 | 状态 |
 |---------|---------|------|
-| F1-导入导出增强 | 7 | READY |
+| F1-导入导出增强 | 7 | DONE |
 
-**统计**: READY=7, IN_PROGRESS=0, DONE=0, BLOCKED=0
+**统计**: READY=0, IN_PROGRESS=0, DONE=7, BLOCKED=0
 
 ## Sprint-19: 统一资产权限管控 (202603)
+**状态**: DONE
 
 | Feature | Task 数 | 状态 |
 |---------|---------|------|
@@ -125,10 +127,22 @@
 **统计**: READY=0, IN_PROGRESS=0, DONE=20, BLOCKED=0
 
 ## Sprint-20: 逻辑建模批量删除与文件浏览器重构 (202603)
+**状态**: DONE
 
 | Feature | Task 数 | 状态 |
 |---------|---------|------|
 | F1-企业级文件浏览器重构 | 4 | DONE |
-| F2-统一批量删除链路 | 4 | IN_PROGRESS |
+| F2-统一批量删除链路 | 4 | DONE |
 
-**统计**: READY=0, IN_PROGRESS=1, DONE=7, BLOCKED=0
+**统计**: READY=0, IN_PROGRESS=0, DONE=8, BLOCKED=0
+
+## Sprint-21: 统一产品入口与UI框架 (202603)
+**状态**: DONE
+
+| Feature | Task 数 | 状态 |
+|---------|---------|------|
+| F1-门户与外壳统一 | 5 | DONE |
+| F2-业务组件antd迁移 | 9 | DONE |
+| F3-侧边导航统一 | 1 | DONE |
+
+**统计**: READY=0, IN_PROGRESS=0, DONE=15, BLOCKED=0

@@ -1,7 +1,7 @@
 # F3: 侧边导航统一
 
 **优先级**: P1
-**状态**: READY
+**状态**: DONE
 **依赖**: F1（antd 已引入，Header 已统一）
 
 ## 目标
@@ -62,9 +62,9 @@
 
 | ID | Task | 优先级 | 状态 | 依赖 |
 |----|------|--------|------|------|
-| T01 | AppLayout 侧边栏替换为 antd Sider + Menu | P1 | READY | F1/T03 |
-| T02 | 菜单图标替换为 antd icons | P1 | READY | T01 |
-| T03 | 折叠/展开功能 | P1 | READY | T01 |
+| T01 | AppLayout 侧边栏替换为 antd Sider + Menu | P1 | DONE | F1/T03 |
+| T02 | 菜单图标替换为 antd icons | P1 | DONE | T01 |
+| T03 | 折叠/展开功能 | P1 | DONE | T01 |
 
 ## 完成标准
 - [ ] analytics-webapp 侧边导航使用 antd Menu

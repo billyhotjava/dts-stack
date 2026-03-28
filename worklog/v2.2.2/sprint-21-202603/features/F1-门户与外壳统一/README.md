@@ -1,7 +1,7 @@
 # F1: 门户与外壳统一
 
 **优先级**: P0
-**状态**: READY
+**状态**: DONE
 
 ## 目标
 
@@ -77,12 +77,12 @@
 
 | ID | Task | 优先级 | 状态 | 依赖 |
 |----|------|--------|------|------|
-| T01 | 门户选择页（PortalPage） | P0 | READY | - |
-| T02 | 默认路由改为 /portal | P0 | READY | T01 |
-| T03 | analytics-webapp 引入 antd + ConfigProvider | P0 | READY | - |
-| T04 | analytics-webapp Header 重构（antd Layout.Header） | P0 | READY | T03 |
-| T05 | platform-webapp Header 添加切换按钮 | P0 | READY | - |
-| T06 | analytics-webapp Header 添加切换按钮 | P0 | READY | T04 |
+| T01 | 门户选择页（PortalPage） | P0 | DONE | - |
+| T02 | 默认路由改为 /portal | P0 | DONE | T01 |
+| T03 | analytics-webapp 引入 antd + ConfigProvider | P0 | DONE | - |
+| T04 | analytics-webapp Header 重构（antd Layout.Header） | P0 | DONE | T03 |
+| T05 | platform-webapp Header 添加切换按钮 | P0 | DONE | - |
+| T06 | analytics-webapp Header 添加切换按钮 | P0 | DONE | T04 |
 
 ## 完成标准
 - [ ] 登录后进入门户选择页

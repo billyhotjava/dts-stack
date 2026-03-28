@@ -1,7 +1,7 @@
 # F2: 业务组件 antd 迁移
 
 **优先级**: P1
-**状态**: READY
+**状态**: DONE
 **依赖**: F1（antd 已引入）
 
 ## 目标
@@ -47,15 +47,15 @@
 
 | ID | Task | 优先级 | 状态 | 依赖 |
 |----|------|--------|------|------|
-| T01 | 迁移 Card 组件 | P1 | READY | F1/T03 |
-| T02 | 迁移 Badge 组件 | P1 | READY | F1/T03 |
-| T03 | 迁移 Button 组件 | P1 | READY | F1/T03 |
-| T04 | 迁移 Spinner → Spin | P1 | READY | F1/T03 |
-| T05 | 迁移 Modal 组件 | P1 | READY | F1/T03 |
-| T06 | 迁移 Input 组件 | P1 | READY | F1/T03 |
-| T07 | 迁移 Select 组件 | P1 | READY | F1/T03 |
-| T08 | 迁移剩余组件（Skeleton/Tabs/Dropdown/Drawer/Checkbox） | P1 | READY | F1/T03 |
-| T09 | 移除 ThemeToggle + 删除 ui/ 目录 | P1 | READY | T01-T08 |
+| T01 | 迁移 Card 组件 | P1 | DONE | F1/T03 |
+| T02 | 迁移 Badge 组件 | P1 | DONE | F1/T03 |
+| T03 | 迁移 Button 组件 | P1 | DONE | F1/T03 |
+| T04 | 迁移 Spinner → Spin | P1 | DONE | F1/T03 |
+| T05 | 迁移 Modal 组件 | P1 | DONE | F1/T03 |
+| T06 | 迁移 Input 组件 | P1 | DONE | F1/T03 |
+| T07 | 迁移 Select 组件 | P1 | DONE | F1/T03 |
+| T08 | 迁移剩余组件（Skeleton/Tabs/Dropdown/Drawer/Checkbox） | P1 | DONE | F1/T03 |
+| T09 | 移除 ThemeToggle + 删除 ui/ 目录 | P1 | DONE | T01-T08 |
 
 ## 完成标准
 - [ ] 全部 60 个文件的自定义 UI 引用替换为 antd
