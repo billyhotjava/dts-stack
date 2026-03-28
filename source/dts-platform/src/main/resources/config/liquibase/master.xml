@@ -115,4 +115,5 @@
     <include file="config/liquibase/changelog/20260224_02_governance_capacity_indexes.xml" relativeToChangelogFile="false"/>
     <include file="config/liquibase/changelog/20260316_01_project_cockpit_import.xml" relativeToChangelogFile="false"/>
     <include file="config/liquibase/changelog/20260316_02_topic_binding_center.xml" relativeToChangelogFile="false"/>
+    <include file="config/liquibase/changelog/20260328_01_asset_permission.xml" relativeToChangelogFile="false"/>
 </databaseChangeLog>
