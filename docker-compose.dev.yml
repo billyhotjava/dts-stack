@@ -531,6 +531,13 @@ services:
       - "traefik.http.routers.dts-analytics-embed.priority=244"
       - "traefik.http.routers.dts-analytics-embed.service=dts-analytics-api"
       - "traefik.http.routers.dts-analytics-embed.middlewares=platform-forward-auth@file,dts-strip-analytics-api@docker,cors-allow@file,security-headers@file"
+      # CORS preflight: OPTIONS /analytics/api/* bypasses forward-auth (browsers never send auth on preflight)
+      - "traefik.http.routers.dts-analytics-api-cors.rule=Host(`${HOST_PLATFORM_UI}`) && PathPrefix(`/analytics/api`) && Method(`OPTIONS`)"
+      - "traefik.http.routers.dts-analytics-api-cors.entrypoints=websecure"
+      - "traefik.http.routers.dts-analytics-api-cors.tls=true"
+      - "traefik.http.routers.dts-analytics-api-cors.priority=241"
+      - "traefik.http.routers.dts-analytics-api-cors.service=dts-analytics-api"
+      - "traefik.http.routers.dts-analytics-api-cors.middlewares=dts-strip-analytics-api@docker,cors-allow@file,security-headers@file"
       # /analytics/api/* -> dts-analytics /api/*
       - "traefik.http.routers.dts-analytics-api.rule=Host(`${HOST_PLATFORM_UI}`) && PathPrefix(`/analytics/api`)"
       - "traefik.http.routers.dts-analytics-api.entrypoints=websecure"
