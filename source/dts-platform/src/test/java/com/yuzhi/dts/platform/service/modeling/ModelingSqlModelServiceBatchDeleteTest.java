@@ -29,11 +29,15 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.Executor;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.TransactionDefinition;
+import org.springframework.transaction.TransactionException;
+import org.springframework.transaction.TransactionStatus;
+import org.springframework.transaction.support.SimpleTransactionStatus;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.api.io.TempDir;
-import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.Spy;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -59,8 +63,9 @@ class ModelingSqlModelServiceBatchDeleteTest {
     @Mock private ModelFileService fileService;
     @Mock private Executor taskExecutor;
     @Spy private ObjectMapper objectMapper = new ObjectMapper();
+    private final PlatformTransactionManager transactionManager = new NoopTransactionManager();
 
-    @InjectMocks private ModelingSqlModelService service;
+    private ModelingSqlModelService service;
 
     @TempDir Path tempDir;
 
@@ -68,6 +73,27 @@ class ModelingSqlModelServiceBatchDeleteTest {
 
     @BeforeEach
     void setUp() {
+        service =
+            new ModelingSqlModelService(
+                repo,
+                planRepo,
+                dataSourceRepository,
+                adminInfraClient,
+                organizationVisibilityService,
+                security,
+                dbtConfigService,
+                datasetRepository,
+                tableRepository,
+                columnRepository,
+                queryDatasetAssetRepository,
+                biReportLinkRepository,
+                columnSyncService,
+                auditService,
+                objectMapper,
+                fileService,
+                taskExecutor,
+                transactionManager
+            );
         lenient().when(security.resolveActiveDept(anyString())).thenReturn("D1");
         lenient().when(security.hasInstituteScope()).thenReturn(false);
         lenient().when(organizationVisibilityService.isRoot(anyString())).thenReturn(false);
@@ -147,6 +173,39 @@ class ModelingSqlModelServiceBatchDeleteTest {
         assertThat(storedModels).isEmpty();
     }
 
+    @Test
+    void deleteBatch_shouldContinue_whenRepositoryDeleteThrows() {
+        UUID id1 = UUID.randomUUID();
+        UUID id2 = UUID.randomUUID();
+        storedModels.add(model(id1, "m1", "models/dwd/m1.sql"));
+        storedModels.add(model(id2, "m2", "models/dwd/m2.sql"));
+        when(repo.findById(id1)).thenAnswer(invocation -> storedModels.stream().filter(model -> id1.equals(model.getId())).findFirst());
+        when(repo.findById(id2)).thenAnswer(invocation -> storedModels.stream().filter(model -> id2.equals(model.getId())).findFirst());
+        lenient()
+            .doAnswer(invocation -> {
+                ModelingSqlModel model = invocation.getArgument(0);
+                if (id2.equals(model.getId())) {
+                    throw new IllegalStateException("delete failed");
+                }
+                storedModels.removeIf(existing -> existing.getId() != null && existing.getId().equals(model.getId()));
+                return null;
+            })
+            .when(repo)
+            .delete(any(ModelingSqlModel.class));
+
+        ModelingSqlModelService.BatchDeleteResult result = service.deleteBatch(
+            new ModelingSqlModelService.BatchDeleteRequest(List.of(id1, id2)),
+            "D1"
+        );
+
+        assertThat(result.requested()).isEqualTo(2);
+        assertThat(result.deleted()).isEqualTo(1);
+        assertThat(result.failed()).isEqualTo(1);
+        assertThat(result.failures()).hasSize(1);
+        assertThat(result.failures().get(0).modelId()).isEqualTo(id2);
+        assertThat(storedModels).extracting(ModelingSqlModel::getId).containsExactly(id2);
+    }
+
     private ModelingSqlModel model(UUID id, String name, String path) {
         ModelingSqlModel model = new ModelingSqlModel();
         model.setId(id);
@@ -155,5 +214,19 @@ class ModelingSqlModelServiceBatchDeleteTest {
         model.setOwnerDept("D1");
         model.setPlanId(UUID.randomUUID());
         return model;
+    }
+
+    private static final class NoopTransactionManager implements PlatformTransactionManager {
+
+        @Override
+        public TransactionStatus getTransaction(TransactionDefinition definition) throws TransactionException {
+            return new SimpleTransactionStatus();
+        }
+
+        @Override
+        public void commit(TransactionStatus status) throws TransactionException {}
+
+        @Override
+        public void rollback(TransactionStatus status) throws TransactionException {}
     }
 }

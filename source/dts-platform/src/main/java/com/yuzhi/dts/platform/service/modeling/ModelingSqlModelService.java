@@ -51,9 +51,12 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.TransactionDefinition;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.TransactionSynchronization;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
+import org.springframework.transaction.support.TransactionTemplate;
 import org.springframework.util.StringUtils;
 
 /**
@@ -87,6 +90,7 @@ public class ModelingSqlModelService {
     private final ObjectMapper objectMapper;
     private final ModelFileService fileService;
     private final Executor taskExecutor;
+    private final TransactionTemplate batchDeleteTransactionTemplate;
 
     public ModelingSqlModelService(
         ModelingSqlModelRepository repo,
@@ -105,7 +109,8 @@ public class ModelingSqlModelService {
         AuditService auditService,
         ObjectMapper objectMapper,
         ModelFileService fileService,
-        @Qualifier("taskExecutor") Executor taskExecutor
+        @Qualifier("taskExecutor") Executor taskExecutor,
+        PlatformTransactionManager transactionManager
     ) {
         this.repo = repo;
         this.planRepo = planRepo;
@@ -124,6 +129,9 @@ public class ModelingSqlModelService {
         this.objectMapper = objectMapper;
         this.fileService = fileService;
         this.taskExecutor = taskExecutor;
+        TransactionTemplate template = new TransactionTemplate(transactionManager);
+        template.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
+        this.batchDeleteTransactionTemplate = template;
     }
 
     // ── Public CRUD operations ─────────────────────────────────────────
@@ -337,7 +345,7 @@ public class ModelingSqlModelService {
         int deleted = 0;
         for (UUID id : requestedIds) {
             try {
-                delete(id, activeDeptHeader);
+                batchDeleteTransactionTemplate.executeWithoutResult(status -> delete(id, activeDeptHeader));
                 deleted++;
             } catch (Exception ex) {
                 failures.add(new BatchDeleteFailure(id, trimToNull(ex.getMessage()) != null ? ex.getMessage() : "删除失败"));

@@ -2,12 +2,18 @@ export type BulkSelectionSource = "tree" | "governance" | "list" | "mixed";
 
 export type BulkSelectionState = {
 	selectedIds: string[];
+	sourceSelections: Record<Exclude<BulkSelectionSource, "mixed">, string[]>;
 	selectedSource: BulkSelectionSource | null;
 	lastChangedAt: number | null;
 };
 
 export const EMPTY_BULK_SELECTION: BulkSelectionState = {
 	selectedIds: [],
+	sourceSelections: {
+		tree: [],
+		governance: [],
+		list: [],
+	},
 	selectedSource: null,
 	lastChangedAt: null,
 };
@@ -30,22 +36,25 @@ export function applyBulkSelectionChange(
 	source: Exclude<BulkSelectionSource, "mixed">,
 	changedAt = Date.now(),
 ): BulkSelectionState {
-	const nextIds = normalizeIds(selectedIds);
-	if (!nextIds.length) {
-		return {
-			selectedIds: [],
-			selectedSource: null,
-			lastChangedAt: changedAt,
-		};
-	}
+	const nextSourceSelections = {
+		tree: normalizeIds(current.sourceSelections?.tree || []),
+		governance: normalizeIds(current.sourceSelections?.governance || []),
+		list: normalizeIds(current.sourceSelections?.list || []),
+	};
+	nextSourceSelections[source] = normalizeIds(selectedIds);
+	const nextIds = normalizeIds([
+		...nextSourceSelections.tree,
+		...nextSourceSelections.governance,
+		...nextSourceSelections.list,
+	]);
+	const activeSources = (Object.entries(nextSourceSelections) as Array<
+		[Exclude<BulkSelectionSource, "mixed">, string[]]
+	>).filter(([, ids]) => ids.length > 0);
 	const nextSource =
-		!current.selectedSource || current.selectedSource === source || current.selectedSource === "mixed"
-			? current.selectedSource === "mixed"
-				? "mixed"
-				: source
-			: "mixed";
+		activeSources.length === 0 ? null : activeSources.length === 1 ? activeSources[0][0] : "mixed";
 	return {
 		selectedIds: nextIds,
+		sourceSelections: nextSourceSelections,
 		selectedSource: nextSource,
 		lastChangedAt: changedAt,
 	};
@@ -56,16 +65,25 @@ export function clearDeletedBulkSelection(current: BulkSelectionState, deletedId
 		return current;
 	}
 	const deleted = new Set(normalizeIds(deletedIds));
-	const nextIds = current.selectedIds.filter((id) => !deleted.has(id));
-	if (!nextIds.length) {
-		return {
-			selectedIds: [],
-			selectedSource: null,
-			lastChangedAt: current.lastChangedAt,
-		};
-	}
+	const nextSourceSelections = {
+		tree: (current.sourceSelections?.tree || []).filter((id) => !deleted.has(id)),
+		governance: (current.sourceSelections?.governance || []).filter((id) => !deleted.has(id)),
+		list: (current.sourceSelections?.list || []).filter((id) => !deleted.has(id)),
+	};
+	const nextIds = normalizeIds([
+		...nextSourceSelections.tree,
+		...nextSourceSelections.governance,
+		...nextSourceSelections.list,
+	]);
+	const activeSources = (Object.entries(nextSourceSelections) as Array<
+		[Exclude<BulkSelectionSource, "mixed">, string[]]
+	>).filter(([, ids]) => ids.length > 0);
+	const nextSource =
+		activeSources.length === 0 ? null : activeSources.length === 1 ? activeSources[0][0] : "mixed";
 	return {
-		...current,
 		selectedIds: nextIds,
+		sourceSelections: nextSourceSelections,
+		selectedSource: nextSource,
+		lastChangedAt: current.lastChangedAt,
 	};
 }

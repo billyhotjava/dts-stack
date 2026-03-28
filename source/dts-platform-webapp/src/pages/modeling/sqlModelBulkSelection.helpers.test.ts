@@ -23,6 +23,11 @@ test("applyBulkSelectionChange keeps source when changes come from same origin",
 	const state = applyBulkSelectionChange(
 		{
 			selectedIds: ["111"],
+			sourceSelections: {
+				tree: ["111"],
+				governance: [],
+				list: [],
+			},
 			selectedSource: "tree",
 			lastChangedAt: 10,
 		},
@@ -33,25 +38,40 @@ test("applyBulkSelectionChange keeps source when changes come from same origin",
 
 	assert.deepEqual(state, {
 		selectedIds: ["111", "222"],
+		sourceSelections: {
+			tree: ["111", "222"],
+			governance: [],
+			list: [],
+		},
 		selectedSource: "tree",
 		lastChangedAt: 20,
 	});
 });
 
-test("applyBulkSelectionChange promotes source to mixed when origins differ", () => {
+test("applyBulkSelectionChange merges selections across different origins", () => {
 	const state = applyBulkSelectionChange(
 		{
 			selectedIds: ["111"],
+			sourceSelections: {
+				tree: ["111"],
+				governance: [],
+				list: [],
+			},
 			selectedSource: "tree",
 			lastChangedAt: 10,
 		},
-		["111", "333"],
+		["333"],
 		"governance",
 		20,
 	);
 
 	assert.deepEqual(state, {
 		selectedIds: ["111", "333"],
+		sourceSelections: {
+			tree: ["111"],
+			governance: ["333"],
+			list: [],
+		},
 		selectedSource: "mixed",
 		lastChangedAt: 20,
 	});
@@ -60,18 +80,33 @@ test("applyBulkSelectionChange promotes source to mixed when origins differ", ()
 test("clearDeletedBulkSelection removes deleted ids and resets source when empty", () => {
 	const state: BulkSelectionState = {
 		selectedIds: ["111", "222"],
+		sourceSelections: {
+			tree: ["111"],
+			governance: ["222"],
+			list: [],
+		},
 		selectedSource: "mixed",
 		lastChangedAt: 10,
 	};
 
 	assert.deepEqual(clearDeletedBulkSelection(state, ["111"]), {
 		selectedIds: ["222"],
-		selectedSource: "mixed",
+		sourceSelections: {
+			tree: [],
+			governance: ["222"],
+			list: [],
+		},
+		selectedSource: "governance",
 		lastChangedAt: 10,
 	});
 
 	assert.deepEqual(clearDeletedBulkSelection(state, ["111", "222"]), {
 		selectedIds: [],
+		sourceSelections: {
+			tree: [],
+			governance: [],
+			list: [],
+		},
 		selectedSource: null,
 		lastChangedAt: 10,
 	});

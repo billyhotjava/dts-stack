@@ -2291,7 +2291,7 @@ export default function SqlModelingPage() {
 					onClearSelection={() => setBulkSelection(EMPTY_BULK_SELECTION)}
 					onBatchDelete={removeSelectedModels}
 					batchDeleteDisabled={!bulkSelection.selectedIds.length}
-					loading={spacesLoading}
+					loading={spacesLoading || modelsLoading}
 					showEmptyModelsHint={!modelsLoading && treeData.length > 0 && activeLayerNodes.length === 0}
 				/>
 

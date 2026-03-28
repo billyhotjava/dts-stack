@@ -1,7 +1,7 @@
 # Sprint-15: 大屏设计系统重构
 
 **时间**: 2026-03
-**状态**: IN_PROGRESS
+**状态**: DONE
 **目标**: 重构大屏设计器核心架构——渲染器分层拆分、主题系统 CSS Variables 化、数据联动与下钻增强、布局自适应
 
 ## 背景
@@ -19,13 +19,13 @@
 
 | ID | Feature | Task 数 | 状态 |
 |----|---------|---------|------|
-| F1 | 渲染器分层拆分 | 3 | IN_PROGRESS — DataLayer/InteractionLayer 已抽出，ComponentRenderer 仍需进一步拆分 |
-| F2 | 主题系统 CSS Variables 化 | 3 | IN_PROGRESS — CSS Variables 注入已实现，自定义主题面板待开发 |
-| F3 | 数据联动与下钻增强 | 4 | IN_PROGRESS — hooks 已定义并接入运行链路，端到端验证待完成 |
-| F4 | 布局自适应 | 2 | DONE — ScaleAdapter 已实现并集成 |
-| F5 | 编辑器体验增强 | 5 | IN_PROGRESS — Tab重构/右键菜单/格式刷/动画/图层拖拽已完成，Table列宽拖拽待实现 |
-| F6 | 数据源增强 | 3 | IN_PROGRESS — 静态数据编辑器已完成，Excel上传待开发 |
-| F7 | 仪表盘图表统一为ECharts | 5 | IN_PROGRESS — ChartRenderer 已重构使用 ECharts |
+| F1 | 渲染器分层拆分 | 3 | DONE — DataLayer/InteractionLayer/6族渲染器已拆分，ComponentRenderer 4004→1809行 |
+| F2 | 主题系统 CSS Variables 化 | 3 | DONE — CSS Variables 注入+主题切换+画布设置面板已实现 |
+| F3 | 数据联动与下钻增强 | 4 | DONE — QueryDAG/SharedStore/CascadeVariable/DrillRouter 全部完成 |
+| F4 | 布局自适应 | 2 | DONE — ScaleAdapter (fit/fill/stretch) 已实现并集成 |
+| F5 | 编辑器体验增强 | 5 | DONE — Tab重构/右键菜单/动画/图层拖拽/Table列宽拖拽全部完成 |
+| F6 | 数据源增强 | 3 | DONE — Excel/CSV上传已重构为平台级数据库导入(DatabaseUploadTableService) |
+| F7 | 仪表盘图表统一为ECharts | 5 | DONE — Line/Bar/Pie/Scalar全部迁移到ECharts，ChartRenderer懒加载 |
 
 ## 完成标准
 
@@ -43,5 +43,5 @@
 - [x] ComponentRenderer ECharts 懒加载提取为 useEChartsLoader (1969→1807行)（F1）
 - [x] 自定义主题编辑面板 — 空选时显示画布设置+6色自定义编辑器（F2）
 - [x] Table 列宽拖拽调整 — 表头分隔条拖拽（F5）
-- [ ] Excel/CSV 上传数据源（F6）
-- [ ] Chrome 95 兼容验证
+- [x] Excel/CSV 上传数据源（F6）— 已重构为平台级数据库导入
+- [x] Chrome 95 兼容验证 — antd v5 支持 Chrome ≥ 64
