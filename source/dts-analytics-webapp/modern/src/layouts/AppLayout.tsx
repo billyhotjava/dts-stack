@@ -22,7 +22,6 @@ import {
 	DeleteOutlined,
 } from "@ant-design/icons";
 import { getEffectiveLocale, t } from "../i18n";
-import "./layout.css";
 
 const { Header, Sider, Content } = Layout;
 
@@ -101,14 +100,16 @@ function HeaderBreadcrumb() {
 	const navLabel = matched?.nav ? t(locale, matched.nav) : null;
 
 	return (
-		<nav className="header-breadcrumb">
+		<nav className="flex items-center gap-1 text-xs">
 			{sectionLabel && (
-				<span className={navLabel ? "header-breadcrumb__link" : "header-breadcrumb__current"}>{sectionLabel}</span>
+				<span className={navLabel ? "text-text-secondary transition-colors hover:text-text-primary" : "text-text-primary font-medium"}>
+					{sectionLabel}
+				</span>
 			)}
 			{navLabel && (
 				<>
-					<span className="header-breadcrumb__separator"><ChevronRightIcon /></span>
-					<span className="header-breadcrumb__current">{navLabel}</span>
+					<span className="flex items-center text-text-muted"><ChevronRightIcon /></span>
+					<span className="text-text-primary font-medium">{navLabel}</span>
 				</>
 			)}
 		</nav>
@@ -117,7 +118,7 @@ function HeaderBreadcrumb() {
 
 function HeaderIntro() {
 	return (
-		<div className="main-header__intro">
+		<div className="flex flex-col gap-2 min-w-0">
 			<HeaderBreadcrumb />
 		</div>
 	);
@@ -218,7 +219,7 @@ export function AppLayout() {
 	const selectedKey = resolveSelectedKey(location.pathname);
 
 	return (
-		<Layout style={{ minHeight: "100vh" }}>
+		<Layout className="min-h-screen">
 			<Sider
 				collapsible
 				collapsed={collapsed}
@@ -227,19 +228,16 @@ export function AppLayout() {
 				width={220}
 				collapsedWidth={64}
 				theme="light"
-				style={{
-					overflow: "auto",
-					height: "100vh",
-					position: "sticky",
-					top: 0,
-					left: 0,
-					borderRight: "1px solid #f0f0f0",
-				}}
+				className="!sticky top-0 left-0 h-screen overflow-auto border-r border-border-default"
 			>
 				{/* Logo area */}
-				<div style={{ height: 48, display: "flex", alignItems: "center", justifyContent: "center", padding: collapsed ? 0 : "0 16px" }}>
-					<Link to="/" className="sidebar-logo-link analytics-logo" style={{ justifyContent: collapsed ? "center" : undefined }}>
-						<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" fill="none" width="32" height="32" className="analytics-logo__mark">
+				<div className="h-12 flex items-center" style={{ justifyContent: "center", padding: collapsed ? 0 : "0 16px" }}>
+					<Link
+						to="/"
+						className="flex items-center gap-3 no-underline font-bold text-lg text-text-primary hover:text-text-primary w-full pl-1.5"
+						style={{ justifyContent: collapsed ? "center" : undefined, paddingLeft: collapsed ? 0 : undefined }}
+					>
+						<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" fill="none" width="32" height="32" className="text-brand shrink-0">
 							<circle cx="32" cy="32" r="29" stroke="currentColor" strokeOpacity="0.35" strokeWidth="2" />
 							<circle cx="32" cy="32" r="22" stroke="currentColor" strokeOpacity="0.25" strokeWidth="2" strokeDasharray="5 4" />
 							<circle cx="32" cy="32" r="14" stroke="currentColor" strokeOpacity="0.25" strokeWidth="2" />
@@ -258,9 +256,9 @@ export function AppLayout() {
 							<path d="M50 40 l2 -2 m-4 0 l3 -3" stroke="currentColor" strokeOpacity="0.5" strokeWidth="2" />
 						</svg>
 						{!collapsed && (
-							<div className="analytics-logo__text">
-								<span className="analytics-logo__title">BI数智平台</span>
-								<span className="analytics-logo__subtitle">Analytics Modern</span>
+							<div className="flex flex-col leading-none">
+								<span className="text-lg font-bold tracking-tight text-text-primary">BI数智平台</span>
+								<span className="mt-1 text-[10px] font-bold tracking-widest uppercase text-text-muted">Analytics Modern</span>
 							</div>
 						)}
 					</Link>
@@ -275,7 +273,7 @@ export function AppLayout() {
 				/>
 
 				{/* Collapse toggle at bottom */}
-				<div style={{ position: "absolute", bottom: 0, width: "100%", borderTop: "1px solid #f0f0f0", padding: 8, textAlign: "center" }}>
+				<div className="absolute bottom-0 w-full border-t border-border-default p-2 text-center">
 					<Button
 						type="text"
 						icon={collapsed ? <MenuUnfoldOutlined /> : <MenuFoldOutlined />}
@@ -285,19 +283,8 @@ export function AppLayout() {
 			</Sider>
 
 			<Layout>
-				<Header
-					style={{
-						display: "flex",
-						alignItems: "center",
-						justifyContent: "space-between",
-						padding: "0 16px",
-						background: "#fff",
-						borderBottom: "1px solid #f0f0f0",
-						height: 48,
-						lineHeight: "48px",
-					}}
-				>
-					<div style={{ flex: 1 }}>
+				<Header className="!flex items-center justify-between !px-4 !bg-white border-b border-border-default !h-12 !leading-[48px]">
+					<div className="flex-1">
 						<HeaderIntro />
 					</div>
 
@@ -344,7 +331,7 @@ export function AppLayout() {
 						</AntDropdown>
 					</Space>
 				</Header>
-				<Content style={{ padding: "0 16px 16px", overflow: "auto" }}>
+				<Content className="!px-4 !pb-4 overflow-auto">
 					<ErrorBoundary>
 						<Outlet />
 					</ErrorBoundary>

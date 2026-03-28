@@ -64,22 +64,16 @@ export function TableSearchPicker({ locale, tables, fkRecommendations = [], valu
 			<div
 				key={tbl.id}
 				onClick={() => !disabled && onChange(tbl.id)}
-				style={{
-					padding: "6px 12px",
-					cursor: disabled ? "default" : "pointer",
-					background: isSelected ? "var(--color-primary-bg, #EBF5FF)" : undefined,
-					display: "flex",
-					justifyContent: "space-between",
-					alignItems: "center",
-				}}
+				className={`flex justify-between items-center px-3 py-1.5 ${disabled ? "cursor-default" : "cursor-pointer"}`}
+				style={isSelected ? { background: "var(--color-primary-bg, #EBF5FF)" } : undefined}
 			>
 				<span>{tbl.schema ? `${tbl.schema}.` : ""}{label}</span>
 				{fk && (
-					<span style={{ fontSize: "12px", color: "var(--color-text-tertiary)" }}>
+					<span className="text-xs text-text-muted">
 						{fk.originFieldName} → {fk.destinationFieldName}
 					</span>
 				)}
-				{isSelected && <span style={{ color: "var(--color-primary, #3B82F6)" }}>✓</span>}
+				{isSelected && <span className="text-brand">✓</span>}
 			</div>
 		);
 	};
@@ -87,18 +81,17 @@ export function TableSearchPicker({ locale, tables, fkRecommendations = [], valu
 	return (
 		<div>
 			<input
-				className="input"
+				className="w-full box-border px-3 py-2 rounded-sm border border-border-default bg-surface-card text-text-primary mb-2"
 				type="text"
 				value={search}
 				onChange={(e) => setSearch(e.target.value)}
 				placeholder={placeholder ?? t(locale, "notebook.source.searchPlaceholder")}
 				disabled={disabled}
-				style={{ width: "100%", marginBottom: 8 }}
 			/>
-			<div style={{ maxHeight: 240, overflowY: "auto", border: "1px solid var(--color-border, #e0e0e0)", borderRadius: "var(--radius-sm, 4px)" }}>
+			<div className="max-h-60 overflow-y-auto border border-border-default rounded-sm">
 				{recommended.length > 0 && (
 					<>
-						<div style={{ padding: "4px 12px", fontSize: "12px", fontWeight: 600, color: "var(--color-text-secondary)", background: "var(--color-bg-secondary, #f8f9fa)" }}>
+						<div className="px-3 py-1 text-xs font-semibold text-text-secondary bg-surface-muted">
 							{t(locale, "notebook.source.recommended")}
 						</div>
 						{recommended.map(renderTable)}
@@ -109,7 +102,7 @@ export function TableSearchPicker({ locale, tables, fkRecommendations = [], valu
 						{Array.from(schemaGroups(others).entries()).map(([schema, items]) => (
 							<div key={schema}>
 								{schema && (
-									<div style={{ padding: "4px 12px", fontSize: "12px", fontWeight: 600, color: "var(--color-text-secondary)", background: "var(--color-bg-secondary, #f8f9fa)" }}>
+									<div className="px-3 py-1 text-xs font-semibold text-text-secondary bg-surface-muted">
 										{schema}
 									</div>
 								)}
@@ -119,7 +112,7 @@ export function TableSearchPicker({ locale, tables, fkRecommendations = [], valu
 					</>
 				)}
 				{filtered.length === 0 && (
-					<div style={{ padding: "12px", textAlign: "center", color: "var(--color-text-tertiary)" }}>
+					<div className="p-3 text-center text-text-muted">
 						—
 					</div>
 				)}

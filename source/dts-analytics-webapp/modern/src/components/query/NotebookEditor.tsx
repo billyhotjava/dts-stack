@@ -432,7 +432,7 @@ export function NotebookEditor({ databaseId, initialDatasetQuery, onDatasetQuery
 
 	// ---- render ----
 	return (
-		<div style={{ maxWidth: 960, margin: "0 auto" }}>
+		<div className="max-w-[960px] mx-auto">
 			{/* Step 1: Data Source */}
 			<StepCard
 				title={t(locale, "notebook.step.dataSource")}

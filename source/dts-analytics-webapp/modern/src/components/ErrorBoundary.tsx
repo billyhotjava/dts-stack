@@ -32,21 +32,14 @@ export class ErrorBoundary extends React.Component<Props, State> {
 			this.state.error instanceof Error ? this.state.error.message : String(this.state.error ?? "Unknown error");
 
 		return (
-			<div style={{ maxWidth: 1080, margin: "0 auto", padding: "40px 16px" }}>
-				<div
-					style={{
-						background: "#fff",
-						border: "1px solid rgba(0,0,0,0.08)",
-						borderRadius: 12,
-						padding: 16,
-					}}
-				>
-					<div style={{ fontWeight: 700 }}>{t(locale, "error")}</div>
-					<div className="muted" style={{ marginTop: 10, whiteSpace: "pre-wrap" }}>
+			<div className="max-w-[1080px] mx-auto px-4 py-10">
+				<div className="bg-surface-card border border-border-default rounded-xl p-4">
+					<div className="font-bold">{t(locale, "error")}</div>
+					<div className="text-text-secondary mt-2.5 whitespace-pre-wrap">
 						{message}
 					</div>
-					<div style={{ height: 12 }} />
-					<div className="row" style={{ gap: 8 }}>
+					<div className="h-3" />
+					<div className="flex gap-2">
 						<button className="btn" type="button" onClick={() => window.location.reload()}>
 							{t(locale, "auth.reload")}
 						</button>

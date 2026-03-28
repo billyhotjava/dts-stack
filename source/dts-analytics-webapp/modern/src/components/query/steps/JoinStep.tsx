@@ -66,7 +66,7 @@ function JoinCard(props: {
 	];
 
 	const renderCondition = (cond: JoinCondition, index: number) => (
-		<div key={cond.id} style={{ display: "flex", gap: 8, alignItems: "center", marginBottom: 4 }}>
+		<div key={cond.id} className="flex gap-2 items-center mb-1">
 			<FieldPicker
 				fields={sourceFields}
 				value={cond.leftField}
@@ -80,7 +80,7 @@ function JoinCard(props: {
 			/>
 			{advancedMode ? (
 				<select
-					className="input"
+					className="w-full box-border px-3 py-2 rounded-sm border border-border-default bg-surface-card text-text-primary"
 					style={{ width: 80 }}
 					value={cond.op}
 					onChange={(e) => {
@@ -94,10 +94,10 @@ function JoinCard(props: {
 					))}
 				</select>
 			) : (
-				<span style={{ width: 30, textAlign: "center" }}>=</span>
+				<span className="w-[30px] text-center">=</span>
 			)}
 			<select
-				className="input"
+				className="w-full box-border px-3 py-2 rounded-sm border border-border-default bg-surface-card text-text-primary"
 				style={{ width: 200 }}
 				value={cond.rightFieldId ?? ""}
 				onChange={(e) => {
@@ -112,7 +112,7 @@ function JoinCard(props: {
 				))}
 			</select>
 			{advancedMode && join.conditions.length > 1 && (
-				<button className="btn" type="button" onClick={() => {
+				<button className="inline-flex items-center justify-center gap-2 px-3 py-2 rounded-sm border border-border-default bg-surface-card text-text-primary font-medium cursor-pointer" type="button" onClick={() => {
 					onUpdate({ conditions: join.conditions.filter((c) => c.id !== cond.id) });
 				}}>×</button>
 			)}
@@ -120,12 +120,7 @@ function JoinCard(props: {
 	);
 
 	return (
-		<div style={{
-			border: "1px solid var(--color-border, #e0e0e0)",
-			borderRadius: "var(--radius-sm, 4px)",
-			padding: "var(--spacing-sm, 8px) var(--spacing-md, 12px)",
-			marginBottom: 8,
-		}}>
+		<div className="border border-border-default rounded-sm px-3 py-2 mb-2">
 			<TableSearchPicker
 				locale={locale}
 				tables={tables}
@@ -137,9 +132,9 @@ function JoinCard(props: {
 
 			{join.sourceTableId && (
 				<>
-					<div style={{ marginTop: 8 }}>
+					<div className="mt-2">
 						<select
-							className="input"
+							className="w-full box-border px-3 py-2 rounded-sm border border-border-default bg-surface-card text-text-primary"
 							value={join.strategy}
 							onChange={(e) => onUpdate({ strategy: e.target.value as JoinType })}
 							style={{ width: 300 }}
@@ -154,11 +149,11 @@ function JoinCard(props: {
 						</select>
 					</div>
 
-					<div style={{ marginTop: 8 }}>
-						<div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 4 }}>
-							<span className="muted">{t(locale, "notebook.join.condition")}</span>
+					<div className="mt-2">
+						<div className="flex justify-between items-center mb-1">
+							<span className="text-text-secondary">{t(locale, "notebook.join.condition")}</span>
 							<button
-								className="btn"
+								className="inline-flex items-center justify-center gap-2 px-3 py-2 rounded-sm border border-border-default bg-surface-card text-text-primary font-medium cursor-pointer"
 								type="button"
 								onClick={() => {
 									if (advancedMode) {
@@ -175,9 +170,9 @@ function JoinCard(props: {
 						</div>
 
 						{advancedMode && (
-							<div style={{ marginBottom: 4 }}>
+							<div className="mb-1">
 								<select
-									className="input"
+									className="w-full box-border px-3 py-2 rounded-sm border border-border-default bg-surface-card text-text-primary"
 									value={join.conditionCombine}
 									onChange={(e) => onUpdate({ conditionCombine: e.target.value as "and" | "or" })}
 									style={{ width: 100 }}
@@ -191,7 +186,7 @@ function JoinCard(props: {
 						{join.conditions.map((c, i) => renderCondition(c, i))}
 
 						{advancedMode && (
-							<button className="btn" type="button" onClick={() => {
+							<button className="inline-flex items-center justify-center gap-2 px-3 py-2 rounded-sm border border-border-default bg-surface-card text-text-primary font-medium cursor-pointer" type="button" onClick={() => {
 								onUpdate({ conditions: [...join.conditions, { id: makeId(), leftField: null, op: "=", rightFieldId: null }] });
 							}}>
 								{t(locale, "notebook.join.addCondition")}
@@ -201,8 +196,8 @@ function JoinCard(props: {
 				</>
 			)}
 
-			<div style={{ marginTop: 8, textAlign: "right" }}>
-				<button className="btn" type="button" onClick={onRemove}>
+			<div className="mt-2 text-right">
+				<button className="inline-flex items-center justify-center gap-2 px-3 py-2 rounded-sm border border-border-default bg-surface-card text-text-primary font-medium cursor-pointer" type="button" onClick={onRemove}>
 					{t(locale, "notebook.join.removeJoin")}
 				</button>
 			</div>
@@ -313,14 +308,14 @@ export function JoinStep({ locale, sourceTableId, tables, joins, allFieldsBefore
 			))}
 
 			<button
-				className="btn"
+				className="inline-flex items-center justify-center gap-2 px-3 py-2 rounded-sm border border-border-default bg-surface-card text-text-primary font-medium cursor-pointer"
 				type="button"
 				onClick={addJoin}
 				disabled={joins.length >= MAX_JOINS || !sourceTableId}
 			>
 				{t(locale, "notebook.join.addJoin")}
 				{remaining > 0 && remaining < MAX_JOINS && (
-					<span style={{ marginLeft: 8, fontSize: 12, opacity: 0.7 }}>
+					<span className="ml-2 text-xs opacity-70">
 						({t(locale, "notebook.join.remaining").replace("{n}", String(remaining))})
 					</span>
 				)}

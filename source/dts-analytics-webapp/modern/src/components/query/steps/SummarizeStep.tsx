@@ -55,40 +55,39 @@ export function SummarizeStep({
 	return (
 		<div>
 			{/* header */}
-			<div className="row" style={{ justifyContent: "space-between" }}>
+			<div className="flex gap-3 flex-wrap items-center justify-between">
 				<strong>{t(locale, "builder.summarize")}</strong>
-				<button className="btn" type="button" onClick={addAggregation}>
+				<button className="inline-flex items-center justify-center gap-2 px-3 py-2 rounded-sm border border-border-default bg-surface-card text-text-primary font-medium cursor-pointer" type="button" onClick={addAggregation}>
 					{t(locale, "builder.addAggregation")}
 				</button>
 			</div>
-			<div style={{ height: 8 }} />
+			<div className="h-2" />
 
 			{/* group-by section */}
-			<div className="muted">{t(locale, "builder.groupBy")}</div>
-			<div style={{ height: 8 }} />
+			<div className="text-text-secondary">{t(locale, "builder.groupBy")}</div>
+			<div className="h-2" />
 
 			{allFields.length === 0 ? (
-				<div className="muted">—</div>
+				<div className="text-text-secondary">—</div>
 			) : (
 				<div>
 					{Array.from(grouped.entries()).map(([tableName, fields]) => (
-						<div key={tableName} style={{ marginBottom: 8 }}>
-							<div className="muted" style={{ fontSize: 12, marginBottom: 4 }}>{tableName}</div>
-							<div style={{ display: "flex", flexWrap: "wrap", gap: 4 }}>
+						<div key={tableName} className="mb-2">
+							<div className="text-text-secondary text-xs mb-1">{tableName}</div>
+							<div className="flex flex-wrap gap-1">
 								{fields.map((f) => {
 									const ref: FieldRef = { fieldId: f.fieldId, joinAlias: f.tableAlias };
 									const checked = groupByFields.some((g) => fieldRefEquals(g, ref));
 									return (
 										<label
 											key={fieldRefKey(ref)}
-											className="tag"
-											style={{ cursor: "pointer", userSelect: "none" }}
+											className="inline-flex items-center px-2 py-0.5 rounded-full text-sm font-medium border border-border-default bg-surface-muted text-text-secondary cursor-pointer select-none"
 										>
 											<input
 												type="checkbox"
 												checked={checked}
 												onChange={() => toggleGroupBy(ref)}
-												style={{ marginRight: 6 }}
+												className="mr-1.5"
 											/>
 											{f.displayName}
 										</label>
@@ -100,20 +99,20 @@ export function SummarizeStep({
 				</div>
 			)}
 
-			<div style={{ height: 12 }} />
+			<div className="h-3" />
 
 			{/* aggregations section */}
-			<div className="row" style={{ justifyContent: "space-between" }}>
-				<div className="muted">{t(locale, "builder.aggregations")}</div>
-				<div className="muted">{aggregations.length ? `${aggregations.length}` : "—"}</div>
+			<div className="flex gap-3 flex-wrap items-center justify-between">
+				<div className="text-text-secondary">{t(locale, "builder.aggregations")}</div>
+				<div className="text-text-secondary">{aggregations.length ? `${aggregations.length}` : "—"}</div>
 			</div>
-			<div style={{ height: 8 }} />
+			<div className="h-2" />
 
-			{aggregations.length === 0 ? <div className="muted">—</div> : null}
+			{aggregations.length === 0 ? <div className="text-text-secondary">—</div> : null}
 			{aggregations.map((r) => (
-				<div key={r.id} className="row" style={{ marginBottom: 8 }}>
+				<div key={r.id} className="flex gap-3 flex-wrap items-center mb-2">
 					<select
-						className="input"
+						className="w-full box-border px-3 py-2 rounded-sm border border-border-default bg-surface-card text-text-primary"
 						style={{ width: 200 }}
 						value={r.op}
 						onChange={(e) => updateAggregation(r.id, { op: e.target.value as AggregationOp })}
@@ -133,7 +132,7 @@ export function SummarizeStep({
 						style={{ width: 360 }}
 					/>
 
-					<button className="btn" type="button" onClick={() => removeAggregation(r.id)}>
+					<button className="inline-flex items-center justify-center gap-2 px-3 py-2 rounded-sm border border-border-default bg-surface-card text-text-primary font-medium cursor-pointer" type="button" onClick={() => removeAggregation(r.id)}>
 						{t(locale, "builder.remove")}
 					</button>
 				</div>

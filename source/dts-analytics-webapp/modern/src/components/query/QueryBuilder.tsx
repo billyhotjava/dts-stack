@@ -451,19 +451,19 @@ export function QueryBuilder(props: {
 	};
 
 	return (
-		<div className="card">
-			<div className="row" style={{ justifyContent: "space-between", alignItems: "center" }}>
+		<div className="bg-surface-card border border-border-default rounded-md p-md shadow-sm">
+			<div className="flex flex-wrap items-center justify-between">
 				<strong>{t(locale, "questions.builder")}</strong>
 			</div>
-			<div style={{ height: 12 }} />
+			<div className="h-3" />
 
 			{tables.state === "error" && <ErrorNotice locale={locale} error={tables.error} />}
 			{visibleTableIds.state === "error" && <ErrorNotice locale={locale} error={visibleTableIds.error} />}
 			{table.state === "error" && <ErrorNotice locale={locale} error={table.error} />}
 
-			<div className="row">
+			<div className="flex gap-md flex-wrap items-center">
 				<label style={{ width: 420 }}>
-					<div className="muted">{t(locale, "builder.table")}</div>
+					<div className="text-text-secondary">{t(locale, "builder.table")}</div>
 					<select
 						className="input"
 						value={tableId ?? ""}
@@ -484,7 +484,7 @@ export function QueryBuilder(props: {
 				</label>
 
 				<label style={{ width: 180 }}>
-					<div className="muted">{t(locale, "builder.limit")}</div>
+					<div className="text-text-secondary">{t(locale, "builder.limit")}</div>
 					<input
 						className="input"
 						type="number"
@@ -496,7 +496,7 @@ export function QueryBuilder(props: {
 				</label>
 
 				<label style={{ width: 220 }}>
-					<div className="muted">{t(locale, "builder.sort")}</div>
+					<div className="text-text-secondary">{t(locale, "builder.sort")}</div>
 					<select
 						className="input"
 						value={orderByKey}
@@ -527,7 +527,7 @@ export function QueryBuilder(props: {
 					</select>
 				</label>
 				<label style={{ width: 140 }}>
-					<div className="muted">{t(locale, "builder.direction")}</div>
+					<div className="text-text-secondary">{t(locale, "builder.direction")}</div>
 					<select className="input" value={orderByDir} onChange={(e) => setOrderByDir(e.target.value === "desc" ? "desc" : "asc")}>
 						<option value="asc">{t(locale, "builder.asc")}</option>
 						<option value="desc">{t(locale, "builder.desc")}</option>
@@ -535,35 +535,35 @@ export function QueryBuilder(props: {
 				</label>
 			</div>
 
-			<div style={{ height: 12 }} />
+			<div className="h-3" />
 
 			<div>
-				<div className="row" style={{ justifyContent: "space-between" }}>
+				<div className="flex flex-wrap items-center justify-between">
 					<strong>{t(locale, "builder.summarize")}</strong>
 					<button className="btn" type="button" onClick={addAggregation} disabled={table.state !== "loaded"}>
 						{t(locale, "builder.addAggregation")}
 					</button>
 				</div>
-				<div style={{ height: 8 }} />
+				<div className="h-2" />
 
 				{table.state !== "loaded" ? (
-					<div className="muted">—</div>
+					<div className="text-text-secondary">&mdash;</div>
 				) : (
 					<>
-						<div className="muted">{t(locale, "builder.groupBy")}</div>
-						<div style={{ height: 8 }} />
-						<div className="row" style={{ alignItems: "flex-start" }}>
+						<div className="text-text-secondary">{t(locale, "builder.groupBy")}</div>
+						<div className="h-2" />
+						<div className="flex flex-wrap items-start gap-md">
 							{tableFields.map((f) => {
 								const id = typeof f.id === "number" ? f.id : 0;
 								if (!id) return null;
 								const checked = groupByFieldIds.includes(id);
 								return (
-									<label key={String(id)} className="tag" style={{ cursor: "pointer", userSelect: "none" }}>
+									<label key={String(id)} className="tag cursor-pointer select-none">
 										<input
 											type="checkbox"
 											checked={checked}
 											onChange={() => toggleGroupByField(id)}
-											style={{ marginRight: 6 }}
+											className="mr-1.5"
 										/>
 										{f.display_name || f.name || `field:${id}`}
 									</label>
@@ -571,17 +571,17 @@ export function QueryBuilder(props: {
 							})}
 						</div>
 
-						<div style={{ height: 12 }} />
+						<div className="h-3" />
 
-						<div className="row" style={{ justifyContent: "space-between" }}>
-							<div className="muted">{t(locale, "builder.aggregations")}</div>
-							<div className="muted">{aggregations.length ? `${aggregations.length}` : "—"}</div>
+						<div className="flex flex-wrap items-center justify-between">
+							<div className="text-text-secondary">{t(locale, "builder.aggregations")}</div>
+							<div className="text-text-secondary">{aggregations.length ? `${aggregations.length}` : "\u2014"}</div>
 						</div>
-						<div style={{ height: 8 }} />
+						<div className="h-2" />
 
-						{aggregations.length === 0 ? <div className="muted">—</div> : null}
+						{aggregations.length === 0 ? <div className="text-text-secondary">&mdash;</div> : null}
 						{aggregations.map((r) => (
-							<div key={r.id} className="row" style={{ marginBottom: 8 }}>
+							<div key={r.id} className="flex gap-md flex-wrap items-center mb-2">
 								<select
 									className="input"
 									style={{ width: 200 }}
@@ -620,32 +620,32 @@ export function QueryBuilder(props: {
 				)}
 			</div>
 
-			<div style={{ height: 12 }} />
+			<div className="h-3" />
 
 			<div>
-				<div className="row" style={{ justifyContent: "space-between" }}>
+				<div className="flex flex-wrap items-center justify-between">
 					<strong>{t(locale, "builder.fields")}</strong>
-					<div className="muted">
+					<div className="text-text-secondary">
 						{t(locale, "builder.selected")}: {selectedFieldIds.length}
 					</div>
 				</div>
-				<div style={{ height: 8 }} />
+				<div className="h-2" />
 				{table.state !== "loaded" ? (
-					<div className="muted">—</div>
+					<div className="text-text-secondary">&mdash;</div>
 				) : (
-					<div className="row" style={{ alignItems: "flex-start" }}>
+					<div className="flex flex-wrap items-start gap-md">
 						{tableFields.map((f) => {
 							const id = typeof f.id === "number" ? f.id : 0;
 							if (!id) return null;
 							const checked = selectedFieldIds.includes(id);
 							return (
-								<label key={String(id)} className="tag" style={{ cursor: "pointer", userSelect: "none" }}>
+								<label key={String(id)} className="tag cursor-pointer select-none">
 									<input
 										type="checkbox"
 										checked={checked}
 										onChange={() => toggleField(id)}
 										disabled={isSummarized}
-										style={{ marginRight: 6 }}
+										className="mr-1.5"
 									/>
 									{f.display_name || f.name || `field:${id}`}
 								</label>
@@ -653,23 +653,23 @@ export function QueryBuilder(props: {
 						})}
 					</div>
 				)}
-				{isSummarized ? <div className="muted" style={{ marginTop: 8 }}>{t(locale, "builder.fieldsDisabled")}</div> : null}
+				{isSummarized ? <div className="text-text-secondary mt-2">{t(locale, "builder.fieldsDisabled")}</div> : null}
 			</div>
 
-			<div style={{ height: 12 }} />
+			<div className="h-3" />
 
 			<div>
-				<div className="row" style={{ justifyContent: "space-between" }}>
+				<div className="flex flex-wrap items-center justify-between">
 					<strong>{t(locale, "builder.filters")}</strong>
 					<button className="btn" type="button" onClick={addFilter} disabled={table.state !== "loaded"}>
 						{t(locale, "builder.addFilter")}
 					</button>
 				</div>
-				<div style={{ height: 8 }} />
+				<div className="h-2" />
 
-				{filters.length === 0 ? <div className="muted">—</div> : null}
+				{filters.length === 0 ? <div className="text-text-secondary">&mdash;</div> : null}
 				{filters.map((r) => (
-					<div key={r.id} className="row" style={{ marginBottom: 8 }}>
+					<div key={r.id} className="flex gap-md flex-wrap items-center mb-2">
 						<select
 							className="input"
 							style={{ width: 240 }}
@@ -757,7 +757,7 @@ export function QueryBuilder(props: {
 				))}
 			</div>
 
-			<div style={{ height: 12 }} />
+			<div className="h-3" />
 		</div>
 	);
 }

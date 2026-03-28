@@ -23,7 +23,7 @@ function colLabel(col: Record<string, unknown>, index: number): string {
 }
 
 function renderCell(value: unknown): ReactNode {
-	if (value === null || value === undefined) return <span className="text-muted">(null)</span>;
+	if (value === null || value === undefined) return <span className="text-text-muted">(null)</span>;
 	if (typeof value === "boolean") return value ? "true" : "false";
 	if (typeof value === "number") {
 		return (
@@ -65,7 +65,7 @@ function SortIcon({ direction }: { direction: "asc" | "desc" | null }) {
 	}
 	// Neutral - show both arrows faintly
 	return (
-		<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ opacity: 0.3 }}>
+		<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="opacity-30">
 			<polyline points="18 15 12 9 6 15" />
 		</svg>
 	);
@@ -111,9 +111,9 @@ export function DataTable({ cols, rows, maxRows = 5000, pageSize = 50, onRowClic
 	const showPagination = safeRows.length > pageSize;
 
 	return (
-		<div style={{ display: "flex", flexDirection: "column", gap: "var(--spacing-sm, 8px)" }}>
-			<div className="data-table-wrapper">
-				<table className="table data-table">
+		<div className="flex flex-col gap-2">
+			<div className="overflow-x-auto overflow-y-auto max-h-[600px] border border-border-default rounded-sm">
+				<table className="w-full border-collapse">
 					<thead>
 						<tr>
 							{cols.map((c, idx) => {
@@ -122,10 +122,10 @@ export function DataTable({ cols, rows, maxRows = 5000, pageSize = 50, onRowClic
 									<th
 										key={idx}
 										onClick={() => handleSort(idx)}
-										style={{ cursor: "pointer", userSelect: "none" }}
+										className="sticky top-0 z-10 bg-surface-muted cursor-pointer select-none hover:bg-[var(--color-bg-hover,#f0f2f5)] px-md py-sm text-left text-sm font-semibold text-text-secondary uppercase tracking-wide border-b border-border-default"
 										title={`Sort by ${colLabel(c, idx)}`}
 									>
-										<div style={{ display: "flex", alignItems: "center", gap: "var(--spacing-xs, 4px)" }}>
+										<div className="flex items-center gap-1">
 											<span>{colLabel(c, idx)}</span>
 											<SortIcon direction={sortDir} />
 										</div>
@@ -142,17 +142,18 @@ export function DataTable({ cols, rows, maxRows = 5000, pageSize = 50, onRowClic
 								<tr
 									key={rIdx}
 									onClick={onRowClick ? () => onRowClick(cells, globalIdx) : undefined}
+									className="hover:bg-[var(--color-bg-hover,#f5f7fa)]"
 									style={onRowClick ? { cursor: "pointer" } : undefined}
 								>
 									{cols.map((_, cIdx) => (
-										<td key={cIdx}>{renderCell(cells[cIdx])}</td>
+										<td key={cIdx} className="max-w-[300px] overflow-hidden text-ellipsis whitespace-nowrap px-md py-sm border-b border-border-default">{renderCell(cells[cIdx])}</td>
 									))}
 								</tr>
 							);
 						})}
 						{paginatedRows.length === 0 && (
 							<tr>
-								<td colSpan={cols.length} style={{ textAlign: "center", color: "var(--color-text-tertiary, #999)", padding: "var(--spacing-lg, 24px)" }}>
+								<td colSpan={cols.length} className="text-center text-text-muted py-6 px-md border-b border-border-default">
 									No rows to display
 								</td>
 							</tr>
@@ -163,25 +164,18 @@ export function DataTable({ cols, rows, maxRows = 5000, pageSize = 50, onRowClic
 
 			{/* Pagination & Info */}
 			{showPagination && (
-				<div style={{
-					display: "flex",
-					alignItems: "center",
-					justifyContent: "space-between",
-					gap: "var(--spacing-md, 16px)",
-					fontSize: "var(--font-size-sm, 12px)",
-					color: "var(--color-text-secondary, #666)",
-				}}>
+				<div className="flex items-center justify-between gap-4 text-xs text-text-secondary">
 					<div>
 						<Tag>
 							{safeRows.length.toLocaleString()} rows
 						</Tag>
 						{safeRows.length < (Array.isArray(rows) ? rows.length : 0) && (
-							<span style={{ marginLeft: "var(--spacing-xs, 4px)" }}>
+							<span className="ml-1">
 								(truncated from {(Array.isArray(rows) ? rows.length : 0).toLocaleString()})
 							</span>
 						)}
 					</div>
-					<div style={{ display: "flex", alignItems: "center", gap: "var(--spacing-sm, 8px)" }}>
+					<div className="flex items-center gap-2">
 						<Button
 							type="text"
 							size="small"
@@ -220,38 +214,6 @@ export function DataTable({ cols, rows, maxRows = 5000, pageSize = 50, onRowClic
 					</div>
 				</div>
 			)}
-
-			<style>{`
-				.data-table-wrapper {
-					overflow-x: auto;
-					max-height: 600px;
-					overflow-y: auto;
-					border: 1px solid var(--color-border, #eee);
-					border-radius: var(--radius-sm, 6px);
-				}
-
-				.data-table thead th {
-					position: sticky;
-					top: 0;
-					z-index: 1;
-					background: var(--color-bg-secondary, #f9fbfc);
-				}
-
-				.data-table thead th:hover {
-					background: var(--color-bg-hover, #f0f2f5);
-				}
-
-				.data-table tbody tr:hover {
-					background: var(--color-bg-hover, #f5f7fa);
-				}
-
-				.data-table td {
-					max-width: 300px;
-					overflow: hidden;
-					text-overflow: ellipsis;
-					white-space: nowrap;
-				}
-			`}</style>
 		</div>
 	);
 }

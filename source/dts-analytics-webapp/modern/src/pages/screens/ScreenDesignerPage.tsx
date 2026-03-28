@@ -363,9 +363,10 @@ function ScreenDesignerContent() {
     return (
         <>
         <ScreenRuntimeProvider definitions={state.config.globalVariables}>
+            {/* screen-designer kept for CSS variable scope used by non-migrated children */}
             <div
                 data-testid="analytics-screen-designer"
-                className={`screen-designer ${focusMode ? 'is-focus-mode' : ''}`}
+                className={`screen-designer flex flex-col fixed inset-0 overflow-hidden isolate z-[9999] ${focusMode ? 'is-focus-mode' : ''}`}
             >
                 <ScreenHeader
                     currentPageIndex={currentPageIndex}
@@ -377,14 +378,14 @@ function ScreenDesignerContent() {
                     onToggleInspectorPanel={() => setShowInspectorPanel((prev) => !prev)}
                 />
 
-                <div className="screen-designer-body">
+                <div className="flex flex-1 min-h-0 overflow-hidden">
                     {!focusMode && showLibraryPanel ? (
-                        <div className="designer-side-rail designer-side-rail--library">
+                        <div className="designer-side-rail designer-side-rail--library flex min-h-0 overflow-hidden shrink-0 border-r border-[var(--color-border)]" style={{ width: 'clamp(280px, 18vw, 320px)', flex: '0 0 clamp(280px, 18vw, 320px)' }}>
                             <ComponentLibraryPanel />
                         </div>
                     ) : null}
 
-                    <div className="canvas-area">
+                    <div className="flex-1 flex flex-col min-w-0 min-h-0 relative">
                         <CanvasToolbar />
                         <DesignerCanvas />
                         {(hasMultiPages || pages.length > 0) && (
@@ -402,7 +403,7 @@ function ScreenDesignerContent() {
                     </div>
 
                     {!focusMode && showInspectorPanel ? (
-                        <div className="designer-side-rail designer-side-rail--inspector">
+                        <div className="designer-side-rail designer-side-rail--inspector flex min-h-0 overflow-hidden shrink-0 border-l border-[var(--color-border)]" style={{ width: 'clamp(320px, 22vw, 360px)', flex: '0 0 clamp(320px, 22vw, 360px)' }}>
                             <div className="designer-right-panel">
                                 <div className="designer-right-panel-tabs">
                                     {([

@@ -64,7 +64,7 @@ export function DataSourceStep({ locale, databaseId, tableId, onTableSelected }:
 	return (
 		<div>
 			{tables.state === "error" && <ErrorNotice locale={locale} error={tables.error} />}
-			{tables.state === "loading" && <div className="muted">{t(locale, "loading")}</div>}
+			{tables.state === "loading" && <div className="text-text-secondary">{t(locale, "loading")}</div>}
 			{tables.state === "loaded" && (
 				<TableSearchPicker
 					locale={locale}

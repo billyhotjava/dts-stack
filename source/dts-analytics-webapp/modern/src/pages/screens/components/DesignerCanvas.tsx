@@ -211,27 +211,27 @@ export function DesignerCanvas() {
     }, [config.height, rulerStep]);
 
     return (
-        <div className="canvas-container" ref={containerRef}>
+        <div className="flex-1 min-h-0 overflow-auto bg-[#1a1a2e] grid place-items-center p-10" ref={containerRef}>
             {/* Horizontal ruler */}
-            <div className="canvas-ruler canvas-ruler--h" style={{ paddingLeft: 30 }}>
+            <div className="canvas-ruler canvas-ruler--h shrink-0 relative overflow-hidden bg-[#1a1a2e] h-[22px] border-b border-white/[0.08]" style={{ paddingLeft: 30 }}>
                 <div style={{ position: 'relative', width: config.width * scale, height: '100%', overflow: 'hidden' }}>
                     {hTicks.map(x => (
-                        <span key={x} className="canvas-ruler-tick" style={{ left: x * scale }}>{x}</span>
+                        <span key={x} className="canvas-ruler-tick absolute text-[9px] text-white/35 pointer-events-none whitespace-nowrap bottom-0.5" style={{ left: x * scale }}>{x}</span>
                     ))}
                 </div>
             </div>
-            <div style={{ display: 'flex', flex: 1, minHeight: 0 }}>
+            <div className="flex flex-1 min-h-0">
                 {/* Vertical ruler */}
-                <div className="canvas-ruler canvas-ruler--v">
+                <div className="canvas-ruler canvas-ruler--v shrink-0 relative overflow-hidden bg-[#1a1a2e] w-[30px] border-r border-white/[0.08]">
                     <div style={{ position: 'relative', height: config.height * scale, width: '100%', overflow: 'hidden' }}>
                         {vTicks.map(y => (
-                            <span key={y} className="canvas-ruler-tick" style={{ top: y * scale }}>{y}</span>
+                            <span key={y} className="canvas-ruler-tick absolute text-[9px] text-white/35 pointer-events-none whitespace-nowrap left-0.5" style={{ top: y * scale, writingMode: 'vertical-lr', textOrientation: 'mixed' }}>{y}</span>
                         ))}
                     </div>
                 </div>
-            <div className="canvas-scroll-area" style={{ flex: 1, overflow: 'auto', position: 'relative' }}>
+            <div className="flex-1 overflow-auto relative">
             <div
-                className="canvas-wrapper"
+                className="relative shadow-[0_4px_20px_rgba(0,0,0,0.5)] origin-center"
                 style={{
                     width: config.width * scale,
                     height: config.height * scale,
@@ -242,7 +242,7 @@ export function DesignerCanvas() {
                         drop(node);
                         (canvasRef as React.MutableRefObject<HTMLDivElement | null>).current = node;
                     }}
-                    className="canvas"
+                    className="relative overflow-hidden"
                     style={{
                         width: config.width,
                         height: config.height,
@@ -256,7 +256,7 @@ export function DesignerCanvas() {
                     onClick={handleCanvasClick}
                     onContextMenu={handleContextMenu}
                 >
-                    {showGrid && <div className="canvas-grid" />}
+                    {showGrid && <div className="canvas-grid absolute inset-0 pointer-events-none" />}
 
                     {visibleSortedComponents.map((component) => (
                         <CanvasComponent
@@ -302,12 +302,10 @@ export function DesignerCanvas() {
 
                     {isOver && (
                         <div
+                            className="absolute inset-0 pointer-events-none"
                             style={{
-                                position: 'absolute',
-                                inset: 0,
                                 backgroundColor: 'rgba(99, 102, 241, 0.1)',
                                 border: '2px dashed var(--color-primary)',
-                                pointerEvents: 'none',
                             }}
                         />
                     )}
@@ -320,23 +318,23 @@ export function DesignerCanvas() {
             {/* Right-click context menu */}
             {ctxMenu && (
                 <div
-                    className="canvas-context-menu"
+                    className="canvas-context-menu fixed z-[10000] min-w-[160px] bg-[var(--color-surface-secondary)] border border-[var(--color-border)] rounded-lg shadow-[0_8px_24px_rgba(0,0,0,0.4)] py-1 animate-[ctx-menu-in_0.12s_ease-out]"
                     style={{ left: ctxMenu.x, top: ctxMenu.y }}
                     onClick={(e) => e.stopPropagation()}
                 >
                     {ctxMenu.componentId && selectedIds.length > 0 ? (
                         <>
-                            <button type="button" className="ctx-menu-item" onClick={() => { duplicateSelected(); closeMenu(); }}>
+                            <button type="button" className="ctx-menu-item block w-full py-[7px] px-3.5 border-none bg-transparent text-[var(--color-text-primary)] text-xs text-left cursor-pointer transition-colors duration-100 hover:not-disabled:bg-[var(--color-primary-light)] hover:not-disabled:text-[var(--color-primary)] disabled:text-[var(--color-text-tertiary)] disabled:cursor-default" onClick={() => { duplicateSelected(); closeMenu(); }}>
                                 复制组件
                             </button>
-                            <button type="button" className="ctx-menu-item" onClick={() => { copyComponents(); closeMenu(); }}>
+                            <button type="button" className="ctx-menu-item block w-full py-[7px] px-3.5 border-none bg-transparent text-[var(--color-text-primary)] text-xs text-left cursor-pointer transition-colors duration-100 hover:not-disabled:bg-[var(--color-primary-light)] hover:not-disabled:text-[var(--color-primary)] disabled:text-[var(--color-text-tertiary)] disabled:cursor-default" onClick={() => { copyComponents(); closeMenu(); }}>
                                 拷贝 (Ctrl+C)
                             </button>
-                            <button type="button" className="ctx-menu-item" onClick={() => { deleteComponents(selectedIds); closeMenu(); }}>
+                            <button type="button" className="ctx-menu-item block w-full py-[7px] px-3.5 border-none bg-transparent text-[var(--color-text-primary)] text-xs text-left cursor-pointer transition-colors duration-100 hover:not-disabled:bg-[var(--color-primary-light)] hover:not-disabled:text-[var(--color-primary)] disabled:text-[var(--color-text-tertiary)] disabled:cursor-default" onClick={() => { deleteComponents(selectedIds); closeMenu(); }}>
                                 删除
                             </button>
-                            <div className="ctx-menu-divider" />
-                            <button type="button" className="ctx-menu-item" onClick={() => {
+                            <div className="h-px mx-2 my-1 bg-[var(--color-border)]" />
+                            <button type="button" className="ctx-menu-item block w-full py-[7px] px-3.5 border-none bg-transparent text-[var(--color-text-primary)] text-xs text-left cursor-pointer transition-colors duration-100 hover:not-disabled:bg-[var(--color-primary-light)] hover:not-disabled:text-[var(--color-primary)] disabled:text-[var(--color-text-tertiary)] disabled:cursor-default" onClick={() => {
                                 selectedIds.forEach(id => {
                                     const c = config.components.find(c => c.id === id);
                                     if (c) dispatch({ type: 'REORDER_LAYER', payload: { id, direction: 'top' } });
@@ -345,7 +343,7 @@ export function DesignerCanvas() {
                             }}>
                                 置顶
                             </button>
-                            <button type="button" className="ctx-menu-item" onClick={() => {
+                            <button type="button" className="ctx-menu-item block w-full py-[7px] px-3.5 border-none bg-transparent text-[var(--color-text-primary)] text-xs text-left cursor-pointer transition-colors duration-100 hover:not-disabled:bg-[var(--color-primary-light)] hover:not-disabled:text-[var(--color-primary)] disabled:text-[var(--color-text-tertiary)] disabled:cursor-default" onClick={() => {
                                 selectedIds.forEach(id => {
                                     dispatch({ type: 'REORDER_LAYER', payload: { id, direction: 'bottom' } });
                                 });
@@ -353,8 +351,8 @@ export function DesignerCanvas() {
                             }}>
                                 置底
                             </button>
-                            <div className="ctx-menu-divider" />
-                            <button type="button" className="ctx-menu-item" onClick={() => {
+                            <div className="h-px mx-2 my-1 bg-[var(--color-border)]" />
+                            <button type="button" className="ctx-menu-item block w-full py-[7px] px-3.5 border-none bg-transparent text-[var(--color-text-primary)] text-xs text-left cursor-pointer transition-colors duration-100 hover:not-disabled:bg-[var(--color-primary-light)] hover:not-disabled:text-[var(--color-primary)] disabled:text-[var(--color-text-tertiary)] disabled:cursor-default" onClick={() => {
                                 selectedIds.forEach(id => {
                                     const c = config.components.find(c => c.id === id);
                                     if (c) {
@@ -365,7 +363,7 @@ export function DesignerCanvas() {
                             }}>
                                 {config.components.find(c => c.id === selectedIds[0])?.locked ? '解锁' : '锁定'}
                             </button>
-                            <button type="button" className="ctx-menu-item" onClick={() => {
+                            <button type="button" className="ctx-menu-item block w-full py-[7px] px-3.5 border-none bg-transparent text-[var(--color-text-primary)] text-xs text-left cursor-pointer transition-colors duration-100 hover:not-disabled:bg-[var(--color-primary-light)] hover:not-disabled:text-[var(--color-primary)] disabled:text-[var(--color-text-tertiary)] disabled:cursor-default" onClick={() => {
                                 selectedIds.forEach(id => {
                                     const c = config.components.find(c => c.id === id);
                                     if (c) {
@@ -379,18 +377,18 @@ export function DesignerCanvas() {
                         </>
                     ) : (
                         <>
-                            <button type="button" className="ctx-menu-item" onClick={() => { pasteComponents(); closeMenu(); }} disabled={!clipboard?.length}>
+                            <button type="button" className="ctx-menu-item block w-full py-[7px] px-3.5 border-none bg-transparent text-[var(--color-text-primary)] text-xs text-left cursor-pointer transition-colors duration-100 hover:not-disabled:bg-[var(--color-primary-light)] hover:not-disabled:text-[var(--color-primary)] disabled:text-[var(--color-text-tertiary)] disabled:cursor-default" onClick={() => { pasteComponents(); closeMenu(); }} disabled={!clipboard?.length}>
                                 粘贴 (Ctrl+V)
                             </button>
-                            <div className="ctx-menu-divider" />
-                            <button type="button" className="ctx-menu-item" onClick={() => { undo(); closeMenu(); }}>
+                            <div className="h-px mx-2 my-1 bg-[var(--color-border)]" />
+                            <button type="button" className="ctx-menu-item block w-full py-[7px] px-3.5 border-none bg-transparent text-[var(--color-text-primary)] text-xs text-left cursor-pointer transition-colors duration-100 hover:not-disabled:bg-[var(--color-primary-light)] hover:not-disabled:text-[var(--color-primary)] disabled:text-[var(--color-text-tertiary)] disabled:cursor-default" onClick={() => { undo(); closeMenu(); }}>
                                 撤销 (Ctrl+Z)
                             </button>
-                            <button type="button" className="ctx-menu-item" onClick={() => { redo(); closeMenu(); }}>
+                            <button type="button" className="ctx-menu-item block w-full py-[7px] px-3.5 border-none bg-transparent text-[var(--color-text-primary)] text-xs text-left cursor-pointer transition-colors duration-100 hover:not-disabled:bg-[var(--color-primary-light)] hover:not-disabled:text-[var(--color-primary)] disabled:text-[var(--color-text-tertiary)] disabled:cursor-default" onClick={() => { redo(); closeMenu(); }}>
                                 重做 (Ctrl+Y)
                             </button>
-                            <div className="ctx-menu-divider" />
-                            <button type="button" className="ctx-menu-item" onClick={() => { selectComponents(config.components.map(c => c.id)); closeMenu(); }}>
+                            <div className="h-px mx-2 my-1 bg-[var(--color-border)]" />
+                            <button type="button" className="ctx-menu-item block w-full py-[7px] px-3.5 border-none bg-transparent text-[var(--color-text-primary)] text-xs text-left cursor-pointer transition-colors duration-100 hover:not-disabled:bg-[var(--color-primary-light)] hover:not-disabled:text-[var(--color-primary)] disabled:text-[var(--color-text-tertiary)] disabled:cursor-default" onClick={() => { selectComponents(config.components.map(c => c.id)); closeMenu(); }}>
                                 全选
                             </button>
                         </>

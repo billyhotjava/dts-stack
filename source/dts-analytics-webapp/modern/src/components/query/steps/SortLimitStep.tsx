@@ -26,11 +26,11 @@ function aggLabel(agg: AggregationRow, allFields: MergedField[]): string {
 
 export function SortLimitStep({ locale, allFields, isSummarized, groupByFields, aggregations, orderByKey, orderByDir, limit, onOrderByKeyChange, onOrderByDirChange, onLimitChange }: Props) {
 	return (
-		<div style={{ display: "flex", gap: 12, alignItems: "flex-end", flexWrap: "wrap" }}>
-			<label style={{ flex: 1, minWidth: 200 }}>
-				<div className="muted">{t(locale, "builder.sort")}</div>
+		<div className="flex gap-3 items-end flex-wrap">
+			<label className="flex-1 min-w-[200px]">
+				<div className="text-text-secondary">{t(locale, "builder.sort")}</div>
 				<select
-					className="input"
+					className="w-full box-border px-3 py-2 rounded-sm border border-border-default bg-surface-card text-text-primary"
 					value={orderByKey}
 					onChange={(e) => onOrderByKeyChange(e.target.value)}
 				>
@@ -65,18 +65,18 @@ export function SortLimitStep({ locale, allFields, isSummarized, groupByFields, 
 				</select>
 			</label>
 
-			<label style={{ width: 120 }}>
-				<div className="muted">{t(locale, "builder.direction")}</div>
-				<select className="input" value={orderByDir} onChange={(e) => onOrderByDirChange(e.target.value === "desc" ? "desc" : "asc")}>
+			<label className="w-[120px]">
+				<div className="text-text-secondary">{t(locale, "builder.direction")}</div>
+				<select className="w-full box-border px-3 py-2 rounded-sm border border-border-default bg-surface-card text-text-primary" value={orderByDir} onChange={(e) => onOrderByDirChange(e.target.value === "desc" ? "desc" : "asc")}>
 					<option value="asc">{t(locale, "builder.asc")}</option>
 					<option value="desc">{t(locale, "builder.desc")}</option>
 				</select>
 			</label>
 
-			<label style={{ width: 120 }}>
-				<div className="muted">{t(locale, "builder.limit")}</div>
+			<label className="w-[120px]">
+				<div className="text-text-secondary">{t(locale, "builder.limit")}</div>
 				<input
-					className="input"
+					className="w-full box-border px-3 py-2 rounded-sm border border-border-default bg-surface-card text-text-primary"
 					type="number"
 					min={1}
 					max={10000}

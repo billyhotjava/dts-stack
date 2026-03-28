@@ -23,7 +23,7 @@ export function FieldPicker({ fields, value, onChange, placeholder, disabled, st
 
 	return (
 		<select
-			className="input"
+			className="w-full box-border px-3 py-2 rounded-sm border border-border-default bg-surface-card text-text-primary"
 			style={style}
 			value={currentKey}
 			disabled={disabled}

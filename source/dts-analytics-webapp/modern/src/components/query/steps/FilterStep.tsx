@@ -30,17 +30,17 @@ export function FilterStep({ locale, allFields, filters, onFiltersChange }: Prop
 
 	return (
 		<div>
-			<div className="row" style={{ justifyContent: "space-between" }}>
+			<div className="flex gap-3 flex-wrap items-center justify-between">
 				<strong>{t(locale, "builder.filters")}</strong>
-				<button className="btn" type="button" onClick={addFilter}>
+				<button className="inline-flex items-center justify-center gap-2 px-3 py-2 rounded-sm border border-border-default bg-surface-card text-text-primary font-medium cursor-pointer" type="button" onClick={addFilter}>
 					{t(locale, "builder.addFilter")}
 				</button>
 			</div>
-			<div style={{ height: 8 }} />
+			<div className="h-2" />
 
-			{filters.length === 0 ? <div className="muted">—</div> : null}
+			{filters.length === 0 ? <div className="text-text-secondary">—</div> : null}
 			{filters.map((r) => (
-				<div key={r.id} className="row" style={{ marginBottom: 8 }}>
+				<div key={r.id} className="flex gap-3 flex-wrap items-center mb-2">
 					<FieldPicker
 						fields={allFields}
 						value={r.field}
@@ -49,7 +49,7 @@ export function FilterStep({ locale, allFields, filters, onFiltersChange }: Prop
 						style={{ width: 240 }}
 					/>
 					<select
-						className="input"
+						className="w-full box-border px-3 py-2 rounded-sm border border-border-default bg-surface-card text-text-primary"
 						style={{ width: 160 }}
 						value={r.op}
 						onChange={(e) => updateFilter(r.id, { op: e.target.value as FilterOp })}
@@ -74,14 +74,14 @@ export function FilterStep({ locale, allFields, filters, onFiltersChange }: Prop
 					{isNoValueOp(r.op) ? null : r.op === "between" ? (
 						<>
 							<input
-								className="input"
+								className="w-full box-border px-3 py-2 rounded-sm border border-border-default bg-surface-card text-text-primary"
 								style={{ width: 180 }}
 								value={r.value1}
 								onChange={(e) => updateFilter(r.id, { value1: e.target.value })}
 								placeholder={t(locale, "builder.min")}
 							/>
 							<input
-								className="input"
+								className="w-full box-border px-3 py-2 rounded-sm border border-border-default bg-surface-card text-text-primary"
 								style={{ width: 180 }}
 								value={r.value2}
 								onChange={(e) => updateFilter(r.id, { value2: e.target.value })}
@@ -90,7 +90,7 @@ export function FilterStep({ locale, allFields, filters, onFiltersChange }: Prop
 						</>
 					) : (
 						<input
-							className="input"
+							className="w-full box-border px-3 py-2 rounded-sm border border-border-default bg-surface-card text-text-primary"
 							style={{ width: 360 }}
 							value={r.value1}
 							onChange={(e) => updateFilter(r.id, { value1: e.target.value })}
@@ -99,7 +99,7 @@ export function FilterStep({ locale, allFields, filters, onFiltersChange }: Prop
 					)}
 
 					<button
-						className="btn"
+						className="inline-flex items-center justify-center gap-2 px-3 py-2 rounded-sm border border-border-default bg-surface-card text-text-primary font-medium cursor-pointer"
 						type="button"
 						onClick={() => removeFilter(r.id)}
 						disabled={false}

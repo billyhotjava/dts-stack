@@ -12,7 +12,7 @@ type Props = {
 
 export function PickColumnsStep({ locale, allFields, selectedFields, onSelectedFieldsChange, isSummarized }: Props) {
 	if (isSummarized) {
-		return <div className="muted">{t(locale, "notebook.columns.disabled")}</div>;
+		return <div className="text-text-secondary">{t(locale, "notebook.columns.disabled")}</div>;
 	}
 
 	const toggle = (ref: FieldRef) => {
@@ -37,24 +37,24 @@ export function PickColumnsStep({ locale, allFields, selectedFields, onSelectedF
 
 	return (
 		<div>
-			<div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
-				<span className="muted">{t(locale, "notebook.columns.selected")}: {selectedFields.length}</span>
-				<button className="btn" type="button" onClick={selectAll}>{t(locale, "notebook.columns.selectAll")}</button>
+			<div className="flex justify-between items-center mb-2">
+				<span className="text-text-secondary">{t(locale, "notebook.columns.selected")}: {selectedFields.length}</span>
+				<button className="inline-flex items-center justify-center gap-2 px-3 py-2 rounded-sm border border-border-default bg-surface-card text-text-primary font-medium cursor-pointer" type="button" onClick={selectAll}>{t(locale, "notebook.columns.selectAll")}</button>
 			</div>
 			{Array.from(grouped.entries()).map(([tableName, fields]) => (
-				<div key={tableName} style={{ marginBottom: 8 }}>
-					<div className="muted" style={{ fontSize: 12, marginBottom: 4 }}>{tableName}</div>
-					<div style={{ display: "flex", flexWrap: "wrap", gap: 4 }}>
+				<div key={tableName} className="mb-2">
+					<div className="text-text-secondary text-xs mb-1">{tableName}</div>
+					<div className="flex flex-wrap gap-1">
 						{fields.map((f) => {
 							const ref: FieldRef = { fieldId: f.fieldId, joinAlias: f.tableAlias };
 							const checked = selectedFields.some((s) => fieldRefEquals(s, ref));
 							return (
-								<label key={fieldRefKey(ref)} className="tag" style={{ cursor: "pointer", userSelect: "none" }}>
+								<label key={fieldRefKey(ref)} className="inline-flex items-center px-2 py-0.5 rounded-full text-sm font-medium border border-border-default bg-surface-muted text-text-secondary cursor-pointer select-none">
 									<input
 										type="checkbox"
 										checked={checked}
 										onChange={() => toggle(ref)}
-										style={{ marginRight: 6 }}
+										className="mr-1.5"
 									/>
 									{f.displayName}
 								</label>
