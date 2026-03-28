@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { analyticsApi, type ScreenAclEntry } from '../../../api/analyticsApi';
-import { Modal } from '../../../ui/Modal/Modal';
+import { Modal } from 'antd';
 
 interface ScreenAclPanelProps {
     open: boolean;
@@ -64,7 +64,7 @@ export function ScreenAclPanel({ open, screenId, onClose }: ScreenAclPanelProps)
     };
 
     return (
-        <Modal isOpen={open} onClose={onClose} title="权限管理" size="xl">
+        <Modal open={open} onCancel={onClose} title="权限管理" width={960}>
             {!screenId && <div style={{ fontSize: 12, opacity: 0.8 }}>请先保存大屏后再配置权限。</div>}
             {loading && <div style={{ fontSize: 12, opacity: 0.8, marginBottom: 8 }}>加载中...</div>}
             {error && (

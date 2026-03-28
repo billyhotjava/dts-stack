@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { analyticsApi, type ScreenPublicLinkPolicy } from '../../../api/analyticsApi';
 import { writeTextToClipboard } from '../../../hooks/clipboard';
-import { Modal } from '../../../ui/Modal/Modal';
+import { Modal } from 'antd';
 
 interface ScreenSharePolicyPanelProps {
     open: boolean;
@@ -77,7 +77,7 @@ export function ScreenSharePolicyPanel({ open, screenId, onClose }: ScreenShareP
     }, [open, screenId]);
 
     return (
-        <Modal isOpen={open} onClose={onClose} title="分享策略" size="lg">
+        <Modal open={open} onCancel={onClose} title="分享策略" width={720}>
             {loading && <div style={{ fontSize: 12, opacity: 0.8, marginBottom: 10 }}>加载中...</div>}
             {error && (
                 <div style={{

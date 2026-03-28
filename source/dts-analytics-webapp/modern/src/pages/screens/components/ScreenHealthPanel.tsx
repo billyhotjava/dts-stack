@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { analyticsApi, type ScreenHealthReport, type ScreenHealthStats } from '../../../api/analyticsApi';
-import { Modal } from '../../../ui/Modal/Modal';
+import { Modal } from 'antd';
 
 interface ScreenHealthPanelProps {
     open: boolean;
@@ -186,7 +186,7 @@ export function ScreenHealthPanel({ open, screenId, onClose }: ScreenHealthPanel
     };
 
     return (
-        <Modal isOpen={open} onClose={onClose} title="兼容与性能体检" size="xl">
+        <Modal open={open} onCancel={onClose} title="兼容与性能体检" width={960}>
             <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 10, alignItems: 'center' }}>
                 <div style={{ fontSize: 12, opacity: 0.8 }}>
                     requestId: {report?.requestId || '-'} | baseline: {report?.baselineTargetComponents || 100} 组件

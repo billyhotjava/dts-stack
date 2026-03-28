@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { analyticsApi, type DatabaseListItem, type DatasetCachePolicy, type DatasetCacheStats } from '../../../api/analyticsApi';
-import { Modal } from '../../../ui/Modal/Modal';
+import { Modal } from 'antd';
 
 interface CacheObservabilityPanelProps {
     open: boolean;
@@ -87,7 +87,7 @@ export function CacheObservabilityPanel({ open, onClose }: CacheObservabilityPan
     }, [selectedDbId, open]);
 
     return (
-        <Modal isOpen={open} onClose={onClose} title="缓存命中率观测" size="xl">
+        <Modal open={open} onCancel={onClose} title="缓存命中率观测" width={960}>
             {loading && <div style={{ fontSize: 12, opacity: 0.8, marginBottom: 10 }}>加载中...</div>}
             {error && (
                 <div style={{

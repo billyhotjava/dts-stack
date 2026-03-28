@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { analyticsApi, HttpError, type ScreenEditLock } from '../../../api/analyticsApi';
-import { Modal } from '../../../ui/Modal/Modal';
+import { Modal } from 'antd';
 
 interface ScreenEditLockPanelProps {
     open: boolean;
@@ -125,7 +125,7 @@ export function ScreenEditLockPanel({ open, screenId, lock, onClose, onChange }:
     };
 
     return (
-        <Modal isOpen={open} onClose={onClose} title="编辑锁" size="lg">
+        <Modal open={open} onCancel={onClose} title="编辑锁" width={720}>
             <div style={{ fontSize: 12, opacity: 0.8, marginBottom: 10 }}>
                 用于避免多人同时改同一大屏导致覆盖。持有者可保存/发布，其他用户会收到冲突提示。
             </div>

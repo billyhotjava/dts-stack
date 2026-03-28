@@ -1,5 +1,5 @@
 import { useMemo } from 'react';
-import { Modal } from '../../../ui/Modal/Modal';
+import { Modal } from 'antd';
 import type { ScreenGlobalVariable } from '../types';
 
 interface GlobalVariableManagerProps {
@@ -51,7 +51,7 @@ export function GlobalVariableManager({ open, variables, cycleWarnings, onClose,
     };
 
     return (
-        <Modal isOpen={open} onClose={onClose} title="全局变量中心" size="xl">
+        <Modal open={open} onCancel={onClose} title="全局变量中心" width={960}>
             <div style={{ fontSize: 12, opacity: 0.8, marginBottom: 10 }}>
                 大屏级变量可用于 1-&gt;N 组件联动与页面级筛选，组件数据源参数可绑定这些变量。
             </div>

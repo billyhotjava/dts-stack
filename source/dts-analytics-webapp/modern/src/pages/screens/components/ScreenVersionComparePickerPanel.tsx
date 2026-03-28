@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import type { ScreenVersion } from '../../../api/analyticsApi';
-import { Modal } from '../../../ui/Modal/Modal';
+import { Modal } from 'antd';
 
 interface ScreenVersionComparePickerPanelProps {
     open: boolean;
@@ -35,7 +35,7 @@ export function ScreenVersionComparePickerPanel({
     const valid = fromVersionId.length > 0 && toVersionId.length > 0 && fromVersionId !== toVersionId;
 
     return (
-        <Modal isOpen={open} onClose={onClose} title="选择对比版本" size="md">
+        <Modal open={open} onCancel={onClose} title="选择对比版本" width={520}>
             <div style={{ fontSize: 12, opacity: 0.8, marginBottom: 10 }}>
                 选择起始版本（from）和目标版本（to）进行差异比较。
             </div>

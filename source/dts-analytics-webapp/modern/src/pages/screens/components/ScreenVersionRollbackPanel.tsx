@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import type { ScreenVersion } from '../../../api/analyticsApi';
-import { Modal } from '../../../ui/Modal/Modal';
+import { Modal } from 'antd';
 
 interface ScreenVersionRollbackPanelProps {
     open: boolean;
@@ -33,7 +33,7 @@ export function ScreenVersionRollbackPanel({
     const targetVersion = versions.find((item) => asId(item.id) === targetVersionId);
 
     return (
-        <Modal isOpen={open} onClose={onClose} title="选择回滚版本" size="md">
+        <Modal open={open} onCancel={onClose} title="选择回滚版本" width={520}>
             <div style={{ fontSize: 12, opacity: 0.8, marginBottom: 10 }}>
                 选择目标版本后，草稿与发布版本将回退到该版本配置。
             </div>

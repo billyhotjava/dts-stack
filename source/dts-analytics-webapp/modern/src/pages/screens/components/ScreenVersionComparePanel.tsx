@@ -1,4 +1,4 @@
-import { Modal } from '../../../ui/Modal/Modal';
+import { Modal } from 'antd';
 import type { ScreenVersionDiff } from '../../../api/analyticsApi';
 import type { ReactNode } from 'react';
 import { writeTextToClipboard } from '../../../hooks/clipboard';
@@ -40,7 +40,7 @@ export function ScreenVersionComparePanel({ open, diff, onClose }: ScreenVersion
     const changedTypeComponents = Array.isArray(details.changedTypeComponents) ? details.changedTypeComponents : [];
 
     return (
-        <Modal isOpen={open} onClose={onClose} title="版本差异详情" size="xl">
+        <Modal open={open} onCancel={onClose} title="版本差异详情" width={960}>
             <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginBottom: 10 }}>
                 <button
                     type="button"

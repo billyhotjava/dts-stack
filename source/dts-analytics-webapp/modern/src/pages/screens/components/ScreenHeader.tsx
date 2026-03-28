@@ -26,7 +26,7 @@ import { ScreenVersionComparePickerPanel } from './ScreenVersionComparePickerPan
 import { ScreenVersionRollbackPanel } from './ScreenVersionRollbackPanel';
 import { VersionHistoryPanel } from './VersionHistoryPanel';
 import { ScreenSnapshotPanel } from './ScreenSnapshotPanel';
-import { Modal } from '../../../ui/Modal/Modal';
+import { Modal } from 'antd';
 import { buildExploreSessionSteps } from './ScreenHeader.helpers';
 import { buildScreenPayload, normalizeScreenConfig, validateScreenPayload } from '../specV2';
 import { commitScreenPageDraft, materializeScreenPage } from '../screenPageState';
@@ -2619,10 +2619,10 @@ export function ScreenHeader({
             />
 
             <Modal
-                isOpen={showSaveTemplateDialog}
-                onClose={() => setShowSaveTemplateDialog(false)}
+                open={showSaveTemplateDialog}
+                onCancel={() => setShowSaveTemplateDialog(false)}
                 title="保存为模板"
-                size="md"
+                width={520}
                 footer={(
                     <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
                         <button type="button" className="header-btn" onClick={() => setShowSaveTemplateDialog(false)}>
@@ -2679,10 +2679,10 @@ export function ScreenHeader({
             </Modal>
 
             <Modal
-                isOpen={showExploreSessionDialog}
-                onClose={() => setShowExploreSessionDialog(false)}
+                open={showExploreSessionDialog}
+                onCancel={() => setShowExploreSessionDialog(false)}
                 title="沉淀分析会话"
-                size="lg"
+                width={720}
                 footer={(
                     <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
                         <button type="button" className="header-btn" onClick={() => setShowExploreSessionDialog(false)}>

@@ -1,5 +1,5 @@
 import { Fragment, useMemo, useState, type CSSProperties } from 'react';
-import { Modal } from '../../../ui/Modal/Modal';
+import { Modal } from 'antd';
 import { useScreenRuntime } from '../ScreenRuntimeContext';
 
 interface InteractionDebugPanelProps {
@@ -17,7 +17,7 @@ export function InteractionDebugPanel({ open, cycleWarnings, onClose }: Interact
     ), [events, kindFilter]);
 
     return (
-        <Modal isOpen={open} onClose={onClose} title="联动调试台" size="xl">
+        <Modal open={open} onCancel={onClose} title="联动调试台" width={960}>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
                 <section style={{ border: '1px solid rgba(148,163,184,0.25)', borderRadius: 8, padding: 10 }}>
                     <div style={{ fontSize: 12, fontWeight: 600, marginBottom: 8 }}>变量实时值</div>

@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Modal } from '../../../ui/Modal/Modal';
+import { Modal } from 'antd';
 import type { ScreenConfig } from '../types';
 
 type ImportAction = 'replace' | 'create-screen' | 'register-template';
@@ -57,10 +57,10 @@ export function ImportPreviewModal({
 
 	return (
 		<Modal
-			isOpen={isOpen}
-			onClose={onClose}
+			open={isOpen}
+			onCancel={onClose}
 			title="导入预览"
-			size="md"
+			width={520}
 			footer={
 				<div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
 					<button type="button" className="header-btn" onClick={onClose}>取消</button>

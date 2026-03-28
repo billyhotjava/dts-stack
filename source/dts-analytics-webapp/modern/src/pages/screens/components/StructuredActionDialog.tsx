@@ -1,4 +1,4 @@
-import { Modal } from '../../../ui/Modal/Modal';
+import { Modal } from 'antd';
 
 export type StructuredActionField = {
     key: string;
@@ -37,11 +37,10 @@ export function StructuredActionDialog({
 }: StructuredActionDialogProps) {
     return (
         <Modal
-            isOpen={open}
-            onClose={onClose}
+            open={open}
+            onCancel={onClose}
             title={title}
-            description={description}
-            size="lg"
+            width={720}
             footer={(
                 <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
                     <button type="button" className="template-btn secondary" onClick={onClose} disabled={loading}>

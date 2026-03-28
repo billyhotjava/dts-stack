@@ -5,7 +5,7 @@ import {
     type ScreenComment,
 } from '../../../api/analyticsApi';
 import type { ScreenComponent } from '../types';
-import { Modal } from '../../../ui/Modal/Modal';
+import { Modal } from 'antd';
 
 interface ScreenCollaborationPanelProps {
     open: boolean;
@@ -809,7 +809,7 @@ export function ScreenCollaborationPanel({
     }, [open, screenId, presenceTtlSeconds]);
 
     return (
-        <Modal isOpen={open} onClose={onClose} title="协作批注中心" size="xl">
+        <Modal open={open} onCancel={onClose} title="协作批注中心" width={960}>
             <div style={{ fontSize: 12, opacity: 0.8, marginBottom: 10 }}>
                 轻协作模式：支持对大屏或指定组件添加评论，按状态跟踪“待处理/已解决”。
             </div>

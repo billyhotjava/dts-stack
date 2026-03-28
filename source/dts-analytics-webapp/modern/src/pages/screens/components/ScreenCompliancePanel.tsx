@@ -4,7 +4,7 @@ import {
     type ScreenCompliancePolicy,
     type ScreenComplianceReport,
 } from '../../../api/analyticsApi';
-import { Modal } from '../../../ui/Modal/Modal';
+import { Modal } from 'antd';
 
 interface ScreenCompliancePanelProps {
     open: boolean;
@@ -84,7 +84,7 @@ export function ScreenCompliancePanel({ open, screenId, onClose }: ScreenComplia
     }, [open, screenId]);
 
     return (
-        <Modal isOpen={open} onClose={onClose} title="合规策略中心" size="xl">
+        <Modal open={open} onCancel={onClose} title="合规策略中心" width={960}>
             {loading && <div style={{ fontSize: 12, opacity: 0.8, marginBottom: 10 }}>加载中...</div>}
             {error && (
                 <div style={{

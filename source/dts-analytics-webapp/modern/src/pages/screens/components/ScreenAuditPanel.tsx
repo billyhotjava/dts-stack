@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState, type CSSProperties } from 'react';
 import { analyticsApi, type ScreenAuditEntry } from '../../../api/analyticsApi';
-import { Modal } from '../../../ui/Modal/Modal';
+import { Modal } from 'antd';
 
 interface ScreenAuditPanelProps {
     open: boolean;
@@ -85,7 +85,7 @@ export function ScreenAuditPanel({ open, screenId, onClose }: ScreenAuditPanelPr
     );
 
     return (
-        <Modal isOpen={open} onClose={onClose} title="操作审计链路" size="xl">
+        <Modal open={open} onCancel={onClose} title="操作审计链路" width={960}>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(120px, 1fr))', gap: 8, marginBottom: 10 }}>
                 <MetricCell title="审计总数" value={String(rows.length)} />
                 <MetricCell title="筛选后" value={String(filteredRows.length)} />

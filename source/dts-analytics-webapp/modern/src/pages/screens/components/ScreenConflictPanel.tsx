@@ -1,4 +1,4 @@
-import { Modal } from '../../../ui/Modal/Modal';
+import { Modal } from 'antd';
 
 export interface ScreenUpdateConflict {
     code: string;
@@ -28,7 +28,7 @@ export function ScreenConflictPanel({
     const fields = conflict?.fields ?? [];
 
     return (
-        <Modal isOpen={open} onClose={onClose} title="检测到并发编辑冲突" size="md">
+        <Modal open={open} onCancel={onClose} title="检测到并发编辑冲突" width={520}>
             <div style={{ fontSize: 12, opacity: 0.85, marginBottom: 10, lineHeight: 1.6 }}>
                 {conflict?.message || '当前草稿已被其他用户更新，且与你本地改动在相同字段/组件上发生重叠。'}
             </div>
