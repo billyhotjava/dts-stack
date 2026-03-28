@@ -24,13 +24,23 @@ function messageFromError(error: unknown): string {
 
 export function ErrorNotice({ locale, error }: Props) {
 	const message = messageFromError(error);
-	const isAuth = error instanceof AuthError || message.includes("HTTP 401") || message.includes("HTTP 403");
+	const is403 = (error instanceof HttpError && error.status === 403) || message.includes("HTTP 403");
+	const isAuth = error instanceof AuthError || message.includes("HTTP 401") || is403;
 
 	if (!isAuth) {
 		return (
 			<div className="card">
 				<div className="muted">{t(locale, "error")}</div>
 				<div style={{ marginTop: 8, whiteSpace: "pre-wrap" }}>{message}</div>
+			</div>
+		);
+	}
+
+	if (is403) {
+		return (
+			<div className="card" style={{ textAlign: "center", padding: "24px 16px" }}>
+				<div style={{ fontSize: 32, opacity: 0.3, marginBottom: 8 }}>&#128274;</div>
+				<div style={{ color: "#666" }}>{t(locale, "auth.forbidden")}</div>
 			</div>
 		);
 	}
