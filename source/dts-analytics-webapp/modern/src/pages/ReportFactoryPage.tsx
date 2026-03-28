@@ -5,7 +5,7 @@ import { PageContainer, PageHeader } from "../components/PageContainer/PageConta
 import { getEffectiveLocale, t, type Locale } from "../i18n";
 import { Badge } from "../ui/Badge/Badge";
 import { Button } from "../ui/Button/Button";
-import { Card, CardBody, CardFooter, CardHeader } from "../ui/Card/Card";
+import { Card } from "antd";
 import { Input, TextArea } from "../ui/Input/Input";
 import { NativeSelect } from "../ui/Input/Select";
 import { Spinner } from "../ui/Loading/Spinner";
@@ -200,9 +200,7 @@ export default function ReportFactoryPage() {
 			)}
 
 			<div className="grid2" style={{ marginBottom: "var(--spacing-lg)" }}>
-				<Card>
-					<CardHeader title="模板管理" />
-					<CardBody>
+				<Card title="模板管理">
 						<div className="col" style={{ gap: "var(--spacing-sm)" }}>
 							<Input
 								label={t(locale, "common.name")}
@@ -223,17 +221,14 @@ export default function ReportFactoryPage() {
 								placeholder="问题背景,关键洞察,风险与建议"
 							/>
 						</div>
-					</CardBody>
-					<CardFooter align="right">
+					<div style={{ display: "flex", justifyContent: "flex-end", paddingTop: "var(--spacing-md)", marginTop: "var(--spacing-md)", borderTop: "1px solid var(--color-border)" }}>
 						<Button variant="primary" onClick={createTemplate} loading={saving}>
 							创建模板
 						</Button>
-					</CardFooter>
+					</div>
 				</Card>
 
-				<Card>
-					<CardHeader title="报告生成" />
-					<CardBody>
+				<Card title="报告生成">
 						<div className="col" style={{ gap: "var(--spacing-sm)" }}>
 							<NativeSelect
 								label="模板"
@@ -268,21 +263,18 @@ export default function ReportFactoryPage() {
 								rows={3}
 							/>
 						</div>
-					</CardBody>
-					<CardFooter align="right">
+					<div style={{ display: "flex", justifyContent: "flex-end", paddingTop: "var(--spacing-md)", marginTop: "var(--spacing-md)", borderTop: "1px solid var(--color-border)" }}>
 						<Button variant="primary" onClick={generateReport} loading={saving}>
 							生成报告
 						</Button>
-					</CardFooter>
+					</div>
 				</Card>
 			</div>
 
-			<Card style={{ marginBottom: "var(--spacing-lg)" }}>
-				<CardHeader
-					title="模板列表"
-					action={templates.state === "loaded" ? <Badge>{templates.value.length}</Badge> : null}
-				/>
-				<CardBody>
+			<Card style={{ marginBottom: "var(--spacing-lg)" }}
+				title="模板列表"
+				extra={templates.state === "loaded" ? <Badge>{templates.value.length}</Badge> : null}
+			>
 					{templates.state === "loading" && (
 						<div className="loading-container" style={{ padding: "var(--spacing-lg)" }}>
 							<Spinner size="md" />
@@ -314,16 +306,13 @@ export default function ReportFactoryPage() {
 							</tbody>
 						</table>
 					)}
-				</CardBody>
 			</Card>
 
 			<div className="grid2">
-				<Card>
-					<CardHeader
-						title="生成任务"
-						action={runs.state === "loaded" ? <Badge>{runs.value.length}</Badge> : null}
-					/>
-					<CardBody>
+				<Card
+					title="生成任务"
+					extra={runs.state === "loaded" ? <Badge>{runs.value.length}</Badge> : null}
+				>
 						{runs.state === "loading" && (
 							<div className="loading-container" style={{ padding: "var(--spacing-lg)" }}>
 								<Spinner size="md" />
@@ -380,12 +369,9 @@ export default function ReportFactoryPage() {
 								</tbody>
 							</table>
 						)}
-					</CardBody>
 				</Card>
 
-				<Card>
-					<CardHeader title="任务详情" />
-					<CardBody>
+				<Card title="任务详情">
 						{selectedRun == null && <div className="muted">点击左侧“详情”查看任务信息。</div>}
 						{selectedRun?.state === "loading" && (
 							<div className="loading-container" style={{ padding: "var(--spacing-lg)" }}>
@@ -414,7 +400,6 @@ export default function ReportFactoryPage() {
 								}, null, 2)}
 							</pre>
 						)}
-					</CardBody>
 				</Card>
 			</div>
 		</PageContainer>

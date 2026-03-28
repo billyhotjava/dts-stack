@@ -10,7 +10,7 @@ import {
 import { EmptyState } from "../components/EmptyState";
 import { ErrorNotice } from "../components/ErrorNotice";
 import { PageContainer, PageHeader, Breadcrumb } from "../components/PageContainer/PageContainer";
-import { Card, CardHeader, CardBody, CardFooter } from "../ui/Card/Card";
+import { Card } from "antd";
 import { Button } from "../ui/Button/Button";
 import { Input } from "../ui/Input/Input";
 import { NativeSelect } from "../ui/Input/Select";
@@ -217,9 +217,7 @@ export default function DashboardEditorPage() {
 			{cards.state === "error" && <ErrorNotice locale={locale} error={cards.error} />}
 			{saveState?.state === "error" && <ErrorNotice locale={locale} error={saveState.error} />}
 
-			<Card style={{ marginBottom: "var(--spacing-lg)" }}>
-				<CardHeader title={t(locale, "dashboards.settings")} />
-				<CardBody>
+			<Card style={{ marginBottom: "var(--spacing-lg)" }} title={t(locale, "dashboards.settings")}>
 					<div className="form-grid" style={{ gridTemplateColumns: "1fr 260px" }}>
 						<Input
 							label={t(locale, "common.name")}
@@ -245,8 +243,7 @@ export default function DashboardEditorPage() {
 							placeholder={t(locale, "common.descPlaceholder")}
 						/>
 					</div>
-				</CardBody>
-				<CardFooter>
+				<div style={{ display: "flex", justifyContent: "flex-end", paddingTop: "var(--spacing-md)", marginTop: "var(--spacing-md)", borderTop: "1px solid var(--color-border)" }}>
 					<Button
 						variant="primary"
 						icon={<SaveIcon />}
@@ -256,17 +253,15 @@ export default function DashboardEditorPage() {
 					>
 						{t(locale, "dashboards.save")}
 					</Button>
-				</CardFooter>
+				</div>
 			</Card>
 
-			<Card>
-				<CardHeader
-					title={t(locale, "common.cards")}
-					action={
+			<Card
+				title={t(locale, "common.cards")}
+				extra={
 						<Badge variant="default">{dashcards.length}</Badge>
 					}
-				/>
-				<CardBody>
+			>
 					<div style={{ display: "flex", gap: "var(--spacing-sm)", alignItems: "flex-end", marginBottom: "var(--spacing-md)" }}>
 						<div style={{ flex: 1, maxWidth: 300 }}>
 							<NativeSelect
@@ -334,7 +329,6 @@ export default function DashboardEditorPage() {
 							</tbody>
 						</table>
 					)}
-				</CardBody>
 			</Card>
 
 			<style>{`

@@ -4,7 +4,7 @@ import { analyticsApi, type CardListItem, type DashboardListItem } from "../api/
 import { PageContainer, PageHeader } from "../components/PageContainer/PageContainer";
 import { EmptyState } from "../components/EmptyState";
 import { ErrorNotice } from "../components/ErrorNotice";
-import { Card, CardHeader, CardBody } from "../ui/Card/Card";
+import { Card } from "antd";
 import { Button } from "../ui/Button/Button";
 import { Spinner } from "../ui/Loading/Spinner";
 import { getEffectiveLocale, t, type Locale } from "../i18n";
@@ -86,7 +86,6 @@ export default function AnalyzePage() {
 			/>
 
 			<Card style={{ marginBottom: "var(--spacing-lg)" }}>
-				<CardBody>
 					<div style={{ display: "flex", gap: "var(--spacing-sm)", flexWrap: "wrap" }}>
 						<Link to="/questions/new">
 							<Button variant="primary" icon={<PlusIcon />}>
@@ -104,22 +103,19 @@ export default function AnalyzePage() {
 							</Button>
 						</Link>
 					</div>
-				</CardBody>
 			</Card>
 
 			<div className="grid2">
-				<Card>
-					<CardHeader
-						title={t(locale, "dashboards.title")}
-						action={
-							<Link to="/dashboards">
-								<Button variant="tertiary" size="sm" icon={<ArrowRightIcon />} iconPosition="right">
-									{t(locale, "common.open")}
-								</Button>
-							</Link>
-						}
-					/>
-					<CardBody>
+				<Card
+					title={t(locale, "dashboards.title")}
+					extra={
+						<Link to="/dashboards">
+							<Button variant="tertiary" size="sm" icon={<ArrowRightIcon />} iconPosition="right">
+								{t(locale, "common.open")}
+							</Button>
+						</Link>
+					}
+				>
 						{dashboards.state === "loading" && (
 							<div className="loading-container" style={{ padding: "var(--spacing-lg)" }}>
 								<Spinner size="md" />
@@ -158,21 +154,18 @@ export default function AnalyzePage() {
 								</tbody>
 							</table>
 						)}
-					</CardBody>
 				</Card>
 
-				<Card>
-					<CardHeader
-						title={t(locale, "questions.title")}
-						action={
-							<Link to="/questions">
-								<Button variant="tertiary" size="sm" icon={<ArrowRightIcon />} iconPosition="right">
-									{t(locale, "common.open")}
-								</Button>
-							</Link>
-						}
-					/>
-					<CardBody>
+				<Card
+					title={t(locale, "questions.title")}
+					extra={
+						<Link to="/questions">
+							<Button variant="tertiary" size="sm" icon={<ArrowRightIcon />} iconPosition="right">
+								{t(locale, "common.open")}
+							</Button>
+						</Link>
+					}
+				>
 						{cards.state === "loading" && (
 							<div className="loading-container" style={{ padding: "var(--spacing-lg)" }}>
 								<Spinner size="md" />
@@ -211,7 +204,6 @@ export default function AnalyzePage() {
 								</tbody>
 							</table>
 						)}
-					</CardBody>
 				</Card>
 			</div>
 		</PageContainer>

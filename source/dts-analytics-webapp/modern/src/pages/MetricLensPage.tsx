@@ -5,7 +5,7 @@ import { PageContainer, PageHeader } from "../components/PageContainer/PageConta
 import { getEffectiveLocale, t, type Locale } from "../i18n";
 import { Badge } from "../ui/Badge/Badge";
 import { Button } from "../ui/Button/Button";
-import { Card, CardBody, CardHeader } from "../ui/Card/Card";
+import { Card } from "antd";
 import { NativeSelect } from "../ui/Input/Select";
 import { Spinner } from "../ui/Loading/Spinner";
 import "./page.css";
@@ -115,12 +115,10 @@ export default function MetricLensPage() {
 			/>
 
 			<div className="grid2" style={{ marginBottom: "var(--spacing-lg)" }}>
-				<Card>
-					<CardHeader
-						title="指标清单"
-						action={listState.state === "loaded" ? <Badge>{listState.value.length}</Badge> : null}
-					/>
-					<CardBody>
+				<Card
+					title="指标清单"
+					extra={listState.state === "loaded" ? <Badge>{listState.value.length}</Badge> : null}
+				>
 						{listState.state === "loading" && (
 							<div className="loading-container" style={{ padding: "var(--spacing-lg)" }}>
 								<Spinner size="md" />
@@ -165,12 +163,9 @@ export default function MetricLensPage() {
 								</table>
 							</>
 						)}
-					</CardBody>
 				</Card>
 
-				<Card>
-					<CardHeader title="冲突检测" />
-					<CardBody>
+				<Card title="冲突检测">
 						{conflictState.state === "loading" && (
 							<div className="loading-container" style={{ padding: "var(--spacing-lg)" }}>
 								<Spinner size="md" />
@@ -200,14 +195,11 @@ export default function MetricLensPage() {
 								</tbody>
 							</table>
 						)}
-					</CardBody>
 				</Card>
 			</div>
 
 			<div className="grid2">
-				<Card>
-					<CardHeader title="指标透视详情" />
-					<CardBody>
+				<Card title="指标透视详情">
 						{detailState == null && <div className="muted">选择指标查看详情。</div>}
 						{detailState?.state === "loading" && (
 							<div className="loading-container" style={{ padding: "var(--spacing-lg)" }}>
@@ -236,12 +228,9 @@ export default function MetricLensPage() {
 								}, null, 2)}
 							</pre>
 						)}
-					</CardBody>
 				</Card>
 
-				<Card>
-					<CardHeader title="版本对比" />
-					<CardBody>
+				<Card title="版本对比">
 						<div className="col" style={{ gap: "var(--spacing-sm)", marginBottom: "var(--spacing-sm)" }}>
 							<NativeSelect
 								label="左版本"
@@ -278,7 +267,6 @@ export default function MetricLensPage() {
 								{JSON.stringify(compareState.value, null, 2)}
 							</pre>
 						)}
-					</CardBody>
 				</Card>
 			</div>
 		</PageContainer>

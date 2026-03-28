@@ -5,7 +5,7 @@ import { ChartRenderer, type VisualizationType, type VisualizationSettings } fro
 import { PageContainer, PageHeader, Breadcrumb } from "../components/PageContainer/PageContainer";
 import { EmptyState } from "../components/EmptyState";
 import { ErrorNotice } from "../components/ErrorNotice";
-import { Card, CardHeader, CardBody } from "../ui/Card/Card";
+import { Card } from "antd";
 import { Badge } from "../ui/Badge/Badge";
 import { Spinner } from "../ui/Loading/Spinner";
 import { getEffectiveLocale, t, type Locale } from "../i18n";
@@ -97,9 +97,7 @@ export default function PublicDashboardPage() {
 			{dashboard.state === "error" && <ErrorNotice locale={locale} error={dashboard.error} />}
 
 			<Card style={{ marginBottom: "var(--spacing-lg)" }}>
-				<CardBody>
 					<p className="text-muted" style={{ margin: 0 }}>{t(locale, "share.note")}</p>
-				</CardBody>
 			</Card>
 
 			{dashboard.state === "loaded" && dashcards.length === 0 && <EmptyState title={t(locale, "common.empty")} />}
@@ -122,12 +120,10 @@ export default function PublicDashboardPage() {
 							typeof dc.row === "number" && typeof dc.size_y === "number" ? `${dc.row + 1} / span ${dc.size_y}` : "auto";
 						const result = dashcardResults[dc.id];
 						return (
-							<Card key={String(dc.id)} style={{ gridColumn, gridRow, overflow: "hidden" }}>
-								<CardHeader
-									title={cardId ? <Link to={`/questions/${cardId}`}>{String(name)}</Link> : String(name)}
-									action={<Badge variant="default" size="sm">card</Badge>}
-								/>
-								<CardBody>
+							<Card key={String(dc.id)} style={{ gridColumn, gridRow, overflow: "hidden" }}
+								title={cardId ? <Link to={`/questions/${cardId}`}>{String(name)}</Link> : String(name)}
+								extra={<Badge variant="default" size="sm">card</Badge>}
+							>
 									{!result || result.state === "loading" ? (
 										<div className="loading-container" style={{ padding: "var(--spacing-md)" }}>
 											<Spinner size="sm" />
@@ -146,7 +142,6 @@ export default function PublicDashboardPage() {
 									) : (
 										<EmptyState title={t(locale, "common.empty")} />
 									)}
-								</CardBody>
 							</Card>
 						);
 					})}

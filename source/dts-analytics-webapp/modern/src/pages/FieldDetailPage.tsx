@@ -4,7 +4,7 @@ import { analyticsApi, type FieldDetail, type FieldValuesResponse } from "../api
 import { PageContainer, PageHeader, Breadcrumb } from "../components/PageContainer/PageContainer";
 import { EmptyState } from "../components/EmptyState";
 import { ErrorNotice } from "../components/ErrorNotice";
-import { Card, CardHeader, CardBody } from "../ui/Card/Card";
+import { Card } from "antd";
 import { Badge } from "../ui/Badge/Badge";
 import { Spinner } from "../ui/Loading/Spinner";
 import { getEffectiveLocale, t, type Locale } from "../i18n";
@@ -86,18 +86,14 @@ export default function FieldDetailPage() {
 
 			{fieldState.state === "loading" && (
 				<Card>
-					<CardBody>
 						<div className="loading-container" style={{ padding: "var(--spacing-xl)" }}>
 							<Spinner size="lg" />
 						</div>
-					</CardBody>
 				</Card>
 			)}
 			{fieldState.state === "error" && <ErrorNotice locale={locale} error={fieldState.error} />}
 			{fieldState.state === "loaded" && (
-				<Card style={{ marginBottom: "var(--spacing-lg)" }}>
-					<CardHeader title="Field Details" />
-					<CardBody>
+				<Card style={{ marginBottom: "var(--spacing-lg)" }} title="Field Details">
 						<div className="field-details">
 							<div className="field-detail-row">
 								<span className="field-detail-label">{t(locale, "common.name")}</span>
@@ -126,14 +122,12 @@ export default function FieldDetailPage() {
 								<span className="field-detail-value">{String(fieldState.value.visibility_type ?? "-")}</span>
 							</div>
 						</div>
-					</CardBody>
 				</Card>
 			)}
 
-			<Card>
-				<CardHeader
-					title={t(locale, "field.values")}
-					action={
+			<Card
+				title={t(locale, "field.values")}
+				extra={
 						valuesState.state === "loaded" && (
 							<Badge variant="default">
 								{Array.isArray(valuesState.value.values) ? valuesState.value.values.length : 0}
@@ -141,8 +135,7 @@ export default function FieldDetailPage() {
 							</Badge>
 						)
 					}
-				/>
-				<CardBody>
+			>
 					{valuesState.state === "loading" && (
 						<div className="loading-container" style={{ padding: "var(--spacing-lg)" }}>
 							<Spinner size="md" />
@@ -161,7 +154,6 @@ export default function FieldDetailPage() {
 							))}
 						</div>
 					)}
-				</CardBody>
 			</Card>
 
 			<style>{`

@@ -3,7 +3,7 @@ import { Link } from "react-router";
 import { analyticsApi, type CurrentUser, type DashboardListItem, type CardListItem, type ScreenListItem } from "../api/analyticsApi";
 import { ErrorNotice } from "../components/ErrorNotice";
 import { PageContainer } from "../components/PageContainer/PageContainer";
-import { Card, CardHeader, CardBody } from "../ui/Card/Card";
+import { Card } from "antd";
 import { Button } from "../ui/Button/Button";
 import { Badge } from "../ui/Badge/Badge";
 import { Spinner } from "../ui/Loading/Spinner";
@@ -211,18 +211,16 @@ export default function HomePage() {
 			{/* Recent Items */}
 			<div className="grid3" style={{ marginTop: "var(--spacing-xl)" }}>
 				{/* Recent Dashboards */}
-				<Card>
-					<CardHeader
-						title={t(locale, "home.recentDashboards")}
-						action={
-							<Link to="/dashboards">
-								<Button variant="tertiary" size="sm" icon={<ArrowRightIcon />} iconPosition="right">
-									{t(locale, "common.viewAll")}
-								</Button>
-							</Link>
-						}
-					/>
-					<CardBody>
+				<Card
+					title={t(locale, "home.recentDashboards")}
+					extra={
+						<Link to="/dashboards">
+							<Button variant="tertiary" size="sm" icon={<ArrowRightIcon />} iconPosition="right">
+								{t(locale, "common.viewAll")}
+							</Button>
+						</Link>
+					}
+				>
 						{dashboards.state === "loading" && (
 							<div className="loading-state">
 								<Spinner size="md" />
@@ -253,22 +251,19 @@ export default function HomePage() {
 								))}
 							</ul>
 						)}
-					</CardBody>
 				</Card>
 
 				{/* Recent Questions */}
-				<Card>
-					<CardHeader
-						title={t(locale, "home.recentQuestions")}
-						action={
-							<Link to="/questions">
-								<Button variant="tertiary" size="sm" icon={<ArrowRightIcon />} iconPosition="right">
-									{t(locale, "common.viewAll")}
-								</Button>
-							</Link>
-						}
-					/>
-					<CardBody>
+				<Card
+					title={t(locale, "home.recentQuestions")}
+					extra={
+						<Link to="/questions">
+							<Button variant="tertiary" size="sm" icon={<ArrowRightIcon />} iconPosition="right">
+								{t(locale, "common.viewAll")}
+							</Button>
+						</Link>
+					}
+				>
 						{questions.state === "loading" && (
 							<div className="loading-state">
 								<Spinner size="md" />
@@ -299,22 +294,19 @@ export default function HomePage() {
 								))}
 							</ul>
 						)}
-					</CardBody>
 				</Card>
 
 				{/* Published Screens */}
-				<Card>
-					<CardHeader
-						title={t(locale, "home.publishedScreens")}
-						action={
-							<Link to="/screens">
-								<Button variant="tertiary" size="sm" icon={<ArrowRightIcon />} iconPosition="right">
-									{t(locale, "common.viewAll")}
-								</Button>
-							</Link>
-						}
-					/>
-					<CardBody>
+				<Card
+					title={t(locale, "home.publishedScreens")}
+					extra={
+						<Link to="/screens">
+							<Button variant="tertiary" size="sm" icon={<ArrowRightIcon />} iconPosition="right">
+								{t(locale, "common.viewAll")}
+							</Button>
+						</Link>
+					}
+				>
 						{screens.state === "loading" && (
 							<div className="loading-state">
 								<Spinner size="md" />
@@ -353,7 +345,6 @@ export default function HomePage() {
 								))}
 							</ul>
 						)}
-					</CardBody>
 				</Card>
 			</div>
 

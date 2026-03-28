@@ -4,7 +4,7 @@ import { analyticsApi, type DashboardCard, type DashboardDetail, type DashboardQ
 import { PageContainer, PageHeader } from "../components/PageContainer/PageContainer";
 import { ErrorNotice } from "../components/ErrorNotice";
 import { ChartRenderer, type VisualizationType, type VisualizationSettings } from "../components/charts";
-import { Card, CardHeader, CardBody, CollapsibleCard } from "../ui/Card/Card";
+import { Card, Collapse } from "antd";
 import { Button } from "../ui/Button/Button";
 import { Input } from "../ui/Input/Input";
 import { NativeSelect } from "../ui/Input/Select";
@@ -227,10 +227,9 @@ export default function DashboardDetailPage() {
 					/>
 
 					{shareUuid && (
-						<Card style={{ marginBottom: "var(--spacing-lg)" }}>
-							<CardHeader
-								title={t(locale, "share.title")}
-								action={
+						<Card style={{ marginBottom: "var(--spacing-lg)" }}
+							title={t(locale, "share.title")}
+							extra={
 									<Button
 										variant="secondary"
 										size="sm"
@@ -249,8 +248,7 @@ export default function DashboardDetailPage() {
 										{shareCopied ? t(locale, "share.copied") : t(locale, "share.copy")}
 									</Button>
 								}
-							/>
-							<CardBody>
+						>
 								<Input
 									readOnly
 									value={`${window.location.origin}/analytics/public/dashboard/${encodeURIComponent(shareUuid)}`}
@@ -258,22 +256,18 @@ export default function DashboardDetailPage() {
 								<p className="text-muted" style={{ marginTop: "var(--spacing-sm)", fontSize: "var(--font-size-sm)" }}>
 									{t(locale, "share.note")}
 								</p>
-							</CardBody>
 						</Card>
 					)}
 
 					{dashboardParams.length > 0 && (
-						<Card style={{ marginBottom: "var(--spacing-lg)" }}>
-							<CardHeader
-								title={t(locale, "filter.title")}
-								icon={<FilterIcon />}
-								action={
+						<Card style={{ marginBottom: "var(--spacing-lg)" }}
+							title={<span style={{ display: "inline-flex", alignItems: "center", gap: 8 }}><FilterIcon />{t(locale, "filter.title")}</span>}
+							extra={
 									<Button variant="tertiary" size="sm" onClick={() => setParamValues({})}>
 										{t(locale, "filter.clear")}
 									</Button>
 								}
-							/>
-							<CardBody>
+						>
 								<div style={{ display: "flex", flexWrap: "wrap", gap: "var(--spacing-md)" }}>
 									{dashboardParams.map((p) => (
 										<div key={p.id} style={{ minWidth: 200, flex: "1 1 200px", maxWidth: 300 }}>
@@ -289,7 +283,6 @@ export default function DashboardDetailPage() {
 										</div>
 									))}
 								</div>
-							</CardBody>
 						</Card>
 					)}
 
@@ -314,12 +307,10 @@ export default function DashboardDetailPage() {
 							const result = dashcardResults[dc.id];
 
 							return (
-								<Card key={dc.id} style={{ gridColumn, gridRow, overflow: "hidden" }}>
-									<CardHeader
-										title={cardId ? <Link to={`/questions/${cardId}`}>{String(name)}</Link> : String(name)}
-										action={<Badge variant="default" size="sm">card</Badge>}
-									/>
-									<CardBody>
+								<Card key={dc.id} style={{ gridColumn, gridRow, overflow: "hidden" }}
+									title={cardId ? <Link to={`/questions/${cardId}`}>{String(name)}</Link> : String(name)}
+									extra={<Badge variant="default" size="sm">card</Badge>}
+								>
 										{!result || result.state === "loading" ? (
 											<div className="loading-container" style={{ padding: "var(--spacing-md)" }}>
 												<Spinner size="sm" />
@@ -336,21 +327,22 @@ export default function DashboardDetailPage() {
 												settings={(card?.visualization_settings as VisualizationSettings) || {}}
 											/>
 										)}
-									</CardBody>
 								</Card>
 							);
 						})}
 					</div>
 
-					<CollapsibleCard
-						title={t(locale, "dashboards.detailNote")}
-						subtitle="JSON"
-						defaultOpen={false}
-					>
-						<pre style={{ whiteSpace: "pre-wrap", fontSize: 12, margin: 0, overflow: "auto" }}>
-							{JSON.stringify(state.value, null, 2)}
-						</pre>
-					</CollapsibleCard>
+					<Collapse
+						items={[{
+							key: "detail",
+							label: <>{t(locale, "dashboards.detailNote")} <span style={{ color: "var(--color-text-secondary)", fontSize: "var(--font-size-sm)", fontWeight: "normal" }}>JSON</span></>,
+							children: (
+								<pre style={{ whiteSpace: "pre-wrap", fontSize: 12, margin: 0, overflow: "auto" }}>
+									{JSON.stringify(state.value, null, 2)}
+								</pre>
+							),
+						}]}
+					/>
 				</>
 			)}
 			</div>

@@ -12,7 +12,7 @@ import { PageContainer, PageHeader } from "../components/PageContainer/PageConta
 import { getEffectiveLocale, t, type Locale } from "../i18n";
 import { Badge } from "../ui/Badge/Badge";
 import { Button } from "../ui/Button/Button";
-import { Card, CardBody, CardFooter, CardHeader } from "../ui/Card/Card";
+import { Card } from "antd";
 import { Input, TextArea } from "../ui/Input/Input";
 import { NativeSelect } from "../ui/Input/Select";
 import { Spinner } from "../ui/Loading/Spinner";
@@ -230,9 +230,7 @@ export default function Nl2SqlEvalPage() {
 			)}
 
 			<div className="grid2" style={{ marginBottom: "var(--spacing-lg)" }}>
-				<Card>
-					<CardHeader title="评测样例管理" />
-					<CardBody>
+				<Card title="评测样例管理">
 						<div className="col" style={{ gap: "var(--spacing-sm)" }}>
 							<Input label={t(locale, "common.name")} value={caseName} onChange={(event) => setCaseName(event.target.value)} placeholder="制造日报趋势评测" />
 							<Input label="业务域" value={caseDomain} onChange={(event) => setCaseDomain(event.target.value)} placeholder="manufacturing" />
@@ -240,17 +238,14 @@ export default function Nl2SqlEvalPage() {
 							<TextArea label={t(locale, "common.description")} value={caseNotes} onChange={(event) => setCaseNotes(event.target.value)} rows={2} />
 							<TextArea label="Expected(JSON)" value={caseExpected} onChange={(event) => setCaseExpected(event.target.value)} rows={3} />
 						</div>
-					</CardBody>
-					<CardFooter align="right">
+					<div style={{ display: "flex", justifyContent: "flex-end", paddingTop: "var(--spacing-md)", marginTop: "var(--spacing-md)", borderTop: "1px solid var(--color-border)" }}>
 						<Button variant="primary" onClick={createCase} loading={saving}>
 							创建样例
 						</Button>
-					</CardFooter>
+					</div>
 				</Card>
 
-				<Card>
-					<CardHeader title="执行参数" />
-					<CardBody>
+				<Card title="执行参数">
 						<div className="col" style={{ gap: "var(--spacing-sm)" }}>
 							<label style={{ display: "inline-flex", gap: "var(--spacing-xs)", alignItems: "center", fontSize: "var(--font-size-sm)" }}>
 								<input type="checkbox" checked={enabledOnly} onChange={(event) => setEnabledOnly(event.target.checked)} />
@@ -259,22 +254,19 @@ export default function Nl2SqlEvalPage() {
 							<Input label="样例上限" value={limit} onChange={(event) => setLimit(event.target.value)} />
 							<Input label="指定 CaseIds(逗号分隔，可选)" value={caseIdsCsv} onChange={(event) => setCaseIdsCsv(event.target.value)} placeholder="1,2,5" />
 						</div>
-					</CardBody>
-					<CardFooter align="right">
+					<div style={{ display: "flex", justifyContent: "flex-end", paddingTop: "var(--spacing-md)", marginTop: "var(--spacing-md)", borderTop: "1px solid var(--color-border)" }}>
 						<div style={{ display: "flex", gap: "var(--spacing-sm)" }}>
 							<Button variant="secondary" onClick={runEval} loading={saving}>执行评测</Button>
 							<Button variant="primary" onClick={runEvalGated} loading={saving}>执行 Gated</Button>
 						</div>
-					</CardFooter>
+					</div>
 				</Card>
 			</div>
 
-			<Card style={{ marginBottom: "var(--spacing-lg)" }}>
-				<CardHeader
-					title="样例列表"
-					action={casesState.state === "loaded" ? <Badge>{casesState.value.length}</Badge> : null}
-				/>
-				<CardBody>
+			<Card style={{ marginBottom: "var(--spacing-lg)" }}
+				title="样例列表"
+				extra={casesState.state === "loaded" ? <Badge>{casesState.value.length}</Badge> : null}
+			>
 					{casesState.state === "loading" && (
 						<div className="loading-container" style={{ padding: "var(--spacing-lg)" }}>
 							<Spinner size="md" />
@@ -306,16 +298,13 @@ export default function Nl2SqlEvalPage() {
 							</tbody>
 						</table>
 					)}
-				</CardBody>
 			</Card>
 
 			<div className="grid2">
-				<Card>
-					<CardHeader
-						title="Run 历史与对比"
-						action={runsState.state === "loaded" ? <Badge>{runsState.value.length}</Badge> : null}
-					/>
-					<CardBody>
+				<Card
+					title="Run 历史与对比"
+					extra={runsState.state === "loaded" ? <Badge>{runsState.value.length}</Badge> : null}
+				>
 						{runsState.state === "loading" && (
 							<div className="loading-container" style={{ padding: "var(--spacing-lg)" }}>
 								<Spinner size="md" />
@@ -353,12 +342,9 @@ export default function Nl2SqlEvalPage() {
 								</table>
 							</div>
 						)}
-					</CardBody>
 				</Card>
 
-				<Card>
-					<CardHeader title="执行与对比结果" />
-					<CardBody>
+				<Card title="执行与对比结果">
 						{compareState?.state === "loading" && (
 							<div className="loading-container" style={{ padding: "var(--spacing-lg)" }}>
 								<Spinner size="md" />
@@ -378,7 +364,6 @@ export default function Nl2SqlEvalPage() {
 								compare: compareState?.state === "loaded" ? compareState.value : null,
 							}, null, 2)}
 						</pre>
-					</CardBody>
 				</Card>
 			</div>
 		</PageContainer>

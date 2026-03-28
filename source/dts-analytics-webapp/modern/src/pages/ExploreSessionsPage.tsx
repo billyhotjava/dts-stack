@@ -5,7 +5,7 @@ import { ErrorNotice } from "../components/ErrorNotice";
 import { getEffectiveLocale, t, type Locale } from "../i18n";
 import { Badge } from "../ui/Badge/Badge";
 import { Button } from "../ui/Button/Button";
-import { Card, CardBody, CardFooter, CardHeader } from "../ui/Card/Card";
+import { Card } from "antd";
 import { Input, TextArea } from "../ui/Input/Input";
 import { Spinner } from "../ui/Loading/Spinner";
 import "./page.css";
@@ -319,9 +319,7 @@ export default function ExploreSessionsPage() {
 			)}
 
 			<div className="grid2" style={{ marginBottom: "var(--spacing-lg)" }}>
-				<Card>
-					<CardHeader title="新建分析会话" />
-					<CardBody>
+				<Card title="新建分析会话">
 						<div className="col" style={{ gap: "var(--spacing-sm)" }}>
 							<Input label={t(locale, "common.name")} value={title} onChange={(event) => setTitle(event.target.value)} placeholder="产线告警波动复盘" />
 							<TextArea label="问题描述" value={question} onChange={(event) => setQuestion(event.target.value)} rows={3} />
@@ -331,20 +329,17 @@ export default function ExploreSessionsPage() {
 							</div>
 							<Input label="标签（逗号分隔）" value={tags} onChange={(event) => setTags(event.target.value)} placeholder="产线,告警,复盘" />
 						</div>
-					</CardBody>
-					<CardFooter align="right">
+					<div style={{ display: "flex", justifyContent: "flex-end", paddingTop: "var(--spacing-md)", marginTop: "var(--spacing-md)", borderTop: "1px solid var(--color-border)" }}>
 						<Button variant="primary" onClick={createSession} loading={saving}>
 							创建会话
 						</Button>
-					</CardFooter>
+					</div>
 				</Card>
 
-				<Card>
-					<CardHeader
-						title="会话列表"
-						action={sessions.state === "loaded" ? <Badge>{sessions.value.length}</Badge> : null}
-					/>
-					<CardBody>
+				<Card
+					title="会话列表"
+					extra={sessions.state === "loaded" ? <Badge>{sessions.value.length}</Badge> : null}
+				>
 						{sessions.state === "loading" && (
 							<div className="loading-container" style={{ padding: "var(--spacing-lg)" }}>
 								<Spinner size="md" />
@@ -387,15 +382,12 @@ export default function ExploreSessionsPage() {
 								</tbody>
 							</table>
 						)}
-					</CardBody>
 				</Card>
 			</div>
 
-			<Card>
-				<CardHeader
-					title="会话详情"
-					subtitle={currentSession ? `#${currentSession.id}` : "选择左侧会话查看详情"}
-					action={
+			<Card
+				title={<span>会话详情 <span style={{ color: "var(--color-text-secondary)", fontSize: "var(--font-size-sm)", fontWeight: "normal" }}>{currentSession ? `#${currentSession.id}` : "选择左侧会话查看详情"}</span></span>}
+				extra={
 						currentSession ? (
 							<div style={{ display: "flex", gap: "var(--spacing-xs)", flexWrap: "wrap" }}>
 								<Button size="sm" variant="tertiary" onClick={cloneSession} loading={saving}>复制</Button>
@@ -404,8 +396,7 @@ export default function ExploreSessionsPage() {
 							</div>
 						) : null
 					}
-				/>
-				<CardBody>
+			>
 					{selectedSession?.state === "loading" && (
 						<div className="loading-container" style={{ padding: "var(--spacing-lg)" }}>
 							<Spinner size="md" />
@@ -492,7 +483,6 @@ export default function ExploreSessionsPage() {
 							)}
 						</div>
 					)}
-				</CardBody>
 			</Card>
 		</PageContainer>
 	);

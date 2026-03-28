@@ -14,7 +14,7 @@ import { EmptyState } from "../components/EmptyState";
 import { ErrorNotice } from "../components/ErrorNotice";
 import { PageContainer, PageHeader, Breadcrumb } from "../components/PageContainer/PageContainer";
 import { NotebookEditor } from "../components/query/NotebookEditor";
-import { Card, CardHeader, CardBody, CardFooter } from "../ui/Card/Card";
+import { Card } from "antd";
 import { Button } from "../ui/Button/Button";
 import { Input, TextArea } from "../ui/Input/Input";
 import { NativeSelect } from "../ui/Input/Select";
@@ -330,7 +330,6 @@ export default function CardEditorPage() {
 
 			{dbEmpty ? (
 				<Card style={{ marginBottom: "var(--spacing-lg)" }}>
-					<CardBody>
 						<EmptyState
 							title={t(locale, "questions.noDb")}
 							action={
@@ -339,13 +338,10 @@ export default function CardEditorPage() {
 								</Link>
 							}
 						/>
-					</CardBody>
 				</Card>
 			) : null}
 
-			<Card style={{ marginBottom: "var(--spacing-lg)" }}>
-				<CardHeader title={t(locale, "questions.settings")} />
-				<CardBody>
+			<Card style={{ marginBottom: "var(--spacing-lg)" }} title={t(locale, "questions.settings")}>
 					<div className="form-grid" style={{ gridTemplateColumns: "1fr 260px 260px" }}>
 						<Input
 							label={t(locale, "common.name")}
@@ -392,12 +388,9 @@ export default function CardEditorPage() {
 							{mode === "builder" ? t(locale, "questions.builder") : t(locale, "questions.sql")}
 						</span>
 					</div>
-				</CardBody>
 			</Card>
 
-			<Card style={{ marginBottom: "var(--spacing-lg)" }}>
-				<CardHeader title={mode === "builder" ? t(locale, "questions.mode.builder") : t(locale, "questions.mode.sql")} />
-				<CardBody>
+			<Card style={{ marginBottom: "var(--spacing-lg)" }} title={mode === "builder" ? t(locale, "questions.mode.builder") : t(locale, "questions.mode.sql")}>
 					{mode === "builder" ? (
 						<NotebookEditor
 							databaseId={databaseId}
@@ -414,8 +407,7 @@ export default function CardEditorPage() {
 							style={{ fontFamily: "ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace" }}
 						/>
 					)}
-				</CardBody>
-				<CardFooter align="between">
+				<div style={{ display: "flex", justifyContent: "space-between", paddingTop: "var(--spacing-md)", marginTop: "var(--spacing-md)", borderTop: "1px solid var(--color-border)" }}>
 					<div style={{ display: "flex", gap: "var(--spacing-sm)", alignItems: "center" }}>
 						<Button
 							variant="primary"
@@ -445,36 +437,34 @@ export default function CardEditorPage() {
 						</Button>
 					</div>
 					<div />
-				</CardFooter>
+				</div>
 			</Card>
 
-			<Card>
-				<CardHeader
-					title={t(locale, "questions.queryResult")}
-					action={
-						<div style={{ display: "flex", gap: "var(--spacing-xs)", alignItems: "center" }}>
-							{runState?.state === "loaded" && (
-								<Badge variant="default" size="sm" style={{ marginRight: "var(--spacing-sm)" }}>
-									{runState.value.row_count ?? (runState.value.data?.rows as any[] | undefined)?.length ?? 0} {t(locale, "questions.resultRows")}
-									{runState.value.running_time != null && (
-										<> &middot; {runState.value.running_time}ms</>
-									)}
-								</Badge>
-							)}
-							{VISUALIZATION_TYPES.map((vt) => (
-								<Button
-									key={vt.value}
-									variant={displayType === vt.value ? "primary" : "tertiary"}
-									size="sm"
-									onClick={() => setDisplayType(vt.value)}
-								>
-									{t(locale, `vis.${vt.value}`)}
-								</Button>
-							))}
-						</div>
-					}
-				/>
-				<CardBody>
+			<Card
+				title={t(locale, "questions.queryResult")}
+				extra={
+					<div style={{ display: "flex", gap: "var(--spacing-xs)", alignItems: "center" }}>
+						{runState?.state === "loaded" && (
+							<Badge variant="default" size="sm" style={{ marginRight: "var(--spacing-sm)" }}>
+								{runState.value.row_count ?? (runState.value.data?.rows as any[] | undefined)?.length ?? 0} {t(locale, "questions.resultRows")}
+								{runState.value.running_time != null && (
+									<> &middot; {runState.value.running_time}ms</>
+								)}
+							</Badge>
+						)}
+						{VISUALIZATION_TYPES.map((vt) => (
+							<Button
+								key={vt.value}
+								variant={displayType === vt.value ? "primary" : "tertiary"}
+								size="sm"
+								onClick={() => setDisplayType(vt.value)}
+							>
+								{t(locale, `vis.${vt.value}`)}
+							</Button>
+						))}
+					</div>
+				}
+			>
 					{runState === null && (
 						<EmptyState title={t(locale, "questions.runFirst")} />
 					)}
@@ -604,7 +594,6 @@ export default function CardEditorPage() {
 							/>
 						</>
 					)}
-				</CardBody>
 			</Card>
 
 			<style>{`

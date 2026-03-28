@@ -4,7 +4,7 @@ import { analyticsApi, type CardDetail, type CardQueryResponse, type Explainabil
 import { ChartRenderer, type VisualizationType, type VisualizationSettings } from "../components/charts";
 import { PageContainer, PageHeader } from "../components/PageContainer/PageContainer";
 import { ErrorNotice } from "../components/ErrorNotice";
-import { Card, CardHeader, CardBody, CollapsibleCard } from "../ui/Card/Card";
+import { Card, Collapse } from "antd";
 import { Button } from "../ui/Button/Button";
 import { Input } from "../ui/Input/Input";
 import { Badge } from "../ui/Badge/Badge";
@@ -152,10 +152,9 @@ export default function CardDetailPage() {
 					/>
 
 					{shareUuid && (
-						<Card style={{ marginBottom: "var(--spacing-lg)" }}>
-							<CardHeader
-								title={t(locale, "share.title")}
-								action={
+						<Card style={{ marginBottom: "var(--spacing-lg)" }}
+							title={t(locale, "share.title")}
+							extra={
 									<Button
 										variant="secondary"
 										size="sm"
@@ -174,8 +173,7 @@ export default function CardDetailPage() {
 										{shareCopied ? t(locale, "share.copied") : t(locale, "share.copy")}
 									</Button>
 								}
-							/>
-							<CardBody>
+						>
 								<Input
 									readOnly
 									value={`${window.location.origin}/analytics/public/card/${encodeURIComponent(shareUuid)}`}
@@ -183,34 +181,32 @@ export default function CardDetailPage() {
 								<p className="text-muted" style={{ marginTop: "var(--spacing-sm)", fontSize: "var(--font-size-sm)" }}>
 									{t(locale, "share.note")}
 								</p>
-							</CardBody>
 						</Card>
 					)}
 
-					<CollapsibleCard
-						title={t(locale, "questions.detailNote")}
-						subtitle="JSON"
-						defaultOpen={false}
+					<Collapse
 						style={{ marginBottom: "var(--spacing-lg)" }}
-					>
-						<pre style={{ whiteSpace: "pre-wrap", fontSize: 12, margin: 0, overflow: "auto" }}>
-							{JSON.stringify(state.value, null, 2)}
-						</pre>
-					</CollapsibleCard>
+						items={[{
+							key: "detail",
+							label: <>{t(locale, "questions.detailNote")} <span style={{ color: "var(--color-text-secondary)", fontSize: "var(--font-size-sm)", fontWeight: "normal" }}>JSON</span></>,
+							children: (
+								<pre style={{ whiteSpace: "pre-wrap", fontSize: 12, margin: 0, overflow: "auto" }}>
+									{JSON.stringify(state.value, null, 2)}
+								</pre>
+							),
+						}]}
+					/>
 
 					{explainState?.state === "error" && (
 						<Card style={{ marginBottom: "var(--spacing-lg)" }}>
-							<CardBody>
 								<ErrorNotice locale={locale} error={explainState.error} />
-							</CardBody>
 						</Card>
 					)}
 
 					{explainState?.state === "loaded" && (
-						<Card style={{ marginBottom: "var(--spacing-lg)" }}>
-							<CardHeader
-								title="Explainability"
-								action={
+						<Card style={{ marginBottom: "var(--spacing-lg)" }}
+							title="Explainability"
+							extra={
 									<Button
 										variant="tertiary"
 										size="sm"
@@ -222,25 +218,21 @@ export default function CardDetailPage() {
 										Copy JSON
 									</Button>
 								}
-							/>
-							<CardBody>
+						>
 								<pre style={{ whiteSpace: "pre-wrap", margin: 0, padding: "var(--spacing-sm)", background: "var(--color-bg-tertiary)", borderRadius: "var(--radius-sm)", fontSize: 12 }}>
 									{JSON.stringify(explainState.value.explainCard ?? {}, null, 2)}
 								</pre>
-							</CardBody>
 						</Card>
 					)}
 
-					<Card>
-						<CardHeader
-							title={t(locale, "questions.queryResult")}
-							action={
+					<Card
+						title={t(locale, "questions.queryResult")}
+						extra={
 								<Button variant="tertiary" size="sm" onClick={() => setShowRaw((v) => !v)}>
 									{t(locale, "questions.queryRaw")}
 								</Button>
 							}
-						/>
-						<CardBody>
+					>
 							{queryState?.state === "loading" && (
 								<div className="loading-container" style={{ padding: "var(--spacing-lg)" }}>
 									<Spinner size="md" />
@@ -280,7 +272,6 @@ export default function CardDetailPage() {
 									)}
 								</>
 							)}
-						</CardBody>
 					</Card>
 				</>
 			)}

@@ -4,7 +4,7 @@ import { analyticsApi, type TableDetail } from "../api/analyticsApi";
 import { PageContainer, PageHeader, Breadcrumb } from "../components/PageContainer/PageContainer";
 import { EmptyState } from "../components/EmptyState";
 import { ErrorNotice } from "../components/ErrorNotice";
-import { Card, CardHeader, CardBody } from "../ui/Card/Card";
+import { Card } from "antd";
 import { Button } from "../ui/Button/Button";
 import { Badge } from "../ui/Badge/Badge";
 import { Spinner } from "../ui/Loading/Spinner";
@@ -86,11 +86,9 @@ export default function TableDetailPage() {
 
 			{state.state === "loading" && (
 				<Card>
-					<CardBody>
 						<div className="loading-container" style={{ padding: "var(--spacing-xl)" }}>
 							<Spinner size="lg" />
 						</div>
-					</CardBody>
 				</Card>
 			)}
 			{state.state === "error" && <ErrorNotice locale={locale} error={state.error} />}
@@ -98,20 +96,15 @@ export default function TableDetailPage() {
 				<>
 					{state.value.description && (
 						<Card style={{ marginBottom: "var(--spacing-lg)" }}>
-							<CardBody>
 								<p className="text-muted" style={{ margin: 0 }}>{state.value.description}</p>
-							</CardBody>
 						</Card>
 					)}
 
 					{Array.isArray(state.value.fields) && state.value.fields.length > 0 ? (
-						<Card>
-							<CardHeader
-								title={t(locale, "builder.fields")}
-								icon={<FieldIcon />}
-								action={<Badge variant="default">{state.value.fields.length}</Badge>}
-							/>
-							<CardBody>
+						<Card
+							title={<span style={{ display: "inline-flex", alignItems: "center", gap: 8 }}><FieldIcon />{t(locale, "builder.fields")}</span>}
+							extra={<Badge variant="default">{state.value.fields.length}</Badge>}
+						>
 								<table className="table">
 									<thead>
 										<tr>
@@ -146,7 +139,6 @@ export default function TableDetailPage() {
 										))}
 									</tbody>
 								</table>
-							</CardBody>
 						</Card>
 					) : (
 						<EmptyState title={t(locale, "common.empty")} description="提示：字段列表为空，可能需要先同步数据库元数据。" />
