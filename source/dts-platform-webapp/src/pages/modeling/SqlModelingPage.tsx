@@ -7,7 +7,6 @@ import {
 	Alert,
 	Badge,
 	Button,
-	Card,
 	Checkbox,
 	Divider,
 	Drawer,
@@ -29,12 +28,10 @@ import {
 } from "antd";
 import {
 	PlusOutlined,
-	EditOutlined,
 	DeleteOutlined,
 	SaveOutlined,
 	SettingOutlined,
 	DownOutlined,
-	ImportOutlined,
 	CodeOutlined,
 	TableOutlined,
 	LinkOutlined,
@@ -45,6 +42,8 @@ import {
 	FileTextOutlined,
 	UndoOutlined,
 	CheckCircleOutlined,
+	SafetyCertificateOutlined,
+	InboxOutlined,
 } from "@ant-design/icons";
 import type { UploadFile } from "antd/es/upload/interface";
 import type { ColumnsType } from "antd/es/table";
@@ -1984,50 +1983,17 @@ export default function SqlModelingPage() {
 
 	// 模型操作下拉菜单
 	const modelMenuItems = [
-		{
-			key: "create",
-			icon: <PlusOutlined />,
-			label: "新建模型",
-			disabled: !workspaceOk,
-			onClick: openCreateModel,
-		},
-		{
-			key: "import",
-			icon: <ImportOutlined />,
-			label: "导入模型",
-			disabled: !workspaceOk,
-			onClick: openImportModel,
-		},
-		{
-			key: "batch-import",
-			icon: <ImportOutlined />,
-			label: "批量导入",
-			disabled: !workspaceOk,
-			onClick: openBatchImportModal,
-		},
-		{
-			key: "generate-ods",
-			icon: <ImportOutlined />,
-			label: "从 ODS 一键生成",
-			disabled: !workspaceOk,
-			onClick: openOdsGenerateModel,
-		},
-		{
-			key: "edit",
-			icon: <EditOutlined />,
-			label: "编辑模型",
-			disabled: !activeModel || !workspaceOk,
-			onClick: openEditModel,
-		},
+		{ key: "create", label: "新建模型", onClick: openCreateModel },
+		{ key: "edit", label: "编辑模型", onClick: openEditModel },
 		{ type: "divider" as const },
-		{
-			key: "delete",
-			icon: <DeleteOutlined />,
-			label: "删除模型",
-			disabled: !activeModel,
-			danger: true,
-			onClick: removeModel,
-		},
+		{ key: "import", label: "导入模型", onClick: openImportModel },
+		{ key: "batch-import", label: "批量导入", onClick: openBatchImportModal },
+		{ key: "generate-ods", label: "从 ODS 一键生成", onClick: openOdsGenerateModel },
+		{ type: "divider" as const },
+		{ key: "governance", icon: <SafetyCertificateOutlined />, label: "模型治理", onClick: openGovernanceModal },
+		{ key: "batch-archive", icon: <InboxOutlined />, label: "批量归档", onClick: openBatchArchive },
+		{ type: "divider" as const },
+		{ key: "delete", label: "删除模型", danger: true, onClick: removeModel },
 	];
 
 	// 插入代码下拉菜单
@@ -2064,33 +2030,6 @@ export default function SqlModelingPage() {
 					className="mb-4"
 				/>
 			)}
-			<Card
-				title={
-					<Space>
-						<span>逻辑建模工作区</span>
-						<Badge count={sqlModels.length} showZero overflowCount={999} style={{ backgroundColor: sqlModels.length > 0 ? '#1677ff' : '#d9d9d9' }} />
-						{dbtSyncStatus?.stats?.lastSyncAt && (
-							<Typography.Text type="secondary" style={{ fontSize: 12, fontWeight: 'normal' }}>
-								上次同步: {formatDateTime(dbtSyncStatus.stats.lastSyncAt)}
-							</Typography.Text>
-						)}
-					</Space>
-				}
-				extra={
-					<Space wrap>
-						<Button className="rounded-2xl" onClick={() => router.push("/modeling/dbt-files")}>
-							打开 DBT 文件
-						</Button>
-						<Button className="rounded-2xl" onClick={() => router.push("/foundation/data-sources")}>
-							去 ODS 接入
-						</Button>
-						<Button className="rounded-2xl" type="primary" onClick={openOdsGenerateModel} disabled={!workspaceOk}>
-							一键生成模型
-						</Button>
-					</Space>
-				}
-			/>
-
 			<div className="flex min-h-[calc(100vh-120px)] flex-col overflow-hidden rounded-[30px] border border-border/70 bg-card shadow-sm">
 			{/* 顶部工具栏 */}
 			<div className="flex h-14 items-center justify-between border-b border-border bg-card px-4">
@@ -2113,12 +2052,6 @@ export default function SqlModelingPage() {
 							模型 <DownOutlined className="text-xs" />
 						</Button>
 					</Dropdown>
-					<Button onClick={openGovernanceModal} disabled={!workspaceOk}>
-						模型治理
-					</Button>
-					<Button onClick={openBatchArchive} disabled={!canBatchArchive}>
-						批量归档
-					</Button>
 					{/* 保存按钮 */}
 					<Button
 						icon={<SaveOutlined />}
@@ -2374,7 +2307,9 @@ export default function SqlModelingPage() {
 									beforeMount={(monaco) => registerDbtLanguage(monaco)}
 									onChange={(value) => setSqlDraft(value || "")}
 									options={{
+										fontFamily: "'JetBrains Mono', 'Fira Code', 'Source Code Pro', 'Cascadia Code', Consolas, 'Courier New', monospace",
 										fontSize: 13,
+										fontLigatures: true,
 										minimap: { enabled: false },
 										automaticLayout: true,
 										wordWrap: "on",
