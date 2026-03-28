@@ -17,7 +17,7 @@
 | ID | Feature | Task 数 | 状态 |
 |----|---------|---------|------|
 | F1 | 资产权限数据模型与服务 | 5 | DONE |
-| F2 | Analytics 权限统一 | 4 | READY |
+| F2 | Analytics 权限统一 | 4 | DONE |
 | F3 | 前端权限管理界面 | 5 | READY |
 | F4 | Analytics 前端适配 | 3 | READY |
 | F5 | 数据迁移与集成测试 | 3 | READY |
