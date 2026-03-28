@@ -35,6 +35,9 @@ import type { ScreenTheme } from '../types';
 import { LinkageGraphPanel } from './LinkageGraphPanel';
 import type { ScreenConfig } from '../types';
 import { writeTextToClipboard } from '../../../hooks/clipboard';
+import { inlineResources } from '../utils/resourceInliner';
+import { ImportPreviewModal } from './ImportPreviewModal';
+import { countInlinedResources } from '../utils/resourceRestorer';
 
 type PublishNotice = {
     screenId: string | number;
@@ -59,8 +62,7 @@ type QuickActionItem = {
     run: () => void | Promise<void>;
 };
 
-const DESIGN_ACTION_STORAGE_KEY = 'dts.analytics.screen.header.designAction';
-const GOVERNANCE_ACTION_STORAGE_KEY = 'dts.analytics.screen.header.governanceAction';
+// DESIGN_ACTION_STORAGE_KEY and GOVERNANCE_ACTION_STORAGE_KEY removed — menus use direct buttons now
 const VERSION_ACTION_STORAGE_KEY = 'dts.analytics.screen.header.versionAction';
 const EXPORT_ACTION_STORAGE_KEY = 'dts.analytics.screen.header.exportAction';
 const QUICK_ACTION_RECENT_STORAGE_KEY = 'dts.analytics.screen.header.quickRecentActions';
@@ -245,43 +247,8 @@ export function ScreenHeader({
             return [];
         }
     });
-    const [designAction, setDesignAction] = useState<
-        'session' | 'variables' | 'interaction' | 'collaboration' | 'template' | 'import' | 'command'
-    >(() => {
-        if (typeof window === 'undefined') return 'variables';
-        const raw = window.localStorage.getItem(DESIGN_ACTION_STORAGE_KEY);
-        if (
-            raw === 'session'
-            || raw === 'variables'
-            || raw === 'interaction'
-            || raw === 'collaboration'
-            || raw === 'template'
-            || raw === 'import'
-            || raw === 'command'
-        ) {
-            return raw;
-        }
-        return 'variables';
-    });
-    const [governanceAction, setGovernanceAction] = useState<
-        'edit-lock' | 'cache' | 'compliance' | 'health' | 'acl' | 'audit' | 'share-policy' | 'share-link'
-    >(() => {
-        if (typeof window === 'undefined') return 'cache';
-        const raw = window.localStorage.getItem(GOVERNANCE_ACTION_STORAGE_KEY);
-        if (
-            raw === 'edit-lock'
-            || raw === 'cache'
-            || raw === 'compliance'
-            || raw === 'health'
-            || raw === 'acl'
-            || raw === 'audit'
-            || raw === 'share-policy'
-            || raw === 'share-link'
-        ) {
-            return raw;
-        }
-        return 'cache';
-    });
+    // designAction state removed — "编辑" menu uses direct buttons now
+    // governanceAction state removed — "安全" menu uses direct buttons now
     const [previewDeviceMode, setPreviewDeviceMode] = useState<'auto' | 'pc' | 'tablet' | 'mobile'>('auto');
     const [versionAction, setVersionAction] = useState<'history' | 'compare'>(() => {
         if (typeof window === 'undefined') return 'history';
@@ -324,6 +291,14 @@ export function ScreenHeader({
     const [batchAction, setBatchAction] = useState<BatchAction>('duplicate');
     const [themeApplyMode, setThemeApplyMode] = useState<ThemeComponentApplyMode>('force');
     const [showLinkageGraph, setShowLinkageGraph] = useState(false);
+    const [importPreview, setImportPreview] = useState<{
+        fileName: string;
+        parsedSpec: ScreenConfig;
+        templateMeta?: { name: string; description?: string; category?: string; tags?: string[] };
+        validation: { errors: string[]; warnings: string[] };
+        resourcesInlined: boolean;
+        inlinedResourceCount: number;
+    } | null>(null);
     const themeInputRef = useRef<HTMLInputElement | null>(null);
     const { selectedIds, showGrid, zoom } = state;
 
@@ -468,7 +443,7 @@ export function ScreenHeader({
     const quickInputRef = useRef<HTMLInputElement | null>(null);
     const quickActionRefs = useRef<Array<HTMLButtonElement | null>>([]);
     const menuContainerRef = useRef<HTMLDivElement | null>(null);
-    const [activeMenu, setActiveMenu] = useState<'primary' | 'tools-design' | 'tools-release' | 'tools-governance' | null>(null);
+    const [activeMenu, setActiveMenu] = useState<'primary' | 'tools-view' | 'tools-edit' | 'tools-theme' | 'tools-io' | 'tools-release' | 'tools-security' | null>(null);
     const [permissions, setPermissions] = useState({
         canRead: true,
         canEdit: true,
@@ -514,15 +489,7 @@ export function ScreenHeader({
         window.localStorage.setItem(key, JSON.stringify(publishNotice));
     }, [id, publishNotice]);
 
-    useEffect(() => {
-        if (typeof window === 'undefined') return;
-        window.localStorage.setItem(DESIGN_ACTION_STORAGE_KEY, designAction);
-    }, [designAction]);
-
-    useEffect(() => {
-        if (typeof window === 'undefined') return;
-        window.localStorage.setItem(GOVERNANCE_ACTION_STORAGE_KEY, governanceAction);
-    }, [governanceAction]);
+    // designAction / governanceAction localStorage persistence removed — menus use direct buttons now
 
     useEffect(() => {
         if (typeof window === 'undefined') return;
@@ -1255,10 +1222,16 @@ export function ScreenHeader({
             return;
         }
         try {
+            const rawSpec = buildScreenPayload(persistedConfig) as Record<string, unknown>;
+            const { spec: inlinedSpec, inlinedCount, errors: inlineErrors } = await inlineResources(rawSpec);
+            if (inlineErrors.length > 0) {
+                console.warn('[export] Resource inlining warnings:', inlineErrors);
+            }
             const payload = {
                 schema: 'dts.screen.spec',
                 exportedAt: new Date().toISOString(),
-                screenSpec: buildScreenPayload(persistedConfig),
+                resourcesInlined: inlinedCount > 0,
+                screenSpec: inlinedSpec,
             };
             const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json;charset=utf-8' });
             const url = URL.createObjectURL(blob);
@@ -1513,30 +1486,52 @@ export function ScreenHeader({
     const handleImportJson = async (event: React.ChangeEvent<HTMLInputElement>) => {
         const file = event.target.files?.[0];
         event.target.value = '';
-        if (!file) {
-            return;
-        }
+        if (!file) return;
+
         try {
             const content = await file.text();
             const parsed = JSON.parse(content) as Record<string, unknown>;
             const source = (parsed.screenSpec || parsed) as Record<string, unknown>;
+            const templateMeta = parsed.templateMeta as { name: string; description?: string; category?: string; tags?: string[] } | undefined;
             const normalized = normalizeScreenConfig(source, { id: id || '' });
             if (normalized.warnings.length > 0) {
                 console.warn('[screen-import] normalized warnings:', normalized.warnings);
             }
             const validation = validateScreenPayload(buildScreenPayload(normalized.config));
-            if (validation.errors.length > 0) {
-                alert(`JSON 导入失败，配置不合法：${validation.errors.join('；')}`);
-                return;
-            }
-            if (validation.warnings.length > 0) {
-                console.warn('[screen-import] validate warnings:', validation.warnings);
-            }
-            loadConfig(materializeScreenPage(normalized.config, currentPageIndex));
-            alert('JSON 导入完成');
+            const resourcesInlined = parsed.resourcesInlined === true;
+            const inlinedResourceCount = resourcesInlined ? countInlinedResources(source) : 0;
+
+            setImportPreview({
+                fileName: file.name,
+                parsedSpec: normalized.config,
+                templateMeta: templateMeta || undefined,
+                validation,
+                resourcesInlined,
+                inlinedResourceCount,
+            });
         } catch (error) {
-            console.error('Failed to import screen json:', error);
+            console.error('Failed to parse import file:', error);
             alert('JSON 导入失败，请检查文件格式');
+        }
+    };
+
+    const handleImportConfirm = async (action: 'replace' | 'create-screen' | 'register-template') => {
+        if (!importPreview) return;
+        const { parsedSpec: importedConfig } = importPreview;
+
+        try {
+            if (action === 'replace') {
+                loadConfig(materializeScreenPage(importedConfig, currentPageIndex));
+                setImportPreview(null);
+            } else if (action === 'create-screen') {
+                const spec = buildScreenPayload(importedConfig);
+                const created = await analyticsApi.createScreen(spec);
+                setImportPreview(null);
+                window.location.href = `/analytics/screens/${String(created.id)}/edit`;
+            }
+        } catch (error) {
+            console.error('Import action failed:', error);
+            alert(error instanceof Error ? error.message : '导入操作失败');
         }
     };
 
@@ -1685,109 +1680,8 @@ export function ScreenHeader({
         void executeMenuAction(handleExportPng);
     }, [executeMenuAction, exportAction, handleExportJson, handleExportPdf, handleExportPng]);
 
-    const canExecuteDesignAction = useMemo(() => {
-        if (designAction === 'session') return permissions.canRead;
-        if (designAction === 'collaboration') return !!id && permissions.canRead;
-        if (designAction === 'template') return permissions.canEdit && !isSavingTemplate;
-        return true;
-    }, [designAction, id, isSavingTemplate, permissions.canEdit, permissions.canRead]);
-
-    const executeDesignAction = useCallback(() => {
-        if (designAction === 'session') {
-            if (!permissions.canRead) return;
-            void executeMenuAction(handleCreateExploreSession);
-            return;
-        }
-        if (designAction === 'variables') {
-            void executeMenuAction(() => setShowVariableManager(true));
-            return;
-        }
-        if (designAction === 'interaction') {
-            void executeMenuAction(() => setShowInteractionDebugPanel(true));
-            return;
-        }
-        if (designAction === 'collaboration') {
-            if (!id || !permissions.canRead) return;
-            void executeMenuAction(() => setShowCollaborationPanel(true));
-            return;
-        }
-        if (designAction === 'template') {
-            if (!permissions.canEdit || isSavingTemplate) return;
-            void executeMenuAction(handleSaveAsTemplate);
-            return;
-        }
-        if (designAction === 'import') {
-            void executeMenuAction(handleOpenImport);
-            return;
-        }
-        void executeMenuAction(() => {
-            setQuickKeyword('');
-            setShowQuickActions(true);
-        });
-    }, [
-        designAction,
-        executeMenuAction,
-        handleCreateExploreSession,
-        handleOpenImport,
-        handleSaveAsTemplate,
-        id,
-        isSavingTemplate,
-        permissions.canEdit,
-        permissions.canRead,
-    ]);
-
-    const canExecuteGovernanceAction = useMemo(() => {
-        if (governanceAction === 'edit-lock') return !!id && permissions.canRead;
-        if (governanceAction === 'acl' || governanceAction === 'audit') return !!id && permissions.canManage;
-        if (governanceAction === 'share-policy' || governanceAction === 'share-link') return !!id && permissions.canPublish;
-        return true;
-    }, [governanceAction, id, permissions.canManage, permissions.canPublish, permissions.canRead]);
-
-    const executeGovernanceAction = useCallback(() => {
-        if (governanceAction === 'edit-lock') {
-            if (!id || !permissions.canRead) return;
-            void executeMenuAction(() => setShowEditLockPanel(true));
-            return;
-        }
-        if (governanceAction === 'cache') {
-            void executeMenuAction(() => setShowCachePanel(true));
-            return;
-        }
-        if (governanceAction === 'compliance') {
-            void executeMenuAction(() => setShowCompliancePanel(true));
-            return;
-        }
-        if (governanceAction === 'health') {
-            void executeMenuAction(() => setShowHealthPanel(true));
-            return;
-        }
-        if (governanceAction === 'acl') {
-            if (!id || !permissions.canManage) return;
-            void executeMenuAction(() => setShowAclPanel(true));
-            return;
-        }
-        if (governanceAction === 'audit') {
-            if (!id || !permissions.canManage) return;
-            void executeMenuAction(() => setShowAuditPanel(true));
-            return;
-        }
-        if (governanceAction === 'share-policy') {
-            if (!id || !permissions.canPublish) return;
-            void executeMenuAction(() => setShowSharePolicyPanel(true));
-            return;
-        }
-        if (!id || !permissions.canPublish || isSharing) return;
-        void executeMenuAction(handleShare);
-    }, [
-        executeMenuAction,
-        governanceAction,
-        handleShare,
-        id,
-        isSharing,
-        permissions.canManage,
-        permissions.canPublish,
-        permissions.canRead,
-    ]);
+    // canExecuteDesignAction / executeDesignAction / canExecuteGovernanceAction / executeGovernanceAction
+    // removed — menus now use direct onClick buttons instead of select+execute pattern
 
     const quickActions: QuickActionItem[] = useMemo(() => {
         return [
@@ -2137,12 +2031,12 @@ export function ScreenHeader({
                                 </div>
                             </HeaderMenu>
                         </div>
+                        {/* --- 1. 视图 --- */}
                         <HeaderMenu
-                            label={`视图${cycleWarnings.length > 0 ? `(${cycleWarnings.length})` : ''}`}
-                            open={activeMenu === 'tools-design'}
-                            onToggle={() => setActiveMenu((prev) => (prev === 'tools-design' ? null : 'tools-design'))}
+                            label="视图"
+                            open={activeMenu === 'tools-view'}
+                            onToggle={() => setActiveMenu((prev) => (prev === 'tools-view' ? null : 'tools-view'))}
                         >
-                            {/* 面板 */}
                             {onToggleFocusMode && (
                                 <div className="header-menu-section">
                                     <div className="header-menu-section-title">面板</div>
@@ -2161,21 +2055,60 @@ export function ScreenHeader({
                                     )}
                                 </div>
                             )}
-                            {/* 视图 */}
                             <div className="header-menu-section">
-                                <div className="header-menu-section-title">视图与主题</div>
+                                <div className="header-menu-section-title">视图</div>
                                 <button type="button" className="header-btn" onClick={handleZoomReset} title="缩放重置为 100%">缩放100%</button>
                                 <button type="button" className="header-btn" onClick={handleZoomFit} title="按当前窗口自动适配缩放">缩放适配</button>
                                 <button type="button" className={`header-btn ${showGrid ? 'active' : ''}`} onClick={() => dispatch({ type: 'TOGGLE_GRID' })} title="显示/隐藏网格">
                                     {showGrid ? '隐藏网格' : '显示网格'}
                                 </button>
+                            </div>
+                            <div className="header-menu-section">
+                                <div className="header-menu-section-title">帮助</div>
+                                <button type="button" className="header-btn" onClick={handleShortcutHelp} title="查看快捷键">快捷键</button>
+                            </div>
+                        </HeaderMenu>
+                        {/* --- 2. 编辑 --- */}
+                        <HeaderMenu
+                            label={`编辑${cycleWarnings.length > 0 ? `(${cycleWarnings.length})` : ''}`}
+                            open={activeMenu === 'tools-edit'}
+                            onToggle={() => setActiveMenu((prev) => (prev === 'tools-edit' ? null : 'tools-edit'))}
+                        >
+                            <div className="header-menu-section">
+                                <div className="header-menu-section-title">批量动作</div>
+                                <select className="header-device-select" value={batchAction} onChange={(e) => setBatchAction(e.target.value as BatchAction)} title="批量动作">
+                                    {BATCH_ACTION_OPTIONS.map((item) => (<option key={item.value} value={item.value}>{item.label}</option>))}
+                                </select>
+                                <button type="button" className="header-btn" onClick={executeBatchAction} disabled={!canExecuteBatch} title={canExecuteBatch ? '执行批量动作' : '请先选择组件'}>执行动作</button>
+                            </div>
+                            <div className="header-menu-section">
+                                <div className="header-menu-section-title">联动与设计</div>
+                                <button type="button" className="header-btn" onClick={() => { setActiveMenu(null); setShowLinkageGraph(prev => !prev); }} title="查看组件联动关系图">联动关系图</button>
+                                <button type="button" className="header-btn" onClick={() => executeMenuAction(() => setShowVariableManager(true))} title="管理全局变量">变量管理</button>
+                                <button type="button" className="header-btn" onClick={() => executeMenuAction(() => setShowInteractionDebugPanel(true))} title="联动调试面板">联动调试</button>
+                                <button type="button" className="header-btn" onClick={() => executeMenuAction(() => { setQuickKeyword(''); setShowQuickActions(true); })} title="命令面板 Ctrl/Cmd+K">命令面板</button>
+                            </div>
+                            <div className="header-menu-section">
+                                <div className="header-menu-section-title">更多</div>
+                                <button type="button" className="header-btn" onClick={() => executeMenuAction(handleCreateExploreSession)} disabled={!permissions.canRead} title="沉淀分析会话">沉淀会话</button>
+                                <button type="button" className="header-btn" onClick={() => executeMenuAction(() => { if (id && permissions.canRead) setShowCollaborationPanel(true); })} disabled={!id || !permissions.canRead} title="协作批注">协作批注</button>
+                                <button type="button" className="header-btn" onClick={() => executeMenuAction(handleSaveAsTemplate)} disabled={!permissions.canEdit || isSavingTemplate} title="保存为模板">{isSavingTemplate ? '模板保存中...' : '保存模板'}</button>
+                            </div>
+                        </HeaderMenu>
+                        {/* --- 3. 主题 --- */}
+                        <HeaderMenu
+                            label="主题"
+                            open={activeMenu === 'tools-theme'}
+                            onToggle={() => setActiveMenu((prev) => (prev === 'tools-theme' ? null : 'tools-theme'))}
+                        >
+                            <div className="header-menu-section">
+                                <div className="header-menu-section-title">主题选择</div>
                                 <select className="header-device-select" value={config.theme || ''} onChange={handleToolbarThemeChange} title="切换主题">
                                     {THEME_OPTIONS.map((opt) => (<option key={opt.value} value={opt.value}>{opt.label}</option>))}
                                 </select>
                             </div>
-                            {/* 主题工具 */}
                             <div className="header-menu-section">
-                                <div className="header-menu-section-title">主题工具</div>
+                                <div className="header-menu-section-title">应用与导入导出</div>
                                 <select className="header-device-select" value={themeApplyMode} onChange={(e) => setThemeApplyMode(e.target.value === 'safe' ? 'safe' : 'force')} title="组件样式应用策略">
                                     <option value="force">强制覆盖</option>
                                     <option value="safe">仅补缺省</option>
@@ -2184,43 +2117,39 @@ export function ScreenHeader({
                                 <button type="button" className="header-btn" onClick={handleExportThemePack} title="导出主题包">导出主题</button>
                                 <button type="button" className="header-btn" onClick={handleImportThemePackClick} title="导入主题包">导入主题</button>
                             </div>
-                            {/* 批量动作 */}
+                        </HeaderMenu>
+                        {/* --- 导入导出 --- */}
+                        <HeaderMenu
+                            label="导入导出"
+                            open={activeMenu === 'tools-io'}
+                            onToggle={() => setActiveMenu((prev) => (prev === 'tools-io' ? null : 'tools-io'))}
+                        >
                             <div className="header-menu-section">
-                                <div className="header-menu-section-title">批量动作</div>
-                                <select className="header-device-select" value={batchAction} onChange={(e) => setBatchAction(e.target.value as BatchAction)} title="批量动作">
-                                    {BATCH_ACTION_OPTIONS.map((item) => (<option key={item.value} value={item.value}>{item.label}</option>))}
-                                </select>
-                                <button type="button" className="header-btn" onClick={executeBatchAction} disabled={!canExecuteBatch} title={canExecuteBatch ? '执行批量动作' : '请先选择组件'}>执行动作</button>
+                                <div className="header-menu-section-title">导入</div>
+                                <button type="button" className="header-btn" onClick={() => executeMenuAction(handleOpenImport)} title="从 JSON 文件导入大屏配置">选择 JSON 文件...</button>
                             </div>
-                            {/* 联动 & 设计 */}
                             <div className="header-menu-section">
-                                <div className="header-menu-section-title">设计与联动</div>
-                                <button type="button" className="header-btn" onClick={() => { setActiveMenu(null); setShowLinkageGraph(prev => !prev); }} title="查看组件联动关系图">联动关系图</button>
-                                <label className="header-menu-inline-label" htmlFor="screen-design-action">设计动作</label>
-                                <select id="screen-design-action" className="header-device-select" value={designAction} onChange={(e) => { const next = e.target.value; if (next === 'session' || next === 'variables' || next === 'interaction' || next === 'collaboration' || next === 'template' || next === 'import' || next === 'command') { setDesignAction(next); return; } setDesignAction('variables'); }} title="选择设计动作">
-                                    <option value="variables">变量管理</option>
-                                    <option value="interaction">联动调试</option>
-                                    <option value="session">沉淀会话</option>
-                                    <option value="collaboration">协作批注</option>
-                                    <option value="template">保存模板</option>
-                                    <option value="import">导入JSON</option>
-                                    <option value="command">命令面板</option>
+                                <div className="header-menu-section-title">导出</div>
+                                <label className="header-menu-inline-label" htmlFor="screen-io-device-mode">预览设备</label>
+                                <select id="screen-io-device-mode" className="header-device-select" value={previewDeviceMode} onChange={(e) => { const next = e.target.value; if (next === 'pc' || next === 'tablet' || next === 'mobile') { setPreviewDeviceMode(next); return; } setPreviewDeviceMode('auto'); }} title="预览设备模式">
+                                    <option value="auto">自动</option>
+                                    <option value="pc">PC</option>
+                                    <option value="tablet">平板</option>
+                                    <option value="mobile">手机</option>
                                 </select>
-                                <button type="button" className="header-btn" onClick={executeDesignAction} disabled={!canExecuteDesignAction} title="执行设计动作">执行设计动作</button>
-                            </div>
-                            {/* 帮助 */}
-                            <div className="header-menu-section">
-                                <div className="header-menu-section-title">帮助</div>
-                                <button type="button" className="header-btn" onClick={handleShortcutHelp} title="查看快捷键">快捷键</button>
+                                <button type="button" className="header-btn" onClick={() => executeMenuAction(handleExportJson)} title="导出 JSON（含内联资源）">导出 JSON</button>
+                                <button type="button" className="header-btn" onClick={() => executeMenuAction(handleExportPng)} disabled={!id} title="导出 PNG 图片">导出 PNG</button>
+                                <button type="button" className="header-btn" onClick={() => executeMenuAction(handleExportPdf)} disabled={!id} title="导出 PDF 文档">导出 PDF</button>
                             </div>
                         </HeaderMenu>
+                        {/* --- 4. 版本导出 (kept as-is) --- */}
                         <HeaderMenu
-                            label="版本导出"
+                            label="版本"
                             open={activeMenu === 'tools-release'}
                             onToggle={() => setActiveMenu((prev) => (prev === 'tools-release' ? null : 'tools-release'))}
                         >
                             <div className="header-menu-section">
-                                <div className="header-menu-section-title">版本与导出</div>
+                                <div className="header-menu-section-title">版本管理</div>
                                 <label className="header-menu-inline-label" htmlFor="screen-preview-device-mode">预览设备</label>
                                 <select id="screen-preview-device-mode" className="header-device-select" value={previewDeviceMode} onChange={(e) => { const next = e.target.value; if (next === 'pc' || next === 'tablet' || next === 'mobile') { setPreviewDeviceMode(next); return; } setPreviewDeviceMode('auto'); }} title="预览设备模式">
                                     <option value="auto">自动</option>
@@ -2240,36 +2169,28 @@ export function ScreenHeader({
                                         </button>
                                     </>
                                 ) : null}
-                                <label className="header-menu-inline-label" htmlFor="screen-export-action">导出动作</label>
-                                <select id="screen-export-action" className="header-device-select" value={exportAction} onChange={(e) => { const next = e.target.value; if (next === 'json' || next === 'pdf' || next === 'png') { setExportAction(next); return; } setExportAction('png'); }} title="选择导出格式">
-                                    <option value="png">导出PNG</option>
-                                    <option value="pdf">导出PDF</option>
-                                    <option value="json">导出JSON</option>
-                                </select>
-                                <button type="button" className="header-btn" onClick={executeExportAction} title="执行导出">执行导出</button>
                             </div>
                         </HeaderMenu>
+                        {/* --- 5. 安全 (replaces 治理) --- */}
                         <HeaderMenu
-                            label="治理"
-                            open={activeMenu === 'tools-governance'}
-                            onToggle={() => setActiveMenu((prev) => (prev === 'tools-governance' ? null : 'tools-governance'))}
+                            label="安全"
+                            open={activeMenu === 'tools-security'}
+                            onToggle={() => setActiveMenu((prev) => (prev === 'tools-security' ? null : 'tools-security'))}
                         >
                             <div className="header-menu-section">
-                                <div className="header-menu-section-title">治理与安全</div>
-                                <label className="header-menu-inline-label" htmlFor="screen-governance-action">治理动作</label>
-                                <select id="screen-governance-action" className="header-device-select" value={governanceAction} onChange={(e) => { const next = e.target.value; if (next === 'edit-lock' || next === 'cache' || next === 'compliance' || next === 'health' || next === 'acl' || next === 'audit' || next === 'share-policy' || next === 'share-link') { setGovernanceAction(next); return; } setGovernanceAction('cache'); }} title="选择治理动作">
-                                    <option value="edit-lock">编辑锁{lockedByOther ? '(占用)' : (editLock?.mine ? '(我)' : '')}</option>
-                                    <option value="cache">缓存观测</option>
-                                    <option value="compliance">合规</option>
-                                    <option value="health">体检</option>
-                                    <option value="acl">权限</option>
-                                    <option value="audit">审计</option>
-                                    <option value="share-policy">分享策略</option>
-                                    <option value="share-link">分享链接</option>
-                                </select>
-                                <button type="button" className="header-btn" onClick={executeGovernanceAction} disabled={!canExecuteGovernanceAction || (governanceAction === 'share-link' && isSharing)} title="执行治理动作">
-                                    {governanceAction === 'share-link' && isSharing ? '分享中...' : '执行治理动作'}
+                                <div className="header-menu-section-title">安全与治理</div>
+                                <button type="button" className="header-btn" onClick={() => executeMenuAction(() => { if (id && permissions.canRead) setShowEditLockPanel(true); })} disabled={!id || !permissions.canRead} title="查看/管理编辑锁">
+                                    编辑锁{lockedByOther ? '(占用)' : (editLock?.mine ? '(我)' : '')}
                                 </button>
+                                <button type="button" className="header-btn" onClick={() => executeMenuAction(() => setShowCachePanel(true))} title="缓存观测面板">缓存观测</button>
+                                <button type="button" className="header-btn" onClick={() => executeMenuAction(() => { if (id && permissions.canManage) setShowAclPanel(true); })} disabled={!id || !permissions.canManage} title="权限矩阵(ACL)">权限(ACL)</button>
+                                <button type="button" className="header-btn" onClick={() => executeMenuAction(() => { if (id && permissions.canManage) setShowAuditPanel(true); })} disabled={!id || !permissions.canManage} title="审计记录">审计</button>
+                                <button type="button" className="header-btn" onClick={() => executeMenuAction(() => { if (id && permissions.canPublish) setShowSharePolicyPanel(true); })} disabled={!id || !permissions.canPublish} title="分享策略配置">分享策略</button>
+                                <button type="button" className="header-btn" onClick={() => executeMenuAction(handleShare)} disabled={!id || !permissions.canPublish || isSharing} title="生成分享链接">
+                                    {isSharing ? '分享中...' : '分享链接'}
+                                </button>
+                                <button type="button" className="header-btn" onClick={() => executeMenuAction(() => setShowCompliancePanel(true))} title="合规检查">合规</button>
+                                <button type="button" className="header-btn" onClick={() => executeMenuAction(() => setShowHealthPanel(true))} title="体检报告">体检</button>
                             </div>
                         </HeaderMenu>
                         <input ref={themeInputRef} type="file" accept="application/json,.json" style={{ display: 'none' }} onChange={handleThemePackFileChange} />
@@ -2313,6 +2234,20 @@ export function ScreenHeader({
                         style={{ display: 'none' }}
                         onChange={handleImportJson}
                     />
+                    {importPreview && (
+                        <ImportPreviewModal
+                            isOpen={!!importPreview}
+                            onClose={() => setImportPreview(null)}
+                            fileName={importPreview.fileName}
+                            parsedSpec={importPreview.parsedSpec}
+                            templateMeta={importPreview.templateMeta}
+                            validation={importPreview.validation}
+                            resourcesInlined={importPreview.resourcesInlined}
+                            inlinedResourceCount={importPreview.inlinedResourceCount}
+                            mode="editor"
+                            onConfirm={handleImportConfirm}
+                        />
+                    )}
                 </div>
             </div>
             {lockedByOther && (
@@ -2445,16 +2380,17 @@ export function ScreenHeader({
                             width: 'min(680px, 96vw)',
                             maxHeight: '70vh',
                             overflow: 'hidden',
-                            background: '#ffffff',
-                            border: '1px solid var(--color-border)',
+                            background: '#1e2330',
+                            border: '1px solid rgba(255,255,255,0.1)',
                             borderRadius: 10,
-                            boxShadow: '0 20px 70px rgba(2,6,23,0.35)',
+                            boxShadow: '0 20px 70px rgba(0,0,0,0.6)',
                             display: 'grid',
                             gridTemplateRows: 'auto auto 1fr',
+                            color: '#e2e8f0',
                         }}
                         onClick={(event) => event.stopPropagation()}
                     >
-                        <div style={{ padding: '10px 12px 0', fontSize: 12, color: '#64748b' }}>
+                        <div style={{ padding: '10px 12px 0', fontSize: 12, color: '#94a3b8' }}>
                             命令面板（Ctrl/Cmd + K，↑/↓选择，Enter执行，Ctrl/Cmd + Shift + P 预览）
                         </div>
                         <div style={{ padding: '8px 12px 10px' }}>
@@ -2462,7 +2398,7 @@ export function ScreenHeader({
                                 ref={quickInputRef}
                                 type="text"
                                 className="screen-name-input"
-                                style={{ width: '100%', minWidth: 0 }}
+                                style={{ width: '100%', minWidth: 0, background: 'rgba(255,255,255,0.06)', color: '#e2e8f0', border: '1px solid rgba(255,255,255,0.15)' }}
                                 value={quickKeyword}
                                 onChange={(event) => {
                                     setQuickKeyword(event.target.value);
@@ -2499,7 +2435,7 @@ export function ScreenHeader({
                         </div>
                         <div style={{ overflowY: 'auto', padding: '0 12px 12px', display: 'grid', gap: 6 }}>
                             {filteredQuickActions.length === 0 ? (
-                                <div style={{ padding: '20px 12px', fontSize: 13, color: '#64748b' }}>
+                                <div style={{ padding: '20px 12px', fontSize: 13, color: '#94a3b8' }}>
                                     未匹配到动作，请换个关键词。
                                 </div>
                             ) : (
@@ -2516,8 +2452,8 @@ export function ScreenHeader({
                                         style={{
                                             width: '100%',
                                             justifyContent: 'flex-start',
-                                            background: index === quickActiveIndex ? 'rgba(148,163,184,0.2)' : undefined,
-                                            borderColor: index === quickActiveIndex ? '#94a3b8' : undefined,
+                                            background: index === quickActiveIndex ? 'rgba(99,130,255,0.2)' : undefined,
+                                            borderColor: index === quickActiveIndex ? 'rgba(99,130,255,0.5)' : undefined,
                                         }}
                                         disabled={item.disabled}
                                         onMouseEnter={() => setQuickActiveIndex(index)}
@@ -2531,8 +2467,8 @@ export function ScreenHeader({
                                                     fontSize: 11,
                                                     padding: '1px 6px',
                                                     borderRadius: 999,
-                                                    background: 'rgba(14,116,144,0.15)',
-                                                    color: '#0e7490',
+                                                    background: 'rgba(56,189,248,0.15)',
+                                                    color: '#38bdf8',
                                                 }}
                                                 >
                                                     最近
@@ -2540,7 +2476,7 @@ export function ScreenHeader({
                                             ) : null}
                                         </span>
                                         {item.hotkey ? (
-                                            <span style={{ marginLeft: 'auto', fontSize: 11, color: '#64748b' }}>
+                                            <span style={{ marginLeft: 'auto', fontSize: 11, color: '#94a3b8' }}>
                                                 {item.hotkey}
                                             </span>
                                         ) : null}
