@@ -20,7 +20,6 @@ import com.yuzhi.dts.platform.service.etl.DbtQualityGateService;
 import com.yuzhi.dts.platform.service.etl.DbtReleaseGateService;
 import com.yuzhi.dts.platform.service.etl.DbtSourceService;
 import com.yuzhi.dts.platform.service.ops.ExternalRunLogService;
-import com.yuzhi.dts.platform.service.topic.TopicBindingRuntimeService;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
@@ -47,7 +46,6 @@ public class EtlResource {
     private final DbtRunResultService dbtRunResultService;
     private final DbtQualityGateService dbtQualityGateService;
     private final DbtReleaseGateService dbtReleaseGateService;
-    private final TopicBindingRuntimeService topicBindingRuntimeService;
     private final DbtArtifactSyncState dbtArtifactSyncState;
     private final AirflowClient airflowClient;
     private final AirflowProperties airflowProperties;
@@ -69,7 +67,6 @@ public class EtlResource {
         DbtRunResultService dbtRunResultService,
         DbtQualityGateService dbtQualityGateService,
         DbtReleaseGateService dbtReleaseGateService,
-        TopicBindingRuntimeService topicBindingRuntimeService,
         DbtArtifactSyncState dbtArtifactSyncState,
         AirflowClient airflowClient,
         AirflowProperties airflowProperties,
@@ -88,7 +85,6 @@ public class EtlResource {
         this.dbtRunResultService = dbtRunResultService;
         this.dbtQualityGateService = dbtQualityGateService;
         this.dbtReleaseGateService = dbtReleaseGateService;
-        this.topicBindingRuntimeService = topicBindingRuntimeService;
         this.dbtArtifactSyncState = dbtArtifactSyncState;
         this.airflowClient = airflowClient;
         this.airflowProperties = airflowProperties;
@@ -516,7 +512,6 @@ public class EtlResource {
         }
         Map<String, Object> conf = new LinkedHashMap<>();
         dbtSourceService.refreshOdsSources();
-        TopicBindingRuntimeService.RuntimeCompilationResult topicRuntime = topicBindingRuntimeService.compileRuntimeArtifacts();
         conf.put("operation", operation);
         if (fullRefresh) {
             conf.put("full_refresh", true);
@@ -533,9 +528,6 @@ public class EtlResource {
         Map<String, Object> mergedVars = new LinkedHashMap<>();
         if (request != null && request.vars() != null && !request.vars().isEmpty()) {
             mergedVars.putAll(request.vars());
-        }
-        if (topicRuntime != null && topicRuntime.vars() != null && !topicRuntime.vars().isEmpty()) {
-            mergedVars.putAll(topicRuntime.vars());
         }
         if (!mergedVars.isEmpty()) {
             conf.put("vars", toJsonString(mergedVars));

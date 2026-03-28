@@ -6,7 +6,6 @@ import static org.mockito.Mockito.when;
 import com.yuzhi.dts.platform.config.DbtProperties;
 import com.yuzhi.dts.platform.domain.infra.InfraOdsTableMapping;
 import com.yuzhi.dts.platform.repository.infra.InfraOdsTableMappingRepository;
-import com.yuzhi.dts.platform.service.topic.TopicBindingRuntimeService;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
@@ -26,14 +25,11 @@ class DbtSourceServiceTest {
     @Mock
     private InfraOdsTableMappingRepository mappingRepository;
 
-    @Mock
-    private TopicBindingRuntimeService topicBindingRuntimeService;
-
     @TempDir
     Path tempDir;
 
     @Test
-    void refreshOdsSources_shouldUseConfiguredWorkspaceInsteadOfStaticDefault() throws Exception {
+    void refreshOdsSourcesShouldUseConfiguredWorkspaceInsteadOfStaticDefault() throws Exception {
         Path configuredProjectDir = tempDir.resolve("configured-dbt");
         Files.createDirectories(configuredProjectDir.resolve("models"));
 
@@ -68,7 +64,7 @@ class DbtSourceServiceTest {
         mapping.setEnabled(true);
         when(mappingRepository.findByEnabledTrueOrderByOdsSchemaAscOdsTableAsc()).thenReturn(List.of(mapping));
 
-        DbtSourceService service = new DbtSourceService(properties, configService, mappingRepository, topicBindingRuntimeService);
+        DbtSourceService service = new DbtSourceService(properties, configService, mappingRepository);
 
         DbtSourceService.DbtSourceRefreshResult result = service.refreshOdsSources();
 
@@ -79,7 +75,7 @@ class DbtSourceServiceTest {
     }
 
     @Test
-    void refreshOdsSources_shouldWriteEmptySourcesListWhenNoMappingsExist() throws Exception {
+    void refreshOdsSourcesShouldWriteEmptySourcesListWhenNoMappingsExist() throws Exception {
         Path configuredProjectDir = tempDir.resolve("configured-dbt-empty");
         Files.createDirectories(configuredProjectDir.resolve("models"));
 
@@ -107,18 +103,17 @@ class DbtSourceServiceTest {
         when(configService.loadConfig()).thenReturn(view);
         when(mappingRepository.findByEnabledTrueOrderByOdsSchemaAscOdsTableAsc()).thenReturn(List.of());
 
-        DbtSourceService service = new DbtSourceService(properties, configService, mappingRepository, topicBindingRuntimeService);
+        DbtSourceService service = new DbtSourceService(properties, configService, mappingRepository);
 
         DbtSourceService.DbtSourceRefreshResult result = service.refreshOdsSources();
 
         assertThat(result.enabled()).isTrue();
         assertThat(result.tables()).isEqualTo(0);
-        assertThat(Files.readString(configuredProjectDir.resolve("models").resolve("ods_sources.yml")))
-            .isEqualTo("version: 2\nsources: []\n");
+        assertThat(Files.readString(configuredProjectDir.resolve("models").resolve("ods_sources.yml"))).isEqualTo("version: 2\nsources: []\n");
     }
 
     @Test
-    void refreshOdsSources_shouldDeduplicateSameSchemaAndTable() throws Exception {
+    void refreshOdsSourcesShouldDeduplicateSameSchemaAndTable() throws Exception {
         Path configuredProjectDir = tempDir.resolve("configured-dbt-dup");
         Files.createDirectories(configuredProjectDir.resolve("models"));
 
@@ -159,7 +154,7 @@ class DbtSourceServiceTest {
 
         when(mappingRepository.findByEnabledTrueOrderByOdsSchemaAscOdsTableAsc()).thenReturn(List.of(first, second));
 
-        DbtSourceService service = new DbtSourceService(properties, configService, mappingRepository, topicBindingRuntimeService);
+        DbtSourceService service = new DbtSourceService(properties, configService, mappingRepository);
 
         DbtSourceService.DbtSourceRefreshResult result = service.refreshOdsSources();
 

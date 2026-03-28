@@ -1,6 +1,5 @@
 package com.yuzhi.dts.platform.service.etl;
 
-import com.yuzhi.dts.platform.service.topic.TopicBindingRuntimeService;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
@@ -17,16 +16,13 @@ public class DbtReleaseGateService {
     private static final int RECENT_BUILD_EVIDENCE_LIMIT = 20;
 
     private final DbtRunResultService dbtRunResultService;
-    private final TopicBindingRuntimeService topicBindingRuntimeService;
     private final boolean requireGitMetadata;
 
     public DbtReleaseGateService(
         DbtRunResultService dbtRunResultService,
-        TopicBindingRuntimeService topicBindingRuntimeService,
         @Value("${dts.dbt.release-gate.require-git-metadata:false}") boolean requireGitMetadata
     ) {
         this.dbtRunResultService = dbtRunResultService;
-        this.topicBindingRuntimeService = topicBindingRuntimeService;
         this.requireGitMetadata = requireGitMetadata;
     }
 
@@ -40,8 +36,6 @@ public class DbtReleaseGateService {
 
         evaluateGitBranch(normalizedGitRef, strict, blockers, warnings);
         evaluateCommitSha(normalizedCommitSha, strict, blockers, warnings);
-        evaluateTopicBindings(normalizedSelector, blockers);
-
         DbtRunResultService.DbtRunSummary latestRun = dbtRunResultService.loadLatestBuildSummary(20);
         BuildEvidence evidence = null;
         if (latestRun == null || !latestRun.present()) {
@@ -69,14 +63,6 @@ public class DbtReleaseGateService {
             warnings,
             evidence
         );
-    }
-
-    private void evaluateTopicBindings(String selector, List<String> blockers) {
-        TopicBindingRuntimeService.BindingDiagnostics diagnostics = topicBindingRuntimeService.diagnose(selector);
-        if (diagnostics == null || diagnostics.missingRequired().isEmpty()) {
-            return;
-        }
-        blockers.add("缺少专题绑定：" + String.join(", ", diagnostics.missingRequired()));
     }
 
     private void evaluateGitBranch(String gitRef, boolean strict, List<String> blockers, List<String> warnings) {

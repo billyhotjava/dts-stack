@@ -1,10 +1,11 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
+	applyBatchDeletedModelSelection,
 	applyDeletedModelSelection,
 	applyManualModelSelection,
 	resolveRunsRequestAfterSelection,
-} from "./sqlModelDeleteFlow.helpers";
+} from "./sqlModelDeleteFlow.helpers.ts";
 
 test("applyDeletedModelSelection clears selection and suppresses auto-select when deleting active model", () => {
 	const result = applyDeletedModelSelection({
@@ -54,5 +55,17 @@ test("resolveRunsRequestAfterSelection keeps selector when active model exists",
 	assert.deepEqual(result, {
 		shouldLoadRuns: true,
 		selector: "model:dwd_patent",
+	});
+});
+
+test("applyBatchDeletedModelSelection clears active model when it is included in deleted ids", () => {
+	const result = applyBatchDeletedModelSelection({
+		activeModelKey: "model-2",
+		deletedModelKeys: ["model-1", "model-2"],
+	});
+
+	assert.deepEqual(result, {
+		nextActiveModelKey: null,
+		suppressAutoSelect: true,
 	});
 });

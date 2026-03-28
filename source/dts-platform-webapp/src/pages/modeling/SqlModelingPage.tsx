@@ -1,4 +1,4 @@
-import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Suspense, useCallback, useEffect, useMemo, useRef, useState, type Key } from "react";
 import Editor from "@monaco-editor/react";
 import { toast } from "sonner";
 import { registerDbtLanguage, DBT_SQL_LANGUAGE_ID } from "./dbt-monaco-lang";
@@ -89,7 +89,6 @@ import {
 	checkDagReady,
 } from "@/api/platformApi";
 import dataSourcesService, { type InfraDataSource } from "@/api/services/dataSourcesService";
-import topicBindingService, { type TopicBindingDiagnostics } from "@/api/services/topicBindingService";
 import BatchImportModal from "./BatchImportModal";
 import BatchDeleteResultModal from "./components/BatchDeleteResultModal";
 import GovernanceModal from "./components/GovernanceModal";
@@ -166,16 +165,6 @@ const syncTag = (synced?: boolean) => {
 
 const normalizeUpper = (value?: string) => normalizeText(value).toUpperCase();
 const normalizeLower = (value?: string) => normalizeText(value).toLowerCase();
-const resolveTopicBindingSelector = (model?: { dagSelector?: string; name?: string }) => {
-	const dagSelector = normalizeText(model?.dagSelector);
-	if (dagSelector.startsWith("tab:")) {
-		return `tag:${dagSelector.slice(4)}`;
-	}
-	if (dagSelector) {
-		return dagSelector;
-	}
-	return model?.name ? `model:${model.name}` : undefined;
-};
 
 const resolveDbtSelector = (value?: string) => {
 	const selector = normalizeText(value);
@@ -311,8 +300,6 @@ export default function SqlModelingPage() {
 	const [previewData, setPreviewData] = useState<{ columns: string[]; rows: any[][] } | null>(null);
 	const [previewLoading, setPreviewLoading] = useState(false);
 	const [previewLimit, setPreviewLimit] = useState(100);
-	const [topicDiagnostics, setTopicDiagnostics] = useState<TopicBindingDiagnostics | null>(null);
-	const [topicDiagnosticsLoading, setTopicDiagnosticsLoading] = useState(false);
 	// FE-006: Git state
 	const [gitStatus, setGitStatus] = useState<{ initialized?: boolean; clean?: boolean; staged?: string[]; unstaged?: string[]; untracked?: string[] } | null>(null);
 	const [gitLog, setGitLog] = useState<Array<{ hash?: string; shortMessage?: string; author?: string; date?: string }>>([]);
@@ -534,23 +521,6 @@ export default function SqlModelingPage() {
 			setDbtRefs([]);
 		} finally {
 			setRefsLoading(false);
-		}
-	}, []);
-
-	const loadTopicDiagnostics = useCallback(async (selector?: string) => {
-		const normalizedSelector = normalizeText(selector);
-		if (!normalizedSelector) {
-			setTopicDiagnostics(null);
-			return;
-		}
-		setTopicDiagnosticsLoading(true);
-		try {
-			const resp = await topicBindingService.getStatus(normalizedSelector);
-			setTopicDiagnostics(resp || null);
-		} catch (err: any) {
-			setTopicDiagnostics(null);
-		} finally {
-			setTopicDiagnosticsLoading(false);
 		}
 	}, []);
 
@@ -1839,10 +1809,6 @@ export default function SqlModelingPage() {
 	}, [activeModel?.id, loadContractImpact]);
 
 	useEffect(() => {
-		void loadTopicDiagnostics(resolveTopicBindingSelector(activeModel || undefined));
-	}, [activeModel?.dagSelector, activeModel?.name, loadTopicDiagnostics]);
-
-	useEffect(() => {
 		if (!activeRunsRequest.shouldLoadRuns) {
 			setRuns([]);
 			return;
@@ -1861,30 +1827,6 @@ export default function SqlModelingPage() {
 		window.addEventListener("beforeunload", handler);
 		return () => window.removeEventListener("beforeunload", handler);
 	}, [sqlDirty]);
-
-	const topicBindingAlert = useMemo(() => {
-		if (!topicDiagnostics?.rows?.length) {
-			return null;
-		}
-		if (topicDiagnostics.missingRequired?.length) {
-			return {
-				type: "warning" as const,
-				message: `缺少 ${topicDiagnostics.missingRequired.length} 个必填专题绑定`,
-				description: topicDiagnostics.missingRequired.join("，"),
-			};
-		}
-		return {
-			type: "success" as const,
-			message: "当前模型依赖的专题绑定已就绪",
-			description: topicDiagnostics.rows
-				.map((row) =>
-					row.bound
-						? `${row.templateCode}.${row.entityCode} -> ${row.boundSchemaName || "ods"}.${row.boundTableName || "-"}`
-						: `${row.templateCode}.${row.entityCode} 未绑定`,
-				)
-				.join("；"),
-		};
-	}, [topicDiagnostics]);
 
 	const filteredModels = useMemo(() => {
 		const key = normalizeText(keyword).toLowerCase();
@@ -2319,7 +2261,7 @@ export default function SqlModelingPage() {
 					treeData={treeData}
 					selectedKeys={activeModelKey ? [`model:${activeModelKey}`] : activeSpaceKey ? [activeSpaceKey] : []}
 					checkedKeys={checkedModelKeys}
-					onSelect={(keys: React.Key[]) => {
+					onSelect={(keys: Key[]) => {
 						const key = String(keys[0] || "");
 						if (!key) return;
 						if (key.startsWith("space-")) {
@@ -2477,30 +2419,6 @@ export default function SqlModelingPage() {
 														</span>
 													</div>
 												</div>
-												<Divider className="my-2" />
-												<div className="text-xs font-medium text-muted-foreground mb-2">专题绑定诊断</div>
-												{topicDiagnosticsLoading ? (
-													<Skeleton active paragraph={{ rows: 2 }} title={false} />
-												) : topicBindingAlert ? (
-													<div className="space-y-2">
-														<Alert
-															type={topicBindingAlert.type}
-															showIcon
-															message={topicBindingAlert.message}
-															description={topicBindingAlert.description}
-														/>
-														<Button size="small" type="link" icon={<LinkOutlined />} onClick={() => router.push("/foundation/topic-bindings")}>
-															打开专题绑定中心
-														</Button>
-													</div>
-												) : (
-													<div className="space-y-2">
-														<div className="text-xs text-muted-foreground">当前模型未命中已定义的专题模板绑定。</div>
-														<Button size="small" type="link" icon={<LinkOutlined />} onClick={() => router.push("/foundation/topic-bindings")}>
-															查看专题绑定中心
-														</Button>
-													</div>
-												)}
 												<Divider className="my-2" />
 												<div className="text-xs font-medium text-muted-foreground mb-2">字段列表</div>
 												{columnsLoading && modelColumns.length === 0 ? (
@@ -3192,20 +3110,6 @@ export default function SqlModelingPage() {
 					<Form.Item name="models" label="模型选择器" rules={[{ required: true, message: "请输入模型选择器" }]}>
 						<Input placeholder="例如：tag:crm 或 model:xxx" />
 					</Form.Item>
-					{topicBindingAlert ? (
-						<Alert
-							type={topicBindingAlert.type}
-							showIcon
-							message={topicBindingAlert.message}
-							description={topicBindingAlert.description}
-							action={
-								<Button size="small" type="link" onClick={() => router.push("/foundation/topic-bindings")}>
-									去绑定
-								</Button>
-							}
-							className="mb-3"
-						/>
-					) : null}
 					<Form.Item name="target" label="Target">
 						<Input placeholder="dev" />
 					</Form.Item>
@@ -3270,10 +3174,26 @@ export default function SqlModelingPage() {
 				previewLoading={governancePreviewLoading}
 				executing={governanceExecuting}
 				preview={governancePreview}
-				selection={governanceSelection}
-				onSelectionChange={setGovernanceSelection}
+				selection={bulkSelection.selectedIds}
+				onSelectionChange={(keys) => setBulkSelection((current) => applyBulkSelectionChange(current, keys, "governance"))}
+				onSelectAllPreview={() =>
+					setBulkSelection((current) =>
+						applyBulkSelectionChange(
+							current,
+							governancePreview.map((item) => String(item.modelId || "").trim()).filter(Boolean),
+							"governance",
+						),
+					)
+				}
+				onClearSelection={() => setBulkSelection(EMPTY_BULK_SELECTION)}
 				spaces={spaces}
 				form={governanceForm}
+			/>
+
+			<BatchDeleteResultModal
+				open={batchDeleteResultOpen}
+				onClose={() => setBatchDeleteResultOpen(false)}
+				result={batchDeleteResult}
 			/>
 
 			<BatchImportModal
@@ -3311,11 +3231,19 @@ export default function SqlModelingPage() {
 				open={batchArchiveOpen}
 				title="批量归档未归档模型"
 				onCancel={() => setBatchArchiveOpen(false)}
-				onOk={submitBatchArchive}
-				okText="批量归档"
-				cancelText="取消"
 				confirmLoading={archiveSubmitting}
 				width={720}
+				footer={
+					<Space>
+						<Button onClick={() => setBatchArchiveOpen(false)}>取消</Button>
+						<Button danger icon={<DeleteOutlined />} onClick={removeSelectedModels} disabled={!batchArchiveSelection.length}>
+							删除所选
+						</Button>
+						<Button type="primary" onClick={submitBatchArchive} loading={archiveSubmitting} disabled={!batchArchiveSelection.length}>
+							批量归档
+						</Button>
+					</Space>
+				}
 			>
 				<Form layout="vertical" form={batchArchiveForm} disabled={archiveSubmitting}>
 					<Form.Item name="planId" label="目标项目空间" rules={[{ required: true, message: "请选择目标项目空间" }]}>
@@ -3326,17 +3254,34 @@ export default function SqlModelingPage() {
 					</Form.Item>
 					<Form.Item label={`待归档模型 (${batchArchiveSelection.length}/${unassignedModels.length})`}>
 						<div className="max-h-[320px] space-y-2 overflow-y-auto rounded border border-border p-3">
-							<Checkbox
-								checked={batchArchiveSelection.length > 0 && batchArchiveSelection.length === unassignedModels.length}
-								indeterminate={
-									batchArchiveSelection.length > 0 && batchArchiveSelection.length < unassignedModels.length
-								}
-								onChange={(event) =>
-									setBatchArchiveSelection(event.target.checked ? collectUnassignedModelIds(unassignedModels) : [])
-								}
-							>
-								全选未归档模型
-							</Checkbox>
+							<div className="flex items-center justify-between gap-3">
+								<Checkbox
+									checked={batchArchiveSelection.length > 0 && batchArchiveSelection.length === unassignedModels.length}
+									indeterminate={
+										batchArchiveSelection.length > 0 && batchArchiveSelection.length < unassignedModels.length
+									}
+									onChange={(event) =>
+										setBulkSelection((current) =>
+											applyBulkSelectionChange(
+												current,
+												event.target.checked ? unassignedModelIds : [],
+												"list",
+											),
+										)
+									}
+								>
+									全选未归档模型
+								</Checkbox>
+								<Button
+									type="link"
+									size="small"
+									className="px-0"
+									onClick={() => setBulkSelection(EMPTY_BULK_SELECTION)}
+									disabled={!batchArchiveSelection.length}
+								>
+									清空选择
+								</Button>
+							</div>
 							<div className="space-y-2 pt-2">
 								{unassignedModels.map((model, index) => {
 									const modelId = model.id || `unassigned-${index}`;
@@ -3350,10 +3295,14 @@ export default function SqlModelingPage() {
 												checked={checked}
 												disabled={!model.id}
 												onChange={(event) => {
-													setBatchArchiveSelection((current) =>
-														event.target.checked
-															? [...current, modelId]
-															: current.filter((item) => item !== modelId),
+													setBulkSelection((current) =>
+														applyBulkSelectionChange(
+															current,
+															event.target.checked
+																? [...batchArchiveSelection, modelId]
+																: batchArchiveSelection.filter((item) => item !== modelId),
+															"list",
+														),
 													);
 												}}
 											/>

@@ -108,41 +108,6 @@ export type ExcelImportErrorPreviewResponse = {
 	rows: ExcelImportErrorRow[];
 };
 
-export type ProjectCockpitBatchLoadRequest = {
-	fileId: string;
-};
-
-export type ProjectCockpitBatchLoadResponse = {
-	batchId: string;
-	batchCode: string;
-	loadedRowCount: number;
-	acceptedRowCount: number;
-	rejectedRowCount: number;
-	warningRowCount: number;
-	issueCount: number;
-	status: string;
-};
-
-export type ProjectCockpitBatchIssueRow = {
-	rowIndex?: number;
-	severity?: string;
-	issueCode?: string;
-	message?: string;
-	projectNo?: string;
-	subsystem?: string;
-	nodeTask?: string;
-	planDate?: string;
-	completionStatus?: string;
-	riskLevel?: string;
-};
-
-export type ProjectCockpitBatchIssuePreviewResponse = {
-	batchId: string;
-	issueRowCount: number;
-	limit: number;
-	rows: ProjectCockpitBatchIssueRow[];
-};
-
 export default {
 	list: () => apiClient.get<InfraDataSource[]>({ url: "/infra/data-sources" }),
 	detail: (id: string) => apiClient.get<InfraDataSource>({ url: `/infra/data-sources/${id}` }),
@@ -163,8 +128,4 @@ export default {
 		apiClient.post<ExcelImportParseResponse>({ url: "/infra/excel-import/parse", data: payload }),
 	excelErrors: (params: { fileId: string; limit?: number }) =>
 		apiClient.get<ExcelImportErrorPreviewResponse>({ url: "/infra/excel-import/errors", params }),
-	excelLoadProjectCockpit: (payload: ProjectCockpitBatchLoadRequest) =>
-		apiClient.post<ProjectCockpitBatchLoadResponse>({ url: "/infra/excel-import/project-cockpit/load", data: payload }),
-	projectCockpitIssues: (params: { batchId: string; severity?: string; limit?: number }) =>
-		apiClient.get<ProjectCockpitBatchIssuePreviewResponse>({ url: "/infra/excel-import/project-cockpit/issues", params }),
 };
