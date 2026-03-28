@@ -17,6 +17,7 @@ import com.yuzhi.dts.analytics.service.QueryExportService;
 import com.yuzhi.dts.analytics.service.QueryExecutionFacade;
 import com.yuzhi.dts.analytics.service.QueryMetricsService;
 import com.yuzhi.dts.analytics.service.QueryTraceService;
+import com.yuzhi.dts.analytics.service.AssetListFilterService;
 import com.yuzhi.dts.analytics.service.RevisionService;
 import com.yuzhi.dts.analytics.web.support.MetabaseAuth;
 import com.yuzhi.dts.analytics.web.support.PlatformContext;
@@ -62,6 +63,7 @@ public class CardResource {
     private final QueryExportService queryExportService;
     private final QueryMetricsService queryMetricsService;
     private final QueryTraceService queryTraceService;
+    private final AssetListFilterService assetListFilterService;
     private final ObjectMapper objectMapper;
 
     public CardResource(
@@ -77,6 +79,7 @@ public class CardResource {
             QueryExportService queryExportService,
             QueryMetricsService queryMetricsService,
             QueryTraceService queryTraceService,
+            AssetListFilterService assetListFilterService,
             ObjectMapper objectMapper) {
         this.sessionService = sessionService;
         this.cardRepository = cardRepository;
@@ -90,6 +93,7 @@ public class CardResource {
         this.queryExportService = queryExportService;
         this.queryMetricsService = queryMetricsService;
         this.queryTraceService = queryTraceService;
+        this.assetListFilterService = assetListFilterService;
         this.objectMapper = objectMapper;
     }
 
@@ -115,6 +119,9 @@ public class CardResource {
         } else {
             cards = cardRepository.findAllByArchivedFalseOrderByIdAsc();
         }
+
+        cards = assetListFilterService.filterByPermission(
+            cards, "CARD", c -> String.valueOf(c.getId()), request);
 
         return ResponseEntity.ok(cards.stream()
                 .map(card -> toCardResponse(card, null, favoriteCardIds.contains(card.getId())))

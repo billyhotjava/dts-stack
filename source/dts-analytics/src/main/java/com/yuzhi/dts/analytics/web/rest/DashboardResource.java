@@ -22,6 +22,7 @@ import com.yuzhi.dts.analytics.service.EntityIdGenerator;
 import com.yuzhi.dts.analytics.service.FieldValuesService;
 import com.yuzhi.dts.analytics.service.PublicLinkService;
 import com.yuzhi.dts.analytics.service.QueryExecutionFacade;
+import com.yuzhi.dts.analytics.service.AssetListFilterService;
 import com.yuzhi.dts.analytics.service.RevisionService;
 import com.yuzhi.dts.analytics.web.support.MetabaseAuth;
 import com.yuzhi.dts.analytics.web.support.PlatformContext;
@@ -67,6 +68,7 @@ public class DashboardResource {
     private final AnalyticsTableRepository tableRepository;
     private final FieldValuesService fieldValuesService;
     private final QueryExecutionFacade queryExecutionFacade;
+    private final AssetListFilterService assetListFilterService;
     private final ObjectMapper objectMapper;
 
     public DashboardResource(
@@ -83,6 +85,7 @@ public class DashboardResource {
             AnalyticsTableRepository tableRepository,
             FieldValuesService fieldValuesService,
             QueryExecutionFacade queryExecutionFacade,
+            AssetListFilterService assetListFilterService,
             ObjectMapper objectMapper) {
         this.sessionService = sessionService;
         this.dashboardRepository = dashboardRepository;
@@ -97,6 +100,7 @@ public class DashboardResource {
         this.tableRepository = tableRepository;
         this.fieldValuesService = fieldValuesService;
         this.queryExecutionFacade = queryExecutionFacade;
+        this.assetListFilterService = assetListFilterService;
         this.objectMapper = objectMapper;
     }
 
@@ -114,7 +118,11 @@ public class DashboardResource {
             }
         }
 
-        return ResponseEntity.ok(dashboardRepository.findAllByArchivedFalseOrderByIdAsc().stream()
+        List<AnalyticsDashboard> dashboards = dashboardRepository.findAllByArchivedFalseOrderByIdAsc();
+        dashboards = assetListFilterService.filterByPermission(
+            dashboards, "DASHBOARD", d -> String.valueOf(d.getId()), request);
+
+        return ResponseEntity.ok(dashboards.stream()
                 .map(dashboard -> toDashboardListItem(dashboard, favoriteDashboardIds.contains(dashboard.getId())))
                 .toList());
     }

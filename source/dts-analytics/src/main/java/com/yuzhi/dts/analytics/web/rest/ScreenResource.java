@@ -20,6 +20,7 @@ import com.yuzhi.dts.analytics.service.ScreenWarmupService;
 import com.yuzhi.dts.analytics.service.ScreenAiGenerationService;
 import com.yuzhi.dts.analytics.service.ScreenComplianceService;
 import com.yuzhi.dts.analytics.service.ScreenServerRenderExportService;
+import com.yuzhi.dts.analytics.service.AssetListFilterService;
 import com.yuzhi.dts.analytics.service.ScreenSpecValidator;
 import com.yuzhi.dts.analytics.web.support.MetabaseAuth;
 import com.yuzhi.dts.analytics.web.support.PlatformContext;
@@ -71,6 +72,7 @@ public class ScreenResource {
     private final ScreenComplianceService screenComplianceService;
     private final ScreenServerRenderExportService screenServerRenderExportService;
     private final ScreenSpecValidator screenSpecValidator;
+    private final AssetListFilterService assetListFilterService;
     private final PublicLinkService publicLinkService;
     private final ObjectMapper objectMapper;
 
@@ -86,6 +88,7 @@ public class ScreenResource {
             ScreenComplianceService screenComplianceService,
             ScreenServerRenderExportService screenServerRenderExportService,
             ScreenSpecValidator screenSpecValidator,
+            AssetListFilterService assetListFilterService,
             PublicLinkService publicLinkService,
             ObjectMapper objectMapper) {
         this.sessionService = sessionService;
@@ -99,6 +102,7 @@ public class ScreenResource {
         this.screenComplianceService = screenComplianceService;
         this.screenServerRenderExportService = screenServerRenderExportService;
         this.screenSpecValidator = screenSpecValidator;
+        this.assetListFilterService = assetListFilterService;
         this.publicLinkService = publicLinkService;
         this.objectMapper = objectMapper;
     }
@@ -111,7 +115,11 @@ public class ScreenResource {
         }
 
         PlatformContext context = PlatformContext.from(request);
-        List<ObjectNode> result = screenRepository.findAllByArchivedFalseOrderByIdDesc().stream()
+        List<AnalyticsScreen> screens = screenRepository.findAllByArchivedFalseOrderByIdDesc();
+        screens = assetListFilterService.filterByPermission(
+            screens, "SCREEN", s -> String.valueOf(s.getId()), request);
+
+        List<ObjectNode> result = screens.stream()
                 .map(screen -> {
                     ScreenAclService.PermissionSnapshot permissions = screenAclService.snapshot(screen, user.get(), context);
                     if (!permissions.canRead()) {
