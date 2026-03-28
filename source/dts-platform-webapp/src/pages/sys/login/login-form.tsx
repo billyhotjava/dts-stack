@@ -513,12 +513,12 @@ export function LoginForm({ className, ...props }: React.ComponentPropsWithoutRe
 							{bilingual("sys.login.loginButton")}
 						</Button>
 					)}
-					{!isAdminMode && (
-					<Button type="button" variant="outline" className="w-full" onClick={handlePkiLogin} disabled={loading}>
-						{loading && <Loader2 className="animate-spin mr-2" />}
-						证书登录
-					</Button>
-				)}
+						{!isAdminMode && (
+						<Button type="button" variant="outline" className="w-full" onClick={handlePkiLogin} disabled={loading}>
+							{loading && <Loader2 className="animate-spin mr-2" />}
+							证书登录
+						</Button>
+					)}
 				</form>
 			</Form>
 			<Dialog open={pkiDialogOpen} onOpenChange={handlePkiDialogOpenChange}>

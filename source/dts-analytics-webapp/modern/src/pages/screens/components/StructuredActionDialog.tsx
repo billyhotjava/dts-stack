@@ -53,6 +53,9 @@ export function StructuredActionDialog({
             )}
         >
             <div style={{ display: 'grid', gap: 12 }}>
+                {description && (
+                    <div style={{ color: '#666', fontSize: 13, marginBottom: 4 }}>{description}</div>
+                )}
                 {fields.map((field) => (
                     <label key={field.key} style={{ display: 'grid', gap: 6 }}>
                         <span style={{ fontSize: 13, fontWeight: 600 }}>{field.label}</span>
