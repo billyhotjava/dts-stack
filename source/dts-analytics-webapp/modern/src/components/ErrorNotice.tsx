@@ -29,32 +29,32 @@ export function ErrorNotice({ locale, error }: Props) {
 
 	if (!isAuth) {
 		return (
-			<div className="card">
-				<div className="muted">{t(locale, "error")}</div>
-				<div style={{ marginTop: 8, whiteSpace: "pre-wrap" }}>{message}</div>
+			<div className="rounded-lg border border-border-default bg-surface-card p-4">
+				<div className="text-text-muted">{t(locale, "error")}</div>
+				<div className="mt-2 whitespace-pre-wrap">{message}</div>
 			</div>
 		);
 	}
 
 	if (is403) {
 		return (
-			<div className="card" style={{ textAlign: "center", padding: "24px 16px" }}>
-				<div style={{ fontSize: 32, opacity: 0.3, marginBottom: 8 }}>&#128274;</div>
-				<div style={{ color: "#666" }}>{t(locale, "auth.forbidden")}</div>
+			<div className="rounded-lg border border-border-default bg-surface-card text-center py-6 px-4">
+				<div className="text-[32px] opacity-30 mb-2">&#128274;</div>
+				<div className="text-text-secondary">{t(locale, "auth.forbidden")}</div>
 			</div>
 		);
 	}
 
 	return (
-		<div className="card">
-			<div className="muted">{t(locale, "error")}</div>
-			<div style={{ marginTop: 8 }}>{t(locale, "auth.expired")}</div>
-			<div style={{ marginTop: 12, display: "flex", gap: 8, flexWrap: "wrap" }}>
-				<a className="btn" href="/" rel="noreferrer">
+		<div className="rounded-lg border border-border-default bg-surface-card p-4">
+			<div className="text-text-muted">{t(locale, "error")}</div>
+			<div className="mt-2">{t(locale, "auth.expired")}</div>
+			<div className="mt-3 flex gap-2 flex-wrap">
+				<a className="inline-flex items-center px-3 py-1.5 rounded-md bg-brand text-white text-sm" href="/" rel="noreferrer">
 					{t(locale, "auth.back")}
 				</a>
 				<button
-					className="btn"
+					className="inline-flex items-center px-3 py-1.5 rounded-md bg-brand text-white text-sm cursor-pointer"
 					type="button"
 					onClick={() => {
 						window.location.reload();
@@ -63,7 +63,7 @@ export function ErrorNotice({ locale, error }: Props) {
 					{t(locale, "auth.reload")}
 				</button>
 			</div>
-			<div style={{ marginTop: 8, fontSize: 12, opacity: 0.7, whiteSpace: "pre-wrap" }}>{message}</div>
+			<div className="mt-2 text-xs opacity-70 whitespace-pre-wrap">{message}</div>
 		</div>
 	);
 }

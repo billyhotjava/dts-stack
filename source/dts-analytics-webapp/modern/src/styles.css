@@ -2,6 +2,44 @@
 @import './styles/tokens.css';
 @import './styles/utilities.css';
 
+/* Tailwind — layout utilities only, preflight disabled (AntD manages components) */
+@import "tailwindcss" layer(utilities) theme(static);
+
+@layer theme {
+  @theme {
+    /* Map analytics tokens to Tailwind theme */
+    --color-surface-page: var(--surface-page);
+    --color-surface-card: var(--surface-card);
+    --color-surface-float: var(--surface-float);
+    --color-surface-muted: var(--surface-muted);
+    --color-surface-workspace: var(--surface-workspace);
+
+    --color-text-primary: var(--text-primary);
+    --color-text-secondary: var(--text-secondary);
+    --color-text-muted: var(--text-muted);
+
+    --color-border-default: var(--color-border);
+    --color-border-strong: var(--color-border-strong);
+
+    --color-brand: var(--color-brand);
+    --color-success: var(--color-success);
+    --color-warning: var(--color-warning);
+    --color-error: var(--color-error);
+    --color-info: var(--color-info);
+
+    --radius-xs: var(--radius-xs);
+    --radius-sm: var(--radius-sm);
+    --radius-md: var(--radius-md);
+    --radius-lg: var(--radius-lg);
+    --radius-xl: var(--radius-xl);
+
+    --shadow-sm: var(--shadow-sm);
+    --shadow-md: var(--shadow-md);
+    --shadow-lg: var(--shadow-lg);
+    --shadow-xl: var(--shadow-xl);
+  }
+}
+
 /* Base Styles */
 :root {
   color-scheme: light;

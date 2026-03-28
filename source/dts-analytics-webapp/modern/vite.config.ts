@@ -1,4 +1,5 @@
 import react from "@vitejs/plugin-react";
+import tailwindcss from "@tailwindcss/vite";
 import { existsSync } from "node:fs";
 import { defineConfig, loadEnv } from "vite";
 
@@ -66,7 +67,7 @@ export function createAnalyticsViteConfig(
 
 	return {
 		base: publicBase,
-		plugins: [react()],
+		plugins: [tailwindcss(), react()],
 		server: {
 			host: true,
 			// Containerized dev may proxy analytics through sibling services (for example dts-platform-webapp),
