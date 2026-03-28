@@ -105,8 +105,6 @@ In the Chinese (zh-CN) section:
 "nav.myCollection": "你的个人集合",
 // Change:
 "nav.collections": "工作空间",  // was "集合"
-// Add:
-"nav.workspace": "工作空间",
 ```
 
 In the English section:
@@ -116,9 +114,9 @@ In the English section:
 "nav.myCollection": "My collection",
 // Change:
 "nav.collections": "Workspace",  // was "Collections"
-// Add:
-"nav.workspace": "Workspace",
 ```
+
+No new keys needed — reuse `nav.collections` everywhere, just change its value.
 
 Also update workspace-related keys:
 ```typescript

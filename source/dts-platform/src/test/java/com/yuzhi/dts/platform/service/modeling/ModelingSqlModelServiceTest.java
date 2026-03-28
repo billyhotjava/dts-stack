@@ -53,10 +53,14 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.api.io.TempDir;
 import org.mockito.ArgumentCaptor;
-import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.Spy;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.TransactionDefinition;
+import org.springframework.transaction.TransactionException;
+import org.springframework.transaction.TransactionStatus;
+import org.springframework.transaction.support.SimpleTransactionStatus;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 @ExtendWith(MockitoExtension.class)
@@ -116,11 +120,11 @@ class ModelingSqlModelServiceTest {
     @Spy
     private ObjectMapper objectMapper = new ObjectMapper();
 
-    @InjectMocks
     private ModelingSqlModelService service;
 
-    @InjectMocks
     private ModelGenerationService generationService;
+
+    private final PlatformTransactionManager transactionManager = new NoopTransactionManager();
 
     @TempDir
     Path tempDir;
@@ -137,6 +141,44 @@ class ModelingSqlModelServiceTest {
         plan.setId(planId);
         plan.setName("Patent Plan");
         plan.setOwnerDept("D1");
+        service =
+            new ModelingSqlModelService(
+                repo,
+                planRepo,
+                dataSourceRepository,
+                adminInfraClient,
+                organizationVisibilityService,
+                security,
+                dbtConfigService,
+                datasetRepository,
+                tableRepository,
+                columnRepository,
+                queryDatasetAssetRepository,
+                biReportLinkRepository,
+                columnSyncService,
+                auditService,
+                objectMapper,
+                fileService,
+                taskExecutor,
+                transactionManager
+            );
+        generationService =
+            new ModelGenerationService(
+                service,
+                fileService,
+                repo,
+                planRepo,
+                odsTableMappingRepository,
+                dataSourceRepository,
+                adminInfraClient,
+                security,
+                dbtConfigService,
+                datasetRepository,
+                tableRepository,
+                columnRepository,
+                queryDatasetAssetRepository,
+                biReportLinkRepository
+            );
 
         lenient().when(security.resolveActiveDept(anyString())).thenReturn("D1");
         lenient().when(security.hasInstituteScope()).thenReturn(false);
@@ -213,7 +255,6 @@ class ModelingSqlModelServiceTest {
             new DbtConfigService.DbtWorkspaceStatus(true, "ok", Map.of())
         );
         lenient().when(dbtConfigService.loadConfig()).thenReturn(view);
-        setField(generationService, "coreService", service);
     }
 
     @Test
@@ -518,7 +559,84 @@ class ModelingSqlModelServiceTest {
     }
 
     @Test
-    void list_shouldDeduplicateExistingModelsWithSamePlanAndName() {
+    void create_shouldRejectDuplicateModelNameWithinSamePlan() {
+        UUID sourceId = UUID.randomUUID();
+        when(dataSourceRepository.findById(sourceId)).thenReturn(Optional.of(source(sourceId, "ODS-Lake", "postgres")));
+
+        ModelingSqlModel existing = new ModelingSqlModel();
+        existing.setId(UUID.randomUUID());
+        existing.setPlanId(planId);
+        existing.setName("dim_node_type");
+        existing.setOwnerDept("D1");
+        storedModels.add(existing);
+
+        ModelingSqlModelService.SqlModelRequest request = new ModelingSqlModelService.SqlModelRequest(
+            planId,
+            "dim_node_type",
+            null,
+            "DWD",
+            sourceId,
+            "public",
+            "table",
+            "project-management",
+            "desc",
+            "select 1 as id",
+            true,
+            "DRAFT",
+            "D1",
+            null
+        );
+
+        assertThatThrownBy(() -> service.create(request, "D1")).isInstanceOf(IllegalArgumentException.class).hasMessageContaining("模型名已存在");
+    }
+
+    @Test
+    void update_shouldRejectRenameToDuplicateModelNameWithinSamePlan() {
+        UUID sourceId = UUID.randomUUID();
+        when(dataSourceRepository.findById(sourceId)).thenReturn(Optional.of(source(sourceId, "ODS-Lake", "postgres")));
+
+        ModelingSqlModel existing = new ModelingSqlModel();
+        existing.setId(UUID.randomUUID());
+        existing.setPlanId(planId);
+        existing.setName("dim_node_type");
+        existing.setOwnerDept("D1");
+
+        ModelingSqlModel editing = new ModelingSqlModel();
+        editing.setId(UUID.randomUUID());
+        editing.setPlanId(planId);
+        editing.setName("dwd_project_node");
+        editing.setLayer("DWD");
+        editing.setSourceDataSourceId(sourceId);
+        editing.setOwnerDept("D1");
+        editing.setModelPath("models/dwd/project/dwd_project_node.sql");
+
+        storedModels.add(existing);
+        storedModels.add(editing);
+
+        ModelingSqlModelService.SqlModelRequest request = new ModelingSqlModelService.SqlModelRequest(
+            planId,
+            "dim_node_type",
+            null,
+            "DWD",
+            sourceId,
+            "public",
+            "table",
+            "project-management",
+            "desc",
+            "select 1 as id",
+            true,
+            "DRAFT",
+            "D1",
+            null
+        );
+
+        assertThatThrownBy(() -> service.update(editing.getId(), request, "D1"))
+            .isInstanceOf(IllegalArgumentException.class)
+            .hasMessageContaining("模型名已存在");
+    }
+
+    @Test
+    void list_shouldReturnAllExistingModelsWithSamePlanAndName() {
         UUID sourceId = UUID.randomUUID();
 
         ModelingSqlModel older = new ModelingSqlModel();
@@ -552,9 +670,8 @@ class ModelingSqlModelServiceTest {
 
         List<ModelingSqlModelService.SqlModelDto> models = service.list(planId, null, "D1");
 
-        assertThat(models).hasSize(1);
-        assertThat(models.get(0).id()).isEqualTo(newer.getId());
-        assertThat(models.get(0).status()).isEqualTo("PUBLISHED");
+        assertThat(models).hasSize(2);
+        assertThat(models).extracting(ModelingSqlModelService.SqlModelDto::id).containsExactlyInAnyOrder(older.getId(), newer.getId());
     }
 
     @Test
@@ -1025,5 +1142,19 @@ class ModelingSqlModelServiceTest {
             }
         }
         return archive;
+    }
+
+    private static final class NoopTransactionManager implements PlatformTransactionManager {
+
+        @Override
+        public TransactionStatus getTransaction(org.springframework.transaction.TransactionDefinition definition) throws TransactionException {
+            return new SimpleTransactionStatus();
+        }
+
+        @Override
+        public void commit(TransactionStatus status) throws TransactionException {}
+
+        @Override
+        public void rollback(TransactionStatus status) throws TransactionException {}
     }
 }

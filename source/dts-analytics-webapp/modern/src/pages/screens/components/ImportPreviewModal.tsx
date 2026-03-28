@@ -62,7 +62,7 @@ export function ImportPreviewModal({
 			title="导入预览"
 			width={520}
 			footer={
-				<div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
+				<div className="flex justify-end gap-sm">
 					<button type="button" className="header-btn" onClick={onClose}>取消</button>
 					<button
 						type="button"
@@ -75,14 +75,14 @@ export function ImportPreviewModal({
 				</div>
 			}
 		>
-			<div style={{ display: 'grid', gap: 16 }}>
-				<div style={{ fontSize: 13, color: 'var(--color-text-secondary, #6b7280)' }}>
+			<div className="grid" style={{ gap: 16 }}>
+				<div className="text-sm text-secondary">
 					文件: {fileName}
 				</div>
 
-				<div style={{ padding: '12px 16px', background: 'var(--color-bg-secondary, #f8f9fa)', borderRadius: 8 }}>
-					<div style={{ fontWeight: 600, marginBottom: 8 }}>基本信息</div>
-					<div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '6px 24px', fontSize: 13 }}>
+				<div className="rounded-md" style={{ padding: '12px 16px', background: 'var(--color-bg-secondary)' }}>
+					<div className="font-semibold" style={{ marginBottom: 8 }}>基本信息</div>
+					<div className="grid grid-cols-2 text-sm" style={{ gap: '6px 24px' }}>
 						<div>名称: <strong>{templateMeta?.name || parsedSpec.name || '未命名'}</strong></div>
 						<div>尺寸: <strong>{parsedSpec.width ?? '?'} × {parsedSpec.height ?? '?'}</strong></div>
 						<div>组件数: <strong>{componentCount}</strong>{pageCount > 1 ? ` (${pageCount} 页)` : ''}</div>
@@ -95,25 +95,38 @@ export function ImportPreviewModal({
 						)}
 					</div>
 					{templateMeta?.tags && templateMeta.tags.length > 0 && (
-						<div style={{ marginTop: 8, fontSize: 12 }}>
+						<div className="text-xs" style={{ marginTop: 8 }}>
 							标签: {templateMeta.tags.map((tag) => (
-								<span key={tag} style={{ display: 'inline-block', padding: '1px 8px', marginRight: 4, background: 'var(--color-bg-tertiary, #e5e7eb)', borderRadius: 4 }}>{tag}</span>
+								<span
+									key={tag}
+									className="inline-block rounded-xs"
+									style={{ padding: '1px 8px', marginRight: 4, background: 'var(--color-bg-tertiary)' }}
+								>
+									{tag}
+								</span>
 							))}
 						</div>
 					)}
 				</div>
 
-				<div style={{ padding: '12px 16px', background: hasErrors ? 'rgba(239,68,68,0.06)' : 'rgba(16,185,129,0.06)', borderRadius: 8, border: hasErrors ? '1px solid rgba(239,68,68,0.2)' : '1px solid rgba(16,185,129,0.2)' }}>
-					<div style={{ fontWeight: 600, marginBottom: 4 }}>校验结果</div>
+				<div
+					className="rounded-md"
+					style={{
+						padding: '12px 16px',
+						background: hasErrors ? 'rgba(239,68,68,0.06)' : 'rgba(16,185,129,0.06)',
+						border: hasErrors ? '1px solid rgba(239,68,68,0.2)' : '1px solid rgba(16,185,129,0.2)',
+					}}
+				>
+					<div className="font-semibold" style={{ marginBottom: 4 }}>校验结果</div>
 					{hasErrors ? (
-						<div style={{ color: '#b91c1c', fontSize: 13 }}>
+						<div className="text-sm" style={{ color: '#b91c1c' }}>
 							{validation.errors.map((e, i) => <div key={i}>✗ {e}</div>)}
 						</div>
 					) : (
-						<div style={{ color: '#047857', fontSize: 13 }}>✓ 配置格式合法</div>
+						<div className="text-sm" style={{ color: '#047857' }}>✓ 配置格式合法</div>
 					)}
 					{validation.warnings.length > 0 && (
-						<div style={{ color: '#92400e', fontSize: 13, marginTop: 4 }}>
+						<div className="text-sm" style={{ color: '#92400e', marginTop: 4 }}>
 							{validation.warnings.map((w, i) => <div key={i}>⚠ {w}</div>)}
 						</div>
 					)}
@@ -121,21 +134,18 @@ export function ImportPreviewModal({
 
 				{!hasErrors && (
 					<div>
-						<div style={{ fontWeight: 600, marginBottom: 8 }}>导入方式</div>
-						<div style={{ display: 'grid', gap: 8 }}>
+						<div className="font-semibold" style={{ marginBottom: 8 }}>导入方式</div>
+						<div className="grid gap-sm">
 							{actions.map((action) => (
 								<label
 									key={action.value}
+									className="flex items-start cursor-pointer rounded-md"
 									style={{
-										display: 'flex',
-										alignItems: 'flex-start',
 										gap: 8,
 										padding: '10px 14px',
-										borderRadius: 8,
 										border: selectedAction === action.value
-											? '2px solid var(--color-primary, #3B82F6)'
-											: '1px solid var(--color-border, #e0e0e0)',
-										cursor: 'pointer',
+											? '2px solid var(--color-brand)'
+											: '1px solid var(--color-border)',
 										background: selectedAction === action.value ? 'rgba(59,130,246,0.04)' : undefined,
 									}}
 								>
@@ -148,8 +158,8 @@ export function ImportPreviewModal({
 										style={{ marginTop: 2 }}
 									/>
 									<div>
-										<div style={{ fontWeight: 500 }}>{action.label}</div>
-										<div style={{ fontSize: 12, color: 'var(--color-text-secondary, #6b7280)' }}>{action.description}</div>
+										<div className="font-medium">{action.label}</div>
+										<div className="text-xs text-secondary">{action.description}</div>
 									</div>
 								</label>
 							))}

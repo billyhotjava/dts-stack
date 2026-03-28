@@ -30,12 +30,12 @@ function DraggableComponentItem({ item, favorite, onToggleFavorite, onUse }: Dra
             ref={(node) => {
                 drag(node);
             }}
-            className="component-item"
+            className="relative flex flex-col items-center pt-2.5 px-1 pb-1.5 bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg cursor-grab overflow-hidden transition-all duration-150 hover:border-[var(--color-primary)] hover:shadow-[0_2px_8px_rgba(80,158,227,0.12)] hover:-translate-y-px active:cursor-grabbing active:translate-y-0"
             style={{ opacity: isDragging ? 0.5 : 1 }}
         >
             <button
                 type="button"
-                className="component-favorite-btn"
+                className="absolute top-0.5 right-0.5 border-none bg-transparent text-amber-400 cursor-pointer text-[10px] leading-none p-0.5 z-[1]"
                 onClick={(e) => {
                     e.stopPropagation();
                     e.preventDefault();
@@ -45,8 +45,8 @@ function DraggableComponentItem({ item, favorite, onToggleFavorite, onUse }: Dra
             >
                 {favorite ? '★' : '☆'}
             </button>
-            <div className="component-item-icon">{item.icon}</div>
-            <span className="component-item-name">{item.name}</span>
+            <div className="w-9 h-9 flex items-center justify-center text-[22px] text-[var(--color-primary)] mb-0.5 bg-[var(--color-primary-light,rgba(80,158,227,0.08))] rounded-lg">{item.icon}</div>
+            <span className="text-[10px] text-[var(--color-text-secondary)] text-center leading-tight max-w-full overflow-hidden text-ellipsis whitespace-nowrap">{item.name}</span>
         </div>
     );
 }
@@ -308,11 +308,11 @@ export function ComponentLibraryPanel() {
     }, [visibleCategories, activeTag]);
 
     return (
-        <div className="component-library">
-            <div className="component-library-header">
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                    <h3 style={{ margin: 0 }}>组件库</h3>
-                    <div style={{ display: 'flex', gap: 4, fontSize: 10 }}>
+        <div className="w-[280px] bg-[var(--color-surface-secondary)] border-r border-[var(--color-border)] flex flex-col overflow-hidden">
+            <div className="px-3 py-2.5 border-b border-[var(--color-border)] shrink-0">
+                <div className="flex items-center justify-between">
+                    <h3 className="m-0 text-sm font-semibold text-[var(--color-text-primary)]">组件库</h3>
+                    <div className="flex gap-1 text-[10px]">
                         <button type="button" className="component-library-scope-btn" onClick={expandVisibleCategories} title="展开分类">▼</button>
                         <button type="button" className="component-library-scope-btn" onClick={collapseVisibleCategories} title="收起分类">▲</button>
                     </div>
@@ -320,19 +320,18 @@ export function ComponentLibraryPanel() {
                 <input
                     ref={searchInputRef}
                     type="text"
-                    className="property-input"
+                    className="property-input mt-1.5 w-full"
                     value={query}
                     onChange={(e) => setQuery(e.target.value)}
                     placeholder="搜索组件（按 / 聚焦）"
-                    style={{ marginTop: 6, width: '100%' }}
                 />
-                <div className="component-library-scope-row" style={{ marginTop: 6 }}>
+                <div className="flex flex-wrap gap-1.5 mt-1.5">
                     <button type="button" className={`component-library-scope-btn ${activeScope === 'all' ? 'active' : ''}`} onClick={() => setActiveScope('all')}>全部</button>
                     <button type="button" className={`component-library-scope-btn ${activeScope === 'favorites' ? 'active' : ''}`} onClick={() => setActiveScope('favorites')}>★{favorites.length}</button>
                     <button type="button" className={`component-library-scope-btn ${activeScope === 'recent' ? 'active' : ''}`} onClick={() => setActiveScope('recent')}>⏱{recent.length}</button>
                     <button type="button" className={`component-library-scope-btn ${activeScope === 'plugin' ? 'active' : ''}`} onClick={() => setActiveScope('plugin')}>🔌</button>
                 </div>
-                <div className="component-library-tags" style={{ marginTop: 4 }}>
+                <div className="component-library-tags flex flex-wrap gap-1 mt-1">
                     {CATEGORY_TAGS.map(tag => (
                         <button
                             key={tag}
@@ -345,16 +344,16 @@ export function ComponentLibraryPanel() {
                     ))}
                 </div>
             </div>
-            <div className="component-library-content">
+            <div className="flex-1 overflow-y-auto p-3">
                 {pluginError && (
-                    <div style={{ color: '#fbbf24', fontSize: 12, marginBottom: 8 }}>{pluginError}</div>
+                    <div className="text-amber-400 text-xs mb-2">{pluginError}</div>
                 )}
                 {activeScope === 'all' && filteredFavoriteCategory && (
-                    <div className="component-category">
-                        <div className="component-category-title">
+                    <div className="mb-4">
+                        <div className="text-xs font-semibold text-[var(--color-text-secondary)] mb-2 uppercase tracking-wide">
                             {filteredFavoriteCategory.icon} {filteredFavoriteCategory.name}
                         </div>
-                        <div className="component-grid">
+                        <div className="grid grid-cols-3 gap-1.5">
                             {filteredFavoriteCategory.items.map((item: ComponentItem, idx: number) => (
                                 <DraggableComponentItem
                                     key={`favorite-${item.name}-${idx}`}
@@ -368,11 +367,11 @@ export function ComponentLibraryPanel() {
                     </div>
                 )}
                 {activeScope === 'all' && filteredRecentCategory && (
-                    <div className="component-category">
-                        <div className="component-category-title">
+                    <div className="mb-4">
+                        <div className="text-xs font-semibold text-[var(--color-text-secondary)] mb-2 uppercase tracking-wide">
                             {filteredRecentCategory.icon} {filteredRecentCategory.name}
                         </div>
-                        <div className="component-grid">
+                        <div className="grid grid-cols-3 gap-1.5">
                             {filteredRecentCategory.items.map((item: ComponentItem, idx: number) => (
                                 <DraggableComponentItem
                                     key={`recent-${item.name}-${idx}`}
@@ -386,12 +385,12 @@ export function ComponentLibraryPanel() {
                     </div>
                 )}
                 {tagFilteredCategories.map((category: ComponentCategory) => (
-                    <div key={category.name} className="component-category">
-                        <div className="component-category-title" style={{ cursor: 'pointer' }} onClick={() => toggleCategory(category.name)}>
+                    <div key={category.name} className="mb-4">
+                        <div className="text-xs font-semibold text-[var(--color-text-secondary)] mb-2 uppercase tracking-wide cursor-pointer" onClick={() => toggleCategory(category.name)}>
                             {collapsedCategories.includes(category.name) ? '▸' : '▾'} {category.icon} {category.name}
                         </div>
                         {!collapsedCategories.includes(category.name) ? (
-                            <div className="component-grid">
+                            <div className="grid grid-cols-3 gap-1.5">
                                 {category.items.map((item: ComponentItem, idx: number) => (
                                     <DraggableComponentItem
                                         key={`${category.name}-${item.name}-${idx}`}
@@ -406,7 +405,7 @@ export function ComponentLibraryPanel() {
                     </div>
                 ))}
                 {visibleCategories.length === 0 ? (
-                    <div style={{ fontSize: 12, color: 'var(--color-text-secondary)', padding: '6px 0' }}>
+                    <div className="text-xs text-[var(--color-text-secondary)] py-1.5">
                         未找到匹配组件
                     </div>
                 ) : null}

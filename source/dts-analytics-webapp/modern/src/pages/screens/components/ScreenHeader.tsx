@@ -125,17 +125,17 @@ function HeaderMenu({
     children: ReactNode;
 }) {
     return (
-        <div className={`header-menu ${open ? 'is-open' : ''}`}>
+        <div className="relative">
             <button
                 type="button"
-                className="header-btn header-menu-trigger"
+                className={`flex items-center gap-1.5 px-4 py-2 border border-[var(--color-border)] rounded-md bg-[var(--color-surface)] text-[var(--color-text-primary)] text-[13px] font-medium cursor-pointer whitespace-nowrap shrink-0 transition-all duration-200 min-w-16 justify-center hover:border-[var(--color-primary)] hover:bg-[var(--color-primary-light)] ${open ? 'border-[var(--color-primary)] bg-[var(--color-primary-light)]' : ''}`}
                 aria-expanded={open}
                 onClick={onToggle}
             >
                 {label}
             </button>
             {open ? (
-                <div className="header-menu-panel">
+                <div className="absolute top-[calc(100%+6px)] right-0 z-[1600] min-w-[220px] w-[280px] max-w-[min(86vw,320px)] max-h-[min(72vh,560px)] overflow-y-auto bg-[var(--color-surface-secondary)] border border-[var(--color-border)] rounded-lg shadow-[0_10px_30px_rgba(2,6,23,0.28)] text-[var(--color-text-primary)] p-2 grid gap-1.5">
                     {children}
                 </div>
             ) : null}
@@ -1964,17 +1964,17 @@ export function ScreenHeader({
 
     return (
         <>
-            <div className="screen-header">
-                <div className="screen-header-left">
-                    <button type="button" className="header-btn back-btn" onClick={handleBack} title="返回列表">
+            <div className="flex items-center justify-between gap-2.5 px-3 py-2 min-h-[52px] bg-[var(--color-surface-secondary)] border-b border-[var(--color-border)] shrink-0 relative z-[1200]">
+                <div className="flex items-center gap-2.5 min-w-0 flex-auto">
+                    <button type="button" className="flex items-center gap-1.5 px-4 py-2 border-0 bg-transparent text-[var(--color-text-secondary)] text-[13px] font-medium cursor-pointer whitespace-nowrap shrink-0 rounded-md transition-all duration-200 hover:text-[var(--color-text-primary)] hover:bg-[var(--color-surface-hover)]" onClick={handleBack} title="返回列表">
                         ← 返回
                     </button>
-                    <div className="screen-header-intro">
-                        <div className="screen-name-container">
+                    <div className="flex items-center min-w-0">
+                        <div className="flex items-center min-w-0">
                             {isEditingName ? (
                                 <input
                                     type="text"
-                                    className="screen-name-input"
+                                    className="text-base font-semibold text-[var(--color-text-primary)] bg-[var(--color-surface)] border border-[var(--color-primary)] rounded px-2 py-1 outline-none min-w-[200px]"
                                     value={nameValue}
                                     onChange={(e) => setNameValue(e.target.value)}
                                     onBlur={handleNameBlur}
@@ -1982,7 +1982,7 @@ export function ScreenHeader({
                                     autoFocus
                                 />
                             ) : (
-                                <span className="screen-name" onClick={handleNameClick} title="点击编辑名称">
+                                <span className="text-base font-semibold text-[var(--color-text-primary)] cursor-pointer px-2 py-1 rounded transition-[background] duration-200 max-w-[min(42vw,420px)] overflow-hidden text-ellipsis whitespace-nowrap hover:bg-[var(--color-surface-hover)]" onClick={handleNameClick} title="点击编辑名称">
                                     {config.name}
                                 </span>
                             )}
@@ -1990,19 +1990,19 @@ export function ScreenHeader({
                     </div>
                 </div>
 
-                <div className="screen-header-right">
-                    <div className="header-menu-group" ref={menuContainerRef}>
-                        <div className="header-mobile-primary-menu">
+                <div className="flex items-center gap-2 min-w-0 shrink">
+                    <div className="flex items-center gap-2 shrink-0" ref={menuContainerRef}>
+                        <div className="header-mobile-primary-menu hidden">
                             <HeaderMenu
                                 label="操作"
                                 open={activeMenu === 'primary'}
                                 onToggle={() => setActiveMenu((prev) => (prev === 'primary' ? null : 'primary'))}
                             >
-                                <div className="header-menu-section">
-                                    <div className="header-menu-section-title">快捷操作</div>
+                                <div className="grid gap-1.5 py-1 pb-2 border-b border-[var(--color-border)] last:border-b-0 last:pb-1">
+                                    <div className="text-[11px] font-semibold text-[var(--color-text-secondary)] tracking-[0.04em] uppercase px-1 py-0.5">快捷操作</div>
                                     <button
                                         type="button"
-                                        className="header-btn"
+                                        className="flex items-center gap-1.5 px-4 py-2 border border-[var(--color-border)] rounded-md bg-[var(--color-surface)] text-[var(--color-text-primary)] text-[13px] font-medium cursor-pointer transition-all duration-200 whitespace-nowrap shrink-0 w-full justify-start py-[7px] px-2.5 hover:border-[var(--color-primary)] hover:bg-[var(--color-primary-light)] disabled:opacity-50 disabled:cursor-not-allowed"
                                         onClick={() => executeMenuAction(handlePreview)}
                                         title={`预览大屏（${previewDeviceMode === 'auto' ? '自动' : previewDeviceMode}）`}
                                     >
@@ -2011,7 +2011,7 @@ export function ScreenHeader({
                                     {id && (
                                         <button
                                             type="button"
-                                            className="header-btn"
+                                            className="flex items-center gap-1.5 px-4 py-2 border border-[var(--color-border)] rounded-md bg-[var(--color-surface)] text-[var(--color-text-primary)] text-[13px] font-medium cursor-pointer transition-all duration-200 whitespace-nowrap shrink-0 w-full justify-start py-[7px] px-2.5 hover:border-[var(--color-primary)] hover:bg-[var(--color-primary-light)] disabled:opacity-50 disabled:cursor-not-allowed"
                                             onClick={() => executeMenuAction(handlePublish)}
                                             disabled={isPublishing || !permissions.canPublish || lockedByOther}
                                             title={lockedByOther ? `当前由 ${lockOwnerText} 持有编辑锁` : '发布当前草稿'}
@@ -2021,7 +2021,7 @@ export function ScreenHeader({
                                     )}
                                     <button
                                         type="button"
-                                        className="header-btn"
+                                        className="flex items-center gap-1.5 px-4 py-2 border border-[var(--color-border)] rounded-md bg-[var(--color-surface)] text-[var(--color-text-primary)] text-[13px] font-medium cursor-pointer transition-all duration-200 whitespace-nowrap shrink-0 w-full justify-start py-[7px] px-2.5 hover:border-[var(--color-primary)] hover:bg-[var(--color-primary-light)] disabled:opacity-50 disabled:cursor-not-allowed"
                                         onClick={() => executeMenuAction(handleSave)}
                                         disabled={isSaving || !permissions.canEdit || lockedByOther}
                                         title={lockedByOther ? `当前由 ${lockOwnerText} 持有编辑锁` : '保存草稿'}
@@ -2038,34 +2038,34 @@ export function ScreenHeader({
                             onToggle={() => setActiveMenu((prev) => (prev === 'tools-view' ? null : 'tools-view'))}
                         >
                             {onToggleFocusMode && (
-                                <div className="header-menu-section">
-                                    <div className="header-menu-section-title">面板</div>
-                                    <button type="button" className={`header-btn ${focusMode ? 'active' : ''}`} onClick={() => { onToggleFocusMode(); setActiveMenu(null); }} title="Ctrl/Cmd + \\">
+                                <div className="grid gap-1.5 py-1 pb-2 border-b border-[var(--color-border)] last:border-b-0 last:pb-1">
+                                    <div className="text-[11px] font-semibold text-[var(--color-text-secondary)] tracking-[0.04em] uppercase px-1 py-0.5">面板</div>
+                                    <button type="button" className={`flex items-center gap-1.5 px-4 py-2 border border-[var(--color-border)] rounded-md bg-[var(--color-surface)] text-[var(--color-text-primary)] text-[13px] font-medium cursor-pointer transition-all duration-200 whitespace-nowrap shrink-0 w-full justify-start py-[7px] px-2.5 hover:border-[var(--color-primary)] hover:bg-[var(--color-primary-light)] disabled:opacity-50 disabled:cursor-not-allowed ${focusMode ? 'border-[var(--color-primary)] bg-[var(--color-primary-light)]' : ''}`} onClick={() => { onToggleFocusMode(); setActiveMenu(null); }} title="Ctrl/Cmd + \\">
                                         {focusMode ? '退出聚焦' : '聚焦模式'}
                                     </button>
                                     {!focusMode && onToggleLibraryPanel && (
-                                        <button type="button" className={`header-btn ${showLibraryPanel ? 'active' : ''}`} onClick={onToggleLibraryPanel} title="Ctrl/Cmd+Alt+1">
+                                        <button type="button" className={`flex items-center gap-1.5 px-4 py-2 border border-[var(--color-border)] rounded-md bg-[var(--color-surface)] text-[var(--color-text-primary)] text-[13px] font-medium cursor-pointer transition-all duration-200 whitespace-nowrap shrink-0 w-full justify-start py-[7px] px-2.5 hover:border-[var(--color-primary)] hover:bg-[var(--color-primary-light)] disabled:opacity-50 disabled:cursor-not-allowed ${showLibraryPanel ? 'border-[var(--color-primary)] bg-[var(--color-primary-light)]' : ''}`} onClick={onToggleLibraryPanel} title="Ctrl/Cmd+Alt+1">
                                             {showLibraryPanel ? '隐藏左栏' : '显示左栏'}
                                         </button>
                                     )}
                                     {!focusMode && onToggleInspectorPanel && (
-                                        <button type="button" className={`header-btn ${showInspectorPanel ? 'active' : ''}`} onClick={onToggleInspectorPanel} title="Ctrl/Cmd+Alt+2">
+                                        <button type="button" className={`flex items-center gap-1.5 px-4 py-2 border border-[var(--color-border)] rounded-md bg-[var(--color-surface)] text-[var(--color-text-primary)] text-[13px] font-medium cursor-pointer transition-all duration-200 whitespace-nowrap shrink-0 w-full justify-start py-[7px] px-2.5 hover:border-[var(--color-primary)] hover:bg-[var(--color-primary-light)] disabled:opacity-50 disabled:cursor-not-allowed ${showInspectorPanel ? 'border-[var(--color-primary)] bg-[var(--color-primary-light)]' : ''}`} onClick={onToggleInspectorPanel} title="Ctrl/Cmd+Alt+2">
                                             {showInspectorPanel ? '隐藏右栏' : '显示右栏'}
                                         </button>
                                     )}
                                 </div>
                             )}
-                            <div className="header-menu-section">
-                                <div className="header-menu-section-title">视图</div>
-                                <button type="button" className="header-btn" onClick={handleZoomReset} title="缩放重置为 100%">缩放100%</button>
-                                <button type="button" className="header-btn" onClick={handleZoomFit} title="按当前窗口自动适配缩放">缩放适配</button>
-                                <button type="button" className={`header-btn ${showGrid ? 'active' : ''}`} onClick={() => dispatch({ type: 'TOGGLE_GRID' })} title="显示/隐藏网格">
+                            <div className="grid gap-1.5 py-1 pb-2 border-b border-[var(--color-border)] last:border-b-0 last:pb-1">
+                                <div className="text-[11px] font-semibold text-[var(--color-text-secondary)] tracking-[0.04em] uppercase px-1 py-0.5">视图</div>
+                                <button type="button" className="flex items-center gap-1.5 px-4 py-2 border border-[var(--color-border)] rounded-md bg-[var(--color-surface)] text-[var(--color-text-primary)] text-[13px] font-medium cursor-pointer transition-all duration-200 whitespace-nowrap shrink-0 w-full justify-start py-[7px] px-2.5 hover:border-[var(--color-primary)] hover:bg-[var(--color-primary-light)] disabled:opacity-50 disabled:cursor-not-allowed" onClick={handleZoomReset} title="缩放重置为 100%">缩放100%</button>
+                                <button type="button" className="flex items-center gap-1.5 px-4 py-2 border border-[var(--color-border)] rounded-md bg-[var(--color-surface)] text-[var(--color-text-primary)] text-[13px] font-medium cursor-pointer transition-all duration-200 whitespace-nowrap shrink-0 w-full justify-start py-[7px] px-2.5 hover:border-[var(--color-primary)] hover:bg-[var(--color-primary-light)] disabled:opacity-50 disabled:cursor-not-allowed" onClick={handleZoomFit} title="按当前窗口自动适配缩放">缩放适配</button>
+                                <button type="button" className={`flex items-center gap-1.5 px-4 py-2 border border-[var(--color-border)] rounded-md bg-[var(--color-surface)] text-[var(--color-text-primary)] text-[13px] font-medium cursor-pointer transition-all duration-200 whitespace-nowrap shrink-0 w-full justify-start py-[7px] px-2.5 hover:border-[var(--color-primary)] hover:bg-[var(--color-primary-light)] disabled:opacity-50 disabled:cursor-not-allowed ${showGrid ? 'border-[var(--color-primary)] bg-[var(--color-primary-light)]' : ''}`} onClick={() => dispatch({ type: 'TOGGLE_GRID' })} title="显示/隐藏网格">
                                     {showGrid ? '隐藏网格' : '显示网格'}
                                 </button>
                             </div>
-                            <div className="header-menu-section">
-                                <div className="header-menu-section-title">帮助</div>
-                                <button type="button" className="header-btn" onClick={handleShortcutHelp} title="查看快捷键">快捷键</button>
+                            <div className="grid gap-1.5 py-1 pb-2 border-b border-[var(--color-border)] last:border-b-0 last:pb-1">
+                                <div className="text-[11px] font-semibold text-[var(--color-text-secondary)] tracking-[0.04em] uppercase px-1 py-0.5">帮助</div>
+                                <button type="button" className="flex items-center gap-1.5 px-4 py-2 border border-[var(--color-border)] rounded-md bg-[var(--color-surface)] text-[var(--color-text-primary)] text-[13px] font-medium cursor-pointer transition-all duration-200 whitespace-nowrap shrink-0 w-full justify-start py-[7px] px-2.5 hover:border-[var(--color-primary)] hover:bg-[var(--color-primary-light)] disabled:opacity-50 disabled:cursor-not-allowed" onClick={handleShortcutHelp} title="查看快捷键">快捷键</button>
                             </div>
                         </HeaderMenu>
                         {/* --- 2. 编辑 --- */}
@@ -2074,25 +2074,25 @@ export function ScreenHeader({
                             open={activeMenu === 'tools-edit'}
                             onToggle={() => setActiveMenu((prev) => (prev === 'tools-edit' ? null : 'tools-edit'))}
                         >
-                            <div className="header-menu-section">
-                                <div className="header-menu-section-title">批量动作</div>
-                                <select className="header-device-select" value={batchAction} onChange={(e) => setBatchAction(e.target.value as BatchAction)} title="批量动作">
+                            <div className="grid gap-1.5 py-1 pb-2 border-b border-[var(--color-border)] last:border-b-0 last:pb-1">
+                                <div className="text-[11px] font-semibold text-[var(--color-text-secondary)] tracking-[0.04em] uppercase px-1 py-0.5">批量动作</div>
+                                <select className="px-2.5 py-[7px] border border-[var(--color-border)] rounded-md bg-[var(--color-surface)] text-[var(--color-text-primary)] text-[13px] font-medium min-w-[110px] w-full focus:outline-none focus:border-[var(--color-primary)]" value={batchAction} onChange={(e) => setBatchAction(e.target.value as BatchAction)} title="批量动作">
                                     {BATCH_ACTION_OPTIONS.map((item) => (<option key={item.value} value={item.value}>{item.label}</option>))}
                                 </select>
-                                <button type="button" className="header-btn" onClick={executeBatchAction} disabled={!canExecuteBatch} title={canExecuteBatch ? '执行批量动作' : '请先选择组件'}>执行动作</button>
+                                <button type="button" className="flex items-center gap-1.5 px-4 py-2 border border-[var(--color-border)] rounded-md bg-[var(--color-surface)] text-[var(--color-text-primary)] text-[13px] font-medium cursor-pointer transition-all duration-200 whitespace-nowrap shrink-0 w-full justify-start py-[7px] px-2.5 hover:border-[var(--color-primary)] hover:bg-[var(--color-primary-light)] disabled:opacity-50 disabled:cursor-not-allowed" onClick={executeBatchAction} disabled={!canExecuteBatch} title={canExecuteBatch ? '执行批量动作' : '请先选择组件'}>执行动作</button>
                             </div>
-                            <div className="header-menu-section">
-                                <div className="header-menu-section-title">联动与设计</div>
-                                <button type="button" className="header-btn" onClick={() => { setActiveMenu(null); setShowLinkageGraph(prev => !prev); }} title="查看组件联动关系图">联动关系图</button>
-                                <button type="button" className="header-btn" onClick={() => executeMenuAction(() => setShowVariableManager(true))} title="管理全局变量">变量管理</button>
-                                <button type="button" className="header-btn" onClick={() => executeMenuAction(() => setShowInteractionDebugPanel(true))} title="联动调试面板">联动调试</button>
-                                <button type="button" className="header-btn" onClick={() => executeMenuAction(() => { setQuickKeyword(''); setShowQuickActions(true); })} title="命令面板 Ctrl/Cmd+K">命令面板</button>
+                            <div className="grid gap-1.5 py-1 pb-2 border-b border-[var(--color-border)] last:border-b-0 last:pb-1">
+                                <div className="text-[11px] font-semibold text-[var(--color-text-secondary)] tracking-[0.04em] uppercase px-1 py-0.5">联动与设计</div>
+                                <button type="button" className="flex items-center gap-1.5 px-4 py-2 border border-[var(--color-border)] rounded-md bg-[var(--color-surface)] text-[var(--color-text-primary)] text-[13px] font-medium cursor-pointer transition-all duration-200 whitespace-nowrap shrink-0 w-full justify-start py-[7px] px-2.5 hover:border-[var(--color-primary)] hover:bg-[var(--color-primary-light)] disabled:opacity-50 disabled:cursor-not-allowed" onClick={() => { setActiveMenu(null); setShowLinkageGraph(prev => !prev); }} title="查看组件联动关系图">联动关系图</button>
+                                <button type="button" className="flex items-center gap-1.5 px-4 py-2 border border-[var(--color-border)] rounded-md bg-[var(--color-surface)] text-[var(--color-text-primary)] text-[13px] font-medium cursor-pointer transition-all duration-200 whitespace-nowrap shrink-0 w-full justify-start py-[7px] px-2.5 hover:border-[var(--color-primary)] hover:bg-[var(--color-primary-light)] disabled:opacity-50 disabled:cursor-not-allowed" onClick={() => executeMenuAction(() => setShowVariableManager(true))} title="管理全局变量">变量管理</button>
+                                <button type="button" className="flex items-center gap-1.5 px-4 py-2 border border-[var(--color-border)] rounded-md bg-[var(--color-surface)] text-[var(--color-text-primary)] text-[13px] font-medium cursor-pointer transition-all duration-200 whitespace-nowrap shrink-0 w-full justify-start py-[7px] px-2.5 hover:border-[var(--color-primary)] hover:bg-[var(--color-primary-light)] disabled:opacity-50 disabled:cursor-not-allowed" onClick={() => executeMenuAction(() => setShowInteractionDebugPanel(true))} title="联动调试面板">联动调试</button>
+                                <button type="button" className="flex items-center gap-1.5 px-4 py-2 border border-[var(--color-border)] rounded-md bg-[var(--color-surface)] text-[var(--color-text-primary)] text-[13px] font-medium cursor-pointer transition-all duration-200 whitespace-nowrap shrink-0 w-full justify-start py-[7px] px-2.5 hover:border-[var(--color-primary)] hover:bg-[var(--color-primary-light)] disabled:opacity-50 disabled:cursor-not-allowed" onClick={() => executeMenuAction(() => { setQuickKeyword(''); setShowQuickActions(true); })} title="命令面板 Ctrl/Cmd+K">命令面板</button>
                             </div>
-                            <div className="header-menu-section">
-                                <div className="header-menu-section-title">更多</div>
-                                <button type="button" className="header-btn" onClick={() => executeMenuAction(handleCreateExploreSession)} disabled={!permissions.canRead} title="沉淀分析会话">沉淀会话</button>
-                                <button type="button" className="header-btn" onClick={() => executeMenuAction(() => { if (id && permissions.canRead) setShowCollaborationPanel(true); })} disabled={!id || !permissions.canRead} title="协作批注">协作批注</button>
-                                <button type="button" className="header-btn" onClick={() => executeMenuAction(handleSaveAsTemplate)} disabled={!permissions.canEdit || isSavingTemplate} title="保存为模板">{isSavingTemplate ? '模板保存中...' : '保存模板'}</button>
+                            <div className="grid gap-1.5 py-1 pb-2 border-b border-[var(--color-border)] last:border-b-0 last:pb-1">
+                                <div className="text-[11px] font-semibold text-[var(--color-text-secondary)] tracking-[0.04em] uppercase px-1 py-0.5">更多</div>
+                                <button type="button" className="flex items-center gap-1.5 px-4 py-2 border border-[var(--color-border)] rounded-md bg-[var(--color-surface)] text-[var(--color-text-primary)] text-[13px] font-medium cursor-pointer transition-all duration-200 whitespace-nowrap shrink-0 w-full justify-start py-[7px] px-2.5 hover:border-[var(--color-primary)] hover:bg-[var(--color-primary-light)] disabled:opacity-50 disabled:cursor-not-allowed" onClick={() => executeMenuAction(handleCreateExploreSession)} disabled={!permissions.canRead} title="沉淀分析会话">沉淀会话</button>
+                                <button type="button" className="flex items-center gap-1.5 px-4 py-2 border border-[var(--color-border)] rounded-md bg-[var(--color-surface)] text-[var(--color-text-primary)] text-[13px] font-medium cursor-pointer transition-all duration-200 whitespace-nowrap shrink-0 w-full justify-start py-[7px] px-2.5 hover:border-[var(--color-primary)] hover:bg-[var(--color-primary-light)] disabled:opacity-50 disabled:cursor-not-allowed" onClick={() => executeMenuAction(() => { if (id && permissions.canRead) setShowCollaborationPanel(true); })} disabled={!id || !permissions.canRead} title="协作批注">协作批注</button>
+                                <button type="button" className="flex items-center gap-1.5 px-4 py-2 border border-[var(--color-border)] rounded-md bg-[var(--color-surface)] text-[var(--color-text-primary)] text-[13px] font-medium cursor-pointer transition-all duration-200 whitespace-nowrap shrink-0 w-full justify-start py-[7px] px-2.5 hover:border-[var(--color-primary)] hover:bg-[var(--color-primary-light)] disabled:opacity-50 disabled:cursor-not-allowed" onClick={() => executeMenuAction(handleSaveAsTemplate)} disabled={!permissions.canEdit || isSavingTemplate} title="保存为模板">{isSavingTemplate ? '模板保存中...' : '保存模板'}</button>
                             </div>
                         </HeaderMenu>
                         {/* --- 3. 主题 --- */}
@@ -2101,21 +2101,21 @@ export function ScreenHeader({
                             open={activeMenu === 'tools-theme'}
                             onToggle={() => setActiveMenu((prev) => (prev === 'tools-theme' ? null : 'tools-theme'))}
                         >
-                            <div className="header-menu-section">
-                                <div className="header-menu-section-title">主题选择</div>
-                                <select className="header-device-select" value={config.theme || ''} onChange={handleToolbarThemeChange} title="切换主题">
+                            <div className="grid gap-1.5 py-1 pb-2 border-b border-[var(--color-border)] last:border-b-0 last:pb-1">
+                                <div className="text-[11px] font-semibold text-[var(--color-text-secondary)] tracking-[0.04em] uppercase px-1 py-0.5">主题选择</div>
+                                <select className="px-2.5 py-[7px] border border-[var(--color-border)] rounded-md bg-[var(--color-surface)] text-[var(--color-text-primary)] text-[13px] font-medium min-w-[110px] w-full focus:outline-none focus:border-[var(--color-primary)]" value={config.theme || ''} onChange={handleToolbarThemeChange} title="切换主题">
                                     {THEME_OPTIONS.map((opt) => (<option key={opt.value} value={opt.value}>{opt.label}</option>))}
                                 </select>
                             </div>
-                            <div className="header-menu-section">
-                                <div className="header-menu-section-title">应用与导入导出</div>
-                                <select className="header-device-select" value={themeApplyMode} onChange={(e) => setThemeApplyMode(e.target.value === 'safe' ? 'safe' : 'force')} title="组件样式应用策略">
+                            <div className="grid gap-1.5 py-1 pb-2 border-b border-[var(--color-border)] last:border-b-0 last:pb-1">
+                                <div className="text-[11px] font-semibold text-[var(--color-text-secondary)] tracking-[0.04em] uppercase px-1 py-0.5">应用与导入导出</div>
+                                <select className="px-2.5 py-[7px] border border-[var(--color-border)] rounded-md bg-[var(--color-surface)] text-[var(--color-text-primary)] text-[13px] font-medium min-w-[110px] w-full focus:outline-none focus:border-[var(--color-primary)]" value={themeApplyMode} onChange={(e) => setThemeApplyMode(e.target.value === 'safe' ? 'safe' : 'force')} title="组件样式应用策略">
                                     <option value="force">强制覆盖</option>
                                     <option value="safe">仅补缺省</option>
                                 </select>
-                                <button type="button" className="header-btn" onClick={() => applyThemeToAllComponents(themeApplyMode)} title="按当前主题批量刷新组件样式">应用样式</button>
-                                <button type="button" className="header-btn" onClick={handleExportThemePack} title="导出主题包">导出主题</button>
-                                <button type="button" className="header-btn" onClick={handleImportThemePackClick} title="导入主题包">导入主题</button>
+                                <button type="button" className="flex items-center gap-1.5 px-4 py-2 border border-[var(--color-border)] rounded-md bg-[var(--color-surface)] text-[var(--color-text-primary)] text-[13px] font-medium cursor-pointer transition-all duration-200 whitespace-nowrap shrink-0 w-full justify-start py-[7px] px-2.5 hover:border-[var(--color-primary)] hover:bg-[var(--color-primary-light)] disabled:opacity-50 disabled:cursor-not-allowed" onClick={() => applyThemeToAllComponents(themeApplyMode)} title="按当前主题批量刷新组件样式">应用样式</button>
+                                <button type="button" className="flex items-center gap-1.5 px-4 py-2 border border-[var(--color-border)] rounded-md bg-[var(--color-surface)] text-[var(--color-text-primary)] text-[13px] font-medium cursor-pointer transition-all duration-200 whitespace-nowrap shrink-0 w-full justify-start py-[7px] px-2.5 hover:border-[var(--color-primary)] hover:bg-[var(--color-primary-light)] disabled:opacity-50 disabled:cursor-not-allowed" onClick={handleExportThemePack} title="导出主题包">导出主题</button>
+                                <button type="button" className="flex items-center gap-1.5 px-4 py-2 border border-[var(--color-border)] rounded-md bg-[var(--color-surface)] text-[var(--color-text-primary)] text-[13px] font-medium cursor-pointer transition-all duration-200 whitespace-nowrap shrink-0 w-full justify-start py-[7px] px-2.5 hover:border-[var(--color-primary)] hover:bg-[var(--color-primary-light)] disabled:opacity-50 disabled:cursor-not-allowed" onClick={handleImportThemePackClick} title="导入主题包">导入主题</button>
                             </div>
                         </HeaderMenu>
                         {/* --- 导入导出 --- */}
@@ -2124,22 +2124,22 @@ export function ScreenHeader({
                             open={activeMenu === 'tools-io'}
                             onToggle={() => setActiveMenu((prev) => (prev === 'tools-io' ? null : 'tools-io'))}
                         >
-                            <div className="header-menu-section">
-                                <div className="header-menu-section-title">导入</div>
-                                <button type="button" className="header-btn" onClick={() => executeMenuAction(handleOpenImport)} title="从 JSON 文件导入大屏配置">选择 JSON 文件...</button>
+                            <div className="grid gap-1.5 py-1 pb-2 border-b border-[var(--color-border)] last:border-b-0 last:pb-1">
+                                <div className="text-[11px] font-semibold text-[var(--color-text-secondary)] tracking-[0.04em] uppercase px-1 py-0.5">导入</div>
+                                <button type="button" className="flex items-center gap-1.5 px-4 py-2 border border-[var(--color-border)] rounded-md bg-[var(--color-surface)] text-[var(--color-text-primary)] text-[13px] font-medium cursor-pointer transition-all duration-200 whitespace-nowrap shrink-0 w-full justify-start py-[7px] px-2.5 hover:border-[var(--color-primary)] hover:bg-[var(--color-primary-light)] disabled:opacity-50 disabled:cursor-not-allowed" onClick={() => executeMenuAction(handleOpenImport)} title="从 JSON 文件导入大屏配置">选择 JSON 文件...</button>
                             </div>
-                            <div className="header-menu-section">
-                                <div className="header-menu-section-title">导出</div>
-                                <label className="header-menu-inline-label" htmlFor="screen-io-device-mode">预览设备</label>
-                                <select id="screen-io-device-mode" className="header-device-select" value={previewDeviceMode} onChange={(e) => { const next = e.target.value; if (next === 'pc' || next === 'tablet' || next === 'mobile') { setPreviewDeviceMode(next); return; } setPreviewDeviceMode('auto'); }} title="预览设备模式">
+                            <div className="grid gap-1.5 py-1 pb-2 border-b border-[var(--color-border)] last:border-b-0 last:pb-1">
+                                <div className="text-[11px] font-semibold text-[var(--color-text-secondary)] tracking-[0.04em] uppercase px-1 py-0.5">导出</div>
+                                <label className="text-xs text-[var(--color-text-secondary)] px-1" htmlFor="screen-io-device-mode">预览设备</label>
+                                <select id="screen-io-device-mode" className="px-2.5 py-[7px] border border-[var(--color-border)] rounded-md bg-[var(--color-surface)] text-[var(--color-text-primary)] text-[13px] font-medium min-w-[110px] w-full focus:outline-none focus:border-[var(--color-primary)]" value={previewDeviceMode} onChange={(e) => { const next = e.target.value; if (next === 'pc' || next === 'tablet' || next === 'mobile') { setPreviewDeviceMode(next); return; } setPreviewDeviceMode('auto'); }} title="预览设备模式">
                                     <option value="auto">自动</option>
                                     <option value="pc">PC</option>
                                     <option value="tablet">平板</option>
                                     <option value="mobile">手机</option>
                                 </select>
-                                <button type="button" className="header-btn" onClick={() => executeMenuAction(handleExportJson)} title="导出 JSON（含内联资源）">导出 JSON</button>
-                                <button type="button" className="header-btn" onClick={() => executeMenuAction(handleExportPng)} disabled={!id} title="导出 PNG 图片">导出 PNG</button>
-                                <button type="button" className="header-btn" onClick={() => executeMenuAction(handleExportPdf)} disabled={!id} title="导出 PDF 文档">导出 PDF</button>
+                                <button type="button" className="flex items-center gap-1.5 px-4 py-2 border border-[var(--color-border)] rounded-md bg-[var(--color-surface)] text-[var(--color-text-primary)] text-[13px] font-medium cursor-pointer transition-all duration-200 whitespace-nowrap shrink-0 w-full justify-start py-[7px] px-2.5 hover:border-[var(--color-primary)] hover:bg-[var(--color-primary-light)] disabled:opacity-50 disabled:cursor-not-allowed" onClick={() => executeMenuAction(handleExportJson)} title="导出 JSON（含内联资源）">导出 JSON</button>
+                                <button type="button" className="flex items-center gap-1.5 px-4 py-2 border border-[var(--color-border)] rounded-md bg-[var(--color-surface)] text-[var(--color-text-primary)] text-[13px] font-medium cursor-pointer transition-all duration-200 whitespace-nowrap shrink-0 w-full justify-start py-[7px] px-2.5 hover:border-[var(--color-primary)] hover:bg-[var(--color-primary-light)] disabled:opacity-50 disabled:cursor-not-allowed" onClick={() => executeMenuAction(handleExportPng)} disabled={!id} title="导出 PNG 图片">导出 PNG</button>
+                                <button type="button" className="flex items-center gap-1.5 px-4 py-2 border border-[var(--color-border)] rounded-md bg-[var(--color-surface)] text-[var(--color-text-primary)] text-[13px] font-medium cursor-pointer transition-all duration-200 whitespace-nowrap shrink-0 w-full justify-start py-[7px] px-2.5 hover:border-[var(--color-primary)] hover:bg-[var(--color-primary-light)] disabled:opacity-50 disabled:cursor-not-allowed" onClick={() => executeMenuAction(handleExportPdf)} disabled={!id} title="导出 PDF 文档">导出 PDF</button>
                             </div>
                         </HeaderMenu>
                         {/* --- 4. 版本导出 (kept as-is) --- */}
@@ -2148,10 +2148,10 @@ export function ScreenHeader({
                             open={activeMenu === 'tools-release'}
                             onToggle={() => setActiveMenu((prev) => (prev === 'tools-release' ? null : 'tools-release'))}
                         >
-                            <div className="header-menu-section">
-                                <div className="header-menu-section-title">版本管理</div>
-                                <label className="header-menu-inline-label" htmlFor="screen-preview-device-mode">预览设备</label>
-                                <select id="screen-preview-device-mode" className="header-device-select" value={previewDeviceMode} onChange={(e) => { const next = e.target.value; if (next === 'pc' || next === 'tablet' || next === 'mobile') { setPreviewDeviceMode(next); return; } setPreviewDeviceMode('auto'); }} title="预览设备模式">
+                            <div className="grid gap-1.5 py-1 pb-2 border-b border-[var(--color-border)] last:border-b-0 last:pb-1">
+                                <div className="text-[11px] font-semibold text-[var(--color-text-secondary)] tracking-[0.04em] uppercase px-1 py-0.5">版本管理</div>
+                                <label className="text-xs text-[var(--color-text-secondary)] px-1" htmlFor="screen-preview-device-mode">预览设备</label>
+                                <select id="screen-preview-device-mode" className="px-2.5 py-[7px] border border-[var(--color-border)] rounded-md bg-[var(--color-surface)] text-[var(--color-text-primary)] text-[13px] font-medium min-w-[110px] w-full focus:outline-none focus:border-[var(--color-primary)]" value={previewDeviceMode} onChange={(e) => { const next = e.target.value; if (next === 'pc' || next === 'tablet' || next === 'mobile') { setPreviewDeviceMode(next); return; } setPreviewDeviceMode('auto'); }} title="预览设备模式">
                                     <option value="auto">自动</option>
                                     <option value="pc">PC</option>
                                     <option value="tablet">平板</option>
@@ -2159,12 +2159,12 @@ export function ScreenHeader({
                                 </select>
                                 {id ? (
                                     <>
-                                        <label className="header-menu-inline-label" htmlFor="screen-version-action">版本动作</label>
-                                        <select id="screen-version-action" className="header-device-select" value={versionAction} onChange={(e) => { setVersionAction(e.target.value === 'compare' ? 'compare' : 'history'); }} title="选择版本动作">
+                                        <label className="text-xs text-[var(--color-text-secondary)] px-1" htmlFor="screen-version-action">版本动作</label>
+                                        <select id="screen-version-action" className="px-2.5 py-[7px] border border-[var(--color-border)] rounded-md bg-[var(--color-surface)] text-[var(--color-text-primary)] text-[13px] font-medium min-w-[110px] w-full focus:outline-none focus:border-[var(--color-primary)]" value={versionAction} onChange={(e) => { setVersionAction(e.target.value === 'compare' ? 'compare' : 'history'); }} title="选择版本动作">
                                             <option value="history">版本历史/回滚</option>
                                             <option value="compare">版本对比</option>
                                         </select>
-                                        <button type="button" className="header-btn" onClick={executeVersionAction} disabled={isLoadingVersions || (versionAction === 'history' ? !permissions.canPublish : !permissions.canRead)} title={versionAction === 'history' ? '查看版本历史并回滚' : '查看版本差异摘要'}>
+                                        <button type="button" className="flex items-center gap-1.5 px-4 py-2 border border-[var(--color-border)] rounded-md bg-[var(--color-surface)] text-[var(--color-text-primary)] text-[13px] font-medium cursor-pointer transition-all duration-200 whitespace-nowrap shrink-0 w-full justify-start py-[7px] px-2.5 hover:border-[var(--color-primary)] hover:bg-[var(--color-primary-light)] disabled:opacity-50 disabled:cursor-not-allowed" onClick={executeVersionAction} disabled={isLoadingVersions || (versionAction === 'history' ? !permissions.canPublish : !permissions.canRead)} title={versionAction === 'history' ? '查看版本历史并回滚' : '查看版本差异摘要'}>
                                             {isLoadingVersions ? '加载中...' : '执行版本动作'}
                                         </button>
                                     </>
@@ -2177,28 +2177,28 @@ export function ScreenHeader({
                             open={activeMenu === 'tools-security'}
                             onToggle={() => setActiveMenu((prev) => (prev === 'tools-security' ? null : 'tools-security'))}
                         >
-                            <div className="header-menu-section">
-                                <div className="header-menu-section-title">安全与治理</div>
-                                <button type="button" className="header-btn" onClick={() => executeMenuAction(() => { if (id && permissions.canRead) setShowEditLockPanel(true); })} disabled={!id || !permissions.canRead} title="查看/管理编辑锁">
+                            <div className="grid gap-1.5 py-1 pb-2 border-b border-[var(--color-border)] last:border-b-0 last:pb-1">
+                                <div className="text-[11px] font-semibold text-[var(--color-text-secondary)] tracking-[0.04em] uppercase px-1 py-0.5">安全与治理</div>
+                                <button type="button" className="flex items-center gap-1.5 px-4 py-2 border border-[var(--color-border)] rounded-md bg-[var(--color-surface)] text-[var(--color-text-primary)] text-[13px] font-medium cursor-pointer transition-all duration-200 whitespace-nowrap shrink-0 w-full justify-start py-[7px] px-2.5 hover:border-[var(--color-primary)] hover:bg-[var(--color-primary-light)] disabled:opacity-50 disabled:cursor-not-allowed" onClick={() => executeMenuAction(() => { if (id && permissions.canRead) setShowEditLockPanel(true); })} disabled={!id || !permissions.canRead} title="查看/管理编辑锁">
                                     编辑锁{lockedByOther ? '(占用)' : (editLock?.mine ? '(我)' : '')}
                                 </button>
-                                <button type="button" className="header-btn" onClick={() => executeMenuAction(() => setShowCachePanel(true))} title="缓存观测面板">缓存观测</button>
-                                <button type="button" className="header-btn" onClick={() => executeMenuAction(() => { if (id && permissions.canManage) setShowAclPanel(true); })} disabled={!id || !permissions.canManage} title="权限矩阵(ACL)">权限(ACL)</button>
-                                <button type="button" className="header-btn" onClick={() => executeMenuAction(() => { if (id && permissions.canManage) setShowAuditPanel(true); })} disabled={!id || !permissions.canManage} title="审计记录">审计</button>
-                                <button type="button" className="header-btn" onClick={() => executeMenuAction(() => { if (id && permissions.canPublish) setShowSharePolicyPanel(true); })} disabled={!id || !permissions.canPublish} title="分享策略配置">分享策略</button>
-                                <button type="button" className="header-btn" onClick={() => executeMenuAction(handleShare)} disabled={!id || !permissions.canPublish || isSharing} title="生成分享链接">
+                                <button type="button" className="flex items-center gap-1.5 px-4 py-2 border border-[var(--color-border)] rounded-md bg-[var(--color-surface)] text-[var(--color-text-primary)] text-[13px] font-medium cursor-pointer transition-all duration-200 whitespace-nowrap shrink-0 w-full justify-start py-[7px] px-2.5 hover:border-[var(--color-primary)] hover:bg-[var(--color-primary-light)] disabled:opacity-50 disabled:cursor-not-allowed" onClick={() => executeMenuAction(() => setShowCachePanel(true))} title="缓存观测面板">缓存观测</button>
+                                <button type="button" className="flex items-center gap-1.5 px-4 py-2 border border-[var(--color-border)] rounded-md bg-[var(--color-surface)] text-[var(--color-text-primary)] text-[13px] font-medium cursor-pointer transition-all duration-200 whitespace-nowrap shrink-0 w-full justify-start py-[7px] px-2.5 hover:border-[var(--color-primary)] hover:bg-[var(--color-primary-light)] disabled:opacity-50 disabled:cursor-not-allowed" onClick={() => executeMenuAction(() => { if (id && permissions.canManage) setShowAclPanel(true); })} disabled={!id || !permissions.canManage} title="权限矩阵(ACL)">权限(ACL)</button>
+                                <button type="button" className="flex items-center gap-1.5 px-4 py-2 border border-[var(--color-border)] rounded-md bg-[var(--color-surface)] text-[var(--color-text-primary)] text-[13px] font-medium cursor-pointer transition-all duration-200 whitespace-nowrap shrink-0 w-full justify-start py-[7px] px-2.5 hover:border-[var(--color-primary)] hover:bg-[var(--color-primary-light)] disabled:opacity-50 disabled:cursor-not-allowed" onClick={() => executeMenuAction(() => { if (id && permissions.canManage) setShowAuditPanel(true); })} disabled={!id || !permissions.canManage} title="审计记录">审计</button>
+                                <button type="button" className="flex items-center gap-1.5 px-4 py-2 border border-[var(--color-border)] rounded-md bg-[var(--color-surface)] text-[var(--color-text-primary)] text-[13px] font-medium cursor-pointer transition-all duration-200 whitespace-nowrap shrink-0 w-full justify-start py-[7px] px-2.5 hover:border-[var(--color-primary)] hover:bg-[var(--color-primary-light)] disabled:opacity-50 disabled:cursor-not-allowed" onClick={() => executeMenuAction(() => { if (id && permissions.canPublish) setShowSharePolicyPanel(true); })} disabled={!id || !permissions.canPublish} title="分享策略配置">分享策略</button>
+                                <button type="button" className="flex items-center gap-1.5 px-4 py-2 border border-[var(--color-border)] rounded-md bg-[var(--color-surface)] text-[var(--color-text-primary)] text-[13px] font-medium cursor-pointer transition-all duration-200 whitespace-nowrap shrink-0 w-full justify-start py-[7px] px-2.5 hover:border-[var(--color-primary)] hover:bg-[var(--color-primary-light)] disabled:opacity-50 disabled:cursor-not-allowed" onClick={() => executeMenuAction(handleShare)} disabled={!id || !permissions.canPublish || isSharing} title="生成分享链接">
                                     {isSharing ? '分享中...' : '分享链接'}
                                 </button>
-                                <button type="button" className="header-btn" onClick={() => executeMenuAction(() => setShowCompliancePanel(true))} title="合规检查">合规</button>
-                                <button type="button" className="header-btn" onClick={() => executeMenuAction(() => setShowHealthPanel(true))} title="体检报告">体检</button>
+                                <button type="button" className="flex items-center gap-1.5 px-4 py-2 border border-[var(--color-border)] rounded-md bg-[var(--color-surface)] text-[var(--color-text-primary)] text-[13px] font-medium cursor-pointer transition-all duration-200 whitespace-nowrap shrink-0 w-full justify-start py-[7px] px-2.5 hover:border-[var(--color-primary)] hover:bg-[var(--color-primary-light)] disabled:opacity-50 disabled:cursor-not-allowed" onClick={() => executeMenuAction(() => setShowCompliancePanel(true))} title="合规检查">合规</button>
+                                <button type="button" className="flex items-center gap-1.5 px-4 py-2 border border-[var(--color-border)] rounded-md bg-[var(--color-surface)] text-[var(--color-text-primary)] text-[13px] font-medium cursor-pointer transition-all duration-200 whitespace-nowrap shrink-0 w-full justify-start py-[7px] px-2.5 hover:border-[var(--color-primary)] hover:bg-[var(--color-primary-light)] disabled:opacity-50 disabled:cursor-not-allowed" onClick={() => executeMenuAction(() => setShowHealthPanel(true))} title="体检报告">体检</button>
                             </div>
                         </HeaderMenu>
                         <input ref={themeInputRef} type="file" accept="application/json,.json" style={{ display: 'none' }} onChange={handleThemePackFileChange} />
                     </div>
-                    <div className="screen-header-primary-actions">
+                    <div className="flex items-center gap-2 min-w-0 overflow-visible whitespace-nowrap">
                         <button
                             type="button"
-                            className="header-btn header-primary-desktop"
+                            className="flex items-center gap-1.5 px-4 py-2 border border-[var(--color-border)] rounded-md bg-[var(--color-surface)] text-[var(--color-text-primary)] text-[13px] font-medium cursor-pointer transition-all duration-200 whitespace-nowrap shrink-0 hover:border-[var(--color-primary)] hover:bg-[var(--color-primary-light)] disabled:opacity-50 disabled:cursor-not-allowed"
                             onClick={handlePreview}
                             disabled={!id}
                             title={`预览大屏（${previewDeviceMode === 'auto' ? '自动' : previewDeviceMode}）`}
@@ -2208,7 +2208,7 @@ export function ScreenHeader({
                         {id ? (
                             <button
                                 type="button"
-                                className="header-btn header-primary-desktop"
+                                className="flex items-center gap-1.5 px-4 py-2 border border-[var(--color-border)] rounded-md bg-[var(--color-surface)] text-[var(--color-text-primary)] text-[13px] font-medium cursor-pointer transition-all duration-200 whitespace-nowrap shrink-0 hover:border-[var(--color-primary)] hover:bg-[var(--color-primary-light)] disabled:opacity-50 disabled:cursor-not-allowed"
                                 onClick={() => void handlePublish()}
                                 disabled={isPublishing || !permissions.canPublish || lockedByOther}
                                 title={lockedByOther ? `当前由 ${lockOwnerText} 持有编辑锁` : '发布当前草稿'}
@@ -2219,7 +2219,7 @@ export function ScreenHeader({
                         <button
                             type="button"
                             data-testid="analytics-screen-primary-action-button"
-                            className="header-btn save-btn header-primary-desktop"
+                            className="flex items-center gap-1.5 px-4 py-2 border border-[var(--color-primary)] rounded-md bg-[var(--color-primary)] text-white text-[13px] font-medium cursor-pointer transition-all duration-200 whitespace-nowrap shrink-0 hover:bg-[var(--color-primary-dark)] disabled:opacity-50 disabled:cursor-not-allowed"
                             onClick={() => void handleSave()}
                             disabled={isSaving || !permissions.canEdit || lockedByOther}
                             title={lockedByOther ? `当前由 ${lockOwnerText} 持有编辑锁` : '保存草稿'}
@@ -2251,7 +2251,7 @@ export function ScreenHeader({
                 </div>
             </div>
             {lockedByOther && (
-                <div className="screen-lock-notice">
+                <div className="px-4 py-3 text-xs text-[#f59e0b] border-b border-white/[0.08] shrink-0 bg-[rgba(245,158,11,0.12)]">
                     编辑锁提示：当前由 {lockOwnerText} 编辑中，保存/发布已被保护性禁用。
                     {lockErrorText ? ` (${lockErrorText})` : ''}
                 </div>
@@ -2278,7 +2278,7 @@ export function ScreenHeader({
                         <strong>{headerActionNotice.title}</strong>
                         <button
                             type="button"
-                            className="header-btn"
+                            className="flex items-center gap-1.5 px-4 py-2 border border-[var(--color-border)] rounded-md bg-[var(--color-surface)] text-[var(--color-text-primary)] text-[13px] font-medium cursor-pointer transition-all duration-200 whitespace-nowrap shrink-0 w-full justify-start py-[7px] px-2.5 hover:border-[var(--color-primary)] hover:bg-[var(--color-primary-light)] disabled:opacity-50 disabled:cursor-not-allowed"
                             onClick={() => setHeaderActionNotice(null)}
                         >
                             收起
@@ -2290,47 +2290,47 @@ export function ScreenHeader({
                 </div>
             )}
             {publishNotice && (
-                <div className="screen-publish-notice" data-testid="analytics-screen-publish-notice">
-                    <div className="screen-publish-notice-main">
-                        <div className="screen-publish-notice-title">
+                <div className="flex items-start justify-between gap-3 px-3 py-2.5 border-t border-[rgba(34,197,94,0.32)] bg-[rgba(34,197,94,0.08)] relative z-[1100] shrink-0" data-testid="analytics-screen-publish-notice">
+                    <div className="min-w-0 grid gap-1.5 flex-auto">
+                        <div className="text-[13px] text-[var(--color-text-primary)] font-semibold">
                             已发布 v{publishNotice.versionNo}（大屏 #{publishNotice.screenId}）
                         </div>
-                        <div className="screen-publish-notice-link-row">
-                            <span className="screen-publish-notice-label">预览链接</span>
+                        <div className="flex items-center gap-2 flex-wrap text-xs text-[var(--color-text-primary)]">
+                            <span className="text-[var(--color-text-secondary)] w-14 shrink-0">预览链接</span>
                             <a href={publishNotice.previewUrl} target="_blank" rel="noreferrer">{publishNotice.previewUrl}</a>
                             <button
                                 type="button"
-                                className="header-btn"
+                                className="flex items-center gap-1.5 px-4 py-2 border border-[var(--color-border)] rounded-md bg-[var(--color-surface)] text-[var(--color-text-primary)] text-[13px] font-medium cursor-pointer transition-all duration-200 whitespace-nowrap shrink-0 w-full justify-start py-[7px] px-2.5 hover:border-[var(--color-primary)] hover:bg-[var(--color-primary-light)] disabled:opacity-50 disabled:cursor-not-allowed"
                                 onClick={() => void handleCopyUrl(publishNotice.previewUrl)}
                             >
                                 复制
                             </button>
                         </div>
-                        <div className="screen-publish-notice-link-row">
-                            <span className="screen-publish-notice-label">公开链接</span>
+                        <div className="flex items-center gap-2 flex-wrap text-xs text-[var(--color-text-primary)]">
+                            <span className="text-[var(--color-text-secondary)] w-14 shrink-0">公开链接</span>
                             {publishNotice.publicUrl ? (
                                 <>
                                     <a href={publishNotice.publicUrl} target="_blank" rel="noreferrer">{publishNotice.publicUrl}</a>
                                     <button
                                         type="button"
-                                        className="header-btn"
+                                        className="flex items-center gap-1.5 px-4 py-2 border border-[var(--color-border)] rounded-md bg-[var(--color-surface)] text-[var(--color-text-primary)] text-[13px] font-medium cursor-pointer transition-all duration-200 whitespace-nowrap shrink-0 w-full justify-start py-[7px] px-2.5 hover:border-[var(--color-primary)] hover:bg-[var(--color-primary-light)] disabled:opacity-50 disabled:cursor-not-allowed"
                                         onClick={() => void handleCopyUrl(publishNotice.publicUrl!)}
                                     >
                                         复制
                                     </button>
                                 </>
                             ) : (
-                                <span className="screen-publish-notice-muted">未生成（可在“更多/治理/分享链接”中重试）</span>
+                                <span className="text-xs text-[var(--color-text-secondary)]">未生成（可在“更多/治理/分享链接”中重试）</span>
                             )}
                         </div>
                         {publishNotice.warmupText ? (
-                            <div className="screen-publish-notice-muted">{publishNotice.warmupText.trim()}</div>
+                            <div className="text-xs text-[var(--color-text-secondary)]">{publishNotice.warmupText.trim()}</div>
                         ) : null}
                     </div>
-                    <div className="screen-publish-notice-actions">
+                    <div className="flex items-center gap-2 shrink-0 flex-wrap">
                         <button
                             type="button"
-                            className="header-btn"
+                            className="flex items-center gap-1.5 px-4 py-2 border border-[var(--color-border)] rounded-md bg-[var(--color-surface)] text-[var(--color-text-primary)] text-[13px] font-medium cursor-pointer transition-all duration-200 whitespace-nowrap shrink-0 w-full justify-start py-[7px] px-2.5 hover:border-[var(--color-primary)] hover:bg-[var(--color-primary-light)] disabled:opacity-50 disabled:cursor-not-allowed"
                             onClick={() => navigate('/')}
                             title="返回 Analytics 首页"
                         >
@@ -2338,7 +2338,7 @@ export function ScreenHeader({
                         </button>
                         <button
                             type="button"
-                            className="header-btn"
+                            className="flex items-center gap-1.5 px-4 py-2 border border-[var(--color-border)] rounded-md bg-[var(--color-surface)] text-[var(--color-text-primary)] text-[13px] font-medium cursor-pointer transition-all duration-200 whitespace-nowrap shrink-0 w-full justify-start py-[7px] px-2.5 hover:border-[var(--color-primary)] hover:bg-[var(--color-primary-light)] disabled:opacity-50 disabled:cursor-not-allowed"
                             onClick={() => navigate('/screens')}
                             title="进入大屏管理列表"
                         >
@@ -2346,7 +2346,7 @@ export function ScreenHeader({
                         </button>
                         <button
                             type="button"
-                            className="header-btn"
+                            className="flex items-center gap-1.5 px-4 py-2 border border-[var(--color-border)] rounded-md bg-[var(--color-surface)] text-[var(--color-text-primary)] text-[13px] font-medium cursor-pointer transition-all duration-200 whitespace-nowrap shrink-0 w-full justify-start py-[7px] px-2.5 hover:border-[var(--color-primary)] hover:bg-[var(--color-primary-light)] disabled:opacity-50 disabled:cursor-not-allowed"
                             onClick={() => { setPublishNotice(null); setPublishNoticeDismissed(true); }}
                             title="收起发布信息"
                         >
@@ -2397,7 +2397,7 @@ export function ScreenHeader({
                             <input
                                 ref={quickInputRef}
                                 type="text"
-                                className="screen-name-input"
+                                className="text-base font-semibold text-[var(--color-text-primary)] bg-[var(--color-surface)] border border-[var(--color-primary)] rounded px-2 py-1 outline-none min-w-[200px]"
                                 style={{ width: '100%', minWidth: 0, background: 'rgba(255,255,255,0.06)', color: '#e2e8f0', border: '1px solid rgba(255,255,255,0.15)' }}
                                 value={quickKeyword}
                                 onChange={(event) => {
@@ -2448,7 +2448,7 @@ export function ScreenHeader({
                                             quickActionRefs.current[index] = node;
                                         }}
                                         type="button"
-                                        className="header-btn"
+                                        className="flex items-center gap-1.5 px-4 py-2 border border-[var(--color-border)] rounded-md bg-[var(--color-surface)] text-[var(--color-text-primary)] text-[13px] font-medium cursor-pointer transition-all duration-200 whitespace-nowrap shrink-0 w-full justify-start py-[7px] px-2.5 hover:border-[var(--color-primary)] hover:bg-[var(--color-primary-light)] disabled:opacity-50 disabled:cursor-not-allowed"
                                         style={{
                                             width: '100%',
                                             justifyContent: 'flex-start',
@@ -2625,12 +2625,12 @@ export function ScreenHeader({
                 width={520}
                 footer={(
                     <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
-                        <button type="button" className="header-btn" onClick={() => setShowSaveTemplateDialog(false)}>
+                        <button type="button" className="flex items-center gap-1.5 px-4 py-2 border border-[var(--color-border)] rounded-md bg-[var(--color-surface)] text-[var(--color-text-primary)] text-[13px] font-medium cursor-pointer transition-all duration-200 whitespace-nowrap shrink-0 w-full justify-start py-[7px] px-2.5 hover:border-[var(--color-primary)] hover:bg-[var(--color-primary-light)] disabled:opacity-50 disabled:cursor-not-allowed" onClick={() => setShowSaveTemplateDialog(false)}>
                             取消
                         </button>
                         <button
                             type="button"
-                            className="header-btn save-btn"
+                            className="flex items-center gap-1.5 px-4 py-2 border border-[var(--color-primary)] rounded-md bg-[var(--color-primary)] text-white text-[13px] font-medium cursor-pointer transition-all duration-200 whitespace-nowrap shrink-0 hover:bg-[var(--color-primary-dark)] disabled:opacity-50 disabled:cursor-not-allowed"
                             onClick={() => void handleSubmitSaveAsTemplate()}
                             disabled={isSavingTemplate || !templateForm.name.trim()}
                         >
@@ -2643,7 +2643,7 @@ export function ScreenHeader({
                     <label style={{ display: 'grid', gap: 6 }}>
                         <span>模板名称</span>
                         <input
-                            className="screen-name-input"
+                            className="text-base font-semibold text-[var(--color-text-primary)] bg-[var(--color-surface)] border border-[var(--color-primary)] rounded px-2 py-1 outline-none min-w-[200px]"
                             value={templateForm.name}
                             onChange={(event) => setTemplateForm((current) => ({ ...current, name: event.target.value }))}
                             placeholder="输入模板名称"
@@ -2652,7 +2652,7 @@ export function ScreenHeader({
                     <label style={{ display: 'grid', gap: 6 }}>
                         <span>模板描述</span>
                         <textarea
-                            className="screen-name-input"
+                            className="text-base font-semibold text-[var(--color-text-primary)] bg-[var(--color-surface)] border border-[var(--color-primary)] rounded px-2 py-1 outline-none min-w-[200px]"
                             value={templateForm.description}
                             onChange={(event) => setTemplateForm((current) => ({ ...current, description: event.target.value }))}
                             placeholder="输入模板描述"
@@ -2663,7 +2663,7 @@ export function ScreenHeader({
                     <label style={{ display: 'grid', gap: 6 }}>
                         <span>可见范围</span>
                         <select
-                            className="header-select"
+                            className="px-2.5 py-[7px] border border-[var(--color-border)] rounded-md bg-[var(--color-surface)] text-[var(--color-text-primary)] text-[13px] font-medium min-w-[110px] w-full focus:outline-none focus:border-[var(--color-primary)]"
                             value={templateForm.visibilityScope}
                             onChange={(event) => setTemplateForm((current) => ({
                                 ...current,
@@ -2685,12 +2685,12 @@ export function ScreenHeader({
                 width={720}
                 footer={(
                     <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
-                        <button type="button" className="header-btn" onClick={() => setShowExploreSessionDialog(false)}>
+                        <button type="button" className="flex items-center gap-1.5 px-4 py-2 border border-[var(--color-border)] rounded-md bg-[var(--color-surface)] text-[var(--color-text-primary)] text-[13px] font-medium cursor-pointer transition-all duration-200 whitespace-nowrap shrink-0 w-full justify-start py-[7px] px-2.5 hover:border-[var(--color-primary)] hover:bg-[var(--color-primary-light)] disabled:opacity-50 disabled:cursor-not-allowed" onClick={() => setShowExploreSessionDialog(false)}>
                             取消
                         </button>
                         <button
                             type="button"
-                            className="header-btn save-btn"
+                            className="flex items-center gap-1.5 px-4 py-2 border border-[var(--color-primary)] rounded-md bg-[var(--color-primary)] text-white text-[13px] font-medium cursor-pointer transition-all duration-200 whitespace-nowrap shrink-0 hover:bg-[var(--color-primary-dark)] disabled:opacity-50 disabled:cursor-not-allowed"
                             onClick={() => void handleSubmitCreateExploreSession()}
                             disabled={!exploreSessionForm.title.trim()}
                         >
@@ -2703,7 +2703,7 @@ export function ScreenHeader({
                     <label style={{ display: 'grid', gap: 6 }}>
                         <span>会话标题</span>
                         <input
-                            className="screen-name-input"
+                            className="text-base font-semibold text-[var(--color-text-primary)] bg-[var(--color-surface)] border border-[var(--color-primary)] rounded px-2 py-1 outline-none min-w-[200px]"
                             value={exploreSessionForm.title}
                             onChange={(event) => setExploreSessionForm((current) => ({ ...current, title: event.target.value }))}
                             placeholder="输入会话标题"
@@ -2712,7 +2712,7 @@ export function ScreenHeader({
                     <label style={{ display: 'grid', gap: 6 }}>
                         <span>问题描述</span>
                         <textarea
-                            className="screen-name-input"
+                            className="text-base font-semibold text-[var(--color-text-primary)] bg-[var(--color-surface)] border border-[var(--color-primary)] rounded px-2 py-1 outline-none min-w-[200px]"
                             value={exploreSessionForm.question}
                             onChange={(event) => setExploreSessionForm((current) => ({ ...current, question: event.target.value }))}
                             rows={3}
@@ -2722,7 +2722,7 @@ export function ScreenHeader({
                     <label style={{ display: 'grid', gap: 6 }}>
                         <span>阶段结论</span>
                         <textarea
-                            className="screen-name-input"
+                            className="text-base font-semibold text-[var(--color-text-primary)] bg-[var(--color-surface)] border border-[var(--color-primary)] rounded px-2 py-1 outline-none min-w-[200px]"
                             value={exploreSessionForm.conclusion}
                             onChange={(event) => setExploreSessionForm((current) => ({ ...current, conclusion: event.target.value }))}
                             rows={3}
@@ -2732,7 +2732,7 @@ export function ScreenHeader({
                     <label style={{ display: 'grid', gap: 6 }}>
                         <span>标签</span>
                         <input
-                            className="screen-name-input"
+                            className="text-base font-semibold text-[var(--color-text-primary)] bg-[var(--color-surface)] border border-[var(--color-primary)] rounded px-2 py-1 outline-none min-w-[200px]"
                             value={exploreSessionForm.tagsInput}
                             onChange={(event) => setExploreSessionForm((current) => ({ ...current, tagsInput: event.target.value }))}
                             placeholder="逗号分隔，如：大屏,复盘"

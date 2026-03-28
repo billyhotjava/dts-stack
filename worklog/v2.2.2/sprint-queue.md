@@ -149,3 +149,17 @@
 | F3-侧边导航统一 | 1 | DONE |
 
 **统计**: READY=0, IN_PROGRESS=0, DONE=15, BLOCKED=0
+
+## Sprint-24: 逻辑建模主工作流补完 (202603)
+**状态**: READY
+
+| Feature | Task 数 | 状态 |
+|---------|---------|------|
+| F1-模型唯一性与列表语义收口 | 3 | READY |
+| F2-文件浏览器与批量选择语义重构 | 4 | READY |
+| F3-模型生命周期操作补完 | 5 | READY |
+| F4-导入与批量导入链路补完 | 4 | READY |
+| F5-从ODS生成模板 | 4 | READY |
+| F6-编译测试上线与验收闭环 | 4 | READY |
+
+**统计**: READY=24, IN_PROGRESS=0, DONE=0, BLOCKED=0

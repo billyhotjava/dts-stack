@@ -875,12 +875,16 @@ export function TemplateGallery({ onSelect, onClose }: TemplateGalleryProps) {
         }
     };
 
+    const btnSecondary = 'px-3.5 py-2.5 rounded-sm text-[13px] font-medium cursor-pointer transition-all duration-200 bg-surface-card border border-border-strong text-text-secondary hover:border-brand hover:text-text-primary';
+    const btnPrimary = 'px-3.5 py-2.5 rounded-sm text-[13px] font-medium cursor-pointer transition-all duration-200 bg-brand border-none text-white hover:-translate-y-px hover:shadow-[0_4px_12px_rgba(80,158,227,0.3)]';
+    const selectCls = 'bg-surface-muted border border-border-default rounded-sm px-2.5 py-2 text-text-primary text-[13px]';
+
     return (
-        <div className="template-gallery-overlay" data-testid="analytics-screen-template-gallery" onClick={onClose}>
-            <div className="template-gallery-modal" onClick={(e) => e.stopPropagation()}>
-                <div className="template-gallery-header">
-                    <h2>📋 模板市场</h2>
-                    <button className="template-gallery-close" onClick={onClose}>✕</button>
+        <div className="fixed inset-0 flex items-center justify-center z-[1000] bg-[rgba(15,23,42,0.4)] backdrop-blur-[4px]" data-testid="analytics-screen-template-gallery" onClick={onClose}>
+            <div className="bg-surface-card rounded-lg w-[92%] max-w-[1080px] max-h-[84vh] flex flex-col shadow-lg border border-border-default" onClick={(e) => e.stopPropagation()}>
+                <div className="flex items-center justify-between px-6 py-5 border-b border-border-default">
+                    <h2 className="m-0 text-xl text-text-primary">📋 模板市场</h2>
+                    <button className="bg-transparent border-none text-text-muted text-2xl cursor-pointer px-2 py-1 rounded-xs transition-all duration-200 hover:bg-[rgba(80,158,227,0.08)] hover:text-text-primary" onClick={onClose}>✕</button>
                 </div>
 
                 {actionNotice ? (
@@ -898,7 +902,7 @@ export function TemplateGallery({ onSelect, onClose }: TemplateGalleryProps) {
                     }}>
                         <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, alignItems: 'center' }}>
                             <strong>{actionNotice.title}</strong>
-                            <button className="template-btn secondary" onClick={() => setActionNotice(null)}>关闭</button>
+                            <button className={btnSecondary} onClick={() => setActionNotice(null)}>关闭</button>
                         </div>
                         <div style={{ marginTop: 6, fontSize: 12, whiteSpace: 'pre-wrap', lineHeight: 1.6 }}>
                             {actionNotice.message}
@@ -906,12 +910,12 @@ export function TemplateGallery({ onSelect, onClose }: TemplateGalleryProps) {
                     </div>
                 ) : null}
 
-                <div className="template-category-tabs">
+                <div className="flex gap-0.5 px-6 pt-2.5 border-b border-border-default overflow-x-auto">
                     {allCategories.map((value) => (
                         <button
                             key={value}
                             data-testid={`analytics-screen-template-category-${value}`}
-                            className={`template-category-tab ${category === value ? 'active' : ''}`}
+                            className={`bg-transparent border-none border-b-2 px-3.5 py-2 text-[13px] cursor-pointer whitespace-nowrap transition-all duration-200 ${category === value ? 'text-brand border-b-brand' : 'border-b-transparent text-text-secondary hover:text-text-primary'}`}
                             onClick={() => setCategory(value)}
                         >
                             {value === 'all' ? '全部' : (CATEGORY_LABELS[value] || value)}
@@ -919,16 +923,16 @@ export function TemplateGallery({ onSelect, onClose }: TemplateGalleryProps) {
                     ))}
                 </div>
 
-                <div className="template-gallery-filters">
+                <div className="grid grid-cols-[1fr_repeat(10,auto)] gap-2 px-6 py-3 border-b border-border-default">
                     <input
                         type="text"
-                        className="template-search-input"
+                        className="bg-surface-muted border border-border-default rounded-sm px-2.5 py-2 text-text-primary text-[13px]"
                         value={keyword}
                         onChange={(e) => setKeyword(e.target.value)}
                         placeholder="搜索模板名称、说明、分类或标签"
                     />
                     <select
-                        className="template-category-select"
+                        className={selectCls}
                         value={visibility}
                         onChange={(e) => setVisibility(e.target.value)}
                     >
@@ -938,7 +942,7 @@ export function TemplateGallery({ onSelect, onClose }: TemplateGalleryProps) {
                         <option value="global">全局</option>
                     </select>
                     <select
-                        className="template-category-select"
+                        className={selectCls}
                         value={listing}
                         onChange={(e) => setListing(e.target.value as 'all' | 'listed' | 'unlisted')}
                     >
@@ -946,9 +950,9 @@ export function TemplateGallery({ onSelect, onClose }: TemplateGalleryProps) {
                         <option value="listed">仅上架</option>
                         <option value="unlisted">仅下架</option>
                     </select>
-                    <button className="template-btn secondary" onClick={loadAssetTemplates}>刷新</button>
-                    <button className="template-btn secondary" onClick={() => handleImportClick('template')}>导入</button>
-                    <button className="template-btn secondary" onClick={handleExportTemplate}>导出</button>
+                    <button className={btnSecondary} onClick={loadAssetTemplates}>刷新</button>
+                    <button className={btnSecondary} onClick={() => handleImportClick('template')}>导入</button>
+                    <button className={btnSecondary} onClick={handleExportTemplate}>导出</button>
                     <input
                         ref={fileInputRef}
                         type="file"
@@ -972,33 +976,33 @@ export function TemplateGallery({ onSelect, onClose }: TemplateGalleryProps) {
                     )}
                 </div>
 
-                <div className="template-gallery-content">
-                    <div className="template-section-title">内置模板</div>
-                    <div className="template-gallery-grid">
+                <div className="flex-1 overflow-y-auto p-6 bg-surface-page">
+                    <div className="text-sm font-bold text-text-primary mb-3">内置模板</div>
+                    <div className="grid grid-cols-[repeat(auto-fill,minmax(260px,1fr))] gap-5">
                         {filteredBuiltins.map((template) => {
                             const key = `builtin:${template.id}`;
                             return (
                                 <div
                                     key={key}
                                     data-testid={`analytics-screen-template-builtin-${template.id}`}
-                                    className={`template-card ${selectedKey === key ? 'selected' : ''}`}
+                                    className={`relative bg-surface-card border-2 rounded-[10px] overflow-hidden cursor-pointer transition-all duration-200 ease-in-out hover:border-[var(--color-brand-light,#C7E0F4)] hover:-translate-y-0.5 hover:shadow-sm ${selectedKey === key ? 'border-brand shadow-[0_0_0_3px_rgba(80,158,227,0.2)]' : 'border-border-default'}`}
                                     onClick={() => setSelectedKey(key)}
                                 >
-                                    <div className="template-card-preview">
-                                        <span className="template-card-icon">{template.thumbnail}</span>
-                                        <div className="template-card-badge">内置</div>
+                                    <div className="h-[140px] bg-surface-workspace flex items-center justify-center relative">
+                                        <span className="text-5xl">{template.thumbnail}</span>
+                                        <div className="absolute top-2.5 right-2.5 px-2.5 py-1 bg-[rgba(80,158,227,0.12)] text-brand rounded-full text-[11px] font-medium">内置</div>
                                     </div>
-                                    <div className="template-card-info">
-                                        <h3>{template.name}</h3>
-                                        <p>{template.description}</p>
+                                    <div className="p-4">
+                                        <h3 className="m-0 mb-2 text-base font-semibold text-text-primary">{template.name}</h3>
+                                        <p className="m-0 mb-2.5 text-[13px] text-text-secondary leading-[1.4]">{template.description}</p>
                                         {Array.isArray(template.tags) && template.tags.length > 0 && (
-                                            <div className="template-card-tags">
+                                            <div className="flex flex-wrap gap-1 mb-2">
                                                 {template.tags.map((tag) => (
-                                                    <span key={tag} className="template-tag">{tag}</span>
+                                                    <span key={tag} className="inline-block px-2 py-0.5 bg-[rgba(80,158,227,0.1)] text-brand rounded-[10px] text-[11px]">{tag}</span>
                                                 ))}
                                             </div>
                                         )}
-                                        <div className="template-card-meta">
+                                        <div className="text-xs text-text-muted">
                                             {(CATEGORY_LABELS[template.category] || template.category)}
                                             {` · ${template.config.width}×${template.config.height}`}
                                             {` · ${template.config.components.length} 个组件`}
@@ -1012,32 +1016,32 @@ export function TemplateGallery({ onSelect, onClose }: TemplateGalleryProps) {
                         })}
                     </div>
 
-                    <div className="template-section-title" style={{ marginTop: 20 }}>资产模板</div>
+                    <div className="text-sm font-bold text-text-primary mb-3" style={{ marginTop: 20 }}>资产模板</div>
                     {loading ? (
-                        <div className="template-empty-hint">加载中...</div>
+                        <div className="text-text-muted text-[13px] py-3.5 px-1">加载中...</div>
                     ) : error ? (
-                        <div className="template-empty-hint">{error}</div>
+                        <div className="text-text-muted text-[13px] py-3.5 px-1">{error}</div>
                     ) : filteredAssets.length === 0 ? (
-                        <div className="template-empty-hint">暂无资产模板</div>
+                        <div className="text-text-muted text-[13px] py-3.5 px-1">暂无资产模板</div>
                     ) : (
-                        <div className="template-gallery-grid">
+                        <div className="grid grid-cols-[repeat(auto-fill,minmax(260px,1fr))] gap-5">
                             {filteredAssets.map((template) => {
                                 const key = `asset:${template.id}`;
                                 return (
                                     <div
                                         key={key}
                                         data-testid={`analytics-screen-template-asset-${template.id}`}
-                                        className={`template-card ${selectedKey === key ? 'selected' : ''}`}
+                                        className={`relative bg-surface-card border-2 rounded-[10px] overflow-hidden cursor-pointer transition-all duration-200 ease-in-out hover:border-[var(--color-brand-light,#C7E0F4)] hover:-translate-y-0.5 hover:shadow-sm ${selectedKey === key ? 'border-brand shadow-[0_0_0_3px_rgba(80,158,227,0.2)]' : 'border-border-default'}`}
                                         onClick={() => setSelectedKey(key)}
                                     >
-                                        <div className="template-card-preview">
-                                            <span className="template-card-icon">{template.thumbnail || '🧩'}</span>
-                                            <div className="template-card-badge">资产</div>
+                                        <div className="h-[140px] bg-surface-workspace flex items-center justify-center relative">
+                                            <span className="text-5xl">{template.thumbnail || '🧩'}</span>
+                                            <div className="absolute top-2.5 right-2.5 px-2.5 py-1 bg-[rgba(80,158,227,0.12)] text-brand rounded-full text-[11px] font-medium">资产</div>
                                         </div>
-                                        <div className="template-card-info">
-                                            <h3>{template.name || `模板 #${template.id}`}</h3>
-                                            <p>{template.description || '无描述'}</p>
-                                            <div className="template-card-meta">
+                                        <div className="p-4">
+                                            <h3 className="m-0 mb-2 text-base font-semibold text-text-primary">{template.name || `模板 #${template.id}`}</h3>
+                                            <p className="m-0 mb-2.5 text-[13px] text-text-secondary leading-[1.4]">{template.description || '无描述'}</p>
+                                            <div className="text-xs text-text-muted">
                                                 {(CATEGORY_LABELS[normalizeTemplateCategory(template.category)] || normalizeTemplateCategory(template.category))}
                                                 {` · ${template.listed === false ? '下架' : '上架'}`}
                                                 {` · ${VISIBILITY_LABELS[String(template.visibilityScope || 'team').toLowerCase()] || String(template.visibilityScope || 'team')}`}
@@ -1053,18 +1057,18 @@ export function TemplateGallery({ onSelect, onClose }: TemplateGalleryProps) {
                     )}
                 </div>
 
-                <div className="template-gallery-footer">
+                <div className="flex gap-3 justify-end px-6 py-4 border-t border-border-default">
                     {selectedAsset ? (
                         <>
                             <button
-                                className="template-btn secondary"
+                                className={btnSecondary}
                                 onClick={handleToggleListing}
                                 disabled={isUpdatingAsset}
                             >
                                 {selectedAsset.listed === false ? '上架模板' : '下架模板'}
                             </button>
                             <button
-                                className="template-btn secondary"
+                                className={btnSecondary}
                                 onClick={() => void openRestoreTemplateVersionDialog()}
                                 disabled={isUpdatingAsset}
                             >
@@ -1072,19 +1076,19 @@ export function TemplateGallery({ onSelect, onClose }: TemplateGalleryProps) {
                             </button>
                         </>
                     ) : null}
-                    <button className="template-btn secondary" onClick={onClose}>取消</button>
-                    <button className="template-btn primary" data-testid="analytics-screen-template-confirm" onClick={handleConfirm}>使用此模板</button>
+                    <button className={btnSecondary} onClick={onClose}>取消</button>
+                    <button className={btnPrimary} data-testid="analytics-screen-template-confirm" onClick={handleConfirm}>使用此模板</button>
                 </div>
             </div>
 
             {showIndustryAudit && (
-                <div className="industry-audit-overlay" onClick={(e) => e.stopPropagation()}>
-                    <div className="industry-audit-modal">
-                        <div className="industry-audit-header">
+                <div className="fixed inset-0 z-[1600] bg-[rgba(15,23,42,0.4)] flex items-center justify-center p-5" onClick={(e) => e.stopPropagation()}>
+                    <div className="w-[min(1100px,94vw)] max-h-[82vh] flex flex-col bg-surface-card border border-border-default rounded-[10px] shadow-lg">
+                        <div className="flex justify-between items-center px-4 py-3.5 border-b border-border-default text-text-primary">
                             <h3 style={{ margin: 0 }}>行业包审计</h3>
                             <div style={{ display: 'flex', gap: 8 }}>
                                 <button
-                                    className="template-btn secondary"
+                                    className={btnSecondary}
                                     onClick={() => {
                                         void loadIndustryAudit();
                                     }}
@@ -1092,12 +1096,12 @@ export function TemplateGallery({ onSelect, onClose }: TemplateGalleryProps) {
                                 >
                                     {industryAuditLoading ? '刷新中...' : '刷新'}
                                 </button>
-                                <button className="template-btn secondary" onClick={() => setShowIndustryAudit(false)}>关闭</button>
+                                <button className={btnSecondary} onClick={() => setShowIndustryAudit(false)}>关闭</button>
                             </div>
                         </div>
-                        <div className="industry-audit-filters">
+                        <div className="flex gap-2 items-center px-4 py-2.5 border-b border-border-default">
                             <select
-                                className="template-category-select"
+                                className={selectCls}
                                 value={industryAuditAction}
                                 onChange={(e) => setIndustryAuditAction(e.target.value as typeof industryAuditAction)}
                             >
@@ -1106,7 +1110,7 @@ export function TemplateGallery({ onSelect, onClose }: TemplateGalleryProps) {
                                 <option value="pack.import">导入</option>
                             </select>
                             <select
-                                className="template-category-select"
+                                className={selectCls}
                                 value={industryAuditResult}
                                 onChange={(e) => setIndustryAuditResult(e.target.value as typeof industryAuditResult)}
                             >
@@ -1120,15 +1124,15 @@ export function TemplateGallery({ onSelect, onClose }: TemplateGalleryProps) {
                                 共 {filteredIndustryAuditRows.length} 条
                             </div>
                         </div>
-                        <div className="industry-audit-body">
+                        <div className="flex-1 overflow-auto px-3 py-2 pb-3">
                             {industryAuditError ? (
-                                <div className="template-empty-hint">{industryAuditError}</div>
+                                <div className="text-text-muted text-[13px] py-3.5 px-1">{industryAuditError}</div>
                             ) : industryAuditLoading && industryAuditRows.length === 0 ? (
-                                <div className="template-empty-hint">加载中...</div>
+                                <div className="text-text-muted text-[13px] py-3.5 px-1">加载中...</div>
                             ) : filteredIndustryAuditRows.length === 0 ? (
-                                <div className="template-empty-hint">暂无审计记录</div>
+                                <div className="text-text-muted text-[13px] py-3.5 px-1">暂无审计记录</div>
                             ) : (
-                                <table className="industry-audit-table">
+                                <table className="w-full border-collapse text-xs text-text-primary [&_th]:sticky [&_th]:top-0 [&_th]:z-[1] [&_th]:text-left [&_th]:p-2 [&_th]:border-b [&_th]:border-border-strong [&_th]:bg-surface-muted [&_th]:text-text-secondary [&_td]:p-2 [&_td]:border-b [&_td]:border-border-default [&_td]:align-top [&_td]:break-all">
                                     <thead>
                                         <tr>
                                             <th>时间</th>
@@ -1173,225 +1177,6 @@ export function TemplateGallery({ onSelect, onClose }: TemplateGalleryProps) {
                 onSubmit={handleSubmitDialog}
             />
 
-            <style>{`
-                .template-gallery-overlay {
-                    position: fixed;
-                    top: 0; left: 0; right: 0; bottom: 0;
-                    background: rgba(15, 23, 42, 0.4);
-                    display: flex;
-                    align-items: center;
-                    justify-content: center;
-                    z-index: 1000;
-                    backdrop-filter: blur(4px);
-                }
-                .template-gallery-modal {
-                    background: var(--surface-card, #fff);
-                    border-radius: 12px;
-                    width: 92%; max-width: 1080px; max-height: 84vh;
-                    display: flex; flex-direction: column;
-                    box-shadow: var(--panel-shadow, 0 18px 40px rgba(15,23,42,0.08));
-                    border: 1px solid var(--border-subtle, rgba(148,163,184,0.24));
-                }
-                .template-gallery-header {
-                    display: flex; align-items: center; justify-content: space-between;
-                    padding: 20px 24px;
-                    border-bottom: 1px solid var(--border-subtle, rgba(148,163,184,0.24));
-                }
-                .template-gallery-header h2 {
-                    margin: 0; font-size: 20px;
-                    color: var(--text-primary, rgba(15,23,42,0.92));
-                }
-                .template-gallery-close {
-                    background: none; border: none;
-                    color: var(--text-muted, rgba(71,85,105,0.6));
-                    font-size: 24px; cursor: pointer;
-                    padding: 4px 8px; border-radius: 4px; transition: all 0.2s;
-                }
-                .template-gallery-close:hover {
-                    background: var(--color-bg-hover, rgba(80,158,227,0.08));
-                    color: var(--text-primary, rgba(15,23,42,0.92));
-                }
-                .template-category-tabs {
-                    display: flex; gap: 2px;
-                    padding: 10px 24px 0;
-                    border-bottom: 1px solid var(--border-subtle, rgba(148,163,184,0.24));
-                    overflow-x: auto;
-                }
-                .template-category-tab {
-                    background: none; border: none;
-                    border-bottom: 2px solid transparent;
-                    padding: 8px 14px;
-                    color: var(--text-secondary, rgba(51,65,85,0.72));
-                    font-size: 13px; cursor: pointer;
-                    white-space: nowrap; transition: all 0.2s;
-                }
-                .template-category-tab:hover {
-                    color: var(--text-primary, rgba(15,23,42,0.92));
-                }
-                .template-category-tab.active {
-                    color: var(--color-brand, #509EE3);
-                    border-bottom-color: var(--color-brand, #509EE3);
-                }
-                .template-gallery-filters {
-                    display: grid;
-                    grid-template-columns: 1fr repeat(10, auto);
-                    gap: 8px; padding: 12px 24px;
-                    border-bottom: 1px solid var(--border-subtle, rgba(148,163,184,0.24));
-                }
-                .template-search-input {
-                    background: var(--surface-muted, #F7F9FC);
-                    border: 1px solid var(--border-subtle, rgba(148,163,184,0.24));
-                    border-radius: 6px; padding: 8px 10px;
-                    color: var(--text-primary, rgba(15,23,42,0.92));
-                    font-size: 13px;
-                }
-                .template-category-select {
-                    background: var(--surface-muted, #F7F9FC);
-                    border: 1px solid var(--border-subtle, rgba(148,163,184,0.24));
-                    border-radius: 6px; padding: 8px 10px;
-                    color: var(--text-primary, rgba(15,23,42,0.92));
-                    font-size: 13px;
-                }
-                .template-gallery-content {
-                    flex: 1; overflow-y: auto; padding: 24px;
-                    background: var(--surface-page, #F4F7FB);
-                }
-                .template-section-title {
-                    font-size: 14px; font-weight: 700;
-                    color: var(--text-primary, rgba(15,23,42,0.92));
-                    margin-bottom: 12px;
-                }
-                .template-gallery-grid {
-                    display: grid;
-                    grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
-                    gap: 20px;
-                }
-                .template-card {
-                    position: relative;
-                    background: var(--surface-card, #fff);
-                    border: 2px solid var(--border-subtle, rgba(148,163,184,0.24));
-                    border-radius: 10px; overflow: hidden;
-                    cursor: pointer; transition: all 0.2s ease;
-                }
-                .template-card:hover {
-                    border-color: var(--color-brand-light, #C7E0F4);
-                    transform: translateY(-2px);
-                    box-shadow: var(--soft-shadow, 0 10px 24px rgba(15,23,42,0.06));
-                }
-                .template-card.selected {
-                    border-color: var(--color-brand, #509EE3);
-                    box-shadow: 0 0 0 3px rgba(80,158,227,0.2);
-                }
-                .template-card-preview {
-                    height: 140px;
-                    background: var(--surface-workspace, #ECF1F7);
-                    display: flex; align-items: center; justify-content: center;
-                    position: relative;
-                }
-                .template-card-icon { font-size: 48px; }
-                .template-card-badge {
-                    position: absolute; top: 10px; right: 10px;
-                    padding: 4px 10px;
-                    background: rgba(80,158,227,0.12);
-                    color: var(--color-brand, #509EE3);
-                    border-radius: 20px; font-size: 11px; font-weight: 500;
-                }
-                .template-card-info { padding: 16px; }
-                .template-card-info h3 {
-                    margin: 0 0 8px 0; font-size: 16px; font-weight: 600;
-                    color: var(--text-primary, rgba(15,23,42,0.92));
-                }
-                .template-card-info p {
-                    margin: 0 0 10px 0; font-size: 13px;
-                    color: var(--text-secondary, rgba(51,65,85,0.72));
-                    line-height: 1.4;
-                }
-                .template-card-tags {
-                    display: flex; flex-wrap: wrap; gap: 4px; margin-bottom: 8px;
-                }
-                .template-tag {
-                    display: inline-block; padding: 2px 8px;
-                    background: rgba(80,158,227,0.1);
-                    color: var(--color-brand, #509EE3);
-                    border-radius: 10px; font-size: 11px;
-                }
-                .template-card-meta {
-                    font-size: 12px;
-                    color: var(--text-muted, rgba(71,85,105,0.6));
-                }
-                .template-empty-hint {
-                    color: var(--text-muted, rgba(71,85,105,0.6));
-                    font-size: 13px; padding: 14px 4px;
-                }
-                .template-gallery-footer {
-                    display: flex; gap: 12px; justify-content: flex-end;
-                    padding: 16px 24px;
-                    border-top: 1px solid var(--border-subtle, rgba(148,163,184,0.24));
-                }
-                .template-btn {
-                    padding: 10px 14px; border-radius: 6px;
-                    font-size: 13px; font-weight: 500;
-                    cursor: pointer; transition: all 0.2s;
-                }
-                .template-btn.secondary {
-                    background: var(--surface-card, #fff);
-                    border: 1px solid var(--border-strong, rgba(100,116,139,0.38));
-                    color: var(--text-secondary, rgba(51,65,85,0.72));
-                }
-                .template-btn.secondary:hover {
-                    border-color: var(--color-brand, #509EE3);
-                    color: var(--text-primary, rgba(15,23,42,0.92));
-                }
-                .template-btn.primary {
-                    background: var(--color-brand, #509EE3);
-                    border: none; color: #fff;
-                }
-                .template-btn.primary:hover {
-                    transform: translateY(-1px);
-                    box-shadow: 0 4px 12px rgba(80,158,227,0.3);
-                }
-                .industry-audit-overlay {
-                    position: fixed; inset: 0; z-index: 1600;
-                    background: rgba(15,23,42,0.4);
-                    display: flex; align-items: center; justify-content: center; padding: 20px;
-                }
-                .industry-audit-modal {
-                    width: min(1100px, 94vw); max-height: 82vh;
-                    display: flex; flex-direction: column;
-                    background: var(--surface-card, #fff);
-                    border: 1px solid var(--border-subtle, rgba(148,163,184,0.24));
-                    border-radius: 10px;
-                    box-shadow: var(--panel-shadow, 0 18px 40px rgba(15,23,42,0.08));
-                }
-                .industry-audit-header {
-                    display: flex; justify-content: space-between; align-items: center;
-                    padding: 14px 16px;
-                    border-bottom: 1px solid var(--border-subtle, rgba(148,163,184,0.24));
-                    color: var(--text-primary, rgba(15,23,42,0.92));
-                }
-                .industry-audit-filters {
-                    display: flex; gap: 8px; align-items: center;
-                    padding: 10px 16px;
-                    border-bottom: 1px solid var(--border-subtle, rgba(148,163,184,0.24));
-                }
-                .industry-audit-body { flex: 1; overflow: auto; padding: 8px 12px 12px; }
-                .industry-audit-table {
-                    width: 100%; border-collapse: collapse; font-size: 12px;
-                    color: var(--text-primary, rgba(15,23,42,0.92));
-                }
-                .industry-audit-table th {
-                    position: sticky; top: 0; z-index: 1;
-                    text-align: left; padding: 8px;
-                    border-bottom: 1px solid var(--border-strong, rgba(100,116,139,0.38));
-                    background: var(--surface-muted, #F7F9FC);
-                    color: var(--text-secondary, rgba(51,65,85,0.72));
-                }
-                .industry-audit-table td {
-                    padding: 8px;
-                    border-bottom: 1px solid var(--border-subtle, rgba(148,163,184,0.24));
-                    vertical-align: top; word-break: break-all;
-                }
-            `}</style>
         </div>
     );
 }

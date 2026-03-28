@@ -43,9 +43,9 @@ export function CanvasToolbar() {
     };
 
     return (
-        <div className="canvas-toolbar">
+        <div className="min-h-[44px] bg-[var(--color-surface-secondary)] border-b border-[var(--color-border)] flex items-center px-2 gap-1 overflow-hidden shrink-0">
             {/* History */}
-            <div className="toolbar-group" title="历史操作">
+            <div className="flex items-center gap-0.5 px-1 shrink-0" title="历史操作">
                 <button className="toolbar-btn" onClick={undo} disabled={!canUndo} title="撤销 (Ctrl+Z)">
                     ↩
                 </button>
@@ -54,10 +54,10 @@ export function CanvasToolbar() {
                 </button>
             </div>
 
-            <div className="toolbar-separator" />
+            <div className="w-px h-6 bg-[var(--color-border)] mx-0.5 shrink-0" />
 
             {/* Alignment */}
-            <div className="toolbar-group" title="对齐">
+            <div className="flex items-center gap-0.5 px-1 shrink-0" title="对齐">
                 <button className="toolbar-btn toolbar-btn--icon" onClick={() => alignSelected('left')} disabled={!canAlign} title="左对齐">
                     ⫷
                 </button>
@@ -78,10 +78,10 @@ export function CanvasToolbar() {
                 </button>
             </div>
 
-            <div className="toolbar-separator" />
+            <div className="w-px h-6 bg-[var(--color-border)] mx-0.5 shrink-0" />
 
             {/* Distribution & Grouping */}
-            <div className="toolbar-group" title="分布与编组">
+            <div className="flex items-center gap-0.5 px-1 shrink-0" title="分布与编组">
                 <button className="toolbar-btn" onClick={() => distributeSelected('horizontal')} disabled={!canDistribute} title="水平等距分布 (3+)">
                     ⫞H
                 </button>
@@ -96,10 +96,10 @@ export function CanvasToolbar() {
                 </button>
             </div>
 
-            <div className="toolbar-separator" />
+            <div className="w-px h-6 bg-[var(--color-border)] mx-0.5 shrink-0" />
 
             {/* Format painter */}
-            <div className="toolbar-group" title="格式刷">
+            <div className="flex items-center gap-0.5 px-1 shrink-0" title="格式刷">
                 <button
                     className={`toolbar-btn ${formatSource ? 'toolbar-btn--active' : ''}`}
                     onClick={pickFormatSource}
@@ -118,10 +118,10 @@ export function CanvasToolbar() {
                 </button>
             </div>
 
-            <div className="toolbar-separator" />
+            <div className="w-px h-6 bg-[var(--color-border)] mx-0.5 shrink-0" />
 
             {/* View controls */}
-            <div className="toolbar-group" title="视图控制">
+            <div className="flex items-center gap-0.5 px-1 shrink-0" title="视图控制">
                 <button
                     className={`toolbar-btn ${showGrid ? 'toolbar-btn--active' : ''}`}
                     onClick={() => dispatch({ type: 'TOGGLE_GRID' })}
@@ -132,10 +132,10 @@ export function CanvasToolbar() {
             </div>
 
             {/* Spacer */}
-            <div style={{ flex: 1 }} />
+            <div className="flex-1" />
 
             {/* Zoom */}
-            <div className="toolbar-group">
+            <div className="flex items-center gap-0.5 px-1 shrink-0">
                 <button className="toolbar-btn" onClick={() => handleZoomStep(-25)} title="缩小 25%">-</button>
                 <select className="zoom-select" value={zoom} onChange={handleZoomChange}>
                     {zoomSelectOptions.map((z) => (
@@ -145,12 +145,12 @@ export function CanvasToolbar() {
                 <button className="toolbar-btn" onClick={() => handleZoomStep(25)} title="放大 25%">+</button>
             </div>
 
-            <div className="toolbar-separator" />
+            <div className="w-px h-6 bg-[var(--color-border)] mx-0.5 shrink-0" />
 
             {/* Status - compact */}
-            <div className="toolbar-group toolbar-group--status">
-                <span className="toolbar-status-text">{state.config.width}×{state.config.height}</span>
-                {selectedIds.length > 0 && <span className="toolbar-status-text">选{selectedIds.length}</span>}
+            <div className="flex items-center gap-1 px-1 shrink min-w-0">
+                <span className="text-[11px] text-[var(--color-text-tertiary)] whitespace-nowrap">{state.config.width}×{state.config.height}</span>
+                {selectedIds.length > 0 && <span className="text-[11px] text-[var(--color-text-tertiary)] whitespace-nowrap">选{selectedIds.length}</span>}
             </div>
         </div>
     );

@@ -265,10 +265,10 @@ function renderChartTitleLayoutRows(
             <div style={{ fontSize: 11, color: '#888', marginTop: 8, marginBottom: 4 }}>
                 标题位置微调
             </div>
-            <div className="property-row">
-                <label className="property-label">标题位置</label>
+            <div className="flex items-center mb-3">
+                <label className="w-20 text-xs text-text-secondary">标题位置</label>
                 <select
-                    className="property-input"
+                    className="flex-1 px-2.5 py-1.5 border border-border-default rounded bg-surface-card text-text-primary text-xs focus:outline-none focus:border-brand"
                     value={(config.titlePosition as string) || 'auto'}
                     onChange={(e) => onChange('titlePosition', e.target.value)}
                 >
@@ -278,41 +278,41 @@ function renderChartTitleLayoutRows(
                     <option value="right">右侧</option>
                 </select>
             </div>
-            <div className="property-row">
-                <label className="property-label">启用拖拽微调</label>
+            <div className="flex items-center mb-3">
+                <label className="w-20 text-xs text-text-secondary">启用拖拽微调</label>
                 <input
                     type="checkbox"
                     checked={config.titleDragEnabled === true}
                     onChange={(e) => onChange('titleDragEnabled', e.target.checked)}
                 />
             </div>
-            <div className="property-row">
-                <label className="property-label">水平偏移</label>
+            <div className="flex items-center mb-3">
+                <label className="w-20 text-xs text-text-secondary">水平偏移</label>
                 <input
                     type="number"
-                    className="property-input"
+                    className="flex-1 px-2.5 py-1.5 border border-border-default rounded bg-surface-card text-text-primary text-xs focus:outline-none focus:border-brand"
                     min={-400}
                     max={400}
                     value={(config.titleOffsetX as number) || 0}
                     onChange={(e) => onChange('titleOffsetX', Number(e.target.value))}
                 />
             </div>
-            <div className="property-row">
-                <label className="property-label">垂直偏移</label>
+            <div className="flex items-center mb-3">
+                <label className="w-20 text-xs text-text-secondary">垂直偏移</label>
                 <input
                     type="number"
-                    className="property-input"
+                    className="flex-1 px-2.5 py-1.5 border border-border-default rounded bg-surface-card text-text-primary text-xs focus:outline-none focus:border-brand"
                     min={-200}
                     max={200}
                     value={(config.titleOffsetY as number) || 0}
                     onChange={(e) => onChange('titleOffsetY', Number(e.target.value))}
                 />
             </div>
-            <div className="property-row">
-                <label className="property-label">标题布局</label>
+            <div className="flex items-center mb-3">
+                <label className="w-20 text-xs text-text-secondary">标题布局</label>
                 <button
                     type="button"
-                    className="property-input"
+                    className="flex-1 px-2.5 py-1.5 border border-border-default rounded bg-surface-card text-text-primary text-xs focus:outline-none focus:border-brand"
                     onClick={() => {
                         onChange('titlePosition', 'auto');
                         onChange('titleDragEnabled', false);
@@ -397,20 +397,20 @@ function renderQuickChartConfig(
 
     return (
         <>
-            <div className="property-row">
-                <label className="property-label">标题</label>
+            <div className="flex items-center mb-3">
+                <label className="w-20 text-xs text-text-secondary">标题</label>
                 <input
                     type="text"
-                    className="property-input"
+                    className="flex-1 px-2.5 py-1.5 border border-border-default rounded bg-surface-card text-text-primary text-xs focus:outline-none focus:border-brand"
                     value={String(config.title ?? '')}
                     onChange={(e) => onChange('title', e.target.value)}
                 />
             </div>
-            <div className="property-row">
-                <label className="property-label">标题字号</label>
+            <div className="flex items-center mb-3">
+                <label className="w-20 text-xs text-text-secondary">标题字号</label>
                 <input
                     type="number"
-                    className="property-input"
+                    className="flex-1 px-2.5 py-1.5 border border-border-default rounded bg-surface-card text-text-primary text-xs focus:outline-none focus:border-brand"
                     min={10}
                     max={40}
                     value={Number(config.titleFontSize) || 14}
@@ -418,10 +418,10 @@ function renderQuickChartConfig(
                 />
             </div>
             {renderChartTitleLayoutRows(config as Record<string, unknown>, onChange)}
-            <div className="property-row">
-                <label className="property-label">图例显示</label>
+            <div className="flex items-center mb-3">
+                <label className="w-20 text-xs text-text-secondary">图例显示</label>
                 <select
-                    className="property-input"
+                    className="flex-1 px-2.5 py-1.5 border border-border-default rounded bg-surface-card text-text-primary text-xs focus:outline-none focus:border-brand"
                     value={(config.legendDisplay as string) || 'auto'}
                     onChange={(e) => onChange('legendDisplay', e.target.value)}
                 >
@@ -430,18 +430,18 @@ function renderQuickChartConfig(
                     <option value="hide">隐藏</option>
                 </select>
             </div>
-            <div className="property-row">
-                <label className="property-label">自动避让</label>
+            <div className="flex items-center mb-3">
+                <label className="w-20 text-xs text-text-secondary">自动避让</label>
                 <input
                     type="checkbox"
                     checked={config.autoLegendAvoid !== false}
                     onChange={(e) => onChange('autoLegendAvoid', e.target.checked)}
                 />
             </div>
-            <div className="property-row">
-                <label className="property-label">小屏预设</label>
+            <div className="flex items-center mb-3">
+                <label className="w-20 text-xs text-text-secondary">小屏预设</label>
                 <select
-                    className="property-input"
+                    className="flex-1 px-2.5 py-1.5 border border-border-default rounded bg-surface-card text-text-primary text-xs focus:outline-none focus:border-brand"
                     value={(config.compactLayoutPreset as string) || 'auto'}
                     onChange={(e) => onChange('compactLayoutPreset', e.target.value)}
                 >
@@ -449,23 +449,23 @@ function renderQuickChartConfig(
                     <option value="off">关闭</option>
                 </select>
             </div>
-            <div className="property-row">
-                <label className="property-label">图形缩放(%)</label>
+            <div className="flex items-center mb-3">
+                <label className="w-20 text-xs text-text-secondary">图形缩放(%)</label>
                 <input
                     type="number"
-                    className="property-input"
+                    className="flex-1 px-2.5 py-1.5 border border-border-default rounded bg-surface-card text-text-primary text-xs focus:outline-none focus:border-brand"
                     min={40}
                     max={180}
                     value={(config.chartScalePercent as number) || 100}
                     onChange={(e) => onChange('chartScalePercent', Number(e.target.value))}
                 />
             </div>
-            <div className="property-row">
-                <label className="property-label">布局预设</label>
+            <div className="flex items-center mb-3">
+                <label className="w-20 text-xs text-text-secondary">布局预设</label>
                 <div style={{ display: 'flex', gap: 6, width: '100%' }}>
                     <button
                         type="button"
-                        className="property-action-btn"
+                        className="inline-flex items-center gap-1 px-2 py-1 text-xs text-brand cursor-pointer hover:underline"
                         style={{ flex: 1 }}
                         onClick={() => applyLayoutPreset('balanced')}
                         title="自动避让 + 默认留白"
@@ -474,7 +474,7 @@ function renderQuickChartConfig(
                     </button>
                     <button
                         type="button"
-                        className="property-action-btn"
+                        className="inline-flex items-center gap-1 px-2 py-1 text-xs text-brand cursor-pointer hover:underline"
                         style={{ flex: 1 }}
                         onClick={() => applyLayoutPreset('compact')}
                         title="紧凑布局，优先保证小容器可读"
@@ -483,7 +483,7 @@ function renderQuickChartConfig(
                     </button>
                     <button
                         type="button"
-                        className="property-action-btn"
+                        className="inline-flex items-center gap-1 px-2 py-1 text-xs text-brand cursor-pointer hover:underline"
                         style={{ flex: 1 }}
                         onClick={() => applyLayoutPreset('spacious')}
                         title="图例侧边 + 留白更充分"
@@ -492,11 +492,11 @@ function renderQuickChartConfig(
                     </button>
                 </div>
             </div>
-            <div className="property-row">
-                <label className="property-label">布局回正</label>
+            <div className="flex items-center mb-3">
+                <label className="w-20 text-xs text-text-secondary">布局回正</label>
                 <button
                     type="button"
-                    className="property-action-btn"
+                    className="inline-flex items-center gap-1 px-2 py-1 text-xs text-brand cursor-pointer hover:underline"
                     style={{ width: '100%' }}
                     onClick={() => {
                         onChange('legendOffsetX', 0);
@@ -513,12 +513,12 @@ function renderQuickChartConfig(
                     一键回到自动布局
                 </button>
             </div>
-            <div className="property-row">
-                <label className="property-label">图例避让</label>
+            <div className="flex items-center mb-3">
+                <label className="w-20 text-xs text-text-secondary">图例避让</label>
                 <div style={{ width: '100%' }}>
                     <button
                         type="button"
-                        className="property-action-btn"
+                        className="inline-flex items-center gap-1 px-2 py-1 text-xs text-brand cursor-pointer hover:underline"
                         style={{ width: '100%' }}
                         onClick={() => applyLegendHeuristicLayout(component, onChange)}
                         title={legendHeuristic.hint}
@@ -529,8 +529,8 @@ function renderQuickChartConfig(
                 </div>
             </div>
             {(type === 'bar-chart') ? (
-                <div className="property-row">
-                    <label className="property-label">水平方向</label>
+                <div className="flex items-center mb-3">
+                    <label className="w-20 text-xs text-text-secondary">水平方向</label>
                     <input
                         type="checkbox"
                         checked={Boolean(config.horizontal)}
@@ -539,10 +539,10 @@ function renderQuickChartConfig(
                 </div>
             ) : null}
             {(type === 'bar-chart' || type === 'line-chart') ? (
-                <div className="property-row">
-                    <label className="property-label">堆叠模式</label>
+                <div className="flex items-center mb-3">
+                    <label className="w-20 text-xs text-text-secondary">堆叠模式</label>
                     <select
-                        className="property-input"
+                        className="flex-1 px-2.5 py-1.5 border border-border-default rounded bg-surface-card text-text-primary text-xs focus:outline-none focus:border-brand"
                         value={(config.stackMode as string) || 'off'}
                         onChange={(e) => onChange('stackMode', e.target.value)}
                     >
@@ -553,10 +553,10 @@ function renderQuickChartConfig(
             ) : null}
             {(type === 'wordcloud-chart') ? (
                 <>
-                    <div className="property-row">
-                        <label className="property-label">形状</label>
+                    <div className="flex items-center mb-3">
+                        <label className="w-20 text-xs text-text-secondary">形状</label>
                         <select
-                            className="property-input"
+                            className="flex-1 px-2.5 py-1.5 border border-border-default rounded bg-surface-card text-text-primary text-xs focus:outline-none focus:border-brand"
                             value={(config.shape as string) || 'circle'}
                             onChange={(e) => onChange('shape', e.target.value)}
                         >
@@ -568,11 +568,11 @@ function renderQuickChartConfig(
                             <option value="star">星形</option>
                         </select>
                     </div>
-                    <div className="property-row">
-                        <label className="property-label">最小字号</label>
+                    <div className="flex items-center mb-3">
+                        <label className="w-20 text-xs text-text-secondary">最小字号</label>
                         <input
                             type="number"
-                            className="property-input"
+                            className="flex-1 px-2.5 py-1.5 border border-border-default rounded bg-surface-card text-text-primary text-xs focus:outline-none focus:border-brand"
                             min={8}
                             max={40}
                             value={Array.isArray(config.fontSizeRange) ? (config.fontSizeRange as number[])[0] : 14}
@@ -583,11 +583,11 @@ function renderQuickChartConfig(
                             }}
                         />
                     </div>
-                    <div className="property-row">
-                        <label className="property-label">最大字号</label>
+                    <div className="flex items-center mb-3">
+                        <label className="w-20 text-xs text-text-secondary">最大字号</label>
                         <input
                             type="number"
-                            className="property-input"
+                            className="flex-1 px-2.5 py-1.5 border border-border-default rounded bg-surface-card text-text-primary text-xs focus:outline-none focus:border-brand"
                             min={20}
                             max={120}
                             value={Array.isArray(config.fontSizeRange) ? (config.fontSizeRange as number[])[1] : 60}
@@ -602,22 +602,22 @@ function renderQuickChartConfig(
             ) : null}
             {isAxisChart ? (
                 <>
-                    <div className="property-row">
-                        <label className="property-label">X轴角度</label>
+                    <div className="flex items-center mb-3">
+                        <label className="w-20 text-xs text-text-secondary">X轴角度</label>
                         <input
                             type="number"
-                            className="property-input"
+                            className="flex-1 px-2.5 py-1.5 border border-border-default rounded bg-surface-card text-text-primary text-xs focus:outline-none focus:border-brand"
                             min={-90}
                             max={90}
                             value={(config.xAxisLabelRotate as number) || 0}
                             onChange={(e) => onChange('xAxisLabelRotate', Number(e.target.value))}
                         />
                     </div>
-                    <div className="property-row">
-                        <label className="property-label">X轴最大字数</label>
+                    <div className="flex items-center mb-3">
+                        <label className="w-20 text-xs text-text-secondary">X轴最大字数</label>
                         <input
                             type="number"
-                            className="property-input"
+                            className="flex-1 px-2.5 py-1.5 border border-border-default rounded bg-surface-card text-text-primary text-xs focus:outline-none focus:border-brand"
                             min={0}
                             max={40}
                             value={(config.xAxisLabelMaxLength as number) || 0}
@@ -625,11 +625,11 @@ function renderQuickChartConfig(
                             placeholder="0=不限"
                         />
                     </div>
-                    <div className="property-row">
-                        <label className="property-label">X轴抽样间隔</label>
+                    <div className="flex items-center mb-3">
+                        <label className="w-20 text-xs text-text-secondary">X轴抽样间隔</label>
                         <input
                             type="number"
-                            className="property-input"
+                            className="flex-1 px-2.5 py-1.5 border border-border-default rounded bg-surface-card text-text-primary text-xs focus:outline-none focus:border-brand"
                             min={0}
                             max={200}
                             value={(config.xAxisLabelInterval as number) || 0}
@@ -637,10 +637,10 @@ function renderQuickChartConfig(
                             placeholder="0=自动"
                         />
                     </div>
-                    <div className="property-row">
-                        <label className="property-label">标签系列策略</label>
+                    <div className="flex items-center mb-3">
+                        <label className="w-20 text-xs text-text-secondary">标签系列策略</label>
                         <select
-                            className="property-input"
+                            className="flex-1 px-2.5 py-1.5 border border-border-default rounded bg-surface-card text-text-primary text-xs focus:outline-none focus:border-brand"
                             value={(config.axisSeriesLabelStrategy as string) || 'auto'}
                             onChange={(e) => onChange('axisSeriesLabelStrategy', e.target.value)}
                         >
@@ -650,11 +650,11 @@ function renderQuickChartConfig(
                             <option value="none">隐藏标签</option>
                         </select>
                     </div>
-                    <div className="property-row">
-                        <label className="property-label">标签步长</label>
+                    <div className="flex items-center mb-3">
+                        <label className="w-20 text-xs text-text-secondary">标签步长</label>
                         <input
                             type="number"
-                            className="property-input"
+                            className="flex-1 px-2.5 py-1.5 border border-border-default rounded bg-surface-card text-text-primary text-xs focus:outline-none focus:border-brand"
                             min={0}
                             max={200}
                             value={(config.axisSeriesLabelStep as number) || 0}
@@ -662,11 +662,11 @@ function renderQuickChartConfig(
                             placeholder="0=自动"
                         />
                     </div>
-                    <div className="property-row">
-                        <label className="property-label">Tooltip行数</label>
+                    <div className="flex items-center mb-3">
+                        <label className="w-20 text-xs text-text-secondary">Tooltip行数</label>
                         <input
                             type="number"
-                            className="property-input"
+                            className="flex-1 px-2.5 py-1.5 border border-border-default rounded bg-surface-card text-text-primary text-xs focus:outline-none focus:border-brand"
                             min={0}
                             max={50}
                             value={(config.axisTooltipMaxRows as number) || 0}
@@ -678,10 +678,10 @@ function renderQuickChartConfig(
             ) : null}
             {showSeriesLabelControls ? (
                 <>
-                    <div className="property-row">
-                        <label className="property-label">标签位置</label>
+                    <div className="flex items-center mb-3">
+                        <label className="w-20 text-xs text-text-secondary">标签位置</label>
                         <select
-                            className="property-input"
+                            className="flex-1 px-2.5 py-1.5 border border-border-default rounded bg-surface-card text-text-primary text-xs focus:outline-none focus:border-brand"
                             value={(config.seriesLabelPosition as string) || 'auto'}
                             onChange={(e) => onChange('seriesLabelPosition', e.target.value)}
                         >
@@ -691,11 +691,11 @@ function renderQuickChartConfig(
                             <option value="none">隐藏</option>
                         </select>
                     </div>
-                    <div className="property-row">
-                        <label className="property-label">标签字号</label>
+                    <div className="flex items-center mb-3">
+                        <label className="w-20 text-xs text-text-secondary">标签字号</label>
                         <input
                             type="number"
-                            className="property-input"
+                            className="flex-1 px-2.5 py-1.5 border border-border-default rounded bg-surface-card text-text-primary text-xs focus:outline-none focus:border-brand"
                             min={10}
                             max={28}
                             value={(config.seriesLabelFontSize as number) || 12}
@@ -705,9 +705,9 @@ function renderQuickChartConfig(
                 </>
             ) : null}
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', gap: 6 }}>
-                <button type="button" className="property-btn-small" onClick={() => applyPreset('business')}>商务预设</button>
-                <button type="button" className="property-btn-small" onClick={() => applyPreset('compact')}>紧凑预设</button>
-                <button type="button" className="property-btn-small" onClick={() => applyPreset('clear')}>恢复预设</button>
+                <button type="button" className="inline-flex items-center justify-center px-2 py-1 min-h-7 border border-border-default rounded bg-surface-card text-text-primary text-xs cursor-pointer transition-all duration-200 hover:border-brand hover:bg-brand/10 disabled:opacity-45 disabled:cursor-not-allowed" onClick={() => applyPreset('business')}>商务预设</button>
+                <button type="button" className="inline-flex items-center justify-center px-2 py-1 min-h-7 border border-border-default rounded bg-surface-card text-text-primary text-xs cursor-pointer transition-all duration-200 hover:border-brand hover:bg-brand/10 disabled:opacity-45 disabled:cursor-not-allowed" onClick={() => applyPreset('compact')}>紧凑预设</button>
+                <button type="button" className="inline-flex items-center justify-center px-2 py-1 min-h-7 border border-border-default rounded bg-surface-card text-text-primary text-xs cursor-pointer transition-all duration-200 hover:border-brand hover:bg-brand/10 disabled:opacity-45 disabled:cursor-not-allowed" onClick={() => applyPreset('clear')}>恢复预设</button>
             </div>
             <div style={{ fontSize: 11, color: '#94a3b8', lineHeight: 1.45 }}>
                 当前为简洁模式，仅显示高频参数。切换到“专业模式”可配置全部细节。
@@ -946,18 +946,18 @@ export function PropertyPanel({ activeTab = 'style' }: { activeTab?: PropertyPan
         };
         const isCustom = config.theme === 'brand-custom';
         return (
-            <div className="property-panel property-panel--empty">
-                <div className="property-panel-header">
+            <div className="flex flex-col h-full">
+                <div className="px-4 py-3 border-b border-border-default">
                     <h3>画布设置</h3>
-                    <p className="property-panel-subtitle">全局主题与画布属性</p>
+                    <p className="text-xs text-text-muted mt-1">全局主题与画布属性</p>
                 </div>
-                <div className="property-panel-content">
-                    <div className="property-section">
-                        <div className="property-section-title">主题</div>
-                        <div className="property-row">
-                            <label className="property-label">主题方案</label>
+                <div className="flex-1 overflow-y-auto px-4 py-2">
+                    <div className="py-3 border-b border-border-default">
+                        <div className="text-xs font-semibold text-text-secondary uppercase tracking-wide mb-2">主题</div>
+                        <div className="flex items-center mb-3">
+                            <label className="w-20 text-xs text-text-secondary">主题方案</label>
                             <select
-                                className="property-input"
+                                className="flex-1 px-2.5 py-1.5 border border-border-default rounded bg-surface-card text-text-primary text-xs focus:outline-none focus:border-brand"
                                 value={config.theme || 'legacy-dark'}
                                 onChange={(e) => updateConfig({ theme: e.target.value as typeof config.theme })}
                             >
@@ -980,11 +980,11 @@ export function PropertyPanel({ activeTab = 'style' }: { activeTab?: PropertyPan
                                     ['borderColor', '边框', '#1e293b'],
                                     ['cardBackground', '卡片背景', '#1a2332'],
                                 ].map(([key, label, fallback]) => (
-                                    <div className="property-row" key={key}>
-                                        <label className="property-label">{label}</label>
+                                    <div className="flex items-center mb-3" key={key}>
+                                        <label className="w-20 text-xs text-text-secondary">{label}</label>
                                         <input
                                             type="color"
-                                            className="property-color-input"
+                                            className="w-8 h-7 border border-border-default rounded cursor-pointer p-0"
                                             value={customTheme?.[key] || fallback}
                                             onChange={(e) => handleCustomThemeChange(key, e.target.value)}
                                         />
@@ -993,38 +993,38 @@ export function PropertyPanel({ activeTab = 'style' }: { activeTab?: PropertyPan
                             </>
                         )}
                     </div>
-                    <div className="property-section">
-                        <div className="property-section-title">画布</div>
-                        <div className="property-row">
-                            <label className="property-label">宽度</label>
+                    <div className="py-3 border-b border-border-default">
+                        <div className="text-xs font-semibold text-text-secondary uppercase tracking-wide mb-2">画布</div>
+                        <div className="flex items-center mb-3">
+                            <label className="w-20 text-xs text-text-secondary">宽度</label>
                             <input
                                 type="number"
-                                className="property-input"
+                                className="flex-1 px-2.5 py-1.5 border border-border-default rounded bg-surface-card text-text-primary text-xs focus:outline-none focus:border-brand"
                                 value={config.width || 1920}
                                 onChange={(e) => updateConfig({ width: Math.max(320, Number(e.target.value) || 1920) })}
                             />
                         </div>
-                        <div className="property-row">
-                            <label className="property-label">高度</label>
+                        <div className="flex items-center mb-3">
+                            <label className="w-20 text-xs text-text-secondary">高度</label>
                             <input
                                 type="number"
-                                className="property-input"
+                                className="flex-1 px-2.5 py-1.5 border border-border-default rounded bg-surface-card text-text-primary text-xs focus:outline-none focus:border-brand"
                                 value={config.height || 1080}
                                 onChange={(e) => updateConfig({ height: Math.max(240, Number(e.target.value) || 1080) })}
                             />
                         </div>
-                        <div className="property-row">
-                            <label className="property-label">背景色</label>
+                        <div className="flex items-center mb-3">
+                            <label className="w-20 text-xs text-text-secondary">背景色</label>
                             <input
                                 type="color"
-                                className="property-color-input"
+                                className="w-8 h-7 border border-border-default rounded cursor-pointer p-0"
                                 value={config.backgroundColor || '#1e1f26'}
                                 onChange={(e) => updateConfig({ backgroundColor: e.target.value })}
                             />
                         </div>
                     </div>
                     <div className="empty-state" style={{ padding: '20px 0' }}>
-                        <div className="empty-state-hint">点击画布中的组件进行选择编辑</div>
+                        <div className="text-xs text-text-muted text-center py-8">点击画布中的组件进行选择编辑</div>
                     </div>
                 </div>
             </div>
@@ -1038,41 +1038,41 @@ export function PropertyPanel({ activeTab = 'style' }: { activeTab?: PropertyPan
         const grouped = selectedComponents.filter((item) => Boolean(item.groupId)).length;
         const primarySelected = selectedComponents[0];
         return (
-            <div className="property-panel property-panel--batch">
-                <div className="property-panel-header">
+            <div className="flex flex-col h-full">
+                <div className="px-4 py-3 border-b border-border-default">
                     <h3>批量属性 ({total})</h3>
-                    <p className="property-panel-subtitle">
+                    <p className="text-xs text-text-muted mt-1">
                         统一处理 {primarySelected?.type || 'selected'} 组件。
                         {grouped > 0 ? ` 当前包含 ${grouped} 个已编组组件。` : ''}
                     </p>
                 </div>
-                <div className="property-panel-content">
-                    <div className="property-section">
-                        <div className="property-section-title">批量设置</div>
-                        <div className="property-row">
-                            <label className="property-label">宽度</label>
+                <div className="flex-1 overflow-y-auto px-4 py-2">
+                    <div className="py-3 border-b border-border-default">
+                        <div className="text-xs font-semibold text-text-secondary uppercase tracking-wide mb-2">批量设置</div>
+                        <div className="flex items-center mb-3">
+                            <label className="w-20 text-xs text-text-secondary">宽度</label>
                             <input
                                 type="number"
-                                className="property-input"
+                                className="flex-1 px-2.5 py-1.5 border border-border-default rounded bg-surface-card text-text-primary text-xs focus:outline-none focus:border-brand"
                                 min={50}
                                 onChange={(e) => updateSelectedComponents({ width: Math.max(50, Number(e.target.value) || 50) })}
                                 placeholder="统一宽度"
                             />
                         </div>
-                        <div className="property-row">
-                            <label className="property-label">高度</label>
+                        <div className="flex items-center mb-3">
+                            <label className="w-20 text-xs text-text-secondary">高度</label>
                             <input
                                 type="number"
-                                className="property-input"
+                                className="flex-1 px-2.5 py-1.5 border border-border-default rounded bg-surface-card text-text-primary text-xs focus:outline-none focus:border-brand"
                                 min={50}
                                 onChange={(e) => updateSelectedComponents({ height: Math.max(50, Number(e.target.value) || 50) })}
                                 placeholder="统一高度"
                             />
                         </div>
-                        <div className="property-row">
-                            <label className="property-label">锁定</label>
+                        <div className="flex items-center mb-3">
+                            <label className="w-20 text-xs text-text-secondary">锁定</label>
                             <select
-                                className="property-input"
+                                className="flex-1 px-2.5 py-1.5 border border-border-default rounded bg-surface-card text-text-primary text-xs focus:outline-none focus:border-brand"
                                 value={allLocked ? 'locked' : 'unlocked'}
                                 onChange={(e) => updateSelectedComponents({ locked: e.target.value === 'locked' })}
                             >
@@ -1080,10 +1080,10 @@ export function PropertyPanel({ activeTab = 'style' }: { activeTab?: PropertyPan
                                 <option value="unlocked">全部解锁</option>
                             </select>
                         </div>
-                        <div className="property-row">
-                            <label className="property-label">可见</label>
+                        <div className="flex items-center mb-3">
+                            <label className="w-20 text-xs text-text-secondary">可见</label>
                             <select
-                                className="property-input"
+                                className="flex-1 px-2.5 py-1.5 border border-border-default rounded bg-surface-card text-text-primary text-xs focus:outline-none focus:border-brand"
                                 value={allVisible ? 'visible' : 'hidden'}
                                 onChange={(e) => updateSelectedComponents({ visible: e.target.value === 'visible' })}
                             >
@@ -1092,22 +1092,22 @@ export function PropertyPanel({ activeTab = 'style' }: { activeTab?: PropertyPan
                             </select>
                         </div>
                     </div>
-                    <div className="property-section">
-                        <div className="property-section-title">批量动作</div>
+                    <div className="py-3 border-b border-border-default">
+                        <div className="text-xs font-semibold text-text-secondary uppercase tracking-wide mb-2">批量动作</div>
                         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: 6 }}>
-                            <button type="button" className="property-btn-small" onClick={() => alignSelected('left')} disabled={total < 2}>左对齐</button>
-                            <button type="button" className="property-btn-small" onClick={() => alignSelected('right')} disabled={total < 2}>右对齐</button>
-                            <button type="button" className="property-btn-small" onClick={() => alignSelected('top')} disabled={total < 2}>顶对齐</button>
-                            <button type="button" className="property-btn-small" onClick={() => alignSelected('bottom')} disabled={total < 2}>底对齐</button>
-                            <button type="button" className="property-btn-small" onClick={() => distributeSelected('horizontal')} disabled={total < 3}>水平分布</button>
-                            <button type="button" className="property-btn-small" onClick={() => distributeSelected('vertical')} disabled={total < 3}>垂直分布</button>
-                            <button type="button" className="property-btn-small" onClick={groupSelected} disabled={total < 2}>组合</button>
-                            <button type="button" className="property-btn-small" onClick={ungroupSelected} disabled={total < 1}>解组</button>
+                            <button type="button" className="inline-flex items-center justify-center px-2 py-1 min-h-7 border border-border-default rounded bg-surface-card text-text-primary text-xs cursor-pointer transition-all duration-200 hover:border-brand hover:bg-brand/10 disabled:opacity-45 disabled:cursor-not-allowed" onClick={() => alignSelected('left')} disabled={total < 2}>左对齐</button>
+                            <button type="button" className="inline-flex items-center justify-center px-2 py-1 min-h-7 border border-border-default rounded bg-surface-card text-text-primary text-xs cursor-pointer transition-all duration-200 hover:border-brand hover:bg-brand/10 disabled:opacity-45 disabled:cursor-not-allowed" onClick={() => alignSelected('right')} disabled={total < 2}>右对齐</button>
+                            <button type="button" className="inline-flex items-center justify-center px-2 py-1 min-h-7 border border-border-default rounded bg-surface-card text-text-primary text-xs cursor-pointer transition-all duration-200 hover:border-brand hover:bg-brand/10 disabled:opacity-45 disabled:cursor-not-allowed" onClick={() => alignSelected('top')} disabled={total < 2}>顶对齐</button>
+                            <button type="button" className="inline-flex items-center justify-center px-2 py-1 min-h-7 border border-border-default rounded bg-surface-card text-text-primary text-xs cursor-pointer transition-all duration-200 hover:border-brand hover:bg-brand/10 disabled:opacity-45 disabled:cursor-not-allowed" onClick={() => alignSelected('bottom')} disabled={total < 2}>底对齐</button>
+                            <button type="button" className="inline-flex items-center justify-center px-2 py-1 min-h-7 border border-border-default rounded bg-surface-card text-text-primary text-xs cursor-pointer transition-all duration-200 hover:border-brand hover:bg-brand/10 disabled:opacity-45 disabled:cursor-not-allowed" onClick={() => distributeSelected('horizontal')} disabled={total < 3}>水平分布</button>
+                            <button type="button" className="inline-flex items-center justify-center px-2 py-1 min-h-7 border border-border-default rounded bg-surface-card text-text-primary text-xs cursor-pointer transition-all duration-200 hover:border-brand hover:bg-brand/10 disabled:opacity-45 disabled:cursor-not-allowed" onClick={() => distributeSelected('vertical')} disabled={total < 3}>垂直分布</button>
+                            <button type="button" className="inline-flex items-center justify-center px-2 py-1 min-h-7 border border-border-default rounded bg-surface-card text-text-primary text-xs cursor-pointer transition-all duration-200 hover:border-brand hover:bg-brand/10 disabled:opacity-45 disabled:cursor-not-allowed" onClick={groupSelected} disabled={total < 2}>组合</button>
+                            <button type="button" className="inline-flex items-center justify-center px-2 py-1 min-h-7 border border-border-default rounded bg-surface-card text-text-primary text-xs cursor-pointer transition-all duration-200 hover:border-brand hover:bg-brand/10 disabled:opacity-45 disabled:cursor-not-allowed" onClick={ungroupSelected} disabled={total < 1}>解组</button>
                         </div>
                         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: 6, marginTop: 6 }}>
                             <button
                                 type="button"
-                                className="property-btn-small"
+                                className="inline-flex items-center justify-center px-2 py-1 min-h-7 border border-border-default rounded bg-surface-card text-text-primary text-xs cursor-pointer transition-all duration-200 hover:border-brand hover:bg-brand/10 disabled:opacity-45 disabled:cursor-not-allowed"
                                 disabled={!primarySelected}
                                 onClick={() => {
                                     if (!primarySelected) return;
@@ -1119,7 +1119,7 @@ export function PropertyPanel({ activeTab = 'style' }: { activeTab?: PropertyPan
                             </button>
                             <button
                                 type="button"
-                                className="property-btn-small"
+                                className="inline-flex items-center justify-center px-2 py-1 min-h-7 border border-border-default rounded bg-surface-card text-text-primary text-xs cursor-pointer transition-all duration-200 hover:border-brand hover:bg-brand/10 disabled:opacity-45 disabled:cursor-not-allowed"
                                 disabled={!primarySelected}
                                 onClick={() => {
                                     if (!primarySelected) return;
@@ -1131,8 +1131,8 @@ export function PropertyPanel({ activeTab = 'style' }: { activeTab?: PropertyPan
                             </button>
                         </div>
                     </div>
-                    <div className="property-section">
-                        <div className="property-section-title">选择概览</div>
+                    <div className="py-3 border-b border-border-default">
+                        <div className="text-xs font-semibold text-text-secondary uppercase tracking-wide mb-2">选择概览</div>
                         <div style={{ fontSize: 12, opacity: 0.8, lineHeight: 1.7 }}>
                             已选组件: {total}<br />
                             已分组组件: {grouped}<br />
@@ -1486,18 +1486,18 @@ export function PropertyPanel({ activeTab = 'style' }: { activeTab?: PropertyPan
 
     return (
         <div className={`property-panel property-panel--${panelDensity}`}>
-            <div className="property-panel-header">
+            <div className="px-4 py-3 border-b border-border-default">
                 <h3>{selectedComponent.name}</h3>
-                <p className="property-panel-subtitle">
+                <p className="text-xs text-text-muted mt-1">
                     {selectedComponent.type} · {selectedComponent.width} × {selectedComponent.height} · {TAB_LABELS[activeTab]}
                 </p>
             </div>
-            <div className="property-panel-content">
-                {isStyleTab && <div className="property-section">
-                    <div className="property-section-title property-section-title-collapsible">
+            <div className="flex-1 overflow-y-auto px-4 py-2">
+                {isStyleTab && <div className="py-3 border-b border-border-default">
+                    <div className="text-xs font-semibold text-text-secondary uppercase tracking-wide mb-2 flex items-center justify-between cursor-pointer select-none">
                         <button
                             type="button"
-                            className="property-section-toggle"
+                            className="text-[10px] text-text-muted transition-transform duration-200"
                             onClick={() => toggleSection('quick-filter')}
                         >
                             {isSectionCollapsed('quick-filter') ? '▸' : '▾'} 快速定位
@@ -1505,20 +1505,20 @@ export function PropertyPanel({ activeTab = 'style' }: { activeTab?: PropertyPan
                     </div>
                     {!isSectionCollapsed('quick-filter') ? (
                         <>
-                            <div className="property-row">
-                                <label className="property-label">筛选</label>
+                            <div className="flex items-center mb-3">
+                                <label className="w-20 text-xs text-text-secondary">筛选</label>
                                 <input
                                     type="text"
-                                    className="property-input"
+                                    className="flex-1 px-2.5 py-1.5 border border-border-default rounded bg-surface-card text-text-primary text-xs focus:outline-none focus:border-brand"
                                     value={panelFilter}
                                     onChange={(e) => setPanelFilter(e.target.value)}
                                     placeholder="输入：位置/样式/数据/联动/可见..."
                                 />
                             </div>
-                            <div className="property-quick-filter-row">
-                                <button type="button" className="property-btn-small" onClick={() => applyPanelPreset('')}>清空</button>
+                            <div className="flex flex-wrap items-center gap-1.5">
+                                <button type="button" className="inline-flex items-center justify-center px-2 py-1 min-h-7 border border-border-default rounded bg-surface-card text-text-primary text-xs cursor-pointer transition-all duration-200 hover:border-brand hover:bg-brand/10 disabled:opacity-45 disabled:cursor-not-allowed" onClick={() => applyPanelPreset('')}>清空</button>
                                 <select
-                                    className="property-input"
+                                    className="flex-1 px-2.5 py-1.5 border border-border-default rounded bg-surface-card text-text-primary text-xs focus:outline-none focus:border-brand"
                                     style={{ maxWidth: 160, padding: '4px 8px' }}
                                     defaultValue=""
                                     onChange={(event) => {
@@ -1552,21 +1552,21 @@ export function PropertyPanel({ activeTab = 'style' }: { activeTab?: PropertyPan
                                     全部
                                 </button>
                             </div>
-                            <div className="property-quick-filter-row">
-                                <button type="button" className="property-btn-small" onClick={collapseToEssential}>常用视图</button>
-                                <button type="button" className="property-btn-small" onClick={expandAllSections}>全部展开</button>
-                                <button type="button" className="property-btn-small" onClick={collapseAllSections}>全部收起</button>
+                            <div className="flex flex-wrap items-center gap-1.5">
+                                <button type="button" className="inline-flex items-center justify-center px-2 py-1 min-h-7 border border-border-default rounded bg-surface-card text-text-primary text-xs cursor-pointer transition-all duration-200 hover:border-brand hover:bg-brand/10 disabled:opacity-45 disabled:cursor-not-allowed" onClick={collapseToEssential}>常用视图</button>
+                                <button type="button" className="inline-flex items-center justify-center px-2 py-1 min-h-7 border border-border-default rounded bg-surface-card text-text-primary text-xs cursor-pointer transition-all duration-200 hover:border-brand hover:bg-brand/10 disabled:opacity-45 disabled:cursor-not-allowed" onClick={expandAllSections}>全部展开</button>
+                                <button type="button" className="inline-flex items-center justify-center px-2 py-1 min-h-7 border border-border-default rounded bg-surface-card text-text-primary text-xs cursor-pointer transition-all duration-200 hover:border-brand hover:bg-brand/10 disabled:opacity-45 disabled:cursor-not-allowed" onClick={collapseAllSections}>全部收起</button>
                             </div>
                         </>
                     ) : null}
                 </div>}
 
                 {isStyleTab && shouldRenderSection('quick-actions', '快捷', '操作', '样式', '复制', '对齐') && (
-                    <div className="property-section">
-                        <div className="property-section-title property-section-title-collapsible">
+                    <div className="py-3 border-b border-border-default">
+                        <div className="text-xs font-semibold text-text-secondary uppercase tracking-wide mb-2 flex items-center justify-between cursor-pointer select-none">
                             <button
                                 type="button"
-                                className="property-section-toggle"
+                                className="text-[10px] text-text-muted transition-transform duration-200"
                                 onClick={() => toggleSection('quick-actions')}
                             >
                                 {isSectionCollapsed('quick-actions') ? '▸' : '▾'} 快捷操作
@@ -1575,61 +1575,61 @@ export function PropertyPanel({ activeTab = 'style' }: { activeTab?: PropertyPan
                         {!isSectionCollapsed('quick-actions') ? (
                             <>
                                 <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 6 }}>
-                                    <button type="button" className="property-btn-small" style={getQuickActionFilterButtonStyle('core')} onClick={() => setQuickActionMode('core')}>常用</button>
-                                    <button type="button" className="property-btn-small" style={getQuickActionFilterButtonStyle('layout')} onClick={() => setQuickActionMode('layout')}>布局</button>
-                                    <button type="button" className="property-btn-small" style={getQuickActionFilterButtonStyle('nudge')} onClick={() => setQuickActionMode('nudge')}>微调</button>
-                                    <button type="button" className="property-btn-small" style={getQuickActionFilterButtonStyle('clipboard')} onClick={() => setQuickActionMode('clipboard')}>剪贴板</button>
-                                    <button type="button" className="property-btn-small" style={getQuickActionFilterButtonStyle('all')} onClick={() => setQuickActionMode('all')}>全部</button>
+                                    <button type="button" className="inline-flex items-center justify-center px-2 py-1 min-h-7 border border-border-default rounded bg-surface-card text-text-primary text-xs cursor-pointer transition-all duration-200 hover:border-brand hover:bg-brand/10 disabled:opacity-45 disabled:cursor-not-allowed" style={getQuickActionFilterButtonStyle('core')} onClick={() => setQuickActionMode('core')}>常用</button>
+                                    <button type="button" className="inline-flex items-center justify-center px-2 py-1 min-h-7 border border-border-default rounded bg-surface-card text-text-primary text-xs cursor-pointer transition-all duration-200 hover:border-brand hover:bg-brand/10 disabled:opacity-45 disabled:cursor-not-allowed" style={getQuickActionFilterButtonStyle('layout')} onClick={() => setQuickActionMode('layout')}>布局</button>
+                                    <button type="button" className="inline-flex items-center justify-center px-2 py-1 min-h-7 border border-border-default rounded bg-surface-card text-text-primary text-xs cursor-pointer transition-all duration-200 hover:border-brand hover:bg-brand/10 disabled:opacity-45 disabled:cursor-not-allowed" style={getQuickActionFilterButtonStyle('nudge')} onClick={() => setQuickActionMode('nudge')}>微调</button>
+                                    <button type="button" className="inline-flex items-center justify-center px-2 py-1 min-h-7 border border-border-default rounded bg-surface-card text-text-primary text-xs cursor-pointer transition-all duration-200 hover:border-brand hover:bg-brand/10 disabled:opacity-45 disabled:cursor-not-allowed" style={getQuickActionFilterButtonStyle('clipboard')} onClick={() => setQuickActionMode('clipboard')}>剪贴板</button>
+                                    <button type="button" className="inline-flex items-center justify-center px-2 py-1 min-h-7 border border-border-default rounded bg-surface-card text-text-primary text-xs cursor-pointer transition-all duration-200 hover:border-brand hover:bg-brand/10 disabled:opacity-45 disabled:cursor-not-allowed" style={getQuickActionFilterButtonStyle('all')} onClick={() => setQuickActionMode('all')}>全部</button>
                                 </div>
                                 {showQuickActionGroup('core') ? (
                                     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: 6 }}>
-                                        <button type="button" className="property-btn-small" onClick={duplicateCurrentComponent}>复制组件</button>
-                                        <button type="button" className="property-btn-small" onClick={() => deleteComponents([selectedComponent.id])}>删除组件</button>
-                                        <button type="button" className="property-btn-small" onClick={() => alignToCanvas('h-center')}>水平居中</button>
-                                        <button type="button" className="property-btn-small" onClick={() => alignToCanvas('v-center')}>垂直居中</button>
+                                        <button type="button" className="inline-flex items-center justify-center px-2 py-1 min-h-7 border border-border-default rounded bg-surface-card text-text-primary text-xs cursor-pointer transition-all duration-200 hover:border-brand hover:bg-brand/10 disabled:opacity-45 disabled:cursor-not-allowed" onClick={duplicateCurrentComponent}>复制组件</button>
+                                        <button type="button" className="inline-flex items-center justify-center px-2 py-1 min-h-7 border border-border-default rounded bg-surface-card text-text-primary text-xs cursor-pointer transition-all duration-200 hover:border-brand hover:bg-brand/10 disabled:opacity-45 disabled:cursor-not-allowed" onClick={() => deleteComponents([selectedComponent.id])}>删除组件</button>
+                                        <button type="button" className="inline-flex items-center justify-center px-2 py-1 min-h-7 border border-border-default rounded bg-surface-card text-text-primary text-xs cursor-pointer transition-all duration-200 hover:border-brand hover:bg-brand/10 disabled:opacity-45 disabled:cursor-not-allowed" onClick={() => alignToCanvas('h-center')}>水平居中</button>
+                                        <button type="button" className="inline-flex items-center justify-center px-2 py-1 min-h-7 border border-border-default rounded bg-surface-card text-text-primary text-xs cursor-pointer transition-all duration-200 hover:border-brand hover:bg-brand/10 disabled:opacity-45 disabled:cursor-not-allowed" onClick={() => alignToCanvas('v-center')}>垂直居中</button>
                                     </div>
                                 ) : null}
                                 {showQuickActionGroup('layout') ? (
                                     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: 6, marginTop: 6 }}>
-                                        <button type="button" className="property-btn-small" onClick={() => alignToCanvas('left')}>贴左</button>
-                                        <button type="button" className="property-btn-small" onClick={() => alignToCanvas('right')}>贴右</button>
-                                        <button type="button" className="property-btn-small" onClick={() => alignToCanvas('top')}>贴上</button>
-                                        <button type="button" className="property-btn-small" onClick={() => alignToCanvas('bottom')}>贴下</button>
+                                        <button type="button" className="inline-flex items-center justify-center px-2 py-1 min-h-7 border border-border-default rounded bg-surface-card text-text-primary text-xs cursor-pointer transition-all duration-200 hover:border-brand hover:bg-brand/10 disabled:opacity-45 disabled:cursor-not-allowed" onClick={() => alignToCanvas('left')}>贴左</button>
+                                        <button type="button" className="inline-flex items-center justify-center px-2 py-1 min-h-7 border border-border-default rounded bg-surface-card text-text-primary text-xs cursor-pointer transition-all duration-200 hover:border-brand hover:bg-brand/10 disabled:opacity-45 disabled:cursor-not-allowed" onClick={() => alignToCanvas('right')}>贴右</button>
+                                        <button type="button" className="inline-flex items-center justify-center px-2 py-1 min-h-7 border border-border-default rounded bg-surface-card text-text-primary text-xs cursor-pointer transition-all duration-200 hover:border-brand hover:bg-brand/10 disabled:opacity-45 disabled:cursor-not-allowed" onClick={() => alignToCanvas('top')}>贴上</button>
+                                        <button type="button" className="inline-flex items-center justify-center px-2 py-1 min-h-7 border border-border-default rounded bg-surface-card text-text-primary text-xs cursor-pointer transition-all duration-200 hover:border-brand hover:bg-brand/10 disabled:opacity-45 disabled:cursor-not-allowed" onClick={() => alignToCanvas('bottom')}>贴下</button>
                                     </div>
                                 ) : null}
                                 {showQuickActionGroup('nudge') ? (
                                     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, minmax(0, 1fr))', gap: 6, marginTop: 6 }}>
-                                        <button type="button" className="property-btn-small" onClick={() => nudgePosition(-1, 0)} title="X -1">←1</button>
-                                        <button type="button" className="property-btn-small" onClick={() => nudgePosition(1, 0)} title="X +1">→1</button>
-                                        <button type="button" className="property-btn-small" onClick={() => nudgePosition(0, -1)} title="Y -1">↑1</button>
-                                        <button type="button" className="property-btn-small" onClick={() => nudgePosition(0, 1)} title="Y +1">↓1</button>
-                                        <button type="button" className="property-btn-small" onClick={() => nudgePosition(-10, 0)} title="X -10">←10</button>
-                                        <button type="button" className="property-btn-small" onClick={() => nudgePosition(10, 0)} title="X +10">→10</button>
-                                        <button type="button" className="property-btn-small" onClick={() => nudgePosition(0, -10)} title="Y -10">↑10</button>
-                                        <button type="button" className="property-btn-small" onClick={() => nudgePosition(0, 10)} title="Y +10">↓10</button>
-                                        <button type="button" className="property-btn-small" onClick={() => nudgeSize(-10, 0)} title="宽度 -10">宽-10</button>
-                                        <button type="button" className="property-btn-small" onClick={() => nudgeSize(10, 0)} title="宽度 +10">宽+10</button>
-                                        <button type="button" className="property-btn-small" onClick={() => nudgeSize(0, -10)} title="高度 -10">高-10</button>
-                                        <button type="button" className="property-btn-small" onClick={() => nudgeSize(0, 10)} title="高度 +10">高+10</button>
+                                        <button type="button" className="inline-flex items-center justify-center px-2 py-1 min-h-7 border border-border-default rounded bg-surface-card text-text-primary text-xs cursor-pointer transition-all duration-200 hover:border-brand hover:bg-brand/10 disabled:opacity-45 disabled:cursor-not-allowed" onClick={() => nudgePosition(-1, 0)} title="X -1">←1</button>
+                                        <button type="button" className="inline-flex items-center justify-center px-2 py-1 min-h-7 border border-border-default rounded bg-surface-card text-text-primary text-xs cursor-pointer transition-all duration-200 hover:border-brand hover:bg-brand/10 disabled:opacity-45 disabled:cursor-not-allowed" onClick={() => nudgePosition(1, 0)} title="X +1">→1</button>
+                                        <button type="button" className="inline-flex items-center justify-center px-2 py-1 min-h-7 border border-border-default rounded bg-surface-card text-text-primary text-xs cursor-pointer transition-all duration-200 hover:border-brand hover:bg-brand/10 disabled:opacity-45 disabled:cursor-not-allowed" onClick={() => nudgePosition(0, -1)} title="Y -1">↑1</button>
+                                        <button type="button" className="inline-flex items-center justify-center px-2 py-1 min-h-7 border border-border-default rounded bg-surface-card text-text-primary text-xs cursor-pointer transition-all duration-200 hover:border-brand hover:bg-brand/10 disabled:opacity-45 disabled:cursor-not-allowed" onClick={() => nudgePosition(0, 1)} title="Y +1">↓1</button>
+                                        <button type="button" className="inline-flex items-center justify-center px-2 py-1 min-h-7 border border-border-default rounded bg-surface-card text-text-primary text-xs cursor-pointer transition-all duration-200 hover:border-brand hover:bg-brand/10 disabled:opacity-45 disabled:cursor-not-allowed" onClick={() => nudgePosition(-10, 0)} title="X -10">←10</button>
+                                        <button type="button" className="inline-flex items-center justify-center px-2 py-1 min-h-7 border border-border-default rounded bg-surface-card text-text-primary text-xs cursor-pointer transition-all duration-200 hover:border-brand hover:bg-brand/10 disabled:opacity-45 disabled:cursor-not-allowed" onClick={() => nudgePosition(10, 0)} title="X +10">→10</button>
+                                        <button type="button" className="inline-flex items-center justify-center px-2 py-1 min-h-7 border border-border-default rounded bg-surface-card text-text-primary text-xs cursor-pointer transition-all duration-200 hover:border-brand hover:bg-brand/10 disabled:opacity-45 disabled:cursor-not-allowed" onClick={() => nudgePosition(0, -10)} title="Y -10">↑10</button>
+                                        <button type="button" className="inline-flex items-center justify-center px-2 py-1 min-h-7 border border-border-default rounded bg-surface-card text-text-primary text-xs cursor-pointer transition-all duration-200 hover:border-brand hover:bg-brand/10 disabled:opacity-45 disabled:cursor-not-allowed" onClick={() => nudgePosition(0, 10)} title="Y +10">↓10</button>
+                                        <button type="button" className="inline-flex items-center justify-center px-2 py-1 min-h-7 border border-border-default rounded bg-surface-card text-text-primary text-xs cursor-pointer transition-all duration-200 hover:border-brand hover:bg-brand/10 disabled:opacity-45 disabled:cursor-not-allowed" onClick={() => nudgeSize(-10, 0)} title="宽度 -10">宽-10</button>
+                                        <button type="button" className="inline-flex items-center justify-center px-2 py-1 min-h-7 border border-border-default rounded bg-surface-card text-text-primary text-xs cursor-pointer transition-all duration-200 hover:border-brand hover:bg-brand/10 disabled:opacity-45 disabled:cursor-not-allowed" onClick={() => nudgeSize(10, 0)} title="宽度 +10">宽+10</button>
+                                        <button type="button" className="inline-flex items-center justify-center px-2 py-1 min-h-7 border border-border-default rounded bg-surface-card text-text-primary text-xs cursor-pointer transition-all duration-200 hover:border-brand hover:bg-brand/10 disabled:opacity-45 disabled:cursor-not-allowed" onClick={() => nudgeSize(0, -10)} title="高度 -10">高-10</button>
+                                        <button type="button" className="inline-flex items-center justify-center px-2 py-1 min-h-7 border border-border-default rounded bg-surface-card text-text-primary text-xs cursor-pointer transition-all duration-200 hover:border-brand hover:bg-brand/10 disabled:opacity-45 disabled:cursor-not-allowed" onClick={() => nudgeSize(0, 10)} title="高度 +10">高+10</button>
                                     </div>
                                 ) : null}
                                 {showQuickActionGroup('clipboard') ? (
                                     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: 6, marginTop: 6 }}>
-                                        <button type="button" className="property-btn-small" onClick={copyCurrentStyle}>复制样式</button>
-                                        <button type="button" className="property-btn-small" onClick={applyCopiedStyle}>粘贴样式</button>
-                                        <button type="button" className="property-btn-small" onClick={copyLayoutSnapshot}>复制布局</button>
-                                        <button type="button" className="property-btn-small" onClick={pasteLayoutSnapshot}>粘贴布局</button>
-                                        <button type="button" className="property-btn-small" onClick={() => { void copyConfigJson(); }}>复制配置JSON</button>
-                                        <button type="button" className="property-btn-small" onClick={pasteConfigJson}>粘贴配置JSON</button>
-                                        <button type="button" className="property-btn-small" onClick={() => persistStyleClipboard(null)}>清空样式板</button>
-                                        <button type="button" className="property-btn-small" onClick={() => persistLayoutClipboard(null)}>清空布局板</button>
+                                        <button type="button" className="inline-flex items-center justify-center px-2 py-1 min-h-7 border border-border-default rounded bg-surface-card text-text-primary text-xs cursor-pointer transition-all duration-200 hover:border-brand hover:bg-brand/10 disabled:opacity-45 disabled:cursor-not-allowed" onClick={copyCurrentStyle}>复制样式</button>
+                                        <button type="button" className="inline-flex items-center justify-center px-2 py-1 min-h-7 border border-border-default rounded bg-surface-card text-text-primary text-xs cursor-pointer transition-all duration-200 hover:border-brand hover:bg-brand/10 disabled:opacity-45 disabled:cursor-not-allowed" onClick={applyCopiedStyle}>粘贴样式</button>
+                                        <button type="button" className="inline-flex items-center justify-center px-2 py-1 min-h-7 border border-border-default rounded bg-surface-card text-text-primary text-xs cursor-pointer transition-all duration-200 hover:border-brand hover:bg-brand/10 disabled:opacity-45 disabled:cursor-not-allowed" onClick={copyLayoutSnapshot}>复制布局</button>
+                                        <button type="button" className="inline-flex items-center justify-center px-2 py-1 min-h-7 border border-border-default rounded bg-surface-card text-text-primary text-xs cursor-pointer transition-all duration-200 hover:border-brand hover:bg-brand/10 disabled:opacity-45 disabled:cursor-not-allowed" onClick={pasteLayoutSnapshot}>粘贴布局</button>
+                                        <button type="button" className="inline-flex items-center justify-center px-2 py-1 min-h-7 border border-border-default rounded bg-surface-card text-text-primary text-xs cursor-pointer transition-all duration-200 hover:border-brand hover:bg-brand/10 disabled:opacity-45 disabled:cursor-not-allowed" onClick={() => { void copyConfigJson(); }}>复制配置JSON</button>
+                                        <button type="button" className="inline-flex items-center justify-center px-2 py-1 min-h-7 border border-border-default rounded bg-surface-card text-text-primary text-xs cursor-pointer transition-all duration-200 hover:border-brand hover:bg-brand/10 disabled:opacity-45 disabled:cursor-not-allowed" onClick={pasteConfigJson}>粘贴配置JSON</button>
+                                        <button type="button" className="inline-flex items-center justify-center px-2 py-1 min-h-7 border border-border-default rounded bg-surface-card text-text-primary text-xs cursor-pointer transition-all duration-200 hover:border-brand hover:bg-brand/10 disabled:opacity-45 disabled:cursor-not-allowed" onClick={() => persistStyleClipboard(null)}>清空样式板</button>
+                                        <button type="button" className="inline-flex items-center justify-center px-2 py-1 min-h-7 border border-border-default rounded bg-surface-card text-text-primary text-xs cursor-pointer transition-all duration-200 hover:border-brand hover:bg-brand/10 disabled:opacity-45 disabled:cursor-not-allowed" onClick={() => persistLayoutClipboard(null)}>清空布局板</button>
                                     </div>
                                 ) : null}
                                 {CHART_COMPONENT_TYPES.has(selectedComponent.type) ? (
                                     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', gap: 6, marginTop: 6 }}>
-                                        <button type="button" className="property-btn-small" onClick={() => applyChartPreset('business')} title="适合白底商务大屏">商务预设</button>
-                                        <button type="button" className="property-btn-small" onClick={() => applyChartPreset('compact')} title="适合小尺寸组件">紧凑预设</button>
-                                        <button type="button" className="property-btn-small" onClick={() => applyChartPreset('clear')} title="恢复默认可读策略">恢复预设</button>
+                                        <button type="button" className="inline-flex items-center justify-center px-2 py-1 min-h-7 border border-border-default rounded bg-surface-card text-text-primary text-xs cursor-pointer transition-all duration-200 hover:border-brand hover:bg-brand/10 disabled:opacity-45 disabled:cursor-not-allowed" onClick={() => applyChartPreset('business')} title="适合白底商务大屏">商务预设</button>
+                                        <button type="button" className="inline-flex items-center justify-center px-2 py-1 min-h-7 border border-border-default rounded bg-surface-card text-text-primary text-xs cursor-pointer transition-all duration-200 hover:border-brand hover:bg-brand/10 disabled:opacity-45 disabled:cursor-not-allowed" onClick={() => applyChartPreset('compact')} title="适合小尺寸组件">紧凑预设</button>
+                                        <button type="button" className="inline-flex items-center justify-center px-2 py-1 min-h-7 border border-border-default rounded bg-surface-card text-text-primary text-xs cursor-pointer transition-all duration-200 hover:border-brand hover:bg-brand/10 disabled:opacity-45 disabled:cursor-not-allowed" onClick={() => applyChartPreset('clear')} title="恢复默认可读策略">恢复预设</button>
                                     </div>
                                 ) : null}
                                 <div style={{ marginTop: 6, fontSize: 11, color: '#94a3b8', lineHeight: 1.45 }}>
@@ -1651,11 +1651,11 @@ export function PropertyPanel({ activeTab = 'style' }: { activeTab?: PropertyPan
                     const cc = selectedComponent.config;
                     const setCC = handleConfigChange;
                     return (
-                    <div className="property-section">
-                        <div className="property-section-title property-section-title-collapsible">
+                    <div className="py-3 border-b border-border-default">
+                        <div className="text-xs font-semibold text-text-secondary uppercase tracking-wide mb-2 flex items-center justify-between cursor-pointer select-none">
                             <button
                                 type="button"
-                                className="property-section-toggle"
+                                className="text-[10px] text-text-muted transition-transform duration-200"
                                 onClick={() => toggleSection('component-appearance')}
                             >
                                 {isSectionCollapsed('component-appearance') ? '▸' : '▾'} 组件外观
@@ -1663,30 +1663,30 @@ export function PropertyPanel({ activeTab = 'style' }: { activeTab?: PropertyPan
                         </div>
                         {!isSectionCollapsed('component-appearance') ? (
                             <>
-                                <div className="property-row">
-                                    <label className="property-label">背景色</label>
+                                <div className="flex items-center mb-3">
+                                    <label className="w-20 text-xs text-text-secondary">背景色</label>
                                     <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
                                         <input
                                             type="color"
-                                            className="property-color-input"
+                                            className="w-8 h-7 border border-border-default rounded cursor-pointer p-0"
                                             value={String(cc.componentBgColor || 'transparent') === 'transparent' ? '#000000' : String(cc.componentBgColor || '#000000')}
                                             onChange={(e) => setCC('componentBgColor', e.target.value)}
                                         />
                                         <input
                                             type="text"
-                                            className="property-input"
+                                            className="flex-1 px-2.5 py-1.5 border border-border-default rounded bg-surface-card text-text-primary text-xs focus:outline-none focus:border-brand"
                                             style={{ flex: 1 }}
                                             value={String(cc.componentBgColor || '')}
                                             onChange={(e) => setCC('componentBgColor', e.target.value)}
                                             placeholder="transparent"
                                         />
                                         {cc.componentBgColor ? (
-                                            <button type="button" className="property-btn-small" onClick={() => setCC('componentBgColor', '')}>清除</button>
+                                            <button type="button" className="inline-flex items-center justify-center px-2 py-1 min-h-7 border border-border-default rounded bg-surface-card text-text-primary text-xs cursor-pointer transition-all duration-200 hover:border-brand hover:bg-brand/10 disabled:opacity-45 disabled:cursor-not-allowed" onClick={() => setCC('componentBgColor', '')}>清除</button>
                                         ) : null}
                                     </div>
                                 </div>
-                                <div className="property-row">
-                                    <label className="property-label">背景透明度</label>
+                                <div className="flex items-center mb-3">
+                                    <label className="w-20 text-xs text-text-secondary">背景透明度</label>
                                     <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
                                         <input
                                             type="range"
@@ -1700,11 +1700,11 @@ export function PropertyPanel({ activeTab = 'style' }: { activeTab?: PropertyPan
                                         <span style={{ fontSize: 11, minWidth: 32, textAlign: 'right' }}>{Number(cc.componentBgOpacity ?? 100)}%</span>
                                     </div>
                                 </div>
-                                <div className="property-row">
-                                    <label className="property-label">圆角</label>
+                                <div className="flex items-center mb-3">
+                                    <label className="w-20 text-xs text-text-secondary">圆角</label>
                                     <input
                                         type="number"
-                                        className="property-input"
+                                        className="flex-1 px-2.5 py-1.5 border border-border-default rounded bg-surface-card text-text-primary text-xs focus:outline-none focus:border-brand"
                                         value={Number(cc.componentBorderRadius ?? 0)}
                                         onChange={(e) => setCC('componentBorderRadius', Math.max(0, Number(e.target.value) || 0))}
                                         min={0}
@@ -1712,12 +1712,12 @@ export function PropertyPanel({ activeTab = 'style' }: { activeTab?: PropertyPan
                                         placeholder="0"
                                     />
                                 </div>
-                                <div className="property-row">
-                                    <label className="property-label">边框</label>
+                                <div className="flex items-center mb-3">
+                                    <label className="w-20 text-xs text-text-secondary">边框</label>
                                     <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
                                         <input
                                             type="number"
-                                            className="property-input"
+                                            className="flex-1 px-2.5 py-1.5 border border-border-default rounded bg-surface-card text-text-primary text-xs focus:outline-none focus:border-brand"
                                             style={{ width: 50 }}
                                             value={Number(cc.componentBorderWidth ?? 0)}
                                             onChange={(e) => setCC('componentBorderWidth', Math.max(0, Number(e.target.value) || 0))}
@@ -1727,12 +1727,12 @@ export function PropertyPanel({ activeTab = 'style' }: { activeTab?: PropertyPan
                                         />
                                         <input
                                             type="color"
-                                            className="property-color-input"
+                                            className="w-8 h-7 border border-border-default rounded cursor-pointer p-0"
                                             value={String(cc.componentBorderColor || '#ffffff')}
                                             onChange={(e) => setCC('componentBorderColor', e.target.value)}
                                         />
                                         <select
-                                            className="property-input"
+                                            className="flex-1 px-2.5 py-1.5 border border-border-default rounded bg-surface-card text-text-primary text-xs focus:outline-none focus:border-brand"
                                             style={{ flex: 1 }}
                                             value={String(cc.componentBorderStyle || 'solid')}
                                             onChange={(e) => setCC('componentBorderStyle', e.target.value)}
@@ -1743,11 +1743,11 @@ export function PropertyPanel({ activeTab = 'style' }: { activeTab?: PropertyPan
                                         </select>
                                     </div>
                                 </div>
-                                <div className="property-row">
-                                    <label className="property-label">内边距</label>
+                                <div className="flex items-center mb-3">
+                                    <label className="w-20 text-xs text-text-secondary">内边距</label>
                                     <input
                                         type="number"
-                                        className="property-input"
+                                        className="flex-1 px-2.5 py-1.5 border border-border-default rounded bg-surface-card text-text-primary text-xs focus:outline-none focus:border-brand"
                                         value={Number(cc.componentPadding ?? 0)}
                                         onChange={(e) => setCC('componentPadding', Math.max(0, Number(e.target.value) || 0))}
                                         min={0}
@@ -1763,11 +1763,11 @@ export function PropertyPanel({ activeTab = 'style' }: { activeTab?: PropertyPan
 
                 {/* Position & Size */}
                 {isStyleTab && shouldRenderSection('position-size', '位置', '尺寸', 'x', 'y', '宽', '高') && (
-                    <div className="property-section">
-                        <div className="property-section-title property-section-title-collapsible">
+                    <div className="py-3 border-b border-border-default">
+                        <div className="text-xs font-semibold text-text-secondary uppercase tracking-wide mb-2 flex items-center justify-between cursor-pointer select-none">
                             <button
                                 type="button"
-                                className="property-section-toggle"
+                                className="text-[10px] text-text-muted transition-transform duration-200"
                                 onClick={() => toggleSection('position-size')}
                             >
                                 {isSectionCollapsed('position-size') ? '▸' : '▾'} 位置与尺寸
@@ -1775,41 +1775,41 @@ export function PropertyPanel({ activeTab = 'style' }: { activeTab?: PropertyPan
                         </div>
                         {!isSectionCollapsed('position-size') ? (
                             <>
-                                <div className="property-row">
-                                    <label className="property-label">X</label>
+                                <div className="flex items-center mb-3">
+                                    <label className="w-20 text-xs text-text-secondary">X</label>
                                     <input
                                         type="number"
-                                        className="property-input"
+                                        className="flex-1 px-2.5 py-1.5 border border-border-default rounded bg-surface-card text-text-primary text-xs focus:outline-none focus:border-brand"
                                         value={selectedComponent.x}
                                         onChange={(e) => handleChange('x', Number(e.target.value))}
                                     />
                                 </div>
 
-                                <div className="property-row">
-                                    <label className="property-label">Y</label>
+                                <div className="flex items-center mb-3">
+                                    <label className="w-20 text-xs text-text-secondary">Y</label>
                                     <input
                                         type="number"
-                                        className="property-input"
+                                        className="flex-1 px-2.5 py-1.5 border border-border-default rounded bg-surface-card text-text-primary text-xs focus:outline-none focus:border-brand"
                                         value={selectedComponent.y}
                                         onChange={(e) => handleChange('y', Number(e.target.value))}
                                     />
                                 </div>
 
-                                <div className="property-row">
-                                    <label className="property-label">宽度</label>
+                                <div className="flex items-center mb-3">
+                                    <label className="w-20 text-xs text-text-secondary">宽度</label>
                                     <input
                                         type="number"
-                                        className="property-input"
+                                        className="flex-1 px-2.5 py-1.5 border border-border-default rounded bg-surface-card text-text-primary text-xs focus:outline-none focus:border-brand"
                                         value={selectedComponent.width}
                                         onChange={(e) => handleChange('width', Number(e.target.value))}
                                     />
                                 </div>
 
-                                <div className="property-row">
-                                    <label className="property-label">高度</label>
+                                <div className="flex items-center mb-3">
+                                    <label className="w-20 text-xs text-text-secondary">高度</label>
                                     <input
                                         type="number"
-                                        className="property-input"
+                                        className="flex-1 px-2.5 py-1.5 border border-border-default rounded bg-surface-card text-text-primary text-xs focus:outline-none focus:border-brand"
                                         value={selectedComponent.height}
                                         onChange={(e) => handleChange('height', Number(e.target.value))}
                                     />
@@ -1821,11 +1821,11 @@ export function PropertyPanel({ activeTab = 'style' }: { activeTab?: PropertyPan
 
                 {/* Component-specific config (plugin) */}
                 {isStyleTab && runtimePlugin?.propertySchema?.fields?.length && shouldRenderSection('plugin-config', '插件', 'plugin', runtimePlugin.name) ? (
-                    <div className="property-section">
-                        <div className="property-section-title property-section-title-collapsible">
+                    <div className="py-3 border-b border-border-default">
+                        <div className="text-xs font-semibold text-text-secondary uppercase tracking-wide mb-2 flex items-center justify-between cursor-pointer select-none">
                             <button
                                 type="button"
-                                className="property-section-toggle"
+                                className="text-[10px] text-text-muted transition-transform duration-200"
                                 onClick={() => toggleSection('plugin-config')}
                             >
                                 {isSectionCollapsed('plugin-config') ? '▸' : '▾'} 插件配置 ({runtimePlugin.name})
@@ -1838,14 +1838,14 @@ export function PropertyPanel({ activeTab = 'style' }: { activeTab?: PropertyPan
                 ) : null}
 
                 {isStyleTab && shouldRenderSection('component-config', '组件', '样式', '图表', '外观') && (
-                    <div className="property-section">
+                    <div className="py-3 border-b border-border-default">
                         <div
-                            className="property-section-title property-section-title-collapsible"
+                            className="text-xs font-semibold text-text-secondary uppercase tracking-wide mb-2 flex items-center justify-between cursor-pointer select-none"
                             style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}
                         >
                             <button
                                 type="button"
-                                className="property-section-toggle"
+                                className="text-[10px] text-text-muted transition-transform duration-200"
                                 onClick={() => toggleSection('component-config')}
                             >
                                 {isSectionCollapsed('component-config') ? '▸' : '▾'} 组件配置
@@ -1854,7 +1854,7 @@ export function PropertyPanel({ activeTab = 'style' }: { activeTab?: PropertyPan
                                 <div style={{ display: 'inline-flex', gap: 6 }}>
                                     <button
                                         type="button"
-                                        className="property-btn-small"
+                                        className="inline-flex items-center justify-center px-2 py-1 min-h-7 border border-border-default rounded bg-surface-card text-text-primary text-xs cursor-pointer transition-all duration-200 hover:border-brand hover:bg-brand/10 disabled:opacity-45 disabled:cursor-not-allowed"
                                         onClick={() => setComponentConfigMode('quick')}
                                         style={{
                                             minHeight: 24,
@@ -1866,7 +1866,7 @@ export function PropertyPanel({ activeTab = 'style' }: { activeTab?: PropertyPan
                                     </button>
                                     <button
                                         type="button"
-                                        className="property-btn-small"
+                                        className="inline-flex items-center justify-center px-2 py-1 min-h-7 border border-border-default rounded bg-surface-card text-text-primary text-xs cursor-pointer transition-all duration-200 hover:border-brand hover:bg-brand/10 disabled:opacity-45 disabled:cursor-not-allowed"
                                         onClick={() => setComponentConfigMode('advanced')}
                                         style={{
                                             minHeight: 24,
@@ -1892,11 +1892,11 @@ export function PropertyPanel({ activeTab = 'style' }: { activeTab?: PropertyPan
 
                 {/* Data Source */}
                 {isDataTab && shouldRenderSection('data-source', '数据', 'sql', 'card', 'api', 'dataset', 'metric') && (
-                    <div className="property-section">
-                        <div className="property-section-title property-section-title-collapsible">
+                    <div className="py-3 border-b border-border-default">
+                        <div className="text-xs font-semibold text-text-secondary uppercase tracking-wide mb-2 flex items-center justify-between cursor-pointer select-none">
                             <button
                                 type="button"
-                                className="property-section-toggle"
+                                className="text-[10px] text-text-muted transition-transform duration-200"
                                 onClick={() => toggleSection('data-source')}
                             >
                                 {isSectionCollapsed('data-source') ? '▸' : '▾'} 数据源
@@ -1916,11 +1916,11 @@ export function PropertyPanel({ activeTab = 'style' }: { activeTab?: PropertyPan
                     const currentMapping = (selectedComponent.config._fieldMapping as FieldMapping) ?? {};
                     const useFieldMapping = selectedComponent.config._useFieldMapping !== false;
                     return (
-                        <div className="property-section">
-                            <div className="property-section-title property-section-title-collapsible">
+                        <div className="py-3 border-b border-border-default">
+                            <div className="text-xs font-semibold text-text-secondary uppercase tracking-wide mb-2 flex items-center justify-between cursor-pointer select-none">
                                 <button
                                     type="button"
-                                    className="property-section-toggle"
+                                    className="text-[10px] text-text-muted transition-transform duration-200"
                                     onClick={() => toggleSection('field-mapping')}
                                 >
                                     {isSectionCollapsed('field-mapping') ? '▸' : '▾'} 字段映射
@@ -1953,11 +1953,11 @@ export function PropertyPanel({ activeTab = 'style' }: { activeTab?: PropertyPan
                 })()}
 
                 {isDataTab && shouldRenderSection('explain', '解释', 'explain') && (
-                    <div className="property-section">
-                        <div className="property-section-title property-section-title-collapsible">
+                    <div className="py-3 border-b border-border-default">
+                        <div className="text-xs font-semibold text-text-secondary uppercase tracking-wide mb-2 flex items-center justify-between cursor-pointer select-none">
                             <button
                                 type="button"
-                                className="property-section-toggle"
+                                className="text-[10px] text-text-muted transition-transform duration-200"
                                 onClick={() => toggleSection('explain')}
                             >
                                 {isSectionCollapsed('explain') ? '▸' : '▾'} 解释
@@ -1968,7 +1968,7 @@ export function PropertyPanel({ activeTab = 'style' }: { activeTab?: PropertyPan
                                 <div style={{ display: 'grid', gap: 8 }}>
                                     <button
                                         type="button"
-                                        className="property-btn-small"
+                                        className="inline-flex items-center justify-center px-2 py-1 min-h-7 border border-border-default rounded bg-surface-card text-text-primary text-xs cursor-pointer transition-all duration-200 hover:border-brand hover:bg-brand/10 disabled:opacity-45 disabled:cursor-not-allowed"
                                         onClick={() => { void handleExplain(); }}
                                     >
                                         解释当前组件
@@ -1988,7 +1988,7 @@ export function PropertyPanel({ activeTab = 'style' }: { activeTab?: PropertyPan
                                         <>
                                             <button
                                                 type="button"
-                                                className="property-btn-small"
+                                                className="inline-flex items-center justify-center px-2 py-1 min-h-7 border border-border-default rounded bg-surface-card text-text-primary text-xs cursor-pointer transition-all duration-200 hover:border-brand hover:bg-brand/10 disabled:opacity-45 disabled:cursor-not-allowed"
                                                 onClick={() => {
                                                     const text = explainState.value.copyJson ?? JSON.stringify(explainState.value.explainCard ?? {}, null, 2);
                                                     void writeTextToClipboard(text);
@@ -2025,11 +2025,11 @@ export function PropertyPanel({ activeTab = 'style' }: { activeTab?: PropertyPan
 
                 {/* Chart annotations (markLine / markArea / conditionalColors) */}
                 {isStyleTab && shouldRenderSection('component-config', '标注', '辅助线', 'markLine', 'threshold') && (selectedComponent.type === 'line-chart' || selectedComponent.type === 'bar-chart' || selectedComponent.type === 'scatter-chart' || selectedComponent.type === 'combo-chart' || selectedComponent.type === 'waterfall-chart') && (
-                    <div className="property-section">
-                        <div className="property-section-title property-section-title-collapsible">
+                    <div className="py-3 border-b border-border-default">
+                        <div className="text-xs font-semibold text-text-secondary uppercase tracking-wide mb-2 flex items-center justify-between cursor-pointer select-none">
                             <button
                                 type="button"
-                                className="property-section-toggle"
+                                className="text-[10px] text-text-muted transition-transform duration-200"
                                 onClick={() => toggleSection('annotations')}
                             >
                                 {isSectionCollapsed('annotations') ? '▸' : '▾'} 标注 / 阈值线
@@ -2046,11 +2046,11 @@ export function PropertyPanel({ activeTab = 'style' }: { activeTab?: PropertyPan
 
                 {/* Drill-down config */}
                 {isInteractionTab && drillDownContent ? (
-                    <div className="property-section">
-                        <div className="property-section-title property-section-title-collapsible">
+                    <div className="py-3 border-b border-border-default">
+                        <div className="text-xs font-semibold text-text-secondary uppercase tracking-wide mb-2 flex items-center justify-between cursor-pointer select-none">
                             <button
                                 type="button"
-                                className="property-section-toggle"
+                                className="text-[10px] text-text-muted transition-transform duration-200"
                                 onClick={() => toggleSection('drill-down')}
                             >
                                 {isSectionCollapsed('drill-down') ? '▸' : '▾'} 下钻配置
@@ -2061,11 +2061,11 @@ export function PropertyPanel({ activeTab = 'style' }: { activeTab?: PropertyPan
                 ) : null}
 
                 {isInteractionTab && interactionContent ? (
-                    <div className="property-section">
-                        <div className="property-section-title property-section-title-collapsible">
+                    <div className="py-3 border-b border-border-default">
+                        <div className="text-xs font-semibold text-text-secondary uppercase tracking-wide mb-2 flex items-center justify-between cursor-pointer select-none">
                             <button
                                 type="button"
-                                className="property-section-toggle"
+                                className="text-[10px] text-text-muted transition-transform duration-200"
                                 onClick={() => toggleSection('interaction')}
                             >
                                 {isSectionCollapsed('interaction') ? '▸' : '▾'} 联动配置
@@ -2076,11 +2076,11 @@ export function PropertyPanel({ activeTab = 'style' }: { activeTab?: PropertyPan
                 ) : null}
 
                 {isInteractionTab && actionContent ? (
-                    <div className="property-section">
-                        <div className="property-section-title property-section-title-collapsible">
+                    <div className="py-3 border-b border-border-default">
+                        <div className="text-xs font-semibold text-text-secondary uppercase tracking-wide mb-2 flex items-center justify-between cursor-pointer select-none">
                             <button
                                 type="button"
-                                className="property-section-toggle"
+                                className="text-[10px] text-text-muted transition-transform duration-200"
                                 onClick={() => toggleSection('actions')}
                             >
                                 {isSectionCollapsed('actions') ? '▸' : '▾'} 动作入口
@@ -2092,11 +2092,11 @@ export function PropertyPanel({ activeTab = 'style' }: { activeTab?: PropertyPan
 
                 {/* Visibility & Lock & Name */}
                 {isAdvancedTab && shouldRenderSection('other', '其他', '名称', '容器', '锁定', '可见') && (
-                    <div className="property-section">
-                        <div className="property-section-title property-section-title-collapsible">
+                    <div className="py-3 border-b border-border-default">
+                        <div className="text-xs font-semibold text-text-secondary uppercase tracking-wide mb-2 flex items-center justify-between cursor-pointer select-none">
                             <button
                                 type="button"
-                                className="property-section-toggle"
+                                className="text-[10px] text-text-muted transition-transform duration-200"
                                 onClick={() => toggleSection('other')}
                             >
                                 {isSectionCollapsed('other') ? '▸' : '▾'} 其他
@@ -2104,20 +2104,20 @@ export function PropertyPanel({ activeTab = 'style' }: { activeTab?: PropertyPan
                         </div>
                         {!isSectionCollapsed('other') ? (
                             <>
-                                <div className="property-row">
-                                    <label className="property-label">名称</label>
+                                <div className="flex items-center mb-3">
+                                    <label className="w-20 text-xs text-text-secondary">名称</label>
                                     <input
                                         type="text"
-                                        className="property-input"
+                                        className="flex-1 px-2.5 py-1.5 border border-border-default rounded bg-surface-card text-text-primary text-xs focus:outline-none focus:border-brand"
                                         value={selectedComponent.name}
                                         onChange={(e) => handleChange('name', e.target.value)}
                                     />
                                 </div>
 
-                                <div className="property-row">
-                                    <label className="property-label">所属容器</label>
+                                <div className="flex items-center mb-3">
+                                    <label className="w-20 text-xs text-text-secondary">所属容器</label>
                                     <select
-                                        className="property-input"
+                                        className="flex-1 px-2.5 py-1.5 border border-border-default rounded bg-surface-card text-text-primary text-xs focus:outline-none focus:border-brand"
                                         value={selectedComponent.parentContainerId || ''}
                                         onChange={(e) => {
                                             const parentId = e.target.value || undefined;
@@ -2161,21 +2161,21 @@ export function PropertyPanel({ activeTab = 'style' }: { activeTab?: PropertyPan
                                 </div>
 
                                 {selectedComponent.type === 'container' && (
-                                    <div className="property-row">
-                                        <label className="property-label">子组件数</label>
-                                        <div className="property-input" style={{ display: 'flex', alignItems: 'center' }}>
+                                    <div className="flex items-center mb-3">
+                                        <label className="w-20 text-xs text-text-secondary">子组件数</label>
+                                        <div className="flex-1 px-2.5 py-1.5 border border-border-default rounded bg-surface-card text-text-primary text-xs focus:outline-none focus:border-brand" style={{ display: 'flex', alignItems: 'center' }}>
                                             {config.components.filter((item) => item.parentContainerId === selectedComponent.id).length}
                                         </div>
                                     </div>
                                 )}
                                 {selectedComponent.type === 'tab-switcher' && (
-                                    <div className="property-row" style={{ alignItems: 'flex-start' }}>
-                                        <label className="property-label">Tab联动</label>
+                                    <div className="flex items-center mb-3" style={{ alignItems: 'flex-start' }}>
+                                        <label className="w-20 text-xs text-text-secondary">Tab联动</label>
                                         <div style={{ display: 'grid', gap: 6, width: '100%' }}>
-                                            <button type="button" className="property-btn-small" onClick={applyTabVisibilityRules}>
+                                            <button type="button" className="inline-flex items-center justify-center px-2 py-1 min-h-7 border border-border-default rounded bg-surface-card text-text-primary text-xs cursor-pointer transition-all duration-200 hover:border-brand hover:bg-brand/10 disabled:opacity-45 disabled:cursor-not-allowed" onClick={applyTabVisibilityRules}>
                                                 一键应用显隐规则
                                             </button>
-                                            <button type="button" className="property-btn-small" onClick={clearTabVisibilityRules}>
+                                            <button type="button" className="inline-flex items-center justify-center px-2 py-1 min-h-7 border border-border-default rounded bg-surface-card text-text-primary text-xs cursor-pointer transition-all duration-200 hover:border-brand hover:bg-brand/10 disabled:opacity-45 disabled:cursor-not-allowed" onClick={clearTabVisibilityRules}>
                                                 清理显隐规则
                                             </button>
                                             <div style={{ fontSize: 11, color: '#94a3b8', lineHeight: 1.5 }}>
@@ -2185,8 +2185,8 @@ export function PropertyPanel({ activeTab = 'style' }: { activeTab?: PropertyPan
                                     </div>
                                 )}
 
-                                <div className="property-row">
-                                    <label className="property-label">锁定</label>
+                                <div className="flex items-center mb-3">
+                                    <label className="w-20 text-xs text-text-secondary">锁定</label>
                                     <input
                                         type="checkbox"
                                         checked={selectedComponent.locked}
@@ -2194,16 +2194,16 @@ export function PropertyPanel({ activeTab = 'style' }: { activeTab?: PropertyPan
                                     />
                                 </div>
 
-                                <div className="property-row">
-                                    <label className="property-label">可见</label>
+                                <div className="flex items-center mb-3">
+                                    <label className="w-20 text-xs text-text-secondary">可见</label>
                                     <input
                                         type="checkbox"
                                         checked={selectedComponent.visible}
                                         onChange={(e) => handleChange('visible', e.target.checked)}
                                     />
                                 </div>
-                                <div className="property-row">
-                                    <label className="property-label">多端可见</label>
+                                <div className="flex items-center mb-3">
+                                    <label className="w-20 text-xs text-text-secondary">多端可见</label>
                                     <div style={{ display: 'flex', gap: 8 }}>
                                         {(['pc', 'tablet', 'mobile'] as const).map((device) => {
                                             const current = Array.isArray(selectedComponent.config.visibleOn)
@@ -2232,8 +2232,8 @@ export function PropertyPanel({ activeTab = 'style' }: { activeTab?: PropertyPan
                                         })}
                                     </div>
                                 </div>
-                                <div className="property-row">
-                                    <label className="property-label">变量可见条件</label>
+                                <div className="flex items-center mb-3">
+                                    <label className="w-20 text-xs text-text-secondary">变量可见条件</label>
                                     <input
                                         type="checkbox"
                                         checked={selectedComponent.config.visibilityRuleEnabled === true}
@@ -2242,20 +2242,20 @@ export function PropertyPanel({ activeTab = 'style' }: { activeTab?: PropertyPan
                                 </div>
                                 {selectedComponent.config.visibilityRuleEnabled === true && (
                                     <>
-                                        <div className="property-row">
-                                            <label className="property-label">变量Key</label>
+                                        <div className="flex items-center mb-3">
+                                            <label className="w-20 text-xs text-text-secondary">变量Key</label>
                                             <input
                                                 type="text"
-                                                className="property-input"
+                                                className="flex-1 px-2.5 py-1.5 border border-border-default rounded bg-surface-card text-text-primary text-xs focus:outline-none focus:border-brand"
                                                 value={String(selectedComponent.config.visibilityVariableKey ?? '')}
                                                 onChange={(e) => handleConfigChange('visibilityVariableKey', e.target.value)}
                                                 placeholder="tabKey"
                                             />
                                         </div>
-                                        <div className="property-row">
-                                            <label className="property-label">匹配模式</label>
+                                        <div className="flex items-center mb-3">
+                                            <label className="w-20 text-xs text-text-secondary">匹配模式</label>
                                             <select
-                                                className="property-input"
+                                                className="flex-1 px-2.5 py-1.5 border border-border-default rounded bg-surface-card text-text-primary text-xs focus:outline-none focus:border-brand"
                                                 value={String(selectedComponent.config.visibilityMatchMode ?? 'equals')}
                                                 onChange={(e) => handleConfigChange('visibilityMatchMode', e.target.value)}
                                             >
@@ -2275,10 +2275,10 @@ export function PropertyPanel({ activeTab = 'style' }: { activeTab?: PropertyPan
                                                 return null;
                                             }
                                             return (
-                                                <div className="property-row">
-                                                    <label className="property-label">匹配值</label>
+                                                <div className="flex items-center mb-3">
+                                                    <label className="w-20 text-xs text-text-secondary">匹配值</label>
                                                     <textarea
-                                                        className="property-input"
+                                                        className="flex-1 px-2.5 py-1.5 border border-border-default rounded bg-surface-card text-text-primary text-xs focus:outline-none focus:border-brand"
                                                         rows={4}
                                                         value={serializeVisibilityMatchValues(selectedComponent.config.visibilityMatchValues)}
                                                         onChange={(e) => handleConfigChange('visibilityMatchValues', parseVisibilityMatchValues(e.target.value))}
@@ -2298,18 +2298,18 @@ export function PropertyPanel({ activeTab = 'style' }: { activeTab?: PropertyPan
                 )}
 
                 {isInteractionTab && !drillDownContent && !interactionContent && !actionContent && (
-                    <div className="property-panel-tab-empty">
+                    <div className="flex items-center justify-center h-full text-xs text-text-muted">
                         <div className="empty-state-icon">🔗</div>
                         <div className="empty-state-text">当前组件暂无交互配置</div>
-                        <div className="empty-state-hint">图表类组件支持下钻、联动和动作配置</div>
+                        <div className="text-xs text-text-muted text-center py-8">图表类组件支持下钻、联动和动作配置</div>
                     </div>
                 )}
                 {isAdvancedTab && (
-                    <div className="property-section" style={{ marginTop: 8 }}>
-                        <div className="property-section-title property-section-title-collapsible">
+                    <div className="py-3 border-b border-border-default" style={{ marginTop: 8 }}>
+                        <div className="text-xs font-semibold text-text-secondary uppercase tracking-wide mb-2 flex items-center justify-between cursor-pointer select-none">
                             <button
                                 type="button"
-                                className="property-section-toggle"
+                                className="text-[10px] text-text-muted transition-transform duration-200"
                                 onClick={() => toggleSection('animation')}
                             >
                                 {isSectionCollapsed('animation') ? '▸' : '▾'} 入场动画
@@ -2317,10 +2317,10 @@ export function PropertyPanel({ activeTab = 'style' }: { activeTab?: PropertyPan
                         </div>
                         {!isSectionCollapsed('animation') && (
                             <>
-                                <div className="property-row">
-                                    <label className="property-label">动画类型</label>
+                                <div className="flex items-center mb-3">
+                                    <label className="w-20 text-xs text-text-secondary">动画类型</label>
                                     <select
-                                        className="property-input"
+                                        className="flex-1 px-2.5 py-1.5 border border-border-default rounded bg-surface-card text-text-primary text-xs focus:outline-none focus:border-brand"
                                         value={String(selectedComponent.config.animationType ?? 'none')}
                                         onChange={(e) => handleConfigChange('animationType', e.target.value)}
                                     >
@@ -2335,11 +2335,11 @@ export function PropertyPanel({ activeTab = 'style' }: { activeTab?: PropertyPan
                                         <option value="rotateIn">旋转进入</option>
                                     </select>
                                 </div>
-                                <div className="property-row">
-                                    <label className="property-label">时长(ms)</label>
+                                <div className="flex items-center mb-3">
+                                    <label className="w-20 text-xs text-text-secondary">时长(ms)</label>
                                     <input
                                         type="number"
-                                        className="property-input"
+                                        className="flex-1 px-2.5 py-1.5 border border-border-default rounded bg-surface-card text-text-primary text-xs focus:outline-none focus:border-brand"
                                         min={100}
                                         max={5000}
                                         step={100}
@@ -2347,11 +2347,11 @@ export function PropertyPanel({ activeTab = 'style' }: { activeTab?: PropertyPan
                                         onChange={(e) => handleConfigChange('animationDuration', Number(e.target.value))}
                                     />
                                 </div>
-                                <div className="property-row">
-                                    <label className="property-label">延迟(ms)</label>
+                                <div className="flex items-center mb-3">
+                                    <label className="w-20 text-xs text-text-secondary">延迟(ms)</label>
                                     <input
                                         type="number"
-                                        className="property-input"
+                                        className="flex-1 px-2.5 py-1.5 border border-border-default rounded bg-surface-card text-text-primary text-xs focus:outline-none focus:border-brand"
                                         min={0}
                                         max={10000}
                                         step={100}
@@ -2359,10 +2359,10 @@ export function PropertyPanel({ activeTab = 'style' }: { activeTab?: PropertyPan
                                         onChange={(e) => handleConfigChange('animationDelay', Number(e.target.value))}
                                     />
                                 </div>
-                                <div className="property-row">
-                                    <label className="property-label">缓动函数</label>
+                                <div className="flex items-center mb-3">
+                                    <label className="w-20 text-xs text-text-secondary">缓动函数</label>
                                     <select
-                                        className="property-input"
+                                        className="flex-1 px-2.5 py-1.5 border border-border-default rounded bg-surface-card text-text-primary text-xs focus:outline-none focus:border-brand"
                                         value={String(selectedComponent.config.animationEasing ?? 'ease')}
                                         onChange={(e) => handleConfigChange('animationEasing', e.target.value)}
                                     >
@@ -2377,7 +2377,7 @@ export function PropertyPanel({ activeTab = 'style' }: { activeTab?: PropertyPan
                                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6, marginTop: 8 }}>
                                     <button
                                         type="button"
-                                        className="property-btn-small"
+                                        className="inline-flex items-center justify-center px-2 py-1 min-h-7 border border-border-default rounded bg-surface-card text-text-primary text-xs cursor-pointer transition-all duration-200 hover:border-brand hover:bg-brand/10 disabled:opacity-45 disabled:cursor-not-allowed"
                                         title="按位置自动设置递增延迟（从上到下、从左到右）"
                                         onClick={() => {
                                             const sorted = [...config.components]
@@ -2395,7 +2395,7 @@ export function PropertyPanel({ activeTab = 'style' }: { activeTab?: PropertyPan
                                     </button>
                                     <button
                                         type="button"
-                                        className="property-btn-small"
+                                        className="inline-flex items-center justify-center px-2 py-1 min-h-7 border border-border-default rounded bg-surface-card text-text-primary text-xs cursor-pointer transition-all duration-200 hover:border-brand hover:bg-brand/10 disabled:opacity-45 disabled:cursor-not-allowed"
                                         onClick={() => {
                                             const nextComponents = config.components.map(c => {
                                                 if (String(c.config.animationType ?? 'none') !== 'none') {
@@ -2444,8 +2444,8 @@ function renderPluginSchemaFields(
                 ) : null;
                 if (field.type === 'boolean') {
                     return (
-                        <div className="property-row" key={key}>
-                            <label className="property-label">{label}</label>
+                        <div className="flex items-center mb-3" key={key}>
+                            <label className="w-20 text-xs text-text-secondary">{label}</label>
                             <div style={{ flex: 1 }}>
                                 <input
                                     type="checkbox"
@@ -2462,12 +2462,12 @@ function renderPluginSchemaFields(
                     const max = Number.isFinite(field.max) ? Number(field.max) : undefined;
                     const step = Number.isFinite(field.step) ? Number(field.step) : undefined;
                     return (
-                        <div className="property-row" key={key}>
-                            <label className="property-label">{label}</label>
+                        <div className="flex items-center mb-3" key={key}>
+                            <label className="w-20 text-xs text-text-secondary">{label}</label>
                             <div style={{ flex: 1 }}>
                                 <input
                                     type="number"
-                                    className="property-input"
+                                    className="flex-1 px-2.5 py-1.5 border border-border-default rounded bg-surface-card text-text-primary text-xs focus:outline-none focus:border-brand"
                                     min={min}
                                     max={max}
                                     step={step}
@@ -2503,11 +2503,11 @@ function renderPluginSchemaFields(
                         : [];
                     const selectedIndex = options.findIndex((item) => String(item.value) === String(value));
                     return (
-                        <div className="property-row" key={key}>
-                            <label className="property-label">{label}</label>
+                        <div className="flex items-center mb-3" key={key}>
+                            <label className="w-20 text-xs text-text-secondary">{label}</label>
                             <div style={{ flex: 1 }}>
                                 <select
-                                    className="property-input"
+                                    className="flex-1 px-2.5 py-1.5 border border-border-default rounded bg-surface-card text-text-primary text-xs focus:outline-none focus:border-brand"
                                     value={selectedIndex >= 0 ? String(selectedIndex) : ''}
                                     onChange={(e) => {
                                         const nextIdx = Number(e.target.value);
@@ -2534,12 +2534,12 @@ function renderPluginSchemaFields(
                 if (field.type === 'color') {
                     const fallback = typeof value === 'string' && value ? value : '#3b82f6';
                     return (
-                        <div className="property-row" key={key}>
-                            <label className="property-label">{label}</label>
+                        <div className="flex items-center mb-3" key={key}>
+                            <label className="w-20 text-xs text-text-secondary">{label}</label>
                             <div style={{ flex: 1 }}>
                                 <input
                                     type="color"
-                                    className="property-color-input"
+                                    className="w-8 h-7 border border-border-default rounded cursor-pointer p-0"
                                     value={fallback}
                                     onChange={(e) => onChange(key, e.target.value)}
                                 />
@@ -2556,12 +2556,12 @@ function renderPluginSchemaFields(
                         2,
                     );
                     return (
-                        <div className="property-row" key={key}>
-                            <label className="property-label">{label}</label>
+                        <div className="flex items-center mb-3" key={key}>
+                            <label className="w-20 text-xs text-text-secondary">{label}</label>
                             <div style={{ flex: 1 }}>
                                 <button
                                     type="button"
-                                    className="header-btn"
+                                    className="inline-flex items-center gap-1.5 min-h-8 rounded-md border border-border-default bg-surface-card text-text-primary px-3 text-xs cursor-pointer hover:border-brand hover:bg-brand/10 disabled:opacity-40 disabled:cursor-not-allowed"
                                     onClick={() => {
                                         const input = window.prompt(`${label} (${isArray ? 'JSON数组' : 'JSON对象'})`, snapshot);
                                         if (input == null) return;
@@ -2601,12 +2601,12 @@ function renderPluginSchemaFields(
                     );
                 }
                 return (
-                    <div className="property-row" key={key}>
-                        <label className="property-label">{label}</label>
+                    <div className="flex items-center mb-3" key={key}>
+                        <label className="w-20 text-xs text-text-secondary">{label}</label>
                         <div style={{ flex: 1 }}>
                             <input
                                 type="text"
-                                className="property-input"
+                                className="flex-1 px-2.5 py-1.5 border border-border-default rounded bg-surface-card text-text-primary text-xs focus:outline-none focus:border-brand"
                                 value={String(value ?? '')}
                                 placeholder={String(field?.placeholder || '')}
                                 onChange={(e) => onChange(key, e.target.value)}
@@ -2641,10 +2641,10 @@ function renderComponentConfig(
         return (
             <>
                 {/* Color scheme selector */}
-                <div className="property-row" style={{ marginTop: 8 }}>
-                    <label className="property-label">配色方案</label>
+                <div className="flex items-center mb-3" style={{ marginTop: 8 }}>
+                    <label className="w-20 text-xs text-text-secondary">配色方案</label>
                     <select
-                        className="property-input"
+                        className="flex-1 px-2.5 py-1.5 border border-border-default rounded bg-surface-card text-text-primary text-xs focus:outline-none focus:border-brand"
                         value={(config._colorScheme as string) || ''}
                         onChange={(e) => {
                             const schemeId = e.target.value;
@@ -2667,11 +2667,11 @@ function renderComponentConfig(
                     系列配色
                 </div>
                 {labels.map((label, idx) => (
-                    <div className="property-row" key={`${label}-${idx}`}>
-                        <label className="property-label">{label || `系列${idx + 1}`}</label>
+                    <div className="flex items-center mb-3" key={`${label}-${idx}`}>
+                        <label className="w-20 text-xs text-text-secondary">{label || `系列${idx + 1}`}</label>
                         <input
                             type="color"
-                            className="property-color-input"
+                            className="w-8 h-7 border border-border-default rounded cursor-pointer p-0"
                             value={configuredSeriesColors[idx] || DEFAULT_SERIES_COLORS[idx % DEFAULT_SERIES_COLORS.length]}
                             onChange={(e) => setSeriesColor(idx, e.target.value)}
                         />
@@ -2683,10 +2683,10 @@ function renderComponentConfig(
 
     const renderLegendLayoutRows = () => (
         <>
-            <div className="property-row">
-                <label className="property-label">图例显示</label>
+            <div className="flex items-center mb-3">
+                <label className="w-20 text-xs text-text-secondary">图例显示</label>
                 <select
-                    className="property-input"
+                    className="flex-1 px-2.5 py-1.5 border border-border-default rounded bg-surface-card text-text-primary text-xs focus:outline-none focus:border-brand"
                     value={(config.legendDisplay as string) || 'auto'}
                     onChange={(e) => onChange('legendDisplay', e.target.value)}
                 >
@@ -2695,10 +2695,10 @@ function renderComponentConfig(
                     <option value="hide">隐藏</option>
                 </select>
             </div>
-            <div className="property-row">
-                <label className="property-label">图例位置</label>
+            <div className="flex items-center mb-3">
+                <label className="w-20 text-xs text-text-secondary">图例位置</label>
                 <select
-                    className="property-input"
+                    className="flex-1 px-2.5 py-1.5 border border-border-default rounded bg-surface-card text-text-primary text-xs focus:outline-none focus:border-brand"
                     value={(config.legendPosition as string) || 'auto'}
                     onChange={(e) => onChange('legendPosition', e.target.value)}
                 >
@@ -2709,26 +2709,26 @@ function renderComponentConfig(
                     <option value="right">右</option>
                 </select>
             </div>
-            <div className="property-row">
-                <label className="property-label">启用拖拽微调</label>
+            <div className="flex items-center mb-3">
+                <label className="w-20 text-xs text-text-secondary">启用拖拽微调</label>
                 <input
                     type="checkbox"
                     checked={config.legendDragEnabled === true}
                     onChange={(e) => onChange('legendDragEnabled', e.target.checked)}
                 />
             </div>
-            <div className="property-row">
-                <label className="property-label">自动避让</label>
+            <div className="flex items-center mb-3">
+                <label className="w-20 text-xs text-text-secondary">自动避让</label>
                 <input
                     type="checkbox"
                     checked={config.autoLegendAvoid !== false}
                     onChange={(e) => onChange('autoLegendAvoid', e.target.checked)}
                 />
             </div>
-            <div className="property-row">
-                <label className="property-label">图例方向</label>
+            <div className="flex items-center mb-3">
+                <label className="w-20 text-xs text-text-secondary">图例方向</label>
                 <select
-                    className="property-input"
+                    className="flex-1 px-2.5 py-1.5 border border-border-default rounded bg-surface-card text-text-primary text-xs focus:outline-none focus:border-brand"
                     value={(config.legendOrient as string) || 'auto'}
                     onChange={(e) => onChange('legendOrient', e.target.value)}
                 >
@@ -2737,10 +2737,10 @@ function renderComponentConfig(
                     <option value="vertical">纵向</option>
                 </select>
             </div>
-            <div className="property-row">
-                <label className="property-label">图例对齐</label>
+            <div className="flex items-center mb-3">
+                <label className="w-20 text-xs text-text-secondary">图例对齐</label>
                 <select
-                    className="property-input"
+                    className="flex-1 px-2.5 py-1.5 border border-border-default rounded bg-surface-card text-text-primary text-xs focus:outline-none focus:border-brand"
                     value={(config.legendAlign as string) || 'auto'}
                     onChange={(e) => onChange('legendAlign', e.target.value)}
                 >
@@ -2750,22 +2750,22 @@ function renderComponentConfig(
                     <option value="end">靠后</option>
                 </select>
             </div>
-            <div className="property-row">
-                <label className="property-label">图例间距</label>
+            <div className="flex items-center mb-3">
+                <label className="w-20 text-xs text-text-secondary">图例间距</label>
                 <input
                     type="number"
-                    className="property-input"
+                    className="flex-1 px-2.5 py-1.5 border border-border-default rounded bg-surface-card text-text-primary text-xs focus:outline-none focus:border-brand"
                     min={0}
                     max={60}
                     value={(config.legendItemGap as number) || 12}
                     onChange={(e) => onChange('legendItemGap', Number(e.target.value))}
                 />
             </div>
-            <div className="property-row">
-                <label className="property-label">图例预留(px)</label>
+            <div className="flex items-center mb-3">
+                <label className="w-20 text-xs text-text-secondary">图例预留(px)</label>
                 <input
                     type="number"
-                    className="property-input"
+                    className="flex-1 px-2.5 py-1.5 border border-border-default rounded bg-surface-card text-text-primary text-xs focus:outline-none focus:border-brand"
                     min={0}
                     max={360}
                     value={(config.legendReserveSize as number) || 0}
@@ -2773,33 +2773,33 @@ function renderComponentConfig(
                     placeholder="0=自动"
                 />
             </div>
-            <div className="property-row">
-                <label className="property-label">图例水平偏移</label>
+            <div className="flex items-center mb-3">
+                <label className="w-20 text-xs text-text-secondary">图例水平偏移</label>
                 <input
                     type="number"
-                    className="property-input"
+                    className="flex-1 px-2.5 py-1.5 border border-border-default rounded bg-surface-card text-text-primary text-xs focus:outline-none focus:border-brand"
                     min={-400}
                     max={400}
                     value={(config.legendOffsetX as number) || 0}
                     onChange={(e) => onChange('legendOffsetX', Number(e.target.value))}
                 />
             </div>
-            <div className="property-row">
-                <label className="property-label">图例垂直偏移</label>
+            <div className="flex items-center mb-3">
+                <label className="w-20 text-xs text-text-secondary">图例垂直偏移</label>
                 <input
                     type="number"
-                    className="property-input"
+                    className="flex-1 px-2.5 py-1.5 border border-border-default rounded bg-surface-card text-text-primary text-xs focus:outline-none focus:border-brand"
                     min={-400}
                     max={400}
                     value={(config.legendOffsetY as number) || 0}
                     onChange={(e) => onChange('legendOffsetY', Number(e.target.value))}
                 />
             </div>
-            <div className="property-row">
-                <label className="property-label">图例文本宽(px)</label>
+            <div className="flex items-center mb-3">
+                <label className="w-20 text-xs text-text-secondary">图例文本宽(px)</label>
                 <input
                     type="number"
-                    className="property-input"
+                    className="flex-1 px-2.5 py-1.5 border border-border-default rounded bg-surface-card text-text-primary text-xs focus:outline-none focus:border-brand"
                     min={0}
                     max={320}
                     value={(config.legendNameMaxWidth as number) || 0}
@@ -2807,11 +2807,11 @@ function renderComponentConfig(
                     placeholder="0=自动"
                 />
             </div>
-            <div className="property-row">
-                <label className="property-label">图例偏移</label>
+            <div className="flex items-center mb-3">
+                <label className="w-20 text-xs text-text-secondary">图例偏移</label>
                 <button
                     type="button"
-                    className="property-input"
+                    className="flex-1 px-2.5 py-1.5 border border-border-default rounded bg-surface-card text-text-primary text-xs focus:outline-none focus:border-brand"
                     onClick={() => {
                         onChange('legendOffsetX', 0);
                         onChange('legendOffsetY', 0);
@@ -2820,12 +2820,12 @@ function renderComponentConfig(
                     重置为自动
                 </button>
             </div>
-            <div className="property-row">
-                <label className="property-label">图例避让</label>
+            <div className="flex items-center mb-3">
+                <label className="w-20 text-xs text-text-secondary">图例避让</label>
                 <div style={{ width: '100%' }}>
                     <button
                         type="button"
-                        className="property-action-btn"
+                        className="inline-flex items-center gap-1 px-2 py-1 text-xs text-brand cursor-pointer hover:underline"
                         style={{ width: '100%' }}
                         onClick={() => applyLegendHeuristicLayout(component, onChange)}
                         title={legendHeuristic.hint}
@@ -2839,10 +2839,10 @@ function renderComponentConfig(
     );
 
     const renderCompactPresetRow = () => (
-        <div className="property-row">
-            <label className="property-label">小屏预设</label>
+        <div className="flex items-center mb-3">
+            <label className="w-20 text-xs text-text-secondary">小屏预设</label>
             <select
-                className="property-input"
+                className="flex-1 px-2.5 py-1.5 border border-border-default rounded bg-surface-card text-text-primary text-xs focus:outline-none focus:border-brand"
                 value={(config.compactLayoutPreset as string) || 'auto'}
                 onChange={(e) => onChange('compactLayoutPreset', e.target.value)}
             >
@@ -2857,11 +2857,11 @@ function renderComponentConfig(
             <div style={{ fontSize: 11, color: '#888', marginTop: 8, marginBottom: 4 }}>
                 图形留白(像素)
             </div>
-            <div className="property-row">
-                <label className="property-label">上留白</label>
+            <div className="flex items-center mb-3">
+                <label className="w-20 text-xs text-text-secondary">上留白</label>
                 <input
                     type="number"
-                    className="property-input"
+                    className="flex-1 px-2.5 py-1.5 border border-border-default rounded bg-surface-card text-text-primary text-xs focus:outline-none focus:border-brand"
                     min={0}
                     max={300}
                     value={(config.chartPaddingTop as number) || 0}
@@ -2869,11 +2869,11 @@ function renderComponentConfig(
                     placeholder="0=自动"
                 />
             </div>
-            <div className="property-row">
-                <label className="property-label">右留白</label>
+            <div className="flex items-center mb-3">
+                <label className="w-20 text-xs text-text-secondary">右留白</label>
                 <input
                     type="number"
-                    className="property-input"
+                    className="flex-1 px-2.5 py-1.5 border border-border-default rounded bg-surface-card text-text-primary text-xs focus:outline-none focus:border-brand"
                     min={0}
                     max={300}
                     value={(config.chartPaddingRight as number) || 0}
@@ -2881,11 +2881,11 @@ function renderComponentConfig(
                     placeholder="0=自动"
                 />
             </div>
-            <div className="property-row">
-                <label className="property-label">下留白</label>
+            <div className="flex items-center mb-3">
+                <label className="w-20 text-xs text-text-secondary">下留白</label>
                 <input
                     type="number"
-                    className="property-input"
+                    className="flex-1 px-2.5 py-1.5 border border-border-default rounded bg-surface-card text-text-primary text-xs focus:outline-none focus:border-brand"
                     min={0}
                     max={300}
                     value={(config.chartPaddingBottom as number) || 0}
@@ -2893,11 +2893,11 @@ function renderComponentConfig(
                     placeholder="0=自动"
                 />
             </div>
-            <div className="property-row">
-                <label className="property-label">左留白</label>
+            <div className="flex items-center mb-3">
+                <label className="w-20 text-xs text-text-secondary">左留白</label>
                 <input
                     type="number"
-                    className="property-input"
+                    className="flex-1 px-2.5 py-1.5 border border-border-default rounded bg-surface-card text-text-primary text-xs focus:outline-none focus:border-brand"
                     min={0}
                     max={300}
                     value={(config.chartPaddingLeft as number) || 0}
@@ -2905,11 +2905,11 @@ function renderComponentConfig(
                     placeholder="0=自动"
                 />
             </div>
-            <div className="property-row">
-                <label className="property-label">图形布局</label>
+            <div className="flex items-center mb-3">
+                <label className="w-20 text-xs text-text-secondary">图形布局</label>
                 <button
                     type="button"
-                    className="property-input"
+                    className="flex-1 px-2.5 py-1.5 border border-border-default rounded bg-surface-card text-text-primary text-xs focus:outline-none focus:border-brand"
                     onClick={() => {
                         onChange('chartPaddingTop', 0);
                         onChange('chartPaddingRight', 0);
@@ -2930,41 +2930,41 @@ function renderComponentConfig(
             <div style={{ fontSize: 11, color: '#888', marginTop: 8, marginBottom: 4 }}>
                 图形位置微调
             </div>
-            <div className="property-row">
-                <label className="property-label">启用拖拽微调</label>
+            <div className="flex items-center mb-3">
+                <label className="w-20 text-xs text-text-secondary">启用拖拽微调</label>
                 <input
                     type="checkbox"
                     checked={config.chartDragEnabled === true}
                     onChange={(e) => onChange('chartDragEnabled', e.target.checked)}
                 />
             </div>
-            <div className="property-row">
-                <label className="property-label">水平偏移</label>
+            <div className="flex items-center mb-3">
+                <label className="w-20 text-xs text-text-secondary">水平偏移</label>
                 <input
                     type="number"
-                    className="property-input"
+                    className="flex-1 px-2.5 py-1.5 border border-border-default rounded bg-surface-card text-text-primary text-xs focus:outline-none focus:border-brand"
                     min={-400}
                     max={400}
                     value={(config.chartOffsetX as number) || 0}
                     onChange={(e) => onChange('chartOffsetX', Number(e.target.value))}
                 />
             </div>
-            <div className="property-row">
-                <label className="property-label">垂直偏移</label>
+            <div className="flex items-center mb-3">
+                <label className="w-20 text-xs text-text-secondary">垂直偏移</label>
                 <input
                     type="number"
-                    className="property-input"
+                    className="flex-1 px-2.5 py-1.5 border border-border-default rounded bg-surface-card text-text-primary text-xs focus:outline-none focus:border-brand"
                     min={-400}
                     max={400}
                     value={(config.chartOffsetY as number) || 0}
                     onChange={(e) => onChange('chartOffsetY', Number(e.target.value))}
                 />
             </div>
-            <div className="property-row">
-                <label className="property-label">图形偏移</label>
+            <div className="flex items-center mb-3">
+                <label className="w-20 text-xs text-text-secondary">图形偏移</label>
                 <button
                     type="button"
-                    className="property-input"
+                    className="flex-1 px-2.5 py-1.5 border border-border-default rounded bg-surface-card text-text-primary text-xs focus:outline-none focus:border-brand"
                     onClick={() => {
                         onChange('chartOffsetX', 0);
                         onChange('chartOffsetY', 0);
@@ -2973,11 +2973,11 @@ function renderComponentConfig(
                     重置为自动
                 </button>
             </div>
-            <div className="property-row">
-                <label className="property-label">图形缩放(%)</label>
+            <div className="flex items-center mb-3">
+                <label className="w-20 text-xs text-text-secondary">图形缩放(%)</label>
                 <input
                     type="number"
-                    className="property-input"
+                    className="flex-1 px-2.5 py-1.5 border border-border-default rounded bg-surface-card text-text-primary text-xs focus:outline-none focus:border-brand"
                     min={40}
                     max={180}
                     value={(config.chartScalePercent as number) || 100}
@@ -2992,22 +2992,22 @@ function renderComponentConfig(
             <div style={{ fontSize: 11, color: '#888', marginTop: 8, marginBottom: 4 }}>
                 轴标签防拥挤
             </div>
-            <div className="property-row">
-                <label className="property-label">X轴标签角度</label>
+            <div className="flex items-center mb-3">
+                <label className="w-20 text-xs text-text-secondary">X轴标签角度</label>
                 <input
                     type="number"
-                    className="property-input"
+                    className="flex-1 px-2.5 py-1.5 border border-border-default rounded bg-surface-card text-text-primary text-xs focus:outline-none focus:border-brand"
                     min={-90}
                     max={90}
                     value={(config.xAxisLabelRotate as number) || 0}
                     onChange={(e) => onChange('xAxisLabelRotate', Number(e.target.value))}
                 />
             </div>
-            <div className="property-row">
-                <label className="property-label">X轴最大字数</label>
+            <div className="flex items-center mb-3">
+                <label className="w-20 text-xs text-text-secondary">X轴最大字数</label>
                 <input
                     type="number"
-                    className="property-input"
+                    className="flex-1 px-2.5 py-1.5 border border-border-default rounded bg-surface-card text-text-primary text-xs focus:outline-none focus:border-brand"
                     min={0}
                     max={40}
                     value={(config.xAxisLabelMaxLength as number) || 0}
@@ -3015,11 +3015,11 @@ function renderComponentConfig(
                     placeholder="0=不限"
                 />
             </div>
-            <div className="property-row">
-                <label className="property-label">X轴抽样间隔</label>
+            <div className="flex items-center mb-3">
+                <label className="w-20 text-xs text-text-secondary">X轴抽样间隔</label>
                 <input
                     type="number"
-                    className="property-input"
+                    className="flex-1 px-2.5 py-1.5 border border-border-default rounded bg-surface-card text-text-primary text-xs focus:outline-none focus:border-brand"
                     min={0}
                     max={200}
                     value={(config.xAxisLabelInterval as number) || 0}
@@ -3027,10 +3027,10 @@ function renderComponentConfig(
                     placeholder="0=自动"
                 />
             </div>
-            <div className="property-row">
-                <label className="property-label">标签系列策略</label>
+            <div className="flex items-center mb-3">
+                <label className="w-20 text-xs text-text-secondary">标签系列策略</label>
                 <select
-                    className="property-input"
+                    className="flex-1 px-2.5 py-1.5 border border-border-default rounded bg-surface-card text-text-primary text-xs focus:outline-none focus:border-brand"
                     value={(config.axisSeriesLabelStrategy as string) || 'auto'}
                     onChange={(e) => onChange('axisSeriesLabelStrategy', e.target.value)}
                 >
@@ -3040,11 +3040,11 @@ function renderComponentConfig(
                     <option value="none">隐藏标签</option>
                 </select>
             </div>
-            <div className="property-row">
-                <label className="property-label">标签步长</label>
+            <div className="flex items-center mb-3">
+                <label className="w-20 text-xs text-text-secondary">标签步长</label>
                 <input
                     type="number"
-                    className="property-input"
+                    className="flex-1 px-2.5 py-1.5 border border-border-default rounded bg-surface-card text-text-primary text-xs focus:outline-none focus:border-brand"
                     min={0}
                     max={200}
                     value={(config.axisSeriesLabelStep as number) || 0}
@@ -3052,11 +3052,11 @@ function renderComponentConfig(
                     placeholder="0=自动"
                 />
             </div>
-            <div className="property-row">
-                <label className="property-label">Tooltip行数</label>
+            <div className="flex items-center mb-3">
+                <label className="w-20 text-xs text-text-secondary">Tooltip行数</label>
                 <input
                     type="number"
-                    className="property-input"
+                    className="flex-1 px-2.5 py-1.5 border border-border-default rounded bg-surface-card text-text-primary text-xs focus:outline-none focus:border-brand"
                     min={0}
                     max={50}
                     value={(config.axisTooltipMaxRows as number) || 0}
@@ -3072,10 +3072,10 @@ function renderComponentConfig(
             <div style={{ fontSize: 11, color: '#888', marginTop: 8, marginBottom: 4 }}>
                 数据标签
             </div>
-            <div className="property-row">
-                <label className="property-label">标签位置</label>
+            <div className="flex items-center mb-3">
+                <label className="w-20 text-xs text-text-secondary">标签位置</label>
                 <select
-                    className="property-input"
+                    className="flex-1 px-2.5 py-1.5 border border-border-default rounded bg-surface-card text-text-primary text-xs focus:outline-none focus:border-brand"
                     value={(config.seriesLabelPosition as string) || 'auto'}
                     onChange={(e) => onChange('seriesLabelPosition', e.target.value)}
                 >
@@ -3085,11 +3085,11 @@ function renderComponentConfig(
                     <option value="none">隐藏</option>
                 </select>
             </div>
-            <div className="property-row">
-                <label className="property-label">标签字号</label>
+            <div className="flex items-center mb-3">
+                <label className="w-20 text-xs text-text-secondary">标签字号</label>
                 <input
                     type="number"
-                    className="property-input"
+                    className="flex-1 px-2.5 py-1.5 border border-border-default rounded bg-surface-card text-text-primary text-xs focus:outline-none focus:border-brand"
                     min={10}
                     max={28}
                     value={(config.seriesLabelFontSize as number) || 12}
@@ -3098,11 +3098,11 @@ function renderComponentConfig(
             </div>
             {(options?.includeLeaderLines ?? true) ? (
                 <>
-                    <div className="property-row">
-                        <label className="property-label">标签最小角度</label>
+                    <div className="flex items-center mb-3">
+                        <label className="w-20 text-xs text-text-secondary">标签最小角度</label>
                         <input
                             type="number"
-                            className="property-input"
+                            className="flex-1 px-2.5 py-1.5 border border-border-default rounded bg-surface-card text-text-primary text-xs focus:outline-none focus:border-brand"
                             min={0}
                             max={45}
                             value={(config.seriesLabelMinAngle as number) || 0}
@@ -3110,11 +3110,11 @@ function renderComponentConfig(
                             placeholder="0=自动"
                         />
                     </div>
-                    <div className="property-row">
-                        <label className="property-label">引导线长度1</label>
+                    <div className="flex items-center mb-3">
+                        <label className="w-20 text-xs text-text-secondary">引导线长度1</label>
                         <input
                             type="number"
-                            className="property-input"
+                            className="flex-1 px-2.5 py-1.5 border border-border-default rounded bg-surface-card text-text-primary text-xs focus:outline-none focus:border-brand"
                             min={0}
                             max={60}
                             value={(config.seriesLabelLineLength as number) || 0}
@@ -3122,11 +3122,11 @@ function renderComponentConfig(
                             placeholder="0=自动"
                         />
                     </div>
-                    <div className="property-row">
-                        <label className="property-label">引导线长度2</label>
+                    <div className="flex items-center mb-3">
+                        <label className="w-20 text-xs text-text-secondary">引导线长度2</label>
                         <input
                             type="number"
-                            className="property-input"
+                            className="flex-1 px-2.5 py-1.5 border border-border-default rounded bg-surface-card text-text-primary text-xs focus:outline-none focus:border-brand"
                             min={0}
                             max={60}
                             value={(config.seriesLabelLineLength2 as number) || 0}
@@ -3144,20 +3144,20 @@ function renderComponentConfig(
         case 'bar-chart':
             return (
                 <>
-                    <div className="property-row">
-                        <label className="property-label">标题</label>
+                    <div className="flex items-center mb-3">
+                        <label className="w-20 text-xs text-text-secondary">标题</label>
                         <input
                             type="text"
-                            className="property-input"
+                            className="flex-1 px-2.5 py-1.5 border border-border-default rounded bg-surface-card text-text-primary text-xs focus:outline-none focus:border-brand"
                             value={config.title as string}
                             onChange={(e) => onChange('title', e.target.value)}
                         />
                     </div>
-                    <div className="property-row">
-                        <label className="property-label">标题字号</label>
+                    <div className="flex items-center mb-3">
+                        <label className="w-20 text-xs text-text-secondary">标题字号</label>
                         <input
                             type="number"
-                            className="property-input"
+                            className="flex-1 px-2.5 py-1.5 border border-border-default rounded bg-surface-card text-text-primary text-xs focus:outline-none focus:border-brand"
                             min={10}
                             max={36}
                             value={(config.titleFontSize as number) || 14}
@@ -3165,41 +3165,41 @@ function renderComponentConfig(
                         />
                     </div>
                     {renderChartTitleLayoutRows(config as Record<string, unknown>, onChange)}
-                    <div className="property-row">
-                        <label className="property-label">坐标轴字号</label>
+                    <div className="flex items-center mb-3">
+                        <label className="w-20 text-xs text-text-secondary">坐标轴字号</label>
                         <input
                             type="number"
-                            className="property-input"
+                            className="flex-1 px-2.5 py-1.5 border border-border-default rounded bg-surface-card text-text-primary text-xs focus:outline-none focus:border-brand"
                             min={10}
                             max={28}
                             value={(config.axisFontSize as number) || 12}
                             onChange={(e) => onChange('axisFontSize', Number(e.target.value))}
                         />
                     </div>
-                    <div className="property-row">
-                        <label className="property-label">坐标轴颜色</label>
+                    <div className="flex items-center mb-3">
+                        <label className="w-20 text-xs text-text-secondary">坐标轴颜色</label>
                         <input
                             type="color"
-                            className="property-color-input"
+                            className="w-8 h-7 border border-border-default rounded cursor-pointer p-0"
                             value={(config.axisLabelColor as string) || '#6b7280'}
                             onChange={(e) => onChange('axisLabelColor', e.target.value)}
                         />
                     </div>
-                    <div className="property-row">
-                        <label className="property-label">图例字号</label>
+                    <div className="flex items-center mb-3">
+                        <label className="w-20 text-xs text-text-secondary">图例字号</label>
                         <input
                             type="number"
-                            className="property-input"
+                            className="flex-1 px-2.5 py-1.5 border border-border-default rounded bg-surface-card text-text-primary text-xs focus:outline-none focus:border-brand"
                             min={10}
                             max={28}
                             value={(config.legendFontSize as number) || 12}
                             onChange={(e) => onChange('legendFontSize', Number(e.target.value))}
                         />
                     </div>
-                    <div className="property-row">
-                        <label className="property-label">图例位置</label>
+                    <div className="flex items-center mb-3">
+                        <label className="w-20 text-xs text-text-secondary">图例位置</label>
                         <select
-                            className="property-input"
+                            className="flex-1 px-2.5 py-1.5 border border-border-default rounded bg-surface-card text-text-primary text-xs focus:outline-none focus:border-brand"
                             value={(config.legendPosition as string) || 'auto'}
                             onChange={(e) => onChange('legendPosition', e.target.value)}
                         >
@@ -3240,20 +3240,20 @@ function renderComponentConfig(
         case 'funnel-chart':
             return (
                 <>
-                    <div className="property-row">
-                        <label className="property-label">标题</label>
+                    <div className="flex items-center mb-3">
+                        <label className="w-20 text-xs text-text-secondary">标题</label>
                         <input
                             type="text"
-                            className="property-input"
+                            className="flex-1 px-2.5 py-1.5 border border-border-default rounded bg-surface-card text-text-primary text-xs focus:outline-none focus:border-brand"
                             value={config.title as string}
                             onChange={(e) => onChange('title', e.target.value)}
                         />
                     </div>
-                    <div className="property-row">
-                        <label className="property-label">标题字号</label>
+                    <div className="flex items-center mb-3">
+                        <label className="w-20 text-xs text-text-secondary">标题字号</label>
                         <input
                             type="number"
-                            className="property-input"
+                            className="flex-1 px-2.5 py-1.5 border border-border-default rounded bg-surface-card text-text-primary text-xs focus:outline-none focus:border-brand"
                             min={10}
                             max={36}
                             value={(config.titleFontSize as number) || 14}
@@ -3263,21 +3263,21 @@ function renderComponentConfig(
                     {renderChartTitleLayoutRows(config as Record<string, unknown>, onChange)}
                     {type !== 'gauge-chart' && (
                         <>
-                            <div className="property-row">
-                                <label className="property-label">图例字号</label>
+                            <div className="flex items-center mb-3">
+                                <label className="w-20 text-xs text-text-secondary">图例字号</label>
                                 <input
                                     type="number"
-                                    className="property-input"
+                                    className="flex-1 px-2.5 py-1.5 border border-border-default rounded bg-surface-card text-text-primary text-xs focus:outline-none focus:border-brand"
                                     min={10}
                                     max={28}
                                     value={(config.legendFontSize as number) || 12}
                                     onChange={(e) => onChange('legendFontSize', Number(e.target.value))}
                                 />
                             </div>
-                            <div className="property-row">
-                                <label className="property-label">图例位置</label>
+                            <div className="flex items-center mb-3">
+                                <label className="w-20 text-xs text-text-secondary">图例位置</label>
                                 <select
-                                    className="property-input"
+                                    className="flex-1 px-2.5 py-1.5 border border-border-default rounded bg-surface-card text-text-primary text-xs focus:outline-none focus:border-brand"
                                     value={(config.legendPosition as string) || 'auto'}
                                     onChange={(e) => onChange('legendPosition', e.target.value)}
                                 >
@@ -3306,11 +3306,11 @@ function renderComponentConfig(
                         </>
                     )}
                     {type === 'gauge-chart' && (
-                        <div className="property-row">
-                            <label className="property-label">值</label>
+                        <div className="flex items-center mb-3">
+                            <label className="w-20 text-xs text-text-secondary">值</label>
                             <input
                                 type="number"
-                                className="property-input"
+                                className="flex-1 px-2.5 py-1.5 border border-border-default rounded bg-surface-card text-text-primary text-xs focus:outline-none focus:border-brand"
                                 value={config.value as number}
                                 onChange={(e) => onChange('value', Number(e.target.value))}
                             />
@@ -3322,78 +3322,78 @@ function renderComponentConfig(
         case 'number-card':
             return (
                 <>
-                    <div className="property-row">
-                        <label className="property-label">标题</label>
+                    <div className="flex items-center mb-3">
+                        <label className="w-20 text-xs text-text-secondary">标题</label>
                         <input
                             type="text"
-                            className="property-input"
+                            className="flex-1 px-2.5 py-1.5 border border-border-default rounded bg-surface-card text-text-primary text-xs focus:outline-none focus:border-brand"
                             value={config.title as string}
                             onChange={(e) => onChange('title', e.target.value)}
                         />
                     </div>
-                    <div className="property-row">
-                        <label className="property-label">数值</label>
+                    <div className="flex items-center mb-3">
+                        <label className="w-20 text-xs text-text-secondary">数值</label>
                         <input
                             type="number"
-                            className="property-input"
+                            className="flex-1 px-2.5 py-1.5 border border-border-default rounded bg-surface-card text-text-primary text-xs focus:outline-none focus:border-brand"
                             value={config.value as number}
                             onChange={(e) => onChange('value', Number(e.target.value))}
                         />
                     </div>
-                    <div className="property-row">
-                        <label className="property-label">前缀</label>
+                    <div className="flex items-center mb-3">
+                        <label className="w-20 text-xs text-text-secondary">前缀</label>
                         <input
                             type="text"
-                            className="property-input"
+                            className="flex-1 px-2.5 py-1.5 border border-border-default rounded bg-surface-card text-text-primary text-xs focus:outline-none focus:border-brand"
                             value={config.prefix as string}
                             onChange={(e) => onChange('prefix', e.target.value)}
                         />
                     </div>
-                    <div className="property-row">
-                        <label className="property-label">标题字号</label>
+                    <div className="flex items-center mb-3">
+                        <label className="w-20 text-xs text-text-secondary">标题字号</label>
                         <input
                             type="number"
-                            className="property-input"
+                            className="flex-1 px-2.5 py-1.5 border border-border-default rounded bg-surface-card text-text-primary text-xs focus:outline-none focus:border-brand"
                             min={10}
                             max={36}
                             value={(config.titleFontSize as number) || 12}
                             onChange={(e) => onChange('titleFontSize', Number(e.target.value))}
                         />
                     </div>
-                    <div className="property-row">
-                        <label className="property-label">数值字号</label>
+                    <div className="flex items-center mb-3">
+                        <label className="w-20 text-xs text-text-secondary">数值字号</label>
                         <input
                             type="number"
-                            className="property-input"
+                            className="flex-1 px-2.5 py-1.5 border border-border-default rounded bg-surface-card text-text-primary text-xs focus:outline-none focus:border-brand"
                             min={16}
                             max={72}
                             value={(config.valueFontSize as number) || 32}
                             onChange={(e) => onChange('valueFontSize', Number(e.target.value))}
                         />
                     </div>
-                    <div className="property-row">
-                        <label className="property-label">标题颜色</label>
+                    <div className="flex items-center mb-3">
+                        <label className="w-20 text-xs text-text-secondary">标题颜色</label>
                         <input
                             type="color"
-                            className="property-color-input"
+                            className="w-8 h-7 border border-border-default rounded cursor-pointer p-0"
                             value={(config.titleColor as string) || '#ffffff'}
                             onChange={(e) => onChange('titleColor', e.target.value)}
                         />
                     </div>
-                    <div className="property-row">
-                        <label className="property-label">数值颜色</label>
+                    <div className="flex items-center mb-3">
+                        <label className="w-20 text-xs text-text-secondary">数值颜色</label>
                         <input
                             type="color"
-                            className="property-color-input"
+                            className="w-8 h-7 border border-border-default rounded cursor-pointer p-0"
                             value={(config.valueColor as string) || '#ffffff'}
                             onChange={(e) => onChange('valueColor', e.target.value)}
                         />
                     </div>
-                    <div className="property-row">
-                        <label className="property-label">背景色</label>
+                    <div className="flex items-center mb-3">
+                        <label className="w-20 text-xs text-text-secondary">背景色</label>
                         <input
                             type="color"
-                            className="property-color-input"
+                            className="w-8 h-7 border border-border-default rounded cursor-pointer p-0"
                             value={(config.backgroundColor as string) || '#1a1a2e'}
                             onChange={(e) => onChange('backgroundColor', e.target.value)}
                         />
@@ -3404,29 +3404,29 @@ function renderComponentConfig(
         case 'title':
             return (
                 <>
-                    <div className="property-row">
-                        <label className="property-label">文本</label>
+                    <div className="flex items-center mb-3">
+                        <label className="w-20 text-xs text-text-secondary">文本</label>
                         <input
                             type="text"
-                            className="property-input"
+                            className="flex-1 px-2.5 py-1.5 border border-border-default rounded bg-surface-card text-text-primary text-xs focus:outline-none focus:border-brand"
                             value={config.text as string}
                             onChange={(e) => onChange('text', e.target.value)}
                         />
                     </div>
-                    <div className="property-row">
-                        <label className="property-label">字号</label>
+                    <div className="flex items-center mb-3">
+                        <label className="w-20 text-xs text-text-secondary">字号</label>
                         <input
                             type="number"
-                            className="property-input"
+                            className="flex-1 px-2.5 py-1.5 border border-border-default rounded bg-surface-card text-text-primary text-xs focus:outline-none focus:border-brand"
                             value={config.fontSize as number}
                             onChange={(e) => onChange('fontSize', Number(e.target.value))}
                         />
                     </div>
-                    <div className="property-row">
-                        <label className="property-label">颜色</label>
+                    <div className="flex items-center mb-3">
+                        <label className="w-20 text-xs text-text-secondary">颜色</label>
                         <input
                             type="color"
-                            className="property-color-input"
+                            className="w-8 h-7 border border-border-default rounded cursor-pointer p-0"
                             value={config.color as string}
                             onChange={(e) => onChange('color', e.target.value)}
                         />
@@ -3437,20 +3437,20 @@ function renderComponentConfig(
         case 'markdown-text':
             return (
                 <>
-                    <div className="property-row">
-                        <label className="property-label">Markdown</label>
+                    <div className="flex items-center mb-3">
+                        <label className="w-20 text-xs text-text-secondary">Markdown</label>
                         <textarea
-                            className="property-input"
+                            className="flex-1 px-2.5 py-1.5 border border-border-default rounded bg-surface-card text-text-primary text-xs focus:outline-none focus:border-brand"
                             rows={8}
                             value={(config.markdown as string) || ''}
                             onChange={(e) => onChange('markdown', e.target.value)}
                         />
                     </div>
-                    <div className="property-row">
-                        <label className="property-label">字号</label>
+                    <div className="flex items-center mb-3">
+                        <label className="w-20 text-xs text-text-secondary">字号</label>
                         <input
                             type="number"
-                            className="property-input"
+                            className="flex-1 px-2.5 py-1.5 border border-border-default rounded bg-surface-card text-text-primary text-xs focus:outline-none focus:border-brand"
                             min={10}
                             max={36}
                             value={(config.fontSize as number) || 14}
@@ -3463,30 +3463,30 @@ function renderComponentConfig(
         case 'richtext':
             return (
                 <>
-                    <div className="property-row">
-                        <label className="property-label">HTML 内容</label>
+                    <div className="flex items-center mb-3">
+                        <label className="w-20 text-xs text-text-secondary">HTML 内容</label>
                         <textarea
-                            className="property-input"
+                            className="flex-1 px-2.5 py-1.5 border border-border-default rounded bg-surface-card text-text-primary text-xs focus:outline-none focus:border-brand"
                             rows={8}
                             value={(config.content as string) || ''}
                             onChange={(e) => onChange('content', e.target.value)}
                         />
                     </div>
-                    <div className="property-row">
-                        <label className="property-label">内边距</label>
+                    <div className="flex items-center mb-3">
+                        <label className="w-20 text-xs text-text-secondary">内边距</label>
                         <input
                             type="number"
-                            className="property-input"
+                            className="flex-1 px-2.5 py-1.5 border border-border-default rounded bg-surface-card text-text-primary text-xs focus:outline-none focus:border-brand"
                             min={0}
                             max={60}
                             value={(config.padding as number) ?? 12}
                             onChange={(e) => onChange('padding', Number(e.target.value))}
                         />
                     </div>
-                    <div className="property-row">
-                        <label className="property-label">垂直对齐</label>
+                    <div className="flex items-center mb-3">
+                        <label className="w-20 text-xs text-text-secondary">垂直对齐</label>
                         <select
-                            className="property-input"
+                            className="flex-1 px-2.5 py-1.5 border border-border-default rounded bg-surface-card text-text-primary text-xs focus:outline-none focus:border-brand"
                             value={(config.verticalAlign as string) || 'top'}
                             onChange={(e) => onChange('verticalAlign', e.target.value)}
                         >
@@ -3495,10 +3495,10 @@ function renderComponentConfig(
                             <option value="bottom">底部</option>
                         </select>
                     </div>
-                    <div className="property-row">
-                        <label className="property-label">溢出</label>
+                    <div className="flex items-center mb-3">
+                        <label className="w-20 text-xs text-text-secondary">溢出</label>
                         <select
-                            className="property-input"
+                            className="flex-1 px-2.5 py-1.5 border border-border-default rounded bg-surface-card text-text-primary text-xs focus:outline-none focus:border-brand"
                             value={(config.overflow as string) || 'hidden'}
                             onChange={(e) => onChange('overflow', e.target.value)}
                         >
@@ -3513,20 +3513,20 @@ function renderComponentConfig(
         case 'datetime':
             return (
                 <>
-                    <div className="property-row">
-                        <label className="property-label">格式</label>
+                    <div className="flex items-center mb-3">
+                        <label className="w-20 text-xs text-text-secondary">格式</label>
                         <input
                             type="text"
-                            className="property-input"
+                            className="flex-1 px-2.5 py-1.5 border border-border-default rounded bg-surface-card text-text-primary text-xs focus:outline-none focus:border-brand"
                             value={config.format as string}
                             onChange={(e) => onChange('format', e.target.value)}
                         />
                     </div>
-                    <div className="property-row">
-                        <label className="property-label">字号</label>
+                    <div className="flex items-center mb-3">
+                        <label className="w-20 text-xs text-text-secondary">字号</label>
                         <input
                             type="number"
-                            className="property-input"
+                            className="flex-1 px-2.5 py-1.5 border border-border-default rounded bg-surface-card text-text-primary text-xs focus:outline-none focus:border-brand"
                             value={config.fontSize as number}
                             onChange={(e) => onChange('fontSize', Number(e.target.value))}
                         />
@@ -3537,20 +3537,20 @@ function renderComponentConfig(
         case 'countdown':
             return (
                 <>
-                    <div className="property-row">
-                        <label className="property-label">标题</label>
+                    <div className="flex items-center mb-3">
+                        <label className="w-20 text-xs text-text-secondary">标题</label>
                         <input
                             type="text"
-                            className="property-input"
+                            className="flex-1 px-2.5 py-1.5 border border-border-default rounded bg-surface-card text-text-primary text-xs focus:outline-none focus:border-brand"
                             value={(config.title as string) || '倒计时'}
                             onChange={(e) => onChange('title', e.target.value)}
                         />
                     </div>
-                    <div className="property-row">
-                        <label className="property-label">目标时间</label>
+                    <div className="flex items-center mb-3">
+                        <label className="w-20 text-xs text-text-secondary">目标时间</label>
                         <input
                             type="datetime-local"
-                            className="property-input"
+                            className="flex-1 px-2.5 py-1.5 border border-border-default rounded bg-surface-card text-text-primary text-xs focus:outline-none focus:border-brand"
                             value={String(config.targetTime || '').replace('Z', '').slice(0, 16)}
                             onChange={(e) => {
                                 const raw = String(e.target.value || '').trim();
@@ -3565,18 +3565,18 @@ function renderComponentConfig(
                             }}
                         />
                     </div>
-                    <div className="property-row">
-                        <label className="property-label">目标时间变量</label>
+                    <div className="flex items-center mb-3">
+                        <label className="w-20 text-xs text-text-secondary">目标时间变量</label>
                         <input
                             type="text"
-                            className="property-input"
+                            className="flex-1 px-2.5 py-1.5 border border-border-default rounded bg-surface-card text-text-primary text-xs focus:outline-none focus:border-brand"
                             value={(config.targetVariableKey as string) || ''}
                             onChange={(e) => onChange('targetVariableKey', e.target.value)}
                             placeholder="releaseDeadline"
                         />
                     </div>
-                    <div className="property-row">
-                        <label className="property-label">显示天数</label>
+                    <div className="flex items-center mb-3">
+                        <label className="w-20 text-xs text-text-secondary">显示天数</label>
                         <input
                             type="checkbox"
                             checked={config.showDays !== false}
@@ -3589,20 +3589,20 @@ function renderComponentConfig(
         case 'marquee':
             return (
                 <>
-                    <div className="property-row">
-                        <label className="property-label">文本</label>
+                    <div className="flex items-center mb-3">
+                        <label className="w-20 text-xs text-text-secondary">文本</label>
                         <textarea
-                            className="property-input"
+                            className="flex-1 px-2.5 py-1.5 border border-border-default rounded bg-surface-card text-text-primary text-xs focus:outline-none focus:border-brand"
                             rows={4}
                             value={(config.text as string) || ''}
                             onChange={(e) => onChange('text', e.target.value)}
                         />
                     </div>
-                    <div className="property-row">
-                        <label className="property-label">速度(秒)</label>
+                    <div className="flex items-center mb-3">
+                        <label className="w-20 text-xs text-text-secondary">速度(秒)</label>
                         <input
                             type="number"
-                            className="property-input"
+                            className="flex-1 px-2.5 py-1.5 border border-border-default rounded bg-surface-card text-text-primary text-xs focus:outline-none focus:border-brand"
                             min={10}
                             max={120}
                             value={(config.speed as number) || 40}
@@ -3615,19 +3615,19 @@ function renderComponentConfig(
         case 'carousel':
             return (
                 <>
-                    <div className="property-row">
-                        <label className="property-label">标题</label>
+                    <div className="flex items-center mb-3">
+                        <label className="w-20 text-xs text-text-secondary">标题</label>
                         <input
                             type="text"
-                            className="property-input"
+                            className="flex-1 px-2.5 py-1.5 border border-border-default rounded bg-surface-card text-text-primary text-xs focus:outline-none focus:border-brand"
                             value={(config.title as string) || '轮播卡片'}
                             onChange={(e) => onChange('title', e.target.value)}
                         />
                     </div>
-                    <div className="property-row">
-                        <label className="property-label">内容来源</label>
+                    <div className="flex items-center mb-3">
+                        <label className="w-20 text-xs text-text-secondary">内容来源</label>
                         <select
-                            className="property-input"
+                            className="flex-1 px-2.5 py-1.5 border border-border-default rounded bg-surface-card text-text-primary text-xs focus:outline-none focus:border-brand"
                             value={(config.itemSourceMode as string) || 'auto'}
                             onChange={(e) => onChange('itemSourceMode', e.target.value)}
                         >
@@ -3636,10 +3636,10 @@ function renderComponentConfig(
                             <option value="data">数据内容</option>
                         </select>
                     </div>
-                    <div className="property-row">
-                        <label className="property-label">轮播内容</label>
+                    <div className="flex items-center mb-3">
+                        <label className="w-20 text-xs text-text-secondary">轮播内容</label>
                         <textarea
-                            className="property-input"
+                            className="flex-1 px-2.5 py-1.5 border border-border-default rounded bg-surface-card text-text-primary text-xs focus:outline-none focus:border-brand"
                             rows={6}
                             value={Array.isArray(config.items) ? config.items.map((item) => String(item ?? '')).join('\n') : String(config.items ?? '')}
                             onChange={(e) => {
@@ -3653,40 +3653,40 @@ function renderComponentConfig(
                             placeholder="每行一条，例如：\n设备在线率 99.2%\n昨日告警 6 条"
                         />
                     </div>
-                    <div className="property-row">
-                        <label className="property-label">轮播间隔(秒)</label>
+                    <div className="flex items-center mb-3">
+                        <label className="w-20 text-xs text-text-secondary">轮播间隔(秒)</label>
                         <input
                             type="number"
-                            className="property-input"
+                            className="flex-1 px-2.5 py-1.5 border border-border-default rounded bg-surface-card text-text-primary text-xs focus:outline-none focus:border-brand"
                             min={1}
                             max={120}
                             value={(config.intervalSeconds as number) || 4}
                             onChange={(e) => onChange('intervalSeconds', Number(e.target.value))}
                         />
                     </div>
-                    <div className="property-row">
-                        <label className="property-label">自动轮播</label>
+                    <div className="flex items-center mb-3">
+                        <label className="w-20 text-xs text-text-secondary">自动轮播</label>
                         <input
                             type="checkbox"
                             checked={config.autoPlay !== false}
                             onChange={(e) => onChange('autoPlay', e.target.checked)}
                         />
                     </div>
-                    <div className="property-row">
-                        <label className="property-label">数据内容列</label>
+                    <div className="flex items-center mb-3">
+                        <label className="w-20 text-xs text-text-secondary">数据内容列</label>
                         <input
                             type="text"
-                            className="property-input"
+                            className="flex-1 px-2.5 py-1.5 border border-border-default rounded bg-surface-card text-text-primary text-xs focus:outline-none focus:border-brand"
                             value={(config.dataItemField as string) || ''}
                             onChange={(e) => onChange('dataItemField', e.target.value)}
                             placeholder="列名/显示名/序号(1开始)"
                         />
                     </div>
-                    <div className="property-row">
-                        <label className="property-label">数据行上限</label>
+                    <div className="flex items-center mb-3">
+                        <label className="w-20 text-xs text-text-secondary">数据行上限</label>
                         <input
                             type="number"
-                            className="property-input"
+                            className="flex-1 px-2.5 py-1.5 border border-border-default rounded bg-surface-card text-text-primary text-xs focus:outline-none focus:border-brand"
                             min={1}
                             max={500}
                             value={(config.dataItemMax as number) || 50}
@@ -3694,24 +3694,24 @@ function renderComponentConfig(
                             placeholder="数据源接入时生效"
                         />
                     </div>
-                    <div className="property-row">
-                        <label className="property-label">显示切换按钮</label>
+                    <div className="flex items-center mb-3">
+                        <label className="w-20 text-xs text-text-secondary">显示切换按钮</label>
                         <input
                             type="checkbox"
                             checked={config.showControls !== false}
                             onChange={(e) => onChange('showControls', e.target.checked)}
                         />
                     </div>
-                    <div className="property-row">
-                        <label className="property-label">悬停暂停</label>
+                    <div className="flex items-center mb-3">
+                        <label className="w-20 text-xs text-text-secondary">悬停暂停</label>
                         <input
                             type="checkbox"
                             checked={config.pauseOnHover !== false}
                             onChange={(e) => onChange('pauseOnHover', e.target.checked)}
                         />
                     </div>
-                    <div className="property-row">
-                        <label className="property-label">显示指示点</label>
+                    <div className="flex items-center mb-3">
+                        <label className="w-20 text-xs text-text-secondary">显示指示点</label>
                         <input
                             type="checkbox"
                             checked={config.showDots !== false}
@@ -3724,29 +3724,29 @@ function renderComponentConfig(
         case 'tab-switcher':
             return (
                 <>
-                    <div className="property-row">
-                        <label className="property-label">标题</label>
+                    <div className="flex items-center mb-3">
+                        <label className="w-20 text-xs text-text-secondary">标题</label>
                         <input
                             type="text"
-                            className="property-input"
+                            className="flex-1 px-2.5 py-1.5 border border-border-default rounded bg-surface-card text-text-primary text-xs focus:outline-none focus:border-brand"
                             value={(config.label as string) || '维度切换'}
                             onChange={(e) => onChange('label', e.target.value)}
                         />
                     </div>
-                    <div className="property-row">
-                        <label className="property-label">变量Key</label>
+                    <div className="flex items-center mb-3">
+                        <label className="w-20 text-xs text-text-secondary">变量Key</label>
                         <input
                             type="text"
-                            className="property-input"
+                            className="flex-1 px-2.5 py-1.5 border border-border-default rounded bg-surface-card text-text-primary text-xs focus:outline-none focus:border-brand"
                             value={(config.variableKey as string) || ''}
                             onChange={(e) => onChange('variableKey', e.target.value)}
                             placeholder="tabKey"
                         />
                     </div>
-                    <div className="property-row">
-                        <label className="property-label">选项来源</label>
+                    <div className="flex items-center mb-3">
+                        <label className="w-20 text-xs text-text-secondary">选项来源</label>
                         <select
-                            className="property-input"
+                            className="flex-1 px-2.5 py-1.5 border border-border-default rounded bg-surface-card text-text-primary text-xs focus:outline-none focus:border-brand"
                             value={(config.optionSourceMode as string) || 'manual'}
                             onChange={(e) => onChange('optionSourceMode', e.target.value === 'data' ? 'data' : 'manual')}
                         >
@@ -3755,10 +3755,10 @@ function renderComponentConfig(
                         </select>
                     </div>
                     {(String(config.optionSourceMode || 'manual') !== 'data') ? (
-                        <div className="property-row">
-                            <label className="property-label">选项</label>
+                        <div className="flex items-center mb-3">
+                            <label className="w-20 text-xs text-text-secondary">选项</label>
                             <textarea
-                                className="property-input"
+                                className="flex-1 px-2.5 py-1.5 border border-border-default rounded bg-surface-card text-text-primary text-xs focus:outline-none focus:border-brand"
                                 rows={6}
                                 value={Array.isArray(config.options)
                                     ? config.options.map((item) => {
@@ -3795,31 +3795,31 @@ function renderComponentConfig(
                         </div>
                     ) : (
                         <>
-                            <div className="property-row">
-                                <label className="property-label">标签列</label>
+                            <div className="flex items-center mb-3">
+                                <label className="w-20 text-xs text-text-secondary">标签列</label>
                                 <input
                                     type="text"
-                                    className="property-input"
+                                    className="flex-1 px-2.5 py-1.5 border border-border-default rounded bg-surface-card text-text-primary text-xs focus:outline-none focus:border-brand"
                                     value={(config.dataOptionLabelField as string) || ''}
                                     onChange={(e) => onChange('dataOptionLabelField', e.target.value)}
                                     placeholder="列名/显示名/序号(1开始)"
                                 />
                             </div>
-                            <div className="property-row">
-                                <label className="property-label">值列</label>
+                            <div className="flex items-center mb-3">
+                                <label className="w-20 text-xs text-text-secondary">值列</label>
                                 <input
                                     type="text"
-                                    className="property-input"
+                                    className="flex-1 px-2.5 py-1.5 border border-border-default rounded bg-surface-card text-text-primary text-xs focus:outline-none focus:border-brand"
                                     value={(config.dataOptionValueField as string) || ''}
                                     onChange={(e) => onChange('dataOptionValueField', e.target.value)}
                                     placeholder="列名/显示名/序号(1开始)"
                                 />
                             </div>
-                            <div className="property-row">
-                                <label className="property-label">最大选项数</label>
+                            <div className="flex items-center mb-3">
+                                <label className="w-20 text-xs text-text-secondary">最大选项数</label>
                                 <input
                                     type="number"
-                                    className="property-input"
+                                    className="flex-1 px-2.5 py-1.5 border border-border-default rounded bg-surface-card text-text-primary text-xs focus:outline-none focus:border-brand"
                                     min={1}
                                     max={500}
                                     value={(config.dataOptionMax as number) || 100}
@@ -3828,56 +3828,56 @@ function renderComponentConfig(
                             </div>
                         </>
                     )}
-                    <div className="property-row">
-                        <label className="property-label">默认值</label>
+                    <div className="flex items-center mb-3">
+                        <label className="w-20 text-xs text-text-secondary">默认值</label>
                         <input
                             type="text"
-                            className="property-input"
+                            className="flex-1 px-2.5 py-1.5 border border-border-default rounded bg-surface-card text-text-primary text-xs focus:outline-none focus:border-brand"
                             value={(config.defaultValue as string) || ''}
                             onChange={(e) => onChange('defaultValue', e.target.value)}
                             placeholder="首次加载时写入变量"
                         />
                     </div>
-                    <div className="property-row">
-                        <label className="property-label">紧凑模式</label>
+                    <div className="flex items-center mb-3">
+                        <label className="w-20 text-xs text-text-secondary">紧凑模式</label>
                         <input
                             type="checkbox"
                             checked={config.compact === true}
                             onChange={(e) => onChange('compact', e.target.checked)}
                         />
                     </div>
-                    <div className="property-row">
-                        <label className="property-label">激活背景</label>
+                    <div className="flex items-center mb-3">
+                        <label className="w-20 text-xs text-text-secondary">激活背景</label>
                         <input
                             type="color"
-                            className="property-color-input"
+                            className="w-8 h-7 border border-border-default rounded cursor-pointer p-0"
                             value={(config.activeBackgroundColor as string) || '#38bdf8'}
                             onChange={(e) => onChange('activeBackgroundColor', e.target.value)}
                         />
                     </div>
-                    <div className="property-row">
-                        <label className="property-label">激活文字</label>
+                    <div className="flex items-center mb-3">
+                        <label className="w-20 text-xs text-text-secondary">激活文字</label>
                         <input
                             type="color"
-                            className="property-color-input"
+                            className="w-8 h-7 border border-border-default rounded cursor-pointer p-0"
                             value={(config.activeTextColor as string) || '#0f172a'}
                             onChange={(e) => onChange('activeTextColor', e.target.value)}
                         />
                     </div>
-                    <div className="property-row">
-                        <label className="property-label">未激活背景</label>
+                    <div className="flex items-center mb-3">
+                        <label className="w-20 text-xs text-text-secondary">未激活背景</label>
                         <input
                             type="color"
-                            className="property-color-input"
+                            className="w-8 h-7 border border-border-default rounded cursor-pointer p-0"
                             value={(config.inactiveBackgroundColor as string) || '#1e293b'}
                             onChange={(e) => onChange('inactiveBackgroundColor', e.target.value)}
                         />
                     </div>
-                    <div className="property-row">
-                        <label className="property-label">未激活文字</label>
+                    <div className="flex items-center mb-3">
+                        <label className="w-20 text-xs text-text-secondary">未激活文字</label>
                         <input
                             type="color"
-                            className="property-color-input"
+                            className="w-8 h-7 border border-border-default rounded cursor-pointer p-0"
                             value={(config.inactiveTextColor as string) || '#94a3b8'}
                             onChange={(e) => onChange('inactiveTextColor', e.target.value)}
                         />
@@ -3888,19 +3888,19 @@ function renderComponentConfig(
         case 'progress-bar':
             return (
                 <>
-                    <div className="property-row">
-                        <label className="property-label">值 (%)</label>
+                    <div className="flex items-center mb-3">
+                        <label className="w-20 text-xs text-text-secondary">值 (%)</label>
                         <input
                             type="number"
-                            className="property-input"
+                            className="flex-1 px-2.5 py-1.5 border border-border-default rounded bg-surface-card text-text-primary text-xs focus:outline-none focus:border-brand"
                             min={0}
                             max={100}
                             value={config.value as number}
                             onChange={(e) => onChange('value', Number(e.target.value))}
                         />
                     </div>
-                    <div className="property-row">
-                        <label className="property-label">显示标签</label>
+                    <div className="flex items-center mb-3">
+                        <label className="w-20 text-xs text-text-secondary">显示标签</label>
                         <input
                             type="checkbox"
                             checked={config.showLabel as boolean}
@@ -3913,60 +3913,60 @@ function renderComponentConfig(
         case 'filter-input':
             return (
                 <>
-                    <div className="property-row">
-                        <label className="property-label">标题</label>
+                    <div className="flex items-center mb-3">
+                        <label className="w-20 text-xs text-text-secondary">标题</label>
                         <input
                             type="text"
-                            className="property-input"
+                            className="flex-1 px-2.5 py-1.5 border border-border-default rounded bg-surface-card text-text-primary text-xs focus:outline-none focus:border-brand"
                             value={(config.label as string) || '筛选'}
                             onChange={(e) => onChange('label', e.target.value)}
                         />
                     </div>
-                    <div className="property-row">
-                        <label className="property-label">变量Key</label>
+                    <div className="flex items-center mb-3">
+                        <label className="w-20 text-xs text-text-secondary">变量Key</label>
                         <input
                             type="text"
-                            className="property-input"
+                            className="flex-1 px-2.5 py-1.5 border border-border-default rounded bg-surface-card text-text-primary text-xs focus:outline-none focus:border-brand"
                             value={(config.variableKey as string) || ''}
                             onChange={(e) => onChange('variableKey', e.target.value)}
                             placeholder="keyword"
                         />
                     </div>
-                    <div className="property-row">
-                        <label className="property-label">占位</label>
+                    <div className="flex items-center mb-3">
+                        <label className="w-20 text-xs text-text-secondary">占位</label>
                         <input
                             type="text"
-                            className="property-input"
+                            className="flex-1 px-2.5 py-1.5 border border-border-default rounded bg-surface-card text-text-primary text-xs focus:outline-none focus:border-brand"
                             value={(config.placeholder as string) || ''}
                             onChange={(e) => onChange('placeholder', e.target.value)}
                             placeholder="请输入关键词"
                         />
                     </div>
-                    <div className="property-row">
-                        <label className="property-label">默认值</label>
+                    <div className="flex items-center mb-3">
+                        <label className="w-20 text-xs text-text-secondary">默认值</label>
                         <input
                             type="text"
-                            className="property-input"
+                            className="flex-1 px-2.5 py-1.5 border border-border-default rounded bg-surface-card text-text-primary text-xs focus:outline-none focus:border-brand"
                             value={(config.defaultValue as string) || ''}
                             onChange={(e) => onChange('defaultValue', e.target.value)}
                             placeholder="初始关键字"
                         />
                     </div>
-                    <div className="property-row">
-                        <label className="property-label">作用说明</label>
+                    <div className="flex items-center mb-3">
+                        <label className="w-20 text-xs text-text-secondary">作用说明</label>
                         <input
                             type="text"
-                            className="property-input"
+                            className="flex-1 px-2.5 py-1.5 border border-border-default rounded bg-surface-card text-text-primary text-xs focus:outline-none focus:border-brand"
                             value={(config.scopeHint as string) || ''}
                             onChange={(e) => onChange('scopeHint', e.target.value)}
                             placeholder="作用于项目、风险、交付物"
                         />
                     </div>
-                    <div className="property-row">
-                        <label className="property-label">防抖(ms)</label>
+                    <div className="flex items-center mb-3">
+                        <label className="w-20 text-xs text-text-secondary">防抖(ms)</label>
                         <input
                             type="number"
-                            className="property-input"
+                            className="flex-1 px-2.5 py-1.5 border border-border-default rounded bg-surface-card text-text-primary text-xs focus:outline-none focus:border-brand"
                             min={0}
                             max={5000}
                             step={50}
@@ -3991,29 +3991,29 @@ function renderComponentConfig(
                 .join('\n');
             return (
                 <>
-                    <div className="property-row">
-                        <label className="property-label">标题</label>
+                    <div className="flex items-center mb-3">
+                        <label className="w-20 text-xs text-text-secondary">标题</label>
                         <input
                             type="text"
-                            className="property-input"
+                            className="flex-1 px-2.5 py-1.5 border border-border-default rounded bg-surface-card text-text-primary text-xs focus:outline-none focus:border-brand"
                             value={(config.label as string) || '筛选'}
                             onChange={(e) => onChange('label', e.target.value)}
                         />
                     </div>
-                    <div className="property-row">
-                        <label className="property-label">变量Key</label>
+                    <div className="flex items-center mb-3">
+                        <label className="w-20 text-xs text-text-secondary">变量Key</label>
                         <input
                             type="text"
-                            className="property-input"
+                            className="flex-1 px-2.5 py-1.5 border border-border-default rounded bg-surface-card text-text-primary text-xs focus:outline-none focus:border-brand"
                             value={(config.variableKey as string) || ''}
                             onChange={(e) => onChange('variableKey', e.target.value)}
                             placeholder="region"
                         />
                     </div>
-                    <div className="property-row">
-                        <label className="property-label">选项来源</label>
+                    <div className="flex items-center mb-3">
+                        <label className="w-20 text-xs text-text-secondary">选项来源</label>
                         <select
-                            className="property-input"
+                            className="flex-1 px-2.5 py-1.5 border border-border-default rounded bg-surface-card text-text-primary text-xs focus:outline-none focus:border-brand"
                             value={optionSourceMode}
                             onChange={(e) => onChange('optionSourceMode', e.target.value === 'data' ? 'data' : 'manual')}
                         >
@@ -4022,10 +4022,10 @@ function renderComponentConfig(
                         </select>
                     </div>
                     {optionSourceMode === 'manual' ? (
-                        <div className="property-row">
-                            <label className="property-label">选项(每行1个)</label>
+                        <div className="flex items-center mb-3">
+                            <label className="w-20 text-xs text-text-secondary">选项(每行1个)</label>
                             <textarea
-                                className="property-input"
+                                className="flex-1 px-2.5 py-1.5 border border-border-default rounded bg-surface-card text-text-primary text-xs focus:outline-none focus:border-brand"
                                 rows={5}
                                 value={optionText}
                                 onChange={(e) => {
@@ -4040,31 +4040,31 @@ function renderComponentConfig(
                         </div>
                     ) : (
                         <>
-                            <div className="property-row">
-                                <label className="property-label">值字段</label>
+                            <div className="flex items-center mb-3">
+                                <label className="w-20 text-xs text-text-secondary">值字段</label>
                                 <input
                                     type="text"
-                                    className="property-input"
+                                    className="flex-1 px-2.5 py-1.5 border border-border-default rounded bg-surface-card text-text-primary text-xs focus:outline-none focus:border-brand"
                                     value={(config.dataOptionValueField as string) || ''}
                                     onChange={(e) => onChange('dataOptionValueField', e.target.value)}
                                     placeholder="默认第1列"
                                 />
                             </div>
-                            <div className="property-row">
-                                <label className="property-label">标签字段</label>
+                            <div className="flex items-center mb-3">
+                                <label className="w-20 text-xs text-text-secondary">标签字段</label>
                                 <input
                                     type="text"
-                                    className="property-input"
+                                    className="flex-1 px-2.5 py-1.5 border border-border-default rounded bg-surface-card text-text-primary text-xs focus:outline-none focus:border-brand"
                                     value={(config.dataOptionLabelField as string) || ''}
                                     onChange={(e) => onChange('dataOptionLabelField', e.target.value)}
                                     placeholder="默认与值字段相同"
                                 />
                             </div>
-                            <div className="property-row">
-                                <label className="property-label">最大选项数</label>
+                            <div className="flex items-center mb-3">
+                                <label className="w-20 text-xs text-text-secondary">最大选项数</label>
                                 <input
                                     type="number"
-                                    className="property-input"
+                                    className="flex-1 px-2.5 py-1.5 border border-border-default rounded bg-surface-card text-text-primary text-xs focus:outline-none focus:border-brand"
                                     min={1}
                                     max={2000}
                                     value={Number(config.dataOptionMax as number) > 0 ? Number(config.dataOptionMax as number) : 200}
@@ -4076,31 +4076,31 @@ function renderComponentConfig(
                             </div>
                         </>
                     )}
-                    <div className="property-row">
-                        <label className="property-label">占位</label>
+                    <div className="flex items-center mb-3">
+                        <label className="w-20 text-xs text-text-secondary">占位</label>
                         <input
                             type="text"
-                            className="property-input"
+                            className="flex-1 px-2.5 py-1.5 border border-border-default rounded bg-surface-card text-text-primary text-xs focus:outline-none focus:border-brand"
                             value={(config.placeholder as string) || ''}
                             onChange={(e) => onChange('placeholder', e.target.value)}
                             placeholder="请选择"
                         />
                     </div>
-                    <div className="property-row">
-                        <label className="property-label">默认值</label>
+                    <div className="flex items-center mb-3">
+                        <label className="w-20 text-xs text-text-secondary">默认值</label>
                         <input
                             type="text"
-                            className="property-input"
+                            className="flex-1 px-2.5 py-1.5 border border-border-default rounded bg-surface-card text-text-primary text-xs focus:outline-none focus:border-brand"
                             value={(config.defaultValue as string) || ''}
                             onChange={(e) => onChange('defaultValue', e.target.value)}
                             placeholder="默认选项值"
                         />
                     </div>
-                    <div className="property-row">
-                        <label className="property-label">作用说明</label>
+                    <div className="flex items-center mb-3">
+                        <label className="w-20 text-xs text-text-secondary">作用说明</label>
                         <input
                             type="text"
-                            className="property-input"
+                            className="flex-1 px-2.5 py-1.5 border border-border-default rounded bg-surface-card text-text-primary text-xs focus:outline-none focus:border-brand"
                             value={(config.scopeHint as string) || ''}
                             onChange={(e) => onChange('scopeHint', e.target.value)}
                             placeholder="作用于项目、风险、交付物"
@@ -4113,58 +4113,58 @@ function renderComponentConfig(
         case 'filter-date-range':
             return (
                 <>
-                    <div className="property-row">
-                        <label className="property-label">标题</label>
+                    <div className="flex items-center mb-3">
+                        <label className="w-20 text-xs text-text-secondary">标题</label>
                         <input
                             type="text"
-                            className="property-input"
+                            className="flex-1 px-2.5 py-1.5 border border-border-default rounded bg-surface-card text-text-primary text-xs focus:outline-none focus:border-brand"
                             value={(config.label as string) || '日期区间'}
                             onChange={(e) => onChange('label', e.target.value)}
                         />
                     </div>
-                    <div className="property-row">
-                        <label className="property-label">开始变量</label>
+                    <div className="flex items-center mb-3">
+                        <label className="w-20 text-xs text-text-secondary">开始变量</label>
                         <input
                             type="text"
-                            className="property-input"
+                            className="flex-1 px-2.5 py-1.5 border border-border-default rounded bg-surface-card text-text-primary text-xs focus:outline-none focus:border-brand"
                             value={(config.startKey as string) || ''}
                             onChange={(e) => onChange('startKey', e.target.value)}
                             placeholder="startDate"
                         />
                     </div>
-                    <div className="property-row">
-                        <label className="property-label">结束变量</label>
+                    <div className="flex items-center mb-3">
+                        <label className="w-20 text-xs text-text-secondary">结束变量</label>
                         <input
                             type="text"
-                            className="property-input"
+                            className="flex-1 px-2.5 py-1.5 border border-border-default rounded bg-surface-card text-text-primary text-xs focus:outline-none focus:border-brand"
                             value={(config.endKey as string) || ''}
                             onChange={(e) => onChange('endKey', e.target.value)}
                             placeholder="endDate"
                         />
                     </div>
-                    <div className="property-row">
-                        <label className="property-label">默认开始</label>
+                    <div className="flex items-center mb-3">
+                        <label className="w-20 text-xs text-text-secondary">默认开始</label>
                         <input
                             type="date"
-                            className="property-input"
+                            className="flex-1 px-2.5 py-1.5 border border-border-default rounded bg-surface-card text-text-primary text-xs focus:outline-none focus:border-brand"
                             value={(config.defaultStartValue as string) || ''}
                             onChange={(e) => onChange('defaultStartValue', e.target.value)}
                         />
                     </div>
-                    <div className="property-row">
-                        <label className="property-label">默认结束</label>
+                    <div className="flex items-center mb-3">
+                        <label className="w-20 text-xs text-text-secondary">默认结束</label>
                         <input
                             type="date"
-                            className="property-input"
+                            className="flex-1 px-2.5 py-1.5 border border-border-default rounded bg-surface-card text-text-primary text-xs focus:outline-none focus:border-brand"
                             value={(config.defaultEndValue as string) || ''}
                             onChange={(e) => onChange('defaultEndValue', e.target.value)}
                         />
                     </div>
-                    <div className="property-row">
-                        <label className="property-label">作用说明</label>
+                    <div className="flex items-center mb-3">
+                        <label className="w-20 text-xs text-text-secondary">作用说明</label>
                         <input
                             type="text"
-                            className="property-input"
+                            className="flex-1 px-2.5 py-1.5 border border-border-default rounded bg-surface-card text-text-primary text-xs focus:outline-none focus:border-brand"
                             value={(config.scopeHint as string) || ''}
                             onChange={(e) => onChange('scopeHint', e.target.value)}
                             placeholder="作用于统计周期过滤"
@@ -4176,20 +4176,20 @@ function renderComponentConfig(
         case 'image':
             return (
                 <>
-                    <div className="property-row">
-                        <label className="property-label">图片URL</label>
+                    <div className="flex items-center mb-3">
+                        <label className="w-20 text-xs text-text-secondary">图片URL</label>
                         <input
                             type="text"
-                            className="property-input"
+                            className="flex-1 px-2.5 py-1.5 border border-border-default rounded bg-surface-card text-text-primary text-xs focus:outline-none focus:border-brand"
                             value={config.src as string}
                             onChange={(e) => onChange('src', e.target.value)}
                             placeholder="输入图片地址"
                         />
                     </div>
-                    <div className="property-row">
-                        <label className="property-label">填充方式</label>
+                    <div className="flex items-center mb-3">
+                        <label className="w-20 text-xs text-text-secondary">填充方式</label>
                         <select
-                            className="property-input"
+                            className="flex-1 px-2.5 py-1.5 border border-border-default rounded bg-surface-card text-text-primary text-xs focus:outline-none focus:border-brand"
                             value={config.fit as string}
                             onChange={(e) => onChange('fit', e.target.value)}
                         >
@@ -4204,26 +4204,26 @@ function renderComponentConfig(
         case 'video':
             return (
                 <>
-                    <div className="property-row">
-                        <label className="property-label">视频URL</label>
+                    <div className="flex items-center mb-3">
+                        <label className="w-20 text-xs text-text-secondary">视频URL</label>
                         <input
                             type="text"
-                            className="property-input"
+                            className="flex-1 px-2.5 py-1.5 border border-border-default rounded bg-surface-card text-text-primary text-xs focus:outline-none focus:border-brand"
                             value={config.src as string}
                             onChange={(e) => onChange('src', e.target.value)}
                             placeholder="输入视频地址"
                         />
                     </div>
-                    <div className="property-row">
-                        <label className="property-label">自动播放</label>
+                    <div className="flex items-center mb-3">
+                        <label className="w-20 text-xs text-text-secondary">自动播放</label>
                         <input
                             type="checkbox"
                             checked={config.autoplay as boolean}
                             onChange={(e) => onChange('autoplay', e.target.checked)}
                         />
                     </div>
-                    <div className="property-row">
-                        <label className="property-label">循环</label>
+                    <div className="flex items-center mb-3">
+                        <label className="w-20 text-xs text-text-secondary">循环</label>
                         <input
                             type="checkbox"
                             checked={config.loop as boolean}
@@ -4235,11 +4235,11 @@ function renderComponentConfig(
 
         case 'iframe':
             return (
-                <div className="property-row">
-                    <label className="property-label">URL</label>
+                <div className="flex items-center mb-3">
+                    <label className="w-20 text-xs text-text-secondary">URL</label>
                     <input
                         type="text"
-                        className="property-input"
+                        className="flex-1 px-2.5 py-1.5 border border-border-default rounded bg-surface-card text-text-primary text-xs focus:outline-none focus:border-brand"
                         value={config.src as string}
                         onChange={(e) => onChange('src', e.target.value)}
                         placeholder="输入网页地址"
@@ -4250,10 +4250,10 @@ function renderComponentConfig(
         case 'border-box':
             return (
                 <>
-                    <div className="property-row">
-                        <label className="property-label">边框类型</label>
+                    <div className="flex items-center mb-3">
+                        <label className="w-20 text-xs text-text-secondary">边框类型</label>
                         <select
-                            className="property-input"
+                            className="flex-1 px-2.5 py-1.5 border border-border-default rounded bg-surface-card text-text-primary text-xs focus:outline-none focus:border-brand"
                             value={config.boxType as number}
                             onChange={(e) => onChange('boxType', Number(e.target.value))}
                         >
@@ -4268,10 +4268,10 @@ function renderComponentConfig(
         case 'decoration':
             return (
                 <>
-                    <div className="property-row">
-                        <label className="property-label">装饰类型</label>
+                    <div className="flex items-center mb-3">
+                        <label className="w-20 text-xs text-text-secondary">装饰类型</label>
                         <select
-                            className="property-input"
+                            className="flex-1 px-2.5 py-1.5 border border-border-default rounded bg-surface-card text-text-primary text-xs focus:outline-none focus:border-brand"
                             value={config.decorationType as number}
                             onChange={(e) => onChange('decorationType', Number(e.target.value))}
                         >
@@ -4286,21 +4286,21 @@ function renderComponentConfig(
         case 'water-level':
             return (
                 <>
-                    <div className="property-row">
-                        <label className="property-label">值 (%)</label>
+                    <div className="flex items-center mb-3">
+                        <label className="w-20 text-xs text-text-secondary">值 (%)</label>
                         <input
                             type="number"
-                            className="property-input"
+                            className="flex-1 px-2.5 py-1.5 border border-border-default rounded bg-surface-card text-text-primary text-xs focus:outline-none focus:border-brand"
                             min={0}
                             max={100}
                             value={config.value as number}
                             onChange={(e) => onChange('value', Number(e.target.value))}
                         />
                     </div>
-                    <div className="property-row">
-                        <label className="property-label">形状</label>
+                    <div className="flex items-center mb-3">
+                        <label className="w-20 text-xs text-text-secondary">形状</label>
                         <select
-                            className="property-input"
+                            className="flex-1 px-2.5 py-1.5 border border-border-default rounded bg-surface-card text-text-primary text-xs focus:outline-none focus:border-brand"
                             value={config.shape as string}
                             onChange={(e) => onChange('shape', e.target.value)}
                         >
@@ -4315,20 +4315,20 @@ function renderComponentConfig(
         case 'digital-flop':
             return (
                 <>
-                    <div className="property-row">
-                        <label className="property-label">数值</label>
+                    <div className="flex items-center mb-3">
+                        <label className="w-20 text-xs text-text-secondary">数值</label>
                         <input
                             type="number"
-                            className="property-input"
+                            className="flex-1 px-2.5 py-1.5 border border-border-default rounded bg-surface-card text-text-primary text-xs focus:outline-none focus:border-brand"
                             value={(config.number as number[])?.[0] || 0}
                             onChange={(e) => onChange('number', [Number(e.target.value)])}
                         />
                     </div>
-                    <div className="property-row">
-                        <label className="property-label">字号</label>
+                    <div className="flex items-center mb-3">
+                        <label className="w-20 text-xs text-text-secondary">字号</label>
                         <input
                             type="number"
-                            className="property-input"
+                            className="flex-1 px-2.5 py-1.5 border border-border-default rounded bg-surface-card text-text-primary text-xs focus:outline-none focus:border-brand"
                             value={(config.style as { fontSize?: number })?.fontSize || 30}
                             onChange={(e) => onChange('style', {
                                 ...(config.style as object),
@@ -4342,22 +4342,22 @@ function renderComponentConfig(
         case 'percent-pond':
             return (
                 <>
-                    <div className="property-row">
-                        <label className="property-label">值 (%)</label>
+                    <div className="flex items-center mb-3">
+                        <label className="w-20 text-xs text-text-secondary">值 (%)</label>
                         <input
                             type="number"
-                            className="property-input"
+                            className="flex-1 px-2.5 py-1.5 border border-border-default rounded bg-surface-card text-text-primary text-xs focus:outline-none focus:border-brand"
                             min={0}
                             max={100}
                             value={config.value as number}
                             onChange={(e) => onChange('value', Number(e.target.value))}
                         />
                     </div>
-                    <div className="property-row">
-                        <label className="property-label">边框宽度</label>
+                    <div className="flex items-center mb-3">
+                        <label className="w-20 text-xs text-text-secondary">边框宽度</label>
                         <input
                             type="number"
-                            className="property-input"
+                            className="flex-1 px-2.5 py-1.5 border border-border-default rounded bg-surface-card text-text-primary text-xs focus:outline-none focus:border-brand"
                             min={1}
                             max={10}
                             value={config.borderWidth as number}
@@ -4370,20 +4370,20 @@ function renderComponentConfig(
         case 'scatter-chart':
             return (
                 <>
-                    <div className="property-row">
-                        <label className="property-label">标题</label>
+                    <div className="flex items-center mb-3">
+                        <label className="w-20 text-xs text-text-secondary">标题</label>
                         <input
                             type="text"
-                            className="property-input"
+                            className="flex-1 px-2.5 py-1.5 border border-border-default rounded bg-surface-card text-text-primary text-xs focus:outline-none focus:border-brand"
                             value={config.title as string}
                             onChange={(e) => onChange('title', e.target.value)}
                         />
                     </div>
-                    <div className="property-row">
-                        <label className="property-label">标题字号</label>
+                    <div className="flex items-center mb-3">
+                        <label className="w-20 text-xs text-text-secondary">标题字号</label>
                         <input
                             type="number"
-                            className="property-input"
+                            className="flex-1 px-2.5 py-1.5 border border-border-default rounded bg-surface-card text-text-primary text-xs focus:outline-none focus:border-brand"
                             min={10}
                             max={36}
                             value={(config.titleFontSize as number) || 14}
@@ -4391,41 +4391,41 @@ function renderComponentConfig(
                         />
                     </div>
                     {renderChartTitleLayoutRows(config as Record<string, unknown>, onChange)}
-                    <div className="property-row">
-                        <label className="property-label">坐标轴字号</label>
+                    <div className="flex items-center mb-3">
+                        <label className="w-20 text-xs text-text-secondary">坐标轴字号</label>
                         <input
                             type="number"
-                            className="property-input"
+                            className="flex-1 px-2.5 py-1.5 border border-border-default rounded bg-surface-card text-text-primary text-xs focus:outline-none focus:border-brand"
                             min={10}
                             max={28}
                             value={(config.axisFontSize as number) || 12}
                             onChange={(e) => onChange('axisFontSize', Number(e.target.value))}
                         />
                     </div>
-                    <div className="property-row">
-                        <label className="property-label">坐标轴颜色</label>
+                    <div className="flex items-center mb-3">
+                        <label className="w-20 text-xs text-text-secondary">坐标轴颜色</label>
                         <input
                             type="color"
-                            className="property-color-input"
+                            className="w-8 h-7 border border-border-default rounded cursor-pointer p-0"
                             value={(config.axisLabelColor as string) || '#6b7280'}
                             onChange={(e) => onChange('axisLabelColor', e.target.value)}
                         />
                     </div>
-                    <div className="property-row">
-                        <label className="property-label">图例字号</label>
+                    <div className="flex items-center mb-3">
+                        <label className="w-20 text-xs text-text-secondary">图例字号</label>
                         <input
                             type="number"
-                            className="property-input"
+                            className="flex-1 px-2.5 py-1.5 border border-border-default rounded bg-surface-card text-text-primary text-xs focus:outline-none focus:border-brand"
                             min={10}
                             max={28}
                             value={(config.legendFontSize as number) || 12}
                             onChange={(e) => onChange('legendFontSize', Number(e.target.value))}
                         />
                     </div>
-                    <div className="property-row">
-                        <label className="property-label">图例位置</label>
+                    <div className="flex items-center mb-3">
+                        <label className="w-20 text-xs text-text-secondary">图例位置</label>
                         <select
-                            className="property-input"
+                            className="flex-1 px-2.5 py-1.5 border border-border-default rounded bg-surface-card text-text-primary text-xs focus:outline-none focus:border-brand"
                             value={(config.legendPosition as string) || 'auto'}
                             onChange={(e) => onChange('legendPosition', e.target.value)}
                         >
@@ -4447,20 +4447,20 @@ function renderComponentConfig(
         case 'map-chart':
             return (
                 <>
-                    <div className="property-row">
-                        <label className="property-label">标题</label>
+                    <div className="flex items-center mb-3">
+                        <label className="w-20 text-xs text-text-secondary">标题</label>
                         <input
                             type="text"
-                            className="property-input"
+                            className="flex-1 px-2.5 py-1.5 border border-border-default rounded bg-surface-card text-text-primary text-xs focus:outline-none focus:border-brand"
                             value={(config.title as string) || '区域地图'}
                             onChange={(e) => onChange('title', e.target.value)}
                         />
                     </div>
-                    <div className="property-row">
-                        <label className="property-label">标题字号</label>
+                    <div className="flex items-center mb-3">
+                        <label className="w-20 text-xs text-text-secondary">标题字号</label>
                         <input
                             type="number"
-                            className="property-input"
+                            className="flex-1 px-2.5 py-1.5 border border-border-default rounded bg-surface-card text-text-primary text-xs focus:outline-none focus:border-brand"
                             min={10}
                             max={36}
                             value={(config.titleFontSize as number) || 14}
@@ -4468,10 +4468,10 @@ function renderComponentConfig(
                         />
                     </div>
                     {renderChartTitleLayoutRows(config as Record<string, unknown>, onChange)}
-                    <div className="property-row">
-                        <label className="property-label">地图模式</label>
+                    <div className="flex items-center mb-3">
+                        <label className="w-20 text-xs text-text-secondary">地图模式</label>
                         <select
-                            className="property-input"
+                            className="flex-1 px-2.5 py-1.5 border border-border-default rounded bg-surface-card text-text-primary text-xs focus:outline-none focus:border-brand"
                             value={(config.mapMode as string) || 'region'}
                             onChange={(e) => onChange('mapMode', e.target.value)}
                         >
@@ -4482,10 +4482,10 @@ function renderComponentConfig(
                             <option value="flow">流向地图</option>
                         </select>
                     </div>
-                    <div className="property-row">
-                        <label className="property-label">地图范围</label>
+                    <div className="flex items-center mb-3">
+                        <label className="w-20 text-xs text-text-secondary">地图范围</label>
                         <select
-                            className="property-input"
+                            className="flex-1 px-2.5 py-1.5 border border-border-default rounded bg-surface-card text-text-primary text-xs focus:outline-none focus:border-brand"
                             value={(config.mapScope as string) || 'china'}
                             onChange={(e) => onChange('mapScope', e.target.value)}
                         >
@@ -4499,22 +4499,22 @@ function renderComponentConfig(
                         </select>
                     </div>
                     {((config.mapMode as string) === 'bubble' || (config.mapMode as string) === 'scatter') ? (
-                        <div className="property-row">
-                            <label className="property-label">气泡颜色</label>
+                        <div className="flex items-center mb-3">
+                            <label className="w-20 text-xs text-text-secondary">气泡颜色</label>
                             <input
                                 type="color"
-                                className="property-input"
+                                className="flex-1 px-2.5 py-1.5 border border-border-default rounded bg-surface-card text-text-primary text-xs focus:outline-none focus:border-brand"
                                 value={(config.bubbleColor as string) || '#3b82f6'}
                                 onChange={(e) => onChange('bubbleColor', e.target.value)}
                             />
                         </div>
                     ) : null}
                     {(config.mapMode as string) === 'heatmap' ? (
-                        <div className="property-row">
-                            <label className="property-label">热力半径</label>
+                        <div className="flex items-center mb-3">
+                            <label className="w-20 text-xs text-text-secondary">热力半径</label>
                             <input
                                 type="number"
-                                className="property-input"
+                                className="flex-1 px-2.5 py-1.5 border border-border-default rounded bg-surface-card text-text-primary text-xs focus:outline-none focus:border-brand"
                                 min={5}
                                 max={80}
                                 value={(config.heatmapRadius as number) || 20}
@@ -4523,8 +4523,8 @@ function renderComponentConfig(
                         </div>
                     ) : null}
                     {(config.mapMode as string) === 'flow' ? (
-                        <div className="property-row">
-                            <label className="property-label">流动动画</label>
+                        <div className="flex items-center mb-3">
+                            <label className="w-20 text-xs text-text-secondary">流动动画</label>
                             <input
                                 type="checkbox"
                                 checked={config.showFlowEffect !== false}
@@ -4532,47 +4532,47 @@ function renderComponentConfig(
                             />
                         </div>
                     ) : null}
-                    <div className="property-row">
-                        <label className="property-label">区域变量Key</label>
+                    <div className="flex items-center mb-3">
+                        <label className="w-20 text-xs text-text-secondary">区域变量Key</label>
                         <input
                             type="text"
-                            className="property-input"
+                            className="flex-1 px-2.5 py-1.5 border border-border-default rounded bg-surface-card text-text-primary text-xs focus:outline-none focus:border-brand"
                             value={(config.regionVariableKey as string) || ''}
                             onChange={(e) => onChange('regionVariableKey', e.target.value)}
                             placeholder="region"
                         />
                     </div>
-                    <div className="property-row">
-                        <label className="property-label">区域编码变量Key</label>
+                    <div className="flex items-center mb-3">
+                        <label className="w-20 text-xs text-text-secondary">区域编码变量Key</label>
                         <input
                             type="text"
-                            className="property-input"
+                            className="flex-1 px-2.5 py-1.5 border border-border-default rounded bg-surface-card text-text-primary text-xs focus:outline-none focus:border-brand"
                             value={(config.regionCodeVariableKey as string) || ''}
                             onChange={(e) => onChange('regionCodeVariableKey', e.target.value)}
                             placeholder="region_code"
                         />
                     </div>
-                    <div className="property-row">
-                        <label className="property-label">优先使用内置底图</label>
+                    <div className="flex items-center mb-3">
+                        <label className="w-20 text-xs text-text-secondary">优先使用内置底图</label>
                         <input
                             type="checkbox"
                             checked={config.usePresetGeoJson !== false}
                             onChange={(e) => onChange('usePresetGeoJson', e.target.checked)}
                         />
                     </div>
-                    <div className="property-row">
-                        <label className="property-label">GeoJSON URL(可选)</label>
+                    <div className="flex items-center mb-3">
+                        <label className="w-20 text-xs text-text-secondary">GeoJSON URL(可选)</label>
                         <input
                             type="text"
-                            className="property-input"
+                            className="flex-1 px-2.5 py-1.5 border border-border-default rounded bg-surface-card text-text-primary text-xs focus:outline-none focus:border-brand"
                             value={(config.geoJsonUrl as string) || ''}
                             onChange={(e) => onChange('geoJsonUrl', e.target.value)}
                             placeholder="https://.../map.geojson"
                         />
                     </div>
                     {!(config.mapMode as string) || (config.mapMode as string) === 'region' ? (
-                        <div className="property-row">
-                            <label className="property-label">启用下钻</label>
+                        <div className="flex items-center mb-3">
+                            <label className="w-20 text-xs text-text-secondary">启用下钻</label>
                             <input
                                 type="checkbox"
                                 checked={config.enableRegionDrill !== false}
@@ -4592,22 +4592,22 @@ function renderComponentConfig(
         case 'scroll-ranking':
             return (
                 <>
-                    <div className="property-row">
-                        <label className="property-label">行数</label>
+                    <div className="flex items-center mb-3">
+                        <label className="w-20 text-xs text-text-secondary">行数</label>
                         <input
                             type="number"
-                            className="property-input"
+                            className="flex-1 px-2.5 py-1.5 border border-border-default rounded bg-surface-card text-text-primary text-xs focus:outline-none focus:border-brand"
                             min={1}
                             max={20}
                             value={config.rowNum as number}
                             onChange={(e) => onChange('rowNum', Number(e.target.value))}
                         />
                     </div>
-                    <div className="property-row">
-                        <label className="property-label">等待时间(ms)</label>
+                    <div className="flex items-center mb-3">
+                        <label className="w-20 text-xs text-text-secondary">等待时间(ms)</label>
                         <input
                             type="number"
-                            className="property-input"
+                            className="flex-1 px-2.5 py-1.5 border border-border-default rounded bg-surface-card text-text-primary text-xs focus:outline-none focus:border-brand"
                             min={500}
                             max={10000}
                             step={500}
@@ -4621,10 +4621,10 @@ function renderComponentConfig(
         case 'shape':
             return (
                 <>
-                    <div className="property-row">
-                        <label className="property-label">形状</label>
+                    <div className="flex items-center mb-3">
+                        <label className="w-20 text-xs text-text-secondary">形状</label>
                         <select
-                            className="property-input"
+                            className="flex-1 px-2.5 py-1.5 border border-border-default rounded bg-surface-card text-text-primary text-xs focus:outline-none focus:border-brand"
                             value={(config.shapeType as string) || 'rect'}
                             onChange={(e) => onChange('shapeType', e.target.value)}
                         >
@@ -4634,20 +4634,20 @@ function renderComponentConfig(
                             <option value="arrow">箭头</option>
                         </select>
                     </div>
-                    <div className="property-row">
-                        <label className="property-label">填充色</label>
+                    <div className="flex items-center mb-3">
+                        <label className="w-20 text-xs text-text-secondary">填充色</label>
                         <input
                             type="color"
-                            className="property-color-input"
+                            className="w-8 h-7 border border-border-default rounded cursor-pointer p-0"
                             value={(config.fillColor as string) || '#3b82f6'}
                             onChange={(e) => onChange('fillColor', e.target.value)}
                         />
                     </div>
-                    <div className="property-row">
-                        <label className="property-label">边框色</label>
+                    <div className="flex items-center mb-3">
+                        <label className="w-20 text-xs text-text-secondary">边框色</label>
                         <input
                             type="color"
-                            className="property-color-input"
+                            className="w-8 h-7 border border-border-default rounded cursor-pointer p-0"
                             value={(config.borderColor as string) || '#60a5fa'}
                             onChange={(e) => onChange('borderColor', e.target.value)}
                         />
@@ -4658,20 +4658,20 @@ function renderComponentConfig(
         case 'container':
             return (
                 <>
-                    <div className="property-row">
-                        <label className="property-label">标题</label>
+                    <div className="flex items-center mb-3">
+                        <label className="w-20 text-xs text-text-secondary">标题</label>
                         <input
                             type="text"
-                            className="property-input"
+                            className="flex-1 px-2.5 py-1.5 border border-border-default rounded bg-surface-card text-text-primary text-xs focus:outline-none focus:border-brand"
                             value={(config.title as string) || '容器'}
                             onChange={(e) => onChange('title', e.target.value)}
                         />
                     </div>
-                    <div className="property-row">
-                        <label className="property-label">内边距</label>
+                    <div className="flex items-center mb-3">
+                        <label className="w-20 text-xs text-text-secondary">内边距</label>
                         <input
                             type="number"
-                            className="property-input"
+                            className="flex-1 px-2.5 py-1.5 border border-border-default rounded bg-surface-card text-text-primary text-xs focus:outline-none focus:border-brand"
                             min={0}
                             max={80}
                             value={(config.padding as number) || 12}
@@ -4685,20 +4685,20 @@ function renderComponentConfig(
         case 'globe-chart':
             return (
                 <>
-                    <div className="property-row">
-                        <label className="property-label">标题</label>
+                    <div className="flex items-center mb-3">
+                        <label className="w-20 text-xs text-text-secondary">标题</label>
                         <input
                             type="text"
-                            className="property-input"
+                            className="flex-1 px-2.5 py-1.5 border border-border-default rounded bg-surface-card text-text-primary text-xs focus:outline-none focus:border-brand"
                             value={(config.title as string) || '3D 地球'}
                             onChange={(e) => onChange('title', e.target.value)}
                         />
                     </div>
-                    <div className="property-row">
-                        <label className="property-label">标题字号</label>
+                    <div className="flex items-center mb-3">
+                        <label className="w-20 text-xs text-text-secondary">标题字号</label>
                         <input
                             type="number"
-                            className="property-input"
+                            className="flex-1 px-2.5 py-1.5 border border-border-default rounded bg-surface-card text-text-primary text-xs focus:outline-none focus:border-brand"
                             min={10}
                             max={36}
                             value={(config.titleFontSize as number) || 14}
@@ -4706,43 +4706,43 @@ function renderComponentConfig(
                         />
                     </div>
                     {renderChartTitleLayoutRows(config as Record<string, unknown>, onChange)}
-                    <div className="property-row">
-                        <label className="property-label">自动旋转</label>
-                        <select className="property-input" value={config.autoRotate !== false ? 'true' : 'false'} onChange={(e) => onChange('autoRotate', e.target.value === 'true')}>
+                    <div className="flex items-center mb-3">
+                        <label className="w-20 text-xs text-text-secondary">自动旋转</label>
+                        <select className="flex-1 px-2.5 py-1.5 border border-border-default rounded bg-surface-card text-text-primary text-xs focus:outline-none focus:border-brand" value={config.autoRotate !== false ? 'true' : 'false'} onChange={(e) => onChange('autoRotate', e.target.value === 'true')}>
                             <option value="true">开启</option>
                             <option value="false">关闭</option>
                         </select>
                     </div>
-                    <div className="property-row">
-                        <label className="property-label">旋转速度</label>
-                        <input type="number" className="property-input" min={1} max={50} value={(config.rotateSpeed as number) || 10} onChange={(e) => onChange('rotateSpeed', Number(e.target.value))} />
+                    <div className="flex items-center mb-3">
+                        <label className="w-20 text-xs text-text-secondary">旋转速度</label>
+                        <input type="number" className="flex-1 px-2.5 py-1.5 border border-border-default rounded bg-surface-card text-text-primary text-xs focus:outline-none focus:border-brand" min={1} max={50} value={(config.rotateSpeed as number) || 10} onChange={(e) => onChange('rotateSpeed', Number(e.target.value))} />
                     </div>
-                    <div className="property-row">
-                        <label className="property-label">观测距离</label>
-                        <input type="number" className="property-input" min={50} max={500} value={(config.viewDistance as number) || 200} onChange={(e) => onChange('viewDistance', Number(e.target.value))} />
+                    <div className="flex items-center mb-3">
+                        <label className="w-20 text-xs text-text-secondary">观测距离</label>
+                        <input type="number" className="flex-1 px-2.5 py-1.5 border border-border-default rounded bg-surface-card text-text-primary text-xs focus:outline-none focus:border-brand" min={50} max={500} value={(config.viewDistance as number) || 200} onChange={(e) => onChange('viewDistance', Number(e.target.value))} />
                     </div>
-                    <div className="property-row">
-                        <label className="property-label">底图纹理 URL</label>
-                        <input type="text" className="property-input" placeholder="https://..." value={(config.baseTexture as string) || ''} onChange={(e) => onChange('baseTexture', e.target.value)} />
+                    <div className="flex items-center mb-3">
+                        <label className="w-20 text-xs text-text-secondary">底图纹理 URL</label>
+                        <input type="text" className="flex-1 px-2.5 py-1.5 border border-border-default rounded bg-surface-card text-text-primary text-xs focus:outline-none focus:border-brand" placeholder="https://..." value={(config.baseTexture as string) || ''} onChange={(e) => onChange('baseTexture', e.target.value)} />
                     </div>
-                    <div className="property-row">
-                        <label className="property-label">高度纹理 URL</label>
-                        <input type="text" className="property-input" placeholder="https://..." value={(config.heightTexture as string) || ''} onChange={(e) => onChange('heightTexture', e.target.value)} />
+                    <div className="flex items-center mb-3">
+                        <label className="w-20 text-xs text-text-secondary">高度纹理 URL</label>
+                        <input type="text" className="flex-1 px-2.5 py-1.5 border border-border-default rounded bg-surface-card text-text-primary text-xs focus:outline-none focus:border-brand" placeholder="https://..." value={(config.heightTexture as string) || ''} onChange={(e) => onChange('heightTexture', e.target.value)} />
                     </div>
-                    <div className="property-row">
-                        <label className="property-label">大气层效果</label>
-                        <select className="property-input" value={config.showAtmosphere !== false ? 'true' : 'false'} onChange={(e) => onChange('showAtmosphere', e.target.value === 'true')}>
+                    <div className="flex items-center mb-3">
+                        <label className="w-20 text-xs text-text-secondary">大气层效果</label>
+                        <select className="flex-1 px-2.5 py-1.5 border border-border-default rounded bg-surface-card text-text-primary text-xs focus:outline-none focus:border-brand" value={config.showAtmosphere !== false ? 'true' : 'false'} onChange={(e) => onChange('showAtmosphere', e.target.value === 'true')}>
                             <option value="true">开启</option>
                             <option value="false">关闭</option>
                         </select>
                     </div>
-                    <div className="property-row">
-                        <label className="property-label">散点大小</label>
-                        <input type="number" className="property-input" min={2} max={40} value={(config.pointSize as number) || 12} onChange={(e) => onChange('pointSize', Number(e.target.value))} />
+                    <div className="flex items-center mb-3">
+                        <label className="w-20 text-xs text-text-secondary">散点大小</label>
+                        <input type="number" className="flex-1 px-2.5 py-1.5 border border-border-default rounded bg-surface-card text-text-primary text-xs focus:outline-none focus:border-brand" min={2} max={40} value={(config.pointSize as number) || 12} onChange={(e) => onChange('pointSize', Number(e.target.value))} />
                     </div>
-                    <div className="property-row">
-                        <label className="property-label">背景色</label>
-                        <input type="color" className="property-input" value={(config.globeBackground as string) || '#000000'} onChange={(e) => onChange('globeBackground', e.target.value)} />
+                    <div className="flex items-center mb-3">
+                        <label className="w-20 text-xs text-text-secondary">背景色</label>
+                        <input type="color" className="flex-1 px-2.5 py-1.5 border border-border-default rounded bg-surface-card text-text-primary text-xs focus:outline-none focus:border-brand" value={(config.globeBackground as string) || '#000000'} onChange={(e) => onChange('globeBackground', e.target.value)} />
                     </div>
                 </>
             );
@@ -4750,15 +4750,15 @@ function renderComponentConfig(
         case 'bar3d-chart':
             return (
                 <>
-                    <div className="property-row">
-                        <label className="property-label">标题</label>
-                        <input type="text" className="property-input" value={(config.title as string) || '3D 柱状图'} onChange={(e) => onChange('title', e.target.value)} />
+                    <div className="flex items-center mb-3">
+                        <label className="w-20 text-xs text-text-secondary">标题</label>
+                        <input type="text" className="flex-1 px-2.5 py-1.5 border border-border-default rounded bg-surface-card text-text-primary text-xs focus:outline-none focus:border-brand" value={(config.title as string) || '3D 柱状图'} onChange={(e) => onChange('title', e.target.value)} />
                     </div>
-                    <div className="property-row">
-                        <label className="property-label">标题字号</label>
+                    <div className="flex items-center mb-3">
+                        <label className="w-20 text-xs text-text-secondary">标题字号</label>
                         <input
                             type="number"
-                            className="property-input"
+                            className="flex-1 px-2.5 py-1.5 border border-border-default rounded bg-surface-card text-text-primary text-xs focus:outline-none focus:border-brand"
                             min={10}
                             max={36}
                             value={(config.titleFontSize as number) || 14}
@@ -4766,47 +4766,47 @@ function renderComponentConfig(
                         />
                     </div>
                     {renderChartTitleLayoutRows(config as Record<string, unknown>, onChange)}
-                    <div className="property-row">
-                        <label className="property-label">视角 Alpha</label>
-                        <input type="number" className="property-input" min={0} max={90} value={(config.viewAlpha as number) || 40} onChange={(e) => onChange('viewAlpha', Number(e.target.value))} />
+                    <div className="flex items-center mb-3">
+                        <label className="w-20 text-xs text-text-secondary">视角 Alpha</label>
+                        <input type="number" className="flex-1 px-2.5 py-1.5 border border-border-default rounded bg-surface-card text-text-primary text-xs focus:outline-none focus:border-brand" min={0} max={90} value={(config.viewAlpha as number) || 40} onChange={(e) => onChange('viewAlpha', Number(e.target.value))} />
                     </div>
-                    <div className="property-row">
-                        <label className="property-label">视角 Beta</label>
-                        <input type="number" className="property-input" min={0} max={360} value={(config.viewBeta as number) || 30} onChange={(e) => onChange('viewBeta', Number(e.target.value))} />
+                    <div className="flex items-center mb-3">
+                        <label className="w-20 text-xs text-text-secondary">视角 Beta</label>
+                        <input type="number" className="flex-1 px-2.5 py-1.5 border border-border-default rounded bg-surface-card text-text-primary text-xs focus:outline-none focus:border-brand" min={0} max={360} value={(config.viewBeta as number) || 30} onChange={(e) => onChange('viewBeta', Number(e.target.value))} />
                     </div>
-                    <div className="property-row">
-                        <label className="property-label">自动旋转</label>
-                        <select className="property-input" value={config.autoRotate === true ? 'true' : 'false'} onChange={(e) => onChange('autoRotate', e.target.value === 'true')}>
+                    <div className="flex items-center mb-3">
+                        <label className="w-20 text-xs text-text-secondary">自动旋转</label>
+                        <select className="flex-1 px-2.5 py-1.5 border border-border-default rounded bg-surface-card text-text-primary text-xs focus:outline-none focus:border-brand" value={config.autoRotate === true ? 'true' : 'false'} onChange={(e) => onChange('autoRotate', e.target.value === 'true')}>
                             <option value="false">关闭</option>
                             <option value="true">开启</option>
                         </select>
                     </div>
-                    <div className="property-row">
-                        <label className="property-label">盒宽</label>
-                        <input type="number" className="property-input" min={20} max={300} value={(config.boxWidth as number) || 100} onChange={(e) => onChange('boxWidth', Number(e.target.value))} />
+                    <div className="flex items-center mb-3">
+                        <label className="w-20 text-xs text-text-secondary">盒宽</label>
+                        <input type="number" className="flex-1 px-2.5 py-1.5 border border-border-default rounded bg-surface-card text-text-primary text-xs focus:outline-none focus:border-brand" min={20} max={300} value={(config.boxWidth as number) || 100} onChange={(e) => onChange('boxWidth', Number(e.target.value))} />
                     </div>
-                    <div className="property-row">
-                        <label className="property-label">盒深</label>
-                        <input type="number" className="property-input" min={20} max={300} value={(config.boxDepth as number) || 80} onChange={(e) => onChange('boxDepth', Number(e.target.value))} />
+                    <div className="flex items-center mb-3">
+                        <label className="w-20 text-xs text-text-secondary">盒深</label>
+                        <input type="number" className="flex-1 px-2.5 py-1.5 border border-border-default rounded bg-surface-card text-text-primary text-xs focus:outline-none focus:border-brand" min={20} max={300} value={(config.boxDepth as number) || 80} onChange={(e) => onChange('boxDepth', Number(e.target.value))} />
                     </div>
-                    <div className="property-row">
-                        <label className="property-label">盒高</label>
-                        <input type="number" className="property-input" min={20} max={300} value={(config.boxHeight as number) || 60} onChange={(e) => onChange('boxHeight', Number(e.target.value))} />
+                    <div className="flex items-center mb-3">
+                        <label className="w-20 text-xs text-text-secondary">盒高</label>
+                        <input type="number" className="flex-1 px-2.5 py-1.5 border border-border-default rounded bg-surface-card text-text-primary text-xs focus:outline-none focus:border-brand" min={20} max={300} value={(config.boxHeight as number) || 60} onChange={(e) => onChange('boxHeight', Number(e.target.value))} />
                     </div>
-                    <div className="property-row">
-                        <label className="property-label">显示标签</label>
-                        <select className="property-input" value={config.showLabel === true ? 'true' : 'false'} onChange={(e) => onChange('showLabel', e.target.value === 'true')}>
+                    <div className="flex items-center mb-3">
+                        <label className="w-20 text-xs text-text-secondary">显示标签</label>
+                        <select className="flex-1 px-2.5 py-1.5 border border-border-default rounded bg-surface-card text-text-primary text-xs focus:outline-none focus:border-brand" value={config.showLabel === true ? 'true' : 'false'} onChange={(e) => onChange('showLabel', e.target.value === 'true')}>
                             <option value="false">关闭</option>
                             <option value="true">开启</option>
                         </select>
                     </div>
-                    <div className="property-row">
-                        <label className="property-label">色阶低值</label>
-                        <input type="color" className="property-input" value={(config.colorRange as string[])?.[0] || '#313695'} onChange={(e) => onChange('colorRange', [e.target.value, (config.colorRange as string[])?.[1] || '#a50026'])} />
+                    <div className="flex items-center mb-3">
+                        <label className="w-20 text-xs text-text-secondary">色阶低值</label>
+                        <input type="color" className="flex-1 px-2.5 py-1.5 border border-border-default rounded bg-surface-card text-text-primary text-xs focus:outline-none focus:border-brand" value={(config.colorRange as string[])?.[0] || '#313695'} onChange={(e) => onChange('colorRange', [e.target.value, (config.colorRange as string[])?.[1] || '#a50026'])} />
                     </div>
-                    <div className="property-row">
-                        <label className="property-label">色阶高值</label>
-                        <input type="color" className="property-input" value={(config.colorRange as string[])?.[1] || '#a50026'} onChange={(e) => onChange('colorRange', [(config.colorRange as string[])?.[0] || '#313695', e.target.value])} />
+                    <div className="flex items-center mb-3">
+                        <label className="w-20 text-xs text-text-secondary">色阶高值</label>
+                        <input type="color" className="flex-1 px-2.5 py-1.5 border border-border-default rounded bg-surface-card text-text-primary text-xs focus:outline-none focus:border-brand" value={(config.colorRange as string[])?.[1] || '#a50026'} onChange={(e) => onChange('colorRange', [(config.colorRange as string[])?.[0] || '#313695', e.target.value])} />
                     </div>
                 </>
             );
@@ -4814,15 +4814,15 @@ function renderComponentConfig(
         case 'scatter3d-chart':
             return (
                 <>
-                    <div className="property-row">
-                        <label className="property-label">标题</label>
-                        <input type="text" className="property-input" value={(config.title as string) || '3D 散点图'} onChange={(e) => onChange('title', e.target.value)} />
+                    <div className="flex items-center mb-3">
+                        <label className="w-20 text-xs text-text-secondary">标题</label>
+                        <input type="text" className="flex-1 px-2.5 py-1.5 border border-border-default rounded bg-surface-card text-text-primary text-xs focus:outline-none focus:border-brand" value={(config.title as string) || '3D 散点图'} onChange={(e) => onChange('title', e.target.value)} />
                     </div>
-                    <div className="property-row">
-                        <label className="property-label">标题字号</label>
+                    <div className="flex items-center mb-3">
+                        <label className="w-20 text-xs text-text-secondary">标题字号</label>
                         <input
                             type="number"
-                            className="property-input"
+                            className="flex-1 px-2.5 py-1.5 border border-border-default rounded bg-surface-card text-text-primary text-xs focus:outline-none focus:border-brand"
                             min={10}
                             max={36}
                             value={(config.titleFontSize as number) || 14}
@@ -4830,58 +4830,58 @@ function renderComponentConfig(
                         />
                     </div>
                     {renderChartTitleLayoutRows(config as Record<string, unknown>, onChange)}
-                    <div className="property-row">
-                        <label className="property-label">散点大小</label>
-                        <input type="number" className="property-input" min={2} max={30} value={(config.pointSize as number) || 8} onChange={(e) => onChange('pointSize', Number(e.target.value))} />
+                    <div className="flex items-center mb-3">
+                        <label className="w-20 text-xs text-text-secondary">散点大小</label>
+                        <input type="number" className="flex-1 px-2.5 py-1.5 border border-border-default rounded bg-surface-card text-text-primary text-xs focus:outline-none focus:border-brand" min={2} max={30} value={(config.pointSize as number) || 8} onChange={(e) => onChange('pointSize', Number(e.target.value))} />
                     </div>
-                    <div className="property-row">
-                        <label className="property-label">视角 Alpha</label>
-                        <input type="number" className="property-input" min={0} max={90} value={(config.viewAlpha as number) || 40} onChange={(e) => onChange('viewAlpha', Number(e.target.value))} />
+                    <div className="flex items-center mb-3">
+                        <label className="w-20 text-xs text-text-secondary">视角 Alpha</label>
+                        <input type="number" className="flex-1 px-2.5 py-1.5 border border-border-default rounded bg-surface-card text-text-primary text-xs focus:outline-none focus:border-brand" min={0} max={90} value={(config.viewAlpha as number) || 40} onChange={(e) => onChange('viewAlpha', Number(e.target.value))} />
                     </div>
-                    <div className="property-row">
-                        <label className="property-label">视角 Beta</label>
-                        <input type="number" className="property-input" min={0} max={360} value={(config.viewBeta as number) || 30} onChange={(e) => onChange('viewBeta', Number(e.target.value))} />
+                    <div className="flex items-center mb-3">
+                        <label className="w-20 text-xs text-text-secondary">视角 Beta</label>
+                        <input type="number" className="flex-1 px-2.5 py-1.5 border border-border-default rounded bg-surface-card text-text-primary text-xs focus:outline-none focus:border-brand" min={0} max={360} value={(config.viewBeta as number) || 30} onChange={(e) => onChange('viewBeta', Number(e.target.value))} />
                     </div>
-                    <div className="property-row">
-                        <label className="property-label">自动旋转</label>
-                        <select className="property-input" value={config.autoRotate === true ? 'true' : 'false'} onChange={(e) => onChange('autoRotate', e.target.value === 'true')}>
+                    <div className="flex items-center mb-3">
+                        <label className="w-20 text-xs text-text-secondary">自动旋转</label>
+                        <select className="flex-1 px-2.5 py-1.5 border border-border-default rounded bg-surface-card text-text-primary text-xs focus:outline-none focus:border-brand" value={config.autoRotate === true ? 'true' : 'false'} onChange={(e) => onChange('autoRotate', e.target.value === 'true')}>
                             <option value="false">关闭</option>
                             <option value="true">开启</option>
                         </select>
                     </div>
-                    <div className="property-row">
-                        <label className="property-label">显示标签</label>
-                        <select className="property-input" value={config.showLabel === true ? 'true' : 'false'} onChange={(e) => onChange('showLabel', e.target.value === 'true')}>
+                    <div className="flex items-center mb-3">
+                        <label className="w-20 text-xs text-text-secondary">显示标签</label>
+                        <select className="flex-1 px-2.5 py-1.5 border border-border-default rounded bg-surface-card text-text-primary text-xs focus:outline-none focus:border-brand" value={config.showLabel === true ? 'true' : 'false'} onChange={(e) => onChange('showLabel', e.target.value === 'true')}>
                             <option value="false">关闭</option>
                             <option value="true">开启</option>
                         </select>
                     </div>
-                    <div className="property-row">
-                        <label className="property-label">X 轴名称</label>
-                        <input type="text" className="property-input" value={(config.xAxisName as string) || 'X'} onChange={(e) => onChange('xAxisName', e.target.value)} />
+                    <div className="flex items-center mb-3">
+                        <label className="w-20 text-xs text-text-secondary">X 轴名称</label>
+                        <input type="text" className="flex-1 px-2.5 py-1.5 border border-border-default rounded bg-surface-card text-text-primary text-xs focus:outline-none focus:border-brand" value={(config.xAxisName as string) || 'X'} onChange={(e) => onChange('xAxisName', e.target.value)} />
                     </div>
-                    <div className="property-row">
-                        <label className="property-label">Y 轴名称</label>
-                        <input type="text" className="property-input" value={(config.yAxisName as string) || 'Y'} onChange={(e) => onChange('yAxisName', e.target.value)} />
+                    <div className="flex items-center mb-3">
+                        <label className="w-20 text-xs text-text-secondary">Y 轴名称</label>
+                        <input type="text" className="flex-1 px-2.5 py-1.5 border border-border-default rounded bg-surface-card text-text-primary text-xs focus:outline-none focus:border-brand" value={(config.yAxisName as string) || 'Y'} onChange={(e) => onChange('yAxisName', e.target.value)} />
                     </div>
-                    <div className="property-row">
-                        <label className="property-label">Z 轴名称</label>
-                        <input type="text" className="property-input" value={(config.zAxisName as string) || 'Z'} onChange={(e) => onChange('zAxisName', e.target.value)} />
+                    <div className="flex items-center mb-3">
+                        <label className="w-20 text-xs text-text-secondary">Z 轴名称</label>
+                        <input type="text" className="flex-1 px-2.5 py-1.5 border border-border-default rounded bg-surface-card text-text-primary text-xs focus:outline-none focus:border-brand" value={(config.zAxisName as string) || 'Z'} onChange={(e) => onChange('zAxisName', e.target.value)} />
                     </div>
-                    <div className="property-row">
-                        <label className="property-label">色阶低值</label>
-                        <input type="color" className="property-input" value={(config.colorRange as string[])?.[0] || '#50a3ba'} onChange={(e) => onChange('colorRange', [e.target.value, (config.colorRange as string[])?.[1] || '#eac736'])} />
+                    <div className="flex items-center mb-3">
+                        <label className="w-20 text-xs text-text-secondary">色阶低值</label>
+                        <input type="color" className="flex-1 px-2.5 py-1.5 border border-border-default rounded bg-surface-card text-text-primary text-xs focus:outline-none focus:border-brand" value={(config.colorRange as string[])?.[0] || '#50a3ba'} onChange={(e) => onChange('colorRange', [e.target.value, (config.colorRange as string[])?.[1] || '#eac736'])} />
                     </div>
-                    <div className="property-row">
-                        <label className="property-label">色阶高值</label>
-                        <input type="color" className="property-input" value={(config.colorRange as string[])?.[1] || '#eac736'} onChange={(e) => onChange('colorRange', [(config.colorRange as string[])?.[0] || '#50a3ba', e.target.value])} />
+                    <div className="flex items-center mb-3">
+                        <label className="w-20 text-xs text-text-secondary">色阶高值</label>
+                        <input type="color" className="flex-1 px-2.5 py-1.5 border border-border-default rounded bg-surface-card text-text-primary text-xs focus:outline-none focus:border-brand" value={(config.colorRange as string[])?.[1] || '#eac736'} onChange={(e) => onChange('colorRange', [(config.colorRange as string[])?.[0] || '#50a3ba', e.target.value])} />
                     </div>
                 </>
             );
 
         default:
             return (
-                <div className="empty-state-hint">
+                <div className="text-xs text-text-muted text-center py-8">
                     暂无可配置项
                 </div>
             );
@@ -5027,10 +5027,10 @@ function renderDataSourceConfig(
 
     return (
         <>
-            <div className="property-row">
-                <label className="property-label">类型</label>
+            <div className="flex items-center mb-3">
+                <label className="w-20 text-xs text-text-secondary">类型</label>
                 <select
-                    className="property-input"
+                    className="flex-1 px-2.5 py-1.5 border border-border-default rounded bg-surface-card text-text-primary text-xs focus:outline-none focus:border-brand"
                     value={dsType}
                     onChange={(e) => setType(e.target.value)}
                 >
@@ -5049,8 +5049,8 @@ function renderDataSourceConfig(
 
             {dsType === 'card' && (
                 <>
-                    <div className="property-row">
-                        <label className="property-label">Card</label>
+                    <div className="flex items-center mb-3">
+                        <label className="w-20 text-xs text-text-secondary">Card</label>
                         <CardIdPicker
                             value={ds?.type === 'card' ? (ds.cardConfig?.cardId ?? 0) : 0}
                             onChange={(cardId) => {
@@ -5065,11 +5065,11 @@ function renderDataSourceConfig(
                             }}
                         />
                     </div>
-                    <div className="property-row">
-                        <label className="property-label">刷新(秒)</label>
+                    <div className="flex items-center mb-3">
+                        <label className="w-20 text-xs text-text-secondary">刷新(秒)</label>
                         <input
                             type="number"
-                            className="property-input"
+                            className="flex-1 px-2.5 py-1.5 border border-border-default rounded bg-surface-card text-text-primary text-xs focus:outline-none focus:border-brand"
                             min={0}
                             step={10}
                             value={ds?.type === 'card' ? (ds.cardConfig?.refreshInterval ?? 0) : 0}
@@ -5128,11 +5128,11 @@ function renderDataSourceConfig(
 
             {dsType === 'api' && (
                 <>
-                    <div className="property-row">
-                        <label className="property-label">URL</label>
+                    <div className="flex items-center mb-3">
+                        <label className="w-20 text-xs text-text-secondary">URL</label>
                         <input
                             type="text"
-                            className="property-input"
+                            className="flex-1 px-2.5 py-1.5 border border-border-default rounded bg-surface-card text-text-primary text-xs focus:outline-none focus:border-brand"
                             value={ds?.type === 'api' ? (ds.apiConfig?.url ?? '') : ''}
                             onChange={(e) => {
                                 setDataSource({
@@ -5149,10 +5149,10 @@ function renderDataSourceConfig(
                             placeholder="/analytics/api/card/1/query 或 https://..."
                         />
                     </div>
-                    <div className="property-row">
-                        <label className="property-label">方法</label>
+                    <div className="flex items-center mb-3">
+                        <label className="w-20 text-xs text-text-secondary">方法</label>
                         <select
-                            className="property-input"
+                            className="flex-1 px-2.5 py-1.5 border border-border-default rounded bg-surface-card text-text-primary text-xs focus:outline-none focus:border-brand"
                             value={ds?.type === 'api' ? (ds.apiConfig?.method ?? 'GET') : 'GET'}
                             onChange={(e) => {
                                 const method = (e.target.value as 'GET' | 'POST') || 'GET';
@@ -5172,10 +5172,10 @@ function renderDataSourceConfig(
                             <option value="POST">POST</option>
                         </select>
                     </div>
-                    <div className="property-row">
-                        <label className="property-label">Body</label>
+                    <div className="flex items-center mb-3">
+                        <label className="w-20 text-xs text-text-secondary">Body</label>
                         <textarea
-                            className="property-input"
+                            className="flex-1 px-2.5 py-1.5 border border-border-default rounded bg-surface-card text-text-primary text-xs focus:outline-none focus:border-brand"
                             rows={4}
                             value={ds?.type === 'api' ? (ds.apiConfig?.body ?? '') : ''}
                             onChange={(e) => {
@@ -5194,11 +5194,11 @@ function renderDataSourceConfig(
                             placeholder='{"parameters":[]}'
                         />
                     </div>
-                    <div className="property-row">
-                        <label className="property-label">刷新(秒)</label>
+                    <div className="flex items-center mb-3">
+                        <label className="w-20 text-xs text-text-secondary">刷新(秒)</label>
                         <input
                             type="number"
-                            className="property-input"
+                            className="flex-1 px-2.5 py-1.5 border border-border-default rounded bg-surface-card text-text-primary text-xs focus:outline-none focus:border-brand"
                             min={0}
                             step={10}
                             value={ds?.type === 'api' ? (ds.refreshInterval ?? 0) : 0}
@@ -5225,8 +5225,8 @@ function renderDataSourceConfig(
 
             {dsType === 'sql' && (
                 <>
-                    <div className="property-row">
-                        <label className="property-label">数据库</label>
+                    <div className="flex items-center mb-3">
+                        <label className="w-20 text-xs text-text-secondary">数据库</label>
                         <DatabaseIdPicker
                             value={sqlConfig?.databaseId ?? 0}
                             onChange={(databaseId) => {
@@ -5244,11 +5244,11 @@ function renderDataSourceConfig(
                             }}
                         />
                     </div>
-                    <div className="property-row">
-                        <label className="property-label">数据库ID(手工)</label>
+                    <div className="flex items-center mb-3">
+                        <label className="w-20 text-xs text-text-secondary">数据库ID(手工)</label>
                         <input
                             type="number"
-                            className="property-input"
+                            className="flex-1 px-2.5 py-1.5 border border-border-default rounded bg-surface-card text-text-primary text-xs focus:outline-none focus:border-brand"
                             min={1}
                             value={sqlConfig?.databaseId ?? 0}
                             onChange={(e) => {
@@ -5268,10 +5268,10 @@ function renderDataSourceConfig(
                             placeholder="用于离线环境或未同步数据库列表"
                         />
                     </div>
-                    <div className="property-row">
-                        <label className="property-label">SQL</label>
+                    <div className="flex items-center mb-3">
+                        <label className="w-20 text-xs text-text-secondary">SQL</label>
                         <textarea
-                            className="property-input"
+                            className="flex-1 px-2.5 py-1.5 border border-border-default rounded bg-surface-card text-text-primary text-xs focus:outline-none focus:border-brand"
                             rows={6}
                             value={sqlConfig?.query ?? ''}
                             onChange={(e) => {
@@ -5290,11 +5290,11 @@ function renderDataSourceConfig(
                             placeholder="select * from public.table where day = {{day}} limit 200"
                         />
                     </div>
-                    <div className="property-row">
-                        <label className="property-label">参数提取</label>
+                    <div className="flex items-center mb-3">
+                        <label className="w-20 text-xs text-text-secondary">参数提取</label>
                         <button
                             type="button"
-                            className="header-btn"
+                            className="inline-flex items-center gap-1.5 min-h-8 rounded-md border border-border-default bg-surface-card text-text-primary px-3 text-xs cursor-pointer hover:border-brand hover:bg-brand/10 disabled:opacity-40 disabled:cursor-not-allowed"
                             onClick={() => {
                                 const names = extractSqlTemplateParameterNames(sqlConfig?.query ?? '');
                                 if (names.length === 0) {
@@ -5328,11 +5328,11 @@ function renderDataSourceConfig(
                     <div style={{ fontSize: 11, color: '#94a3b8', marginTop: -2 }}>
                         自动识别 &#123;&#123;param&#125;&#125; / $&#123;param&#125; 占位符并生成参数绑定。
                     </div>
-                    <div className="property-row">
-                        <label className="property-label">最大行数</label>
+                    <div className="flex items-center mb-3">
+                        <label className="w-20 text-xs text-text-secondary">最大行数</label>
                         <input
                             type="number"
-                            className="property-input"
+                            className="flex-1 px-2.5 py-1.5 border border-border-default rounded bg-surface-card text-text-primary text-xs focus:outline-none focus:border-brand"
                             min={1}
                             step={100}
                             value={sqlConfig?.maxRows ?? 2000}
@@ -5353,11 +5353,11 @@ function renderDataSourceConfig(
                             placeholder="默认2000"
                         />
                     </div>
-                    <div className="property-row">
-                        <label className="property-label">超时(秒)</label>
+                    <div className="flex items-center mb-3">
+                        <label className="w-20 text-xs text-text-secondary">超时(秒)</label>
                         <input
                             type="number"
-                            className="property-input"
+                            className="flex-1 px-2.5 py-1.5 border border-border-default rounded bg-surface-card text-text-primary text-xs focus:outline-none focus:border-brand"
                             min={1}
                             step={5}
                             value={sqlConfig?.queryTimeoutSeconds ?? 60}
@@ -5383,11 +5383,11 @@ function renderDataSourceConfig(
                         globalVariables={globalVariables}
                         onChange={updateSqlBindings}
                     />
-                    <div className="property-row">
-                        <label className="property-label">刷新(秒)</label>
+                    <div className="flex items-center mb-3">
+                        <label className="w-20 text-xs text-text-secondary">刷新(秒)</label>
                         <input
                             type="number"
-                            className="property-input"
+                            className="flex-1 px-2.5 py-1.5 border border-border-default rounded bg-surface-card text-text-primary text-xs focus:outline-none focus:border-brand"
                             min={0}
                             step={10}
                             value={dsType === 'sql' ? (ds?.refreshInterval ?? 0) : 0}
@@ -5414,10 +5414,10 @@ function renderDataSourceConfig(
 
             {dsType === 'dataset' && (
                 <>
-                    <div className="property-row">
-                        <label className="property-label">QueryBody(JSON)</label>
+                    <div className="flex items-center mb-3">
+                        <label className="w-20 text-xs text-text-secondary">QueryBody(JSON)</label>
                         <textarea
-                            className="property-input"
+                            className="flex-1 px-2.5 py-1.5 border border-border-default rounded bg-surface-card text-text-primary text-xs focus:outline-none focus:border-brand"
                             rows={8}
                             value={safeJsonStringify(ds?.datasetConfig?.queryBody)}
                             onChange={(e) => {
@@ -5432,11 +5432,11 @@ function renderDataSourceConfig(
                             placeholder='{"database":1,"type":"native","native":{"query":"select 1"}}'
                         />
                     </div>
-                    <div className="property-row">
-                        <label className="property-label">刷新(秒)</label>
+                    <div className="flex items-center mb-3">
+                        <label className="w-20 text-xs text-text-secondary">刷新(秒)</label>
                         <input
                             type="number"
-                            className="property-input"
+                            className="flex-1 px-2.5 py-1.5 border border-border-default rounded bg-surface-card text-text-primary text-xs focus:outline-none focus:border-brand"
                             min={0}
                             step={10}
                             value={dsType === 'dataset' ? (ds?.refreshInterval ?? 0) : 0}
@@ -5457,8 +5457,8 @@ function renderDataSourceConfig(
 
             {dsType === 'metric' && (
                 <>
-                    <div className="property-row">
-                        <label className="property-label">Card</label>
+                    <div className="flex items-center mb-3">
+                        <label className="w-20 text-xs text-text-secondary">Card</label>
                         <CardIdPicker
                             value={dsType === 'metric' ? (ds?.metricConfig?.cardId ?? 0) : 0}
                             onChange={(cardId) => {
@@ -5512,11 +5512,11 @@ function renderDataSourceConfig(
                         globalVariables={globalVariables}
                         onChange={updateMetricBindings}
                     />
-                    <div className="property-row">
-                        <label className="property-label">刷新(秒)</label>
+                    <div className="flex items-center mb-3">
+                        <label className="w-20 text-xs text-text-secondary">刷新(秒)</label>
                         <input
                             type="number"
-                            className="property-input"
+                            className="flex-1 px-2.5 py-1.5 border border-border-default rounded bg-surface-card text-text-primary text-xs focus:outline-none focus:border-brand"
                             min={0}
                             step={10}
                             value={dsType === 'metric' ? (ds?.refreshInterval ?? 0) : 0}
@@ -5666,8 +5666,8 @@ function renderInteractionConfig(
 
     const content = (
         <>
-            <div className="property-row">
-                <label className="property-label">启用点击联动</label>
+            <div className="flex items-center mb-3">
+                <label className="w-20 text-xs text-text-secondary">启用点击联动</label>
                 <input
                     type="checkbox"
                     checked={interaction.enabled ?? false}
@@ -5693,10 +5693,10 @@ function renderInteractionConfig(
                                 marginBottom: 8,
                             }}
                         >
-                            <div className="property-row">
-                                <label className="property-label">目标变量</label>
+                            <div className="flex items-center mb-3">
+                                <label className="w-20 text-xs text-text-secondary">目标变量</label>
                                 <select
-                                    className="property-input"
+                                    className="flex-1 px-2.5 py-1.5 border border-border-default rounded bg-surface-card text-text-primary text-xs focus:outline-none focus:border-brand"
                                     value={mapping.variableKey || ''}
                                     onChange={(e) => updateMapping(index, { variableKey: e.target.value })}
                                 >
@@ -5709,11 +5709,11 @@ function renderInteractionConfig(
                                 </select>
                             </div>
 
-                            <div className="property-row">
-                                <label className="property-label">取值路径</label>
+                            <div className="flex items-center mb-3">
+                                <label className="w-20 text-xs text-text-secondary">取值路径</label>
                                 <input
                                     list={`interaction-source-path-${index}`}
-                                    className="property-input"
+                                    className="flex-1 px-2.5 py-1.5 border border-border-default rounded bg-surface-card text-text-primary text-xs focus:outline-none focus:border-brand"
                                     value={mapping.sourcePath || 'name'}
                                     onChange={(e) => updateMapping(index, { sourcePath: e.target.value })}
                                     placeholder="name / data.name / value"
@@ -5725,10 +5725,10 @@ function renderInteractionConfig(
                                 </datalist>
                             </div>
 
-                            <div className="property-row">
-                                <label className="property-label">值转换</label>
+                            <div className="flex items-center mb-3">
+                                <label className="w-20 text-xs text-text-secondary">值转换</label>
                                 <select
-                                    className="property-input"
+                                    className="flex-1 px-2.5 py-1.5 border border-border-default rounded bg-surface-card text-text-primary text-xs focus:outline-none focus:border-brand"
                                     value={String(mapping.transform || 'raw')}
                                     onChange={(e) => updateMapping(index, { transform: e.target.value as ComponentInteractionMapping['transform'] })}
                                 >
@@ -5740,10 +5740,10 @@ function renderInteractionConfig(
                                 </select>
                             </div>
 
-                            <div className="property-row">
-                                <label className="property-label">默认值</label>
+                            <div className="flex items-center mb-3">
+                                <label className="w-20 text-xs text-text-secondary">默认值</label>
                                 <input
-                                    className="property-input"
+                                    className="flex-1 px-2.5 py-1.5 border border-border-default rounded bg-surface-card text-text-primary text-xs focus:outline-none focus:border-brand"
                                     value={mapping.fallbackValue || ''}
                                     onChange={(e) => updateMapping(index, { fallbackValue: e.target.value })}
                                     placeholder="取值为空时写入该值"
@@ -5751,7 +5751,7 @@ function renderInteractionConfig(
                             </div>
 
                             <button
-                                className="property-input"
+                                className="flex-1 px-2.5 py-1.5 border border-border-default rounded bg-surface-card text-text-primary text-xs focus:outline-none focus:border-brand"
                                 onClick={() => setInteraction({ ...interaction, mappings: mappings.filter((_, i) => i !== index) })}
                                 style={{ width: '100%', cursor: 'pointer', textAlign: 'center', color: '#ef4444' }}
                             >
@@ -5761,7 +5761,7 @@ function renderInteractionConfig(
                     ))}
 
                     <button
-                        className="property-input"
+                        className="flex-1 px-2.5 py-1.5 border border-border-default rounded bg-surface-card text-text-primary text-xs focus:outline-none focus:border-brand"
                         onClick={() => setInteraction({
                             ...interaction,
                             mappings: [...mappings, {
@@ -5779,8 +5779,8 @@ function renderInteractionConfig(
                         支持自定义路径，例如 <code>data.code</code>；可对值做数值/大小写转换，并设置空值回退。
                     </div>
 
-                    <div className="property-row" style={{ marginTop: 10 }}>
-                        <label className="property-label">启用点击跳转</label>
+                    <div className="flex items-center mb-3" style={{ marginTop: 10 }}>
+                        <label className="w-20 text-xs text-text-secondary">启用点击跳转</label>
                         <input
                             type="checkbox"
                             checked={interaction.jumpEnabled === true}
@@ -5790,19 +5790,19 @@ function renderInteractionConfig(
 
                     {interaction.jumpEnabled === true && (
                         <>
-                            <div className="property-row">
-                                <label className="property-label">跳转链接模板</label>
+                            <div className="flex items-center mb-3">
+                                <label className="w-20 text-xs text-text-secondary">跳转链接模板</label>
                                 <input
-                                    className="property-input"
+                                    className="flex-1 px-2.5 py-1.5 border border-border-default rounded bg-surface-card text-text-primary text-xs focus:outline-none focus:border-brand"
                                     value={interaction.jumpUrlTemplate || ''}
                                     onChange={(e) => setInteraction({ ...interaction, jumpUrlTemplate: e.target.value })}
                                     placeholder="https://host/path?name={{name}}&value={{value}}"
                                 />
                             </div>
-                            <div className="property-row">
-                                <label className="property-label">打开方式</label>
+                            <div className="flex items-center mb-3">
+                                <label className="w-20 text-xs text-text-secondary">打开方式</label>
                                 <select
-                                    className="property-input"
+                                    className="flex-1 px-2.5 py-1.5 border border-border-default rounded bg-surface-card text-text-primary text-xs focus:outline-none focus:border-brand"
                                     value={interaction.jumpOpenMode || 'new-tab'}
                                     onChange={(e) => setInteraction({
                                         ...interaction,
@@ -5827,8 +5827,8 @@ function renderInteractionConfig(
         return content;
     }
     return (
-        <div className="property-section">
-            <div className="property-section-title">联动配置</div>
+        <div className="py-3 border-b border-border-default">
+            <div className="text-xs font-semibold text-text-secondary uppercase tracking-wide mb-2">联动配置</div>
             {content}
         </div>
     );
@@ -5883,21 +5883,21 @@ function renderActionConfig(
                             background: 'rgba(248,250,252,0.72)',
                         }}
                     >
-                        <div className="property-row">
-                            <label className="property-label">动作标题</label>
+                        <div className="flex items-center mb-3">
+                            <label className="w-20 text-xs text-text-secondary">动作标题</label>
                             <input
                                 type="text"
-                                className="property-input"
+                                className="flex-1 px-2.5 py-1.5 border border-border-default rounded bg-surface-card text-text-primary text-xs focus:outline-none focus:border-brand"
                                 value={action.label || ''}
                                 onChange={(e) => updateAction(index, { label: e.target.value })}
                                 placeholder="查看详情 / 发起协调 / 跳转周报"
                             />
                         </div>
 
-                        <div className="property-row">
-                            <label className="property-label">动作类型</label>
+                        <div className="flex items-center mb-3">
+                            <label className="w-20 text-xs text-text-secondary">动作类型</label>
                             <select
-                                className="property-input"
+                                className="flex-1 px-2.5 py-1.5 border border-border-default rounded bg-surface-card text-text-primary text-xs focus:outline-none focus:border-brand"
                                 value={actionType}
                                 onChange={(e) => updateAction(index, { type: e.target.value as ScreenComponentAction['type'] })}
                             >
@@ -5922,11 +5922,11 @@ function renderActionConfig(
                                             marginBottom: 8,
                                         }}
                                     >
-                                        <div className="property-row">
-                                            <label className="property-label">目标变量</label>
+                                        <div className="flex items-center mb-3">
+                                            <label className="w-20 text-xs text-text-secondary">目标变量</label>
                                             <input
                                                 type="text"
-                                                className="property-input"
+                                                className="flex-1 px-2.5 py-1.5 border border-border-default rounded bg-surface-card text-text-primary text-xs focus:outline-none focus:border-brand"
                                                 value={mapping.variableKey || ''}
                                                 onChange={(e) => {
                                                     const next = [...mappings];
@@ -5936,11 +5936,11 @@ function renderActionConfig(
                                                 placeholder="projectId"
                                             />
                                         </div>
-                                        <div className="property-row">
-                                            <label className="property-label">取值路径</label>
+                                        <div className="flex items-center mb-3">
+                                            <label className="w-20 text-xs text-text-secondary">取值路径</label>
                                             <input
                                                 list={`action-source-path-${index}-${mappingIndex}`}
-                                                className="property-input"
+                                                className="flex-1 px-2.5 py-1.5 border border-border-default rounded bg-surface-card text-text-primary text-xs focus:outline-none focus:border-brand"
                                                 value={mapping.sourcePath || ''}
                                                 onChange={(e) => {
                                                     const next = [...mappings];
@@ -5955,10 +5955,10 @@ function renderActionConfig(
                                                 ))}
                                             </datalist>
                                         </div>
-                                        <div className="property-row">
-                                            <label className="property-label">值转换</label>
+                                        <div className="flex items-center mb-3">
+                                            <label className="w-20 text-xs text-text-secondary">值转换</label>
                                             <select
-                                                className="property-input"
+                                                className="flex-1 px-2.5 py-1.5 border border-border-default rounded bg-surface-card text-text-primary text-xs focus:outline-none focus:border-brand"
                                                 value={String(mapping.transform || 'raw')}
                                                 onChange={(e) => {
                                                     const next = [...mappings];
@@ -5975,7 +5975,7 @@ function renderActionConfig(
                                         </div>
                                         <button
                                             type="button"
-                                            className="property-input"
+                                            className="flex-1 px-2.5 py-1.5 border border-border-default rounded bg-surface-card text-text-primary text-xs focus:outline-none focus:border-brand"
                                             onClick={() => updateMappings(index, mappings.filter((_, i) => i !== mappingIndex))}
                                             style={{ width: '100%', textAlign: 'center', cursor: 'pointer', color: '#ef4444' }}
                                         >
@@ -5986,7 +5986,7 @@ function renderActionConfig(
 
                                 <button
                                     type="button"
-                                    className="property-input"
+                                    className="flex-1 px-2.5 py-1.5 border border-border-default rounded bg-surface-card text-text-primary text-xs focus:outline-none focus:border-brand"
                                     onClick={() => updateMappings(index, [
                                         ...mappings,
                                         { variableKey: '', sourcePath: 'name', transform: 'raw', fallbackValue: '' },
@@ -6000,20 +6000,20 @@ function renderActionConfig(
 
                         {actionType === 'jump-url' ? (
                             <>
-                                <div className="property-row">
-                                    <label className="property-label">跳转链接模板</label>
+                                <div className="flex items-center mb-3">
+                                    <label className="w-20 text-xs text-text-secondary">跳转链接模板</label>
                                     <input
                                         type="text"
-                                        className="property-input"
+                                        className="flex-1 px-2.5 py-1.5 border border-border-default rounded bg-surface-card text-text-primary text-xs focus:outline-none focus:border-brand"
                                         value={action.jumpUrlTemplate || ''}
                                         onChange={(e) => updateAction(index, { jumpUrlTemplate: e.target.value })}
                                         placeholder="https://host/path?project={{name}}"
                                     />
                                 </div>
-                                <div className="property-row">
-                                    <label className="property-label">打开方式</label>
+                                <div className="flex items-center mb-3">
+                                    <label className="w-20 text-xs text-text-secondary">打开方式</label>
                                     <select
-                                        className="property-input"
+                                        className="flex-1 px-2.5 py-1.5 border border-border-default rounded bg-surface-card text-text-primary text-xs focus:outline-none focus:border-brand"
                                         value={action.jumpOpenMode || 'new-tab'}
                                         onChange={(e) => updateAction(index, { jumpOpenMode: e.target.value === 'self' ? 'self' : 'new-tab' })}
                                     >
@@ -6026,20 +6026,20 @@ function renderActionConfig(
 
                         {actionType === 'open-panel' ? (
                             <>
-                                <div className="property-row">
-                                    <label className="property-label">面板标题模板</label>
+                                <div className="flex items-center mb-3">
+                                    <label className="w-20 text-xs text-text-secondary">面板标题模板</label>
                                     <input
                                         type="text"
-                                        className="property-input"
+                                        className="flex-1 px-2.5 py-1.5 border border-border-default rounded bg-surface-card text-text-primary text-xs focus:outline-none focus:border-brand"
                                         value={action.panelTitle || ''}
                                         onChange={(e) => updateAction(index, { panelTitle: e.target.value })}
                                         placeholder="项目 {{name}}"
                                     />
                                 </div>
-                                <div className="property-row">
-                                    <label className="property-label">面板内容模板</label>
+                                <div className="flex items-center mb-3">
+                                    <label className="w-20 text-xs text-text-secondary">面板内容模板</label>
                                     <textarea
-                                        className="property-input"
+                                        className="flex-1 px-2.5 py-1.5 border border-border-default rounded bg-surface-card text-text-primary text-xs focus:outline-none focus:border-brand"
                                         rows={4}
                                         value={action.panelBodyTemplate || ''}
                                         onChange={(e) => updateAction(index, { panelBodyTemplate: e.target.value })}
@@ -6051,20 +6051,20 @@ function renderActionConfig(
 
                         {actionType === 'emit-intent' ? (
                             <>
-                                <div className="property-row">
-                                    <label className="property-label">意图名称</label>
+                                <div className="flex items-center mb-3">
+                                    <label className="w-20 text-xs text-text-secondary">意图名称</label>
                                     <input
                                         type="text"
-                                        className="property-input"
+                                        className="flex-1 px-2.5 py-1.5 border border-border-default rounded bg-surface-card text-text-primary text-xs focus:outline-none focus:border-brand"
                                         value={action.intentName || ''}
                                         onChange={(e) => updateAction(index, { intentName: e.target.value })}
                                         placeholder="project.follow-up"
                                     />
                                 </div>
-                                <div className="property-row">
-                                    <label className="property-label">意图负载模板</label>
+                                <div className="flex items-center mb-3">
+                                    <label className="w-20 text-xs text-text-secondary">意图负载模板</label>
                                     <textarea
-                                        className="property-input"
+                                        className="flex-1 px-2.5 py-1.5 border border-border-default rounded bg-surface-card text-text-primary text-xs focus:outline-none focus:border-brand"
                                         rows={4}
                                         value={action.intentPayloadTemplate || ''}
                                         onChange={(e) => updateAction(index, { intentPayloadTemplate: e.target.value })}
@@ -6084,7 +6084,7 @@ function renderActionConfig(
 
                         <button
                             type="button"
-                            className="property-input"
+                            className="flex-1 px-2.5 py-1.5 border border-border-default rounded bg-surface-card text-text-primary text-xs focus:outline-none focus:border-brand"
                             onClick={() => setActions(actions.filter((_, i) => i !== index))}
                             style={{ width: '100%', textAlign: 'center', cursor: 'pointer', color: '#ef4444', marginTop: 8 }}
                         >
@@ -6096,7 +6096,7 @@ function renderActionConfig(
 
             <button
                 type="button"
-                className="property-input"
+                className="flex-1 px-2.5 py-1.5 border border-border-default rounded bg-surface-card text-text-primary text-xs focus:outline-none focus:border-brand"
                 onClick={() => setActions([
                     ...actions,
                     { type: 'open-panel', label: '查看详情', panelTitle: '{{name}}', panelBodyTemplate: '' },
@@ -6112,8 +6112,8 @@ function renderActionConfig(
         return content;
     }
     return (
-        <div className="property-section">
-            <div className="property-section-title">动作入口</div>
+        <div className="py-3 border-b border-border-default">
+            <div className="text-xs font-semibold text-text-secondary uppercase tracking-wide mb-2">动作入口</div>
             {content}
         </div>
     );
@@ -6157,8 +6157,8 @@ function renderDrillDownConfig(
 
     const content = (
         <>
-            <div className="property-row">
-                <label className="property-label">启用下钻</label>
+            <div className="flex items-center mb-3">
+                <label className="w-20 text-xs text-text-secondary">启用下钻</label>
                 <input
                     type="checkbox"
                     checked={enabled}
@@ -6185,7 +6185,7 @@ function renderDrillDownConfig(
                             }}>
                                 <span>层级 {i + 1}</span>
                                 <button
-                                    className="property-btn-small"
+                                    className="inline-flex items-center justify-center px-2 py-1 min-h-7 border border-border-default rounded bg-surface-card text-text-primary text-xs cursor-pointer transition-all duration-200 hover:border-brand hover:bg-brand/10 disabled:opacity-45 disabled:cursor-not-allowed"
                                     onClick={() => removeLevel(i)}
                                     style={{
                                         background: 'none', border: 'none',
@@ -6195,29 +6195,29 @@ function renderDrillDownConfig(
                                     删除
                                 </button>
                             </div>
-                            <div className="property-row">
-                                <label className="property-label">Card</label>
+                            <div className="flex items-center mb-3">
+                                <label className="w-20 text-xs text-text-secondary">Card</label>
                                 <CardIdPicker
                                     value={level.cardId || 0}
                                     onChange={(cardId) => updateLevel(i, 'cardId', cardId)}
                                     placeholder="-- 下钻目标 --"
                                 />
                             </div>
-                            <div className="property-row">
-                                <label className="property-label">参数名</label>
+                            <div className="flex items-center mb-3">
+                                <label className="w-20 text-xs text-text-secondary">参数名</label>
                                 <input
                                     type="text"
-                                    className="property-input"
+                                    className="flex-1 px-2.5 py-1.5 border border-border-default rounded bg-surface-card text-text-primary text-xs focus:outline-none focus:border-brand"
                                     value={level.paramName}
                                     onChange={(e) => updateLevel(i, 'paramName', e.target.value)}
                                     placeholder="如: region"
                                 />
                             </div>
-                            <div className="property-row">
-                                <label className="property-label">标签</label>
+                            <div className="flex items-center mb-3">
+                                <label className="w-20 text-xs text-text-secondary">标签</label>
                                 <input
                                     type="text"
-                                    className="property-input"
+                                    className="flex-1 px-2.5 py-1.5 border border-border-default rounded bg-surface-card text-text-primary text-xs focus:outline-none focus:border-brand"
                                     value={level.label}
                                     onChange={(e) => updateLevel(i, 'label', e.target.value)}
                                     placeholder="如: 地区"
@@ -6227,7 +6227,7 @@ function renderDrillDownConfig(
                     ))}
 
                     <button
-                        className="property-input"
+                        className="flex-1 px-2.5 py-1.5 border border-border-default rounded bg-surface-card text-text-primary text-xs focus:outline-none focus:border-brand"
                         onClick={addLevel}
                         style={{
                             width: '100%', cursor: 'pointer',
@@ -6245,8 +6245,8 @@ function renderDrillDownConfig(
         return content;
     }
     return (
-        <div className="property-section">
-            <div className="property-section-title">下钻配置</div>
+        <div className="py-3 border-b border-border-default">
+            <div className="text-xs font-semibold text-text-secondary uppercase tracking-wide mb-2">下钻配置</div>
             {content}
         </div>
     );
@@ -6320,7 +6320,7 @@ function CardSourceColumnBindingsEditor({
             <div style={{ display: 'flex', gap: 6, marginBottom: 8 }}>
                 <button
                     type="button"
-                    className="header-btn"
+                    className="inline-flex items-center gap-1.5 min-h-8 rounded-md border border-border-default bg-surface-card text-text-primary px-3 text-xs cursor-pointer hover:border-brand hover:bg-brand/10 disabled:opacity-40 disabled:cursor-not-allowed"
                     onClick={() => {
                         if (!unboundSources[0]) return;
                         onColumnsChange([...effectiveColumns, { source: unboundSources[0].name, align: defaultAlign }]);
@@ -6332,7 +6332,7 @@ function CardSourceColumnBindingsEditor({
                 </button>
                 <button
                     type="button"
-                    className="header-btn"
+                    className="inline-flex items-center gap-1.5 min-h-8 rounded-md border border-border-default bg-surface-card text-text-primary px-3 text-xs cursor-pointer hover:border-brand hover:bg-brand/10 disabled:opacity-40 disabled:cursor-not-allowed"
                     onClick={() => onColumnsChange(undefined)}
                     title="恢复默认映射（按数据源原始字段）"
                 >
@@ -6340,7 +6340,7 @@ function CardSourceColumnBindingsEditor({
                 </button>
                 <button
                     type="button"
-                    className="header-btn"
+                    className="inline-flex items-center gap-1.5 min-h-8 rounded-md border border-border-default bg-surface-card text-text-primary px-3 text-xs cursor-pointer hover:border-brand hover:bg-brand/10 disabled:opacity-40 disabled:cursor-not-allowed"
                     onClick={() => onColumnsChange([])}
                     disabled={effectiveColumns.length === 0}
                     title="清空当前映射"
@@ -6369,7 +6369,7 @@ function CardSourceColumnBindingsEditor({
                             <div style={{ display: 'flex', gap: 4 }}>
                                 <button
                                     type="button"
-                                    className="header-btn"
+                                    className="inline-flex items-center gap-1.5 min-h-8 rounded-md border border-border-default bg-surface-card text-text-primary px-3 text-xs cursor-pointer hover:border-brand hover:bg-brand/10 disabled:opacity-40 disabled:cursor-not-allowed"
                                     onClick={() => handleMove(index, -1)}
                                     disabled={index === 0}
                                     title="上移"
@@ -6378,7 +6378,7 @@ function CardSourceColumnBindingsEditor({
                                 </button>
                                 <button
                                     type="button"
-                                    className="header-btn"
+                                    className="inline-flex items-center gap-1.5 min-h-8 rounded-md border border-border-default bg-surface-card text-text-primary px-3 text-xs cursor-pointer hover:border-brand hover:bg-brand/10 disabled:opacity-40 disabled:cursor-not-allowed"
                                     onClick={() => handleMove(index, 1)}
                                     disabled={index >= effectiveColumns.length - 1}
                                     title="下移"
@@ -6387,7 +6387,7 @@ function CardSourceColumnBindingsEditor({
                                 </button>
                                 <button
                                     type="button"
-                                    className="header-btn"
+                                    className="inline-flex items-center gap-1.5 min-h-8 rounded-md border border-border-default bg-surface-card text-text-primary px-3 text-xs cursor-pointer hover:border-brand hover:bg-brand/10 disabled:opacity-40 disabled:cursor-not-allowed"
                                     onClick={() => handleRemove(index)}
                                     title="删除该列"
                                 >
@@ -6395,10 +6395,10 @@ function CardSourceColumnBindingsEditor({
                                 </button>
                             </div>
                         </div>
-                        <div className="property-row">
-                            <label className="property-label">绑定字段</label>
+                        <div className="flex items-center mb-3">
+                            <label className="w-20 text-xs text-text-secondary">绑定字段</label>
                             <select
-                                className="property-input"
+                                className="flex-1 px-2.5 py-1.5 border border-border-default rounded bg-surface-card text-text-primary text-xs focus:outline-none focus:border-brand"
                                 value={entry.source}
                                 onChange={(e) => handleSourceChange(index, e.target.value)}
                             >
@@ -6412,11 +6412,11 @@ function CardSourceColumnBindingsEditor({
                                 ))}
                             </select>
                         </div>
-                        <div className="property-row">
-                            <label className="property-label">表头标题</label>
+                        <div className="flex items-center mb-3">
+                            <label className="w-20 text-xs text-text-secondary">表头标题</label>
                             <input
                                 type="text"
-                                className="property-input"
+                                className="flex-1 px-2.5 py-1.5 border border-border-default rounded bg-surface-card text-text-primary text-xs focus:outline-none focus:border-brand"
                                 placeholder={sourceMeta?.displayName || entry.source}
                                 value={entry.alias || ''}
                                 onChange={(e) => {
@@ -6434,10 +6434,10 @@ function CardSourceColumnBindingsEditor({
                                 }}
                             />
                         </div>
-                        <div className="property-row">
-                            <label className="property-label">对齐</label>
+                        <div className="flex items-center mb-3">
+                            <label className="w-20 text-xs text-text-secondary">对齐</label>
                             <select
-                                className="property-input"
+                                className="flex-1 px-2.5 py-1.5 border border-border-default rounded bg-surface-card text-text-primary text-xs focus:outline-none focus:border-brand"
                                 value={(entry.align as string) || defaultAlign}
                                 onChange={(e) => updateColumn(index, { align: e.target.value as ColumnEntry['align'] })}
                             >
@@ -6446,19 +6446,19 @@ function CardSourceColumnBindingsEditor({
                                 <option value="right">右</option>
                             </select>
                         </div>
-                        <div className="property-row">
-                            <label className="property-label">自动换行</label>
+                        <div className="flex items-center mb-3">
+                            <label className="w-20 text-xs text-text-secondary">自动换行</label>
                             <input
                                 type="checkbox"
                                 checked={entry.wrap === true}
                                 onChange={(e) => updateColumn(index, { wrap: e.target.checked })}
                             />
                         </div>
-                        <div className="property-row">
-                            <label className="property-label">列宽(%)</label>
+                        <div className="flex items-center mb-3">
+                            <label className="w-20 text-xs text-text-secondary">列宽(%)</label>
                             <input
                                 type="number"
-                                className="property-input"
+                                className="flex-1 px-2.5 py-1.5 border border-border-default rounded bg-surface-card text-text-primary text-xs focus:outline-none focus:border-brand"
                                 min={5}
                                 max={100}
                                 value={typeof entry.width === 'number' ? entry.width : ''}
@@ -6476,10 +6476,10 @@ function CardSourceColumnBindingsEditor({
                                 }}
                             />
                         </div>
-                        <div className="property-row">
-                            <label className="property-label">格式化</label>
+                        <div className="flex items-center mb-3">
+                            <label className="w-20 text-xs text-text-secondary">格式化</label>
                             <select
-                                className="property-input"
+                                className="flex-1 px-2.5 py-1.5 border border-border-default rounded bg-surface-card text-text-primary text-xs focus:outline-none focus:border-brand"
                                 value={(entry.formatter as string) || 'auto'}
                                 onChange={(e) => updateColumn(index, { formatter: e.target.value as ColumnEntry['formatter'] })}
                             >
@@ -6515,22 +6515,22 @@ function ScrollBoardConfig({ component, onChange }: {
 
     return (
         <>
-            <div className="property-row">
-                <label className="property-label">行数</label>
+            <div className="flex items-center mb-3">
+                <label className="w-20 text-xs text-text-secondary">行数</label>
                 <input
                     type="number"
-                    className="property-input"
+                    className="flex-1 px-2.5 py-1.5 border border-border-default rounded bg-surface-card text-text-primary text-xs focus:outline-none focus:border-brand"
                     min={1}
                     max={20}
                     value={config.rowNum as number}
                     onChange={(e) => onChange('rowNum', Number(e.target.value))}
                 />
             </div>
-            <div className="property-row">
-                <label className="property-label">等待时间(ms)</label>
+            <div className="flex items-center mb-3">
+                <label className="w-20 text-xs text-text-secondary">等待时间(ms)</label>
                 <input
                     type="number"
-                    className="property-input"
+                    className="flex-1 px-2.5 py-1.5 border border-border-default rounded bg-surface-card text-text-primary text-xs focus:outline-none focus:border-brand"
                     min={500}
                     max={10000}
                     step={500}
@@ -6538,20 +6538,20 @@ function ScrollBoardConfig({ component, onChange }: {
                     onChange={(e) => onChange('waitTime', Number(e.target.value))}
                 />
             </div>
-            <div className="property-row">
-                <label className="property-label">表头颜色</label>
+            <div className="flex items-center mb-3">
+                <label className="w-20 text-xs text-text-secondary">表头颜色</label>
                 <input
                     type="color"
-                    className="property-color-input"
+                    className="w-8 h-7 border border-border-default rounded cursor-pointer p-0"
                     value={(config.headerColor as string) || '#ffffff'}
                     onChange={(e) => onChange('headerColor', e.target.value)}
                 />
             </div>
-            <div className="property-row">
-                <label className="property-label">表头背景</label>
+            <div className="flex items-center mb-3">
+                <label className="w-20 text-xs text-text-secondary">表头背景</label>
                 <input
                     type="color"
-                    className="property-color-input"
+                    className="w-8 h-7 border border-border-default rounded cursor-pointer p-0"
                     value={(config.headerBGC as string) || '#003366'}
                     onChange={(e) => onChange('headerBGC', e.target.value)}
                 />
@@ -6582,11 +6582,11 @@ function ScrollBoardConfig({ component, onChange }: {
                         表头别名
                     </div>
                     {staticHeaders.map((h, i) => (
-                        <div className="property-row" key={i}>
-                            <label className="property-label" title={h}>列{i + 1}</label>
+                        <div className="flex items-center mb-3" key={i}>
+                            <label className="w-20 text-xs text-text-secondary" title={h}>列{i + 1}</label>
                             <input
                                 type="text"
-                                className="property-input"
+                                className="flex-1 px-2.5 py-1.5 border border-border-default rounded bg-surface-card text-text-primary text-xs focus:outline-none focus:border-brand"
                                 placeholder={h}
                                 value={columnAlias[String(i)] || ''}
                                 onChange={(e) => {
@@ -6653,59 +6653,59 @@ function ChartAnnotationConfig({ component, onChange }: {
             <div style={{ fontSize: 11, color: '#94a3b8', fontWeight: 600 }}>辅助线 ({markLines.length}/5)</div>
             {markLines.map((ml, idx) => (
                 <div key={idx} style={{ display: 'grid', gridTemplateColumns: 'auto 1fr 60px 60px auto', gap: 4, alignItems: 'center' }}>
-                    <select className="property-input" style={{ fontSize: 11, padding: '3px 4px' }} value={ml.type}
+                    <select className="flex-1 px-2.5 py-1.5 border border-border-default rounded bg-surface-card text-text-primary text-xs focus:outline-none focus:border-brand" style={{ fontSize: 11, padding: '3px 4px' }} value={ml.type}
                         onChange={(e) => updateMarkLine(idx, { type: e.target.value as ChartMarkLine['type'] })}>
                         <option value="value">固定值</option><option value="average">平均</option>
                         <option value="min">最小</option><option value="max">最大</option>
                     </select>
                     {ml.type === 'value' ? (
-                        <input type="number" className="property-input" style={{ fontSize: 11, padding: '3px 4px' }} value={ml.value ?? 0}
+                        <input type="number" className="flex-1 px-2.5 py-1.5 border border-border-default rounded bg-surface-card text-text-primary text-xs focus:outline-none focus:border-brand" style={{ fontSize: 11, padding: '3px 4px' }} value={ml.value ?? 0}
                             onChange={(e) => updateMarkLine(idx, { value: Number(e.target.value) })} />
                     ) : <span />}
-                    <input type="text" className="property-input" style={{ fontSize: 11, padding: '3px 4px' }} placeholder="标签" value={ml.name ?? ''} onChange={(e) => updateMarkLine(idx, { name: e.target.value })} />
-                    <input type="color" className="property-color-input" value={ml.color ?? '#ff6b6b'} onChange={(e) => updateMarkLine(idx, { color: e.target.value })} />
-                    <button type="button" className="property-btn-small" style={{ padding: '2px 6px', fontSize: 11 }} onClick={() => removeMarkLine(idx)}>×</button>
+                    <input type="text" className="flex-1 px-2.5 py-1.5 border border-border-default rounded bg-surface-card text-text-primary text-xs focus:outline-none focus:border-brand" style={{ fontSize: 11, padding: '3px 4px' }} placeholder="标签" value={ml.name ?? ''} onChange={(e) => updateMarkLine(idx, { name: e.target.value })} />
+                    <input type="color" className="w-8 h-7 border border-border-default rounded cursor-pointer p-0" value={ml.color ?? '#ff6b6b'} onChange={(e) => updateMarkLine(idx, { color: e.target.value })} />
+                    <button type="button" className="inline-flex items-center justify-center px-2 py-1 min-h-7 border border-border-default rounded bg-surface-card text-text-primary text-xs cursor-pointer transition-all duration-200 hover:border-brand hover:bg-brand/10 disabled:opacity-45 disabled:cursor-not-allowed" style={{ padding: '2px 6px', fontSize: 11 }} onClick={() => removeMarkLine(idx)}>×</button>
                 </div>
             ))}
             {markLines.length < 5 && (
-                <button type="button" className="property-btn-small" onClick={addMarkLine} style={{ fontSize: 11, justifySelf: 'start' }}>+ 辅助线</button>
+                <button type="button" className="inline-flex items-center justify-center px-2 py-1 min-h-7 border border-border-default rounded bg-surface-card text-text-primary text-xs cursor-pointer transition-all duration-200 hover:border-brand hover:bg-brand/10 disabled:opacity-45 disabled:cursor-not-allowed" onClick={addMarkLine} style={{ fontSize: 11, justifySelf: 'start' }}>+ 辅助线</button>
             )}
 
             <div style={{ fontSize: 11, color: '#94a3b8', fontWeight: 600, marginTop: 4 }}>标记区域 ({markAreas.length}/3)</div>
             {markAreas.map((ma, idx) => (
                 <div key={idx} style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 60px 60px auto', gap: 4, alignItems: 'center' }}>
-                    <input type="number" className="property-input" style={{ fontSize: 11, padding: '3px 4px' }} placeholder="起始" value={ma.from} onChange={(e) => updateMarkArea(idx, { from: Number(e.target.value) })} />
-                    <input type="number" className="property-input" style={{ fontSize: 11, padding: '3px 4px' }} placeholder="结束" value={ma.to} onChange={(e) => updateMarkArea(idx, { to: Number(e.target.value) })} />
-                    <input type="text" className="property-input" style={{ fontSize: 11, padding: '3px 4px' }} placeholder="标签" value={ma.name ?? ''} onChange={(e) => updateMarkArea(idx, { name: e.target.value })} />
-                    <input type="color" className="property-color-input" value={ma.color?.startsWith('rgba') ? '#ff6b6b' : (ma.color ?? '#ff6b6b')}
+                    <input type="number" className="flex-1 px-2.5 py-1.5 border border-border-default rounded bg-surface-card text-text-primary text-xs focus:outline-none focus:border-brand" style={{ fontSize: 11, padding: '3px 4px' }} placeholder="起始" value={ma.from} onChange={(e) => updateMarkArea(idx, { from: Number(e.target.value) })} />
+                    <input type="number" className="flex-1 px-2.5 py-1.5 border border-border-default rounded bg-surface-card text-text-primary text-xs focus:outline-none focus:border-brand" style={{ fontSize: 11, padding: '3px 4px' }} placeholder="结束" value={ma.to} onChange={(e) => updateMarkArea(idx, { to: Number(e.target.value) })} />
+                    <input type="text" className="flex-1 px-2.5 py-1.5 border border-border-default rounded bg-surface-card text-text-primary text-xs focus:outline-none focus:border-brand" style={{ fontSize: 11, padding: '3px 4px' }} placeholder="标签" value={ma.name ?? ''} onChange={(e) => updateMarkArea(idx, { name: e.target.value })} />
+                    <input type="color" className="w-8 h-7 border border-border-default rounded cursor-pointer p-0" value={ma.color?.startsWith('rgba') ? '#ff6b6b' : (ma.color ?? '#ff6b6b')}
                         onChange={(e) => { const h = e.target.value; const r = parseInt(h.slice(1, 3), 16); const g = parseInt(h.slice(3, 5), 16); const b = parseInt(h.slice(5, 7), 16); updateMarkArea(idx, { color: `rgba(${r},${g},${b},0.15)` }); }} />
-                    <button type="button" className="property-btn-small" style={{ padding: '2px 6px', fontSize: 11 }} onClick={() => removeMarkArea(idx)}>×</button>
+                    <button type="button" className="inline-flex items-center justify-center px-2 py-1 min-h-7 border border-border-default rounded bg-surface-card text-text-primary text-xs cursor-pointer transition-all duration-200 hover:border-brand hover:bg-brand/10 disabled:opacity-45 disabled:cursor-not-allowed" style={{ padding: '2px 6px', fontSize: 11 }} onClick={() => removeMarkArea(idx)}>×</button>
                 </div>
             ))}
             {markAreas.length < 3 && (
-                <button type="button" className="property-btn-small" onClick={addMarkArea} style={{ fontSize: 11, justifySelf: 'start' }}>+ 标记区域</button>
+                <button type="button" className="inline-flex items-center justify-center px-2 py-1 min-h-7 border border-border-default rounded bg-surface-card text-text-primary text-xs cursor-pointer transition-all duration-200 hover:border-brand hover:bg-brand/10 disabled:opacity-45 disabled:cursor-not-allowed" onClick={addMarkArea} style={{ fontSize: 11, justifySelf: 'start' }}>+ 标记区域</button>
             )}
 
             <div style={{ fontSize: 11, color: '#94a3b8', fontWeight: 600, marginTop: 4 }}>条件着色 ({conditionalColors.length}/5)</div>
             {conditionalColors.map((cc, idx) => (
                 <div key={idx} style={{ display: 'grid', gridTemplateColumns: 'auto 60px 60px 40px auto', gap: 4, alignItems: 'center' }}>
-                    <select className="property-input" style={{ fontSize: 11, padding: '3px 4px' }} value={cc.operator}
+                    <select className="flex-1 px-2.5 py-1.5 border border-border-default rounded bg-surface-card text-text-primary text-xs focus:outline-none focus:border-brand" style={{ fontSize: 11, padding: '3px 4px' }} value={cc.operator}
                         onChange={(e) => updateConditionalColor(idx, { operator: e.target.value as SeriesConditionalColor['operator'] })}>
                         <option value=">">{'>'}</option><option value=">=">{'>='}</option><option value="<">{'<'}</option>
                         <option value="<=">{'<='}</option><option value="==">{'=='}</option><option value="between">区间</option>
                     </select>
-                    <input type="number" className="property-input" style={{ fontSize: 11, padding: '3px 4px' }} value={cc.value}
+                    <input type="number" className="flex-1 px-2.5 py-1.5 border border-border-default rounded bg-surface-card text-text-primary text-xs focus:outline-none focus:border-brand" style={{ fontSize: 11, padding: '3px 4px' }} value={cc.value}
                         onChange={(e) => updateConditionalColor(idx, { value: Number(e.target.value) })} />
                     {cc.operator === 'between' ? (
-                        <input type="number" className="property-input" style={{ fontSize: 11, padding: '3px 4px' }} placeholder="上限" value={cc.valueTo ?? 0}
+                        <input type="number" className="flex-1 px-2.5 py-1.5 border border-border-default rounded bg-surface-card text-text-primary text-xs focus:outline-none focus:border-brand" style={{ fontSize: 11, padding: '3px 4px' }} placeholder="上限" value={cc.valueTo ?? 0}
                             onChange={(e) => updateConditionalColor(idx, { valueTo: Number(e.target.value) })} />
                     ) : <span />}
-                    <input type="color" className="property-color-input" value={cc.color} onChange={(e) => updateConditionalColor(idx, { color: e.target.value })} />
-                    <button type="button" className="property-btn-small" style={{ padding: '2px 6px', fontSize: 11 }} onClick={() => removeConditionalColor(idx)}>×</button>
+                    <input type="color" className="w-8 h-7 border border-border-default rounded cursor-pointer p-0" value={cc.color} onChange={(e) => updateConditionalColor(idx, { color: e.target.value })} />
+                    <button type="button" className="inline-flex items-center justify-center px-2 py-1 min-h-7 border border-border-default rounded bg-surface-card text-text-primary text-xs cursor-pointer transition-all duration-200 hover:border-brand hover:bg-brand/10 disabled:opacity-45 disabled:cursor-not-allowed" style={{ padding: '2px 6px', fontSize: 11 }} onClick={() => removeConditionalColor(idx)}>×</button>
                 </div>
             ))}
             {conditionalColors.length < 5 && (
-                <button type="button" className="property-btn-small" onClick={addConditionalColor} style={{ fontSize: 11, justifySelf: 'start' }}>+ 条件着色</button>
+                <button type="button" className="inline-flex items-center justify-center px-2 py-1 min-h-7 border border-border-default rounded bg-surface-card text-text-primary text-xs cursor-pointer transition-all duration-200 hover:border-brand hover:bg-brand/10 disabled:opacity-45 disabled:cursor-not-allowed" onClick={addConditionalColor} style={{ fontSize: 11, justifySelf: 'start' }}>+ 条件着色</button>
             )}
         </div>
     );
@@ -6727,32 +6727,32 @@ function TableConfig({ component, onChange }: {
 
     return (
         <>
-            <div className="property-row">
-                <label className="property-label">字号</label>
+            <div className="flex items-center mb-3">
+                <label className="w-20 text-xs text-text-secondary">字号</label>
                 <input
                     type="number"
-                    className="property-input"
+                    className="flex-1 px-2.5 py-1.5 border border-border-default rounded bg-surface-card text-text-primary text-xs focus:outline-none focus:border-brand"
                     min={10}
                     max={24}
                     value={(config.fontSize as number) || 13}
                     onChange={(e) => onChange('fontSize', Number(e.target.value))}
                 />
             </div>
-            <div className="property-row">
-                <label className="property-label">表头字号</label>
+            <div className="flex items-center mb-3">
+                <label className="w-20 text-xs text-text-secondary">表头字号</label>
                 <input
                     type="number"
-                    className="property-input"
+                    className="flex-1 px-2.5 py-1.5 border border-border-default rounded bg-surface-card text-text-primary text-xs focus:outline-none focus:border-brand"
                     min={10}
                     max={36}
                     value={(config.headerFontSize as number) || (config.fontSize as number) || 13}
                     onChange={(e) => onChange('headerFontSize', Number(e.target.value))}
                 />
             </div>
-            <div className="property-row">
-                <label className="property-label">表头对齐</label>
+            <div className="flex items-center mb-3">
+                <label className="w-20 text-xs text-text-secondary">表头对齐</label>
                 <select
-                    className="property-input"
+                    className="flex-1 px-2.5 py-1.5 border border-border-default rounded bg-surface-card text-text-primary text-xs focus:outline-none focus:border-brand"
                     value={(config.headerAlign as string) || ''}
                     onChange={(e) => onChange('headerAlign', e.target.value || undefined)}
                 >
@@ -6762,52 +6762,52 @@ function TableConfig({ component, onChange }: {
                     <option value="right">右对齐</option>
                 </select>
             </div>
-            <div className="property-row">
-                <label className="property-label">表头颜色</label>
+            <div className="flex items-center mb-3">
+                <label className="w-20 text-xs text-text-secondary">表头颜色</label>
                 <input
                     type="color"
-                    className="property-color-input"
+                    className="w-8 h-7 border border-border-default rounded cursor-pointer p-0"
                     value={(config.headerColor as string) || '#e5e7eb'}
                     onChange={(e) => onChange('headerColor', e.target.value)}
                 />
             </div>
-            <div className="property-row">
-                <label className="property-label">表头背景</label>
+            <div className="flex items-center mb-3">
+                <label className="w-20 text-xs text-text-secondary">表头背景</label>
                 <input
                     type="color"
-                    className="property-color-input"
+                    className="w-8 h-7 border border-border-default rounded cursor-pointer p-0"
                     value={(config.headerBackground as string) || '#64748b'}
                     onChange={(e) => onChange('headerBackground', e.target.value)}
                 />
             </div>
-            <div className="property-row">
-                <label className="property-label">正文颜色</label>
+            <div className="flex items-center mb-3">
+                <label className="w-20 text-xs text-text-secondary">正文颜色</label>
                 <input
                     type="color"
-                    className="property-color-input"
+                    className="w-8 h-7 border border-border-default rounded cursor-pointer p-0"
                     value={(config.bodyColor as string) || '#d1d5db'}
                     onChange={(e) => onChange('bodyColor', e.target.value)}
                 />
             </div>
-            <div className="property-row">
-                <label className="property-label">边框颜色</label>
+            <div className="flex items-center mb-3">
+                <label className="w-20 text-xs text-text-secondary">边框颜色</label>
                 <input
                     type="color"
-                    className="property-color-input"
+                    className="w-8 h-7 border border-border-default rounded cursor-pointer p-0"
                     value={(config.borderColor as string) || '#94a3b8'}
                     onChange={(e) => onChange('borderColor', e.target.value)}
                 />
             </div>
-            <div className="property-row">
-                <label className="property-label">启用排序</label>
+            <div className="flex items-center mb-3">
+                <label className="w-20 text-xs text-text-secondary">启用排序</label>
                 <input
                     type="checkbox"
                     checked={config.enableSort !== false}
                     onChange={(e) => onChange('enableSort', e.target.checked)}
                 />
             </div>
-            <div className="property-row">
-                <label className="property-label">分页</label>
+            <div className="flex items-center mb-3">
+                <label className="w-20 text-xs text-text-secondary">分页</label>
                 <input
                     type="checkbox"
                     checked={config.enablePagination === true}
@@ -6815,11 +6815,11 @@ function TableConfig({ component, onChange }: {
                 />
             </div>
             {config.enablePagination === true && (
-                <div className="property-row">
-                    <label className="property-label">每页条数</label>
+                <div className="flex items-center mb-3">
+                    <label className="w-20 text-xs text-text-secondary">每页条数</label>
                     <input
                         type="number"
-                        className="property-input"
+                        className="flex-1 px-2.5 py-1.5 border border-border-default rounded bg-surface-card text-text-primary text-xs focus:outline-none focus:border-brand"
                         min={1}
                         max={200}
                         value={(config.pageSize as number) || 10}
@@ -6827,26 +6827,26 @@ function TableConfig({ component, onChange }: {
                     />
                 </div>
             )}
-            <div className="property-row">
-                <label className="property-label">冻结表头</label>
+            <div className="flex items-center mb-3">
+                <label className="w-20 text-xs text-text-secondary">冻结表头</label>
                 <input
                     type="checkbox"
                     checked={config.freezeHeader !== false}
                     onChange={(e) => onChange('freezeHeader', e.target.checked)}
                 />
             </div>
-            <div className="property-row">
-                <label className="property-label">冻结首列</label>
+            <div className="flex items-center mb-3">
+                <label className="w-20 text-xs text-text-secondary">冻结首列</label>
                 <input
                     type="checkbox"
                     checked={config.freezeFirstColumn === true}
                     onChange={(e) => onChange('freezeFirstColumn', e.target.checked)}
                 />
             </div>
-            <div className="property-row">
-                <label className="property-label">条件格式(JSON)</label>
+            <div className="flex items-center mb-3">
+                <label className="w-20 text-xs text-text-secondary">条件格式(JSON)</label>
                 <textarea
-                    className="property-input"
+                    className="flex-1 px-2.5 py-1.5 border border-border-default rounded bg-surface-card text-text-primary text-xs focus:outline-none focus:border-brand"
                     rows={4}
                     defaultValue={JSON.stringify((config.conditionalRules as unknown[]) || [], null, 2)}
                     onBlur={(e) => {
@@ -6891,11 +6891,11 @@ function TableConfig({ component, onChange }: {
                         表头别名
                     </div>
                     {staticHeaders.map((h, i) => (
-                        <div className="property-row" key={i}>
-                            <label className="property-label" title={h}>列{i + 1}</label>
+                        <div className="flex items-center mb-3" key={i}>
+                            <label className="w-20 text-xs text-text-secondary" title={h}>列{i + 1}</label>
                             <input
                                 type="text"
-                                className="property-input"
+                                className="flex-1 px-2.5 py-1.5 border border-border-default rounded bg-surface-card text-text-primary text-xs focus:outline-none focus:border-brand"
                                 placeholder={h}
                                 value={columnAlias[String(i)] || ''}
                                 onChange={(e) => {
@@ -6914,26 +6914,26 @@ function TableConfig({ component, onChange }: {
             )}
 
             {/* Table 样式增强 */}
-            <div className="property-section-label">样式</div>
-            <div className="property-row">
-                <label className="property-label">表头背景</label>
-                <input type="color" className="property-input" value={(config.headerBackground as string) || '#112238'} onChange={(e) => onChange('headerBackground', e.target.value)} />
+            <div className="text-xs text-text-secondary mb-1">样式</div>
+            <div className="flex items-center mb-3">
+                <label className="w-20 text-xs text-text-secondary">表头背景</label>
+                <input type="color" className="flex-1 px-2.5 py-1.5 border border-border-default rounded bg-surface-card text-text-primary text-xs focus:outline-none focus:border-brand" value={(config.headerBackground as string) || '#112238'} onChange={(e) => onChange('headerBackground', e.target.value)} />
             </div>
-            <div className="property-row">
-                <label className="property-label">行背景</label>
-                <input type="color" className="property-input" value={(config.bodyBackground as string) || '#0d1b2d'} onChange={(e) => onChange('bodyBackground', e.target.value)} />
+            <div className="flex items-center mb-3">
+                <label className="w-20 text-xs text-text-secondary">行背景</label>
+                <input type="color" className="flex-1 px-2.5 py-1.5 border border-border-default rounded bg-surface-card text-text-primary text-xs focus:outline-none focus:border-brand" value={(config.bodyBackground as string) || '#0d1b2d'} onChange={(e) => onChange('bodyBackground', e.target.value)} />
             </div>
-            <div className="property-row">
-                <label className="property-label">交替行背景</label>
-                <input type="color" className="property-input" value={(config.oddRowBackground as string) || '#10233a'} onChange={(e) => onChange('oddRowBackground', e.target.value)} />
+            <div className="flex items-center mb-3">
+                <label className="w-20 text-xs text-text-secondary">交替行背景</label>
+                <input type="color" className="flex-1 px-2.5 py-1.5 border border-border-default rounded bg-surface-card text-text-primary text-xs focus:outline-none focus:border-brand" value={(config.oddRowBackground as string) || '#10233a'} onChange={(e) => onChange('oddRowBackground', e.target.value)} />
             </div>
-            <div className="property-row">
-                <label className="property-label">文字颜色</label>
-                <input type="color" className="property-input" value={(config.bodyColor as string) || '#c8ddf5'} onChange={(e) => onChange('bodyColor', e.target.value)} />
+            <div className="flex items-center mb-3">
+                <label className="w-20 text-xs text-text-secondary">文字颜色</label>
+                <input type="color" className="flex-1 px-2.5 py-1.5 border border-border-default rounded bg-surface-card text-text-primary text-xs focus:outline-none focus:border-brand" value={(config.bodyColor as string) || '#c8ddf5'} onChange={(e) => onChange('bodyColor', e.target.value)} />
             </div>
-            <div className="property-row">
-                <label className="property-label">边框颜色</label>
-                <input type="color" className="property-input" value={(config.borderColor as string) || '#1e3a5f'} onChange={(e) => onChange('borderColor', e.target.value)} />
+            <div className="flex items-center mb-3">
+                <label className="w-20 text-xs text-text-secondary">边框颜色</label>
+                <input type="color" className="flex-1 px-2.5 py-1.5 border border-border-default rounded bg-surface-card text-text-primary text-xs focus:outline-none focus:border-brand" value={(config.borderColor as string) || '#1e3a5f'} onChange={(e) => onChange('borderColor', e.target.value)} />
             </div>
         </>
     );
@@ -7063,7 +7063,7 @@ function StaticDataEditor({ component, updateComponent }: {
 
     return (
         <>
-            <div className="property-section-label" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 6 }}>
+            <div className="text-xs text-text-secondary mb-1" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 6 }}>
                 <span>静态数据</span>
                 <span style={{ display: 'flex', gap: 8 }}>
                     <button type="button" style={{ background: 'none', border: 'none', color: '#94a3b8', cursor: 'pointer', fontSize: 11 }}
@@ -7140,7 +7140,7 @@ function StaticDataEditor({ component, updateComponent }: {
             ) : (
                 <div>
                     <textarea
-                        className="property-input"
+                        className="flex-1 px-2.5 py-1.5 border border-border-default rounded bg-surface-card text-text-primary text-xs focus:outline-none focus:border-brand"
                         style={{ width: '100%', height: 200, fontFamily: 'monospace', fontSize: 11, resize: 'vertical' }}
                         value={jsonText}
                         onChange={(e) => { setJsonText(e.target.value); setJsonError(null); }}

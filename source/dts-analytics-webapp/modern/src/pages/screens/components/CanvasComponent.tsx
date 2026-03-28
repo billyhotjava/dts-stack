@@ -360,14 +360,14 @@ export function CanvasComponent({ component, isSelected, theme }: CanvasComponen
     return (
         <div
             data-component-id={component.id}
-            className={`canvas-component ${isSelected ? 'selected' : ''} ${component.locked ? 'locked' : ''}`}
+            className={`absolute select-none ${isSelected ? 'outline-2 outline-[var(--color-primary)] outline-offset-2' : ''} ${component.locked ? 'cursor-not-allowed' : ''}`}
             style={{
                 left: component.x,
                 top: component.y,
                 width: component.width,
                 height: component.height,
                 zIndex: component.zIndex,
-                cursor: isDragging ? 'grabbing' : isResizing ? 'default' : 'move',
+                cursor: isDragging ? 'grabbing' : isResizing ? 'default' : (component.locked ? 'not-allowed' : 'move'),
                 ...resolveComponentAppearanceStyle(component.config),
             }}
             onMouseDown={handleMouseDown}

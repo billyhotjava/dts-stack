@@ -318,23 +318,23 @@ export function DesignerCanvas() {
             {/* Right-click context menu */}
             {ctxMenu && (
                 <div
-                    className="canvas-context-menu fixed z-[10000] min-w-[160px] bg-[var(--color-surface-secondary)] border border-[var(--color-border)] rounded-lg shadow-[0_8px_24px_rgba(0,0,0,0.4)] py-1 animate-[ctx-menu-in_0.12s_ease-out]"
+                    className="canvas-context-menu"
                     style={{ left: ctxMenu.x, top: ctxMenu.y }}
                     onClick={(e) => e.stopPropagation()}
                 >
                     {ctxMenu.componentId && selectedIds.length > 0 ? (
                         <>
-                            <button type="button" className="ctx-menu-item block w-full py-[7px] px-3.5 border-none bg-transparent text-[var(--color-text-primary)] text-xs text-left cursor-pointer transition-colors duration-100 hover:not-disabled:bg-[var(--color-primary-light)] hover:not-disabled:text-[var(--color-primary)] disabled:text-[var(--color-text-tertiary)] disabled:cursor-default" onClick={() => { duplicateSelected(); closeMenu(); }}>
+                            <button type="button" className="ctx-menu-item" onClick={() => { duplicateSelected(); closeMenu(); }}>
                                 复制组件
                             </button>
-                            <button type="button" className="ctx-menu-item block w-full py-[7px] px-3.5 border-none bg-transparent text-[var(--color-text-primary)] text-xs text-left cursor-pointer transition-colors duration-100 hover:not-disabled:bg-[var(--color-primary-light)] hover:not-disabled:text-[var(--color-primary)] disabled:text-[var(--color-text-tertiary)] disabled:cursor-default" onClick={() => { copyComponents(); closeMenu(); }}>
+                            <button type="button" className="ctx-menu-item" onClick={() => { copyComponents(); closeMenu(); }}>
                                 拷贝 (Ctrl+C)
                             </button>
-                            <button type="button" className="ctx-menu-item block w-full py-[7px] px-3.5 border-none bg-transparent text-[var(--color-text-primary)] text-xs text-left cursor-pointer transition-colors duration-100 hover:not-disabled:bg-[var(--color-primary-light)] hover:not-disabled:text-[var(--color-primary)] disabled:text-[var(--color-text-tertiary)] disabled:cursor-default" onClick={() => { deleteComponents(selectedIds); closeMenu(); }}>
+                            <button type="button" className="ctx-menu-item" onClick={() => { deleteComponents(selectedIds); closeMenu(); }}>
                                 删除
                             </button>
-                            <div className="h-px mx-2 my-1 bg-[var(--color-border)]" />
-                            <button type="button" className="ctx-menu-item block w-full py-[7px] px-3.5 border-none bg-transparent text-[var(--color-text-primary)] text-xs text-left cursor-pointer transition-colors duration-100 hover:not-disabled:bg-[var(--color-primary-light)] hover:not-disabled:text-[var(--color-primary)] disabled:text-[var(--color-text-tertiary)] disabled:cursor-default" onClick={() => {
+                            <div className="ctx-menu-divider" />
+                            <button type="button" className="ctx-menu-item" onClick={() => {
                                 selectedIds.forEach(id => {
                                     const c = config.components.find(c => c.id === id);
                                     if (c) dispatch({ type: 'REORDER_LAYER', payload: { id, direction: 'top' } });
@@ -343,7 +343,7 @@ export function DesignerCanvas() {
                             }}>
                                 置顶
                             </button>
-                            <button type="button" className="ctx-menu-item block w-full py-[7px] px-3.5 border-none bg-transparent text-[var(--color-text-primary)] text-xs text-left cursor-pointer transition-colors duration-100 hover:not-disabled:bg-[var(--color-primary-light)] hover:not-disabled:text-[var(--color-primary)] disabled:text-[var(--color-text-tertiary)] disabled:cursor-default" onClick={() => {
+                            <button type="button" className="ctx-menu-item" onClick={() => {
                                 selectedIds.forEach(id => {
                                     dispatch({ type: 'REORDER_LAYER', payload: { id, direction: 'bottom' } });
                                 });
@@ -351,8 +351,8 @@ export function DesignerCanvas() {
                             }}>
                                 置底
                             </button>
-                            <div className="h-px mx-2 my-1 bg-[var(--color-border)]" />
-                            <button type="button" className="ctx-menu-item block w-full py-[7px] px-3.5 border-none bg-transparent text-[var(--color-text-primary)] text-xs text-left cursor-pointer transition-colors duration-100 hover:not-disabled:bg-[var(--color-primary-light)] hover:not-disabled:text-[var(--color-primary)] disabled:text-[var(--color-text-tertiary)] disabled:cursor-default" onClick={() => {
+                            <div className="ctx-menu-divider" />
+                            <button type="button" className="ctx-menu-item" onClick={() => {
                                 selectedIds.forEach(id => {
                                     const c = config.components.find(c => c.id === id);
                                     if (c) {
@@ -363,7 +363,7 @@ export function DesignerCanvas() {
                             }}>
                                 {config.components.find(c => c.id === selectedIds[0])?.locked ? '解锁' : '锁定'}
                             </button>
-                            <button type="button" className="ctx-menu-item block w-full py-[7px] px-3.5 border-none bg-transparent text-[var(--color-text-primary)] text-xs text-left cursor-pointer transition-colors duration-100 hover:not-disabled:bg-[var(--color-primary-light)] hover:not-disabled:text-[var(--color-primary)] disabled:text-[var(--color-text-tertiary)] disabled:cursor-default" onClick={() => {
+                            <button type="button" className="ctx-menu-item" onClick={() => {
                                 selectedIds.forEach(id => {
                                     const c = config.components.find(c => c.id === id);
                                     if (c) {
@@ -377,18 +377,18 @@ export function DesignerCanvas() {
                         </>
                     ) : (
                         <>
-                            <button type="button" className="ctx-menu-item block w-full py-[7px] px-3.5 border-none bg-transparent text-[var(--color-text-primary)] text-xs text-left cursor-pointer transition-colors duration-100 hover:not-disabled:bg-[var(--color-primary-light)] hover:not-disabled:text-[var(--color-primary)] disabled:text-[var(--color-text-tertiary)] disabled:cursor-default" onClick={() => { pasteComponents(); closeMenu(); }} disabled={!clipboard?.length}>
+                            <button type="button" className="ctx-menu-item" onClick={() => { pasteComponents(); closeMenu(); }} disabled={!clipboard?.length}>
                                 粘贴 (Ctrl+V)
                             </button>
-                            <div className="h-px mx-2 my-1 bg-[var(--color-border)]" />
-                            <button type="button" className="ctx-menu-item block w-full py-[7px] px-3.5 border-none bg-transparent text-[var(--color-text-primary)] text-xs text-left cursor-pointer transition-colors duration-100 hover:not-disabled:bg-[var(--color-primary-light)] hover:not-disabled:text-[var(--color-primary)] disabled:text-[var(--color-text-tertiary)] disabled:cursor-default" onClick={() => { undo(); closeMenu(); }}>
+                            <div className="ctx-menu-divider" />
+                            <button type="button" className="ctx-menu-item" onClick={() => { undo(); closeMenu(); }}>
                                 撤销 (Ctrl+Z)
                             </button>
-                            <button type="button" className="ctx-menu-item block w-full py-[7px] px-3.5 border-none bg-transparent text-[var(--color-text-primary)] text-xs text-left cursor-pointer transition-colors duration-100 hover:not-disabled:bg-[var(--color-primary-light)] hover:not-disabled:text-[var(--color-primary)] disabled:text-[var(--color-text-tertiary)] disabled:cursor-default" onClick={() => { redo(); closeMenu(); }}>
+                            <button type="button" className="ctx-menu-item" onClick={() => { redo(); closeMenu(); }}>
                                 重做 (Ctrl+Y)
                             </button>
-                            <div className="h-px mx-2 my-1 bg-[var(--color-border)]" />
-                            <button type="button" className="ctx-menu-item block w-full py-[7px] px-3.5 border-none bg-transparent text-[var(--color-text-primary)] text-xs text-left cursor-pointer transition-colors duration-100 hover:not-disabled:bg-[var(--color-primary-light)] hover:not-disabled:text-[var(--color-primary)] disabled:text-[var(--color-text-tertiary)] disabled:cursor-default" onClick={() => { selectComponents(config.components.map(c => c.id)); closeMenu(); }}>
+                            <div className="ctx-menu-divider" />
+                            <button type="button" className="ctx-menu-item" onClick={() => { selectComponents(config.components.map(c => c.id)); closeMenu(); }}>
                                 全选
                             </button>
                         </>

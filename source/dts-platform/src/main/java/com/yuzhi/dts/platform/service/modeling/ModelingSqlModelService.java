@@ -142,7 +142,7 @@ public class ModelingSqlModelService {
         boolean instituteScope = security.hasInstituteScope();
         List<ModelingSqlModel> models = planId == null ? repo.findAll() : repo.findByPlanId(planId);
         String kw = trimToNull(keyword);
-        Map<String, ModelingSqlModel> deduplicated = new LinkedHashMap<>();
+        List<ModelingSqlModel> visibleModels = new ArrayList<>();
         for (ModelingSqlModel model : models) {
             if (!isOwnerDeptVisible(model != null ? model.getOwnerDept() : null, activeDept, instituteScope)) {
                 continue;
@@ -150,13 +150,9 @@ public class ModelingSqlModelService {
             if (kw != null && !matchKeyword(model, kw)) {
                 continue;
             }
-            String key = dedupeModelKey(model);
-            ModelingSqlModel existing = deduplicated.get(key);
-            if (shouldReplaceDuplicateModel(model, existing)) {
-                deduplicated.put(key, model);
-            }
+            visibleModels.add(model);
         }
-        List<SqlModelDto> result = new ArrayList<>(toDtoBatch(deduplicated.values()));
+        List<SqlModelDto> result = new ArrayList<>(toDtoBatch(visibleModels));
         result.sort((a, b) -> String.valueOf(a.name()).compareToIgnoreCase(String.valueOf(b.name())));
         return result;
     }
@@ -712,6 +708,7 @@ public class ModelingSqlModelService {
 
         ModelingPlan plan = resolvePlan(request.planId(), activeDeptHeader);
         InfraDataSource source = resolveSource(sourceId, activeDeptHeader);
+        assertUniqueModelName(plan != null ? plan.getId() : null, name, isCreate ? null : model.getId());
 
         String activeDept = security.resolveActiveDept(activeDeptHeader);
         if (isCreate) {
@@ -757,6 +754,18 @@ public class ModelingSqlModelService {
         if (isCreate || request.semanticContract() != null) {
             applySemanticContract(model, request.semanticContract());
         }
+    }
+
+    private void assertUniqueModelName(UUID planId, String modelName, UUID currentModelId) {
+        String normalizedName = trimToNull(modelName);
+        if (planId == null || normalizedName == null) {
+            return;
+        }
+        repo.findFirstByPlanIdAndNameIgnoreCase(planId, normalizedName)
+            .filter(existing -> currentModelId == null || !Objects.equals(existing.getId(), currentModelId))
+            .ifPresent(existing -> {
+                throw new IllegalArgumentException("同一项目空间下模型名已存在: " + normalizedName);
+            });
     }
 
     private Optional<InfraDataSource> resolveSourceEntity(UUID sourceId) {
