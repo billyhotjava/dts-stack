@@ -103,3 +103,11 @@
 | F4-实施准备与验收基线 | 3 | DONE |
 
 **统计**: READY=0, IN_PROGRESS=0, DONE=12, BLOCKED=0
+
+## Sprint-18: 大屏编辑器导入导出功能完善 (202603)
+
+| Feature | Task 数 | 状态 |
+|---------|---------|------|
+| F1-导入导出增强 | 7 | READY |
+
+**统计**: READY=7, IN_PROGRESS=0, DONE=0, BLOCKED=0
