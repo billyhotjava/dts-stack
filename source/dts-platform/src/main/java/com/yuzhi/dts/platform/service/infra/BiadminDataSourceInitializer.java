@@ -93,6 +93,8 @@ public class BiadminDataSourceInitializer {
             entity.setStatus(STATUS_ACTIVE);
             entity.setCreatedBy("system");
             entity.setLastModifiedBy("system");
+            // Mark as system-managed so platform UI disables edit/delete
+            entity.setProps("{\"source\":\"admin-data-lake\",\"system\":true}");
 
             // 加密保存密码
             secretService.applySecrets(entity, Map.of("password", pgPwdBiadmin));

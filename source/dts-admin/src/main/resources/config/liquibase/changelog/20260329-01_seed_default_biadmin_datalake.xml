@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="utf-8"?>
+<databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.22.xsd">
+
+    <!-- Seed the default biadmin data lake if no data sources exist at all -->
+    <changeSet id="20260329-01-seed-default-biadmin-datalake" author="system">
+        <preConditions onFail="MARK_RAN">
+            <tableExists tableName="infra_data_source"/>
+            <sqlCheck expectedResult="0">
+                SELECT COUNT(*) FROM infra_data_source
+            </sqlCheck>
+        </preConditions>
+        <sql>
+            INSERT INTO infra_data_source (
+                id, name, type, jdbc_url, username, description,
+                status, is_default, has_secrets,
+                created_at, updated_at
+            ) VALUES (
+                gen_random_uuid(),
+                '数仓 (biadmin)',
+                'postgres',
+                'jdbc:postgresql://dts-pg:5432/biadmin',
+                'biadmin',
+                '系统默认数据湖，自动创建',
+                'ACTIVE',
+                true,
+                false,
+                NOW(),
+                NOW()
+            );
+        </sql>
+    </changeSet>
+
+</databaseChangeLog>

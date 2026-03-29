@@ -84,7 +84,14 @@ const isFileSource = (type?: string) => {
 	return normalized === "excel" || normalized === "csv";
 };
 
-const isAdminManagedSource = (source?: InfraDataSource | null) => source?.props?.source === "admin-data-lake";
+const isAdminManagedSource = (source?: InfraDataSource | null) => {
+	if (!source) return false;
+	// Check props flag (set by BiadminDataSourceInitializer)
+	if (source.props?.source === "admin-data-lake") return true;
+	// Fallback: match by name for data sources created before the props fix
+	if (source.name === "数仓 (biadmin)") return true;
+	return false;
+};
 
 const parseJson = (value?: string) => {
 	const text = String(value || "").trim();
