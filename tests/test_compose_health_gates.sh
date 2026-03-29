@@ -16,6 +16,7 @@ def load_yaml(path: pathlib.Path):
 
 legacy = load_yaml(repo / "docker-compose.legacy.yml")
 app = load_yaml(repo / "docker-compose-app.yml")
+dev = load_yaml(repo / "docker-compose.dev.yml")
 
 expected_health = {
     ("legacy", "dts-admin"): "management/health",
@@ -39,7 +40,7 @@ expected_offline_fallback = {
     ("app", "dts-analytics"): "grep -q",
 }
 
-docs = {"legacy": legacy, "app": app}
+docs = {"legacy": legacy, "app": app, "dev": dev}
 errors = []
 
 for (scope, service), expected_fragment in sorted(expected_health.items()):
@@ -73,6 +74,30 @@ for scope in ("legacy", "app"):
         cond = ((depends_on.get(upstream) or {}).get("condition"))
         if cond != "service_healthy":
             errors.append(f"{scope}:dts-platform-webapp depends_on {upstream} expected service_healthy, got {cond!r}")
+
+for scope in ("legacy", "app", "dev"):
+    admin = (((docs[scope] or {}).get("services") or {}).get("dts-admin") or {})
+    depends_on = admin.get("depends_on")
+    if not isinstance(depends_on, dict):
+        errors.append(f"{scope}:dts-admin missing depends_on")
+        continue
+    for upstream in ("dts-pg", "dts-keycloak", "dts-proxy"):
+        cond = ((depends_on.get(upstream) or {}).get("condition"))
+        expected = "service_healthy" if upstream == "dts-pg" else "service_started"
+        if cond != expected:
+            errors.append(f"{scope}:dts-admin depends_on {upstream} expected {expected}, got {cond!r}")
+
+for scope in ("app", "dev"):
+    for service in ("dts-admin", "dts-platform"):
+        node = (((docs[scope] or {}).get("services") or {}).get(service) or {})
+        env = node.get("environment") or {}
+        for key in (
+            "SPRING_SECURITY_OAUTH2_CLIENT_PROVIDER_OIDC_ISSUER_URI",
+            "SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_ISSUER_URI",
+        ):
+            value = env.get(key)
+            if value != "${OIDC_ISSUER_URI}":
+                errors.append(f"{scope}:{service} {key} expected '${{OIDC_ISSUER_URI}}', got {value!r}")
 
 if errors:
     raise SystemExit("\n".join(errors))

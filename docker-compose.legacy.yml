@@ -264,6 +264,8 @@ services:
         condition: service_healthy
       dts-keycloak:
         condition: service_started
+      dts-proxy:
+        condition: service_started
     environment:
       TZ: ${TZ:-Asia/Shanghai}
       SPRING_PROFILES_ACTIVE: ${DTS_PROFILE:-prod}

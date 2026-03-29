@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { Alert, App, Button, Card, Modal, Progress, Space, Table, Tag } from "antd";
+import { Alert, Button, Card, Modal, Progress, Space, Table, Tag, message } from "antd";
 import {
 	PlayCircleOutlined,
 	EditOutlined,
@@ -26,7 +26,6 @@ type ExecutionProgressView = {
 };
 
 export default function TransformPage() {
-	const { modal, message } = App.useApp();
 	const router = useRouter();
 	const [tasks, setTasks] = useState<IngestionTaskDTO[]>([]);
 	const [loading, setLoading] = useState(false);
@@ -187,7 +186,7 @@ export default function TransformPage() {
 	};
 
 	const handleExecute = async (id: number, name: string) => {
-		modal.confirm({
+		Modal.confirm({
 			title: "确认执行",
 			content: `确定要执行任务 "${name}" 吗？`,
 			onOk: async () => {
@@ -204,7 +203,7 @@ export default function TransformPage() {
 	};
 
 	const handleRebuildDag = async (id: number, name: string) => {
-		modal.confirm({
+		Modal.confirm({
 			title: "强制重建 DAG",
 			content: `确定要重建任务 "${name}" 的 DAG 文件吗？`,
 			onOk: async () => {
@@ -220,7 +219,7 @@ export default function TransformPage() {
 	};
 
 	const handleDelete = async (id: number, name: string) => {
-		modal.confirm({
+		Modal.confirm({
 			title: "确认删除",
 			content: `确定要删除任务 "${name}" 吗？该操作会移除任务配置、DAG、执行记录与运行日志，且不可恢复。`,
 			okText: "删除",
