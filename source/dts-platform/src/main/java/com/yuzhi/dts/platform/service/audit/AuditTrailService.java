@@ -1,39 +1,29 @@
 package com.yuzhi.dts.platform.service.audit;
 
 import com.yuzhi.dts.platform.config.AuditProperties;
-import com.yuzhi.dts.platform.config.DtsAdminProperties;
-import java.net.URI;
+import com.yuzhi.dts.platform.service.admin.gateway.audit.AdminAuditGateway;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
-import java.util.ArrayList;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.atomic.AtomicLong;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.boot.web.client.RestTemplateBuilder;
-import org.springframework.http.HttpEntity;
-import org.springframework.http.HttpHeaders;
-import org.springframework.http.MediaType;
-import org.springframework.http.ResponseEntity;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
-import org.springframework.web.client.RestClientException;
-import org.springframework.web.client.RestTemplate;
 
 @Service
 public class AuditTrailService {
 
     private static final Logger log = LoggerFactory.getLogger(AuditTrailService.class);
     private static final String SOURCE_SYSTEM_PLATFORM = "platform";
-    private static final Duration DEFAULT_CONNECT_TIMEOUT = Duration.ofSeconds(3);
-    private static final Duration DEFAULT_READ_TIMEOUT = Duration.ofSeconds(5);
     private static final Duration READ_DEDUPE_WINDOW = Duration.ofSeconds(2);
     private static final int READ_DEDUPE_MAX_SIZE = 2048;
     private static final int FAILOVER_QUEUE_MAX_SIZE = 10_000;
@@ -66,25 +56,16 @@ public class AuditTrailService {
     }
 
     private final AuditProperties properties;
-    private final RestTemplate restTemplate;
-    private final URI ingestEndpoint;
+    private final AdminAuditGateway adminAuditGateway;
     private final ConcurrentHashMap<String, Long> recentReadEvents = new ConcurrentHashMap<>();
     private final ConcurrentLinkedQueue<Map<String, Object>> failedEventQueue = new ConcurrentLinkedQueue<>();
     private final AtomicLong droppedEventCount = new AtomicLong(0);
 
-    public AuditTrailService(
-        AuditProperties properties,
-        RestTemplateBuilder restTemplateBuilder,
-        DtsAdminProperties adminProperties
-    ) {
+    public AuditTrailService(AuditProperties properties, AdminAuditGateway adminAuditGateway) {
         this.properties = properties;
-        this.restTemplate = restTemplateBuilder
-            .setConnectTimeout(DEFAULT_CONNECT_TIMEOUT)
-            .setReadTimeout(DEFAULT_READ_TIMEOUT)
-            .build();
-        this.ingestEndpoint = resolveEndpoint(adminProperties);
-        if (this.ingestEndpoint == null) {
-            log.warn("dts-admin base URL is not configured; platform audit forwarding will be disabled");
+        this.adminAuditGateway = adminAuditGateway;
+        if (!adminAuditGateway.isEnabled()) {
+            log.warn("dts-admin audit gateway is disabled; platform audit forwarding will be disabled");
         }
     }
 
@@ -109,10 +90,7 @@ public class AuditTrailService {
     }
 
     public void record(PendingAuditEvent event) {
-        if (!properties.isEnabled()) {
-            return;
-        }
-        if (ingestEndpoint == null) {
+        if (!properties.isEnabled() || !adminAuditGateway.isEnabled()) {
             return;
         }
         if (event == null || !StringUtils.hasText(event.actor) || isAnonymous(event.actor)) {
@@ -143,6 +121,13 @@ public class AuditTrailService {
             }
             return;
         }
+        Map<String, Object> body = toRequestBody(event);
+        if (!forwardEvent(body)) {
+            enqueueFailedEvent(body);
+        }
+    }
+
+    private Map<String, Object> toRequestBody(PendingAuditEvent event) {
         Instant occurredAt = event.occurredAt != null ? event.occurredAt : Instant.now();
         Map<String, Object> body = new HashMap<>();
         body.put("sourceSystem", SOURCE_SYSTEM_PLATFORM);
@@ -167,7 +152,7 @@ public class AuditTrailService {
         }
         if (StringUtils.hasText(event.resourceId)) {
             body.put("resourceId", event.resourceId);
-            body.put("targetIds", java.util.List.of(event.resourceId));
+            body.put("targetIds", List.of(event.resourceId));
         }
         body.put("targetTable", defaultString(event.resourceType, null));
         if (StringUtils.hasText(event.resourceName)) {
@@ -235,28 +220,19 @@ public class AuditTrailService {
         if (StringUtils.hasText(event.extraTags)) {
             body.put("extraTags", event.extraTags);
         }
+        return body;
+    }
 
-        HttpHeaders headers = new HttpHeaders();
-        headers.setContentType(MediaType.APPLICATION_JSON);
-        try {
-            ResponseEntity<Void> response = restTemplate.postForEntity(ingestEndpoint, new HttpEntity<>(body, headers), Void.class);
-            if (!response.getStatusCode().is2xxSuccessful()) {
-                log.warn(
-                    "Forwarded audit event but received non-success status code {} (action={}, module={})",
-                    response.getStatusCode(),
-                    body.get("action"),
-                    body.get("module")
-                );
-            }
-        } catch (RestClientException ex) {
+    private boolean forwardEvent(Map<String, Object> body) {
+        boolean submitted = adminAuditGateway.recordEvent(body);
+        if (!submitted) {
             log.warn(
-                "Failed to forward audit event action={} module={} : {}",
+                "Failed to forward audit event action={} module={}",
                 body.get("action"),
-                body.get("module"),
-                ex.getMessage()
+                body.get("module")
             );
-            enqueueFailedEvent(body);
         }
+        return submitted;
     }
 
     private void enqueueFailedEvent(Map<String, Object> body) {
@@ -274,7 +250,7 @@ public class AuditTrailService {
 
     @Scheduled(fixedDelay = 30000)
     public void retryFailedEvents() {
-        if (ingestEndpoint == null) {
+        if (!adminAuditGateway.isEnabled()) {
             return;
         }
         int queueSize = failedEventQueue.size();
@@ -292,24 +268,13 @@ public class AuditTrailService {
             batch.add(event);
         }
 
-        HttpHeaders headers = new HttpHeaders();
-        headers.setContentType(MediaType.APPLICATION_JSON);
-
         int succeeded = 0;
-        int failed = 0;
         for (Map<String, Object> body : batch) {
-            try {
-                ResponseEntity<Void> response = restTemplate.postForEntity(ingestEndpoint, new HttpEntity<>(body, headers), Void.class);
-                if (response.getStatusCode().is2xxSuccessful()) {
-                    succeeded++;
-                } else {
-                    failed++;
-                    enqueueFailedEvent(body);
-                }
-            } catch (RestClientException ex) {
-                failed++;
-                enqueueFailedEvent(body);
+            if (forwardEvent(body)) {
+                succeeded++;
+                continue;
             }
+            enqueueFailedEvent(body);
         }
 
         int pending = failedEventQueue.size();
@@ -377,23 +342,6 @@ public class AuditTrailService {
     private void pruneDedupeCache(long now) {
         long threshold = now - READ_DEDUPE_WINDOW.toMillis();
         recentReadEvents.entrySet().removeIf(entry -> entry.getValue() < threshold);
-    }
-
-    private URI resolveEndpoint(DtsAdminProperties adminProperties) {
-        if (adminProperties == null || !adminProperties.isEnabled() || !StringUtils.hasText(adminProperties.getBaseUrl())) {
-            return null;
-        }
-        String base = stripTrailingSlash(adminProperties.getBaseUrl());
-        String apiPath = adminProperties.getApiPath();
-        String normalizedPath = StringUtils.hasText(apiPath) ? "/" + apiPath.replaceAll("^/+", "").replaceAll("/+$", "") : "";
-        return URI.create(base + normalizedPath + "/audit-events");
-    }
-
-    private String stripTrailingSlash(String value) {
-        if (value == null) {
-            return null;
-        }
-        return value.replaceAll("/+$", "");
     }
 
     private boolean isAnonymous(String actor) {

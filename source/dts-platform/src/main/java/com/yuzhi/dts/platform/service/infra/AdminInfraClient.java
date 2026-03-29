@@ -3,26 +3,20 @@ package com.yuzhi.dts.platform.service.infra;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import com.yuzhi.dts.platform.config.DtsAdminProperties;
-import java.net.URI;
-import java.time.Duration;
+import com.yuzhi.dts.platform.service.admin.gateway.support.AdminGatewayException;
+import com.yuzhi.dts.platform.service.admin.gateway.support.AdminGatewayRequestOptions;
+import com.yuzhi.dts.platform.service.admin.gateway.support.AdminGatewayTarget;
+import com.yuzhi.dts.platform.service.admin.gateway.support.AdminGatewayTransport;
 import java.time.Instant;
 import java.util.Collections;
-import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.boot.web.client.RestTemplateBuilder;
 import org.springframework.core.ParameterizedTypeReference;
-import org.springframework.http.HttpEntity;
-import org.springframework.http.HttpHeaders;
-import org.springframework.http.HttpMethod;
-import org.springframework.http.MediaType;
-import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Component;
 import org.springframework.util.StringUtils;
-import org.springframework.web.client.RestTemplate;
 
 @Component
 public class AdminInfraClient {
@@ -31,42 +25,33 @@ public class AdminInfraClient {
     private static final ParameterizedTypeReference<AdminInceptorConfig> RESPONSE_TYPE = new ParameterizedTypeReference<>() {};
     private static final ParameterizedTypeReference<AdminDataLakeConfig> DATA_LAKE_RESPONSE_TYPE = new ParameterizedTypeReference<>() {};
 
-    private final RestTemplate restTemplate;
+    private final AdminGatewayTransport transport;
     private final DtsAdminProperties properties;
 
-    public AdminInfraClient(RestTemplateBuilder builder, DtsAdminProperties properties) {
+    public AdminInfraClient(AdminGatewayTransport transport, DtsAdminProperties properties) {
         this.properties = properties;
-        this.restTemplate = builder.setConnectTimeout(Duration.ofSeconds(5)).setReadTimeout(Duration.ofSeconds(10)).build();
+        this.transport = transport;
     }
 
     public Optional<AdminInceptorConfig> fetchActiveInceptor() {
         if (!properties.isEnabled()) {
             return Optional.empty();
         }
-        HttpHeaders headers = new HttpHeaders();
-        headers.setAccept(Collections.singletonList(MediaType.APPLICATION_JSON));
-        if (StringUtils.hasText(properties.getServiceToken())) {
-            headers.set(HttpHeaders.AUTHORIZATION, "Bearer " + properties.getServiceToken());
-        }
-        if (StringUtils.hasText(properties.getServiceName())) {
-            headers.set("X-DTS-Service", properties.getServiceName());
-        }
-        HttpEntity<Void> requestEntity = new HttpEntity<>(headers);
-
-        List<String> candidates = candidateBaseUrls();
-        for (String baseUrl : candidates) {
-            URI uri = buildUri(baseUrl, properties.getApiPath(), "/platform/infra/inceptor");
-            try {
-                ResponseEntity<AdminInceptorConfig> response = restTemplate.exchange(uri, HttpMethod.GET, requestEntity, RESPONSE_TYPE);
-                if (response.getStatusCode().is2xxSuccessful() && response.getBody() != null) {
-                    return Optional.of(response.getBody());
-                }
-                log.debug("Admin infra endpoint {} returned status {}", uri, response.getStatusCode());
-            } catch (Exception ex) {
-                log.debug("Failed to fetch Inceptor data source from admin service at {}: {}", uri, ex.getMessage());
+        try {
+            AdminInceptorConfig response = transport.exchangeRaw(
+                AdminGatewayTarget.API,
+                org.springframework.http.HttpMethod.GET,
+                "/platform/infra/inceptor",
+                null,
+                RESPONSE_TYPE,
+                AdminGatewayRequestOptions.defaults()
+            );
+            if (response != null) {
+                return Optional.of(response);
             }
+        } catch (AdminGatewayException ex) {
+            log.debug("Failed to fetch Inceptor data source from admin service: {}", ex.getMessage());
         }
-        log.warn("Unable to fetch active Inceptor configuration from any configured admin endpoints {}", candidates);
         return Optional.empty();
     }
 
@@ -74,30 +59,21 @@ public class AdminInfraClient {
         if (!properties.isEnabled()) {
             return Optional.empty();
         }
-        HttpHeaders headers = new HttpHeaders();
-        headers.setAccept(Collections.singletonList(MediaType.APPLICATION_JSON));
-        if (StringUtils.hasText(properties.getServiceToken())) {
-            headers.set(HttpHeaders.AUTHORIZATION, "Bearer " + properties.getServiceToken());
-        }
-        if (StringUtils.hasText(properties.getServiceName())) {
-            headers.set("X-DTS-Service", properties.getServiceName());
-        }
-        HttpEntity<Void> requestEntity = new HttpEntity<>(headers);
-
-        List<String> candidates = candidateBaseUrls();
-        for (String baseUrl : candidates) {
-            URI uri = buildUri(baseUrl, properties.getApiPath(), "/platform/infra/data-lakes/default");
-            try {
-                ResponseEntity<AdminDataLakeConfig> response = restTemplate.exchange(uri, HttpMethod.GET, requestEntity, DATA_LAKE_RESPONSE_TYPE);
-                if (response.getStatusCode().is2xxSuccessful() && response.getBody() != null) {
-                    return Optional.of(response.getBody());
-                }
-                log.debug("Admin data lake endpoint {} returned status {}", uri, response.getStatusCode());
-            } catch (Exception ex) {
-                log.debug("Failed to fetch default data lake from admin service at {}: {}", uri, ex.getMessage());
+        try {
+            AdminDataLakeConfig response = transport.exchangeRaw(
+                AdminGatewayTarget.API,
+                org.springframework.http.HttpMethod.GET,
+                "/platform/infra/data-lakes/default",
+                null,
+                DATA_LAKE_RESPONSE_TYPE,
+                AdminGatewayRequestOptions.defaults()
+            );
+            if (response != null) {
+                return Optional.of(response);
             }
+        } catch (AdminGatewayException ex) {
+            log.debug("Failed to fetch default data lake from admin service: {}", ex.getMessage());
         }
-        log.warn("Unable to fetch default data lake from any configured admin endpoints {}", candidates);
         return Optional.empty();
     }
 
@@ -105,72 +81,20 @@ public class AdminInfraClient {
         if (!properties.isEnabled() || request == null) {
             return false;
         }
-        HttpHeaders headers = new HttpHeaders();
-        headers.setAccept(Collections.singletonList(MediaType.APPLICATION_JSON));
-        if (StringUtils.hasText(properties.getServiceToken())) {
-            headers.set(HttpHeaders.AUTHORIZATION, "Bearer " + properties.getServiceToken());
-        }
-        if (StringUtils.hasText(properties.getServiceName())) {
-            headers.set("X-DTS-Service", properties.getServiceName());
-        }
-        HttpEntity<AdminDataLakeDestinationUpdateRequest> requestEntity = new HttpEntity<>(request, headers);
-
-        List<String> candidates = candidateBaseUrls();
-        for (String baseUrl : candidates) {
-            URI uri = buildUri(baseUrl, properties.getApiPath(), "/platform/infra/data-lakes/default/destination");
-            try {
-                ResponseEntity<AdminDataLakeConfig> response =
-                    restTemplate.exchange(uri, HttpMethod.POST, requestEntity, DATA_LAKE_RESPONSE_TYPE);
-                if (response.getStatusCode().is2xxSuccessful()) {
-                    return true;
-                }
-                log.debug("Admin data lake update endpoint {} returned status {}", uri, response.getStatusCode());
-            } catch (Exception ex) {
-                log.debug("Failed to update default data lake at {}: {}", uri, ex.getMessage());
-            }
+        try {
+            AdminDataLakeConfig response = transport.exchangeRaw(
+                AdminGatewayTarget.API,
+                org.springframework.http.HttpMethod.POST,
+                "/platform/infra/data-lakes/default/destination",
+                request,
+                DATA_LAKE_RESPONSE_TYPE,
+                AdminGatewayRequestOptions.defaults()
+            );
+            return response != null;
+        } catch (AdminGatewayException ex) {
+            log.debug("Failed to update default data lake: {}", ex.getMessage());
         }
         return false;
-    }
-
-    private List<String> candidateBaseUrls() {
-        String configured = properties.getBaseUrl();
-        if (!StringUtils.hasText(configured)) {
-            configured = "http://dts-admin:8081";
-        }
-        java.util.LinkedHashSet<String> urls = new java.util.LinkedHashSet<>();
-        urls.add(configured);
-        deriveLocalFallback(configured).ifPresent(urls::add);
-        return List.copyOf(urls);
-    }
-
-    private Optional<String> deriveLocalFallback(String baseUrl) {
-        try {
-            URI uri = URI.create(baseUrl);
-            String host = uri.getHost();
-            if (host == null || "dts-admin".equalsIgnoreCase(host)) {
-                String scheme = uri.getScheme() != null ? uri.getScheme() : "http";
-                int port = uri.getPort();
-                StringBuilder fallback = new StringBuilder(scheme).append("://localhost");
-                if (port > 0) {
-                    fallback.append(":").append(port);
-                }
-                return Optional.of(fallback.toString());
-            }
-        } catch (IllegalArgumentException ex) {
-            log.debug("Failed to derive fallback admin URL from {}: {}", baseUrl, ex.getMessage());
-        }
-        return Optional.empty();
-    }
-
-    private URI buildUri(String baseUrl, String basePath, String suffix) {
-        String normalizedBase = StringUtils.hasText(baseUrl) ? baseUrl : "http://dts-admin:8081";
-        normalizedBase = normalizedBase.replaceAll("/+$", "");
-        String path = basePath == null ? "" : basePath.trim();
-        if (!path.isEmpty() && !path.startsWith("/")) {
-            path = "/" + path;
-        }
-        String tail = suffix == null ? "" : suffix;
-        return URI.create(normalizedBase + path + tail);
     }
 
     @JsonIgnoreProperties(ignoreUnknown = true)

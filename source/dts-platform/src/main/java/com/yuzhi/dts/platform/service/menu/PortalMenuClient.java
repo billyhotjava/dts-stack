@@ -3,40 +3,38 @@ package com.yuzhi.dts.platform.service.menu;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import com.yuzhi.dts.platform.config.DtsAdminProperties;
-import java.net.URI;
+import com.yuzhi.dts.platform.service.admin.gateway.support.AdminGatewayEnvelope;
+import com.yuzhi.dts.platform.service.admin.gateway.support.AdminGatewayException;
+import com.yuzhi.dts.platform.service.admin.gateway.support.AdminGatewayRequestOptions;
+import com.yuzhi.dts.platform.service.admin.gateway.support.AdminGatewayTarget;
+import com.yuzhi.dts.platform.service.admin.gateway.support.AdminGatewayTransport;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.boot.web.client.RestTemplateBuilder;
 import org.springframework.core.ParameterizedTypeReference;
-import org.springframework.http.HttpEntity;
-import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpMethod;
-import org.springframework.http.MediaType;
-import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Component;
 import org.springframework.util.StringUtils;
-import org.springframework.web.client.RestTemplate;
 
 @Component
 public class PortalMenuClient {
 
     private static final Logger log = LoggerFactory.getLogger(PortalMenuClient.class);
 
-    private final RestTemplate restTemplate;
+    private final AdminGatewayTransport transport;
     private final DtsAdminProperties props;
 
-    private static final ParameterizedTypeReference<ApiEnvelope<List<RemoteMenuNode>>> MENU_TREE_TYPE =
+    private static final ParameterizedTypeReference<AdminGatewayEnvelope<List<RemoteMenuNode>>> MENU_TREE_TYPE =
         new ParameterizedTypeReference<>() {};
-    private static final ParameterizedTypeReference<ApiEnvelope<java.util.Map<String, Object>>> MAP_ENVELOPE =
+    private static final ParameterizedTypeReference<AdminGatewayEnvelope<java.util.Map<String, Object>>> MAP_ENVELOPE =
         new ParameterizedTypeReference<>() {};
-    private static final ParameterizedTypeReference<ApiEnvelope<PortalMenuCollection>> MENU_COLLECTION_TYPE =
+    private static final ParameterizedTypeReference<AdminGatewayEnvelope<PortalMenuCollection>> MENU_COLLECTION_TYPE =
         new ParameterizedTypeReference<>() {};
 
-    public PortalMenuClient(RestTemplateBuilder builder, DtsAdminProperties props) {
-        this.restTemplate = builder.setConnectTimeout(java.time.Duration.ofSeconds(3)).setReadTimeout(java.time.Duration.ofSeconds(5)).build();
+    public PortalMenuClient(AdminGatewayTransport transport, DtsAdminProperties props) {
+        this.transport = transport;
         this.props = props;
     }
 
@@ -46,16 +44,17 @@ public class PortalMenuClient {
             return List.of();
         }
         try {
-            URI uri = buildUri(props.getApiPath(), "/menu");
-            ResponseEntity<ApiEnvelope<List<RemoteMenuNode>>> response = restExchange(uri, MENU_TREE_TYPE);
-            ApiEnvelope<List<RemoteMenuNode>> body = response.getBody();
-            if (body != null && body.isSuccess() && body.data() != null) {
-                return body.data();
-            }
-            log.warn("Portal menu tree request returned no data: status={} message={} uri={}", body != null ? body.status() : null, body != null ? body.message() : null, uri);
-        } catch (Exception ex) {
+            List<RemoteMenuNode> data = transport.exchangeEnvelopeData(
+                AdminGatewayTarget.API,
+                org.springframework.http.HttpMethod.GET,
+                "/menu",
+                null,
+                MENU_TREE_TYPE,
+                AdminGatewayRequestOptions.defaults()
+            );
+            return data != null ? data : List.of();
+        } catch (AdminGatewayException ex) {
             log.warn("Failed to fetch portal menu tree from dts-admin: {}", ex.getMessage());
-            log.debug("Portal menu tree fetch stack", ex);
         }
         return Collections.emptyList();
     }
@@ -69,67 +68,19 @@ public class PortalMenuClient {
             return List.of();
         }
         try {
-            StringBuilder qs = new StringBuilder();
-            if (roles != null) {
-                for (String r : roles) {
-                    if (r == null || r.isBlank()) continue;
-                    if (qs.length() == 0) qs.append("?"); else qs.append("&");
-                    qs.append("roles=").append(urlEncode(r));
-                }
-            }
-            if (permissions != null) {
-                for (String p : permissions) {
-                    if (p == null || p.isBlank()) continue;
-                    if (qs.length() == 0) qs.append("?"); else qs.append("&");
-                    qs.append("permissions=").append(urlEncode(p));
-                }
-            }
-            URI uri = buildUri(props.getApiPath(), "/menu" + qs.toString());
-            ResponseEntity<ApiEnvelope<List<RemoteMenuNode>>> response = restExchange(uri, MENU_TREE_TYPE);
-            ApiEnvelope<List<RemoteMenuNode>> body = response.getBody();
-            if (body != null && body.isSuccess() && body.data() != null) {
-                return body.data();
-            }
-            log.warn(
-                "Portal menu audience request returned no data: status={} message={} uri={}",
-                body != null ? body.status() : null,
-                body != null ? body.message() : null,
-                uri
+            List<RemoteMenuNode> data = transport.exchangeEnvelopeData(
+                AdminGatewayTarget.API,
+                org.springframework.http.HttpMethod.GET,
+                buildAudienceSuffix(roles, permissions),
+                null,
+                MENU_TREE_TYPE,
+                AdminGatewayRequestOptions.defaults()
             );
-        } catch (Exception ex) {
+            return data != null ? data : List.of();
+        } catch (AdminGatewayException ex) {
             log.warn("Failed to fetch portal menu tree (audience) from dts-admin: {}", ex.getMessage());
-            log.debug("Portal menu audience fetch stack", ex);
         }
         return Collections.emptyList();
-    }
-
-    private URI buildUri(String basePath, String suffix) {
-        String baseUrl = props.getBaseUrl();
-        if (!StringUtils.hasText(baseUrl)) {
-            baseUrl = "http://dts-admin:8081";
-        }
-        String normalized = baseUrl.replaceAll("/+$", "");
-        String path = (basePath == null ? "" : basePath).replaceAll("/+$", "");
-        String tail = suffix == null ? "" : suffix;
-        return URI.create(normalized + path + tail);
-    }
-
-    private <T> ResponseEntity<T> restExchange(URI uri, ParameterizedTypeReference<T> type) {
-        HttpHeaders headers = new HttpHeaders();
-        headers.setAccept(List.of(MediaType.APPLICATION_JSON));
-        if (StringUtils.hasText(props.getServiceToken())) {
-            headers.set(HttpHeaders.AUTHORIZATION, "Bearer " + props.getServiceToken());
-        }
-        HttpEntity<Void> request = new HttpEntity<>(headers);
-        return restTemplate.exchange(uri, HttpMethod.GET, request, type);
-    }
-
-    private String urlEncode(String s) {
-        try {
-            return java.net.URLEncoder.encode(s, java.nio.charset.StandardCharsets.UTF_8);
-        } catch (Exception ignored) {
-            return s;
-        }
     }
 
     public Map<String, Object> createPortalMenu(Map<String, Object> payload) {
@@ -150,30 +101,17 @@ public class PortalMenuClient {
             return Map.of("status", "SKIPPED");
         }
         try {
-            URI uri = buildUri(props.getAdminApiPath(), suffix);
-            HttpHeaders headers = new HttpHeaders();
-            headers.setAccept(List.of(MediaType.APPLICATION_JSON));
-            headers.setContentType(MediaType.APPLICATION_JSON);
-            if (StringUtils.hasText(props.getServiceToken())) {
-                headers.set(HttpHeaders.AUTHORIZATION, "Bearer " + props.getServiceToken());
-            }
-            HttpEntity<Map<String, Object>> entity = new HttpEntity<>(payload, headers);
-            ResponseEntity<ApiEnvelope<Map<String, Object>>> response = restTemplate.exchange(uri, method, entity, MAP_ENVELOPE);
-            ApiEnvelope<Map<String, Object>> body = response.getBody();
-            if (body != null && body.isSuccess()) {
-                return body.data() != null ? body.data() : Map.of("status", body.status());
-            }
-            log.warn(
-                "Portal menu admin exchange returned failure status: status={} message={} uri={} method={} payload={}",
-                body != null ? body.status() : null,
-                body != null ? body.message() : null,
-                uri,
+            Map<String, Object> data = transport.exchangeEnvelopeData(
+                AdminGatewayTarget.ADMIN_API,
                 method,
-                payload
+                suffix,
+                payload,
+                MAP_ENVELOPE,
+                AdminGatewayRequestOptions.defaults()
             );
+            return data != null ? data : Map.of("status", "SUCCESS");
         } catch (Exception ex) {
             log.warn("Portal menu admin exchange failed ({} {}): {}", method, suffix, ex.getMessage());
-            log.debug("Portal menu admin exchange stack", ex);
         }
         return Map.of("status", "ERROR");
     }
@@ -183,27 +121,51 @@ public class PortalMenuClient {
             return List.of();
         }
         try {
-            URI uri = buildUri(props.getAdminApiPath(), "/portal/menus");
-            HttpHeaders headers = new HttpHeaders();
-            headers.setAccept(List.of(MediaType.APPLICATION_JSON));
-            if (StringUtils.hasText(props.getServiceToken())) {
-                headers.set(HttpHeaders.AUTHORIZATION, "Bearer " + props.getServiceToken());
-            }
-            HttpEntity<Void> request = new HttpEntity<>(headers);
-            ResponseEntity<ApiEnvelope<PortalMenuCollection>> response = restTemplate.exchange(
-                uri,
-                HttpMethod.GET,
-                request,
-                MENU_COLLECTION_TYPE
+            PortalMenuCollection data = transport.exchangeEnvelopeData(
+                AdminGatewayTarget.ADMIN_API,
+                org.springframework.http.HttpMethod.GET,
+                "/portal/menus",
+                null,
+                MENU_COLLECTION_TYPE,
+                AdminGatewayRequestOptions.defaults()
             );
-            ApiEnvelope<PortalMenuCollection> body = response.getBody();
-            if (body != null && body.isSuccess() && body.data() != null && body.data().getMenus() != null) {
-                return body.data().getMenus();
+            if (data != null && data.getMenus() != null) {
+                return data.getMenus();
             }
         } catch (Exception ex) {
             log.debug("Failed to fetch active menu tree via admin API: {}", ex.getMessage());
         }
         return List.of();
+    }
+
+    private String buildAudienceSuffix(List<String> roles, List<String> permissions) {
+        StringBuilder qs = new StringBuilder("/menu");
+        boolean hasQuery = false;
+        if (roles != null) {
+            for (String role : roles) {
+                if (!StringUtils.hasText(role)) continue;
+                qs.append(hasQuery ? "&" : "?");
+                qs.append("roles=").append(urlEncode(role));
+                hasQuery = true;
+            }
+        }
+        if (permissions != null) {
+            for (String permission : permissions) {
+                if (!StringUtils.hasText(permission)) continue;
+                qs.append(hasQuery ? "&" : "?");
+                qs.append("permissions=").append(urlEncode(permission));
+                hasQuery = true;
+            }
+        }
+        return qs.toString();
+    }
+
+    private String urlEncode(String value) {
+        try {
+            return java.net.URLEncoder.encode(value, java.nio.charset.StandardCharsets.UTF_8);
+        } catch (Exception ignored) {
+            return value;
+        }
     }
 
     private static class PortalMenuCollection {
@@ -229,13 +191,6 @@ public class PortalMenuClient {
             this.allMenus = allMenus;
         }
     }
-
-    public record ApiEnvelope<T>(@JsonProperty("status") String status, @JsonProperty("message") String message, @JsonProperty("data") T data) {
-        public boolean isSuccess() {
-            return status != null && ("SUCCESS".equalsIgnoreCase(status) || "OK".equalsIgnoreCase(status) || "200".equals(status));
-        }
-    }
-
     @JsonIgnoreProperties(ignoreUnknown = true)
     public static class RemoteMenuNode {
         private String id;

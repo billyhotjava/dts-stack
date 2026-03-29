@@ -4,7 +4,7 @@ import com.yuzhi.dts.platform.security.AuthoritiesConstants;
 import com.yuzhi.dts.platform.security.session.PortalSessionRegistry;
 import com.yuzhi.dts.platform.security.session.PortalSessionRegistry.AdminTokens;
 import com.yuzhi.dts.platform.security.session.PortalSessionRegistry.PortalSession;
-import com.yuzhi.dts.platform.service.admin.AdminAuthClient;
+import com.yuzhi.dts.platform.service.admin.gateway.auth.AdminAuthGateway;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -27,7 +27,7 @@ public class KeycloakAuthResource {
 
     private static final Logger log = LoggerFactory.getLogger(KeycloakAuthResource.class);
     private final PortalSessionRegistry sessionRegistry;
-    private final AdminAuthClient adminAuthClient;
+    private final AdminAuthGateway adminAuthGateway;
     private final com.yuzhi.dts.platform.service.audit.AuditService audit;
     private final com.yuzhi.dts.platform.service.infra.InceptorDataSourceRegistry inceptorRegistry;
     private final boolean portalAuditEnabled;
@@ -35,14 +35,14 @@ public class KeycloakAuthResource {
 
     public KeycloakAuthResource(
         PortalSessionRegistry sessionRegistry,
-        AdminAuthClient adminAuthClient,
+        AdminAuthGateway adminAuthGateway,
         com.yuzhi.dts.platform.service.audit.AuditService audit,
         com.yuzhi.dts.platform.service.infra.InceptorDataSourceRegistry inceptorRegistry,
         @Value("${auditing.portal-auth.enabled:true}") boolean portalAuditEnabled,
         @Value("${auditing.portal-auth.refresh-enabled:false}") boolean portalRefreshAuditEnabled
     ) {
         this.sessionRegistry = sessionRegistry;
-        this.adminAuthClient = adminAuthClient;
+        this.adminAuthGateway = adminAuthGateway;
         this.audit = audit;
         this.inceptorRegistry = inceptorRegistry;
         this.portalAuditEnabled = portalAuditEnabled;
@@ -79,7 +79,7 @@ public class KeycloakAuthResource {
             if (log.isInfoEnabled()) {
                 log.info("[login] attempt username={}", username);
             }
-            var result = adminAuthClient.login(username, password);
+            var result = adminAuthGateway.login(username, password);
             Map<String, Object> user = result.user();
             String displayName = resolveUserDisplayName(user);
             // Role-based blocks are handled by admin; platform trusts admin decision
@@ -376,7 +376,7 @@ public class KeycloakAuthResource {
             AdminTokens adminTokens = session.adminTokens();
             if (adminTokens != null && StringUtils.hasText(adminTokens.refreshToken())) {
                 try {
-                    adminAuthClient.logout(adminTokens.refreshToken());
+                    adminAuthGateway.logout(adminTokens.refreshToken());
                 } catch (Exception ex) {
                     revokeFailed = true;
                     revokeError = ex.getMessage();
@@ -421,6 +421,16 @@ public class KeycloakAuthResource {
             }
         }
         return ResponseEntity.ok(ApiResponses.ok(null));
+    }
+
+    @GetMapping("/pki-challenge")
+    public ResponseEntity<ApiResponse<AdminAuthGateway.PkiChallengeView>> pkiChallenge() {
+        return ResponseEntity.ok(ApiResponses.ok(adminAuthGateway.getPkiChallenge()));
+    }
+
+    @PostMapping("/pki-login")
+    public ResponseEntity<ApiResponse<Map<String, Object>>> pkiLogin(@RequestBody(required = false) Map<String, Object> payload) {
+        return ResponseEntity.ok(ApiResponses.ok(adminAuthGateway.pkiLogin(payload)));
     }
 
     /**
@@ -597,7 +607,7 @@ public class KeycloakAuthResource {
                         return tokens;
                     }
                     try {
-                        var result = adminAuthClient.refresh(adminRefresh);
+                        var result = adminAuthGateway.refresh(adminRefresh);
                         return computeAdminTokens(
                             result.accessToken(),
                             result.accessTokenExpiresIn(),

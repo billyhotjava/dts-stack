@@ -1,5 +1,4 @@
 import apiClient from "../apiClient";
-import { GLOBAL_CONFIG } from "@/global-config";
 
 export type PkiChallenge = {
   challengeId: string;
@@ -11,7 +10,6 @@ export type PkiChallenge = {
 
 export async function getPkiChallenge(): Promise<PkiChallenge> {
   const data = await apiClient.get<unknown>({
-    baseURL: GLOBAL_CONFIG.adminApiBaseUrl,
     url: "/keycloak/auth/pki-challenge",
   });
   if (!data || typeof data !== "object") {
@@ -42,7 +40,6 @@ export type PkiLoginPayload = {
 
 export async function pkiLogin(payload: PkiLoginPayload): Promise<any> {
   const data = await apiClient.post<any>({
-    baseURL: GLOBAL_CONFIG.adminApiBaseUrl,
     url: "/keycloak/auth/pki-login",
     data: payload,
   });
