@@ -4,7 +4,10 @@ import {
 	createAsyncRunInitialProgress,
 	createAsyncRunRetryProgress,
 	createAsyncRunTimeoutProgress,
+	extractAsyncRunSubmitErrorMessage,
+	isDagNotReadySubmitError,
 	mapExecutionToProgressView,
+	resolveAsyncRunSubmitFeedback,
 	resolveAsyncRunPollHint,
 	resolveCreatedTaskId,
 } from "./transformCreateAsyncRun.helpers";
@@ -35,7 +38,7 @@ test("mapExecutionToProgressView marks success as terminal success", () => {
 				status: "SUCCESS",
 				executionId: 1001,
 			} as any,
-			18_000
+			18_000,
 		),
 		{
 			progress: 100,
@@ -43,7 +46,7 @@ test("mapExecutionToProgressView marks success as terminal success", () => {
 			stage: "执行成功",
 			detail: "入湖任务已执行完成。",
 			terminal: true,
-		}
+		},
 	);
 });
 
@@ -54,7 +57,7 @@ test("mapExecutionToProgressView marks failures as terminal exception with messa
 				status: "failed",
 				errorMessage: "reader schema mismatch",
 			} as any,
-			22_000
+			22_000,
 		),
 		{
 			progress: 100,
@@ -62,7 +65,7 @@ test("mapExecutionToProgressView marks failures as terminal exception with messa
 			stage: "执行失败",
 			detail: "reader schema mismatch",
 			terminal: true,
-		}
+		},
 	);
 });
 
@@ -99,7 +102,7 @@ test("createAsyncRunTimeoutProgress and retry progress keep user-facing fallback
 			stage: "准备执行",
 			detail: "状态同步中，稍后自动重试。",
 			terminal: false,
-		}
+		},
 	);
 });
 
@@ -107,4 +110,24 @@ test("resolveAsyncRunPollHint prefers execution hint and ignores non-finite valu
 	assert.equal(resolveAsyncRunPollHint({ execution: { pollIntervalMs: 5000 } }), 5000);
 	assert.equal(resolveAsyncRunPollHint({ pollIntervalMs: 3000 }), 3000);
 	assert.equal(resolveAsyncRunPollHint({ execution: { pollIntervalMs: "bad" } }), undefined);
+});
+
+test("resolveAsyncRunSubmitFeedback downgrades DAG not ready timeout to warning prompt", () => {
+	const error = new Error(
+		"Airflow 触发失败: [AIRFLOW_DAG_NOT_READY_TIMEOUT] DAG 未就绪: task_task_patent_test1_manual",
+	);
+
+	assert.equal(extractAsyncRunSubmitErrorMessage(error), error.message);
+	assert.equal(isDagNotReadySubmitError(error), true);
+	assert.deepEqual(resolveAsyncRunSubmitFeedback(error, "execute"), {
+		level: "warning",
+		message: "DAG 正在准备中，暂时还不能执行。请等待约 30 秒后再试。",
+	});
+});
+
+test("resolveAsyncRunSubmitFeedback preserves normal failures as error messages", () => {
+	assert.deepEqual(resolveAsyncRunSubmitFeedback(new Error("reader schema mismatch"), "retry"), {
+		level: "error",
+		message: "重试失败: reader schema mismatch",
+	});
 });

@@ -2,6 +2,7 @@ package com.yuzhi.dts.analytics.web.rest;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.yuzhi.dts.analytics.config.DtsAdminProperties;
 import com.yuzhi.dts.analytics.config.PlatformAuthProperties;
 import com.yuzhi.dts.analytics.domain.AnalyticsUser;
 import com.yuzhi.dts.analytics.repository.AnalyticsUserRepository;
@@ -19,7 +20,7 @@ import java.util.Optional;
 import java.util.Set;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.beans.factory.annotation.Value;
+// import removed: @Value no longer used
 import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpMethod;
@@ -64,7 +65,7 @@ public class UserResource {
             RestTemplateBuilder restTemplateBuilder,
             ObjectMapper objectMapper,
             PlatformAuthProperties authProperties,
-            @Value("${dts.analytics.platform.base-url:http://dts-platform:8081}") String platformBaseUrl) {
+            DtsAdminProperties adminProperties) {
         this.sessionService = sessionService;
         this.userRepository = userRepository;
         this.groupService = groupService;
@@ -75,8 +76,9 @@ public class UserResource {
                 .build();
         this.objectMapper = objectMapper;
         this.authProperties = authProperties;
-        this.platformBaseUrl = platformBaseUrl == null || platformBaseUrl.isBlank()
-                ? "http://dts-platform:8081" : platformBaseUrl.trim();
+        String adminBase = adminProperties != null ? adminProperties.getBaseUrl() : null;
+        this.platformBaseUrl = (adminBase == null || adminBase.isBlank())
+                ? "http://dts-admin:8081" : adminBase.trim();
     }
 
     @GetMapping(path = "/current", produces = MediaType.APPLICATION_JSON_VALUE)
@@ -153,7 +155,9 @@ public class UserResource {
                 String email = pu.get("email") == null ? null
                         : pu.get("email").toString().trim().toLowerCase(java.util.Locale.ROOT);
                 String username = pu.get("username") == null ? null : pu.get("username").toString().trim();
-                String fullName = pu.get("fullName") == null ? null : pu.get("fullName").toString().trim();
+                String fullName = pu.get("displayName") == null
+                        ? (pu.get("fullName") == null ? null : pu.get("fullName").toString().trim())
+                        : pu.get("displayName").toString().trim();
                 if (username == null || username.isEmpty()) continue;
 
                 // Check if already present by email or username-derived email
@@ -194,9 +198,7 @@ public class UserResource {
     @SuppressWarnings("unchecked")
     private List<Map<String, Object>> fetchPlatformUsers(String keyword, HttpServletRequest request) {
         URI uri = UriComponentsBuilder.fromHttpUrl(platformBaseUrl)
-                .path("/api/admin/users")
-                .queryParam("page", 0)
-                .queryParam("size", 50)
+                .path("/api/platform/directory/users")
                 .queryParam("keyword", keyword)
                 .build()
                 .toUri();
@@ -226,8 +228,15 @@ public class UserResource {
         Map<String, Object> body = response.getBody();
         if (body == null) return List.of();
 
-        // ApiResponse wrapper: { code, message, data: { content: [...], ... } }
+        // ApiResponse wrapper: { code, data: [UserSummary...] }
         Object dataObj = body.get("data");
+        if (dataObj instanceof List<?> dataList) {
+            return dataList.stream()
+                    .filter(o -> o instanceof Map)
+                    .map(o -> (Map<String, Object>) o)
+                    .toList();
+        }
+        // Fallback: { data: { content: [...] } } (paginated format)
         if (dataObj instanceof Map<?, ?> dataMap) {
             Object contentObj = dataMap.get("content");
             if (contentObj instanceof List<?> contentList) {

@@ -82,7 +82,9 @@ async function refreshTokenIfPossible(): Promise<boolean> {
 			return false;
 		} finally {
 			// Clear after a tick so concurrent awaiters get the same result
-			setTimeout(() => { refreshingPromise = null; }, 50);
+			setTimeout(() => {
+				refreshingPromise = null;
+			}, 50);
 		}
 	})();
 
@@ -90,9 +92,7 @@ async function refreshTokenIfPossible(): Promise<boolean> {
 }
 
 // ── Keep-alive timer ──
-const KEEP_ALIVE_INTERVAL_MS = TEST_SESSION_ENABLED
-	? TEST_SESSION_REFRESH_MS
-	: 4 * 60 * 1000; // 4 min — refresh before typical 5-min access token expiry
+const KEEP_ALIVE_INTERVAL_MS = TEST_SESSION_ENABLED ? TEST_SESSION_REFRESH_MS : 4 * 60 * 1000; // 4 min — refresh before typical 5-min access token expiry
 
 let keepAliveTimer: number | null = null;
 function ensureKeepAliveTimer() {
@@ -172,7 +172,9 @@ axiosInstance.interceptors.request.use(
 						const dept = (fromAttrs || fromTop || "").trim();
 						if (dept) {
 							(config.headers as any)["X-Active-Dept"] = dept;
-							try { ctx.actions.setActiveDept(dept); } catch {}
+							try {
+								ctx.actions.setActiveDept(dept);
+							} catch {}
 						}
 					} catch {}
 				}
@@ -219,10 +221,9 @@ axiosInstance.interceptors.response.use(
 			typeof requestUrl === "string" &&
 			(requestUrl.includes("/keycloak/auth/login") || requestUrl.includes("/keycloak/auth/platform/login"));
 		const isRefreshRequest = Boolean((response?.config as any)?._isRefreshRequest);
-		const shouldSuppressAuthHandling = typeof requestUrl === "string" && (
-			requestUrl.includes("/keycloak/localization/")
-			|| requestUrl.includes("/workbench/")
-		);
+		const shouldSuppressAuthHandling =
+			typeof requestUrl === "string" &&
+			(requestUrl.includes("/keycloak/localization/") || requestUrl.includes("/workbench/"));
 
 		if (!(isLoginRequest && response?.status === 401)) {
 			console.error("API Response Error:", response?.status, response?.data, error.message);
@@ -230,6 +231,7 @@ axiosInstance.interceptors.response.use(
 
 		const apiBody: any = response?.data || {};
 		const headers = response?.headers || {};
+		const skipErrorToast = Boolean((response?.config as any)?._skipErrorToast);
 		const sessionExpiredHeader =
 			typeof headers?.["x-session-expired"] === "string"
 				? headers["x-session-expired"].toLowerCase() === "true"
@@ -307,7 +309,9 @@ axiosInstance.interceptors.response.use(
 			// Force logout only when server explicitly signals session issue
 			if (shouldForceLogout) {
 				userStore.getState().actions.clearUserInfoAndToken();
-				try { localStorage.setItem("dts.session.logoutTs", String(Date.now())); } catch {}
+				try {
+					localStorage.setItem("dts.session.logoutTs", String(Date.now()));
+				} catch {}
 				if (typeof window !== "undefined" && !isLoginRouteActive()) {
 					location.replace(resolveLoginHref());
 				}
@@ -315,13 +319,17 @@ axiosInstance.interceptors.response.use(
 			// Otherwise: just reject — caller handles the error, don't destroy session
 		} else if (shouldForceLogout && !TEST_SESSION_ENABLED) {
 			userStore.getState().actions.clearUserInfoAndToken();
-			try { localStorage.setItem("dts.session.logoutTs", String(Date.now())); } catch {}
+			try {
+				localStorage.setItem("dts.session.logoutTs", String(Date.now()));
+			} catch {}
 			if (typeof window !== "undefined" && !isLoginRouteActive()) {
 				location.replace(resolveLoginHref());
 			}
 		} else {
 			if (!shouldSuppressAuthHandling && !isLoginRequest) {
-				toast.error(combinedMsg, { position: "top-center" });
+				if (!skipErrorToast) {
+					toast.error(combinedMsg, { position: "top-center" });
+				}
 			}
 		}
 		return Promise.reject(error);

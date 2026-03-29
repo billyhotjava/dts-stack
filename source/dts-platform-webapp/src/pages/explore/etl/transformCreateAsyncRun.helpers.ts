@@ -22,6 +22,37 @@ export const resolveAsyncRunPollHint = (payload: any): number | undefined => {
 	return Number.isFinite(hint) ? hint : undefined;
 };
 
+export const extractAsyncRunSubmitErrorMessage = (error: any): string => {
+	const responseData = error?.response?.data;
+	const detail = responseData?.detail || responseData?.message || responseData?.title || responseData?.error;
+	return normalizeText(detail || error?.message);
+};
+
+export const isDagNotReadySubmitError = (error: any): boolean => {
+	const message = extractAsyncRunSubmitErrorMessage(error).toUpperCase();
+	return message.includes("AIRFLOW_DAG_NOT_READY_TIMEOUT") || message.includes("DAG 未就绪");
+};
+
+export const resolveAsyncRunSubmitFeedback = (
+	error: any,
+	action: "execute" | "retry" = "execute",
+): { level: "warning" | "error"; message: string } => {
+	if (isDagNotReadySubmitError(error)) {
+		return {
+			level: "warning",
+			message:
+				action === "retry"
+					? "DAG 正在准备中，暂时还不能重试。请等待约 30 秒后再试。"
+					: "DAG 正在准备中，暂时还不能执行。请等待约 30 秒后再试。",
+		};
+	}
+	const fallback = extractAsyncRunSubmitErrorMessage(error) || "未知错误";
+	return {
+		level: "error",
+		message: action === "retry" ? `重试失败: ${fallback}` : `执行失败: ${fallback}`,
+	};
+};
+
 export const createAsyncRunInitialProgress = (): AsyncRunProgressView => ({
 	progress: 10,
 	status: "active",
@@ -45,7 +76,7 @@ export const createAsyncRunRetryProgress = (previous: AsyncRunProgressView): Asy
 
 export const mapExecutionToProgressView = (
 	execution: IngestionExecutionDTO | null,
-	elapsedMs: number
+	elapsedMs: number,
 ): AsyncRunProgressView => {
 	if (!execution) {
 		const dynamicProgress = Math.min(45, 15 + Math.floor(elapsedMs / 5000) * 5);

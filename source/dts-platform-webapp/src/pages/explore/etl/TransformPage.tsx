@@ -9,11 +9,8 @@ import {
 	SyncOutlined,
 } from "@ant-design/icons";
 import { useRouter } from "@/routes/hooks";
-import {
-	ingestionTaskAPI,
-	type IngestionTaskDTO,
-	type IngestionExecutionDTO,
-} from "@/api/ingestion";
+import { ingestionTaskAPI, type IngestionTaskDTO, type IngestionExecutionDTO } from "@/api/ingestion";
+import { resolveAsyncRunSubmitFeedback } from "./transformCreateAsyncRun.helpers";
 import { formatTimestamp } from "@/utils/format";
 import { normalizeText } from "@/utils/textUtils";
 
@@ -56,10 +53,10 @@ export default function TransformPage() {
 
 	/** Adaptive polling: starts fast, slows down over time. Never hard-stops. */
 	const adaptivePollDelay = (elapsedMs: number): number => {
-		if (elapsedMs < 30_000) return 3_000;    // first 30s: every 3s
-		if (elapsedMs < 120_000) return 5_000;   // 30s-2min: every 5s
-		if (elapsedMs < 300_000) return 10_000;  // 2-5min: every 10s
-		return 30_000;                            // >5min: every 30s
+		if (elapsedMs < 30_000) return 3_000; // first 30s: every 3s
+		if (elapsedMs < 120_000) return 5_000; // 30s-2min: every 5s
+		if (elapsedMs < 300_000) return 10_000; // 2-5min: every 10s
+		return 30_000; // >5min: every 30s
 	};
 
 	const stopExecutePolling = () => {
@@ -140,11 +137,7 @@ export default function TransformPage() {
 		};
 	};
 
-	const startExecuteProgressPolling = (
-		taskId: number,
-		taskName: string,
-		_pollIntervalMs?: number
-	) => {
+	const startExecuteProgressPolling = (taskId: number, taskName: string, _pollIntervalMs?: number) => {
 		stopExecutePolling();
 		const startTime = Date.now();
 		executeStartedAtRef.current = startTime;
@@ -195,8 +188,13 @@ export default function TransformPage() {
 					message.success("任务已提交，后台正在触发执行");
 					startExecuteProgressPolling(id, name, submit?.pollIntervalMs);
 					void loadTasks();
-				} catch {
-					// error already shown by global interceptor
+				} catch (error: any) {
+					const feedback = resolveAsyncRunSubmitFeedback(error, "execute");
+					if (feedback.level === "warning") {
+						message.warning(feedback.message);
+						return;
+					}
+					message.error(feedback.message);
 				}
 			},
 		});

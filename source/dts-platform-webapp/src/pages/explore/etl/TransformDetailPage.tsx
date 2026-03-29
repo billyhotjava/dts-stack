@@ -1,7 +1,35 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useParams } from "@/routes/hooks";
-import { Button, Card, Descriptions, Dropdown, Space, Tabs, Tag, message, Spin, Modal, Form, Input, Select, Typography, Drawer, Progress, Alert, Table } from "antd";
-import { PlayCircleOutlined, EditOutlined, HistoryOutlined, ArrowLeftOutlined, SyncOutlined, FileTextOutlined, ReloadOutlined, DeleteOutlined } from "@ant-design/icons";
+import {
+	Button,
+	Card,
+	Descriptions,
+	Dropdown,
+	Space,
+	Tabs,
+	Tag,
+	message,
+	Spin,
+	Modal,
+	Form,
+	Input,
+	Select,
+	Typography,
+	Drawer,
+	Progress,
+	Alert,
+	Table,
+} from "antd";
+import {
+	PlayCircleOutlined,
+	EditOutlined,
+	HistoryOutlined,
+	ArrowLeftOutlined,
+	SyncOutlined,
+	FileTextOutlined,
+	ReloadOutlined,
+	DeleteOutlined,
+} from "@ant-design/icons";
 import { useRouter } from "@/routes/hooks";
 import {
 	ingestionTaskAPI,
@@ -15,6 +43,7 @@ import dataSourcesService, { type InfraDataSource } from "@/api/services/dataSou
 import { listSqlModels } from "@/api/platformApi";
 import RollbackImpactModal, { type RollbackRequest } from "@/components/rollback/RollbackImpactModal";
 import ExecutionHistoryTable from "./components/ExecutionHistoryTable";
+import { resolveAsyncRunSubmitFeedback } from "./transformCreateAsyncRun.helpers";
 import { normalizeText } from "@/utils/textUtils";
 
 const { Text } = Typography;
@@ -236,7 +265,10 @@ export default function TransformDetailPage() {
 	};
 
 	const buildModelSelectorFromNames = (names: string[]) =>
-		(names || []).filter(Boolean).map((name) => `model:${name}`).join(" ");
+		(names || [])
+			.filter(Boolean)
+			.map((name) => `model:${name}`)
+			.join(" ");
 
 	const loadDbtModels = async () => {
 		setDbtModelsLoading(true);
@@ -313,7 +345,12 @@ export default function TransformDetailPage() {
 			message.success("任务已提交，后台正在触发执行");
 			startExecuteProgressPolling(Number(task.id), submit?.pollIntervalMs);
 		} catch (error: any) {
-			message.error("执行失败: " + (error.message || "未知错误"));
+			const feedback = resolveAsyncRunSubmitFeedback(error, "execute");
+			if (feedback.level === "warning") {
+				message.warning(feedback.message);
+				return;
+			}
+			message.error(feedback.message);
 		} finally {
 			setExecuteSubmitting(false);
 		}
@@ -321,10 +358,10 @@ export default function TransformDetailPage() {
 
 	/** Adaptive polling: starts fast, slows down over time. Never hard-stops. */
 	const adaptivePollDelay = (elapsedMs: number): number => {
-		if (elapsedMs < 30_000) return 3_000;    // first 30s: every 3s
-		if (elapsedMs < 120_000) return 5_000;   // 30s-2min: every 5s
-		if (elapsedMs < 300_000) return 10_000;  // 2-5min: every 10s
-		return 30_000;                            // >5min: every 30s
+		if (elapsedMs < 30_000) return 3_000; // first 30s: every 3s
+		if (elapsedMs < 120_000) return 5_000; // 30s-2min: every 5s
+		if (elapsedMs < 300_000) return 10_000; // 2-5min: every 10s
+		return 30_000; // >5min: every 30s
 	};
 
 	const stopExecutePolling = () => {
@@ -524,10 +561,16 @@ export default function TransformDetailPage() {
 							icon={<PlayCircleOutlined />}
 							onClick={handleExecute}
 							loading={executeSubmitting || (executeProgressOpen && !executeProgress.terminal)}
-							disabled={task.status === "deleted" || executeSubmitting || (executeProgressOpen && !executeProgress.terminal)}
+							disabled={
+								task.status === "deleted" || executeSubmitting || (executeProgressOpen && !executeProgress.terminal)
+							}
 							data-testid="platform-transform-execute"
 						>
-							{executeSubmitting ? "提交中..." : (executeProgressOpen && !executeProgress.terminal) ? "执行中" : "执行任务"}
+							{executeSubmitting
+								? "提交中..."
+								: executeProgressOpen && !executeProgress.terminal
+									? "执行中"
+									: "执行任务"}
 						</Button>
 					</Space>
 				}
@@ -542,193 +585,245 @@ export default function TransformDetailPage() {
 						label: "任务配置",
 						children: (
 							<div className="space-y-6">
+								<div className="grid gap-6 xl:grid-cols-[1.05fr_0.95fr]">
+									<Card title="基本信息">
+										<Descriptions column={2} bordered>
+											<Descriptions.Item label="任务名称">{task.name}</Descriptions.Item>
+											<Descriptions.Item label="状态">{renderStatus(task.status)}</Descriptions.Item>
+											<Descriptions.Item label="数据源连接">
+												{sourceDetail
+													? `${sourceDetail.name} (${sourceDetail.type || "unknown"})`
+													: task.sourceDataSourceId || "-"}
+											</Descriptions.Item>
+											<Descriptions.Item label="Reader 类型">{task.sourceType}</Descriptions.Item>
+											<Descriptions.Item label="目标类型">
+												{task.destinationType || "postgresqlwriter"}
+											</Descriptions.Item>
+											<Descriptions.Item label="同步模式">{task.syncMode}</Descriptions.Item>
+											<Descriptions.Item label="调度配置">{task.syncSchedule || "手动触发"}</Descriptions.Item>
+											<Descriptions.Item label="创建人">{task.createdBy}</Descriptions.Item>
+											<Descriptions.Item label="创建时间">
+												{task.createdDate ? new Date(task.createdDate).toLocaleString("zh-CN") : "-"}
+											</Descriptions.Item>
+											<Descriptions.Item label="最后修改人">{task.lastModifiedBy || "-"}</Descriptions.Item>
+											<Descriptions.Item label="最后修改时间">
+												{task.lastModifiedDate ? new Date(task.lastModifiedDate).toLocaleString("zh-CN") : "-"}
+											</Descriptions.Item>
+										</Descriptions>
+									</Card>
 
-			<div className="grid gap-6 xl:grid-cols-[1.05fr_0.95fr]">
-				<Card title="基本信息">
-				<Descriptions column={2} bordered>
-					<Descriptions.Item label="任务名称">{task.name}</Descriptions.Item>
-					<Descriptions.Item label="状态">{renderStatus(task.status)}</Descriptions.Item>
-					<Descriptions.Item label="数据源连接">
-						{sourceDetail ? `${sourceDetail.name} (${sourceDetail.type || "unknown"})` : task.sourceDataSourceId || "-"}
-					</Descriptions.Item>
-					<Descriptions.Item label="Reader 类型">{task.sourceType}</Descriptions.Item>
-					<Descriptions.Item label="目标类型">{task.destinationType || "postgresqlwriter"}</Descriptions.Item>
-					<Descriptions.Item label="同步模式">{task.syncMode}</Descriptions.Item>
-					<Descriptions.Item label="调度配置">{task.syncSchedule || "手动触发"}</Descriptions.Item>
-					<Descriptions.Item label="创建人">{task.createdBy}</Descriptions.Item>
-					<Descriptions.Item label="创建时间">{task.createdDate ? new Date(task.createdDate).toLocaleString("zh-CN") : "-"}</Descriptions.Item>
-					<Descriptions.Item label="最后修改人">{task.lastModifiedBy || "-"}</Descriptions.Item>
-					<Descriptions.Item label="最后修改时间">
-						{task.lastModifiedDate ? new Date(task.lastModifiedDate).toLocaleString("zh-CN") : "-"}
-					</Descriptions.Item>
-				</Descriptions>
-				</Card>
+									<Card
+										title="执行与编排"
+										extra={
+											<Button
+												icon={<ReloadOutlined />}
+												onClick={() => loadLatestExecution()}
+												loading={latestExecutionLoading}
+											>
+												刷新执行记录
+											</Button>
+										}
+									>
+										<Descriptions column={2} bordered>
+											<Descriptions.Item label="Airflow 启用">
+												{task.airflowEnabled ? <Tag color="success">已启用</Tag> : <Tag>未启用</Tag>}
+											</Descriptions.Item>
+											<Descriptions.Item label="编排模板">
+												{task.airflowDagId ? "系统自动生成" : "系统默认"}
+											</Descriptions.Item>
+											<Descriptions.Item label="最后执行时间">
+												{task.lastExecutedAt ? new Date(task.lastExecutedAt).toLocaleString("zh-CN") : "从未执行"}
+											</Descriptions.Item>
+											<Descriptions.Item label="最后执行状态">
+												{task.lastExecutionStatus ? (
+													<Tag
+														color={
+															task.lastExecutionStatus === "success"
+																? "success"
+																: task.lastExecutionStatus === "failed"
+																	? "error"
+																	: "processing"
+														}
+													>
+														{task.lastExecutionStatus}
+													</Tag>
+												) : (
+													"-"
+												)}
+											</Descriptions.Item>
+											<Descriptions.Item label="Addax Job路径" span={2}>
+												{task.addaxJobPath || "-"}
+											</Descriptions.Item>
+										</Descriptions>
+										<div className="mt-4 flex items-center gap-3">
+											<Button icon={<FileTextOutlined />} onClick={openLatestLog} disabled={!task.lastExecutedAt}>
+												查看最新日志
+											</Button>
+											{latestExecution ? (
+												<Text type="secondary">
+													执行ID：{latestExecution.executionId || latestExecution.id} · 状态：{latestExecution.status}
+												</Text>
+											) : (
+												<Text type="secondary">暂无执行记录</Text>
+											)}
+										</div>
+									</Card>
+								</div>
 
-				<Card
-					title="执行与编排"
-					extra={
-						<Button icon={<ReloadOutlined />} onClick={() => loadLatestExecution()} loading={latestExecutionLoading}>
-							刷新执行记录
-						</Button>
-					}
-				>
-				<Descriptions column={2} bordered>
-					<Descriptions.Item label="Airflow 启用">{task.airflowEnabled ? <Tag color="success">已启用</Tag> : <Tag>未启用</Tag>}</Descriptions.Item>
-					<Descriptions.Item label="编排模板">{task.airflowDagId ? "系统自动生成" : "系统默认"}</Descriptions.Item>
-					<Descriptions.Item label="最后执行时间">
-						{task.lastExecutedAt ? new Date(task.lastExecutedAt).toLocaleString("zh-CN") : "从未执行"}
-					</Descriptions.Item>
-					<Descriptions.Item label="最后执行状态">
-						{task.lastExecutionStatus ? (
-							<Tag color={task.lastExecutionStatus === "success" ? "success" : task.lastExecutionStatus === "failed" ? "error" : "processing"}>
-								{task.lastExecutionStatus}
-							</Tag>
-						) : (
-							"-"
-						)}
-					</Descriptions.Item>
-					<Descriptions.Item label="Addax Job路径" span={2}>
-						{task.addaxJobPath || "-"}
-					</Descriptions.Item>
-				</Descriptions>
-				<div className="mt-4 flex items-center gap-3">
-					<Button icon={<FileTextOutlined />} onClick={openLatestLog} disabled={!task.lastExecutedAt}>
-						查看最新日志
-					</Button>
-					{latestExecution ? (
-						<Text type="secondary">
-							执行ID：{latestExecution.executionId || latestExecution.id} · 状态：{latestExecution.status}
-						</Text>
-					) : (
-						<Text type="secondary">暂无执行记录</Text>
-					)}
-				</div>
-				</Card>
-			</div>
+								<div className="grid gap-6 xl:grid-cols-2">
+									<Card title="源端覆盖参数">
+										<pre className="overflow-auto rounded-[24px] bg-muted/35 p-4 text-xs leading-6">
+											{JSON.stringify(task.sourceConfig || {}, null, 2)}
+										</pre>
+									</Card>
 
-			<div className="grid gap-6 xl:grid-cols-2">
-				<Card title="源端覆盖参数">
-					<pre className="overflow-auto rounded-[24px] bg-muted/35 p-4 text-xs leading-6">{JSON.stringify(task.sourceConfig || {}, null, 2)}</pre>
-				</Card>
+									{task.destinationConfig ? (
+										<Card title="目标配置">
+											<pre className="overflow-auto rounded-[24px] bg-muted/35 p-4 text-xs leading-6">
+												{JSON.stringify(task.destinationConfig, null, 2)}
+											</pre>
+										</Card>
+									) : null}
+								</div>
 
-				{task.destinationConfig ? (
-					<Card title="目标配置">
-						<pre className="overflow-auto rounded-[24px] bg-muted/35 p-4 text-xs leading-6">{JSON.stringify(task.destinationConfig, null, 2)}</pre>
-					</Card>
-				) : null}
-			</div>
+								{task.tableMapping && task.tableMapping.length > 0 ? (
+									<Card title="表映射配置">
+										<pre className="overflow-auto rounded-[24px] bg-muted/35 p-4 text-xs leading-6">
+											{JSON.stringify(task.tableMapping, null, 2)}
+										</pre>
+									</Card>
+								) : null}
 
-			{task.tableMapping && task.tableMapping.length > 0 ? (
-				<Card title="表映射配置">
-					<pre className="overflow-auto rounded-[24px] bg-muted/35 p-4 text-xs leading-6">{JSON.stringify(task.tableMapping, null, 2)}</pre>
-				</Card>
-			) : null}
+								<Card
+									title="DBT 绑定"
+									extra={
+										<Button type="link" onClick={openDbtModal}>
+											绑定模型 / DAG 族
+										</Button>
+									}
+								>
+									<Descriptions column={2} bordered>
+										<Descriptions.Item label="模型选择器">
+											{task.dbtModelSelector ? <Text code>{task.dbtModelSelector}</Text> : "未绑定"}
+										</Descriptions.Item>
+										<Descriptions.Item label="DAG 族选择器">
+											{task.dbtDagSelector ? <Text code>{task.dbtDagSelector}</Text> : "默认 DAG"}
+										</Descriptions.Item>
+									</Descriptions>
+									<div className="mt-2 text-xs text-muted-foreground">
+										可直接输入 selector（如：model:xxx、tag:xxx），或从模型列表快速生成。
+									</div>
+								</Card>
 
-			<Card
-				title="DBT 绑定"
-				extra={
-					<Button type="link" onClick={openDbtModal}>
-						绑定模型 / DAG 族
-					</Button>
-				}
-			>
-				<Descriptions column={2} bordered>
-					<Descriptions.Item label="模型选择器">
-						{task.dbtModelSelector ? <Text code>{task.dbtModelSelector}</Text> : "未绑定"}
-					</Descriptions.Item>
-					<Descriptions.Item label="DAG 族选择器">
-						{task.dbtDagSelector ? <Text code>{task.dbtDagSelector}</Text> : "默认 DAG"}
-					</Descriptions.Item>
-				</Descriptions>
-				<div className="mt-2 text-xs text-muted-foreground">
-					可直接输入 selector（如：model:xxx、tag:xxx），或从模型列表快速生成。
-				</div>
-			</Card>
+								{showRealtimeStatusCard ? (
+									<Card
+										title="实时链路状态"
+										extra={
+											<Button
+												icon={<ReloadOutlined />}
+												onClick={() => task?.id && loadRealtimeStatus(Number(task.id))}
+												loading={realtimeStatusLoading}
+											>
+												刷新实时状态
+											</Button>
+										}
+									>
+										{realtimeStale && (
+											<Alert type="warning" banner message="数据可能已过期，请点击刷新按钮重新加载" className="mb-2" />
+										)}
+										<Descriptions column={2} bordered>
+											<Descriptions.Item label="连接器">{realtimeStatus?.connectorType || "-"}</Descriptions.Item>
+											<Descriptions.Item label="链路状态">
+												{realtimeStatus?.status ? (
+													<Tag
+														color={
+															realtimeStatus.status === "RUNNING"
+																? "processing"
+																: realtimeStatus.status === "ERROR"
+																	? "error"
+																	: "default"
+														}
+													>
+														{realtimeStatus.status}
+													</Tag>
+												) : (
+													"-"
+												)}
+											</Descriptions.Item>
+											<Descriptions.Item label="Topic">{realtimeStatus?.topicName || "-"}</Descriptions.Item>
+											<Descriptions.Item label="Consumer Group">
+												{realtimeStatus?.consumerGroup || "-"}
+											</Descriptions.Item>
+											<Descriptions.Item label="Checkpoint">{realtimeStatus?.checkpointToken || "-"}</Descriptions.Item>
+											<Descriptions.Item label="最新心跳">
+												{realtimeStatus?.lastHeartbeat
+													? new Date(realtimeStatus.lastHeartbeat).toLocaleString("zh-CN")
+													: "-"}
+											</Descriptions.Item>
+											<Descriptions.Item label="延迟(ms)">{realtimeStatus?.lagMs ?? "-"}</Descriptions.Item>
+											<Descriptions.Item label="吞吐(rps)">{realtimeStatus?.throughputRps ?? "-"}</Descriptions.Item>
+											<Descriptions.Item label="堆积量" span={2}>
+												{realtimeStatus?.backlogCount ?? "-"}
+											</Descriptions.Item>
+										</Descriptions>
+										<div className="mt-2 text-xs text-muted-foreground">
+											当前展示范围仅限 `cdc` 任务，用于现场排查链路堆积、心跳缺失和消费延迟。
+										</div>
+									</Card>
+								) : null}
 
-			{showRealtimeStatusCard ? (
-				<Card
-					title="实时链路状态"
-					extra={
-						<Button
-							icon={<ReloadOutlined />}
-							onClick={() => task?.id && loadRealtimeStatus(Number(task.id))}
-							loading={realtimeStatusLoading}
-						>
-							刷新实时状态
-						</Button>
-					}
-				>
-					{realtimeStale && <Alert type="warning" banner message="数据可能已过期，请点击刷新按钮重新加载" className="mb-2" />}
-					<Descriptions column={2} bordered>
-						<Descriptions.Item label="连接器">{realtimeStatus?.connectorType || "-"}</Descriptions.Item>
-						<Descriptions.Item label="链路状态">
-							{realtimeStatus?.status ? <Tag color={realtimeStatus.status === "RUNNING" ? "processing" : realtimeStatus.status === "ERROR" ? "error" : "default"}>{realtimeStatus.status}</Tag> : "-"}
-						</Descriptions.Item>
-						<Descriptions.Item label="Topic">{realtimeStatus?.topicName || "-"}</Descriptions.Item>
-						<Descriptions.Item label="Consumer Group">{realtimeStatus?.consumerGroup || "-"}</Descriptions.Item>
-						<Descriptions.Item label="Checkpoint">{realtimeStatus?.checkpointToken || "-"}</Descriptions.Item>
-						<Descriptions.Item label="最新心跳">{realtimeStatus?.lastHeartbeat ? new Date(realtimeStatus.lastHeartbeat).toLocaleString("zh-CN") : "-"}</Descriptions.Item>
-						<Descriptions.Item label="延迟(ms)">{realtimeStatus?.lagMs ?? "-"}</Descriptions.Item>
-						<Descriptions.Item label="吞吐(rps)">{realtimeStatus?.throughputRps ?? "-"}</Descriptions.Item>
-						<Descriptions.Item label="堆积量" span={2}>{realtimeStatus?.backlogCount ?? "-"}</Descriptions.Item>
-					</Descriptions>
-					<div className="mt-2 text-xs text-muted-foreground">
-						当前展示范围仅限 `cdc` 任务，用于现场排查链路堆积、心跳缺失和消费延迟。
-					</div>
-				</Card>
-			) : null}
-
-			{normalizeText(task.syncMode).toLowerCase() === "incremental" ? (
-				<Card
-					title="增量检查点"
-					extra={
-						<Button
-							icon={<ReloadOutlined />}
-							onClick={() => task?.id && loadIncrementalStates(Number(task.id))}
-							loading={incrementalStatesLoading}
-						>
-							刷新检查点
-						</Button>
-					}
-				>
-					{incrementalStale && <Alert type="warning" banner message="数据可能已过期，请点击刷新按钮重新加载" className="mb-2" />}
-					<Table<IngestionIncrementalStateDTO>
-						rowKey={(record) => `${record.taskId}-${record.sourceTable}`}
-						size="small"
-						loading={incrementalStatesLoading}
-						pagination={false}
-						dataSource={incrementalStates}
-						locale={{ emptyText: "暂无检查点（首次成功执行后会写入）" }}
-						columns={[
-							{
-								title: "源表",
-								dataIndex: "sourceTable",
-								key: "sourceTable",
-								render: (value: string) => <Text code>{value || "-"}</Text>,
-							},
-							{
-								title: "最新水位",
-								dataIndex: "lastSuccessWatermark",
-								key: "lastSuccessWatermark",
-								render: (value?: string) => value || "-",
-							},
-							{
-								title: "最近运行ID",
-								dataIndex: "lastRunId",
-								key: "lastRunId",
-								render: (value?: string) => value || "-",
-							},
-							{
-								title: "更新时间",
-								dataIndex: "updatedAt",
-								key: "updatedAt",
-								render: (value?: string) => (value ? new Date(value).toLocaleString("zh-CN") : "-"),
-							},
-						]}
-					/>
-				</Card>
-			) : null}
-
+								{normalizeText(task.syncMode).toLowerCase() === "incremental" ? (
+									<Card
+										title="增量检查点"
+										extra={
+											<Button
+												icon={<ReloadOutlined />}
+												onClick={() => task?.id && loadIncrementalStates(Number(task.id))}
+												loading={incrementalStatesLoading}
+											>
+												刷新检查点
+											</Button>
+										}
+									>
+										{incrementalStale && (
+											<Alert type="warning" banner message="数据可能已过期，请点击刷新按钮重新加载" className="mb-2" />
+										)}
+										<Table<IngestionIncrementalStateDTO>
+											rowKey={(record) => `${record.taskId}-${record.sourceTable}`}
+											size="small"
+											loading={incrementalStatesLoading}
+											pagination={false}
+											dataSource={incrementalStates}
+											locale={{ emptyText: "暂无检查点（首次成功执行后会写入）" }}
+											columns={[
+												{
+													title: "源表",
+													dataIndex: "sourceTable",
+													key: "sourceTable",
+													render: (value: string) => <Text code>{value || "-"}</Text>,
+												},
+												{
+													title: "最新水位",
+													dataIndex: "lastSuccessWatermark",
+													key: "lastSuccessWatermark",
+													render: (value?: string) => value || "-",
+												},
+												{
+													title: "最近运行ID",
+													dataIndex: "lastRunId",
+													key: "lastRunId",
+													render: (value?: string) => value || "-",
+												},
+												{
+													title: "更新时间",
+													dataIndex: "updatedAt",
+													key: "updatedAt",
+													render: (value?: string) => (value ? new Date(value).toLocaleString("zh-CN") : "-"),
+												},
+											]}
+										/>
+									</Card>
+								) : null}
 							</div>
 						),
 					},
@@ -760,15 +855,10 @@ export default function TransformDetailPage() {
 						/>
 					</Form.Item>
 					<Form.Item label="模型选择器" name="dbtModelSelector">
-						<Input.TextArea
-							rows={2}
-							placeholder="例如：model:order_detail model:user_profile 或 tag:crm"
-						/>
+						<Input.TextArea rows={2} placeholder="例如：model:order_detail model:user_profile 或 tag:crm" />
 					</Form.Item>
 					<Form.Item label="DAG 族选择器" name="dbtDagSelector">
-						<Input
-							placeholder="例如：tab:crm 或 tag:crm"
-						/>
+						<Input placeholder="例如：tab:crm 或 tag:crm" />
 					</Form.Item>
 					<div className="text-xs text-muted-foreground">
 						不填写 DAG 族选择器将使用默认 DAG。模型选择器为空则不会触发 dbt。
@@ -853,17 +943,17 @@ export default function TransformDetailPage() {
 				}
 			>
 				<div data-testid="platform-transform-log-drawer">
-				<div className="mb-3">
-					{logMeta?.dagId ? (
-						<Text type="secondary">
-							DAG: {logMeta.dagId}
-							{logMeta?.dagRunId ? ` · Run: ${logMeta.dagRunId}` : ""}
-						</Text>
-					) : null}
-				</div>
-				<pre className="whitespace-pre-wrap break-words text-xs bg-muted p-3 rounded border border-border">
-					{logLoading ? "日志加载中..." : logContent || "暂无日志"}
-				</pre>
+					<div className="mb-3">
+						{logMeta?.dagId ? (
+							<Text type="secondary">
+								DAG: {logMeta.dagId}
+								{logMeta?.dagRunId ? ` · Run: ${logMeta.dagRunId}` : ""}
+							</Text>
+						) : null}
+					</div>
+					<pre className="whitespace-pre-wrap break-words text-xs bg-muted p-3 rounded border border-border">
+						{logLoading ? "日志加载中..." : logContent || "暂无日志"}
+					</pre>
 				</div>
 			</Drawer>
 		</div>
