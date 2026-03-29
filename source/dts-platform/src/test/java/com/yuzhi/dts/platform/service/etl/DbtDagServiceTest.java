@@ -73,6 +73,10 @@ class DbtDagServiceTest {
         assertThat(dagSource).contains("docker_cmd+=(--threads");
         assertThat(dagSource).contains("dag_run.conf.get('vars', '') | tojson");
         assertThat(dagSource).contains("docker_cmd+=(--vars \\\"$vars_json\\\")");
+        assertThat(dagSource).contains("dag_run.conf.get('macro_name', '')");
+        assertThat(dagSource).contains("dag_run.conf.get('macro_args', '') | tojson");
+        assertThat(dagSource).contains("docker_cmd+=(run-operation \\\"$macro_name\\\"");
+        assertThat(dagSource).contains("docker_cmd+=(--args \\\"$macro_args_json\\\")");
         assertThat(dagSource).doesNotContain("env_var(");
         assertThat(dagSource).doesNotContain("DockerOperator(");
         assertThat(dagSource).doesNotContain("from airflow.providers.docker.operators.docker import DockerOperator");

@@ -1,917 +1,384 @@
-2026-03-28T17:19:25.367+08:00 DEBUG 158 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = false 
-2026-03-28T17:19:25.369+08:00 DEBUG 158 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = true 
-2026-03-28T17:19:25.915+08:00 DEBUG 158 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = false 
-2026-03-28T17:19:25.917+08:00 DEBUG 158 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = true 
-2026-03-28T17:19:40.918+08:00 DEBUG 158 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = false 
-2026-03-28T17:19:40.920+08:00 DEBUG 158 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = true 
-2026-03-28T17:19:55.370+08:00 DEBUG 158 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = false 
-2026-03-28T17:19:55.372+08:00 DEBUG 158 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = true 
-2026-03-28T17:19:55.921+08:00 DEBUG 158 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = false 
-2026-03-28T17:19:55.922+08:00 DEBUG 158 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = true 
-2026-03-28T17:20:10.923+08:00 DEBUG 158 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = false 
-2026-03-28T17:20:10.927+08:00 DEBUG 158 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = true 
-2026-03-28T17:20:14.955+08:00 DEBUG 158 --- [  XNIO-1 I/O-15] io.undertow.request                      : Timing out idle connection from /172.19.0.16:35938 
-2026-03-28T17:20:15.117+08:00 DEBUG 158 --- [  XNIO-1 task-2] io.undertow.request.security             : Attempting to authenticate /api/ingestion/tasks/list, authentication required: false 
-2026-03-28T17:20:15.117+08:00 DEBUG 158 --- [  XNIO-1 task-2] io.undertow.request.security             : Authentication outcome was NOT_ATTEMPTED with method io.undertow.security.impl.CachedAuthenticatedSessionMechanism@741bf691 for /api/ingestion/tasks/list 
-2026-03-28T17:20:15.117+08:00 DEBUG 158 --- [  XNIO-1 task-2] io.undertow.request.security             : Authentication result was ATTEMPTED for /api/ingestion/tasks/list 
-2026-03-28T17:20:15.119+08:00 DEBUG 158 --- [  XNIO-1 task-2] org.postgresql.jdbc.PgConnection         :   setReadOnly = true 
-2026-03-28T17:20:15.119+08:00 DEBUG 158 --- [  XNIO-1 task-2] org.postgresql.jdbc.PgConnection         :   setAutoCommit = false 
-2026-03-28T17:20:15.121+08:00 DEBUG 158 --- [  XNIO-1 task-2] org.postgresql.jdbc.PgConnection         :   setAutoCommit = true 
-2026-03-28T17:20:15.121+08:00 DEBUG 158 --- [  XNIO-1 task-2] org.postgresql.jdbc.PgConnection         :   setReadOnly = false 
-2026-03-28T17:20:25.373+08:00 DEBUG 158 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = false 
-2026-03-28T17:20:25.376+08:00 DEBUG 158 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = true 
-2026-03-28T17:20:25.928+08:00 DEBUG 158 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = false 
-2026-03-28T17:20:25.930+08:00 DEBUG 158 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = true 
-2026-03-28T17:20:40.931+08:00 DEBUG 158 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = false 
-2026-03-28T17:20:40.933+08:00 DEBUG 158 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = true 
-2026-03-28T17:20:55.378+08:00 DEBUG 158 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = false 
-2026-03-28T17:20:55.379+08:00 DEBUG 158 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = true 
-2026-03-28T17:20:55.934+08:00 DEBUG 158 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = false 
-2026-03-28T17:20:55.936+08:00 DEBUG 158 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = true 
-2026-03-28T17:21:10.937+08:00 DEBUG 158 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = false 
-2026-03-28T17:21:10.939+08:00 DEBUG 158 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = true 
-2026-03-28T17:21:15.266+08:00 DEBUG 158 --- [  XNIO-1 I/O-12] io.undertow.request                      : Timing out idle connection from /172.19.0.16:52932 
-2026-03-28T17:21:15.440+08:00 DEBUG 158 --- [  XNIO-1 task-2] io.undertow.request.security             : Attempting to authenticate /api/ingestion/tasks/list, authentication required: false 
-2026-03-28T17:21:15.440+08:00 DEBUG 158 --- [  XNIO-1 task-2] io.undertow.request.security             : Authentication outcome was NOT_ATTEMPTED with method io.undertow.security.impl.CachedAuthenticatedSessionMechanism@741bf691 for /api/ingestion/tasks/list 
-2026-03-28T17:21:15.440+08:00 DEBUG 158 --- [  XNIO-1 task-2] io.undertow.request.security             : Authentication result was ATTEMPTED for /api/ingestion/tasks/list 
-2026-03-28T17:21:15.443+08:00 DEBUG 158 --- [  XNIO-1 task-2] org.postgresql.jdbc.PgConnection         :   setReadOnly = true 
-2026-03-28T17:21:15.443+08:00 DEBUG 158 --- [  XNIO-1 task-2] org.postgresql.jdbc.PgConnection         :   setAutoCommit = false 
-2026-03-28T17:21:15.444+08:00 DEBUG 158 --- [  XNIO-1 task-2] org.postgresql.jdbc.PgConnection         :   setAutoCommit = true 
-2026-03-28T17:21:15.445+08:00 DEBUG 158 --- [  XNIO-1 task-2] org.postgresql.jdbc.PgConnection         :   setReadOnly = false 
-2026-03-28T17:21:25.380+08:00 DEBUG 158 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = false 
-2026-03-28T17:21:25.381+08:00 DEBUG 158 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = true 
-2026-03-28T17:21:25.940+08:00 DEBUG 158 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = false 
-2026-03-28T17:21:25.942+08:00 DEBUG 158 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = true 
-2026-03-28T17:21:40.943+08:00 DEBUG 158 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = false 
-2026-03-28T17:21:40.945+08:00 DEBUG 158 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = true 
-2026-03-28T17:21:55.382+08:00 DEBUG 158 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = false 
-2026-03-28T17:21:55.383+08:00 DEBUG 158 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = true 
-2026-03-28T17:21:55.946+08:00 DEBUG 158 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = false 
-2026-03-28T17:21:55.948+08:00 DEBUG 158 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = true 
-2026-03-28T17:22:10.949+08:00 DEBUG 158 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = false 
-2026-03-28T17:22:10.951+08:00 DEBUG 158 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = true 
-2026-03-28T17:22:15.589+08:00 DEBUG 158 --- [   XNIO-1 I/O-3] io.undertow.request                      : Timing out idle connection from /172.19.0.16:40410 
-2026-03-28T17:22:15.746+08:00 DEBUG 158 --- [  XNIO-1 task-2] io.undertow.request.security             : Attempting to authenticate /api/ingestion/tasks/list, authentication required: false 
-2026-03-28T17:22:15.746+08:00 DEBUG 158 --- [  XNIO-1 task-2] io.undertow.request.security             : Authentication outcome was NOT_ATTEMPTED with method io.undertow.security.impl.CachedAuthenticatedSessionMechanism@741bf691 for /api/ingestion/tasks/list 
-2026-03-28T17:22:15.746+08:00 DEBUG 158 --- [  XNIO-1 task-2] io.undertow.request.security             : Authentication result was ATTEMPTED for /api/ingestion/tasks/list 
-2026-03-28T17:22:15.748+08:00 DEBUG 158 --- [  XNIO-1 task-2] org.postgresql.jdbc.PgConnection         :   setReadOnly = true 
-2026-03-28T17:22:15.748+08:00 DEBUG 158 --- [  XNIO-1 task-2] org.postgresql.jdbc.PgConnection         :   setAutoCommit = false 
-2026-03-28T17:22:15.749+08:00 DEBUG 158 --- [  XNIO-1 task-2] org.postgresql.jdbc.PgConnection         :   setAutoCommit = true 
-2026-03-28T17:22:15.749+08:00 DEBUG 158 --- [  XNIO-1 task-2] org.postgresql.jdbc.PgConnection         :   setReadOnly = false 
-2026-03-28T17:22:25.384+08:00 DEBUG 158 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = false 
-2026-03-28T17:22:25.385+08:00 DEBUG 158 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = true 
-2026-03-28T17:22:25.951+08:00 DEBUG 158 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = false 
-2026-03-28T17:22:25.953+08:00 DEBUG 158 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = true 
-2026-03-28T17:22:40.954+08:00 DEBUG 158 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = false 
-2026-03-28T17:22:40.956+08:00 DEBUG 158 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = true 
-2026-03-28T17:22:55.386+08:00 DEBUG 158 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = false 
-2026-03-28T17:22:55.387+08:00 DEBUG 158 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = true 
-2026-03-28T17:22:55.957+08:00 DEBUG 158 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = false 
-2026-03-28T17:22:55.958+08:00 DEBUG 158 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = true 
-2026-03-28T17:23:10.960+08:00 DEBUG 158 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = false 
-2026-03-28T17:23:10.961+08:00 DEBUG 158 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = true 
-2026-03-28T17:23:11.814+08:00 DEBUG 158 --- [  XNIO-1 task-2] io.undertow.request.security             : Attempting to authenticate /api/ingestion/tasks/list, authentication required: false 
-2026-03-28T17:23:11.814+08:00 DEBUG 158 --- [  XNIO-1 task-2] io.undertow.request.security             : Authentication outcome was NOT_ATTEMPTED with method io.undertow.security.impl.CachedAuthenticatedSessionMechanism@741bf691 for /api/ingestion/tasks/list 
-2026-03-28T17:23:11.814+08:00 DEBUG 158 --- [  XNIO-1 task-2] io.undertow.request.security             : Authentication result was ATTEMPTED for /api/ingestion/tasks/list 
-2026-03-28T17:23:11.817+08:00 DEBUG 158 --- [  XNIO-1 task-2] org.postgresql.jdbc.PgConnection         :   setReadOnly = true 
-2026-03-28T17:23:11.817+08:00 DEBUG 158 --- [  XNIO-1 task-2] org.postgresql.jdbc.PgConnection         :   setAutoCommit = false 
-2026-03-28T17:23:11.818+08:00 DEBUG 158 --- [  XNIO-1 task-2] org.postgresql.jdbc.PgConnection         :   setAutoCommit = true 
-2026-03-28T17:23:11.818+08:00 DEBUG 158 --- [  XNIO-1 task-2] org.postgresql.jdbc.PgConnection         :   setReadOnly = false 
-2026-03-28T17:23:13.249+08:00 DEBUG 158 --- [  XNIO-1 task-2] io.undertow.request.security             : Attempting to authenticate /api/ingestion/templates, authentication required: false 
-2026-03-28T17:23:13.249+08:00 DEBUG 158 --- [  XNIO-1 task-2] io.undertow.request.security             : Authentication outcome was NOT_ATTEMPTED with method io.undertow.security.impl.CachedAuthenticatedSessionMechanism@741bf691 for /api/ingestion/templates 
-2026-03-28T17:23:13.249+08:00 DEBUG 158 --- [  XNIO-1 task-2] io.undertow.request.security             : Authentication result was ATTEMPTED for /api/ingestion/templates 
-2026-03-28T17:23:13.251+08:00 DEBUG 158 --- [  XNIO-1 task-3] io.undertow.request.security             : Attempting to authenticate /api/ingestion/connectors/capabilities, authentication required: false 
-2026-03-28T17:23:13.251+08:00 DEBUG 158 --- [  XNIO-1 task-3] io.undertow.request.security             : Authentication outcome was NOT_ATTEMPTED with method io.undertow.security.impl.CachedAuthenticatedSessionMechanism@741bf691 for /api/ingestion/connectors/capabilities 
-2026-03-28T17:23:13.251+08:00 DEBUG 158 --- [  XNIO-1 task-3] io.undertow.request.security             : Authentication result was ATTEMPTED for /api/ingestion/connectors/capabilities 
-2026-03-28T17:23:13.253+08:00 DEBUG 158 --- [  XNIO-1 task-3] org.postgresql.jdbc.PgConnection         :   setReadOnly = true 
-2026-03-28T17:23:13.253+08:00 DEBUG 158 --- [  XNIO-1 task-3] org.postgresql.jdbc.PgConnection         :   setAutoCommit = false 
-2026-03-28T17:23:13.259+08:00 DEBUG 158 --- [  XNIO-1 task-3] org.postgresql.jdbc.PgConnection         :   setAutoCommit = true 
-2026-03-28T17:23:13.259+08:00 DEBUG 158 --- [  XNIO-1 task-3] org.postgresql.jdbc.PgConnection         :   setReadOnly = false 
-2026-03-28T17:23:16.063+08:00 DEBUG 158 --- [  XNIO-1 task-3] io.undertow.request.security             : Attempting to authenticate /api/ingestion/tasks/list, authentication required: false 
-2026-03-28T17:23:16.063+08:00 DEBUG 158 --- [  XNIO-1 task-3] io.undertow.request.security             : Authentication outcome was NOT_ATTEMPTED with method io.undertow.security.impl.CachedAuthenticatedSessionMechanism@741bf691 for /api/ingestion/tasks/list 
-2026-03-28T17:23:16.063+08:00 DEBUG 158 --- [  XNIO-1 task-3] io.undertow.request.security             : Authentication result was ATTEMPTED for /api/ingestion/tasks/list 
-2026-03-28T17:23:16.066+08:00 DEBUG 158 --- [  XNIO-1 task-3] org.postgresql.jdbc.PgConnection         :   setReadOnly = true 
-2026-03-28T17:23:16.066+08:00 DEBUG 158 --- [  XNIO-1 task-3] org.postgresql.jdbc.PgConnection         :   setAutoCommit = false 
-2026-03-28T17:23:16.068+08:00 DEBUG 158 --- [  XNIO-1 task-3] org.postgresql.jdbc.PgConnection         :   setAutoCommit = true 
-2026-03-28T17:23:16.068+08:00 DEBUG 158 --- [  XNIO-1 task-3] org.postgresql.jdbc.PgConnection         :   setReadOnly = false 
-2026-03-28T17:23:25.388+08:00 DEBUG 158 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = false 
-2026-03-28T17:23:25.389+08:00 DEBUG 158 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = true 
-2026-03-28T17:23:25.962+08:00 DEBUG 158 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = false 
-2026-03-28T17:23:25.964+08:00 DEBUG 158 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = true 
-2026-03-28T17:23:40.965+08:00 DEBUG 158 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = false 
-2026-03-28T17:23:40.966+08:00 DEBUG 158 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = true 
-2026-03-28T17:23:55.390+08:00 DEBUG 158 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = false 
-2026-03-28T17:23:55.391+08:00 DEBUG 158 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = true 
-2026-03-28T17:23:55.967+08:00 DEBUG 158 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = false 
-2026-03-28T17:23:55.969+08:00 DEBUG 158 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = true 
-2026-03-28T17:24:10.969+08:00 DEBUG 158 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = false 
-2026-03-28T17:24:10.971+08:00 DEBUG 158 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = true 
-2026-03-28T17:24:13.392+08:00 DEBUG 158 --- [   XNIO-1 I/O-7] io.undertow.request                      : Timing out idle connection from /172.19.0.16:56502 
-2026-03-28T17:24:16.125+08:00 DEBUG 158 --- [   XNIO-1 I/O-6] io.undertow.request                      : Timing out idle connection from /172.19.0.16:45442 
-2026-03-28T17:24:16.374+08:00 DEBUG 158 --- [  XNIO-1 task-3] io.undertow.request.security             : Attempting to authenticate /api/ingestion/tasks/list, authentication required: false 
-2026-03-28T17:24:16.375+08:00 DEBUG 158 --- [  XNIO-1 task-3] io.undertow.request.security             : Authentication outcome was NOT_ATTEMPTED with method io.undertow.security.impl.CachedAuthenticatedSessionMechanism@741bf691 for /api/ingestion/tasks/list 
-2026-03-28T17:24:16.375+08:00 DEBUG 158 --- [  XNIO-1 task-3] io.undertow.request.security             : Authentication result was ATTEMPTED for /api/ingestion/tasks/list 
-2026-03-28T17:24:16.377+08:00 DEBUG 158 --- [  XNIO-1 task-3] org.postgresql.jdbc.PgConnection         :   setReadOnly = true 
-2026-03-28T17:24:16.377+08:00 DEBUG 158 --- [  XNIO-1 task-3] org.postgresql.jdbc.PgConnection         :   setAutoCommit = false 
-2026-03-28T17:24:16.378+08:00 DEBUG 158 --- [  XNIO-1 task-3] org.postgresql.jdbc.PgConnection         :   setAutoCommit = true 
-2026-03-28T17:24:16.378+08:00 DEBUG 158 --- [  XNIO-1 task-3] org.postgresql.jdbc.PgConnection         :   setReadOnly = false 
-2026-03-28T17:24:25.392+08:00 DEBUG 158 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = false 
-2026-03-28T17:24:25.393+08:00 DEBUG 158 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = true 
-2026-03-28T17:24:25.972+08:00 DEBUG 158 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = false 
-2026-03-28T17:24:25.973+08:00 DEBUG 158 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = true 
-2026-03-28T17:24:40.974+08:00 DEBUG 158 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = false 
-2026-03-28T17:24:40.976+08:00 DEBUG 158 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = true 
-2026-03-28T17:24:55.393+08:00 DEBUG 158 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = false 
-2026-03-28T17:24:55.394+08:00 DEBUG 158 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = true 
-2026-03-28T17:24:55.977+08:00 DEBUG 158 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = false 
-2026-03-28T17:24:55.979+08:00 DEBUG 158 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = true 
-2026-03-28T17:25:10.980+08:00 DEBUG 158 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = false 
-2026-03-28T17:25:10.982+08:00 DEBUG 158 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = true 
-2026-03-28T17:25:16.524+08:00 DEBUG 158 --- [   XNIO-1 I/O-3] io.undertow.request                      : Timing out idle connection from /172.19.0.16:39868 
-2026-03-28T17:25:16.664+08:00 DEBUG 158 --- [  XNIO-1 task-3] io.undertow.request.security             : Attempting to authenticate /api/ingestion/tasks/list, authentication required: false 
-2026-03-28T17:25:16.664+08:00 DEBUG 158 --- [  XNIO-1 task-3] io.undertow.request.security             : Authentication outcome was NOT_ATTEMPTED with method io.undertow.security.impl.CachedAuthenticatedSessionMechanism@741bf691 for /api/ingestion/tasks/list 
-2026-03-28T17:25:16.664+08:00 DEBUG 158 --- [  XNIO-1 task-3] io.undertow.request.security             : Authentication result was ATTEMPTED for /api/ingestion/tasks/list 
-2026-03-28T17:25:16.666+08:00 DEBUG 158 --- [  XNIO-1 task-3] org.postgresql.jdbc.PgConnection         :   setReadOnly = true 
-2026-03-28T17:25:16.666+08:00 DEBUG 158 --- [  XNIO-1 task-3] org.postgresql.jdbc.PgConnection         :   setAutoCommit = false 
-2026-03-28T17:25:16.667+08:00 DEBUG 158 --- [  XNIO-1 task-3] org.postgresql.jdbc.PgConnection         :   setAutoCommit = true 
-2026-03-28T17:25:16.667+08:00 DEBUG 158 --- [  XNIO-1 task-3] org.postgresql.jdbc.PgConnection         :   setReadOnly = false 
-2026-03-28T17:25:25.395+08:00 DEBUG 158 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = false 
-2026-03-28T17:25:25.396+08:00 DEBUG 158 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = true 
-2026-03-28T17:25:25.982+08:00 DEBUG 158 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = false 
-2026-03-28T17:25:25.984+08:00 DEBUG 158 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = true 
-2026-03-28T17:25:40.985+08:00 DEBUG 158 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = false 
-2026-03-28T17:25:40.987+08:00 DEBUG 158 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = true 
-2026-03-28T17:25:55.397+08:00 DEBUG 158 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = false 
-2026-03-28T17:25:55.397+08:00 DEBUG 158 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = true 
-2026-03-28T17:25:55.988+08:00 DEBUG 158 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = false 
-2026-03-28T17:25:55.990+08:00 DEBUG 158 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = true 
-2026-03-28T17:26:10.990+08:00 DEBUG 158 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = false 
-2026-03-28T17:26:10.992+08:00 DEBUG 158 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = true 
-2026-03-28T17:26:16.811+08:00 DEBUG 158 --- [  XNIO-1 I/O-14] io.undertow.request                      : Timing out idle connection from /172.19.0.16:56632 
-2026-03-28T17:26:16.975+08:00 DEBUG 158 --- [  XNIO-1 task-3] io.undertow.request.security             : Attempting to authenticate /api/ingestion/tasks/list, authentication required: false 
-2026-03-28T17:26:16.975+08:00 DEBUG 158 --- [  XNIO-1 task-3] io.undertow.request.security             : Authentication outcome was NOT_ATTEMPTED with method io.undertow.security.impl.CachedAuthenticatedSessionMechanism@741bf691 for /api/ingestion/tasks/list 
-2026-03-28T17:26:16.975+08:00 DEBUG 158 --- [  XNIO-1 task-3] io.undertow.request.security             : Authentication result was ATTEMPTED for /api/ingestion/tasks/list 
-2026-03-28T17:26:16.977+08:00 DEBUG 158 --- [  XNIO-1 task-3] org.postgresql.jdbc.PgConnection         :   setReadOnly = true 
-2026-03-28T17:26:16.977+08:00 DEBUG 158 --- [  XNIO-1 task-3] org.postgresql.jdbc.PgConnection         :   setAutoCommit = false 
-2026-03-28T17:26:16.978+08:00 DEBUG 158 --- [  XNIO-1 task-3] org.postgresql.jdbc.PgConnection         :   setAutoCommit = true 
-2026-03-28T17:26:16.978+08:00 DEBUG 158 --- [  XNIO-1 task-3] org.postgresql.jdbc.PgConnection         :   setReadOnly = false 
-2026-03-28T17:26:25.398+08:00 DEBUG 158 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = false 
-2026-03-28T17:26:25.399+08:00 DEBUG 158 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = true 
-2026-03-28T17:26:25.993+08:00 DEBUG 158 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = false 
-2026-03-28T17:26:25.995+08:00 DEBUG 158 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = true 
-2026-03-28T17:26:40.996+08:00 DEBUG 158 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = false 
-2026-03-28T17:26:40.998+08:00 DEBUG 158 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = true 
-2026-03-28T17:26:55.400+08:00 DEBUG 158 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = false 
-2026-03-28T17:26:55.401+08:00 DEBUG 158 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = true 
-2026-03-28T17:26:55.999+08:00 DEBUG 158 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = false 
-2026-03-28T17:26:56.001+08:00 DEBUG 158 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = true 
-2026-03-28T17:27:11.002+08:00 DEBUG 158 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = false 
-2026-03-28T17:27:11.004+08:00 DEBUG 158 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = true 
-2026-03-28T17:27:17.124+08:00 DEBUG 158 --- [  XNIO-1 I/O-15] io.undertow.request                      : Timing out idle connection from /172.19.0.16:56530 
-2026-03-28T17:27:17.266+08:00 DEBUG 158 --- [  XNIO-1 task-3] io.undertow.request.security             : Attempting to authenticate /api/ingestion/tasks/list, authentication required: false 
-2026-03-28T17:27:17.266+08:00 DEBUG 158 --- [  XNIO-1 task-3] io.undertow.request.security             : Authentication outcome was NOT_ATTEMPTED with method io.undertow.security.impl.CachedAuthenticatedSessionMechanism@741bf691 for /api/ingestion/tasks/list 
-2026-03-28T17:27:17.266+08:00 DEBUG 158 --- [  XNIO-1 task-3] io.undertow.request.security             : Authentication result was ATTEMPTED for /api/ingestion/tasks/list 
-2026-03-28T17:27:17.269+08:00 DEBUG 158 --- [  XNIO-1 task-3] org.postgresql.jdbc.PgConnection         :   setReadOnly = true 
-2026-03-28T17:27:17.269+08:00 DEBUG 158 --- [  XNIO-1 task-3] org.postgresql.jdbc.PgConnection         :   setAutoCommit = false 
-2026-03-28T17:27:17.270+08:00 DEBUG 158 --- [  XNIO-1 task-3] org.postgresql.jdbc.PgConnection         :   setAutoCommit = true 
-2026-03-28T17:27:17.270+08:00 DEBUG 158 --- [  XNIO-1 task-3] org.postgresql.jdbc.PgConnection         :   setReadOnly = false 
-2026-03-28T17:27:25.402+08:00 DEBUG 158 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = false 
-2026-03-28T17:27:25.403+08:00 DEBUG 158 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = true 
-2026-03-28T17:27:26.005+08:00 DEBUG 158 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = false 
-2026-03-28T17:27:26.007+08:00 DEBUG 158 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = true 
-2026-03-28T17:27:41.009+08:00 DEBUG 158 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = false 
-2026-03-28T17:27:41.011+08:00 DEBUG 158 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = true 
-2026-03-28T17:27:55.404+08:00 DEBUG 158 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = false 
-2026-03-28T17:27:55.405+08:00 DEBUG 158 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = true 
-2026-03-28T17:27:56.012+08:00 DEBUG 158 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = false 
-2026-03-28T17:27:56.014+08:00 DEBUG 158 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = true 
-2026-03-28T17:28:11.015+08:00 DEBUG 158 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = false 
-2026-03-28T17:28:11.017+08:00 DEBUG 158 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = true 
-2026-03-28T17:28:17.414+08:00 DEBUG 158 --- [  XNIO-1 I/O-11] io.undertow.request                      : Timing out idle connection from /172.19.0.16:44164 
-2026-03-28T17:28:17.565+08:00 DEBUG 158 --- [  XNIO-1 task-3] io.undertow.request.security             : Attempting to authenticate /api/ingestion/tasks/list, authentication required: false 
-2026-03-28T17:28:17.565+08:00 DEBUG 158 --- [  XNIO-1 task-3] io.undertow.request.security             : Authentication outcome was NOT_ATTEMPTED with method io.undertow.security.impl.CachedAuthenticatedSessionMechanism@741bf691 for /api/ingestion/tasks/list 
-2026-03-28T17:28:17.565+08:00 DEBUG 158 --- [  XNIO-1 task-3] io.undertow.request.security             : Authentication result was ATTEMPTED for /api/ingestion/tasks/list 
-2026-03-28T17:28:17.567+08:00 DEBUG 158 --- [  XNIO-1 task-3] org.postgresql.jdbc.PgConnection         :   setReadOnly = true 
-2026-03-28T17:28:17.567+08:00 DEBUG 158 --- [  XNIO-1 task-3] org.postgresql.jdbc.PgConnection         :   setAutoCommit = false 
-2026-03-28T17:28:17.569+08:00 DEBUG 158 --- [  XNIO-1 task-3] org.postgresql.jdbc.PgConnection         :   setAutoCommit = true 
-2026-03-28T17:28:17.569+08:00 DEBUG 158 --- [  XNIO-1 task-3] org.postgresql.jdbc.PgConnection         :   setReadOnly = false 
-2026-03-28T17:28:25.406+08:00 DEBUG 158 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = false 
-2026-03-28T17:28:25.408+08:00 DEBUG 158 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = true 
-2026-03-28T17:28:26.018+08:00 DEBUG 158 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = false 
-2026-03-28T17:28:26.020+08:00 DEBUG 158 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = true 
-2026-03-28T17:28:41.021+08:00 DEBUG 158 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = false 
-2026-03-28T17:28:41.022+08:00 DEBUG 158 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = true 
-2026-03-28T17:28:55.409+08:00 DEBUG 158 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = false 
-2026-03-28T17:28:55.410+08:00 DEBUG 158 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = true 
-2026-03-28T17:28:56.023+08:00 DEBUG 158 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = false 
-2026-03-28T17:28:56.025+08:00 DEBUG 158 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = true 
-2026-03-28T17:29:11.026+08:00 DEBUG 158 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = false 
-2026-03-28T17:29:11.027+08:00 DEBUG 158 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = true 
-2026-03-28T17:29:17.714+08:00 DEBUG 158 --- [  XNIO-1 I/O-16] io.undertow.request                      : Timing out idle connection from /172.19.0.16:49962 
-2026-03-28T17:29:17.865+08:00 DEBUG 158 --- [  XNIO-1 task-3] io.undertow.request.security             : Attempting to authenticate /api/ingestion/tasks/list, authentication required: false 
-2026-03-28T17:29:17.865+08:00 DEBUG 158 --- [  XNIO-1 task-3] io.undertow.request.security             : Authentication outcome was NOT_ATTEMPTED with method io.undertow.security.impl.CachedAuthenticatedSessionMechanism@741bf691 for /api/ingestion/tasks/list 
-2026-03-28T17:29:17.865+08:00 DEBUG 158 --- [  XNIO-1 task-3] io.undertow.request.security             : Authentication result was ATTEMPTED for /api/ingestion/tasks/list 
-2026-03-28T17:29:17.868+08:00 DEBUG 158 --- [  XNIO-1 task-3] org.postgresql.jdbc.PgConnection         :   setReadOnly = true 
-2026-03-28T17:29:17.868+08:00 DEBUG 158 --- [  XNIO-1 task-3] org.postgresql.jdbc.PgConnection         :   setAutoCommit = false 
-2026-03-28T17:29:17.869+08:00 DEBUG 158 --- [  XNIO-1 task-3] org.postgresql.jdbc.PgConnection         :   setAutoCommit = true 
-2026-03-28T17:29:17.870+08:00 DEBUG 158 --- [  XNIO-1 task-3] org.postgresql.jdbc.PgConnection         :   setReadOnly = false 
-2026-03-28T17:29:25.410+08:00 DEBUG 158 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = false 
-2026-03-28T17:29:25.411+08:00 DEBUG 158 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = true 
-2026-03-28T17:29:26.028+08:00 DEBUG 158 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = false 
-2026-03-28T17:29:26.030+08:00 DEBUG 158 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = true 
-2026-03-28T17:29:41.031+08:00 DEBUG 158 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = false 
-2026-03-28T17:29:41.033+08:00 DEBUG 158 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = true 
-2026-03-28T17:29:55.412+08:00 DEBUG 158 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = false 
-2026-03-28T17:29:55.413+08:00 DEBUG 158 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = true 
-2026-03-28T17:29:56.034+08:00 DEBUG 158 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = false 
-2026-03-28T17:29:56.037+08:00 DEBUG 158 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = true 
-2026-03-28T17:30:11.038+08:00 DEBUG 158 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = false 
-2026-03-28T17:30:11.040+08:00 DEBUG 158 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = true 
-2026-03-28T17:30:18.010+08:00 DEBUG 158 --- [   XNIO-1 I/O-3] io.undertow.request                      : Timing out idle connection from /172.19.0.16:38802 
-2026-03-28T17:30:18.180+08:00 DEBUG 158 --- [  XNIO-1 task-3] io.undertow.request.security             : Attempting to authenticate /api/ingestion/tasks/list, authentication required: false 
-2026-03-28T17:30:18.180+08:00 DEBUG 158 --- [  XNIO-1 task-3] io.undertow.request.security             : Authentication outcome was NOT_ATTEMPTED with method io.undertow.security.impl.CachedAuthenticatedSessionMechanism@741bf691 for /api/ingestion/tasks/list 
-2026-03-28T17:30:18.180+08:00 DEBUG 158 --- [  XNIO-1 task-3] io.undertow.request.security             : Authentication result was ATTEMPTED for /api/ingestion/tasks/list 
-2026-03-28T17:30:18.181+08:00 DEBUG 158 --- [  XNIO-1 task-3] org.postgresql.jdbc.PgConnection         :   setReadOnly = true 
-2026-03-28T17:30:18.182+08:00 DEBUG 158 --- [  XNIO-1 task-3] org.postgresql.jdbc.PgConnection         :   setAutoCommit = false 
-2026-03-28T17:30:18.182+08:00 DEBUG 158 --- [  XNIO-1 task-3] org.postgresql.jdbc.PgConnection         :   setAutoCommit = true 
-2026-03-28T17:30:18.182+08:00 DEBUG 158 --- [  XNIO-1 task-3] org.postgresql.jdbc.PgConnection         :   setReadOnly = false 
-2026-03-28T17:30:25.414+08:00 DEBUG 158 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = false 
-2026-03-28T17:30:25.415+08:00 DEBUG 158 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = true 
-2026-03-28T17:30:26.040+08:00 DEBUG 158 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = false 
-2026-03-28T17:30:26.042+08:00 DEBUG 158 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = true 
-2026-03-28T17:30:41.043+08:00 DEBUG 158 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = false 
-2026-03-28T17:30:41.045+08:00 DEBUG 158 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = true 
-2026-03-28T17:30:55.416+08:00 DEBUG 158 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = false 
-2026-03-28T17:30:55.417+08:00 DEBUG 158 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = true 
-2026-03-28T17:30:56.046+08:00 DEBUG 158 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = false 
-2026-03-28T17:30:56.047+08:00 DEBUG 158 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = true 
-2026-03-28T17:31:11.048+08:00 DEBUG 158 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = false 
-2026-03-28T17:31:11.050+08:00 DEBUG 158 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = true 
-2026-03-28T17:31:18.329+08:00 DEBUG 158 --- [  XNIO-1 I/O-10] io.undertow.request                      : Timing out idle connection from /172.19.0.16:44948 
-2026-03-28T17:31:18.488+08:00 DEBUG 158 --- [  XNIO-1 task-3] io.undertow.request.security             : Attempting to authenticate /api/ingestion/tasks/list, authentication required: false 
-2026-03-28T17:31:18.488+08:00 DEBUG 158 --- [  XNIO-1 task-3] io.undertow.request.security             : Authentication outcome was NOT_ATTEMPTED with method io.undertow.security.impl.CachedAuthenticatedSessionMechanism@741bf691 for /api/ingestion/tasks/list 
-2026-03-28T17:31:18.488+08:00 DEBUG 158 --- [  XNIO-1 task-3] io.undertow.request.security             : Authentication result was ATTEMPTED for /api/ingestion/tasks/list 
-2026-03-28T17:31:18.491+08:00 DEBUG 158 --- [  XNIO-1 task-3] org.postgresql.jdbc.PgConnection         :   setReadOnly = true 
-2026-03-28T17:31:18.491+08:00 DEBUG 158 --- [  XNIO-1 task-3] org.postgresql.jdbc.PgConnection         :   setAutoCommit = false 
-2026-03-28T17:31:18.492+08:00 DEBUG 158 --- [  XNIO-1 task-3] org.postgresql.jdbc.PgConnection         :   setAutoCommit = true 
-2026-03-28T17:31:18.492+08:00 DEBUG 158 --- [  XNIO-1 task-3] org.postgresql.jdbc.PgConnection         :   setReadOnly = false 
-2026-03-28T17:31:25.418+08:00 DEBUG 158 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = false 
-2026-03-28T17:31:25.420+08:00 DEBUG 158 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = true 
-2026-03-28T17:31:26.051+08:00 DEBUG 158 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = false 
-2026-03-28T17:31:26.052+08:00 DEBUG 158 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = true 
-2026-03-28T17:31:41.055+08:00 DEBUG 158 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = false 
-2026-03-28T17:31:41.057+08:00 DEBUG 158 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = true 
-2026-03-28T17:31:55.422+08:00 DEBUG 158 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = false 
-2026-03-28T17:31:55.423+08:00 DEBUG 158 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = true 
-2026-03-28T17:31:56.058+08:00 DEBUG 158 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = false 
-2026-03-28T17:31:56.059+08:00 DEBUG 158 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = true 
-2026-03-28T17:32:11.060+08:00 DEBUG 158 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = false 
-2026-03-28T17:32:11.062+08:00 DEBUG 158 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = true 
-2026-03-28T17:32:18.638+08:00 DEBUG 158 --- [  XNIO-1 I/O-11] io.undertow.request                      : Timing out idle connection from /172.19.0.16:32960 
-2026-03-28T17:32:18.816+08:00 DEBUG 158 --- [  XNIO-1 task-3] io.undertow.request.security             : Attempting to authenticate /api/ingestion/tasks/list, authentication required: false 
-2026-03-28T17:32:18.817+08:00 DEBUG 158 --- [  XNIO-1 task-3] io.undertow.request.security             : Authentication outcome was NOT_ATTEMPTED with method io.undertow.security.impl.CachedAuthenticatedSessionMechanism@741bf691 for /api/ingestion/tasks/list 
-2026-03-28T17:32:18.817+08:00 DEBUG 158 --- [  XNIO-1 task-3] io.undertow.request.security             : Authentication result was ATTEMPTED for /api/ingestion/tasks/list 
-2026-03-28T17:32:18.819+08:00 DEBUG 158 --- [  XNIO-1 task-3] org.postgresql.jdbc.PgConnection         :   setReadOnly = true 
-2026-03-28T17:32:18.819+08:00 DEBUG 158 --- [  XNIO-1 task-3] org.postgresql.jdbc.PgConnection         :   setAutoCommit = false 
-2026-03-28T17:32:18.819+08:00 DEBUG 158 --- [  XNIO-1 task-3] org.postgresql.jdbc.PgConnection         :   setAutoCommit = true 
-2026-03-28T17:32:18.819+08:00 DEBUG 158 --- [  XNIO-1 task-3] org.postgresql.jdbc.PgConnection         :   setReadOnly = false 
-2026-03-28T17:32:25.424+08:00 DEBUG 158 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = false 
-2026-03-28T17:32:25.425+08:00 DEBUG 158 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = true 
-2026-03-28T17:32:26.063+08:00 DEBUG 158 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = false 
-2026-03-28T17:32:26.064+08:00 DEBUG 158 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = true 
-2026-03-28T17:32:41.065+08:00 DEBUG 158 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = false 
-2026-03-28T17:32:41.067+08:00 DEBUG 158 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = true 
-2026-03-28T17:32:55.426+08:00 DEBUG 158 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = false 
-2026-03-28T17:32:55.427+08:00 DEBUG 158 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = true 
-2026-03-28T17:32:56.068+08:00 DEBUG 158 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = false 
-2026-03-28T17:32:56.069+08:00 DEBUG 158 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = true 
-2026-03-28T17:33:11.070+08:00 DEBUG 158 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = false 
-2026-03-28T17:33:11.071+08:00 DEBUG 158 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = true 
-2026-03-28T17:33:18.966+08:00 DEBUG 158 --- [  XNIO-1 I/O-16] io.undertow.request                      : Timing out idle connection from /172.19.0.16:54384 
-2026-03-28T17:33:19.119+08:00 DEBUG 158 --- [  XNIO-1 task-3] io.undertow.request.security             : Attempting to authenticate /api/ingestion/tasks/list, authentication required: false 
-2026-03-28T17:33:19.119+08:00 DEBUG 158 --- [  XNIO-1 task-3] io.undertow.request.security             : Authentication outcome was NOT_ATTEMPTED with method io.undertow.security.impl.CachedAuthenticatedSessionMechanism@741bf691 for /api/ingestion/tasks/list 
-2026-03-28T17:33:19.119+08:00 DEBUG 158 --- [  XNIO-1 task-3] io.undertow.request.security             : Authentication result was ATTEMPTED for /api/ingestion/tasks/list 
-2026-03-28T17:33:19.122+08:00 DEBUG 158 --- [  XNIO-1 task-3] org.postgresql.jdbc.PgConnection         :   setReadOnly = true 
-2026-03-28T17:33:19.122+08:00 DEBUG 158 --- [  XNIO-1 task-3] org.postgresql.jdbc.PgConnection         :   setAutoCommit = false 
-2026-03-28T17:33:19.124+08:00 DEBUG 158 --- [  XNIO-1 task-3] org.postgresql.jdbc.PgConnection         :   setAutoCommit = true 
-2026-03-28T17:33:19.124+08:00 DEBUG 158 --- [  XNIO-1 task-3] org.postgresql.jdbc.PgConnection         :   setReadOnly = false 
-2026-03-28T17:33:25.428+08:00 DEBUG 158 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = false 
-2026-03-28T17:33:25.428+08:00 DEBUG 158 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = true 
-2026-03-28T17:33:26.074+08:00 DEBUG 158 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = false 
-2026-03-28T17:33:26.076+08:00 DEBUG 158 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = true 
-2026-03-28T17:33:41.077+08:00 DEBUG 158 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = false 
-2026-03-28T17:33:41.078+08:00 DEBUG 158 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = true 
-2026-03-28T17:33:55.429+08:00 DEBUG 158 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = false 
-2026-03-28T17:33:55.430+08:00 DEBUG 158 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = true 
-2026-03-28T17:33:56.079+08:00 DEBUG 158 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = false 
-2026-03-28T17:33:56.081+08:00 DEBUG 158 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = true 
-2026-03-28T17:34:11.081+08:00 DEBUG 158 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = false 
-2026-03-28T17:34:11.083+08:00 DEBUG 158 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = true 
-2026-03-28T17:34:19.268+08:00 DEBUG 158 --- [  XNIO-1 I/O-10] io.undertow.request                      : Timing out idle connection from /172.19.0.16:45042 
-2026-03-28T17:34:19.440+08:00 DEBUG 158 --- [  XNIO-1 task-3] io.undertow.request.security             : Attempting to authenticate /api/ingestion/tasks/list, authentication required: false 
-2026-03-28T17:34:19.440+08:00 DEBUG 158 --- [  XNIO-1 task-3] io.undertow.request.security             : Authentication outcome was NOT_ATTEMPTED with method io.undertow.security.impl.CachedAuthenticatedSessionMechanism@741bf691 for /api/ingestion/tasks/list 
-2026-03-28T17:34:19.440+08:00 DEBUG 158 --- [  XNIO-1 task-3] io.undertow.request.security             : Authentication result was ATTEMPTED for /api/ingestion/tasks/list 
-2026-03-28T17:34:19.444+08:00 DEBUG 158 --- [  XNIO-1 task-3] org.postgresql.jdbc.PgConnection         :   setReadOnly = true 
-2026-03-28T17:34:19.445+08:00 DEBUG 158 --- [  XNIO-1 task-3] org.postgresql.jdbc.PgConnection         :   setAutoCommit = false 
-2026-03-28T17:34:19.446+08:00 DEBUG 158 --- [  XNIO-1 task-3] org.postgresql.jdbc.PgConnection         :   setAutoCommit = true 
-2026-03-28T17:34:19.446+08:00 DEBUG 158 --- [  XNIO-1 task-3] org.postgresql.jdbc.PgConnection         :   setReadOnly = false 
-2026-03-28T17:34:25.431+08:00 DEBUG 158 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = false 
-2026-03-28T17:34:25.432+08:00 DEBUG 158 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = true 
-2026-03-28T17:34:26.084+08:00 DEBUG 158 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = false 
-2026-03-28T17:34:26.086+08:00 DEBUG 158 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = true 
-2026-03-28T17:34:41.087+08:00 DEBUG 158 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = false 
-2026-03-28T17:34:41.089+08:00 DEBUG 158 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = true 
-2026-03-28T17:34:55.432+08:00 DEBUG 158 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = false 
-2026-03-28T17:34:55.433+08:00 DEBUG 158 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = true 
-2026-03-28T17:34:56.090+08:00 DEBUG 158 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = false 
-2026-03-28T17:34:56.094+08:00 DEBUG 158 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = true 
-2026-03-28T17:35:11.095+08:00 DEBUG 158 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = false 
-2026-03-28T17:35:11.097+08:00 DEBUG 158 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = true 
-2026-03-28T17:35:19.590+08:00 DEBUG 158 --- [   XNIO-1 I/O-1] io.undertow.request                      : Timing out idle connection from /172.19.0.16:57972 
-2026-03-28T17:35:19.764+08:00 DEBUG 158 --- [  XNIO-1 task-3] io.undertow.request.security             : Attempting to authenticate /api/ingestion/tasks/list, authentication required: false 
-2026-03-28T17:35:19.764+08:00 DEBUG 158 --- [  XNIO-1 task-3] io.undertow.request.security             : Authentication outcome was NOT_ATTEMPTED with method io.undertow.security.impl.CachedAuthenticatedSessionMechanism@741bf691 for /api/ingestion/tasks/list 
-2026-03-28T17:35:19.764+08:00 DEBUG 158 --- [  XNIO-1 task-3] io.undertow.request.security             : Authentication result was ATTEMPTED for /api/ingestion/tasks/list 
-2026-03-28T17:35:19.765+08:00 DEBUG 158 --- [  XNIO-1 task-3] org.postgresql.jdbc.PgConnection         :   setReadOnly = true 
-2026-03-28T17:35:19.765+08:00 DEBUG 158 --- [  XNIO-1 task-3] org.postgresql.jdbc.PgConnection         :   setAutoCommit = false 
-2026-03-28T17:35:19.766+08:00 DEBUG 158 --- [  XNIO-1 task-3] org.postgresql.jdbc.PgConnection         :   setAutoCommit = true 
-2026-03-28T17:35:19.766+08:00 DEBUG 158 --- [  XNIO-1 task-3] org.postgresql.jdbc.PgConnection         :   setReadOnly = false 
-2026-03-28T17:35:25.434+08:00 DEBUG 158 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = false 
-2026-03-28T17:35:25.435+08:00 DEBUG 158 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = true 
-2026-03-28T17:35:26.098+08:00 DEBUG 158 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = false 
-2026-03-28T17:35:26.100+08:00 DEBUG 158 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = true 
-2026-03-28T17:35:41.101+08:00 DEBUG 158 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = false 
-2026-03-28T17:35:41.102+08:00 DEBUG 158 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = true 
-2026-03-28T17:35:55.436+08:00 DEBUG 158 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = false 
-2026-03-28T17:35:55.437+08:00 DEBUG 158 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = true 
-2026-03-28T17:35:56.103+08:00 DEBUG 158 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = false 
-2026-03-28T17:35:56.105+08:00 DEBUG 158 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = true 
-2026-03-28T17:36:11.107+08:00 DEBUG 158 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = false 
-2026-03-28T17:36:11.109+08:00 DEBUG 158 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = true 
-2026-03-28T17:36:19.914+08:00 DEBUG 158 --- [   XNIO-1 I/O-4] io.undertow.request                      : Timing out idle connection from /172.19.0.16:52906 
-2026-03-28T17:36:20.080+08:00 DEBUG 158 --- [  XNIO-1 task-3] io.undertow.request.security             : Attempting to authenticate /api/ingestion/tasks/list, authentication required: false 
-2026-03-28T17:36:20.080+08:00 DEBUG 158 --- [  XNIO-1 task-3] io.undertow.request.security             : Authentication outcome was NOT_ATTEMPTED with method io.undertow.security.impl.CachedAuthenticatedSessionMechanism@741bf691 for /api/ingestion/tasks/list 
-2026-03-28T17:36:20.080+08:00 DEBUG 158 --- [  XNIO-1 task-3] io.undertow.request.security             : Authentication result was ATTEMPTED for /api/ingestion/tasks/list 
-2026-03-28T17:36:20.082+08:00 DEBUG 158 --- [  XNIO-1 task-3] org.postgresql.jdbc.PgConnection         :   setReadOnly = true 
-2026-03-28T17:36:20.082+08:00 DEBUG 158 --- [  XNIO-1 task-3] org.postgresql.jdbc.PgConnection         :   setAutoCommit = false 
-2026-03-28T17:36:20.083+08:00 DEBUG 158 --- [  XNIO-1 task-3] org.postgresql.jdbc.PgConnection         :   setAutoCommit = true 
-2026-03-28T17:36:20.083+08:00 DEBUG 158 --- [  XNIO-1 task-3] org.postgresql.jdbc.PgConnection         :   setReadOnly = false 
-2026-03-28T17:36:25.439+08:00 DEBUG 158 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = false 
-2026-03-28T17:36:25.440+08:00 DEBUG 158 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = true 
-2026-03-28T17:36:26.110+08:00 DEBUG 158 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = false 
-2026-03-28T17:36:26.112+08:00 DEBUG 158 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = true 
-2026-03-28T17:36:41.112+08:00 DEBUG 158 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = false 
-2026-03-28T17:36:41.115+08:00 DEBUG 158 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = true 
-2026-03-28T17:36:55.441+08:00 DEBUG 158 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = false 
-2026-03-28T17:36:55.442+08:00 DEBUG 158 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = true 
-2026-03-28T17:36:56.115+08:00 DEBUG 158 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = false 
-2026-03-28T17:36:56.117+08:00 DEBUG 158 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = true 
-2026-03-28T17:37:11.118+08:00 DEBUG 158 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = false 
-2026-03-28T17:37:11.122+08:00 DEBUG 158 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = true 
-2026-03-28T17:37:20.229+08:00 DEBUG 158 --- [  XNIO-1 I/O-11] io.undertow.request                      : Timing out idle connection from /172.19.0.16:49304 
-2026-03-28T17:37:20.395+08:00 DEBUG 158 --- [  XNIO-1 task-3] io.undertow.request.security             : Attempting to authenticate /api/ingestion/tasks/list, authentication required: false 
-2026-03-28T17:37:20.395+08:00 DEBUG 158 --- [  XNIO-1 task-3] io.undertow.request.security             : Authentication outcome was NOT_ATTEMPTED with method io.undertow.security.impl.CachedAuthenticatedSessionMechanism@741bf691 for /api/ingestion/tasks/list 
-2026-03-28T17:37:20.396+08:00 DEBUG 158 --- [  XNIO-1 task-3] io.undertow.request.security             : Authentication result was ATTEMPTED for /api/ingestion/tasks/list 
-2026-03-28T17:37:20.398+08:00 DEBUG 158 --- [  XNIO-1 task-3] org.postgresql.jdbc.PgConnection         :   setReadOnly = true 
-2026-03-28T17:37:20.398+08:00 DEBUG 158 --- [  XNIO-1 task-3] org.postgresql.jdbc.PgConnection         :   setAutoCommit = false 
-2026-03-28T17:37:20.399+08:00 DEBUG 158 --- [  XNIO-1 task-3] org.postgresql.jdbc.PgConnection         :   setAutoCommit = true 
-2026-03-28T17:37:20.399+08:00 DEBUG 158 --- [  XNIO-1 task-3] org.postgresql.jdbc.PgConnection         :   setReadOnly = false 
-2026-03-28T17:37:25.443+08:00 DEBUG 158 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = false 
-2026-03-28T17:37:25.444+08:00 DEBUG 158 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = true 
-2026-03-28T17:37:26.123+08:00 DEBUG 158 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = false 
-2026-03-28T17:37:26.124+08:00 DEBUG 158 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = true 
-2026-03-28T17:37:41.125+08:00 DEBUG 158 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = false 
-2026-03-28T17:37:41.126+08:00 DEBUG 158 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = true 
-2026-03-28T17:37:55.444+08:00 DEBUG 158 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = false 
-2026-03-28T17:37:55.445+08:00 DEBUG 158 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = true 
-2026-03-28T17:37:56.127+08:00 DEBUG 158 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = false 
-2026-03-28T17:37:56.129+08:00 DEBUG 158 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = true 
-2026-03-28T17:38:11.129+08:00 DEBUG 158 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = false 
-2026-03-28T17:38:11.131+08:00 DEBUG 158 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = true 
-2026-03-28T17:38:20.476+08:00 DEBUG 158 --- [   XNIO-1 I/O-4] io.undertow.request                      : Timing out idle connection from /172.19.0.16:52910 
-2026-03-28T17:38:20.698+08:00 DEBUG 158 --- [  XNIO-1 task-3] io.undertow.request.security             : Attempting to authenticate /api/ingestion/tasks/list, authentication required: false 
-2026-03-28T17:38:20.699+08:00 DEBUG 158 --- [  XNIO-1 task-3] io.undertow.request.security             : Authentication outcome was NOT_ATTEMPTED with method io.undertow.security.impl.CachedAuthenticatedSessionMechanism@741bf691 for /api/ingestion/tasks/list 
-2026-03-28T17:38:20.699+08:00 DEBUG 158 --- [  XNIO-1 task-3] io.undertow.request.security             : Authentication result was ATTEMPTED for /api/ingestion/tasks/list 
-2026-03-28T17:38:20.702+08:00 DEBUG 158 --- [  XNIO-1 task-3] org.postgresql.jdbc.PgConnection         :   setReadOnly = true 
-2026-03-28T17:38:20.702+08:00 DEBUG 158 --- [  XNIO-1 task-3] org.postgresql.jdbc.PgConnection         :   setAutoCommit = false 
-2026-03-28T17:38:20.703+08:00 DEBUG 158 --- [  XNIO-1 task-3] org.postgresql.jdbc.PgConnection         :   setAutoCommit = true 
-2026-03-28T17:38:20.703+08:00 DEBUG 158 --- [  XNIO-1 task-3] org.postgresql.jdbc.PgConnection         :   setReadOnly = false 
-2026-03-28T17:38:25.446+08:00 DEBUG 158 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = false 
-2026-03-28T17:38:25.447+08:00 DEBUG 158 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = true 
-2026-03-28T17:38:26.133+08:00 DEBUG 158 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = false 
-2026-03-28T17:38:26.135+08:00 DEBUG 158 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = true 
-2026-03-28T17:38:41.136+08:00 DEBUG 158 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = false 
-2026-03-28T17:38:41.137+08:00 DEBUG 158 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = true 
-2026-03-28T17:38:55.448+08:00 DEBUG 158 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = false 
-2026-03-28T17:38:55.450+08:00 DEBUG 158 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = true 
-2026-03-28T17:38:56.138+08:00 DEBUG 158 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = false 
-2026-03-28T17:38:56.140+08:00 DEBUG 158 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = true 
-2026-03-28T17:39:11.141+08:00 DEBUG 158 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = false 
-2026-03-28T17:39:11.142+08:00 DEBUG 158 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = true 
-2026-03-28T17:39:20.848+08:00 DEBUG 158 --- [  XNIO-1 I/O-12] io.undertow.request                      : Timing out idle connection from /172.19.0.16:34056 
-2026-03-28T17:39:21.015+08:00 DEBUG 158 --- [  XNIO-1 task-3] io.undertow.request.security             : Attempting to authenticate /api/ingestion/tasks/list, authentication required: false 
-2026-03-28T17:39:21.015+08:00 DEBUG 158 --- [  XNIO-1 task-3] io.undertow.request.security             : Authentication outcome was NOT_ATTEMPTED with method io.undertow.security.impl.CachedAuthenticatedSessionMechanism@741bf691 for /api/ingestion/tasks/list 
-2026-03-28T17:39:21.015+08:00 DEBUG 158 --- [  XNIO-1 task-3] io.undertow.request.security             : Authentication result was ATTEMPTED for /api/ingestion/tasks/list 
-2026-03-28T17:39:21.017+08:00 DEBUG 158 --- [  XNIO-1 task-3] org.postgresql.jdbc.PgConnection         :   setReadOnly = true 
-2026-03-28T17:39:21.017+08:00 DEBUG 158 --- [  XNIO-1 task-3] org.postgresql.jdbc.PgConnection         :   setAutoCommit = false 
-2026-03-28T17:39:21.018+08:00 DEBUG 158 --- [  XNIO-1 task-3] org.postgresql.jdbc.PgConnection         :   setAutoCommit = true 
-2026-03-28T17:39:21.018+08:00 DEBUG 158 --- [  XNIO-1 task-3] org.postgresql.jdbc.PgConnection         :   setReadOnly = false 
-2026-03-28T17:39:25.450+08:00 DEBUG 158 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = false 
-2026-03-28T17:39:25.452+08:00 DEBUG 158 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = true 
-2026-03-28T17:39:26.143+08:00 DEBUG 158 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = false 
-2026-03-28T17:39:26.146+08:00 DEBUG 158 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = true 
-2026-03-28T17:39:41.147+08:00 DEBUG 158 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = false 
-2026-03-28T17:39:41.148+08:00 DEBUG 158 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = true 
-2026-03-28T17:39:55.452+08:00 DEBUG 158 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = false 
-2026-03-28T17:39:55.453+08:00 DEBUG 158 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = true 
-2026-03-28T17:39:56.149+08:00 DEBUG 158 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = false 
-2026-03-28T17:39:56.150+08:00 DEBUG 158 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = true 
-2026-03-28T17:40:11.151+08:00 DEBUG 158 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = false 
-2026-03-28T17:40:11.153+08:00 DEBUG 158 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = true 
-2026-03-28T17:40:21.164+08:00 DEBUG 158 --- [   XNIO-1 I/O-9] io.undertow.request                      : Timing out idle connection from /172.19.0.16:60800 
-2026-03-28T17:40:21.312+08:00 DEBUG 158 --- [  XNIO-1 task-3] io.undertow.request.security             : Attempting to authenticate /api/ingestion/tasks/list, authentication required: false 
-2026-03-28T17:40:21.312+08:00 DEBUG 158 --- [  XNIO-1 task-3] io.undertow.request.security             : Authentication outcome was NOT_ATTEMPTED with method io.undertow.security.impl.CachedAuthenticatedSessionMechanism@741bf691 for /api/ingestion/tasks/list 
-2026-03-28T17:40:21.312+08:00 DEBUG 158 --- [  XNIO-1 task-3] io.undertow.request.security             : Authentication result was ATTEMPTED for /api/ingestion/tasks/list 
-2026-03-28T17:40:21.314+08:00 DEBUG 158 --- [  XNIO-1 task-3] org.postgresql.jdbc.PgConnection         :   setReadOnly = true 
-2026-03-28T17:40:21.314+08:00 DEBUG 158 --- [  XNIO-1 task-3] org.postgresql.jdbc.PgConnection         :   setAutoCommit = false 
-2026-03-28T17:40:21.315+08:00 DEBUG 158 --- [  XNIO-1 task-3] org.postgresql.jdbc.PgConnection         :   setAutoCommit = true 
-2026-03-28T17:40:21.315+08:00 DEBUG 158 --- [  XNIO-1 task-3] org.postgresql.jdbc.PgConnection         :   setReadOnly = false 
-2026-03-28T17:40:25.454+08:00 DEBUG 158 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = false 
-2026-03-28T17:40:25.456+08:00 DEBUG 158 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = true 
-2026-03-28T17:40:26.153+08:00 DEBUG 158 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = false 
-2026-03-28T17:40:26.155+08:00 DEBUG 158 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = true 
-2026-03-28T17:40:41.156+08:00 DEBUG 158 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = false 
-2026-03-28T17:40:41.159+08:00 DEBUG 158 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = true 
-2026-03-28T17:40:55.457+08:00 DEBUG 158 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = false 
-2026-03-28T17:40:55.458+08:00 DEBUG 158 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = true 
-2026-03-28T17:40:56.160+08:00 DEBUG 158 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = false 
-2026-03-28T17:40:56.161+08:00 DEBUG 158 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = true 
-2026-03-28T17:41:11.162+08:00 DEBUG 158 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = false 
-2026-03-28T17:41:11.163+08:00 DEBUG 158 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = true 
-2026-03-28T17:41:21.461+08:00 DEBUG 158 --- [   XNIO-1 I/O-2] io.undertow.request                      : Timing out idle connection from /172.19.0.16:39246 
-2026-03-28T17:41:21.630+08:00 DEBUG 158 --- [  XNIO-1 task-3] io.undertow.request.security             : Attempting to authenticate /api/ingestion/tasks/list, authentication required: false 
-2026-03-28T17:41:21.630+08:00 DEBUG 158 --- [  XNIO-1 task-3] io.undertow.request.security             : Authentication outcome was NOT_ATTEMPTED with method io.undertow.security.impl.CachedAuthenticatedSessionMechanism@741bf691 for /api/ingestion/tasks/list 
-2026-03-28T17:41:21.630+08:00 DEBUG 158 --- [  XNIO-1 task-3] io.undertow.request.security             : Authentication result was ATTEMPTED for /api/ingestion/tasks/list 
-2026-03-28T17:41:21.631+08:00 DEBUG 158 --- [  XNIO-1 task-3] org.postgresql.jdbc.PgConnection         :   setReadOnly = true 
-2026-03-28T17:41:21.631+08:00 DEBUG 158 --- [  XNIO-1 task-3] org.postgresql.jdbc.PgConnection         :   setAutoCommit = false 
-2026-03-28T17:41:21.632+08:00 DEBUG 158 --- [  XNIO-1 task-3] org.postgresql.jdbc.PgConnection         :   setAutoCommit = true 
-2026-03-28T17:41:21.632+08:00 DEBUG 158 --- [  XNIO-1 task-3] org.postgresql.jdbc.PgConnection         :   setReadOnly = false 
-2026-03-28T17:41:25.459+08:00 DEBUG 158 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = false 
-2026-03-28T17:41:25.460+08:00 DEBUG 158 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = true 
-2026-03-28T17:41:26.164+08:00 DEBUG 158 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = false 
-2026-03-28T17:41:26.166+08:00 DEBUG 158 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = true 
-2026-03-28T17:41:41.166+08:00 DEBUG 158 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = false 
-2026-03-28T17:41:41.168+08:00 DEBUG 158 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = true 
-2026-03-28T17:41:55.461+08:00 DEBUG 158 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = false 
-2026-03-28T17:41:55.462+08:00 DEBUG 158 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = true 
-2026-03-28T17:41:56.169+08:00 DEBUG 158 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = false 
-2026-03-28T17:41:56.172+08:00 DEBUG 158 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = true 
-2026-03-28T17:42:11.172+08:00 DEBUG 158 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = false 
-2026-03-28T17:42:11.174+08:00 DEBUG 158 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = true 
-2026-03-28T17:42:21.780+08:00 DEBUG 158 --- [  XNIO-1 I/O-12] io.undertow.request                      : Timing out idle connection from /172.19.0.16:57890 
-2026-03-28T17:42:21.947+08:00 DEBUG 158 --- [  XNIO-1 task-3] io.undertow.request.security             : Attempting to authenticate /api/ingestion/tasks/list, authentication required: false 
-2026-03-28T17:42:21.947+08:00 DEBUG 158 --- [  XNIO-1 task-3] io.undertow.request.security             : Authentication outcome was NOT_ATTEMPTED with method io.undertow.security.impl.CachedAuthenticatedSessionMechanism@741bf691 for /api/ingestion/tasks/list 
-2026-03-28T17:42:21.947+08:00 DEBUG 158 --- [  XNIO-1 task-3] io.undertow.request.security             : Authentication result was ATTEMPTED for /api/ingestion/tasks/list 
-2026-03-28T17:42:21.949+08:00 DEBUG 158 --- [  XNIO-1 task-3] org.postgresql.jdbc.PgConnection         :   setReadOnly = true 
-2026-03-28T17:42:21.949+08:00 DEBUG 158 --- [  XNIO-1 task-3] org.postgresql.jdbc.PgConnection         :   setAutoCommit = false 
-2026-03-28T17:42:21.951+08:00 DEBUG 158 --- [  XNIO-1 task-3] org.postgresql.jdbc.PgConnection         :   setAutoCommit = true 
-2026-03-28T17:42:21.951+08:00 DEBUG 158 --- [  XNIO-1 task-3] org.postgresql.jdbc.PgConnection         :   setReadOnly = false 
-2026-03-28T17:42:25.463+08:00 DEBUG 158 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = false 
-2026-03-28T17:42:25.463+08:00 DEBUG 158 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = true 
-2026-03-28T17:42:26.174+08:00 DEBUG 158 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = false 
-2026-03-28T17:42:26.176+08:00 DEBUG 158 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = true 
-2026-03-28T17:42:41.177+08:00 DEBUG 158 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = false 
-2026-03-28T17:42:41.178+08:00 DEBUG 158 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = true 
-2026-03-28T17:42:55.464+08:00 DEBUG 158 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = false 
-2026-03-28T17:42:55.466+08:00 DEBUG 158 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = true 
-2026-03-28T17:42:56.178+08:00 DEBUG 158 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = false 
-2026-03-28T17:42:56.180+08:00 DEBUG 158 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = true 
-2026-03-28T17:43:11.181+08:00 DEBUG 158 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = false 
-2026-03-28T17:43:11.184+08:00 DEBUG 158 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = true 
-2026-03-28T17:43:22.098+08:00 DEBUG 158 --- [   XNIO-1 I/O-4] io.undertow.request                      : Timing out idle connection from /172.19.0.16:43462 
-2026-03-28T17:43:22.270+08:00 DEBUG 158 --- [  XNIO-1 task-3] io.undertow.request.security             : Attempting to authenticate /api/ingestion/tasks/list, authentication required: false 
-2026-03-28T17:43:22.270+08:00 DEBUG 158 --- [  XNIO-1 task-3] io.undertow.request.security             : Authentication outcome was NOT_ATTEMPTED with method io.undertow.security.impl.CachedAuthenticatedSessionMechanism@741bf691 for /api/ingestion/tasks/list 
-2026-03-28T17:43:22.270+08:00 DEBUG 158 --- [  XNIO-1 task-3] io.undertow.request.security             : Authentication result was ATTEMPTED for /api/ingestion/tasks/list 
-2026-03-28T17:43:22.272+08:00 DEBUG 158 --- [  XNIO-1 task-3] org.postgresql.jdbc.PgConnection         :   setReadOnly = true 
-2026-03-28T17:43:22.272+08:00 DEBUG 158 --- [  XNIO-1 task-3] org.postgresql.jdbc.PgConnection         :   setAutoCommit = false 
-2026-03-28T17:43:22.273+08:00 DEBUG 158 --- [  XNIO-1 task-3] org.postgresql.jdbc.PgConnection         :   setAutoCommit = true 
-2026-03-28T17:43:22.273+08:00 DEBUG 158 --- [  XNIO-1 task-3] org.postgresql.jdbc.PgConnection         :   setReadOnly = false 
-2026-03-28T17:43:25.467+08:00 DEBUG 158 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = false 
-2026-03-28T17:43:25.468+08:00 DEBUG 158 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = true 
-2026-03-28T17:43:26.185+08:00 DEBUG 158 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = false 
-2026-03-28T17:43:26.186+08:00 DEBUG 158 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = true 
-2026-03-28T17:43:41.187+08:00 DEBUG 158 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = false 
-2026-03-28T17:43:41.189+08:00 DEBUG 158 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = true 
-2026-03-28T17:43:55.469+08:00 DEBUG 158 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = false 
-2026-03-28T17:43:55.470+08:00 DEBUG 158 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = true 
-2026-03-28T17:43:56.189+08:00 DEBUG 158 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = false 
-2026-03-28T17:43:56.191+08:00 DEBUG 158 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = true 
-2026-03-28T17:44:11.191+08:00 DEBUG 158 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = false 
-2026-03-28T17:44:11.192+08:00 DEBUG 158 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = true 
-2026-03-28T17:44:22.420+08:00 DEBUG 158 --- [   XNIO-1 I/O-4] io.undertow.request                      : Timing out idle connection from /172.19.0.16:52704 
-2026-03-28T17:44:22.615+08:00 DEBUG 158 --- [  XNIO-1 task-3] io.undertow.request.security             : Attempting to authenticate /api/ingestion/tasks/list, authentication required: false 
-2026-03-28T17:44:22.615+08:00 DEBUG 158 --- [  XNIO-1 task-3] io.undertow.request.security             : Authentication outcome was NOT_ATTEMPTED with method io.undertow.security.impl.CachedAuthenticatedSessionMechanism@741bf691 for /api/ingestion/tasks/list 
-2026-03-28T17:44:22.615+08:00 DEBUG 158 --- [  XNIO-1 task-3] io.undertow.request.security             : Authentication result was ATTEMPTED for /api/ingestion/tasks/list 
-2026-03-28T17:44:22.617+08:00 DEBUG 158 --- [  XNIO-1 task-3] org.postgresql.jdbc.PgConnection         :   setReadOnly = true 
-2026-03-28T17:44:22.617+08:00 DEBUG 158 --- [  XNIO-1 task-3] org.postgresql.jdbc.PgConnection         :   setAutoCommit = false 
-2026-03-28T17:44:22.617+08:00 DEBUG 158 --- [  XNIO-1 task-3] org.postgresql.jdbc.PgConnection         :   setAutoCommit = true 
-2026-03-28T17:44:22.618+08:00 DEBUG 158 --- [  XNIO-1 task-3] org.postgresql.jdbc.PgConnection         :   setReadOnly = false 
-2026-03-28T17:44:25.471+08:00 DEBUG 158 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = false 
-2026-03-28T17:44:25.471+08:00 DEBUG 158 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = true 
-2026-03-28T17:44:26.195+08:00 DEBUG 158 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = false 
-2026-03-28T17:44:26.197+08:00 DEBUG 158 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = true 
-2026-03-28T17:44:34.196+08:00 DEBUG 158 --- [onnection adder] org.postgresql.Driver                    : Connecting with URL: jdbc:postgresql://dts-pg:5432/dts_platform 
-2026-03-28T17:44:34.196+08:00 DEBUG 158 --- [onnection adder] org.postgresql.jdbc.PgConnection         : PostgreSQL JDBC Driver 42.7.5 
-2026-03-28T17:44:34.199+08:00 DEBUG 158 --- [onnection adder] org.postgresql.jdbc.PgConnection         :   setDefaultFetchSize = 0 
-2026-03-28T17:44:34.199+08:00 DEBUG 158 --- [onnection adder] org.postgresql.jdbc.PgConnection         :   setPrepareThreshold = 5 
-2026-03-28T17:44:34.199+08:00 DEBUG 158 --- [onnection adder] o.p.core.v3.ConnectionFactoryImpl        : Trying to establish a protocol version 3 connection to dts-pg:5432 
-2026-03-28T17:44:34.201+08:00 DEBUG 158 --- [onnection adder] o.p.core.v3.ConnectionFactoryImpl        : Receive Buffer Size is 65,536 
-2026-03-28T17:44:34.201+08:00 DEBUG 158 --- [onnection adder] o.p.core.v3.ConnectionFactoryImpl        : Send Buffer Size is 43,520 
-2026-03-28T17:44:41.198+08:00 DEBUG 158 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = false 
-2026-03-28T17:44:41.201+08:00 DEBUG 158 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = true 
-2026-03-28T17:44:53.502+08:00 DEBUG 158 --- [onnection adder] org.postgresql.Driver                    : Connecting with URL: jdbc:postgresql://dts-pg:5432/dts_platform 
-2026-03-28T17:44:53.502+08:00 DEBUG 158 --- [onnection adder] org.postgresql.jdbc.PgConnection         : PostgreSQL JDBC Driver 42.7.5 
-2026-03-28T17:44:53.502+08:00 DEBUG 158 --- [onnection adder] org.postgresql.jdbc.PgConnection         :   setDefaultFetchSize = 0 
-2026-03-28T17:44:53.502+08:00 DEBUG 158 --- [onnection adder] org.postgresql.jdbc.PgConnection         :   setPrepareThreshold = 5 
-2026-03-28T17:44:53.502+08:00 DEBUG 158 --- [onnection adder] o.p.core.v3.ConnectionFactoryImpl        : Trying to establish a protocol version 3 connection to dts-pg:5432 
-2026-03-28T17:44:53.503+08:00 DEBUG 158 --- [onnection adder] o.p.core.v3.ConnectionFactoryImpl        : Receive Buffer Size is 65,536 
-2026-03-28T17:44:53.503+08:00 DEBUG 158 --- [onnection adder] o.p.core.v3.ConnectionFactoryImpl        : Send Buffer Size is 43,520 
-2026-03-28T17:44:55.472+08:00 DEBUG 158 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = false 
-2026-03-28T17:44:55.476+08:00 DEBUG 158 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = true 
-2026-03-28T17:44:56.202+08:00 DEBUG 158 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = false 
-2026-03-28T17:44:56.203+08:00 DEBUG 158 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = true 
-2026-03-28T17:45:01.652+08:00 DEBUG 158 --- [onnection adder] org.postgresql.Driver                    : Connecting with URL: jdbc:postgresql://dts-pg:5432/dts_platform 
-2026-03-28T17:45:01.652+08:00 DEBUG 158 --- [onnection adder] org.postgresql.jdbc.PgConnection         : PostgreSQL JDBC Driver 42.7.5 
-2026-03-28T17:45:01.652+08:00 DEBUG 158 --- [onnection adder] org.postgresql.jdbc.PgConnection         :   setDefaultFetchSize = 0 
-2026-03-28T17:45:01.652+08:00 DEBUG 158 --- [onnection adder] org.postgresql.jdbc.PgConnection         :   setPrepareThreshold = 5 
-2026-03-28T17:45:01.652+08:00 DEBUG 158 --- [onnection adder] o.p.core.v3.ConnectionFactoryImpl        : Trying to establish a protocol version 3 connection to dts-pg:5432 
-2026-03-28T17:45:01.653+08:00 DEBUG 158 --- [onnection adder] o.p.core.v3.ConnectionFactoryImpl        : Receive Buffer Size is 65,536 
-2026-03-28T17:45:01.653+08:00 DEBUG 158 --- [onnection adder] o.p.core.v3.ConnectionFactoryImpl        : Send Buffer Size is 43,520 
-2026-03-28T17:45:01.745+08:00 DEBUG 158 --- [onnection adder] org.postgresql.Driver                    : Connecting with URL: jdbc:postgresql://dts-pg:5432/dts_platform 
-2026-03-28T17:45:01.745+08:00 DEBUG 158 --- [onnection adder] org.postgresql.jdbc.PgConnection         : PostgreSQL JDBC Driver 42.7.5 
-2026-03-28T17:45:01.745+08:00 DEBUG 158 --- [onnection adder] org.postgresql.jdbc.PgConnection         :   setDefaultFetchSize = 0 
-2026-03-28T17:45:01.745+08:00 DEBUG 158 --- [onnection adder] org.postgresql.jdbc.PgConnection         :   setPrepareThreshold = 5 
-2026-03-28T17:45:01.745+08:00 DEBUG 158 --- [onnection adder] o.p.core.v3.ConnectionFactoryImpl        : Trying to establish a protocol version 3 connection to dts-pg:5432 
-2026-03-28T17:45:01.746+08:00 DEBUG 158 --- [onnection adder] o.p.core.v3.ConnectionFactoryImpl        : Receive Buffer Size is 65,536 
-2026-03-28T17:45:01.746+08:00 DEBUG 158 --- [onnection adder] o.p.core.v3.ConnectionFactoryImpl        : Send Buffer Size is 43,520 
-2026-03-28T17:45:07.026+08:00 DEBUG 158 --- [onnection adder] org.postgresql.Driver                    : Connecting with URL: jdbc:postgresql://dts-pg:5432/dts_platform 
-2026-03-28T17:45:07.026+08:00 DEBUG 158 --- [onnection adder] org.postgresql.jdbc.PgConnection         : PostgreSQL JDBC Driver 42.7.5 
-2026-03-28T17:45:07.026+08:00 DEBUG 158 --- [onnection adder] org.postgresql.jdbc.PgConnection         :   setDefaultFetchSize = 0 
-2026-03-28T17:45:07.026+08:00 DEBUG 158 --- [onnection adder] org.postgresql.jdbc.PgConnection         :   setPrepareThreshold = 5 
-2026-03-28T17:45:07.026+08:00 DEBUG 158 --- [onnection adder] o.p.core.v3.ConnectionFactoryImpl        : Trying to establish a protocol version 3 connection to dts-pg:5432 
-2026-03-28T17:45:07.027+08:00 DEBUG 158 --- [onnection adder] o.p.core.v3.ConnectionFactoryImpl        : Receive Buffer Size is 65,536 
-2026-03-28T17:45:07.028+08:00 DEBUG 158 --- [onnection adder] o.p.core.v3.ConnectionFactoryImpl        : Send Buffer Size is 43,520 
-2026-03-28T17:45:11.204+08:00 DEBUG 158 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = false 
-2026-03-28T17:45:11.208+08:00 DEBUG 158 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = true 
-2026-03-28T17:45:22.765+08:00 DEBUG 158 --- [  XNIO-1 I/O-16] io.undertow.request                      : Timing out idle connection from /172.19.0.16:49446 
-2026-03-28T17:45:22.936+08:00 DEBUG 158 --- [  XNIO-1 task-3] io.undertow.request.security             : Attempting to authenticate /api/ingestion/tasks/list, authentication required: false 
-2026-03-28T17:45:22.936+08:00 DEBUG 158 --- [  XNIO-1 task-3] io.undertow.request.security             : Authentication outcome was NOT_ATTEMPTED with method io.undertow.security.impl.CachedAuthenticatedSessionMechanism@741bf691 for /api/ingestion/tasks/list 
-2026-03-28T17:45:22.936+08:00 DEBUG 158 --- [  XNIO-1 task-3] io.undertow.request.security             : Authentication result was ATTEMPTED for /api/ingestion/tasks/list 
-2026-03-28T17:45:22.938+08:00 DEBUG 158 --- [  XNIO-1 task-3] org.postgresql.jdbc.PgConnection         :   setReadOnly = true 
-2026-03-28T17:45:22.938+08:00 DEBUG 158 --- [  XNIO-1 task-3] org.postgresql.jdbc.PgConnection         :   setAutoCommit = false 
-2026-03-28T17:45:22.941+08:00 DEBUG 158 --- [  XNIO-1 task-3] org.postgresql.jdbc.PgConnection         :   setAutoCommit = true 
-2026-03-28T17:45:22.941+08:00 DEBUG 158 --- [  XNIO-1 task-3] org.postgresql.jdbc.PgConnection         :   setReadOnly = false 
-2026-03-28T17:45:23.982+08:00 DEBUG 158 --- [onnection adder] org.postgresql.Driver                    : Connecting with URL: jdbc:postgresql://dts-pg:5432/dts_platform 
-2026-03-28T17:45:23.982+08:00 DEBUG 158 --- [onnection adder] org.postgresql.jdbc.PgConnection         : PostgreSQL JDBC Driver 42.7.5 
-2026-03-28T17:45:23.982+08:00 DEBUG 158 --- [onnection adder] org.postgresql.jdbc.PgConnection         :   setDefaultFetchSize = 0 
-2026-03-28T17:45:23.982+08:00 DEBUG 158 --- [onnection adder] org.postgresql.jdbc.PgConnection         :   setPrepareThreshold = 5 
-2026-03-28T17:45:23.982+08:00 DEBUG 158 --- [onnection adder] o.p.core.v3.ConnectionFactoryImpl        : Trying to establish a protocol version 3 connection to dts-pg:5432 
-2026-03-28T17:45:23.983+08:00 DEBUG 158 --- [onnection adder] o.p.core.v3.ConnectionFactoryImpl        : Receive Buffer Size is 65,536 
-2026-03-28T17:45:23.983+08:00 DEBUG 158 --- [onnection adder] o.p.core.v3.ConnectionFactoryImpl        : Send Buffer Size is 43,520 
-2026-03-28T17:45:25.477+08:00 DEBUG 158 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = false 
-2026-03-28T17:45:25.479+08:00 DEBUG 158 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = true 
-2026-03-28T17:45:26.209+08:00 DEBUG 158 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = false 
-2026-03-28T17:45:26.212+08:00 DEBUG 158 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = true 
-2026-03-28T17:45:29.967+08:00 DEBUG 158 --- [onnection adder] org.postgresql.Driver                    : Connecting with URL: jdbc:postgresql://dts-pg:5432/dts_platform 
-2026-03-28T17:45:29.968+08:00 DEBUG 158 --- [onnection adder] org.postgresql.jdbc.PgConnection         : PostgreSQL JDBC Driver 42.7.5 
-2026-03-28T17:45:29.968+08:00 DEBUG 158 --- [onnection adder] org.postgresql.jdbc.PgConnection         :   setDefaultFetchSize = 0 
-2026-03-28T17:45:29.968+08:00 DEBUG 158 --- [onnection adder] org.postgresql.jdbc.PgConnection         :   setPrepareThreshold = 5 
-2026-03-28T17:45:29.968+08:00 DEBUG 158 --- [onnection adder] o.p.core.v3.ConnectionFactoryImpl        : Trying to establish a protocol version 3 connection to dts-pg:5432 
-2026-03-28T17:45:29.969+08:00 DEBUG 158 --- [onnection adder] o.p.core.v3.ConnectionFactoryImpl        : Receive Buffer Size is 65,536 
-2026-03-28T17:45:29.969+08:00 DEBUG 158 --- [onnection adder] o.p.core.v3.ConnectionFactoryImpl        : Send Buffer Size is 43,520 
-2026-03-28T17:45:34.861+08:00 DEBUG 158 --- [onnection adder] org.postgresql.Driver                    : Connecting with URL: jdbc:postgresql://dts-pg:5432/dts_platform 
-2026-03-28T17:45:34.861+08:00 DEBUG 158 --- [onnection adder] org.postgresql.jdbc.PgConnection         : PostgreSQL JDBC Driver 42.7.5 
-2026-03-28T17:45:34.861+08:00 DEBUG 158 --- [onnection adder] org.postgresql.jdbc.PgConnection         :   setDefaultFetchSize = 0 
-2026-03-28T17:45:34.861+08:00 DEBUG 158 --- [onnection adder] org.postgresql.jdbc.PgConnection         :   setPrepareThreshold = 5 
-2026-03-28T17:45:34.861+08:00 DEBUG 158 --- [onnection adder] o.p.core.v3.ConnectionFactoryImpl        : Trying to establish a protocol version 3 connection to dts-pg:5432 
-2026-03-28T17:45:34.862+08:00 DEBUG 158 --- [onnection adder] o.p.core.v3.ConnectionFactoryImpl        : Receive Buffer Size is 65,536 
-2026-03-28T17:45:34.862+08:00 DEBUG 158 --- [onnection adder] o.p.core.v3.ConnectionFactoryImpl        : Send Buffer Size is 43,520 
-2026-03-28T17:45:40.470+08:00 DEBUG 158 --- [onnection adder] org.postgresql.Driver                    : Connecting with URL: jdbc:postgresql://dts-pg:5432/dts_platform 
-2026-03-28T17:45:40.470+08:00 DEBUG 158 --- [onnection adder] org.postgresql.jdbc.PgConnection         : PostgreSQL JDBC Driver 42.7.5 
-2026-03-28T17:45:40.470+08:00 DEBUG 158 --- [onnection adder] org.postgresql.jdbc.PgConnection         :   setDefaultFetchSize = 0 
-2026-03-28T17:45:40.470+08:00 DEBUG 158 --- [onnection adder] org.postgresql.jdbc.PgConnection         :   setPrepareThreshold = 5 
-2026-03-28T17:45:40.470+08:00 DEBUG 158 --- [onnection adder] o.p.core.v3.ConnectionFactoryImpl        : Trying to establish a protocol version 3 connection to dts-pg:5432 
-2026-03-28T17:45:40.471+08:00 DEBUG 158 --- [onnection adder] o.p.core.v3.ConnectionFactoryImpl        : Receive Buffer Size is 65,536 
-2026-03-28T17:45:40.471+08:00 DEBUG 158 --- [onnection adder] o.p.core.v3.ConnectionFactoryImpl        : Send Buffer Size is 43,520 
-2026-03-28T17:45:41.212+08:00 DEBUG 158 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = false 
-2026-03-28T17:45:41.215+08:00 DEBUG 158 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = true 
-2026-03-28T17:45:53.733+08:00 DEBUG 158 --- [onnection adder] org.postgresql.Driver                    : Connecting with URL: jdbc:postgresql://dts-pg:5432/dts_platform 
-2026-03-28T17:45:53.733+08:00 DEBUG 158 --- [onnection adder] org.postgresql.jdbc.PgConnection         : PostgreSQL JDBC Driver 42.7.5 
-2026-03-28T17:45:53.733+08:00 DEBUG 158 --- [onnection adder] org.postgresql.jdbc.PgConnection         :   setDefaultFetchSize = 0 
-2026-03-28T17:45:53.733+08:00 DEBUG 158 --- [onnection adder] org.postgresql.jdbc.PgConnection         :   setPrepareThreshold = 5 
-2026-03-28T17:45:53.733+08:00 DEBUG 158 --- [onnection adder] o.p.core.v3.ConnectionFactoryImpl        : Trying to establish a protocol version 3 connection to dts-pg:5432 
-2026-03-28T17:45:53.733+08:00 DEBUG 158 --- [onnection adder] o.p.core.v3.ConnectionFactoryImpl        : Receive Buffer Size is 65,536 
-2026-03-28T17:45:53.733+08:00 DEBUG 158 --- [onnection adder] o.p.core.v3.ConnectionFactoryImpl        : Send Buffer Size is 43,520 
-2026-03-28T17:45:55.480+08:00 DEBUG 158 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = false 
-2026-03-28T17:45:55.483+08:00 DEBUG 158 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = true 
-2026-03-28T17:45:56.216+08:00 DEBUG 158 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = false 
-2026-03-28T17:45:56.218+08:00 DEBUG 158 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = true 
-2026-03-28T17:46:11.218+08:00 DEBUG 158 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = false 
-2026-03-28T17:46:11.220+08:00 DEBUG 158 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = true 
-2026-03-28T17:46:23.086+08:00 DEBUG 158 --- [   XNIO-1 I/O-3] io.undertow.request                      : Timing out idle connection from /172.19.0.16:50204 
-2026-03-28T17:46:23.266+08:00 DEBUG 158 --- [  XNIO-1 task-3] io.undertow.request.security             : Attempting to authenticate /api/ingestion/tasks/list, authentication required: false 
-2026-03-28T17:46:23.266+08:00 DEBUG 158 --- [  XNIO-1 task-3] io.undertow.request.security             : Authentication outcome was NOT_ATTEMPTED with method io.undertow.security.impl.CachedAuthenticatedSessionMechanism@741bf691 for /api/ingestion/tasks/list 
-2026-03-28T17:46:23.266+08:00 DEBUG 158 --- [  XNIO-1 task-3] io.undertow.request.security             : Authentication result was ATTEMPTED for /api/ingestion/tasks/list 
-2026-03-28T17:46:23.268+08:00 DEBUG 158 --- [  XNIO-1 task-3] org.postgresql.jdbc.PgConnection         :   setReadOnly = true 
-2026-03-28T17:46:23.268+08:00 DEBUG 158 --- [  XNIO-1 task-3] org.postgresql.jdbc.PgConnection         :   setAutoCommit = false 
-2026-03-28T17:46:23.269+08:00 DEBUG 158 --- [  XNIO-1 task-3] org.postgresql.jdbc.PgConnection         :   setAutoCommit = true 
-2026-03-28T17:46:23.269+08:00 DEBUG 158 --- [  XNIO-1 task-3] org.postgresql.jdbc.PgConnection         :   setReadOnly = false 
-2026-03-28T17:46:25.484+08:00 DEBUG 158 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = false 
-2026-03-28T17:46:25.485+08:00 DEBUG 158 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = true 
-2026-03-28T17:46:26.222+08:00 DEBUG 158 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = false 
-2026-03-28T17:46:26.224+08:00 DEBUG 158 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = true 
-2026-03-28T17:46:41.225+08:00 DEBUG 158 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = false 
-2026-03-28T17:46:41.227+08:00 DEBUG 158 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = true 
-2026-03-28T17:46:55.487+08:00 DEBUG 158 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = false 
-2026-03-28T17:46:55.489+08:00 DEBUG 158 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = true 
-2026-03-28T17:46:56.227+08:00 DEBUG 158 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = false 
-2026-03-28T17:46:56.229+08:00 DEBUG 158 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = true 
-2026-03-28T17:47:11.230+08:00 DEBUG 158 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = false 
-2026-03-28T17:47:11.231+08:00 DEBUG 158 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = true 
-2026-03-28T17:47:23.417+08:00 DEBUG 158 --- [  XNIO-1 I/O-10] io.undertow.request                      : Timing out idle connection from /172.19.0.16:51470 
-2026-03-28T17:47:23.584+08:00 DEBUG 158 --- [  XNIO-1 task-3] io.undertow.request.security             : Attempting to authenticate /api/ingestion/tasks/list, authentication required: false 
-2026-03-28T17:47:23.585+08:00 DEBUG 158 --- [  XNIO-1 task-3] io.undertow.request.security             : Authentication outcome was NOT_ATTEMPTED with method io.undertow.security.impl.CachedAuthenticatedSessionMechanism@741bf691 for /api/ingestion/tasks/list 
-2026-03-28T17:47:23.585+08:00 DEBUG 158 --- [  XNIO-1 task-3] io.undertow.request.security             : Authentication result was ATTEMPTED for /api/ingestion/tasks/list 
-2026-03-28T17:47:23.587+08:00 DEBUG 158 --- [  XNIO-1 task-3] org.postgresql.jdbc.PgConnection         :   setReadOnly = true 
-2026-03-28T17:47:23.587+08:00 DEBUG 158 --- [  XNIO-1 task-3] org.postgresql.jdbc.PgConnection         :   setAutoCommit = false 
-2026-03-28T17:47:23.588+08:00 DEBUG 158 --- [  XNIO-1 task-3] org.postgresql.jdbc.PgConnection         :   setAutoCommit = true 
-2026-03-28T17:47:23.588+08:00 DEBUG 158 --- [  XNIO-1 task-3] org.postgresql.jdbc.PgConnection         :   setReadOnly = false 
-2026-03-28T17:47:25.490+08:00 DEBUG 158 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = false 
-2026-03-28T17:47:25.491+08:00 DEBUG 158 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = true 
-2026-03-28T17:47:26.232+08:00 DEBUG 158 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = false 
-2026-03-28T17:47:26.236+08:00 DEBUG 158 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = true 
-2026-03-28T17:47:41.237+08:00 DEBUG 158 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = false 
-2026-03-28T17:47:41.238+08:00 DEBUG 158 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = true 
-2026-03-28T17:47:55.492+08:00 DEBUG 158 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = false 
-2026-03-28T17:47:55.493+08:00 DEBUG 158 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = true 
-2026-03-28T17:47:56.239+08:00 DEBUG 158 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = false 
-2026-03-28T17:47:56.241+08:00 DEBUG 158 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = true 
-2026-03-28T17:48:11.242+08:00 DEBUG 158 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = false 
-2026-03-28T17:48:11.244+08:00 DEBUG 158 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = true 
-2026-03-28T17:48:23.643+08:00 DEBUG 158 --- [   XNIO-1 I/O-1] io.undertow.request                      : Timing out idle connection from /172.19.0.16:45428 
-2026-03-28T17:48:23.911+08:00 DEBUG 158 --- [  XNIO-1 task-3] io.undertow.request.security             : Attempting to authenticate /api/ingestion/tasks/list, authentication required: false 
-2026-03-28T17:48:23.912+08:00 DEBUG 158 --- [  XNIO-1 task-3] io.undertow.request.security             : Authentication outcome was NOT_ATTEMPTED with method io.undertow.security.impl.CachedAuthenticatedSessionMechanism@741bf691 for /api/ingestion/tasks/list 
-2026-03-28T17:48:23.912+08:00 DEBUG 158 --- [  XNIO-1 task-3] io.undertow.request.security             : Authentication result was ATTEMPTED for /api/ingestion/tasks/list 
-2026-03-28T17:48:23.916+08:00 DEBUG 158 --- [  XNIO-1 task-3] org.postgresql.jdbc.PgConnection         :   setReadOnly = true 
-2026-03-28T17:48:23.916+08:00 DEBUG 158 --- [  XNIO-1 task-3] org.postgresql.jdbc.PgConnection         :   setAutoCommit = false 
-2026-03-28T17:48:23.918+08:00 DEBUG 158 --- [  XNIO-1 task-3] org.postgresql.jdbc.PgConnection         :   setAutoCommit = true 
-2026-03-28T17:48:23.918+08:00 DEBUG 158 --- [  XNIO-1 task-3] org.postgresql.jdbc.PgConnection         :   setReadOnly = false 
-2026-03-28T17:48:25.494+08:00 DEBUG 158 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = false 
-2026-03-28T17:48:25.495+08:00 DEBUG 158 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = true 
-2026-03-28T17:48:26.244+08:00 DEBUG 158 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = false 
-2026-03-28T17:48:26.247+08:00 DEBUG 158 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = true 
-2026-03-28T17:48:41.248+08:00 DEBUG 158 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = false 
-2026-03-28T17:48:41.249+08:00 DEBUG 158 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = true 
-2026-03-28T17:48:55.497+08:00 DEBUG 158 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = false 
-2026-03-28T17:48:55.499+08:00 DEBUG 158 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = true 
-2026-03-28T17:48:56.250+08:00 DEBUG 158 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = false 
-2026-03-28T17:48:56.252+08:00 DEBUG 158 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = true 
-2026-03-28T17:49:11.252+08:00 DEBUG 158 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = false 
-2026-03-28T17:49:11.254+08:00 DEBUG 158 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = true 
-2026-03-28T17:49:24.043+08:00 DEBUG 158 --- [  XNIO-1 I/O-14] io.undertow.request                      : Timing out idle connection from /172.19.0.16:53872 
-2026-03-28T17:49:24.239+08:00 DEBUG 158 --- [  XNIO-1 task-3] io.undertow.request.security             : Attempting to authenticate /api/ingestion/tasks/list, authentication required: false 
-2026-03-28T17:49:24.239+08:00 DEBUG 158 --- [  XNIO-1 task-3] io.undertow.request.security             : Authentication outcome was NOT_ATTEMPTED with method io.undertow.security.impl.CachedAuthenticatedSessionMechanism@741bf691 for /api/ingestion/tasks/list 
-2026-03-28T17:49:24.240+08:00 DEBUG 158 --- [  XNIO-1 task-3] io.undertow.request.security             : Authentication result was ATTEMPTED for /api/ingestion/tasks/list 
-2026-03-28T17:49:24.241+08:00 DEBUG 158 --- [  XNIO-1 task-3] org.postgresql.jdbc.PgConnection         :   setReadOnly = true 
-2026-03-28T17:49:24.241+08:00 DEBUG 158 --- [  XNIO-1 task-3] org.postgresql.jdbc.PgConnection         :   setAutoCommit = false 
-2026-03-28T17:49:24.243+08:00 DEBUG 158 --- [  XNIO-1 task-3] org.postgresql.jdbc.PgConnection         :   setAutoCommit = true 
-2026-03-28T17:49:24.243+08:00 DEBUG 158 --- [  XNIO-1 task-3] org.postgresql.jdbc.PgConnection         :   setReadOnly = false 
-2026-03-28T17:49:25.223+08:00 DEBUG 158 --- [  XNIO-1 task-3] io.undertow.request.security             : Attempting to authenticate /api/ingestion/tasks/list, authentication required: false 
-2026-03-28T17:49:25.223+08:00 DEBUG 158 --- [  XNIO-1 task-3] io.undertow.request.security             : Authentication outcome was NOT_ATTEMPTED with method io.undertow.security.impl.CachedAuthenticatedSessionMechanism@741bf691 for /api/ingestion/tasks/list 
-2026-03-28T17:49:25.223+08:00 DEBUG 158 --- [  XNIO-1 task-3] io.undertow.request.security             : Authentication result was ATTEMPTED for /api/ingestion/tasks/list 
-2026-03-28T17:49:25.225+08:00 DEBUG 158 --- [  XNIO-1 task-3] org.postgresql.jdbc.PgConnection         :   setReadOnly = true 
-2026-03-28T17:49:25.225+08:00 DEBUG 158 --- [  XNIO-1 task-3] org.postgresql.jdbc.PgConnection         :   setAutoCommit = false 
-2026-03-28T17:49:25.227+08:00 DEBUG 158 --- [  XNIO-1 task-3] org.postgresql.jdbc.PgConnection         :   setAutoCommit = true 
-2026-03-28T17:49:25.227+08:00 DEBUG 158 --- [  XNIO-1 task-3] org.postgresql.jdbc.PgConnection         :   setReadOnly = false 
-2026-03-28T17:49:25.499+08:00 DEBUG 158 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = false 
-2026-03-28T17:49:25.501+08:00 DEBUG 158 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = true 
-2026-03-28T17:49:26.255+08:00 DEBUG 158 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = false 
-2026-03-28T17:49:26.256+08:00 DEBUG 158 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = true 
-2026-03-28T17:49:29.554+08:00 DEBUG 158 --- [  XNIO-1 task-3] io.undertow.request.security             : Attempting to authenticate /api/ingestion/templates, authentication required: false 
-2026-03-28T17:49:29.554+08:00 DEBUG 158 --- [  XNIO-1 task-3] io.undertow.request.security             : Authentication outcome was NOT_ATTEMPTED with method io.undertow.security.impl.CachedAuthenticatedSessionMechanism@741bf691 for /api/ingestion/templates 
-2026-03-28T17:49:29.554+08:00 DEBUG 158 --- [  XNIO-1 task-3] io.undertow.request.security             : Authentication result was ATTEMPTED for /api/ingestion/templates 
-2026-03-28T17:49:29.555+08:00 DEBUG 158 --- [  XNIO-1 task-2] io.undertow.request.security             : Attempting to authenticate /api/ingestion/connectors/capabilities, authentication required: false 
-2026-03-28T17:49:29.555+08:00 DEBUG 158 --- [  XNIO-1 task-2] io.undertow.request.security             : Authentication outcome was NOT_ATTEMPTED with method io.undertow.security.impl.CachedAuthenticatedSessionMechanism@741bf691 for /api/ingestion/connectors/capabilities 
-2026-03-28T17:49:29.555+08:00 DEBUG 158 --- [  XNIO-1 task-2] io.undertow.request.security             : Authentication result was ATTEMPTED for /api/ingestion/connectors/capabilities 
-2026-03-28T17:49:29.556+08:00 DEBUG 158 --- [  XNIO-1 task-2] org.postgresql.jdbc.PgConnection         :   setReadOnly = true 
-2026-03-28T17:49:29.556+08:00 DEBUG 158 --- [  XNIO-1 task-2] org.postgresql.jdbc.PgConnection         :   setAutoCommit = false 
-2026-03-28T17:49:29.561+08:00 DEBUG 158 --- [  XNIO-1 task-2] org.postgresql.jdbc.PgConnection         :   setAutoCommit = true 
-2026-03-28T17:49:29.562+08:00 DEBUG 158 --- [  XNIO-1 task-2] org.postgresql.jdbc.PgConnection         :   setReadOnly = false 
-2026-03-28T17:49:41.257+08:00 DEBUG 158 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = false 
-2026-03-28T17:49:41.260+08:00 DEBUG 158 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = true 
-2026-03-28T17:49:55.502+08:00 DEBUG 158 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = false 
-2026-03-28T17:49:55.503+08:00 DEBUG 158 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = true 
-2026-03-28T17:49:56.261+08:00 DEBUG 158 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = false 
-2026-03-28T17:49:56.262+08:00 DEBUG 158 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = true 
-2026-03-28T17:50:11.263+08:00 DEBUG 158 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = false 
-2026-03-28T17:50:11.264+08:00 DEBUG 158 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = true 
-2026-03-28T17:50:24.557+08:00 DEBUG 158 --- [  XNIO-1 task-2] io.undertow.request.security             : Attempting to authenticate /api/ingestion/tasks/list, authentication required: false 
-2026-03-28T17:50:24.558+08:00 DEBUG 158 --- [  XNIO-1 task-2] io.undertow.request.security             : Authentication outcome was NOT_ATTEMPTED with method io.undertow.security.impl.CachedAuthenticatedSessionMechanism@741bf691 for /api/ingestion/tasks/list 
-2026-03-28T17:50:24.558+08:00 DEBUG 158 --- [  XNIO-1 task-2] io.undertow.request.security             : Authentication result was ATTEMPTED for /api/ingestion/tasks/list 
-2026-03-28T17:50:24.560+08:00 DEBUG 158 --- [  XNIO-1 task-2] org.postgresql.jdbc.PgConnection         :   setReadOnly = true 
-2026-03-28T17:50:24.560+08:00 DEBUG 158 --- [  XNIO-1 task-2] org.postgresql.jdbc.PgConnection         :   setAutoCommit = false 
-2026-03-28T17:50:24.561+08:00 DEBUG 158 --- [  XNIO-1 task-2] org.postgresql.jdbc.PgConnection         :   setAutoCommit = true 
-2026-03-28T17:50:24.561+08:00 DEBUG 158 --- [  XNIO-1 task-2] org.postgresql.jdbc.PgConnection         :   setReadOnly = false 
-2026-03-28T17:50:25.503+08:00 DEBUG 158 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = false 
-2026-03-28T17:50:25.505+08:00 DEBUG 158 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = true 
-2026-03-28T17:50:26.265+08:00 DEBUG 158 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = false 
-2026-03-28T17:50:26.267+08:00 DEBUG 158 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = true 
-2026-03-28T17:50:29.696+08:00 DEBUG 158 --- [   XNIO-1 I/O-4] io.undertow.request                      : Timing out idle connection from /172.19.0.16:59250 
-2026-03-28T17:50:41.268+08:00 DEBUG 158 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = false 
-2026-03-28T17:50:41.269+08:00 DEBUG 158 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = true 
-2026-03-28T17:50:55.506+08:00 DEBUG 158 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = false 
-2026-03-28T17:50:55.507+08:00 DEBUG 158 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = true 
-2026-03-28T17:50:56.270+08:00 DEBUG 158 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = false 
-2026-03-28T17:50:56.271+08:00 DEBUG 158 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = true 
-2026-03-28T17:51:11.272+08:00 DEBUG 158 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = false 
-2026-03-28T17:51:11.274+08:00 DEBUG 158 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = true 
-2026-03-28T17:51:24.712+08:00 DEBUG 158 --- [   XNIO-1 I/O-3] io.undertow.request                      : Timing out idle connection from /172.19.0.16:60594 
-2026-03-28T17:51:24.854+08:00 DEBUG 158 --- [  XNIO-1 task-2] io.undertow.request.security             : Attempting to authenticate /api/ingestion/tasks/list, authentication required: false 
-2026-03-28T17:51:24.854+08:00 DEBUG 158 --- [  XNIO-1 task-2] io.undertow.request.security             : Authentication outcome was NOT_ATTEMPTED with method io.undertow.security.impl.CachedAuthenticatedSessionMechanism@741bf691 for /api/ingestion/tasks/list 
-2026-03-28T17:51:24.855+08:00 DEBUG 158 --- [  XNIO-1 task-2] io.undertow.request.security             : Authentication result was ATTEMPTED for /api/ingestion/tasks/list 
-2026-03-28T17:51:24.857+08:00 DEBUG 158 --- [  XNIO-1 task-2] org.postgresql.jdbc.PgConnection         :   setReadOnly = true 
-2026-03-28T17:51:24.857+08:00 DEBUG 158 --- [  XNIO-1 task-2] org.postgresql.jdbc.PgConnection         :   setAutoCommit = false 
-2026-03-28T17:51:24.858+08:00 DEBUG 158 --- [  XNIO-1 task-2] org.postgresql.jdbc.PgConnection         :   setAutoCommit = true 
-2026-03-28T17:51:24.858+08:00 DEBUG 158 --- [  XNIO-1 task-2] org.postgresql.jdbc.PgConnection         :   setReadOnly = false 
-2026-03-28T17:51:25.507+08:00 DEBUG 158 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = false 
-2026-03-28T17:51:25.508+08:00 DEBUG 158 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = true 
-2026-03-28T17:51:26.274+08:00 DEBUG 158 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = false 
-2026-03-28T17:51:26.276+08:00 DEBUG 158 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = true 
-2026-03-28T17:51:41.276+08:00 DEBUG 158 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = false 
-2026-03-28T17:51:41.278+08:00 DEBUG 158 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = true 
-2026-03-28T17:51:55.509+08:00 DEBUG 158 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = false 
-2026-03-28T17:51:55.510+08:00 DEBUG 158 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = true 
-2026-03-28T17:51:56.279+08:00 DEBUG 158 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = false 
-2026-03-28T17:51:56.280+08:00 DEBUG 158 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = true 
-2026-03-28T17:52:11.281+08:00 DEBUG 158 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = false 
-2026-03-28T17:52:11.282+08:00 DEBUG 158 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = true 
-2026-03-28T17:52:25.004+08:00 DEBUG 158 --- [   XNIO-1 I/O-8] io.undertow.request                      : Timing out idle connection from /172.19.0.16:33348 
-2026-03-28T17:52:25.169+08:00 DEBUG 158 --- [  XNIO-1 task-2] io.undertow.request.security             : Attempting to authenticate /api/ingestion/tasks/list, authentication required: false 
-2026-03-28T17:52:25.169+08:00 DEBUG 158 --- [  XNIO-1 task-2] io.undertow.request.security             : Authentication outcome was NOT_ATTEMPTED with method io.undertow.security.impl.CachedAuthenticatedSessionMechanism@741bf691 for /api/ingestion/tasks/list 
-2026-03-28T17:52:25.169+08:00 DEBUG 158 --- [  XNIO-1 task-2] io.undertow.request.security             : Authentication result was ATTEMPTED for /api/ingestion/tasks/list 
-2026-03-28T17:52:25.171+08:00 DEBUG 158 --- [  XNIO-1 task-2] org.postgresql.jdbc.PgConnection         :   setReadOnly = true 
-2026-03-28T17:52:25.171+08:00 DEBUG 158 --- [  XNIO-1 task-2] org.postgresql.jdbc.PgConnection         :   setAutoCommit = false 
-2026-03-28T17:52:25.172+08:00 DEBUG 158 --- [  XNIO-1 task-2] org.postgresql.jdbc.PgConnection         :   setAutoCommit = true 
-2026-03-28T17:52:25.172+08:00 DEBUG 158 --- [  XNIO-1 task-2] org.postgresql.jdbc.PgConnection         :   setReadOnly = false 
-2026-03-28T17:52:25.511+08:00 DEBUG 158 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = false 
-2026-03-28T17:52:25.512+08:00 DEBUG 158 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = true 
-2026-03-28T17:52:26.283+08:00 DEBUG 158 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = false 
-2026-03-28T17:52:26.285+08:00 DEBUG 158 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = true 
-2026-03-28T17:52:41.285+08:00 DEBUG 158 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = false 
-2026-03-28T17:52:41.287+08:00 DEBUG 158 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = true 
-2026-03-28T17:52:55.512+08:00 DEBUG 158 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = false 
-2026-03-28T17:52:55.513+08:00 DEBUG 158 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = true 
-2026-03-28T17:52:56.288+08:00 DEBUG 158 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = false 
-2026-03-28T17:52:56.290+08:00 DEBUG 158 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = true 
-2026-03-28T17:53:11.291+08:00 DEBUG 158 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = false 
-2026-03-28T17:53:11.292+08:00 DEBUG 158 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = true 
-2026-03-28T17:53:25.319+08:00 DEBUG 158 --- [  XNIO-1 I/O-13] io.undertow.request                      : Timing out idle connection from /172.19.0.16:34498 
-2026-03-28T17:53:25.465+08:00 DEBUG 158 --- [  XNIO-1 task-2] io.undertow.request.security             : Attempting to authenticate /api/ingestion/tasks/list, authentication required: false 
-2026-03-28T17:53:25.465+08:00 DEBUG 158 --- [  XNIO-1 task-2] io.undertow.request.security             : Authentication outcome was NOT_ATTEMPTED with method io.undertow.security.impl.CachedAuthenticatedSessionMechanism@741bf691 for /api/ingestion/tasks/list 
-2026-03-28T17:53:25.465+08:00 DEBUG 158 --- [  XNIO-1 task-2] io.undertow.request.security             : Authentication result was ATTEMPTED for /api/ingestion/tasks/list 
-2026-03-28T17:53:25.468+08:00 DEBUG 158 --- [  XNIO-1 task-2] org.postgresql.jdbc.PgConnection         :   setReadOnly = true 
-2026-03-28T17:53:25.468+08:00 DEBUG 158 --- [  XNIO-1 task-2] org.postgresql.jdbc.PgConnection         :   setAutoCommit = false 
-2026-03-28T17:53:25.469+08:00 DEBUG 158 --- [  XNIO-1 task-2] org.postgresql.jdbc.PgConnection         :   setAutoCommit = true 
-2026-03-28T17:53:25.469+08:00 DEBUG 158 --- [  XNIO-1 task-2] org.postgresql.jdbc.PgConnection         :   setReadOnly = false 
-2026-03-28T17:53:25.514+08:00 DEBUG 158 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = false 
-2026-03-28T17:53:25.515+08:00 DEBUG 158 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = true 
-2026-03-28T17:53:26.293+08:00 DEBUG 158 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = false 
-2026-03-28T17:53:26.295+08:00 DEBUG 158 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = true 
-2026-03-28T17:53:41.296+08:00 DEBUG 158 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = false 
-2026-03-28T17:53:41.298+08:00 DEBUG 158 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = true 
-2026-03-28T17:53:55.516+08:00 DEBUG 158 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = false 
-2026-03-28T17:53:55.518+08:00 DEBUG 158 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = true 
-2026-03-28T17:53:56.299+08:00 DEBUG 158 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = false 
-2026-03-28T17:53:56.300+08:00 DEBUG 158 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = true 
-2026-03-28T17:58:47.259+08:00 DEBUG 158 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = false 
-2026-03-28T17:58:47.261+08:00 DEBUG 158 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = true 
-2026-03-28T17:59:01.476+08:00 DEBUG 158 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = false 
-2026-03-28T17:59:01.477+08:00 DEBUG 158 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = true 
-2026-03-28T17:59:01.536+08:00 DEBUG 158 --- [   XNIO-1 I/O-8] io.undertow.request                      : Timing out idle connection from /172.19.0.16:60442 
-2026-03-28T17:59:01.753+08:00 DEBUG 158 --- [  XNIO-1 task-2] io.undertow.request.security             : Attempting to authenticate /api/ingestion/tasks/list, authentication required: false 
-2026-03-28T17:59:01.753+08:00 DEBUG 158 --- [  XNIO-1 task-2] io.undertow.request.security             : Authentication outcome was NOT_ATTEMPTED with method io.undertow.security.impl.CachedAuthenticatedSessionMechanism@741bf691 for /api/ingestion/tasks/list 
-2026-03-28T17:59:01.753+08:00 DEBUG 158 --- [  XNIO-1 task-2] io.undertow.request.security             : Authentication result was ATTEMPTED for /api/ingestion/tasks/list 
-2026-03-28T17:59:01.755+08:00 DEBUG 158 --- [  XNIO-1 task-2] org.postgresql.jdbc.PgConnection         :   setReadOnly = true 
-2026-03-28T17:59:01.755+08:00 DEBUG 158 --- [  XNIO-1 task-2] org.postgresql.jdbc.PgConnection         :   setAutoCommit = false 
-2026-03-28T17:59:01.758+08:00 DEBUG 158 --- [  XNIO-1 task-2] org.postgresql.jdbc.PgConnection         :   setAutoCommit = true 
-2026-03-28T17:59:01.758+08:00 DEBUG 158 --- [  XNIO-1 task-2] org.postgresql.jdbc.PgConnection         :   setReadOnly = false 
-2026-03-28T17:59:02.261+08:00 DEBUG 158 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = false 
-2026-03-28T17:59:02.264+08:00 DEBUG 158 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = true 
-2026-03-28T17:59:17.265+08:00 DEBUG 158 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = false 
-2026-03-28T17:59:17.266+08:00 DEBUG 158 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = true 
-2026-03-28T17:59:31.478+08:00 DEBUG 158 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = false 
-2026-03-28T17:59:31.479+08:00 DEBUG 158 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = true 
-2026-03-28T17:59:32.267+08:00 DEBUG 158 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = false 
-2026-03-28T17:59:32.269+08:00 DEBUG 158 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = true 
-2026-03-28T17:59:47.270+08:00 DEBUG 158 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = false 
-2026-03-28T17:59:47.271+08:00 DEBUG 158 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = true 
-2026-03-28T18:00:01.480+08:00 DEBUG 158 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = false 
-2026-03-28T18:00:01.481+08:00 DEBUG 158 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = true 
-2026-03-28T18:00:01.899+08:00 DEBUG 158 --- [   XNIO-1 I/O-4] io.undertow.request                      : Timing out idle connection from /172.19.0.16:54386 
-2026-03-28T18:00:02.067+08:00 DEBUG 158 --- [  XNIO-1 task-2] io.undertow.request.security             : Attempting to authenticate /api/ingestion/tasks/list, authentication required: false 
-2026-03-28T18:00:02.067+08:00 DEBUG 158 --- [  XNIO-1 task-2] io.undertow.request.security             : Authentication outcome was NOT_ATTEMPTED with method io.undertow.security.impl.CachedAuthenticatedSessionMechanism@741bf691 for /api/ingestion/tasks/list 
-2026-03-28T18:00:02.067+08:00 DEBUG 158 --- [  XNIO-1 task-2] io.undertow.request.security             : Authentication result was ATTEMPTED for /api/ingestion/tasks/list 
-2026-03-28T18:00:02.069+08:00 DEBUG 158 --- [  XNIO-1 task-2] org.postgresql.jdbc.PgConnection         :   setReadOnly = true 
-2026-03-28T18:00:02.069+08:00 DEBUG 158 --- [  XNIO-1 task-2] org.postgresql.jdbc.PgConnection         :   setAutoCommit = false 
-2026-03-28T18:00:02.070+08:00 DEBUG 158 --- [  XNIO-1 task-2] org.postgresql.jdbc.PgConnection         :   setAutoCommit = true 
-2026-03-28T18:00:02.070+08:00 DEBUG 158 --- [  XNIO-1 task-2] org.postgresql.jdbc.PgConnection         :   setReadOnly = false 
-2026-03-28T18:00:02.272+08:00 DEBUG 158 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = false 
-2026-03-28T18:00:02.273+08:00 DEBUG 158 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = true 
-2026-03-28T18:00:17.274+08:00 DEBUG 158 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = false 
-2026-03-28T18:00:17.276+08:00 DEBUG 158 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = true 
-2026-03-28T18:00:31.482+08:00 DEBUG 158 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = false 
-2026-03-28T18:00:31.483+08:00 DEBUG 158 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = true 
-2026-03-28T18:00:32.277+08:00 DEBUG 158 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = false 
-2026-03-28T18:00:32.279+08:00 DEBUG 158 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = true 
-2026-03-28T18:00:47.279+08:00 DEBUG 158 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = false 
-2026-03-28T18:00:47.281+08:00 DEBUG 158 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = true 
-2026-03-28T18:01:01.484+08:00 DEBUG 158 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = false 
-2026-03-28T18:01:01.485+08:00 DEBUG 158 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = true 
-2026-03-28T18:01:02.216+08:00 DEBUG 158 --- [   XNIO-1 I/O-3] io.undertow.request                      : Timing out idle connection from /172.19.0.16:52588 
-2026-03-28T18:01:02.282+08:00 DEBUG 158 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = false 
-2026-03-28T18:01:02.283+08:00 DEBUG 158 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = true 
-2026-03-28T18:01:02.385+08:00 DEBUG 158 --- [  XNIO-1 task-2] io.undertow.request.security             : Attempting to authenticate /api/ingestion/tasks/list, authentication required: false 
-2026-03-28T18:01:02.385+08:00 DEBUG 158 --- [  XNIO-1 task-2] io.undertow.request.security             : Authentication outcome was NOT_ATTEMPTED with method io.undertow.security.impl.CachedAuthenticatedSessionMechanism@741bf691 for /api/ingestion/tasks/list 
-2026-03-28T18:01:02.385+08:00 DEBUG 158 --- [  XNIO-1 task-2] io.undertow.request.security             : Authentication result was ATTEMPTED for /api/ingestion/tasks/list 
-2026-03-28T18:01:02.387+08:00 DEBUG 158 --- [  XNIO-1 task-2] org.postgresql.jdbc.PgConnection         :   setReadOnly = true 
-2026-03-28T18:01:02.387+08:00 DEBUG 158 --- [  XNIO-1 task-2] org.postgresql.jdbc.PgConnection         :   setAutoCommit = false 
-2026-03-28T18:01:02.388+08:00 DEBUG 158 --- [  XNIO-1 task-2] org.postgresql.jdbc.PgConnection         :   setAutoCommit = true 
-2026-03-28T18:01:02.388+08:00 DEBUG 158 --- [  XNIO-1 task-2] org.postgresql.jdbc.PgConnection         :   setReadOnly = false 
-2026-03-28T18:01:17.284+08:00 DEBUG 158 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = false 
-2026-03-28T18:01:17.286+08:00 DEBUG 158 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = true 
-2026-03-28T18:01:31.486+08:00 DEBUG 158 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = false 
-2026-03-28T18:01:31.487+08:00 DEBUG 158 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = true 
-2026-03-28T18:01:32.287+08:00 DEBUG 158 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = false 
-2026-03-28T18:01:32.289+08:00 DEBUG 158 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = true 
-2026-03-28T18:01:47.289+08:00 DEBUG 158 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = false 
-2026-03-28T18:01:47.291+08:00 DEBUG 158 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = true 
-2026-03-28T18:02:01.488+08:00 DEBUG 158 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = false 
-2026-03-28T18:02:01.489+08:00 DEBUG 158 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = true 
-2026-03-28T18:02:02.291+08:00 DEBUG 158 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = false 
-2026-03-28T18:02:02.293+08:00 DEBUG 158 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = true 
-2026-03-28T18:02:02.535+08:00 DEBUG 158 --- [   XNIO-1 I/O-8] io.undertow.request                      : Timing out idle connection from /172.19.0.16:50638 
-2026-03-28T18:02:02.687+08:00 DEBUG 158 --- [  XNIO-1 task-2] io.undertow.request.security             : Attempting to authenticate /api/ingestion/tasks/list, authentication required: false 
-2026-03-28T18:02:02.687+08:00 DEBUG 158 --- [  XNIO-1 task-2] io.undertow.request.security             : Authentication outcome was NOT_ATTEMPTED with method io.undertow.security.impl.CachedAuthenticatedSessionMechanism@741bf691 for /api/ingestion/tasks/list 
-2026-03-28T18:02:02.687+08:00 DEBUG 158 --- [  XNIO-1 task-2] io.undertow.request.security             : Authentication result was ATTEMPTED for /api/ingestion/tasks/list 
-2026-03-28T18:02:02.689+08:00 DEBUG 158 --- [  XNIO-1 task-2] org.postgresql.jdbc.PgConnection         :   setReadOnly = true 
-2026-03-28T18:02:02.689+08:00 DEBUG 158 --- [  XNIO-1 task-2] org.postgresql.jdbc.PgConnection         :   setAutoCommit = false 
-2026-03-28T18:02:02.690+08:00 DEBUG 158 --- [  XNIO-1 task-2] org.postgresql.jdbc.PgConnection         :   setAutoCommit = true 
-2026-03-28T18:02:02.690+08:00 DEBUG 158 --- [  XNIO-1 task-2] org.postgresql.jdbc.PgConnection         :   setReadOnly = false 
-2026-03-28T18:02:17.294+08:00 DEBUG 158 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = false 
-2026-03-28T18:02:17.296+08:00 DEBUG 158 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = true 
-2026-03-28T18:02:31.490+08:00 DEBUG 158 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = false 
-2026-03-28T18:02:31.491+08:00 DEBUG 158 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = true 
-2026-03-28T18:02:32.298+08:00 DEBUG 158 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = false 
-2026-03-28T18:02:32.300+08:00 DEBUG 158 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = true 
-2026-03-28T18:02:47.300+08:00 DEBUG 158 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = false 
-2026-03-28T18:02:47.302+08:00 DEBUG 158 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = true 
-2026-03-28T18:03:01.492+08:00 DEBUG 158 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = false 
-2026-03-28T18:03:01.493+08:00 DEBUG 158 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = true 
-2026-03-28T18:03:02.303+08:00 DEBUG 158 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = false 
-2026-03-28T18:03:02.304+08:00 DEBUG 158 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = true 
-2026-03-28T18:03:02.828+08:00 DEBUG 158 --- [   XNIO-1 I/O-9] io.undertow.request                      : Timing out idle connection from /172.19.0.16:46996 
-2026-03-28T18:03:03.032+08:00 DEBUG 158 --- [  XNIO-1 task-2] io.undertow.request.security             : Attempting to authenticate /api/ingestion/tasks/list, authentication required: false 
-2026-03-28T18:03:03.032+08:00 DEBUG 158 --- [  XNIO-1 task-2] io.undertow.request.security             : Authentication outcome was NOT_ATTEMPTED with method io.undertow.security.impl.CachedAuthenticatedSessionMechanism@741bf691 for /api/ingestion/tasks/list 
-2026-03-28T18:03:03.032+08:00 DEBUG 158 --- [  XNIO-1 task-2] io.undertow.request.security             : Authentication result was ATTEMPTED for /api/ingestion/tasks/list 
-2026-03-28T18:03:03.034+08:00 DEBUG 158 --- [  XNIO-1 task-2] org.postgresql.jdbc.PgConnection         :   setReadOnly = true 
-2026-03-28T18:03:03.034+08:00 DEBUG 158 --- [  XNIO-1 task-2] org.postgresql.jdbc.PgConnection         :   setAutoCommit = false 
-2026-03-28T18:03:03.035+08:00 DEBUG 158 --- [  XNIO-1 task-2] org.postgresql.jdbc.PgConnection         :   setAutoCommit = true 
-2026-03-28T18:03:03.035+08:00 DEBUG 158 --- [  XNIO-1 task-2] org.postgresql.jdbc.PgConnection         :   setReadOnly = false 
-2026-03-28T18:03:17.305+08:00 DEBUG 158 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = false 
-2026-03-28T18:03:17.307+08:00 DEBUG 158 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = true 
-2026-03-28T18:03:31.494+08:00 DEBUG 158 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = false 
-2026-03-28T18:03:31.495+08:00 DEBUG 158 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = true 
-2026-03-28T18:03:32.308+08:00 DEBUG 158 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = false 
-2026-03-28T18:03:32.309+08:00 DEBUG 158 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = true 
-2026-03-28T18:03:47.310+08:00 DEBUG 158 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = false 
-2026-03-28T18:03:47.311+08:00 DEBUG 158 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = true 
-2026-03-28T18:04:01.496+08:00 DEBUG 158 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = false 
-2026-03-28T18:04:01.497+08:00 DEBUG 158 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = true 
-2026-03-28T18:04:02.312+08:00 DEBUG 158 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = false 
-2026-03-28T18:04:02.314+08:00 DEBUG 158 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = true 
-2026-03-28T18:04:17.315+08:00 DEBUG 158 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = false 
-2026-03-28T18:04:17.317+08:00 DEBUG 158 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = true 
-2026-03-28T18:04:31.498+08:00 DEBUG 158 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = false 
-2026-03-28T18:04:31.500+08:00 DEBUG 158 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = true 
-2026-03-28T18:04:32.318+08:00 DEBUG 158 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = false 
-2026-03-28T18:04:32.319+08:00 DEBUG 158 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = true 
-2026-03-28T18:04:33.587+08:00 DEBUG 158 --- [  XNIO-1 task-2] io.undertow.request.security             : Attempting to authenticate /api/ingestion/tasks/list, authentication required: false 
-2026-03-28T18:04:33.587+08:00 DEBUG 158 --- [  XNIO-1 task-2] io.undertow.request.security             : Authentication outcome was NOT_ATTEMPTED with method io.undertow.security.impl.CachedAuthenticatedSessionMechanism@741bf691 for /api/ingestion/tasks/list 
-2026-03-28T18:04:33.587+08:00 DEBUG 158 --- [  XNIO-1 task-2] io.undertow.request.security             : Authentication result was ATTEMPTED for /api/ingestion/tasks/list 
-2026-03-28T18:04:33.589+08:00 DEBUG 158 --- [  XNIO-1 task-2] org.postgresql.jdbc.PgConnection         :   setReadOnly = true 
-2026-03-28T18:04:33.589+08:00 DEBUG 158 --- [  XNIO-1 task-2] org.postgresql.jdbc.PgConnection         :   setAutoCommit = false 
-2026-03-28T18:04:33.590+08:00 DEBUG 158 --- [  XNIO-1 task-2] org.postgresql.jdbc.PgConnection         :   setAutoCommit = true 
-2026-03-28T18:04:33.590+08:00 DEBUG 158 --- [  XNIO-1 task-2] org.postgresql.jdbc.PgConnection         :   setReadOnly = false 
-2026-03-28T18:04:40.710+08:00 DEBUG 158 --- [SIGTERM handler] java.lang.Runtime                        : Runtime.exit() called with status: 143 
+2026-03-29T18:44:24.027+08:00 DEBUG 157 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = false 
+2026-03-29T18:44:24.033+08:00 DEBUG 157 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = true 
+2026-03-29T18:44:24.390+08:00 DEBUG 157 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = false 
+2026-03-29T18:44:24.394+08:00 DEBUG 157 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = true 
+2026-03-29T18:44:39.395+08:00 DEBUG 157 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = false 
+2026-03-29T18:44:39.401+08:00 DEBUG 157 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = true 
+2026-03-29T18:44:54.035+08:00 DEBUG 157 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = false 
+2026-03-29T18:44:54.036+08:00 DEBUG 157 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = true 
+2026-03-29T18:44:54.402+08:00 DEBUG 157 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = false 
+2026-03-29T18:44:54.405+08:00 DEBUG 157 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = true 
+2026-03-29T18:45:07.172+08:00 DEBUG 157 --- [   XNIO-1 I/O-3] io.undertow.request                      : Timing out idle connection from /172.19.0.16:39164 
+2026-03-29T18:45:07.344+08:00 DEBUG 157 --- [  XNIO-1 task-2] io.undertow.request.security             : Attempting to authenticate /api/ingestion/tasks/list, authentication required: false 
+2026-03-29T18:45:07.344+08:00 DEBUG 157 --- [  XNIO-1 task-2] io.undertow.request.security             : Authentication outcome was NOT_ATTEMPTED with method io.undertow.security.impl.CachedAuthenticatedSessionMechanism@35f489b for /api/ingestion/tasks/list 
+2026-03-29T18:45:07.344+08:00 DEBUG 157 --- [  XNIO-1 task-2] io.undertow.request.security             : Authentication result was ATTEMPTED for /api/ingestion/tasks/list 
+2026-03-29T18:45:07.349+08:00 DEBUG 157 --- [  XNIO-1 task-2] org.postgresql.jdbc.PgConnection         :   setReadOnly = true 
+2026-03-29T18:45:07.350+08:00 DEBUG 157 --- [  XNIO-1 task-2] org.postgresql.jdbc.PgConnection         :   setAutoCommit = false 
+2026-03-29T18:45:07.352+08:00 DEBUG 157 --- [  XNIO-1 task-2] org.postgresql.jdbc.PgConnection         :   setAutoCommit = true 
+2026-03-29T18:45:07.352+08:00 DEBUG 157 --- [  XNIO-1 task-2] org.postgresql.jdbc.PgConnection         :   setReadOnly = false 
+2026-03-29T18:45:09.406+08:00 DEBUG 157 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = false 
+2026-03-29T18:45:09.409+08:00 DEBUG 157 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = true 
+2026-03-29T18:45:24.037+08:00 DEBUG 157 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = false 
+2026-03-29T18:45:24.039+08:00 DEBUG 157 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = true 
+2026-03-29T18:45:24.410+08:00 DEBUG 157 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = false 
+2026-03-29T18:45:24.415+08:00 DEBUG 157 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = true 
+2026-03-29T18:45:39.417+08:00 DEBUG 157 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = false 
+2026-03-29T18:45:39.420+08:00 DEBUG 157 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = true 
+2026-03-29T18:45:54.040+08:00 DEBUG 157 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = false 
+2026-03-29T18:45:54.058+08:00 DEBUG 157 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = true 
+2026-03-29T18:45:54.421+08:00 DEBUG 157 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = false 
+2026-03-29T18:45:54.424+08:00 DEBUG 157 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = true 
+2026-03-29T18:46:07.484+08:00 DEBUG 157 --- [   XNIO-1 I/O-9] io.undertow.request                      : Timing out idle connection from /172.19.0.16:55436 
+2026-03-29T18:46:07.676+08:00 DEBUG 157 --- [  XNIO-1 task-2] io.undertow.request.security             : Attempting to authenticate /api/ingestion/tasks/list, authentication required: false 
+2026-03-29T18:46:07.677+08:00 DEBUG 157 --- [  XNIO-1 task-2] io.undertow.request.security             : Authentication outcome was NOT_ATTEMPTED with method io.undertow.security.impl.CachedAuthenticatedSessionMechanism@35f489b for /api/ingestion/tasks/list 
+2026-03-29T18:46:07.677+08:00 DEBUG 157 --- [  XNIO-1 task-2] io.undertow.request.security             : Authentication result was ATTEMPTED for /api/ingestion/tasks/list 
+2026-03-29T18:46:07.679+08:00 DEBUG 157 --- [  XNIO-1 task-2] org.postgresql.jdbc.PgConnection         :   setReadOnly = true 
+2026-03-29T18:46:07.679+08:00 DEBUG 157 --- [  XNIO-1 task-2] org.postgresql.jdbc.PgConnection         :   setAutoCommit = false 
+2026-03-29T18:46:07.683+08:00 DEBUG 157 --- [  XNIO-1 task-2] org.postgresql.jdbc.PgConnection         :   setAutoCommit = true 
+2026-03-29T18:46:07.683+08:00 DEBUG 157 --- [  XNIO-1 task-2] org.postgresql.jdbc.PgConnection         :   setReadOnly = false 
+2026-03-29T18:46:09.425+08:00 DEBUG 157 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = false 
+2026-03-29T18:46:09.428+08:00 DEBUG 157 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = true 
+2026-03-29T18:46:24.059+08:00 DEBUG 157 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = false 
+2026-03-29T18:46:24.060+08:00 DEBUG 157 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = true 
+2026-03-29T18:46:24.428+08:00 DEBUG 157 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = false 
+2026-03-29T18:46:24.434+08:00 DEBUG 157 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = true 
+2026-03-29T18:46:39.436+08:00 DEBUG 157 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = false 
+2026-03-29T18:46:39.438+08:00 DEBUG 157 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = true 
+2026-03-29T18:46:54.061+08:00 DEBUG 157 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = false 
+2026-03-29T18:46:54.063+08:00 DEBUG 157 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = true 
+2026-03-29T18:46:54.439+08:00 DEBUG 157 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = false 
+2026-03-29T18:46:54.442+08:00 DEBUG 157 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = true 
+2026-03-29T18:47:07.826+08:00 DEBUG 157 --- [  XNIO-1 I/O-13] io.undertow.request                      : Timing out idle connection from /172.19.0.16:56100 
+2026-03-29T18:47:07.995+08:00 DEBUG 157 --- [  XNIO-1 task-2] io.undertow.request.security             : Attempting to authenticate /api/ingestion/tasks/list, authentication required: false 
+2026-03-29T18:47:07.995+08:00 DEBUG 157 --- [  XNIO-1 task-2] io.undertow.request.security             : Authentication outcome was NOT_ATTEMPTED with method io.undertow.security.impl.CachedAuthenticatedSessionMechanism@35f489b for /api/ingestion/tasks/list 
+2026-03-29T18:47:07.995+08:00 DEBUG 157 --- [  XNIO-1 task-2] io.undertow.request.security             : Authentication result was ATTEMPTED for /api/ingestion/tasks/list 
+2026-03-29T18:47:07.998+08:00 DEBUG 157 --- [  XNIO-1 task-2] org.postgresql.jdbc.PgConnection         :   setReadOnly = true 
+2026-03-29T18:47:07.998+08:00 DEBUG 157 --- [  XNIO-1 task-2] org.postgresql.jdbc.PgConnection         :   setAutoCommit = false 
+2026-03-29T18:47:08.003+08:00 DEBUG 157 --- [  XNIO-1 task-2] org.postgresql.jdbc.PgConnection         :   setAutoCommit = true 
+2026-03-29T18:47:08.003+08:00 DEBUG 157 --- [  XNIO-1 task-2] org.postgresql.jdbc.PgConnection         :   setReadOnly = false 
+2026-03-29T18:47:09.443+08:00 DEBUG 157 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = false 
+2026-03-29T18:47:09.445+08:00 DEBUG 157 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = true 
+2026-03-29T18:47:24.064+08:00 DEBUG 157 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = false 
+2026-03-29T18:47:24.069+08:00 DEBUG 157 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = true 
+2026-03-29T18:47:24.446+08:00 DEBUG 157 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = false 
+2026-03-29T18:47:24.452+08:00 DEBUG 157 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = true 
+2026-03-29T18:47:39.453+08:00 DEBUG 157 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = false 
+2026-03-29T18:47:39.456+08:00 DEBUG 157 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = true 
+2026-03-29T18:47:54.070+08:00 DEBUG 157 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = false 
+2026-03-29T18:47:54.073+08:00 DEBUG 157 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = true 
+2026-03-29T18:47:54.457+08:00 DEBUG 157 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = false 
+2026-03-29T18:47:54.460+08:00 DEBUG 157 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = true 
+2026-03-29T18:48:08.144+08:00 DEBUG 157 --- [   XNIO-1 I/O-8] io.undertow.request                      : Timing out idle connection from /172.19.0.16:49364 
+2026-03-29T18:48:08.322+08:00 DEBUG 157 --- [  XNIO-1 task-2] io.undertow.request.security             : Attempting to authenticate /api/ingestion/tasks/list, authentication required: false 
+2026-03-29T18:48:08.323+08:00 DEBUG 157 --- [  XNIO-1 task-2] io.undertow.request.security             : Authentication outcome was NOT_ATTEMPTED with method io.undertow.security.impl.CachedAuthenticatedSessionMechanism@35f489b for /api/ingestion/tasks/list 
+2026-03-29T18:48:08.323+08:00 DEBUG 157 --- [  XNIO-1 task-2] io.undertow.request.security             : Authentication result was ATTEMPTED for /api/ingestion/tasks/list 
+2026-03-29T18:48:08.325+08:00 DEBUG 157 --- [  XNIO-1 task-2] org.postgresql.jdbc.PgConnection         :   setReadOnly = true 
+2026-03-29T18:48:08.325+08:00 DEBUG 157 --- [  XNIO-1 task-2] org.postgresql.jdbc.PgConnection         :   setAutoCommit = false 
+2026-03-29T18:48:08.327+08:00 DEBUG 157 --- [  XNIO-1 task-2] org.postgresql.jdbc.PgConnection         :   setAutoCommit = true 
+2026-03-29T18:48:08.327+08:00 DEBUG 157 --- [  XNIO-1 task-2] org.postgresql.jdbc.PgConnection         :   setReadOnly = false 
+2026-03-29T18:48:09.461+08:00 DEBUG 157 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = false 
+2026-03-29T18:48:09.463+08:00 DEBUG 157 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = true 
+2026-03-29T18:48:24.074+08:00 DEBUG 157 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = false 
+2026-03-29T18:48:24.076+08:00 DEBUG 157 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = true 
+2026-03-29T18:48:24.464+08:00 DEBUG 157 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = false 
+2026-03-29T18:48:24.469+08:00 DEBUG 157 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = true 
+2026-03-29T18:48:39.470+08:00 DEBUG 157 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = false 
+2026-03-29T18:48:39.473+08:00 DEBUG 157 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = true 
+2026-03-29T18:48:54.077+08:00 DEBUG 157 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = false 
+2026-03-29T18:48:54.079+08:00 DEBUG 157 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = true 
+2026-03-29T18:48:54.474+08:00 DEBUG 157 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = false 
+2026-03-29T18:48:54.476+08:00 DEBUG 157 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = true 
+2026-03-29T18:49:08.471+08:00 DEBUG 157 --- [  XNIO-1 I/O-15] io.undertow.request                      : Timing out idle connection from /172.19.0.16:43206 
+2026-03-29T18:49:08.671+08:00 DEBUG 157 --- [  XNIO-1 task-2] io.undertow.request.security             : Attempting to authenticate /api/ingestion/tasks/list, authentication required: false 
+2026-03-29T18:49:08.671+08:00 DEBUG 157 --- [  XNIO-1 task-2] io.undertow.request.security             : Authentication outcome was NOT_ATTEMPTED with method io.undertow.security.impl.CachedAuthenticatedSessionMechanism@35f489b for /api/ingestion/tasks/list 
+2026-03-29T18:49:08.671+08:00 DEBUG 157 --- [  XNIO-1 task-2] io.undertow.request.security             : Authentication result was ATTEMPTED for /api/ingestion/tasks/list 
+2026-03-29T18:49:08.674+08:00 DEBUG 157 --- [  XNIO-1 task-2] org.postgresql.jdbc.PgConnection         :   setReadOnly = true 
+2026-03-29T18:49:08.674+08:00 DEBUG 157 --- [  XNIO-1 task-2] org.postgresql.jdbc.PgConnection         :   setAutoCommit = false 
+2026-03-29T18:49:08.675+08:00 DEBUG 157 --- [  XNIO-1 task-2] org.postgresql.jdbc.PgConnection         :   setAutoCommit = true 
+2026-03-29T18:49:08.676+08:00 DEBUG 157 --- [  XNIO-1 task-2] org.postgresql.jdbc.PgConnection         :   setReadOnly = false 
+2026-03-29T18:49:09.477+08:00 DEBUG 157 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = false 
+2026-03-29T18:49:09.480+08:00 DEBUG 157 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = true 
+2026-03-29T18:49:24.080+08:00 DEBUG 157 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = false 
+2026-03-29T18:49:24.082+08:00 DEBUG 157 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = true 
+2026-03-29T18:49:24.480+08:00 DEBUG 157 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = false 
+2026-03-29T18:49:24.486+08:00 DEBUG 157 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = true 
+2026-03-29T18:49:39.488+08:00 DEBUG 157 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = false 
+2026-03-29T18:49:39.490+08:00 DEBUG 157 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = true 
+2026-03-29T18:49:54.083+08:00 DEBUG 157 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = false 
+2026-03-29T18:49:54.088+08:00 DEBUG 157 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = true 
+2026-03-29T18:49:54.491+08:00 DEBUG 157 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = false 
+2026-03-29T18:49:54.494+08:00 DEBUG 157 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = true 
+2026-03-29T18:50:08.822+08:00 DEBUG 157 --- [  XNIO-1 I/O-12] io.undertow.request                      : Timing out idle connection from /172.19.0.16:46816 
+2026-03-29T18:50:09.003+08:00 DEBUG 157 --- [  XNIO-1 task-2] io.undertow.request.security             : Attempting to authenticate /api/ingestion/tasks/list, authentication required: false 
+2026-03-29T18:50:09.004+08:00 DEBUG 157 --- [  XNIO-1 task-2] io.undertow.request.security             : Authentication outcome was NOT_ATTEMPTED with method io.undertow.security.impl.CachedAuthenticatedSessionMechanism@35f489b for /api/ingestion/tasks/list 
+2026-03-29T18:50:09.004+08:00 DEBUG 157 --- [  XNIO-1 task-2] io.undertow.request.security             : Authentication result was ATTEMPTED for /api/ingestion/tasks/list 
+2026-03-29T18:50:09.007+08:00 DEBUG 157 --- [  XNIO-1 task-2] org.postgresql.jdbc.PgConnection         :   setReadOnly = true 
+2026-03-29T18:50:09.007+08:00 DEBUG 157 --- [  XNIO-1 task-2] org.postgresql.jdbc.PgConnection         :   setAutoCommit = false 
+2026-03-29T18:50:09.009+08:00 DEBUG 157 --- [  XNIO-1 task-2] org.postgresql.jdbc.PgConnection         :   setAutoCommit = true 
+2026-03-29T18:50:09.009+08:00 DEBUG 157 --- [  XNIO-1 task-2] org.postgresql.jdbc.PgConnection         :   setReadOnly = false 
+2026-03-29T18:50:09.495+08:00 DEBUG 157 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = false 
+2026-03-29T18:50:09.497+08:00 DEBUG 157 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = true 
+2026-03-29T18:50:24.090+08:00 DEBUG 157 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = false 
+2026-03-29T18:50:24.091+08:00 DEBUG 157 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = true 
+2026-03-29T18:50:24.498+08:00 DEBUG 157 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = false 
+2026-03-29T18:50:24.500+08:00 DEBUG 157 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = true 
+2026-03-29T18:50:39.504+08:00 DEBUG 157 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = false 
+2026-03-29T18:50:39.508+08:00 DEBUG 157 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = true 
+2026-03-29T18:50:54.092+08:00 DEBUG 157 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = false 
+2026-03-29T18:50:54.093+08:00 DEBUG 157 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = true 
+2026-03-29T18:50:54.508+08:00 DEBUG 157 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = false 
+2026-03-29T18:50:54.511+08:00 DEBUG 157 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = true 
+2026-03-29T18:51:09.154+08:00 DEBUG 157 --- [  XNIO-1 I/O-16] io.undertow.request                      : Timing out idle connection from /172.19.0.16:46090 
+2026-03-29T18:51:09.355+08:00 DEBUG 157 --- [  XNIO-1 task-2] io.undertow.request.security             : Attempting to authenticate /api/ingestion/tasks/list, authentication required: false 
+2026-03-29T18:51:09.355+08:00 DEBUG 157 --- [  XNIO-1 task-2] io.undertow.request.security             : Authentication outcome was NOT_ATTEMPTED with method io.undertow.security.impl.CachedAuthenticatedSessionMechanism@35f489b for /api/ingestion/tasks/list 
+2026-03-29T18:51:09.355+08:00 DEBUG 157 --- [  XNIO-1 task-2] io.undertow.request.security             : Authentication result was ATTEMPTED for /api/ingestion/tasks/list 
+2026-03-29T18:51:09.358+08:00 DEBUG 157 --- [  XNIO-1 task-2] org.postgresql.jdbc.PgConnection         :   setReadOnly = true 
+2026-03-29T18:51:09.358+08:00 DEBUG 157 --- [  XNIO-1 task-2] org.postgresql.jdbc.PgConnection         :   setAutoCommit = false 
+2026-03-29T18:51:09.360+08:00 DEBUG 157 --- [  XNIO-1 task-2] org.postgresql.jdbc.PgConnection         :   setAutoCommit = true 
+2026-03-29T18:51:09.360+08:00 DEBUG 157 --- [  XNIO-1 task-2] org.postgresql.jdbc.PgConnection         :   setReadOnly = false 
+2026-03-29T18:51:09.512+08:00 DEBUG 157 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = false 
+2026-03-29T18:51:09.514+08:00 DEBUG 157 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = true 
+2026-03-29T18:51:24.094+08:00 DEBUG 157 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = false 
+2026-03-29T18:51:24.095+08:00 DEBUG 157 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = true 
+2026-03-29T18:51:24.515+08:00 DEBUG 157 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = false 
+2026-03-29T18:51:24.517+08:00 DEBUG 157 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = true 
+2026-03-29T18:51:39.518+08:00 DEBUG 157 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = false 
+2026-03-29T18:51:39.524+08:00 DEBUG 157 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = true 
+2026-03-29T18:51:54.096+08:00 DEBUG 157 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = false 
+2026-03-29T18:51:54.097+08:00 DEBUG 157 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = true 
+2026-03-29T18:51:54.525+08:00 DEBUG 157 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = false 
+2026-03-29T18:51:54.527+08:00 DEBUG 157 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = true 
+2026-03-29T18:52:09.505+08:00 DEBUG 157 --- [  XNIO-1 I/O-10] io.undertow.request                      : Timing out idle connection from /172.19.0.16:38556 
+2026-03-29T18:52:09.528+08:00 DEBUG 157 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = false 
+2026-03-29T18:52:09.530+08:00 DEBUG 157 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = true 
+2026-03-29T18:52:09.696+08:00 DEBUG 157 --- [  XNIO-1 task-2] io.undertow.request.security             : Attempting to authenticate /api/ingestion/tasks/list, authentication required: false 
+2026-03-29T18:52:09.696+08:00 DEBUG 157 --- [  XNIO-1 task-2] io.undertow.request.security             : Authentication outcome was NOT_ATTEMPTED with method io.undertow.security.impl.CachedAuthenticatedSessionMechanism@35f489b for /api/ingestion/tasks/list 
+2026-03-29T18:52:09.696+08:00 DEBUG 157 --- [  XNIO-1 task-2] io.undertow.request.security             : Authentication result was ATTEMPTED for /api/ingestion/tasks/list 
+2026-03-29T18:52:09.698+08:00 DEBUG 157 --- [  XNIO-1 task-2] org.postgresql.jdbc.PgConnection         :   setReadOnly = true 
+2026-03-29T18:52:09.698+08:00 DEBUG 157 --- [  XNIO-1 task-2] org.postgresql.jdbc.PgConnection         :   setAutoCommit = false 
+2026-03-29T18:52:09.699+08:00 DEBUG 157 --- [  XNIO-1 task-2] org.postgresql.jdbc.PgConnection         :   setAutoCommit = true 
+2026-03-29T18:52:09.699+08:00 DEBUG 157 --- [  XNIO-1 task-2] org.postgresql.jdbc.PgConnection         :   setReadOnly = false 
+2026-03-29T18:52:24.098+08:00 DEBUG 157 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = false 
+2026-03-29T18:52:24.099+08:00 DEBUG 157 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = true 
+2026-03-29T18:52:24.531+08:00 DEBUG 157 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = false 
+2026-03-29T18:52:24.534+08:00 DEBUG 157 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = true 
+2026-03-29T18:52:39.534+08:00 DEBUG 157 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = false 
+2026-03-29T18:52:39.540+08:00 DEBUG 157 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = true 
+2026-03-29T18:52:54.101+08:00 DEBUG 157 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = false 
+2026-03-29T18:52:54.105+08:00 DEBUG 157 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = true 
+2026-03-29T18:52:54.541+08:00 DEBUG 157 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = false 
+2026-03-29T18:52:54.546+08:00 DEBUG 157 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = true 
+2026-03-29T18:53:09.547+08:00 DEBUG 157 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = false 
+2026-03-29T18:53:09.550+08:00 DEBUG 157 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = true 
+2026-03-29T18:53:09.847+08:00 DEBUG 157 --- [  XNIO-1 I/O-14] io.undertow.request                      : Timing out idle connection from /172.19.0.16:39650 
+2026-03-29T18:53:10.029+08:00 DEBUG 157 --- [  XNIO-1 task-2] io.undertow.request.security             : Attempting to authenticate /api/ingestion/tasks/list, authentication required: false 
+2026-03-29T18:53:10.029+08:00 DEBUG 157 --- [  XNIO-1 task-2] io.undertow.request.security             : Authentication outcome was NOT_ATTEMPTED with method io.undertow.security.impl.CachedAuthenticatedSessionMechanism@35f489b for /api/ingestion/tasks/list 
+2026-03-29T18:53:10.029+08:00 DEBUG 157 --- [  XNIO-1 task-2] io.undertow.request.security             : Authentication result was ATTEMPTED for /api/ingestion/tasks/list 
+2026-03-29T18:53:10.033+08:00 DEBUG 157 --- [  XNIO-1 task-2] org.postgresql.jdbc.PgConnection         :   setReadOnly = true 
+2026-03-29T18:53:10.033+08:00 DEBUG 157 --- [  XNIO-1 task-2] org.postgresql.jdbc.PgConnection         :   setAutoCommit = false 
+2026-03-29T18:53:10.035+08:00 DEBUG 157 --- [  XNIO-1 task-2] org.postgresql.jdbc.PgConnection         :   setAutoCommit = true 
+2026-03-29T18:53:10.036+08:00 DEBUG 157 --- [  XNIO-1 task-2] org.postgresql.jdbc.PgConnection         :   setReadOnly = false 
+2026-03-29T18:53:24.108+08:00 DEBUG 157 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = false 
+2026-03-29T18:53:24.110+08:00 DEBUG 157 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = true 
+2026-03-29T18:53:24.551+08:00 DEBUG 157 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = false 
+2026-03-29T18:53:24.557+08:00 DEBUG 157 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = true 
+2026-03-29T18:53:39.558+08:00 DEBUG 157 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = false 
+2026-03-29T18:53:39.561+08:00 DEBUG 157 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = true 
+2026-03-29T18:53:54.111+08:00 DEBUG 157 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = false 
+2026-03-29T18:53:54.112+08:00 DEBUG 157 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = true 
+2026-03-29T18:53:54.562+08:00 DEBUG 157 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = false 
+2026-03-29T18:53:54.564+08:00 DEBUG 157 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = true 
+2026-03-29T18:54:09.565+08:00 DEBUG 157 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = false 
+2026-03-29T18:54:09.567+08:00 DEBUG 157 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = true 
+2026-03-29T18:54:10.180+08:00 DEBUG 157 --- [   XNIO-1 I/O-4] io.undertow.request                      : Timing out idle connection from /172.19.0.16:41944 
+2026-03-29T18:54:10.575+08:00 DEBUG 157 --- [  XNIO-1 task-2] io.undertow.request.security             : Attempting to authenticate /api/ingestion/tasks/list, authentication required: false 
+2026-03-29T18:54:10.575+08:00 DEBUG 157 --- [  XNIO-1 task-2] io.undertow.request.security             : Authentication outcome was NOT_ATTEMPTED with method io.undertow.security.impl.CachedAuthenticatedSessionMechanism@35f489b for /api/ingestion/tasks/list 
+2026-03-29T18:54:10.575+08:00 DEBUG 157 --- [  XNIO-1 task-2] io.undertow.request.security             : Authentication result was ATTEMPTED for /api/ingestion/tasks/list 
+2026-03-29T18:54:10.579+08:00 DEBUG 157 --- [  XNIO-1 task-2] org.postgresql.jdbc.PgConnection         :   setReadOnly = true 
+2026-03-29T18:54:10.579+08:00 DEBUG 157 --- [  XNIO-1 task-2] org.postgresql.jdbc.PgConnection         :   setAutoCommit = false 
+2026-03-29T18:54:10.581+08:00 DEBUG 157 --- [  XNIO-1 task-2] org.postgresql.jdbc.PgConnection         :   setAutoCommit = true 
+2026-03-29T18:54:10.581+08:00 DEBUG 157 --- [  XNIO-1 task-2] org.postgresql.jdbc.PgConnection         :   setReadOnly = false 
+2026-03-29T18:54:24.113+08:00 DEBUG 157 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = false 
+2026-03-29T18:54:24.114+08:00 DEBUG 157 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = true 
+2026-03-29T18:54:24.568+08:00 DEBUG 157 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = false 
+2026-03-29T18:54:24.573+08:00 DEBUG 157 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = true 
+2026-03-29T18:54:39.575+08:00 DEBUG 157 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = false 
+2026-03-29T18:54:39.578+08:00 DEBUG 157 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = true 
+2026-03-29T18:54:46.320+08:00 DEBUG 157 --- [  XNIO-1 task-2] io.undertow.request.security             : Attempting to authenticate /api/ingestion/tasks/list, authentication required: false 
+2026-03-29T18:54:46.320+08:00 DEBUG 157 --- [  XNIO-1 task-2] io.undertow.request.security             : Authentication outcome was NOT_ATTEMPTED with method io.undertow.security.impl.CachedAuthenticatedSessionMechanism@35f489b for /api/ingestion/tasks/list 
+2026-03-29T18:54:46.320+08:00 DEBUG 157 --- [  XNIO-1 task-2] io.undertow.request.security             : Authentication result was ATTEMPTED for /api/ingestion/tasks/list 
+2026-03-29T18:54:46.325+08:00 DEBUG 157 --- [  XNIO-1 task-2] org.postgresql.jdbc.PgConnection         :   setReadOnly = true 
+2026-03-29T18:54:46.325+08:00 DEBUG 157 --- [  XNIO-1 task-2] org.postgresql.jdbc.PgConnection         :   setAutoCommit = false 
+2026-03-29T18:54:46.327+08:00 DEBUG 157 --- [  XNIO-1 task-2] org.postgresql.jdbc.PgConnection         :   setAutoCommit = true 
+2026-03-29T18:54:46.327+08:00 DEBUG 157 --- [  XNIO-1 task-2] org.postgresql.jdbc.PgConnection         :   setReadOnly = false 
+2026-03-29T18:54:48.110+08:00 DEBUG 157 --- [  XNIO-1 task-2] io.undertow.request.security             : Attempting to authenticate /api/ingestion/templates, authentication required: false 
+2026-03-29T18:54:48.110+08:00 DEBUG 157 --- [  XNIO-1 task-2] io.undertow.request.security             : Authentication outcome was NOT_ATTEMPTED with method io.undertow.security.impl.CachedAuthenticatedSessionMechanism@35f489b for /api/ingestion/templates 
+2026-03-29T18:54:48.110+08:00 DEBUG 157 --- [  XNIO-1 task-2] io.undertow.request.security             : Authentication result was ATTEMPTED for /api/ingestion/templates 
+2026-03-29T18:54:48.111+08:00 DEBUG 157 --- [  XNIO-1 task-3] io.undertow.request.security             : Attempting to authenticate /api/ingestion/connectors/capabilities, authentication required: false 
+2026-03-29T18:54:48.112+08:00 DEBUG 157 --- [  XNIO-1 task-3] io.undertow.request.security             : Authentication outcome was NOT_ATTEMPTED with method io.undertow.security.impl.CachedAuthenticatedSessionMechanism@35f489b for /api/ingestion/connectors/capabilities 
+2026-03-29T18:54:48.112+08:00 DEBUG 157 --- [  XNIO-1 task-3] io.undertow.request.security             : Authentication result was ATTEMPTED for /api/ingestion/connectors/capabilities 
+2026-03-29T18:54:48.115+08:00 DEBUG 157 --- [  XNIO-1 task-3] org.postgresql.jdbc.PgConnection         :   setReadOnly = true 
+2026-03-29T18:54:48.115+08:00 DEBUG 157 --- [  XNIO-1 task-3] org.postgresql.jdbc.PgConnection         :   setAutoCommit = false 
+2026-03-29T18:54:48.124+08:00 DEBUG 157 --- [  XNIO-1 task-3] org.postgresql.jdbc.PgConnection         :   setAutoCommit = true 
+2026-03-29T18:54:48.125+08:00 DEBUG 157 --- [  XNIO-1 task-3] org.postgresql.jdbc.PgConnection         :   setReadOnly = false 
+2026-03-29T18:54:54.115+08:00 DEBUG 157 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = false 
+2026-03-29T18:54:54.116+08:00 DEBUG 157 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = true 
+2026-03-29T18:54:54.579+08:00 DEBUG 157 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = false 
+2026-03-29T18:54:54.582+08:00 DEBUG 157 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = true 
+2026-03-29T18:55:09.583+08:00 DEBUG 157 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = false 
+2026-03-29T18:55:09.586+08:00 DEBUG 157 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = true 
+2026-03-29T18:55:10.918+08:00 DEBUG 157 --- [  XNIO-1 task-3] io.undertow.request.security             : Attempting to authenticate /api/ingestion/tasks/list, authentication required: false 
+2026-03-29T18:55:10.918+08:00 DEBUG 157 --- [  XNIO-1 task-3] io.undertow.request.security             : Authentication outcome was NOT_ATTEMPTED with method io.undertow.security.impl.CachedAuthenticatedSessionMechanism@35f489b for /api/ingestion/tasks/list 
+2026-03-29T18:55:10.918+08:00 DEBUG 157 --- [  XNIO-1 task-3] io.undertow.request.security             : Authentication result was ATTEMPTED for /api/ingestion/tasks/list 
+2026-03-29T18:55:10.921+08:00 DEBUG 157 --- [  XNIO-1 task-3] org.postgresql.jdbc.PgConnection         :   setReadOnly = true 
+2026-03-29T18:55:10.921+08:00 DEBUG 157 --- [  XNIO-1 task-3] org.postgresql.jdbc.PgConnection         :   setAutoCommit = false 
+2026-03-29T18:55:10.924+08:00 DEBUG 157 --- [  XNIO-1 task-3] org.postgresql.jdbc.PgConnection         :   setAutoCommit = true 
+2026-03-29T18:55:10.934+08:00 DEBUG 157 --- [  XNIO-1 task-3] org.postgresql.jdbc.PgConnection         :   setReadOnly = false 
+2026-03-29T18:55:24.117+08:00 DEBUG 157 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = false 
+2026-03-29T18:55:24.118+08:00 DEBUG 157 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = true 
+2026-03-29T18:55:24.586+08:00 DEBUG 157 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = false 
+2026-03-29T18:55:24.592+08:00 DEBUG 157 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = true 
+2026-03-29T18:55:39.593+08:00 DEBUG 157 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = false 
+2026-03-29T18:55:39.596+08:00 DEBUG 157 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = true 
+2026-03-29T18:55:48.265+08:00 DEBUG 157 --- [  XNIO-1 I/O-14] io.undertow.request                      : Timing out idle connection from /172.19.0.16:57076 
+2026-03-29T18:55:54.119+08:00 DEBUG 157 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = false 
+2026-03-29T18:55:54.121+08:00 DEBUG 157 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = true 
+2026-03-29T18:55:54.597+08:00 DEBUG 157 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = false 
+2026-03-29T18:55:54.600+08:00 DEBUG 157 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = true 
+2026-03-29T18:56:09.601+08:00 DEBUG 157 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = false 
+2026-03-29T18:56:09.604+08:00 DEBUG 157 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = true 
+2026-03-29T18:56:11.085+08:00 DEBUG 157 --- [   XNIO-1 I/O-6] io.undertow.request                      : Timing out idle connection from /172.19.0.16:37668 
+2026-03-29T18:56:11.277+08:00 DEBUG 157 --- [  XNIO-1 task-3] io.undertow.request.security             : Attempting to authenticate /api/ingestion/tasks/list, authentication required: false 
+2026-03-29T18:56:11.277+08:00 DEBUG 157 --- [  XNIO-1 task-3] io.undertow.request.security             : Authentication outcome was NOT_ATTEMPTED with method io.undertow.security.impl.CachedAuthenticatedSessionMechanism@35f489b for /api/ingestion/tasks/list 
+2026-03-29T18:56:11.277+08:00 DEBUG 157 --- [  XNIO-1 task-3] io.undertow.request.security             : Authentication result was ATTEMPTED for /api/ingestion/tasks/list 
+2026-03-29T18:56:11.279+08:00 DEBUG 157 --- [  XNIO-1 task-3] org.postgresql.jdbc.PgConnection         :   setReadOnly = true 
+2026-03-29T18:56:11.279+08:00 DEBUG 157 --- [  XNIO-1 task-3] org.postgresql.jdbc.PgConnection         :   setAutoCommit = false 
+2026-03-29T18:56:11.281+08:00 DEBUG 157 --- [  XNIO-1 task-3] org.postgresql.jdbc.PgConnection         :   setAutoCommit = true 
+2026-03-29T18:56:11.281+08:00 DEBUG 157 --- [  XNIO-1 task-3] org.postgresql.jdbc.PgConnection         :   setReadOnly = false 
+2026-03-29T18:56:24.122+08:00 DEBUG 157 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = false 
+2026-03-29T18:56:24.124+08:00 DEBUG 157 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = true 
+2026-03-29T18:56:24.605+08:00 DEBUG 157 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = false 
+2026-03-29T18:56:24.610+08:00 DEBUG 157 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = true 
+2026-03-29T18:56:39.611+08:00 DEBUG 157 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = false 
+2026-03-29T18:56:39.614+08:00 DEBUG 157 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = true 
+2026-03-29T18:56:54.127+08:00 DEBUG 157 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = false 
+2026-03-29T18:56:54.128+08:00 DEBUG 157 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = true 
+2026-03-29T18:56:54.615+08:00 DEBUG 157 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = false 
+2026-03-29T18:56:54.618+08:00 DEBUG 157 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = true 
+2026-03-29T18:57:09.619+08:00 DEBUG 157 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = false 
+2026-03-29T18:57:09.622+08:00 DEBUG 157 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = true 
+2026-03-29T18:57:11.427+08:00 DEBUG 157 --- [  XNIO-1 I/O-12] io.undertow.request                      : Timing out idle connection from /172.19.0.16:60668 
+2026-03-29T18:57:11.606+08:00 DEBUG 157 --- [  XNIO-1 task-3] io.undertow.request.security             : Attempting to authenticate /api/ingestion/tasks/list, authentication required: false 
+2026-03-29T18:57:11.606+08:00 DEBUG 157 --- [  XNIO-1 task-3] io.undertow.request.security             : Authentication outcome was NOT_ATTEMPTED with method io.undertow.security.impl.CachedAuthenticatedSessionMechanism@35f489b for /api/ingestion/tasks/list 
+2026-03-29T18:57:11.606+08:00 DEBUG 157 --- [  XNIO-1 task-3] io.undertow.request.security             : Authentication result was ATTEMPTED for /api/ingestion/tasks/list 
+2026-03-29T18:57:11.611+08:00 DEBUG 157 --- [  XNIO-1 task-3] org.postgresql.jdbc.PgConnection         :   setReadOnly = true 
+2026-03-29T18:57:11.611+08:00 DEBUG 157 --- [  XNIO-1 task-3] org.postgresql.jdbc.PgConnection         :   setAutoCommit = false 
+2026-03-29T18:57:11.613+08:00 DEBUG 157 --- [  XNIO-1 task-3] org.postgresql.jdbc.PgConnection         :   setAutoCommit = true 
+2026-03-29T18:57:11.613+08:00 DEBUG 157 --- [  XNIO-1 task-3] org.postgresql.jdbc.PgConnection         :   setReadOnly = false 
+2026-03-29T18:57:24.129+08:00 DEBUG 157 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = false 
+2026-03-29T18:57:24.130+08:00 DEBUG 157 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = true 
+2026-03-29T18:57:24.622+08:00 DEBUG 157 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = false 
+2026-03-29T18:57:24.628+08:00 DEBUG 157 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = true 
+2026-03-29T18:57:39.629+08:00 DEBUG 157 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = false 
+2026-03-29T18:57:39.631+08:00 DEBUG 157 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = true 
+2026-03-29T18:57:54.131+08:00 DEBUG 157 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = false 
+2026-03-29T18:57:54.133+08:00 DEBUG 157 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = true 
+2026-03-29T18:57:54.632+08:00 DEBUG 157 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = false 
+2026-03-29T18:57:54.634+08:00 DEBUG 157 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = true 
+2026-03-29T18:58:09.635+08:00 DEBUG 157 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = false 
+2026-03-29T18:58:09.638+08:00 DEBUG 157 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = true 
+2026-03-29T18:58:11.755+08:00 DEBUG 157 --- [   XNIO-1 I/O-4] io.undertow.request                      : Timing out idle connection from /172.19.0.16:50060 
+2026-03-29T18:58:11.923+08:00 DEBUG 157 --- [  XNIO-1 task-3] io.undertow.request.security             : Attempting to authenticate /api/ingestion/tasks/list, authentication required: false 
+2026-03-29T18:58:11.924+08:00 DEBUG 157 --- [  XNIO-1 task-3] io.undertow.request.security             : Authentication outcome was NOT_ATTEMPTED with method io.undertow.security.impl.CachedAuthenticatedSessionMechanism@35f489b for /api/ingestion/tasks/list 
+2026-03-29T18:58:11.924+08:00 DEBUG 157 --- [  XNIO-1 task-3] io.undertow.request.security             : Authentication result was ATTEMPTED for /api/ingestion/tasks/list 
+2026-03-29T18:58:11.928+08:00 DEBUG 157 --- [  XNIO-1 task-3] org.postgresql.jdbc.PgConnection         :   setReadOnly = true 
+2026-03-29T18:58:11.928+08:00 DEBUG 157 --- [  XNIO-1 task-3] org.postgresql.jdbc.PgConnection         :   setAutoCommit = false 
+2026-03-29T18:58:11.929+08:00 DEBUG 157 --- [  XNIO-1 task-3] org.postgresql.jdbc.PgConnection         :   setAutoCommit = true 
+2026-03-29T18:58:11.930+08:00 DEBUG 157 --- [  XNIO-1 task-3] org.postgresql.jdbc.PgConnection         :   setReadOnly = false 
+2026-03-29T18:58:24.134+08:00 DEBUG 157 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = false 
+2026-03-29T18:58:24.135+08:00 DEBUG 157 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = true 
+2026-03-29T18:58:24.639+08:00 DEBUG 157 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = false 
+2026-03-29T18:58:24.643+08:00 DEBUG 157 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = true 
+2026-03-29T18:58:39.645+08:00 DEBUG 157 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = false 
+2026-03-29T18:58:39.648+08:00 DEBUG 157 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = true 
+2026-03-29T18:58:54.136+08:00 DEBUG 157 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = false 
+2026-03-29T18:58:54.137+08:00 DEBUG 157 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = true 
+2026-03-29T18:58:54.649+08:00 DEBUG 157 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = false 
+2026-03-29T18:58:54.652+08:00 DEBUG 157 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = true 
+2026-03-29T18:59:09.653+08:00 DEBUG 157 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = false 
+2026-03-29T18:59:09.655+08:00 DEBUG 157 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = true 
+2026-03-29T18:59:12.018+08:00 DEBUG 157 --- [   XNIO-1 I/O-9] io.undertow.request                      : Timing out idle connection from /172.19.0.16:56056 
+2026-03-29T18:59:12.234+08:00 DEBUG 157 --- [  XNIO-1 task-3] io.undertow.request.security             : Attempting to authenticate /api/ingestion/tasks/list, authentication required: false 
+2026-03-29T18:59:12.234+08:00 DEBUG 157 --- [  XNIO-1 task-3] io.undertow.request.security             : Authentication outcome was NOT_ATTEMPTED with method io.undertow.security.impl.CachedAuthenticatedSessionMechanism@35f489b for /api/ingestion/tasks/list 
+2026-03-29T18:59:12.234+08:00 DEBUG 157 --- [  XNIO-1 task-3] io.undertow.request.security             : Authentication result was ATTEMPTED for /api/ingestion/tasks/list 
+2026-03-29T18:59:12.237+08:00 DEBUG 157 --- [  XNIO-1 task-3] org.postgresql.jdbc.PgConnection         :   setReadOnly = true 
+2026-03-29T18:59:12.237+08:00 DEBUG 157 --- [  XNIO-1 task-3] org.postgresql.jdbc.PgConnection         :   setAutoCommit = false 
+2026-03-29T18:59:12.239+08:00 DEBUG 157 --- [  XNIO-1 task-3] org.postgresql.jdbc.PgConnection         :   setAutoCommit = true 
+2026-03-29T18:59:12.239+08:00 DEBUG 157 --- [  XNIO-1 task-3] org.postgresql.jdbc.PgConnection         :   setReadOnly = false 
+2026-03-29T18:59:24.138+08:00 DEBUG 157 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = false 
+2026-03-29T18:59:24.139+08:00 DEBUG 157 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = true 
+2026-03-29T18:59:24.656+08:00 DEBUG 157 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = false 
+2026-03-29T18:59:24.660+08:00 DEBUG 157 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = true 
+2026-03-29T18:59:39.661+08:00 DEBUG 157 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = false 
+2026-03-29T18:59:39.664+08:00 DEBUG 157 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = true 
+2026-03-29T18:59:54.140+08:00 DEBUG 157 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = false 
+2026-03-29T18:59:54.141+08:00 DEBUG 157 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = true 
+2026-03-29T18:59:54.665+08:00 DEBUG 157 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = false 
+2026-03-29T18:59:54.668+08:00 DEBUG 157 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = true 
+2026-03-29T19:00:09.668+08:00 DEBUG 157 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = false 
+2026-03-29T19:00:09.672+08:00 DEBUG 157 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = true 
+2026-03-29T19:00:12.384+08:00 DEBUG 157 --- [   XNIO-1 I/O-8] io.undertow.request                      : Timing out idle connection from /172.19.0.16:36696 
+2026-03-29T19:00:12.564+08:00 DEBUG 157 --- [  XNIO-1 task-3] io.undertow.request.security             : Attempting to authenticate /api/ingestion/tasks/list, authentication required: false 
+2026-03-29T19:00:12.565+08:00 DEBUG 157 --- [  XNIO-1 task-3] io.undertow.request.security             : Authentication outcome was NOT_ATTEMPTED with method io.undertow.security.impl.CachedAuthenticatedSessionMechanism@35f489b for /api/ingestion/tasks/list 
+2026-03-29T19:00:12.565+08:00 DEBUG 157 --- [  XNIO-1 task-3] io.undertow.request.security             : Authentication result was ATTEMPTED for /api/ingestion/tasks/list 
+2026-03-29T19:00:12.567+08:00 DEBUG 157 --- [  XNIO-1 task-3] org.postgresql.jdbc.PgConnection         :   setReadOnly = true 
+2026-03-29T19:00:12.567+08:00 DEBUG 157 --- [  XNIO-1 task-3] org.postgresql.jdbc.PgConnection         :   setAutoCommit = false 
+2026-03-29T19:00:12.569+08:00 DEBUG 157 --- [  XNIO-1 task-3] org.postgresql.jdbc.PgConnection         :   setAutoCommit = true 
+2026-03-29T19:00:12.569+08:00 DEBUG 157 --- [  XNIO-1 task-3] org.postgresql.jdbc.PgConnection         :   setReadOnly = false 
+2026-03-29T19:00:24.143+08:00 DEBUG 157 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = false 
+2026-03-29T19:00:24.147+08:00 DEBUG 157 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = true 
+2026-03-29T19:00:24.673+08:00 DEBUG 157 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = false 
+2026-03-29T19:00:24.675+08:00 DEBUG 157 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = true 
+2026-03-29T19:00:39.677+08:00 DEBUG 157 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = false 
+2026-03-29T19:00:39.681+08:00 DEBUG 157 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = true 
+2026-03-29T19:00:54.148+08:00 DEBUG 157 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = false 
+2026-03-29T19:00:54.149+08:00 DEBUG 157 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = true 
+2026-03-29T19:00:54.681+08:00 DEBUG 157 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = false 
+2026-03-29T19:00:54.683+08:00 DEBUG 157 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = true 
+2026-03-29T19:01:09.684+08:00 DEBUG 157 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = false 
+2026-03-29T19:01:09.686+08:00 DEBUG 157 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = true 
+2026-03-29T19:01:12.714+08:00 DEBUG 157 --- [  XNIO-1 I/O-14] io.undertow.request                      : Timing out idle connection from /172.19.0.16:58358 
+2026-03-29T19:01:12.885+08:00 DEBUG 157 --- [  XNIO-1 task-3] io.undertow.request.security             : Attempting to authenticate /api/ingestion/tasks/list, authentication required: false 
+2026-03-29T19:01:12.885+08:00 DEBUG 157 --- [  XNIO-1 task-3] io.undertow.request.security             : Authentication outcome was NOT_ATTEMPTED with method io.undertow.security.impl.CachedAuthenticatedSessionMechanism@35f489b for /api/ingestion/tasks/list 
+2026-03-29T19:01:12.885+08:00 DEBUG 157 --- [  XNIO-1 task-3] io.undertow.request.security             : Authentication result was ATTEMPTED for /api/ingestion/tasks/list 
+2026-03-29T19:01:12.887+08:00 DEBUG 157 --- [  XNIO-1 task-3] org.postgresql.jdbc.PgConnection         :   setReadOnly = true 
+2026-03-29T19:01:12.887+08:00 DEBUG 157 --- [  XNIO-1 task-3] org.postgresql.jdbc.PgConnection         :   setAutoCommit = false 
+2026-03-29T19:01:12.889+08:00 DEBUG 157 --- [  XNIO-1 task-3] org.postgresql.jdbc.PgConnection         :   setAutoCommit = true 
+2026-03-29T19:01:12.889+08:00 DEBUG 157 --- [  XNIO-1 task-3] org.postgresql.jdbc.PgConnection         :   setReadOnly = false 
+2026-03-29T19:01:24.150+08:00 DEBUG 157 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = false 
+2026-03-29T19:01:24.152+08:00 DEBUG 157 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = true 
+2026-03-29T19:01:24.687+08:00 DEBUG 157 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = false 
+2026-03-29T19:01:24.689+08:00 DEBUG 157 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = true 
+2026-03-29T19:01:39.690+08:00 DEBUG 157 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = false 
+2026-03-29T19:01:39.698+08:00 DEBUG 157 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = true 
+2026-03-29T19:01:54.153+08:00 DEBUG 157 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = false 
+2026-03-29T19:01:54.155+08:00 DEBUG 157 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = true 
+2026-03-29T19:01:54.699+08:00 DEBUG 157 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = false 
+2026-03-29T19:01:54.702+08:00 DEBUG 157 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = true 
+2026-03-29T19:02:09.703+08:00 DEBUG 157 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = false 
+2026-03-29T19:02:09.706+08:00 DEBUG 157 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = true 
+2026-03-29T19:02:24.155+08:00 DEBUG 157 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = false 
+2026-03-29T19:02:24.157+08:00 DEBUG 157 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = true 
+2026-03-29T19:02:24.502+08:00 DEBUG 157 --- [  XNIO-1 task-3] io.undertow.request.security             : Attempting to authenticate /api/ingestion/tasks/list, authentication required: false 
+2026-03-29T19:02:24.502+08:00 DEBUG 157 --- [  XNIO-1 task-3] io.undertow.request.security             : Authentication outcome was NOT_ATTEMPTED with method io.undertow.security.impl.CachedAuthenticatedSessionMechanism@35f489b for /api/ingestion/tasks/list 
+2026-03-29T19:02:24.502+08:00 DEBUG 157 --- [  XNIO-1 task-3] io.undertow.request.security             : Authentication result was ATTEMPTED for /api/ingestion/tasks/list 
+2026-03-29T19:02:24.504+08:00 DEBUG 157 --- [  XNIO-1 task-3] org.postgresql.jdbc.PgConnection         :   setReadOnly = true 
+2026-03-29T19:02:24.504+08:00 DEBUG 157 --- [  XNIO-1 task-3] org.postgresql.jdbc.PgConnection         :   setAutoCommit = false 
+2026-03-29T19:02:24.506+08:00 DEBUG 157 --- [  XNIO-1 task-3] org.postgresql.jdbc.PgConnection         :   setAutoCommit = true 
+2026-03-29T19:02:24.506+08:00 DEBUG 157 --- [  XNIO-1 task-3] org.postgresql.jdbc.PgConnection         :   setReadOnly = false 
+2026-03-29T19:02:24.707+08:00 DEBUG 157 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = false 
+2026-03-29T19:02:24.710+08:00 DEBUG 157 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = true 
+2026-03-29T19:02:33.921+08:00 DEBUG 157 --- [SIGTERM handler] java.lang.Runtime                        : Runtime.exit() called with status: 143 
 
 java.lang.Throwable: Runtime.exit(143)
 	at java.base/java.lang.Shutdown.logRuntimeExit(Shutdown.java:179)
@@ -920,5 +387,5 @@ java.lang.Throwable: Runtime.exit(143)
 	at java.base/jdk.internal.misc.Signal$1.run(Signal.java:218)
 	at java.base/java.lang.Thread.run(Thread.java:1583)
 
-2026-03-28T18:04:40.759+08:00  INFO 158 --- [ionShutdownHook] io.undertow                              : stopping server: Undertow - 2.3.18.Final 
-2026-03-28T18:04:40.770+08:00  INFO 158 --- [ionShutdownHook] io.undertow.servlet                      : Destroying Spring FrameworkServlet 'dispatcherServlet' 
+2026-03-29T19:02:33.933+08:00  INFO 157 --- [ionShutdownHook] io.undertow                              : stopping server: Undertow - 2.3.18.Final 
+2026-03-29T19:02:33.937+08:00  INFO 157 --- [ionShutdownHook] io.undertow.servlet                      : Destroying Spring FrameworkServlet 'dispatcherServlet' 

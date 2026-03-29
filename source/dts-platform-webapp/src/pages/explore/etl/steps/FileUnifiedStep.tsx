@@ -164,28 +164,30 @@ export default function FileUnifiedStep({
 		<>
 			{/* ─── 基础信息 ─── */}
 			<Divider orientation="left">基础信息</Divider>
-			<Form.Item
-				name="name"
-				label="任务名称"
-				rules={[{ required: true, message: "请输入任务名称" }]}
-			>
-				<Input placeholder="例如：csv-import-task" />
-			</Form.Item>
-			<Form.Item
-				name="ownerDept"
-				label="归属部门"
-				rules={[{ required: true, message: "请选择归属部门" }]}
-			>
-				<Select
-					showSearch
-					placeholder="请选择归属部门"
-					loading={loadingDeptOptions}
-					options={deptOptions}
-					filterOption={(input, option) =>
-						(option?.label as string)?.toLowerCase().includes(input.toLowerCase()) ?? false
-					}
-				/>
-			</Form.Item>
+			<div className="grid gap-4 md:grid-cols-2">
+				<Form.Item
+					name="name"
+					label="任务名称"
+					rules={[{ required: true, message: "请输入任务名称" }]}
+				>
+					<Input placeholder="例如：csv-import-task" />
+				</Form.Item>
+				<Form.Item
+					name="ownerDept"
+					label="归属部门"
+					rules={[{ required: true, message: "请选择归属部门" }]}
+				>
+					<Select
+						showSearch
+						placeholder="请选择归属部门"
+						loading={loadingDeptOptions}
+						options={deptOptions}
+						filterOption={(input, option) =>
+							(option?.label as string)?.toLowerCase().includes(input.toLowerCase()) ?? false
+						}
+					/>
+				</Form.Item>
+			</div>
 			<Form.Item name="description" label="描述">
 				<Input.TextArea rows={2} placeholder="可选，说明任务用途" />
 			</Form.Item>

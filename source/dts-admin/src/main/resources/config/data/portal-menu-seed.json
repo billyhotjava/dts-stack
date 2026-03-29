@@ -337,31 +337,6 @@
           "externalLink": "/services/tokens"
         }
       ]
-    },
-    {
-      "key": "visual-analytics",
-      "path": "visual-analytics",
-      "icon": "solar:pie-chart-bold-duotone",
-      "titleKey": "sys.nav.portal.visualAnalytics",
-      "title": "数据可视化",
-      "children": [
-        {
-          "key": "reports",
-          "path": "reports",
-          "icon": "solar:chart-square-bold-duotone",
-          "titleKey": "sys.nav.portal.visualReports",
-          "title": "看板中心",
-          "externalLink": "/visual-analytics/reports"
-        },
-        {
-          "key": "self-service",
-          "path": "self-service",
-          "icon": "solar:magic-stick-3-bold-duotone",
-          "titleKey": "sys.nav.portal.visualSelfService",
-          "title": "智能自助分析",
-          "externalLink": "/analytics"
-        }
-      ]
     }
   ]
 }

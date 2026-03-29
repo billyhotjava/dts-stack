@@ -74,7 +74,6 @@ import {
 	listTemplateLayers,
 	getDbtRunLog,
 	previewDbtModel,
-	getDbtOutputRelation,
 	truncateDbtOutputRelation,
 	rebuildDbtOutputRelation,
 	getDbtGitStatus,
@@ -98,6 +97,9 @@ import { useRouter } from "@/routes/hooks";
 import { buildArchivePayload, collectUnassignedModelIds } from "./sqlModelArchive.helpers";
 import { resolveBatchImportNavigation } from "./batchImportNavigation.helpers";
 import {
+	buildOperationCompletedMessage,
+	buildOperationQueuedMessage,
+	buildOperationSkippedMessage,
 	buildReleaseSelector,
 	createFailedBuildSummary,
 	createPendingBuildSummary,
@@ -105,6 +107,10 @@ import {
 	inferBuildOperationFromCommand,
 	matchesTriggeredBuildSummary,
 } from "./sqlModelBuild.helpers";
+import {
+	buildTruncateOutputRelationPreview,
+	buildRebuildOutputRelationPreview,
+} from "./sqlModelOutputAction.helpers";
 import {
 	applyBatchDeletedModelSelection,
 	applyDeletedModelSelection,
@@ -319,6 +325,7 @@ export default function SqlModelingPage() {
 	const [outputRelationLoading, setOutputRelationLoading] = useState(false);
 	const [outputRelationSubmitting, setOutputRelationSubmitting] = useState(false);
 	const [outputRelation, setOutputRelation] = useState<DbtOutputRelation | null>(null);
+	const [outputRelationError, setOutputRelationError] = useState<string | null>(null);
 	const [governanceOpen, setGovernanceOpen] = useState(false);
 	const [governancePreviewLoading, setGovernancePreviewLoading] = useState(false);
 	const [governanceExecuting, setGovernanceExecuting] = useState(false);
@@ -644,16 +651,18 @@ export default function SqlModelingPage() {
 		setOutputAction(action);
 		setOutputModalOpen(true);
 		setOutputRelation(null);
-		setOutputRelationLoading(true);
-		try {
-			const resp = (await getDbtOutputRelation(activeModel.id)) as DbtOutputRelation;
-			setOutputRelation(resp || null);
-		} catch (err: any) {
-			setOutputModalOpen(false);
-			setOutputAction(null);
-		} finally {
+		setOutputRelationError(null);
+		if (action === "truncate") {
+			setOutputRelation(buildTruncateOutputRelationPreview(activeModel, dbtConfig));
 			setOutputRelationLoading(false);
+			return;
 		}
+		if (action === "rebuild") {
+			setOutputRelation(buildRebuildOutputRelationPreview(activeModel, dbtConfig));
+			setOutputRelationLoading(false);
+			return;
+		}
+		setOutputRelationLoading(false);
 	};
 
 	const submitOutputAction = async () => {
@@ -663,14 +672,36 @@ export default function SqlModelingPage() {
 		setOutputRelationSubmitting(true);
 		try {
 			if (outputAction === "truncate") {
-				const resp: any = await truncateDbtOutputRelation({ modelId: activeModel.id });
-				const message = resp?.message || "清空产出表完成";
-				toast.success(message);
+				const selector =
+					resolveDbtSelector(outputRelation?.selector) ||
+					resolveDbtSelector(activeModel.dagSelector) ||
+					(activeModel?.name ? `model:${activeModel.name}` : "all");
+				const resp: any = await truncateDbtOutputRelation({
+					modelId: activeModel.id,
+					target: normalizeText(dbtConfig?.config?.targetName) || "dev",
+				});
+				const dagRunId = normalizeText(resp?.dag_run_id || resp?.dagRunId);
+				const dagId = normalizeText(resp?.dag_id || resp?.dagId);
+				const pendingRun = {
+					present: true,
+					command: "dbt run-operation truncate_relation",
+					status: "RUNNING",
+					generatedAt: new Date().toISOString(),
+					total: 0,
+					success: 0,
+					failed: 0,
+					skipped: 0,
+					failures: [],
+					dagRunId,
+					dagId,
+				} as DbtRunSummary;
+				setRunResult(pendingRun);
+				setBottomTab("operations"); setOpsSubTab("execlog");
+				toast.success(resp?.message || "已提交清空产出表任务");
 				setOutputModalOpen(false);
 				setOutputAction(null);
 				void loadAuditLogs(dbtConfig?.config?.targetDataSourceId);
-				setBottomTab("operations"); setOpsSubTab("audit");
-				await loadSyncStatus(resolveDbtSelector(outputRelation?.selector) || resolveDbtSelector(activeModel.dagSelector) || undefined);
+				await loadRuns({ dagId: dagId || undefined, selector });
 				return;
 			}
 
@@ -930,11 +961,11 @@ export default function SqlModelingPage() {
 						content: (
 							<div style={{ fontSize: 12 }}>
 								<p>后端未返回成功提交结果，请检查以下信息后重试。</p>
-								<ul style={{ paddingLeft: 18, margin: 0 }}>
-									{([...(releaseResult.blockers || []), ...(releaseResult.warnings || [])] || []).map((item, idx) => (
-										<li key={`${item}-${idx}`}>{item}</li>
-									))}
-								</ul>
+									<ul style={{ paddingLeft: 18, margin: 0 }}>
+										{[...(releaseResult.blockers || []), ...(releaseResult.warnings || [])].map((item, idx) => (
+											<li key={`${item}-${idx}`}>{item}</li>
+										))}
+									</ul>
 							</div>
 						),
 					});
@@ -982,7 +1013,7 @@ export default function SqlModelingPage() {
 				dagRunId,
 				dagId,
 			} as DbtRunSummary;
-			toast.success(`dbt ${operation} 已提交，正在等待结果`);
+			toast.success(buildOperationQueuedMessage(operation));
 			setExecLog("");
 			if (operation === "compile") {
 				setCompileResult(pendingRun);
@@ -1035,11 +1066,11 @@ export default function SqlModelingPage() {
 				return;
 			}
 			if (finalStatus === "SUCCESS") {
-				toast.success(`dbt ${operation} 已完成`);
+				toast.success(buildOperationCompletedMessage(operation));
 				return;
 			}
 			if (finalStatus === "SKIPPED") {
-				toast.warning(`dbt ${operation} 返回 SKIPPED，请重新执行后再提交变更`);
+				toast.warning(buildOperationSkippedMessage(operation));
 				return;
 			}
 			if (settled.timedOut) {
@@ -3129,10 +3160,10 @@ export default function SqlModelingPage() {
 
 				<Modal
 					open={gitCommitOpen}
-					title="提交变更"
+					title="提交到 Git"
 					onCancel={() => setGitCommitOpen(false)}
 					onOk={handleGitCommit}
-					okText="提交"
+					okText="提交到 Git"
 					cancelText="取消"
 					confirmLoading={gitCommitting}
 				>
@@ -3144,7 +3175,7 @@ export default function SqlModelingPage() {
 							onPressEnter={handleGitCommit}
 						/>
 						<div className="rounded border border-border bg-muted/10 px-3 py-2 text-xs text-muted-foreground">
-							当前提交会写入 dbt Git 工作区，建议先完成编译和测试。
+							当前操作会把本地 dbt 工作区改动提交到 Git，本页不负责审批流或远端推送。建议先完成编译和测试。
 						</div>
 					</div>
 				</Modal>
@@ -3404,12 +3435,18 @@ export default function SqlModelingPage() {
 			/>
 				<OutputRelationModal
 					open={outputModalOpen}
-					onClose={() => { setOutputModalOpen(false); setOutputAction(null); }}
+					onClose={() => {
+						setOutputModalOpen(false);
+						setOutputAction(null);
+						setOutputRelation(null);
+						setOutputRelationError(null);
+					}}
 					onSubmit={() => void submitOutputAction()}
 					submitting={outputRelationSubmitting}
 					loading={outputRelationLoading}
 					outputAction={outputAction}
 					outputRelation={outputRelation}
+					errorMessage={outputRelationError}
 					activeModel={activeModel}
 				/>
 			</div>

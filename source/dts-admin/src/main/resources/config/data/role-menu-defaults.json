@@ -202,17 +202,5 @@
     "title": "共享交换",
     "route": "/services/tokens",
     "requiredRoles": ["DEPT_DATA_OWNER", "DEPT_LEADER", "INST_DATA_OWNER", "INST_LEADER", "ADMIN", "OP_ADMIN"]
-  },
-  {
-    "code": "sys.nav.portal.visualReports",
-    "title": "看板中心",
-    "route": "/visual-analytics/reports",
-    "requiredRoles": ["EMPLOYEE", "DEPT_DATA_OWNER", "DEPT_LEADER", "INST_DATA_OWNER", "INST_LEADER", "ADMIN", "OP_ADMIN"]
-  },
-  {
-    "code": "sys.nav.portal.visualSelfService",
-    "title": "智能自助分析",
-    "route": "/analytics",
-    "requiredRoles": ["EMPLOYEE", "DEPT_DATA_OWNER", "DEPT_LEADER", "INST_DATA_OWNER", "INST_LEADER", "ADMIN", "OP_ADMIN"]
   }
 ]

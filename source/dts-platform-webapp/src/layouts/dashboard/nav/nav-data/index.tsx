@@ -333,7 +333,6 @@ const NAV_CATEGORY_GROUPS: { name?: string; keys: string[]; flatten?: boolean }[
 	{ name: "数据集成", keys: ["resource", "studio"] },
 	{ name: "治理与资产", keys: ["governance", "portal"] },
 	{ name: "运维与服务", keys: ["ops", "services"] },
-	{ name: "可视化", keys: ["visual-analytics"] },
 ];
 
 const resolveSectionKey = (node: MenuTree): string => {

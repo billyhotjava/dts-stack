@@ -22,7 +22,6 @@ class DbtReleaseSubmissionServiceTest {
         DbtQualityGateService qualityGateService = mock(DbtQualityGateService.class);
         DbtReleaseGateService releaseGateService = mock(DbtReleaseGateService.class);
         DbtDagService dbtDagService = mock(DbtDagService.class);
-        DbtSourceService dbtSourceService = mock(DbtSourceService.class);
         AirflowClient airflowClient = mock(AirflowClient.class);
         ExternalRunLogService externalRunLogService = mock(ExternalRunLogService.class);
 
@@ -34,7 +33,6 @@ class DbtReleaseSubmissionServiceTest {
             qualityGateService,
             releaseGateService,
             dbtDagService,
-            dbtSourceService,
             airflowClient,
             externalRunLogService
         );
@@ -55,7 +53,6 @@ class DbtReleaseSubmissionServiceTest {
         assertThat(result.status()).isEqualTo("BLOCKED");
         assertThat(result.blocking()).isTrue();
         assertThat(result.blockers()).anyMatch(item -> item.contains("尚未在 Airflow 中注册"));
-        verify(dbtSourceService, never()).refreshOdsSources();
         verify(airflowClient, never()).triggerDag(eq("dwh_biadmin_dbt_manual"), any());
     }
 
@@ -64,7 +61,6 @@ class DbtReleaseSubmissionServiceTest {
         DbtQualityGateService qualityGateService = mock(DbtQualityGateService.class);
         DbtReleaseGateService releaseGateService = mock(DbtReleaseGateService.class);
         DbtDagService dbtDagService = mock(DbtDagService.class);
-        DbtSourceService dbtSourceService = mock(DbtSourceService.class);
         AirflowClient airflowClient = mock(AirflowClient.class);
         ExternalRunLogService externalRunLogService = mock(ExternalRunLogService.class);
 
@@ -102,7 +98,6 @@ class DbtReleaseSubmissionServiceTest {
             qualityGateService,
             releaseGateService,
             dbtDagService,
-            dbtSourceService,
             airflowClient,
             externalRunLogService
         );
@@ -123,7 +118,6 @@ class DbtReleaseSubmissionServiceTest {
         assertThat(result.status()).isEqualTo("WARNING");
         assertThat(result.warning()).isTrue();
         assertThat(result.warnings()).contains("缺少类型元信息", "缺少 Git 分支信息");
-        verify(dbtSourceService, never()).refreshOdsSources();
         verify(airflowClient, never()).triggerDag(eq("dwh_biadmin_dbt_manual"), any());
     }
 
@@ -132,7 +126,6 @@ class DbtReleaseSubmissionServiceTest {
         DbtQualityGateService qualityGateService = mock(DbtQualityGateService.class);
         DbtReleaseGateService releaseGateService = mock(DbtReleaseGateService.class);
         DbtDagService dbtDagService = mock(DbtDagService.class);
-        DbtSourceService dbtSourceService = mock(DbtSourceService.class);
         AirflowClient airflowClient = mock(AirflowClient.class);
         ExternalRunLogService externalRunLogService = mock(ExternalRunLogService.class);
 
@@ -165,7 +158,6 @@ class DbtReleaseSubmissionServiceTest {
                 List.of("缺少 Git 分支信息"),
                 new DbtReleaseGateService.BuildEvidence("inv-1", "dbt build --select tag:project-management", "SUCCESS", "2026-03-29T00:00:00Z", "/tmp/run_results.json")
             ));
-        when(dbtSourceService.refreshOdsSources()).thenReturn(DbtSourceService.DbtSourceRefreshResult.success("/tmp/ods_sources.yml", 1));
         when(airflowClient.triggerDag(eq("dwh_biadmin_dbt_manual"), any()))
             .thenReturn(java.util.Optional.of(Map.of("dag_run_id", "run-1", "dag_id", "dwh_biadmin_dbt_manual", "state", "queued")));
 
@@ -173,7 +165,6 @@ class DbtReleaseSubmissionServiceTest {
             qualityGateService,
             releaseGateService,
             dbtDagService,
-            dbtSourceService,
             airflowClient,
             externalRunLogService
         );
@@ -194,7 +185,6 @@ class DbtReleaseSubmissionServiceTest {
         assertThat(result.status()).isEqualTo("SUBMITTED");
         assertThat(result.dagRunId()).isEqualTo("run-1");
         assertThat(result.dagId()).isEqualTo("dwh_biadmin_dbt_manual");
-        verify(dbtSourceService).refreshOdsSources();
         verify(airflowClient).triggerDag(eq("dwh_biadmin_dbt_manual"), any());
     }
 
@@ -202,7 +192,6 @@ class DbtReleaseSubmissionServiceTest {
         DbtQualityGateService qualityGateService,
         DbtReleaseGateService releaseGateService,
         DbtDagService dbtDagService,
-        DbtSourceService dbtSourceService,
         AirflowClient airflowClient,
         ExternalRunLogService externalRunLogService
     ) {
@@ -213,7 +202,6 @@ class DbtReleaseSubmissionServiceTest {
             qualityGateService,
             releaseGateService,
             dbtDagService,
-            dbtSourceService,
             airflowClient,
             airflowProperties,
             externalRunLogService,

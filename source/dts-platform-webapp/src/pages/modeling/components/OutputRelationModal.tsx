@@ -11,6 +11,7 @@ export type OutputRelationModalProps = {
 	loading: boolean;
 	outputAction: "truncate" | "rebuild" | null;
 	outputRelation: DbtOutputRelation | null;
+	errorMessage?: string | null;
 	activeModel: SqlModel | null;
 };
 
@@ -22,6 +23,7 @@ export default function OutputRelationModal({
 	loading,
 	outputAction,
 	outputRelation,
+	errorMessage,
 	activeModel,
 }: OutputRelationModalProps) {
 	return (
@@ -39,12 +41,18 @@ export default function OutputRelationModal({
 			okText={outputAction === "rebuild" ? "确认重建" : "确认清空"}
 			okButtonProps={{
 				danger: outputAction === "rebuild",
-				disabled: loading || !activeModel?.id || (outputAction === "truncate" && !!outputRelation?.exists && !outputRelation?.truncateAllowed),
+				disabled:
+					loading ||
+					!!errorMessage ||
+					!activeModel?.id ||
+					(outputAction === "truncate" && !!outputRelation?.exists && !outputRelation?.truncateAllowed),
 			}}
 		>
 			<Space direction="vertical" size={12} className="w-full">
 				{loading ? (
 					<div className="py-6 text-center text-sm text-muted-foreground">正在分析当前模型产出 relation...</div>
+				) : errorMessage ? (
+					<Alert type="error" showIcon message={errorMessage} />
 				) : outputRelation ? (
 					<>
 						<Alert
@@ -68,11 +76,11 @@ export default function OutputRelationModal({
 								</div>
 								<div>
 									<Text type="secondary">检测类型</Text>
-									<div>{outputRelation.relationType || (outputRelation.exists ? "-" : "未生成")}</div>
+									<div>{outputRelation.relationType || (outputRelation.checkSkipped ? "待任务检查" : outputRelation.exists ? "-" : "未生成")}</div>
 								</div>
 								<div>
 									<Text type="secondary">当前状态</Text>
-									<div>{outputRelation.exists ? "已存在" : "不存在"}</div>
+									<div>{outputRelation.checkSkipped ? "待后台任务检查" : outputRelation.exists ? "已存在" : "不存在"}</div>
 								</div>
 								<div>
 									<Text type="secondary">下游引用</Text>
@@ -84,6 +92,13 @@ export default function OutputRelationModal({
 								<div className="font-mono">{outputRelation.selector || activeModel?.dagSelector || "-"}</div>
 							</div>
 						</div>
+						{outputRelation.checkSkipped ? (
+							<Alert
+								type="warning"
+								showIcon
+								message={outputRelation.checkMessage || "当前操作未预先检查目标库 relation。"}
+							/>
+						) : null}
 						{outputAction === "truncate" && outputRelation.exists && !outputRelation.truncateAllowed ? (
 							<Alert
 								type="error"

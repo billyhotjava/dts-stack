@@ -113,8 +113,8 @@ export const previewDbtModel = (model: string, limit = 100) =>
 	api.get(withModelingRequestTimeout({ url: "/etl/dbt/preview", params: { model, limit } }));
 export const getDbtOutputRelation = (modelId: string) =>
 	api.get(withModelingRequestTimeout({ url: "/etl/dbt/output", params: { modelId } }));
-export const truncateDbtOutputRelation = (data: { modelId: string }) =>
-	api.post({ url: "/etl/dbt/output/truncate", data });
+export const truncateDbtOutputRelation = (data: { modelId: string; target?: string }) =>
+	api.post(withModelingRequestTimeout({ url: "/etl/dbt/output/truncate", data }));
 export const rebuildDbtOutputRelation = (data: { modelId: string; target?: string; vars?: Record<string, any> }) =>
 	api.post({ url: "/etl/dbt/output/rebuild", data });
 

@@ -147,15 +147,29 @@ public class EtlResource {
     }
 
     @PostMapping("/dbt/output/truncate")
-    public ApiResponse<DbtOutputRelationService.DbtOutputRelationActionResult> truncateDbtOutputRelation(
-        @RequestBody DbtOutputRelationRequest request
+    public ApiResponse<Map<String, Object>> truncateDbtOutputRelation(
+        @RequestBody DbtOutputRelationRequest request,
+        @RequestHeader(value = "X-Active-Dept", required = false) String activeDept
     ) {
         try {
-            ApiResponse<DbtOutputRelationService.DbtOutputRelationActionResult> response = ApiResponses.ok(
-                dbtOutputRelationService.truncate(request.modelId())
+            DbtOutputRelationService.DbtOutputRelationActionResult prepare = dbtOutputRelationService.prepareTruncate(request.modelId());
+            String selector = prepare.selector();
+            Map<String, Object> macroArgs = buildTruncateMacroArgs(request.modelId());
+            ApiResponse<Map<String, Object>> response = triggerDbtMacroOperation(
+                selector,
+                selector,
+                request.target(),
+                "truncate_relation",
+                macroArgs,
+                activeDept
             );
+            Map<String, Object> payload = new LinkedHashMap<>(response.getData());
+            payload.put("relation", prepare.qualifiedName());
+            payload.put("selector", selector);
+            payload.put("macroName", "truncate_relation");
+            payload.put("message", prepare.message());
             auditService.audit("EXECUTE", "etl.dbt.output.truncate", String.valueOf(request.modelId()));
-            return response;
+            return ApiResponses.ok(payload);
         } catch (IllegalArgumentException | IllegalStateException ex) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, ex.getMessage(), ex);
         }
@@ -496,10 +510,17 @@ public class EtlResource {
             return "run";
         }
         String op = raw.trim().toLowerCase();
-        if ("run".equals(op) || "test".equals(op) || "compile".equals(op) || "docs".equals(op) || "build".equals(op)) {
+        if (
+            "run".equals(op) ||
+            "test".equals(op) ||
+            "compile".equals(op) ||
+            "docs".equals(op) ||
+            "build".equals(op) ||
+            "run-operation".equals(op)
+        ) {
             return op;
         }
-        throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "operation 仅支持 run/test/compile/docs/build");
+        throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "operation 仅支持 run/test/compile/docs/build/run-operation");
     }
 
     private ApiResponse<Map<String, Object>> triggerDbtOperation(
@@ -554,6 +575,41 @@ public class EtlResource {
         }
         if (StringUtils.hasText(request == null ? null : request.buildInvocationId())) {
             conf.put("buildInvocationId", request.buildInvocationId().trim());
+        }
+        Map<String, Object> payload = Map.of("conf", conf, "logical_date", Instant.now().toString());
+        Map<String, Object> result = new LinkedHashMap<>(triggerAirflowDagOrThrow(dagId, payload));
+        result.putIfAbsent("dagId", dagId);
+        try {
+            externalRunLogService.recordAirflowRun(ExternalRunLogService.ENTRY_DBT, dagId, result, conf, activeDept);
+        } catch (RuntimeException ex) {
+            // best-effort sync
+        }
+        return ApiResponses.ok(result);
+    }
+
+    private ApiResponse<Map<String, Object>> triggerDbtMacroOperation(
+        String dagSelector,
+        String selector,
+        String target,
+        String macroName,
+        Map<String, Object> macroArgs,
+        String activeDept
+    ) {
+        String dagId = dbtDagService.ensureDagForSelector(dagSelector);
+        if (!StringUtils.hasText(dagId)) {
+            dagId = airflowProperties.getDagId();
+        }
+        Map<String, Object> conf = new LinkedHashMap<>();
+        conf.put("operation", "run-operation");
+        conf.put("macro_name", macroName);
+        if (StringUtils.hasText(selector)) {
+            conf.put("models", selector);
+        }
+        if (StringUtils.hasText(target)) {
+            conf.put("target", target.trim());
+        }
+        if (macroArgs != null && !macroArgs.isEmpty()) {
+            conf.put("macro_args", toJsonString(macroArgs));
         }
         Map<String, Object> payload = Map.of("conf", conf, "logical_date", Instant.now().toString());
         Map<String, Object> result = new LinkedHashMap<>(triggerAirflowDagOrThrow(dagId, payload));
@@ -689,6 +745,37 @@ public class EtlResource {
             return bool;
         }
         return Boolean.parseBoolean(stringVal(value));
+    }
+
+    private Map<String, Object> buildTruncateMacroArgs(java.util.UUID modelId) {
+        ModelingSqlModel model = sqlModelRepository
+            .findById(modelId)
+            .orElseThrow(() -> new IllegalArgumentException("模型不存在"));
+        String identifier = stringVal(model.getAlias());
+        if (!StringUtils.hasText(identifier)) {
+            identifier = stringVal(model.getName());
+        }
+        if (!StringUtils.hasText(identifier)) {
+            throw new IllegalArgumentException("模型名称不能为空");
+        }
+        String schema = stringVal(model.getSchemaName());
+        String database = null;
+        DbtConfigService.DbtConfigView view = dbtConfigService.loadConfig();
+        if (view != null && view.config() != null) {
+            database = stringVal(view.config().database());
+            if (!StringUtils.hasText(schema)) {
+                schema = stringVal(view.config().schema());
+            }
+        }
+        Map<String, Object> macroArgs = new LinkedHashMap<>();
+        if (StringUtils.hasText(database)) {
+            macroArgs.put("database_name", database);
+        }
+        if (StringUtils.hasText(schema)) {
+            macroArgs.put("schema_name", schema);
+        }
+        macroArgs.put("identifier", identifier);
+        return macroArgs;
     }
 
     private String resolveSelector(DbtRunRequest request, boolean required) {

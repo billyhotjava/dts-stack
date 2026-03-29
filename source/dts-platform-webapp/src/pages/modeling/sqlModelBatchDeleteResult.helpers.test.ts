@@ -101,3 +101,38 @@ test("buildSqlModelGovernanceDetail keeps skipped and failed governance items ex
 		{ modelId: "m3", status: "skipped", message: "当前账号无权限治理该模型" },
 	]);
 });
+
+// ── Edge cases ───────────────────────────────────────────────────────
+
+test("buildSqlModelBatchDeleteDetail handles empty requestedIds", () => {
+	const result = buildSqlModelBatchDeleteDetail({
+		requestedIds: [],
+		models: [],
+		result: { requested: 0, deleted: 0, failed: 0, failures: [] },
+	});
+	assert.equal(result.requested, 0);
+	assert.equal(result.deleted, 0);
+	assert.equal(result.rows.length, 0);
+});
+
+test("buildSqlModelBatchDeleteDetail handles null result gracefully", () => {
+	const result = buildSqlModelBatchDeleteDetail({
+		requestedIds: ["m1"],
+		models: [{ id: "m1", name: "test", layer: "DWD", planName: "p1", modelPath: "m.sql" }],
+		result: null,
+	});
+	assert.equal(result.requested, 1);
+	assert.equal(result.deleted, 1);
+	assert.equal(result.rows[0].status, "success");
+});
+
+test("buildSqlModelGovernanceDetail handles empty result items", () => {
+	const result = buildSqlModelGovernanceDetail({
+		requestedIds: ["m1"],
+		preview: [{ modelId: "m1", name: "test", layer: "DWD", planName: "p1", modelPath: "m.sql" }],
+		result: { requested: 1, deleted: 0, skipped: 1, failed: 0, items: [] },
+	});
+	assert.equal(result.skipped, 1);
+	assert.equal(result.rows.length, 1);
+	assert.equal(result.rows[0].status, "skipped");
+});

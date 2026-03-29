@@ -31,9 +31,9 @@ test("createSecondaryModelingActions moves secondary actions into more menu", ()
 			label: action.label,
 		})),
 		[
-			{ key: "commit", label: "提交变更" },
+			{ key: "commit", label: "提交到 Git" },
 			{ key: "sync", label: "同步模型" },
-			{ key: "docs", label: "文档" },
+			{ key: "docs", label: "生成文档" },
 			{ key: "rollback", label: "回退" },
 		],
 	);

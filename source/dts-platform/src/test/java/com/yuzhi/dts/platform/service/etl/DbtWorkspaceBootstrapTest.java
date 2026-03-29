@@ -55,6 +55,7 @@ class DbtWorkspaceBootstrapTest {
         assertThat(projectDir.resolve("macros/nullif_placeholder.sql")).exists();
         assertThat(projectDir.resolve("macros/parse_numeric_safe.sql")).exists();
         assertThat(projectDir.resolve("macros/parse_date_safe.sql")).exists();
+        assertThat(projectDir.resolve("macros/truncate_relation.sql")).exists();
         assertThat(projectDir.resolve("seeds")).isDirectory();
         assertThat(projectDir.resolve("tests")).isDirectory();
         assertThat(projectDir.resolve("analyses")).isDirectory();

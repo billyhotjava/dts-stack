@@ -71,3 +71,31 @@ test("mergeExpandedTreeKeys prunes stale keys and preserves valid preferences", 
 		["space-a", "space-b", "layer-ODS"],
 	);
 });
+
+// ── Edge cases ───────────────────────────────────────────────────────
+
+test("collectExpandableTreeKeys returns empty for empty tree", () => {
+	assert.deepEqual(collectExpandableTreeKeys([]), []);
+});
+
+test("collectExpandableTreeKeys skips leaf-only nodes", () => {
+	const leafOnly: ModelFileBrowserTreeNode[] = [
+		{ key: "model:1", title: "m1", nodeType: "model", isLeaf: true },
+	];
+	assert.deepEqual(collectExpandableTreeKeys(leafOnly), []);
+});
+
+test("deriveDefaultExpandedTreeKeys returns empty when activeSpaceKey is null", () => {
+	assert.deepEqual(deriveDefaultExpandedTreeKeys(treeData, null), []);
+});
+
+test("deriveDefaultExpandedTreeKeys returns empty when activeSpaceKey not found", () => {
+	assert.deepEqual(deriveDefaultExpandedTreeKeys(treeData, "space-nonexistent"), []);
+});
+
+test("mergeExpandedTreeKeys deduplicates keys", () => {
+	assert.deepEqual(
+		mergeExpandedTreeKeys(["space-a", "space-a"], treeData, ["space-a"]),
+		["space-a"],
+	);
+});

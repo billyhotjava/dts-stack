@@ -27,6 +27,27 @@ export function buildCommandHint(operation: BuildOperation, selector?: string) {
 	return normalizedSelector ? `dbt ${operation} --select ${normalizedSelector}` : `dbt ${operation}`;
 }
 
+export function buildOperationQueuedMessage(operation: BuildOperation) {
+	if (operation === "docs") {
+		return "文档产物生成任务已提交，正在等待结果";
+	}
+	return `dbt ${operation} 已提交，正在等待结果`;
+}
+
+export function buildOperationCompletedMessage(operation: BuildOperation) {
+	if (operation === "docs") {
+		return "文档产物已生成，当前页面不提供内嵌浏览";
+	}
+	return `dbt ${operation} 已完成`;
+}
+
+export function buildOperationSkippedMessage(operation: BuildOperation) {
+	if (operation === "docs") {
+		return "文档产物生成返回 SKIPPED，请重新执行";
+	}
+	return `dbt ${operation} 返回 SKIPPED，请重新执行后再提交变更`;
+}
+
 export function buildReleaseSelector(selector?: string) {
 	const normalizedSelector = normalizeText(selector);
 	if (!normalizedSelector || normalizedSelector === "all") {

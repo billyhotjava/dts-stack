@@ -63,8 +63,10 @@ public class AdminDirectoryGateway {
                 AdminGatewayRequestOptions.defaults()
             );
             if (tree != null && !tree.isEmpty()) {
+                backfillDeptCodes(tree);
                 return tree;
             }
+            LOG.debug("Org tree from dts-admin was empty, falling back to sync");
         } catch (AdminGatewayException ex) {
             LOG.warn("Failed to fetch org tree from dts-admin: {}", ex.getMessage());
         }
@@ -77,10 +79,26 @@ public class AdminDirectoryGateway {
                 ORG_TREE_ENVELOPE,
                 AdminGatewayRequestOptions.defaults()
             );
-            return synced != null ? synced : List.of();
+            List<OrgNode> result = synced != null ? synced : List.of();
+            backfillDeptCodes(result);
+            return result;
         } catch (AdminGatewayException ex) {
             LOG.warn("Failed to sync org tree from dts-admin: {}", ex.getMessage());
             return List.of();
+        }
+    }
+
+    /**
+     * Admin API may return org nodes without deptCode.
+     * Fall back to name as deptCode so the frontend dropdown is populated.
+     */
+    private void backfillDeptCodes(List<OrgNode> nodes) {
+        if (nodes == null) return;
+        for (OrgNode node : nodes) {
+            if (!StringUtils.hasText(node.getDeptCode()) && StringUtils.hasText(node.getName())) {
+                node.setDeptCode(node.getName().trim());
+            }
+            backfillDeptCodes(node.getChildren());
         }
     }
 
@@ -369,6 +387,7 @@ public class AdminDirectoryGateway {
         private List<OrgNode> children;
         @JsonProperty("isRoot")
         private Boolean isRoot;
+        private String groupPath;
 
         public Long getId() { return id; }
         public void setId(Long id) { this.id = id; }
@@ -382,6 +401,8 @@ public class AdminDirectoryGateway {
         public void setChildren(List<OrgNode> children) { this.children = children; }
         public Boolean getIsRoot() { return isRoot; }
         public void setIsRoot(Boolean isRoot) { this.isRoot = isRoot; }
+        public String getGroupPath() { return groupPath; }
+        public void setGroupPath(String groupPath) { this.groupPath = groupPath; }
     }
 
     public record UserSummary(String id, String username, String displayName, String deptCode) {}

@@ -132,57 +132,61 @@ export function DbUnifiedStep({
 		<>
 			{/* ─── 基础信息 ─── */}
 			<Divider orientation="left">基础信息</Divider>
-			<Form.Item
-				name="name"
-				label="任务名称"
-				rules={[{ required: true, message: "请输入任务名称" }]}
-			>
-				<Input placeholder="例如：pg-lake-task1" />
-			</Form.Item>
-			<Form.Item
-				name="ownerDept"
-				label="归属部门"
-				rules={[{ required: true, message: "请选择归属部门" }]}
-			>
-				<Select
-					loading={loadingDeptOptions}
-					placeholder={loadingDeptOptions ? "加载中..." : "请选择归属部门"}
-					options={deptOptions}
-					showSearch
-					filterOption={(input, option) =>
-						(option?.label ?? "").toLowerCase().includes(input.toLowerCase())
-					}
-				/>
-			</Form.Item>
+			<div className="grid gap-4 md:grid-cols-2">
+				<Form.Item
+					name="name"
+					label="任务名称"
+					rules={[{ required: true, message: "请输入任务名称" }]}
+				>
+					<Input placeholder="例如：pg-lake-task1" />
+				</Form.Item>
+				<Form.Item
+					name="ownerDept"
+					label="归属部门"
+					rules={[{ required: true, message: "请选择归属部门" }]}
+				>
+					<Select
+						loading={loadingDeptOptions}
+						placeholder={loadingDeptOptions ? "加载中..." : "请选择归属部门"}
+						options={deptOptions}
+						showSearch
+						filterOption={(input, option) =>
+							(option?.label ?? "").toLowerCase().includes(input.toLowerCase())
+						}
+					/>
+				</Form.Item>
+			</div>
 			<Form.Item name="description" label="描述">
 				<Input.TextArea rows={2} placeholder="可选，说明任务用途" />
 			</Form.Item>
 
 			{/* ─── 数据源 ─── */}
 			<Divider orientation="left">数据源</Divider>
-			<Form.Item
-				name="sourceDataSourceId"
-				label="数据源连接"
-				rules={[{ required: true, message: "请选择数据源连接" }]}
-			>
-				<Select
-					loading={loadingDataSources}
-					placeholder={loadingDataSources ? "加载中..." : "请选择数据源连接"}
-					options={dataSources.map((item) => ({
-						label: `${item.name} (${item.type || "unknown"})`,
-						value: item.id,
-					}))}
-					showSearch
-					optionFilterProp="label"
-				/>
-			</Form.Item>
-			<Form.Item
-				name="readerType"
-				label="Reader 类型"
-				rules={[{ validator: readerTypeValidator }]}
-			>
-				<Input placeholder="将根据数据源自动生成" disabled />
-			</Form.Item>
+			<div className="grid gap-4 md:grid-cols-2">
+				<Form.Item
+					name="sourceDataSourceId"
+					label="数据源连接"
+					rules={[{ required: true, message: "请选择数据源连接" }]}
+				>
+					<Select
+						loading={loadingDataSources}
+						placeholder={loadingDataSources ? "加载中..." : "请选择数据源连接"}
+						options={dataSources.map((item) => ({
+							label: `${item.name} (${item.type || "unknown"})`,
+							value: item.id,
+						}))}
+						showSearch
+						optionFilterProp="label"
+					/>
+				</Form.Item>
+				<Form.Item
+					name="readerType"
+					label="Reader 类型"
+					rules={[{ validator: readerTypeValidator }]}
+				>
+					<Input placeholder="将根据数据源自动生成" disabled />
+				</Form.Item>
+			</div>
 			<Form.Item name="tableSelectionMode" label="入湖表选择">
 				<Radio.Group
 					onChange={(e) => {
@@ -197,9 +201,11 @@ export function DbUnifiedStep({
 				</Radio.Group>
 			</Form.Item>
 			{tableSelectionMode === "all" ? (
-				<Form.Item name="tableExclude" label="排除表（每行一个，可选）">
-					<Input.TextArea rows={2} placeholder="schema.table 或 table_name" />
-				</Form.Item>
+				<div className="grid gap-4 md:grid-cols-2">
+					<Form.Item name="tableExclude" label="排除表（每行一个，可选）">
+						<Input.TextArea rows={2} placeholder="schema.table 或 table_name" />
+					</Form.Item>
+				</div>
 			) : null}
 			{editorMode === "json" ? (
 				<Form.Item
@@ -253,12 +259,11 @@ export function DbUnifiedStep({
 					/>
 				</>
 			)}
-			<Form.Item name="syncPrefix" label="目标表前缀">
-				<Input placeholder="从数据源自动推算，可手动修改" />
-			</Form.Item>
-			<Text type="secondary" className="block -mt-3 mb-4">
-				用于自动生成 ODS 表名（如：ods_erp_ + 源表名）。若 Writer 已指定目标表，可留空。
-			</Text>
+			<div className="grid gap-4 md:grid-cols-2">
+				<Form.Item name="syncPrefix" label="目标表前缀" extra="用于自动生成 ODS 表名（如：ods_erp_ + 源表名）。若 Writer 已指定目标表，可留空。">
+					<Input placeholder="从数据源自动推算，可手动修改" />
+				</Form.Item>
+			</div>
 
 			{/* ─── 源端表发现 ─── */}
 			<Divider orientation="left">源端表发现</Divider>

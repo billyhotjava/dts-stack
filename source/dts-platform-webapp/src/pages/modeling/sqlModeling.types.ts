@@ -83,6 +83,8 @@ export type DbtOutputRelation = {
 	truncateAllowed?: boolean;
 	downstreamRefCount?: number;
 	message?: string;
+	checkSkipped?: boolean;
+	checkMessage?: string;
 };
 
 export type SqlModel = {

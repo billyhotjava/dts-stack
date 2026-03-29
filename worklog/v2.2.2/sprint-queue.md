@@ -161,8 +161,9 @@
 | F4-导入与批量导入链路补完 | 4 | READY |
 | F5-从ODS生成模板 | 4 | READY |
 | F6-编译测试上线与验收闭环 | 4 | READY |
+| F7-工具栏动作与产出表回退补完 | 6 | IN_PROGRESS |
 
-**统计**: READY=15, IN_PROGRESS=3, DONE=7, BLOCKED=0
+**统计**: READY=18, IN_PROGRESS=4, DONE=8, BLOCKED=0
 
 ## Sprint-25: 分析看板编辑器 (202603)
 **状态**: DONE

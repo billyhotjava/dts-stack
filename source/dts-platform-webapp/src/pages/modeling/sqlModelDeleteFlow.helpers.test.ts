@@ -1,71 +1,124 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
-	applyBatchDeletedModelSelection,
 	applyDeletedModelSelection,
+	applyBatchDeletedModelSelection,
 	applyManualModelSelection,
 	resolveRunsRequestAfterSelection,
 } from "./sqlModelDeleteFlow.helpers.ts";
 
-test("applyDeletedModelSelection clears selection and suppresses auto-select when deleting active model", () => {
+// ── applyDeletedModelSelection ───────────────────────────────────────
+
+test("applyDeletedModelSelection clears active when deleted model matches", () => {
 	const result = applyDeletedModelSelection({
-		activeModelKey: "model-1",
-		deletedModelKey: "model-1",
+		activeModelKey: "m1",
+		deletedModelKey: "m1",
 	});
-
-	assert.deepEqual(result, {
-		nextActiveModelKey: null,
-		suppressAutoSelect: true,
-	});
+	assert.equal(result.nextActiveModelKey, null);
+	assert.equal(result.suppressAutoSelect, true);
 });
 
-test("applyDeletedModelSelection preserves selection when deleting another model", () => {
+test("applyDeletedModelSelection keeps active when deleted model differs", () => {
 	const result = applyDeletedModelSelection({
-		activeModelKey: "model-1",
-		deletedModelKey: "model-2",
+		activeModelKey: "m1",
+		deletedModelKey: "m2",
 	});
-
-	assert.deepEqual(result, {
-		nextActiveModelKey: "model-1",
-		suppressAutoSelect: false,
-	});
+	assert.equal(result.nextActiveModelKey, "m1");
+	assert.equal(result.suppressAutoSelect, false);
 });
 
-test("applyManualModelSelection restores normal auto-select behavior", () => {
-	const result = applyManualModelSelection("model-9");
-
-	assert.deepEqual(result, {
-		nextActiveModelKey: "model-9",
-		suppressAutoSelect: false,
+test("applyDeletedModelSelection keeps null active unchanged", () => {
+	const result = applyDeletedModelSelection({
+		activeModelKey: null,
+		deletedModelKey: "m1",
 	});
+	assert.equal(result.nextActiveModelKey, null);
+	assert.equal(result.suppressAutoSelect, false);
 });
 
-test("resolveRunsRequestAfterSelection skips runs loading when there is no active model", () => {
-	const result = resolveRunsRequestAfterSelection(undefined);
-
-	assert.deepEqual(result, {
-		shouldLoadRuns: false,
-		selector: undefined,
+test("applyDeletedModelSelection handles null deleted key", () => {
+	const result = applyDeletedModelSelection({
+		activeModelKey: "m1",
+		deletedModelKey: null,
 	});
+	assert.equal(result.nextActiveModelKey, "m1");
+	assert.equal(result.suppressAutoSelect, false);
 });
 
-test("resolveRunsRequestAfterSelection keeps selector when active model exists", () => {
-	const result = resolveRunsRequestAfterSelection("model:dwd_patent");
+// ── applyBatchDeletedModelSelection ──────────────────────────────────
 
-	assert.deepEqual(result, {
-		shouldLoadRuns: true,
-		selector: "model:dwd_patent",
-	});
-});
-
-test("applyBatchDeletedModelSelection clears active model when it is included in deleted ids", () => {
+test("applyBatchDeletedModelSelection clears active when it is among deleted keys", () => {
 	const result = applyBatchDeletedModelSelection({
-		activeModelKey: "model-2",
-		deletedModelKeys: ["model-1", "model-2"],
+		activeModelKey: "m2",
+		deletedModelKeys: ["m1", "m2", "m3"],
 	});
+	assert.equal(result.nextActiveModelKey, null);
+	assert.equal(result.suppressAutoSelect, true);
+});
 
-	assert.deepEqual(result, {
-		nextActiveModelKey: null,
-		suppressAutoSelect: true,
+test("applyBatchDeletedModelSelection keeps active when not in deleted set", () => {
+	const result = applyBatchDeletedModelSelection({
+		activeModelKey: "m4",
+		deletedModelKeys: ["m1", "m2", "m3"],
 	});
+	assert.equal(result.nextActiveModelKey, "m4");
+	assert.equal(result.suppressAutoSelect, false);
+});
+
+test("applyBatchDeletedModelSelection handles empty deleted keys", () => {
+	const result = applyBatchDeletedModelSelection({
+		activeModelKey: "m1",
+		deletedModelKeys: [],
+	});
+	assert.equal(result.nextActiveModelKey, "m1");
+	assert.equal(result.suppressAutoSelect, false);
+});
+
+test("applyBatchDeletedModelSelection handles null active key", () => {
+	const result = applyBatchDeletedModelSelection({
+		activeModelKey: null,
+		deletedModelKeys: ["m1"],
+	});
+	assert.equal(result.nextActiveModelKey, null);
+	assert.equal(result.suppressAutoSelect, false);
+});
+
+// ── applyManualModelSelection ────────────────────────────────────────
+
+test("applyManualModelSelection sets new active key and clears suppress", () => {
+	const result = applyManualModelSelection("m5");
+	assert.equal(result.nextActiveModelKey, "m5");
+	assert.equal(result.suppressAutoSelect, false);
+});
+
+test("applyManualModelSelection accepts null", () => {
+	const result = applyManualModelSelection(null);
+	assert.equal(result.nextActiveModelKey, null);
+	assert.equal(result.suppressAutoSelect, false);
+});
+
+// ── resolveRunsRequestAfterSelection ─────────────────────────────────
+
+test("resolveRunsRequestAfterSelection enables loading for valid selector", () => {
+	const result = resolveRunsRequestAfterSelection("tag:project-management");
+	assert.equal(result.shouldLoadRuns, true);
+	assert.equal(result.selector, "tag:project-management");
+});
+
+test("resolveRunsRequestAfterSelection disables loading for empty string", () => {
+	const result = resolveRunsRequestAfterSelection("  ");
+	assert.equal(result.shouldLoadRuns, false);
+	assert.equal(result.selector, undefined);
+});
+
+test("resolveRunsRequestAfterSelection disables loading for null", () => {
+	const result = resolveRunsRequestAfterSelection(null);
+	assert.equal(result.shouldLoadRuns, false);
+	assert.equal(result.selector, undefined);
+});
+
+test("resolveRunsRequestAfterSelection disables loading for undefined", () => {
+	const result = resolveRunsRequestAfterSelection(undefined);
+	assert.equal(result.shouldLoadRuns, false);
+	assert.equal(result.selector, undefined);
 });

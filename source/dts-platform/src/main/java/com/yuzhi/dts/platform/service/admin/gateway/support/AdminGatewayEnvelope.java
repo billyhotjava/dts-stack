@@ -8,6 +8,6 @@ public record AdminGatewayEnvelope<T>(
     @JsonProperty("data") T data
 ) {
     public boolean isSuccess() {
-        return status != null && ("SUCCESS".equalsIgnoreCase(status) || "OK".equalsIgnoreCase(status) || "200".equals(status));
+        return status != null && ("SUCCESS".equalsIgnoreCase(status) || "OK".equalsIgnoreCase(status) || "200".equalsIgnoreCase(status));
     }
 }

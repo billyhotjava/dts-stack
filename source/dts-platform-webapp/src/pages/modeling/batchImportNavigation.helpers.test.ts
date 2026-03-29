@@ -1,44 +1,78 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { extractImportedModelNames, resolveBatchImportNavigation } from "./batchImportNavigation.helpers";
+import { extractImportedModelNames, resolveBatchImportNavigation } from "./batchImportNavigation.helpers.ts";
 
-test("extractImportedModelNames returns only successfully imported model names", () => {
-	const result = extractImportedModelNames([
-		{ name: "ads_a", status: "imported" },
-		{ name: "ads_b", status: "skipped" },
-		{ name: "ads_c", status: "validation_failed" },
-		{ name: "ads_d", status: "write_failed" },
-		{ name: "ads_e", status: "imported" },
-	]);
+// ── extractImportedModelNames ────────────────────────────────────────
 
-	assert.deepEqual(result, ["ads_a", "ads_e"]);
+test("extractImportedModelNames filters only imported status", () => {
+	const details = [
+		{ name: "model_a", status: "imported" },
+		{ name: "model_b", status: "skipped" },
+		{ name: "model_c", status: "imported" },
+		{ name: "model_d", status: "validation_failed" },
+	];
+	assert.deepEqual(extractImportedModelNames(details), ["model_a", "model_c"]);
 });
 
-test("resolveBatchImportNavigation activates target space and selects first imported model in that space", () => {
-	const result = resolveBatchImportNavigation(
-		"plan-9",
-		["biz_ads_major_project_overview", "biz_ads_delay_reason_trend"],
-		[
-			{ id: "m1", name: "other_model", planId: "plan-2" },
-			{ id: "m2", name: "biz_ads_delay_reason_trend", planId: "plan-9" },
-			{ id: "m3", name: "biz_ads_major_project_overview", planId: "plan-9" },
-		],
-	);
-
-	assert.deepEqual(result, {
-		activeSpaceKey: "space-plan-9",
-		activeModelKey: "m3",
-	});
+test("extractImportedModelNames skips entries without name", () => {
+	const details = [
+		{ status: "imported" },
+		{ name: "", status: "imported" },
+		{ name: "valid", status: "imported" },
+	];
+	assert.deepEqual(extractImportedModelNames(details), ["valid"]);
 });
 
-test("resolveBatchImportNavigation still switches to target space when imported models are not found", () => {
-	const result = resolveBatchImportNavigation("plan-9", ["missing_model"], [
-		{ id: "m1", name: "other_model", planId: "plan-2" },
-		{ id: "m2", name: "biz_ads_delay_reason_trend", planId: "plan-9" },
-	]);
+test("extractImportedModelNames returns empty for non-array input", () => {
+	assert.deepEqual(extractImportedModelNames(null as any), []);
+	assert.deepEqual(extractImportedModelNames(undefined as any), []);
+});
 
-	assert.deepEqual(result, {
-		activeSpaceKey: "space-plan-9",
-		activeModelKey: null,
-	});
+test("extractImportedModelNames handles empty array", () => {
+	assert.deepEqual(extractImportedModelNames([]), []);
+});
+
+// ── resolveBatchImportNavigation ─────────────────────────────────────
+
+test("resolveBatchImportNavigation selects first imported model in plan", () => {
+	const models = [
+		{ id: "id-a", name: "model_a", planId: "p1" },
+		{ id: "id-b", name: "model_b", planId: "p1" },
+		{ id: "id-c", name: "model_c", planId: "p2" },
+	];
+	const result = resolveBatchImportNavigation("p1", ["model_b", "model_a"], models);
+	assert.equal(result.activeSpaceKey, "space-p1");
+	assert.equal(result.activeModelKey, "id-b");
+});
+
+test("resolveBatchImportNavigation returns null keys when planId is empty", () => {
+	const result = resolveBatchImportNavigation("", ["model_a"], []);
+	assert.equal(result.activeSpaceKey, null);
+	assert.equal(result.activeModelKey, null);
+});
+
+test("resolveBatchImportNavigation returns null model when no match found", () => {
+	const models = [
+		{ id: "id-a", name: "other_model", planId: "p1" },
+	];
+	const result = resolveBatchImportNavigation("p1", ["nonexistent"], models);
+	assert.equal(result.activeSpaceKey, "space-p1");
+	assert.equal(result.activeModelKey, null);
+});
+
+test("resolveBatchImportNavigation filters models by planId", () => {
+	const models = [
+		{ id: "id-a", name: "model_a", planId: "p2" },
+	];
+	const result = resolveBatchImportNavigation("p1", ["model_a"], models);
+	assert.equal(result.activeSpaceKey, "space-p1");
+	assert.equal(result.activeModelKey, null);
+});
+
+test("resolveBatchImportNavigation is case-insensitive on name matching", () => {
+	const models = [
+		{ id: "id-a", name: "Model_A", planId: "p1" },
+	];
+	const result = resolveBatchImportNavigation("p1", ["model_a"], models);
+	assert.equal(result.activeModelKey, "id-a");
 });

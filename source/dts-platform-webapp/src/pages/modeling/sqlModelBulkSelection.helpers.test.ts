@@ -157,3 +157,61 @@ test("summarizeBulkSelection returns per-source counts and total", () => {
 		list: 1,
 	});
 });
+
+// ── Edge cases ───────────────────────────────────────────────────────
+
+test("deriveSelectedModelIdsFromCheckedKeys deduplicates ids", () => {
+	const result = deriveSelectedModelIdsFromCheckedKeys([
+		"model:111",
+		"model:111",
+		"model:222",
+	]);
+	assert.deepEqual(result, ["111", "222"]);
+});
+
+test("deriveSelectedModelIdsFromCheckedKeys handles empty array", () => {
+	assert.deepEqual(deriveSelectedModelIdsFromCheckedKeys([]), []);
+});
+
+test("deriveSelectedModelIdsFromCheckedKeys trims whitespace in ids", () => {
+	const result = deriveSelectedModelIdsFromCheckedKeys(["model: 111 "]);
+	assert.deepEqual(result, ["111"]);
+});
+
+test("clearDeletedBulkSelection returns same state when no ids to delete", () => {
+	const state: BulkSelectionState = {
+		selectedIds: ["111"],
+		sourceSelections: { tree: ["111"], governance: [], list: [] },
+		selectedSource: "tree",
+		lastChangedAt: 10,
+	};
+	const result = clearDeletedBulkSelection(state, []);
+	assert.equal(result, state);
+});
+
+test("clearDeletedBulkSelection returns same state when selection is already empty", () => {
+	const state: BulkSelectionState = {
+		selectedIds: [],
+		sourceSelections: { tree: [], governance: [], list: [] },
+		selectedSource: null,
+		lastChangedAt: null,
+	};
+	const result = clearDeletedBulkSelection(state, ["111"]);
+	assert.equal(result, state);
+});
+
+test("applyBulkSelectionChange deduplicates overlapping ids across sources", () => {
+	const state = applyBulkSelectionChange(
+		{
+			selectedIds: ["111"],
+			sourceSelections: { tree: ["111"], governance: [], list: [] },
+			selectedSource: "tree",
+			lastChangedAt: 10,
+		},
+		["111"],
+		"governance",
+		20,
+	);
+	assert.deepEqual(state.selectedIds, ["111"]);
+	assert.equal(state.selectedSource, "mixed");
+});

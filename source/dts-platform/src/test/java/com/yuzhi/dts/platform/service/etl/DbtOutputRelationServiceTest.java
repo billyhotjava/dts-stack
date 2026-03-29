@@ -11,6 +11,7 @@ import com.yuzhi.dts.platform.repository.modeling.ModelingSqlModelRepository;
 import java.sql.Connection;
 import java.sql.DatabaseMetaData;
 import java.sql.ResultSet;
+import java.sql.SQLException;
 import java.sql.Statement;
 import java.util.List;
 import java.util.Optional;
@@ -115,17 +116,48 @@ class DbtOutputRelationServiceTest {
         Connection connection = mock(Connection.class);
         DatabaseMetaData metadata = mock(DatabaseMetaData.class);
         ResultSet tables = mock(ResultSet.class);
-        when(connectionFactory.open(target)).thenReturn(connection);
-        when(connection.getMetaData()).thenReturn(metadata);
-        when(metadata.getTables(null, "public", "major_project_overview", new String[] { "TABLE", "VIEW" })).thenReturn(tables);
-        when(tables.next()).thenReturn(true, false);
-        when(tables.getString("TABLE_TYPE")).thenReturn("TABLE");
 
         DbtOutputRelationService.DbtOutputRelationActionResult result = service.prepareRebuild(model.getId());
 
-        assertThat(result.relationExists()).isTrue();
+        assertThat(result.relationExists()).isFalse();
         assertThat(result.executed()).isFalse();
         assertThat(result.selector()).isEqualTo("tag:project-management");
         assertThat(result.message()).contains("dbt --full-refresh");
+    }
+
+    @Test
+    void analyze_shouldWrapTargetConnectionFailureWithExplainableMessage() throws Exception {
+        when(connectionFactory.open(target)).thenThrow(new SQLException("The connection attempt failed."));
+
+        assertThatThrownBy(() -> service.analyze(model.getId()))
+            .isInstanceOf(IllegalStateException.class)
+            .hasMessageContaining("目标数仓连接失败")
+            .hasMessageContaining("数据源配置")
+            .hasMessageContaining("The connection attempt failed.");
+    }
+
+    @Test
+    void prepareRebuild_shouldNotRequireLiveWarehouseConnection() throws Exception {
+        when(connectionFactory.open(target)).thenThrow(new IllegalStateException("should not open connection"));
+
+        DbtOutputRelationService.DbtOutputRelationActionResult result = service.prepareRebuild(model.getId());
+
+        assertThat(result.relationExists()).isFalse();
+        assertThat(result.executed()).isFalse();
+        assertThat(result.selector()).isEqualTo("tag:project-management");
+        assertThat(result.message()).contains("dbt --full-refresh");
+    }
+
+    @Test
+    void prepareTruncate_shouldNotRequireLiveWarehouseConnection() throws Exception {
+        when(connectionFactory.open(target)).thenThrow(new IllegalStateException("should not open connection"));
+
+        DbtOutputRelationService.DbtOutputRelationActionResult result = service.prepareTruncate(model.getId());
+
+        assertThat(result.relationExists()).isFalse();
+        assertThat(result.executed()).isFalse();
+        assertThat(result.selector()).isEqualTo("tag:project-management");
+        assertThat(result.message()).contains("run-operation");
+        assertThat(result.qualifiedName()).isEqualTo("\"public\".\"major_project_overview\"");
     }
 }

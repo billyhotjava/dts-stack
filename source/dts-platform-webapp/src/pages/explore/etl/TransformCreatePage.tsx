@@ -371,9 +371,18 @@ export default function TransformCreatePage() {
 						...(n.deptCode ? [{ label: n.name, value: n.deptCode }] : []),
 						...(n.children ? flatten(n.children) : []),
 					]);
-				setDeptOptions(flatten(nodes));
+				const options = flatten(nodes);
+				if (options.length === 0 && activeDept) {
+					options.push({ label: activeDept, value: activeDept });
+				}
+				setDeptOptions(options);
 			})
-			.catch(() => {})
+			.catch(() => {
+				if (!active) return;
+				if (activeDept) {
+					setDeptOptions([{ label: activeDept, value: activeDept }]);
+				}
+			})
 			.finally(() => { if (active) setLoadingDeptOptions(false); });
 		return () => { active = false; };
 	}, []);

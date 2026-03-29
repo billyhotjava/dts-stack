@@ -23,7 +23,6 @@ public class DbtReleaseSubmissionService {
     private final DbtQualityGateService qualityGateService;
     private final DbtReleaseGateService releaseGateService;
     private final DbtDagService dbtDagService;
-    private final DbtSourceService dbtSourceService;
     private final AirflowClient airflowClient;
     private final AirflowProperties airflowProperties;
     private final ExternalRunLogService externalRunLogService;
@@ -33,7 +32,6 @@ public class DbtReleaseSubmissionService {
         DbtQualityGateService qualityGateService,
         DbtReleaseGateService releaseGateService,
         DbtDagService dbtDagService,
-        DbtSourceService dbtSourceService,
         AirflowClient airflowClient,
         AirflowProperties airflowProperties,
         ExternalRunLogService externalRunLogService,
@@ -42,7 +40,6 @@ public class DbtReleaseSubmissionService {
         this.qualityGateService = qualityGateService;
         this.releaseGateService = releaseGateService;
         this.dbtDagService = dbtDagService;
-        this.dbtSourceService = dbtSourceService;
         this.airflowClient = airflowClient;
         this.airflowProperties = airflowProperties;
         this.externalRunLogService = externalRunLogService;
@@ -94,7 +91,6 @@ public class DbtReleaseSubmissionService {
         }
 
         ensureDagActive(dagId, dag);
-        dbtSourceService.refreshOdsSources();
 
         Map<String, Object> conf = buildTriggerConf(selector, request, releaseGate);
         Map<String, Object> payload = Map.of("conf", conf, "logical_date", Instant.now().toString());

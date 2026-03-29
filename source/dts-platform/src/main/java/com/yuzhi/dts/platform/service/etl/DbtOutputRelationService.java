@@ -52,7 +52,7 @@ public class DbtOutputRelationService {
                 descriptor.exists() ? "已发现当前模型产出 relation" : "当前模型尚未生成产出 relation"
             );
         } catch (SQLException ex) {
-            throw new IllegalStateException("检查产出表失败: " + ex.getMessage(), ex);
+            throw new IllegalStateException(buildAnalyzeFailureMessage(ex), ex);
         }
     }
 
@@ -87,35 +87,43 @@ public class DbtOutputRelationService {
                 "已清空当前模型产出表"
             );
         } catch (SQLException ex) {
-            throw new IllegalStateException("清空产出表失败: " + ex.getMessage(), ex);
+            throw new IllegalStateException(buildTruncateFailureMessage(ex), ex);
         }
     }
 
     public DbtOutputRelationActionResult prepareRebuild(UUID modelId) {
-        DbtOutputRelationSummary summary = analyze(modelId);
-        if (!summary.exists()) {
-            return new DbtOutputRelationActionResult(
-                summary.modelId(),
-                summary.modelName(),
-                summary.selector(),
-                summary.qualifiedName(),
-                "rebuild",
-                false,
-                false,
-                "当前模型暂无产出 relation，将直接执行 dbt build"
-            );
-        }
-        // S4-002: Do NOT drop the table before build. Instead, rely on dbt --full-refresh
-        // which handles DROP+CREATE atomically within the dbt materialization.
+        ModelingSqlModel model = resolveModel(modelId);
+        DbtTargetConnectionFactory.TargetWarehouse target = connectionFactory.resolveTarget();
+        String schema = resolveSchema(model, target);
+        String identifier = resolveIdentifier(model);
+        String selector = resolveSelector(model);
         return new DbtOutputRelationActionResult(
-            summary.modelId(),
-            summary.modelName(),
-            summary.selector(),
-            summary.qualifiedName(),
+            model.getId(),
+            model.getName(),
+            selector,
+            buildQualifiedName(schema, identifier),
             "rebuild",
-            true,
             false,
-            "将通过 dbt --full-refresh 安全重建产出 relation"
+            false,
+            "将通过 dbt --full-refresh 安全重建产出 relation，当前步骤不依赖平台直连目标数仓"
+        );
+    }
+
+    public DbtOutputRelationActionResult prepareTruncate(UUID modelId) {
+        ModelingSqlModel model = resolveModel(modelId);
+        DbtTargetConnectionFactory.TargetWarehouse target = connectionFactory.resolveTarget();
+        String schema = resolveSchema(model, target);
+        String identifier = resolveIdentifier(model);
+        String selector = resolveSelector(model);
+        return new DbtOutputRelationActionResult(
+            model.getId(),
+            model.getName(),
+            selector,
+            buildQualifiedName(schema, identifier),
+            "truncate",
+            false,
+            false,
+            "将通过 dbt run-operation truncate_relation 异步清空产出 relation，当前步骤不依赖平台直连目标数仓"
         );
     }
 
@@ -209,6 +217,42 @@ public class DbtOutputRelationService {
         }
         String text = value.trim();
         return text.isEmpty() ? null : text;
+    }
+
+    private String buildAnalyzeFailureMessage(SQLException ex) {
+        if (looksLikeConnectionFailure(ex)) {
+            return "检查产出表失败: 目标数仓连接失败，请检查数据源配置、网络连通性和 JDBC 驱动后重试。底层信息: " + sanitizeSqlMessage(ex);
+        }
+        return "检查产出表失败: 无法读取目标数仓 relation 信息。底层信息: " + sanitizeSqlMessage(ex);
+    }
+
+    private String buildTruncateFailureMessage(SQLException ex) {
+        if (looksLikeConnectionFailure(ex)) {
+            return "清空产出表失败: 目标数仓连接失败，请检查数据源配置、网络连通性和 JDBC 驱动后重试。底层信息: " + sanitizeSqlMessage(ex);
+        }
+        return "清空产出表失败: 无法在目标数仓执行 TRUNCATE。底层信息: " + sanitizeSqlMessage(ex);
+    }
+
+    private boolean looksLikeConnectionFailure(SQLException ex) {
+        String message = sanitizeSqlMessage(ex).toLowerCase(Locale.ROOT);
+        return (
+            message.contains("connection") ||
+            message.contains("connect") ||
+            message.contains("timeout") ||
+            message.contains("refused") ||
+            message.contains("login") ||
+            message.contains("network") ||
+            message.contains("socket") ||
+            message.contains("通信")
+        );
+    }
+
+    private String sanitizeSqlMessage(SQLException ex) {
+        String message = ex == null ? null : stringVal(ex.getMessage());
+        if (StringUtils.hasText(message)) {
+            return message;
+        }
+        return ex == null ? "未知错误" : ex.getClass().getSimpleName();
     }
 
     private record RelationDescriptor(boolean exists, String type) {}

@@ -6,7 +6,9 @@ import com.yuzhi.dts.platform.service.infra.InfraSecretService;
 import java.sql.Connection;
 import java.sql.DriverManager;
 import java.sql.SQLException;
+import java.util.Locale;
 import java.util.Map;
+import java.util.Properties;
 import java.util.UUID;
 import org.springframework.stereotype.Component;
 import org.springframework.util.StringUtils;
@@ -55,7 +57,54 @@ public class DbtTargetConnectionFactory {
     }
 
     public Connection open(TargetWarehouse target) throws SQLException {
-        return DriverManager.getConnection(target.jdbcUrl(), target.username(), target.password());
+        try {
+            DriverManager.setLoginTimeout(5);
+        } catch (RuntimeException ignored) {}
+        String driverClass = inferDriverClass(target.jdbcUrl());
+        if (StringUtils.hasText(driverClass)) {
+            try {
+                Class.forName(driverClass);
+            } catch (ClassNotFoundException ignored) {}
+        }
+        Properties properties = new Properties();
+        if (StringUtils.hasText(target.username())) {
+            properties.setProperty("user", target.username());
+        }
+        if (StringUtils.hasText(target.password())) {
+            properties.setProperty("password", target.password());
+        }
+        String jdbcUrl = target.jdbcUrl();
+        String normalizedUrl = jdbcUrl == null ? "" : jdbcUrl.trim().toLowerCase(Locale.ROOT);
+        if (normalizedUrl.startsWith("jdbc:postgresql:") && !normalizedUrl.contains("connecttimeout=")) {
+            properties.setProperty("connectTimeout", "5");
+        }
+        if (normalizedUrl.startsWith("jdbc:sqlserver:") && !normalizedUrl.contains("logintimeout=")) {
+            properties.setProperty("loginTimeout", "5");
+        }
+        return DriverManager.getConnection(jdbcUrl, properties);
+    }
+
+    private String inferDriverClass(String jdbcUrl) {
+        if (!StringUtils.hasText(jdbcUrl)) {
+            return null;
+        }
+        String normalized = jdbcUrl.trim().toLowerCase(Locale.ROOT);
+        if (normalized.startsWith("jdbc:postgresql:")) {
+            return "org.postgresql.Driver";
+        }
+        if (normalized.startsWith("jdbc:mysql:")) {
+            return "com.mysql.cj.jdbc.Driver";
+        }
+        if (normalized.startsWith("jdbc:oracle:")) {
+            return "oracle.jdbc.OracleDriver";
+        }
+        if (normalized.startsWith("jdbc:sqlserver:")) {
+            return "com.microsoft.sqlserver.jdbc.SQLServerDriver";
+        }
+        if (normalized.startsWith("jdbc:dm:")) {
+            return "dm.jdbc.driver.DmDriver";
+        }
+        return null;
     }
 
     private String stringVal(Object value) {
