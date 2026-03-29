@@ -21,9 +21,9 @@ dts-platform-webapp 和 dts-analytics-webapp/modern 技术栈存在分裂：
 | F2 | ApexCharts → ECharts (platform-webapp) | DONE |
 | F3 | Tailwind 安装配置 (analytics-webapp) | DONE |
 | F4 | Design Token 对齐 | DONE |
-| F5 | 通用组件 Tailwind 迁移 (29 文件) | IN_PROGRESS |
-| F6 | 大屏编辑器 Tailwind 迁移 (~70 文件) | PENDING |
-| F7 | 清理旧 CSS 文件 (16 文件) | PENDING |
+| F5 | 通用组件 Tailwind 迁移 (29 文件) | DONE |
+| F6 | 大屏编辑器 Tailwind 迁移 (~50 文件) | DONE |
+| F7 | 清理旧 CSS + 页面级迁移 | DONE |
 
 ## 已完成的改动
 

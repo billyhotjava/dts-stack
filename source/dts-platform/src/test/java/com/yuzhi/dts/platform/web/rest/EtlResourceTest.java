@@ -24,6 +24,7 @@ import com.yuzhi.dts.platform.service.etl.DbtOutputRelationService;
 import com.yuzhi.dts.platform.service.etl.DbtPreviewService;
 import com.yuzhi.dts.platform.service.etl.DbtQualityGateService;
 import com.yuzhi.dts.platform.service.etl.DbtReleaseGateService;
+import com.yuzhi.dts.platform.service.etl.DbtReleaseSubmissionService;
 import com.yuzhi.dts.platform.service.etl.DbtRunResultService;
 import com.yuzhi.dts.platform.service.etl.DbtSourceService;
 import com.yuzhi.dts.platform.service.ops.ExternalRunLogService;
@@ -34,30 +35,30 @@ import org.springframework.web.server.ResponseStatusException;
 class EtlResourceTest {
 
     @Test
-    void triggerDbtCompileShouldWaitUntilDagIsVisibleBeforeTriggering() {
+    void triggerDbtCompileShouldFailFastWhenDagIsNotReady() {
         DbtDagService dbtDagService = mock(DbtDagService.class);
         DbtSourceService dbtSourceService = mock(DbtSourceService.class);
         AirflowClient airflowClient = mock(AirflowClient.class);
-        AirflowProperties airflowProperties = airflowProperties(1, 0);
+        AirflowProperties airflowProperties = airflowProperties(30, 1);
 
         when(dbtDagService.ensureDagForSelector("tag:project-management")).thenReturn("dwh_biadmin_dbt_manual");
         when(dbtSourceService.refreshOdsSources()).thenReturn(DbtSourceService.DbtSourceRefreshResult.success("/tmp/ods_sources.yml", 1));
-        when(airflowClient.getDag("dwh_biadmin_dbt_manual")).thenReturn(java.util.Optional.empty(), java.util.Optional.empty());
-        when(airflowClient.listDags(200))
-            .thenReturn(java.util.Optional.of(Map.of("dags", java.util.List.of())))
-            .thenReturn(java.util.Optional.of(Map.of("dags", java.util.List.of(Map.of("dag_id", "dwh_biadmin_dbt_manual")))));
-        when(airflowClient.triggerDag(eq("dwh_biadmin_dbt_manual"), any()))
-            .thenReturn(java.util.Optional.of(Map.of("dag_run_id", "run-1", "state", "queued")));
+        when(airflowClient.getDag("dwh_biadmin_dbt_manual")).thenReturn(java.util.Optional.empty());
+        when(airflowClient.listDags(200)).thenReturn(java.util.Optional.of(Map.of("dags", java.util.List.of())));
 
         EtlResource resource = newResource(dbtDagService, dbtSourceService, airflowClient, airflowProperties);
 
-        resource.triggerDbtCompile(
-            new EtlResource.DbtRunRequest("tag:project-management", "tag:project-management", "dev", "compile", Map.of(), null, null, null),
-            "BIADMIN"
-        );
+        assertThatThrownBy(
+            () ->
+                resource.triggerDbtCompile(
+                    new EtlResource.DbtRunRequest("tag:project-management", "tag:project-management", "dev", "compile", Map.of(), null, null, null),
+                    "BIADMIN"
+                )
+        )
+            .isInstanceOf(ResponseStatusException.class)
+            .satisfies(ex -> assertThat(((ResponseStatusException) ex).getReason()).contains("尚未在 Airflow 中注册"));
 
-        verify(airflowClient, times(2)).listDags(200);
-        verify(airflowClient).triggerDag(eq("dwh_biadmin_dbt_manual"), any());
+        verify(airflowClient, times(1)).listDags(200);
     }
 
     @Test
@@ -156,7 +157,7 @@ class EtlResourceTest {
                 )
         )
             .isInstanceOf(ResponseStatusException.class)
-            .satisfies(ex -> assertThat(((ResponseStatusException) ex).getReason()).contains("Airflow DAG 触发失败"));
+            .satisfies(ex -> assertThat(((ResponseStatusException) ex).getReason()).contains("尚未在 Airflow 中注册"));
     }
 
     private EtlResource newResource(
@@ -176,6 +177,7 @@ class EtlResourceTest {
             mock(DbtRunResultService.class),
             mock(DbtQualityGateService.class),
             mock(DbtReleaseGateService.class),
+            mock(DbtReleaseSubmissionService.class),
             new DbtArtifactSyncState(),
             airflowClient,
             airflowProperties,

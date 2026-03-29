@@ -8,6 +8,7 @@ import static org.mockito.ArgumentMatchers.anyCollection;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.lenient;
+import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -841,6 +842,59 @@ class ModelingSqlModelServiceTest {
             .isEqualTo(keeper.getId());
         assertThat(sharedSqlPath).exists();
         assertThat(uniqueSqlPath).doesNotExist();
+    }
+
+    @Test
+    void executeGovernance_shouldExposeDeletedFailedAndSkippedItems() throws Exception {
+        ModelingSqlModel deletable = new ModelingSqlModel();
+        deletable.setId(UUID.randomUUID());
+        deletable.setPlanId(planId);
+        deletable.setName("biz_ads_ok");
+        deletable.setOwnerDept("D1");
+        deletable.setModelPath("models/ads/prj1/biz_ads_ok.sql");
+
+        ModelingSqlModel protectedModel = new ModelingSqlModel();
+        protectedModel.setId(UUID.randomUUID());
+        protectedModel.setPlanId(planId);
+        protectedModel.setName("biz_ads_protected");
+        protectedModel.setOwnerDept("D2");
+        protectedModel.setModelPath("models/ads/prj1/biz_ads_protected.sql");
+
+        ModelingSqlModel failing = new ModelingSqlModel();
+        failing.setId(UUID.randomUUID());
+        failing.setPlanId(planId);
+        failing.setName("biz_ads_failed");
+        failing.setOwnerDept("D1");
+        failing.setModelPath("models/ads/prj1/biz_ads_failed.sql");
+
+        storedModels.add(deletable);
+        storedModels.add(protectedModel);
+        storedModels.add(failing);
+
+        doAnswer(invocation -> {
+            ModelingSqlModel model = invocation.getArgument(0);
+            if (failing.getId().equals(model.getId())) {
+                throw new RuntimeException("删除模型失败");
+            }
+            storedModels.removeIf(existing -> existing.getId() != null && existing.getId().equals(model.getId()));
+            return null;
+        }).when(repo).delete(any(ModelingSqlModel.class));
+
+        ModelingSqlModelService.SqlModelGovernanceExecuteResult result = generationService.executeGovernance(
+            new ModelingSqlModelService.SqlModelGovernanceExecuteRequest(
+                List.of(deletable.getId(), protectedModel.getId(), failing.getId(), UUID.randomUUID()),
+                false
+            ),
+            "D1"
+        );
+
+        assertThat(result.requested()).isEqualTo(4);
+        assertThat(result.deleted()).isEqualTo(1);
+        assertThat(result.failed()).isEqualTo(1);
+        assertThat(result.skipped()).isEqualTo(2);
+        assertThat(result.items())
+            .extracting(ModelingSqlModelService.SqlModelGovernanceExecuteItem::result)
+            .containsExactlyInAnyOrder("DELETED", "FAILED", "SKIPPED", "SKIPPED");
     }
 
     @Test

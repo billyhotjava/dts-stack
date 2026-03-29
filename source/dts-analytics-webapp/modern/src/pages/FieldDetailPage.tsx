@@ -6,8 +6,6 @@ import { EmptyState } from "../components/EmptyState";
 import { ErrorNotice } from "../components/ErrorNotice";
 import { Spin, Card, Tag } from "antd";
 import { getEffectiveLocale, t, type Locale } from "../i18n";
-import "./page.css";
-
 type LoadState<T> =
 	| { state: "loading" }
 	| { state: "loaded"; value: T }
@@ -147,7 +145,7 @@ export default function FieldDetailPage() {
 						<div className="field-values-list">
 							{valuesState.value.values.map((v, idx) => (
 								<div key={String(idx)} className="field-value-item">
-									{v === null || v === undefined ? <span className="text-muted">(null)</span> : String(v)}
+									{v === null || v === undefined ? <span className="text-secondary">(null)</span> : String(v)}
 								</div>
 							))}
 						</div>

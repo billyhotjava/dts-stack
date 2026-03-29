@@ -3,8 +3,6 @@ import { Link } from "react-router";
 import { PageContainer } from "../components/PageContainer/PageContainer";
 import { Button, Card } from "antd";
 import { getEffectiveLocale, t, type Locale } from "../i18n";
-import "./page.css";
-
 // Icons
 const AlertIcon = () => (
 	<svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
@@ -33,7 +31,7 @@ export default function NotFoundPage() {
 					<h1 style={{ margin: 0, fontSize: "var(--font-size-2xl)", fontWeight: "var(--font-weight-bold)", color: "var(--color-text-primary)" }}>
 						{t(locale, "notfound.title")}
 					</h1>
-					<p className="text-muted" style={{ marginTop: "var(--spacing-md)", marginBottom: "var(--spacing-xl)", maxWidth: 400 }}>
+					<p className="text-secondary" style={{ marginTop: "var(--spacing-md)", marginBottom: "var(--spacing-xl)", maxWidth: 400 }}>
 						{t(locale, "notfound.desc")}
 					</p>
 					<Link to="/">

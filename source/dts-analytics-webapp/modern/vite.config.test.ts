@@ -1,7 +1,11 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { createAnalyticsServerProxy } from "./vite.config";
+import {
+	createAnalyticsServerProxy,
+	isRuntimeConfigRequestPath,
+	resolveBrowserPlatformBaseUrl,
+} from "./vite.config";
 
 test("createAnalyticsServerProxy wires analytics and platform APIs in container mode", () => {
 	const proxy = createAnalyticsServerProxy({}, true);
@@ -30,4 +34,28 @@ test("createAnalyticsServerProxy falls back to localhost targets outside contain
 
 	assert.equal(proxy["/api"].target, "http://127.0.0.1:18082");
 	assert.equal(proxy["/analytics/api"].target, "http://127.0.0.1:3000");
+});
+
+test("resolveBrowserPlatformBaseUrl prefers explicit runtime configuration", () => {
+	assert.equal(
+		resolveBrowserPlatformBaseUrl("https://dts.local", "127.0.0.1:3002", "http"),
+		"https://dts.local",
+	);
+});
+
+test("resolveBrowserPlatformBaseUrl derives host-accessible platform origin for standalone analytics dev", () => {
+	assert.equal(
+		resolveBrowserPlatformBaseUrl("", "127.0.0.1:3002", "http"),
+		"http://127.0.0.1:18012",
+	);
+	assert.equal(
+		resolveBrowserPlatformBaseUrl("", "dts.local", "https"),
+		"https://dts.local",
+	);
+});
+
+test("isRuntimeConfigRequestPath matches both root and analytics-base runtime config urls", () => {
+	assert.equal(isRuntimeConfigRequestPath("/runtime-config.js"), true);
+	assert.equal(isRuntimeConfigRequestPath("/analytics/runtime-config.js"), true);
+	assert.equal(isRuntimeConfigRequestPath("/analytics/src/main.tsx"), false);
 });

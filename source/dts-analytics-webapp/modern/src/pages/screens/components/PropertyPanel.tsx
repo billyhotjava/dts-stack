@@ -262,7 +262,7 @@ function renderChartTitleLayoutRows(
 ) {
     return (
         <>
-            <div style={{ fontSize: 11, color: '#888', marginTop: 8, marginBottom: 4 }}>
+            <div style={{ fontSize: 11, color: 'var(--color-text-secondary)', marginTop: 8, marginBottom: 4 }}>
                 标题位置微调
             </div>
             <div className="flex items-center mb-3">
@@ -525,7 +525,7 @@ function renderQuickChartConfig(
                     >
                         一键自动避让
                     </button>
-                    <div style={{ fontSize: 11, color: '#888', marginTop: 4 }}>{legendHeuristic.hint}</div>
+                    <div style={{ fontSize: 11, color: 'var(--color-text-secondary)', marginTop: 4 }}>{legendHeuristic.hint}</div>
                 </div>
             </div>
             {(type === 'bar-chart') ? (
@@ -709,7 +709,7 @@ function renderQuickChartConfig(
                 <button type="button" className="inline-flex items-center justify-center px-2 py-1 min-h-7 border border-border-default rounded bg-surface-card text-text-primary text-xs cursor-pointer transition-all duration-200 hover:border-brand hover:bg-brand/10 disabled:opacity-45 disabled:cursor-not-allowed" onClick={() => applyPreset('compact')}>紧凑预设</button>
                 <button type="button" className="inline-flex items-center justify-center px-2 py-1 min-h-7 border border-border-default rounded bg-surface-card text-text-primary text-xs cursor-pointer transition-all duration-200 hover:border-brand hover:bg-brand/10 disabled:opacity-45 disabled:cursor-not-allowed" onClick={() => applyPreset('clear')}>恢复预设</button>
             </div>
-            <div style={{ fontSize: 11, color: '#94a3b8', lineHeight: 1.45 }}>
+            <div style={{ fontSize: 11, color: 'var(--color-text-secondary)', lineHeight: 1.45 }}>
                 当前为简洁模式，仅显示高频参数。切换到“专业模式”可配置全部细节。
             </div>
         </>
@@ -1023,7 +1023,7 @@ export function PropertyPanel({ activeTab = 'style' }: { activeTab?: PropertyPan
                             />
                         </div>
                     </div>
-                    <div className="empty-state" style={{ padding: '20px 0' }}>
+                    <div className="flex flex-col items-center justify-center py-8 text-center" style={{ padding: '20px 0' }}>
                         <div className="text-xs text-text-muted text-center py-8">点击画布中的组件进行选择编辑</div>
                     </div>
                 </div>
@@ -1632,7 +1632,7 @@ export function PropertyPanel({ activeTab = 'style' }: { activeTab?: PropertyPan
                                         <button type="button" className="inline-flex items-center justify-center px-2 py-1 min-h-7 border border-border-default rounded bg-surface-card text-text-primary text-xs cursor-pointer transition-all duration-200 hover:border-brand hover:bg-brand/10 disabled:opacity-45 disabled:cursor-not-allowed" onClick={() => applyChartPreset('clear')} title="恢复默认可读策略">恢复预设</button>
                                     </div>
                                 ) : null}
-                                <div style={{ marginTop: 6, fontSize: 11, color: '#94a3b8', lineHeight: 1.45 }}>
+                                <div style={{ marginTop: 6, fontSize: 11, color: 'var(--color-text-secondary)', lineHeight: 1.45 }}>
                                     {styleClipboard
                                         ? `样式剪贴板：${styleClipboard.type}（${Object.keys(styleClipboard.config || {}).length} 字段）`
                                         : '样式剪贴板为空，可先在任意组件点击“复制样式”。'}
@@ -1925,7 +1925,7 @@ export function PropertyPanel({ activeTab = 'style' }: { activeTab?: PropertyPan
                                 >
                                     {isSectionCollapsed('field-mapping') ? '▸' : '▾'} 字段映射
                                 </button>
-                                <label style={{ fontSize: 11, color: '#94a3b8', display: 'flex', alignItems: 'center', gap: 4, marginLeft: 'auto' }}>
+                                <label style={{ fontSize: 11, color: 'var(--color-text-secondary)', display: 'flex', alignItems: 'center', gap: 4, marginLeft: 'auto' }}>
                                     <input
                                         type="checkbox"
                                         checked={useFieldMapping}
@@ -1944,7 +1944,7 @@ export function PropertyPanel({ activeTab = 'style' }: { activeTab?: PropertyPan
                                     onChange={(newMapping) => handleConfigChange('_fieldMapping', newMapping)}
                                 />
                             ) : !isSectionCollapsed('field-mapping') ? (
-                                <div style={{ fontSize: 11, color: '#64748b', padding: '4px 0' }}>
+                                <div style={{ fontSize: 11, color: 'var(--color-text-secondary)', padding: '4px 0' }}>
                                     字段映射已关闭，使用高级模式直接编辑 config。
                                 </div>
                             ) : null}
@@ -1973,11 +1973,11 @@ export function PropertyPanel({ activeTab = 'style' }: { activeTab?: PropertyPan
                                     >
                                         解释当前组件
                                     </button>
-                                    <div style={{ fontSize: 11, color: '#94a3b8', lineHeight: 1.45 }}>
+                                    <div style={{ fontSize: 11, color: 'var(--color-text-secondary)', lineHeight: 1.45 }}>
                                         解释来源 CardId: {explainCardId}
                                     </div>
                                     {explainState?.state === 'loading' ? (
-                                        <div style={{ fontSize: 12, color: '#94a3b8' }}>解释生成中...</div>
+                                        <div style={{ fontSize: 12, color: 'var(--color-text-secondary)' }}>解释生成中...</div>
                                     ) : null}
                                     {explainState?.state === 'error' ? (
                                         <div style={{ fontSize: 12, color: '#ef4444' }}>
@@ -2015,7 +2015,7 @@ export function PropertyPanel({ activeTab = 'style' }: { activeTab?: PropertyPan
                                     ) : null}
                                 </div>
                             ) : (
-                                <div style={{ fontSize: 11, color: '#94a3b8', lineHeight: 1.45 }}>
+                                <div style={{ fontSize: 11, color: 'var(--color-text-secondary)', lineHeight: 1.45 }}>
                                     当前组件未绑定可解释的 Card 数据源。
                                 </div>
                             )
@@ -2178,7 +2178,7 @@ export function PropertyPanel({ activeTab = 'style' }: { activeTab?: PropertyPan
                                             <button type="button" className="inline-flex items-center justify-center px-2 py-1 min-h-7 border border-border-default rounded bg-surface-card text-text-primary text-xs cursor-pointer transition-all duration-200 hover:border-brand hover:bg-brand/10 disabled:opacity-45 disabled:cursor-not-allowed" onClick={clearTabVisibilityRules}>
                                                 清理显隐规则
                                             </button>
-                                            <div style={{ fontSize: 11, color: '#94a3b8', lineHeight: 1.5 }}>
+                                            <div style={{ fontSize: 11, color: 'var(--color-text-secondary)', lineHeight: 1.5 }}>
                                                 规则会按 Tab 选项顺序分配到图表/表格组件。
                                             </div>
                                         </div>
@@ -2287,7 +2287,7 @@ export function PropertyPanel({ activeTab = 'style' }: { activeTab?: PropertyPan
                                                 </div>
                                             );
                                         })()}
-                                        <div style={{ fontSize: 11, color: '#94a3b8', marginTop: -2 }}>
+                                        <div style={{ fontSize: 11, color: 'var(--color-text-secondary)', marginTop: -2 }}>
                                             仅在预览/公开/导出模式生效，设计器中始终可见便于编辑。
                                         </div>
                                     </>
@@ -2299,8 +2299,8 @@ export function PropertyPanel({ activeTab = 'style' }: { activeTab?: PropertyPan
 
                 {isInteractionTab && !drillDownContent && !interactionContent && !actionContent && (
                     <div className="flex items-center justify-center h-full text-xs text-text-muted">
-                        <div className="empty-state-icon">🔗</div>
-                        <div className="empty-state-text">当前组件暂无交互配置</div>
+                        <div className="text-3xl opacity-30 mb-2">🔗</div>
+                        <div className="text-xs text-text-muted">当前组件暂无交互配置</div>
                         <div className="text-xs text-text-muted text-center py-8">图表类组件支持下钻、联动和动作配置</div>
                     </div>
                 )}
@@ -2409,7 +2409,7 @@ export function PropertyPanel({ activeTab = 'style' }: { activeTab?: PropertyPan
                                         清除所有延迟
                                     </button>
                                 </div>
-                                <div style={{ fontSize: 11, color: '#94a3b8', marginTop: 4, lineHeight: 1.45 }}>
+                                <div style={{ fontSize: 11, color: 'var(--color-text-secondary)', marginTop: 4, lineHeight: 1.45 }}>
                                     入场动画仅在预览和运行时生效，设计器中不播放。
                                 </div>
                             </>
@@ -2438,7 +2438,7 @@ function renderPluginSchemaFields(
                 const value = component.config[key] ?? field?.defaultValue;
                 const description = String(field?.description || '').trim();
                 const descriptionNode = description ? (
-                    <div style={{ fontSize: 11, color: '#94a3b8', marginTop: 4, lineHeight: 1.45 }}>
+                    <div style={{ fontSize: 11, color: 'var(--color-text-secondary)', marginTop: 4, lineHeight: 1.45 }}>
                         {description}
                     </div>
                 ) : null;
@@ -2663,7 +2663,7 @@ function renderComponentConfig(
                         ))}
                     </select>
                 </div>
-                <div style={{ fontSize: 11, color: '#888', marginTop: 8, marginBottom: 4 }}>
+                <div style={{ fontSize: 11, color: 'var(--color-text-secondary)', marginTop: 8, marginBottom: 4 }}>
                     系列配色
                 </div>
                 {labels.map((label, idx) => (
@@ -2832,7 +2832,7 @@ function renderComponentConfig(
                     >
                         一键自动避让
                     </button>
-                    <div style={{ fontSize: 11, color: '#888', marginTop: 4 }}>{legendHeuristic.hint}</div>
+                    <div style={{ fontSize: 11, color: 'var(--color-text-secondary)', marginTop: 4 }}>{legendHeuristic.hint}</div>
                 </div>
             </div>
         </>
@@ -2854,7 +2854,7 @@ function renderComponentConfig(
 
     const renderChartPaddingRows = () => (
         <>
-            <div style={{ fontSize: 11, color: '#888', marginTop: 8, marginBottom: 4 }}>
+            <div style={{ fontSize: 11, color: 'var(--color-text-secondary)', marginTop: 8, marginBottom: 4 }}>
                 图形留白(像素)
             </div>
             <div className="flex items-center mb-3">
@@ -2927,7 +2927,7 @@ function renderComponentConfig(
 
     const renderChartOffsetRows = () => (
         <>
-            <div style={{ fontSize: 11, color: '#888', marginTop: 8, marginBottom: 4 }}>
+            <div style={{ fontSize: 11, color: 'var(--color-text-secondary)', marginTop: 8, marginBottom: 4 }}>
                 图形位置微调
             </div>
             <div className="flex items-center mb-3">
@@ -2989,7 +2989,7 @@ function renderComponentConfig(
 
     const renderAxisLabelRows = () => (
         <>
-            <div style={{ fontSize: 11, color: '#888', marginTop: 8, marginBottom: 4 }}>
+            <div style={{ fontSize: 11, color: 'var(--color-text-secondary)', marginTop: 8, marginBottom: 4 }}>
                 轴标签防拥挤
             </div>
             <div className="flex items-center mb-3">
@@ -3069,7 +3069,7 @@ function renderComponentConfig(
 
     const renderSeriesLabelRows = (options?: { includeLeaderLines?: boolean }) => (
         <>
-            <div style={{ fontSize: 11, color: '#888', marginTop: 8, marginBottom: 4 }}>
+            <div style={{ fontSize: 11, color: 'var(--color-text-secondary)', marginTop: 8, marginBottom: 4 }}>
                 数据标签
             </div>
             <div className="flex items-center mb-3">
@@ -3394,7 +3394,7 @@ function renderComponentConfig(
                         <input
                             type="color"
                             className="w-8 h-7 border border-border-default rounded cursor-pointer p-0"
-                            value={(config.backgroundColor as string) || '#1a1a2e'}
+                            value={(config.backgroundColor as string) || '#1e1f26'}
                             onChange={(e) => onChange('backgroundColor', e.target.value)}
                         />
                     </div>
@@ -5325,7 +5325,7 @@ function renderDataSourceConfig(
                             从 SQL 提取参数
                         </button>
                     </div>
-                    <div style={{ fontSize: 11, color: '#94a3b8', marginTop: -2 }}>
+                    <div style={{ fontSize: 11, color: 'var(--color-text-secondary)', marginTop: -2 }}>
                         自动识别 &#123;&#123;param&#125;&#125; / $&#123;param&#125; 占位符并生成参数绑定。
                     </div>
                     <div className="flex items-center mb-3">
@@ -5678,7 +5678,7 @@ function renderInteractionConfig(
             {interaction.enabled && (
                 <>
                     {globalVariables.length === 0 && (
-                        <div style={{ fontSize: 11, color: '#888', marginBottom: 8 }}>
+                        <div style={{ fontSize: 11, color: 'var(--color-text-secondary)', marginBottom: 8 }}>
                             请先在顶部“变量”里创建全局变量。
                         </div>
                     )}
@@ -5775,7 +5775,7 @@ function renderInteractionConfig(
                     >
                         + 添加联动规则
                     </button>
-                    <div style={{ fontSize: 11, color: '#94a3b8', marginTop: 6, lineHeight: 1.5 }}>
+                    <div style={{ fontSize: 11, color: 'var(--color-text-secondary)', marginTop: 6, lineHeight: 1.5 }}>
                         支持自定义路径，例如 <code>data.code</code>；可对值做数值/大小写转换，并设置空值回退。
                     </div>
 
@@ -5813,7 +5813,7 @@ function renderInteractionConfig(
                                     <option value="self">当前窗口</option>
                                 </select>
                             </div>
-                            <div style={{ fontSize: 11, color: '#94a3b8', marginTop: 4 }}>
+                            <div style={{ fontSize: 11, color: 'var(--color-text-secondary)', marginTop: 4 }}>
                                 支持占位符: {'{{name}} / {{seriesName}} / {{value}} / {{data.name}}'}
                             </div>
                         </>
@@ -5863,7 +5863,7 @@ function renderActionConfig(
     const content = (
         <>
             {actions.length === 0 ? (
-                <div style={{ fontSize: 11, color: '#94a3b8', marginBottom: 8 }}>
+                <div style={{ fontSize: 11, color: 'var(--color-text-secondary)', marginBottom: 8 }}>
                     当前组件还没有动作入口。适合配置详情面板、跳转、变量写入或意图事件。
                 </div>
             ) : null}
@@ -6075,7 +6075,7 @@ function renderActionConfig(
                         ) : null}
 
                         {(actionType === 'drill-down' || actionType === 'drill-up') ? (
-                            <div style={{ fontSize: 11, color: '#94a3b8', marginTop: 6 }}>
+                            <div style={{ fontSize: 11, color: 'var(--color-text-secondary)', marginTop: 6 }}>
                                 {actionType === 'drill-down'
                                     ? '运行态会复用当前组件的下钻链路，并使用点击值推进到下一层。'
                                     : '运行态会从当前钻取层级返回上一层。'}
@@ -6181,7 +6181,7 @@ function renderDrillDownConfig(
                                 alignItems: 'center',
                                 marginBottom: 4,
                                 fontSize: 11,
-                                color: '#888',
+                                color: 'var(--color-text-secondary)',
                             }}>
                                 <span>层级 {i + 1}</span>
                                 <button
@@ -6314,7 +6314,7 @@ function CardSourceColumnBindingsEditor({
 
     return (
         <>
-            <div style={{ fontSize: 11, color: '#888', marginTop: 8, marginBottom: 4 }}>
+            <div style={{ fontSize: 11, color: 'var(--color-text-secondary)', marginTop: 8, marginBottom: 4 }}>
                 {title}
             </div>
             <div style={{ display: 'flex', gap: 6, marginBottom: 8 }}>
@@ -6349,7 +6349,7 @@ function CardSourceColumnBindingsEditor({
                 </button>
             </div>
             {effectiveColumns.length === 0 && (
-                <div style={{ fontSize: 11, color: '#888', marginTop: 4, marginBottom: 8 }}>
+                <div style={{ fontSize: 11, color: 'var(--color-text-secondary)', marginTop: 4, marginBottom: 8 }}>
                     当前无字段绑定，请点击“添加列”。
                 </div>
             )}
@@ -6363,7 +6363,7 @@ function CardSourceColumnBindingsEditor({
                         marginBottom: 6,
                     }}>
                         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
-                            <span style={{ fontSize: 11, color: '#94a3b8' }}>
+                            <span style={{ fontSize: 11, color: 'var(--color-text-secondary)' }}>
                                 列 {index + 1}{sourceMeta ? '' : ' (失效字段)'}
                             </span>
                             <div style={{ display: 'flex', gap: 4 }}>
@@ -6559,7 +6559,7 @@ function ScrollBoardConfig({ component, onChange }: {
 
             {/* Card 数据源: 等待列加载 */}
             {hasDynamicSource && sourceCols.length === 0 && (
-                <div style={{ fontSize: 11, color: '#888', marginTop: 8, padding: '4px 0' }}>
+                <div style={{ fontSize: 11, color: 'var(--color-text-secondary)', marginTop: 8, padding: '4px 0' }}>
                     等待数据源加载列信息…
                 </div>
             )}
@@ -6578,7 +6578,7 @@ function ScrollBoardConfig({ component, onChange }: {
             {/* 静态数据源: 按索引的表头别名 (保持向后兼容) */}
             {!hasDynamicSource && staticHeaders.length > 0 && (
                 <>
-                    <div style={{ fontSize: 11, color: '#888', marginTop: 8, marginBottom: 4 }}>
+                    <div style={{ fontSize: 11, color: 'var(--color-text-secondary)', marginTop: 8, marginBottom: 4 }}>
                         表头别名
                     </div>
                     {staticHeaders.map((h, i) => (
@@ -6650,7 +6650,7 @@ function ChartAnnotationConfig({ component, onChange }: {
 
     return (
         <div style={{ display: 'grid', gap: 8 }}>
-            <div style={{ fontSize: 11, color: '#94a3b8', fontWeight: 600 }}>辅助线 ({markLines.length}/5)</div>
+            <div style={{ fontSize: 11, color: 'var(--color-text-secondary)', fontWeight: 600 }}>辅助线 ({markLines.length}/5)</div>
             {markLines.map((ml, idx) => (
                 <div key={idx} style={{ display: 'grid', gridTemplateColumns: 'auto 1fr 60px 60px auto', gap: 4, alignItems: 'center' }}>
                     <select className="flex-1 px-2.5 py-1.5 border border-border-default rounded bg-surface-card text-text-primary text-xs focus:outline-none focus:border-brand" style={{ fontSize: 11, padding: '3px 4px' }} value={ml.type}
@@ -6671,7 +6671,7 @@ function ChartAnnotationConfig({ component, onChange }: {
                 <button type="button" className="inline-flex items-center justify-center px-2 py-1 min-h-7 border border-border-default rounded bg-surface-card text-text-primary text-xs cursor-pointer transition-all duration-200 hover:border-brand hover:bg-brand/10 disabled:opacity-45 disabled:cursor-not-allowed" onClick={addMarkLine} style={{ fontSize: 11, justifySelf: 'start' }}>+ 辅助线</button>
             )}
 
-            <div style={{ fontSize: 11, color: '#94a3b8', fontWeight: 600, marginTop: 4 }}>标记区域 ({markAreas.length}/3)</div>
+            <div style={{ fontSize: 11, color: 'var(--color-text-secondary)', fontWeight: 600, marginTop: 4 }}>标记区域 ({markAreas.length}/3)</div>
             {markAreas.map((ma, idx) => (
                 <div key={idx} style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 60px 60px auto', gap: 4, alignItems: 'center' }}>
                     <input type="number" className="flex-1 px-2.5 py-1.5 border border-border-default rounded bg-surface-card text-text-primary text-xs focus:outline-none focus:border-brand" style={{ fontSize: 11, padding: '3px 4px' }} placeholder="起始" value={ma.from} onChange={(e) => updateMarkArea(idx, { from: Number(e.target.value) })} />
@@ -6686,7 +6686,7 @@ function ChartAnnotationConfig({ component, onChange }: {
                 <button type="button" className="inline-flex items-center justify-center px-2 py-1 min-h-7 border border-border-default rounded bg-surface-card text-text-primary text-xs cursor-pointer transition-all duration-200 hover:border-brand hover:bg-brand/10 disabled:opacity-45 disabled:cursor-not-allowed" onClick={addMarkArea} style={{ fontSize: 11, justifySelf: 'start' }}>+ 标记区域</button>
             )}
 
-            <div style={{ fontSize: 11, color: '#94a3b8', fontWeight: 600, marginTop: 4 }}>条件着色 ({conditionalColors.length}/5)</div>
+            <div style={{ fontSize: 11, color: 'var(--color-text-secondary)', fontWeight: 600, marginTop: 4 }}>条件着色 ({conditionalColors.length}/5)</div>
             {conditionalColors.map((cc, idx) => (
                 <div key={idx} style={{ display: 'grid', gridTemplateColumns: 'auto 60px 60px 40px auto', gap: 4, alignItems: 'center' }}>
                     <select className="flex-1 px-2.5 py-1.5 border border-border-default rounded bg-surface-card text-text-primary text-xs focus:outline-none focus:border-brand" style={{ fontSize: 11, padding: '3px 4px' }} value={cc.operator}
@@ -6870,7 +6870,7 @@ function TableConfig({ component, onChange }: {
             </div>
 
             {hasDynamicSource && sourceCols.length === 0 && (
-                <div style={{ fontSize: 11, color: '#888', marginTop: 8, padding: '4px 0' }}>
+                <div style={{ fontSize: 11, color: 'var(--color-text-secondary)', marginTop: 8, padding: '4px 0' }}>
                     等待数据源加载列信息…
                 </div>
             )}
@@ -6887,7 +6887,7 @@ function TableConfig({ component, onChange }: {
 
             {!hasDynamicSource && staticHeaders.length > 0 && (
                 <>
-                    <div style={{ fontSize: 11, color: '#888', marginTop: 8, marginBottom: 4 }}>
+                    <div style={{ fontSize: 11, color: 'var(--color-text-secondary)', marginTop: 8, marginBottom: 4 }}>
                         表头别名
                     </div>
                     {staticHeaders.map((h, i) => (
@@ -7066,7 +7066,7 @@ function StaticDataEditor({ component, updateComponent }: {
             <div className="text-xs text-text-secondary mb-1" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 6 }}>
                 <span>静态数据</span>
                 <span style={{ display: 'flex', gap: 8 }}>
-                    <button type="button" style={{ background: 'none', border: 'none', color: '#94a3b8', cursor: 'pointer', fontSize: 11 }}
+                    <button type="button" style={{ background: 'none', border: 'none', color: 'var(--color-text-secondary)', cursor: 'pointer', fontSize: 11 }}
                         onClick={() => { setHeaders(defaultTemplate.headers); setRows(defaultTemplate.rows); applyTableData(defaultTemplate.headers, defaultTemplate.rows); }}
                         title="重置为当前组件类型的示例数据"
                     >重置模板</button>
@@ -7081,7 +7081,7 @@ function StaticDataEditor({ component, updateComponent }: {
                     <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
                         <thead>
                             <tr>
-                                <th style={{ width: 28, padding: '4px 2px', background: 'var(--color-bg-secondary, #f4f7fb)', borderBottom: '1px solid var(--color-border, #e5e7eb)', fontSize: 10, color: '#999' }}>#</th>
+                                <th style={{ width: 28, padding: '4px 2px', background: 'var(--color-bg-secondary, #f4f7fb)', borderBottom: '1px solid var(--color-border, #e5e7eb)', fontSize: 10, color: 'var(--color-text-tertiary)' }}>#</th>
                                 {headers.map((h, ci) => (
                                     <th key={ci} style={{ padding: 0, background: 'var(--color-bg-secondary, #f4f7fb)', borderBottom: '1px solid var(--color-border, #e5e7eb)', position: 'relative' }}>
                                         <input
@@ -7092,7 +7092,7 @@ function StaticDataEditor({ component, updateComponent }: {
                                         />
                                         {headers.length > 1 && (
                                             <button type="button" onClick={() => deleteColumn(ci)}
-                                                style={{ position: 'absolute', top: 0, right: 2, background: 'none', border: 'none', color: '#ccc', cursor: 'pointer', fontSize: 10, lineHeight: 1 }}
+                                                style={{ position: 'absolute', top: 0, right: 2, background: 'none', border: 'none', color: 'var(--color-text-tertiary)', cursor: 'pointer', fontSize: 10, lineHeight: 1 }}
                                                 title="删除列">×</button>
                                         )}
                                     </th>
@@ -7107,7 +7107,7 @@ function StaticDataEditor({ component, updateComponent }: {
                         <tbody>
                             {rows.map((row, ri) => (
                                 <tr key={ri}>
-                                    <td style={{ padding: '2px 4px', textAlign: 'center', fontSize: 10, color: '#999', borderBottom: '1px solid var(--color-border, #e5e7eb)', userSelect: 'none' }}>
+                                    <td style={{ padding: '2px 4px', textAlign: 'center', fontSize: 10, color: 'var(--color-text-tertiary)', borderBottom: '1px solid var(--color-border, #e5e7eb)', userSelect: 'none' }}>
                                         {ri + 1}
                                     </td>
                                     {row.slice(0, headers.length).map((cell, ci) => (
@@ -7123,7 +7123,7 @@ function StaticDataEditor({ component, updateComponent }: {
                                     <td style={{ padding: 0, textAlign: 'center', borderBottom: '1px solid var(--color-border, #e5e7eb)' }}>
                                         {rows.length > 1 && (
                                             <button type="button" onClick={() => deleteRow(ri)}
-                                                style={{ background: 'none', border: 'none', color: '#ccc', cursor: 'pointer', fontSize: 12 }}
+                                                style={{ background: 'none', border: 'none', color: 'var(--color-text-tertiary)', cursor: 'pointer', fontSize: 12 }}
                                                 title="删除行">×</button>
                                         )}
                                     </td>
@@ -7147,13 +7147,13 @@ function StaticDataEditor({ component, updateComponent }: {
                         spellCheck={false}
                     />
                     {jsonError && <div style={{ color: '#ef4444', fontSize: 11, marginTop: 4 }}>{jsonError}</div>}
-                    <button type="button" className="property-btn" style={{ marginTop: 6, width: '100%' }} onClick={applyJson}>
+                    <button type="button" className="inline-flex items-center justify-center px-3 py-1.5 min-h-8 border border-border-default rounded bg-surface-card text-text-primary text-xs cursor-pointer hover:border-brand hover:bg-brand/10" style={{ marginTop: 6, width: '100%' }} onClick={applyJson}>
                         应用 JSON
                     </button>
                 </div>
             )}
 
-            <div style={{ fontSize: 10, color: '#94a3b8', padding: '4px 0', lineHeight: 1.4 }}>
+            <div style={{ fontSize: 10, color: 'var(--color-text-secondary)', padding: '4px 0', lineHeight: 1.4 }}>
                 {headers.length} 列 × {rows.length} 行
                 {STATIC_DATA_HINTS[componentType] && (
                     <span style={{ display: 'block', marginTop: 2, color: '#60a5fa' }}>

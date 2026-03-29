@@ -73,17 +73,18 @@ export function ProjectCockpitLayout({
 		: "尚未发布统一统计周期";
 
 	return (
-		<div className="project-cockpit">
-			<Card className="project-cockpit__period-card">
-				<div className="project-cockpit__period-bar">
-					<div className="project-cockpit__period-meta">
-						<div className="project-cockpit__period-title">统一统计周期</div>
-						<div className="project-cockpit__period-hint">
+		<div className="flex flex-col gap-3.5">
+			{/* Period card */}
+			<Card style={{ background: "radial-gradient(circle at top left, rgba(37,99,235,0.1), transparent 40%), linear-gradient(135deg, rgba(255,255,255,0.98), rgba(244,249,255,0.96))" }}>
+				<div className="grid grid-cols-[minmax(220px,1.1fr)_minmax(280px,1.4fr)_minmax(180px,0.8fr)] gap-4 items-end max-[1200px]:grid-cols-1">
+					<div className="flex flex-col gap-2">
+						<div className="text-xl font-bold tracking-tight">统一统计周期</div>
+						<div className="text-[13px] leading-relaxed text-text-secondary">
 							项目看板按 t1/t2 统一口径计算，保存后所有人看到同一版报表。
 						</div>
-						<div className="project-cockpit__period-status">{publishedLabel}</div>
+						<div className="text-[13px] leading-relaxed text-text-secondary">{publishedLabel}</div>
 					</div>
-					<div className="project-cockpit__period-inputs">
+					<div className="grid grid-cols-2 gap-3 max-[768px]:grid-cols-1">
 						<div>
 							<label style={{ display: "block", marginBottom: 4, fontWeight: 500 }}>t1 统计开始</label>
 							<Input
@@ -103,7 +104,7 @@ export function ProjectCockpitLayout({
 							/>
 						</div>
 					</div>
-					<div className="project-cockpit__period-actions">
+					<div className="flex flex-col gap-2">
 						{canPublish ? (
 							<Button
 								type="primary"
@@ -120,7 +121,7 @@ export function ProjectCockpitLayout({
 								保存统一口径
 							</Button>
 						) : null}
-						<span className="project-cockpit__period-tip">
+						<span className="text-[13px] leading-relaxed text-text-secondary">
 							{canPublish ? "保存后刷新即可同步到所有用户。" : "当前账号可预览统一口径，但不能发布。"}
 						</span>
 					</div>
@@ -129,15 +130,17 @@ export function ProjectCockpitLayout({
 
 			{settingsError ? <ErrorNotice locale={locale} error={settingsError} /> : null}
 
-			<div className="project-cockpit__topbar">
-				<h2 className="project-cockpit__topbar-title" onClick={() => setFilterOpen((prev) => !prev)} role="button" tabIndex={0}>
-					条件筛选 <span className="project-cockpit__topbar-arrow">{filterOpen ? "▾" : "▸"}</span>
+			{/* Filter toggle */}
+			<div className="flex items-center justify-between">
+				<h2 className="text-xl font-bold cursor-pointer select-none text-brand m-0 hover:opacity-80" onClick={() => setFilterOpen((prev) => !prev)} role="button" tabIndex={0}>
+					条件筛选 <span className="text-sm text-text-secondary">{filterOpen ? "▾" : "▸"}</span>
 				</h2>
 			</div>
 
+			{/* Filter bar */}
 			{filterOpen ? (
-				<Card className="project-cockpit__filter-card">
-					<div className="project-cockpit__filter-bar">
+				<Card>
+					<div className="flex items-end gap-3 flex-wrap [&>*]:min-w-[120px] [&>*]:flex-[1_1_120px] [&>*]:max-w-[200px] [&>button]:flex-[0_0_auto] [&>button]:min-w-0 [&>button]:max-w-none">
 						<div>
 							<label style={{ display: "block", marginBottom: 4, fontWeight: 500 }}>项目</label>
 							<Select
@@ -176,20 +179,21 @@ export function ProjectCockpitLayout({
 				</Card>
 			) : null}
 
-			<div className="project-cockpit__hero-grid">
-				<Card className="project-cockpit__hero-card project-cockpit__hero-card--compact">
-					<div className="project-cockpit__hero-body--compact">
-						<div className="project-cockpit__hero-title--compact">{hero?.title ?? "项目看板"}</div>
-						<span className="project-cockpit__hero-scope">{hero?.scope ?? ""}</span>
-						<span className="project-cockpit__hero-scope">更新: {hero?.updatedAt ?? "--"}</span>
+			{/* Hero grid */}
+			<div className="grid grid-cols-[2fr_1.2fr] gap-4 max-[1200px]:grid-cols-1">
+				<Card style={{ background: "radial-gradient(circle at top left, rgba(37,99,235,0.12), transparent 42%), linear-gradient(135deg, rgba(255,255,255,0.98), rgba(240,247,255,0.95))" }}>
+					<div className="flex items-center gap-4 flex-wrap px-4 py-3">
+						<div className="text-xl font-bold tracking-tight">{hero?.title ?? "项目看板"}</div>
+						<span className="text-[13px] text-text-secondary">{hero?.scope ?? ""}</span>
+						<span className="text-[13px] text-text-secondary">更新: {hero?.updatedAt ?? "--"}</span>
 					</div>
 				</Card>
-				<Card className="project-cockpit__spotlight-card--compact">
-					<div className="project-cockpit__spotlight-body--compact">
-						<div className="project-cockpit__spotlight-row">
+				<Card>
+					<div className="px-4 py-3">
+						<div className="flex items-center gap-3.5 flex-wrap">
 							<strong>重点盯防</strong>
-							<span className="project-cockpit__spotlight-name--compact">{spotlight?.majorProjectName ?? "暂无"}</span>
-							<div className="project-cockpit__spotlight-metrics">
+							<span className="text-[15px] font-semibold">{spotlight?.majorProjectName ?? "暂无"}</span>
+							<div className="flex flex-wrap gap-2">
 								<Tag color="error">高风险 {spotlight?.highRiskCount ?? 0}</Tag>
 								<Tag color="warning">延期 {spotlight?.delayCount ?? 0}</Tag>
 								<Tag>下一里程碑 {spotlight?.nextMilestone ?? "--"}</Tag>
@@ -218,14 +222,14 @@ export function ProjectCockpitLayout({
 			<Tabs
 				activeKey={queryState.theme}
 				onChange={(key) => setTheme(key as ProjectCockpitTheme)}
-				className="project-cockpit__tabs"
+				className="gap-3.5 flex-1 [&_[role=tabpanel]]:min-h-[600px]"
 				items={THEME_ITEMS.map((item) => ({
 					key: item.id,
 					label: item.label,
 					children:
 						item.id === "overview" ? (
 							summaryLoading && !summary ? (
-								<div className="project-cockpit__loading-card">
+								<div className="flex items-center justify-center min-h-[220px] border border-dashed border-border-default rounded-2xl bg-surface-muted text-text-secondary">
 									<Spin size="large" />
 								</div>
 							) : (

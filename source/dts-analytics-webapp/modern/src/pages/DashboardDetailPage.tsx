@@ -1,25 +1,21 @@
 import { Link, useParams } from "react-router";
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { analyticsApi, type DashboardCard, type DashboardDetail, type DashboardQueryResponse } from "../api/analyticsApi";
 import { PageContainer, PageHeader } from "../components/PageContainer/PageContainer";
 import { ErrorNotice } from "../components/ErrorNotice";
-import { ChartRenderer, type VisualizationType, type VisualizationSettings } from "../components/charts";
 import { Input, Spin, Button, Card, Collapse, Tag, Select } from "antd";
 import { getEffectiveLocale, t, type Locale } from "../i18n";
 import { writeTextToClipboard } from "../hooks/clipboard";
-import "./page.css";
+import { useDashboardCrossFilter } from "../hooks/useDashboardCrossFilter";
+import { useDrillFilter } from "../hooks/useDrillFilter";
+import { DashboardEditorGrid } from "./dashboard/DashboardEditorGrid";
+import { DashboardFilterBar, type DashboardParameter } from "./dashboard/DashboardFilterBar";
+import type { SeriesClickParams } from "../components/charts";
 
 type LoadState<T> =
 	| { state: "loading" }
 	| { state: "loaded"; value: T }
 	| { state: "error"; error: unknown };
-
-type DashboardParam = {
-	id: string;
-	name?: string;
-	slug?: string;
-	type?: string;
-};
 
 export default function DashboardDetailPage() {
 	const { id } = useParams();
@@ -32,6 +28,9 @@ export default function DashboardDetailPage() {
 	const [shareUuid, setShareUuid] = useState<string>("");
 	const [shareBusy, setShareBusy] = useState(false);
 	const [shareCopied, setShareCopied] = useState(false);
+
+	const crossFilter = useDashboardCrossFilter();
+	const drill = useDrillFilter();
 
 	useEffect(() => {
 		let cancelled = false;
@@ -51,7 +50,7 @@ export default function DashboardDetailPage() {
 		};
 	}, [id]);
 
-	const dashboardParams: DashboardParam[] = useMemo(() => {
+	const dashboardParams: DashboardParameter[] = useMemo(() => {
 		if (state.state !== "loaded") return [];
 		const raw = state.value.parameters;
 		if (!Array.isArray(raw)) return [];
@@ -67,7 +66,16 @@ export default function DashboardDetailPage() {
 
 	const dashcards: DashboardCard[] = useMemo(() => {
 		if (state.state !== "loaded") return [];
-		return Array.isArray(state.value.ordered_cards) ? (state.value.ordered_cards as DashboardCard[]) : [];
+		const raw = Array.isArray(state.value.ordered_cards) ? (state.value.ordered_cards as DashboardCard[]) : [];
+		// Fix overlapping cards: if all cards have row=0 (or same row), stack them vertically
+		const allSameRow = raw.length > 1 && raw.every((dc) => (dc.row ?? 0) === (raw[0].row ?? 0));
+		if (!allSameRow) return raw;
+		let nextRow = 0;
+		return raw.map((dc) => {
+			const fixed = { ...dc, row: nextRow, col: dc.col ?? 0 };
+			nextRow += (dc.size_y ?? 6);
+			return fixed;
+		});
 	}, [state]);
 
 	useEffect(() => {
@@ -127,8 +135,9 @@ export default function DashboardDetailPage() {
 					next[dc.id] = { state: "error", error: new Error("Missing card_id") };
 					continue;
 				}
+				const params = crossFilter.buildCrossFilterParams(dc.id, queryParametersPayload);
 				try {
-					const value = await analyticsApi.queryDashcard(id, dc.id, cardId, { parameters: queryParametersPayload });
+					const value = await analyticsApi.queryDashcard(id, dc.id, cardId, { parameters: params });
 					next[dc.id] = { state: "loaded", value };
 				} catch (e) {
 					next[dc.id] = { state: "error", error: e };
@@ -140,7 +149,25 @@ export default function DashboardDetailPage() {
 		return () => {
 			cancelled = true;
 		};
-	}, [id, dashcards, queryParametersPayload]);
+	}, [id, dashcards, queryParametersPayload, crossFilter.activeFilter]);
+
+	const handleParamChange = useCallback((paramId: string, value: string) => {
+		setParamValues((prev) => ({ ...prev, [paramId]: value }));
+	}, []);
+
+	const handleSeriesClick = useCallback(
+		(dashcardId: number, params: SeriesClickParams, _event?: React.MouseEvent) => {
+			crossFilter.setFilter({
+				sourceCardId: dashcardId,
+				column: params.dimensionName,
+				value: params.dimensionValue,
+			});
+		},
+		[crossFilter],
+	);
+
+	// Stub layout change handler (read-only, does nothing)
+	const noop = useCallback(() => {}, []);
 
 	const ShareIcon = () => (
 		<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -169,12 +196,6 @@ export default function DashboardDetailPage() {
 	const CheckIcon = () => (
 		<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
 			<polyline points="20 6 9 17 4 12" />
-		</svg>
-	);
-
-	const FilterIcon = () => (
-		<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-			<polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3" />
 		</svg>
 	);
 
@@ -248,85 +269,51 @@ export default function DashboardDetailPage() {
 									readOnly
 									value={`${window.location.origin}/analytics/public/dashboard/${encodeURIComponent(shareUuid)}`}
 								/>
-								<p className="text-muted" style={{ marginTop: "var(--spacing-sm)", fontSize: "var(--font-size-sm)" }}>
+								<p className="text-secondary" style={{ marginTop: "var(--spacing-sm)", fontSize: "var(--font-size-sm)" }}>
 									{t(locale, "share.note")}
 								</p>
 						</Card>
 					)}
 
-					{dashboardParams.length > 0 && (
-						<Card style={{ marginBottom: "var(--spacing-lg)" }}
-							title={<span style={{ display: "inline-flex", alignItems: "center", gap: 8 }}><FilterIcon />{t(locale, "filter.title")}</span>}
-							extra={
-									<Button type="text" onClick={() => setParamValues({})}>
-										{t(locale, "filter.clear")}
-									</Button>
-								}
-						>
-								<div style={{ display: "flex", flexWrap: "wrap", gap: "var(--spacing-md)" }}>
-									{dashboardParams.map((p) => (
-										<div key={p.id} style={{ minWidth: 200, flex: "1 1 200px", maxWidth: 300 }}>
-											<label style={{ display: "block", marginBottom: 4, fontWeight: 500 }}>{p.name || p.slug || p.id}</label>
-											<Select
-												value={paramValues[p.id] ?? ""}
-												onChange={(value) => setParamValues((prev) => ({ ...prev, [p.id]: value }))}
-												options={[
-													{ value: "", label: t(locale, "filter.all") },
-													...(paramOptions[p.id] ?? []).map((v) => ({ value: String(v), label: String(v) }))
-												]}
-												style={{ width: "100%" }}
-											/>
-										</div>
-									))}
-								</div>
-						</Card>
+					{/* Cross-filter indicator */}
+					{crossFilter.activeFilter && (
+						<div className="flex items-center gap-2 mb-3 px-3 py-2 bg-blue-50 dark:bg-blue-900/20 rounded-md text-sm">
+							<span>
+								{t(locale, "filter.crossFilterActive")
+									.replace("{column}", crossFilter.activeFilter.column)
+									.replace("{value}", crossFilter.activeFilter.value)}
+							</span>
+							<Button type="link" size="small" onClick={crossFilter.clearFilter}>
+								{t(locale, "filter.clearCrossFilter")}
+							</Button>
+						</div>
 					)}
 
-					<div
-						className="dashboardGrid"
-						style={{
-							display: "grid",
-							gridTemplateColumns: "repeat(24, minmax(0, 1fr))",
-							gap: "var(--spacing-md)",
-							alignItems: "stretch",
-							marginBottom: "var(--spacing-lg)",
-						}}
-					>
-						{dashcards.map((dc) => {
-							const card: any = dc.card as any;
-							const cardId = dc.card_id ?? (card && typeof card.id === "number" ? card.id : undefined);
-							const name = (card && typeof card.name === "string" && card.name) || `Card ${cardId ?? "-"}`;
-							const gridColumn =
-								typeof dc.col === "number" && typeof dc.size_x === "number" ? `${dc.col + 1} / span ${dc.size_x}` : "auto";
-							const gridRow =
-								typeof dc.row === "number" && typeof dc.size_y === "number" ? `${dc.row + 1} / span ${dc.size_y}` : "auto";
-							const result = dashcardResults[dc.id];
+					{/* Filter bar using new component */}
+					<DashboardFilterBar
+						parameters={dashboardParams}
+						paramValues={paramValues}
+						paramOptions={paramOptions}
+						onParamChange={handleParamChange}
+						isEditing={false}
+						locale={locale}
+					/>
 
-							return (
-								<Card key={dc.id} style={{ gridColumn, gridRow, overflow: "hidden" }}
-									title={cardId ? <Link to={`/questions/${cardId}`}>{String(name)}</Link> : String(name)}
-									extra={<Tag>card</Tag>}
-								>
-										{!result || result.state === "loading" ? (
-											<div className="loading-container" style={{ padding: "var(--spacing-md)" }}>
-												<Spin />
-											</div>
-										) : result.state === "error" ? (
-											<ErrorNotice locale={locale} error={result.error} />
-										) : (
-											<ChartRenderer
-												data={{
-													cols: (result.value.data?.cols ?? []) as { name: string; display_name?: string; base_type?: string }[],
-													rows: (result.value.data?.rows ?? []) as any[][]
-												}}
-												display={(card?.display as VisualizationType) || "table"}
-												settings={(card?.visualization_settings as VisualizationSettings) || {}}
-											/>
-										)}
-								</Card>
-							);
-						})}
-					</div>
+					{/* Dashboard grid using new component */}
+					{dashcards.length > 0 && (
+						<DashboardEditorGrid
+							dashcards={dashcards}
+							cardResults={dashcardResults}
+							isEditing={false}
+							locale={locale}
+							onLayoutChange={noop}
+							onRemoveCard={noop}
+							onSeriesClick={handleSeriesClick}
+							drillFilters={drill.filters}
+							onDrillClear={drill.clearAll}
+							onDrillRemoveFrom={drill.removeFiltersFrom}
+						/>
+					)}
 
 					<Collapse
 						items={[{

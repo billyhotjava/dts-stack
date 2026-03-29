@@ -218,6 +218,20 @@ export type DbtReleaseGateResult = {
 	};
 };
 
+export type DbtReleaseSubmitResult = {
+	selector?: string;
+	status?: "SUBMITTED" | "WARNING" | "BLOCKED" | string;
+	blocking?: boolean;
+	warning?: boolean;
+	blockers?: string[];
+	warnings?: string[];
+	dagId?: string;
+	dagRunId?: string;
+	qualityGate?: DbtQualityGateResult | null;
+	releaseGate?: DbtReleaseGateResult | null;
+	buildEvidence?: DbtReleaseGateResult["buildEvidence"] | null;
+};
+
 export type SqlModelContractImpact = {
 	modelId?: string;
 	modelName?: string;
@@ -268,6 +282,7 @@ export type SqlModelGovernanceExecuteResult = {
 	requested?: number;
 	deleted?: number;
 	skipped?: number;
+	failed?: number;
 	items?: Array<{
 		modelId?: string;
 		name?: string;

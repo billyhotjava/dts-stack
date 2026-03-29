@@ -5,8 +5,6 @@ import { ErrorNotice } from "../components/ErrorNotice";
 import { PageContainer } from "../components/PageContainer/PageContainer";
 import { Spin, Button, Card } from "antd";
 import { getEffectiveLocale, t, type Locale } from "../i18n";
-import "./page.css";
-
 type LoadState<T> =
 	| { state: "loading" }
 	| { state: "loaded"; value: T }
@@ -162,51 +160,8 @@ export default function HomePage() {
 			{user.state === "error" && <ErrorNotice locale={locale} error={user.error} />}
 			{health.state === "error" && <ErrorNotice locale={locale} error={health.error} />}
 
-			{/* Quick Actions */}
-			<div className="section">
-				<h2 className="sectionTitle">{t(locale, "home.quickActions")}</h2>
-				<div className="grid3">
-					<Link to="/project-cockpit" className="quick-action-card">
-						<div className="quick-action-card__icon">
-							<ProjectCockpitIcon />
-						</div>
-						<div className="quick-action-card__content">
-							<h3>项目看板</h3>
-							<p>统一入口查看重大项目、子项目、计划执行和延期归因。</p>
-						</div>
-					</Link>
-					<Link to="/questions/new" className="quick-action-card">
-						<div className="quick-action-card__icon">
-							<QuestionIcon />
-						</div>
-						<div className="quick-action-card__content">
-							<h3>{t(locale, "questions.new")}</h3>
-							<p>{t(locale, "home.newQuestionDesc")}</p>
-						</div>
-					</Link>
-					<Link to="/dashboards/new" className="quick-action-card">
-						<div className="quick-action-card__icon">
-							<DashboardIcon />
-						</div>
-						<div className="quick-action-card__content">
-							<h3>{t(locale, "dashboards.new")}</h3>
-							<p>{t(locale, "home.newDashboardDesc")}</p>
-						</div>
-					</Link>
-					<Link to="/data" className="quick-action-card">
-						<div className="quick-action-card__icon">
-							<DatabaseIcon />
-						</div>
-						<div className="quick-action-card__content">
-							<h3>{t(locale, "nav.data")}</h3>
-							<p>{t(locale, "home.browseDataDesc")}</p>
-						</div>
-					</Link>
-				</div>
-			</div>
-
-			{/* Recent Items */}
-			<div className="grid3" style={{ marginTop: "var(--spacing-xl)" }}>
+			{/* Recent Items — top section */}
+			<div className="grid grid-cols-3 gap-md">
 				{/* Recent Dashboards */}
 				<Card
 					title={t(locale, "home.recentDashboards")}
@@ -343,6 +298,31 @@ export default function HomePage() {
 							</ul>
 						)}
 				</Card>
+			</div>
+
+			{/* Quick Actions — bottom section */}
+			<div style={{ marginTop: "var(--spacing-xl)" }}>
+				<h2 className="text-lg font-semibold text-primary mb-md">{t(locale, "home.quickActions")}</h2>
+				<div className="grid grid-cols-3 gap-md">
+					<Link to="/screens/new" className="quick-action-card">
+						<div className="quick-action-card__icon">
+							<ScreenIcon />
+						</div>
+						<div className="quick-action-card__content">
+							<h3>自建大屏</h3>
+							<p>创建自定义数据大屏，可视化展示关键指标。</p>
+						</div>
+					</Link>
+					<Link to="/dashboards/new" className="quick-action-card">
+						<div className="quick-action-card__icon">
+							<DashboardIcon />
+						</div>
+						<div className="quick-action-card__content">
+							<h3>自建分析看板</h3>
+							<p>创建分析看板，组合多个图表进行数据分析。</p>
+						</div>
+					</Link>
+				</div>
 			</div>
 
 			<style>{`

@@ -211,21 +211,21 @@ export function DesignerCanvas() {
     }, [config.height, rulerStep]);
 
     return (
-        <div className="flex-1 min-h-0 overflow-auto bg-[#1a1a2e] grid place-items-center p-10" ref={containerRef}>
+        <div className="flex-1 min-h-0 overflow-auto grid place-items-center p-10" ref={containerRef} style={{ background: 'var(--color-surface)' }}>
             {/* Horizontal ruler */}
-            <div className="canvas-ruler canvas-ruler--h shrink-0 relative overflow-hidden bg-[#1a1a2e] h-[22px] border-b border-white/[0.08]" style={{ paddingLeft: 30 }}>
+            <div className="canvas-ruler canvas-ruler--h shrink-0 relative overflow-hidden h-[22px]" style={{ paddingLeft: 30, background: 'var(--color-surface)', borderBottom: '1px solid var(--color-border)' }}>
                 <div style={{ position: 'relative', width: config.width * scale, height: '100%', overflow: 'hidden' }}>
                     {hTicks.map(x => (
-                        <span key={x} className="canvas-ruler-tick absolute text-[9px] text-white/35 pointer-events-none whitespace-nowrap bottom-0.5" style={{ left: x * scale }}>{x}</span>
+                        <span key={x} className="canvas-ruler-tick absolute text-[9px] pointer-events-none whitespace-nowrap bottom-0.5" style={{ left: x * scale, color: 'var(--color-text-tertiary)' }}>{x}</span>
                     ))}
                 </div>
             </div>
             <div className="flex flex-1 min-h-0">
                 {/* Vertical ruler */}
-                <div className="canvas-ruler canvas-ruler--v shrink-0 relative overflow-hidden bg-[#1a1a2e] w-[30px] border-r border-white/[0.08]">
+                <div className="canvas-ruler canvas-ruler--v shrink-0 relative overflow-hidden w-[30px]" style={{ background: 'var(--color-surface)', borderRight: '1px solid var(--color-border)' }}>
                     <div style={{ position: 'relative', height: config.height * scale, width: '100%', overflow: 'hidden' }}>
                         {vTicks.map(y => (
-                            <span key={y} className="canvas-ruler-tick absolute text-[9px] text-white/35 pointer-events-none whitespace-nowrap left-0.5" style={{ top: y * scale, writingMode: 'vertical-lr', textOrientation: 'mixed' }}>{y}</span>
+                            <span key={y} className="canvas-ruler-tick absolute text-[9px] pointer-events-none whitespace-nowrap left-0.5" style={{ top: y * scale, writingMode: 'vertical-lr', textOrientation: 'mixed', color: 'var(--color-text-tertiary)' }}>{y}</span>
                         ))}
                     </div>
                 </div>

@@ -1,4 +1,5 @@
 import { useScreenRuntime } from '../ScreenRuntimeContext';
+import '../ScreenRuntimeShell.css';
 
 export function GlobalVariablePanel() {
     const { definitions, values, setVariable } = useScreenRuntime();

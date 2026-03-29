@@ -1,3 +1,5 @@
+import '../ScreenRuntimeShell.css';
+
 type PreviewScaleControlProps = {
     scalePercent: number;
     onFit: () => void;

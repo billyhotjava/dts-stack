@@ -6,8 +6,6 @@ import { EmptyState } from "../components/EmptyState";
 import { ErrorNotice } from "../components/ErrorNotice";
 import { Input, Spin, Button, Card, Tag } from "antd";
 import { getEffectiveLocale, t, type Locale } from "../i18n";
-import "./page.css";
-
 type LoadState<T> =
 	| { state: "idle" }
 	| { state: "loading" }
@@ -134,7 +132,7 @@ export default function SearchPage() {
 
 			{state.state === "idle" && (
 				<Card>
-					<p className="text-muted" style={{ textAlign: "center", margin: 0 }}>
+					<p className="text-secondary" style={{ textAlign: "center", margin: 0 }}>
 						{t(locale, "search.placeholder")}
 					</p>
 				</Card>
@@ -173,7 +171,7 @@ export default function SearchPage() {
 											<Tag color={item.model === "dashboard" ? "processing" : item.model === "card" ? "success" : undefined}>
 												{item.model === "dashboard" ? t(locale, "dashboards.title") : item.model === "card" ? t(locale, "questions.title") : item.model === "collection" ? t(locale, "collections.title") : item.model}
 											</Tag>
-											<span className="text-muted">{t(locale, "common.id")}: {String(item.id)}</span>
+											<span className="text-secondary">{t(locale, "common.id")}: {String(item.id)}</span>
 										</span>
 									</div>
 								</Link>

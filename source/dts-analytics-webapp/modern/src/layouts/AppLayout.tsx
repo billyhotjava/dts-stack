@@ -7,7 +7,6 @@ import {
 	HomeOutlined,
 	QuestionCircleOutlined,
 	DashboardOutlined,
-	FolderOutlined,
 	DatabaseOutlined,
 	AppstoreOutlined,
 	BarChartOutlined,
@@ -36,7 +35,6 @@ const ROUTE_NAV_MAP: RouteNavMeta[] = [
 	{ path: "/", section: "nav.section.core", nav: "nav.home" },
 	{ path: "/questions", section: "nav.section.core", nav: "nav.questions" },
 	{ path: "/dashboards", section: "nav.section.core", nav: "nav.dashboards" },
-	{ path: "/collections", section: "nav.section.core", nav: "nav.collections" },
 	{ path: "/data", section: "nav.section.data", nav: "nav.data" },
 	{ path: "/models", section: "nav.section.data", nav: "nav.models" },
 	{ path: "/metrics", section: "nav.section.data", nav: "nav.metrics" },
@@ -126,7 +124,6 @@ function HeaderIntro() {
 const MENU_PATHS = [
 	"/questions",
 	"/dashboards",
-	"/collections",
 	"/data",
 	"/models",
 	"/metrics",
@@ -181,7 +178,6 @@ export function AppLayout() {
 				{ key: "/", icon: <HomeOutlined />, label: t(locale, "nav.home") },
 				{ key: "/questions", icon: <QuestionCircleOutlined />, label: t(locale, "nav.questions") },
 				{ key: "/dashboards", icon: <DashboardOutlined />, label: t(locale, "nav.dashboards") },
-				{ key: "/collections", icon: <FolderOutlined />, label: t(locale, "nav.collections") },
 			],
 		},
 		{ type: "divider" },
@@ -213,16 +209,17 @@ export function AppLayout() {
 
 	return (
 		<Layout className="min-h-screen">
-			<Sider
-				collapsible
-				collapsed={collapsed}
-				onCollapse={setCollapsed}
-				trigger={null}
-				width={220}
-				collapsedWidth={64}
-				theme="light"
-				className="!sticky top-0 left-0 h-screen overflow-auto border-r border-border-default"
-			>
+				<Sider
+					collapsible
+					collapsed={collapsed}
+					onCollapse={setCollapsed}
+					trigger={null}
+					width={220}
+					collapsedWidth={64}
+					theme="light"
+					className="top-0 left-0 h-screen overflow-auto border-r border-border-default"
+					style={{ position: "sticky" }}
+				>
 				{/* Logo area */}
 				<div className="h-12 flex items-center" style={{ justifyContent: "center", padding: collapsed ? 0 : "0 16px" }}>
 					<Link
@@ -276,7 +273,10 @@ export function AppLayout() {
 			</Sider>
 
 			<Layout>
-				<Header className="!flex items-center justify-between !px-4 !bg-white border-b border-border-default !h-12 !leading-[48px]">
+					<Header
+						className="flex items-center justify-between border-b border-border-default"
+						style={{ paddingInline: 16, background: "#ffffff", height: 48, lineHeight: "48px" }}
+					>
 					<div className="flex-1">
 						<HeaderIntro />
 					</div>
@@ -324,8 +324,8 @@ export function AppLayout() {
 						</AntDropdown>
 					</Space>
 				</Header>
-				<Content className="!px-4 !pb-4 overflow-auto">
-					<ErrorBoundary>
+					<Content className="overflow-auto" style={{ paddingInline: 16, paddingBottom: 16 }}>
+						<ErrorBoundary>
 						<Outlet />
 					</ErrorBoundary>
 				</Content>

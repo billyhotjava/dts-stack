@@ -5,8 +5,6 @@ import { EmptyState } from "../components/EmptyState";
 import { ErrorNotice } from "../components/ErrorNotice";
 import { Spin, Card, Statistic, Tag } from "antd";
 import { getEffectiveLocale, t, type Locale } from "../i18n";
-import "./page.css";
-
 type LoadState<T> =
 	| { state: "loading" }
 	| { state: "loaded"; value: T }
@@ -61,7 +59,7 @@ export default function MetricsPage() {
 			/>
 
 			{/* Summary Stats */}
-			<div className="grid3" style={{ marginBottom: "var(--spacing-lg)" }}>
+			<div className="grid grid-cols-3 gap-md" style={{ marginBottom: "var(--spacing-lg)" }}>
 				<Card><Statistic title={t(locale, "metrics.analytics")} value={localMetrics.state === "loaded" ? localMetrics.value.length : "-"} prefix={<MetricIcon />} /></Card>
 				<Card><Statistic title={t(locale, "metrics.platform")} value={platformMetrics.state === "loaded" ? platformMetrics.value.length : "-"} prefix={<MetricIcon />} /></Card>
 				<Card><Statistic title={t(locale, "common.total")} value={localMetrics.state === "loaded" && platformMetrics.state === "loaded" ? localMetrics.value.length + platformMetrics.value.length : "-"} prefix={<MetricIcon />} /></Card>
@@ -85,7 +83,7 @@ export default function MetricsPage() {
 						<EmptyState title={t(locale, "common.empty")} description={t(locale, "metrics.analyticsEmpty")} />
 					)}
 					{localMetrics.state === "loaded" && localMetrics.value.length > 0 && (
-						<table className="table">
+						<table>
 							<thead>
 								<tr>
 									<th>{t(locale, "common.name")}</th>
@@ -122,7 +120,7 @@ export default function MetricsPage() {
 						<EmptyState title={t(locale, "common.empty")} description={t(locale, "metrics.platformEmpty")} />
 					)}
 					{platformMetrics.state === "loaded" && platformMetrics.value.length > 0 && (
-						<table className="table">
+						<table>
 							<thead>
 								<tr>
 									<th>{t(locale, "common.name")}</th>

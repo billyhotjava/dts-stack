@@ -7,8 +7,6 @@ import { ErrorNotice } from "../components/ErrorNotice";
 import { Input, Spin, Button, Card, Collapse, Tag } from "antd";
 import { getEffectiveLocale, t, type Locale } from "../i18n";
 import { writeTextToClipboard } from "../hooks/clipboard";
-import "./page.css";
-
 type LoadState<T> =
 	| { state: "loading" }
 	| { state: "loaded"; value: T }
@@ -174,7 +172,7 @@ export default function CardDetailPage() {
 									readOnly
 									value={`${window.location.origin}/analytics/public/card/${encodeURIComponent(shareUuid)}`}
 								/>
-								<p className="text-muted" style={{ marginTop: "var(--spacing-sm)", fontSize: "var(--font-size-sm)" }}>
+								<p className="text-secondary" style={{ marginTop: "var(--spacing-sm)", fontSize: "var(--font-size-sm)" }}>
 									{t(locale, "share.note")}
 								</p>
 						</Card>
@@ -258,7 +256,7 @@ export default function CardDetailPage() {
 											settings={(state.value.visualization_settings as VisualizationSettings) || {}}
 										/>
 									) : (
-										<p className="text-muted">{t(locale, "questions.noTabular")}</p>
+										<p className="text-secondary">{t(locale, "questions.noTabular")}</p>
 									)}
 
 									{showRaw && (

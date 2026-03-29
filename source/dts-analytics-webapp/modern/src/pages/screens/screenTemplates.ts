@@ -60,7 +60,7 @@ export interface ScreenTemplate {
     config: Omit<ScreenConfig, 'id'>;
 }
 
-const LIGHT_BACKGROUND = '#eaf2fb';
+const LIGHT_BACKGROUND = '#1e1f26';
 const LIGHT_SURFACE = '#ffffff';
 const LIGHT_TEXT = '#1c2833';
 const LIGHT_MUTED = '#566573';
@@ -255,7 +255,7 @@ const techDataCenterTemplate: ScreenTemplate = {
         description: '数据可视化大屏',
         width: 1920,
         height: 1080,
-        backgroundColor: '#eaf2fb', theme: 'glacier',
+        backgroundColor: '#1e1f26', theme: 'glacier',
         components: [
             // ===== 顶部区域 =====
             // 标题栏背景
@@ -573,7 +573,7 @@ const blankTemplate: ScreenTemplate = {
         description: '',
         width: 1920,
         height: 1080,
-        backgroundColor: '#eaf2fb',
+        backgroundColor: '#1e1f26',
         theme: 'glacier',
         components: [],
     },
@@ -595,7 +595,7 @@ const patentDataCenterTemplate: ScreenTemplate = {
         description: '专利数据可视化大屏',
         width: 1920,
         height: 1080,
-        backgroundColor: '#eaf2fb', theme: 'glacier',
+        backgroundColor: '#1e1f26', theme: 'glacier',
         components: [
             // =============================================================
             //  顶部标题区  y: 0–80
@@ -873,7 +873,7 @@ const patentTitaniumTemplate: ScreenTemplate = {
         description: '专利数据可视化大屏（钛合金灰）',
         width: 1920,
         height: 1080,
-        backgroundColor: '#eaf2fb',
+        backgroundColor: '#1e1f26',
         theme: 'glacier',
         components: [
             createComponent('ti-header-bar', 'border-box', '标题栏背景', 0, 0, 1920, 72, 90, {
@@ -1013,7 +1013,7 @@ const businessLightTemplate: ScreenTemplate = {
         description: '白色商务风格数据看板',
         width: 1920,
         height: 1080,
-        backgroundColor: '#eaf2fb',
+        backgroundColor: '#1e1f26',
         theme: 'glacier',
         components: [
             // ===== 顶部标题栏 =====
@@ -1110,12 +1110,12 @@ const businessLightTemplate: ScreenTemplate = {
 const blank4kTemplate: ScreenTemplate = {
     id: 'blank-4k', name: '空白模板 · 4K', description: '3840×2160 超高清空白大屏', thumbnail: '🖥️',
     category: 'blank', tags: ['空白', '4K', '超高清'],
-    config: { name: '未命名大屏(4K)', description: '', width: 3840, height: 2160, backgroundColor: '#eaf2fb', theme: 'glacier', components: [] },
+    config: { name: '未命名大屏(4K)', description: '', width: 3840, height: 2160, backgroundColor: '#1e1f26', theme: 'glacier', components: [] },
 };
 const blankSmallTemplate: ScreenTemplate = {
     id: 'blank-small', name: '空白模板 · 小屏', description: '1280×720 小屏幕空白模板', thumbnail: '📱',
     category: 'blank', tags: ['空白', '小屏', '720p'],
-    config: { name: '未命名大屏(720p)', description: '', width: 1280, height: 720, backgroundColor: '#eaf2fb', theme: 'glacier', components: [] },
+    config: { name: '未命名大屏(720p)', description: '', width: 1280, height: 720, backgroundColor: '#1e1f26', theme: 'glacier', components: [] },
 };
 
 // ============================================================
@@ -1125,7 +1125,7 @@ const smartCityTemplate: ScreenTemplate = {
     id: 'smart-city', name: '智慧城市总览', description: '中间地图+左右数据面板，适合城市管理/政务展示', thumbnail: '🏙️',
     category: 'government', tags: ['智慧城市', '政务', '地图', '监控'],
     config: {
-        name: '智慧城市总览', description: '智慧城市数据大屏', width: 1920, height: 1080, backgroundColor: '#eaf2fb', theme: 'glacier',
+        name: '智慧城市总览', description: '智慧城市数据大屏', width: 1920, height: 1080, backgroundColor: '#1e1f26', theme: 'glacier',
         components: [
             createComponent('sc-header-bar', 'border-box', '标题栏背景', 0, 0, 1920, 72, 90, { backgroundColor: '#044B8C', borderWidth: 0, borderRadius: 0 }),
             createComponent('sc-title', 'title', '主标题', 660, 12, 600, 55, 100, { text: '智慧城市运营中心', fontSize: 36, fontWeight: 'bold', color: '#ffffff', textAlign: 'center' }),
@@ -1153,7 +1153,7 @@ const govServiceTemplate: ScreenTemplate = {
     id: 'gov-service', name: '政务服务大屏', description: '政务服务数据展示，办件量/满意度/服务效率', thumbnail: '🏛️',
     category: 'government', tags: ['政务', '服务', '办件', '满意度'],
     config: {
-        name: '政务服务大屏', description: '政务服务运营数据', width: 1920, height: 1080, backgroundColor: '#eaf2fb', theme: 'glacier',
+        name: '政务服务大屏', description: '政务服务运营数据', width: 1920, height: 1080, backgroundColor: '#1e1f26', theme: 'glacier',
         components: [
             createComponent('gs-header-bar', 'border-box', '标题栏背景', 0, 0, 1920, 72, 90, { backgroundColor: '#044B8C', borderWidth: 0, borderRadius: 0 }),
             createComponent('gs-title', 'title', '主标题', 560, 12, 800, 55, 100, { text: '政务服务运营大屏', fontSize: 36, fontWeight: 'bold', color: '#ffffff', textAlign: 'center' }),
@@ -1180,7 +1180,7 @@ const productionMonitorTemplate: ScreenTemplate = {
     id: 'production-monitor', name: '生产监控大屏', description: '工厂生产线实时监控，OEE/产量/告警', thumbnail: '🏭',
     category: 'manufacturing', tags: ['生产', '制造', 'OEE', '产线'],
     config: {
-        name: '生产监控大屏', description: '生产线实时监控', width: 1920, height: 1080, backgroundColor: '#eaf2fb', theme: 'glacier',
+        name: '生产监控大屏', description: '生产线实时监控', width: 1920, height: 1080, backgroundColor: '#1e1f26', theme: 'glacier',
         components: [
             createComponent('pm-header-bar', 'border-box', '标题栏背景', 0, 0, 1920, 72, 90, { backgroundColor: '#044B8C', borderWidth: 0, borderRadius: 0 }),
             createComponent('pm-title', 'title', '主标题', 560, 12, 800, 55, 100, { text: '智能制造监控中心', fontSize: 36, fontWeight: 'bold', color: '#ffffff', textAlign: 'center' }),
@@ -1210,7 +1210,7 @@ const energyManagementTemplate: ScreenTemplate = {
     id: 'energy-management', name: '能源管理大屏', description: '能耗监测/碳排放/节能分析', thumbnail: '⚡',
     category: 'manufacturing', tags: ['能源', '能耗', '碳排放', '节能'],
     config: {
-        name: '能源管理大屏', description: '企业能源管理数据', width: 1920, height: 1080, backgroundColor: '#eaf2fb', theme: 'glacier',
+        name: '能源管理大屏', description: '企业能源管理数据', width: 1920, height: 1080, backgroundColor: '#1e1f26', theme: 'glacier',
         components: [
             createComponent('em-header-bar', 'border-box', '标题栏背景', 0, 0, 1920, 72, 90, { backgroundColor: '#044B8C', borderWidth: 0, borderRadius: 0 }),
             createComponent('em-title', 'title', '主标题', 560, 12, 800, 55, 100, { text: '能源管理监控平台', fontSize: 36, fontWeight: 'bold', color: '#ffffff', textAlign: 'center' }),
@@ -1235,7 +1235,7 @@ const salesRealtimeTemplate: ScreenTemplate = {
     id: 'sales-realtime', name: '销售实时大屏', description: 'GMV/订单量/区域销售实时监控', thumbnail: '💰',
     category: 'retail', tags: ['销售', 'GMV', '电商', '实时'],
     config: {
-        name: '销售实时大屏', description: '销售数据实时监控', width: 1920, height: 1080, backgroundColor: '#eaf2fb', theme: 'glacier',
+        name: '销售实时大屏', description: '销售数据实时监控', width: 1920, height: 1080, backgroundColor: '#1e1f26', theme: 'glacier',
         components: [
             createComponent('sr-header-bar', 'border-box', '标题栏背景', 0, 0, 1920, 72, 90, { backgroundColor: '#044B8C', borderWidth: 0, borderRadius: 0 }),
             createComponent('sr-title', 'title', '主标题', 560, 12, 800, 55, 100, { text: '全渠道销售实时监控', fontSize: 36, fontWeight: 'bold', color: '#ffffff', textAlign: 'center' }),
@@ -1260,7 +1260,7 @@ const storeOperationTemplate: ScreenTemplate = {
     id: 'store-operation', name: '门店运营看板', description: '门店销售对比/日趋势/品类占比', thumbnail: '🏪',
     category: 'retail', tags: ['门店', '零售', '运营', '对比'],
     config: {
-        name: '门店运营看板', description: '门店运营数据看板', width: 1920, height: 1080, backgroundColor: '#eaf2fb', theme: 'glacier',
+        name: '门店运营看板', description: '门店运营数据看板', width: 1920, height: 1080, backgroundColor: '#1e1f26', theme: 'glacier',
         components: [
             createComponent('so-header-bar', 'border-box', '标题栏背景', 0, 0, 1920, 72, 90, { backgroundColor: '#044B8C', borderWidth: 0, borderRadius: 0 }),
             createComponent('so-title', 'title', '主标题', 560, 12, 800, 55, 100, { text: '门店运营分析看板', fontSize: 36, fontWeight: 'bold', color: '#ffffff', textAlign: 'center' }),
@@ -1284,7 +1284,7 @@ const financeMonitorTemplate: ScreenTemplate = {
     id: 'finance-monitor', name: '资金监控大屏', description: '资金流动/结构分析/交易明细', thumbnail: '🏦',
     category: 'finance', tags: ['金融', '资金', '交易', '监控'],
     config: {
-        name: '资金监控大屏', description: '资金监控数据大屏', width: 1920, height: 1080, backgroundColor: '#eaf2fb', theme: 'glacier',
+        name: '资金监控大屏', description: '资金监控数据大屏', width: 1920, height: 1080, backgroundColor: '#1e1f26', theme: 'glacier',
         components: [
             createComponent('fm-header-bar', 'border-box', '标题栏背景', 0, 0, 1920, 72, 90, { backgroundColor: '#044B8C', borderWidth: 0, borderRadius: 0 }),
             createComponent('fm-title', 'title', '主标题', 560, 12, 800, 55, 100, { text: '资金监控中心', fontSize: 36, fontWeight: 'bold', color: '#ffffff', textAlign: 'center' }),
@@ -1306,7 +1306,7 @@ const riskAlertTemplate: ScreenTemplate = {
     id: 'risk-alert', name: '风控预警大屏', description: '风险等级/告警滚动/风险分布', thumbnail: '🛡️',
     category: 'finance', tags: ['风控', '预警', '风险', '合规'],
     config: {
-        name: '风控预警大屏', description: '风控预警数据大屏', width: 1920, height: 1080, backgroundColor: '#eaf2fb', theme: 'glacier',
+        name: '风控预警大屏', description: '风控预警数据大屏', width: 1920, height: 1080, backgroundColor: '#1e1f26', theme: 'glacier',
         components: [
             createComponent('ra-header-bar', 'border-box', '标题栏背景', 0, 0, 1920, 72, 90, { backgroundColor: '#044B8C', borderWidth: 0, borderRadius: 0 }),
             createComponent('ra-title', 'title', '主标题', 560, 12, 800, 55, 100, { text: '风控预警监控中心', fontSize: 36, fontWeight: 'bold', color: '#ffffff', textAlign: 'center' }),
@@ -1332,7 +1332,7 @@ const campusDataTemplate: ScreenTemplate = {
     id: 'campus-data', name: '校园数据大屏', description: '在校生/教师/班级/成绩数据', thumbnail: '🎓',
     category: 'education', tags: ['教育', '校园', '学生', '教学'],
     config: {
-        name: '校园数据大屏', description: '校园数据可视化大屏', width: 1920, height: 1080, backgroundColor: '#eaf2fb', theme: 'glacier',
+        name: '校园数据大屏', description: '校园数据可视化大屏', width: 1920, height: 1080, backgroundColor: '#1e1f26', theme: 'glacier',
         components: [
             createComponent('cd-header-bar', 'border-box', '标题栏背景', 0, 0, 1920, 72, 90, { backgroundColor: '#044B8C', borderWidth: 0, borderRadius: 0 }),
             createComponent('cd-title', 'title', '主标题', 560, 12, 800, 55, 100, { text: '智慧校园数据中心', fontSize: 36, fontWeight: 'bold', color: '#ffffff', textAlign: 'center' }),
@@ -1353,7 +1353,7 @@ const hospitalOperationTemplate: ScreenTemplate = {
     id: 'hospital-operation', name: '医院运营大屏', description: '门诊/住院/手术/科室数据', thumbnail: '🏥',
     category: 'education', tags: ['医疗', '医院', '门诊', '运营'],
     config: {
-        name: '医院运营大屏', description: '医院运营数据大屏', width: 1920, height: 1080, backgroundColor: '#eaf2fb', theme: 'glacier',
+        name: '医院运营大屏', description: '医院运营数据大屏', width: 1920, height: 1080, backgroundColor: '#1e1f26', theme: 'glacier',
         components: [
             createComponent('ho-header-bar', 'border-box', '标题栏背景', 0, 0, 1920, 72, 90, { backgroundColor: '#044B8C', borderWidth: 0, borderRadius: 0 }),
             createComponent('ho-title', 'title', '主标题', 560, 12, 800, 55, 100, { text: '智慧医院运营大屏', fontSize: 36, fontWeight: 'bold', color: '#ffffff', textAlign: 'center' }),
@@ -1379,7 +1379,7 @@ const opsKpiTemplate: ScreenTemplate = {
     id: 'ops-kpi-center', name: '运营指标中心', description: '九宫格KPI+趋势+进度条', thumbnail: '📋',
     category: 'general', tags: ['运营', 'KPI', '指标', '九宫格'],
     config: {
-        name: '运营指标中心', description: '核心运营指标看板', width: 1920, height: 1080, backgroundColor: '#eaf2fb', theme: 'glacier',
+        name: '运营指标中心', description: '核心运营指标看板', width: 1920, height: 1080, backgroundColor: '#1e1f26', theme: 'glacier',
         components: [
             createComponent('ok-header-bar', 'border-box', '标题栏背景', 0, 0, 1920, 72, 90, { backgroundColor: '#044B8C', borderWidth: 0, borderRadius: 0 }),
             createComponent('ok-title', 'title', '主标题', 560, 12, 800, 55, 100, { text: '运营指标中心', fontSize: 36, fontWeight: 'bold', color: '#ffffff', textAlign: 'center' }),

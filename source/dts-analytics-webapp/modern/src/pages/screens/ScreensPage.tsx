@@ -1,12 +1,11 @@
 import { useEffect, useState, useCallback, useMemo, useRef } from 'react';
 import { useNavigate } from 'react-router';
 import { analyticsApi, ScreenListItem, type ScreenAiGenerationResponse } from '../../api/analyticsApi';
+import { PageContainer } from '../../components/PageContainer/PageContainer';
 import { writeTextToClipboard } from '../../hooks/clipboard';
 import { TemplateGallery, type TemplateSelection } from './components';
 import { createConfigFromTemplate } from './screenTemplates';
 import { buildScreenPayload, normalizeScreenConfig } from './specV2';
-import '../page.css';
-
 const SCREEN_LIST_PREF_KEY = 'dts.analytics.screens.listPref.v1';
 
 export default function ScreensPage() {
@@ -430,115 +429,116 @@ export default function ScreensPage() {
 	};
 
 	return (
-		<div className="page-container" data-testid="analytics-screens-page">
-			<div className="flex items-center justify-between px-5 pt-4 pb-2">
-				<h1 className="m-0 text-xl font-semibold text-text-primary">大屏管理</h1>
-				<div className="flex gap-2.5">
-					<button className="inline-flex items-center justify-center h-8 px-4 text-sm font-normal leading-normal border border-brand rounded-md bg-brand text-white cursor-pointer transition-all duration-200 whitespace-nowrap hover:opacity-85 disabled:opacity-50 disabled:cursor-not-allowed" onClick={handleOpenAiGenerator}>
-						自动生成
-					</button>
-					<button className="inline-flex items-center justify-center h-8 px-4 text-sm font-normal leading-normal border border-brand rounded-md bg-brand text-white cursor-pointer transition-all duration-200 whitespace-nowrap hover:opacity-85 disabled:opacity-50 disabled:cursor-not-allowed" data-testid="analytics-screen-create" onClick={handleCreate}>
-						新建大屏
-					</button>
-				</div>
-			</div>
-
-			<div className="page-content">
-				<div className="flex items-center justify-between gap-2.5 px-5 pt-3 flex-wrap">
-					<div className="flex items-center gap-2 flex-wrap">
-						<input
-							ref={searchInputRef}
-							className="min-w-[240px] max-w-[340px] w-[34vw] border border-border-default rounded-lg px-2.5 py-2 bg-surface-card text-text-primary text-[13px]"
-							value={searchKeyword}
-							onChange={(e) => setSearchKeyword(e.target.value)}
-							placeholder="搜索大屏名称或描述（/）"
-						/>
-						<select
-							className="border border-border-default rounded-lg px-2.5 py-2 bg-surface-card text-text-primary text-[13px]"
-							value={publishFilter}
-							onChange={(e) => {
-								const next = e.target.value;
-								if (next === 'published' || next === 'draft') {
-									setPublishFilter(next);
-									return;
-								}
-								setPublishFilter('all');
-							}}
-						>
-							<option value="all">全部状态</option>
-							<option value="published">仅已发布</option>
-							<option value="draft">仅未发布</option>
-						</select>
-						<select
-							className="border border-border-default rounded-lg px-2.5 py-2 bg-surface-card text-text-primary text-[13px]"
-							value={sortMode}
-							onChange={(e) => {
-								const next = e.target.value;
-								if (next === 'updated-asc' || next === 'name-asc' || next === 'name-desc') {
-									setSortMode(next);
-									return;
-								}
-								setSortMode('updated-desc');
-							}}
-						>
-							<option value="updated-desc">按更新时间(新→旧)</option>
-							<option value="updated-asc">按更新时间(旧→新)</option>
-							<option value="name-asc">按名称(A→Z)</option>
-							<option value="name-desc">按名称(Z→A)</option>
-						</select>
-						<button
-							type="button"
-							className="border border-border-default rounded-lg px-2.5 py-2 bg-surface-card text-text-primary text-[13px] cursor-pointer hover:border-brand hover:bg-brand/10"
-							onClick={() => {
-								setSearchKeyword('');
-								setPublishFilter('all');
-								setSortMode('updated-desc');
-							}}
-							title="恢复默认筛选与排序"
-						>
-							重置
+		<PageContainer>
+			<div className="space-y-4" data-testid="analytics-screens-page">
+				<div className="flex items-center justify-between gap-3 pt-1 flex-wrap">
+					<h1 className="m-0 text-xl font-semibold text-text-primary">大屏管理</h1>
+					<div className="flex gap-2.5">
+						<button className="inline-flex items-center justify-center h-8 px-4 text-sm font-normal leading-normal border border-brand rounded-md bg-brand text-white cursor-pointer transition-all duration-200 whitespace-nowrap hover:opacity-85 disabled:opacity-50 disabled:cursor-not-allowed" onClick={handleOpenAiGenerator}>
+							自动生成
 						</button>
-					</div>
-					<div className="text-xs text-text-secondary">
-						总计 {screens.length} · 已发布 {publishedCount} · 未发布 {draftCount} · 当前 {visibleScreens.length}
-					</div>
-				</div>
-				{loading ? (
-					<div className="flex flex-col items-center justify-center py-[60px] gap-4">
-						<div className="w-8 h-8 border-[3px] border-border-default border-t-brand rounded-full animate-spin" />
-						<span>加载中...</span>
-					</div>
-				) : error ? (
-					<div className="flex flex-col items-center justify-center py-[60px] gap-4">
-						<span>{error}</span>
-						<button onClick={loadScreens}>重试</button>
-					</div>
-				) : screens.length === 0 ? (
-					<div className="flex flex-col items-center justify-center px-5 py-10 text-center">
-						<div className="text-5xl text-text-muted mb-4">屏</div>
-						<div className="text-sm text-text-secondary">暂无大屏</div>
-						<div className="text-xs text-text-muted mt-2">点击"新建大屏"创建您的第一个数据大屏</div>
-						<button className="inline-flex items-center justify-center h-8 px-4 text-sm font-normal leading-normal border border-brand rounded-md bg-brand text-white cursor-pointer transition-all duration-200 whitespace-nowrap hover:opacity-85 mt-4" onClick={handleCreate}>
+						<button className="inline-flex items-center justify-center h-8 px-4 text-sm font-normal leading-normal border border-brand rounded-md bg-brand text-white cursor-pointer transition-all duration-200 whitespace-nowrap hover:opacity-85 disabled:opacity-50 disabled:cursor-not-allowed" data-testid="analytics-screen-create" onClick={handleCreate}>
 							新建大屏
 						</button>
 					</div>
-				) : visibleScreens.length === 0 ? (
-					<div className="flex flex-col items-center justify-center px-5 py-10 text-center">
-						<div className="text-5xl text-text-muted mb-4">筛</div>
-						<div className="text-sm text-text-secondary">没有匹配结果</div>
-						<div className="text-xs text-text-muted mt-2">尝试清空搜索词或调整状态筛选</div>
-						<button
-							className="inline-flex items-center justify-center h-8 px-4 text-sm font-normal leading-normal border border-brand rounded-md bg-brand text-white cursor-pointer transition-all duration-200 whitespace-nowrap hover:opacity-85 mt-4"
-							onClick={() => {
-								setSearchKeyword('');
-								setPublishFilter('all');
-							}}
-						>
-							重置筛选
-						</button>
+				</div>
+
+				<div className="space-y-4">
+					<div className="flex items-center justify-between gap-2.5 rounded-lg border border-border-default bg-surface-card px-4 py-3 flex-wrap">
+						<div className="flex items-center gap-2 flex-wrap">
+							<input
+								ref={searchInputRef}
+								className="min-w-[240px] max-w-[340px] w-[34vw] border border-border-default rounded-lg px-2.5 py-2 bg-surface-card text-text-primary text-[13px]"
+								value={searchKeyword}
+								onChange={(e) => setSearchKeyword(e.target.value)}
+								placeholder="搜索大屏名称或描述（/）"
+							/>
+							<select
+								className="border border-border-default rounded-lg px-2.5 py-2 bg-surface-card text-text-primary text-[13px]"
+								value={publishFilter}
+								onChange={(e) => {
+									const next = e.target.value;
+									if (next === 'published' || next === 'draft') {
+										setPublishFilter(next);
+										return;
+									}
+									setPublishFilter('all');
+								}}
+							>
+								<option value="all">全部状态</option>
+								<option value="published">仅已发布</option>
+								<option value="draft">仅未发布</option>
+							</select>
+							<select
+								className="border border-border-default rounded-lg px-2.5 py-2 bg-surface-card text-text-primary text-[13px]"
+								value={sortMode}
+								onChange={(e) => {
+									const next = e.target.value;
+									if (next === 'updated-asc' || next === 'name-asc' || next === 'name-desc') {
+										setSortMode(next);
+										return;
+									}
+									setSortMode('updated-desc');
+								}}
+							>
+								<option value="updated-desc">按更新时间(新→旧)</option>
+								<option value="updated-asc">按更新时间(旧→新)</option>
+								<option value="name-asc">按名称(A→Z)</option>
+								<option value="name-desc">按名称(Z→A)</option>
+							</select>
+							<button
+								type="button"
+								className="border border-border-default rounded-lg px-2.5 py-2 bg-surface-card text-text-primary text-[13px] cursor-pointer hover:border-brand hover:bg-brand/10"
+								onClick={() => {
+									setSearchKeyword('');
+									setPublishFilter('all');
+									setSortMode('updated-desc');
+								}}
+								title="恢复默认筛选与排序"
+							>
+								重置
+							</button>
+						</div>
+						<div className="text-xs text-text-secondary">
+							总计 {screens.length} · 已发布 {publishedCount} · 未发布 {draftCount} · 当前 {visibleScreens.length}
+						</div>
 					</div>
-				) : (
-					<div className="grid gap-5 p-5" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))' }}>
+					{loading ? (
+						<div className="flex flex-col items-center justify-center py-[60px] gap-4">
+							<div className="w-8 h-8 border-[3px] border-border-default border-t-brand rounded-full animate-spin" />
+							<span>加载中...</span>
+						</div>
+					) : error ? (
+						<div className="flex flex-col items-center justify-center py-[60px] gap-4">
+							<span>{error}</span>
+							<button onClick={loadScreens}>重试</button>
+						</div>
+					) : screens.length === 0 ? (
+						<div className="flex flex-col items-center justify-center px-5 py-10 text-center">
+							<div className="text-5xl text-text-muted mb-4">屏</div>
+							<div className="text-sm text-text-secondary">暂无大屏</div>
+							<div className="text-xs text-text-muted mt-2">点击"新建大屏"创建您的第一个数据大屏</div>
+							<button className="inline-flex items-center justify-center h-8 px-4 text-sm font-normal leading-normal border border-brand rounded-md bg-brand text-white cursor-pointer transition-all duration-200 whitespace-nowrap hover:opacity-85 mt-4" onClick={handleCreate}>
+								新建大屏
+							</button>
+						</div>
+					) : visibleScreens.length === 0 ? (
+						<div className="flex flex-col items-center justify-center px-5 py-10 text-center">
+							<div className="text-5xl text-text-muted mb-4">筛</div>
+							<div className="text-sm text-text-secondary">没有匹配结果</div>
+							<div className="text-xs text-text-muted mt-2">尝试清空搜索词或调整状态筛选</div>
+							<button
+								className="inline-flex items-center justify-center h-8 px-4 text-sm font-normal leading-normal border border-brand rounded-md bg-brand text-white cursor-pointer transition-all duration-200 whitespace-nowrap hover:opacity-85 mt-4"
+								onClick={() => {
+									setSearchKeyword('');
+									setPublishFilter('all');
+								}}
+							>
+								重置筛选
+							</button>
+						</div>
+					) : (
+						<div className="grid gap-5 p-5" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))' }}>
 						{visibleScreens.map((screen) => (
 							<div key={screen.id} className="relative bg-surface-card border border-border-default rounded-lg overflow-visible transition-all duration-200 hover:border-brand hover:shadow-[0_4px_12px_rgba(0,0,0,0.1)]" data-testid={`analytics-screen-card-${screen.id}`}>
 								<div
@@ -554,10 +554,10 @@ export default function ScreensPage() {
 											<line x1="24" y1="30" x2="24" y2="34" stroke="currentColor" strokeWidth="2.5" />
 										</svg>
 									</div>
-									<div className="absolute bottom-2 right-2 px-2 py-1 bg-surface-card text-text-secondary border border-border-default rounded text-[11px] font-semibold backdrop-blur-sm">
-										{screen.width || 1920} × {screen.height || 1080}
+										<div className="absolute bottom-2 right-2 px-2 py-1 bg-surface-card text-text-secondary border border-border-default rounded text-[11px] font-semibold backdrop-blur-sm">
+											{screen.width || 1920} × {screen.height || 1080}
+										</div>
 									</div>
-								</div>
 								<div className="p-4">
 									<h3 className="m-0 mb-2 text-base font-semibold text-text-primary">{screen.name || '未命名大屏'}</h3>
 									<p className="m-0 mb-2 text-xs text-text-secondary overflow-hidden text-ellipsis whitespace-nowrap">
@@ -675,6 +675,7 @@ export default function ScreensPage() {
 						))}
 					</div>
 				)}
+				</div>
 			</div>
 
 			<style>{`
@@ -849,6 +850,6 @@ export default function ScreensPage() {
 					</div>
 				</div>
 			)}
-		</div>
+		</PageContainer>
 	);
 }

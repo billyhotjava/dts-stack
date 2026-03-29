@@ -16,8 +16,6 @@ import { PageContainer, PageHeader, Breadcrumb } from "../components/PageContain
 import { NotebookEditor } from "../components/query/NotebookEditor";
 import { Input, Spin, Button, Card, Tag, Select } from "antd";
 import { getEffectiveLocale, t, type Locale } from "../i18n";
-import "./page.css";
-
 const VISUALIZATION_TYPES: { value: VisualizationType; label: string }[] = [
 	{ value: "table", label: "Table" }, // Will translate in render
 	{ value: "line", label: "Line" },
@@ -387,7 +385,7 @@ export default function CardEditorPage() {
 						>
 							{t(locale, "questions.mode.sql")}
 						</Button>
-						<span className="text-muted" style={{ marginLeft: "var(--spacing-sm)" }}>
+						<span className="text-secondary" style={{ marginLeft: "var(--spacing-sm)" }}>
 							{mode === "builder" ? t(locale, "questions.builder") : t(locale, "questions.sql")}
 						</span>
 					</div>
@@ -554,7 +552,7 @@ export default function CardEditorPage() {
 							{/* Collapsible SQL block */}
 							{showSql && runState.value?.data?.native_form?.query && (
 								<div style={{ marginBottom: "var(--spacing-md)" }}>
-									<div className="text-muted" style={{ marginBottom: "var(--spacing-xs)" }}>{t(locale, "questions.querySql")}</div>
+									<div className="text-secondary" style={{ marginBottom: "var(--spacing-xs)" }}>{t(locale, "questions.querySql")}</div>
 									<pre style={{ whiteSpace: "pre-wrap", fontSize: "var(--font-size-sm)", margin: 0, padding: "var(--spacing-sm)", background: "var(--color-bg-tertiary)", borderRadius: "var(--radius-sm)" }}>
 										{String(runState.value.data.native_form.query)}
 									</pre>

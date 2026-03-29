@@ -6,8 +6,6 @@ import { EmptyState } from "../components/EmptyState";
 import { ErrorNotice } from "../components/ErrorNotice";
 import { Spin, Button, Card, Tag } from "antd";
 import { getEffectiveLocale, t, type Locale } from "../i18n";
-import "./page.css";
-
 type LoadState<T> =
 	| { state: "loading" }
 	| { state: "loaded"; value: T }
@@ -93,7 +91,7 @@ export default function TableDetailPage() {
 				<>
 					{state.value.description && (
 						<Card style={{ marginBottom: "var(--spacing-lg)" }}>
-								<p className="text-muted" style={{ margin: 0 }}>{state.value.description}</p>
+								<p className="text-secondary" style={{ margin: 0 }}>{state.value.description}</p>
 						</Card>
 					)}
 
@@ -102,7 +100,7 @@ export default function TableDetailPage() {
 							title={<span style={{ display: "inline-flex", alignItems: "center", gap: 8 }}><FieldIcon />{t(locale, "builder.fields")}</span>}
 							extra={<Tag>{state.value.fields.length}</Tag>}
 						>
-								<table className="table">
+								<table>
 									<thead>
 										<tr>
 											<th>{t(locale, "common.name")}</th>
@@ -129,7 +127,7 @@ export default function TableDetailPage() {
 													{f.semantic_type ? (
 														<Tag color="processing">{String(f.semantic_type)}</Tag>
 													) : (
-														<span className="text-muted">-</span>
+														<span className="text-secondary">-</span>
 													)}
 												</td>
 											</tr>

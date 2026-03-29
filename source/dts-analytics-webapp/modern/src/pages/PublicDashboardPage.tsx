@@ -7,8 +7,6 @@ import { EmptyState } from "../components/EmptyState";
 import { ErrorNotice } from "../components/ErrorNotice";
 import { Spin, Card, Tag } from "antd";
 import { getEffectiveLocale, t, type Locale } from "../i18n";
-import "./page.css";
-
 type LoadState<T> =
 	| { state: "loading" }
 	| { state: "loaded"; value: T }
@@ -95,7 +93,7 @@ export default function PublicDashboardPage() {
 			{dashboard.state === "error" && <ErrorNotice locale={locale} error={dashboard.error} />}
 
 			<Card style={{ marginBottom: "var(--spacing-lg)" }}>
-					<p className="text-muted" style={{ margin: 0 }}>{t(locale, "share.note")}</p>
+					<p className="text-secondary" style={{ margin: 0 }}>{t(locale, "share.note")}</p>
 			</Card>
 
 			{dashboard.state === "loaded" && dashcards.length === 0 && <EmptyState title={t(locale, "common.empty")} />}

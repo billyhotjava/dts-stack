@@ -7,13 +7,14 @@ type BatchDeleteResultModalProps = {
 	open: boolean;
 	onClose: () => void;
 	result: SqlModelBatchDeleteDetail | null;
+	title?: string;
 };
 
-export default function BatchDeleteResultModal({ open, onClose, result }: BatchDeleteResultModalProps) {
+export default function BatchDeleteResultModal({ open, onClose, result, title = "删除结果" }: BatchDeleteResultModalProps) {
 	return (
 		<Modal
 			open={open}
-			title="批量删除结果"
+			title={title}
 			width={980}
 			onCancel={onClose}
 			onOk={onClose}
@@ -22,9 +23,9 @@ export default function BatchDeleteResultModal({ open, onClose, result }: BatchD
 		>
 			<Space direction="vertical" size={16} style={{ width: "100%" }}>
 				<Alert
-					type={result?.failed ? "warning" : "success"}
+					type={result?.failed || result?.skipped ? "warning" : "success"}
 					showIcon
-					message={`本次请求 ${result?.requested || 0} 个模型，成功删除 ${result?.deleted || 0} 个，失败 ${result?.failed || 0} 个`}
+					message={`本次请求 ${result?.requested || 0} 个模型，成功 ${result?.deleted || 0} 个，失败 ${result?.failed || 0} 个，跳过 ${result?.skipped || 0} 个`}
 				/>
 				<Table
 					size="small"
@@ -58,12 +59,22 @@ export default function BatchDeleteResultModal({ open, onClose, result }: BatchD
 							dataIndex: "status",
 							width: 120,
 							render: (value) =>
-								value === "success" ? <Tag color="green">删除成功</Tag> : <Tag color="red">删除失败</Tag>,
+								value === "success" ? (
+									<Tag color="green">处理成功</Tag>
+								) : value === "skipped" ? (
+									<Tag color="gold">已跳过</Tag>
+								) : (
+									<Tag color="red">处理失败</Tag>
+								),
 						},
 						{
 							title: "说明",
 							dataIndex: "message",
-							render: (value) => <Text type={value ? "danger" : "secondary"}>{value || "已删除"}</Text>,
+							render: (value, record) => (
+								<Text type={record.status === "failed" && value ? "danger" : "secondary"}>
+									{value || "处理成功"}
+								</Text>
+							),
 						},
 					]}
 				/>

@@ -4,8 +4,6 @@ import { PageContainer, PageHeader } from "../components/PageContainer/PageConta
 import { ErrorNotice } from "../components/ErrorNotice";
 import { getEffectiveLocale, t, type Locale } from "../i18n";
 import { Input, Spin, Button, Card, Tag } from "antd";
-import "./page.css";
-
 type LoadState<T> =
 	| { state: "loading" }
 	| { state: "loaded"; value: T }
@@ -314,9 +312,9 @@ export default function ExploreSessionsPage() {
 				</div>
 			)}
 
-			<div className="grid2" style={{ marginBottom: "var(--spacing-lg)" }}>
+			<div className="grid grid-cols-2 gap-md" style={{ marginBottom: "var(--spacing-lg)" }}>
 				<Card title="新建分析会话">
-						<div className="col" style={{ gap: "var(--spacing-sm)" }}>
+						<div className="flex flex-col gap-md" style={{ gap: "var(--spacing-sm)" }}>
 							<div>
 								<label style={{ display: "block", marginBottom: 4, fontWeight: 500 }}>{t(locale, "common.name")}</label>
 								<Input value={title} onChange={(event) => setTitle(event.target.value)} placeholder="产线告警波动复盘" />
@@ -325,7 +323,7 @@ export default function ExploreSessionsPage() {
 								<label style={{ display: "block", marginBottom: 4, fontWeight: 500 }}>问题描述</label>
 								<Input.TextArea value={question} onChange={(event) => setQuestion(event.target.value)} rows={3} />
 							</div>
-							<div className="grid2">
+							<div className="grid grid-cols-2 gap-md">
 								<div>
 									<label style={{ display: "block", marginBottom: 4, fontWeight: 500 }}>项目标识</label>
 									<Input value={projectKey} onChange={(event) => setProjectKey(event.target.value)} placeholder="project-a" />
@@ -358,10 +356,10 @@ export default function ExploreSessionsPage() {
 						)}
 						{sessions.state === "error" && <ErrorNotice locale={locale} error={sessions.error} />}
 						{sessions.state === "loaded" && sessions.value.length === 0 && (
-							<div className="muted">{t(locale, "common.empty")}</div>
+							<div className="text-secondary">{t(locale, "common.empty")}</div>
 						)}
 						{sessions.state === "loaded" && sessions.value.length > 0 && (
-							<table className="table">
+							<table>
 								<thead>
 									<tr>
 										<th>{t(locale, "common.name")}</th>
@@ -415,14 +413,14 @@ export default function ExploreSessionsPage() {
 					)}
 					{selectedSession?.state === "error" && <ErrorNotice locale={locale} error={selectedSession.error} />}
 					{currentSession && (
-						<div className="col">
-							<div className="grid2">
+						<div className="flex flex-col gap-md">
+							<div className="grid grid-cols-2 gap-md">
 								<div>
-									<div className="small muted">问题</div>
+									<div className="text-sm text-secondary">问题</div>
 									<div>{currentSession.question || "-"}</div>
 								</div>
 								<div>
-									<div className="small muted">标签</div>
+									<div className="text-sm text-secondary">标签</div>
 									<div style={{ display: "flex", gap: "var(--spacing-xs)", flexWrap: "wrap" }}>
 										{Array.isArray(currentSession.tags) && currentSession.tags.length > 0
 											? currentSession.tags.map((tag, idx) => <Tag key={`${String(tag)}-${idx}`}>{String(tag)}</Tag>)
@@ -431,7 +429,7 @@ export default function ExploreSessionsPage() {
 								</div>
 							</div>
 
-							<div className="grid2">
+							<div className="grid grid-cols-2 gap-md">
 								<div>
 									<label style={{ display: "block", marginBottom: 4, fontWeight: 500 }}>结论</label>
 									<Input.TextArea
@@ -446,7 +444,7 @@ export default function ExploreSessionsPage() {
 										rows={4}
 									/>
 								</div>
-								<div className="col" style={{ gap: "var(--spacing-sm)" }}>
+								<div className="flex flex-col gap-md" style={{ gap: "var(--spacing-sm)" }}>
 									<div>
 										<label style={{ display: "block", marginBottom: 4, fontWeight: 500 }}>追加步骤标题</label>
 										<Input value={stepTitle} onChange={(event) => setStepTitle(event.target.value)} placeholder="筛选华北区域并下钻" />
@@ -479,7 +477,7 @@ export default function ExploreSessionsPage() {
 							</div>
 
 							<div>
-								<div className="small muted" style={{ marginBottom: "var(--spacing-xs)" }}>步骤明细</div>
+								<div className="text-sm text-secondary" style={{ marginBottom: "var(--spacing-xs)" }}>步骤明细</div>
 								<pre style={{
 									margin: 0,
 									padding: "var(--spacing-sm)",
@@ -493,7 +491,7 @@ export default function ExploreSessionsPage() {
 
 							{replayResult && (
 								<div>
-									<div className="small muted" style={{ marginBottom: "var(--spacing-xs)" }}>重放结果</div>
+									<div className="text-sm text-secondary" style={{ marginBottom: "var(--spacing-xs)" }}>重放结果</div>
 									<pre style={{
 										margin: 0,
 										padding: "var(--spacing-sm)",

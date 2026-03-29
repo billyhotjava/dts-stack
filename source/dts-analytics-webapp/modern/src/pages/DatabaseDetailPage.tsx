@@ -6,8 +6,6 @@ import { EmptyState } from "../components/EmptyState";
 import { ErrorNotice } from "../components/ErrorNotice";
 import { Input, Spin, Button, Card, Collapse, Tag } from "antd";
 import { getEffectiveLocale, t, type Locale } from "../i18n";
-import "./page.css";
-
 type LoadState<T> =
 	| { state: "loading" }
 	| { state: "loaded"; value: T }
@@ -207,7 +205,7 @@ export default function DatabaseDetailPage() {
 													) : (
 														<span className="table-list-item__name">{tb?.name ?? "-"}</span>
 													)}
-													<span className="table-list-item__id text-muted">ID: {String(tb?.id ?? "-")}</span>
+													<span className="table-list-item__id text-secondary">ID: {String(tb?.id ?? "-")}</span>
 												</div>
 												{tb?.id && (
 													<Link to={`/questions/new?db=${encodeURIComponent(String(dbId))}&table=${encodeURIComponent(String(tb.id))}`}>

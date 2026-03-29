@@ -5,8 +5,6 @@ import { ErrorNotice } from "../components/ErrorNotice";
 import { Button, Spin, Tag, Checkbox, message } from "antd";
 import { UndoOutlined } from "@ant-design/icons";
 import { getEffectiveLocale, t, type Locale } from "../i18n";
-import "./page.css";
-
 type LoadState<T> =
 	| { state: "loading" }
 	| { state: "loaded"; value: T }
@@ -103,7 +101,7 @@ export default function TrashPage() {
 						<TrashIcon />
 					</div>
 					<h3 style={{ margin: 0, color: "var(--color-text-secondary)" }}>{t(locale, "common.empty")}</h3>
-					<p className="text-muted" style={{ marginTop: "var(--spacing-sm)" }}>
+					<p className="text-secondary" style={{ marginTop: "var(--spacing-sm)" }}>
 						{t(locale, "trash.emptyDesc")}
 					</p>
 				</div>

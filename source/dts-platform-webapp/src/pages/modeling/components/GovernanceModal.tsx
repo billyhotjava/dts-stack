@@ -26,6 +26,7 @@ export type GovernanceModalProps = {
 	executing: boolean;
 	preview: SqlModelGovernancePreviewItem[];
 	selection: string[];
+	totalSelectionCount?: number;
 	onSelectionChange: (keys: string[]) => void;
 	onSelectAllPreview: () => void;
 	onClearSelection: () => void;
@@ -42,6 +43,7 @@ export default function GovernanceModal({
 	executing,
 	preview,
 	selection,
+	totalSelectionCount,
 	onSelectionChange,
 	onSelectAllPreview,
 	onClearSelection,
@@ -131,7 +133,12 @@ export default function GovernanceModal({
 			</Form>
 			<div className="mt-4">
 				<div className="mb-3 flex items-center justify-between rounded-md border border-border bg-muted/20 px-3 py-2">
-					<div className="text-xs text-muted-foreground">已选 {selection.length} 个命中模型</div>
+					<div className="text-xs text-muted-foreground">
+						已选 {selection.length} 个命中模型
+						{typeof totalSelectionCount === "number" && totalSelectionCount > selection.length
+							? `（全局共 ${totalSelectionCount} 项）`
+							: ""}
+					</div>
 					<Space size="small">
 						<Button size="small" onClick={onSelectAllPreview} disabled={!preview.length}>
 							全选命中

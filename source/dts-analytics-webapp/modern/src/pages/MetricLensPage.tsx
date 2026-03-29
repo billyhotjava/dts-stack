@@ -4,8 +4,6 @@ import { ErrorNotice } from "../components/ErrorNotice";
 import { PageContainer, PageHeader } from "../components/PageContainer/PageContainer";
 import { getEffectiveLocale, t, type Locale } from "../i18n";
 import { Spin, Button, Card, Tag, Select } from "antd";
-import "./page.css";
-
 type LoadState<T> =
 	| { state: "loading" }
 	| { state: "loaded"; value: T }
@@ -110,7 +108,7 @@ export default function MetricLensPage() {
 				}
 			/>
 
-			<div className="grid2" style={{ marginBottom: "var(--spacing-lg)" }}>
+			<div className="grid grid-cols-2 gap-md" style={{ marginBottom: "var(--spacing-lg)" }}>
 				<Card
 					title="指标清单"
 					extra={listState.state === "loaded" ? <Tag>{listState.value.length}</Tag> : null}
@@ -122,7 +120,7 @@ export default function MetricLensPage() {
 						)}
 						{listState.state === "error" && <ErrorNotice locale={locale} error={listState.error} />}
 						{listState.state === "loaded" && listState.value.length === 0 && (
-							<div className="muted">{t(locale, "common.empty")}</div>
+							<div className="text-secondary">{t(locale, "common.empty")}</div>
 						)}
 						{listState.state === "loaded" && listState.value.length > 0 && (
 							<>
@@ -135,7 +133,7 @@ export default function MetricLensPage() {
 										style={{ width: "100%" }}
 									/>
 								</div>
-								<table className="table" style={{ marginTop: "var(--spacing-md)" }}>
+								<table style={{ marginTop: "var(--spacing-md)" }}>
 									<thead>
 										<tr>
 											<th>{t(locale, "common.name")}</th>
@@ -172,10 +170,10 @@ export default function MetricLensPage() {
 						)}
 						{conflictState.state === "error" && <ErrorNotice locale={locale} error={conflictState.error} />}
 						{conflictState.state === "loaded" && conflictState.value.length === 0 && (
-							<div className="muted">当前未发现口径冲突。</div>
+							<div className="text-secondary">当前未发现口径冲突。</div>
 						)}
 						{conflictState.state === "loaded" && conflictState.value.length > 0 && (
-							<table className="table">
+							<table>
 								<thead>
 									<tr>
 										<th>指标名</th>
@@ -197,9 +195,9 @@ export default function MetricLensPage() {
 				</Card>
 			</div>
 
-			<div className="grid2">
+			<div className="grid grid-cols-2 gap-md">
 				<Card title="指标透视详情">
-						{detailState == null && <div className="muted">选择指标查看详情。</div>}
+						{detailState == null && <div className="text-secondary">选择指标查看详情。</div>}
 						{detailState?.state === "loading" && (
 							<div className="loading-container" style={{ padding: "var(--spacing-lg)" }}>
 								<Spin />
@@ -230,7 +228,7 @@ export default function MetricLensPage() {
 				</Card>
 
 				<Card title="版本对比">
-						<div className="col" style={{ gap: "var(--spacing-sm)", marginBottom: "var(--spacing-sm)" }}>
+						<div className="flex flex-col gap-md" style={{ gap: "var(--spacing-sm)", marginBottom: "var(--spacing-sm)" }}>
 							<div>
 								<label style={{ display: "block", marginBottom: 4, fontWeight: 500 }}>左版本</label>
 								<Select

@@ -2,7 +2,6 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Drawer, Input, Spin, Button, Tag } from "antd";
 import { analyticsApi, type ProjectCockpitDrillItem } from "../../../api/analyticsApi";
 import { useProjectCockpitContext, type DrillTarget } from "../ProjectCockpitContext";
-import "./DrillDownDrawer.css";
 
 type SortKey = keyof ProjectCockpitDrillItem;
 type SortDir = "asc" | "desc";
@@ -214,7 +213,7 @@ export function DrillDownDrawer() {
 				</div>
 			}
 		>
-			<div className="drill-down-drawer__toolbar">
+			<div className="flex items-center gap-4 mb-4">
 				<Input
 					type="text"
 					placeholder="搜索..."
@@ -222,26 +221,26 @@ export function DrillDownDrawer() {
 					onChange={(e) => setSearch(e.target.value)}
 					style={{ maxWidth: 280 }}
 				/>
-				<span className="drill-down-drawer__count">
+				<span className="text-sm text-text-secondary whitespace-nowrap">
 					共 {filtered.length} 条{search && items.length !== filtered.length ? ` / ${items.length}` : ""}
 				</span>
 			</div>
 			{loading ? (
-				<div className="drill-down-drawer__loading">
+				<div className="flex justify-center py-10">
 					<Spin />
 				</div>
 			) : filtered.length === 0 ? (
-				<div className="drill-down-drawer__empty">暂无数据</div>
+				<div className="text-center py-10 text-text-muted text-base">暂无数据</div>
 			) : (
-				<div className="drill-down-drawer__table-wrap">
-					<table className="drill-down-drawer__table">
+				<div className="overflow-x-auto">
+					<table className="w-full border-collapse text-sm">
 						<thead>
 							<tr>
 								{columns.map((col) => (
 									<th
 										key={col.key}
 										onClick={() => handleSort(col.key)}
-										className="drill-down-drawer__th"
+										className="sticky top-0 px-4 py-2 text-left font-semibold text-text-secondary bg-surface-muted border-b border-border-default cursor-pointer select-none whitespace-nowrap hover:text-text-primary"
 									>
 										{col.label}
 										{sortKey === col.key ? (sortDir === "asc" ? " ↑" : " ↓") : ""}
@@ -251,9 +250,9 @@ export function DrillDownDrawer() {
 						</thead>
 						<tbody>
 							{filtered.map((item, idx) => (
-								<tr key={item.id ?? idx} className="drill-down-drawer__tr">
+								<tr key={item.id ?? idx} className="hover:bg-surface-muted/50">
 									{columns.map((col) => (
-										<td key={col.key} className="drill-down-drawer__td">
+										<td key={col.key} className="px-4 py-2 border-b border-border-default text-text-primary">
 											{col.render ? col.render(item) : String(item[col.key] ?? "-")}
 										</td>
 									))}

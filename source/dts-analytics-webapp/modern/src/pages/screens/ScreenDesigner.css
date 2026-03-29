@@ -9,6 +9,15 @@
   --color-text-primary: rgba(255, 255, 255, 0.85);
   --color-text-secondary: rgba(255, 255, 255, 0.55);
   --color-text-tertiary: rgba(255, 255, 255, 0.3);
+  /* Override app-level Tailwind token variables for dark editor */
+  --text-primary: rgba(255, 255, 255, 0.92);
+  --text-secondary: rgba(226, 232, 240, 0.72);
+  --text-tertiary: rgba(148, 163, 184, 0.55);
+  --surface-page: #1e1f26;
+  --surface-card: #262730;
+  --surface-muted: #2a2b36;
+  --border-default: rgba(255, 255, 255, 0.1);
+  --border-muted: rgba(255, 255, 255, 0.06);
   display: flex;
   flex-direction: column;
   position: fixed;
@@ -19,6 +28,12 @@
   overflow: hidden;
   isolation: isolate;
   z-index: 9999;
+}
+
+.screen-designer input,
+.screen-designer select,
+.screen-designer textarea {
+  color: var(--color-text-primary);
 }
 
 .screen-designer-body {
@@ -569,7 +584,7 @@
 
 /* Rulers */
 .canvas-ruler {
-  background: #1a1a2e;
+  background: var(--color-surface);
   flex-shrink: 0;
   position: relative;
   overflow: hidden;
@@ -1040,7 +1055,7 @@
   flex: 1;
   min-height: 0;
   overflow: auto;
-  background: #1a1a2e;
+  background: var(--color-surface);
   display: grid;
   place-items: center;
   padding: 40px;
@@ -2472,7 +2487,7 @@
 
 /* Canvas container */
 [data-theme="dark"] .screen-designer .canvas-container {
-  background: linear-gradient(180deg, rgba(16, 24, 39, 0.94), rgba(13, 21, 36, 0.92));
+  background: var(--color-surface);
   border-color: rgba(255, 255, 255, 0.08);
   box-shadow: none;
 }

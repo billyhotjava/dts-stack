@@ -18,6 +18,7 @@ import com.yuzhi.dts.platform.service.etl.DbtArtifactSyncState;
 import com.yuzhi.dts.platform.service.etl.DbtRunResultService;
 import com.yuzhi.dts.platform.service.etl.DbtQualityGateService;
 import com.yuzhi.dts.platform.service.etl.DbtReleaseGateService;
+import com.yuzhi.dts.platform.service.etl.DbtReleaseSubmissionService;
 import com.yuzhi.dts.platform.service.etl.DbtSourceService;
 import com.yuzhi.dts.platform.service.ops.ExternalRunLogService;
 import java.time.Duration;
@@ -46,6 +47,7 @@ public class EtlResource {
     private final DbtRunResultService dbtRunResultService;
     private final DbtQualityGateService dbtQualityGateService;
     private final DbtReleaseGateService dbtReleaseGateService;
+    private final DbtReleaseSubmissionService dbtReleaseSubmissionService;
     private final DbtArtifactSyncState dbtArtifactSyncState;
     private final AirflowClient airflowClient;
     private final AirflowProperties airflowProperties;
@@ -67,6 +69,7 @@ public class EtlResource {
         DbtRunResultService dbtRunResultService,
         DbtQualityGateService dbtQualityGateService,
         DbtReleaseGateService dbtReleaseGateService,
+        DbtReleaseSubmissionService dbtReleaseSubmissionService,
         DbtArtifactSyncState dbtArtifactSyncState,
         AirflowClient airflowClient,
         AirflowProperties airflowProperties,
@@ -85,6 +88,7 @@ public class EtlResource {
         this.dbtRunResultService = dbtRunResultService;
         this.dbtQualityGateService = dbtQualityGateService;
         this.dbtReleaseGateService = dbtReleaseGateService;
+        this.dbtReleaseSubmissionService = dbtReleaseSubmissionService;
         this.dbtArtifactSyncState = dbtArtifactSyncState;
         this.airflowClient = airflowClient;
         this.airflowProperties = airflowProperties;
@@ -363,6 +367,16 @@ public class EtlResource {
         return ApiResponses.ok(result);
     }
 
+    @PostMapping("/dbt/release/submit")
+    public ApiResponse<DbtReleaseSubmissionService.DbtReleaseSubmitResult> submitDbtRelease(
+        @RequestBody(required = false) DbtReleaseSubmissionService.DbtReleaseSubmitRequest request,
+        @RequestHeader(value = "X-Active-Dept", required = false) String activeDept
+    ) {
+        DbtReleaseSubmissionService.DbtReleaseSubmitResult result = dbtReleaseSubmissionService.submit(request, activeDept);
+        auditService.audit("EXECUTE", "etl.dbt.release.submit", StringUtils.hasText(result.selector()) ? result.selector() : "all");
+        return ApiResponses.ok(result);
+    }
+
     private void recordDbtSyncState(
         DbtAssetSyncService.DbtAssetSyncResult assetResult,
         DbtRunResultService.DbtRunSyncResult runResult
@@ -581,7 +595,11 @@ public class EtlResource {
     }
 
     private Map<String, Object> triggerAirflowDagOrThrow(String dagId, Map<String, Object> payload) {
-        Map<String, Object> dag = waitForDagRegistration(dagId);
+        Map<String, Object> dag = findDag(dagId);
+        if (dag == null) {
+            throw new ResponseStatusException(HttpStatus.BAD_GATEWAY,
+                "DAG [" + dagId + "] 尚未在 Airflow 中注册，请稍后重试（通常需要 30 秒）");
+        }
         ensureDagActive(dagId, dag);
         try {
             return airflowClient

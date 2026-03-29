@@ -11,8 +11,6 @@ import { ErrorNotice } from "../components/ErrorNotice";
 import { PageContainer, PageHeader } from "../components/PageContainer/PageContainer";
 import { getEffectiveLocale, t, type Locale } from "../i18n";
 import { Input, Spin, Button, Card, Tag, Select } from "antd";
-import "./page.css";
-
 type LoadState<T> =
 	| { state: "loading" }
 	| { state: "loaded"; value: T }
@@ -224,9 +222,9 @@ export default function Nl2SqlEvalPage() {
 				</div>
 			)}
 
-			<div className="grid2" style={{ marginBottom: "var(--spacing-lg)" }}>
+			<div className="grid grid-cols-2 gap-md" style={{ marginBottom: "var(--spacing-lg)" }}>
 				<Card title="评测样例管理">
-						<div className="col" style={{ gap: "var(--spacing-sm)" }}>
+						<div className="flex flex-col gap-md" style={{ gap: "var(--spacing-sm)" }}>
 							<div>
 								<label style={{ display: "block", marginBottom: 4, fontWeight: 500 }}>{t(locale, "common.name")}</label>
 								<Input value={caseName} onChange={(event) => setCaseName(event.target.value)} placeholder="制造日报趋势评测" />
@@ -256,7 +254,7 @@ export default function Nl2SqlEvalPage() {
 				</Card>
 
 				<Card title="执行参数">
-						<div className="col" style={{ gap: "var(--spacing-sm)" }}>
+						<div className="flex flex-col gap-md" style={{ gap: "var(--spacing-sm)" }}>
 							<label style={{ display: "inline-flex", gap: "var(--spacing-xs)", alignItems: "center", fontSize: "var(--font-size-sm)" }}>
 								<input type="checkbox" checked={enabledOnly} onChange={(event) => setEnabledOnly(event.target.checked)} />
 								仅执行 enabled 样例
@@ -290,10 +288,10 @@ export default function Nl2SqlEvalPage() {
 					)}
 					{casesState.state === "error" && <ErrorNotice locale={locale} error={casesState.error} />}
 					{casesState.state === "loaded" && casesState.value.length === 0 && (
-						<div className="muted">{t(locale, "common.empty")}</div>
+						<div className="text-secondary">{t(locale, "common.empty")}</div>
 					)}
 					{casesState.state === "loaded" && casesState.value.length > 0 && (
-						<table className="table">
+						<table>
 							<thead>
 								<tr>
 									<th>ID</th>
@@ -316,7 +314,7 @@ export default function Nl2SqlEvalPage() {
 					)}
 			</Card>
 
-			<div className="grid2">
+			<div className="grid grid-cols-2 gap-md">
 				<Card
 					title="Run 历史与对比"
 					extra={runsState.state === "loaded" ? <Tag>{runsState.value.length}</Tag> : null}
@@ -328,8 +326,8 @@ export default function Nl2SqlEvalPage() {
 						)}
 						{runsState.state === "error" && <ErrorNotice locale={locale} error={runsState.error} />}
 						{runsState.state === "loaded" && (
-							<div className="col" style={{ gap: "var(--spacing-sm)" }}>
-								<div className="grid2">
+							<div className="flex flex-col gap-md" style={{ gap: "var(--spacing-sm)" }}>
+								<div className="grid grid-cols-2 gap-md">
 									<div>
 										<label style={{ display: "block", marginBottom: 4, fontWeight: 500 }}>Baseline Run</label>
 										<Select value={baselineRunId} onChange={(value) => setBaselineRunId(value)} options={runOptions} style={{ width: "100%" }} />
@@ -342,7 +340,7 @@ export default function Nl2SqlEvalPage() {
 								<Button type="primary" onClick={() => void compareRuns()} disabled={!baselineRunId || !candidateRunId}>
 									执行 Run 对比
 								</Button>
-								<table className="table">
+								<table>
 									<thead>
 										<tr>
 											<th>ID</th>

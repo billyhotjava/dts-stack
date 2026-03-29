@@ -1,4 +1,5 @@
 import type { DeviceMode } from '../deviceMode';
+import '../ScreenRuntimeShell.css';
 
 interface DeviceModeSwitcherProps {
     deviceMode: DeviceMode;

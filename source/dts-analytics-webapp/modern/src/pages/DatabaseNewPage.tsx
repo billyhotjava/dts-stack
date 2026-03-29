@@ -7,8 +7,6 @@ import { EmptyState } from "../components/EmptyState";
 import { ErrorNotice } from "../components/ErrorNotice";
 import { Input, Spin, Button, Card, Tag } from "antd";
 import { getEffectiveLocale, t, type Locale } from "../i18n";
-import "./page.css";
-
 type LoadState<T> =
 	| { state: "loading" }
 	| { state: "loaded"; value: T }
@@ -216,7 +214,7 @@ export default function DatabaseNewPage() {
 							)}
 
 							{state.state === "loaded" && filtered.length > 0 && (
-								<div className="grid3">
+								<div className="grid grid-cols-3 gap-md">
 									{filtered.map((item) => (
 										<Card key={item.id} hoverable style={{ height: "100%" }}>
 												<div style={{ display: "flex", alignItems: "flex-start", gap: "var(--spacing-md)" }}>
@@ -237,11 +235,11 @@ export default function DatabaseNewPage() {
 														<h3 style={{ margin: 0, fontSize: "var(--font-size-md)", fontWeight: "var(--font-weight-semibold)" }}>
 															{item.name || item.id}
 														</h3>
-														<p className="text-muted" style={{ margin: "var(--spacing-xs) 0 0", fontSize: "var(--font-size-sm)" }}>
+														<p className="text-secondary" style={{ margin: "var(--spacing-xs) 0 0", fontSize: "var(--font-size-sm)" }}>
 															{t(locale, "common.id")}: {item.id}
 														</p>
 														{item.description ? (
-															<p className="text-muted" style={{ margin: "var(--spacing-xs) 0 0", fontSize: "var(--font-size-sm)" }}>
+															<p className="text-secondary" style={{ margin: "var(--spacing-xs) 0 0", fontSize: "var(--font-size-sm)" }}>
 																{item.description}
 															</p>
 														) : null}

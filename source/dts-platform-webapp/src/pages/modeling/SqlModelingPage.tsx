@@ -56,7 +56,6 @@ import {
 	getSqlModelContractImpact,
 	createSqlModel,
 	updateSqlModel,
-	deleteSqlModel,
 	batchDeleteSqlModels,
 	importSqlModel,
 	generateSqlModelsFromOds,
@@ -65,12 +64,10 @@ import {
 	listModelingPlans,
 	syncDbtModels,
 	getDbtSyncStatus,
-	triggerDbtRun,
+	submitDbtRelease,
 	triggerDbtCompile,
 	triggerDbtTest,
 	triggerDbtDocs,
-	checkDbtQualityGate,
-	checkDbtReleaseGate,
 	updateDbtConfig,
 	listDbtSources,
 	listDbtRefs,
@@ -86,7 +83,6 @@ import {
 	getDbtGitDiff,
 	revertDbtFile,
 	getRollbackAuditLog,
-	checkDagReady,
 } from "@/api/platformApi";
 import dataSourcesService, { type InfraDataSource } from "@/api/services/dataSourcesService";
 import BatchImportModal from "./BatchImportModal";
@@ -118,12 +114,20 @@ import {
 import {
 	EMPTY_BULK_SELECTION,
 	applyBulkSelectionChange,
+	clearBulkSelectionSource,
 	clearDeletedBulkSelection,
 	deriveSelectedModelIdsFromCheckedKeys,
+	summarizeBulkSelection,
 	type BulkSelectionState,
 } from "./sqlModelBulkSelection.helpers";
 import {
+	type ModelFileBrowserTreeNode,
+	deriveDefaultExpandedTreeKeys,
+	mergeExpandedTreeKeys,
+} from "./modelFileBrowserTree.helpers";
+import {
 	buildSqlModelBatchDeleteDetail,
+	buildSqlModelGovernanceDetail,
 	type SqlModelBatchDeleteDetail,
 } from "./sqlModelBatchDeleteResult.helpers";
 import {
@@ -143,8 +147,7 @@ import type {
 	DbtSourceItem,
 	DbtRefItem,
 	SqlModelOdsGenerateResult,
-	DbtQualityGateResult,
-	DbtReleaseGateResult,
+	DbtReleaseSubmitResult,
 	SqlModelContractImpact,
 	SqlModelGovernancePreviewItem,
 	SqlModelGovernancePreviewResult,
@@ -153,6 +156,7 @@ import type {
 	OdsSkippedSeverity,
 	OdsSkippedEntry,
 } from "./sqlModeling.types";
+import { resolveReleaseSubmitOutcome } from "./sqlModelReleaseSubmit.helpers";
 
 import { normalizeText, formatDateTime } from "@/utils/textUtils";
 
@@ -250,6 +254,7 @@ export default function SqlModelingPage() {
 	const [spacesLoading, setSpacesLoading] = useState(false);
 	const [spaces, setSpaces] = useState<ProjectSpace[]>([]);
 	const [activeSpaceKey, setActiveSpaceKey] = useState<string | null>(null);
+	const [expandedTreeKeys, setExpandedTreeKeys] = useState<string[]>([]);
 	const [modelsLoading, setModelsLoading] = useState(false);
 	const [sqlModels, setSqlModels] = useState<SqlModel[]>([]);
 	const [dataSources, setDataSources] = useState<InfraDataSource[]>([]);
@@ -320,6 +325,7 @@ export default function SqlModelingPage() {
 	const [governancePreview, setGovernancePreview] = useState<SqlModelGovernancePreviewItem[]>([]);
 	const [bulkSelection, setBulkSelection] = useState<BulkSelectionState>(EMPTY_BULK_SELECTION);
 	const [batchDeleteResult, setBatchDeleteResult] = useState<SqlModelBatchDeleteDetail | null>(null);
+	const [batchDeleteResultTitle, setBatchDeleteResultTitle] = useState("删除结果");
 	const [batchDeleteResultOpen, setBatchDeleteResultOpen] = useState(false);
 	const [auditLogs, setAuditLogs] = useState<any[]>([]);
 	const [auditLogsLoading, setAuditLogsLoading] = useState(false);
@@ -860,115 +866,83 @@ export default function SqlModelingPage() {
 	const submitRun = async () => {
 		setRunSubmitting(true);
 		try {
-			const values = await runForm.validateFields(["models"]);
+			const values = await runForm.validateFields();
 			const modelsSelector = resolveDbtSelector(values.models) || "all";
-			const dagStatus = (await checkDagReady({ selector: modelsSelector })) as { ready?: boolean; message?: string };
-			if (!dagStatus?.ready) {
-				Modal.warning({
-					title: "DAG 未就绪",
-					content: dagStatus?.message || "DAG 正在同步中，请稍后再试",
-				});
-				return;
-			}
-			const gate = (await checkDbtQualityGate({ models: modelsSelector })) as DbtQualityGateResult;
-			if (gate?.blocking) {
-				Modal.error({
-					title: "质量门禁阻断",
-					content: (
-						<div style={{ fontSize: 12 }}>
-							<p>当前不满足发布条件，请先修复后重试。</p>
-							<ul style={{ paddingLeft: 18, margin: 0 }}>
-								{(gate.blockers || []).map((item, idx) => (
-									<li key={`${item}-${idx}`}>{item}</li>
-								))}
-							</ul>
-						</div>
-					),
-				});
-				return;
-			}
-			if (gate?.warning) {
-				const confirmed = await new Promise<boolean>((resolve) =>
-					Modal.confirm({
-						title: "质量门禁告警",
-						content: (
-							<div style={{ fontSize: 12 }}>
-								<p>检测到以下告警，是否继续提交变更？</p>
-								<ul style={{ paddingLeft: 18, margin: 0 }}>
-									{(gate.warnings || []).map((item, idx) => (
-										<li key={`${item}-${idx}`}>{item}</li>
-									))}
-								</ul>
-							</div>
-						),
-						okText: "继续上线",
-						cancelText: "取消",
-						onOk: () => resolve(true),
-						onCancel: () => resolve(false),
-					}),
-				);
-				if (!confirmed) {
-					return;
-				}
-			}
-			const releaseGate = (await checkDbtReleaseGate({
+			const payload = {
 				models: modelsSelector,
-				gitRef: normalizeText(values.gitRef) || undefined,
-				commitSha: normalizeText(values.commitSha) || undefined,
-				strictMode: values.strictMode !== false,
-			})) as DbtReleaseGateResult;
-			if (releaseGate?.blocking) {
-				Modal.error({
-					title: "发布门禁阻断",
-					content: (
-						<div style={{ fontSize: 12 }}>
-							<p>当前不满足发布门禁，请先修复后重试。</p>
-							<ul style={{ paddingLeft: 18, margin: 0 }}>
-								{(releaseGate.blockers || []).map((item, idx) => (
-									<li key={`${item}-${idx}`}>{item}</li>
-								))}
-							</ul>
-						</div>
-					),
-				});
-				return;
-			}
-			if (releaseGate?.warning) {
-				const confirmed = await new Promise<boolean>((resolve) =>
-					Modal.confirm({
-						title: "发布门禁告警",
-						content: (
-							<div style={{ fontSize: 12 }}>
-								<p>检测到以下告警，是否继续提交变更？</p>
-								<ul style={{ paddingLeft: 18, margin: 0 }}>
-									{(releaseGate.warnings || []).map((item, idx) => (
-										<li key={`${item}-${idx}`}>{item}</li>
-									))}
-								</ul>
-							</div>
-						),
-						okText: "继续上线",
-						cancelText: "取消",
-						onOk: () => resolve(true),
-						onCancel: () => resolve(false),
-					}),
-				);
-				if (!confirmed) {
-					return;
-				}
-			}
-			const triggerResp = await triggerDbtRun({
-				models: buildReleaseSelector(modelsSelector),
-				dagSelector: modelsSelector,
-				operation: "build",
 				target: normalizeText(values.target) || undefined,
 				vars: tryParseJsonObject(values.vars),
 				gitRef: normalizeText(values.gitRef) || undefined,
 				commitSha: normalizeText(values.commitSha) || undefined,
-				buildInvocationId: normalizeText(releaseGate?.buildEvidence?.invocationId) || undefined,
-			});
-			const dagRunId = normalizeText((triggerResp as any)?.dag_run_id || (triggerResp as any)?.dagRunId);
-			const dagId = normalizeText((triggerResp as any)?.dag_id || (triggerResp as any)?.dagId);
+				strictMode: values.strictMode !== false,
+			};
+			const submitRelease = async (confirmWarnings = false) =>
+				(await submitDbtRelease({
+					...payload,
+					confirmWarnings,
+				})) as DbtReleaseSubmitResult;
+
+			let releaseResult = await submitRelease(false);
+			const firstOutcome = resolveReleaseSubmitOutcome(releaseResult);
+			if (firstOutcome === "blocked") {
+				Modal.error({
+					title: "上线阻断",
+					content: (
+						<div style={{ fontSize: 12 }}>
+							<p>当前不满足上线条件，请先修复后重试。</p>
+							<ul style={{ paddingLeft: 18, margin: 0 }}>
+								{(releaseResult.blockers || []).map((item, idx) => (
+									<li key={`${item}-${idx}`}>{item}</li>
+								))}
+							</ul>
+						</div>
+					),
+				});
+				return;
+			}
+			if (firstOutcome === "warning") {
+				const confirmed = await new Promise<boolean>((resolve) =>
+					Modal.confirm({
+						title: "上线告警",
+						content: (
+							<div style={{ fontSize: 12 }}>
+								<p>检测到以下告警，是否继续提交变更？</p>
+								<ul style={{ paddingLeft: 18, margin: 0 }}>
+									{(releaseResult.warnings || []).map((item, idx) => (
+										<li key={`${item}-${idx}`}>{item}</li>
+									))}
+								</ul>
+							</div>
+						),
+						okText: "继续上线",
+						cancelText: "取消",
+						onOk: () => resolve(true),
+						onCancel: () => resolve(false),
+					}),
+				);
+				if (!confirmed) {
+					return;
+				}
+				releaseResult = await submitRelease(true);
+				if (resolveReleaseSubmitOutcome(releaseResult) !== "submitted") {
+					Modal.error({
+						title: "上线提交失败",
+						content: (
+							<div style={{ fontSize: 12 }}>
+								<p>后端未返回成功提交结果，请检查以下信息后重试。</p>
+								<ul style={{ paddingLeft: 18, margin: 0 }}>
+									{([...(releaseResult.blockers || []), ...(releaseResult.warnings || [])] || []).map((item, idx) => (
+										<li key={`${item}-${idx}`}>{item}</li>
+									))}
+								</ul>
+							</div>
+						),
+					});
+					return;
+				}
+			}
+			const dagRunId = normalizeText(releaseResult?.dagRunId);
+			const dagId = normalizeText(releaseResult?.dagId);
 			setRunResult({
 				...createPendingBuildSummary("build", buildReleaseSelector(modelsSelector)),
 				dagRunId,
@@ -1109,7 +1083,11 @@ export default function SqlModelingPage() {
 		batchArchiveForm.resetFields();
 		batchArchiveForm.setFieldsValue({ planId: defaultArchivePlanId });
 		setBulkSelection((current) =>
-			applyBulkSelectionChange(current, collectUnassignedModelIds(unassignedModels), "list"),
+			applyBulkSelectionChange(
+				current,
+				(current.sourceSelections?.list || []).filter((id) => unassignedModelIds.includes(id)),
+				"list",
+			),
 		);
 		setBatchArchiveOpen(true);
 	};
@@ -1122,7 +1100,7 @@ export default function SqlModelingPage() {
 			deleteFiles: true,
 		});
 		setGovernancePreview([]);
-		setBulkSelection(EMPTY_BULK_SELECTION);
+		setBulkSelection((current) => clearBulkSelectionSource(current, "governance"));
 		setGovernanceOpen(true);
 	};
 
@@ -1169,16 +1147,35 @@ export default function SqlModelingPage() {
 		const values = governanceForm.getFieldsValue();
 		setGovernanceExecuting(true);
 		try {
+			const requestedIds = [...bulkSelection.selectedIds];
 			const resp = (await executeSqlModelGovernance({
-				modelIds: bulkSelection.selectedIds,
+				modelIds: requestedIds,
 				deleteFiles: values.deleteFiles !== false,
 			})) as SqlModelGovernanceExecuteResult;
 			const deleted = Number(resp?.deleted || 0);
+			const failed = Number(resp?.failed || 0);
 			const skipped = Number(resp?.skipped || 0);
-			toast.success(`治理完成：删除 ${deleted} 个，跳过 ${skipped} 个`);
+			const deletedIds = (resp?.items || [])
+				.filter((item) => String(item?.result || "").toUpperCase() === "DELETED")
+				.map((item) => String(item?.modelId || "").trim())
+				.filter(Boolean);
+			setBulkSelection((current) =>
+				clearBulkSelectionSource(clearDeletedBulkSelection(current, deletedIds), "governance"),
+			);
+			setBatchDeleteResult(
+				buildSqlModelGovernanceDetail({
+					requestedIds,
+					preview: governancePreview,
+					result: resp,
+				}),
+			);
+			setBatchDeleteResultTitle("治理结果");
+			setBatchDeleteResultOpen(true);
+			toast[failed > 0 || skipped > 0 ? "warning" : "success"](
+				`治理完成：成功 ${deleted} 个，失败 ${failed} 个，跳过 ${skipped} 个`,
+			);
 			await loadModels();
 			setGovernancePreview([]);
-			setBulkSelection(EMPTY_BULK_SELECTION);
 			setGovernanceOpen(false);
 		} catch (err: any) {
 		} finally {
@@ -1544,19 +1541,50 @@ export default function SqlModelingPage() {
 
 	const removeModel = () => {
 		if (!activeModel?.id) return;
+		const requestedIds = [String(activeModel.id)];
+		const selectedSnapshot = [
+			{
+				id: activeModel.id,
+				name: activeModel.name,
+				layer: activeModel.layer,
+				planName: activeModel.planName,
+				modelPath: activeModel.modelPath,
+			},
+		];
 		Modal.confirm({
 			title: "删除模型？",
 			content: `确认删除模型 ${activeModel.name || ""} 吗？`,
+			okText: "确认删除",
+			okButtonProps: { danger: true },
 			onOk: async () => {
 				try {
-					await deleteSqlModel(activeModel.id as string);
+					const resp = (await batchDeleteSqlModels({
+						modelIds: requestedIds,
+					})) as SqlModelBatchDeleteResult;
+					const failedIds = new Set(
+						(resp?.failures || []).map((failure) => String(failure?.modelId || "").trim()).filter(Boolean),
+					);
+					const deletedIds = requestedIds.filter((id) => !failedIds.has(id));
 					const nextSelection = applyDeletedModelSelection({
 						activeModelKey,
-						deletedModelKey: activeModel.id as string,
+						deletedModelKey: deletedIds[0] || null,
 					});
 					setActiveModelKey(nextSelection.nextActiveModelKey);
 					setSuppressAutoSelect(nextSelection.suppressAutoSelect);
-					toast.success("模型已删除");
+					setBulkSelection((current) => clearDeletedBulkSelection(current, deletedIds));
+					setBatchDeleteResult(
+						buildSqlModelBatchDeleteDetail({
+							requestedIds,
+							models: selectedSnapshot,
+							result: resp,
+						}),
+					);
+					setBatchDeleteResultTitle("删除结果");
+					setBatchDeleteResultOpen(true);
+					const failed = Number(resp?.failed || 0);
+					toast[failed > 0 ? "warning" : "success"](
+						failed > 0 ? `模型删除失败，请查看结果明细` : `模型已删除`,
+					);
 					await loadModels();
 				} catch (err: any) {
 				}
@@ -1607,6 +1635,7 @@ export default function SqlModelingPage() {
 							result: resp,
 						}),
 					);
+					setBatchDeleteResultTitle("删除结果");
 					setBatchDeleteResultOpen(true);
 					const deleted = Number(resp?.deleted || 0);
 					const failed = Number(resp?.failed || 0);
@@ -1844,9 +1873,10 @@ export default function SqlModelingPage() {
 	);
 	const unassignedModelIds = useMemo(() => collectUnassignedModelIds(unassignedModels), [unassignedModels]);
 	const unassignedModelIdSet = useMemo(() => new Set(unassignedModelIds), [unassignedModelIds]);
+	const selectionSummary = useMemo(() => summarizeBulkSelection(bulkSelection), [bulkSelection]);
 
 
-	const buildLayerNodes = useCallback((input: SqlModel[]) => {
+	const buildLayerNodes = useCallback((input: SqlModel[]): ModelFileBrowserTreeNode[] => {
 		const layers = new Map<string, SqlModel[]>();
 		input.forEach((model) => {
 			const layer = model.layer || inferLayer(model.name);
@@ -1860,9 +1890,11 @@ export default function SqlModelingPage() {
 			.map(([layer, list]) => ({
 				title: `${layer}_层 (${list.length})`,
 				key: `layer-${layer}`,
+				nodeType: "layer" as const,
 				children: list.map((model, idx) => ({
 					title: <span className="inline-flex items-center gap-1">{model.name || model.alias || "未命名模型"}{model.status && model.status !== "DRAFT" && <span className={`inline-block rounded px-1 text-[10px] leading-4 ${model.status === "PUBLISHED" ? "bg-green-500/15 text-green-600" : model.status === "TESTED" ? "bg-orange-500/15 text-orange-600" : "bg-blue-500/15 text-blue-600"}`}>{model.status === "PUBLISHED" ? "已发布" : model.status === "TESTED" ? "已测试" : model.status === "COMMITTED" ? "已提交" : model.status}</span>}</span>,
 					key: `model:${resolveModelKey(model, `${layer}-${idx}`)}`,
+					nodeType: "model" as const,
 					isLeaf: true,
 					icon: <></>,
 				})),
@@ -1981,10 +2013,17 @@ export default function SqlModelingPage() {
 	const activeLayerNodes = useMemo(() => buildLayerNodes(activeSpaceModels), [buildLayerNodes, activeSpaceModels]);
 	const canArchiveActiveModel = !!activeModel?.id && !activeModel?.planId && spaces.length > 0;
 	const canBatchArchive = unassignedModels.length > 0 && spaces.length > 0;
-	const checkedModelKeys = useMemo(() => bulkSelection.selectedIds.map((id) => `model:${id}`), [bulkSelection.selectedIds]);
+	const checkedModelKeys = useMemo(
+		() => (bulkSelection.sourceSelections?.tree || []).map((id) => `model:${id}`),
+		[bulkSelection.sourceSelections],
+	);
 	const batchArchiveSelection = useMemo(
-		() => bulkSelection.selectedIds.filter((id) => unassignedModelIdSet.has(id)),
-		[bulkSelection.selectedIds, unassignedModelIdSet],
+		() => (bulkSelection.sourceSelections?.list || []).filter((id) => unassignedModelIdSet.has(id)),
+		[bulkSelection.sourceSelections, unassignedModelIdSet],
+	);
+	const governanceSelection = useMemo(
+		() => bulkSelection.sourceSelections?.governance || [],
+		[bulkSelection.sourceSelections],
 	);
 	const visibleModelIds = useMemo(
 		() => activeSpaceModels.map((model) => String(model.id || "").trim()).filter(Boolean),
@@ -1998,13 +2037,14 @@ export default function SqlModelingPage() {
 		});
 	}, [bulkSelection.selectedIds, sqlModels]);
 
-	const treeData = useMemo(() => {
+	const treeData = useMemo<ModelFileBrowserTreeNode[]>(() => {
 		const nodes = spaces.map((space, idx) => {
 			const key = resolveSpaceKey(space, idx);
 			const spaceModels = filteredModels.filter((model) => model.planId === space.id);
 			return {
 				title: space.name || "未命名项目空间",
 				key,
+				nodeType: "space" as const,
 				children: key === activeSpaceKey ? buildLayerNodes(spaceModels) : [],
 			};
 		});
@@ -2012,11 +2052,21 @@ export default function SqlModelingPage() {
 			nodes.push({
 				title: `未归档工作区模型 (${unassignedModels.length})`,
 				key: UNASSIGNED_SPACE_KEY,
+				nodeType: "space" as const,
 				children: activeSpaceKey === UNASSIGNED_SPACE_KEY ? buildLayerNodes(unassignedModels) : [],
 			});
 		}
 		return nodes;
 	}, [spaces, activeSpaceKey, filteredModels, buildLayerNodes, unassignedModels]);
+
+	const defaultExpandedTreeKeys = useMemo(
+		() => deriveDefaultExpandedTreeKeys(treeData, activeSpaceKey),
+		[treeData, activeSpaceKey],
+	);
+
+	useEffect(() => {
+		setExpandedTreeKeys((current) => mergeExpandedTreeKeys(current, treeData, defaultExpandedTreeKeys));
+	}, [treeData, defaultExpandedTreeKeys]);
 
 	useEffect(() => {
 		const existingIds = new Set(sqlModels.map((model) => String(model.id || "").trim()).filter(Boolean));
@@ -2261,6 +2311,7 @@ export default function SqlModelingPage() {
 					treeData={treeData}
 					selectedKeys={activeModelKey ? [`model:${activeModelKey}`] : activeSpaceKey ? [activeSpaceKey] : []}
 					checkedKeys={checkedModelKeys}
+					expandedKeys={expandedTreeKeys}
 					onSelect={(keys: Key[]) => {
 						const key = String(keys[0] || "");
 						if (!key) return;
@@ -2286,9 +2337,11 @@ export default function SqlModelingPage() {
 							applyBulkSelectionChange(current, deriveSelectedModelIdsFromCheckedKeys(keys), "tree"),
 						)
 					}
+					onExpand={setExpandedTreeKeys}
 					selectedCount={bulkSelection.selectedIds.length}
+					selectionBreakdown={`树 ${selectionSummary.tree} / 治理 ${selectionSummary.governance} / 列表 ${selectionSummary.list}`}
 					onSelectAllCurrent={() => setBulkSelection((current) => applyBulkSelectionChange(current, visibleModelIds, "tree"))}
-					onClearSelection={() => setBulkSelection(EMPTY_BULK_SELECTION)}
+					onClearSelection={() => setBulkSelection((current) => clearBulkSelectionSource(current, "tree"))}
 					onBatchDelete={removeSelectedModels}
 					batchDeleteDisabled={!bulkSelection.selectedIds.length}
 					loading={spacesLoading || modelsLoading}
@@ -3174,7 +3227,8 @@ export default function SqlModelingPage() {
 				previewLoading={governancePreviewLoading}
 				executing={governanceExecuting}
 				preview={governancePreview}
-				selection={bulkSelection.selectedIds}
+				selection={governanceSelection}
+				totalSelectionCount={bulkSelection.selectedIds.length}
 				onSelectionChange={(keys) => setBulkSelection((current) => applyBulkSelectionChange(current, keys, "governance"))}
 				onSelectAllPreview={() =>
 					setBulkSelection((current) =>
@@ -3185,7 +3239,7 @@ export default function SqlModelingPage() {
 						),
 					)
 				}
-				onClearSelection={() => setBulkSelection(EMPTY_BULK_SELECTION)}
+				onClearSelection={() => setBulkSelection((current) => clearBulkSelectionSource(current, "governance"))}
 				spaces={spaces}
 				form={governanceForm}
 			/>
@@ -3194,6 +3248,7 @@ export default function SqlModelingPage() {
 				open={batchDeleteResultOpen}
 				onClose={() => setBatchDeleteResultOpen(false)}
 				result={batchDeleteResult}
+				title={batchDeleteResultTitle}
 			/>
 
 			<BatchImportModal
@@ -3276,7 +3331,7 @@ export default function SqlModelingPage() {
 									type="link"
 									size="small"
 									className="px-0"
-									onClick={() => setBulkSelection(EMPTY_BULK_SELECTION)}
+									onClick={() => setBulkSelection((current) => clearBulkSelectionSource(current, "list"))}
 									disabled={!batchArchiveSelection.length}
 								>
 									清空选择

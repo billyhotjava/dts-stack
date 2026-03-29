@@ -44,6 +44,7 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
@@ -392,16 +393,25 @@ public class ModelGenerationService {
         String activeDept = security.resolveActiveDept(activeDeptHeader);
         boolean instituteScope = security.hasInstituteScope();
 
-        List<ModelingSqlModel> selectedModels = request.modelIds()
-            .stream()
-            .distinct()
-            .map(id -> repo.findById(id).orElse(null))
-            .filter(model -> model != null)
-            .filter(model -> coreService.isOwnerDeptVisible(model.getOwnerDept(), activeDept, instituteScope))
-            .toList();
+        List<UUID> requestedIds = request.modelIds().stream().filter(Objects::nonNull).distinct().toList();
+        List<SqlModelGovernanceExecuteItem> items = new ArrayList<>();
+        List<ModelingSqlModel> selectedModels = new ArrayList<>();
+        for (UUID modelId : requestedIds) {
+            ModelingSqlModel model = repo.findById(modelId).orElse(null);
+            if (model == null) {
+                items.add(new SqlModelGovernanceExecuteItem(modelId, null, "SKIPPED", "模型不存在或已删除"));
+                continue;
+            }
+            if (!coreService.isOwnerDeptVisible(model.getOwnerDept(), activeDept, instituteScope)) {
+                items.add(new SqlModelGovernanceExecuteItem(modelId, model.getName(), "SKIPPED", "当前账号无权限治理该模型"));
+                continue;
+            }
+            selectedModels.add(model);
+        }
 
         if (selectedModels.isEmpty()) {
-            return new SqlModelGovernanceExecuteResult(request.modelIds().size(), 0, request.modelIds().size(), List.of());
+            int skipped = (int) items.stream().filter(item -> "SKIPPED".equals(item.result())).count();
+            return new SqlModelGovernanceExecuteResult(requestedIds.size(), 0, skipped, 0, items);
         }
 
         boolean deleteFiles = request.deleteFiles() == null || request.deleteFiles();
@@ -415,7 +425,6 @@ public class ModelGenerationService {
             }
         }
 
-        List<SqlModelGovernanceExecuteItem> items = new ArrayList<>();
         for (ModelingSqlModel model : selectedModels) {
             try {
                 repo.delete(model);
@@ -442,8 +451,9 @@ public class ModelGenerationService {
         }
 
         int deleted = (int) items.stream().filter(item -> "DELETED".equals(item.result())).count();
-        int skippedCount = request.modelIds().size() - deleted;
-        return new SqlModelGovernanceExecuteResult(request.modelIds().size(), deleted, skippedCount, items);
+        int skippedCount = (int) items.stream().filter(item -> "SKIPPED".equals(item.result())).count();
+        int failed = (int) items.stream().filter(item -> "FAILED".equals(item.result())).count();
+        return new SqlModelGovernanceExecuteResult(requestedIds.size(), deleted, skippedCount, failed, items);
     }
 
     // ── Workspace sync ─────────────────────────────────────────────────

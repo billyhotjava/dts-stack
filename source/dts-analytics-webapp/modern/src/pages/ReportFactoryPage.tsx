@@ -4,8 +4,6 @@ import { ErrorNotice } from "../components/ErrorNotice";
 import { PageContainer, PageHeader } from "../components/PageContainer/PageContainer";
 import { getEffectiveLocale, t, type Locale } from "../i18n";
 import { Input, Spin, Button, Card, Tag, Select } from "antd";
-import "./page.css";
-
 type LoadState<T> =
 	| { state: "loading" }
 	| { state: "loaded"; value: T }
@@ -194,9 +192,9 @@ export default function ReportFactoryPage() {
 				</div>
 			)}
 
-			<div className="grid2" style={{ marginBottom: "var(--spacing-lg)" }}>
+			<div className="grid grid-cols-2 gap-md" style={{ marginBottom: "var(--spacing-lg)" }}>
 				<Card title="模板管理">
-						<div className="col" style={{ gap: "var(--spacing-sm)" }}>
+						<div className="flex flex-col gap-md" style={{ gap: "var(--spacing-sm)" }}>
 							<div>
 								<label style={{ display: "block", marginBottom: 4, fontWeight: 500 }}>{t(locale, "common.name")}</label>
 								<Input
@@ -230,7 +228,7 @@ export default function ReportFactoryPage() {
 				</Card>
 
 				<Card title="报告生成">
-						<div className="col" style={{ gap: "var(--spacing-sm)" }}>
+						<div className="flex flex-col gap-md" style={{ gap: "var(--spacing-sm)" }}>
 							<div>
 								<label style={{ display: "block", marginBottom: 4, fontWeight: 500 }}>模板</label>
 								<Select
@@ -240,7 +238,7 @@ export default function ReportFactoryPage() {
 									style={{ width: "100%" }}
 								/>
 							</div>
-							<div className="grid2">
+							<div className="grid grid-cols-2 gap-md">
 								<div>
 									<label style={{ display: "block", marginBottom: 4, fontWeight: 500 }}>来源类型</label>
 									<Select
@@ -296,10 +294,10 @@ export default function ReportFactoryPage() {
 					)}
 					{templates.state === "error" && <ErrorNotice locale={locale} error={templates.error} />}
 					{templates.state === "loaded" && templates.value.length === 0 && (
-						<div className="muted">{t(locale, "common.empty")}</div>
+						<div className="text-secondary">{t(locale, "common.empty")}</div>
 					)}
 					{templates.state === "loaded" && templates.value.length > 0 && (
-						<table className="table">
+						<table>
 							<thead>
 								<tr>
 									<th>{t(locale, "common.name")}</th>
@@ -322,7 +320,7 @@ export default function ReportFactoryPage() {
 					)}
 			</Card>
 
-			<div className="grid2">
+			<div className="grid grid-cols-2 gap-md">
 				<Card
 					title="生成任务"
 					extra={runs.state === "loaded" ? <Tag>{runs.value.length}</Tag> : null}
@@ -334,10 +332,10 @@ export default function ReportFactoryPage() {
 						)}
 						{runs.state === "error" && <ErrorNotice locale={locale} error={runs.error} />}
 						{runs.state === "loaded" && runs.value.length === 0 && (
-							<div className="muted">{t(locale, "common.empty")}</div>
+							<div className="text-secondary">{t(locale, "common.empty")}</div>
 						)}
 						{runs.state === "loaded" && runs.value.length > 0 && (
-							<table className="table">
+							<table>
 								<thead>
 									<tr>
 										<th>ID</th>
@@ -363,7 +361,7 @@ export default function ReportFactoryPage() {
 															href={analyticsApi.getReportRunExportUrl(row.id || "", "html")}
 															target="_blank"
 															rel="noreferrer"
-															className="link"
+															className="text-brand no-underline"
 														>
 															HTML
 														</a>
@@ -371,7 +369,7 @@ export default function ReportFactoryPage() {
 															href={analyticsApi.getReportRunExportUrl(row.id || "", "markdown")}
 															target="_blank"
 															rel="noreferrer"
-															className="link"
+															className="text-brand no-underline"
 														>
 															MD
 														</a>
@@ -386,7 +384,7 @@ export default function ReportFactoryPage() {
 				</Card>
 
 				<Card title="任务详情">
-						{selectedRun == null && <div className="muted">点击左侧“详情”查看任务信息。</div>}
+						{selectedRun == null && <div className="text-secondary">点击左侧“详情”查看任务信息。</div>}
 						{selectedRun?.state === "loading" && (
 							<div className="loading-container" style={{ padding: "var(--spacing-lg)" }}>
 								<Spin />

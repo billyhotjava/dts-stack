@@ -1,4 +1,3 @@
-import "./DelayReasonMatrix.css";
 import { buildDelayReasonMatrixSummary } from "../views/riskAttributionView.helpers";
 
 type Props = {
@@ -23,34 +22,36 @@ export function DelayReasonMatrix({ rows, onDrillReason, onDrillDept }: Props) {
 	const reasonKeys = Object.keys(REASON_LABELS) as Array<keyof typeof REASON_LABELS>;
 
 	return (
-		<div className="project-cockpit__matrix">
-			<div className="project-cockpit__matrix-header">
+		<div className="flex flex-col gap-2.5">
+			{/* Header */}
+			<div className="grid grid-cols-[120px_80px_110px_1fr] gap-3 items-center text-xs text-text-secondary uppercase tracking-wide max-[1200px]:grid-cols-1">
 				<span>责任科室</span>
 				<span>延期总数</span>
 				<span>主因</span>
 				<span>归因结构</span>
 			</div>
+			{/* Rows */}
 			{summary.rows.map((row) => {
 				const dept = String(row.dept ?? "-");
 				const dominantKey = (row.dominantReason ?? "normal") as keyof typeof REASON_LABELS;
 				return (
-					<div key={dept} className="project-cockpit__matrix-row">
+					<div key={dept} className="grid grid-cols-[120px_80px_110px_1fr] gap-3 items-center px-3.5 py-3 rounded-[14px] bg-surface-muted max-[1200px]:grid-cols-1">
 						<strong
-							className={onDrillDept ? "project-cockpit__matrix-link" : undefined}
+							className={onDrillDept ? "cursor-pointer text-brand hover:underline" : undefined}
 							onClick={onDrillDept ? () => onDrillDept(dept) : undefined}
 						>
 							{dept}
 						</strong>
 						<span>{Number(row.total ?? 0)}</span>
 						<span>{REASON_LABELS[dominantKey] ?? "-"}</span>
-						<div className="project-cockpit__matrix-bars">
+						<div className="flex gap-1.5 flex-wrap">
 							{reasonKeys.map((key) => {
 								const label = REASON_LABELS[key];
 								const value = Number(row[key] ?? 0);
 								return value > 0 ? (
 									<span
 										key={key}
-										className={`project-cockpit__matrix-pill${onDrillReason ? " project-cockpit__matrix-pill--clickable" : ""}`}
+										className={`inline-flex items-center px-2 py-1 rounded-full text-xs bg-blue-600/[0.08] text-blue-700 transition-colors duration-150${onDrillReason ? " cursor-pointer hover:bg-blue-600/[0.18]" : ""}`}
 										title={`${label}: ${value}`}
 										onClick={onDrillReason ? () => onDrillReason(dept, key) : undefined}
 									>

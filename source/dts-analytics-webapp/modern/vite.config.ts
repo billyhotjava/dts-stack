@@ -5,7 +5,9 @@ import { defineConfig, loadEnv } from "vite";
 
 const publicBase = "/analytics/";
 const platformServiceTarget = { host: "dts-platform", containerPort: 8081, hostPort: 18082 };
+const platformUiTarget = { host: "dts-platform-webapp", containerPort: 3001, hostPort: 18012 };
 const analyticsServiceTarget = { host: "dts-analytics", containerPort: 3000, hostPort: 3000 };
+const runtimeConfigRequestPaths = new Set(["/runtime-config.js", `${publicBase}runtime-config.js`]);
 
 function resolveServiceProxyTarget(
 	envValue: string | undefined,
@@ -48,6 +50,33 @@ export function createAnalyticsServerProxy(
 	};
 }
 
+export function resolveBrowserPlatformBaseUrl(
+	explicitPlatformBaseUrl: string | undefined,
+	requestHost: string | undefined,
+	requestProtocol: string | undefined,
+) {
+	const explicit = String(explicitPlatformBaseUrl || "").trim();
+	if (explicit) {
+		return explicit;
+	}
+
+	const host = String(requestHost || "").trim();
+	if (!host) {
+		return "";
+	}
+
+	const protocol = String(requestProtocol || "").trim().toLowerCase() === "https" ? "https" : "http";
+	if (host.endsWith(":3002")) {
+		return `${protocol}://${host.replace(/:3002$/, ":18012")}`;
+	}
+	return `${protocol}://${host}`;
+}
+
+export function isRuntimeConfigRequestPath(urlPath: string | undefined): boolean {
+	const pathname = String(urlPath || "").split("?")[0];
+	return runtimeConfigRequestPaths.has(pathname);
+}
+
 export function createAnalyticsViteConfig(
 	mode: string,
 	envOverrides: Record<string, string | undefined> = process.env,
@@ -64,10 +93,40 @@ export function createAnalyticsViteConfig(
 	const legacyEnabled = normalizedLegacyFlag !== "0" && normalizedLegacyFlag !== "false";
 	const buildTarget = legacyEnabled ? "chrome95" : "chrome109";
 	const port = Number.parseInt(env.PORT ?? "3002", 10);
+	const explicitPlatformPublicBaseUrl =
+		env.VITE_PLATFORM_PUBLIC_BASE_URL ||
+		env.PLATFORM_PUBLIC_BASE_URL ||
+		(runningInContainer ? "" : resolveServiceProxyTarget("", platformUiTarget, false));
+
+	const runtimeConfigPlugin = {
+		name: "analytics-dev-runtime-config",
+		apply: "serve" as const,
+		configureServer(server: any) {
+			server.middlewares.use((req: any, res: any, next: any) => {
+				if (isRuntimeConfigRequestPath(req.url)) {
+					const requestProtocol = String(req.headers["x-forwarded-proto"] || "").split(",")[0] || "http";
+					const platformPublicBaseUrl = resolveBrowserPlatformBaseUrl(
+						explicitPlatformPublicBaseUrl,
+						req.headers.host,
+						requestProtocol,
+					);
+					let js = "(function(w){w.__RUNTIME_CONFIG__=w.__RUNTIME_CONFIG__||{};";
+					if (String(platformPublicBaseUrl).trim()) {
+						js += `w.__RUNTIME_CONFIG__.platformBaseUrl=${JSON.stringify(String(platformPublicBaseUrl).trim())};`;
+					}
+					js += "})(window);\n";
+					res.setHeader("Content-Type", "application/javascript; charset=utf-8");
+					res.end(js);
+					return;
+				}
+				next();
+			});
+		},
+	};
 
 	return {
 		base: publicBase,
-		plugins: [tailwindcss(), react()],
+		plugins: [tailwindcss(), react(), runtimeConfigPlugin],
 		server: {
 			host: true,
 			// Containerized dev may proxy analytics through sibling services (for example dts-platform-webapp),

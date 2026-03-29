@@ -6,8 +6,6 @@ import { Button, Card, Input, Skeleton, Tag } from "antd";
 import { CardGrid } from "../components/DashboardGrid/DashboardGrid";
 import { ErrorNotice } from "../components/ErrorNotice";
 import { getEffectiveLocale, t, type Locale } from "../i18n";
-import "./page.css";
-
 type LoadState<T> =
 	| { state: "loading" }
 	| { state: "loaded"; value: T }
@@ -104,7 +102,7 @@ export default function ModelsPage() {
 			/>
 
 			{/* Filter Bar */}
-			<div className="filterBar">
+			<div className="flex items-center gap-sm p-md bg-primary border rounded-md mb-md">
 				<div style={{ flex: 1, maxWidth: 320 }}>
 					<Input.Search
 						placeholder={t(locale, "common.search")}
@@ -204,7 +202,7 @@ export default function ModelsPage() {
 			{/* List View */}
 			{state.state === "loaded" && filteredModels.length > 0 && viewMode === "list" && (
 				<Card styles={{ body: { padding: 0 } }}>
-					<table className="table">
+					<table>
 						<thead>
 							<tr>
 								<th>{t(locale, "common.name")}</th>
@@ -216,11 +214,11 @@ export default function ModelsPage() {
 							{filteredModels.map((c) => (
 								<tr key={String(c.id)}>
 									<td>
-										<Link to={`/questions/${c.id}`} className="link">
+										<Link to={`/questions/${c.id}`} className="text-brand no-underline">
 											{c.name || t(locale, "common.untitled")}
 										</Link>
 										{c.description && (
-											<span className="muted" style={{ marginLeft: 8, fontSize: "0.85em" }}>{c.description}</span>
+											<span className="text-secondary" style={{ marginLeft: 8, fontSize: "0.85em" }}>{c.description}</span>
 										)}
 									</td>
 									<td>
@@ -230,7 +228,7 @@ export default function ModelsPage() {
 											</Tag>
 										)}
 									</td>
-									<td className="muted">{c.id}</td>
+									<td className="text-secondary">{c.id}</td>
 								</tr>
 							))}
 						</tbody>

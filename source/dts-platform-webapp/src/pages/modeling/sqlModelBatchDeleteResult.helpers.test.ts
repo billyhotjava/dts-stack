@@ -1,6 +1,9 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { buildSqlModelBatchDeleteDetail } from "./sqlModelBatchDeleteResult.helpers.ts";
+import {
+	buildSqlModelBatchDeleteDetail,
+	buildSqlModelGovernanceDetail,
+} from "./sqlModelBatchDeleteResult.helpers.ts";
 
 test("buildSqlModelBatchDeleteDetail marks failed ids and keeps model metadata", () => {
 	const result = buildSqlModelBatchDeleteDetail({
@@ -20,6 +23,7 @@ test("buildSqlModelBatchDeleteDetail marks failed ids and keeps model metadata",
 	assert.equal(result.requested, 2);
 	assert.equal(result.deleted, 1);
 	assert.equal(result.failed, 1);
+	assert.equal(result.skipped, 0);
 	assert.deepEqual(result.rows, [
 		{
 			modelId: "m1",
@@ -64,5 +68,36 @@ test("buildSqlModelBatchDeleteDetail falls back when model metadata is missing",
 			status: "failed",
 			message: "删除失败",
 		},
+	]);
+});
+
+test("buildSqlModelGovernanceDetail keeps skipped and failed governance items explainable", () => {
+	const result = buildSqlModelGovernanceDetail({
+		requestedIds: ["m1", "m2", "m3"],
+		preview: [
+			{ modelId: "m1", name: "ads_overview", layer: "ADS", planName: "prj1", modelPath: "models/ads/prj1/ads_overview.sql" },
+			{ modelId: "m2", name: "dws_risk", layer: "DWS", planName: "prj1", modelPath: "models/dws/prj1/dws_risk.sql" },
+			{ modelId: "m3", name: "dim_node_type", layer: "DWD", planName: "prj1", modelPath: "models/dwd/prj1/dim_node_type.sql" },
+		],
+		result: {
+			requested: 3,
+			deleted: 1,
+			skipped: 1,
+			failed: 1,
+			items: [
+				{ modelId: "m1", name: "ads_overview", result: "DELETED", message: "模型记录已删除" },
+				{ modelId: "m2", name: "dws_risk", result: "FAILED", message: "删除模型失败" },
+				{ modelId: "m3", name: "dim_node_type", result: "SKIPPED", message: "当前账号无权限治理该模型" },
+			],
+		},
+	});
+
+	assert.equal(result.deleted, 1);
+	assert.equal(result.failed, 1);
+	assert.equal(result.skipped, 1);
+	assert.deepEqual(result.rows.map((row) => ({ modelId: row.modelId, status: row.status, message: row.message })), [
+		{ modelId: "m1", status: "success", message: "模型记录已删除" },
+		{ modelId: "m2", status: "failed", message: "删除模型失败" },
+		{ modelId: "m3", status: "skipped", message: "当前账号无权限治理该模型" },
 	]);
 });

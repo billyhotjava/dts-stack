@@ -6,8 +6,6 @@ import { EmptyState } from "../components/EmptyState";
 import { ErrorNotice } from "../components/ErrorNotice";
 import { Spin, Button, Card, Tag } from "antd";
 import { getEffectiveLocale, t, type Locale } from "../i18n";
-import "./page.css";
-
 type LoadState<T> =
 	| { state: "loading" }
 	| { state: "loaded"; value: T }
@@ -106,7 +104,7 @@ export default function DataPage() {
 				/>
 			)}
 			{state.state === "loaded" && state.value.length > 0 && (
-				<div className="grid3">
+				<div className="grid grid-cols-3 gap-md">
 					{state.value.map((db) => (
 						<Card key={db.id} hoverable style={{ height: "100%" }}>
 							<div style={{ display: "flex", alignItems: "flex-start", gap: "var(--spacing-md)" }}>
@@ -119,7 +117,7 @@ export default function DataPage() {
 											{db.name ?? `db:${db.id}`}
 										</h3>
 									</Link>
-									<p className="text-muted" style={{ margin: "var(--spacing-xs) 0 0", fontSize: "var(--font-size-sm)" }}>
+									<p className="text-secondary" style={{ margin: "var(--spacing-xs) 0 0", fontSize: "var(--font-size-sm)" }}>
 										{t(locale, "common.id")}: {db.id}
 									</p>
 								</div>

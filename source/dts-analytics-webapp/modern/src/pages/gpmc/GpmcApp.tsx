@@ -150,10 +150,10 @@ export default function GpmcApp({
 	return (
 		<GpmcContext.Provider value={value}>
 			<div
-			className={`gpmc${fullscreen ? " gpmc--fullscreen" : ""}`}
-			data-theme={layer === "strategic" ? "dark" : theme}
-			data-mode={layer === "strategic" ? "bigscreen" : "dashboard"}
-		>
+				className={`gpmc${fullscreen ? " gpmc--fullscreen" : ""}`}
+				data-theme={layer === "strategic" ? "dark" : theme}
+				data-mode={layer === "strategic" ? "bigscreen" : "dashboard"}
+			>
 				{children}
 			</div>
 		</GpmcContext.Provider>

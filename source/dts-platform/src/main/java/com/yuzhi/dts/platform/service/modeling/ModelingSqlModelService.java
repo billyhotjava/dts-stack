@@ -1235,6 +1235,7 @@ public class ModelingSqlModelService {
         int requested,
         int deleted,
         int skipped,
+        int failed,
         List<SqlModelGovernanceExecuteItem> items
     ) {}
 

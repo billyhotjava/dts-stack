@@ -1,7 +1,7 @@
 # F1: 模型唯一性与列表语义收口
 
 **优先级**: P0
-**状态**: READY
+**状态**: DONE
 
 ## 目标
 
@@ -11,12 +11,12 @@
 
 | ID | Task | 优先级 | 状态 | 依赖 |
 |----|------|--------|------|------|
-| T01 | 收口后端唯一性规则并补统一校验入口 | P0 | READY | - |
-| T02 | 去掉列表静默去重并显式暴露冲突 | P0 | READY | T01 |
-| T03 | 补充 create/update/import/batch-import/ods-template 的唯一性回归 | P0 | READY | T01 |
+| T01 | 收口后端唯一性规则并补统一校验入口 | P0 | DONE | - |
+| T02 | 去掉列表静默去重并显式暴露冲突 | P0 | DONE | T01 |
+| T03 | 补充 create/update/import/batch-import/ods-template 的唯一性回归 | P0 | DONE | T01 |
 
 ## 完成标准
 
-- [ ] `create/update/import/batch-import` 全部遵守同一套唯一性规则
-- [ ] `list()` 不再静默折叠重复模型
+- [x] `create/update/import/batch-import` 全部遵守同一套唯一性规则
+- [x] `list()` 不再静默折叠重复模型
 - [ ] 唯一性冲突有稳定错误码和用户提示

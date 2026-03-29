@@ -60,6 +60,23 @@ export function applyBulkSelectionChange(
 	};
 }
 
+export function clearBulkSelectionSource(
+	current: BulkSelectionState,
+	source: Exclude<BulkSelectionSource, "mixed">,
+	changedAt = Date.now(),
+): BulkSelectionState {
+	return applyBulkSelectionChange(current, [], source, changedAt);
+}
+
+export function summarizeBulkSelection(current: BulkSelectionState) {
+	return {
+		total: current.selectedIds.length,
+		tree: normalizeIds(current.sourceSelections?.tree || []).length,
+		governance: normalizeIds(current.sourceSelections?.governance || []).length,
+		list: normalizeIds(current.sourceSelections?.list || []).length,
+	};
+}
+
 export function clearDeletedBulkSelection(current: BulkSelectionState, deletedIds: string[]): BulkSelectionState {
 	if (!current.selectedIds.length || !deletedIds.length) {
 		return current;

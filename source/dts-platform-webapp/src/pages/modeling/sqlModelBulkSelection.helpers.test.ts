@@ -2,8 +2,10 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
 	applyBulkSelectionChange,
+	clearBulkSelectionSource,
 	clearDeletedBulkSelection,
 	deriveSelectedModelIdsFromCheckedKeys,
+	summarizeBulkSelection,
 	type BulkSelectionState,
 } from "./sqlModelBulkSelection.helpers.ts";
 
@@ -109,5 +111,49 @@ test("clearDeletedBulkSelection removes deleted ids and resets source when empty
 		},
 		selectedSource: null,
 		lastChangedAt: 10,
+	});
+});
+
+test("clearBulkSelectionSource only clears the requested source bucket", () => {
+	const state: BulkSelectionState = {
+		selectedIds: ["111", "222", "333"],
+		sourceSelections: {
+			tree: ["111"],
+			governance: ["222"],
+			list: ["333"],
+		},
+		selectedSource: "mixed",
+		lastChangedAt: 10,
+	};
+
+	assert.deepEqual(clearBulkSelectionSource(state, "governance", 20), {
+		selectedIds: ["111", "333"],
+		sourceSelections: {
+			tree: ["111"],
+			governance: [],
+			list: ["333"],
+		},
+		selectedSource: "mixed",
+		lastChangedAt: 20,
+	});
+});
+
+test("summarizeBulkSelection returns per-source counts and total", () => {
+	const state: BulkSelectionState = {
+		selectedIds: ["111", "222", "333"],
+		sourceSelections: {
+			tree: ["111"],
+			governance: ["222"],
+			list: ["333"],
+		},
+		selectedSource: "mixed",
+		lastChangedAt: 10,
+	};
+
+	assert.deepEqual(summarizeBulkSelection(state), {
+		total: 3,
+		tree: 1,
+		governance: 1,
+		list: 1,
 	});
 });

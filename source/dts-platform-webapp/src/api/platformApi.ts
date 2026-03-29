@@ -89,15 +89,20 @@ export const listDbtModels = () => api.get({ url: "/etl/dbt/models" });
 export const syncDbtModels = () => api.post(withModelingRequestTimeout({ url: "/etl/dbt/models/sync" }));
 export const getDbtSyncStatus = (params?: { models?: string }) =>
 	api.get(withModelingRequestTimeout({ url: "/etl/dbt/sync/status", params }));
-export const checkDagReady = (params?: { selector?: string }) => api.get({ url: "/etl/dbt/dag/ready", params });
+export const checkDagReady = (params?: { selector?: string }) =>
+	api.get(withModelingRequestTimeout({ url: "/etl/dbt/dag/ready", params }));
 export const listDbtRuns = (limit = 20, params?: { dagId?: string; selector?: string }) =>
 	api.get(withModelingRequestTimeout({ url: "/etl/dbt/runs", params: { limit, ...(params || {}) } }));
-export const triggerDbtRun = (data: any) => api.post({ url: "/etl/dbt/run", data });
-export const triggerDbtCompile = (data?: any) => api.post({ url: "/etl/dbt/compile", data });
-export const triggerDbtTest = (data?: any) => api.post({ url: "/etl/dbt/test", data });
-export const triggerDbtDocs = (data?: any) => api.post({ url: "/etl/dbt/docs", data });
-export const checkDbtQualityGate = (data?: any) => api.post({ url: "/etl/dbt/quality-gate/check", data });
-export const checkDbtReleaseGate = (data?: any) => api.post({ url: "/etl/dbt/release-gate/check", data });
+export const triggerDbtRun = (data: any) => api.post(withModelingRequestTimeout({ url: "/etl/dbt/run", data }));
+export const triggerDbtCompile = (data?: any) => api.post(withModelingRequestTimeout({ url: "/etl/dbt/compile", data }));
+export const triggerDbtTest = (data?: any) => api.post(withModelingRequestTimeout({ url: "/etl/dbt/test", data }));
+export const triggerDbtDocs = (data?: any) => api.post(withModelingRequestTimeout({ url: "/etl/dbt/docs", data }));
+export const checkDbtQualityGate = (data?: any) =>
+	api.post(withModelingRequestTimeout({ url: "/etl/dbt/quality-gate/check", data }));
+export const checkDbtReleaseGate = (data?: any) =>
+	api.post(withModelingRequestTimeout({ url: "/etl/dbt/release-gate/check", data }));
+export const submitDbtRelease = (data: any) =>
+	api.post(withModelingRequestTimeout({ url: "/etl/dbt/release/submit", data }));
 
 // dbt execution log (from Airflow)
 export const getDbtRunLog = (dagRunId: string, params?: { dagId?: string; taskId?: string; tryNumber?: number }) =>

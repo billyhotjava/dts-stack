@@ -6,8 +6,6 @@ import { EmptyState } from "../components/EmptyState";
 import { ErrorNotice } from "../components/ErrorNotice";
 import { Spin, Card, Tag } from "antd";
 import { getEffectiveLocale, t, type Locale } from "../i18n";
-import "./page.css";
-
 type LoadState<T> =
 	| { state: "loading" }
 	| { state: "loaded"; value: T }
@@ -89,7 +87,7 @@ export default function CollectionItemsPage() {
 										<Tag color={item.model === "dashboard" ? "processing" : "success"}>
 											{item.model === "dashboard" ? t(locale, "dashboards.title") : t(locale, "questions.title")}
 										</Tag>
-										<span className="text-muted">{t(locale, "common.id")}: {item.id}</span>
+										<span className="text-secondary">{t(locale, "common.id")}: {item.id}</span>
 									</span>
 								</div>
 							</Link>

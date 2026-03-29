@@ -2,18 +2,22 @@ import type { Key } from "react";
 import { DeleteOutlined } from "@ant-design/icons";
 import { Button, Input, Skeleton, Tree, Typography } from "antd";
 import { EmptyState } from "@/components/empty-state";
+import type { ModelFileBrowserTreeNode } from "../modelFileBrowserTree.helpers";
 
 const { Text } = Typography;
 
 type ModelFileBrowserProps = {
 	keyword: string;
 	onKeywordChange: (value: string) => void;
-	treeData: any[];
+	treeData: ModelFileBrowserTreeNode[];
 	selectedKeys: string[];
 	checkedKeys: string[];
+	expandedKeys: string[];
 	onSelect: (keys: Key[]) => void;
 	onCheck: (checkedKeys: string[]) => void;
+	onExpand: (expandedKeys: string[]) => void;
 	selectedCount: number;
+	selectionBreakdown?: string;
 	onSelectAllCurrent: () => void;
 	onClearSelection: () => void;
 	onBatchDelete: () => void;
@@ -28,9 +32,12 @@ export default function ModelFileBrowser({
 	treeData,
 	selectedKeys,
 	checkedKeys,
+	expandedKeys,
 	onSelect,
 	onCheck,
+	onExpand,
 	selectedCount,
+	selectionBreakdown,
 	onSelectAllCurrent,
 	onClearSelection,
 	onBatchDelete,
@@ -50,7 +57,10 @@ export default function ModelFileBrowser({
 			/>
 			<div className="mb-3 rounded-md border border-border bg-background px-2 py-2">
 				<div className="mb-2 flex items-center justify-between gap-2">
-					<Text className="text-xs text-muted-foreground">已选 {selectedCount} 项</Text>
+					<div className="min-w-0">
+						<Text className="text-xs text-muted-foreground">已选 {selectedCount} 项</Text>
+						{selectionBreakdown ? <div className="text-[11px] text-muted-foreground">{selectionBreakdown}</div> : null}
+					</div>
 					{selectedCount > 0 ? (
 						<Button type="link" size="small" className="px-0" onClick={onClearSelection}>
 							清空选择
@@ -76,12 +86,13 @@ export default function ModelFileBrowser({
 				<>
 					<Tree
 						checkable
-						defaultExpandAll
 						treeData={treeData}
 						selectedKeys={selectedKeys}
 						checkedKeys={checkedKeys}
+						expandedKeys={expandedKeys}
 						onSelect={(keys) => onSelect(keys as Key[])}
 						onCheck={(keys) => onCheck((Array.isArray(keys) ? keys : keys.checked).map((key) => String(key)))}
+						onExpand={(keys) => onExpand(keys.map((key) => String(key)))}
 					/>
 					{showEmptyModelsHint ? <div className="mt-3 text-xs text-muted-foreground">当前项目暂无模型。</div> : null}
 				</>
