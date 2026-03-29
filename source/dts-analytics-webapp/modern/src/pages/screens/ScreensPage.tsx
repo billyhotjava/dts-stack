@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router';
 import { analyticsApi, ScreenListItem, type ScreenAiGenerationResponse } from '../../api/analyticsApi';
 import { PageContainer } from '../../components/PageContainer/PageContainer';
 import { writeTextToClipboard } from '../../hooks/clipboard';
-import { TemplateGallery, type TemplateSelection } from './components';
+import { TemplateGallery, ScreenSharePanel, ScreenAclPanel, type TemplateSelection } from './components';
 import { createConfigFromTemplate } from './screenTemplates';
 import { buildScreenPayload, normalizeScreenConfig } from './specV2';
 const SCREEN_LIST_PREF_KEY = 'dts.analytics.screens.listPref.v1';
@@ -27,6 +27,8 @@ export default function ScreensPage() {
 	const [aiResult, setAiResult] = useState<ScreenAiGenerationResponse | null>(null);
 	const [aiContextHistory, setAiContextHistory] = useState<string[]>([]);
 	const [activeCardMenuId, setActiveCardMenuId] = useState<string | number | null>(null);
+	const [shareScreenId, setShareScreenId] = useState<string | number | null>(null);
+	const [aclScreenId, setAclScreenId] = useState<string | number | null>(null);
 	const [searchKeyword, setSearchKeyword] = useState(() => {
 		if (typeof window === 'undefined') return '';
 		try {
@@ -627,6 +629,26 @@ export default function ScreensPage() {
 											<div className="absolute right-0 top-[calc(100%+6px)] min-w-[160px] z-[900] bg-surface-card text-text-primary opacity-100 border border-border-default rounded-lg shadow-[0_8px_24px_rgba(15,23,42,0.2)] p-1.5 grid gap-1">
 												<button
 													type="button"
+													className="border border-transparent rounded-md px-2 py-[7px] bg-transparent text-text-primary text-xs text-left cursor-pointer hover:border-brand hover:bg-brand/10"
+													onClick={() => {
+														setActiveCardMenuId(null);
+														setShareScreenId(screen.id);
+													}}
+												>
+													分享给用户
+												</button>
+												<button
+													type="button"
+													className="border border-transparent rounded-md px-2 py-[7px] bg-transparent text-text-primary text-xs text-left cursor-pointer hover:border-brand hover:bg-brand/10"
+													onClick={() => {
+														setActiveCardMenuId(null);
+														setAclScreenId(screen.id);
+													}}
+												>
+													权限管理
+												</button>
+												<button
+													type="button"
 													className="border border-transparent rounded-md px-2 py-[7px] bg-transparent text-text-primary text-xs text-left cursor-pointer hover:border-brand hover:bg-brand/10 disabled:opacity-55 disabled:cursor-not-allowed"
 													onClick={() => {
 														setActiveCardMenuId(null);
@@ -850,6 +872,19 @@ export default function ScreensPage() {
 					</div>
 				</div>
 			)}
+			<ScreenSharePanel
+				open={shareScreenId != null}
+				screenId={shareScreenId ?? undefined}
+				onClose={() => setShareScreenId(null)}
+				isOwner={true}
+			/>
+
+			<ScreenAclPanel
+				open={aclScreenId != null}
+				screenId={aclScreenId ?? undefined}
+				onClose={() => setAclScreenId(null)}
+				isOwner={true}
+			/>
 		</PageContainer>
 	);
 }

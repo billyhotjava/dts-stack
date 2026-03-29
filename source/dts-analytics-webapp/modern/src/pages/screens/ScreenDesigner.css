@@ -33,14 +33,18 @@
 .screen-designer input,
 .screen-designer select,
 .screen-designer textarea {
-  color: var(--color-text-primary);
-  background-color: var(--surface-card);
-  border-color: var(--border-default);
+  color: rgba(255, 255, 255, 0.85) !important;
+  background-color: #2a2b36 !important;
+  border-color: rgba(255, 255, 255, 0.1) !important;
+}
+
+.screen-designer input[type="color"] {
+  background-color: transparent !important;
 }
 
 .screen-designer select option {
-  background-color: var(--surface-card);
-  color: var(--color-text-primary);
+  background-color: #2a2b36 !important;
+  color: rgba(255, 255, 255, 0.85) !important;
 }
 
 .screen-designer-body {
