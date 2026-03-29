@@ -268,102 +268,17 @@ export default function HomePage() {
 				)}
 			</Card>
 
-			{/* Recent Dashboards & Questions — 2 columns */}
-			<div className="grid grid-cols-2 gap-md">
-				{/* Recent Dashboards */}
-				<Card
-					title={t(locale, "home.recentDashboards")}
-					extra={
-						<Link to="/dashboards">
-							<Button type="text" size="small" icon={<ArrowRightIcon />} iconPosition="end">
-								{t(locale, "common.viewAll")}
-							</Button>
-						</Link>
-					}
-				>
-						{dashboards.state === "loading" && (
-							<div className="loading-state"><Spin /></div>
-						)}
-						{dashboards.state === "error" && (
-							<div className="error-state">{t(locale, "error")}</div>
-						)}
-						{dashboards.state === "loaded" && dashboards.value.length === 0 && (
-							<div className="empty-state-small">
-								<p>{t(locale, "common.empty")}</p>
-								<Link to="/dashboards/new">
-									<Button type="primary" size="small" icon={<PlusOutlined />}>
-										{t(locale, "dashboards.new")}
-									</Button>
-								</Link>
-							</div>
-						)}
-						{dashboards.state === "loaded" && dashboards.value.length > 0 && (
-							<ul className="item-list">
-								{dashboards.value.map((d) => (
-									<li key={d.id}>
-										<Link to={`/dashboards/${d.id}`} className="item-list__link">
-											<DashboardIcon />
-											<span>{d.name || t(locale, "common.untitled")}</span>
-										</Link>
-									</li>
-								))}
-							</ul>
-						)}
-				</Card>
-
-				{/* Recent Questions */}
-				<Card
-					title={t(locale, "home.recentQuestions")}
-					extra={
-						<Link to="/questions">
-							<Button type="text" size="small" icon={<ArrowRightIcon />} iconPosition="end">
-								{t(locale, "common.viewAll")}
-							</Button>
-						</Link>
-					}
-				>
-						{questions.state === "loading" && (
-							<div className="loading-state"><Spin /></div>
-						)}
-						{questions.state === "error" && (
-							<div className="error-state">{t(locale, "error")}</div>
-						)}
-						{questions.state === "loaded" && questions.value.length === 0 && (
-							<div className="empty-state-small">
-								<p>{t(locale, "common.empty")}</p>
-								<Link to="/questions/new">
-									<Button type="primary" size="small" icon={<PlusOutlined />}>
-										{t(locale, "questions.new")}
-									</Button>
-								</Link>
-							</div>
-						)}
-						{questions.state === "loaded" && questions.value.length > 0 && (
-							<ul className="item-list">
-								{questions.value.map((q) => (
-									<li key={q.id}>
-										<Link to={`/questions/${q.id}`} className="item-list__link">
-											<QuestionIcon />
-											<span>{q.name || t(locale, "common.untitled")}</span>
-										</Link>
-									</li>
-								))}
-							</ul>
-						)}
-				</Card>
-			</div>
-
 			{/* Quick Actions — bottom section */}
 			<div style={{ marginTop: "var(--spacing-xl)" }}>
 				<h2 className="text-lg font-semibold text-primary mb-md">{t(locale, "home.quickActions")}</h2>
 				<div className="grid grid-cols-3 gap-md">
-					<Link to="/screens/new" className="quick-action-card">
+					<Link to="/questions/new" className="quick-action-card">
 						<div className="quick-action-card__icon">
-							<ScreenIcon />
+							<QuestionIcon />
 						</div>
 						<div className="quick-action-card__content">
-							<h3>自建大屏</h3>
-							<p>创建自定义数据大屏，可视化展示关键指标。</p>
+							<h3>自建分析卡片</h3>
+							<p>创建查询或图表，快速分析数据。</p>
 						</div>
 					</Link>
 					<Link to="/dashboards/new" className="quick-action-card">
@@ -373,6 +288,15 @@ export default function HomePage() {
 						<div className="quick-action-card__content">
 							<h3>自建分析看板</h3>
 							<p>创建分析看板，组合多个图表进行数据分析。</p>
+						</div>
+					</Link>
+					<Link to="/screens/new" className="quick-action-card">
+						<div className="quick-action-card__icon">
+							<ScreenIcon />
+						</div>
+						<div className="quick-action-card__content">
+							<h3>自建大屏</h3>
+							<p>创建自定义数据大屏，可视化展示关键指标。</p>
 						</div>
 					</Link>
 				</div>
