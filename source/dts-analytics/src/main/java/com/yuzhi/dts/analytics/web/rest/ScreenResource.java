@@ -749,13 +749,14 @@ public class ScreenResource {
         }
 
         PlatformContext context = PlatformContext.from(request);
-        if (!screenAclService.hasPermission(screen, user.get(), context, ScreenAclService.Permission.MANAGE)) {
+        ScreenAclService.PermissionSnapshot perms = screenAclService.snapshot(screen, user.get(), context);
+        if (!perms.canManage()) {
             return forbidden();
         }
 
         List<ObjectNode> before = screenAclService.listEntries(screen.getId()).stream().map(this::toAclResponse).toList();
         List<AnalyticsScreenAcl> entries = screenAclService.parseEntriesFromBody(screen.getId(), user.get().getId(), body);
-        screenAclService.replaceEntries(screen, user.get().getId(), entries);
+        screenAclService.replaceEntries(screen, user.get().getId(), entries, perms.isOwner());
         List<ObjectNode> after = screenAclService.listEntries(screen.getId()).stream().map(this::toAclResponse).toList();
 
         screenAuditService.log(
@@ -807,10 +808,9 @@ public class ScreenResource {
         screen.setArchived(false);
 
         screen = screenRepository.save(screen);
-        screenAclService.ensureCreatorManage(screen);
-        screenAclService.ensureDefaultReadRoles(screen);
+        screenAclService.ensureCreatorOwner(screen);
 
-        ScreenAclService.PermissionSnapshot permissions = new ScreenAclService.PermissionSnapshot(true, true, true, true);
+        ScreenAclService.PermissionSnapshot permissions = new ScreenAclService.PermissionSnapshot(true, true, true, true, true, true);
         ObjectNode detail = toDetailResponse(screen, null, null, "draft", permissions);
         applySpecWarnings(detail, specValidation.warnings());
 
@@ -1025,8 +1025,9 @@ public class ScreenResource {
         }
 
         PlatformContext context = PlatformContext.from(request);
-        if (!screenAclService.hasPermission(screen, user.get(), context, ScreenAclService.Permission.MANAGE)) {
-            return forbidden();
+        if (!screenAclService.hasPermission(screen, user.get(), context, ScreenAclService.Permission.OWNER)) {
+            return ResponseEntity.status(403).contentType(MediaType.APPLICATION_JSON).body(
+                objectMapper.createObjectNode().put("error", "Only the owner can delete this screen"));
         }
         ScreenEditLockService.LockSnapshot blockingLock =
                 screenEditLockService.currentBlockingLock(screen.getId(), user.get().getId());
@@ -1063,7 +1064,7 @@ public class ScreenResource {
         }
 
         PlatformContext ctx = PlatformContext.from(request);
-        if (!screenAclService.hasPermission(screen, user.get(), ctx, ScreenAclService.Permission.PUBLISH)) {
+        if (!screenAclService.hasPermission(screen, user.get(), ctx, ScreenAclService.Permission.MANAGE)) {
             return forbidden();
         }
 
@@ -1110,7 +1111,7 @@ public class ScreenResource {
         }
 
         PlatformContext ctx = PlatformContext.from(request);
-        if (!screenAclService.hasPermission(screen, user.get(), ctx, ScreenAclService.Permission.PUBLISH)) {
+        if (!screenAclService.hasPermission(screen, user.get(), ctx, ScreenAclService.Permission.MANAGE)) {
             return forbidden();
         }
 
@@ -1213,6 +1214,8 @@ public class ScreenResource {
         node.put("canEdit", permissions.canEdit());
         node.put("canPublish", permissions.canPublish());
         node.put("canManage", permissions.canManage());
+        node.put("canDelete", permissions.canDelete());
+        node.put("isOwner", permissions.isOwner());
         if (currentPublishedVersion != null) {
             node.put("publishedVersionNo", currentPublishedVersion.getVersionNo());
             node.putPOJO("publishedAt", currentPublishedVersion.getPublishedAt());

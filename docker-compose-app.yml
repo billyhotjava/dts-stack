@@ -178,7 +178,7 @@ services:
     networks:
       - dts-core
     healthcheck:
-      test: ["CMD-SHELL", "curl -fsS http://127.0.0.1:8081/management/health >/dev/null || exit 1"]
+      test: ["CMD-SHELL", "curl -fsS http://127.0.0.1:8081/management/health >/dev/null 2>&1 || grep -qE ':[0]*1F91 .* 0A ' /proc/net/tcp || grep -qE ':[0]*1F91 .* 0A ' /proc/net/tcp6"]
       <<: *hc
     restart: unless-stopped
     labels:
@@ -280,7 +280,7 @@ services:
     networks:
       - dts-core
     healthcheck:
-      test: ["CMD-SHELL", "curl -fsS http://127.0.0.1:8081/management/health >/dev/null || exit 1"]
+      test: ["CMD-SHELL", "curl -fsS http://127.0.0.1:8081/management/health >/dev/null 2>&1 || grep -qE ':[0]*1F91 .* 0A ' /proc/net/tcp || grep -qE ':[0]*1F91 .* 0A ' /proc/net/tcp6"]
       <<: *hc
     restart: unless-stopped
     labels:
@@ -365,7 +365,7 @@ services:
     networks:
       - dts-core
     healthcheck:
-      test: ["CMD-SHELL", "curl -fsS http://127.0.0.1:8083/management/health >/dev/null || exit 1"]
+      test: ["CMD-SHELL", "curl -fsS http://127.0.0.1:8083/management/health >/dev/null 2>&1 || grep -qE ':[0]*1F93 .* 0A ' /proc/net/tcp || grep -qE ':[0]*1F93 .* 0A ' /proc/net/tcp6"]
       <<: *hc
     restart: unless-stopped
 
@@ -403,7 +403,7 @@ services:
     networks:
       - dts-core
     healthcheck:
-      test: ["CMD-SHELL", "curl -fsS http://127.0.0.1:3000/api/health >/dev/null || exit 1"]
+      test: ["CMD-SHELL", "curl -fsS http://127.0.0.1:3000/api/health >/dev/null 2>&1 || grep -qE ':[0]*0BB8 .* 0A ' /proc/net/tcp || grep -qE ':[0]*0BB8 .* 0A ' /proc/net/tcp6"]
       <<: *hc
     restart: unless-stopped
     labels:

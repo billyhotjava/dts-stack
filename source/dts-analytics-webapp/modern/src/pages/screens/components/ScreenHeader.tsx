@@ -449,6 +449,8 @@ export function ScreenHeader({
         canEdit: true,
         canPublish: true,
         canManage: true,
+        canDelete: true,
+        isOwner: true,
     });
 
     const cycleWarnings = useMemo(() => detectInteractionCycles(config), [config]);
@@ -551,7 +553,7 @@ export function ScreenHeader({
 
     useEffect(() => {
         if (!id) {
-            setPermissions({ canRead: true, canEdit: true, canPublish: true, canManage: true });
+            setPermissions({ canRead: true, canEdit: true, canPublish: true, canManage: true, canDelete: true, isOwner: true });
             return;
         }
         let cancelled = false;
@@ -563,11 +565,13 @@ export function ScreenHeader({
                     canEdit: screen.canEdit !== false,
                     canPublish: screen.canPublish !== false,
                     canManage: screen.canManage !== false,
+                    canDelete: (screen as Record<string, unknown>).canDelete !== false,
+                    isOwner: (screen as Record<string, unknown>).isOwner === true,
                 });
             })
             .catch(() => {
                 if (!cancelled) {
-                    setPermissions({ canRead: true, canEdit: true, canPublish: true, canManage: false });
+                    setPermissions({ canRead: true, canEdit: true, canPublish: true, canManage: false, canDelete: false, isOwner: false });
                 }
             });
         return () => {
@@ -2524,6 +2528,7 @@ export function ScreenHeader({
                 open={showAclPanel}
                 screenId={id}
                 onClose={() => setShowAclPanel(false)}
+                isOwner={permissions.isOwner}
             />
 
             <ScreenAuditPanel

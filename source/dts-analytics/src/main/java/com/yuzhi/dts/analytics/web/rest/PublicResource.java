@@ -7,6 +7,7 @@ import com.yuzhi.dts.analytics.domain.AnalyticsDashboard;
 import com.yuzhi.dts.analytics.domain.AnalyticsDashboardCard;
 import com.yuzhi.dts.analytics.domain.AnalyticsPublicLink;
 import com.yuzhi.dts.analytics.domain.AnalyticsScreen;
+import com.yuzhi.dts.analytics.domain.AnalyticsUser;
 import com.yuzhi.dts.analytics.domain.AnalyticsScreenVersion;
 import com.yuzhi.dts.analytics.repository.AnalyticsCardRepository;
 import com.yuzhi.dts.analytics.repository.AnalyticsDashboardCardRepository;
@@ -20,6 +21,7 @@ import com.yuzhi.dts.analytics.service.PublicLinkService;
 import com.yuzhi.dts.analytics.service.QueryExecutionFacade;
 import com.yuzhi.dts.analytics.service.QueryMetricsService;
 import com.yuzhi.dts.analytics.service.QueryTraceService;
+import com.yuzhi.dts.analytics.service.ScreenAclService;
 import com.yuzhi.dts.analytics.web.support.MetabaseAuth;
 import com.yuzhi.dts.analytics.web.support.PlatformContext;
 import com.yuzhi.dts.analytics.web.support.RequestContextUtils;
@@ -56,6 +58,7 @@ public class PublicResource {
     private final QueryMetricsService queryMetricsService;
     private final QueryTraceService queryTraceService;
     private final ProjectCockpitService projectCockpitService;
+    private final ScreenAclService screenAclService;
     private final ObjectMapper objectMapper;
 
     public PublicResource(
@@ -70,6 +73,7 @@ public class PublicResource {
             QueryMetricsService queryMetricsService,
             QueryTraceService queryTraceService,
             ProjectCockpitService projectCockpitService,
+            ScreenAclService screenAclService,
             ObjectMapper objectMapper) {
         this.sessionService = sessionService;
         this.publicLinkService = publicLinkService;
@@ -82,6 +86,7 @@ public class PublicResource {
         this.queryMetricsService = queryMetricsService;
         this.queryTraceService = queryTraceService;
         this.projectCockpitService = projectCockpitService;
+        this.screenAclService = screenAclService;
         this.objectMapper = objectMapper;
     }
 
@@ -179,10 +184,24 @@ public class PublicResource {
                 resolveSharePassword(request))) {
             return ResponseEntity.status(403).contentType(MediaType.TEXT_PLAIN).body("Forbidden");
         }
+        // Public link now requires authentication
+        Optional<AnalyticsUser> user = MetabaseAuth.currentUser(sessionService, request);
+        if (user.isEmpty()) {
+            return ResponseEntity.status(401).contentType(MediaType.APPLICATION_JSON).body(
+                objectMapper.createObjectNode().put("error", "Authentication required").put("loginUrl", "/"));
+        }
+
         AnalyticsScreen screen = screenRepository.findById(link.getModelId()).orElse(null);
         if (screen == null || screen.isArchived()) {
             return ResponseEntity.notFound().build();
         }
+
+        // Check READ permission
+        if (!screenAclService.hasPermission(screen, user.get(), ctx, ScreenAclService.Permission.READ)) {
+            return ResponseEntity.status(403).contentType(MediaType.APPLICATION_JSON).body(
+                objectMapper.createObjectNode().put("error", "You do not have permission to view this screen"));
+        }
+
         AnalyticsScreenVersion publishedVersion =
                 screenVersionRepository.findFirstByScreenIdAndCurrentPublishedTrue(screen.getId()).orElse(null);
         if (publishedVersion == null) {

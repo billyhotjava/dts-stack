@@ -900,7 +900,7 @@ export type ScreenAclEntry = {
 	screenId?: number | string;
 	subjectType: "USER" | "ROLE";
 	subjectId: string;
-	perm: "READ" | "EDIT" | "PUBLISH" | "MANAGE";
+	perm: "READ" | "MANAGE" | "OWNER";
 	creatorId?: number | string;
 	createdAt?: string;
 	updatedAt?: string;

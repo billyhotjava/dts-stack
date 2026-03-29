@@ -28,6 +28,17 @@ expected_health = {
     ("app", "dts-analytics"): "/api/health",
 }
 
+expected_offline_fallback = {
+    ("legacy", "dts-admin"): "grep -q",
+    ("legacy", "dts-platform"): "grep -q",
+    ("legacy", "dts-ingestion"): "grep -q",
+    ("legacy", "dts-analytics"): "grep -q",
+    ("app", "dts-admin"): "grep -q",
+    ("app", "dts-platform"): "grep -q",
+    ("app", "dts-ingestion"): "grep -q",
+    ("app", "dts-analytics"): "grep -q",
+}
+
 docs = {"legacy": legacy, "app": app}
 errors = []
 
@@ -40,6 +51,17 @@ for (scope, service), expected_fragment in sorted(expected_health.items()):
     test_cmd = health.get("test")
     if not test_cmd or expected_fragment not in " ".join(str(item) for item in test_cmd):
         errors.append(f"{scope}:{service} healthcheck does not contain {expected_fragment!r}: {test_cmd!r}")
+
+for (scope, service), expected_fragment in sorted(expected_offline_fallback.items()):
+    node = (((docs[scope] or {}).get("services") or {}).get(service) or {})
+    health = node.get("healthcheck")
+    if not health:
+        errors.append(f"{scope}:{service} missing healthcheck")
+        continue
+    test_cmd = health.get("test")
+    joined = " ".join(str(item) for item in test_cmd or [])
+    if expected_fragment not in joined:
+        errors.append(f"{scope}:{service} healthcheck missing offline fallback {expected_fragment!r}: {test_cmd!r}")
 
 for scope in ("legacy", "app"):
     webapp = (((docs[scope] or {}).get("services") or {}).get("dts-platform-webapp") or {})

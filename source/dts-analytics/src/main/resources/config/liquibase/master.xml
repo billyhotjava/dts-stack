@@ -41,4 +41,5 @@
     <include file="config/liquibase/changelog/0034_card_type.xml" relativeToChangelogFile="false"/>
     <include file="config/liquibase/changelog/0035_screen_pages_carousel.xml" relativeToChangelogFile="false"/>
     <include file="config/liquibase/changelog/0036_screen_uploaded_dataset.xml" relativeToChangelogFile="false"/>
+    <include file="config/liquibase/changelog/0039_screen_acl_owner_migration.xml" relativeToChangelogFile="false"/>
 </databaseChangeLog>

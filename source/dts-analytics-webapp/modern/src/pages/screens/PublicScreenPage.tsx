@@ -1,6 +1,6 @@
 import { useEffect, useState, useCallback, useMemo, useRef } from 'react';
 import { useParams } from 'react-router';
-import { analyticsApi } from '../../api/analyticsApi';
+import { analyticsApi, HttpError } from '../../api/analyticsApi';
 import { ComponentRenderer } from './components/ComponentRenderer';
 import { DeviceModeSwitcher } from './components/DeviceModeSwitcher';
 import { GlobalVariablePanel } from './components/GlobalVariablePanel';
@@ -112,6 +112,7 @@ export default function PublicScreenPage() {
 	const [deviceMode, setDeviceMode] = useState<DeviceMode>('pc');
 	const [forcedDeviceMode, setForcedDeviceMode] = useState<DeviceMode | null>(null);
 	const [fabOpen, setFabOpen] = useState(false);
+	const [authError, setAuthError] = useState<'not-authenticated' | 'forbidden' | null>(null);
 	const scrollContainerRef = useRef<HTMLDivElement | null>(null);
 	const fabRef = useRef<HTMLDivElement | null>(null);
 
@@ -152,9 +153,17 @@ export default function PublicScreenPage() {
 				setLoading(false);
 			})
 			.catch((err) => {
-				console.error('Failed to load public screen:', err);
-				setError('加载大屏失败');
-				setLoading(false);
+				if (err instanceof HttpError && err.status === 401) {
+					setAuthError('not-authenticated');
+					setLoading(false);
+				} else if (err instanceof HttpError && err.status === 403) {
+					setAuthError('forbidden');
+					setLoading(false);
+				} else {
+					console.error('Failed to load public screen:', err);
+					setError('加载大屏失败');
+					setLoading(false);
+				}
 			});
 	}, [uuid]);
 
@@ -325,6 +334,26 @@ export default function PublicScreenPage() {
 	}, [screen]);
 
 	// ── Early returns MUST be after all hooks ──
+	if (authError === 'not-authenticated') {
+		return (
+			<div className="flex flex-col items-center justify-center min-h-screen gap-4 p-8 text-center">
+				<div className="text-4xl opacity-30">&#x1f512;</div>
+				<h2 className="text-xl font-semibold">需要登录</h2>
+				<p className="text-text-secondary">请先登录后再查看此大屏</p>
+				<a href="/" className="px-4 py-2 rounded-md bg-brand text-white">返回登录</a>
+			</div>
+		);
+	}
+	if (authError === 'forbidden') {
+		return (
+			<div className="flex flex-col items-center justify-center min-h-screen gap-4 p-8 text-center">
+				<div className="text-4xl opacity-30">&#x1f6ab;</div>
+				<h2 className="text-xl font-semibold">无访问权限</h2>
+				<p className="text-text-secondary">您没有权限查看此大屏，请联系大屏拥有者授权</p>
+				<a href="/" className="px-4 py-2 rounded-md bg-brand text-white">返回首页</a>
+			</div>
+		);
+	}
 	if (loading) {
 		return (
 			<div

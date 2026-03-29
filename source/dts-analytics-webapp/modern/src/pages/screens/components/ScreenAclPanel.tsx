@@ -6,16 +6,23 @@ interface ScreenAclPanelProps {
 	open: boolean;
 	screenId?: string | number;
 	onClose: () => void;
+	isOwner?: boolean;
 }
 
 const SUBJECT_TYPES: ScreenAclEntry['subjectType'][] = ['USER', 'ROLE'];
-const PERMS: ScreenAclEntry['perm'][] = ['READ', 'EDIT', 'PUBLISH', 'MANAGE'];
+const ASSIGNABLE_PERMS: ScreenAclEntry['perm'][] = ['MANAGE', 'READ'];
+const PERM_LABELS: Record<string, string> = {
+	OWNER: '拥有者',
+	MANAGE: '管理者',
+	READ: '查看者',
+};
 
 function normalizeEntry(row: Partial<ScreenAclEntry>): ScreenAclEntry {
+	const validPerms: ScreenAclEntry['perm'][] = ['READ', 'MANAGE', 'OWNER'];
 	return {
 		subjectType: row.subjectType === 'ROLE' ? 'ROLE' : 'USER',
 		subjectId: String(row.subjectId || '').trim(),
-		perm: (PERMS.includes(row.perm as ScreenAclEntry['perm']) ? row.perm : 'READ') as ScreenAclEntry['perm'],
+		perm: (validPerms.includes(row.perm as ScreenAclEntry['perm']) ? row.perm : 'READ') as ScreenAclEntry['perm'],
 		id: row.id,
 		screenId: row.screenId,
 		creatorId: row.creatorId,
@@ -24,7 +31,7 @@ function normalizeEntry(row: Partial<ScreenAclEntry>): ScreenAclEntry {
 	};
 }
 
-export function ScreenAclPanel({ open, screenId, onClose }: ScreenAclPanelProps) {
+export function ScreenAclPanel({ open, screenId, onClose, isOwner = false }: ScreenAclPanelProps) {
 	const [loading, setLoading] = useState(false);
 	const [saving, setSaving] = useState(false);
 	const [error, setError] = useState<string | null>(null);
@@ -63,6 +70,9 @@ export function ScreenAclPanel({ open, screenId, onClose }: ScreenAclPanelProps)
 		setRows((prev) => prev.filter((_, i) => i !== index));
 	};
 
+	// Determine which perms the current user can assign
+	const availablePerms: ScreenAclEntry['perm'][] = isOwner ? ASSIGNABLE_PERMS : ['READ'];
+
 	return (
 		<Modal open={open} onCancel={onClose} title="权限管理" width={960}>
 			{!screenId && <div className="text-xs opacity-80">请先保存大屏后再配置权限。</div>}
@@ -80,45 +90,63 @@ export function ScreenAclPanel({ open, screenId, onClose }: ScreenAclPanelProps)
 				<div />
 			</div>
 
-			{rows.map((row, idx) => (
-				<div
-					key={`${row.subjectType}-${row.subjectId}-${row.perm}-${idx}`}
-					className="grid gap-2 mb-2"
-					style={{ gridTemplateColumns: '120px 1fr 160px 68px' }}
-				>
-					<select
-						className="flex-1 px-2.5 py-1.5 border border-border-default rounded bg-surface-card text-text-primary text-xs focus:outline-none focus:border-brand"
-						value={row.subjectType}
-						onChange={(e) => updateAt(idx, { subjectType: e.target.value as ScreenAclEntry['subjectType'] })}
+			{rows.map((row, idx) => {
+				// OWNER rows are read-only
+				if (row.perm === 'OWNER') {
+					return (
+						<div
+							key={`${row.subjectType}-${row.subjectId}-${row.perm}-${idx}`}
+							className="grid gap-2 mb-2"
+							style={{ gridTemplateColumns: '120px 1fr 160px 68px' }}
+						>
+							<span className="text-xs text-text-muted px-2.5 py-1.5">{row.subjectType}</span>
+							<span className="text-xs text-text-primary px-2.5 py-1.5">{row.subjectId}</span>
+							<span className="text-xs font-semibold text-brand px-2.5 py-1.5">{PERM_LABELS.OWNER}</span>
+							<span />
+						</div>
+					);
+				}
+
+				return (
+					<div
+						key={`${row.subjectType}-${row.subjectId}-${row.perm}-${idx}`}
+						className="grid gap-2 mb-2"
+						style={{ gridTemplateColumns: '120px 1fr 160px 68px' }}
 					>
-						{SUBJECT_TYPES.map((type) => (
-							<option key={type} value={type}>{type}</option>
-						))}
-					</select>
-					<input
-						className="flex-1 px-2.5 py-1.5 border border-border-default rounded bg-surface-card text-text-primary text-xs focus:outline-none focus:border-brand"
-						value={row.subjectId}
-						placeholder={row.subjectType === 'ROLE' ? 'ROLE_ANALYST' : '10001'}
-						onChange={(e) => updateAt(idx, { subjectId: e.target.value })}
-					/>
-					<select
-						className="flex-1 px-2.5 py-1.5 border border-border-default rounded bg-surface-card text-text-primary text-xs focus:outline-none focus:border-brand"
-						value={row.perm}
-						onChange={(e) => updateAt(idx, { perm: e.target.value as ScreenAclEntry['perm'] })}
-					>
-						{PERMS.map((perm) => (
-							<option key={perm} value={perm}>{perm}</option>
-						))}
-					</select>
-					<button
-						type="button"
-						className="min-h-8 rounded-md border border-white/10 bg-white/5 text-text-primary px-3.5 text-xs hover:border-brand/30 hover:bg-brand/10"
-						onClick={() => removeAt(idx)}
-					>
-						-
-					</button>
-				</div>
-			))}
+						<select
+							className="flex-1 px-2.5 py-1.5 border border-border-default rounded bg-surface-card text-text-primary text-xs focus:outline-none focus:border-brand"
+							value={row.subjectType}
+							onChange={(e) => updateAt(idx, { subjectType: e.target.value as ScreenAclEntry['subjectType'] })}
+						>
+							{SUBJECT_TYPES.map((type) => (
+								<option key={type} value={type}>{type}</option>
+							))}
+						</select>
+						<input
+							className="flex-1 px-2.5 py-1.5 border border-border-default rounded bg-surface-card text-text-primary text-xs focus:outline-none focus:border-brand"
+							value={row.subjectId}
+							placeholder={row.subjectType === 'ROLE' ? 'ROLE_ANALYST' : '10001'}
+							onChange={(e) => updateAt(idx, { subjectId: e.target.value })}
+						/>
+						<select
+							className="flex-1 px-2.5 py-1.5 border border-border-default rounded bg-surface-card text-text-primary text-xs focus:outline-none focus:border-brand"
+							value={row.perm}
+							onChange={(e) => updateAt(idx, { perm: e.target.value as ScreenAclEntry['perm'] })}
+						>
+							{availablePerms.map((perm) => (
+								<option key={perm} value={perm}>{PERM_LABELS[perm] || perm}</option>
+							))}
+						</select>
+						<button
+							type="button"
+							className="min-h-8 rounded-md border border-white/10 bg-white/5 text-text-primary px-3.5 text-xs hover:border-brand/30 hover:bg-brand/10"
+							onClick={() => removeAt(idx)}
+						>
+							-
+						</button>
+					</div>
+				);
+			})}
 
 			<div className="flex gap-2">
 				<button
@@ -139,6 +167,7 @@ export function ScreenAclPanel({ open, screenId, onClose }: ScreenAclPanelProps)
 						setError(null);
 						try {
 							const payload = rows
+								.filter((item) => item.perm !== 'OWNER')
 								.map(normalizeEntry)
 								.filter((item) => item.subjectId.trim().length > 0);
 							const updated = await analyticsApi.updateScreenAcl(screenId, { entries: payload });

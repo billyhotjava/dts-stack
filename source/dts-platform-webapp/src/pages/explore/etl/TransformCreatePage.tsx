@@ -116,6 +116,7 @@ export default function TransformCreatePage() {
 	const [hasDraft, setHasDraft] = useState(false);
 	const [loadingTask, setLoadingTask] = useState(false);
 	const [editingTask, setEditingTask] = useState<IngestionTaskDTO | null>(null);
+	const [submittedTaskId, setSubmittedTaskId] = useState<number | string | null>(null);
 	const [discoveringTables, setDiscoveringTables] = useState(false);
 	const [discoveredTables, setDiscoveredTables] = useState<TableInfo[]>([]);
 	const [selectedTableKeys, setSelectedTableKeys] = useState<string[]>([]);
@@ -252,6 +253,9 @@ export default function TransformCreatePage() {
 		const pollHint = resolveAsyncRunPollHint(result);
 		clearDraft();
 		setHasDraft(false);
+		if (createdTaskId) {
+			setSubmittedTaskId(createdTaskId);
+		}
 		if (runNow && createdTaskId) {
 			toast.success("任务已提交，正在后台执行");
 			startAsyncRunProgress(createdTaskId, taskName, pollHint);
@@ -681,6 +685,11 @@ export default function TransformCreatePage() {
 	const handleSaveDraft = async () => {
 		if (isEdit) {
 			toast.info("编辑模式不支持保存草稿");
+			return;
+		}
+		if (submittedTaskId) {
+			toast.info("任务已提交，无需重复保存");
+			router.push(`/explore/etl/transform/${submittedTaskId}`);
 			return;
 		}
 		let values: Record<string, any> = {};
@@ -1114,6 +1123,10 @@ export default function TransformCreatePage() {
 	};
 
 	const handleSubmit = async (values: any) => {
+		if (submittedTaskId) {
+			toast.info("任务已提交，请勿重复提交");
+			return;
+		}
 		try {
 			setSaving(true);
 			const mergedValues = { ...form.getFieldsValue(true), ...(values || {}) };
@@ -1529,7 +1542,7 @@ export default function TransformCreatePage() {
 							icon={<SaveOutlined />}
 							loading={savingDraft}
 							onClick={handleSaveDraft}
-							disabled={isEdit}
+							disabled={isEdit || !!submittedTaskId}
 						>
 							保存草稿{hasDraft ? " ✓" : ""}
 						</Button>

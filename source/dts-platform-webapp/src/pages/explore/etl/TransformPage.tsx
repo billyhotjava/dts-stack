@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { Alert, Button, Card, Modal, Progress, Space, Table, Tag, message } from "antd";
+import { Alert, App, Button, Card, Modal, Progress, Space, Table, Tag } from "antd";
 import {
 	PlayCircleOutlined,
 	EditOutlined,
@@ -26,6 +26,7 @@ type ExecutionProgressView = {
 };
 
 export default function TransformPage() {
+	const { modal, message } = App.useApp();
 	const router = useRouter();
 	const [tasks, setTasks] = useState<IngestionTaskDTO[]>([]);
 	const [loading, setLoading] = useState(false);
@@ -80,7 +81,8 @@ export default function TransformPage() {
 				params.status = statusFilter;
 			}
 			const result = await ingestionTaskAPI.getTasks(params);
-			const content = Array.isArray(result?.content) ? result.content : [];
+			const allContent = Array.isArray(result?.content) ? result.content : [];
+			const content = statusFilter ? allContent : allContent.filter((t: any) => t.status !== "deleted");
 			setTasks(content);
 			const total = typeof result?.totalElements === "number" ? result.totalElements : content.length;
 			setPagination((prev) => ({ ...prev, total }));
@@ -185,7 +187,7 @@ export default function TransformPage() {
 	};
 
 	const handleExecute = async (id: number, name: string) => {
-		Modal.confirm({
+		modal.confirm({
 			title: "确认执行",
 			content: `确定要执行任务 "${name}" 吗？`,
 			onOk: async () => {
@@ -202,7 +204,7 @@ export default function TransformPage() {
 	};
 
 	const handleRebuildDag = async (id: number, name: string) => {
-		Modal.confirm({
+		modal.confirm({
 			title: "强制重建 DAG",
 			content: `确定要重建任务 "${name}" 的 DAG 文件吗？`,
 			onOk: async () => {
@@ -218,7 +220,7 @@ export default function TransformPage() {
 	};
 
 	const handleDelete = async (id: number, name: string) => {
-		Modal.confirm({
+		modal.confirm({
 			title: "确认删除",
 			content: `确定要删除任务 "${name}" 吗？该操作会移除任务配置、DAG、执行记录与运行日志，且不可恢复。`,
 			okText: "删除",
@@ -227,7 +229,8 @@ export default function TransformPage() {
 				try {
 					await ingestionTaskAPI.deleteTask(id);
 					message.success("任务已删除");
-					void loadTasks();
+					setTasks((prev) => prev.filter((t) => t.id !== id));
+					setPagination((prev) => ({ ...prev, total: Math.max(0, prev.total - 1) }));
 				} catch {
 					// error already shown by global interceptor
 				}
@@ -320,8 +323,7 @@ export default function TransformPage() {
 		{
 			title: "操作",
 			key: "action",
-			width: 250,
-			fixed: "right" as const,
+			width: 420,
 			render: (_: any, record: IngestionTaskDTO) => (
 				<Space size="small">
 					<Button
@@ -421,7 +423,7 @@ export default function TransformPage() {
 						dataSource={tasks}
 						rowKey="id"
 						loading={loading}
-						scroll={{ x: 1400 }}
+						scroll={{ x: 1600 }}
 						pagination={{
 							current: pagination.current,
 							pageSize: pagination.pageSize,

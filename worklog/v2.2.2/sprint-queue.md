@@ -55,11 +55,11 @@
 | Feature | Task 数 | 状态 |
 |---------|---------|------|
 | F1-容器自恢复策略 | 3 | DONE |
-| F2-启动顺序与健康门禁 | 3 | DONE |
+| F2-启动顺序与健康门禁 | 4 | IN_PROGRESS |
 | F3-platform-webapp自等待机制 | 3 | DONE |
 | F4-重启回归与现场验收 | 3 | IN_PROGRESS |
 
-**统计**: READY=2, IN_PROGRESS=2, DONE=8, BLOCKED=0
+**统计**: READY=2, IN_PROGRESS=3, DONE=7, BLOCKED=0
 
 ## Sprint-11: 数据入湖前后端优化 (202603)
 
