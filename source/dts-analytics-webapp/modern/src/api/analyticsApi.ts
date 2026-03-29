@@ -333,6 +333,7 @@ export type DatabaseListItem = {
 	id: number;
 	name?: string;
 	engine?: string;
+	is_system?: boolean;
 };
 
 export type DatabaseListResponse = {

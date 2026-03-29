@@ -121,21 +121,28 @@ export default function DataPage() {
 										{t(locale, "common.id")}: {db.id}
 									</p>
 								</div>
-								<Tag>
-									{db.engine ?? "-"}
-								</Tag>
+								<div style={{ display: "flex", gap: "var(--spacing-xs)", alignItems: "center" }}>
+									{db.is_system && (
+										<Tag color="blue">内置</Tag>
+									)}
+									<Tag>
+										{db.engine ?? "-"}
+									</Tag>
+								</div>
 							</div>
-							<div style={{ display: "flex", gap: "var(--spacing-xs)", marginTop: "var(--spacing-md)", justifyContent: "flex-end" }}>
-								<Button
-									type="text"
-									size="small"
-									icon={<TrashIcon />}
-									onClick={() => setConfirmDeleteId(db.id)}
-									style={{ color: "var(--color-error)" }}
-								>
-									{t(locale, "data.delete")}
-								</Button>
-							</div>
+							{!db.is_system && (
+								<div style={{ display: "flex", gap: "var(--spacing-xs)", marginTop: "var(--spacing-md)", justifyContent: "flex-end" }}>
+									<Button
+										type="text"
+										size="small"
+										icon={<TrashIcon />}
+										onClick={() => setConfirmDeleteId(db.id)}
+										style={{ color: "var(--color-error)" }}
+									>
+										{t(locale, "data.delete")}
+									</Button>
+								</div>
+							)}
 						</Card>
 					))}
 				</div>

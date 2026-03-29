@@ -15,7 +15,7 @@ else
 fi
 
 MODE=""
-IMAGE_ONLY=""
+IMAGE_ONLY=()
 PACK_MODE=""
 PACK_OUTPUT=""
 PACK_INCLUDE_IMAGES="true"
@@ -27,15 +27,15 @@ usage() {
 Usage:
   ${0##*/} -all
   ${0##*/} -all --legacy
-  ${0##*/} --image <name>
-  ${0##*/} --image <name> --legacy
+  ${0##*/} --image <name> [<name> ...]
+  ${0##*/} --image <name> [<name> ...] --legacy
   ${0##*/} -all --no-save
   ${0##*/} --pack [--output <path>] [--no-images]
   ${0##*/} --bg -all              (run in background, safe for SSH)
 
 Options:
   -all, --all           Build all images (same as legacy buildAll.sh behavior).
-  --image <name>        Build a single image and save tarballs to both dist/ and legacy-dist/.
+  --image <name...>     Build one or more images. Supports repeated --image or multiple names after one --image.
   --legacy              Build only the legacy image set or legacy variant of a single image.
   --no-save             Build images but skip docker save tarball export (reduces disk pressure).
   --pack                Package dts-stack for deployment (excludes source, logs, git, etc.).
@@ -51,6 +51,8 @@ Examples:
   ${0##*/} --bg -all
   ${0##*/} --bg --image dts-analytics
   ${0##*/} --image dts-admin
+  ${0##*/} --image dts-admin dts-platform --legacy
+  ${0##*/} --image dts-admin --image dts-platform --legacy
   ${0##*/} --image dts-admin --legacy
   ${0##*/} --image dts-dbt
   ${0##*/} --pack
@@ -85,12 +87,15 @@ while [[ $# -gt 0 ]]; do
       shift
       ;;
     --image)
-      IMAGE_ONLY="${2:-}"
-      if [[ -z "${IMAGE_ONLY}" ]]; then
+      if [[ $# -lt 2 || "${2:-}" == -* ]]; then
         echo "[dts-build] ERROR: --image requires a value" >&2
         exit 1
       fi
-      shift 2
+      shift
+      while [[ $# -gt 0 && "${1}" != -* ]]; do
+        IMAGE_ONLY+=("$1")
+        shift
+      done
       ;;
     --pack)
       PACK_MODE="true"
@@ -128,12 +133,12 @@ while [[ $# -gt 0 ]]; do
   esac
 done
 
-if [[ -n "${MODE}" && -n "${IMAGE_ONLY}" ]]; then
+if [[ -n "${MODE}" && "${#IMAGE_ONLY[@]}" -gt 0 ]]; then
   echo "[dts-build] ERROR: --all and --image cannot be used together" >&2
   exit 1
 fi
 
-if [[ -n "${PACK_MODE}" && ( -n "${MODE}" || -n "${IMAGE_ONLY}" ) ]]; then
+if [[ -n "${PACK_MODE}" && ( -n "${MODE}" || "${#IMAGE_ONLY[@]}" -gt 0 ) ]]; then
   echo "[dts-build] ERROR: --pack cannot be used with --all or --image" >&2
   exit 1
 fi
@@ -285,11 +290,11 @@ required_min_disk_gb() {
     return 0
   fi
 
-  if [[ -n "${IMAGE_ONLY}" ]]; then
+  if [[ "${#IMAGE_ONLY[@]}" -gt 0 ]]; then
     if [[ "${SAVE_IMAGE_TARS}" == "true" ]]; then
-      echo 16
+      echo $((8 + (${#IMAGE_ONLY[@]} * 8)))
     else
-      echo 12
+      echo $((6 + (${#IMAGE_ONLY[@]} * 6)))
     fi
     return 0
   fi
@@ -1214,13 +1219,32 @@ ROLLBACK_MANIFEST
   echo "[dts-build] Done!"
 }
 
+attempt_git_pull() {
+  if ! command -v git >/dev/null 2>&1; then
+    echo "[dts-build] WARN: git not found in PATH; skipping git pull"
+    return 0
+  fi
+
+  if [[ ! -d "${REPO_ROOT}/.git" ]]; then
+    echo "[dts-build] INFO: ${REPO_ROOT} is not a git worktree; skipping git pull"
+    return 0
+  fi
+
+  echo "[dts-build] Updating repository with git pull --ff-only"
+  if ! git -C "${REPO_ROOT}" pull --ff-only; then
+    echo "[dts-build] WARN: git pull --ff-only failed; continuing with current local sources"
+  fi
+}
+
 if [[ -n "${PACK_MODE}" ]]; then
+  attempt_git_pull
   pack_deployment
   exit 0
 fi
 
 require_cmd docker
 preflight_check
+attempt_git_pull
 
 if [[ "$MODE" == "all" ]]; then
   if [[ "${LEGACY_ONLY}" == "true" ]]; then
@@ -1229,8 +1253,10 @@ if [[ "$MODE" == "all" ]]; then
     build_all_normal
     build_all_legacy
   fi
-elif [[ -n "$IMAGE_ONLY" ]]; then
-  build_single_image "$IMAGE_ONLY" "$LEGACY_ONLY"
+elif [[ "${#IMAGE_ONLY[@]}" -gt 0 ]]; then
+  for image in "${IMAGE_ONLY[@]}"; do
+    build_single_image "$image" "$LEGACY_ONLY"
+  done
 else
   usage
   exit 1

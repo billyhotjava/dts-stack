@@ -43,6 +43,7 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
+import com.yuzhi.dts.analytics.service.DataLakeDatabaseInitializer;
 import org.springframework.util.StringUtils;
 
 @RestController
@@ -364,6 +365,9 @@ public class DatabaseResource {
         }
 
         AnalyticsDatabase db = existing.get();
+        if (DataLakeDatabaseInitializer.isDataLakeDatabase(db)) {
+            return ResponseEntity.badRequest().body(Map.of("errors", Map.of("database", "内置数据湖不允许修改")));
+        }
         UUID platformId = resolvePlatformDataSourceId(request == null ? null : request.details());
         if (platformId == null) {
             platformId = resolvePlatformDataSourceId(db.getDetailsJson());
@@ -407,8 +411,12 @@ public class DatabaseResource {
         if (auth.isPresent()) {
             return auth.get();
         }
-        if (!databaseRepository.existsById(dbId)) {
+        Optional<AnalyticsDatabase> existing = databaseRepository.findById(dbId);
+        if (existing.isEmpty()) {
             return ResponseEntity.notFound().build();
+        }
+        if (DataLakeDatabaseInitializer.isDataLakeDatabase(existing.orElseThrow())) {
+            return ResponseEntity.badRequest().body(Map.of("errors", Map.of("database", "内置数据湖不允许删除")));
         }
         // BUG-004 fix: cascade delete child records before deleting database
         // (FK constraints on analytics_field/analytics_table don't have CASCADE)
@@ -551,6 +559,7 @@ public class DatabaseResource {
         item.put("is_full_sync", db.isFullSync());
         item.put("is_on_demand", db.isOnDemand());
         item.put("is_sample", db.isSample());
+        item.put("is_system", DataLakeDatabaseInitializer.isDataLakeDatabase(db));
         item.put("initial_sync_status", "complete");
         item.put("native_permissions", "write");
         item.put("options", null);

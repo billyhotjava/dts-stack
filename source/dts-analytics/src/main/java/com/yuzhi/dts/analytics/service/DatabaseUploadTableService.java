@@ -19,7 +19,7 @@ public class DatabaseUploadTableService {
 
     private static final Logger log = LoggerFactory.getLogger(DatabaseUploadTableService.class);
 
-    private static final String SCHEMA = "biadmin";
+    private static final String SCHEMA = "upload";
     private static final int BATCH_SIZE = 1000;
     private static final int MAX_TABLE_NAME_LENGTH = 40;
     private static final DateTimeFormatter DATE_FMT = DateTimeFormatter.ofPattern("yyyyMMdd");
