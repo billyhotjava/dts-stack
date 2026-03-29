@@ -30,6 +30,8 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
 import org.springframework.web.client.RestClientException;
 import org.springframework.web.client.RestTemplate;
+import com.yuzhi.dts.analytics.web.support.RequestContext;
+import com.yuzhi.dts.analytics.web.support.RequestContextHolder;
 
 @Service
 @Transactional
@@ -85,6 +87,9 @@ public class ScreenAuditService {
             return null;
         }
 
+        // Capture client IP from request thread before @Async dispatch
+        String clientIp = resolveCurrentClientIp();
+
         AnalyticsScreenAuditLog log = new AnalyticsScreenAuditLog();
         log.setScreenId(screenId);
         log.setActorId(actorId);
@@ -95,9 +100,14 @@ public class ScreenAuditService {
         AnalyticsScreenAuditLog saved = screenAuditLogRepository.save(log);
 
         // Forward to dts-admin audit center asynchronously
-        forwardToAdmin(saved);
+        forwardToAdmin(saved, clientIp);
 
         return saved;
+    }
+
+    private String resolveCurrentClientIp() {
+        RequestContext ctx = RequestContextHolder.current();
+        return ctx != null ? ctx.clientIp() : null;
     }
 
     @Transactional(readOnly = true)
@@ -116,12 +126,12 @@ public class ScreenAuditService {
     // ---- Admin audit forwarding ----
 
     @Async
-    void forwardToAdmin(AnalyticsScreenAuditLog auditLog) {
+    void forwardToAdmin(AnalyticsScreenAuditLog auditLog, String clientIp) {
         if (ingestEndpoint == null || auditLog == null) {
             return;
         }
         try {
-            Map<String, Object> body = buildForwardPayload(auditLog);
+            Map<String, Object> body = buildForwardPayload(auditLog, clientIp);
             postEvent(body);
         } catch (Exception ex) {
             LOG.warn("Failed to forward screen audit event action={} screenId={}: {}",
@@ -129,7 +139,7 @@ public class ScreenAuditService {
         }
     }
 
-    private Map<String, Object> buildForwardPayload(AnalyticsScreenAuditLog auditLog) {
+    private Map<String, Object> buildForwardPayload(AnalyticsScreenAuditLog auditLog, String clientIp) {
         Instant occurredAt = auditLog.getCreatedAt() != null ? auditLog.getCreatedAt() : Instant.now();
         String actor = resolveActorUsername(auditLog.getActorId());
         String action = auditLog.getAction();
@@ -149,6 +159,9 @@ public class ScreenAuditService {
         if (buttonCode != null) {
             body.put("buttonCode", buttonCode);
             body.put("operationCode", buttonCode);
+        }
+        if (StringUtils.hasText(clientIp)) {
+            body.put("clientIp", clientIp);
         }
         return body;
     }

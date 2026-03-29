@@ -2209,6 +2209,10 @@ export const screenTemplates: ScreenTemplate[] = [
     hrCockpitTemplate,
     ...gpmcTemplates,
     projectManagementCommandCenterTemplate,
+    auxiliaryBalanceDashboardTemplate,
+    ownFundDashboardTemplate,
+    personalBalanceDashboardTemplate,
+    projectFundDashboardTemplate,
 ];
 
 /**
