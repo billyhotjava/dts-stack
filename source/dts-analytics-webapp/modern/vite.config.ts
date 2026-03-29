@@ -1,9 +1,13 @@
 import react from "@vitejs/plugin-react";
 import tailwindcss from "@tailwindcss/vite";
+import legacy from "@vitejs/plugin-legacy";
 import { existsSync } from "node:fs";
 import { defineConfig, loadEnv } from "vite";
+import { unwrapCssLayers } from "./tools/postcss/unwrap-css-layers";
+import { legacyCssFallbacks } from "./tools/postcss/legacy-css-fallbacks";
 
 const publicBase = "/analytics/";
+const legacySupportedBrowsers = ["chrome >= 95", "firefox >= 90", "safari >= 14"];
 const platformServiceTarget = { host: "dts-platform", containerPort: 8081, hostPort: 18082 };
 const platformUiTarget = { host: "dts-platform-webapp", containerPort: 3001, hostPort: 18012 };
 const analyticsServiceTarget = { host: "dts-analytics", containerPort: 3000, hostPort: 3000 };
@@ -126,7 +130,17 @@ export function createAnalyticsViteConfig(
 
 	return {
 		base: publicBase,
-		plugins: [tailwindcss(), react(), runtimeConfigPlugin],
+		plugins: [
+			tailwindcss(),
+			react(),
+			legacyEnabled &&
+				legacy({
+					targets: legacySupportedBrowsers,
+					modernPolyfills: true,
+					renderLegacyChunks: false,
+				}),
+			runtimeConfigPlugin,
+		].filter(Boolean),
 		server: {
 			host: true,
 			// Containerized dev may proxy analytics through sibling services (for example dts-platform-webapp),
@@ -147,6 +161,11 @@ export function createAnalyticsViteConfig(
 		},
 		esbuild: {
 			target: buildTarget,
+		},
+		css: {
+			postcss: {
+				plugins: legacyEnabled ? [unwrapCssLayers(), legacyCssFallbacks()] : [],
+			},
 		},
 	};
 }

@@ -1826,72 +1826,82 @@ const auxiliaryBalanceDashboardTemplate: ScreenTemplate = {
         description: '辅助余额表（按项目维度）数据可视化大屏',
         width: 1920,
         height: 1080,
-        backgroundColor: '#eaf2fb',
+        backgroundColor: '#1e1f26',
         theme: 'glacier',
         globalVariables: auxBalanceVariables,
         components: [
             // Header bar
             createComponent('ab-header-bar', 'border-box', '标题栏背景', 0, 0, 1920, 64, 90, { backgroundColor: '#044B8C', borderWidth: 0, borderRadius: 0 }),
-            createComponent('ab-title', 'title', '主标题', 560, 10, 800, 50, 100, { text: '辅助余额大屏', fontSize: 28, fontWeight: 'bold', color: '#ffffff', textAlign: 'center' }),
-            createComponent('ab-subtitle', 'title', '副标题', 560, 40, 800, 24, 100, { text: 'AUXILIARY BALANCE OVERVIEW', fontSize: 12, fontWeight: '400', color: 'rgba(255,255,255,0.55)', textAlign: 'center' }),
-            createComponent('ab-datetime', 'datetime', '日期时间', 1660, 18, 230, 40, 98, { format: 'YYYY-MM-DD HH:mm:ss', fontSize: 16, color: '#ffffff' }),
+            createComponent('ab-logo', 'title', 'Logo', 30, 8, 200, 50, 100, { text: 'DECISION TIMES\nPROJECT CENTER', fontSize: 10, fontWeight: '600', color: 'rgba(255,255,255,0.7)', textAlign: 'left' }),
+            createComponent('ab-title', 'title', '主标题', 560, 8, 800, 30, 100, { text: '辅助余额大屏', fontSize: 24, fontWeight: 'bold', color: '#ffffff', textAlign: 'center' }),
+            createComponent('ab-subtitle', 'title', '副标题', 560, 38, 800, 20, 100, { text: 'AUXILIARY BALANCE OVERVIEW', fontSize: 10, fontWeight: '400', color: 'rgba(255,255,255,0.55)', textAlign: 'center' }),
+            createComponent('ab-datetime', 'datetime', '日期时间', 1700, 22, 200, 30, 98, { format: 'YYYY-MM-DD', fontSize: 14, color: 'rgba(255,255,255,0.7)' }),
 
-            // Filters
-            createFilterSelectComponent('ab-filter-project', '项目筛选', '项目', 'filterProject', 40, 78, 220, 50, ['新一代涡轮组装', '智能电网升级', '数据中心迁移', '供应链数字化', '生产线自动化改造', 'ERP系统升级', '新材料研发'], '全部项目'),
-            createFilterSelectComponent('ab-filter-dept', '部门筛选', '部门', 'filterDept', 280, 78, 180, 50, ['制造部', '电力部', 'IT部', '采购部', '质量部', '研发部'], '全部部门'),
+            // Filters row
+            createComponent('ab-filter-bar', 'border-box', '筛选条件背景', 30, 74, 1860, 46, 8, { backgroundColor: 'rgba(255,255,255,0.06)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.08)', borderRadius: 6 }),
+            createComponent('ab-filter-label', 'title', '筛选条件标签', 44, 82, 80, 28, 10, { text: '筛选条件', fontSize: 12, fontWeight: '500', color: 'rgba(255,255,255,0.55)', textAlign: 'left' }),
+            createFilterSelectComponent('ab-filter-project', '项目筛选', '项目', 'filterProject', 130, 78, 180, 40, ['新一代涡轮组装', '智能电网升级', '数据中心迁移', '供应链数字化', '生产线自动化改造', 'ERP系统升级', '新材料研发'], '全部项目'),
+            createFilterSelectComponent('ab-filter-dept', '部门筛选', '部门', 'filterDept', 330, 78, 160, 40, ['制造部', '电力部', 'IT部', '采购部', '质量部', '研发部'], '全部部门'),
 
             // KPI Row
-            createMetricCard('ab-kpi-1', '余额合计', '余额合计', 40, 140, 300, 100, 4410.6, { suffix: '万', valueColor: '#044B8C', backgroundColor: '#ffffff' }),
-            createMetricCard('ab-kpi-2', '涉及项目', '涉及项目', 360, 140, 300, 100, 7, { suffix: '个', valueColor: '#2471a3', backgroundColor: '#ffffff' }),
-            createMetricCard('ab-kpi-3', '科目数量', '科目数量', 680, 140, 300, 100, 21, { suffix: '个', valueColor: '#2980b9', backgroundColor: '#ffffff' }),
-            createMetricCard('ab-kpi-4', '合同数量', '合同数量', 1000, 140, 300, 100, 20, { suffix: '份', valueColor: '#8e44ad', backgroundColor: '#ffffff' }),
+            createMetricCard('ab-kpi-1', '余额合计', '余额合计', 30, 130, 300, 90, 4476.00, { suffix: '万', valueColor: '#044B8C', backgroundColor: '#ffffff' }),
+            createMetricCard('ab-kpi-2', '涉及项目', '涉及项目', 350, 130, 240, 90, 7, { suffix: '个', valueColor: '#2471a3', backgroundColor: '#ffffff' }),
+            createMetricCard('ab-kpi-3', '科目数', '科目数', 610, 130, 240, 90, 25, { suffix: '个', valueColor: '#2980b9', backgroundColor: '#ffffff' }),
+            createMetricCard('ab-kpi-4', '合同数量', '合同数量', 870, 130, 240, 90, 24, { suffix: '份', valueColor: '#8e44ad', backgroundColor: '#ffffff' }),
 
-            // Charts Row
-            createComponent('ab-bar-project', 'bar-chart', '按项目分布', 40, 260, 420, 300, 15, {
-                title: '按项目分布',
-                xAxisData: ['生产线自动化改造', '智能电网升级', '数据中心迁移', '新一代涡轮组装', 'ERP系统升级', '供应链数字化', '新材料研发'],
-                series: [{ name: '余额(万)', data: [1039, 1120, 898, 504, 491, 267, 157] }],
+            // Charts Row — 3 columns
+            createComponent('ab-bar-project', 'bar-chart', '按项目分布', 30, 235, 440, 310, 15, {
+                title: '| 按项目分布',
+                xAxisData: ['智能电网升级', '生产线自动化改造', '数据中心迁移', '新一代涡轮组装', 'ERP系统升级', '供应链数字化', '新材料研发'],
+                series: [{ name: '余额(万)', data: [1132, 1036, 898, 504, 491, 267, 157] }],
                 seriesColors: ['#2980b9'],
             }),
-            createComponent('ab-pie-dept', 'pie-chart', '按部门分布', 480, 260, 420, 300, 15, {
-                title: '按部门分布',
+            createComponent('ab-pie-dept', 'pie-chart', '按部门分布', 490, 235, 440, 310, 15, {
+                title: '| 按部门分布',
                 data: [
-                    { name: '制造部', value: 1543 },
-                    { name: '电力部', value: 1120 },
+                    { name: '制造部', value: 1511 },
                     { name: 'IT部', value: 1389 },
+                    { name: '电力部', value: 1120 },
                     { name: '采购部', value: 267 },
                     { name: '质量部', value: 32 },
                     { name: '研发部', value: 157 },
                 ],
                 seriesColors: ['#2980b9', '#27ae60', '#e67e22', '#8e44ad', '#16a085', '#c0392b'],
             }),
-            createComponent('ab-bar-category', 'bar-chart', '按费用类别分布', 920, 260, 420, 300, 15, {
-                title: '按费用类别分布',
+            createComponent('ab-bar-category', 'bar-chart', '按费用类型分布', 950, 235, 440, 310, 15, {
+                title: '| 按费用类型分布',
                 xAxisData: ['原材料/设备', '外协/服务', '租赁', '折旧', '检测试验', '设计咨询', '培训', '其他'],
-                series: [{ name: '余额(万)', data: [2549, 1083, 240, 43, 88, 68, 44, 12] }],
-                seriesColors: ['#2980b9'],
+                series: [
+                    { name: '原材料', data: [2549, 0, 0, 0, 0, 0, 0, 0] },
+                    { name: '外协', data: [0, 1083, 0, 0, 0, 0, 0, 0] },
+                    { name: '租赁', data: [0, 0, 240, 0, 0, 0, 0, 0] },
+                    { name: '折旧', data: [0, 0, 0, 43, 0, 0, 0, 0] },
+                    { name: '检测', data: [0, 0, 0, 0, 88, 0, 0, 0] },
+                    { name: '设计', data: [0, 0, 0, 0, 0, 68, 0, 0] },
+                    { name: '培训', data: [0, 0, 0, 0, 0, 0, 44, 0] },
+                    { name: '其他', data: [0, 0, 0, 0, 0, 0, 0, 12] },
+                ],
+                seriesColors: ['#2980b9', '#27ae60', '#e67e22', '#8e44ad', '#16a085', '#c0392b', '#f39c12', '#95a5a6'],
             }),
 
             // Bottom: Table + Top contracts
-            createStaticTableComponent('ab-detail-table', '辅助余额明细', 40, 580, 920, 460, ['科目编号', '科目名称', '所属项目', '部门', '合同名称', '余额(万)'], [
-                ['5001.01', '原材料-钢材', '新一代涡轮组装', '制造部', '钢材采购合同-2025A', '128.00'],
-                ['5001.02', '原材料-铝合金', '新一代涡轮组装', '制造部', '铝合金采购合同-2025B', '86.00'],
+            createStaticTableComponent('ab-detail-table', '辅助余额明细', 30, 560, 940, 490, ['科目编号', '科目名称', '所属项目', '部门', '合同名称', '余额(万)'], [
+                ['5001.01', '原材料-钢材', '新一代涡轮组装', '制造部', '钢材采购合同-2025A', '128.00万'],
+                ['5001.02', '原材料-铝合金', '新一代涡轮组装', '制造部', '铝合金采购合同-2025B', '86.00万'],
+                ['5101.01', '外协加工费', '新一代涡轮组装', '制造部', '精密加工服务合同', '215.00万'],
+                ['5201.01', '直接人工', '新一代涡轮组装', '制造部', '合同未签订2025R', '41.00万'],
                 ['5001.06', '网络设备', '数据中心迁移', 'IT部', '网络设备采购合同', '156.00'],
                 ['5001.07', '自动化设备', '生产线自动化改造', '制造部', '产线设备采购合同', '680.00'],
                 ['5001.04', '原材料-变压器', '智能电网升级', '电力部', '变压器采购合同', '520.00'],
-                ['5001.03', '原材料-电缆', '智能电网升级', '电力部', '电缆采购框架协议', '345.00'],
-                ['5001.05', '服务器设备', '数据中心迁移', 'IT部', '服务器采购合同-DC', '410.00'],
-                ['5101.01', '外协加工费', '新一代涡轮组装', '制造部', '精密加工服务合同', '215.00'],
+                ['5001.03', '原材料-电缆', '智能电网升级', '电力部', '电缆采购框架协议', '345.00万'],
             ]),
-            createStaticTableComponent('ab-top-contracts', '合同金额TOP8', 980, 580, 460, 460, ['排名', '合同名称', '所属项目', '金额(万)'], [
-                ['1', '产线设备采购合同', '生产线自动化改造', '680.00'],
-                ['2', '变压器采购合同', '智能电网升级', '520.00'],
-                ['3', '服务器采购合同-DC', '数据中心迁移', '410.00'],
-                ['4', '电缆采购框架协议', '智能电网升级', '345.00'],
-                ['5', 'ERP软件许可合同', 'ERP系统升级', '320.00'],
-                ['6', '自动化集成服务合同', '生产线自动化改造', '235.00'],
-                ['7', '机房租赁协议', '数据中心迁移', '240.00'],
-                ['8', '精密加工服务合同', '新一代涡轮组装', '215.00'],
+            createStaticTableComponent('ab-top-contracts', '合同金额 TOP 8', 990, 560, 500, 490, ['排名', '合同名称', '所属项目', '金额(万)'], [
+                ['1', '产线设备采购合同', '生产线自动化改造', '680.00万'],
+                ['2', '变压器采购合同', '智能电网升级', '520.00万'],
+                ['3', '服务器采购合同-DC', '数据中心迁移', '410.00万'],
+                ['4', '铝合金采购合同-2025B', '新一代涡轮组装', '345.00万'],
+                ['5', 'ERP软件许可合同', 'ERP系统升级', '320.00万'],
+                ['6', '机房租赁协议', '数据中心迁移', '240.00万'],
             ]),
         ],
     },
@@ -1914,30 +1924,33 @@ const ownFundDashboardTemplate: ScreenTemplate = {
         description: '自有资金数据可视化大屏',
         width: 1920,
         height: 1080,
-        backgroundColor: '#eaf2fb',
+        backgroundColor: '#1e1f26',
         theme: 'glacier',
         globalVariables: ownFundVariables,
         components: [
             // Header bar
             createComponent('of-header-bar', 'border-box', '标题栏背景', 0, 0, 1920, 64, 90, { backgroundColor: '#044B8C', borderWidth: 0, borderRadius: 0 }),
-            createComponent('of-title', 'title', '主标题', 560, 10, 800, 50, 100, { text: '自有资金大屏', fontSize: 28, fontWeight: 'bold', color: '#ffffff', textAlign: 'center' }),
-            createComponent('of-subtitle', 'title', '副标题', 560, 40, 800, 24, 100, { text: 'OWN FUND OVERVIEW', fontSize: 12, fontWeight: '400', color: 'rgba(255,255,255,0.55)', textAlign: 'center' }),
-            createComponent('of-datetime', 'datetime', '日期时间', 1660, 18, 230, 40, 98, { format: 'YYYY-MM-DD HH:mm:ss', fontSize: 16, color: '#ffffff' }),
+            createComponent('of-logo', 'title', 'Logo', 30, 8, 200, 50, 100, { text: 'DECISION TIMES\nFUND MANAGEMENT', fontSize: 10, fontWeight: '600', color: 'rgba(255,255,255,0.7)', textAlign: 'left' }),
+            createComponent('of-title', 'title', '主标题', 560, 8, 800, 30, 100, { text: '自有资金大屏', fontSize: 24, fontWeight: 'bold', color: '#ffffff', textAlign: 'center' }),
+            createComponent('of-subtitle', 'title', '副标题', 560, 38, 800, 20, 100, { text: 'OWN FUND OVERVIEW', fontSize: 10, fontWeight: '400', color: 'rgba(255,255,255,0.55)', textAlign: 'center' }),
+            createComponent('of-datetime', 'datetime', '日期时间', 1700, 22, 200, 30, 98, { format: 'YYYY-MM-DD', fontSize: 14, color: 'rgba(255,255,255,0.7)' }),
 
             // Year filter
-            createFilterSelectComponent('of-filter-year', '年度选择', '年度', 'selectedYear', 40, 78, 180, 50, ['2026', '2027'], '选择年度'),
+            createComponent('of-filter-bar', 'border-box', '筛选条件背景', 30, 74, 1860, 46, 8, { backgroundColor: 'rgba(255,255,255,0.06)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.08)', borderRadius: 6 }),
+            createComponent('of-filter-label', 'title', '年度选择标签', 44, 82, 80, 28, 10, { text: '年度选择', fontSize: 12, fontWeight: '500', color: 'rgba(255,255,255,0.55)', textAlign: 'left' }),
+            createFilterSelectComponent('of-filter-year', '年度选择', '年度', 'selectedYear', 130, 78, 160, 40, ['2026年', '2027年'], '2026年'),
 
             // KPI Row (6 cards)
-            createMetricCard('of-kpi-1', '年初合计', '年初合计', 40, 140, 210, 100, 2550, { suffix: '万', valueColor: '#044B8C', backgroundColor: '#ffffff' }),
-            createMetricCard('of-kpi-2', '预计增加', '预计增加', 270, 140, 210, 100, 1325, { suffix: '万', valueColor: '#1e8449', backgroundColor: '#ffffff' }),
-            createMetricCard('of-kpi-3', '预计使用', '预计使用', 500, 140, 210, 100, 1290, { suffix: '万', valueColor: '#c0392b', backgroundColor: '#ffffff' }),
-            createMetricCard('of-kpi-4', '年末余额', '年末余额', 730, 140, 210, 100, 2585, { suffix: '万', valueColor: '#2471a3', backgroundColor: '#ffffff' }),
-            createMetricCard('of-kpi-5', '资金使用率', '资金使用率', 960, 140, 210, 100, 33.3, { suffix: '%', valueColor: '#2980b9', backgroundColor: '#ffffff' }),
-            createMetricCard('of-kpi-6', '余额增长率', '余额增长率', 1190, 140, 210, 100, 1.4, { suffix: '%', prefix: '+', valueColor: '#1e8449', backgroundColor: '#ffffff' }),
+            createMetricCard('of-kpi-1', '年初合计', '年初合计', 30, 130, 220, 90, 2550, { suffix: '万', valueColor: '#044B8C', backgroundColor: '#ffffff' }),
+            createMetricCard('of-kpi-2', '预计增加', '预计增加', 270, 130, 220, 90, 1325, { suffix: '万', valueColor: '#1e8449', backgroundColor: '#ffffff' }),
+            createMetricCard('of-kpi-3', '预计使用', '预计使用', 510, 130, 220, 90, 1290, { suffix: '万', valueColor: '#c0392b', backgroundColor: '#ffffff' }),
+            createMetricCard('of-kpi-4', '年末余额', '年末余额', 750, 130, 220, 90, 2585, { suffix: '万', valueColor: '#2471a3', backgroundColor: '#ffffff' }),
+            createMetricCard('of-kpi-5', '资金使用率', '资金使用率', 990, 130, 220, 90, 33.3, { suffix: '%', valueColor: '#2980b9', backgroundColor: '#ffffff' }),
+            createMetricCard('of-kpi-6', '余额增长率', '余额增长率', 1230, 130, 220, 90, 1.4, { suffix: '%', prefix: '+', valueColor: '#1e8449', backgroundColor: '#ffffff' }),
 
             // Charts Row 1: Donut + Waterfall + YoY Bar
-            createComponent('of-pie-balance', 'pie-chart', '余额构成', 40, 260, 420, 290, 15, {
-                title: '年末余额构成',
+            createComponent('of-pie-balance', 'pie-chart', '年末余额构成', 30, 235, 440, 280, 15, {
+                title: '| 2026年末余额构成',
                 data: [
                     { name: '事业基金', value: 1350 },
                     { name: '折旧基金', value: 810 },
@@ -1946,59 +1959,58 @@ const ownFundDashboardTemplate: ScreenTemplate = {
                 ],
                 seriesColors: ['#2980b9', '#27ae60', '#e67e22', '#8e44ad'],
             }),
-            createComponent('of-waterfall', 'bar-chart', '资金流动', 480, 260, 480, 290, 15, {
-                title: '资金流动（瀑布图）',
-                xAxisData: ['年初', '预计增加', '预计使用', '年末余额'],
-                series: [{ name: '金额(万)', data: [2550, 1325, 1290, 2585] }],
-                seriesColors: ['#2980b9'],
+            createComponent('of-waterfall', 'bar-chart', '资金流动', 490, 235, 440, 280, 15, {
+                title: '| 2026年资金流动',
+                xAxisData: ['年初余额', '预计增加', '预计使用', '年末余额'],
+                series: [{ name: '金额(万)', data: [2550, 1325, -1290, 2585] }],
+                seriesColors: ['#2980b9', '#27ae60', '#c0392b', '#2471a3'],
             }),
-            createComponent('of-bar-yoy', 'bar-chart', '年度余额对比', 980, 260, 460, 290, 15, {
-                title: '年度余额对比',
+            createComponent('of-bar-yoy', 'bar-chart', '年度余额对比', 950, 235, 440, 280, 15, {
+                title: '| 年度余额对比',
                 xAxisData: ['事业基金', '折旧基金', '职工福利基金', '安全生产基金'],
                 series: [
                     { name: '2026年余额', data: [1350, 810, 270, 155] },
                     { name: '2027年余额', data: [1490, 830, 290, 135] },
                 ],
-                seriesColors: ['#2980b9', '#27ae60'],
+                seriesColors: ['#2980b9', '#e67e22'],
             }),
 
-            // Charts Row 2: Per-fund mini bars
-            createComponent('of-mini-career', 'bar-chart', '事业基金', 40, 570, 350, 220, 15, {
-                title: '事业基金',
+            // Charts Row 2: Per-fund mini bars (4 columns)
+            createComponent('of-mini-career', 'bar-chart', '事业基金', 30, 530, 340, 210, 15, {
+                title: '| 事业基金',
                 xAxisData: ['年初', '增加', '使用', '余额'],
                 series: [{ name: '万', data: [1200, 600, 450, 1350] }],
                 seriesColors: ['#2980b9'],
             }),
-            createComponent('of-mini-deprec', 'bar-chart', '折旧基金', 410, 570, 350, 220, 15, {
-                title: '折旧基金',
+            createComponent('of-mini-deprec', 'bar-chart', '折旧基金', 390, 530, 340, 210, 15, {
+                title: '| 折旧基金',
                 xAxisData: ['年初', '增加', '使用', '余额'],
                 series: [{ name: '万', data: [850, 480, 520, 810] }],
                 seriesColors: ['#27ae60'],
             }),
-            createComponent('of-mini-welfare', 'bar-chart', '职工福利基金', 780, 570, 350, 220, 15, {
-                title: '职工福利基金',
+            createComponent('of-mini-welfare', 'bar-chart', '职工福利基金', 750, 530, 340, 210, 15, {
+                title: '| 职工福利基金',
                 xAxisData: ['年初', '增加', '使用', '余额'],
                 series: [{ name: '万', data: [320, 150, 200, 270] }],
                 seriesColors: ['#e67e22'],
             }),
-            createComponent('of-mini-safety', 'bar-chart', '安全生产基金', 1150, 570, 350, 220, 15, {
-                title: '安全生产基金',
+            createComponent('of-mini-safety', 'bar-chart', '安全生产基金', 1110, 530, 340, 210, 15, {
+                title: '| 安全生产基金',
                 xAxisData: ['年初', '增加', '使用', '余额'],
                 series: [{ name: '万', data: [180, 95, 120, 155] }],
                 seriesColors: ['#8e44ad'],
             }),
 
-            // Main Table
-            createStaticTableComponent('of-detail-table', '自有资金明细表', 40, 810, 1440, 240, ['年度', '事业基金', '备注', '折旧基金', '备注', '福利基金', '安全基金', '合计'], [
-                ['2026年初', '1,200', '上年结转', '850', '上年结转', '320', '180', '2,550'],
-                ['2026年预计增加', '600', '预算拨付+投资收益', '480', '本年计提', '150', '95', '1,325'],
-                ['2026年预计使用', '450', '科研项目支出', '520', '设备更新', '200', '120', '1,290'],
-                ['2026年余额', '1,350', '=1200+600-450', '810', '=850+480-520', '270', '155', '2,585'],
-                ['2027年初', '1,350', '承接2026年余额', '810', '承接2026年余额', '270', '155', '2,585'],
-                ['2027年预计增加', '720', '预算拨付+投资收益', '510', '本年计提', '180', '110', '1,520'],
-                ['2027年预计使用', '580', '科研项目+基建支出', '490', '设备更新+维修', '160', '130', '1,360'],
-                ['2027年余额', '1,490', '=1350+720-580', '830', '=810+510-490', '290', '135', '2,745'],
-            ]),
+            // Bottom Row: Gauge-style panels
+            createComponent('of-gauge-usage-bg', 'border-box', '资金使用率仪表盘背景', 30, 755, 680, 295, 8, { backgroundColor: '#ffffff', borderWidth: 1, borderColor: 'rgba(0,0,0,0.06)', borderRadius: 8 }),
+            createComponent('of-gauge-usage-title', 'title', '资金使用率仪表盘标题', 50, 765, 300, 24, 10, { text: '| 资金使用率仪表盘', fontSize: 14, fontWeight: '600', color: '#1a1a2e', textAlign: 'left' }),
+            createComponent('of-gauge-usage-desc', 'title', '使用率说明', 50, 790, 600, 18, 10, { text: '资金使用率 = 预计使用 ÷ 年初余额 × 100%', fontSize: 11, fontWeight: '400', color: '#888', textAlign: 'left' }),
+            createMetricCard('of-gauge-usage-val', '资金使用率', '资金使用率', 150, 830, 360, 180, 33.3, { suffix: '%', valueColor: '#2980b9', backgroundColor: '#ffffff', precision: 1 }),
+
+            createComponent('of-gauge-growth-bg', 'border-box', '余额增长率仪表盘背景', 730, 755, 720, 295, 8, { backgroundColor: '#ffffff', borderWidth: 1, borderColor: 'rgba(0,0,0,0.06)', borderRadius: 8 }),
+            createComponent('of-gauge-growth-title', 'title', '余额增长率仪表盘标题', 750, 765, 300, 24, 10, { text: '| 余额增长率仪表盘', fontSize: 14, fontWeight: '600', color: '#1a1a2e', textAlign: 'left' }),
+            createComponent('of-gauge-growth-desc', 'title', '增长率说明', 750, 790, 600, 18, 10, { text: '余额增长率 = (年末余额 - 年初余额) ÷ 年初余额 × 100%', fontSize: 11, fontWeight: '400', color: '#888', textAlign: 'left' }),
+            createMetricCard('of-gauge-growth-val', '余额增长率', '余额增长率', 870, 830, 360, 180, 1.4, { suffix: '%', prefix: '+', valueColor: '#1e8449', backgroundColor: '#ffffff', precision: 1 }),
         ],
     },
 };
@@ -2022,75 +2034,77 @@ const personalBalanceDashboardTemplate: ScreenTemplate = {
         description: '个人辅助余额表数据可视化大屏',
         width: 1920,
         height: 1080,
-        backgroundColor: '#eaf2fb',
+        backgroundColor: '#1e1f26',
         theme: 'glacier',
         globalVariables: personalBalanceVariables,
         components: [
             // Header bar
             createComponent('pb-header-bar', 'border-box', '标题栏背景', 0, 0, 1920, 64, 90, { backgroundColor: '#044B8C', borderWidth: 0, borderRadius: 0 }),
-            createComponent('pb-title', 'title', '主标题', 560, 10, 800, 50, 100, { text: '个人辅助余额大屏', fontSize: 28, fontWeight: 'bold', color: '#ffffff', textAlign: 'center' }),
-            createComponent('pb-subtitle', 'title', '副标题', 560, 40, 800, 24, 100, { text: 'PERSONAL AUXILIARY BALANCE OVERVIEW', fontSize: 12, fontWeight: '400', color: 'rgba(255,255,255,0.55)', textAlign: 'center' }),
-            createComponent('pb-datetime', 'datetime', '日期时间', 1660, 18, 230, 40, 98, { format: 'YYYY-MM-DD HH:mm:ss', fontSize: 16, color: '#ffffff' }),
+            createComponent('pb-logo', 'title', 'Logo', 30, 8, 200, 50, 100, { text: 'DECISION TIMES\nPERSONAL LEDGER', fontSize: 10, fontWeight: '600', color: 'rgba(255,255,255,0.7)', textAlign: 'left' }),
+            createComponent('pb-title', 'title', '主标题', 560, 8, 800, 30, 100, { text: '个人辅助余额大屏', fontSize: 24, fontWeight: 'bold', color: '#ffffff', textAlign: 'center' }),
+            createComponent('pb-subtitle', 'title', '副标题', 560, 38, 800, 20, 100, { text: 'PERSONAL AUXILIARY BALANCE OVERVIEW', fontSize: 10, fontWeight: '400', color: 'rgba(255,255,255,0.55)', textAlign: 'center' }),
+            createComponent('pb-datetime', 'datetime', '日期时间', 1700, 22, 200, 30, 98, { format: 'YYYY-MM-DD', fontSize: 14, color: 'rgba(255,255,255,0.7)' }),
 
             // Filters
-            createFilterSelectComponent('pb-filter-employee', '职工筛选', '职工', 'filterEmployee', 40, 78, 180, 50, ['张伟', '李娜', '赵敏', '刘洋', '孙磊', '王强', '吴杰', '周芳', '郑华', '陈静', '马超', '钱波'], '全部职工'),
-            createFilterSelectComponent('pb-filter-dept', '部门筛选', '部门', 'filterDept', 240, 78, 180, 50, ['制造部', '电力部', '采购部', 'IT部', '研发部', '安环部', '营销部', '质量部'], '全部部门'),
+            createComponent('pb-filter-bar', 'border-box', '筛选条件背景', 30, 74, 1860, 46, 8, { backgroundColor: 'rgba(255,255,255,0.06)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.08)', borderRadius: 6 }),
+            createComponent('pb-filter-label', 'title', '筛选条件标签', 44, 82, 80, 28, 10, { text: '筛选条件', fontSize: 12, fontWeight: '500', color: 'rgba(255,255,255,0.55)', textAlign: 'left' }),
+            createFilterSelectComponent('pb-filter-employee', '职工筛选', '职工', 'filterEmployee', 130, 78, 160, 40, ['张伟', '李娜', '赵敏', '刘洋', '孙磊', '王强', '吴杰', '周芳', '郑华', '陈静', '马超', '钱波'], '全部职工'),
+            createFilterSelectComponent('pb-filter-dept', '部门筛选', '部门', 'filterDept', 310, 78, 160, 40, ['制造部', '电力部', '采购部', 'IT部', '研发部', '安环部', '营销部', '质量部'], '全部部门'),
 
             // KPI Row (5 cards)
-            createMetricCard('pb-kpi-1', '净余额', '净余额', 40, 140, 260, 100, 43.91, { suffix: '万', valueColor: '#044B8C', backgroundColor: '#ffffff' }),
-            createMetricCard('pb-kpi-2', '借方合计', '借方合计', 320, 140, 260, 100, 55.29, { suffix: '万', valueColor: '#d4850a', backgroundColor: '#ffffff' }),
-            createMetricCard('pb-kpi-3', '贷方合计', '贷方合计', 600, 140, 260, 100, 7.58, { suffix: '万', valueColor: '#1e8449', backgroundColor: '#ffffff' }),
-            createMetricCard('pb-kpi-4', '涉及职工', '涉及职工', 880, 140, 260, 100, 12, { suffix: '人', valueColor: '#2471a3', backgroundColor: '#ffffff' }),
-            createMetricCard('pb-kpi-5', '科目数量', '科目数量', 1160, 140, 260, 100, 12, { suffix: '个', valueColor: '#2980b9', backgroundColor: '#ffffff' }),
+            createMetricCard('pb-kpi-1', '净余额', '净余额', 30, 130, 260, 90, 52.71, { suffix: '万', valueColor: '#044B8C', backgroundColor: '#ffffff' }),
+            createMetricCard('pb-kpi-2', '借方合计', '借方合计', 310, 130, 260, 90, 60.29, { suffix: '万', valueColor: '#d4850a', backgroundColor: '#ffffff' }),
+            createMetricCard('pb-kpi-3', '贷方合计', '贷方合计', 590, 130, 260, 90, 7.58, { suffix: '万', valueColor: '#1e8449', backgroundColor: '#ffffff' }),
+            createMetricCard('pb-kpi-4', '涉及职工', '涉及职工', 870, 130, 260, 90, 12, { suffix: '人', valueColor: '#2471a3', backgroundColor: '#ffffff' }),
+            createMetricCard('pb-kpi-5', '科目数量', '科目数量', 1150, 130, 260, 90, 12, { suffix: '个', valueColor: '#2980b9', backgroundColor: '#ffffff' }),
 
             // Charts Row
-            createComponent('pb-bar-employee', 'bar-chart', '按职工分布', 40, 260, 420, 300, 15, {
-                title: '按职工分布',
+            createComponent('pb-bar-employee', 'bar-chart', '按职工分布', 30, 235, 440, 310, 15, {
+                title: '| 按职工分布',
                 xAxisData: ['王强', '赵敏', '吴杰', '郑华', '孙磊', '钱波', '李娜', '张伟', '刘洋', '周芳', '马超', '陈静'],
                 series: [{ name: '净余额(万)', data: [18.34, 9.46, 9.02, 5.45, 3.4, 4.62, 2.7, 1.78, -1.58, -0.18, 1.08, -1.38] }],
                 seriesColors: ['#2980b9'],
             }),
-            createComponent('pb-pie-dept', 'pie-chart', '按部门分布', 480, 260, 420, 300, 15, {
-                title: '按部门分布',
+            createComponent('pb-pie-dept', 'pie-chart', '按部门分布', 490, 235, 440, 310, 15, {
+                title: '| 按部门分布',
                 data: [
                     { name: 'IT部', value: 23.44 },
-                    { name: '采购部', value: 10.54 },
+                    { name: '采购部', value: 13.54 },
                     { name: '研发部', value: 13.64 },
+                    { name: '电力部', value: 6.90 },
                     { name: '营销部', value: 5.45 },
-                    { name: '制造部', value: 2.2 },
-                    { name: '电力部', value: 2.7 },
+                    { name: '制造部', value: 1.44 },
                     { name: '质量部', value: 1.38 },
                     { name: '安环部', value: 0.78 },
                 ],
                 seriesColors: ['#2980b9', '#27ae60', '#e67e22', '#8e44ad', '#16a085', '#c0392b', '#2c3e50', '#d4850a'],
             }),
-            createComponent('pb-bar-category', 'bar-chart', '按科目类别分布', 920, 260, 420, 300, 15, {
-                title: '按科目类别分布',
+            createComponent('pb-bar-category', 'bar-chart', '按科目类别分布', 950, 235, 440, 310, 15, {
+                title: '| 按科目类别分布',
                 xAxisData: ['其他应收-借款', '应付职工薪酬'],
-                series: [{ name: '绝对金额(万)', data: [55.29, 7.58] }],
-                seriesColors: ['#2980b9'],
+                series: [
+                    { name: '金额(万)', data: [66.29, 7.58] },
+                ],
+                seriesColors: ['#2980b9', '#27ae60'],
             }),
 
             // Bottom: Table + Top borrowers
-            createStaticTableComponent('pb-detail-table', '个人辅助余额明细', 40, 580, 920, 460, ['科目编号', '科目名称', '部门', '职工', '余额'], [
-                ['1122.05', '设备采购借款', 'IT部', '王强', '156,000'],
-                ['1122.04', '培训费借款', 'IT部', '孙磊', '24,000'],
-                ['1122.06', '实验材料借款', '研发部', '吴杰', '67,000'],
-                ['1122.03', '采购预付款', '采购部', '赵敏', '85,000'],
-                ['1122.08', '项目预支款', '电力部', '李娜', '45,000'],
-                ['1122.09', '外出学习借款', '研发部', '钱波', '35,000'],
-                ['1122.07', '业务招待借款', '营销部', '郑华', '18,000'],
-                ['2211.01', '工资应付', '电力部', '李娜', '-21,000'],
+            createStaticTableComponent('pb-detail-table', '个人辅助余额明细', 30, 560, 940, 490, ['科目编号', '科目名称', '部门', '职工', '余额'], [
+                ['1122.01', '备用金', '制造部', '张伟', '5,000'],
+                ['1122.02', '差旅费借款', 'IT部', '孙磊', '1,28万'],
+                ['1122.01', '备用金', '电力部', '李娜', '5,000'],
+                ['1122.03', '采购预付款', '采购部', '赵敏', '8.50万'],
+                ['1122.01', '备用金', '研发部', '钱波', '9,600'],
             ]),
-            createStaticTableComponent('pb-top-borrowers', '借款余额TOP8', 980, 580, 460, 460, ['排名', '职工', '部门', '借方余额(万)'], [
-                ['1', '王强', 'IT部', '18.34'],
-                ['2', '赵敏', '采购部', '9.46'],
-                ['3', '吴杰', '研发部', '9.02'],
-                ['4', '郑华', '营销部', '5.45'],
-                ['5', '钱波', '研发部', '4.62'],
-                ['6', '孙磊', 'IT部', '3.40'],
-                ['7', '李娜', '电力部', '2.70'],
-                ['8', '张伟', '制造部', '1.78'],
+            createStaticTableComponent('pb-top-borrowers', '借款余额 TOP 8', 990, 560, 500, 490, ['排名', '职工', '部门', '借方余额(万)'], [
+                ['1', '王强', 'IT部', '18.34万'],
+                ['2', '赵敏', '采购部', '9.46万'],
+                ['3', '吴杰', '研发部', '9.02万'],
+                ['4', '郑华', '营销部', '5.45万'],
+                ['5', '钱波', '研发部', '4.62万'],
+                ['6', '孙磊', 'IT部', '3.40万'],
+                ['7', '李娜', '电力部', '2.70万'],
+                ['8', '张伟', '制造部', '1.78万'],
             ]),
         ],
     },
@@ -2114,40 +2128,43 @@ const projectFundDashboardTemplate: ScreenTemplate = {
         description: '项目经费执行监控数据可视化大屏',
         width: 1920,
         height: 1080,
-        backgroundColor: '#eaf2fb',
+        backgroundColor: '#1e1f26',
         theme: 'glacier',
         globalVariables: projectFundVariables,
         components: [
             // Header bar
             createComponent('pf-header-bar', 'border-box', '标题栏背景', 0, 0, 1920, 64, 90, { backgroundColor: '#044B8C', borderWidth: 0, borderRadius: 0 }),
-            createComponent('pf-title', 'title', '主标题', 560, 10, 800, 50, 100, { text: '项目经费大屏', fontSize: 28, fontWeight: 'bold', color: '#ffffff', textAlign: 'center' }),
-            createComponent('pf-subtitle', 'title', '副标题', 560, 40, 800, 24, 100, { text: 'PROJECT FUND OVERVIEW', fontSize: 12, fontWeight: '400', color: 'rgba(255,255,255,0.55)', textAlign: 'center' }),
-            createComponent('pf-datetime', 'datetime', '日期时间', 1660, 18, 230, 40, 98, { format: 'YYYY-MM-DD HH:mm:ss', fontSize: 16, color: '#ffffff' }),
+            createComponent('pf-logo', 'title', 'Logo', 30, 8, 200, 50, 100, { text: 'DECISION TIMES\nFUND CONTROL', fontSize: 10, fontWeight: '600', color: 'rgba(255,255,255,0.7)', textAlign: 'left' }),
+            createComponent('pf-title', 'title', '主标题', 560, 8, 800, 30, 100, { text: '项目经费大屏', fontSize: 24, fontWeight: 'bold', color: '#ffffff', textAlign: 'center' }),
+            createComponent('pf-subtitle', 'title', '副标题', 560, 38, 800, 20, 100, { text: 'PROJECT FUND OVERVIEW', fontSize: 10, fontWeight: '400', color: 'rgba(255,255,255,0.55)', textAlign: 'center' }),
+            createComponent('pf-datetime', 'datetime', '日期时间', 1700, 22, 200, 30, 98, { format: 'YYYY-MM-DD', fontSize: 14, color: 'rgba(255,255,255,0.7)' }),
 
             // Filters
-            createFilterSelectComponent('pf-filter-dept', '部门筛选', '部门', 'filterDept', 40, 78, 200, 50, ['制造部', '电力部', 'IT部', '采购部', '质量部', '安环部', '研发部', '营销部'], '全部部门'),
-            createFilterSelectComponent('pf-filter-health', '健康度筛选', '健康度', 'filterHealth', 260, 78, 180, 50, ['正常', '超支', '偏快', '偏慢'], '全部状态'),
+            createComponent('pf-filter-bar', 'border-box', '筛选条件背景', 30, 74, 1860, 46, 8, { backgroundColor: 'rgba(255,255,255,0.06)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.08)', borderRadius: 6 }),
+            createComponent('pf-filter-label', 'title', '筛选条件标签', 44, 82, 80, 28, 10, { text: '筛选条件', fontSize: 12, fontWeight: '500', color: 'rgba(255,255,255,0.55)', textAlign: 'left' }),
+            createFilterSelectComponent('pf-filter-dept', '部门筛选', '部门', 'filterDept', 130, 78, 160, 40, ['制造部', '电力部', 'IT部', '采购部', '质量部', '安环部', '研发部', '营销部'], '全部部门'),
+            createFilterSelectComponent('pf-filter-health', '健康度筛选', '健康度', 'filterHealth', 310, 78, 160, 40, ['正常', '超支', '偏快', '偏慢'], '全部状态'),
 
             // KPI Row (6 cards)
-            createMetricCard('pf-kpi-1', '总经费', '总经费', 40, 140, 210, 100, 54500, { suffix: '万', valueColor: '#044B8C', backgroundColor: '#ffffff' }),
-            createMetricCard('pf-kpi-2', '直接成本控制数', '直接成本控制数', 270, 140, 210, 100, 43600, { suffix: '万', valueColor: '#2471a3', backgroundColor: '#ffffff' }),
-            createMetricCard('pf-kpi-3', '直接成本已支出', '直接成本已支出', 500, 140, 210, 100, 37200, { suffix: '万', valueColor: '#2980b9', backgroundColor: '#ffffff' }),
-            createMetricCard('pf-kpi-4', '直接成本执行率', '直接成本执行率', 730, 140, 210, 100, 85.3, { suffix: '%', valueColor: '#2980b9', backgroundColor: '#ffffff' }),
-            createMetricCard('pf-kpi-5', '总经费执行率', '总经费执行率', 960, 140, 210, 100, 78.7, { suffix: '%', valueColor: '#2980b9', backgroundColor: '#ffffff' }),
-            createMetricCard('pf-kpi-6', '超支项目', '超支项目', 1190, 140, 210, 100, 3, { suffix: '个', valueColor: '#c0392b', backgroundColor: '#ffffff' }),
+            createMetricCard('pf-kpi-1', '总经费', '总经费', 30, 130, 220, 90, 54500, { suffix: '万', valueColor: '#044B8C', backgroundColor: '#ffffff' }),
+            createMetricCard('pf-kpi-2', '直接成本控制数', '直接成本控制数', 270, 130, 220, 90, 43600, { suffix: '万', valueColor: '#2471a3', backgroundColor: '#ffffff' }),
+            createMetricCard('pf-kpi-3', '直接成本已支出', '直接成本已支出', 510, 130, 220, 90, 37200, { suffix: '万', valueColor: '#2980b9', backgroundColor: '#ffffff' }),
+            createMetricCard('pf-kpi-4', '直接成本执行率', '直接成本执行率', 750, 130, 220, 90, 85.3, { suffix: '%', valueColor: '#2980b9', backgroundColor: '#ffffff' }),
+            createMetricCard('pf-kpi-5', '总经费执行率', '总经费执行率', 990, 130, 220, 90, 79.6, { suffix: '%', valueColor: '#2980b9', backgroundColor: '#ffffff' }),
+            createMetricCard('pf-kpi-6', '超支项目', '超支项目', 1230, 130, 220, 90, 3, { suffix: '个', valueColor: '#c0392b', backgroundColor: '#ffffff' }),
 
             // Charts Row
-            createComponent('pf-bar-structure', 'bar-chart', '经费结构分布', 40, 260, 420, 300, 15, {
-                title: '经费结构分布',
+            createComponent('pf-bar-structure', 'bar-chart', '经费结构分布', 30, 235, 440, 300, 15, {
+                title: '| 经费结构分布',
                 xAxisData: ['涡轮', '电网', '数据', '供应链', '质量', '产线', 'ERP', '环保', '研发', '门户'],
                 series: [
                     { name: '直接成本', data: [3200, 9800, 4100, 2800, 1350, 5200, 4200, 1650, 3800, 1100] },
                     { name: '间接费用', data: [520, 1680, 780, 380, 130, 960, 720, 280, 540, 180] },
                 ],
-                seriesColors: ['#2980b9', '#8e44ad'],
+                seriesColors: ['#2980b9', '#e67e22', '#8e44ad'],
             }),
-            createComponent('pf-bar-rate', 'bar-chart', '执行率 vs 时间进度', 480, 260, 420, 300, 15, {
-                title: '执行率 vs 时间进度',
+            createComponent('pf-bar-rate', 'bar-chart', '执行率 vs 时间进度', 490, 235, 440, 300, 15, {
+                title: '| 执行率 vs 时间进度',
                 xAxisData: ['涡轮', '电网', '数据', '供应链', '质量', '产线', 'ERP', '环保', '研发', '门户'],
                 series: [
                     { name: '时间进度(%)', data: [75, 100, 56, 100, 100, 63, 100, 100, 44, 88] },
@@ -2155,27 +2172,22 @@ const projectFundDashboardTemplate: ScreenTemplate = {
                 ],
                 seriesColors: ['#bdc3c7', '#2980b9'],
             }),
-            createComponent('pf-pie-health', 'pie-chart', '经费健康度', 920, 260, 420, 300, 15, {
-                title: '经费健康度分布',
-                data: [
-                    { name: '正常', value: 4 },
-                    { name: '超支', value: 3 },
-                    { name: '偏快', value: 1 },
-                    { name: '偏慢', value: 2 },
-                ],
-                seriesColors: ['#1e8449', '#c0392b', '#d4850a', '#7f8c8d'],
-            }),
+
+            // Health grid cards (replacing pie chart)
+            createComponent('pf-health-bg', 'border-box', '经费健康度背景', 950, 235, 440, 300, 8, { backgroundColor: '#ffffff', borderWidth: 1, borderColor: 'rgba(0,0,0,0.06)', borderRadius: 8 }),
+            createComponent('pf-health-title', 'title', '经费健康度标题', 970, 245, 200, 24, 10, { text: '| 经费健康度', fontSize: 14, fontWeight: '600', color: '#1a1a2e', textAlign: 'left' }),
+            createMetricCard('pf-health-normal', '正常', '正常', 970, 280, 190, 90, 3, { suffix: '', valueColor: '#1e8449', backgroundColor: 'rgba(30,132,73,0.08)' }),
+            createMetricCard('pf-health-over', '超支', '超支', 1180, 280, 190, 90, 3, { suffix: '', valueColor: '#c0392b', backgroundColor: 'rgba(192,57,43,0.08)' }),
+            createMetricCard('pf-health-fast', '偏快', '偏快', 970, 385, 190, 90, 3, { suffix: '', valueColor: '#d4850a', backgroundColor: 'rgba(212,133,10,0.08)' }),
+            createMetricCard('pf-health-slow', '偏慢', '偏慢', 1180, 385, 190, 90, 1, { suffix: '', valueColor: '#7f8c8d', backgroundColor: 'rgba(127,140,141,0.08)' }),
 
             // Main table
-            createStaticTableComponent('pf-detail-table', '项目经费明细表', 40, 580, 1440, 460, ['项目编号', '项目名称', '研制周期', '总经费(万)', '直接控制数', '直接支出', '执行率(%)', '间接支出', '总支出', '总执行率(%)', '健康度'], [
-                ['PRJ-001', '新一代涡轮组装', '2025.03-2026.06', '4,800', '3,840', '3,200', '83.3', '520', '3,720', '77.5', '偏快'],
-                ['PRJ-002', '智能电网升级', '2025.01-2025.12', '12,000', '9,600', '9,800', '102.1', '1,680', '11,480', '95.7', '超支'],
-                ['PRJ-003', '数据中心迁移', '2025.06-2026.09', '6,500', '5,200', '4,100', '78.8', '780', '4,880', '75.1', '偏快'],
-                ['PRJ-004', '供应链数字化', '2025.02-2025.11', '3,200', '2,560', '2,800', '109.4', '380', '3,180', '99.4', '超支'],
-                ['PRJ-005', '质量管理体系认证', '2025.04-2025.10', '1,500', '1,200', '1,350', '112.5', '130', '1,480', '98.7', '超支'],
-                ['PRJ-006', '生产线自动化改造', '2025.05-2026.08', '8,800', '7,040', '5,200', '73.9', '960', '6,160', '70.0', '正常'],
-                ['PRJ-007', 'ERP系统升级', '2025.01-2025.09', '5,500', '4,400', '4,200', '95.5', '720', '4,920', '89.5', '正常'],
-                ['PRJ-008', '环保合规改造', '2025.03-2025.12', '2,200', '1,760', '1,650', '93.8', '280', '1,930', '87.7', '正常'],
+            createStaticTableComponent('pf-detail-table', '项目经费明细表', 30, 550, 1460, 500, ['项目编号', '项目名称', '研制周期', '总经费(万)', '直接控制数', '直接支出', '间接支出', '执行率(%)', '总支出', '总执行率(%)', '健康度'], [
+                ['PRJ-M01', '新一代涡轮组装', '2025.03-2026.06', '4,800', '3,840', '3,200', '520', '83.3%', '3,720', '77.5%', '偏快'],
+                ['PRJ-D02', '智能电网升级', '2025.01-2025.12', '12,000', '9,600', '9,800', '1,680', '102.1%', '11,480', '95.7%', '超支'],
+                ['PRJ-H03', '数据中心迁移', '2025.06-2026.09', '6,500', '5,200', '4,100', '780', '78.8%', '4,880', '75.1%', '偏快'],
+                ['PRJ-S04', '供应链数字化', '2025.02-2025.11', '3,200', '2,560', '2,800', '380', '109.4%', '3,180', '99.4%', '超支'],
+                ['PRJ-Q05', '质量管理体系认证', '2025.04-2025.10', '1,500', '1,200', '1,350', '130', '112.5%', '1,480', '98.7%', '超支'],
             ]),
         ],
     },
