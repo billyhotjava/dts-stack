@@ -130,6 +130,15 @@ export function DbUnifiedStep({
 
 	return (
 		<>
+			{/* ─── 数据来源切换 ─── */}
+			<Divider orientation="left">数据来源切换</Divider>
+			<Form.Item name="sourceCategory" label="数据来源">
+				<Radio.Group onChange={(e) => setSourceCategory(e.target.value)}>
+					<Radio.Button value="database">数据库</Radio.Button>
+					<Radio.Button value="file">文件上传</Radio.Button>
+				</Radio.Group>
+			</Form.Item>
+
 			{/* ─── 基础信息 ─── */}
 			<Divider orientation="left">基础信息</Divider>
 			<div className="grid gap-4 md:grid-cols-2">
@@ -474,14 +483,6 @@ export function DbUnifiedStep({
 				]}
 			/>
 
-			{/* ─── 数据来源切换 ─── */}
-			<Divider orientation="left">数据来源切换</Divider>
-			<Form.Item name="sourceCategory" label="数据来源">
-				<Radio.Group onChange={(e) => setSourceCategory(e.target.value)}>
-					<Radio.Button value="database">数据库</Radio.Button>
-					<Radio.Button value="file">文件上传</Radio.Button>
-				</Radio.Group>
-			</Form.Item>
 		</>
 	);
 }

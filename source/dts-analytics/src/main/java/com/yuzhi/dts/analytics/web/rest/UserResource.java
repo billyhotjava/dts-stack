@@ -1,17 +1,28 @@
 package com.yuzhi.dts.analytics.web.rest;
 
 import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.yuzhi.dts.analytics.config.PlatformAuthProperties;
 import com.yuzhi.dts.analytics.domain.AnalyticsUser;
 import com.yuzhi.dts.analytics.repository.AnalyticsUserRepository;
 import com.yuzhi.dts.analytics.service.AnalyticsSessionService;
 import com.yuzhi.dts.analytics.service.GroupService;
 import com.yuzhi.dts.analytics.web.support.MetabaseLocale;
 import jakarta.servlet.http.HttpServletRequest;
+import java.net.URI;
 import java.security.SecureRandom;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.http.HttpEntity;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.HttpMethod;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -25,26 +36,47 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.boot.web.client.RestTemplateBuilder;
+import org.springframework.web.client.RestTemplate;
+import org.springframework.web.util.UriComponentsBuilder;
 
 @RestController
 @RequestMapping("/api/user")
 @Transactional
 public class UserResource {
 
+    private static final Logger LOG = LoggerFactory.getLogger(UserResource.class);
+
     private final AnalyticsSessionService sessionService;
     private final AnalyticsUserRepository userRepository;
     private final GroupService groupService;
     private final PasswordEncoder passwordEncoder;
+    private final RestTemplate restTemplate;
+    private final ObjectMapper objectMapper;
+    private final String platformBaseUrl;
+    private final PlatformAuthProperties authProperties;
 
     public UserResource(
             AnalyticsSessionService sessionService,
             AnalyticsUserRepository userRepository,
             GroupService groupService,
-            PasswordEncoder passwordEncoder) {
+            PasswordEncoder passwordEncoder,
+            RestTemplateBuilder restTemplateBuilder,
+            ObjectMapper objectMapper,
+            PlatformAuthProperties authProperties,
+            @Value("${dts.analytics.platform.base-url:http://dts-platform:8081}") String platformBaseUrl) {
         this.sessionService = sessionService;
         this.userRepository = userRepository;
         this.groupService = groupService;
         this.passwordEncoder = passwordEncoder;
+        this.restTemplate = restTemplateBuilder
+                .setConnectTimeout(java.time.Duration.ofMillis(3000))
+                .setReadTimeout(java.time.Duration.ofMillis(5000))
+                .build();
+        this.objectMapper = objectMapper;
+        this.authProperties = authProperties;
+        this.platformBaseUrl = platformBaseUrl == null || platformBaseUrl.isBlank()
+                ? "http://dts-platform:8081" : platformBaseUrl.trim();
     }
 
     @GetMapping(path = "/current", produces = MediaType.APPLICATION_JSON_VALUE)
@@ -72,9 +104,10 @@ public class UserResource {
     /**
      * Lightweight user search for sharing — accessible to any authenticated user.
      * Returns only id, email and common_name for each active user matching the query.
+     * Merges results from both the local analytics_user table and the platform admin API
+     * so that platform users who haven't yet logged into analytics are discoverable.
      */
     @GetMapping(path = "/search", produces = MediaType.APPLICATION_JSON_VALUE)
-    @Transactional(readOnly = true)
     public ResponseEntity<?> search(@RequestParam(name = "q", defaultValue = "") String query,
                                     HttpServletRequest request) {
         Optional<AnalyticsUser> caller = sessionService.resolveUser(request);
@@ -82,7 +115,10 @@ public class UserResource {
             return ResponseEntity.status(401).contentType(MediaType.TEXT_PLAIN).body("Unauthenticated");
         }
         String q = query == null ? "" : query.trim().toLowerCase(java.util.Locale.ROOT);
-        List<Map<String, Object>> results = userRepository.findAll().stream()
+
+        // 1) Local analytics_user results
+        Set<String> seenEmails = new LinkedHashSet<>();
+        List<Map<String, Object>> localResults = userRepository.findAll().stream()
                 .filter(AnalyticsUser::isActive)
                 .filter(u -> {
                     if (q.isEmpty()) return true;
@@ -100,10 +136,148 @@ public class UserResource {
                     item.put("common_name", "%s %s".formatted(
                             u.getFirstName() == null ? "" : u.getFirstName(),
                             u.getLastName() == null ? "" : u.getLastName()).trim());
+                    if (u.getEmail() != null) {
+                        seenEmails.add(u.getEmail().toLowerCase(java.util.Locale.ROOT));
+                    }
                     return item;
                 })
                 .toList();
-        return ResponseEntity.ok(results);
+
+        // 2) Platform admin users — provision into analytics_user if needed, then merge
+        List<Map<String, Object>> merged = new java.util.ArrayList<>(localResults);
+        try {
+            List<Map<String, Object>> platformUsers = fetchPlatformUsers(q, request);
+            for (Map<String, Object> pu : platformUsers) {
+                if (merged.size() >= 50) break;
+
+                String email = pu.get("email") == null ? null
+                        : pu.get("email").toString().trim().toLowerCase(java.util.Locale.ROOT);
+                String username = pu.get("username") == null ? null : pu.get("username").toString().trim();
+                String fullName = pu.get("fullName") == null ? null : pu.get("fullName").toString().trim();
+                if (username == null || username.isEmpty()) continue;
+
+                // Check if already present by email or username-derived email
+                boolean duplicate = email != null && !email.isEmpty() && seenEmails.contains(email);
+                if (!duplicate) {
+                    String lcUser = username.toLowerCase(java.util.Locale.ROOT);
+                    duplicate = seenEmails.stream().anyMatch(e -> e.startsWith(lcUser + "@"));
+                }
+                if (duplicate) continue;
+
+                // Auto-provision into analytics_user so we always have a numeric ID for ACL
+                AnalyticsUser provisioned = provisionPlatformUser(username, fullName, email);
+                if (provisioned == null) continue;
+
+                Map<String, Object> item = new LinkedHashMap<>();
+                item.put("id", provisioned.getId());
+                item.put("email", provisioned.getEmail());
+                String commonName = "%s %s".formatted(
+                        provisioned.getFirstName() == null ? "" : provisioned.getFirstName(),
+                        provisioned.getLastName() == null ? "" : provisioned.getLastName()).trim();
+                item.put("common_name", commonName.isEmpty() ? username : commonName);
+                merged.add(item);
+                if (provisioned.getEmail() != null) {
+                    seenEmails.add(provisioned.getEmail().toLowerCase(java.util.Locale.ROOT));
+                }
+            }
+        } catch (Exception ex) {
+            LOG.debug("Failed to fetch platform users for search: {}", ex.getMessage());
+        }
+
+        return ResponseEntity.ok(merged);
+    }
+
+    /**
+     * Query platform admin API for users matching the search keyword.
+     * Forwards the caller's auth headers so the platform can authenticate the request.
+     */
+    @SuppressWarnings("unchecked")
+    private List<Map<String, Object>> fetchPlatformUsers(String keyword, HttpServletRequest request) {
+        URI uri = UriComponentsBuilder.fromHttpUrl(platformBaseUrl)
+                .path("/api/admin/users")
+                .queryParam("page", 0)
+                .queryParam("size", 50)
+                .queryParam("keyword", keyword)
+                .build()
+                .toUri();
+
+        HttpHeaders headers = new HttpHeaders();
+        headers.setAccept(List.of(MediaType.APPLICATION_JSON));
+        // Forward authentication headers from the original request
+        String authorization = request.getHeader("Authorization");
+        if (authorization != null && !authorization.isBlank()) {
+            headers.set("Authorization", authorization);
+        }
+        String cookie = request.getHeader("Cookie");
+        if (cookie != null && !cookie.isBlank()) {
+            headers.set("Cookie", cookie);
+        }
+        // Forward platform identity headers set by the reverse proxy
+        for (String hdr : List.of("X-DTS-User", "X-DTS-Display-Name", "X-DTS-User-Id", "X-DTS-Roles", "X-DTS-Dept-Code")) {
+            String val = request.getHeader(hdr);
+            if (val != null && !val.isBlank()) {
+                headers.set(hdr, val);
+            }
+        }
+        headers.set("X-DTS-Service", "dts-analytics");
+
+        ResponseEntity<Map> response = restTemplate.exchange(uri, HttpMethod.GET,
+                new HttpEntity<>(headers), Map.class);
+        Map<String, Object> body = response.getBody();
+        if (body == null) return List.of();
+
+        // ApiResponse wrapper: { code, message, data: { content: [...], ... } }
+        Object dataObj = body.get("data");
+        if (dataObj instanceof Map<?, ?> dataMap) {
+            Object contentObj = dataMap.get("content");
+            if (contentObj instanceof List<?> contentList) {
+                return contentList.stream()
+                        .filter(o -> o instanceof Map)
+                        .map(o -> (Map<String, Object>) o)
+                        .toList();
+            }
+        }
+        return List.of();
+    }
+
+    /**
+     * Provision a platform user into the local analytics_user table so they can
+     * be referenced by numeric ID in ACL entries. Idempotent — returns the
+     * existing row if the email is already taken.
+     */
+    private AnalyticsUser provisionPlatformUser(String username, String fullName, String email) {
+        String effectiveEmail;
+        if (email != null && !email.isBlank() && email.contains("@")) {
+            effectiveEmail = email.trim().toLowerCase(java.util.Locale.ROOT);
+        } else {
+            effectiveEmail = (username.trim() + "@" + authProperties.emailDomain())
+                    .toLowerCase(java.util.Locale.ROOT);
+        }
+
+        // Check if already exists
+        Optional<AnalyticsUser> existing = userRepository.findByEmailIgnoreCase(effectiveEmail);
+        if (existing.isPresent()) {
+            return existing.get();
+        }
+
+        String displayName = (fullName != null && !fullName.isBlank()) ? fullName.trim() : username.trim();
+
+        AnalyticsUser user = new AnalyticsUser();
+        user.setEmail(effectiveEmail);
+        user.setFirstName(displayName);
+        user.setLastName("");
+        user.setSuperuser(false);
+        user.setActive(true);
+        user.setPasswordHash(passwordEncoder.encode(java.util.UUID.randomUUID().toString()));
+
+        try {
+            user = userRepository.save(user);
+            groupService.ensureUserInDefaultGroups(user);
+            return user;
+        } catch (org.springframework.dao.DataIntegrityViolationException ex) {
+            // Concurrent insert — refetch
+            return userRepository.findByEmailIgnoreCase(effectiveEmail).orElse(null);
+        }
     }
 
     @GetMapping(path = "/{id}", produces = MediaType.APPLICATION_JSON_VALUE)
@@ -112,9 +286,8 @@ public class UserResource {
         if (user.isEmpty()) {
             return ResponseEntity.status(401).contentType(MediaType.TEXT_PLAIN).body("Unauthenticated");
         }
-        if (!user.get().isSuperuser() && user.get().getId() != id) {
-            return ResponseEntity.status(403).contentType(MediaType.TEXT_PLAIN).body("You don't have permissions to do that.");
-        }
+        // Any authenticated user can look up basic user info (needed for ACL display names).
+        // Full details are still protected — toMetabaseUser only exposes safe fields.
         return userRepository.findById(id)
                 .<ResponseEntity<?>>map(u -> ResponseEntity.ok(toMetabaseUser(u, groupService, MetabaseLocale.resolve(request))))
                 .orElseGet(() -> ResponseEntity.notFound().build());

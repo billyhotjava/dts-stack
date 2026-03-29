@@ -27,6 +27,7 @@ export function ScreenSharePanel({ open, screenId, onClose, isOwner = false }: S
 	const [saving, setSaving] = useState(false);
 	const [error, setError] = useState<string | null>(null);
 	const [entries, setEntries] = useState<ScreenAclEntry[]>([]);
+	const [userNameMap, setUserNameMap] = useState<Record<string, string>>({});
 
 	// User search state
 	const [searchQuery, setSearchQuery] = useState('');
@@ -40,6 +41,36 @@ export function ScreenSharePanel({ open, screenId, onClose, isOwner = false }: S
 	const [shareUrl, setShareUrl] = useState<string | null>(null);
 	const [linkLoading, setLinkLoading] = useState(false);
 
+	// Resolve user IDs to display names
+	const resolveUserNames = useCallback(async (aclEntries: ScreenAclEntry[]) => {
+		const userIds = [
+			...new Set(
+				aclEntries
+					.filter((e) => e.subjectType === 'USER')
+					.map((e) => String(e.subjectId))
+					.filter((id) => id.trim().length > 0),
+			),
+		];
+		if (userIds.length === 0) return;
+
+		const nameMap: Record<string, string> = {};
+		await Promise.all(
+			userIds.map(async (id) => {
+				try {
+					const user = await analyticsApi.getUser(id);
+					const name =
+						user.common_name ||
+						[user.first_name, user.last_name].filter(Boolean).join(' ').trim() ||
+						user.email;
+					if (name) nameMap[id] = name;
+				} catch {
+					// Resolution failed — will fall back to "用户 {id}"
+				}
+			}),
+		);
+		setUserNameMap((prev) => ({ ...prev, ...nameMap }));
+	}, []);
+
 	// Load ACL entries
 	const loadAcl = useCallback(async () => {
 		if (!screenId) return;
@@ -47,14 +78,16 @@ export function ScreenSharePanel({ open, screenId, onClose, isOwner = false }: S
 		setError(null);
 		try {
 			const acl = await analyticsApi.getScreenAcl(screenId);
-			setEntries((acl || []).map(normalizeEntry));
+			const normalized = (acl || []).map(normalizeEntry);
+			setEntries(normalized);
+			resolveUserNames(normalized);
 		} catch (e) {
 			setError(e instanceof Error ? e.message : '加载权限失败');
 			setEntries([]);
 		} finally {
 			setLoading(false);
 		}
-	}, [screenId]);
+	}, [screenId, resolveUserNames]);
 
 	useEffect(() => {
 		if (!open || !screenId) return;
@@ -275,10 +308,12 @@ export function ScreenSharePanel({ open, screenId, onClose, isOwner = false }: S
 										fontSize: 11,
 										fontWeight: 600,
 									}}>
-										{(entry.subjectId || '?').charAt(0).toUpperCase()}
+										{(userNameMap[String(entry.subjectId)] || entry.subjectId || '?').charAt(0).toUpperCase()}
 									</span>
 									<span style={{ fontSize: 13, color: 'var(--color-text-primary, #e5e7eb)' }}>
-										{entry.subjectType === 'USER' ? `用户 ${entry.subjectId}` : `角色 ${entry.subjectId}`}
+										{entry.subjectType === 'USER'
+											? (userNameMap[String(entry.subjectId)] || `用户 ${entry.subjectId}`)
+											: `角色 ${entry.subjectId}`}
 									</span>
 								</div>
 								<Tag color={PERM_COLORS.OWNER} style={{ margin: 0 }}>
@@ -314,10 +349,12 @@ export function ScreenSharePanel({ open, screenId, onClose, isOwner = false }: S
 											fontSize: 11,
 											fontWeight: 600,
 										}}>
-											{(entry.subjectId || '?').charAt(0).toUpperCase()}
+											{(userNameMap[String(entry.subjectId)] || entry.subjectId || '?').charAt(0).toUpperCase()}
 										</span>
 										<span style={{ fontSize: 13, color: 'var(--color-text-primary, #e5e7eb)' }}>
-											{entry.subjectType === 'USER' ? `用户 ${entry.subjectId}` : `角色 ${entry.subjectId}`}
+											{entry.subjectType === 'USER'
+											? (userNameMap[String(entry.subjectId)] || `用户 ${entry.subjectId}`)
+											: `角色 ${entry.subjectId}`}
 										</span>
 									</div>
 									<div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>

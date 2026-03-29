@@ -1634,6 +1634,10 @@ export type UserSearchItem = {
 
 export const analyticsApi = {
 	getCurrentUser: () => fetchJson<CurrentUser>("/analytics/api/user/current"),
+	getUser: (id: number | string) =>
+		fetchJson<{ id: number; email?: string; common_name?: string; first_name?: string; last_name?: string }>(
+			`/analytics/api/user/${encodeURIComponent(String(id))}`,
+		),
 	searchUsers: (query: string) =>
 		fetchJson<UserSearchItem[]>("/analytics/api/user/search?q=" + encodeURIComponent(query)),
 	getHealth: () => fetchJson<{ status?: string }>("/analytics/api/health"),
