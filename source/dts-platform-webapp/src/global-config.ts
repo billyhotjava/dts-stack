@@ -25,8 +25,6 @@ export type GlobalConfig = {
     enableSqlWorkbench: boolean;
     /** Allowed roles to sign in; empty means allow all authenticated users */
     allowedLoginRoles: string[];
-    /** Base URL for Admin APIs (used for Keycloak localization, etc.) */
-    adminApiBaseUrl: string;
     /** Local Koal middleware endpoints, used for PKI login */
     koalPkiEndpoints: string[];
 };
@@ -104,16 +102,6 @@ const resolveApiBaseUrl = () => {
 	return ensureLeadingSlash(normalized, "/api");
 };
 
-const resolveAdminApiBaseUrl = () => {
-    const raw = (import.meta.env.VITE_ADMIN_API_BASE_URL || "") as string;
-    const normalized = String(raw).trim();
-    if (!normalized) {
-        // Fallback to a conventional reverse-proxy path if configured (may not work in dev unless proxied)
-        return "/admin/api";
-    }
-    return normalized.replace(/\/+$/, "");
-};
-
 const resolveAllowedLoginRoles = (): string[] => {
     // Default: allow all authenticated users (empty list).
     // If you want to restrict, set VITE_ALLOWED_LOGIN_ROLES to a comma-separated list, e.g.
@@ -182,6 +170,5 @@ export const GLOBAL_CONFIG: GlobalConfig = {
     enablePortalMenuMgmt: String(import.meta.env.VITE_ENABLE_PORTAL_MENU_MGMT || "true").toLowerCase() === "true",
     enableSqlWorkbench: resolveEnableSqlWorkbench(),
     allowedLoginRoles: resolveAllowedLoginRoles(),
-    adminApiBaseUrl: resolveAdminApiBaseUrl(),
     koalPkiEndpoints: resolveKoalPkiEndpoints(),
 };

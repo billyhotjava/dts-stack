@@ -72,8 +72,7 @@ export function createPlatformServerProxy({
 			secure: false,
 			xfwd: true,
 		},
-		// Proxy Admin API under same-origin path to avoid browser CORS in dev.
-		// When VITE_ADMIN_API_BASE_URL = '/admin/api', frontend calls hit Vite and are forwarded here.
+		// Keep a legacy same-origin admin proxy for local debugging and backwards compatibility.
 		"/admin/api": {
 			target: adminProxyTarget,
 			changeOrigin: true,

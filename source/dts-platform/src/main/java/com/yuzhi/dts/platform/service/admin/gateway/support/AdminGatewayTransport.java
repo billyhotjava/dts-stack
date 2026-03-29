@@ -12,6 +12,7 @@ import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpMethod;
 import org.springframework.http.ResponseEntity;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 import org.springframework.util.StringUtils;
 import org.springframework.web.client.HttpStatusCodeException;
@@ -26,6 +27,7 @@ public class AdminGatewayTransport {
     private final DtsAdminProperties properties;
     private final AdminGatewayHeaders gatewayHeaders;
 
+    @Autowired
     public AdminGatewayTransport(RestTemplateBuilder builder, DtsAdminProperties properties) {
         this(builder, properties, new AdminGatewayHeaders(properties));
     }
