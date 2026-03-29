@@ -35,6 +35,36 @@ public class AnalyticsMetric implements Serializable {
     @Column(name = "metric_json", nullable = false, columnDefinition = "text")
     private String metricJson;
 
+    @Column(name = "base_table_id")
+    private Long baseTableId;
+
+    @Column(name = "aggregation", length = 30)
+    private String aggregation;
+
+    @Column(name = "expression_field", length = 255)
+    private String expressionField;
+
+    @Column(name = "filter_json", columnDefinition = "text")
+    private String filterJson;
+
+    @Column(name = "time_dimension", length = 255)
+    private String timeDimension;
+
+    @Column(name = "time_grain", length = 20)
+    private String timeGrain;
+
+    @Column(name = "display_name", length = 255)
+    private String displayName;
+
+    @Column(name = "unit", length = 30)
+    private String unit;
+
+    @Column(name = "tags", length = 500)
+    private String tags;
+
+    @Column(name = "visibility", length = 20)
+    private String visibility;
+
     @Column(name = "created_at", nullable = false)
     private Instant createdAt;
 
@@ -91,6 +121,86 @@ public class AnalyticsMetric implements Serializable {
 
     public Instant getUpdatedAt() {
         return updatedAt;
+    }
+
+    public Long getBaseTableId() {
+        return baseTableId;
+    }
+
+    public void setBaseTableId(Long baseTableId) {
+        this.baseTableId = baseTableId;
+    }
+
+    public String getAggregation() {
+        return aggregation;
+    }
+
+    public void setAggregation(String aggregation) {
+        this.aggregation = aggregation;
+    }
+
+    public String getExpressionField() {
+        return expressionField;
+    }
+
+    public void setExpressionField(String expressionField) {
+        this.expressionField = expressionField;
+    }
+
+    public String getFilterJson() {
+        return filterJson;
+    }
+
+    public void setFilterJson(String filterJson) {
+        this.filterJson = filterJson;
+    }
+
+    public String getTimeDimension() {
+        return timeDimension;
+    }
+
+    public void setTimeDimension(String timeDimension) {
+        this.timeDimension = timeDimension;
+    }
+
+    public String getTimeGrain() {
+        return timeGrain;
+    }
+
+    public void setTimeGrain(String timeGrain) {
+        this.timeGrain = timeGrain;
+    }
+
+    public String getDisplayName() {
+        return displayName;
+    }
+
+    public void setDisplayName(String displayName) {
+        this.displayName = displayName;
+    }
+
+    public String getUnit() {
+        return unit;
+    }
+
+    public void setUnit(String unit) {
+        this.unit = unit;
+    }
+
+    public String getTags() {
+        return tags;
+    }
+
+    public void setTags(String tags) {
+        this.tags = tags;
+    }
+
+    public String getVisibility() {
+        return visibility;
+    }
+
+    public void setVisibility(String visibility) {
+        this.visibility = visibility;
     }
 
     @PrePersist

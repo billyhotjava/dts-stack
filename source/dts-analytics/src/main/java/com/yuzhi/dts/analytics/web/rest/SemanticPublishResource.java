@@ -271,7 +271,7 @@ public class SemanticPublishResource {
 
         Optional<AnalyticsField> existing = fieldRepository.findByTableIdAndName(table.getId(), name);
         if (existing.isPresent()) {
-            AnalyticsField af = existing.get();
+            AnalyticsField af = existing.orElseThrow();
             af.setFieldRole(fieldRole);
             if (displayName != null) {
                 af.setDisplayName(displayName);
@@ -304,7 +304,7 @@ public class SemanticPublishResource {
     private void annotateFieldRole(Long tableId, String fieldName, String role, String aggregation, String displayName) {
         Optional<AnalyticsField> existing = fieldRepository.findByTableIdAndName(tableId, fieldName);
         if (existing.isPresent()) {
-            AnalyticsField af = existing.get();
+            AnalyticsField af = existing.orElseThrow();
             af.setFieldRole(role);
             if (aggregation != null) {
                 af.setDefaultAggregation(aggregation.toLowerCase());
