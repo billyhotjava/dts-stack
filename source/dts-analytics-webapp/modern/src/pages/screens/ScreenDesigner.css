@@ -34,6 +34,13 @@
 .screen-designer select,
 .screen-designer textarea {
   color: var(--color-text-primary);
+  background-color: var(--surface-card);
+  border-color: var(--border-default);
+}
+
+.screen-designer select option {
+  background-color: var(--surface-card);
+  color: var(--color-text-primary);
 }
 
 .screen-designer-body {
@@ -2520,7 +2527,13 @@
 [data-theme="dark"] .screen-designer .property-color-input,
 [data-theme="dark"] .screen-designer .property-number-input,
 [data-theme="dark"] .screen-designer .property-input--compact,
-[data-theme="dark"] .screen-designer .property-select .ant-select-selector {
+[data-theme="dark"] .screen-designer .property-select .ant-select-selector,
+.screen-designer .property-input,
+.screen-designer .property-btn-small,
+.screen-designer .property-color-input,
+.screen-designer .property-number-input,
+.screen-designer .property-input--compact,
+.screen-designer .property-select .ant-select-selector {
   background: rgba(255, 255, 255, 0.05);
   border-color: rgba(255, 255, 255, 0.1);
   color: var(--text-primary);
