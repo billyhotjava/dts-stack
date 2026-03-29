@@ -1,7 +1,7 @@
 package com.yuzhi.dts.platform.service.security;
 
-import com.yuzhi.dts.platform.service.directory.AdminDirectoryClient;
-import com.yuzhi.dts.platform.service.directory.AdminDirectoryClient.OrgNode;
+import com.yuzhi.dts.platform.service.admin.gateway.directory.AdminDirectoryGateway;
+import com.yuzhi.dts.platform.service.admin.gateway.directory.AdminDirectoryGateway.OrgNode;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.HashSet;
@@ -21,11 +21,11 @@ public class OrganizationVisibilityService {
 
     private static final Duration CACHE_TTL = Duration.ofMinutes(5);
 
-    private final AdminDirectoryClient adminDirectoryClient;
+    private final AdminDirectoryGateway adminDirectoryGateway;
     private final AtomicReference<Cache> cacheRef = new AtomicReference<>();
 
-    public OrganizationVisibilityService(AdminDirectoryClient adminDirectoryClient) {
-        this.adminDirectoryClient = adminDirectoryClient;
+    public OrganizationVisibilityService(AdminDirectoryGateway adminDirectoryGateway) {
+        this.adminDirectoryGateway = adminDirectoryGateway;
     }
 
     public boolean isRoot(String deptCode) {
@@ -64,7 +64,7 @@ public class OrganizationVisibilityService {
     }
 
     private Cache reloadCache(Instant now) {
-        List<OrgNode> tree = adminDirectoryClient.fetchOrgTree();
+        List<OrgNode> tree = adminDirectoryGateway.fetchOrgTree();
         RootSnapshot snapshot = collectRoots(tree);
         return new Cache(snapshot.rootKeys(), snapshot.defaultRootDept(), now.plus(CACHE_TTL));
     }

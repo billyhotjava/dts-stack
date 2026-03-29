@@ -1,9 +1,8 @@
 package com.yuzhi.dts.platform.web.rest;
 
-import com.yuzhi.dts.platform.service.directory.AdminDirectoryClient;
-import com.yuzhi.dts.platform.service.directory.AdminDirectoryClient.OrgNode;
-import com.yuzhi.dts.platform.service.directory.AdminUserDirectoryClient;
-import com.yuzhi.dts.platform.service.directory.AdminUserDirectoryClient.UserSummary;
+import com.yuzhi.dts.platform.service.admin.gateway.directory.AdminDirectoryGateway;
+import com.yuzhi.dts.platform.service.admin.gateway.directory.AdminDirectoryGateway.OrgNode;
+import com.yuzhi.dts.platform.service.admin.gateway.directory.AdminDirectoryGateway.UserSummary;
 import java.util.List;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -18,29 +17,27 @@ import org.springframework.web.bind.annotation.RestController;
 @RequestMapping("/api/directory")
 public class DirectoryResource {
 
-    private final AdminDirectoryClient adminDirectoryClient;
-    private final AdminUserDirectoryClient adminUserDirectoryClient;
+    private final AdminDirectoryGateway adminDirectoryGateway;
 
-    public DirectoryResource(AdminDirectoryClient adminDirectoryClient, AdminUserDirectoryClient adminUserDirectoryClient) {
-        this.adminDirectoryClient = adminDirectoryClient;
-        this.adminUserDirectoryClient = adminUserDirectoryClient;
+    public DirectoryResource(AdminDirectoryGateway adminDirectoryGateway) {
+        this.adminDirectoryGateway = adminDirectoryGateway;
     }
 
     @GetMapping("/orgs")
     public ApiResponse<List<OrgNode>> orgs() {
-        List<OrgNode> tree = adminDirectoryClient.fetchOrgTree();
+        List<OrgNode> tree = adminDirectoryGateway.fetchOrgTree();
         return ApiResponses.ok(tree);
     }
 
     @GetMapping("/users")
     public ApiResponse<List<UserSummary>> users(@RequestParam(name = "keyword", required = false) String keyword) {
-        List<UserSummary> list = adminUserDirectoryClient.searchUsers(keyword);
+        List<UserSummary> list = adminDirectoryGateway.searchUsers(keyword);
         return ApiResponses.ok(list);
     }
 
     @GetMapping("/roles")
-    public ApiResponse<List<AdminUserDirectoryClient.RoleSummary>> roles() {
-        List<AdminUserDirectoryClient.RoleSummary> roles = adminUserDirectoryClient.listRoles();
+    public ApiResponse<List<AdminDirectoryGateway.RoleSummary>> roles() {
+        List<AdminDirectoryGateway.RoleSummary> roles = adminDirectoryGateway.listRoles();
         return ApiResponses.ok(roles);
     }
 }

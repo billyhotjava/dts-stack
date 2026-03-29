@@ -2,8 +2,7 @@ package com.yuzhi.dts.platform.web.rest;
 
 import com.yuzhi.dts.platform.domain.catalog.CatalogDomain;
 import com.yuzhi.dts.platform.repository.catalog.CatalogDomainRepository;
-import com.yuzhi.dts.platform.service.directory.AdminDirectoryClient;
-import com.yuzhi.dts.platform.service.directory.AdminUserDirectoryClient;
+import com.yuzhi.dts.platform.service.admin.gateway.directory.AdminDirectoryGateway;
 import com.yuzhi.dts.platform.security.policy.DataLevel;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -22,17 +21,14 @@ import org.springframework.web.bind.annotation.RestController;
 @Transactional(readOnly = true)
 public class GovernanceIndicatorDependencyResource {
 
-    private final AdminDirectoryClient adminDirectoryClient;
-    private final AdminUserDirectoryClient adminUserDirectoryClient;
+    private final AdminDirectoryGateway adminDirectoryGateway;
     private final CatalogDomainRepository domainRepository;
 
     public GovernanceIndicatorDependencyResource(
-        AdminDirectoryClient adminDirectoryClient,
-        AdminUserDirectoryClient adminUserDirectoryClient,
+        AdminDirectoryGateway adminDirectoryGateway,
         CatalogDomainRepository domainRepository
     ) {
-        this.adminDirectoryClient = adminDirectoryClient;
-        this.adminUserDirectoryClient = adminUserDirectoryClient;
+        this.adminDirectoryGateway = adminDirectoryGateway;
         this.domainRepository = domainRepository;
     }
 
@@ -47,11 +43,11 @@ public class GovernanceIndicatorDependencyResource {
         @RequestParam(name = "includeUsers", defaultValue = "false") boolean includeUsers
     ) {
         Map<String, Object> payload = new LinkedHashMap<>();
-        payload.put("orgTree", adminDirectoryClient.fetchOrgTree());
+        payload.put("orgTree", adminDirectoryGateway.fetchOrgTree());
         payload.put("domainTree", buildDomainTree(domainRepository.findAll()));
 
         if (includeUsers || StringUtils.hasText(userKeyword)) {
-            payload.put("users", adminUserDirectoryClient.searchUsers(userKeyword));
+            payload.put("users", adminDirectoryGateway.searchUsers(userKeyword));
         } else {
             payload.put("users", List.of());
         }
