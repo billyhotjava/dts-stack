@@ -47,6 +47,65 @@
   color: rgba(255, 255, 255, 0.85) !important;
 }
 
+/* Force dark theme on all antd components inside screen designer */
+.screen-designer .ant-select-selector {
+  background-color: #2a2b36 !important;
+  border-color: rgba(255, 255, 255, 0.1) !important;
+  color: rgba(255, 255, 255, 0.85) !important;
+}
+
+.screen-designer .ant-select-dropdown {
+  background-color: #2a2b36 !important;
+}
+
+.screen-designer .ant-select-item {
+  color: rgba(255, 255, 255, 0.85) !important;
+}
+
+.screen-designer .ant-select-item-option-active,
+.screen-designer .ant-select-item-option-selected {
+  background-color: rgba(111, 179, 242, 0.12) !important;
+}
+
+.screen-designer .ant-select-selection-item {
+  color: rgba(255, 255, 255, 0.85) !important;
+}
+
+.screen-designer .ant-select-arrow {
+  color: rgba(255, 255, 255, 0.45) !important;
+}
+
+.screen-designer .ant-input,
+.screen-designer .ant-input-number,
+.screen-designer .ant-input-number-input {
+  background-color: #2a2b36 !important;
+  border-color: rgba(255, 255, 255, 0.1) !important;
+  color: rgba(255, 255, 255, 0.85) !important;
+}
+
+.screen-designer .ant-input-number-handler-wrap {
+  background-color: #2a2b36 !important;
+}
+
+.screen-designer .ant-btn-default {
+  background-color: #2a2b36 !important;
+  border-color: rgba(255, 255, 255, 0.1) !important;
+  color: rgba(255, 255, 255, 0.85) !important;
+}
+
+.screen-designer .ant-collapse-header {
+  color: rgba(255, 255, 255, 0.85) !important;
+}
+
+.screen-designer .ant-collapse-content {
+  background-color: transparent !important;
+  border-color: rgba(255, 255, 255, 0.06) !important;
+}
+
+.screen-designer .ant-checkbox-wrapper {
+  color: rgba(255, 255, 255, 0.85) !important;
+}
+
 .screen-designer-body {
   display: flex;
   flex: 1;
