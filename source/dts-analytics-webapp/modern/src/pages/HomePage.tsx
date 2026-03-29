@@ -3,7 +3,9 @@ import { Link } from "react-router";
 import { analyticsApi, type CurrentUser, type DashboardListItem, type CardListItem, type ScreenListItem } from "../api/analyticsApi";
 import { ErrorNotice } from "../components/ErrorNotice";
 import { PageContainer } from "../components/PageContainer/PageContainer";
-import { Spin, Button, Card } from "antd";
+import { Spin, Button, Card, Table, Tag } from "antd";
+import { PlusOutlined } from "@ant-design/icons";
+import type { ColumnsType } from "antd/es/table";
 import { getEffectiveLocale, t, type Locale } from "../i18n";
 type LoadState<T> =
 	| { state: "loading" }
@@ -126,15 +128,14 @@ export default function HomePage() {
 			.listScreens()
 			.then((value) => {
 				if (cancelled) return;
-				const published = value
-					.filter((item) => Number(item.publishedVersionNo || 0) > 0)
+				const sorted = value
 					.sort((a, b) => {
-						const ta = new Date(a.publishedAt || a.updatedAt || 0).getTime();
-						const tb = new Date(b.publishedAt || b.updatedAt || 0).getTime();
+						const ta = new Date(a.updatedAt || 0).getTime();
+						const tb = new Date(b.updatedAt || 0).getTime();
 						return tb - ta;
 					})
-					.slice(0, 5);
-				setScreens({ state: "loaded", value: published });
+					.slice(0, 10);
+				setScreens({ state: "loaded", value: sorted });
 			})
 			.catch((e) => {
 				if (cancelled) return;
@@ -154,14 +155,121 @@ export default function HomePage() {
 
 	const healthStatus = health.state === "loaded" ? health.value : "loading";
 
+	const fmtTime = (raw?: string | null) => {
+		if (!raw) return "-";
+		try {
+			const d = new Date(raw);
+			return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")} ${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
+		} catch { return raw; }
+	};
+
+	const screenColumns: ColumnsType<ScreenListItem> = [
+		{
+			title: t(locale, "common.name"),
+			dataIndex: "name",
+			key: "name",
+			ellipsis: true,
+			render: (name: string, record) => (
+				<Link to={`/screens/${record.id}/edit`} style={{ color: "var(--color-brand)", fontWeight: 500 }}>
+					{name || t(locale, "common.untitled")}
+				</Link>
+			),
+		},
+		{
+			title: t(locale, "common.description"),
+			dataIndex: "description",
+			key: "description",
+			ellipsis: true,
+			render: (desc: string | null) => <span style={{ color: "var(--color-text-secondary)" }}>{desc || "-"}</span>,
+		},
+		{
+			title: "尺寸",
+			key: "size",
+			width: 110,
+			render: (_, record) => <span style={{ color: "var(--color-text-secondary)", fontSize: 12 }}>{record.width ?? "-"} x {record.height ?? "-"}</span>,
+		},
+		{
+			title: "状态",
+			key: "status",
+			width: 90,
+			render: (_, record) => Number(record.publishedVersionNo || 0) > 0
+				? <Tag color="green">v{record.publishedVersionNo}</Tag>
+				: <Tag>草稿</Tag>,
+		},
+		{
+			title: t(locale, "common.updatedAt"),
+			dataIndex: "updatedAt",
+			key: "updatedAt",
+			width: 150,
+			render: (v: string) => <span style={{ color: "var(--color-text-secondary)", fontSize: 12 }}>{fmtTime(v)}</span>,
+		},
+		{
+			title: "",
+			key: "actions",
+			width: 120,
+			render: (_, record) => (
+				<div style={{ display: 'flex', gap: 8 }}>
+					<Link to={`/screens/${record.id}/edit`}>
+						<Button type="link" size="small">编辑</Button>
+					</Link>
+					<a
+						href={`/analytics/screens/${encodeURIComponent(String(record.id))}/preview`}
+						target="_blank"
+						rel="noreferrer"
+					>
+						<Button type="link" size="small">预览</Button>
+					</a>
+				</div>
+			),
+		},
+	];
+
 	return (
 		<PageContainer>
 			{/* Error Notices */}
 			{user.state === "error" && <ErrorNotice locale={locale} error={user.error} />}
 			{health.state === "error" && <ErrorNotice locale={locale} error={health.error} />}
 
-			{/* Recent Items — top section */}
-			<div className="grid grid-cols-3 gap-md">
+			{/* My Screens — full-width Table */}
+			<Card
+				title={t(locale, "home.myScreens")}
+				extra={
+					<div style={{ display: 'flex', gap: 8 }}>
+						<Link to="/screens">
+							<Button type="text" size="small" icon={<ArrowRightIcon />} iconPosition="end">
+								{t(locale, "common.viewAll")}
+							</Button>
+						</Link>
+						<Link to="/screens/new">
+							<Button type="primary" size="small" icon={<PlusOutlined />}>
+								{t(locale, "home.newScreen")}
+							</Button>
+						</Link>
+					</div>
+				}
+				styles={{ body: { padding: 0 } }}
+				style={{ marginBottom: 'var(--spacing-lg)' }}
+			>
+				{screens.state === "loading" && (
+					<div className="loading-state"><Spin /></div>
+				)}
+				{screens.state === "error" && (
+					<div className="error-state">{t(locale, "error")}</div>
+				)}
+				{screens.state === "loaded" && (
+					<Table<ScreenListItem>
+						columns={screenColumns}
+						dataSource={screens.value}
+						rowKey={(r) => String(r.id)}
+						size="small"
+						pagination={false}
+						locale={{ emptyText: t(locale, "home.noScreens") }}
+					/>
+				)}
+			</Card>
+
+			{/* Recent Dashboards & Questions — 2 columns */}
+			<div className="grid grid-cols-2 gap-md">
 				{/* Recent Dashboards */}
 				<Card
 					title={t(locale, "home.recentDashboards")}
@@ -174,9 +282,7 @@ export default function HomePage() {
 					}
 				>
 						{dashboards.state === "loading" && (
-							<div className="loading-state">
-								<Spin />
-							</div>
+							<div className="loading-state"><Spin /></div>
 						)}
 						{dashboards.state === "error" && (
 							<div className="error-state">{t(locale, "error")}</div>
@@ -185,7 +291,7 @@ export default function HomePage() {
 							<div className="empty-state-small">
 								<p>{t(locale, "common.empty")}</p>
 								<Link to="/dashboards/new">
-									<Button type="primary" size="small" icon={<PlusIcon />}>
+									<Button type="primary" size="small" icon={<PlusOutlined />}>
 										{t(locale, "dashboards.new")}
 									</Button>
 								</Link>
@@ -217,9 +323,7 @@ export default function HomePage() {
 					}
 				>
 						{questions.state === "loading" && (
-							<div className="loading-state">
-								<Spin />
-							</div>
+							<div className="loading-state"><Spin /></div>
 						)}
 						{questions.state === "error" && (
 							<div className="error-state">{t(locale, "error")}</div>
@@ -228,7 +332,7 @@ export default function HomePage() {
 							<div className="empty-state-small">
 								<p>{t(locale, "common.empty")}</p>
 								<Link to="/questions/new">
-									<Button type="primary" size="small" icon={<PlusIcon />}>
+									<Button type="primary" size="small" icon={<PlusOutlined />}>
 										{t(locale, "questions.new")}
 									</Button>
 								</Link>
@@ -242,57 +346,6 @@ export default function HomePage() {
 											<QuestionIcon />
 											<span>{q.name || t(locale, "common.untitled")}</span>
 										</Link>
-									</li>
-								))}
-							</ul>
-						)}
-				</Card>
-
-				{/* Published Screens */}
-				<Card
-					title={t(locale, "home.publishedScreens")}
-					extra={
-						<Link to="/screens">
-							<Button type="text" size="small" icon={<ArrowRightIcon />} iconPosition="end">
-								{t(locale, "common.viewAll")}
-							</Button>
-						</Link>
-					}
-				>
-						{screens.state === "loading" && (
-							<div className="loading-state">
-								<Spin />
-							</div>
-						)}
-						{screens.state === "error" && (
-							<div className="error-state">{t(locale, "error")}</div>
-						)}
-						{screens.state === "loaded" && screens.value.length === 0 && (
-							<div className="empty-state-small">
-								<p>{t(locale, "home.noPublishedScreens")}</p>
-								<Link to="/screens">
-									<Button type="primary" size="small" icon={<PlusIcon />}>
-										{t(locale, "home.openScreenCenter")}
-									</Button>
-								</Link>
-							</div>
-						)}
-						{screens.state === "loaded" && screens.value.length > 0 && (
-							<ul className="item-list">
-								{screens.value.map((s) => (
-									<li key={s.id}>
-										<div className="item-list__row">
-											<a
-												href={`/analytics/screens/${encodeURIComponent(String(s.id))}/preview`}
-												className="item-list__link"
-												target="_blank"
-												rel="noreferrer"
-											>
-												<ScreenIcon />
-												<span>{s.name || t(locale, "common.untitled")}</span>
-											</a>
-											<div className="item-list__meta">v{s.publishedVersionNo || "-"}</div>
-										</div>
 									</li>
 								))}
 							</ul>
