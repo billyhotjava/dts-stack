@@ -176,6 +176,17 @@
 
 **统计**: READY=0, IN_PROGRESS=0, DONE=10, BLOCKED=0
 
+## Sprint-26: 大屏权限系统 (202603)
+**状态**: DONE
+
+| Feature | Task 数 | 状态 |
+|---------|---------|------|
+| F1-后端权限模型重写 | 2 | DONE |
+| F2-数据迁移 | 1 | DONE |
+| F3-前端权限UI | 4 | DONE |
+
+**统计**: READY=0, IN_PROGRESS=0, DONE=7, BLOCKED=0
+
 ## Sprint-26: Platform统一Admin Gateway (202603)
 **状态**: DONE
 

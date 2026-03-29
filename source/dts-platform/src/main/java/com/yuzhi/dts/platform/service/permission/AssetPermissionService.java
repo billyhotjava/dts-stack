@@ -86,7 +86,7 @@ public class AssetPermissionService {
 
         // 4. Department-level: check ownership
         Optional<AssetOwnership> ownership = ownershipRepository.findByAssetTypeAndAssetId(assetType, assetId);
-        if (ownership.isPresent() && deptCode != null && deptCode.equalsIgnoreCase(ownership.get().getOwnerDeptCode())) {
+        if (ownership.isPresent() && deptCode != null && deptCode.equalsIgnoreCase(ownership.orElseThrow().getOwnerDeptCode())) {
             if (hasAny(roles, DEPT_MANAGE_ROLES)) {
                 return PermissionResult.allowed("MANAGE", "dept_ownership");
             }

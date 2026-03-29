@@ -70,7 +70,7 @@ public class AssetGrantResource {
         Optional<AssetOwnership> ownership = ownershipRepository.findByAssetTypeAndAssetId(
             request.assetType(), request.assetId()
         );
-        if (ownership.isPresent() && isCrossDepartment(ownership.get())) {
+        if (ownership.isPresent() && isCrossDepartment(ownership.orElseThrow())) {
             if (!SecurityUtils.hasCurrentUserAnyOfAuthorities(INST_LEVEL_ROLES.toArray(new String[0]))) {
                 return ResponseEntity.status(403).body(
                     Map.of("error", "Cross-department grants require institute-level privileges")
