@@ -16,5 +16,6 @@ export { GlobalVariablePanel } from './GlobalVariablePanel';
 export { ScreenAclPanel } from './ScreenAclPanel';
 export { ScreenAuditPanel } from './ScreenAuditPanel';
 export { ScreenSharePolicyPanel } from './ScreenSharePolicyPanel';
+export { ScreenSharePanel } from './ScreenSharePanel';
 export { ScreenHealthPanel } from './ScreenHealthPanel';
 export { InteractionDebugPanel } from './InteractionDebugPanel';

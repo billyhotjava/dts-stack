@@ -1626,8 +1626,16 @@ function buildProjectCockpitQuery(params?: ProjectCockpitFilterQuery): string {
 	return query.length > 0 ? `?${query}` : "";
 }
 
+export type UserSearchItem = {
+	id: number | string;
+	email?: string;
+	common_name?: string;
+};
+
 export const analyticsApi = {
 	getCurrentUser: () => fetchJson<CurrentUser>("/analytics/api/user/current"),
+	searchUsers: (query: string) =>
+		fetchJson<UserSearchItem[]>("/analytics/api/user/search?q=" + encodeURIComponent(query)),
 	getHealth: () => fetchJson<{ status?: string }>("/analytics/api/health"),
 	getProjectCockpitSettings: () =>
 		fetchJson<ProjectCockpitSettingsResponse>("/analytics/api/project-cockpit/settings"),

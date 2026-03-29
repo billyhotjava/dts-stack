@@ -21,6 +21,7 @@ import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.transaction.annotation.Transactional;
@@ -66,6 +67,43 @@ public class UserResource {
         }
         String locale = MetabaseLocale.resolve(request);
         return ResponseEntity.ok(userRepository.findAll().stream().map(u -> toMetabaseUser(u, groupService, locale)).toList());
+    }
+
+    /**
+     * Lightweight user search for sharing — accessible to any authenticated user.
+     * Returns only id, email and common_name for each active user matching the query.
+     */
+    @GetMapping(path = "/search", produces = MediaType.APPLICATION_JSON_VALUE)
+    @Transactional(readOnly = true)
+    public ResponseEntity<?> search(@RequestParam(name = "q", defaultValue = "") String query,
+                                    HttpServletRequest request) {
+        Optional<AnalyticsUser> caller = sessionService.resolveUser(request);
+        if (caller.isEmpty()) {
+            return ResponseEntity.status(401).contentType(MediaType.TEXT_PLAIN).body("Unauthenticated");
+        }
+        String q = query == null ? "" : query.trim().toLowerCase(java.util.Locale.ROOT);
+        List<Map<String, Object>> results = userRepository.findAll().stream()
+                .filter(AnalyticsUser::isActive)
+                .filter(u -> {
+                    if (q.isEmpty()) return true;
+                    String email = u.getEmail() == null ? "" : u.getEmail().toLowerCase(java.util.Locale.ROOT);
+                    String first = u.getFirstName() == null ? "" : u.getFirstName().toLowerCase(java.util.Locale.ROOT);
+                    String last = u.getLastName() == null ? "" : u.getLastName().toLowerCase(java.util.Locale.ROOT);
+                    String common = (first + " " + last).trim();
+                    return email.contains(q) || first.contains(q) || last.contains(q) || common.contains(q);
+                })
+                .limit(50)
+                .map(u -> {
+                    Map<String, Object> item = new LinkedHashMap<>();
+                    item.put("id", u.getId());
+                    item.put("email", u.getEmail());
+                    item.put("common_name", "%s %s".formatted(
+                            u.getFirstName() == null ? "" : u.getFirstName(),
+                            u.getLastName() == null ? "" : u.getLastName()).trim());
+                    return item;
+                })
+                .toList();
+        return ResponseEntity.ok(results);
     }
 
     @GetMapping(path = "/{id}", produces = MediaType.APPLICATION_JSON_VALUE)

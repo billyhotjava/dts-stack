@@ -16,6 +16,7 @@ import { ScreenCompliancePanel } from './ScreenCompliancePanel';
 import { ScreenAclPanel } from './ScreenAclPanel';
 import { ScreenAuditPanel } from './ScreenAuditPanel';
 import { ScreenSharePolicyPanel } from './ScreenSharePolicyPanel';
+import { ScreenSharePanel } from './ScreenSharePanel';
 import { ScreenHealthPanel } from './ScreenHealthPanel';
 import { InteractionDebugPanel } from './InteractionDebugPanel';
 import { ScreenCollaborationPanel } from './ScreenCollaborationPanel';
@@ -220,6 +221,7 @@ export function ScreenHeader({
     const [showAclPanel, setShowAclPanel] = useState(false);
     const [showAuditPanel, setShowAuditPanel] = useState(false);
     const [showSharePolicyPanel, setShowSharePolicyPanel] = useState(false);
+    const [showSharePanel, setShowSharePanel] = useState(false);
     const [showInteractionDebugPanel, setShowInteractionDebugPanel] = useState(false);
     const [showCollaborationPanel, setShowCollaborationPanel] = useState(false);
     const [showEditLockPanel, setShowEditLockPanel] = useState(false);
@@ -2189,6 +2191,7 @@ export function ScreenHeader({
                                 <button type="button" className="flex items-center gap-1.5 px-4 py-2 border border-[var(--color-border)] rounded-md bg-[var(--color-surface)] text-[var(--color-text-primary)] text-[13px] font-medium cursor-pointer transition-all duration-200 whitespace-nowrap shrink-0 w-full justify-start py-[7px] px-2.5 hover:border-[var(--color-primary)] hover:bg-[var(--color-primary-light)] disabled:opacity-50 disabled:cursor-not-allowed" onClick={() => executeMenuAction(() => setShowCachePanel(true))} title="缓存观测面板">缓存观测</button>
                                 <button type="button" className="flex items-center gap-1.5 px-4 py-2 border border-[var(--color-border)] rounded-md bg-[var(--color-surface)] text-[var(--color-text-primary)] text-[13px] font-medium cursor-pointer transition-all duration-200 whitespace-nowrap shrink-0 w-full justify-start py-[7px] px-2.5 hover:border-[var(--color-primary)] hover:bg-[var(--color-primary-light)] disabled:opacity-50 disabled:cursor-not-allowed" onClick={() => executeMenuAction(() => { if (id && permissions.canManage) setShowAclPanel(true); })} disabled={!id || !permissions.canManage} title="权限矩阵(ACL)">权限(ACL)</button>
                                 <button type="button" className="flex items-center gap-1.5 px-4 py-2 border border-[var(--color-border)] rounded-md bg-[var(--color-surface)] text-[var(--color-text-primary)] text-[13px] font-medium cursor-pointer transition-all duration-200 whitespace-nowrap shrink-0 w-full justify-start py-[7px] px-2.5 hover:border-[var(--color-primary)] hover:bg-[var(--color-primary-light)] disabled:opacity-50 disabled:cursor-not-allowed" onClick={() => executeMenuAction(() => { if (id && permissions.canManage) setShowAuditPanel(true); })} disabled={!id || !permissions.canManage} title="审计记录">审计</button>
+                                <button type="button" className="flex items-center gap-1.5 px-4 py-2 border border-[var(--color-border)] rounded-md bg-[var(--color-surface)] text-[var(--color-text-primary)] text-[13px] font-medium cursor-pointer transition-all duration-200 whitespace-nowrap shrink-0 w-full justify-start py-[7px] px-2.5 hover:border-[var(--color-primary)] hover:bg-[var(--color-primary-light)] disabled:opacity-50 disabled:cursor-not-allowed" onClick={() => executeMenuAction(() => { if (id && permissions.canManage) setShowSharePanel(true); })} disabled={!id || !permissions.canManage} title="分享大屏给其他用户">分享</button>
                                 <button type="button" className="flex items-center gap-1.5 px-4 py-2 border border-[var(--color-border)] rounded-md bg-[var(--color-surface)] text-[var(--color-text-primary)] text-[13px] font-medium cursor-pointer transition-all duration-200 whitespace-nowrap shrink-0 w-full justify-start py-[7px] px-2.5 hover:border-[var(--color-primary)] hover:bg-[var(--color-primary-light)] disabled:opacity-50 disabled:cursor-not-allowed" onClick={() => executeMenuAction(() => { if (id && permissions.canPublish) setShowSharePolicyPanel(true); })} disabled={!id || !permissions.canPublish} title="分享策略配置">分享策略</button>
                                 <button type="button" className="flex items-center gap-1.5 px-4 py-2 border border-[var(--color-border)] rounded-md bg-[var(--color-surface)] text-[var(--color-text-primary)] text-[13px] font-medium cursor-pointer transition-all duration-200 whitespace-nowrap shrink-0 w-full justify-start py-[7px] px-2.5 hover:border-[var(--color-primary)] hover:bg-[var(--color-primary-light)] disabled:opacity-50 disabled:cursor-not-allowed" onClick={() => executeMenuAction(handleShare)} disabled={!id || !permissions.canPublish || isSharing} title="生成分享链接">
                                     {isSharing ? '分享中...' : '分享链接'}
@@ -2621,6 +2624,13 @@ export function ScreenHeader({
                 open={showSharePolicyPanel}
                 screenId={id}
                 onClose={() => setShowSharePolicyPanel(false)}
+            />
+
+            <ScreenSharePanel
+                open={showSharePanel}
+                screenId={id}
+                onClose={() => setShowSharePanel(false)}
+                isOwner={permissions.isOwner}
             />
 
             <Modal
