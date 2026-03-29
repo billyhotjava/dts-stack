@@ -7,12 +7,9 @@ import static org.mockito.Mockito.when;
 
 import com.yuzhi.dts.platform.service.admin.gateway.audit.AdminAuditGateway;
 import com.yuzhi.dts.platform.service.audit.AuditService;
-import jakarta.servlet.http.HttpServletResponse;
-import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.util.Map;
 import org.junit.jupiter.api.Test;
-import org.springframework.mock.web.DelegatingServletOutputStream;
 import org.springframework.mock.web.MockHttpServletResponse;
 
 class SecurityAuditLogProxyResourceTest {

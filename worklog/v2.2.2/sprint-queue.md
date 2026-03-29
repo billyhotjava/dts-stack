@@ -176,10 +176,10 @@
 **统计**: READY=0, IN_PROGRESS=0, DONE=10, BLOCKED=0
 
 ## Sprint-26: Platform统一Admin Gateway (202603)
-**状态**: IN_PROGRESS
+**状态**: DONE
 
 | Feature | Task 数 | 状态 |
 |---------|---------|------|
-| F1-Platform统一Admin Gateway | 5 | IN_PROGRESS |
+| F1-Platform统一Admin Gateway | 5 | DONE |
 
-**统计**: READY=3, IN_PROGRESS=1, DONE=1, BLOCKED=0
+**统计**: READY=0, IN_PROGRESS=0, DONE=5, BLOCKED=0

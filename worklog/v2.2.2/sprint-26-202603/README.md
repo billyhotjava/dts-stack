@@ -1,7 +1,7 @@
 # Sprint-26: Platform统一Admin Gateway
 
 **时间**: 2026-03
-**状态**: IN_PROGRESS
+**状态**: DONE
 **目标**: 将 `dts-platform` 与 `dts-platform-webapp` 对 `dts-admin` 的调用统一收口到 `dts-platform` 后端 gateway 机制中
 
 ## 背景
@@ -18,12 +18,12 @@
 
 | ID | Feature | Task 数 | 状态 |
 |----|---------|---------|------|
-| F1 | Platform统一Admin Gateway | 5 | IN_PROGRESS |
+| F1 | Platform统一Admin Gateway | 5 | DONE |
 
 ## 完成标准
 
-- [ ] `dts-platform` 建立统一 admin gateway 基础层
-- [ ] 当前所有后端 admin 直连调用迁入 gateway
-- [ ] `dts-platform-webapp` 不再直接读取 `adminApiBaseUrl`
-- [ ] 数据入湖任务“归属部门”通过 `dts-platform` 目录接口获取
-- [ ] sprint / feature / task / it 文档完整可追踪
+- [x] `dts-platform` 建立统一 admin gateway 基础层
+- [x] 当前所有后端 admin 直连调用迁入 gateway
+- [x] `dts-platform-webapp` 不再直接读取 `adminApiBaseUrl`
+- [x] 数据入湖任务“归属部门”通过 `dts-platform` 目录接口获取
+- [x] sprint / feature / task / it 文档完整可追踪

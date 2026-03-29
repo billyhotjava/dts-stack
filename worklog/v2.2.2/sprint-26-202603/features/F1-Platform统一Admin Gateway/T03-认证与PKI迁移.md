@@ -1,7 +1,7 @@
 # T03: 认证与PKI迁移
 
 **优先级**: P0
-**状态**: READY
+**状态**: DONE
 **依赖**: T01
 
 ## 目标
@@ -23,9 +23,9 @@
 
 ## 验证
 
-- [ ] `cd source/dts-platform && ./mvnw -q -Dtest=KeycloakAuthResourceTest,AdminAuthGatewayTest test`
+- [x] `cd source/dts-platform && ./mvnw -q -Dtest=KeycloakAuthResourceTest,AdminAuthGatewayTest test`
 
 ## 完成标准
 
-- [ ] 前端不再直接以 `adminApiBaseUrl` 发起 auth / pki 请求
-- [ ] 平台认证行为与现有页面兼容
+- [x] 前端不再直接以 `adminApiBaseUrl` 发起 auth / pki 请求
+- [x] 平台认证行为与现有页面兼容

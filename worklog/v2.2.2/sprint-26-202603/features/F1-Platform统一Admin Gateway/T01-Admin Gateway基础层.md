@@ -22,9 +22,9 @@
 
 ## 验证
 
-- [ ] `cd source/dts-platform && ./mvnw -q -Dtest=AdminGatewayTransportTest test`
+- [x] `cd source/dts-platform && ./mvnw -q -Dtest=AdminGatewayTransportTest test`
 
 ## 完成标准
 
-- [ ] 可被各 domain gateway 复用
-- [ ] 有 transport 层失败与成功路径测试
+- [x] 可被各 domain gateway 复用
+- [x] 有 transport 层失败与成功路径测试

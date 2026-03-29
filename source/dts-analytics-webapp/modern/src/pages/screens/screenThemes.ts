@@ -510,7 +510,7 @@ function patchComponentConfig(
         case 'table':
             patchConfigValue(next, 'headerColor', tokens.textPrimary, mode);
             patchConfigValue(next, 'bodyColor', tokens.textSecondary, mode);
-            patchConfigValue(next, 'headerBackground', '#dbe9f6', mode);
+            patchConfigValue(next, 'headerBackground', withColorAlpha(tokens.textPrimary, 0.08), mode);
             patchConfigValue(next, 'bodyBackground', 'transparent', mode);
             patchConfigValue(next, 'oddRowBackground', 'transparent', mode);
             patchConfigValue(next, 'evenRowBackground', withColorAlpha(tokens.textPrimary, 0.04), mode);

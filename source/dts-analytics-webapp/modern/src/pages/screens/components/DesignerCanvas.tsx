@@ -8,7 +8,7 @@ import { buildComponentMap, isComponentEffectivelyVisible } from '../componentHi
 import { applyChartPresetDefaults, isChartComponentType } from '../chartPresets';
 import { safeCssBackgroundUrl } from '../sanitize';
 import { applyThemeCssVariables } from '../themes/screenCssVariables';
-import { resolveScreenTheme } from '../screenThemes';
+import { resolveScreenTheme, getThemeTokens, applyThemeToComponents } from '../screenThemes';
 
 type ContextMenuState = {
     x: number;
@@ -117,6 +117,13 @@ export function DesignerCanvas() {
                     )
                     : Math.max(0, dropY);
 
+                const rawConfig = isChartComponentType(item.type)
+                    ? applyChartPresetDefaults(
+                        { ...item.defaultConfig },
+                        item.defaultWidth <= 360 || item.defaultHeight <= 260 ? 'compact' : 'business',
+                    )
+                    : { ...item.defaultConfig };
+
                 const newComponent: ScreenComponent = {
                     id: generateId(),
                     type: item.type,
@@ -128,16 +135,14 @@ export function DesignerCanvas() {
                     zIndex: currentComponents.length + 1,
                     locked: false,
                     visible: true,
-                    config: isChartComponentType(item.type)
-                        ? applyChartPresetDefaults(
-                            { ...item.defaultConfig },
-                            item.defaultWidth <= 360 || item.defaultHeight <= 260 ? 'compact' : 'business',
-                        )
-                        : { ...item.defaultConfig },
+                    config: rawConfig,
                     parentContainerId: targetContainer?.id,
                 };
 
-                addComponent(newComponent);
+                // Apply current theme colors to the new component so text/lines
+                // are visible on the dark canvas (e.g., white text, light axes)
+                const [themed] = applyThemeToComponents([newComponent], config.theme, 'safe');
+                addComponent(themed);
             }
         },
         collect: (monitor) => ({
