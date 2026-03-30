@@ -301,12 +301,24 @@ public class PortalMenuService {
         if (!StringUtils.hasText(segment)) {
             return parentPath == null ? "" : parentPath;
         }
+        // Segment starting with "/" is already absolute — return as-is.
+        if (segment.startsWith("/")) {
+            return segment;
+        }
         if (!StringUtils.hasText(parentPath)) {
             return "/" + segment;
         }
         String normalizedParent = parentPath.endsWith("/") ? parentPath.substring(0, parentPath.length() - 1) : parentPath;
         if (segment.isEmpty()) {
             return normalizedParent;
+        }
+        // DB stores full paths (e.g., "bi/home" for a child of "bi").
+        // If segment already starts with the parent's basename, it's a full path — just prepend "/".
+        String parentBasename = normalizedParent.contains("/")
+            ? normalizedParent.substring(normalizedParent.lastIndexOf('/') + 1)
+            : normalizedParent.replace("/", "");
+        if (StringUtils.hasText(parentBasename) && segment.startsWith(parentBasename + "/")) {
+            return "/" + segment;
         }
         return normalizedParent + "/" + segment;
     }
