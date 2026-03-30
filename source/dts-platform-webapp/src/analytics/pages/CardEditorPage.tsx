@@ -10,11 +10,11 @@ import {
 } from "../api/analyticsApi";
 import { resolveAnalyticsErrorCodeMessage } from "../api/errorCodeMessages";
 import { ChartRenderer, type VisualizationType } from "../components/charts";
-import { EmptyState } from "../components/EmptyState";
+import { EmptyState } from "@/components/empty-state";
 import { ErrorNotice } from "../components/ErrorNotice";
-import { PageContainer, PageHeader, Breadcrumb } from "../components/PageContainer/PageContainer";
+import { PageHeader } from "@/components/page-header";
 import { NotebookEditor } from "../components/query/NotebookEditor";
-import { Input, Spin, Button, Card, Tag, Select } from "antd";
+import { Input, Spin, Button, Card, Tag, Select, Breadcrumb } from "antd";
 import { getEffectiveLocale, t, type Locale } from "../i18n";
 const VISUALIZATION_TYPES: { value: VisualizationType; label: string }[] = [
 	{ value: "table", label: "Table" }, // Will translate in render
@@ -305,15 +305,13 @@ export default function CardEditorPage() {
 	];
 
 	return (
-		<PageContainer>
+		<div className="space-y-4">
+			<Breadcrumb items={[
+				{ title: <Link to="/bi/questions">{t(locale, "nav.questions")}</Link> },
+				{ title: cardId ? `#${cardId}` : t(locale, "questions.unsaved") },
+			]} />
 			<PageHeader
 				title={cardId ? `${t(locale, "questions.edit")} #${cardId}` : t(locale, "questions.new")}
-				breadcrumbs={
-					<Breadcrumb items={[
-						{ label: t(locale, "nav.questions"), href: "/bi/questions" },
-						{ label: cardId ? `#${cardId}` : t(locale, "questions.unsaved") }
-					]} />
-				}
 			/>
 
 			{card?.state === "error" && <ErrorNotice locale={locale} error={card.error} />}
@@ -325,7 +323,7 @@ export default function CardEditorPage() {
 				<Card style={{ marginBottom: "var(--spacing-lg)" }}>
 						<EmptyState
 							title={t(locale, "questions.noDb")}
-							action={
+							actions={
 								<Link to="/bi/data/new">
 									<Button type="primary">{t(locale, "data.add")}</Button>
 								</Link>
@@ -611,6 +609,6 @@ export default function CardEditorPage() {
 					}
 				}
 			`}</style>
-		</PageContainer>
+		</div>
 	);
 }

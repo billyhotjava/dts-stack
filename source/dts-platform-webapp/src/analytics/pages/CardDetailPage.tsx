@@ -2,9 +2,9 @@ import { Link, useParams } from "react-router";
 import { useEffect, useMemo, useState } from "react";
 import { analyticsApi, type CardDetail, type CardQueryResponse, type ExplainabilityResponse } from "../api/analyticsApi";
 import { ChartRenderer, type VisualizationType, type VisualizationSettings } from "../components/charts";
-import { PageContainer, PageHeader } from "../components/PageContainer/PageContainer";
+import { PageHeader } from "@/components/page-header";
 import { ErrorNotice } from "../components/ErrorNotice";
-import { Input, Spin, Button, Card, Collapse, Tag } from "antd";
+import { Input, Spin, Button, Card, Collapse, Tag, Breadcrumb } from "antd";
 import { getEffectiveLocale, t, type Locale } from "../i18n";
 import { writeTextToClipboard } from "../hooks/clipboard";
 import { resolveRouteHref } from "../helpers/resolveAnalyticsUrl";
@@ -103,7 +103,7 @@ export default function CardDetailPage() {
 	};
 
 	return (
-		<PageContainer>
+		<div className="space-y-4">
 			{state.state === "loading" && (
 				<div className="loading-container">
 					<Spin size="large" />
@@ -113,7 +113,7 @@ export default function CardDetailPage() {
 			{state.state === "loaded" && (
 				<>
 					<PageHeader
-						title={state.value.name ?? "-"}
+						title={String(state.value.name ?? "-")}
 						actions={
 							<>
 								<Button
@@ -270,6 +270,6 @@ export default function CardDetailPage() {
 					</Card>
 				</>
 			)}
-		</PageContainer>
+		</div>
 	);
 }

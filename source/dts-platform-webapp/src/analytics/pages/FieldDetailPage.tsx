@@ -1,11 +1,11 @@
 // @ts-nocheck — migrated from analytics-webapp, pending unused-import cleanup
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { Link, useParams } from "react-router";
 import { analyticsApi, type FieldDetail, type FieldValuesResponse } from "../api/analyticsApi";
-import { PageContainer, PageHeader, Breadcrumb } from "../components/PageContainer/PageContainer";
-import { EmptyState } from "../components/EmptyState";
+import { PageHeader } from "@/components/page-header";
+import { EmptyState } from "@/components/empty-state";
 import { ErrorNotice } from "../components/ErrorNotice";
-import { Spin, Card, Tag } from "antd";
+import { Spin, Card, Tag, Breadcrumb } from "antd";
 import { getEffectiveLocale, t, type Locale } from "../i18n";
 type LoadState<T> =
 	| { state: "loading" }
@@ -63,22 +63,22 @@ export default function FieldDetailPage() {
 		return f.display_name || f.name || `${t(locale, "field.title")} #${String(f.id)}`;
 	})();
 
-	const breadcrumbItems: { label: string; href?: string }[] = [
-		{ label: t(locale, "data.title"), href: "/bi/data" },
+	const breadcrumbItems: { title: ReactNode }[] = [
+		{ title: <Link to="/bi/data">{t(locale, "data.title")}</Link> },
 	];
 	if (dbId) {
-		breadcrumbItems.push({ label: `${t(locale, "data.db")} #${dbId}`, href: `/bi/data/${encodeURIComponent(String(dbId))}` });
+		breadcrumbItems.push({ title: <Link to={`/bi/data/${encodeURIComponent(String(dbId))}`}>{`${t(locale, "data.db")} #${dbId}`}</Link> });
 	}
 	if (dbId && tableId) {
-		breadcrumbItems.push({ label: `${t(locale, "builder.table")} #${tableId}`, href: `/bi/data/${encodeURIComponent(String(dbId))}/tables/${encodeURIComponent(String(tableId))}` });
+		breadcrumbItems.push({ title: <Link to={`/bi/data/${encodeURIComponent(String(dbId))}/tables/${encodeURIComponent(String(tableId))}`}>{`${t(locale, "builder.table")} #${tableId}`}</Link> });
 	}
-	breadcrumbItems.push({ label: `Field #${fieldId}` });
+	breadcrumbItems.push({ title: `Field #${fieldId}` });
 
 	return (
-		<PageContainer>
+		<div className="space-y-4">
+			<Breadcrumb items={breadcrumbItems} />
 			<PageHeader
 				title={title}
-				breadcrumbs={<Breadcrumb items={breadcrumbItems} />}
 			/>
 
 			{fieldState.state === "loading" && (
@@ -198,6 +198,6 @@ export default function FieldDetailPage() {
 					font-size: var(--font-size-sm);
 				}
 			`}</style>
-		</PageContainer>
+		</div>
 	);
 }

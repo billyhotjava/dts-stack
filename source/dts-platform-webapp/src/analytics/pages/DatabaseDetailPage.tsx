@@ -1,10 +1,10 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link, useParams } from "react-router";
 import { analyticsApi, type DatabaseMetadataResponse } from "../api/analyticsApi";
-import { PageContainer, PageHeader, Breadcrumb } from "../components/PageContainer/PageContainer";
-import { EmptyState } from "../components/EmptyState";
+import { PageHeader } from "@/components/page-header";
+import { EmptyState } from "@/components/empty-state";
 import { ErrorNotice } from "../components/ErrorNotice";
-import { Input, Spin, Button, Card, Collapse, Tag } from "antd";
+import { Input, Spin, Button, Card, Collapse, Tag, Breadcrumb } from "antd";
 import { getEffectiveLocale, t, type Locale } from "../i18n";
 type LoadState<T> =
 	| { state: "loading" }
@@ -113,15 +113,13 @@ export default function DatabaseDetailPage() {
 	}
 
 	return (
-		<PageContainer>
+		<div className="space-y-4">
+			<Breadcrumb items={[
+				{ title: <Link to="/bi/data">{t(locale, "data.title")}</Link> },
+				{ title: `Database #${dbId}` },
+			]} />
 			<PageHeader
 				title={`${t(locale, "data.db")} #${dbId}`}
-				breadcrumbs={
-					<Breadcrumb items={[
-						{ label: t(locale, "data.title"), href: "/bi/data" },
-						{ label: `Database #${dbId}` }
-					]} />
-				}
 				actions={
 					<Button
 						type="default"
@@ -170,7 +168,7 @@ export default function DatabaseDetailPage() {
 				<EmptyState
 					title={t(locale, "common.empty")}
 					description={t(locale, "data.metaEmpty")}
-					action={
+					actions={
 						<Button type="primary" icon={<SyncIcon />} loading={syncing} onClick={syncSchema}>
 							{syncing ? t(locale, "data.syncing") : t(locale, "data.sync")}
 						</Button>
@@ -291,6 +289,6 @@ export default function DatabaseDetailPage() {
 					font-size: var(--font-size-sm);
 				}
 			`}</style>
-		</PageContainer>
+		</div>
 	);
 }

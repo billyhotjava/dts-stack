@@ -1,10 +1,10 @@
 import { Link, useParams } from "react-router";
 import { useEffect, useMemo, useState } from "react";
 import { analyticsApi, type CollectionItem } from "../api/analyticsApi";
-import { PageContainer, PageHeader, Breadcrumb } from "../components/PageContainer/PageContainer";
-import { EmptyState } from "../components/EmptyState";
+import { PageHeader } from "@/components/page-header";
+import { EmptyState } from "@/components/empty-state";
 import { ErrorNotice } from "../components/ErrorNotice";
-import { Spin, Card, Tag } from "antd";
+import { Spin, Card, Tag, Breadcrumb } from "antd";
 import { getEffectiveLocale, t, type Locale } from "../i18n";
 type LoadState<T> =
 	| { state: "loading" }
@@ -52,15 +52,13 @@ export default function CollectionItemsPage() {
 	}, [id]);
 
 	return (
-		<PageContainer>
+		<div className="space-y-4">
+			<Breadcrumb items={[
+				{ title: <Link to="/bi/collections">{t(locale, "collections.title")}</Link> },
+				{ title: id === "root" ? t(locale, "collections.rootName") : (id ?? "root") },
+			]} />
 			<PageHeader
 				title={t(locale, "collections.itemsTitle")}
-				breadcrumbs={
-					<Breadcrumb items={[
-						{ label: t(locale, "collections.title"), href: "/bi/collections" },
-						{ label: id === "root" ? t(locale, "collections.rootName") : (id ?? "root") }
-					]} />
-				}
 			/>
 
 			{state.state === "loading" && (
@@ -154,6 +152,6 @@ export default function CollectionItemsPage() {
 					font-size: var(--font-size-sm);
 				}
 			`}</style>
-		</PageContainer>
+		</div>
 	);
 }

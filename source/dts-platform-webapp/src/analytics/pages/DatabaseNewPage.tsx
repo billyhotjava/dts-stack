@@ -3,10 +3,10 @@ import { useEffect, useMemo, useState } from "react";
 import { Link, useNavigate } from "react-router";
 import { analyticsApi, type PlatformDataSourceItem, type CurrentUser } from "../api/analyticsApi";
 import UploadedDataEditor from "../components/UploadedDataEditor";
-import { PageContainer, PageHeader, Breadcrumb } from "../components/PageContainer/PageContainer";
-import { EmptyState } from "../components/EmptyState";
+import { PageHeader } from "@/components/page-header";
+import { EmptyState } from "@/components/empty-state";
 import { ErrorNotice } from "../components/ErrorNotice";
-import { Input, Spin, Button, Card, Tag } from "antd";
+import { Input, Spin, Button, Card, Tag, Breadcrumb } from "antd";
 import { getEffectiveLocale, t, type Locale } from "../i18n";
 type LoadState<T> =
 	| { state: "loading" }
@@ -149,15 +149,13 @@ export default function DatabaseNewPage() {
 	}
 
 	return (
-		<PageContainer>
+		<div className="space-y-4">
+			<Breadcrumb items={[
+				{ title: <Link to="/bi/data">{t(locale, "data.title")}</Link> },
+				{ title: t(locale, "data.add") },
+			]} />
 			<PageHeader
 				title={t(locale, "data.add")}
-				breadcrumbs={
-					<Breadcrumb items={[
-						{ label: t(locale, "data.title"), href: "/bi/data" },
-						{ label: t(locale, "data.add") }
-					]} />
-				}
 			/>
 
 			<Card>
@@ -335,6 +333,6 @@ export default function DatabaseNewPage() {
 					</Link>
 				</div>
 			</Card>
-		</PageContainer>
+		</div>
 	);
 }
