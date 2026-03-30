@@ -1,5 +1,7 @@
 // @ts-nocheck — migrated from analytics-webapp, pending unused-import cleanup
 import { useEffect, useState } from 'react';
+import { message } from 'antd';
+import { toast } from 'sonner';
 import { useScreen } from '../ScreenContext';
 import type {
     CardParameterBinding,
@@ -1265,12 +1267,12 @@ export function PropertyPanel({ activeTab = 'style' }: { activeTab?: PropertyPan
     const copyCurrentStyle = () => {
         const payload = buildStyleClipboardPayload(selectedComponent);
         persistStyleClipboard(payload);
-        alert(`已复制样式（${Object.keys(payload.config).length} 个外观字段）`);
+        message.success(`已复制样式（${Object.keys(payload.config).length} 个外观字段）`);
     };
 
     const applyCopiedStyle = () => {
         if (!styleClipboard) {
-            alert('样式剪贴板为空，请先复制一个组件样式');
+            message.warning('样式剪贴板为空，请先复制一个组件样式');
             return;
         }
         if (styleClipboard.type !== selectedComponent.type) {
@@ -1297,12 +1299,12 @@ export function PropertyPanel({ activeTab = 'style' }: { activeTab?: PropertyPan
             height: selectedComponent.height,
             copiedAt: new Date().toISOString(),
         });
-        alert('布局已复制（位置 + 尺寸）');
+        message.success('布局已复制（位置 + 尺寸）');
     };
 
     const pasteLayoutSnapshot = () => {
         if (!layoutClipboard) {
-            alert('布局剪贴板为空，请先复制布局');
+            message.warning('布局剪贴板为空，请先复制布局');
             return;
         }
         const nextWidth = Math.max(50, Math.round(layoutClipboard.width));
@@ -1340,7 +1342,7 @@ export function PropertyPanel({ activeTab = 'style' }: { activeTab?: PropertyPan
     };
     const applyChartPreset = (preset: ChartPreset) => {
         if (!isChartComponentType(selectedComponent.type)) {
-            alert('当前组件不是图表类型，无法应用图表预设');
+            message.warning('当前组件不是图表类型，无法应用图表预设');
             return;
         }
         updateComponent(selectedComponent.id, {
@@ -1351,7 +1353,7 @@ export function PropertyPanel({ activeTab = 'style' }: { activeTab?: PropertyPan
     const copyConfigJson = async () => {
         const text = JSON.stringify(selectedComponent.config || {}, null, 2);
         const copied = await writeTextToClipboard(text);
-        alert(copied ? '组件配置JSON已复制' : '复制失败，请重试');
+        if (copied) { message.success('组件配置JSON已复制'); } else { message.warning('复制失败，请重试'); }
     };
 
     const pasteConfigJson = () => {
@@ -1361,13 +1363,13 @@ export function PropertyPanel({ activeTab = 'style' }: { activeTab?: PropertyPan
         try {
             const parsed = JSON.parse(input);
             if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
-                alert('配置必须是 JSON 对象');
+                toast.error('配置必须是 JSON 对象');
                 return;
             }
             updateComponent(selectedComponent.id, { config: parsed as Record<string, unknown> });
-            alert('组件配置已更新');
+            message.success('组件配置已更新');
         } catch {
-            alert('JSON 格式错误，请检查后重试');
+            toast.error('JSON 格式错误，请检查后重试');
         }
     };
 
@@ -1376,7 +1378,7 @@ export function PropertyPanel({ activeTab = 'style' }: { activeTab?: PropertyPan
         const variableKey = String(selectedComponent.config.variableKey || 'tabKey').trim() || 'tabKey';
         const optionValues = resolveTabSwitcherOptionValues(selectedComponent.config.options);
         if (optionValues.length === 0) {
-            alert('请先在 Tab 组件中配置可用选项');
+            message.warning('请先在 Tab 组件中配置可用选项');
             return;
         }
         const targetTypes = new Set<ComponentType>([
@@ -1413,11 +1415,11 @@ export function PropertyPanel({ activeTab = 'style' }: { activeTab?: PropertyPan
             };
         });
         if (assigned <= 0) {
-            alert('当前画布没有可绑定 Tab 显隐规则的图表/表格组件');
+            message.warning('当前画布没有可绑定 Tab 显隐规则的图表/表格组件');
             return;
         }
         updateConfig({ components: nextComponents });
-        alert(`已应用 Tab 显隐规则到 ${assigned} 个组件`);
+        message.success(`已应用 Tab 显隐规则到 ${assigned} 个组件`);
     };
 
     const clearTabVisibilityRules = () => {
@@ -1445,11 +1447,11 @@ export function PropertyPanel({ activeTab = 'style' }: { activeTab?: PropertyPan
             return { ...item, config: rest };
         });
         if (cleared <= 0) {
-            alert('未找到可清理的 Tab 显隐规则');
+            message.info('未找到可清理的 Tab 显隐规则');
             return;
         }
         updateConfig({ components: nextComponents });
-        alert(`已清理 ${cleared} 个组件的 Tab 显隐规则`);
+        message.success(`已清理 ${cleared} 个组件的 Tab 显隐规则`);
     };
 
     const pluginMeta = readComponentPluginMeta(selectedComponent.config);
@@ -2132,7 +2134,7 @@ export function PropertyPanel({ activeTab = 'style' }: { activeTab?: PropertyPan
                                                 return;
                                             }
                                             if (wouldCreateParentCycle(config.components, selectedComponent.id, parentId)) {
-                                                alert('该容器绑定会形成循环引用，请选择其他容器');
+                                                toast.error('该容器绑定会形成循环引用，请选择其他容器');
                                                 return;
                                             }
                                             const maxX = parent.x + Math.max(0, parent.width - selectedComponent.width);
@@ -2569,16 +2571,16 @@ function renderPluginSchemaFields(
                                         try {
                                             const parsed = JSON.parse(input);
                                             if (isArray && !Array.isArray(parsed)) {
-                                                alert(`${label} 需要是 JSON 数组`);
+                                                toast.error(`${label} 需要是 JSON 数组`);
                                                 return;
                                             }
                                             if (!isArray && (parsed == null || typeof parsed !== 'object' || Array.isArray(parsed))) {
-                                                alert(`${label} 需要是 JSON 对象`);
+                                                toast.error(`${label} 需要是 JSON 对象`);
                                                 return;
                                             }
                                             onChange(key, parsed);
                                         } catch {
-                                            alert(`${label} JSON 格式错误`);
+                                            toast.error(`${label} JSON 格式错误`);
                                         }
                                     }}
                                 >
@@ -5299,7 +5301,7 @@ function renderDataSourceConfig(
                             onClick={() => {
                                 const names = extractSqlTemplateParameterNames(sqlConfig?.query ?? '');
                                 if (names.length === 0) {
-                                    alert('未识别到 SQL 参数，占位符示例：{{day}} 或 ${day}');
+                                    message.info('未识别到 SQL 参数，占位符示例：{{day}} 或 ${day}');
                                     return;
                                 }
                                 const previous = new Map(
@@ -6294,7 +6296,7 @@ function CardSourceColumnBindingsEditor({
     const handleSourceChange = (index: number, nextSource: string) => {
         const duplicate = effectiveColumns.some((item, i) => i !== index && item.source === nextSource);
         if (duplicate) {
-            alert('该字段已被绑定，请选择其他字段');
+            message.warning('该字段已被绑定，请选择其他字段');
             return;
         }
         updateColumn(index, { source: nextSource });
@@ -6860,7 +6862,7 @@ function TableConfig({ component, onChange }: {
                             const parsed = JSON.parse(raw);
                             onChange('conditionalRules', Array.isArray(parsed) ? parsed : []);
                         } catch {
-                            alert('条件格式 JSON 解析失败');
+                            toast.error('条件格式 JSON 解析失败');
                         }
                     }}
                     placeholder='[{"columnKey":"amount","operator":">","value":100,"color":"#ef4444"}]'
