@@ -330,7 +330,7 @@ export default function DataPage() {
 
 			{/* --- Data Lake List --- */}
 			<PageSection
-				title="数据湖"
+				title="数据湖列表"
 				description="平台已注册的数据源列表"
 				actions={
 					<Input.Search
@@ -371,7 +371,7 @@ export default function DataPage() {
 							disabled={dataLakeId == null}
 							onClick={() => setUploadModalOpen(true)}
 						>
-							上传数据
+							上传 Excel/CSV
 						</Button>
 					</Space>
 				}
