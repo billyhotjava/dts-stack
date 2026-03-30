@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useParams } from 'react-router';
+import { resolveRouteForOpen } from '../../helpers/resolveAnalyticsUrl';
 import { analyticsApi, HttpError } from '../../api/analyticsApi';
 import { ComponentRenderer } from './components/ComponentRenderer';
 import { RuntimeActionPanel } from './components/RuntimeActionPanel';
@@ -268,7 +269,7 @@ export default function ScreenExportPage() {
 			fallbackParams.set('device', forcedDevice);
 		}
 		const suffix = fallbackParams.toString();
-		return `/bi/screens/${id}/preview${suffix ? `?${suffix}` : ''}`;
+		return resolveRouteForOpen(`/bi/screens/${id}/preview${suffix ? `?${suffix}` : ''}`);
 	};
 
 	const openPreviewFallback = () => {

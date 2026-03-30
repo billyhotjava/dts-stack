@@ -1,6 +1,7 @@
 import { useEffect, useState, useCallback, useMemo, useRef } from 'react';
 import { useNavigate } from 'react-router';
 import { analyticsApi, ScreenListItem, type ScreenAiGenerationResponse } from '../../api/analyticsApi';
+import { resolveRouteForOpen, resolveRouteHref } from '../../helpers/resolveAnalyticsUrl';
 import { PageContainer } from '../../components/PageContainer/PageContainer';
 import { writeTextToClipboard } from '../../hooks/clipboard';
 import { TemplateGallery, ScreenSharePanel, ScreenAclPanel, type TemplateSelection } from './components';
@@ -348,11 +349,11 @@ export default function ScreensPage() {
 	};
 
 	const handlePreview = (id: string | number) => {
-		window.open(`/bi/screens/${id}/preview`, '_blank', 'noopener,noreferrer');
+		window.open(resolveRouteForOpen(`/bi/screens/${id}/preview`), '_blank', 'noopener,noreferrer');
 	};
 
 	const getPreviewUrl = useCallback(
-		(id: string | number) => `${window.location.origin}/bi/screens/${encodeURIComponent(String(id))}/preview`,
+		(id: string | number) => resolveRouteHref(`/bi/screens/${encodeURIComponent(String(id))}/preview`),
 		[],
 	);
 
@@ -367,7 +368,7 @@ export default function ScreensPage() {
 		setSharingId(id);
 		try {
 			const { uuid } = await analyticsApi.createScreenPublicLink(id);
-			const url = `${window.location.origin}/bi/public/screen/${uuid}`;
+			const url = resolveRouteHref(`/bi/public/screen/${uuid}`);
 			const copied = await writeTextToClipboard(url);
 			alert(copied ? '分享链接已复制到剪贴板' : `复制失败，请手工复制：\n${url}`);
 		} catch (err) {

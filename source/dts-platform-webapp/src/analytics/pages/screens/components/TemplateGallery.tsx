@@ -10,6 +10,7 @@ import {
     type ScreenTemplate,
 } from '../screenTemplates';
 import { SCREEN_SCHEMA_VERSION, normalizeScreenConfig, validateScreenPayload, buildScreenPayload } from '../specV2';
+import { resolveRouteForOpen } from '../../../helpers/resolveAnalyticsUrl';
 import { inlineResources } from '../utils/resourceInliner';
 import { ImportPreviewModal } from './ImportPreviewModal';
 import { countInlinedResources } from '../utils/resourceRestorer';
@@ -481,7 +482,7 @@ export function TemplateGallery({ onSelect, onClose }: TemplateGalleryProps) {
             } else if (action === 'create-screen') {
                 const spec = buildScreenPayload(parsedSpec);
                 const created = await analyticsApi.createScreen(spec);
-                window.location.href = `/bi/screens/${String(created.id)}/edit`;
+                window.location.href = resolveRouteForOpen(`/bi/screens/${String(created.id)}/edit`);
                 return;
             }
             setImportPreview(null);

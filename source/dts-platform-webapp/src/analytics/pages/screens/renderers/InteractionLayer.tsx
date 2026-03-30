@@ -14,6 +14,7 @@ import {
     resolveActionTemplateText,
 } from './shared/actionUtils';
 import type { RuntimeEventKind } from '../ScreenRuntimeContext';
+import { resolveRouteForOpen } from '../../../helpers/resolveAnalyticsUrl';
 
 // ---------------------------------------------------------------------------
 // Screen-reference URL resolution (moved from ComponentRenderer)
@@ -56,7 +57,7 @@ export async function resolveScreenReferenceUrl(targetUrl: string): Promise<stri
             .filter((item) => String(item.name || '').trim() === parsed.screenName)
             .sort((a, b) => new Date(String(b.updatedAt || 0)).getTime() - new Date(String(a.updatedAt || 0)).getTime())[0];
         if (exact?.id != null) {
-            return `/bi/screens/${encodeURIComponent(String(exact.id))}/preview`;
+            return resolveRouteForOpen(`/bi/screens/${encodeURIComponent(String(exact.id))}/preview`);
         }
     } catch (error) {
         console.error('Failed to resolve screen reference jump target:', error);

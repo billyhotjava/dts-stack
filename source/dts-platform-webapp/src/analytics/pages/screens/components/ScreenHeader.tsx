@@ -37,6 +37,7 @@ import type { ScreenTheme } from '../types';
 import { LinkageGraphPanel } from './LinkageGraphPanel';
 import type { ScreenConfig } from '../types';
 import { writeTextToClipboard } from '../../../hooks/clipboard';
+import { resolveRouteForOpen, resolveRouteHref } from '../../../helpers/resolveAnalyticsUrl';
 import { inlineResources } from '../utils/resourceInliner';
 import { ImportPreviewModal } from './ImportPreviewModal';
 import { countInlinedResources } from '../utils/resourceRestorer';
@@ -965,12 +966,12 @@ export function ScreenHeader({
                     + '，跳过 ' + (warmup.skipped || 0)
                     + '，失败 ' + (warmup.failed || 0);
             }
-            const previewUrl = `${window.location.origin}/bi/screens/${encodeURIComponent(String(screenId))}/preview`;
+            const previewUrl = resolveRouteHref(`/bi/screens/${encodeURIComponent(String(screenId))}/preview`);
             let publicUrl: string | null = null;
             try {
                 const policy = await analyticsApi.createScreenPublicLink(screenId, {});
                 if (policy?.uuid) {
-                    publicUrl = `${window.location.origin}/bi/public/screen/${policy.uuid}`;
+                    publicUrl = resolveRouteHref(`/bi/public/screen/${policy.uuid}`);
                 }
             } catch (linkError) {
                 console.warn('Publish succeeded but creating public link failed:', linkError);
@@ -1012,7 +1013,7 @@ export function ScreenHeader({
                 setPublishNotice({
                     screenId: id,
                     versionNo,
-                    previewUrl: `${window.location.origin}/bi/screens/${encodeURIComponent(String(id))}/preview`,
+                    previewUrl: resolveRouteHref(`/bi/screens/${encodeURIComponent(String(id))}/preview`),
                     publicUrl: null,
                     warmupText: '',
                 });
@@ -1109,7 +1110,7 @@ export function ScreenHeader({
             const suffix = previewDeviceMode === 'auto'
                 ? ''
                 : `?device=${encodeURIComponent(previewDeviceMode)}`;
-            window.open(`/bi/screens/${id}/preview${suffix}`, '_blank', 'noopener,noreferrer');
+            window.open(resolveRouteForOpen(`/bi/screens/${id}/preview${suffix}`), '_blank', 'noopener,noreferrer');
         } else {
             alert('请先保存大屏后再预览');
         }
@@ -1293,7 +1294,7 @@ export function ScreenHeader({
         if (previewDeviceMode !== 'auto') {
             params.set('device', previewDeviceMode);
         }
-        const url = `/bi/screens/${id}/export?${params.toString()}`;
+        const url = resolveRouteForOpen(`/bi/screens/${id}/export?${params.toString()}`);
         const popup = window.open(url, '_blank', 'noopener,noreferrer');
         if (!popup) {
             throw new Error('请允许弹窗后重试导出');
@@ -1534,7 +1535,7 @@ export function ScreenHeader({
                 const spec = buildScreenPayload(importedConfig);
                 const created = await analyticsApi.createScreen(spec);
                 setImportPreview(null);
-                window.location.href = `/bi/screens/${String(created.id)}/edit`;
+                window.location.href = resolveRouteForOpen(`/bi/screens/${String(created.id)}/edit`);
             }
         } catch (error) {
             console.error('Import action failed:', error);
@@ -1555,7 +1556,7 @@ export function ScreenHeader({
                 });
                 return;
             }
-            const baseUrl = `${window.location.origin}/bi/public/screen/${uuid}`;
+            const baseUrl = resolveRouteHref(`/bi/public/screen/${uuid}`);
             const embedUrl = `${baseUrl}?embed=1&hideControls=1`;
             const iframeCode = `<iframe src="${embedUrl}" width="100%" height="600" frameborder="0" allowfullscreen style="border: none;"></iframe>`;
             const globalVars = config.globalVariables ?? [];

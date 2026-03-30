@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { analyticsApi, type ScreenPublicLinkPolicy } from '../../../api/analyticsApi';
 import { writeTextToClipboard } from '../../../hooks/clipboard';
+import { resolveRouteHref } from '../../../helpers/resolveAnalyticsUrl';
 import { Modal } from 'antd';
 
 interface ScreenSharePolicyPanelProps {
@@ -47,7 +48,7 @@ export function ScreenSharePolicyPanel({ open, screenId, onClose }: ScreenShareP
     const shareUrl = useMemo(() => {
         const uuid = policy?.uuid;
         if (!uuid) return '';
-        return `${window.location.origin}/bi/public/screen/${uuid}`;
+        return resolveRouteHref(`/bi/public/screen/${uuid}`);
     }, [policy?.uuid]);
 
     const loadPolicy = async () => {

@@ -1,6 +1,7 @@
 import { useEffect, useState, useCallback, useRef } from 'react';
 import { analyticsApi, type ScreenAclEntry, type UserSearchItem } from '../../../api/analyticsApi';
 import { writeTextToClipboard } from '../../../hooks/clipboard';
+import { resolveRouteHref } from '../../../helpers/resolveAnalyticsUrl';
 import { Modal, Input, Select, Button, Tag, message } from 'antd';
 
 interface ScreenSharePanelProps {
@@ -209,7 +210,7 @@ export function ScreenSharePanel({ open, screenId, onClose, isOwner = false }: S
 				message.error('未获取到分享链接，请先发布后重试');
 				return;
 			}
-			const url = `${window.location.origin}/bi/public/screen/${uuid}`;
+			const url = resolveRouteHref(`/bi/public/screen/${uuid}`);
 			setShareUrl(url);
 			const copied = await writeTextToClipboard(url);
 			if (copied) {
