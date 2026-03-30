@@ -10,10 +10,18 @@ type CustomPluginModule = {
     [key: string]: unknown;
 };
 
-const customModules = import.meta.glob('./custom/*.tsx', { eager: true }) as Record<string, CustomPluginModule>;
+const customModules = loadBuiltinCustomModules();
 const CUSTOM_ADAPTERS: Record<string, AdapterFactory> = buildCustomAdapters(customModules);
 
 export function installBuiltinPluginAdapters(manifests: ScreenPluginManifest[]): void {
+    installBuiltinPluginAdaptersFromModules(manifests, customModules);
+}
+
+export function installBuiltinPluginAdaptersFromModules(
+    manifests: ScreenPluginManifest[],
+    modules: Record<string, CustomPluginModule>,
+): void {
+    const adapters = buildCustomAdapters(modules);
     for (const plugin of manifests || []) {
         const pluginId = String(plugin?.id ?? '').trim();
         if (!pluginId) continue;
@@ -23,11 +31,21 @@ export function installBuiltinPluginAdapters(manifests: ScreenPluginManifest[]):
             const componentId = String(component?.id ?? '').trim();
             if (!componentId) continue;
             const adapterKey = `${pluginId}:${componentId}`;
-            const factory = CUSTOM_ADAPTERS[adapterKey];
+            const factory = adapters[adapterKey];
             if (!factory) continue;
             registerRendererPlugin(factory(pluginId, componentId, version));
         }
     }
+}
+
+function loadBuiltinCustomModules(): Record<string, CustomPluginModule> {
+    const meta = import.meta as ImportMeta & {
+        glob?: (pattern: string, options: { eager: true }) => Record<string, CustomPluginModule>;
+    };
+    if (typeof meta.glob !== 'function') {
+        return {};
+    }
+    return meta.glob('./custom/*.tsx', { eager: true }) as Record<string, CustomPluginModule>;
 }
 
 function buildCustomAdapters(modules: Record<string, CustomPluginModule>): Record<string, AdapterFactory> {

@@ -1,0 +1,171 @@
+{
+  "id": "finance-kit",
+  "name": "财务模板族",
+  "version": "1.0.0",
+  "origin": "builtin",
+  "installed": true,
+  "components": [
+    {
+      "id": "shell",
+      "name": "财务页壳",
+      "description": "统一的白底财务大屏页壳和内容骨架",
+      "icon": "🏦",
+      "baseType": "container",
+      "defaultWidth": 1840,
+      "defaultHeight": 980,
+      "defaultConfig": {
+        "title": "财务分析中心",
+        "subtitle": "Financial cockpit",
+        "sections": ["筛选区", "指标区", "明细区"]
+      },
+      "propertySchema": {
+        "version": "1.0.0",
+        "fields": [
+          { "key": "title", "label": "主标题", "type": "string", "defaultValue": "财务分析中心" },
+          { "key": "subtitle", "label": "副标题", "type": "string", "defaultValue": "Financial cockpit" }
+        ]
+      }
+    },
+    {
+      "id": "header-bar",
+      "name": "财务标题栏",
+      "description": "蓝色标题栏，展示机构、标题和日期",
+      "icon": "🧾",
+      "baseType": "container",
+      "defaultWidth": 1840,
+      "defaultHeight": 110,
+      "defaultConfig": {
+        "title": "辅助余额表_项目维度",
+        "subtitle": "Financial Operations Dashboard",
+        "orgName": "BI数据平台",
+        "dateText": "数据日期：2026-03-30"
+      },
+      "propertySchema": {
+        "version": "1.0.0",
+        "fields": [
+          { "key": "title", "label": "标题", "type": "string", "defaultValue": "辅助余额表_项目维度" },
+          { "key": "subtitle", "label": "副标题", "type": "string", "defaultValue": "Financial Operations Dashboard" },
+          { "key": "orgName", "label": "机构名称", "type": "string", "defaultValue": "BI数据平台" },
+          { "key": "dateText", "label": "日期文案", "type": "string", "defaultValue": "数据日期：2026-03-30" }
+        ]
+      }
+    },
+    {
+      "id": "filter-strip",
+      "name": "财务筛选条",
+      "description": "财务驾驶舱风格筛选条",
+      "icon": "🎛️",
+      "baseType": "container",
+      "defaultWidth": 1840,
+      "defaultHeight": 88,
+      "defaultConfig": {
+        "filters": ["年度: 2026", "部门: 全部", "状态: 全部"]
+      },
+      "propertySchema": {
+        "version": "1.0.0",
+        "fields": [
+          { "key": "filters", "label": "筛选项", "type": "array", "defaultValue": ["年度: 2026", "部门: 全部", "状态: 全部"] }
+        ]
+      }
+    },
+    {
+      "id": "kpi-card",
+      "name": "财务KPI卡",
+      "description": "财务指标卡，可配置值、单位和语义色",
+      "icon": "💳",
+      "baseType": "number-card",
+      "defaultWidth": 280,
+      "defaultHeight": 140,
+      "defaultConfig": {
+        "title": "本期余额",
+        "value": "12,580.00",
+        "unit": "万元",
+        "hint": "较上期 +12.6%",
+        "tone": "accent"
+      },
+      "propertySchema": {
+        "version": "1.0.0",
+        "fields": [
+          { "key": "title", "label": "标题", "type": "string", "defaultValue": "本期余额" },
+          { "key": "value", "label": "数值", "type": "string", "defaultValue": "12,580.00" },
+          { "key": "unit", "label": "单位", "type": "string", "defaultValue": "万元" },
+          { "key": "hint", "label": "说明", "type": "string", "defaultValue": "较上期 +12.6%" },
+          {
+            "key": "tone",
+            "label": "语义色",
+            "type": "select",
+            "defaultValue": "accent",
+            "options": [
+              { "label": "默认", "value": "accent" },
+              { "label": "成功", "value": "success" },
+              { "label": "预警", "value": "warning" },
+              { "label": "风险", "value": "danger" }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": "ranking-list",
+      "name": "财务排行块",
+      "description": "TOP排名区块",
+      "icon": "🏅",
+      "baseType": "table",
+      "defaultWidth": 460,
+      "defaultHeight": 420,
+      "defaultConfig": {
+        "items": [
+          { "name": "项目A", "value": "1,250.00", "extra": "同比 +8.2%" },
+          { "name": "项目B", "value": "930.50", "extra": "同比 +5.7%" }
+        ]
+      }
+    },
+    {
+      "id": "summary-table",
+      "name": "财务汇总表",
+      "description": "财务明细表格区块",
+      "icon": "📋",
+      "baseType": "table",
+      "defaultWidth": 900,
+      "defaultHeight": 420,
+      "defaultConfig": {
+        "headers": ["项目", "预算", "执行", "余额"],
+        "rows": [
+          { "col1": "科研项目A", "col2": "1,200", "col3": "860", "col4": "340" },
+          { "col1": "科研项目B", "col2": "980", "col3": "760", "col4": "220" }
+        ]
+      }
+    },
+    {
+      "id": "note-panel",
+      "name": "财务说明块",
+      "description": "口径、规则、备注说明区块",
+      "icon": "📝",
+      "baseType": "markdown-text",
+      "defaultWidth": 520,
+      "defaultHeight": 220,
+      "defaultConfig": {
+        "title": "口径说明",
+        "notes": [
+          "金额单位默认按万元展示。",
+          "模板块支持拖拽和二次编辑。"
+        ]
+      }
+    },
+    {
+      "id": "status-grid",
+      "name": "财务状态矩阵",
+      "description": "项目健康度和风险状态矩阵",
+      "icon": "🧭",
+      "baseType": "container",
+      "defaultWidth": 520,
+      "defaultHeight": 300,
+      "defaultConfig": {
+        "items": [
+          { "title": "执行健康", "value": "良好", "hint": "执行率 82%", "tone": "success" },
+          { "title": "预警项目", "value": "3", "hint": "需重点关注", "tone": "warning" }
+        ]
+      }
+    }
+  ]
+}

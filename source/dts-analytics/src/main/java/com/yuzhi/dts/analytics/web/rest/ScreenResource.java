@@ -116,8 +116,8 @@ public class ScreenResource {
 
         PlatformContext context = PlatformContext.from(request);
         List<AnalyticsScreen> screens = screenRepository.findAllByArchivedFalseOrderByIdDesc();
-        screens = assetListFilterService.filterByPermission(
-            screens, "SCREEN", s -> String.valueOf(s.getId()), request);
+        // Screen visibility is governed solely by analytics_screen_acl (share panel),
+        // not by the platform asset-permission system, so skip assetListFilterService here.
 
         List<ObjectNode> result = screens.stream()
                 .map(screen -> {
