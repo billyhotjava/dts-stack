@@ -212,22 +212,7 @@ public class UserResource {
 
         HttpHeaders headers = new HttpHeaders();
         headers.setAccept(List.of(MediaType.APPLICATION_JSON));
-        // Forward authentication headers from the original request
-        String authorization = request.getHeader("Authorization");
-        if (authorization != null && !authorization.isBlank()) {
-            headers.set("Authorization", authorization);
-        }
-        String cookie = request.getHeader("Cookie");
-        if (cookie != null && !cookie.isBlank()) {
-            headers.set("Cookie", cookie);
-        }
-        // Forward platform identity headers set by the reverse proxy
-        for (String hdr : List.of("X-DTS-User", "X-DTS-Display-Name", "X-DTS-User-Id", "X-DTS-Roles", "X-DTS-Dept-Code")) {
-            String val = request.getHeader(hdr);
-            if (val != null && !val.isBlank()) {
-                headers.set(hdr, val);
-            }
-        }
+        // Use service-level authentication so we can search ALL users regardless of caller's dept
         headers.set("X-DTS-Service", "dts-analytics");
 
         ResponseEntity<Map> response = restTemplate.exchange(uri, HttpMethod.GET,

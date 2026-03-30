@@ -7077,13 +7077,13 @@ function StaticDataEditor({ component, updateComponent }: {
             </div>
 
             {mode === 'table' ? (
-                <div style={{ border: '1px solid var(--color-border, #e5e7eb)', borderRadius: 6, overflow: 'auto', maxHeight: 320 }}>
+                <div style={{ border: '1px solid var(--color-border, rgba(255,255,255,0.1))', borderRadius: 6, overflow: 'auto', maxHeight: 320 }}>
                     <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
                         <thead>
                             <tr>
-                                <th style={{ width: 28, padding: '4px 2px', background: 'var(--color-bg-secondary, #f4f7fb)', borderBottom: '1px solid var(--color-border, #e5e7eb)', fontSize: 10, color: 'var(--color-text-tertiary)' }}>#</th>
+                                <th style={{ width: 28, padding: '4px 2px', background: 'var(--color-bg-secondary, #252830)', borderBottom: '1px solid var(--color-border, rgba(255,255,255,0.1))', fontSize: 10, color: 'var(--color-text-tertiary)' }}>#</th>
                                 {headers.map((h, ci) => (
-                                    <th key={ci} style={{ padding: 0, background: 'var(--color-bg-secondary, #f4f7fb)', borderBottom: '1px solid var(--color-border, #e5e7eb)', position: 'relative' }}>
+                                    <th key={ci} style={{ padding: 0, background: 'var(--color-bg-secondary, #252830)', borderBottom: '1px solid var(--color-border, rgba(255,255,255,0.1))', position: 'relative' }}>
                                         <input
                                             type="text"
                                             value={h}
@@ -7097,7 +7097,7 @@ function StaticDataEditor({ component, updateComponent }: {
                                         )}
                                     </th>
                                 ))}
-                                <th style={{ width: 28, padding: 0, background: 'var(--color-bg-secondary, #f4f7fb)', borderBottom: '1px solid var(--color-border, #e5e7eb)' }}>
+                                <th style={{ width: 28, padding: 0, background: 'var(--color-bg-secondary, #252830)', borderBottom: '1px solid var(--color-border, rgba(255,255,255,0.1))' }}>
                                     <button type="button" onClick={addColumn}
                                         style={{ background: 'none', border: 'none', color: 'var(--color-primary, #509EE3)', cursor: 'pointer', fontSize: 14, padding: '2px 6px' }}
                                         title="添加列">+</button>
@@ -7107,11 +7107,11 @@ function StaticDataEditor({ component, updateComponent }: {
                         <tbody>
                             {rows.map((row, ri) => (
                                 <tr key={ri}>
-                                    <td style={{ padding: '2px 4px', textAlign: 'center', fontSize: 10, color: 'var(--color-text-tertiary)', borderBottom: '1px solid var(--color-border, #e5e7eb)', userSelect: 'none' }}>
+                                    <td style={{ padding: '2px 4px', textAlign: 'center', fontSize: 10, color: 'var(--color-text-tertiary)', borderBottom: '1px solid var(--color-border, rgba(255,255,255,0.1))', userSelect: 'none' }}>
                                         {ri + 1}
                                     </td>
                                     {row.slice(0, headers.length).map((cell, ci) => (
-                                        <td key={ci} style={{ padding: 0, borderBottom: '1px solid var(--color-border, #e5e7eb)' }}>
+                                        <td key={ci} style={{ padding: 0, borderBottom: '1px solid var(--color-border, rgba(255,255,255,0.1))' }}>
                                             <input
                                                 type="text"
                                                 value={cell}
@@ -7120,7 +7120,7 @@ function StaticDataEditor({ component, updateComponent }: {
                                             />
                                         </td>
                                     ))}
-                                    <td style={{ padding: 0, textAlign: 'center', borderBottom: '1px solid var(--color-border, #e5e7eb)' }}>
+                                    <td style={{ padding: 0, textAlign: 'center', borderBottom: '1px solid var(--color-border, rgba(255,255,255,0.1))' }}>
                                         {rows.length > 1 && (
                                             <button type="button" onClick={() => deleteRow(ri)}
                                                 style={{ background: 'none', border: 'none', color: 'var(--color-text-tertiary)', cursor: 'pointer', fontSize: 12 }}
@@ -7131,9 +7131,9 @@ function StaticDataEditor({ component, updateComponent }: {
                             ))}
                         </tbody>
                     </table>
-                    <div style={{ padding: '4px 8px', borderTop: '1px solid var(--color-border, #e5e7eb)' }}>
+                    <div style={{ padding: '4px 8px', borderTop: '1px solid var(--color-border, rgba(255,255,255,0.1))' }}>
                         <button type="button" onClick={addRow}
-                            style={{ background: 'none', border: '1px dashed var(--color-border, #d1d5db)', borderRadius: 4, padding: '3px 12px', cursor: 'pointer', fontSize: 11, color: 'var(--color-primary, #509EE3)', width: '100%' }}
+                            style={{ background: 'none', border: '1px dashed var(--color-border, rgba(255,255,255,0.15))', borderRadius: 4, padding: '3px 12px', cursor: 'pointer', fontSize: 11, color: 'var(--color-primary, #509EE3)', width: '100%' }}
                         >+ 添加行</button>
                     </div>
                 </div>

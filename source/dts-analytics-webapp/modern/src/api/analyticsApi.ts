@@ -1,11 +1,3 @@
-export type CurrentUser = {
-	id?: number | string;
-	email?: string;
-	first_name?: string;
-	last_name?: string;
-	common_name?: string;
-};
-
 export type CollectionListItem = {
 	id: number | "root";
 	name?: string;
@@ -2184,7 +2176,6 @@ export const analyticsApi = {
 		rows: unknown[][];
 	}) => sendJson<{ tableName: string; schema: string; rowCount: number }>(
 		`/analytics/api/database/${dbId}/upload-table`, body),
-	getCurrentUser: () => fetchJson<CurrentUser>("/analytics/api/user/current"),
 	listMyUploads: (dbId: number | string) =>
 		fetchJson<MyUploadItem[]>(`/analytics/api/database/${encodeURIComponent(String(dbId))}/my-uploads`),
 	deleteUploadTable: (dbId: number | string, tableName: string) =>
