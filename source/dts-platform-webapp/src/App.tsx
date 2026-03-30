@@ -20,10 +20,12 @@ if (import.meta.env.DEV) {
 	});
 }
 
+const queryClient = new QueryClient();
+
 function App({ children }: { children: React.ReactNode }) {
 	return (
 		<HelmetProvider>
-			<QueryClientProvider client={new QueryClient()}>
+			<QueryClientProvider client={queryClient}>
 				<ThemeProvider adapters={[AntdAdapter]}>
 					<Helmet>
 						<title>{GLOBAL_CONFIG.appName}</title>
