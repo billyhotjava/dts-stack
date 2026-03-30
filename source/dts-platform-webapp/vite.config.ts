@@ -55,6 +55,14 @@ export function createPlatformServerProxy({
 			ws: true,
 			xfwd: true,
 		},
+		"/bi/api": {
+			target: analyticsApiProxyTarget,
+			changeOrigin: true,
+			rewrite: (path: string) => path.replace(/^\/bi\/api/, "/api"),
+			secure: false,
+			ws: true,
+			xfwd: true,
+		},
 		// Analytics UI is now embedded in platform-webapp — no proxy needed.
 		// The "/analytics/api" proxy above still forwards API calls to dts-analytics.
 		"/api": {

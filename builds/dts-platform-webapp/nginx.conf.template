@@ -63,6 +63,24 @@ server {
         proxy_pass $ANALYTICS_API_UPSTREAM;
     }
 
+    # Proxy BI API calls (/bi/api/*) to dts-analytics backend.
+    # Must appear before the /bi/ SPA fallback so API requests are proxied,
+    # not served as index.html.
+    location /bi/api/ {
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Forwarded-Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_set_header Authorization $http_authorization;
+        proxy_set_header Cookie $http_cookie;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection "upgrade";
+        rewrite ^/bi/api/(.*)$ /api/$1 break;
+        proxy_pass $ANALYTICS_API_UPSTREAM;
+    }
+
     # BI pages are embedded in platform-webapp — SPA fallback for /bi/*
     location /bi/ {
         try_files $uri $uri/ /index.html;

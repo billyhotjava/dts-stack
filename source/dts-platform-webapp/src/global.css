@@ -1,9 +1,11 @@
 /* editor */
 @import "react-quill/dist/quill.snow.css";
 
-/* Analytics design tokens & utilities (merged from dts-analytics-webapp) */
+/* Analytics design tokens (CSS variables — no conflict) */
 @import './analytics/styles/tokens.css';
-@import './analytics/styles/utilities.css';
+/* Analytics utilities wrapped in a low-priority layer so Tailwind wins on name collisions
+   (e.g. .bg-primary means "card bg" in analytics vs "brand color" in Tailwind). */
+@import './analytics/styles/utilities.css' layer(analytics);
 
 /* import tailwind */
 @import "tailwindcss";

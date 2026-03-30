@@ -224,6 +224,11 @@
 .bg-secondary { background-color: var(--color-bg-secondary); }
 .bg-tertiary { background-color: var(--color-bg-tertiary); }
 .bg-dark { background-color: var(--color-bg-dark); }
+.bg-surface-page { background-color: var(--surface-page); }
+.bg-surface-card { background-color: var(--surface-card); }
+.bg-surface-float { background-color: var(--surface-float); }
+.bg-surface-muted { background-color: var(--surface-muted); }
+.bg-surface-workspace { background-color: var(--surface-workspace); }
 .bg-brand { background-color: var(--color-brand); }
 .bg-success { background-color: var(--color-success); }
 .bg-success-light { background-color: var(--color-success-light); }
@@ -244,6 +249,8 @@
 .border-b { border-bottom: 1px solid var(--color-border); }
 .border-l { border-left: 1px solid var(--color-border); }
 .border-r { border-right: 1px solid var(--color-border); }
+.border-border-default { border-color: var(--color-border); }
+.border-border-strong { border-color: var(--color-border-strong); }
 .border-strong { border-color: var(--color-border-strong); }
 .border-brand { border-color: var(--color-brand); }
 

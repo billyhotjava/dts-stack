@@ -102,7 +102,7 @@ export default function ModelsPage() {
 			/>
 
 			{/* Filter Bar */}
-			<div className="flex items-center gap-sm p-md bg-primary border rounded-md mb-md">
+			<div className="flex items-center gap-sm p-md bg-surface-card border rounded-md mb-md">
 				<div style={{ flex: 1, maxWidth: 320 }}>
 					<Input.Search
 						placeholder={t(locale, "common.search")}
