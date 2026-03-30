@@ -34,7 +34,7 @@ public class PlatformPermissionFilter extends OncePerRequestFilter {
     /** URL patterns that map to asset references: group(1)=assetType, group(2)=assetId */
     private static final Pattern CARD_PATTERN = Pattern.compile("^/api/card/(\\d+)(?:/.*)?$");
     private static final Pattern DASHBOARD_PATTERN = Pattern.compile("^/api/dashboard/(\\d+)(?:/.*)?$");
-    private static final Pattern SCREEN_PATTERN = Pattern.compile("^/api/screens/(\\d+)(?:/.*)?$");
+    // SCREEN removed: screen permissions are handled by ScreenPermissionService in the controller layer
     private static final Pattern TABLE_PATTERN = Pattern.compile("^/api/table/(\\d+)(?:/.*)?$");
 
     /** Paths that should NOT be filtered (non-asset or pre-auth paths) */
@@ -127,9 +127,6 @@ public class PlatformPermissionFilter extends OncePerRequestFilter {
 
         m = DASHBOARD_PATTERN.matcher(path);
         if (m.matches()) return new AssetRef("DASHBOARD", m.group(1));
-
-        m = SCREEN_PATTERN.matcher(path);
-        if (m.matches()) return new AssetRef("SCREEN", m.group(1));
 
         m = TABLE_PATTERN.matcher(path);
         if (m.matches()) return new AssetRef("TABLE", m.group(1));

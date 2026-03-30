@@ -6,4 +6,6 @@ import org.springframework.data.jpa.repository.JpaRepository;
 
 public interface AnalyticsScreenRepository extends JpaRepository<AnalyticsScreen, Long> {
     List<AnalyticsScreen> findAllByArchivedFalseOrderByIdDesc();
+
+    List<AnalyticsScreen> findAllByIdInAndArchivedFalse(List<Long> ids);
 }

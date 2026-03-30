@@ -4,6 +4,7 @@ import com.yuzhi.dts.platform.domain.permission.AssetOwnership;
 import com.yuzhi.dts.platform.repository.permission.AssetOwnershipRepository;
 import com.yuzhi.dts.platform.service.permission.AssetPermissionAuditService;
 import java.util.List;
+import java.util.Map;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.data.domain.Page;
@@ -80,6 +81,49 @@ public class AssetOwnershipResource {
         return ResponseEntity.ok(new BatchResult(updated));
     }
 
+    @PostMapping
+    @Transactional
+    @PreAuthorize(INST_MANAGER_EXPRESSION)
+    public ResponseEntity<AssetOwnership> create(@RequestBody CreateOwnershipRequest request) {
+        if (request.assetType() == null || request.assetType().isBlank()
+                || request.assetId() == null || request.assetId().isBlank()) {
+            return ResponseEntity.badRequest().build();
+        }
+        // Upsert: if ownership already exists for this asset, update it
+        AssetOwnership ownership = ownershipRepository
+            .findByAssetTypeAndAssetId(request.assetType().trim(), request.assetId().trim())
+            .orElseGet(AssetOwnership::new);
+
+        ownership.setAssetType(request.assetType().trim());
+        ownership.setAssetId(request.assetId().trim());
+        ownership.setOwnerDeptCode(request.ownerDeptCode() != null ? request.ownerDeptCode().trim() : "");
+        ownership.setAssignedBy(request.assignedBy() != null ? request.assignedBy().trim() : "SYSTEM");
+        ownership = ownershipRepository.save(ownership);
+
+        log.info("Created/updated ownership: type={} id={} dept={}",
+            ownership.getAssetType(), ownership.getAssetId(), ownership.getOwnerDeptCode());
+        return ResponseEntity.ok(ownership);
+    }
+
+    @DeleteMapping
+    @Transactional
+    @PreAuthorize(INST_MANAGER_EXPRESSION)
+    public ResponseEntity<?> delete(
+            @RequestParam String assetType,
+            @RequestParam String assetId) {
+        ownershipRepository.findByAssetTypeAndAssetId(assetType.trim(), assetId.trim())
+            .ifPresent(ownership -> {
+                auditService.recordOwnershipChange(
+                    ownership.getAssetType(), ownership.getAssetId(),
+                    ownership.getOwnerDeptCode(), null
+                );
+                ownershipRepository.delete(ownership);
+                log.info("Deleted ownership: type={} id={}", assetType, assetId);
+            });
+        return ResponseEntity.ok(Map.of("deleted", true));
+    }
+
+    public record CreateOwnershipRequest(String assetType, String assetId, String ownerDeptCode, String assignedBy) {}
     public record UpdateOwnershipRequest(String ownerDeptCode, String assignedBy) {}
     public record BatchOwnershipRequest(List<Long> ids, String ownerDeptCode, String assignedBy) {}
     public record BatchResult(int updated) {}

@@ -13,7 +13,7 @@ import com.yuzhi.dts.analytics.repository.AnalyticsScreenRepository;
 import com.yuzhi.dts.analytics.repository.AnalyticsScreenTemplateRepository;
 import com.yuzhi.dts.analytics.repository.AnalyticsScreenTemplateVersionRepository;
 import com.yuzhi.dts.analytics.service.AnalyticsSessionService;
-import com.yuzhi.dts.analytics.service.ScreenAclService;
+import com.yuzhi.dts.analytics.service.ScreenPermissionService;
 import com.yuzhi.dts.analytics.service.ScreenAssetAuditService;
 import com.yuzhi.dts.analytics.service.ScreenTemplateVersionService;
 import com.yuzhi.dts.analytics.web.support.MetabaseAuth;
@@ -46,7 +46,7 @@ public class ScreenTemplateResource {
     private final AnalyticsScreenTemplateRepository screenTemplateRepository;
     private final AnalyticsScreenTemplateVersionRepository screenTemplateVersionRepository;
     private final AnalyticsScreenRepository screenRepository;
-    private final ScreenAclService screenAclService;
+    private final ScreenPermissionService screenPermissionService;
     private final ScreenAssetAuditService screenAssetAuditService;
     private final ScreenTemplateVersionService screenTemplateVersionService;
     private final ObjectMapper objectMapper;
@@ -56,7 +56,7 @@ public class ScreenTemplateResource {
             AnalyticsScreenTemplateRepository screenTemplateRepository,
             AnalyticsScreenTemplateVersionRepository screenTemplateVersionRepository,
             AnalyticsScreenRepository screenRepository,
-            ScreenAclService screenAclService,
+            ScreenPermissionService screenPermissionService,
             ScreenAssetAuditService screenAssetAuditService,
             ScreenTemplateVersionService screenTemplateVersionService,
             ObjectMapper objectMapper) {
@@ -64,7 +64,7 @@ public class ScreenTemplateResource {
         this.screenTemplateRepository = screenTemplateRepository;
         this.screenTemplateVersionRepository = screenTemplateVersionRepository;
         this.screenRepository = screenRepository;
-        this.screenAclService = screenAclService;
+        this.screenPermissionService = screenPermissionService;
         this.screenAssetAuditService = screenAssetAuditService;
         this.screenTemplateVersionService = screenTemplateVersionService;
         this.objectMapper = objectMapper;
@@ -326,7 +326,7 @@ public class ScreenTemplateResource {
         }
 
         PlatformContext context = PlatformContext.from(request);
-        if (!screenAclService.hasPermission(screen, user.get(), context, ScreenAclService.Permission.READ)) {
+        if (!screenPermissionService.snapshot(screen, user.get(), context).canRead()) {
             return forbidden();
         }
 
@@ -521,7 +521,6 @@ public class ScreenTemplateResource {
         screen.setArchived(false);
 
         screen = screenRepository.save(screen);
-        screenAclService.ensureCreatorManage(screen);
         Map<String, Object> createScreenAudit = new LinkedHashMap<>();
         createScreenAudit.put("targetScreenId", screen.getId());
         createScreenAudit.put("targetScreenName", screen.getName());

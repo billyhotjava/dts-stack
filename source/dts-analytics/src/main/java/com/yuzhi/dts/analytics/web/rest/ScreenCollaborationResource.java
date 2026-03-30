@@ -8,7 +8,7 @@ import com.yuzhi.dts.analytics.domain.AnalyticsScreenAuditLog;
 import com.yuzhi.dts.analytics.domain.AnalyticsUser;
 import com.yuzhi.dts.analytics.repository.AnalyticsScreenRepository;
 import com.yuzhi.dts.analytics.service.AnalyticsSessionService;
-import com.yuzhi.dts.analytics.service.ScreenAclService;
+import com.yuzhi.dts.analytics.service.ScreenPermissionService;
 import com.yuzhi.dts.analytics.service.ScreenAuditService;
 import com.yuzhi.dts.analytics.service.ScreenCollaborationRealtimeService;
 import com.yuzhi.dts.analytics.web.support.MetabaseAuth;
@@ -56,7 +56,7 @@ public class ScreenCollaborationResource {
 
     private final AnalyticsSessionService sessionService;
     private final AnalyticsScreenRepository screenRepository;
-    private final ScreenAclService screenAclService;
+    private final ScreenPermissionService screenPermissionService;
     private final ScreenAuditService screenAuditService;
     private final ScreenCollaborationRealtimeService realtimeService;
     private final ObjectMapper objectMapper;
@@ -64,13 +64,13 @@ public class ScreenCollaborationResource {
     public ScreenCollaborationResource(
             AnalyticsSessionService sessionService,
             AnalyticsScreenRepository screenRepository,
-            ScreenAclService screenAclService,
+            ScreenPermissionService screenPermissionService,
             ScreenAuditService screenAuditService,
             ScreenCollaborationRealtimeService realtimeService,
             ObjectMapper objectMapper) {
         this.sessionService = sessionService;
         this.screenRepository = screenRepository;
-        this.screenAclService = screenAclService;
+        this.screenPermissionService = screenPermissionService;
         this.screenAuditService = screenAuditService;
         this.realtimeService = realtimeService;
         this.objectMapper = objectMapper;
@@ -93,7 +93,7 @@ public class ScreenCollaborationResource {
         }
 
         PlatformContext context = PlatformContext.from(request);
-        if (!screenAclService.hasPermission(screen, user.get(), context, ScreenAclService.Permission.READ)) {
+        if (!screenPermissionService.snapshot(screen, user.get(), context).canRead()) {
             return forbidden();
         }
 
@@ -119,7 +119,7 @@ public class ScreenCollaborationResource {
         }
 
         PlatformContext context = PlatformContext.from(request);
-        if (!screenAclService.hasPermission(screen, user.get(), context, ScreenAclService.Permission.READ)) {
+        if (!screenPermissionService.snapshot(screen, user.get(), context).canRead()) {
             return forbidden();
         }
 
@@ -145,7 +145,7 @@ public class ScreenCollaborationResource {
         }
 
         PlatformContext context = PlatformContext.from(request);
-        if (!screenAclService.hasPermission(screen, user.get(), context, ScreenAclService.Permission.READ)) {
+        if (!screenPermissionService.snapshot(screen, user.get(), context).canRead()) {
             return forbidden();
         }
 
@@ -194,7 +194,7 @@ public class ScreenCollaborationResource {
         }
 
         PlatformContext context = PlatformContext.from(request);
-        if (!screenAclService.hasPermission(screen, user.get(), context, ScreenAclService.Permission.READ)) {
+        if (!screenPermissionService.snapshot(screen, user.get(), context).canRead()) {
             return forbidden();
         }
 
@@ -249,7 +249,7 @@ public class ScreenCollaborationResource {
             return ResponseEntity.notFound().build();
         }
         PlatformContext context = PlatformContext.from(request);
-        if (!screenAclService.hasPermission(screen, user.get(), context, ScreenAclService.Permission.READ)) {
+        if (!screenPermissionService.snapshot(screen, user.get(), context).canRead()) {
             return forbidden();
         }
         int safeTtlSeconds = sanitizeTtlSeconds(ttlSeconds);
@@ -275,7 +275,7 @@ public class ScreenCollaborationResource {
             return ResponseEntity.notFound().build();
         }
         PlatformContext context = PlatformContext.from(request);
-        if (!screenAclService.hasPermission(screen, user.get(), context, ScreenAclService.Permission.READ)) {
+        if (!screenPermissionService.snapshot(screen, user.get(), context).canRead()) {
             return forbidden();
         }
         int safeTtlSeconds = sanitizeTtlSeconds(ttlSeconds);
@@ -336,7 +336,7 @@ public class ScreenCollaborationResource {
             return ResponseEntity.notFound().build();
         }
         PlatformContext context = PlatformContext.from(request);
-        if (!screenAclService.hasPermission(screen, user.get(), context, ScreenAclService.Permission.READ)) {
+        if (!screenPermissionService.snapshot(screen, user.get(), context).canRead()) {
             return forbidden();
         }
         int safeTtlSeconds = sanitizeTtlSeconds(ttlSeconds);
@@ -377,7 +377,7 @@ public class ScreenCollaborationResource {
             return ResponseEntity.notFound().build();
         }
         PlatformContext context = PlatformContext.from(request);
-        if (!screenAclService.hasPermission(screen, user.get(), context, ScreenAclService.Permission.READ)) {
+        if (!screenPermissionService.snapshot(screen, user.get(), context).canRead()) {
             return forbidden();
         }
         int safeTtlSeconds = sanitizeTtlSeconds(ttlSeconds);
@@ -402,7 +402,7 @@ public class ScreenCollaborationResource {
         }
 
         PlatformContext context = PlatformContext.from(request);
-        if (!screenAclService.hasPermission(screen, user.get(), context, ScreenAclService.Permission.EDIT)) {
+        if (!screenPermissionService.snapshot(screen, user.get(), context).canEdit()) {
             return forbidden();
         }
 
@@ -492,7 +492,7 @@ public class ScreenCollaborationResource {
         }
 
         PlatformContext context = PlatformContext.from(request);
-        if (!screenAclService.hasPermission(screen, user.get(), context, ScreenAclService.Permission.EDIT)) {
+        if (!screenPermissionService.snapshot(screen, user.get(), context).canEdit()) {
             return forbidden();
         }
 

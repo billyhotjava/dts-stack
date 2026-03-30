@@ -496,6 +496,182 @@ export function renderBasic(
                 </div>
             );
 
+        // ── 企业组件 ──
+
+        case 'section-panel': {
+            const title = String(c.title || '');
+            const titleIcon = c.titleIcon ? String(c.titleIcon) : '';
+            const showHeader = c.showHeader !== false;
+            const headerHeight = Math.max(0, Number(c.headerHeight || 36));
+            const borderStyle = String(c.borderStyle || 'solid');
+            const borderWidth = Math.max(0, Number(c.borderWidth || 1));
+            const borderRadius = Math.max(0, Number(c.borderRadius || 12));
+            const borderColor = c.borderColor as string[] | string | undefined;
+            const bgColor = String(c.backgroundColor || 'rgba(30, 41, 59, 0.85)');
+            const backdropBlur = Math.max(0, Number(c.backdropBlur || 0));
+            const shadow = String(c.shadow || 'none');
+            const padding = Math.max(0, Number(c.padding || 16));
+            const titleAlign = String(c.titleAlign || 'left') as 'left' | 'center';
+            const titleColor = resolveTextColor(c.titleColor as string | undefined, t.textPrimary);
+            const headerBg = String(c.headerBackground || 'transparent');
+
+            const shadowMap: Record<string, string> = {
+                none: 'none',
+                subtle: '0 1px 3px rgba(0,0,0,0.08), 0 1px 2px rgba(0,0,0,0.06)',
+                medium: '0 4px 12px rgba(0,0,0,0.12), 0 2px 4px rgba(0,0,0,0.08)',
+                strong: '0 8px 24px rgba(0,0,0,0.2), 0 4px 8px rgba(0,0,0,0.12)',
+            };
+
+            // Border style resolution
+            let borderCss = 'none';
+            if (borderStyle === 'solid') {
+                const clr = Array.isArray(borderColor) ? borderColor[0] : (borderColor || 'rgba(148,163,184,0.2)');
+                borderCss = `${borderWidth}px solid ${clr}`;
+            } else if (borderStyle === 'gradient' && Array.isArray(borderColor) && borderColor.length >= 2) {
+                borderCss = `${borderWidth}px solid ${borderColor[0]}`;
+            } else if (borderStyle === 'glow' && Array.isArray(borderColor)) {
+                borderCss = `${borderWidth}px solid ${borderColor[0] || '#3b82f6'}`;
+            }
+
+            const glowShadow = borderStyle === 'glow'
+                ? `0 0 12px ${(Array.isArray(borderColor) ? borderColor[0] : borderColor) || '#3b82f6'}40`
+                : '';
+            const finalShadow = [shadowMap[shadow] || 'none', glowShadow].filter(s => s && s !== 'none').join(', ') || 'none';
+
+            // Gradient border via border-image
+            const gradientBorderImage = borderStyle === 'gradient' && Array.isArray(borderColor) && borderColor.length >= 2
+                ? `linear-gradient(135deg, ${borderColor[0]}, ${borderColor[1]}) 1`
+                : undefined;
+
+            return (
+                <div style={{
+                    width: '100%', height: '100%', boxSizing: 'border-box',
+                    border: borderCss,
+                    borderImage: gradientBorderImage,
+                    borderRadius,
+                    background: bgColor,
+                    backdropFilter: backdropBlur > 0 ? `blur(${backdropBlur}px)` : undefined,
+                    WebkitBackdropFilter: backdropBlur > 0 ? `blur(${backdropBlur}px)` : undefined,
+                    boxShadow: finalShadow,
+                    display: 'flex', flexDirection: 'column',
+                    overflow: 'hidden',
+                }}>
+                    {showHeader && (
+                        <div style={{
+                            height: headerHeight, minHeight: headerHeight,
+                            display: 'flex', alignItems: 'center',
+                            justifyContent: titleAlign === 'center' ? 'center' : 'flex-start',
+                            padding: '0 16px', gap: 8,
+                            fontSize: 15, fontWeight: 600, color: titleColor,
+                            background: headerBg,
+                            borderBottom: `1px solid ${Array.isArray(borderColor) ? borderColor[0] + '30' : 'rgba(148,163,184,0.1)'}`,
+                        }}>
+                            {titleIcon && <span style={{ fontSize: 16 }}>{titleIcon}</span>}
+                            {title}
+                        </div>
+                    )}
+                    <div style={{ flex: 1, padding, overflow: 'hidden', position: 'relative' }}>
+                        {/* Child components render here via canvas layer */}
+                    </div>
+                </div>
+            );
+        }
+
+        case 'divider': {
+            const direction = String(c.direction || 'horizontal');
+            const lineStyle = String(c.lineStyle || 'solid');
+            const lineColor = String(c.lineColor || 'rgba(148, 163, 184, 0.3)');
+            const lineWidth = Math.max(1, Number(c.lineWidth || 1));
+            const gradientColors = c.gradientColors as string[] | undefined;
+
+            if (direction === 'vertical') {
+                const bg = lineStyle === 'gradient' && gradientColors?.length
+                    ? `linear-gradient(to bottom, ${gradientColors.join(', ')})`
+                    : lineColor;
+                return (
+                    <div style={{
+                        width: lineWidth, height: '100%', margin: '0 auto',
+                        background: bg,
+                        borderRadius: lineWidth,
+                    }} />
+                );
+            }
+            // horizontal
+            const bg = lineStyle === 'gradient' && gradientColors?.length
+                ? `linear-gradient(to right, ${gradientColors.join(', ')})`
+                : lineColor;
+            return (
+                <div style={{
+                    width: '100%', display: 'flex', alignItems: 'center', height: '100%',
+                }}>
+                    <div style={{
+                        width: '100%', height: lineWidth,
+                        background: bg,
+                        borderRadius: lineWidth,
+                        borderStyle: lineStyle === 'dashed' ? 'dashed' : lineStyle === 'dotted' ? 'dotted' : 'none',
+                        borderWidth: lineStyle !== 'solid' && lineStyle !== 'gradient' ? lineWidth : 0,
+                        borderColor: lineColor,
+                    }} />
+                </div>
+            );
+        }
+
+        case 'stat-card': {
+            const title = String(c.title || '指标');
+            const value = String(c.value || '0');
+            const suffix = String(c.suffix || '');
+            const trend = String(c.trend || 'none');
+            const trendValue = String(c.trendValue || '');
+            const icon = c.icon ? String(c.icon) : '';
+            const accentColor = String(c.accentColor || '#3b82f6');
+            const showAccentBar = c.showAccentBar !== false;
+            const borderRadius = Math.max(0, Number(c.borderRadius || 10));
+            const bgColor = String(c.backgroundColor || t.cardBackground);
+            const shadow = String(c.shadow || 'subtle');
+            const valueColor = resolveTextColor(c.valueColor as string | undefined, t.textPrimary);
+            const titleColor = resolveTextColor(c.titleColor as string | undefined, t.textSecondary);
+
+            const shadowMap: Record<string, string> = {
+                none: 'none',
+                subtle: '0 1px 3px rgba(0,0,0,0.08), 0 1px 2px rgba(0,0,0,0.06)',
+                medium: '0 4px 12px rgba(0,0,0,0.12)',
+            };
+
+            const trendIcon = trend === 'up' ? '↑' : trend === 'down' ? '↓' : '';
+            const trendColor = trend === 'up' ? '#059669' : trend === 'down' ? '#dc2626' : t.textMuted;
+
+            return (
+                <div style={{
+                    width: '100%', height: '100%', boxSizing: 'border-box',
+                    display: 'flex', borderRadius,
+                    background: bgColor,
+                    border: `1px solid ${t.cardBorder?.replace(/^1px solid /, '') || 'rgba(148,163,184,0.2)'}`,
+                    boxShadow: shadowMap[shadow] || 'none',
+                    overflow: 'hidden',
+                }}>
+                    {showAccentBar && (
+                        <div style={{ width: 4, background: accentColor, borderRadius: '4px 0 0 4px', flexShrink: 0 }} />
+                    )}
+                    <div style={{ flex: 1, padding: '12px 16px', display: 'flex', flexDirection: 'column', justifyContent: 'center', gap: 6, minWidth: 0 }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                            {icon && <span style={{ fontSize: 14, flexShrink: 0 }}>{icon}</span>}
+                            <span style={{ fontSize: 12, fontWeight: 500, color: titleColor, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{title}</span>
+                        </div>
+                        <div style={{ display: 'flex', alignItems: 'baseline', gap: 6 }}>
+                            <span style={{ fontSize: 28, fontWeight: 700, color: valueColor, lineHeight: 1.1 }}>{value}</span>
+                            {suffix && <span style={{ fontSize: 13, color: titleColor }}>{suffix}</span>}
+                        </div>
+                        {trendValue && (
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 12, color: trendColor }}>
+                                {trendIcon && <span style={{ fontWeight: 600 }}>{trendIcon}</span>}
+                                <span>{trendValue}</span>
+                            </div>
+                        )}
+                    </div>
+                </div>
+            );
+        }
+
         case 'image':
             return isSafeSrcUrl(c.src) ? (
                 <img

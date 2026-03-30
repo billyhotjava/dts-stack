@@ -21,7 +21,7 @@ import com.yuzhi.dts.analytics.service.PublicLinkService;
 import com.yuzhi.dts.analytics.service.QueryExecutionFacade;
 import com.yuzhi.dts.analytics.service.QueryMetricsService;
 import com.yuzhi.dts.analytics.service.QueryTraceService;
-import com.yuzhi.dts.analytics.service.ScreenAclService;
+import com.yuzhi.dts.analytics.service.ScreenPermissionService;
 import com.yuzhi.dts.analytics.web.support.MetabaseAuth;
 import com.yuzhi.dts.analytics.web.support.PlatformContext;
 import com.yuzhi.dts.analytics.web.support.RequestContextUtils;
@@ -58,7 +58,7 @@ public class PublicResource {
     private final QueryMetricsService queryMetricsService;
     private final QueryTraceService queryTraceService;
     private final ProjectCockpitService projectCockpitService;
-    private final ScreenAclService screenAclService;
+    private final ScreenPermissionService screenPermissionService;
     private final ObjectMapper objectMapper;
 
     public PublicResource(
@@ -73,7 +73,7 @@ public class PublicResource {
             QueryMetricsService queryMetricsService,
             QueryTraceService queryTraceService,
             ProjectCockpitService projectCockpitService,
-            ScreenAclService screenAclService,
+            ScreenPermissionService screenPermissionService,
             ObjectMapper objectMapper) {
         this.sessionService = sessionService;
         this.publicLinkService = publicLinkService;
@@ -86,7 +86,7 @@ public class PublicResource {
         this.queryMetricsService = queryMetricsService;
         this.queryTraceService = queryTraceService;
         this.projectCockpitService = projectCockpitService;
-        this.screenAclService = screenAclService;
+        this.screenPermissionService = screenPermissionService;
         this.objectMapper = objectMapper;
     }
 
@@ -197,7 +197,7 @@ public class PublicResource {
         }
 
         // Check READ permission
-        if (!screenAclService.hasPermission(screen, user.get(), ctx, ScreenAclService.Permission.READ)) {
+        if (!screenPermissionService.snapshot(screen, user.get(), ctx).canRead()) {
             return ResponseEntity.status(403).contentType(MediaType.APPLICATION_JSON).body(
                 objectMapper.createObjectNode().put("error", "You do not have permission to view this screen"));
         }

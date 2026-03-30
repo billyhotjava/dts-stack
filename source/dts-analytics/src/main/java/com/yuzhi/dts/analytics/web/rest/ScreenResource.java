@@ -34,6 +34,7 @@ import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import org.springframework.http.MediaType;
@@ -114,13 +115,27 @@ public class ScreenResource {
         }
 
         PlatformContext context = PlatformContext.from(request);
-        List<AnalyticsScreen> screens = screenRepository.findAllByArchivedFalseOrderByIdDesc();
-        // Screen visibility is governed solely by analytics_screen_acl (share panel),
-        // not by the platform asset-permission system, so skip assetListFilterService here.
+
+        // Get accessible screen IDs first (efficient: single platform API call)
+        List<String> accessibleIds = screenPermissionService.listAccessibleScreenIds(user.orElseThrow(), context);
+
+        List<AnalyticsScreen> screens;
+        if (screenPermissionService.isAllAccessible(accessibleIds)) {
+            screens = screenRepository.findAllByArchivedFalseOrderByIdDesc();
+        } else if (accessibleIds.isEmpty()) {
+            screens = List.of();
+        } else {
+            // Convert string IDs to Long and query
+            List<Long> ids = accessibleIds.stream()
+                .map(s -> { try { return Long.parseLong(s); } catch (NumberFormatException e) { return null; } })
+                .filter(Objects::nonNull)
+                .toList();
+            screens = ids.isEmpty() ? List.of() : screenRepository.findAllByIdInAndArchivedFalse(ids);
+        }
 
         List<ObjectNode> result = screens.stream()
                 .map(screen -> {
-                    ScreenPermissionService.PermissionSnapshot permissions = screenPermissionService.snapshot(screen, user.get(), context);
+                    ScreenPermissionService.PermissionSnapshot permissions = screenPermissionService.snapshot(screen, user.orElseThrow(), context);
                     if (!permissions.canRead()) {
                         return null;
                     }
@@ -849,8 +864,11 @@ public class ScreenResource {
         return ResponseEntity.ok(detail);
     }
 
-    @PostMapping(path = "/{id}/publish", produces = MediaType.APPLICATION_JSON_VALUE)
-    public ResponseEntity<?> publish(@PathVariable("id") long id, HttpServletRequest request) {
+    @PostMapping(path = "/{id}/publish", consumes = MediaType.APPLICATION_JSON_VALUE, produces = MediaType.APPLICATION_JSON_VALUE)
+    public ResponseEntity<?> publish(
+            @PathVariable("id") long id,
+            @RequestBody(required = false) JsonNode body,
+            HttpServletRequest request) {
         Optional<AnalyticsUser> user = MetabaseAuth.currentUser(sessionService, request);
         if (user.isEmpty()) {
             return unauthorized();
@@ -870,6 +888,17 @@ public class ScreenResource {
                 screenEditLockService.currentBlockingLock(screen.getId(), user.get().getId());
         if (blockingLock != null) {
             return lockConflict(blockingLock);
+        }
+
+        String classification = body == null ? null : trimToNull(body.path("classification").asText(null));
+        if (classification != null) {
+            String upper = classification.toUpperCase(java.util.Locale.ROOT);
+            if (!java.util.Set.of("PUBLIC", "INTERNAL", "SECRET", "CONFIDENTIAL").contains(upper)) {
+                return ResponseEntity.badRequest().contentType(MediaType.APPLICATION_JSON)
+                    .body(objectMapper.createObjectNode().put("error", "classification must be PUBLIC, INTERNAL, SECRET, or CONFIDENTIAL"));
+            }
+            screen.setClassification(upper);
+            screenRepository.save(screen);
         }
 
         AnalyticsScreenVersion beforePublished =
@@ -1100,6 +1129,95 @@ public class ScreenResource {
         return ResponseEntity.noContent().build();
     }
 
+    // ── Grant management (proxied to platform asset_grant API) ──────────
+
+    @GetMapping(path = "/{id}/grants", produces = MediaType.APPLICATION_JSON_VALUE)
+    public ResponseEntity<?> getGrants(@PathVariable("id") long id, HttpServletRequest request) {
+        Optional<AnalyticsUser> user = MetabaseAuth.currentUser(sessionService, request);
+        if (user.isEmpty()) return unauthorized();
+
+        AnalyticsScreen screen = screenRepository.findById(id).orElse(null);
+        if (screen == null || screen.isArchived()) return ResponseEntity.notFound().build();
+
+        PlatformContext context = PlatformContext.from(request);
+        ScreenPermissionService.PermissionSnapshot perms = screenPermissionService.snapshot(screen, user.orElseThrow(), context);
+        if (!perms.isOwner()) return forbidden();
+
+        // Proxy to platform: GET /api/asset-grants?assetType=SCREEN&assetId={id}
+        try {
+            List<Map<String, Object>> grants = screenOwnershipService.listGrants(screen.getId());
+            return ResponseEntity.ok(grants);
+        } catch (Exception ex) {
+            return ResponseEntity.status(503).body(Map.of("error", "Failed to fetch grants: " + ex.getMessage()));
+        }
+    }
+
+    @PutMapping(path = "/{id}/grants", consumes = MediaType.APPLICATION_JSON_VALUE, produces = MediaType.APPLICATION_JSON_VALUE)
+    public ResponseEntity<?> addGrant(
+            @PathVariable("id") long id,
+            @RequestBody(required = false) JsonNode body,
+            HttpServletRequest request) {
+        Optional<AnalyticsUser> user = MetabaseAuth.currentUser(sessionService, request);
+        if (user.isEmpty()) return unauthorized();
+
+        AnalyticsScreen screen = screenRepository.findById(id).orElse(null);
+        if (screen == null || screen.isArchived()) return ResponseEntity.notFound().build();
+
+        PlatformContext context = PlatformContext.from(request);
+        ScreenPermissionService.PermissionSnapshot perms = screenPermissionService.snapshot(screen, user.orElseThrow(), context);
+        if (!perms.isOwner()) return forbidden();
+
+        // Parse body: { granteeType: "USER"|"DEPT"|"ROLE", granteeId: "...", permission: "READ"|"EDIT" }
+        String granteeType = body != null ? trimToNull(body.path("granteeType").asText(null)) : null;
+        String granteeId = body != null ? trimToNull(body.path("granteeId").asText(null)) : null;
+        String permission = body != null ? trimToNull(body.path("permission").asText(null)) : null;
+
+        if (granteeType == null || granteeId == null || permission == null) {
+            return ResponseEntity.badRequest().body(Map.of("error", "granteeType, granteeId, and permission are required"));
+        }
+        if (!Set.of("USER", "DEPT", "ROLE").contains(granteeType.toUpperCase())) {
+            return ResponseEntity.badRequest().body(Map.of("error", "granteeType must be USER, DEPT, or ROLE"));
+        }
+        if (!Set.of("READ", "EDIT").contains(permission.toUpperCase())) {
+            return ResponseEntity.badRequest().body(Map.of("error", "permission must be READ or EDIT"));
+        }
+
+        try {
+            String grantedBy = extractUsername(user.orElseThrow());
+            Map<String, Object> grant = screenOwnershipService.createGrant(
+                screen.getId(), granteeType.toUpperCase(), granteeId, permission.toUpperCase(), grantedBy);
+
+            screenAuditService.log(screen.getId(), user.orElseThrow().getId(), "grant.add", null, grant, requestIdFrom(request));
+            return ResponseEntity.ok(grant);
+        } catch (Exception ex) {
+            return ResponseEntity.status(503).body(Map.of("error", "Failed to create grant: " + ex.getMessage()));
+        }
+    }
+
+    @DeleteMapping(path = "/{id}/grants/{grantId}")
+    public ResponseEntity<?> revokeGrant(
+            @PathVariable("id") long id,
+            @PathVariable("grantId") long grantId,
+            HttpServletRequest request) {
+        Optional<AnalyticsUser> user = MetabaseAuth.currentUser(sessionService, request);
+        if (user.isEmpty()) return unauthorized();
+
+        AnalyticsScreen screen = screenRepository.findById(id).orElse(null);
+        if (screen == null || screen.isArchived()) return ResponseEntity.notFound().build();
+
+        PlatformContext context = PlatformContext.from(request);
+        ScreenPermissionService.PermissionSnapshot perms = screenPermissionService.snapshot(screen, user.orElseThrow(), context);
+        if (!perms.isOwner()) return forbidden();
+
+        try {
+            screenOwnershipService.revokeGrant(grantId);
+            screenAuditService.log(screen.getId(), user.orElseThrow().getId(), "grant.revoke", Map.of("grantId", grantId), null, requestIdFrom(request));
+            return ResponseEntity.ok(Map.of("deleted", true));
+        } catch (Exception ex) {
+            return ResponseEntity.status(503).body(Map.of("error", "Failed to revoke grant: " + ex.getMessage()));
+        }
+    }
+
     private AnalyticsScreenVersion createVersionFromScreen(
             AnalyticsScreen screen,
             Long creatorId,
@@ -1158,8 +1276,10 @@ public class ScreenResource {
         node.put("canEdit", permissions.canEdit());
         node.put("canPublish", permissions.canEdit());
         node.put("canManage", permissions.isOwner());
-        node.put("canDelete", permissions.canDelete());
+        node.put("canDelete", permissions.isOwner());
         node.put("isOwner", permissions.isOwner());
+        node.put("classification", screen.getClassification());
+        node.put("ownerDeptCode", screen.getOwnerDeptCode());
         if (currentPublishedVersion != null) {
             node.put("publishedVersionNo", currentPublishedVersion.getVersionNo());
             node.putPOJO("publishedAt", currentPublishedVersion.getPublishedAt());
@@ -1301,19 +1421,6 @@ public class ScreenResource {
             out.add(item);
         }
         return out;
-    }
-
-    private ObjectNode toAclResponse(AnalyticsScreenAcl acl) {
-        ObjectNode node = objectMapper.createObjectNode();
-        node.put("id", acl.getId());
-        node.put("screenId", acl.getScreenId());
-        node.put("subjectType", acl.getSubjectType());
-        node.put("subjectId", acl.getSubjectId());
-        node.put("perm", acl.getPerm());
-        node.putPOJO("creatorId", acl.getCreatorId());
-        node.putPOJO("createdAt", acl.getCreatedAt());
-        node.putPOJO("updatedAt", acl.getUpdatedAt());
-        return node;
     }
 
     private ObjectNode toDetailResponse(
@@ -2132,6 +2239,13 @@ public class ScreenResource {
         node.putPOJO("expireAt", lock.expireAt());
         node.put("ttlSeconds", lock.ttlSeconds());
         return node;
+    }
+
+    private String extractUsername(AnalyticsUser user) {
+        String email = user.getEmail();
+        if (email == null || email.isBlank()) return "";
+        int at = email.indexOf('@');
+        return at > 0 ? email.substring(0, at) : email;
     }
 
     private static String trimToNull(String value) {

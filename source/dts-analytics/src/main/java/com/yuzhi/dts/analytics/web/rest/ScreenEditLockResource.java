@@ -7,7 +7,7 @@ import com.yuzhi.dts.analytics.domain.AnalyticsScreen;
 import com.yuzhi.dts.analytics.domain.AnalyticsUser;
 import com.yuzhi.dts.analytics.repository.AnalyticsScreenRepository;
 import com.yuzhi.dts.analytics.service.AnalyticsSessionService;
-import com.yuzhi.dts.analytics.service.ScreenAclService;
+import com.yuzhi.dts.analytics.service.ScreenPermissionService;
 import com.yuzhi.dts.analytics.service.ScreenEditLockService;
 import com.yuzhi.dts.analytics.web.support.MetabaseAuth;
 import com.yuzhi.dts.analytics.web.support.PlatformContext;
@@ -30,19 +30,19 @@ public class ScreenEditLockResource {
 
     private final AnalyticsSessionService sessionService;
     private final AnalyticsScreenRepository screenRepository;
-    private final ScreenAclService screenAclService;
+    private final ScreenPermissionService screenPermissionService;
     private final ScreenEditLockService screenEditLockService;
     private final ObjectMapper objectMapper;
 
     public ScreenEditLockResource(
             AnalyticsSessionService sessionService,
             AnalyticsScreenRepository screenRepository,
-            ScreenAclService screenAclService,
+            ScreenPermissionService screenPermissionService,
             ScreenEditLockService screenEditLockService,
             ObjectMapper objectMapper) {
         this.sessionService = sessionService;
         this.screenRepository = screenRepository;
-        this.screenAclService = screenAclService;
+        this.screenPermissionService = screenPermissionService;
         this.screenEditLockService = screenEditLockService;
         this.objectMapper = objectMapper;
     }
@@ -53,9 +53,9 @@ public class ScreenEditLockResource {
         if (user.isEmpty()) {
             return unauthorized();
         }
-        AnalyticsScreen screen = loadEditableScreen(id, user.get(), request, ScreenAclService.Permission.READ);
+        AnalyticsScreen screen = loadReadableScreen(id, user.get(), request);
         if (screen == null) {
-            return screenResponse(id, user.get(), request, ScreenAclService.Permission.READ);
+            return screenResponseRead(id, user.get(), request);
         }
         return ResponseEntity.ok(toResponse(screenEditLockService.current(screen.getId(), user.get().getId())));
     }
@@ -69,15 +69,15 @@ public class ScreenEditLockResource {
         if (user.isEmpty()) {
             return unauthorized();
         }
-        AnalyticsScreen screen = loadEditableScreen(id, user.get(), request, ScreenAclService.Permission.EDIT);
+        AnalyticsScreen screen = loadEditableScreen(id, user.get(), request);
         if (screen == null) {
-            return screenResponse(id, user.get(), request, ScreenAclService.Permission.EDIT);
+            return screenResponseEdit(id, user.get(), request);
         }
         Integer ttlSeconds = body != null && body.has("ttlSeconds") ? body.path("ttlSeconds").asInt(120) : null;
         boolean forceTakeover = body != null && body.has("forceTakeover") && body.path("forceTakeover").asBoolean(false);
         if (forceTakeover) {
             PlatformContext context = PlatformContext.from(request);
-            if (!screenAclService.hasPermission(screen, user.get(), context, ScreenAclService.Permission.MANAGE)) {
+            if (!screenPermissionService.snapshot(screen, user.get(), context).isOwner()) {
                 return forbidden();
             }
         }
@@ -104,9 +104,9 @@ public class ScreenEditLockResource {
         if (user.isEmpty()) {
             return unauthorized();
         }
-        AnalyticsScreen screen = loadEditableScreen(id, user.get(), request, ScreenAclService.Permission.EDIT);
+        AnalyticsScreen screen = loadEditableScreen(id, user.get(), request);
         if (screen == null) {
-            return screenResponse(id, user.get(), request, ScreenAclService.Permission.EDIT);
+            return screenResponseEdit(id, user.get(), request);
         }
         Integer ttlSeconds = body != null && body.has("ttlSeconds") ? body.path("ttlSeconds").asInt(120) : null;
         ScreenEditLockService.LockAcquireResult result = screenEditLockService.heartbeat(
@@ -131,41 +131,57 @@ public class ScreenEditLockResource {
         if (user.isEmpty()) {
             return unauthorized();
         }
-        AnalyticsScreen screen = loadEditableScreen(id, user.get(), request, ScreenAclService.Permission.EDIT);
+        AnalyticsScreen screen = loadEditableScreen(id, user.get(), request);
         if (screen == null) {
-            return screenResponse(id, user.get(), request, ScreenAclService.Permission.EDIT);
+            return screenResponseEdit(id, user.get(), request);
         }
         screenEditLockService.release(screen.getId(), user.get().getId());
         return ResponseEntity.ok(toResponse(screenEditLockService.current(screen.getId(), user.get().getId())));
     }
 
-    private AnalyticsScreen loadEditableScreen(
-            long screenId,
-            AnalyticsUser user,
-            HttpServletRequest request,
-            ScreenAclService.Permission permission) {
+    private AnalyticsScreen loadReadableScreen(long screenId, AnalyticsUser user, HttpServletRequest request) {
         AnalyticsScreen screen = screenRepository.findById(screenId).orElse(null);
         if (screen == null || screen.isArchived()) {
             return null;
         }
         PlatformContext context = PlatformContext.from(request);
-        if (!screenAclService.hasPermission(screen, user, context, permission)) {
+        if (!screenPermissionService.snapshot(screen, user, context).canRead()) {
             return null;
         }
         return screen;
     }
 
-    private ResponseEntity<?> screenResponse(
-            long screenId,
-            AnalyticsUser user,
-            HttpServletRequest request,
-            ScreenAclService.Permission permission) {
+    private AnalyticsScreen loadEditableScreen(long screenId, AnalyticsUser user, HttpServletRequest request) {
+        AnalyticsScreen screen = screenRepository.findById(screenId).orElse(null);
+        if (screen == null || screen.isArchived()) {
+            return null;
+        }
+        PlatformContext context = PlatformContext.from(request);
+        if (!screenPermissionService.snapshot(screen, user, context).canEdit()) {
+            return null;
+        }
+        return screen;
+    }
+
+    private ResponseEntity<?> screenResponseRead(long screenId, AnalyticsUser user, HttpServletRequest request) {
         AnalyticsScreen screen = screenRepository.findById(screenId).orElse(null);
         if (screen == null || screen.isArchived()) {
             return ResponseEntity.notFound().build();
         }
         PlatformContext context = PlatformContext.from(request);
-        if (!screenAclService.hasPermission(screen, user, context, permission)) {
+        if (!screenPermissionService.snapshot(screen, user, context).canRead()) {
+            return forbidden();
+        }
+        return ResponseEntity.internalServerError().contentType(MediaType.TEXT_PLAIN).body("Unexpected lock state");
+    }
+
+    private ResponseEntity<?> screenResponseEdit(long screenId, AnalyticsUser user, HttpServletRequest request) {
+        AnalyticsScreen screen = screenRepository.findById(screenId).orElse(null);
+        if (screen == null || screen.isArchived()) {
+            return ResponseEntity.notFound().build();
+        }
+        PlatformContext context = PlatformContext.from(request);
+        if (!screenPermissionService.snapshot(screen, user, context).canEdit()) {
             return forbidden();
         }
         return ResponseEntity.internalServerError().contentType(MediaType.TEXT_PLAIN).body("Unexpected lock state");

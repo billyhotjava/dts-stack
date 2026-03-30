@@ -36,7 +36,7 @@ public class ScreenCollaborationRealtimeService {
     private final ObjectMapper objectMapper;
     private final AnalyticsScreenRepository screenRepository;
     private final AnalyticsUserRepository userRepository;
-    private final ScreenAclService screenAclService;
+    private final ScreenPermissionService screenPermissionService;
     private final ScreenAuditService screenAuditService;
     private final ConcurrentHashMap<Long, CopyOnWriteArraySet<String>> screenSockets = new ConcurrentHashMap<>();
     private final ConcurrentHashMap<String, WebSocketSession> socketSessions = new ConcurrentHashMap<>();
@@ -48,12 +48,12 @@ public class ScreenCollaborationRealtimeService {
             ObjectMapper objectMapper,
             AnalyticsScreenRepository screenRepository,
             AnalyticsUserRepository userRepository,
-            ScreenAclService screenAclService,
+            ScreenPermissionService screenPermissionService,
             ScreenAuditService screenAuditService) {
         this.objectMapper = objectMapper;
         this.screenRepository = screenRepository;
         this.userRepository = userRepository;
-        this.screenAclService = screenAclService;
+        this.screenPermissionService = screenPermissionService;
         this.screenAuditService = screenAuditService;
     }
 
@@ -178,7 +178,7 @@ public class ScreenCollaborationRealtimeService {
             return;
         }
         PlatformContext context = new PlatformContext(null, null, binding.roles);
-        if (!screenAclService.hasPermission(screen, user, context, ScreenAclService.Permission.EDIT)) {
+        if (!screenPermissionService.snapshot(screen, user, context).canEdit()) {
             sendError(socket, "forbidden", requestId);
             return;
         }
@@ -274,7 +274,7 @@ public class ScreenCollaborationRealtimeService {
             return;
         }
         PlatformContext context = new PlatformContext(null, null, binding.roles);
-        if (!screenAclService.hasPermission(screen, user, context, ScreenAclService.Permission.EDIT)) {
+        if (!screenPermissionService.snapshot(screen, user, context).canEdit()) {
             sendError(socket, "forbidden", requestId);
             return;
         }

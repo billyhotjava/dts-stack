@@ -13,10 +13,9 @@ import {
 import { GlobalVariableManager } from './GlobalVariableManager';
 import { CacheObservabilityPanel } from './CacheObservabilityPanel';
 import { ScreenCompliancePanel } from './ScreenCompliancePanel';
-import { ScreenAclPanel } from './ScreenAclPanel';
 import { ScreenAuditPanel } from './ScreenAuditPanel';
 import { ScreenSharePolicyPanel } from './ScreenSharePolicyPanel';
-import { ScreenSharePanel } from './ScreenSharePanel';
+import { ScreenGrantPanel } from './ScreenGrantPanel';
 import { ScreenHealthPanel } from './ScreenHealthPanel';
 import { InteractionDebugPanel } from './InteractionDebugPanel';
 import { ScreenCollaborationPanel } from './ScreenCollaborationPanel';
@@ -213,12 +212,13 @@ export function ScreenHeader({
     const [nameValue, setNameValue] = useState(config.name);
     const [isSharing, setIsSharing] = useState(false);
     const [isPublishing, setIsPublishing] = useState(false);
+    const [showPublishDialog, setShowPublishDialog] = useState(false);
+    const [publishClassification, setPublishClassification] = useState<string | undefined>(undefined);
     const [isLoadingVersions, setIsLoadingVersions] = useState(false);
     const [showVariableManager, setShowVariableManager] = useState(false);
     const [showCachePanel, setShowCachePanel] = useState(false);
     const [showCompliancePanel, setShowCompliancePanel] = useState(false);
     const [showHealthPanel, setShowHealthPanel] = useState(false);
-    const [showAclPanel, setShowAclPanel] = useState(false);
     const [showAuditPanel, setShowAuditPanel] = useState(false);
     const [showSharePolicyPanel, setShowSharePolicyPanel] = useState(false);
     const [showSharePanel, setShowSharePanel] = useState(false);
@@ -454,6 +454,7 @@ export function ScreenHeader({
         canDelete: true,
         isOwner: true,
     });
+    const [screenMeta, setScreenMeta] = useState<{ classification?: string; ownerDeptCode?: string }>({});
 
     const cycleWarnings = useMemo(() => detectInteractionCycles(config), [config]);
     const lockedByOther = !!(editLock?.active && !editLock?.mine);
@@ -569,6 +570,10 @@ export function ScreenHeader({
                     canManage: screen.canManage !== false,
                     canDelete: (screen as Record<string, unknown>).canDelete !== false,
                     isOwner: (screen as Record<string, unknown>).isOwner === true,
+                });
+                setScreenMeta({
+                    classification: screen.classification,
+                    ownerDeptCode: screen.ownerDeptCode,
                 });
             })
             .catch(() => {
@@ -944,16 +949,17 @@ export function ScreenHeader({
         }
     }, [handleLockHttpError, handleUpdateConflictError, isSavingTemplate, saveScreen, templateForm]);
 
-    const handlePublish = useCallback(async () => {
+    const doPublish = useCallback(async (classification?: string) => {
         if (isPublishing) return;
         setIsPublishing(true);
+        setShowPublishDialog(false);
         try {
             const screenId = await saveScreen();
             if (!screenId) {
                 alert('请先保存大屏');
                 return;
             }
-            const result = await analyticsApi.publishScreen(screenId);
+            const result = await analyticsApi.publishScreen(screenId, classification ? { classification } : undefined);
             const warmup = result.warmup;
             const versionNo = result.version && result.version.versionNo != null ? result.version.versionNo : '-';
             let warmupText = '';
@@ -992,6 +998,10 @@ export function ScreenHeader({
             setIsPublishing(false);
         }
     }, [handleLockHttpError, handleUpdateConflictError, isPublishing, saveScreen]);
+
+    const handlePublish = useCallback(() => {
+        setShowPublishDialog(true);
+    }, []);
 
     useEffect(() => {
         if (!id || !permissions.canRead || publishNotice || publishNoticeDismissed) {
@@ -1778,13 +1788,6 @@ export function ScreenHeader({
                 run: () => setShowEditLockPanel(true),
             },
             {
-                id: 'governance-acl',
-                label: '权限矩阵',
-                keywords: '权限 acl',
-                disabled: !id || !permissions.canManage,
-                run: () => setShowAclPanel(true),
-            },
-            {
                 id: 'governance-audit',
                 label: '审计记录',
                 keywords: '审计 audit',
@@ -2189,7 +2192,6 @@ export function ScreenHeader({
                                     编辑锁{lockedByOther ? '(占用)' : (editLock?.mine ? '(我)' : '')}
                                 </button>
                                 <button type="button" className="header-btn flex items-center gap-1.5 px-4 py-2 border border-[var(--color-border)] rounded-md bg-[var(--color-surface)] text-[var(--color-text-primary)] text-[13px] font-medium cursor-pointer transition-all duration-200 whitespace-nowrap shrink-0 w-full justify-start py-[7px] px-2.5 hover:border-[var(--color-primary)] hover:bg-[var(--color-primary-light)] disabled:opacity-50 disabled:cursor-not-allowed" onClick={() => executeMenuAction(() => setShowCachePanel(true))} title="缓存观测面板">缓存观测</button>
-                                <button type="button" className="header-btn flex items-center gap-1.5 px-4 py-2 border border-[var(--color-border)] rounded-md bg-[var(--color-surface)] text-[var(--color-text-primary)] text-[13px] font-medium cursor-pointer transition-all duration-200 whitespace-nowrap shrink-0 w-full justify-start py-[7px] px-2.5 hover:border-[var(--color-primary)] hover:bg-[var(--color-primary-light)] disabled:opacity-50 disabled:cursor-not-allowed" onClick={() => executeMenuAction(() => setShowAclPanel(true))} disabled={!id || !permissions.canManage} title="权限矩阵(ACL)">权限(ACL)</button>
                                 <button type="button" className="header-btn flex items-center gap-1.5 px-4 py-2 border border-[var(--color-border)] rounded-md bg-[var(--color-surface)] text-[var(--color-text-primary)] text-[13px] font-medium cursor-pointer transition-all duration-200 whitespace-nowrap shrink-0 w-full justify-start py-[7px] px-2.5 hover:border-[var(--color-primary)] hover:bg-[var(--color-primary-light)] disabled:opacity-50 disabled:cursor-not-allowed" onClick={() => executeMenuAction(() => setShowAuditPanel(true))} disabled={!id || !permissions.canManage} title="审计记录">审计</button>
                                 <button type="button" className="header-btn flex items-center gap-1.5 px-4 py-2 border border-[var(--color-border)] rounded-md bg-[var(--color-surface)] text-[var(--color-text-primary)] text-[13px] font-medium cursor-pointer transition-all duration-200 whitespace-nowrap shrink-0 w-full justify-start py-[7px] px-2.5 hover:border-[var(--color-primary)] hover:bg-[var(--color-primary-light)] disabled:opacity-50 disabled:cursor-not-allowed" onClick={() => executeMenuAction(() => setShowSharePanel(true))} disabled={!id || !permissions.canManage} title="分享大屏给其他用户">分享</button>
                                 <button type="button" className="header-btn flex items-center gap-1.5 px-4 py-2 border border-[var(--color-border)] rounded-md bg-[var(--color-surface)] text-[var(--color-text-primary)] text-[13px] font-medium cursor-pointer transition-all duration-200 whitespace-nowrap shrink-0 w-full justify-start py-[7px] px-2.5 hover:border-[var(--color-primary)] hover:bg-[var(--color-primary-light)] disabled:opacity-50 disabled:cursor-not-allowed" onClick={() => executeMenuAction(() => setShowSharePolicyPanel(true))} disabled={!id || !permissions.canPublish} title="分享策略配置">分享策略</button>
@@ -2527,13 +2529,6 @@ export function ScreenHeader({
                 onClose={() => setShowHealthPanel(false)}
             />
 
-            <ScreenAclPanel
-                open={showAclPanel}
-                screenId={id}
-                onClose={() => setShowAclPanel(false)}
-                isOwner={permissions.isOwner}
-            />
-
             <ScreenAuditPanel
                 open={showAuditPanel}
                 screenId={id}
@@ -2626,12 +2621,40 @@ export function ScreenHeader({
                 onClose={() => setShowSharePolicyPanel(false)}
             />
 
-            <ScreenSharePanel
+            <ScreenGrantPanel
                 open={showSharePanel}
                 screenId={id}
                 onClose={() => setShowSharePanel(false)}
                 isOwner={permissions.isOwner}
+                ownerDept={screenMeta.ownerDeptCode || ''}
+                classification={screenMeta.classification}
             />
+
+            <Modal
+                open={showPublishDialog}
+                onCancel={() => setShowPublishDialog(false)}
+                title="发布大屏"
+                width={400}
+                onOk={() => doPublish(publishClassification)}
+                okText={isPublishing ? '发布中...' : '发布'}
+                okButtonProps={{ loading: isPublishing }}
+                cancelText="取消"
+            >
+                <div style={{ marginBottom: 16 }}>
+                    <div style={{ marginBottom: 8, fontWeight: 500 }}>密级（可选）</div>
+                    <select
+                        value={publishClassification || ''}
+                        onChange={(e) => setPublishClassification(e.target.value || undefined)}
+                        style={{ width: '100%', padding: '6px 8px', borderRadius: 4, border: '1px solid var(--color-border, #d9d9d9)' }}
+                    >
+                        <option value="">不设置密级</option>
+                        <option value="PUBLIC">公开</option>
+                        <option value="INTERNAL">内部</option>
+                        <option value="SECRET">秘密</option>
+                        <option value="CONFIDENTIAL">机密</option>
+                    </select>
+                </div>
+            </Modal>
 
             <Modal
                 open={showSaveTemplateDialog}

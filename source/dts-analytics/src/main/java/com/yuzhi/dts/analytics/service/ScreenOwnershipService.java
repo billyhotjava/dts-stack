@@ -49,7 +49,7 @@ public class ScreenOwnershipService {
 
 	/**
 	 * Register ownership for a screen asset on the platform side.
-	 * Uses the batch endpoint as the platform does not expose a single-create POST.
+	 * POST /api/asset-ownership creates or upserts the ownership record.
 	 * Failures are logged but do not propagate — the screen remains functional
 	 * without an ownership record (dept-scoping is simply unavailable).
 	 */
@@ -60,16 +60,13 @@ public class ScreenOwnershipService {
 		}
 
 		try {
-			URI uri = buildUri("/api/asset-ownership/batch");
-
-			Map<String, Object> entry = new LinkedHashMap<>();
-			entry.put("assetType", ASSET_TYPE);
-			entry.put("assetId", String.valueOf(screenId));
-			entry.put("ownerDeptCode", ownerDeptCode);
-			entry.put("assignedBy", ownerUsername);
+			URI uri = buildUri("/api/asset-ownership");
 
 			Map<String, Object> body = new LinkedHashMap<>();
-			body.put("entries", List.of(entry));
+			body.put("assetType", ASSET_TYPE);
+			body.put("assetId", String.valueOf(screenId));
+			body.put("ownerDeptCode", ownerDeptCode != null ? ownerDeptCode : "");
+			body.put("assignedBy", ownerUsername != null ? ownerUsername : "SYSTEM");
 
 			restTemplate.exchange(
 				uri, HttpMethod.POST,
@@ -94,16 +91,39 @@ public class ScreenOwnershipService {
 			return;
 		}
 
+		String assetId = String.valueOf(screenId);
+
+		// 1. Remove all grants for this screen
 		try {
-			URI uri = UriComponentsBuilder.fromHttpUrl(platformBaseUrl)
-				.path("/api/asset-ownership")
+			URI grantsUri = UriComponentsBuilder.fromHttpUrl(platformBaseUrl)
+				.path("/api/asset-grants/by-asset")
 				.queryParam("assetType", ASSET_TYPE)
-				.queryParam("assetId", String.valueOf(screenId))
+				.queryParam("assetId", assetId)
 				.build(true)
 				.toUri();
 
 			restTemplate.exchange(
-				uri, HttpMethod.DELETE,
+				grantsUri, HttpMethod.DELETE,
+				new HttpEntity<>(buildHeaders()),
+				Map.class
+			);
+
+			LOG.info("Removed grants for screen {}", screenId);
+		} catch (Exception ex) {
+			LOG.warn("Failed to remove grants for screen {}: {}", screenId, ex.getMessage());
+		}
+
+		// 2. Remove ownership record
+		try {
+			URI ownershipUri = UriComponentsBuilder.fromHttpUrl(platformBaseUrl)
+				.path("/api/asset-ownership")
+				.queryParam("assetType", ASSET_TYPE)
+				.queryParam("assetId", assetId)
+				.build(true)
+				.toUri();
+
+			restTemplate.exchange(
+				ownershipUri, HttpMethod.DELETE,
 				new HttpEntity<>(buildHeaders()),
 				Void.class
 			);
@@ -121,6 +141,71 @@ public class ScreenOwnershipService {
 	public void transferOwnership(Long screenId, String newOwnerUsername, String newDeptCode) {
 		LOG.info("transferOwnership not yet implemented for screen {} -> owner={} dept={}",
 			screenId, newOwnerUsername, newDeptCode);
+	}
+
+	/**
+	 * List all grants for a screen asset.
+	 * Proxies to GET {platformBaseUrl}/api/asset-grants?assetType=SCREEN&assetId={screenId}
+	 */
+	@SuppressWarnings("unchecked")
+	public List<Map<String, Object>> listGrants(Long screenId) {
+		URI uri = UriComponentsBuilder.fromHttpUrl(platformBaseUrl)
+			.path("/api/asset-grants")
+			.queryParam("assetType", ASSET_TYPE)
+			.queryParam("assetId", String.valueOf(screenId))
+			.build().toUri();
+
+		// Platform returns List<AssetGrant> directly (JSON array), so deserialize as List
+		var response = restTemplate.exchange(uri, HttpMethod.GET,
+			new HttpEntity<>(buildHeaders()), List.class);
+
+		Object body = response.getBody();
+		if (body instanceof List<?> list) {
+			return list.stream()
+				.filter(o -> o instanceof Map)
+				.map(o -> (Map<String, Object>) o)
+				.toList();
+		}
+		return List.of();
+	}
+
+	/**
+	 * Create a grant for a screen asset.
+	 * Proxies to POST {platformBaseUrl}/api/asset-grants
+	 */
+	@SuppressWarnings("unchecked")
+	public Map<String, Object> createGrant(Long screenId, String granteeType, String granteeId,
+											String permission, String grantedBy) {
+		URI uri = UriComponentsBuilder.fromHttpUrl(platformBaseUrl)
+			.path("/api/asset-grants")
+			.build().toUri();
+
+		Map<String, Object> body = new LinkedHashMap<>();
+		body.put("assetType", ASSET_TYPE);
+		body.put("assetId", String.valueOf(screenId));
+		body.put("granteeType", granteeType);
+		body.put("granteeId", granteeId);
+		body.put("permission", permission);
+		body.put("grantedBy", grantedBy);
+
+		var response = restTemplate.exchange(uri, HttpMethod.POST,
+			new HttpEntity<>(body, buildHeaders()), Map.class);
+
+		Map<String, Object> result = response.getBody();
+		return result != null ? new LinkedHashMap<>(result) : Map.of();
+	}
+
+	/**
+	 * Revoke (delete) a specific grant by its ID.
+	 * Proxies to DELETE {platformBaseUrl}/api/asset-grants/{grantId}
+	 */
+	public void revokeGrant(Long grantId) {
+		URI uri = UriComponentsBuilder.fromHttpUrl(platformBaseUrl)
+			.path("/api/asset-grants/" + grantId)
+			.build().toUri();
+
+		restTemplate.exchange(uri, HttpMethod.DELETE,
+			new HttpEntity<>(buildHeaders()), Map.class);
 	}
 
 	private URI buildUri(String path) {

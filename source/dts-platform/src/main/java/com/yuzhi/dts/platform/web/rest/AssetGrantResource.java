@@ -78,7 +78,9 @@ public class AssetGrantResource {
             }
         }
 
-        String currentUser = SecurityUtils.getCurrentUserLogin().orElse("system");
+        String grantedBy = request.grantedBy() != null && !request.grantedBy().isBlank()
+            ? request.grantedBy().trim()
+            : SecurityUtils.getCurrentUserLogin().orElse("system");
 
         AssetGrant grant = new AssetGrant();
         grant.setAssetType(request.assetType());
@@ -88,17 +90,35 @@ public class AssetGrantResource {
         grant.setPermission(request.permission());
         grant.setValidFrom(request.validFrom());
         grant.setValidTo(request.validTo());
-        grant.setGrantedBy(currentUser);
+        grant.setGrantedBy(grantedBy);
         grant.setGrantReason(request.grantReason());
 
         grant = grantRepository.save(grant);
 
         auditService.recordGrant(
             request.assetType(), request.assetId(),
-            request.granteeId(), request.permission(), request.grantReason()
+            request.granteeId(), request.permission(), request.grantReason(),
+            grantedBy
         );
 
         return ResponseEntity.ok(grant);
+    }
+
+    @DeleteMapping("/by-asset")
+    @Transactional
+    @PreAuthorize(DEPT_MANAGER_EXPRESSION)
+    public ResponseEntity<?> revokeByAsset(
+            @RequestParam String assetType,
+            @RequestParam String assetId) {
+        List<AssetGrant> grants = grantRepository.findByAssetTypeAndAssetId(assetType.trim(), assetId.trim());
+        for (AssetGrant grant : grants) {
+            auditService.recordRevoke(
+                grant.getAssetType(), grant.getAssetId(),
+                grant.getGranteeId(), grant.getPermission()
+            );
+        }
+        grantRepository.deleteAll(grants);
+        return ResponseEntity.ok(Map.of("deleted", grants.size()));
     }
 
     @DeleteMapping("/{id}")
@@ -141,6 +161,7 @@ public class AssetGrantResource {
         String granteeType, String granteeId,
         String permission,
         Instant validFrom, Instant validTo,
-        String grantReason
+        String grantReason,
+        String grantedBy
     ) {}
 }

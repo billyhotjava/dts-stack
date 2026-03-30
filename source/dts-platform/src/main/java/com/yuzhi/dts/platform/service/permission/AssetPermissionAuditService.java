@@ -18,13 +18,18 @@ public class AssetPermissionAuditService {
 
     public void recordGrant(String assetType, String assetId, String targetUser,
                             String permission, String oaReference) {
+        recordGrant(assetType, assetId, targetUser, permission, oaReference, currentOperator());
+    }
+
+    public void recordGrant(String assetType, String assetId, String targetUser,
+                            String permission, String oaReference, String operator) {
         AssetPermissionAudit audit = new AssetPermissionAudit();
         audit.setAction("GRANT");
         audit.setAssetType(assetType);
         audit.setAssetId(assetId);
         audit.setTargetUser(targetUser);
         audit.setPermission(permission);
-        audit.setOperator(currentOperator());
+        audit.setOperator(operator);
         audit.setOaReference(oaReference);
         auditRepository.save(audit);
     }

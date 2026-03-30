@@ -482,6 +482,10 @@ export type ScreenListItem = {
 	canEdit?: boolean;
 	canPublish?: boolean;
 	canManage?: boolean;
+	canDelete?: boolean;
+	isOwner?: boolean;
+	classification?: string;
+	ownerDeptCode?: string;
 };
 
 export type ScreenDetail = ScreenListItem & {
@@ -916,6 +920,31 @@ export type ScreenAclEntry = {
 	creatorId?: number | string;
 	createdAt?: string;
 	updatedAt?: string;
+};
+
+export type ScreenGrantEntry = {
+	id: number;
+	assetType: string;
+	assetId: string;
+	granteeType: string; // USER, DEPT, ROLE
+	granteeId: string;
+	permission: string; // READ, EDIT
+	grantedBy?: string;
+	grantReason?: string;
+	createdDate?: string;
+};
+
+export type OrgNode = {
+	id: string;
+	name: string;
+	code: string;
+	parentId?: string;
+	children?: OrgNode[];
+};
+
+export type RoleSummary = {
+	name: string;
+	code: string;
 };
 
 export type ScreenAuditEntry = {
@@ -2029,10 +2058,10 @@ export const analyticsApi = {
 			+ `?fromVersionId=${encodeURIComponent(String(fromVersionId))}`
 			+ `&toVersionId=${encodeURIComponent(String(toVersionId))}`,
 		),
-	publishScreen: (id: string | number) =>
+	publishScreen: (id: string | number, body?: { classification?: string }) =>
 		sendJson<{ screen: ScreenDetail; version: ScreenVersion; warmup?: ScreenWarmupSummary }>(
 			`/analytics/api/screens/${encodeURIComponent(String(id))}/publish`,
-			{},
+			body ?? {},
 		),
 	rollbackScreenVersion: (id: string | number, versionId: string | number) =>
 		sendJson<{ screen: ScreenDetail; version: ScreenVersion; warmup?: ScreenWarmupSummary }>(
@@ -2043,10 +2072,16 @@ export const analyticsApi = {
 		requestJson<ScreenDetail>(`/analytics/api/screens/${encodeURIComponent(String(id))}`, "PUT", body),
 	deleteScreen: (id: string | number) =>
 		requestJson<void>(`/analytics/api/screens/${encodeURIComponent(String(id))}`, "DELETE"),
-	getScreenAcl: (id: string | number) =>
-		fetchJson<ScreenAclEntry[]>(`/analytics/api/screens/${encodeURIComponent(String(id))}/acl`),
-	updateScreenAcl: (id: string | number, body: { entries: ScreenAclEntry[] }) =>
-		requestJson<ScreenAclEntry[]>(`/analytics/api/screens/${encodeURIComponent(String(id))}/acl`, "PUT", body),
+	// Screen grants (new permission system)
+	listScreenGrants: (id: string | number) =>
+		fetchJson<ScreenGrantEntry[]>(`/analytics/api/screens/${encodeURIComponent(String(id))}/grants`),
+	addScreenGrant: (id: string | number, body: { granteeType: string; granteeId: string; permission: string }) =>
+		sendJson<ScreenGrantEntry>(`/analytics/api/screens/${encodeURIComponent(String(id))}/grants`, body),
+	revokeScreenGrant: (id: string | number, grantId: number) =>
+		requestJson<{ deleted: boolean }>(`/analytics/api/screens/${encodeURIComponent(String(id))}/grants/${grantId}`, "DELETE"),
+	// Directory APIs for sharing
+	listOrgs: () => fetchJson<{ data: OrgNode[] }>("/analytics/api/platform/directory/orgs"),
+	listRoles: () => fetchJson<{ data: RoleSummary[] }>("/analytics/api/platform/directory/roles"),
 	getScreenEditLock: (id: string | number) =>
 		fetchJson<ScreenEditLock>(`/analytics/api/screens/${encodeURIComponent(String(id))}/edit-lock`),
 	acquireScreenEditLock: (id: string | number, body?: { ttlSeconds?: number; forceTakeover?: boolean }) =>
