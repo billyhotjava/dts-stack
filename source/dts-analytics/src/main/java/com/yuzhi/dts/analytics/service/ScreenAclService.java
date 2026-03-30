@@ -143,12 +143,23 @@ public class ScreenAclService {
             }
         }
 
-        screenAclRepository.deleteAllByScreenId(screen.getId());
+        // Copy OWNER fields before deleting (avoid Hibernate managed-entity ID conflict)
+        String ownerSubjectType = ownerEntry != null ? ownerEntry.getSubjectType() : null;
+        String ownerSubjectId = ownerEntry != null ? ownerEntry.getSubjectId() : null;
+        Long ownerCreatorId = ownerEntry != null ? ownerEntry.getCreatorId() : null;
 
-        // Re-insert OWNER
-        if (ownerEntry != null) {
-            ownerEntry.setId(null);
-            screenAclRepository.save(ownerEntry);
+        screenAclRepository.deleteAllByScreenId(screen.getId());
+        screenAclRepository.flush();
+
+        // Re-insert OWNER as a fresh entity
+        if (ownerSubjectType != null) {
+            AnalyticsScreenAcl newOwner = new AnalyticsScreenAcl();
+            newOwner.setScreenId(screen.getId());
+            newOwner.setSubjectType(ownerSubjectType);
+            newOwner.setSubjectId(ownerSubjectId);
+            newOwner.setPerm("OWNER");
+            newOwner.setCreatorId(ownerCreatorId);
+            screenAclRepository.save(newOwner);
         } else {
             ensureCreatorOwner(screen);
         }

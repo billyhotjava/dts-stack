@@ -7077,8 +7077,8 @@ function StaticDataEditor({ component, updateComponent }: {
             </div>
 
             {mode === 'table' ? (
-                <div style={{ border: '1px solid var(--color-border, rgba(255,255,255,0.1))', borderRadius: 6, overflow: 'auto', maxHeight: 320 }}>
-                    <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
+                <div style={{ border: '1px solid var(--color-border, rgba(255,255,255,0.1))', borderRadius: 6, overflow: 'auto', maxHeight: 320, background: 'var(--color-surface, #1e1f26)' }}>
+                    <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12, color: 'var(--color-text-primary, #e2e8f0)' }}>
                         <thead>
                             <tr>
                                 <th style={{ width: 28, padding: '4px 2px', background: 'var(--color-bg-secondary, #252830)', borderBottom: '1px solid var(--color-border, rgba(255,255,255,0.1))', fontSize: 10, color: 'var(--color-text-tertiary)' }}>#</th>
@@ -7088,7 +7088,7 @@ function StaticDataEditor({ component, updateComponent }: {
                                             type="text"
                                             value={h}
                                             onChange={(e) => updateHeader(ci, e.target.value)}
-                                            style={{ width: '100%', border: 'none', background: 'transparent', padding: '6px 8px', fontSize: 12, fontWeight: 600, outline: 'none', boxSizing: 'border-box' }}
+                                            style={{ width: '100%', border: 'none', background: 'transparent', padding: '6px 8px', fontSize: 12, fontWeight: 600, outline: 'none', boxSizing: 'border-box', color: 'inherit' }}
                                         />
                                         {headers.length > 1 && (
                                             <button type="button" onClick={() => deleteColumn(ci)}
@@ -7116,7 +7116,7 @@ function StaticDataEditor({ component, updateComponent }: {
                                                 type="text"
                                                 value={cell}
                                                 onChange={(e) => updateCell(ri, ci, e.target.value)}
-                                                style={{ width: '100%', border: 'none', background: 'transparent', padding: '5px 8px', fontSize: 12, outline: 'none', boxSizing: 'border-box' }}
+                                                style={{ width: '100%', border: 'none', background: 'transparent', padding: '5px 8px', fontSize: 12, outline: 'none', boxSizing: 'border-box', color: 'inherit' }}
                                             />
                                         </td>
                                     ))}
