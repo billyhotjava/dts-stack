@@ -1128,8 +1128,8 @@ export type ScreenComponentData = {
  */
 /**
  * Read platform tokens from the shared localStorage store.
- * Traefik forward-auth validates the Keycloak JWT (adminAccessToken),
- * so we prefer that over the portal demo token (accessToken).
+ * Traefik forward-auth validates the portal session token (accessToken / demo-xxx),
+ * NOT the Keycloak JWT (adminAccessToken).
  */
 function getPlatformTokens(): { accessToken: string; refreshToken: string } {
 	try {
@@ -1138,14 +1138,8 @@ function getPlatformTokens(): { accessToken: string; refreshToken: string } {
 		const store = JSON.parse(raw);
 		const userToken = store?.state?.userToken;
 		if (!userToken || typeof userToken !== "object") return { accessToken: "", refreshToken: "" };
-		// Prefer Keycloak JWT (adminAccessToken) for API calls through Traefik forward-auth.
-		// Fall back to portal token (accessToken) for direct/proxy calls.
-		const accessToken = String(
-			userToken.adminAccessToken || userToken.accessToken || userToken.access_token || userToken.token || ""
-		).trim();
-		const refreshToken = String(
-			userToken.adminRefreshToken || userToken.refreshToken || userToken.refresh_token || ""
-		).trim();
+		const accessToken = String(userToken.accessToken || userToken.access_token || userToken.token || "").trim();
+		const refreshToken = String(userToken.refreshToken || userToken.refresh_token || "").trim();
 		return { accessToken, refreshToken };
 	} catch {
 		return { accessToken: "", refreshToken: "" };

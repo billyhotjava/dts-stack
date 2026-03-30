@@ -8,13 +8,6 @@
       "title": "BI 分析",
       "children": [
         {
-          "key": "home",
-          "path": "home",
-          "icon": "solar:home-2-bold-duotone",
-          "titleKey": "sys.nav.portal.analyticsHome",
-          "title": "分析首页"
-        },
-        {
           "key": "screens",
           "path": "screens",
           "icon": "solar:monitor-bold-duotone",

@@ -881,7 +881,7 @@ export function TemplateGallery({ onSelect, onClose }: TemplateGalleryProps) {
     const selectCls = 'bg-surface-muted border border-border-default rounded-sm px-2.5 py-2 text-text-primary text-[13px]';
 
     return (
-        <div className="fixed inset-0 flex items-center justify-center z-[1000] bg-[rgba(15,23,42,0.4)] backdrop-blur-[4px]" data-testid="analytics-screen-template-gallery" onClick={onClose}>
+        <div className="fixed inset-0 flex items-center justify-center z-[1000] bg-[rgba(15,23,42,0.55)]" data-testid="analytics-screen-template-gallery" onClick={onClose}>
             <div className="bg-surface-card rounded-lg w-[92%] max-w-[1080px] max-h-[84vh] flex flex-col shadow-lg border border-border-default" onClick={(e) => e.stopPropagation()}>
                 <div className="flex items-center justify-between px-6 py-5 border-b border-border-default">
                     <h2 className="m-0 text-xl text-text-primary">📋 模板市场</h2>
