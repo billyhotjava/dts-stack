@@ -62,6 +62,20 @@ export default function AdminGuard({ children }: Props) {
 	const redirectingRef = useRef(false);
 	const lastReasonRef = useRef<"session-expired" | "concurrent-login" | "signed-out" | null>(null);
 
+	// Reset guard state when token changes (e.g. after re-login)
+	const tokenRef = useRef(token?.accessToken);
+	useEffect(() => {
+		if (token?.accessToken && token.accessToken !== tokenRef.current) {
+			tokenRef.current = token.accessToken;
+			// Clear stale whoami cache so the guard re-fetches with the new token
+			queryClient.removeQueries({ queryKey: ["admin", "whoami"] });
+			redirectingRef.current = false;
+			lastReasonRef.current = null;
+			setTriedRefresh(false);
+			setGuardState("idle");
+		}
+	}, [token?.accessToken, queryClient]);
+
 	const { data, isLoading, isError, error } = useQuery({
 		queryKey: ["admin", "whoami"],
 		queryFn: adminApi.getWhoami,
@@ -77,7 +91,7 @@ export default function AdminGuard({ children }: Props) {
 			redirectingRef.current = true;
 			lastReasonRef.current = reason;
 			setGuardState("redirecting");
-			queryClient.cancelQueries({ queryKey: ["admin", "whoami"] });
+			queryClient.removeQueries({ queryKey: ["admin", "whoami"] });
 			if (reason === "concurrent-login") {
 				toast.error("账号已在其他浏览器登录，本会话已退出", { id: "session-conflict" });
 			} else if (reason === "session-expired") {
