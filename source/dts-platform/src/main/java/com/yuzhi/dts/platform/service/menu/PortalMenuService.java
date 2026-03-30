@@ -29,7 +29,10 @@ public class PortalMenuService {
         List<RemoteMenuNode> baseline = client.fetchActiveMenuTree();
         java.util.Set<String> activeIds = flattenIds(baseline);
         java.util.Set<String> visited = new java.util.LinkedHashSet<>();
-        List<RemoteMenuNode> remote = (roles != null && !roles.isEmpty()) ? client.fetchMenuTreeForAudience(roles, List.of()) : baseline;
+        // ROLE_OP_ADMIN gets full menu access — skip audience filtering
+        boolean isOpAdmin = roles.stream().anyMatch(r -> "ROLE_OP_ADMIN".equals(r) || "ROLE_OPADMIN".equals(r));
+        List<RemoteMenuNode> remote = isOpAdmin ? baseline
+            : (roles != null && !roles.isEmpty()) ? client.fetchMenuTreeForAudience(roles, List.of()) : baseline;
         List<PortalMenuTreeItem> mapped = remote
             .stream()
             .map(node -> mapTree(node, null, null, activeIds, visited))

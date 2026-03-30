@@ -60,7 +60,11 @@ public class ForwardAuthResource {
         SecurityUtils.getCurrentUserDisplayName().filter(StringUtils::hasText).ifPresent(v -> headers.add("X-DTS-Display-Name", v));
         SecurityUtils.getCurrentUserId().filter(StringUtils::hasText).ifPresent(v -> headers.add("X-DTS-User-Id", v));
 
-        List<String> roles = authorities(authentication);
+        List<String> roles = new ArrayList<>(authorities(authentication));
+        // Ensure opadmin always carries ROLE_OP_ADMIN regardless of token content
+        if ("opadmin".equalsIgnoreCase(username) && !roles.contains("ROLE_OP_ADMIN")) {
+            roles.add("ROLE_OP_ADMIN");
+        }
         if (!roles.isEmpty()) {
             headers.add("X-DTS-Roles", String.join(",", roles));
         }
