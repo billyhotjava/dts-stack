@@ -33,13 +33,19 @@ export default {
   getMenuTree,
 };
 
-function normalizeMenuTreePaths<T extends Menu | MenuTree>(items: T[], parentPath?: string): T[] {
+/**
+ * Normalize menu paths to absolute form.
+ * The DB already stores full paths (e.g., "bi/home" not just "home"),
+ * so we only need normalizeMenuPath() to add the leading slash.
+ * No parent-child joining needed.
+ */
+function normalizeMenuTreePaths<T extends Menu | MenuTree>(items: T[]): T[] {
 	return items.map((item) => {
 		const menuTreeItem = item as T & { children?: T[] };
 		const meta = parseMenuMetadata((item as any).metadata);
-		const resolvedPath = resolveMenuPath(item as any, meta, parentPath);
+		const resolvedPath = resolveMenuPath(item as any, meta);
 		const normalizedChildren = Array.isArray(menuTreeItem.children)
-			? normalizeMenuTreePaths(menuTreeItem.children, resolvedPath || parentPath)
+			? normalizeMenuTreePaths(menuTreeItem.children)
 			: undefined;
 
 		return {
