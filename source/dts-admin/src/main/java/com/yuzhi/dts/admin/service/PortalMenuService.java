@@ -890,7 +890,13 @@ public class PortalMenuService {
                 created.setParent(parent);
                 menuRepo.save(created);
             } else {
-                // Recurse to ensure deeper nodes exist; keep existing attributes untouched.
+                // Sync metadata from seed so removed fields (e.g. externalLink) are cleaned up.
+                String freshMetadata = writeMetadata(child, false, sectionKey);
+                if (freshMetadata != null && !freshMetadata.equals(existing.getMetadata())) {
+                    existing.setMetadata(freshMetadata);
+                    menuRepo.save(existing);
+                }
+                // Recurse to ensure deeper nodes exist.
                 ensureChildrenFromSeed(existing, child.children(), 1, nextCompositeKey, sectionKey);
                 // Ensure leaf component is present when seed defines a leaf but existing has none
                 if ((child.children() == null || child.children().isEmpty()) && !StringUtils.hasText(existing.getComponent())) {

@@ -49,7 +49,9 @@ const PATH_COMPONENT_OVERRIDES: Record<string, string> = {
 	"/services/tokens": "/pages/services/TokensPage",
 	"/modeling/dbt-files": "/pages/modeling/DbtFileBrowserPage",
 	// ── Analytics pages (merged from dts-analytics-webapp) ──
+	// Menu seed paths resolve to /analytics/home, /analytics/screens, etc.
 	"/analytics": "/analytics/pages/HomePage",
+	"/analytics/home": "/analytics/pages/HomePage",
 	"/analytics/screens": "/analytics/pages/screens/ScreensPage",
 	"/analytics/dashboards": "/analytics/pages/DashboardsPage",
 	"/analytics/dashboards/new": "/analytics/pages/DashboardEditorPage",

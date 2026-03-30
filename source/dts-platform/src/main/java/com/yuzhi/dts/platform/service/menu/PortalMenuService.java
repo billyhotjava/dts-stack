@@ -26,13 +26,13 @@ public class PortalMenuService {
     public List<PortalMenuTreeItem> getMenuTree() {
         // Forward the current user's roles (sanitized) so dts-admin can filter precisely.
         List<String> roles = sanitizeAudienceRoles(currentAuthorities());
-        List<RemoteMenuNode> baseline = client.fetchActiveMenuTree();
-        java.util.Set<String> activeIds = flattenIds(baseline);
+        // Always pass roles to dts-admin; the unauthenticated /api/menu endpoint returns empty
+        // when called without roles or a security context, so we must provide explicit audience hints.
+        List<RemoteMenuNode> remote = (roles != null && !roles.isEmpty())
+            ? client.fetchMenuTreeForAudience(roles, List.of())
+            : client.fetchMenuTree();
+        java.util.Set<String> activeIds = flattenIds(remote);
         java.util.Set<String> visited = new java.util.LinkedHashSet<>();
-        // ROLE_OP_ADMIN gets full menu access — skip audience filtering
-        boolean isOpAdmin = roles.stream().anyMatch(r -> "ROLE_OP_ADMIN".equals(r) || "ROLE_OPADMIN".equals(r));
-        List<RemoteMenuNode> remote = isOpAdmin ? baseline
-            : (roles != null && !roles.isEmpty()) ? client.fetchMenuTreeForAudience(roles, List.of()) : baseline;
         List<PortalMenuTreeItem> mapped = remote
             .stream()
             .map(node -> mapTree(node, null, null, activeIds, visited))

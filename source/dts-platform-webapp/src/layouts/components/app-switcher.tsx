@@ -7,7 +7,7 @@ export function AppSwitcher() {
 
 	const handleSwitch = () => {
 		localStorage.removeItem("dts.portal.preferredApp");
-		navigate("/analytics", { replace: true });
+		navigate("/analytics/home", { replace: true });
 	};
 
 	return (
