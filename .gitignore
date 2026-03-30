@@ -63,3 +63,4 @@ docs/intergration/mdm/mdmdemo/target
 .codex
 .vscode
 .specify
+**/log.root_IS_UNDEFINED/
