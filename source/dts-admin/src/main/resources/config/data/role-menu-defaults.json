@@ -202,5 +202,41 @@
     "title": "共享交换",
     "route": "/services/tokens",
     "requiredRoles": ["DEPT_DATA_OWNER", "DEPT_LEADER", "INST_DATA_OWNER", "INST_LEADER", "ADMIN", "OP_ADMIN"]
+  },
+  {
+    "code": "sys.nav.portal.analyticsHome",
+    "title": "分析首页",
+    "route": "/analytics",
+    "requiredRoles": ["EMPLOYEE", "DEPT_DATA_OWNER", "DEPT_LEADER", "INST_DATA_OWNER", "INST_LEADER", "ADMIN", "OP_ADMIN"]
+  },
+  {
+    "code": "sys.nav.portal.analyticsScreens",
+    "title": "数据大屏",
+    "route": "/analytics/screens",
+    "requiredRoles": ["EMPLOYEE", "DEPT_DATA_OWNER", "DEPT_LEADER", "INST_DATA_OWNER", "INST_LEADER", "ADMIN", "OP_ADMIN"]
+  },
+  {
+    "code": "sys.nav.portal.analyticsDashboards",
+    "title": "分析看板",
+    "route": "/analytics/dashboards",
+    "requiredRoles": ["EMPLOYEE", "DEPT_DATA_OWNER", "DEPT_LEADER", "INST_DATA_OWNER", "INST_LEADER", "ADMIN", "OP_ADMIN"]
+  },
+  {
+    "code": "sys.nav.portal.analyticsQuestions",
+    "title": "分析卡片",
+    "route": "/analytics/questions",
+    "requiredRoles": ["EMPLOYEE", "DEPT_DATA_OWNER", "DEPT_LEADER", "INST_DATA_OWNER", "INST_LEADER", "ADMIN", "OP_ADMIN"]
+  },
+  {
+    "code": "sys.nav.portal.analyticsData",
+    "title": "数据管理",
+    "route": "/analytics/data",
+    "requiredRoles": ["EMPLOYEE", "DEPT_DATA_OWNER", "DEPT_LEADER", "INST_DATA_OWNER", "INST_LEADER", "ADMIN", "OP_ADMIN"]
+  },
+  {
+    "code": "sys.nav.portal.analyticsProjectCockpit",
+    "title": "项目看板",
+    "route": "/analytics/project-cockpit",
+    "requiredRoles": ["EMPLOYEE", "DEPT_DATA_OWNER", "DEPT_LEADER", "INST_DATA_OWNER", "INST_LEADER", "ADMIN", "OP_ADMIN"]
   }
 ]
