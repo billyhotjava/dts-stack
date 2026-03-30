@@ -159,15 +159,15 @@ const collectAllowedRoutes = (menus: MenuTree[]): AllowedRouteIndex => {
 		paths: new Set<string>(),
 		codes: new Set<string>(),
 	};
-	const stack = Array.isArray(menus) ? [...menus] : [];
+	const stack: Array<{ node: MenuTree; parentPath?: string }> = Array.isArray(menus) ? menus.map((n) => ({ node: n })) : [];
 	while (stack.length) {
-		const node = stack.pop();
+		const { node, parentPath } = stack.pop()!;
 		if (!node || isMenuDeleted(node)) continue;
 		const meta = parseMenuMetadata(node.metadata);
+		const resolvedPath = resolveMenuPath(node, meta, parentPath);
 		if (isNavigableMenu(node, meta)) {
-			const path = resolveMenuPath(node, meta);
-			if (path && !isExternalPath(path)) {
-				allowed.paths.add(path);
+			if (resolvedPath && !isExternalPath(resolvedPath)) {
+				allowed.paths.add(resolvedPath);
 			}
 			if (node.code) {
 				const code = String(node.code);
@@ -180,7 +180,7 @@ const collectAllowedRoutes = (menus: MenuTree[]): AllowedRouteIndex => {
 		}
 		if (Array.isArray(node.children)) {
 			for (const child of node.children) {
-				stack.push(child as MenuTree);
+				stack.push({ node: child as MenuTree, parentPath: resolvedPath || parentPath });
 			}
 		}
 	}
@@ -215,6 +215,7 @@ const buildNavItemsInternal = (
 	nodes: MenuTree[],
 	parentIcon: string | undefined,
 	visited: Set<string>,
+	parentPath?: string,
 ): NavItemDataProps[] => {
 	if (!Array.isArray(nodes) || nodes.length === 0) {
 		return [];
@@ -244,7 +245,7 @@ const buildNavItemsInternal = (
 	});
 	const items: NavItemDataProps[] = [];
 	for (const node of sortedNodes) {
-		const navItem = createNavItem(node, parentIcon, visited);
+		const navItem = createNavItem(node, parentIcon, visited, parentPath);
 		if (navItem) {
 			items.push(navItem);
 		}
@@ -256,6 +257,7 @@ const createNavItem = (
 	node: MenuTree,
 	parentIcon: string | undefined,
 	visited: Set<string>,
+	parentPath?: string,
 ): NavItemDataProps | null => {
 	if (!node || isMenuDeleted(node)) {
 		return null;
@@ -274,13 +276,16 @@ const createNavItem = (
 	}
 
 	const explicitOrMappedIcon = resolveMenuIcon(node, meta) ?? parentIcon ?? DEFAULT_MENU_ICON;
+	// Resolve this node's path (joining with parent path for relative paths like "home" → "/bi/home")
+	const resolvedNodePath = resolveMenuPath(node, meta, parentPath);
 	const children = buildNavItemsInternal(
 		Array.isArray(node.children) ? node.children : [],
 		explicitOrMappedIcon,
 		visited,
+		resolvedNodePath || parentPath,
 	);
 
-	const rawPath = resolveMenuPath(node, meta);
+	const rawPath = resolvedNodePath;
 	let path = rawPath;
 	if (!path && children.length > 0) {
 		path = children[0]?.path ?? firstAccessibleChildPath(node) ?? "";
