@@ -37,7 +37,7 @@ public class AssetPermissionAudit implements Serializable {
     @Column(name = "oa_reference", length = 128)
     private String oaReference;
 
-    @Column(name = "detail", columnDefinition = "clob")
+    @Column(name = "detail", columnDefinition = "text")
     private String detail;
 
     @Column(name = "created_date")
