@@ -336,6 +336,25 @@ export type DatabaseListItem = {
 	is_system?: boolean;
 };
 
+export type CurrentUser = {
+	id: number;
+	email?: string;
+	first_name?: string;
+	last_name?: string;
+	common_name?: string;
+	is_superuser?: boolean;
+	is_data_admin?: boolean;
+	platform_username?: string;
+};
+
+export type MyUploadItem = {
+	id: number;
+	name: string;
+	display_name?: string;
+	schema?: string;
+	created_at?: string;
+};
+
 export type DatabaseListResponse = {
 	data: DatabaseListItem[];
 	total: number;
@@ -2165,4 +2184,12 @@ export const analyticsApi = {
 		rows: unknown[][];
 	}) => sendJson<{ tableName: string; schema: string; rowCount: number }>(
 		`/analytics/api/database/${dbId}/upload-table`, body),
+	getCurrentUser: () => fetchJson<CurrentUser>("/analytics/api/user/current"),
+	listMyUploads: (dbId: number | string) =>
+		fetchJson<MyUploadItem[]>(`/analytics/api/database/${encodeURIComponent(String(dbId))}/my-uploads`),
+	deleteUploadTable: (dbId: number | string, tableName: string) =>
+		requestJson<void>(
+			`/analytics/api/database/${encodeURIComponent(String(dbId))}/upload-table/${encodeURIComponent(tableName)}`,
+			"DELETE"
+		),
 };
