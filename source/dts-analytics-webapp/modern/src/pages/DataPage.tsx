@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router";
-import { analyticsApi, type DatabaseListItem } from "../api/analyticsApi";
+import { analyticsApi, type DatabaseListItem, type CurrentUser } from "../api/analyticsApi";
 import { PageContainer, PageHeader } from "../components/PageContainer/PageContainer";
 import { EmptyState } from "../components/EmptyState";
 import { ErrorNotice } from "../components/ErrorNotice";
@@ -37,6 +37,7 @@ const TrashIcon = () => (
 export default function DataPage() {
 	const locale: Locale = useMemo(() => getEffectiveLocale(), []);
 	const [state, setState] = useState<LoadState<DatabaseListItem[]>>({ state: "loading" });
+	const [currentUser, setCurrentUser] = useState<CurrentUser | null>(null);
 	const [deleting, setDeleting] = useState<number | null>(null);
 	const [confirmDeleteId, setConfirmDeleteId] = useState<number | null>(null);
 
@@ -51,6 +52,12 @@ export default function DataPage() {
 				setState({ state: "error", error: e });
 			});
 	};
+
+	useEffect(() => {
+		analyticsApi.getCurrentUser().then(setCurrentUser).catch(() => {});
+	}, []);
+
+	const isDataAdmin = currentUser?.is_data_admin || currentUser?.is_superuser || false;
 
 	useEffect(() => {
 		reload();
@@ -75,11 +82,19 @@ export default function DataPage() {
 			<PageHeader
 				title={t(locale, "data.title")}
 				actions={
-					<Link to="/data/new">
-						<Button type="primary" icon={<PlusIcon />}>
-							{t(locale, "data.add")}
-						</Button>
-					</Link>
+					isDataAdmin ? (
+						<Link to="/data/new">
+							<Button type="primary" icon={<PlusIcon />}>
+								{t(locale, "data.add")}
+							</Button>
+						</Link>
+					) : (
+						<Link to="/data/new?tab=other">
+							<Button type="primary" icon={<PlusIcon />}>
+								上传数据
+							</Button>
+						</Link>
+					)
 				}
 			/>
 
@@ -130,7 +145,7 @@ export default function DataPage() {
 									</Tag>
 								</div>
 							</div>
-							{!db.is_system && (
+							{!db.is_system && isDataAdmin && (
 								<div style={{ display: "flex", gap: "var(--spacing-xs)", marginTop: "var(--spacing-md)", justifyContent: "flex-end" }}>
 									<Button
 										type="text"
