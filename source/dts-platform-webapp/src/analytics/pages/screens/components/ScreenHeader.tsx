@@ -28,7 +28,8 @@ import { ScreenVersionComparePickerPanel } from './ScreenVersionComparePickerPan
 import { ScreenVersionRollbackPanel } from './ScreenVersionRollbackPanel';
 import { VersionHistoryPanel } from './VersionHistoryPanel';
 import { ScreenSnapshotPanel } from './ScreenSnapshotPanel';
-import { Modal } from 'antd';
+import { Modal, message } from 'antd';
+import { toast } from 'sonner';
 import { buildExploreSessionSteps } from './ScreenHeader.helpers';
 import { buildScreenPayload, normalizeScreenConfig, validateScreenPayload } from '../specV2';
 import { commitScreenPageDraft, materializeScreenPage } from '../screenPageState';
@@ -396,8 +397,8 @@ export function ScreenHeader({
         try {
             const content = await file.text();
             const raw = JSON.parse(content);
-            if (!raw || typeof raw !== 'object') { alert('主题包格式不正确'); return; }
-            if (raw.schema && raw.schema !== 'dts.screen-theme-pack') { alert('主题包 schema 不匹配'); return; }
+            if (!raw || typeof raw !== 'object') { toast.error('主题包格式不正确'); return; }
+            if (raw.schema && raw.schema !== 'dts.screen-theme-pack') { toast.error('主题包 schema 不匹配'); return; }
             const normalizeTheme = (t: unknown) => {
                 if (t === 'legacy-dark' || t === 'titanium' || t === 'glacier') return t as ScreenTheme;
                 return undefined;
@@ -418,11 +419,11 @@ export function ScreenHeader({
                     updateConfig({ components: nextComps });
                 }
             }
-        } catch { alert('主题包解析失败'); }
+        } catch { toast.error('主题包解析失败'); }
     }, [config.theme, config.components, updateConfig]);
 
     const handleShortcutHelp = useCallback(() => {
-        alert([
+        toast.error([
             '快捷键说明', '',
             'Ctrl/Cmd + Z：撤销', 'Ctrl/Cmd + Y / Shift+Z：重做',
             'Ctrl/Cmd + C / V：复制 / 粘贴', 'Ctrl/Cmd + D：复制一份',
@@ -830,7 +831,7 @@ export function ScreenHeader({
             setShowConflictPanel(false);
         } catch (error) {
             const message = error instanceof Error ? error.message : '重载最新草稿失败';
-            alert(message);
+            toast.error(message);
         } finally {
             setConflictLoading(false);
         }
@@ -844,7 +845,7 @@ export function ScreenHeader({
             const message = error instanceof HttpError && error.code === 'SCREEN_UPDATE_CONFLICT'
                 ? handleUpdateConflictError(error, '保存失败，存在并发冲突')
                 : handleLockHttpError(error, '保存失败');
-            alert(message);
+            toast.error(message);
         }
     }, [handleLockHttpError, handleUpdateConflictError, saveScreen]);
 
@@ -952,7 +953,7 @@ export function ScreenHeader({
         try {
             const screenId = await saveScreen();
             if (!screenId) {
-                alert('请先保存大屏');
+                toast.error('请先保存大屏');
                 return;
             }
             const result = await analyticsApi.publishScreen(screenId);
@@ -983,13 +984,13 @@ export function ScreenHeader({
                 publicUrl,
                 warmupText,
             });
-            alert('发布成功，版本 v' + versionNo + warmupText);
+            toast.success('发布成功，版本 v' + versionNo + warmupText);
         } catch (error) {
             console.error('Failed to publish screen:', error);
             const message = error instanceof HttpError && error.code === 'SCREEN_UPDATE_CONFLICT'
                 ? handleUpdateConflictError(error, '发布失败，存在并发冲突')
                 : handleLockHttpError(error, '发布失败');
-            alert(message);
+            toast.error(message);
         } finally {
             setIsPublishing(false);
         }
@@ -1034,7 +1035,7 @@ export function ScreenHeader({
         try {
             const versions = await analyticsApi.listScreenVersions(id);
             if (!versions.length) {
-                alert('当前没有已发布版本');
+                toast.error('当前没有已发布版本');
                 return;
             }
             setVersionCandidates(versions);
@@ -1042,7 +1043,7 @@ export function ScreenHeader({
         } catch (error) {
             console.error('Failed to load version history:', error);
             const message = handleLockHttpError(error, '加载版本历史失败');
-            alert(message);
+            toast.error(message);
         } finally {
             setIsLoadingVersions(false);
         }
@@ -1060,11 +1061,11 @@ export function ScreenHeader({
                 applyScreenDetail(result.screen);
             }
             setShowVersionRollbackPanel(false);
-            alert('回滚成功，已切换草稿与发布版本');
+            toast.success('回滚成功，已切换草稿与发布版本');
         } catch (error) {
             console.error('Failed to rollback version:', error);
             const message = handleLockHttpError(error, '回滚失败');
-            alert(message);
+            toast.error(message);
         } finally {
             setIsLoadingVersions(false);
         }
@@ -1076,14 +1077,14 @@ export function ScreenHeader({
         try {
             const versions = await analyticsApi.listScreenVersions(id);
             if (!versions || versions.length < 2) {
-                alert('至少需要两个版本才能对比');
+                message.warning('至少需要两个版本才能对比');
                 return;
             }
             setVersionCandidates(versions);
             setShowVersionComparePicker(true);
         } catch (error) {
             console.error('Failed to compare versions:', error);
-            alert('版本对比失败');
+            toast.error('版本对比失败');
         } finally {
             setIsLoadingVersions(false);
         }
@@ -1099,7 +1100,7 @@ export function ScreenHeader({
             setShowVersionComparePanel(true);
         } catch (error) {
             console.error('Failed to compare versions:', error);
-            alert('版本对比失败');
+            toast.error('版本对比失败');
         } finally {
             setIsLoadingVersions(false);
         }
@@ -1112,7 +1113,7 @@ export function ScreenHeader({
                 : `?device=${encodeURIComponent(previewDeviceMode)}`;
             window.open(resolveRouteForOpen(`/bi/screens/${id}/preview${suffix}`), '_blank', 'noopener,noreferrer');
         } else {
-            alert('请先保存大屏后再预览');
+            toast.error('请先保存大屏后再预览');
         }
     };
 
@@ -1216,7 +1217,7 @@ export function ScreenHeader({
             const prepared = await ensureExportAllowed('json');
             preparedRequestId = prepared?.requestId || undefined;
         } catch (error) {
-            alert(error instanceof Error ? error.message : '导出失败');
+            toast.error(error instanceof Error ? error.message : '导出失败');
             if (id) {
                 void analyticsApi.reportScreenExport(id, {
                     status: 'failed',
@@ -1270,7 +1271,7 @@ export function ScreenHeader({
                     message: error instanceof Error ? error.message : 'export_failed',
                 });
             }
-            alert(error instanceof Error ? error.message : 'JSON 导出失败');
+            toast.error(error instanceof Error ? error.message : 'JSON 导出失败');
         }
     };
 
@@ -1365,7 +1366,7 @@ export function ScreenHeader({
                     message: error instanceof Error ? error.message : 'prepare_failed',
                 });
             }
-            alert(error instanceof Error ? error.message : 'PNG 导出失败');
+            toast.error(error instanceof Error ? error.message : 'PNG 导出失败');
             return;
         }
         try {
@@ -1411,7 +1412,7 @@ export function ScreenHeader({
                         message: fallbackError instanceof Error ? fallbackError.message : 'export_failed',
                     });
                 }
-                alert(fallbackError instanceof Error ? fallbackError.message : 'PNG 导出失败');
+                toast.error(fallbackError instanceof Error ? fallbackError.message : 'PNG 导出失败');
             }
         }
     };
@@ -1436,7 +1437,7 @@ export function ScreenHeader({
                     message: error instanceof Error ? error.message : 'prepare_failed',
                 });
             }
-            alert(error instanceof Error ? error.message : 'PDF 导出失败');
+            toast.error(error instanceof Error ? error.message : 'PDF 导出失败');
             return;
         }
         try {
@@ -1482,7 +1483,7 @@ export function ScreenHeader({
                         message: fallbackError instanceof Error ? fallbackError.message : 'export_failed',
                     });
                 }
-                alert(fallbackError instanceof Error ? fallbackError.message : 'PDF 导出失败');
+                toast.error(fallbackError instanceof Error ? fallbackError.message : 'PDF 导出失败');
             }
         }
     };
@@ -1519,7 +1520,7 @@ export function ScreenHeader({
             });
         } catch (error) {
             console.error('Failed to parse import file:', error);
-            alert('JSON 导入失败，请检查文件格式');
+            toast.error('JSON 导入失败，请检查文件格式');
         }
     };
 
@@ -1539,7 +1540,7 @@ export function ScreenHeader({
             }
         } catch (error) {
             console.error('Import action failed:', error);
-            alert(error instanceof Error ? error.message : '导入操作失败');
+            toast.error(error instanceof Error ? error.message : '导入操作失败');
         }
     };
 
@@ -1827,7 +1828,7 @@ export function ScreenHeader({
                 keywords: '命令 面板 help 快捷键',
                 disabled: false,
                 hotkey: 'Ctrl/Cmd + K',
-                run: () => alert('可输入关键词，使用 ↑/↓ 选择，Enter 执行。'),
+                run: () => message.info('可输入关键词，使用 ↑/↓ 选择，Enter 执行。'),
             },
         ];
     }, [
