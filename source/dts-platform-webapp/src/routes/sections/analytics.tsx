@@ -60,18 +60,16 @@ function AnalyticsAppShell() {
 }
 
 /**
- * Analytics routes — integrated into the platform router.
- *
- * URL structure preserved at /analytics/* for backward compatibility.
+ * Analytics route children — used inside the "analytics" root-level route.
+ * These are RELATIVE paths (no "analytics/" prefix) because the parent already has path="analytics".
  */
-export const analyticsRoutes: RouteObject[] = [
+export const analyticsChildren: RouteObject[] = [
 	// Public routes — no auth required (shareable links)
-	{ path: "analytics/public/screen/:uuid", element: <S><PublicScreenPage /></S> },
-	{ path: "analytics/public/card/:uuid", element: <S><PublicCardPage /></S> },
-	{ path: "analytics/public/dashboard/:uuid", element: <S><PublicDashboardPage /></S> },
+	{ path: "public/screen/:uuid", element: <S><PublicScreenPage /></S> },
+	{ path: "public/card/:uuid", element: <S><PublicCardPage /></S> },
+	{ path: "public/dashboard/:uuid", element: <S><PublicDashboardPage /></S> },
 	// Authenticated analytics routes
 	{
-		path: "analytics",
 		element: <LoginAuthGuard><AnalyticsAppShell /></LoginAuthGuard>,
 		children: [
 			// Full-screen routes (screen designer — no sidebar)
