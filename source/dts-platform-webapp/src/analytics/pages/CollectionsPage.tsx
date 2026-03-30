@@ -1,11 +1,11 @@
 import { Link } from "react-router";
 import { useEffect, useMemo, useState } from "react";
 import { analyticsApi, type CardListItem, type DashboardListItem } from "../api/analyticsApi";
-import { PageContainer, PageHeader } from "../components/PageContainer/PageContainer";
+import { PageHeader } from "@/components/page-header";
 import { EmptyState } from "../components/EmptyState";
 import { ErrorNotice } from "../components/ErrorNotice";
-import { Button, Input, Spin, Table, Tag } from "antd";
-import { PlusOutlined, SearchOutlined } from "@ant-design/icons";
+import { Button, Card, Input, Space, Spin, Table, Tag } from "antd";
+import { PlusOutlined } from "@ant-design/icons";
 import type { ColumnsType } from "antd/es/table";
 import { getEffectiveLocale, t, type Locale } from "../i18n";
 
@@ -139,7 +139,7 @@ export default function CollectionsPage() {
 	const hasError = cardsState.state === "error" || dashboardsState.state === "error";
 
 	return (
-		<PageContainer>
+		<div className="space-y-4">
 			<PageHeader title={t(locale, "collections.title")} />
 
 			{isLoading && (
@@ -158,18 +158,12 @@ export default function CollectionsPage() {
 			{!isLoading && !hasError && (
 				<div className="flex flex-col gap-6">
 					{/* 查询 Table */}
-					<div className="bg-surface-card border border-border-default rounded-lg overflow-hidden">
-						<div className="flex items-center justify-between px-4 py-3 border-b border-border-default">
-							<div className="flex items-center gap-2">
-								<h3 className="text-base font-semibold text-text-primary m-0">
-									{t(locale, "questions.title")}
-								</h3>
-								<Tag color="blue">{filteredCards.length}</Tag>
-							</div>
-							<div className="flex items-center gap-2">
-								<Input
+					<Card
+						title={<span className="font-semibold">{t(locale, "questions.title")} <Tag color="blue">{filteredCards.length}</Tag></span>}
+						extra={
+							<Space>
+								<Input.Search
 									placeholder={t(locale, "common.search")}
-									prefix={<SearchOutlined />}
 									value={cardSearch}
 									onChange={(e) => setCardSearch(e.target.value)}
 									allowClear
@@ -181,8 +175,9 @@ export default function CollectionsPage() {
 										{t(locale, "questions.new")}
 									</Button>
 								</Link>
-							</div>
-						</div>
+							</Space>
+						}
+					>
 						{filteredCards.length === 0 ? (
 							<EmptyState title={t(locale, "common.empty")} />
 						) : (
@@ -194,21 +189,15 @@ export default function CollectionsPage() {
 								pagination={filteredCards.length > 10 ? { pageSize: 10, showSizeChanger: true, showTotal: (total) => `${total} 条` } : false}
 							/>
 						)}
-					</div>
+					</Card>
 
 					{/* 看板 Table */}
-					<div className="bg-surface-card border border-border-default rounded-lg overflow-hidden">
-						<div className="flex items-center justify-between px-4 py-3 border-b border-border-default">
-							<div className="flex items-center gap-2">
-								<h3 className="text-base font-semibold text-text-primary m-0">
-									{t(locale, "dashboards.title")}
-								</h3>
-								<Tag color="green">{filteredDashboards.length}</Tag>
-							</div>
-							<div className="flex items-center gap-2">
-								<Input
+					<Card
+						title={<span className="font-semibold">{t(locale, "dashboards.title")} <Tag color="green">{filteredDashboards.length}</Tag></span>}
+						extra={
+							<Space>
+								<Input.Search
 									placeholder={t(locale, "common.search")}
-									prefix={<SearchOutlined />}
 									value={dashSearch}
 									onChange={(e) => setDashSearch(e.target.value)}
 									allowClear
@@ -220,8 +209,9 @@ export default function CollectionsPage() {
 										{t(locale, "dashboards.new")}
 									</Button>
 								</Link>
-							</div>
-						</div>
+							</Space>
+						}
+					>
 						{filteredDashboards.length === 0 ? (
 							<EmptyState title={t(locale, "common.empty")} />
 						) : (
@@ -233,9 +223,9 @@ export default function CollectionsPage() {
 								pagination={filteredDashboards.length > 10 ? { pageSize: 10, showSizeChanger: true, showTotal: (total) => `${total} 条` } : false}
 							/>
 						)}
-					</div>
+					</Card>
 				</div>
 			)}
-		</PageContainer>
+		</div>
 	);
 }
