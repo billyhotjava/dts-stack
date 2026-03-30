@@ -16,7 +16,7 @@ export const overviewKpis = [
 ];
 
 export const healthMatrix = [
-	{ id: "GZ-2026-018", name: "集团制造协同平台二期", dept: "数字化事业部 / A类重点项目", owner: "张伟 / PMO", actualRate: 82, planRate: 86, execRate: 76, status: "正常推进", statusTone: "ok" as const, risk: "中" },
+	{ id: "GZ-2026-018", name: "集团制造协同平台二期", dept: "数字化事业部 / A类重点项目", owner: "张工 / PMO", actualRate: 82, planRate: 86, execRate: 76, status: "正常推进", statusTone: "ok" as const, risk: "中" },
 	{ id: "NY-2026-006", name: "新能源工厂建设项目", dept: "工程建设中心 / 战略级项目", owner: "刘工 / 项目总", actualRate: 61, planRate: 79, execRate: 88, status: "延期预警", statusTone: "danger" as const, risk: "高" },
 	{ id: "RD-2026-011", name: "核心器件研发验证项目", dept: "研发中心 / 技术攻关类", owner: "陈工 / 技术负责人", actualRate: 46, planRate: 44, execRate: 39, status: "风险可控", statusTone: "warn" as const, risk: "中" },
 	{ id: "IT-2026-003", name: "集团统一主数据治理工程", dept: "信息化管理部 / 平台类项目", owner: "王工 / 产品经理", actualRate: 73, planRate: 75, execRate: 68, status: "按计划执行", statusTone: "ok" as const, risk: "低" },
@@ -254,7 +254,7 @@ export const collaborationMatrix = [
 ];
 
 export const personWorkload = [
-	{ name: "张伟", dept: "数字化事业部", projects: 3, hours: 52, status: "超负荷" },
+	{ name: "张工", dept: "数字化事业部", projects: 3, hours: 52, status: "超负荷" },
 	{ name: "刘工", dept: "工程建设中心", projects: 2, hours: 48, status: "正常" },
 	{ name: "陈工", dept: "研发中心", projects: 4, hours: 56, status: "超负荷" },
 	{ name: "王工", dept: "信息化管理部", projects: 2, hours: 42, status: "正常" },

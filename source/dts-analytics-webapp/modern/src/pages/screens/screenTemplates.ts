@@ -2179,7 +2179,7 @@ const personalBalanceDashboardTemplate: ScreenTemplate = {
             }),
             createComponent('pb-chart-employee', 'bar-chart', '职工余额分布', 24, 394, 596, 286, 20, {
                 title: '职工余额分布',
-                xAxisData: ['王强', '赵敏', '吴杰', '郑华', '孙磊', '钱波', '李娜', '张伟'],
+                xAxisData: ['王强', '赵敏', '吴杰', '郑华', '孙磊', '钱波', '李工', '张工'],
                 series: [{ name: '净余额(万)', data: [18.34, 9.46, 9.02, 5.45, 3.4, 4.62, 2.7, 1.78] }],
                 seriesColors: ['#2e73d6'],
                 backgroundColor: '#ffffff',
@@ -2215,7 +2215,7 @@ const personalBalanceDashboardTemplate: ScreenTemplate = {
             createFinancePluginComponent('pb-summary', 'table', 'summary-table', '个人余额明细', 24, 700, 1260, 336, 15, {
                 headers: ['科目编号', '科目名称', '部门', '职工'],
                 rows: [
-                    financeRow('1122.01', '备用金', '制造部', '张伟'),
+                    financeRow('1122.01', '备用金', '制造部', '张工'),
                     financeRow('1122.02', '差旅费借款', 'IT部', '孙磊'),
                     financeRow('1122.03', '采购预付款', '采购部', '赵敏'),
                     financeRow('1122.01', '备用金', '研发部', '钱波'),
