@@ -203,4 +203,4 @@
 |---------|---------|------|
 | F1-财务大屏模板族插件化重构 | 5 | IN_PROGRESS |
 
-**统计**: READY=0, IN_PROGRESS=3, DONE=2, BLOCKED=0
+**统计**: READY=0, IN_PROGRESS=1, DONE=4, BLOCKED=0

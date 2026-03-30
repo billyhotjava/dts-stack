@@ -5,13 +5,13 @@
 - [x] 财务插件注册测试通过
 - [x] 财务模板定义测试通过
 - [x] 财务插件基础契约测试通过
-- [ ] 财务预览运行态专项测试通过
+- [x] 财务预览运行态专项测试通过
 - [x] `source/dts-analytics-webapp/modern` `pnpm typecheck` 通过
 - [x] `source/dts-analytics-webapp/modern` `pnpm build` 通过
 
 ### 计划执行命令
 
-- `cd source/dts-analytics-webapp/modern && node --import tsx --test src/pages/screens/plugins/custom/financePluginAdapters.test.ts src/pages/screens/financeTemplates.test.ts src/pages/screens/componentLibraryPlugins.test.ts`
+- `cd source/dts-analytics-webapp/modern && node --import tsx --test src/pages/screens/plugins/custom/financePluginAdapters.test.ts src/pages/screens/financeTemplates.test.ts src/pages/screens/componentLibraryPlugins.test.ts src/pages/screens/specV2.finance-plugin.test.ts src/pages/screens/financePreviewRuntime.test.tsx`
 - `cd source/dts-analytics-webapp/modern && pnpm typecheck`
 - `cd source/dts-analytics-webapp/modern && pnpm build`
 
