@@ -95,7 +95,16 @@ export const normalizeMenuPath = (path?: string | null): string => {
 	return normalized === "" ? "/" : normalized;
 };
 
-export const resolveMenuPath = (node: MenuTree, meta: MenuMetadata): string => {
+const joinRelativeMenuPath = (parentPath: string, childPath: string): string => {
+	const normalizedParent = normalizeMenuPath(parentPath);
+	const normalizedChild = normalizeMenuPath(childPath);
+	if (!normalizedParent) return normalizedChild;
+	if (!normalizedChild) return normalizedParent;
+	if (normalizedChild === "/") return normalizedParent;
+	return normalizeMenuPath(`${normalizedParent}/${normalizedChild.replace(/^\/+/, "")}`);
+};
+
+export const resolveMenuPath = (node: MenuTree, meta: MenuMetadata, parentPath?: string): string => {
 	// Prefer explicit external link in metadata so navigation can open the real URL directly (avoids popup blockers).
 	const external =
 		(meta as any)?.externalLink ??
@@ -108,7 +117,18 @@ export const resolveMenuPath = (node: MenuTree, meta: MenuMetadata): string => {
 		return normalizeMenuPath(external);
 	}
 	const rawPath = node?.path ?? (typeof (meta as any)?.path === "string" ? (meta as any).path : undefined);
-	return normalizeMenuPath(rawPath);
+	const normalized = normalizeMenuPath(rawPath);
+	if (!normalized) {
+		return parentPath ? normalizeMenuPath(parentPath) : "";
+	}
+	if (!parentPath) {
+		return normalized;
+	}
+	const raw = String(rawPath ?? "").trim();
+	if (raw.startsWith("/")) {
+		return normalized;
+	}
+	return joinRelativeMenuPath(parentPath, raw);
 };
 
 export const isMenuDeleted = (node: MenuTree): boolean => Boolean((node as unknown as { deleted?: boolean })?.deleted);
@@ -136,40 +156,50 @@ const shouldSkipMenu = (node: MenuTree, meta: MenuMetadata): boolean =>
 export const findMenuByPath = (menus: MenuTree[], targetPath: string): MenuTree | null => {
 	const target = normalizeMenuPath(targetPath);
 	if (!target) return null;
-	const queue: MenuTree[] = Array.isArray(menus) ? [...menus] : [];
+	const queue: Array<{ node: MenuTree; parentPath?: string }> = Array.isArray(menus)
+		? menus.map((node) => ({ node }))
+		: [];
 	while (queue.length) {
-		const node = queue.shift()!;
+		const current = queue.shift()!;
+		const node = current.node;
 		const meta = parseMenuMetadata(node?.metadata);
 		if (shouldSkipMenu(node, meta)) {
 			continue;
 		}
-		const path = resolveMenuPath(node, meta);
+		const path = resolveMenuPath(node, meta, current.parentPath);
 		if (path === target) {
 			return node;
 		}
 		if (Array.isArray(node.children) && node.children.length > 0) {
-			queue.push(...(node.children as MenuTree[]));
+			for (const child of node.children as MenuTree[]) {
+				queue.push({ node: child, parentPath: path || current.parentPath });
+			}
 		}
 	}
 	return null;
 };
 
 export const firstAccessibleMenuPath = (menus: MenuTree[]): string | null => {
-	const queue: MenuTree[] = Array.isArray(menus) ? [...menus] : [];
+	const queue: Array<{ node: MenuTree; parentPath?: string }> = Array.isArray(menus)
+		? menus.map((node) => ({ node }))
+		: [];
 	while (queue.length) {
-		const node = queue.shift()!;
+		const current = queue.shift()!;
+		const node = current.node;
 		const meta = parseMenuMetadata(node?.metadata);
 		if (shouldSkipMenu(node, meta)) {
 			continue;
 		}
-		const path = resolveMenuPath(node, meta);
+		const path = resolveMenuPath(node, meta, current.parentPath);
 		const typeValue = menuTypeOf(node);
 		const isLeafType = typeValue === undefined || typeValue >= PermissionType.MENU;
 		if (path && !isExternalPath(path) && (hasMenuComponent(node) || isLeafType)) {
 			return path;
 		}
 		if (Array.isArray(node.children) && node.children.length > 0) {
-			queue.push(...(node.children as MenuTree[]));
+			for (const child of node.children as MenuTree[]) {
+				queue.push({ node: child, parentPath: path || current.parentPath });
+			}
 		}
 	}
 	return null;
@@ -179,21 +209,31 @@ export const firstAccessibleChildPath = (node: MenuTree | null | undefined): str
 	if (!node || !Array.isArray(node.children)) {
 		return null;
 	}
-	return firstAccessibleMenuPath(node.children as MenuTree[]);
+	const meta = parseMenuMetadata(node.metadata);
+	const parentPath = resolveMenuPath(node, meta);
+	return firstAccessibleMenuPath(
+		(node.children as MenuTree[]).map((child) => ({
+			...child,
+			path: resolveMenuPath(child, parseMenuMetadata(child.metadata), parentPath),
+		})),
+	);
 };
 
 export const findBestMenuMatch = (menus: MenuTree[], targetPath: string): MenuTree | null => {
 	const normalized = normalizeMenuPath(targetPath);
 	if (!normalized) return null;
 	let best: { node: MenuTree; length: number } | null = null;
-	const stack: MenuTree[] = Array.isArray(menus) ? [...menus] : [];
+	const stack: Array<{ node: MenuTree; parentPath?: string }> = Array.isArray(menus)
+		? menus.map((node) => ({ node }))
+		: [];
 	while (stack.length) {
-		const node = stack.pop()!;
+		const current = stack.pop()!;
+		const node = current.node;
 		const meta = parseMenuMetadata(node?.metadata);
 		if (shouldSkipMenu(node, meta)) {
 			continue;
 		}
-		const menuPath = resolveMenuPath(node, meta);
+		const menuPath = resolveMenuPath(node, meta, current.parentPath);
 		if (menuPath) {
 			const base = menuPath.endsWith("/") ? menuPath.slice(0, -1) : menuPath;
 			const target = normalized.endsWith("/") ? normalized.slice(0, -1) : normalized;
@@ -210,7 +250,9 @@ export const findBestMenuMatch = (menus: MenuTree[], targetPath: string): MenuTr
 			}
 		}
 		if (Array.isArray(node.children) && node.children.length > 0) {
-			stack.push(...(node.children as MenuTree[]));
+			for (const child of node.children as MenuTree[]) {
+				stack.push({ node: child, parentPath: menuPath || current.parentPath });
+			}
 		}
 	}
 	return best?.node ?? null;
