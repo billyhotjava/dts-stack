@@ -20,37 +20,41 @@ export function NavList({ data, depth = 1 }: NavListProps) {
 		return null;
 	}
 
-	return (
+	const navItem = (
+		<NavItem
+			// data
+			title={data.title}
+			path={data.path}
+			icon={data.icon}
+			info={data.info}
+			caption={data.caption}
+			auth={data.auth}
+			// state
+			open={open}
+			active={isActive}
+			disabled={data.disabled}
+			// options
+			hasChild={hasChild}
+			depth={depth}
+			// event
+			onClick={handleClick}
+		/>
+	);
+
+	const renderLeafItem = () => navItem;
+
+	const renderCollapsibleItem = () => (
 		<Collapsible open={open} onOpenChange={setOpen} data-nav-type="list">
-			<CollapsibleTrigger className="w-full">
-				<NavItem
-					// data
-					title={data.title}
-					path={data.path}
-					icon={data.icon}
-					info={data.info}
-					caption={data.caption}
-					auth={data.auth}
-					// state
-					open={open}
-					active={isActive}
-					disabled={data.disabled}
-					// options
-					hasChild={hasChild}
-					depth={depth}
-					// event
-					onClick={handleClick}
-				/>
-			</CollapsibleTrigger>
-			{hasChild && (
-				<CollapsibleContent>
-					<div className="ml-4 mt-1 flex flex-col gap-0.5">
-						{data.children?.map((child) => (
-							<NavList key={child.title} data={child} depth={depth + 1} />
-						))}
-					</div>
-				</CollapsibleContent>
-			)}
+			<CollapsibleTrigger asChild>{navItem}</CollapsibleTrigger>
+			<CollapsibleContent>
+				<div className="ml-4 mt-1 flex flex-col gap-0.5">
+					{data.children?.map((child) => (
+						<NavList key={child.title} data={child} depth={depth + 1} />
+					))}
+				</div>
+			</CollapsibleContent>
 		</Collapsible>
 	);
+
+	return <li className="list-none">{hasChild ? renderCollapsibleItem() : renderLeafItem()}</li>;
 }
