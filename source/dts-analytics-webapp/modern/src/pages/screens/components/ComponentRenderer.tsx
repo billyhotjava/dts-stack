@@ -6,6 +6,7 @@ import type { ChartMarkArea, ChartMarkLine, SeriesConditionalColor } from '../ty
 import { getThemeTokens } from '../screenThemes';
 import { isSafeSrcUrl } from '../sanitize';
 import { PluginRenderBoundary } from '../plugins/PluginRenderBoundary';
+import { ensureBuiltinPluginAdapter } from '../plugins/builtinPluginAdapters';
 import { getRendererPlugin } from '../plugins/registry';
 import { readComponentPluginMeta, resolveRuntimePluginId } from '../plugins/runtime';
 import { useScreenPluginRuntime } from '../plugins/useScreenPluginRuntime';
@@ -157,13 +158,24 @@ export const ComponentRenderer = memo(function ComponentRenderer({ component, mo
 
     const runtime = useScreenRuntime();
     const pluginRuntimeVersion = useScreenPluginRuntime();
+    const [pluginRecoveryVersion, setPluginRecoveryVersion] = useState(0);
     const t = useMemo(() => getThemeTokens(theme), [theme]);
     const pluginMeta = useMemo(() => readComponentPluginMeta(config), [config]);
     const runtimePlugin = useMemo<RendererPlugin | null>(() => {
         const runtimeId = resolveRuntimePluginId(pluginMeta);
         if (!runtimeId) return null;
         return getRendererPlugin(runtimeId) ?? null;
-    }, [pluginMeta, pluginRuntimeVersion]);
+    }, [pluginMeta, pluginRuntimeVersion, pluginRecoveryVersion]);
+
+    useEffect(() => {
+        if (!pluginMeta || runtimePlugin) {
+            return;
+        }
+        const installed = ensureBuiltinPluginAdapter(pluginMeta.pluginId, pluginMeta.componentId, pluginMeta.version);
+        if (installed) {
+            setPluginRecoveryVersion((prev) => prev + 1);
+        }
+    }, [pluginMeta, runtimePlugin]);
 
     // Build ECharts base options from theme tokens
     const themeOptions = useMemo(() => ({

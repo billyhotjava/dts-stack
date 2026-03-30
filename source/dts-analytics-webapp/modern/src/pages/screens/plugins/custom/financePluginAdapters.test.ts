@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { installBuiltinPluginAdaptersFromModules } from '../builtinPluginAdapters';
+import { ensureBuiltinPluginAdapterFromModules, installBuiltinPluginAdaptersFromModules } from '../builtinPluginAdapters';
 import { buildPluginRuntimeId, getRendererPlugin, unregisterRendererPlugin } from '../registry';
 import * as shellModule from './finance-kit__shell';
 import * as headerBarModule from './finance-kit__header-bar';
@@ -59,4 +59,23 @@ test('finance plugin adapters register all builtin finance renderer plugins', ()
         assert.equal(plugin?.baseType, component.baseType);
         assert.equal(plugin?.id, runtimeId);
     }
+});
+
+test('finance plugin adapter can self-register from component metadata even without manifest loading', () => {
+    const runtimeId = buildPluginRuntimeId(FINANCE_PLUGIN_ID, 'kpi-card', FINANCE_PLUGIN_VERSION);
+    unregisterRendererPlugin(runtimeId);
+
+    const installed = ensureBuiltinPluginAdapterFromModules(
+        FINANCE_PLUGIN_ID,
+        'kpi-card',
+        FINANCE_PLUGIN_VERSION,
+        {
+            './custom/finance-kit__kpi-card.tsx': kpiCardModule,
+        },
+    );
+
+    assert.equal(installed, true);
+    const plugin = getRendererPlugin(runtimeId);
+    assert.ok(plugin, `expected renderer plugin ${runtimeId} to be registered by fallback path`);
+    assert.equal(plugin?.baseType, 'number-card');
 });

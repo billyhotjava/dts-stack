@@ -17,6 +17,14 @@ export function installBuiltinPluginAdapters(manifests: ScreenPluginManifest[]):
     installBuiltinPluginAdaptersFromModules(manifests, customModules);
 }
 
+export function ensureBuiltinPluginAdapter(
+    pluginId: string,
+    componentId: string,
+    version?: string,
+): boolean {
+    return ensureBuiltinPluginAdapterFromModules(pluginId, componentId, version, customModules);
+}
+
 export function installBuiltinPluginAdaptersFromModules(
     manifests: ScreenPluginManifest[],
     modules: Record<string, CustomPluginModule>,
@@ -36,6 +44,27 @@ export function installBuiltinPluginAdaptersFromModules(
             registerRendererPlugin(factory(pluginId, componentId, version));
         }
     }
+}
+
+export function ensureBuiltinPluginAdapterFromModules(
+    pluginId: string,
+    componentId: string,
+    version: string | undefined,
+    modules: Record<string, CustomPluginModule>,
+): boolean {
+    const pid = String(pluginId || '').trim();
+    const cid = String(componentId || '').trim();
+    if (!pid || !cid) {
+        return false;
+    }
+    const adapters = buildCustomAdapters(modules);
+    const adapterKey = `${pid}:${cid}`;
+    const factory = adapters[adapterKey];
+    if (!factory) {
+        return false;
+    }
+    registerRendererPlugin(factory(pid, cid, version));
+    return true;
 }
 
 function loadBuiltinCustomModules(): Record<string, CustomPluginModule> {
