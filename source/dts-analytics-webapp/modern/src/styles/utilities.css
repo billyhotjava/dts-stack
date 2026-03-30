@@ -417,3 +417,93 @@
   outline: none;
   box-shadow: var(--shadow-focus);
 }
+
+/* ═══════════════════════════════════════════════════════════════
+   Tailwind fallback: button styles for when Tailwind is not installed
+   These use attribute selectors to match common Tailwind class patterns
+   without conflicting with Tailwind when it IS installed (Tailwind's
+   @layer utilities has lower specificity than these plain selectors).
+   ═══════════════════════════════════════════════════════════════ */
+
+/* Primary brand button — matches bg-brand text-white border-brand pattern */
+button[class*="bg-brand"][class*="text-white"],
+a[class*="bg-brand"][class*="text-white"] {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 32px;
+  padding: 0 16px;
+  font-size: 14px;
+  font-weight: 400;
+  line-height: normal;
+  border: 1px solid var(--color-brand, #509EE3);
+  border-radius: 6px;
+  background: var(--color-brand, #509EE3);
+  color: #ffffff;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: opacity 0.2s;
+}
+
+button[class*="bg-brand"][class*="text-white"]:hover,
+a[class*="bg-brand"][class*="text-white"]:hover {
+  opacity: 0.85;
+}
+
+button[class*="bg-brand"][class*="text-white"]:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* Ghost / outline button — matches border-border-default bg-surface-card pattern */
+button[class*="border-border-default"][class*="bg-surface-card"],
+button[class*="border-white\\/10"][class*="bg-white\\/5"] {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 32px;
+  padding: 4px 14px;
+  font-size: 12px;
+  font-weight: 500;
+  border: 1px solid var(--color-border, rgba(148,163,184,0.24));
+  border-radius: 6px;
+  background: var(--color-bg-primary, var(--surface-card, #ffffff));
+  color: var(--color-text-primary, rgba(15,23,42,0.92));
+  cursor: pointer;
+  white-space: nowrap;
+  transition: all 0.2s;
+}
+
+/* Screen designer scope: dark theme overrides for ghost buttons */
+.screen-designer button[class*="border-border-default"][class*="bg-surface-card"],
+.screen-designer button[class*="border-white"][class*="bg-white"] {
+  background: rgba(255, 255, 255, 0.05);
+  border-color: rgba(255, 255, 255, 0.1);
+  color: var(--color-text-primary, rgba(255, 255, 255, 0.92));
+}
+
+.screen-designer button[class*="border-border-default"][class*="bg-surface-card"]:hover,
+.screen-designer button[class*="border-white"][class*="bg-white"]:hover {
+  border-color: var(--color-primary, #409eff);
+  background: rgba(64, 158, 255, 0.1);
+}
+
+/* Screen list page buttons — cards and filters */
+button[class*="rounded-md"][class*="border-border-default"][class*="cursor-pointer"] {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 4px 12px;
+  font-size: 12px;
+  border: 1px solid var(--color-border, rgba(148,163,184,0.24));
+  border-radius: 6px;
+  background: var(--color-bg-primary, var(--surface-card, #ffffff));
+  color: var(--color-text-primary, rgba(15,23,42,0.92));
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+button[class*="rounded-md"][class*="border-border-default"][class*="cursor-pointer"]:hover {
+  border-color: var(--color-brand, #509EE3);
+  background: rgba(80, 158, 227, 0.08);
+}

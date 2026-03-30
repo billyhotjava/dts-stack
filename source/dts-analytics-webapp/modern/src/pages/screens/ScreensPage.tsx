@@ -603,6 +603,7 @@ export default function ScreensPage() {
 								<div className="flex gap-2 px-4 py-3 border-t border-border-default items-center">
 									<button
 										className="flex-1 py-2 border border-border-default rounded-md bg-surface-card cursor-pointer text-xs font-medium transition-all duration-200 hover:border-brand hover:bg-brand/10"
+										style={{ background: 'var(--surface-card, #fff)', border: '1px solid var(--color-border, rgba(148,163,184,0.24))', borderRadius: 6 }}
 										data-testid={`analytics-screen-edit-button-${screen.id}`}
 										onClick={() => handleEdit(screen.id)}
 										title="编辑大屏"
@@ -611,6 +612,7 @@ export default function ScreensPage() {
 									</button>
 									<button
 										className="flex-1 py-2 border border-border-default rounded-md bg-surface-card cursor-pointer text-xs font-medium transition-all duration-200 hover:border-brand hover:bg-brand/10"
+										style={{ background: 'var(--surface-card, #fff)', border: '1px solid var(--color-border, rgba(148,163,184,0.24))', borderRadius: 6 }}
 										data-testid={`analytics-screen-preview-${screen.id}`}
 										onClick={() => handlePreview(screen.id)}
 										title="预览大屏"
@@ -620,6 +622,7 @@ export default function ScreensPage() {
 									<div className="screen-card-menu relative flex-1 z-[2]">
 										<button
 											className={`w-full py-2 border border-border-default rounded-md bg-surface-card cursor-pointer text-xs font-medium transition-all duration-200 hover:border-brand hover:bg-brand/10 ${activeCardMenuId === screen.id ? 'border-brand bg-brand/10' : ''}`}
+											style={{ background: 'var(--surface-card, #fff)', border: '1px solid var(--color-border, rgba(148,163,184,0.24))', borderRadius: 6 }}
 											onClick={() => setActiveCardMenuId((prev) => (prev === screen.id ? null : screen.id))}
 											title="更多操作"
 										>
@@ -650,6 +653,7 @@ export default function ScreensPage() {
 												<button
 													type="button"
 													className="border border-transparent rounded-md px-2 py-[7px] bg-transparent text-text-primary text-xs text-left cursor-pointer hover:border-brand hover:bg-brand/10 disabled:opacity-55 disabled:cursor-not-allowed"
+													style={{ background: 'transparent', color: 'var(--color-text-primary, #1c2833)', fontSize: 12, textAlign: 'left' }}
 													onClick={() => {
 														setActiveCardMenuId(null);
 														void handleShare(screen.id);
@@ -671,6 +675,7 @@ export default function ScreensPage() {
 												<button
 													type="button"
 													className="border border-transparent rounded-md px-2 py-[7px] bg-transparent text-text-primary text-xs text-left cursor-pointer hover:border-brand hover:bg-brand/10 disabled:opacity-55 disabled:cursor-not-allowed"
+													style={{ background: 'transparent', color: 'var(--color-text-primary, #1c2833)', fontSize: 12, textAlign: 'left' }}
 													onClick={() => {
 														setActiveCardMenuId(null);
 														void handleSaveAsTemplate(screen.id, screen.name);
@@ -682,6 +687,7 @@ export default function ScreensPage() {
 												<button
 													type="button"
 													className="border border-transparent rounded-md px-2 py-[7px] bg-transparent text-text-primary text-xs text-left cursor-pointer hover:border-error hover:bg-error/10"
+													style={{ background: 'transparent', color: 'var(--color-text-primary, #1c2833)', fontSize: 12, textAlign: 'left' }}
 													onClick={() => {
 														setActiveCardMenuId(null);
 														void handleDelete(screen.id);
