@@ -1,3 +1,5 @@
+import { resolveLoginHref } from '@/routes/constants';
+
 export type CollectionListItem = {
 	id: number | "root";
 	name?: string;
@@ -1211,7 +1213,7 @@ async function apiFetch(url: string, init: RequestInit, allowRefresh: boolean): 
 	if (!refreshed?.accessToken) {
 		// Refresh failed and no new token — redirect to platform login
 		const returnUrl = encodeURIComponent(window.location.pathname + window.location.search);
-		window.location.href = `/#/auth/login?redirect=${returnUrl}`;
+		window.location.href = `${resolveLoginHref()}?redirect=${returnUrl}`;
 		return response;
 	}
 
@@ -1222,7 +1224,7 @@ async function apiFetch(url: string, init: RequestInit, allowRefresh: boolean): 
 	if (retryResponse.status === 401) {
 		// Retry also failed with 401 — session is unrecoverable
 		const returnUrl = encodeURIComponent(window.location.pathname + window.location.search);
-		window.location.href = `/#/auth/login?redirect=${returnUrl}`;
+		window.location.href = `${resolveLoginHref()}?redirect=${returnUrl}`;
 	}
 	return retryResponse;
 }
