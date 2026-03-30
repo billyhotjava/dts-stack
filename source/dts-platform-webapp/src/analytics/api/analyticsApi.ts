@@ -1687,6 +1687,15 @@ export type UserSearchItem = {
 	common_name?: string;
 };
 
+export type PlatformRole = {
+	id?: string;
+	name: string;
+	description?: string;
+	scope?: string;
+	operations?: string[];
+	source?: "builtin" | "custom" | "assignment" | string;
+};
+
 export const analyticsApi = {
 	getCurrentUser: () => fetchJson<CurrentUser>("/bi/api/user/current"),
 	getUser: (id: number | string) =>
@@ -1695,6 +1704,13 @@ export const analyticsApi = {
 		),
 	searchUsers: (query: string) =>
 		fetchJson<UserSearchItem[]>("/bi/api/user/search?q=" + encodeURIComponent(query)),
+	listPlatformRoles: async (): Promise<PlatformRole[]> => {
+		const response = await apiFetch("/api/directory/roles", { method: "GET" }, true);
+		if (!response.ok) return [];
+		const body = await response.json();
+		// Platform returns { data: [...] } or raw array
+		return Array.isArray(body) ? body : Array.isArray(body?.data) ? body.data : [];
+	},
 	getHealth: () => fetchJson<{ status?: string }>("/bi/api/health"),
 	getProjectCockpitSettings: () =>
 		fetchJson<ProjectCockpitSettingsResponse>("/bi/api/project-cockpit/settings"),
@@ -2086,10 +2102,23 @@ export const analyticsApi = {
 		requestJson<ScreenDetail>(`/bi/api/screens/${encodeURIComponent(String(id))}`, "PUT", body),
 	deleteScreen: (id: string | number) =>
 		requestJson<void>(`/bi/api/screens/${encodeURIComponent(String(id))}`, "DELETE"),
-	getScreenAcl: (id: string | number) =>
-		fetchJson<ScreenAclEntry[]>(`/bi/api/screens/${encodeURIComponent(String(id))}/acl`),
-	updateScreenAcl: (id: string | number, body: { entries: ScreenAclEntry[] }) =>
-		requestJson<ScreenAclEntry[]>(`/bi/api/screens/${encodeURIComponent(String(id))}/acl`, "PUT", body),
+	getScreenAcl: async (id: string | number): Promise<ScreenAclEntry[]> => {
+		type PlatformGrant = { id?: number; granteeType?: string; granteeId?: string; permission?: string; grantedBy?: string; createdDate?: string; lastModifiedDate?: string };
+		const grants = await fetchJson<PlatformGrant[]>(`/bi/api/screens/${encodeURIComponent(String(id))}/grants`);
+		return (grants || []).map((g) => ({
+			id: g.id,
+			screenId: id,
+			subjectType: (g.granteeType === "ROLE" ? "ROLE" : "USER") as ScreenAclEntry["subjectType"],
+			subjectId: g.granteeId || "",
+			perm: (g.permission === "EDIT" ? "MANAGE" : "READ") as ScreenAclEntry["perm"],
+			createdAt: g.createdDate,
+			updatedAt: g.lastModifiedDate,
+		}));
+	},
+	addScreenGrant: (id: string | number, body: { granteeType: string; granteeId: string; permission: string }) =>
+		requestJson<Record<string, unknown>>(`/bi/api/screens/${encodeURIComponent(String(id))}/grants`, "PUT", body),
+	revokeScreenGrant: (screenId: string | number, grantId: string | number) =>
+		requestJson<void>(`/bi/api/screens/${encodeURIComponent(String(screenId))}/grants/${encodeURIComponent(String(grantId))}`, "DELETE"),
 	getScreenEditLock: (id: string | number) =>
 		fetchJson<ScreenEditLock>(`/bi/api/screens/${encodeURIComponent(String(id))}/edit-lock`),
 	acquireScreenEditLock: (id: string | number, body?: { ttlSeconds?: number; forceTakeover?: boolean }) =>

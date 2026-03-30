@@ -1,5 +1,5 @@
-import { useEffect, useState } from 'react';
-import { analyticsApi, type ScreenAclEntry } from '../../../api/analyticsApi';
+import { useEffect, useState, useCallback, useMemo } from 'react';
+import { analyticsApi, type ScreenAclEntry, type UserSearchItem, type PlatformRole } from '../../../api/analyticsApi';
 import { Modal } from 'antd';
 
 interface ScreenAclPanelProps {
@@ -9,179 +9,448 @@ interface ScreenAclPanelProps {
 	isOwner?: boolean;
 }
 
-const SUBJECT_TYPES: ScreenAclEntry['subjectType'][] = ['USER', 'ROLE'];
-const ASSIGNABLE_PERMS: ScreenAclEntry['perm'][] = ['MANAGE', 'READ'];
-const PERM_LABELS: Record<string, string> = {
-	OWNER: '拥有者',
-	MANAGE: '管理者',
-	READ: '查看者',
-};
+const GRANTEE_TYPE_LABELS: Record<string, string> = { USER: '用户', ROLE: '角色' };
+const PERM_LABELS: Record<string, string> = { OWNER: '拥有者', MANAGE: '管理者', READ: '查看者' };
 
-function normalizeEntry(row: Partial<ScreenAclEntry>): ScreenAclEntry {
-	const validPerms: ScreenAclEntry['perm'][] = ['READ', 'MANAGE', 'OWNER'];
-	return {
-		subjectType: row.subjectType === 'ROLE' ? 'ROLE' : 'USER',
-		subjectId: String(row.subjectId || '').trim(),
-		perm: (validPerms.includes(row.perm as ScreenAclEntry['perm']) ? row.perm : 'READ') as ScreenAclEntry['perm'],
-		id: row.id,
-		screenId: row.screenId,
-		creatorId: row.creatorId,
-		createdAt: row.createdAt,
-		updatedAt: row.updatedAt,
-	};
+function toBackendPermission(perm: 'MANAGE' | 'READ'): string {
+	return perm === 'MANAGE' ? 'EDIT' : 'READ';
 }
 
+const PAGE_SIZE = 10;
+
 export function ScreenAclPanel({ open, screenId, onClose, isOwner = false }: ScreenAclPanelProps) {
+	// ── Existing grants ──
 	const [loading, setLoading] = useState(false);
-	const [saving, setSaving] = useState(false);
 	const [error, setError] = useState<string | null>(null);
 	const [rows, setRows] = useState<ScreenAclEntry[]>([]);
 
+	// ── Add grant form ──
+	const [granteeType, setGranteeType] = useState<'USER' | 'ROLE'>('USER');
+	const [addPerm, setAddPerm] = useState<'MANAGE' | 'READ'>('READ');
+	const [searchQuery, setSearchQuery] = useState('');
+	const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+	const [adding, setAdding] = useState(false);
+
+	// ── Candidate data sources ──
+	const [users, setUsers] = useState<UserSearchItem[]>([]);
+	const [usersLoading, setUsersLoading] = useState(false);
+	const [roles, setRoles] = useState<PlatformRole[]>([]);
+	const [rolesLoading, setRolesLoading] = useState(false);
+
+	// ── Pagination ──
+	const [currentPage, setCurrentPage] = useState(1);
+
+	// ── Load existing grants ──
+	const loadGrants = useCallback(async () => {
+		if (!screenId) return;
+		setLoading(true);
+		setError(null);
+		try {
+			const acl = await analyticsApi.getScreenAcl(screenId);
+			setRows(acl || []);
+		} catch (e) {
+			setError(e instanceof Error ? e.message : '加载权限失败');
+			setRows([]);
+		} finally {
+			setLoading(false);
+		}
+	}, [screenId]);
+
 	useEffect(() => {
 		if (!open || !screenId) return;
-		let cancelled = false;
-		const load = async () => {
-			setLoading(true);
-			setError(null);
-			try {
-				const acl = await analyticsApi.getScreenAcl(screenId);
-				if (cancelled) return;
-				setRows((acl || []).map(normalizeEntry));
-			} catch (e) {
-				if (!cancelled) {
-					setError(e instanceof Error ? e.message : '加载权限失败');
-					setRows([]);
-				}
-			} finally {
-				if (!cancelled) setLoading(false);
+		loadGrants();
+	}, [open, screenId, loadGrants]);
+
+	// ── Load users when type is USER ──
+	const loadUsers = useCallback(async (query: string) => {
+		setUsersLoading(true);
+		try {
+			const result = await analyticsApi.searchUsers(query);
+			setUsers(result || []);
+		} catch {
+			setUsers([]);
+		} finally {
+			setUsersLoading(false);
+		}
+	}, []);
+
+	// ── Load roles when type is ROLE ──
+	const loadRoles = useCallback(async () => {
+		setRolesLoading(true);
+		try {
+			const result = await analyticsApi.listPlatformRoles();
+			setRoles(result || []);
+		} catch {
+			setRoles([]);
+		} finally {
+			setRolesLoading(false);
+		}
+	}, []);
+
+	// ── Trigger load on type switch or open ──
+	useEffect(() => {
+		if (!open) return;
+		setSearchQuery('');
+		setSelectedIds(new Set());
+		setCurrentPage(1);
+		if (granteeType === 'USER') {
+			loadUsers('');
+		} else {
+			loadRoles();
+		}
+	}, [open, granteeType, loadUsers, loadRoles]);
+
+	// ── Debounced user search ──
+	useEffect(() => {
+		if (!open || granteeType !== 'USER') return;
+		const timer = setTimeout(() => {
+			loadUsers(searchQuery);
+		}, 300);
+		return () => clearTimeout(timer);
+	}, [searchQuery, open, granteeType, loadUsers]);
+
+	// ── Filtered candidates (roles support frontend filter) ──
+	const filteredRoles = useMemo(() => {
+		if (!searchQuery.trim()) return roles;
+		const kw = searchQuery.trim().toLowerCase();
+		return roles.filter(
+			(r) =>
+				(r.name || '').toLowerCase().includes(kw) ||
+				(r.description || '').toLowerCase().includes(kw),
+		);
+	}, [roles, searchQuery]);
+
+	const candidateList = granteeType === 'USER' ? users : filteredRoles;
+	const totalItems = candidateList.length;
+	const totalPages = Math.max(1, Math.ceil(totalItems / PAGE_SIZE));
+	const safePage = Math.min(currentPage, totalPages);
+	const pagedItems = candidateList.slice((safePage - 1) * PAGE_SIZE, safePage * PAGE_SIZE);
+
+	// Reset page when search changes
+	useEffect(() => {
+		setCurrentPage(1);
+	}, [searchQuery, granteeType]);
+
+	// ── Checkbox helpers ──
+	const getCandidateId = (item: UserSearchItem | PlatformRole): string => {
+		if (granteeType === 'USER') {
+			return String((item as UserSearchItem).id);
+		}
+		return (item as PlatformRole).name;
+	};
+
+	const toggleSelect = (id: string) => {
+		setSelectedIds((prev) => {
+			const next = new Set(prev);
+			if (next.has(id)) next.delete(id);
+			else next.add(id);
+			return next;
+		});
+	};
+
+	const isAllPageSelected = pagedItems.length > 0 && pagedItems.every((item) => selectedIds.has(getCandidateId(item)));
+
+	const togglePageAll = () => {
+		setSelectedIds((prev) => {
+			const next = new Set(prev);
+			const pageIds = pagedItems.map(getCandidateId);
+			if (isAllPageSelected) {
+				pageIds.forEach((id) => next.delete(id));
+			} else {
+				pageIds.forEach((id) => next.add(id));
 			}
-		};
-		load();
-		return () => {
-			cancelled = true;
-		};
-	}, [open, screenId]);
-
-	const updateAt = (index: number, patch: Partial<ScreenAclEntry>) => {
-		setRows((prev) => prev.map((row, i) => (i === index ? normalizeEntry({ ...row, ...patch }) : row)));
+			return next;
+		});
 	};
 
-	const removeAt = (index: number) => {
-		setRows((prev) => prev.filter((_, i) => i !== index));
+	// ── Add selected grants ──
+	const handleAddSelected = async () => {
+		if (!screenId || selectedIds.size === 0) return;
+		setAdding(true);
+		setError(null);
+		try {
+			const permission = toBackendPermission(addPerm);
+			for (const granteeId of selectedIds) {
+				await analyticsApi.addScreenGrant(screenId, {
+					granteeType,
+					granteeId,
+					permission,
+				});
+			}
+			setSelectedIds(new Set());
+			await loadGrants();
+		} catch (e) {
+			setError(e instanceof Error ? e.message : '添加权限失败');
+		} finally {
+			setAdding(false);
+		}
 	};
 
-	// Determine which perms the current user can assign
-	const availablePerms: ScreenAclEntry['perm'][] = isOwner ? ASSIGNABLE_PERMS : ['READ'];
+	// ── Revoke grant ──
+	const handleRevoke = async (grantId: string | number | undefined) => {
+		if (!screenId || grantId == null) return;
+		if (!confirm('确定要移除这条权限吗？')) return;
+		setError(null);
+		try {
+			await analyticsApi.revokeScreenGrant(screenId, grantId);
+			await loadGrants();
+		} catch (e) {
+			setError(e instanceof Error ? e.message : '移除权限失败');
+		}
+	};
+
+	const assignablePerms: ('MANAGE' | 'READ')[] = isOwner ? ['MANAGE', 'READ'] : ['READ'];
+
+	// ── Shared table cell style ──
+	const cellCls = 'px-3 py-2 text-xs text-text-primary';
+	const headerCls = 'text-left font-medium px-3 py-2 text-xs text-text-secondary bg-surface-secondary';
 
 	return (
-		<Modal open={open} onCancel={onClose} title="权限管理" width={960}>
+		<Modal
+			open={open}
+			onCancel={onClose}
+			title="权限管理"
+			footer={null}
+			width={780}
+			styles={{ body: { maxHeight: '72vh', overflowY: 'auto' } }}
+		>
 			{!screenId && <div className="text-xs opacity-80">请先保存大屏后再配置权限。</div>}
-			{loading && <div className="text-xs opacity-80 mb-2">加载中...</div>}
 			{error && (
 				<div className="border border-error bg-error/10 text-error rounded-lg p-2.5 mb-3 text-xs whitespace-pre-wrap">
 					{error}
 				</div>
 			)}
 
-			<div className="grid gap-2 mb-2 text-xs" style={{ gridTemplateColumns: '120px 1fr 160px 68px' }}>
-				<div>主体类型</div>
-				<div>主体标识</div>
-				<div>权限</div>
-				<div />
-			</div>
-
-			{rows.map((row, idx) => {
-				// OWNER rows are read-only
-				if (row.perm === 'OWNER') {
-					return (
-						<div
-							key={`${row.subjectType}-${row.subjectId}-${row.perm}-${idx}`}
-							className="grid gap-2 mb-2"
-							style={{ gridTemplateColumns: '120px 1fr 160px 68px' }}
-						>
-							<span className="text-xs text-text-muted px-2.5 py-1.5">{row.subjectType}</span>
-							<span className="text-xs text-text-primary px-2.5 py-1.5">{row.subjectId}</span>
-							<span className="text-xs font-semibold text-brand px-2.5 py-1.5">{PERM_LABELS.OWNER}</span>
-							<span />
-						</div>
-					);
-				}
-
-				return (
-					<div
-						key={`${row.subjectType}-${row.subjectId}-${row.perm}-${idx}`}
-						className="grid gap-2 mb-2"
-						style={{ gridTemplateColumns: '120px 1fr 160px 68px' }}
-					>
-						<select
-							className="flex-1 px-2.5 py-1.5 border border-border-default rounded bg-surface-card text-text-primary text-xs focus:outline-none focus:border-brand"
-							value={row.subjectType}
-							onChange={(e) => updateAt(idx, { subjectType: e.target.value as ScreenAclEntry['subjectType'] })}
-						>
-							{SUBJECT_TYPES.map((type) => (
-								<option key={type} value={type}>{type}</option>
-							))}
-						</select>
-						<input
-							className="flex-1 px-2.5 py-1.5 border border-border-default rounded bg-surface-card text-text-primary text-xs focus:outline-none focus:border-brand"
-							value={row.subjectId}
-							placeholder={row.subjectType === 'ROLE' ? 'ROLE_ANALYST' : '10001'}
-							onChange={(e) => updateAt(idx, { subjectId: e.target.value })}
-						/>
-						<select
-							className="flex-1 px-2.5 py-1.5 border border-border-default rounded bg-surface-card text-text-primary text-xs focus:outline-none focus:border-brand"
-							value={row.perm}
-							onChange={(e) => updateAt(idx, { perm: e.target.value as ScreenAclEntry['perm'] })}
-						>
-							{availablePerms.map((perm) => (
-								<option key={perm} value={perm}>{PERM_LABELS[perm] || perm}</option>
-							))}
-						</select>
-						<button
-							type="button"
-							className="min-h-8 rounded-md border border-white/10 bg-white/5 text-text-primary px-3.5 text-xs hover:border-brand/30 hover:bg-brand/10"
-							onClick={() => removeAt(idx)}
-						>
-							-
-						</button>
+			{/* ── Section 1: Existing Grants ── */}
+			<div className="mb-5">
+				<div className="text-sm font-medium text-text-primary mb-2">已有权限</div>
+				{loading ? (
+					<div className="text-xs text-text-muted py-4 text-center">加载中...</div>
+				) : rows.length === 0 ? (
+					<div className="text-xs text-text-muted py-4 text-center border border-border-default rounded-lg">暂无权限记录</div>
+				) : (
+					<div className="rounded-lg border border-border-default overflow-hidden">
+						<table className="w-full border-collapse">
+							<thead>
+								<tr>
+									<th className={headerCls}>类型</th>
+									<th className={headerCls}>标识</th>
+									<th className={headerCls}>权限</th>
+									<th className={`${headerCls} text-right`}>操作</th>
+								</tr>
+							</thead>
+							<tbody>
+								{rows.map((row, idx) => (
+									<tr key={row.id ?? idx} className="border-t border-border-default">
+										<td className={cellCls}>{GRANTEE_TYPE_LABELS[row.subjectType] || row.subjectType}</td>
+										<td className={cellCls}>{row.subjectId}</td>
+										<td className={cellCls}>
+											<span className={row.perm === 'OWNER' ? 'font-semibold text-brand' : ''}>
+												{PERM_LABELS[row.perm] || row.perm}
+											</span>
+										</td>
+										<td className={`${cellCls} text-right`}>
+											{row.perm !== 'OWNER' && row.id != null ? (
+												<button
+													type="button"
+													className="px-2 py-0.5 rounded border border-border-default bg-surface-card text-xs text-error cursor-pointer hover:border-error hover:bg-error/10"
+													onClick={() => handleRevoke(row.id)}
+												>
+													移除
+												</button>
+											) : null}
+										</td>
+									</tr>
+								))}
+							</tbody>
+						</table>
 					</div>
-				);
-			})}
-
-			<div className="flex gap-2">
-				<button
-					type="button"
-					className="min-h-8 rounded-md border border-white/10 bg-white/5 text-text-primary px-3.5 text-xs hover:border-brand/30 hover:bg-brand/10 disabled:opacity-45 disabled:cursor-not-allowed"
-					onClick={() => setRows((prev) => [...prev, normalizeEntry({ subjectType: 'USER', subjectId: '', perm: 'READ' })])}
-					disabled={!screenId}
-				>
-					+ 添加
-				</button>
-				<button
-					type="button"
-					className="min-h-8 rounded-md border border-white/10 bg-white/5 text-text-primary px-3.5 text-xs hover:border-brand/30 hover:bg-brand/10 disabled:opacity-45 disabled:cursor-not-allowed"
-					disabled={!screenId || saving}
-					onClick={async () => {
-						if (!screenId) return;
-						setSaving(true);
-						setError(null);
-						try {
-							const payload = rows
-								.filter((item) => item.perm !== 'OWNER')
-								.map(normalizeEntry)
-								.filter((item) => item.subjectId.trim().length > 0);
-							const updated = await analyticsApi.updateScreenAcl(screenId, { entries: payload });
-							setRows((updated || []).map(normalizeEntry));
-						} catch (e) {
-							setError(e instanceof Error ? e.message : '保存权限失败');
-						} finally {
-							setSaving(false);
-						}
-					}}
-				>
-					{saving ? '保存中...' : '保存权限'}
-				</button>
+				)}
 			</div>
+
+			{/* ── Section 2: Add Grant ── */}
+			{screenId && (
+				<div className="border-t border-border-default pt-4">
+					<div className="text-sm font-medium text-text-primary mb-3">添加权限</div>
+
+					{/* Type & perm selectors */}
+					<div className="flex items-center gap-3 mb-3 flex-wrap">
+						<div className="flex items-center gap-1.5">
+							<span className="text-xs text-text-secondary">授权类型</span>
+							<select
+								className="px-2.5 py-1.5 border border-border-default rounded bg-surface-card text-text-primary text-xs focus:outline-none focus:border-brand"
+								value={granteeType}
+								onChange={(e) => {
+									setGranteeType(e.target.value as 'USER' | 'ROLE');
+									setSelectedIds(new Set());
+								}}
+							>
+								<option value="USER">用户</option>
+								<option value="ROLE">角色</option>
+							</select>
+						</div>
+						<div className="flex items-center gap-1.5">
+							<span className="text-xs text-text-secondary">权限</span>
+							<select
+								className="px-2.5 py-1.5 border border-border-default rounded bg-surface-card text-text-primary text-xs focus:outline-none focus:border-brand"
+								value={addPerm}
+								onChange={(e) => setAddPerm(e.target.value as 'MANAGE' | 'READ')}
+							>
+								{assignablePerms.map((p) => (
+									<option key={p} value={p}>{PERM_LABELS[p]}</option>
+								))}
+							</select>
+						</div>
+						<div className="flex-1 min-w-[180px]">
+							<input
+								className="w-full px-2.5 py-1.5 border border-border-default rounded bg-surface-card text-text-primary text-xs focus:outline-none focus:border-brand"
+								value={searchQuery}
+								onChange={(e) => setSearchQuery(e.target.value)}
+								placeholder={granteeType === 'USER' ? '搜索用户名或姓名...' : '搜索角色名称...'}
+							/>
+						</div>
+					</div>
+
+					{/* Candidate table */}
+					<div className="rounded-lg border border-border-default overflow-hidden mb-3">
+						<table className="w-full border-collapse">
+							<thead>
+								<tr>
+									<th className={`${headerCls} w-10`}>
+										<input
+											type="checkbox"
+											checked={isAllPageSelected}
+											onChange={togglePageAll}
+											className="cursor-pointer"
+										/>
+									</th>
+									{granteeType === 'USER' ? (
+										<>
+											<th className={headerCls}>ID</th>
+											<th className={headerCls}>姓名</th>
+											<th className={headerCls}>邮箱</th>
+										</>
+									) : (
+										<>
+											<th className={headerCls}>角色名称</th>
+											<th className={headerCls}>描述</th>
+											<th className={headerCls}>来源</th>
+										</>
+									)}
+								</tr>
+							</thead>
+							<tbody>
+								{(usersLoading || rolesLoading) ? (
+									<tr>
+										<td colSpan={4} className="text-center text-xs text-text-muted py-6">加载中...</td>
+									</tr>
+								) : pagedItems.length === 0 ? (
+									<tr>
+										<td colSpan={4} className="text-center text-xs text-text-muted py-6">
+											{searchQuery ? '无匹配结果' : '暂无数据'}
+										</td>
+									</tr>
+								) : granteeType === 'USER' ? (
+									(pagedItems as UserSearchItem[]).map((user) => {
+										const uid = String(user.id);
+										return (
+											<tr
+												key={uid}
+												className={`border-t border-border-default cursor-pointer transition-colors duration-100 ${selectedIds.has(uid) ? 'bg-brand/5' : 'hover:bg-surface-secondary/50'}`}
+												onClick={() => toggleSelect(uid)}
+											>
+												<td className={cellCls}>
+													<input
+														type="checkbox"
+														checked={selectedIds.has(uid)}
+														onChange={() => toggleSelect(uid)}
+														className="cursor-pointer"
+													/>
+												</td>
+												<td className={cellCls}>{user.id}</td>
+												<td className={cellCls}>{user.common_name || '-'}</td>
+												<td className={`${cellCls} text-text-secondary`}>{user.email || '-'}</td>
+											</tr>
+										);
+									})
+								) : (
+									(pagedItems as PlatformRole[]).map((role) => {
+										const rid = role.name;
+										const sourceLabels: Record<string, string> = { builtin: '内置', custom: '自定义', assignment: '分配' };
+										return (
+											<tr
+												key={rid}
+												className={`border-t border-border-default cursor-pointer transition-colors duration-100 ${selectedIds.has(rid) ? 'bg-brand/5' : 'hover:bg-surface-secondary/50'}`}
+												onClick={() => toggleSelect(rid)}
+											>
+												<td className={cellCls}>
+													<input
+														type="checkbox"
+														checked={selectedIds.has(rid)}
+														onChange={() => toggleSelect(rid)}
+														className="cursor-pointer"
+													/>
+												</td>
+												<td className={`${cellCls} font-medium`}>{role.name}</td>
+												<td className={`${cellCls} text-text-secondary`}>{role.description || '-'}</td>
+												<td className={cellCls}>{sourceLabels[role.source || ''] || role.source || '-'}</td>
+											</tr>
+										);
+									})
+								)}
+							</tbody>
+						</table>
+					</div>
+
+					{/* Pagination & action */}
+					<div className="flex items-center justify-between flex-wrap gap-2">
+						<div className="text-xs text-text-muted">
+							共 {totalItems} 条
+							{selectedIds.size > 0 && (
+								<span className="ml-2 text-brand font-medium">已选 {selectedIds.size} 项</span>
+							)}
+						</div>
+						<div className="flex items-center gap-1.5">
+							{totalPages > 1 && (
+								<div className="flex items-center gap-1 mr-3">
+									<button
+										type="button"
+										className="px-2 py-1 rounded border border-border-default bg-surface-card text-xs cursor-pointer hover:border-brand disabled:opacity-40 disabled:cursor-not-allowed"
+										disabled={safePage <= 1}
+										onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+									>
+										上一页
+									</button>
+									<span className="text-xs text-text-secondary px-1.5">{safePage} / {totalPages}</span>
+									<button
+										type="button"
+										className="px-2 py-1 rounded border border-border-default bg-surface-card text-xs cursor-pointer hover:border-brand disabled:opacity-40 disabled:cursor-not-allowed"
+										disabled={safePage >= totalPages}
+										onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+									>
+										下一页
+									</button>
+								</div>
+							)}
+							<button
+								type="button"
+								className="px-3 py-1.5 rounded-md border border-brand bg-brand text-white text-xs cursor-pointer hover:opacity-85 disabled:opacity-40 disabled:cursor-not-allowed"
+								onClick={handleAddSelected}
+								disabled={adding || selectedIds.size === 0}
+							>
+								{adding ? '添加中...' : `添加选中的 ${selectedIds.size} 项`}
+							</button>
+							<button
+								type="button"
+								className="px-3 py-1.5 rounded-md border border-border-default bg-surface-card text-text-primary text-xs cursor-pointer hover:border-brand hover:bg-brand/10"
+								onClick={onClose}
+							>
+								关闭
+							</button>
+						</div>
+					</div>
+				</div>
+			)}
 		</Modal>
 	);
 }

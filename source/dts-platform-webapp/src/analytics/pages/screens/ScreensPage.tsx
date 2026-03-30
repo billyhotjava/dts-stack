@@ -512,7 +512,7 @@ export default function ScreensPage() {
 							</button>
 						</div>
 					) : (
-						<div className="rounded-lg border border-border-default overflow-hidden">
+						<div className="rounded-lg border border-border-default overflow-visible">
 							<table className="w-full border-collapse text-sm">
 								<thead>
 									<tr className="bg-surface-secondary text-text-secondary text-xs">

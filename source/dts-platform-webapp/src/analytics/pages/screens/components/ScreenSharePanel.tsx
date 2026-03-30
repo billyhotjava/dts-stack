@@ -148,29 +148,32 @@ export function ScreenSharePanel({ open, screenId, onClose, isOwner = false }: S
 		});
 	};
 
+	const reloadEntries = async () => {
+		if (!screenId) return;
+		try {
+			const acl = await analyticsApi.getScreenAcl(screenId);
+			setEntries((acl || []).map(normalizeEntry));
+		} catch { /* ignore reload failure */ }
+	};
+
 	const handleAddSelected = async () => {
 		if (!screenId || selectedUserIds.size === 0) return;
 		setSaving(true);
 		setError(null);
 		try {
-			const nonOwnerEntries = entries
-				.filter((e) => e.perm !== 'OWNER')
-				.map(normalizeEntry)
-				.filter((e) => e.subjectId.trim().length > 0);
-
-			const newEntries: ScreenAclEntry[] = Array.from(selectedUserIds).map((uid) => ({
-				subjectType: 'USER' as const,
-				subjectId: uid,
-				perm: addPerm,
-			}));
-
-			const payload = [...nonOwnerEntries, ...newEntries];
-			const updated = await analyticsApi.updateScreenAcl(screenId, { entries: payload });
-			setEntries((updated || []).map(normalizeEntry));
+			const backendPerm = addPerm === 'MANAGE' ? 'EDIT' : 'READ';
+			for (const uid of selectedUserIds) {
+				await analyticsApi.addScreenGrant(screenId, {
+					granteeType: 'USER',
+					granteeId: uid,
+					permission: backendPerm,
+				});
+			}
+			await reloadEntries();
 			setSelectedUserIds(new Set());
 			setSearchQuery('');
 			setSearchResults([]);
-			message.success(`已添加 ${newEntries.length} 位用户`);
+			message.success(`已添加 ${selectedUserIds.size} 位用户`);
 		} catch (e) {
 			setError(e instanceof Error ? e.message : '添加用户失败');
 		} finally {
@@ -181,19 +184,13 @@ export function ScreenSharePanel({ open, screenId, onClose, isOwner = false }: S
 	const handleRemoveEntry = async (index: number) => {
 		if (!screenId) return;
 		const target = entries[index];
-		if (!target || target.perm === 'OWNER') return;
+		if (!target || target.perm === 'OWNER' || target.id == null) return;
 
 		setSaving(true);
 		setError(null);
 		try {
-			const remaining = entries
-				.filter((_, i) => i !== index)
-				.filter((e) => e.perm !== 'OWNER')
-				.map(normalizeEntry)
-				.filter((e) => e.subjectId.trim().length > 0);
-
-			const updated = await analyticsApi.updateScreenAcl(screenId, { entries: remaining });
-			setEntries((updated || []).map(normalizeEntry));
+			await analyticsApi.revokeScreenGrant(screenId, target.id);
+			await reloadEntries();
 		} catch (e) {
 			setError(e instanceof Error ? e.message : '移除用户失败');
 		} finally {
