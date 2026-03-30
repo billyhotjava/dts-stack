@@ -20,9 +20,6 @@ export ADMIN_UPSTREAM_API
 ANALYTICS_API_UPSTREAM="${ANALYTICS_API_PROXY_TARGET:-http://dts-analytics:3000}"
 export ANALYTICS_API_UPSTREAM
 
-ANALYTICS_UI_UPSTREAM="${ANALYTICS_UI_PROXY_TARGET:-http://dts-analytics-webapp-modern:80}"
-export ANALYTICS_UI_UPSTREAM
-
 NGINX_TEMPLATE_PATH="${NGINX_TEMPLATE_PATH:-/etc/nginx/http.d/default.conf.template}"
 NGINX_CONFIG_PATH="${NGINX_CONFIG_PATH:-/etc/nginx/http.d/default.conf}"
 WEBAPP_HTML_ROOT="${WEBAPP_HTML_ROOT:-/usr/share/nginx/html}"
@@ -31,13 +28,12 @@ WEBAPP_BACKEND_WAIT_INTERVAL_SECONDS="${WEBAPP_BACKEND_WAIT_INTERVAL_SECONDS:-3}
 PLATFORM_HEALTHCHECK_URL="${PLATFORM_HEALTHCHECK_URL:-$(printf '%s' "$UPSTREAM" | sed 's:/*$::')/management/health}"
 ADMIN_HEALTHCHECK_URL="${ADMIN_HEALTHCHECK_URL:-$(printf '%s' "$ADMIN_BASE" | sed 's:/*$::')/management/health}"
 ANALYTICS_HEALTHCHECK_URL="${ANALYTICS_HEALTHCHECK_URL:-$(printf '%s' "$ANALYTICS_API_UPSTREAM" | sed 's:/*$::')/api/health}"
-ANALYTICS_UI_HEALTHCHECK_URL="${ANALYTICS_UI_HEALTHCHECK_URL:-$(printf '%s' "$ANALYTICS_UI_UPSTREAM" | sed 's:/*$::')/}"
 
 render_active_nginx_config() {
   if [ -f "$NGINX_TEMPLATE_PATH" ]; then
-    echo "[entrypoint] Rendering active Nginx config with UPSTREAM=$UPSTREAM ADMIN_UPSTREAM_API=$ADMIN_UPSTREAM_API ANALYTICS_API_UPSTREAM=$ANALYTICS_API_UPSTREAM ANALYTICS_UI_UPSTREAM=$ANALYTICS_UI_UPSTREAM"
+    echo "[entrypoint] Rendering active Nginx config with UPSTREAM=$UPSTREAM ADMIN_UPSTREAM_API=$ADMIN_UPSTREAM_API ANALYTICS_API_UPSTREAM=$ANALYTICS_API_UPSTREAM"
     # shellcheck disable=SC2016
-    envsubst '${UPSTREAM} ${ADMIN_UPSTREAM_API} ${ANALYTICS_API_UPSTREAM} ${ANALYTICS_UI_UPSTREAM}' < "$NGINX_TEMPLATE_PATH" > "$NGINX_CONFIG_PATH"
+    envsubst '${UPSTREAM} ${ADMIN_UPSTREAM_API} ${ANALYTICS_API_UPSTREAM}' < "$NGINX_TEMPLATE_PATH" > "$NGINX_CONFIG_PATH"
   fi
 }
 
@@ -76,12 +72,11 @@ wait_for_backends() {
   while :; do
     if probe_backend "$PLATFORM_HEALTHCHECK_URL" \
       && probe_backend "$ADMIN_HEALTHCHECK_URL" \
-      && probe_backend "$ANALYTICS_HEALTHCHECK_URL" \
-      && probe_backend "$ANALYTICS_UI_HEALTHCHECK_URL"; then
+      && probe_backend "$ANALYTICS_HEALTHCHECK_URL"; then
       echo "[entrypoint] Backend dependencies are reachable; reloading active Nginx config"
       return 0
     fi
-    echo "[entrypoint] Waiting for backends: platform=$PLATFORM_HEALTHCHECK_URL admin=$ADMIN_HEALTHCHECK_URL analytics=$ANALYTICS_HEALTHCHECK_URL analytics-ui=$ANALYTICS_UI_HEALTHCHECK_URL"
+    echo "[entrypoint] Waiting for backends: platform=$PLATFORM_HEALTHCHECK_URL admin=$ADMIN_HEALTHCHECK_URL analytics=$ANALYTICS_HEALTHCHECK_URL"
     sleep "$WEBAPP_BACKEND_WAIT_INTERVAL_SECONDS"
   done
 }
