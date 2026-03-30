@@ -57,7 +57,7 @@ export default function CollectionItemsPage() {
 				title={t(locale, "collections.itemsTitle")}
 				breadcrumbs={
 					<Breadcrumb items={[
-						{ label: t(locale, "collections.title"), href: "/collections" },
+						{ label: t(locale, "collections.title"), href: "/analytics/collections" },
 						{ label: id === "root" ? t(locale, "collections.rootName") : (id ?? "root") }
 					]} />
 				}
@@ -75,7 +75,7 @@ export default function CollectionItemsPage() {
 			{state.state === "loaded" && state.value.length > 0 && (
 				<div className="collection-items">
 					{state.value.map((item) => {
-						const href = item.model === "dashboard" ? `/dashboards/${item.id}` : `/questions/${item.id}`;
+						const href = item.model === "dashboard" ? `/analytics/dashboards/${item.id}` : `/analytics/questions/${item.id}`;
 						return (
 							<Link key={`${item.model}:${item.id}`} to={href} className="collection-item">
 								<div className="collection-item__icon">

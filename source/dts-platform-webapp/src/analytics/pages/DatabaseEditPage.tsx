@@ -20,8 +20,8 @@ export default function DatabaseEditPage() {
 				title={t(locale, "data.edit")}
 				breadcrumbs={
 					<Breadcrumb items={[
-						{ label: t(locale, "data.title"), href: "/data" },
-						{ label: `${t(locale, "data.db")} #${dbId}`, href: `/data/${dbId}` },
+						{ label: t(locale, "data.title"), href: "/analytics/data" },
+						{ label: `${t(locale, "data.db")} #${dbId}`, href: `/analytics/data/${dbId}` },
 						{ label: t(locale, "data.edit") }
 					]} />
 				}

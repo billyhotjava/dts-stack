@@ -3,11 +3,11 @@ export type GpmcBoardScreenId = Exclude<GpmcScreenId, "overview">;
 export type GpmcDrillLayer = "strategic" | "control" | "execution";
 
 function getGpmcScreenPath(screen: GpmcScreenId) {
-	return screen === "overview" ? "/gpmc" : `/gpmc/${screen}`;
+	return screen === "overview" ? "/analytics/gpmc" : `/analytics/gpmc/${screen}`;
 }
 
 function getGpmcDrillPath(screen: GpmcBoardScreenId) {
-	return `/gpmc/drill/${screen}`;
+	return `/analytics/gpmc/drill/${screen}`;
 }
 
 export type GpmcAssistAction = {

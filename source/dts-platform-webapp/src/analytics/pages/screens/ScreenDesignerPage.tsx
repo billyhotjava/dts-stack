@@ -179,7 +179,7 @@ function ScreenDesignerContent() {
                 .then((screen) => {
                     if (screen.canEdit === false) {
                         alert('当前账号没有该大屏的编辑权限');
-                        navigate('/screens', { replace: true });
+                        navigate('/analytics/screens', { replace: true });
                         return;
                     }
                     const normalized = normalizeScreenConfig(screen, { id: screen.id });

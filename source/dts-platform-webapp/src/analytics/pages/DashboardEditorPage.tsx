@@ -367,7 +367,7 @@ export default function DashboardEditorPage() {
 			const saved = await analyticsApi.saveDashboard(body);
 			setSaveState({ state: "loaded", value: saved });
 			message.success(t(locale, "dashboards.save"));
-			navigate(`/dashboards/${saved.id}`, { replace: true });
+			navigate(`/analytics/dashboards/${saved.id}`, { replace: true });
 		} catch (e) {
 			setSaveState({ state: "error", error: e });
 		}

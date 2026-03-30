@@ -64,13 +64,13 @@ export default function FieldDetailPage() {
 	})();
 
 	const breadcrumbItems: { label: string; href?: string }[] = [
-		{ label: t(locale, "data.title"), href: "/data" },
+		{ label: t(locale, "data.title"), href: "/analytics/data" },
 	];
 	if (dbId) {
-		breadcrumbItems.push({ label: `${t(locale, "data.db")} #${dbId}`, href: `/data/${encodeURIComponent(String(dbId))}` });
+		breadcrumbItems.push({ label: `${t(locale, "data.db")} #${dbId}`, href: `/analytics/data/${encodeURIComponent(String(dbId))}` });
 	}
 	if (dbId && tableId) {
-		breadcrumbItems.push({ label: `${t(locale, "builder.table")} #${tableId}`, href: `/data/${encodeURIComponent(String(dbId))}/tables/${encodeURIComponent(String(tableId))}` });
+		breadcrumbItems.push({ label: `${t(locale, "builder.table")} #${tableId}`, href: `/analytics/data/${encodeURIComponent(String(dbId))}/tables/${encodeURIComponent(String(tableId))}` });
 	}
 	breadcrumbItems.push({ label: `Field #${fieldId}` });
 

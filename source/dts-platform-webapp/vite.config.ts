@@ -283,6 +283,8 @@ export default defineConfig(({ mode }) => {
 						"vendor-ui": ["antd", "@ant-design/cssinjs", "styled-components"],
 						"vendor-utils": ["axios", "dayjs", "i18next", "zustand", "@iconify/react"],
 						"vendor-monaco": ["monaco-editor"],
+						"vendor-echarts": ["echarts", "echarts-for-react", "echarts-wordcloud"],
+						"vendor-dnd": ["react-dnd", "react-dnd-html5-backend", "react-grid-layout"],
 					},
 				},
 			},

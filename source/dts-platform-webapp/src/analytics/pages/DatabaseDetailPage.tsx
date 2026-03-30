@@ -118,7 +118,7 @@ export default function DatabaseDetailPage() {
 				title={`${t(locale, "data.db")} #${dbId}`}
 				breadcrumbs={
 					<Breadcrumb items={[
-						{ label: t(locale, "data.title"), href: "/data" },
+						{ label: t(locale, "data.title"), href: "/analytics/data" },
 						{ label: `Database #${dbId}` }
 					]} />
 				}

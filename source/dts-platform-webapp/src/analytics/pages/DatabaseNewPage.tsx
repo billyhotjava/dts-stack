@@ -140,7 +140,7 @@ export default function DatabaseNewPage() {
 			}
 			await analyticsApi.syncDatabaseSchema(createdId);
 			setOkMessage(t(locale, "data.synced"));
-			navigate(`/data/${encodeURIComponent(String(createdId))}`, { replace: true });
+			navigate(`/analytics/data/${encodeURIComponent(String(createdId))}`, { replace: true });
 		} catch (e) {
 			setError(e);
 		} finally {
@@ -154,7 +154,7 @@ export default function DatabaseNewPage() {
 				title={t(locale, "data.add")}
 				breadcrumbs={
 					<Breadcrumb items={[
-						{ label: t(locale, "data.title"), href: "/data" },
+						{ label: t(locale, "data.title"), href: "/analytics/data" },
 						{ label: t(locale, "data.add") }
 					]} />
 				}
@@ -312,9 +312,9 @@ export default function DatabaseNewPage() {
 										setOkMessage(`导入成功: ${result.tableName} (${result.rowCount} 行)`);
 										if (dataLakeId) {
 											analyticsApi.syncDatabaseSchema(dataLakeId).then(() => {
-												navigate(`/data/${dataLakeId}`, { replace: true });
+												navigate(`/analytics/data/${dataLakeId}`, { replace: true });
 											}).catch(() => {
-												navigate(`/data/${dataLakeId}`, { replace: true });
+												navigate(`/analytics/data/${dataLakeId}`, { replace: true });
 											});
 										}
 									}}

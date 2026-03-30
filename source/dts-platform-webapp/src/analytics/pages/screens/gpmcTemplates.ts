@@ -305,12 +305,12 @@ function createAssistTrigger(
 }
 
 const gpmcTopicTabs: Array<{ screen: GpmcScreenId; label: string; href: string }> = [
-	{ screen: 'overview', label: '综合态势', href: '/gpmc' },
-	{ screen: 'execution', label: '执行监控', href: '/gpmc/execution' },
-	{ screen: 'quality', label: '质量跟进', href: '/gpmc/quality' },
-	{ screen: 'tech-state', label: '技术状态', href: '/gpmc/tech-state' },
-	{ screen: 'cost', label: '成本控制', href: '/gpmc/cost' },
-	{ screen: 'risk', label: '风险预警', href: '/gpmc/risk' },
+	{ screen: 'overview', label: '综合态势', href: '/analytics/gpmc' },
+	{ screen: 'execution', label: '执行监控', href: '/analytics/gpmc/execution' },
+	{ screen: 'quality', label: '质量跟进', href: '/analytics/gpmc/quality' },
+	{ screen: 'tech-state', label: '技术状态', href: '/analytics/gpmc/tech-state' },
+	{ screen: 'cost', label: '成本控制', href: '/analytics/gpmc/cost' },
+	{ screen: 'risk', label: '风险预警', href: '/analytics/gpmc/risk' },
 ];
 
 const gpmcScreenNames: Record<GpmcScreenId, string> = {
@@ -632,12 +632,12 @@ const strategicOverviewTemplate: ScreenTemplate = {
 			...createTopicTabs('overview', 534, 82, true),
 			...createAssistTrigger('gpmc-overview-assist-explanation', '说明', 1742, 40, ACCENT, getGpmcAssistContent('overview', 'strategic').explanation.title, flattenAssistCardBody(getGpmcAssistContent('overview', 'strategic').explanation)),
 			...createAssistTrigger('gpmc-overview-assist-guide', '导览', 1818, 40, SUCCESS, getGpmcAssistContent('overview', 'strategic').guide!.title, flattenAssistCardBody(getGpmcAssistContent('overview', 'strategic').guide!)),
-			createStrategicNumberCard('gpmc-overview-kpi-total', '项目总数', 376, 136, 184, 128, { valueColor: STRATEGIC_TEXT }, [jumpSelfAction(buildScreenReference(gpmcScreenNames.execution, '/gpmc/execution'))]),
-			createStrategicNumberCard('gpmc-overview-kpi-active', '进行中项目', 572, 136, 184, 74, { valueColor: STRATEGIC_TEXT }, [jumpSelfAction(buildScreenReference(gpmcScreenNames.execution, '/gpmc/execution'))]),
-			createStrategicNumberCard('gpmc-overview-kpi-delay', '延期项目', 768, 136, 184, 11, { valueColor: '#c0392b' }, [jumpSelfAction(buildScreenReference(gpmcScreenNames.execution, '/gpmc/execution'))]),
-			createStrategicNumberCard('gpmc-overview-kpi-budget', '年度预算总额', 964, 136, 184, 36.8, { suffix: ' 亿元', precision: 1, valueColor: STRATEGIC_TEXT }, [jumpSelfAction(buildScreenReference(gpmcScreenNames.cost, '/gpmc/cost'))]),
-			createStrategicNumberCard('gpmc-overview-kpi-progress', '平均进度达成率', 1160, 136, 184, 78, { suffix: '%', precision: 0, valueColor: '#1e8449' }, [jumpSelfAction(buildScreenReference(gpmcScreenNames.execution, '/gpmc/execution'))]),
-			createStrategicNumberCard('gpmc-overview-kpi-risk', '高风险项目占比', 1356, 136, 184, 9.4, { suffix: '%', precision: 1, valueColor: '#c0392b' }, [jumpSelfAction(buildScreenReference(gpmcScreenNames.risk, '/gpmc/risk'))]),
+			createStrategicNumberCard('gpmc-overview-kpi-total', '项目总数', 376, 136, 184, 128, { valueColor: STRATEGIC_TEXT }, [jumpSelfAction(buildScreenReference(gpmcScreenNames.execution, '/analytics/gpmc/execution'))]),
+			createStrategicNumberCard('gpmc-overview-kpi-active', '进行中项目', 572, 136, 184, 74, { valueColor: STRATEGIC_TEXT }, [jumpSelfAction(buildScreenReference(gpmcScreenNames.execution, '/analytics/gpmc/execution'))]),
+			createStrategicNumberCard('gpmc-overview-kpi-delay', '延期项目', 768, 136, 184, 11, { valueColor: '#c0392b' }, [jumpSelfAction(buildScreenReference(gpmcScreenNames.execution, '/analytics/gpmc/execution'))]),
+			createStrategicNumberCard('gpmc-overview-kpi-budget', '年度预算总额', 964, 136, 184, 36.8, { suffix: ' 亿元', precision: 1, valueColor: STRATEGIC_TEXT }, [jumpSelfAction(buildScreenReference(gpmcScreenNames.cost, '/analytics/gpmc/cost'))]),
+			createStrategicNumberCard('gpmc-overview-kpi-progress', '平均进度达成率', 1160, 136, 184, 78, { suffix: '%', precision: 0, valueColor: '#1e8449' }, [jumpSelfAction(buildScreenReference(gpmcScreenNames.execution, '/analytics/gpmc/execution'))]),
+			createStrategicNumberCard('gpmc-overview-kpi-risk', '高风险项目占比', 1356, 136, 184, 9.4, { suffix: '%', precision: 1, valueColor: '#c0392b' }, [jumpSelfAction(buildScreenReference(gpmcScreenNames.risk, '/analytics/gpmc/risk'))]),
 			createBarChart(
 				'gpmc-overview-weekly-chart',
 				'周度完成趋势',
@@ -650,7 +650,7 @@ const strategicOverviewTemplate: ScreenTemplate = {
 					{ name: '完成数', data: [42, 48, 55, 51, 62, 58, 65, 72] },
 					{ name: '延期数', data: [8, 6, 9, 7, 5, 8, 4, 6] },
 				],
-				[jumpSelfAction(buildScreenReference(gpmcScreenNames.execution, '/gpmc/execution'))],
+				[jumpSelfAction(buildScreenReference(gpmcScreenNames.execution, '/analytics/gpmc/execution'))],
 			),
 			createPieChart(
 				'gpmc-overview-stage-chart',
@@ -666,7 +666,7 @@ const strategicOverviewTemplate: ScreenTemplate = {
 					{ name: '已完成', value: 32 },
 					{ name: '已暂停', value: 6 },
 				],
-				[jumpSelfAction(buildScreenReference(gpmcScreenNames.execution, '/gpmc/execution'))],
+				[jumpSelfAction(buildScreenReference(gpmcScreenNames.execution, '/analytics/gpmc/execution'))],
 			),
 			createStrategicTable(
 				'gpmc-overview-quality-tags',
@@ -682,7 +682,7 @@ const strategicOverviewTemplate: ScreenTemplate = {
 					['管理', 6],
 					['元器件', 5],
 				],
-				[jumpSelfAction(buildScreenReference(gpmcScreenNames.quality, '/gpmc/quality'))],
+				[jumpSelfAction(buildScreenReference(gpmcScreenNames.quality, '/analytics/gpmc/quality'))],
 			),
 			createStrategicTable(
 				'gpmc-overview-delay-top',
@@ -699,7 +699,7 @@ const strategicOverviewTemplate: ScreenTemplate = {
 					['供应链协同平台', '14天'],
 					['质量追溯系统', '12天'],
 				],
-				[jumpSelfAction(buildScreenReference(gpmcScreenNames.execution, '/gpmc/execution'))],
+				[jumpSelfAction(buildScreenReference(gpmcScreenNames.execution, '/analytics/gpmc/execution'))],
 			),
 			createComponent('gpmc-overview-health-gauge', 'gauge-chart', '综合健康指数', 488, 332, 336, 308, 16, {
 				title: '综合健康指数',
@@ -724,7 +724,7 @@ const strategicOverviewTemplate: ScreenTemplate = {
 					{ name: '新增', data: [32, 28, 35, 22, 25, 23] },
 					{ name: '已闭环', data: [28, 30, 25, 32, 24, 18] },
 				],
-				[jumpSelfAction(buildScreenReference(gpmcScreenNames.quality, '/gpmc/quality'))],
+				[jumpSelfAction(buildScreenReference(gpmcScreenNames.quality, '/analytics/gpmc/quality'))],
 			),
 			withConfig(
 				createBarChart(
@@ -736,7 +736,7 @@ const strategicOverviewTemplate: ScreenTemplate = {
 					212,
 					['技术风险', '进度风险', '成本风险', '外协风险', '质量风险'],
 					[{ name: '风险数', data: [14, 11, 9, 7, 5] }],
-					[jumpSelfAction(buildScreenReference(gpmcScreenNames.risk, '/gpmc/risk'))],
+					[jumpSelfAction(buildScreenReference(gpmcScreenNames.risk, '/analytics/gpmc/risk'))],
 				),
 				{
 					titleFontSize: 19,
@@ -758,7 +758,7 @@ const strategicOverviewTemplate: ScreenTemplate = {
 					152,
 					['工程建设', '数字化', '研发', '制造'],
 					[{ name: '执行率', data: [86, 52, 68, 104] }],
-					[jumpSelfAction(buildScreenReference(gpmcScreenNames.cost, '/gpmc/cost'))],
+					[jumpSelfAction(buildScreenReference(gpmcScreenNames.cost, '/analytics/gpmc/cost'))],
 				),
 				{
 					titleFontSize: 19,
@@ -780,7 +780,7 @@ const strategicOverviewTemplate: ScreenTemplate = {
 					156,
 					['M1', 'M2', 'M3', 'M4', 'M5', 'M6'],
 					[{ name: '变更数', data: [5, 8, 3, 6, 4, 2] }],
-					[jumpSelfAction(buildScreenReference(gpmcScreenNames['tech-state'], '/gpmc/tech-state'))],
+					[jumpSelfAction(buildScreenReference(gpmcScreenNames['tech-state'], '/analytics/gpmc/tech-state'))],
 				),
 				{
 					titleFontSize: 19,
@@ -809,7 +809,7 @@ const strategicOverviewTemplate: ScreenTemplate = {
 						['外协交付波动', '跟踪'],
 						['成本偏差放大', '需关注'],
 					],
-					[jumpSelfAction(buildScreenReference(gpmcScreenNames.risk, '/gpmc/risk'))],
+					[jumpSelfAction(buildScreenReference(gpmcScreenNames.risk, '/analytics/gpmc/risk'))],
 				),
 				{
 					fontSize: 17,
@@ -831,7 +831,7 @@ const strategicOverviewTemplate: ScreenTemplate = {
 					['集团统一主数据治理工程', '73%', '可控', '中'],
 					['供应链数字化转型项目', '88%', '可控', '低'],
 				],
-				[jumpAction(buildGpmcTemplateJump('/gpmc/drill/execution'))],
+				[jumpAction(buildGpmcTemplateJump('/analytics/gpmc/drill/execution'))],
 			),
 		],
 	},
@@ -858,7 +858,7 @@ const executionBoardTemplate: ScreenTemplate = {
 			createStrategicNumberCard('gpmc-execution-kpi-completion', '整体完成率', 58, 126, 260, 72.4, { suffix: '%', precision: 1, valueColor: '#1a5276' }),
 			createStrategicNumberCard('gpmc-execution-kpi-milestone', '里程碑达成率', 332, 126, 260, 68, { suffix: '%', valueColor: '#d4850a' }),
 			createStrategicNumberCard('gpmc-execution-kpi-overdue', '延期任务数', 606, 126, 260, 37, { valueColor: '#c0392b' }),
-			createStrategicNumberCard('gpmc-execution-kpi-max-delay', '最大延期天数', 880, 126, 260, 28, { suffix: ' 天', valueColor: '#c0392b' }, [jumpAction(buildGpmcTemplateJump('/gpmc/drill/execution'))]),
+			createStrategicNumberCard('gpmc-execution-kpi-max-delay', '最大延期天数', 880, 126, 260, 28, { suffix: ' 天', valueColor: '#c0392b' }, [jumpAction(buildGpmcTemplateJump('/analytics/gpmc/drill/execution'))]),
 			createStrategicNumberCard('gpmc-execution-kpi-due-soon', '近期到期', 1154, 126, 260, 15, { valueColor: STRATEGIC_TEXT }),
 			createStrategicNumberCard('gpmc-execution-kpi-blocked', '阻塞链路', 1428, 126, 260, 6, { valueColor: '#d4850a' }),
 			createStrategicNumberCard('gpmc-execution-kpi-owner', '责任人聚焦', 1702, 126, 166, 12, { valueColor: '#2980b9' }),
@@ -880,7 +880,7 @@ const executionBoardTemplate: ScreenTemplate = {
 					{ name: '数据建模', type: '一般任务', planDate: '2026-02-01', actualDate: '2026-04-10', owner: '孙丽', riskLevel: '低', majorProjectName: '数据治理工程', subprojectName: '主数据', status: '已完成', isCompleted: true, isOverdue: true, delayDays: 5 },
 					{ name: '接口开发', type: '一般任务', planDate: '2026-04-01', actualDate: '2026-06-15', owner: '周涛', riskLevel: '中', majorProjectName: '数据治理工程', subprojectName: '主数据', status: '进行中', isCompleted: false, isOverdue: false },
 				],
-			}, [jumpAction(buildGpmcTemplateJump('/gpmc/drill/execution'))]),
+			}, [jumpAction(buildGpmcTemplateJump('/analytics/gpmc/drill/execution'))]),
 			createBarChart(
 				'gpmc-execution-stage',
 				'阶段分布',
@@ -903,7 +903,7 @@ const executionBoardTemplate: ScreenTemplate = {
 					{ name: '在办任务', data: [24, 18, 22, 15, 12] },
 					{ name: '延期任务', data: [8, 3, 6, 4, 2] },
 				],
-				[jumpAction(buildGpmcTemplateJump('/gpmc/drill/execution'))],
+				[jumpAction(buildGpmcTemplateJump('/analytics/gpmc/drill/execution'))],
 			),
 			createStrategicTable(
 				'gpmc-execution-delay-top',
@@ -920,7 +920,7 @@ const executionBoardTemplate: ScreenTemplate = {
 					['供应链协同平台', 14, '采购中心', '中'],
 					['质量追溯系统', 12, '质量管理部', '低'],
 				],
-				[jumpAction(buildGpmcTemplateJump('/gpmc/drill/execution'))],
+				[jumpAction(buildGpmcTemplateJump('/analytics/gpmc/drill/execution'))],
 			),
 			createStrategicTable(
 				'gpmc-execution-block-chain',
@@ -936,7 +936,7 @@ const executionBoardTemplate: ScreenTemplate = {
 					['采购签约', '供应商交期偏移', '李明', '采购中心', '切换备选供应商'],
 					['主数据联调', '接口协议变更', '王薇', '数字化事业部', '补齐协议评审'],
 				],
-				[jumpAction(buildGpmcTemplateJump('/gpmc/drill/execution'))],
+				[jumpAction(buildGpmcTemplateJump('/analytics/gpmc/drill/execution'))],
 			),
 		],
 	),
@@ -962,7 +962,7 @@ const qualityBoardTemplate: ScreenTemplate = {
 			createStrategicNumberCard('gpmc-quality-kpi-new', '新增质量问题', 58, 126, 260, 23, { valueColor: '#c0392b' }),
 			createStrategicNumberCard('gpmc-quality-kpi-existing', '现存质量问题', 332, 126, 260, 47, { valueColor: '#d4850a' }),
 			createStrategicNumberCard('gpmc-quality-kpi-close', '归零完成率', 606, 126, 260, 68.3, { suffix: '%', precision: 1, valueColor: '#1e8449' }),
-			createStrategicNumberCard('gpmc-quality-kpi-no-plan', '未提交归零计划', 880, 126, 260, 8, { valueColor: '#c0392b' }, [jumpAction(buildGpmcTemplateJump('/gpmc/drill/quality'))]),
+			createStrategicNumberCard('gpmc-quality-kpi-no-plan', '未提交归零计划', 880, 126, 260, 8, { valueColor: '#c0392b' }, [jumpAction(buildGpmcTemplateJump('/analytics/gpmc/drill/quality'))]),
 			createStrategicNumberCard('gpmc-quality-kpi-high', '高优未关', 1154, 126, 260, 37, { valueColor: '#c0392b' }),
 			createStrategicNumberCard('gpmc-quality-kpi-measure', '措施覆盖率', 1428, 126, 260, 76, { suffix: '%', valueColor: '#2980b9' }),
 			createStrategicNumberCard('gpmc-quality-kpi-projects', '问题项目数', 1702, 126, 166, 15, { valueColor: STRATEGIC_TEXT }),
@@ -990,7 +990,7 @@ const qualityBoardTemplate: ScreenTemplate = {
 				320,
 				['核心器件研发', '新能源工厂', '制造协同平台', '数据治理工程'],
 				[{ name: '问题数', data: [14, 11, 9, 6] }],
-				[jumpAction(buildGpmcTemplateJump('/gpmc/drill/quality'))],
+				[jumpAction(buildGpmcTemplateJump('/analytics/gpmc/drill/quality'))],
 			),
 			createLineChart(
 				'gpmc-quality-close-trend',
@@ -1019,7 +1019,7 @@ const qualityBoardTemplate: ScreenTemplate = {
 					['供应链平台', '接口协议不一致', '已完成管理归零', '沉淀接口协议基线'],
 					['制造协同平台', '测试覆盖不足', '未完成归零', '扩充自动化测试集'],
 				],
-				[jumpAction(buildGpmcTemplateJump('/gpmc/drill/quality'))],
+				[jumpAction(buildGpmcTemplateJump('/analytics/gpmc/drill/quality'))],
 			),
 			createStrategicTable(
 				'gpmc-quality-detail',
@@ -1036,7 +1036,7 @@ const qualityBoardTemplate: ScreenTemplate = {
 					['供应链平台', '接口协议不一致', '软件', '已完成管理归零', '0'],
 					['制造协同平台', '测试用例覆盖不足', '管理', '未完成归零', '8'],
 				],
-				[jumpAction(buildGpmcTemplateJump('/gpmc/drill/quality'))],
+				[jumpAction(buildGpmcTemplateJump('/analytics/gpmc/drill/quality'))],
 			),
 		],
 	),
@@ -1080,7 +1080,7 @@ const techStateBoardTemplate: ScreenTemplate = {
 					['结构件材料替代', '新能源工厂', 'Ⅰ类', '已签署'],
 					['软件架构调整', '数据治理工程', 'Ⅱ类', '未评审'],
 				],
-				[jumpAction(buildGpmcTemplateJump('/gpmc/drill/tech-state'))],
+				[jumpAction(buildGpmcTemplateJump('/analytics/gpmc/drill/tech-state'))],
 			),
 			createPieChart(
 				'gpmc-tech-type-pie',
@@ -1122,7 +1122,7 @@ const techStateBoardTemplate: ScreenTemplate = {
 					['结构件材料替代', '新能源工厂', '闭环归档与影响跟踪', '已签署'],
 					['软件架构调整', '数据治理工程', '补发评审通知并更新状态', '未评审'],
 				],
-				[jumpAction(buildGpmcTemplateJump('/gpmc/drill/tech-state'))],
+				[jumpAction(buildGpmcTemplateJump('/analytics/gpmc/drill/tech-state'))],
 			),
 		],
 	),
@@ -1166,7 +1166,7 @@ const costBoardTemplate: ScreenTemplate = {
 					{ name: '实际支出', data: [2.6, 3.3, 3.8, 3.0, 3.4, 3.7] },
 					{ name: '预算偏差', data: [-0.2, 0.2, 0.3, -0.2, -0.2, -0.1] },
 				],
-				[jumpAction(buildGpmcTemplateJump('/gpmc/drill/cost'))],
+				[jumpAction(buildGpmcTemplateJump('/analytics/gpmc/drill/cost'))],
 				),
 				{
 					seriesColors: ['#2980b9', '#1e8449', '#d4850a'],
@@ -1199,7 +1199,7 @@ const costBoardTemplate: ScreenTemplate = {
 					['集团制造协同平台二期', '-0.04 亿', '可控', '低'],
 					['核心器件研发验证项目', '-0.12 亿', '可控', '低'],
 				],
-				[jumpAction(buildGpmcTemplateJump('/gpmc/drill/cost'))],
+				[jumpAction(buildGpmcTemplateJump('/analytics/gpmc/drill/cost'))],
 			),
 			createStrategicTable(
 				'gpmc-cost-detail',
@@ -1216,7 +1216,7 @@ const costBoardTemplate: ScreenTemplate = {
 					['生产制造中心', '生产制造中心', '10.0 亿', '10.4 亿', '104.0%', '+0.4 亿'],
 					['采购中心', '采购中心', '3.1 亿', '2.8 亿', '90.3%', '-0.3 亿'],
 				],
-				[jumpAction(buildGpmcTemplateJump('/gpmc/drill/cost'))],
+				[jumpAction(buildGpmcTemplateJump('/analytics/gpmc/drill/cost'))],
 			),
 		],
 	),
@@ -1255,7 +1255,7 @@ const riskBoardTemplate: ScreenTemplate = {
 				320,
 				['高×高', '高×中', '中×高', '中×中', '低×中', '低×低'],
 				[{ name: '风险数', data: [4, 6, 5, 12, 10, 15] }],
-				[jumpAction(buildGpmcTemplateJump('/gpmc/drill/risk'))],
+				[jumpAction(buildGpmcTemplateJump('/analytics/gpmc/drill/risk'))],
 			),
 			createPieChart(
 				'gpmc-risk-category',
@@ -1286,7 +1286,7 @@ const riskBoardTemplate: ScreenTemplate = {
 					['制造协同平台', '关键技术人员流失', '中', '激励方案 + 备份人员'],
 					['供应链平台', '原材料价格上涨', '中', '锁价合同'],
 				],
-				[jumpAction(buildGpmcTemplateJump('/gpmc/drill/risk'))],
+				[jumpAction(buildGpmcTemplateJump('/analytics/gpmc/drill/risk'))],
 			),
 			createStrategicTable(
 				'gpmc-risk-detail',
@@ -1303,7 +1303,7 @@ const riskBoardTemplate: ScreenTemplate = {
 					['原材料价格上涨', '供应链平台', '中', '已闭环', '0', '锁价合同'],
 					['测试环境不稳定', '数据治理工程', '低', '跟进中', '8', '环境容器化'],
 				],
-				[jumpAction(buildGpmcTemplateJump('/gpmc/drill/risk'))],
+				[jumpAction(buildGpmcTemplateJump('/analytics/gpmc/drill/risk'))],
 			),
 		],
 	),

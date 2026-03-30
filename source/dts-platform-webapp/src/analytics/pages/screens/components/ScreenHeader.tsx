@@ -744,7 +744,7 @@ export function ScreenHeader({
 
             const result = await analyticsApi.createScreen(payload);
             if (result.id) {
-                navigate(`/screens/${result.id}/edit`, { replace: true });
+                navigate(`/analytics/screens/${result.id}/edit`, { replace: true });
             }
             return result.id;
         } finally {
@@ -1632,7 +1632,7 @@ export function ScreenHeader({
     }, [config, exploreSessionForm]);
 
     const handleBack = () => {
-        navigate('/screens');
+        navigate('/analytics/screens');
     };
 
     const handleCopyUrl = useCallback(async (url: string) => {
@@ -2347,7 +2347,7 @@ export function ScreenHeader({
                         <button
                             type="button"
                             className="header-btn flex items-center gap-1.5 px-4 py-2 border border-[var(--color-border)] rounded-md bg-[var(--color-surface)] text-[var(--color-text-primary)] text-[13px] font-medium cursor-pointer transition-all duration-200 whitespace-nowrap shrink-0 w-full justify-start py-[7px] px-2.5 hover:border-[var(--color-primary)] hover:bg-[var(--color-primary-light)] disabled:opacity-50 disabled:cursor-not-allowed"
-                            onClick={() => navigate('/screens')}
+                            onClick={() => navigate('/analytics/screens')}
                             title="进入大屏管理列表"
                         >
                             大屏中心

@@ -199,12 +199,12 @@ export default function ScreensPage() {
 				const response = await analyticsApi.createScreenFromTemplate(remoteTemplate.id as string | number, {
 					name: (remoteTemplate.name || '未命名模板') + ' 副本',
 				});
-				navigate(`/screens/${response.id}/edit`);
+				navigate(`/analytics/screens/${response.id}/edit`);
 				return;
 			}
 
 			const config = createConfigFromTemplate(selection.template);
-			navigate('/screens/new', {
+			navigate('/analytics/screens/new', {
 				state: {
 					initialConfig: {
 						id: '',
@@ -214,7 +214,7 @@ export default function ScreensPage() {
 			});
 		} catch (err) {
 			console.error('Failed to create screen from template:', err);
-			navigate('/screens/new');
+			navigate('/analytics/screens/new');
 		}
 	};
 
@@ -270,7 +270,7 @@ export default function ScreensPage() {
 				description: spec.description || normalized.config.description || 'AI自动生成',
 			}));
 			setShowAiGenerator(false);
-			navigate(`/screens/${created.id}/edit`);
+			navigate(`/analytics/screens/${created.id}/edit`);
 		} catch (err) {
 			console.error('Failed to create screen from ai spec:', err);
 			alert('创建 AI 草稿失败');
@@ -344,7 +344,7 @@ export default function ScreensPage() {
 	};
 
 	const handleEdit = (id: string | number) => {
-		navigate(`/screens/${id}/edit`);
+		navigate(`/analytics/screens/${id}/edit`);
 	};
 
 	const handlePreview = (id: string | number) => {

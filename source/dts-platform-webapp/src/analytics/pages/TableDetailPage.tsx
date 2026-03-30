@@ -52,11 +52,11 @@ export default function TableDetailPage() {
 	}, [tableId]);
 
 	const newQuestionHref =
-		dbId && tableId ? `/questions/new?db=${encodeURIComponent(String(dbId))}&table=${encodeURIComponent(String(tableId))}` : "/questions/new";
+		dbId && tableId ? `/analytics/questions/new?db=${encodeURIComponent(String(dbId))}&table=${encodeURIComponent(String(tableId))}` : "/analytics/questions/new";
 
 	const fieldHref = (id: number) => {
 		if (!dbId || !tableId) return null;
-		return `/data/${encodeURIComponent(String(dbId))}/tables/${encodeURIComponent(String(tableId))}/fields/${encodeURIComponent(String(id))}`;
+		return `/analytics/data/${encodeURIComponent(String(dbId))}/tables/${encodeURIComponent(String(tableId))}/fields/${encodeURIComponent(String(id))}`;
 	};
 
 	return (
@@ -65,8 +65,8 @@ export default function TableDetailPage() {
 				title={state.state === "loaded" ? (state.value.display_name || state.value.name || `Table #${tableId}`) : `${t(locale, "builder.table")} #${tableId}`}
 				breadcrumbs={
 					<Breadcrumb items={[
-						{ label: t(locale, "data.title"), href: "/data" },
-						{ label: `${t(locale, "data.db")} #${dbId}`, href: dbId ? `/data/${encodeURIComponent(String(dbId))}` : undefined },
+						{ label: t(locale, "data.title"), href: "/analytics/data" },
+						{ label: `${t(locale, "data.db")} #${dbId}`, href: dbId ? `/analytics/data/${encodeURIComponent(String(dbId))}` : undefined },
 						{ label: `Table #${tableId}` }
 					]} />
 				}

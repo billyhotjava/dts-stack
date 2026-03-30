@@ -65,11 +65,10 @@ function AnalyticsAppShell() {
  * URL structure preserved at /analytics/* for backward compatibility.
  */
 export const analyticsRoutes: RouteObject[] = [
-	// Public screen (no auth, no layout)
-	{
-		path: "analytics/public/screen/:uuid",
-		element: <S><PublicScreenPage /></S>,
-	},
+	// Public routes — no auth required (shareable links)
+	{ path: "analytics/public/screen/:uuid", element: <S><PublicScreenPage /></S> },
+	{ path: "analytics/public/card/:uuid", element: <S><PublicCardPage /></S> },
+	{ path: "analytics/public/dashboard/:uuid", element: <S><PublicDashboardPage /></S> },
 	// Authenticated analytics routes
 	{
 		path: "analytics",
@@ -104,8 +103,6 @@ export const analyticsRoutes: RouteObject[] = [
 					{ path: "models", element: <S><ModelsPage /></S> },
 					{ path: "metrics", element: <S><MetricsPage /></S> },
 					{ path: "trash", element: <S><TrashPage /></S> },
-					{ path: "public/card/:uuid", element: <S><PublicCardPage /></S> },
-					{ path: "public/dashboard/:uuid", element: <S><PublicDashboardPage /></S> },
 					{ path: "screens", element: <S><ScreensPage /></S> },
 					{ path: "project-cockpit", element: <S><ProjectCockpitPage /></S> },
 					{ path: "gpmc/drill/:domain", element: <S><GpmcDrillPage /></S> },
