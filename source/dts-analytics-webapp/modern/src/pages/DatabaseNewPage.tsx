@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link, useNavigate } from "react-router";
-import { analyticsApi, type PlatformDataSourceItem } from "../api/analyticsApi";
+import { analyticsApi, type PlatformDataSourceItem, type CurrentUser } from "../api/analyticsApi";
 import UploadedDataEditor from "../components/UploadedDataEditor";
 import { PageContainer, PageHeader, Breadcrumb } from "../components/PageContainer/PageContainer";
 import { EmptyState } from "../components/EmptyState";
@@ -52,9 +52,17 @@ export default function DatabaseNewPage() {
 	const [importingId, setImportingId] = useState<string | null>(null);
 	const [okMessage, setOkMessage] = useState("");
 	const [error, setError] = useState<unknown>(null);
-	const [activeTab, setActiveTab] = useState<'platform' | 'other'>('platform');
+	const [currentUser, setCurrentUser] = useState<CurrentUser | null>(null);
+	const [dataLakeId, setDataLakeId] = useState<number | null>(null);
+
+	const searchParams = new URLSearchParams(window.location.search);
+	const [activeTab, setActiveTab] = useState<'platform' | 'other'>(
+		searchParams.get('tab') === 'other' ? 'other' : 'platform'
+	);
 	const [databases, setDatabases] = useState<Array<{ id: number; name: string }>>([]);
 	const [selectedDbId, setSelectedDbId] = useState<number | null>(null);
+
+	const isDataAdmin = currentUser?.is_data_admin || currentUser?.is_superuser || false;
 
 	const reload = () => {
 		setState({ state: "loading" });
@@ -71,15 +79,33 @@ export default function DatabaseNewPage() {
 	};
 
 	useEffect(() => {
-		reload();
+		analyticsApi.getCurrentUser().then(setCurrentUser).catch(() => {});
 	}, []);
 
 	useEffect(() => {
+		if (currentUser && !isDataAdmin) {
+			setActiveTab('other');
+		}
+	}, [currentUser, isDataAdmin]);
+
+	useEffect(() => {
+		if (isDataAdmin) {
+			reload();
+		}
+	}, [isDataAdmin]);
+
+	useEffect(() => {
 		analyticsApi.listDatabases().then((list: any) => {
-			const dbs = (Array.isArray(list) ? list : list?.data || [])
-				.map((d: any) => ({ id: d.id, name: d.name }));
-			setDatabases(dbs);
-			if (dbs.length > 0) setSelectedDbId(dbs[0].id);
+			const dbs = (Array.isArray(list) ? list : list?.data || []);
+			const dbList = dbs.map((d: any) => ({ id: d.id, name: d.name }));
+			setDatabases(dbList);
+			const lake = dbs.find((d: any) => d.is_system === true);
+			if (lake) {
+				setDataLakeId(lake.id);
+				setSelectedDbId(lake.id);
+			} else if (dbList.length > 0) {
+				setSelectedDbId(dbList[0].id);
+			}
 		}).catch(() => {});
 	}, []);
 
@@ -135,22 +161,22 @@ export default function DatabaseNewPage() {
 
 			<Card>
 				<div style={{ display: 'flex', borderBottom: '1px solid var(--color-border)', marginBottom: 'var(--spacing-md)' }}>
-					<button
-						type="button"
-						onClick={() => setActiveTab('platform')}
-						style={{
-							padding: 'var(--spacing-sm) var(--spacing-md)',
-							border: 'none',
-							background: 'none',
-							cursor: 'pointer',
-							fontSize: 'var(--font-size-md)',
-							fontWeight: activeTab === 'platform' ? 'var(--font-weight-semibold)' : 'normal',
-							color: activeTab === 'platform' ? 'var(--color-brand)' : 'var(--color-text-secondary)',
-							borderBottom: activeTab === 'platform' ? '2px solid var(--color-brand)' : '2px solid transparent',
-						}}
-					>
-						{t(locale, 'data.tabPlatform')}
-					</button>
+					{isDataAdmin && (
+						<button type="button" onClick={() => setActiveTab('platform')}
+							style={{
+								padding: 'var(--spacing-sm) var(--spacing-md)',
+								border: 'none',
+								background: 'none',
+								cursor: 'pointer',
+								fontSize: 'var(--font-size-md)',
+								fontWeight: activeTab === 'platform' ? 'var(--font-weight-semibold)' : 'normal',
+								color: activeTab === 'platform' ? 'var(--color-brand)' : 'var(--color-text-secondary)',
+								borderBottom: activeTab === 'platform' ? '2px solid var(--color-brand)' : '2px solid transparent',
+							}}
+						>
+							{t(locale, 'data.tabPlatform')}
+						</button>
+					)}
 					<button
 						type="button"
 						onClick={() => setActiveTab('other')}
@@ -278,44 +304,24 @@ export default function DatabaseNewPage() {
 								{t(locale, 'data.uploadDesc')}
 							</p>
 
-							{/* Database selector */}
-							<div style={{ marginBottom: 'var(--spacing-md)' }}>
-								<label style={{ display: 'block', marginBottom: 'var(--spacing-xs)', fontSize: 'var(--font-size-sm)', fontWeight: 'var(--font-weight-semibold)' }}>
-									{t(locale, 'data.selectDatabase')}
-								</label>
-								<select
-									value={selectedDbId ?? ''}
-									onChange={(e) => setSelectedDbId(Number(e.target.value))}
-									style={{
-										width: '100%',
-										padding: 'var(--spacing-sm)',
-										fontSize: 'var(--font-size-md)',
-										borderRadius: 'var(--radius-sm)',
-										border: '1px solid var(--color-border)',
-										background: 'var(--color-bg)',
-										color: 'var(--color-text)',
-									}}
-								>
-									{databases.map(db => (
-										<option key={db.id} value={db.id}>{db.name}</option>
-									))}
-								</select>
-							</div>
-
-							{/* Upload editor */}
-							{selectedDbId && (
+							{dataLakeId ? (
 								<UploadedDataEditor
-									databaseId={selectedDbId}
+									databaseId={dataLakeId}
 									onComplete={(result: { tableName: string; schema: string; rowCount: number }) => {
 										setOkMessage(`导入成功: ${result.tableName} (${result.rowCount} 行)`);
-										if (selectedDbId) {
-											analyticsApi.syncDatabaseSchema(selectedDbId).then(() => {
-												navigate(`/data/${selectedDbId}`, { replace: true });
+										if (dataLakeId) {
+											analyticsApi.syncDatabaseSchema(dataLakeId).then(() => {
+												navigate(`/data/${dataLakeId}`, { replace: true });
 											}).catch(() => {
-												navigate(`/data/${selectedDbId}`, { replace: true });
+												navigate(`/data/${dataLakeId}`, { replace: true });
 											});
 										}
 									}}
+								/>
+							) : (
+								<EmptyState
+									title="数据湖未就绪"
+									description="内置数据湖尚未初始化，请联系管理员。"
 								/>
 							)}
 						</div>
