@@ -117,7 +117,7 @@ export default function PublicDashboardPage() {
 						const result = dashcardResults[dc.id];
 						return (
 							<Card key={String(dc.id)} style={{ gridColumn, gridRow, overflow: "hidden" }}
-								title={cardId ? <Link to={`/analytics/questions/${cardId}`}>{String(name)}</Link> : String(name)}
+								title={cardId ? <Link to={`/bi/questions/${cardId}`}>{String(name)}</Link> : String(name)}
 								extra={<Tag>card</Tag>}
 							>
 									{!result || result.state === "loading" ? (

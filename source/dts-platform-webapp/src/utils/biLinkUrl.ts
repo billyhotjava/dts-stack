@@ -60,7 +60,7 @@ const extractPathLike = (raw: string) => {
 const shouldRedirectHetuEntryToAnalytics = (rawPath: string) => {
 	const plainPath = String(rawPath || "").split("#")[0].split("?")[0] || "";
 	const path = plainPath.toLowerCase().replace(/\/+$/, "");
-	// Only convert Hetu entry pages to /analytics.
+	// Only convert Hetu entry pages to /bi.
 	// Keep deep links (e.g. /screen/share/...) untouched.
 	return (
 		path === "/screen" ||
@@ -98,7 +98,7 @@ export const normalizeBiLinkForSave = (raw?: string | null, engine?: string | nu
 	if (normalizedEngine !== "HETU") return text;
 	const resolved = normalizeHetuUrl(text, true);
 	if (shouldRedirectHetuEntryToAnalytics(extractPathLike(resolved))) {
-		return toAbsolute("/analytics");
+		return toAbsolute("/bi");
 	}
 	return resolved;
 };
@@ -112,7 +112,7 @@ export const resolveBiLinkForOpen = (raw?: string | null, engine?: string | null
 	}
 	const resolved = normalizeHetuUrl(text, true);
 	if (shouldRedirectHetuEntryToAnalytics(extractPathLike(resolved))) {
-		return toAbsolute("/analytics");
+		return toAbsolute("/bi");
 	}
 	return resolved.startsWith("/") ? toAbsolute(resolved) : resolved;
 };

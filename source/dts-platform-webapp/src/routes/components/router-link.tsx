@@ -11,7 +11,6 @@ export const RouterLink = ({ href, children, className, onClick, ...props }: Rou
 	// Some routes (e.g. reverse-proxied BI tools) must trigger a full page load.
 	const isProxyEscape =
 		href.startsWith("/dashboards") ||
-		href.startsWith("/analytics") ||
 		href.startsWith("/screen");
 
 	if (isExternal || isProxyEscape) {

@@ -30,7 +30,7 @@ function parseScreenReferenceUrl(targetUrl: string): { screenName: string; fallb
     const raw = targetUrl.slice(SCREEN_REF_PREFIX.length);
     const [screenNamePart, fallbackPart = ''] = raw.split('|', 2);
     const screenName = decodeURIComponent(screenNamePart || '').trim();
-    const fallbackUrl = decodeURIComponent(fallbackPart || '').trim() || '/analytics/screens';
+    const fallbackUrl = decodeURIComponent(fallbackPart || '').trim() || '/bi/screens';
     if (!screenName) {
         return { screenName: '', fallbackUrl };
     }
@@ -56,7 +56,7 @@ export async function resolveScreenReferenceUrl(targetUrl: string): Promise<stri
             .filter((item) => String(item.name || '').trim() === parsed.screenName)
             .sort((a, b) => new Date(String(b.updatedAt || 0)).getTime() - new Date(String(a.updatedAt || 0)).getTime())[0];
         if (exact?.id != null) {
-            return `/analytics/screens/${encodeURIComponent(String(exact.id))}/preview`;
+            return `/bi/screens/${encodeURIComponent(String(exact.id))}/preview`;
         }
     } catch (error) {
         console.error('Failed to resolve screen reference jump target:', error);

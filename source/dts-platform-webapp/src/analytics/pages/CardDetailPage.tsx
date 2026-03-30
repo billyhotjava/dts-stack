@@ -133,7 +133,7 @@ export default function CardDetailPage() {
 								>
 									{t(locale, "share.create")}
 								</Button>
-								<Link to={`/analytics/questions/${encodeURIComponent(String(state.value.id))}/edit`}>
+								<Link to={`/bi/questions/${encodeURIComponent(String(state.value.id))}/edit`}>
 									<Button type="primary" icon={<EditIcon />}>
 										{t(locale, "questions.edit")}
 									</Button>
@@ -154,7 +154,7 @@ export default function CardDetailPage() {
 										size="small"
 										icon={shareCopied ? <CheckIcon /> : <CopyIcon />}
 										onClick={async () => {
-											const link = `${window.location.origin}/analytics/public/card/${encodeURIComponent(shareUuid)}`;
+											const link = `${window.location.origin}/bi/public/card/${encodeURIComponent(shareUuid)}`;
 											const copied = await writeTextToClipboard(link);
 											if (copied) {
 												setShareCopied(true);
@@ -170,7 +170,7 @@ export default function CardDetailPage() {
 						>
 								<Input
 									readOnly
-									value={`${window.location.origin}/analytics/public/card/${encodeURIComponent(shareUuid)}`}
+									value={`${window.location.origin}/bi/public/card/${encodeURIComponent(shareUuid)}`}
 								/>
 								<p className="text-secondary" style={{ marginTop: "var(--spacing-sm)", fontSize: "var(--font-size-sm)" }}>
 									{t(locale, "share.note")}

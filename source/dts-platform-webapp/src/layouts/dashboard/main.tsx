@@ -83,6 +83,54 @@ const resolveAuthForPath = (index: Map<string, string[]>, pathname: string): str
  * @param path
  * @returns
  */
+/**
+ * Collect all reachable paths from the menu tree (for route-level access check).
+ * Only includes non-hidden, non-disabled, non-deleted leaf and branch paths.
+ */
+const collectMenuPaths = (menus: MenuTree[]): Set<string> => {
+	const paths = new Set<string>();
+	const stack = Array.isArray(menus) ? [...menus] : [];
+	while (stack.length) {
+		const node = stack.pop();
+		if (!node) continue;
+		if (isMenuDeleted(node)) continue;
+		const meta = parseMenuMetadata(node.metadata);
+		if (isMenuHidden(node, meta) || isMenuDisabled(node, meta)) continue;
+		const path = resolveMenuPath(node, meta);
+		if (path && !isExternalPath(path)) {
+			paths.add(path.endsWith("/") ? path.slice(0, -1) : path);
+		}
+		if (Array.isArray(node.children)) {
+			for (const child of node.children) {
+				stack.push(child as MenuTree);
+			}
+		}
+	}
+	return paths;
+};
+
+/**
+ * Paths that are always reachable regardless of menu configuration.
+ * Platform core pages (workbench, settings, etc.) are not gated by menu visibility.
+ * Only BI paths (/bi/*) are subject to menu-based access control.
+ */
+const ALWAYS_ALLOWED_PREFIXES = ["/workbench", "/explore", "/governance", "/catalog",
+	"/foundation", "/modeling", "/security", "/services", "/ops", "/bi", "/my", "/settings"];
+
+/** Check if pathname is reachable from any menu path (exact or prefix match). */
+const isPathInMenuTree = (menuPaths: Set<string>, pathname: string): boolean => {
+	if (menuPaths.size === 0) return true; // menus not loaded → graceful degradation
+	const normalized = pathname.endsWith("/") ? pathname.slice(0, -1) : pathname;
+	// Platform core paths are always allowed
+	if (ALWAYS_ALLOWED_PREFIXES.some((p) => normalized === p || normalized.startsWith(p + "/"))) return true;
+	if (menuPaths.has(normalized)) return true;
+	// Prefix match: /bi/dashboards/123 is reachable via /bi/dashboards
+	for (const menuPath of menuPaths) {
+		if (normalized.startsWith(menuPath + "/")) return true;
+	}
+	return false;
+};
+
 const Main = () => {
 	const { themeStretch } = useSettings();
 	const menus = useMenuStore((s) => s.menus || []);
@@ -90,6 +138,17 @@ const Main = () => {
 	const { pathname } = useLocation();
 	const authIndex = useMemo(() => buildAuthIndex(menus), [menus]);
 	const currentNavAuth = useMemo(() => resolveAuthForPath(authIndex, pathname), [authIndex, pathname]);
+	const menuPaths = useMemo(() => collectMenuPaths(menus), [menus]);
+	const pathReachable = useMemo(() => isPathInMenuTree(menuPaths, pathname), [menuPaths, pathname]);
+
+	// If menus are loaded but the path is not in the menu tree, block access.
+	if (!pathReachable) {
+		return (
+			<Suspense fallback={<LineLoading />}>
+				<Page403 />
+			</Suspense>
+		);
+	}
 
 	return (
 		<AuthGuard

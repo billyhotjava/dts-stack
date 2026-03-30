@@ -122,7 +122,7 @@ test('normalizeScreenConfig migrates legacy project operations gantt screen comp
                         dataSource: {
                             type: 'api',
                             apiConfig: {
-                                url: '/analytics/api/project-cockpit/screen/execution',
+                                url: '/bi/api/project-cockpit/screen/execution',
                                 responsePath: 'ganttTasks',
                             },
                         },

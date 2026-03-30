@@ -93,7 +93,7 @@ export default function ModelsPage() {
 			<PageHeader
 				title={t(locale, "models.title")}
 				actions={
-					<Link to="/analytics/questions/new">
+					<Link to="/bi/questions/new">
 						<Button type="primary" icon={<PlusIcon />}>
 							{t(locale, "questions.new")}
 						</Button>
@@ -149,7 +149,7 @@ export default function ModelsPage() {
 					title={t(locale, "common.empty")}
 					description={t(locale, "models.emptyDesc")}
 					action={
-						<Link to="/analytics/questions/new">
+						<Link to="/bi/questions/new">
 							<Button type="primary" icon={<PlusIcon />}>
 								{t(locale, "questions.new")}
 							</Button>
@@ -175,7 +175,7 @@ export default function ModelsPage() {
 			{state.state === "loaded" && filteredModels.length > 0 && viewMode === "grid" && (
 				<CardGrid columns={3} gap="md">
 					{filteredModels.map((c) => (
-						<Link key={c.id} to={`/analytics/questions/${c.id}`} style={{ textDecoration: "none" }}>
+						<Link key={c.id} to={`/bi/questions/${c.id}`} style={{ textDecoration: "none" }}>
 							<Card hoverable>
 								<div className="model-card">
 									<div className="model-card__icon">
@@ -214,7 +214,7 @@ export default function ModelsPage() {
 							{filteredModels.map((c) => (
 								<tr key={String(c.id)}>
 									<td>
-										<Link to={`/analytics/questions/${c.id}`} className="text-brand no-underline">
+										<Link to={`/bi/questions/${c.id}`} className="text-brand no-underline">
 											{c.name || t(locale, "common.untitled")}
 										</Link>
 										{c.description && (

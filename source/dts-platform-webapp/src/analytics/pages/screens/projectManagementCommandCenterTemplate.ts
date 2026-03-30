@@ -72,7 +72,7 @@ function buildCockpitJumpUrl(
     Object.entries(overrides).forEach(([key, value]) => {
         params.set(key, value);
     });
-    return `/analytics/project-cockpit?${Array.from(params.entries())
+    return `/bi/project-cockpit?${Array.from(params.entries())
         .map(([key, value]) => `${key}=${value}`)
         .join('&')}`;
 }
@@ -132,7 +132,7 @@ function createFilterInput(id: string, label: string, variableKey: string, x: nu
 }
 
 function buildFilterOptionsDataSource(responsePath: string): DataSourceConfig {
-    return buildScreenApiDataSource('/analytics/api/project-cockpit/screen/overview', responsePath);
+    return buildScreenApiDataSource('/bi/api/project-cockpit/screen/overview', responsePath);
 }
 
 function createFilterSelect(
@@ -233,7 +233,7 @@ function createNumberCard(
         titleColor: SUBTITLE_COLOR,
         valueColor: TITLE_COLOR,
         backgroundColor: KPI_BG,
-    }, buildScreenApiDataSource('/analytics/api/project-cockpit/screen/overview', responsePath));
+    }, buildScreenApiDataSource('/bi/api/project-cockpit/screen/overview', responsePath));
 }
 
 function createExecutionNumberCard(
@@ -254,7 +254,7 @@ function createExecutionNumberCard(
         titleColor: SUBTITLE_COLOR,
         valueColor: TITLE_COLOR,
         backgroundColor: KPI_BG,
-    }, buildScreenApiDataSource('/analytics/api/project-cockpit/screen/execution', responsePath));
+    }, buildScreenApiDataSource('/bi/api/project-cockpit/screen/execution', responsePath));
 }
 
 function createRiskNumberCard(
@@ -275,7 +275,7 @@ function createRiskNumberCard(
         titleColor: SUBTITLE_COLOR,
         valueColor: TITLE_COLOR,
         backgroundColor: KPI_BG,
-    }, buildScreenApiDataSource('/analytics/api/project-cockpit/screen/risk', responsePath));
+    }, buildScreenApiDataSource('/bi/api/project-cockpit/screen/risk', responsePath));
 }
 
 function createApiSummaryCard(
@@ -521,13 +521,13 @@ function buildOverviewPage(): ScreenPage {
             createPanel('pmcc-overview-bg-right', 988, 280, 900, 760),
             ...createCommonHeader('总体态势', 0),
             ...createKpiRow([
-                { id: 'pmcc-ov-kpi-total', title: '本周期节点总数', url: '/analytics/api/project-cockpit/screen/overview', responsePath: 'kpis.0', jumpUrlTemplate: buildCockpitJumpUrl('overview', { drillTarget: 'completion' }) },
-                { id: 'pmcc-ov-kpi-due', title: '已到期节点', url: '/analytics/api/project-cockpit/screen/overview', responsePath: 'kpis.2', jumpUrlTemplate: buildCockpitJumpUrl('overview', { drillTarget: 'overdue' }) },
-                { id: 'pmcc-ov-kpi-completed', title: '节点完成总数', url: '/analytics/api/project-cockpit/screen/overview', responsePath: 'kpis.7', jumpUrlTemplate: buildCockpitJumpUrl('overview', { drillTarget: 'completion' }) },
-                { id: 'pmcc-ov-kpi-rate', title: '节点完成率', url: '/analytics/api/project-cockpit/screen/overview', responsePath: 'kpis.8', suffix: '%', jumpUrlTemplate: buildCockpitJumpUrl('overview', { drillTarget: 'completion' }) },
-                { id: 'pmcc-ov-kpi-ontime', title: '按时完成率', url: '/analytics/api/project-cockpit/screen/overview', responsePath: 'kpis.9', suffix: '%', jumpUrlTemplate: buildCockpitJumpUrl('overview', { drillTarget: 'completion' }) },
-                { id: 'pmcc-ov-kpi-overdue', title: '超期完成率', url: '/analytics/api/project-cockpit/screen/overview', responsePath: 'kpis.10', suffix: '%', jumpUrlTemplate: buildCockpitJumpUrl('overview', { drillTarget: 'completion' }) },
-                { id: 'pmcc-ov-kpi-milestone-rate', title: '里程碑完成率', url: '/analytics/api/project-cockpit/screen/execution', responsePath: 'milestoneKpis.3', suffix: '%', jumpUrlTemplate: buildCockpitJumpUrl('execution', { drillTarget: 'milestone' }) },
+                { id: 'pmcc-ov-kpi-total', title: '本周期节点总数', url: '/bi/api/project-cockpit/screen/overview', responsePath: 'kpis.0', jumpUrlTemplate: buildCockpitJumpUrl('overview', { drillTarget: 'completion' }) },
+                { id: 'pmcc-ov-kpi-due', title: '已到期节点', url: '/bi/api/project-cockpit/screen/overview', responsePath: 'kpis.2', jumpUrlTemplate: buildCockpitJumpUrl('overview', { drillTarget: 'overdue' }) },
+                { id: 'pmcc-ov-kpi-completed', title: '节点完成总数', url: '/bi/api/project-cockpit/screen/overview', responsePath: 'kpis.7', jumpUrlTemplate: buildCockpitJumpUrl('overview', { drillTarget: 'completion' }) },
+                { id: 'pmcc-ov-kpi-rate', title: '节点完成率', url: '/bi/api/project-cockpit/screen/overview', responsePath: 'kpis.8', suffix: '%', jumpUrlTemplate: buildCockpitJumpUrl('overview', { drillTarget: 'completion' }) },
+                { id: 'pmcc-ov-kpi-ontime', title: '按时完成率', url: '/bi/api/project-cockpit/screen/overview', responsePath: 'kpis.9', suffix: '%', jumpUrlTemplate: buildCockpitJumpUrl('overview', { drillTarget: 'completion' }) },
+                { id: 'pmcc-ov-kpi-overdue', title: '超期完成率', url: '/bi/api/project-cockpit/screen/overview', responsePath: 'kpis.10', suffix: '%', jumpUrlTemplate: buildCockpitJumpUrl('overview', { drillTarget: 'completion' }) },
+                { id: 'pmcc-ov-kpi-milestone-rate', title: '里程碑完成率', url: '/bi/api/project-cockpit/screen/execution', responsePath: 'milestoneKpis.3', suffix: '%', jumpUrlTemplate: buildCockpitJumpUrl('execution', { drillTarget: 'milestone' }) },
             ], 128, 118),
             withActions(createLineChart(
                 'pmcc-overview-weekly',
@@ -536,7 +536,7 @@ function buildOverviewPage(): ScreenPage {
                 304,
                 878,
                 320,
-                '/analytics/api/project-cockpit/screen/overview',
+                '/bi/api/project-cockpit/screen/overview',
                 'weekly',
                 'weekLabel',
                 [
@@ -552,7 +552,7 @@ function buildOverviewPage(): ScreenPage {
                 648,
                 878,
                 360,
-                '/analytics/api/project-cockpit/screen/overview',
+                '/bi/api/project-cockpit/screen/overview',
                 'ranking',
                 'majorProjectName',
                 [
@@ -567,7 +567,7 @@ function buildOverviewPage(): ScreenPage {
                 304,
                 380,
                 230,
-                '/analytics/api/project-cockpit/screen/overview',
+                '/bi/api/project-cockpit/screen/overview',
                 'completionBreakdown',
             ), jumpAction(buildCockpitJumpUrl('overview', { drillTarget: 'completion' }))),
             withActions(createRadarChart(
@@ -577,7 +577,7 @@ function buildOverviewPage(): ScreenPage {
                 552,
                 380,
                 232,
-                '/analytics/api/project-cockpit/screen/overview',
+                '/bi/api/project-cockpit/screen/overview',
                 'healthRadar',
             ), jumpAction(buildCockpitJumpUrl('overview', { drillTarget: 'completion' }))),
             withActions(createApiTable(
@@ -587,7 +587,7 @@ function buildOverviewPage(): ScreenPage {
                 802,
                 380,
                 206,
-                '/analytics/api/project-cockpit/screen/overview',
+                '/bi/api/project-cockpit/screen/overview',
                 'spotlight',
                 [
                     { source: 'majorProjectName', alias: '项目' },
@@ -603,7 +603,7 @@ function buildOverviewPage(): ScreenPage {
                 304,
                 454,
                 704,
-                '/analytics/api/project-cockpit/screen/overview',
+                '/bi/api/project-cockpit/screen/overview',
                 'alerts',
                 ['title', 'majorProjectName', 'riskLevel', 'delayDays', 'reason'],
             ), jumpAction(buildCockpitJumpUrl('overview', { drillTarget: 'overdue' }))),
@@ -623,15 +623,15 @@ function buildExecutionPage(): ScreenPage {
             createPanel('pmcc-execution-bg-right-bottom', 988, 650, 900, 390),
             ...createCommonHeader('执行与里程碑', 1),
             ...createKpiRow([
-                { id: 'pmcc-ex-kpi-high', title: '未完成高风险', url: '/analytics/api/project-cockpit/screen/execution', responsePath: 'incompleteKpis.0', jumpUrlTemplate: buildCockpitJumpUrl('risk', { drillTarget: 'high-risk' }) },
-                { id: 'pmcc-ex-kpi-mid', title: '未完成中风险', url: '/analytics/api/project-cockpit/screen/execution', responsePath: 'incompleteKpis.1', jumpUrlTemplate: buildCockpitJumpUrl('risk', { drillTarget: 'high-risk' }) },
-                { id: 'pmcc-ex-kpi-ms-open', title: '未完成里程碑', url: '/analytics/api/project-cockpit/screen/execution', responsePath: 'incompleteKpis.2', jumpUrlTemplate: buildCockpitJumpUrl('execution', { drillTarget: 'milestone' }) },
-                { id: 'pmcc-ex-kpi-major', title: '未完成重大节点', url: '/analytics/api/project-cockpit/screen/execution', responsePath: 'incompleteKpis.3', jumpUrlTemplate: buildCockpitJumpUrl('execution', { drillTarget: 'overdue' }) },
-                { id: 'pmcc-ex-kpi-important', title: '未完成重要节点', url: '/analytics/api/project-cockpit/screen/execution', responsePath: 'incompleteKpis.4', jumpUrlTemplate: buildCockpitJumpUrl('execution', { drillTarget: 'overdue' }) },
-                { id: 'pmcc-ex-kpi-ms-ontime', title: '里程碑按时完成', url: '/analytics/api/project-cockpit/screen/execution', responsePath: 'milestoneKpis.0', jumpUrlTemplate: buildCockpitJumpUrl('execution', { drillTarget: 'milestone' }) },
-                { id: 'pmcc-ex-kpi-ms-overdue', title: '里程碑超期完成', url: '/analytics/api/project-cockpit/screen/execution', responsePath: 'milestoneKpis.1', jumpUrlTemplate: buildCockpitJumpUrl('execution', { drillTarget: 'milestone' }) },
-                { id: 'pmcc-ex-kpi-ms-pending', title: '里程碑待完成', url: '/analytics/api/project-cockpit/screen/execution', responsePath: 'milestoneKpis.2', jumpUrlTemplate: buildCockpitJumpUrl('execution', { drillTarget: 'milestone' }) },
-                { id: 'pmcc-ex-kpi-ms-rate', title: '里程碑完成率', url: '/analytics/api/project-cockpit/screen/execution', responsePath: 'milestoneKpis.3', suffix: '%', jumpUrlTemplate: buildCockpitJumpUrl('execution', { drillTarget: 'milestone' }) },
+                { id: 'pmcc-ex-kpi-high', title: '未完成高风险', url: '/bi/api/project-cockpit/screen/execution', responsePath: 'incompleteKpis.0', jumpUrlTemplate: buildCockpitJumpUrl('risk', { drillTarget: 'high-risk' }) },
+                { id: 'pmcc-ex-kpi-mid', title: '未完成中风险', url: '/bi/api/project-cockpit/screen/execution', responsePath: 'incompleteKpis.1', jumpUrlTemplate: buildCockpitJumpUrl('risk', { drillTarget: 'high-risk' }) },
+                { id: 'pmcc-ex-kpi-ms-open', title: '未完成里程碑', url: '/bi/api/project-cockpit/screen/execution', responsePath: 'incompleteKpis.2', jumpUrlTemplate: buildCockpitJumpUrl('execution', { drillTarget: 'milestone' }) },
+                { id: 'pmcc-ex-kpi-major', title: '未完成重大节点', url: '/bi/api/project-cockpit/screen/execution', responsePath: 'incompleteKpis.3', jumpUrlTemplate: buildCockpitJumpUrl('execution', { drillTarget: 'overdue' }) },
+                { id: 'pmcc-ex-kpi-important', title: '未完成重要节点', url: '/bi/api/project-cockpit/screen/execution', responsePath: 'incompleteKpis.4', jumpUrlTemplate: buildCockpitJumpUrl('execution', { drillTarget: 'overdue' }) },
+                { id: 'pmcc-ex-kpi-ms-ontime', title: '里程碑按时完成', url: '/bi/api/project-cockpit/screen/execution', responsePath: 'milestoneKpis.0', jumpUrlTemplate: buildCockpitJumpUrl('execution', { drillTarget: 'milestone' }) },
+                { id: 'pmcc-ex-kpi-ms-overdue', title: '里程碑超期完成', url: '/bi/api/project-cockpit/screen/execution', responsePath: 'milestoneKpis.1', jumpUrlTemplate: buildCockpitJumpUrl('execution', { drillTarget: 'milestone' }) },
+                { id: 'pmcc-ex-kpi-ms-pending', title: '里程碑待完成', url: '/bi/api/project-cockpit/screen/execution', responsePath: 'milestoneKpis.2', jumpUrlTemplate: buildCockpitJumpUrl('execution', { drillTarget: 'milestone' }) },
+                { id: 'pmcc-ex-kpi-ms-rate', title: '里程碑完成率', url: '/bi/api/project-cockpit/screen/execution', responsePath: 'milestoneKpis.3', suffix: '%', jumpUrlTemplate: buildCockpitJumpUrl('execution', { drillTarget: 'milestone' }) },
             ], 126, 106),
             withActions(createComponent('pmcc-execution-gantt', 'gantt-chart', '任务甘特图', 56, 286, 878, 520, 10, {
                 title: '任务甘特图',
@@ -641,7 +641,7 @@ function buildExecutionPage(): ScreenPage {
                 endField: 'actualDate',
                 categoryField: 'majorProjectName',
                 statusField: 'riskLevel',
-            }, buildScreenApiDataSource('/analytics/api/project-cockpit/screen/execution', 'ganttTasks')), jumpAction(buildCockpitJumpUrl('execution', {
+            }, buildScreenApiDataSource('/bi/api/project-cockpit/screen/execution', 'ganttTasks')), jumpAction(buildCockpitJumpUrl('execution', {
                 majorProjectId: '{{data.majorProjectId}}',
                 deptId: '{{data.dept}}',
                 drillTarget: 'overdue',
@@ -653,7 +653,7 @@ function buildExecutionPage(): ScreenPage {
                 824,
                 420,
                 184,
-                '/analytics/api/project-cockpit/screen/execution',
+                '/bi/api/project-cockpit/screen/execution',
                 'workload',
                 'dept',
                 [
@@ -668,7 +668,7 @@ function buildExecutionPage(): ScreenPage {
                 824,
                 438,
                 184,
-                '/analytics/api/project-cockpit/screen/execution',
+                '/bi/api/project-cockpit/screen/execution',
                 'dueList',
                 ['name', 'majorProjectName', 'dept', 'planDate', 'status', 'delayDays'],
             ), jumpAction(buildCockpitJumpUrl('execution', { deptId: '{{dept}}', drillTarget: 'overdue' }))),
@@ -679,7 +679,7 @@ function buildExecutionPage(): ScreenPage {
                 286,
                 264,
                 320,
-                '/analytics/api/project-cockpit/screen/execution',
+                '/bi/api/project-cockpit/screen/execution',
                 'milestoneBreakdown',
             ), jumpAction(buildCockpitJumpUrl('execution', { drillTarget: 'milestone' }))),
             withActions(createPieChart(
@@ -689,7 +689,7 @@ function buildExecutionPage(): ScreenPage {
                 286,
                 252,
                 320,
-                '/analytics/api/project-cockpit/screen/execution',
+                '/bi/api/project-cockpit/screen/execution',
                 'stageBuckets',
             ), jumpAction(buildCockpitJumpUrl('execution'))),
             withActions(createApiSummaryCard(
@@ -699,7 +699,7 @@ function buildExecutionPage(): ScreenPage {
                 304,
                 140,
                 92,
-                '/analytics/api/project-cockpit/screen/execution',
+                '/bi/api/project-cockpit/screen/execution',
                 'executionSummary',
                 'overdueCount',
             ), jumpAction(buildCockpitJumpUrl('execution', { drillTarget: 'overdue' }))),
@@ -710,7 +710,7 @@ function buildExecutionPage(): ScreenPage {
                 304,
                 140,
                 92,
-                '/analytics/api/project-cockpit/screen/execution',
+                '/bi/api/project-cockpit/screen/execution',
                 'executionSummary',
                 'maxDelayDays',
                 '天',
@@ -722,7 +722,7 @@ function buildExecutionPage(): ScreenPage {
                 414,
                 140,
                 92,
-                '/analytics/api/project-cockpit/screen/execution',
+                '/bi/api/project-cockpit/screen/execution',
                 'executionSummary',
                 'nodeTotal',
             ), jumpAction(buildCockpitJumpUrl('execution'))),
@@ -733,7 +733,7 @@ function buildExecutionPage(): ScreenPage {
                 414,
                 140,
                 92,
-                '/analytics/api/project-cockpit/screen/execution',
+                '/bi/api/project-cockpit/screen/execution',
                 'executionSummary',
                 'dueSoonCount',
             ), jumpAction(buildCockpitJumpUrl('execution', { drillTarget: 'overdue' }))),
@@ -744,7 +744,7 @@ function buildExecutionPage(): ScreenPage {
                 650,
                 852,
                 358,
-                '/analytics/api/project-cockpit/screen/execution',
+                '/bi/api/project-cockpit/screen/execution',
                 'milestones',
                 [
                     { source: 'name', alias: '里程碑', align: 'left', wrap: true },
@@ -770,12 +770,12 @@ function buildRiskPage(): ScreenPage {
             createPanel('pmcc-risk-bg-right-bottom', 988, 658, 900, 382),
             ...createCommonHeader('风险与变更', 2),
             ...createKpiRow([
-                { id: 'pmcc-rk-kpi-abnormal', title: '不正常待变更', url: '/analytics/api/project-cockpit/screen/risk', responsePath: 'changeKpis.0', jumpUrlTemplate: buildCockpitJumpUrl('risk', { drillTarget: 'overdue' }) },
-                { id: 'pmcc-rk-kpi-unc', title: '超期未完未变更', url: '/analytics/api/project-cockpit/screen/risk', responsePath: 'changeKpis.1', jumpUrlTemplate: buildCockpitJumpUrl('risk', { drillTarget: 'overdue' }) },
-                { id: 'pmcc-rk-kpi-chg', title: '超期未完已变更', url: '/analytics/api/project-cockpit/screen/risk', responsePath: 'changeKpis.2', jumpUrlTemplate: buildCockpitJumpUrl('risk') },
-                { id: 'pmcc-rk-kpi-done', title: '超期已完未变更', url: '/analytics/api/project-cockpit/screen/risk', responsePath: 'changeKpis.3', jumpUrlTemplate: buildCockpitJumpUrl('risk') },
-                { id: 'pmcc-rk-kpi-abnrate', title: '异常率', url: '/analytics/api/project-cockpit/screen/risk', responsePath: 'changeKpis.4', suffix: '%', jumpUrlTemplate: buildCockpitJumpUrl('risk', { drillTarget: 'overdue' }) },
-                { id: 'pmcc-rk-kpi-ovrate', title: '超期率', url: '/analytics/api/project-cockpit/screen/risk', responsePath: 'changeKpis.5', suffix: '%', jumpUrlTemplate: buildCockpitJumpUrl('risk', { drillTarget: 'overdue' }) },
+                { id: 'pmcc-rk-kpi-abnormal', title: '不正常待变更', url: '/bi/api/project-cockpit/screen/risk', responsePath: 'changeKpis.0', jumpUrlTemplate: buildCockpitJumpUrl('risk', { drillTarget: 'overdue' }) },
+                { id: 'pmcc-rk-kpi-unc', title: '超期未完未变更', url: '/bi/api/project-cockpit/screen/risk', responsePath: 'changeKpis.1', jumpUrlTemplate: buildCockpitJumpUrl('risk', { drillTarget: 'overdue' }) },
+                { id: 'pmcc-rk-kpi-chg', title: '超期未完已变更', url: '/bi/api/project-cockpit/screen/risk', responsePath: 'changeKpis.2', jumpUrlTemplate: buildCockpitJumpUrl('risk') },
+                { id: 'pmcc-rk-kpi-done', title: '超期已完未变更', url: '/bi/api/project-cockpit/screen/risk', responsePath: 'changeKpis.3', jumpUrlTemplate: buildCockpitJumpUrl('risk') },
+                { id: 'pmcc-rk-kpi-abnrate', title: '异常率', url: '/bi/api/project-cockpit/screen/risk', responsePath: 'changeKpis.4', suffix: '%', jumpUrlTemplate: buildCockpitJumpUrl('risk', { drillTarget: 'overdue' }) },
+                { id: 'pmcc-rk-kpi-ovrate', title: '超期率', url: '/bi/api/project-cockpit/screen/risk', responsePath: 'changeKpis.5', suffix: '%', jumpUrlTemplate: buildCockpitJumpUrl('risk', { drillTarget: 'overdue' }) },
             ], 128, 118),
             withActions(createPieChart(
                 'pmcc-risk-breakdown',
@@ -784,7 +784,7 @@ function buildRiskPage(): ScreenPage {
                 304,
                 420,
                 320,
-                '/analytics/api/project-cockpit/screen/risk',
+                '/bi/api/project-cockpit/screen/risk',
                 'riskBreakdown',
             ), jumpAction(buildCockpitJumpUrl('risk', { riskLevel: '{{name}}' }))),
             withActions(createBarChart(
@@ -794,7 +794,7 @@ function buildRiskPage(): ScreenPage {
                 304,
                 438,
                 320,
-                '/analytics/api/project-cockpit/screen/risk',
+                '/bi/api/project-cockpit/screen/risk',
                 'delayReasonBreakdown',
                 'label',
                 [{ field: 'value', name: '数量' }],
@@ -806,7 +806,7 @@ function buildRiskPage(): ScreenPage {
                 648,
                 878,
                 360,
-                '/analytics/api/project-cockpit/screen/risk',
+                '/bi/api/project-cockpit/screen/risk',
                 'weeklyDelayTrend',
                 'weekLabel',
                 [
@@ -821,7 +821,7 @@ function buildRiskPage(): ScreenPage {
                 304,
                 198,
                 102,
-                '/analytics/api/project-cockpit/screen/risk',
+                '/bi/api/project-cockpit/screen/risk',
                 'governanceSummary',
                 'delayedNodeCount',
             ), jumpAction(buildCockpitJumpUrl('risk', { drillTarget: 'overdue' }))),
@@ -832,7 +832,7 @@ function buildRiskPage(): ScreenPage {
                 304,
                 198,
                 102,
-                '/analytics/api/project-cockpit/screen/risk',
+                '/bi/api/project-cockpit/screen/risk',
                 'governanceSummary',
                 'highRiskNodeCount',
             ), jumpAction(buildCockpitJumpUrl('risk', { drillTarget: 'high-risk' }))),
@@ -843,7 +843,7 @@ function buildRiskPage(): ScreenPage {
                 304,
                 198,
                 102,
-                '/analytics/api/project-cockpit/screen/risk',
+                '/bi/api/project-cockpit/screen/risk',
                 'governanceSummary',
                 'openRiskNodeCount',
             ), jumpAction(buildCockpitJumpUrl('risk', { drillTarget: 'high-risk' }))),
@@ -854,7 +854,7 @@ function buildRiskPage(): ScreenPage {
                 304,
                 198,
                 102,
-                '/analytics/api/project-cockpit/screen/risk',
+                '/bi/api/project-cockpit/screen/risk',
                 'governanceSummary',
                 'changedNodeCount',
             ), jumpAction(buildCockpitJumpUrl('risk'))),
@@ -873,7 +873,7 @@ function buildRiskPage(): ScreenPage {
                 520,
                 852,
                 276,
-                '/analytics/api/project-cockpit/screen/risk',
+                '/bi/api/project-cockpit/screen/risk',
                 'delayReasonMatrix',
                 [
                     { source: 'dept', alias: '责任科室', align: 'left', wrap: true },
@@ -916,7 +916,7 @@ function buildRiskPage(): ScreenPage {
                 814,
                 852,
                 194,
-                '/analytics/api/project-cockpit/screen/risk',
+                '/bi/api/project-cockpit/screen/risk',
                 'delayedProjects',
                 [
                     { source: 'majorProjectName', alias: '项目', align: 'left', wrap: true },
@@ -951,7 +951,7 @@ function createCompareSummaryCard(
         titleColor: SUBTITLE_COLOR,
         valueColor: TITLE_COLOR,
         backgroundColor: KPI_BG,
-    }, buildScreenApiDataSource('/analytics/api/project-cockpit/screen/metrics-compare', 'summary'));
+    }, buildScreenApiDataSource('/bi/api/project-cockpit/screen/metrics-compare', 'summary'));
 }
 
 function createCompareTable(
@@ -990,7 +990,7 @@ function createCompareTable(
             { columnKey: 'status', operator: '=', value: '差异', color: '#b91c1c', background: 'rgba(254, 226, 226, 0.96)' },
             { columnKey: 'status', operator: '=', value: '一致', color: '#166534', background: 'rgba(220, 252, 231, 0.96)' },
         ],
-    }, buildScreenApiDataSource('/analytics/api/project-cockpit/screen/metrics-compare', responsePath));
+    }, buildScreenApiDataSource('/bi/api/project-cockpit/screen/metrics-compare', responsePath));
 }
 
 function createTreeSummaryCard(
@@ -1011,7 +1011,7 @@ function createTreeSummaryCard(
         titleColor: SUBTITLE_COLOR,
         valueColor: TITLE_COLOR,
         backgroundColor: KPI_BG,
-    }, buildScreenApiDataSource('/analytics/api/project-cockpit/screen/tree', 'summary'));
+    }, buildScreenApiDataSource('/bi/api/project-cockpit/screen/tree', 'summary'));
 }
 
 function createTreeTable(
@@ -1046,7 +1046,7 @@ function createTreeTable(
         enableSort: false,
         enablePagination: false,
         freezeHeader: true,
-    }, buildScreenApiDataSource('/analytics/api/project-cockpit/screen/tree', responsePath));
+    }, buildScreenApiDataSource('/bi/api/project-cockpit/screen/tree', responsePath));
 }
 
 function createMarkdownNote(id: string, markdown: string, x: number, y: number, width: number, height: number): ScreenComponent {

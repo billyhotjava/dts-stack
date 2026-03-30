@@ -24,11 +24,11 @@ export function isGpmcBoardScreenId(value: string): value is GpmcBoardScreenId {
 }
 
 export function getGpmcScreenPath(screen: GpmcScreenId) {
-	return screen === "overview" ? "/analytics/gpmc" : `/analytics/gpmc/${screen}`;
+	return screen === "overview" ? "/bi/gpmc" : `/bi/gpmc/${screen}`;
 }
 
 export function getGpmcDrillPath(screen: GpmcBoardScreenId) {
-	return `/analytics/gpmc/drill/${screen}`;
+	return `/bi/gpmc/drill/${screen}`;
 }
 
 // ── Drill layer ──

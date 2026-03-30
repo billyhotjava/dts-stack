@@ -83,13 +83,13 @@ export default function DataPage() {
 				title={t(locale, "data.title")}
 				actions={
 					isDataAdmin ? (
-						<Link to="/analytics/data/new">
+						<Link to="/bi/data/new">
 							<Button type="primary" icon={<PlusIcon />}>
 								{t(locale, "data.add")}
 							</Button>
 						</Link>
 					) : (
-						<Link to="/analytics/data/new?tab=other">
+						<Link to="/bi/data/new?tab=other">
 							<Button type="primary" icon={<PlusIcon />}>
 								上传数据
 							</Button>
@@ -110,7 +110,7 @@ export default function DataPage() {
 				<EmptyState
 					title={t(locale, "data.empty")}
 					action={
-						<Link to="/analytics/data/new">
+						<Link to="/bi/data/new">
 							<Button type="primary" icon={<PlusIcon />}>
 								{t(locale, "data.add")}
 							</Button>
@@ -123,11 +123,11 @@ export default function DataPage() {
 					{state.value.map((db) => (
 						<Card key={db.id} hoverable style={{ height: "100%" }}>
 							<div style={{ display: "flex", alignItems: "flex-start", gap: "var(--spacing-md)" }}>
-								<Link to={`/analytics/data/${db.id}`} style={{ textDecoration: "none", display: "flex", alignItems: "center", justifyContent: "center", width: 40, height: 40, borderRadius: "var(--radius-md)", background: "var(--color-bg-hover)", color: "var(--color-brand)", flexShrink: 0 }}>
+								<Link to={`/bi/data/${db.id}`} style={{ textDecoration: "none", display: "flex", alignItems: "center", justifyContent: "center", width: 40, height: 40, borderRadius: "var(--radius-md)", background: "var(--color-bg-hover)", color: "var(--color-brand)", flexShrink: 0 }}>
 									<DatabaseIcon />
 								</Link>
 								<div style={{ flex: 1, minWidth: 0 }}>
-									<Link to={`/analytics/data/${db.id}`} style={{ textDecoration: "none" }}>
+									<Link to={`/bi/data/${db.id}`} style={{ textDecoration: "none" }}>
 										<h3 style={{ margin: 0, fontSize: "var(--font-size-md)", fontWeight: "var(--font-weight-semibold)", color: "var(--color-text-primary)" }}>
 											{db.name ?? `db:${db.id}`}
 										</h3>

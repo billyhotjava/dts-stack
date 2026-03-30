@@ -46,7 +46,8 @@ server {
         proxy_pass $ADMIN_UPSTREAM_API;
     }
 
-    # Proxy analytics APIs to analytics backend service.
+    # Proxy BI analytics APIs to dts-analytics backend service.
+    # API path stays /analytics/api/ (backend service name, not a frontend route).
     location /analytics/api/ {
         proxy_http_version 1.1;
         proxy_set_header Host $host;
@@ -62,11 +63,11 @@ server {
         proxy_pass $ANALYTICS_API_UPSTREAM;
     }
 
-    # Analytics UI is now embedded in platform-webapp — use SPA fallback.
-    location /analytics/ {
+    # BI pages are embedded in platform-webapp — SPA fallback for /bi/*
+    location /bi/ {
         try_files $uri $uri/ /index.html;
     }
-    location = /analytics {
+    location = /bi {
         try_files $uri /index.html;
     }
 

@@ -92,9 +92,9 @@ test('buildActionRuntimeParams merges runtime filters and click params for jump-
         riskLevel: '高',
     });
     assert.equal(resolveActionTemplateText(
-        '/analytics/project-cockpit?theme=risk&majorProjectId={{majorProjectId}}&deptId={{dept}}&riskLevel={{runtime.riskLevel}}',
+        '/bi/project-cockpit?theme=risk&majorProjectId={{majorProjectId}}&deptId={{dept}}&riskLevel={{runtime.riskLevel}}',
         params,
-    ), '/analytics/project-cockpit?theme=risk&majorProjectId=major-aurora&deptId=质量科&riskLevel=高');
+    ), '/bi/project-cockpit?theme=risk&majorProjectId=major-aurora&deptId=质量科&riskLevel=高');
 });
 
 test('resolvePreferredDrillValue picks chart or table drill labels in priority order', () => {

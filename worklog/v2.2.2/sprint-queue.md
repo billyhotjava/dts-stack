@@ -213,3 +213,12 @@
 | F1-Platform承载Analytics菜单与路由统一 | 5 | READY |
 
 **统计**: READY=5, IN_PROGRESS=0, DONE=0, BLOCKED=0
+
+## Sprint-29: 大屏权限重构 — 融入平台统一资产权限体系 (202603)
+**状态**: READY
+
+| Feature | Task 数 | 状态 |
+|---------|---------|------|
+| F1-大屏权限重构 | 13 | READY |
+
+**统计**: READY=13, IN_PROGRESS=0, DONE=0, BLOCKED=0

@@ -44,4 +44,6 @@
     <include file="config/liquibase/changelog/0037_metric_structured_fields.xml" relativeToChangelogFile="false"/>
     <include file="config/liquibase/changelog/0038_field_role_aggregation.xml" relativeToChangelogFile="false"/>
     <include file="config/liquibase/changelog/0039_screen_acl_owner_migration.xml" relativeToChangelogFile="false"/>
+    <include file="config/liquibase/changelog/0040_screen_classification.xml" relativeToChangelogFile="false"/>
+    <include file="config/liquibase/changelog/0041_drop_screen_acl.xml" relativeToChangelogFile="false"/>
 </databaseChangeLog>

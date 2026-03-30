@@ -47,7 +47,7 @@ export function ScreenSharePolicyPanel({ open, screenId, onClose }: ScreenShareP
     const shareUrl = useMemo(() => {
         const uuid = policy?.uuid;
         if (!uuid) return '';
-        return `${window.location.origin}/analytics/public/screen/${uuid}`;
+        return `${window.location.origin}/bi/public/screen/${uuid}`;
     }, [policy?.uuid]);
 
     const loadPolicy = async () => {

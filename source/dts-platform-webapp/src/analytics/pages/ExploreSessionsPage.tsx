@@ -271,7 +271,7 @@ export default function ExploreSessionsPage() {
 			if (!uuid) {
 				throw new Error("分享链接创建失败");
 			}
-			const url = `${window.location.origin}/analytics/api/explore-session/public/${encodeURIComponent(uuid)}`;
+			const url = `${window.location.origin}/bi/api/explore-session/public/${encodeURIComponent(uuid)}`;
 			if (navigator.clipboard?.writeText) {
 				await navigator.clipboard.writeText(url);
 			}

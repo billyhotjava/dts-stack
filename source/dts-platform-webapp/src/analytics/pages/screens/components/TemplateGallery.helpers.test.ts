@@ -17,7 +17,7 @@ test('parseRuntimeTargetsInput parses valid runtime probe rows and skips invalid
         host: '127.0.0.1',
         port: 3000,
         required: true,
-        path: '/analytics',
+        path: '/bi',
         expectedStatus: '200-499',
         expectedBodyContains: 'metabase',
     });

@@ -259,7 +259,7 @@ export default function CardEditorPage() {
 
 			const saved = cardId ? await analyticsApi.updateCard(cardId, body) : await analyticsApi.createCard(body);
 			setSaveState({ state: "loaded", value: saved });
-			navigate(`/analytics/questions/${saved.id}`, { replace: true });
+			navigate(`/bi/questions/${saved.id}`, { replace: true });
 		} catch (e) {
 			setSaveState({ state: "error", error: e });
 		}
@@ -310,7 +310,7 @@ export default function CardEditorPage() {
 				title={cardId ? `${t(locale, "questions.edit")} #${cardId}` : t(locale, "questions.new")}
 				breadcrumbs={
 					<Breadcrumb items={[
-						{ label: t(locale, "nav.questions"), href: "/analytics/questions" },
+						{ label: t(locale, "nav.questions"), href: "/bi/questions" },
 						{ label: cardId ? `#${cardId}` : t(locale, "questions.unsaved") }
 					]} />
 				}
@@ -326,7 +326,7 @@ export default function CardEditorPage() {
 						<EmptyState
 							title={t(locale, "questions.noDb")}
 							action={
-								<Link to="/analytics/data/new">
+								<Link to="/bi/data/new">
 									<Button type="primary">{t(locale, "data.add")}</Button>
 								</Link>
 							}

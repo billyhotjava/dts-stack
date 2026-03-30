@@ -118,7 +118,7 @@ export default function DatabaseDetailPage() {
 				title={`${t(locale, "data.db")} #${dbId}`}
 				breadcrumbs={
 					<Breadcrumb items={[
-						{ label: t(locale, "data.title"), href: "/analytics/data" },
+						{ label: t(locale, "data.title"), href: "/bi/data" },
 						{ label: `Database #${dbId}` }
 					]} />
 				}
@@ -199,7 +199,7 @@ export default function DatabaseDetailPage() {
 												</div>
 												<div className="table-list-item__content">
 													{tb?.id ? (
-														<Link to={`/analytics/data/${encodeURIComponent(String(dbId))}/tables/${encodeURIComponent(String(tb.id))}`} className="table-list-item__name">
+														<Link to={`/bi/data/${encodeURIComponent(String(dbId))}/tables/${encodeURIComponent(String(tb.id))}`} className="table-list-item__name">
 															{tb?.name ?? "-"}
 														</Link>
 													) : (
@@ -208,7 +208,7 @@ export default function DatabaseDetailPage() {
 													<span className="table-list-item__id text-secondary">ID: {String(tb?.id ?? "-")}</span>
 												</div>
 												{tb?.id && (
-													<Link to={`/analytics/questions/new?db=${encodeURIComponent(String(dbId))}&table=${encodeURIComponent(String(tb.id))}`}>
+													<Link to={`/bi/questions/new?db=${encodeURIComponent(String(dbId))}&table=${encodeURIComponent(String(tb.id))}`}>
 														<Button type="text" icon={<PlusIcon />}>
 															{t(locale, "questions.new")}
 														</Button>

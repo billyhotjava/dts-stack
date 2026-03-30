@@ -744,7 +744,7 @@ export function ScreenHeader({
 
             const result = await analyticsApi.createScreen(payload);
             if (result.id) {
-                navigate(`/analytics/screens/${result.id}/edit`, { replace: true });
+                navigate(`/bi/screens/${result.id}/edit`, { replace: true });
             }
             return result.id;
         } finally {
@@ -965,12 +965,12 @@ export function ScreenHeader({
                     + '，跳过 ' + (warmup.skipped || 0)
                     + '，失败 ' + (warmup.failed || 0);
             }
-            const previewUrl = `${window.location.origin}/analytics/screens/${encodeURIComponent(String(screenId))}/preview`;
+            const previewUrl = `${window.location.origin}/bi/screens/${encodeURIComponent(String(screenId))}/preview`;
             let publicUrl: string | null = null;
             try {
                 const policy = await analyticsApi.createScreenPublicLink(screenId, {});
                 if (policy?.uuid) {
-                    publicUrl = `${window.location.origin}/analytics/public/screen/${policy.uuid}`;
+                    publicUrl = `${window.location.origin}/bi/public/screen/${policy.uuid}`;
                 }
             } catch (linkError) {
                 console.warn('Publish succeeded but creating public link failed:', linkError);
@@ -1012,7 +1012,7 @@ export function ScreenHeader({
                 setPublishNotice({
                     screenId: id,
                     versionNo,
-                    previewUrl: `${window.location.origin}/analytics/screens/${encodeURIComponent(String(id))}/preview`,
+                    previewUrl: `${window.location.origin}/bi/screens/${encodeURIComponent(String(id))}/preview`,
                     publicUrl: null,
                     warmupText: '',
                 });
@@ -1109,7 +1109,7 @@ export function ScreenHeader({
             const suffix = previewDeviceMode === 'auto'
                 ? ''
                 : `?device=${encodeURIComponent(previewDeviceMode)}`;
-            window.open(`/analytics/screens/${id}/preview${suffix}`, '_blank', 'noopener,noreferrer');
+            window.open(`/bi/screens/${id}/preview${suffix}`, '_blank', 'noopener,noreferrer');
         } else {
             alert('请先保存大屏后再预览');
         }
@@ -1293,7 +1293,7 @@ export function ScreenHeader({
         if (previewDeviceMode !== 'auto') {
             params.set('device', previewDeviceMode);
         }
-        const url = `/analytics/screens/${id}/export?${params.toString()}`;
+        const url = `/bi/screens/${id}/export?${params.toString()}`;
         const popup = window.open(url, '_blank', 'noopener,noreferrer');
         if (!popup) {
             throw new Error('请允许弹窗后重试导出');
@@ -1534,7 +1534,7 @@ export function ScreenHeader({
                 const spec = buildScreenPayload(importedConfig);
                 const created = await analyticsApi.createScreen(spec);
                 setImportPreview(null);
-                window.location.href = `/analytics/screens/${String(created.id)}/edit`;
+                window.location.href = `/bi/screens/${String(created.id)}/edit`;
             }
         } catch (error) {
             console.error('Import action failed:', error);
@@ -1555,7 +1555,7 @@ export function ScreenHeader({
                 });
                 return;
             }
-            const baseUrl = `${window.location.origin}/analytics/public/screen/${uuid}`;
+            const baseUrl = `${window.location.origin}/bi/public/screen/${uuid}`;
             const embedUrl = `${baseUrl}?embed=1&hideControls=1`;
             const iframeCode = `<iframe src="${embedUrl}" width="100%" height="600" frameborder="0" allowfullscreen style="border: none;"></iframe>`;
             const globalVars = config.globalVariables ?? [];
@@ -1632,7 +1632,7 @@ export function ScreenHeader({
     }, [config, exploreSessionForm]);
 
     const handleBack = () => {
-        navigate('/analytics/screens');
+        navigate('/bi/screens');
     };
 
     const handleCopyUrl = useCallback(async (url: string) => {
@@ -2339,7 +2339,7 @@ export function ScreenHeader({
                         <button
                             type="button"
                             className="header-btn flex items-center gap-1.5 px-4 py-2 border border-[var(--color-border)] rounded-md bg-[var(--color-surface)] text-[var(--color-text-primary)] text-[13px] font-medium cursor-pointer transition-all duration-200 whitespace-nowrap shrink-0 w-full justify-start py-[7px] px-2.5 hover:border-[var(--color-primary)] hover:bg-[var(--color-primary-light)] disabled:opacity-50 disabled:cursor-not-allowed"
-                            onClick={() => navigate('/analytics')}
+                            onClick={() => navigate('/bi')}
                             title="返回 Analytics 首页"
                         >
                             Analytics首页
@@ -2347,7 +2347,7 @@ export function ScreenHeader({
                         <button
                             type="button"
                             className="header-btn flex items-center gap-1.5 px-4 py-2 border border-[var(--color-border)] rounded-md bg-[var(--color-surface)] text-[var(--color-text-primary)] text-[13px] font-medium cursor-pointer transition-all duration-200 whitespace-nowrap shrink-0 w-full justify-start py-[7px] px-2.5 hover:border-[var(--color-primary)] hover:bg-[var(--color-primary-light)] disabled:opacity-50 disabled:cursor-not-allowed"
-                            onClick={() => navigate('/analytics/screens')}
+                            onClick={() => navigate('/bi/screens')}
                             title="进入大屏管理列表"
                         >
                             大屏中心

@@ -73,7 +73,6 @@ export const isExternalPath = (path: string): boolean => {
 	const lower = value.toLowerCase();
 	return (
 		lower.startsWith("/dashboards") ||
-		lower.startsWith("/analytics") ||
 		lower.startsWith("/screen") ||
 		lower.startsWith("/dashboard/hetu")
 	);

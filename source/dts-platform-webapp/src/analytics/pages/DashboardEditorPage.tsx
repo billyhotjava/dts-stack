@@ -367,7 +367,7 @@ export default function DashboardEditorPage() {
 			const saved = await analyticsApi.saveDashboard(body);
 			setSaveState({ state: "loaded", value: saved });
 			message.success(t(locale, "dashboards.save"));
-			navigate(`/analytics/dashboards/${saved.id}`, { replace: true });
+			navigate(`/bi/dashboards/${saved.id}`, { replace: true });
 		} catch (e) {
 			setSaveState({ state: "error", error: e });
 		}
@@ -412,7 +412,7 @@ export default function DashboardEditorPage() {
 			<div data-testid="analytics-dashboard-editor">
 				{/* Top toolbar */}
 				<div className="flex items-center gap-3 mb-4 flex-wrap">
-					<Link to="/analytics/dashboards">
+					<Link to="/bi/dashboards">
 						<Button type="text" icon={<ArrowLeftOutlined />}>
 							{t(locale, "dashboards.backToList")}
 						</Button>

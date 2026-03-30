@@ -481,7 +481,7 @@ export function TemplateGallery({ onSelect, onClose }: TemplateGalleryProps) {
             } else if (action === 'create-screen') {
                 const spec = buildScreenPayload(parsedSpec);
                 const created = await analyticsApi.createScreen(spec);
-                window.location.href = `/analytics/screens/${String(created.id)}/edit`;
+                window.location.href = `/bi/screens/${String(created.id)}/edit`;
                 return;
             }
             setImportPreview(null);

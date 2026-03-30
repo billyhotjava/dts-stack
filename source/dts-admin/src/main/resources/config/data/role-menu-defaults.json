@@ -204,39 +204,39 @@
     "requiredRoles": ["DEPT_DATA_OWNER", "DEPT_LEADER", "INST_DATA_OWNER", "INST_LEADER", "ADMIN", "OP_ADMIN"]
   },
   {
-    "code": "sys.nav.portal.analyticsHome",
+    "code": "sys.nav.portal.biHome",
     "title": "分析首页",
-    "route": "/analytics",
+    "route": "/bi",
     "requiredRoles": ["EMPLOYEE", "DEPT_DATA_OWNER", "DEPT_LEADER", "INST_DATA_OWNER", "INST_LEADER", "ADMIN", "OP_ADMIN"]
   },
   {
-    "code": "sys.nav.portal.analyticsScreens",
+    "code": "sys.nav.portal.biScreens",
     "title": "数据大屏",
-    "route": "/analytics/screens",
+    "route": "/bi/screens",
     "requiredRoles": ["EMPLOYEE", "DEPT_DATA_OWNER", "DEPT_LEADER", "INST_DATA_OWNER", "INST_LEADER", "ADMIN", "OP_ADMIN"]
   },
   {
-    "code": "sys.nav.portal.analyticsDashboards",
+    "code": "sys.nav.portal.biDashboards",
     "title": "分析看板",
-    "route": "/analytics/dashboards",
+    "route": "/bi/dashboards",
     "requiredRoles": ["EMPLOYEE", "DEPT_DATA_OWNER", "DEPT_LEADER", "INST_DATA_OWNER", "INST_LEADER", "ADMIN", "OP_ADMIN"]
   },
   {
-    "code": "sys.nav.portal.analyticsQuestions",
+    "code": "sys.nav.portal.biQuestions",
     "title": "分析卡片",
-    "route": "/analytics/questions",
+    "route": "/bi/questions",
     "requiredRoles": ["EMPLOYEE", "DEPT_DATA_OWNER", "DEPT_LEADER", "INST_DATA_OWNER", "INST_LEADER", "ADMIN", "OP_ADMIN"]
   },
   {
-    "code": "sys.nav.portal.analyticsData",
+    "code": "sys.nav.portal.biData",
     "title": "数据管理",
-    "route": "/analytics/data",
+    "route": "/bi/data",
     "requiredRoles": ["EMPLOYEE", "DEPT_DATA_OWNER", "DEPT_LEADER", "INST_DATA_OWNER", "INST_LEADER", "ADMIN", "OP_ADMIN"]
   },
   {
-    "code": "sys.nav.portal.analyticsProjectCockpit",
+    "code": "sys.nav.portal.biProjectCockpit",
     "title": "项目看板",
-    "route": "/analytics/project-cockpit",
+    "route": "/bi/project-cockpit",
     "requiredRoles": ["EMPLOYEE", "DEPT_DATA_OWNER", "DEPT_LEADER", "INST_DATA_OWNER", "INST_LEADER", "ADMIN", "OP_ADMIN"]
   }
 ]

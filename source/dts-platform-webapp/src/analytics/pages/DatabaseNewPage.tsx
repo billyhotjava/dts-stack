@@ -140,7 +140,7 @@ export default function DatabaseNewPage() {
 			}
 			await analyticsApi.syncDatabaseSchema(createdId);
 			setOkMessage(t(locale, "data.synced"));
-			navigate(`/analytics/data/${encodeURIComponent(String(createdId))}`, { replace: true });
+			navigate(`/bi/data/${encodeURIComponent(String(createdId))}`, { replace: true });
 		} catch (e) {
 			setError(e);
 		} finally {
@@ -154,7 +154,7 @@ export default function DatabaseNewPage() {
 				title={t(locale, "data.add")}
 				breadcrumbs={
 					<Breadcrumb items={[
-						{ label: t(locale, "data.title"), href: "/analytics/data" },
+						{ label: t(locale, "data.title"), href: "/bi/data" },
 						{ label: t(locale, "data.add") }
 					]} />
 				}
@@ -312,9 +312,9 @@ export default function DatabaseNewPage() {
 										setOkMessage(`导入成功: ${result.tableName} (${result.rowCount} 行)`);
 										if (dataLakeId) {
 											analyticsApi.syncDatabaseSchema(dataLakeId).then(() => {
-												navigate(`/analytics/data/${dataLakeId}`, { replace: true });
+												navigate(`/bi/data/${dataLakeId}`, { replace: true });
 											}).catch(() => {
-												navigate(`/analytics/data/${dataLakeId}`, { replace: true });
+												navigate(`/bi/data/${dataLakeId}`, { replace: true });
 											});
 										}
 									}}
@@ -328,7 +328,7 @@ export default function DatabaseNewPage() {
 						</div>
 					)}
 				<div style={{ display: "flex", justifyContent: "space-between", padding: "var(--spacing-md)", borderTop: "1px solid var(--color-border)" }}>
-					<Link to="/analytics/data">
+					<Link to="/bi/data">
 						<Button type="text">
 							{t(locale, "common.open")} {t(locale, "data.title")}
 						</Button>

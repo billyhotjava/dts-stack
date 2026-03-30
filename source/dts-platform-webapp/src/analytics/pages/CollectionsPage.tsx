@@ -70,7 +70,7 @@ export default function CollectionsPage() {
 			dataIndex: "name",
 			key: "name",
 			render: (name: string, record) => (
-				<Link to={`/analytics/questions/${record.id}`} className="text-brand hover:underline font-medium">
+				<Link to={`/bi/questions/${record.id}`} className="text-brand hover:underline font-medium">
 					{name || "-"}
 				</Link>
 			),
@@ -112,7 +112,7 @@ export default function CollectionsPage() {
 			dataIndex: "name",
 			key: "name",
 			render: (name: string, record) => (
-				<Link to={`/analytics/dashboards/${record.id}`} className="text-brand hover:underline font-medium">
+				<Link to={`/bi/dashboards/${record.id}`} className="text-brand hover:underline font-medium">
 					{name || "-"}
 				</Link>
 			),
@@ -176,7 +176,7 @@ export default function CollectionsPage() {
 									size="small"
 									style={{ width: 200 }}
 								/>
-								<Link to="/analytics/questions/new">
+								<Link to="/bi/questions/new">
 									<Button type="primary" size="small" icon={<PlusOutlined />}>
 										{t(locale, "questions.new")}
 									</Button>
@@ -215,7 +215,7 @@ export default function CollectionsPage() {
 									size="small"
 									style={{ width: 200 }}
 								/>
-								<Link to="/analytics/dashboards/new">
+								<Link to="/bi/dashboards/new">
 									<Button type="primary" size="small" icon={<PlusOutlined />}>
 										{t(locale, "dashboards.new")}
 									</Button>

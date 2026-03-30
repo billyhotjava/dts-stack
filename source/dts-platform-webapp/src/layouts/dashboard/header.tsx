@@ -5,7 +5,7 @@ import { cn } from "@/utils";
 import AccountDropdown from "../components/account-dropdown";
 import BreadCrumb from "../components/bread-crumb";
 import SearchBar from "../components/search-bar";
-import { AppSwitcher } from "../components/app-switcher";
+
 
 interface HeaderProps {
 	leftSlot?: ReactNode;
@@ -35,7 +35,6 @@ export default function Header({ leftSlot }: HeaderProps) {
 
 				<div className="flex items-center gap-2">
 					<SearchBar />
-					<AppSwitcher />
 					<AccountDropdown />
 				</div>
 			</div>

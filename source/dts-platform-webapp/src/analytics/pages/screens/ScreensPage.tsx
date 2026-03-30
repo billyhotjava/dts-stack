@@ -199,12 +199,12 @@ export default function ScreensPage() {
 				const response = await analyticsApi.createScreenFromTemplate(remoteTemplate.id as string | number, {
 					name: (remoteTemplate.name || '未命名模板') + ' 副本',
 				});
-				navigate(`/analytics/screens/${response.id}/edit`);
+				navigate(`/bi/screens/${response.id}/edit`);
 				return;
 			}
 
 			const config = createConfigFromTemplate(selection.template);
-			navigate('/analytics/screens/new', {
+			navigate('/bi/screens/new', {
 				state: {
 					initialConfig: {
 						id: '',
@@ -214,7 +214,7 @@ export default function ScreensPage() {
 			});
 		} catch (err) {
 			console.error('Failed to create screen from template:', err);
-			navigate('/analytics/screens/new');
+			navigate('/bi/screens/new');
 		}
 	};
 
@@ -270,7 +270,7 @@ export default function ScreensPage() {
 				description: spec.description || normalized.config.description || 'AI自动生成',
 			}));
 			setShowAiGenerator(false);
-			navigate(`/analytics/screens/${created.id}/edit`);
+			navigate(`/bi/screens/${created.id}/edit`);
 		} catch (err) {
 			console.error('Failed to create screen from ai spec:', err);
 			alert('创建 AI 草稿失败');
@@ -344,15 +344,15 @@ export default function ScreensPage() {
 	};
 
 	const handleEdit = (id: string | number) => {
-		navigate(`/analytics/screens/${id}/edit`);
+		navigate(`/bi/screens/${id}/edit`);
 	};
 
 	const handlePreview = (id: string | number) => {
-		window.open(`/analytics/screens/${id}/preview`, '_blank', 'noopener,noreferrer');
+		window.open(`/bi/screens/${id}/preview`, '_blank', 'noopener,noreferrer');
 	};
 
 	const getPreviewUrl = useCallback(
-		(id: string | number) => `${window.location.origin}/analytics/screens/${encodeURIComponent(String(id))}/preview`,
+		(id: string | number) => `${window.location.origin}/bi/screens/${encodeURIComponent(String(id))}/preview`,
 		[],
 	);
 
@@ -367,7 +367,7 @@ export default function ScreensPage() {
 		setSharingId(id);
 		try {
 			const { uuid } = await analyticsApi.createScreenPublicLink(id);
-			const url = `${window.location.origin}/analytics/public/screen/${uuid}`;
+			const url = `${window.location.origin}/bi/public/screen/${uuid}`;
 			const copied = await writeTextToClipboard(url);
 			alert(copied ? '分享链接已复制到剪贴板' : `复制失败，请手工复制：\n${url}`);
 		} catch (err) {

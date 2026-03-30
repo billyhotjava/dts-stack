@@ -209,7 +209,7 @@ export function ScreenSharePanel({ open, screenId, onClose, isOwner = false }: S
 				message.error('未获取到分享链接，请先发布后重试');
 				return;
 			}
-			const url = `${window.location.origin}/analytics/public/screen/${uuid}`;
+			const url = `${window.location.origin}/bi/public/screen/${uuid}`;
 			setShareUrl(url);
 			const copied = await writeTextToClipboard(url);
 			if (copied) {

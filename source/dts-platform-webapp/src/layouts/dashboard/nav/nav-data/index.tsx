@@ -484,10 +484,10 @@ const FALLBACK_NAV_DATA: NavProps["data"] = [
 	{
 		name: "BI 分析",
 		items: [
-			{ path: "/analytics/home", title: "分析首页", icon: "solar:home-2-bold-duotone" },
-			{ path: "/analytics/screens", title: "数据大屏", icon: "solar:monitor-bold-duotone" },
-			{ path: "/analytics/dashboards", title: "分析看板", icon: "solar:widget-3-bold-duotone" },
-			{ path: "/analytics/questions", title: "分析卡片", icon: "solar:clipboard-list-bold-duotone" },
+			{ path: "/bi/home", title: "分析首页", icon: "solar:home-2-bold-duotone" },
+			{ path: "/bi/screens", title: "数据大屏", icon: "solar:monitor-bold-duotone" },
+			{ path: "/bi/dashboards", title: "分析看板", icon: "solar:widget-3-bold-duotone" },
+			{ path: "/bi/questions", title: "分析卡片", icon: "solar:clipboard-list-bold-duotone" },
 		],
 	},
 	{

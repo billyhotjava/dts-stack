@@ -387,7 +387,7 @@ export default function Page() {
 							<div
 								key={screen.id}
 								onClick={() => {
-									window.open(`/analytics/screens/${screen.id}/preview`, "_blank");
+									window.open(`/bi/screens/${screen.id}/preview`, "_blank");
 								}}
 								style={{
 									flex: "0 0 180px",

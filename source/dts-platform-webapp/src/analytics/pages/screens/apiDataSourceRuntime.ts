@@ -146,7 +146,7 @@ function rewritePublicScreenProjectCockpitUrl(url: string, queryContext?: Record
     if (!match) {
         return url;
     }
-    return `/analytics/api/public/screen/${encodeURIComponent(publicScreenUuid)}/project-cockpit/${match[1]}`;
+    return `/bi/api/public/screen/${encodeURIComponent(publicScreenUuid)}/project-cockpit/${match[1]}`;
 }
 
 function extractByPath(payload: unknown, responsePath?: string): unknown {

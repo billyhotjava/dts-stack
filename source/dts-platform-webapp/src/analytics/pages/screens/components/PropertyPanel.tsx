@@ -5147,7 +5147,7 @@ function renderDataSourceConfig(
                                     },
                                 });
                             }}
-                            placeholder="/analytics/api/card/1/query 或 https://..."
+                            placeholder="/bi/api/card/1/query 或 https://..."
                         />
                     </div>
                     <div className="property-row flex items-center mb-3">

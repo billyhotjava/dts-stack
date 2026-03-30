@@ -452,7 +452,7 @@ export function ScreenCollaborationPanel({
 			const params = new URLSearchParams();
 			params.set('sessionId', presenceSessionIdRef.current);
 			params.set('clientType', 'web');
-			const url = `${protocol}://${window.location.host}/analytics/api/screens/${encodeURIComponent(String(screenId))}/collaboration/ws?${params.toString()}`;
+			const url = `${protocol}://${window.location.host}/bi/api/screens/${encodeURIComponent(String(screenId))}/collaboration/ws?${params.toString()}`;
 			const socket = new WebSocket(url);
 			wsRef.current = socket;
 			socket.onopen = () => {
@@ -591,7 +591,7 @@ export function ScreenCollaborationPanel({
 			const sinceId = commentCursorRef.current;
 			const durationSec = Math.max(20, Math.min(Math.floor(refreshSeconds * 4), 120));
 			const waitMs = Math.max(500, Math.min(Math.floor(refreshSeconds * 1000), 5000));
-			const url = `/analytics/api/screens/${encodeURIComponent(String(screenId))}/comments/stream`
+			const url = `/bi/api/screens/${encodeURIComponent(String(screenId))}/comments/stream`
 				+ `?sinceId=${encodeURIComponent(String(sinceId))}`
 				+ `&limit=${encodeURIComponent(String(limit))}`
 				+ `&durationSec=${encodeURIComponent(String(durationSec))}`
@@ -721,7 +721,7 @@ export function ScreenCollaborationPanel({
 			clearSource();
 			const durationSec = Math.max(20, Math.min(Math.floor(refreshSeconds * 4), 120));
 			const waitMs = Math.max(500, Math.min(Math.floor(refreshSeconds * 1000), 5000));
-			const url = `/analytics/api/screens/${encodeURIComponent(String(screenId))}/collaboration/presence/stream`
+			const url = `/bi/api/screens/${encodeURIComponent(String(screenId))}/collaboration/presence/stream`
 				+ `?sessionId=${encodeURIComponent(presenceSessionIdRef.current)}`
 				+ `&ttlSeconds=${encodeURIComponent(String(presenceTtlSeconds))}`
 				+ `&durationSec=${encodeURIComponent(String(durationSec))}`

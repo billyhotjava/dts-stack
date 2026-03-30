@@ -1,10 +1,10 @@
 {
   "portalNavSections": [
     {
-      "key": "analytics",
-      "path": "analytics",
+      "key": "bi",
+      "path": "bi",
       "icon": "solar:chart-2-bold-duotone",
-      "titleKey": "sys.nav.portal.analytics",
+      "titleKey": "sys.nav.portal.bi",
       "title": "BI 分析",
       "children": [
         {

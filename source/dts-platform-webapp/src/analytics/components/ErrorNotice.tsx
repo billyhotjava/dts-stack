@@ -50,7 +50,7 @@ export function ErrorNotice({ locale, error }: Props) {
 			<div className="text-text-muted">{t(locale, "error")}</div>
 			<div className="mt-2">{t(locale, "auth.expired")}</div>
 			<div className="mt-3 flex gap-2 flex-wrap">
-				<a className="inline-flex items-center px-3 py-1.5 rounded-md bg-brand text-white text-sm" href="/analytics" rel="noreferrer">
+				<a className="inline-flex items-center px-3 py-1.5 rounded-md bg-brand text-white text-sm" href="/bi" rel="noreferrer">
 					{t(locale, "auth.back")}
 				</a>
 				<button

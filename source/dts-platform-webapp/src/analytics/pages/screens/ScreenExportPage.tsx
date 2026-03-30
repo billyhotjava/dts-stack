@@ -203,9 +203,9 @@ export default function ScreenExportPage() {
 				setEffectiveMode(resolvedMode || 'draft');
 				const rawPreview = String(prepared.previewUrl || '').trim();
 				if (rawPreview.length > 0) {
-					const normalizedPreview = rawPreview.startsWith('/analytics')
+					const normalizedPreview = rawPreview.startsWith('/bi')
 						? rawPreview
-						: (rawPreview.startsWith('/') ? `/analytics${rawPreview}` : `/analytics/${rawPreview}`);
+						: (rawPreview.startsWith('/') ? `/bi${rawPreview}` : `/bi/${rawPreview}`);
 					setPreviewUrl(normalizedPreview);
 				} else {
 					setPreviewUrl(null);
@@ -268,7 +268,7 @@ export default function ScreenExportPage() {
 			fallbackParams.set('device', forcedDevice);
 		}
 		const suffix = fallbackParams.toString();
-		return `/analytics/screens/${id}/preview${suffix ? `?${suffix}` : ''}`;
+		return `/bi/screens/${id}/preview${suffix ? `?${suffix}` : ''}`;
 	};
 
 	const openPreviewFallback = () => {

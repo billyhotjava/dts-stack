@@ -214,15 +214,12 @@ export function LoginForm({ className, ...props }: React.ComponentPropsWithoutRe
 					await svc.default.getMenuTree().catch(() => undefined);
 				} catch {}
 			}
-			// If login was triggered by an embedded module (e.g. /analytics), honor the redirect hint.
-			// Keep this safe: only allow same-origin absolute paths, and use hard navigation for cross-app paths.
-			if (safeRedirect?.startsWith("/analytics")) {
-				window.location.assign(safeRedirect);
-				return;
-			}
-			// 登录后回到平台默认首页（由全局配置/菜单决定）。
-			// 注意：Router 已配置 basename=publicPath，这里必须传入“路由内路径”，不要再拼 publicPath。
-			navigate(safeRedirect || GLOBAL_CONFIG.defaultRoute || "/workbench", { replace: true });
+			// Login redirect: menu first item -> config default -> /workbench fallback
+			const { useMenuStore } = await import("@/store/menuStore");
+			const { firstAccessibleMenuPath } = await import("@/utils/menuTree");
+			const menuDefault = firstAccessibleMenuPath(useMenuStore.getState().menus || []);
+			const target = safeRedirect || menuDefault || GLOBAL_CONFIG.defaultRoute || "/workbench";
+			navigate(target, { replace: true });
 			toast.success(bilingual("sys.login.loginSuccessTitle"), {
 				closeButton: true,
 			});
@@ -405,7 +402,11 @@ export function LoginForm({ className, ...props }: React.ComponentPropsWithoutRe
 				// ignore
 			}
 
-			navigate(GLOBAL_CONFIG.defaultRoute || "/workbench", { replace: true });
+			// 菜单树首项 → 配置默认路由 → /workbench 兜底
+			const { useMenuStore } = await import("@/store/menuStore");
+			const { firstAccessibleMenuPath } = await import("@/utils/menuTree");
+			const menuDefault = firstAccessibleMenuPath(useMenuStore.getState().menus || []);
+			navigate(menuDefault || GLOBAL_CONFIG.defaultRoute || "/workbench", { replace: true });
 			toast.success(bilingual("sys.login.loginSuccessTitle"), { closeButton: true });
 
 			await client.logout();

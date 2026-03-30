@@ -34,7 +34,7 @@ export default function NotFoundPage() {
 					<p className="text-secondary" style={{ marginTop: "var(--spacing-md)", marginBottom: "var(--spacing-xl)", maxWidth: 400 }}>
 						{t(locale, "notfound.desc")}
 					</p>
-					<Link to="/analytics">
+					<Link to="/bi">
 						<Button type="primary" icon={<HomeIcon />}>
 							{t(locale, "nav.home")}
 						</Button>

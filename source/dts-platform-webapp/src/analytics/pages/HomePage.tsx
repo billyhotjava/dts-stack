@@ -171,7 +171,7 @@ export default function HomePage() {
 			key: "name",
 			ellipsis: true,
 			render: (name: string, record) => (
-				<Link to={`/analytics/screens/${record.id}/edit`} style={{ color: "var(--color-brand)", fontWeight: 500 }}>
+				<Link to={`/bi/screens/${record.id}/edit`} style={{ color: "var(--color-brand)", fontWeight: 500 }}>
 					{name || t(locale, "common.untitled")}
 				</Link>
 			),
@@ -210,11 +210,11 @@ export default function HomePage() {
 			width: 120,
 			render: (_, record) => (
 				<div style={{ display: 'flex', gap: 8 }}>
-					<Link to={`/analytics/screens/${record.id}/edit`}>
+					<Link to={`/bi/screens/${record.id}/edit`}>
 						<Button type="link" size="small">编辑</Button>
 					</Link>
 					<a
-						href={`/analytics/screens/${encodeURIComponent(String(record.id))}/preview`}
+						href={`/bi/screens/${encodeURIComponent(String(record.id))}/preview`}
 						target="_blank"
 						rel="noreferrer"
 					>
@@ -236,12 +236,12 @@ export default function HomePage() {
 				title={t(locale, "home.myScreens")}
 				extra={
 					<div style={{ display: 'flex', gap: 8 }}>
-						<Link to="/analytics/screens">
+						<Link to="/bi/screens">
 							<Button type="text" size="small" icon={<ArrowRightIcon />} iconPosition="end">
 								{t(locale, "common.viewAll")}
 							</Button>
 						</Link>
-						<Link to="/analytics/screens/new">
+						<Link to="/bi/screens/new">
 							<Button type="primary" size="small" icon={<PlusOutlined />}>
 								{t(locale, "home.newScreen")}
 							</Button>
@@ -273,7 +273,7 @@ export default function HomePage() {
 			<div style={{ marginTop: "var(--spacing-xl)" }}>
 				<h2 className="text-lg font-semibold text-primary mb-md">{t(locale, "home.quickActions")}</h2>
 				<div className="grid grid-cols-3 gap-md">
-					<Link to="/analytics/questions/new" className="quick-action-card">
+					<Link to="/bi/questions/new" className="quick-action-card">
 						<div className="quick-action-card__icon">
 							<QuestionIcon />
 						</div>
@@ -282,7 +282,7 @@ export default function HomePage() {
 							<p>创建查询或图表，快速分析数据。</p>
 						</div>
 					</Link>
-					<Link to="/analytics/dashboards/new" className="quick-action-card">
+					<Link to="/bi/dashboards/new" className="quick-action-card">
 						<div className="quick-action-card__icon">
 							<DashboardIcon />
 						</div>
@@ -291,7 +291,7 @@ export default function HomePage() {
 							<p>创建分析看板，组合多个图表进行数据分析。</p>
 						</div>
 					</Link>
-					<Link to="/analytics/screens/new" className="quick-action-card">
+					<Link to="/bi/screens/new" className="quick-action-card">
 						<div className="quick-action-card__icon">
 							<ScreenIcon />
 						</div>

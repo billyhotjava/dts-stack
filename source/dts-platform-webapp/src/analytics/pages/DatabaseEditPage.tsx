@@ -20,8 +20,8 @@ export default function DatabaseEditPage() {
 				title={t(locale, "data.edit")}
 				breadcrumbs={
 					<Breadcrumb items={[
-						{ label: t(locale, "data.title"), href: "/analytics/data" },
-						{ label: `${t(locale, "data.db")} #${dbId}`, href: `/analytics/data/${dbId}` },
+						{ label: t(locale, "data.title"), href: "/bi/data" },
+						{ label: `${t(locale, "data.db")} #${dbId}`, href: `/bi/data/${dbId}` },
 						{ label: t(locale, "data.edit") }
 					]} />
 				}
@@ -51,7 +51,7 @@ export default function DatabaseEditPage() {
 						</div>
 					</div>
 				<div style={{ display: "flex", justifyContent: "space-between", paddingTop: "var(--spacing-md)", marginTop: "var(--spacing-md)", borderTop: "1px solid var(--color-border)" }}>
-					<Link to="/analytics/data">
+					<Link to="/bi/data">
 						<Button type="text">{t(locale, "common.open")} {t(locale, "data.title")}</Button>
 					</Link>
 				</div>

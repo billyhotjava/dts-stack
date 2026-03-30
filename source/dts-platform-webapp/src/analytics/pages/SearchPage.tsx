@@ -44,9 +44,9 @@ const FolderIcon = () => (
 );
 
 function resultHref(item: SearchItem): string {
-	if (item.model === "dashboard") return `/analytics/dashboards/${item.id}`;
-	if (item.model === "card") return `/analytics/questions/${item.id}`;
-	if (item.model === "collection") return `/analytics/collections/${item.id}`;
+	if (item.model === "dashboard") return `/bi/dashboards/${item.id}`;
+	if (item.model === "card") return `/bi/questions/${item.id}`;
+	if (item.model === "collection") return `/bi/collections/${item.id}`;
 	return "/";
 }
 

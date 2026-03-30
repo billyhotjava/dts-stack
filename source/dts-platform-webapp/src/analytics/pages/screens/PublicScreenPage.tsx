@@ -340,7 +340,7 @@ export default function PublicScreenPage() {
 				<div className="text-4xl opacity-30">&#x1f512;</div>
 				<h2 className="text-xl font-semibold">需要登录</h2>
 				<p className="text-text-secondary">请先登录后再查看此大屏</p>
-				<a href="/analytics" className="px-4 py-2 rounded-md bg-brand text-white">返回登录</a>
+				<a href="/bi" className="px-4 py-2 rounded-md bg-brand text-white">返回登录</a>
 			</div>
 		);
 	}
@@ -350,7 +350,7 @@ export default function PublicScreenPage() {
 				<div className="text-4xl opacity-30">&#x1f6ab;</div>
 				<h2 className="text-xl font-semibold">无访问权限</h2>
 				<p className="text-text-secondary">您没有权限查看此大屏，请联系大屏拥有者授权</p>
-				<a href="/analytics" className="px-4 py-2 rounded-md bg-brand text-white">返回首页</a>
+				<a href="/bi" className="px-4 py-2 rounded-md bg-brand text-white">返回首页</a>
 			</div>
 		);
 	}

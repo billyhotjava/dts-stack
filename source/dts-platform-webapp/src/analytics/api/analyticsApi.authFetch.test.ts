@@ -65,7 +65,7 @@ test("fetchWithPlatformAuth injects portal bearer token and credentials", async 
 	}) as typeof fetch;
 
 	try {
-		const response = await fetchWithPlatformAuth("/analytics/api/project-cockpit/screen/overview");
+		const response = await fetchWithPlatformAuth("/bi/api/project-cockpit/screen/overview");
 		assert.equal(response.status, 200);
 		assert.equal(capturedAuthorization, "Bearer portal-access-token");
 		assert.equal(capturedCredentials, "include");

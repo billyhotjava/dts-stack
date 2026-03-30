@@ -27,24 +27,24 @@ const S = ({ children }: { children: React.ReactNode }) => (
  */
 export const analyticsStandaloneRoutes: RouteObject[] = [
 	// Public routes — no auth required (shareable links)
-	{ path: "analytics/public/screen/:uuid", element: <S><PublicScreenPage /></S> },
-	{ path: "analytics/public/card/:uuid", element: <S><PublicCardPage /></S> },
-	{ path: "analytics/public/dashboard/:uuid", element: <S><PublicDashboardPage /></S> },
+	{ path: "bi/public/screen/:uuid", element: <S><PublicScreenPage /></S> },
+	{ path: "bi/public/card/:uuid", element: <S><PublicCardPage /></S> },
+	{ path: "bi/public/dashboard/:uuid", element: <S><PublicDashboardPage /></S> },
 	// Full-screen authenticated routes (screen designer — no sidebar)
 	{
-		path: "analytics/screens/new",
+		path: "bi/screens/new",
 		element: <LoginAuthGuard><S><ScreenDesignerPage /></S></LoginAuthGuard>,
 	},
 	{
-		path: "analytics/screens/:id/edit",
+		path: "bi/screens/:id/edit",
 		element: <LoginAuthGuard><S><ScreenDesignerPage /></S></LoginAuthGuard>,
 	},
 	{
-		path: "analytics/screens/:id/preview",
+		path: "bi/screens/:id/preview",
 		element: <LoginAuthGuard><S><ScreenPreviewPage /></S></LoginAuthGuard>,
 	},
 	{
-		path: "analytics/screens/:id/export",
+		path: "bi/screens/:id/export",
 		element: <LoginAuthGuard><S><ScreenExportPage /></S></LoginAuthGuard>,
 	},
 ];

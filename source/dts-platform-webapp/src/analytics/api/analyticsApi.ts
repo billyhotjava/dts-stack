@@ -1681,30 +1681,30 @@ export type UserSearchItem = {
 };
 
 export const analyticsApi = {
-	getCurrentUser: () => fetchJson<CurrentUser>("/analytics/api/user/current"),
+	getCurrentUser: () => fetchJson<CurrentUser>("/bi/api/user/current"),
 	getUser: (id: number | string) =>
 		fetchJson<{ id: number; email?: string; common_name?: string; first_name?: string; last_name?: string }>(
-			`/analytics/api/user/${encodeURIComponent(String(id))}`,
+			`/bi/api/user/${encodeURIComponent(String(id))}`,
 		),
 	searchUsers: (query: string) =>
-		fetchJson<UserSearchItem[]>("/analytics/api/user/search?q=" + encodeURIComponent(query)),
-	getHealth: () => fetchJson<{ status?: string }>("/analytics/api/health"),
+		fetchJson<UserSearchItem[]>("/bi/api/user/search?q=" + encodeURIComponent(query)),
+	getHealth: () => fetchJson<{ status?: string }>("/bi/api/health"),
 	getProjectCockpitSettings: () =>
-		fetchJson<ProjectCockpitSettingsResponse>("/analytics/api/project-cockpit/settings"),
+		fetchJson<ProjectCockpitSettingsResponse>("/bi/api/project-cockpit/settings"),
 	updateProjectCockpitSettings: (body: { periodStart: string; periodEnd: string }) =>
-		requestJson<void>("/analytics/api/project-cockpit/settings", "PUT", body),
+		requestJson<void>("/bi/api/project-cockpit/settings", "PUT", body),
 	getProjectCockpitSummary: (params?: ProjectCockpitFilterQuery) =>
-		fetchJson<ProjectCockpitSummaryResponse>("/analytics/api/project-cockpit/summary" + buildProjectCockpitQuery(params)),
+		fetchJson<ProjectCockpitSummaryResponse>("/bi/api/project-cockpit/summary" + buildProjectCockpitQuery(params)),
 	getProjectCockpitTrends: (params?: ProjectCockpitFilterQuery) =>
-		fetchJson<ProjectCockpitTrendsResponse>("/analytics/api/project-cockpit/trends" + buildProjectCockpitQuery(params)),
+		fetchJson<ProjectCockpitTrendsResponse>("/bi/api/project-cockpit/trends" + buildProjectCockpitQuery(params)),
 	getProjectCockpitExecution: (params?: ProjectCockpitFilterQuery) =>
-		fetchJson<ProjectCockpitExecutionResponse>("/analytics/api/project-cockpit/execution" + buildProjectCockpitQuery(params)),
+		fetchJson<ProjectCockpitExecutionResponse>("/bi/api/project-cockpit/execution" + buildProjectCockpitQuery(params)),
 	getProjectCockpitRiskAttribution: (params?: ProjectCockpitFilterQuery) =>
-		fetchJson<ProjectCockpitRiskAttributionResponse>("/analytics/api/project-cockpit/risk-attribution" + buildProjectCockpitQuery(params)),
+		fetchJson<ProjectCockpitRiskAttributionResponse>("/bi/api/project-cockpit/risk-attribution" + buildProjectCockpitQuery(params)),
 	getProjectCockpitTree: (params?: ProjectCockpitFilterQuery) =>
-		fetchJson<ProjectCockpitTreeResponse>("/analytics/api/project-cockpit/major-project-tree" + buildProjectCockpitQuery(params)),
+		fetchJson<ProjectCockpitTreeResponse>("/bi/api/project-cockpit/major-project-tree" + buildProjectCockpitQuery(params)),
 	getProjectCockpitDataSupport: (params?: ProjectCockpitFilterQuery) =>
-		fetchJson<ProjectCockpitDataSupportResponse>("/analytics/api/project-cockpit/data-support" + buildProjectCockpitQuery(params)),
+		fetchJson<ProjectCockpitDataSupportResponse>("/bi/api/project-cockpit/data-support" + buildProjectCockpitQuery(params)),
 	getProjectCockpitDrillDetail: (target: string, params?: ProjectCockpitFilterQuery & Record<string, string>) => {
 		const qs = new URLSearchParams();
 		if (params) {
@@ -1714,85 +1714,85 @@ export const analyticsApi = {
 		}
 		const query = qs.toString();
 		return fetchJson<ProjectCockpitDrillDetailResponse>(
-			`/analytics/api/project-cockpit/drill/${encodeURIComponent(target)}${query ? `?${query}` : ""}`
+			`/bi/api/project-cockpit/drill/${encodeURIComponent(target)}${query ? `?${query}` : ""}`
 		);
 	},
-	listDatabases: () => fetchJson<DatabaseListResponse>("/analytics/api/database"),
-	listPlatformDataSources: () => fetchJson<PlatformDataSourceItem[]>("/analytics/api/platform/data-sources"),
+	listDatabases: () => fetchJson<DatabaseListResponse>("/bi/api/database"),
+	listPlatformDataSources: () => fetchJson<PlatformDataSourceItem[]>("/bi/api/platform/data-sources"),
 	listTables: (dbId: string | number) =>
-		fetchJson<TableSummary[]>(`/analytics/api/table?db_id=${encodeURIComponent(String(dbId))}`),
+		fetchJson<TableSummary[]>(`/bi/api/table?db_id=${encodeURIComponent(String(dbId))}`),
 	getTable: (tableId: string | number) =>
-		fetchJson<TableDetail>(`/analytics/api/table/${encodeURIComponent(String(tableId))}`),
+		fetchJson<TableDetail>(`/bi/api/table/${encodeURIComponent(String(tableId))}`),
 	getTableFks: (tableId: string | number) =>
-		fetchJson<Array<{ origin_id: number; origin: { id: number; name: string; table_id: number }; destination_id: number; destination: { id: number; name: string; table_id: number } }>>(`/analytics/api/table/${encodeURIComponent(String(tableId))}/fks`),
+		fetchJson<Array<{ origin_id: number; origin: { id: number; name: string; table_id: number }; destination_id: number; destination: { id: number; name: string; table_id: number } }>>(`/bi/api/table/${encodeURIComponent(String(tableId))}/fks`),
 	getField: (fieldId: string | number) =>
-		fetchJson<FieldDetail>(`/analytics/api/field/${encodeURIComponent(String(fieldId))}`),
+		fetchJson<FieldDetail>(`/bi/api/field/${encodeURIComponent(String(fieldId))}`),
 	getFieldValues: (fieldId: string | number) =>
-		fetchJson<FieldValuesResponse>(`/analytics/api/field/${encodeURIComponent(String(fieldId))}/values`),
-	validateDatabase: (body: unknown) => sendJson<DatabaseValidateResponse>("/analytics/api/database/validate", body),
-	createDatabase: (body: unknown) => sendJson<DatabaseCreateResponse>("/analytics/api/database", body),
+		fetchJson<FieldValuesResponse>(`/bi/api/field/${encodeURIComponent(String(fieldId))}/values`),
+	validateDatabase: (body: unknown) => sendJson<DatabaseValidateResponse>("/bi/api/database/validate", body),
+	createDatabase: (body: unknown) => sendJson<DatabaseCreateResponse>("/bi/api/database", body),
 	syncDatabaseSchema: (dbId: string | number) =>
-		sendJson<Record<string, unknown>>(`/analytics/api/database/${encodeURIComponent(String(dbId))}/sync_schema`, {}),
+		sendJson<Record<string, unknown>>(`/bi/api/database/${encodeURIComponent(String(dbId))}/sync_schema`, {}),
 	updateDatabase: (id: string | number, body: unknown) =>
-		requestJson<DatabaseCreateResponse>(`/analytics/api/database/${encodeURIComponent(String(id))}`, "PUT", body),
+		requestJson<DatabaseCreateResponse>(`/bi/api/database/${encodeURIComponent(String(id))}`, "PUT", body),
 	deleteDatabase: (id: string | number) =>
-		requestJson<void>(`/analytics/api/database/${encodeURIComponent(String(id))}`, "DELETE"),
+		requestJson<void>(`/bi/api/database/${encodeURIComponent(String(id))}`, "DELETE"),
 	getDatabaseMetadata: (dbId: string | number) =>
-		fetchJson<DatabaseMetadataResponse>(`/analytics/api/database/${encodeURIComponent(String(dbId))}/metadata`),
-	listCollections: () => fetchJson<CollectionListItem[]>("/analytics/api/collection"),
+		fetchJson<DatabaseMetadataResponse>(`/bi/api/database/${encodeURIComponent(String(dbId))}/metadata`),
+	listCollections: () => fetchJson<CollectionListItem[]>("/bi/api/collection"),
 	getCollectionItems: (id: string | number) =>
-		fetchJson<CollectionItem[]>(`/analytics/api/collection/${encodeURIComponent(String(id))}/items`),
-	listDashboards: () => fetchJson<DashboardListItem[]>("/analytics/api/dashboard"),
-	getDashboard: (id: string | number) => fetchJson<DashboardDetail>(`/analytics/api/dashboard/${encodeURIComponent(String(id))}`),
-	createDashboard: (body: unknown) => sendJson<DashboardDetail>("/analytics/api/dashboard", body),
-	saveDashboard: (body: unknown) => sendJson<DashboardDetail>("/analytics/api/dashboard/save", body),
+		fetchJson<CollectionItem[]>(`/bi/api/collection/${encodeURIComponent(String(id))}/items`),
+	listDashboards: () => fetchJson<DashboardListItem[]>("/bi/api/dashboard"),
+	getDashboard: (id: string | number) => fetchJson<DashboardDetail>(`/bi/api/dashboard/${encodeURIComponent(String(id))}`),
+	createDashboard: (body: unknown) => sendJson<DashboardDetail>("/bi/api/dashboard", body),
+	saveDashboard: (body: unknown) => sendJson<DashboardDetail>("/bi/api/dashboard/save", body),
 	listDashboardParamValues: (dashId: string | number, paramId: string) =>
 		fetchJson<string[]>(
-			`/analytics/api/dashboard/${encodeURIComponent(String(dashId))}/params/${encodeURIComponent(String(paramId))}/values`,
+			`/bi/api/dashboard/${encodeURIComponent(String(dashId))}/params/${encodeURIComponent(String(paramId))}/values`,
 		),
 	searchDashboardParamValues: (dashId: string | number, paramId: string, query: string) =>
 		fetchJson<string[]>(
-			`/analytics/api/dashboard/${encodeURIComponent(String(dashId))}/params/${encodeURIComponent(String(paramId))}/search/${encodeURIComponent(String(query))}`,
+			`/bi/api/dashboard/${encodeURIComponent(String(dashId))}/params/${encodeURIComponent(String(paramId))}/search/${encodeURIComponent(String(query))}`,
 		),
-	listCards: (type?: string) => fetchJson<CardListItem[]>(type ? `/analytics/api/card?type=${encodeURIComponent(type)}` : "/analytics/api/card"),
-	listModels: () => fetchJson<CardListItem[]>("/analytics/api/card?type=model"),
-	getCard: (id: string | number) => fetchJson<CardDetail>(`/analytics/api/card/${encodeURIComponent(String(id))}`),
-	createCard: (body: unknown) => sendJson<CardDetail>("/analytics/api/card", body),
+	listCards: (type?: string) => fetchJson<CardListItem[]>(type ? `/bi/api/card?type=${encodeURIComponent(type)}` : "/bi/api/card"),
+	listModels: () => fetchJson<CardListItem[]>("/bi/api/card?type=model"),
+	getCard: (id: string | number) => fetchJson<CardDetail>(`/bi/api/card/${encodeURIComponent(String(id))}`),
+	createCard: (body: unknown) => sendJson<CardDetail>("/bi/api/card", body),
 	updateCard: (id: string | number, body: unknown) =>
-		requestJson<CardDetail>(`/analytics/api/card/${encodeURIComponent(String(id))}`, "PUT", body),
+		requestJson<CardDetail>(`/bi/api/card/${encodeURIComponent(String(id))}`, "PUT", body),
 	deleteCard: (id: string | number) =>
-		requestJson<void>(`/analytics/api/card/${encodeURIComponent(String(id))}`, "DELETE"),
+		requestJson<void>(`/bi/api/card/${encodeURIComponent(String(id))}`, "DELETE"),
 	deleteDashboard: (id: string | number) =>
-		requestJson<void>(`/analytics/api/dashboard/${encodeURIComponent(String(id))}`, "DELETE"),
+		requestJson<void>(`/bi/api/dashboard/${encodeURIComponent(String(id))}`, "DELETE"),
 	updateDashboard: (id: string | number, body: unknown) =>
-		requestJson<DashboardDetail>(`/analytics/api/dashboard/${encodeURIComponent(String(id))}`, "PUT", body),
+		requestJson<DashboardDetail>(`/bi/api/dashboard/${encodeURIComponent(String(id))}`, "PUT", body),
 	queryCard: (id: string | number, body?: unknown) =>
-		sendJson<CardQueryResponse>(`/analytics/api/card/${encodeURIComponent(String(id))}/query`, body ?? {}),
-	runDatasetQuery: (body: unknown) => sendJson<CardQueryResponse>("/analytics/api/dataset", body),
-	getDatasetCacheStats: () => fetchJson<DatasetCacheStats>("/analytics/api/dataset/cache/stats"),
+		sendJson<CardQueryResponse>(`/bi/api/card/${encodeURIComponent(String(id))}/query`, body ?? {}),
+	runDatasetQuery: (body: unknown) => sendJson<CardQueryResponse>("/bi/api/dataset", body),
+	getDatasetCacheStats: () => fetchJson<DatasetCacheStats>("/bi/api/dataset/cache/stats"),
 	getDatasetCachePolicy: (databaseId: string | number) =>
-		fetchJson<DatasetCachePolicy>("/analytics/api/dataset/cache/policy/" + encodeURIComponent(String(databaseId))),
+		fetchJson<DatasetCachePolicy>("/bi/api/dataset/cache/policy/" + encodeURIComponent(String(databaseId))),
 	setDatasetCachePolicy: (databaseId: string | number, body: unknown) =>
-		sendJson<DatasetCachePolicy>("/analytics/api/dataset/cache/policy/" + encodeURIComponent(String(databaseId)), body),
-	warmupDatasetCache: (body: unknown) => sendJson<Record<string, unknown>>("/analytics/api/dataset/cache/warmup", body),
+		sendJson<DatasetCachePolicy>("/bi/api/dataset/cache/policy/" + encodeURIComponent(String(databaseId)), body),
+	warmupDatasetCache: (body: unknown) => sendJson<Record<string, unknown>>("/bi/api/dataset/cache/warmup", body),
 	queryDashcard: (dashboardId: string | number, dashcardId: string | number, cardId: string | number, body?: unknown) =>
 		sendJson<DashboardQueryResponse>(
-			`/analytics/api/dashboard/${encodeURIComponent(String(dashboardId))}/dashcard/${encodeURIComponent(String(dashcardId))}/card/${encodeURIComponent(String(cardId))}/query`,
+			`/bi/api/dashboard/${encodeURIComponent(String(dashboardId))}/dashcard/${encodeURIComponent(String(dashcardId))}/card/${encodeURIComponent(String(cardId))}/query`,
 			body ?? {},
 		),
 	search: (q: string) =>
-		fetchJson<SearchResponse>(`/analytics/api/search?q=${encodeURIComponent(String(q ?? ""))}&limit=25&offset=0`),
-	listMetrics: () => fetchJson<Metric[]>("/analytics/api/metric"),
+		fetchJson<SearchResponse>(`/bi/api/search?q=${encodeURIComponent(String(q ?? ""))}&limit=25&offset=0`),
+	listMetrics: () => fetchJson<Metric[]>("/bi/api/metric"),
 	getMetric: (id: string | number) =>
-		fetchJson<Metric>("/analytics/api/metric/" + encodeURIComponent(String(id))),
+		fetchJson<Metric>("/bi/api/metric/" + encodeURIComponent(String(id))),
 	createMetric: (body: Partial<Metric>) =>
-		sendJson<Metric>("/analytics/api/metric", body),
+		sendJson<Metric>("/bi/api/metric", body),
 	updateMetric: (id: string | number, body: Partial<Metric>) =>
-		requestJson<Metric>("/analytics/api/metric/" + encodeURIComponent(String(id)), "PUT", body),
+		requestJson<Metric>("/bi/api/metric/" + encodeURIComponent(String(id)), "PUT", body),
 	deleteMetric: (id: string | number) =>
-		requestJson<void>("/analytics/api/metric/" + encodeURIComponent(String(id)), "DELETE"),
+		requestJson<void>("/bi/api/metric/" + encodeURIComponent(String(id)), "DELETE"),
 	listMetricVersions: (metricId: string | number) =>
-		fetchJson<string[]>("/analytics/api/query-trace/metric/" + encodeURIComponent(String(metricId)) + "/versions"),
+		fetchJson<string[]>("/bi/api/query-trace/metric/" + encodeURIComponent(String(metricId)) + "/versions"),
 	getQueryTraceFailureSummary: (days = 7, topN = 10, chain?: string) => {
 		const qs = new URLSearchParams();
 		qs.set("days", String(days));
@@ -1800,10 +1800,10 @@ export const analyticsApi = {
 		if (chain && chain.trim().length > 0) {
 			qs.set("chain", chain.trim());
 		}
-		return fetchJson<QueryTraceFailureSummary>("/analytics/api/query-trace/failure-summary?" + qs.toString());
+		return fetchJson<QueryTraceFailureSummary>("/bi/api/query-trace/failure-summary?" + qs.toString());
 	},
 	explainCard: (cardId: string | number, body?: unknown) =>
-		sendJson<ExplainabilityResponse>("/analytics/api/explain/card/" + encodeURIComponent(String(cardId)), body ?? {}),
+		sendJson<ExplainabilityResponse>("/bi/api/explain/card/" + encodeURIComponent(String(cardId)), body ?? {}),
 	listExploreSessions: (params?: {
 		includeArchived?: boolean;
 		dept?: string;
@@ -1819,57 +1819,57 @@ export const analyticsApi = {
 			qs.set("projectKey", params.projectKey.trim());
 		}
 		qs.set("limit", String(params?.limit ?? 100));
-		return fetchJson<ExploreSessionItem[]>("/analytics/api/explore-session?" + qs.toString());
+		return fetchJson<ExploreSessionItem[]>("/bi/api/explore-session?" + qs.toString());
 	},
 	getExploreSession: (id: string | number) =>
-		fetchJson<ExploreSessionItem>("/analytics/api/explore-session/" + encodeURIComponent(String(id))),
+		fetchJson<ExploreSessionItem>("/bi/api/explore-session/" + encodeURIComponent(String(id))),
 	createExploreSession: (body: unknown) =>
-		sendJson<ExploreSessionItem>("/analytics/api/explore-session", body ?? {}),
+		sendJson<ExploreSessionItem>("/bi/api/explore-session", body ?? {}),
 	updateExploreSession: (id: string | number, body: unknown) =>
-		requestJson<ExploreSessionItem>("/analytics/api/explore-session/" + encodeURIComponent(String(id)), "PUT", body),
+		requestJson<ExploreSessionItem>("/bi/api/explore-session/" + encodeURIComponent(String(id)), "PUT", body),
 	appendExploreSessionStep: (id: string | number, body: unknown) =>
-		sendJson<ExploreSessionItem>("/analytics/api/explore-session/" + encodeURIComponent(String(id)) + "/steps", body ?? {}),
+		sendJson<ExploreSessionItem>("/bi/api/explore-session/" + encodeURIComponent(String(id)) + "/steps", body ?? {}),
 	replayExploreSessionStep: (id: string | number, stepIndex: number) =>
 		sendJson<Record<string, unknown>>(
-			"/analytics/api/explore-session/" + encodeURIComponent(String(id)) + "/replay",
+			"/bi/api/explore-session/" + encodeURIComponent(String(id)) + "/replay",
 			{ stepIndex },
 		),
 	archiveExploreSession: (id: string | number) =>
-		sendJson<ExploreSessionItem>("/analytics/api/explore-session/" + encodeURIComponent(String(id)) + "/archive", {}),
+		sendJson<ExploreSessionItem>("/bi/api/explore-session/" + encodeURIComponent(String(id)) + "/archive", {}),
 	cloneExploreSession: (id: string | number) =>
-		sendJson<ExploreSessionItem>("/analytics/api/explore-session/" + encodeURIComponent(String(id)) + "/clone", {}),
+		sendJson<ExploreSessionItem>("/bi/api/explore-session/" + encodeURIComponent(String(id)) + "/clone", {}),
 	createExploreSessionPublicLink: (id: string | number) =>
-		sendJson<{ uuid: string }>("/analytics/api/explore-session/" + encodeURIComponent(String(id)) + "/public_link", {}),
+		sendJson<{ uuid: string }>("/bi/api/explore-session/" + encodeURIComponent(String(id)) + "/public_link", {}),
 	deleteExploreSessionPublicLink: (id: string | number) =>
-		requestJson<void>("/analytics/api/explore-session/" + encodeURIComponent(String(id)) + "/public_link", "DELETE"),
+		requestJson<void>("/bi/api/explore-session/" + encodeURIComponent(String(id)) + "/public_link", "DELETE"),
 	getPublicExploreSession: (uuid: string) =>
-		fetchJson<ExploreSessionItem>("/analytics/api/explore-session/public/" + encodeURIComponent(String(uuid))),
+		fetchJson<ExploreSessionItem>("/bi/api/explore-session/public/" + encodeURIComponent(String(uuid))),
 	listReportTemplates: (limit = 100) =>
-		fetchJson<ReportTemplateItem[]>("/analytics/api/report-factory/templates?limit=" + encodeURIComponent(String(limit))),
+		fetchJson<ReportTemplateItem[]>("/bi/api/report-factory/templates?limit=" + encodeURIComponent(String(limit))),
 	createReportTemplate: (body: unknown) =>
-		sendJson<ReportTemplateItem>("/analytics/api/report-factory/templates", body ?? {}),
+		sendJson<ReportTemplateItem>("/bi/api/report-factory/templates", body ?? {}),
 	updateReportTemplate: (id: string | number, body: unknown) =>
-		requestJson<ReportTemplateItem>("/analytics/api/report-factory/templates/" + encodeURIComponent(String(id)), "PUT", body),
+		requestJson<ReportTemplateItem>("/bi/api/report-factory/templates/" + encodeURIComponent(String(id)), "PUT", body),
 	deleteReportTemplate: (id: string | number) =>
-		requestJson<void>("/analytics/api/report-factory/templates/" + encodeURIComponent(String(id)), "DELETE"),
+		requestJson<void>("/bi/api/report-factory/templates/" + encodeURIComponent(String(id)), "DELETE"),
 	generateReportRun: (body: unknown) =>
-		sendJson<ReportRunItem>("/analytics/api/report-factory/generate", body ?? {}),
+		sendJson<ReportRunItem>("/bi/api/report-factory/generate", body ?? {}),
 	listReportRuns: (limit = 100) =>
-		fetchJson<ReportRunItem[]>("/analytics/api/report-factory/runs?limit=" + encodeURIComponent(String(limit))),
+		fetchJson<ReportRunItem[]>("/bi/api/report-factory/runs?limit=" + encodeURIComponent(String(limit))),
 	getReportRun: (id: string | number) =>
-		fetchJson<ReportRunItem>("/analytics/api/report-factory/runs/" + encodeURIComponent(String(id))),
+		fetchJson<ReportRunItem>("/bi/api/report-factory/runs/" + encodeURIComponent(String(id))),
 	getReportRunExportUrl: (id: string | number, format: "html" | "markdown" = "html") =>
-		"/analytics/api/report-factory/runs/"
+		"/bi/api/report-factory/runs/"
 		+ encodeURIComponent(String(id))
 		+ "/export?format="
 		+ encodeURIComponent(String(format)),
 	listMetricLens: () =>
-		fetchJson<MetricLensSummary[]>("/analytics/api/metric-lens"),
+		fetchJson<MetricLensSummary[]>("/bi/api/metric-lens"),
 	getMetricLens: (metricId: string | number) =>
-		fetchJson<MetricLensDetail>("/analytics/api/metric-lens/" + encodeURIComponent(String(metricId))),
+		fetchJson<MetricLensDetail>("/bi/api/metric-lens/" + encodeURIComponent(String(metricId))),
 	compareMetricLensVersions: (metricId: string | number, leftVersion: string, rightVersion: string) =>
 		fetchJson<MetricLensCompare>(
-			"/analytics/api/metric-lens/"
+			"/bi/api/metric-lens/"
 			+ encodeURIComponent(String(metricId))
 			+ "/compare?leftVersion="
 			+ encodeURIComponent(String(leftVersion))
@@ -1877,77 +1877,77 @@ export const analyticsApi = {
 			+ encodeURIComponent(String(rightVersion)),
 		),
 	getMetricLensConflicts: () =>
-		fetchJson<Array<Record<string, unknown>>>("/analytics/api/metric-lens/conflicts"),
+		fetchJson<Array<Record<string, unknown>>>("/bi/api/metric-lens/conflicts"),
 	listNl2SqlEvalCases: (enabledOnly = false, limit = 200) =>
 		fetchJson<Nl2SqlEvalCaseItem[]>(
-			"/analytics/api/nl2sql-eval/cases?enabledOnly="
+			"/bi/api/nl2sql-eval/cases?enabledOnly="
 			+ encodeURIComponent(String(enabledOnly))
 			+ "&limit="
 			+ encodeURIComponent(String(limit)),
 		),
 	createNl2SqlEvalCase: (body: unknown) =>
-		sendJson<Nl2SqlEvalCaseItem>("/analytics/api/nl2sql-eval/cases", body ?? {}),
+		sendJson<Nl2SqlEvalCaseItem>("/bi/api/nl2sql-eval/cases", body ?? {}),
 	updateNl2SqlEvalCase: (id: string | number, body: unknown) =>
-		requestJson<Nl2SqlEvalCaseItem>("/analytics/api/nl2sql-eval/cases/" + encodeURIComponent(String(id)), "PUT", body),
+		requestJson<Nl2SqlEvalCaseItem>("/bi/api/nl2sql-eval/cases/" + encodeURIComponent(String(id)), "PUT", body),
 	deleteNl2SqlEvalCase: (id: string | number) =>
-		requestJson<void>("/analytics/api/nl2sql-eval/cases/" + encodeURIComponent(String(id)), "DELETE"),
+		requestJson<void>("/bi/api/nl2sql-eval/cases/" + encodeURIComponent(String(id)), "DELETE"),
 	runNl2SqlEvaluation: (body?: unknown) =>
-		sendJson<Nl2SqlEvalRunSummary>("/analytics/api/nl2sql-eval/run", body ?? {}),
+		sendJson<Nl2SqlEvalRunSummary>("/bi/api/nl2sql-eval/run", body ?? {}),
 	runNl2SqlEvaluationWithGate: (body?: unknown) =>
-		sendJson<Nl2SqlEvalGateRunResponse>("/analytics/api/nl2sql-eval/run-gated", body ?? {}),
+		sendJson<Nl2SqlEvalGateRunResponse>("/bi/api/nl2sql-eval/run-gated", body ?? {}),
 	listNl2SqlEvalRuns: (limit = 20) =>
 		fetchJson<Nl2SqlEvalRunRecord[]>(
-			"/analytics/api/nl2sql-eval/runs?limit=" + encodeURIComponent(String(limit)),
+			"/bi/api/nl2sql-eval/runs?limit=" + encodeURIComponent(String(limit)),
 		),
 	compareNl2SqlEvalRuns: (baselineRunId: string | number, candidateRunId: string | number) =>
 		fetchJson<Nl2SqlEvalCompareResponse>(
-			"/analytics/api/nl2sql-eval/compare?baselineRunId="
+			"/bi/api/nl2sql-eval/compare?baselineRunId="
 			+ encodeURIComponent(String(baselineRunId))
 			+ "&candidateRunId="
 			+ encodeURIComponent(String(candidateRunId)),
 		),
-	listPlatformMetrics: () => fetchJson<PlatformMetric[]>("/analytics/api/platform/metrics"),
-	listVisibleTables: () => fetchJson<Array<number | VisibleTable>>("/analytics/api/platform/visible-tables"),
-	getTrash: () => fetchJson<TrashResponse>("/analytics/api/trash"),
+	listPlatformMetrics: () => fetchJson<PlatformMetric[]>("/bi/api/platform/metrics"),
+	listVisibleTables: () => fetchJson<Array<number | VisibleTable>>("/bi/api/platform/visible-tables"),
+	getTrash: () => fetchJson<TrashResponse>("/bi/api/trash"),
 	createCardPublicLink: (id: string | number) =>
-		sendJson<{ uuid: string }>(`/analytics/api/card/${encodeURIComponent(String(id))}/public_link`, {}),
+		sendJson<{ uuid: string }>(`/bi/api/card/${encodeURIComponent(String(id))}/public_link`, {}),
 	deleteCardPublicLink: (id: string | number) =>
-		requestJson<void>(`/analytics/api/card/${encodeURIComponent(String(id))}/public_link`, "DELETE"),
+		requestJson<void>(`/bi/api/card/${encodeURIComponent(String(id))}/public_link`, "DELETE"),
 	createDashboardPublicLink: (id: string | number) =>
-		sendJson<{ uuid: string }>(`/analytics/api/dashboard/${encodeURIComponent(String(id))}/public_link`, {}),
+		sendJson<{ uuid: string }>(`/bi/api/dashboard/${encodeURIComponent(String(id))}/public_link`, {}),
 	deleteDashboardPublicLink: (id: string | number) =>
-		requestJson<void>(`/analytics/api/dashboard/${encodeURIComponent(String(id))}/public_link`, "DELETE"),
-	getPublicCard: (uuid: string) => fetchJson<PublicCardDetail>(`/analytics/api/public/card/${encodeURIComponent(uuid)}`),
+		requestJson<void>(`/bi/api/dashboard/${encodeURIComponent(String(id))}/public_link`, "DELETE"),
+	getPublicCard: (uuid: string) => fetchJson<PublicCardDetail>(`/bi/api/public/card/${encodeURIComponent(uuid)}`),
 	queryPublicCard: (uuid: string, body?: unknown) =>
-		sendJson<CardQueryResponse>(`/analytics/api/public/card/${encodeURIComponent(uuid)}/query`, body ?? {}),
+		sendJson<CardQueryResponse>(`/bi/api/public/card/${encodeURIComponent(uuid)}/query`, body ?? {}),
 	getPublicDashboard: (uuid: string) =>
-		fetchJson<PublicDashboardDetail>(`/analytics/api/public/dashboard/${encodeURIComponent(uuid)}`),
+		fetchJson<PublicDashboardDetail>(`/bi/api/public/dashboard/${encodeURIComponent(uuid)}`),
 	queryPublicDashboardDashcard: (uuid: string, dashcardId: string | number, cardId: string | number, body?: unknown) =>
 		sendJson<DashboardQueryResponse>(
-			`/analytics/api/public/dashboard/${encodeURIComponent(uuid)}/dashcard/${encodeURIComponent(String(dashcardId))}/card/${encodeURIComponent(String(cardId))}/query`,
+			`/bi/api/public/dashboard/${encodeURIComponent(uuid)}/dashcard/${encodeURIComponent(String(dashcardId))}/card/${encodeURIComponent(String(cardId))}/query`,
 			body ?? {},
 		),
 
 	// Screen Designer API
-	listScreenPlugins: () => fetchJson<ScreenPluginManifest[]>("/analytics/api/screen-plugins"),
+	listScreenPlugins: () => fetchJson<ScreenPluginManifest[]>("/bi/api/screen-plugins"),
 	validateScreenPlugin: (body: unknown) =>
-		sendJson<ScreenPluginValidationResult>("/analytics/api/screen-plugins/validate", body),
+		sendJson<ScreenPluginValidationResult>("/bi/api/screen-plugins/validate", body),
 	exportScreenIndustryPack: (body?: unknown) =>
-		sendJson<ScreenIndustryPack>("/analytics/api/screen-packs/export", body ?? {}),
+		sendJson<ScreenIndustryPack>("/bi/api/screen-packs/export", body ?? {}),
 	importScreenIndustryPack: (body: unknown) =>
-		sendJson<ScreenIndustryPackImportResult>("/analytics/api/screen-packs/import", body),
+		sendJson<ScreenIndustryPackImportResult>("/bi/api/screen-packs/import", body),
 	getScreenIndustryPackPresets: () =>
-		fetchJson<ScreenIndustryPackPresets>("/analytics/api/screen-packs/presets"),
+		fetchJson<ScreenIndustryPackPresets>("/bi/api/screen-packs/presets"),
 	validateScreenIndustryPack: (body: unknown) =>
-		sendJson<ScreenIndustryPackValidationResult>("/analytics/api/screen-packs/validate", body),
+		sendJson<ScreenIndustryPackValidationResult>("/bi/api/screen-packs/validate", body),
 	listScreenIndustryPackAudit: (limit = 100) =>
 		fetchJson<ScreenIndustryPackAuditRow[]>(
-			"/analytics/api/screen-packs/audit?limit=" + encodeURIComponent(String(limit)),
+			"/bi/api/screen-packs/audit?limit=" + encodeURIComponent(String(limit)),
 		),
 	generateScreenIndustryConnectorPlan: (body?: unknown) =>
-		sendJson<ScreenIndustryConnectorPlan>("/analytics/api/screen-packs/connectors/plan", body ?? {}),
+		sendJson<ScreenIndustryConnectorPlan>("/bi/api/screen-packs/connectors/plan", body ?? {}),
 	probeScreenIndustryConnectors: (body?: unknown) =>
-		sendJson<ScreenIndustryConnectorProbe>("/analytics/api/screen-packs/connectors/probe", body ?? {}),
+		sendJson<ScreenIndustryConnectorProbe>("/bi/api/screen-packs/connectors/probe", body ?? {}),
 	getScreenIndustryOpsHealth: (deploymentMode?: string, includeRuntime = false) => {
 		const qs = new URLSearchParams();
 		if (deploymentMode && String(deploymentMode).trim().length > 0) {
@@ -1958,14 +1958,14 @@ export const analyticsApi = {
 		}
 		const query = qs.toString();
 		const suffix = query.length > 0 ? `?${query}` : "";
-		return fetchJson<ScreenIndustryOpsHealth>("/analytics/api/screen-packs/ops/health" + suffix);
+		return fetchJson<ScreenIndustryOpsHealth>("/bi/api/screen-packs/ops/health" + suffix);
 	},
 	probeScreenIndustryRuntime: (body?: unknown) =>
-		sendJson<ScreenIndustryRuntimeProbe>("/analytics/api/screen-packs/ops/runtime-probe", body ?? {}),
+		sendJson<ScreenIndustryRuntimeProbe>("/bi/api/screen-packs/ops/runtime-probe", body ?? {}),
 	getScreenCompliancePolicy: () =>
-		fetchJson<ScreenCompliancePolicy>("/analytics/api/screen-compliance/policy"),
+		fetchJson<ScreenCompliancePolicy>("/bi/api/screen-compliance/policy"),
 	updateScreenCompliancePolicy: (body: unknown) =>
-		requestJson<ScreenCompliancePolicy>("/analytics/api/screen-compliance/policy", "PUT", body),
+		requestJson<ScreenCompliancePolicy>("/bi/api/screen-compliance/policy", "PUT", body),
 	getScreenComplianceReport: (query?: ScreenComplianceReportQuery) => {
 		const qs = new URLSearchParams();
 		if (query?.screenId !== undefined && query?.screenId !== null && String(query.screenId).trim() !== "") {
@@ -1979,15 +1979,15 @@ export const analyticsApi = {
 		}
 		const suffix = qs.toString();
 		const url = suffix.length > 0
-			? "/analytics/api/screen-compliance/report?" + suffix
-			: "/analytics/api/screen-compliance/report";
+			? "/bi/api/screen-compliance/report?" + suffix
+			: "/bi/api/screen-compliance/report";
 		return fetchJson<ScreenComplianceReport>(url);
 	},
 	generateScreenSpec: (body: ScreenAiGenerationRequest) =>
-		sendJson<ScreenAiGenerationResponse>("/analytics/api/screens/ai/generate", body),
+		sendJson<ScreenAiGenerationResponse>("/bi/api/screens/ai/generate", body),
 	reviseScreenSpec: (body: ScreenAiRevisionRequest) =>
-		sendJson<ScreenAiGenerationResponse>("/analytics/api/screens/ai/revise", body),
-	listScreens: () => fetchJson<ScreenListItem[]>("/analytics/api/screens"),
+		sendJson<ScreenAiGenerationResponse>("/bi/api/screens/ai/revise", body),
+	listScreens: () => fetchJson<ScreenListItem[]>("/bi/api/screens"),
 	listScreenTemplates: (params?: {
 		q?: string;
 		category?: string;
@@ -2002,39 +2002,39 @@ export const analyticsApi = {
 		if (params?.visibility) qs.set("visibility", String(params.visibility));
 		if (typeof params?.listed === "boolean") qs.set("listed", String(params.listed));
 		const query = qs.toString();
-		const url = query.length > 0 ? "/analytics/api/screen-templates?" + query : "/analytics/api/screen-templates";
+		const url = query.length > 0 ? "/bi/api/screen-templates?" + query : "/bi/api/screen-templates";
 		return fetchJson<ScreenTemplateItem[]>(url);
 	},
 	getScreenTemplate: (id: string | number) =>
-		fetchJson<ScreenTemplateItem>("/analytics/api/screen-templates/" + encodeURIComponent(String(id))),
+		fetchJson<ScreenTemplateItem>("/bi/api/screen-templates/" + encodeURIComponent(String(id))),
 	createScreenTemplate: (body: unknown) =>
-		sendJson<ScreenTemplateItem>("/analytics/api/screen-templates", body),
+		sendJson<ScreenTemplateItem>("/bi/api/screen-templates", body),
 	createScreenTemplateFromScreen: (screenId: string | number, body?: unknown) =>
-		sendJson<ScreenTemplateItem>("/analytics/api/screen-templates/from-screen/" + encodeURIComponent(String(screenId)), body ?? {}),
+		sendJson<ScreenTemplateItem>("/bi/api/screen-templates/from-screen/" + encodeURIComponent(String(screenId)), body ?? {}),
 	updateScreenTemplate: (id: string | number, body: unknown) =>
-		requestJson<ScreenTemplateItem>("/analytics/api/screen-templates/" + encodeURIComponent(String(id)), "PUT", body),
+		requestJson<ScreenTemplateItem>("/bi/api/screen-templates/" + encodeURIComponent(String(id)), "PUT", body),
 	updateScreenTemplateListing: (id: string | number, listed: boolean) =>
 		requestJson<ScreenTemplateItem>(
-			"/analytics/api/screen-templates/" + encodeURIComponent(String(id)) + "/listing",
+			"/bi/api/screen-templates/" + encodeURIComponent(String(id)) + "/listing",
 			"PUT",
 			{ listed },
 		),
 	listScreenTemplateVersions: (id: string | number, limit = 50) =>
 		fetchJson<ScreenTemplateVersionItem[]>(
-			"/analytics/api/screen-templates/" + encodeURIComponent(String(id)) + "/versions?limit=" + encodeURIComponent(String(limit)),
+			"/bi/api/screen-templates/" + encodeURIComponent(String(id)) + "/versions?limit=" + encodeURIComponent(String(limit)),
 		),
 	restoreScreenTemplateVersion: (id: string | number, versionNo: number) =>
 		sendJson<ScreenTemplateItem>(
-			"/analytics/api/screen-templates/"
+			"/bi/api/screen-templates/"
 				+ encodeURIComponent(String(id))
 				+ "/restore/"
 				+ encodeURIComponent(String(versionNo)),
 			{},
 		),
 	deleteScreenTemplate: (id: string | number) =>
-		requestJson<void>("/analytics/api/screen-templates/" + encodeURIComponent(String(id)), "DELETE"),
+		requestJson<void>("/bi/api/screen-templates/" + encodeURIComponent(String(id)), "DELETE"),
 	createScreenFromTemplate: (id: string | number, body?: unknown) =>
-		sendJson<ScreenDetail>("/analytics/api/screen-templates/" + encodeURIComponent(String(id)) + "/create-screen", body ?? {}),
+		sendJson<ScreenDetail>("/bi/api/screen-templates/" + encodeURIComponent(String(id)) + "/create-screen", body ?? {}),
 	getScreen: (
 		id: string | number,
 		options?: { mode?: "draft" | "published" | "preview" | string; fallbackDraft?: boolean },
@@ -2043,78 +2043,78 @@ export const analyticsApi = {
 		if (options?.mode) params.set("mode", String(options.mode));
 		if (options?.fallbackDraft !== undefined) params.set("fallbackDraft", String(options.fallbackDraft));
 		const qs = params.toString();
-		const base = `/analytics/api/screens/${encodeURIComponent(String(id))}`;
+		const base = `/bi/api/screens/${encodeURIComponent(String(id))}`;
 		return fetchJson<ScreenDetail>(qs ? `${base}?${qs}` : base);
 	},
 	getScreenHealth: (id: string | number) =>
-		fetchJson<ScreenHealthReport>(`/analytics/api/screens/${encodeURIComponent(String(id))}/health`),
+		fetchJson<ScreenHealthReport>(`/bi/api/screens/${encodeURIComponent(String(id))}/health`),
 	prepareScreenExport: (id: string | number, body?: ScreenExportPrepareRequest) =>
-		sendJson<ScreenExportPrepareResult>(`/analytics/api/screens/${encodeURIComponent(String(id))}/export-prepare`, body ?? {}),
+		sendJson<ScreenExportPrepareResult>(`/bi/api/screens/${encodeURIComponent(String(id))}/export-prepare`, body ?? {}),
 	reportScreenExport: (id: string | number, body: ScreenExportReportRequest) =>
-		sendJson<ScreenExportReportResult>(`/analytics/api/screens/${encodeURIComponent(String(id))}/export-report`, body),
+		sendJson<ScreenExportReportResult>(`/bi/api/screens/${encodeURIComponent(String(id))}/export-report`, body),
 	renderScreenExport: (id: string | number, body?: ScreenExportRenderRequest) =>
-		requestBinary(`/analytics/api/screens/${encodeURIComponent(String(id))}/export-render`, "POST", body ?? {}),
+		requestBinary(`/bi/api/screens/${encodeURIComponent(String(id))}/export-render`, "POST", body ?? {}),
 	validateScreenSpec: (body: unknown) =>
-		sendJson<ScreenSpecValidationResponse>("/analytics/api/screens/validate-spec", body),
-	createScreen: (body: unknown) => sendJson<ScreenDetail>("/analytics/api/screens", body),
+		sendJson<ScreenSpecValidationResponse>("/bi/api/screens/validate-spec", body),
+	createScreen: (body: unknown) => sendJson<ScreenDetail>("/bi/api/screens", body),
 	listScreenVersions: (id: string | number) =>
-		fetchJson<ScreenVersion[]>(`/analytics/api/screens/${encodeURIComponent(String(id))}/versions`),
+		fetchJson<ScreenVersion[]>(`/bi/api/screens/${encodeURIComponent(String(id))}/versions`),
 	compareScreenVersions: (id: string | number, fromVersionId: string | number, toVersionId: string | number) =>
 		fetchJson<ScreenVersionDiff>(
-			`/analytics/api/screens/${encodeURIComponent(String(id))}/versions/compare`
+			`/bi/api/screens/${encodeURIComponent(String(id))}/versions/compare`
 			+ `?fromVersionId=${encodeURIComponent(String(fromVersionId))}`
 			+ `&toVersionId=${encodeURIComponent(String(toVersionId))}`,
 		),
 	publishScreen: (id: string | number) =>
 		sendJson<{ screen: ScreenDetail; version: ScreenVersion; warmup?: ScreenWarmupSummary }>(
-			`/analytics/api/screens/${encodeURIComponent(String(id))}/publish`,
+			`/bi/api/screens/${encodeURIComponent(String(id))}/publish`,
 			{},
 		),
 	rollbackScreenVersion: (id: string | number, versionId: string | number) =>
 		sendJson<{ screen: ScreenDetail; version: ScreenVersion; warmup?: ScreenWarmupSummary }>(
-			`/analytics/api/screens/${encodeURIComponent(String(id))}/rollback/${encodeURIComponent(String(versionId))}`,
+			`/bi/api/screens/${encodeURIComponent(String(id))}/rollback/${encodeURIComponent(String(versionId))}`,
 			{},
 		),
 	updateScreen: (id: string | number, body: unknown) =>
-		requestJson<ScreenDetail>(`/analytics/api/screens/${encodeURIComponent(String(id))}`, "PUT", body),
+		requestJson<ScreenDetail>(`/bi/api/screens/${encodeURIComponent(String(id))}`, "PUT", body),
 	deleteScreen: (id: string | number) =>
-		requestJson<void>(`/analytics/api/screens/${encodeURIComponent(String(id))}`, "DELETE"),
+		requestJson<void>(`/bi/api/screens/${encodeURIComponent(String(id))}`, "DELETE"),
 	getScreenAcl: (id: string | number) =>
-		fetchJson<ScreenAclEntry[]>(`/analytics/api/screens/${encodeURIComponent(String(id))}/acl`),
+		fetchJson<ScreenAclEntry[]>(`/bi/api/screens/${encodeURIComponent(String(id))}/acl`),
 	updateScreenAcl: (id: string | number, body: { entries: ScreenAclEntry[] }) =>
-		requestJson<ScreenAclEntry[]>(`/analytics/api/screens/${encodeURIComponent(String(id))}/acl`, "PUT", body),
+		requestJson<ScreenAclEntry[]>(`/bi/api/screens/${encodeURIComponent(String(id))}/acl`, "PUT", body),
 	getScreenEditLock: (id: string | number) =>
-		fetchJson<ScreenEditLock>(`/analytics/api/screens/${encodeURIComponent(String(id))}/edit-lock`),
+		fetchJson<ScreenEditLock>(`/bi/api/screens/${encodeURIComponent(String(id))}/edit-lock`),
 	acquireScreenEditLock: (id: string | number, body?: { ttlSeconds?: number; forceTakeover?: boolean }) =>
-		sendJson<ScreenEditLock>(`/analytics/api/screens/${encodeURIComponent(String(id))}/edit-lock/acquire`, body ?? {}),
+		sendJson<ScreenEditLock>(`/bi/api/screens/${encodeURIComponent(String(id))}/edit-lock/acquire`, body ?? {}),
 	heartbeatScreenEditLock: (id: string | number, body?: { ttlSeconds?: number }) =>
-		sendJson<ScreenEditLock>(`/analytics/api/screens/${encodeURIComponent(String(id))}/edit-lock/heartbeat`, body ?? {}),
+		sendJson<ScreenEditLock>(`/bi/api/screens/${encodeURIComponent(String(id))}/edit-lock/heartbeat`, body ?? {}),
 	releaseScreenEditLock: (id: string | number) =>
-		sendJson<ScreenEditLock>(`/analytics/api/screens/${encodeURIComponent(String(id))}/edit-lock/release`, {}),
+		sendJson<ScreenEditLock>(`/bi/api/screens/${encodeURIComponent(String(id))}/edit-lock/release`, {}),
 	getScreenAuditLogs: (id: string | number, limit = 200) =>
 		fetchJson<ScreenAuditEntry[]>(
-			`/analytics/api/screens/${encodeURIComponent(String(id))}/audit?limit=${encodeURIComponent(String(limit))}`,
+			`/bi/api/screens/${encodeURIComponent(String(id))}/audit?limit=${encodeURIComponent(String(limit))}`,
 		),
 	listScreenComments: (id: string | number, limit = 200) =>
 		fetchJson<ScreenComment[]>(
-			`/analytics/api/screens/${encodeURIComponent(String(id))}/comments?limit=${encodeURIComponent(String(limit))}`,
+			`/bi/api/screens/${encodeURIComponent(String(id))}/comments?limit=${encodeURIComponent(String(limit))}`,
 		),
 	listScreenCommentChanges: (id: string | number, sinceId = 0, limit = 200) =>
 		fetchJson<ScreenCommentChanges>(
-			`/analytics/api/screens/${encodeURIComponent(String(id))}/comments/changes`
+			`/bi/api/screens/${encodeURIComponent(String(id))}/comments/changes`
 			+ `?sinceId=${encodeURIComponent(String(sinceId))}`
 			+ `&limit=${encodeURIComponent(String(limit))}`,
 		),
 	listScreenCommentChangesLive: (id: string | number, sinceId = 0, limit = 200, waitMs = 12000) =>
 		fetchJson<ScreenCommentChanges>(
-			`/analytics/api/screens/${encodeURIComponent(String(id))}/comments/live`
+			`/bi/api/screens/${encodeURIComponent(String(id))}/comments/live`
 			+ `?sinceId=${encodeURIComponent(String(sinceId))}`
 			+ `&limit=${encodeURIComponent(String(limit))}`
 			+ `&waitMs=${encodeURIComponent(String(waitMs))}`,
 		),
 	getScreenCollaborationPresence: (id: string | number, ttlSeconds = 45, sessionId?: string) =>
 		fetchJson<ScreenCollaborationPresence>(
-			`/analytics/api/screens/${encodeURIComponent(String(id))}/collaboration/presence`
+			`/bi/api/screens/${encodeURIComponent(String(id))}/collaboration/presence`
 			+ `?ttlSeconds=${encodeURIComponent(String(ttlSeconds))}`
 			+ `${sessionId ? `&sessionId=${encodeURIComponent(sessionId)}` : ''}`,
 		),
@@ -2130,7 +2130,7 @@ export const analyticsApi = {
 		ttlSeconds = 45,
 	) =>
 		sendJson<ScreenCollaborationPresence>(
-			`/analytics/api/screens/${encodeURIComponent(String(id))}/collaboration/presence/heartbeat`
+			`/bi/api/screens/${encodeURIComponent(String(id))}/collaboration/presence/heartbeat`
 			+ `?ttlSeconds=${encodeURIComponent(String(ttlSeconds))}`,
 			body ?? {},
 		),
@@ -2142,7 +2142,7 @@ export const analyticsApi = {
 		ttlSeconds = 45,
 	) =>
 		sendJson<ScreenCollaborationPresence>(
-			`/analytics/api/screens/${encodeURIComponent(String(id))}/collaboration/presence/leave`
+			`/bi/api/screens/${encodeURIComponent(String(id))}/collaboration/presence/leave`
 			+ `?ttlSeconds=${encodeURIComponent(String(ttlSeconds))}`,
 			body ?? {},
 		),
@@ -2152,71 +2152,71 @@ export const analyticsApi = {
 		anchor?: Record<string, unknown>;
 		mentions?: Array<Record<string, unknown>>;
 	}) =>
-		sendJson<ScreenComment>(`/analytics/api/screens/${encodeURIComponent(String(id))}/comments`, body),
+		sendJson<ScreenComment>(`/bi/api/screens/${encodeURIComponent(String(id))}/comments`, body),
 	resolveScreenComment: (id: string | number, commentId: string | number, body?: { note?: string }) =>
 		sendJson<ScreenComment>(
-			`/analytics/api/screens/${encodeURIComponent(String(id))}/comments/${encodeURIComponent(String(commentId))}/resolve`,
+			`/bi/api/screens/${encodeURIComponent(String(id))}/comments/${encodeURIComponent(String(commentId))}/resolve`,
 			body ?? {},
 		),
 	reopenScreenComment: (id: string | number, commentId: string | number, body?: { note?: string }) =>
 		sendJson<ScreenComment>(
-			`/analytics/api/screens/${encodeURIComponent(String(id))}/comments/${encodeURIComponent(String(commentId))}/reopen`,
+			`/bi/api/screens/${encodeURIComponent(String(id))}/comments/${encodeURIComponent(String(commentId))}/reopen`,
 			body ?? {},
 		),
 	createScreenPublicLink: (id: string | number, body?: unknown) =>
-		sendJson<ScreenPublicLinkPolicy>(`/analytics/api/screens/${encodeURIComponent(String(id))}/public_link`, body ?? {}),
+		sendJson<ScreenPublicLinkPolicy>(`/bi/api/screens/${encodeURIComponent(String(id))}/public_link`, body ?? {}),
 	updateScreenPublicLinkPolicy: (id: string | number, body: unknown) =>
-		requestJson<ScreenPublicLinkPolicy>(`/analytics/api/screens/${encodeURIComponent(String(id))}/public_link/policy`, "PUT", body),
+		requestJson<ScreenPublicLinkPolicy>(`/bi/api/screens/${encodeURIComponent(String(id))}/public_link/policy`, "PUT", body),
 	deleteScreenPublicLink: (id: string | number) =>
-		requestJson<void>(`/analytics/api/screens/${encodeURIComponent(String(id))}/public_link`, "DELETE"),
+		requestJson<void>(`/bi/api/screens/${encodeURIComponent(String(id))}/public_link`, "DELETE"),
 	getPublicScreen: (uuid: string) =>
-		fetchJson<PublicScreenDetail>(`/analytics/api/public/screen/${encodeURIComponent(uuid)}`),
+		fetchJson<PublicScreenDetail>(`/bi/api/public/screen/${encodeURIComponent(uuid)}`),
 	// Snapshot API
 	createSnapshot: (id: string | number, body: unknown) =>
-		sendJson<unknown>(`/analytics/api/screens/${encodeURIComponent(String(id))}/snapshot`, body),
+		sendJson<unknown>(`/bi/api/screens/${encodeURIComponent(String(id))}/snapshot`, body),
 	getSnapshotTask: (taskId: string) =>
-		fetchJson<unknown>(`/analytics/api/screens/snapshot-tasks/${encodeURIComponent(taskId)}`),
+		fetchJson<unknown>(`/bi/api/screens/snapshot-tasks/${encodeURIComponent(taskId)}`),
 	listSnapshotSchedules: (id: string | number) =>
-		fetchJson<unknown[]>(`/analytics/api/screens/${encodeURIComponent(String(id))}/snapshot-schedules`),
+		fetchJson<unknown[]>(`/bi/api/screens/${encodeURIComponent(String(id))}/snapshot-schedules`),
 	createSnapshotSchedule: (id: string | number, body: unknown) =>
-		sendJson<unknown>(`/analytics/api/screens/${encodeURIComponent(String(id))}/snapshot-schedules`, body),
+		sendJson<unknown>(`/bi/api/screens/${encodeURIComponent(String(id))}/snapshot-schedules`, body),
 	updateSnapshotSchedule: (id: string | number, scheduleId: string, body: unknown) =>
-		requestJson<unknown>(`/analytics/api/screens/${encodeURIComponent(String(id))}/snapshot-schedules/${encodeURIComponent(scheduleId)}`, "PUT", body),
+		requestJson<unknown>(`/bi/api/screens/${encodeURIComponent(String(id))}/snapshot-schedules/${encodeURIComponent(scheduleId)}`, "PUT", body),
 	deleteSnapshotSchedule: (id: string | number, scheduleId: string) =>
-		requestJson<void>(`/analytics/api/screens/${encodeURIComponent(String(id))}/snapshot-schedules/${encodeURIComponent(scheduleId)}`, "DELETE"),
+		requestJson<void>(`/bi/api/screens/${encodeURIComponent(String(id))}/snapshot-schedules/${encodeURIComponent(scheduleId)}`, "DELETE"),
 	listSnapshotTasks: (id: string | number) =>
-		fetchJson<unknown[]>(`/analytics/api/screens/${encodeURIComponent(String(id))}/snapshot-tasks`),
+		fetchJson<unknown[]>(`/bi/api/screens/${encodeURIComponent(String(id))}/snapshot-tasks`),
 	// Marketplace API
 	listMarketplaceComponents: (params?: { search?: string; category?: string }) => {
 		const qs = new URLSearchParams();
 		if (params?.search) qs.set('search', params.search);
 		if (params?.category) qs.set('category', params.category);
 		const suffix = qs.toString() ? `?${qs.toString()}` : '';
-		return fetchJson<MarketplaceCatalogItem[]>(`/analytics/api/marketplace/components${suffix}`);
+		return fetchJson<MarketplaceCatalogItem[]>(`/bi/api/marketplace/components${suffix}`);
 	},
 	listMarketplaceTemplates: (params?: { search?: string; category?: string }) => {
 		const qs = new URLSearchParams();
 		if (params?.search) qs.set('search', params.search);
 		if (params?.category) qs.set('category', params.category);
 		const suffix = qs.toString() ? `?${qs.toString()}` : '';
-		return fetchJson<MarketplaceCatalogItem[]>(`/analytics/api/marketplace/templates${suffix}`);
+		return fetchJson<MarketplaceCatalogItem[]>(`/bi/api/marketplace/templates${suffix}`);
 	},
 	installMarketplaceComponent: (id: string) =>
-		sendJson<MarketplaceCatalogItem>(`/analytics/api/marketplace/components/${encodeURIComponent(id)}/install`, {}),
+		sendJson<MarketplaceCatalogItem>(`/bi/api/marketplace/components/${encodeURIComponent(id)}/install`, {}),
 	installMarketplaceTemplate: (id: string) =>
-		sendJson<MarketplaceCatalogItem>(`/analytics/api/marketplace/templates/${encodeURIComponent(id)}/install`, {}),
+		sendJson<MarketplaceCatalogItem>(`/bi/api/marketplace/templates/${encodeURIComponent(id)}/install`, {}),
 	// Upload table data
 	uploadTable: (dbId: number | string, body: {
 		tableName: string;
 		columns: Array<{ name: string; displayName: string; type: string }>;
 		rows: unknown[][];
 	}) => sendJson<{ tableName: string; schema: string; rowCount: number }>(
-		`/analytics/api/database/${dbId}/upload-table`, body),
+		`/bi/api/database/${dbId}/upload-table`, body),
 	listMyUploads: (dbId: number | string) =>
-		fetchJson<MyUploadItem[]>(`/analytics/api/database/${encodeURIComponent(String(dbId))}/my-uploads`),
+		fetchJson<MyUploadItem[]>(`/bi/api/database/${encodeURIComponent(String(dbId))}/my-uploads`),
 	deleteUploadTable: (dbId: number | string, tableName: string) =>
 		requestJson<void>(
-			`/analytics/api/database/${encodeURIComponent(String(dbId))}/upload-table/${encodeURIComponent(tableName)}`,
+			`/bi/api/database/${encodeURIComponent(String(dbId))}/upload-table/${encodeURIComponent(tableName)}`,
 			"DELETE"
 		),
 };

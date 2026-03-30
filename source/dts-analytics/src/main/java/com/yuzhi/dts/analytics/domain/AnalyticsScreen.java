@@ -53,6 +53,12 @@ public class AnalyticsScreen implements Serializable {
     @Column(name = "carousel_json", columnDefinition = "text")
     private String carouselJson;
 
+    @Column(name = "classification", length = 32)
+    private String classification;
+
+    @Column(name = "owner_dept_code", length = 64)
+    private String ownerDeptCode;
+
     @Column(name = "archived", nullable = false)
     private boolean archived = false;
 
@@ -159,6 +165,22 @@ public class AnalyticsScreen implements Serializable {
 
     public void setCarouselJson(String carouselJson) {
         this.carouselJson = carouselJson;
+    }
+
+    public String getClassification() {
+        return classification;
+    }
+
+    public void setClassification(String classification) {
+        this.classification = classification;
+    }
+
+    public String getOwnerDeptCode() {
+        return ownerDeptCode;
+    }
+
+    public void setOwnerDeptCode(String ownerDeptCode) {
+        this.ownerDeptCode = ownerDeptCode;
     }
 
     public boolean isArchived() {

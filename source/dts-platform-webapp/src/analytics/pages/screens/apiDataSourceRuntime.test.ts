@@ -8,7 +8,7 @@ import {
 test('buildApiRuntimeRequest expands params from runtime variables and omits blank values', () => {
     const result = buildApiRuntimeRequest(
         {
-            url: '/analytics/api/project-cockpit/screen/overview',
+            url: '/bi/api/project-cockpit/screen/overview',
             method: 'GET',
             params: {
                 programId: '{{programId}}',
@@ -44,7 +44,7 @@ test('buildApiRuntimeRequest expands params from runtime variables and omits bla
 test('buildApiRuntimeRequest expands post body templates and keeps queryContext payload', () => {
     const result = buildApiRuntimeRequest(
         {
-            url: '/analytics/api/project-cockpit/screen/filters',
+            url: '/bi/api/project-cockpit/screen/filters',
             method: 'POST',
             body: '{"programId":"{{programId}}","dateFrom":"{{dateFrom}}","riskLevel":"{{riskLevel}}"}',
         },
@@ -79,7 +79,7 @@ test('buildApiRuntimeRequest expands post body templates and keeps queryContext 
 test('buildApiRuntimeRequest rewrites project cockpit api url for public screen runtime', () => {
     const result = buildApiRuntimeRequest(
         {
-            url: '/analytics/api/project-cockpit/screen/overview',
+            url: '/bi/api/project-cockpit/screen/overview',
             method: 'GET',
             params: {
                 programId: '{{programId}}',
@@ -98,14 +98,14 @@ test('buildApiRuntimeRequest rewrites project cockpit api url for public screen 
         },
     );
 
-    assert.equal(result.url, '/analytics/api/public/screen/screen-public-uuid/project-cockpit/overview');
+    assert.equal(result.url, '/bi/api/public/screen/screen-public-uuid/project-cockpit/overview');
     assert.equal(result.params.programId, 'program-a');
 });
 
 test('buildApiRuntimeRequest rewrites metrics-compare api url for public screen runtime', () => {
     const result = buildApiRuntimeRequest(
         {
-            url: '/analytics/api/project-cockpit/screen/metrics-compare',
+            url: '/bi/api/project-cockpit/screen/metrics-compare',
             method: 'GET',
             params: {
                 majorProjectId: '{{majorProjectId}}',
@@ -124,14 +124,14 @@ test('buildApiRuntimeRequest rewrites metrics-compare api url for public screen 
         },
     );
 
-    assert.equal(result.url, '/analytics/api/public/screen/screen-public-uuid/project-cockpit/metrics-compare');
+    assert.equal(result.url, '/bi/api/public/screen/screen-public-uuid/project-cockpit/metrics-compare');
     assert.equal(result.params.majorProjectId, 'major-a');
 });
 
 test('buildApiRuntimeRequest rewrites tree api url for public screen runtime', () => {
     const result = buildApiRuntimeRequest(
         {
-            url: '/analytics/api/project-cockpit/screen/tree',
+            url: '/bi/api/project-cockpit/screen/tree',
             method: 'GET',
             params: {
                 majorProjectId: '{{majorProjectId}}',
@@ -152,7 +152,7 @@ test('buildApiRuntimeRequest rewrites tree api url for public screen runtime', (
         },
     );
 
-    assert.equal(result.url, '/analytics/api/public/screen/screen-public-uuid/project-cockpit/tree');
+    assert.equal(result.url, '/bi/api/public/screen/screen-public-uuid/project-cockpit/tree');
     assert.equal(result.params.majorProjectId, 'major-a');
     assert.equal(result.params.deptId, 'dept-01');
 });

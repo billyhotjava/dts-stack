@@ -6,21 +6,20 @@ import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.yuzhi.dts.analytics.domain.AnalyticsPublicLink;
 import com.yuzhi.dts.analytics.domain.AnalyticsScreen;
-import com.yuzhi.dts.analytics.domain.AnalyticsScreenAcl;
 import com.yuzhi.dts.analytics.domain.AnalyticsScreenVersion;
 import com.yuzhi.dts.analytics.domain.AnalyticsUser;
 import com.yuzhi.dts.analytics.repository.AnalyticsScreenRepository;
 import com.yuzhi.dts.analytics.repository.AnalyticsScreenVersionRepository;
 import com.yuzhi.dts.analytics.service.AnalyticsSessionService;
 import com.yuzhi.dts.analytics.service.PublicLinkService;
-import com.yuzhi.dts.analytics.service.ScreenAclService;
 import com.yuzhi.dts.analytics.service.ScreenAuditService;
 import com.yuzhi.dts.analytics.service.ScreenEditLockService;
 import com.yuzhi.dts.analytics.service.ScreenWarmupService;
 import com.yuzhi.dts.analytics.service.ScreenAiGenerationService;
 import com.yuzhi.dts.analytics.service.ScreenComplianceService;
 import com.yuzhi.dts.analytics.service.ScreenServerRenderExportService;
-import com.yuzhi.dts.analytics.service.AssetListFilterService;
+import com.yuzhi.dts.analytics.service.ScreenOwnershipService;
+import com.yuzhi.dts.analytics.service.ScreenPermissionService;
 import com.yuzhi.dts.analytics.service.ScreenSpecValidator;
 import com.yuzhi.dts.analytics.web.support.MetabaseAuth;
 import com.yuzhi.dts.analytics.web.support.PlatformContext;
@@ -64,7 +63,8 @@ public class ScreenResource {
     private final AnalyticsSessionService sessionService;
     private final AnalyticsScreenRepository screenRepository;
     private final AnalyticsScreenVersionRepository screenVersionRepository;
-    private final ScreenAclService screenAclService;
+    private final ScreenPermissionService screenPermissionService;
+    private final ScreenOwnershipService screenOwnershipService;
     private final ScreenAuditService screenAuditService;
     private final ScreenEditLockService screenEditLockService;
     private final ScreenWarmupService screenWarmupService;
@@ -72,7 +72,6 @@ public class ScreenResource {
     private final ScreenComplianceService screenComplianceService;
     private final ScreenServerRenderExportService screenServerRenderExportService;
     private final ScreenSpecValidator screenSpecValidator;
-    private final AssetListFilterService assetListFilterService;
     private final PublicLinkService publicLinkService;
     private final ObjectMapper objectMapper;
 
@@ -80,7 +79,8 @@ public class ScreenResource {
             AnalyticsSessionService sessionService,
             AnalyticsScreenRepository screenRepository,
             AnalyticsScreenVersionRepository screenVersionRepository,
-            ScreenAclService screenAclService,
+            ScreenPermissionService screenPermissionService,
+            ScreenOwnershipService screenOwnershipService,
             ScreenAuditService screenAuditService,
             ScreenEditLockService screenEditLockService,
             ScreenWarmupService screenWarmupService,
@@ -88,13 +88,13 @@ public class ScreenResource {
             ScreenComplianceService screenComplianceService,
             ScreenServerRenderExportService screenServerRenderExportService,
             ScreenSpecValidator screenSpecValidator,
-            AssetListFilterService assetListFilterService,
             PublicLinkService publicLinkService,
             ObjectMapper objectMapper) {
         this.sessionService = sessionService;
         this.screenRepository = screenRepository;
         this.screenVersionRepository = screenVersionRepository;
-        this.screenAclService = screenAclService;
+        this.screenPermissionService = screenPermissionService;
+        this.screenOwnershipService = screenOwnershipService;
         this.screenAuditService = screenAuditService;
         this.screenEditLockService = screenEditLockService;
         this.screenWarmupService = screenWarmupService;
@@ -102,7 +102,6 @@ public class ScreenResource {
         this.screenComplianceService = screenComplianceService;
         this.screenServerRenderExportService = screenServerRenderExportService;
         this.screenSpecValidator = screenSpecValidator;
-        this.assetListFilterService = assetListFilterService;
         this.publicLinkService = publicLinkService;
         this.objectMapper = objectMapper;
     }
@@ -121,7 +120,7 @@ public class ScreenResource {
 
         List<ObjectNode> result = screens.stream()
                 .map(screen -> {
-                    ScreenAclService.PermissionSnapshot permissions = screenAclService.snapshot(screen, user.get(), context);
+                    ScreenPermissionService.PermissionSnapshot permissions = screenPermissionService.snapshot(screen, user.get(), context);
                     if (!permissions.canRead()) {
                         return null;
                     }
@@ -199,7 +198,7 @@ public class ScreenResource {
         }
 
         PlatformContext context = PlatformContext.from(request);
-        ScreenAclService.PermissionSnapshot permissions = screenAclService.snapshot(screen, user.get(), context);
+        ScreenPermissionService.PermissionSnapshot permissions = screenPermissionService.snapshot(screen, user.get(), context);
         if (!permissions.canRead()) {
             return forbidden();
         }
@@ -232,7 +231,7 @@ public class ScreenResource {
         }
 
         PlatformContext context = PlatformContext.from(request);
-        if (!screenAclService.hasPermission(screen, user.get(), context, ScreenAclService.Permission.READ)) {
+        if (!screenPermissionService.snapshot(screen, user.get(), context).canRead()) {
             return forbidden();
         }
 
@@ -256,7 +255,7 @@ public class ScreenResource {
             return ResponseEntity.notFound().build();
         }
         PlatformContext context = PlatformContext.from(request);
-        if (!screenAclService.hasPermission(screen, user.get(), context, ScreenAclService.Permission.READ)) {
+        if (!screenPermissionService.snapshot(screen, user.get(), context).canRead()) {
             return forbidden();
         }
         AnalyticsScreenVersion fromVersion = screenVersionRepository.findByIdAndScreenId(fromVersionId, screen.getId()).orElse(null);
@@ -283,7 +282,7 @@ public class ScreenResource {
         }
 
         PlatformContext context = PlatformContext.from(request);
-        if (!screenAclService.hasPermission(screen, user.get(), context, ScreenAclService.Permission.MANAGE)) {
+        if (!screenPermissionService.snapshot(screen, user.get(), context).isOwner()) {
             return forbidden();
         }
 
@@ -316,7 +315,7 @@ public class ScreenResource {
         }
 
         PlatformContext context = PlatformContext.from(request);
-        if (!screenAclService.hasPermission(screen, user.get(), context, ScreenAclService.Permission.READ)) {
+        if (!screenPermissionService.snapshot(screen, user.get(), context).canRead()) {
             return forbidden();
         }
 
@@ -356,7 +355,7 @@ public class ScreenResource {
         }
 
         PlatformContext context = PlatformContext.from(request);
-        ScreenAclService.PermissionSnapshot permissions = screenAclService.snapshot(screen, user.get(), context);
+        ScreenPermissionService.PermissionSnapshot permissions = screenPermissionService.snapshot(screen, user.get(), context);
         if (!permissions.canRead()) {
             return forbidden();
         }
@@ -404,7 +403,7 @@ public class ScreenResource {
 
         ObjectNode policy = screenComplianceService.currentPolicy();
         boolean exportApprovalRequired = policy.path("exportApprovalRequired").asBoolean(false);
-        if (exportApprovalRequired && !permissions.canManage()) {
+        if (exportApprovalRequired && !permissions.isOwner()) {
             ObjectNode denied = objectMapper.createObjectNode();
             denied.put("code", "SCREEN_EXPORT_APPROVAL_REQUIRED");
             denied.put("retryable", false);
@@ -495,7 +494,7 @@ public class ScreenResource {
         }
 
         PlatformContext context = PlatformContext.from(request);
-        ScreenAclService.PermissionSnapshot permissions = screenAclService.snapshot(screen, user.get(), context);
+        ScreenPermissionService.PermissionSnapshot permissions = screenPermissionService.snapshot(screen, user.get(), context);
         if (!permissions.canRead()) {
             return forbidden();
         }
@@ -589,7 +588,7 @@ public class ScreenResource {
         }
 
         PlatformContext context = PlatformContext.from(request);
-        ScreenAclService.PermissionSnapshot permissions = screenAclService.snapshot(screen, user.get(), context);
+        ScreenPermissionService.PermissionSnapshot permissions = screenPermissionService.snapshot(screen, user.get(), context);
         if (!permissions.canRead()) {
             return forbidden();
         }
@@ -633,7 +632,7 @@ public class ScreenResource {
 
         ObjectNode policy = screenComplianceService.currentPolicy();
         boolean exportApprovalRequired = policy.path("exportApprovalRequired").asBoolean(false);
-        if (exportApprovalRequired && !permissions.canManage()) {
+        if (exportApprovalRequired && !permissions.isOwner()) {
             ObjectNode denied = objectMapper.createObjectNode();
             denied.put("code", "SCREEN_EXPORT_APPROVAL_REQUIRED");
             denied.put("retryable", false);
@@ -713,63 +712,6 @@ public class ScreenResource {
         }
     }
 
-    @GetMapping(path = "/{id}/acl", produces = MediaType.APPLICATION_JSON_VALUE)
-    public ResponseEntity<?> getAcl(@PathVariable("id") long id, HttpServletRequest request) {
-        Optional<AnalyticsUser> user = MetabaseAuth.currentUser(sessionService, request);
-        if (user.isEmpty()) {
-            return unauthorized();
-        }
-
-        AnalyticsScreen screen = screenRepository.findById(id).orElse(null);
-        if (screen == null || screen.isArchived()) {
-            return ResponseEntity.notFound().build();
-        }
-
-        PlatformContext context = PlatformContext.from(request);
-        if (!screenAclService.hasPermission(screen, user.get(), context, ScreenAclService.Permission.MANAGE)) {
-            return forbidden();
-        }
-
-        return ResponseEntity.ok(screenAclService.listEntries(screen.getId()).stream().map(this::toAclResponse).toList());
-    }
-
-    @PutMapping(path = "/{id}/acl", consumes = MediaType.APPLICATION_JSON_VALUE, produces = MediaType.APPLICATION_JSON_VALUE)
-    public ResponseEntity<?> updateAcl(
-            @PathVariable("id") long id,
-            @RequestBody(required = false) JsonNode body,
-            HttpServletRequest request) {
-        Optional<AnalyticsUser> user = MetabaseAuth.currentUser(sessionService, request);
-        if (user.isEmpty()) {
-            return unauthorized();
-        }
-
-        AnalyticsScreen screen = screenRepository.findById(id).orElse(null);
-        if (screen == null || screen.isArchived()) {
-            return ResponseEntity.notFound().build();
-        }
-
-        PlatformContext context = PlatformContext.from(request);
-        ScreenAclService.PermissionSnapshot perms = screenAclService.snapshot(screen, user.get(), context);
-        if (!perms.canManage()) {
-            return forbidden();
-        }
-
-        List<ObjectNode> before = screenAclService.listEntries(screen.getId()).stream().map(this::toAclResponse).toList();
-        List<AnalyticsScreenAcl> entries = screenAclService.parseEntriesFromBody(screen.getId(), user.get().getId(), body);
-        screenAclService.replaceEntries(screen, user.get().getId(), entries, perms.isOwner());
-        List<ObjectNode> after = screenAclService.listEntries(screen.getId()).stream().map(this::toAclResponse).toList();
-
-        screenAuditService.log(
-                screen.getId(),
-                user.get().getId(),
-                "acl.update",
-                before,
-                after,
-                requestIdFrom(request));
-
-        return ResponseEntity.ok(after);
-    }
-
     @PostMapping(consumes = MediaType.APPLICATION_JSON_VALUE, produces = MediaType.APPLICATION_JSON_VALUE)
     public ResponseEntity<?> create(@RequestBody(required = false) JsonNode body, HttpServletRequest request) {
         Optional<AnalyticsUser> user = MetabaseAuth.currentUser(sessionService, request);
@@ -807,10 +749,11 @@ public class ScreenResource {
         screen.setCreatorId(user.get().getId());
         screen.setArchived(false);
 
+        screen.setOwnerDeptCode(PlatformContext.from(request).dept());
         screen = screenRepository.save(screen);
-        screenAclService.ensureCreatorOwner(screen);
+        screenOwnershipService.registerOwnership(screen.getId(), extractUsername(user.get()), PlatformContext.from(request).dept());
 
-        ScreenAclService.PermissionSnapshot permissions = new ScreenAclService.PermissionSnapshot(true, true, true, true, true, true);
+        ScreenPermissionService.PermissionSnapshot permissions = ScreenPermissionService.PermissionSnapshot.all();
         ObjectNode detail = toDetailResponse(screen, null, null, "draft", permissions);
         applySpecWarnings(detail, specValidation.warnings());
 
@@ -835,7 +778,7 @@ public class ScreenResource {
         }
 
         PlatformContext context = PlatformContext.from(request);
-        ScreenAclService.PermissionSnapshot permissions = screenAclService.snapshot(screen, user.get(), context);
+        ScreenPermissionService.PermissionSnapshot permissions = screenPermissionService.snapshot(screen, user.get(), context);
         if (!permissions.canEdit()) {
             return forbidden();
         }
@@ -919,8 +862,8 @@ public class ScreenResource {
         }
 
         PlatformContext context = PlatformContext.from(request);
-        ScreenAclService.PermissionSnapshot permissions = screenAclService.snapshot(screen, user.get(), context);
-        if (!permissions.canPublish()) {
+        ScreenPermissionService.PermissionSnapshot permissions = screenPermissionService.snapshot(screen, user.get(), context);
+        if (!permissions.canEdit()) {
             return forbidden();
         }
         ScreenEditLockService.LockSnapshot blockingLock =
@@ -975,8 +918,8 @@ public class ScreenResource {
         }
 
         PlatformContext context = PlatformContext.from(request);
-        ScreenAclService.PermissionSnapshot permissions = screenAclService.snapshot(screen, user.get(), context);
-        if (!permissions.canPublish()) {
+        ScreenPermissionService.PermissionSnapshot permissions = screenPermissionService.snapshot(screen, user.get(), context);
+        if (!permissions.canEdit()) {
             return forbidden();
         }
         ScreenEditLockService.LockSnapshot blockingLock =
@@ -1025,7 +968,7 @@ public class ScreenResource {
         }
 
         PlatformContext context = PlatformContext.from(request);
-        if (!screenAclService.hasPermission(screen, user.get(), context, ScreenAclService.Permission.OWNER)) {
+        if (!screenPermissionService.snapshot(screen, user.get(), context).isOwner()) {
             return ResponseEntity.status(403).contentType(MediaType.APPLICATION_JSON).body(
                 objectMapper.createObjectNode().put("error", "Only the owner can delete this screen"));
         }
@@ -1042,6 +985,7 @@ public class ScreenResource {
         screen.setArchived(true);
         screenRepository.save(screen);
         screenEditLockService.release(screen.getId(), user.get().getId());
+        screenOwnershipService.removeOwnership(screen.getId());
 
         screenAuditService.log(screen.getId(), user.get().getId(), "screen.delete", before, null, requestIdFrom(request));
 
@@ -1064,7 +1008,7 @@ public class ScreenResource {
         }
 
         PlatformContext ctx = PlatformContext.from(request);
-        if (!screenAclService.hasPermission(screen, user.get(), ctx, ScreenAclService.Permission.MANAGE)) {
+        if (!screenPermissionService.snapshot(screen, user.get(), ctx).isOwner()) {
             return forbidden();
         }
 
@@ -1111,7 +1055,7 @@ public class ScreenResource {
         }
 
         PlatformContext ctx = PlatformContext.from(request);
-        if (!screenAclService.hasPermission(screen, user.get(), ctx, ScreenAclService.Permission.MANAGE)) {
+        if (!screenPermissionService.snapshot(screen, user.get(), ctx).isOwner()) {
             return forbidden();
         }
 
@@ -1143,7 +1087,7 @@ public class ScreenResource {
         }
 
         PlatformContext ctx = PlatformContext.from(request);
-        if (!screenAclService.hasPermission(screen, user.get(), ctx, ScreenAclService.Permission.MANAGE)) {
+        if (!screenPermissionService.snapshot(screen, user.get(), ctx).isOwner()) {
             return forbidden();
         }
 
@@ -1200,7 +1144,7 @@ public class ScreenResource {
     private ObjectNode toListResponse(
             AnalyticsScreen screen,
             AnalyticsScreenVersion currentPublishedVersion,
-            ScreenAclService.PermissionSnapshot permissions) {
+            ScreenPermissionService.PermissionSnapshot permissions) {
         ObjectNode node = objectMapper.createObjectNode();
         node.put("id", screen.getId());
         node.put("name", screen.getName());
@@ -1212,8 +1156,8 @@ public class ScreenResource {
         node.putPOJO("updatedAt", screen.getUpdatedAt());
         node.put("canRead", permissions.canRead());
         node.put("canEdit", permissions.canEdit());
-        node.put("canPublish", permissions.canPublish());
-        node.put("canManage", permissions.canManage());
+        node.put("canPublish", permissions.canEdit());
+        node.put("canManage", permissions.isOwner());
         node.put("canDelete", permissions.canDelete());
         node.put("isOwner", permissions.isOwner());
         if (currentPublishedVersion != null) {
@@ -1377,7 +1321,7 @@ public class ScreenResource {
             AnalyticsScreenVersion effectiveVersion,
             AnalyticsScreenVersion currentPublishedVersion,
             String sourceMode,
-            ScreenAclService.PermissionSnapshot permissions) {
+            ScreenPermissionService.PermissionSnapshot permissions) {
         ObjectNode node = toListResponse(screen, currentPublishedVersion, permissions);
         if (effectiveVersion != null) {
             node.put("name", effectiveVersion.getName());

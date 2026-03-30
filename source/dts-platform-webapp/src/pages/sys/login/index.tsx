@@ -33,12 +33,6 @@ function LoginPage() {
 	})();
 
 	if (token.accessToken) {
-		// If we're already authenticated and this page was reached via embedded module redirect,
-		// jump directly to that module with a hard navigation.
-		if (safeRedirect?.startsWith("/analytics")) {
-			window.location.replace(safeRedirect);
-			return null;
-		}
 		return <Navigate to={safeRedirect || GLOBAL_CONFIG.defaultRoute} replace />;
 	}
 

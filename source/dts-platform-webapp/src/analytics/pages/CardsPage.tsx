@@ -75,7 +75,7 @@ export default function CardsPage() {
 			key: "name",
 			ellipsis: true,
 			render: (name: string, record) => (
-				<Link to={`/analytics/questions/${record.id}`} className="text-brand hover:underline font-medium">
+				<Link to={`/bi/questions/${record.id}`} className="text-brand hover:underline font-medium">
 					{name || t(locale, "common.untitled")}
 				</Link>
 			),
@@ -109,10 +109,10 @@ export default function CardsPage() {
 			width: 150,
 			render: (_, record) => (
 				<Space size={4}>
-					<Link to={`/analytics/questions/${record.id}`}>
+					<Link to={`/bi/questions/${record.id}`}>
 						<Button type="text" size="small" icon={<EyeOutlined />}>查看</Button>
 					</Link>
-					<Link to={`/analytics/questions/${record.id}/edit`}>
+					<Link to={`/bi/questions/${record.id}/edit`}>
 						<Button type="text" size="small" icon={<EditOutlined />}>编辑</Button>
 					</Link>
 					<Button
@@ -134,7 +134,7 @@ export default function CardsPage() {
 			<PageHeader
 				title={t(locale, "questions.title")}
 				actions={
-					<Link to="/analytics/questions/new">
+					<Link to="/bi/questions/new">
 						<Button type="primary" icon={<PlusOutlined />}>
 							{t(locale, "questions.new")}
 						</Button>

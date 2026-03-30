@@ -234,7 +234,7 @@ export default function DashboardDetailPage() {
 								>
 									{t(locale, "share.create")}
 								</Button>
-								<Link to={`/analytics/dashboards/${encodeURIComponent(String(state.value.id))}/edit`}>
+								<Link to={`/bi/dashboards/${encodeURIComponent(String(state.value.id))}/edit`}>
 									<Button type="primary" icon={<EditIcon />}>
 										{t(locale, "dashboards.edit")}
 									</Button>
@@ -252,7 +252,7 @@ export default function DashboardDetailPage() {
 										size="small"
 										icon={shareCopied ? <CheckIcon /> : <CopyIcon />}
 										onClick={async () => {
-											const link = `${window.location.origin}/analytics/public/dashboard/${encodeURIComponent(shareUuid)}`;
+											const link = `${window.location.origin}/bi/public/dashboard/${encodeURIComponent(shareUuid)}`;
 											const copied = await writeTextToClipboard(link);
 											if (copied) {
 												setShareCopied(true);
@@ -268,7 +268,7 @@ export default function DashboardDetailPage() {
 						>
 								<Input
 									readOnly
-									value={`${window.location.origin}/analytics/public/dashboard/${encodeURIComponent(shareUuid)}`}
+									value={`${window.location.origin}/bi/public/dashboard/${encodeURIComponent(shareUuid)}`}
 								/>
 								<p className="text-secondary" style={{ marginTop: "var(--spacing-sm)", fontSize: "var(--font-size-sm)" }}>
 									{t(locale, "share.note")}
