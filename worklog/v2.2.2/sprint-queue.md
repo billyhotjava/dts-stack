@@ -197,10 +197,10 @@
 **统计**: READY=0, IN_PROGRESS=0, DONE=5, BLOCKED=0
 
 ## Sprint-27: 财务大屏模板族插件化重构 (202603)
-**状态**: READY
+**状态**: IN_PROGRESS
 
 | Feature | Task 数 | 状态 |
 |---------|---------|------|
-| F1-财务大屏模板族插件化重构 | 5 | READY |
+| F1-财务大屏模板族插件化重构 | 5 | IN_PROGRESS |
 
-**统计**: READY=5, IN_PROGRESS=0, DONE=0, BLOCKED=0
+**统计**: READY=0, IN_PROGRESS=3, DONE=2, BLOCKED=0

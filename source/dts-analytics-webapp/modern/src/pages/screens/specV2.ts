@@ -49,7 +49,7 @@ const COMPONENT_TYPES = new Set<ScreenComponent['type']>([
     'scatter3d-chart',
 ]);
 
-const THEMES = new Set<ScreenTheme>(['legacy-dark', 'titanium', 'glacier']);
+const THEMES = new Set<ScreenTheme>(['legacy-dark', 'titanium', 'glacier', 'light-business', 'dark-command', 'brand-custom']);
 const DATA_SOURCE_TYPES = new Set(['static', 'api', 'card', 'sql', 'dataset', 'metric', 'database']);
 const VARIABLE_TYPES = new Set(['string', 'number', 'date']);
 const VARIABLE_KEY_PATTERN = /^[A-Za-z_][A-Za-z0-9_:\.-]{0,63}$/;

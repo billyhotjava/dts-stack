@@ -398,7 +398,7 @@ export default function UploadedDataEditor({ databaseId, onComplete }: UploadedD
 								<table className="w-full border-collapse text-[11px]">
 									<thead>
 										<tr>
-											<th className="px-1.5 py-1 bg-surface-muted border-b border-border-default text-left font-semibold text-text-muted whitespace-nowrap min-w-[60px]">原始列名</th>
+											<th className="px-1.5 py-1 bg-surface-muted border-b border-border-default text-left font-semibold text-text-muted whitespace-nowrap min-w-[60px]">字段名</th>
 											<th className="px-1.5 py-1 bg-surface-muted border-b border-border-default text-left font-semibold text-text-muted whitespace-nowrap min-w-[60px]">显示名</th>
 											<th className="px-1.5 py-1 bg-surface-muted border-b border-border-default text-left font-semibold text-text-muted whitespace-nowrap min-w-[50px]">类型</th>
 											<th className="px-1.5 py-1 bg-surface-muted border-b border-border-default text-left font-semibold text-text-muted whitespace-nowrap w-7"></th>
@@ -407,8 +407,15 @@ export default function UploadedDataEditor({ databaseId, onComplete }: UploadedD
 									<tbody>
 										{columns.map((col, ci) => (
 											<tr key={ci} style={col.excluded ? { opacity: 0.4, textDecoration: 'line-through' } : undefined}>
-												<td className="px-1.5 py-1 border-b border-border-default/50 text-text-primary whitespace-nowrap max-w-[120px] overflow-hidden text-ellipsis" title={col.originalName}>
-													{col.originalName}
+												<td className="border-b border-border-default/50 p-0">
+													<input
+														type="text"
+														className="w-full border-0 bg-transparent px-1.5 py-1 text-[11px] text-text-primary outline-none"
+														value={col.originalName}
+														disabled={col.excluded}
+														onChange={(e) => updateColumn(ci, { originalName: e.target.value })}
+														title="修改字段名（实际数据库列名）"
+													/>
 												</td>
 												<td className="border-b border-border-default/50 p-0">
 													<input

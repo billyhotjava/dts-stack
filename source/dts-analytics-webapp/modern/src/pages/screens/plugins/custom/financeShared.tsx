@@ -288,7 +288,7 @@ export function FinanceSummaryTable(context: RendererPluginRenderContext): React
             <div style={{ overflow: 'hidden', borderRadius: 14, border: `1px solid ${COLORS.border}` }}>
                 <div style={{ display: 'grid', gridTemplateColumns: `repeat(${headers.length}, minmax(0, 1fr))`, background: COLORS.headerSoft }}>
                     {headers.map((header) => (
-                        <div key={header} style={tableHeaderStyle}>{header}</div>
+                        <div key={header} style={tableHeaderStyle()}>{header}</div>
                     ))}
                 </div>
                 {data.slice(0, 6).map((row, index) => (
