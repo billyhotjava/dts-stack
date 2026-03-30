@@ -7,6 +7,7 @@ import { ErrorNotice } from "../components/ErrorNotice";
 import { Input, Spin, Button, Card, Collapse, Tag } from "antd";
 import { getEffectiveLocale, t, type Locale } from "../i18n";
 import { writeTextToClipboard } from "../hooks/clipboard";
+import { resolveRouteHref } from "../helpers/resolveAnalyticsUrl";
 type LoadState<T> =
 	| { state: "loading" }
 	| { state: "loaded"; value: T }
@@ -154,7 +155,7 @@ export default function CardDetailPage() {
 										size="small"
 										icon={shareCopied ? <CheckIcon /> : <CopyIcon />}
 										onClick={async () => {
-											const link = `${window.location.origin}/bi/public/card/${encodeURIComponent(shareUuid)}`;
+											const link = resolveRouteHref(`/bi/public/card/${encodeURIComponent(shareUuid)}`);
 											const copied = await writeTextToClipboard(link);
 											if (copied) {
 												setShareCopied(true);
@@ -170,7 +171,7 @@ export default function CardDetailPage() {
 						>
 								<Input
 									readOnly
-									value={`${window.location.origin}/bi/public/card/${encodeURIComponent(shareUuid)}`}
+									value={resolveRouteHref(`/bi/public/card/${encodeURIComponent(shareUuid)}`)}
 								/>
 								<p className="text-secondary" style={{ marginTop: "var(--spacing-sm)", fontSize: "var(--font-size-sm)" }}>
 									{t(locale, "share.note")}

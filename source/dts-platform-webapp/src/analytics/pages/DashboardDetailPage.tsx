@@ -7,6 +7,7 @@ import { ErrorNotice } from "../components/ErrorNotice";
 import { Input, Spin, Button, Card, Collapse, Tag, Select } from "antd";
 import { getEffectiveLocale, t, type Locale } from "../i18n";
 import { writeTextToClipboard } from "../hooks/clipboard";
+import { resolveRouteHref } from "../helpers/resolveAnalyticsUrl";
 import { useDashboardCrossFilter } from "../hooks/useDashboardCrossFilter";
 import { useDrillFilter } from "../hooks/useDrillFilter";
 import { DashboardEditorGrid } from "./dashboard/DashboardEditorGrid";
@@ -252,7 +253,7 @@ export default function DashboardDetailPage() {
 										size="small"
 										icon={shareCopied ? <CheckIcon /> : <CopyIcon />}
 										onClick={async () => {
-											const link = `${window.location.origin}/bi/public/dashboard/${encodeURIComponent(shareUuid)}`;
+											const link = resolveRouteHref(`/bi/public/dashboard/${encodeURIComponent(shareUuid)}`);
 											const copied = await writeTextToClipboard(link);
 											if (copied) {
 												setShareCopied(true);
@@ -268,7 +269,7 @@ export default function DashboardDetailPage() {
 						>
 								<Input
 									readOnly
-									value={`${window.location.origin}/bi/public/dashboard/${encodeURIComponent(shareUuid)}`}
+									value={resolveRouteHref(`/bi/public/dashboard/${encodeURIComponent(shareUuid)}`)}
 								/>
 								<p className="text-secondary" style={{ marginTop: "var(--spacing-sm)", fontSize: "var(--font-size-sm)" }}>
 									{t(locale, "share.note")}
