@@ -1,10 +1,10 @@
 import { useEffect, useState, useCallback, useMemo, useRef } from 'react';
 import { useNavigate } from 'react-router';
 import { analyticsApi, ScreenListItem, type ScreenAiGenerationResponse } from '../../api/analyticsApi';
-import { resolveRouteForOpen, resolveRouteHref } from '../../helpers/resolveAnalyticsUrl';
+import { resolveRouteForOpen } from '../../helpers/resolveAnalyticsUrl';
 import { PageContainer } from '../../components/PageContainer/PageContainer';
 import { writeTextToClipboard } from '../../hooks/clipboard';
-import { TemplateGallery, ScreenSharePanel, ScreenAclPanel, type TemplateSelection } from './components';
+import { TemplateGallery, ScreenAclPanel, type TemplateSelection } from './components';
 import { createConfigFromTemplate } from './screenTemplates';
 import { buildScreenPayload, normalizeScreenConfig } from './specV2';
 const SCREEN_LIST_PREF_KEY = 'dts.analytics.screens.listPref.v1';
@@ -15,7 +15,6 @@ export default function ScreensPage() {
 	const [loading, setLoading] = useState(true);
 	const [error, setError] = useState<string | null>(null);
 	const [showTemplateGallery, setShowTemplateGallery] = useState(false);
-	const [sharingId, setSharingId] = useState<string | number | null>(null);
 	const [savingTemplateId, setSavingTemplateId] = useState<string | number | null>(null);
 
 	const [showAiGenerator, setShowAiGenerator] = useState(false);
@@ -28,7 +27,6 @@ export default function ScreensPage() {
 	const [aiResult, setAiResult] = useState<ScreenAiGenerationResponse | null>(null);
 	const [aiContextHistory, setAiContextHistory] = useState<string[]>([]);
 	const [activeCardMenuId, setActiveCardMenuId] = useState<string | number | null>(null);
-	const [shareScreenId, setShareScreenId] = useState<string | number | null>(null);
 	const [aclScreenId, setAclScreenId] = useState<string | number | null>(null);
 	const [searchKeyword, setSearchKeyword] = useState(() => {
 		if (typeof window === 'undefined') return '';
@@ -352,33 +350,6 @@ export default function ScreensPage() {
 		window.open(resolveRouteForOpen(`/bi/screens/${id}/preview`), '_blank', 'noopener,noreferrer');
 	};
 
-	const getPreviewUrl = useCallback(
-		(id: string | number) => resolveRouteHref(`/bi/screens/${encodeURIComponent(String(id))}/preview`),
-		[],
-	);
-
-	const handleCopyPreviewUrl = async (id: string | number) => {
-		const url = getPreviewUrl(id);
-		const copied = await writeTextToClipboard(url);
-		alert(copied ? '预览链接已复制到剪贴板' : `复制失败，请手工复制：\n${url}`);
-	};
-
-	const handleShare = async (id: string | number) => {
-		if (sharingId !== null) return;
-		setSharingId(id);
-		try {
-			const { uuid } = await analyticsApi.createScreenPublicLink(id);
-			const url = resolveRouteHref(`/bi/public/screen/${uuid}`);
-			const copied = await writeTextToClipboard(url);
-			alert(copied ? '分享链接已复制到剪贴板' : `复制失败，请手工复制：\n${url}`);
-		} catch (err) {
-			console.error('Failed to create public link:', err);
-			alert('创建分享链接失败');
-		} finally {
-			setSharingId(null);
-		}
-	};
-
 	const handleSaveAsTemplate = async (id: string | number, screenName?: string) => {
 		if (savingTemplateId !== null) return;
 
@@ -541,169 +512,109 @@ export default function ScreensPage() {
 							</button>
 						</div>
 					) : (
-						<div className="grid gap-5 p-5" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))' }}>
-						{visibleScreens.map((screen) => (
-							<div key={screen.id} className="relative bg-surface-card border border-border-default rounded-lg overflow-visible transition-all duration-200 hover:border-brand hover:shadow-[0_4px_12px_rgba(0,0,0,0.1)]" data-testid={`analytics-screen-card-${screen.id}`}>
-								<div
-									className="relative h-40 flex items-center justify-center cursor-pointer rounded-t-lg overflow-hidden border-b border-border-default"
-									style={{ background: 'linear-gradient(135deg, rgba(84,123,255,0.08) 0%, rgba(34,197,94,0.06) 50%, rgba(168,85,247,0.06) 100%)' }}
-									data-testid={`analytics-screen-edit-${screen.id}`}
-									onClick={() => handleEdit(screen.id)}
-								>
-									<div className="text-[32px] opacity-[0.18] font-bold tracking-wider text-text-primary">
-										<svg width="48" height="36" viewBox="0 0 48 36" fill="none" xmlns="http://www.w3.org/2000/svg">
-											<rect x="2" y="2" width="44" height="28" rx="3" stroke="currentColor" strokeWidth="2.5" />
-											<line x1="18" y1="34" x2="30" y2="34" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" />
-											<line x1="24" y1="30" x2="24" y2="34" stroke="currentColor" strokeWidth="2.5" />
-										</svg>
-									</div>
-										<div className="absolute bottom-2 right-2 px-2 py-1 bg-surface-card text-text-secondary border border-border-default rounded text-[11px] font-semibold backdrop-blur-sm">
-											{screen.width || 1920} × {screen.height || 1080}
-										</div>
-									</div>
-								<div className="p-4">
-									<h3 className="m-0 mb-2 text-base font-semibold text-text-primary">{screen.name || '未命名大屏'}</h3>
-									<p className="m-0 mb-2 text-xs text-text-secondary overflow-hidden text-ellipsis whitespace-nowrap">
-										{screen.description || '无描述'}
-									</p>
-									<div className="text-[11px] text-text-muted grid gap-1">
-										<div className="flex items-center gap-2 flex-wrap">
-											<span className={`inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-semibold border border-transparent ${screen.publishedVersionNo ? 'text-[#166534] bg-success/10 border-success/30' : 'text-[#9a3412] bg-warning/10 border-warning/30'}`}>
-												{screen.publishedVersionNo ? `已发布 v${screen.publishedVersionNo}` : '未发布'}
-											</span>
-											{screen.publishedAt ? (
-												<span>发布: {formatDate(screen.publishedAt)}</span>
-											) : null}
-										</div>
-										<span>更新: {formatDate(screen.updatedAt)}</span>
-										{screen.publishedVersionNo ? (
-											<div className="flex items-center gap-1.5">
-												<a
-													href={getPreviewUrl(screen.id)}
-													target="_blank"
-													rel="noreferrer"
-													className="text-brand no-underline max-w-[170px] overflow-hidden text-ellipsis whitespace-nowrap hover:underline"
-													title="打开预览链接"
-												>
-													预览链接
-												</a>
-												<button
-													type="button"
-													className="border border-border-default rounded-md bg-surface-card text-text-primary text-[11px] px-1.5 py-0.5 cursor-pointer hover:border-brand hover:bg-brand/10"
-													onClick={() => {
-														void handleCopyPreviewUrl(screen.id);
-													}}
-													title="复制预览链接"
-												>
-													复制
-												</button>
-											</div>
-										) : null}
-									</div>
-								</div>
-								<div className="flex gap-2 px-4 py-3 border-t border-border-default items-center">
-									<button
-										className="flex-1 py-2 border border-border-default rounded-md bg-surface-card cursor-pointer text-xs font-medium transition-all duration-200 hover:border-brand hover:bg-brand/10"
-										style={{ background: 'var(--surface-card, #fff)', border: '1px solid var(--color-border, rgba(148,163,184,0.24))', borderRadius: 6 }}
-										data-testid={`analytics-screen-edit-button-${screen.id}`}
-										onClick={() => handleEdit(screen.id)}
-										title="编辑大屏"
-									>
-										编辑
-									</button>
-									<button
-										className="flex-1 py-2 border border-border-default rounded-md bg-surface-card cursor-pointer text-xs font-medium transition-all duration-200 hover:border-brand hover:bg-brand/10"
-										style={{ background: 'var(--surface-card, #fff)', border: '1px solid var(--color-border, rgba(148,163,184,0.24))', borderRadius: 6 }}
-										data-testid={`analytics-screen-preview-${screen.id}`}
-										onClick={() => handlePreview(screen.id)}
-										title="预览大屏"
-									>
-										预览
-									</button>
-									<div className="screen-card-menu relative flex-1 z-[2]">
-										<button
-											className={`w-full py-2 border border-border-default rounded-md bg-surface-card cursor-pointer text-xs font-medium transition-all duration-200 hover:border-brand hover:bg-brand/10 ${activeCardMenuId === screen.id ? 'border-brand bg-brand/10' : ''}`}
-											style={{ background: 'var(--surface-card, #fff)', border: '1px solid var(--color-border, rgba(148,163,184,0.24))', borderRadius: 6 }}
-											onClick={() => setActiveCardMenuId((prev) => (prev === screen.id ? null : screen.id))}
-											title="更多操作"
+						<div className="rounded-lg border border-border-default overflow-hidden">
+							<table className="w-full border-collapse text-sm">
+								<thead>
+									<tr className="bg-surface-secondary text-text-secondary text-xs">
+										<th className="text-left font-medium px-4 py-3">名称</th>
+										<th className="text-left font-medium px-4 py-3">描述</th>
+										<th className="text-left font-medium px-4 py-3 whitespace-nowrap">分辨率</th>
+										<th className="text-left font-medium px-4 py-3 whitespace-nowrap">状态</th>
+										<th className="text-left font-medium px-4 py-3 whitespace-nowrap">更新时间</th>
+										<th className="text-right font-medium px-4 py-3 whitespace-nowrap">操作</th>
+									</tr>
+								</thead>
+								<tbody>
+									{visibleScreens.map((screen) => (
+										<tr
+											key={screen.id}
+											className="border-t border-border-default bg-surface-card hover:bg-brand/5 transition-colors duration-150"
+											data-testid={`analytics-screen-row-${screen.id}`}
 										>
-											更多
-										</button>
-										{activeCardMenuId === screen.id ? (
-											<div className="absolute right-0 top-[calc(100%+6px)] min-w-[160px] z-[900] bg-surface-card text-text-primary opacity-100 border border-border-default rounded-lg shadow-[0_8px_24px_rgba(15,23,42,0.2)] p-1.5 grid gap-1">
-												<button
-													type="button"
-													className="border border-transparent rounded-md px-2 py-[7px] bg-transparent text-text-primary text-xs text-left cursor-pointer hover:border-brand hover:bg-brand/10"
-													onClick={() => {
-														setActiveCardMenuId(null);
-														setShareScreenId(screen.id);
-													}}
-												>
-													分享给用户
-												</button>
-												<button
-													type="button"
-													className="border border-transparent rounded-md px-2 py-[7px] bg-transparent text-text-primary text-xs text-left cursor-pointer hover:border-brand hover:bg-brand/10"
-													onClick={() => {
-														setActiveCardMenuId(null);
-														setAclScreenId(screen.id);
-													}}
-												>
-													权限管理
-												</button>
-												<button
-													type="button"
-													className="border border-transparent rounded-md px-2 py-[7px] bg-transparent text-text-primary text-xs text-left cursor-pointer hover:border-brand hover:bg-brand/10 disabled:opacity-55 disabled:cursor-not-allowed"
-													style={{ background: 'transparent', color: 'var(--color-text-primary, #1c2833)', fontSize: 12, textAlign: 'left' }}
-													onClick={() => {
-														setActiveCardMenuId(null);
-														void handleShare(screen.id);
-													}}
-													disabled={sharingId === screen.id}
-												>
-													{sharingId === screen.id ? '生成分享链接中...' : '生成分享链接'}
-												</button>
-												<button
-													type="button"
-													className="border border-transparent rounded-md px-2 py-[7px] bg-transparent text-text-primary text-xs text-left cursor-pointer hover:border-brand hover:bg-brand/10"
-													onClick={() => {
-														setActiveCardMenuId(null);
-														void handleCopyPreviewUrl(screen.id);
-													}}
-												>
-													复制预览链接
-												</button>
-												<button
-													type="button"
-													className="border border-transparent rounded-md px-2 py-[7px] bg-transparent text-text-primary text-xs text-left cursor-pointer hover:border-brand hover:bg-brand/10 disabled:opacity-55 disabled:cursor-not-allowed"
-													style={{ background: 'transparent', color: 'var(--color-text-primary, #1c2833)', fontSize: 12, textAlign: 'left' }}
-													onClick={() => {
-														setActiveCardMenuId(null);
-														void handleSaveAsTemplate(screen.id, screen.name);
-													}}
-													disabled={savingTemplateId === screen.id}
-												>
-													{savingTemplateId === screen.id ? '保存模板中...' : '保存为模板'}
-												</button>
-												<button
-													type="button"
-													className="border border-transparent rounded-md px-2 py-[7px] bg-transparent text-text-primary text-xs text-left cursor-pointer hover:border-error hover:bg-error/10"
-													style={{ background: 'transparent', color: 'var(--color-text-primary, #1c2833)', fontSize: 12, textAlign: 'left' }}
-													onClick={() => {
-														setActiveCardMenuId(null);
-														void handleDelete(screen.id);
-													}}
-												>
-													删除大屏
-												</button>
-											</div>
-										) : null}
-									</div>
-								</div>
-							</div>
-						))}
-					</div>
-				)}
+											<td className="px-4 py-3 font-medium text-text-primary max-w-[200px]">
+												<span className="block overflow-hidden text-ellipsis whitespace-nowrap">{screen.name || '未命名大屏'}</span>
+											</td>
+											<td className="px-4 py-3 text-text-secondary max-w-[240px]">
+												<span className="block overflow-hidden text-ellipsis whitespace-nowrap">{screen.description || '无描述'}</span>
+											</td>
+											<td className="px-4 py-3 text-text-secondary whitespace-nowrap text-xs">
+												{screen.width || 1920} × {screen.height || 1080}
+											</td>
+											<td className="px-4 py-3 whitespace-nowrap">
+												<span className={`inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-semibold border border-transparent ${screen.publishedVersionNo ? 'text-[#166534] bg-success/10 border-success/30' : 'text-[#9a3412] bg-warning/10 border-warning/30'}`}>
+													{screen.publishedVersionNo ? `已发布 v${screen.publishedVersionNo}` : '未发布'}
+												</span>
+											</td>
+											<td className="px-4 py-3 text-text-secondary whitespace-nowrap text-xs">
+												{formatDate(screen.updatedAt)}
+											</td>
+											<td className="px-4 py-3 text-right whitespace-nowrap">
+												<div className="inline-flex items-center gap-1.5">
+													<button
+														className="px-2.5 py-1 border border-border-default rounded-md bg-surface-card cursor-pointer text-xs font-medium transition-all duration-200 hover:border-brand hover:bg-brand/10 text-text-primary"
+														data-testid={`analytics-screen-preview-${screen.id}`}
+														onClick={() => handlePreview(screen.id)}
+													>
+														预览
+													</button>
+													<button
+														className="px-2.5 py-1 border border-border-default rounded-md bg-surface-card cursor-pointer text-xs font-medium transition-all duration-200 hover:border-brand hover:bg-brand/10 text-text-primary"
+														data-testid={`analytics-screen-edit-button-${screen.id}`}
+														onClick={() => handleEdit(screen.id)}
+													>
+														编辑
+													</button>
+													<div className="screen-card-menu relative">
+														<button
+															className={`px-2.5 py-1 border border-border-default rounded-md bg-surface-card cursor-pointer text-xs font-medium transition-all duration-200 hover:border-brand hover:bg-brand/10 text-text-primary ${activeCardMenuId === screen.id ? 'border-brand bg-brand/10' : ''}`}
+															onClick={() => setActiveCardMenuId((prev) => (prev === screen.id ? null : screen.id))}
+														>
+															更多
+														</button>
+														{activeCardMenuId === screen.id ? (
+															<div className="absolute right-0 top-[calc(100%+4px)] min-w-[140px] z-[900] bg-surface-card text-text-primary border border-border-default rounded-lg shadow-[0_8px_24px_rgba(15,23,42,0.2)] p-1.5 grid gap-0.5">
+																<button
+																	type="button"
+																	className="border border-transparent rounded-md px-3 py-[7px] bg-transparent text-text-primary text-xs text-left cursor-pointer hover:border-brand hover:bg-brand/10"
+																	onClick={() => {
+																		setActiveCardMenuId(null);
+																		setAclScreenId(screen.id);
+																	}}
+																>
+																	权限管理
+																</button>
+																<button
+																	type="button"
+																	className="border border-transparent rounded-md px-3 py-[7px] bg-transparent text-text-primary text-xs text-left cursor-pointer hover:border-brand hover:bg-brand/10 disabled:opacity-55 disabled:cursor-not-allowed"
+																	onClick={() => {
+																		setActiveCardMenuId(null);
+																		void handleSaveAsTemplate(screen.id, screen.name);
+																	}}
+																	disabled={savingTemplateId === screen.id}
+																>
+																	{savingTemplateId === screen.id ? '保存中...' : '保存为模板'}
+																</button>
+																<button
+																	type="button"
+																	className="border border-transparent rounded-md px-3 py-[7px] bg-transparent text-xs text-left cursor-pointer hover:border-error hover:bg-error/10 text-error"
+																	onClick={() => {
+																		setActiveCardMenuId(null);
+																		void handleDelete(screen.id);
+																	}}
+																>
+																	删除
+																</button>
+															</div>
+														) : null}
+													</div>
+												</div>
+											</td>
+										</tr>
+									))}
+								</tbody>
+							</table>
+						</div>
+					)}
 				</div>
 			</div>
 
@@ -879,13 +790,6 @@ export default function ScreensPage() {
 					</div>
 				</div>
 			)}
-			<ScreenSharePanel
-				open={shareScreenId != null}
-				screenId={shareScreenId ?? undefined}
-				onClose={() => setShareScreenId(null)}
-				isOwner={true}
-			/>
-
 			<ScreenAclPanel
 				open={aclScreenId != null}
 				screenId={aclScreenId ?? undefined}

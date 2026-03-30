@@ -220,8 +220,10 @@
    Background Utilities
    ============================================ */
 
-.bg-primary { background-color: var(--color-bg-primary); }
-.bg-secondary { background-color: var(--color-bg-secondary); }
+/* NOTE: .bg-primary / .bg-secondary removed — they clash with Tailwind (brand color vs surface).
+   Use .bg-surface-card / .bg-surface-page or the mb- prefixed aliases below. */
+.mb-bg-primary { background-color: var(--color-bg-primary); }
+.mb-bg-secondary { background-color: var(--color-bg-secondary); }
 .bg-tertiary { background-color: var(--color-bg-tertiary); }
 .bg-dark { background-color: var(--color-bg-dark); }
 .bg-surface-page { background-color: var(--surface-page); }
