@@ -125,7 +125,17 @@ export const resolveMenuPath = (node: MenuTree, meta: MenuMetadata, parentPath?:
 		return normalized;
 	}
 	const raw = String(rawPath ?? "").trim();
+	// Absolute paths (starting with "/") don't need joining
 	if (raw.startsWith("/")) {
+		return normalized;
+	}
+	// DB stores full paths like "bi/home" (not just "home").
+	// If the normalized path already starts with the parent prefix, it's a full path — don't double-join.
+	const normalizedParent = normalizeMenuPath(parentPath);
+	if (normalizedParent && normalized.startsWith(normalizedParent + "/")) {
+		return normalized;
+	}
+	if (normalizedParent && normalized === normalizedParent) {
 		return normalized;
 	}
 	return joinRelativeMenuPath(parentPath, raw);
