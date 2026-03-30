@@ -161,7 +161,7 @@ public class ScreenResource {
         Integer height = body != null && body.has("height") ? body.path("height").asInt(1080) : 1080;
 
         ObjectNode result = screenAiGenerationService.generate(prompt, width, height);
-        result.putPOJO("generatedBy", user.get().getId());
+        result.putPOJO("generatedBy", user.orElseThrow().getId());
         result.putPOJO("generatedAt", Instant.now());
         return ResponseEntity.ok(result);
     }
@@ -178,7 +178,7 @@ public class ScreenResource {
         String mode = body == null ? null : trimToNull(body.path("mode").asText(null));
         boolean applyChanges = mode == null || !"suggest".equalsIgnoreCase(mode);
         ObjectNode result = screenAiGenerationService.revise(prompt, screenSpec, context, applyChanges);
-        result.putPOJO("generatedBy", user.get().getId());
+        result.putPOJO("generatedBy", user.orElseThrow().getId());
         result.putPOJO("generatedAt", Instant.now());
         return ResponseEntity.ok(result);
     }
@@ -213,7 +213,7 @@ public class ScreenResource {
         }
 
         PlatformContext context = PlatformContext.from(request);
-        ScreenPermissionService.PermissionSnapshot permissions = screenPermissionService.snapshot(screen, user.get(), context);
+        ScreenPermissionService.PermissionSnapshot permissions = screenPermissionService.snapshot(screen, user.orElseThrow(), context);
         if (!permissions.canRead()) {
             return forbidden();
         }
@@ -246,7 +246,7 @@ public class ScreenResource {
         }
 
         PlatformContext context = PlatformContext.from(request);
-        if (!screenPermissionService.snapshot(screen, user.get(), context).canRead()) {
+        if (!screenPermissionService.snapshot(screen, user.orElseThrow(), context).canRead()) {
             return forbidden();
         }
 
@@ -270,7 +270,7 @@ public class ScreenResource {
             return ResponseEntity.notFound().build();
         }
         PlatformContext context = PlatformContext.from(request);
-        if (!screenPermissionService.snapshot(screen, user.get(), context).canRead()) {
+        if (!screenPermissionService.snapshot(screen, user.orElseThrow(), context).canRead()) {
             return forbidden();
         }
         AnalyticsScreenVersion fromVersion = screenVersionRepository.findByIdAndScreenId(fromVersionId, screen.getId()).orElse(null);
@@ -297,7 +297,7 @@ public class ScreenResource {
         }
 
         PlatformContext context = PlatformContext.from(request);
-        if (!screenPermissionService.snapshot(screen, user.get(), context).isOwner()) {
+        if (!screenPermissionService.snapshot(screen, user.orElseThrow(), context).isOwner()) {
             return forbidden();
         }
 
@@ -330,7 +330,7 @@ public class ScreenResource {
         }
 
         PlatformContext context = PlatformContext.from(request);
-        if (!screenPermissionService.snapshot(screen, user.get(), context).canRead()) {
+        if (!screenPermissionService.snapshot(screen, user.orElseThrow(), context).canRead()) {
             return forbidden();
         }
 
@@ -370,7 +370,7 @@ public class ScreenResource {
         }
 
         PlatformContext context = PlatformContext.from(request);
-        ScreenPermissionService.PermissionSnapshot permissions = screenPermissionService.snapshot(screen, user.get(), context);
+        ScreenPermissionService.PermissionSnapshot permissions = screenPermissionService.snapshot(screen, user.orElseThrow(), context);
         if (!permissions.canRead()) {
             return forbidden();
         }
@@ -427,7 +427,7 @@ public class ScreenResource {
             denied.put("screenId", screen.getId());
             denied.put("format", format);
             denied.put("mode", mode);
-            screenAuditService.log(screen.getId(), user.get().getId(), "screen.export.denied", null, denied, requestId);
+            screenAuditService.log(screen.getId(), user.orElseThrow().getId(), "screen.export.denied", null, denied, requestId);
             return ResponseEntity.status(403)
                     .contentType(MediaType.APPLICATION_JSON)
                     .header("X-Error-Code", "SCREEN_EXPORT_APPROVAL_REQUIRED")
@@ -489,7 +489,7 @@ public class ScreenResource {
             auditPayload.put("screenComponentCount", componentCount);
             auditPayload.remove("screenSpec");
         }
-        screenAuditService.log(screen.getId(), user.get().getId(), "screen.export.prepare", null, auditPayload, requestId);
+        screenAuditService.log(screen.getId(), user.orElseThrow().getId(), "screen.export.prepare", null, auditPayload, requestId);
         return ResponseEntity.ok(payload);
     }
 
@@ -509,7 +509,7 @@ public class ScreenResource {
         }
 
         PlatformContext context = PlatformContext.from(request);
-        ScreenPermissionService.PermissionSnapshot permissions = screenPermissionService.snapshot(screen, user.get(), context);
+        ScreenPermissionService.PermissionSnapshot permissions = screenPermissionService.snapshot(screen, user.orElseThrow(), context);
         if (!permissions.canRead()) {
             return forbidden();
         }
@@ -583,7 +583,7 @@ public class ScreenResource {
             case "failed" -> "screen.export.failed";
             default -> "screen.export.report";
         };
-        screenAuditService.log(screen.getId(), user.get().getId(), action, null, payload, requestId);
+        screenAuditService.log(screen.getId(), user.orElseThrow().getId(), action, null, payload, requestId);
         return ResponseEntity.ok(payload);
     }
 
@@ -603,7 +603,7 @@ public class ScreenResource {
         }
 
         PlatformContext context = PlatformContext.from(request);
-        ScreenPermissionService.PermissionSnapshot permissions = screenPermissionService.snapshot(screen, user.get(), context);
+        ScreenPermissionService.PermissionSnapshot permissions = screenPermissionService.snapshot(screen, user.orElseThrow(), context);
         if (!permissions.canRead()) {
             return forbidden();
         }
@@ -656,7 +656,7 @@ public class ScreenResource {
             denied.put("screenId", screen.getId());
             denied.put("format", format);
             denied.put("mode", mode);
-            screenAuditService.log(screen.getId(), user.get().getId(), "screen.export.denied", null, denied, requestId);
+            screenAuditService.log(screen.getId(), user.orElseThrow().getId(), "screen.export.denied", null, denied, requestId);
             return ResponseEntity.status(403)
                     .contentType(MediaType.APPLICATION_JSON)
                     .header("X-Error-Code", "SCREEN_EXPORT_APPROVAL_REQUIRED")
@@ -699,7 +699,7 @@ public class ScreenResource {
             auditPayload.put("pixelRatio", pixelRatio);
             auditPayload.put("hiddenByDevice", hiddenByDevice);
             auditPayload.put("renderEngine", "server-heuristic-v2");
-            screenAuditService.log(screen.getId(), user.get().getId(), "screen.export.server.render", null, auditPayload, requestId);
+            screenAuditService.log(screen.getId(), user.orElseThrow().getId(), "screen.export.server.render", null, auditPayload, requestId);
 
             return ResponseEntity.ok()
                     .contentType(contentType)
@@ -722,7 +722,7 @@ public class ScreenResource {
             failure.put("resolvedMode", resolvedMode);
             failure.put("specDigest", specDigest);
             failure.put("renderEngine", "server-heuristic-v2");
-            screenAuditService.log(screen.getId(), user.get().getId(), "screen.export.server.render.failed", null, failure, requestId);
+            screenAuditService.log(screen.getId(), user.orElseThrow().getId(), "screen.export.server.render.failed", null, failure, requestId);
             return ResponseEntity.internalServerError().contentType(MediaType.APPLICATION_JSON).body(failure);
         }
     }
@@ -761,18 +761,18 @@ public class ScreenResource {
         screen.setCarouselJson(body != null && body.has("carouselConfig") && body.path("carouselConfig").isObject()
                 ? body.path("carouselConfig").toString()
                 : null);
-        screen.setCreatorId(user.get().getId());
+        screen.setCreatorId(user.orElseThrow().getId());
         screen.setArchived(false);
 
         screen.setOwnerDeptCode(PlatformContext.from(request).dept());
         screen = screenRepository.save(screen);
-        screenOwnershipService.registerOwnership(screen.getId(), extractUsername(user.get()), PlatformContext.from(request).dept());
+        screenOwnershipService.registerOwnership(screen.getId(), extractUsername(user.orElseThrow()), PlatformContext.from(request).dept());
 
         ScreenPermissionService.PermissionSnapshot permissions = ScreenPermissionService.PermissionSnapshot.all();
         ObjectNode detail = toDetailResponse(screen, null, null, "draft", permissions);
         applySpecWarnings(detail, specValidation.warnings());
 
-        screenAuditService.log(screen.getId(), user.get().getId(), "screen.create", null, detail, requestIdFrom(request));
+        screenAuditService.log(screen.getId(), user.orElseThrow().getId(), "screen.create", null, detail, requestIdFrom(request));
 
         return ResponseEntity.ok(detail);
     }
@@ -793,12 +793,12 @@ public class ScreenResource {
         }
 
         PlatformContext context = PlatformContext.from(request);
-        ScreenPermissionService.PermissionSnapshot permissions = screenPermissionService.snapshot(screen, user.get(), context);
+        ScreenPermissionService.PermissionSnapshot permissions = screenPermissionService.snapshot(screen, user.orElseThrow(), context);
         if (!permissions.canEdit()) {
             return forbidden();
         }
         ScreenEditLockService.LockSnapshot blockingLock =
-                screenEditLockService.currentBlockingLock(screen.getId(), user.get().getId());
+                screenEditLockService.currentBlockingLock(screen.getId(), user.orElseThrow().getId());
         if (blockingLock != null) {
             return lockConflict(blockingLock);
         }
@@ -859,7 +859,7 @@ public class ScreenResource {
         ObjectNode detail = toDetailResponse(screen, null, currentPublished, "draft", permissions);
         applySpecWarnings(detail, specValidation.warnings());
 
-        screenAuditService.log(screen.getId(), user.get().getId(), "screen.update", before, detail, requestIdFrom(request));
+        screenAuditService.log(screen.getId(), user.orElseThrow().getId(), "screen.update", before, detail, requestIdFrom(request));
 
         return ResponseEntity.ok(detail);
     }
@@ -880,12 +880,12 @@ public class ScreenResource {
         }
 
         PlatformContext context = PlatformContext.from(request);
-        ScreenPermissionService.PermissionSnapshot permissions = screenPermissionService.snapshot(screen, user.get(), context);
+        ScreenPermissionService.PermissionSnapshot permissions = screenPermissionService.snapshot(screen, user.orElseThrow(), context);
         if (!permissions.canEdit()) {
             return forbidden();
         }
         ScreenEditLockService.LockSnapshot blockingLock =
-                screenEditLockService.currentBlockingLock(screen.getId(), user.get().getId());
+                screenEditLockService.currentBlockingLock(screen.getId(), user.orElseThrow().getId());
         if (blockingLock != null) {
             return lockConflict(blockingLock);
         }
@@ -912,7 +912,7 @@ public class ScreenResource {
         screenVersionRepository.clearCurrentPublished(screen.getId());
         AnalyticsScreenVersion version = createVersionFromScreen(
                 screen,
-                user.get().getId(),
+                user.orElseThrow().getId(),
                 nextVersionNo,
                 true,
                 Instant.now());
@@ -923,10 +923,10 @@ public class ScreenResource {
         response.set("screen", detail);
         response.set("version", toVersionResponse(version));
 
-        ScreenWarmupService.WarmupSummary warmupSummary = screenWarmupService.warmupForPublishedScreen(screen, user.get().getId());
+        ScreenWarmupService.WarmupSummary warmupSummary = screenWarmupService.warmupForPublishedScreen(screen, user.orElseThrow().getId());
         response.putPOJO("warmup", warmupSummary);
 
-        screenAuditService.log(screen.getId(), user.get().getId(), "screen.publish", before, response, requestIdFrom(request));
+        screenAuditService.log(screen.getId(), user.orElseThrow().getId(), "screen.publish", before, response, requestIdFrom(request));
 
         return ResponseEntity.ok(response);
     }
@@ -947,12 +947,12 @@ public class ScreenResource {
         }
 
         PlatformContext context = PlatformContext.from(request);
-        ScreenPermissionService.PermissionSnapshot permissions = screenPermissionService.snapshot(screen, user.get(), context);
+        ScreenPermissionService.PermissionSnapshot permissions = screenPermissionService.snapshot(screen, user.orElseThrow(), context);
         if (!permissions.canEdit()) {
             return forbidden();
         }
         ScreenEditLockService.LockSnapshot blockingLock =
-                screenEditLockService.currentBlockingLock(screen.getId(), user.get().getId());
+                screenEditLockService.currentBlockingLock(screen.getId(), user.orElseThrow().getId());
         if (blockingLock != null) {
             return lockConflict(blockingLock);
         }
@@ -979,7 +979,7 @@ public class ScreenResource {
         response.set("screen", detail);
         response.set("version", toVersionResponse(targetVersion));
 
-        screenAuditService.log(screen.getId(), user.get().getId(), "screen.rollback", before, response, requestIdFrom(request));
+        screenAuditService.log(screen.getId(), user.orElseThrow().getId(), "screen.rollback", before, response, requestIdFrom(request));
 
         return ResponseEntity.ok(response);
     }
@@ -997,12 +997,12 @@ public class ScreenResource {
         }
 
         PlatformContext context = PlatformContext.from(request);
-        if (!screenPermissionService.snapshot(screen, user.get(), context).isOwner()) {
+        if (!screenPermissionService.snapshot(screen, user.orElseThrow(), context).isOwner()) {
             return ResponseEntity.status(403).contentType(MediaType.APPLICATION_JSON).body(
                 objectMapper.createObjectNode().put("error", "Only the owner can delete this screen"));
         }
         ScreenEditLockService.LockSnapshot blockingLock =
-                screenEditLockService.currentBlockingLock(screen.getId(), user.get().getId());
+                screenEditLockService.currentBlockingLock(screen.getId(), user.orElseThrow().getId());
         if (blockingLock != null) {
             return lockConflict(blockingLock);
         }
@@ -1013,10 +1013,10 @@ public class ScreenResource {
 
         screen.setArchived(true);
         screenRepository.save(screen);
-        screenEditLockService.release(screen.getId(), user.get().getId());
+        screenEditLockService.release(screen.getId(), user.orElseThrow().getId());
         screenOwnershipService.removeOwnership(screen.getId());
 
-        screenAuditService.log(screen.getId(), user.get().getId(), "screen.delete", before, null, requestIdFrom(request));
+        screenAuditService.log(screen.getId(), user.orElseThrow().getId(), "screen.delete", before, null, requestIdFrom(request));
 
         return ResponseEntity.noContent().build();
     }
@@ -1037,7 +1037,7 @@ public class ScreenResource {
         }
 
         PlatformContext ctx = PlatformContext.from(request);
-        if (!screenPermissionService.snapshot(screen, user.get(), ctx).isOwner()) {
+        if (!screenPermissionService.snapshot(screen, user.orElseThrow(), ctx).isOwner()) {
             return forbidden();
         }
 
@@ -1051,7 +1051,7 @@ public class ScreenResource {
         String uuid;
         try {
             uuid = publicLinkService.getOrCreateScoped(
-                    PublicLinkService.MODEL_SCREEN, id, user.get().getId(), ctx.dept(), ctx.classification());
+                    PublicLinkService.MODEL_SCREEN, id, user.orElseThrow().getId(), ctx.dept(), ctx.classification());
         } catch (IllegalStateException e) {
             return forbidden();
         }
@@ -1063,7 +1063,7 @@ public class ScreenResource {
         }
 
         ObjectNode after = toPublicLinkPolicyResponse(uuid, link);
-        screenAuditService.log(screen.getId(), user.get().getId(), "screen.public_link.create", before, after, requestIdFrom(request));
+        screenAuditService.log(screen.getId(), user.orElseThrow().getId(), "screen.public_link.create", before, after, requestIdFrom(request));
 
         return ResponseEntity.ok(after);
     }
@@ -1084,7 +1084,7 @@ public class ScreenResource {
         }
 
         PlatformContext ctx = PlatformContext.from(request);
-        if (!screenPermissionService.snapshot(screen, user.get(), ctx).isOwner()) {
+        if (!screenPermissionService.snapshot(screen, user.orElseThrow(), ctx).isOwner()) {
             return forbidden();
         }
 
@@ -1098,7 +1098,7 @@ public class ScreenResource {
         link = publicLinkService.save(link);
         ObjectNode after = toPublicLinkPolicyResponse(link.getPublicUuid(), link);
 
-        screenAuditService.log(screen.getId(), user.get().getId(), "screen.public_link.policy", before, after, requestIdFrom(request));
+        screenAuditService.log(screen.getId(), user.orElseThrow().getId(), "screen.public_link.policy", before, after, requestIdFrom(request));
 
         return ResponseEntity.ok(after);
     }
@@ -1116,7 +1116,7 @@ public class ScreenResource {
         }
 
         PlatformContext ctx = PlatformContext.from(request);
-        if (!screenPermissionService.snapshot(screen, user.get(), ctx).isOwner()) {
+        if (!screenPermissionService.snapshot(screen, user.orElseThrow(), ctx).isOwner()) {
             return forbidden();
         }
 
@@ -1124,7 +1124,7 @@ public class ScreenResource {
         ObjectNode before = toPublicLinkPolicyResponse(beforeLink == null ? null : beforeLink.getPublicUuid(), beforeLink);
 
         publicLinkService.delete(PublicLinkService.MODEL_SCREEN, id);
-        screenAuditService.log(screen.getId(), user.get().getId(), "screen.public_link.delete", before, null, requestIdFrom(request));
+        screenAuditService.log(screen.getId(), user.orElseThrow().getId(), "screen.public_link.delete", before, null, requestIdFrom(request));
 
         return ResponseEntity.noContent().build();
     }

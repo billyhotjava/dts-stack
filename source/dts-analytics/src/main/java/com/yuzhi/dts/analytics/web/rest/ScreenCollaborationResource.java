@@ -93,7 +93,7 @@ public class ScreenCollaborationResource {
         }
 
         PlatformContext context = PlatformContext.from(request);
-        if (!screenPermissionService.snapshot(screen, user.get(), context).canRead()) {
+        if (!screenPermissionService.snapshot(screen, user.orElseThrow(), context).canRead()) {
             return forbidden();
         }
 
@@ -119,7 +119,7 @@ public class ScreenCollaborationResource {
         }
 
         PlatformContext context = PlatformContext.from(request);
-        if (!screenPermissionService.snapshot(screen, user.get(), context).canRead()) {
+        if (!screenPermissionService.snapshot(screen, user.orElseThrow(), context).canRead()) {
             return forbidden();
         }
 
@@ -145,7 +145,7 @@ public class ScreenCollaborationResource {
         }
 
         PlatformContext context = PlatformContext.from(request);
-        if (!screenPermissionService.snapshot(screen, user.get(), context).canRead()) {
+        if (!screenPermissionService.snapshot(screen, user.orElseThrow(), context).canRead()) {
             return forbidden();
         }
 
@@ -194,7 +194,7 @@ public class ScreenCollaborationResource {
         }
 
         PlatformContext context = PlatformContext.from(request);
-        if (!screenPermissionService.snapshot(screen, user.get(), context).canRead()) {
+        if (!screenPermissionService.snapshot(screen, user.orElseThrow(), context).canRead()) {
             return forbidden();
         }
 
@@ -249,11 +249,11 @@ public class ScreenCollaborationResource {
             return ResponseEntity.notFound().build();
         }
         PlatformContext context = PlatformContext.from(request);
-        if (!screenPermissionService.snapshot(screen, user.get(), context).canRead()) {
+        if (!screenPermissionService.snapshot(screen, user.orElseThrow(), context).canRead()) {
             return forbidden();
         }
         int safeTtlSeconds = sanitizeTtlSeconds(ttlSeconds);
-        String safeSessionId = resolvePresenceSessionIdFromRaw(sessionId, request, user.get());
+        String safeSessionId = resolvePresenceSessionIdFromRaw(sessionId, request, user.orElseThrow());
         return ResponseEntity.ok(buildPresenceResponse(screen.getId(), safeTtlSeconds, safeSessionId));
     }
 
@@ -275,13 +275,13 @@ public class ScreenCollaborationResource {
             return ResponseEntity.notFound().build();
         }
         PlatformContext context = PlatformContext.from(request);
-        if (!screenPermissionService.snapshot(screen, user.get(), context).canRead()) {
+        if (!screenPermissionService.snapshot(screen, user.orElseThrow(), context).canRead()) {
             return forbidden();
         }
         int safeTtlSeconds = sanitizeTtlSeconds(ttlSeconds);
         int safeDurationSec = Math.max(15, Math.min(durationSec, 120));
         int safeWaitMs = Math.max(500, Math.min(waitMs, 5000));
-        String safeSessionId = resolvePresenceSessionIdFromRaw(sessionId, request, user.get());
+        String safeSessionId = resolvePresenceSessionIdFromRaw(sessionId, request, user.orElseThrow());
 
         SseEmitter emitter = new SseEmitter((safeDurationSec + 5L) * 1000L);
         CompletableFuture.runAsync(() -> {
@@ -336,11 +336,11 @@ public class ScreenCollaborationResource {
             return ResponseEntity.notFound().build();
         }
         PlatformContext context = PlatformContext.from(request);
-        if (!screenPermissionService.snapshot(screen, user.get(), context).canRead()) {
+        if (!screenPermissionService.snapshot(screen, user.orElseThrow(), context).canRead()) {
             return forbidden();
         }
         int safeTtlSeconds = sanitizeTtlSeconds(ttlSeconds);
-        String sessionId = resolvePresenceSessionId(body, request, user.get());
+        String sessionId = resolvePresenceSessionId(body, request, user.orElseThrow());
         String componentId = trimToNull(body == null ? null : body.path("componentId").asText(null));
         boolean typing = body != null && body.path("typing").asBoolean(false);
         String clientType = trimToNull(body == null ? null : body.path("clientType").asText(null));
@@ -348,8 +348,8 @@ public class ScreenCollaborationResource {
 
         PresenceState state = new PresenceState();
         state.sessionId = sessionId;
-        state.userId = user.get().getId();
-        state.displayName = resolveDisplayName(user.get());
+        state.userId = user.orElseThrow().getId();
+        state.displayName = resolveDisplayName(user.orElseThrow());
         state.componentId = componentId;
         state.typing = typing;
         state.clientType = clientType;
@@ -377,11 +377,11 @@ public class ScreenCollaborationResource {
             return ResponseEntity.notFound().build();
         }
         PlatformContext context = PlatformContext.from(request);
-        if (!screenPermissionService.snapshot(screen, user.get(), context).canRead()) {
+        if (!screenPermissionService.snapshot(screen, user.orElseThrow(), context).canRead()) {
             return forbidden();
         }
         int safeTtlSeconds = sanitizeTtlSeconds(ttlSeconds);
-        String sessionId = resolvePresenceSessionId(body, request, user.get());
+        String sessionId = resolvePresenceSessionId(body, request, user.orElseThrow());
         removePresence(screen.getId(), sessionId);
         return ResponseEntity.ok(buildPresenceResponse(screen.getId(), safeTtlSeconds, sessionId));
     }
@@ -402,7 +402,7 @@ public class ScreenCollaborationResource {
         }
 
         PlatformContext context = PlatformContext.from(request);
-        if (!screenPermissionService.snapshot(screen, user.get(), context).canEdit()) {
+        if (!screenPermissionService.snapshot(screen, user.orElseThrow(), context).canEdit()) {
             return forbidden();
         }
 
@@ -432,7 +432,7 @@ public class ScreenCollaborationResource {
 
         AnalyticsScreenAuditLog log = screenAuditService.logAndReturn(
                 screen.getId(),
-                user.get().getId(),
+                user.orElseThrow().getId(),
                 ACTION_COMMENT_ADD,
                 null,
                 payload,
@@ -492,7 +492,7 @@ public class ScreenCollaborationResource {
         }
 
         PlatformContext context = PlatformContext.from(request);
-        if (!screenPermissionService.snapshot(screen, user.get(), context).canEdit()) {
+        if (!screenPermissionService.snapshot(screen, user.orElseThrow(), context).canEdit()) {
             return forbidden();
         }
 
@@ -516,7 +516,7 @@ public class ScreenCollaborationResource {
 
         AnalyticsScreenAuditLog actionLog = screenAuditService.logAndReturn(
                 screen.getId(),
-                user.get().getId(),
+                user.orElseThrow().getId(),
                 resolve ? ACTION_COMMENT_RESOLVE : ACTION_COMMENT_REOPEN,
                 null,
                 payload,
@@ -525,7 +525,7 @@ public class ScreenCollaborationResource {
         if (resolve) {
             target.status = "resolved";
             target.resolvedAt = actionLog == null ? Instant.now() : actionLog.getCreatedAt();
-            target.resolvedBy = user.get().getId();
+            target.resolvedBy = user.orElseThrow().getId();
             target.resolutionNote = note;
         } else {
             target.status = "open";
