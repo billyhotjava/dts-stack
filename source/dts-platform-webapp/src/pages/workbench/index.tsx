@@ -9,6 +9,7 @@ import workbenchService, {
 } from "@/api/services/workbenchService";
 import { useRouter } from "@/routes/hooks";
 import userStore from "@/store/userStore";
+import { resolveRouteForOpen } from "@/analytics/helpers/resolveAnalyticsUrl";
 
 
 type PublishedScreen = {
@@ -387,7 +388,7 @@ export default function Page() {
 							<div
 								key={screen.id}
 								onClick={() => {
-									window.open(`/bi/screens/${screen.id}/preview`, "_blank");
+									window.open(resolveRouteForOpen(`/bi/screens/${screen.id}/preview`), "_blank");
 								}}
 								style={{
 									flex: "0 0 180px",
