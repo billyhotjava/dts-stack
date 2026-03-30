@@ -1,207 +1,408 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link } from "react-router";
-import { analyticsApi, type DatabaseListItem, type CurrentUser } from "../api/analyticsApi";
-import { PageContainer, PageHeader } from "../components/PageContainer/PageContainer";
-import { EmptyState } from "../components/EmptyState";
-import { ErrorNotice } from "../components/ErrorNotice";
-import { Spin, Button, Card, Tag } from "antd";
-import { getEffectiveLocale, t, type Locale } from "../i18n";
-type LoadState<T> =
-	| { state: "loading" }
-	| { state: "loaded"; value: T }
-	| { state: "error"; error: unknown };
+import {
+	analyticsApi,
+	type PlatformDataSourceItem,
+	type DatabaseListItem,
+	type CurrentUser,
+	type MyUploadItem,
+} from "../api/analyticsApi";
+import { PageContainer, PageHeader, PageSection } from "../components/PageContainer/PageContainer";
+import { Table, Tag, Button, Input, Modal, message, Space, Tooltip } from "antd";
+import type { ColumnsType } from "antd/es/table";
+import UploadedDataEditor from "../components/UploadedDataEditor";
 
-// Icons
-const PlusIcon = () => (
-	<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-		<path d="M5 12h14" />
-		<path d="M12 5v14" />
-	</svg>
-);
+/* ------------------------------------------------------------------ */
+/*  Types                                                              */
+/* ------------------------------------------------------------------ */
 
-const DatabaseIcon = () => (
-	<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-		<ellipse cx="12" cy="5" rx="9" ry="3" />
-		<path d="M3 5v14a9 3 0 0 0 18 0V5" />
-		<path d="M3 12a9 3 0 0 0 18 0" />
-	</svg>
-);
+/** Platform data source row enriched with matched analytics DB id */
+type DataLakeRow = PlatformDataSourceItem & {
+	analyticsDbId?: number;
+};
 
-const TrashIcon = () => (
-	<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-		<polyline points="3 6 5 6 21 6" />
-		<path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
-	</svg>
-);
+/* ------------------------------------------------------------------ */
+/*  Component                                                          */
+/* ------------------------------------------------------------------ */
 
 export default function DataPage() {
-	const locale: Locale = useMemo(() => getEffectiveLocale(), []);
-	const [state, setState] = useState<LoadState<DatabaseListItem[]>>({ state: "loading" });
+	// --- user / permissions ---
 	const [currentUser, setCurrentUser] = useState<CurrentUser | null>(null);
-	const [deleting, setDeleting] = useState<number | null>(null);
-	const [confirmDeleteId, setConfirmDeleteId] = useState<number | null>(null);
+	const isDataAdmin = currentUser?.is_data_admin || currentUser?.is_superuser || false;
 
-	const reload = () => {
-		setState({ state: "loading" });
-		analyticsApi
-			.listDatabases()
-			.then((r) => {
-				setState({ state: "loaded", value: r.data ?? [] });
+	// --- data lake list ---
+	const [platformSources, setPlatformSources] = useState<PlatformDataSourceItem[]>([]);
+	const [databases, setDatabases] = useState<DatabaseListItem[]>([]);
+	const [lakeLoading, setLakeLoading] = useState(true);
+	const [lakeSearch, setLakeSearch] = useState("");
+
+	// --- my uploads ---
+	const [dataLakeId, setDataLakeId] = useState<number | null>(null);
+	const [uploads, setUploads] = useState<MyUploadItem[]>([]);
+	const [uploadsLoading, setUploadsLoading] = useState(true);
+	const [uploadsSearch, setUploadsSearch] = useState("");
+
+	// --- upload modal ---
+	const [uploadModalOpen, setUploadModalOpen] = useState(false);
+
+	// --- sync loading per source ---
+	const [syncingId, setSyncingId] = useState<string | null>(null);
+
+	/* ---------- loaders ---------- */
+
+	const loadLakeData = useCallback(() => {
+		setLakeLoading(true);
+		Promise.all([
+			analyticsApi.listPlatformDataSources(),
+			analyticsApi.listDatabases(),
+		])
+			.then(([sources, dbResp]) => {
+				setPlatformSources(sources ?? []);
+				const dbs = dbResp.data ?? [];
+				setDatabases(dbs);
+				// find the is_system database for uploads
+				const systemDb = dbs.find((d) => d.is_system);
+				if (systemDb) setDataLakeId(systemDb.id);
 			})
 			.catch((e) => {
-				setState({ state: "error", error: e });
-			});
-	};
+				console.error("Failed to load data lake sources:", e);
+				message.error("加载数据源列表失败");
+			})
+			.finally(() => setLakeLoading(false));
+	}, []);
+
+	const loadUploads = useCallback(() => {
+		if (dataLakeId == null) {
+			setUploadsLoading(false);
+			return;
+		}
+		setUploadsLoading(true);
+		analyticsApi
+			.listMyUploads(dataLakeId)
+			.then((items) => setUploads(items ?? []))
+			.catch((e) => {
+				console.error("Failed to load uploads:", e);
+				message.error("加载上传列表失败");
+			})
+			.finally(() => setUploadsLoading(false));
+	}, [dataLakeId]);
 
 	useEffect(() => {
 		analyticsApi.getCurrentUser().then(setCurrentUser).catch(() => {});
-	}, []);
-
-	const isDataAdmin = currentUser?.is_data_admin || currentUser?.is_superuser || false;
+		loadLakeData();
+	}, [loadLakeData]);
 
 	useEffect(() => {
-		reload();
-	}, []);
+		loadUploads();
+	}, [loadUploads]);
 
-	async function handleDelete(id: number) {
-		setDeleting(id);
-		try {
-			await analyticsApi.deleteDatabase(id);
-			setConfirmDeleteId(null);
-			reload();
-		} catch (e) {
-			console.error("Delete failed:", e);
-			alert(String(e));
-		} finally {
-			setDeleting(null);
+	/* ---------- derived data ---------- */
+
+	/** Map platform source name -> analytics database id */
+	const dbByName = useMemo(() => {
+		const map = new Map<string, DatabaseListItem>();
+		for (const db of databases) {
+			if (db.name) map.set(db.name, db);
 		}
-	}
+		return map;
+	}, [databases]);
+
+	const lakeRows: DataLakeRow[] = useMemo(() => {
+		const keyword = lakeSearch.trim().toLowerCase();
+		return platformSources
+			.map((src) => ({
+				...src,
+				analyticsDbId: src.name ? dbByName.get(src.name)?.id : undefined,
+			}))
+			.filter((row) => {
+				if (!keyword) return true;
+				return (
+					(row.name ?? "").toLowerCase().includes(keyword) ||
+					(row.type ?? "").toLowerCase().includes(keyword) ||
+					(row.jdbcUrl ?? "").toLowerCase().includes(keyword)
+				);
+			});
+	}, [platformSources, dbByName, lakeSearch]);
+
+	const filteredUploads = useMemo(() => {
+		const keyword = uploadsSearch.trim().toLowerCase();
+		if (!keyword) return uploads;
+		return uploads.filter(
+			(u) =>
+				u.name.toLowerCase().includes(keyword) ||
+				(u.display_name ?? "").toLowerCase().includes(keyword) ||
+				(u.schema ?? "").toLowerCase().includes(keyword),
+		);
+	}, [uploads, uploadsSearch]);
+
+	/* ---------- actions ---------- */
+
+	const handleSync = async (row: DataLakeRow) => {
+		if (!row.analyticsDbId) {
+			message.warning("该数据源尚未在分析平台中注册，无法同步");
+			return;
+		}
+		setSyncingId(row.id);
+		try {
+			await analyticsApi.syncDatabaseSchema(row.analyticsDbId);
+			message.success(`已触发「${row.name}」的元数据同步`);
+		} catch (e) {
+			console.error("Sync failed:", e);
+		} finally {
+			setSyncingId(null);
+		}
+	};
+
+	const handleDeleteUpload = (record: MyUploadItem) => {
+		if (dataLakeId == null) return;
+		Modal.confirm({
+			title: "确认删除",
+			content: `确定要删除上传表「${record.display_name || record.name}」吗？此操作不可恢复。`,
+			okText: "删除",
+			okType: "danger",
+			cancelText: "取消",
+			onOk: async () => {
+				try {
+					await analyticsApi.deleteUploadTable(dataLakeId, record.name);
+					message.success("删除成功");
+					loadUploads();
+				} catch (e) {
+					console.error("Delete upload failed:", e);
+				}
+			},
+		});
+	};
+
+	const handleUploadComplete = async (result: { tableName: string; schema: string; rowCount: number }) => {
+		setUploadModalOpen(false);
+		message.success(`上传成功：${result.tableName}（${result.rowCount} 行）`);
+		loadUploads();
+		// also sync schema so the table is queryable
+		if (dataLakeId != null) {
+			try {
+				await analyticsApi.syncDatabaseSchema(dataLakeId);
+			} catch {
+				// silent — sync is best-effort after upload
+			}
+		}
+	};
+
+	/* ---------- table columns ---------- */
+
+	const lakeColumns: ColumnsType<DataLakeRow> = useMemo(
+		() => [
+			{
+				title: "名称",
+				dataIndex: "name",
+				key: "name",
+				ellipsis: true,
+				render: (name: string | undefined) => name ?? "-",
+			},
+			{
+				title: "类型",
+				dataIndex: "type",
+				key: "type",
+				width: 120,
+				render: (type: string | undefined) =>
+					type ? <Tag>{type}</Tag> : "-",
+			},
+			{
+				title: "连接地址",
+				dataIndex: "jdbcUrl",
+				key: "jdbcUrl",
+				ellipsis: true,
+				render: (url: string | undefined) => (
+					<Tooltip title={url}>
+						<span className="text-text-secondary text-[length:var(--font-size-sm)]">
+							{url ?? "-"}
+						</span>
+					</Tooltip>
+				),
+			},
+			{
+				title: "状态",
+				dataIndex: "status",
+				key: "status",
+				width: 100,
+				render: (status: string | undefined | null) => {
+					if (!status) return "-";
+					const color = status === "ACTIVE" || status === "active" ? "green" : "default";
+					return <Tag color={color}>{status}</Tag>;
+				},
+			},
+			{
+				title: "操作",
+				key: "actions",
+				width: 180,
+				render: (_: unknown, row: DataLakeRow) => (
+					<Space size="small">
+						{isDataAdmin && (
+							<Button
+								type="link"
+								size="small"
+								loading={syncingId === row.id}
+								disabled={!row.analyticsDbId}
+								onClick={() => handleSync(row)}
+							>
+								同步元数据
+							</Button>
+						)}
+						{row.analyticsDbId ? (
+							<Link to={`/bi/data/${row.analyticsDbId}`}>
+								<Button type="link" size="small">
+									查看表
+								</Button>
+							</Link>
+						) : (
+							<Button type="link" size="small" disabled>
+								查看表
+							</Button>
+						)}
+					</Space>
+				),
+			},
+		],
+		[isDataAdmin, syncingId],
+	);
+
+	const uploadColumns: ColumnsType<MyUploadItem> = useMemo(
+		() => [
+			{
+				title: "表名",
+				dataIndex: "name",
+				key: "name",
+				ellipsis: true,
+			},
+			{
+				title: "显示名",
+				dataIndex: "display_name",
+				key: "display_name",
+				ellipsis: true,
+				render: (v: string | undefined) => v ?? "-",
+			},
+			{
+				title: "Schema",
+				dataIndex: "schema",
+				key: "schema",
+				width: 140,
+				render: (v: string | undefined) => v ?? "-",
+			},
+			{
+				title: "上传时间",
+				dataIndex: "created_at",
+				key: "created_at",
+				width: 180,
+				render: (v: string | undefined) => (v ? new Date(v).toLocaleString("zh-CN") : "-"),
+			},
+			{
+				title: "操作",
+				key: "actions",
+				width: 140,
+				render: (_: unknown, record: MyUploadItem) => (
+					<Space size="small">
+						{dataLakeId != null && (
+							<Link to={`/bi/data/${dataLakeId}`}>
+								<Button type="link" size="small">
+									查看
+								</Button>
+							</Link>
+						)}
+						<Button
+							type="link"
+							size="small"
+							danger
+							onClick={() => handleDeleteUpload(record)}
+						>
+							删除
+						</Button>
+					</Space>
+				),
+			},
+		],
+		[dataLakeId],
+	);
+
+	/* ---------- render ---------- */
 
 	return (
 		<PageContainer>
-			<PageHeader
-				title={t(locale, "data.title")}
+			<PageHeader title="数据管理" />
+
+			{/* --- Data Lake List --- */}
+			<PageSection
+				title="数据湖"
+				description="平台已注册的数据源列表"
 				actions={
-					isDataAdmin ? (
-						<Link to="/bi/data/new">
-							<Button type="primary" icon={<PlusIcon />}>
-								{t(locale, "data.add")}
-							</Button>
-						</Link>
-					) : (
-						<Link to="/bi/data/new?tab=other">
-							<Button type="primary" icon={<PlusIcon />}>
-								上传数据
-							</Button>
-						</Link>
-					)
+					<Input.Search
+						placeholder="搜索数据源..."
+						allowClear
+						style={{ width: 240 }}
+						value={lakeSearch}
+						onChange={(e) => setLakeSearch(e.target.value)}
+					/>
 				}
-			/>
-
-			{state.state === "loading" && (
-				<Card>
-					<div className="loading-container" style={{ padding: "var(--spacing-xl)" }}>
-						<Spin size="large" />
-					</div>
-				</Card>
-			)}
-			{state.state === "error" && <ErrorNotice locale={locale} error={state.error} />}
-			{state.state === "loaded" && state.value.length === 0 && (
-				<EmptyState
-					title={t(locale, "data.empty")}
-					action={
-						<Link to="/bi/data/new">
-							<Button type="primary" icon={<PlusIcon />}>
-								{t(locale, "data.add")}
-							</Button>
-						</Link>
-					}
+			>
+				<Table<DataLakeRow>
+					rowKey="id"
+					columns={lakeColumns}
+					dataSource={lakeRows}
+					loading={lakeLoading}
+					pagination={false}
+					size="middle"
+					locale={{ emptyText: "暂无数据源" }}
 				/>
-			)}
-			{state.state === "loaded" && state.value.length > 0 && (
-				<div className="grid grid-cols-3 gap-md">
-					{state.value.map((db) => (
-						<Card key={db.id} hoverable style={{ height: "100%" }}>
-							<div style={{ display: "flex", alignItems: "flex-start", gap: "var(--spacing-md)" }}>
-								<Link to={`/bi/data/${db.id}`} style={{ textDecoration: "none", display: "flex", alignItems: "center", justifyContent: "center", width: 40, height: 40, borderRadius: "var(--radius-md)", background: "var(--color-bg-hover)", color: "var(--color-brand)", flexShrink: 0 }}>
-									<DatabaseIcon />
-								</Link>
-								<div style={{ flex: 1, minWidth: 0 }}>
-									<Link to={`/bi/data/${db.id}`} style={{ textDecoration: "none" }}>
-										<h3 style={{ margin: 0, fontSize: "var(--font-size-md)", fontWeight: "var(--font-weight-semibold)", color: "var(--color-text-primary)" }}>
-											{db.name ?? `db:${db.id}`}
-										</h3>
-									</Link>
-									<p className="text-secondary" style={{ margin: "var(--spacing-xs) 0 0", fontSize: "var(--font-size-sm)" }}>
-										{t(locale, "common.id")}: {db.id}
-									</p>
-								</div>
-								<div style={{ display: "flex", gap: "var(--spacing-xs)", alignItems: "center" }}>
-									{db.is_system && (
-										<Tag color="blue">内置</Tag>
-									)}
-									<Tag>
-										{db.engine ?? "-"}
-									</Tag>
-								</div>
-							</div>
-							{!db.is_system && isDataAdmin && (
-								<div style={{ display: "flex", gap: "var(--spacing-xs)", marginTop: "var(--spacing-md)", justifyContent: "flex-end" }}>
-									<Button
-										type="text"
-										size="small"
-										icon={<TrashIcon />}
-										onClick={() => setConfirmDeleteId(db.id)}
-										style={{ color: "var(--color-error)" }}
-									>
-										{t(locale, "data.delete")}
-									</Button>
-								</div>
-							)}
-						</Card>
-					))}
-				</div>
-			)}
+			</PageSection>
 
-			{/* Delete Confirmation Dialog */}
-			{confirmDeleteId !== null && (
-				<div style={{
-					position: "fixed",
-					inset: 0,
-					background: "rgba(0, 0, 0, 0.5)",
-					display: "flex",
-					alignItems: "center",
-					justifyContent: "center",
-					zIndex: 1000,
-				}}>
-					<Card style={{ maxWidth: 400, width: "90%" }}>
-						<h3 style={{ margin: "0 0 var(--spacing-md)", fontSize: "var(--font-size-lg)", fontWeight: "var(--font-weight-semibold)" }}>
-							{t(locale, "data.delete")}
-						</h3>
-						<p style={{ margin: "0 0 var(--spacing-lg)", color: "var(--color-text-secondary)" }}>
-							{t(locale, "data.deleteConfirm")}
-						</p>
-						<div style={{ display: "flex", gap: "var(--spacing-sm)", justifyContent: "flex-end" }}>
-							<Button
-								type="default"
-								onClick={() => setConfirmDeleteId(null)}
-								disabled={deleting !== null}
-							>
-								{t(locale, "common.cancel")}
-							</Button>
-							<Button
-								type="primary"
-								loading={deleting === confirmDeleteId}
-								disabled={deleting !== null}
-								onClick={() => handleDelete(confirmDeleteId)}
-								style={{ background: "var(--color-error)" }}
-							>
-								{t(locale, "data.delete")}
-							</Button>
-						</div>
-					</Card>
-				</div>
-			)}
+			{/* --- My Uploads --- */}
+			<PageSection
+				title="我的上传"
+				description="您上传的 CSV / Excel 数据表"
+				actions={
+					<Space>
+						<Input.Search
+							placeholder="搜索上传表..."
+							allowClear
+							style={{ width: 240 }}
+							value={uploadsSearch}
+							onChange={(e) => setUploadsSearch(e.target.value)}
+						/>
+						<Button
+							type="primary"
+							disabled={dataLakeId == null}
+							onClick={() => setUploadModalOpen(true)}
+						>
+							上传数据
+						</Button>
+					</Space>
+				}
+			>
+				<Table<MyUploadItem>
+					rowKey="id"
+					columns={uploadColumns}
+					dataSource={filteredUploads}
+					loading={uploadsLoading}
+					pagination={false}
+					size="middle"
+					locale={{ emptyText: "暂无上传数据" }}
+				/>
+			</PageSection>
+
+			{/* --- Upload Modal --- */}
+			<Modal
+				title="上传数据"
+				open={uploadModalOpen}
+				onCancel={() => setUploadModalOpen(false)}
+				width={720}
+				destroyOnClose
+				footer={null}
+			>
+				{dataLakeId != null && (
+					<UploadedDataEditor
+						databaseId={dataLakeId}
+						onComplete={handleUploadComplete}
+					/>
+				)}
+			</Modal>
 		</PageContainer>
 	);
 }
