@@ -1,6 +1,10 @@
 /* editor */
 @import "react-quill/dist/quill.snow.css";
 
+/* Analytics design tokens & utilities (merged from dts-analytics-webapp) */
+@import './analytics/styles/tokens.css';
+@import './analytics/styles/utilities.css';
+
 /* import tailwind */
 @import "tailwindcss";
 @import "tw-animate-css";
