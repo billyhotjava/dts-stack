@@ -8,7 +8,7 @@ import {
 	type Nl2SqlEvalRunSummary,
 } from "../api/analyticsApi";
 import { ErrorNotice } from "../components/ErrorNotice";
-import { PageContainer, PageHeader } from "../components/PageContainer/PageContainer";
+import { PageHeader } from "@/components/page-header";
 import { getEffectiveLocale, t, type Locale } from "../i18n";
 import { Input, Spin, Button, Card, Tag, Select } from "antd";
 type LoadState<T> =
@@ -205,7 +205,7 @@ export default function Nl2SqlEvalPage() {
 		: [{ value: "", label: t(locale, "loading") }];
 
 	return (
-		<PageContainer>
+		<div className="space-y-4">
 			<PageHeader
 				title={t(locale, "nl2sqlEval.title")}
 				actions={
@@ -386,6 +386,6 @@ export default function Nl2SqlEvalPage() {
 						</pre>
 				</Card>
 			</div>
-		</PageContainer>
+		</div>
 	);
 }

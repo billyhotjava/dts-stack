@@ -10,7 +10,6 @@ import {
 	type DashboardQueryResponse,
 } from "../api/analyticsApi";
 import { ErrorNotice } from "../components/ErrorNotice";
-import { PageContainer } from "../components/PageContainer/PageContainer";
 import { Button, Input, Select, Modal, message, Spin } from "antd";
 import {
 	ArrowLeftOutlined,
@@ -391,24 +390,24 @@ export default function DashboardEditorPage() {
 	// Loading state
 	if (dashboard?.state === "loading") {
 		return (
-			<PageContainer maxWidth="full">
+			<div className="space-y-4">
 				<div className="flex items-center justify-center min-h-[400px]">
 					<Spin size="large" />
 				</div>
-			</PageContainer>
+			</div>
 		);
 	}
 
 	if (dashboard?.state === "error") {
 		return (
-			<PageContainer maxWidth="full">
+			<div className="space-y-4">
 				<ErrorNotice locale={locale} error={dashboard.error} />
-			</PageContainer>
+			</div>
 		);
 	}
 
 	return (
-		<PageContainer maxWidth="full">
+		<div className="space-y-4">
 			<div data-testid="analytics-dashboard-editor">
 				{/* Top toolbar */}
 				<div className="flex items-center gap-3 mb-4 flex-wrap">
@@ -546,6 +545,6 @@ export default function DashboardEditorPage() {
 					/>
 				)}
 			</div>
-		</PageContainer>
+		</div>
 	);
 }

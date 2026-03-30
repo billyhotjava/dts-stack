@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { analyticsApi, type ReportRunItem, type ReportTemplateItem } from "../api/analyticsApi";
 import { ErrorNotice } from "../components/ErrorNotice";
-import { PageContainer, PageHeader } from "../components/PageContainer/PageContainer";
+import { PageHeader } from "@/components/page-header";
 import { getEffectiveLocale, t, type Locale } from "../i18n";
 import { Input, Spin, Button, Card, Tag, Select } from "antd";
 type LoadState<T> =
@@ -175,7 +175,7 @@ export default function ReportFactoryPage() {
 	];
 
 	return (
-		<PageContainer>
+		<div className="space-y-4">
 			<PageHeader
 				title={t(locale, "reportFactory.title")}
 				actions={
@@ -414,6 +414,6 @@ export default function ReportFactoryPage() {
 						)}
 				</Card>
 			</div>
-		</PageContainer>
+		</div>
 	);
 }

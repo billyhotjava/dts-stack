@@ -1,6 +1,7 @@
 import { useMemo } from "react";
 import { Link, useParams } from "react-router";
-import { PageContainer, PageHeader, Breadcrumb } from "../components/PageContainer/PageContainer";
+import { PageHeader } from "@/components/page-header";
+import { Breadcrumb } from "antd";
 import { Button, Card } from "antd";
 import { getEffectiveLocale, t, type Locale } from "../i18n";
 const LockIcon = () => (
@@ -15,16 +16,14 @@ export default function DatabaseEditPage() {
 	const { dbId } = useParams();
 
 	return (
-		<PageContainer>
+		<div className="space-y-4">
+			<Breadcrumb items={[
+				{ title: <Link to="/bi/data">{t(locale, "data.title")}</Link> },
+				{ title: <Link to={`/bi/data/${dbId}`}>{t(locale, "data.db")} #{dbId}</Link> },
+				{ title: t(locale, "data.edit") },
+			]} />
 			<PageHeader
 				title={t(locale, "data.edit")}
-				breadcrumbs={
-					<Breadcrumb items={[
-						{ label: t(locale, "data.title"), href: "/bi/data" },
-						{ label: `${t(locale, "data.db")} #${dbId}`, href: `/bi/data/${dbId}` },
-						{ label: t(locale, "data.edit") }
-					]} />
-				}
 			/>
 
 			<Card>
@@ -56,6 +55,6 @@ export default function DatabaseEditPage() {
 					</Link>
 				</div>
 			</Card>
-		</PageContainer>
+		</div>
 	);
 }

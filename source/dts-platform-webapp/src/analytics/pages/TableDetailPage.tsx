@@ -1,8 +1,9 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link, useParams } from "react-router";
 import { analyticsApi, type TableDetail } from "../api/analyticsApi";
-import { PageContainer, PageHeader, Breadcrumb } from "../components/PageContainer/PageContainer";
-import { EmptyState } from "../components/EmptyState";
+import { PageHeader } from "@/components/page-header";
+import { EmptyState } from "@/components/empty-state";
+import { Breadcrumb } from "antd";
 import { ErrorNotice } from "../components/ErrorNotice";
 import { Spin, Button, Card, Tag } from "antd";
 import { getEffectiveLocale, t, type Locale } from "../i18n";
@@ -60,16 +61,14 @@ export default function TableDetailPage() {
 	};
 
 	return (
-		<PageContainer>
+		<div className="space-y-4">
+			<Breadcrumb items={[
+				{ title: <Link to="/bi/data">{t(locale, "data.title")}</Link> },
+				{ title: dbId ? <Link to={`/bi/data/${encodeURIComponent(String(dbId))}`}>{t(locale, "data.db")} #{dbId}</Link> : `${t(locale, "data.db")} #${dbId}` },
+				{ title: `Table #${tableId}` },
+			]} />
 			<PageHeader
 				title={state.state === "loaded" ? (state.value.display_name || state.value.name || `Table #${tableId}`) : `${t(locale, "builder.table")} #${tableId}`}
-				breadcrumbs={
-					<Breadcrumb items={[
-						{ label: t(locale, "data.title"), href: "/bi/data" },
-						{ label: `${t(locale, "data.db")} #${dbId}`, href: dbId ? `/bi/data/${encodeURIComponent(String(dbId))}` : undefined },
-						{ label: `Table #${tableId}` }
-					]} />
-				}
 				actions={
 					<Link to={newQuestionHref}>
 						<Button type="primary" icon={<PlusIcon />}>
@@ -140,6 +139,6 @@ export default function TableDetailPage() {
 					)}
 				</>
 			)}
-		</PageContainer>
+		</div>
 	);
 }

@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { analyticsApi, type TrashItem, type TrashResponse } from "../api/analyticsApi";
-import { PageContainer, PageHeader } from "../components/PageContainer/PageContainer";
+import { PageHeader } from "@/components/page-header";
 import { ErrorNotice } from "../components/ErrorNotice";
 import { Button, Spin, Tag, Checkbox, message } from "antd";
 import { UndoOutlined } from "@ant-design/icons";
@@ -77,7 +77,7 @@ export default function TrashPage() {
 	};
 
 	return (
-		<PageContainer>
+		<div className="space-y-4">
 			<PageHeader
 				title={t(locale, "trash.title")}
 				actions={
@@ -151,6 +151,6 @@ export default function TrashPage() {
 					})}
 				</div>
 			)}
-		</PageContainer>
+		</div>
 	);
 }

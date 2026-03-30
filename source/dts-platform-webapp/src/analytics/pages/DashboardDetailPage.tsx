@@ -2,7 +2,7 @@
 import { Link, useParams } from "react-router";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { analyticsApi, type DashboardCard, type DashboardDetail, type DashboardQueryResponse } from "../api/analyticsApi";
-import { PageContainer, PageHeader } from "../components/PageContainer/PageContainer";
+import { PageHeader } from "@/components/page-header";
 import { ErrorNotice } from "../components/ErrorNotice";
 import { Input, Spin, Button, Card, Collapse, Tag, Select } from "antd";
 import { getEffectiveLocale, t, type Locale } from "../i18n";
@@ -202,7 +202,7 @@ export default function DashboardDetailPage() {
 	);
 
 	return (
-		<PageContainer maxWidth="full">
+		<div className="space-y-4">
 			<div data-testid="analytics-dashboard-detail">
 			{state.state === "loading" && (
 				<div className="loading-container">
@@ -331,6 +331,6 @@ export default function DashboardDetailPage() {
 				</>
 			)}
 			</div>
-		</PageContainer>
+		</div>
 	);
 }

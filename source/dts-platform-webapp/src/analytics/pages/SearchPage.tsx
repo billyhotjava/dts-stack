@@ -1,8 +1,8 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link, useLocation, useNavigate } from "react-router";
 import { analyticsApi, type SearchItem } from "../api/analyticsApi";
-import { PageContainer, PageHeader } from "../components/PageContainer/PageContainer";
-import { EmptyState } from "../components/EmptyState";
+import { PageHeader } from "@/components/page-header";
+import { EmptyState } from "@/components/empty-state";
 import { ErrorNotice } from "../components/ErrorNotice";
 import { Input, Spin, Button, Card, Tag } from "antd";
 import { getEffectiveLocale, t, type Locale } from "../i18n";
@@ -105,7 +105,7 @@ export default function SearchPage() {
 	};
 
 	return (
-		<PageContainer>
+		<div className="space-y-4">
 			<PageHeader
 				title={t(locale, "search.title")}
 			/>
@@ -235,6 +235,6 @@ export default function SearchPage() {
 					font-size: var(--font-size-sm);
 				}
 			`}</style>
-		</PageContainer>
+		</div>
 	);
 }

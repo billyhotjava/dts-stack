@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { analyticsApi, type MetricLensCompare, type MetricLensDetail, type MetricLensSummary } from "../api/analyticsApi";
 import { ErrorNotice } from "../components/ErrorNotice";
-import { PageContainer, PageHeader } from "../components/PageContainer/PageContainer";
+import { PageHeader } from "@/components/page-header";
 import { getEffectiveLocale, t, type Locale } from "../i18n";
 import { Spin, Button, Card, Tag, Select } from "antd";
 type LoadState<T> =
@@ -98,7 +98,7 @@ export default function MetricLensPage() {
 	const versionOptions = versions.map((item) => ({ value: item, label: item }));
 
 	return (
-		<PageContainer>
+		<div className="space-y-4">
 			<PageHeader
 				title={t(locale, "metricLens.title")}
 				actions={
@@ -272,6 +272,6 @@ export default function MetricLensPage() {
 						)}
 				</Card>
 			</div>
-		</PageContainer>
+		</div>
 	);
 }
