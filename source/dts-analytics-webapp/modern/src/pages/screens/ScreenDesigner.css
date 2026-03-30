@@ -102,6 +102,57 @@
   border-color: rgba(255, 255, 255, 0.06) !important;
 }
 
+/* Restore light theme for antd Modals inside screen designer (template gallery, share panel, etc.) */
+.screen-designer .ant-modal-content,
+.screen-designer .ant-modal-header {
+  background-color: #ffffff !important;
+  color: rgba(0, 0, 0, 0.88) !important;
+}
+
+.screen-designer .ant-modal-content .ant-btn-default {
+  background-color: #ffffff !important;
+  border-color: #d9d9d9 !important;
+  color: rgba(0, 0, 0, 0.88) !important;
+}
+
+.screen-designer .ant-modal-content .ant-select-selector {
+  background-color: #ffffff !important;
+  border-color: #d9d9d9 !important;
+  color: rgba(0, 0, 0, 0.88) !important;
+}
+
+.screen-designer .ant-modal-content .ant-select-dropdown {
+  background-color: #ffffff !important;
+}
+
+.screen-designer .ant-modal-content .ant-select-item {
+  color: rgba(0, 0, 0, 0.88) !important;
+}
+
+.screen-designer .ant-modal-content input,
+.screen-designer .ant-modal-content select,
+.screen-designer .ant-modal-content textarea {
+  background-color: #ffffff !important;
+  border-color: #d9d9d9 !important;
+  color: rgba(0, 0, 0, 0.88) !important;
+}
+
+.screen-designer .ant-modal-content .ant-input,
+.screen-designer .ant-modal-content .ant-input-number,
+.screen-designer .ant-modal-content .ant-input-number-input {
+  background-color: #ffffff !important;
+  border-color: #d9d9d9 !important;
+  color: rgba(0, 0, 0, 0.88) !important;
+}
+
+.screen-designer .ant-modal-title {
+  color: rgba(0, 0, 0, 0.88) !important;
+}
+
+.screen-designer .ant-modal-close {
+  color: rgba(0, 0, 0, 0.45) !important;
+}
+
 .screen-designer .ant-checkbox-wrapper {
   color: rgba(255, 255, 255, 0.85) !important;
 }
