@@ -10,7 +10,10 @@ type CustomPluginModule = {
     [key: string]: unknown;
 };
 
-const customModules = loadBuiltinCustomModules();
+const customModules =
+    typeof window === 'undefined'
+        ? {}
+        : (import.meta.glob('./custom/*.tsx', { eager: true }) as Record<string, CustomPluginModule>);
 const CUSTOM_ADAPTERS: Record<string, AdapterFactory> = buildCustomAdapters(customModules);
 
 export function installBuiltinPluginAdapters(manifests: ScreenPluginManifest[]): void {
@@ -65,16 +68,6 @@ export function ensureBuiltinPluginAdapterFromModules(
     }
     registerRendererPlugin(factory(pid, cid, version));
     return true;
-}
-
-function loadBuiltinCustomModules(): Record<string, CustomPluginModule> {
-    const meta = import.meta as ImportMeta & {
-        glob?: (pattern: string, options: { eager: true }) => Record<string, CustomPluginModule>;
-    };
-    if (typeof meta.glob !== 'function') {
-        return {};
-    }
-    return meta.glob('./custom/*.tsx', { eager: true }) as Record<string, CustomPluginModule>;
 }
 
 function buildCustomAdapters(modules: Record<string, CustomPluginModule>): Record<string, AdapterFactory> {

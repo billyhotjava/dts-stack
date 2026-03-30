@@ -53,7 +53,7 @@ public class PlatformPermissionFilter extends OncePerRequestFilter {
         "/api/screen-plugins",
         "/api/screen-packs",
         "/api/screen-compliance",
-        "/api/screens/ai",
+        "/api/screens",
         "/actuator",
         "/auth"
     );

@@ -217,7 +217,7 @@ export default function HomePage() {
 						target="_blank"
 						rel="noreferrer"
 					>
-						<Button type="link" size="small">预览</Button>
+						<Button type="link" size="small">查看</Button>
 					</a>
 				</div>
 			),
