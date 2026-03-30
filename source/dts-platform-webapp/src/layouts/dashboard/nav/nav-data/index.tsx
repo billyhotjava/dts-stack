@@ -476,6 +476,28 @@ const filterNavData = (
 	}, []);
 };
 
+/**
+ * Fallback navigation when the menu API is unavailable.
+ * Ensures the platform is still navigable even if dts-admin is down.
+ */
+const FALLBACK_NAV_DATA: NavProps["data"] = [
+	{
+		name: "BI 分析",
+		items: [
+			{ path: "/analytics/home", title: "分析首页", icon: "solar:home-2-bold-duotone" },
+			{ path: "/analytics/screens", title: "数据大屏", icon: "solar:monitor-bold-duotone" },
+			{ path: "/analytics/dashboards", title: "分析看板", icon: "solar:widget-3-bold-duotone" },
+			{ path: "/analytics/questions", title: "分析卡片", icon: "solar:clipboard-list-bold-duotone" },
+		],
+	},
+	{
+		name: "数据平台",
+		items: [
+			{ path: "/workbench", title: "工作台", icon: "solar:widget-3-bold-duotone" },
+		],
+	},
+];
+
 export const useFilteredNavData = () => {
 	const roles = useUserRoles();
 	const permissions = useUserPermissions();
@@ -490,5 +512,11 @@ export const useFilteredNavData = () => {
 	const navGroups = useMemo(() => buildNavGroups(menus), [menus]);
 	const allowedRoutes = useMemo(() => collectAllowedRoutes(menus), [menus]);
 
-	return useMemo(() => filterNavData(navGroups, authCodes, allowedRoutes), [navGroups, authCodes, allowedRoutes]);
+	const filtered = useMemo(() => filterNavData(navGroups, authCodes, allowedRoutes), [navGroups, authCodes, allowedRoutes]);
+
+	// Fallback: if menu API returned nothing, show minimal nav so the platform is still usable.
+	if (filtered.length === 0 && menus.length === 0) {
+		return FALLBACK_NAV_DATA;
+	}
+	return filtered;
 };

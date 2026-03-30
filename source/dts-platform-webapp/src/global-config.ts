@@ -1,5 +1,4 @@
 import packageJson from "../package.json";
-import { DEFAULT_PORTAL_ROUTE } from "./constants/portal-navigation";
 
 /**
  * Global application configuration type definition
@@ -61,8 +60,8 @@ const removeTrailingSlash = (path: string) => {
 const resolveDefaultRoute = () => {
 	const env = import.meta.env as Record<string, string | undefined>;
 	const routerMode = (env.VITE_APP_ROUTER_MODE || "backend").trim().toLowerCase();
-	const backendFallback = DEFAULT_PORTAL_ROUTE;
-	const frontendFallback = DEFAULT_PORTAL_ROUTE;
+	const backendFallback = "/workbench";
+	const frontendFallback = "/workbench";
 
 	const fallback = routerMode === "backend" ? backendFallback : frontendFallback;
 	const rawDefaultRoute = env.VITE_APP_DEFAULT_ROUTE;

@@ -23,7 +23,7 @@ const S = ({ children }: { children: React.ReactNode }) => (
  * - Full-screen editors (screen designer, preview, export)
  *
  * Regular analytics pages (home, dashboards, questions, screens list, etc.)
- * are rendered INSIDE DashboardLayout via PATH_COMPONENT_OVERRIDES in dynamic-resolver.tsx.
+ * are statically registered in static-routes.tsx inside DashboardLayout.
  */
 export const analyticsStandaloneRoutes: RouteObject[] = [
 	// Public routes — no auth required (shareable links)

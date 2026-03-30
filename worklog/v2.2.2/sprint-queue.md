@@ -204,3 +204,12 @@
 | F1-财务大屏模板族插件化重构 | 5 | IN_PROGRESS |
 
 **统计**: READY=0, IN_PROGRESS=1, DONE=4, BLOCKED=0
+
+## Sprint-28: Platform承载Analytics菜单与路由统一 (202603)
+**状态**: READY
+
+| Feature | Task 数 | 状态 |
+|---------|---------|------|
+| F1-Platform承载Analytics菜单与路由统一 | 5 | READY |
+
+**统计**: READY=5, IN_PROGRESS=0, DONE=0, BLOCKED=0

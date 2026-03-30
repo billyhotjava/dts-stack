@@ -1122,7 +1122,43 @@ export type ScreenComponentData = {
 	interaction?: Record<string, unknown>;
 };
 
-import { getPlatformTokens, refreshPlatformAccessToken } from "./platformSession";
+/**
+ * Read platform access/refresh tokens from the shared localStorage store.
+ * This is the same store used by the platform's userStore (Zustand with persist).
+ */
+function getPlatformTokens(): { accessToken: string; refreshToken: string } {
+	try {
+		const raw = localStorage.getItem("userStore");
+		if (!raw) return { accessToken: "", refreshToken: "" };
+		const store = JSON.parse(raw);
+		const userToken = store?.state?.userToken;
+		if (!userToken || typeof userToken !== "object") return { accessToken: "", refreshToken: "" };
+		const accessToken = String(userToken.accessToken || userToken.access_token || userToken.token || "").trim();
+		const refreshToken = String(userToken.refreshToken || userToken.refresh_token || "").trim();
+		return { accessToken, refreshToken };
+	} catch {
+		return { accessToken: "", refreshToken: "" };
+	}
+}
+
+async function refreshPlatformAccessToken(refreshToken: string): Promise<{ accessToken: string } | null> {
+	if (!refreshToken) return null;
+	try {
+		const resp = await fetch("/api/keycloak/auth/refresh", {
+			method: "POST",
+			credentials: "include",
+			headers: { "content-type": "application/json", accept: "application/json" },
+			body: JSON.stringify({ refreshToken }),
+		});
+		if (!resp.ok) return null;
+		const body = await resp.json().catch(() => null);
+		const data = body?.data ?? body?.result ?? body?.payload ?? body;
+		const token = String(data?.accessToken || data?.access_token || data?.token || "").trim();
+		return token ? { accessToken: token } : null;
+	} catch {
+		return null;
+	}
+}
 
 export class HttpError extends Error {
 	status: number;
