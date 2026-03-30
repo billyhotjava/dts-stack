@@ -1,8 +1,10 @@
 import { Link } from "react-router";
 import { useEffect, useMemo, useState } from "react";
 import { analyticsApi, type CardListItem } from "../api/analyticsApi";
-import { PageContainer, PageHeader, EmptyState } from "../components/PageContainer/PageContainer";
-import { Button, Card, Input, Skeleton, Tag } from "antd";
+import { PageHeader } from "@/components/page-header";
+import { EmptyState } from "@/components/empty-state";
+import { Button, Card, Input, Skeleton, Table, Tag } from "antd";
+import type { ColumnsType } from "antd/es/table";
 import { CardGrid } from "../components/DashboardGrid/DashboardGrid";
 import { ErrorNotice } from "../components/ErrorNotice";
 import { getEffectiveLocale, t, type Locale } from "../i18n";
@@ -88,8 +90,40 @@ export default function ModelsPage() {
 		);
 	}, [state, searchQuery]);
 
+	const modelColumns: ColumnsType<CardListItem> = [
+		{
+			title: t(locale, "common.name"),
+			dataIndex: "name",
+			key: "name",
+			render: (name: string, record) => (
+				<>
+					<Link to={`/bi/questions/${record.id}`} className="text-brand hover:underline font-medium">
+						{name || t(locale, "common.untitled")}
+					</Link>
+					{record.description && (
+						<span className="text-text-secondary ml-2 text-sm">{record.description}</span>
+					)}
+				</>
+			),
+		},
+		{
+			title: t(locale, "common.type"),
+			dataIndex: "display",
+			key: "display",
+			width: 100,
+			render: (display: string) => display ? <Tag>{display}</Tag> : "-",
+		},
+		{
+			title: t(locale, "common.id"),
+			dataIndex: "id",
+			key: "id",
+			width: 80,
+			render: (id: number) => <span className="text-text-muted">{id}</span>,
+		},
+	];
+
 	return (
-		<PageContainer>
+		<div className="space-y-4">
 			<PageHeader
 				title={t(locale, "models.title")}
 				actions={
@@ -145,10 +179,10 @@ export default function ModelsPage() {
 			{/* Empty State */}
 			{state.state === "loaded" && state.value.length === 0 && (
 				<EmptyState
-					icon={<ModelIcon />}
+					icon="lucide:inbox"
 					title={t(locale, "common.empty")}
 					description={t(locale, "models.emptyDesc")}
-					action={
+					actions={
 						<Link to="/bi/questions/new">
 							<Button type="primary" icon={<PlusIcon />}>
 								{t(locale, "questions.new")}
@@ -163,7 +197,7 @@ export default function ModelsPage() {
 				<EmptyState
 					title={t(locale, "common.noResults")}
 					description={t(locale, "common.noResultsDesc")}
-					action={
+					actions={
 						<Button type="default" onClick={() => setSearchQuery("")}>
 							{t(locale, "common.clearSearch")}
 						</Button>
@@ -201,38 +235,14 @@ export default function ModelsPage() {
 
 			{/* List View */}
 			{state.state === "loaded" && filteredModels.length > 0 && viewMode === "list" && (
-				<Card styles={{ body: { padding: 0 } }}>
-					<table>
-						<thead>
-							<tr>
-								<th>{t(locale, "common.name")}</th>
-								<th>{t(locale, "common.type")}</th>
-								<th style={{ width: 80 }}>{t(locale, "common.id")}</th>
-							</tr>
-						</thead>
-						<tbody>
-							{filteredModels.map((c) => (
-								<tr key={String(c.id)}>
-									<td>
-										<Link to={`/bi/questions/${c.id}`} className="text-brand no-underline">
-											{c.name || t(locale, "common.untitled")}
-										</Link>
-										{c.description && (
-											<span className="text-secondary" style={{ marginLeft: 8, fontSize: "0.85em" }}>{c.description}</span>
-										)}
-									</td>
-									<td>
-										{c.display && (
-											<Tag>
-												{c.display}
-											</Tag>
-										)}
-									</td>
-									<td className="text-secondary">{c.id}</td>
-								</tr>
-							))}
-						</tbody>
-					</table>
+				<Card>
+					<Table
+						rowKey={(record) => String(record.id)}
+						columns={modelColumns}
+						dataSource={filteredModels}
+						pagination={false}
+						size="small"
+					/>
 				</Card>
 			)}
 
@@ -282,6 +292,6 @@ export default function ModelsPage() {
 					white-space: nowrap;
 				}
 			`}</style>
-		</PageContainer>
+		</div>
 	);
 }
