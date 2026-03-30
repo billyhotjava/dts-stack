@@ -15,7 +15,6 @@ import { registerLocalIcons } from "./components/icon";
 import { GLOBAL_CONFIG } from "./global-config";
 import ErrorBoundary from "./routes/components/error-boundary";
 import { makeRoutesSection } from "./routes/sections";
-import { analyticsChildren } from "./routes/sections/analytics";
 
 await registerLocalIcons();
 
@@ -24,20 +23,6 @@ await registerLocalIcons();
 const makeRouter = GLOBAL_CONFIG.routerHistory === "hash" ? createHashRouter : createBrowserRouter;
 const router = makeRouter(
 	[
-		// Analytics: separate root-level route branch.
-		// Must be declared BEFORE the App catch-all to avoid being swallowed
-		// by the dashboard layout's pathless wildcard route.
-		{
-			path: "analytics",
-			Component: () => (
-				<App>
-					<Outlet />
-				</App>
-			),
-			errorElement: <ErrorBoundary />,
-			children: analyticsChildren,
-		},
-		// Platform: everything else (login, dashboard, admin, etc.)
 		{
 			Component: () => (
 				<App>

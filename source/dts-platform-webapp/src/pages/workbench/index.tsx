@@ -263,7 +263,7 @@ export default function Page() {
 		const target =
 			favorite.link
 			|| inferFavoriteLink(favorite.targetType)
-			|| "/analytics";
+			|| "/workbench";
 		push(target);
 	};
 

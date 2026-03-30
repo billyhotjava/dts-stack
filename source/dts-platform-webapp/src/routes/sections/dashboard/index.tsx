@@ -50,7 +50,7 @@ export const dashboardRoutes: RouteObject[] = [
 function FallbackDashboardIndex() {
 	const router = useRouter();
 	const location = useLocation();
-	const fallbackPath = GLOBAL_CONFIG.defaultRoute || "/analytics";
+	const fallbackPath = GLOBAL_CONFIG.defaultRoute || "/workbench";
 
 	useEffect(() => {
 		if (fallbackPath && location.pathname !== fallbackPath) {

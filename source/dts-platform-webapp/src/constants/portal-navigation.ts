@@ -1,1 +1,1 @@
-export const DEFAULT_PORTAL_ROUTE = "/analytics";
+export const DEFAULT_PORTAL_ROUTE = "/workbench";

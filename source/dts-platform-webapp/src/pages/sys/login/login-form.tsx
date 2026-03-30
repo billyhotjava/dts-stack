@@ -222,7 +222,7 @@ export function LoginForm({ className, ...props }: React.ComponentPropsWithoutRe
 			}
 			// 登录后回到平台默认首页（由全局配置/菜单决定）。
 			// 注意：Router 已配置 basename=publicPath，这里必须传入“路由内路径”，不要再拼 publicPath。
-			navigate(safeRedirect || GLOBAL_CONFIG.defaultRoute || "/analytics", { replace: true });
+			navigate(safeRedirect || GLOBAL_CONFIG.defaultRoute || "/workbench", { replace: true });
 			toast.success(bilingual("sys.login.loginSuccessTitle"), {
 				closeButton: true,
 			});
@@ -405,7 +405,7 @@ export function LoginForm({ className, ...props }: React.ComponentPropsWithoutRe
 				// ignore
 			}
 
-			navigate(GLOBAL_CONFIG.defaultRoute || "/analytics", { replace: true });
+			navigate(GLOBAL_CONFIG.defaultRoute || "/workbench", { replace: true });
 			toast.success(bilingual("sys.login.loginSuccessTitle"), { closeButton: true });
 
 			await client.logout();

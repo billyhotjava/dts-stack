@@ -106,7 +106,7 @@
 .gpmc {
   display: grid;
   grid-template-columns: 1fr;
-  grid-template-rows: auto 1fr;
+  grid-template-rows: auto auto 1fr;
   min-height: 100vh;
   background: linear-gradient(135deg, var(--gpmc-bg-grad-1), var(--gpmc-bg-grad-2));
   color: var(--gpmc-text);

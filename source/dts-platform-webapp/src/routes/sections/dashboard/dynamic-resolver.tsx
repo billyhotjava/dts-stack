@@ -20,6 +20,7 @@ import { Component } from "./utils";
 type Props = { base?: string };
 
 const PATH_COMPONENT_OVERRIDES: Record<string, string> = {
+	// ── Platform pages ──
 	"/governance": "/pages/governance/GovernanceCenterPage",
 	"/catalog/assets": "/pages/catalog/DatasetsPage",
 	"/catalog/asset-detail": "/pages/catalog/AssetDetailPage",
@@ -47,6 +48,26 @@ const PATH_COMPONENT_OVERRIDES: Record<string, string> = {
 	"/services/products": "/pages/services/DataProductsPage",
 	"/services/tokens": "/pages/services/TokensPage",
 	"/modeling/dbt-files": "/pages/modeling/DbtFileBrowserPage",
+	// ── Analytics pages (merged from dts-analytics-webapp) ──
+	"/analytics": "/analytics/pages/HomePage",
+	"/analytics/screens": "/analytics/pages/screens/ScreensPage",
+	"/analytics/dashboards": "/analytics/pages/DashboardsPage",
+	"/analytics/dashboards/new": "/analytics/pages/DashboardEditorPage",
+	"/analytics/questions": "/analytics/pages/CardsPage",
+	"/analytics/questions/new": "/analytics/pages/CardEditorPage",
+	"/analytics/data": "/analytics/pages/DataPage",
+	"/analytics/data/new": "/analytics/pages/DatabaseNewPage",
+	"/analytics/models": "/analytics/pages/ModelsPage",
+	"/analytics/metrics": "/analytics/pages/MetricsPage",
+	"/analytics/trash": "/analytics/pages/TrashPage",
+	"/analytics/collections": "/analytics/pages/CollectionsPage",
+	"/analytics/search": "/analytics/pages/SearchPage",
+	"/analytics/project-cockpit": "/analytics/pages/project-cockpit/ProjectCockpitPage",
+	"/analytics/gpmc": "/analytics/pages/gpmc/GpmcPage",
+	"/analytics/explore-sessions": "/analytics/pages/ExploreSessionsPage",
+	"/analytics/report-factory": "/analytics/pages/ReportFactoryPage",
+	"/analytics/metric-lens": "/analytics/pages/MetricLensPage",
+	"/analytics/nl2sql-eval": "/analytics/pages/Nl2SqlEvalPage",
 };
 
 export function DynamicMenuResolver({ base }: Props) {
