@@ -1,6 +1,63 @@
 {
   "portalNavSections": [
     {
+      "key": "analytics",
+      "path": "analytics",
+      "icon": "solar:chart-2-bold-duotone",
+      "titleKey": "sys.nav.portal.analytics",
+      "title": "BI 分析",
+      "children": [
+        {
+          "key": "home",
+          "path": "home",
+          "icon": "solar:home-2-bold-duotone",
+          "titleKey": "sys.nav.portal.analyticsHome",
+          "title": "分析首页",
+          "externalLink": "/analytics"
+        },
+        {
+          "key": "screens",
+          "path": "screens",
+          "icon": "solar:monitor-bold-duotone",
+          "titleKey": "sys.nav.portal.analyticsScreens",
+          "title": "数据大屏",
+          "externalLink": "/analytics/screens"
+        },
+        {
+          "key": "dashboards",
+          "path": "dashboards",
+          "icon": "solar:widget-3-bold-duotone",
+          "titleKey": "sys.nav.portal.analyticsDashboards",
+          "title": "分析看板",
+          "externalLink": "/analytics/dashboards"
+        },
+        {
+          "key": "questions",
+          "path": "questions",
+          "icon": "solar:clipboard-list-bold-duotone",
+          "titleKey": "sys.nav.portal.analyticsQuestions",
+          "title": "分析卡片",
+          "externalLink": "/analytics/questions"
+        },
+        {
+          "key": "data",
+          "path": "data",
+          "icon": "solar:database-bold-duotone",
+          "titleKey": "sys.nav.portal.analyticsData",
+          "title": "数据管理",
+          "externalLink": "/analytics/data"
+        },
+        {
+          "key": "projectCockpit",
+          "path": "project-cockpit",
+          "icon": "solar:chart-square-bold-duotone",
+          "titleKey": "sys.nav.portal.analyticsProjectCockpit",
+          "title": "项目看板",
+          "externalLink": "/analytics/project-cockpit"
+        }
+      ]
+    },
+    {
       "key": "workbench",
       "path": "workbench",
       "icon": "solar:widget-3-bold-duotone",
