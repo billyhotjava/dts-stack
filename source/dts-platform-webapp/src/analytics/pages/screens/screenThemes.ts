@@ -343,6 +343,79 @@ const darkCommandTheme: ScreenThemeTokens = {
     errorBg: 'rgba(10,22,40,0.9)',
 };
 
+// ── Enterprise Light theme (professional, minimal, boardroom-friendly) ──
+const enterpriseLightTheme: ScreenThemeTokens = {
+    ...lightBusinessTheme,
+    canvasBackground: '#f0f4f8',
+    cardBackground: '#ffffff',
+    cardBorder: '1px solid rgba(148, 163, 184, 0.18)',
+    cardShadow: '0 1px 3px rgba(0,0,0,0.06), 0 1px 2px rgba(0,0,0,0.04)',
+    cardBorderRadius: 12,
+    textPrimary: '#0f172a',
+    textSecondary: '#334155',
+    textMuted: '#64748b',
+    accentColor: '#2563eb',
+    echarts: {
+        ...lightBusinessTheme.echarts,
+        colorPalette: ['#2563eb', '#0891b2', '#059669', '#d97706', '#dc2626', '#7c3aed', '#0d9488', '#ea580c'],
+    },
+    barGradient: ['#2563eb', '#3b82f6'],
+    numberCard: {
+        background: '#ffffff',
+        border: '1px solid rgba(148, 163, 184, 0.18)',
+        titleColor: '#64748b',
+        valueColor: '#0f172a',
+    },
+    scrollBoard: { headerBg: '#e2e8f0', oddRowBg: '#ffffff', evenRowBg: '#f8fafc', textColor: '#0f172a' },
+    progressBar: { trackBg: '#e2e8f0', fillGradient: ['#2563eb', '#3b82f6'], labelColor: '#0f172a' },
+    breadcrumb: { background: 'rgba(255,255,255,0.95)', textColor: '#334155', linkColor: '#2563eb' },
+    gauge: { axisLineColor: '#e2e8f0', splitLineColor: '#f1f5f9', axisLabelColor: '#334155', titleColor: '#0f172a', detailColor: '#2563eb' },
+    radar: { axisNameColor: '#334155', splitLineColor: '#e2e8f0' },
+    placeholder: { background: '#f8fafc', border: '2px dashed #cbd5e1', color: '#94a3b8' },
+    pieLabelColor: '#0f172a',
+    funnelLabelColor: '#0f172a',
+    errorBg: 'rgba(255,255,255,0.96)',
+};
+
+// ── Enterprise Dark theme (professional, deep blue, executive-grade) ──
+const enterpriseDarkTheme: ScreenThemeTokens = {
+    ...darkCommandTheme,
+    canvasBackground: '#0f1219',
+    cardBackground: 'rgba(30, 41, 59, 0.85)',
+    cardBorder: '1px solid rgba(148, 163, 184, 0.12)',
+    cardShadow: '0 4px 12px rgba(0,0,0,0.25)',
+    cardBorderRadius: 12,
+    textPrimary: '#e2e8f0',
+    textSecondary: '#94a3b8',
+    textMuted: '#64748b',
+    accentColor: '#3b82f6',
+    echarts: {
+        ...darkCommandTheme.echarts,
+        axisLineColor: 'rgba(148, 163, 184, 0.15)',
+        axisLabelColor: '#94a3b8',
+        splitLineColor: 'rgba(148, 163, 184, 0.08)',
+        tooltipBg: 'rgba(15, 18, 25, 0.92)',
+        tooltipBorder: 'rgba(148, 163, 184, 0.15)',
+        colorPalette: ['#3b82f6', '#06b6d4', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#14b8a6', '#f97316'],
+    },
+    barGradient: ['#3b82f6', '#2563eb'],
+    numberCard: {
+        background: 'rgba(30, 41, 59, 0.85)',
+        border: '1px solid rgba(148, 163, 184, 0.12)',
+        titleColor: '#94a3b8',
+        valueColor: '#e2e8f0',
+    },
+    scrollBoard: { headerBg: 'rgba(30, 41, 59, 0.9)', oddRowBg: 'rgba(30, 41, 59, 0.6)', evenRowBg: 'rgba(30, 41, 59, 0.4)', textColor: '#e2e8f0' },
+    progressBar: { trackBg: 'rgba(30, 41, 59, 0.8)', fillGradient: ['#3b82f6', '#2563eb'], labelColor: '#e2e8f0' },
+    breadcrumb: { background: 'rgba(15, 18, 25, 0.9)', textColor: '#94a3b8', linkColor: '#3b82f6' },
+    gauge: { axisLineColor: 'rgba(148, 163, 184, 0.2)', splitLineColor: 'rgba(148, 163, 184, 0.1)', axisLabelColor: '#94a3b8', titleColor: '#e2e8f0', detailColor: '#3b82f6' },
+    radar: { axisNameColor: '#94a3b8', splitLineColor: 'rgba(148, 163, 184, 0.1)' },
+    placeholder: { background: 'rgba(30, 41, 59, 0.5)', border: '2px dashed rgba(148, 163, 184, 0.2)', color: '#64748b' },
+    pieLabelColor: '#e2e8f0',
+    funnelLabelColor: '#e2e8f0',
+    errorBg: 'rgba(15, 18, 25, 0.92)',
+};
+
 // ── Brand Custom theme (user-editable, defaults to light) ──
 const brandCustomTheme: ScreenThemeTokens = { ...lightBusinessTheme };
 
@@ -352,6 +425,8 @@ const themeMap: Record<ScreenTheme, ScreenThemeTokens> = {
     'glacier': glacierTheme,
     'light-business': lightBusinessTheme,
     'dark-command': darkCommandTheme,
+    'enterprise-light': enterpriseLightTheme,
+    'enterprise-dark': enterpriseDarkTheme,
     'brand-custom': brandCustomTheme,
 };
 

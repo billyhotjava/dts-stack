@@ -1,6 +1,6 @@
 // Screen Designer Component Types
 
-export type ScreenTheme = 'legacy-dark' | 'titanium' | 'glacier' | 'light-business' | 'dark-command' | 'brand-custom';
+export type ScreenTheme = 'legacy-dark' | 'titanium' | 'glacier' | 'light-business' | 'dark-command' | 'brand-custom' | 'enterprise-light' | 'enterprise-dark';
 
 export interface ScreenGlobalVariable {
     key: string;

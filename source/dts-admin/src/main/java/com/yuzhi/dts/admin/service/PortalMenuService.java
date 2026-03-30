@@ -56,7 +56,7 @@ public class PortalMenuService {
         "model",
         "job",
         "quality",
-        "bi",
+        "analytics",
         "operations",
         "catalog",
         "modeling",

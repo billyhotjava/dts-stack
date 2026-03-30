@@ -2,6 +2,10 @@ import type { ScreenConfig, ScreenComponent, ScreenGlobalVariable } from './type
 import { SCREEN_SCHEMA_VERSION } from './specV2';
 import { projectManagementCommandCenterTemplate } from './projectManagementCommandCenterTemplate';
 import { gpmcTemplates } from './gpmcTemplates';
+import {
+    ENTERPRISE, resetIdCounter,
+    headerBar, sectionPanel, chart, gradientDivider, kpiRow, threeColumnGrid,
+} from './enterpriseTemplateBuilder';
 
 /**
  * Screen Template definition
@@ -2346,10 +2350,175 @@ const projectFundDashboardTemplate: ScreenTemplate = {
 /**
  * 所有可用模板
  */
+// ── Enterprise Templates (professional, minimal, section-panel based) ──
+
+function buildEnterpriseDarkTemplate(): ScreenTemplate {
+    resetIdCounter(9000);
+    const T = ENTERPRISE.dark;
+    const W = 1920, H = 1080;
+    const components: ScreenComponent[] = [
+        ...headerBar(T, '数字化转型指挥中心', W),
+        ...kpiRow(T, 24, 68, 220, 16, [
+            { title: '总收入', value: '12.8', suffix: '亿', trend: 'up', trendValue: '+8.3%', icon: '💰', accentColor: T.success },
+            { title: '活跃用户', value: '86.4', suffix: '万', trend: 'up', trendValue: '+12.1%', icon: '👥', accentColor: T.accent },
+            { title: '系统可用率', value: '99.97', suffix: '%', trend: 'up', trendValue: '+0.02%', icon: '✅', accentColor: T.info },
+            { title: '数据处理量', value: '3.2', suffix: 'TB/日', trend: 'up', trendValue: '+18%', icon: '📊', accentColor: '#7c3aed' },
+            { title: '安全事件', value: '0', suffix: '项', icon: '🛡️', accentColor: T.success },
+            { title: '待处理告警', value: '3', suffix: '项', trend: 'down', trendValue: '-5', icon: '⚠️', accentColor: T.warning },
+            { title: '项目交付率', value: '94.2', suffix: '%', trend: 'up', trendValue: '+3.1%', icon: '🎯', accentColor: T.accent },
+            { title: 'IT 成本指数', value: '0.82', icon: '📉', accentColor: T.danger },
+        ]),
+        gradientDivider(T, 24, 176, W - 48),
+        ...threeColumnGrid(T, {
+            startY: 196,
+            screenWidth: W,
+            rowHeight: 400,
+            gap: 16,
+            edgePadding: 24,
+            sections: [
+                { title: '营收趋势', titleIcon: '📈', chartType: 'line-chart', chartName: '月度营收', chartConfig: { xAxisField: 'month', yAxisField: 'revenue', smooth: true } },
+                { title: '业务分布', titleIcon: '🧩', chartType: 'pie-chart', chartName: '业务占比', chartConfig: { nameField: 'category', valueField: 'amount' } },
+                { title: '区域排行', titleIcon: '🏆', chartType: 'bar-chart', chartName: '区域销售', chartConfig: { xAxisField: 'region', yAxisField: 'sales', horizontal: true } },
+                { title: '系统性能', titleIcon: '⚡', chartType: 'gauge-chart', chartName: '系统负载', chartConfig: { value: 72, min: 0, max: 100, title: 'CPU 使用率' } },
+                { title: '用户活跃度', titleIcon: '📊', chartType: 'bar-chart', chartName: '日活跃用户', chartConfig: { xAxisField: 'date', yAxisField: 'dau' } },
+                { title: '告警分布', titleIcon: '🔔', chartType: 'radar-chart', chartName: '告警雷达', chartConfig: { dimensions: ['安全', '性能', '容量', '可用', '合规'] } },
+            ],
+        }),
+    ];
+    return {
+        id: 'enterprise-digital-transformation',
+        name: '数字化转型指挥中心',
+        category: 'general',
+        thumbnail: '🏢',
+        description: '企业级深色主题，section-panel 面板布局，8 个 KPI + 6 区域图表',
+        tags: ['企业', '数字化', '指挥中心', 'KPI'],
+        config: {
+            schemaVersion: SCREEN_SCHEMA_VERSION,
+            name: '数字化转型指挥中心',
+            width: W, height: H,
+            backgroundColor: T.canvas,
+            theme: 'enterprise-dark',
+            components,
+            pages: [],
+            globalVariables: [],
+        },
+    };
+}
+
+function buildEnterpriseLightTemplate(): ScreenTemplate {
+    resetIdCounter(9200);
+    const T = ENTERPRISE.light;
+    const W = 1920, H = 1080;
+    const components: ScreenComponent[] = [
+        ...headerBar(T, '供应链全景看板', W),
+        ...kpiRow(T, 24, 68, 280, 16, [
+            { title: '订单总量', value: '42,830', suffix: '单', trend: 'up', trendValue: '+6.2%', icon: '📦', accentColor: T.accent },
+            { title: '准时交付率', value: '96.1', suffix: '%', trend: 'up', trendValue: '+1.8%', icon: '🚚', accentColor: T.success },
+            { title: '库存周转天数', value: '28.4', suffix: '天', trend: 'down', trendValue: '-2.1天', icon: '📋', accentColor: T.info },
+            { title: '供应商评分', value: '4.3', suffix: '/5', icon: '⭐', accentColor: T.warning },
+            { title: '异常工单', value: '12', suffix: '项', trend: 'down', trendValue: '-8', icon: '⚠️', accentColor: T.danger },
+            { title: '成本节约', value: '1,280', suffix: '万', trend: 'up', trendValue: '+15%', icon: '💰', accentColor: T.success },
+        ]),
+        gradientDivider(T, 24, 176, W - 48),
+        // Left column: 2 panels
+        sectionPanel(T, '采购趋势', 24, 196, 620, 400, { titleIcon: '📈' }),
+        chart('line-chart', '月度采购', 40, 240, 588, 340, { xAxisField: 'month', yAxisField: 'amount', smooth: true }),
+        sectionPanel(T, '库存分布', 24, 612, 620, 400, { titleIcon: '📊' }),
+        chart('bar-chart', '仓库库存', 40, 656, 588, 340, { xAxisField: 'warehouse', yAxisField: 'quantity' }),
+        // Center column
+        sectionPanel(T, '供应链地图', 660, 196, 616, 816, { titleIcon: '🗺️', shadow: 'medium' }),
+        chart('pie-chart', '区域分布', 676, 240, 584, 756, { nameField: 'region', valueField: 'amount' }),
+        // Right column: 2 panels
+        sectionPanel(T, '供应商排行', 1292, 196, 604, 400, { titleIcon: '🏆' }),
+        chart('bar-chart', '供应商评分', 1308, 240, 572, 340, { xAxisField: 'supplier', yAxisField: 'score', horizontal: true }),
+        sectionPanel(T, '异常预警', 1292, 612, 604, 400, { titleIcon: '🔔' }),
+        chart('table', '异常工单', 1308, 656, 572, 340, {}),
+    ];
+    return {
+        id: 'enterprise-supply-chain',
+        name: '供应链全景看板',
+        category: 'manufacturing',
+        thumbnail: '🏭',
+        description: '企业级浅色主题，供应链全链路可视化，采购/库存/交付/异常',
+        tags: ['企业', '供应链', '采购', '库存'],
+        config: {
+            schemaVersion: SCREEN_SCHEMA_VERSION,
+            name: '供应链全景看板',
+            width: W, height: H,
+            backgroundColor: T.canvas,
+            theme: 'enterprise-light',
+            components,
+            pages: [],
+            globalVariables: [],
+        },
+    };
+}
+
+function buildCustomer360Template(): ScreenTemplate {
+    resetIdCounter(9400);
+    const T = ENTERPRISE.light;
+    const W = 1920, H = 1080;
+    const components: ScreenComponent[] = [
+        ...headerBar(T, '客户 360° 画像', W),
+        // Top: customer info card
+        sectionPanel(T, '客户概览', 24, 68, W - 48, 160, { titleIcon: '👤', shadow: 'medium' }),
+        ...kpiRow(T, 40, 112, 200, 12, [
+            { title: '客户等级', value: 'VIP', icon: '⭐', accentColor: T.warning },
+            { title: '累计消费', value: '128.6', suffix: '万', icon: '💳', accentColor: T.accent },
+            { title: '最近购买', value: '3', suffix: '天前', icon: '🛒', accentColor: T.info },
+            { title: '满意度评分', value: '4.7', suffix: '/5', icon: '😊', accentColor: T.success },
+            { title: '活跃度', value: '高', icon: '🔥', accentColor: T.danger },
+            { title: '生命周期', value: '成长期', icon: '📈', accentColor: '#7c3aed' },
+            { title: '推荐意愿', value: '82', suffix: '%', icon: '📣', accentColor: T.accent },
+            { title: '流失风险', value: '低', icon: '🛡️', accentColor: T.success },
+        ]),
+        gradientDivider(T, 24, 240, W - 48),
+        // Bottom: 4-column grid
+        sectionPanel(T, '消费趋势', 24, 260, 460, 380, { titleIcon: '📈' }),
+        chart('line-chart', '月消费', 40, 304, 428, 320, { xAxisField: 'month', yAxisField: 'spend', smooth: true }),
+        sectionPanel(T, '品类偏好', 500, 260, 460, 380, { titleIcon: '🎯' }),
+        chart('pie-chart', '品类占比', 516, 304, 428, 320, { nameField: 'category', valueField: 'amount' }),
+        sectionPanel(T, '行为轨迹', 976, 260, 460, 380, { titleIcon: '👣' }),
+        chart('bar-chart', '渠道行为', 992, 304, 428, 320, { xAxisField: 'channel', yAxisField: 'visits' }),
+        sectionPanel(T, '标签画像', 1452, 260, 444, 380, { titleIcon: '🏷️' }),
+        chart('wordcloud-chart', '标签云', 1468, 304, 412, 320, { nameField: 'tag', valueField: 'weight' }),
+        // Bottom row
+        sectionPanel(T, '交易明细', 24, 656, 940, 380, { titleIcon: '📋' }),
+        chart('table', '近期交易', 40, 700, 908, 320, {}),
+        sectionPanel(T, '推荐策略', 980, 656, 916, 380, { titleIcon: '🎁' }),
+        chart('table', '推荐商品', 996, 700, 884, 320, {}),
+    ];
+    return {
+        id: 'enterprise-customer-360',
+        name: '客户 360° 画像',
+        category: 'retail',
+        thumbnail: '👤',
+        description: '企业级客户全景画像，KPI+消费趋势+标签云+交易明细',
+        tags: ['企业', '客户', 'CRM', '画像'],
+        config: {
+            schemaVersion: SCREEN_SCHEMA_VERSION,
+            name: '客户 360° 画像',
+            width: W, height: H,
+            backgroundColor: T.canvas,
+            theme: 'enterprise-light',
+            components,
+            pages: [],
+            globalVariables: [],
+        },
+    };
+}
+
+const enterpriseDigitalTransformationTemplate = buildEnterpriseDarkTemplate();
+const enterpriseSupplyChainTemplate = buildEnterpriseLightTemplate();
+const enterpriseCustomer360Template = buildCustomer360Template();
+
 export const screenTemplates: ScreenTemplate[] = [
     blankTemplate,
     blank4kTemplate,
     blankSmallTemplate,
+    enterpriseDigitalTransformationTemplate,
+    enterpriseSupplyChainTemplate,
+    enterpriseCustomer360Template,
     techDataCenterTemplate,
     patentDataCenterTemplate,
     patentTitaniumTemplate,

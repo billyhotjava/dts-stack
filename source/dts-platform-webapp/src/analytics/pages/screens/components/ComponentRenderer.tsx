@@ -1509,7 +1509,7 @@ export const ComponentRenderer = memo(function ComponentRenderer({ component, mo
                         })),
                         symbolSize: Number(c.pointSize ?? 12),
                         itemStyle: { color: t.echarts.colorPalette[0] },
-                        label: { show: true, formatter: '{b}', textStyle: { color: '#fff', fontSize: 10 } },
+                        label: { show: true, formatter: '{b}', textStyle: { color: 'var(--text-primary, #e2e8f0)', fontSize: 10 } },
                     });
                 }
                 if (flowData.length > 0) {
@@ -1594,7 +1594,7 @@ export const ComponentRenderer = memo(function ComponentRenderer({ component, mo
                         shading: 'lambert',
                         label: {
                             show: c.showLabel === true,
-                            textStyle: { color: '#fff', fontSize: 10 },
+                            textStyle: { color: 'var(--text-primary, #e2e8f0)', fontSize: 10 },
                             formatter: (p: Record<string, unknown>) => String((p.value as number[])?.[2] ?? ''),
                         },
                     }],
@@ -1653,7 +1653,7 @@ export const ComponentRenderer = memo(function ComponentRenderer({ component, mo
                         itemStyle: { opacity: 0.8 },
                         label: {
                             show: c.showLabel === true,
-                            textStyle: { color: '#fff', fontSize: 10 },
+                            textStyle: { color: 'var(--text-primary, #e2e8f0)', fontSize: 10 },
                         },
                     }],
                 }, echartsClickHandler);
