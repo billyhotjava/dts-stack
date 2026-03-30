@@ -19,7 +19,7 @@ public class DatabaseUploadTableService {
 
     private static final Logger log = LoggerFactory.getLogger(DatabaseUploadTableService.class);
 
-    private static final String SCHEMA = "upload";
+    static final String SCHEMA = "upload";
     private static final int BATCH_SIZE = 1000;
     private static final int MAX_TABLE_NAME_LENGTH = 40;
     private static final DateTimeFormatter DATE_FMT = DateTimeFormatter.ofPattern("yyyyMMdd");
@@ -39,15 +39,32 @@ public class DatabaseUploadTableService {
         this.metadataSyncService = metadataSyncService;
     }
 
+    public static String sanitizeUsername(String username) {
+        if (username == null || username.isBlank()) {
+            return "anonymous";
+        }
+        String sanitized = username.trim().toLowerCase(Locale.ROOT)
+                .replaceAll("[^a-z0-9]", "_")
+                .replaceAll("_+", "_")
+                .replaceAll("^_|_$", "");
+        if (sanitized.isEmpty()) {
+            return "anonymous";
+        }
+        if (sanitized.length() > 20) {
+            sanitized = sanitized.substring(0, 20).replaceAll("_$", "");
+        }
+        return sanitized;
+    }
+
     /**
-     * Creates a table in the biadmin schema with the given columns and rows,
+     * Creates a table in the upload schema with the given columns and rows,
      * then syncs metadata so the table appears in the analytics catalog.
      *
      * @return the actual table name created (without schema prefix)
      */
-    public UploadResult uploadTable(long databaseId, String tableName, List<ColumnDef> columns, List<List<Object>> rows)
+    public UploadResult uploadTable(long databaseId, String username, String tableName, List<ColumnDef> columns, List<List<Object>> rows)
             throws SQLException {
-        String sanitized = sanitizeTableName(tableName);
+        String sanitized = sanitizeTableName(username, tableName);
         String fullTableName = SCHEMA + ".\"" + sanitized + "\"";
 
         HikariDataSource dataSource = dataSourceRegistry.get(databaseId);
@@ -161,7 +178,7 @@ public class DatabaseUploadTableService {
         }
     }
 
-    static String sanitizeTableName(String name) {
+    static String sanitizeTableName(String username, String name) {
         if (name == null || name.isBlank()) {
             name = "untitled";
         }
@@ -176,8 +193,18 @@ public class DatabaseUploadTableService {
             // Don't end with underscore after truncation
             sanitized = sanitized.replaceAll("_$", "");
         }
-        String datePrefix = "upload_" + LocalDate.now().format(DATE_FMT) + "_";
-        return datePrefix + sanitized;
+        String prefix = "upload_" + sanitizeUsername(username) + "_" + LocalDate.now().format(DATE_FMT) + "_";
+        return prefix + sanitized;
+    }
+
+    public void dropUploadTable(long databaseId, String tableName) throws SQLException {
+        HikariDataSource dataSource = dataSourceRegistry.get(databaseId);
+        try (Connection conn = dataSource.getConnection();
+             Statement stmt = conn.createStatement()) {
+            stmt.execute("DROP TABLE IF EXISTS " + SCHEMA + ".\"" + tableName + "\"");
+            log.info("Dropped upload table {}.\"{}\" from database {}", SCHEMA, tableName, databaseId);
+        }
+        metadataSyncService.syncDatabaseSchema(databaseId);
     }
 
     /**

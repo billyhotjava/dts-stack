@@ -91,7 +91,7 @@ public class DatabaseResource {
     public ResponseEntity<?> list(HttpServletRequest request) {
         Optional<ResponseEntity<String>> auth = MetabaseAuth.requireUser(sessionService, request);
         if (auth.isPresent()) {
-            return auth.get();
+            return auth.orElseThrow();
         }
 
         List<Map<String, Object>> data = databaseRepository.findAll().stream().map(this::toDatabaseListItem).toList();
@@ -100,9 +100,9 @@ public class DatabaseResource {
 
     @PostMapping(consumes = MediaType.APPLICATION_JSON_VALUE, produces = MediaType.APPLICATION_JSON_VALUE)
     public ResponseEntity<?> create(@RequestBody DatabaseRequest request, HttpServletRequest servletRequest) {
-        Optional<ResponseEntity<String>> auth = MetabaseAuth.requireSuperuser(sessionService, servletRequest);
+        Optional<ResponseEntity<String>> auth = MetabaseAuth.requireDataAdmin(sessionService, servletRequest);
         if (auth.isPresent()) {
-            return auth.get();
+            return auth.orElseThrow();
         }
 
         JsonNode details = request == null ? null : request.details();
@@ -133,7 +133,7 @@ public class DatabaseResource {
     public ResponseEntity<?> get(@PathVariable("dbId") long dbId, HttpServletRequest request) {
         Optional<ResponseEntity<String>> auth = MetabaseAuth.requireUser(sessionService, request);
         if (auth.isPresent()) {
-            return auth.get();
+            return auth.orElseThrow();
         }
         return databaseRepository.findById(dbId).<ResponseEntity<?>>map(db -> ResponseEntity.ok(toDatabaseGet(db, true))).orElseGet(
                 () -> ResponseEntity.notFound().build());
@@ -143,7 +143,7 @@ public class DatabaseResource {
     public ResponseEntity<?> metadata(@PathVariable("dbId") long dbId, HttpServletRequest request) {
         Optional<ResponseEntity<String>> auth = MetabaseAuth.requireUser(sessionService, request);
         if (auth.isPresent()) {
-            return auth.get();
+            return auth.orElseThrow();
         }
         return databaseRepository.findById(dbId)
                 .<ResponseEntity<?>>map(db -> {
@@ -158,7 +158,7 @@ public class DatabaseResource {
     public ResponseEntity<?> schemas(@PathVariable("dbId") long dbId, HttpServletRequest request) {
         Optional<ResponseEntity<String>> auth = MetabaseAuth.requireUser(sessionService, request);
         if (auth.isPresent()) {
-            return auth.get();
+            return auth.orElseThrow();
         }
         if (!databaseRepository.existsById(dbId)) {
             return ResponseEntity.notFound().build();
@@ -177,7 +177,7 @@ public class DatabaseResource {
             @PathVariable("dbId") long dbId, @PathVariable("schemaName") String schemaName, HttpServletRequest request) {
         Optional<ResponseEntity<String>> auth = MetabaseAuth.requireUser(sessionService, request);
         if (auth.isPresent()) {
-            return auth.get();
+            return auth.orElseThrow();
         }
         if (!databaseRepository.existsById(dbId)) {
             return ResponseEntity.notFound().build();
@@ -193,7 +193,7 @@ public class DatabaseResource {
     public ResponseEntity<?> fields(@PathVariable("dbId") long dbId, HttpServletRequest request) {
         Optional<ResponseEntity<String>> auth = MetabaseAuth.requireUser(sessionService, request);
         if (auth.isPresent()) {
-            return auth.get();
+            return auth.orElseThrow();
         }
         if (!databaseRepository.existsById(dbId)) {
             return ResponseEntity.notFound().build();
@@ -209,7 +209,7 @@ public class DatabaseResource {
     public ResponseEntity<?> idfields(@PathVariable("dbId") long dbId, HttpServletRequest request) {
         Optional<ResponseEntity<String>> auth = MetabaseAuth.requireUser(sessionService, request);
         if (auth.isPresent()) {
-            return auth.get();
+            return auth.orElseThrow();
         }
         if (!databaseRepository.existsById(dbId)) {
             return ResponseEntity.notFound().build();
@@ -238,7 +238,7 @@ public class DatabaseResource {
             HttpServletRequest request) {
         Optional<ResponseEntity<String>> auth = MetabaseAuth.requireUser(sessionService, request);
         if (auth.isPresent()) {
-            return auth.get();
+            return auth.orElseThrow();
         }
         if (!databaseRepository.existsById(dbId)) {
             return ResponseEntity.notFound().build();
@@ -250,7 +250,7 @@ public class DatabaseResource {
     public ResponseEntity<?> cardAutocompleteSuggestions(@PathVariable("dbId") long dbId, HttpServletRequest request) {
         Optional<ResponseEntity<String>> auth = MetabaseAuth.requireUser(sessionService, request);
         if (auth.isPresent()) {
-            return auth.get();
+            return auth.orElseThrow();
         }
         if (!databaseRepository.existsById(dbId)) {
             return ResponseEntity.notFound().build();
@@ -260,9 +260,9 @@ public class DatabaseResource {
 
     @PostMapping(path = "/{dbId}/sync_schema", produces = MediaType.APPLICATION_JSON_VALUE)
     public ResponseEntity<?> syncSchema(@PathVariable("dbId") long dbId, HttpServletRequest request) {
-        Optional<ResponseEntity<String>> auth = MetabaseAuth.requireSuperuser(sessionService, request);
+        Optional<ResponseEntity<String>> auth = MetabaseAuth.requireDataAdmin(sessionService, request);
         if (auth.isPresent()) {
-            return auth.get();
+            return auth.orElseThrow();
         }
         if (!databaseRepository.existsById(dbId)) {
             return ResponseEntity.notFound().build();
@@ -296,7 +296,7 @@ public class DatabaseResource {
     public ResponseEntity<?> dismissSpinner(@PathVariable("dbId") long dbId, HttpServletRequest request) {
         Optional<ResponseEntity<String>> auth = MetabaseAuth.requireUser(sessionService, request);
         if (auth.isPresent()) {
-            return auth.get();
+            return auth.orElseThrow();
         }
         if (!databaseRepository.existsById(dbId)) {
             return ResponseEntity.notFound().build();
@@ -306,9 +306,9 @@ public class DatabaseResource {
 
     @PostMapping(path = "/{dbId}/rescan_values", produces = MediaType.APPLICATION_JSON_VALUE)
     public ResponseEntity<?> rescanValues(@PathVariable("dbId") long dbId, HttpServletRequest request) {
-        Optional<ResponseEntity<String>> auth = MetabaseAuth.requireSuperuser(sessionService, request);
+        Optional<ResponseEntity<String>> auth = MetabaseAuth.requireDataAdmin(sessionService, request);
         if (auth.isPresent()) {
-            return auth.get();
+            return auth.orElseThrow();
         }
         if (!databaseRepository.existsById(dbId)) {
             return ResponseEntity.notFound().build();
@@ -318,9 +318,9 @@ public class DatabaseResource {
 
     @PostMapping(path = "/{dbId}/discard_values", produces = MediaType.APPLICATION_JSON_VALUE)
     public ResponseEntity<?> discardValues(@PathVariable("dbId") long dbId, HttpServletRequest request) {
-        Optional<ResponseEntity<String>> auth = MetabaseAuth.requireSuperuser(sessionService, request);
+        Optional<ResponseEntity<String>> auth = MetabaseAuth.requireDataAdmin(sessionService, request);
         if (auth.isPresent()) {
-            return auth.get();
+            return auth.orElseThrow();
         }
         if (!databaseRepository.existsById(dbId)) {
             return ResponseEntity.notFound().build();
@@ -330,9 +330,9 @@ public class DatabaseResource {
 
     @PostMapping(path = "/{dbId}/persist", produces = MediaType.APPLICATION_JSON_VALUE)
     public ResponseEntity<?> persist(@PathVariable("dbId") long dbId, HttpServletRequest request) {
-        Optional<ResponseEntity<String>> auth = MetabaseAuth.requireSuperuser(sessionService, request);
+        Optional<ResponseEntity<String>> auth = MetabaseAuth.requireDataAdmin(sessionService, request);
         if (auth.isPresent()) {
-            return auth.get();
+            return auth.orElseThrow();
         }
         if (!databaseRepository.existsById(dbId)) {
             return ResponseEntity.notFound().build();
@@ -342,9 +342,9 @@ public class DatabaseResource {
 
     @PostMapping(path = "/{dbId}/unpersist", produces = MediaType.APPLICATION_JSON_VALUE)
     public ResponseEntity<?> unpersist(@PathVariable("dbId") long dbId, HttpServletRequest request) {
-        Optional<ResponseEntity<String>> auth = MetabaseAuth.requireSuperuser(sessionService, request);
+        Optional<ResponseEntity<String>> auth = MetabaseAuth.requireDataAdmin(sessionService, request);
         if (auth.isPresent()) {
-            return auth.get();
+            return auth.orElseThrow();
         }
         if (!databaseRepository.existsById(dbId)) {
             return ResponseEntity.notFound().build();
@@ -354,9 +354,9 @@ public class DatabaseResource {
 
     @PutMapping(path = "/{id}", consumes = MediaType.APPLICATION_JSON_VALUE, produces = MediaType.APPLICATION_JSON_VALUE)
     public ResponseEntity<?> update(@PathVariable("id") long id, @RequestBody DatabaseRequest request, HttpServletRequest servletRequest) {
-        Optional<ResponseEntity<String>> auth = MetabaseAuth.requireSuperuser(sessionService, servletRequest);
+        Optional<ResponseEntity<String>> auth = MetabaseAuth.requireDataAdmin(sessionService, servletRequest);
         if (auth.isPresent()) {
-            return auth.get();
+            return auth.orElseThrow();
         }
 
         Optional<AnalyticsDatabase> existing = databaseRepository.findById(id);
@@ -364,7 +364,7 @@ public class DatabaseResource {
             return ResponseEntity.notFound().build();
         }
 
-        AnalyticsDatabase db = existing.get();
+        AnalyticsDatabase db = existing.orElseThrow();
         if (DataLakeDatabaseInitializer.isDataLakeDatabase(db)) {
             return ResponseEntity.badRequest().body(Map.of("errors", Map.of("database", "内置数据湖不允许修改")));
         }
@@ -407,9 +407,9 @@ public class DatabaseResource {
 
     @DeleteMapping(path = "/{dbId}")
     public ResponseEntity<?> delete(@PathVariable("dbId") long dbId, HttpServletRequest request) {
-        Optional<ResponseEntity<String>> auth = MetabaseAuth.requireSuperuser(sessionService, request);
+        Optional<ResponseEntity<String>> auth = MetabaseAuth.requireDataAdmin(sessionService, request);
         if (auth.isPresent()) {
-            return auth.get();
+            return auth.orElseThrow();
         }
         Optional<AnalyticsDatabase> existing = databaseRepository.findById(dbId);
         if (existing.isEmpty()) {
@@ -430,9 +430,9 @@ public class DatabaseResource {
 
     @PostMapping(path = "/sample_database", produces = MediaType.APPLICATION_JSON_VALUE)
     public ResponseEntity<?> addSampleDatabase(HttpServletRequest request) {
-        Optional<ResponseEntity<String>> auth = MetabaseAuth.requireSuperuser(sessionService, request);
+        Optional<ResponseEntity<String>> auth = MetabaseAuth.requireDataAdmin(sessionService, request);
         if (auth.isPresent()) {
-            return auth.get();
+            return auth.orElseThrow();
         }
 
         AnalyticsDatabase db = new AnalyticsDatabase();
@@ -458,10 +458,14 @@ public class DatabaseResource {
             HttpServletRequest request) {
         Optional<ResponseEntity<String>> auth = MetabaseAuth.requireUser(sessionService, request);
         if (auth.isPresent()) {
-            return auth.get();
+            return auth.orElseThrow();
         }
         if (!databaseRepository.existsById(dbId)) {
             return ResponseEntity.notFound().build();
+        }
+        String username = request.getHeader("X-DTS-User");
+        if (username == null || username.isBlank()) {
+            return ResponseEntity.status(403).contentType(MediaType.TEXT_PLAIN).body("无法识别用户");
         }
         if (body == null || body.tableName() == null || body.tableName().isBlank()) {
             return ResponseEntity.badRequest().body(Map.of("errors", Map.of("tableName", "表名不能为空")));
@@ -476,7 +480,7 @@ public class DatabaseResource {
 
         try {
             DatabaseUploadTableService.UploadResult result = uploadTableService.uploadTable(
-                    dbId, body.tableName(), columns, body.rows());
+                    dbId, username, body.tableName(), columns, body.rows());
             return ResponseEntity.ok(Map.of(
                     "tableName", result.tableName(),
                     "schema", result.schema(),
@@ -488,11 +492,70 @@ public class DatabaseResource {
         }
     }
 
+    @GetMapping(path = "/{dbId}/my-uploads", produces = MediaType.APPLICATION_JSON_VALUE)
+    public ResponseEntity<?> myUploads(@PathVariable("dbId") long dbId, HttpServletRequest request) {
+        Optional<ResponseEntity<String>> auth = MetabaseAuth.requireUser(sessionService, request);
+        if (auth.isPresent()) {
+            return auth.orElseThrow();
+        }
+        if (!databaseRepository.existsById(dbId)) {
+            return ResponseEntity.notFound().build();
+        }
+        String username = request.getHeader("X-DTS-User");
+        if (username == null || username.isBlank()) {
+            return ResponseEntity.ok(List.of());
+        }
+        String prefix = "upload_" + DatabaseUploadTableService.sanitizeUsername(username) + "_";
+        List<Map<String, Object>> tables = tableRepository
+                .findAllByDatabaseIdAndSchemaNameOrderByNameAsc(dbId, DatabaseUploadTableService.SCHEMA)
+                .stream()
+                .filter(t -> t.isActive() && t.getName() != null && t.getName().startsWith(prefix))
+                .map(t -> {
+                    Map<String, Object> item = new LinkedHashMap<>();
+                    item.put("id", t.getId());
+                    item.put("name", t.getName());
+                    item.put("display_name", t.getDisplayName());
+                    item.put("schema", t.getSchemaName());
+                    item.put("created_at", t.getCreatedAt() != null ? t.getCreatedAt().toString() : null);
+                    return item;
+                })
+                .toList();
+        return ResponseEntity.ok(tables);
+    }
+
+    @DeleteMapping(path = "/{dbId}/upload-table/{tableName}")
+    public ResponseEntity<?> deleteUploadTable(
+            @PathVariable("dbId") long dbId,
+            @PathVariable("tableName") String tableName,
+            HttpServletRequest request) {
+        Optional<ResponseEntity<String>> auth = MetabaseAuth.requireUser(sessionService, request);
+        if (auth.isPresent()) {
+            return auth.orElseThrow();
+        }
+        if (!databaseRepository.existsById(dbId)) {
+            return ResponseEntity.notFound().build();
+        }
+        String username = request.getHeader("X-DTS-User");
+        if (username == null || username.isBlank()) {
+            return ResponseEntity.status(403).contentType(MediaType.TEXT_PLAIN).body("无法识别用户");
+        }
+        String prefix = "upload_" + DatabaseUploadTableService.sanitizeUsername(username) + "_";
+        if (!tableName.startsWith(prefix)) {
+            return ResponseEntity.status(403).body(Map.of("errors", Map.of("table", "只能删除自己上传的表")));
+        }
+        try {
+            uploadTableService.dropUploadTable(dbId, tableName);
+            return ResponseEntity.noContent().build();
+        } catch (SQLException e) {
+            return ResponseEntity.internalServerError().body(Map.of("error", "删除表失败: " + e.getMessage()));
+        }
+    }
+
     @PostMapping(path = "/validate", consumes = MediaType.APPLICATION_JSON_VALUE, produces = MediaType.APPLICATION_JSON_VALUE)
     public ResponseEntity<?> validateConnection(@RequestBody DatabaseRequest request, HttpServletRequest servletRequest) {
-        Optional<ResponseEntity<String>> auth = MetabaseAuth.requireSuperuser(sessionService, servletRequest);
+        Optional<ResponseEntity<String>> auth = MetabaseAuth.requireDataAdmin(sessionService, servletRequest);
         if (auth.isPresent()) {
-            return auth.get();
+            return auth.orElseThrow();
         }
 
         Map<String, String> errors = new LinkedHashMap<>();
