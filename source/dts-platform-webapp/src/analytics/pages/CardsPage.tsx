@@ -1,11 +1,11 @@
 import { Link } from "react-router";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { analyticsApi, type CardListItem } from "../api/analyticsApi";
-import { PageContainer, PageHeader } from "../components/PageContainer/PageContainer";
+import { PageHeader } from "@/components/page-header";
 import { EmptyState } from "../components/EmptyState";
 import { ErrorNotice } from "../components/ErrorNotice";
-import { Button, Input, Modal, Space, Spin, Table, Tag, message } from "antd";
-import { PlusOutlined, SearchOutlined, EyeOutlined, EditOutlined, DeleteOutlined } from "@ant-design/icons";
+import { Button, Card, Input, Modal, Space, Spin, Table, Tag, message } from "antd";
+import { PlusOutlined, EyeOutlined, EditOutlined, DeleteOutlined } from "@ant-design/icons";
 import type { ColumnsType } from "antd/es/table";
 import { getEffectiveLocale, t, type Locale } from "../i18n";
 
@@ -110,13 +110,13 @@ export default function CardsPage() {
 			render: (_, record) => (
 				<Space size={4}>
 					<Link to={`/bi/questions/${record.id}`}>
-						<Button type="text" size="small" icon={<EyeOutlined />}>查看</Button>
+						<Button type="link" size="small" icon={<EyeOutlined />}>查看</Button>
 					</Link>
 					<Link to={`/bi/questions/${record.id}/edit`}>
-						<Button type="text" size="small" icon={<EditOutlined />}>编辑</Button>
+						<Button type="link" size="small" icon={<EditOutlined />}>编辑</Button>
 					</Link>
 					<Button
-						type="text"
+						type="link"
 						size="small"
 						danger
 						icon={<DeleteOutlined />}
@@ -130,7 +130,7 @@ export default function CardsPage() {
 	];
 
 	return (
-		<PageContainer>
+		<div className="space-y-4">
 			<PageHeader
 				title={t(locale, "questions.title")}
 				actions={
@@ -147,21 +147,16 @@ export default function CardsPage() {
 			)}
 			{state.state === "error" && <ErrorNotice locale={locale} error={state.error} />}
 			{state.state === "loaded" && (
-				<div className="bg-surface-card border border-border-default rounded-lg overflow-hidden">
-					<div className="flex items-center justify-between px-4 py-3 border-b border-border-default">
-						<span className="text-sm text-text-secondary">
-							{filteredCards.length} {filteredCards.length === state.value.length ? "条" : `/ ${state.value.length} 条`}
-						</span>
-						<Input
+				<Card>
+					<Space className="mb-4">
+						<Input.Search
 							placeholder={t(locale, "common.search")}
-							prefix={<SearchOutlined />}
 							value={searchQuery}
 							onChange={(e) => setSearchQuery(e.target.value)}
 							allowClear
-							size="small"
-							style={{ width: 240 }}
+							style={{ width: 300 }}
 						/>
-					</div>
+					</Space>
 					{filteredCards.length === 0 ? (
 						<EmptyState title={searchQuery ? t(locale, "common.noResults") : t(locale, "common.empty")} />
 					) : (
@@ -173,8 +168,8 @@ export default function CardsPage() {
 							pagination={filteredCards.length > 15 ? { pageSize: 15, showSizeChanger: true, showTotal: (total) => `${total} 条` } : false}
 						/>
 					)}
-				</div>
+				</Card>
 			)}
-		</PageContainer>
+		</div>
 	);
 }
