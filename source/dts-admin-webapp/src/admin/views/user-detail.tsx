@@ -211,7 +211,8 @@ export default function UserDetailView() {
 			key: "name",
 			render: (_: any, record) => {
 				const key = (record?.name || "").toString().trim().toUpperCase();
-				const display = roleDisplayNameCatalog[key];
+				const keyNoPrefix = key.startsWith("ROLE_") ? key.substring(5) : key;
+				const display = roleDisplayNameCatalog[key] || roleDisplayNameCatalog[keyNoPrefix];
 				return (display || record?.name || "-").toString();
 			},
 		},
@@ -220,7 +221,9 @@ export default function UserDetailView() {
 			dataIndex: "description",
 			key: "description",
 			render: (desc: string, record) => {
-				const fallback = roleCatalog[(record?.name || "").toString().trim().toUpperCase()] || "";
+				const rKey = (record?.name || "").toString().trim().toUpperCase();
+				const rKeyNoPrefix = rKey.startsWith("ROLE_") ? rKey.substring(5) : rKey;
+				const fallback = roleCatalog[rKey] || roleCatalog[rKeyNoPrefix] || "";
 				const text = (desc || fallback || "").toString().trim();
 				return text ? text : "-";
 			},
