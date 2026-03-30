@@ -8,6 +8,7 @@ import com.yuzhi.dts.analytics.domain.AnalyticsUser;
 import com.yuzhi.dts.analytics.repository.AnalyticsUserRepository;
 import com.yuzhi.dts.analytics.service.AnalyticsSessionService;
 import com.yuzhi.dts.analytics.service.GroupService;
+import com.yuzhi.dts.analytics.web.support.MetabaseAuth;
 import com.yuzhi.dts.analytics.web.support.MetabaseLocale;
 import jakarta.servlet.http.HttpServletRequest;
 import java.net.URI;
@@ -87,7 +88,13 @@ public class UserResource {
         if (user.isEmpty()) {
             return ResponseEntity.status(401).contentType(MediaType.TEXT_PLAIN).body("Unauthenticated");
         }
-        return ResponseEntity.ok(toMetabaseUser(user.get(), groupService, MetabaseLocale.resolve(request)));
+        Map<String, Object> result = toMetabaseUser(user.orElseThrow(), groupService, MetabaseLocale.resolve(request));
+        result.put("is_data_admin", user.orElseThrow().isSuperuser() || MetabaseAuth.isDataAdmin(request));
+        String platformUsername = request.getHeader("X-DTS-User");
+        if (platformUsername != null && !platformUsername.isBlank()) {
+            result.put("platform_username", platformUsername.trim());
+        }
+        return ResponseEntity.ok(result);
     }
 
     @GetMapping(produces = MediaType.APPLICATION_JSON_VALUE)

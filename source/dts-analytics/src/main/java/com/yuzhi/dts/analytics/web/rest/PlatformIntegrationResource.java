@@ -28,7 +28,7 @@ public class PlatformIntegrationResource {
 
     @GetMapping(path = "/data-sources", produces = MediaType.APPLICATION_JSON_VALUE)
     public ResponseEntity<?> dataSources(HttpServletRequest request) {
-        Optional<ResponseEntity<String>> auth = MetabaseAuth.requireUser(sessionService, request);
+        Optional<ResponseEntity<String>> auth = MetabaseAuth.requireDataAdmin(sessionService, request);
         if (auth.isPresent()) {
             return auth.get();
         }
