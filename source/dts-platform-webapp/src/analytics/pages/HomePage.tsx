@@ -3,7 +3,6 @@ import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router";
 import { analyticsApi, type CurrentUser, type DashboardListItem, type CardListItem, type ScreenListItem } from "../api/analyticsApi";
 import { ErrorNotice } from "../components/ErrorNotice";
-import { PageContainer } from "../components/PageContainer/PageContainer";
 import { Spin, Button, Card, Table, Tag } from "antd";
 import { PlusOutlined } from "@ant-design/icons";
 import type { ColumnsType } from "antd/es/table";
@@ -226,7 +225,7 @@ export default function HomePage() {
 	];
 
 	return (
-		<PageContainer>
+		<div className="space-y-4">
 			{/* Error Notices */}
 			{user.state === "error" && <ErrorNotice locale={locale} error={user.error} />}
 			{health.state === "error" && <ErrorNotice locale={locale} error={health.error} />}
@@ -451,6 +450,6 @@ export default function HomePage() {
 					flex: 0 0 auto;
 				}
 			`}</style>
-		</PageContainer>
+		</div>
 	);
 }

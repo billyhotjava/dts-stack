@@ -1,7 +1,7 @@
 // @ts-nocheck — migrated from analytics-webapp, pending unused-import cleanup
 import { useEffect, useMemo, useState } from "react";
 import { analyticsApi, type ExploreSessionItem } from "../api/analyticsApi";
-import { PageContainer, PageHeader } from "../components/PageContainer/PageContainer";
+import { PageHeader } from "@/components/page-header";
 import { ErrorNotice } from "../components/ErrorNotice";
 import { getEffectiveLocale, t, type Locale } from "../i18n";
 import { Input, Spin, Button, Card, Tag } from "antd";
@@ -286,7 +286,7 @@ export default function ExploreSessionsPage() {
 	};
 
 	return (
-		<PageContainer>
+		<div className="space-y-4">
 			<PageHeader
 				title={t(locale, "explore.title")}
 				actions={
@@ -507,6 +507,6 @@ export default function ExploreSessionsPage() {
 						</div>
 					)}
 			</Card>
-		</PageContainer>
+		</div>
 	);
 }

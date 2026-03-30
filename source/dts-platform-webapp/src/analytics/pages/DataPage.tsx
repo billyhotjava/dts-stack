@@ -7,7 +7,8 @@ import {
 	type CurrentUser,
 	type MyUploadItem,
 } from "../api/analyticsApi";
-import { PageContainer, PageHeader, PageSection } from "../components/PageContainer/PageContainer";
+import { PageSection } from "../components/PageContainer/PageContainer";
+import { PageHeader } from "@/components/page-header";
 import { Table, Tag, Button, Input, Modal, message, Space, Tooltip } from "antd";
 import type { ColumnsType } from "antd/es/table";
 import UploadedDataEditor from "../components/UploadedDataEditor";
@@ -325,7 +326,7 @@ export default function DataPage() {
 	/* ---------- render ---------- */
 
 	return (
-		<PageContainer>
+		<div className="space-y-4">
 			<PageHeader title="数据管理" />
 
 			{/* --- Data Lake List --- */}
@@ -403,6 +404,6 @@ export default function DataPage() {
 					/>
 				)}
 			</Modal>
-		</PageContainer>
+		</div>
 	);
 }

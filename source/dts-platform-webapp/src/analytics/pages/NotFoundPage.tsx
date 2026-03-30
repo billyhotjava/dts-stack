@@ -1,6 +1,5 @@
 import { useMemo } from "react";
 import { Link } from "react-router";
-import { PageContainer } from "../components/PageContainer/PageContainer";
 import { Button, Card } from "antd";
 import { getEffectiveLocale, t, type Locale } from "../i18n";
 // Icons
@@ -22,7 +21,7 @@ const HomeIcon = () => (
 export default function NotFoundPage() {
 	const locale: Locale = useMemo(() => getEffectiveLocale(), []);
 	return (
-		<PageContainer>
+		<div className="space-y-4">
 			<Card>
 				<div style={{ display: "flex", flexDirection: "column", alignItems: "center", padding: "var(--spacing-2xl)", textAlign: "center" }}>
 					<div style={{ color: "var(--color-text-tertiary)", marginBottom: "var(--spacing-lg)" }}>
@@ -41,6 +40,6 @@ export default function NotFoundPage() {
 					</Link>
 				</div>
 			</Card>
-		</PageContainer>
+		</div>
 	);
 }
