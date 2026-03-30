@@ -2,6 +2,7 @@ import { useEffect, useState, useCallback, useMemo } from 'react';
 import { DndProvider } from 'react-dnd';
 import { HTML5Backend } from 'react-dnd-html5-backend';
 import { useLocation, useNavigate, useParams } from 'react-router';
+import { toast } from 'sonner';
 import { ScreenProvider, useScreen } from './ScreenContext';
 import { ScreenRuntimeProvider } from './ScreenRuntimeContext';
 import { analyticsApi } from '../../api/analyticsApi';
@@ -178,7 +179,7 @@ function ScreenDesignerContent() {
             analyticsApi.getScreen(id, { mode: 'draft' })
                 .then((screen) => {
                     if (screen.canEdit === false) {
-                        alert('当前账号没有该大屏的编辑权限');
+                        toast.error('当前账号没有该大屏的编辑权限');
                         navigate('/bi/screens', { replace: true });
                         return;
                     }

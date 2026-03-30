@@ -1,4 +1,4 @@
-import { Modal } from 'antd';
+import { Modal, message } from 'antd';
 import type { ScreenVersionDiff } from '../../../api/analyticsApi';
 import type { ReactNode } from 'react';
 import { writeTextToClipboard } from '../../../hooks/clipboard';
@@ -51,7 +51,7 @@ export function ScreenVersionComparePanel({ open, diff, onClose }: ScreenVersion
 						].join('\n');
 						const copied = await writeTextToClipboard(summaryText);
 						if (!copied) {
-							alert(summaryText);
+							message.info(summaryText);
 						}
 					}}
 				>

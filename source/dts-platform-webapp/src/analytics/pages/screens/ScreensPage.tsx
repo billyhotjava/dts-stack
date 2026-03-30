@@ -1,5 +1,7 @@
 import { useEffect, useState, useCallback, useMemo, useRef } from 'react';
 import { useNavigate } from 'react-router';
+import { message } from 'antd';
+import { toast } from 'sonner';
 import { analyticsApi, ScreenListItem, type ScreenAiGenerationResponse } from '../../api/analyticsApi';
 import { resolveRouteForOpen } from '../../helpers/resolveAnalyticsUrl';
 import { PageContainer } from '../../components/PageContainer/PageContainer';
@@ -221,7 +223,7 @@ export default function ScreensPage() {
 		if (aiLoading) return;
 		const prompt = aiPrompt.trim();
 		if (!prompt) {
-			alert('请输入业务需求描述');
+			message.warning('请输入业务需求描述');
 			return;
 		}
 
@@ -236,7 +238,7 @@ export default function ScreensPage() {
 			setAiContextHistory((prev) => ([...prev, `初始需求: ${prompt}`]).slice(-12));
 		} catch (err) {
 			console.error('Failed to generate ai screen spec:', err);
-			alert('AI 生成失败');
+			toast.error('AI 生成失败');
 		} finally {
 			setAiLoading(false);
 		}
@@ -246,7 +248,7 @@ export default function ScreensPage() {
 		if (aiCreating) return;
 		const spec = aiResult?.screenSpec;
 		if (!spec) {
-			alert('请先生成方案');
+			message.warning('请先生成方案');
 			return;
 		}
 		const pendingVariables = aiResult?.nl2sqlDiagnostics?.pendingVariables ?? [];
@@ -272,7 +274,7 @@ export default function ScreensPage() {
 			navigate(`/bi/screens/${created.id}/edit`);
 		} catch (err) {
 			console.error('Failed to create screen from ai spec:', err);
-			alert('创建 AI 草稿失败');
+			toast.error('创建 AI 草稿失败');
 		} finally {
 			setAiCreating(false);
 		}
@@ -283,11 +285,11 @@ export default function ScreensPage() {
 		const prompt = aiRefinePrompt.trim();
 		const screenSpec = aiResult?.screenSpec;
 		if (!prompt) {
-			alert('请输入优化指令');
+			message.warning('请输入优化指令');
 			return;
 		}
 		if (!screenSpec) {
-			alert('请先生成初始方案');
+			message.warning('请先生成初始方案');
 			return;
 		}
 		setAiRefining(true);
@@ -309,7 +311,7 @@ export default function ScreensPage() {
 			});
 		} catch (err) {
 			console.error('Failed to refine ai screen spec:', err);
-			alert('AI 优化失败');
+			toast.error('AI 优化失败');
 		} finally {
 			setAiRefining(false);
 		}
@@ -317,7 +319,7 @@ export default function ScreensPage() {
 
 	const handleCopyAiRecommendations = async () => {
 		if (!aiResult) {
-			alert('请先生成 AI 方案');
+			message.warning('请先生成 AI 方案');
 			return;
 		}
 		const payload = {
@@ -336,10 +338,10 @@ export default function ScreensPage() {
 		};
 		const copied = await writeTextToClipboard(JSON.stringify(payload, null, 2));
 		if (!copied) {
-			alert('复制失败，请稍后重试');
+			message.warning('复制失败，请稍后重试');
 			return;
 		}
-		alert('AI建议已复制到剪贴板');
+		message.success('AI建议已复制到剪贴板');
 	};
 
 	const handleEdit = (id: string | number) => {
@@ -369,10 +371,10 @@ export default function ScreensPage() {
 				category,
 				tags: ['saved-from-screen'],
 			});
-			alert('已保存到模板资产中心');
+			toast.success('已保存到模板资产中心');
 		} catch (err) {
 			console.error('Failed to create template from screen:', err);
-			alert('保存模板失败');
+			toast.error('保存模板失败');
 		} finally {
 			setSavingTemplateId(null);
 		}
@@ -386,7 +388,7 @@ export default function ScreensPage() {
 			loadScreens();
 		} catch (err) {
 			console.error('Failed to delete screen:', err);
-			alert('删除失败');
+			toast.error('删除失败');
 		}
 	};
 

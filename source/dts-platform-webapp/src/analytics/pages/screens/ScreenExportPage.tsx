@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useParams } from 'react-router';
+import { toast } from 'sonner';
 import { resolveRouteForOpen } from '../../helpers/resolveAnalyticsUrl';
 import { analyticsApi, HttpError } from '../../api/analyticsApi';
 import { ComponentRenderer } from './components/ComponentRenderer';
@@ -644,7 +645,7 @@ export default function ScreenExportPage() {
 								try {
 									openPreviewFallback();
 								} catch (openError) {
-									alert(toErrorMessage(openError, '打开预览页失败'));
+									toast.error(toErrorMessage(openError, '打开预览页失败'));
 								}
 							}}
 						>
@@ -658,7 +659,7 @@ export default function ScreenExportPage() {
 									try {
 										printCanvasDomFallback();
 									} catch (printError) {
-										alert(toErrorMessage(printError, 'PDF 打印回退失败'));
+										toast.error(toErrorMessage(printError, 'PDF 打印回退失败'));
 									}
 								}}
 							>

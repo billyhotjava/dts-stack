@@ -8,6 +8,7 @@
  */
 import { useState, useCallback, useEffect } from 'react';
 import { analyticsApi } from '../../../api/analyticsApi';
+import { toast } from 'sonner';
 
 /* ---------- types (mirror backend DTOs) ---------- */
 
@@ -169,7 +170,7 @@ export function ScreenSnapshotPanel({ open, screenId, onClose }: ScreenSnapshotP
 			setEditingSchedule(null);
 			loadSchedules();
 		} catch {
-			alert('保存失败');
+			toast.error('保存失败');
 		}
 	}, [screenId, editingSchedule, loadSchedules]);
 
@@ -179,7 +180,7 @@ export function ScreenSnapshotPanel({ open, screenId, onClose }: ScreenSnapshotP
 			await analyticsApi.deleteSnapshotSchedule(screenId, scheduleId);
 			loadSchedules();
 		} catch {
-			alert('删除失败');
+			toast.error('删除失败');
 		}
 	}, [screenId, loadSchedules]);
 

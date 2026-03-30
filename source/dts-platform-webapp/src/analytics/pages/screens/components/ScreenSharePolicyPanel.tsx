@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { analyticsApi, type ScreenPublicLinkPolicy } from '../../../api/analyticsApi';
 import { writeTextToClipboard } from '../../../hooks/clipboard';
 import { resolveRouteHref } from '../../../helpers/resolveAnalyticsUrl';
-import { Modal } from 'antd';
+import { Modal, message } from 'antd';
 
 interface ScreenSharePolicyPanelProps {
     open: boolean;
@@ -187,7 +187,11 @@ export function ScreenSharePolicyPanel({ open, screenId, onClose }: ScreenShareP
                     onClick={async () => {
                         if (!shareUrl) return;
                         const copied = await writeTextToClipboard(shareUrl);
-                        alert(copied ? '分享链接已复制到剪贴板' : `复制失败，请手工复制：\n${shareUrl}`);
+                        if (copied) {
+                            message.success('分享链接已复制到剪贴板');
+                        } else {
+                            message.warning(`复制失败，请手工复制：${shareUrl}`);
+                        }
                     }}
                 >
                     复制链接
