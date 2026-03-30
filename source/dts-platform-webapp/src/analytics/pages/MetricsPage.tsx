@@ -1,9 +1,10 @@
 import { useEffect, useMemo, useState } from "react";
 import { analyticsApi, type Metric, type PlatformMetric } from "../api/analyticsApi";
-import { PageContainer, PageHeader } from "../components/PageContainer/PageContainer";
-import { EmptyState } from "../components/EmptyState";
+import { PageHeader } from "@/components/page-header";
+import { EmptyState } from "@/components/empty-state";
 import { ErrorNotice } from "../components/ErrorNotice";
-import { Spin, Card, Statistic, Tag } from "antd";
+import { Spin, Card, Statistic, Tag, Table } from "antd";
+import type { ColumnsType } from "antd/es/table";
 import { getEffectiveLocale, t, type Locale } from "../i18n";
 type LoadState<T> =
 	| { state: "loading" }
@@ -52,8 +53,18 @@ export default function MetricsPage() {
 		};
 	}, []);
 
+	const metricColumns: ColumnsType<Metric> = [
+		{ title: t(locale, "common.name"), dataIndex: "name", key: "name", render: (v: string | undefined) => v ?? "-" },
+		{ title: t(locale, "common.id"), dataIndex: "id", key: "id" },
+	];
+
+	const platformMetricColumns: ColumnsType<PlatformMetric> = [
+		{ title: t(locale, "common.name"), dataIndex: "name", key: "name", render: (v: string | undefined) => v ?? "-" },
+		{ title: t(locale, "common.id"), dataIndex: "id", key: "id" },
+	];
+
 	return (
-		<PageContainer>
+		<div className="space-y-4">
 			<PageHeader
 				title={t(locale, "metrics.title")}
 			/>
@@ -83,22 +94,7 @@ export default function MetricsPage() {
 						<EmptyState title={t(locale, "common.empty")} description={t(locale, "metrics.analyticsEmpty")} />
 					)}
 					{localMetrics.state === "loaded" && localMetrics.value.length > 0 && (
-						<table>
-							<thead>
-								<tr>
-									<th>{t(locale, "common.name")}</th>
-									<th>{t(locale, "common.id")}</th>
-								</tr>
-							</thead>
-							<tbody>
-								{localMetrics.value.map((m) => (
-									<tr key={String(m.id)}>
-										<td>{m.name ?? "-"}</td>
-										<td>{m.id}</td>
-									</tr>
-								))}
-							</tbody>
-						</table>
+						<Table columns={metricColumns} dataSource={localMetrics.value} rowKey={(m) => String(m.id)} pagination={false} size="small" />
 					)}
 			</Card>
 
@@ -120,24 +116,9 @@ export default function MetricsPage() {
 						<EmptyState title={t(locale, "common.empty")} description={t(locale, "metrics.platformEmpty")} />
 					)}
 					{platformMetrics.state === "loaded" && platformMetrics.value.length > 0 && (
-						<table>
-							<thead>
-								<tr>
-									<th>{t(locale, "common.name")}</th>
-									<th>{t(locale, "common.id")}</th>
-								</tr>
-							</thead>
-							<tbody>
-								{platformMetrics.value.map((m) => (
-									<tr key={String(m.id)}>
-										<td>{m.name ?? "-"}</td>
-										<td>{m.id}</td>
-									</tr>
-								))}
-							</tbody>
-						</table>
+						<Table columns={platformMetricColumns} dataSource={platformMetrics.value} rowKey={(m) => String(m.id)} pagination={false} size="small" />
 					)}
 			</Card>
-		</PageContainer>
+		</div>
 	);
 }
