@@ -270,8 +270,8 @@ export default function MetadataPage() {
 					setSelectedPipelineId(list[0]?.id);
 				}
 			}
-		} catch (error: any) {
-			toast.error(error?.message || "采集任务加载失败");
+		} catch {
+			// error toast handled by global interceptor
 		} finally {
 			setLoadingPipelines(false);
 		}
@@ -282,8 +282,8 @@ export default function MetadataPage() {
 			const resp: any = await getCatalogSyncConfig();
 			setSyncConfig(resp || null);
 			setCronDraft(String(resp?.autoSyncCron || ""));
-		} catch (error: any) {
-			toast.error(error?.message || "采集配置加载失败");
+		} catch {
+			// error toast handled by global interceptor
 			setSyncConfig(null);
 			setCronDraft("");
 		}
@@ -308,8 +308,8 @@ export default function MetadataPage() {
 				includeDetails: false,
 			});
 			setDriftEvents(Array.isArray(resp) ? (resp as SchemaDriftEvent[]) : []);
-		} catch (error: any) {
-			toast.error(error?.message || "Schema 漂移工单加载失败");
+		} catch {
+			// error toast handled by global interceptor
 			setDriftEvents([]);
 		} finally {
 			setLoadingDrift(false);
@@ -326,8 +326,8 @@ export default function MetadataPage() {
 				sourceId: integration === "JDBC" ? selectedPipeline?.sourceId : undefined,
 			});
 			setRuns(Array.isArray(resp) ? (resp as SyncRun[]) : []);
-		} catch (error: any) {
-			toast.error(error?.message || "采集历史加载失败");
+		} catch {
+			// error toast handled by global interceptor
 		} finally {
 			setLoadingRuns(false);
 		}
@@ -347,8 +347,8 @@ export default function MetadataPage() {
 				sourceId: sourceId || undefined,
 			});
 			setDiagData(resp || null);
-		} catch (error: any) {
-			toast.error(error?.message || "采集诊断加载失败");
+		} catch {
+			// error toast handled by global interceptor
 			setDiagData(null);
 		} finally {
 			setDiagLoading(false);
@@ -372,8 +372,8 @@ export default function MetadataPage() {
 				if (prev && items.some((item: TableSummary) => item.fqn === prev)) return prev;
 				return items[0]?.fqn;
 			});
-		} catch (error: any) {
-			toast.error(error?.message || "元数据资产加载失败");
+		} catch {
+			// error toast handled by global interceptor
 			setTables([]);
 			setSelectedFqn(undefined);
 		} finally {
@@ -386,8 +386,8 @@ export default function MetadataPage() {
 		try {
 			const resp: any = await getTechMetadataTableDetail(fqn);
 			setTableDetail(resp || null);
-		} catch (error: any) {
-			toast.error(error?.message || "元数据详情加载失败");
+		} catch {
+			// error toast handled by global interceptor
 			setTableDetail(null);
 		}
 	};
@@ -420,8 +420,8 @@ export default function MetadataPage() {
 			if (selectedPipeline.integration) {
 				void loadRuns(selectedPipeline.integration);
 			}
-		} catch (error: any) {
-			toast.error(error?.message || "触发采集失败");
+		} catch {
+			// error toast handled by global interceptor
 		}
 	};
 
@@ -436,8 +436,8 @@ export default function MetadataPage() {
 			setSyncConfig(resp || null);
 			toast.success(checked ? "已开启自动采集" : "已关闭自动采集");
 			await loadPipelines();
-		} catch (error: any) {
-			toast.error(error?.message || "更新自动采集开关失败");
+		} catch {
+			// error toast handled by global interceptor
 		} finally {
 			setSyncConfigUpdating(false);
 		}
@@ -459,8 +459,8 @@ export default function MetadataPage() {
 			setSyncConfig(resp || null);
 			setCronDraft(String(resp?.autoSyncCron || cron));
 			toast.success("Cron 配置已更新");
-		} catch (error: any) {
-			toast.error(error?.message || "更新 Cron 失败");
+		} catch {
+			// error toast handled by global interceptor
 		} finally {
 			setSyncConfigUpdating(false);
 		}
@@ -522,7 +522,7 @@ export default function MetadataPage() {
 			if (error?.errorFields) {
 				return;
 			}
-			toast.error(error?.message || "Schema 漂移工单更新失败");
+			// error toast handled by global interceptor
 		} finally {
 			setDriftActionSubmitting(false);
 		}

@@ -97,8 +97,8 @@ export default function DataSearchPage() {
 					.map((item: any) => ({ id: String(item.id || ""), name: String(item.name || "").trim() }))
 					.filter((item: any) => item.id && item.name),
 			);
-		} catch (error: any) {
-			toast.error(error?.message || "主题域加载失败");
+		} catch {
+			// error toast handled by global interceptor
 		}
 	};
 
@@ -223,8 +223,8 @@ export default function DataSearchPage() {
 			});
 			setResults(normalizeRows(resp || {}));
 			saveCurrentQuery();
-		} catch (error: any) {
-			toast.error(error?.message || "搜索失败");
+		} catch {
+			// error toast handled by global interceptor
 		} finally {
 			setLoading(false);
 		}
