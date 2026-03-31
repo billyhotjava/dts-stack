@@ -1148,6 +1148,20 @@ function getPlatformTokens(): { accessToken: string; refreshToken: string } {
 	}
 }
 
+/** 从 userStore 读取当前用户角色列表，用于填充 X-DTS-Roles 请求头。 */
+function getPlatformRoles(): string {
+	try {
+		const raw = localStorage.getItem("userStore");
+		if (!raw) return "";
+		const store = JSON.parse(raw);
+		const roles = store?.state?.userInfo?.roles;
+		if (!Array.isArray(roles) || roles.length === 0) return "";
+		return roles.map((r: unknown) => String(r || "").trim()).filter(Boolean).join(",");
+	} catch {
+		return "";
+	}
+}
+
 async function refreshPlatformAccessToken(refreshToken: string): Promise<{ accessToken: string } | null> {
 	if (!refreshToken) return null;
 	try {
@@ -1199,6 +1213,10 @@ async function apiFetch(url: string, init: RequestInit, allowRefresh: boolean): 
 	if (tokens.accessToken && !headers.has("authorization")) {
 		headers.set("authorization", `Bearer ${tokens.accessToken}`);
 	}
+	const roles = getPlatformRoles();
+	if (roles && !headers.has("x-dts-roles")) {
+		headers.set("x-dts-roles", roles);
+	}
 
 	const response = await fetch(url, { ...init, credentials: "include", headers });
 	if (response.status !== 401 || !allowRefresh) {
@@ -1220,6 +1238,9 @@ async function apiFetch(url: string, init: RequestInit, allowRefresh: boolean): 
 	const retryHeaders = new Headers(init.headers ?? {});
 	if (!retryHeaders.has("accept")) retryHeaders.set("accept", "application/json");
 	retryHeaders.set("authorization", `Bearer ${refreshed.accessToken}`);
+	if (roles && !retryHeaders.has("x-dts-roles")) {
+		retryHeaders.set("x-dts-roles", roles);
+	}
 	const retryResponse = await fetch(url, { ...init, credentials: "include", headers: retryHeaders });
 	if (retryResponse.status === 401) {
 		// Retry also failed with 401 — session is unrecoverable

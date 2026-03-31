@@ -42,6 +42,36 @@ public class PlatformTrustedUserService {
         this.httpClient = HttpClient.newBuilder().build();
     }
 
+    /**
+     * 仅刷新已有 analytics 用户的 platform_username 和 superuser 字段，不创建新用户。
+     * 适用于 session 路径：用户已经通过 session cookie 认证，但 platform_username 尚未写入（存量用户）。
+     * 比 resolveOrProvision 更安全，因为它不会改变当前 session 对应的用户身份。
+     */
+    public AnalyticsUser refreshKnownUserAttributes(HttpServletRequest request, AnalyticsUser user) {
+        if (!properties.enabled() || user == null) {
+            return user;
+        }
+        Optional<PlatformIdentity> identity = resolveIdentity(request);
+        if (identity.isEmpty()) {
+            return user;
+        }
+        String username = identity.get().username();
+        boolean superuser = identity.get().superuser();
+        boolean dirty = false;
+        if (username != null && !username.isBlank() && !username.equals(user.getPlatformUsername())) {
+            user.setPlatformUsername(username.trim());
+            dirty = true;
+        }
+        if (user.isSuperuser() != superuser) {
+            user.setSuperuser(superuser);
+            dirty = true;
+        }
+        if (dirty) {
+            user = userRepository.save(user);
+        }
+        return user;
+    }
+
     public Optional<AnalyticsUser> resolveOrProvision(HttpServletRequest request) {
         if (!properties.enabled()) {
             return Optional.empty();

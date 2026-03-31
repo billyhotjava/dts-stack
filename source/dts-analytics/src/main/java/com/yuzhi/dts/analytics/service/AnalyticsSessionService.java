@@ -57,8 +57,17 @@ public class AnalyticsSessionService {
                 .flatMap(session -> userRepository.findById(session.getUserId()))
                 .filter(AnalyticsUser::isActive);
         if (byMetabaseSession.isPresent()) {
-            request.setAttribute(ATTR_RESOLVED_USER, byMetabaseSession.get());
-            return byMetabaseSession;
+            AnalyticsUser user = byMetabaseSession.get();
+            // platform_username 在 session 路径下不会被自动填充（resolveOrProvision 被跳过）。
+            // 对于存量用户（platform_username 列新增之前已有 session），需要在这里从 forward-auth
+            // 补填 platform_username 和 superuser，否则权限检查会用 UUID 前缀作为 username，
+            // 导致无法匹配 grant，且 superuser 标志可能是旧值（false）。
+            // 使用 refreshKnownUserAttributes 而非 resolveOrProvision，确保不会切换 session 对应的用户。
+            if (user.getPlatformUsername() == null || user.getPlatformUsername().isBlank()) {
+                user = platformTrustedUserService.refreshKnownUserAttributes(request, user);
+            }
+            request.setAttribute(ATTR_RESOLVED_USER, user);
+            return Optional.of(user);
         }
         Optional<AnalyticsUser> resolved = platformTrustedUserService.resolveOrProvision(request).filter(AnalyticsUser::isActive);
         if (resolved.isPresent()) {
