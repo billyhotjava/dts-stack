@@ -77,7 +77,7 @@ public class ScreenPermissionService {
             return PermissionSnapshot.all();
         }
 
-        String userId = String.valueOf(user.getId());
+        String userId = resolveUserId(user);
         List<String> safeRoles = safeRoles(roles);
 
         List<AnalyticsScreenAccess> grants = accessRepository.findGrantsForUser(
@@ -115,7 +115,7 @@ public class ScreenPermissionService {
             return ALL_MARKER;
         }
 
-        String userId = String.valueOf(user.getId());
+        String userId = resolveUserId(user);
         List<String> safeRoles = safeRoles(roles);
 
         List<Long> ids = accessRepository.findAccessibleScreenIds(userId, safeRoles);
@@ -136,5 +136,16 @@ public class ScreenPermissionService {
             return List.of(NO_ROLE_PLACEHOLDER);
         }
         return roles;
+    }
+
+    /**
+     * Resolve the user identifier used for USER-type grant lookups.
+     * Prefers platformUsername (Keycloak username, e.g. "test230917") because that is
+     * what the ACL panel stores.  Falls back to the numeric string ID for accounts that
+     * were created before the platform-username field was populated (e.g. legacy superusers).
+     */
+    private String resolveUserId(AnalyticsUser user) {
+        String pn = user.getPlatformUsername();
+        return (pn != null && !pn.isBlank()) ? pn : String.valueOf(user.getId());
     }
 }

@@ -763,8 +763,10 @@ public class ScreenResource {
 
         screen = screenRepository.save(screen);
 
-        screenOwnershipService.createGrant(screen.getId(), "USER",
-                String.valueOf(user.orElseThrow().getId()), "OWNER", user.orElseThrow().getId());
+        AnalyticsUser creator = user.orElseThrow();
+        String creatorGranteeId = creator.getPlatformUsername() != null && !creator.getPlatformUsername().isBlank()
+                ? creator.getPlatformUsername() : String.valueOf(creator.getId());
+        screenOwnershipService.createGrant(screen.getId(), "USER", creatorGranteeId, "OWNER", creator.getId());
 
         ScreenPermissionService.PermissionSnapshot permissions = ScreenPermissionService.PermissionSnapshot.all();
         ObjectNode detail = toDetailResponse(screen, null, null, "draft", permissions);
@@ -2283,7 +2285,9 @@ public class ScreenResource {
                 skipped++;
                 continue;
             }
-            String granteeId = String.valueOf(creatorId);
+            AnalyticsUser creator = userRepository.findById(creatorId).orElse(null);
+            String granteeId = (creator != null && creator.getPlatformUsername() != null && !creator.getPlatformUsername().isBlank())
+                    ? creator.getPlatformUsername() : String.valueOf(creatorId);
             // Check if OWNER grant already exists
             boolean hasOwner = screenOwnershipService.listGrants(screen.getId()).stream()
                 .anyMatch(g -> "USER".equals(g.get("granteeType")) && granteeId.equals(g.get("granteeId"))

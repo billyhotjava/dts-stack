@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { Button, Card, Col, Form, Input, Modal, Row, Select, Space, Tag } from "antd";
+import { Button, Card, Col, Form, Input, Modal, Row, Select, Space, Table, Tag } from "antd";
 import { Database, FileCheck, ListTodo, Monitor, RefreshCw, TrendingUp, Workflow } from "lucide-react";
 import { toast } from "sonner";
 import workbenchService, {
@@ -382,41 +382,59 @@ export default function Page() {
 
 			{/* Published screens quick access */}
 			{screens.length > 0 && (
-				<Card size="small" title={<span style={{ fontSize: 14, fontWeight: 600 }}>数据大屏</span>} styles={{ body: { padding: "12px 16px" } }} style={{ marginBottom: 8 }}>
-					<div style={{ display: "flex", gap: 12, overflowX: "auto", paddingBottom: 4 }}>
-						{screens.map((screen) => (
-							<div
-								key={screen.id}
-								onClick={() => {
-									window.open(resolveRouteForOpen(`/bi/screens/${screen.id}/preview`), "_blank");
-								}}
-								style={{
-									flex: "0 0 180px",
-									height: 88,
-									borderRadius: 8,
-									border: "1px solid #e5e7eb",
-									background: "#f8fafc",
-									cursor: "pointer",
-									display: "flex",
-									flexDirection: "column",
-									alignItems: "center",
-									justifyContent: "center",
-									gap: 6,
-									transition: "border-color 0.15s, box-shadow 0.15s",
-								}}
-								onMouseEnter={(e) => { e.currentTarget.style.borderColor = "#509EE3"; e.currentTarget.style.boxShadow = "0 2px 8px rgba(80,158,227,0.15)"; }}
-								onMouseLeave={(e) => { e.currentTarget.style.borderColor = "#e5e7eb"; e.currentTarget.style.boxShadow = "none"; }}
-							>
-								<Monitor style={{ width: 20, height: 20, color: "#509EE3" }} />
-								<div style={{ fontSize: 13, fontWeight: 600, color: "#1e293b", textAlign: "center", padding: "0 8px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", maxWidth: 160 }}>
-									{screen.name || `大屏 #${screen.id}`}
-								</div>
-								<div style={{ fontSize: 11, color: screen.publishedAt ? "#10b981" : "#94a3b8" }}>
-									{screen.publishedAt ? `已发布` : "未发布"}
-								</div>
-							</div>
-						))}
-					</div>
+				<Card size="small" title={<span style={{ fontSize: 14, fontWeight: 600 }}>数据大屏</span>} styles={{ body: { padding: 0 } }} style={{ marginBottom: 8 }}>
+					<Table
+						size="small"
+						dataSource={screens}
+						rowKey="id"
+						pagination={false}
+						columns={[
+							{
+								title: "名称",
+								dataIndex: "name",
+								key: "name",
+								render: (name: string, record: PublishedScreen) => (
+									<span
+										style={{ color: "#509EE3", cursor: "pointer" }}
+										onClick={() => window.open(resolveRouteForOpen(`/bi/screens/${record.id}/preview`), "_blank")}
+									>
+										<Monitor style={{ width: 13, height: 13, display: "inline", verticalAlign: "middle", marginRight: 5 }} />
+										{name || `大屏 #${record.id}`}
+									</span>
+								),
+							},
+							{
+								title: "状态",
+								dataIndex: "publishedAt",
+								key: "publishedAt",
+								width: 80,
+								render: (publishedAt: string | null | undefined) =>
+									publishedAt ? <Tag color="success">已发布</Tag> : <Tag>未发布</Tag>,
+							},
+							{
+								title: "更新时间",
+								dataIndex: "updatedAt",
+								key: "updatedAt",
+								width: 140,
+								render: (v: string | undefined) => v ? relativeTime(v) : "-",
+							},
+							{
+								title: "操作",
+								key: "action",
+								width: 80,
+								render: (_: unknown, record: PublishedScreen) => (
+									<Button
+										size="small"
+										type="link"
+										style={{ padding: 0 }}
+										onClick={() => window.open(resolveRouteForOpen(`/bi/screens/${record.id}/preview`), "_blank")}
+									>
+										打开
+									</Button>
+								),
+							},
+						]}
+					/>
 				</Card>
 			)}
 
