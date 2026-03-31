@@ -1167,6 +1167,20 @@ function getPlatformRoles(): string {
 // All concurrent callers share one in-flight refresh promise and get the same result.
 let _pendingRefresh: Promise<{ accessToken: string } | null> | null = null;
 
+// Redirect guard: ensures only one concurrent apiFetch caller triggers the login redirect.
+// Without this, N parallel failing requests each call window.location.href, polluting history.
+let _redirectingToLogin = false;
+
+/**
+ * Reset the redirect guard. Must be called after a successful login so that future analytics
+ * 401s (e.g. after the analytics session expires again) can trigger a new redirect.
+ * In hash-router mode the module is NOT re-initialised on route changes, so the flag would
+ * otherwise stay true for the lifetime of the page, silently dropping all future auth errors.
+ */
+export function resetAnalyticsAuthRedirectFlag(): void {
+	_redirectingToLogin = false;
+}
+
 async function refreshPlatformAccessToken(refreshToken: string): Promise<{ accessToken: string } | null> {
 	if (!refreshToken) return null;
 	if (_pendingRefresh) return _pendingRefresh;
@@ -1229,6 +1243,25 @@ export class HttpError extends Error {
 
 export class AuthError extends HttpError { }
 
+// Public analytics endpoints (/bi/api/public/*) are accessible without authentication.
+// For these URLs we must NOT redirect to login on 401 — the caller handles the error UI.
+function isPublicAnalyticsUrl(url: string): boolean {
+	return url.includes("/api/public/") || url.includes("/bi/api/public/");
+}
+
+function redirectToLogin(): void {
+	if (_redirectingToLogin) return;
+	_redirectingToLogin = true;
+	// In hash-router mode (/#/some/path) window.location.pathname is always '/'.
+	// The actual route lives in window.location.hash — strip the leading '#' to get the path.
+	// In browser-router mode there is no hash, so fall back to pathname + search.
+	const currentPath = window.location.hash
+		? window.location.hash.replace(/^#/, '') || '/'
+		: window.location.pathname + window.location.search;
+	const returnUrl = encodeURIComponent(currentPath);
+	window.location.href = `${resolveLoginHref()}?redirect=${returnUrl}`;
+}
+
 async function apiFetch(url: string, init: RequestInit, allowRefresh: boolean): Promise<Response> {
 	const tokens = getPlatformTokens();
 	const headers = new Headers(init.headers ?? {});
@@ -1242,7 +1275,8 @@ async function apiFetch(url: string, init: RequestInit, allowRefresh: boolean): 
 	}
 
 	const response = await fetch(url, { ...init, credentials: "include", headers });
-	if (response.status !== 401 || !allowRefresh) {
+	// Public endpoints: never redirect on 401 — let the caller render the auth-error UI.
+	if (response.status !== 401 || !allowRefresh || isPublicAnalyticsUrl(url)) {
 		return response;
 	}
 
@@ -1252,9 +1286,8 @@ async function apiFetch(url: string, init: RequestInit, allowRefresh: boolean): 
 
 	const refreshed = await refreshPlatformAccessToken(tokens.refreshToken);
 	if (!refreshed?.accessToken) {
-		// Refresh failed and no new token — redirect to platform login
-		const returnUrl = encodeURIComponent(window.location.pathname + window.location.search);
-		window.location.href = `${resolveLoginHref()}?redirect=${returnUrl}`;
+		// Refresh failed — redirect to platform login (guarded: only one redirect fires).
+		redirectToLogin();
 		return response;
 	}
 
@@ -1266,9 +1299,8 @@ async function apiFetch(url: string, init: RequestInit, allowRefresh: boolean): 
 	}
 	const retryResponse = await fetch(url, { ...init, credentials: "include", headers: retryHeaders });
 	if (retryResponse.status === 401) {
-		// Retry also failed with 401 — session is unrecoverable
-		const returnUrl = encodeURIComponent(window.location.pathname + window.location.search);
-		window.location.href = `${resolveLoginHref()}?redirect=${returnUrl}`;
+		// Retry also failed — session is unrecoverable (guarded: only one redirect fires).
+		redirectToLogin();
 	}
 	return retryResponse;
 }
