@@ -10,6 +10,7 @@ import com.yuzhi.dts.analytics.domain.AnalyticsScreenVersion;
 import com.yuzhi.dts.analytics.domain.AnalyticsUser;
 import com.yuzhi.dts.analytics.repository.AnalyticsScreenRepository;
 import com.yuzhi.dts.analytics.repository.AnalyticsScreenVersionRepository;
+import com.yuzhi.dts.analytics.repository.AnalyticsUserRepository;
 import com.yuzhi.dts.analytics.service.AnalyticsSessionService;
 import com.yuzhi.dts.analytics.service.PublicLinkService;
 import com.yuzhi.dts.analytics.service.ScreenAuditService;
@@ -64,6 +65,7 @@ public class ScreenResource {
     private final AnalyticsSessionService sessionService;
     private final AnalyticsScreenRepository screenRepository;
     private final AnalyticsScreenVersionRepository screenVersionRepository;
+    private final AnalyticsUserRepository userRepository;
     private final ScreenPermissionService screenPermissionService;
     private final ScreenOwnershipService screenOwnershipService;
     private final ScreenAuditService screenAuditService;
@@ -80,6 +82,7 @@ public class ScreenResource {
             AnalyticsSessionService sessionService,
             AnalyticsScreenRepository screenRepository,
             AnalyticsScreenVersionRepository screenVersionRepository,
+            AnalyticsUserRepository userRepository,
             ScreenPermissionService screenPermissionService,
             ScreenOwnershipService screenOwnershipService,
             ScreenAuditService screenAuditService,
@@ -94,6 +97,7 @@ public class ScreenResource {
         this.sessionService = sessionService;
         this.screenRepository = screenRepository;
         this.screenVersionRepository = screenVersionRepository;
+        this.userRepository = userRepository;
         this.screenPermissionService = screenPermissionService;
         this.screenOwnershipService = screenOwnershipService;
         this.screenAuditService = screenAuditService;
@@ -766,7 +770,15 @@ public class ScreenResource {
 
         screen.setOwnerDeptCode(PlatformContext.from(request).dept());
         screen = screenRepository.save(screen);
-        screenOwnershipService.registerOwnership(screen.getId(), extractUsername(user.orElseThrow()), PlatformContext.from(request).dept());
+
+        String creatorUsername = extractUsername(user.orElseThrow());
+        screenOwnershipService.registerOwnership(screen.getId(), creatorUsername, PlatformContext.from(request).dept());
+        // 在平台注册创建者的 MANAGE 授权，使其可以通过平台权限系统发现并管理自己创建的大屏。
+        // 平台的 listAccessibleAssetIds 只查 explicit grants，不查 ownership，因此必须显式建档。
+        if (!creatorUsername.isBlank()) {
+            screenOwnershipService.createGrant(screen.getId(), "USER", creatorUsername, "MANAGE", creatorUsername);
+            screenPermissionService.invalidateCacheForUser(creatorUsername);
+        }
 
         ScreenPermissionService.PermissionSnapshot permissions = ScreenPermissionService.PermissionSnapshot.all();
         ObjectNode detail = toDetailResponse(screen, null, null, "draft", permissions);
@@ -2253,7 +2265,71 @@ public class ScreenResource {
         return node;
     }
 
+    /**
+     * One-time admin endpoint: backfill MANAGE grants on the platform for screens
+     * created before the explicit-grant requirement was introduced.
+     *
+     * <p>Iterates every non-archived screen, resolves its creator's platform_username, and
+     * calls {@code ScreenOwnershipService.createGrant} with MANAGE permission.  Duplicate
+     * grants are silently ignored by the platform (idempotent).  Invalidates the permission
+     * cache for every affected creator so the change takes effect immediately.
+     */
+    @PostMapping(path = "/admin/backfill-grants", produces = MediaType.APPLICATION_JSON_VALUE)
+    public ResponseEntity<?> backfillGrants(HttpServletRequest request) {
+        Optional<ResponseEntity<String>> authError = MetabaseAuth.requireSuperuser(sessionService, request);
+        if (authError.isPresent()) {
+            return authError.orElseThrow();
+        }
+
+        List<AnalyticsScreen> screens = screenRepository.findAllByArchivedFalseOrderByIdDesc();
+
+        int processed = 0;
+        int skipped = 0;
+        Set<String> invalidatedUsers = new HashSet<>();
+
+        for (AnalyticsScreen screen : screens) {
+            Long creatorId = screen.getCreatorId();
+            if (creatorId == null) {
+                skipped++;
+                continue;
+            }
+            AnalyticsUser creator = userRepository.findById(creatorId).orElse(null);
+            if (creator == null) {
+                skipped++;
+                continue;
+            }
+            String username = extractUsername(creator);
+            if (username.isBlank()) {
+                skipped++;
+                continue;
+            }
+            try {
+                screenOwnershipService.createGrant(screen.getId(), "USER", username, "MANAGE", username);
+                if (!invalidatedUsers.contains(username)) {
+                    screenPermissionService.invalidateCacheForUser(username);
+                    invalidatedUsers.add(username);
+                }
+                processed++;
+            } catch (Exception ex) {
+                skipped++;
+            }
+        }
+
+        return ResponseEntity.ok(Map.of(
+                "processed", processed,
+                "skipped", skipped,
+                "total", screens.size(),
+                "cacheInvalidated", invalidatedUsers.size()
+        ));
+    }
+
     private String extractUsername(AnalyticsUser user) {
+        // Prefer platform_username (Keycloak username set during SSO provisioning).
+        // Fall back to email local-part for legacy records without platform_username.
+        String platformUsername = user.getPlatformUsername();
+        if (platformUsername != null && !platformUsername.isBlank()) {
+            return platformUsername.trim();
+        }
         String email = user.getEmail();
         if (email == null || email.isBlank()) return "";
         int at = email.indexOf('@');
