@@ -8,6 +8,7 @@ import {
 } from './shared/chartUtils';
 import {
     buildActionRuntimeParams,
+    normalizeRuntimeJumpUrl,
     normalizeScreenActionType,
     resolvePreferredDrillValue,
     resolveActionMappingValues,
@@ -141,7 +142,13 @@ export function useComponentInteractions(
     ), [component.actions, mode]);
 
     const navigateToResolvedUrl = useCallback(async (targetUrl: string, openMode: 'self' | 'new-tab', source: string) => {
-        const resolvedTargetUrl = await resolveScreenReferenceUrl(targetUrl);
+        const resolvedTargetUrl = normalizeRuntimeJumpUrl(
+            await resolveScreenReferenceUrl(targetUrl),
+            {
+                currentOrigin: window.location.origin,
+                resolveAppRoute: resolveRouteForOpen,
+            },
+        );
         runtime.trackEvent({
             kind: 'jump',
             key: 'jumpUrl',

@@ -98,3 +98,47 @@ export function resolvePreferredDrillValue(params: Record<string, unknown>): str
         ?? resolveInteractionValue(params, 'row[0]')
         ?? (rowValue == null ? undefined : String(rowValue));
 }
+
+function collapseAnalyticsBase(path: string): string {
+    const raw = String(path || '').trim();
+    if (!raw) {
+        return '';
+    }
+    return raw.replace(/^(\/bi)+(\/|$)/i, '/bi$2');
+}
+
+type NormalizeRuntimeJumpUrlOptions = {
+    currentOrigin?: string;
+    resolveAppRoute?: (route: string) => string;
+};
+
+export function normalizeRuntimeJumpUrl(
+    targetUrl: string,
+    options: NormalizeRuntimeJumpUrlOptions = {},
+): string {
+    const raw = String(targetUrl || '').trim();
+    if (!raw) {
+        return '';
+    }
+
+    const resolveAppRoute = options.resolveAppRoute ?? ((route: string) => route);
+    const currentOrigin = String(options.currentOrigin || '').trim();
+
+    if (raw.startsWith('/')) {
+        return resolveAppRoute(collapseAnalyticsBase(raw));
+    }
+
+    if (/^[a-zA-Z][a-zA-Z\d+.-]*:\/\//.test(raw)) {
+        try {
+            const url = new URL(raw);
+            if (!currentOrigin || url.origin !== currentOrigin) {
+                return raw;
+            }
+            return resolveAppRoute(collapseAnalyticsBase(`${url.pathname}${url.search}${url.hash}`));
+        } catch {
+            return raw;
+        }
+    }
+
+    return raw;
+}

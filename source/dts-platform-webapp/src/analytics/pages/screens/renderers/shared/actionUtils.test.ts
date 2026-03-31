@@ -5,6 +5,7 @@ import {
     buildTableRowActionParams,
     buildActionRuntimeParams,
     normalizeScreenActionType,
+    normalizeRuntimeJumpUrl,
     resolvePreferredDrillValue,
     resolveActionMappingValues,
     resolveActionTemplateText,
@@ -102,4 +103,32 @@ test('resolvePreferredDrillValue picks chart or table drill labels in priority o
     assert.equal(resolvePreferredDrillValue({ data: { name: '实施' } }), '实施');
     assert.equal(resolvePreferredDrillValue({ 项目: 'QMS二期', row: ['QMS二期', '周工'] }), 'QMS二期');
     assert.equal(resolvePreferredDrillValue({ row: ['PLM整合', '李工'] }), 'PLM整合');
+});
+
+test('normalizeRuntimeJumpUrl rewrites duplicate /bi prefixes into hash-friendly app routes', () => {
+    const resolveAppRoute = (route: string) => `/#${route}`;
+
+    assert.equal(
+        normalizeRuntimeJumpUrl('/bi/bi/gpmc/execution', {
+            currentOrigin: 'https://bi.example.com',
+            resolveAppRoute,
+        }),
+        '/#/bi/gpmc/execution',
+    );
+
+    assert.equal(
+        normalizeRuntimeJumpUrl('https://bi.example.com/bi/bi/gpmc/drill/execution?screen=1', {
+            currentOrigin: 'https://bi.example.com',
+            resolveAppRoute,
+        }),
+        '/#/bi/gpmc/drill/execution?screen=1',
+    );
+
+    assert.equal(
+        normalizeRuntimeJumpUrl('https://external.example.com/bi/gpmc/execution', {
+            currentOrigin: 'https://bi.example.com',
+            resolveAppRoute,
+        }),
+        'https://external.example.com/bi/gpmc/execution',
+    );
 });

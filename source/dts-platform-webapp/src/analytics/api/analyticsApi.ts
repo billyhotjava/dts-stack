@@ -1,4 +1,5 @@
 import { resolveLoginHref } from '@/routes/constants';
+import userStore from '@/store/userStore';
 
 export type CollectionListItem = {
 	id: number | "root";
@@ -1180,8 +1181,20 @@ async function refreshPlatformAccessToken(refreshToken: string): Promise<{ acces
 			if (!resp.ok) return null;
 			const body = await resp.json().catch(() => null);
 			const data = body?.data ?? body?.result ?? body?.payload ?? body;
-			const token = String(data?.accessToken || data?.access_token || data?.token || "").trim();
-			return token ? { accessToken: token } : null;
+			const newAccessToken = String(data?.accessToken || data?.access_token || data?.token || "").trim();
+			if (!newAccessToken) return null;
+			// Write the new tokens back into userStore so SessionManager's refresh timer
+			// picks up the new refreshToken. Without this, the SessionManager holds the old
+			// (already-consumed) refreshToken and its next scheduled refresh fails, which
+			// triggers clearUserInfoAndToken() + LOGOUT_TS, causing the session-conflict loop.
+			const newRefreshToken = String(data?.refreshToken || data?.refresh_token || "").trim();
+			const existing = userStore.getState();
+			userStore.getState().actions.setUserToken({
+				...existing.userToken,
+				accessToken: newAccessToken,
+				...(newRefreshToken ? { refreshToken: newRefreshToken } : {}),
+			});
+			return { accessToken: newAccessToken };
 		} catch {
 			return null;
 		}
