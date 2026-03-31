@@ -1,5 +1,4 @@
 import { useCallback, useEffect, useState } from "react";
-import { toast } from "sonner";
 import { Card, DatePicker, Input, Select, Space, Table, Tag } from "antd";
 import type { ColumnsType } from "antd/es/table";
 import { listPermissionAudit } from "@/api/platformApi";
@@ -54,8 +53,8 @@ export default function PermissionAuditPage() {
 			const content = resp?.content ?? resp?.data ?? resp ?? [];
 			setItems(Array.isArray(content) ? content : []);
 			setTotal(resp?.totalElements ?? content.length);
-		} catch (err: any) {
-			toast.error(err?.message || "Load failed");
+		} catch {
+			/* global interceptor handles toast */
 		} finally {
 			setLoading(false);
 		}
@@ -64,28 +63,28 @@ export default function PermissionAuditPage() {
 	useEffect(() => { loadData(); }, [loadData]);
 
 	const columns: ColumnsType<AuditEntry> = [
-		{ title: "Time", dataIndex: "createdDate", key: "time", width: 170,
+		{ title: "时间", dataIndex: "createdDate", key: "time", width: 170,
 			render: (v?: string) => v ? new Date(v).toLocaleString() : "-" },
-		{ title: "Action", dataIndex: "action", key: "action", width: 140,
+		{ title: "操作", dataIndex: "action", key: "action", width: 140,
 			render: (v: string) => <Tag color={ACTION_COLORS[v] || "default"}>{v}</Tag> },
-		{ title: "Asset", key: "asset", width: 200,
+		{ title: "资产", key: "asset", width: 200,
 			render: (_: any, r: AuditEntry) => r.assetType ? `${r.assetType}:${r.assetId}` : "-" },
-		{ title: "Target User", dataIndex: "targetUser", key: "targetUser", width: 120 },
-		{ title: "Permission", dataIndex: "permission", key: "permission", width: 100 },
-		{ title: "Operator", dataIndex: "operator", key: "operator", width: 120 },
-		{ title: "OA Ref", dataIndex: "oaReference", key: "oaReference", width: 120 },
+		{ title: "目标用户", dataIndex: "targetUser", key: "targetUser", width: 120 },
+		{ title: "权限", dataIndex: "permission", key: "permission", width: 100 },
+		{ title: "操作者", dataIndex: "operator", key: "operator", width: 120 },
+		{ title: "OA 单号", dataIndex: "oaReference", key: "oaReference", width: 120 },
 	];
 
 	return (
-		<Card title="Permission Audit Log">
+		<Card title="权限审计日志">
 			<Space wrap className="mb-4">
-				<Select allowClear placeholder="Action" options={ACTION_OPTIONS}
+				<Select allowClear placeholder="操作" options={ACTION_OPTIONS}
 					style={{ width: 160 }} value={action} onChange={setAction} />
-				<Input placeholder="Operator" allowClear style={{ width: 140 }}
+				<Input placeholder="操作者" allowClear style={{ width: 140 }}
 					value={operator} onChange={(e) => setOperator(e.target.value)} onPressEnter={() => loadData()} />
-				<Input placeholder="Target User" allowClear style={{ width: 140 }}
+				<Input placeholder="目标用户" allowClear style={{ width: 140 }}
 					value={targetUser} onChange={(e) => setTargetUser(e.target.value)} onPressEnter={() => loadData()} />
-				<Input placeholder="OA Ref" allowClear style={{ width: 140 }}
+				<Input placeholder="OA 单号" allowClear style={{ width: 140 }}
 					value={oaReference} onChange={(e) => setOaReference(e.target.value)} onPressEnter={() => loadData()} />
 				<DatePicker.RangePicker onChange={(dates) => setDateRange(dates as any)} />
 			</Space>
@@ -94,7 +93,7 @@ export default function PermissionAuditPage() {
 				size="small"
 				pagination={{
 					current: page + 1, pageSize: 20, total,
-					onChange: (p) => setPage(p - 1), showTotal: (t) => `Total ${t}`,
+					onChange: (p) => setPage(p - 1), showTotal: (t) => `共 ${t} 条`,
 				}}
 			/>
 		</Card>

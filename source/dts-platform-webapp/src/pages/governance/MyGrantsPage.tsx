@@ -1,5 +1,4 @@
 import { useCallback, useEffect, useState } from "react";
-import { toast } from "sonner";
 import { Card, Table, Tabs, Tag } from "antd";
 import type { ColumnsType } from "antd/es/table";
 import { listMyGrants, listGrantedByMe } from "@/api/platformApi";
@@ -39,8 +38,8 @@ export default function MyGrantsPage() {
 				setGrantedGrants(items);
 			}
 			setTotal(resp?.totalElements ?? items.length);
-		} catch (err: any) {
-			toast.error(err?.message || "Load failed");
+		} catch {
+			/* global interceptor handles toast */
 		} finally {
 			setLoading(false);
 		}
@@ -55,35 +54,35 @@ export default function MyGrantsPage() {
 	};
 
 	const receivedColumns: ColumnsType<AssetGrant> = [
-		{ title: "Asset", key: "asset", render: (_: any, r: AssetGrant) => `${r.assetType}:${r.assetId}` },
-		{ title: "Permission", dataIndex: "permission", width: 100,
+		{ title: "资产", key: "asset", render: (_: any, r: AssetGrant) => `${r.assetType}:${r.assetId}` },
+		{ title: "权限", dataIndex: "permission", width: 100,
 			render: (v: string) => <Tag color={v === "MANAGE" ? "red" : v === "EDIT" ? "orange" : "default"}>{v}</Tag> },
-		{ title: "Valid To", dataIndex: "validTo", width: 160,
+		{ title: "有效期至", dataIndex: "validTo", width: 160,
 			render: (v?: string) => {
-				if (!v) return <Tag color="green">Permanent</Tag>;
+				if (!v) return <Tag color="green">永久</Tag>;
 				const expiring = isExpiringSoon(v);
 				return <Tag color={expiring ? "red" : "default"}>{new Date(v).toLocaleDateString()}</Tag>;
 			}},
-		{ title: "Granted By", dataIndex: "grantedBy", width: 120 },
-		{ title: "Reason", dataIndex: "grantReason", ellipsis: true },
+		{ title: "授权者", dataIndex: "grantedBy", width: 120 },
+		{ title: "原因", dataIndex: "grantReason", ellipsis: true },
 	];
 
 	const grantedColumns: ColumnsType<AssetGrant> = [
-		{ title: "Asset", key: "asset", render: (_: any, r: AssetGrant) => `${r.assetType}:${r.assetId}` },
-		{ title: "Grantee", key: "grantee", render: (_: any, r: AssetGrant) => `${r.granteeType}:${r.granteeId}` },
-		{ title: "Permission", dataIndex: "permission", width: 100,
+		{ title: "资产", key: "asset", render: (_: any, r: AssetGrant) => `${r.assetType}:${r.assetId}` },
+		{ title: "被授权人", key: "grantee", render: (_: any, r: AssetGrant) => `${r.granteeType}:${r.granteeId}` },
+		{ title: "权限", dataIndex: "permission", width: 100,
 			render: (v: string) => <Tag color={v === "MANAGE" ? "red" : v === "EDIT" ? "orange" : "default"}>{v}</Tag> },
-		{ title: "Valid To", dataIndex: "validTo", width: 160,
-			render: (v?: string) => v ? new Date(v).toLocaleDateString() : "Permanent" },
-		{ title: "Reason", dataIndex: "grantReason", ellipsis: true },
+		{ title: "有效期至", dataIndex: "validTo", width: 160,
+			render: (v?: string) => v ? new Date(v).toLocaleDateString() : "永久" },
+		{ title: "原因", dataIndex: "grantReason", ellipsis: true },
 	];
 
 	return (
-		<Card title="My Grants">
+		<Card title="我的授权">
 			<Tabs activeKey={activeTab} onChange={(key) => { setActiveTab(key); setPage(0); }}
 				items={[
-					{ key: "received", label: "Received" },
-					{ key: "granted", label: "Granted by Me" },
+					{ key: "received", label: "已接收" },
+					{ key: "granted", label: "我授予的" },
 				]}
 			/>
 			<Table

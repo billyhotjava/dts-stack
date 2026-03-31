@@ -65,8 +65,8 @@ export default function AssetOwnershipPage() {
 			const content = resp?.content ?? resp?.data ?? resp ?? [];
 			setItems(Array.isArray(content) ? content : []);
 			setTotal(resp?.totalElements ?? content.length ?? 0);
-		} catch (err: any) {
-			toast.error(err?.message || "Load failed");
+		} catch {
+			/* global interceptor handles toast */
 		} finally {
 			setLoading(false);
 		}
@@ -79,11 +79,11 @@ export default function AssetOwnershipPage() {
 		if (!editModal.record || !editDept) return;
 		try {
 			await updateAssetOwnership(editModal.record.id, { ownerDeptCode: editDept });
-			toast.success("Updated");
+			toast.success("已更新");
 			setEditModal({ open: false });
 			loadData();
-		} catch (err: any) {
-			toast.error(err?.message || "Update failed");
+		} catch {
+			/* global interceptor handles toast */
 		}
 	};
 
@@ -91,48 +91,48 @@ export default function AssetOwnershipPage() {
 		if (!selectedRowKeys.length || !editDept) return;
 		try {
 			await batchUpdateAssetOwnership({ ids: selectedRowKeys, ownerDeptCode: editDept });
-			toast.success(`Updated ${selectedRowKeys.length} items`);
+			toast.success(`已更新 ${selectedRowKeys.length} 项`);
 			setBatchModal(false);
 			setSelectedRowKeys([]);
 			loadData();
-		} catch (err: any) {
-			toast.error(err?.message || "Batch update failed");
+		} catch {
+			/* global interceptor handles toast */
 		}
 	};
 
 	const columns: ColumnsType<AssetOwnership> = [
-		{ title: "Asset ID", dataIndex: "assetId", key: "assetId", ellipsis: true },
-		{ title: "Type", dataIndex: "assetType", key: "assetType", width: 120,
+		{ title: "资产 ID", dataIndex: "assetId", key: "assetId", ellipsis: true },
+		{ title: "类型", dataIndex: "assetType", key: "assetType", width: 120,
 			render: (v: string) => <Tag>{v}</Tag> },
-		{ title: "Owner Dept", dataIndex: "ownerDeptCode", key: "ownerDeptCode", width: 150,
+		{ title: "所有者部门", dataIndex: "ownerDeptCode", key: "ownerDeptCode", width: 150,
 			render: (v: string) => {
 				const dept = depts.find(d => d.value === v);
 				return dept ? dept.label : v;
 			}},
-		{ title: "Source", dataIndex: "sourceId", key: "sourceId", width: 120 },
-		{ title: "Assigned By", dataIndex: "assignedBy", key: "assignedBy", width: 120 },
-		{ title: "Action", key: "action", width: 80,
+		{ title: "来源", dataIndex: "sourceId", key: "sourceId", width: 120 },
+		{ title: "分配者", dataIndex: "assignedBy", key: "assignedBy", width: 120 },
+		{ title: "操作", key: "action", width: 80,
 			render: (_: any, record: AssetOwnership) => (
 				<Button type="link" size="small" onClick={() => {
 					setEditDept(record.ownerDeptCode);
 					setEditModal({ open: true, record });
-				}}>Edit</Button>
+				}}>编辑</Button>
 			)},
 	];
 
 	return (
 		<div className="space-y-4">
-			<Card title="Asset Ownership Management">
+			<Card title="资产所有权管理">
 				<Space wrap className="mb-4">
-					<Select allowClear placeholder="Asset Type" options={ASSET_TYPE_OPTIONS}
+					<Select allowClear placeholder="资产类型" options={ASSET_TYPE_OPTIONS}
 						style={{ width: 140 }} value={assetType} onChange={setAssetType} />
-					<Select allowClear showSearch placeholder="Department" options={depts}
+					<Select allowClear showSearch placeholder="部门" options={depts}
 						style={{ width: 180 }} value={ownerDeptCode} onChange={setOwnerDeptCode} />
-					<Input.Search placeholder="Search asset..." allowClear style={{ width: 220 }}
+					<Input.Search placeholder="搜索资产..." allowClear style={{ width: 220 }}
 						onSearch={(v) => { setKeyword(v); setPage(0); }} />
 					{selectedRowKeys.length > 0 && (
 						<Button type="primary" onClick={() => { setEditDept(""); setBatchModal(true); }}>
-							Batch Update ({selectedRowKeys.length})
+							批量更新 ({selectedRowKeys.length})
 						</Button>
 					)}
 				</Space>
@@ -141,26 +141,26 @@ export default function AssetOwnershipPage() {
 					rowSelection={{ selectedRowKeys, onChange: (keys) => setSelectedRowKeys(keys as number[]) }}
 					pagination={{
 						current: page + 1, pageSize: size, total,
-						onChange: (p) => setPage(p - 1), showTotal: (t) => `Total ${t}`,
+						onChange: (p) => setPage(p - 1), showTotal: (t) => `共 ${t} 条`,
 					}}
 					size="small"
 				/>
 			</Card>
 
-			<Modal title="Edit Ownership" open={editModal.open}
+			<Modal title="编辑所有权" open={editModal.open}
 				onCancel={() => setEditModal({ open: false })} onOk={handleEdit}>
 				<div className="py-4">
-					<div className="mb-2">Asset: {editModal.record?.assetType}:{editModal.record?.assetId}</div>
-					<Select showSearch placeholder="Select department" options={depts}
+					<div className="mb-2">资产: {editModal.record?.assetType}:{editModal.record?.assetId}</div>
+					<Select showSearch placeholder="选择部门" options={depts}
 						style={{ width: "100%" }} value={editDept} onChange={setEditDept} />
 				</div>
 			</Modal>
 
-			<Modal title="Batch Update Ownership" open={batchModal}
+			<Modal title="批量更新所有权" open={batchModal}
 				onCancel={() => setBatchModal(false)} onOk={handleBatch}>
 				<div className="py-4">
-					<div className="mb-2">Selected {selectedRowKeys.length} assets</div>
-					<Select showSearch placeholder="Select department" options={depts}
+					<div className="mb-2">已选择 {selectedRowKeys.length} 个资产</div>
+					<Select showSearch placeholder="选择部门" options={depts}
 						style={{ width: "100%" }} value={editDept} onChange={setEditDept} />
 				</div>
 			</Modal>
