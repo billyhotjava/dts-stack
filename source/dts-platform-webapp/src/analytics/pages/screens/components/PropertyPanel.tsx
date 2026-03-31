@@ -1,5 +1,5 @@
 // @ts-nocheck — migrated from analytics-webapp, pending unused-import cleanup
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { message } from 'antd';
 import { toast } from 'sonner';
 import { useScreen } from '../ScreenContext';
@@ -27,7 +27,7 @@ import { readComponentPluginMeta, resolveRuntimePluginId } from '../plugins/runt
 import { useScreenPluginRuntime } from '../plugins/useScreenPluginRuntime';
 import type { PropertySchemaField } from '../plugins/types';
 import { wouldCreateParentCycle } from '../componentHierarchy';
-import { analyticsApi, type ExplainabilityResponse } from '../../../api/analyticsApi';
+import { analyticsApi, type ExplainabilityResponse, type ScreenListItem } from '../../../api/analyticsApi';
 import { writeTextToClipboard } from '../../../hooks/clipboard';
 import {
     CHART_COMPONENT_TYPES,
@@ -790,6 +790,170 @@ function resolveTabSwitcherOptionValues(raw: unknown): string[] {
 }
 
 export type PropertyPanelTab = 'style' | 'data' | 'interaction' | 'advanced';
+
+// ── Screen Jump Picker: 大屏选择器（用于 jump-url 动作配置）──────────
+
+const SCREEN_REF_PREFIX = 'screen-ref:';
+
+function parseScreenRefName(url: string): string | null {
+    if (!url.startsWith(SCREEN_REF_PREFIX)) return null;
+    const raw = url.slice(SCREEN_REF_PREFIX.length);
+    const [namePart] = raw.split('|', 2);
+    return decodeURIComponent(namePart || '').trim() || null;
+}
+
+function buildScreenRefUrl(screen: ScreenListItem): string {
+    const name = encodeURIComponent(String(screen.name || '').trim());
+    const fallback = encodeURIComponent(`/bi/screens/${screen.id}/preview`);
+    return `${SCREEN_REF_PREFIX}${name}|${fallback}`;
+}
+
+let _screenListCache: { items: ScreenListItem[]; ts: number } | null = null;
+const SCREEN_CACHE_TTL = 30_000;
+
+async function fetchScreenList(): Promise<ScreenListItem[]> {
+    const now = Date.now();
+    if (_screenListCache && _screenListCache.ts + SCREEN_CACHE_TTL > now) {
+        return _screenListCache.items;
+    }
+    const items = await analyticsApi.listScreens();
+    items.sort((a, b) => new Date(String(b.updatedAt || 0)).getTime() - new Date(String(a.updatedAt || 0)).getTime());
+    _screenListCache = { items, ts: now };
+    return items;
+}
+
+function ScreenJumpPicker({ value, onChange }: { value: string; onChange: (url: string) => void }) {
+    const isScreenRef = value.startsWith(SCREEN_REF_PREFIX);
+    const [mode, setMode] = useState<'screen' | 'custom'>(isScreenRef ? 'screen' : 'custom');
+    const [screens, setScreens] = useState<ScreenListItem[]>([]);
+    const [loading, setLoading] = useState(false);
+    const [search, setSearch] = useState('');
+    const [open, setOpen] = useState(false);
+
+    const selectedName = parseScreenRefName(value);
+
+    const loadScreens = useCallback(async () => {
+        if (screens.length > 0) return;
+        setLoading(true);
+        try {
+            const list = await fetchScreenList();
+            setScreens(list);
+        } catch { /* ignore */ }
+        setLoading(false);
+    }, [screens.length]);
+
+    const filtered = screens.filter(s => !search || (s.name || '').toLowerCase().includes(search.toLowerCase()));
+
+    const inputCls = 'property-input flex-1 px-2.5 py-1.5 border border-border-default rounded bg-surface-card text-text-primary text-xs focus:outline-none focus:border-brand';
+
+    return (
+        <>
+            <div className="property-row flex items-center mb-3">
+                <label className="property-label w-20 text-xs text-text-secondary">跳转目标</label>
+                <div className="flex gap-3 flex-1">
+                    <label className="flex items-center gap-1 text-xs cursor-pointer">
+                        <input type="radio" checked={mode === 'screen'} onChange={() => setMode('screen')} className="accent-brand" />
+                        选择大屏
+                    </label>
+                    <label className="flex items-center gap-1 text-xs cursor-pointer">
+                        <input type="radio" checked={mode === 'custom'} onChange={() => setMode('custom')} className="accent-brand" />
+                        自定义URL
+                    </label>
+                </div>
+            </div>
+
+            {mode === 'screen' ? (
+                <div className="property-row flex items-start mb-3">
+                    <label className="property-label w-20 text-xs text-text-secondary pt-1.5">目标大屏</label>
+                    <div className="flex-1 relative">
+                        <button
+                            type="button"
+                            className={inputCls + ' w-full text-left cursor-pointer flex items-center justify-between'}
+                            onClick={() => { setOpen(!open); if (!open) void loadScreens(); }}
+                        >
+                            <span className={selectedName ? 'text-text-primary' : 'text-text-tertiary'}>
+                                {selectedName || '点击选择大屏...'}
+                            </span>
+                            <span className="text-text-tertiary">{open ? '▲' : '▼'}</span>
+                        </button>
+
+                        {open && (
+                            <div
+                                style={{
+                                    position: 'absolute', top: '100%', left: 0, right: 0, zIndex: 999,
+                                    maxHeight: 240, overflowY: 'auto',
+                                    border: '1px solid rgba(148,163,184,0.3)', borderRadius: 6,
+                                    background: 'var(--color-surface-card, #fff)',
+                                    boxShadow: '0 4px 12px rgba(0,0,0,0.08)',
+                                }}
+                            >
+                                <div style={{ padding: '6px 8px', borderBottom: '1px solid rgba(148,163,184,0.18)' }}>
+                                    <input
+                                        type="text"
+                                        className={inputCls + ' w-full'}
+                                        placeholder="搜索大屏名称..."
+                                        value={search}
+                                        onChange={(e) => setSearch(e.target.value)}
+                                        autoFocus
+                                    />
+                                </div>
+                                {loading ? (
+                                    <div style={{ padding: '12px 14px', fontSize: 12, color: '#94a3b8' }}>加载中...</div>
+                                ) : filtered.length === 0 ? (
+                                    <div style={{ padding: '12px 14px', fontSize: 12, color: '#94a3b8' }}>
+                                        {search ? '无匹配结果' : '暂无大屏'}
+                                    </div>
+                                ) : (
+                                    filtered.map(s => {
+                                        const isSelected = selectedName === String(s.name || '').trim();
+                                        const isPublished = s.publishedVersionNo != null && s.publishedVersionNo > 0;
+                                        return (
+                                            <div
+                                                key={String(s.id)}
+                                                onClick={() => { onChange(buildScreenRefUrl(s)); setOpen(false); setSearch(''); }}
+                                                style={{
+                                                    padding: '8px 14px', cursor: 'pointer', fontSize: 12,
+                                                    display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                                                    background: isSelected ? 'rgba(37,99,235,0.08)' : 'transparent',
+                                                }}
+                                                onMouseEnter={(e) => { (e.currentTarget as HTMLDivElement).style.background = 'rgba(37,99,235,0.06)'; }}
+                                                onMouseLeave={(e) => { (e.currentTarget as HTMLDivElement).style.background = isSelected ? 'rgba(37,99,235,0.08)' : 'transparent'; }}
+                                            >
+                                                <span style={{ fontWeight: isSelected ? 600 : 400 }}>
+                                                    {isSelected ? '✓ ' : ''}{s.name || `大屏 #${s.id}`}
+                                                </span>
+                                                <span style={{
+                                                    fontSize: 10, padding: '1px 6px', borderRadius: 4,
+                                                    background: isPublished ? 'rgba(16,185,129,0.12)' : 'rgba(148,163,184,0.12)',
+                                                    color: isPublished ? '#059669' : '#94a3b8',
+                                                }}>
+                                                    {isPublished ? '已发布' : '草稿'}
+                                                </span>
+                                            </div>
+                                        );
+                                    })
+                                )}
+                            </div>
+                        )}
+                    </div>
+                </div>
+            ) : (
+                <div className="property-row flex items-center mb-3">
+                    <label className="property-label w-20 text-xs text-text-secondary">跳转链接模板</label>
+                    <input
+                        type="text"
+                        className={inputCls + ' flex-1'}
+                        value={value}
+                        onChange={(e) => onChange(e.target.value)}
+                        placeholder="https://host/path?project={{name}}"
+                    />
+                </div>
+            )}
+        </>
+    );
+}
+
+// ── PropertyPanel ────────────────────────────────────────────────────
 
 export function PropertyPanel({ activeTab = 'style' }: { activeTab?: PropertyPanelTab }) {
     const {
@@ -6003,16 +6167,10 @@ function renderActionConfig(
 
                         {actionType === 'jump-url' ? (
                             <>
-                                <div className="property-row flex items-center mb-3">
-                                    <label className="property-label w-20 text-xs text-text-secondary">跳转链接模板</label>
-                                    <input
-                                        type="text"
-                                        className="property-input flex-1 px-2.5 py-1.5 border border-border-default rounded bg-surface-card text-text-primary text-xs focus:outline-none focus:border-brand"
-                                        value={action.jumpUrlTemplate || ''}
-                                        onChange={(e) => updateAction(index, { jumpUrlTemplate: e.target.value })}
-                                        placeholder="https://host/path?project={{name}}"
-                                    />
-                                </div>
+                                <ScreenJumpPicker
+                                    value={action.jumpUrlTemplate || ''}
+                                    onChange={(url) => updateAction(index, { jumpUrlTemplate: url })}
+                                />
                                 <div className="property-row flex items-center mb-3">
                                     <label className="property-label w-20 text-xs text-text-secondary">打开方式</label>
                                     <select
