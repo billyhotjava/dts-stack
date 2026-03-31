@@ -39,6 +39,8 @@ public class IncrementalSyncService {
 
     private static final Logger LOG = LoggerFactory.getLogger(IncrementalSyncService.class);
     private static final Pattern SAFE_SQL_IDENTIFIER = Pattern.compile("^[A-Za-z0-9_.$\"]+$");
+    /** Watermark values (dates, numbers) must not contain SQL meta-characters. */
+    private static final Pattern SAFE_WATERMARK_VALUE = Pattern.compile("^[A-Za-z0-9_.:\\-+T /]+$");
 
     private final IngestionIncrementalStateRepository stateRepository;
     private final IngestionIncrementalAuditRepository auditRepository;
@@ -472,6 +474,9 @@ public class IncrementalSyncService {
         String normalizedValue = normalize(value);
         if (!StringUtils.hasText(normalizedValue)) {
             return "NULL";
+        }
+        if (!SAFE_WATERMARK_VALUE.matcher(normalizedValue).matches()) {
+            throw new IllegalStateException("增量水位值包含非法字符: " + normalizedValue);
         }
         String normalizedType = normalize(type);
         if ("number".equalsIgnoreCase(normalizedType) || "numeric".equalsIgnoreCase(normalizedType)) {

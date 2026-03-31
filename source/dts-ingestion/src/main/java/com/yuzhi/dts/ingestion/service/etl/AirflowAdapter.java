@@ -181,9 +181,9 @@ public class AirflowAdapter {
         for (int attempt = 0; attempt < maxAttempts; attempt++) {
             try {
                 Thread.sleep(safePollSeconds * 1000L);
-            } catch (InterruptedException ignored) {
+            } catch (InterruptedException ex) {
                 Thread.currentThread().interrupt();
-                break;
+                return response;
             }
             response = client.triggerDag(dagId, payload);
             if (response.success() || response.statusCode() != 404) {

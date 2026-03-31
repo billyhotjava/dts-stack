@@ -28,6 +28,7 @@ import java.nio.file.Files;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -112,16 +113,40 @@ class IngestionTaskFullRefreshExecutionTest {
             Runnable::run
         );
 
+        // Initialize transaction synchronization for unit tests (execute() registers a post-commit hook)
+        if (!org.springframework.transaction.support.TransactionSynchronizationManager.isSynchronizationActive()) {
+            org.springframework.transaction.support.TransactionSynchronizationManager.initSynchronization();
+        }
+
+        // Make TransactionTemplate actually execute the callback (needed for async trigger phase)
+        org.mockito.Mockito.lenient().when(transactionManager.getTransaction(any()))
+            .thenReturn(new org.springframework.transaction.support.SimpleTransactionStatus());
+
         when(airflowAdapter.isEnabled()).thenReturn(false);
         when(executionRepository.findFirstByTaskIdOrderByCreatedAtDesc(any(Long.class))).thenReturn(Optional.empty());
         when(taskRepository.save(any(IngestionTask.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        // Track saved executions so findById can return them in the async trigger phase
+        java.util.Map<Long, IngestionExecution> savedExecutions = new java.util.concurrent.ConcurrentHashMap<>();
         when(executionRepository.save(any(IngestionExecution.class))).thenAnswer(inv -> {
             IngestionExecution execution = inv.getArgument(0);
             if (execution.getId() == null) {
                 execution.setId(900L);
             }
+            savedExecutions.put(execution.getId(), execution);
             return execution;
         });
+        org.mockito.Mockito.lenient().when(executionRepository.findById(any(Long.class))).thenAnswer(inv -> {
+            Long id = inv.getArgument(0);
+            return java.util.Optional.ofNullable(savedExecutions.get(id));
+        });
+    }
+
+    @AfterEach
+    void tearDown() {
+        if (org.springframework.transaction.support.TransactionSynchronizationManager.isSynchronizationActive()) {
+            org.springframework.transaction.support.TransactionSynchronizationManager.clearSynchronization();
+        }
     }
 
     @Test
@@ -136,6 +161,10 @@ class IngestionTaskFullRefreshExecutionTest {
         when(executionMapper.toDto(any(IngestionExecution.class))).thenReturn(new IngestionExecutionDTO());
 
         service.execute(101L);
+
+        // Phase 2 runs in afterCommit — simulate by invoking registered synchronizations
+        org.springframework.transaction.support.TransactionSynchronizationManager.getSynchronizations()
+            .forEach(org.springframework.transaction.support.TransactionSynchronization::afterCommit);
 
         verify(targetTableProvisioner).ensureTargetTables(eq(task), eq(null));
 
@@ -158,6 +187,9 @@ class IngestionTaskFullRefreshExecutionTest {
 
         service.execute(102L);
 
+        org.springframework.transaction.support.TransactionSynchronizationManager.getSynchronizations()
+            .forEach(org.springframework.transaction.support.TransactionSynchronization::afterCommit);
+
         verify(targetTableProvisioner, never()).ensureTargetTables(any(), any());
     }
 
@@ -176,9 +208,20 @@ class IngestionTaskFullRefreshExecutionTest {
         when(airflowDagService.rebuildDagForTask(any(), any())).thenReturn("task_test");
         when(addaxJobService.toContainerJobPath(any())).thenReturn(null);
 
-        org.assertj.core.api.Assertions.assertThatThrownBy(() -> service.execute(103L))
-            .isInstanceOf(RuntimeException.class)
-            .hasMessageContaining("Addax 作业路径无效，请先重建作业");
+        // Phase 1 succeeds (returns "preparing" execution)
+        service.execute(103L);
+
+        // Phase 2 runs in afterCommit — the error is handled async via markExecutionFailed
+        org.springframework.transaction.support.TransactionSynchronizationManager.getSynchronizations()
+            .forEach(org.springframework.transaction.support.TransactionSynchronization::afterCommit);
+
+        ArgumentCaptor<IngestionExecution> captor = ArgumentCaptor.forClass(IngestionExecution.class);
+        verify(executionRepository, org.mockito.Mockito.atLeast(2)).save(captor.capture());
+        boolean hasFailed = captor.getAllValues().stream()
+            .anyMatch(e -> "failed".equals(e.getStatus())
+                && e.getErrorMessage() != null
+                && e.getErrorMessage().contains("Addax 作业路径无效"));
+        assertThat(hasFailed).isTrue();
     }
 
     private IngestionTask baseTask(Long id, String sourceType, String syncMode) {

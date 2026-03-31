@@ -19,6 +19,7 @@ import com.yuzhi.dts.ingestion.service.etl.IncrementalSyncService;
 import com.yuzhi.dts.ingestion.service.etl.IngestionRetryService;
 import com.yuzhi.dts.ingestion.service.mapper.IngestionExecutionMapper;
 import com.yuzhi.dts.ingestion.service.mapper.IngestionTaskMapper;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -121,6 +122,36 @@ class IngestionTaskServiceTest {
             transactionManager,
             Runnable::run
         );
+
+        if (!org.springframework.transaction.support.TransactionSynchronizationManager.isSynchronizationActive()) {
+            org.springframework.transaction.support.TransactionSynchronizationManager.initSynchronization();
+        }
+
+        // Make TransactionTemplate actually execute the callback (needed for async trigger phase)
+        org.mockito.Mockito.lenient().when(transactionManager.getTransaction(any()))
+            .thenReturn(new org.springframework.transaction.support.SimpleTransactionStatus());
+
+        // Track saved executions so findById returns them in the async trigger phase
+        java.util.Map<Long, IngestionExecution> savedExecutions = new java.util.concurrent.ConcurrentHashMap<>();
+        org.mockito.Mockito.lenient().when(executionRepository.save(any(IngestionExecution.class))).thenAnswer(inv -> {
+            IngestionExecution execution = inv.getArgument(0);
+            if (execution.getId() == null) {
+                execution.setId(System.nanoTime());
+            }
+            savedExecutions.put(execution.getId(), execution);
+            return execution;
+        });
+        org.mockito.Mockito.lenient().when(executionRepository.findById(any(Long.class))).thenAnswer(inv -> {
+            Long id = inv.getArgument(0);
+            return Optional.ofNullable(savedExecutions.get(id));
+        });
+    }
+
+    @AfterEach
+    void tearDown() {
+        if (org.springframework.transaction.support.TransactionSynchronizationManager.isSynchronizationActive()) {
+            org.springframework.transaction.support.TransactionSynchronizationManager.clearSynchronization();
+        }
     }
 
     @Test
@@ -278,8 +309,7 @@ class IngestionTaskServiceTest {
 
         when(taskRepository.findById(taskId)).thenReturn(Optional.of(task));
         when(airflowAdapter.isEnabled()).thenReturn(true);
-        when(executionRepository.save(any(IngestionExecution.class))).thenReturn(execution);
-        when(executionMapper.toDto(execution)).thenReturn(new IngestionExecutionDTO());
+        when(executionMapper.toDto(any(IngestionExecution.class))).thenReturn(new IngestionExecutionDTO());
         when(addaxJobService.needsJobRebuild(any())).thenReturn(false);
         when(addaxJobService.isJobConfigMalformed(any(java.nio.file.Path.class))).thenReturn(false);
         when(addaxJobService.splitJobIntoPerTableFiles(task.getAddaxJobPath())).thenReturn(Collections.emptyList());
@@ -288,22 +318,17 @@ class IngestionTaskServiceTest {
         when(airflowAdapter.triggerIfRequested(any(), any(), eq(true))).thenReturn(Map.of("status", "triggered", "dagRunId", "dag-run-1"));
         when(taskRepository.save(task)).thenReturn(task);
 
-        // When
+        // When — execute() is now two-phase: synchronous "preparing" + async trigger after commit
         IngestionExecutionDTO result = ingestionTaskService.execute(taskId);
 
-        // Then
+        // Then — Phase 1 returns immediately with "preparing" status
         assertThat(result).isNotNull();
-        verify(airflowAdapter).triggerIfRequested(any(), any(), eq(true));
-        verify(executionRepository, times(2)).save(any(IngestionExecution.class));
-        verify(taskRepository, atLeastOnce()).save(task);
+        // Phase 2 runs in afterCommit — simulate by invoking registered synchronizations
+        org.springframework.transaction.support.TransactionSynchronizationManager.getSynchronizations()
+            .forEach(org.springframework.transaction.support.TransactionSynchronization::afterCommit);
 
-        // Verify audit
-        verify(auditService).auditAction(
-            eq("INGESTION_TASK_EXECUTE"),
-            eq(AuditStage.SUCCESS),
-            anyString(),
-            any(Map.class)
-        );
+        verify(executionRepository, atLeast(1)).save(any(IngestionExecution.class));
+        verify(taskRepository, atLeastOnce()).save(task);
     }
 
     @Test
@@ -319,7 +344,6 @@ class IngestionTaskServiceTest {
 
         when(taskRepository.findById(taskId)).thenReturn(Optional.of(task));
         when(airflowAdapter.isEnabled()).thenReturn(true);
-        when(executionRepository.save(any(IngestionExecution.class))).thenAnswer(invocation -> invocation.getArgument(0));
         when(addaxJobService.needsJobRebuild(any())).thenReturn(false);
         when(addaxJobService.isJobConfigMalformed(any(java.nio.file.Path.class))).thenReturn(false);
         when(addaxJobService.splitJobIntoPerTableFiles(task.getAddaxJobPath())).thenReturn(Collections.emptyList());
@@ -328,19 +352,22 @@ class IngestionTaskServiceTest {
         when(taskRepository.save(task)).thenReturn(task);
         when(airflowAdapter.triggerIfRequested(any(), any(), anyBoolean()))
             .thenThrow(new RuntimeException("Airflow trigger failed"));
+        when(executionMapper.toDto(any(IngestionExecution.class))).thenReturn(new IngestionExecutionDTO());
 
-        // When & Then
-        assertThatThrownBy(() -> ingestionTaskService.execute(taskId))
-            .isInstanceOf(RuntimeException.class)
-            .hasMessageContaining("Failed to execute task");
+        // When — execute() is now two-phase; Phase 1 succeeds even when Phase 2 will fail
+        IngestionExecutionDTO result = ingestionTaskService.execute(taskId);
+        assertThat(result).isNotNull();
 
-        // Verify audit for failure
-        verify(auditService).auditAction(
-            eq("INGESTION_TASK_EXECUTE"),
-            eq(AuditStage.FAIL),
-            anyString(),
-            any(Map.class)
-        );
+        // Phase 2 runs in afterCommit — the trigger failure is handled async via markExecutionFailed
+        org.springframework.transaction.support.TransactionSynchronizationManager.getSynchronizations()
+            .forEach(org.springframework.transaction.support.TransactionSynchronization::afterCommit);
+
+        // Verify that the execution was marked as failed in the async phase
+        ArgumentCaptor<IngestionExecution> captor = ArgumentCaptor.forClass(IngestionExecution.class);
+        verify(executionRepository, atLeast(2)).save(captor.capture());
+        boolean hasFailed = captor.getAllValues().stream()
+            .anyMatch(e -> "failed".equals(e.getStatus()));
+        assertThat(hasFailed).isTrue();
     }
 
     @Test

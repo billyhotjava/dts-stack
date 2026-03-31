@@ -374,21 +374,17 @@ public class IngestionTaskService {
         log.info("Request to delete IngestionTask : {}", id);
         IngestionTask task = taskRepository.findById(id)
             .orElseThrow(() -> new IllegalArgumentException("Task not found: " + id));
-        try {
-            executionRepository.deleteByTaskId(id);
-        } catch (Exception ex) {
-            log.warn("Failed to delete executions for task {}: {}", id, ex.getMessage());
-        }
-        try {
-            incrementalSyncService.clearCheckpointByTaskId(id);
-        } catch (Exception ex) {
-            log.warn("Failed to delete incremental checkpoints for task {}: {}", id, ex.getMessage());
-        }
-        try {
-            changeLogService.deleteByTaskId(id);
-        } catch (Exception ex) {
-            log.warn("Failed to delete change logs for task {}: {}", id, ex.getMessage());
-        }
+
+        // Database cascade — must all succeed within the same transaction.
+        // Do NOT swallow exceptions here; if any DB delete fails, the whole
+        // transaction must roll back to avoid orphaned references.
+        executionRepository.deleteByTaskId(id);
+        incrementalSyncService.clearCheckpointByTaskId(id);
+        changeLogService.deleteByTaskId(id);
+        taskRepository.delete(task);
+        log.info("Deleted ingestion task ID: {} by user: {}", id, task.getLastModifiedBy());
+
+        // Filesystem cleanup (best-effort, not transactional)
         try {
             addaxJobService.deleteJobIfExists(task.getAddaxJobPath());
         } catch (Exception ex) {
@@ -399,8 +395,7 @@ public class IngestionTaskService {
         } catch (Exception ex) {
             log.warn("Failed to delete Airflow DAG for task {}: {}", id, ex.getMessage());
         }
-        taskRepository.delete(task);
-        log.info("Deleted ingestion task ID: {} by user: {}", id, task.getLastModifiedBy());
+
         return taskMapper.toDto(task);
     }
 

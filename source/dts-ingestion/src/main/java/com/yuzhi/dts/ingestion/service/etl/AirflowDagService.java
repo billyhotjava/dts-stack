@@ -1,5 +1,6 @@
 package com.yuzhi.dts.ingestion.service.etl;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.yuzhi.dts.ingestion.config.AddaxProperties;
 import com.yuzhi.dts.ingestion.config.AirflowProperties;
 import com.fasterxml.jackson.databind.JsonNode;
@@ -716,6 +717,25 @@ public class AirflowDagService {
                 }
             }
         }
+        // Last resort: read credentials from the Addax job JSON file (writer.parameter)
+        if (!StringUtils.hasText(jdbcUrl) || !StringUtils.hasText(username) || !StringUtils.hasText(password)) {
+            JsonNode writerParam = readWriterParamFromJob(task.getAddaxJobPath());
+            if (writerParam != null) {
+                if (!StringUtils.hasText(jdbcUrl)) jdbcUrl = firstText(writerParam, "jdbcUrl");
+                if (!StringUtils.hasText(username)) username = firstText(writerParam, "username");
+                if (!StringUtils.hasText(password)) password = firstText(writerParam, "password");
+                // Also check nested connection[0]
+                JsonNode wpConn = writerParam.get("connection");
+                JsonNode wpEntry = null;
+                if (wpConn != null && wpConn.isArray() && !wpConn.isEmpty()) wpEntry = wpConn.get(0);
+                else if (wpConn != null && wpConn.isObject()) wpEntry = wpConn;
+                if (wpEntry != null) {
+                    if (!StringUtils.hasText(jdbcUrl)) jdbcUrl = firstText(wpEntry, "jdbcUrl");
+                    if (!StringUtils.hasText(username)) username = firstText(wpEntry, "username");
+                    if (!StringUtils.hasText(password)) password = firstText(wpEntry, "password");
+                }
+            }
+        }
         if (!StringUtils.hasText(username)) username = "postgres";
         if (!StringUtils.hasText(password)) password = "";
 
@@ -750,6 +770,27 @@ public class AirflowDagService {
             }
         }
         return new FileSourceDbInfo(host, port, dbname, username, password);
+    }
+
+    private static final ObjectMapper JOB_MAPPER = new ObjectMapper();
+
+    /** Read writer.parameter from an Addax job JSON file. Returns null on any failure. */
+    private JsonNode readWriterParamFromJob(String jobPath) {
+        if (!StringUtils.hasText(jobPath)) return null;
+        try {
+            Path path = Path.of(jobPath);
+            if (!Files.isReadable(path)) return null;
+            JsonNode root = JOB_MAPPER.readTree(path.toFile());
+            JsonNode content = root.at("/job/content");
+            if (content.isMissingNode() || !content.isArray() || content.isEmpty()) return null;
+            JsonNode writer = content.get(0).get("writer");
+            if (writer == null) return null;
+            JsonNode param = writer.get("parameter");
+            return (param != null && !param.isNull()) ? param : null;
+        } catch (Exception e) {
+            LOG.debug("Could not read writer params from job {}: {}", jobPath, e.getMessage());
+            return null;
+        }
     }
 
     /**

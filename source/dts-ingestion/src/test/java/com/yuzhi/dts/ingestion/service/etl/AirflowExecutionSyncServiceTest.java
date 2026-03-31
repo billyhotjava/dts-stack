@@ -27,9 +27,6 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
-import org.springframework.data.domain.Page;
-import org.springframework.data.domain.PageImpl;
-import org.springframework.data.domain.PageRequest;
 
 @ExtendWith(MockitoExtension.class)
 class AirflowExecutionSyncServiceTest {
@@ -80,8 +77,7 @@ class AirflowExecutionSyncServiceTest {
     void shouldMarkFailureWithDetailedMessageAndAudit() {
         IngestionTask task = task(10L, "task-demo", "dag-demo");
         IngestionExecution execution = runningExecution(101L, "manual__001", task);
-        Page<IngestionExecution> page = new PageImpl<>(List.of(execution), PageRequest.of(0, 20), 1);
-        when(executionRepository.findByStatus(eq("running"), any(PageRequest.class))).thenReturn(page);
+        when(executionRepository.findByStatusWithTask("running")).thenReturn(List.of(execution));
         when(airflowClient.getDagRunLookup("dag-demo", "manual__001"))
             .thenReturn(AirflowClient.DagRunLookupResult.found(200, Map.of("state", "failed")));
 
@@ -118,8 +114,7 @@ class AirflowExecutionSyncServiceTest {
     void shouldUpdateCheckpointWhenDagSucceeded() {
         IngestionTask task = task(20L, "task-success", "dag-success");
         IngestionExecution execution = runningExecution(202L, "manual__002", task);
-        Page<IngestionExecution> page = new PageImpl<>(List.of(execution), PageRequest.of(0, 20), 1);
-        when(executionRepository.findByStatus(eq("running"), any(PageRequest.class))).thenReturn(page);
+        when(executionRepository.findByStatusWithTask("running")).thenReturn(List.of(execution));
         when(airflowClient.getDagRunLookup("dag-success", "manual__002"))
             .thenReturn(AirflowClient.DagRunLookupResult.found(200, Map.of("state", "success")));
 
@@ -135,8 +130,7 @@ class AirflowExecutionSyncServiceTest {
         IngestionExecution execution = runningExecution(303L, "manual__404", task);
         execution.setStartTime(Instant.now().minusSeconds(10 * 60));
 
-        Page<IngestionExecution> page = new PageImpl<>(List.of(execution), PageRequest.of(0, 20), 1);
-        when(executionRepository.findByStatus(eq("running"), any(PageRequest.class))).thenReturn(page);
+        when(executionRepository.findByStatusWithTask("running")).thenReturn(List.of(execution));
         when(airflowClient.getDagRunLookup("dag-missing", "manual__404"))
             .thenReturn(AirflowClient.DagRunLookupResult.notFound(404, "DAGRun not found"));
 
