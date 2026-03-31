@@ -808,7 +808,7 @@ services:
     image: ${IMAGE_AIRFLOW}
     container_name: dts-airflow-init
     entrypoint: /bin/bash
-    command: ["/opt/airflow/init/init.sh"]
+    command: ["-c", "bash /opt/airflow/init/init.sh"]
     environment:
       TZ: ${TZ:-Asia/Shanghai}
       AIRFLOW__CORE__EXECUTOR: LocalExecutor
