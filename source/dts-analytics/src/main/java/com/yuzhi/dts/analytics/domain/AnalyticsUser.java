@@ -38,6 +38,10 @@ public class AnalyticsUser implements Serializable {
     @Column(name = "is_active", nullable = false)
     private boolean active = true;
 
+    /** Keycloak / platform username (e.g. "test230916"). Used for permission matching. */
+    @Column(name = "platform_username", length = 200)
+    private String platformUsername;
+
     @Column(name = "created_at", nullable = false)
     private Instant createdAt;
 
@@ -98,6 +102,14 @@ public class AnalyticsUser implements Serializable {
 
     public void setActive(boolean active) {
         this.active = active;
+    }
+
+    public String getPlatformUsername() {
+        return platformUsername;
+    }
+
+    public void setPlatformUsername(String platformUsername) {
+        this.platformUsername = platformUsername;
     }
 
     public Instant getCreatedAt() {

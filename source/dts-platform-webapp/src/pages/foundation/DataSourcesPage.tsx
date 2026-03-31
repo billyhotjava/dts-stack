@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router";
 import { getOrgTree, type OrgNode } from "@/api/services/directoryService";
 import {
+	Alert,
 	Button,
 	Card,
 	Divider,
@@ -697,6 +698,7 @@ export default function DataSourcesPage() {
 				destroyOnClose
 			>
 				<Space direction="vertical" style={{ width: "100%" }}>
+					<Alert type="warning" showIcon message="非密模块禁止上传涉密数据" />
 					<Upload.Dragger
 						name="file"
 						multiple={false}

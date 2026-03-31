@@ -1,6 +1,7 @@
 import { useState, useCallback } from "react";
 import { toast } from "sonner";
 import {
+	Alert,
 	Button,
 	Checkbox,
 	Form,
@@ -382,7 +383,8 @@ const BatchImportModal = ({
 			afterOpenChange={handleAfterOpenChange}
 			footer={null}
 		>
-			<Tabs
+			<Alert type="warning" showIcon message="非密模块禁止上传涉密数据" style={{ marginBottom: 16 }} />
+		<Tabs
 				activeKey={activeTab}
 				onChange={setActiveTab}
 				items={[

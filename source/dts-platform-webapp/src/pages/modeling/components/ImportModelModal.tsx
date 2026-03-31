@@ -1,4 +1,4 @@
-import { Button, Form, Input, Modal, Select, Space, Switch, Upload } from "antd";
+import { Alert, Button, Form, Input, Modal, Select, Space, Switch, Upload } from "antd";
 import type { UploadFile } from "antd/es/upload/interface";
 import type { ProjectSpace } from "../sqlModeling.types";
 import type { InfraDataSource } from "@/api/services/dataSourcesService";
@@ -44,6 +44,7 @@ export default function ImportModelModal({
 				</Space>
 			}
 		>
+			<Alert type="warning" showIcon message="非密模块禁止上传涉密数据" style={{ marginBottom: 16 }} />
 			<Form layout="vertical" form={form} disabled={submitting}>
 				<div className="grid gap-4 md:grid-cols-2">
 					<Form.Item name="planId" label="项目空间" rules={[{ required: true, message: "请选择项目空间" }]}>

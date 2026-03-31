@@ -28,6 +28,7 @@ const COMPONENT_TYPES = new Set<ScreenComponent['type']>([
     'title',
     'markdown-text',
     'number-card',
+    'stat-card',
     'progress-bar',
     'tab-switcher',
     'carousel',

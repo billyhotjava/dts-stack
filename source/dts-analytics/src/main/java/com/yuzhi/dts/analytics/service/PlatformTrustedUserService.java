@@ -73,6 +73,10 @@ public class PlatformTrustedUserService {
                 user.setActive(true);
                 dirty = true;
             }
+            if (!username.equals(user.getPlatformUsername())) {
+                user.setPlatformUsername(username);
+                dirty = true;
+            }
             if (dirty) {
                 user = userRepository.save(user);
             }
@@ -85,6 +89,7 @@ public class PlatformTrustedUserService {
         created.setFirstName(displayName);
         created.setLastName("");
         created.setSuperuser(superuser);
+        created.setPlatformUsername(username);
         created.setActive(true);
         created.setPasswordHash(passwordEncoder.encode(UUID.randomUUID().toString()));
 

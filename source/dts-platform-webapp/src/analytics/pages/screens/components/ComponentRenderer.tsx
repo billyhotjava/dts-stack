@@ -1339,6 +1339,7 @@ export const ComponentRenderer = memo(function ComponentRenderer({ component, mo
 
             // ==================== 基础 + 形状 + 媒体组件 ====================
             case 'number-card':
+            case 'stat-card':
             case 'title':
             case 'markdown-text':
             case 'richtext':

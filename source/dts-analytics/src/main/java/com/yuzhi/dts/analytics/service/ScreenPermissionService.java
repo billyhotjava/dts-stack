@@ -216,6 +216,12 @@ public class ScreenPermissionService {
     }
 
     private String extractUsername(AnalyticsUser user) {
+        // Prefer the stored Keycloak username (set during SSO provisioning).
+        // Fall back to extracting the local part of the email for legacy records.
+        String platformUsername = user.getPlatformUsername();
+        if (platformUsername != null && !platformUsername.isBlank()) {
+            return platformUsername.trim();
+        }
         String email = user.getEmail();
         if (email == null) {
             return null;
