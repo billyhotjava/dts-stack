@@ -1043,9 +1043,8 @@ public class ScreenResource {
             return forbidden();
         }
 
-        if (screenVersionRepository.findFirstByScreenIdAndCurrentPublishedTrue(screen.getId()).isEmpty()) {
-            return ResponseEntity.status(409).contentType(MediaType.TEXT_PLAIN).body("No published version");
-        }
+        // Published-version gate removed: allow creating public links for unpublished screens.
+        // The public viewer page will show a "not yet published" message if there is no content.
 
         AnalyticsPublicLink beforeLink = publicLinkService.findByModelAndModelId(PublicLinkService.MODEL_SCREEN, id).orElse(null);
         ObjectNode before = toPublicLinkPolicyResponse(beforeLink == null ? null : beforeLink.getPublicUuid(), beforeLink);

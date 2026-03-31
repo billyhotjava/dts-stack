@@ -1220,9 +1220,17 @@ async function apiFetch(url: string, init: RequestInit, allowRefresh: boolean): 
 	}
 
 	// Use the shared single-flight refresh — same lock as apiClient and SessionManager.
+	// The refresh function has built-in cooldown (5s) and cross-tab sync to prevent
+	// race conditions when multiple tabs share the same refresh token.
 	const refreshed = await refreshAccessToken();
 	if (!refreshed?.accessToken) {
-		redirectToLoginWithReturn();
+		// Don't redirect immediately — the cooldown in refreshAccessToken prevents storms,
+		// and another tab might have already refreshed successfully.
+		// Only redirect if we still have no valid token after the attempt.
+		const latestTokens = getPlatformTokens();
+		if (!latestTokens.accessToken) {
+			redirectToLoginWithReturn();
+		}
 		return response;
 	}
 

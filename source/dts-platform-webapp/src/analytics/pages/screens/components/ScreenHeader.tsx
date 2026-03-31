@@ -1553,7 +1553,7 @@ export function ScreenHeader({
                 setHeaderActionNotice({
                     tone: 'error',
                     title: '分享链接生成失败',
-                    message: '未获取到分享链接，请先发布后重试。',
+                    message: '未获取到分享链接，请稍后重试。',
                 });
                 return;
             }
