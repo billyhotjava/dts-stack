@@ -9,6 +9,7 @@ import com.yuzhi.dts.ingestion.repository.IngestionTaskRepository;
 import com.yuzhi.dts.ingestion.service.audit.AuditService;
 import com.yuzhi.dts.ingestion.service.infra.IngestionSettingsService;
 import com.yuzhi.dts.ingestion.service.infra.PlatformInfraClient;
+import jakarta.persistence.OptimisticLockException;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
@@ -21,8 +22,6 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.boot.context.event.ApplicationReadyEvent;
 import org.springframework.context.event.EventListener;
-import org.springframework.data.domain.Page;
-import org.springframework.data.domain.PageRequest;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
@@ -126,7 +125,12 @@ public class AirflowExecutionSyncService {
                     execution.setErrorMessage("执行状态在服务重启后无法恢复，已标记为失败");
                     execution.setFailureCategory("RUNTIME");
                     execution.setFailureAdvice(ExecutionFailureClassifier.advice("RUNTIME"));
-                    executionRepository.save(execution);
+                    try {
+                        executionRepository.save(execution);
+                    } catch (OptimisticLockException ole) {
+                        LOG.warn("[recovery] optimistic lock conflict on execution {} — skipping", execution.getId());
+                        continue;
+                    }
 
                     if (task != null) {
                         task.setLastExecutionStatus("failed");
@@ -159,19 +163,23 @@ public class AirflowExecutionSyncService {
         if (batchSize <= 0) {
             return;
         }
-        Page<IngestionExecution> page = executionRepository.findByStatus("running", PageRequest.of(0, batchSize));
-        if (page.isEmpty()) {
+        List<IngestionExecution> runningExecutions = executionRepository.findByStatusWithTask("running");
+        if (runningExecutions.isEmpty()) {
             return;
         }
+        // Apply batch limit
+        List<IngestionExecution> batch = runningExecutions.size() > batchSize
+            ? runningExecutions.subList(0, batchSize)
+            : runningExecutions;
 
         int syncedCount = 0;
         int errorCount = 0;
 
-        for (IngestionExecution execution : page.getContent()) {
+        for (IngestionExecution execution : batch) {
             // Stop polling if we've hit too many consecutive errors (circuit breaker is open)
             if (errorCount >= 3) {
                 LOG.warn("[airflow-sync] stopping poll after {} consecutive errors, {} remaining executions skipped",
-                    errorCount, page.getContent().size() - syncedCount);
+                    errorCount, batch.size() - syncedCount);
                 break;
             }
 
@@ -247,7 +255,12 @@ public class AirflowExecutionSyncService {
             execution.setFailureCategory(null);
             execution.setFailureAdvice(null);
         }
-        executionRepository.save(execution);
+        try {
+            executionRepository.save(execution);
+        } catch (OptimisticLockException ole) {
+            LOG.warn("[airflow] optimistic lock conflict on execution {} — skipping (concurrent update)", execution.getId());
+            return;
+        }
 
         task.setLastExecutionStatus(status);
         if ("success".equalsIgnoreCase(status)) {

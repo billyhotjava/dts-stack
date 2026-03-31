@@ -76,6 +76,12 @@ public interface IngestionExecutionRepository extends JpaRepository<IngestionExe
     Page<IngestionExecution> findByStatus(String status, Pageable pageable);
 
     /**
+     * 根据状态查询执行历史（带 fetch join task 避免 N+1）
+     */
+    @Query("select e from IngestionExecution e join fetch e.task t where lower(e.status) = lower(:status)")
+    List<IngestionExecution> findByStatusWithTask(@Param("status") String status);
+
+    /**
      * 查询任务的最新一次执行记录
      */
     Optional<IngestionExecution> findFirstByTaskIdOrderByCreatedAtDesc(Long taskId);
