@@ -1,6 +1,6 @@
 #!/usr/bin/env npx tsx
 /**
- * 从 gpmcTemplates.ts 导出 6 个大屏实例 JSON
+ * 从 gpmcTemplates.ts + gpmcDrillTemplates.ts 导出 6+5=11 个大屏实例 JSON
  * - 删除所有 staticData (mockData)
  * - 切换为 sqlConfig 引用查询卡片 SQL
  * - 输出到 screen-instances/ 目录
@@ -8,6 +8,7 @@
  * 运行方式: cd source/dts-platform-webapp && npx tsx ../../worklog/v2.2.2/dist/pm/generate-screen-instances.ts
  */
 import { gpmcTemplates } from '/opt/prod/s10/s10-stack/source/dts-platform-webapp/src/analytics/pages/screens/gpmcTemplates';
+import { gpmcDrillTemplates } from '/opt/prod/s10/s10-stack/source/dts-platform-webapp/src/analytics/pages/screens/gpmcDrillTemplates';
 import { writeFileSync, mkdirSync } from 'fs';
 import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
@@ -167,8 +168,89 @@ function processComponent(comp: any): any {
 	return result;
 }
 
-// 处理模板
-for (const template of gpmcTemplates) {
+// 下钻模板的组件按 screen ID 前缀匹配查询卡片
+const DRILL_SCREEN_CARD_MAP: Record<string, string> = {
+	'gpmc-drill-execution': 'card-execution-kpi-overview',
+	'gpmc-drill-quality': 'card-quality-kpi',
+	'gpmc-drill-tech-state': 'card-tech-state-kpi',
+	'gpmc-drill-cost': 'card-cost-kpi',
+	'gpmc-drill-risk': 'card-risk-kpi',
+};
+
+const DRILL_TABLE_CARD_MAP: Record<string, Record<string, string>> = {
+	'gpmc-drill-execution': {
+		'detail': 'card-project-tree-snapshot',
+		'side': 'card-weekly-subproject-summary',
+		'support': 'card-delay-reason-trend',
+	},
+	'gpmc-drill-quality': {
+		'detail': 'card-quality-issue-list',
+		'side': 'card-quality-kpi',
+		'support': 'card-quality-measure-list',
+	},
+	'gpmc-drill-tech-state': {
+		'detail': 'card-tech-state-list',
+		'side': 'card-tech-state-kpi',
+		'support': 'card-tech-state-measure-list',
+	},
+	'gpmc-drill-cost': {
+		'detail': 'card-cost-period-summary',
+		'side': 'card-cost-kpi',
+		'support': 'card-cost-kpi',
+	},
+	'gpmc-drill-risk': {
+		'detail': 'card-risk-info-list',
+		'side': 'card-risk-period-summary',
+		'support': 'card-risk-measure-list',
+	},
+};
+
+function processDrillComponent(comp: any, screenId: string): any {
+	const result = { ...comp };
+	const compId = comp.id || '';
+
+	// 判断组件角色（KPI / detail / side / support）
+	let cardKey: string | null = null;
+	if (comp.type === 'number-card') {
+		cardKey = DRILL_SCREEN_CARD_MAP[screenId] || null;
+	} else if (comp.type === 'table') {
+		const tableMap = DRILL_TABLE_CARD_MAP[screenId];
+		if (tableMap) {
+			if (compId.includes('detail')) cardKey = tableMap['detail'];
+			else if (compId.includes('side')) cardKey = tableMap['side'];
+			else if (compId.includes('support')) cardKey = tableMap['support'];
+			else cardKey = tableMap['detail']; // fallback
+		}
+	}
+
+	if (cardKey && CARD_SQL_MAP[cardKey]) {
+		const sqlContent = readCardSqlSync(CARD_SQL_MAP[cardKey].sqlFile);
+		result.dataSource = {
+			type: 'sql',
+			sqlConfig: {
+				databaseId: '{{DATABASE_ID}}',
+				query: sqlContent,
+				queryTimeoutSeconds: 30,
+				maxRows: 2000,
+			},
+		};
+		// 清除 mock data
+		if (result.dataSource?.staticData) delete result.dataSource.staticData;
+		if (result.config?.data) delete result.config.data;
+	}
+
+	// 清除残留 staticData
+	if (result.dataSource?.type === 'static') {
+		delete result.dataSource.staticData;
+	}
+
+	return result;
+}
+
+// 处理全部模板（6 主屏 + 5 下钻）
+const allTemplates = [...gpmcTemplates, ...gpmcDrillTemplates];
+for (const template of allTemplates) {
+	const isDrill = template.id.startsWith('gpmc-drill-');
 	const screenConfig = {
 		schemaVersion: 2,
 		id: template.id,
@@ -179,7 +261,9 @@ for (const template of gpmcTemplates) {
 		backgroundColor: template.config.backgroundColor,
 		theme: template.config.theme || 'enterprise-light',
 		globalVariables: template.config.globalVariables || [],
-		components: (template.config.components || []).map(processComponent),
+		components: (template.config.components || []).map(c =>
+			isDrill ? processDrillComponent(c, template.id) : processComponent(c)
+		),
 	};
 
 	const filename = `${template.id}.json`;

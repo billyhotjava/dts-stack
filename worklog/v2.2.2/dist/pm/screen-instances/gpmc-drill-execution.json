@@ -1,0 +1,379 @@
+{
+  "schemaVersion": 2,
+  "id": "gpmc-drill-execution",
+  "name": "执行层-项目执行详情 (实例)",
+  "description": "项目执行监控钻取页面，展示关键任务节点、资源负载及延期项目排行。",
+  "width": 1920,
+  "height": 1080,
+  "backgroundColor": "#eaf2fb",
+  "theme": "enterprise-light",
+  "globalVariables": [
+    {
+      "key": "dateFrom",
+      "label": "开始日期",
+      "type": "date"
+    },
+    {
+      "key": "dateTo",
+      "label": "结束日期",
+      "type": "date"
+    },
+    {
+      "key": "projectNo",
+      "label": "项目编号",
+      "type": "string"
+    },
+    {
+      "key": "deptId",
+      "label": "事业部/科室",
+      "type": "string"
+    }
+  ],
+  "components": [
+    {
+      "id": "drill-exec-header-bar",
+      "type": "shape",
+      "name": "drill-exec-header-bar",
+      "x": 0,
+      "y": 0,
+      "width": 1920,
+      "height": 56,
+      "zIndex": 5,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "shapeType": "rect",
+        "fillColor": "#044B8C",
+        "borderColor": "#044B8C",
+        "borderWidth": 0,
+        "radius": 0
+      }
+    },
+    {
+      "id": "drill-exec-title",
+      "type": "title",
+      "name": "执行层-项目执行详情",
+      "x": 20,
+      "y": 12,
+      "width": 500,
+      "height": 32,
+      "zIndex": 60,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "text": "执行层-项目执行详情",
+        "fontSize": 22,
+        "fontWeight": "700",
+        "color": "#ffffff",
+        "textAlign": "flex-start"
+      }
+    },
+    {
+      "id": "drill-exec-badge",
+      "type": "title",
+      "name": "只读执行页",
+      "x": 1760,
+      "y": 14,
+      "width": 140,
+      "height": 28,
+      "zIndex": 60,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "text": "只读执行页",
+        "fontSize": 13,
+        "fontWeight": "600",
+        "color": "#ffffff",
+        "textAlign": "center",
+        "backgroundColor": "rgba(255, 255, 255, 0.18)",
+        "borderRadius": 14
+      }
+    },
+    {
+      "id": "drill-exec-kpi-1",
+      "type": "number-card",
+      "name": "整体完成率",
+      "x": 20,
+      "y": 70,
+      "width": 456,
+      "height": 90,
+      "zIndex": 10,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "title": "整体完成率",
+        "value": "72.4",
+        "unit": "%",
+        "precision": 1,
+        "titleColor": "#0f172a",
+        "valueColor": "#3b82f6",
+        "backgroundColor": "#ffffff",
+        "borderRadius": 12,
+        "fontSize": 36
+      },
+      "dataSource": {
+        "type": "sql",
+        "sqlConfig": {
+          "databaseId": "{{DATABASE_ID}}",
+          "query": "SELECT\n    plan_year,\n    plan_quarter,\n    plan_month,\n    total_cnt,\n    pending_normal_cnt,\n    due_cnt,\n    outside_completed_cnt,\n    incomplete_cnt,\n    on_time_cnt,\n    overdue_completed_cnt,\n    completed_total_cnt,\n    completion_rate,\n    on_time_rate,\n    overdue_completion_rate,\n    abnormal_pending_cnt,\n    overdue_incomplete_unchanged_cnt,\n    overdue_incomplete_changed_cnt\nFROM biz_ads_project_kpi_overview\nORDER BY plan_year, plan_month",
+          "queryTimeoutSeconds": 30,
+          "maxRows": 2000
+        }
+      }
+    },
+    {
+      "id": "drill-exec-kpi-2",
+      "type": "number-card",
+      "name": "里程碑达成率",
+      "x": 490,
+      "y": 70,
+      "width": 456,
+      "height": 90,
+      "zIndex": 10,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "title": "里程碑达成率",
+        "value": "68",
+        "unit": "%",
+        "precision": 0,
+        "titleColor": "#0f172a",
+        "valueColor": "#d4850a",
+        "backgroundColor": "#ffffff",
+        "borderRadius": 12,
+        "fontSize": 36
+      },
+      "dataSource": {
+        "type": "sql",
+        "sqlConfig": {
+          "databaseId": "{{DATABASE_ID}}",
+          "query": "SELECT\n    plan_year,\n    plan_quarter,\n    plan_month,\n    total_cnt,\n    pending_normal_cnt,\n    due_cnt,\n    outside_completed_cnt,\n    incomplete_cnt,\n    on_time_cnt,\n    overdue_completed_cnt,\n    completed_total_cnt,\n    completion_rate,\n    on_time_rate,\n    overdue_completion_rate,\n    abnormal_pending_cnt,\n    overdue_incomplete_unchanged_cnt,\n    overdue_incomplete_changed_cnt\nFROM biz_ads_project_kpi_overview\nORDER BY plan_year, plan_month",
+          "queryTimeoutSeconds": 30,
+          "maxRows": 2000
+        }
+      }
+    },
+    {
+      "id": "drill-exec-kpi-3",
+      "type": "number-card",
+      "name": "关键路径偏差",
+      "x": 960,
+      "y": 70,
+      "width": 456,
+      "height": 90,
+      "zIndex": 10,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "title": "关键路径偏差",
+        "value": "4.6",
+        "unit": "%",
+        "precision": 1,
+        "titleColor": "#0f172a",
+        "valueColor": "#d4850a",
+        "backgroundColor": "#ffffff",
+        "borderRadius": 12,
+        "fontSize": 36
+      },
+      "dataSource": {
+        "type": "sql",
+        "sqlConfig": {
+          "databaseId": "{{DATABASE_ID}}",
+          "query": "SELECT\n    plan_year,\n    plan_quarter,\n    plan_month,\n    total_cnt,\n    pending_normal_cnt,\n    due_cnt,\n    outside_completed_cnt,\n    incomplete_cnt,\n    on_time_cnt,\n    overdue_completed_cnt,\n    completed_total_cnt,\n    completion_rate,\n    on_time_rate,\n    overdue_completion_rate,\n    abnormal_pending_cnt,\n    overdue_incomplete_unchanged_cnt,\n    overdue_incomplete_changed_cnt\nFROM biz_ads_project_kpi_overview\nORDER BY plan_year, plan_month",
+          "queryTimeoutSeconds": 30,
+          "maxRows": 2000
+        }
+      }
+    },
+    {
+      "id": "drill-exec-kpi-4",
+      "type": "number-card",
+      "name": "延期任务数",
+      "x": 1430,
+      "y": 70,
+      "width": 470,
+      "height": 90,
+      "zIndex": 10,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "title": "延期任务数",
+        "value": "37",
+        "unit": "",
+        "precision": 0,
+        "titleColor": "#0f172a",
+        "valueColor": "#c0392b",
+        "backgroundColor": "#ffffff",
+        "borderRadius": 12,
+        "fontSize": 36
+      },
+      "dataSource": {
+        "type": "sql",
+        "sqlConfig": {
+          "databaseId": "{{DATABASE_ID}}",
+          "query": "SELECT\n    plan_year,\n    plan_quarter,\n    plan_month,\n    total_cnt,\n    pending_normal_cnt,\n    due_cnt,\n    outside_completed_cnt,\n    incomplete_cnt,\n    on_time_cnt,\n    overdue_completed_cnt,\n    completed_total_cnt,\n    completion_rate,\n    on_time_rate,\n    overdue_completion_rate,\n    abnormal_pending_cnt,\n    overdue_incomplete_unchanged_cnt,\n    overdue_incomplete_changed_cnt\nFROM biz_ads_project_kpi_overview\nORDER BY plan_year, plan_month",
+          "queryTimeoutSeconds": 30,
+          "maxRows": 2000
+        }
+      }
+    },
+    {
+      "id": "drill-exec-detail-table",
+      "type": "table",
+      "name": "关键任务与节点明细",
+      "x": 20,
+      "y": 175,
+      "width": 1145,
+      "height": 420,
+      "zIndex": 15,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "columns": [
+          {
+            "key": "name",
+            "title": "任务/节点",
+            "width": 280
+          },
+          {
+            "key": "project",
+            "title": "所属项目",
+            "width": 280
+          },
+          {
+            "key": "progress",
+            "title": "完成率",
+            "width": 200
+          },
+          {
+            "key": "risk",
+            "title": "风险等级",
+            "width": 200
+          }
+        ],
+        "headerBg": "#dbe9f6",
+        "bodyBg": "rgba(255, 255, 255, 0.98)",
+        "evenRowBg": "rgba(241, 245, 249, 0.98)",
+        "borderRadius": 12,
+        "fontSize": 13,
+        "showPagination": false
+      },
+      "dataSource": {
+        "type": "sql",
+        "sqlConfig": {
+          "databaseId": "{{DATABASE_ID}}",
+          "query": "SELECT\n    snapshot_level,\n    entity_id,\n    parent_id,\n    entity_name,\n    major_project_id,\n    major_project_name,\n    subproject_id,\n    subproject_name,\n    total_nodes,\n    completed_nodes,\n    overdue_open_nodes,\n    high_risk_nodes,\n    avg_health_score,\n    plan_start_date,\n    plan_end_date,\n    actual_end_date,\n    progress_rate,\n    sort_order,\n    node_id,\n    node_task,\n    node_type,\n    risk_level,\n    delay_days\nFROM biz_ads_major_project_tree_snapshot\nORDER BY major_project_id, sort_order",
+          "queryTimeoutSeconds": 30,
+          "maxRows": 2000
+        }
+      }
+    },
+    {
+      "id": "drill-exec-side-panel",
+      "type": "table",
+      "name": "资源负载摘要",
+      "x": 1185,
+      "y": 175,
+      "width": 715,
+      "height": 420,
+      "zIndex": 15,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "columns": [
+          {
+            "key": "dept",
+            "title": "部门",
+            "width": 200
+          },
+          {
+            "key": "total",
+            "title": "总人力",
+            "width": 100
+          },
+          {
+            "key": "active",
+            "title": "在岗",
+            "width": 100
+          },
+          {
+            "key": "overloaded",
+            "title": "超负荷",
+            "width": 100
+          },
+          {
+            "key": "idle",
+            "title": "空闲",
+            "width": 100
+          }
+        ],
+        "headerBg": "#dbe9f6",
+        "bodyBg": "rgba(255, 255, 255, 0.98)",
+        "evenRowBg": "rgba(241, 245, 249, 0.98)",
+        "borderRadius": 12,
+        "fontSize": 13,
+        "showPagination": false
+      },
+      "dataSource": {
+        "type": "sql",
+        "sqlConfig": {
+          "databaseId": "{{DATABASE_ID}}",
+          "query": "SELECT\n    major_project_id,\n    major_project_name,\n    subproject_id,\n    subproject_name,\n    week_start_date,\n    plan_iso_week,\n    total_nodes,\n    completed_nodes,\n    overdue_open_nodes,\n    high_risk_nodes,\n    milestone_nodes,\n    milestone_completed_nodes,\n    avg_health_score,\n    avg_delay_days,\n    max_delay_days,\n    completion_rate,\n    milestone_completion_rate\nFROM biz_dws_week_subproject_summary\nORDER BY plan_iso_week DESC, major_project_id, subproject_id",
+          "queryTimeoutSeconds": 30,
+          "maxRows": 2000
+        }
+      }
+    },
+    {
+      "id": "drill-exec-support-table",
+      "type": "table",
+      "name": "延期项目排行",
+      "x": 20,
+      "y": 610,
+      "width": 1880,
+      "height": 440,
+      "zIndex": 15,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "columns": [
+          {
+            "key": "name",
+            "title": "项目",
+            "width": 500
+          },
+          {
+            "key": "delay",
+            "title": "延期天数",
+            "width": 300
+          },
+          {
+            "key": "dept",
+            "title": "责任科室",
+            "width": 400
+          },
+          {
+            "key": "risk",
+            "title": "风险",
+            "width": 300
+          }
+        ],
+        "headerBg": "#dbe9f6",
+        "bodyBg": "rgba(255, 255, 255, 0.98)",
+        "evenRowBg": "rgba(241, 245, 249, 0.98)",
+        "borderRadius": 12,
+        "fontSize": 13,
+        "showPagination": false
+      },
+      "dataSource": {
+        "type": "sql",
+        "sqlConfig": {
+          "databaseId": "{{DATABASE_ID}}",
+          "query": "SELECT\n    major_project_id,\n    major_project_name,\n    dept,\n    week_start_date,\n    plan_iso_week,\n    delay_reason_category,\n    delay_reason_label,\n    delayed_node_count,\n    high_risk_node_count,\n    delayed_subproject_count\nFROM biz_ads_delay_reason_trend\nORDER BY plan_iso_week DESC, delayed_node_count DESC",
+          "queryTimeoutSeconds": 30,
+          "maxRows": 2000
+        }
+      }
+    }
+  ]
+}

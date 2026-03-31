@@ -1,0 +1,364 @@
+{
+  "schemaVersion": 2,
+  "id": "gpmc-drill-cost",
+  "name": "执行层-成本与预算控制明细 (实例)",
+  "description": "成本预算钻取页面，展示部门预算执行、成本控制摘要及月度支出趋势。",
+  "width": 1920,
+  "height": 1080,
+  "backgroundColor": "#eaf2fb",
+  "theme": "enterprise-light",
+  "globalVariables": [
+    {
+      "key": "dateFrom",
+      "label": "开始日期",
+      "type": "date"
+    },
+    {
+      "key": "dateTo",
+      "label": "结束日期",
+      "type": "date"
+    },
+    {
+      "key": "projectNo",
+      "label": "项目编号",
+      "type": "string"
+    },
+    {
+      "key": "deptId",
+      "label": "事业部/科室",
+      "type": "string"
+    }
+  ],
+  "components": [
+    {
+      "id": "drill-cost-header-bar",
+      "type": "shape",
+      "name": "drill-cost-header-bar",
+      "x": 0,
+      "y": 0,
+      "width": 1920,
+      "height": 56,
+      "zIndex": 5,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "shapeType": "rect",
+        "fillColor": "#044B8C",
+        "borderColor": "#044B8C",
+        "borderWidth": 0,
+        "radius": 0
+      }
+    },
+    {
+      "id": "drill-cost-title",
+      "type": "title",
+      "name": "执行层-成本与预算控制明细",
+      "x": 20,
+      "y": 12,
+      "width": 500,
+      "height": 32,
+      "zIndex": 60,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "text": "执行层-成本与预算控制明细",
+        "fontSize": 22,
+        "fontWeight": "700",
+        "color": "#ffffff",
+        "textAlign": "flex-start"
+      }
+    },
+    {
+      "id": "drill-cost-badge",
+      "type": "title",
+      "name": "只读执行页",
+      "x": 1760,
+      "y": 14,
+      "width": 140,
+      "height": 28,
+      "zIndex": 60,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "text": "只读执行页",
+        "fontSize": 13,
+        "fontWeight": "600",
+        "color": "#ffffff",
+        "textAlign": "center",
+        "backgroundColor": "rgba(255, 255, 255, 0.18)",
+        "borderRadius": 14
+      }
+    },
+    {
+      "id": "drill-cost-kpi-1",
+      "type": "number-card",
+      "name": "预算总额",
+      "x": 20,
+      "y": 70,
+      "width": 456,
+      "height": 90,
+      "zIndex": 10,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "title": "预算总额",
+        "value": "36.8",
+        "unit": "亿",
+        "precision": 1,
+        "titleColor": "#0f172a",
+        "valueColor": "#3b82f6",
+        "backgroundColor": "#ffffff",
+        "borderRadius": 12,
+        "fontSize": 36
+      },
+      "dataSource": {
+        "type": "sql",
+        "sqlConfig": {
+          "databaseId": "{{DATABASE_ID}}",
+          "query": "SELECT\n    period_year,\n    period_month,\n    budget_total,\n    actual_total,\n    deviation_total,\n    execution_rate,\n    deviation_rate,\n    annual_budget_total,\n    annual_actual_total,\n    annual_deviation_total,\n    annual_execution_rate,\n    annual_deviation_rate\nFROM biz_ads_cost_kpi\nORDER BY period_year, period_month",
+          "queryTimeoutSeconds": 30,
+          "maxRows": 2000
+        }
+      }
+    },
+    {
+      "id": "drill-cost-kpi-2",
+      "type": "number-card",
+      "name": "累计执行",
+      "x": 490,
+      "y": 70,
+      "width": 456,
+      "height": 90,
+      "zIndex": 10,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "title": "累计执行",
+        "value": "26.1",
+        "unit": "亿",
+        "precision": 1,
+        "titleColor": "#0f172a",
+        "valueColor": "#3b82f6",
+        "backgroundColor": "#ffffff",
+        "borderRadius": 12,
+        "fontSize": 36
+      },
+      "dataSource": {
+        "type": "sql",
+        "sqlConfig": {
+          "databaseId": "{{DATABASE_ID}}",
+          "query": "SELECT\n    period_year,\n    period_month,\n    budget_total,\n    actual_total,\n    deviation_total,\n    execution_rate,\n    deviation_rate,\n    annual_budget_total,\n    annual_actual_total,\n    annual_deviation_total,\n    annual_execution_rate,\n    annual_deviation_rate\nFROM biz_ads_cost_kpi\nORDER BY period_year, period_month",
+          "queryTimeoutSeconds": 30,
+          "maxRows": 2000
+        }
+      }
+    },
+    {
+      "id": "drill-cost-kpi-3",
+      "type": "number-card",
+      "name": "预算偏差",
+      "x": 960,
+      "y": 70,
+      "width": 456,
+      "height": 90,
+      "zIndex": 10,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "title": "预算偏差",
+        "value": "+0.72",
+        "unit": "亿",
+        "precision": 1,
+        "titleColor": "#0f172a",
+        "valueColor": "#c0392b",
+        "backgroundColor": "#ffffff",
+        "borderRadius": 12,
+        "fontSize": 36
+      },
+      "dataSource": {
+        "type": "sql",
+        "sqlConfig": {
+          "databaseId": "{{DATABASE_ID}}",
+          "query": "SELECT\n    period_year,\n    period_month,\n    budget_total,\n    actual_total,\n    deviation_total,\n    execution_rate,\n    deviation_rate,\n    annual_budget_total,\n    annual_actual_total,\n    annual_deviation_total,\n    annual_execution_rate,\n    annual_deviation_rate\nFROM biz_ads_cost_kpi\nORDER BY period_year, period_month",
+          "queryTimeoutSeconds": 30,
+          "maxRows": 2000
+        }
+      }
+    },
+    {
+      "id": "drill-cost-kpi-4",
+      "type": "number-card",
+      "name": "燃尽率",
+      "x": 1430,
+      "y": 70,
+      "width": 470,
+      "height": 90,
+      "zIndex": 10,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "title": "燃尽率",
+        "value": "71",
+        "unit": "%",
+        "precision": 0,
+        "titleColor": "#0f172a",
+        "valueColor": "#d4850a",
+        "backgroundColor": "#ffffff",
+        "borderRadius": 12,
+        "fontSize": 36
+      },
+      "dataSource": {
+        "type": "sql",
+        "sqlConfig": {
+          "databaseId": "{{DATABASE_ID}}",
+          "query": "SELECT\n    period_year,\n    period_month,\n    budget_total,\n    actual_total,\n    deviation_total,\n    execution_rate,\n    deviation_rate,\n    annual_budget_total,\n    annual_actual_total,\n    annual_deviation_total,\n    annual_execution_rate,\n    annual_deviation_rate\nFROM biz_ads_cost_kpi\nORDER BY period_year, period_month",
+          "queryTimeoutSeconds": 30,
+          "maxRows": 2000
+        }
+      }
+    },
+    {
+      "id": "drill-cost-detail-table",
+      "type": "table",
+      "name": "部门预算执行明细",
+      "x": 20,
+      "y": 175,
+      "width": 1145,
+      "height": 420,
+      "zIndex": 15,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "columns": [
+          {
+            "key": "dept",
+            "title": "责任科室",
+            "width": 280
+          },
+          {
+            "key": "budget",
+            "title": "预算",
+            "width": 200
+          },
+          {
+            "key": "actual",
+            "title": "实际",
+            "width": 200
+          },
+          {
+            "key": "rate",
+            "title": "执行率",
+            "width": 200
+          }
+        ],
+        "headerBg": "#dbe9f6",
+        "bodyBg": "rgba(255, 255, 255, 0.98)",
+        "evenRowBg": "rgba(241, 245, 249, 0.98)",
+        "borderRadius": 12,
+        "fontSize": 13,
+        "showPagination": false
+      },
+      "dataSource": {
+        "type": "sql",
+        "sqlConfig": {
+          "databaseId": "{{DATABASE_ID}}",
+          "query": "SELECT\n    period_year,\n    period_month,\n    project_no,\n    dept,\n    budget_total,\n    actual_total,\n    deviation_total,\n    execution_rate,\n    deviation_rate,\n    project_cnt\nFROM biz_dws_cost_period_summary\nORDER BY period_year, period_month, project_no",
+          "queryTimeoutSeconds": 30,
+          "maxRows": 2000
+        }
+      }
+    },
+    {
+      "id": "drill-cost-side-panel",
+      "type": "table",
+      "name": "成本控制摘要",
+      "x": 1185,
+      "y": 175,
+      "width": 715,
+      "height": 420,
+      "zIndex": 15,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "columns": [
+          {
+            "key": "label",
+            "title": "指标",
+            "width": 350
+          },
+          {
+            "key": "value",
+            "title": "数值",
+            "width": 300
+          }
+        ],
+        "headerBg": "#dbe9f6",
+        "bodyBg": "rgba(255, 255, 255, 0.98)",
+        "evenRowBg": "rgba(241, 245, 249, 0.98)",
+        "borderRadius": 12,
+        "fontSize": 13,
+        "showPagination": false
+      },
+      "dataSource": {
+        "type": "sql",
+        "sqlConfig": {
+          "databaseId": "{{DATABASE_ID}}",
+          "query": "SELECT\n    period_year,\n    period_month,\n    budget_total,\n    actual_total,\n    deviation_total,\n    execution_rate,\n    deviation_rate,\n    annual_budget_total,\n    annual_actual_total,\n    annual_deviation_total,\n    annual_execution_rate,\n    annual_deviation_rate\nFROM biz_ads_cost_kpi\nORDER BY period_year, period_month",
+          "queryTimeoutSeconds": 30,
+          "maxRows": 2000
+        }
+      }
+    },
+    {
+      "id": "drill-cost-support-table",
+      "type": "table",
+      "name": "月度支出趋势",
+      "x": 20,
+      "y": 610,
+      "width": 1880,
+      "height": 440,
+      "zIndex": 15,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "columns": [
+          {
+            "key": "month",
+            "title": "周期",
+            "width": 300
+          },
+          {
+            "key": "plan",
+            "title": "计划支出",
+            "width": 400
+          },
+          {
+            "key": "actual",
+            "title": "实际支出",
+            "width": 400
+          },
+          {
+            "key": "deviation",
+            "title": "偏差",
+            "width": 400
+          }
+        ],
+        "headerBg": "#dbe9f6",
+        "bodyBg": "rgba(255, 255, 255, 0.98)",
+        "evenRowBg": "rgba(241, 245, 249, 0.98)",
+        "borderRadius": 12,
+        "fontSize": 13,
+        "showPagination": false
+      },
+      "dataSource": {
+        "type": "sql",
+        "sqlConfig": {
+          "databaseId": "{{DATABASE_ID}}",
+          "query": "SELECT\n    period_year,\n    period_month,\n    budget_total,\n    actual_total,\n    deviation_total,\n    execution_rate,\n    deviation_rate,\n    annual_budget_total,\n    annual_actual_total,\n    annual_deviation_total,\n    annual_execution_rate,\n    annual_deviation_rate\nFROM biz_ads_cost_kpi\nORDER BY period_year, period_month",
+          "queryTimeoutSeconds": 30,
+          "maxRows": 2000
+        }
+      }
+    }
+  ]
+}
