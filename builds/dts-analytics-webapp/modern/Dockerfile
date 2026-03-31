@@ -40,6 +40,9 @@ RUN set -eux; \
     pnpm install --no-frozen-lockfile --ignore-scripts; \
     unset npm_config_registry npm_config_proxy npm_config_https_proxy http_proxy https_proxy
 
+# Copy shared session-core package (referenced by tsconfig paths ../../dts-session-core/src/*)
+COPY source/dts-session-core/ /dts-session-core/
+
 COPY source/dts-analytics-webapp/modern/ ./
 RUN pnpm "${WEBAPP_BUILD_CMD}"
 

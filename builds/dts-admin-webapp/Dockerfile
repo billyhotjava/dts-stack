@@ -50,6 +50,9 @@ RUN set -eux; \
     rm -rf /root/.pnpm-store/*tmp* 2>/dev/null || true; \
     unset npm_config_registry npm_config_proxy npm_config_https_proxy http_proxy https_proxy
 
+# Copy shared session-core package (sibling directory referenced by tsconfig paths)
+COPY source/dts-session-core/ /dts-session-core/
+
 # Copy the remaining project files and build the production bundle
 COPY source/dts-admin-webapp/ ./
 COPY builds/dts-admin-webapp/scripts /builds/dts-admin-webapp/scripts
