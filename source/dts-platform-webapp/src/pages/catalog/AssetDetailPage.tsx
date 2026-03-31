@@ -332,8 +332,8 @@ export default function AssetDetailPage() {
 	useEffect(() => {
 		const refresh = () => {
 			if (detailRow?.id) {
-				void loadSecurityLinkage(detailRow.id, true);
-				void loadGovernanceHealth(detailRow.id, true);
+				void loadSecurityLinkage(detailRow.id);
+				void loadGovernanceHealth(detailRow.id);
 			}
 			void loadDatasets(pageState.page, pageState.size);
 		};
