@@ -31,6 +31,15 @@ function isTokenExpired(token?: string): boolean {
 	return Date.now() > exp - 10_000;
 }
 
+/** Capture the current route path for use as a post-login redirect parameter.
+ *  In hash-router mode window.location.pathname is always "/", so we read from the hash. */
+function currentRouteForRedirect(): string {
+	if (window.location.hash) {
+		return window.location.hash.replace(/^#/, "").split("?")[0] || "/";
+	}
+	return window.location.pathname + window.location.search;
+}
+
 /** Check whether the session has been idle beyond the configured timeout. */
 function isSessionIdle(): boolean {
 	try {
@@ -65,7 +74,8 @@ export default function LoginAuthGuard({ children }: Props) {
             if (accessToken) {
                 useUserStore.getState().actions.clearUserInfoAndToken();
             }
-            router.replace(LOGIN_ROUTE);
+            const returnUrl = encodeURIComponent(currentRouteForRedirect());
+            router.replace(`${LOGIN_ROUTE}?redirect=${returnUrl}`);
             return;
         }
         const expandSynonyms = (list: string[]): Set<string> => {
@@ -106,7 +116,8 @@ export default function LoginAuthGuard({ children }: Props) {
         const timer = window.setInterval(() => {
             if (isTokenExpired(accessToken) || isSessionIdle()) {
                 useUserStore.getState().actions.clearUserInfoAndToken();
-                window.location.replace(resolveLoginHref());
+                const returnUrl = encodeURIComponent(currentRouteForRedirect());
+                window.location.replace(`${resolveLoginHref()}?redirect=${returnUrl}`);
             }
         }, 30_000);
         return () => window.clearInterval(timer);
