@@ -14,12 +14,7 @@ import { useRedirectIntentStore } from './session-auth';
  *   3. Navigates to /auth/login?redirect=<returnPath> via React Router (soft, no reload)
  *   4. Clears the intent so it doesn't re-trigger
  */
-let _srg_renders = 0;
 export default function SessionRedirectGuard() {
-	_srg_renders += 1;
-	if (_srg_renders % 50 === 0 || _srg_renders <= 3) {
-		console.warn('[SessionRedirectGuard] render #', _srg_renders);
-	}
 	const intent = useRedirectIntentStore((s) => s.intent);
 	const clearIntent = useRedirectIntentStore((s) => s.clearIntent);
 	const navigate = useNavigate();

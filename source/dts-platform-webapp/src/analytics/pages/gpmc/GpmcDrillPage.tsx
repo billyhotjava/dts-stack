@@ -1,4 +1,3 @@
-import { useRef } from "react";
 import { useNavigate, useParams } from "react-router";
 import GpmcApp, {
 	getGpmcScreenPath,
@@ -32,11 +31,6 @@ const DRILL_META: Record<GpmcBoardScreenId, { title: string; description: string
 };
 
 export default function GpmcDrillPage() {
-	const renderCount = useRef(0);
-	renderCount.current += 1;
-	if (renderCount.current % 50 === 0 || renderCount.current <= 5) {
-		console.warn('[GPMC-DRILL] render #', renderCount.current);
-	}
 	const navigate = useNavigate();
 	const { domain } = useParams();
 	const screen = domain && isGpmcBoardScreenId(domain) ? domain : "execution";

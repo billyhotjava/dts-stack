@@ -630,15 +630,29 @@ export function useCardDataSource(
         }
     }, [cacheKey, cardId, contextKey, dataSource, databaseId, paramsKey, queryTimeoutMs, sourceType]);
 
+    // Pause polling when the tab is hidden (e.g. user opened drill page in a new tab).
+    // Without this, background tabs keep firing API requests → 401 refresh races →
+    // ERR_INSUFFICIENT_RESOURCES storm that exhausts CPU and memory.
+    const [tabVisible, setTabVisible] = useState(() => typeof document !== 'undefined' ? document.visibilityState === 'visible' : true);
+
+    useEffect(() => {
+        const onVisibility = () => setTabVisible(document.visibilityState === 'visible');
+        document.addEventListener('visibilitychange', onVisibility);
+        return () => document.removeEventListener('visibilitychange', onVisibility);
+    }, []);
+
     useEffect(() => {
         if (intervalRef.current) {
             clearInterval(intervalRef.current);
             intervalRef.current = null;
         }
 
-        fetchData();
+        // Only fetch when the tab is visible
+        if (tabVisible) {
+            fetchData();
+        }
 
-        if (refreshInterval && refreshInterval > 0 && sourceType !== 'static') {
+        if (tabVisible && refreshInterval && refreshInterval > 0 && sourceType !== 'static') {
             intervalRef.current = setInterval(() => {
                 fetchData();
             }, refreshInterval * 1000);
@@ -650,7 +664,7 @@ export function useCardDataSource(
                 intervalRef.current = null;
             }
         };
-    }, [dataSource, fetchData, refreshInterval, sourceType]);
+    }, [dataSource, fetchData, refreshInterval, sourceType, tabVisible]);
 
     return { data, loading, error };
 }

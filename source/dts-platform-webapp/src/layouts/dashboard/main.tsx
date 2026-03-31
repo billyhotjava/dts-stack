@@ -131,12 +131,7 @@ const isPathInMenuTree = (menuPaths: Set<string>, pathname: string): boolean => 
 	return false;
 };
 
-let _main_renders = 0;
 const Main = () => {
-	_main_renders += 1;
-	if (_main_renders % 50 === 0 || _main_renders <= 3) {
-		console.warn('[Main] render #', _main_renders);
-	}
 	const { themeStretch } = useSettings();
 	const menus = useMenuStore((s) => s.menus || []);
 
