@@ -59,6 +59,7 @@ class ScreenPermissionServiceTest {
         assertThat(snap.canRead()).isTrue();
         assertThat(snap.canEdit()).isTrue();
         assertThat(snap.isOwner()).isTrue();
+        Mockito.verifyNoInteractions(repo);
     }
 
     @Test
@@ -66,6 +67,7 @@ class ScreenPermissionServiceTest {
         AnalyticsUser su = user(1L, true);
         List<Long> ids = service.listAccessibleScreenIds(su, List.of());
         assertThat(service.isAllAccessible(ids)).isTrue();
+        Mockito.verifyNoInteractions(repo);
     }
 
     @Test
