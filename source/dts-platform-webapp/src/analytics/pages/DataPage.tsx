@@ -280,7 +280,7 @@ export default function DataPage() {
 				render: (v: string | undefined) => v ?? "-",
 			},
 			{
-				title: "Schema",
+				title: "模式",
 				dataIndex: "schema",
 				key: "schema",
 				width: 140,
