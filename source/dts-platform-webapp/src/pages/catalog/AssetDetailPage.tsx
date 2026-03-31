@@ -301,7 +301,7 @@ export default function AssetDetailPage() {
 		}
 	};
 
-	const loadSecurityLinkage = async (datasetId?: string, silent = false) => {
+	const loadSecurityLinkage = async (datasetId?: string) => {
 		if (!datasetId) {
 			setSecurityLinkage(null);
 			return;
@@ -315,7 +315,7 @@ export default function AssetDetailPage() {
 		}
 	};
 
-	const loadGovernanceHealth = async (datasetId?: string, silent = false) => {
+	const loadGovernanceHealth = async (datasetId?: string) => {
 		if (!datasetId) {
 			setGovernanceHealth(null);
 			return;
