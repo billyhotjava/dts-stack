@@ -1179,15 +1179,18 @@ public class ScreenResource {
             return ResponseEntity.badRequest().body(Map.of("error", "granteeType must be USER or ROLE"));
         }
         if (!Set.of("VIEWER", "MANAGER", "READ", "EDIT").contains(permission.toUpperCase())) {
-            return ResponseEntity.badRequest().body(Map.of("error", "permission must be VIEWER or MANAGER"));
+            return ResponseEntity.badRequest().body(Map.of("error", "permission must be VIEWER or MANAGER (READ/EDIT accepted for backward compatibility)"));
         }
 
         // Translate legacy permission values to the new local table vocabulary
         String resolvedPermission = switch (permission.toUpperCase()) {
             case "READ" -> "VIEWER";
             case "EDIT" -> "MANAGER";
-            default -> permission.toUpperCase(); // "VIEWER", "MANAGER" pass through
+            default -> permission.toUpperCase();
         };
+        if (!Set.of("VIEWER", "MANAGER").contains(resolvedPermission)) {
+            return ResponseEntity.badRequest().body(Map.of("error", "permission must be VIEWER or MANAGER"));
+        }
         try {
             Long grantedById = user.orElseThrow().getId();
             AnalyticsScreenAccess grant = screenOwnershipService.createGrant(
