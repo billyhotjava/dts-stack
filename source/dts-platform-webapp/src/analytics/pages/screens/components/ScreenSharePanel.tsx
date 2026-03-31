@@ -161,7 +161,7 @@ export function ScreenSharePanel({ open, screenId, onClose, isOwner = false }: S
 		setSaving(true);
 		setError(null);
 		try {
-			const backendPerm = addPerm === 'MANAGE' ? 'EDIT' : 'READ';
+			const backendPerm = addPerm === 'MANAGE' ? 'MANAGER' : 'VIEWER';
 			for (const uid of selectedUserIds) {
 				await analyticsApi.addScreenGrant(screenId, {
 					granteeType: 'USER',
@@ -407,9 +407,7 @@ export function ScreenSharePanel({ open, screenId, onClose, isOwner = false }: S
 							marginBottom: 8,
 						}}>
 							{filteredResults.map((user) => {
-								const email = user.email || '';
-								const at = email.indexOf('@');
-								const uid = at > 0 ? email.substring(0, at) : String(user.id);
+								const uid = String(user.id);
 								const checked = selectedUserIds.has(uid);
 								return (
 									<div

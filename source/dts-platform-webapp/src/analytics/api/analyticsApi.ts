@@ -2148,7 +2148,7 @@ export const analyticsApi = {
 			screenId: id,
 			subjectType: (g.granteeType === "ROLE" ? "ROLE" : "USER") as ScreenAclEntry["subjectType"],
 			subjectId: g.granteeId || "",
-			perm: (g.permission === "EDIT" ? "MANAGE" : "READ") as ScreenAclEntry["perm"],
+			perm: (g.permission === "OWNER" ? "OWNER" : g.permission === "MANAGER" || g.permission === "EDIT" ? "MANAGE" : "READ") as ScreenAclEntry["perm"],
 			createdAt: g.createdDate,
 			updatedAt: g.lastModifiedDate,
 		}));
