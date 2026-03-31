@@ -59,6 +59,10 @@ public class ScreenSpecValidator {
             "filter-select",
             "filter-date-range",
             "richtext",
+            // 企业组件
+            "section-panel",
+            "divider",
+            "stat-card",
             // 3D 可视化 (echarts-gl)
             "globe-chart",
             "bar3d-chart",

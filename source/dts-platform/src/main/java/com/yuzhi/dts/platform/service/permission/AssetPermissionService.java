@@ -50,6 +50,13 @@ public class AssetPermissionService {
         GLOBAL_ACCESS_ROLES.addAll(INST_READ_ROLES);
     }
 
+    /**
+     * Asset types that require explicit grants only.
+     * Role-based implicit access (INST/DEPT roles) is bypassed for these types;
+     * only superuser roles and explicit grants are honoured.
+     */
+    private static final Set<String> EXPLICIT_GRANT_ONLY_TYPES = Set.of("SCREEN");
+
     private static final Map<String, Integer> PERMISSION_RANK = Map.of(
         "MANAGE", 3,
         "EDIT", 2,
@@ -65,33 +72,36 @@ public class AssetPermissionService {
     }
 
     public PermissionResult check(String username, List<String> roles, String deptCode, String assetType, String assetId) {
-        // 1. Superuser roles → MANAGE all
+        // 1. Superuser roles → MANAGE all (applies to every asset type)
         if (hasAny(roles, SUPERUSER_ROLES)) {
             return PermissionResult.allowed("MANAGE", "superuser");
         }
 
-        // 2. Institute leader → READ all
-        if (hasAny(roles, INST_READ_ROLES)) {
-            // Also check if INST_DATA_OWNER for MANAGE
+        boolean explicitOnly = EXPLICIT_GRANT_ONLY_TYPES.contains(assetType);
+
+        if (!explicitOnly) {
+            // 2. Institute leader → READ all
+            if (hasAny(roles, INST_READ_ROLES)) {
+                if (hasAny(roles, INST_MANAGE_ROLES)) {
+                    return PermissionResult.allowed("MANAGE", "inst_manage");
+                }
+                return PermissionResult.allowed("READ", "inst_read");
+            }
+
+            // 3. Institute data owner → MANAGE all
             if (hasAny(roles, INST_MANAGE_ROLES)) {
                 return PermissionResult.allowed("MANAGE", "inst_manage");
             }
-            return PermissionResult.allowed("READ", "inst_read");
-        }
 
-        // 3. Institute data owner → MANAGE all
-        if (hasAny(roles, INST_MANAGE_ROLES)) {
-            return PermissionResult.allowed("MANAGE", "inst_manage");
-        }
-
-        // 4. Department-level: check ownership
-        Optional<AssetOwnership> ownership = ownershipRepository.findByAssetTypeAndAssetId(assetType, assetId);
-        if (ownership.isPresent() && deptCode != null && deptCode.equalsIgnoreCase(ownership.orElseThrow().getOwnerDeptCode())) {
-            if (hasAny(roles, DEPT_MANAGE_ROLES)) {
-                return PermissionResult.allowed("MANAGE", "dept_ownership");
-            }
-            if (hasAny(roles, DEPT_READ_ROLES)) {
-                return PermissionResult.allowed("READ", "dept_ownership");
+            // 4. Department-level: check ownership
+            Optional<AssetOwnership> ownership = ownershipRepository.findByAssetTypeAndAssetId(assetType, assetId);
+            if (ownership.isPresent() && deptCode != null && deptCode.equalsIgnoreCase(ownership.orElseThrow().getOwnerDeptCode())) {
+                if (hasAny(roles, DEPT_MANAGE_ROLES)) {
+                    return PermissionResult.allowed("MANAGE", "dept_ownership");
+                }
+                if (hasAny(roles, DEPT_READ_ROLES)) {
+                    return PermissionResult.allowed("READ", "dept_ownership");
+                }
             }
         }
 
@@ -115,27 +125,15 @@ public class AssetPermissionService {
 
     public Map<String, PermissionResult> batchCheck(String username, List<String> roles, String deptCode,
                                                      List<AssetRef> assets) {
-        // Short-circuit for global roles
+        // Short-circuit for superuser roles (applies to every asset type)
         if (hasAny(roles, SUPERUSER_ROLES)) {
             return assets.stream().collect(Collectors.toMap(
                 a -> a.type() + ":" + a.id(),
                 a -> PermissionResult.allowed("MANAGE", "superuser")
             ));
         }
-        if (hasAny(roles, INST_MANAGE_ROLES)) {
-            return assets.stream().collect(Collectors.toMap(
-                a -> a.type() + ":" + a.id(),
-                a -> PermissionResult.allowed("MANAGE", "inst_manage")
-            ));
-        }
-        if (hasAny(roles, INST_READ_ROLES)) {
-            return assets.stream().collect(Collectors.toMap(
-                a -> a.type() + ":" + a.id(),
-                a -> PermissionResult.allowed("READ", "inst_read")
-            ));
-        }
 
-        // Per-asset check for non-global roles
+        // Per-asset check — delegates to check() which honours EXPLICIT_GRANT_ONLY_TYPES
         Map<String, PermissionResult> results = new LinkedHashMap<>();
         for (AssetRef asset : assets) {
             PermissionResult result = check(username, roles, deptCode, asset.type(), asset.id());
@@ -146,16 +144,22 @@ public class AssetPermissionService {
 
     public AccessibleAssetsResult listAccessibleAssetIds(String username, List<String> roles, String deptCode,
                                                           String assetType, Pageable pageable) {
-        // Global roles see everything
-        if (hasAny(roles, GLOBAL_ACCESS_ROLES)) {
+        boolean explicitOnly = EXPLICIT_GRANT_ONLY_TYPES.contains(assetType);
+
+        // Global roles see everything — but not for explicit-only asset types
+        if (!explicitOnly && hasAny(roles, GLOBAL_ACCESS_ROLES)) {
+            return AccessibleAssetsResult.all();
+        }
+        // Superuser always sees everything, regardless of asset type
+        if (hasAny(roles, SUPERUSER_ROLES)) {
             return AccessibleAssetsResult.all();
         }
 
         // Collect IDs from department ownership + explicit grants
         Set<String> assetIds = new LinkedHashSet<>();
 
-        // Department-level roles: add owned assets
-        if (deptCode != null && hasAny(roles, Stream.concat(DEPT_MANAGE_ROLES.stream(), DEPT_READ_ROLES.stream())
+        // Department-level roles: add owned assets (skipped for explicit-only types)
+        if (!explicitOnly && deptCode != null && hasAny(roles, Stream.concat(DEPT_MANAGE_ROLES.stream(), DEPT_READ_ROLES.stream())
                 .collect(Collectors.toSet()))) {
             List<String> deptAssets = ownershipRepository.findAssetIdsByTypeAndDeptCode(assetType, deptCode);
             assetIds.addAll(deptAssets);

@@ -1196,12 +1196,19 @@ public class ScreenResource {
 
         try {
             String grantedBy = extractUsername(user.orElseThrow());
+            // When granteeType is USER, the frontend sends the analytics numeric ID (e.g. "42").
+            // The platform grant system uses platform usernames ("test230916") for USER grants.
+            // Translate: if granteeId looks like a numeric analytics ID, resolve the platform username.
+            String resolvedGranteeId = granteeId;
+            if ("USER".equalsIgnoreCase(granteeType)) {
+                resolvedGranteeId = resolveGranteeUsername(granteeId);
+            }
             Map<String, Object> grant = screenOwnershipService.createGrant(
-                screen.getId(), granteeType.toUpperCase(), granteeId, permission.toUpperCase(), grantedBy);
+                screen.getId(), granteeType.toUpperCase(), resolvedGranteeId, permission.toUpperCase(), grantedBy);
 
             screenAuditService.log(screen.getId(), user.orElseThrow().getId(), "grant.add", null, grant, requestIdFrom(request));
             // Invalidate permission cache for the grantee so they see the screen immediately
-            screenPermissionService.invalidateCacheForUser(granteeId);
+            screenPermissionService.invalidateCacheForUser(resolvedGranteeId);
             return ResponseEntity.ok(grant);
         } catch (Exception ex) {
             return ResponseEntity.status(503).body(Map.of("error", "Failed to create grant: " + ex.getMessage()));
@@ -2321,6 +2328,34 @@ public class ScreenResource {
                 "total", screens.size(),
                 "cacheInvalidated", invalidatedUsers.size()
         ));
+    }
+
+    /**
+     * Resolve a USER grantee identifier to a platform username.
+     *
+     * <p>The frontend's user search returns analytics numeric IDs (e.g. "42"), but the
+     * platform grant system expects Keycloak usernames (e.g. "test230916").  If the
+     * supplied id is a numeric analytics ID, look up the user and return their
+     * {@code platform_username} (falling back to email local-part for legacy records).
+     * If the id is already a non-numeric string, return it as-is.
+     */
+    private String resolveGranteeUsername(String granteeId) {
+        if (granteeId == null || granteeId.isBlank()) {
+            return granteeId;
+        }
+        try {
+            long analyticsId = Long.parseLong(granteeId.trim());
+            AnalyticsUser grantee = userRepository.findById(analyticsId).orElse(null);
+            if (grantee != null) {
+                String username = extractUsername(grantee);
+                if (!username.isBlank()) {
+                    return username;
+                }
+            }
+        } catch (NumberFormatException ignored) {
+            // granteeId is not numeric — already a username or role name, use as-is
+        }
+        return granteeId;
     }
 
     private String extractUsername(AnalyticsUser user) {
