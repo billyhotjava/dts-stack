@@ -9,6 +9,8 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicLong;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.boot.web.client.RestTemplateBuilder;
@@ -37,9 +39,9 @@ public class AirflowClient {
     private final AirflowProperties properties;
     private final IngestionSettingsService settingsService;
 
-    // Simple circuit breaker state (volatile for visibility across threads)
-    private volatile int consecutiveFailures = 0;
-    private volatile long circuitOpenUntil = 0L;
+    // Simple circuit breaker state (atomic for thread safety)
+    private final AtomicInteger consecutiveFailures = new AtomicInteger(0);
+    private final AtomicLong circuitOpenUntil = new AtomicLong(0L);
 
     public AirflowClient(RestTemplateBuilder builder, AirflowProperties properties, IngestionSettingsService settingsService) {
         this.restTemplate = builder.setConnectTimeout(Duration.ofSeconds(10)).setReadTimeout(Duration.ofSeconds(30)).build();
@@ -48,28 +50,29 @@ public class AirflowClient {
     }
 
     private boolean isCircuitOpen() {
-        if (consecutiveFailures < CIRCUIT_BREAKER_THRESHOLD) {
+        int failures = consecutiveFailures.get();
+        if (failures < CIRCUIT_BREAKER_THRESHOLD) {
             return false;
         }
-        if (System.currentTimeMillis() >= circuitOpenUntil) {
+        if (System.currentTimeMillis() >= circuitOpenUntil.get()) {
             // Cooldown expired — allow one probe request (half-open)
-            consecutiveFailures = CIRCUIT_BREAKER_THRESHOLD - 1;
+            consecutiveFailures.compareAndSet(failures, CIRCUIT_BREAKER_THRESHOLD - 1);
             return false;
         }
         return true;
     }
 
     private void recordSuccess() {
-        consecutiveFailures = 0;
-        circuitOpenUntil = 0L;
+        consecutiveFailures.set(0);
+        circuitOpenUntil.set(0L);
     }
 
     private void recordFailure() {
-        consecutiveFailures++;
-        if (consecutiveFailures >= CIRCUIT_BREAKER_THRESHOLD) {
-            circuitOpenUntil = System.currentTimeMillis() + CIRCUIT_BREAKER_COOLDOWN.toMillis();
+        int current = consecutiveFailures.incrementAndGet();
+        if (current >= CIRCUIT_BREAKER_THRESHOLD) {
+            circuitOpenUntil.set(System.currentTimeMillis() + CIRCUIT_BREAKER_COOLDOWN.toMillis());
             LOG.warn("[airflow-circuit] circuit OPEN — {} consecutive failures, cooling down for {}s",
-                consecutiveFailures, CIRCUIT_BREAKER_COOLDOWN.toSeconds());
+                current, CIRCUIT_BREAKER_COOLDOWN.toSeconds());
         }
     }
 

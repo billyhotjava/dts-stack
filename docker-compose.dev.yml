@@ -808,19 +808,7 @@ services:
     image: ${IMAGE_AIRFLOW}
     container_name: dts-airflow-init
     entrypoint: /bin/bash
-    command:
-      - -c
-      - |
-        airflow db migrate
-        if airflow --help 2>/dev/null | grep -q "users"; then
-          airflow users create \
-            --username "${AIRFLOW_ADMIN_USERNAME}" \
-            --password "${AIRFLOW_ADMIN_PASSWORD}" \
-            --firstname "${AIRFLOW_ADMIN_FIRSTNAME}" \
-            --lastname "${AIRFLOW_ADMIN_LASTNAME}" \
-            --role Admin \
-            --email "${AIRFLOW_ADMIN_EMAIL}" || true
-        fi
+    command: ["/opt/airflow/init/init.sh"]
     environment:
       TZ: ${TZ:-Asia/Shanghai}
       AIRFLOW__CORE__EXECUTOR: LocalExecutor
@@ -856,6 +844,7 @@ services:
       dts-pg:
         condition: service_healthy
     volumes:
+      - ./services/dts-airflow/init.sh:/opt/airflow/init/init.sh:ro
       - ./services/dts-airflow/dags:/opt/airflow/dags
       - ./logs/airflow:/opt/airflow/logs
       - ./services/dts-airflow/plugins:/opt/airflow/plugins

@@ -48,6 +48,7 @@ import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.Executor;
 import java.util.Collection;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
@@ -89,6 +90,7 @@ public class IngestionTaskService {
     private final com.yuzhi.dts.ingestion.service.etl.IngestionRetryService retryService;
     private final DagPreheatService dagPreheatService;
     private final TransactionTemplate txTemplate;
+    private final Executor ingestionTaskExecutor;
 
     public IngestionTaskService(
         IngestionTaskRepository taskRepository,
@@ -106,7 +108,8 @@ public class IngestionTaskService {
         IngestionTaskChangeLogService changeLogService,
         @org.springframework.context.annotation.Lazy com.yuzhi.dts.ingestion.service.etl.IngestionRetryService retryService,
         DagPreheatService dagPreheatService,
-        PlatformTransactionManager transactionManager
+        PlatformTransactionManager transactionManager,
+        @org.springframework.beans.factory.annotation.Qualifier("ingestionTaskExecutor") Executor ingestionTaskExecutor
     ) {
         this.taskRepository = taskRepository;
         this.executionRepository = executionRepository;
@@ -124,6 +127,7 @@ public class IngestionTaskService {
         this.retryService = retryService;
         this.dagPreheatService = dagPreheatService;
         this.txTemplate = new TransactionTemplate(transactionManager);
+        this.ingestionTaskExecutor = ingestionTaskExecutor;
     }
 
     /**
@@ -459,7 +463,7 @@ public class IngestionTaskService {
                     } catch (Exception ex) {
                         log.error("Async trigger phase failed for task {} execution {}: {}", finalTaskId, executionId, ex.getMessage(), ex);
                     }
-                }, java.util.concurrent.Executors.newVirtualThreadPerTaskExecutor());
+                }, ingestionTaskExecutor);
             }
         });
 
@@ -633,20 +637,22 @@ public class IngestionTaskService {
     public CompletableFuture<Void> executeAsync(Long taskId) {
         try {
             execute(taskId);
+            return CompletableFuture.completedFuture(null);
         } catch (Exception ex) {
             log.error("Async execution failed for task {}", taskId, ex);
+            return CompletableFuture.failedFuture(ex);
         }
-        return CompletableFuture.completedFuture(null);
     }
 
     @Async("ingestionTaskExecutor")
     public CompletableFuture<Void> retryExecutionAsync(Long taskId, Long executionId, String retryMode) {
         try {
             retryExecution(taskId, executionId, retryMode);
+            return CompletableFuture.completedFuture(null);
         } catch (Exception ex) {
             log.error("Async retry failed for task {} execution {}: {}", taskId, executionId, ex.getMessage(), ex);
+            return CompletableFuture.failedFuture(ex);
         }
-        return CompletableFuture.completedFuture(null);
     }
 
     public IngestionExecutionDTO retryExecution(Long taskId, Long executionId, String retryMode) {
@@ -1500,13 +1506,18 @@ public class IngestionTaskService {
     }
 
     private String evaluateGovernanceBlock(IngestionTask task, GovernancePolicy policy, Long excludeExecutionId) {
-        List<IngestionExecution> inProgressExecutions = listInProgressExecutions();
-        long taskInProgress = countInProgressByTask(task.getId(), excludeExecutionId, inProgressExecutions);
-        if (policy.maxConcurrentRuns() > 0 && taskInProgress >= policy.maxConcurrentRuns()) {
-            return "任务并发已达上限(" + policy.maxConcurrentRuns() + ")，当前运行中/排队中执行: " + taskInProgress;
+        // Use database count queries for atomic concurrency checks to prevent race conditions.
+        // The excludeExecutionId offset accounts for the current execution's own "preparing" record.
+        long excludeOffset = excludeExecutionId != null ? 1 : 0;
+        if (policy.maxConcurrentRuns() > 0) {
+            long taskInProgress = executionRepository.countByTaskIdAndStatusesIgnoreCase(task.getId(), IN_PROGRESS_STATUSES) - excludeOffset;
+            if (taskInProgress >= policy.maxConcurrentRuns()) {
+                return "任务并发已达上限(" + policy.maxConcurrentRuns() + ")，当前运行中/排队中执行: " + taskInProgress;
+            }
         }
         if (task.getSourceDataSourceId() != null && policy.sourceConcurrencyLimit() > 0) {
-            long sourceInProgress = countInProgressBySource(task.getSourceDataSourceId(), excludeExecutionId, inProgressExecutions);
+            long sourceInProgress = executionRepository.countBySourceDataSourceIdAndStatusesIgnoreCase(
+                task.getSourceDataSourceId(), IN_PROGRESS_STATUSES) - excludeOffset;
             if (sourceInProgress >= policy.sourceConcurrencyLimit()) {
                 return "来源并发已达上限(" + policy.sourceConcurrencyLimit() + ")，source="
                     + task.getSourceDataSourceId()
@@ -1515,7 +1526,7 @@ public class IngestionTaskService {
             }
         }
         if (StringUtils.hasText(policy.projectKey()) && policy.projectConcurrencyLimit() > 0) {
-            long projectInProgress = countInProgressByProject(policy.projectKey(), excludeExecutionId, inProgressExecutions);
+            long projectInProgress = countInProgressByProject(policy.projectKey(), excludeExecutionId, null);
             if (projectInProgress >= policy.projectConcurrencyLimit()) {
                 return "项目并发已达上限(" + policy.projectConcurrencyLimit() + ")，project="
                     + policy.projectKey()
@@ -1559,6 +1570,13 @@ public class IngestionTaskService {
         }
         if (!queueTurn) {
             log.warn("Governance queue wait timeout for task {}: waiting for higher-priority queue turn", task.getId());
+            return false;
+        }
+        // Final atomic check: re-verify concurrency limits using database count
+        // to prevent race conditions where multiple threads pass the polling loop simultaneously.
+        String finalCheck = evaluateGovernanceBlock(task, policy, currentExecutionId);
+        if (StringUtils.hasText(finalCheck)) {
+            log.warn("Governance final check failed for task {} after queue wait: {}", task.getId(), finalCheck);
             return false;
         }
         return true;
