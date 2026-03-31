@@ -443,7 +443,6 @@ const filterItems = (
 		const hasPermission = item.auth ? checkAny(item.auth, permissions) : true;
 		const normalizedPath = normalizeMenuPath(item.path);
 		const isRouteAllowed =
-			allowedRoutes.paths.size === 0 ||
 			isExternalPath(normalizedPath) ||
 			isPathAllowed(normalizedPath, allowedRoutes.paths) ||
 			filteredChildren.length > 0;
@@ -482,16 +481,11 @@ const filterNavData = (
  * Fallback navigation when the menu API is unavailable.
  * Ensures the platform is still navigable even if dts-admin is down.
  */
+/**
+ * Minimal fallback when dts-admin is unreachable. Only contains platform-core
+ * pages (workbench) — NO BI items, because BI visibility is role-gated.
+ */
 const FALLBACK_NAV_DATA: NavProps["data"] = [
-	{
-		name: "BI 分析",
-		items: [
-			{ path: "/bi/home", title: "分析首页", icon: "solar:home-2-bold-duotone" },
-			{ path: "/bi/screens", title: "数据大屏", icon: "solar:monitor-bold-duotone" },
-			{ path: "/bi/dashboards", title: "分析看板", icon: "solar:widget-3-bold-duotone" },
-			{ path: "/bi/questions", title: "分析卡片", icon: "solar:clipboard-list-bold-duotone" },
-		],
-	},
 	{
 		name: "数据平台",
 		items: [
