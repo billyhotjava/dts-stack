@@ -78,6 +78,9 @@ class IngestionTaskExecutionFilterTest {
     @Mock
     private DagPreheatService dagPreheatService;
 
+    @Mock
+    private org.springframework.transaction.PlatformTransactionManager transactionManager;
+
     private IngestionTaskService ingestionTaskService;
 
     @BeforeEach
@@ -97,7 +100,8 @@ class IngestionTaskExecutionFilterTest {
             auditService,
             changeLogService,
             retryService,
-            dagPreheatService
+            dagPreheatService,
+            transactionManager
         );
     }
 

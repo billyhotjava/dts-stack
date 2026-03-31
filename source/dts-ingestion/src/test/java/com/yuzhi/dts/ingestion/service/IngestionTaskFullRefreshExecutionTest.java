@@ -83,6 +83,9 @@ class IngestionTaskFullRefreshExecutionTest {
     @Mock
     private DagPreheatService dagPreheatService;
 
+    @Mock
+    private org.springframework.transaction.PlatformTransactionManager transactionManager;
+
     private IngestionTaskService service;
     private ObjectMapper objectMapper;
 
@@ -104,7 +107,8 @@ class IngestionTaskFullRefreshExecutionTest {
             auditService,
             changeLogService,
             retryService,
-            dagPreheatService
+            dagPreheatService,
+            transactionManager
         );
 
         when(airflowAdapter.isEnabled()).thenReturn(false);

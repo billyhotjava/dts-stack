@@ -93,6 +93,9 @@ class IngestionTaskServiceTest {
     @Mock
     private DagPreheatService dagPreheatService;
 
+    @Mock
+    private org.springframework.transaction.PlatformTransactionManager transactionManager;
+
     private IngestionTaskService ingestionTaskService;
     private ObjectMapper objectMapper;
 
@@ -114,7 +117,8 @@ class IngestionTaskServiceTest {
             auditService,
             changeLogService,
             retryService,
-            dagPreheatService
+            dagPreheatService,
+            transactionManager
         );
     }
 
