@@ -3,11 +3,13 @@ import { isAxiosError } from "axios";
 import { toast } from "sonner";
 import { create } from "zustand";
 import { createJSONStorage, persist } from "zustand/middleware";
+import { readStorageValue, removeStorageKeys } from "@dts-session-core/storage";
 import type { UserInfo, UserToken } from "#/entity";
 import { StorageEnum } from "#/enum";
 import type { KeycloakTranslations } from "#/keycloak";
 import { KeycloakLocalizationService } from "@/api/services/keycloakLocalizationService";
 import userService, { type SignInReq } from "@/api/services/userService";
+import { PLATFORM_LEGACY_SESSION_KEYS, PLATFORM_LEGACY_USER_STORE_KEYS, PLATFORM_SESSION_KEYS } from "@/auth/session-keys";
 import { GLOBAL_CONFIG } from "@/global-config";
 import { updateLocalTranslations } from "@/utils/translation";
 import { useMenuStore } from "./menuStore";
@@ -76,11 +78,21 @@ const useUserStore = create<UserStore>()(
 						// Reset scoped context so the next user doesn't inherit prior dept/scope
 						const ctx = useContextStore.getState();
 						ctx.actions.setActiveDept(undefined);
-						localStorage.removeItem("dts.session.loginTs");
-						localStorage.removeItem("dts.session.lastActivity");
-						localStorage.removeItem("dts.session.id");
-						localStorage.removeItem("dts.session.user");
-						localStorage.removeItem("dts.session.logoutTs");
+						removeStorageKeys(
+							[
+								PLATFORM_SESSION_KEYS.loginTs,
+								PLATFORM_SESSION_KEYS.lastActivity,
+								PLATFORM_SESSION_KEYS.sessionId,
+								PLATFORM_SESSION_KEYS.sessionUser,
+								PLATFORM_SESSION_KEYS.logoutTs,
+								...PLATFORM_LEGACY_SESSION_KEYS.loginTs,
+								...PLATFORM_LEGACY_SESSION_KEYS.lastActivity,
+								...PLATFORM_LEGACY_SESSION_KEYS.sessionId,
+								...PLATFORM_LEGACY_SESSION_KEYS.sessionUser,
+								...PLATFORM_LEGACY_SESSION_KEYS.logoutTs,
+							],
+							localStorage,
+						);
 					} catch {
 						// ignore store access errors (e.g., during SSR)
 					}
@@ -88,8 +100,12 @@ const useUserStore = create<UserStore>()(
 			},
 		}),
 		{
-			name: "userStore", // name of the item in the storage (must be unique)
-			storage: createJSONStorage(() => localStorage), // (optional) by default, 'localStorage' is used
+			name: PLATFORM_SESSION_KEYS.userStore,
+			storage: createJSONStorage(() => ({
+				getItem: (name) => readStorageValue(name, PLATFORM_LEGACY_USER_STORE_KEYS, localStorage),
+				setItem: (name, value) => localStorage.setItem(name, value),
+				removeItem: (name) => localStorage.removeItem(name),
+			})),
 			partialize: (state) => ({
 				[StorageEnum.UserInfo]: state.userInfo,
 				[StorageEnum.UserToken]: state.userToken,
@@ -226,7 +242,7 @@ export const useSignIn = () => {
 
 			// Mark login timestamp for downstream grace handling on initial 401s
 			try {
-				localStorage.setItem("dts.session.loginTs", String(Date.now()));
+				localStorage.setItem(PLATFORM_SESSION_KEYS.loginTs, String(Date.now()));
 			} catch {}
 
 			// 登录成功后获取并更新Keycloak翻译词条

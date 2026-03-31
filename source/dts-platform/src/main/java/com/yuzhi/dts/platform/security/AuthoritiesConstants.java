@@ -6,6 +6,11 @@ package com.yuzhi.dts.platform.security;
 public final class AuthoritiesConstants {
 
     public static final String ADMIN = "ROLE_ADMIN";
+    // Governance triad roles (aligned with dts-admin / Keycloak realm roles)
+    public static final String SYS_ADMIN = "ROLE_SYS_ADMIN";           // 系统管理员
+    public static final String AUTH_ADMIN = "ROLE_AUTH_ADMIN";         // 授权管理员
+    public static final String AUDITOR_ADMIN = "ROLE_SECURITY_AUDITOR"; // 安全审计员
+
     // Business administrator (OP admin) — should have full platform access
     public static final String OP_ADMIN = "ROLE_OP_ADMIN";
 

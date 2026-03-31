@@ -12,6 +12,7 @@ import { unwrapCssLayers } from "./tools/postcss/unwrap-css-layers";
 import { legacyCssFallbacks } from "./tools/postcss/legacy-css-fallbacks";
 
 const rootDir = fileURLToPath(new URL(".", import.meta.url));
+const sharedSessionCoreDir = resolvePath(rootDir, "../dts-session-core/src");
 const legacySupportedBrowsers = ["chrome >= 95", "edge >= 95", "firefox >= 102", "safari >= 15.4", "ios >= 15.5", "android >= 95"];
 const modernSupportedBrowsers = ["chrome >= 109", "edge >= 109", "firefox >= 115", "safari >= 16.4", "ios >= 16.4", "android >= 109"];
 const adminServiceTarget = { host: "dts-admin", containerPort: 8081, hostPort: 18081 };
@@ -245,6 +246,7 @@ export default defineConfig(({ mode }) => {
 			alias: {
 				"@": resolvePath(rootDir, "src"),
 				"#": resolvePath(rootDir, "src/types"),
+				"@dts-session-core": sharedSessionCoreDir,
 			},
 		},
 
@@ -256,7 +258,7 @@ export default defineConfig(({ mode }) => {
       // like 'dts-platform-webapp'.
       allowedHosts: true,
       // Restrict file serving to this project only
-      fs: { strict: true, allow: [rootDir] },
+      fs: { strict: true, allow: [rootDir, sharedSessionCoreDir] },
       // Ignore sibling workspace mounts to avoid cross-project file watching
       watch: {
         ignored: [

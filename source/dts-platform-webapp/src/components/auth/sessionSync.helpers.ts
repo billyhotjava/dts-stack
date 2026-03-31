@@ -1,4 +1,5 @@
 import type { UserInfo, UserToken } from "#/entity";
+import { parsePersistedUserStoreSnapshot as parsePersistedSnapshot } from "@dts-session-core/persisted-store";
 
 type AnyRecord = Record<string, unknown>;
 
@@ -12,20 +13,12 @@ function asRecord(value: unknown): AnyRecord | null {
 }
 
 export function parsePersistedUserStoreSnapshot(raw: string | null | undefined): PersistedSessionSnapshot | null {
-	if (!raw || !raw.trim()) return null;
-	try {
-		const parsed = JSON.parse(raw) as unknown;
-		const root = asRecord(parsed);
-		const state = asRecord(root?.state);
-		const userInfo = (asRecord(state?.userInfo) ?? {}) as Partial<UserInfo>;
-		const userToken = (asRecord(state?.userToken) ?? {}) as UserToken;
-		if (!Object.keys(userInfo).length && !Object.keys(userToken).length) {
-			return null;
-		}
-		return { userInfo, userToken };
-	} catch {
-		return null;
-	}
+	const snapshot = parsePersistedSnapshot(raw);
+	if (!snapshot) return null;
+	return {
+		userInfo: (asRecord(snapshot.userInfo) ?? {}) as Partial<UserInfo>,
+		userToken: (asRecord(snapshot.userToken) ?? {}) as UserToken,
+	};
 }
 
 function normalizeTokenValue(value: unknown): string {

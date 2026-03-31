@@ -15,6 +15,8 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.oauth2.core.OAuth2AuthenticatedPrincipal;
+import org.springframework.security.oauth2.jwt.Jwt;
+import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationToken;
 import org.springframework.util.StringUtils;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestMethod;
@@ -73,14 +75,22 @@ public class ForwardAuthResource {
                 .flatMap(principal -> optionalStringList(principal.getAttributes().get("permissions")))
                 .ifPresent(perms -> headers.add("X-DTS-Permissions", String.join(",", perms)));
 
+        // Extract dept_code and personnel_level from JWT claims or OAuth2 principal attributes.
+        // JwtAuthenticationToken wraps a Jwt (not OAuth2AuthenticatedPrincipal), so we must
+        // check both paths to ensure these fields are propagated to downstream services.
+        Map<String, Object> claimsMap = extractClaims(authentication);
         Optional<OAuth2AuthenticatedPrincipal> principalOpt = extractPrincipal(authentication);
-        principalOpt
-            .flatMap(p -> optionalString(p.getAttribute("dept_code")))
+
+        optionalString(claimsMap.get("dept_code"))
+            .or(() -> optionalString(claimsMap.get("deptCode")))
+            .or(() -> principalOpt.flatMap(p -> optionalString(p.getAttribute("dept_code"))))
             .or(() -> principalOpt.flatMap(p -> optionalString(p.getAttribute("deptCode"))))
             .ifPresent(v -> headers.add("X-DTS-Dept-Code", v));
 
-        principalOpt
-            .flatMap(p -> optionalString(p.getAttribute("person_security_level")))
+        optionalString(claimsMap.get("person_security_level"))
+            .or(() -> optionalString(claimsMap.get("personnel_level")))
+            .or(() -> optionalString(claimsMap.get("personnelLevel")))
+            .or(() -> principalOpt.flatMap(p -> optionalString(p.getAttribute("person_security_level"))))
             .or(() -> principalOpt.flatMap(p -> optionalString(p.getAttribute("personnel_level"))))
             .or(() -> principalOpt.flatMap(p -> optionalString(p.getAttribute("personnelLevel"))))
             .ifPresent(v -> headers.add("X-DTS-Personnel-Level", v));
@@ -139,6 +149,14 @@ public class ForwardAuthResource {
                 .map(String::trim)
                 .distinct()
                 .collect(Collectors.toList());
+    }
+
+    private static Map<String, Object> extractClaims(Authentication authentication) {
+        if (authentication instanceof JwtAuthenticationToken jwtAuth) {
+            Jwt jwt = jwtAuth.getToken();
+            return jwt != null ? jwt.getClaims() : Map.of();
+        }
+        return Map.of();
     }
 
     private static Optional<OAuth2AuthenticatedPrincipal> extractPrincipal(Authentication authentication) {

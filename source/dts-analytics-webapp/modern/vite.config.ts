@@ -2,11 +2,15 @@ import react from "@vitejs/plugin-react";
 import tailwindcss from "@tailwindcss/vite";
 import legacy from "@vitejs/plugin-legacy";
 import { existsSync } from "node:fs";
+import { resolve as resolvePath } from "node:path";
+import { fileURLToPath } from "node:url";
 import { defineConfig, loadEnv } from "vite";
 import { unwrapCssLayers } from "./tools/postcss/unwrap-css-layers";
 import { legacyCssFallbacks } from "./tools/postcss/legacy-css-fallbacks";
 
 const publicBase = "/analytics/";
+const rootDir = fileURLToPath(new URL(".", import.meta.url));
+const sharedSessionCoreDir = resolvePath(rootDir, "../../dts-session-core/src");
 const legacySupportedBrowsers = ["chrome >= 95", "firefox >= 90", "safari >= 14"];
 const platformServiceTarget = { host: "dts-platform", containerPort: 8081, hostPort: 18082 };
 const platformUiTarget = { host: "dts-platform-webapp", containerPort: 3001, hostPort: 18012 };
@@ -158,6 +162,11 @@ export function createAnalyticsViteConfig(
 		build: {
 			target: buildTarget,
 			chunkSizeWarningLimit: 700,
+		},
+		resolve: {
+			alias: {
+				"@dts-session-core": sharedSessionCoreDir,
+			},
 		},
 		esbuild: {
 			target: buildTarget,

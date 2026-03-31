@@ -6,8 +6,10 @@ import { GLOBAL_CONFIG } from "@/global-config";
 import { t } from "@/locales/i18n";
 import { isLoginRouteActive } from "@/routes/constants";
 import { refreshAccessToken, redirectToLoginWithReturn } from "@/auth/session-auth";
+import { PLATFORM_LEGACY_SESSION_KEYS, PLATFORM_SESSION_KEYS } from "@/auth/session-keys";
 import useContextStore from "@/store/contextStore";
 import userStore from "@/store/userStore";
+import { readStorageValue } from "@dts-session-core/storage";
 
 /** 将 Axios 内部英文错误消息转换为中文，避免"Network Error"等直接透传给用户 */
 function normalizeAxiosErrorMessage(msg: string | undefined): string {
@@ -239,7 +241,9 @@ axiosInstance.interceptors.response.use(
 			}
 			// Grace window just after login
 			try {
-				const loginTs = Number(localStorage.getItem("dts.session.loginTs") || "0");
+				const loginTs = Number(
+					readStorageValue(PLATFORM_SESSION_KEYS.loginTs, PLATFORM_LEGACY_SESSION_KEYS.loginTs, localStorage) || "0",
+				);
 				if (loginTs > 0 && Date.now() - loginTs < 2000) {
 					console.warn("[auth] Suppressing auto-logout due to grace window after login");
 					return Promise.reject(error);
@@ -249,7 +253,7 @@ axiosInstance.interceptors.response.use(
 			if (shouldForceLogout) {
 				userStore.getState().actions.clearUserInfoAndToken();
 				try {
-					localStorage.setItem("dts.session.logoutTs", String(Date.now()));
+					localStorage.setItem(PLATFORM_SESSION_KEYS.logoutTs, String(Date.now()));
 				} catch {}
 				if (typeof window !== "undefined" && !isLoginRouteActive()) {
 					redirectToLoginWithReturn();
@@ -259,7 +263,7 @@ axiosInstance.interceptors.response.use(
 		} else if (shouldForceLogout && !TEST_SESSION_ENABLED) {
 			userStore.getState().actions.clearUserInfoAndToken();
 			try {
-				localStorage.setItem("dts.session.logoutTs", String(Date.now()));
+				localStorage.setItem(PLATFORM_SESSION_KEYS.logoutTs, String(Date.now()));
 			} catch {}
 			if (typeof window !== "undefined" && !isLoginRouteActive()) {
 				redirectToLoginWithReturn();

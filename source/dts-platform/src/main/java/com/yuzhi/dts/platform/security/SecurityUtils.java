@@ -246,31 +246,133 @@ public final class SecurityUtils {
 
     @SuppressWarnings("unchecked")
     private static Collection<String> getRolesFromClaims(Map<String, Object> claims) {
-        return (Collection<String>) claims.getOrDefault(
-            "groups",
-            claims.getOrDefault("roles", claims.getOrDefault(CLAIMS_NAMESPACE + "roles", new ArrayList<>()))
-        );
+        List<String> roles = new ArrayList<>();
+
+        collectRoles(claims.get("groups"), roles);
+        collectRoles(claims.get("roles"), roles);
+        collectRoles(claims.get(CLAIMS_NAMESPACE + "roles"), roles);
+
+        // Keycloak realm_access.roles
+        Object realmAccess = claims.get("realm_access");
+        if (realmAccess instanceof Map<?, ?> realmMap) {
+            collectRoles(realmMap.get("roles"), roles);
+        }
+
+        // Keycloak resource_access.{client}.roles
+        Object resourceAccess = claims.get("resource_access");
+        if (resourceAccess instanceof Map<?, ?> resourceMap) {
+            for (Object resource : resourceMap.values()) {
+                if (resource instanceof Map<?, ?> resourceEntry) {
+                    collectRoles(resourceEntry.get("roles"), roles);
+                }
+            }
+        }
+
+        return roles;
+    }
+
+    private static void collectRoles(Object source, Collection<String> target) {
+        if (source == null) {
+            return;
+        }
+        if (source instanceof Collection<?> collection) {
+            for (Object value : collection) {
+                if (value instanceof String s && !s.isBlank()) {
+                    target.add(s);
+                }
+            }
+        } else if (source instanceof String s && !s.isBlank()) {
+            target.add(s);
+        }
+    }
+
+    private static final Map<String, String> ROLE_ALIASES = Map.ofEntries(
+        // Canonical triad (no prefix aliases)
+        Map.entry("SYSADMIN", AuthoritiesConstants.SYS_ADMIN),
+        Map.entry("AUTHADMIN", AuthoritiesConstants.AUTH_ADMIN),
+        Map.entry("AUDITADMIN", AuthoritiesConstants.AUDITOR_ADMIN),
+        Map.entry("SECURITYAUDITOR", AuthoritiesConstants.AUDITOR_ADMIN),
+        Map.entry("OPADMIN", AuthoritiesConstants.OP_ADMIN),
+
+        // Canonical triad (prefixed variants commonly seen in legacy realms)
+        Map.entry("ROLE_SYSADMIN", AuthoritiesConstants.SYS_ADMIN),
+        Map.entry("ROLE_SYSTEM_ADMIN", AuthoritiesConstants.SYS_ADMIN),
+        Map.entry("ROLE_AUTHADMIN", AuthoritiesConstants.AUTH_ADMIN),
+        Map.entry("ROLE_IAM_ADMIN", AuthoritiesConstants.AUTH_ADMIN),
+        Map.entry("ROLE_AUDITOR_ADMIN", AuthoritiesConstants.AUDITOR_ADMIN),
+        Map.entry("ROLE_AUDIT_ADMIN", AuthoritiesConstants.AUDITOR_ADMIN),
+        Map.entry("ROLE_SECURITYAUDITOR", AuthoritiesConstants.AUDITOR_ADMIN),
+
+        // Already-canonical names map to themselves (idempotent)
+        Map.entry(AuthoritiesConstants.SYS_ADMIN, AuthoritiesConstants.SYS_ADMIN),
+        Map.entry(AuthoritiesConstants.AUTH_ADMIN, AuthoritiesConstants.AUTH_ADMIN),
+        Map.entry(AuthoritiesConstants.AUDITOR_ADMIN, AuthoritiesConstants.AUDITOR_ADMIN),
+        Map.entry(AuthoritiesConstants.OP_ADMIN, AuthoritiesConstants.OP_ADMIN)
+    );
+
+    private static String canonicalizeGovernanceRole(String role) {
+        if (role == null || role.isBlank()) {
+            return null;
+        }
+        String compact = role.replaceAll("[^A-Z0-9]", "");
+        if (compact.isEmpty()) {
+            return null;
+        }
+        if (compact.startsWith("SYS")) {
+            return AuthoritiesConstants.SYS_ADMIN;
+        }
+        if ((compact.startsWith("AUTH") || compact.startsWith("IAM")) && compact.contains("ADMIN")) {
+            return AuthoritiesConstants.AUTH_ADMIN;
+        }
+        if (compact.startsWith("AUDIT") || compact.startsWith("AUDITOR") || compact.contains("SECURITYAUDITOR")) {
+            return AuthoritiesConstants.AUDITOR_ADMIN;
+        }
+        if (compact.startsWith("SECURITY") && compact.contains("AUDITOR")) {
+            return AuthoritiesConstants.AUDITOR_ADMIN;
+        }
+        if (compact.startsWith("OP") && compact.contains("ADMIN")) {
+            return AuthoritiesConstants.OP_ADMIN;
+        }
+        return null;
+    }
+
+    static String normalizeRole(String role) {
+        if (role == null) {
+            return null;
+        }
+        String trimmed = role.trim();
+        if (trimmed.isEmpty()) {
+            return null;
+        }
+        String upper = trimmed.toUpperCase(Locale.ROOT);
+        // First, try exact alias match
+        String alias = ROLE_ALIASES.get(upper);
+        if (alias != null) return alias;
+
+        // If it's already prefixed, normalize and retry alias map
+        if (upper.startsWith("ROLE_")) {
+            String noPrefix = upper.substring(5);
+            String aliasNoPrefix = ROLE_ALIASES.get(noPrefix);
+            if (aliasNoPrefix != null) return aliasNoPrefix;
+            String canonical = canonicalizeGovernanceRole(noPrefix);
+            if (canonical != null) return canonical;
+            return upper; // keep as-is
+        }
+
+        String canonical = canonicalizeGovernanceRole(upper);
+        if (canonical != null) return canonical;
+
+        // As a last resort, prefix unknown role names
+        return "ROLE_" + upper;
     }
 
     private static List<GrantedAuthority> mapRolesToGrantedAuthorities(Collection<String> roles) {
         return roles
             .stream()
-            .map(role -> {
-                if (role == null) {
-                    return null;
-                }
-                String normalized = role.trim();
-                if (normalized.isEmpty()) {
-                    return null;
-                }
-                normalized = normalized.toUpperCase(Locale.ROOT);
-                if (!normalized.startsWith("ROLE_")) {
-                    normalized = "ROLE_" + normalized;
-                }
-                return new SimpleGrantedAuthority(normalized);
-            })
-            .filter(authority -> authority != null)
+            .map(SecurityUtils::normalizeRole)
+            .filter(java.util.Objects::nonNull)
             .distinct()
+            .map(SimpleGrantedAuthority::new)
             .collect(Collectors.toList());
     }
 

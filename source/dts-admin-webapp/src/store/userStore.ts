@@ -2,11 +2,13 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { create } from "zustand";
 import { createJSONStorage, persist } from "zustand/middleware";
+import { readStorageValue, removeStorageKeys } from "@dts-session-core/storage";
 import type { UserInfo, UserToken } from "#/entity";
 import { StorageEnum } from "#/enum";
 import type { KeycloakTranslations } from "#/keycloak";
 import { KeycloakLocalizationService } from "@/api/services/keycloakLocalizationService";
 import userService, { type SignInReq } from "@/api/services/userService";
+import { ADMIN_LEGACY_SESSION_KEYS, ADMIN_LEGACY_USER_STORE_KEYS, ADMIN_SESSION_KEYS } from "@/auth/session-keys";
 import { GLOBAL_CONFIG } from "@/global-config";
 import { updateLocalTranslations } from "@/utils/translation";
 
@@ -129,12 +131,31 @@ const useUserStore = create<UserStore>()(
 				},
 				clearUserInfoAndToken() {
 					set({ userInfo: {}, userToken: {} });
+					removeStorageKeys(
+						[
+							ADMIN_SESSION_KEYS.loginTs,
+							ADMIN_SESSION_KEYS.lastActivity,
+							ADMIN_SESSION_KEYS.sessionId,
+							ADMIN_SESSION_KEYS.sessionUser,
+							ADMIN_SESSION_KEYS.logoutTs,
+							...ADMIN_LEGACY_SESSION_KEYS.loginTs,
+							...ADMIN_LEGACY_SESSION_KEYS.lastActivity,
+							...ADMIN_LEGACY_SESSION_KEYS.sessionId,
+							...ADMIN_LEGACY_SESSION_KEYS.sessionUser,
+							...ADMIN_LEGACY_SESSION_KEYS.logoutTs,
+						],
+						localStorage,
+					);
 				},
 			},
 		}),
 		{
-			name: "userStore", // name of the item in the storage (must be unique)
-			storage: createJSONStorage(() => localStorage), // (optional) by default, 'localStorage' is used
+			name: ADMIN_SESSION_KEYS.userStore,
+			storage: createJSONStorage(() => ({
+				getItem: (name) => readStorageValue(name, ADMIN_LEGACY_USER_STORE_KEYS, localStorage),
+				setItem: (name, value) => localStorage.setItem(name, value),
+				removeItem: (name) => localStorage.removeItem(name),
+			})),
 			partialize: (state) => ({
 				[StorageEnum.UserInfo]: state.userInfo,
 				[StorageEnum.UserToken]: state.userToken,
@@ -279,6 +300,9 @@ export const useSignIn = () => {
 			setUserToken({ accessToken, refreshToken });
 			setUserInfo(adaptedUser);
 			queryClient.removeQueries({ queryKey: ["admin", "whoami"], exact: true });
+			try {
+				localStorage.setItem(ADMIN_SESSION_KEYS.loginTs, String(Date.now()));
+			} catch {}
 
 			// 登录成功后获取并更新Keycloak翻译词条
 			try {

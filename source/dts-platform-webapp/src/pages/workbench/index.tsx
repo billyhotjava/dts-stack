@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { Button, Card, Col, Form, Input, Modal, Row, Select, Space, Table, Tag } from "antd";
-import { Database, FileCheck, ListTodo, Monitor, RefreshCw, TrendingUp, Workflow } from "lucide-react";
+import { Database, FileCheck, ListTodo, Monitor, RefreshCw, TrendingUp } from "lucide-react";
 import { toast } from "sonner";
 import workbenchService, {
 	type WorkbenchFavorite,
@@ -371,10 +371,7 @@ export default function Page() {
 					>
 						刷新
 					</Button>
-					<Button onClick={() => push("/dashboard/workbench/workflow-center")} icon={<Workflow className="h-4 w-4" />}>
-						待办中心
-					</Button>
-					<Button data-testid="platform-workbench-new-favorite" type="primary" onClick={openFavoriteCreate}>
+<Button data-testid="platform-workbench-new-favorite" type="primary" onClick={openFavoriteCreate}>
 						新建收藏
 					</Button>
 				</Space>

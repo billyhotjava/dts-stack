@@ -2,9 +2,11 @@ import { useCallback, useEffect, useRef } from "react";
 import menuService from "@/api/services/menuService";
 import useUserStore, { useUserInfo, useUserToken } from "@/store/userStore";
 import { redirectToLoginWithReturn } from "@/auth/session-auth";
+import { PLATFORM_LEGACY_SESSION_KEYS, PLATFORM_SESSION_KEYS } from "@/auth/session-keys";
 import { LOGIN_ROUTE } from "../constants";
 import { useRouter } from "../hooks";
 import { GLOBAL_CONFIG } from "@/global-config";
+import { readStorageValue } from "@dts-session-core/storage";
 
 /** Decode JWT exp claim. Returns expiry in ms or null if not a valid JWT. */
 function decodeJwtExp(token?: string): number | null {
@@ -35,7 +37,11 @@ function isTokenExpired(token?: string): boolean {
 /** Check whether the session has been idle beyond the configured timeout. */
 function isSessionIdle(): boolean {
 	try {
-		const stored = localStorage.getItem("dts.session.lastActivity");
+		const stored = readStorageValue(
+			PLATFORM_SESSION_KEYS.lastActivity,
+			PLATFORM_LEGACY_SESSION_KEYS.lastActivity,
+			localStorage,
+		);
 		if (!stored) return false; // No record yet (first login); don't block.
 		const lastActivity = Number(stored);
 		if (!(lastActivity > 0)) return false;

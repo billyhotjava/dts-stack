@@ -1,4 +1,6 @@
 import { refreshAccessToken, redirectToLoginWithReturn, resetLoginRedirectFlag } from '@/auth/session-auth';
+import { readPersistedRoles, readPersistedTokens } from '@dts-session-core/persisted-store';
+import { PLATFORM_LEGACY_USER_STORE_KEYS, PLATFORM_SESSION_KEYS } from '@/auth/session-keys';
 
 export type CollectionListItem = {
 	id: number | "root";
@@ -1134,32 +1136,17 @@ export type ScreenComponentData = {
  * NOT the Keycloak JWT (adminAccessToken).
  */
 function getPlatformTokens(): { accessToken: string; refreshToken: string } {
-	try {
-		const raw = localStorage.getItem("userStore");
-		if (!raw) return { accessToken: "", refreshToken: "" };
-		const store = JSON.parse(raw);
-		const userToken = store?.state?.userToken;
-		if (!userToken || typeof userToken !== "object") return { accessToken: "", refreshToken: "" };
-		const accessToken = String(userToken.accessToken || userToken.access_token || userToken.token || "").trim();
-		const refreshToken = String(userToken.refreshToken || userToken.refresh_token || "").trim();
-		return { accessToken, refreshToken };
-	} catch {
-		return { accessToken: "", refreshToken: "" };
-	}
+	const { accessToken, refreshToken } = readPersistedTokens(
+		PLATFORM_SESSION_KEYS.userStore,
+		PLATFORM_LEGACY_USER_STORE_KEYS,
+		localStorage,
+	);
+	return { accessToken, refreshToken };
 }
 
 /** 从 userStore 读取当前用户角色列表，用于填充 X-DTS-Roles 请求头。 */
 function getPlatformRoles(): string {
-	try {
-		const raw = localStorage.getItem("userStore");
-		if (!raw) return "";
-		const store = JSON.parse(raw);
-		const roles = store?.state?.userInfo?.roles;
-		if (!Array.isArray(roles) || roles.length === 0) return "";
-		return roles.map((r: unknown) => String(r || "").trim()).filter(Boolean).join(",");
-	} catch {
-		return "";
-	}
+	return readPersistedRoles(PLATFORM_SESSION_KEYS.userStore, PLATFORM_LEGACY_USER_STORE_KEYS, localStorage).join(",");
 }
 
 // ── Auth coordination ──
@@ -1202,7 +1189,12 @@ export class AuthError extends HttpError { }
 // Public analytics endpoints (/bi/api/public/*) are accessible without authentication.
 // For these URLs we must NOT redirect to login on 401 — the caller handles the error UI.
 function isPublicAnalyticsUrl(url: string): boolean {
-	return url.includes("/api/public/") || url.includes("/bi/api/public/");
+	return (
+		url.includes("/api/public/") ||
+		url.includes("/bi/api/public/") ||
+		url.includes("/api/explore-session/public/") ||
+		url.includes("/bi/api/explore-session/public/")
+	);
 }
 
 async function apiFetch(url: string, init: RequestInit, allowRefresh: boolean): Promise<Response> {

@@ -1,15 +1,4 @@
-/**
- * session-auth.ts — 统一会话鉴权模块
- *
- * 整个平台 **唯一** 的 token 刷新入口和登录重定向入口。
- * apiClient / SessionManager / analyticsApi / LoginAuthGuard 全部委托到这里。
- *
- * 核心保证：
- *  1. 同一时刻最多只有一个 refresh 请求在飞（single-flight lock）
- *  2. 同一时刻最多只触发一次登录重定向（redirect guard）
- *  3. 重定向始终携带当前路由作为 ?redirect= 参数（hash 路由感知）
- */
-
+import { buildLoginRedirectHref, currentRoutePath as resolveCurrentRoutePath } from "@dts-session-core/route";
 import { resolveLoginHref } from '@/routes/constants';
 import userStore from '@/store/userStore';
 import { GLOBAL_CONFIG } from '@/global-config';
@@ -108,10 +97,7 @@ let _redirecting = false;
  * hash 模式下 window.location.pathname 始终为 "/"，真实路由在 hash 里。
  */
 export function currentRoutePath(): string {
-	if (window.location.hash) {
-		return window.location.hash.replace(/^#/, '') || '/';
-	}
-	return window.location.pathname + window.location.search;
+	return resolveCurrentRoutePath(GLOBAL_CONFIG.routerHistory);
 }
 
 /**
@@ -124,8 +110,7 @@ export function currentRoutePath(): string {
 export function redirectToLoginWithReturn(): void {
 	if (_redirecting) return;
 	_redirecting = true;
-	const returnUrl = encodeURIComponent(currentRoutePath());
-	window.location.replace(`${resolveLoginHref()}?redirect=${returnUrl}`);
+	window.location.replace(buildLoginRedirectHref(resolveLoginHref(), currentRoutePath()));
 }
 
 /**

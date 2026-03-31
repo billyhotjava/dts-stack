@@ -211,8 +211,11 @@
 | Feature | Task 数 | 状态 |
 |---------|---------|------|
 | F1-Platform承载Analytics菜单与路由统一 | 5 | READY |
+| F2-统一Session控制内核与协议 | 4 | READY |
+| F3-Platform与Admin接入统一Session控制 | 4 | READY |
+| F4-analytics modern退场与依赖拆除 | 4 | READY |
 
-**统计**: READY=5, IN_PROGRESS=0, DONE=0, BLOCKED=0
+**统计**: READY=17, IN_PROGRESS=0, DONE=0, BLOCKED=0
 
 ## Sprint-29: 大屏权限重构 — 融入平台统一资产权限体系 (202603)
 **状态**: CANCELLED（被 Sprint-33 取代，平台 grant 方案存在 ID 错配根因，改用本地表方案）

@@ -1,16 +1,12 @@
 import { useEffect, useMemo, useRef } from "react";
 import { toast } from "sonner";
+import { nextRefreshDelayMs } from "@dts-session-core/token";
+import { readStorageValue } from "@dts-session-core/storage";
 import { refreshAccessToken, redirectToLoginWithReturn } from "@/auth/session-auth";
+import { PLATFORM_LEGACY_SESSION_KEYS, PLATFORM_SESSION_KEYS } from "@/auth/session-keys";
 import { useUserActions, useUserInfo, useUserToken } from "@/store/userStore";
 import userService from "@/api/services/userService";
 import { hasPersistedSessionChanged, parsePersistedUserStoreSnapshot } from "./sessionSync.helpers";
-
-const STORAGE_KEYS = {
-	SESSION_ID: "dts.session.id",
-	SESSION_USER: "dts.session.user",
-	LOGOUT_TS: "dts.session.logoutTs",
-	LAST_ACTIVITY: "dts.session.lastActivity",
-} as const;
 
 const SESSION_TIMEOUT_MINUTES = Math.max(
 	1,
@@ -21,38 +17,13 @@ const SESSION_IDLE_GRACE_MS = 30 * 1000;
 
 const genId = () => Math.random().toString(36).slice(2) + Date.now().toString(36);
 
-function decodeJwtExp(token?: string): number | null {
-	if (!token) return null;
-	try {
-		const parts = token.split(".");
-		if (parts.length < 2) return null;
-		let payload = parts[1].replace(/-/g, "+").replace(/_/g, "/");
-		while (payload.length % 4 !== 0) payload += "=";
-		const json = atob(payload);
-		const obj = JSON.parse(json);
-		if (obj && typeof obj.exp === "number") {
-			return obj.exp * 1000; // to ms
-		}
-		return null;
-	} catch {
-		return null;
-	}
-}
-
-function nextRefreshDelayMs(accessToken?: string): number {
-	const MIN_DELAY = 30 * 1000; // 30s
-	const DEFAULT_DELAY = 4 * 60 * 1000; // 4m fallback
-	const SKEW = 60 * 1000; // refresh 60s before expiry
-	const expMs = decodeJwtExp(accessToken);
-	if (!expMs) return DEFAULT_DELAY;
-	const now = Date.now();
-	const ms = Math.max(MIN_DELAY, expMs - now - SKEW);
-	return ms;
-}
-
 function readLastActivity(): number {
 	try {
-		const stored = localStorage.getItem(STORAGE_KEYS.LAST_ACTIVITY);
+		const stored = readStorageValue(
+			PLATFORM_SESSION_KEYS.lastActivity,
+			PLATFORM_LEGACY_SESSION_KEYS.lastActivity,
+			localStorage,
+		);
 		if (stored) {
 			const ts = Number(stored);
 			if (ts > 0) return ts;
@@ -66,7 +37,7 @@ function writeLastActivity(ts: number, lastWriteRef: { current: number }) {
 	if (ts - lastWriteRef.current < 10_000) return;
 	lastWriteRef.current = ts;
 	try {
-		localStorage.setItem(STORAGE_KEYS.LAST_ACTIVITY, String(ts));
+		localStorage.setItem(PLATFORM_SESSION_KEYS.lastActivity, String(ts));
 	} catch {}
 }
 
@@ -93,12 +64,12 @@ export default function SessionManager() {
 		const now = Date.now();
 		lastActivityRef.current = now;
 		writeLastActivity(now, lastActivityWriteRef);
-		const current = localStorage.getItem(STORAGE_KEYS.SESSION_ID);
+		const current = localStorage.getItem(PLATFORM_SESSION_KEYS.sessionId);
 		if (!current) {
 			const newId = `${loginName || "user"}#${genId()}#${tabIdRef.current}`;
 			mySessionIdRef.current = newId;
-			localStorage.setItem(STORAGE_KEYS.SESSION_ID, newId);
-			if (loginName) localStorage.setItem(STORAGE_KEYS.SESSION_USER, loginName);
+			localStorage.setItem(PLATFORM_SESSION_KEYS.sessionId, newId);
+			if (loginName) localStorage.setItem(PLATFORM_SESSION_KEYS.sessionUser, loginName);
 		} else {
 			mySessionIdRef.current = current;
 		}
@@ -107,7 +78,7 @@ export default function SessionManager() {
 	useEffect(() => {
 		const onStorage = (e: StorageEvent) => {
 			if (!e.key) return;
-			if (e.key === "userStore" && e.newValue) {
+			if (e.key === PLATFORM_SESSION_KEYS.userStore && e.newValue) {
 				const nextSnapshot = parsePersistedUserStoreSnapshot(e.newValue);
 				const currentSnapshot = { userInfo: user, userToken: token };
 				if (hasPersistedSessionChanged(currentSnapshot, nextSnapshot)) {
@@ -120,17 +91,17 @@ export default function SessionManager() {
 				}
 				return;
 			}
-			if (e.key === STORAGE_KEYS.SESSION_ID) {
+			if (e.key === PLATFORM_SESSION_KEYS.sessionId) {
 				const newId = e.newValue;
 				if (isLoggedIn && newId && newId !== mySessionIdRef.current && !logoutInProgressRef.current) {
 					logoutInProgressRef.current = true;
 					toast.error("账号已在其他位置登录，本会话已退出", { id: "session-conflict" });
 					clearUserInfoAndToken();
-					localStorage.setItem(STORAGE_KEYS.LOGOUT_TS, String(Date.now()));
+					localStorage.setItem(PLATFORM_SESSION_KEYS.logoutTs, String(Date.now()));
 					redirectToLoginWithReturn();
 				}
 			}
-			if (e.key === STORAGE_KEYS.LOGOUT_TS && e.newValue) {
+			if (e.key === PLATFORM_SESSION_KEYS.logoutTs && e.newValue) {
 				if (isLoggedIn && !logoutInProgressRef.current) {
 					logoutInProgressRef.current = true;
 					toast.error("账号已在其他位置登录，本会话已退出", { id: "session-conflict" });
@@ -189,7 +160,7 @@ export default function SessionManager() {
 					logoutInProgressRef.current = true;
 					toast.error("会话已过期，请重新登录", { id: "session-expired" });
 					clearUserInfoAndToken();
-					localStorage.setItem(STORAGE_KEYS.LOGOUT_TS, String(Date.now()));
+					localStorage.setItem(PLATFORM_SESSION_KEYS.logoutTs, String(Date.now()));
 					redirectToLoginWithReturn();
 				}
 				cancelled = true;
@@ -219,7 +190,7 @@ export default function SessionManager() {
 					logoutInProgressRef.current = true;
 					toast.error("会话已过期，请重新登录", { id: "session-expired" });
 					clearUserInfoAndToken();
-					localStorage.setItem(STORAGE_KEYS.LOGOUT_TS, String(Date.now()));
+					localStorage.setItem(PLATFORM_SESSION_KEYS.logoutTs, String(Date.now()));
 					redirectToLoginWithReturn();
 				}
 				cancelled = true;
@@ -259,7 +230,7 @@ export default function SessionManager() {
 			}
 			toast.error("长时间未操作，已自动退出，请重新登录", { id: "session-expired" });
 			clearUserInfoAndToken();
-			localStorage.setItem(STORAGE_KEYS.LOGOUT_TS, String(Date.now()));
+			localStorage.setItem(PLATFORM_SESSION_KEYS.logoutTs, String(Date.now()));
 			redirectToLoginWithReturn();
 		};
 
