@@ -407,7 +407,9 @@ export function ScreenSharePanel({ open, screenId, onClose, isOwner = false }: S
 							marginBottom: 8,
 						}}>
 							{filteredResults.map((user) => {
-								const uid = String(user.id);
+								const email = user.email || '';
+								const at = email.indexOf('@');
+								const uid = at > 0 ? email.substring(0, at) : String(user.id);
 								const checked = selectedUserIds.has(uid);
 								return (
 									<div

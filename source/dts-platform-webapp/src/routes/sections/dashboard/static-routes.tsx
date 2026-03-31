@@ -22,9 +22,7 @@ const CardsPage = lazy(() => import("@/analytics/pages/CardsPage"));
 const CardDetailPage = lazy(() => import("@/analytics/pages/CardDetailPage"));
 const CardEditorPage = lazy(() => import("@/analytics/pages/CardEditorPage"));
 const DataPage = lazy(() => import("@/analytics/pages/DataPage"));
-const DatabaseNewPage = lazy(() => import("@/analytics/pages/DatabaseNewPage"));
 const DatabaseDetailPage = lazy(() => import("@/analytics/pages/DatabaseDetailPage"));
-const DatabaseEditPage = lazy(() => import("@/analytics/pages/DatabaseEditPage"));
 const TableDetailPage = lazy(() => import("@/analytics/pages/TableDetailPage"));
 const FieldDetailPage = lazy(() => import("@/analytics/pages/FieldDetailPage"));
 const ModelsPage = lazy(() => import("@/analytics/pages/ModelsPage"));
@@ -70,9 +68,7 @@ export const STATIC_DASHBOARD_ROUTES: RouteObject[] = [
 	{ path: "bi/questions/:id", element: <S><CardDetailPage /></S> },
 	{ path: "bi/questions/:id/edit", element: <S><CardEditorPage /></S> },
 	{ path: "bi/data", element: <S><DataPage /></S> },
-	{ path: "bi/data/new", element: <S><DatabaseNewPage /></S> },
 	{ path: "bi/data/:dbId", element: <S><DatabaseDetailPage /></S> },
-	{ path: "bi/data/:dbId/edit", element: <S><DatabaseEditPage /></S> },
 	{ path: "bi/data/:dbId/tables/:tableId", element: <S><TableDetailPage /></S> },
 	{ path: "bi/data/:dbId/tables/:tableId/fields/:fieldId", element: <S><FieldDetailPage /></S> },
 	{ path: "bi/models", element: <S><ModelsPage /></S> },

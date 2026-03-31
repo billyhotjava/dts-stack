@@ -123,7 +123,25 @@ public class PlatformDirectoryResource {
             String key = summary.username().toLowerCase();
             summaries.putIfAbsent(key, summary);
         }
-        return ResponseEntity.ok(ApiResponse.ok(new ArrayList<>(summaries.values())));
+
+        // For users missing deptName from Keycloak attributes, resolve via PersonProfile
+        List<String> needDeptResolve = summaries.values().stream()
+            .filter(s -> !StringUtils.hasText(s.deptName()) && StringUtils.hasText(s.deptCode()))
+            .map(UserSummary::username).toList();
+        Map<String, AdminUserService.DepartmentInfo> deptMap =
+            needDeptResolve.isEmpty() ? Map.of() : adminUserService.resolveDepartments(needDeptResolve);
+        List<UserSummary> result = new ArrayList<>(summaries.size());
+        for (UserSummary s : summaries.values()) {
+            if (!StringUtils.hasText(s.deptName())) {
+                AdminUserService.DepartmentInfo dept = deptMap.get(s.username());
+                if (dept != null && StringUtils.hasText(dept.deptName())) {
+                    result.add(new UserSummary(s.id(), s.username(), s.displayName(), s.deptCode(), dept.deptName()));
+                    continue;
+                }
+            }
+            result.add(s);
+        }
+        return ResponseEntity.ok(ApiResponse.ok(result));
     }
 
     @GetMapping("/roles")
@@ -171,15 +189,18 @@ public class PlatformDirectoryResource {
         String username = user.getUsername().trim();
         String displayName = firstNonBlank(
             user.getFullName(),
+            firstAttribute(user.getAttributes(), "fullName", "fullname", "display_name", "displayName"),
             combine(user.getFirstName(), user.getLastName()),
             username
         );
-        String dept = firstAttribute(user.getAttributes(), "dept_code", "deptCode", "department");
+        String deptCode = firstAttribute(user.getAttributes(), "dept_code", "deptCode", "department");
+        String deptName = firstAttribute(user.getAttributes(), "deptName", "dept_name", "departmentName", "org_name");
         return new UserSummary(
             firstNonBlank(user.getId(), username),
             username,
             displayName,
-            StringUtils.hasText(dept) ? dept.trim() : null
+            StringUtils.hasText(deptCode) ? deptCode.trim() : null,
+            StringUtils.hasText(deptName) ? deptName.trim() : null
         );
     }
 
@@ -389,7 +410,7 @@ public class PlatformDirectoryResource {
         return null;
     }
 
-    public record UserSummary(String id, String username, String displayName, String deptCode) {}
+    public record UserSummary(String id, String username, String displayName, String deptCode, String deptName) {}
 
     public record RoleSummary(String id, String name, String description, String scope, List<String> operations, String source) {}
 

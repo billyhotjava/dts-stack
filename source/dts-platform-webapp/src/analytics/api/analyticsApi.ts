@@ -1687,6 +1687,14 @@ export type UserSearchItem = {
 	common_name?: string;
 };
 
+export type PlatformUser = {
+	id?: string;
+	username: string;
+	displayName?: string;
+	deptCode?: string;
+	deptName?: string;
+};
+
 export type PlatformRole = {
 	id?: string;
 	name: string;
@@ -1704,6 +1712,15 @@ export const analyticsApi = {
 		),
 	searchUsers: (query: string) =>
 		fetchJson<UserSearchItem[]>("/bi/api/user/search?q=" + encodeURIComponent(query)),
+	listPlatformUsers: async (keyword?: string): Promise<PlatformUser[]> => {
+		const params = keyword ? `?keyword=${encodeURIComponent(keyword)}` : '';
+		const response = await apiFetch(`/api/directory/users${params}`, { method: "GET" }, true);
+		if (!response.ok) return [];
+		const body = await response.json();
+		// Platform returns { data: [...] } or raw array
+		const list = Array.isArray(body) ? body : Array.isArray(body?.data) ? body.data : [];
+		return list as PlatformUser[];
+	},
 	listPlatformRoles: async (): Promise<PlatformRole[]> => {
 		const response = await apiFetch("/api/directory/roles", { method: "GET" }, true);
 		if (!response.ok) return [];
