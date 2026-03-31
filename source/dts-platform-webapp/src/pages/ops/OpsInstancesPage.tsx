@@ -1,5 +1,4 @@
 import { useEffect, useState } from "react";
-import { toast } from "sonner";
 import { Button, Card, Input, Select, Space, Table, Tag, Typography } from "antd";
 import type { ColumnsType } from "antd/es/table";
 import { PageHeader } from "@/components/page-header";
@@ -44,8 +43,8 @@ export default function OpsInstancesPage() {
 				limit: 200,
 			});
 			setRecords(Array.isArray(list) ? (list as OpsInstance[]) : []);
-		} catch (error: any) {
-			toast.error(error?.message || "实例加载失败");
+		} catch {
+			// handled by global interceptor
 		} finally {
 			setLoading(false);
 		}

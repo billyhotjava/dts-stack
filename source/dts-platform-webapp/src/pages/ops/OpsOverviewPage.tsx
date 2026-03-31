@@ -1,5 +1,4 @@
 import { useEffect, useMemo, useState } from "react";
-import { toast } from "sonner";
 import type { EChartsOption } from "echarts";
 import { Alert, Button, Card, Col, Empty, InputNumber, Row, Select, Space, Statistic, Table, Tabs, Tag, Typography } from "antd";
 import { ReloadOutlined } from "@ant-design/icons";
@@ -106,8 +105,8 @@ export default function OpsOverviewPage() {
 			setOverview(summary as OpsOverview);
 			setMetrics(metricPayload as OpsDevCenterMetrics);
 			setAlerts(Array.isArray(alertList) ? (alertList as OpsAlert[]) : []);
-		} catch (error: any) {
-			toast.error(error?.message || "运维概览加载失败");
+		} catch {
+			// handled by global interceptor
 		} finally {
 			setLoading(false);
 		}

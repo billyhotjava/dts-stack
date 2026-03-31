@@ -35,8 +35,8 @@ export default function OpsBackfillPage() {
 		try {
 			const list = await opsService.backfills();
 			setRecords(Array.isArray(list) ? (list as OpsBackfill[]) : []);
-		} catch (error: any) {
-			toast.error(error?.message || "补数记录加载失败");
+		} catch {
+			// handled by global interceptor
 		} finally {
 			setLoading(false);
 		}
@@ -46,8 +46,8 @@ export default function OpsBackfillPage() {
 		try {
 			const list = await listAirflowJobs(200);
 			setJobs(Array.isArray(list) ? (list as AirflowJob[]) : []);
-		} catch (error: any) {
-			toast.error(error?.message || "Airflow 任务加载失败");
+		} catch {
+			// handled by global interceptor
 		}
 	};
 
@@ -76,7 +76,7 @@ export default function OpsBackfillPage() {
 			await loadBackfills();
 		} catch (error: any) {
 			if (error?.errorFields) return;
-			toast.error(error?.message || "提交失败");
+			// API errors handled by global interceptor
 		}
 	};
 

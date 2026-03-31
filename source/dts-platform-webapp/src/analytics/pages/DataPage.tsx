@@ -67,7 +67,6 @@ export default function DataPage() {
 			})
 			.catch((e) => {
 				console.error("Failed to load data lake sources:", e);
-				message.error("加载数据源列表失败");
 			})
 			.finally(() => setLakeLoading(false));
 	}, []);
@@ -83,7 +82,6 @@ export default function DataPage() {
 			.then((items) => setUploads(items ?? []))
 			.catch((e) => {
 				console.error("Failed to load uploads:", e);
-				message.error("加载上传列表失败");
 			})
 			.finally(() => setUploadsLoading(false));
 	}, [dataLakeId]);

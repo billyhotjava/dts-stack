@@ -2,7 +2,6 @@ import { useEffect, useMemo, useState } from "react";
 import { Button, Card, Select, Space, Table, Tag } from "antd";
 import type { ColumnsType } from "antd/es/table";
 import { CheckCircle2, RefreshCw, Shield, Workflow } from "lucide-react";
-import { toast } from "sonner";
 import { PlatformSummaryCards } from "@/components/console-page";
 import { EmptyState } from "@/components/empty-state";
 import workbenchService, { type WorkbenchTodoItem } from "@/api/services/workbenchService";
@@ -38,8 +37,7 @@ export default function Page() {
 		try {
 			const list = await workbenchService.todos();
 			setTodos(Array.isArray(list) ? (list as WorkbenchTodoItem[]) : []);
-		} catch (error: any) {
-			toast.error(error?.message || "待办加载失败");
+		} catch {
 			setTodos([]);
 		} finally {
 			setLoading(false);

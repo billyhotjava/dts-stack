@@ -1,5 +1,4 @@
 import { useEffect, useState } from "react";
-import { toast } from "sonner";
 import { Card, Table, Tag, Typography } from "antd";
 import type { ColumnsType } from "antd/es/table";
 import { PageHeader } from "@/components/page-header";
@@ -16,8 +15,8 @@ export default function OpsAlertLogPage() {
 		try {
 			const list = await opsService.alerts({ limit: 200 });
 			setAlerts(Array.isArray(list) ? (list as OpsAlert[]) : []);
-		} catch (error: any) {
-			toast.error(error?.message || "告警加载失败");
+		} catch {
+			// handled by global interceptor
 		} finally {
 			setLoading(false);
 		}

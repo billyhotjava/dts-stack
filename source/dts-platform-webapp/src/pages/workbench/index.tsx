@@ -293,7 +293,7 @@ export default function Page() {
 			if (error && typeof error === "object" && "errorFields" in error) {
 				return;
 			}
-			toast.error("保存收藏失败");
+			// handled by global interceptor
 		} finally {
 			setFavoriteSaving(false);
 		}
