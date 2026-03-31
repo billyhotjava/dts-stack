@@ -384,7 +384,7 @@ const BatchImportModal = ({
 			footer={null}
 		>
 			<Alert type="warning" showIcon message="非密模块禁止上传涉密数据" style={{ marginBottom: 16 }} />
-		<Tabs
+			<Tabs
 				activeKey={activeTab}
 				onChange={setActiveTab}
 				items={[
