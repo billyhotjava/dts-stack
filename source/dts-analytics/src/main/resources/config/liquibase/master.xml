@@ -47,4 +47,5 @@
     <include file="config/liquibase/changelog/0040_screen_classification.xml" relativeToChangelogFile="false"/>
     <include file="config/liquibase/changelog/0041_drop_screen_acl.xml" relativeToChangelogFile="false"/>
     <include file="config/liquibase/changelog/0042_user_platform_username.xml" relativeToChangelogFile="false"/>
+    <include file="config/liquibase/changelog/0043_screen_access.xml" relativeToChangelogFile="false"/>
 </databaseChangeLog>

@@ -1,0 +1,51 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+        http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
+
+    <changeSet id="0043-screen-access" author="dts">
+        <preConditions onFail="MARK_RAN">
+            <not>
+                <tableExists tableName="analytics_screen_access"/>
+            </not>
+        </preConditions>
+        <createTable tableName="analytics_screen_access">
+            <column name="id" type="bigint" autoIncrement="true">
+                <constraints primaryKey="true" nullable="false"/>
+            </column>
+            <column name="screen_id" type="bigint">
+                <constraints nullable="false"/>
+            </column>
+            <column name="grantee_type" type="varchar(10)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="grantee_id" type="varchar(200)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="permission" type="varchar(10)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="granted_by" type="bigint"/>
+            <column name="granted_at" type="timestamptz" defaultValueComputed="now()">
+                <constraints nullable="false"/>
+            </column>
+        </createTable>
+        <addUniqueConstraint
+            tableName="analytics_screen_access"
+            columnNames="screen_id, grantee_type, grantee_id"
+            constraintName="uq_screen_access"/>
+        <createIndex tableName="analytics_screen_access" indexName="idx_screen_access_screen_id">
+            <column name="screen_id"/>
+        </createIndex>
+        <createIndex tableName="analytics_screen_access" indexName="idx_screen_access_grantee">
+            <column name="grantee_type"/>
+            <column name="grantee_id"/>
+        </createIndex>
+        <rollback>
+            <dropTable tableName="analytics_screen_access"/>
+        </rollback>
+    </changeSet>
+
+</databaseChangeLog>
