@@ -1,49 +1,43 @@
 package com.yuzhi.dts.analytics.service;
 
 import com.yuzhi.dts.analytics.domain.AnalyticsScreen;
+import com.yuzhi.dts.analytics.domain.AnalyticsScreenAccess;
 import com.yuzhi.dts.analytics.domain.AnalyticsUser;
-import com.yuzhi.dts.analytics.service.PlatformPermissionClient.AccessibleAssetsResult;
-import com.yuzhi.dts.analytics.service.PlatformPermissionClient.PermissionResult;
-import com.yuzhi.dts.analytics.web.support.PlatformContext;
+import com.yuzhi.dts.analytics.repository.AnalyticsScreenAccessRepository;
 import java.util.Collections;
 import java.util.List;
 import org.springframework.stereotype.Service;
 
 /**
- * Screen permission service — all decisions delegated to the platform permission system.
+ * Screen permission service — all decisions delegated to local analytics_screen_access table.
  *
- * <p>There are no local ACL rules here. Superuser flags, creator checks, and role-based
- * shortcuts have been removed. The platform is the single source of truth:
+ * <p>Permission levels:
  * <ul>
- *   <li>MANAGE grant  → {@link PermissionSnapshot#all()} (canRead + canEdit + isOwner)</li>
- *   <li>EDIT grant    → {@link PermissionSnapshot#editOnly()} (canRead + canEdit)</li>
- *   <li>READ grant    → {@link PermissionSnapshot#readOnly()} (canRead only)</li>
- *   <li>no grant      → {@link PermissionSnapshot#none()}</li>
+ *   <li>OWNER   → {@link PermissionSnapshot#all()} (canRead + canEdit + isOwner)</li>
+ *   <li>MANAGER → {@link PermissionSnapshot#managerOnly()} (canRead + isOwner, no canEdit)</li>
+ *   <li>VIEWER  → {@link PermissionSnapshot#readOnly()} (canRead only)</li>
+ *   <li>no grant → {@link PermissionSnapshot#none()}</li>
  * </ul>
  *
- * <p>Role-based global access (ROLE_OP_ADMIN → MANAGE, ROLE_INST_DATA_OWNER → MANAGE, etc.)
- * is handled entirely by {@code AssetPermissionService} on the platform side.
+ * <p>Superuser bypass: {@code analytics_user.superuser = true} → skip table, full access.
+ * No hardcoded role names. No default grants.
  */
 @Service
 public class ScreenPermissionService {
 
-    /** Sentinel list indicating access to all screens. */
-    private static final List<String> ALL_MARKER = List.of("*");
-
-    private final PlatformPermissionClient platformPermissionClient;
-
-    public ScreenPermissionService(PlatformPermissionClient platformPermissionClient) {
-        this.platformPermissionClient = platformPermissionClient;
-    }
+    /** Sentinel list: first element is -1L, indicates access to ALL screens (superuser). */
+    private static final List<Long> ALL_MARKER = List.of(-1L);
 
     /**
-     * Invalidate cached permission results for a given username.
-     * Call after grant changes so subsequent requests reflect the updated permissions.
+     * Placeholder role used in JPQL IN clause when the user has no roles,
+     * to prevent empty collection binding which causes a SQL syntax error.
      */
-    public void invalidateCacheForUser(String username) {
-        if (username != null) {
-            platformPermissionClient.invalidateCache(username);
-        }
+    private static final String NO_ROLE_PLACEHOLDER = "__NO_ROLE__";
+
+    private final AnalyticsScreenAccessRepository accessRepository;
+
+    public ScreenPermissionService(AnalyticsScreenAccessRepository accessRepository) {
+        this.accessRepository = accessRepository;
     }
 
     // ---- Permission snapshot ----
@@ -54,8 +48,9 @@ public class ScreenPermissionService {
             return new PermissionSnapshot(true, true, true);
         }
 
-        public static PermissionSnapshot editOnly() {
-            return new PermissionSnapshot(true, true, false);
+        /** MANAGER: can read and manage grants, but cannot edit screen content. */
+        public static PermissionSnapshot managerOnly() {
+            return new PermissionSnapshot(true, false, true);
         }
 
         public static PermissionSnapshot readOnly() {
@@ -70,108 +65,86 @@ public class ScreenPermissionService {
     // ---- Main permission check ----
 
     /**
-     * Build a permission snapshot by delegating entirely to the platform permission system.
+     * Build a permission snapshot by querying the local access table.
      *
-     * <p>Requires {@code platform_username} to be populated on the user entity (set during
-     * SSO provisioning via {@code PlatformTrustedUserService}). Falls back to the email
-     * local-part for legacy records where {@code platform_username} is not yet set.
+     * @param roles list of role names from X-DTS-Roles header; may be empty
      */
-    public PermissionSnapshot snapshot(AnalyticsScreen screen, AnalyticsUser user, PlatformContext context) {
+    public PermissionSnapshot snapshot(AnalyticsScreen screen, AnalyticsUser user, List<String> roles) {
         if (user == null) {
             return PermissionSnapshot.none();
         }
-        String username = extractUsername(user);
-        if (username == null) {
-            return PermissionSnapshot.none();
-        }
-
-        String deptCode = context != null ? context.dept() : null;
-        String screenId = String.valueOf(screen.getId());
-
-        PermissionResult result = platformPermissionClient.check(
-                username, context != null ? context.roles() : null, deptCode, "SCREEN", screenId);
-
-        if (!result.allowed()) {
-            return PermissionSnapshot.none();
-        }
-
-        String permission = result.permission();
-        if ("MANAGE".equalsIgnoreCase(permission)) {
+        if (user.isSuperuser()) {
             return PermissionSnapshot.all();
         }
-        if ("EDIT".equalsIgnoreCase(permission)) {
-            return PermissionSnapshot.editOnly();
+
+        String userId = String.valueOf(user.getId());
+        List<String> safeRoles = safeRoles(roles);
+
+        List<AnalyticsScreenAccess> grants = accessRepository.findGrantsForUser(
+                screen.getId(), userId, safeRoles);
+
+        // Highest permission wins: OWNER > MANAGER > VIEWER
+        boolean hasOwner = grants.stream().anyMatch(g -> "OWNER".equalsIgnoreCase(g.getPermission()));
+        if (hasOwner) {
+            return PermissionSnapshot.all();
         }
-        return PermissionSnapshot.readOnly();
+        boolean hasManager = grants.stream().anyMatch(g -> "MANAGER".equalsIgnoreCase(g.getPermission()));
+        if (hasManager) {
+            return PermissionSnapshot.managerOnly();
+        }
+        boolean hasViewer = grants.stream().anyMatch(g -> "VIEWER".equalsIgnoreCase(g.getPermission()));
+        if (hasViewer) {
+            return PermissionSnapshot.readOnly();
+        }
+        return PermissionSnapshot.none();
     }
 
     // ---- Accessible screen IDs ----
 
     /**
-     * List the IDs of screens accessible to the given user via the platform.
-     * Returns a sentinel list {@code ["*"]} when the platform reports global access
-     * (e.g. ROLE_OP_ADMIN, ROLE_INST_DATA_OWNER, ROLE_INST_LEADER).
+     * Returns IDs of screens accessible to the user.
+     * Returns sentinel {@code [-1L]} when the user is a superuser (access to all screens).
+     *
+     * @param roles list of role names from X-DTS-Roles header; may be empty
      */
-    public List<String> listAccessibleScreenIds(AnalyticsUser user, PlatformContext context) {
+    public List<Long> listAccessibleScreenIds(AnalyticsUser user, List<String> roles) {
         if (user == null) {
             return Collections.emptyList();
         }
-        String username = extractUsername(user);
-        if (username == null) {
-            return Collections.emptyList();
-        }
-
-        String deptCode = context != null ? context.dept() : null;
-
-        AccessibleAssetsResult result = platformPermissionClient.listAccessibleAssetIds(
-                username, context != null ? context.roles() : null, deptCode, "SCREEN", 0, 10_000);
-
-        if (result.isAll()) {
+        if (user.isSuperuser()) {
             return ALL_MARKER;
         }
 
-        return result.assetIds().isEmpty() ? Collections.emptyList() : List.copyOf(result.assetIds());
+        String userId = String.valueOf(user.getId());
+        List<String> safeRoles = safeRoles(roles);
+
+        List<Long> ids = accessRepository.findAccessibleScreenIds(userId, safeRoles);
+        return ids.isEmpty() ? Collections.emptyList() : List.copyOf(ids);
     }
 
     /**
-     * Check whether the returned list represents "all accessible" (sentinel marker).
+     * Check whether the returned list represents "all accessible" (superuser sentinel).
      */
-    public boolean isAllAccessible(List<String> ids) {
-        return ids != null && ids.size() == 1 && "*".equals(ids.getFirst());
+    public boolean isAllAccessible(List<Long> ids) {
+        return ids != null && ids.size() == 1 && ids.getFirst().equals(-1L);
     }
 
     // ---- Stub methods for future implementation ----
 
-    /**
-     * Check whether the user's classification level permits viewing this screen.
-     * Stub: always returns true.
-     */
     public boolean checkClassification(AnalyticsScreen screen, String personnelLevel) {
         return true;
     }
 
-    /**
-     * Check whether the user has access to all data sources used by this screen.
-     * Stub: always returns true.
-     */
     public boolean checkDataSourceAccess(AnalyticsScreen screen, AnalyticsUser user) {
         return true;
     }
 
     // ---- Private helpers ----
 
-    private String extractUsername(AnalyticsUser user) {
-        // Prefer the Keycloak username stored during SSO provisioning.
-        // Fall back to the email local-part for legacy records.
-        String platformUsername = user.getPlatformUsername();
-        if (platformUsername != null && !platformUsername.isBlank()) {
-            return platformUsername.trim();
+    private List<String> safeRoles(List<String> roles) {
+        if (roles == null || roles.isEmpty()) {
+            return List.of(NO_ROLE_PLACEHOLDER);
         }
-        String email = user.getEmail();
-        if (email == null) {
-            return null;
-        }
-        int at = email.indexOf('@');
-        return at > 0 ? email.substring(0, at) : email;
+        return roles;
     }
 }
