@@ -43,6 +43,16 @@ public class ScreenPermissionService {
         this.screenRepository = screenRepository;
     }
 
+    /**
+     * Invalidate cached permission results for a given username.
+     * Call after grant changes so subsequent requests reflect the updated permissions.
+     */
+    public void invalidateCacheForUser(String username) {
+        if (username != null) {
+            platformPermissionClient.invalidateCache(username);
+        }
+    }
+
     // ---- Permission snapshot ----
 
     public record PermissionSnapshot(boolean canRead, boolean canEdit, boolean isOwner) {

@@ -1188,6 +1188,8 @@ public class ScreenResource {
                 screen.getId(), granteeType.toUpperCase(), granteeId, permission.toUpperCase(), grantedBy);
 
             screenAuditService.log(screen.getId(), user.orElseThrow().getId(), "grant.add", null, grant, requestIdFrom(request));
+            // Invalidate permission cache for the grantee so they see the screen immediately
+            screenPermissionService.invalidateCacheForUser(granteeId);
             return ResponseEntity.ok(grant);
         } catch (Exception ex) {
             return ResponseEntity.status(503).body(Map.of("error", "Failed to create grant: " + ex.getMessage()));
@@ -1210,8 +1212,18 @@ public class ScreenResource {
         if (!perms.isOwner()) return forbidden();
 
         try {
+            // Look up the grantee before deleting, so we can invalidate their cache
+            List<Map<String, Object>> grants = screenOwnershipService.listGrants(screen.getId());
+            String revokedGrantee = grants.stream()
+                .filter(g -> grantId == ((Number) g.getOrDefault("id", 0L)).longValue())
+                .map(g -> (String) g.get("granteeId"))
+                .findFirst().orElse(null);
+
             screenOwnershipService.revokeGrant(grantId);
             screenAuditService.log(screen.getId(), user.orElseThrow().getId(), "grant.revoke", Map.of("grantId", grantId), null, requestIdFrom(request));
+            if (revokedGrantee != null) {
+                screenPermissionService.invalidateCacheForUser(revokedGrantee);
+            }
             return ResponseEntity.ok(Map.of("deleted", true));
         } catch (Exception ex) {
             return ResponseEntity.status(503).body(Map.of("error", "Failed to revoke grant: " + ex.getMessage()));
