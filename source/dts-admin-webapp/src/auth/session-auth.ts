@@ -67,18 +67,11 @@ export function redirectToLoginWithReturn(): void {
 	redirecting = true;
 	const loginPath = "/auth/login";
 	const current = currentRoutePath();
-	// If already on the login page, don't wrap the URL again — extract the existing
-	// redirect target (if any) and reuse it to prevent ?redirect= parameter nesting
-	// that causes 414 Request-URI Too Large.
 	const pathOnly = current.split("?")[0];
+	// Already on the login page — don't navigate again. The ?redirect= parameter
+	// (if present) is already in the URL and will be read after login succeeds.
+	// Re-navigating to the same URL causes a reload loop.
 	if (pathOnly === loginPath || pathOnly.endsWith(loginPath)) {
-		// Already on login — keep the URL as-is (or preserve existing redirect param)
-		const params = new URLSearchParams(current.split("?")[1] || "");
-		const existingRedirect = params.get("redirect");
-		if (existingRedirect) {
-			window.location.replace(buildLoginRedirectHref(resolveAdminLoginHref(), existingRedirect));
-		}
-		// else: already on login with no redirect param — do nothing
 		return;
 	}
 	window.location.replace(buildLoginRedirectHref(resolveAdminLoginHref(), current));
