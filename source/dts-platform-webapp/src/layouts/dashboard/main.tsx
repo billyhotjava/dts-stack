@@ -112,10 +112,10 @@ const collectMenuPaths = (menus: MenuTree[]): Set<string> => {
 /**
  * Paths that are always reachable regardless of menu configuration.
  * Platform core pages (workbench, settings, etc.) are not gated by menu visibility.
- * Only BI paths (/bi/*) are subject to menu-based access control.
+ * BI paths (/bi/*) are NOT in this list — they are subject to menu-based access control.
  */
 const ALWAYS_ALLOWED_PREFIXES = ["/workbench", "/explore", "/governance", "/catalog",
-	"/foundation", "/modeling", "/security", "/services", "/ops", "/bi", "/my", "/settings"];
+	"/foundation", "/modeling", "/security", "/services", "/ops", "/my", "/settings"];
 
 /** Check if pathname is reachable from any menu path (exact or prefix match). */
 const isPathInMenuTree = (menuPaths: Set<string>, pathname: string): boolean => {
