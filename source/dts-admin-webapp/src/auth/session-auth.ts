@@ -48,12 +48,11 @@ export async function refreshAccessToken(): Promise<RefreshResult> {
 			return null;
 		}
 	})().finally(() => {
-		// Delay clearing so concurrent awaiters in the same tick get the shared result.
-		// queueMicrotask is too aggressive — a 50ms window is safe for Keycloak's
-		// single-use refresh tokens and matches the platform implementation.
-		setTimeout(() => {
-			refreshPromise = null;
-		}, 50);
+		// Clear synchronously: all callers that already `await refreshPromise` hold their
+		// own reference and will receive the resolved value regardless of this assignment.
+		// Clearing immediately ensures NEW callers start a fresh refresh instead of joining
+		// a stale resolved promise.
+		refreshPromise = null;
 	});
 
 	return refreshPromise;
