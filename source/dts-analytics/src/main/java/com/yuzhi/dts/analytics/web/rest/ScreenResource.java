@@ -6,6 +6,7 @@ import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.yuzhi.dts.analytics.domain.AnalyticsPublicLink;
 import com.yuzhi.dts.analytics.domain.AnalyticsScreen;
+import com.yuzhi.dts.analytics.domain.AnalyticsScreenAccess;
 import com.yuzhi.dts.analytics.domain.AnalyticsScreenVersion;
 import com.yuzhi.dts.analytics.domain.AnalyticsUser;
 import com.yuzhi.dts.analytics.repository.AnalyticsScreenRepository;
@@ -23,7 +24,6 @@ import com.yuzhi.dts.analytics.service.ScreenOwnershipService;
 import com.yuzhi.dts.analytics.service.ScreenPermissionService;
 import com.yuzhi.dts.analytics.service.ScreenSpecValidator;
 import com.yuzhi.dts.analytics.web.support.MetabaseAuth;
-import com.yuzhi.dts.analytics.web.support.PlatformContext;
 import jakarta.servlet.http.HttpServletRequest;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
@@ -35,7 +35,6 @@ import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
-import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import org.springframework.http.MediaType;
@@ -118,10 +117,9 @@ public class ScreenResource {
             return unauthorized();
         }
 
-        PlatformContext context = PlatformContext.from(request);
+        List<String> roles = extractRoles(request);
 
-        // Get accessible screen IDs first (efficient: single platform API call)
-        List<String> accessibleIds = screenPermissionService.listAccessibleScreenIds(user.orElseThrow(), context);
+        List<Long> accessibleIds = screenPermissionService.listAccessibleScreenIds(user.orElseThrow(), roles);
 
         List<AnalyticsScreen> screens;
         if (screenPermissionService.isAllAccessible(accessibleIds)) {
@@ -129,17 +127,12 @@ public class ScreenResource {
         } else if (accessibleIds.isEmpty()) {
             screens = List.of();
         } else {
-            // Convert string IDs to Long and query
-            List<Long> ids = accessibleIds.stream()
-                .map(s -> { try { return Long.parseLong(s); } catch (NumberFormatException e) { return null; } })
-                .filter(Objects::nonNull)
-                .toList();
-            screens = ids.isEmpty() ? List.of() : screenRepository.findAllByIdInAndArchivedFalse(ids);
+            screens = screenRepository.findAllByIdInAndArchivedFalse(accessibleIds);
         }
 
         List<ObjectNode> result = screens.stream()
                 .map(screen -> {
-                    ScreenPermissionService.PermissionSnapshot permissions = screenPermissionService.snapshot(screen, user.orElseThrow(), context);
+                    ScreenPermissionService.PermissionSnapshot permissions = screenPermissionService.snapshot(screen, user.orElseThrow(), roles);
                     if (!permissions.canRead()) {
                         return null;
                     }
@@ -216,8 +209,8 @@ public class ScreenResource {
             return ResponseEntity.notFound().build();
         }
 
-        PlatformContext context = PlatformContext.from(request);
-        ScreenPermissionService.PermissionSnapshot permissions = screenPermissionService.snapshot(screen, user.orElseThrow(), context);
+        List<String> roles = extractRoles(request);
+        ScreenPermissionService.PermissionSnapshot permissions = screenPermissionService.snapshot(screen, user.orElseThrow(), roles);
         if (!permissions.canRead()) {
             return forbidden();
         }
@@ -249,8 +242,8 @@ public class ScreenResource {
             return ResponseEntity.notFound().build();
         }
 
-        PlatformContext context = PlatformContext.from(request);
-        if (!screenPermissionService.snapshot(screen, user.orElseThrow(), context).canRead()) {
+        List<String> roles = extractRoles(request);
+        if (!screenPermissionService.snapshot(screen, user.orElseThrow(), roles).canRead()) {
             return forbidden();
         }
 
@@ -273,8 +266,8 @@ public class ScreenResource {
         if (screen == null || screen.isArchived()) {
             return ResponseEntity.notFound().build();
         }
-        PlatformContext context = PlatformContext.from(request);
-        if (!screenPermissionService.snapshot(screen, user.orElseThrow(), context).canRead()) {
+        List<String> roles = extractRoles(request);
+        if (!screenPermissionService.snapshot(screen, user.orElseThrow(), roles).canRead()) {
             return forbidden();
         }
         AnalyticsScreenVersion fromVersion = screenVersionRepository.findByIdAndScreenId(fromVersionId, screen.getId()).orElse(null);
@@ -300,8 +293,8 @@ public class ScreenResource {
             return ResponseEntity.notFound().build();
         }
 
-        PlatformContext context = PlatformContext.from(request);
-        if (!screenPermissionService.snapshot(screen, user.orElseThrow(), context).isOwner()) {
+        List<String> roles = extractRoles(request);
+        if (!screenPermissionService.snapshot(screen, user.orElseThrow(), roles).isOwner()) {
             return forbidden();
         }
 
@@ -333,8 +326,8 @@ public class ScreenResource {
             return ResponseEntity.notFound().build();
         }
 
-        PlatformContext context = PlatformContext.from(request);
-        if (!screenPermissionService.snapshot(screen, user.orElseThrow(), context).canRead()) {
+        List<String> roles = extractRoles(request);
+        if (!screenPermissionService.snapshot(screen, user.orElseThrow(), roles).canRead()) {
             return forbidden();
         }
 
@@ -373,8 +366,8 @@ public class ScreenResource {
             return ResponseEntity.notFound().build();
         }
 
-        PlatformContext context = PlatformContext.from(request);
-        ScreenPermissionService.PermissionSnapshot permissions = screenPermissionService.snapshot(screen, user.orElseThrow(), context);
+        List<String> roles = extractRoles(request);
+        ScreenPermissionService.PermissionSnapshot permissions = screenPermissionService.snapshot(screen, user.orElseThrow(), roles);
         if (!permissions.canRead()) {
             return forbidden();
         }
@@ -512,8 +505,8 @@ public class ScreenResource {
             return ResponseEntity.notFound().build();
         }
 
-        PlatformContext context = PlatformContext.from(request);
-        ScreenPermissionService.PermissionSnapshot permissions = screenPermissionService.snapshot(screen, user.orElseThrow(), context);
+        List<String> roles = extractRoles(request);
+        ScreenPermissionService.PermissionSnapshot permissions = screenPermissionService.snapshot(screen, user.orElseThrow(), roles);
         if (!permissions.canRead()) {
             return forbidden();
         }
@@ -606,8 +599,8 @@ public class ScreenResource {
             return ResponseEntity.notFound().build();
         }
 
-        PlatformContext context = PlatformContext.from(request);
-        ScreenPermissionService.PermissionSnapshot permissions = screenPermissionService.snapshot(screen, user.orElseThrow(), context);
+        List<String> roles = extractRoles(request);
+        ScreenPermissionService.PermissionSnapshot permissions = screenPermissionService.snapshot(screen, user.orElseThrow(), roles);
         if (!permissions.canRead()) {
             return forbidden();
         }
@@ -768,17 +761,10 @@ public class ScreenResource {
         screen.setCreatorId(user.orElseThrow().getId());
         screen.setArchived(false);
 
-        screen.setOwnerDeptCode(PlatformContext.from(request).dept());
         screen = screenRepository.save(screen);
 
-        String creatorUsername = extractUsername(user.orElseThrow());
-        screenOwnershipService.registerOwnership(screen.getId(), creatorUsername, PlatformContext.from(request).dept());
-        // 在平台注册创建者的 MANAGE 授权，使其可以通过平台权限系统发现并管理自己创建的大屏。
-        // 平台的 listAccessibleAssetIds 只查 explicit grants，不查 ownership，因此必须显式建档。
-        if (!creatorUsername.isBlank()) {
-            screenOwnershipService.createGrant(screen.getId(), "USER", creatorUsername, "MANAGE", creatorUsername);
-            screenPermissionService.invalidateCacheForUser(creatorUsername);
-        }
+        screenOwnershipService.createGrant(screen.getId(), "USER",
+                String.valueOf(user.orElseThrow().getId()), "OWNER", user.orElseThrow().getId());
 
         ScreenPermissionService.PermissionSnapshot permissions = ScreenPermissionService.PermissionSnapshot.all();
         ObjectNode detail = toDetailResponse(screen, null, null, "draft", permissions);
@@ -804,8 +790,8 @@ public class ScreenResource {
             return ResponseEntity.notFound().build();
         }
 
-        PlatformContext context = PlatformContext.from(request);
-        ScreenPermissionService.PermissionSnapshot permissions = screenPermissionService.snapshot(screen, user.orElseThrow(), context);
+        List<String> roles = extractRoles(request);
+        ScreenPermissionService.PermissionSnapshot permissions = screenPermissionService.snapshot(screen, user.orElseThrow(), roles);
         if (!permissions.canEdit()) {
             return forbidden();
         }
@@ -891,8 +877,8 @@ public class ScreenResource {
             return ResponseEntity.notFound().build();
         }
 
-        PlatformContext context = PlatformContext.from(request);
-        ScreenPermissionService.PermissionSnapshot permissions = screenPermissionService.snapshot(screen, user.orElseThrow(), context);
+        List<String> roles = extractRoles(request);
+        ScreenPermissionService.PermissionSnapshot permissions = screenPermissionService.snapshot(screen, user.orElseThrow(), roles);
         if (!permissions.canEdit()) {
             return forbidden();
         }
@@ -958,8 +944,8 @@ public class ScreenResource {
             return ResponseEntity.notFound().build();
         }
 
-        PlatformContext context = PlatformContext.from(request);
-        ScreenPermissionService.PermissionSnapshot permissions = screenPermissionService.snapshot(screen, user.orElseThrow(), context);
+        List<String> roles = extractRoles(request);
+        ScreenPermissionService.PermissionSnapshot permissions = screenPermissionService.snapshot(screen, user.orElseThrow(), roles);
         if (!permissions.canEdit()) {
             return forbidden();
         }
@@ -1008,8 +994,8 @@ public class ScreenResource {
             return ResponseEntity.notFound().build();
         }
 
-        PlatformContext context = PlatformContext.from(request);
-        if (!screenPermissionService.snapshot(screen, user.orElseThrow(), context).isOwner()) {
+        List<String> roles = extractRoles(request);
+        if (!screenPermissionService.snapshot(screen, user.orElseThrow(), roles).isOwner()) {
             return ResponseEntity.status(403).contentType(MediaType.APPLICATION_JSON).body(
                 objectMapper.createObjectNode().put("error", "Only the owner can delete this screen"));
         }
@@ -1026,7 +1012,7 @@ public class ScreenResource {
         screen.setArchived(true);
         screenRepository.save(screen);
         screenEditLockService.release(screen.getId(), user.orElseThrow().getId());
-        screenOwnershipService.removeOwnership(screen.getId());
+        screenOwnershipService.removeAllGrants(screen.getId());
 
         screenAuditService.log(screen.getId(), user.orElseThrow().getId(), "screen.delete", before, null, requestIdFrom(request));
 
@@ -1048,8 +1034,10 @@ public class ScreenResource {
             return ResponseEntity.notFound().build();
         }
 
-        PlatformContext ctx = PlatformContext.from(request);
-        if (!screenPermissionService.snapshot(screen, user.orElseThrow(), ctx).isOwner()) {
+        List<String> roles = extractRoles(request);
+        String dept = trimToNull(request.getHeader("X-DTS-Dept"));
+        String classification = trimToNull(request.getHeader("X-DTS-Classification"));
+        if (!screenPermissionService.snapshot(screen, user.orElseThrow(), roles).isOwner()) {
             return forbidden();
         }
 
@@ -1063,7 +1051,7 @@ public class ScreenResource {
         String uuid;
         try {
             uuid = publicLinkService.getOrCreateScoped(
-                    PublicLinkService.MODEL_SCREEN, id, user.orElseThrow().getId(), ctx.dept(), ctx.classification());
+                    PublicLinkService.MODEL_SCREEN, id, user.orElseThrow().getId(), dept, classification);
         } catch (IllegalStateException e) {
             return forbidden();
         }
@@ -1095,8 +1083,8 @@ public class ScreenResource {
             return ResponseEntity.notFound().build();
         }
 
-        PlatformContext ctx = PlatformContext.from(request);
-        if (!screenPermissionService.snapshot(screen, user.orElseThrow(), ctx).isOwner()) {
+        List<String> roles = extractRoles(request);
+        if (!screenPermissionService.snapshot(screen, user.orElseThrow(), roles).isOwner()) {
             return forbidden();
         }
 
@@ -1127,8 +1115,8 @@ public class ScreenResource {
             return ResponseEntity.notFound().build();
         }
 
-        PlatformContext ctx = PlatformContext.from(request);
-        if (!screenPermissionService.snapshot(screen, user.orElseThrow(), ctx).isOwner()) {
+        List<String> roles = extractRoles(request);
+        if (!screenPermissionService.snapshot(screen, user.orElseThrow(), roles).isOwner()) {
             return forbidden();
         }
 
@@ -1151,11 +1139,11 @@ public class ScreenResource {
         AnalyticsScreen screen = screenRepository.findById(id).orElse(null);
         if (screen == null || screen.isArchived()) return ResponseEntity.notFound().build();
 
-        PlatformContext context = PlatformContext.from(request);
-        ScreenPermissionService.PermissionSnapshot perms = screenPermissionService.snapshot(screen, user.orElseThrow(), context);
+        List<String> roles = extractRoles(request);
+        ScreenPermissionService.PermissionSnapshot perms = screenPermissionService.snapshot(screen, user.orElseThrow(), roles);
         if (!perms.isOwner()) return forbidden();
 
-        // Proxy to platform: GET /api/asset-grants?assetType=SCREEN&assetId={id}
+        // Fetch grants from local table
         try {
             List<Map<String, Object>> grants = screenOwnershipService.listGrants(screen.getId());
             return ResponseEntity.ok(grants);
@@ -1175,11 +1163,11 @@ public class ScreenResource {
         AnalyticsScreen screen = screenRepository.findById(id).orElse(null);
         if (screen == null || screen.isArchived()) return ResponseEntity.notFound().build();
 
-        PlatformContext context = PlatformContext.from(request);
-        ScreenPermissionService.PermissionSnapshot perms = screenPermissionService.snapshot(screen, user.orElseThrow(), context);
+        List<String> roles = extractRoles(request);
+        ScreenPermissionService.PermissionSnapshot perms = screenPermissionService.snapshot(screen, user.orElseThrow(), roles);
         if (!perms.isOwner()) return forbidden();
 
-        // Parse body: { granteeType: "USER"|"DEPT"|"ROLE", granteeId: "...", permission: "READ"|"EDIT" }
+        // Parse body: { granteeType: "USER"|"ROLE", granteeId: "...", permission: "VIEWER"|"MANAGER"|"READ"|"EDIT" }
         String granteeType = body != null ? trimToNull(body.path("granteeType").asText(null)) : null;
         String granteeId = body != null ? trimToNull(body.path("granteeId").asText(null)) : null;
         String permission = body != null ? trimToNull(body.path("permission").asText(null)) : null;
@@ -1187,29 +1175,34 @@ public class ScreenResource {
         if (granteeType == null || granteeId == null || permission == null) {
             return ResponseEntity.badRequest().body(Map.of("error", "granteeType, granteeId, and permission are required"));
         }
-        if (!Set.of("USER", "DEPT", "ROLE").contains(granteeType.toUpperCase())) {
-            return ResponseEntity.badRequest().body(Map.of("error", "granteeType must be USER, DEPT, or ROLE"));
+        if (!Set.of("USER", "ROLE").contains(granteeType.toUpperCase())) {
+            return ResponseEntity.badRequest().body(Map.of("error", "granteeType must be USER or ROLE"));
         }
-        if (!Set.of("READ", "EDIT").contains(permission.toUpperCase())) {
-            return ResponseEntity.badRequest().body(Map.of("error", "permission must be READ or EDIT"));
+        if (!Set.of("VIEWER", "MANAGER", "READ", "EDIT").contains(permission.toUpperCase())) {
+            return ResponseEntity.badRequest().body(Map.of("error", "permission must be VIEWER or MANAGER"));
         }
 
+        // Translate legacy permission values to the new local table vocabulary
+        String resolvedPermission = switch (permission.toUpperCase()) {
+            case "READ" -> "VIEWER";
+            case "EDIT" -> "MANAGER";
+            default -> permission.toUpperCase(); // "VIEWER", "MANAGER" pass through
+        };
         try {
-            String grantedBy = extractUsername(user.orElseThrow());
-            // When granteeType is USER, the frontend sends the analytics numeric ID (e.g. "42").
-            // The platform grant system uses platform usernames ("test230916") for USER grants.
-            // Translate: if granteeId looks like a numeric analytics ID, resolve the platform username.
-            String resolvedGranteeId = granteeId;
-            if ("USER".equalsIgnoreCase(granteeType)) {
-                resolvedGranteeId = resolveGranteeUsername(granteeId);
-            }
-            Map<String, Object> grant = screenOwnershipService.createGrant(
-                screen.getId(), granteeType.toUpperCase(), resolvedGranteeId, permission.toUpperCase(), grantedBy);
-
-            screenAuditService.log(screen.getId(), user.orElseThrow().getId(), "grant.add", null, grant, requestIdFrom(request));
-            // Invalidate permission cache for the grantee so they see the screen immediately
-            screenPermissionService.invalidateCacheForUser(resolvedGranteeId);
-            return ResponseEntity.ok(grant);
+            Long grantedById = user.orElseThrow().getId();
+            AnalyticsScreenAccess grant = screenOwnershipService.createGrant(
+                screen.getId(), granteeType.toUpperCase(), granteeId, resolvedPermission, grantedById);
+            java.util.LinkedHashMap<String, Object> grantMap = new java.util.LinkedHashMap<>();
+            grantMap.put("id", grant.getId());
+            grantMap.put("screenId", grant.getScreenId());
+            grantMap.put("granteeType", grant.getGranteeType());
+            grantMap.put("granteeId", grant.getGranteeId());
+            grantMap.put("permission", grant.getPermission());
+            grantMap.put("grantedBy", grant.getGrantedBy() != null ? grant.getGrantedBy() : "");
+            grantMap.put("grantedAt", grant.getGrantedAt() != null ? grant.getGrantedAt().toString() : "");
+            screenAuditService.log(screen.getId(), user.orElseThrow().getId(), "grant.add", null,
+                objectMapper.valueToTree(grantMap), requestIdFrom(request));
+            return ResponseEntity.ok(grantMap);
         } catch (Exception ex) {
             return ResponseEntity.status(503).body(Map.of("error", "Failed to create grant: " + ex.getMessage()));
         }
@@ -1226,23 +1219,14 @@ public class ScreenResource {
         AnalyticsScreen screen = screenRepository.findById(id).orElse(null);
         if (screen == null || screen.isArchived()) return ResponseEntity.notFound().build();
 
-        PlatformContext context = PlatformContext.from(request);
-        ScreenPermissionService.PermissionSnapshot perms = screenPermissionService.snapshot(screen, user.orElseThrow(), context);
+        List<String> roles = extractRoles(request);
+        ScreenPermissionService.PermissionSnapshot perms = screenPermissionService.snapshot(screen, user.orElseThrow(), roles);
         if (!perms.isOwner()) return forbidden();
 
         try {
-            // Look up the grantee before deleting, so we can invalidate their cache
-            List<Map<String, Object>> grants = screenOwnershipService.listGrants(screen.getId());
-            String revokedGrantee = grants.stream()
-                .filter(g -> grantId == ((Number) g.getOrDefault("id", 0L)).longValue())
-                .map(g -> (String) g.get("granteeId"))
-                .findFirst().orElse(null);
-
             screenOwnershipService.revokeGrant(grantId);
-            screenAuditService.log(screen.getId(), user.orElseThrow().getId(), "grant.revoke", Map.of("grantId", grantId), null, requestIdFrom(request));
-            if (revokedGrantee != null) {
-                screenPermissionService.invalidateCacheForUser(revokedGrantee);
-            }
+            screenAuditService.log(screen.getId(), user.orElseThrow().getId(), "grant.revoke",
+                Map.of("grantId", grantId), null, requestIdFrom(request));
             return ResponseEntity.ok(Map.of("deleted", true));
         } catch (Exception ex) {
             return ResponseEntity.status(503).body(Map.of("error", "Failed to revoke grant: " + ex.getMessage()));
@@ -2273,13 +2257,8 @@ public class ScreenResource {
     }
 
     /**
-     * One-time admin endpoint: backfill MANAGE grants on the platform for screens
-     * created before the explicit-grant requirement was introduced.
-     *
-     * <p>Iterates every non-archived screen, resolves its creator's platform_username, and
-     * calls {@code ScreenOwnershipService.createGrant} with MANAGE permission.  Duplicate
-     * grants are silently ignored by the platform (idempotent).  Invalidates the permission
-     * cache for every affected creator so the change takes effect immediately.
+     * One-time admin endpoint: backfill OWNER grants in the local analytics_screen_access table
+     * for screens created before the local permission table was introduced.
      */
     @PostMapping(path = "/admin/backfill-grants", produces = MediaType.APPLICATION_JSON_VALUE)
     public ResponseEntity<?> backfillGrants(HttpServletRequest request) {
@@ -2288,87 +2267,48 @@ public class ScreenResource {
             return authError.orElseThrow();
         }
 
-        List<AnalyticsScreen> screens = screenRepository.findAllByArchivedFalseOrderByIdDesc();
-
-        int processed = 0;
+        List<AnalyticsScreen> allScreens = screenRepository.findAll();
+        int created = 0;
         int skipped = 0;
-        Set<String> invalidatedUsers = new HashSet<>();
 
-        for (AnalyticsScreen screen : screens) {
+        for (AnalyticsScreen screen : allScreens) {
             Long creatorId = screen.getCreatorId();
             if (creatorId == null) {
                 skipped++;
                 continue;
             }
-            AnalyticsUser creator = userRepository.findById(creatorId).orElse(null);
-            if (creator == null) {
+            String granteeId = String.valueOf(creatorId);
+            // Check if OWNER grant already exists
+            boolean hasOwner = screenOwnershipService.listGrants(screen.getId()).stream()
+                .anyMatch(g -> "USER".equals(g.get("granteeType")) && granteeId.equals(g.get("granteeId"))
+                    && "OWNER".equals(g.get("permission")));
+            if (hasOwner) {
                 skipped++;
                 continue;
             }
-            String username = extractUsername(creator);
-            if (username.isBlank()) {
-                skipped++;
-                continue;
-            }
-            try {
-                screenOwnershipService.createGrant(screen.getId(), "USER", username, "MANAGE", username);
-                if (!invalidatedUsers.contains(username)) {
-                    screenPermissionService.invalidateCacheForUser(username);
-                    invalidatedUsers.add(username);
-                }
-                processed++;
-            } catch (Exception ex) {
-                skipped++;
-            }
+            screenOwnershipService.createGrant(screen.getId(), "USER", granteeId, "OWNER", creatorId);
+            created++;
         }
 
         return ResponseEntity.ok(Map.of(
-                "processed", processed,
-                "skipped", skipped,
-                "total", screens.size(),
-                "cacheInvalidated", invalidatedUsers.size()
-        ));
+            "total", allScreens.size(),
+            "created", created,
+            "skipped", skipped));
     }
 
     /**
-     * Resolve a USER grantee identifier to a platform username.
-     *
-     * <p>The frontend's user search returns analytics numeric IDs (e.g. "42"), but the
-     * platform grant system expects Keycloak usernames (e.g. "test230916").  If the
-     * supplied id is a numeric analytics ID, look up the user and return their
-     * {@code platform_username} (falling back to email local-part for legacy records).
-     * If the id is already a non-numeric string, return it as-is.
+     * Extract roles from X-DTS-Roles header, split by comma.
+     * Returns empty list if header is absent or blank.
      */
-    private String resolveGranteeUsername(String granteeId) {
-        if (granteeId == null || granteeId.isBlank()) {
-            return granteeId;
+    private List<String> extractRoles(HttpServletRequest request) {
+        String header = request.getHeader("X-DTS-Roles");
+        if (header == null || header.isBlank()) {
+            return List.of();
         }
-        try {
-            long analyticsId = Long.parseLong(granteeId.trim());
-            AnalyticsUser grantee = userRepository.findById(analyticsId).orElse(null);
-            if (grantee != null) {
-                String username = extractUsername(grantee);
-                if (!username.isBlank()) {
-                    return username;
-                }
-            }
-        } catch (NumberFormatException ignored) {
-            // granteeId is not numeric — already a username or role name, use as-is
-        }
-        return granteeId;
-    }
-
-    private String extractUsername(AnalyticsUser user) {
-        // Prefer platform_username (Keycloak username set during SSO provisioning).
-        // Fall back to email local-part for legacy records without platform_username.
-        String platformUsername = user.getPlatformUsername();
-        if (platformUsername != null && !platformUsername.isBlank()) {
-            return platformUsername.trim();
-        }
-        String email = user.getEmail();
-        if (email == null || email.isBlank()) return "";
-        int at = email.indexOf('@');
-        return at > 0 ? email.substring(0, at) : email;
+        return java.util.Arrays.stream(header.split(","))
+                .map(String::trim)
+                .filter(s -> !s.isEmpty())
+                .toList();
     }
 
     private static String trimToNull(String value) {
