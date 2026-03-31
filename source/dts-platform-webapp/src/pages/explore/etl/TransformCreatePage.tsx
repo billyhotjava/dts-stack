@@ -860,7 +860,7 @@ export default function TransformCreatePage() {
 			setOdsTableLoading(true);
 			const tables = await sqlListTables(lakeDatasourceId);
 			const odsTables = (Array.isArray(tables) ? tables : []).filter(
-				t => t.name?.toLowerCase().startsWith("ods_")
+				t => t.name && !t.name.toLowerCase().startsWith("pg_")
 			);
 			setOdsTableList(odsTables);
 		} catch (err: any) {
