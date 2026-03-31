@@ -229,39 +229,64 @@
       "locked": false,
       "visible": true,
       "config": {
-        "columns": [
-          {
-            "key": "project",
-            "title": "项目",
-            "width": 200
-          },
-          {
-            "key": "issue",
-            "title": "问题",
-            "width": 280
-          },
-          {
-            "key": "category",
-            "title": "分类",
-            "width": 160
-          },
-          {
-            "key": "status",
-            "title": "状态",
-            "width": 200
-          },
-          {
-            "key": "days",
-            "title": "滞留天数",
-            "width": 140
-          }
+        "title": "质量问题清单",
+        "header": [
+          "项目",
+          "问题",
+          "分类",
+          "状态",
+          "滞留天数"
         ],
-        "headerBg": "#dbe9f6",
-        "bodyBg": "rgba(255, 255, 255, 0.98)",
-        "evenRowBg": "rgba(241, 245, 249, 0.98)",
-        "borderRadius": 12,
-        "fontSize": 13,
-        "showPagination": false
+        "data": [
+          [
+            "核心器件研发",
+            "PCB布线设计缺陷",
+            "设计",
+            "未完成归零",
+            "15 天"
+          ],
+          [
+            "智能制造产线",
+            "焊接工艺参数偏差",
+            "工艺",
+            "已完成技术归零",
+            "0 天"
+          ],
+          [
+            "新能源工厂",
+            "控制器元器件批次不良",
+            "元器件",
+            "未完成归零",
+            "22 天"
+          ],
+          [
+            "供应链平台",
+            "接口协议不一致",
+            "软件",
+            "已完成管理归零",
+            "0 天"
+          ],
+          [
+            "制造协同平台",
+            "测试用例覆盖不足",
+            "管理",
+            "未完成归零",
+            "8 天"
+          ]
+        ],
+        "fontSize": 16,
+        "headerAlign": "center",
+        "headerColor": "#0f172a",
+        "headerBackground": "#dbe9f6",
+        "bodyColor": "#334155",
+        "bodyBackground": "rgba(255, 255, 255, 0.98)",
+        "oddRowBackground": "rgba(255, 255, 255, 0.98)",
+        "evenRowBackground": "rgba(241, 245, 249, 0.98)",
+        "borderColor": "rgba(148, 163, 184, 0.24)",
+        "enableSort": true,
+        "enablePagination": true,
+        "pageSize": 8,
+        "freezeHeader": true
       },
       "dataSource": {
         "type": "sql",
@@ -285,24 +310,42 @@
       "locked": false,
       "visible": true,
       "config": {
-        "columns": [
-          {
-            "key": "label",
-            "title": "指标",
-            "width": 350
-          },
-          {
-            "key": "value",
-            "title": "数值",
-            "width": 300
-          }
+        "title": "质量闭环摘要",
+        "header": [
+          "指标",
+          "数值"
         ],
-        "headerBg": "#dbe9f6",
-        "bodyBg": "rgba(255, 255, 255, 0.98)",
-        "evenRowBg": "rgba(241, 245, 249, 0.98)",
-        "borderRadius": 12,
-        "fontSize": 13,
-        "showPagination": false
+        "data": [
+          [
+            "现存质量问题",
+            "47"
+          ],
+          [
+            "归零完成率",
+            "68.3%"
+          ],
+          [
+            "未提交归零计划",
+            "8"
+          ],
+          [
+            "高优未关闭",
+            "37"
+          ]
+        ],
+        "fontSize": 16,
+        "headerAlign": "center",
+        "headerColor": "#0f172a",
+        "headerBackground": "#dbe9f6",
+        "bodyColor": "#334155",
+        "bodyBackground": "rgba(255, 255, 255, 0.98)",
+        "oddRowBackground": "rgba(255, 255, 255, 0.98)",
+        "evenRowBackground": "rgba(241, 245, 249, 0.98)",
+        "borderColor": "rgba(148, 163, 184, 0.24)",
+        "enableSort": true,
+        "enablePagination": true,
+        "pageSize": 8,
+        "freezeHeader": true
       },
       "dataSource": {
         "type": "sql",
@@ -326,34 +369,58 @@
       "locked": false,
       "visible": true,
       "config": {
-        "columns": [
-          {
-            "key": "project",
-            "title": "项目",
-            "width": 400
-          },
-          {
-            "key": "measure",
-            "title": "建议措施",
-            "width": 500
-          },
-          {
-            "key": "owner",
-            "title": "责任界面",
-            "width": 400
-          },
-          {
-            "key": "status",
-            "title": "闭环状态",
-            "width": 300
-          }
+        "title": "跟进措施摘要",
+        "header": [
+          "项目",
+          "建议措施",
+          "责任界面",
+          "闭环状态"
         ],
-        "headerBg": "#dbe9f6",
-        "bodyBg": "rgba(255, 255, 255, 0.98)",
-        "evenRowBg": "rgba(241, 245, 249, 0.98)",
-        "borderRadius": 12,
-        "fontSize": 13,
-        "showPagination": false
+        "data": [
+          [
+            "核心器件研发",
+            "针对\"PCB布线设计缺陷\"补充专项措施",
+            "设计专题组",
+            "未完成归零"
+          ],
+          [
+            "智能制造产线",
+            "针对\"焊接工艺参数偏差\"补充专项措施",
+            "工艺专题组",
+            "已完成技术归零"
+          ],
+          [
+            "新能源工厂",
+            "针对\"控制器元器件批次不良\"补充专项措施",
+            "元器件专题组",
+            "未完成归零"
+          ],
+          [
+            "供应链平台",
+            "针对\"接口协议不一致\"补充专项措施",
+            "软件专题组",
+            "已完成管理归零"
+          ],
+          [
+            "制造协同平台",
+            "针对\"测试用例覆盖不足\"补充专项措施",
+            "管理专题组",
+            "未完成归零"
+          ]
+        ],
+        "fontSize": 16,
+        "headerAlign": "center",
+        "headerColor": "#0f172a",
+        "headerBackground": "#dbe9f6",
+        "bodyColor": "#334155",
+        "bodyBackground": "rgba(255, 255, 255, 0.98)",
+        "oddRowBackground": "rgba(255, 255, 255, 0.98)",
+        "evenRowBackground": "rgba(241, 245, 249, 0.98)",
+        "borderColor": "rgba(148, 163, 184, 0.24)",
+        "enableSort": true,
+        "enablePagination": true,
+        "pageSize": 8,
+        "freezeHeader": true
       },
       "dataSource": {
         "type": "sql",

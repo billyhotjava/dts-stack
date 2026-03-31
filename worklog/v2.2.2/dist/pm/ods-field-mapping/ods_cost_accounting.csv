@@ -1,0 +1,9 @@
+序号,Excel表头,ODS字段名,类型,必填,枚举值/说明
+1,项目编号,project_no,varchar,是,
+2,项目名称,project_name,varchar,,
+3,统计周期,accounting_period,varchar,是,格式YYYY或YYYY-MM
+4,预算金额,budget_amount,varchar,,万元
+5,实际金额,actual_amount,varchar,,万元
+6,责任科室/部门,dept,varchar,,
+7,费用类别,cost_category,varchar,,
+8,备注,remark,varchar,,

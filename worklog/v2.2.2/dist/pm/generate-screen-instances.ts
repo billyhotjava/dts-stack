@@ -234,9 +234,8 @@ function processDrillComponent(comp: any, screenId: string): any {
 				maxRows: 2000,
 			},
 		};
-		// 清除 mock data
+		// 清除 dataSource 中的 staticData，但保留 config.data（表格内联数据，作为默认展示）
 		if (result.dataSource?.staticData) delete result.dataSource.staticData;
-		if (result.config?.data) delete result.config.data;
 	}
 
 	// 清除残留 staticData

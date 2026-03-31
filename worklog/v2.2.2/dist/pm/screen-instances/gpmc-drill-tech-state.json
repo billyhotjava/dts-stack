@@ -229,34 +229,52 @@
       "locked": false,
       "visible": true,
       "config": {
-        "columns": [
-          {
-            "key": "name",
-            "title": "技术状态",
-            "width": 300
-          },
-          {
-            "key": "project",
-            "title": "项目",
-            "width": 280
-          },
-          {
-            "key": "changeType",
-            "title": "更改类别",
-            "width": 200
-          },
-          {
-            "key": "status",
-            "title": "签署状态",
-            "width": 200
-          }
+        "title": "技术状态变更清单",
+        "header": [
+          "技术状态",
+          "项目",
+          "更改类别",
+          "签署状态"
         ],
-        "headerBg": "#dbe9f6",
-        "bodyBg": "rgba(255, 255, 255, 0.98)",
-        "evenRowBg": "rgba(241, 245, 249, 0.98)",
-        "borderRadius": 12,
-        "fontSize": 13,
-        "showPagination": false
+        "data": [
+          [
+            "控制器硬件版本升级",
+            "核心器件研发",
+            "Ⅰ",
+            "已签署"
+          ],
+          [
+            "通信协议变更",
+            "制造协同平台",
+            "Ⅱ",
+            "评审中"
+          ],
+          [
+            "结构件材料替代",
+            "新能源工厂",
+            "Ⅰ",
+            "已签署"
+          ],
+          [
+            "软件架构调整",
+            "数据治理工程",
+            "Ⅱ",
+            "未评审"
+          ]
+        ],
+        "fontSize": 16,
+        "headerAlign": "center",
+        "headerColor": "#0f172a",
+        "headerBackground": "#dbe9f6",
+        "bodyColor": "#334155",
+        "bodyBackground": "rgba(255, 255, 255, 0.98)",
+        "oddRowBackground": "rgba(255, 255, 255, 0.98)",
+        "evenRowBackground": "rgba(241, 245, 249, 0.98)",
+        "borderColor": "rgba(148, 163, 184, 0.24)",
+        "enableSort": true,
+        "enablePagination": true,
+        "pageSize": 8,
+        "freezeHeader": true
       },
       "dataSource": {
         "type": "sql",
@@ -280,24 +298,50 @@
       "locked": false,
       "visible": true,
       "config": {
-        "columns": [
-          {
-            "key": "label",
-            "title": "分类",
-            "width": 350
-          },
-          {
-            "key": "value",
-            "title": "数量",
-            "width": 300
-          }
+        "title": "状态分布摘要",
+        "header": [
+          "分类",
+          "数量"
         ],
-        "headerBg": "#dbe9f6",
-        "bodyBg": "rgba(255, 255, 255, 0.98)",
-        "evenRowBg": "rgba(241, 245, 249, 0.98)",
-        "borderRadius": 12,
-        "fontSize": 13,
-        "showPagination": false
+        "data": [
+          [
+            "更改类别: Ⅰ类",
+            4
+          ],
+          [
+            "更改类别: Ⅱ类",
+            9
+          ],
+          [
+            "更改类别: Ⅲ类",
+            5
+          ],
+          [
+            "签署: 已签署",
+            12
+          ],
+          [
+            "签署: 评审中",
+            4
+          ],
+          [
+            "签署: 未评审",
+            2
+          ]
+        ],
+        "fontSize": 16,
+        "headerAlign": "center",
+        "headerColor": "#0f172a",
+        "headerBackground": "#dbe9f6",
+        "bodyColor": "#334155",
+        "bodyBackground": "rgba(255, 255, 255, 0.98)",
+        "oddRowBackground": "rgba(255, 255, 255, 0.98)",
+        "evenRowBackground": "rgba(241, 245, 249, 0.98)",
+        "borderColor": "rgba(148, 163, 184, 0.24)",
+        "enableSort": true,
+        "enablePagination": true,
+        "pageSize": 8,
+        "freezeHeader": true
       },
       "dataSource": {
         "type": "sql",
@@ -321,34 +365,52 @@
       "locked": false,
       "visible": true,
       "config": {
-        "columns": [
-          {
-            "key": "techState",
-            "title": "技术状态",
-            "width": 400
-          },
-          {
-            "key": "action",
-            "title": "跟进动作",
-            "width": 500
-          },
-          {
-            "key": "project",
-            "title": "项目",
-            "width": 400
-          },
-          {
-            "key": "status",
-            "title": "当前状态",
-            "width": 300
-          }
+        "title": "跟进措施摘要",
+        "header": [
+          "技术状态",
+          "跟进动作",
+          "项目",
+          "当前状态"
         ],
-        "headerBg": "#dbe9f6",
-        "bodyBg": "rgba(255, 255, 255, 0.98)",
-        "evenRowBg": "rgba(241, 245, 249, 0.98)",
-        "borderRadius": 12,
-        "fontSize": 13,
-        "showPagination": false
+        "data": [
+          [
+            "控制器硬件版本升级",
+            "进入签署归档与闭环确认",
+            "核心器件研发",
+            "已签署"
+          ],
+          [
+            "通信协议变更",
+            "继续评审并补充签署资料",
+            "制造协同平台",
+            "评审中"
+          ],
+          [
+            "结构件材料替代",
+            "进入签署归档与闭环确认",
+            "新能源工厂",
+            "已签署"
+          ],
+          [
+            "软件架构调整",
+            "继续评审并补充签署资料",
+            "数据治理工程",
+            "未评审"
+          ]
+        ],
+        "fontSize": 16,
+        "headerAlign": "center",
+        "headerColor": "#0f172a",
+        "headerBackground": "#dbe9f6",
+        "bodyColor": "#334155",
+        "bodyBackground": "rgba(255, 255, 255, 0.98)",
+        "oddRowBackground": "rgba(255, 255, 255, 0.98)",
+        "evenRowBackground": "rgba(241, 245, 249, 0.98)",
+        "borderColor": "rgba(148, 163, 184, 0.24)",
+        "enableSort": true,
+        "enablePagination": true,
+        "pageSize": 8,
+        "freezeHeader": true
       },
       "dataSource": {
         "type": "sql",

@@ -229,39 +229,64 @@
       "locked": false,
       "visible": true,
       "config": {
-        "columns": [
-          {
-            "key": "name",
-            "title": "风险",
-            "width": 280
-          },
-          {
-            "key": "project",
-            "title": "项目",
-            "width": 220
-          },
-          {
-            "key": "level",
-            "title": "等级",
-            "width": 140
-          },
-          {
-            "key": "status",
-            "title": "状态",
-            "width": 160
-          },
-          {
-            "key": "days",
-            "title": "滞留天数",
-            "width": 140
-          }
+        "title": "风险清单",
+        "header": [
+          "风险",
+          "项目",
+          "等级",
+          "状态",
+          "滞留天数"
         ],
-        "headerBg": "#dbe9f6",
-        "bodyBg": "rgba(255, 255, 255, 0.98)",
-        "evenRowBg": "rgba(241, 245, 249, 0.98)",
-        "borderRadius": 12,
-        "fontSize": 13,
-        "showPagination": false
+        "data": [
+          [
+            "核心芯片供货延迟",
+            "核心器件研发",
+            "高",
+            "跟进中",
+            "35 天"
+          ],
+          [
+            "施工许可证审批滞后",
+            "新能源工厂",
+            "高",
+            "跟进中",
+            "28 天"
+          ],
+          [
+            "关键技术人员流失",
+            "制造协同平台",
+            "中",
+            "跟进中",
+            "15 天"
+          ],
+          [
+            "原材料价格上涨",
+            "供应链平台",
+            "中",
+            "已闭环",
+            "0 天"
+          ],
+          [
+            "测试环境不稳定",
+            "数据治理工程",
+            "低",
+            "跟进中",
+            "8 天"
+          ]
+        ],
+        "fontSize": 16,
+        "headerAlign": "center",
+        "headerColor": "#0f172a",
+        "headerBackground": "#dbe9f6",
+        "bodyColor": "#334155",
+        "bodyBackground": "rgba(255, 255, 255, 0.98)",
+        "oddRowBackground": "rgba(255, 255, 255, 0.98)",
+        "evenRowBackground": "rgba(241, 245, 249, 0.98)",
+        "borderColor": "rgba(148, 163, 184, 0.24)",
+        "enableSort": true,
+        "enablePagination": true,
+        "pageSize": 8,
+        "freezeHeader": true
       },
       "dataSource": {
         "type": "sql",
@@ -285,24 +310,50 @@
       "locked": false,
       "visible": true,
       "config": {
-        "columns": [
-          {
-            "key": "name",
-            "title": "分类",
-            "width": 350
-          },
-          {
-            "key": "value",
-            "title": "数量",
-            "width": 300
-          }
+        "title": "风险分类摘要",
+        "header": [
+          "分类",
+          "数量"
         ],
-        "headerBg": "#dbe9f6",
-        "bodyBg": "rgba(255, 255, 255, 0.98)",
-        "evenRowBg": "rgba(241, 245, 249, 0.98)",
-        "borderRadius": 12,
-        "fontSize": 13,
-        "showPagination": false
+        "data": [
+          [
+            "技术风险",
+            28
+          ],
+          [
+            "进度风险",
+            22
+          ],
+          [
+            "成本风险",
+            15
+          ],
+          [
+            "外协风险",
+            12
+          ],
+          [
+            "质量风险",
+            8
+          ],
+          [
+            "管理风险",
+            4
+          ]
+        ],
+        "fontSize": 16,
+        "headerAlign": "center",
+        "headerColor": "#0f172a",
+        "headerBackground": "#dbe9f6",
+        "bodyColor": "#334155",
+        "bodyBackground": "rgba(255, 255, 255, 0.98)",
+        "oddRowBackground": "rgba(255, 255, 255, 0.98)",
+        "evenRowBackground": "rgba(241, 245, 249, 0.98)",
+        "borderColor": "rgba(148, 163, 184, 0.24)",
+        "enableSort": true,
+        "enablePagination": true,
+        "pageSize": 8,
+        "freezeHeader": true
       },
       "dataSource": {
         "type": "sql",
@@ -326,34 +377,58 @@
       "locked": false,
       "visible": true,
       "config": {
-        "columns": [
-          {
-            "key": "project",
-            "title": "项目",
-            "width": 400
-          },
-          {
-            "key": "name",
-            "title": "风险",
-            "width": 450
-          },
-          {
-            "key": "measure",
-            "title": "应对措施",
-            "width": 500
-          },
-          {
-            "key": "status",
-            "title": "状态",
-            "width": 300
-          }
+        "title": "风险措施摘要",
+        "header": [
+          "项目",
+          "风险",
+          "应对措施",
+          "状态"
         ],
-        "headerBg": "#dbe9f6",
-        "bodyBg": "rgba(255, 255, 255, 0.98)",
-        "evenRowBg": "rgba(241, 245, 249, 0.98)",
-        "borderRadius": 12,
-        "fontSize": 13,
-        "showPagination": false
+        "data": [
+          [
+            "核心器件研发",
+            "核心芯片供货延迟",
+            "启用备选供应商",
+            "跟进中"
+          ],
+          [
+            "新能源工厂",
+            "施工许可证审批滞后",
+            "加速审批协调",
+            "跟进中"
+          ],
+          [
+            "制造协同平台",
+            "关键技术人员流失",
+            "激励方案+备份人员",
+            "跟进中"
+          ],
+          [
+            "供应链平台",
+            "原材料价格上涨",
+            "锁价合同",
+            "已闭环"
+          ],
+          [
+            "数据治理工程",
+            "测试环境不稳定",
+            "环境容器化",
+            "跟进中"
+          ]
+        ],
+        "fontSize": 16,
+        "headerAlign": "center",
+        "headerColor": "#0f172a",
+        "headerBackground": "#dbe9f6",
+        "bodyColor": "#334155",
+        "bodyBackground": "rgba(255, 255, 255, 0.98)",
+        "oddRowBackground": "rgba(255, 255, 255, 0.98)",
+        "evenRowBackground": "rgba(241, 245, 249, 0.98)",
+        "borderColor": "rgba(148, 163, 184, 0.24)",
+        "enableSort": true,
+        "enablePagination": true,
+        "pageSize": 8,
+        "freezeHeader": true
       },
       "dataSource": {
         "type": "sql",

@@ -229,34 +229,70 @@
       "locked": false,
       "visible": true,
       "config": {
-        "columns": [
-          {
-            "key": "name",
-            "title": "任务/节点",
-            "width": 280
-          },
-          {
-            "key": "project",
-            "title": "所属项目",
-            "width": 280
-          },
-          {
-            "key": "progress",
-            "title": "完成率",
-            "width": 200
-          },
-          {
-            "key": "risk",
-            "title": "风险等级",
-            "width": 200
-          }
+        "title": "关键任务与节点明细",
+        "header": [
+          "任务/节点",
+          "所属项目",
+          "完成率",
+          "风险等级"
         ],
-        "headerBg": "#dbe9f6",
-        "bodyBg": "rgba(255, 255, 255, 0.98)",
-        "evenRowBg": "rgba(241, 245, 249, 0.98)",
-        "borderRadius": 12,
-        "fontSize": 13,
-        "showPagination": false
+        "data": [
+          [
+            "需求分析",
+            "制造协同平台",
+            "100%",
+            "低"
+          ],
+          [
+            "系统设计",
+            "制造协同平台",
+            "85%",
+            "低"
+          ],
+          [
+            "核心开发",
+            "制造协同平台",
+            "45%",
+            "中"
+          ],
+          [
+            "基建施工",
+            "新能源工厂",
+            "35%",
+            "高"
+          ],
+          [
+            "设备采购",
+            "新能源工厂",
+            "60%",
+            "中"
+          ],
+          [
+            "原型验证",
+            "核心器件研发",
+            "70%",
+            "中"
+          ],
+          [
+            "批量测试",
+            "核心器件研发",
+            "20%",
+            "高"
+          ]
+        ],
+        "fontSize": 16,
+        "headerAlign": "center",
+        "headerColor": "#0f172a",
+        "headerBackground": "#dbe9f6",
+        "bodyColor": "#334155",
+        "bodyBackground": "rgba(255, 255, 255, 0.98)",
+        "oddRowBackground": "rgba(255, 255, 255, 0.98)",
+        "evenRowBackground": "rgba(241, 245, 249, 0.98)",
+        "borderColor": "rgba(148, 163, 184, 0.24)",
+        "enableSort": true,
+        "enablePagination": true,
+        "pageSize": 8,
+        "freezeHeader": true
       },
       "dataSource": {
         "type": "sql",
@@ -280,39 +316,64 @@
       "locked": false,
       "visible": true,
       "config": {
-        "columns": [
-          {
-            "key": "dept",
-            "title": "部门",
-            "width": 200
-          },
-          {
-            "key": "total",
-            "title": "总人力",
-            "width": 100
-          },
-          {
-            "key": "active",
-            "title": "在岗",
-            "width": 100
-          },
-          {
-            "key": "overloaded",
-            "title": "超负荷",
-            "width": 100
-          },
-          {
-            "key": "idle",
-            "title": "空闲",
-            "width": 100
-          }
+        "title": "资源负载摘要",
+        "header": [
+          "部门",
+          "在岗/总人力",
+          "超负荷",
+          "空闲"
         ],
-        "headerBg": "#dbe9f6",
-        "bodyBg": "rgba(255, 255, 255, 0.98)",
-        "evenRowBg": "rgba(241, 245, 249, 0.98)",
-        "borderRadius": 12,
-        "fontSize": 13,
-        "showPagination": false
+        "data": [
+          [
+            "工程建设中心",
+            "62/68",
+            8,
+            2
+          ],
+          [
+            "数字化事业部",
+            "48/52",
+            5,
+            3
+          ],
+          [
+            "研发中心",
+            "78/85",
+            12,
+            4
+          ],
+          [
+            "生产制造中心",
+            "40/45",
+            3,
+            2
+          ],
+          [
+            "采购中心",
+            "28/32",
+            0,
+            4
+          ],
+          [
+            "质量管理部",
+            "25/28",
+            0,
+            0
+          ]
+        ],
+        "fontSize": 16,
+        "headerAlign": "center",
+        "headerColor": "#0f172a",
+        "headerBackground": "#dbe9f6",
+        "bodyColor": "#334155",
+        "bodyBackground": "rgba(255, 255, 255, 0.98)",
+        "oddRowBackground": "rgba(255, 255, 255, 0.98)",
+        "evenRowBackground": "rgba(241, 245, 249, 0.98)",
+        "borderColor": "rgba(148, 163, 184, 0.24)",
+        "enableSort": true,
+        "enablePagination": true,
+        "pageSize": 8,
+        "freezeHeader": true
       },
       "dataSource": {
         "type": "sql",
@@ -336,34 +397,88 @@
       "locked": false,
       "visible": true,
       "config": {
-        "columns": [
-          {
-            "key": "name",
-            "title": "项目",
-            "width": 500
-          },
-          {
-            "key": "delay",
-            "title": "延期天数",
-            "width": 300
-          },
-          {
-            "key": "dept",
-            "title": "责任科室",
-            "width": 400
-          },
-          {
-            "key": "risk",
-            "title": "风险",
-            "width": 300
-          }
+        "title": "延期项目排行",
+        "header": [
+          "项目",
+          "延期天数",
+          "责任科室",
+          "风险"
         ],
-        "headerBg": "#dbe9f6",
-        "bodyBg": "rgba(255, 255, 255, 0.98)",
-        "evenRowBg": "rgba(241, 245, 249, 0.98)",
-        "borderRadius": 12,
-        "fontSize": 13,
-        "showPagination": false
+        "data": [
+          [
+            "新能源工厂建设项目",
+            "28 天",
+            "工程建设中心",
+            "高"
+          ],
+          [
+            "核心器件研发验证项目",
+            "21 天",
+            "研发中心",
+            "中"
+          ],
+          [
+            "智能制造产线改造",
+            "18 天",
+            "生产制造中心",
+            "高"
+          ],
+          [
+            "供应链协同平台",
+            "14 天",
+            "采购中心",
+            "中"
+          ],
+          [
+            "质量追溯系统",
+            "12 天",
+            "质量管理部",
+            "低"
+          ],
+          [
+            "数据治理一期",
+            "10 天",
+            "信息化管理部",
+            "低"
+          ],
+          [
+            "ERP升级项目",
+            "8 天",
+            "财务部",
+            "中"
+          ],
+          [
+            "安全生产监控平台",
+            "7 天",
+            "安全环保部",
+            "高"
+          ],
+          [
+            "人力资源数字化",
+            "5 天",
+            "人力资源部",
+            "低"
+          ],
+          [
+            "办公自动化升级",
+            "3 天",
+            "行政管理部",
+            "低"
+          ]
+        ],
+        "fontSize": 16,
+        "headerAlign": "center",
+        "headerColor": "#0f172a",
+        "headerBackground": "#dbe9f6",
+        "bodyColor": "#334155",
+        "bodyBackground": "rgba(255, 255, 255, 0.98)",
+        "oddRowBackground": "rgba(255, 255, 255, 0.98)",
+        "evenRowBackground": "rgba(241, 245, 249, 0.98)",
+        "borderColor": "rgba(148, 163, 184, 0.24)",
+        "enableSort": true,
+        "enablePagination": true,
+        "pageSize": 8,
+        "freezeHeader": true
       },
       "dataSource": {
         "type": "sql",

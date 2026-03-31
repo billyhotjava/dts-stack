@@ -229,34 +229,58 @@
       "locked": false,
       "visible": true,
       "config": {
-        "columns": [
-          {
-            "key": "dept",
-            "title": "责任科室",
-            "width": 280
-          },
-          {
-            "key": "budget",
-            "title": "预算",
-            "width": 200
-          },
-          {
-            "key": "actual",
-            "title": "实际",
-            "width": 200
-          },
-          {
-            "key": "rate",
-            "title": "执行率",
-            "width": 200
-          }
+        "title": "部门预算执行明细",
+        "header": [
+          "责任科室",
+          "预算 (亿)",
+          "实际 (亿)",
+          "执行率 (%)"
         ],
-        "headerBg": "#dbe9f6",
-        "bodyBg": "rgba(255, 255, 255, 0.98)",
-        "evenRowBg": "rgba(241, 245, 249, 0.98)",
-        "borderRadius": 12,
-        "fontSize": 13,
-        "showPagination": false
+        "data": [
+          [
+            "工程建设中心",
+            9.5,
+            8.6,
+            "90.5%"
+          ],
+          [
+            "数字化事业部",
+            6,
+            5.2,
+            "86.7%"
+          ],
+          [
+            "研发中心",
+            8.2,
+            6.8,
+            "82.9%"
+          ],
+          [
+            "生产制造中心",
+            10,
+            10.4,
+            "104%"
+          ],
+          [
+            "采购中心",
+            3.1,
+            2.8,
+            "90.3%"
+          ]
+        ],
+        "fontSize": 16,
+        "headerAlign": "center",
+        "headerColor": "#0f172a",
+        "headerBackground": "#dbe9f6",
+        "bodyColor": "#334155",
+        "bodyBackground": "rgba(255, 255, 255, 0.98)",
+        "oddRowBackground": "rgba(255, 255, 255, 0.98)",
+        "evenRowBackground": "rgba(241, 245, 249, 0.98)",
+        "borderColor": "rgba(148, 163, 184, 0.24)",
+        "enableSort": true,
+        "enablePagination": true,
+        "pageSize": 8,
+        "freezeHeader": true
       },
       "dataSource": {
         "type": "sql",
@@ -280,24 +304,42 @@
       "locked": false,
       "visible": true,
       "config": {
-        "columns": [
-          {
-            "key": "label",
-            "title": "指标",
-            "width": 350
-          },
-          {
-            "key": "value",
-            "title": "数值",
-            "width": 300
-          }
+        "title": "成本控制摘要",
+        "header": [
+          "指标",
+          "数值"
         ],
-        "headerBg": "#dbe9f6",
-        "bodyBg": "rgba(255, 255, 255, 0.98)",
-        "evenRowBg": "rgba(241, 245, 249, 0.98)",
-        "borderRadius": 12,
-        "fontSize": 13,
-        "showPagination": false
+        "data": [
+          [
+            "预算总额",
+            "36.8 亿"
+          ],
+          [
+            "累计执行额",
+            "26.1 亿"
+          ],
+          [
+            "预算偏差",
+            "+0.72 亿"
+          ],
+          [
+            "燃尽率",
+            "71%"
+          ]
+        ],
+        "fontSize": 16,
+        "headerAlign": "center",
+        "headerColor": "#0f172a",
+        "headerBackground": "#dbe9f6",
+        "bodyColor": "#334155",
+        "bodyBackground": "rgba(255, 255, 255, 0.98)",
+        "oddRowBackground": "rgba(255, 255, 255, 0.98)",
+        "evenRowBackground": "rgba(241, 245, 249, 0.98)",
+        "borderColor": "rgba(148, 163, 184, 0.24)",
+        "enableSort": true,
+        "enablePagination": true,
+        "pageSize": 8,
+        "freezeHeader": true
       },
       "dataSource": {
         "type": "sql",
@@ -321,34 +363,64 @@
       "locked": false,
       "visible": true,
       "config": {
-        "columns": [
-          {
-            "key": "month",
-            "title": "周期",
-            "width": 300
-          },
-          {
-            "key": "plan",
-            "title": "计划支出",
-            "width": 400
-          },
-          {
-            "key": "actual",
-            "title": "实际支出",
-            "width": 400
-          },
-          {
-            "key": "deviation",
-            "title": "偏差",
-            "width": 400
-          }
+        "title": "月度支出趋势",
+        "header": [
+          "周期",
+          "计划支出 (亿)",
+          "实际支出 (亿)",
+          "偏差 (亿)"
         ],
-        "headerBg": "#dbe9f6",
-        "bodyBg": "rgba(255, 255, 255, 0.98)",
-        "evenRowBg": "rgba(241, 245, 249, 0.98)",
-        "borderRadius": 12,
-        "fontSize": 13,
-        "showPagination": false
+        "data": [
+          [
+            "1月",
+            2.8,
+            2.6,
+            "-0.2"
+          ],
+          [
+            "2月",
+            3.1,
+            3.3,
+            "0.2"
+          ],
+          [
+            "3月",
+            3.5,
+            3.8,
+            "0.3"
+          ],
+          [
+            "4月",
+            3.2,
+            3,
+            "-0.2"
+          ],
+          [
+            "5月",
+            3.6,
+            3.4,
+            "-0.2"
+          ],
+          [
+            "6月",
+            3.8,
+            "-",
+            "-"
+          ]
+        ],
+        "fontSize": 16,
+        "headerAlign": "center",
+        "headerColor": "#0f172a",
+        "headerBackground": "#dbe9f6",
+        "bodyColor": "#334155",
+        "bodyBackground": "rgba(255, 255, 255, 0.98)",
+        "oddRowBackground": "rgba(255, 255, 255, 0.98)",
+        "evenRowBackground": "rgba(241, 245, 249, 0.98)",
+        "borderColor": "rgba(148, 163, 184, 0.24)",
+        "enableSort": true,
+        "enablePagination": true,
+        "pageSize": 8,
+        "freezeHeader": true
       },
       "dataSource": {
         "type": "sql",

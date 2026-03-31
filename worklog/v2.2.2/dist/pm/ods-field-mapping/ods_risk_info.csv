@@ -1,0 +1,15 @@
+序号,Excel表头,ODS字段名,类型,必填,枚举值/说明
+1,项目编号,project_no,varchar,是,
+2,风险名称,risk_name,varchar,是,
+3,风险等级,risk_level,varchar,,高/中/低
+4,风险提出时间,risk_submit_time,varchar,是,格式YYYY-MM-DD
+5,主要风险内容,risk_content,varchar,,
+6,影响范围,impact_scope,varchar,,
+7,闭环状态,closure_status,varchar,,已闭环/未闭环
+8,应对措施,response_measure,varchar,,
+9,责任科室,dept,varchar,,
+10,分系统,subsystem,varchar,,
+11,负责人,owner,varchar,,
+12,最后更新时间,last_update_time,varchar,,
+13,填写人,filled_by,varchar,,
+14,备注,remark,varchar,,

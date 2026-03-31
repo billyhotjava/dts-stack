@@ -1,0 +1,15 @@
+序号,Excel表头,ODS字段名,类型,必填,枚举值/说明
+1,项目编号,project_no,varchar,是,
+2,技术状态名称/代号,tech_state_name,varchar,是,
+3,更改事项,change_item,varchar,是,
+4,更改类别,change_category,varchar,,I/II/III
+5,更改提出时间,change_submit_time,varchar,,格式YYYY-MM-DD
+6,文件签署状态,file_signature_status,varchar,,
+7,是否完成签署,completion_signature,varchar,,是/否
+8,整改落实状态,reform_status,varchar,,未落实整改/已落实整改/不涉及整改
+9,闭环状态,closure_status,varchar,,已闭环/未闭环
+10,责任科室,dept,varchar,,
+11,分系统,subsystem,varchar,,
+12,最后更新时间,last_update_time,varchar,,
+13,填写人,filled_by,varchar,,
+14,备注,remark,varchar,,

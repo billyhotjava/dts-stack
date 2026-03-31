@@ -1,0 +1,14 @@
+序号,Excel表头,ODS字段名,类型,必填,枚举值/说明
+1,项目编号,project_no,varchar,是,
+2,问题名称/问题描述,issue_name,varchar,是,
+3,原因分类,issue_category,varchar,,设计/工艺/管理/元器件/操作/外协外购/软件/其他
+4,质量问题发生时间,issue_date,varchar,是,格式YYYY-MM-DD
+5,状态,status,varchar,,未完成归零/已完成技术归零/已完成管理归零/已完成技术和管理归零
+6,闭环状态,closure_status,varchar,,已闭环/未闭环
+7,归零计划,zero_plan,varchar,,有/无
+8,责任科室,dept,varchar,,
+9,分系统,subsystem,varchar,,
+10,负责人,owner,varchar,,
+11,最后更新时间,last_update_time,varchar,,
+12,填写人,filled_by,varchar,,
+13,备注,remark,varchar,,

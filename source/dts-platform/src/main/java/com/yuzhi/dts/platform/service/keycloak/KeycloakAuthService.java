@@ -366,11 +366,24 @@ public class KeycloakAuthService {
     private RuntimeException translateAuthError(HttpStatusCodeException ex) {
         String detail = extractErrorMessage(ex.getResponseBodyAsString());
         if (ex.getStatusCode() == HttpStatus.UNAUTHORIZED || ex.getStatusCode() == HttpStatus.BAD_REQUEST) {
-            String message = detail.isBlank() ? "用户名或密码错误" : detail;
-            return new BadCredentialsException(message, ex);
+            return new BadCredentialsException("用户名或密码错误", ex);
         }
-        String message = detail.isBlank() ? "Keycloak认证失败" : detail;
+        String message = detail.isBlank() ? "认证服务异常，请稍后重试" : translateKeycloakError(detail);
         return new IllegalStateException(message, ex);
+    }
+
+    private String translateKeycloakError(String detail) {
+        if (detail == null || detail.isBlank()) return "认证服务异常，请稍后重试";
+        String lower = detail.toLowerCase();
+        if (lower.contains("invalid") && lower.contains("credentials")) return "用户名或密码错误";
+        if (lower.contains("account disabled") || lower.contains("account is not fully set up")) return "账户已被禁用";
+        if (lower.contains("account locked") || lower.contains("temporarily locked")) return "账户已被锁定，请稍后重试";
+        if (lower.contains("expired")) return "账户或密码已过期";
+        // 如果已经是中文则直接返回
+        if (detail.codePoints().anyMatch(cp -> Character.UnicodeScript.of(cp) == Character.UnicodeScript.HAN)) {
+            return detail;
+        }
+        return "认证服务异常，请稍后重试";
     }
 
     private String extractErrorMessage(String body) {

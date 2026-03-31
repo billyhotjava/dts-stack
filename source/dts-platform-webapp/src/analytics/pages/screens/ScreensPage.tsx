@@ -557,7 +557,7 @@ export default function ScreensPage() {
 														data-testid={`analytics-screen-preview-${screen.id}`}
 														onClick={() => handlePreview(screen.id)}
 													>
-														预览
+														查看
 													</button>
 													<button
 														className="px-2.5 py-1 border border-border-default rounded-md bg-surface-card cursor-pointer text-xs font-medium transition-all duration-200 hover:border-brand hover:bg-brand/10 text-text-primary"
@@ -565,6 +565,18 @@ export default function ScreensPage() {
 														onClick={() => handleEdit(screen.id)}
 													>
 														编辑
+													</button>
+													<button
+														className="px-2.5 py-1 border border-border-default rounded-md bg-surface-card cursor-pointer text-xs font-medium transition-all duration-200 hover:border-brand hover:bg-brand/10 text-text-primary"
+														onClick={() => {
+															if (!screen.publishedVersionNo) {
+																message.warning('只有已经发布的大屏才能进行权限设置');
+																return;
+															}
+															setAclScreenId(screen.id);
+														}}
+													>
+														权限
 													</button>
 													<div className="screen-card-menu relative">
 														<button
@@ -575,16 +587,6 @@ export default function ScreensPage() {
 														</button>
 														{activeCardMenuId === screen.id ? (
 															<div className="absolute right-0 top-[calc(100%+4px)] min-w-[140px] z-[900] bg-surface-card text-text-primary border border-border-default rounded-lg shadow-[0_8px_24px_rgba(15,23,42,0.2)] p-1.5 grid gap-0.5">
-																<button
-																	type="button"
-																	className="border border-transparent rounded-md px-3 py-[7px] bg-transparent text-text-primary text-xs text-left cursor-pointer hover:border-brand hover:bg-brand/10"
-																	onClick={() => {
-																		setActiveCardMenuId(null);
-																		setAclScreenId(screen.id);
-																	}}
-																>
-																	权限管理
-																</button>
 																<button
 																	type="button"
 																	className="border border-transparent rounded-md px-3 py-[7px] bg-transparent text-text-primary text-xs text-left cursor-pointer hover:border-brand hover:bg-brand/10 disabled:opacity-55 disabled:cursor-not-allowed"
