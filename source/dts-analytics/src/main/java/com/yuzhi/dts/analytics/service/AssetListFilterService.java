@@ -12,7 +12,7 @@ import org.springframework.stereotype.Service;
 
 /**
  * Filters asset lists based on platform permissions.
- * Used by CardResource, DashboardResource, ScreenResource to return only authorized assets.
+ * Used by CardResource and DashboardResource to return only authorized assets.
  */
 @Service
 public class AssetListFilterService {
@@ -33,7 +33,7 @@ public class AssetListFilterService {
      * Filter a list of entities by platform permission.
      *
      * @param entities   the full list of entities
-     * @param assetType  asset type (CARD, DASHBOARD, SCREEN, TABLE, MODEL)
+     * @param assetType  asset type (CARD, DASHBOARD, TABLE, MODEL)
      * @param idExtractor function to extract asset ID from entity
      * @param request    HTTP request (for user context headers)
      * @return filtered list containing only authorized entities
