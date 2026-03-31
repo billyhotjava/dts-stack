@@ -3,9 +3,9 @@
 
 x-hc: &hc
   interval: 10s
-  timeout: 5s
-  retries: 30
-  start_period: 20s
+  timeout: 10s
+  retries: 60
+  start_period: 60s
 
 services:
 
