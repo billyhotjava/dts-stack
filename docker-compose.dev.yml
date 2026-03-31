@@ -550,69 +550,6 @@ services:
       - "traefik.http.services.dts-analytics-api.loadbalancer.server.port=3000"
       - "traefik.http.middlewares.dts-strip-analytics-api.stripprefix.prefixes=/analytics"
       - "traefik.http.routers.dts-analytics-api.middlewares=platform-forward-auth@file,dts-strip-analytics-api@docker,cors-allow@file,security-headers@file"
-
-  # Webapp: dts-analytics-webapp-modern (React19/Vite; modern UI; replaces legacy)
-  dts-analytics-webapp-modern:
-    image: node:22-bookworm
-    working_dir: /workspace
-    depends_on:
-      - dts-analytics
-    environment:
-      TZ: ${TZ:-Asia/Shanghai}
-      PNPM_STORE_DIR: /pnpm-store
-      # Optional: set DTS_DOCKER_HTTP_PROXY in .env to route container traffic through a proxy.
-      HTTP_PROXY: ${DTS_DOCKER_HTTP_PROXY:-}
-      HTTPS_PROXY: ${DTS_DOCKER_HTTPS_PROXY:-}
-      http_proxy: ${DTS_DOCKER_HTTP_PROXY:-}
-      https_proxy: ${DTS_DOCKER_HTTPS_PROXY:-}
-      NO_PROXY: "${DTS_DOCKER_NO_PROXY:-localhost,127.0.0.1,::1},dts-analytics,dts-pg,dts-platform,dts-admin,dts-proxy"
-      no_proxy: "${DTS_DOCKER_NO_PROXY:-localhost,127.0.0.1,::1},dts-analytics,dts-pg,dts-platform,dts-admin,dts-proxy"
-      BROWSER: none
-      VITE_OPEN: "false"
-      CHOKIDAR_USEPOLLING: "true"
-      CHOKIDAR_INTERVAL: "1000"
-      HOST: 0.0.0.0
-      PORT: "3002"
-      VITE_API_PROXY_TARGET: http://dts-platform:8081
-      VITE_ANALYTICS_API_PROXY_TARGET: http://dts-analytics:3000
-    command:
-      [
-        "sh",
-        "-lc",
-        "if [ -f package.json ]; then corepack enable; pnpm install --store-dir /pnpm-store --frozen-lockfile --ignore-scripts --offline || pnpm install --store-dir /pnpm-store --frozen-lockfile --ignore-scripts || pnpm install --store-dir /pnpm-store --no-frozen-lockfile --ignore-scripts; pnpm run dev -- --host 0.0.0.0 --port ${PORT:-3002} --strictPort --open=false; else echo no\\ package.json\\ found; tail -f /dev/null; fi",
-      ]
-    ports:
-      - "127.0.0.1:3002:3002"
-    volumes:
-      - ./source/dts-analytics-webapp/modern:/workspace:z
-      - pnpm-store:/pnpm-store
-      - /workspace/node_modules
-    networks:
-      - dts-core
-    labels:
-      - "traefik.enable=true"
-      - "traefik.docker.network=dts-core"
-      - "traefik.http.routers.dts-analytics-ui.rule=Host(`${HOST_PLATFORM_UI}`) && PathPrefix(`/analytics`) && !PathPrefix(`/analytics/api`)"
-      - "traefik.http.routers.dts-analytics-ui.entrypoints=websecure"
-      - "traefik.http.routers.dts-analytics-ui.tls=true"
-      - "traefik.http.routers.dts-analytics-ui.priority=230"
-      - "traefik.http.routers.dts-analytics-ui.service=dts-analytics-webapp-modern"
-      - "traefik.http.services.dts-analytics-webapp-modern.loadbalancer.server.port=3002"
-      - "traefik.http.middlewares.dts-analytics-ui-redirect.redirectregex.regex=^https?://([^/]+)/analytics$"
-      - "traefik.http.middlewares.dts-analytics-ui-redirect.redirectregex.replacement=https://$${1}/analytics/"
-      - "traefik.http.middlewares.dts-analytics-ui-redirect.redirectregex.permanent=true"
-      - "traefik.http.routers.dts-analytics-ui.middlewares=dts-analytics-ui-redirect@docker,security-headers@file"
-    healthcheck:
-      test:
-        [
-          "CMD-SHELL",
-          "node -e \"require('http').get('http://127.0.0.1:'+(process.env.PORT||'3002')+'/',r=>process.exit(r.statusCode>=200&&r.statusCode<500?0:1)).on('error',()=>process.exit(1))\"",
-        ]
-      interval: 10s
-      timeout: 5s
-      retries: 30
-      start_period: 60s
-
   # Frontend: dts-admin-webapp (optional dev server)
   # If your project uses Vite/React/Angular dev server, adjust command/port below.
   dts-admin-webapp:
@@ -698,7 +635,6 @@ services:
       # Note: vite.config rewrites '/admin/api' -> '/api' for the target, so do NOT include '/api' suffix here.
       VITE_ADMIN_PROXY_TARGET: "http://dts-admin:8081"
       VITE_ANALYTICS_API_PROXY_TARGET: "http://dts-analytics:3000"
-      VITE_ANALYTICS_UI_PROXY_TARGET: "http://dts-analytics-webapp-modern:3002"
       # Enable experimental SQL workbench by default (can be overridden in .env)
       VITE_ENABLE_SQL_WORKBENCH: ${VITE_ENABLE_SQL_WORKBENCH:-true}
       # Toggle password login UI for platform webapp during dev builds

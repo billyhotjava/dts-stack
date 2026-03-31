@@ -1,0 +1,39 @@
+version: 2
+sources:
+  - name: "pm_ods"
+    schema: "public"
+    description: "项目管理 ODS 源表（执行域 + 质量/技术状态/风险/成本域）"
+    tables:
+      # ─── 执行域 ───
+      - name: "project_subject_domain"
+        identifier: "ods_project_subject_domain"
+        description: "项目主体域原始数据 — 进度节点/里程碑事实"
+
+      # ─── 质量域 ───
+      - name: "quality_issue"
+        identifier: "ods_quality_issue"
+        description: "质量信息汇总表 — 质量问题事实"
+      - name: "quality_measure"
+        identifier: "ods_quality_measure"
+        description: "质量跟进措施表 — 质量问题闭环措施"
+
+      # ─── 技术状态域 ───
+      - name: "tech_state"
+        identifier: "ods_tech_state"
+        description: "技术状态信息汇总表 — 技术状态变更事实"
+      - name: "tech_state_measure"
+        identifier: "ods_tech_state_measure"
+        description: "技术状态跟进措施表 — 技术状态闭环措施"
+
+      # ─── 风险域 ───
+      - name: "risk_info"
+        identifier: "ods_risk_info"
+        description: "风险信息汇总表 — 风险事实"
+      - name: "risk_measure"
+        identifier: "ods_risk_measure"
+        description: "风险跟进措施表 — 风险闭环措施"
+
+      # ─── 成本域 ───
+      - name: "cost_accounting"
+        identifier: "ods_cost_accounting"
+        description: "成本核算基本表 — 成本事实"

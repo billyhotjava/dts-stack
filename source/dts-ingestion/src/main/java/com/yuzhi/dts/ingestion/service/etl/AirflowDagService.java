@@ -388,14 +388,21 @@ public class AirflowDagService {
             String createTableDdl = buildCreateTableDdl(task);
             if (StringUtils.hasText(createTableDdl)) {
                 FileSourceDbInfo dbInfo = extractFileSourceDbInfo(task);
-                extraImports = "\nfrom airflow.operators.python import PythonOperator\n";
-                // Indentation must be 4 spaces to align with other statements inside "with DAG" block
-                // (the outer text block strips 12 chars of leading whitespace)
+                extraImports = "\nfrom airflow.operators.python import PythonOperator\nimport os\n";
+                // Use environment variables for DB credentials (set via docker-compose or Airflow connections)
+                // to avoid embedding plaintext passwords in DAG files.
+                // Fallback: credentials can also be passed through Airflow Variables if env vars are not set.
                 initTableBlock = """
 
     def _init_target_table():
         import psycopg2
-        conn = psycopg2.connect(host="%s", port=%d, dbname="%s", user="%s", password="%s")
+        conn = psycopg2.connect(
+            host=os.getenv("DTS_TARGET_DB_HOST", "%s"),
+            port=int(os.getenv("DTS_TARGET_DB_PORT", "%d")),
+            dbname=os.getenv("DTS_TARGET_DB_NAME", "%s"),
+            user=os.getenv("DTS_TARGET_DB_USER", "%s"),
+            password=os.getenv("DTS_TARGET_DB_PASSWORD", "%s"),
+        )
         try:
             cur = conn.cursor()
             cur.execute(\"\"\"%s\"\"\")

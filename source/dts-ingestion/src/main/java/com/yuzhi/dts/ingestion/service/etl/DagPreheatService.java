@@ -22,9 +22,9 @@ public class DagPreheatService {
     private static final Logger LOG = LoggerFactory.getLogger(DagPreheatService.class);
 
     /** Max number of polling attempts during preheat. */
-    private static final int PREHEAT_MAX_ATTEMPTS = 3;
+    private static final int PREHEAT_MAX_ATTEMPTS = 12;
     /** Seconds between each polling attempt. */
-    private static final int PREHEAT_POLL_SECONDS = 5;
+    private static final int PREHEAT_POLL_SECONDS = 10;
 
     private final AirflowClient airflowClient;
 

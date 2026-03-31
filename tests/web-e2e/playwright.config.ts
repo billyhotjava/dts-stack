@@ -27,23 +27,9 @@ function platformDevServerUrl(): string {
   return `http://127.0.0.1:${platformDevServerPort()}/`;
 }
 
-function useAnalyticsDevServer(): boolean {
-  return ['1', 'true', 'yes', 'on'].includes(
-    String(process.env.DTS_WEB_E2E_WITH_ANALYTICS_DEV_SERVER ?? '0').trim().toLowerCase(),
-  );
-}
-
-function analyticsDevServerPort(): number {
-  return Number(process.env.DTS_WEB_E2E_ANALYTICS_DEV_SERVER_PORT || '19335');
-}
-
-function analyticsDevServerUrl(): string {
-  const explicit = process.env.DTS_ANALYTICS_URL?.trim();
-  if (explicit) {
-    return explicit;
-  }
-  return `http://127.0.0.1:${analyticsDevServerPort()}/analytics/`;
-}
+// Analytics dev server removed — analytics UI is now embedded in platform-webapp.
+// Environment variables DTS_WEB_E2E_WITH_ANALYTICS_DEV_SERVER and DTS_ANALYTICS_URL
+// are no longer used. Analytics e2e tests should target the platform dev server.
 
 function useAdminDevServer(): boolean {
   return ['1', 'true', 'yes', 'on'].includes(
@@ -83,14 +69,7 @@ if (usePlatformDevServer()) {
   });
 }
 
-if (useAnalyticsDevServer()) {
-  webServers.push({
-    command: `VITE_CACHE_DIR=.vite-cache pnpm --dir ../../source/dts-analytics-webapp/modern exec vite --host 127.0.0.1 --port ${analyticsDevServerPort()} --strictPort`,
-    url: analyticsDevServerUrl(),
-    reuseExistingServer: !process.env.CI,
-    timeout: 120_000,
-  });
-}
+// Analytics dev server block removed — see comment above.
 
 if (useAdminDevServer()) {
   webServers.push({

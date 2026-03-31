@@ -21,49 +21,57 @@ public final class ExecutionFailureClassifier {
         if (!StringUtils.hasText(text)) {
             return CATEGORY_RUNTIME;
         }
+
+        // Governance rules (highest priority — user-actionable)
         if (containsAny(text, "治理队列等待超时", "governance queue wait timeout")) {
             return CATEGORY_GOVERNANCE_QUEUE_TIMEOUT;
         }
-        if (
-            containsAny(
-                text,
-                "并发已达上限",
-                "不在允许执行窗口内",
-                "任务仍在运行中",
-                "governance rejected",
-                "concurrency limit reached",
-                "execution window"
-            )
-        ) {
+        if (containsAny(text, "并发已达上限", "不在允许执行窗口内", "任务仍在运行中",
+            "governance rejected", "concurrency limit reached", "execution window")) {
             return CATEGORY_GOVERNANCE_LIMIT;
         }
-        if (containsAny(text, "connection refused", "connect timed out", "unknown host", "no route to host", "connection reset")) {
-            return CATEGORY_CONNECTION;
-        }
-        if (containsAny(text, "access denied", "permission denied", "not authorized", "authentication failed", "401", "403")) {
-            return CATEGORY_PERMISSION;
-        }
-        if (
-            containsAny(
-                text,
-                "airflowtimetableinvalid",
-                "dag 导入失败",
-                "dag import failed",
-                "airflow_dag_not_ready_timeout",
-                "iterator expression"
-            )
-        ) {
+
+        // Airflow/runtime errors (before connection checks — "connection refused" in Airflow logs
+        // should not be classified as CONNECTION if it's clearly an Airflow DAG issue)
+        if (containsAny(text, "airflowtimetableinvalid", "dag 导入失败", "dag import failed",
+            "airflow_dag_not_ready_timeout", "iterator expression", "dag 未就绪",
+            "airflow 熔断中", "airflow 触发失败")) {
             return CATEGORY_RUNTIME;
         }
-        if (containsAny(text, "syntax error", "create table", "alter table", "drop table", "relation", "does not exist")) {
+
+        // Network/connection errors
+        if (containsAny(text, "connection refused", "connect timed out", "unknown host",
+            "no route to host", "connection reset", "i/o error", "broken pipe",
+            "ehostunreach", "econnrefused", "econnaborted")) {
+            return CATEGORY_CONNECTION;
+        }
+
+        // Permission errors
+        if (containsAny(text, "access denied", "permission denied", "not authorized",
+            "authentication failed", "login failed", "password authentication failed")) {
+            return CATEGORY_PERMISSION;
+        }
+
+        // DDL errors (check before DML — "does not exist" is a DDL issue, not DML)
+        if (containsAny(text, "syntax error", "create table", "alter table", "drop table",
+            "relation \"", "does not exist", "already exists", "cannot drop")) {
             return CATEGORY_DDL;
         }
-        if (containsAny(text, "duplicate key", "violates", "constraint", "insert", "update", "delete from", "truncate")) {
+
+        // DML errors
+        if (containsAny(text, "duplicate key", "violates unique", "violates foreign key",
+            "violates check constraint", "violates not-null", "on conflict",
+            "deadlock detected", "lock timeout")) {
             return CATEGORY_DML;
         }
-        if (containsAny(text, "invalid", "format", "parse", "type mismatch", "data truncation", "null value")) {
+
+        // Data quality errors (narrowed keywords to avoid false positives)
+        if (containsAny(text, "type mismatch", "data truncation", "null value in column",
+            "invalid input syntax", "numeric value out of range",
+            "date/time field value out of range", "character varying")) {
             return CATEGORY_DATA_QUALITY;
         }
+
         return CATEGORY_RUNTIME;
     }
 

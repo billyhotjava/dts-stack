@@ -418,9 +418,7 @@ fi
 
 if [[ "${WITH_ANALYTICS}" == "1" || "${WITH_ANALYTICS_DEV}" == "1" ]]; then
   services+=(dts-analytics)
-  if [[ "$WITH_WEBAPP" != "0" && "${SKIP_WEBAPP:-0}" != "1" ]]; then
-    services+=(dts-analytics-webapp-modern)
-  fi
+  # dts-analytics-webapp-modern removed — analytics UI is now embedded in platform-webapp.
 fi
 
 # Ensure Airflow is up before OpenMetadata.

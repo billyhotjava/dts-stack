@@ -443,28 +443,7 @@ create_temp_context_from_repo_paths() {
   echo "$tmp_context"
 }
 
-build_analytics_modern_image() {
-  local tag="$1"
-  local output_dir="$2"
-  shift 2
-  local args=("$@")
-  local tmp_context
-  tmp_context="$(create_temp_context_from_repo_paths \
-    builds/dts-analytics-webapp/modern \
-    source/dts-analytics-webapp/modern)"
-  if ! build_image_ctx \
-    "dts-analytics-webapp-modern" \
-    "$tag" \
-    "${tmp_context}/builds/dts-analytics-webapp/modern/Dockerfile" \
-    "$tmp_context" \
-    "$output_dir" \
-    "${args[@]}"; then
-    local build_rc=$?
-    rm -rf "$tmp_context"
-    return "$build_rc"
-  fi
-  rm -rf "$tmp_context"
-}
+# build_analytics_modern_image removed — analytics UI is now embedded in platform-webapp.
 
 build_maven_module() {
   local module="$1"
@@ -618,7 +597,7 @@ init_images_normal() {
   IMAGE_DTS_ANALYTICS="${IMAGE_DTS_ANALYTICS:-dts-analytics:local}"
   IMAGE_DTS_ADMIN_WEBAPP="${IMAGE_DTS_ADMIN_WEBAPP:-dts-admin-webapp:local}"
   IMAGE_DTS_PLATFORM_WEBAPP="${IMAGE_DTS_PLATFORM_WEBAPP:-dts-platform-webapp:local}"
-  IMAGE_DTS_ANALYTICS_WEBAPP_MODERN="${IMAGE_DTS_ANALYTICS_WEBAPP_MODERN:-dts-analytics-webapp-modern:local}"
+
   IMAGE_DTS_AIRFLOW_OM="${IMAGE_DTS_AIRFLOW_OM:-${IMAGE_AIRFLOW:-dts-airflow-om:local}}"
   IMAGE_DTS_DBT="${IMAGE_DTS_DBT:-${IMAGE_DBT:-dts-dbt:1.10.0}}"
   IMAGE_DTS_ADDAX="${IMAGE_DTS_ADDAX:-${IMAGE_ADDAX:-dts-addax:6.0.8}}"
@@ -633,7 +612,7 @@ init_images_legacy() {
   IMAGE_DTS_ANALYTICS="${IMAGE_DTS_ANALYTICS:-dts-analytics:local}"
   IMAGE_DTS_ADMIN_WEBAPP="${IMAGE_DTS_ADMIN_WEBAPP:-dts-admin-webapp:local}"
   IMAGE_DTS_PLATFORM_WEBAPP="${IMAGE_DTS_PLATFORM_WEBAPP:-dts-platform-webapp:local}"
-  IMAGE_DTS_ANALYTICS_WEBAPP_MODERN="${IMAGE_DTS_ANALYTICS_WEBAPP_MODERN:-dts-analytics-webapp-modern:local}"
+
   IMAGE_DTS_AIRFLOW_OM="${IMAGE_DTS_AIRFLOW_OM:-${IMAGE_AIRFLOW:-dts-airflow-om:local}}"
   IMAGE_DTS_DBT="${IMAGE_DTS_DBT:-${IMAGE_DBT:-dts-dbt:1.11.2}}"
   IMAGE_DTS_ADDAX="${IMAGE_DTS_ADDAX:-${IMAGE_ADDAX:-dts-addax:6.0.8}}"
@@ -669,10 +648,6 @@ resolve_image() {
     dts-platform-webapp)
       tag="$IMAGE_DTS_PLATFORM_WEBAPP"
       dockerfile="${REPO_ROOT}/builds/dts-platform-webapp/Dockerfile"
-      ;;
-    dts-analytics-webapp-modern)
-      tag="$IMAGE_DTS_ANALYTICS_WEBAPP_MODERN"
-      dockerfile="${REPO_ROOT}/builds/dts-analytics-webapp/modern/Dockerfile"
       ;;
     dts-airflow-om)
       tag="$IMAGE_DTS_AIRFLOW_OM"
@@ -732,12 +707,7 @@ build_all_normal() {
     --build-arg NPM_REGISTRY="${NPM_REGISTRY:-}" \
     --build-arg NPM_HTTP_PROXY="${NPM_HTTP_PROXY:-${HTTP_PROXY:-}}" \
     --build-arg NPM_HTTPS_PROXY="${NPM_HTTPS_PROXY:-${HTTPS_PROXY:-}}"
-  build_analytics_modern_image "$IMAGE_DTS_ANALYTICS_WEBAPP_MODERN" "$NORMAL_DIST" \
-    --build-arg PNPM_VERSION="${PNPM_VERSION}" \
-    --build-arg WEBAPP_BUILD_CMD="${WEBAPP_BUILD_CMD}" \
-    --build-arg NPM_REGISTRY="${NPM_REGISTRY:-}" \
-    --build-arg NPM_HTTP_PROXY="${NPM_HTTP_PROXY:-${HTTP_PROXY:-}}" \
-    --build-arg NPM_HTTPS_PROXY="${NPM_HTTPS_PROXY:-${HTTPS_PROXY:-}}"
+  # build_analytics_modern_image removed — analytics UI embedded in platform-webapp.
   build_image "dts-airflow-om" "$IMAGE_DTS_AIRFLOW_OM" "${REPO_ROOT}/source/dts-airflow-om/Dockerfile" "$NORMAL_DIST" \
     --build-arg PIP_INDEX_URL="${PIP_INDEX_URL:-}" \
     --build-arg PIP_TRUSTED_HOST="${PIP_TRUSTED_HOST:-}" \
@@ -782,12 +752,6 @@ build_all_legacy() {
     --build-arg NPM_HTTP_PROXY="${NPM_HTTP_PROXY:-${HTTP_PROXY:-}}" \
     --build-arg NPM_HTTPS_PROXY="${NPM_HTTPS_PROXY:-${HTTPS_PROXY:-}}"
   build_image "dts-platform-webapp" "$IMAGE_DTS_PLATFORM_WEBAPP" "${REPO_ROOT}/builds/dts-platform-webapp/Dockerfile" "$LEGACY_DIST" \
-    --build-arg PNPM_VERSION="${PNPM_VERSION}" \
-    --build-arg WEBAPP_BUILD_CMD="${WEBAPP_BUILD_CMD}" \
-    --build-arg NPM_REGISTRY="${NPM_REGISTRY:-}" \
-    --build-arg NPM_HTTP_PROXY="${NPM_HTTP_PROXY:-${HTTP_PROXY:-}}" \
-    --build-arg NPM_HTTPS_PROXY="${NPM_HTTPS_PROXY:-${HTTPS_PROXY:-}}"
-  build_analytics_modern_image "$IMAGE_DTS_ANALYTICS_WEBAPP_MODERN" "$LEGACY_DIST" \
     --build-arg PNPM_VERSION="${PNPM_VERSION}" \
     --build-arg WEBAPP_BUILD_CMD="${WEBAPP_BUILD_CMD}" \
     --build-arg NPM_REGISTRY="${NPM_REGISTRY:-}" \
@@ -926,10 +890,6 @@ build_single_image() {
     local selected_df="$normal_df"
     if [[ -n "$legacy_df" && -f "$legacy_df" ]]; then
       selected_df="$legacy_df"
-    fi
-    if [[ "$name" == "dts-analytics-webapp-modern" ]]; then
-      build_analytics_modern_image "$normal_tag" "$LEGACY_DIST" "${build_args[@]}"
-      return 0
     fi
     if [[ "$name" == "dts-dbt" || "$name" == "dts-addax" ]]; then
       build_image_ctx "$name" "$normal_tag" "$selected_df" "${REPO_ROOT}/builds/${name}" "$LEGACY_DIST" "${build_args[@]}"

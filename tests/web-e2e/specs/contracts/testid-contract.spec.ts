@@ -33,11 +33,11 @@ const contracts: Contract[] = [
     ],
   },
   {
-    file: 'source/dts-analytics-webapp/modern/src/pages/DashboardsPage.tsx',
+    file: 'source/dts-platform-webapp/src/analytics/pages/DashboardsPage.tsx',
     ids: ['analytics-dashboards-page', 'analytics-dashboard-search', 'analytics-dashboard-card-'],
   },
   {
-    file: 'source/dts-analytics-webapp/modern/src/pages/DashboardDetailPage.tsx',
+    file: 'source/dts-platform-webapp/src/analytics/pages/DashboardDetailPage.tsx',
     ids: ['analytics-dashboard-detail', 'analytics-dashboard-share'],
   },
   {

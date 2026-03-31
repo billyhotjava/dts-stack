@@ -414,39 +414,81 @@ public class IngestionTaskService {
 
         IngestionTask task = loadExecutableTask(taskId);
         GovernancePolicy policy = resolveGovernancePolicy(task);
-        // 创建执行记录（先在内存中保留 createdAt，用于统计治理排队等待时长）
+
+        // Phase 1 (synchronous): validate, governance check, create execution record
+        String governanceBlockedReason = evaluateGovernanceBlock(task, policy, null);
+        if (StringUtils.hasText(governanceBlockedReason)) {
+            if (!"QUEUE".equalsIgnoreCase(policy.rejectPolicy())) {
+                throw new RuntimeException("Failed to execute task: " + governanceBlockedReason);
+            }
+            // Queue mode: governance wait happens in the async phase
+        }
+
         IngestionExecution execution = new IngestionExecution();
         execution.setTask(task);
         execution.setStatus("preparing");
         execution.setCreatedAt(Instant.now());
         execution.setReplaceMode(resolveReplaceMode(task));
         execution.setTriggerMode(normalizeTriggerMode(triggerMode));
+        execution.setExecutionId("preparing-" + UUID.randomUUID().toString().substring(0, 8));
+        execution = executionRepository.save(execution);
+
+        task.setLastExecutionStatus("preparing");
+        task.setStatus("active");
+        taskRepository.save(task);
+
+        // Phase 2 (asynchronous): job generation, DAG wait, Airflow trigger
+        final Long executionId = execution.getId();
+        final Long finalTaskId = taskId;
+        final GovernancePolicy finalPolicy = policy;
+        final String finalGovernanceBlockedReason = governanceBlockedReason;
+        CompletableFuture.runAsync(() -> {
+            try {
+                executeAirflowTriggerPhase(finalTaskId, executionId, finalPolicy, finalGovernanceBlockedReason);
+            } catch (Exception ex) {
+                log.error("Async trigger phase failed for task {} execution {}: {}", finalTaskId, executionId, ex.getMessage(), ex);
+            }
+        }, java.util.concurrent.Executors.newVirtualThreadPerTaskExecutor());
+
+        log.info("Execution {} for task {} submitted to background trigger phase", execution.getId(), taskId);
+        return executionMapper.toDto(execution);
+    }
+
+    /**
+     * Phase 2 of execute — runs in background thread.
+     * Handles governance queue wait, Addax job generation, target table provisioning,
+     * DAG file creation, and Airflow trigger.
+     */
+    @Transactional
+    private void executeAirflowTriggerPhase(
+        Long taskId,
+        Long executionId,
+        GovernancePolicy policy,
+        String governanceBlockedReason
+    ) {
+        IngestionExecution execution = executionRepository.findById(executionId).orElse(null);
+        if (execution == null) {
+            log.error("[async-trigger] execution {} not found, aborting", executionId);
+            return;
+        }
+        IngestionTask task = execution.getTask();
+        if (task == null) {
+            task = taskRepository.findById(taskId).orElse(null);
+        }
+        if (task == null) {
+            markExecutionFailed(execution, null, "任务不存在");
+            return;
+        }
 
         boolean airflowTriggered = false;
         try {
-            IngestionExecution savedPreparingExecution = executionRepository.save(execution);
-            if (savedPreparingExecution != null) {
-                execution = savedPreparingExecution;
-            }
-
-            String governanceBlockedReason = evaluateGovernanceBlock(task, policy, execution.getId());
-            if (StringUtils.hasText(governanceBlockedReason)) {
-                if ("QUEUE".equalsIgnoreCase(policy.rejectPolicy())) {
-                    boolean ready = waitForGovernanceSlot(
-                        task,
-                        policy,
-                        execution.getId(),
-                        GOVERNANCE_QUEUE_MAX_WAIT,
-                        GOVERNANCE_QUEUE_POLL_INTERVAL
+            // Governance queue wait (if applicable)
+            if (StringUtils.hasText(governanceBlockedReason) && "QUEUE".equalsIgnoreCase(policy.rejectPolicy())) {
+                boolean ready = waitForGovernanceSlot(task, policy, execution.getId(), GOVERNANCE_QUEUE_MAX_WAIT, GOVERNANCE_QUEUE_POLL_INTERVAL);
+                if (!ready) {
+                    throw new IllegalStateException(
+                        "触发治理队列等待超时(" + GOVERNANCE_QUEUE_MAX_WAIT.toSeconds() + "s)：" + governanceBlockedReason
                     );
-                    if (!ready) {
-                        throw new IllegalStateException(
-                            "触发治理队列等待超时(" + GOVERNANCE_QUEUE_MAX_WAIT.toSeconds() + "s)："
-                                + governanceBlockedReason
-                        );
-                    }
-                } else {
-                    throw new IllegalStateException(governanceBlockedReason);
                 }
             }
 
@@ -455,13 +497,9 @@ public class IngestionTaskService {
             Map<String, Object> runtimeReaderOverrides = incrementalSyncService.buildReaderRuntimeOverrides(task, source);
             task = ensureAddaxJobExists(task, source, runtimeReaderOverrides);
             execution.setDroppedTables(resolveDroppedTables(task));
-            // File sources cannot use ensureTargetTables because dts-ingestion cannot reach the
-            // target database directly. CREATE TABLE DDL is injected into the Addax writer preSql
-            // instead (see AddaxJobService.injectFileSourceCreateTablePreSql).
             if (!isFileSourceType(task.getSourceType())) {
                 targetTableProvisioner.ensureTargetTables(task, source == null ? null : source.readerConfig());
             }
-            // Resolve actual column names for PostgreSQL writers to work around Addax 6.0.8 quoteColumn bug
             addaxJobService.resolveWriterColumnsIfNeeded(task.getAddaxJobPath());
             if (airflowEnabled && task.getAirflowEnabled() == null) {
                 task.setAirflowEnabled(true);
@@ -473,7 +511,6 @@ public class IngestionTaskService {
             }
             execution.setStartTime(Instant.now());
 
-            // 触发Airflow DAG
             if (airflowEnabled) {
                 String airflowJobPath = addaxJobService.toContainerJobPath(task.getAddaxJobPath());
                 if (!StringUtils.hasText(airflowJobPath)) {
@@ -483,26 +520,13 @@ public class IngestionTaskService {
                 conf.put("job_path", airflowJobPath);
                 conf.put("task_id", taskId);
                 conf.put("task_name", StringUtils.hasText(task.getName()) ? task.getName() : ("task-" + taskId));
-                if (StringUtils.hasText(policy.priority())) {
-                    conf.put("priority", policy.priority());
-                }
-                if (StringUtils.hasText(policy.rejectPolicy())) {
-                    conf.put("reject_policy", policy.rejectPolicy());
-                }
-                if (StringUtils.hasText(policy.projectKey())) {
-                    conf.put("project_key", policy.projectKey());
-                }
+                if (StringUtils.hasText(policy.priority())) conf.put("priority", policy.priority());
+                if (StringUtils.hasText(policy.rejectPolicy())) conf.put("reject_policy", policy.rejectPolicy());
+                if (StringUtils.hasText(policy.projectKey())) conf.put("project_key", policy.projectKey());
 
                 Map<String, Object> airflowResult = airflowAdapter.triggerIfRequested(
-                    new AirflowAdapter.AirflowRequest(
-                        true, 
-                        task.getAirflowDagId(), 
-                        null, 
-                        null, 
-                        null
-                    ),
-                    conf,
-                    true // runNow
+                    new AirflowAdapter.AirflowRequest(true, task.getAirflowDagId(), null, null, null),
+                    conf, true
                 );
                 log.info("Airflow trigger result for task {}: {}", taskId, airflowResult);
                 String status = airflowResult == null ? null : String.valueOf(airflowResult.get("status"));
@@ -510,177 +534,76 @@ public class IngestionTaskService {
                     String message = airflowResult == null ? null : String.valueOf(airflowResult.get("message"));
                     String code = airflowResult == null ? null : String.valueOf(airflowResult.get("code"));
                     String normalizedCode = (code == null || "null".equalsIgnoreCase(code) || code.isBlank()) ? null : code.trim();
-                    String normalizedMessage = (message == null || "null".equalsIgnoreCase(message) || message.isBlank())
-                        ? null
-                        : message.trim();
+                    String normalizedMessage = (message == null || "null".equalsIgnoreCase(message) || message.isBlank()) ? null : message.trim();
                     String detail = normalizedMessage;
                     if (normalizedCode != null) {
                         detail = normalizedMessage == null ? "[" + normalizedCode + "]" : "[" + normalizedCode + "] " + normalizedMessage;
                     }
-                    throw new IllegalStateException(
-                        "Airflow 触发失败" + (detail == null ? "" : (": " + detail))
-                    );
+                    throw new IllegalStateException("Airflow 触发失败" + (detail == null ? "" : (": " + detail)));
                 }
                 airflowTriggered = true;
                 String dagRunId = extractDagRunId(airflowResult);
-                if (StringUtils.hasText(dagRunId)) {
-                    execution.setExecutionId(dagRunId);
-                } else {
-                    execution.setExecutionId("airflow-" + java.util.UUID.randomUUID().toString().substring(0, 8));
-                }
-
-                try {
-                    execution.setStatus("running");
-                    IngestionExecution savedRunningExecution = executionRepository.save(execution);
-                    if (savedRunningExecution != null) {
-                        execution = savedRunningExecution;
-                    }
-
-                    // 更新任务的最后执行信息
-                    task.setLastExecutedAt(Instant.now());
-                    task.setLastExecutionStatus("running");
-                    task.setStatus("active");
-                    taskRepository.save(task);
-
-                    log.info("Started execution {} for task ID: {}", execution.getExecutionId(), taskId);
-
-                    // 记录审计
-                    Map<String, Object> successMeta = new java.util.LinkedHashMap<>();
-                    successMeta.put("taskId", taskId);
-                    successMeta.put("executionId", execution.getId());
-                    String operator = null;
-                    if (execution.getTask() != null) {
-                        operator = execution.getTask().getLastModifiedBy();
-                        if (!StringUtils.hasText(operator)) {
-                            operator = execution.getTask().getCreatedBy();
-                        }
-                    }
-                    if (!StringUtils.hasText(operator)) {
-                        operator = "system";
-                    }
-                    successMeta.put("operator", operator);
-                    auditService.auditAction(
-                        "INGESTION_TASK_EXECUTE",
-                        AuditStage.SUCCESS,
-                        task.getName(),
-                        successMeta
-                    );
-                } catch (Exception postTriggerEx) {
-                    log.warn("Post-trigger operations failed for task {} execution {} (DAG already triggered, dagRunId={}): {}",
-                        taskId, savedPreparingExecution.getId(), dagRunId, postTriggerEx.getMessage(), postTriggerEx);
-                    try {
-                        execution.setStatus("running");
-                        execution.setExecutionId(dagRunId);
-                        executionRepository.save(execution);
-                    } catch (Exception saveEx) {
-                        log.error("Failed to persist running status for execution {}: {}", savedPreparingExecution.getId(), saveEx.getMessage());
-                    }
-                }
-            } else {
-                // 如果未启用Airflow，记录为手动执行
-                execution.setExecutionId("manual-" + java.util.UUID.randomUUID().toString().substring(0, 8));
-
+                execution.setExecutionId(StringUtils.hasText(dagRunId) ? dagRunId : ("airflow-" + UUID.randomUUID().toString().substring(0, 8)));
                 execution.setStatus("running");
-                IngestionExecution savedRunningExecution = executionRepository.save(execution);
-                if (savedRunningExecution != null) {
-                    execution = savedRunningExecution;
-                }
-
-                // 更新任务的最后执行信息
-                task.setLastExecutedAt(Instant.now());
-                task.setLastExecutionStatus("running");
-                task.setStatus("active");
-                taskRepository.save(task);
-
-                log.info("Started execution {} for task ID: {}", execution.getExecutionId(), taskId);
-
-                // 记录审计
-                Map<String, Object> successMeta = new java.util.LinkedHashMap<>();
-                successMeta.put("taskId", taskId);
-                successMeta.put("executionId", execution.getId());
-                String operator = null;
-                if (execution.getTask() != null) {
-                    operator = execution.getTask().getLastModifiedBy();
-                    if (!StringUtils.hasText(operator)) {
-                        operator = execution.getTask().getCreatedBy();
-                    }
-                }
-                if (!StringUtils.hasText(operator)) {
-                    operator = "system";
-                }
-                successMeta.put("operator", operator);
-                auditService.auditAction(
-                    "INGESTION_TASK_EXECUTE",
-                    AuditStage.SUCCESS,
-                    task.getName(),
-                    successMeta
-                );
+                executionRepository.save(execution);
+            } else {
+                execution.setExecutionId("manual-" + UUID.randomUUID().toString().substring(0, 8));
+                execution.setStatus("running");
+                executionRepository.save(execution);
             }
 
-            return executionMapper.toDto(execution);
+            task.setLastExecutedAt(Instant.now());
+            task.setLastExecutionStatus("running");
+            taskRepository.save(task);
+            log.info("Started execution {} for task ID: {}", execution.getExecutionId(), taskId);
+
+            auditService.auditAction("INGESTION_TASK_EXECUTE", AuditStage.SUCCESS, task.getName(),
+                Map.of("taskId", taskId, "executionId", execution.getId(), "operator", resolveOperator(task)));
+
         } catch (Exception e) {
             if (airflowTriggered) {
-                log.warn("Post-trigger error for task {} — DAG already running, returning success", taskId, e);
-                return executionMapper.toDto(execution);
+                log.warn("Post-trigger error for task {} — DAG already running, keeping status=running", taskId, e);
+                return;
             }
-            log.error("Failed to execute task ID: {}", taskId, e);
+            log.error("[async-trigger] failed for task {}: {}", taskId, e.getMessage(), e);
+            markExecutionFailed(execution, task, extractFailureMessage(e));
+        }
+    }
 
-            String failureMessage = extractFailureMessage(e);
-            String failureCategory = com.yuzhi.dts.ingestion.service.etl.ExecutionFailureClassifier.classify(failureMessage);
-            String failureAdvice = com.yuzhi.dts.ingestion.service.etl.ExecutionFailureClassifier.advice(failureCategory);
+    private void markExecutionFailed(IngestionExecution execution, IngestionTask task, String failureMessage) {
+        String failureCategory = ExecutionFailureClassifier.classify(failureMessage);
+        String failureAdvice = ExecutionFailureClassifier.advice(failureCategory);
 
-            if (execution == null) {
-                execution = new IngestionExecution();
-                execution.setTask(task);
-            }
-            if (execution.getStartTime() == null) {
-                execution.setStartTime(execution.getCreatedAt() != null ? execution.getCreatedAt() : Instant.now());
-            }
-            if (!StringUtils.hasText(execution.getExecutionId())) {
-                execution.setExecutionId("failed-" + java.util.UUID.randomUUID().toString().substring(0, 8));
-            }
-            execution.setStatus("failed");
-            execution.setEndTime(Instant.now());
-            execution.setErrorMessage(failureMessage);
-            execution.setFailureCategory(failureCategory);
-            execution.setFailureAdvice(failureAdvice);
+        if (execution.getStartTime() == null) {
+            execution.setStartTime(execution.getCreatedAt() != null ? execution.getCreatedAt() : Instant.now());
+        }
+        execution.setStatus("failed");
+        execution.setEndTime(Instant.now());
+        execution.setErrorMessage(failureMessage);
+        execution.setFailureCategory(failureCategory);
+        execution.setFailureAdvice(failureAdvice);
+        executionRepository.save(execution);
+
+        try {
+            retryService.scheduleRetryIfEligible(execution);
             executionRepository.save(execution);
+        } catch (Exception retryEx) {
+            log.warn("Failed to schedule auto-retry for execution id={}: {}", execution.getId(), retryEx.getMessage());
+        }
 
-            // Schedule automatic retry if eligible
-            try {
-                retryService.scheduleRetryIfEligible(execution);
-                executionRepository.save(execution);
-            } catch (Exception retryEx) {
-                log.warn("Failed to schedule auto-retry for execution id={}: {}", execution.getId(), retryEx.getMessage());
-            }
-
+        if (task != null) {
             task.setLastExecutionStatus("failed");
             taskRepository.save(task);
 
-            // 记录审计失败
-            Map<String, Object> meta = new java.util.LinkedHashMap<>();
-            meta.put("taskId", taskId);
+            Map<String, Object> meta = new LinkedHashMap<>();
+            meta.put("taskId", task.getId());
             meta.put("failureCategory", failureCategory);
             meta.put("failureAdvice", failureAdvice);
-            if (StringUtils.hasText(failureMessage)) {
-                meta.put("error", failureMessage);
-            }
-            if (StringUtils.hasText(failureMessage) && failureMessage.contains("并发已达上限")) {
-                meta.put("governanceRejected", true);
-            }
-            auditService.auditAction(
-                "INGESTION_TASK_EXECUTE",
-                AuditStage.FAIL,
-                task.getName(),
-                meta
-            );
-
-            throw new RuntimeException(
-                StringUtils.hasText(failureMessage) ? "Failed to execute task: " + failureMessage : "Failed to execute task",
-                e
-            );
+            if (StringUtils.hasText(failureMessage)) meta.put("error", failureMessage);
+            auditService.auditAction("INGESTION_TASK_EXECUTE", AuditStage.FAIL, task.getName(), meta);
         }
     }
+
 
     @Async("ingestionTaskExecutor")
     public CompletableFuture<Void> executeAsync(Long taskId) {

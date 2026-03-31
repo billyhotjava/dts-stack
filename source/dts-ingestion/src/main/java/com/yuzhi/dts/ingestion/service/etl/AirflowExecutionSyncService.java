@@ -160,7 +160,21 @@ public class AirflowExecutionSyncService {
             return;
         }
         Page<IngestionExecution> page = executionRepository.findByStatus("running", PageRequest.of(0, batchSize));
+        if (page.isEmpty()) {
+            return;
+        }
+
+        int syncedCount = 0;
+        int errorCount = 0;
+
         for (IngestionExecution execution : page.getContent()) {
+            // Stop polling if we've hit too many consecutive errors (circuit breaker is open)
+            if (errorCount >= 3) {
+                LOG.warn("[airflow-sync] stopping poll after {} consecutive errors, {} remaining executions skipped",
+                    errorCount, page.getContent().size() - syncedCount);
+                break;
+            }
+
             IngestionTask task = execution.getTask();
             if (task == null || !Boolean.TRUE.equals(task.getAirflowEnabled())) {
                 continue;
@@ -170,17 +184,32 @@ public class AirflowExecutionSyncService {
             if (!StringUtils.hasText(dagId) || !StringUtils.hasText(dagRunId)) {
                 continue;
             }
+            // Skip executions still in "preparing" phase — they haven't triggered Airflow yet
+            if (dagRunId.startsWith("preparing-")) {
+                continue;
+            }
+
             AirflowClient.DagRunLookupResult dagRunLookup = airflowClient.getDagRunLookup(dagId, dagRunId);
+
+            // Track Airflow connectivity errors for early termination
+            if (dagRunLookup.statusCode() < 0 || dagRunLookup.statusCode() >= 500) {
+                errorCount++;
+                continue;
+            }
+            errorCount = 0; // reset on successful API call
+
             if (!dagRunLookup.found()) {
                 if (dagRunLookup.notFound() && shouldFailMissingDagRun(execution)) {
                     String failureMessage = resolveMissingDagRunMessage(dagId, dagRunId, dagRunLookup.message());
                     markExecution(execution, task, "failed", failureMessage, dagId, dagRunId);
                 }
+                syncedCount++;
                 continue;
             }
             Map<String, Object> dagRun = dagRunLookup.dagRun();
             String state = toText(dagRun.get("state"));
             if (!StringUtils.hasText(state)) {
+                syncedCount++;
                 continue;
             }
             String normalized = state.trim().toLowerCase(Locale.ROOT);
@@ -190,6 +219,7 @@ public class AirflowExecutionSyncService {
                 String failureMessage = resolveAirflowFailureMessage(dagId, dagRunId, state);
                 markExecution(execution, task, "failed", failureMessage, dagId, dagRunId);
             }
+            syncedCount++;
         }
     }
 

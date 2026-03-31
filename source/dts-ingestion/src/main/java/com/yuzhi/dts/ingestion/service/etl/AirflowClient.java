@@ -28,14 +28,49 @@ public class AirflowClient {
 
     private static final Logger LOG = LoggerFactory.getLogger(AirflowClient.class);
 
+    /** Circuit breaker: consecutive failure count before tripping. */
+    private static final int CIRCUIT_BREAKER_THRESHOLD = 5;
+    /** Circuit breaker: how long to stay open (fast-fail) before retrying. */
+    private static final Duration CIRCUIT_BREAKER_COOLDOWN = Duration.ofSeconds(30);
+
     private final RestTemplate restTemplate;
     private final AirflowProperties properties;
     private final IngestionSettingsService settingsService;
 
+    // Simple circuit breaker state (volatile for visibility across threads)
+    private volatile int consecutiveFailures = 0;
+    private volatile long circuitOpenUntil = 0L;
+
     public AirflowClient(RestTemplateBuilder builder, AirflowProperties properties, IngestionSettingsService settingsService) {
-        this.restTemplate = builder.setConnectTimeout(Duration.ofSeconds(5)).setReadTimeout(Duration.ofSeconds(10)).build();
+        this.restTemplate = builder.setConnectTimeout(Duration.ofSeconds(10)).setReadTimeout(Duration.ofSeconds(30)).build();
         this.properties = properties;
         this.settingsService = settingsService;
+    }
+
+    private boolean isCircuitOpen() {
+        if (consecutiveFailures < CIRCUIT_BREAKER_THRESHOLD) {
+            return false;
+        }
+        if (System.currentTimeMillis() >= circuitOpenUntil) {
+            // Cooldown expired — allow one probe request (half-open)
+            consecutiveFailures = CIRCUIT_BREAKER_THRESHOLD - 1;
+            return false;
+        }
+        return true;
+    }
+
+    private void recordSuccess() {
+        consecutiveFailures = 0;
+        circuitOpenUntil = 0L;
+    }
+
+    private void recordFailure() {
+        consecutiveFailures++;
+        if (consecutiveFailures >= CIRCUIT_BREAKER_THRESHOLD) {
+            circuitOpenUntil = System.currentTimeMillis() + CIRCUIT_BREAKER_COOLDOWN.toMillis();
+            LOG.warn("[airflow-circuit] circuit OPEN — {} consecutive failures, cooling down for {}s",
+                consecutiveFailures, CIRCUIT_BREAKER_COOLDOWN.toSeconds());
+        }
     }
 
     public TriggerResult triggerDag(String dagId, Map<String, Object> payload) {
@@ -43,17 +78,26 @@ public class AirflowClient {
         if (!settings.enabled() || !StringUtils.hasText(settings.baseUrl()) || !StringUtils.hasText(dagId)) {
             return new TriggerResult(false, 0, "Airflow 未启用或缺少 DAG", null);
         }
+        if (isCircuitOpen()) {
+            return new TriggerResult(false, -1, "Airflow 熔断中，请稍后重试", null);
+        }
         URI uri = buildUri(settings, "/dags/" + dagId + "/dagRuns", null);
         try {
             HttpHeaders headers = defaultHeaders(settings);
             HttpEntity<Map<String, Object>> entity = new HttpEntity<>(payload, headers);
             ResponseEntity<Map> response = restTemplate.exchange(uri, HttpMethod.POST, entity, Map.class);
+            recordSuccess();
             return new TriggerResult(true, response.getStatusCode().value(), null, response.getBody());
         } catch (HttpStatusCodeException ex) {
             LOG.warn("Airflow dag trigger failed status={} body={}", ex.getStatusCode().value(), ex.getResponseBodyAsString());
+            // 4xx errors are Airflow-side issues, not connectivity — don't count toward circuit breaker
+            if (ex.getStatusCode().is5xxServerError()) {
+                recordFailure();
+            }
             return new TriggerResult(false, ex.getStatusCode().value(), ex.getResponseBodyAsString(), null);
         } catch (Exception ex) {
             LOG.warn("Airflow dag trigger error: {}", ex.getMessage());
+            recordFailure();
             return new TriggerResult(false, -1, ex.getMessage(), null);
         }
     }
@@ -112,20 +156,29 @@ public class AirflowClient {
         if (!settings.enabled() || !StringUtils.hasText(settings.baseUrl()) || !StringUtils.hasText(dagId) || !StringUtils.hasText(dagRunId)) {
             return DagRunLookupResult.disabled();
         }
+        if (isCircuitOpen()) {
+            return DagRunLookupResult.error(-1, "Airflow 熔断中");
+        }
         URI uri = buildUri(settings, "/dags/" + dagId + "/dagRuns/" + dagRunId, null);
         try {
             HttpHeaders headers = defaultHeaders(settings);
             HttpEntity<Void> entity = new HttpEntity<>(headers);
             ResponseEntity<Map> response = restTemplate.exchange(uri, HttpMethod.GET, entity, Map.class);
+            recordSuccess();
             return DagRunLookupResult.found(response.getStatusCode().value(), response.getBody());
         } catch (HttpStatusCodeException ex) {
-            LOG.warn("Airflow dag run fetch failed status={} body={}", ex.getStatusCode().value(), ex.getResponseBodyAsString());
             if (ex.getStatusCode().value() == 404) {
+                recordSuccess();
                 return DagRunLookupResult.notFound(ex.getStatusCode().value(), ex.getResponseBodyAsString());
+            }
+            LOG.warn("Airflow dag run fetch failed status={} body={}", ex.getStatusCode().value(), ex.getResponseBodyAsString());
+            if (ex.getStatusCode().is5xxServerError()) {
+                recordFailure();
             }
             return DagRunLookupResult.error(ex.getStatusCode().value(), ex.getResponseBodyAsString());
         } catch (Exception ex) {
             LOG.warn("Airflow dag run fetch error: {}", ex.getMessage());
+            recordFailure();
             return DagRunLookupResult.error(-1, ex.getMessage());
         }
     }
@@ -271,19 +324,28 @@ public class AirflowClient {
         if (!settings.enabled() || !StringUtils.hasText(settings.baseUrl())) {
             return false;
         }
+        if (isCircuitOpen()) {
+            return false;
+        }
         URI uri = buildUri(settings, "/dags/" + dagId, null);
         try {
             HttpHeaders headers = defaultHeaders(settings);
             HttpEntity<Void> entity = new HttpEntity<>(headers);
             ResponseEntity<Map> response = restTemplate.exchange(uri, HttpMethod.GET, entity, Map.class);
+            recordSuccess();
             return response.getStatusCode().is2xxSuccessful();
         } catch (HttpStatusCodeException ex) {
             if (ex.getStatusCode().value() == 404) {
+                recordSuccess(); // 404 = Airflow is reachable, DAG just not there yet
                 return false;
             }
             LOG.warn("Airflow dag check failed status={} body={}", ex.getStatusCode().value(), ex.getResponseBodyAsString());
+            if (ex.getStatusCode().is5xxServerError()) {
+                recordFailure();
+            }
         } catch (Exception ex) {
             LOG.warn("Airflow dag check error: {}", ex.getMessage());
+            recordFailure();
         }
         return false;
     }
