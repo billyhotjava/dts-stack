@@ -1,5 +1,5 @@
 import { useEffect, useState, useCallback, useMemo } from 'react';
-import { analyticsApi, type ScreenAclEntry, type UserSearchItem, type PlatformRole } from '../../../api/analyticsApi';
+import { analyticsApi, type ScreenAclEntry, type PlatformUser, type PlatformRole } from '../../../api/analyticsApi';
 import { Modal } from 'antd';
 
 interface ScreenAclPanelProps {
@@ -22,6 +22,7 @@ export function ScreenAclPanel({ open, screenId, onClose, isOwner = false }: Scr
 	// ── Existing grants ──
 	const [loading, setLoading] = useState(false);
 	const [error, setError] = useState<string | null>(null);
+	const [forbidden, setForbidden] = useState(false);
 	const [rows, setRows] = useState<ScreenAclEntry[]>([]);
 
 	// ── Add grant form ──
@@ -32,7 +33,7 @@ export function ScreenAclPanel({ open, screenId, onClose, isOwner = false }: Scr
 	const [adding, setAdding] = useState(false);
 
 	// ── Candidate data sources ──
-	const [users, setUsers] = useState<UserSearchItem[]>([]);
+	const [platformUsers, setPlatformUsers] = useState<PlatformUser[]>([]);
 	const [usersLoading, setUsersLoading] = useState(false);
 	const [roles, setRoles] = useState<PlatformRole[]>([]);
 	const [rolesLoading, setRolesLoading] = useState(false);
@@ -45,11 +46,17 @@ export function ScreenAclPanel({ open, screenId, onClose, isOwner = false }: Scr
 		if (!screenId) return;
 		setLoading(true);
 		setError(null);
+		setForbidden(false);
 		try {
 			const acl = await analyticsApi.getScreenAcl(screenId);
 			setRows(acl || []);
-		} catch (e) {
-			setError(e instanceof Error ? e.message : '加载权限失败');
+		} catch (e: unknown) {
+			const status = (e as { status?: number }).status;
+			if (status === 403) {
+				setForbidden(true);
+			} else {
+				setError(e instanceof Error ? e.message : '加载权限失败');
+			}
 			setRows([]);
 		} finally {
 			setLoading(false);
@@ -61,20 +68,20 @@ export function ScreenAclPanel({ open, screenId, onClose, isOwner = false }: Scr
 		loadGrants();
 	}, [open, screenId, loadGrants]);
 
-	// ── Load users when type is USER ──
-	const loadUsers = useCallback(async (query: string) => {
+	// ── Load platform users ──
+	const loadUsers = useCallback(async (keyword: string) => {
 		setUsersLoading(true);
 		try {
-			const result = await analyticsApi.searchUsers(query);
-			setUsers(result || []);
+			const result = await analyticsApi.listPlatformUsers(keyword || undefined);
+			setPlatformUsers(result || []);
 		} catch {
-			setUsers([]);
+			setPlatformUsers([]);
 		} finally {
 			setUsersLoading(false);
 		}
 	}, []);
 
-	// ── Load roles when type is ROLE ──
+	// ── Load roles ──
 	const loadRoles = useCallback(async () => {
 		setRolesLoading(true);
 		try {
@@ -109,7 +116,7 @@ export function ScreenAclPanel({ open, screenId, onClose, isOwner = false }: Scr
 		return () => clearTimeout(timer);
 	}, [searchQuery, open, granteeType, loadUsers]);
 
-	// ── Filtered candidates (roles support frontend filter) ──
+	// ── Filtered roles (frontend filter) ──
 	const filteredRoles = useMemo(() => {
 		if (!searchQuery.trim()) return roles;
 		const kw = searchQuery.trim().toLowerCase();
@@ -120,7 +127,28 @@ export function ScreenAclPanel({ open, screenId, onClose, isOwner = false }: Scr
 		);
 	}, [roles, searchQuery]);
 
-	const candidateList = granteeType === 'USER' ? users : filteredRoles;
+	// ── Build username→displayName map for existing grants ──
+	const userDisplayMap = useMemo(() => {
+		const map = new Map<string, PlatformUser>();
+		for (const u of platformUsers) {
+			map.set(u.username.toLowerCase(), u);
+		}
+		return map;
+	}, [platformUsers]);
+
+	const resolveGrantLabel = (row: ScreenAclEntry): string => {
+		if (row.subjectType === 'USER') {
+			const u = userDisplayMap.get((row.subjectId || '').toLowerCase());
+			if (u) {
+				const parts = [u.username];
+				if (u.displayName && u.displayName !== u.username) parts.push(u.displayName);
+				return parts.join(' / ');
+			}
+		}
+		return row.subjectId;
+	};
+
+	const candidateList: (PlatformUser | PlatformRole)[] = granteeType === 'USER' ? platformUsers : filteredRoles;
 	const totalItems = candidateList.length;
 	const totalPages = Math.max(1, Math.ceil(totalItems / PAGE_SIZE));
 	const safePage = Math.min(currentPage, totalPages);
@@ -132,9 +160,9 @@ export function ScreenAclPanel({ open, screenId, onClose, isOwner = false }: Scr
 	}, [searchQuery, granteeType]);
 
 	// ── Checkbox helpers ──
-	const getCandidateId = (item: UserSearchItem | PlatformRole): string => {
+	const getCandidateId = (item: PlatformUser | PlatformRole): string => {
 		if (granteeType === 'USER') {
-			return String((item as UserSearchItem).id);
+			return (item as PlatformUser).username;
 		}
 		return (item as PlatformRole).name;
 	};
@@ -201,7 +229,6 @@ export function ScreenAclPanel({ open, screenId, onClose, isOwner = false }: Scr
 
 	const assignablePerms: ('MANAGE' | 'READ')[] = isOwner ? ['MANAGE', 'READ'] : ['READ'];
 
-	// ── Shared table cell style ──
 	const cellCls = 'px-3 py-2 text-xs text-text-primary';
 	const headerCls = 'text-left font-medium px-3 py-2 text-xs text-text-secondary bg-surface-secondary';
 
@@ -215,14 +242,27 @@ export function ScreenAclPanel({ open, screenId, onClose, isOwner = false }: Scr
 			styles={{ body: { maxHeight: '72vh', overflowY: 'auto' } }}
 		>
 			{!screenId && <div className="text-xs opacity-80">请先保存大屏后再配置权限。</div>}
-			{error && (
+			{forbidden && (
+				<div className="border border-warning bg-warning/10 text-text-primary rounded-lg px-4 py-6 mb-3 text-center">
+					<div className="text-sm font-medium mb-1">无权管理此大屏的权限</div>
+					<div className="text-xs text-text-secondary">只有大屏的创建者才能查看和管理权限配置。</div>
+					<button
+						type="button"
+						className="mt-4 px-4 py-1.5 rounded-md border border-border-default bg-surface-card text-text-primary text-xs cursor-pointer hover:border-brand hover:bg-brand/10"
+						onClick={onClose}
+					>
+						关闭
+					</button>
+				</div>
+			)}
+			{error && !forbidden && (
 				<div className="border border-error bg-error/10 text-error rounded-lg p-2.5 mb-3 text-xs whitespace-pre-wrap">
 					{error}
 				</div>
 			)}
 
 			{/* ── Section 1: Existing Grants ── */}
-			<div className="mb-5">
+			{!forbidden && <div className="mb-5">
 				<div className="text-sm font-medium text-text-primary mb-2">已有权限</div>
 				{loading ? (
 					<div className="text-xs text-text-muted py-4 text-center">加载中...</div>
@@ -243,7 +283,7 @@ export function ScreenAclPanel({ open, screenId, onClose, isOwner = false }: Scr
 								{rows.map((row, idx) => (
 									<tr key={row.id ?? idx} className="border-t border-border-default">
 										<td className={cellCls}>{GRANTEE_TYPE_LABELS[row.subjectType] || row.subjectType}</td>
-										<td className={cellCls}>{row.subjectId}</td>
+										<td className={cellCls}>{resolveGrantLabel(row)}</td>
 										<td className={cellCls}>
 											<span className={row.perm === 'OWNER' ? 'font-semibold text-brand' : ''}>
 												{PERM_LABELS[row.perm] || row.perm}
@@ -266,10 +306,10 @@ export function ScreenAclPanel({ open, screenId, onClose, isOwner = false }: Scr
 						</table>
 					</div>
 				)}
-			</div>
+			</div>}
 
 			{/* ── Section 2: Add Grant ── */}
-			{screenId && (
+			{screenId && !forbidden && (
 				<div className="border-t border-border-default pt-4">
 					<div className="text-sm font-medium text-text-primary mb-3">添加权限</div>
 
@@ -326,9 +366,9 @@ export function ScreenAclPanel({ open, screenId, onClose, isOwner = false }: Scr
 									</th>
 									{granteeType === 'USER' ? (
 										<>
-											<th className={headerCls}>ID</th>
+											<th className={headerCls}>用户名</th>
 											<th className={headerCls}>姓名</th>
-											<th className={headerCls}>邮箱</th>
+											<th className={headerCls}>部门</th>
 										</>
 									) : (
 										<>
@@ -351,8 +391,8 @@ export function ScreenAclPanel({ open, screenId, onClose, isOwner = false }: Scr
 										</td>
 									</tr>
 								) : granteeType === 'USER' ? (
-									(pagedItems as UserSearchItem[]).map((user) => {
-										const uid = String(user.id);
+									(pagedItems as PlatformUser[]).map((user) => {
+										const uid = user.username;
 										return (
 											<tr
 												key={uid}
@@ -367,9 +407,9 @@ export function ScreenAclPanel({ open, screenId, onClose, isOwner = false }: Scr
 														className="cursor-pointer"
 													/>
 												</td>
-												<td className={cellCls}>{user.id}</td>
-												<td className={cellCls}>{user.common_name || '-'}</td>
-												<td className={`${cellCls} text-text-secondary`}>{user.email || '-'}</td>
+												<td className={cellCls}>{user.username}</td>
+												<td className={cellCls}>{user.displayName || '-'}</td>
+												<td className={`${cellCls} text-text-secondary`}>{user.deptName || user.deptCode || '-'}</td>
 											</tr>
 										);
 									})
