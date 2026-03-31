@@ -75,7 +75,6 @@ PATH="${FAKE_BIN}:${PATH}" \
   API_PROXY_TARGET="http://dts-platform:8081" \
   ADMIN_API_PROXY_TARGET="http://dts-admin:8081" \
   ANALYTICS_API_PROXY_TARGET="http://dts-analytics:3000" \
-  ANALYTICS_UI_PROXY_TARGET="http://dts-analytics-webapp-modern:80" \
   WEBAPP_BACKEND_WAIT_INTERVAL_SECONDS=0 \
   sh "${REPO_ROOT}/builds/dts-platform-webapp/docker-entrypoint.sh" >"${OUTPUT_FILE}" 2>&1
 STATUS=$?

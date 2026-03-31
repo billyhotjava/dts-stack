@@ -830,9 +830,7 @@ generate_env_base(){
   : "${IMAGE_DTS_ADMIN_WEBAPP:=dts-admin-webapp:1.0.0}"
   : "${IMAGE_DTS_PLATFORM_WEBAPP:=dts-platform-webapp:1.0.0}"
   : "${IMAGE_DTS_ANALYTICS:=dts-analytics:1.0.0}"
-  : "${IMAGE_DTS_ANALYTICS_WEBAPP_MODERN:=dts-analytics-webapp-modern:1.0.0}"
-  # Traefik upstream port for analytics modern webapp (nginx image defaults to 80).
-  : "${DTS_ANALYTICS_WEBAPP_MODERN_PORT:=80}"
+  # IMAGE_DTS_ANALYTICS_WEBAPP_MODERN removed — analytics UI embedded in platform-webapp.
   : "${ANALYTICS_ENCRYPTION_SECRET:=$(generate_fernet)}"
   # Prefer same-domain mount under platform UI to keep user-facing URLs consistent and avoid extra DNS/ports.
   : "${ANALYTICS_SITE_URL:=https://${HOST_PLATFORM_UI}/analytics}"
@@ -1217,8 +1215,6 @@ IMAGE_DTS_INGESTION=${IMAGE_DTS_INGESTION}
 IMAGE_DTS_ADMIN_WEBAPP=${IMAGE_DTS_ADMIN_WEBAPP}
 IMAGE_DTS_PLATFORM_WEBAPP=${IMAGE_DTS_PLATFORM_WEBAPP}
 IMAGE_DTS_ANALYTICS=${IMAGE_DTS_ANALYTICS}
-IMAGE_DTS_ANALYTICS_WEBAPP_MODERN=${IMAGE_DTS_ANALYTICS_WEBAPP_MODERN}
-DTS_ANALYTICS_WEBAPP_MODERN_PORT=${DTS_ANALYTICS_WEBAPP_MODERN_PORT}
 EOF
 
   # Append optional hosts/env blocks conditionally to .env

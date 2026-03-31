@@ -856,15 +856,6 @@ build_single_image() {
         --build-arg NPM_HTTP_PROXY="${NPM_HTTP_PROXY:-${HTTP_PROXY:-}}"
         --build-arg NPM_HTTPS_PROXY="${NPM_HTTPS_PROXY:-${HTTPS_PROXY:-}}")
       ;;
-    dts-analytics-webapp-modern)
-      build_args+=(
-        --build-arg PNPM_VERSION="${PNPM_VERSION}"
-        --build-arg WEBAPP_BUILD_CMD="${WEBAPP_BUILD_CMD}"
-        --build-arg NPM_REGISTRY="${NPM_REGISTRY:-}"
-        --build-arg NPM_HTTP_PROXY="${NPM_HTTP_PROXY:-${HTTP_PROXY:-}}"
-        --build-arg NPM_HTTPS_PROXY="${NPM_HTTPS_PROXY:-${HTTPS_PROXY:-}}"
-      )
-      ;;
     dts-airflow-om)
       build_args+=(
         --build-arg PIP_INDEX_URL="${PIP_INDEX_URL:-}"
@@ -896,12 +887,6 @@ build_single_image() {
     else
       build_image "$name" "$normal_tag" "$selected_df" "$LEGACY_DIST" "${build_args[@]}"
     fi
-    return 0
-  fi
-
-  if [[ "$name" == "dts-analytics-webapp-modern" ]]; then
-    build_analytics_modern_image "$normal_tag" "$NORMAL_DIST" "${build_args[@]}"
-    save_image "$normal_tag" "$LEGACY_DIST"
     return 0
   fi
 

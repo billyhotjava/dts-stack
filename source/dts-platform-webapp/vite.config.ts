@@ -17,14 +17,13 @@ const legacySupportedBrowsers = ["chrome >= 95", "edge >= 95", "firefox >= 102",
 const modernSupportedBrowsers = ["chrome >= 109", "edge >= 109", "firefox >= 115", "safari >= 16.4", "ios >= 16.4", "android >= 109"];
 const adminServiceTarget = { host: "dts-admin", containerPort: 8081, hostPort: 18081 };
 const analyticsApiServiceTarget = { host: "dts-analytics", containerPort: 3000, hostPort: 3000 };
-const analyticsUiServiceTarget = { host: "dts-analytics-webapp-modern", containerPort: 3002, hostPort: 3002 };
+// analyticsUiServiceTarget removed — analytics UI is now embedded in platform-webapp.
 
 type PlatformServerProxyOptions = {
 	apiProxyTarget: string;
 	apiProxyPrefix: string;
 	adminProxyTarget: string;
 	analyticsApiProxyTarget: string;
-	analyticsUiProxyTarget: string;
 };
 
 function resolveServiceProxyTarget(
@@ -45,7 +44,6 @@ export function createPlatformServerProxy({
 	apiProxyPrefix,
 	adminProxyTarget,
 	analyticsApiProxyTarget,
-	analyticsUiProxyTarget,
 }: PlatformServerProxyOptions) {
 	return {
 		"/analytics/api": {
@@ -147,11 +145,6 @@ export default defineConfig(({ mode }) => {
 	const analyticsApiProxyTarget = resolveServiceProxyTarget(
 		env.VITE_ANALYTICS_API_PROXY_TARGET || rawEnv.VITE_ANALYTICS_API_PROXY_TARGET,
 		analyticsApiServiceTarget,
-		runningInContainer,
-	);
-	const analyticsUiProxyTarget = resolveServiceProxyTarget(
-		env.VITE_ANALYTICS_UI_PROXY_TARGET || rawEnv.VITE_ANALYTICS_UI_PROXY_TARGET,
-		analyticsUiServiceTarget,
 		runningInContainer,
 	);
 	const pollingEnabled = String(env.CHOKIDAR_USEPOLLING || "").trim().toLowerCase() === "true";
@@ -276,7 +269,6 @@ export default defineConfig(({ mode }) => {
 					apiProxyPrefix,
 					adminProxyTarget,
 					analyticsApiProxyTarget,
-					analyticsUiProxyTarget,
 				}),
 			},
 

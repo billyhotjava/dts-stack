@@ -248,12 +248,19 @@ export default function TransformPage() {
 
 	const renderExecutionStatus = (status?: string) => {
 		const statusMap: Record<string, { color: string; text: string }> = {
+			preparing: { color: "processing", text: "准备中" },
 			running: { color: "processing", text: "运行中" },
 			success: { color: "success", text: "成功" },
 			failed: { color: "error", text: "失败" },
 		};
 		const config = statusMap[status || ""];
 		return config ? <Tag color={config.color}>{config.text}</Tag> : <span>-</span>;
+	};
+
+	/** Whether a task is currently in a non-interruptible execution phase. */
+	const isTaskBusy = (record: IngestionTaskDTO): boolean => {
+		const lastStatus = (record.lastExecutionStatus || "").toLowerCase();
+		return lastStatus === "preparing" || lastStatus === "running" || executingTaskId === record.id;
 	};
 
 	const columns = [

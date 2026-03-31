@@ -74,6 +74,13 @@ export const createAsyncRunRetryProgress = (previous: AsyncRunProgressView): Asy
 	detail: "状态同步中，稍后自动重试。",
 });
 
+/**
+ * Map execution status + elapsed time to a user-friendly progress view.
+ *
+ * The "preparing" phase can take up to ~135s (DAG file write → Airflow scheduler pickup → trigger).
+ * We show phased messages so the user knows the system is still working:
+ *   0-15s: 作业准备  |  15-45s: DAG 注册  |  45-90s: 调度器扫描  |  90s+: 即将触发
+ */
 export const mapExecutionToProgressView = (
 	execution: IngestionExecutionDTO | null,
 	elapsedMs: number,
@@ -84,7 +91,7 @@ export const mapExecutionToProgressView = (
 			progress: dynamicProgress,
 			status: "active",
 			stage: "等待执行记录",
-			detail: "任务已提交，系统正在准备 DAG 和作业参数。",
+			detail: "任务已提交，系统正在创建执行记录。",
 			terminal: false,
 		};
 	}
@@ -108,19 +115,55 @@ export const mapExecutionToProgressView = (
 		};
 	}
 	if (rawStatus === "preparing") {
-		return {
-			progress: 55,
-			status: "active",
-			stage: "准备执行",
-			detail: "正在生成/校验 Addax 作业并等待 DAG 就绪。",
-			terminal: false,
-		};
+		return mapPreparingPhase(elapsedMs);
 	}
 	return {
 		progress: 80,
 		status: "active",
 		stage: "执行中",
-		detail: "已触发执行，正在同步运行状态。",
+		detail: "Addax 任务运行中，正在同步状态。",
+		terminal: false,
+	};
+};
+
+/** Phased progress for the "preparing" state (up to ~135s). */
+const mapPreparingPhase = (elapsedMs: number): AsyncRunProgressView => {
+	if (elapsedMs < 15_000) {
+		const progress = 20 + Math.floor(elapsedMs / 1000);
+		return {
+			progress,
+			status: "active",
+			stage: "正在准备作业",
+			detail: "生成 Addax 作业配置、校验目标表结构…",
+			terminal: false,
+		};
+	}
+	if (elapsedMs < 45_000) {
+		const progress = 35 + Math.floor((elapsedMs - 15_000) / 2000);
+		return {
+			progress: Math.min(progress, 49),
+			status: "active",
+			stage: "注册 DAG 文件",
+			detail: "DAG 文件已写入，等待 Airflow 调度器识别…",
+			terminal: false,
+		};
+	}
+	if (elapsedMs < 90_000) {
+		const progress = 50 + Math.floor((elapsedMs - 45_000) / 3000);
+		return {
+			progress: Math.min(progress, 64),
+			status: "active",
+			stage: "等待调度器扫描",
+			detail: "Airflow 调度器正在扫描 DAG 目录，通常需要 30-60 秒。请耐心等待…",
+			terminal: false,
+		};
+	}
+	const progress = 65 + Math.floor((elapsedMs - 90_000) / 5000);
+	return {
+		progress: Math.min(progress, 74),
+		status: "active",
+		stage: "即将触发执行",
+		detail: "DAG 注册中，即将触发 Airflow 执行。如长时间未启动，可查看任务详情页。",
 		terminal: false,
 	};
 };
