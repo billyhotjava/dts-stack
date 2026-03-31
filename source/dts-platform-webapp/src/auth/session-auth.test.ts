@@ -34,7 +34,7 @@ vi.mock("@/store/userStore", () => ({
 	},
 }));
 
-const { refreshAccessToken, redirectToLoginWithReturn, resetLoginRedirectFlag } =
+const { refreshAccessToken, redirectToLoginWithReturn, resetLoginRedirectFlag, useRedirectIntentStore } =
 	await import("./session-auth");
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
@@ -147,19 +147,14 @@ describe("refreshAccessToken: single-flight lock", () => {
 	});
 });
 
-describe("redirectToLoginWithReturn: redirect guard", () => {
-	let replacedUrls: string[];
-
+describe("redirectToLoginWithReturn: Zustand intent pattern", () => {
 	beforeEach(() => {
-		replacedUrls = [];
-		// Mock window.location.replace — jsdom doesn't support actual navigation
 		Object.defineProperty(window, "location", {
 			value: {
 				...window.location,
 				hash: "#/bi/gpmc/drill/execution",
 				pathname: "/",
 				search: "",
-				replace: (url: string) => replacedUrls.push(url),
 			},
 			writable: true,
 			configurable: true,
@@ -167,25 +162,35 @@ describe("redirectToLoginWithReturn: redirect guard", () => {
 		resetLoginRedirectFlag();
 	});
 
-	it("redirects with current route as ?redirect= parameter", () => {
+	it("writes redirect intent with current route to Zustand store", () => {
 		redirectToLoginWithReturn();
-		expect(replacedUrls).toHaveLength(1);
-		expect(replacedUrls[0]).toBe("/#/auth/login?redirect=%2Fbi%2Fgpmc%2Fdrill%2Fexecution");
+		const intent = useRedirectIntentStore.getState().intent;
+		expect(intent).not.toBeNull();
+		expect(intent!.returnPath).toBe("/bi/gpmc/drill/execution");
 	});
 
-	it("is idempotent — second call is suppressed", () => {
+	it("deduplicates identical redirect paths", () => {
 		redirectToLoginWithReturn();
+		const seq1 = useRedirectIntentStore.getState().intent!.seq;
 		redirectToLoginWithReturn();
-		redirectToLoginWithReturn();
-		expect(replacedUrls).toHaveLength(1);
+		const seq2 = useRedirectIntentStore.getState().intent!.seq;
+		expect(seq1).toBe(seq2); // same seq = not bumped
 	});
 
-	it("fires again after resetLoginRedirectFlag", () => {
+	it("clears intent on resetLoginRedirectFlag", () => {
 		redirectToLoginWithReturn();
-		expect(replacedUrls).toHaveLength(1);
-
+		expect(useRedirectIntentStore.getState().intent).not.toBeNull();
 		resetLoginRedirectFlag();
+		expect(useRedirectIntentStore.getState().intent).toBeNull();
+	});
+
+	it("skips redirect when already on login page", () => {
+		Object.defineProperty(window, "location", {
+			value: { ...window.location, hash: "#/auth/login?redirect=%2Fdashboard", pathname: "/" },
+			writable: true,
+			configurable: true,
+		});
 		redirectToLoginWithReturn();
-		expect(replacedUrls).toHaveLength(2);
+		expect(useRedirectIntentStore.getState().intent).toBeNull();
 	});
 });

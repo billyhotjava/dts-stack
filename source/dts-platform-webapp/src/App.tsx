@@ -8,6 +8,7 @@ import { GLOBAL_CONFIG } from "./global-config";
 import { AntdAdapter } from "./theme/adapter/antd.adapter";
 import { ThemeProvider } from "./theme/theme-provider";
 import SessionManager from "@/components/auth/session-manager";
+import SessionRedirectGuard from "@/auth/SessionRedirectGuard";
 
 if (import.meta.env.DEV) {
 	import("react-scan").then(({ scan }) => {
@@ -34,6 +35,7 @@ function App({ children }: { children: React.ReactNode }) {
 					<Toast />
 					<RouteLoadingProgress />
 					<SessionManager />
+					<SessionRedirectGuard />
 					<MotionLazy>{children}</MotionLazy>
 				</ThemeProvider>
 			</QueryClientProvider>

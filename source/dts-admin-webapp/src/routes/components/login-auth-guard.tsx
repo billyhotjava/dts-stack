@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef } from "react";
 import { decodeJwtExp } from "@dts-session-core/token";
 import { readStorageValue } from "@dts-session-core/storage";
-import { redirectToLoginWithReturn } from "@/auth/session-auth";
+import { currentRoutePath, redirectToLoginWithReturn } from "@/auth/session-auth";
 import { ADMIN_LEGACY_SESSION_KEYS, ADMIN_SESSION_KEYS } from "@/auth/session-keys";
 import useUserStore, { useUserInfo, useUserToken } from "@/store/userStore";
 import { useRouter } from "../hooks";
@@ -44,7 +44,11 @@ export default function LoginAuthGuard({ children }: Props) {
 			if (accessToken) {
 				useUserStore.getState().actions.clearUserInfoAndToken();
 			}
-			redirectToLoginWithReturn();
+			// Use React Router soft navigation (no page reload) — we're inside a component
+			// and have router context. The 30s timer below uses redirectToLoginWithReturn()
+			// (hard navigation) because it runs outside the render cycle.
+			const returnUrl = encodeURIComponent(currentRoutePath());
+			router.replace(`/auth/login?redirect=${returnUrl}`);
 			return;
 		}
 		const expandSynonyms = (list: string[]): Set<string> => {

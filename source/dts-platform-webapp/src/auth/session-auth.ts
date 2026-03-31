@@ -1,5 +1,5 @@
-import { buildLoginRedirectHref, currentRoutePath as resolveCurrentRoutePath } from "@dts-session-core/route";
-import { resolveLoginHref } from '@/routes/constants';
+import { create } from 'zustand';
+import { currentRoutePath as resolveCurrentRoutePath } from "@dts-session-core/route";
 import userStore from '@/store/userStore';
 import { GLOBAL_CONFIG } from '@/global-config';
 
@@ -186,47 +186,71 @@ export async function refreshAccessToken(): Promise<RefreshResult> {
 	return _refreshPromise;
 }
 
-// ─── Login redirect ──────────────────────────────────────────────────────────
+// ─── Login redirect (Zustand intent pattern) ────────────────────────────────
+//
+// Instead of calling window.location.replace() directly (which causes page reloads,
+// redirect loops, and 414 errors), callers write a "redirect intent" to a Zustand store.
+// A React component (<SessionRedirectGuard>) subscribes to this store and performs the
+// actual navigation via React Router's navigate() — soft navigation, no reload.
 
-let _redirecting = false;
+type RedirectIntent = {
+	/** The path the user should return to after login */
+	returnPath: string;
+	/** Monotonic counter to distinguish repeated intents for the same path */
+	seq: number;
+} | null;
+
+type RedirectIntentStore = {
+	intent: RedirectIntent;
+	/** Write a redirect intent. Idempotent — duplicate paths within the same seq are ignored. */
+	requestRedirect: (returnPath: string) => void;
+	/** Clear the intent after the React component has consumed it. */
+	clearIntent: () => void;
+};
+
+let _seq = 0;
+
+export const useRedirectIntentStore = create<RedirectIntentStore>((set, get) => ({
+	intent: null,
+	requestRedirect: (returnPath: string) => {
+		const current = get().intent;
+		// Deduplicate: if the same returnPath is already pending, don't bump seq
+		if (current && current.returnPath === returnPath) return;
+		_seq += 1;
+		console.warn(LOG_PREFIX, 'redirect: intent', { returnPath, seq: _seq });
+		set({ intent: { returnPath, seq: _seq } });
+	},
+	clearIntent: () => set({ intent: null }),
+}));
 
 /**
  * 获取当前路由路径（hash 路由感知）。
- *
- * hash 模式下 window.location.pathname 始终为 "/"，真实路由在 hash 里。
  */
 export function currentRoutePath(): string {
 	return resolveCurrentRoutePath(GLOBAL_CONFIG.routerHistory);
 }
 
 /**
- * 重定向到登录页，自动携带当前路由作为 ?redirect= 参数。
+ * 请求重定向到登录页，自动携带当前路由作为 redirect 目标。
  *
- * 幂等：同一时刻只触发一次跳转。hash 路由下 window.location.href 不会导致
- * 真正的 page reload，所以模块级变量不会自动重置 —— 需要在登录成功后手动调用
- * resetLoginRedirectFlag()。
+ * 不再直接操作 window.location — 而是写入 Zustand store，
+ * 由 <SessionRedirectGuard> 组件通过 React Router 软导航消费。
  */
 export function redirectToLoginWithReturn(): void {
-	if (_redirecting) return;
-	_redirecting = true;
 	const loginPath = '/auth/login';
 	const current = currentRoutePath();
 	const pathOnly = current.split('?')[0];
-	// Already on the login page — don't navigate again. The ?redirect= parameter
-	// (if present) is already in the URL and will be read after login succeeds.
-	// Re-navigating to the same URL causes a reload loop.
+	// Already on login page — no need to redirect
 	if (pathOnly === loginPath || pathOnly.endsWith(loginPath)) {
 		console.debug(LOG_PREFIX, 'redirect: skipped (already on login page)');
 		return;
 	}
-	const href = buildLoginRedirectHref(resolveLoginHref(), current);
-	console.warn(LOG_PREFIX, 'redirect: to login', { returnPath: current, href });
-	window.location.replace(href);
+	useRedirectIntentStore.getState().requestRedirect(current);
 }
 
 /**
- * 登录成功后重置重定向守卫，使后续会话过期可以再次触发重定向。
+ * 登录成功后清除 redirect intent，防止登录后又被重定向。
  */
 export function resetLoginRedirectFlag(): void {
-	_redirecting = false;
+	useRedirectIntentStore.getState().clearIntent();
 }

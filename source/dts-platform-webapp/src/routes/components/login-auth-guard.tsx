@@ -56,6 +56,8 @@ export default function LoginAuthGuard({ children }: Props) {
             if (accessToken) {
                 useUserStore.getState().actions.clearUserInfoAndToken();
             }
+            // redirectToLoginWithReturn() now writes a Zustand intent — no window.location.
+            // <SessionRedirectGuard> consumes the intent and navigates via React Router.
             redirectToLoginWithReturn();
             return;
         }
