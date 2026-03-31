@@ -79,12 +79,23 @@ function jumpSelfAction(urlTemplate: string): ScreenComponentAction {
 	return { type: 'jump-url', jumpUrlTemplate: urlTemplate, jumpOpenMode: 'self' };
 }
 
+function withAnalyticsBase(path: string) {
+	const normalizedPath = String(path || '').trim();
+	if (!normalizedPath) {
+		return ANALYTICS_BASENAME;
+	}
+	if (normalizedPath === ANALYTICS_BASENAME || normalizedPath.startsWith(`${ANALYTICS_BASENAME}/`)) {
+		return normalizedPath;
+	}
+	return `${ANALYTICS_BASENAME}${normalizedPath.startsWith('/') ? normalizedPath : `/${normalizedPath}`}`;
+}
+
 function buildScreenReference(screenName: string, fallbackPath: string) {
-	return `${SCREEN_REF_PREFIX}${encodeURIComponent(screenName)}|${encodeURIComponent(`${ANALYTICS_BASENAME}${fallbackPath}`)}`;
+	return `${SCREEN_REF_PREFIX}${encodeURIComponent(screenName)}|${encodeURIComponent(withAnalyticsBase(fallbackPath))}`;
 }
 
 function buildGpmcTemplateJump(path: string) {
-	return `${ANALYTICS_BASENAME}${path}`;
+	return withAnalyticsBase(path);
 }
 
 function openPanelAction(title: string, body: string): ScreenComponentAction {

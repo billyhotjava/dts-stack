@@ -18,3 +18,27 @@ test('gpmc cost board template emphasizes planned, actual, and variance trends',
 	);
 	assert.equal(varianceRanking?.config.title, '成本偏差预警榜');
 });
+
+test('gpmc templates keep platform jump paths under a single /bi prefix', () => {
+	const overviewTemplate = getTemplateById('gpmc-strategic-overview');
+	const executionTemplate = getTemplateById('gpmc-execution-board');
+
+	assert.ok(overviewTemplate);
+	assert.ok(executionTemplate);
+
+	const overviewTotalKpi = overviewTemplate?.config.components.find((item) => item.id === 'gpmc-overview-kpi-total');
+	const overviewExecutionTab = overviewTemplate?.config.components.find((item) => item.id === 'overview-topic-execution-shape');
+	const executionDelayTable = executionTemplate?.config.components.find((item) => item.id === 'gpmc-execution-delay-top');
+	const executionDelayKpi = executionTemplate?.config.components.find((item) => item.id === 'gpmc-execution-kpi-max-delay');
+
+	assert.equal(
+		overviewTotalKpi?.actions?.[0]?.jumpUrlTemplate,
+		'screen-ref:GPMC%20%E9%A1%B9%E7%9B%AE%E6%89%A7%E8%A1%8C%E7%9B%91%E6%8E%A7|%2Fbi%2Fgpmc%2Fexecution',
+	);
+	assert.equal(
+		overviewExecutionTab?.actions?.[0]?.jumpUrlTemplate,
+		'screen-ref:GPMC%20%E9%A1%B9%E7%9B%AE%E6%89%A7%E8%A1%8C%E7%9B%91%E6%8E%A7|%2Fbi%2Fgpmc%2Fexecution',
+	);
+	assert.equal(executionDelayTable?.actions?.[0]?.jumpUrlTemplate, '/bi/gpmc/drill/execution');
+	assert.equal(executionDelayKpi?.actions?.[0]?.jumpUrlTemplate, '/bi/gpmc/drill/execution');
+});
