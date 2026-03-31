@@ -1,5 +1,4 @@
 import { useTranslation } from "react-i18next";
-import { NavLink } from "react-router";
 import { useLoginStateContext } from "@/pages/sys/login/providers/login-provider";
 import { LOGIN_ROUTE } from "@/routes/constants";
 import { useRouter } from "@/routes/hooks";
@@ -53,9 +52,6 @@ export default function AccountDropdown() {
 						<div className="truncate text-text-secondary text-xs">{email}</div>
 					</div>
 				</div>
-				<DropdownMenuItem asChild>
-					<NavLink to="/settings/profile">{t("sys.nav.portal.settingsProfile")}</NavLink>
-				</DropdownMenuItem>
 				<DropdownMenuSeparator />
 				<DropdownMenuItem className="font-bold text-warning" onClick={logout}>
 					{t("sys.login.logout")}
