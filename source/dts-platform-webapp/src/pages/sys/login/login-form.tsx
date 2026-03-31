@@ -19,7 +19,7 @@ import { Input } from "@/ui/input";
 import { RadioGroup, RadioGroupItem } from "@/ui/radio-group";
 import { cn } from "@/utils";
 import { updateLocalTranslations } from "@/utils/translation";
-import { resetAnalyticsAuthRedirectFlag } from "@/analytics/api/analyticsApi";
+import { resetLoginRedirectFlag } from "@/auth/session-auth";
 import { LoginStateEnum, useLoginStateContext } from "./providers/login-provider";
 
 const IS_DEV = typeof import.meta !== "undefined" && Boolean(import.meta.env?.DEV);
@@ -216,7 +216,7 @@ export function LoginForm({ className, ...props }: React.ComponentPropsWithoutRe
 				} catch {}
 			}
 			// Reset analytics auth redirect guard so future session expiry can trigger a new redirect.
-			resetAnalyticsAuthRedirectFlag();
+			resetLoginRedirectFlag();
 			// Login redirect: explicit redirect param -> config default -> /workbench fallback
 			const target = safeRedirect || GLOBAL_CONFIG.defaultRoute || "/workbench";
 			navigate(target, { replace: true });
@@ -403,7 +403,7 @@ export function LoginForm({ className, ...props }: React.ComponentPropsWithoutRe
 			}
 
 			// Reset analytics auth redirect guard so future session expiry can trigger a new redirect.
-			resetAnalyticsAuthRedirectFlag();
+			resetLoginRedirectFlag();
 			// 配置默认路由 → /workbench 兜底
 			navigate(safeRedirect || GLOBAL_CONFIG.defaultRoute || "/workbench", { replace: true });
 			toast.success(bilingual("sys.login.loginSuccessTitle"), { closeButton: true });

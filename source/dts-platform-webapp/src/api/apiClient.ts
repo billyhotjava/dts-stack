@@ -4,7 +4,8 @@ import type { Result } from "#/api";
 import { ResultStatus } from "#/enum";
 import { GLOBAL_CONFIG } from "@/global-config";
 import { t } from "@/locales/i18n";
-import { isLoginRouteActive, resolveLoginHref } from "@/routes/constants";
+import { isLoginRouteActive } from "@/routes/constants";
+import { refreshAccessToken, redirectToLoginWithReturn } from "@/auth/session-auth";
 import useContextStore from "@/store/contextStore";
 import userStore from "@/store/userStore";
 
@@ -52,103 +53,21 @@ const isSuccessStatus = (status: unknown): boolean => {
 const TEST_SESSION_ENABLED =
 	String(import.meta.env.VITE_TEST_LONG_SESSION ?? import.meta.env.VITE_TEST_SESSION ?? "false").toLowerCase() ===
 	"true";
-const TEST_SESSION_REFRESH_MS = Number(import.meta.env.VITE_TEST_SESSION_PING_MS ?? 5 * 60 * 1000);
-const TEST_SESSION_MAX_AGE_MS = Number(import.meta.env.VITE_TEST_SESSION_MAX_AGE_MS ?? 4 * 60 * 60 * 1000);
+// TEST_SESSION_REFRESH_MS / TEST_SESSION_MAX_AGE_MS removed — keep-alive timer no longer lives here.
 
 // ── Token refresh coordination ──
-// Single in-flight refresh to avoid stampedes.
-let refreshingPromise: Promise<boolean> | null = null;
-
+// Delegate to the shared single-flight refresh in session-auth.ts.
+// This ensures apiClient, SessionManager, and analyticsApi all share one lock.
 async function refreshTokenIfPossible(): Promise<boolean> {
-	const { userToken, actions } = userStore.getState() as any;
-	const refresh = String(userToken?.refreshToken || "").trim();
-	if (!refresh) return false;
-
-	// Reuse in-flight refresh
-	if (refreshingPromise) {
-		return refreshingPromise;
-	}
-
-	refreshingPromise = (async (): Promise<boolean> => {
-		try {
-			const resp: any = await axiosInstance.post(
-				"/keycloak/auth/refresh",
-				{ refreshToken: refresh },
-				// Bypass auth header — this IS the auth endpoint
-				{ headers: { Authorization: undefined }, _isRefreshRequest: true } as any,
-			);
-			const nextAccess = String(resp?.accessToken || resp?.data?.accessToken || "").trim();
-			const nextRefresh = String(resp?.refreshToken || resp?.data?.refreshToken || "").trim();
-			const adminAccessToken = String(resp?.adminAccessToken || resp?.data?.adminAccessToken || "").trim();
-			const adminRefreshToken = String(resp?.adminRefreshToken || resp?.data?.adminRefreshToken || "").trim();
-			const adminAccessTokenExpiresAt = String(
-				resp?.adminAccessTokenExpiresAt || resp?.data?.adminAccessTokenExpiresAt || "",
-			).trim();
-			const adminRefreshTokenExpiresAt = String(
-				resp?.adminRefreshTokenExpiresAt || resp?.data?.adminRefreshTokenExpiresAt || "",
-			).trim();
-			if (!nextAccess) return false;
-			actions.setUserToken({
-				accessToken: nextAccess,
-				refreshToken: nextRefresh || refresh,
-				adminAccessToken: adminAccessToken || userToken?.adminAccessToken,
-				adminRefreshToken: adminRefreshToken || userToken?.adminRefreshToken,
-				adminAccessTokenExpiresAt: adminAccessTokenExpiresAt || userToken?.adminAccessTokenExpiresAt,
-				adminRefreshTokenExpiresAt: adminRefreshTokenExpiresAt || userToken?.adminRefreshTokenExpiresAt,
-			});
-			return true;
-		} catch {
-			return false;
-		} finally {
-			// Clear after a tick so concurrent awaiters get the same result
-			setTimeout(() => {
-				refreshingPromise = null;
-			}, 50);
-		}
-	})();
-
-	return refreshingPromise;
+	const result = await refreshAccessToken();
+	return result !== null;
 }
 
-// ── Keep-alive timer ──
-const KEEP_ALIVE_INTERVAL_MS = TEST_SESSION_ENABLED ? TEST_SESSION_REFRESH_MS : 4 * 60 * 1000; // 4 min — refresh before typical 5-min access token expiry
-
-let keepAliveTimer: number | null = null;
-function ensureKeepAliveTimer() {
-	if (typeof window === "undefined") return;
-	if (keepAliveTimer !== null) return;
-	keepAliveTimer = window.setInterval(async () => {
-		const { userToken } = userStore.getState();
-		if (!userToken?.refreshToken) return;
-		if (TEST_SESSION_ENABLED) {
-			const loginTs = Number(localStorage.getItem("dts.session.loginTs") || "0");
-			if (loginTs > 0 && Date.now() - loginTs > TEST_SESSION_MAX_AGE_MS) return;
-		}
-		try {
-			await refreshTokenIfPossible();
-		} catch {
-			// keep-alive is best-effort, don't propagate
-		}
-	}, KEEP_ALIVE_INTERVAL_MS);
-}
-
-if (typeof window !== "undefined") {
-	ensureKeepAliveTimer();
-	window.addEventListener("focus", ensureKeepAliveTimer);
-	// When tab becomes visible again, proactively refresh token.
-	// Debounce to avoid rapid-fire refreshes on quick tab switches.
-	let visibilityRefreshScheduled = false;
-	document.addEventListener("visibilitychange", () => {
-		if (document.visibilityState !== "visible" || visibilityRefreshScheduled) return;
-		const { userToken } = userStore.getState();
-		if (!userToken?.refreshToken) return;
-		visibilityRefreshScheduled = true;
-		setTimeout(() => {
-			visibilityRefreshScheduled = false;
-			refreshTokenIfPossible().catch(() => {});
-		}, 300);
-	});
-}
+// ── Keep-alive timer — REMOVED ──
+// The keep-alive timer (4-min interval + visibility change handler) has been removed.
+// SessionManager now owns the sole proactive refresh schedule (JWT exp − 60s).
+// This eliminates the dual-timer race where both timers could consume a single-use
+// refresh token concurrently, causing one to fail and trigger a forced logout.
 
 // ── Request interceptor ──
 axiosInstance.interceptors.request.use(
@@ -333,7 +252,7 @@ axiosInstance.interceptors.response.use(
 					localStorage.setItem("dts.session.logoutTs", String(Date.now()));
 				} catch {}
 				if (typeof window !== "undefined" && !isLoginRouteActive()) {
-					location.replace(resolveLoginHref());
+					redirectToLoginWithReturn();
 				}
 			}
 			// Otherwise: just reject — caller handles the error, don't destroy session
@@ -343,7 +262,7 @@ axiosInstance.interceptors.response.use(
 				localStorage.setItem("dts.session.logoutTs", String(Date.now()));
 			} catch {}
 			if (typeof window !== "undefined" && !isLoginRouteActive()) {
-				location.replace(resolveLoginHref());
+				redirectToLoginWithReturn();
 			}
 		} else {
 			if (!shouldSuppressAuthHandling && !isLoginRequest) {

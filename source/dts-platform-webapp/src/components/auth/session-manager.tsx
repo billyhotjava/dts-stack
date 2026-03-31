@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef } from "react";
 import { toast } from "sonner";
-import { resolveLoginHref } from "@/routes/constants";
+import { refreshAccessToken, redirectToLoginWithReturn } from "@/auth/session-auth";
 import { useUserActions, useUserInfo, useUserToken } from "@/store/userStore";
 import userService from "@/api/services/userService";
 import { hasPersistedSessionChanged, parsePersistedUserStoreSnapshot } from "./sessionSync.helpers";
@@ -127,7 +127,7 @@ export default function SessionManager() {
 					toast.error("账号已在其他位置登录，本会话已退出", { id: "session-conflict" });
 					clearUserInfoAndToken();
 					localStorage.setItem(STORAGE_KEYS.LOGOUT_TS, String(Date.now()));
-					window.location.replace(resolveLoginHref());
+					redirectToLoginWithReturn();
 				}
 			}
 			if (e.key === STORAGE_KEYS.LOGOUT_TS && e.newValue) {
@@ -135,7 +135,7 @@ export default function SessionManager() {
 					logoutInProgressRef.current = true;
 					toast.error("账号已在其他位置登录，本会话已退出", { id: "session-conflict" });
 					clearUserInfoAndToken();
-					window.location.replace(resolveLoginHref());
+					redirectToLoginWithReturn();
 				}
 			}
 		};
@@ -190,7 +190,7 @@ export default function SessionManager() {
 					toast.error("会话已过期，请重新登录", { id: "session-expired" });
 					clearUserInfoAndToken();
 					localStorage.setItem(STORAGE_KEYS.LOGOUT_TS, String(Date.now()));
-					window.location.replace(resolveLoginHref());
+					redirectToLoginWithReturn();
 				}
 				cancelled = true;
 				return;
@@ -204,39 +204,23 @@ export default function SessionManager() {
 				schedule(SESSION_IDLE_GRACE_MS);
 				return;
 			}
-			try {
-				const res = await userService.refresh(token.refreshToken!);
-				const nextAccess = (res as any)?.accessToken;
-				const nextRefresh = (res as any)?.refreshToken;
-				const normalizeDate = (value: unknown): string | undefined =>
-					typeof value === "string" && value.trim() ? value.trim() : undefined;
-				const nextAdminAccess = (res as any)?.adminAccessToken || token.adminAccessToken;
-				const nextAdminRefresh = (res as any)?.adminRefreshToken || token.adminRefreshToken;
-				const adminAccessExpiresAt =
-					normalizeDate((res as any)?.adminAccessTokenExpiresAt) ?? token.adminAccessTokenExpiresAt;
-				const adminRefreshExpiresAt =
-					normalizeDate((res as any)?.adminRefreshTokenExpiresAt) ?? token.adminRefreshTokenExpiresAt;
-				if (nextAccess) {
-					setUserToken({
-						accessToken: nextAccess,
-						refreshToken: nextRefresh || token.refreshToken,
-						adminAccessToken: nextAdminAccess,
-						adminRefreshToken: nextAdminRefresh,
-						adminAccessTokenExpiresAt: adminAccessExpiresAt,
-						adminRefreshTokenExpiresAt: adminRefreshExpiresAt,
-					});
-				}
+			// Use the shared single-flight refresh — same lock as apiClient and analyticsApi.
+			// This prevents concurrent refresh-token consumption when multiple callers race.
+			const result = await refreshAccessToken();
+			if (result) {
+				// refreshAccessToken already wrote to userStore; just reschedule.
 				if (!cancelled) {
-					const delay = nextRefreshDelayMs(nextAccess || token.accessToken);
+					const delay = nextRefreshDelayMs(result.accessToken);
 					schedule(delay);
 				}
-			} catch (err) {
+			} else {
+				// Refresh failed (token expired/consumed/server error)
 				if (!logoutInProgressRef.current) {
 					logoutInProgressRef.current = true;
 					toast.error("会话已过期，请重新登录", { id: "session-expired" });
 					clearUserInfoAndToken();
 					localStorage.setItem(STORAGE_KEYS.LOGOUT_TS, String(Date.now()));
-					window.location.replace(resolveLoginHref());
+					redirectToLoginWithReturn();
 				}
 				cancelled = true;
 			}
@@ -276,7 +260,7 @@ export default function SessionManager() {
 			toast.error("长时间未操作，已自动退出，请重新登录", { id: "session-expired" });
 			clearUserInfoAndToken();
 			localStorage.setItem(STORAGE_KEYS.LOGOUT_TS, String(Date.now()));
-			window.location.replace(resolveLoginHref());
+			redirectToLoginWithReturn();
 		};
 
 		const resetTimer = () => {

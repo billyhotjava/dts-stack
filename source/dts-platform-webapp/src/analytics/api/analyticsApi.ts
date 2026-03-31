@@ -1,5 +1,4 @@
-import { resolveLoginHref } from '@/routes/constants';
-import userStore from '@/store/userStore';
+import { refreshAccessToken, redirectToLoginWithReturn, resetLoginRedirectFlag } from '@/auth/session-auth';
 
 export type CollectionListItem = {
 	id: number | "root";
@@ -1163,60 +1162,17 @@ function getPlatformRoles(): string {
 	}
 }
 
-// Single-flight lock: prevents concurrent 401 handlers from each burning the same refresh token.
-// All concurrent callers share one in-flight refresh promise and get the same result.
-let _pendingRefresh: Promise<{ accessToken: string } | null> | null = null;
-
-// Redirect guard: ensures only one concurrent apiFetch caller triggers the login redirect.
-// Without this, N parallel failing requests each call window.location.href, polluting history.
-let _redirectingToLogin = false;
+// ── Auth coordination ──
+// Token refresh and login redirect are delegated to the shared session-auth module.
+// This ensures analyticsApi, apiClient, and SessionManager all share one single-flight
+// lock and one redirect guard — eliminating the dual-timer race that was the root cause
+// of the "drill page kicked back to workbench" bug.
 
 /**
- * Reset the redirect guard. Must be called after a successful login so that future analytics
- * 401s (e.g. after the analytics session expires again) can trigger a new redirect.
- * In hash-router mode the module is NOT re-initialised on route changes, so the flag would
- * otherwise stay true for the lifetime of the page, silently dropping all future auth errors.
+ * @deprecated Use `resetLoginRedirectFlag` from `@/auth/session-auth` directly.
+ * Kept as a re-export for backwards compatibility with existing callers.
  */
-export function resetAnalyticsAuthRedirectFlag(): void {
-	_redirectingToLogin = false;
-}
-
-async function refreshPlatformAccessToken(refreshToken: string): Promise<{ accessToken: string } | null> {
-	if (!refreshToken) return null;
-	if (_pendingRefresh) return _pendingRefresh;
-	_pendingRefresh = (async () => {
-		try {
-			const resp = await fetch("/api/keycloak/auth/refresh", {
-				method: "POST",
-				credentials: "include",
-				headers: { "content-type": "application/json", accept: "application/json" },
-				body: JSON.stringify({ refreshToken }),
-			});
-			if (!resp.ok) return null;
-			const body = await resp.json().catch(() => null);
-			const data = body?.data ?? body?.result ?? body?.payload ?? body;
-			const newAccessToken = String(data?.accessToken || data?.access_token || data?.token || "").trim();
-			if (!newAccessToken) return null;
-			// Write the new tokens back into userStore so SessionManager's refresh timer
-			// picks up the new refreshToken. Without this, the SessionManager holds the old
-			// (already-consumed) refreshToken and its next scheduled refresh fails, which
-			// triggers clearUserInfoAndToken() + LOGOUT_TS, causing the session-conflict loop.
-			const newRefreshToken = String(data?.refreshToken || data?.refresh_token || "").trim();
-			const existing = userStore.getState();
-			userStore.getState().actions.setUserToken({
-				...existing.userToken,
-				accessToken: newAccessToken,
-				...(newRefreshToken ? { refreshToken: newRefreshToken } : {}),
-			});
-			return { accessToken: newAccessToken };
-		} catch {
-			return null;
-		}
-	})().finally(() => {
-		_pendingRefresh = null;
-	});
-	return _pendingRefresh;
-}
+export const resetAnalyticsAuthRedirectFlag = resetLoginRedirectFlag;
 
 export class HttpError extends Error {
 	status: number;
@@ -1249,19 +1205,6 @@ function isPublicAnalyticsUrl(url: string): boolean {
 	return url.includes("/api/public/") || url.includes("/bi/api/public/");
 }
 
-function redirectToLogin(): void {
-	if (_redirectingToLogin) return;
-	_redirectingToLogin = true;
-	// In hash-router mode (/#/some/path) window.location.pathname is always '/'.
-	// The actual route lives in window.location.hash — strip the leading '#' to get the path.
-	// In browser-router mode there is no hash, so fall back to pathname + search.
-	const currentPath = window.location.hash
-		? window.location.hash.replace(/^#/, '') || '/'
-		: window.location.pathname + window.location.search;
-	const returnUrl = encodeURIComponent(currentPath);
-	window.location.href = `${resolveLoginHref()}?redirect=${returnUrl}`;
-}
-
 async function apiFetch(url: string, init: RequestInit, allowRefresh: boolean): Promise<Response> {
 	const tokens = getPlatformTokens();
 	const headers = new Headers(init.headers ?? {});
@@ -1284,10 +1227,10 @@ async function apiFetch(url: string, init: RequestInit, allowRefresh: boolean): 
 		return response;
 	}
 
-	const refreshed = await refreshPlatformAccessToken(tokens.refreshToken);
+	// Use the shared single-flight refresh — same lock as apiClient and SessionManager.
+	const refreshed = await refreshAccessToken();
 	if (!refreshed?.accessToken) {
-		// Refresh failed — redirect to platform login (guarded: only one redirect fires).
-		redirectToLogin();
+		redirectToLoginWithReturn();
 		return response;
 	}
 
@@ -1299,8 +1242,7 @@ async function apiFetch(url: string, init: RequestInit, allowRefresh: boolean): 
 	}
 	const retryResponse = await fetch(url, { ...init, credentials: "include", headers: retryHeaders });
 	if (retryResponse.status === 401) {
-		// Retry also failed — session is unrecoverable (guarded: only one redirect fires).
-		redirectToLogin();
+		redirectToLoginWithReturn();
 	}
 	return retryResponse;
 }

@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useRef } from "react";
 import menuService from "@/api/services/menuService";
 import useUserStore, { useUserInfo, useUserToken } from "@/store/userStore";
-import { LOGIN_ROUTE, resolveLoginHref } from "../constants";
+import { redirectToLoginWithReturn } from "@/auth/session-auth";
+import { LOGIN_ROUTE } from "../constants";
 import { useRouter } from "../hooks";
 import { GLOBAL_CONFIG } from "@/global-config";
 
@@ -29,15 +30,6 @@ function isTokenExpired(token?: string): boolean {
 	const exp = decodeJwtExp(token);
 	if (exp === null) return false; // Opaque token; can't check locally, trust it.
 	return Date.now() > exp - 10_000;
-}
-
-/** Capture the current route path for use as a post-login redirect parameter.
- *  In hash-router mode window.location.pathname is always "/", so we read from the hash. */
-function currentRouteForRedirect(): string {
-	if (window.location.hash) {
-		return window.location.hash.replace(/^#/, "").split("?")[0] || "/";
-	}
-	return window.location.pathname + window.location.search;
 }
 
 /** Check whether the session has been idle beyond the configured timeout. */
@@ -70,12 +62,10 @@ export default function LoginAuthGuard({ children }: Props) {
 
     const check = useCallback(() => {
         if (!accessToken || isTokenExpired(accessToken) || isSessionIdle()) {
-            // Clear stale token so the user doesn't flash the dashboard on next visit.
             if (accessToken) {
                 useUserStore.getState().actions.clearUserInfoAndToken();
             }
-            const returnUrl = encodeURIComponent(currentRouteForRedirect());
-            router.replace(`${LOGIN_ROUTE}?redirect=${returnUrl}`);
+            redirectToLoginWithReturn();
             return;
         }
         const expandSynonyms = (list: string[]): Set<string> => {
@@ -116,8 +106,7 @@ export default function LoginAuthGuard({ children }: Props) {
         const timer = window.setInterval(() => {
             if (isTokenExpired(accessToken) || isSessionIdle()) {
                 useUserStore.getState().actions.clearUserInfoAndToken();
-                const returnUrl = encodeURIComponent(currentRouteForRedirect());
-                window.location.replace(`${resolveLoginHref()}?redirect=${returnUrl}`);
+                redirectToLoginWithReturn();
             }
         }, 30_000);
         return () => window.clearInterval(timer);
