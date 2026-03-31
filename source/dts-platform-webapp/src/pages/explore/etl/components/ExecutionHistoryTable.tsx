@@ -379,6 +379,7 @@ export default function ExecutionHistoryTable({ taskId }: ExecutionHistoryTableP
 
 	const renderStatus = (status: string) => {
 		const statusMap: Record<string, { color: string; text: string }> = {
+			preparing: { color: "processing", text: "准备中" },
 			running: { color: "processing", text: "运行中" },
 			success: { color: "success", text: "成功" },
 			failed: { color: "error", text: "失败" },
@@ -625,7 +626,9 @@ export default function ExecutionHistoryTable({ taskId }: ExecutionHistoryTableP
 			width: 220,
 			render: (_: any, record: IngestionExecutionDTO) => (
 				<Space size={4}>
-					<Button size="small" onClick={() => loadLog(record)}>
+					<Button size="small" onClick={() => loadLog(record)}
+						disabled={normalizeText(record.status).toLowerCase() === "preparing"}
+					>
 						查看日志
 					</Button>
 					{normalizeText(record.status).toLowerCase() === "failed" ? (
@@ -633,7 +636,7 @@ export default function ExecutionHistoryTable({ taskId }: ExecutionHistoryTableP
 							失败重试
 						</Button>
 					) : null}
-					{normalizeText(record.status).toLowerCase() !== "running" ? (
+					{!["running", "preparing"].includes(normalizeText(record.status).toLowerCase()) ? (
 						<Button size="small" onClick={() => handleFullRerun(record)}>
 							整批重跑
 						</Button>
@@ -673,9 +676,10 @@ export default function ExecutionHistoryTable({ taskId }: ExecutionHistoryTableP
 							icon={<PlayCircleOutlined />}
 							onClick={handleExecute}
 							loading={executeSubmitting}
-							disabled={task?.status === "deleted"}
+							disabled={task?.status === "deleted" || ["preparing", "running"].includes((task?.lastExecutionStatus || "").toLowerCase())}
 						>
-							执行任务
+							{(task?.lastExecutionStatus || "").toLowerCase() === "preparing" ? "准备中" :
+							 (task?.lastExecutionStatus || "").toLowerCase() === "running" ? "执行中" : "执行任务"}
 						</Button>
 						<Button icon={<ReloadOutlined />} onClick={loadExecutions} loading={loading}>
 							刷新
@@ -690,6 +694,7 @@ export default function ExecutionHistoryTable({ taskId }: ExecutionHistoryTableP
 						style={{ width: 140 }}
 						value={statusFilter}
 						options={[
+							{ label: "准备中", value: "preparing" },
 							{ label: "运行中", value: "running" },
 							{ label: "成功", value: "success" },
 							{ label: "失败", value: "failed" },

@@ -10,9 +10,9 @@ import {
 } from "@ant-design/icons";
 import { useRouter } from "@/routes/hooks";
 import { ingestionTaskAPI, type IngestionTaskDTO, type IngestionExecutionDTO } from "@/api/ingestion";
-import { resolveAsyncRunSubmitFeedback } from "./transformCreateAsyncRun.helpers";
+import { resolveAsyncRunSubmitFeedback, mapExecutionToProgressView } from "./transformCreateAsyncRun.helpers";
 import { formatTimestamp } from "@/utils/format";
-import { normalizeText } from "@/utils/textUtils";
+
 
 type ExecutionProgressView = {
 	percent: number;
@@ -90,50 +90,13 @@ export default function TransformPage() {
 	};
 
 	const mapExecutionProgress = (execution: IngestionExecutionDTO | null, elapsedMs: number): ExecutionProgressView => {
-		if (!execution) {
-			const percent = Math.min(45, 15 + Math.floor(elapsedMs / 5000) * 5);
-			return {
-				percent,
-				status: "active",
-				stage: "等待执行记录",
-				detail: "任务已提交，系统正在准备 DAG 和作业参数。",
-				terminal: false,
-			};
-		}
-		const normalized = normalizeText(execution.status).toLowerCase();
-		if (normalized === "success") {
-			return {
-				percent: 100,
-				status: "success",
-				stage: "执行成功",
-				detail: "任务已执行完成。",
-				terminal: true,
-			};
-		}
-		if (normalized === "failed" || normalized === "error") {
-			return {
-				percent: 100,
-				status: "exception",
-				stage: "执行失败",
-				detail: normalizeText(execution.errorMessage) || "执行失败，请查看日志。",
-				terminal: true,
-			};
-		}
-		if (normalized === "preparing") {
-			return {
-				percent: 60,
-				status: "active",
-				stage: "准备执行",
-				detail: "正在生成/校验 Addax 作业并等待 DAG 就绪。",
-				terminal: false,
-			};
-		}
+		const view = mapExecutionToProgressView(execution, elapsedMs);
 		return {
-			percent: 85,
-			status: "active",
-			stage: "执行中",
-			detail: "已触发执行，正在同步运行状态。",
-			terminal: false,
+			percent: view.progress,
+			status: view.status,
+			stage: view.stage,
+			detail: view.detail,
+			terminal: view.terminal,
 		};
 	};
 
@@ -335,10 +298,12 @@ export default function TransformPage() {
 						type="primary"
 						icon={<PlayCircleOutlined />}
 						onClick={() => handleExecute(record.id!, record.name)}
-						loading={executingTaskId === record.id && !executeProgress.terminal}
-						disabled={record.status === "deleted" || (executingTaskId === record.id && !executeProgress.terminal)}
+						loading={isTaskBusy(record) && !executeProgress.terminal}
+						disabled={record.status === "deleted" || isTaskBusy(record)}
 					>
-						{executingTaskId === record.id && !executeProgress.terminal ? "执行中" : "执行"}
+						{isTaskBusy(record)
+							? (record.lastExecutionStatus || "").toLowerCase() === "preparing" ? "准备中" : "执行中"
+							: "执行"}
 					</Button>
 					<Button
 						size="small"
@@ -351,7 +316,7 @@ export default function TransformPage() {
 						size="small"
 						icon={<EditOutlined />}
 						onClick={() => router.push(`/explore/etl/transform/${record.id}/edit`)}
-						disabled={record.status === "deleted"}
+						disabled={record.status === "deleted" || isTaskBusy(record)}
 					>
 						编辑
 					</Button>
@@ -359,7 +324,7 @@ export default function TransformPage() {
 						size="small"
 						icon={<SyncOutlined />}
 						onClick={() => handleRebuildDag(record.id!, record.name)}
-						disabled={record.status === "deleted" || record.airflowEnabled === false}
+						disabled={record.status === "deleted" || record.airflowEnabled === false || isTaskBusy(record)}
 					>
 						重建 DAG
 					</Button>
