@@ -30,6 +30,8 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 import org.springframework.util.StringUtils;
 
 import java.nio.file.Files;
@@ -438,17 +440,23 @@ public class IngestionTaskService {
         taskRepository.save(task);
 
         // Phase 2 (asynchronous): job generation, DAG wait, Airflow trigger
+        // Must run AFTER transaction commits so the execution record is visible to the new thread.
         final Long executionId = execution.getId();
         final Long finalTaskId = taskId;
         final GovernancePolicy finalPolicy = policy;
         final String finalGovernanceBlockedReason = governanceBlockedReason;
-        CompletableFuture.runAsync(() -> {
-            try {
-                executeAirflowTriggerPhase(finalTaskId, executionId, finalPolicy, finalGovernanceBlockedReason);
-            } catch (Exception ex) {
-                log.error("Async trigger phase failed for task {} execution {}: {}", finalTaskId, executionId, ex.getMessage(), ex);
+        TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+            @Override
+            public void afterCommit() {
+                CompletableFuture.runAsync(() -> {
+                    try {
+                        executeAirflowTriggerPhase(finalTaskId, executionId, finalPolicy, finalGovernanceBlockedReason);
+                    } catch (Exception ex) {
+                        log.error("Async trigger phase failed for task {} execution {}: {}", finalTaskId, executionId, ex.getMessage(), ex);
+                    }
+                }, java.util.concurrent.Executors.newVirtualThreadPerTaskExecutor());
             }
-        }, java.util.concurrent.Executors.newVirtualThreadPerTaskExecutor());
+        });
 
         log.info("Execution {} for task {} submitted to background trigger phase", execution.getId(), taskId);
         return executionMapper.toDto(execution);
