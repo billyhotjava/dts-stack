@@ -27,6 +27,8 @@ server {
         # Explicitly forward Authorization and cookies to backend
         proxy_set_header Authorization $http_authorization;
         proxy_set_header Cookie $http_cookie;
+        # Strip internal service header to prevent external spoofing
+        proxy_set_header X-DTS-Service "";
         proxy_pass $UPSTREAM;
     }
 
