@@ -29,9 +29,11 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.TransactionSynchronization;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
+import org.springframework.transaction.support.TransactionTemplate;
 import org.springframework.util.StringUtils;
 
 import java.nio.file.Files;
@@ -86,6 +88,7 @@ public class IngestionTaskService {
     private final IngestionTaskChangeLogService changeLogService;
     private final com.yuzhi.dts.ingestion.service.etl.IngestionRetryService retryService;
     private final DagPreheatService dagPreheatService;
+    private final TransactionTemplate txTemplate;
 
     public IngestionTaskService(
         IngestionTaskRepository taskRepository,
@@ -102,7 +105,8 @@ public class IngestionTaskService {
         AuditService auditService,
         IngestionTaskChangeLogService changeLogService,
         @org.springframework.context.annotation.Lazy com.yuzhi.dts.ingestion.service.etl.IngestionRetryService retryService,
-        DagPreheatService dagPreheatService
+        DagPreheatService dagPreheatService,
+        PlatformTransactionManager transactionManager
     ) {
         this.taskRepository = taskRepository;
         this.executionRepository = executionRepository;
@@ -119,6 +123,7 @@ public class IngestionTaskService {
         this.changeLogService = changeLogService;
         this.retryService = retryService;
         this.dagPreheatService = dagPreheatService;
+        this.txTemplate = new TransactionTemplate(transactionManager);
     }
 
     /**
@@ -463,12 +468,24 @@ public class IngestionTaskService {
     }
 
     /**
-     * Phase 2 of execute — runs in background thread.
-     * Handles governance queue wait, Addax job generation, target table provisioning,
-     * DAG file creation, and Airflow trigger.
+     * Phase 2 runs in a background virtual thread AFTER the calling transaction has
+     * committed.  Because there is no inherited Hibernate Session / transaction, we
+     * use a programmatic TransactionTemplate to open a fresh one.  The @Transactional
+     * annotation on this private method has no effect (Spring AOP cannot proxy private
+     * methods), so it is intentionally removed.
      */
-    @Transactional
     private void executeAirflowTriggerPhase(
+        Long taskId,
+        Long executionId,
+        GovernancePolicy policy,
+        String governanceBlockedReason
+    ) {
+        txTemplate.executeWithoutResult(txStatus -> {
+            doExecuteAirflowTriggerPhase(taskId, executionId, policy, governanceBlockedReason);
+        });
+    }
+
+    private void doExecuteAirflowTriggerPhase(
         Long taskId,
         Long executionId,
         GovernancePolicy policy,
@@ -479,10 +496,9 @@ public class IngestionTaskService {
             log.error("[async-trigger] execution {} not found, aborting", executionId);
             return;
         }
-        IngestionTask task = execution.getTask();
-        if (task == null) {
-            task = taskRepository.findById(taskId).orElse(null);
-        }
+        // Load task directly from repository — not via execution.getTask() lazy proxy,
+        // because this runs in a new session outside the original request scope.
+        IngestionTask task = taskRepository.findById(taskId).orElse(null);
         if (task == null) {
             markExecutionFailed(execution, null, "任务不存在");
             return;

@@ -697,6 +697,25 @@ public class AirflowDagService {
         }
         String username = firstText(destConfig, "username");
         String password = firstText(destConfig, "password");
+        // Fallback: try to read credentials from connection[0] (Addax writer config
+        // stores them there when the top-level fields are missing).
+        if (!StringUtils.hasText(username) || !StringUtils.hasText(password)) {
+            JsonNode conn = destConfig.get("connection");
+            JsonNode connEntry = null;
+            if (conn != null && conn.isArray() && conn.size() > 0) {
+                connEntry = conn.get(0);
+            } else if (conn != null && conn.isObject()) {
+                connEntry = conn;
+            }
+            if (connEntry != null) {
+                if (!StringUtils.hasText(username)) {
+                    username = firstText(connEntry, "username");
+                }
+                if (!StringUtils.hasText(password)) {
+                    password = firstText(connEntry, "password");
+                }
+            }
+        }
         if (!StringUtils.hasText(username)) username = "postgres";
         if (!StringUtils.hasText(password)) password = "";
 
