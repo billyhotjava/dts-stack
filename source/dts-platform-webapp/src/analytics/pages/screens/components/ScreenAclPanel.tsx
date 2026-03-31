@@ -13,7 +13,7 @@ const GRANTEE_TYPE_LABELS: Record<string, string> = { USER: '用户', ROLE: '角
 const PERM_LABELS: Record<string, string> = { OWNER: '拥有者', MANAGE: '管理者', READ: '查看者' };
 
 function toBackendPermission(perm: 'MANAGE' | 'READ'): string {
-	return perm === 'MANAGE' ? 'EDIT' : 'READ';
+	return perm === 'MANAGE' ? 'MANAGER' : 'VIEWER';
 }
 
 const PAGE_SIZE = 10;
