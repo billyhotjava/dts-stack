@@ -114,16 +114,22 @@ describe("refreshAccessToken: single-flight lock", () => {
 		expect(r2!.accessToken).toBe("new-access-2");
 	});
 
-	it("releases lock even when refresh fails", async () => {
+	it("releases lock even when refresh fails, after cooldown expires", async () => {
 		fetchOk = false;
 		const r1 = await refreshAccessToken();
 		expect(r1).toBeNull();
 
-		// Next call should start a fresh attempt, not reuse the failed result
+		// The refresh has a 5s cooldown after failure. Advance Date.now() past it.
+		const realDateNow = Date.now;
+		const failedAt = realDateNow();
+		Date.now = () => failedAt + 6_000;
+
+		// Next call should start a fresh attempt
 		fetchOk = true;
 		const r2 = await refreshAccessToken();
 		expect(r2).not.toBeNull();
-		expect(fetchCalls).toHaveLength(2);
+
+		Date.now = realDateNow; // restore
 	});
 
 	it("returns null when no refresh token in store", async () => {

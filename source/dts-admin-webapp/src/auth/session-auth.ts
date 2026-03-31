@@ -65,7 +65,23 @@ export function currentRoutePath(): string {
 export function redirectToLoginWithReturn(): void {
 	if (redirecting) return;
 	redirecting = true;
-	window.location.replace(buildLoginRedirectHref(resolveAdminLoginHref(), currentRoutePath()));
+	const loginPath = "/auth/login";
+	const current = currentRoutePath();
+	// If already on the login page, don't wrap the URL again — extract the existing
+	// redirect target (if any) and reuse it to prevent ?redirect= parameter nesting
+	// that causes 414 Request-URI Too Large.
+	const pathOnly = current.split("?")[0];
+	if (pathOnly === loginPath || pathOnly.endsWith(loginPath)) {
+		// Already on login — keep the URL as-is (or preserve existing redirect param)
+		const params = new URLSearchParams(current.split("?")[1] || "");
+		const existingRedirect = params.get("redirect");
+		if (existingRedirect) {
+			window.location.replace(buildLoginRedirectHref(resolveAdminLoginHref(), existingRedirect));
+		}
+		// else: already on login with no redirect param — do nothing
+		return;
+	}
+	window.location.replace(buildLoginRedirectHref(resolveAdminLoginHref(), current));
 }
 
 export function resetLoginRedirectFlag(): void {
