@@ -23,6 +23,11 @@ public interface AnalyticsScreenAccessRepository extends JpaRepository<Analytics
     @Query("DELETE FROM AnalyticsScreenAccess a WHERE a.screenId = :screenId")
     void deleteByScreenId(@Param("screenId") Long screenId);
 
+    @Modifying
+    @Transactional
+    @Query("DELETE FROM AnalyticsScreenAccess a WHERE a.id = :grantId AND a.screenId = :screenId")
+    int deleteByIdAndScreenId(@Param("grantId") Long grantId, @Param("screenId") Long screenId);
+
     /**
      * Returns screen IDs where the user has a direct USER grant
      * OR the user holds one of the given roles with a ROLE grant.

@@ -68,6 +68,15 @@ public class ScreenOwnershipService {
     }
 
     /**
+     * Revoke a specific grant, only if it belongs to the given screen.
+     * Returns true if the grant was deleted, false if it did not exist or belonged to a different screen.
+     */
+    @Transactional
+    public boolean revokeGrantForScreen(Long grantId, Long screenId) {
+        return accessRepository.deleteByIdAndScreenId(grantId, screenId) > 0;
+    }
+
+    /**
      * Remove all grants for a screen. Call on screen deletion/archival.
      */
     @Transactional

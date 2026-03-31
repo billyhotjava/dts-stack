@@ -1129,7 +1129,7 @@ public class ScreenResource {
         return ResponseEntity.noContent().build();
     }
 
-    // ── Grant management (proxied to platform asset_grant API) ──────────
+    // ── Grant management (local analytics_screen_access table) ──────────
 
     @GetMapping(path = "/{id}/grants", produces = MediaType.APPLICATION_JSON_VALUE)
     public ResponseEntity<?> getGrants(@PathVariable("id") long id, HttpServletRequest request) {
@@ -1227,7 +1227,10 @@ public class ScreenResource {
         if (!perms.isOwner()) return forbidden();
 
         try {
-            screenOwnershipService.revokeGrant(grantId);
+            boolean deleted = screenOwnershipService.revokeGrantForScreen(grantId, screen.getId());
+            if (!deleted) {
+                return ResponseEntity.notFound().build();
+            }
             screenAuditService.log(screen.getId(), user.orElseThrow().getId(), "grant.revoke",
                 Map.of("grantId", grantId), null, requestIdFrom(request));
             return ResponseEntity.ok(Map.of("deleted", true));
