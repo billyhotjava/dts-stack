@@ -218,11 +218,11 @@
 **状态**: CANCELLED（被 Sprint-33 取代，平台 grant 方案存在 ID 错配根因，改用本地表方案）
 
 ## Sprint-33: 大屏权限本地化重构 — 替换平台权限查询路径 (202603)
-**状态**: READY
+**状态**: DONE
 
 | Feature | Task 数 | 状态 |
 |---------|---------|------|
-| F1-本地权限表重构 | 7 | READY |
-| F2-前端权限UI对齐 | 3 | READY |
+| F1-本地权限表重构 | 7 | DONE |
+| F2-前端权限UI对齐 | 3 | DONE |
 
-**统计**: READY=10, IN_PROGRESS=0, DONE=0, BLOCKED=0
+**统计**: READY=0, IN_PROGRESS=0, DONE=10, BLOCKED=0
