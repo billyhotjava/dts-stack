@@ -8,6 +8,25 @@ import { isLoginRouteActive, resolveLoginHref } from "@/routes/constants";
 import useContextStore from "@/store/contextStore";
 import userStore from "@/store/userStore";
 
+/** 将 Axios 内部英文错误消息转换为中文，避免"Network Error"等直接透传给用户 */
+function normalizeAxiosErrorMessage(msg: string | undefined): string {
+	if (!msg) return "";
+	const lower = msg.toLowerCase();
+	if (lower === "network error" || lower.includes("err_network") || lower.includes("network changed")) {
+		return "网络异常，请检查网络连接后重试";
+	}
+	if (lower.includes("timeout") || lower.includes("econnaborted")) {
+		return "请求超时，请稍后重试";
+	}
+	if (lower.includes("econnrefused") || lower.includes("connection refused")) {
+		return "无法连接到服务器，请稍后重试";
+	}
+	if (lower === "request failed with status code 0") {
+		return "网络异常，请检查网络连接后重试";
+	}
+	return msg;
+}
+
 const axiosInstance = axios.create({
 	baseURL: GLOBAL_CONFIG.apiBaseUrl,
 	timeout: 30000,
@@ -249,7 +268,8 @@ axiosInstance.interceptors.response.use(
 		const fieldMsg = fieldErrors.length
 			? `${fieldErrors[0]?.field ?? "字段"}: ${fieldErrors[0]?.message ?? "非法"}`
 			: "";
-		const errMsg = (problemDetail ? String(problemDetail) : "") || fieldMsg || message || t("sys.api.errorMessage");
+		const normalizedMessage = normalizeAxiosErrorMessage(message);
+		const errMsg = (problemDetail ? String(problemDetail) : "") || fieldMsg || normalizedMessage || t("sys.api.errorMessage");
 		let hint = "";
 		switch (String(errCode || "")) {
 			case "dts-sec-0001":

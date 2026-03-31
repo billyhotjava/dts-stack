@@ -117,13 +117,13 @@ export function fileTypeByName(fileName = "") {
 export function beforeAvatarUpload(file: RcFile) {
 	const isJpgOrPng = file.type === "image/jpeg" || file.type === "image/png";
 	if (!isJpgOrPng) {
-		toast.error("You can only upload JPG/PNG file!", {
+		toast.error("只能上传 JPG/PNG 格式的图片", {
 			position: "top-center",
 		});
 	}
 	const isLt2M = file.size / 1024 / 1024 < 2;
 	if (!isLt2M) {
-		toast.error("Image must smaller than 2MB!", {
+		toast.error("图片大小不能超过 2MB", {
 			position: "top-center",
 		});
 	}

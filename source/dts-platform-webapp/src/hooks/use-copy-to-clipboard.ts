@@ -21,7 +21,7 @@ export const useCopyToClipboard = (): ReturnType => {
 				return false;
 			}
 			setCopiedText(text);
-			toast.success("Copied!");
+			toast.success("已复制");
 			return true;
 		} catch (error) {
 			console.warn("Copy failed", error);

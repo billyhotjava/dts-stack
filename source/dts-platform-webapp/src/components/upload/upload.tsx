@@ -40,11 +40,11 @@ export function Upload({ thumbnail = false, secretModule = false, userClassifica
 						<UploadIllustration />
 					</p>
 					<div>
-						<h5 className="mt-4">Drop or Select file</h5>
+						<h5 className="mt-4">拖拽或选择文件</h5>
 						<p className="text-sm text-gray-500">
-							Drop files here or click
-							<span className="mx-2 text-primary underline">browse</span>
-							thorough your machine
+							将文件拖拽至此，或点击
+							<span className="mx-2 text-primary underline">浏览</span>
+							选择本地文件
 						</p>
 					</div>
 				</div>
