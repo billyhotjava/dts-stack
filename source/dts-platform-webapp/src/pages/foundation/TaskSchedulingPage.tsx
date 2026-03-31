@@ -7,7 +7,7 @@ const ENTRY_CARDS = [
 		title: "运行概览",
 		description: "查看任务成功率、失败作业、异常告警与近期运行趋势。",
 		tag: "监控",
-		path: "/dashboard/ops/overview",
+		path: "/ops/overview",
 		actionLabel: "查看概览",
 	},
 	{
@@ -15,7 +15,7 @@ const ENTRY_CARDS = [
 		title: "任务编排",
 		description: "进入编排入口，查看外部 DAG 状态、失败记录与最近执行。",
 		tag: "编排",
-		path: "/dashboard/explore/etl/orchestration",
+		path: "/explore/etl/orchestration",
 		actionLabel: "查看编排",
 	},
 	{
@@ -23,7 +23,7 @@ const ENTRY_CARDS = [
 		title: "任务列表",
 		description: "查看数据集成任务、执行历史与任务详情。",
 		tag: "执行",
-		path: "/dashboard/explore/etl/transform",
+		path: "/explore/etl/transform",
 		actionLabel: "查看任务",
 	},
 ];
@@ -37,13 +37,13 @@ export default function Page() {
 				title="任务运维中心"
 				extra={
 					<>
-						<Button style={{ marginRight: 8 }} onClick={() => push("/dashboard/ops/overview")}>
+						<Button style={{ marginRight: 8 }} onClick={() => push("/ops/overview")}>
 							运行概览
 						</Button>
-						<Button style={{ marginRight: 8 }} onClick={() => push("/dashboard/explore/etl/orchestration")}>
+						<Button style={{ marginRight: 8 }} onClick={() => push("/explore/etl/orchestration")}>
 							任务编排
 						</Button>
-						<Button type="primary" onClick={() => push("/dashboard/explore/etl/transform")}>
+						<Button type="primary" onClick={() => push("/explore/etl/transform")}>
 							任务列表
 						</Button>
 					</>

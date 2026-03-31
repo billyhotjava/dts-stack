@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import {
+	Alert,
 	Button,
 	Card,
 	Collapse,
@@ -253,6 +254,7 @@ export default function FileBasicStep({
 					<Radio.Button value="file">文件上传</Radio.Button>
 				</Radio.Group>
 			</Form.Item>
+			<Alert type="warning" showIcon message="非密模块禁止上传涉密数据" style={{ marginBottom: 8 }} />
 			<Form.Item label="上传文件" required>
 				<Upload.Dragger
 					accept=".xlsx,.csv"

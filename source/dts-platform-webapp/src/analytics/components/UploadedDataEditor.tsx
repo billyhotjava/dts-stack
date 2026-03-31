@@ -294,6 +294,10 @@ export default function UploadedDataEditor({ databaseId, onComplete }: UploadedD
 	if (!file) {
 		return (
 			<>
+				<div className="flex items-start gap-2 px-3 py-2 mb-2 rounded-md text-xs" style={{ background: '#fffbe6', border: '1px solid #ffe58f', color: '#d46b08' }}>
+					<span>⚠</span>
+					<span>非密模块禁止上传涉密数据</span>
+				</div>
 				<div
 					className={`border-2 border-dashed rounded-lg py-5 px-3 text-center cursor-pointer text-text-muted text-xs leading-relaxed transition-colors ${dragOver ? 'border-brand bg-brand/5' : 'border-border-default'}`}
 					onDrop={handleDrop}

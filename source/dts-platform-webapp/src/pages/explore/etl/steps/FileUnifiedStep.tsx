@@ -203,6 +203,7 @@ export default function FileUnifiedStep({
 
 			{/* ─── 文件上传 ─── */}
 			<Divider orientation="left">文件上传</Divider>
+			<Alert type="warning" showIcon message="非密模块禁止上传涉密数据" style={{ marginBottom: 8 }} />
 			<Form.Item label="上传文件" required>
 				<Upload.Dragger
 					accept=".xlsx,.csv"
