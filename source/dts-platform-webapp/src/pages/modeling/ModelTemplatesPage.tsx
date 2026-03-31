@@ -19,6 +19,7 @@ import { PageHeader } from "@/components/page-header";
 import {
 	archiveModelingPlan,
 	createModelingPlan,
+	deleteModelingPlan,
 	listModelingPlans,
 	publishModelingPlan,
 	restoreModelingPlan,
@@ -224,6 +225,26 @@ export default function Page() {
 		});
 	};
 
+	const handleDelete = (row: ProjectSpace) => {
+		if (!row.id) return;
+		Modal.confirm({
+			title: "删除项目空间？",
+			content: `确认永久删除「${row.name || "该项目空间"}」？此操作不可恢复。`,
+			okText: "确认删除",
+			okButtonProps: { danger: true },
+			cancelText: "取消",
+			onOk: async () => {
+				try {
+					await deleteModelingPlan(row.id!);
+					toast.success("项目空间已删除");
+					await loadSpaces();
+				} catch {
+					// global interceptor handles the error toast
+				}
+			},
+		});
+	};
+
 	const columns: ColumnsType<ProjectSpace> = useMemo(
 		() => [
 			{ title: "项目空间", dataIndex: "name", key: "name", width: 200 },
@@ -247,7 +268,7 @@ export default function Page() {
 				title: "操作",
 				key: "actions",
 				fixed: "right",
-				width: 220,
+				width: 280,
 				render: (_, row) => (
 					<Space>
 						<Button size="small" onClick={() => openEdit(row)}>
@@ -265,6 +286,9 @@ export default function Page() {
 								归档
 							</Button>
 						)}
+						<Button size="small" danger onClick={() => handleDelete(row)}>
+							删除
+						</Button>
 					</Space>
 				),
 			},

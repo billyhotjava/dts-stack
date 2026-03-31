@@ -221,7 +221,7 @@ export default function Page() {
 			setLoading(false);
 		}
 		// Load screens independently — don't block workbench if analytics is unavailable
-		fetchScreens().then(setScreens).catch(() => {});
+		fetchScreens().then(setScreens).catch(() => { });
 	};
 
 	useEffect(() => {
@@ -540,21 +540,6 @@ export default function Page() {
 								<div style={{ color: "#9ca3af", fontSize: 13 }}>暂无收藏入口</div>
 							)}
 						</div>
-					</Card>
-				</Col>
-				<Col xs={24} lg={8}>
-					<Card size="small" title="快捷链接" extra={<span style={{ fontSize: 12, color: "#aaa" }}>模块直达</span>}>
-						<Space direction="vertical" style={{ width: "100%" }}>
-							<Button data-testid="platform-workbench-link-datasets" block onClick={() => push("/dashboard/catalog/datasets")}>
-								数据资产门户
-							</Button>
-							<Button data-testid="platform-workbench-link-jobs" block onClick={() => push("/dashboard/explore/etl")}>
-								数据入湖中心
-							</Button>
-							<Button data-testid="platform-workbench-link-dbt" block onClick={() => push("/dashboard/modeling/dbt-files")}>
-								逻辑建模中心
-							</Button>
-						</Space>
 					</Card>
 				</Col>
 			</Row>
