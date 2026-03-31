@@ -4,6 +4,8 @@ import { nextRefreshDelayMs } from "@dts-session-core/token";
 import { readStorageValue } from "@dts-session-core/storage";
 import { refreshAccessToken, redirectToLoginWithReturn } from "@/auth/session-auth";
 import { PLATFORM_LEGACY_SESSION_KEYS, PLATFORM_SESSION_KEYS } from "@/auth/session-keys";
+
+const LOG_PREFIX = '[session:platform]';
 import { useUserActions, useUserInfo, useUserToken } from "@/store/userStore";
 import userService from "@/api/services/userService";
 import { hasPersistedSessionChanged, parsePersistedUserStoreSnapshot } from "./sessionSync.helpers";
@@ -95,6 +97,7 @@ export default function SessionManager() {
 				const newId = e.newValue;
 				if (isLoggedIn && newId && newId !== mySessionIdRef.current && !logoutInProgressRef.current) {
 					logoutInProgressRef.current = true;
+					console.warn(LOG_PREFIX, 'logout: SESSION_CONFLICT', { myId: mySessionIdRef.current, newId });
 					toast.error("账号已在其他位置登录，本会话已退出", { id: "session-conflict" });
 					clearUserInfoAndToken();
 					localStorage.setItem(PLATFORM_SESSION_KEYS.logoutTs, String(Date.now()));
@@ -104,6 +107,7 @@ export default function SessionManager() {
 			if (e.key === PLATFORM_SESSION_KEYS.logoutTs && e.newValue) {
 				if (isLoggedIn && !logoutInProgressRef.current) {
 					logoutInProgressRef.current = true;
+					console.warn(LOG_PREFIX, 'logout: CROSS_TAB_BROADCAST');
 					toast.error("账号已在其他位置登录，本会话已退出", { id: "session-conflict" });
 					clearUserInfoAndToken();
 					redirectToLoginWithReturn();
@@ -158,6 +162,7 @@ export default function SessionManager() {
 			if (idleFor > SESSION_TIMEOUT_MS + SESSION_IDLE_GRACE_MS) {
 				if (!logoutInProgressRef.current) {
 					logoutInProgressRef.current = true;
+					console.warn(LOG_PREFIX, 'logout: SESSION_EXPIRED (idle during refresh cycle)', { idleFor });
 					toast.error("会话已过期，请重新登录", { id: "session-expired" });
 					clearUserInfoAndToken();
 					localStorage.setItem(PLATFORM_SESSION_KEYS.logoutTs, String(Date.now()));
@@ -188,6 +193,7 @@ export default function SessionManager() {
 				// Refresh failed (token expired/consumed/server error)
 				if (!logoutInProgressRef.current) {
 					logoutInProgressRef.current = true;
+					console.warn(LOG_PREFIX, 'logout: REFRESH_FAILED');
 					toast.error("会话已过期，请重新登录", { id: "session-expired" });
 					clearUserInfoAndToken();
 					localStorage.setItem(PLATFORM_SESSION_KEYS.logoutTs, String(Date.now()));
@@ -203,7 +209,9 @@ export default function SessionManager() {
 			cancelled = true;
 			if (timer) window.clearTimeout(timer);
 		};
-	}, [isLoggedIn, token?.refreshToken, token?.accessToken, setUserToken, clearUserInfoAndToken]);
+		// setUserToken removed from deps — refreshAccessToken writes to userStore internally.
+		// eslint-disable-next-line react-hooks/exhaustive-deps
+	}, [isLoggedIn, token?.refreshToken, token?.accessToken, clearUserInfoAndToken]);
 
 	useEffect(() => {
 		if (!isLoggedIn) return;
@@ -223,6 +231,7 @@ export default function SessionManager() {
 				return;
 			}
 			logoutInProgressRef.current = true;
+			console.warn(LOG_PREFIX, 'logout: IDLE_TIMEOUT', { idleFor });
 			const refreshToken = token?.refreshToken;
 			const username = user?.username || user?.email || undefined;
 			if (refreshToken) {

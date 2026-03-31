@@ -160,7 +160,13 @@ axiosInstance.interceptors.response.use(
 		const isLoginRequest =
 			typeof requestUrl === "string" &&
 			(requestUrl.includes("/keycloak/auth/login") || requestUrl.includes("/keycloak/auth/platform/login"));
-		const isRefreshRequest = Boolean((response?.config as any)?._isRefreshRequest);
+		// _isRefreshRequest is no longer set — refreshTokenIfPossible now uses raw fetch
+		// via session-auth.ts and never passes through this axios interceptor.
+		// The guard is kept as defense-in-depth in case a direct axiosInstance.post to
+		// the refresh endpoint is introduced in the future.
+		const isRefreshRequest =
+			Boolean((response?.config as any)?._isRefreshRequest) ||
+			(typeof requestUrl === "string" && requestUrl.includes("/keycloak/auth/refresh"));
 		const shouldSuppressAuthHandling =
 			typeof requestUrl === "string" &&
 			(requestUrl.includes("/keycloak/localization/") || requestUrl.includes("/workbench/"));
@@ -217,8 +223,12 @@ axiosInstance.interceptors.response.use(
 		}
 		const combinedMsg = hint ? `${errMsg}（${hint}）` : errMsg;
 		(error as any).message = combinedMsg;
+		// Match explicit session-conflict / session-expired messages from the backend.
+		// Deliberately excludes bare "session" — Keycloak errors like "Session not active"
+		// should NOT trigger a force-logout (they're handled by the 401 refresh path).
 		const sessionErrorByMessage =
-			typeof combinedMsg === "string" && /已在其他位置登录|会话已超时|重新登录|session/i.test(combinedMsg);
+			typeof combinedMsg === "string" &&
+			/已在其他位置登录|会话已超时|重新登录|session.?conflict|session.?expired/i.test(combinedMsg);
 		const shouldForceLogout = sessionExpiredHeader || sessionConflictHeader || sessionErrorByMessage;
 
 		// ── 401 handling ──

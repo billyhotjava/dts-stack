@@ -4,6 +4,9 @@ import type { Result } from "#/api";
 import { ResultStatus } from "#/enum";
 import { GLOBAL_CONFIG } from "@/global-config";
 import { t } from "@/locales/i18n";
+import { readStorageValue } from "@dts-session-core/storage";
+import { redirectToLoginWithReturn, refreshAccessToken } from "@/auth/session-auth";
+import { ADMIN_LEGACY_SESSION_KEYS, ADMIN_SESSION_KEYS } from "@/auth/session-keys";
 import userStore from "@/store/userStore";
 
 const isBusinessSuccess = (status: unknown): boolean => {
@@ -131,9 +134,6 @@ axiosInstance.interceptors.request.use(
 	},
 );
 
-let isRefreshing = false;
-let pendingQueue: Array<() => void> = [];
-
 axiosInstance.interceptors.response.use(
 	(res: AxiosResponse<Result<any>>) => {
 		console.log("API Response:", res.status, res.config.url, res.data);
@@ -163,7 +163,7 @@ axiosInstance.interceptors.response.use(
 		}
 		throw new Error(message || t("sys.api.apiRequestFailed"));
 	},
-	(error: AxiosError<Result>) => {
+	async (error: AxiosError<Result>) => {
 		const { response, message, code, config } = error || {};
 		const requestUrl = typeof config?.url === "string" ? config.url : "";
 		const isLoginRequest = typeof requestUrl === "string" && requestUrl.includes("/keycloak/auth/login");
@@ -286,6 +286,10 @@ axiosInstance.interceptors.response.use(
 			const expiredHeader = hasHeaderFlag(headers, "x-session-expired");
 			if (conflictHeader || expiredHeader) {
 				state.actions.clearUserInfoAndToken();
+				try {
+					localStorage.setItem(ADMIN_SESSION_KEYS.logoutTs, String(Date.now()));
+				} catch {}
+				redirectToLoginWithReturn();
 				return Promise.reject(error);
 			}
 			// In development, relax auto-logout to ease debugging
@@ -293,49 +297,42 @@ axiosInstance.interceptors.response.use(
 				console.warn("[DEV] 401 received; skipping auto logout");
 			} else {
 				// 优先尝试使用 refreshToken 静默续期并重试原请求（最多一次）
-				// accessToken is intentionally not read here; we'll use the refreshed token when available
-				const { refreshToken } = (state.userToken || ({} as any)) as any;
 				const original = error.config as AxiosRequestConfig & { _retry?: boolean };
-				if (!isRefreshRequest && !isLoginRequest && refreshToken && !original._retry) {
-					if (isRefreshing) {
-						return new Promise((resolve) => {
-							pendingQueue.push(() => resolve(axiosInstance.request(original)));
-						});
-					}
+				if (!isRefreshRequest && !isLoginRequest && !original._retry) {
 					original._retry = true;
-					isRefreshing = true;
-					return import("@/api/services/userService").then(({ default: userService }) =>
-						userService
-							.refresh(refreshToken)
-							.then((res: any) => {
-								const nextAccess = res?.accessToken as string | undefined;
-								const nextRefresh = (res?.refreshToken as string | undefined) || refreshToken;
-								if (nextAccess) {
-									state.actions.setUserToken({ accessToken: nextAccess, refreshToken: nextRefresh });
-									// 更新原请求的认证头后重试
-									original.headers = original.headers || {};
-									(original.headers as any).Authorization = `Bearer ${nextAccess}`;
-									pendingQueue.forEach((cb) => cb());
-									pendingQueue = [];
-									return axiosInstance.request(original);
-								}
-								// 没有新token则直接抛出，走下方清理逻辑
-								throw error;
-							})
-							.finally(() => {
-								isRefreshing = false;
-							}),
-					);
+					const refreshed = await refreshAccessToken();
+					if (refreshed?.accessToken) {
+						original.headers = original.headers || {};
+						(original.headers as any).Authorization = `Bearer ${refreshed.accessToken}`;
+						return axiosInstance.request(original);
+					}
 				}
+				try {
+					const loginTs = Number(
+						readStorageValue(ADMIN_SESSION_KEYS.loginTs, ADMIN_LEGACY_SESSION_KEYS.loginTs, localStorage) || "0",
+					);
+					if (loginTs > 0 && Date.now() - loginTs < 2000) {
+						console.warn("[auth] Suppressing auto-logout due to grace window after login");
+						return Promise.reject(error);
+					}
+				} catch {}
 				// Only force logout for definite auth failures (refresh failure)
 				// Do NOT auto-logout for login failures or Keycloak admin endpoints that may 401/403 by design
 				if (isRefreshRequest) {
 					userStore.getState().actions.clearUserInfoAndToken();
+					try {
+						localStorage.setItem(ADMIN_SESSION_KEYS.logoutTs, String(Date.now()));
+					} catch {}
+					redirectToLoginWithReturn();
 				} else if (isLoginRequest || isKeycloakAdminEndpoint || shouldSuppressAuthHandling) {
 					// keep session; allow user to continue with permitted features
 					console.warn("[PROD] 401 on non-auth admin endpoint; session preserved");
 				} else {
 					userStore.getState().actions.clearUserInfoAndToken();
+					try {
+						localStorage.setItem(ADMIN_SESSION_KEYS.logoutTs, String(Date.now()));
+					} catch {}
+					redirectToLoginWithReturn();
 				}
 			}
 		}

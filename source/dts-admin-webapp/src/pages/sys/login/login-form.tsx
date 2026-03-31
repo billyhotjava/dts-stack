@@ -1,9 +1,10 @@
 import { Loader2, Eye, EyeOff } from "lucide-react";
 import { useState } from "react";
 import { useForm } from "react-hook-form";
-import { useNavigate } from "react-router";
+import { useLocation, useNavigate } from "react-router";
 import { toast } from "sonner";
 import type { SignInReq } from "@/api/services/userService";
+import { resetLoginRedirectFlag } from "@/auth/session-auth";
 import { GLOBAL_CONFIG } from "@/global-config";
 import { resolveHomePathForRoles } from "@/routes/sections/dashboard";
 import { useBilingualText } from "@/hooks/useBilingualText";
@@ -35,6 +36,7 @@ export function LoginForm({ className, ...props }: React.ComponentPropsWithoutRe
 	const [remember, setRemember] = useState(true);
 	const [showPassword, setShowPassword] = useState(false);
 	const navigate = useNavigate();
+	const location = useLocation();
 
 	const { loginState } = useLoginStateContext();
 	const signIn = useSignIn();
@@ -61,6 +63,19 @@ export function LoginForm({ className, ...props }: React.ComponentPropsWithoutRe
 
 	if (loginState !== LoginStateEnum.LOGIN) return null;
 
+	const safeRedirect = (() => {
+		try {
+			const params = new URLSearchParams(location.search || "");
+			const raw = (params.get("redirect") || "").trim();
+			if (!raw || !raw.startsWith("/") || raw.startsWith("//") || raw.includes("://") || raw.length > 2048) {
+				return null;
+			}
+			return raw;
+		} catch {
+			return null;
+		}
+	})();
+
 	const handleFinish = async (values: SignInReq) => {
 		setLoading(true);
 		try {
@@ -76,7 +91,8 @@ export function LoginForm({ className, ...props }: React.ComponentPropsWithoutRe
 				toast.error("无权访问管理端，请使用业务端登录", { position: "top-center" });
 				return;
 			}
-			const targetRoute = resolveHomePathForRoles(roles);
+			resetLoginRedirectFlag();
+			const targetRoute = safeRedirect || resolveHomePathForRoles(roles);
 			navigate(targetRoute || GLOBAL_CONFIG.defaultRoute, { replace: true });
 			toast.success(bilingual("sys.login.loginSuccessTitle"), {
 				closeButton: true,

@@ -7,9 +7,9 @@ import { AdminSessionContext } from "@/admin/lib/session-context";
 import ForbiddenView from "@/admin/views/forbidden";
 import { normalizeAdminRole } from "@/admin/types";
 import { useRouter } from "@/routes/hooks";
-import { useSignOut, useUserToken, useUserActions } from "@/store/userStore";
+import { useSignOut, useUserToken } from "@/store/userStore";
 import { LineLoading } from "@/components/loading";
-import userService from "@/api/services/userService";
+import { refreshAccessToken } from "@/auth/session-auth";
 
 type GuardState = "idle" | "refreshing" | "redirecting" | "forbidden";
 
@@ -55,7 +55,6 @@ export default function AdminGuard({ children }: Props) {
 	const router = useRouter();
 	const signOut = useSignOut();
 	const token = useUserToken();
-	const { setUserToken } = useUserActions();
 	const queryClient = useQueryClient();
 	const [guardState, setGuardState] = useState<GuardState>("idle");
 	const [triedRefresh, setTriedRefresh] = useState(false);
@@ -160,11 +159,10 @@ export default function AdminGuard({ children }: Props) {
 			void (async () => {
 				try {
 					await queryClient.cancelQueries({ queryKey: ["admin", "whoami"] });
-					const res: any = await userService.refresh(token.refreshToken!);
-					const nextAccess = res?.accessToken as string | undefined;
-					const nextRefresh = (res?.refreshToken as string | undefined) || token.refreshToken;
-					if (nextAccess) {
-						setUserToken({ accessToken: nextAccess, refreshToken: nextRefresh });
+					// Use the shared single-flight refresh — same lock as apiClient and SessionManager.
+					const result = await refreshAccessToken();
+					if (result) {
+						// refreshAccessToken already wrote to userStore; verify identity.
 						try {
 							const whoami = await queryClient.fetchQuery({
 								queryKey: ["admin", "whoami"],
@@ -198,7 +196,6 @@ export default function AdminGuard({ children }: Props) {
 		isError,
 		isLoading,
 		redirectToLogin,
-		setUserToken,
 		signOut,
 		token?.refreshToken,
 		token?.accessToken,

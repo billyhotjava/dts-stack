@@ -19,7 +19,10 @@ import {
 	MenuUnfoldOutlined,
 	DeleteOutlined,
 } from "@ant-design/icons";
+import { parsePersistedUserStoreSnapshot } from "@dts-session-core/persisted-store";
+import { readStorageValue } from "@dts-session-core/storage";
 import { getEffectiveLocale, t } from "../i18n";
+import { PLATFORM_LEGACY_USER_STORE_KEYS, PLATFORM_SESSION_KEYS } from "../api/platformSessionKeys";
 
 const { Header, Sider, Content } = Layout;
 
@@ -69,11 +72,9 @@ const ChevronRightIcon = () => (
 
 function getUserInfo(): { username: string; fullName: string; email: string } {
 	try {
-		const raw = localStorage.getItem("userStore");
-		if (!raw) return { username: "", fullName: "", email: "" };
-		const store = JSON.parse(raw);
-		const state = store?.state;
-		const userInfo = state?.userInfo;
+		const raw = readStorageValue(PLATFORM_SESSION_KEYS.userStore, PLATFORM_LEGACY_USER_STORE_KEYS, localStorage);
+		const store = parsePersistedUserStoreSnapshot(raw);
+		const userInfo = store?.userInfo;
 		if (!userInfo || typeof userInfo !== "object") return { username: "", fullName: "", email: "" };
 		return {
 			username: String(userInfo.username ?? ""),
@@ -155,13 +156,19 @@ export function AppLayout() {
 
 	const handleLogout = () => {
 		try {
-			const raw = localStorage.getItem("userStore");
+			const raw = readStorageValue(PLATFORM_SESSION_KEYS.userStore, PLATFORM_LEGACY_USER_STORE_KEYS, localStorage);
 			if (raw) {
-				const store = JSON.parse(raw);
-				if (store?.state?.userToken) {
-					store.state.userToken = {};
-				}
-				localStorage.setItem("userStore", JSON.stringify(store));
+				const store = parsePersistedUserStoreSnapshot(raw);
+				localStorage.setItem(
+					PLATFORM_SESSION_KEYS.userStore,
+					JSON.stringify({
+						state: {
+							userInfo: store?.userInfo ?? {},
+							userToken: {},
+						},
+						version: 0,
+					}),
+				);
 			}
 		} catch {
 			// ignore

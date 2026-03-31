@@ -14,6 +14,11 @@ export type RefreshResult = {
 	adminRefreshTokenExpiresAt?: string;
 } | null;
 
+// ─── Observability ───────────────────────────────────────────────────────────
+
+const SESSION_DOMAIN = 'platform';
+const LOG_PREFIX = `[session:${SESSION_DOMAIN}]`;
+
 // ─── Single-flight token refresh ─────────────────────────────────────────────
 
 let _refreshPromise: Promise<RefreshResult> | null = null;
@@ -31,8 +36,12 @@ export async function refreshAccessToken(): Promise<RefreshResult> {
 	if (!refreshToken) return null;
 
 	// Single-flight: 复用已有的刷新请求
-	if (_refreshPromise) return _refreshPromise;
+	if (_refreshPromise) {
+		console.debug(LOG_PREFIX, 'refresh: joined in-flight request');
+		return _refreshPromise;
+	}
 
+	console.debug(LOG_PREFIX, 'refresh: attempt');
 	_refreshPromise = (async (): Promise<RefreshResult> => {
 		try {
 			const apiBase = GLOBAL_CONFIG.apiBaseUrl || '/api';
@@ -42,7 +51,10 @@ export async function refreshAccessToken(): Promise<RefreshResult> {
 				headers: { 'content-type': 'application/json', accept: 'application/json' },
 				body: JSON.stringify({ refreshToken }),
 			});
-			if (!resp.ok) return null;
+			if (!resp.ok) {
+				console.warn(LOG_PREFIX, 'refresh: failed', { status: resp.status });
+				return null;
+			}
 
 			const body = await resp.json().catch(() => null);
 			const data = body?.data ?? body?.result ?? body?.payload ?? body;
@@ -66,6 +78,7 @@ export async function refreshAccessToken(): Promise<RefreshResult> {
 				adminRefreshTokenExpiresAt: adminRefreshTokenExpiresAt || existing?.adminRefreshTokenExpiresAt,
 			});
 
+			console.debug(LOG_PREFIX, 'refresh: success');
 			return {
 				accessToken: nextAccess,
 				refreshToken: nextRefresh || refreshToken,
@@ -74,11 +87,14 @@ export async function refreshAccessToken(): Promise<RefreshResult> {
 				adminAccessTokenExpiresAt,
 				adminRefreshTokenExpiresAt,
 			};
-		} catch {
+		} catch (err) {
+			console.warn(LOG_PREFIX, 'refresh: error', err instanceof Error ? err.message : err);
 			return null;
 		}
 	})().finally(() => {
-		// 延迟清除，让同一 tick 的并发 await 拿到相同结果
+		// Delay clearing so concurrent awaiters in the same tick get the shared result.
+		// queueMicrotask is too aggressive — a 50ms window matches the original apiClient
+		// behaviour and is safe for Keycloak's single-use refresh tokens.
 		setTimeout(() => {
 			_refreshPromise = null;
 		}, 50);
@@ -110,7 +126,10 @@ export function currentRoutePath(): string {
 export function redirectToLoginWithReturn(): void {
 	if (_redirecting) return;
 	_redirecting = true;
-	window.location.replace(buildLoginRedirectHref(resolveLoginHref(), currentRoutePath()));
+	const returnPath = currentRoutePath();
+	const href = buildLoginRedirectHref(resolveLoginHref(), returnPath);
+	console.warn(LOG_PREFIX, 'redirect: to login', { returnPath, href });
+	window.location.replace(href);
 }
 
 /**

@@ -1,4 +1,6 @@
 import { useCallback, useEffect, useRef } from "react";
+import { decodeJwtExp } from "@dts-session-core/token";
+import { readStorageValue } from "@dts-session-core/storage";
 import menuService from "@/api/services/menuService";
 import useUserStore, { useUserInfo, useUserToken } from "@/store/userStore";
 import { redirectToLoginWithReturn } from "@/auth/session-auth";
@@ -6,23 +8,6 @@ import { PLATFORM_LEGACY_SESSION_KEYS, PLATFORM_SESSION_KEYS } from "@/auth/sess
 import { LOGIN_ROUTE } from "../constants";
 import { useRouter } from "../hooks";
 import { GLOBAL_CONFIG } from "@/global-config";
-import { readStorageValue } from "@dts-session-core/storage";
-
-/** Decode JWT exp claim. Returns expiry in ms or null if not a valid JWT. */
-function decodeJwtExp(token?: string): number | null {
-	if (!token) return null;
-	try {
-		const parts = token.split(".");
-		if (parts.length < 2) return null;
-		let payload = parts[1].replace(/-/g, "+").replace(/_/g, "/");
-		while (payload.length % 4 !== 0) payload += "=";
-		const json = atob(payload);
-		const obj = JSON.parse(json);
-		return typeof obj?.exp === "number" ? obj.exp * 1000 : null;
-	} catch {
-		return null;
-	}
-}
 
 /** Check whether a JWT access token is expired (with 10s skew). */
 function isTokenExpired(token?: string): boolean {
