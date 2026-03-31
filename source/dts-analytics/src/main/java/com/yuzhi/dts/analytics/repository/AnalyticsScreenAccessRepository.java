@@ -8,6 +8,7 @@ import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
+import org.springframework.transaction.annotation.Transactional;
 
 @Repository
 public interface AnalyticsScreenAccessRepository extends JpaRepository<AnalyticsScreenAccess, Long> {
@@ -18,6 +19,7 @@ public interface AnalyticsScreenAccessRepository extends JpaRepository<Analytics
             Long screenId, String granteeType, String granteeId);
 
     @Modifying
+    @Transactional
     @Query("DELETE FROM AnalyticsScreenAccess a WHERE a.screenId = :screenId")
     void deleteByScreenId(@Param("screenId") Long screenId);
 
