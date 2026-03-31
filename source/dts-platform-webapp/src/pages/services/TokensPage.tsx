@@ -32,8 +32,8 @@ export default function Page() {
 		try {
 			const list = await listMyTokens();
 			setTokens(Array.isArray(list) ? (list as TokenInfo[]) : []);
-		} catch (error: any) {
-			toast.error(error?.message || "令牌加载失败");
+		} catch {
+			// global interceptor handles the error toast
 		} finally {
 			setLoading(false);
 		}
@@ -49,8 +49,8 @@ export default function Page() {
 			setTokenModal({ open: true, token: resp?.token });
 			toast.success("令牌已创建");
 			await loadTokens();
-		} catch (error: any) {
-			toast.error(error?.message || "创建失败");
+		} catch {
+			// global interceptor handles the error toast
 		}
 	};
 
@@ -60,8 +60,8 @@ export default function Page() {
 			await deleteToken(id);
 			toast.success("令牌已吊销");
 			await loadTokens();
-		} catch (error: any) {
-			toast.error(error?.message || "吊销失败");
+		} catch {
+			// global interceptor handles the error toast
 		}
 	};
 

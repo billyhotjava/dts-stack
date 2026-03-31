@@ -1,5 +1,4 @@
 import { useEffect, useMemo, useState } from "react";
-import { toast } from "sonner";
 import { Alert, Card, Select, Space, Table, Tag } from "antd";
 import type { ColumnsType } from "antd/es/table";
 import { useSearchParams } from "react-router";
@@ -191,8 +190,8 @@ export default function QualityPage() {
 			} else if (!selectedId) {
 				setSelectedId(options[0].id);
 			}
-		} catch (error: any) {
-			toast.error(error?.message || "数据集加载失败");
+		} catch {
+			// error toast handled by global interceptor
 		}
 	};
 
@@ -211,8 +210,8 @@ export default function QualityPage() {
 			try {
 				const resp: any = await getDatasetQuality(id);
 				setQuality(resp ? ({ ...resp, source: "openmetadata" } as QualityResult) : null);
-			} catch (fallbackError: any) {
-				toast.error(fallbackError?.message || error?.message || "质量结果加载失败");
+			} catch {
+				// error toast handled by global interceptor
 				setQuality(null);
 			}
 		} finally {

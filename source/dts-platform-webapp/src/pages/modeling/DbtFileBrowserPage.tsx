@@ -185,8 +185,8 @@ export default function DbtFileBrowserPage() {
 				const merged = new Set([...prev, ...keys]);
 				return Array.from(merged);
 			});
-		} catch (err: any) {
-			toast.error("加载目录树失败: " + (err?.message || "未知错误"));
+		} catch {
+			// global interceptor handles the error toast
 		} finally {
 			setTreeLoading(false);
 		}
@@ -230,8 +230,8 @@ export default function DbtFileBrowserPage() {
 				setEditorValue(content.content);
 				setDirty(false);
 				setSelectedKey(path);
-			} catch (err: any) {
-				toast.error("读取文件失败: " + (err?.message || "未知错误"));
+			} catch {
+				// global interceptor handles the error toast
 			} finally {
 				setFileLoading(false);
 			}
@@ -248,8 +248,8 @@ export default function DbtFileBrowserPage() {
 			await saveDbtFileContent({ path: activeFile.path, content: editorValue });
 			setDirty(false);
 			toast.success("已保存");
-		} catch (err: any) {
-			toast.error("保存失败: " + (err?.message || "未知错误"));
+		} catch {
+			// global interceptor handles the error toast
 		} finally {
 			setSaving(false);
 		}
@@ -281,8 +281,8 @@ export default function DbtFileBrowserPage() {
 			setCreateOpen(false);
 			setCreatePath("");
 			loadTree();
-		} catch (err: any) {
-			toast.error("创建失败: " + (err?.message || "未知错误"));
+		} catch {
+			// global interceptor handles the error toast
 		}
 	}, [createPath, createType, loadTree]);
 
@@ -307,8 +307,8 @@ export default function DbtFileBrowserPage() {
 							setDirty(false);
 						}
 						loadTree();
-					} catch (err: any) {
-						toast.error("删除失败: " + (err?.message || "未知错误"));
+					} catch {
+						// global interceptor handles the error toast
 					}
 				},
 			});
@@ -331,8 +331,8 @@ export default function DbtFileBrowserPage() {
 				loadFile(newPath);
 			}
 			loadTree();
-		} catch (err: any) {
-			toast.error("重命名失败: " + (err?.message || "未知错误"));
+		} catch {
+			// global interceptor handles the error toast
 		}
 	}, [renameName, renameOldPath, activeFile?.path, loadFile, loadTree]);
 

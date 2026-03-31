@@ -236,8 +236,8 @@ export default function AssetDetailPage() {
 					.map((item: any) => ({ id: String(item.id || ""), name: String(item.name || "").trim() }))
 					.filter((item: any) => item.id && item.name),
 			);
-		} catch (error: any) {
-			toast.error(error?.message || "主题域加载失败");
+		} catch {
+			// error toast handled by global interceptor
 		}
 	};
 
@@ -288,11 +288,11 @@ export default function AssetDetailPage() {
 				size: Number(resp?.size ?? size),
 				total: Number(resp?.total ?? 0),
 			});
-		} catch (error: any) {
+		} catch {
 			if (reqId !== requestSeqRef.current) {
 				return;
 			}
-			toast.error(error?.message || "资产加载失败");
+			// error toast handled by global interceptor
 			setRecords([]);
 		} finally {
 			if (reqId === requestSeqRef.current) {
@@ -309,10 +309,8 @@ export default function AssetDetailPage() {
 		try {
 			const linkage: any = await getClassificationMaskingLinkage(datasetId);
 			setSecurityLinkage((linkage || null) as DatasetSecurityLinkage | null);
-		} catch (error: any) {
-			if (!silent) {
-				toast.error(error?.message || "密级与脱敏策略加载失败");
-			}
+		} catch {
+			// error toast handled by global interceptor
 			setSecurityLinkage(null);
 		}
 	};
@@ -325,10 +323,8 @@ export default function AssetDetailPage() {
 		try {
 			const payload: any = await getDatasetGovernanceHealth(datasetId);
 			setGovernanceHealth((payload || null) as GovernanceHealth | null);
-		} catch (error: any) {
-			if (!silent) {
-				toast.error(error?.message || "治理健康信息加载失败");
-			}
+		} catch {
+			// error toast handled by global interceptor
 			setGovernanceHealth(null);
 		}
 	};
@@ -401,8 +397,8 @@ export default function AssetDetailPage() {
 			if (governanceResp.status === "fulfilled") {
 				setGovernanceHealth((governanceResp.value || null) as GovernanceHealth | null);
 			}
-		} catch (error: any) {
-			toast.error(error?.message || "加载资产字段失败");
+		} catch {
+			// error toast handled by global interceptor
 			setTableDetail(null);
 			setDetailDataset(null);
 			setSecurityLinkage(null);
@@ -464,8 +460,8 @@ export default function AssetDetailPage() {
 			);
 			toast.success("资产画像已保存");
 			await loadDatasets(pageState.page, pageState.size);
-		} catch (error: any) {
-			toast.error(error?.message || "资产画像保存失败");
+		} catch {
+			// error toast handled by global interceptor
 		} finally {
 			setSavingProfile(false);
 		}

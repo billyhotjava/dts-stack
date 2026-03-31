@@ -1,5 +1,4 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { toast } from "sonner";
 import { Alert, Button, Card, Input, Select, Space, Tag } from "antd";
 import { EmptyState } from "@/components/empty-state";
 import {
@@ -147,8 +146,8 @@ export default function Page() {
 					.map((item: any) => ({ id: String(item.id || ""), name: String(item.name || "").trim() }))
 					.filter((item: any) => item.id && item.name),
 			);
-		} catch (error: any) {
-			toast.error(error?.message || "主题域加载失败");
+		} catch {
+			// error toast handled by global interceptor
 		}
 	};
 
@@ -158,10 +157,7 @@ export default function Page() {
 			const result: any = await getCatalogReconciliation(20);
 			setReconciliation((result || null) as ReconciliationResult | null);
 		} catch (error: any) {
-			const message = String(error?.message || "");
-			if (!message.toLowerCase().includes("403") && !message.toLowerCase().includes("forbidden")) {
-				toast.error(message || "回归核对加载失败");
-			}
+			// error toast handled by global interceptor
 			setReconciliation(null);
 		} finally {
 			setReconciliationLoading(false);
@@ -204,11 +200,11 @@ export default function Page() {
 				size: Number(resp?.size ?? size),
 				total: Number(resp?.total ?? 0),
 			});
-		} catch (error: any) {
+		} catch {
 			if (reqId !== requestSeqRef.current) {
 				return;
 			}
-			toast.error(error?.message || "资产加载失败");
+			// error toast handled by global interceptor
 			setRecords([]);
 		} finally {
 			if (reqId === requestSeqRef.current) {

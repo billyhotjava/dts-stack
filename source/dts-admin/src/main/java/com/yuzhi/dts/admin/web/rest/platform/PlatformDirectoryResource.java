@@ -11,6 +11,7 @@ import com.yuzhi.dts.admin.service.user.AdminUserService;
 import com.yuzhi.dts.admin.web.rest.api.ApiResponse;
 import com.yuzhi.dts.admin.repository.AdminCustomRoleRepository;
 import com.yuzhi.dts.admin.repository.AdminRoleAssignmentRepository;
+import com.yuzhi.dts.admin.repository.OrganizationRepository;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
@@ -85,6 +86,7 @@ public class PlatformDirectoryResource {
     private final AdminUserService adminUserService;
     private final AdminCustomRoleRepository customRoleRepository;
     private final AdminRoleAssignmentRepository roleAssignmentRepository;
+    private final OrganizationRepository organizationRepository;
 
     @Value("${dts.keycloak.admin-client-id:${OAUTH2_ADMIN_CLIENT_ID:}}")
     private String managementClientId;
@@ -98,7 +100,8 @@ public class PlatformDirectoryResource {
         InMemoryStores stores,
         AdminUserService adminUserService,
         AdminCustomRoleRepository customRoleRepository,
-        AdminRoleAssignmentRepository roleAssignmentRepository
+        AdminRoleAssignmentRepository roleAssignmentRepository,
+        OrganizationRepository organizationRepository
     ) {
         this.keycloakAuthService = keycloakAuthService;
         this.keycloakAdminClient = keycloakAdminClient;
@@ -106,6 +109,7 @@ public class PlatformDirectoryResource {
         this.adminUserService = adminUserService;
         this.customRoleRepository = customRoleRepository;
         this.roleAssignmentRepository = roleAssignmentRepository;
+        this.organizationRepository = organizationRepository;
     }
 
     @GetMapping("/users")
@@ -124,22 +128,37 @@ public class PlatformDirectoryResource {
             summaries.putIfAbsent(key, summary);
         }
 
-        // For users missing deptName from Keycloak attributes, resolve via PersonProfile
-        List<String> needDeptResolve = summaries.values().stream()
-            .filter(s -> !StringUtils.hasText(s.deptName()) && StringUtils.hasText(s.deptCode()))
-            .map(UserSummary::username).toList();
-        Map<String, AdminUserService.DepartmentInfo> deptMap =
-            needDeptResolve.isEmpty() ? Map.of() : adminUserService.resolveDepartments(needDeptResolve);
+        // Resolve deptCode → deptName via organization_node table.
+        // Keycloak dept_code may match either organization_node.dept_code or organization_node.id.
+        Set<String> deptCodes = summaries.values().stream()
+            .map(UserSummary::deptCode)
+            .filter(StringUtils::hasText)
+            .collect(Collectors.toSet());
+        Map<String, String> deptNameMap = new LinkedHashMap<>();
+        for (String code : deptCodes) {
+            // Try by dept_code first
+            organizationRepository.findFirstByDeptCodeIgnoreCase(code)
+                .ifPresentOrElse(
+                    node -> deptNameMap.put(code, node.getName()),
+                    () -> {
+                        // Fallback: try by numeric ID (Keycloak often stores node ID as dept_code)
+                        try {
+                            organizationRepository.findById(Long.parseLong(code))
+                                .ifPresent(node -> deptNameMap.put(code, node.getName()));
+                        } catch (NumberFormatException ignored) { }
+                    }
+                );
+        }
         List<UserSummary> result = new ArrayList<>(summaries.size());
         for (UserSummary s : summaries.values()) {
-            if (!StringUtils.hasText(s.deptName())) {
-                AdminUserService.DepartmentInfo dept = deptMap.get(s.username());
-                if (dept != null && StringUtils.hasText(dept.deptName())) {
-                    result.add(new UserSummary(s.id(), s.username(), s.displayName(), s.deptCode(), dept.deptName()));
-                    continue;
-                }
+            String resolvedName = StringUtils.hasText(s.deptName())
+                ? s.deptName()
+                : deptNameMap.get(s.deptCode());
+            if (resolvedName != null && !resolvedName.equals(s.deptName())) {
+                result.add(new UserSummary(s.id(), s.username(), s.displayName(), s.deptCode(), resolvedName));
+            } else {
+                result.add(s);
             }
-            result.add(s);
         }
         return ResponseEntity.ok(ApiResponse.ok(result));
     }

@@ -78,8 +78,8 @@ export default function Page() {
 				status: status || undefined,
 			})) as ProjectSpace[];
 			setSpaces(Array.isArray(resp) ? resp : []);
-		} catch (err: any) {
-			toast.error(err?.message || "加载项目空间失败");
+		} catch {
+			// global interceptor handles the error toast
 		} finally {
 			setLoading(false);
 		}
@@ -150,8 +150,8 @@ export default function Page() {
 			setEditOpen(false);
 			setEditing(null);
 			await loadSpaces();
-		} catch (err: any) {
-			toast.error(err?.message || "保存失败");
+		} catch {
+			// global interceptor handles the error toast
 		} finally {
 			setSaving(false);
 		}
@@ -180,8 +180,8 @@ export default function Page() {
 			setPublishOpen(false);
 			setPublishTarget(null);
 			await loadSpaces();
-		} catch (err: any) {
-			toast.error(err?.message || "发布失败");
+		} catch {
+			// global interceptor handles the error toast
 		} finally {
 			setPublishing(false);
 		}
@@ -199,8 +199,8 @@ export default function Page() {
 					await archiveModelingPlan(row.id!);
 					toast.success("已归档");
 					await loadSpaces();
-				} catch (err: any) {
-					toast.error(err?.message || "归档失败");
+				} catch {
+					// global interceptor handles the error toast
 				}
 			},
 		});
@@ -217,8 +217,8 @@ export default function Page() {
 					await restoreModelingPlan(row.id!);
 					toast.success("已恢复");
 					await loadSpaces();
-				} catch (err: any) {
-					toast.error(err?.message || "恢复失败");
+				} catch {
+					// global interceptor handles the error toast
 				}
 			},
 		});

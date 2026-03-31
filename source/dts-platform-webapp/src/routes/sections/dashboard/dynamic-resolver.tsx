@@ -62,11 +62,11 @@ export function DynamicMenuResolver({ base }: Props) {
 	const defaultRoute = GLOBAL_CONFIG.defaultRoute || "/workbench";
 
 	const redirectToFallback = () => {
-		if (fallbackMenuPath && fallbackMenuPath !== pathname) {
-			return <Navigate to={fallbackMenuPath} replace />;
-		}
 		if (defaultRoute && defaultRoute !== pathname) {
 			return <Navigate to={defaultRoute} replace />;
+		}
+		if (fallbackMenuPath && fallbackMenuPath !== pathname) {
+			return <Navigate to={fallbackMenuPath} replace />;
 		}
 		return <Navigate to="/404" replace />;
 	};

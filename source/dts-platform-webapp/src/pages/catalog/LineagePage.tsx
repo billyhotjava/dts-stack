@@ -147,8 +147,8 @@ export default function LineagePage() {
 			if (!selectedId && options.length) {
 				setSelectedId(options[0].id);
 			}
-		} catch (error: any) {
-			toast.error(error?.message || "数据集加载失败");
+		} catch {
+			// error toast handled by global interceptor
 		}
 	};
 
@@ -170,8 +170,8 @@ export default function LineagePage() {
 				changedWithinHours: changedHours > 0 ? changedHours : undefined,
 			});
 			setImpact(resp || null);
-		} catch (error: any) {
-			toast.error(error?.message || "血缘影响分析加载失败");
+		} catch {
+			// error toast handled by global interceptor
 			setImpact(null);
 		} finally {
 			setLoading(false);

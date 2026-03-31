@@ -60,8 +60,8 @@ export default function Page() {
 		try {
 			const list = await dataProductsService.list();
 			setProducts(Array.isArray(list) ? (list as DataProductSummary[]) : []);
-		} catch (error: any) {
-			toast.error(error?.message || "数据产品加载失败");
+		} catch {
+			// global interceptor handles the error toast
 		} finally {
 			setLoading(false);
 		}
@@ -72,8 +72,8 @@ export default function Page() {
 			const resp: any = await listDatasets({ page: 0, size: 200 });
 			const list = Array.isArray(resp?.content) ? resp.content : [];
 			setDatasets(list.map((item: any) => ({ id: String(item.id), name: item.name || item.id })));
-		} catch (error: any) {
-			toast.error(error?.message || "数据集加载失败");
+		} catch {
+			// global interceptor handles the error toast
 		}
 	};
 
@@ -116,7 +116,6 @@ export default function Page() {
 			await loadProducts();
 		} catch (error: any) {
 			if (error?.errorFields) return;
-			toast.error(error?.message || "保存失败");
 		}
 	};
 
@@ -126,8 +125,8 @@ export default function Page() {
 			await dataProductsService.remove(id);
 			toast.success("已删除数据产品");
 			await loadProducts();
-		} catch (error: any) {
-			toast.error(error?.message || "删除失败");
+		} catch {
+			// global interceptor handles the error toast
 		}
 	};
 
@@ -135,8 +134,8 @@ export default function Page() {
 		try {
 			const detail = await dataProductsService.detail(item.id);
 			setDetailModal(detail as DataProductDetail);
-		} catch (error: any) {
-			toast.error(error?.message || "详情加载失败");
+		} catch {
+			// global interceptor handles the error toast
 		}
 	};
 
@@ -164,7 +163,6 @@ export default function Page() {
 			await loadProducts();
 		} catch (error: any) {
 			if (error?.errorFields) return;
-			toast.error(error?.message || "保存失败");
 		}
 	};
 

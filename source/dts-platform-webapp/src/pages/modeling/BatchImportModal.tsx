@@ -186,7 +186,6 @@ const BatchImportModal = ({
 			showResults(res, values.planId);
 		} catch (err: any) {
 			if (err?.errorFields) return; // form validation
-			toast.error(err?.message || "导入失败");
 		} finally {
 			setSubmitting(false);
 		}
@@ -229,7 +228,6 @@ const BatchImportModal = ({
 			showResults(res, values.planId);
 		} catch (err: any) {
 			if (err?.errorFields) return;
-			toast.error(err?.message || "导入失败");
 		} finally {
 			setSubmitting(false);
 		}

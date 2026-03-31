@@ -237,7 +237,8 @@ public class AdminDirectoryGateway {
             String id = StringUtils.hasText(user.id) ? user.id.trim() : username;
             String displayName = StringUtils.hasText(user.displayName) ? user.displayName.trim() : username;
             String dept = StringUtils.hasText(user.deptCode) ? user.deptCode.trim() : null;
-            summaries.add(new UserSummary(id, username, displayName, dept));
+            String deptName = StringUtils.hasText(user.deptName) ? user.deptName.trim() : null;
+            summaries.add(new UserSummary(id, username, displayName, dept, deptName));
         }
         return summaries;
     }
@@ -283,7 +284,7 @@ public class AdminDirectoryGateway {
         String username = user.getUsername().trim();
         String displayName = firstNonBlank(user.getFullName(), combine(user.getFirstName(), user.getLastName()), username);
         String dept = firstAttribute(user.getAttributes(), "dept_code", "deptCode", "department");
-        return new UserSummary(user.getId(), username, displayName, StringUtils.hasText(dept) ? dept.trim() : null);
+        return new UserSummary(user.getId(), username, displayName, StringUtils.hasText(dept) ? dept.trim() : null, null);
     }
 
     private RoleSummary toSummary(PlatformRole role) {
@@ -405,7 +406,7 @@ public class AdminDirectoryGateway {
         public void setGroupPath(String groupPath) { this.groupPath = groupPath; }
     }
 
-    public record UserSummary(String id, String username, String displayName, String deptCode) {}
+    public record UserSummary(String id, String username, String displayName, String deptCode, String deptName) {}
 
     public record RoleSummary(String id, String name, String description, String scope, List<String> operations, String source) {}
 
@@ -422,6 +423,9 @@ public class AdminDirectoryGateway {
 
         @JsonProperty("deptCode")
         private String deptCode;
+
+        @JsonProperty("deptName")
+        private String deptName;
     }
 
     @JsonIgnoreProperties(ignoreUnknown = true)

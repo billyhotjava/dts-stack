@@ -54,8 +54,8 @@ export default function Page() {
 		try {
 			const list = await apiServicesService.list();
 			setServices(Array.isArray(list) ? (list as ApiServiceSummary[]) : []);
-		} catch (error: any) {
-			toast.error(error?.message || "API 服务加载失败");
+		} catch {
+			// global interceptor handles the error toast
 		} finally {
 			setLoading(false);
 		}
@@ -66,8 +66,8 @@ export default function Page() {
 			const resp: any = await listDatasets({ page: 0, size: 200 });
 			const list = Array.isArray(resp?.content) ? resp.content : [];
 			setDatasets(list.map((item: any) => ({ id: String(item.id), name: item.name || item.id })));
-		} catch (error: any) {
-			toast.error(error?.message || "数据集加载失败");
+		} catch {
+			// global interceptor handles the error toast
 		}
 	};
 
@@ -106,7 +106,6 @@ export default function Page() {
 			await loadServices();
 		} catch (error: any) {
 			if (error?.errorFields) return;
-			toast.error(error?.message || "保存失败");
 		}
 	};
 
@@ -116,8 +115,8 @@ export default function Page() {
 			await apiServicesService.disable(id);
 			toast.success("API 服务已下线");
 			await loadServices();
-		} catch (error: any) {
-			toast.error(error?.message || "操作失败");
+		} catch {
+			// global interceptor handles the error toast
 		}
 	};
 
@@ -127,8 +126,8 @@ export default function Page() {
 			const result = await apiServicesService.tryInvoke(id, {});
 			setTestResult(result);
 			setTestModal(true);
-		} catch (error: any) {
-			toast.error(error?.message || "测试失败");
+		} catch {
+			// global interceptor handles the error toast
 		}
 	};
 

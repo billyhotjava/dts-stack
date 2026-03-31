@@ -214,11 +214,8 @@ export function LoginForm({ className, ...props }: React.ComponentPropsWithoutRe
 					await svc.default.getMenuTree().catch(() => undefined);
 				} catch {}
 			}
-			// Login redirect: menu first item -> config default -> /workbench fallback
-			const { useMenuStore } = await import("@/store/menuStore");
-			const { firstAccessibleMenuPath } = await import("@/utils/menuTree");
-			const menuDefault = firstAccessibleMenuPath(useMenuStore.getState().menus || []);
-			const target = safeRedirect || menuDefault || GLOBAL_CONFIG.defaultRoute || "/workbench";
+			// Login redirect: explicit redirect param -> config default -> /workbench fallback
+			const target = safeRedirect || GLOBAL_CONFIG.defaultRoute || "/workbench";
 			navigate(target, { replace: true });
 			toast.success(bilingual("sys.login.loginSuccessTitle"), {
 				closeButton: true,
@@ -402,11 +399,8 @@ export function LoginForm({ className, ...props }: React.ComponentPropsWithoutRe
 				// ignore
 			}
 
-			// 菜单树首项 → 配置默认路由 → /workbench 兜底
-			const { useMenuStore } = await import("@/store/menuStore");
-			const { firstAccessibleMenuPath } = await import("@/utils/menuTree");
-			const menuDefault = firstAccessibleMenuPath(useMenuStore.getState().menus || []);
-			navigate(menuDefault || GLOBAL_CONFIG.defaultRoute || "/workbench", { replace: true });
+			// 配置默认路由 → /workbench 兜底
+			navigate(GLOBAL_CONFIG.defaultRoute || "/workbench", { replace: true });
 			toast.success(bilingual("sys.login.loginSuccessTitle"), { closeButton: true });
 
 			await client.logout();

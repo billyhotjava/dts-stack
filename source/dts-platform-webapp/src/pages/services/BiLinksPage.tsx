@@ -198,8 +198,8 @@ export default function Page({ embedded }: Props) {
 				enabledOnly,
 			});
 			setRecords(Array.isArray(resp) ? (resp as ReportLink[]) : []);
-		} catch (error: any) {
-			toast.error(error?.message || "加载外部 BI 链接失败");
+		} catch {
+			// global interceptor handles the error toast
 		} finally {
 			setLoading(false);
 		}
@@ -253,7 +253,6 @@ export default function Page({ embedded }: Props) {
 			await fetchList();
 		} catch (error: any) {
 			if (error?.errorFields) return;
-			toast.error(error?.message || "保存外部 BI 链接失败");
 		} finally {
 			setSaving(false);
 		}
@@ -269,8 +268,8 @@ export default function Page({ embedded }: Props) {
 			await reportsService.update(record.id, payload);
 			setRecords((prev) => prev.map((item) => (item.id === record.id ? { ...item, enabled } : item)));
 			toast.success(enabled ? "已启用" : "已停用");
-		} catch (error: any) {
-			toast.error(error?.message || "更新状态失败");
+		} catch {
+			// global interceptor handles the error toast
 		}
 	};
 
@@ -287,8 +286,8 @@ export default function Page({ embedded }: Props) {
 					await reportsService.disable(record.id);
 					setRecords((prev) => prev.map((item) => (item.id === record.id ? { ...item, enabled: false } : item)));
 					toast.success("已停用");
-				} catch (error: any) {
-					toast.error(error?.message || "停用失败");
+				} catch {
+					// global interceptor handles the error toast
 				}
 			},
 		});
@@ -308,8 +307,8 @@ export default function Page({ embedded }: Props) {
 					await reportsService.purge(record.id);
 					setRecords((prev) => prev.filter((item) => item.id !== record.id));
 					toast.success("已物理删除");
-				} catch (error: any) {
-					toast.error(error?.message || "物理删除失败");
+				} catch {
+					// global interceptor handles the error toast
 				}
 			},
 		});
@@ -331,8 +330,8 @@ export default function Page({ embedded }: Props) {
 				engine: record?.engine,
 				classification: record?.classification,
 			});
-		} catch (error: any) {
-			toast.error(error?.message || "访问记录失败");
+		} catch {
+			// global interceptor handles the error toast
 		}
 	};
 
