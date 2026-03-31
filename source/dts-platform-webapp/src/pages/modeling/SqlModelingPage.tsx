@@ -1953,14 +1953,14 @@ export default function SqlModelingPage() {
 				render: (_value, row) => normalizeUpper(row?.conf?.operation) || "RUN",
 			},
 			{
-				title: "Selector",
+				title: "选择器",
 				key: "selector",
 				width: 220,
 				ellipsis: true,
 				render: (_value, row) => normalizeText(row?.conf?.models) || "all",
 			},
 			{
-				title: "Target",
+				title: "目标",
 				key: "target",
 				width: 120,
 				render: (_value, row) => normalizeText(row?.conf?.target) || "dev",
@@ -3194,7 +3194,7 @@ export default function SqlModelingPage() {
 					<Form.Item name="models" label="模型选择器" rules={[{ required: true, message: "请输入模型选择器" }]}>
 						<Input placeholder="例如：tag:crm 或 model:xxx" />
 					</Form.Item>
-					<Form.Item name="target" label="Target">
+					<Form.Item name="target" label="目标">
 						<Input placeholder="dev" />
 					</Form.Item>
 					<div className="grid gap-3 md:grid-cols-2">

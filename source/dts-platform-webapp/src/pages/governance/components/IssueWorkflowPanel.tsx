@@ -578,7 +578,7 @@ export default function IssueWorkflowPanel({ initialDatasetId, initialStatus }: 
 							]}
 						/>
 					</Form.Item>
-					<Form.Item label="Owner" name="owner">
+					<Form.Item label="负责人" name="owner">
 						<Input placeholder="可选" />
 					</Form.Item>
 					<Form.Item label="责任人" name="assignedTo">

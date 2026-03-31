@@ -715,7 +715,7 @@ export default function DataSourcesPage() {
 
 					{excelPrepared?.sheets?.length ? (
 						<Form layout="vertical">
-							<Form.Item label="Sheet">
+							<Form.Item label="工作表">
 								<Select
 									value={excelSheetName}
 									onChange={(value) => setExcelSheetName(value)}

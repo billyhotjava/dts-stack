@@ -329,7 +329,7 @@ export function DbUnifiedStep({
 						},
 					}}
 					columns={[
-						{ title: "Schema", dataIndex: "schema", width: 140 },
+						{ title: "模式", dataIndex: "schema", width: 140 },
 						{ title: "表名", dataIndex: "name" },
 						{ title: "类型", dataIndex: "type", width: 120 },
 					]}

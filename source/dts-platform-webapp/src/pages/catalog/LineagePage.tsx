@@ -230,7 +230,7 @@ export default function LineagePage() {
 					rowKey={(row, idx) => row.id || `${row.db || "db"}.${row.table || "tb"}-${idx}`}
 					columns={[
 						{ title: "节点", dataIndex: "name", render: (v, r) => v || `${r.db || "-"}.${r.table || "-"}` },
-						{ title: "Schema.Table", render: (_, r) => `${r.db || "-"}.${r.table || "-"}` },
+						{ title: "模式.表", render: (_, r) => `${r.db || "-"}.${r.table || "-"}` },
 						{ title: "负责人", render: (_, r) => r.owner || r.ownerDept || "-" },
 						{ title: "最近变更", render: (_, r) => formatTs(r.lastModifiedAt) },
 					]}
@@ -266,7 +266,7 @@ export default function LineagePage() {
 			render: (value) => (value ? <Tag>{String(value).toUpperCase()}</Tag> : "-"),
 		},
 		{
-			title: "Schema.Table",
+			title: "模式.表",
 			key: "table",
 			render: (_, row) => `${row.db || "-"}.${row.table || "-"}`,
 		},
@@ -497,7 +497,7 @@ export default function LineagePage() {
 				{selectedNode ? (
 					<Descriptions column={1} bordered size="small">
 						<Descriptions.Item label="节点名称">{selectedNode.name || "-"}</Descriptions.Item>
-						<Descriptions.Item label="Schema.Table">{`${selectedNode.db || "-"}.${selectedNode.table || "-"}`}</Descriptions.Item>
+						<Descriptions.Item label="模式.表">{`${selectedNode.db || "-"}.${selectedNode.table || "-"}`}</Descriptions.Item>
 						<Descriptions.Item label="分层">
 							<Tag color={layerColor(selectedNode.layer)}>{String(selectedNode.layer || "UNKNOWN").toUpperCase()}</Tag>
 						</Descriptions.Item>

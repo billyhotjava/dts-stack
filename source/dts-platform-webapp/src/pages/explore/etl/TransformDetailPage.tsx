@@ -750,11 +750,11 @@ export default function TransformDetailPage() {
 													"-"
 												)}
 											</Descriptions.Item>
-											<Descriptions.Item label="Topic">{realtimeStatus?.topicName || "-"}</Descriptions.Item>
-											<Descriptions.Item label="Consumer Group">
+											<Descriptions.Item label="主题">{realtimeStatus?.topicName || "-"}</Descriptions.Item>
+											<Descriptions.Item label="消费者组">
 												{realtimeStatus?.consumerGroup || "-"}
 											</Descriptions.Item>
-											<Descriptions.Item label="Checkpoint">{realtimeStatus?.checkpointToken || "-"}</Descriptions.Item>
+											<Descriptions.Item label="检查点">{realtimeStatus?.checkpointToken || "-"}</Descriptions.Item>
 											<Descriptions.Item label="最新心跳">
 												{realtimeStatus?.lastHeartbeat
 													? new Date(realtimeStatus.lastHeartbeat).toLocaleString("zh-CN")

@@ -712,13 +712,13 @@ export default function DbtFileBrowserPage() {
 					</Form.Item>
 					<Form.Item
 						name="models"
-						label="Selector"
+						label="选择器"
 						rules={[{ required: true, message: "请输入模型选择器" }]}
 						extra="例如：all、tag:erp、model:dwd_order"
 					>
 						<Input placeholder="all" />
 					</Form.Item>
-					<Form.Item name="target" label="Target" rules={[{ required: true, message: "请输入 target" }]}>
+					<Form.Item name="target" label="目标" rules={[{ required: true, message: "请输入 target" }]}>
 						<Input placeholder="dev" />
 					</Form.Item>
 				</Form>
