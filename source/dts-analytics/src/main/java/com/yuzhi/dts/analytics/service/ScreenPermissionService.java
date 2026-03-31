@@ -129,18 +129,6 @@ public class ScreenPermissionService {
         return ids != null && ids.size() == 1 && ids.getFirst().equals(-1L);
     }
 
-    // ---- Stub methods for future implementation ----
-
-    /** Always returns true. Classification enforcement is not yet implemented. */
-    public boolean checkClassification(AnalyticsScreen screen, String personnelLevel) {
-        return true;
-    }
-
-    /** Always returns true. Data source access enforcement is not yet implemented. */
-    public boolean checkDataSourceAccess(AnalyticsScreen screen, AnalyticsUser user) {
-        return true;
-    }
-
     // ---- Private helpers ----
 
     private List<String> safeRoles(List<String> roles) {
