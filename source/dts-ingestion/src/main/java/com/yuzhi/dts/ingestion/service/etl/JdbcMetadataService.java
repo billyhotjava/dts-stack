@@ -19,6 +19,7 @@ import java.util.Map;
 import java.util.Properties;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentMap;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
@@ -29,6 +30,8 @@ public class JdbcMetadataService {
 
     private static final Logger LOG = LoggerFactory.getLogger(JdbcMetadataService.class);
     private static final Set<String> REGISTERED_DRIVERS = ConcurrentHashMap.newKeySet();
+    /** Cache URLClassLoaders by JAR path to prevent resource leaks from repeated creation. */
+    private static final ConcurrentMap<String, URLClassLoader> DRIVER_CLASSLOADER_CACHE = new ConcurrentHashMap<>();
 
     public record JdbcConnectionInfo(
         String jdbcUrl,
@@ -175,13 +178,16 @@ public class JdbcMetadataService {
         if (jar == null) {
             return null;
         }
-        try {
-            URL[] urls = new URL[] { jar.toUri().toURL() };
-            return new URLClassLoader(urls, getPlatformOrSystemClassLoader());
-        } catch (Exception ex) {
-            LOG.warn("Failed to load JDBC driver jar {}: {}", jar, ex.getMessage());
-            return null;
-        }
+        String cacheKey = jar.toAbsolutePath().toString();
+        return DRIVER_CLASSLOADER_CACHE.computeIfAbsent(cacheKey, key -> {
+            try {
+                URL[] urls = new URL[] { jar.toUri().toURL() };
+                return new URLClassLoader(urls, getPlatformOrSystemClassLoader());
+            } catch (Exception ex) {
+                LOG.warn("Failed to load JDBC driver jar {}: {}", jar, ex.getMessage());
+                return null;
+            }
+        });
     }
 
     private Path resolveDriverJar(JdbcConnectionInfo info) {

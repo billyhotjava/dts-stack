@@ -101,7 +101,8 @@ class IngestionTaskExecutionFilterTest {
             changeLogService,
             retryService,
             dagPreheatService,
-            transactionManager
+            transactionManager,
+            Runnable::run
         );
     }
 

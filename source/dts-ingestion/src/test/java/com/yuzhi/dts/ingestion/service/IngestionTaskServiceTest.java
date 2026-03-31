@@ -118,7 +118,8 @@ class IngestionTaskServiceTest {
             changeLogService,
             retryService,
             dagPreheatService,
-            transactionManager
+            transactionManager,
+            Runnable::run
         );
     }
 

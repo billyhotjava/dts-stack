@@ -19,5 +19,7 @@
     <include file="config/liquibase/changelog/20260215_02_ingestion_execution_trigger_mode.xml"/>
     <include file="config/liquibase/changelog/20260309_01_ingestion_execution_auto_retry.xml"/>
     <include file="config/liquibase/changelog/20260309_02_rollback_audit_log.xml"/>
+    <include file="config/liquibase/changelog/20260328_01_ingestion_task_owner_dept.xml"/>
+    <include file="config/liquibase/changelog/20260401_01_ingestion_execution_optimistic_lock.xml"/>
 
 </databaseChangeLog>

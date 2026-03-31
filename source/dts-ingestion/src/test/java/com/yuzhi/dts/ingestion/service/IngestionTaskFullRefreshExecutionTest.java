@@ -108,7 +108,8 @@ class IngestionTaskFullRefreshExecutionTest {
             changeLogService,
             retryService,
             dagPreheatService,
-            transactionManager
+            transactionManager,
+            Runnable::run
         );
 
         when(airflowAdapter.isEnabled()).thenReturn(false);
