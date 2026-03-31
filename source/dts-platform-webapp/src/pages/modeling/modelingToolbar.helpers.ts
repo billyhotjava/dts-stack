@@ -1,5 +1,5 @@
 export interface ModelingToolbarActionDefinition {
-	key: "compile" | "test" | "commit" | "release" | "sync" | "docs" | "rollback";
+	key: "compile" | "test" | "build" | "commit" | "release" | "sync" | "docs" | "rollback";
 	label: string;
 }
 
@@ -7,6 +7,7 @@ export function createPrimaryModelingActions(): ModelingToolbarActionDefinition[
 	return [
 		{ key: "compile", label: "编译" },
 		{ key: "test", label: "测试" },
+		{ key: "build", label: "构建" },
 		{ key: "release", label: "上线" },
 	];
 }

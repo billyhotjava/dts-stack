@@ -41,6 +41,7 @@ import {
 	FileTextOutlined,
 	UndoOutlined,
 	CheckCircleOutlined,
+	ThunderboltOutlined,
 	SafetyCertificateOutlined,
 	InboxOutlined,
 } from "@ant-design/icons";
@@ -68,6 +69,7 @@ import {
 	triggerDbtCompile,
 	triggerDbtTest,
 	triggerDbtDocs,
+	triggerDbtRun,
 	updateDbtConfig,
 	listDbtSources,
 	listDbtRefs,
@@ -284,7 +286,7 @@ export default function SqlModelingPage() {
 	const [runs, setRuns] = useState<DagRun[]>([]);
 	const [runOpen, setRunOpen] = useState(false);
 	const [runSubmitting, setRunSubmitting] = useState(false);
-	const [buildTriggering, setBuildTriggering] = useState<"compile" | "test" | "docs" | null>(null);
+	const [buildTriggering, setBuildTriggering] = useState<"compile" | "test" | "docs" | "build" | null>(null);
 	const [compileResult, setCompileResult] = useState<DbtRunSummary | null>(null);
 	const [testResult, setTestResult] = useState<DbtRunSummary | null>(null);
 	const [runResult, setRunResult] = useState<DbtRunSummary | null>(null);
@@ -988,7 +990,7 @@ export default function SqlModelingPage() {
 		}
 	};
 
-	const triggerBuildOperation = async (operation: "compile" | "test" | "docs") => {
+	const triggerBuildOperation = async (operation: "compile" | "test" | "docs" | "build") => {
 		setBuildTriggering(operation);
 		try {
 			const selector = resolveDbtSelector(activeModel?.dagSelector) || (activeModel?.name ? `model:${activeModel.name}` : "all");
@@ -1003,6 +1005,8 @@ export default function SqlModelingPage() {
 				triggerResp = await triggerDbtCompile(payload);
 			} else if (operation === "test") {
 				triggerResp = await triggerDbtTest(payload);
+			} else if (operation === "build") {
+				triggerResp = await triggerDbtRun({ ...payload, operation: "build" });
 			} else {
 				triggerResp = await triggerDbtDocs(payload);
 			}
@@ -2178,9 +2182,6 @@ export default function SqlModelingPage() {
 							模型 <DownOutlined className="text-xs" />
 						</Button>
 					</Dropdown>
-					<Button onClick={openGovernanceModal} disabled={!workspaceOk}>
-						模型治理
-					</Button>
 					<Button danger icon={<DeleteOutlined />} onClick={removeSelectedModels} disabled={!bulkSelection.selectedIds.length}>
 						批量删除
 					</Button>
@@ -2226,6 +2227,21 @@ export default function SqlModelingPage() {
 										data-testid="platform-sql-modeling-test"
 									>
 										{action.label}
+										</Button>
+									);
+								}
+								if (action.key === "build") {
+									return (
+										<Button
+											key={action.key}
+											type="primary"
+											icon={<ThunderboltOutlined />}
+											onClick={() => triggerBuildOperation("build")}
+											loading={buildTriggering === "build"}
+											disabled={!activeModel || !configEnabled || !workspaceOk || buildTriggering != null}
+											data-testid="platform-sql-modeling-build"
+										>
+											{action.label}
 										</Button>
 									);
 								}
