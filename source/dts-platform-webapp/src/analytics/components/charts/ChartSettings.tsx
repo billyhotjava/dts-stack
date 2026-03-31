@@ -59,19 +59,19 @@ export function ChartSettings({
 						children: (
 							<div className="flex flex-col gap-4 py-4 first:pt-0">
 								<div>
-									<label className="block mb-1 font-medium">Title</label>
+									<label className="block mb-1 font-medium">标题</label>
 									<Input
 										value={settings.title || ''}
 										onChange={(e) => updateSetting('title', e.target.value)}
-										placeholder="Chart title"
+										placeholder="图表标题"
 									/>
 								</div>
 								<div>
-									<label className="block mb-1 font-medium">Subtitle</label>
+									<label className="block mb-1 font-medium">副标题</label>
 									<Input
 										value={settings.subtitle || ''}
 										onChange={(e) => updateSetting('subtitle', e.target.value)}
-										placeholder="Optional subtitle"
+										placeholder="可选副标题"
 									/>
 								</div>
 								<div className="flex items-center gap-4">
@@ -79,19 +79,19 @@ export function ChartSettings({
 										checked={settings.showLegend ?? true}
 										onChange={(checked) => updateSetting('showLegend', checked)}
 									/>
-									<span className="ml-2">Show Legend</span>
+									<span className="ml-2">显示图例</span>
 								</div>
 								{settings.showLegend && (
 									<div>
-										<label className="block mb-1 font-medium">Legend Position</label>
+										<label className="block mb-1 font-medium">图例位置</label>
 										<Select
 											value={settings.legendPosition || 'bottom'}
 											onChange={(value) => updateSetting('legendPosition', value as ChartSettingsData['legendPosition'])}
 											options={[
-												{ value: 'top', label: 'Top' },
-												{ value: 'bottom', label: 'Bottom' },
-												{ value: 'left', label: 'Left' },
-												{ value: 'right', label: 'Right' },
+												{ value: 'top', label: '顶部' },
+												{ value: 'bottom', label: '底部' },
+												{ value: 'left', label: '左侧' },
+												{ value: 'right', label: '右侧' },
 											]}
 											style={{ width: "100%" }}
 										/>
@@ -106,19 +106,19 @@ export function ChartSettings({
 						children: (
 							<div className="flex flex-col gap-4 py-4 first:pt-0">
 								<div>
-									<label className="block mb-1 font-medium">X-Axis Label</label>
+									<label className="block mb-1 font-medium">X 轴标签</label>
 									<Input
 										value={settings.xAxisLabel || ''}
 										onChange={(e) => updateSetting('xAxisLabel', e.target.value)}
-										placeholder="X-axis label"
+										placeholder="X 轴标签"
 									/>
 								</div>
 								<div>
-									<label className="block mb-1 font-medium">Y-Axis Label</label>
+									<label className="block mb-1 font-medium">Y 轴标签</label>
 									<Input
 										value={settings.yAxisLabel || ''}
 										onChange={(e) => updateSetting('yAxisLabel', e.target.value)}
-										placeholder="Y-axis label"
+										placeholder="Y 轴标签"
 									/>
 								</div>
 								<div className="flex items-center gap-4">
@@ -126,7 +126,7 @@ export function ChartSettings({
 										checked={settings.showXAxis ?? true}
 										onChange={(e) => updateSetting('showXAxis', e.target.checked)}
 									>
-										Show X-Axis
+										显示 X 轴
 									</Checkbox>
 								</div>
 								<div className="flex items-center gap-4">
@@ -134,7 +134,7 @@ export function ChartSettings({
 										checked={settings.showYAxis ?? true}
 										onChange={(e) => updateSetting('showYAxis', e.target.checked)}
 									>
-										Show Y-Axis
+										显示 Y 轴
 									</Checkbox>
 								</div>
 								<div className="flex items-center gap-4">
@@ -142,7 +142,7 @@ export function ChartSettings({
 										checked={settings.showGridLines ?? true}
 										onChange={(e) => updateSetting('showGridLines', e.target.checked)}
 									>
-										Show Grid Lines
+										显示网格线
 									</Checkbox>
 								</div>
 							</div>
@@ -155,14 +155,14 @@ export function ChartSettings({
 							<>
 								<div className="flex flex-col gap-4 py-4 first:pt-0">
 									<div>
-										<label className="block mb-1 font-medium">Color Palette</label>
+										<label className="block mb-1 font-medium">配色方案</label>
 										<Select
 											value={settings.colorPalette || 'default'}
 											onChange={(value) => updateSetting('colorPalette', value)}
 											options={[
-												{ value: 'default', label: 'Default' },
-												{ value: 'pastel', label: 'Pastel' },
-												{ value: 'categorical', label: 'Categorical' },
+												{ value: 'default', label: '默认' },
+												{ value: 'pastel', label: '柔和' },
+												{ value: 'categorical', label: '分类' },
 											]}
 											style={{ width: "100%" }}
 										/>
@@ -173,7 +173,7 @@ export function ChartSettings({
 												checked={settings.smooth ?? false}
 												onChange={(checked) => updateSetting('smooth', checked)}
 											/>
-											<span className="ml-2">Smooth Lines</span>
+											<span className="ml-2">平滑线条</span>
 										</div>
 									)}
 									{(chartType === 'bar' || chartType === 'area') && (
@@ -182,7 +182,7 @@ export function ChartSettings({
 												checked={settings.stacked ?? false}
 												onChange={(checked) => updateSetting('stacked', checked)}
 											/>
-											<span className="ml-2">Stacked</span>
+											<span className="ml-2">堆叠</span>
 										</div>
 									)}
 									<div className="flex items-center gap-4">
@@ -190,7 +190,7 @@ export function ChartSettings({
 											checked={settings.showDataLabels ?? false}
 											onChange={(checked) => updateSetting('showDataLabels', checked)}
 										/>
-										<span className="ml-2">Show Data Labels</span>
+										<span className="ml-2">显示数据标签</span>
 									</div>
 								</div>
 
@@ -198,21 +198,21 @@ export function ChartSettings({
 								<div className="flex flex-col gap-4 py-4">
 									<h4 className="text-sm font-semibold text-text-secondary uppercase tracking-wide m-0 mb-2">Goal Line</h4>
 									<div>
-										<label className="block mb-1 font-medium">Goal Value</label>
+										<label className="block mb-1 font-medium">目标值</label>
 										<Input
 											type="number"
 											value={settings.goalValue?.toString() || ''}
 											onChange={(e) => updateSetting('goalValue', e.target.value ? Number(e.target.value) : undefined)}
-											placeholder="Enter goal value"
+											placeholder="输入目标值"
 										/>
 									</div>
 									{settings.goalValue !== undefined && (
 										<div>
-											<label className="block mb-1 font-medium">Goal Label</label>
+											<label className="block mb-1 font-medium">目标标签</label>
 											<Input
 												value={settings.goalLabel || ''}
 												onChange={(e) => updateSetting('goalLabel', e.target.value)}
-												placeholder="Goal label"
+												placeholder="目标标签"
 											/>
 										</div>
 									)}

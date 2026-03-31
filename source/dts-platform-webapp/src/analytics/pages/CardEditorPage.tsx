@@ -339,7 +339,7 @@ export default function CardEditorPage() {
 							<Input
 								value={name}
 								onChange={(e) => setName(e.target.value)}
-								placeholder="My Question"
+								placeholder="我的问题"
 							/>
 						</div>
 

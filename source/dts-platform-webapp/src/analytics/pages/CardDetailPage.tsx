@@ -200,7 +200,7 @@ export default function CardDetailPage() {
 
 					{explainState?.state === "loaded" && (
 						<Card style={{ marginBottom: "var(--spacing-lg)" }}
-							title="Explainability"
+							title="可解释性"
 							extra={
 									<Button
 										type="text"
