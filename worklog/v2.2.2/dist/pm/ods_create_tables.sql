@@ -1,10 +1,12 @@
 -- ============================================================
 -- 项目管理 ODS 建表 DDL（手动建表时使用，非 dbt 模型）
+-- 注意: 执行此脚本会 DROP 所有 ODS 表并重建！已有数据会丢失。
 -- 所有字段 varchar — 类型转换由 dbt DWD 层处理
 -- ============================================================
 
 -- ─── 1. 项目主体域原始数据（执行域） ───
-CREATE TABLE IF NOT EXISTS ods_project_subject_domain (
+DROP TABLE IF EXISTS ods_project_subject_domain CASCADE;
+CREATE TABLE ods_project_subject_domain (
     id                   serial PRIMARY KEY,
     project_no           varchar(500),   -- 项目编号
     subsystem            varchar(500),   -- 分系统/分任务
@@ -42,7 +44,8 @@ CREATE TABLE IF NOT EXISTS ods_project_subject_domain (
 );
 
 -- ─── 2. 质量信息汇总表 ───
-CREATE TABLE IF NOT EXISTS ods_quality_issue (
+DROP TABLE IF EXISTS ods_quality_issue CASCADE;
+CREATE TABLE ods_quality_issue (
     id                  serial PRIMARY KEY,
     project_no          varchar(500),   -- 项目编号
     issue_name          varchar(2000),  -- 问题名称/问题描述
@@ -62,7 +65,8 @@ CREATE TABLE IF NOT EXISTS ods_quality_issue (
 );
 
 -- ─── 3. 质量跟进措施表 ───
-CREATE TABLE IF NOT EXISTS ods_quality_measure (
+DROP TABLE IF EXISTS ods_quality_measure CASCADE;
+CREATE TABLE ods_quality_measure (
     id                  serial PRIMARY KEY,
     project_no          varchar(500),   -- 项目编号
     issue_name          varchar(2000),  -- 关联问题名称
@@ -79,7 +83,8 @@ CREATE TABLE IF NOT EXISTS ods_quality_measure (
 );
 
 -- ─── 4. 技术状态信息汇总表 ───
-CREATE TABLE IF NOT EXISTS ods_tech_state (
+DROP TABLE IF EXISTS ods_tech_state CASCADE;
+CREATE TABLE ods_tech_state (
     id                  serial PRIMARY KEY,
     project_no          varchar(500),   -- 项目编号
     tech_state_name     varchar(2000),  -- 技术状态名称/代号
@@ -100,7 +105,8 @@ CREATE TABLE IF NOT EXISTS ods_tech_state (
 );
 
 -- ─── 5. 技术状态跟进措施表 ───
-CREATE TABLE IF NOT EXISTS ods_tech_state_measure (
+DROP TABLE IF EXISTS ods_tech_state_measure CASCADE;
+CREATE TABLE ods_tech_state_measure (
     id                  serial PRIMARY KEY,
     project_no          varchar(500),   -- 项目编号
     tech_state_name     varchar(2000),  -- 关联技术状态名称
@@ -117,7 +123,8 @@ CREATE TABLE IF NOT EXISTS ods_tech_state_measure (
 );
 
 -- ─── 6. 风险信息汇总表 ───
-CREATE TABLE IF NOT EXISTS ods_risk_info (
+DROP TABLE IF EXISTS ods_risk_info CASCADE;
+CREATE TABLE ods_risk_info (
     id                  serial PRIMARY KEY,
     project_no          varchar(500),   -- 项目编号
     risk_name           varchar(2000),  -- 风险名称
@@ -138,7 +145,8 @@ CREATE TABLE IF NOT EXISTS ods_risk_info (
 );
 
 -- ─── 7. 风险跟进措施表 ───
-CREATE TABLE IF NOT EXISTS ods_risk_measure (
+DROP TABLE IF EXISTS ods_risk_measure CASCADE;
+CREATE TABLE ods_risk_measure (
     id                  serial PRIMARY KEY,
     project_no          varchar(500),   -- 项目编号
     risk_name           varchar(2000),  -- 关联风险名称
@@ -156,7 +164,8 @@ CREATE TABLE IF NOT EXISTS ods_risk_measure (
 );
 
 -- ─── 8. 成本核算基本表 ───
-CREATE TABLE IF NOT EXISTS ods_cost_accounting (
+DROP TABLE IF EXISTS ods_cost_accounting CASCADE;
+CREATE TABLE ods_cost_accounting (
     id                  serial PRIMARY KEY,
     project_no          varchar(500),   -- 项目编号
     project_name        varchar(500),   -- 项目名称

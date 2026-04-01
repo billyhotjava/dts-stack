@@ -1242,7 +1242,12 @@ async function apiFetch(url: string, init: RequestInit, allowRefresh: boolean): 
 	}
 	const retryResponse = await fetch(url, { ...init, credentials: "include", headers: retryHeaders });
 	if (retryResponse.status === 401) {
-		redirectToLoginWithReturn();
+		// Only redirect if we genuinely have no valid token — another tab may have
+		// refreshed successfully between our retry and now.
+		const finalTokens = getPlatformTokens();
+		if (!finalTokens.accessToken) {
+			redirectToLoginWithReturn();
+		}
 	}
 	return retryResponse;
 }

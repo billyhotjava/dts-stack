@@ -128,6 +128,24 @@ export async function refreshAccessToken(): Promise<RefreshResult> {
 				body: JSON.stringify({ refreshToken: actualRefreshToken }),
 			});
 			if (!resp.ok) {
+				// Cross-tab race recovery: our request failed (token already consumed by
+				// another tab). Check if the store has been updated with fresh tokens
+				// (via cross-tab broadcast or Zustand persist sync). If so, return those
+				// instead of reporting failure — the session is actually alive.
+				const storeAfterFail = userStore.getState().userToken;
+				const refreshAfterFail = String(storeAfterFail?.refreshToken || '').trim();
+				if (refreshAfterFail && refreshAfterFail !== actualRefreshToken) {
+					console.debug(LOG_PREFIX, 'refresh: failed locally but another tab refreshed — using cross-tab tokens');
+					_refreshFailedAt = 0;
+					return {
+						accessToken: String(storeAfterFail?.accessToken || '').trim(),
+						refreshToken: refreshAfterFail,
+						adminAccessToken: String(storeAfterFail?.adminAccessToken || '').trim() || undefined,
+						adminRefreshToken: String(storeAfterFail?.adminRefreshToken || '').trim() || undefined,
+						adminAccessTokenExpiresAt: String(storeAfterFail?.adminAccessTokenExpiresAt || '').trim() || undefined,
+						adminRefreshTokenExpiresAt: String(storeAfterFail?.adminRefreshTokenExpiresAt || '').trim() || undefined,
+					};
+				}
 				console.warn(LOG_PREFIX, 'refresh: failed', { status: resp.status });
 				_refreshFailedAt = Date.now();
 				return null;
@@ -175,6 +193,17 @@ export async function refreshAccessToken(): Promise<RefreshResult> {
 			console.debug(LOG_PREFIX, 'refresh: success');
 			return result;
 		} catch (err) {
+			// Same cross-tab race recovery for network errors
+			const storeAfterError = userStore.getState().userToken;
+			const refreshAfterError = String(storeAfterError?.refreshToken || '').trim();
+			if (refreshAfterError && refreshAfterError !== refreshToken) {
+				console.debug(LOG_PREFIX, 'refresh: network error but another tab refreshed — using cross-tab tokens');
+				_refreshFailedAt = 0;
+				return {
+					accessToken: String(storeAfterError?.accessToken || '').trim(),
+					refreshToken: refreshAfterError,
+				};
+			}
 			console.warn(LOG_PREFIX, 'refresh: error', err instanceof Error ? err.message : err);
 			_refreshFailedAt = Date.now();
 			return null;

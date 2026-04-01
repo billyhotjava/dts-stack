@@ -5,7 +5,7 @@ import { ResultStatus } from "#/enum";
 import { GLOBAL_CONFIG } from "@/global-config";
 import { t } from "@/locales/i18n";
 import { isLoginRouteActive } from "@/routes/constants";
-import { refreshAccessToken, redirectToLoginWithReturn } from "@/auth/session-auth";
+import { refreshAccessToken, redirectToLoginWithReturn, useRedirectIntentStore } from "@/auth/session-auth";
 import { PLATFORM_LEGACY_SESSION_KEYS, PLATFORM_SESSION_KEYS } from "@/auth/session-keys";
 import useContextStore from "@/store/contextStore";
 import userStore from "@/store/userStore";
@@ -279,7 +279,10 @@ axiosInstance.interceptors.response.use(
 				redirectToLoginWithReturn();
 			}
 		} else {
-			if (!shouldSuppressAuthHandling && !isLoginRequest) {
+			// Suppress error toasts when a login redirect is already in progress —
+			// all in-flight requests will fail, but the user is about to see the login page.
+			const redirectInProgress = useRedirectIntentStore.getState().intent !== null;
+			if (!shouldSuppressAuthHandling && !isLoginRequest && !redirectInProgress) {
 				if (!skipErrorToast) {
 					toast.error(combinedMsg, { position: "top-center" });
 				}

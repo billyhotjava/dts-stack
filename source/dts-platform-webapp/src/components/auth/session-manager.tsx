@@ -160,12 +160,14 @@ export default function SessionManager() {
 			}
 			const idleFor = Date.now() - lastActivityRef.current;
 			if (idleFor > SESSION_TIMEOUT_MS + SESSION_IDLE_GRACE_MS) {
+				// Idle timeout during refresh cycle — the dedicated idle timeout effect
+				// (logoutDueToIdle) handles the full logout flow including LOGOUT_TS
+				// broadcast and server-side logout. Here we just bail out to avoid
+				// a redundant refresh attempt. Don't write LOGOUT_TS from two paths.
 				if (!logoutInProgressRef.current) {
 					logoutInProgressRef.current = true;
-					console.warn(LOG_PREFIX, 'logout: SESSION_EXPIRED (idle during refresh cycle)', { idleFor });
-					toast.error("会话已过期，请重新登录", { id: "session-expired" });
+					console.warn(LOG_PREFIX, 'logout: SESSION_EXPIRED (idle during refresh cycle, deferring to idle timeout effect)', { idleFor });
 					clearUserInfoAndToken();
-					localStorage.setItem(PLATFORM_SESSION_KEYS.logoutTs, String(Date.now()));
 					redirectToLoginWithReturn();
 				}
 				cancelled = true;
@@ -190,13 +192,16 @@ export default function SessionManager() {
 					schedule(delay);
 				}
 			} else {
-				// Refresh failed (token expired/consumed/server error)
+				// Refresh failed — but this could be a cross-tab race (another tab consumed
+				// the token). Do NOT write LOGOUT_TS here — that would force ALL tabs to
+				// log out even though the session may still be alive in another tab.
+				// Only redirect THIS tab; let other tabs handle their own refresh cycle.
 				if (!logoutInProgressRef.current) {
 					logoutInProgressRef.current = true;
-					console.warn(LOG_PREFIX, 'logout: REFRESH_FAILED');
+					console.warn(LOG_PREFIX, 'logout: REFRESH_FAILED (no cross-tab broadcast)');
 					toast.error("会话已过期，请重新登录", { id: "session-expired" });
 					clearUserInfoAndToken();
-					localStorage.setItem(PLATFORM_SESSION_KEYS.logoutTs, String(Date.now()));
+					// Deliberately NOT writing LOGOUT_TS — see comment above
 					redirectToLoginWithReturn();
 				}
 				cancelled = true;

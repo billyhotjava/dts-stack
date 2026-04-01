@@ -208,10 +208,48 @@ public class DbtQualityGateService {
             if (!sqlPath.startsWith(project) || sqlPath.getFileName() == null) {
                 return null;
             }
+            // 1) 优先查同名 yml（如 biz_dwd_quality_issue.yml）
             String baseName = sqlPath.getFileName().toString();
             String ymlName = baseName.endsWith(".sql") ? baseName.substring(0, baseName.length() - 4) + ".yml" : baseName + ".yml";
             Path ymlPath = sqlPath.resolveSibling(ymlName).normalize();
-            return ymlPath.startsWith(project) ? ymlPath : null;
+            if (ymlPath.startsWith(project) && Files.exists(ymlPath)) {
+                return ymlPath;
+            }
+            // 2) 回退：扫描同目录及父目录的所有 yml，查找包含该模型名的 schema 文件
+            Path searchDir = sqlPath.getParent();
+            Path matched = findSchemaYmlContainingModel(project, searchDir, modelName);
+            if (matched != null) {
+                return matched;
+            }
+            // 3) 再往上找一层（models/ 根目录的 schema yml）
+            if (searchDir != null && searchDir.getParent() != null && searchDir.getParent().startsWith(project)) {
+                matched = findSchemaYmlContainingModel(project, searchDir.getParent(), modelName);
+                if (matched != null) {
+                    return matched;
+                }
+            }
+            return null;
+        }
+        return null;
+    }
+
+    private Path findSchemaYmlContainingModel(Path projectRoot, Path dir, String modelName) {
+        if (dir == null || !Files.isDirectory(dir) || !dir.startsWith(projectRoot)) {
+            return null;
+        }
+        try (var entries = Files.list(dir)) {
+            for (Path candidate : entries.filter(Files::isRegularFile).toList()) {
+                String name = candidate.getFileName().toString().toLowerCase(Locale.ROOT);
+                if (!name.endsWith(".yml") && !name.endsWith(".yaml")) {
+                    continue;
+                }
+                String content = readText(candidate);
+                if (content != null && content.contains("name: " + modelName)) {
+                    return candidate;
+                }
+            }
+        } catch (IOException ex) {
+            LOG.debug("[dbt-quality-gate] failed to scan dir {}: {}", dir, ex.getMessage());
         }
         return null;
     }
