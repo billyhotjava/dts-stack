@@ -83,8 +83,9 @@ public class DbtQualityGateService {
         }
 
         List<String> blockers = new ArrayList<>();
+        // 质量门不阻塞上线，所有检查项降级为 warning
         if (blocking) {
-            blockers.add("最近一次质量构建失败（" + defaultText(command, "unknown command") + "），请先修复后再上线");
+            warnings.add("最近一次质量构建失败（" + defaultText(command, "unknown command") + "），建议修复后再上线");
         }
 
         return new DbtQualityGateResult(

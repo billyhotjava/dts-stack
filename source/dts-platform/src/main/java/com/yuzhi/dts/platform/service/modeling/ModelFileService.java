@@ -270,6 +270,67 @@ public class ModelFileService {
         return null;
     }
 
+    /**
+     * 清理 dbt 项目目录中不在本次 ZIP 包内的旧版伴随文件（yml/macro/seed）。
+     * 只清理 ZIP 包涉及到的目录，不影响无关目录。
+     */
+    public List<String> cleanStaleCompanionFiles(Path unzipRoot) throws IOException {
+        String projectDirStr = dbtConfigService.resolveProjectDir();
+        if (!StringUtils.hasText(projectDirStr)) {
+            return List.of();
+        }
+        Path projectDir = Path.of(projectDirStr).normalize();
+        if (!Files.exists(projectDir)) {
+            return List.of();
+        }
+
+        // 1) 收集 ZIP 中要写入的所有目标路径
+        Set<Path> incomingPaths = new LinkedHashSet<>();
+        Set<Path> touchedDirs = new LinkedHashSet<>();
+        try (var walk = Files.walk(unzipRoot)) {
+            for (Path file : walk.filter(Files::isRegularFile).toList()) {
+                String relative = resolveCompanionWorkspacePath(unzipRoot.relativize(file));
+                if (!StringUtils.hasText(relative)) {
+                    continue;
+                }
+                Path target = projectDir.resolve(relative).normalize();
+                if (target.startsWith(projectDir)) {
+                    incomingPaths.add(target);
+                    if (target.getParent() != null) {
+                        touchedDirs.add(target.getParent());
+                    }
+                }
+            }
+        }
+        if (incomingPaths.isEmpty()) {
+            return List.of();
+        }
+
+        // 2) 扫描被 ZIP 涉及的目录，找到不在 ZIP 中的旧文件
+        List<String> deleted = new ArrayList<>();
+        for (Path dir : touchedDirs) {
+            if (!Files.isDirectory(dir) || !dir.startsWith(projectDir)) {
+                continue;
+            }
+            try (var entries = Files.list(dir)) {
+                for (Path existing : entries.filter(Files::isRegularFile).toList()) {
+                    if (incomingPaths.contains(existing)) {
+                        continue; // ZIP 中有这个文件，保留
+                    }
+                    String name = existing.getFileName().toString().toLowerCase(Locale.ROOT);
+                    // 只清理 yml/yaml/sql 伴随文件，不动其他类型
+                    if (name.endsWith(".yml") || name.endsWith(".yaml") || name.endsWith(".sql")) {
+                        String relativePath = projectDir.relativize(existing).toString();
+                        Files.deleteIfExists(existing);
+                        deleted.add(relativePath);
+                        LOG.info("[batch-import] cleaned stale file: {}", relativePath);
+                    }
+                }
+            }
+        }
+        return deleted;
+    }
+
     public void copyWorkspaceCompanionFiles(Path unzipRoot) throws IOException {
         String projectDirStr = dbtConfigService.resolveProjectDir();
         if (!StringUtils.hasText(projectDirStr)) {

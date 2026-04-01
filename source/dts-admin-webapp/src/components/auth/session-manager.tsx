@@ -196,19 +196,23 @@ export function SessionManager() {
 				return;
 			}
 
-			try {
-				const refreshed = await refreshAccessToken();
-				const delay = nextRefreshDelayMs(refreshed?.accessToken || token.accessToken);
-				if (!refreshed?.accessToken) {
-					throw new Error("refresh failed");
-				}
+			const refreshed = await refreshAccessToken();
+			if (refreshed?.accessToken) {
 				activitySinceRefreshRef.current = false;
 				if (!cancelled) {
+					const delay = nextRefreshDelayMs(refreshed.accessToken);
 					schedule(delay);
 				}
-			} catch (err) {
-				triggerAutoLogout();
-				lastActivityRef.current = Date.now();
+			} else {
+				// Refresh failed — could be cross-tab race (another tab consumed the token).
+				// Do NOT call triggerAutoLogout (which writes LOGOUT_TS and forces all tabs
+				// to log out). Only redirect THIS tab; let other tabs handle their own cycle.
+				if (!logoutInProgressRef.current) {
+					logoutInProgressRef.current = true;
+					toast.error("会话已过期，请重新登录", { id: "session-expired" });
+					clearUserInfoAndToken();
+					redirectToLoginWithReturn();
+				}
 				cancelled = true;
 			}
 		};

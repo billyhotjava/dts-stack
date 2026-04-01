@@ -541,6 +541,7 @@ public class ModelGenerationService {
         UUID planId,
         UUID defaultSourceDataSourceId,
         boolean skipExisting,
+        boolean cleanOldFiles,
         Path archivePath,
         String activeDept
     ) {
@@ -664,6 +665,12 @@ public class ModelGenerationService {
             }
 
             if (imported > 0) {
+                if (cleanOldFiles) {
+                    List<String> cleaned = fileService.cleanStaleCompanionFiles(tempDir);
+                    if (!cleaned.isEmpty()) {
+                        LOG.info("[batch-import] cleaned {} stale files", cleaned.size());
+                    }
+                }
                 fileService.copyWorkspaceCompanionFiles(tempDir);
             }
 

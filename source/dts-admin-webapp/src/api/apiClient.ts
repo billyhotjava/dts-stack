@@ -5,7 +5,7 @@ import { ResultStatus } from "#/enum";
 import { GLOBAL_CONFIG } from "@/global-config";
 import { t } from "@/locales/i18n";
 import { readStorageValue } from "@dts-session-core/storage";
-import { redirectToLoginWithReturn, refreshAccessToken } from "@/auth/session-auth";
+import { isRedirectInProgress, redirectToLoginWithReturn, refreshAccessToken } from "@/auth/session-auth";
 import { ADMIN_LEGACY_SESSION_KEYS, ADMIN_SESSION_KEYS } from "@/auth/session-keys";
 import userStore from "@/store/userStore";
 
@@ -236,7 +236,7 @@ axiosInstance.interceptors.response.use(
 					? t("sys.api.networkExceptionMsg")
 					: t("sys.api.networkExceptionMsg");
 			(error as any).message = toastMsg;
-			if (!shouldSuppressAuthHandling && !isLoginRequest) {
+			if (!shouldSuppressAuthHandling && !isLoginRequest && !isRedirectInProgress()) {
 				toast.error(toastMsg, { id: "api-network-error", position: "top-center" });
 			}
 			console.error("API Network Error:", {
@@ -276,7 +276,7 @@ axiosInstance.interceptors.response.use(
 		(error as any).message = errMsg;
 		// 401 responses are handled by AdminGuard (redirect to login);
 		// suppress toast to avoid showing error popups before redirect.
-		if (!shouldSuppressAuthHandling && response?.status !== 401) {
+		if (!shouldSuppressAuthHandling && response?.status !== 401 && !isRedirectInProgress()) {
 			toast.error(errMsg, { position: "top-center" });
 		}
 

@@ -5,9 +5,42 @@ import { ScrollArea } from "@/ui/scroll-area";
 import { useBilingualText } from "@/hooks/useBilingualText";
 import { Title } from "@/ui/typography";
 
+/**
+ * Detect stale-chunk errors caused by deployment: the browser's cached HTML references
+ * a JS chunk that no longer exists on the server (hash changed after rebuild).
+ * Auto-reload once to fetch the new HTML + chunks.
+ */
+function isStaleChunkError(error: unknown): boolean {
+	if (!(error instanceof Error)) return false;
+	const msg = error.message || '';
+	return (
+		msg.includes('Failed to fetch dynamically imported module') ||
+		msg.includes('Importing a module script failed') ||
+		msg.includes('Loading chunk') ||
+		msg.includes('Loading CSS chunk')
+	);
+}
+
+const RELOAD_KEY = 'dts.error-boundary.reload-attempted';
+
 export default function ErrorBoundary() {
 	const error = useRouteError();
 	const _t = useBilingualText();
+
+	// Auto-reload on stale chunk errors (once per session to avoid infinite reload loop)
+	if (isStaleChunkError(error)) {
+		const alreadyReloaded = sessionStorage.getItem(RELOAD_KEY);
+		if (!alreadyReloaded) {
+			sessionStorage.setItem(RELOAD_KEY, '1');
+			window.location.reload();
+			return null;
+		}
+		// Second time → clear flag and show error normally
+		sessionStorage.removeItem(RELOAD_KEY);
+	} else {
+		// Successful navigation → clear the reload flag so next deploy can auto-reload again
+		sessionStorage.removeItem(RELOAD_KEY);
+	}
 
 	return (
 		<ScrollArea className="w-full h-screen">

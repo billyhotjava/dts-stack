@@ -77,6 +77,10 @@ export function redirectToLoginWithReturn(): void {
 	window.location.replace(buildLoginRedirectHref(resolveAdminLoginHref(), current));
 }
 
+export function isRedirectInProgress(): boolean {
+	return redirecting;
+}
+
 export function resetLoginRedirectFlag(): void {
 	redirecting = false;
 }

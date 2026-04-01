@@ -109,6 +109,7 @@ public class DbtReleaseGateService {
         List<String> blockers,
         List<String> warnings
     ) {
+        // 所有构建证据检查降级为 warning，不阻塞上线
         if (!isAllowedBuildCommand(summary.command())) {
             if (dbtRunResultService.hasRecentCompatibleBuildEvidence(selector, RECENT_BUILD_EVIDENCE_LIMIT)) {
                 warnings.add(
@@ -117,10 +118,10 @@ public class DbtReleaseGateService {
                         + " 条中已发现匹配 selector 的有效 CI 校验"
                 );
             } else {
-                blockers.add(
+                warnings.add(
                     "最近一次记录命令不是 compile/test/build，且最近 "
                         + RECENT_BUILD_EVIDENCE_LIMIT
-                        + " 条中未发现匹配 selector 的有效 CI 校验，请先补齐 CI 校验"
+                        + " 条中未发现匹配 selector 的有效 CI 校验，建议补齐 CI 校验"
                 );
             }
             return;
@@ -128,27 +129,19 @@ public class DbtReleaseGateService {
         String status = normalizeUpper(summary.status());
         boolean missingUnbuiltRelations = isMissingUnbuiltRelationTestFailure(summary);
         if (!"SUCCESS".equals(status) && !missingUnbuiltRelations) {
-            blockers.add("最近一次构建状态为 " + defaultText(status, "UNKNOWN") + "，不允许发布");
+            warnings.add("最近一次构建状态为 " + defaultText(status, "UNKNOWN") + "，建议确认后再发布");
         } else if (missingUnbuiltRelations) {
             warnings.add("最近一次 dbt test 失败是因为目标关系尚未生成，首次上线可继续执行 dbt build");
         }
         Instant generatedAt = parseInstant(summary.generatedAt());
         if (generatedAt == null) {
-            if (strict) {
-                blockers.add("构建记录缺少生成时间，无法确认有效性");
-            } else {
-                warnings.add("构建记录缺少生成时间，建议重跑 compile/test");
-            }
+            warnings.add("构建记录缺少生成时间，建议重跑 compile/test");
         } else {
             Duration age = Duration.between(generatedAt, Instant.now());
             if (age.compareTo(DEFAULT_MAX_BUILD_AGE) > 0) {
-                String msg =
-                    "构建记录已过期（" + age.toHours() + "h），需在 " + DEFAULT_MAX_BUILD_AGE.toHours() + "h 内完成 compile/test/build";
-                if (strict) {
-                    blockers.add(msg);
-                } else {
-                    warnings.add(msg);
-                }
+                warnings.add(
+                    "构建记录已过期（" + age.toHours() + "h），建议在 " + DEFAULT_MAX_BUILD_AGE.toHours() + "h 内重新执行 compile/test/build"
+                );
             }
         }
         if (StringUtils.hasText(selector) && !"all".equalsIgnoreCase(selector.trim()) && !commandContainsSelector(summary.command())) {

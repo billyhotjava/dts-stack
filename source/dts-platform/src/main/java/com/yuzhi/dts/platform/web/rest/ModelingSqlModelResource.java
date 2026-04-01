@@ -199,6 +199,7 @@ public class ModelingSqlModelResource {
         @RequestParam UUID sourceDataSourceId,
         @RequestParam("archive") MultipartFile archive,
         @RequestParam(required = false, defaultValue = "false") boolean skipExisting,
+        @RequestParam(required = false, defaultValue = "false") boolean cleanOldFiles,
         @RequestHeader(value = "X-Active-Dept", required = false) String activeDept
     ) throws IOException {
         if (archive.isEmpty()) {
@@ -208,7 +209,7 @@ public class ModelingSqlModelResource {
         try {
             archive.transferTo(tempFile);
             ModelingSqlModelService.BatchImportResult result = generationService.batchImportFromArchive(
-                planId, sourceDataSourceId, skipExisting, tempFile, activeDept
+                planId, sourceDataSourceId, skipExisting, cleanOldFiles, tempFile, activeDept
             );
             auditService.audit("BATCH_IMPORT", "modeling.sql-model",
                 "plan=" + planId + " total=" + result.total() + " imported=" + result.imported());

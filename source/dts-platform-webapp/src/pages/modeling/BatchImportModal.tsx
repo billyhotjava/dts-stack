@@ -182,6 +182,7 @@ const BatchImportModal = ({
 			formData.append("planId", values.planId);
 			formData.append("sourceDataSourceId", values.sourceDataSourceId);
 			formData.append("skipExisting", values.skipExisting ? "true" : "false");
+			formData.append("cleanOldFiles", values.cleanOldFiles ? "true" : "false");
 			formData.append("archive", zipFileList[0].originFileObj);
 			const res = await batchImportSqlModels(formData);
 			showResults(res, values.planId);
@@ -224,6 +225,7 @@ const BatchImportModal = ({
 			formData.append("planId", values.planId);
 			formData.append("sourceDataSourceId", values.sourceDataSourceId);
 			formData.append("skipExisting", values.skipExisting ? "true" : "false");
+			formData.append("cleanOldFiles", values.cleanOldFiles ? "true" : "false");
 			formData.append("archive", blob, "batch-import.zip");
 			const res = await batchImportSqlModels(formData);
 			showResults(res, values.planId);
@@ -347,6 +349,9 @@ const BatchImportModal = ({
 			</div>
 			<Form.Item name="skipExisting" valuePropName="checked" initialValue={false}>
 				<Checkbox>跳过已存在的模型</Checkbox>
+			</Form.Item>
+			<Form.Item name="cleanOldFiles" valuePropName="checked" initialValue={false}>
+				<Checkbox>清理旧版文件（删除目标目录中不在此 ZIP 包内的旧 yml/macro 文件）</Checkbox>
 			</Form.Item>
 		</Form>
 	);
