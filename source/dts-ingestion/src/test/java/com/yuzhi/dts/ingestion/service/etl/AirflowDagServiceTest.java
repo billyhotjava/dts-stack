@@ -42,7 +42,11 @@ class AirflowDagServiceTest {
         addaxProperties.setImage("dts-addax:test");
         addaxProperties.setJobDir("/opt/addax/jobs");
 
-        dagService = new AirflowDagService(airflowProperties, addaxProperties, settingsService, airflowClient);
+        org.springframework.mock.env.MockEnvironment mockEnv = new org.springframework.mock.env.MockEnvironment()
+            .withProperty("spring.datasource.url", "jdbc:postgresql://localhost:5432/test")
+            .withProperty("spring.datasource.username", "test")
+            .withProperty("spring.datasource.password", "test");
+        dagService = new AirflowDagService(airflowProperties, addaxProperties, settingsService, airflowClient, mockEnv);
         lenient().when(settingsService.getSettings(anyString())).thenReturn(new IngestionSettingsService.SettingsSnapshot(Map.of()));
     }
 
