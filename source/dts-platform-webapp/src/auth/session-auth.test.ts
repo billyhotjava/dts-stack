@@ -70,10 +70,13 @@ beforeEach(() => {
 	storedToken = { accessToken: "old-access", refreshToken: "old-refresh" };
 	installFetchMock();
 	resetLoginRedirectFlag();
+	// Clear cross-tab broadcast key to prevent leakage between tests
+	try { localStorage.removeItem('dts:session:cross-tab-refresh'); } catch {}
 });
 
 afterEach(() => {
 	vi.restoreAllMocks();
+	try { localStorage.removeItem('dts:session:cross-tab-refresh'); } catch {}
 });
 
 // ── Tests ────────────────────────────────────────────────────────────────────
