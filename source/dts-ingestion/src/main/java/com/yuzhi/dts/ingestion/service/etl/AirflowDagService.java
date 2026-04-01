@@ -31,17 +31,20 @@ public class AirflowDagService {
     private final AddaxProperties addaxProperties;
     private final IngestionSettingsService settingsService;
     private final AirflowClient airflowClient;
+    private final org.springframework.core.env.Environment springEnv;
 
     public AirflowDagService(
         AirflowProperties properties,
         AddaxProperties addaxProperties,
         IngestionSettingsService settingsService,
-        AirflowClient airflowClient
+        AirflowClient airflowClient,
+        org.springframework.core.env.Environment springEnv
     ) {
         this.properties = properties;
         this.addaxProperties = addaxProperties;
         this.settingsService = settingsService;
         this.airflowClient = airflowClient;
+        this.springEnv = springEnv;
     }
 
     public String ensureDagForTask(IngestionTask task) {
@@ -736,8 +739,18 @@ public class AirflowDagService {
                 }
             }
         }
-        if (!StringUtils.hasText(username)) username = "postgres";
-        if (!StringUtils.hasText(password)) password = "";
+        // Fallback: use spring.datasource credentials (data lake is typically the platform's own PG)
+        if (!StringUtils.hasText(username)) {
+            username = springEnv.getProperty("spring.datasource.username", "postgres");
+        }
+        if (!StringUtils.hasText(password)) {
+            password = springEnv.getProperty("spring.datasource.password", "");
+        }
+
+        // Fallback: use spring.datasource URL if no JDBC URL found
+        if (!StringUtils.hasText(jdbcUrl)) {
+            jdbcUrl = springEnv.getProperty("spring.datasource.url", "");
+        }
 
         // Parse JDBC URL: jdbc:postgresql://host:port/dbname?params
         String host = "localhost";

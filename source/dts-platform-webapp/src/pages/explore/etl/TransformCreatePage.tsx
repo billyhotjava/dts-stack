@@ -892,11 +892,14 @@ export default function TransformCreatePage() {
 
 	const applyOdsMapping = useCallback(() => {
 		if (!odsColumns.length || !fileUploadResult?.columns?.length) return;
+		// 过滤系统自动生成的字段，只保留业务字段参与匹配
+		const systemFields = new Set(['id', 'source_system', 'import_time']);
+		const bizOdsColumns = odsColumns.filter(c => !systemFields.has(c.name?.toLowerCase() ?? ''));
 		const excelCols = [...fileUploadResult.columns];
-		const odsLen = odsColumns.length;
+		const odsLen = bizOdsColumns.length;
 		const excelLen = excelCols.length;
 		for (let i = 0; i < Math.min(odsLen, excelLen); i++) {
-			excelCols[i] = { ...excelCols[i], name: odsColumns[i].name, _odsMatched: true } as any;
+			excelCols[i] = { ...excelCols[i], name: bizOdsColumns[i].name, _odsMatched: true } as any;
 		}
 		for (let i = odsLen; i < excelLen; i++) {
 			excelCols[i] = { ...excelCols[i], _odsExtra: true } as any;
@@ -907,9 +910,11 @@ export default function TransformCreatePage() {
 
 	const unmatchedOdsFields = useMemo(() => {
 		if (!odsMatchApplied || !odsColumns.length) return [];
+		const systemFields = new Set(['id', 'source_system', 'import_time']);
+		const bizOdsColumns = odsColumns.filter(c => !systemFields.has(c.name?.toLowerCase() ?? ''));
 		const excelLen = fileUploadResult?.columns?.length || 0;
-		if (odsColumns.length <= excelLen) return [];
-		return odsColumns.slice(excelLen);
+		if (bizOdsColumns.length <= excelLen) return [];
+		return bizOdsColumns.slice(excelLen);
 	}, [odsMatchApplied, odsColumns, fileUploadResult?.columns?.length]);
 
 	const refreshFilePreview = async () => {
@@ -1621,6 +1626,7 @@ export default function TransformCreatePage() {
 									onFileUpload={async (file, onSuccess, onError) => {
 										try {
 											setUploadingFile(true);
+											const prevColumns = fileUploadResult?.columns;
 											setFileUploadResult(null);
 											const prepare = await dataSourcesService.excelPrepare(file);
 											const parseInput = buildPreparedFileParseInput(prepare, filePreviewRows);
@@ -1638,6 +1644,22 @@ export default function TransformCreatePage() {
 												syncPrefix: form.getFieldValue("syncPrefix"),
 												reason: "upload",
 											});
+											// 编辑模式：复用已保存的字段映射，不清空
+											if (isEdit && prevColumns?.length && parsed.columns?.length) {
+												const prevByLabel = new Map<string, any>();
+												for (const col of prevColumns) {
+													const label = ((col as any).label || '').trim().toLowerCase();
+													if (label) prevByLabel.set(label, col);
+												}
+												parsed.columns = parsed.columns.map((newCol: any) => {
+													const newLabel = (newCol.label || newCol.name || '').trim().toLowerCase();
+													const prev = prevByLabel.get(newLabel);
+													if (prev?.name && (prev as any)._odsMatched) {
+														return { ...newCol, name: prev.name, _odsMatched: true };
+													}
+													return newCol;
+												});
+											}
 											setFileUploadResult(parsed);
 											if (outcome.shouldResetOds) {
 												setSelectedOdsTable(undefined); setOdsColumns([]); setOdsMatchApplied(false);
