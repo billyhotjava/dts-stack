@@ -690,13 +690,7 @@
         "backgroundColor": "#ffffff"
       },
       "dataSource": {
-        "type": "sql",
-        "sqlConfig": {
-          "databaseId": "{{DATABASE_ID}}",
-          "query": "SELECT\n    period_year,\n    period_month,\n    budget_total,\n    actual_total,\n    deviation_total,\n    execution_rate,\n    deviation_rate,\n    annual_budget_total,\n    annual_actual_total,\n    annual_deviation_total,\n    annual_execution_rate,\n    annual_deviation_rate\nFROM biz_ads_cost_kpi\nORDER BY period_year, period_month",
-          "queryTimeoutSeconds": 30,
-          "maxRows": 2000
-        }
+        "type": "static"
       }
     },
     {
@@ -722,13 +716,7 @@
         "backgroundColor": "#ffffff"
       },
       "dataSource": {
-        "type": "sql",
-        "sqlConfig": {
-          "databaseId": "{{DATABASE_ID}}",
-          "query": "SELECT\n    period_year,\n    period_month,\n    budget_total,\n    actual_total,\n    deviation_total,\n    execution_rate,\n    deviation_rate,\n    annual_budget_total,\n    annual_actual_total,\n    annual_deviation_total,\n    annual_execution_rate,\n    annual_deviation_rate\nFROM biz_ads_cost_kpi\nORDER BY period_year, period_month",
-          "queryTimeoutSeconds": 30,
-          "maxRows": 2000
-        }
+        "type": "static"
       }
     },
     {
@@ -754,13 +742,7 @@
         "backgroundColor": "#ffffff"
       },
       "dataSource": {
-        "type": "sql",
-        "sqlConfig": {
-          "databaseId": "{{DATABASE_ID}}",
-          "query": "SELECT\n    period_year,\n    period_month,\n    budget_total,\n    actual_total,\n    deviation_total,\n    execution_rate,\n    deviation_rate,\n    annual_budget_total,\n    annual_actual_total,\n    annual_deviation_total,\n    annual_execution_rate,\n    annual_deviation_rate\nFROM biz_ads_cost_kpi\nORDER BY period_year, period_month",
-          "queryTimeoutSeconds": 30,
-          "maxRows": 2000
-        }
+        "type": "static"
       }
     },
     {
@@ -786,13 +768,7 @@
         "backgroundColor": "#ffffff"
       },
       "dataSource": {
-        "type": "sql",
-        "sqlConfig": {
-          "databaseId": "{{DATABASE_ID}}",
-          "query": "SELECT\n    period_year,\n    period_month,\n    budget_total,\n    actual_total,\n    deviation_total,\n    execution_rate,\n    deviation_rate,\n    annual_budget_total,\n    annual_actual_total,\n    annual_deviation_total,\n    annual_execution_rate,\n    annual_deviation_rate\nFROM biz_ads_cost_kpi\nORDER BY period_year, period_month",
-          "queryTimeoutSeconds": 30,
-          "maxRows": 2000
-        }
+        "type": "static"
       }
     },
     {
@@ -818,13 +794,7 @@
         "backgroundColor": "#ffffff"
       },
       "dataSource": {
-        "type": "sql",
-        "sqlConfig": {
-          "databaseId": "{{DATABASE_ID}}",
-          "query": "SELECT\n    period_year,\n    period_month,\n    budget_total,\n    actual_total,\n    deviation_total,\n    execution_rate,\n    deviation_rate,\n    annual_budget_total,\n    annual_actual_total,\n    annual_deviation_total,\n    annual_execution_rate,\n    annual_deviation_rate\nFROM biz_ads_cost_kpi\nORDER BY period_year, period_month",
-          "queryTimeoutSeconds": 30,
-          "maxRows": 2000
-        }
+        "type": "static"
       }
     },
     {
@@ -850,13 +820,7 @@
         "backgroundColor": "#ffffff"
       },
       "dataSource": {
-        "type": "sql",
-        "sqlConfig": {
-          "databaseId": "{{DATABASE_ID}}",
-          "query": "SELECT\n    period_year,\n    period_month,\n    budget_total,\n    actual_total,\n    deviation_total,\n    execution_rate,\n    deviation_rate,\n    annual_budget_total,\n    annual_actual_total,\n    annual_deviation_total,\n    annual_execution_rate,\n    annual_deviation_rate\nFROM biz_ads_cost_kpi\nORDER BY period_year, period_month",
-          "queryTimeoutSeconds": 30,
-          "maxRows": 2000
-        }
+        "type": "static"
       }
     },
     {
@@ -882,13 +846,7 @@
         "backgroundColor": "#ffffff"
       },
       "dataSource": {
-        "type": "sql",
-        "sqlConfig": {
-          "databaseId": "{{DATABASE_ID}}",
-          "query": "SELECT\n    period_year,\n    period_month,\n    budget_total,\n    actual_total,\n    deviation_total,\n    execution_rate,\n    deviation_rate,\n    annual_budget_total,\n    annual_actual_total,\n    annual_deviation_total,\n    annual_execution_rate,\n    annual_deviation_rate\nFROM biz_ads_cost_kpi\nORDER BY period_year, period_month",
-          "queryTimeoutSeconds": 30,
-          "maxRows": 2000
-        }
+        "type": "static"
       }
     },
     {
@@ -963,13 +921,7 @@
         }
       ],
       "dataSource": {
-        "type": "sql",
-        "sqlConfig": {
-          "databaseId": "{{DATABASE_ID}}",
-          "query": "SELECT\n    period_year,\n    period_month,\n    budget_total,\n    actual_total,\n    deviation_total,\n    execution_rate,\n    deviation_rate,\n    annual_budget_total,\n    annual_actual_total,\n    annual_deviation_total,\n    annual_execution_rate,\n    annual_deviation_rate\nFROM biz_ads_cost_kpi\nORDER BY period_year, period_month",
-          "queryTimeoutSeconds": 30,
-          "maxRows": 2000
-        }
+        "type": "static"
       }
     },
     {
@@ -1021,13 +973,7 @@
         ]
       },
       "dataSource": {
-        "type": "sql",
-        "sqlConfig": {
-          "databaseId": "{{DATABASE_ID}}",
-          "query": "SELECT\n    period_year,\n    period_month,\n    budget_total,\n    actual_total,\n    deviation_total,\n    execution_rate,\n    deviation_rate,\n    annual_budget_total,\n    annual_actual_total,\n    annual_deviation_total,\n    annual_execution_rate,\n    annual_deviation_rate\nFROM biz_ads_cost_kpi\nORDER BY period_year, period_month",
-          "queryTimeoutSeconds": 30,
-          "maxRows": 2000
-        }
+        "type": "static"
       }
     },
     {
@@ -1071,13 +1017,7 @@
         }
       ],
       "dataSource": {
-        "type": "sql",
-        "sqlConfig": {
-          "databaseId": "{{DATABASE_ID}}",
-          "query": "SELECT\n    period_year,\n    period_month,\n    budget_total,\n    actual_total,\n    deviation_total,\n    execution_rate,\n    deviation_rate,\n    annual_budget_total,\n    annual_actual_total,\n    annual_deviation_total,\n    annual_execution_rate,\n    annual_deviation_rate\nFROM biz_ads_cost_kpi\nORDER BY period_year, period_month",
-          "queryTimeoutSeconds": 30,
-          "maxRows": 2000
-        }
+        "type": "static"
       }
     },
     {
@@ -1123,13 +1063,7 @@
         }
       ],
       "dataSource": {
-        "type": "sql",
-        "sqlConfig": {
-          "databaseId": "{{DATABASE_ID}}",
-          "query": "SELECT\n    period_year,\n    period_month,\n    budget_total,\n    actual_total,\n    deviation_total,\n    execution_rate,\n    deviation_rate,\n    annual_budget_total,\n    annual_actual_total,\n    annual_deviation_total,\n    annual_execution_rate,\n    annual_deviation_rate\nFROM biz_ads_cost_kpi\nORDER BY period_year, period_month",
-          "queryTimeoutSeconds": 30,
-          "maxRows": 2000
-        }
+        "type": "static"
       }
     }
   ]

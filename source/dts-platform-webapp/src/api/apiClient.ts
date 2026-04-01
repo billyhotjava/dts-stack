@@ -155,8 +155,12 @@ axiosInstance.interceptors.response.use(
 		throw new Error(message || t("sys.api.apiRequestFailed"));
 	},
 	async (error: AxiosError<Result>) => {
-		const { response, message } = error || {};
-		const requestUrl = response?.config?.url ?? "";
+		const { response, config: errorConfig, message } = error || {};
+		// For network errors, `response` is undefined but `config` is still on the error object
+		const requestUrl = response?.config?.url ?? errorConfig?.url ?? "";
+		const skipErrorToast = Boolean(
+			(response?.config as any)?._skipErrorToast || (errorConfig as any)?._skipErrorToast
+		);
 		const isLoginRequest =
 			typeof requestUrl === "string" &&
 			(requestUrl.includes("/keycloak/auth/login") || requestUrl.includes("/keycloak/auth/platform/login"));
@@ -177,7 +181,6 @@ axiosInstance.interceptors.response.use(
 
 		const apiBody: any = response?.data || {};
 		const headers = response?.headers || {};
-		const skipErrorToast = Boolean((response?.config as any)?._skipErrorToast);
 		const sessionExpiredHeader =
 			typeof headers?.["x-session-expired"] === "string"
 				? headers["x-session-expired"].toLowerCase() === "true"

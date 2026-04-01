@@ -112,13 +112,7 @@
         "fontSize": 36
       },
       "dataSource": {
-        "type": "sql",
-        "sqlConfig": {
-          "databaseId": "{{DATABASE_ID}}",
-          "query": "SELECT\n    period_year,\n    period_month,\n    total_issue_cnt,\n    new_issue_cnt,\n    open_issue_cnt,\n    tech_zero_cnt,\n    mgmt_zero_cnt,\n    both_zero_cnt,\n    zero_completed_cnt,\n    closed_cnt,\n    closure_rate,\n    zero_completion_rate,\n    no_zero_plan_cnt,\n    cat_design_cnt,\n    cat_process_cnt,\n    cat_management_cnt,\n    cat_component_cnt,\n    cat_operation_cnt,\n    cat_outsource_cnt,\n    cat_software_cnt,\n    cat_other_cnt,\n    has_measure_cnt,\n    measure_coverage_rate\nFROM biz_ads_quality_kpi\nORDER BY period_year, period_month",
-          "queryTimeoutSeconds": 30,
-          "maxRows": 2000
-        }
+        "type": "static"
       }
     },
     {
@@ -144,13 +138,7 @@
         "fontSize": 36
       },
       "dataSource": {
-        "type": "sql",
-        "sqlConfig": {
-          "databaseId": "{{DATABASE_ID}}",
-          "query": "SELECT\n    period_year,\n    period_month,\n    total_issue_cnt,\n    new_issue_cnt,\n    open_issue_cnt,\n    tech_zero_cnt,\n    mgmt_zero_cnt,\n    both_zero_cnt,\n    zero_completed_cnt,\n    closed_cnt,\n    closure_rate,\n    zero_completion_rate,\n    no_zero_plan_cnt,\n    cat_design_cnt,\n    cat_process_cnt,\n    cat_management_cnt,\n    cat_component_cnt,\n    cat_operation_cnt,\n    cat_outsource_cnt,\n    cat_software_cnt,\n    cat_other_cnt,\n    has_measure_cnt,\n    measure_coverage_rate\nFROM biz_ads_quality_kpi\nORDER BY period_year, period_month",
-          "queryTimeoutSeconds": 30,
-          "maxRows": 2000
-        }
+        "type": "static"
       }
     },
     {
@@ -176,13 +164,7 @@
         "fontSize": 36
       },
       "dataSource": {
-        "type": "sql",
-        "sqlConfig": {
-          "databaseId": "{{DATABASE_ID}}",
-          "query": "SELECT\n    period_year,\n    period_month,\n    total_issue_cnt,\n    new_issue_cnt,\n    open_issue_cnt,\n    tech_zero_cnt,\n    mgmt_zero_cnt,\n    both_zero_cnt,\n    zero_completed_cnt,\n    closed_cnt,\n    closure_rate,\n    zero_completion_rate,\n    no_zero_plan_cnt,\n    cat_design_cnt,\n    cat_process_cnt,\n    cat_management_cnt,\n    cat_component_cnt,\n    cat_operation_cnt,\n    cat_outsource_cnt,\n    cat_software_cnt,\n    cat_other_cnt,\n    has_measure_cnt,\n    measure_coverage_rate\nFROM biz_ads_quality_kpi\nORDER BY period_year, period_month",
-          "queryTimeoutSeconds": 30,
-          "maxRows": 2000
-        }
+        "type": "static"
       }
     },
     {
@@ -208,13 +190,7 @@
         "fontSize": 36
       },
       "dataSource": {
-        "type": "sql",
-        "sqlConfig": {
-          "databaseId": "{{DATABASE_ID}}",
-          "query": "SELECT\n    period_year,\n    period_month,\n    total_issue_cnt,\n    new_issue_cnt,\n    open_issue_cnt,\n    tech_zero_cnt,\n    mgmt_zero_cnt,\n    both_zero_cnt,\n    zero_completed_cnt,\n    closed_cnt,\n    closure_rate,\n    zero_completion_rate,\n    no_zero_plan_cnt,\n    cat_design_cnt,\n    cat_process_cnt,\n    cat_management_cnt,\n    cat_component_cnt,\n    cat_operation_cnt,\n    cat_outsource_cnt,\n    cat_software_cnt,\n    cat_other_cnt,\n    has_measure_cnt,\n    measure_coverage_rate\nFROM biz_ads_quality_kpi\nORDER BY period_year, period_month",
-          "queryTimeoutSeconds": 30,
-          "maxRows": 2000
-        }
+        "type": "static"
       }
     },
     {
@@ -289,13 +265,7 @@
         "freezeHeader": true
       },
       "dataSource": {
-        "type": "sql",
-        "sqlConfig": {
-          "databaseId": "{{DATABASE_ID}}",
-          "query": "SELECT\n    issue_id,\n    project_no,\n    issue_name,\n    issue_category,\n    status,\n    closure_status,\n    zero_plan,\n    dept,\n    subsystem,\n    owner,\n    filled_by,\n    remark,\n    is_zero_completed,\n    is_tech_zero,\n    is_mgmt_zero,\n    is_both_zero,\n    is_closed,\n    has_zero_plan,\n    issue_date,\n    last_update_time,\n    issue_year,\n    issue_quarter,\n    issue_month,\n    pending_days,\n    source_table,\n    etl_time\nFROM biz_dwd_quality_issue\nORDER BY issue_date DESC",
-          "queryTimeoutSeconds": 30,
-          "maxRows": 2000
-        }
+        "type": "static"
       }
     },
     {
@@ -348,13 +318,7 @@
         "freezeHeader": true
       },
       "dataSource": {
-        "type": "sql",
-        "sqlConfig": {
-          "databaseId": "{{DATABASE_ID}}",
-          "query": "SELECT\n    period_year,\n    period_month,\n    total_issue_cnt,\n    new_issue_cnt,\n    open_issue_cnt,\n    tech_zero_cnt,\n    mgmt_zero_cnt,\n    both_zero_cnt,\n    zero_completed_cnt,\n    closed_cnt,\n    closure_rate,\n    zero_completion_rate,\n    no_zero_plan_cnt,\n    cat_design_cnt,\n    cat_process_cnt,\n    cat_management_cnt,\n    cat_component_cnt,\n    cat_operation_cnt,\n    cat_outsource_cnt,\n    cat_software_cnt,\n    cat_other_cnt,\n    has_measure_cnt,\n    measure_coverage_rate\nFROM biz_ads_quality_kpi\nORDER BY period_year, period_month",
-          "queryTimeoutSeconds": 30,
-          "maxRows": 2000
-        }
+        "type": "static"
       }
     },
     {
@@ -423,13 +387,7 @@
         "freezeHeader": true
       },
       "dataSource": {
-        "type": "sql",
-        "sqlConfig": {
-          "databaseId": "{{DATABASE_ID}}",
-          "query": "SELECT\n    measure_id,\n    issue_id_approx,\n    project_no,\n    issue_name,\n    measure_content,\n    measure_status,\n    responsible_person,\n    filled_by,\n    deadline,\n    actual_complete_date,\n    last_update_time,\n    source_table,\n    etl_time\nFROM biz_dwd_quality_measure\nORDER BY deadline DESC",
-          "queryTimeoutSeconds": 30,
-          "maxRows": 2000
-        }
+        "type": "static"
       }
     }
   ]

@@ -1,11 +1,11 @@
 import { Link } from "react-router";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { analyticsApi, type CardListItem } from "../api/analyticsApi";
 import { PageHeader } from "@/components/page-header";
 import { EmptyState } from "../components/EmptyState";
 import { ErrorNotice } from "../components/ErrorNotice";
-import { Button, Card, Input, Modal, Space, Spin, Table, Tag, message } from "antd";
-import { PlusOutlined, EyeOutlined, EditOutlined, DeleteOutlined } from "@ant-design/icons";
+import { Button, Card, Input, Modal, Select, Space, Spin, Table, Tag, message } from "antd";
+import { PlusOutlined, EyeOutlined, EditOutlined, DeleteOutlined, UploadOutlined } from "@ant-design/icons";
 import type { ColumnsType } from "antd/es/table";
 import { getEffectiveLocale, t, type Locale } from "../i18n";
 
@@ -30,10 +30,193 @@ const DISPLAY_LABELS: Record<string, string> = {
 	number: "数字", gauge: "仪表", map: "地图", progress: "进度", waterfall: "瀑布",
 };
 
+// ── 批量导入 SQL 查询卡片 ──────────────────────────────────
+
+function parseSqlCardMeta(filename: string, content: string): { name: string; description: string; screen: string } {
+	// 从 SQL 注释头提取中文名称、用途和对应大屏
+	const lines = content.split('\n');
+	let name = filename.replace(/\.sql$/i, '').replace(/^card-/, '');
+	let description = '';
+	let screen = '';
+	for (const line of lines) {
+		const m = line.match(/^--\s*查询卡片[:：]\s*(.+)/);
+		if (m) { name = m[1].trim(); continue; }
+		const d = line.match(/^--\s*用途[:：]\s*(.+)/);
+		if (d) { description = d[1].trim(); continue; }
+		const s = line.match(/^--\s*对应大屏[:：]\s*(.+)/);
+		if (s) { screen = s[1].trim(); continue; }
+	}
+	return { name, description, screen };
+}
+
+function extractPureSql(content: string): string {
+	return content.split('\n').filter(line => !line.startsWith('--')).join('\n').trim();
+}
+
+function BatchImportCardsModal({
+	open, onClose, onSuccess,
+}: {
+	open: boolean; onClose: () => void; onSuccess: () => void;
+}) {
+	const [databases, setDatabases] = useState<Array<{ id: number; name: string }>>([]);
+	const [selectedDb, setSelectedDb] = useState<number | null>(null);
+	const [namePrefix, setNamePrefix] = useState('');
+	const [files, setFiles] = useState<Array<{ name: string; cardName: string; description: string; screen: string; sql: string }>>([]);
+	const [importing, setImporting] = useState(false);
+	const [results, setResults] = useState<Array<{ name: string; status: string }> | null>(null);
+	const fileInputRef = useRef<HTMLInputElement>(null);
+
+	useEffect(() => {
+		if (!open) return;
+		analyticsApi.listDatabases().then((resp: any) => {
+			const dbs = (resp?.data || resp || []).map((d: any) => ({ id: d.id, name: d.name }));
+			setDatabases(dbs);
+			if (dbs.length === 1) setSelectedDb(dbs[0].id);
+		}).catch(() => {});
+	}, [open]);
+
+	const handleFilesSelected = async (fileList: FileList | null) => {
+		if (!fileList) return;
+		const parsed: typeof files = [];
+		for (const file of Array.from(fileList)) {
+			if (!file.name.endsWith('.sql')) continue;
+			const content = await file.text();
+			const meta = parseSqlCardMeta(file.name, content);
+			parsed.push({ name: file.name, cardName: meta.name, description: meta.description, screen: meta.screen, sql: extractPureSql(content) });
+		}
+		parsed.sort((a, b) => a.name.localeCompare(b.name));
+		setFiles(parsed);
+	};
+
+	const handleImport = async () => {
+		if (!selectedDb || files.length === 0) return;
+		setImporting(true);
+		const results: Array<{ name: string; status: string }> = [];
+		for (const file of files) {
+			try {
+				const fullName = namePrefix ? `[${namePrefix}] ${file.cardName}` : file.cardName;
+				await analyticsApi.createCard({
+					name: fullName,
+					description: file.description || null,
+					dataset_query: {
+						database: selectedDb,
+						type: "native",
+						native: { query: file.sql },
+					},
+					display: "table",
+					visualization_settings: {},
+				});
+				results.push({ name: file.cardName, status: 'OK' });
+			} catch (err: any) {
+				results.push({ name: file.cardName, status: err?.message || '失败' });
+			}
+		}
+		setResults(results);
+		setImporting(false);
+		const ok = results.filter(r => r.status === 'OK').length;
+		message.success(`批量导入完成: ${ok}/${results.length} 成功`);
+		onSuccess();
+	};
+
+	const reset = () => {
+		setFiles([]);
+		setResults(null);
+		setSelectedDb(databases.length === 1 ? databases[0].id : null);
+		setNamePrefix('');
+	};
+
+	return (
+		<Modal
+			open={open}
+			title="批量导入查询卡片"
+			width={700}
+			onCancel={() => { reset(); onClose(); }}
+			footer={results ? (
+				<Button type="primary" onClick={() => { reset(); onClose(); }}>关闭</Button>
+			) : (
+				<Space>
+					<Button onClick={() => { reset(); onClose(); }}>取消</Button>
+					<Button type="primary" onClick={handleImport} loading={importing} disabled={!selectedDb || files.length === 0}>
+						导入 {files.length > 0 ? `(${files.length} 个)` : ''}
+					</Button>
+				</Space>
+			)}
+		>
+			{results ? (
+				<Table
+					size="small"
+					dataSource={results}
+					rowKey="name"
+					pagination={false}
+					columns={[
+						{ title: '卡片名称', dataIndex: 'name', key: 'name' },
+						{ title: '状态', dataIndex: 'status', key: 'status', width: 100,
+							render: (s: string) => <Tag color={s === 'OK' ? 'green' : 'red'}>{s}</Tag> },
+					]}
+				/>
+			) : (
+				<Space direction="vertical" className="w-full" size={16}>
+					<div>
+						<div className="text-sm font-medium mb-2">数据源</div>
+						<Select
+							className="w-full"
+							placeholder="选择数据源（查询卡片将从此数据源查询）"
+							value={selectedDb}
+							onChange={setSelectedDb}
+							options={databases.map(d => ({ label: d.name, value: d.id }))}
+						/>
+					</div>
+					<div>
+						<div className="text-sm font-medium mb-2">名称前缀（用于分组）</div>
+						<Input
+							placeholder="如: GPMC项管、专利数仓（卡片名称显示为 [前缀] 卡片名）"
+							value={namePrefix}
+							onChange={(e) => setNamePrefix(e.target.value)}
+							allowClear
+						/>
+					</div>
+					<div>
+						<div className="text-sm font-medium mb-2">SQL 文件</div>
+						<input
+							ref={fileInputRef}
+							type="file"
+							multiple
+							accept=".sql"
+							style={{ display: 'none' }}
+							onChange={(e) => handleFilesSelected(e.target.files)}
+						/>
+						<Button icon={<UploadOutlined />} onClick={() => fileInputRef.current?.click()}>
+							选择 SQL 文件（可多选）
+						</Button>
+					</div>
+					{files.length > 0 && (
+						<Table
+							size="small"
+							dataSource={files}
+							rowKey="name"
+							pagination={false}
+							scroll={{ y: 300 }}
+							columns={[
+								{ title: '文件名', dataIndex: 'name', key: 'name', width: 200, ellipsis: true },
+								{ title: '卡片名称', dataIndex: 'cardName', key: 'cardName', width: 180, ellipsis: true },
+								{ title: '对应大屏', dataIndex: 'screen', key: 'screen', width: 120, ellipsis: true },
+								{ title: '用途', dataIndex: 'description', key: 'description', ellipsis: true },
+							]}
+						/>
+					)}
+				</Space>
+			)}
+		</Modal>
+	);
+}
+
+// ── CardsPage ──────────────────────────────────────────────
+
 export default function CardsPage() {
 	const locale: Locale = useMemo(() => getEffectiveLocale(), []);
 	const [state, setState] = useState<LoadState<CardListItem[]>>({ state: "loading" });
 	const [searchQuery, setSearchQuery] = useState("");
+	const [batchImportOpen, setBatchImportOpen] = useState(false);
 
 	const loadCards = useCallback(() => {
 		setState({ state: "loading" });
@@ -134,12 +317,22 @@ export default function CardsPage() {
 			<PageHeader
 				title={t(locale, "questions.title")}
 				actions={
-					<Link to="/bi/questions/new">
-						<Button type="primary" icon={<PlusOutlined />}>
-							{t(locale, "questions.new")}
+					<Space>
+						<Button icon={<UploadOutlined />} onClick={() => setBatchImportOpen(true)}>
+							批量导入 SQL
 						</Button>
-					</Link>
+						<Link to="/bi/questions/new">
+							<Button type="primary" icon={<PlusOutlined />}>
+								{t(locale, "questions.new")}
+							</Button>
+						</Link>
+					</Space>
 				}
+			/>
+			<BatchImportCardsModal
+				open={batchImportOpen}
+				onClose={() => setBatchImportOpen(false)}
+				onSuccess={loadCards}
 			/>
 
 			{state.state === "loading" && (

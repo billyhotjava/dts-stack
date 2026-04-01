@@ -1,10 +1,24 @@
 {% macro ensure_ods_tables() %}
-{# 重建 ODS 表 — 先 DROP 再 CREATE，确保字段与模型一致 #}
+{#
+  ODS 表初始化宏
+  - 默认行为: CREATE TABLE IF NOT EXISTS（保留已有数据）
+  - 传入 force_rebuild=true 时: DROP + CREATE（清空重建）
+
+  用法:
+    on-run-start:
+      - "{{ ensure_ods_tables() }}"                    # 安全模式，不丢数据
+    手动重建:
+      dbt run-operation ensure_ods_tables --args '{force_rebuild: true}'
+#}
+
+{% set force = var('force_rebuild', false) %}
 
 {% set ddl %}
 
+{% if force %}
 DROP TABLE IF EXISTS ods_project_subject_domain CASCADE;
-CREATE TABLE ods_project_subject_domain (
+{% endif %}
+CREATE TABLE IF NOT EXISTS ods_project_subject_domain (
     id serial PRIMARY KEY, project_no varchar(500), subsystem varchar(500),
     node_task varchar(500), plan_date varchar(500), plan_week varchar(500),
     deliverable varchar(500), node_type varchar(500), owner varchar(500),
@@ -19,8 +33,10 @@ CREATE TABLE ods_project_subject_domain (
     source_system varchar(200) DEFAULT 'excel', import_time timestamp DEFAULT now()
 );
 
+{% if force %}
 DROP TABLE IF EXISTS ods_quality_issue CASCADE;
-CREATE TABLE ods_quality_issue (
+{% endif %}
+CREATE TABLE IF NOT EXISTS ods_quality_issue (
     id serial PRIMARY KEY, project_no varchar(500), issue_name varchar(2000),
     issue_category varchar(500), issue_date varchar(500), status varchar(500),
     closure_status varchar(500), zero_plan varchar(500), dept varchar(500),
@@ -29,8 +45,10 @@ CREATE TABLE ods_quality_issue (
     source_system varchar(200) DEFAULT 'excel', import_time timestamp DEFAULT now()
 );
 
+{% if force %}
 DROP TABLE IF EXISTS ods_quality_measure CASCADE;
-CREATE TABLE ods_quality_measure (
+{% endif %}
+CREATE TABLE IF NOT EXISTS ods_quality_measure (
     id serial PRIMARY KEY, project_no varchar(500), issue_name varchar(2000),
     measure_content varchar(2000), measure_status varchar(500),
     responsible_person varchar(500), deadline varchar(500),
@@ -39,8 +57,10 @@ CREATE TABLE ods_quality_measure (
     source_system varchar(200) DEFAULT 'excel', import_time timestamp DEFAULT now()
 );
 
+{% if force %}
 DROP TABLE IF EXISTS ods_tech_state CASCADE;
-CREATE TABLE ods_tech_state (
+{% endif %}
+CREATE TABLE IF NOT EXISTS ods_tech_state (
     id serial PRIMARY KEY, project_no varchar(500), tech_state_name varchar(2000),
     change_item varchar(2000), change_category varchar(500),
     change_submit_time varchar(500), file_signature_status varchar(500),
@@ -50,8 +70,10 @@ CREATE TABLE ods_tech_state (
     source_system varchar(200) DEFAULT 'excel', import_time timestamp DEFAULT now()
 );
 
+{% if force %}
 DROP TABLE IF EXISTS ods_tech_state_measure CASCADE;
-CREATE TABLE ods_tech_state_measure (
+{% endif %}
+CREATE TABLE IF NOT EXISTS ods_tech_state_measure (
     id serial PRIMARY KEY, project_no varchar(500), tech_state_name varchar(2000),
     measure_content varchar(2000), measure_status varchar(500),
     responsible_person varchar(500), deadline varchar(500),
@@ -60,8 +82,10 @@ CREATE TABLE ods_tech_state_measure (
     source_system varchar(200) DEFAULT 'excel', import_time timestamp DEFAULT now()
 );
 
+{% if force %}
 DROP TABLE IF EXISTS ods_risk_info CASCADE;
-CREATE TABLE ods_risk_info (
+{% endif %}
+CREATE TABLE IF NOT EXISTS ods_risk_info (
     id serial PRIMARY KEY, project_no varchar(500), risk_name varchar(2000),
     risk_level varchar(500), risk_submit_time varchar(500),
     risk_content varchar(2000), impact_scope varchar(500),
@@ -71,8 +95,10 @@ CREATE TABLE ods_risk_info (
     source_system varchar(200) DEFAULT 'excel', import_time timestamp DEFAULT now()
 );
 
+{% if force %}
 DROP TABLE IF EXISTS ods_risk_measure CASCADE;
-CREATE TABLE ods_risk_measure (
+{% endif %}
+CREATE TABLE IF NOT EXISTS ods_risk_measure (
     id serial PRIMARY KEY, project_no varchar(500), risk_name varchar(2000),
     measure_content varchar(2000), measure_status varchar(500),
     responsible_person varchar(500), deadline varchar(500),
@@ -81,8 +107,10 @@ CREATE TABLE ods_risk_measure (
     source_system varchar(200) DEFAULT 'excel', import_time timestamp DEFAULT now()
 );
 
+{% if force %}
 DROP TABLE IF EXISTS ods_cost_accounting CASCADE;
-CREATE TABLE ods_cost_accounting (
+{% endif %}
+CREATE TABLE IF NOT EXISTS ods_cost_accounting (
     id serial PRIMARY KEY, project_no varchar(500), project_name varchar(500),
     accounting_period varchar(500), budget_amount varchar(500),
     actual_amount varchar(500), dept varchar(500), cost_category varchar(500),
@@ -93,6 +121,10 @@ CREATE TABLE ods_cost_accounting (
 {% endset %}
 
 {% do run_query(ddl) %}
-{% do log("ODS tables rebuilt (8 tables dropped + created)", info=true) %}
+{% if force %}
+{% do log("ODS tables force-rebuilt (8 tables dropped + created)", info=true) %}
+{% else %}
+{% do log("ODS tables ensured (8 tables, existing data preserved)", info=true) %}
+{% endif %}
 
 {% endmacro %}

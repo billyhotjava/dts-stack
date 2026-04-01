@@ -18,7 +18,11 @@ const getMenuList = async () => {
 };
 
 const getMenuTree = async () => {
-  const data = await apiClient.get<MenuTree[]>({ url: MenuApi.MenuTree });
+  // _skipErrorToast: menu fetch is called on every token refresh (LoginAuthGuard
+  // re-fires when accessToken changes). On flaky networks (e.g. Win7 + Chrome 95)
+  // this creates high-frequency "网络异常" toast storms. The caller already handles
+  // the error silently via .catch(() => {}).
+  const data = await apiClient.get<MenuTree[]>({ url: MenuApi.MenuTree, _skipErrorToast: true } as any);
   const treeRaw = Array.isArray(data) && data.length > 0 ? normalizeMenuTreePaths(data as any) : [];
   useMenuStore.getState().setMenus(treeRaw as any);
   try {

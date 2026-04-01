@@ -709,13 +709,7 @@
         "backgroundColor": "#ffffff"
       },
       "dataSource": {
-        "type": "sql",
-        "sqlConfig": {
-          "databaseId": "{{DATABASE_ID}}",
-          "query": "SELECT\n    plan_year,\n    plan_quarter,\n    plan_month,\n    total_cnt,\n    pending_normal_cnt,\n    due_cnt,\n    outside_completed_cnt,\n    incomplete_cnt,\n    on_time_cnt,\n    overdue_completed_cnt,\n    completed_total_cnt,\n    completion_rate,\n    on_time_rate,\n    overdue_completion_rate,\n    abnormal_pending_cnt,\n    overdue_incomplete_unchanged_cnt,\n    overdue_incomplete_changed_cnt\nFROM biz_ads_project_kpi_overview\nORDER BY plan_year, plan_month",
-          "queryTimeoutSeconds": 30,
-          "maxRows": 2000
-        }
+        "type": "static"
       }
     },
     {
@@ -741,13 +735,7 @@
         "backgroundColor": "#ffffff"
       },
       "dataSource": {
-        "type": "sql",
-        "sqlConfig": {
-          "databaseId": "{{DATABASE_ID}}",
-          "query": "SELECT\n    plan_year,\n    plan_quarter,\n    plan_month,\n    milestone_on_time_cnt,\n    milestone_overdue_completed_cnt,\n    milestone_pending_cnt,\n    milestone_incomplete_cnt,\n    milestone_completion_rate,\n    high_risk_cnt,\n    mid_risk_cnt,\n    milestone_total_cnt,\n    major_total_cnt,\n    important_total_cnt\nFROM biz_ads_project_milestone_kpi\nORDER BY plan_year, plan_month",
-          "queryTimeoutSeconds": 30,
-          "maxRows": 2000
-        }
+        "type": "static"
       }
     },
     {
@@ -773,13 +761,7 @@
         "backgroundColor": "#ffffff"
       },
       "dataSource": {
-        "type": "sql",
-        "sqlConfig": {
-          "databaseId": "{{DATABASE_ID}}",
-          "query": "SELECT\n    plan_year,\n    plan_quarter,\n    plan_month,\n    total_cnt,\n    pending_normal_cnt,\n    due_cnt,\n    outside_completed_cnt,\n    incomplete_cnt,\n    on_time_cnt,\n    overdue_completed_cnt,\n    completed_total_cnt,\n    completion_rate,\n    on_time_rate,\n    overdue_completion_rate,\n    abnormal_pending_cnt,\n    overdue_incomplete_unchanged_cnt,\n    overdue_incomplete_changed_cnt\nFROM biz_ads_project_kpi_overview\nORDER BY plan_year, plan_month",
-          "queryTimeoutSeconds": 30,
-          "maxRows": 2000
-        }
+        "type": "static"
       }
     },
     {
@@ -812,13 +794,7 @@
         }
       ],
       "dataSource": {
-        "type": "sql",
-        "sqlConfig": {
-          "databaseId": "{{DATABASE_ID}}",
-          "query": "SELECT\n    plan_year,\n    plan_quarter,\n    plan_month,\n    total_cnt,\n    pending_normal_cnt,\n    due_cnt,\n    outside_completed_cnt,\n    incomplete_cnt,\n    on_time_cnt,\n    overdue_completed_cnt,\n    completed_total_cnt,\n    completion_rate,\n    on_time_rate,\n    overdue_completion_rate,\n    abnormal_pending_cnt,\n    overdue_incomplete_unchanged_cnt,\n    overdue_incomplete_changed_cnt\nFROM biz_ads_project_kpi_overview\nORDER BY plan_year, plan_month",
-          "queryTimeoutSeconds": 30,
-          "maxRows": 2000
-        }
+        "type": "static"
       }
     },
     {
@@ -844,13 +820,7 @@
         "backgroundColor": "#ffffff"
       },
       "dataSource": {
-        "type": "sql",
-        "sqlConfig": {
-          "databaseId": "{{DATABASE_ID}}",
-          "query": "SELECT\n    plan_year,\n    plan_quarter,\n    plan_month,\n    total_cnt,\n    pending_normal_cnt,\n    due_cnt,\n    outside_completed_cnt,\n    incomplete_cnt,\n    on_time_cnt,\n    overdue_completed_cnt,\n    completed_total_cnt,\n    completion_rate,\n    on_time_rate,\n    overdue_completion_rate,\n    abnormal_pending_cnt,\n    overdue_incomplete_unchanged_cnt,\n    overdue_incomplete_changed_cnt\nFROM biz_ads_project_kpi_overview\nORDER BY plan_year, plan_month",
-          "queryTimeoutSeconds": 30,
-          "maxRows": 2000
-        }
+        "type": "static"
       }
     },
     {
@@ -876,13 +846,7 @@
         "backgroundColor": "#ffffff"
       },
       "dataSource": {
-        "type": "sql",
-        "sqlConfig": {
-          "databaseId": "{{DATABASE_ID}}",
-          "query": "SELECT\n    plan_year,\n    plan_quarter,\n    plan_month,\n    incomplete_high_risk_cnt,\n    incomplete_mid_risk_cnt,\n    incomplete_milestone_cnt,\n    incomplete_major_cnt,\n    incomplete_important_cnt\nFROM biz_ads_project_incomplete_risk\nORDER BY plan_year, plan_month",
-          "queryTimeoutSeconds": 30,
-          "maxRows": 2000
-        }
+        "type": "static"
       }
     },
     {
@@ -908,13 +872,7 @@
         "backgroundColor": "#ffffff"
       },
       "dataSource": {
-        "type": "sql",
-        "sqlConfig": {
-          "databaseId": "{{DATABASE_ID}}",
-          "query": "SELECT\n    plan_year,\n    plan_quarter,\n    plan_month,\n    total_cnt,\n    pending_normal_cnt,\n    due_cnt,\n    outside_completed_cnt,\n    incomplete_cnt,\n    on_time_cnt,\n    overdue_completed_cnt,\n    completed_total_cnt,\n    completion_rate,\n    on_time_rate,\n    overdue_completion_rate,\n    abnormal_pending_cnt,\n    overdue_incomplete_unchanged_cnt,\n    overdue_incomplete_changed_cnt\nFROM biz_ads_project_kpi_overview\nORDER BY plan_year, plan_month",
-          "queryTimeoutSeconds": 30,
-          "maxRows": 2000
-        }
+        "type": "static"
       }
     },
     {
@@ -1097,13 +1055,7 @@
         }
       ],
       "dataSource": {
-        "type": "sql",
-        "sqlConfig": {
-          "databaseId": "{{DATABASE_ID}}",
-          "query": "SELECT\n    snapshot_level,\n    entity_id,\n    parent_id,\n    entity_name,\n    major_project_id,\n    major_project_name,\n    subproject_id,\n    subproject_name,\n    total_nodes,\n    completed_nodes,\n    overdue_open_nodes,\n    high_risk_nodes,\n    avg_health_score,\n    plan_start_date,\n    plan_end_date,\n    actual_end_date,\n    progress_rate,\n    sort_order,\n    node_id,\n    node_task,\n    node_type,\n    risk_level,\n    delay_days\nFROM biz_ads_major_project_tree_snapshot\nORDER BY major_project_id, sort_order",
-          "queryTimeoutSeconds": 30,
-          "maxRows": 2000
-        }
+        "type": "static"
       }
     },
     {
@@ -1145,13 +1097,7 @@
         ]
       },
       "dataSource": {
-        "type": "sql",
-        "sqlConfig": {
-          "databaseId": "{{DATABASE_ID}}",
-          "query": "SELECT\n    plan_year,\n    plan_quarter,\n    plan_month,\n    total_cnt,\n    pending_normal_cnt,\n    due_cnt,\n    outside_completed_cnt,\n    incomplete_cnt,\n    on_time_cnt,\n    overdue_completed_cnt,\n    completed_total_cnt,\n    completion_rate,\n    on_time_rate,\n    overdue_completion_rate,\n    abnormal_pending_cnt,\n    overdue_incomplete_unchanged_cnt,\n    overdue_incomplete_changed_cnt\nFROM biz_ads_project_kpi_overview\nORDER BY plan_year, plan_month",
-          "queryTimeoutSeconds": 30,
-          "maxRows": 2000
-        }
+        "type": "static"
       }
     },
     {
@@ -1210,13 +1156,7 @@
         }
       ],
       "dataSource": {
-        "type": "sql",
-        "sqlConfig": {
-          "databaseId": "{{DATABASE_ID}}",
-          "query": "SELECT\n    plan_year,\n    plan_quarter,\n    plan_month,\n    total_cnt,\n    pending_normal_cnt,\n    due_cnt,\n    outside_completed_cnt,\n    incomplete_cnt,\n    on_time_cnt,\n    overdue_completed_cnt,\n    completed_total_cnt,\n    completion_rate,\n    on_time_rate,\n    overdue_completion_rate,\n    abnormal_pending_cnt,\n    overdue_incomplete_unchanged_cnt,\n    overdue_incomplete_changed_cnt\nFROM biz_ads_project_kpi_overview\nORDER BY plan_year, plan_month",
-          "queryTimeoutSeconds": 30,
-          "maxRows": 2000
-        }
+        "type": "static"
       }
     },
     {
@@ -1260,13 +1200,7 @@
         }
       ],
       "dataSource": {
-        "type": "sql",
-        "sqlConfig": {
-          "databaseId": "{{DATABASE_ID}}",
-          "query": "SELECT\n    major_project_id,\n    major_project_name,\n    dept,\n    week_start_date,\n    plan_iso_week,\n    delay_reason_category,\n    delay_reason_label,\n    delayed_node_count,\n    high_risk_node_count,\n    delayed_subproject_count\nFROM biz_ads_delay_reason_trend\nORDER BY plan_iso_week DESC, delayed_node_count DESC",
-          "queryTimeoutSeconds": 30,
-          "maxRows": 2000
-        }
+        "type": "static"
       }
     },
     {
@@ -1311,13 +1245,7 @@
         }
       ],
       "dataSource": {
-        "type": "sql",
-        "sqlConfig": {
-          "databaseId": "{{DATABASE_ID}}",
-          "query": "SELECT\n    plan_year,\n    plan_quarter,\n    plan_month,\n    incomplete_high_risk_cnt,\n    incomplete_mid_risk_cnt,\n    incomplete_milestone_cnt,\n    incomplete_major_cnt,\n    incomplete_important_cnt\nFROM biz_ads_project_incomplete_risk\nORDER BY plan_year, plan_month",
-          "queryTimeoutSeconds": 30,
-          "maxRows": 2000
-        }
+        "type": "static"
       }
     }
   ]

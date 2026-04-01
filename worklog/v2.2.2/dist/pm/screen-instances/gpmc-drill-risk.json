@@ -112,13 +112,7 @@
         "fontSize": 36
       },
       "dataSource": {
-        "type": "sql",
-        "sqlConfig": {
-          "databaseId": "{{DATABASE_ID}}",
-          "query": "SELECT\n    period_year,\n    period_month,\n    total_risk_cnt,\n    high_risk_cnt,\n    mid_risk_cnt,\n    low_risk_cnt,\n    closed_cnt,\n    open_cnt,\n    closure_rate,\n    high_risk_project_cnt,\n    has_measure_cnt,\n    measure_coverage_rate,\n    avg_pending_days\nFROM biz_ads_risk_kpi\nORDER BY period_year, period_month",
-          "queryTimeoutSeconds": 30,
-          "maxRows": 2000
-        }
+        "type": "static"
       }
     },
     {
@@ -144,13 +138,7 @@
         "fontSize": 36
       },
       "dataSource": {
-        "type": "sql",
-        "sqlConfig": {
-          "databaseId": "{{DATABASE_ID}}",
-          "query": "SELECT\n    period_year,\n    period_month,\n    total_risk_cnt,\n    high_risk_cnt,\n    mid_risk_cnt,\n    low_risk_cnt,\n    closed_cnt,\n    open_cnt,\n    closure_rate,\n    high_risk_project_cnt,\n    has_measure_cnt,\n    measure_coverage_rate,\n    avg_pending_days\nFROM biz_ads_risk_kpi\nORDER BY period_year, period_month",
-          "queryTimeoutSeconds": 30,
-          "maxRows": 2000
-        }
+        "type": "static"
       }
     },
     {
@@ -176,13 +164,7 @@
         "fontSize": 36
       },
       "dataSource": {
-        "type": "sql",
-        "sqlConfig": {
-          "databaseId": "{{DATABASE_ID}}",
-          "query": "SELECT\n    period_year,\n    period_month,\n    total_risk_cnt,\n    high_risk_cnt,\n    mid_risk_cnt,\n    low_risk_cnt,\n    closed_cnt,\n    open_cnt,\n    closure_rate,\n    high_risk_project_cnt,\n    has_measure_cnt,\n    measure_coverage_rate,\n    avg_pending_days\nFROM biz_ads_risk_kpi\nORDER BY period_year, period_month",
-          "queryTimeoutSeconds": 30,
-          "maxRows": 2000
-        }
+        "type": "static"
       }
     },
     {
@@ -208,13 +190,7 @@
         "fontSize": 36
       },
       "dataSource": {
-        "type": "sql",
-        "sqlConfig": {
-          "databaseId": "{{DATABASE_ID}}",
-          "query": "SELECT\n    period_year,\n    period_month,\n    total_risk_cnt,\n    high_risk_cnt,\n    mid_risk_cnt,\n    low_risk_cnt,\n    closed_cnt,\n    open_cnt,\n    closure_rate,\n    high_risk_project_cnt,\n    has_measure_cnt,\n    measure_coverage_rate,\n    avg_pending_days\nFROM biz_ads_risk_kpi\nORDER BY period_year, period_month",
-          "queryTimeoutSeconds": 30,
-          "maxRows": 2000
-        }
+        "type": "static"
       }
     },
     {
@@ -289,13 +265,7 @@
         "freezeHeader": true
       },
       "dataSource": {
-        "type": "sql",
-        "sqlConfig": {
-          "databaseId": "{{DATABASE_ID}}",
-          "query": "SELECT\n    risk_id,\n    project_no,\n    risk_name,\n    risk_level,\n    risk_content,\n    impact_scope,\n    closure_status,\n    response_measure,\n    dept,\n    subsystem,\n    owner,\n    filled_by,\n    remark,\n    risk_rank,\n    is_closed,\n    risk_submit_date,\n    last_update_time,\n    submit_year,\n    submit_quarter,\n    submit_month,\n    pending_days,\n    source_table,\n    etl_time\nFROM biz_dwd_risk_info\nORDER BY risk_submit_date DESC NULLS LAST, risk_rank DESC",
-          "queryTimeoutSeconds": 30,
-          "maxRows": 2000
-        }
+        "type": "static"
       }
     },
     {
@@ -356,13 +326,7 @@
         "freezeHeader": true
       },
       "dataSource": {
-        "type": "sql",
-        "sqlConfig": {
-          "databaseId": "{{DATABASE_ID}}",
-          "query": "SELECT\n    period_year,\n    period_quarter,\n    period_month,\n    project_no,\n    dept,\n    total_risk_cnt,\n    high_risk_cnt,\n    mid_risk_cnt,\n    low_risk_cnt,\n    closed_cnt,\n    open_cnt,\n    closure_rate,\n    has_measure_cnt,\n    measure_coverage_rate,\n    avg_pending_days\nFROM biz_dws_risk_period_summary\nORDER BY period_year, period_month, project_no",
-          "queryTimeoutSeconds": 30,
-          "maxRows": 2000
-        }
+        "type": "static"
       }
     },
     {
@@ -431,13 +395,7 @@
         "freezeHeader": true
       },
       "dataSource": {
-        "type": "sql",
-        "sqlConfig": {
-          "databaseId": "{{DATABASE_ID}}",
-          "query": "SELECT\n    measure_id,\n    risk_id_approx,\n    project_no,\n    risk_name,\n    measure_content,\n    measure_status,\n    responsible_person,\n    closure_deliverable,\n    filled_by,\n    deadline,\n    actual_complete_date,\n    last_update_time,\n    source_table,\n    etl_time\nFROM biz_dwd_risk_measure\nORDER BY deadline DESC NULLS LAST",
-          "queryTimeoutSeconds": 30,
-          "maxRows": 2000
-        }
+        "type": "static"
       }
     }
   ]

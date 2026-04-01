@@ -112,13 +112,7 @@
         "fontSize": 36
       },
       "dataSource": {
-        "type": "sql",
-        "sqlConfig": {
-          "databaseId": "{{DATABASE_ID}}",
-          "query": "SELECT\n    period_year,\n    period_month,\n    total_change_cnt,\n    cat_i_cnt,\n    cat_ii_cnt,\n    cat_iii_cnt,\n    signed_cnt,\n    reviewing_cnt,\n    unsigned_cnt,\n    signature_completion_rate,\n    closed_cnt,\n    open_cnt,\n    reform_done_cnt,\n    reform_na_cnt,\n    reform_pending_cnt,\n    file_unsigned_i_ii_cnt,\n    file_unsigned_iii_cnt,\n    file_signed_cnt,\n    change_unsigned_i_cnt,\n    change_unsigned_ii_cnt,\n    change_unsigned_iii_cnt,\n    change_signed_cnt,\n    unreformed_i_ii_cnt,\n    reformed_i_ii_cnt,\n    reform_na_iii_cnt,\n    has_measure_cnt,\n    measure_coverage_rate\nFROM biz_ads_tech_state_kpi\nORDER BY period_year, period_month",
-          "queryTimeoutSeconds": 30,
-          "maxRows": 2000
-        }
+        "type": "static"
       }
     },
     {
@@ -144,13 +138,7 @@
         "fontSize": 36
       },
       "dataSource": {
-        "type": "sql",
-        "sqlConfig": {
-          "databaseId": "{{DATABASE_ID}}",
-          "query": "SELECT\n    period_year,\n    period_month,\n    total_change_cnt,\n    cat_i_cnt,\n    cat_ii_cnt,\n    cat_iii_cnt,\n    signed_cnt,\n    reviewing_cnt,\n    unsigned_cnt,\n    signature_completion_rate,\n    closed_cnt,\n    open_cnt,\n    reform_done_cnt,\n    reform_na_cnt,\n    reform_pending_cnt,\n    file_unsigned_i_ii_cnt,\n    file_unsigned_iii_cnt,\n    file_signed_cnt,\n    change_unsigned_i_cnt,\n    change_unsigned_ii_cnt,\n    change_unsigned_iii_cnt,\n    change_signed_cnt,\n    unreformed_i_ii_cnt,\n    reformed_i_ii_cnt,\n    reform_na_iii_cnt,\n    has_measure_cnt,\n    measure_coverage_rate\nFROM biz_ads_tech_state_kpi\nORDER BY period_year, period_month",
-          "queryTimeoutSeconds": 30,
-          "maxRows": 2000
-        }
+        "type": "static"
       }
     },
     {
@@ -176,13 +164,7 @@
         "fontSize": 36
       },
       "dataSource": {
-        "type": "sql",
-        "sqlConfig": {
-          "databaseId": "{{DATABASE_ID}}",
-          "query": "SELECT\n    period_year,\n    period_month,\n    total_change_cnt,\n    cat_i_cnt,\n    cat_ii_cnt,\n    cat_iii_cnt,\n    signed_cnt,\n    reviewing_cnt,\n    unsigned_cnt,\n    signature_completion_rate,\n    closed_cnt,\n    open_cnt,\n    reform_done_cnt,\n    reform_na_cnt,\n    reform_pending_cnt,\n    file_unsigned_i_ii_cnt,\n    file_unsigned_iii_cnt,\n    file_signed_cnt,\n    change_unsigned_i_cnt,\n    change_unsigned_ii_cnt,\n    change_unsigned_iii_cnt,\n    change_signed_cnt,\n    unreformed_i_ii_cnt,\n    reformed_i_ii_cnt,\n    reform_na_iii_cnt,\n    has_measure_cnt,\n    measure_coverage_rate\nFROM biz_ads_tech_state_kpi\nORDER BY period_year, period_month",
-          "queryTimeoutSeconds": 30,
-          "maxRows": 2000
-        }
+        "type": "static"
       }
     },
     {
@@ -208,13 +190,7 @@
         "fontSize": 36
       },
       "dataSource": {
-        "type": "sql",
-        "sqlConfig": {
-          "databaseId": "{{DATABASE_ID}}",
-          "query": "SELECT\n    period_year,\n    period_month,\n    total_change_cnt,\n    cat_i_cnt,\n    cat_ii_cnt,\n    cat_iii_cnt,\n    signed_cnt,\n    reviewing_cnt,\n    unsigned_cnt,\n    signature_completion_rate,\n    closed_cnt,\n    open_cnt,\n    reform_done_cnt,\n    reform_na_cnt,\n    reform_pending_cnt,\n    file_unsigned_i_ii_cnt,\n    file_unsigned_iii_cnt,\n    file_signed_cnt,\n    change_unsigned_i_cnt,\n    change_unsigned_ii_cnt,\n    change_unsigned_iii_cnt,\n    change_signed_cnt,\n    unreformed_i_ii_cnt,\n    reformed_i_ii_cnt,\n    reform_na_iii_cnt,\n    has_measure_cnt,\n    measure_coverage_rate\nFROM biz_ads_tech_state_kpi\nORDER BY period_year, period_month",
-          "queryTimeoutSeconds": 30,
-          "maxRows": 2000
-        }
+        "type": "static"
       }
     },
     {
@@ -277,13 +253,7 @@
         "freezeHeader": true
       },
       "dataSource": {
-        "type": "sql",
-        "sqlConfig": {
-          "databaseId": "{{DATABASE_ID}}",
-          "query": "SELECT\n    tech_state_id,\n    project_no,\n    tech_state_name,\n    change_item,\n    file_signature_status,\n    completion_signature,\n    reform_status,\n    closure_status,\n    dept,\n    subsystem,\n    filled_by,\n    remark,\n    change_category,\n    change_severity_rank,\n    is_submitted,\n    is_reviewed,\n    is_signed,\n    is_closed,\n    is_signature_completed,\n    is_reform_done,\n    is_reform_not_applicable,\n    change_submit_date,\n    last_update_time,\n    submit_year,\n    submit_quarter,\n    submit_month,\n    source_table,\n    etl_time\nFROM biz_dwd_tech_state\nORDER BY change_submit_date DESC NULLS LAST",
-          "queryTimeoutSeconds": 30,
-          "maxRows": 2000
-        }
+        "type": "static"
       }
     },
     {
@@ -344,13 +314,7 @@
         "freezeHeader": true
       },
       "dataSource": {
-        "type": "sql",
-        "sqlConfig": {
-          "databaseId": "{{DATABASE_ID}}",
-          "query": "SELECT\n    period_year,\n    period_month,\n    total_change_cnt,\n    cat_i_cnt,\n    cat_ii_cnt,\n    cat_iii_cnt,\n    signed_cnt,\n    reviewing_cnt,\n    unsigned_cnt,\n    signature_completion_rate,\n    closed_cnt,\n    open_cnt,\n    reform_done_cnt,\n    reform_na_cnt,\n    reform_pending_cnt,\n    file_unsigned_i_ii_cnt,\n    file_unsigned_iii_cnt,\n    file_signed_cnt,\n    change_unsigned_i_cnt,\n    change_unsigned_ii_cnt,\n    change_unsigned_iii_cnt,\n    change_signed_cnt,\n    unreformed_i_ii_cnt,\n    reformed_i_ii_cnt,\n    reform_na_iii_cnt,\n    has_measure_cnt,\n    measure_coverage_rate\nFROM biz_ads_tech_state_kpi\nORDER BY period_year, period_month",
-          "queryTimeoutSeconds": 30,
-          "maxRows": 2000
-        }
+        "type": "static"
       }
     },
     {
@@ -413,13 +377,7 @@
         "freezeHeader": true
       },
       "dataSource": {
-        "type": "sql",
-        "sqlConfig": {
-          "databaseId": "{{DATABASE_ID}}",
-          "query": "SELECT\n    measure_id,\n    tech_state_id_approx,\n    project_no,\n    tech_state_name,\n    measure_content,\n    measure_status,\n    responsible_person,\n    filled_by,\n    deadline,\n    actual_complete_date,\n    last_update_time,\n    source_table,\n    etl_time\nFROM biz_dwd_tech_state_measure\nORDER BY deadline DESC NULLS LAST",
-          "queryTimeoutSeconds": 30,
-          "maxRows": 2000
-        }
+        "type": "static"
       }
     }
   ]
