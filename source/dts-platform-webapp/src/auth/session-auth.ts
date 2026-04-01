@@ -119,6 +119,28 @@ function readCrossTabTokens(usedRefreshToken: string): RefreshResult {
 }
 
 /**
+ * Wait for another tab to complete its refresh and broadcast the result.
+ * Checks localStorage immediately, then retries every 300ms up to maxWaitMs.
+ * This closes the race window where our 401 arrives before the winning tab
+ * has finished its successful refresh and written to CROSS_TAB_REFRESH_KEY.
+ */
+async function waitForCrossTabRecovery(usedRefreshToken: string, maxWaitMs: number): Promise<RefreshResult> {
+	// Check immediately first
+	const immediate = readCrossTabTokens(usedRefreshToken);
+	if (immediate) return immediate;
+
+	// Retry with short intervals
+	const interval = 300;
+	const maxRetries = Math.ceil(maxWaitMs / interval);
+	for (let i = 0; i < maxRetries; i++) {
+		await new Promise((resolve) => setTimeout(resolve, interval));
+		const result = readCrossTabTokens(usedRefreshToken);
+		if (result) return result;
+	}
+	return null;
+}
+
+/**
  * 刷新平台 access token。
  *
  * - 如果已有一个 refresh 请求在飞，所有后续调用者复用同一个 Promise
@@ -161,26 +183,26 @@ export async function refreshAccessToken(): Promise<RefreshResult> {
 			});
 			if (!resp.ok) {
 				// Cross-tab race recovery: our request failed (the refresh token was already
-				// consumed by another tab). Read directly from localStorage — NOT from Zustand
-				// in-memory state — because the `storage` event that syncs Zustand is async
-				// and hasn't fired yet. localStorage writes are synchronously visible across tabs.
-				const crossTabResult = readCrossTabTokens(actualRefreshToken);
-				if (crossTabResult) {
-					console.debug(LOG_PREFIX, 'refresh: failed locally but another tab refreshed — using cross-tab tokens from localStorage');
+				// consumed by another tab). The winning tab writes new tokens to localStorage
+				// (CROSS_TAB_REFRESH_KEY) — but it might still be in-flight when we get our
+				// 401 back (401 is faster than a successful refresh). So we check immediately,
+				// then wait up to 2s with retries to give the winning tab time to finish.
+				const recovered = await waitForCrossTabRecovery(actualRefreshToken, 2000);
+				if (recovered) {
+					console.debug(LOG_PREFIX, 'refresh: failed locally but another tab refreshed — recovered from localStorage');
 					_refreshFailedAt = 0;
-					// Update Zustand in-memory state so callers and SessionManager see the new tokens
 					const existing = userStore.getState().userToken;
 					userStore.getState().actions.setUserToken({
-						accessToken: crossTabResult.accessToken,
-						refreshToken: crossTabResult.refreshToken,
-						adminAccessToken: crossTabResult.adminAccessToken || existing?.adminAccessToken,
-						adminRefreshToken: crossTabResult.adminRefreshToken || existing?.adminRefreshToken,
-						adminAccessTokenExpiresAt: crossTabResult.adminAccessTokenExpiresAt || existing?.adminAccessTokenExpiresAt,
-						adminRefreshTokenExpiresAt: crossTabResult.adminRefreshTokenExpiresAt || existing?.adminRefreshTokenExpiresAt,
+						accessToken: recovered.accessToken,
+						refreshToken: recovered.refreshToken,
+						adminAccessToken: recovered.adminAccessToken || existing?.adminAccessToken,
+						adminRefreshToken: recovered.adminRefreshToken || existing?.adminRefreshToken,
+						adminAccessTokenExpiresAt: recovered.adminAccessTokenExpiresAt || existing?.adminAccessTokenExpiresAt,
+						adminRefreshTokenExpiresAt: recovered.adminRefreshTokenExpiresAt || existing?.adminRefreshTokenExpiresAt,
 					});
-					return crossTabResult;
+					return recovered;
 				}
-				console.warn(LOG_PREFIX, 'refresh: failed', { status: resp.status });
+				console.warn(LOG_PREFIX, 'refresh: failed (no cross-tab recovery after wait)', { status: resp.status });
 				_refreshFailedAt = Date.now();
 				return null;
 			}
@@ -228,20 +250,20 @@ export async function refreshAccessToken(): Promise<RefreshResult> {
 			return result;
 		} catch (err) {
 			// Same cross-tab race recovery for network errors
-			const crossTabResult = readCrossTabTokens(refreshToken);
-			if (crossTabResult) {
-				console.debug(LOG_PREFIX, 'refresh: network error but another tab refreshed — using cross-tab tokens from localStorage');
+			const recovered = await waitForCrossTabRecovery(refreshToken, 2000);
+			if (recovered) {
+				console.debug(LOG_PREFIX, 'refresh: network error but recovered from cross-tab localStorage');
 				_refreshFailedAt = 0;
 				const existing = userStore.getState().userToken;
 				userStore.getState().actions.setUserToken({
-					accessToken: crossTabResult.accessToken,
-					refreshToken: crossTabResult.refreshToken,
-					adminAccessToken: crossTabResult.adminAccessToken || existing?.adminAccessToken,
-					adminRefreshToken: crossTabResult.adminRefreshToken || existing?.adminRefreshToken,
-					adminAccessTokenExpiresAt: crossTabResult.adminAccessTokenExpiresAt || existing?.adminAccessTokenExpiresAt,
-					adminRefreshTokenExpiresAt: crossTabResult.adminRefreshTokenExpiresAt || existing?.adminRefreshTokenExpiresAt,
+					accessToken: recovered.accessToken,
+					refreshToken: recovered.refreshToken,
+					adminAccessToken: recovered.adminAccessToken || existing?.adminAccessToken,
+					adminRefreshToken: recovered.adminRefreshToken || existing?.adminRefreshToken,
+					adminAccessTokenExpiresAt: recovered.adminAccessTokenExpiresAt || existing?.adminAccessTokenExpiresAt,
+					adminRefreshTokenExpiresAt: recovered.adminRefreshTokenExpiresAt || existing?.adminRefreshTokenExpiresAt,
 				});
-				return crossTabResult;
+				return recovered;
 			}
 			console.warn(LOG_PREFIX, 'refresh: error', err instanceof Error ? err.message : err);
 			_refreshFailedAt = Date.now();
