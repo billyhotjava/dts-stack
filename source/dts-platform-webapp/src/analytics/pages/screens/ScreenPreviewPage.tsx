@@ -2,7 +2,6 @@ import { useEffect, useState, useCallback, useMemo, useRef } from 'react';
 import { useParams } from 'react-router';
 import { analyticsApi } from '../../api/analyticsApi';
 import { ComponentRenderer } from './components/ComponentRenderer';
-import { DeviceModeSwitcher } from './components/DeviceModeSwitcher';
 import { PreviewScaleControl } from './components/PreviewScaleControl';
 import { RuntimeActionPanel } from './components/RuntimeActionPanel';
 import { ScreenRuntimeProvider } from './ScreenRuntimeContext';
@@ -19,9 +18,7 @@ import { resolveRuntimeCanvasScaleStyle } from './runtimeCanvasStyle';
 import { ScaleAdapter, type ScaleMode } from './renderers/ScaleAdapter';
 import {
 	isVisibleForDevice,
-	parseForcedDeviceModeFromWindow,
 	resolveDeviceModeByViewport,
-	syncDeviceModeToWindowUrl,
 	type DeviceMode,
 } from './deviceMode';
 import { resolveComponentAppearanceStyle } from './componentAppearance';
@@ -140,7 +137,6 @@ export default function ScreenPreviewPage() {
 	const [autoScale, setAutoScale] = useState(1);
 	const [manualScale, setManualScale] = useState<number | null>(null);
 	const [deviceMode, setDeviceMode] = useState<DeviceMode>('pc');
-	const [forcedDeviceMode, setForcedDeviceMode] = useState<DeviceMode | null>(null);
 	const [visibleCount, setVisibleCount] = useState(PREVIEW_BATCH_SIZE);
 	// ScaleAdapter mode: activated via ?scaleMode=fit|fill|stretch
 	const scaleModeParam = useMemo(() => {
@@ -150,10 +146,6 @@ export default function ScreenPreviewPage() {
 	const [fabOpen, setFabOpen] = useState(false);
 	const scrollContainerRef = useRef<HTMLDivElement | null>(null);
 	const fabRef = useRef<HTMLDivElement | null>(null);
-
-	useEffect(() => {
-		setForcedDeviceMode(parseForcedDeviceModeFromWindow());
-	}, []);
 
 	useEffect(() => {
 		if (!id) {
@@ -183,7 +175,7 @@ export default function ScreenPreviewPage() {
 		const viewport = window.visualViewport;
 		const vw = viewport?.width ?? window.innerWidth;
 		const vh = viewport?.height ?? window.innerHeight;
-		const nextMode: DeviceMode = forcedDeviceMode || resolveDeviceModeByViewport(vw);
+		const nextMode: DeviceMode = resolveDeviceModeByViewport(vw);
 		setDeviceMode(nextMode);
 		const nextAutoScale = resolveRuntimeScale({
 			viewportWidth: vw,
@@ -197,7 +189,7 @@ export default function ScreenPreviewPage() {
 		if (manualScale === null) {
 			setScale(nextAutoScale);
 		}
-	}, [forcedDeviceMode, manualScale, screen]);
+	}, [manualScale, screen]);
 
 	useEffect(() => {
 		computeScale();
@@ -441,11 +433,6 @@ export default function ScreenPreviewPage() {
 	const stageHeight = Math.max(1, screenHeight * scale);
 	const scalePercent = Math.round(scale * 100);
 
-	const setForcedMode = (mode: DeviceMode | null) => {
-		setForcedDeviceMode(mode);
-		syncDeviceModeToWindowUrl(mode);
-	};
-
 	return (
 		<ScreenRuntimeProvider definitions={screen.globalVariables ?? []}>
 		<SharedStoreProvider>
@@ -658,21 +645,6 @@ export default function ScreenPreviewPage() {
 									const safePercent = Number.isFinite(percent) ? Math.max(20, Math.min(200, Math.round(percent))) : 100;
 									setAbsoluteScale(safePercent / 100);
 								}}
-							/>
-						</div>
-						<div className="h-px" style={{ background: fabDividerBg(isDark) }} />
-						<div>
-							<div
-								className="text-[11px] font-bold uppercase tracking-wide mb-1.5"
-								style={{ letterSpacing: '0.06em', color: fabSectionTitleColor(isDark) }}
-							>
-								设备模式
-							</div>
-							<DeviceModeSwitcher
-								position="inline"
-								deviceMode={deviceMode}
-								forcedDeviceMode={forcedDeviceMode}
-								onSetForcedMode={setForcedMode}
 							/>
 						</div>
 					</div>

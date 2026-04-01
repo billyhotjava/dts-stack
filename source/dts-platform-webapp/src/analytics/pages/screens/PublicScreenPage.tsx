@@ -2,7 +2,6 @@ import { useEffect, useState, useCallback, useMemo, useRef } from 'react';
 import { useParams } from 'react-router';
 import { analyticsApi, HttpError } from '../../api/analyticsApi';
 import { ComponentRenderer } from './components/ComponentRenderer';
-import { DeviceModeSwitcher } from './components/DeviceModeSwitcher';
 import { GlobalVariablePanel } from './components/GlobalVariablePanel';
 import { PreviewScaleControl } from './components/PreviewScaleControl';
 import { RuntimeActionPanel } from './components/RuntimeActionPanel';
@@ -18,9 +17,7 @@ import { resolveRuntimeScale } from './runtimeScale';
 import { resolveRuntimeCanvasScaleStyle } from './runtimeCanvasStyle';
 import {
 	isVisibleForDevice,
-	parseForcedDeviceModeFromWindow,
 	resolveDeviceModeByViewport,
-	syncDeviceModeToWindowUrl,
 	type DeviceMode,
 } from './deviceMode';
 import { resolveComponentAppearanceStyle } from './componentAppearance';
@@ -110,7 +107,6 @@ export default function PublicScreenPage() {
 	const [autoScale, setAutoScale] = useState(1);
 	const [manualScale, setManualScale] = useState<number | null>(null);
 	const [deviceMode, setDeviceMode] = useState<DeviceMode>('pc');
-	const [forcedDeviceMode, setForcedDeviceMode] = useState<DeviceMode | null>(null);
 	const [fabOpen, setFabOpen] = useState(false);
 	const [authError, setAuthError] = useState<'not-authenticated' | 'forbidden' | null>(null);
 	const scrollContainerRef = useRef<HTMLDivElement | null>(null);
@@ -132,9 +128,6 @@ export default function PublicScreenPage() {
 		return overrides;
 	}, [searchParams]);
 
-	useEffect(() => {
-		setForcedDeviceMode(parseForcedDeviceModeFromWindow());
-	}, []);
 
 	useEffect(() => {
 		if (!uuid) {
@@ -172,7 +165,7 @@ export default function PublicScreenPage() {
 		const viewport = window.visualViewport;
 		const vw = viewport?.width ?? window.innerWidth;
 		const vh = viewport?.height ?? window.innerHeight;
-		const nextMode: DeviceMode = forcedDeviceMode || resolveDeviceModeByViewport(vw);
+		const nextMode: DeviceMode = resolveDeviceModeByViewport(vw);
 		setDeviceMode(nextMode);
 		const nextAutoScale = resolveRuntimeScale({
 			viewportWidth: vw,
@@ -186,7 +179,7 @@ export default function PublicScreenPage() {
 		if (manualScale === null) {
 			setScale(nextAutoScale);
 		}
-	}, [forcedDeviceMode, manualScale, screen]);
+	}, [manualScale, screen]);
 
 	useEffect(() => {
 		computeScale();
@@ -420,11 +413,6 @@ export default function PublicScreenPage() {
 	const stageHeight = Math.max(1, screenHeight * scale);
 	const scalePercent = Math.round(scale * 100);
 
-	const setForcedMode = (mode: DeviceMode | null) => {
-		setForcedDeviceMode(mode);
-		syncDeviceModeToWindowUrl(mode);
-	};
-
 	return (
 		<ScreenRuntimeProvider
 			definitions={effectiveGlobalVars}
@@ -622,21 +610,6 @@ export default function PublicScreenPage() {
 											}}
 										/>
 									)}
-								</div>
-								<div className="h-px" style={{ background: fabDividerBg(isDark) }} />
-								<div>
-									<div
-										className="text-[11px] font-bold uppercase tracking-wide mb-1.5"
-										style={{ letterSpacing: '0.06em', color: fabSectionTitleColor(isDark) }}
-									>
-										设备模式
-									</div>
-									<DeviceModeSwitcher
-										position="inline"
-										deviceMode={deviceMode}
-										forcedDeviceMode={forcedDeviceMode}
-										onSetForcedMode={setForcedMode}
-									/>
 								</div>
 								{globalVariables.length > 0 && (
 									<>
