@@ -6,10 +6,6 @@ function getGpmcScreenPath(screen: GpmcScreenId) {
 	return screen === "overview" ? "/bi/gpmc" : `/bi/gpmc/${screen}`;
 }
 
-function getGpmcDrillPath(screen: GpmcBoardScreenId) {
-	return `/bi/gpmc/drill/${screen}`;
-}
-
 export type GpmcAssistAction = {
 	label: string;
 	description: string;
@@ -117,7 +113,6 @@ function getControlAssistContent(screen: GpmcBoardScreenId): GpmcAssistContent {
 				"如需回到大屏，只讲异常专题回路，不重复讲全量基础信息。",
 			],
 			actions: [
-				{ label: "进入执行层详情", description: "查看甘特、节点、责任人、资源负载等只读明细。", href: getGpmcDrillPath("execution") },
 				{ label: "返回战略层大屏", description: "回到全局态势总览继续讲解战略视角。", href: getGpmcScreenPath("overview") },
 			],
 		},
@@ -130,7 +125,6 @@ function getControlAssistContent(screen: GpmcBoardScreenId): GpmcAssistContent {
 				"执行层详情页承载问题对象、责任人和措施时间线。",
 			],
 			actions: [
-				{ label: "进入质量详情", description: "查看质量问题对象、状态和跟进措施明细。", href: getGpmcDrillPath("quality") },
 				{ label: "查看技术状态看板", description: "继续讲解与质量相邻的技术状态专题。", href: getGpmcScreenPath("tech-state") },
 			],
 		},
@@ -143,7 +137,6 @@ function getControlAssistContent(screen: GpmcBoardScreenId): GpmcAssistContent {
 				"技术状态与质量相邻，可串联说明两类问题的差异。",
 			],
 			actions: [
-				{ label: "进入技术状态详情", description: "查看状态对象、签署情况和跟进措施。", href: getGpmcDrillPath("tech-state") },
 				{ label: "查看质量看板", description: "切换到质量专题，串联说明问题与状态。", href: getGpmcScreenPath("quality") },
 			],
 		},
@@ -156,7 +149,6 @@ function getControlAssistContent(screen: GpmcBoardScreenId): GpmcAssistContent {
 				"执行层详情页承载项目和周期维度的成本只读明细。",
 			],
 			actions: [
-				{ label: "进入成本详情", description: "查看项目、部门、周期三个维度的成本明细。", href: getGpmcDrillPath("cost") },
 				{ label: "返回战略层大屏", description: "回到全局态势继续讲投资执行与风险。", href: getGpmcScreenPath("overview") },
 			],
 		},
@@ -169,7 +161,6 @@ function getControlAssistContent(screen: GpmcBoardScreenId): GpmcAssistContent {
 				"执行层详情承载风险对象与应对措施的只读明细。",
 			],
 			actions: [
-				{ label: "进入风险详情", description: "查看风险对象、等级、责任人和措施明细。", href: getGpmcDrillPath("risk") },
 				{ label: "返回战略层大屏", description: "回到全局态势继续讲战略层健康度。", href: getGpmcScreenPath("overview") },
 			],
 		},

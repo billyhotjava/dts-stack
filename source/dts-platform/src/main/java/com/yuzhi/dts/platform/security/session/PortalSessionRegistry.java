@@ -85,6 +85,23 @@ public class PortalSessionRegistry {
 
         Instant now = Instant.now();
         if (existing.getRevokedAt() != null) {
+            // Cross-tab grace: if this session was revoked by another tab's refresh
+            // (revokedBySessionId is set), return that newer session instead of failing.
+            // This prevents multi-tab race conditions where Tab B uses the same refresh
+            // token as Tab A, but Tab A's refresh already created a replacement session.
+            if (existing.getRevokedBySessionId() != null) {
+                PortalSessionEntity successor = sessionRepository
+                    .findById(existing.getRevokedBySessionId())
+                    .orElse(null);
+                if (successor != null && successor.getRevokedAt() == null && !isExpired(successor, now)) {
+                    log.debug("[session] cross-tab refresh: returning successor session={} for revoked session={}",
+                        successor.getSessionId(), existing.getSessionId());
+                    successor.setLastSeenAt(now);
+                    successor.setExpiresAt(now.plus(sessionTtl));
+                    sessionRepository.save(successor);
+                    return toPortalSession(successor);
+                }
+            }
             throw new IllegalStateException("session_revoked");
         }
         if (isExpired(existing, now)) {

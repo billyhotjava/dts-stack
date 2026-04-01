@@ -1,6 +1,5 @@
 import { useNavigate, useParams } from "react-router";
 import GpmcApp, {
-	getGpmcDrillPath,
 	getGpmcScreenPath,
 	isGpmcScreenId,
 	useGpmc,
@@ -78,13 +77,7 @@ export default function GpmcPage() {
 				}
 				navigate(getGpmcScreenPath(currentScreen));
 			}}
-			onDrillDown={(currentScreen, currentLayer) => {
-				if (currentLayer === "strategic" || currentScreen === "overview") {
-					navigate(getGpmcScreenPath("execution"));
-					return;
-				}
-				navigate(getGpmcDrillPath(currentScreen));
-			}}
+			onDrillDown={() => {}}
 		>
 			<ScreenRouter />
 		</GpmcApp>

@@ -33,7 +33,7 @@ const CollectionItemsPage = lazy(() => import("@/analytics/pages/CollectionItems
 const SearchPage = lazy(() => import("@/analytics/pages/SearchPage"));
 const ProjectCockpitPage = lazy(() => import("@/analytics/pages/project-cockpit/ProjectCockpitPage"));
 const GpmcPage = lazy(() => import("@/analytics/pages/gpmc/GpmcPage"));
-const GpmcDrillPage = lazy(() => import("@/analytics/pages/gpmc/GpmcDrillPage"));
+
 const ExploreSessionsPage = lazy(() => import("@/analytics/pages/ExploreSessionsPage"));
 const ReportFactoryPage = lazy(() => import("@/analytics/pages/ReportFactoryPage"));
 const MetricLensPage = lazy(() => import("@/analytics/pages/MetricLensPage"));
@@ -80,7 +80,7 @@ export const STATIC_DASHBOARD_ROUTES: RouteObject[] = [
 	{ path: "bi/project-cockpit", element: <S><ProjectCockpitPage /></S> },
 	{ path: "bi/gpmc", element: <S><GpmcPage /></S> },
 	{ path: "bi/gpmc/:screenId", element: <S><GpmcPage /></S> },
-	{ path: "bi/gpmc/drill/:domain", element: <S><GpmcDrillPage /></S> },
+
 	{ path: "bi/explore-sessions", element: <S><ExploreSessionsPage /></S> },
 	{ path: "bi/report-factory", element: <S><ReportFactoryPage /></S> },
 	{ path: "bi/metric-lens", element: <S><MetricLensPage /></S> },

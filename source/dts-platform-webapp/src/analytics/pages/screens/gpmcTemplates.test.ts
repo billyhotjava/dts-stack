@@ -39,6 +39,6 @@ test('gpmc templates keep platform jump paths under a single /bi prefix', () => 
 		overviewExecutionTab?.actions?.[0]?.jumpUrlTemplate,
 		'screen-ref:GPMC%20%E9%A1%B9%E7%9B%AE%E6%89%A7%E8%A1%8C%E7%9B%91%E6%8E%A7|%2Fbi%2Fgpmc%2Fexecution',
 	);
-	assert.equal(executionDelayTable?.actions?.[0]?.jumpUrlTemplate, '/bi/gpmc/drill/execution');
-	assert.equal(executionDelayKpi?.actions?.[0]?.jumpUrlTemplate, '/bi/gpmc/drill/execution');
+	assert.equal(executionDelayTable?.actions?.length ?? 0, 0);
+	assert.equal(executionDelayKpi?.actions?.length ?? 0, 0);
 });
