@@ -61,7 +61,11 @@ export default function LoginAuthGuard({ children }: Props) {
 
     const check = useCallback(() => {
         if (!accessToken || isTokenExpired(accessToken) || isSessionIdle()) {
-            // Clear stale token so the user doesn't flash the dashboard on next visit.
+            console.warn("[LoginAuthGuard] redirect: no token or expired/idle", {
+                hasToken: !!accessToken,
+                expired: accessToken ? isTokenExpired(accessToken) : "N/A",
+                idle: isSessionIdle(),
+            });
             if (accessToken) {
                 useUserStore.getState().actions.clearUserInfoAndToken();
             }
@@ -83,11 +87,13 @@ export default function LoginAuthGuard({ children }: Props) {
             const allowedSet = expandSynonyms(allowed);
             const roleSet = expandSynonyms(roles as string[]);
             if (allowedSet.size > 0 && !Array.from(roleSet).some((r) => allowedSet.has(r))) {
+                console.warn("[LoginAuthGuard] redirect: role not allowed", { allowed: [...allowedSet], user: [...roleSet] });
                 router.replace(LOGIN_ROUTE);
                 return;
             }
             // Defense-in-depth: explicitly forbid admin-console roles on platform
             if (roleSet.has("ROLE_SYS_ADMIN") || roleSet.has("ROLE_AUTH_ADMIN") || roleSet.has("ROLE_SECURITY_AUDITOR")) {
+                console.warn("[LoginAuthGuard] redirect: admin role on platform", { roles: [...roleSet] });
                 router.replace(LOGIN_ROUTE);
             }
         }
