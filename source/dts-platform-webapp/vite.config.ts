@@ -295,7 +295,6 @@ export default defineConfig(({ mode }) => {
 						"vendor-core": ["react", "react-dom", "react-router"],
 						"vendor-ui": ["antd", "@ant-design/cssinjs", "styled-components"],
 						"vendor-utils": ["axios", "dayjs", "i18next", "zustand", "@iconify/react"],
-						"vendor-charts": ["apexcharts", "react-apexcharts"],
 					},
 				},
 			},
