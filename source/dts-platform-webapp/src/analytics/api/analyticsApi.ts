@@ -1,4 +1,6 @@
 import { resolveLoginHref } from '@/routes/constants';
+import userStore from "@/store/userStore";
+import { withPlatformAuthorization } from "./platform-auth-header";
 
 export type CollectionListItem = {
 	id: number | "root";
@@ -1170,7 +1172,8 @@ function isPublicAnalyticsUrl(url: string): boolean {
 }
 
 async function apiFetch(url: string, init: RequestInit, allowRedirect: boolean): Promise<Response> {
-	const headers = new Headers(init.headers ?? {});
+	const accessToken = userStore.getState().userToken?.accessToken;
+	const headers = withPlatformAuthorization(init.headers, accessToken);
 	if (!headers.has("accept")) headers.set("accept", "application/json");
 
 	const response = await fetch(url, { ...init, credentials: "include", headers });

@@ -153,6 +153,7 @@ http:
         trustForwardHeader: true
         authRequestHeaders:
           - Cookie
+          - Authorization
         authResponseHeaders:
           - X-DTS-User
           - X-DTS-Display-Name
