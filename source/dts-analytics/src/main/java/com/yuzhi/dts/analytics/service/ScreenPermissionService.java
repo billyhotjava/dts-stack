@@ -4,6 +4,7 @@ import com.yuzhi.dts.analytics.domain.AnalyticsScreen;
 import com.yuzhi.dts.analytics.domain.AnalyticsScreenAccess;
 import com.yuzhi.dts.analytics.domain.AnalyticsUser;
 import com.yuzhi.dts.analytics.repository.AnalyticsScreenAccessRepository;
+import com.yuzhi.dts.analytics.web.support.PlatformContext;
 import java.util.Collections;
 import java.util.List;
 import org.springframework.stereotype.Service;
@@ -70,7 +71,7 @@ public class ScreenPermissionService {
      * @param roles list of role names from X-DTS-Roles header; may be empty
      */
     public PermissionSnapshot snapshot(AnalyticsScreen screen, AnalyticsUser user, List<String> roles) {
-        if (user == null) {
+        if (screen == null || user == null) {
             return PermissionSnapshot.none();
         }
         if (user.isSuperuser()) {
@@ -99,6 +100,10 @@ public class ScreenPermissionService {
         return PermissionSnapshot.none();
     }
 
+    public PermissionSnapshot snapshot(AnalyticsScreen screen, AnalyticsUser user, PlatformContext context) {
+        return snapshot(screen, user, context == null ? List.of() : context.rolesList());
+    }
+
     // ---- Accessible screen IDs ----
 
     /**
@@ -107,6 +112,10 @@ public class ScreenPermissionService {
      *
      * @param roles list of role names from X-DTS-Roles header; may be empty
      */
+    public List<Long> listAccessibleScreenIds(AnalyticsUser user, PlatformContext context) {
+        return listAccessibleScreenIds(user, context == null ? List.of() : context.rolesList());
+    }
+
     public List<Long> listAccessibleScreenIds(AnalyticsUser user, List<String> roles) {
         if (user == null) {
             return Collections.emptyList();

@@ -16,7 +16,7 @@ import org.springframework.web.filter.OncePerRequestFilter;
 
 /**
  * Embedded-mode bridge:
- * - If the request is already authenticated via platform (forward-auth headers or bearer token)
+ * - If the request is already authenticated via platform forward-auth headers
  * - and no Metabase session cookie exists,
  * then mint a {@code metabase.SESSION} for the browser so legacy Metabase UI does not show a
  * separate login screen.

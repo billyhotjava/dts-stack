@@ -1,7 +1,7 @@
 {
 	"name": "slash-admin",
 	"private": true,
-	"version": "0.0.0",
+	"version": "2.2.3",
 	"type": "module",
 	"homepage": "https://github.com/d3george/slash-admin",
 	"scripts": {

@@ -5,6 +5,7 @@ import com.yuzhi.dts.analytics.domain.AnalyticsScreenAccess;
 import com.yuzhi.dts.analytics.domain.AnalyticsUser;
 import com.yuzhi.dts.analytics.repository.AnalyticsScreenAccessRepository;
 import com.yuzhi.dts.analytics.service.ScreenPermissionService.PermissionSnapshot;
+import com.yuzhi.dts.analytics.web.support.PlatformContext;
 import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -119,6 +120,21 @@ class ScreenPermissionServiceTest {
         when(repo.findGrantsForUser(eq(10L), eq("6"), eq(List.of("ROLE_ANALYST")))).thenReturn(
             List.of(access(10L, "ROLE", "ROLE_ANALYST", "VIEWER")));
         PermissionSnapshot snap = service.snapshot(screen(10L), u, List.of("ROLE_ANALYST"));
+        assertThat(snap.canRead()).isTrue();
+        assertThat(snap.canEdit()).isFalse();
+    }
+
+    @Test
+    void platform_context_roles_are_parsed_before_permission_lookup() {
+        AnalyticsUser u = user(8L, false);
+        when(repo.findGrantsForUser(eq(10L), eq("8"), eq(List.of("ROLE_ANALYST", "ROLE_OWNER")))).thenReturn(
+                List.of(access(10L, "ROLE", "ROLE_ANALYST", "VIEWER")));
+
+        PermissionSnapshot snap = service.snapshot(
+                screen(10L),
+                u,
+                new PlatformContext(null, null, " ROLE_ANALYST, ROLE_OWNER , ROLE_ANALYST "));
+
         assertThat(snap.canRead()).isTrue();
         assertThat(snap.canEdit()).isFalse();
     }

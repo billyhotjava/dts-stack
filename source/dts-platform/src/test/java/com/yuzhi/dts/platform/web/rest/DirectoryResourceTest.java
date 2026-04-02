@@ -28,7 +28,7 @@ class DirectoryResourceTest {
     void usersAndRolesShouldDelegateToGateway() {
         AdminDirectoryGateway gateway = mock(AdminDirectoryGateway.class);
         when(gateway.searchUsers("alice"))
-            .thenReturn(List.of(new AdminDirectoryGateway.UserSummary("u1", "alice", "Alice", "1001")));
+            .thenReturn(List.of(new AdminDirectoryGateway.UserSummary("u1", "alice", "Alice", "1001", null)));
         when(gateway.listRoles())
             .thenReturn(List.of(new AdminDirectoryGateway.RoleSummary("r1", "ROLE_DATA_ADMIN", "管理员", null, List.of(), "platform")));
 
@@ -37,7 +37,7 @@ class DirectoryResourceTest {
         ApiResponse<List<AdminDirectoryGateway.UserSummary>> userResponse = resource.users("alice");
         ApiResponse<List<AdminDirectoryGateway.RoleSummary>> roleResponse = resource.roles();
 
-        assertThat(userResponse.getData()).containsExactly(new AdminDirectoryGateway.UserSummary("u1", "alice", "Alice", "1001"));
+        assertThat(userResponse.getData()).containsExactly(new AdminDirectoryGateway.UserSummary("u1", "alice", "Alice", "1001", null));
         assertThat(roleResponse.getData())
             .containsExactly(new AdminDirectoryGateway.RoleSummary("r1", "ROLE_DATA_ADMIN", "管理员", null, List.of(), "platform"));
     }

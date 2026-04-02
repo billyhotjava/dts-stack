@@ -7,7 +7,6 @@ import { toast } from "sonner";
 import { AuditLogService } from "@/api/services/auditLogService";
 import type { AuditLog, AuditLogPageResponse, AuditLogDetail } from "#/entity";
 import { GLOBAL_CONFIG } from "@/global-config";
-import userStore from "@/store/userStore";
 import { Badge } from "@/ui/badge";
 import { Button } from "@/ui/button";
 import { Calendar } from "@/ui/calendar";
@@ -474,9 +473,8 @@ export default function AuditCenterView() {
 			const params = buildQuery(filters);
 			const query = new URLSearchParams(params).toString();
 			const exportUrl = buildExportUrl(query);
-			const token = resolveAccessToken();
 			const response = await fetch(exportUrl, {
-				headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+				credentials: "include",
 			});
 			if (!response.ok) {
 				throw new Error(`导出失败: ${response.status}`);
@@ -1277,19 +1275,6 @@ function deriveFieldLabel(field: string | undefined): string {
 		.filter((token) => token.length > 0)
 		.map((token) => token.charAt(0).toUpperCase() + token.slice(1))
 		.join(" ");
-}
-
-function resolveAccessToken(): string {
-	const { userToken } = userStore.getState();
-	const raw = userToken?.accessToken;
-	if (!raw) {
-		return "";
-	}
-	const trimmed = String(raw).trim();
-	if (!trimmed) {
-		return "";
-	}
-	return trimmed.startsWith("Bearer ") ? trimmed.slice(7).trim() : trimmed;
 }
 
 function buildExportUrl(query: string): string {

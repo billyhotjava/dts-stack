@@ -42,7 +42,7 @@ export function LoginForm({ className, ...props }: React.ComponentPropsWithoutRe
 
 	const { loginState } = useLoginStateContext();
 	const signIn = useSignIn();
-	const { setUserToken, setUserInfo } = useUserActions();
+	const { setAuthenticatedSession } = useUserActions();
 	const bilingual = useBilingualText();
 	const contextActions = useContextActions();
 
@@ -377,12 +377,17 @@ export function LoginForm({ className, ...props }: React.ComponentPropsWithoutRe
 
 			const portal = await createPortalSessionFromPki(username, rawUser);
 			const portalUser = portal?.user ?? rawUser;
-			const accessToken = String(portal?.accessToken || portal?.token || "").trim();
-			const refreshToken = String(portal?.refreshToken || "").trim();
-			if (!accessToken) throw new Error("登录响应缺少访问令牌");
-
-			setUserToken({ accessToken, refreshToken });
-			setUserInfo(portalUser);
+			setAuthenticatedSession(
+				{
+					authenticated: true,
+					username: String(portalUser?.username || portalUser?.preferred_username || username).trim(),
+					displayName: String(portalUser?.displayName || portalUser?.fullName || portalUser?.firstName || username).trim(),
+					browserId: typeof portal?.browserId === "string" ? portal.browserId.trim() : undefined,
+					roles: Array.isArray(portalUser?.roles) ? portalUser.roles : undefined,
+					permissions: Array.isArray(portalUser?.permissions) ? portalUser.permissions : undefined,
+				},
+				portalUser,
+			);
 
 			try {
 				contextActions.initDefaults();

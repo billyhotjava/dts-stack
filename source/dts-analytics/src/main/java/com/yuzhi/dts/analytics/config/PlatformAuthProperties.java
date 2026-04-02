@@ -21,7 +21,7 @@ public record PlatformAuthProperties(
             superuserRoles = List.of("ROLE_OP_ADMIN");
         }
         if (allowBearerFallback == null) {
-            allowBearerFallback = Boolean.TRUE;
+            allowBearerFallback = Boolean.FALSE;
         }
         if (forwardAuthUrl == null || forwardAuthUrl.isBlank()) {
             forwardAuthUrl = "http://dts-platform:8081/api/forward-auth";

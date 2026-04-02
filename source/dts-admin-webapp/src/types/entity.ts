@@ -1,12 +1,6 @@
 import type { NavItemDataProps } from "@/components/nav/types";
 import type { BasicStatus, PermissionType } from "./enum";
 
-export interface UserToken {
-	accessToken?: string;
-	refreshToken?: string;
-	sessionTakeover?: boolean;
-}
-
 export interface UserInfo {
 	id: string;
 	email: string;

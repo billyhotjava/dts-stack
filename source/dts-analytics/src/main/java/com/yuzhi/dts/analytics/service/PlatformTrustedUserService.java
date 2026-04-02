@@ -14,6 +14,8 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Optional;
 import java.util.UUID;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
@@ -23,6 +25,8 @@ import org.springframework.util.StringUtils;
 @Service
 @Transactional
 public class PlatformTrustedUserService {
+
+    private static final Logger LOG = LoggerFactory.getLogger(PlatformTrustedUserService.class);
 
     private final PlatformAuthProperties properties;
     private final AnalyticsUserRepository userRepository;
@@ -144,16 +148,20 @@ public class PlatformTrustedUserService {
         if (fromHeaders.isPresent()) {
             return fromHeaders;
         }
+        String authorization = request == null ? null : request.getHeader("Authorization");
         if (!Boolean.TRUE.equals(properties.allowBearerFallback())) {
+            if (StringUtils.hasText(authorization)) {
+                LOG.warn("Rejecting analytics auth request without trusted X-DTS headers; bearer fallback is disabled");
+            }
             return Optional.empty();
         }
-        String authorization = request.getHeader("Authorization");
         if (!StringUtils.hasText(authorization)) {
             return Optional.empty();
         }
         if (!authorization.toLowerCase(Locale.ROOT).startsWith("bearer ")) {
             return Optional.empty();
         }
+        LOG.warn("Resolving analytics identity via deprecated bearer fallback; please route requests through platform forward-auth");
         return resolveIdentityViaPlatformForwardAuth(authorization, request.getHeader("Cookie"));
     }
 
@@ -164,6 +172,7 @@ public class PlatformTrustedUserService {
             // NOTE: Spring's ForwardedHeaderFilter may consume/remove X-Forwarded-* from the wrapped request,
             // so prefer servlet-level signals (scheme/isSecure) in addition to raw headers.
             if (!looksForwarded(request)) {
+                LOG.warn("Rejecting analytics auth request with X-DTS headers but missing forwarded proxy markers");
                 return Optional.empty();
             }
         }

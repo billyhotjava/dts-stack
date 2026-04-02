@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { parsePersistedUserStoreSnapshot, readPersistedTokens } from "@dts-session-core/persisted-store";
+import { parsePersistedUserStoreSnapshot, readPersistedUserStoreSnapshot } from "@dts-session-core/persisted-store";
 import { createSessionStorageKeys, readStorageValue } from "@dts-session-core/storage";
 
 describe("session storage protocol", () => {
@@ -9,7 +9,35 @@ describe("session storage protocol", () => {
 		expect(createSessionStorageKeys("platform").logoutTs).not.toBe(createSessionStorageKeys("admin").logoutTs);
 	});
 
-	it("falls back to legacy storage values during migration", () => {
+	it("reads user info and session from the persisted zustand store", () => {
+		const storage = new Map<string, string>();
+		const mockStorage = {
+			getItem: (key: string) => storage.get(key) ?? null,
+			setItem: (key: string, value: string) => storage.set(key, value),
+			removeItem: (key: string) => storage.delete(key),
+		};
+		mockStorage.setItem(
+			"dts.platform.userStore",
+			JSON.stringify({
+				state: {
+					userInfo: { username: "alice", roles: ["ROLE_OP_ADMIN"] },
+					session: { initialized: true, authenticated: true, browserId: "browser-1" },
+				},
+				version: 0,
+			}),
+		);
+
+		expect(readPersistedUserStoreSnapshot("dts.platform.userStore", ["userStore"], mockStorage)).toEqual({
+			userInfo: { username: "alice", roles: ["ROLE_OP_ADMIN"] },
+			session: { initialized: true, authenticated: true, browserId: "browser-1" },
+		});
+		expect(parsePersistedUserStoreSnapshot(mockStorage.getItem("dts.platform.userStore"))).toEqual({
+			userInfo: { username: "alice", roles: ["ROLE_OP_ADMIN"] },
+			session: { initialized: true, authenticated: true, browserId: "browser-1" },
+		});
+	});
+
+	it("still falls back to legacy store keys for user info during migration", () => {
 		const storage = new Map<string, string>();
 		const mockStorage = {
 			getItem: (key: string) => storage.get(key) ?? null,
@@ -20,22 +48,16 @@ describe("session storage protocol", () => {
 			"userStore",
 			JSON.stringify({
 				state: {
-					userInfo: { username: "alice", roles: ["ROLE_OP_ADMIN"] },
-					userToken: { accessToken: "legacy-access", refreshToken: "legacy-refresh" },
+					userInfo: { username: "legacy-admin" },
 				},
 				version: 0,
 			}),
 		);
 
-		expect(readStorageValue("dts.platform.userStore", ["userStore"], mockStorage)).toContain("legacy-access");
-		expect(readPersistedTokens("dts.platform.userStore", ["userStore"], mockStorage)).toEqual({
-			accessToken: "legacy-access",
-			refreshToken: "legacy-refresh",
-			adminAccessToken: "",
-			adminRefreshToken: "",
-			adminAccessTokenExpiresAt: "",
-			adminRefreshTokenExpiresAt: "",
+		expect(readStorageValue("dts.platform.userStore", ["userStore"], mockStorage)).toContain("legacy-admin");
+		expect(readPersistedUserStoreSnapshot("dts.platform.userStore", ["userStore"], mockStorage)).toEqual({
+			userInfo: { username: "legacy-admin" },
+			session: {},
 		});
-		expect(parsePersistedUserStoreSnapshot(mockStorage.getItem("userStore"))?.userInfo.username).toBe("alice");
 	});
 });

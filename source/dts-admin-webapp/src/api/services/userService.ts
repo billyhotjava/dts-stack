@@ -1,4 +1,4 @@
-import type { UserInfo, UserToken } from "#/entity";
+import type { UserInfo } from "#/entity";
 import apiClient from "../apiClient";
 
 export interface SignInReq {
@@ -9,34 +9,37 @@ export interface SignInReq {
 export interface SignUpReq extends SignInReq {
 	email: string;
 }
-export type SignInRes = UserToken & { user: UserInfo };
+
+export type SignInRes = {
+	user: UserInfo;
+	browserId?: string;
+	sessionTakeover?: boolean;
+	sessionNotice?: string;
+};
 
 export enum UserApi {
 	SignIn = "/keycloak/auth/login",
 	SignUp = "/auth/signup",
 	Logout = "/keycloak/auth/logout",
-	Refresh = "/keycloak/auth/refresh",
 	User = "/user",
 }
 
 const signin = (data: SignInReq) => apiClient.post<SignInRes>({ url: UserApi.SignIn, data });
 const signup = (data: SignUpReq) => apiClient.post<SignInRes>({ url: UserApi.SignUp, data });
-const logout = (refreshToken: string, username?: string, reason?: string) =>
+const logout = (refreshToken?: string, username?: string, reason?: string) =>
 	apiClient.post({
 		url: UserApi.Logout,
 		data: {
-			refreshToken,
+			...(refreshToken ? { refreshToken } : {}),
 			...(username ? { username } : {}),
 			...(reason ? { reason } : {}),
 		},
 	});
-const refresh = (refreshToken: string) => apiClient.post({ url: UserApi.Refresh, data: { refreshToken } });
-const findById = (id: string) => apiClient.get<UserInfo[]>({ url: `${UserApi.User}/${id}` });
+const findById = (id: string) => apiClient.get<UserInfo[]>({ url: UserApi.User + "/" + id });
 
 export default {
 	signin,
 	signup,
 	findById,
 	logout,
-	refresh,
 };

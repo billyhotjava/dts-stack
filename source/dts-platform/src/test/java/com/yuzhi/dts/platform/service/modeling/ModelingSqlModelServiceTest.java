@@ -454,6 +454,7 @@ class ModelingSqlModelServiceTest {
             planId,
             sourceId,
             false,
+            false,
             archive,
             "D1"
         );
@@ -492,6 +493,7 @@ class ModelingSqlModelServiceTest {
             planId,
             sourceId,
             false,
+            false,
             archive,
             "D1"
         );
@@ -527,7 +529,7 @@ class ModelingSqlModelServiceTest {
             "id,name\n1,demo\n"
         );
 
-        ModelingSqlModelService.BatchImportResult result = generationService.batchImportFromArchive(planId, sourceId, false, archive, "D1");
+        ModelingSqlModelService.BatchImportResult result = generationService.batchImportFromArchive(planId, sourceId, false, false, archive, "D1");
 
         assertThat(result.imported()).isEqualTo(1);
         assertThat(tempDir.resolve("models/project_management_sources.yml")).exists();
@@ -550,8 +552,8 @@ class ModelingSqlModelServiceTest {
             "select '一般节点' as label"
         );
 
-        ModelingSqlModelService.BatchImportResult first = generationService.batchImportFromArchive(planId, sourceId, false, archive, "D1");
-        ModelingSqlModelService.BatchImportResult second = generationService.batchImportFromArchive(planId, sourceId, false, archive, "D1");
+        ModelingSqlModelService.BatchImportResult first = generationService.batchImportFromArchive(planId, sourceId, false, false, archive, "D1");
+        ModelingSqlModelService.BatchImportResult second = generationService.batchImportFromArchive(planId, sourceId, false, false, archive, "D1");
 
         assertThat(first.imported()).isEqualTo(1);
         assertThat(second.imported()).isEqualTo(1);
@@ -919,6 +921,7 @@ class ModelingSqlModelServiceTest {
             planId,
             missingSourceId,
             false,
+            false,
             archive,
             "D1"
         );
@@ -948,6 +951,7 @@ class ModelingSqlModelServiceTest {
         ModelingSqlModelService.BatchImportResult result = generationService.batchImportFromArchive(
             planId,
             adminLakeId,
+            false,
             false,
             archive,
             "D1"

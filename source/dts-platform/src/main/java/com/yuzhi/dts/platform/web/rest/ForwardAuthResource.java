@@ -25,9 +25,9 @@ import org.springframework.web.bind.annotation.RestController;
 /**
  * Traefik forward-auth endpoint for downstream modules (e.g. analytics).
  *
- * <p>This endpoint relies on platform's existing login/session (Bearer token issued by
- * {@code /api/keycloak/auth/login}). Traefik calls this endpoint with the incoming
- * {@code Authorization} header and blocks the downstream request unless this endpoint returns 2xx.
+ * <p>This endpoint relies on platform's existing browser-scoped session cookie.
+ * Traefik calls this endpoint with the incoming platform cookies and blocks the downstream
+ * request unless this endpoint returns 2xx.
  */
 @RestController
 @RequestMapping("/api")

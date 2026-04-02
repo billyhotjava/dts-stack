@@ -31,7 +31,7 @@ server:
 application:
   service:
     name: dts-analytics
-    version: 0.0.1-SNAPSHOT
+    version: 2.2.3-SNAPSHOT
     environment: dev
 
 dts:
@@ -47,6 +47,7 @@ dts:
       enabled: ${DTS_ANALYTICS_PLATFORM_AUTH_ENABLED:true}
       require-forwarded-headers: ${DTS_ANALYTICS_PLATFORM_AUTH_REQUIRE_FORWARDED_HEADERS:true}
       email-domain: ${DTS_ANALYTICS_PLATFORM_AUTH_EMAIL_DOMAIN:platform.local}
+      allow-bearer-fallback: ${DTS_ANALYTICS_PLATFORM_AUTH_ALLOW_BEARER_FALLBACK:false}
     oidc:
       enabled: ${DTS_ANALYTICS_OIDC_ENABLED:false}
       issuer-uri: ${DTS_ANALYTICS_OIDC_ISSUER_URI:}

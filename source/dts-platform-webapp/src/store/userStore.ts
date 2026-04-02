@@ -4,10 +4,15 @@ import { toast } from "sonner";
 import { create } from "zustand";
 import { createJSONStorage, persist } from "zustand/middleware";
 import { readStorageValue, removeStorageKeys } from "@dts-session-core/storage";
-import type { UserInfo, UserToken } from "#/entity";
-import { StorageEnum } from "#/enum";
+import type { UserInfo } from "#/entity";
 import type { KeycloakTranslations } from "#/keycloak";
 import { KeycloakLocalizationService } from "@/api/services/keycloakLocalizationService";
+import type { CurrentSessionPayload, PortalSessionState, SessionReason } from "@/auth/session-state";
+import {
+	createAnonymousSessionState,
+	createAuthenticatedSessionState,
+	createBootstrappingSessionState,
+} from "@/auth/session-state";
 import userService, { type SignInReq } from "@/api/services/userService";
 import { PLATFORM_LEGACY_SESSION_KEYS, PLATFORM_LEGACY_USER_STORE_KEYS, PLATFORM_SESSION_KEYS } from "@/auth/session-keys";
 import { GLOBAL_CONFIG } from "@/global-config";
@@ -50,29 +55,84 @@ const resolveAvatar = (raw: unknown): string => {
 
 type UserStore = {
 	userInfo: Partial<UserInfo>;
-	userToken: UserToken;
+	session: PortalSessionState;
 
 	actions: {
 		setUserInfo: (userInfo: UserInfo) => void;
-		setUserToken: (token: UserToken) => void;
-		clearUserInfoAndToken: () => void;
+		setSession: (session: PortalSessionState) => void;
+		markSessionChecking: () => void;
+		setAuthenticatedSession: (session: CurrentSessionPayload, userInfo?: Partial<UserInfo>) => void;
+		clearUserInfoAndToken: (reason?: SessionReason) => void;
 	};
 };
+
+function buildSessionUserInfo(
+	session: CurrentSessionPayload,
+	currentUserInfo: Partial<UserInfo> = {},
+): Partial<UserInfo> {
+	const username = session.username?.trim() || currentUserInfo.username || "";
+	const displayName = session.displayName?.trim() || currentUserInfo.fullName || currentUserInfo.firstName || username;
+	const nextAttributes = {
+		...(currentUserInfo.attributes ?? {}),
+		...(session.deptCode ? { deptCode: [session.deptCode], dept_code: [session.deptCode] } : {}),
+		...(session.personnelLevel ? { personnel_level: [session.personnelLevel] } : {}),
+	};
+
+	return {
+		...currentUserInfo,
+		username,
+		email: currentUserInfo.email || "",
+		firstName: currentUserInfo.firstName || displayName,
+		lastName: currentUserInfo.lastName || "",
+		fullName: displayName,
+		enabled: currentUserInfo.enabled ?? true,
+		department: session.deptCode || currentUserInfo.department,
+		roles: session.roles ?? normalizeToStringArray(currentUserInfo.roles),
+		permissions: session.permissions ?? normalizeToStringArray(currentUserInfo.permissions),
+		avatar: resolveAvatar(currentUserInfo.avatar),
+		attributes: nextAttributes,
+	};
+}
 
 const useUserStore = create<UserStore>()(
 	persist(
 		(set) => ({
 			userInfo: {},
-			userToken: {},
+			session: createBootstrappingSessionState(),
 			actions: {
 				setUserInfo: (userInfo) => {
 					set({ userInfo });
 				},
-				setUserToken: (userToken) => {
-					set({ userToken });
+				setSession: (session) => {
+					set({ session });
 				},
-				clearUserInfoAndToken() {
-					set({ userInfo: {}, userToken: {} });
+				markSessionChecking: () => {
+					set((state) => ({
+						session: {
+							...state.session,
+							checking: true,
+							reason: state.session.initialized ? state.session.reason : "bootstrapping",
+						},
+					}));
+				},
+				setAuthenticatedSession(sessionPayload, userInfo = {}) {
+					set((state) => ({
+						userInfo: buildSessionUserInfo(sessionPayload, {
+							...state.userInfo,
+							...userInfo,
+						}),
+						session: createAuthenticatedSessionState({
+							browserId: sessionPayload.browserId,
+							expiresAt: sessionPayload.expiresAt,
+							lastCheckedAt: new Date().toISOString(),
+						}),
+					}));
+				},
+				clearUserInfoAndToken(reason = "logged_out") {
+					set({
+						userInfo: {},
+						session: createAnonymousSessionState(reason),
+					});
 					try {
 						useMenuStore.getState().clearMenus();
 						// Reset scoped context so the next user doesn't inherit prior dept/scope
@@ -107,21 +167,21 @@ const useUserStore = create<UserStore>()(
 				removeItem: (name) => localStorage.removeItem(name),
 			})),
 			partialize: (state) => ({
-				[StorageEnum.UserInfo]: state.userInfo,
-				[StorageEnum.UserToken]: state.userToken,
+				userInfo: state.userInfo,
+				session: state.session,
 			}),
 		},
 	),
 );
 
 export const useUserInfo = () => useUserStore((state) => state.userInfo);
-export const useUserToken = () => useUserStore((state) => state.userToken);
+export const usePortalSession = () => useUserStore((state) => state.session);
 export const useUserPermissions = () => useUserStore((state) => state.userInfo.permissions || []);
 export const useUserRoles = () => useUserStore((state) => state.userInfo.roles || []);
 export const useUserActions = () => useUserStore((state) => state.actions);
 
 export const useSignIn = () => {
-	const { setUserToken, setUserInfo } = useUserActions();
+	const { setAuthenticatedSession } = useUserActions();
 
 	const signInMutation = useMutation({
 		mutationFn: userService.signin,
@@ -131,44 +191,6 @@ export const useSignIn = () => {
 		try {
 			const res = await signInMutation.mutateAsync(data);
 			const rawUser = (res as any)?.user ?? (res as any)?.userInfo ?? {};
-
-			const pickToken = (value: unknown): string => {
-				if (!value) return "";
-				if (typeof value === "string") return value;
-				if (typeof value === "object") {
-					const obj = value as Record<string, unknown>;
-					for (const key of ["token", "accessToken", "value"]) {
-						const candidate = obj[key];
-						if (typeof candidate === "string" && candidate) {
-							return candidate;
-						}
-					}
-				}
-				return "";
-			};
-
-			const accessToken =
-				pickToken((res as any)?.accessToken) || pickToken((res as any)?.access_token) || pickToken((res as any)?.token);
-			const refreshToken = pickToken((res as any)?.refreshToken) || pickToken((res as any)?.refresh_token);
-			if (!accessToken) {
-				throw new Error("登录响应缺少访问令牌");
-			}
-			const adminAccessToken = pickToken((res as any)?.adminAccessToken);
-			const adminRefreshToken = pickToken((res as any)?.adminRefreshToken);
-			const normalizeDate = (value: unknown): string | undefined => {
-				if (typeof value === "string" && value.trim()) return value.trim();
-				if (value instanceof Date) return value.toISOString();
-				if (typeof value === "number" && Number.isFinite(value)) {
-					try {
-						return new Date(value).toISOString();
-					} catch {
-						return String(value);
-					}
-				}
-				return undefined;
-			};
-			const adminAccessTokenExpiresAt = normalizeDate((res as any)?.adminAccessTokenExpiresAt);
-			const adminRefreshTokenExpiresAt = normalizeDate((res as any)?.adminRefreshTokenExpiresAt);
 
 			const rawNotice = typeof (res as any)?.sessionNotice === "string" ? ((res as any).sessionNotice as string).trim() : "";
 			const takeoverFlag = Boolean((res as any)?.sessionTakeover);
@@ -223,15 +245,20 @@ export const useSignIn = () => {
 				}
 			}
 
-			setUserToken({
-				accessToken,
-				refreshToken,
-				adminAccessToken,
-				adminRefreshToken,
-				adminAccessTokenExpiresAt,
-				adminRefreshTokenExpiresAt,
-			});
-			setUserInfo(adaptedUser);
+			setAuthenticatedSession(
+				{
+					authenticated: true,
+					username: adaptedUser.username,
+					displayName: adaptedUser.fullName || adaptedUser.firstName || adaptedUser.username,
+					browserId:
+						typeof (res as any)?.browserId === "string" && (res as any).browserId.trim()
+							? (res as any).browserId.trim()
+							: undefined,
+					roles: normalizeToStringArray(adaptedUser.roles),
+					permissions: normalizeToStringArray(adaptedUser.permissions),
+				},
+				adaptedUser,
+			);
 
 			if (takeoverMessage) {
 				toast.info(takeoverMessage, {
@@ -256,19 +283,11 @@ export const useSignIn = () => {
 			return {
 				mode: "backend" as const,
 				user: adaptedUser,
-				token: {
-					accessToken,
-					refreshToken,
-					adminAccessToken,
-					adminRefreshToken,
-					adminAccessTokenExpiresAt,
-					adminRefreshTokenExpiresAt,
-				},
 				notice: takeoverMessage || undefined,
 				takeover: takeoverFlag,
 			};
 		} catch (err) {
-			const fallback = handleDevFallback({ error: err, payload: data, setUserToken, setUserInfo });
+			const fallback = handleDevFallback({ error: err, payload: data, setAuthenticatedSession });
 			if (fallback) {
 				return fallback;
 			}
@@ -285,7 +304,6 @@ export const useSignIn = () => {
 type SignInResult = {
 	mode: "backend" | "fallback";
 	user: UserInfo;
-	token: UserToken;
 	notice?: string;
 	takeover?: boolean;
 };
@@ -293,11 +311,10 @@ type SignInResult = {
 type DevFallbackContext = {
 	error: unknown;
 	payload: SignInReq;
-	setUserToken: (token: UserToken) => void;
-	setUserInfo: (userInfo: UserInfo) => void;
+	setAuthenticatedSession: (session: CurrentSessionPayload, userInfo?: Partial<UserInfo>) => void;
 };
 
-const handleDevFallback = ({ error, payload, setUserToken, setUserInfo }: DevFallbackContext): SignInResult | null => {
+const handleDevFallback = ({ error, payload, setAuthenticatedSession }: DevFallbackContext): SignInResult | null => {
     const enabled = String(import.meta.env.VITE_DEV_LOGIN_FALLBACK || "false").toLowerCase() === "true";
     if (!enabled) {
         return null;
@@ -342,11 +359,17 @@ const handleDevFallback = ({ error, payload, setUserToken, setUserInfo }: DevFal
 		return null;
 	}
 
-	const accessToken = `dev-access-${normalized}-${Date.now()}`;
-	const refreshToken = `dev-refresh-${normalized}-${Date.now()}`;
-	setUserToken({ accessToken, refreshToken });
-	setUserInfo(user);
-	return { mode: "fallback", user, token: { accessToken, refreshToken }, notice: undefined, takeover: false };
+	setAuthenticatedSession(
+		{
+			authenticated: true,
+			username: user.username,
+			displayName: user.username,
+			roles,
+			permissions,
+		},
+		user,
+	);
+	return { mode: "fallback", user, notice: undefined, takeover: false };
 };
 
 const buildRoles = (normalizedUsername: string): string[] => {
@@ -400,13 +423,9 @@ export const useSignOut = () => {
 	const { clearUserInfoAndToken } = useUserActions();
 
 	const signOut = async () => {
-		const { userToken, userInfo } = useUserStore.getState();
+		const { userInfo } = useUserStore.getState();
 		try {
-			// 如果有refreshToken，调用后端登出接口
-			const refreshToken = userToken?.refreshToken;
-			if (refreshToken) {
-				await userService.logout(refreshToken, resolveUsernameForLogout(userInfo));
-			}
+			await userService.logout(undefined, resolveUsernameForLogout(userInfo));
 		} catch (error) {
 			console.error("Logout error:", error);
 			// 即使登出接口失败，也要清理本地信息

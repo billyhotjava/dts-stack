@@ -8,7 +8,6 @@ import workbenchService, {
 	type WorkbenchTodoItem,
 } from "@/api/services/workbenchService";
 import { useRouter } from "@/routes/hooks";
-import userStore from "@/store/userStore";
 import { resolveRouteForOpen } from "@/analytics/helpers/resolveAnalyticsUrl";
 
 
@@ -31,14 +30,9 @@ type FavoriteFormValues = {
 
 async function fetchScreens(): Promise<PublishedScreen[]> {
 	try {
-		const { userToken } = userStore.getState();
-		const headers: Record<string, string> = {};
-		if (userToken?.accessToken) {
-			headers.Authorization = `Bearer ${userToken.accessToken}`;
-		}
 		const ctrl = new AbortController();
 		const timer = setTimeout(() => ctrl.abort(), 5000);
-		const resp = await fetch("/analytics/api/screens", { headers, credentials: "include", signal: ctrl.signal });
+		const resp = await fetch("/analytics/api/screens", { credentials: "include", signal: ctrl.signal });
 		clearTimeout(timer);
 		if (!resp.ok) return [];
 		const list: Array<Record<string, unknown>> = await resp.json();

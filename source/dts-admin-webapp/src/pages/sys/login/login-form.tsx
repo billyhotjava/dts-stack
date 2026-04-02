@@ -40,7 +40,7 @@ export function LoginForm({ className, ...props }: React.ComponentPropsWithoutRe
 
 	const { loginState } = useLoginStateContext();
 	const signIn = useSignIn();
-	const { setUserToken, setUserInfo } = useUserActions();
+	const { setAuthenticatedSession } = useUserActions();
 	const bilingual = useBilingualText();
 
 	const form = useForm<SignInReq>({
@@ -295,10 +295,7 @@ export function LoginForm({ className, ...props }: React.ComponentPropsWithoutRe
 				roles: resp?.user?.roles,
 				sessionTakeover: resp?.sessionTakeover,
 			});
-			const accessToken = String(resp?.accessToken || resp?.token || "").trim();
-			const refreshToken = String(resp?.refreshToken || "").trim();
 			const user = (resp?.user || resp?.userInfo || {}) as any;
-			if (!accessToken) throw new Error("登录响应缺少访问令牌");
 
 			// 仅允许三员角色进入管理端（与密码登录一致）
 			const rolesLower: string[] = Array.isArray(user?.roles) ? (user.roles as any[]).map((r) => String(r).toLowerCase()) : [];
@@ -312,9 +309,26 @@ export function LoginForm({ className, ...props }: React.ComponentPropsWithoutRe
 				setPkiDialogOpen(false);
 				return;
 			}
-			setUserToken({ accessToken, refreshToken });
-			setUserInfo(user);
-			navigate(GLOBAL_CONFIG.defaultRoute, { replace: true });
+			setAuthenticatedSession(
+				{
+					authenticated: true,
+					username: String(user?.username || user?.preferred_username || deriveUsernameFromCert(selectedCert) || "").trim(),
+					displayName: String(user?.fullName || user?.firstName || user?.username || deriveUsernameFromCert(selectedCert) || "").trim(),
+					browserId: typeof resp?.browserId === "string" && resp.browserId.trim() ? resp.browserId.trim() : undefined,
+					roles: Array.isArray(user?.roles) ? user.roles.map((r: unknown) => String(r || "")).filter(Boolean) : [],
+					permissions: Array.isArray(user?.permissions) ? user.permissions.map((p: unknown) => String(p || "")).filter(Boolean) : [],
+				},
+				user,
+			);
+			const takeoverNotice = typeof resp?.sessionNotice === "string" && resp.sessionNotice.trim()
+				? resp.sessionNotice.trim()
+				: resp?.sessionTakeover
+					? "已切换到当前登录，其他会话已下线"
+					: "";
+			if (takeoverNotice) {
+				toast.info(takeoverNotice, { position: "top-center", closeButton: true });
+			}
+			navigate((safeRedirect || GLOBAL_CONFIG.defaultRoute), { replace: true });
 			toast.success("登录成功", { closeButton: true });
 			await client.logout();
 			setPkiDialogOpen(false);

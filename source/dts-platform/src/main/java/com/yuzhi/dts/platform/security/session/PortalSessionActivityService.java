@@ -51,6 +51,7 @@ public class PortalSessionActivityService {
             return ValidationResult.EXPIRED;
         }
         entity.setLastSeenAt(effectiveNow);
+        entity.setLastRenewedAt(effectiveNow);
         entity.setExpiresAt(effectiveNow.plus(sessionTtl));
         sessionRepository.save(entity);
         return ValidationResult.ACTIVE;

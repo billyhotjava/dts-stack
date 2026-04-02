@@ -1,7 +1,6 @@
 import type { AuditLog, AuditLogDetail, AuditLogPageResponse } from "#/entity";
 import apiClient from "../apiClient";
 import { GLOBAL_CONFIG } from "@/global-config";
-import userStore from "@/store/userStore";
 
 /**
  * 审计日志API服务
@@ -116,12 +115,11 @@ export class AuditLogService {
 			}
 		});
 		const base = GLOBAL_CONFIG.apiBaseUrl;
-		const token = userStore.getState().userToken.accessToken;
 		const url = `${base}${AuditLogService.BASE_URL}/export${params.toString() ? `?${params.toString()}` : ""}`;
 		const response = await fetch(url, {
+			credentials: "include",
 			headers: {
 				Accept: "text/csv",
-				...(token ? { Authorization: `Bearer ${token}` } : {}),
 			},
 		});
 		if (!response.ok) {

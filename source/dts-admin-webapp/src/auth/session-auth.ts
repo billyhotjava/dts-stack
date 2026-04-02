@@ -1,86 +1,109 @@
-import { buildLoginRedirectHref, currentRoutePath as resolveCurrentRoutePath } from "@dts-session-core/route";
+import { create } from "zustand";
+import { currentRoutePath as resolveCurrentRoutePath } from "@dts-session-core/route";
+import type { CurrentSessionPayload } from "@/auth/session-state";
 import { GLOBAL_CONFIG } from "@/global-config";
-import userStore from "@/store/userStore";
 
-export type RefreshResult = {
-	accessToken: string;
-	refreshToken: string;
-} | null;
+const SESSION_DOMAIN = "admin";
+const LOG_PREFIX = `[session:${SESSION_DOMAIN}]`;
 
-let refreshPromise: Promise<RefreshResult> | null = null;
-let redirecting = false;
+let currentSessionPromise: Promise<CurrentSessionPayload> | null = null;
 
-function resolveAdminLoginHref(): string {
-	const loginRoute = "/auth/login";
-	const publicPath = String(GLOBAL_CONFIG.publicPath || "/").trim() || "/";
-	if (/^[a-zA-Z][a-zA-Z\d+.-]*:\/\//.test(publicPath) || publicPath.startsWith("//")) {
-		return `${publicPath.replace(/\/+$/, "")}${loginRoute}`;
-	}
-	if (publicPath === "/") {
-		return loginRoute;
-	}
-	return `${publicPath.replace(/\/+$/, "")}${loginRoute}`;
+function normalizeStringList(value: unknown): string[] {
+	if (!Array.isArray(value)) return [];
+	return value
+		.map((item) => (typeof item === "string" ? item.trim() : ""))
+		.filter(Boolean);
 }
 
-export async function refreshAccessToken(): Promise<RefreshResult> {
-	const refreshToken = String(userStore.getState().userToken?.refreshToken || "").trim();
-	if (!refreshToken) return null;
-	if (refreshPromise) return refreshPromise;
+function normalizeCurrentSessionPayload(raw: unknown): CurrentSessionPayload {
+	const record = raw && typeof raw === "object" ? (raw as Record<string, unknown>) : {};
+	const authenticated = Boolean(record.authenticated);
+	if (!authenticated) {
+		return { authenticated: false };
+	}
+	return {
+		authenticated: true,
+		username: typeof record.username === "string" ? record.username.trim() : undefined,
+		displayName: typeof record.displayName === "string" ? record.displayName.trim() : undefined,
+		browserId: typeof record.browserId === "string" ? record.browserId.trim() : undefined,
+		expiresAt: typeof record.expiresAt === "string" ? record.expiresAt.trim() : undefined,
+		deptCode: typeof record.deptCode === "string" ? record.deptCode.trim() : undefined,
+		personnelLevel: typeof record.personnelLevel === "string" ? record.personnelLevel.trim() : undefined,
+		roles: normalizeStringList(record.roles),
+		permissions: normalizeStringList(record.permissions),
+	};
+}
 
-	refreshPromise = (async (): Promise<RefreshResult> => {
+export async function fetchCurrentSession(): Promise<CurrentSessionPayload> {
+	if (currentSessionPromise) {
+		console.debug(LOG_PREFIX, "probe: joined in-flight request");
+		return currentSessionPromise;
+	}
+
+	currentSessionPromise = (async () => {
 		try {
-			const response = await fetch(`${GLOBAL_CONFIG.apiBaseUrl}/keycloak/auth/refresh`, {
-				method: "POST",
+			const apiBase = GLOBAL_CONFIG.apiBaseUrl || "/api";
+			const response = await fetch(`${apiBase}/session/current`, {
+				method: "GET",
 				credentials: "include",
-				headers: { "content-type": "application/json", accept: "application/json" },
-				body: JSON.stringify({ refreshToken }),
+				headers: {
+					accept: "application/json",
+				},
 			});
-			if (!response.ok) return null;
-
 			const body = await response.json().catch(() => null);
 			const data = body?.data ?? body?.result ?? body?.payload ?? body;
-			const nextAccess = String(data?.accessToken || data?.access_token || data?.token || "").trim();
-			if (!nextAccess) return null;
-			const nextRefresh = String(data?.refreshToken || data?.refresh_token || "").trim() || refreshToken;
-			userStore.getState().actions.setUserToken({ accessToken: nextAccess, refreshToken: nextRefresh });
-			return { accessToken: nextAccess, refreshToken: nextRefresh };
-		} catch {
-			return null;
+			return normalizeCurrentSessionPayload(data);
+		} catch (error) {
+			console.warn(LOG_PREFIX, "probe: failed", error);
+			return { authenticated: false };
 		}
 	})().finally(() => {
-		// Clear synchronously: all callers that already `await refreshPromise` hold their
-		// own reference and will receive the resolved value regardless of this assignment.
-		// Clearing immediately ensures NEW callers start a fresh refresh instead of joining
-		// a stale resolved promise.
-		refreshPromise = null;
+		currentSessionPromise = null;
 	});
 
-	return refreshPromise;
+	return currentSessionPromise;
 }
+
+type RedirectIntent = {
+	returnPath: string;
+	seq: number;
+} | null;
+
+type RedirectIntentStore = {
+	intent: RedirectIntent;
+	requestRedirect: (returnPath: string) => void;
+	clearIntent: () => void;
+};
+
+let redirectSeq = 0;
+
+export const useRedirectIntentStore = create<RedirectIntentStore>((set, get) => ({
+	intent: null,
+	requestRedirect: (returnPath: string) => {
+		const current = get().intent;
+		if (current && current.returnPath === returnPath) return;
+		redirectSeq += 1;
+		console.warn(LOG_PREFIX, "redirect: intent", { returnPath, seq: redirectSeq });
+		set({ intent: { returnPath, seq: redirectSeq } });
+	},
+	clearIntent: () => set({ intent: null }),
+}));
 
 export function currentRoutePath(): string {
 	return resolveCurrentRoutePath("browser");
 }
 
 export function redirectToLoginWithReturn(): void {
-	if (redirecting) return;
-	redirecting = true;
 	const loginPath = "/auth/login";
 	const current = currentRoutePath();
 	const pathOnly = current.split("?")[0];
-	// Already on the login page — don't navigate again. The ?redirect= parameter
-	// (if present) is already in the URL and will be read after login succeeds.
-	// Re-navigating to the same URL causes a reload loop.
 	if (pathOnly === loginPath || pathOnly.endsWith(loginPath)) {
+		console.debug(LOG_PREFIX, "redirect: skipped (already on login page)");
 		return;
 	}
-	window.location.replace(buildLoginRedirectHref(resolveAdminLoginHref(), current));
-}
-
-export function isRedirectInProgress(): boolean {
-	return redirecting;
+	useRedirectIntentStore.getState().requestRedirect(current);
 }
 
 export function resetLoginRedirectFlag(): void {
-	redirecting = false;
+	useRedirectIntentStore.getState().clearIntent();
 }

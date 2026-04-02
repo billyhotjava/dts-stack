@@ -3,17 +3,20 @@ import { toast } from "sonner";
 import { create } from "zustand";
 import { createJSONStorage, persist } from "zustand/middleware";
 import { readStorageValue, removeStorageKeys } from "@dts-session-core/storage";
-import type { UserInfo, UserToken } from "#/entity";
-import { StorageEnum } from "#/enum";
+import type { UserInfo } from "#/entity";
 import type { KeycloakTranslations } from "#/keycloak";
 import { KeycloakLocalizationService } from "@/api/services/keycloakLocalizationService";
+import type { CurrentSessionPayload, PortalSessionState, SessionReason } from "@/auth/session-state";
+import {
+	createAnonymousSessionState,
+	createAuthenticatedSessionState,
+	createBootstrappingSessionState,
+} from "@/auth/session-state";
 import userService, { type SignInReq } from "@/api/services/userService";
 import { ADMIN_LEGACY_SESSION_KEYS, ADMIN_LEGACY_USER_STORE_KEYS, ADMIN_SESSION_KEYS } from "@/auth/session-keys";
 import { GLOBAL_CONFIG } from "@/global-config";
 import { updateLocalTranslations } from "@/utils/translation";
 
-// Normalize possibly mixed arrays (objects or strings) to string[] by picking
-// common identity fields such as `code` or `name` when present.
 const normalizeToStringArray = (value: unknown): string[] => {
 	if (!Array.isArray(value)) return [];
 	const out: string[] = [];
@@ -27,12 +30,8 @@ const normalizeToStringArray = (value: unknown): string[] => {
 			const candidate = obj.code ?? obj.name ?? obj.value ?? "";
 			if (typeof candidate === "string" && candidate) {
 				out.push(candidate);
-				continue;
 			}
 		}
-		// Fallback stringification (rare)
-		const s = String(item ?? "");
-		if (s) out.push(s);
 	}
 	return out;
 };
@@ -45,92 +44,78 @@ const resolveAvatar = (raw: unknown): string => {
 	return s;
 };
 
-// Decode JWT payload (best-effort) and extract roles from common Keycloak/OIDC claims
-const decodeJwtPayload = (token?: string): Record<string, unknown> | null => {
-	if (!token) return null;
-	try {
-		const parts = token.split(".");
-		if (parts.length < 2) return null;
-		let payload = parts[1].replace(/-/g, "+").replace(/_/g, "/");
-		while (payload.length % 4 !== 0) payload += "=";
-		const json = atob(payload);
-		return JSON.parse(json) as Record<string, unknown>;
-	} catch {
-		return null;
-	}
-};
-
-const extractRolesFromClaims = (claims: Record<string, unknown> | null | undefined): string[] => {
-	if (!claims || typeof claims !== "object") return [];
-	const roles = new Set<string>();
-	const pushAll = (arr: unknown) => {
-		if (Array.isArray(arr)) {
-			for (const item of arr) {
-				const s = String(item || "").trim();
-				if (s) roles.add(s);
-			}
-		}
-	};
-	// Keycloak realm roles
-	const realm = (claims as any)?.realm_access;
-	if (realm && typeof realm === "object") {
-		pushAll((realm as any).roles);
-	}
-	// Keycloak resource (client) roles
-	const resource = (claims as any)?.resource_access;
-	if (resource && typeof resource === "object") {
-		for (const key of Object.keys(resource as Record<string, unknown>)) {
-			const entry = (resource as any)[key];
-			if (entry && typeof entry === "object") {
-				pushAll((entry as any).roles);
-			}
-		}
-	}
-	// Spring Security authorities (if present)
-	pushAll((claims as any)?.authorities);
-	// Flat roles claim (rare)
-	pushAll((claims as any)?.roles);
-	return Array.from(roles);
-};
-
-const isKeycloakBuiltinOrDefaultRoleName = (role: string): boolean => {
-	const trimmed = String(role || "").trim();
-	if (!trimmed) return true;
-	const lower = trimmed.toLowerCase();
-	const upper = trimmed.toUpperCase();
-	if (lower === "offline_access" || lower === "uma_authorization") return true;
-	if (lower.startsWith("default-roles-")) return true;
-	// Some realms may prefix realm roles into ROLE_* authorities.
-	if (upper === "ROLE_OFFLINE_ACCESS" || upper === "ROLE_UMA_AUTHORIZATION") return true;
-	if (upper.startsWith("ROLE_DEFAULT") || upper.startsWith("DEFAULT-ROLES")) return true;
-	return false;
-};
-
 type UserStore = {
 	userInfo: Partial<UserInfo>;
-	userToken: UserToken;
-
+	session: PortalSessionState;
 	actions: {
 		setUserInfo: (userInfo: UserInfo) => void;
-		setUserToken: (token: UserToken) => void;
-		clearUserInfoAndToken: () => void;
+		setSession: (session: PortalSessionState) => void;
+		markSessionChecking: () => void;
+		setAuthenticatedSession: (session: CurrentSessionPayload, userInfo?: Partial<UserInfo>) => void;
+		clearUserInfoAndToken: (reason?: SessionReason) => void;
 	};
 };
+
+function buildSessionUserInfo(
+	session: CurrentSessionPayload,
+	currentUserInfo: Partial<UserInfo> = {},
+): Partial<UserInfo> {
+	const username = session.username?.trim() || currentUserInfo.username || "";
+	const displayName = session.displayName?.trim() || currentUserInfo.fullName || currentUserInfo.firstName || username;
+	return {
+		...currentUserInfo,
+		username,
+		email: currentUserInfo.email || "",
+		firstName: currentUserInfo.firstName || displayName,
+		lastName: currentUserInfo.lastName || "",
+		fullName: currentUserInfo.fullName || displayName,
+		enabled: currentUserInfo.enabled ?? true,
+		roles: session.roles ?? normalizeToStringArray(currentUserInfo.roles),
+		permissions: session.permissions ?? normalizeToStringArray(currentUserInfo.permissions),
+		avatar: resolveAvatar(currentUserInfo.avatar),
+		attributes: currentUserInfo.attributes ?? {},
+	};
+}
 
 const useUserStore = create<UserStore>()(
 	persist(
 		(set) => ({
 			userInfo: {},
-			userToken: {},
+			session: createBootstrappingSessionState(),
 			actions: {
 				setUserInfo: (userInfo) => {
 					set({ userInfo });
 				},
-				setUserToken: (userToken) => {
-					set({ userToken });
+				setSession: (session) => {
+					set({ session });
 				},
-				clearUserInfoAndToken() {
-					set({ userInfo: {}, userToken: {} });
+				markSessionChecking: () => {
+					set((state) => ({
+						session: {
+							...state.session,
+							checking: true,
+							reason: state.session.initialized ? state.session.reason : "bootstrapping",
+						},
+					}));
+				},
+				setAuthenticatedSession(sessionPayload, userInfo = {}) {
+					set((state) => ({
+						userInfo: buildSessionUserInfo(sessionPayload, {
+							...state.userInfo,
+							...userInfo,
+						}),
+						session: createAuthenticatedSessionState({
+							browserId: sessionPayload.browserId,
+							expiresAt: sessionPayload.expiresAt,
+							lastCheckedAt: new Date().toISOString(),
+						}),
+					}));
+				},
+				clearUserInfoAndToken(reason = "logged_out") {
+					set({
+						userInfo: {},
+						session: createAnonymousSessionState(reason),
+					});
 					removeStorageKeys(
 						[
 							ADMIN_SESSION_KEYS.loginTs,
@@ -157,164 +142,136 @@ const useUserStore = create<UserStore>()(
 				removeItem: (name) => localStorage.removeItem(name),
 			})),
 			partialize: (state) => ({
-				[StorageEnum.UserInfo]: state.userInfo,
-				[StorageEnum.UserToken]: state.userToken,
+				userInfo: state.userInfo,
+				session: state.session,
 			}),
 		},
 	),
 );
 
 export const useUserInfo = () => useUserStore((state) => state.userInfo);
-export const useUserToken = () => useUserStore((state) => state.userToken);
+export const usePortalSession = () => useUserStore((state) => state.session);
 export const useUserPermissions = () => useUserStore((state) => state.userInfo.permissions || []);
 export const useUserRoles = () => useUserStore((state) => state.userInfo.roles || []);
 export const useUserActions = () => useUserStore((state) => state.actions);
 
-export const useSignIn = () => {
-	const { setUserToken, setUserInfo } = useUserActions();
-	const queryClient = useQueryClient();
+const expandAdminRoles = (roles: string[]): Set<string> => {
+	const set = new Set<string>((roles || []).map((role) => String(role || "").trim().toUpperCase()));
+	if (set.has("SYSADMIN") || set.has("SYS_ADMIN") || set.has("ROLE_SYSADMIN") || set.has("ROLE_SYSTEM_ADMIN")) {
+		set.add("ROLE_SYS_ADMIN");
+	}
+	if (set.has("AUTHADMIN") || set.has("AUTH_ADMIN") || set.has("IAM_ADMIN") || set.has("ROLE_AUTHADMIN")) {
+		set.add("ROLE_AUTH_ADMIN");
+	}
+	if (
+		set.has("AUDITADMIN") ||
+		set.has("AUDIT_ADMIN") ||
+		set.has("SECURITYAUDITOR") ||
+		set.has("SECURITY_AUDITOR") ||
+		set.has("ROLE_SECURITYAUDITOR") ||
+		set.has("ROLE_AUDITOR_ADMIN") ||
+		set.has("ROLE_AUDIT_ADMIN")
+	) {
+		set.add("ROLE_SECURITY_AUDITOR");
+	}
+	if (set.has("OPADMIN") || set.has("OP_ADMIN")) {
+		set.add("ROLE_OP_ADMIN");
+	}
+	return set;
+};
 
+export const useSignIn = () => {
+	const { setAuthenticatedSession } = useUserActions();
+	const queryClient = useQueryClient();
 	const signInMutation = useMutation({
 		mutationFn: userService.signin,
 	});
 
-	const USERNAME_FALLBACK_NAME: Record<string, string> = {
-		sysadmin: "系统管理员",
-		authadmin: "授权管理员",
-		auditadmin: "安全审计员",
-		opadmin: "业务运维管理员",
-	};
-
-	const signIn = async (data: SignInReq) => {
+	const signIn = async (data: SignInReq): Promise<UserInfo> => {
 		try {
 			const res = await signInMutation.mutateAsync(data);
-			const { user, accessToken, refreshToken } = res;
-			if (res.sessionTakeover) {
-				toast.warning("检测到该账号已在其他位置登录，已结束之前的会话。", {
-					position: "top-center",
-					closeButton: true,
-				});
-			}
+			const rawUser = (res as any)?.user ?? (res as any)?.userInfo ?? {};
+			const rawNotice = typeof (res as any)?.sessionNotice === "string" ? ((res as any).sessionNotice as string).trim() : "";
+			const takeoverFlag = Boolean((res as any)?.sessionTakeover);
+			const takeoverMessage = rawNotice || (takeoverFlag ? "已切换到当前登录，其他会话已下线" : "");
 
-			// 适配后端数据格式：处理角色和权限信息
-			const getAttr = (key: string) => {
-				const attr = user.attributes as Record<string, string[]> | undefined;
-				if (!attr) return "";
-				const value = attr[key] || attr[key.toLowerCase()];
-				if (Array.isArray(value) && value.length > 0) {
-					const found = value.find((item) => item && item.trim());
-					return (found || value[0] || "").trim();
-				}
-				return "";
-			};
-			const attributeFullName = getAttr("fullName");
-			const usernameLower = user.username?.toLowerCase() ?? "";
-			const fallbackName = USERNAME_FALLBACK_NAME[usernameLower] || "";
-			const resolvedFullName =
-				attributeFullName || user.fullName || user.firstName || fallbackName || user.lastName || user.username || "";
-
-			const adaptedUser = {
-				...user,
-				attributes: (user.attributes as Record<string, string[]>) || {},
-				// 处理角色/权限信息 - 统一为字符串数组
-				roles: normalizeToStringArray(user.roles),
-				permissions: normalizeToStringArray(user.permissions),
-				// 为用户设置默认头像（使用 public 目录下的静态资源路径，兼容生产环境）
-				avatar: resolveAvatar(user.avatar),
-				// 确保必要的字段存在
-				firstName: user.firstName || attributeFullName || resolvedFullName,
-				fullName: resolvedFullName,
-				lastName: user.lastName || "",
-				email: user.email || "",
-				enabled: user.enabled !== undefined ? user.enabled : true,
+			const adaptedUser: UserInfo = {
+				...rawUser,
+				id: typeof rawUser.id === "string" ? rawUser.id : data.username,
+				username: rawUser.username || data.username || "",
+				firstName: rawUser.firstName || rawUser.fullName || rawUser.username || data.username || "",
+				fullName: rawUser.fullName || rawUser.firstName || rawUser.username || data.username || "",
+				lastName: rawUser.lastName || "",
+				email: rawUser.email || "",
+				enabled: rawUser.enabled !== undefined ? rawUser.enabled : true,
+				avatar: resolveAvatar(rawUser.avatar),
+				attributes: (rawUser.attributes as Record<string, string[]>) || {},
+				roles: normalizeToStringArray(rawUser.roles),
+				permissions: normalizeToStringArray(rawUser.permissions),
 			};
 
-			// Augment roles from access token claims when backend user lacks explicit roles
-			try {
-				const claims = decodeJwtPayload(accessToken);
-				const tokenRoles = extractRolesFromClaims(claims);
-				if (Array.isArray(adaptedUser.roles) && tokenRoles.length > 0) {
-					const merged = new Set<string>([...adaptedUser.roles.map((r: any) => String(r || "")), ...tokenRoles]);
-					adaptedUser.roles = Array.from(merged);
-				} else if (tokenRoles.length > 0) {
-					adaptedUser.roles = tokenRoles;
-				}
-			} catch {
-				// ignore token parsing errors
-			}
-
-			// Helper to expand role synonyms and normalize naming
-			const expandSynonyms = (roles: string[]): Set<string> => {
-				const set = new Set<string>((roles || []).map((r) => String(r || "").toUpperCase()));
-				if (set.has("SYSADMIN") || set.has("SYS_ADMIN")) set.add("ROLE_SYS_ADMIN");
-				if (set.has("AUTHADMIN") || set.has("AUTH_ADMIN") || set.has("IAM_ADMIN")) set.add("ROLE_AUTH_ADMIN");
-				if (set.has("AUDITADMIN") || set.has("AUDIT_ADMIN")) set.add("ROLE_SECURITY_AUDITOR");
-				if (set.has("SECURITYAUDITOR") || set.has("SECURITY_AUDITOR")) set.add("ROLE_SECURITY_AUDITOR");
-				// Accept common prefixed variants from legacy realms
-				if (set.has("ROLE_AUDITOR_ADMIN") || set.has("ROLE_AUDIT_ADMIN") || set.has("ROLE_SECURITYAUDITOR")) {
-					set.add("ROLE_SECURITY_AUDITOR");
-				}
-				if (set.has("ROLE_SYSADMIN") || set.has("ROLE_SYSTEM_ADMIN")) {
-					set.add("ROLE_SYS_ADMIN");
-				}
-				if (set.has("ROLE_AUTHADMIN") || set.has("ROLE_IAM_ADMIN") || set.has("ROLE_AUTH_ADMINISTRATOR")) {
-					set.add("ROLE_AUTH_ADMIN");
-				}
-				if (set.has("OPADMIN") || set.has("OP_ADMIN")) set.add("ROLE_OP_ADMIN");
-				return set;
-			};
-
-			const canonicalizeRoles = (roles: string[]): string[] => {
-				const set = expandSynonyms(roles);
-				// preserve originals + ensure canonical role codes exist
-				const originals = (roles || []).map((r) => String(r || ""));
-				const canonicals = ["ROLE_SYS_ADMIN", "ROLE_AUTH_ADMIN", "ROLE_SECURITY_AUDITOR", "ROLE_OP_ADMIN"].filter((r) =>
-					set.has(r),
-				);
-				return Array.from(new Set([...originals, ...canonicals]));
-			};
-
-			// Normalize user roles canonically for downstream guards/menu auth
-			adaptedUser.roles = canonicalizeRoles(Array.isArray(adaptedUser.roles) ? (adaptedUser.roles as string[]) : []).filter(
-				(role) => !isKeycloakBuiltinOrDefaultRoleName(role),
+			const roleSet = expandAdminRoles(Array.isArray(adaptedUser.roles) ? (adaptedUser.roles as string[]) : []);
+			adaptedUser.roles = Array.from(
+				new Set([
+					...(Array.isArray(adaptedUser.roles) ? (adaptedUser.roles as string[]) : []),
+					...["ROLE_SYS_ADMIN", "ROLE_AUTH_ADMIN", "ROLE_SECURITY_AUDITOR", "ROLE_OP_ADMIN"].filter((role) =>
+						roleSet.has(role),
+					),
+				]),
 			);
 
-			const FE_GUARD_ENABLED = String(import.meta.env.VITE_ENABLE_FE_GUARD || "false").toLowerCase() === "true";
+			const FE_GUARD_ENABLED = String(import.meta.env.VITE_ENABLE_FE_GUARD ?? "true").toLowerCase() === "true";
 			if (FE_GUARD_ENABLED) {
 				const allowed = Array.isArray(GLOBAL_CONFIG.allowedLoginRoles) ? GLOBAL_CONFIG.allowedLoginRoles : [];
-				const allowedSet = expandSynonyms(allowed);
-				const userRoles: string[] = Array.isArray(adaptedUser.roles) ? (adaptedUser.roles as string[]) : [];
-				const userSet = expandSynonyms(userRoles);
-				if (allowedSet.size > 0) {
-					const hasAllowed = Array.from(userSet).some((r) => allowedSet.has(r));
-					if (!hasAllowed) {
-						throw new Error("您无权登录该系统");
-					}
+				const allowedSet = expandAdminRoles(allowed);
+				if (allowedSet.size > 0 && !Array.from(roleSet).some((role) => allowedSet.has(role))) {
+					throw new Error("您无权登录该系统");
 				}
-				// Defense-in-depth: explicitly forbid platform-only role on admin console
-				if (userSet.has("ROLE_OP_ADMIN")) {
+				if (roleSet.has("ROLE_OP_ADMIN")) {
 					throw new Error("您无权登录该系统");
 				}
 			}
 
-			setUserToken({ accessToken, refreshToken });
-			setUserInfo(adaptedUser);
+			setAuthenticatedSession(
+				{
+					authenticated: true,
+					username: adaptedUser.username,
+					displayName: adaptedUser.fullName || adaptedUser.firstName || adaptedUser.username,
+					browserId:
+						typeof (res as any)?.browserId === "string" && (res as any).browserId.trim()
+							? (res as any).browserId.trim()
+							: undefined,
+					roles: normalizeToStringArray(adaptedUser.roles),
+					permissions: normalizeToStringArray(adaptedUser.permissions),
+				},
+				adaptedUser,
+			);
+
 			queryClient.removeQueries({ queryKey: ["admin", "whoami"], exact: true });
 			try {
 				localStorage.setItem(ADMIN_SESSION_KEYS.loginTs, String(Date.now()));
-			} catch {}
+			} catch {
+				// ignore storage errors
+			}
 
-			// 登录成功后获取并更新Keycloak翻译词条
 			try {
 				const translations: KeycloakTranslations = await KeycloakLocalizationService.getChineseTranslations();
 				updateLocalTranslations(translations);
 			} catch (translationError) {
 				console.warn("Failed to load Keycloak translations:", translationError);
-				// 不阻塞登录流程，即使翻译加载失败也继续
 			}
+
+			if (takeoverMessage) {
+				toast.info(takeoverMessage, {
+					position: "top-center",
+					closeButton: true,
+				});
+			}
+
 			return adaptedUser;
 		} catch (err) {
-			toast.error(err.message, {
+			const message = err instanceof Error ? err.message : "登录失败";
+			toast.error(message, {
 				position: "top-center",
 			});
 			throw err;
@@ -347,18 +304,12 @@ export const useSignOut = () => {
 	const { clearUserInfoAndToken } = useUserActions();
 
 	const signOut = async () => {
-		const { userToken, userInfo } = useUserStore.getState();
+		const { userInfo } = useUserStore.getState();
 		try {
-			// 如果有refreshToken，调用后端登出接口
-			const refreshToken = userToken?.refreshToken;
-			if (refreshToken) {
-				await userService.logout(refreshToken, resolveUsernameForLogout(userInfo));
-			}
+			await userService.logout(undefined, resolveUsernameForLogout(userInfo));
 		} catch (error) {
 			console.error("Logout error:", error);
-			// 即使登出接口失败，也要清理本地信息
 		} finally {
-			// 清理本地存储的用户信息和token
 			clearUserInfoAndToken();
 		}
 	};

@@ -5,13 +5,12 @@ import { ResultStatus } from "#/enum";
 import { GLOBAL_CONFIG } from "@/global-config";
 import { t } from "@/locales/i18n";
 import { isLoginRouteActive } from "@/routes/constants";
-import { refreshAccessToken, redirectToLoginWithReturn, useRedirectIntentStore } from "@/auth/session-auth";
+import { redirectToLoginWithReturn, useRedirectIntentStore } from "@/auth/session-auth";
 import { PLATFORM_LEGACY_SESSION_KEYS, PLATFORM_SESSION_KEYS } from "@/auth/session-keys";
 import useContextStore from "@/store/contextStore";
 import userStore from "@/store/userStore";
 import { readStorageValue } from "@dts-session-core/storage";
 
-/** 将 Axios 内部英文错误消息转换为中文，避免"Network Error"等直接透传给用户 */
 function normalizeAxiosErrorMessage(msg: string | undefined): string {
 	if (!msg) return "";
 	const lower = msg.toLowerCase();
@@ -33,6 +32,7 @@ function normalizeAxiosErrorMessage(msg: string | undefined): string {
 const axiosInstance = axios.create({
 	baseURL: GLOBAL_CONFIG.apiBaseUrl,
 	timeout: 30000,
+	withCredentials: true,
 	headers: { "Content-Type": "application/json;charset=utf-8" },
 });
 
@@ -52,46 +52,16 @@ const isSuccessStatus = (status: unknown): boolean => {
 	return false;
 };
 
-const TEST_SESSION_ENABLED =
-	String(import.meta.env.VITE_TEST_LONG_SESSION ?? import.meta.env.VITE_TEST_SESSION ?? "false").toLowerCase() ===
-	"true";
-// TEST_SESSION_REFRESH_MS / TEST_SESSION_MAX_AGE_MS removed — keep-alive timer no longer lives here.
-
-// ── Token refresh coordination ──
-// Delegate to the shared single-flight refresh in session-auth.ts.
-// This ensures apiClient, SessionManager, and analyticsApi all share one lock.
-async function refreshTokenIfPossible(): Promise<boolean> {
-	const result = await refreshAccessToken();
-	return result !== null;
-}
-
-// ── Keep-alive timer — REMOVED ──
-// The keep-alive timer (4-min interval + visibility change handler) has been removed.
-// SessionManager now owns the sole proactive refresh schedule (JWT exp − 60s).
-// This eliminates the dual-timer race where both timers could consume a single-use
-// refresh token concurrently, causing one to fail and trigger a forced logout.
-
-// ── Request interceptor ──
 axiosInstance.interceptors.request.use(
 	(config) => {
-		const { userToken } = userStore.getState();
 		const url = config.url || "";
 		const isAuthPath = url.includes("/keycloak/auth/");
-		// For FormData uploads, let the browser set the proper multipart boundary
 		if (typeof FormData !== "undefined" && config.data instanceof FormData) {
 			if (config.headers) {
 				delete (config.headers as any)["Content-Type"];
 			}
 		}
-		if (userToken.accessToken && !isAuthPath) {
-			const raw = String(userToken.accessToken).trim();
-			const token = raw.startsWith("Bearer ") ? raw.slice(7).trim() : raw;
-			if (token) {
-				config.headers.Authorization = `Bearer ${token}`;
-			}
-		}
 
-		// Inject active department header for ABAC gates (non-auth endpoints)
 		if (!isAuthPath) {
 			try {
 				const ctx = useContextStore.getState();
@@ -101,14 +71,14 @@ axiosInstance.interceptors.request.use(
 				} else {
 					try {
 						const ui: any = userStore.getState().userInfo || {};
-						const pick = (v: any): string => {
-							if (Array.isArray(v)) return String(v[0] ?? "").trim();
-							if (v == null) return "";
-							return String(v).trim();
+						const pick = (value: any): string => {
+							if (Array.isArray(value)) return String(value[0] ?? "").trim();
+							if (value == null) return "";
+							return String(value).trim();
 						};
 						const attrs: any = ui.attributes || {};
 						const fromAttrs = pick(attrs.dept_code || attrs.deptCode || attrs.department);
-						const fromTop = pick(ui.dept_code || ui.deptCode);
+						const fromTop = pick(ui.dept_code || ui.deptCode || ui.department);
 						const dept = (fromAttrs || fromTop || "").trim();
 						if (dept) {
 							(config.headers as any)["X-Active-Dept"] = dept;
@@ -118,8 +88,8 @@ axiosInstance.interceptors.request.use(
 						}
 					} catch {}
 				}
-			} catch (_e) {
-				console.warn("Failed to inject active context headers", _e);
+			} catch (_error) {
+				console.warn("Failed to inject active context headers", _error);
 			}
 		}
 
@@ -132,14 +102,12 @@ axiosInstance.interceptors.request.use(
 	},
 );
 
-// ── Response interceptor ──
 axiosInstance.interceptors.response.use(
 	(res: AxiosResponse<Result<any>>) => {
 		console.log("API Response:", res.status, res.config.url, res.data);
 
 		if (!res.data) throw new Error(t("sys.api.apiRequestFailed"));
 
-		// Keycloak API: may or may not wrap in {status, data}
 		if (res.config.url?.includes("/keycloak/")) {
 			if (res.data && typeof res.data === "object" && "status" in res.data) {
 				const { status, data, message } = res.data;
@@ -149,28 +117,19 @@ axiosInstance.interceptors.response.use(
 			return res.data;
 		}
 
-		// Standard API response: {status, data, message}
 		const { status, data, message } = res.data;
 		if (isSuccessStatus(status)) return data;
 		throw new Error(message || t("sys.api.apiRequestFailed"));
 	},
 	async (error: AxiosError<Result>) => {
 		const { response, config: errorConfig, message } = error || {};
-		// For network errors, `response` is undefined but `config` is still on the error object
 		const requestUrl = response?.config?.url ?? errorConfig?.url ?? "";
 		const skipErrorToast = Boolean(
-			(response?.config as any)?._skipErrorToast || (errorConfig as any)?._skipErrorToast
+			(response?.config as any)?._skipErrorToast || (errorConfig as any)?._skipErrorToast,
 		);
 		const isLoginRequest =
 			typeof requestUrl === "string" &&
 			(requestUrl.includes("/keycloak/auth/login") || requestUrl.includes("/keycloak/auth/platform/login"));
-		// _isRefreshRequest is no longer set — refreshTokenIfPossible now uses raw fetch
-		// via session-auth.ts and never passes through this axios interceptor.
-		// The guard is kept as defense-in-depth in case a direct axiosInstance.post to
-		// the refresh endpoint is introduced in the future.
-		const isRefreshRequest =
-			Boolean((response?.config as any)?._isRefreshRequest) ||
-			(typeof requestUrl === "string" && requestUrl.includes("/keycloak/auth/refresh"));
 		const shouldSuppressAuthHandling =
 			typeof requestUrl === "string" &&
 			(requestUrl.includes("/keycloak/localization/") || requestUrl.includes("/workbench/"));
@@ -226,33 +185,12 @@ axiosInstance.interceptors.response.use(
 		}
 		const combinedMsg = hint ? `${errMsg}（${hint}）` : errMsg;
 		(error as any).message = combinedMsg;
-		// Match explicit session-conflict / session-expired messages from the backend.
-		// Deliberately excludes bare "session" — Keycloak errors like "Session not active"
-		// should NOT trigger a force-logout (they're handled by the 401 refresh path).
 		const sessionErrorByMessage =
 			typeof combinedMsg === "string" &&
 			/已在其他位置登录|会话已超时|重新登录|session.?conflict|session.?expired/i.test(combinedMsg);
 		const shouldForceLogout = sessionExpiredHeader || sessionConflictHeader || sessionErrorByMessage;
 
-		// ── 401 handling ──
-		// Never intercept refresh requests themselves — avoid infinite loops
-		if (response?.status === 401 && !shouldSuppressAuthHandling && !isLoginRequest && !isRefreshRequest) {
-			const cfg = response.config || {};
-			if (!(cfg as any)._retry) {
-				const refreshed = await refreshTokenIfPossible();
-				if (refreshed) {
-					const { userToken } = userStore.getState();
-					(cfg.headers as any) = (cfg.headers as any) || {};
-					(cfg.headers as any).Authorization = userToken?.accessToken ? `Bearer ${userToken.accessToken}` : undefined;
-					(cfg as any)._retry = true;
-					try {
-						return await axiosInstance.request(cfg as any);
-					} catch (_e) {
-						// fallthrough to logout handling below
-					}
-				}
-			}
-			// Grace window just after login
+		if (response?.status === 401 && !shouldSuppressAuthHandling && !isLoginRequest) {
 			try {
 				const loginTs = Number(
 					readStorageValue(PLATFORM_SESSION_KEYS.loginTs, PLATFORM_LEGACY_SESSION_KEYS.loginTs, localStorage) || "0",
@@ -262,28 +200,16 @@ axiosInstance.interceptors.response.use(
 					return Promise.reject(error);
 				}
 			} catch {}
-			// Force logout only when server explicitly signals session issue
-			if (shouldForceLogout) {
-				userStore.getState().actions.clearUserInfoAndToken();
-				try {
-					localStorage.setItem(PLATFORM_SESSION_KEYS.logoutTs, String(Date.now()));
-				} catch {}
-				if (typeof window !== "undefined" && !isLoginRouteActive()) {
-					redirectToLoginWithReturn();
-				}
+			userStore.getState().actions.clearUserInfoAndToken(sessionConflictHeader ? "taken_over" : "expired");
+			if (typeof window !== "undefined" && !isLoginRouteActive()) {
+				redirectToLoginWithReturn();
 			}
-			// Otherwise: just reject — caller handles the error, don't destroy session
-		} else if (shouldForceLogout && !TEST_SESSION_ENABLED) {
-			userStore.getState().actions.clearUserInfoAndToken();
-			try {
-				localStorage.setItem(PLATFORM_SESSION_KEYS.logoutTs, String(Date.now()));
-			} catch {}
+		} else if (shouldForceLogout) {
+			userStore.getState().actions.clearUserInfoAndToken(sessionConflictHeader ? "taken_over" : "expired");
 			if (typeof window !== "undefined" && !isLoginRouteActive()) {
 				redirectToLoginWithReturn();
 			}
 		} else {
-			// Suppress error toasts when a login redirect is already in progress —
-			// all in-flight requests will fail, but the user is about to see the login page.
 			const redirectInProgress = useRedirectIntentStore.getState().intent !== null;
 			if (!shouldSuppressAuthHandling && !isLoginRequest && !redirectInProgress) {
 				if (!skipErrorToast) {

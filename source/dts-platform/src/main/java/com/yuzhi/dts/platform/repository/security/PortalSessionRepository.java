@@ -1,6 +1,7 @@
 package com.yuzhi.dts.platform.repository.security;
 
 import com.yuzhi.dts.platform.domain.security.PortalSessionEntity;
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 import jakarta.persistence.LockModeType;
@@ -18,7 +19,13 @@ public interface PortalSessionRepository extends JpaRepository<PortalSessionEnti
 
     Optional<PortalSessionEntity> findByNormalizedUsernameAndRevokedAtIsNull(String normalizedUsername);
 
+    List<PortalSessionEntity> findAllByNormalizedUsernameAndRevokedAtIsNull(String normalizedUsername);
+
     @Lock(LockModeType.PESSIMISTIC_WRITE)
-    @Query("select ps from PortalSessionEntity ps where ps.normalizedUsername = :username and ps.revokedAt is null")
-    Optional<PortalSessionEntity> findActiveForUpdate(@Param("username") String normalizedUsername);
+    @Query(
+        "select ps from PortalSessionEntity ps " +
+        "where ps.normalizedUsername = :username and ps.revokedAt is null " +
+        "order by ps.createdAt desc"
+    )
+    List<PortalSessionEntity> findAllActiveForUpdate(@Param("username") String normalizedUsername);
 }

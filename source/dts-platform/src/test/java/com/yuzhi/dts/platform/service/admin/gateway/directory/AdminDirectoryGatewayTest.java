@@ -95,7 +95,7 @@ class AdminDirectoryGatewayTest {
             );
 
         assertThat(gateway.searchUsers("alice"))
-            .containsExactly(new AdminDirectoryGateway.UserSummary("u1", "alice", "Alice", "1001"));
+            .containsExactly(new AdminDirectoryGateway.UserSummary("u1", "alice", "Alice", "1001", null));
     }
 
     @Test

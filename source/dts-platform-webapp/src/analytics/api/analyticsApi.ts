@@ -1,6 +1,4 @@
-import { refreshAccessToken, redirectToLoginWithReturn, resetLoginRedirectFlag } from '@/auth/session-auth';
-import { readPersistedRoles, readPersistedTokens } from '@dts-session-core/persisted-store';
-import { PLATFORM_LEGACY_USER_STORE_KEYS, PLATFORM_SESSION_KEYS } from '@/auth/session-keys';
+import { redirectToLoginWithReturn, resetLoginRedirectFlag } from '@/auth/session-auth';
 
 export type CollectionListItem = {
 	id: number | "root";
@@ -1126,29 +1124,6 @@ export type ScreenComponentData = {
 	interaction?: Record<string, unknown>;
 };
 
-/**
- * Read platform access/refresh tokens from the shared localStorage store.
- * This is the same store used by the platform's userStore (Zustand with persist).
- */
-/**
- * Read platform tokens from the shared localStorage store.
- * Traefik forward-auth validates the portal session token (accessToken / demo-xxx),
- * NOT the Keycloak JWT (adminAccessToken).
- */
-function getPlatformTokens(): { accessToken: string; refreshToken: string } {
-	const { accessToken, refreshToken } = readPersistedTokens(
-		PLATFORM_SESSION_KEYS.userStore,
-		PLATFORM_LEGACY_USER_STORE_KEYS,
-		localStorage,
-	);
-	return { accessToken, refreshToken };
-}
-
-/** 从 userStore 读取当前用户角色列表，用于填充 X-DTS-Roles 请求头。 */
-function getPlatformRoles(): string {
-	return readPersistedRoles(PLATFORM_SESSION_KEYS.userStore, PLATFORM_LEGACY_USER_STORE_KEYS, localStorage).join(",");
-}
-
 // ── Auth coordination ──
 // Token refresh and login redirect are delegated to the shared session-auth module.
 // This ensures analyticsApi, apiClient, and SessionManager all share one single-flight
@@ -1197,59 +1172,16 @@ function isPublicAnalyticsUrl(url: string): boolean {
 	);
 }
 
-async function apiFetch(url: string, init: RequestInit, allowRefresh: boolean): Promise<Response> {
-	const tokens = getPlatformTokens();
+async function apiFetch(url: string, init: RequestInit, allowRedirect: boolean): Promise<Response> {
 	const headers = new Headers(init.headers ?? {});
 	if (!headers.has("accept")) headers.set("accept", "application/json");
-	if (tokens.accessToken && !headers.has("authorization")) {
-		headers.set("authorization", `Bearer ${tokens.accessToken}`);
-	}
-	const roles = getPlatformRoles();
-	if (roles && !headers.has("x-dts-roles")) {
-		headers.set("x-dts-roles", roles);
-	}
 
 	const response = await fetch(url, { ...init, credentials: "include", headers });
-	// Public endpoints: never redirect on 401 — let the caller render the auth-error UI.
-	if (response.status !== 401 || !allowRefresh || isPublicAnalyticsUrl(url)) {
+	if (response.status !== 401 || !allowRedirect || isPublicAnalyticsUrl(url)) {
 		return response;
 	}
-
-	if (!tokens.refreshToken) {
-		return response;
-	}
-
-	// Use the shared single-flight refresh — same lock as apiClient and SessionManager.
-	// The refresh function has built-in cooldown (5s) and cross-tab sync to prevent
-	// race conditions when multiple tabs share the same refresh token.
-	const refreshed = await refreshAccessToken();
-	if (!refreshed?.accessToken) {
-		// Don't redirect immediately — the cooldown in refreshAccessToken prevents storms,
-		// and another tab might have already refreshed successfully.
-		// Only redirect if we still have no valid token after the attempt.
-		const latestTokens = getPlatformTokens();
-		if (!latestTokens.accessToken) {
-			redirectToLoginWithReturn();
-		}
-		return response;
-	}
-
-	const retryHeaders = new Headers(init.headers ?? {});
-	if (!retryHeaders.has("accept")) retryHeaders.set("accept", "application/json");
-	retryHeaders.set("authorization", `Bearer ${refreshed.accessToken}`);
-	if (roles && !retryHeaders.has("x-dts-roles")) {
-		retryHeaders.set("x-dts-roles", roles);
-	}
-	const retryResponse = await fetch(url, { ...init, credentials: "include", headers: retryHeaders });
-	if (retryResponse.status === 401) {
-		// Only redirect if we genuinely have no valid token — another tab may have
-		// refreshed successfully between our retry and now.
-		const finalTokens = getPlatformTokens();
-		if (!finalTokens.accessToken) {
-			redirectToLoginWithReturn();
-		}
-	}
-	return retryResponse;
+	redirectToLoginWithReturn();
+	return response;
 }
 
 export async function fetchWithPlatformAuth(

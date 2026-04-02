@@ -47,42 +47,94 @@ class PortalSessionRegistryTest {
     }
 
     @Test
-    void refreshSessionMarksPreviousTokenExpired() {
+    void refreshSessionRenewsCurrentSessionInPlace() {
         var repository = newRepository();
         var registry = newRegistry(repository, true);
         var activityService = newActivityService(repository);
         var session = registry.createSession("portaluser", List.of("ROLE_USER"), List.of("portal.view"), null);
         var priorToken = session.accessToken();
         var priorRefresh = session.refreshToken();
+        var priorSessionId = session.sessionId();
+        var priorExpiry = session.expiresAt();
 
         var refreshed = registry.refreshSession(priorRefresh, existing -> existing.adminTokens());
 
-        assertThat(refreshed.accessToken()).isNotEqualTo(priorToken);
-        var oldTokenState = activityService.touch(priorToken, Instant.now().plusSeconds(1));
-        assertThat(oldTokenState).isEqualTo(ValidationResult.EXPIRED);
+        assertThat(refreshed.sessionId()).isEqualTo(priorSessionId);
+        assertThat(refreshed.accessToken()).isEqualTo(priorToken);
+        assertThat(refreshed.refreshToken()).isEqualTo(priorRefresh);
+        assertThat(refreshed.expiresAt()).isAfter(priorExpiry);
 
-        var newTokenState = activityService.touch(refreshed.accessToken(), Instant.now().plusSeconds(2));
-        assertThat(newTokenState).isEqualTo(ValidationResult.ACTIVE);
+        var tokenState = activityService.touch(priorToken, Instant.now().plusSeconds(1));
+        assertThat(tokenState).isEqualTo(ValidationResult.ACTIVE);
     }
 
     @Test
-    void singleSessionEnforcementIsCaseInsensitive() {
+    void sameBrowserCreateSessionReusesExistingSessionWithoutConflict() {
         var repository = newRepository();
         var registry = newRegistry(repository, true);
         var activityService = newActivityService(repository);
-        var initial = registry.createSession("PortalUser", List.of("ROLE_USER"), List.of("portal.view"), null);
+        var initial = registry.createSession(
+            "PortalUser",
+            List.of("ROLE_USER"),
+            List.of("portal.view"),
+            null,
+            null,
+            "Portal User",
+            "browser-1",
+            null
+        );
 
-        assertThat(registry.hasActiveSession("portaluser")).isTrue();
+        assertThat(registry.hasActiveSession("portaluser", "browser-1")).isFalse();
 
-        var takeover = registry.createSession("portaluser", List.of("ROLE_USER"), List.of("portal.view"), null);
+        var reused = registry.createSession(
+            "portaluser",
+            List.of("ROLE_USER"),
+            List.of("portal.view"),
+            null,
+            null,
+            "Portal User",
+            "browser-1",
+            null
+        );
 
-        var initialState = activityService.touch(initial.accessToken(), Instant.now().plusSeconds(1));
-        assertThat(initialState).isEqualTo(ValidationResult.CONCURRENT);
+        assertThat(reused.sessionId()).isEqualTo(initial.sessionId());
+        assertThat(reused.accessToken()).isEqualTo(initial.accessToken());
+        assertThat(reused.refreshToken()).isEqualTo(initial.refreshToken());
+        assertThat(activityService.touch(initial.accessToken(), Instant.now().plusSeconds(1))).isEqualTo(ValidationResult.ACTIVE);
+        assertThat(registry.hasActiveSession("PORTALUSER", "browser-2")).isTrue();
+    }
 
-        assertThat(registry.hasActiveSession("PORTALUSER")).isTrue();
+    @Test
+    void crossBrowserTakeoverRevokesPreviousSessionCaseInsensitively() {
+        var repository = newRepository();
+        var registry = newRegistry(repository, true);
+        var activityService = newActivityService(repository);
+        var initial = registry.createSession(
+            "PortalUser",
+            List.of("ROLE_USER"),
+            List.of("portal.view"),
+            null,
+            null,
+            "Portal User",
+            "browser-1",
+            null
+        );
 
-        var takeoverState = activityService.touch(takeover.accessToken(), Instant.now().plusSeconds(2));
-        assertThat(takeoverState).isEqualTo(ValidationResult.ACTIVE);
+        var takeover = registry.createSession(
+            "portaluser",
+            List.of("ROLE_USER"),
+            List.of("portal.view"),
+            null,
+            null,
+            "Portal User",
+            "browser-2",
+            null
+        );
+
+        assertThat(activityService.touch(initial.accessToken(), Instant.now().plusSeconds(1))).isEqualTo(ValidationResult.CONCURRENT);
+        assertThat(activityService.touch(takeover.accessToken(), Instant.now().plusSeconds(2))).isEqualTo(ValidationResult.ACTIVE);
+        assertThat(registry.hasActiveSession("PORTALUSER", "browser-2")).isFalse();
+        assertThat(registry.hasActiveSession("portaluser", "browser-3")).isTrue();
     }
 
     @Test
@@ -99,12 +151,45 @@ class PortalSessionRegistryTest {
     }
 
     @Test
-    void createSessionFailsWhenTakeoverNotAllowed() {
+    void createSessionFailsWhenTakeoverNotAllowedAcrossBrowsersOnly() {
         var repository = newRepository();
         var registry = newRegistry(repository, false);
-        registry.createSession("portaluser", List.of("ROLE_USER"), List.of("portal.view"), null);
+        var initial = registry.createSession(
+            "portaluser",
+            List.of("ROLE_USER"),
+            List.of("portal.view"),
+            null,
+            null,
+            "Portal User",
+            "browser-1",
+            null
+        );
+        var reused = registry.createSession(
+            "portaluser",
+            List.of("ROLE_USER"),
+            List.of("portal.view"),
+            null,
+            null,
+            "Portal User",
+            "browser-1",
+            null
+        );
+
+        assertThat(reused.sessionId()).isEqualTo(initial.sessionId());
         org.assertj.core.api.Assertions
-            .assertThatThrownBy(() -> registry.createSession("portaluser", List.of("ROLE_USER"), List.of("portal.view"), null))
+            .assertThatThrownBy(
+                () ->
+                    registry.createSession(
+                        "portaluser",
+                        List.of("ROLE_USER"),
+                        List.of("portal.view"),
+                        null,
+                        null,
+                        "Portal User",
+                        "browser-2",
+                        null
+                    )
+            )
             .isInstanceOf(PortalSessionRegistry.ActiveSessionExistsException.class);
     }
 
@@ -119,6 +204,26 @@ class PortalSessionRegistryTest {
 
         assertThat(session.expiresAt()).isAfterOrEqualTo(before.plusSeconds(29 * 60));
         assertThat(session.expiresAt()).isBeforeOrEqualTo(after.plusSeconds(31 * 60));
+    }
+
+    @Test
+    void createSessionPreservesBrowserIdAcrossLookup() {
+        var repository = newRepository();
+        var registry = newRegistry(repository, true);
+
+        var session = registry.createSession(
+            "portaluser",
+            List.of("ROLE_USER"),
+            List.of("portal.view"),
+            null,
+            null,
+            "Portal User",
+            "browser-1",
+            null
+        );
+
+        assertThat(session.browserId()).isEqualTo("browser-1");
+        assertThat(registry.findByAccessToken(session.accessToken()).orElseThrow().browserId()).isEqualTo("browser-1");
     }
 
     private static final class InMemoryPortalSessionRepository implements InvocationHandler {
@@ -144,7 +249,8 @@ class PortalSessionRegistryTest {
                 case "findByAccessToken" -> findByAccessToken((String) args[0]);
                 case "findByRefreshToken" -> findByRefreshToken((String) args[0]);
                 case "findByNormalizedUsernameAndRevokedAtIsNull" -> findActive((String) args[0]);
-                case "findActiveForUpdate" -> findActive((String) args[0]);
+                case "findAllByNormalizedUsernameAndRevokedAtIsNull" -> findAllActive((String) args[0]);
+                case "findAllActiveForUpdate" -> findAllActive((String) args[0]);
                 case "saveAndFlush" -> save((PortalSessionEntity) args[0]);
                 case "flush" -> {
                     // no-op for in-memory stub
@@ -211,14 +317,19 @@ class PortalSessionRegistryTest {
         }
 
         private Optional<PortalSessionEntity> findActive(String normalizedUsername) {
+            return findAllActive(normalizedUsername).stream().findFirst();
+        }
+
+        private List<PortalSessionEntity> findAllActive(String normalizedUsername) {
             if (normalizedUsername == null) {
-                return Optional.empty();
+                return List.of();
             }
             return storage
                 .values()
                 .stream()
                 .filter(entity -> normalizedUsername.equals(entity.getNormalizedUsername()) && entity.getRevokedAt() == null)
-                .findFirst();
+                .sorted((left, right) -> right.getCreatedAt().compareTo(left.getCreatedAt()))
+                .toList();
         }
 
         private void deleteById(UUID id) {

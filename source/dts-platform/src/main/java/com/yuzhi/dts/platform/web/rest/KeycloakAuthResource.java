@@ -1,10 +1,12 @@
 package com.yuzhi.dts.platform.web.rest;
 
 import com.yuzhi.dts.platform.security.AuthoritiesConstants;
+import com.yuzhi.dts.platform.security.session.PortalSessionCookieService;
 import com.yuzhi.dts.platform.security.session.PortalSessionRegistry;
 import com.yuzhi.dts.platform.security.session.PortalSessionRegistry.AdminTokens;
 import com.yuzhi.dts.platform.security.session.PortalSessionRegistry.PortalSession;
 import com.yuzhi.dts.platform.service.admin.gateway.auth.AdminAuthGateway;
+import jakarta.servlet.http.HttpServletRequest;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -16,7 +18,9 @@ import java.util.UUID;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseCookie;
 import org.springframework.http.ResponseEntity;
 import org.springframework.util.StringUtils;
 import org.springframework.web.bind.annotation.*;
@@ -28,6 +32,7 @@ public class KeycloakAuthResource {
     private static final Logger log = LoggerFactory.getLogger(KeycloakAuthResource.class);
     private final PortalSessionRegistry sessionRegistry;
     private final AdminAuthGateway adminAuthGateway;
+    private final PortalSessionCookieService cookieService;
     private final com.yuzhi.dts.platform.service.audit.AuditService audit;
     private final com.yuzhi.dts.platform.service.infra.InceptorDataSourceRegistry inceptorRegistry;
     private final boolean portalAuditEnabled;
@@ -36,6 +41,7 @@ public class KeycloakAuthResource {
     public KeycloakAuthResource(
         PortalSessionRegistry sessionRegistry,
         AdminAuthGateway adminAuthGateway,
+        PortalSessionCookieService cookieService,
         com.yuzhi.dts.platform.service.audit.AuditService audit,
         com.yuzhi.dts.platform.service.infra.InceptorDataSourceRegistry inceptorRegistry,
         @Value("${auditing.portal-auth.enabled:true}") boolean portalAuditEnabled,
@@ -43,6 +49,7 @@ public class KeycloakAuthResource {
     ) {
         this.sessionRegistry = sessionRegistry;
         this.adminAuthGateway = adminAuthGateway;
+        this.cookieService = cookieService;
         this.audit = audit;
         this.inceptorRegistry = inceptorRegistry;
         this.portalAuditEnabled = portalAuditEnabled;
@@ -61,12 +68,12 @@ public class KeycloakAuthResource {
      * {@code /api/keycloak/auth/platform/login}.
      */
     @PostMapping("/platform/login")
-    public ResponseEntity<ApiResponse<Map<String, Object>>> platformLogin(@RequestBody LoginPayload payload) {
-        return login(payload);
+    public ResponseEntity<ApiResponse<Map<String, Object>>> platformLogin(@RequestBody LoginPayload payload, HttpServletRequest request) {
+        return login(payload, request);
     }
 
     @PostMapping("/login")
-    public ResponseEntity<ApiResponse<Map<String, Object>>> login(@RequestBody LoginPayload payload) {
+    public ResponseEntity<ApiResponse<Map<String, Object>>> login(@RequestBody LoginPayload payload, HttpServletRequest request) {
         String username = payload.username() == null ? "" : payload.username().trim();
         String password = payload.password() == null ? "" : payload.password();
         if (!StringUtils.hasText(username) || !StringUtils.hasText(password)) {
@@ -102,9 +109,10 @@ public class KeycloakAuthResource {
             String personnelLevel = normalizePersonnelLevel(extractUserAttribute(user, "personnel_level", "person_security_level", "person_level"));
 
             // Issue a portal session (opaque tokens) for platform API access
+            String browserId = cookieService.resolveBrowserId(request);
             boolean takeover;
             try {
-                takeover = sessionRegistry.hasActiveSession(username);
+                takeover = sessionRegistry.hasActiveSession(username, browserId);
             } catch (RuntimeException ex) {
                 if (isRelationMissing(ex, "portal_sessions")) {
                     String msg = "平台数据库未初始化或升级未完成（缺少 portal_sessions 表），请先执行初始化/升级脚本后重试";
@@ -164,7 +172,16 @@ public class KeycloakAuthResource {
             );
             PortalSession session;
             try {
-                session = sessionRegistry.createSession(username, mappedRoles, permissions, deptCode, personnelLevel, displayName, adminTokens);
+                session = sessionRegistry.createSession(
+                    username,
+                    mappedRoles,
+                    permissions,
+                    deptCode,
+                    personnelLevel,
+                    displayName,
+                    browserId,
+                    adminTokens
+                );
             } catch (PortalSessionRegistry.ActiveSessionExistsException ex) {
                 log.warn("[login] denied username={} reason=race-active-session", username);
                 return ResponseEntity
@@ -237,6 +254,7 @@ public class KeycloakAuthResource {
 
             Map<String, Object> data = new LinkedHashMap<>();
             data.put("user", userOut);
+            data.put("browserId", browserId);
             data.put("accessToken", session.accessToken());
             data.put("refreshToken", session.refreshToken());
             if (adminTokens != null) {
@@ -284,7 +302,7 @@ public class KeycloakAuthResource {
                 data.put("sessionNotice", "已切换到当前登录，其他会话已下线");
                 data.put("sessionTakeover", Boolean.TRUE);
             }
-            return ResponseEntity.ok(ApiResponses.ok(data));
+            return withBrowserCookie(data, browserId);
         } catch (org.springframework.security.authentication.BadCredentialsException ex) {
             log.warn("[login] unauthorized username={} reason={}", username, ex.getMessage());
             String auditActor = sanitizeActor(username);
@@ -357,9 +375,12 @@ public class KeycloakAuthResource {
     }
 
     @PostMapping("/logout")
-    public ResponseEntity<ApiResponse<Void>> logout(@RequestBody(required = false) RefreshPayload payload) {
+    public ResponseEntity<ApiResponse<Void>> logout(@RequestBody(required = false) RefreshPayload payload, HttpServletRequest request) {
         String portalRefresh = payload != null ? payload.refreshToken() : null;
-        PortalSession session = sessionRegistry.invalidateByRefreshToken(portalRefresh);
+        String portalAccess = resolvePortalAccessToken(request);
+        PortalSession session = StringUtils.hasText(portalRefresh)
+            ? sessionRegistry.invalidateByRefreshToken(portalRefresh)
+            : sessionRegistry.invalidateByAccessToken(portalAccess);
         String requestedActor = payload != null ? sanitizeActor(payload.username()) : null;
         String sessionActor = session != null ? sanitizeActor(session.username()) : null;
         String contextActor = sanitizeActor(com.yuzhi.dts.platform.security.SecurityUtils.getCurrentUserLogin().orElse(null));
@@ -420,7 +441,10 @@ public class KeycloakAuthResource {
                 );
             }
         }
-        return ResponseEntity.ok(ApiResponses.ok(null));
+        return ResponseEntity
+            .ok()
+            .header(HttpHeaders.SET_COOKIE, cookieService.clearPortalSessionCookie().toString())
+            .body(ApiResponses.ok(null));
     }
 
     @GetMapping("/pki-challenge")
@@ -439,7 +463,10 @@ public class KeycloakAuthResource {
      * (provided via 'username' and optional 'user' profile from admin) into platform session tokens.
      */
     @PostMapping("/pki-session")
-    public ResponseEntity<ApiResponse<Map<String, Object>>> createPkiSession(@RequestBody PkiSessionPayload payload) {
+    public ResponseEntity<ApiResponse<Map<String, Object>>> createPkiSession(
+        @RequestBody PkiSessionPayload payload,
+        HttpServletRequest request
+    ) {
         String username = payload == null ? null : (payload.username() == null ? null : payload.username().trim());
         if (!org.springframework.util.StringUtils.hasText(username)) {
             return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(ApiResponses.error("缺少用户名"));
@@ -469,7 +496,8 @@ public class KeycloakAuthResource {
             String personnelLevel = normalizePersonnelLevel(extractUserAttribute(user, "personnel_level", "person_security_level", "person_level"));
 
             // Issue a portal session (opaque tokens) for platform API access (no admin tokens needed for PKI path)
-            boolean takeover = sessionRegistry.hasActiveSession(username);
+            String browserId = cookieService.resolveBrowserId(request);
+            boolean takeover = sessionRegistry.hasActiveSession(username, browserId);
             if (takeover && !sessionRegistry.isTakeoverAllowed()) {
                 log.warn("[pki-login] denied username={} reason=active-session", username);
                 if (shouldRecordPortalLoginAudit() && auditActor != null) {
@@ -500,7 +528,16 @@ public class KeycloakAuthResource {
             AdminTokens adminTokens = null;
             PortalSession session;
             try {
-                session = sessionRegistry.createSession(username, mappedRoles, permissions, deptCode, personnelLevel, displayName, adminTokens);
+                session = sessionRegistry.createSession(
+                    username,
+                    mappedRoles,
+                    permissions,
+                    deptCode,
+                    personnelLevel,
+                    displayName,
+                    browserId,
+                    adminTokens
+                );
             } catch (PortalSessionRegistry.ActiveSessionExistsException ex) {
                 log.warn("[pki-login] denied username={} reason=race-active-session", username);
                 return ResponseEntity
@@ -540,6 +577,7 @@ public class KeycloakAuthResource {
             data.put("user", userOut);
             data.put("accessToken", session.accessToken());
             data.put("refreshToken", session.refreshToken());
+            data.put("browserId", browserId);
             if (takeover && sessionRegistry.isTakeoverAllowed()) {
                 data.put("sessionNotice", "已切换到当前登录，其他会话已下线");
                 data.put("sessionTakeover", Boolean.TRUE);
@@ -565,7 +603,7 @@ public class KeycloakAuthResource {
                     metadata
                 );
             }
-            return ResponseEntity.ok(ApiResponses.ok(data));
+            return withBrowserCookie(data, browserId);
         } catch (Exception ex) {
             String msg = ex.getMessage() == null || ex.getMessage().isBlank() ? "登录失败，请稍后重试" : ex.getMessage();
             if (shouldRecordPortalLoginAudit() && auditActor != null) {
@@ -657,7 +695,10 @@ public class KeycloakAuthResource {
                     Map.of("audience", "platform")
                 );
             }
-            return ResponseEntity.ok(ApiResponses.ok(data));
+            return ResponseEntity
+                .ok()
+                .headers(sessionCookieHeaders(refreshed.browserId(), refreshed.accessToken()))
+                .body(ApiResponses.ok(data));
         } catch (IllegalArgumentException ex) {
             String failureActor = actor != null ? actor : resolveRefreshActor(payload.refreshToken());
             if (portalRefreshAuditEnabled && StringUtils.hasText(failureActor)) {
@@ -1019,5 +1060,33 @@ public class KeycloakAuthResource {
             return fallback;
         }
         return now.plusSeconds(defaultSeconds);
+    }
+
+    private String resolvePortalAccessToken(HttpServletRequest request) {
+        String token = cookieService.resolvePortalSessionToken(request);
+        if (StringUtils.hasText(token)) {
+            return token;
+        }
+        String header = request == null ? null : request.getHeader(HttpHeaders.AUTHORIZATION);
+        if (!StringUtils.hasText(header)) {
+            return null;
+        }
+        if (header.regionMatches(true, 0, "Bearer ", 0, 7)) {
+            String value = header.substring(7).trim();
+            return value.isEmpty() ? null : value;
+        }
+        String value = header.trim();
+        return value.isEmpty() ? null : value;
+    }
+
+    private org.springframework.http.HttpHeaders sessionCookieHeaders(String browserId, String accessToken) {
+        org.springframework.http.HttpHeaders headers = new org.springframework.http.HttpHeaders();
+        headers.add(HttpHeaders.SET_COOKIE, cookieService.buildBrowserIdCookie(browserId).toString());
+        headers.add(HttpHeaders.SET_COOKIE, cookieService.buildPortalSessionCookie(accessToken).toString());
+        return headers;
+    }
+
+    private ResponseEntity<ApiResponse<Map<String, Object>>> withBrowserCookie(Map<String, Object> data, String browserId) {
+        return ResponseEntity.ok().headers(sessionCookieHeaders(browserId, String.valueOf(data.get("accessToken")))).body(ApiResponses.ok(data));
     }
 }
