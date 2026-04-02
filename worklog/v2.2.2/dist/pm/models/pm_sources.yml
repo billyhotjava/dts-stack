@@ -37,3 +37,8 @@ sources:
       - name: "cost_accounting"
         identifier: "ods_cost_accounting"
         description: "成本核算基本表 — 成本事实"
+
+      # ─── 物料域 ───
+      - name: "material_info"
+        identifier: "ods_material_info"
+        description: "重要物料信息表 — 物料风险与供应链事实"

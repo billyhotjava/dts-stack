@@ -178,3 +178,26 @@ CREATE TABLE ods_cost_accounting (
     source_system       varchar(200) DEFAULT 'excel',
     import_time         timestamp DEFAULT now()
 );
+
+-- ─── 9. 重要物料信息表 ───
+DROP TABLE IF EXISTS ods_material_info CASCADE;
+CREATE TABLE ods_material_info (
+    id                  serial PRIMARY KEY,
+    project_no          varchar(500),   -- 项目编号（下拉选择）
+    subsystem           varchar(500),   -- 分系统/分任务
+    pbs_no              varchar(500),   -- PBS编号
+    pbs_name            varchar(500),   -- PBS名称
+    risk_name           varchar(2000),  -- 风险名称
+    risk_description    varchar(2000),  -- 风险描述（按条目梳理当前存在的主要具体风险点）
+    self_or_outsource   varchar(500),   -- 自研或外协
+    supplier_name       varchar(500),   -- 供应商名称
+    is_long_cycle       varchar(500),   -- 是否长周期物料（下拉选择）
+    belonging_unit      varchar(500),   -- 所属单机
+    delivery_date       varchar(500),   -- 交期时间
+    last_update_time    varchar(500),   -- 最后更新时间
+    last_update_week    varchar(500),   -- 最后更新周数
+    filled_by           varchar(500),   -- 填写人
+    remark              varchar(2000),  -- 备注
+    source_system       varchar(200) DEFAULT 'excel',
+    import_time         timestamp DEFAULT now()
+);

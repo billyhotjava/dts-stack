@@ -343,3 +343,29 @@ models:
       - name: period_year
         tests:
           - not_null: { config: { severity: warn } }
+
+  # ═══════════════════════════════════════════════════════════════
+  #  物料域
+  # ═══════════════════════════════════════════════════════════════
+
+  - name: biz_dwd_material_info
+    columns:
+      - name: material_id
+        tests:
+          - not_null: { config: { severity: warn } }
+          - unique: { config: { severity: warn } }
+      - name: project_no
+        tests:
+          - not_null: { config: { severity: warn } }
+
+  - name: biz_dws_material_period_summary
+    columns:
+      - name: project_no
+        tests:
+          - not_null: { config: { severity: warn } }
+
+  - name: biz_ads_material_kpi
+    columns:
+      - name: project_no
+        tests:
+          - not_null: { config: { severity: warn } }

@@ -37,3 +37,6 @@ biz_ads_quality_kpi	ADS	models/ads/biz_ads_quality_kpi.sql			public	table	projec
 biz_ads_tech_state_kpi	ADS	models/ads/biz_ads_tech_state_kpi.sql			public	table	project-management,biz,ads,kpi,tech-state	DRAFT	true		技术状态域KPI
 biz_ads_risk_kpi	ADS	models/ads/biz_ads_risk_kpi.sql			public	table	project-management,biz,ads,kpi,risk	DRAFT	true		风险域KPI
 biz_ads_cost_kpi	ADS	models/ads/biz_ads_cost_kpi.sql			public	table	project-management,biz,ads,kpi,cost	DRAFT	true		成本域KPI
+biz_dwd_material_info	DWD	models/dwd/biz_dwd_material_info.sql			public	table	project-management,biz,dwd,material	DRAFT	true		重要物料信息事实表
+biz_dws_material_period_summary	DWS	models/dws/biz_dws_material_period_summary.sql			public	table	project-management,biz,dws,material	DRAFT	true		物料域项目汇总
+biz_ads_material_kpi	ADS	models/ads/biz_ads_material_kpi.sql			public	table	project-management,biz,ads,kpi,material	DRAFT	true		物料域KPI
