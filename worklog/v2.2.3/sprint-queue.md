@@ -1,6 +1,6 @@
 # Sprint Queue — v2.2.3
 
-## Sprint-22: 架构加固 -- 高可用、安全、可观测性 (202604)
+## Sprint-1: 架构加固 -- 高可用、安全、可观测性 (202604)
 **状态**: READY
 **类型**: Design Only（仅设计，不实施）
 
@@ -17,17 +17,12 @@
 
 **统计**: READY=20, IN_PROGRESS=0, DONE=0, BLOCKED=0
 
-## Sprint-23: 浏览器作用域会话重构 (202604)
-**状态**: IN_PROGRESS
-**类型**: Implementation（实施型，含代码、迁移、发布与回滚）
+## Sprint-2: BI 分析卡片文件夹管理 (202604)
+**状态**: READY
+**类型**: Implementation（实施型）
 
 | Feature | Task 数 | 状态 |
 |---------|---------|------|
-| F1-浏览器作用域会话模型 | 3 | IN_PROGRESS |
-| F2-platform后端会话核心重构 | 3 | READY |
-| F3-前端会话运行时重构 | 3 | READY |
-| F4-analytics与proxy鉴权收敛 | 3 | READY |
-| F5-迁移兼容与运维治理 | 3 | READY |
-| F6-集成验证与回归防线 | 3 | READY |
+| F1-分析卡片文件夹管理 | 4 | READY |
 
-**统计**: READY=17, IN_PROGRESS=1, DONE=0, BLOCKED=0
+**统计**: READY=4, IN_PROGRESS=0, DONE=0, BLOCKED=0

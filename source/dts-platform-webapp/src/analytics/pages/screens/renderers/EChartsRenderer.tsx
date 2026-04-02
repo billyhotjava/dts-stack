@@ -370,10 +370,12 @@ export function renderECharts(props: EChartsRendererProps): ReactNode | null {
             // Using xAxis=time, yAxis=category, bar series type for compatibility
             const barSeries: any[] = [];
             sorted.forEach((tk, idx) => {
-                const start = new Date(String(tk.planDate)).getTime();
+                const startRaw = tk.planDate ? new Date(String(tk.planDate)).getTime() : NaN;
+                if (isNaN(startRaw)) return; // 跳过无效日期的任务，避免黑色条
                 const end = tk.actualDate ? new Date(String(tk.actualDate)).getTime() : Date.now();
+                const endSafe = isNaN(end) ? Date.now() : end;
                 barSeries.push({
-                    value: [start, idx, end - start, tk.delayDays],
+                    value: [startRaw, idx, endSafe - startRaw, tk.delayDays],
                     itemStyle: { color: getBarColor(tk) },
                     _task: tk,
                 });

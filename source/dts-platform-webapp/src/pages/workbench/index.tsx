@@ -9,6 +9,7 @@ import workbenchService, {
 } from "@/api/services/workbenchService";
 import { useRouter } from "@/routes/hooks";
 import { resolveRouteForOpen } from "@/analytics/helpers/resolveAnalyticsUrl";
+import apiClient from "@/api/apiClient";
 
 
 type PublishedScreen = {
@@ -30,20 +31,8 @@ type FavoriteFormValues = {
 
 async function fetchScreens(): Promise<PublishedScreen[]> {
 	try {
-		const ctrl = new AbortController();
-		const timer = setTimeout(() => ctrl.abort(), 5000);
-		const resp = await fetch("/analytics/api/screens", { credentials: "include", signal: ctrl.signal });
-		clearTimeout(timer);
-		if (!resp.ok) return [];
-		const list: Array<Record<string, unknown>> = await resp.json();
-		if (!Array.isArray(list)) return [];
-		return list.map((item) => ({
-			id: item.id as number,
-			name: (item.name as string) || "",
-			description: item.description as string | null,
-			updatedAt: item.updatedAt as string | undefined,
-			publishedAt: item.publishedAt as string | null,
-		}));
+		const list = await apiClient.get<PublishedScreen[]>({ url: "/bi/api/screens", timeout: 5000 });
+		return Array.isArray(list) ? list : [];
 	} catch {
 		return [];
 	}
