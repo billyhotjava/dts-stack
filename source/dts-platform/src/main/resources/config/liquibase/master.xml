@@ -117,5 +117,4 @@
     <include file="config/liquibase/changelog/20260316_02_topic_binding_center.xml" relativeToChangelogFile="false"/>
     <include file="config/liquibase/changelog/20260328_01_asset_permission.xml" relativeToChangelogFile="false"/>
     <include file="config/liquibase/changelog/20260328_02_drop_temporary_foundation_features.xml" relativeToChangelogFile="false"/>
-    <include file="config/liquibase/changelog/20260402_01_portal_session_browser_id.xml" relativeToChangelogFile="false"/>
 </databaseChangeLog>

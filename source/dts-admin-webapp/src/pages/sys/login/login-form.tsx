@@ -1,11 +1,9 @@
 import { Loader2, Eye, EyeOff } from "lucide-react";
 import { useState } from "react";
 import { useForm } from "react-hook-form";
-import { useLocation, useNavigate } from "react-router";
+import { useNavigate } from "react-router";
 import { toast } from "sonner";
 import type { SignInReq } from "@/api/services/userService";
-import { resetLoginRedirectFlag } from "@/auth/session-auth";
-import { ADMIN_SESSION_KEYS } from "@/auth/session-keys";
 import { GLOBAL_CONFIG } from "@/global-config";
 import { resolveHomePathForRoles } from "@/routes/sections/dashboard";
 import { useBilingualText } from "@/hooks/useBilingualText";
@@ -20,7 +18,6 @@ import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "
 import { RadioGroup, RadioGroupItem } from "@/ui/radio-group";
 import { getPkiChallenge, pkiLogin, type PkiChallenge } from "@/api/services/pkiService";
 import { KoalMiddlewareClient, KoalCertificate } from "@/api/services/koalPkiClient";
-import { writeLoginActivityMarkers } from "@dts/session-core/storage";
 
 export function LoginForm({ className, ...props }: React.ComponentPropsWithoutRef<"form">) {
 	// 简易调试缓冲：生产构建不会被 esbuild 删除
@@ -38,11 +35,10 @@ export function LoginForm({ className, ...props }: React.ComponentPropsWithoutRe
 	const [remember, setRemember] = useState(true);
 	const [showPassword, setShowPassword] = useState(false);
 	const navigate = useNavigate();
-	const location = useLocation();
 
 	const { loginState } = useLoginStateContext();
 	const signIn = useSignIn();
-	const { setAuthenticatedSession } = useUserActions();
+	const { setUserToken, setUserInfo } = useUserActions();
 	const bilingual = useBilingualText();
 
 	const form = useForm<SignInReq>({
@@ -65,19 +61,6 @@ export function LoginForm({ className, ...props }: React.ComponentPropsWithoutRe
 
 	if (loginState !== LoginStateEnum.LOGIN) return null;
 
-	const safeRedirect = (() => {
-		try {
-			const params = new URLSearchParams(location.search || "");
-			const raw = (params.get("redirect") || "").trim();
-			if (!raw || !raw.startsWith("/") || raw.startsWith("//") || raw.includes("://") || raw.length > 2048) {
-				return null;
-			}
-			return raw;
-		} catch {
-			return null;
-		}
-	})();
-
 	const handleFinish = async (values: SignInReq) => {
 		setLoading(true);
 		try {
@@ -93,8 +76,7 @@ export function LoginForm({ className, ...props }: React.ComponentPropsWithoutRe
 				toast.error("无权访问管理端，请使用业务端登录", { position: "top-center" });
 				return;
 			}
-			resetLoginRedirectFlag();
-			const targetRoute = safeRedirect || resolveHomePathForRoles(roles);
+			const targetRoute = resolveHomePathForRoles(roles);
 			navigate(targetRoute || GLOBAL_CONFIG.defaultRoute, { replace: true });
 			toast.success(bilingual("sys.login.loginSuccessTitle"), {
 				closeButton: true,
@@ -297,7 +279,10 @@ export function LoginForm({ className, ...props }: React.ComponentPropsWithoutRe
 				roles: resp?.user?.roles,
 				sessionTakeover: resp?.sessionTakeover,
 			});
+			const accessToken = String(resp?.accessToken || resp?.token || "").trim();
+			const refreshToken = String(resp?.refreshToken || "").trim();
 			const user = (resp?.user || resp?.userInfo || {}) as any;
+			if (!accessToken) throw new Error("登录响应缺少访问令牌");
 
 			// 仅允许三员角色进入管理端（与密码登录一致）
 			const rolesLower: string[] = Array.isArray(user?.roles) ? (user.roles as any[]).map((r) => String(r).toLowerCase()) : [];
@@ -311,27 +296,9 @@ export function LoginForm({ className, ...props }: React.ComponentPropsWithoutRe
 				setPkiDialogOpen(false);
 				return;
 			}
-			setAuthenticatedSession(
-				{
-					authenticated: true,
-					username: String(user?.username || user?.preferred_username || deriveUsernameFromCert(selectedCert) || "").trim(),
-					displayName: String(user?.fullName || user?.firstName || user?.username || deriveUsernameFromCert(selectedCert) || "").trim(),
-					browserId: typeof resp?.browserId === "string" && resp.browserId.trim() ? resp.browserId.trim() : undefined,
-					roles: Array.isArray(user?.roles) ? user.roles.map((r: unknown) => String(r || "")).filter(Boolean) : [],
-					permissions: Array.isArray(user?.permissions) ? user.permissions.map((p: unknown) => String(p || "")).filter(Boolean) : [],
-				},
-				user,
-			);
-			writeLoginActivityMarkers(ADMIN_SESSION_KEYS);
-			const takeoverNotice = typeof resp?.sessionNotice === "string" && resp.sessionNotice.trim()
-				? resp.sessionNotice.trim()
-				: resp?.sessionTakeover
-					? "已切换到当前登录，其他会话已下线"
-					: "";
-			if (takeoverNotice) {
-				toast.info(takeoverNotice, { position: "top-center", closeButton: true });
-			}
-			navigate((safeRedirect || GLOBAL_CONFIG.defaultRoute), { replace: true });
+			setUserToken({ accessToken, refreshToken });
+			setUserInfo(user);
+			navigate(GLOBAL_CONFIG.defaultRoute, { replace: true });
 			toast.success("登录成功", { closeButton: true });
 			await client.logout();
 			setPkiDialogOpen(false);

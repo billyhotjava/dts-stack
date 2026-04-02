@@ -16,9 +16,7 @@ import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
-import org.springframework.security.oauth2.server.resource.web.BearerTokenResolver;
 import org.springframework.stereotype.Component;
-import org.springframework.util.StringUtils;
 import org.springframework.web.filter.OncePerRequestFilter;
 
 @Component
@@ -35,16 +33,10 @@ public class PortalSessionInactivityFilter extends OncePerRequestFilter {
 
     private final ObjectMapper objectMapper;
     private final PortalSessionActivityService activityService;
-    private final BearerTokenResolver tokenResolver;
 
-    public PortalSessionInactivityFilter(
-        ObjectMapper objectMapper,
-        PortalSessionActivityService activityService,
-        BearerTokenResolver tokenResolver
-    ) {
+    public PortalSessionInactivityFilter(ObjectMapper objectMapper, PortalSessionActivityService activityService) {
         this.objectMapper = objectMapper;
         this.activityService = activityService;
-        this.tokenResolver = tokenResolver;
     }
 
     @Override
@@ -53,16 +45,18 @@ public class PortalSessionInactivityFilter extends OncePerRequestFilter {
             return true;
         }
         String uri = Optional.ofNullable(request.getRequestURI()).orElse("");
-        if (uri.startsWith("/api/keycloak/auth/") || uri.startsWith("/api/session/current")) {
+        if (uri.startsWith("/api/keycloak/auth/")) {
             return true;
         }
-        return !StringUtils.hasText(resolveTokenValue(request));
+        String header = request.getHeader(HttpHeaders.AUTHORIZATION);
+        return header == null || !header.startsWith("Bearer ");
     }
 
     @Override
     protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response, FilterChain filterChain)
         throws ServletException, IOException {
-        String tokenValue = resolveTokenValue(request);
+        String header = request.getHeader(HttpHeaders.AUTHORIZATION);
+        String tokenValue = extractTokenValue(header);
         if (tokenValue == null) {
             filterChain.doFilter(request, response);
             return;
@@ -93,13 +87,15 @@ public class PortalSessionInactivityFilter extends OncePerRequestFilter {
         }
     }
 
-    private String resolveTokenValue(HttpServletRequest request) {
-        try {
-            String token = tokenResolver.resolve(request);
-            return StringUtils.hasText(token) ? token.trim() : null;
-        } catch (Exception ex) {
+    private String extractTokenValue(String header) {
+        if (header == null || header.isBlank()) {
             return null;
         }
+        int idx = header.indexOf(' ');
+        if (idx < 0) {
+            return header.trim();
+        }
+        return header.substring(idx + 1).trim();
     }
 
     private void respondConflict(HttpServletResponse response) throws IOException {

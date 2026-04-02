@@ -1,4 +1,4 @@
-import { fetchCurrentSession, redirectToLoginWithReturn, resetLoginRedirectFlag } from '@/auth/session-auth';
+import { resolveLoginHref } from '@/routes/constants';
 
 export type CollectionListItem = {
 	id: number | "root";
@@ -1130,11 +1130,8 @@ export type ScreenComponentData = {
 // lock and one redirect guard — eliminating the dual-timer race that was the root cause
 // of the "drill page kicked back to workbench" bug.
 
-/**
- * @deprecated Use `resetLoginRedirectFlag` from `@/auth/session-auth` directly.
- * Kept as a re-export for backwards compatibility with existing callers.
- */
-export const resetAnalyticsAuthRedirectFlag = resetLoginRedirectFlag;
+/** @deprecated No longer needed after session-auth removal. No-op for backwards compatibility. */
+export const resetAnalyticsAuthRedirectFlag = () => {};
 
 export class HttpError extends Error {
 	status: number;
@@ -1180,16 +1177,7 @@ async function apiFetch(url: string, init: RequestInit, allowRedirect: boolean):
 	if (response.status !== 401 || !allowRedirect || isPublicAnalyticsUrl(url)) {
 		return response;
 	}
-	try {
-		const probe = await fetchCurrentSession();
-		if (probe.authenticated) {
-			console.warn("[analytics-auth] 401 received but session probe is still authenticated; suppressing redirect");
-			return response;
-		}
-	} catch (error) {
-		console.warn("[analytics-auth] session probe failed after 401", error);
-	}
-	redirectToLoginWithReturn();
+	window.location.replace(resolveLoginHref());
 	return response;
 }
 

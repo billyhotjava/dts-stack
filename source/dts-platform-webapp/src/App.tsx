@@ -8,7 +8,6 @@ import { GLOBAL_CONFIG } from "./global-config";
 import { AntdAdapter } from "./theme/adapter/antd.adapter";
 import { ThemeProvider } from "./theme/theme-provider";
 import SessionManager from "@/components/auth/session-manager";
-import SessionRedirectGuard from "@/auth/SessionRedirectGuard";
 
 if (import.meta.env.DEV) {
 	import("react-scan").then(({ scan }) => {
@@ -21,12 +20,10 @@ if (import.meta.env.DEV) {
 	});
 }
 
-const queryClient = new QueryClient();
-
 function App({ children }: { children: React.ReactNode }) {
 	return (
 		<HelmetProvider>
-			<QueryClientProvider client={queryClient}>
+			<QueryClientProvider client={new QueryClient()}>
 				<ThemeProvider adapters={[AntdAdapter]}>
 					<Helmet>
 						<title>{GLOBAL_CONFIG.appName}</title>
@@ -35,7 +32,6 @@ function App({ children }: { children: React.ReactNode }) {
 					<Toast />
 					<RouteLoadingProgress />
 					<SessionManager />
-					<SessionRedirectGuard />
 					<MotionLazy>{children}</MotionLazy>
 				</ThemeProvider>
 			</QueryClientProvider>

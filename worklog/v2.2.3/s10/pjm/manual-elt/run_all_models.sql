@@ -1,9 +1,4 @@
--- ============================================================
--- 手工执行 ELT：按依赖顺序运行所有数仓模型
--- 前提：ODS 表已存在且有数据
--- 用法：psql -U biadmin -d biadmin -f run_all_models.sql
--- ============================================================
-
+-- 手工执行 ELT（due_cnt bug 已修复）
 BEGIN;
 
 -- ── dim_completion_status ──
@@ -108,517 +103,70 @@ SELECT
   ) AS node_id,
 
   -- === 原始业务字段 ===
-  (
-  CASE
-    WHEN o.project_no IS NULL THEN NULL
-    WHEN upper(btrim(cast(o.project_no AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL')
-      THEN NULL
-    ELSE nullif(btrim(cast(o.project_no AS text)), '')
-  END
-)          AS project_no,
-  (
-  CASE
-    WHEN o.subsystem IS NULL THEN NULL
-    WHEN upper(btrim(cast(o.subsystem AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL')
-      THEN NULL
-    ELSE nullif(btrim(cast(o.subsystem AS text)), '')
-  END
-)           AS subsystem,
-  (
-  CASE
-    WHEN o.node_task IS NULL THEN NULL
-    WHEN upper(btrim(cast(o.node_task AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL')
-      THEN NULL
-    ELSE nullif(btrim(cast(o.node_task AS text)), '')
-  END
-)           AS node_task,
-  (
-  CASE
-    WHEN o.owner IS NULL THEN NULL
-    WHEN upper(btrim(cast(o.owner AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL')
-      THEN NULL
-    ELSE nullif(btrim(cast(o.owner AS text)), '')
-  END
-)               AS owner,
-  (
-  CASE
-    WHEN o.dept IS NULL THEN NULL
-    WHEN upper(btrim(cast(o.dept AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL')
-      THEN NULL
-    ELSE nullif(btrim(cast(o.dept AS text)), '')
-  END
-)                AS dept,
-  (
-  CASE
-    WHEN o.dept_leader IS NULL THEN NULL
-    WHEN upper(btrim(cast(o.dept_leader AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL')
-      THEN NULL
-    ELSE nullif(btrim(cast(o.dept_leader AS text)), '')
-  END
-)         AS dept_leader,
-  (
-  CASE
-    WHEN o.collab_dept IS NULL THEN NULL
-    WHEN upper(btrim(cast(o.collab_dept AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL')
-      THEN NULL
-    ELSE nullif(btrim(cast(o.collab_dept AS text)), '')
-  END
-)         AS collab_dept,
-  (
-  CASE
-    WHEN o.supervisor_dept IS NULL THEN NULL
-    WHEN upper(btrim(cast(o.supervisor_dept AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL')
-      THEN NULL
-    ELSE nullif(btrim(cast(o.supervisor_dept AS text)), '')
-  END
-)     AS supervisor_dept,
-  (
-  CASE
-    WHEN o.incomplete_reason IS NULL THEN NULL
-    WHEN upper(btrim(cast(o.incomplete_reason AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL')
-      THEN NULL
-    ELSE nullif(btrim(cast(o.incomplete_reason AS text)), '')
-  END
-)   AS incomplete_reason,
-  (
-  CASE
-    WHEN o.risk_content IS NULL THEN NULL
-    WHEN upper(btrim(cast(o.risk_content AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL')
-      THEN NULL
-    ELSE nullif(btrim(cast(o.risk_content AS text)), '')
-  END
-)        AS risk_content,
-  (
-  CASE
-    WHEN o.delay_impact IS NULL THEN NULL
-    WHEN upper(btrim(cast(o.delay_impact AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL')
-      THEN NULL
-    ELSE nullif(btrim(cast(o.delay_impact AS text)), '')
-  END
-)        AS delay_impact,
-  (
-  CASE
-    WHEN o.institute_leader IS NULL THEN NULL
-    WHEN upper(btrim(cast(o.institute_leader AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL')
-      THEN NULL
-    ELSE nullif(btrim(cast(o.institute_leader AS text)), '')
-  END
-)    AS institute_leader,
-  (
-  CASE
-    WHEN o.project_manager IS NULL THEN NULL
-    WHEN upper(btrim(cast(o.project_manager AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL')
-      THEN NULL
-    ELSE nullif(btrim(cast(o.project_manager AS text)), '')
-  END
-)     AS project_manager,
-  (
-  CASE
-    WHEN o.filled_by IS NULL THEN NULL
-    WHEN upper(btrim(cast(o.filled_by AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL')
-      THEN NULL
-    ELSE nullif(btrim(cast(o.filled_by AS text)), '')
-  END
-)           AS filled_by,
-  (
-  CASE
-    WHEN o.highlight IS NULL THEN NULL
-    WHEN upper(btrim(cast(o.highlight AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL')
-      THEN NULL
-    ELSE nullif(btrim(cast(o.highlight AS text)), '')
-  END
-)           AS highlight,
-  (
-  CASE
-    WHEN o.deliverable IS NULL THEN NULL
-    WHEN upper(btrim(cast(o.deliverable AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL')
-      THEN NULL
-    ELSE nullif(btrim(cast(o.deliverable AS text)), '')
-  END
-)          AS deliverable,
-  (
-  CASE
-    WHEN (
-  CASE
-    WHEN o.last_update_week IS NULL THEN NULL
-    WHEN upper(btrim(cast(o.last_update_week AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL')
-      THEN NULL
-    ELSE nullif(btrim(cast(o.last_update_week AS text)), '')
-  END
-) IS NULL THEN NULL
-    WHEN regexp_replace((
-  CASE
-    WHEN o.last_update_week IS NULL THEN NULL
-    WHEN upper(btrim(cast(o.last_update_week AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL')
-      THEN NULL
-    ELSE nullif(btrim(cast(o.last_update_week AS text)), '')
-  END
-), ',', '', 'g') ~ '^-?\d+(\.\d+)?$'
-      THEN regexp_replace((
-  CASE
-    WHEN o.last_update_week IS NULL THEN NULL
-    WHEN upper(btrim(cast(o.last_update_week AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL')
-      THEN NULL
-    ELSE nullif(btrim(cast(o.last_update_week AS text)), '')
-  END
-), ',', '', 'g')::numeric
-    ELSE NULL
-  END
-)::int AS last_update_week,
+  (CASE WHEN o.project_no IS NULL THEN NULL WHEN upper(btrim(cast(o.project_no AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL') THEN NULL ELSE nullif(btrim(cast(o.project_no AS text)), '') END)          AS project_no,
+  (CASE WHEN o.subsystem IS NULL THEN NULL WHEN upper(btrim(cast(o.subsystem AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL') THEN NULL ELSE nullif(btrim(cast(o.subsystem AS text)), '') END)           AS subsystem,
+  (CASE WHEN o.node_task IS NULL THEN NULL WHEN upper(btrim(cast(o.node_task AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL') THEN NULL ELSE nullif(btrim(cast(o.node_task AS text)), '') END)           AS node_task,
+  (CASE WHEN o.owner IS NULL THEN NULL WHEN upper(btrim(cast(o.owner AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL') THEN NULL ELSE nullif(btrim(cast(o.owner AS text)), '') END)               AS owner,
+  (CASE WHEN o.dept IS NULL THEN NULL WHEN upper(btrim(cast(o.dept AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL') THEN NULL ELSE nullif(btrim(cast(o.dept AS text)), '') END)                AS dept,
+  (CASE WHEN o.dept_leader IS NULL THEN NULL WHEN upper(btrim(cast(o.dept_leader AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL') THEN NULL ELSE nullif(btrim(cast(o.dept_leader AS text)), '') END)         AS dept_leader,
+  (CASE WHEN o.collab_dept IS NULL THEN NULL WHEN upper(btrim(cast(o.collab_dept AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL') THEN NULL ELSE nullif(btrim(cast(o.collab_dept AS text)), '') END)         AS collab_dept,
+  (CASE WHEN o.supervisor_dept IS NULL THEN NULL WHEN upper(btrim(cast(o.supervisor_dept AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL') THEN NULL ELSE nullif(btrim(cast(o.supervisor_dept AS text)), '') END)     AS supervisor_dept,
+  (CASE WHEN o.incomplete_reason IS NULL THEN NULL WHEN upper(btrim(cast(o.incomplete_reason AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL') THEN NULL ELSE nullif(btrim(cast(o.incomplete_reason AS text)), '') END)   AS incomplete_reason,
+  (CASE WHEN o.risk_content IS NULL THEN NULL WHEN upper(btrim(cast(o.risk_content AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL') THEN NULL ELSE nullif(btrim(cast(o.risk_content AS text)), '') END)        AS risk_content,
+  (CASE WHEN o.delay_impact IS NULL THEN NULL WHEN upper(btrim(cast(o.delay_impact AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL') THEN NULL ELSE nullif(btrim(cast(o.delay_impact AS text)), '') END)        AS delay_impact,
+  (CASE WHEN o.institute_leader IS NULL THEN NULL WHEN upper(btrim(cast(o.institute_leader AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL') THEN NULL ELSE nullif(btrim(cast(o.institute_leader AS text)), '') END)    AS institute_leader,
+  (CASE WHEN o.project_manager IS NULL THEN NULL WHEN upper(btrim(cast(o.project_manager AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL') THEN NULL ELSE nullif(btrim(cast(o.project_manager AS text)), '') END)     AS project_manager,
+  (CASE WHEN o.filled_by IS NULL THEN NULL WHEN upper(btrim(cast(o.filled_by AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL') THEN NULL ELSE nullif(btrim(cast(o.filled_by AS text)), '') END)           AS filled_by,
+  (CASE WHEN o.highlight IS NULL THEN NULL WHEN upper(btrim(cast(o.highlight AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL') THEN NULL ELSE nullif(btrim(cast(o.highlight AS text)), '') END)           AS highlight,
+  (CASE WHEN o.deliverable IS NULL THEN NULL WHEN upper(btrim(cast(o.deliverable AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL') THEN NULL ELSE nullif(btrim(cast(o.deliverable AS text)), '') END)          AS deliverable,
+  (CASE WHEN (CASE WHEN o.last_update_week IS NULL THEN NULL WHEN upper(btrim(cast(o.last_update_week AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL') THEN NULL ELSE nullif(btrim(cast(o.last_update_week AS text)), '') END) IS NULL THEN NULL WHEN regexp_replace((CASE WHEN o.last_update_week IS NULL THEN NULL WHEN upper(btrim(cast(o.last_update_week AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL') THEN NULL ELSE nullif(btrim(cast(o.last_update_week AS text)), '') END), ',', '', 'g') ~ '^-?\d+(\.\d+)?$' THEN regexp_replace((CASE WHEN o.last_update_week IS NULL THEN NULL WHEN upper(btrim(cast(o.last_update_week AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL') THEN NULL ELSE nullif(btrim(cast(o.last_update_week AS text)), '') END), ',', '', 'g')::numeric ELSE NULL END)::int AS last_update_week,
 
   -- === 枚举标准化 ===
-  (
-  CASE
-    WHEN o.completion_status IS NULL THEN NULL
-    WHEN upper(btrim(cast(o.completion_status AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL')
-      THEN NULL
-    ELSE nullif(btrim(cast(o.completion_status AS text)), '')
-  END
-)   AS completion_status,
+  (CASE WHEN o.completion_status IS NULL THEN NULL WHEN upper(btrim(cast(o.completion_status AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL') THEN NULL ELSE nullif(btrim(cast(o.completion_status AS text)), '') END)   AS completion_status,
   COALESCE(cs.is_completed, false)         AS is_completed,
   COALESCE(cs.is_on_time, false)           AS is_on_time,
   COALESCE(cs.is_overdue_completed, false) AS is_overdue_completed,
   COALESCE(cs.is_incomplete, false)        AS is_incomplete,
 
-  (
-  CASE
-    WHEN o.node_type IS NULL THEN NULL
-    WHEN upper(btrim(cast(o.node_type AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL')
-      THEN NULL
-    ELSE nullif(btrim(cast(o.node_type AS text)), '')
-  END
-)           AS node_type,
+  (CASE WHEN o.node_type IS NULL THEN NULL WHEN upper(btrim(cast(o.node_type AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL') THEN NULL ELSE nullif(btrim(cast(o.node_type AS text)), '') END)           AS node_type,
   COALESCE(nt.is_general, false)           AS is_general_node,
 
-  (
-  CASE
-    WHEN o.risk_level IS NULL THEN NULL
-    WHEN upper(btrim(cast(o.risk_level AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL')
-      THEN NULL
-    ELSE nullif(btrim(cast(o.risk_level AS text)), '')
-  END
-)          AS risk_level,
+  (CASE WHEN o.risk_level IS NULL THEN NULL WHEN upper(btrim(cast(o.risk_level AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL') THEN NULL ELSE nullif(btrim(cast(o.risk_level AS text)), '') END)          AS risk_level,
 
-  (
-  CASE
-    WHEN o.source IS NULL THEN NULL
-    WHEN upper(btrim(cast(o.source AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL')
-      THEN NULL
-    ELSE nullif(btrim(cast(o.source AS text)), '')
-  END
-)              AS data_source,
-  (
-  CASE
-    WHEN o.delay_applied IS NULL THEN NULL
-    WHEN upper(btrim(cast(o.delay_applied AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL')
-      THEN NULL
-    ELSE nullif(btrim(cast(o.delay_applied AS text)), '')
-  END
-)       AS delay_applied,
+  (CASE WHEN o.source IS NULL THEN NULL WHEN upper(btrim(cast(o.source AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL') THEN NULL ELSE nullif(btrim(cast(o.source AS text)), '') END)              AS data_source,
+  (CASE WHEN o.delay_applied IS NULL THEN NULL WHEN upper(btrim(cast(o.delay_applied AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL') THEN NULL ELSE nullif(btrim(cast(o.delay_applied AS text)), '') END)       AS delay_applied,
 
   -- === 日期解析 ===
-  (
-  CASE
-    WHEN o.plan_date IS NULL THEN NULL
-    WHEN btrim(cast(o.plan_date AS text)) = '' THEN NULL
-    WHEN btrim(cast(o.plan_date AS text)) ~ '^\d{4}-\d{2}-\d{2}$'
-      THEN to_date(btrim(cast(o.plan_date AS text)), 'YYYY-MM-DD')
-    WHEN btrim(cast(o.plan_date AS text)) ~ '^\d{4}-\d{2}-\d{2}\s+.*$'
-      THEN to_date(substr(btrim(cast(o.plan_date AS text)), 1, 10), 'YYYY-MM-DD')
-    WHEN btrim(cast(o.plan_date AS text)) ~ '^\d{4}/\d{2}/\d{2}$'
-      THEN to_date(replace(btrim(cast(o.plan_date AS text)), '/', '-'), 'YYYY-MM-DD')
-    ELSE NULL
-  END
-)             AS plan_date,
-  (
-  CASE
-    WHEN o.actual_date IS NULL THEN NULL
-    WHEN btrim(cast(o.actual_date AS text)) = '' THEN NULL
-    WHEN btrim(cast(o.actual_date AS text)) ~ '^\d{4}-\d{2}-\d{2}$'
-      THEN to_date(btrim(cast(o.actual_date AS text)), 'YYYY-MM-DD')
-    WHEN btrim(cast(o.actual_date AS text)) ~ '^\d{4}-\d{2}-\d{2}\s+.*$'
-      THEN to_date(substr(btrim(cast(o.actual_date AS text)), 1, 10), 'YYYY-MM-DD')
-    WHEN btrim(cast(o.actual_date AS text)) ~ '^\d{4}/\d{2}/\d{2}$'
-      THEN to_date(replace(btrim(cast(o.actual_date AS text)), '/', '-'), 'YYYY-MM-DD')
-    ELSE NULL
-  END
-)           AS actual_date,
-  (
-  CASE
-    WHEN o.delay_expected_date IS NULL THEN NULL
-    WHEN btrim(cast(o.delay_expected_date AS text)) = '' THEN NULL
-    WHEN btrim(cast(o.delay_expected_date AS text)) ~ '^\d{4}-\d{2}-\d{2}$'
-      THEN to_date(btrim(cast(o.delay_expected_date AS text)), 'YYYY-MM-DD')
-    WHEN btrim(cast(o.delay_expected_date AS text)) ~ '^\d{4}-\d{2}-\d{2}\s+.*$'
-      THEN to_date(substr(btrim(cast(o.delay_expected_date AS text)), 1, 10), 'YYYY-MM-DD')
-    WHEN btrim(cast(o.delay_expected_date AS text)) ~ '^\d{4}/\d{2}/\d{2}$'
-      THEN to_date(replace(btrim(cast(o.delay_expected_date AS text)), '/', '-'), 'YYYY-MM-DD')
-    ELSE NULL
-  END
-)   AS delay_expected_date,
-  (
-  CASE
-    WHEN o.original_plan_date IS NULL THEN NULL
-    WHEN btrim(cast(o.original_plan_date AS text)) = '' THEN NULL
-    WHEN btrim(cast(o.original_plan_date AS text)) ~ '^\d{4}-\d{2}-\d{2}$'
-      THEN to_date(btrim(cast(o.original_plan_date AS text)), 'YYYY-MM-DD')
-    WHEN btrim(cast(o.original_plan_date AS text)) ~ '^\d{4}-\d{2}-\d{2}\s+.*$'
-      THEN to_date(substr(btrim(cast(o.original_plan_date AS text)), 1, 10), 'YYYY-MM-DD')
-    WHEN btrim(cast(o.original_plan_date AS text)) ~ '^\d{4}/\d{2}/\d{2}$'
-      THEN to_date(replace(btrim(cast(o.original_plan_date AS text)), '/', '-'), 'YYYY-MM-DD')
-    ELSE NULL
-  END
-)    AS original_plan_date,
-  (
-  CASE
-    WHEN o.last_update_time IS NULL THEN NULL
-    WHEN btrim(cast(o.last_update_time AS text)) = '' THEN NULL
-    WHEN btrim(cast(o.last_update_time AS text)) ~ '^\d{4}-\d{2}-\d{2}$'
-      THEN to_date(btrim(cast(o.last_update_time AS text)), 'YYYY-MM-DD')
-    WHEN btrim(cast(o.last_update_time AS text)) ~ '^\d{4}-\d{2}-\d{2}\s+.*$'
-      THEN to_date(substr(btrim(cast(o.last_update_time AS text)), 1, 10), 'YYYY-MM-DD')
-    WHEN btrim(cast(o.last_update_time AS text)) ~ '^\d{4}/\d{2}/\d{2}$'
-      THEN to_date(replace(btrim(cast(o.last_update_time AS text)), '/', '-'), 'YYYY-MM-DD')
-    ELSE NULL
-  END
-)      AS last_update_time,
+  (CASE WHEN o.plan_date IS NULL THEN NULL WHEN btrim(cast(o.plan_date AS text)) = '' THEN NULL WHEN btrim(cast(o.plan_date AS text)) ~ '^\d{4}-\d{2}-\d{2}$' THEN to_date(btrim(cast(o.plan_date AS text)), 'YYYY-MM-DD') WHEN btrim(cast(o.plan_date AS text)) ~ '^\d{4}/\d{2}/\d{2}$' THEN to_date(replace(btrim(cast(o.plan_date AS text)), '/', '-'), 'YYYY-MM-DD') ELSE NULL END)             AS plan_date,
+  (CASE WHEN o.actual_date IS NULL THEN NULL WHEN btrim(cast(o.actual_date AS text)) = '' THEN NULL WHEN btrim(cast(o.actual_date AS text)) ~ '^\d{4}-\d{2}-\d{2}$' THEN to_date(btrim(cast(o.actual_date AS text)), 'YYYY-MM-DD') WHEN btrim(cast(o.actual_date AS text)) ~ '^\d{4}/\d{2}/\d{2}$' THEN to_date(replace(btrim(cast(o.actual_date AS text)), '/', '-'), 'YYYY-MM-DD') ELSE NULL END)           AS actual_date,
+  (CASE WHEN o.delay_expected_date IS NULL THEN NULL WHEN btrim(cast(o.delay_expected_date AS text)) = '' THEN NULL WHEN btrim(cast(o.delay_expected_date AS text)) ~ '^\d{4}-\d{2}-\d{2}$' THEN to_date(btrim(cast(o.delay_expected_date AS text)), 'YYYY-MM-DD') WHEN btrim(cast(o.delay_expected_date AS text)) ~ '^\d{4}/\d{2}/\d{2}$' THEN to_date(replace(btrim(cast(o.delay_expected_date AS text)), '/', '-'), 'YYYY-MM-DD') ELSE NULL END)   AS delay_expected_date,
+  (CASE WHEN o.original_plan_date IS NULL THEN NULL WHEN btrim(cast(o.original_plan_date AS text)) = '' THEN NULL WHEN btrim(cast(o.original_plan_date AS text)) ~ '^\d{4}-\d{2}-\d{2}$' THEN to_date(btrim(cast(o.original_plan_date AS text)), 'YYYY-MM-DD') WHEN btrim(cast(o.original_plan_date AS text)) ~ '^\d{4}/\d{2}/\d{2}$' THEN to_date(replace(btrim(cast(o.original_plan_date AS text)), '/', '-'), 'YYYY-MM-DD') ELSE NULL END)    AS original_plan_date,
+  (CASE WHEN o.last_update_time IS NULL THEN NULL WHEN btrim(cast(o.last_update_time AS text)) = '' THEN NULL WHEN btrim(cast(o.last_update_time AS text)) ~ '^\d{4}-\d{2}-\d{2}$' THEN to_date(btrim(cast(o.last_update_time AS text)), 'YYYY-MM-DD') WHEN btrim(cast(o.last_update_time AS text)) ~ '^\d{4}/\d{2}/\d{2}$' THEN to_date(replace(btrim(cast(o.last_update_time AS text)), '/', '-'), 'YYYY-MM-DD') ELSE NULL END)      AS last_update_time,
 
   -- === 周数 ===
-  (
-  CASE
-    WHEN (
-  CASE
-    WHEN o.plan_week IS NULL THEN NULL
-    WHEN upper(btrim(cast(o.plan_week AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL')
-      THEN NULL
-    ELSE nullif(btrim(cast(o.plan_week AS text)), '')
-  END
-) IS NULL THEN NULL
-    WHEN regexp_replace((
-  CASE
-    WHEN o.plan_week IS NULL THEN NULL
-    WHEN upper(btrim(cast(o.plan_week AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL')
-      THEN NULL
-    ELSE nullif(btrim(cast(o.plan_week AS text)), '')
-  END
-), ',', '', 'g') ~ '^-?\d+(\.\d+)?$'
-      THEN regexp_replace((
-  CASE
-    WHEN o.plan_week IS NULL THEN NULL
-    WHEN upper(btrim(cast(o.plan_week AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL')
-      THEN NULL
-    ELSE nullif(btrim(cast(o.plan_week AS text)), '')
-  END
-), ',', '', 'g')::numeric
-    ELSE NULL
-  END
-)::int     AS plan_week,
-  (
-  CASE
-    WHEN (
-  CASE
-    WHEN o.actual_week IS NULL THEN NULL
-    WHEN upper(btrim(cast(o.actual_week AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL')
-      THEN NULL
-    ELSE nullif(btrim(cast(o.actual_week AS text)), '')
-  END
-) IS NULL THEN NULL
-    WHEN regexp_replace((
-  CASE
-    WHEN o.actual_week IS NULL THEN NULL
-    WHEN upper(btrim(cast(o.actual_week AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL')
-      THEN NULL
-    ELSE nullif(btrim(cast(o.actual_week AS text)), '')
-  END
-), ',', '', 'g') ~ '^-?\d+(\.\d+)?$'
-      THEN regexp_replace((
-  CASE
-    WHEN o.actual_week IS NULL THEN NULL
-    WHEN upper(btrim(cast(o.actual_week AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL')
-      THEN NULL
-    ELSE nullif(btrim(cast(o.actual_week AS text)), '')
-  END
-), ',', '', 'g')::numeric
-    ELSE NULL
-  END
-)::int   AS actual_week,
+  (CASE WHEN (CASE WHEN o.plan_week IS NULL THEN NULL WHEN upper(btrim(cast(o.plan_week AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL') THEN NULL ELSE nullif(btrim(cast(o.plan_week AS text)), '') END) IS NULL THEN NULL WHEN regexp_replace((CASE WHEN o.plan_week IS NULL THEN NULL WHEN upper(btrim(cast(o.plan_week AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL') THEN NULL ELSE nullif(btrim(cast(o.plan_week AS text)), '') END), ',', '', 'g') ~ '^-?\d+(\.\d+)?$' THEN regexp_replace((CASE WHEN o.plan_week IS NULL THEN NULL WHEN upper(btrim(cast(o.plan_week AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL') THEN NULL ELSE nullif(btrim(cast(o.plan_week AS text)), '') END), ',', '', 'g')::numeric ELSE NULL END)::int     AS plan_week,
+  (CASE WHEN (CASE WHEN o.actual_week IS NULL THEN NULL WHEN upper(btrim(cast(o.actual_week AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL') THEN NULL ELSE nullif(btrim(cast(o.actual_week AS text)), '') END) IS NULL THEN NULL WHEN regexp_replace((CASE WHEN o.actual_week IS NULL THEN NULL WHEN upper(btrim(cast(o.actual_week AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL') THEN NULL ELSE nullif(btrim(cast(o.actual_week AS text)), '') END), ',', '', 'g') ~ '^-?\d+(\.\d+)?$' THEN regexp_replace((CASE WHEN o.actual_week IS NULL THEN NULL WHEN upper(btrim(cast(o.actual_week AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL') THEN NULL ELSE nullif(btrim(cast(o.actual_week AS text)), '') END), ',', '', 'g')::numeric ELSE NULL END)::int   AS actual_week,
 
   -- === 时间维度标签 ===
-  EXTRACT(YEAR FROM (
-  CASE
-    WHEN o.plan_date IS NULL THEN NULL
-    WHEN btrim(cast(o.plan_date AS text)) = '' THEN NULL
-    WHEN btrim(cast(o.plan_date AS text)) ~ '^\d{4}-\d{2}-\d{2}$'
-      THEN to_date(btrim(cast(o.plan_date AS text)), 'YYYY-MM-DD')
-    WHEN btrim(cast(o.plan_date AS text)) ~ '^\d{4}-\d{2}-\d{2}\s+.*$'
-      THEN to_date(substr(btrim(cast(o.plan_date AS text)), 1, 10), 'YYYY-MM-DD')
-    WHEN btrim(cast(o.plan_date AS text)) ~ '^\d{4}/\d{2}/\d{2}$'
-      THEN to_date(replace(btrim(cast(o.plan_date AS text)), '/', '-'), 'YYYY-MM-DD')
-    ELSE NULL
-  END
-))::int            AS plan_year,
-  EXTRACT(QUARTER FROM (
-  CASE
-    WHEN o.plan_date IS NULL THEN NULL
-    WHEN btrim(cast(o.plan_date AS text)) = '' THEN NULL
-    WHEN btrim(cast(o.plan_date AS text)) ~ '^\d{4}-\d{2}-\d{2}$'
-      THEN to_date(btrim(cast(o.plan_date AS text)), 'YYYY-MM-DD')
-    WHEN btrim(cast(o.plan_date AS text)) ~ '^\d{4}-\d{2}-\d{2}\s+.*$'
-      THEN to_date(substr(btrim(cast(o.plan_date AS text)), 1, 10), 'YYYY-MM-DD')
-    WHEN btrim(cast(o.plan_date AS text)) ~ '^\d{4}/\d{2}/\d{2}$'
-      THEN to_date(replace(btrim(cast(o.plan_date AS text)), '/', '-'), 'YYYY-MM-DD')
-    ELSE NULL
-  END
-))::int         AS plan_quarter,
-  to_char((
-  CASE
-    WHEN o.plan_date IS NULL THEN NULL
-    WHEN btrim(cast(o.plan_date AS text)) = '' THEN NULL
-    WHEN btrim(cast(o.plan_date AS text)) ~ '^\d{4}-\d{2}-\d{2}$'
-      THEN to_date(btrim(cast(o.plan_date AS text)), 'YYYY-MM-DD')
-    WHEN btrim(cast(o.plan_date AS text)) ~ '^\d{4}-\d{2}-\d{2}\s+.*$'
-      THEN to_date(substr(btrim(cast(o.plan_date AS text)), 1, 10), 'YYYY-MM-DD')
-    WHEN btrim(cast(o.plan_date AS text)) ~ '^\d{4}/\d{2}/\d{2}$'
-      THEN to_date(replace(btrim(cast(o.plan_date AS text)), '/', '-'), 'YYYY-MM-DD')
-    ELSE NULL
-  END
-), 'YYYY-MM')                AS plan_month,
-  EXTRACT(WEEK FROM (
-  CASE
-    WHEN o.plan_date IS NULL THEN NULL
-    WHEN btrim(cast(o.plan_date AS text)) = '' THEN NULL
-    WHEN btrim(cast(o.plan_date AS text)) ~ '^\d{4}-\d{2}-\d{2}$'
-      THEN to_date(btrim(cast(o.plan_date AS text)), 'YYYY-MM-DD')
-    WHEN btrim(cast(o.plan_date AS text)) ~ '^\d{4}-\d{2}-\d{2}\s+.*$'
-      THEN to_date(substr(btrim(cast(o.plan_date AS text)), 1, 10), 'YYYY-MM-DD')
-    WHEN btrim(cast(o.plan_date AS text)) ~ '^\d{4}/\d{2}/\d{2}$'
-      THEN to_date(replace(btrim(cast(o.plan_date AS text)), '/', '-'), 'YYYY-MM-DD')
-    ELSE NULL
-  END
-))::int            AS plan_week_of_year,
-  to_char((
-  CASE
-    WHEN o.plan_date IS NULL THEN NULL
-    WHEN btrim(cast(o.plan_date AS text)) = '' THEN NULL
-    WHEN btrim(cast(o.plan_date AS text)) ~ '^\d{4}-\d{2}-\d{2}$'
-      THEN to_date(btrim(cast(o.plan_date AS text)), 'YYYY-MM-DD')
-    WHEN btrim(cast(o.plan_date AS text)) ~ '^\d{4}-\d{2}-\d{2}\s+.*$'
-      THEN to_date(substr(btrim(cast(o.plan_date AS text)), 1, 10), 'YYYY-MM-DD')
-    WHEN btrim(cast(o.plan_date AS text)) ~ '^\d{4}/\d{2}/\d{2}$'
-      THEN to_date(replace(btrim(cast(o.plan_date AS text)), '/', '-'), 'YYYY-MM-DD')
-    ELSE NULL
-  END
-), 'IYYY-"W"IW')            AS plan_iso_week,
+  EXTRACT(YEAR FROM (CASE WHEN o.plan_date IS NULL THEN NULL WHEN btrim(cast(o.plan_date AS text)) = '' THEN NULL WHEN btrim(cast(o.plan_date AS text)) ~ '^\d{4}-\d{2}-\d{2}$' THEN to_date(btrim(cast(o.plan_date AS text)), 'YYYY-MM-DD') WHEN btrim(cast(o.plan_date AS text)) ~ '^\d{4}/\d{2}/\d{2}$' THEN to_date(replace(btrim(cast(o.plan_date AS text)), '/', '-'), 'YYYY-MM-DD') ELSE NULL END))::int            AS plan_year,
+  EXTRACT(QUARTER FROM (CASE WHEN o.plan_date IS NULL THEN NULL WHEN btrim(cast(o.plan_date AS text)) = '' THEN NULL WHEN btrim(cast(o.plan_date AS text)) ~ '^\d{4}-\d{2}-\d{2}$' THEN to_date(btrim(cast(o.plan_date AS text)), 'YYYY-MM-DD') WHEN btrim(cast(o.plan_date AS text)) ~ '^\d{4}/\d{2}/\d{2}$' THEN to_date(replace(btrim(cast(o.plan_date AS text)), '/', '-'), 'YYYY-MM-DD') ELSE NULL END))::int         AS plan_quarter,
+  to_char((CASE WHEN o.plan_date IS NULL THEN NULL WHEN btrim(cast(o.plan_date AS text)) = '' THEN NULL WHEN btrim(cast(o.plan_date AS text)) ~ '^\d{4}-\d{2}-\d{2}$' THEN to_date(btrim(cast(o.plan_date AS text)), 'YYYY-MM-DD') WHEN btrim(cast(o.plan_date AS text)) ~ '^\d{4}/\d{2}/\d{2}$' THEN to_date(replace(btrim(cast(o.plan_date AS text)), '/', '-'), 'YYYY-MM-DD') ELSE NULL END), 'YYYY-MM')                AS plan_month,
+  EXTRACT(WEEK FROM (CASE WHEN o.plan_date IS NULL THEN NULL WHEN btrim(cast(o.plan_date AS text)) = '' THEN NULL WHEN btrim(cast(o.plan_date AS text)) ~ '^\d{4}-\d{2}-\d{2}$' THEN to_date(btrim(cast(o.plan_date AS text)), 'YYYY-MM-DD') WHEN btrim(cast(o.plan_date AS text)) ~ '^\d{4}/\d{2}/\d{2}$' THEN to_date(replace(btrim(cast(o.plan_date AS text)), '/', '-'), 'YYYY-MM-DD') ELSE NULL END))::int            AS plan_week_of_year,
+  to_char((CASE WHEN o.plan_date IS NULL THEN NULL WHEN btrim(cast(o.plan_date AS text)) = '' THEN NULL WHEN btrim(cast(o.plan_date AS text)) ~ '^\d{4}-\d{2}-\d{2}$' THEN to_date(btrim(cast(o.plan_date AS text)), 'YYYY-MM-DD') WHEN btrim(cast(o.plan_date AS text)) ~ '^\d{4}/\d{2}/\d{2}$' THEN to_date(replace(btrim(cast(o.plan_date AS text)), '/', '-'), 'YYYY-MM-DD') ELSE NULL END), 'IYYY-"W"IW')            AS plan_iso_week,
 
-  EXTRACT(YEAR FROM (
-  CASE
-    WHEN o.actual_date IS NULL THEN NULL
-    WHEN btrim(cast(o.actual_date AS text)) = '' THEN NULL
-    WHEN btrim(cast(o.actual_date AS text)) ~ '^\d{4}-\d{2}-\d{2}$'
-      THEN to_date(btrim(cast(o.actual_date AS text)), 'YYYY-MM-DD')
-    WHEN btrim(cast(o.actual_date AS text)) ~ '^\d{4}-\d{2}-\d{2}\s+.*$'
-      THEN to_date(substr(btrim(cast(o.actual_date AS text)), 1, 10), 'YYYY-MM-DD')
-    WHEN btrim(cast(o.actual_date AS text)) ~ '^\d{4}/\d{2}/\d{2}$'
-      THEN to_date(replace(btrim(cast(o.actual_date AS text)), '/', '-'), 'YYYY-MM-DD')
-    ELSE NULL
-  END
-))::int          AS actual_year,
-  to_char((
-  CASE
-    WHEN o.actual_date IS NULL THEN NULL
-    WHEN btrim(cast(o.actual_date AS text)) = '' THEN NULL
-    WHEN btrim(cast(o.actual_date AS text)) ~ '^\d{4}-\d{2}-\d{2}$'
-      THEN to_date(btrim(cast(o.actual_date AS text)), 'YYYY-MM-DD')
-    WHEN btrim(cast(o.actual_date AS text)) ~ '^\d{4}-\d{2}-\d{2}\s+.*$'
-      THEN to_date(substr(btrim(cast(o.actual_date AS text)), 1, 10), 'YYYY-MM-DD')
-    WHEN btrim(cast(o.actual_date AS text)) ~ '^\d{4}/\d{2}/\d{2}$'
-      THEN to_date(replace(btrim(cast(o.actual_date AS text)), '/', '-'), 'YYYY-MM-DD')
-    ELSE NULL
-  END
-), 'YYYY-MM')              AS actual_month,
+  EXTRACT(YEAR FROM (CASE WHEN o.actual_date IS NULL THEN NULL WHEN btrim(cast(o.actual_date AS text)) = '' THEN NULL WHEN btrim(cast(o.actual_date AS text)) ~ '^\d{4}-\d{2}-\d{2}$' THEN to_date(btrim(cast(o.actual_date AS text)), 'YYYY-MM-DD') WHEN btrim(cast(o.actual_date AS text)) ~ '^\d{4}/\d{2}/\d{2}$' THEN to_date(replace(btrim(cast(o.actual_date AS text)), '/', '-'), 'YYYY-MM-DD') ELSE NULL END))::int          AS actual_year,
+  to_char((CASE WHEN o.actual_date IS NULL THEN NULL WHEN btrim(cast(o.actual_date AS text)) = '' THEN NULL WHEN btrim(cast(o.actual_date AS text)) ~ '^\d{4}-\d{2}-\d{2}$' THEN to_date(btrim(cast(o.actual_date AS text)), 'YYYY-MM-DD') WHEN btrim(cast(o.actual_date AS text)) ~ '^\d{4}/\d{2}/\d{2}$' THEN to_date(replace(btrim(cast(o.actual_date AS text)), '/', '-'), 'YYYY-MM-DD') ELSE NULL END), 'YYYY-MM')              AS actual_month,
 
   -- === 衍生字段 ===
   CASE
-    WHEN (
-  CASE
-    WHEN o.plan_date IS NULL THEN NULL
-    WHEN btrim(cast(o.plan_date AS text)) = '' THEN NULL
-    WHEN btrim(cast(o.plan_date AS text)) ~ '^\d{4}-\d{2}-\d{2}$'
-      THEN to_date(btrim(cast(o.plan_date AS text)), 'YYYY-MM-DD')
-    WHEN btrim(cast(o.plan_date AS text)) ~ '^\d{4}-\d{2}-\d{2}\s+.*$'
-      THEN to_date(substr(btrim(cast(o.plan_date AS text)), 1, 10), 'YYYY-MM-DD')
-    WHEN btrim(cast(o.plan_date AS text)) ~ '^\d{4}/\d{2}/\d{2}$'
-      THEN to_date(replace(btrim(cast(o.plan_date AS text)), '/', '-'), 'YYYY-MM-DD')
-    ELSE NULL
-  END
-) IS NOT NULL
-     AND (
-  CASE
-    WHEN o.actual_date IS NULL THEN NULL
-    WHEN btrim(cast(o.actual_date AS text)) = '' THEN NULL
-    WHEN btrim(cast(o.actual_date AS text)) ~ '^\d{4}-\d{2}-\d{2}$'
-      THEN to_date(btrim(cast(o.actual_date AS text)), 'YYYY-MM-DD')
-    WHEN btrim(cast(o.actual_date AS text)) ~ '^\d{4}-\d{2}-\d{2}\s+.*$'
-      THEN to_date(substr(btrim(cast(o.actual_date AS text)), 1, 10), 'YYYY-MM-DD')
-    WHEN btrim(cast(o.actual_date AS text)) ~ '^\d{4}/\d{2}/\d{2}$'
-      THEN to_date(replace(btrim(cast(o.actual_date AS text)), '/', '-'), 'YYYY-MM-DD')
-    ELSE NULL
-  END
-) IS NOT NULL
-    THEN ((
-  CASE
-    WHEN o.actual_date IS NULL THEN NULL
-    WHEN btrim(cast(o.actual_date AS text)) = '' THEN NULL
-    WHEN btrim(cast(o.actual_date AS text)) ~ '^\d{4}-\d{2}-\d{2}$'
-      THEN to_date(btrim(cast(o.actual_date AS text)), 'YYYY-MM-DD')
-    WHEN btrim(cast(o.actual_date AS text)) ~ '^\d{4}-\d{2}-\d{2}\s+.*$'
-      THEN to_date(substr(btrim(cast(o.actual_date AS text)), 1, 10), 'YYYY-MM-DD')
-    WHEN btrim(cast(o.actual_date AS text)) ~ '^\d{4}/\d{2}/\d{2}$'
-      THEN to_date(replace(btrim(cast(o.actual_date AS text)), '/', '-'), 'YYYY-MM-DD')
-    ELSE NULL
-  END
-) - (
-  CASE
-    WHEN o.plan_date IS NULL THEN NULL
-    WHEN btrim(cast(o.plan_date AS text)) = '' THEN NULL
-    WHEN btrim(cast(o.plan_date AS text)) ~ '^\d{4}-\d{2}-\d{2}$'
-      THEN to_date(btrim(cast(o.plan_date AS text)), 'YYYY-MM-DD')
-    WHEN btrim(cast(o.plan_date AS text)) ~ '^\d{4}-\d{2}-\d{2}\s+.*$'
-      THEN to_date(substr(btrim(cast(o.plan_date AS text)), 1, 10), 'YYYY-MM-DD')
-    WHEN btrim(cast(o.plan_date AS text)) ~ '^\d{4}/\d{2}/\d{2}$'
-      THEN to_date(replace(btrim(cast(o.plan_date AS text)), '/', '-'), 'YYYY-MM-DD')
-    ELSE NULL
-  END
-))::int
+    WHEN (CASE WHEN o.plan_date IS NULL THEN NULL WHEN btrim(cast(o.plan_date AS text)) = '' THEN NULL WHEN btrim(cast(o.plan_date AS text)) ~ '^\d{4}-\d{2}-\d{2}$' THEN to_date(btrim(cast(o.plan_date AS text)), 'YYYY-MM-DD') WHEN btrim(cast(o.plan_date AS text)) ~ '^\d{4}/\d{2}/\d{2}$' THEN to_date(replace(btrim(cast(o.plan_date AS text)), '/', '-'), 'YYYY-MM-DD') ELSE NULL END) IS NOT NULL
+     AND (CASE WHEN o.actual_date IS NULL THEN NULL WHEN btrim(cast(o.actual_date AS text)) = '' THEN NULL WHEN btrim(cast(o.actual_date AS text)) ~ '^\d{4}-\d{2}-\d{2}$' THEN to_date(btrim(cast(o.actual_date AS text)), 'YYYY-MM-DD') WHEN btrim(cast(o.actual_date AS text)) ~ '^\d{4}/\d{2}/\d{2}$' THEN to_date(replace(btrim(cast(o.actual_date AS text)), '/', '-'), 'YYYY-MM-DD') ELSE NULL END) IS NOT NULL
+    THEN ((CASE WHEN o.actual_date IS NULL THEN NULL WHEN btrim(cast(o.actual_date AS text)) = '' THEN NULL WHEN btrim(cast(o.actual_date AS text)) ~ '^\d{4}-\d{2}-\d{2}$' THEN to_date(btrim(cast(o.actual_date AS text)), 'YYYY-MM-DD') WHEN btrim(cast(o.actual_date AS text)) ~ '^\d{4}/\d{2}/\d{2}$' THEN to_date(replace(btrim(cast(o.actual_date AS text)), '/', '-'), 'YYYY-MM-DD') ELSE NULL END) - (CASE WHEN o.plan_date IS NULL THEN NULL WHEN btrim(cast(o.plan_date AS text)) = '' THEN NULL WHEN btrim(cast(o.plan_date AS text)) ~ '^\d{4}-\d{2}-\d{2}$' THEN to_date(btrim(cast(o.plan_date AS text)), 'YYYY-MM-DD') WHEN btrim(cast(o.plan_date AS text)) ~ '^\d{4}/\d{2}/\d{2}$' THEN to_date(replace(btrim(cast(o.plan_date AS text)), '/', '-'), 'YYYY-MM-DD') ELSE NULL END))::int
   END AS delay_days,
 
   CASE
-    WHEN (
-  CASE
-    WHEN o.plan_date IS NULL THEN NULL
-    WHEN btrim(cast(o.plan_date AS text)) = '' THEN NULL
-    WHEN btrim(cast(o.plan_date AS text)) ~ '^\d{4}-\d{2}-\d{2}$'
-      THEN to_date(btrim(cast(o.plan_date AS text)), 'YYYY-MM-DD')
-    WHEN btrim(cast(o.plan_date AS text)) ~ '^\d{4}-\d{2}-\d{2}\s+.*$'
-      THEN to_date(substr(btrim(cast(o.plan_date AS text)), 1, 10), 'YYYY-MM-DD')
-    WHEN btrim(cast(o.plan_date AS text)) ~ '^\d{4}/\d{2}/\d{2}$'
-      THEN to_date(replace(btrim(cast(o.plan_date AS text)), '/', '-'), 'YYYY-MM-DD')
-    ELSE NULL
-  END
-) IS NOT NULL
-     AND (
-  CASE
-    WHEN o.plan_date IS NULL THEN NULL
-    WHEN btrim(cast(o.plan_date AS text)) = '' THEN NULL
-    WHEN btrim(cast(o.plan_date AS text)) ~ '^\d{4}-\d{2}-\d{2}$'
-      THEN to_date(btrim(cast(o.plan_date AS text)), 'YYYY-MM-DD')
-    WHEN btrim(cast(o.plan_date AS text)) ~ '^\d{4}-\d{2}-\d{2}\s+.*$'
-      THEN to_date(substr(btrim(cast(o.plan_date AS text)), 1, 10), 'YYYY-MM-DD')
-    WHEN btrim(cast(o.plan_date AS text)) ~ '^\d{4}/\d{2}/\d{2}$'
-      THEN to_date(replace(btrim(cast(o.plan_date AS text)), '/', '-'), 'YYYY-MM-DD')
-    ELSE NULL
-  END
-) <= current_date
+    WHEN (CASE WHEN o.plan_date IS NULL THEN NULL WHEN btrim(cast(o.plan_date AS text)) = '' THEN NULL WHEN btrim(cast(o.plan_date AS text)) ~ '^\d{4}-\d{2}-\d{2}$' THEN to_date(btrim(cast(o.plan_date AS text)), 'YYYY-MM-DD') WHEN btrim(cast(o.plan_date AS text)) ~ '^\d{4}/\d{2}/\d{2}$' THEN to_date(replace(btrim(cast(o.plan_date AS text)), '/', '-'), 'YYYY-MM-DD') ELSE NULL END) IS NOT NULL
+     AND (CASE WHEN o.plan_date IS NULL THEN NULL WHEN btrim(cast(o.plan_date AS text)) = '' THEN NULL WHEN btrim(cast(o.plan_date AS text)) ~ '^\d{4}-\d{2}-\d{2}$' THEN to_date(btrim(cast(o.plan_date AS text)), 'YYYY-MM-DD') WHEN btrim(cast(o.plan_date AS text)) ~ '^\d{4}/\d{2}/\d{2}$' THEN to_date(replace(btrim(cast(o.plan_date AS text)), '/', '-'), 'YYYY-MM-DD') ELSE NULL END) <= current_date
     THEN true
     ELSE false
   END AS is_due,
@@ -628,23 +176,9 @@ SELECT
 
 FROM ods_project_subject_domain o
 LEFT JOIN dim_completion_status cs
-  ON cs.code = (
-  CASE
-    WHEN o.completion_status IS NULL THEN NULL
-    WHEN upper(btrim(cast(o.completion_status AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL')
-      THEN NULL
-    ELSE nullif(btrim(cast(o.completion_status AS text)), '')
-  END
-)
+  ON cs.code = (CASE WHEN o.completion_status IS NULL THEN NULL WHEN upper(btrim(cast(o.completion_status AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL') THEN NULL ELSE nullif(btrim(cast(o.completion_status AS text)), '') END)
 LEFT JOIN dim_node_type nt
-  ON nt.code = (
-  CASE
-    WHEN o.node_type IS NULL THEN NULL
-    WHEN upper(btrim(cast(o.node_type AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL')
-      THEN NULL
-    ELSE nullif(btrim(cast(o.node_type AS text)), '')
-  END
-)
+  ON nt.code = (CASE WHEN o.node_type IS NULL THEN NULL WHEN upper(btrim(cast(o.node_type AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL') THEN NULL ELSE nullif(btrim(cast(o.node_type AS text)), '') END)
 WHERE btrim(COALESCE(o.project_no, '')) != ''
   AND btrim(COALESCE(o.plan_date, '')) != '';
 
@@ -655,51 +189,11 @@ CREATE TABLE pm_dim_major_project AS
 -- project_no IS the major project grouping key (客户确认：项目编号代表项目名称)
 WITH raw AS (
   SELECT
-    (
-  CASE
-    WHEN o.project_no IS NULL THEN NULL
-    WHEN upper(btrim(cast(o.project_no AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL')
-      THEN NULL
-    ELSE nullif(btrim(cast(o.project_no AS text)), '')
-  END
-) AS project_no,
-    (
-  CASE
-    WHEN o.project_no IS NULL THEN NULL
-    WHEN upper(btrim(cast(o.project_no AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL')
-      THEN NULL
-    ELSE nullif(btrim(cast(o.project_no AS text)), '')
-  END
-) AS major_project_name,
-    (
-  CASE
-    WHEN o.dept IS NULL THEN NULL
-    WHEN upper(btrim(cast(o.dept AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL')
-      THEN NULL
-    ELSE nullif(btrim(cast(o.dept AS text)), '')
-  END
-) AS dept,
-    (
-  CASE
-    WHEN o.dept_leader IS NULL THEN NULL
-    WHEN upper(btrim(cast(o.dept_leader AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL')
-      THEN NULL
-    ELSE nullif(btrim(cast(o.dept_leader AS text)), '')
-  END
-) AS dept_leader,
-    (
-  CASE
-    WHEN o.plan_date IS NULL THEN NULL
-    WHEN btrim(cast(o.plan_date AS text)) = '' THEN NULL
-    WHEN btrim(cast(o.plan_date AS text)) ~ '^\d{4}-\d{2}-\d{2}$'
-      THEN to_date(btrim(cast(o.plan_date AS text)), 'YYYY-MM-DD')
-    WHEN btrim(cast(o.plan_date AS text)) ~ '^\d{4}-\d{2}-\d{2}\s+.*$'
-      THEN to_date(substr(btrim(cast(o.plan_date AS text)), 1, 10), 'YYYY-MM-DD')
-    WHEN btrim(cast(o.plan_date AS text)) ~ '^\d{4}/\d{2}/\d{2}$'
-      THEN to_date(replace(btrim(cast(o.plan_date AS text)), '/', '-'), 'YYYY-MM-DD')
-    ELSE NULL
-  END
-) AS plan_date
+    (CASE WHEN o.project_no IS NULL THEN NULL WHEN upper(btrim(cast(o.project_no AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL') THEN NULL ELSE nullif(btrim(cast(o.project_no AS text)), '') END) AS project_no,
+    (CASE WHEN o.project_no IS NULL THEN NULL WHEN upper(btrim(cast(o.project_no AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL') THEN NULL ELSE nullif(btrim(cast(o.project_no AS text)), '') END) AS major_project_name,
+    (CASE WHEN o.dept IS NULL THEN NULL WHEN upper(btrim(cast(o.dept AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL') THEN NULL ELSE nullif(btrim(cast(o.dept AS text)), '') END) AS dept,
+    (CASE WHEN o.dept_leader IS NULL THEN NULL WHEN upper(btrim(cast(o.dept_leader AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL') THEN NULL ELSE nullif(btrim(cast(o.dept_leader AS text)), '') END) AS dept_leader,
+    (CASE WHEN o.plan_date IS NULL THEN NULL WHEN btrim(cast(o.plan_date AS text)) = '' THEN NULL WHEN btrim(cast(o.plan_date AS text)) ~ '^\d{4}-\d{2}-\d{2}$' THEN to_date(btrim(cast(o.plan_date AS text)), 'YYYY-MM-DD') WHEN btrim(cast(o.plan_date AS text)) ~ '^\d{4}/\d{2}/\d{2}$' THEN to_date(replace(btrim(cast(o.plan_date AS text)), '/', '-'), 'YYYY-MM-DD') ELSE NULL END) AS plan_date
   FROM ods_project_subject_domain o
   WHERE btrim(COALESCE(o.project_no, '')) != ''
 ),
@@ -743,59 +237,12 @@ CREATE TABLE pm_dim_subproject AS
 -- subsystem 直接作为子项目名称，不再用 "/" 分割
 WITH raw AS (
   SELECT
-    (
-  CASE
-    WHEN o.project_no IS NULL THEN NULL
-    WHEN upper(btrim(cast(o.project_no AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL')
-      THEN NULL
-    ELSE nullif(btrim(cast(o.project_no AS text)), '')
-  END
-) AS project_no,
-    (
-  CASE
-    WHEN o.subsystem IS NULL THEN NULL
-    WHEN upper(btrim(cast(o.subsystem AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL')
-      THEN NULL
-    ELSE nullif(btrim(cast(o.subsystem AS text)), '')
-  END
-) AS subsystem,
-    (
-  CASE
-    WHEN o.subsystem IS NULL THEN NULL
-    WHEN upper(btrim(cast(o.subsystem AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL')
-      THEN NULL
-    ELSE nullif(btrim(cast(o.subsystem AS text)), '')
-  END
-) AS subproject_name,
-    (
-  CASE
-    WHEN o.dept IS NULL THEN NULL
-    WHEN upper(btrim(cast(o.dept AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL')
-      THEN NULL
-    ELSE nullif(btrim(cast(o.dept AS text)), '')
-  END
-) AS dept,
-    (
-  CASE
-    WHEN o.project_manager IS NULL THEN NULL
-    WHEN upper(btrim(cast(o.project_manager AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL')
-      THEN NULL
-    ELSE nullif(btrim(cast(o.project_manager AS text)), '')
-  END
-) AS project_manager,
-    (
-  CASE
-    WHEN o.plan_date IS NULL THEN NULL
-    WHEN btrim(cast(o.plan_date AS text)) = '' THEN NULL
-    WHEN btrim(cast(o.plan_date AS text)) ~ '^\d{4}-\d{2}-\d{2}$'
-      THEN to_date(btrim(cast(o.plan_date AS text)), 'YYYY-MM-DD')
-    WHEN btrim(cast(o.plan_date AS text)) ~ '^\d{4}-\d{2}-\d{2}\s+.*$'
-      THEN to_date(substr(btrim(cast(o.plan_date AS text)), 1, 10), 'YYYY-MM-DD')
-    WHEN btrim(cast(o.plan_date AS text)) ~ '^\d{4}/\d{2}/\d{2}$'
-      THEN to_date(replace(btrim(cast(o.plan_date AS text)), '/', '-'), 'YYYY-MM-DD')
-    ELSE NULL
-  END
-) AS plan_date
+    (CASE WHEN o.project_no IS NULL THEN NULL WHEN upper(btrim(cast(o.project_no AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL') THEN NULL ELSE nullif(btrim(cast(o.project_no AS text)), '') END) AS project_no,
+    (CASE WHEN o.subsystem IS NULL THEN NULL WHEN upper(btrim(cast(o.subsystem AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL') THEN NULL ELSE nullif(btrim(cast(o.subsystem AS text)), '') END) AS subsystem,
+    (CASE WHEN o.subsystem IS NULL THEN NULL WHEN upper(btrim(cast(o.subsystem AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL') THEN NULL ELSE nullif(btrim(cast(o.subsystem AS text)), '') END) AS subproject_name,
+    (CASE WHEN o.dept IS NULL THEN NULL WHEN upper(btrim(cast(o.dept AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL') THEN NULL ELSE nullif(btrim(cast(o.dept AS text)), '') END) AS dept,
+    (CASE WHEN o.project_manager IS NULL THEN NULL WHEN upper(btrim(cast(o.project_manager AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL') THEN NULL ELSE nullif(btrim(cast(o.project_manager AS text)), '') END) AS project_manager,
+    (CASE WHEN o.plan_date IS NULL THEN NULL WHEN btrim(cast(o.plan_date AS text)) = '' THEN NULL WHEN btrim(cast(o.plan_date AS text)) ~ '^\d{4}-\d{2}-\d{2}$' THEN to_date(btrim(cast(o.plan_date AS text)), 'YYYY-MM-DD') WHEN btrim(cast(o.plan_date AS text)) ~ '^\d{4}/\d{2}/\d{2}$' THEN to_date(replace(btrim(cast(o.plan_date AS text)), '/', '-'), 'YYYY-MM-DD') ELSE NULL END) AS plan_date
   FROM ods_project_subject_domain o
   WHERE btrim(COALESCE(o.project_no, '')) != ''
     AND btrim(COALESCE(o.subsystem, '')) != ''
@@ -849,39 +296,11 @@ SELECT DISTINCT
     COALESCE(btrim(o.subsystem), '') || '|' ||
     COALESCE(btrim(o.node_task), '')
   ) AS map_id,
-  (
-  CASE
-    WHEN o.project_no IS NULL THEN NULL
-    WHEN upper(btrim(cast(o.project_no AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL')
-      THEN NULL
-    ELSE nullif(btrim(cast(o.project_no AS text)), '')
-  END
-) AS project_no,
-  (
-  CASE
-    WHEN o.subsystem IS NULL THEN NULL
-    WHEN upper(btrim(cast(o.subsystem AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL')
-      THEN NULL
-    ELSE nullif(btrim(cast(o.subsystem AS text)), '')
-  END
-) AS subsystem,
-  (
-  CASE
-    WHEN o.node_task IS NULL THEN NULL
-    WHEN upper(btrim(cast(o.node_task AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL')
-      THEN NULL
-    ELSE nullif(btrim(cast(o.node_task AS text)), '')
-  END
-) AS node_task,
+  (CASE WHEN o.project_no IS NULL THEN NULL WHEN upper(btrim(cast(o.project_no AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL') THEN NULL ELSE nullif(btrim(cast(o.project_no AS text)), '') END) AS project_no,
+  (CASE WHEN o.subsystem IS NULL THEN NULL WHEN upper(btrim(cast(o.subsystem AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL') THEN NULL ELSE nullif(btrim(cast(o.subsystem AS text)), '') END) AS subsystem,
+  (CASE WHEN o.node_task IS NULL THEN NULL WHEN upper(btrim(cast(o.node_task AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL') THEN NULL ELSE nullif(btrim(cast(o.node_task AS text)), '') END) AS node_task,
   md5(COALESCE(btrim(o.project_no), '') || '/' || COALESCE(btrim(o.subsystem), '')) AS subproject_id,
-  (
-  CASE
-    WHEN o.project_no IS NULL THEN NULL
-    WHEN upper(btrim(cast(o.project_no AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL')
-      THEN NULL
-    ELSE nullif(btrim(cast(o.project_no AS text)), '')
-  END
-) AS major_project_id,
+  (CASE WHEN o.project_no IS NULL THEN NULL WHEN upper(btrim(cast(o.project_no AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL') THEN NULL ELSE nullif(btrim(cast(o.project_no AS text)), '') END) AS major_project_id,
   CASE btrim(o.node_type)
     WHEN '里程碑节点' THEN 'milestone'
     WHEN '重大节点' THEN 'critical'
@@ -911,474 +330,53 @@ SELECT
   ) AS measure_id,
 
   -- === 原始业务字段 ===
-  (
-  CASE
-    WHEN o.project_no IS NULL THEN NULL
-    WHEN upper(btrim(cast(o.project_no AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL')
-      THEN NULL
-    ELSE nullif(btrim(cast(o.project_no AS text)), '')
-  END
-)               AS project_no,
-  (
-  CASE
-    WHEN o.subsystem IS NULL THEN NULL
-    WHEN upper(btrim(cast(o.subsystem AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL')
-      THEN NULL
-    ELSE nullif(btrim(cast(o.subsystem AS text)), '')
-  END
-)                AS subsystem,
-  (
-  CASE
-    WHEN o.node_task IS NULL THEN NULL
-    WHEN upper(btrim(cast(o.node_task AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL')
-      THEN NULL
-    ELSE nullif(btrim(cast(o.node_task AS text)), '')
-  END
-)                AS node_task,
-  (
-  CASE
-    WHEN o.completion_status IS NULL THEN NULL
-    WHEN upper(btrim(cast(o.completion_status AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL')
-      THEN NULL
-    ELSE nullif(btrim(cast(o.completion_status AS text)), '')
-  END
-)        AS completion_status,
-  (
-  CASE
-    WHEN o.measure_category IS NULL THEN NULL
-    WHEN upper(btrim(cast(o.measure_category AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL')
-      THEN NULL
-    ELSE nullif(btrim(cast(o.measure_category AS text)), '')
-  END
-)         AS measure_category,
-  (
-  CASE
-    WHEN o.measure_title IS NULL THEN NULL
-    WHEN upper(btrim(cast(o.measure_title AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL')
-      THEN NULL
-    ELSE nullif(btrim(cast(o.measure_title AS text)), '')
-  END
-)            AS measure_title,
-  (
-  CASE
-    WHEN o.follow_up_person IS NULL THEN NULL
-    WHEN upper(btrim(cast(o.follow_up_person AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL')
-      THEN NULL
-    ELSE nullif(btrim(cast(o.follow_up_person AS text)), '')
-  END
-)         AS follow_up_person,
-  (
-  CASE
-    WHEN o.main_recipient IS NULL THEN NULL
-    WHEN upper(btrim(cast(o.main_recipient AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL')
-      THEN NULL
-    ELSE nullif(btrim(cast(o.main_recipient AS text)), '')
-  END
-)           AS main_recipient,
-  (
-  CASE
-    WHEN o.cc_recipient IS NULL THEN NULL
-    WHEN upper(btrim(cast(o.cc_recipient AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL')
-      THEN NULL
-    ELSE nullif(btrim(cast(o.cc_recipient AS text)), '')
-  END
-)             AS cc_recipient,
-  (
-  CASE
-    WHEN o.closure_status IS NULL THEN NULL
-    WHEN upper(btrim(cast(o.closure_status AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL')
-      THEN NULL
-    ELSE nullif(btrim(cast(o.closure_status AS text)), '')
-  END
-)           AS closure_status,
-  (
-  CASE
-    WHEN o.closure_deliverable_type IS NULL THEN NULL
-    WHEN upper(btrim(cast(o.closure_deliverable_type AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL')
-      THEN NULL
-    ELSE nullif(btrim(cast(o.closure_deliverable_type AS text)), '')
-  END
-) AS closure_deliverable_type,
-  (
-  CASE
-    WHEN o.closure_deliverable IS NULL THEN NULL
-    WHEN upper(btrim(cast(o.closure_deliverable AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL')
-      THEN NULL
-    ELSE nullif(btrim(cast(o.closure_deliverable AS text)), '')
-  END
-)      AS closure_deliverable,
-  (
-  CASE
-    WHEN o.risk_content IS NULL THEN NULL
-    WHEN upper(btrim(cast(o.risk_content AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL')
-      THEN NULL
-    ELSE nullif(btrim(cast(o.risk_content AS text)), '')
-  END
-)             AS risk_content,
-  (
-  CASE
-    WHEN o.remark IS NULL THEN NULL
-    WHEN upper(btrim(cast(o.remark AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL')
-      THEN NULL
-    ELSE nullif(btrim(cast(o.remark AS text)), '')
-  END
-)                   AS remark,
-  (
-  CASE
-    WHEN o.filled_by IS NULL THEN NULL
-    WHEN upper(btrim(cast(o.filled_by AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL')
-      THEN NULL
-    ELSE nullif(btrim(cast(o.filled_by AS text)), '')
-  END
-)                AS filled_by,
+  (CASE WHEN o.project_no IS NULL THEN NULL WHEN upper(btrim(cast(o.project_no AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL') THEN NULL ELSE nullif(btrim(cast(o.project_no AS text)), '') END)               AS project_no,
+  (CASE WHEN o.subsystem IS NULL THEN NULL WHEN upper(btrim(cast(o.subsystem AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL') THEN NULL ELSE nullif(btrim(cast(o.subsystem AS text)), '') END)                AS subsystem,
+  (CASE WHEN o.node_task IS NULL THEN NULL WHEN upper(btrim(cast(o.node_task AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL') THEN NULL ELSE nullif(btrim(cast(o.node_task AS text)), '') END)                AS node_task,
+  (CASE WHEN o.completion_status IS NULL THEN NULL WHEN upper(btrim(cast(o.completion_status AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL') THEN NULL ELSE nullif(btrim(cast(o.completion_status AS text)), '') END)        AS completion_status,
+  (CASE WHEN o.measure_category IS NULL THEN NULL WHEN upper(btrim(cast(o.measure_category AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL') THEN NULL ELSE nullif(btrim(cast(o.measure_category AS text)), '') END)         AS measure_category,
+  (CASE WHEN o.measure_title IS NULL THEN NULL WHEN upper(btrim(cast(o.measure_title AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL') THEN NULL ELSE nullif(btrim(cast(o.measure_title AS text)), '') END)            AS measure_title,
+  (CASE WHEN o.follow_up_person IS NULL THEN NULL WHEN upper(btrim(cast(o.follow_up_person AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL') THEN NULL ELSE nullif(btrim(cast(o.follow_up_person AS text)), '') END)         AS follow_up_person,
+  (CASE WHEN o.main_recipient IS NULL THEN NULL WHEN upper(btrim(cast(o.main_recipient AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL') THEN NULL ELSE nullif(btrim(cast(o.main_recipient AS text)), '') END)           AS main_recipient,
+  (CASE WHEN o.cc_recipient IS NULL THEN NULL WHEN upper(btrim(cast(o.cc_recipient AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL') THEN NULL ELSE nullif(btrim(cast(o.cc_recipient AS text)), '') END)             AS cc_recipient,
+  (CASE WHEN o.closure_status IS NULL THEN NULL WHEN upper(btrim(cast(o.closure_status AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL') THEN NULL ELSE nullif(btrim(cast(o.closure_status AS text)), '') END)           AS closure_status,
+  (CASE WHEN o.closure_deliverable_type IS NULL THEN NULL WHEN upper(btrim(cast(o.closure_deliverable_type AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL') THEN NULL ELSE nullif(btrim(cast(o.closure_deliverable_type AS text)), '') END) AS closure_deliverable_type,
+  (CASE WHEN o.closure_deliverable IS NULL THEN NULL WHEN upper(btrim(cast(o.closure_deliverable AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL') THEN NULL ELSE nullif(btrim(cast(o.closure_deliverable AS text)), '') END)      AS closure_deliverable,
+  (CASE WHEN o.risk_content IS NULL THEN NULL WHEN upper(btrim(cast(o.risk_content AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL') THEN NULL ELSE nullif(btrim(cast(o.risk_content AS text)), '') END)             AS risk_content,
+  (CASE WHEN o.remark IS NULL THEN NULL WHEN upper(btrim(cast(o.remark AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL') THEN NULL ELSE nullif(btrim(cast(o.remark AS text)), '') END)                   AS remark,
+  (CASE WHEN o.filled_by IS NULL THEN NULL WHEN upper(btrim(cast(o.filled_by AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL') THEN NULL ELSE nullif(btrim(cast(o.filled_by AS text)), '') END)                AS filled_by,
 
   -- === 日期解析 ===
-  (
-  CASE
-    WHEN o.plan_date IS NULL THEN NULL
-    WHEN btrim(cast(o.plan_date AS text)) = '' THEN NULL
-    WHEN btrim(cast(o.plan_date AS text)) ~ '^\d{4}-\d{2}-\d{2}$'
-      THEN to_date(btrim(cast(o.plan_date AS text)), 'YYYY-MM-DD')
-    WHEN btrim(cast(o.plan_date AS text)) ~ '^\d{4}-\d{2}-\d{2}\s+.*$'
-      THEN to_date(substr(btrim(cast(o.plan_date AS text)), 1, 10), 'YYYY-MM-DD')
-    WHEN btrim(cast(o.plan_date AS text)) ~ '^\d{4}/\d{2}/\d{2}$'
-      THEN to_date(replace(btrim(cast(o.plan_date AS text)), '/', '-'), 'YYYY-MM-DD')
-    ELSE NULL
-  END
-)                   AS plan_date,
-  (
-  CASE
-    WHEN o.follow_up_date IS NULL THEN NULL
-    WHEN btrim(cast(o.follow_up_date AS text)) = '' THEN NULL
-    WHEN btrim(cast(o.follow_up_date AS text)) ~ '^\d{4}-\d{2}-\d{2}$'
-      THEN to_date(btrim(cast(o.follow_up_date AS text)), 'YYYY-MM-DD')
-    WHEN btrim(cast(o.follow_up_date AS text)) ~ '^\d{4}-\d{2}-\d{2}\s+.*$'
-      THEN to_date(substr(btrim(cast(o.follow_up_date AS text)), 1, 10), 'YYYY-MM-DD')
-    WHEN btrim(cast(o.follow_up_date AS text)) ~ '^\d{4}/\d{2}/\d{2}$'
-      THEN to_date(replace(btrim(cast(o.follow_up_date AS text)), '/', '-'), 'YYYY-MM-DD')
-    ELSE NULL
-  END
-)              AS follow_up_date,
-  (
-  CASE
-    WHEN o.final_closure_date IS NULL THEN NULL
-    WHEN btrim(cast(o.final_closure_date AS text)) = '' THEN NULL
-    WHEN btrim(cast(o.final_closure_date AS text)) ~ '^\d{4}-\d{2}-\d{2}$'
-      THEN to_date(btrim(cast(o.final_closure_date AS text)), 'YYYY-MM-DD')
-    WHEN btrim(cast(o.final_closure_date AS text)) ~ '^\d{4}-\d{2}-\d{2}\s+.*$'
-      THEN to_date(substr(btrim(cast(o.final_closure_date AS text)), 1, 10), 'YYYY-MM-DD')
-    WHEN btrim(cast(o.final_closure_date AS text)) ~ '^\d{4}/\d{2}/\d{2}$'
-      THEN to_date(replace(btrim(cast(o.final_closure_date AS text)), '/', '-'), 'YYYY-MM-DD')
-    ELSE NULL
-  END
-)          AS final_closure_date,
-  (
-  CASE
-    WHEN o.last_update_time IS NULL THEN NULL
-    WHEN btrim(cast(o.last_update_time AS text)) = '' THEN NULL
-    WHEN btrim(cast(o.last_update_time AS text)) ~ '^\d{4}-\d{2}-\d{2}$'
-      THEN to_date(btrim(cast(o.last_update_time AS text)), 'YYYY-MM-DD')
-    WHEN btrim(cast(o.last_update_time AS text)) ~ '^\d{4}-\d{2}-\d{2}\s+.*$'
-      THEN to_date(substr(btrim(cast(o.last_update_time AS text)), 1, 10), 'YYYY-MM-DD')
-    WHEN btrim(cast(o.last_update_time AS text)) ~ '^\d{4}/\d{2}/\d{2}$'
-      THEN to_date(replace(btrim(cast(o.last_update_time AS text)), '/', '-'), 'YYYY-MM-DD')
-    ELSE NULL
-  END
-)            AS last_update_time,
+  (CASE WHEN o.plan_date IS NULL THEN NULL WHEN btrim(cast(o.plan_date AS text)) = '' THEN NULL WHEN btrim(cast(o.plan_date AS text)) ~ '^\d{4}-\d{2}-\d{2}$' THEN to_date(btrim(cast(o.plan_date AS text)), 'YYYY-MM-DD') WHEN btrim(cast(o.plan_date AS text)) ~ '^\d{4}/\d{2}/\d{2}$' THEN to_date(replace(btrim(cast(o.plan_date AS text)), '/', '-'), 'YYYY-MM-DD') ELSE NULL END)                   AS plan_date,
+  (CASE WHEN o.follow_up_date IS NULL THEN NULL WHEN btrim(cast(o.follow_up_date AS text)) = '' THEN NULL WHEN btrim(cast(o.follow_up_date AS text)) ~ '^\d{4}-\d{2}-\d{2}$' THEN to_date(btrim(cast(o.follow_up_date AS text)), 'YYYY-MM-DD') WHEN btrim(cast(o.follow_up_date AS text)) ~ '^\d{4}/\d{2}/\d{2}$' THEN to_date(replace(btrim(cast(o.follow_up_date AS text)), '/', '-'), 'YYYY-MM-DD') ELSE NULL END)              AS follow_up_date,
+  (CASE WHEN o.final_closure_date IS NULL THEN NULL WHEN btrim(cast(o.final_closure_date AS text)) = '' THEN NULL WHEN btrim(cast(o.final_closure_date AS text)) ~ '^\d{4}-\d{2}-\d{2}$' THEN to_date(btrim(cast(o.final_closure_date AS text)), 'YYYY-MM-DD') WHEN btrim(cast(o.final_closure_date AS text)) ~ '^\d{4}/\d{2}/\d{2}$' THEN to_date(replace(btrim(cast(o.final_closure_date AS text)), '/', '-'), 'YYYY-MM-DD') ELSE NULL END)          AS final_closure_date,
+  (CASE WHEN o.last_update_time IS NULL THEN NULL WHEN btrim(cast(o.last_update_time AS text)) = '' THEN NULL WHEN btrim(cast(o.last_update_time AS text)) ~ '^\d{4}-\d{2}-\d{2}$' THEN to_date(btrim(cast(o.last_update_time AS text)), 'YYYY-MM-DD') WHEN btrim(cast(o.last_update_time AS text)) ~ '^\d{4}/\d{2}/\d{2}$' THEN to_date(replace(btrim(cast(o.last_update_time AS text)), '/', '-'), 'YYYY-MM-DD') ELSE NULL END)            AS last_update_time,
 
   -- === 周数 ===
-  (
-  CASE
-    WHEN (
-  CASE
-    WHEN o.plan_week IS NULL THEN NULL
-    WHEN upper(btrim(cast(o.plan_week AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL')
-      THEN NULL
-    ELSE nullif(btrim(cast(o.plan_week AS text)), '')
-  END
-) IS NULL THEN NULL
-    WHEN regexp_replace((
-  CASE
-    WHEN o.plan_week IS NULL THEN NULL
-    WHEN upper(btrim(cast(o.plan_week AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL')
-      THEN NULL
-    ELSE nullif(btrim(cast(o.plan_week AS text)), '')
-  END
-), ',', '', 'g') ~ '^-?\d+(\.\d+)?$'
-      THEN regexp_replace((
-  CASE
-    WHEN o.plan_week IS NULL THEN NULL
-    WHEN upper(btrim(cast(o.plan_week AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL')
-      THEN NULL
-    ELSE nullif(btrim(cast(o.plan_week AS text)), '')
-  END
-), ',', '', 'g')::numeric
-    ELSE NULL
-  END
-)::int           AS plan_week,
-  (
-  CASE
-    WHEN (
-  CASE
-    WHEN o.follow_up_week IS NULL THEN NULL
-    WHEN upper(btrim(cast(o.follow_up_week AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL')
-      THEN NULL
-    ELSE nullif(btrim(cast(o.follow_up_week AS text)), '')
-  END
-) IS NULL THEN NULL
-    WHEN regexp_replace((
-  CASE
-    WHEN o.follow_up_week IS NULL THEN NULL
-    WHEN upper(btrim(cast(o.follow_up_week AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL')
-      THEN NULL
-    ELSE nullif(btrim(cast(o.follow_up_week AS text)), '')
-  END
-), ',', '', 'g') ~ '^-?\d+(\.\d+)?$'
-      THEN regexp_replace((
-  CASE
-    WHEN o.follow_up_week IS NULL THEN NULL
-    WHEN upper(btrim(cast(o.follow_up_week AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL')
-      THEN NULL
-    ELSE nullif(btrim(cast(o.follow_up_week AS text)), '')
-  END
-), ',', '', 'g')::numeric
-    ELSE NULL
-  END
-)::int      AS follow_up_week,
-  (
-  CASE
-    WHEN (
-  CASE
-    WHEN o.final_closure_week IS NULL THEN NULL
-    WHEN upper(btrim(cast(o.final_closure_week AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL')
-      THEN NULL
-    ELSE nullif(btrim(cast(o.final_closure_week AS text)), '')
-  END
-) IS NULL THEN NULL
-    WHEN regexp_replace((
-  CASE
-    WHEN o.final_closure_week IS NULL THEN NULL
-    WHEN upper(btrim(cast(o.final_closure_week AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL')
-      THEN NULL
-    ELSE nullif(btrim(cast(o.final_closure_week AS text)), '')
-  END
-), ',', '', 'g') ~ '^-?\d+(\.\d+)?$'
-      THEN regexp_replace((
-  CASE
-    WHEN o.final_closure_week IS NULL THEN NULL
-    WHEN upper(btrim(cast(o.final_closure_week AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL')
-      THEN NULL
-    ELSE nullif(btrim(cast(o.final_closure_week AS text)), '')
-  END
-), ',', '', 'g')::numeric
-    ELSE NULL
-  END
-)::int  AS final_closure_week,
-  (
-  CASE
-    WHEN (
-  CASE
-    WHEN o.last_update_week IS NULL THEN NULL
-    WHEN upper(btrim(cast(o.last_update_week AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL')
-      THEN NULL
-    ELSE nullif(btrim(cast(o.last_update_week AS text)), '')
-  END
-) IS NULL THEN NULL
-    WHEN regexp_replace((
-  CASE
-    WHEN o.last_update_week IS NULL THEN NULL
-    WHEN upper(btrim(cast(o.last_update_week AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL')
-      THEN NULL
-    ELSE nullif(btrim(cast(o.last_update_week AS text)), '')
-  END
-), ',', '', 'g') ~ '^-?\d+(\.\d+)?$'
-      THEN regexp_replace((
-  CASE
-    WHEN o.last_update_week IS NULL THEN NULL
-    WHEN upper(btrim(cast(o.last_update_week AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL')
-      THEN NULL
-    ELSE nullif(btrim(cast(o.last_update_week AS text)), '')
-  END
-), ',', '', 'g')::numeric
-    ELSE NULL
-  END
-)::int    AS last_update_week,
+  (CASE WHEN (CASE WHEN o.plan_week IS NULL THEN NULL WHEN upper(btrim(cast(o.plan_week AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL') THEN NULL ELSE nullif(btrim(cast(o.plan_week AS text)), '') END) IS NULL THEN NULL WHEN regexp_replace((CASE WHEN o.plan_week IS NULL THEN NULL WHEN upper(btrim(cast(o.plan_week AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL') THEN NULL ELSE nullif(btrim(cast(o.plan_week AS text)), '') END), ',', '', 'g') ~ '^-?\d+(\.\d+)?$' THEN regexp_replace((CASE WHEN o.plan_week IS NULL THEN NULL WHEN upper(btrim(cast(o.plan_week AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL') THEN NULL ELSE nullif(btrim(cast(o.plan_week AS text)), '') END), ',', '', 'g')::numeric ELSE NULL END)::int           AS plan_week,
+  (CASE WHEN (CASE WHEN o.follow_up_week IS NULL THEN NULL WHEN upper(btrim(cast(o.follow_up_week AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL') THEN NULL ELSE nullif(btrim(cast(o.follow_up_week AS text)), '') END) IS NULL THEN NULL WHEN regexp_replace((CASE WHEN o.follow_up_week IS NULL THEN NULL WHEN upper(btrim(cast(o.follow_up_week AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL') THEN NULL ELSE nullif(btrim(cast(o.follow_up_week AS text)), '') END), ',', '', 'g') ~ '^-?\d+(\.\d+)?$' THEN regexp_replace((CASE WHEN o.follow_up_week IS NULL THEN NULL WHEN upper(btrim(cast(o.follow_up_week AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL') THEN NULL ELSE nullif(btrim(cast(o.follow_up_week AS text)), '') END), ',', '', 'g')::numeric ELSE NULL END)::int      AS follow_up_week,
+  (CASE WHEN (CASE WHEN o.final_closure_week IS NULL THEN NULL WHEN upper(btrim(cast(o.final_closure_week AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL') THEN NULL ELSE nullif(btrim(cast(o.final_closure_week AS text)), '') END) IS NULL THEN NULL WHEN regexp_replace((CASE WHEN o.final_closure_week IS NULL THEN NULL WHEN upper(btrim(cast(o.final_closure_week AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL') THEN NULL ELSE nullif(btrim(cast(o.final_closure_week AS text)), '') END), ',', '', 'g') ~ '^-?\d+(\.\d+)?$' THEN regexp_replace((CASE WHEN o.final_closure_week IS NULL THEN NULL WHEN upper(btrim(cast(o.final_closure_week AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL') THEN NULL ELSE nullif(btrim(cast(o.final_closure_week AS text)), '') END), ',', '', 'g')::numeric ELSE NULL END)::int  AS final_closure_week,
+  (CASE WHEN (CASE WHEN o.last_update_week IS NULL THEN NULL WHEN upper(btrim(cast(o.last_update_week AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL') THEN NULL ELSE nullif(btrim(cast(o.last_update_week AS text)), '') END) IS NULL THEN NULL WHEN regexp_replace((CASE WHEN o.last_update_week IS NULL THEN NULL WHEN upper(btrim(cast(o.last_update_week AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL') THEN NULL ELSE nullif(btrim(cast(o.last_update_week AS text)), '') END), ',', '', 'g') ~ '^-?\d+(\.\d+)?$' THEN regexp_replace((CASE WHEN o.last_update_week IS NULL THEN NULL WHEN upper(btrim(cast(o.last_update_week AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL') THEN NULL ELSE nullif(btrim(cast(o.last_update_week AS text)), '') END), ',', '', 'g')::numeric ELSE NULL END)::int    AS last_update_week,
 
   -- === 时间维度标签 ===
-  EXTRACT(YEAR FROM (
-  CASE
-    WHEN o.plan_date IS NULL THEN NULL
-    WHEN btrim(cast(o.plan_date AS text)) = '' THEN NULL
-    WHEN btrim(cast(o.plan_date AS text)) ~ '^\d{4}-\d{2}-\d{2}$'
-      THEN to_date(btrim(cast(o.plan_date AS text)), 'YYYY-MM-DD')
-    WHEN btrim(cast(o.plan_date AS text)) ~ '^\d{4}-\d{2}-\d{2}\s+.*$'
-      THEN to_date(substr(btrim(cast(o.plan_date AS text)), 1, 10), 'YYYY-MM-DD')
-    WHEN btrim(cast(o.plan_date AS text)) ~ '^\d{4}/\d{2}/\d{2}$'
-      THEN to_date(replace(btrim(cast(o.plan_date AS text)), '/', '-'), 'YYYY-MM-DD')
-    ELSE NULL
-  END
-))::int            AS plan_year,
-  EXTRACT(QUARTER FROM (
-  CASE
-    WHEN o.plan_date IS NULL THEN NULL
-    WHEN btrim(cast(o.plan_date AS text)) = '' THEN NULL
-    WHEN btrim(cast(o.plan_date AS text)) ~ '^\d{4}-\d{2}-\d{2}$'
-      THEN to_date(btrim(cast(o.plan_date AS text)), 'YYYY-MM-DD')
-    WHEN btrim(cast(o.plan_date AS text)) ~ '^\d{4}-\d{2}-\d{2}\s+.*$'
-      THEN to_date(substr(btrim(cast(o.plan_date AS text)), 1, 10), 'YYYY-MM-DD')
-    WHEN btrim(cast(o.plan_date AS text)) ~ '^\d{4}/\d{2}/\d{2}$'
-      THEN to_date(replace(btrim(cast(o.plan_date AS text)), '/', '-'), 'YYYY-MM-DD')
-    ELSE NULL
-  END
-))::int         AS plan_quarter,
-  to_char((
-  CASE
-    WHEN o.plan_date IS NULL THEN NULL
-    WHEN btrim(cast(o.plan_date AS text)) = '' THEN NULL
-    WHEN btrim(cast(o.plan_date AS text)) ~ '^\d{4}-\d{2}-\d{2}$'
-      THEN to_date(btrim(cast(o.plan_date AS text)), 'YYYY-MM-DD')
-    WHEN btrim(cast(o.plan_date AS text)) ~ '^\d{4}-\d{2}-\d{2}\s+.*$'
-      THEN to_date(substr(btrim(cast(o.plan_date AS text)), 1, 10), 'YYYY-MM-DD')
-    WHEN btrim(cast(o.plan_date AS text)) ~ '^\d{4}/\d{2}/\d{2}$'
-      THEN to_date(replace(btrim(cast(o.plan_date AS text)), '/', '-'), 'YYYY-MM-DD')
-    ELSE NULL
-  END
-), 'YYYY-MM')                AS plan_month,
+  EXTRACT(YEAR FROM (CASE WHEN o.plan_date IS NULL THEN NULL WHEN btrim(cast(o.plan_date AS text)) = '' THEN NULL WHEN btrim(cast(o.plan_date AS text)) ~ '^\d{4}-\d{2}-\d{2}$' THEN to_date(btrim(cast(o.plan_date AS text)), 'YYYY-MM-DD') WHEN btrim(cast(o.plan_date AS text)) ~ '^\d{4}/\d{2}/\d{2}$' THEN to_date(replace(btrim(cast(o.plan_date AS text)), '/', '-'), 'YYYY-MM-DD') ELSE NULL END))::int            AS plan_year,
+  EXTRACT(QUARTER FROM (CASE WHEN o.plan_date IS NULL THEN NULL WHEN btrim(cast(o.plan_date AS text)) = '' THEN NULL WHEN btrim(cast(o.plan_date AS text)) ~ '^\d{4}-\d{2}-\d{2}$' THEN to_date(btrim(cast(o.plan_date AS text)), 'YYYY-MM-DD') WHEN btrim(cast(o.plan_date AS text)) ~ '^\d{4}/\d{2}/\d{2}$' THEN to_date(replace(btrim(cast(o.plan_date AS text)), '/', '-'), 'YYYY-MM-DD') ELSE NULL END))::int         AS plan_quarter,
+  to_char((CASE WHEN o.plan_date IS NULL THEN NULL WHEN btrim(cast(o.plan_date AS text)) = '' THEN NULL WHEN btrim(cast(o.plan_date AS text)) ~ '^\d{4}-\d{2}-\d{2}$' THEN to_date(btrim(cast(o.plan_date AS text)), 'YYYY-MM-DD') WHEN btrim(cast(o.plan_date AS text)) ~ '^\d{4}/\d{2}/\d{2}$' THEN to_date(replace(btrim(cast(o.plan_date AS text)), '/', '-'), 'YYYY-MM-DD') ELSE NULL END), 'YYYY-MM')                AS plan_month,
 
-  EXTRACT(YEAR FROM (
-  CASE
-    WHEN o.follow_up_date IS NULL THEN NULL
-    WHEN btrim(cast(o.follow_up_date AS text)) = '' THEN NULL
-    WHEN btrim(cast(o.follow_up_date AS text)) ~ '^\d{4}-\d{2}-\d{2}$'
-      THEN to_date(btrim(cast(o.follow_up_date AS text)), 'YYYY-MM-DD')
-    WHEN btrim(cast(o.follow_up_date AS text)) ~ '^\d{4}-\d{2}-\d{2}\s+.*$'
-      THEN to_date(substr(btrim(cast(o.follow_up_date AS text)), 1, 10), 'YYYY-MM-DD')
-    WHEN btrim(cast(o.follow_up_date AS text)) ~ '^\d{4}/\d{2}/\d{2}$'
-      THEN to_date(replace(btrim(cast(o.follow_up_date AS text)), '/', '-'), 'YYYY-MM-DD')
-    ELSE NULL
-  END
-))::int       AS follow_up_year,
-  to_char((
-  CASE
-    WHEN o.follow_up_date IS NULL THEN NULL
-    WHEN btrim(cast(o.follow_up_date AS text)) = '' THEN NULL
-    WHEN btrim(cast(o.follow_up_date AS text)) ~ '^\d{4}-\d{2}-\d{2}$'
-      THEN to_date(btrim(cast(o.follow_up_date AS text)), 'YYYY-MM-DD')
-    WHEN btrim(cast(o.follow_up_date AS text)) ~ '^\d{4}-\d{2}-\d{2}\s+.*$'
-      THEN to_date(substr(btrim(cast(o.follow_up_date AS text)), 1, 10), 'YYYY-MM-DD')
-    WHEN btrim(cast(o.follow_up_date AS text)) ~ '^\d{4}/\d{2}/\d{2}$'
-      THEN to_date(replace(btrim(cast(o.follow_up_date AS text)), '/', '-'), 'YYYY-MM-DD')
-    ELSE NULL
-  END
-), 'YYYY-MM')           AS follow_up_month,
+  EXTRACT(YEAR FROM (CASE WHEN o.follow_up_date IS NULL THEN NULL WHEN btrim(cast(o.follow_up_date AS text)) = '' THEN NULL WHEN btrim(cast(o.follow_up_date AS text)) ~ '^\d{4}-\d{2}-\d{2}$' THEN to_date(btrim(cast(o.follow_up_date AS text)), 'YYYY-MM-DD') WHEN btrim(cast(o.follow_up_date AS text)) ~ '^\d{4}/\d{2}/\d{2}$' THEN to_date(replace(btrim(cast(o.follow_up_date AS text)), '/', '-'), 'YYYY-MM-DD') ELSE NULL END))::int       AS follow_up_year,
+  to_char((CASE WHEN o.follow_up_date IS NULL THEN NULL WHEN btrim(cast(o.follow_up_date AS text)) = '' THEN NULL WHEN btrim(cast(o.follow_up_date AS text)) ~ '^\d{4}-\d{2}-\d{2}$' THEN to_date(btrim(cast(o.follow_up_date AS text)), 'YYYY-MM-DD') WHEN btrim(cast(o.follow_up_date AS text)) ~ '^\d{4}/\d{2}/\d{2}$' THEN to_date(replace(btrim(cast(o.follow_up_date AS text)), '/', '-'), 'YYYY-MM-DD') ELSE NULL END), 'YYYY-MM')           AS follow_up_month,
 
   -- === 衍生字段 ===
   CASE
-    WHEN (
-  CASE
-    WHEN o.plan_date IS NULL THEN NULL
-    WHEN btrim(cast(o.plan_date AS text)) = '' THEN NULL
-    WHEN btrim(cast(o.plan_date AS text)) ~ '^\d{4}-\d{2}-\d{2}$'
-      THEN to_date(btrim(cast(o.plan_date AS text)), 'YYYY-MM-DD')
-    WHEN btrim(cast(o.plan_date AS text)) ~ '^\d{4}-\d{2}-\d{2}\s+.*$'
-      THEN to_date(substr(btrim(cast(o.plan_date AS text)), 1, 10), 'YYYY-MM-DD')
-    WHEN btrim(cast(o.plan_date AS text)) ~ '^\d{4}/\d{2}/\d{2}$'
-      THEN to_date(replace(btrim(cast(o.plan_date AS text)), '/', '-'), 'YYYY-MM-DD')
-    ELSE NULL
-  END
-) IS NOT NULL
-     AND (
-  CASE
-    WHEN o.follow_up_date IS NULL THEN NULL
-    WHEN btrim(cast(o.follow_up_date AS text)) = '' THEN NULL
-    WHEN btrim(cast(o.follow_up_date AS text)) ~ '^\d{4}-\d{2}-\d{2}$'
-      THEN to_date(btrim(cast(o.follow_up_date AS text)), 'YYYY-MM-DD')
-    WHEN btrim(cast(o.follow_up_date AS text)) ~ '^\d{4}-\d{2}-\d{2}\s+.*$'
-      THEN to_date(substr(btrim(cast(o.follow_up_date AS text)), 1, 10), 'YYYY-MM-DD')
-    WHEN btrim(cast(o.follow_up_date AS text)) ~ '^\d{4}/\d{2}/\d{2}$'
-      THEN to_date(replace(btrim(cast(o.follow_up_date AS text)), '/', '-'), 'YYYY-MM-DD')
-    ELSE NULL
-  END
-) IS NOT NULL
-    THEN ((
-  CASE
-    WHEN o.follow_up_date IS NULL THEN NULL
-    WHEN btrim(cast(o.follow_up_date AS text)) = '' THEN NULL
-    WHEN btrim(cast(o.follow_up_date AS text)) ~ '^\d{4}-\d{2}-\d{2}$'
-      THEN to_date(btrim(cast(o.follow_up_date AS text)), 'YYYY-MM-DD')
-    WHEN btrim(cast(o.follow_up_date AS text)) ~ '^\d{4}-\d{2}-\d{2}\s+.*$'
-      THEN to_date(substr(btrim(cast(o.follow_up_date AS text)), 1, 10), 'YYYY-MM-DD')
-    WHEN btrim(cast(o.follow_up_date AS text)) ~ '^\d{4}/\d{2}/\d{2}$'
-      THEN to_date(replace(btrim(cast(o.follow_up_date AS text)), '/', '-'), 'YYYY-MM-DD')
-    ELSE NULL
-  END
-) - (
-  CASE
-    WHEN o.plan_date IS NULL THEN NULL
-    WHEN btrim(cast(o.plan_date AS text)) = '' THEN NULL
-    WHEN btrim(cast(o.plan_date AS text)) ~ '^\d{4}-\d{2}-\d{2}$'
-      THEN to_date(btrim(cast(o.plan_date AS text)), 'YYYY-MM-DD')
-    WHEN btrim(cast(o.plan_date AS text)) ~ '^\d{4}-\d{2}-\d{2}\s+.*$'
-      THEN to_date(substr(btrim(cast(o.plan_date AS text)), 1, 10), 'YYYY-MM-DD')
-    WHEN btrim(cast(o.plan_date AS text)) ~ '^\d{4}/\d{2}/\d{2}$'
-      THEN to_date(replace(btrim(cast(o.plan_date AS text)), '/', '-'), 'YYYY-MM-DD')
-    ELSE NULL
-  END
-))::int
+    WHEN (CASE WHEN o.plan_date IS NULL THEN NULL WHEN btrim(cast(o.plan_date AS text)) = '' THEN NULL WHEN btrim(cast(o.plan_date AS text)) ~ '^\d{4}-\d{2}-\d{2}$' THEN to_date(btrim(cast(o.plan_date AS text)), 'YYYY-MM-DD') WHEN btrim(cast(o.plan_date AS text)) ~ '^\d{4}/\d{2}/\d{2}$' THEN to_date(replace(btrim(cast(o.plan_date AS text)), '/', '-'), 'YYYY-MM-DD') ELSE NULL END) IS NOT NULL
+     AND (CASE WHEN o.follow_up_date IS NULL THEN NULL WHEN btrim(cast(o.follow_up_date AS text)) = '' THEN NULL WHEN btrim(cast(o.follow_up_date AS text)) ~ '^\d{4}-\d{2}-\d{2}$' THEN to_date(btrim(cast(o.follow_up_date AS text)), 'YYYY-MM-DD') WHEN btrim(cast(o.follow_up_date AS text)) ~ '^\d{4}/\d{2}/\d{2}$' THEN to_date(replace(btrim(cast(o.follow_up_date AS text)), '/', '-'), 'YYYY-MM-DD') ELSE NULL END) IS NOT NULL
+    THEN ((CASE WHEN o.follow_up_date IS NULL THEN NULL WHEN btrim(cast(o.follow_up_date AS text)) = '' THEN NULL WHEN btrim(cast(o.follow_up_date AS text)) ~ '^\d{4}-\d{2}-\d{2}$' THEN to_date(btrim(cast(o.follow_up_date AS text)), 'YYYY-MM-DD') WHEN btrim(cast(o.follow_up_date AS text)) ~ '^\d{4}/\d{2}/\d{2}$' THEN to_date(replace(btrim(cast(o.follow_up_date AS text)), '/', '-'), 'YYYY-MM-DD') ELSE NULL END) - (CASE WHEN o.plan_date IS NULL THEN NULL WHEN btrim(cast(o.plan_date AS text)) = '' THEN NULL WHEN btrim(cast(o.plan_date AS text)) ~ '^\d{4}-\d{2}-\d{2}$' THEN to_date(btrim(cast(o.plan_date AS text)), 'YYYY-MM-DD') WHEN btrim(cast(o.plan_date AS text)) ~ '^\d{4}/\d{2}/\d{2}$' THEN to_date(replace(btrim(cast(o.plan_date AS text)), '/', '-'), 'YYYY-MM-DD') ELSE NULL END))::int
   END AS plan_to_followup_days,
 
   CASE
-    WHEN (
-  CASE
-    WHEN o.follow_up_date IS NULL THEN NULL
-    WHEN btrim(cast(o.follow_up_date AS text)) = '' THEN NULL
-    WHEN btrim(cast(o.follow_up_date AS text)) ~ '^\d{4}-\d{2}-\d{2}$'
-      THEN to_date(btrim(cast(o.follow_up_date AS text)), 'YYYY-MM-DD')
-    WHEN btrim(cast(o.follow_up_date AS text)) ~ '^\d{4}-\d{2}-\d{2}\s+.*$'
-      THEN to_date(substr(btrim(cast(o.follow_up_date AS text)), 1, 10), 'YYYY-MM-DD')
-    WHEN btrim(cast(o.follow_up_date AS text)) ~ '^\d{4}/\d{2}/\d{2}$'
-      THEN to_date(replace(btrim(cast(o.follow_up_date AS text)), '/', '-'), 'YYYY-MM-DD')
-    ELSE NULL
-  END
-) IS NOT NULL
-     AND (
-  CASE
-    WHEN o.final_closure_date IS NULL THEN NULL
-    WHEN btrim(cast(o.final_closure_date AS text)) = '' THEN NULL
-    WHEN btrim(cast(o.final_closure_date AS text)) ~ '^\d{4}-\d{2}-\d{2}$'
-      THEN to_date(btrim(cast(o.final_closure_date AS text)), 'YYYY-MM-DD')
-    WHEN btrim(cast(o.final_closure_date AS text)) ~ '^\d{4}-\d{2}-\d{2}\s+.*$'
-      THEN to_date(substr(btrim(cast(o.final_closure_date AS text)), 1, 10), 'YYYY-MM-DD')
-    WHEN btrim(cast(o.final_closure_date AS text)) ~ '^\d{4}/\d{2}/\d{2}$'
-      THEN to_date(replace(btrim(cast(o.final_closure_date AS text)), '/', '-'), 'YYYY-MM-DD')
-    ELSE NULL
-  END
-) IS NOT NULL
-    THEN ((
-  CASE
-    WHEN o.final_closure_date IS NULL THEN NULL
-    WHEN btrim(cast(o.final_closure_date AS text)) = '' THEN NULL
-    WHEN btrim(cast(o.final_closure_date AS text)) ~ '^\d{4}-\d{2}-\d{2}$'
-      THEN to_date(btrim(cast(o.final_closure_date AS text)), 'YYYY-MM-DD')
-    WHEN btrim(cast(o.final_closure_date AS text)) ~ '^\d{4}-\d{2}-\d{2}\s+.*$'
-      THEN to_date(substr(btrim(cast(o.final_closure_date AS text)), 1, 10), 'YYYY-MM-DD')
-    WHEN btrim(cast(o.final_closure_date AS text)) ~ '^\d{4}/\d{2}/\d{2}$'
-      THEN to_date(replace(btrim(cast(o.final_closure_date AS text)), '/', '-'), 'YYYY-MM-DD')
-    ELSE NULL
-  END
-) - (
-  CASE
-    WHEN o.follow_up_date IS NULL THEN NULL
-    WHEN btrim(cast(o.follow_up_date AS text)) = '' THEN NULL
-    WHEN btrim(cast(o.follow_up_date AS text)) ~ '^\d{4}-\d{2}-\d{2}$'
-      THEN to_date(btrim(cast(o.follow_up_date AS text)), 'YYYY-MM-DD')
-    WHEN btrim(cast(o.follow_up_date AS text)) ~ '^\d{4}-\d{2}-\d{2}\s+.*$'
-      THEN to_date(substr(btrim(cast(o.follow_up_date AS text)), 1, 10), 'YYYY-MM-DD')
-    WHEN btrim(cast(o.follow_up_date AS text)) ~ '^\d{4}/\d{2}/\d{2}$'
-      THEN to_date(replace(btrim(cast(o.follow_up_date AS text)), '/', '-'), 'YYYY-MM-DD')
-    ELSE NULL
-  END
-))::int
+    WHEN (CASE WHEN o.follow_up_date IS NULL THEN NULL WHEN btrim(cast(o.follow_up_date AS text)) = '' THEN NULL WHEN btrim(cast(o.follow_up_date AS text)) ~ '^\d{4}-\d{2}-\d{2}$' THEN to_date(btrim(cast(o.follow_up_date AS text)), 'YYYY-MM-DD') WHEN btrim(cast(o.follow_up_date AS text)) ~ '^\d{4}/\d{2}/\d{2}$' THEN to_date(replace(btrim(cast(o.follow_up_date AS text)), '/', '-'), 'YYYY-MM-DD') ELSE NULL END) IS NOT NULL
+     AND (CASE WHEN o.final_closure_date IS NULL THEN NULL WHEN btrim(cast(o.final_closure_date AS text)) = '' THEN NULL WHEN btrim(cast(o.final_closure_date AS text)) ~ '^\d{4}-\d{2}-\d{2}$' THEN to_date(btrim(cast(o.final_closure_date AS text)), 'YYYY-MM-DD') WHEN btrim(cast(o.final_closure_date AS text)) ~ '^\d{4}/\d{2}/\d{2}$' THEN to_date(replace(btrim(cast(o.final_closure_date AS text)), '/', '-'), 'YYYY-MM-DD') ELSE NULL END) IS NOT NULL
+    THEN ((CASE WHEN o.final_closure_date IS NULL THEN NULL WHEN btrim(cast(o.final_closure_date AS text)) = '' THEN NULL WHEN btrim(cast(o.final_closure_date AS text)) ~ '^\d{4}-\d{2}-\d{2}$' THEN to_date(btrim(cast(o.final_closure_date AS text)), 'YYYY-MM-DD') WHEN btrim(cast(o.final_closure_date AS text)) ~ '^\d{4}/\d{2}/\d{2}$' THEN to_date(replace(btrim(cast(o.final_closure_date AS text)), '/', '-'), 'YYYY-MM-DD') ELSE NULL END) - (CASE WHEN o.follow_up_date IS NULL THEN NULL WHEN btrim(cast(o.follow_up_date AS text)) = '' THEN NULL WHEN btrim(cast(o.follow_up_date AS text)) ~ '^\d{4}-\d{2}-\d{2}$' THEN to_date(btrim(cast(o.follow_up_date AS text)), 'YYYY-MM-DD') WHEN btrim(cast(o.follow_up_date AS text)) ~ '^\d{4}/\d{2}/\d{2}$' THEN to_date(replace(btrim(cast(o.follow_up_date AS text)), '/', '-'), 'YYYY-MM-DD') ELSE NULL END))::int
   END AS followup_to_closure_days,
 
   'ods_progress_measure'::text AS source_table,
@@ -1399,391 +397,57 @@ SELECT
   ) AS issue_id,
 
   -- === 原始业务字段 ===
-  (
-  CASE
-    WHEN o.project_no IS NULL THEN NULL
-    WHEN upper(btrim(cast(o.project_no AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL')
-      THEN NULL
-    ELSE nullif(btrim(cast(o.project_no AS text)), '')
-  END
-)           AS project_no,
-  (
-  CASE
-    WHEN o.subsystem IS NULL THEN NULL
-    WHEN upper(btrim(cast(o.subsystem AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL')
-      THEN NULL
-    ELSE nullif(btrim(cast(o.subsystem AS text)), '')
-  END
-)            AS subsystem,
-  (
-  CASE
-    WHEN o.issue_name IS NULL THEN NULL
-    WHEN upper(btrim(cast(o.issue_name AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL')
-      THEN NULL
-    ELSE nullif(btrim(cast(o.issue_name AS text)), '')
-  END
-)           AS issue_name,
-  (
-  CASE
-    WHEN o.dept IS NULL THEN NULL
-    WHEN upper(btrim(cast(o.dept AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL')
-      THEN NULL
-    ELSE nullif(btrim(cast(o.dept AS text)), '')
-  END
-)                 AS dept,
-  (
-  CASE
-    WHEN o.team_leader IS NULL THEN NULL
-    WHEN upper(btrim(cast(o.team_leader AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL')
-      THEN NULL
-    ELSE nullif(btrim(cast(o.team_leader AS text)), '')
-  END
-)          AS team_leader,
-  (
-  CASE
-    WHEN o.dept_leader IS NULL THEN NULL
-    WHEN upper(btrim(cast(o.dept_leader AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL')
-      THEN NULL
-    ELSE nullif(btrim(cast(o.dept_leader AS text)), '')
-  END
-)          AS dept_leader,
-  (
-  CASE
-    WHEN o.issue_summary IS NULL THEN NULL
-    WHEN upper(btrim(cast(o.issue_summary AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL')
-      THEN NULL
-    ELSE nullif(btrim(cast(o.issue_summary AS text)), '')
-  END
-)        AS issue_summary,
-  (
-  CASE
-    WHEN o.issue_category IS NULL THEN NULL
-    WHEN upper(btrim(cast(o.issue_category AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL')
-      THEN NULL
-    ELSE nullif(btrim(cast(o.issue_category AS text)), '')
-  END
-)       AS issue_category,
-  (
-  CASE
-    WHEN o.zero_plan IS NULL THEN NULL
-    WHEN upper(btrim(cast(o.zero_plan AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL')
-      THEN NULL
-    ELSE nullif(btrim(cast(o.zero_plan AS text)), '')
-  END
-)            AS zero_plan,
-  (
-  CASE
-    WHEN o.zero_plan_synced IS NULL THEN NULL
-    WHEN upper(btrim(cast(o.zero_plan_synced AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL')
-      THEN NULL
-    ELSE nullif(btrim(cast(o.zero_plan_synced AS text)), '')
-  END
-)     AS zero_plan_synced,
-  (
-  CASE
-    WHEN o.status IS NULL THEN NULL
-    WHEN upper(btrim(cast(o.status AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL')
-      THEN NULL
-    ELSE nullif(btrim(cast(o.status AS text)), '')
-  END
-)               AS status,
-  (
-  CASE
-    WHEN o.current_progress IS NULL THEN NULL
-    WHEN upper(btrim(cast(o.current_progress AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL')
-      THEN NULL
-    ELSE nullif(btrim(cast(o.current_progress AS text)), '')
-  END
-)     AS current_progress,
-  (
-  CASE
-    WHEN o.project_manager IS NULL THEN NULL
-    WHEN upper(btrim(cast(o.project_manager AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL')
-      THEN NULL
-    ELSE nullif(btrim(cast(o.project_manager AS text)), '')
-  END
-)      AS project_manager,
-  (
-  CASE
-    WHEN o.filled_by IS NULL THEN NULL
-    WHEN upper(btrim(cast(o.filled_by AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL')
-      THEN NULL
-    ELSE nullif(btrim(cast(o.filled_by AS text)), '')
-  END
-)            AS filled_by,
+  (CASE WHEN o.project_no IS NULL THEN NULL WHEN upper(btrim(cast(o.project_no AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL') THEN NULL ELSE nullif(btrim(cast(o.project_no AS text)), '') END)           AS project_no,
+  (CASE WHEN o.subsystem IS NULL THEN NULL WHEN upper(btrim(cast(o.subsystem AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL') THEN NULL ELSE nullif(btrim(cast(o.subsystem AS text)), '') END)            AS subsystem,
+  (CASE WHEN o.issue_name IS NULL THEN NULL WHEN upper(btrim(cast(o.issue_name AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL') THEN NULL ELSE nullif(btrim(cast(o.issue_name AS text)), '') END)           AS issue_name,
+  (CASE WHEN o.dept IS NULL THEN NULL WHEN upper(btrim(cast(o.dept AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL') THEN NULL ELSE nullif(btrim(cast(o.dept AS text)), '') END)                 AS dept,
+  (CASE WHEN o.team_leader IS NULL THEN NULL WHEN upper(btrim(cast(o.team_leader AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL') THEN NULL ELSE nullif(btrim(cast(o.team_leader AS text)), '') END)          AS team_leader,
+  (CASE WHEN o.dept_leader IS NULL THEN NULL WHEN upper(btrim(cast(o.dept_leader AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL') THEN NULL ELSE nullif(btrim(cast(o.dept_leader AS text)), '') END)          AS dept_leader,
+  (CASE WHEN o.issue_summary IS NULL THEN NULL WHEN upper(btrim(cast(o.issue_summary AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL') THEN NULL ELSE nullif(btrim(cast(o.issue_summary AS text)), '') END)        AS issue_summary,
+  (CASE WHEN o.issue_category IS NULL THEN NULL WHEN upper(btrim(cast(o.issue_category AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL') THEN NULL ELSE nullif(btrim(cast(o.issue_category AS text)), '') END)       AS issue_category,
+  (CASE WHEN o.zero_plan IS NULL THEN NULL WHEN upper(btrim(cast(o.zero_plan AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL') THEN NULL ELSE nullif(btrim(cast(o.zero_plan AS text)), '') END)            AS zero_plan,
+  (CASE WHEN o.zero_plan_synced IS NULL THEN NULL WHEN upper(btrim(cast(o.zero_plan_synced AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL') THEN NULL ELSE nullif(btrim(cast(o.zero_plan_synced AS text)), '') END)     AS zero_plan_synced,
+  (CASE WHEN o.status IS NULL THEN NULL WHEN upper(btrim(cast(o.status AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL') THEN NULL ELSE nullif(btrim(cast(o.status AS text)), '') END)               AS status,
+  (CASE WHEN o.current_progress IS NULL THEN NULL WHEN upper(btrim(cast(o.current_progress AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL') THEN NULL ELSE nullif(btrim(cast(o.current_progress AS text)), '') END)     AS current_progress,
+  (CASE WHEN o.project_manager IS NULL THEN NULL WHEN upper(btrim(cast(o.project_manager AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL') THEN NULL ELSE nullif(btrim(cast(o.project_manager AS text)), '') END)      AS project_manager,
+  (CASE WHEN o.filled_by IS NULL THEN NULL WHEN upper(btrim(cast(o.filled_by AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL') THEN NULL ELSE nullif(btrim(cast(o.filled_by AS text)), '') END)            AS filled_by,
 
   -- === 数值字段 ===
-  (
-  CASE
-    WHEN (
-  CASE
-    WHEN o.new_plan_count IS NULL THEN NULL
-    WHEN upper(btrim(cast(o.new_plan_count AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL')
-      THEN NULL
-    ELSE nullif(btrim(cast(o.new_plan_count AS text)), '')
-  END
-) IS NULL THEN NULL
-    WHEN regexp_replace((
-  CASE
-    WHEN o.new_plan_count IS NULL THEN NULL
-    WHEN upper(btrim(cast(o.new_plan_count AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL')
-      THEN NULL
-    ELSE nullif(btrim(cast(o.new_plan_count AS text)), '')
-  END
-), ',', '', 'g') ~ '^-?\d+(\.\d+)?$'
-      THEN regexp_replace((
-  CASE
-    WHEN o.new_plan_count IS NULL THEN NULL
-    WHEN upper(btrim(cast(o.new_plan_count AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL')
-      THEN NULL
-    ELSE nullif(btrim(cast(o.new_plan_count AS text)), '')
-  END
-), ',', '', 'g')::numeric
-    ELSE NULL
-  END
-)::int  AS new_plan_count,
+  (CASE WHEN (CASE WHEN o.new_plan_count IS NULL THEN NULL WHEN upper(btrim(cast(o.new_plan_count AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL') THEN NULL ELSE nullif(btrim(cast(o.new_plan_count AS text)), '') END) IS NULL THEN NULL WHEN regexp_replace((CASE WHEN o.new_plan_count IS NULL THEN NULL WHEN upper(btrim(cast(o.new_plan_count AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL') THEN NULL ELSE nullif(btrim(cast(o.new_plan_count AS text)), '') END), ',', '', 'g') ~ '^-?\d+(\.\d+)?$' THEN regexp_replace((CASE WHEN o.new_plan_count IS NULL THEN NULL WHEN upper(btrim(cast(o.new_plan_count AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL') THEN NULL ELSE nullif(btrim(cast(o.new_plan_count AS text)), '') END), ',', '', 'g')::numeric ELSE NULL END)::int  AS new_plan_count,
 
   -- === 日期解析 ===
-  (
-  CASE
-    WHEN o.issue_date IS NULL THEN NULL
-    WHEN btrim(cast(o.issue_date AS text)) = '' THEN NULL
-    WHEN btrim(cast(o.issue_date AS text)) ~ '^\d{4}-\d{2}-\d{2}$'
-      THEN to_date(btrim(cast(o.issue_date AS text)), 'YYYY-MM-DD')
-    WHEN btrim(cast(o.issue_date AS text)) ~ '^\d{4}-\d{2}-\d{2}\s+.*$'
-      THEN to_date(substr(btrim(cast(o.issue_date AS text)), 1, 10), 'YYYY-MM-DD')
-    WHEN btrim(cast(o.issue_date AS text)) ~ '^\d{4}/\d{2}/\d{2}$'
-      THEN to_date(replace(btrim(cast(o.issue_date AS text)), '/', '-'), 'YYYY-MM-DD')
-    ELSE NULL
-  END
-)              AS issue_date,
-  (
-  CASE
-    WHEN o.zero_complete_date IS NULL THEN NULL
-    WHEN btrim(cast(o.zero_complete_date AS text)) = '' THEN NULL
-    WHEN btrim(cast(o.zero_complete_date AS text)) ~ '^\d{4}-\d{2}-\d{2}$'
-      THEN to_date(btrim(cast(o.zero_complete_date AS text)), 'YYYY-MM-DD')
-    WHEN btrim(cast(o.zero_complete_date AS text)) ~ '^\d{4}-\d{2}-\d{2}\s+.*$'
-      THEN to_date(substr(btrim(cast(o.zero_complete_date AS text)), 1, 10), 'YYYY-MM-DD')
-    WHEN btrim(cast(o.zero_complete_date AS text)) ~ '^\d{4}/\d{2}/\d{2}$'
-      THEN to_date(replace(btrim(cast(o.zero_complete_date AS text)), '/', '-'), 'YYYY-MM-DD')
-    ELSE NULL
-  END
-)      AS zero_complete_date,
-  (
-  CASE
-    WHEN o.last_update_time IS NULL THEN NULL
-    WHEN btrim(cast(o.last_update_time AS text)) = '' THEN NULL
-    WHEN btrim(cast(o.last_update_time AS text)) ~ '^\d{4}-\d{2}-\d{2}$'
-      THEN to_date(btrim(cast(o.last_update_time AS text)), 'YYYY-MM-DD')
-    WHEN btrim(cast(o.last_update_time AS text)) ~ '^\d{4}-\d{2}-\d{2}\s+.*$'
-      THEN to_date(substr(btrim(cast(o.last_update_time AS text)), 1, 10), 'YYYY-MM-DD')
-    WHEN btrim(cast(o.last_update_time AS text)) ~ '^\d{4}/\d{2}/\d{2}$'
-      THEN to_date(replace(btrim(cast(o.last_update_time AS text)), '/', '-'), 'YYYY-MM-DD')
-    ELSE NULL
-  END
-)        AS last_update_time,
+  (CASE WHEN o.issue_date IS NULL THEN NULL WHEN btrim(cast(o.issue_date AS text)) = '' THEN NULL WHEN btrim(cast(o.issue_date AS text)) ~ '^\d{4}-\d{2}-\d{2}$' THEN to_date(btrim(cast(o.issue_date AS text)), 'YYYY-MM-DD') WHEN btrim(cast(o.issue_date AS text)) ~ '^\d{4}/\d{2}/\d{2}$' THEN to_date(replace(btrim(cast(o.issue_date AS text)), '/', '-'), 'YYYY-MM-DD') ELSE NULL END)              AS issue_date,
+  (CASE WHEN o.zero_complete_date IS NULL THEN NULL WHEN btrim(cast(o.zero_complete_date AS text)) = '' THEN NULL WHEN btrim(cast(o.zero_complete_date AS text)) ~ '^\d{4}-\d{2}-\d{2}$' THEN to_date(btrim(cast(o.zero_complete_date AS text)), 'YYYY-MM-DD') WHEN btrim(cast(o.zero_complete_date AS text)) ~ '^\d{4}/\d{2}/\d{2}$' THEN to_date(replace(btrim(cast(o.zero_complete_date AS text)), '/', '-'), 'YYYY-MM-DD') ELSE NULL END)      AS zero_complete_date,
+  (CASE WHEN o.last_update_time IS NULL THEN NULL WHEN btrim(cast(o.last_update_time AS text)) = '' THEN NULL WHEN btrim(cast(o.last_update_time AS text)) ~ '^\d{4}-\d{2}-\d{2}$' THEN to_date(btrim(cast(o.last_update_time AS text)), 'YYYY-MM-DD') WHEN btrim(cast(o.last_update_time AS text)) ~ '^\d{4}/\d{2}/\d{2}$' THEN to_date(replace(btrim(cast(o.last_update_time AS text)), '/', '-'), 'YYYY-MM-DD') ELSE NULL END)        AS last_update_time,
 
   -- === 周数字段 ===
-  (
-  CASE
-    WHEN (
-  CASE
-    WHEN o.issue_week IS NULL THEN NULL
-    WHEN upper(btrim(cast(o.issue_week AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL')
-      THEN NULL
-    ELSE nullif(btrim(cast(o.issue_week AS text)), '')
-  END
-) IS NULL THEN NULL
-    WHEN regexp_replace((
-  CASE
-    WHEN o.issue_week IS NULL THEN NULL
-    WHEN upper(btrim(cast(o.issue_week AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL')
-      THEN NULL
-    ELSE nullif(btrim(cast(o.issue_week AS text)), '')
-  END
-), ',', '', 'g') ~ '^-?\d+(\.\d+)?$'
-      THEN regexp_replace((
-  CASE
-    WHEN o.issue_week IS NULL THEN NULL
-    WHEN upper(btrim(cast(o.issue_week AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL')
-      THEN NULL
-    ELSE nullif(btrim(cast(o.issue_week AS text)), '')
-  END
-), ',', '', 'g')::numeric
-    ELSE NULL
-  END
-)::int              AS issue_week,
-  (
-  CASE
-    WHEN (
-  CASE
-    WHEN o.zero_complete_week IS NULL THEN NULL
-    WHEN upper(btrim(cast(o.zero_complete_week AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL')
-      THEN NULL
-    ELSE nullif(btrim(cast(o.zero_complete_week AS text)), '')
-  END
-) IS NULL THEN NULL
-    WHEN regexp_replace((
-  CASE
-    WHEN o.zero_complete_week IS NULL THEN NULL
-    WHEN upper(btrim(cast(o.zero_complete_week AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL')
-      THEN NULL
-    ELSE nullif(btrim(cast(o.zero_complete_week AS text)), '')
-  END
-), ',', '', 'g') ~ '^-?\d+(\.\d+)?$'
-      THEN regexp_replace((
-  CASE
-    WHEN o.zero_complete_week IS NULL THEN NULL
-    WHEN upper(btrim(cast(o.zero_complete_week AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL')
-      THEN NULL
-    ELSE nullif(btrim(cast(o.zero_complete_week AS text)), '')
-  END
-), ',', '', 'g')::numeric
-    ELSE NULL
-  END
-)::int      AS zero_complete_week,
-  (
-  CASE
-    WHEN (
-  CASE
-    WHEN o.last_update_week IS NULL THEN NULL
-    WHEN upper(btrim(cast(o.last_update_week AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL')
-      THEN NULL
-    ELSE nullif(btrim(cast(o.last_update_week AS text)), '')
-  END
-) IS NULL THEN NULL
-    WHEN regexp_replace((
-  CASE
-    WHEN o.last_update_week IS NULL THEN NULL
-    WHEN upper(btrim(cast(o.last_update_week AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL')
-      THEN NULL
-    ELSE nullif(btrim(cast(o.last_update_week AS text)), '')
-  END
-), ',', '', 'g') ~ '^-?\d+(\.\d+)?$'
-      THEN regexp_replace((
-  CASE
-    WHEN o.last_update_week IS NULL THEN NULL
-    WHEN upper(btrim(cast(o.last_update_week AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL')
-      THEN NULL
-    ELSE nullif(btrim(cast(o.last_update_week AS text)), '')
-  END
-), ',', '', 'g')::numeric
-    ELSE NULL
-  END
-)::int        AS last_update_week,
+  (CASE WHEN (CASE WHEN o.issue_week IS NULL THEN NULL WHEN upper(btrim(cast(o.issue_week AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL') THEN NULL ELSE nullif(btrim(cast(o.issue_week AS text)), '') END) IS NULL THEN NULL WHEN regexp_replace((CASE WHEN o.issue_week IS NULL THEN NULL WHEN upper(btrim(cast(o.issue_week AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL') THEN NULL ELSE nullif(btrim(cast(o.issue_week AS text)), '') END), ',', '', 'g') ~ '^-?\d+(\.\d+)?$' THEN regexp_replace((CASE WHEN o.issue_week IS NULL THEN NULL WHEN upper(btrim(cast(o.issue_week AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL') THEN NULL ELSE nullif(btrim(cast(o.issue_week AS text)), '') END), ',', '', 'g')::numeric ELSE NULL END)::int              AS issue_week,
+  (CASE WHEN (CASE WHEN o.zero_complete_week IS NULL THEN NULL WHEN upper(btrim(cast(o.zero_complete_week AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL') THEN NULL ELSE nullif(btrim(cast(o.zero_complete_week AS text)), '') END) IS NULL THEN NULL WHEN regexp_replace((CASE WHEN o.zero_complete_week IS NULL THEN NULL WHEN upper(btrim(cast(o.zero_complete_week AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL') THEN NULL ELSE nullif(btrim(cast(o.zero_complete_week AS text)), '') END), ',', '', 'g') ~ '^-?\d+(\.\d+)?$' THEN regexp_replace((CASE WHEN o.zero_complete_week IS NULL THEN NULL WHEN upper(btrim(cast(o.zero_complete_week AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL') THEN NULL ELSE nullif(btrim(cast(o.zero_complete_week AS text)), '') END), ',', '', 'g')::numeric ELSE NULL END)::int      AS zero_complete_week,
+  (CASE WHEN (CASE WHEN o.last_update_week IS NULL THEN NULL WHEN upper(btrim(cast(o.last_update_week AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL') THEN NULL ELSE nullif(btrim(cast(o.last_update_week AS text)), '') END) IS NULL THEN NULL WHEN regexp_replace((CASE WHEN o.last_update_week IS NULL THEN NULL WHEN upper(btrim(cast(o.last_update_week AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL') THEN NULL ELSE nullif(btrim(cast(o.last_update_week AS text)), '') END), ',', '', 'g') ~ '^-?\d+(\.\d+)?$' THEN regexp_replace((CASE WHEN o.last_update_week IS NULL THEN NULL WHEN upper(btrim(cast(o.last_update_week AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL') THEN NULL ELSE nullif(btrim(cast(o.last_update_week AS text)), '') END), ',', '', 'g')::numeric ELSE NULL END)::int        AS last_update_week,
 
   -- === 闭环标志 ===
   CASE
-    WHEN btrim(COALESCE((
-  CASE
-    WHEN o.status IS NULL THEN NULL
-    WHEN upper(btrim(cast(o.status AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL')
-      THEN NULL
-    ELSE nullif(btrim(cast(o.status AS text)), '')
-  END
-), '')) IN ('已归零', '已闭环') THEN true
+    WHEN btrim(COALESCE((CASE WHEN o.status IS NULL THEN NULL WHEN upper(btrim(cast(o.status AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL') THEN NULL ELSE nullif(btrim(cast(o.status AS text)), '') END), '')) IN ('已归零', '已闭环') THEN true
     ELSE false
   END AS is_closed,
 
   -- === 归零计划标志 ===
   CASE
-    WHEN btrim(COALESCE((
-  CASE
-    WHEN o.zero_plan IS NULL THEN NULL
-    WHEN upper(btrim(cast(o.zero_plan AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL')
-      THEN NULL
-    ELSE nullif(btrim(cast(o.zero_plan AS text)), '')
-  END
-), '')) IN ('无', '') THEN false
-    WHEN (
-  CASE
-    WHEN o.zero_plan IS NULL THEN NULL
-    WHEN upper(btrim(cast(o.zero_plan AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL')
-      THEN NULL
-    ELSE nullif(btrim(cast(o.zero_plan AS text)), '')
-  END
-) IS NULL THEN false
+    WHEN btrim(COALESCE((CASE WHEN o.zero_plan IS NULL THEN NULL WHEN upper(btrim(cast(o.zero_plan AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL') THEN NULL ELSE nullif(btrim(cast(o.zero_plan AS text)), '') END), '')) IN ('无', '') THEN false
+    WHEN (CASE WHEN o.zero_plan IS NULL THEN NULL WHEN upper(btrim(cast(o.zero_plan AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL') THEN NULL ELSE nullif(btrim(cast(o.zero_plan AS text)), '') END) IS NULL THEN false
     ELSE true
   END AS has_zero_plan,
 
   -- === 时间维度标签 ===
-  EXTRACT(YEAR FROM (
-  CASE
-    WHEN o.issue_date IS NULL THEN NULL
-    WHEN btrim(cast(o.issue_date AS text)) = '' THEN NULL
-    WHEN btrim(cast(o.issue_date AS text)) ~ '^\d{4}-\d{2}-\d{2}$'
-      THEN to_date(btrim(cast(o.issue_date AS text)), 'YYYY-MM-DD')
-    WHEN btrim(cast(o.issue_date AS text)) ~ '^\d{4}-\d{2}-\d{2}\s+.*$'
-      THEN to_date(substr(btrim(cast(o.issue_date AS text)), 1, 10), 'YYYY-MM-DD')
-    WHEN btrim(cast(o.issue_date AS text)) ~ '^\d{4}/\d{2}/\d{2}$'
-      THEN to_date(replace(btrim(cast(o.issue_date AS text)), '/', '-'), 'YYYY-MM-DD')
-    ELSE NULL
-  END
-))::int     AS issue_year,
-  EXTRACT(QUARTER FROM (
-  CASE
-    WHEN o.issue_date IS NULL THEN NULL
-    WHEN btrim(cast(o.issue_date AS text)) = '' THEN NULL
-    WHEN btrim(cast(o.issue_date AS text)) ~ '^\d{4}-\d{2}-\d{2}$'
-      THEN to_date(btrim(cast(o.issue_date AS text)), 'YYYY-MM-DD')
-    WHEN btrim(cast(o.issue_date AS text)) ~ '^\d{4}-\d{2}-\d{2}\s+.*$'
-      THEN to_date(substr(btrim(cast(o.issue_date AS text)), 1, 10), 'YYYY-MM-DD')
-    WHEN btrim(cast(o.issue_date AS text)) ~ '^\d{4}/\d{2}/\d{2}$'
-      THEN to_date(replace(btrim(cast(o.issue_date AS text)), '/', '-'), 'YYYY-MM-DD')
-    ELSE NULL
-  END
-))::int  AS issue_quarter,
-  to_char((
-  CASE
-    WHEN o.issue_date IS NULL THEN NULL
-    WHEN btrim(cast(o.issue_date AS text)) = '' THEN NULL
-    WHEN btrim(cast(o.issue_date AS text)) ~ '^\d{4}-\d{2}-\d{2}$'
-      THEN to_date(btrim(cast(o.issue_date AS text)), 'YYYY-MM-DD')
-    WHEN btrim(cast(o.issue_date AS text)) ~ '^\d{4}-\d{2}-\d{2}\s+.*$'
-      THEN to_date(substr(btrim(cast(o.issue_date AS text)), 1, 10), 'YYYY-MM-DD')
-    WHEN btrim(cast(o.issue_date AS text)) ~ '^\d{4}/\d{2}/\d{2}$'
-      THEN to_date(replace(btrim(cast(o.issue_date AS text)), '/', '-'), 'YYYY-MM-DD')
-    ELSE NULL
-  END
-), 'YYYY-MM')         AS issue_month,
+  EXTRACT(YEAR FROM (CASE WHEN o.issue_date IS NULL THEN NULL WHEN btrim(cast(o.issue_date AS text)) = '' THEN NULL WHEN btrim(cast(o.issue_date AS text)) ~ '^\d{4}-\d{2}-\d{2}$' THEN to_date(btrim(cast(o.issue_date AS text)), 'YYYY-MM-DD') WHEN btrim(cast(o.issue_date AS text)) ~ '^\d{4}/\d{2}/\d{2}$' THEN to_date(replace(btrim(cast(o.issue_date AS text)), '/', '-'), 'YYYY-MM-DD') ELSE NULL END))::int     AS issue_year,
+  EXTRACT(QUARTER FROM (CASE WHEN o.issue_date IS NULL THEN NULL WHEN btrim(cast(o.issue_date AS text)) = '' THEN NULL WHEN btrim(cast(o.issue_date AS text)) ~ '^\d{4}-\d{2}-\d{2}$' THEN to_date(btrim(cast(o.issue_date AS text)), 'YYYY-MM-DD') WHEN btrim(cast(o.issue_date AS text)) ~ '^\d{4}/\d{2}/\d{2}$' THEN to_date(replace(btrim(cast(o.issue_date AS text)), '/', '-'), 'YYYY-MM-DD') ELSE NULL END))::int  AS issue_quarter,
+  to_char((CASE WHEN o.issue_date IS NULL THEN NULL WHEN btrim(cast(o.issue_date AS text)) = '' THEN NULL WHEN btrim(cast(o.issue_date AS text)) ~ '^\d{4}-\d{2}-\d{2}$' THEN to_date(btrim(cast(o.issue_date AS text)), 'YYYY-MM-DD') WHEN btrim(cast(o.issue_date AS text)) ~ '^\d{4}/\d{2}/\d{2}$' THEN to_date(replace(btrim(cast(o.issue_date AS text)), '/', '-'), 'YYYY-MM-DD') ELSE NULL END), 'YYYY-MM')         AS issue_month,
 
   -- === 滞留天数 ===
   CASE
-    WHEN (
-  CASE
-    WHEN o.issue_date IS NULL THEN NULL
-    WHEN btrim(cast(o.issue_date AS text)) = '' THEN NULL
-    WHEN btrim(cast(o.issue_date AS text)) ~ '^\d{4}-\d{2}-\d{2}$'
-      THEN to_date(btrim(cast(o.issue_date AS text)), 'YYYY-MM-DD')
-    WHEN btrim(cast(o.issue_date AS text)) ~ '^\d{4}-\d{2}-\d{2}\s+.*$'
-      THEN to_date(substr(btrim(cast(o.issue_date AS text)), 1, 10), 'YYYY-MM-DD')
-    WHEN btrim(cast(o.issue_date AS text)) ~ '^\d{4}/\d{2}/\d{2}$'
-      THEN to_date(replace(btrim(cast(o.issue_date AS text)), '/', '-'), 'YYYY-MM-DD')
-    ELSE NULL
-  END
-) IS NOT NULL
-     AND btrim(COALESCE((
-  CASE
-    WHEN o.status IS NULL THEN NULL
-    WHEN upper(btrim(cast(o.status AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL')
-      THEN NULL
-    ELSE nullif(btrim(cast(o.status AS text)), '')
-  END
-), '')) NOT IN ('已归零', '已闭环')
-    THEN (current_date - (
-  CASE
-    WHEN o.issue_date IS NULL THEN NULL
-    WHEN btrim(cast(o.issue_date AS text)) = '' THEN NULL
-    WHEN btrim(cast(o.issue_date AS text)) ~ '^\d{4}-\d{2}-\d{2}$'
-      THEN to_date(btrim(cast(o.issue_date AS text)), 'YYYY-MM-DD')
-    WHEN btrim(cast(o.issue_date AS text)) ~ '^\d{4}-\d{2}-\d{2}\s+.*$'
-      THEN to_date(substr(btrim(cast(o.issue_date AS text)), 1, 10), 'YYYY-MM-DD')
-    WHEN btrim(cast(o.issue_date AS text)) ~ '^\d{4}/\d{2}/\d{2}$'
-      THEN to_date(replace(btrim(cast(o.issue_date AS text)), '/', '-'), 'YYYY-MM-DD')
-    ELSE NULL
-  END
-))::int
+    WHEN (CASE WHEN o.issue_date IS NULL THEN NULL WHEN btrim(cast(o.issue_date AS text)) = '' THEN NULL WHEN btrim(cast(o.issue_date AS text)) ~ '^\d{4}-\d{2}-\d{2}$' THEN to_date(btrim(cast(o.issue_date AS text)), 'YYYY-MM-DD') WHEN btrim(cast(o.issue_date AS text)) ~ '^\d{4}/\d{2}/\d{2}$' THEN to_date(replace(btrim(cast(o.issue_date AS text)), '/', '-'), 'YYYY-MM-DD') ELSE NULL END) IS NOT NULL
+     AND btrim(COALESCE((CASE WHEN o.status IS NULL THEN NULL WHEN upper(btrim(cast(o.status AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL') THEN NULL ELSE nullif(btrim(cast(o.status AS text)), '') END), '')) NOT IN ('已归零', '已闭环')
+    THEN (current_date - (CASE WHEN o.issue_date IS NULL THEN NULL WHEN btrim(cast(o.issue_date AS text)) = '' THEN NULL WHEN btrim(cast(o.issue_date AS text)) ~ '^\d{4}-\d{2}-\d{2}$' THEN to_date(btrim(cast(o.issue_date AS text)), 'YYYY-MM-DD') WHEN btrim(cast(o.issue_date AS text)) ~ '^\d{4}/\d{2}/\d{2}$' THEN to_date(replace(btrim(cast(o.issue_date AS text)), '/', '-'), 'YYYY-MM-DD') ELSE NULL END))::int
     ELSE 0
   END AS pending_days,
 
@@ -1807,414 +471,51 @@ SELECT
   ) AS measure_id,
 
   -- === 原始业务字段（质量问题部分） ===
-  (
-  CASE
-    WHEN o.project_no IS NULL THEN NULL
-    WHEN upper(btrim(cast(o.project_no AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL')
-      THEN NULL
-    ELSE nullif(btrim(cast(o.project_no AS text)), '')
-  END
-)           AS project_no,
-  (
-  CASE
-    WHEN o.subsystem IS NULL THEN NULL
-    WHEN upper(btrim(cast(o.subsystem AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL')
-      THEN NULL
-    ELSE nullif(btrim(cast(o.subsystem AS text)), '')
-  END
-)            AS subsystem,
-  (
-  CASE
-    WHEN o.issue_name IS NULL THEN NULL
-    WHEN upper(btrim(cast(o.issue_name AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL')
-      THEN NULL
-    ELSE nullif(btrim(cast(o.issue_name AS text)), '')
-  END
-)           AS issue_name,
-  (
-  CASE
-    WHEN o.dept IS NULL THEN NULL
-    WHEN upper(btrim(cast(o.dept AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL')
-      THEN NULL
-    ELSE nullif(btrim(cast(o.dept AS text)), '')
-  END
-)                 AS dept,
-  (
-  CASE
-    WHEN o.team_leader IS NULL THEN NULL
-    WHEN upper(btrim(cast(o.team_leader AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL')
-      THEN NULL
-    ELSE nullif(btrim(cast(o.team_leader AS text)), '')
-  END
-)          AS team_leader,
-  (
-  CASE
-    WHEN o.dept_leader IS NULL THEN NULL
-    WHEN upper(btrim(cast(o.dept_leader AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL')
-      THEN NULL
-    ELSE nullif(btrim(cast(o.dept_leader AS text)), '')
-  END
-)          AS dept_leader,
-  (
-  CASE
-    WHEN o.issue_summary IS NULL THEN NULL
-    WHEN upper(btrim(cast(o.issue_summary AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL')
-      THEN NULL
-    ELSE nullif(btrim(cast(o.issue_summary AS text)), '')
-  END
-)        AS issue_summary,
-  (
-  CASE
-    WHEN o.issue_category IS NULL THEN NULL
-    WHEN upper(btrim(cast(o.issue_category AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL')
-      THEN NULL
-    ELSE nullif(btrim(cast(o.issue_category AS text)), '')
-  END
-)       AS issue_category,
-  (
-  CASE
-    WHEN o.zero_plan IS NULL THEN NULL
-    WHEN upper(btrim(cast(o.zero_plan AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL')
-      THEN NULL
-    ELSE nullif(btrim(cast(o.zero_plan AS text)), '')
-  END
-)            AS zero_plan,
-  (
-  CASE
-    WHEN o.zero_plan_synced IS NULL THEN NULL
-    WHEN upper(btrim(cast(o.zero_plan_synced AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL')
-      THEN NULL
-    ELSE nullif(btrim(cast(o.zero_plan_synced AS text)), '')
-  END
-)     AS zero_plan_synced,
-  (
-  CASE
-    WHEN o.status IS NULL THEN NULL
-    WHEN upper(btrim(cast(o.status AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL')
-      THEN NULL
-    ELSE nullif(btrim(cast(o.status AS text)), '')
-  END
-)               AS status,
-  (
-  CASE
-    WHEN o.current_progress IS NULL THEN NULL
-    WHEN upper(btrim(cast(o.current_progress AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL')
-      THEN NULL
-    ELSE nullif(btrim(cast(o.current_progress AS text)), '')
-  END
-)     AS current_progress,
-  (
-  CASE
-    WHEN o.project_manager IS NULL THEN NULL
-    WHEN upper(btrim(cast(o.project_manager AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL')
-      THEN NULL
-    ELSE nullif(btrim(cast(o.project_manager AS text)), '')
-  END
-)      AS project_manager,
+  (CASE WHEN o.project_no IS NULL THEN NULL WHEN upper(btrim(cast(o.project_no AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL') THEN NULL ELSE nullif(btrim(cast(o.project_no AS text)), '') END)           AS project_no,
+  (CASE WHEN o.subsystem IS NULL THEN NULL WHEN upper(btrim(cast(o.subsystem AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL') THEN NULL ELSE nullif(btrim(cast(o.subsystem AS text)), '') END)            AS subsystem,
+  (CASE WHEN o.issue_name IS NULL THEN NULL WHEN upper(btrim(cast(o.issue_name AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL') THEN NULL ELSE nullif(btrim(cast(o.issue_name AS text)), '') END)           AS issue_name,
+  (CASE WHEN o.dept IS NULL THEN NULL WHEN upper(btrim(cast(o.dept AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL') THEN NULL ELSE nullif(btrim(cast(o.dept AS text)), '') END)                 AS dept,
+  (CASE WHEN o.team_leader IS NULL THEN NULL WHEN upper(btrim(cast(o.team_leader AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL') THEN NULL ELSE nullif(btrim(cast(o.team_leader AS text)), '') END)          AS team_leader,
+  (CASE WHEN o.dept_leader IS NULL THEN NULL WHEN upper(btrim(cast(o.dept_leader AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL') THEN NULL ELSE nullif(btrim(cast(o.dept_leader AS text)), '') END)          AS dept_leader,
+  (CASE WHEN o.issue_summary IS NULL THEN NULL WHEN upper(btrim(cast(o.issue_summary AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL') THEN NULL ELSE nullif(btrim(cast(o.issue_summary AS text)), '') END)        AS issue_summary,
+  (CASE WHEN o.issue_category IS NULL THEN NULL WHEN upper(btrim(cast(o.issue_category AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL') THEN NULL ELSE nullif(btrim(cast(o.issue_category AS text)), '') END)       AS issue_category,
+  (CASE WHEN o.zero_plan IS NULL THEN NULL WHEN upper(btrim(cast(o.zero_plan AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL') THEN NULL ELSE nullif(btrim(cast(o.zero_plan AS text)), '') END)            AS zero_plan,
+  (CASE WHEN o.zero_plan_synced IS NULL THEN NULL WHEN upper(btrim(cast(o.zero_plan_synced AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL') THEN NULL ELSE nullif(btrim(cast(o.zero_plan_synced AS text)), '') END)     AS zero_plan_synced,
+  (CASE WHEN o.status IS NULL THEN NULL WHEN upper(btrim(cast(o.status AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL') THEN NULL ELSE nullif(btrim(cast(o.status AS text)), '') END)               AS status,
+  (CASE WHEN o.current_progress IS NULL THEN NULL WHEN upper(btrim(cast(o.current_progress AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL') THEN NULL ELSE nullif(btrim(cast(o.current_progress AS text)), '') END)     AS current_progress,
+  (CASE WHEN o.project_manager IS NULL THEN NULL WHEN upper(btrim(cast(o.project_manager AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL') THEN NULL ELSE nullif(btrim(cast(o.project_manager AS text)), '') END)      AS project_manager,
 
   -- === 跟进措施字段 ===
-  (
-  CASE
-    WHEN o.measure_category IS NULL THEN NULL
-    WHEN upper(btrim(cast(o.measure_category AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL')
-      THEN NULL
-    ELSE nullif(btrim(cast(o.measure_category AS text)), '')
-  END
-)         AS measure_category,
-  (
-  CASE
-    WHEN o.measure_title IS NULL THEN NULL
-    WHEN upper(btrim(cast(o.measure_title AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL')
-      THEN NULL
-    ELSE nullif(btrim(cast(o.measure_title AS text)), '')
-  END
-)            AS measure_title,
-  (
-  CASE
-    WHEN o.follow_up_person IS NULL THEN NULL
-    WHEN upper(btrim(cast(o.follow_up_person AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL')
-      THEN NULL
-    ELSE nullif(btrim(cast(o.follow_up_person AS text)), '')
-  END
-)         AS follow_up_person,
-  (
-  CASE
-    WHEN o.main_recipient IS NULL THEN NULL
-    WHEN upper(btrim(cast(o.main_recipient AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL')
-      THEN NULL
-    ELSE nullif(btrim(cast(o.main_recipient AS text)), '')
-  END
-)           AS main_recipient,
-  (
-  CASE
-    WHEN o.cc_recipient IS NULL THEN NULL
-    WHEN upper(btrim(cast(o.cc_recipient AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL')
-      THEN NULL
-    ELSE nullif(btrim(cast(o.cc_recipient AS text)), '')
-  END
-)             AS cc_recipient,
-  (
-  CASE
-    WHEN o.closure_status IS NULL THEN NULL
-    WHEN upper(btrim(cast(o.closure_status AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL')
-      THEN NULL
-    ELSE nullif(btrim(cast(o.closure_status AS text)), '')
-  END
-)           AS closure_status,
-  (
-  CASE
-    WHEN o.closure_deliverable_type IS NULL THEN NULL
-    WHEN upper(btrim(cast(o.closure_deliverable_type AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL')
-      THEN NULL
-    ELSE nullif(btrim(cast(o.closure_deliverable_type AS text)), '')
-  END
-) AS closure_deliverable_type,
-  (
-  CASE
-    WHEN o.closure_deliverable IS NULL THEN NULL
-    WHEN upper(btrim(cast(o.closure_deliverable AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL')
-      THEN NULL
-    ELSE nullif(btrim(cast(o.closure_deliverable AS text)), '')
-  END
-)      AS closure_deliverable,
-  (
-  CASE
-    WHEN o.risk_content IS NULL THEN NULL
-    WHEN upper(btrim(cast(o.risk_content AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL')
-      THEN NULL
-    ELSE nullif(btrim(cast(o.risk_content AS text)), '')
-  END
-)             AS risk_content,
-  (
-  CASE
-    WHEN o.remark IS NULL THEN NULL
-    WHEN upper(btrim(cast(o.remark AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL')
-      THEN NULL
-    ELSE nullif(btrim(cast(o.remark AS text)), '')
-  END
-)                   AS remark,
-  (
-  CASE
-    WHEN o.filled_by IS NULL THEN NULL
-    WHEN upper(btrim(cast(o.filled_by AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL')
-      THEN NULL
-    ELSE nullif(btrim(cast(o.filled_by AS text)), '')
-  END
-)                AS filled_by,
+  (CASE WHEN o.measure_category IS NULL THEN NULL WHEN upper(btrim(cast(o.measure_category AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL') THEN NULL ELSE nullif(btrim(cast(o.measure_category AS text)), '') END)         AS measure_category,
+  (CASE WHEN o.measure_title IS NULL THEN NULL WHEN upper(btrim(cast(o.measure_title AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL') THEN NULL ELSE nullif(btrim(cast(o.measure_title AS text)), '') END)            AS measure_title,
+  (CASE WHEN o.follow_up_person IS NULL THEN NULL WHEN upper(btrim(cast(o.follow_up_person AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL') THEN NULL ELSE nullif(btrim(cast(o.follow_up_person AS text)), '') END)         AS follow_up_person,
+  (CASE WHEN o.main_recipient IS NULL THEN NULL WHEN upper(btrim(cast(o.main_recipient AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL') THEN NULL ELSE nullif(btrim(cast(o.main_recipient AS text)), '') END)           AS main_recipient,
+  (CASE WHEN o.cc_recipient IS NULL THEN NULL WHEN upper(btrim(cast(o.cc_recipient AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL') THEN NULL ELSE nullif(btrim(cast(o.cc_recipient AS text)), '') END)             AS cc_recipient,
+  (CASE WHEN o.closure_status IS NULL THEN NULL WHEN upper(btrim(cast(o.closure_status AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL') THEN NULL ELSE nullif(btrim(cast(o.closure_status AS text)), '') END)           AS closure_status,
+  (CASE WHEN o.closure_deliverable_type IS NULL THEN NULL WHEN upper(btrim(cast(o.closure_deliverable_type AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL') THEN NULL ELSE nullif(btrim(cast(o.closure_deliverable_type AS text)), '') END) AS closure_deliverable_type,
+  (CASE WHEN o.closure_deliverable IS NULL THEN NULL WHEN upper(btrim(cast(o.closure_deliverable AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL') THEN NULL ELSE nullif(btrim(cast(o.closure_deliverable AS text)), '') END)      AS closure_deliverable,
+  (CASE WHEN o.risk_content IS NULL THEN NULL WHEN upper(btrim(cast(o.risk_content AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL') THEN NULL ELSE nullif(btrim(cast(o.risk_content AS text)), '') END)             AS risk_content,
+  (CASE WHEN o.remark IS NULL THEN NULL WHEN upper(btrim(cast(o.remark AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL') THEN NULL ELSE nullif(btrim(cast(o.remark AS text)), '') END)                   AS remark,
+  (CASE WHEN o.filled_by IS NULL THEN NULL WHEN upper(btrim(cast(o.filled_by AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL') THEN NULL ELSE nullif(btrim(cast(o.filled_by AS text)), '') END)                AS filled_by,
 
   -- === 数值字段 ===
-  (
-  CASE
-    WHEN (
-  CASE
-    WHEN o.new_plan_count IS NULL THEN NULL
-    WHEN upper(btrim(cast(o.new_plan_count AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL')
-      THEN NULL
-    ELSE nullif(btrim(cast(o.new_plan_count AS text)), '')
-  END
-) IS NULL THEN NULL
-    WHEN regexp_replace((
-  CASE
-    WHEN o.new_plan_count IS NULL THEN NULL
-    WHEN upper(btrim(cast(o.new_plan_count AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL')
-      THEN NULL
-    ELSE nullif(btrim(cast(o.new_plan_count AS text)), '')
-  END
-), ',', '', 'g') ~ '^-?\d+(\.\d+)?$'
-      THEN regexp_replace((
-  CASE
-    WHEN o.new_plan_count IS NULL THEN NULL
-    WHEN upper(btrim(cast(o.new_plan_count AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL')
-      THEN NULL
-    ELSE nullif(btrim(cast(o.new_plan_count AS text)), '')
-  END
-), ',', '', 'g')::numeric
-    ELSE NULL
-  END
-)::int      AS new_plan_count,
+  (CASE WHEN (CASE WHEN o.new_plan_count IS NULL THEN NULL WHEN upper(btrim(cast(o.new_plan_count AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL') THEN NULL ELSE nullif(btrim(cast(o.new_plan_count AS text)), '') END) IS NULL THEN NULL WHEN regexp_replace((CASE WHEN o.new_plan_count IS NULL THEN NULL WHEN upper(btrim(cast(o.new_plan_count AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL') THEN NULL ELSE nullif(btrim(cast(o.new_plan_count AS text)), '') END), ',', '', 'g') ~ '^-?\d+(\.\d+)?$' THEN regexp_replace((CASE WHEN o.new_plan_count IS NULL THEN NULL WHEN upper(btrim(cast(o.new_plan_count AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL') THEN NULL ELSE nullif(btrim(cast(o.new_plan_count AS text)), '') END), ',', '', 'g')::numeric ELSE NULL END)::int      AS new_plan_count,
 
   -- === 日期解析 ===
-  (
-  CASE
-    WHEN o.issue_date IS NULL THEN NULL
-    WHEN btrim(cast(o.issue_date AS text)) = '' THEN NULL
-    WHEN btrim(cast(o.issue_date AS text)) ~ '^\d{4}-\d{2}-\d{2}$'
-      THEN to_date(btrim(cast(o.issue_date AS text)), 'YYYY-MM-DD')
-    WHEN btrim(cast(o.issue_date AS text)) ~ '^\d{4}-\d{2}-\d{2}\s+.*$'
-      THEN to_date(substr(btrim(cast(o.issue_date AS text)), 1, 10), 'YYYY-MM-DD')
-    WHEN btrim(cast(o.issue_date AS text)) ~ '^\d{4}/\d{2}/\d{2}$'
-      THEN to_date(replace(btrim(cast(o.issue_date AS text)), '/', '-'), 'YYYY-MM-DD')
-    ELSE NULL
-  END
-)              AS issue_date,
-  (
-  CASE
-    WHEN o.follow_up_date IS NULL THEN NULL
-    WHEN btrim(cast(o.follow_up_date AS text)) = '' THEN NULL
-    WHEN btrim(cast(o.follow_up_date AS text)) ~ '^\d{4}-\d{2}-\d{2}$'
-      THEN to_date(btrim(cast(o.follow_up_date AS text)), 'YYYY-MM-DD')
-    WHEN btrim(cast(o.follow_up_date AS text)) ~ '^\d{4}-\d{2}-\d{2}\s+.*$'
-      THEN to_date(substr(btrim(cast(o.follow_up_date AS text)), 1, 10), 'YYYY-MM-DD')
-    WHEN btrim(cast(o.follow_up_date AS text)) ~ '^\d{4}/\d{2}/\d{2}$'
-      THEN to_date(replace(btrim(cast(o.follow_up_date AS text)), '/', '-'), 'YYYY-MM-DD')
-    ELSE NULL
-  END
-)          AS follow_up_date,
-  (
-  CASE
-    WHEN o.final_closure_date IS NULL THEN NULL
-    WHEN btrim(cast(o.final_closure_date AS text)) = '' THEN NULL
-    WHEN btrim(cast(o.final_closure_date AS text)) ~ '^\d{4}-\d{2}-\d{2}$'
-      THEN to_date(btrim(cast(o.final_closure_date AS text)), 'YYYY-MM-DD')
-    WHEN btrim(cast(o.final_closure_date AS text)) ~ '^\d{4}-\d{2}-\d{2}\s+.*$'
-      THEN to_date(substr(btrim(cast(o.final_closure_date AS text)), 1, 10), 'YYYY-MM-DD')
-    WHEN btrim(cast(o.final_closure_date AS text)) ~ '^\d{4}/\d{2}/\d{2}$'
-      THEN to_date(replace(btrim(cast(o.final_closure_date AS text)), '/', '-'), 'YYYY-MM-DD')
-    ELSE NULL
-  END
-)      AS final_closure_date,
-  (
-  CASE
-    WHEN o.last_update_time IS NULL THEN NULL
-    WHEN btrim(cast(o.last_update_time AS text)) = '' THEN NULL
-    WHEN btrim(cast(o.last_update_time AS text)) ~ '^\d{4}-\d{2}-\d{2}$'
-      THEN to_date(btrim(cast(o.last_update_time AS text)), 'YYYY-MM-DD')
-    WHEN btrim(cast(o.last_update_time AS text)) ~ '^\d{4}-\d{2}-\d{2}\s+.*$'
-      THEN to_date(substr(btrim(cast(o.last_update_time AS text)), 1, 10), 'YYYY-MM-DD')
-    WHEN btrim(cast(o.last_update_time AS text)) ~ '^\d{4}/\d{2}/\d{2}$'
-      THEN to_date(replace(btrim(cast(o.last_update_time AS text)), '/', '-'), 'YYYY-MM-DD')
-    ELSE NULL
-  END
-)        AS last_update_time,
+  (CASE WHEN o.issue_date IS NULL THEN NULL WHEN btrim(cast(o.issue_date AS text)) = '' THEN NULL WHEN btrim(cast(o.issue_date AS text)) ~ '^\d{4}-\d{2}-\d{2}$' THEN to_date(btrim(cast(o.issue_date AS text)), 'YYYY-MM-DD') WHEN btrim(cast(o.issue_date AS text)) ~ '^\d{4}/\d{2}/\d{2}$' THEN to_date(replace(btrim(cast(o.issue_date AS text)), '/', '-'), 'YYYY-MM-DD') ELSE NULL END)              AS issue_date,
+  (CASE WHEN o.follow_up_date IS NULL THEN NULL WHEN btrim(cast(o.follow_up_date AS text)) = '' THEN NULL WHEN btrim(cast(o.follow_up_date AS text)) ~ '^\d{4}-\d{2}-\d{2}$' THEN to_date(btrim(cast(o.follow_up_date AS text)), 'YYYY-MM-DD') WHEN btrim(cast(o.follow_up_date AS text)) ~ '^\d{4}/\d{2}/\d{2}$' THEN to_date(replace(btrim(cast(o.follow_up_date AS text)), '/', '-'), 'YYYY-MM-DD') ELSE NULL END)          AS follow_up_date,
+  (CASE WHEN o.final_closure_date IS NULL THEN NULL WHEN btrim(cast(o.final_closure_date AS text)) = '' THEN NULL WHEN btrim(cast(o.final_closure_date AS text)) ~ '^\d{4}-\d{2}-\d{2}$' THEN to_date(btrim(cast(o.final_closure_date AS text)), 'YYYY-MM-DD') WHEN btrim(cast(o.final_closure_date AS text)) ~ '^\d{4}/\d{2}/\d{2}$' THEN to_date(replace(btrim(cast(o.final_closure_date AS text)), '/', '-'), 'YYYY-MM-DD') ELSE NULL END)      AS final_closure_date,
+  (CASE WHEN o.last_update_time IS NULL THEN NULL WHEN btrim(cast(o.last_update_time AS text)) = '' THEN NULL WHEN btrim(cast(o.last_update_time AS text)) ~ '^\d{4}-\d{2}-\d{2}$' THEN to_date(btrim(cast(o.last_update_time AS text)), 'YYYY-MM-DD') WHEN btrim(cast(o.last_update_time AS text)) ~ '^\d{4}/\d{2}/\d{2}$' THEN to_date(replace(btrim(cast(o.last_update_time AS text)), '/', '-'), 'YYYY-MM-DD') ELSE NULL END)        AS last_update_time,
 
   -- === 周数字段 ===
-  (
-  CASE
-    WHEN (
-  CASE
-    WHEN o.issue_week IS NULL THEN NULL
-    WHEN upper(btrim(cast(o.issue_week AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL')
-      THEN NULL
-    ELSE nullif(btrim(cast(o.issue_week AS text)), '')
-  END
-) IS NULL THEN NULL
-    WHEN regexp_replace((
-  CASE
-    WHEN o.issue_week IS NULL THEN NULL
-    WHEN upper(btrim(cast(o.issue_week AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL')
-      THEN NULL
-    ELSE nullif(btrim(cast(o.issue_week AS text)), '')
-  END
-), ',', '', 'g') ~ '^-?\d+(\.\d+)?$'
-      THEN regexp_replace((
-  CASE
-    WHEN o.issue_week IS NULL THEN NULL
-    WHEN upper(btrim(cast(o.issue_week AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL')
-      THEN NULL
-    ELSE nullif(btrim(cast(o.issue_week AS text)), '')
-  END
-), ',', '', 'g')::numeric
-    ELSE NULL
-  END
-)::int              AS issue_week,
-  (
-  CASE
-    WHEN (
-  CASE
-    WHEN o.follow_up_week IS NULL THEN NULL
-    WHEN upper(btrim(cast(o.follow_up_week AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL')
-      THEN NULL
-    ELSE nullif(btrim(cast(o.follow_up_week AS text)), '')
-  END
-) IS NULL THEN NULL
-    WHEN regexp_replace((
-  CASE
-    WHEN o.follow_up_week IS NULL THEN NULL
-    WHEN upper(btrim(cast(o.follow_up_week AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL')
-      THEN NULL
-    ELSE nullif(btrim(cast(o.follow_up_week AS text)), '')
-  END
-), ',', '', 'g') ~ '^-?\d+(\.\d+)?$'
-      THEN regexp_replace((
-  CASE
-    WHEN o.follow_up_week IS NULL THEN NULL
-    WHEN upper(btrim(cast(o.follow_up_week AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL')
-      THEN NULL
-    ELSE nullif(btrim(cast(o.follow_up_week AS text)), '')
-  END
-), ',', '', 'g')::numeric
-    ELSE NULL
-  END
-)::int          AS follow_up_week,
-  (
-  CASE
-    WHEN (
-  CASE
-    WHEN o.final_closure_week IS NULL THEN NULL
-    WHEN upper(btrim(cast(o.final_closure_week AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL')
-      THEN NULL
-    ELSE nullif(btrim(cast(o.final_closure_week AS text)), '')
-  END
-) IS NULL THEN NULL
-    WHEN regexp_replace((
-  CASE
-    WHEN o.final_closure_week IS NULL THEN NULL
-    WHEN upper(btrim(cast(o.final_closure_week AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL')
-      THEN NULL
-    ELSE nullif(btrim(cast(o.final_closure_week AS text)), '')
-  END
-), ',', '', 'g') ~ '^-?\d+(\.\d+)?$'
-      THEN regexp_replace((
-  CASE
-    WHEN o.final_closure_week IS NULL THEN NULL
-    WHEN upper(btrim(cast(o.final_closure_week AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL')
-      THEN NULL
-    ELSE nullif(btrim(cast(o.final_closure_week AS text)), '')
-  END
-), ',', '', 'g')::numeric
-    ELSE NULL
-  END
-)::int      AS final_closure_week,
-  (
-  CASE
-    WHEN (
-  CASE
-    WHEN o.last_update_week IS NULL THEN NULL
-    WHEN upper(btrim(cast(o.last_update_week AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL')
-      THEN NULL
-    ELSE nullif(btrim(cast(o.last_update_week AS text)), '')
-  END
-) IS NULL THEN NULL
-    WHEN regexp_replace((
-  CASE
-    WHEN o.last_update_week IS NULL THEN NULL
-    WHEN upper(btrim(cast(o.last_update_week AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL')
-      THEN NULL
-    ELSE nullif(btrim(cast(o.last_update_week AS text)), '')
-  END
-), ',', '', 'g') ~ '^-?\d+(\.\d+)?$'
-      THEN regexp_replace((
-  CASE
-    WHEN o.last_update_week IS NULL THEN NULL
-    WHEN upper(btrim(cast(o.last_update_week AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL')
-      THEN NULL
-    ELSE nullif(btrim(cast(o.last_update_week AS text)), '')
-  END
-), ',', '', 'g')::numeric
-    ELSE NULL
-  END
-)::int        AS last_update_week,
+  (CASE WHEN (CASE WHEN o.issue_week IS NULL THEN NULL WHEN upper(btrim(cast(o.issue_week AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL') THEN NULL ELSE nullif(btrim(cast(o.issue_week AS text)), '') END) IS NULL THEN NULL WHEN regexp_replace((CASE WHEN o.issue_week IS NULL THEN NULL WHEN upper(btrim(cast(o.issue_week AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL') THEN NULL ELSE nullif(btrim(cast(o.issue_week AS text)), '') END), ',', '', 'g') ~ '^-?\d+(\.\d+)?$' THEN regexp_replace((CASE WHEN o.issue_week IS NULL THEN NULL WHEN upper(btrim(cast(o.issue_week AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL') THEN NULL ELSE nullif(btrim(cast(o.issue_week AS text)), '') END), ',', '', 'g')::numeric ELSE NULL END)::int              AS issue_week,
+  (CASE WHEN (CASE WHEN o.follow_up_week IS NULL THEN NULL WHEN upper(btrim(cast(o.follow_up_week AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL') THEN NULL ELSE nullif(btrim(cast(o.follow_up_week AS text)), '') END) IS NULL THEN NULL WHEN regexp_replace((CASE WHEN o.follow_up_week IS NULL THEN NULL WHEN upper(btrim(cast(o.follow_up_week AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL') THEN NULL ELSE nullif(btrim(cast(o.follow_up_week AS text)), '') END), ',', '', 'g') ~ '^-?\d+(\.\d+)?$' THEN regexp_replace((CASE WHEN o.follow_up_week IS NULL THEN NULL WHEN upper(btrim(cast(o.follow_up_week AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL') THEN NULL ELSE nullif(btrim(cast(o.follow_up_week AS text)), '') END), ',', '', 'g')::numeric ELSE NULL END)::int          AS follow_up_week,
+  (CASE WHEN (CASE WHEN o.final_closure_week IS NULL THEN NULL WHEN upper(btrim(cast(o.final_closure_week AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL') THEN NULL ELSE nullif(btrim(cast(o.final_closure_week AS text)), '') END) IS NULL THEN NULL WHEN regexp_replace((CASE WHEN o.final_closure_week IS NULL THEN NULL WHEN upper(btrim(cast(o.final_closure_week AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL') THEN NULL ELSE nullif(btrim(cast(o.final_closure_week AS text)), '') END), ',', '', 'g') ~ '^-?\d+(\.\d+)?$' THEN regexp_replace((CASE WHEN o.final_closure_week IS NULL THEN NULL WHEN upper(btrim(cast(o.final_closure_week AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL') THEN NULL ELSE nullif(btrim(cast(o.final_closure_week AS text)), '') END), ',', '', 'g')::numeric ELSE NULL END)::int      AS final_closure_week,
+  (CASE WHEN (CASE WHEN o.last_update_week IS NULL THEN NULL WHEN upper(btrim(cast(o.last_update_week AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL') THEN NULL ELSE nullif(btrim(cast(o.last_update_week AS text)), '') END) IS NULL THEN NULL WHEN regexp_replace((CASE WHEN o.last_update_week IS NULL THEN NULL WHEN upper(btrim(cast(o.last_update_week AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL') THEN NULL ELSE nullif(btrim(cast(o.last_update_week AS text)), '') END), ',', '', 'g') ~ '^-?\d+(\.\d+)?$' THEN regexp_replace((CASE WHEN o.last_update_week IS NULL THEN NULL WHEN upper(btrim(cast(o.last_update_week AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL') THEN NULL ELSE nullif(btrim(cast(o.last_update_week AS text)), '') END), ',', '', 'g')::numeric ELSE NULL END)::int        AS last_update_week,
 
   -- === 闭环标志 ===
   CASE
-    WHEN btrim(COALESCE((
-  CASE
-    WHEN o.closure_status IS NULL THEN NULL
-    WHEN upper(btrim(cast(o.closure_status AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL')
-      THEN NULL
-    ELSE nullif(btrim(cast(o.closure_status AS text)), '')
-  END
-), '')) = '已闭环' THEN true
+    WHEN btrim(COALESCE((CASE WHEN o.closure_status IS NULL THEN NULL WHEN upper(btrim(cast(o.closure_status AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL') THEN NULL ELSE nullif(btrim(cast(o.closure_status AS text)), '') END), '')) = '已闭环' THEN true
     ELSE false
   END AS is_closed,
 
@@ -2237,516 +538,61 @@ SELECT
   ) AS tech_state_id,
 
   -- === 原始业务字段 ===
-  (
-  CASE
-    WHEN o.project_no IS NULL THEN NULL
-    WHEN upper(btrim(cast(o.project_no AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL')
-      THEN NULL
-    ELSE nullif(btrim(cast(o.project_no AS text)), '')
-  END
-)               AS project_no,
-  (
-  CASE
-    WHEN o.tech_state_name IS NULL THEN NULL
-    WHEN upper(btrim(cast(o.tech_state_name AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL')
-      THEN NULL
-    ELSE nullif(btrim(cast(o.tech_state_name AS text)), '')
-  END
-)          AS tech_state_name,
-  (
-  CASE
-    WHEN o.change_item IS NULL THEN NULL
-    WHEN upper(btrim(cast(o.change_item AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL')
-      THEN NULL
-    ELSE nullif(btrim(cast(o.change_item AS text)), '')
-  END
-)              AS change_item,
-  (
-  CASE
-    WHEN o.owner IS NULL THEN NULL
-    WHEN upper(btrim(cast(o.owner AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL')
-      THEN NULL
-    ELSE nullif(btrim(cast(o.owner AS text)), '')
-  END
-)                    AS owner,
-  (
-  CASE
-    WHEN o.dept IS NULL THEN NULL
-    WHEN upper(btrim(cast(o.dept AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL')
-      THEN NULL
-    ELSE nullif(btrim(cast(o.dept AS text)), '')
-  END
-)                     AS dept,
-  (
-  CASE
-    WHEN o.dept_leader IS NULL THEN NULL
-    WHEN upper(btrim(cast(o.dept_leader AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL')
-      THEN NULL
-    ELSE nullif(btrim(cast(o.dept_leader AS text)), '')
-  END
-)              AS dept_leader,
-  (
-  CASE
-    WHEN o.completion_signature IS NULL THEN NULL
-    WHEN upper(btrim(cast(o.completion_signature AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL')
-      THEN NULL
-    ELSE nullif(btrim(cast(o.completion_signature AS text)), '')
-  END
-)     AS completion_signature,
-  (
-  CASE
-    WHEN o.change_reason IS NULL THEN NULL
-    WHEN upper(btrim(cast(o.change_reason AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL')
-      THEN NULL
-    ELSE nullif(btrim(cast(o.change_reason AS text)), '')
-  END
-)            AS change_reason,
-  (
-  CASE
-    WHEN o.change_category IS NULL THEN NULL
-    WHEN upper(btrim(cast(o.change_category AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL')
-      THEN NULL
-    ELSE nullif(btrim(cast(o.change_category AS text)), '')
-  END
-)          AS change_category,
-  (
-  CASE
-    WHEN o.plan_synced IS NULL THEN NULL
-    WHEN upper(btrim(cast(o.plan_synced AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL')
-      THEN NULL
-    ELSE nullif(btrim(cast(o.plan_synced AS text)), '')
-  END
-)              AS plan_synced,
-  (
-  CASE
-    WHEN o.review_situation IS NULL THEN NULL
-    WHEN upper(btrim(cast(o.review_situation AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL')
-      THEN NULL
-    ELSE nullif(btrim(cast(o.review_situation AS text)), '')
-  END
-)         AS review_situation,
-  (
-  CASE
-    WHEN o.affected_files IS NULL THEN NULL
-    WHEN upper(btrim(cast(o.affected_files AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL')
-      THEN NULL
-    ELSE nullif(btrim(cast(o.affected_files AS text)), '')
-  END
-)           AS affected_files,
-  (
-  CASE
-    WHEN o.affected_objects IS NULL THEN NULL
-    WHEN upper(btrim(cast(o.affected_objects AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL')
-      THEN NULL
-    ELSE nullif(btrim(cast(o.affected_objects AS text)), '')
-  END
-)         AS affected_objects,
-  (
-  CASE
-    WHEN o.file_signature_status IS NULL THEN NULL
-    WHEN upper(btrim(cast(o.file_signature_status AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL')
-      THEN NULL
-    ELSE nullif(btrim(cast(o.file_signature_status AS text)), '')
-  END
-)    AS file_signature_status,
-  (
-  CASE
-    WHEN o.reform_status IS NULL THEN NULL
-    WHEN upper(btrim(cast(o.reform_status AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL')
-      THEN NULL
-    ELSE nullif(btrim(cast(o.reform_status AS text)), '')
-  END
-)            AS reform_status,
-  (
-  CASE
-    WHEN o.project_manager IS NULL THEN NULL
-    WHEN upper(btrim(cast(o.project_manager AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL')
-      THEN NULL
-    ELSE nullif(btrim(cast(o.project_manager AS text)), '')
-  END
-)          AS project_manager,
-  (
-  CASE
-    WHEN o.filled_by IS NULL THEN NULL
-    WHEN upper(btrim(cast(o.filled_by AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL')
-      THEN NULL
-    ELSE nullif(btrim(cast(o.filled_by AS text)), '')
-  END
-)                AS filled_by,
-  (
-  CASE
-    WHEN o.remark IS NULL THEN NULL
-    WHEN upper(btrim(cast(o.remark AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL')
-      THEN NULL
-    ELSE nullif(btrim(cast(o.remark AS text)), '')
-  END
-)                   AS remark,
+  (CASE WHEN o.project_no IS NULL THEN NULL WHEN upper(btrim(cast(o.project_no AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL') THEN NULL ELSE nullif(btrim(cast(o.project_no AS text)), '') END)               AS project_no,
+  (CASE WHEN o.tech_state_name IS NULL THEN NULL WHEN upper(btrim(cast(o.tech_state_name AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL') THEN NULL ELSE nullif(btrim(cast(o.tech_state_name AS text)), '') END)          AS tech_state_name,
+  (CASE WHEN o.change_item IS NULL THEN NULL WHEN upper(btrim(cast(o.change_item AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL') THEN NULL ELSE nullif(btrim(cast(o.change_item AS text)), '') END)              AS change_item,
+  (CASE WHEN o.owner IS NULL THEN NULL WHEN upper(btrim(cast(o.owner AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL') THEN NULL ELSE nullif(btrim(cast(o.owner AS text)), '') END)                    AS owner,
+  (CASE WHEN o.dept IS NULL THEN NULL WHEN upper(btrim(cast(o.dept AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL') THEN NULL ELSE nullif(btrim(cast(o.dept AS text)), '') END)                     AS dept,
+  (CASE WHEN o.dept_leader IS NULL THEN NULL WHEN upper(btrim(cast(o.dept_leader AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL') THEN NULL ELSE nullif(btrim(cast(o.dept_leader AS text)), '') END)              AS dept_leader,
+  (CASE WHEN o.completion_signature IS NULL THEN NULL WHEN upper(btrim(cast(o.completion_signature AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL') THEN NULL ELSE nullif(btrim(cast(o.completion_signature AS text)), '') END)     AS completion_signature,
+  (CASE WHEN o.change_reason IS NULL THEN NULL WHEN upper(btrim(cast(o.change_reason AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL') THEN NULL ELSE nullif(btrim(cast(o.change_reason AS text)), '') END)            AS change_reason,
+  (CASE WHEN o.change_category IS NULL THEN NULL WHEN upper(btrim(cast(o.change_category AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL') THEN NULL ELSE nullif(btrim(cast(o.change_category AS text)), '') END)          AS change_category,
+  (CASE WHEN o.plan_synced IS NULL THEN NULL WHEN upper(btrim(cast(o.plan_synced AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL') THEN NULL ELSE nullif(btrim(cast(o.plan_synced AS text)), '') END)              AS plan_synced,
+  (CASE WHEN o.review_situation IS NULL THEN NULL WHEN upper(btrim(cast(o.review_situation AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL') THEN NULL ELSE nullif(btrim(cast(o.review_situation AS text)), '') END)         AS review_situation,
+  (CASE WHEN o.affected_files IS NULL THEN NULL WHEN upper(btrim(cast(o.affected_files AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL') THEN NULL ELSE nullif(btrim(cast(o.affected_files AS text)), '') END)           AS affected_files,
+  (CASE WHEN o.affected_objects IS NULL THEN NULL WHEN upper(btrim(cast(o.affected_objects AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL') THEN NULL ELSE nullif(btrim(cast(o.affected_objects AS text)), '') END)         AS affected_objects,
+  (CASE WHEN o.file_signature_status IS NULL THEN NULL WHEN upper(btrim(cast(o.file_signature_status AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL') THEN NULL ELSE nullif(btrim(cast(o.file_signature_status AS text)), '') END)    AS file_signature_status,
+  (CASE WHEN o.reform_status IS NULL THEN NULL WHEN upper(btrim(cast(o.reform_status AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL') THEN NULL ELSE nullif(btrim(cast(o.reform_status AS text)), '') END)            AS reform_status,
+  (CASE WHEN o.project_manager IS NULL THEN NULL WHEN upper(btrim(cast(o.project_manager AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL') THEN NULL ELSE nullif(btrim(cast(o.project_manager AS text)), '') END)          AS project_manager,
+  (CASE WHEN o.filled_by IS NULL THEN NULL WHEN upper(btrim(cast(o.filled_by AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL') THEN NULL ELSE nullif(btrim(cast(o.filled_by AS text)), '') END)                AS filled_by,
+  (CASE WHEN o.remark IS NULL THEN NULL WHEN upper(btrim(cast(o.remark AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL') THEN NULL ELSE nullif(btrim(cast(o.remark AS text)), '') END)                   AS remark,
 
   -- === 数值字段 ===
-  (
-  CASE
-    WHEN (
-  CASE
-    WHEN o.new_plan_count IS NULL THEN NULL
-    WHEN upper(btrim(cast(o.new_plan_count AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL')
-      THEN NULL
-    ELSE nullif(btrim(cast(o.new_plan_count AS text)), '')
-  END
-) IS NULL THEN NULL
-    WHEN regexp_replace((
-  CASE
-    WHEN o.new_plan_count IS NULL THEN NULL
-    WHEN upper(btrim(cast(o.new_plan_count AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL')
-      THEN NULL
-    ELSE nullif(btrim(cast(o.new_plan_count AS text)), '')
-  END
-), ',', '', 'g') ~ '^-?\d+(\.\d+)?$'
-      THEN regexp_replace((
-  CASE
-    WHEN o.new_plan_count IS NULL THEN NULL
-    WHEN upper(btrim(cast(o.new_plan_count AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL')
-      THEN NULL
-    ELSE nullif(btrim(cast(o.new_plan_count AS text)), '')
-  END
-), ',', '', 'g')::numeric
-    ELSE NULL
-  END
-)::int      AS new_plan_count,
+  (CASE WHEN (CASE WHEN o.new_plan_count IS NULL THEN NULL WHEN upper(btrim(cast(o.new_plan_count AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL') THEN NULL ELSE nullif(btrim(cast(o.new_plan_count AS text)), '') END) IS NULL THEN NULL WHEN regexp_replace((CASE WHEN o.new_plan_count IS NULL THEN NULL WHEN upper(btrim(cast(o.new_plan_count AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL') THEN NULL ELSE nullif(btrim(cast(o.new_plan_count AS text)), '') END), ',', '', 'g') ~ '^-?\d+(\.\d+)?$' THEN regexp_replace((CASE WHEN o.new_plan_count IS NULL THEN NULL WHEN upper(btrim(cast(o.new_plan_count AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL') THEN NULL ELSE nullif(btrim(cast(o.new_plan_count AS text)), '') END), ',', '', 'g')::numeric ELSE NULL END)::int      AS new_plan_count,
 
   -- === 日期解析 ===
-  (
-  CASE
-    WHEN o.change_submit_time IS NULL THEN NULL
-    WHEN btrim(cast(o.change_submit_time AS text)) = '' THEN NULL
-    WHEN btrim(cast(o.change_submit_time AS text)) ~ '^\d{4}-\d{2}-\d{2}$'
-      THEN to_date(btrim(cast(o.change_submit_time AS text)), 'YYYY-MM-DD')
-    WHEN btrim(cast(o.change_submit_time AS text)) ~ '^\d{4}-\d{2}-\d{2}\s+.*$'
-      THEN to_date(substr(btrim(cast(o.change_submit_time AS text)), 1, 10), 'YYYY-MM-DD')
-    WHEN btrim(cast(o.change_submit_time AS text)) ~ '^\d{4}/\d{2}/\d{2}$'
-      THEN to_date(replace(btrim(cast(o.change_submit_time AS text)), '/', '-'), 'YYYY-MM-DD')
-    ELSE NULL
-  END
-)          AS change_submit_time,
-  (
-  CASE
-    WHEN o.signature_closure_date IS NULL THEN NULL
-    WHEN btrim(cast(o.signature_closure_date AS text)) = '' THEN NULL
-    WHEN btrim(cast(o.signature_closure_date AS text)) ~ '^\d{4}-\d{2}-\d{2}$'
-      THEN to_date(btrim(cast(o.signature_closure_date AS text)), 'YYYY-MM-DD')
-    WHEN btrim(cast(o.signature_closure_date AS text)) ~ '^\d{4}-\d{2}-\d{2}\s+.*$'
-      THEN to_date(substr(btrim(cast(o.signature_closure_date AS text)), 1, 10), 'YYYY-MM-DD')
-    WHEN btrim(cast(o.signature_closure_date AS text)) ~ '^\d{4}/\d{2}/\d{2}$'
-      THEN to_date(replace(btrim(cast(o.signature_closure_date AS text)), '/', '-'), 'YYYY-MM-DD')
-    ELSE NULL
-  END
-)      AS signature_closure_date,
-  (
-  CASE
-    WHEN o.plan_file_closure_date IS NULL THEN NULL
-    WHEN btrim(cast(o.plan_file_closure_date AS text)) = '' THEN NULL
-    WHEN btrim(cast(o.plan_file_closure_date AS text)) ~ '^\d{4}-\d{2}-\d{2}$'
-      THEN to_date(btrim(cast(o.plan_file_closure_date AS text)), 'YYYY-MM-DD')
-    WHEN btrim(cast(o.plan_file_closure_date AS text)) ~ '^\d{4}-\d{2}-\d{2}\s+.*$'
-      THEN to_date(substr(btrim(cast(o.plan_file_closure_date AS text)), 1, 10), 'YYYY-MM-DD')
-    WHEN btrim(cast(o.plan_file_closure_date AS text)) ~ '^\d{4}/\d{2}/\d{2}$'
-      THEN to_date(replace(btrim(cast(o.plan_file_closure_date AS text)), '/', '-'), 'YYYY-MM-DD')
-    ELSE NULL
-  END
-)      AS plan_file_closure_date,
-  (
-  CASE
-    WHEN o.plan_reform_date IS NULL THEN NULL
-    WHEN btrim(cast(o.plan_reform_date AS text)) = '' THEN NULL
-    WHEN btrim(cast(o.plan_reform_date AS text)) ~ '^\d{4}-\d{2}-\d{2}$'
-      THEN to_date(btrim(cast(o.plan_reform_date AS text)), 'YYYY-MM-DD')
-    WHEN btrim(cast(o.plan_reform_date AS text)) ~ '^\d{4}-\d{2}-\d{2}\s+.*$'
-      THEN to_date(substr(btrim(cast(o.plan_reform_date AS text)), 1, 10), 'YYYY-MM-DD')
-    WHEN btrim(cast(o.plan_reform_date AS text)) ~ '^\d{4}/\d{2}/\d{2}$'
-      THEN to_date(replace(btrim(cast(o.plan_reform_date AS text)), '/', '-'), 'YYYY-MM-DD')
-    ELSE NULL
-  END
-)            AS plan_reform_date,
-  (
-  CASE
-    WHEN o.file_signature_date IS NULL THEN NULL
-    WHEN btrim(cast(o.file_signature_date AS text)) = '' THEN NULL
-    WHEN btrim(cast(o.file_signature_date AS text)) ~ '^\d{4}-\d{2}-\d{2}$'
-      THEN to_date(btrim(cast(o.file_signature_date AS text)), 'YYYY-MM-DD')
-    WHEN btrim(cast(o.file_signature_date AS text)) ~ '^\d{4}-\d{2}-\d{2}\s+.*$'
-      THEN to_date(substr(btrim(cast(o.file_signature_date AS text)), 1, 10), 'YYYY-MM-DD')
-    WHEN btrim(cast(o.file_signature_date AS text)) ~ '^\d{4}/\d{2}/\d{2}$'
-      THEN to_date(replace(btrim(cast(o.file_signature_date AS text)), '/', '-'), 'YYYY-MM-DD')
-    ELSE NULL
-  END
-)         AS file_signature_date,
-  (
-  CASE
-    WHEN o.reform_date IS NULL THEN NULL
-    WHEN btrim(cast(o.reform_date AS text)) = '' THEN NULL
-    WHEN btrim(cast(o.reform_date AS text)) ~ '^\d{4}-\d{2}-\d{2}$'
-      THEN to_date(btrim(cast(o.reform_date AS text)), 'YYYY-MM-DD')
-    WHEN btrim(cast(o.reform_date AS text)) ~ '^\d{4}-\d{2}-\d{2}\s+.*$'
-      THEN to_date(substr(btrim(cast(o.reform_date AS text)), 1, 10), 'YYYY-MM-DD')
-    WHEN btrim(cast(o.reform_date AS text)) ~ '^\d{4}/\d{2}/\d{2}$'
-      THEN to_date(replace(btrim(cast(o.reform_date AS text)), '/', '-'), 'YYYY-MM-DD')
-    ELSE NULL
-  END
-)                 AS reform_date,
-  (
-  CASE
-    WHEN o.last_update_time IS NULL THEN NULL
-    WHEN btrim(cast(o.last_update_time AS text)) = '' THEN NULL
-    WHEN btrim(cast(o.last_update_time AS text)) ~ '^\d{4}-\d{2}-\d{2}$'
-      THEN to_date(btrim(cast(o.last_update_time AS text)), 'YYYY-MM-DD')
-    WHEN btrim(cast(o.last_update_time AS text)) ~ '^\d{4}-\d{2}-\d{2}\s+.*$'
-      THEN to_date(substr(btrim(cast(o.last_update_time AS text)), 1, 10), 'YYYY-MM-DD')
-    WHEN btrim(cast(o.last_update_time AS text)) ~ '^\d{4}/\d{2}/\d{2}$'
-      THEN to_date(replace(btrim(cast(o.last_update_time AS text)), '/', '-'), 'YYYY-MM-DD')
-    ELSE NULL
-  END
-)            AS last_update_time,
+  (CASE WHEN o.change_submit_time IS NULL THEN NULL WHEN btrim(cast(o.change_submit_time AS text)) = '' THEN NULL WHEN btrim(cast(o.change_submit_time AS text)) ~ '^\d{4}-\d{2}-\d{2}$' THEN to_date(btrim(cast(o.change_submit_time AS text)), 'YYYY-MM-DD') WHEN btrim(cast(o.change_submit_time AS text)) ~ '^\d{4}/\d{2}/\d{2}$' THEN to_date(replace(btrim(cast(o.change_submit_time AS text)), '/', '-'), 'YYYY-MM-DD') ELSE NULL END)          AS change_submit_time,
+  (CASE WHEN o.signature_closure_date IS NULL THEN NULL WHEN btrim(cast(o.signature_closure_date AS text)) = '' THEN NULL WHEN btrim(cast(o.signature_closure_date AS text)) ~ '^\d{4}-\d{2}-\d{2}$' THEN to_date(btrim(cast(o.signature_closure_date AS text)), 'YYYY-MM-DD') WHEN btrim(cast(o.signature_closure_date AS text)) ~ '^\d{4}/\d{2}/\d{2}$' THEN to_date(replace(btrim(cast(o.signature_closure_date AS text)), '/', '-'), 'YYYY-MM-DD') ELSE NULL END)      AS signature_closure_date,
+  (CASE WHEN o.plan_file_closure_date IS NULL THEN NULL WHEN btrim(cast(o.plan_file_closure_date AS text)) = '' THEN NULL WHEN btrim(cast(o.plan_file_closure_date AS text)) ~ '^\d{4}-\d{2}-\d{2}$' THEN to_date(btrim(cast(o.plan_file_closure_date AS text)), 'YYYY-MM-DD') WHEN btrim(cast(o.plan_file_closure_date AS text)) ~ '^\d{4}/\d{2}/\d{2}$' THEN to_date(replace(btrim(cast(o.plan_file_closure_date AS text)), '/', '-'), 'YYYY-MM-DD') ELSE NULL END)      AS plan_file_closure_date,
+  (CASE WHEN o.plan_reform_date IS NULL THEN NULL WHEN btrim(cast(o.plan_reform_date AS text)) = '' THEN NULL WHEN btrim(cast(o.plan_reform_date AS text)) ~ '^\d{4}-\d{2}-\d{2}$' THEN to_date(btrim(cast(o.plan_reform_date AS text)), 'YYYY-MM-DD') WHEN btrim(cast(o.plan_reform_date AS text)) ~ '^\d{4}/\d{2}/\d{2}$' THEN to_date(replace(btrim(cast(o.plan_reform_date AS text)), '/', '-'), 'YYYY-MM-DD') ELSE NULL END)            AS plan_reform_date,
+  (CASE WHEN o.file_signature_date IS NULL THEN NULL WHEN btrim(cast(o.file_signature_date AS text)) = '' THEN NULL WHEN btrim(cast(o.file_signature_date AS text)) ~ '^\d{4}-\d{2}-\d{2}$' THEN to_date(btrim(cast(o.file_signature_date AS text)), 'YYYY-MM-DD') WHEN btrim(cast(o.file_signature_date AS text)) ~ '^\d{4}/\d{2}/\d{2}$' THEN to_date(replace(btrim(cast(o.file_signature_date AS text)), '/', '-'), 'YYYY-MM-DD') ELSE NULL END)         AS file_signature_date,
+  (CASE WHEN o.reform_date IS NULL THEN NULL WHEN btrim(cast(o.reform_date AS text)) = '' THEN NULL WHEN btrim(cast(o.reform_date AS text)) ~ '^\d{4}-\d{2}-\d{2}$' THEN to_date(btrim(cast(o.reform_date AS text)), 'YYYY-MM-DD') WHEN btrim(cast(o.reform_date AS text)) ~ '^\d{4}/\d{2}/\d{2}$' THEN to_date(replace(btrim(cast(o.reform_date AS text)), '/', '-'), 'YYYY-MM-DD') ELSE NULL END)                 AS reform_date,
+  (CASE WHEN o.last_update_time IS NULL THEN NULL WHEN btrim(cast(o.last_update_time AS text)) = '' THEN NULL WHEN btrim(cast(o.last_update_time AS text)) ~ '^\d{4}-\d{2}-\d{2}$' THEN to_date(btrim(cast(o.last_update_time AS text)), 'YYYY-MM-DD') WHEN btrim(cast(o.last_update_time AS text)) ~ '^\d{4}/\d{2}/\d{2}$' THEN to_date(replace(btrim(cast(o.last_update_time AS text)), '/', '-'), 'YYYY-MM-DD') ELSE NULL END)            AS last_update_time,
 
   -- === 周数字段 ===
-  (
-  CASE
-    WHEN (
-  CASE
-    WHEN o.change_submit_week IS NULL THEN NULL
-    WHEN upper(btrim(cast(o.change_submit_week AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL')
-      THEN NULL
-    ELSE nullif(btrim(cast(o.change_submit_week AS text)), '')
-  END
-) IS NULL THEN NULL
-    WHEN regexp_replace((
-  CASE
-    WHEN o.change_submit_week IS NULL THEN NULL
-    WHEN upper(btrim(cast(o.change_submit_week AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL')
-      THEN NULL
-    ELSE nullif(btrim(cast(o.change_submit_week AS text)), '')
-  END
-), ',', '', 'g') ~ '^-?\d+(\.\d+)?$'
-      THEN regexp_replace((
-  CASE
-    WHEN o.change_submit_week IS NULL THEN NULL
-    WHEN upper(btrim(cast(o.change_submit_week AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL')
-      THEN NULL
-    ELSE nullif(btrim(cast(o.change_submit_week AS text)), '')
-  END
-), ',', '', 'g')::numeric
-    ELSE NULL
-  END
-)::int          AS change_submit_week,
-  (
-  CASE
-    WHEN (
-  CASE
-    WHEN o.signature_closure_week IS NULL THEN NULL
-    WHEN upper(btrim(cast(o.signature_closure_week AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL')
-      THEN NULL
-    ELSE nullif(btrim(cast(o.signature_closure_week AS text)), '')
-  END
-) IS NULL THEN NULL
-    WHEN regexp_replace((
-  CASE
-    WHEN o.signature_closure_week IS NULL THEN NULL
-    WHEN upper(btrim(cast(o.signature_closure_week AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL')
-      THEN NULL
-    ELSE nullif(btrim(cast(o.signature_closure_week AS text)), '')
-  END
-), ',', '', 'g') ~ '^-?\d+(\.\d+)?$'
-      THEN regexp_replace((
-  CASE
-    WHEN o.signature_closure_week IS NULL THEN NULL
-    WHEN upper(btrim(cast(o.signature_closure_week AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL')
-      THEN NULL
-    ELSE nullif(btrim(cast(o.signature_closure_week AS text)), '')
-  END
-), ',', '', 'g')::numeric
-    ELSE NULL
-  END
-)::int      AS signature_closure_week,
-  (
-  CASE
-    WHEN (
-  CASE
-    WHEN o.plan_file_closure_week IS NULL THEN NULL
-    WHEN upper(btrim(cast(o.plan_file_closure_week AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL')
-      THEN NULL
-    ELSE nullif(btrim(cast(o.plan_file_closure_week AS text)), '')
-  END
-) IS NULL THEN NULL
-    WHEN regexp_replace((
-  CASE
-    WHEN o.plan_file_closure_week IS NULL THEN NULL
-    WHEN upper(btrim(cast(o.plan_file_closure_week AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL')
-      THEN NULL
-    ELSE nullif(btrim(cast(o.plan_file_closure_week AS text)), '')
-  END
-), ',', '', 'g') ~ '^-?\d+(\.\d+)?$'
-      THEN regexp_replace((
-  CASE
-    WHEN o.plan_file_closure_week IS NULL THEN NULL
-    WHEN upper(btrim(cast(o.plan_file_closure_week AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL')
-      THEN NULL
-    ELSE nullif(btrim(cast(o.plan_file_closure_week AS text)), '')
-  END
-), ',', '', 'g')::numeric
-    ELSE NULL
-  END
-)::int      AS plan_file_closure_week,
-  (
-  CASE
-    WHEN (
-  CASE
-    WHEN o.plan_reform_week IS NULL THEN NULL
-    WHEN upper(btrim(cast(o.plan_reform_week AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL')
-      THEN NULL
-    ELSE nullif(btrim(cast(o.plan_reform_week AS text)), '')
-  END
-) IS NULL THEN NULL
-    WHEN regexp_replace((
-  CASE
-    WHEN o.plan_reform_week IS NULL THEN NULL
-    WHEN upper(btrim(cast(o.plan_reform_week AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL')
-      THEN NULL
-    ELSE nullif(btrim(cast(o.plan_reform_week AS text)), '')
-  END
-), ',', '', 'g') ~ '^-?\d+(\.\d+)?$'
-      THEN regexp_replace((
-  CASE
-    WHEN o.plan_reform_week IS NULL THEN NULL
-    WHEN upper(btrim(cast(o.plan_reform_week AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL')
-      THEN NULL
-    ELSE nullif(btrim(cast(o.plan_reform_week AS text)), '')
-  END
-), ',', '', 'g')::numeric
-    ELSE NULL
-  END
-)::int            AS plan_reform_week,
-  (
-  CASE
-    WHEN (
-  CASE
-    WHEN o.file_signature_week IS NULL THEN NULL
-    WHEN upper(btrim(cast(o.file_signature_week AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL')
-      THEN NULL
-    ELSE nullif(btrim(cast(o.file_signature_week AS text)), '')
-  END
-) IS NULL THEN NULL
-    WHEN regexp_replace((
-  CASE
-    WHEN o.file_signature_week IS NULL THEN NULL
-    WHEN upper(btrim(cast(o.file_signature_week AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL')
-      THEN NULL
-    ELSE nullif(btrim(cast(o.file_signature_week AS text)), '')
-  END
-), ',', '', 'g') ~ '^-?\d+(\.\d+)?$'
-      THEN regexp_replace((
-  CASE
-    WHEN o.file_signature_week IS NULL THEN NULL
-    WHEN upper(btrim(cast(o.file_signature_week AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL')
-      THEN NULL
-    ELSE nullif(btrim(cast(o.file_signature_week AS text)), '')
-  END
-), ',', '', 'g')::numeric
-    ELSE NULL
-  END
-)::int         AS file_signature_week,
-  (
-  CASE
-    WHEN (
-  CASE
-    WHEN o.reform_week IS NULL THEN NULL
-    WHEN upper(btrim(cast(o.reform_week AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL')
-      THEN NULL
-    ELSE nullif(btrim(cast(o.reform_week AS text)), '')
-  END
-) IS NULL THEN NULL
-    WHEN regexp_replace((
-  CASE
-    WHEN o.reform_week IS NULL THEN NULL
-    WHEN upper(btrim(cast(o.reform_week AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL')
-      THEN NULL
-    ELSE nullif(btrim(cast(o.reform_week AS text)), '')
-  END
-), ',', '', 'g') ~ '^-?\d+(\.\d+)?$'
-      THEN regexp_replace((
-  CASE
-    WHEN o.reform_week IS NULL THEN NULL
-    WHEN upper(btrim(cast(o.reform_week AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL')
-      THEN NULL
-    ELSE nullif(btrim(cast(o.reform_week AS text)), '')
-  END
-), ',', '', 'g')::numeric
-    ELSE NULL
-  END
-)::int                 AS reform_week,
-  (
-  CASE
-    WHEN (
-  CASE
-    WHEN o.last_update_week IS NULL THEN NULL
-    WHEN upper(btrim(cast(o.last_update_week AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL')
-      THEN NULL
-    ELSE nullif(btrim(cast(o.last_update_week AS text)), '')
-  END
-) IS NULL THEN NULL
-    WHEN regexp_replace((
-  CASE
-    WHEN o.last_update_week IS NULL THEN NULL
-    WHEN upper(btrim(cast(o.last_update_week AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL')
-      THEN NULL
-    ELSE nullif(btrim(cast(o.last_update_week AS text)), '')
-  END
-), ',', '', 'g') ~ '^-?\d+(\.\d+)?$'
-      THEN regexp_replace((
-  CASE
-    WHEN o.last_update_week IS NULL THEN NULL
-    WHEN upper(btrim(cast(o.last_update_week AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL')
-      THEN NULL
-    ELSE nullif(btrim(cast(o.last_update_week AS text)), '')
-  END
-), ',', '', 'g')::numeric
-    ELSE NULL
-  END
-)::int            AS last_update_week,
+  (CASE WHEN (CASE WHEN o.change_submit_week IS NULL THEN NULL WHEN upper(btrim(cast(o.change_submit_week AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL') THEN NULL ELSE nullif(btrim(cast(o.change_submit_week AS text)), '') END) IS NULL THEN NULL WHEN regexp_replace((CASE WHEN o.change_submit_week IS NULL THEN NULL WHEN upper(btrim(cast(o.change_submit_week AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL') THEN NULL ELSE nullif(btrim(cast(o.change_submit_week AS text)), '') END), ',', '', 'g') ~ '^-?\d+(\.\d+)?$' THEN regexp_replace((CASE WHEN o.change_submit_week IS NULL THEN NULL WHEN upper(btrim(cast(o.change_submit_week AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL') THEN NULL ELSE nullif(btrim(cast(o.change_submit_week AS text)), '') END), ',', '', 'g')::numeric ELSE NULL END)::int          AS change_submit_week,
+  (CASE WHEN (CASE WHEN o.signature_closure_week IS NULL THEN NULL WHEN upper(btrim(cast(o.signature_closure_week AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL') THEN NULL ELSE nullif(btrim(cast(o.signature_closure_week AS text)), '') END) IS NULL THEN NULL WHEN regexp_replace((CASE WHEN o.signature_closure_week IS NULL THEN NULL WHEN upper(btrim(cast(o.signature_closure_week AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL') THEN NULL ELSE nullif(btrim(cast(o.signature_closure_week AS text)), '') END), ',', '', 'g') ~ '^-?\d+(\.\d+)?$' THEN regexp_replace((CASE WHEN o.signature_closure_week IS NULL THEN NULL WHEN upper(btrim(cast(o.signature_closure_week AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL') THEN NULL ELSE nullif(btrim(cast(o.signature_closure_week AS text)), '') END), ',', '', 'g')::numeric ELSE NULL END)::int      AS signature_closure_week,
+  (CASE WHEN (CASE WHEN o.plan_file_closure_week IS NULL THEN NULL WHEN upper(btrim(cast(o.plan_file_closure_week AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL') THEN NULL ELSE nullif(btrim(cast(o.plan_file_closure_week AS text)), '') END) IS NULL THEN NULL WHEN regexp_replace((CASE WHEN o.plan_file_closure_week IS NULL THEN NULL WHEN upper(btrim(cast(o.plan_file_closure_week AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL') THEN NULL ELSE nullif(btrim(cast(o.plan_file_closure_week AS text)), '') END), ',', '', 'g') ~ '^-?\d+(\.\d+)?$' THEN regexp_replace((CASE WHEN o.plan_file_closure_week IS NULL THEN NULL WHEN upper(btrim(cast(o.plan_file_closure_week AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL') THEN NULL ELSE nullif(btrim(cast(o.plan_file_closure_week AS text)), '') END), ',', '', 'g')::numeric ELSE NULL END)::int      AS plan_file_closure_week,
+  (CASE WHEN (CASE WHEN o.plan_reform_week IS NULL THEN NULL WHEN upper(btrim(cast(o.plan_reform_week AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL') THEN NULL ELSE nullif(btrim(cast(o.plan_reform_week AS text)), '') END) IS NULL THEN NULL WHEN regexp_replace((CASE WHEN o.plan_reform_week IS NULL THEN NULL WHEN upper(btrim(cast(o.plan_reform_week AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL') THEN NULL ELSE nullif(btrim(cast(o.plan_reform_week AS text)), '') END), ',', '', 'g') ~ '^-?\d+(\.\d+)?$' THEN regexp_replace((CASE WHEN o.plan_reform_week IS NULL THEN NULL WHEN upper(btrim(cast(o.plan_reform_week AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL') THEN NULL ELSE nullif(btrim(cast(o.plan_reform_week AS text)), '') END), ',', '', 'g')::numeric ELSE NULL END)::int            AS plan_reform_week,
+  (CASE WHEN (CASE WHEN o.file_signature_week IS NULL THEN NULL WHEN upper(btrim(cast(o.file_signature_week AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL') THEN NULL ELSE nullif(btrim(cast(o.file_signature_week AS text)), '') END) IS NULL THEN NULL WHEN regexp_replace((CASE WHEN o.file_signature_week IS NULL THEN NULL WHEN upper(btrim(cast(o.file_signature_week AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL') THEN NULL ELSE nullif(btrim(cast(o.file_signature_week AS text)), '') END), ',', '', 'g') ~ '^-?\d+(\.\d+)?$' THEN regexp_replace((CASE WHEN o.file_signature_week IS NULL THEN NULL WHEN upper(btrim(cast(o.file_signature_week AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL') THEN NULL ELSE nullif(btrim(cast(o.file_signature_week AS text)), '') END), ',', '', 'g')::numeric ELSE NULL END)::int         AS file_signature_week,
+  (CASE WHEN (CASE WHEN o.reform_week IS NULL THEN NULL WHEN upper(btrim(cast(o.reform_week AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL') THEN NULL ELSE nullif(btrim(cast(o.reform_week AS text)), '') END) IS NULL THEN NULL WHEN regexp_replace((CASE WHEN o.reform_week IS NULL THEN NULL WHEN upper(btrim(cast(o.reform_week AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL') THEN NULL ELSE nullif(btrim(cast(o.reform_week AS text)), '') END), ',', '', 'g') ~ '^-?\d+(\.\d+)?$' THEN regexp_replace((CASE WHEN o.reform_week IS NULL THEN NULL WHEN upper(btrim(cast(o.reform_week AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL') THEN NULL ELSE nullif(btrim(cast(o.reform_week AS text)), '') END), ',', '', 'g')::numeric ELSE NULL END)::int                 AS reform_week,
+  (CASE WHEN (CASE WHEN o.last_update_week IS NULL THEN NULL WHEN upper(btrim(cast(o.last_update_week AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL') THEN NULL ELSE nullif(btrim(cast(o.last_update_week AS text)), '') END) IS NULL THEN NULL WHEN regexp_replace((CASE WHEN o.last_update_week IS NULL THEN NULL WHEN upper(btrim(cast(o.last_update_week AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL') THEN NULL ELSE nullif(btrim(cast(o.last_update_week AS text)), '') END), ',', '', 'g') ~ '^-?\d+(\.\d+)?$' THEN regexp_replace((CASE WHEN o.last_update_week IS NULL THEN NULL WHEN upper(btrim(cast(o.last_update_week AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL') THEN NULL ELSE nullif(btrim(cast(o.last_update_week AS text)), '') END), ',', '', 'g')::numeric ELSE NULL END)::int            AS last_update_week,
 
   -- === 签署完成标志 ===
   CASE
-    WHEN btrim(COALESCE((
-  CASE
-    WHEN o.completion_signature IS NULL THEN NULL
-    WHEN upper(btrim(cast(o.completion_signature AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL')
-      THEN NULL
-    ELSE nullif(btrim(cast(o.completion_signature AS text)), '')
-  END
-), '')) = '是' THEN true
+    WHEN btrim(COALESCE((CASE WHEN o.completion_signature IS NULL THEN NULL WHEN upper(btrim(cast(o.completion_signature AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL') THEN NULL ELSE nullif(btrim(cast(o.completion_signature AS text)), '') END), '')) = '是' THEN true
     ELSE false
   END AS is_signature_completed,
 
   -- === 文件签署完成标志 ===
   CASE
-    WHEN btrim(COALESCE((
-  CASE
-    WHEN o.file_signature_status IS NULL THEN NULL
-    WHEN upper(btrim(cast(o.file_signature_status AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL')
-      THEN NULL
-    ELSE nullif(btrim(cast(o.file_signature_status AS text)), '')
-  END
-), '')) = '已完成' THEN true
+    WHEN btrim(COALESCE((CASE WHEN o.file_signature_status IS NULL THEN NULL WHEN upper(btrim(cast(o.file_signature_status AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL') THEN NULL ELSE nullif(btrim(cast(o.file_signature_status AS text)), '') END), '')) = '已完成' THEN true
     ELSE false
   END AS is_file_signed,
 
   -- === 整改落实完成标志 ===
   CASE
-    WHEN btrim(COALESCE((
-  CASE
-    WHEN o.reform_status IS NULL THEN NULL
-    WHEN upper(btrim(cast(o.reform_status AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL')
-      THEN NULL
-    ELSE nullif(btrim(cast(o.reform_status AS text)), '')
-  END
-), '')) = '已完成' THEN true
+    WHEN btrim(COALESCE((CASE WHEN o.reform_status IS NULL THEN NULL WHEN upper(btrim(cast(o.reform_status AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL') THEN NULL ELSE nullif(btrim(cast(o.reform_status AS text)), '') END), '')) = '已完成' THEN true
     ELSE false
   END AS is_reformed,
 
@@ -2770,556 +616,59 @@ SELECT
   ) AS measure_id,
 
   -- === 技术状态主体字段 ===
-  (
-  CASE
-    WHEN o.project_no IS NULL THEN NULL
-    WHEN upper(btrim(cast(o.project_no AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL')
-      THEN NULL
-    ELSE nullif(btrim(cast(o.project_no AS text)), '')
-  END
-)               AS project_no,
-  (
-  CASE
-    WHEN o.tech_state_name IS NULL THEN NULL
-    WHEN upper(btrim(cast(o.tech_state_name AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL')
-      THEN NULL
-    ELSE nullif(btrim(cast(o.tech_state_name AS text)), '')
-  END
-)          AS tech_state_name,
-  (
-  CASE
-    WHEN o.change_item IS NULL THEN NULL
-    WHEN upper(btrim(cast(o.change_item AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL')
-      THEN NULL
-    ELSE nullif(btrim(cast(o.change_item AS text)), '')
-  END
-)              AS change_item,
-  (
-  CASE
-    WHEN o.owner IS NULL THEN NULL
-    WHEN upper(btrim(cast(o.owner AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL')
-      THEN NULL
-    ELSE nullif(btrim(cast(o.owner AS text)), '')
-  END
-)                    AS owner,
-  (
-  CASE
-    WHEN o.dept IS NULL THEN NULL
-    WHEN upper(btrim(cast(o.dept AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL')
-      THEN NULL
-    ELSE nullif(btrim(cast(o.dept AS text)), '')
-  END
-)                     AS dept,
-  (
-  CASE
-    WHEN o.dept_leader IS NULL THEN NULL
-    WHEN upper(btrim(cast(o.dept_leader AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL')
-      THEN NULL
-    ELSE nullif(btrim(cast(o.dept_leader AS text)), '')
-  END
-)              AS dept_leader,
-  (
-  CASE
-    WHEN o.completion_signature IS NULL THEN NULL
-    WHEN upper(btrim(cast(o.completion_signature AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL')
-      THEN NULL
-    ELSE nullif(btrim(cast(o.completion_signature AS text)), '')
-  END
-)     AS completion_signature,
-  (
-  CASE
-    WHEN o.change_reason IS NULL THEN NULL
-    WHEN upper(btrim(cast(o.change_reason AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL')
-      THEN NULL
-    ELSE nullif(btrim(cast(o.change_reason AS text)), '')
-  END
-)            AS change_reason,
-  (
-  CASE
-    WHEN o.change_category IS NULL THEN NULL
-    WHEN upper(btrim(cast(o.change_category AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL')
-      THEN NULL
-    ELSE nullif(btrim(cast(o.change_category AS text)), '')
-  END
-)          AS change_category,
-  (
-  CASE
-    WHEN o.plan_synced IS NULL THEN NULL
-    WHEN upper(btrim(cast(o.plan_synced AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL')
-      THEN NULL
-    ELSE nullif(btrim(cast(o.plan_synced AS text)), '')
-  END
-)              AS plan_synced,
-  (
-  CASE
-    WHEN o.affected_files IS NULL THEN NULL
-    WHEN upper(btrim(cast(o.affected_files AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL')
-      THEN NULL
-    ELSE nullif(btrim(cast(o.affected_files AS text)), '')
-  END
-)           AS affected_files,
-  (
-  CASE
-    WHEN o.affected_objects IS NULL THEN NULL
-    WHEN upper(btrim(cast(o.affected_objects AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL')
-      THEN NULL
-    ELSE nullif(btrim(cast(o.affected_objects AS text)), '')
-  END
-)         AS affected_objects,
-  (
-  CASE
-    WHEN o.file_signature_status IS NULL THEN NULL
-    WHEN upper(btrim(cast(o.file_signature_status AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL')
-      THEN NULL
-    ELSE nullif(btrim(cast(o.file_signature_status AS text)), '')
-  END
-)    AS file_signature_status,
-  (
-  CASE
-    WHEN o.reform_status IS NULL THEN NULL
-    WHEN upper(btrim(cast(o.reform_status AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL')
-      THEN NULL
-    ELSE nullif(btrim(cast(o.reform_status AS text)), '')
-  END
-)            AS reform_status,
-  (
-  CASE
-    WHEN o.project_manager IS NULL THEN NULL
-    WHEN upper(btrim(cast(o.project_manager AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL')
-      THEN NULL
-    ELSE nullif(btrim(cast(o.project_manager AS text)), '')
-  END
-)          AS project_manager,
+  (CASE WHEN o.project_no IS NULL THEN NULL WHEN upper(btrim(cast(o.project_no AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL') THEN NULL ELSE nullif(btrim(cast(o.project_no AS text)), '') END)               AS project_no,
+  (CASE WHEN o.tech_state_name IS NULL THEN NULL WHEN upper(btrim(cast(o.tech_state_name AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL') THEN NULL ELSE nullif(btrim(cast(o.tech_state_name AS text)), '') END)          AS tech_state_name,
+  (CASE WHEN o.change_item IS NULL THEN NULL WHEN upper(btrim(cast(o.change_item AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL') THEN NULL ELSE nullif(btrim(cast(o.change_item AS text)), '') END)              AS change_item,
+  (CASE WHEN o.owner IS NULL THEN NULL WHEN upper(btrim(cast(o.owner AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL') THEN NULL ELSE nullif(btrim(cast(o.owner AS text)), '') END)                    AS owner,
+  (CASE WHEN o.dept IS NULL THEN NULL WHEN upper(btrim(cast(o.dept AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL') THEN NULL ELSE nullif(btrim(cast(o.dept AS text)), '') END)                     AS dept,
+  (CASE WHEN o.dept_leader IS NULL THEN NULL WHEN upper(btrim(cast(o.dept_leader AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL') THEN NULL ELSE nullif(btrim(cast(o.dept_leader AS text)), '') END)              AS dept_leader,
+  (CASE WHEN o.completion_signature IS NULL THEN NULL WHEN upper(btrim(cast(o.completion_signature AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL') THEN NULL ELSE nullif(btrim(cast(o.completion_signature AS text)), '') END)     AS completion_signature,
+  (CASE WHEN o.change_reason IS NULL THEN NULL WHEN upper(btrim(cast(o.change_reason AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL') THEN NULL ELSE nullif(btrim(cast(o.change_reason AS text)), '') END)            AS change_reason,
+  (CASE WHEN o.change_category IS NULL THEN NULL WHEN upper(btrim(cast(o.change_category AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL') THEN NULL ELSE nullif(btrim(cast(o.change_category AS text)), '') END)          AS change_category,
+  (CASE WHEN o.plan_synced IS NULL THEN NULL WHEN upper(btrim(cast(o.plan_synced AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL') THEN NULL ELSE nullif(btrim(cast(o.plan_synced AS text)), '') END)              AS plan_synced,
+  (CASE WHEN o.affected_files IS NULL THEN NULL WHEN upper(btrim(cast(o.affected_files AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL') THEN NULL ELSE nullif(btrim(cast(o.affected_files AS text)), '') END)           AS affected_files,
+  (CASE WHEN o.affected_objects IS NULL THEN NULL WHEN upper(btrim(cast(o.affected_objects AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL') THEN NULL ELSE nullif(btrim(cast(o.affected_objects AS text)), '') END)         AS affected_objects,
+  (CASE WHEN o.file_signature_status IS NULL THEN NULL WHEN upper(btrim(cast(o.file_signature_status AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL') THEN NULL ELSE nullif(btrim(cast(o.file_signature_status AS text)), '') END)    AS file_signature_status,
+  (CASE WHEN o.reform_status IS NULL THEN NULL WHEN upper(btrim(cast(o.reform_status AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL') THEN NULL ELSE nullif(btrim(cast(o.reform_status AS text)), '') END)            AS reform_status,
+  (CASE WHEN o.project_manager IS NULL THEN NULL WHEN upper(btrim(cast(o.project_manager AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL') THEN NULL ELSE nullif(btrim(cast(o.project_manager AS text)), '') END)          AS project_manager,
 
   -- === 跟进措施字段 ===
-  (
-  CASE
-    WHEN o.measure_category IS NULL THEN NULL
-    WHEN upper(btrim(cast(o.measure_category AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL')
-      THEN NULL
-    ELSE nullif(btrim(cast(o.measure_category AS text)), '')
-  END
-)         AS measure_category,
-  (
-  CASE
-    WHEN o.measure_title IS NULL THEN NULL
-    WHEN upper(btrim(cast(o.measure_title AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL')
-      THEN NULL
-    ELSE nullif(btrim(cast(o.measure_title AS text)), '')
-  END
-)            AS measure_title,
-  (
-  CASE
-    WHEN o.follow_up_person IS NULL THEN NULL
-    WHEN upper(btrim(cast(o.follow_up_person AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL')
-      THEN NULL
-    ELSE nullif(btrim(cast(o.follow_up_person AS text)), '')
-  END
-)         AS follow_up_person,
-  (
-  CASE
-    WHEN o.main_recipient IS NULL THEN NULL
-    WHEN upper(btrim(cast(o.main_recipient AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL')
-      THEN NULL
-    ELSE nullif(btrim(cast(o.main_recipient AS text)), '')
-  END
-)           AS main_recipient,
-  (
-  CASE
-    WHEN o.cc_recipient IS NULL THEN NULL
-    WHEN upper(btrim(cast(o.cc_recipient AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL')
-      THEN NULL
-    ELSE nullif(btrim(cast(o.cc_recipient AS text)), '')
-  END
-)             AS cc_recipient,
-  (
-  CASE
-    WHEN o.closure_status IS NULL THEN NULL
-    WHEN upper(btrim(cast(o.closure_status AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL')
-      THEN NULL
-    ELSE nullif(btrim(cast(o.closure_status AS text)), '')
-  END
-)           AS closure_status,
-  (
-  CASE
-    WHEN o.closure_deliverable_type IS NULL THEN NULL
-    WHEN upper(btrim(cast(o.closure_deliverable_type AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL')
-      THEN NULL
-    ELSE nullif(btrim(cast(o.closure_deliverable_type AS text)), '')
-  END
-) AS closure_deliverable_type,
-  (
-  CASE
-    WHEN o.closure_deliverable IS NULL THEN NULL
-    WHEN upper(btrim(cast(o.closure_deliverable AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL')
-      THEN NULL
-    ELSE nullif(btrim(cast(o.closure_deliverable AS text)), '')
-  END
-)      AS closure_deliverable,
-  (
-  CASE
-    WHEN o.risk_content IS NULL THEN NULL
-    WHEN upper(btrim(cast(o.risk_content AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL')
-      THEN NULL
-    ELSE nullif(btrim(cast(o.risk_content AS text)), '')
-  END
-)             AS risk_content,
-  (
-  CASE
-    WHEN o.remark IS NULL THEN NULL
-    WHEN upper(btrim(cast(o.remark AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL')
-      THEN NULL
-    ELSE nullif(btrim(cast(o.remark AS text)), '')
-  END
-)                   AS remark,
-  (
-  CASE
-    WHEN o.filled_by IS NULL THEN NULL
-    WHEN upper(btrim(cast(o.filled_by AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL')
-      THEN NULL
-    ELSE nullif(btrim(cast(o.filled_by AS text)), '')
-  END
-)                AS filled_by,
+  (CASE WHEN o.measure_category IS NULL THEN NULL WHEN upper(btrim(cast(o.measure_category AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL') THEN NULL ELSE nullif(btrim(cast(o.measure_category AS text)), '') END)         AS measure_category,
+  (CASE WHEN o.measure_title IS NULL THEN NULL WHEN upper(btrim(cast(o.measure_title AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL') THEN NULL ELSE nullif(btrim(cast(o.measure_title AS text)), '') END)            AS measure_title,
+  (CASE WHEN o.follow_up_person IS NULL THEN NULL WHEN upper(btrim(cast(o.follow_up_person AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL') THEN NULL ELSE nullif(btrim(cast(o.follow_up_person AS text)), '') END)         AS follow_up_person,
+  (CASE WHEN o.main_recipient IS NULL THEN NULL WHEN upper(btrim(cast(o.main_recipient AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL') THEN NULL ELSE nullif(btrim(cast(o.main_recipient AS text)), '') END)           AS main_recipient,
+  (CASE WHEN o.cc_recipient IS NULL THEN NULL WHEN upper(btrim(cast(o.cc_recipient AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL') THEN NULL ELSE nullif(btrim(cast(o.cc_recipient AS text)), '') END)             AS cc_recipient,
+  (CASE WHEN o.closure_status IS NULL THEN NULL WHEN upper(btrim(cast(o.closure_status AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL') THEN NULL ELSE nullif(btrim(cast(o.closure_status AS text)), '') END)           AS closure_status,
+  (CASE WHEN o.closure_deliverable_type IS NULL THEN NULL WHEN upper(btrim(cast(o.closure_deliverable_type AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL') THEN NULL ELSE nullif(btrim(cast(o.closure_deliverable_type AS text)), '') END) AS closure_deliverable_type,
+  (CASE WHEN o.closure_deliverable IS NULL THEN NULL WHEN upper(btrim(cast(o.closure_deliverable AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL') THEN NULL ELSE nullif(btrim(cast(o.closure_deliverable AS text)), '') END)      AS closure_deliverable,
+  (CASE WHEN o.risk_content IS NULL THEN NULL WHEN upper(btrim(cast(o.risk_content AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL') THEN NULL ELSE nullif(btrim(cast(o.risk_content AS text)), '') END)             AS risk_content,
+  (CASE WHEN o.remark IS NULL THEN NULL WHEN upper(btrim(cast(o.remark AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL') THEN NULL ELSE nullif(btrim(cast(o.remark AS text)), '') END)                   AS remark,
+  (CASE WHEN o.filled_by IS NULL THEN NULL WHEN upper(btrim(cast(o.filled_by AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL') THEN NULL ELSE nullif(btrim(cast(o.filled_by AS text)), '') END)                AS filled_by,
 
   -- === 数值字段 ===
-  (
-  CASE
-    WHEN (
-  CASE
-    WHEN o.new_plan_count IS NULL THEN NULL
-    WHEN upper(btrim(cast(o.new_plan_count AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL')
-      THEN NULL
-    ELSE nullif(btrim(cast(o.new_plan_count AS text)), '')
-  END
-) IS NULL THEN NULL
-    WHEN regexp_replace((
-  CASE
-    WHEN o.new_plan_count IS NULL THEN NULL
-    WHEN upper(btrim(cast(o.new_plan_count AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL')
-      THEN NULL
-    ELSE nullif(btrim(cast(o.new_plan_count AS text)), '')
-  END
-), ',', '', 'g') ~ '^-?\d+(\.\d+)?$'
-      THEN regexp_replace((
-  CASE
-    WHEN o.new_plan_count IS NULL THEN NULL
-    WHEN upper(btrim(cast(o.new_plan_count AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL')
-      THEN NULL
-    ELSE nullif(btrim(cast(o.new_plan_count AS text)), '')
-  END
-), ',', '', 'g')::numeric
-    ELSE NULL
-  END
-)::int      AS new_plan_count,
+  (CASE WHEN (CASE WHEN o.new_plan_count IS NULL THEN NULL WHEN upper(btrim(cast(o.new_plan_count AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL') THEN NULL ELSE nullif(btrim(cast(o.new_plan_count AS text)), '') END) IS NULL THEN NULL WHEN regexp_replace((CASE WHEN o.new_plan_count IS NULL THEN NULL WHEN upper(btrim(cast(o.new_plan_count AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL') THEN NULL ELSE nullif(btrim(cast(o.new_plan_count AS text)), '') END), ',', '', 'g') ~ '^-?\d+(\.\d+)?$' THEN regexp_replace((CASE WHEN o.new_plan_count IS NULL THEN NULL WHEN upper(btrim(cast(o.new_plan_count AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL') THEN NULL ELSE nullif(btrim(cast(o.new_plan_count AS text)), '') END), ',', '', 'g')::numeric ELSE NULL END)::int      AS new_plan_count,
 
   -- === 日期解析 ===
-  (
-  CASE
-    WHEN o.change_submit_time IS NULL THEN NULL
-    WHEN btrim(cast(o.change_submit_time AS text)) = '' THEN NULL
-    WHEN btrim(cast(o.change_submit_time AS text)) ~ '^\d{4}-\d{2}-\d{2}$'
-      THEN to_date(btrim(cast(o.change_submit_time AS text)), 'YYYY-MM-DD')
-    WHEN btrim(cast(o.change_submit_time AS text)) ~ '^\d{4}-\d{2}-\d{2}\s+.*$'
-      THEN to_date(substr(btrim(cast(o.change_submit_time AS text)), 1, 10), 'YYYY-MM-DD')
-    WHEN btrim(cast(o.change_submit_time AS text)) ~ '^\d{4}/\d{2}/\d{2}$'
-      THEN to_date(replace(btrim(cast(o.change_submit_time AS text)), '/', '-'), 'YYYY-MM-DD')
-    ELSE NULL
-  END
-)          AS change_submit_time,
-  (
-  CASE
-    WHEN o.signature_closure_date IS NULL THEN NULL
-    WHEN btrim(cast(o.signature_closure_date AS text)) = '' THEN NULL
-    WHEN btrim(cast(o.signature_closure_date AS text)) ~ '^\d{4}-\d{2}-\d{2}$'
-      THEN to_date(btrim(cast(o.signature_closure_date AS text)), 'YYYY-MM-DD')
-    WHEN btrim(cast(o.signature_closure_date AS text)) ~ '^\d{4}-\d{2}-\d{2}\s+.*$'
-      THEN to_date(substr(btrim(cast(o.signature_closure_date AS text)), 1, 10), 'YYYY-MM-DD')
-    WHEN btrim(cast(o.signature_closure_date AS text)) ~ '^\d{4}/\d{2}/\d{2}$'
-      THEN to_date(replace(btrim(cast(o.signature_closure_date AS text)), '/', '-'), 'YYYY-MM-DD')
-    ELSE NULL
-  END
-)      AS signature_closure_date,
-  (
-  CASE
-    WHEN o.plan_file_closure_date IS NULL THEN NULL
-    WHEN btrim(cast(o.plan_file_closure_date AS text)) = '' THEN NULL
-    WHEN btrim(cast(o.plan_file_closure_date AS text)) ~ '^\d{4}-\d{2}-\d{2}$'
-      THEN to_date(btrim(cast(o.plan_file_closure_date AS text)), 'YYYY-MM-DD')
-    WHEN btrim(cast(o.plan_file_closure_date AS text)) ~ '^\d{4}-\d{2}-\d{2}\s+.*$'
-      THEN to_date(substr(btrim(cast(o.plan_file_closure_date AS text)), 1, 10), 'YYYY-MM-DD')
-    WHEN btrim(cast(o.plan_file_closure_date AS text)) ~ '^\d{4}/\d{2}/\d{2}$'
-      THEN to_date(replace(btrim(cast(o.plan_file_closure_date AS text)), '/', '-'), 'YYYY-MM-DD')
-    ELSE NULL
-  END
-)      AS plan_file_closure_date,
-  (
-  CASE
-    WHEN o.plan_reform_date IS NULL THEN NULL
-    WHEN btrim(cast(o.plan_reform_date AS text)) = '' THEN NULL
-    WHEN btrim(cast(o.plan_reform_date AS text)) ~ '^\d{4}-\d{2}-\d{2}$'
-      THEN to_date(btrim(cast(o.plan_reform_date AS text)), 'YYYY-MM-DD')
-    WHEN btrim(cast(o.plan_reform_date AS text)) ~ '^\d{4}-\d{2}-\d{2}\s+.*$'
-      THEN to_date(substr(btrim(cast(o.plan_reform_date AS text)), 1, 10), 'YYYY-MM-DD')
-    WHEN btrim(cast(o.plan_reform_date AS text)) ~ '^\d{4}/\d{2}/\d{2}$'
-      THEN to_date(replace(btrim(cast(o.plan_reform_date AS text)), '/', '-'), 'YYYY-MM-DD')
-    ELSE NULL
-  END
-)            AS plan_reform_date,
-  (
-  CASE
-    WHEN o.follow_up_date IS NULL THEN NULL
-    WHEN btrim(cast(o.follow_up_date AS text)) = '' THEN NULL
-    WHEN btrim(cast(o.follow_up_date AS text)) ~ '^\d{4}-\d{2}-\d{2}$'
-      THEN to_date(btrim(cast(o.follow_up_date AS text)), 'YYYY-MM-DD')
-    WHEN btrim(cast(o.follow_up_date AS text)) ~ '^\d{4}-\d{2}-\d{2}\s+.*$'
-      THEN to_date(substr(btrim(cast(o.follow_up_date AS text)), 1, 10), 'YYYY-MM-DD')
-    WHEN btrim(cast(o.follow_up_date AS text)) ~ '^\d{4}/\d{2}/\d{2}$'
-      THEN to_date(replace(btrim(cast(o.follow_up_date AS text)), '/', '-'), 'YYYY-MM-DD')
-    ELSE NULL
-  END
-)              AS follow_up_date,
-  (
-  CASE
-    WHEN o.final_closure_date IS NULL THEN NULL
-    WHEN btrim(cast(o.final_closure_date AS text)) = '' THEN NULL
-    WHEN btrim(cast(o.final_closure_date AS text)) ~ '^\d{4}-\d{2}-\d{2}$'
-      THEN to_date(btrim(cast(o.final_closure_date AS text)), 'YYYY-MM-DD')
-    WHEN btrim(cast(o.final_closure_date AS text)) ~ '^\d{4}-\d{2}-\d{2}\s+.*$'
-      THEN to_date(substr(btrim(cast(o.final_closure_date AS text)), 1, 10), 'YYYY-MM-DD')
-    WHEN btrim(cast(o.final_closure_date AS text)) ~ '^\d{4}/\d{2}/\d{2}$'
-      THEN to_date(replace(btrim(cast(o.final_closure_date AS text)), '/', '-'), 'YYYY-MM-DD')
-    ELSE NULL
-  END
-)          AS final_closure_date,
-  (
-  CASE
-    WHEN o.last_update_time IS NULL THEN NULL
-    WHEN btrim(cast(o.last_update_time AS text)) = '' THEN NULL
-    WHEN btrim(cast(o.last_update_time AS text)) ~ '^\d{4}-\d{2}-\d{2}$'
-      THEN to_date(btrim(cast(o.last_update_time AS text)), 'YYYY-MM-DD')
-    WHEN btrim(cast(o.last_update_time AS text)) ~ '^\d{4}-\d{2}-\d{2}\s+.*$'
-      THEN to_date(substr(btrim(cast(o.last_update_time AS text)), 1, 10), 'YYYY-MM-DD')
-    WHEN btrim(cast(o.last_update_time AS text)) ~ '^\d{4}/\d{2}/\d{2}$'
-      THEN to_date(replace(btrim(cast(o.last_update_time AS text)), '/', '-'), 'YYYY-MM-DD')
-    ELSE NULL
-  END
-)            AS last_update_time,
+  (CASE WHEN o.change_submit_time IS NULL THEN NULL WHEN btrim(cast(o.change_submit_time AS text)) = '' THEN NULL WHEN btrim(cast(o.change_submit_time AS text)) ~ '^\d{4}-\d{2}-\d{2}$' THEN to_date(btrim(cast(o.change_submit_time AS text)), 'YYYY-MM-DD') WHEN btrim(cast(o.change_submit_time AS text)) ~ '^\d{4}/\d{2}/\d{2}$' THEN to_date(replace(btrim(cast(o.change_submit_time AS text)), '/', '-'), 'YYYY-MM-DD') ELSE NULL END)          AS change_submit_time,
+  (CASE WHEN o.signature_closure_date IS NULL THEN NULL WHEN btrim(cast(o.signature_closure_date AS text)) = '' THEN NULL WHEN btrim(cast(o.signature_closure_date AS text)) ~ '^\d{4}-\d{2}-\d{2}$' THEN to_date(btrim(cast(o.signature_closure_date AS text)), 'YYYY-MM-DD') WHEN btrim(cast(o.signature_closure_date AS text)) ~ '^\d{4}/\d{2}/\d{2}$' THEN to_date(replace(btrim(cast(o.signature_closure_date AS text)), '/', '-'), 'YYYY-MM-DD') ELSE NULL END)      AS signature_closure_date,
+  (CASE WHEN o.plan_file_closure_date IS NULL THEN NULL WHEN btrim(cast(o.plan_file_closure_date AS text)) = '' THEN NULL WHEN btrim(cast(o.plan_file_closure_date AS text)) ~ '^\d{4}-\d{2}-\d{2}$' THEN to_date(btrim(cast(o.plan_file_closure_date AS text)), 'YYYY-MM-DD') WHEN btrim(cast(o.plan_file_closure_date AS text)) ~ '^\d{4}/\d{2}/\d{2}$' THEN to_date(replace(btrim(cast(o.plan_file_closure_date AS text)), '/', '-'), 'YYYY-MM-DD') ELSE NULL END)      AS plan_file_closure_date,
+  (CASE WHEN o.plan_reform_date IS NULL THEN NULL WHEN btrim(cast(o.plan_reform_date AS text)) = '' THEN NULL WHEN btrim(cast(o.plan_reform_date AS text)) ~ '^\d{4}-\d{2}-\d{2}$' THEN to_date(btrim(cast(o.plan_reform_date AS text)), 'YYYY-MM-DD') WHEN btrim(cast(o.plan_reform_date AS text)) ~ '^\d{4}/\d{2}/\d{2}$' THEN to_date(replace(btrim(cast(o.plan_reform_date AS text)), '/', '-'), 'YYYY-MM-DD') ELSE NULL END)            AS plan_reform_date,
+  (CASE WHEN o.follow_up_date IS NULL THEN NULL WHEN btrim(cast(o.follow_up_date AS text)) = '' THEN NULL WHEN btrim(cast(o.follow_up_date AS text)) ~ '^\d{4}-\d{2}-\d{2}$' THEN to_date(btrim(cast(o.follow_up_date AS text)), 'YYYY-MM-DD') WHEN btrim(cast(o.follow_up_date AS text)) ~ '^\d{4}/\d{2}/\d{2}$' THEN to_date(replace(btrim(cast(o.follow_up_date AS text)), '/', '-'), 'YYYY-MM-DD') ELSE NULL END)              AS follow_up_date,
+  (CASE WHEN o.final_closure_date IS NULL THEN NULL WHEN btrim(cast(o.final_closure_date AS text)) = '' THEN NULL WHEN btrim(cast(o.final_closure_date AS text)) ~ '^\d{4}-\d{2}-\d{2}$' THEN to_date(btrim(cast(o.final_closure_date AS text)), 'YYYY-MM-DD') WHEN btrim(cast(o.final_closure_date AS text)) ~ '^\d{4}/\d{2}/\d{2}$' THEN to_date(replace(btrim(cast(o.final_closure_date AS text)), '/', '-'), 'YYYY-MM-DD') ELSE NULL END)          AS final_closure_date,
+  (CASE WHEN o.last_update_time IS NULL THEN NULL WHEN btrim(cast(o.last_update_time AS text)) = '' THEN NULL WHEN btrim(cast(o.last_update_time AS text)) ~ '^\d{4}-\d{2}-\d{2}$' THEN to_date(btrim(cast(o.last_update_time AS text)), 'YYYY-MM-DD') WHEN btrim(cast(o.last_update_time AS text)) ~ '^\d{4}/\d{2}/\d{2}$' THEN to_date(replace(btrim(cast(o.last_update_time AS text)), '/', '-'), 'YYYY-MM-DD') ELSE NULL END)            AS last_update_time,
 
   -- === 周数字段 ===
-  (
-  CASE
-    WHEN (
-  CASE
-    WHEN o.change_submit_week IS NULL THEN NULL
-    WHEN upper(btrim(cast(o.change_submit_week AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL')
-      THEN NULL
-    ELSE nullif(btrim(cast(o.change_submit_week AS text)), '')
-  END
-) IS NULL THEN NULL
-    WHEN regexp_replace((
-  CASE
-    WHEN o.change_submit_week IS NULL THEN NULL
-    WHEN upper(btrim(cast(o.change_submit_week AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL')
-      THEN NULL
-    ELSE nullif(btrim(cast(o.change_submit_week AS text)), '')
-  END
-), ',', '', 'g') ~ '^-?\d+(\.\d+)?$'
-      THEN regexp_replace((
-  CASE
-    WHEN o.change_submit_week IS NULL THEN NULL
-    WHEN upper(btrim(cast(o.change_submit_week AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL')
-      THEN NULL
-    ELSE nullif(btrim(cast(o.change_submit_week AS text)), '')
-  END
-), ',', '', 'g')::numeric
-    ELSE NULL
-  END
-)::int          AS change_submit_week,
-  (
-  CASE
-    WHEN (
-  CASE
-    WHEN o.signature_closure_week IS NULL THEN NULL
-    WHEN upper(btrim(cast(o.signature_closure_week AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL')
-      THEN NULL
-    ELSE nullif(btrim(cast(o.signature_closure_week AS text)), '')
-  END
-) IS NULL THEN NULL
-    WHEN regexp_replace((
-  CASE
-    WHEN o.signature_closure_week IS NULL THEN NULL
-    WHEN upper(btrim(cast(o.signature_closure_week AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL')
-      THEN NULL
-    ELSE nullif(btrim(cast(o.signature_closure_week AS text)), '')
-  END
-), ',', '', 'g') ~ '^-?\d+(\.\d+)?$'
-      THEN regexp_replace((
-  CASE
-    WHEN o.signature_closure_week IS NULL THEN NULL
-    WHEN upper(btrim(cast(o.signature_closure_week AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL')
-      THEN NULL
-    ELSE nullif(btrim(cast(o.signature_closure_week AS text)), '')
-  END
-), ',', '', 'g')::numeric
-    ELSE NULL
-  END
-)::int      AS signature_closure_week,
-  (
-  CASE
-    WHEN (
-  CASE
-    WHEN o.plan_file_closure_week IS NULL THEN NULL
-    WHEN upper(btrim(cast(o.plan_file_closure_week AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL')
-      THEN NULL
-    ELSE nullif(btrim(cast(o.plan_file_closure_week AS text)), '')
-  END
-) IS NULL THEN NULL
-    WHEN regexp_replace((
-  CASE
-    WHEN o.plan_file_closure_week IS NULL THEN NULL
-    WHEN upper(btrim(cast(o.plan_file_closure_week AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL')
-      THEN NULL
-    ELSE nullif(btrim(cast(o.plan_file_closure_week AS text)), '')
-  END
-), ',', '', 'g') ~ '^-?\d+(\.\d+)?$'
-      THEN regexp_replace((
-  CASE
-    WHEN o.plan_file_closure_week IS NULL THEN NULL
-    WHEN upper(btrim(cast(o.plan_file_closure_week AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL')
-      THEN NULL
-    ELSE nullif(btrim(cast(o.plan_file_closure_week AS text)), '')
-  END
-), ',', '', 'g')::numeric
-    ELSE NULL
-  END
-)::int      AS plan_file_closure_week,
-  (
-  CASE
-    WHEN (
-  CASE
-    WHEN o.plan_reform_week IS NULL THEN NULL
-    WHEN upper(btrim(cast(o.plan_reform_week AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL')
-      THEN NULL
-    ELSE nullif(btrim(cast(o.plan_reform_week AS text)), '')
-  END
-) IS NULL THEN NULL
-    WHEN regexp_replace((
-  CASE
-    WHEN o.plan_reform_week IS NULL THEN NULL
-    WHEN upper(btrim(cast(o.plan_reform_week AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL')
-      THEN NULL
-    ELSE nullif(btrim(cast(o.plan_reform_week AS text)), '')
-  END
-), ',', '', 'g') ~ '^-?\d+(\.\d+)?$'
-      THEN regexp_replace((
-  CASE
-    WHEN o.plan_reform_week IS NULL THEN NULL
-    WHEN upper(btrim(cast(o.plan_reform_week AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL')
-      THEN NULL
-    ELSE nullif(btrim(cast(o.plan_reform_week AS text)), '')
-  END
-), ',', '', 'g')::numeric
-    ELSE NULL
-  END
-)::int            AS plan_reform_week,
-  (
-  CASE
-    WHEN (
-  CASE
-    WHEN o.follow_up_week IS NULL THEN NULL
-    WHEN upper(btrim(cast(o.follow_up_week AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL')
-      THEN NULL
-    ELSE nullif(btrim(cast(o.follow_up_week AS text)), '')
-  END
-) IS NULL THEN NULL
-    WHEN regexp_replace((
-  CASE
-    WHEN o.follow_up_week IS NULL THEN NULL
-    WHEN upper(btrim(cast(o.follow_up_week AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL')
-      THEN NULL
-    ELSE nullif(btrim(cast(o.follow_up_week AS text)), '')
-  END
-), ',', '', 'g') ~ '^-?\d+(\.\d+)?$'
-      THEN regexp_replace((
-  CASE
-    WHEN o.follow_up_week IS NULL THEN NULL
-    WHEN upper(btrim(cast(o.follow_up_week AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL')
-      THEN NULL
-    ELSE nullif(btrim(cast(o.follow_up_week AS text)), '')
-  END
-), ',', '', 'g')::numeric
-    ELSE NULL
-  END
-)::int              AS follow_up_week,
-  (
-  CASE
-    WHEN (
-  CASE
-    WHEN o.final_closure_week IS NULL THEN NULL
-    WHEN upper(btrim(cast(o.final_closure_week AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL')
-      THEN NULL
-    ELSE nullif(btrim(cast(o.final_closure_week AS text)), '')
-  END
-) IS NULL THEN NULL
-    WHEN regexp_replace((
-  CASE
-    WHEN o.final_closure_week IS NULL THEN NULL
-    WHEN upper(btrim(cast(o.final_closure_week AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL')
-      THEN NULL
-    ELSE nullif(btrim(cast(o.final_closure_week AS text)), '')
-  END
-), ',', '', 'g') ~ '^-?\d+(\.\d+)?$'
-      THEN regexp_replace((
-  CASE
-    WHEN o.final_closure_week IS NULL THEN NULL
-    WHEN upper(btrim(cast(o.final_closure_week AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL')
-      THEN NULL
-    ELSE nullif(btrim(cast(o.final_closure_week AS text)), '')
-  END
-), ',', '', 'g')::numeric
-    ELSE NULL
-  END
-)::int          AS final_closure_week,
-  (
-  CASE
-    WHEN (
-  CASE
-    WHEN o.last_update_week IS NULL THEN NULL
-    WHEN upper(btrim(cast(o.last_update_week AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL')
-      THEN NULL
-    ELSE nullif(btrim(cast(o.last_update_week AS text)), '')
-  END
-) IS NULL THEN NULL
-    WHEN regexp_replace((
-  CASE
-    WHEN o.last_update_week IS NULL THEN NULL
-    WHEN upper(btrim(cast(o.last_update_week AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL')
-      THEN NULL
-    ELSE nullif(btrim(cast(o.last_update_week AS text)), '')
-  END
-), ',', '', 'g') ~ '^-?\d+(\.\d+)?$'
-      THEN regexp_replace((
-  CASE
-    WHEN o.last_update_week IS NULL THEN NULL
-    WHEN upper(btrim(cast(o.last_update_week AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL')
-      THEN NULL
-    ELSE nullif(btrim(cast(o.last_update_week AS text)), '')
-  END
-), ',', '', 'g')::numeric
-    ELSE NULL
-  END
-)::int            AS last_update_week,
+  (CASE WHEN (CASE WHEN o.change_submit_week IS NULL THEN NULL WHEN upper(btrim(cast(o.change_submit_week AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL') THEN NULL ELSE nullif(btrim(cast(o.change_submit_week AS text)), '') END) IS NULL THEN NULL WHEN regexp_replace((CASE WHEN o.change_submit_week IS NULL THEN NULL WHEN upper(btrim(cast(o.change_submit_week AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL') THEN NULL ELSE nullif(btrim(cast(o.change_submit_week AS text)), '') END), ',', '', 'g') ~ '^-?\d+(\.\d+)?$' THEN regexp_replace((CASE WHEN o.change_submit_week IS NULL THEN NULL WHEN upper(btrim(cast(o.change_submit_week AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL') THEN NULL ELSE nullif(btrim(cast(o.change_submit_week AS text)), '') END), ',', '', 'g')::numeric ELSE NULL END)::int          AS change_submit_week,
+  (CASE WHEN (CASE WHEN o.signature_closure_week IS NULL THEN NULL WHEN upper(btrim(cast(o.signature_closure_week AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL') THEN NULL ELSE nullif(btrim(cast(o.signature_closure_week AS text)), '') END) IS NULL THEN NULL WHEN regexp_replace((CASE WHEN o.signature_closure_week IS NULL THEN NULL WHEN upper(btrim(cast(o.signature_closure_week AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL') THEN NULL ELSE nullif(btrim(cast(o.signature_closure_week AS text)), '') END), ',', '', 'g') ~ '^-?\d+(\.\d+)?$' THEN regexp_replace((CASE WHEN o.signature_closure_week IS NULL THEN NULL WHEN upper(btrim(cast(o.signature_closure_week AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL') THEN NULL ELSE nullif(btrim(cast(o.signature_closure_week AS text)), '') END), ',', '', 'g')::numeric ELSE NULL END)::int      AS signature_closure_week,
+  (CASE WHEN (CASE WHEN o.plan_file_closure_week IS NULL THEN NULL WHEN upper(btrim(cast(o.plan_file_closure_week AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL') THEN NULL ELSE nullif(btrim(cast(o.plan_file_closure_week AS text)), '') END) IS NULL THEN NULL WHEN regexp_replace((CASE WHEN o.plan_file_closure_week IS NULL THEN NULL WHEN upper(btrim(cast(o.plan_file_closure_week AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL') THEN NULL ELSE nullif(btrim(cast(o.plan_file_closure_week AS text)), '') END), ',', '', 'g') ~ '^-?\d+(\.\d+)?$' THEN regexp_replace((CASE WHEN o.plan_file_closure_week IS NULL THEN NULL WHEN upper(btrim(cast(o.plan_file_closure_week AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL') THEN NULL ELSE nullif(btrim(cast(o.plan_file_closure_week AS text)), '') END), ',', '', 'g')::numeric ELSE NULL END)::int      AS plan_file_closure_week,
+  (CASE WHEN (CASE WHEN o.plan_reform_week IS NULL THEN NULL WHEN upper(btrim(cast(o.plan_reform_week AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL') THEN NULL ELSE nullif(btrim(cast(o.plan_reform_week AS text)), '') END) IS NULL THEN NULL WHEN regexp_replace((CASE WHEN o.plan_reform_week IS NULL THEN NULL WHEN upper(btrim(cast(o.plan_reform_week AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL') THEN NULL ELSE nullif(btrim(cast(o.plan_reform_week AS text)), '') END), ',', '', 'g') ~ '^-?\d+(\.\d+)?$' THEN regexp_replace((CASE WHEN o.plan_reform_week IS NULL THEN NULL WHEN upper(btrim(cast(o.plan_reform_week AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL') THEN NULL ELSE nullif(btrim(cast(o.plan_reform_week AS text)), '') END), ',', '', 'g')::numeric ELSE NULL END)::int            AS plan_reform_week,
+  (CASE WHEN (CASE WHEN o.follow_up_week IS NULL THEN NULL WHEN upper(btrim(cast(o.follow_up_week AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL') THEN NULL ELSE nullif(btrim(cast(o.follow_up_week AS text)), '') END) IS NULL THEN NULL WHEN regexp_replace((CASE WHEN o.follow_up_week IS NULL THEN NULL WHEN upper(btrim(cast(o.follow_up_week AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL') THEN NULL ELSE nullif(btrim(cast(o.follow_up_week AS text)), '') END), ',', '', 'g') ~ '^-?\d+(\.\d+)?$' THEN regexp_replace((CASE WHEN o.follow_up_week IS NULL THEN NULL WHEN upper(btrim(cast(o.follow_up_week AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL') THEN NULL ELSE nullif(btrim(cast(o.follow_up_week AS text)), '') END), ',', '', 'g')::numeric ELSE NULL END)::int              AS follow_up_week,
+  (CASE WHEN (CASE WHEN o.final_closure_week IS NULL THEN NULL WHEN upper(btrim(cast(o.final_closure_week AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL') THEN NULL ELSE nullif(btrim(cast(o.final_closure_week AS text)), '') END) IS NULL THEN NULL WHEN regexp_replace((CASE WHEN o.final_closure_week IS NULL THEN NULL WHEN upper(btrim(cast(o.final_closure_week AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL') THEN NULL ELSE nullif(btrim(cast(o.final_closure_week AS text)), '') END), ',', '', 'g') ~ '^-?\d+(\.\d+)?$' THEN regexp_replace((CASE WHEN o.final_closure_week IS NULL THEN NULL WHEN upper(btrim(cast(o.final_closure_week AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL') THEN NULL ELSE nullif(btrim(cast(o.final_closure_week AS text)), '') END), ',', '', 'g')::numeric ELSE NULL END)::int          AS final_closure_week,
+  (CASE WHEN (CASE WHEN o.last_update_week IS NULL THEN NULL WHEN upper(btrim(cast(o.last_update_week AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL') THEN NULL ELSE nullif(btrim(cast(o.last_update_week AS text)), '') END) IS NULL THEN NULL WHEN regexp_replace((CASE WHEN o.last_update_week IS NULL THEN NULL WHEN upper(btrim(cast(o.last_update_week AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL') THEN NULL ELSE nullif(btrim(cast(o.last_update_week AS text)), '') END), ',', '', 'g') ~ '^-?\d+(\.\d+)?$' THEN regexp_replace((CASE WHEN o.last_update_week IS NULL THEN NULL WHEN upper(btrim(cast(o.last_update_week AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL') THEN NULL ELSE nullif(btrim(cast(o.last_update_week AS text)), '') END), ',', '', 'g')::numeric ELSE NULL END)::int            AS last_update_week,
 
   -- === 闭环标志 ===
   CASE
-    WHEN btrim(COALESCE((
-  CASE
-    WHEN o.closure_status IS NULL THEN NULL
-    WHEN upper(btrim(cast(o.closure_status AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL')
-      THEN NULL
-    ELSE nullif(btrim(cast(o.closure_status AS text)), '')
-  END
-), '')) = '已闭环' THEN true
+    WHEN btrim(COALESCE((CASE WHEN o.closure_status IS NULL THEN NULL WHEN upper(btrim(cast(o.closure_status AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL') THEN NULL ELSE nullif(btrim(cast(o.closure_status AS text)), '') END), '')) = '已闭环' THEN true
     ELSE false
   END AS is_closed,
 
@@ -3342,226 +691,37 @@ SELECT
   ) AS risk_id,
 
   -- === 原始业务字段 ===
-  (
-  CASE
-    WHEN o.project_no IS NULL THEN NULL
-    WHEN upper(btrim(cast(o.project_no AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL')
-      THEN NULL
-    ELSE nullif(btrim(cast(o.project_no AS text)), '')
-  END
-)              AS project_no,
-  (
-  CASE
-    WHEN o.risk_name IS NULL THEN NULL
-    WHEN upper(btrim(cast(o.risk_name AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL')
-      THEN NULL
-    ELSE nullif(btrim(cast(o.risk_name AS text)), '')
-  END
-)               AS risk_name,
-  (
-  CASE
-    WHEN o.subsystem IS NULL THEN NULL
-    WHEN upper(btrim(cast(o.subsystem AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL')
-      THEN NULL
-    ELSE nullif(btrim(cast(o.subsystem AS text)), '')
-  END
-)               AS subsystem,
-  (
-  CASE
-    WHEN o.belonging_unit IS NULL THEN NULL
-    WHEN upper(btrim(cast(o.belonging_unit AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL')
-      THEN NULL
-    ELSE nullif(btrim(cast(o.belonging_unit AS text)), '')
-  END
-)          AS belonging_unit,
-  (
-  CASE
-    WHEN o.risk_description IS NULL THEN NULL
-    WHEN upper(btrim(cast(o.risk_description AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL')
-      THEN NULL
-    ELSE nullif(btrim(cast(o.risk_description AS text)), '')
-  END
-)        AS risk_description,
-  (
-  CASE
-    WHEN o.risk_phase IS NULL THEN NULL
-    WHEN upper(btrim(cast(o.risk_phase AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL')
-      THEN NULL
-    ELSE nullif(btrim(cast(o.risk_phase AS text)), '')
-  END
-)              AS risk_phase,
-  (
-  CASE
-    WHEN o.risk_category IS NULL THEN NULL
-    WHEN upper(btrim(cast(o.risk_category AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL')
-      THEN NULL
-    ELSE nullif(btrim(cast(o.risk_category AS text)), '')
-  END
-)           AS risk_category,
-  (
-  CASE
-    WHEN o.risk_level IS NULL THEN NULL
-    WHEN upper(btrim(cast(o.risk_level AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL')
-      THEN NULL
-    ELSE nullif(btrim(cast(o.risk_level AS text)), '')
-  END
-)              AS risk_level,
-  (
-  CASE
-    WHEN o.impact_scope IS NULL THEN NULL
-    WHEN upper(btrim(cast(o.impact_scope AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL')
-      THEN NULL
-    ELSE nullif(btrim(cast(o.impact_scope AS text)), '')
-  END
-)            AS impact_scope,
-  (
-  CASE
-    WHEN o.response_measure IS NULL THEN NULL
-    WHEN upper(btrim(cast(o.response_measure AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL')
-      THEN NULL
-    ELSE nullif(btrim(cast(o.response_measure AS text)), '')
-  END
-)        AS response_measure,
-  (
-  CASE
-    WHEN o.monthly_control_plan IS NULL THEN NULL
-    WHEN upper(btrim(cast(o.monthly_control_plan AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL')
-      THEN NULL
-    ELSE nullif(btrim(cast(o.monthly_control_plan AS text)), '')
-  END
-)    AS monthly_control_plan,
-  (
-  CASE
-    WHEN o.weekly_release_plan IS NULL THEN NULL
-    WHEN upper(btrim(cast(o.weekly_release_plan AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL')
-      THEN NULL
-    ELSE nullif(btrim(cast(o.weekly_release_plan AS text)), '')
-  END
-)     AS weekly_release_plan,
-  (
-  CASE
-    WHEN o.release_plan_synced IS NULL THEN NULL
-    WHEN upper(btrim(cast(o.release_plan_synced AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL')
-      THEN NULL
-    ELSE nullif(btrim(cast(o.release_plan_synced AS text)), '')
-  END
-)     AS release_plan_synced,
-  (
-  CASE
-    WHEN o.new_plan_count IS NULL THEN NULL
-    WHEN upper(btrim(cast(o.new_plan_count AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL')
-      THEN NULL
-    ELSE nullif(btrim(cast(o.new_plan_count AS text)), '')
-  END
-)          AS new_plan_count,
-  (
-  CASE
-    WHEN o.progress_situation IS NULL THEN NULL
-    WHEN upper(btrim(cast(o.progress_situation AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL')
-      THEN NULL
-    ELSE nullif(btrim(cast(o.progress_situation AS text)), '')
-  END
-)      AS progress_situation,
-  (
-  CASE
-    WHEN o.response_owner IS NULL THEN NULL
-    WHEN upper(btrim(cast(o.response_owner AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL')
-      THEN NULL
-    ELSE nullif(btrim(cast(o.response_owner AS text)), '')
-  END
-)          AS response_owner,
-  (
-  CASE
-    WHEN o.control_owner IS NULL THEN NULL
-    WHEN upper(btrim(cast(o.control_owner AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL')
-      THEN NULL
-    ELSE nullif(btrim(cast(o.control_owner AS text)), '')
-  END
-)           AS control_owner,
-  (
-  CASE
-    WHEN o.dept IS NULL THEN NULL
-    WHEN upper(btrim(cast(o.dept AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL')
-      THEN NULL
-    ELSE nullif(btrim(cast(o.dept AS text)), '')
-  END
-)                    AS dept,
-  (
-  CASE
-    WHEN o.risk_status IS NULL THEN NULL
-    WHEN upper(btrim(cast(o.risk_status AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL')
-      THEN NULL
-    ELSE nullif(btrim(cast(o.risk_status AS text)), '')
-  END
-)             AS risk_status,
-  (
-  CASE
-    WHEN o.remark IS NULL THEN NULL
-    WHEN upper(btrim(cast(o.remark AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL')
-      THEN NULL
-    ELSE nullif(btrim(cast(o.remark AS text)), '')
-  END
-)                  AS remark,
-  (
-  CASE
-    WHEN o.filled_by IS NULL THEN NULL
-    WHEN upper(btrim(cast(o.filled_by AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL')
-      THEN NULL
-    ELSE nullif(btrim(cast(o.filled_by AS text)), '')
-  END
-)               AS filled_by,
+  (CASE WHEN o.project_no IS NULL THEN NULL WHEN upper(btrim(cast(o.project_no AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL') THEN NULL ELSE nullif(btrim(cast(o.project_no AS text)), '') END)              AS project_no,
+  (CASE WHEN o.risk_name IS NULL THEN NULL WHEN upper(btrim(cast(o.risk_name AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL') THEN NULL ELSE nullif(btrim(cast(o.risk_name AS text)), '') END)               AS risk_name,
+  (CASE WHEN o.subsystem IS NULL THEN NULL WHEN upper(btrim(cast(o.subsystem AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL') THEN NULL ELSE nullif(btrim(cast(o.subsystem AS text)), '') END)               AS subsystem,
+  (CASE WHEN o.belonging_unit IS NULL THEN NULL WHEN upper(btrim(cast(o.belonging_unit AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL') THEN NULL ELSE nullif(btrim(cast(o.belonging_unit AS text)), '') END)          AS belonging_unit,
+  (CASE WHEN o.risk_description IS NULL THEN NULL WHEN upper(btrim(cast(o.risk_description AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL') THEN NULL ELSE nullif(btrim(cast(o.risk_description AS text)), '') END)        AS risk_description,
+  (CASE WHEN o.risk_phase IS NULL THEN NULL WHEN upper(btrim(cast(o.risk_phase AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL') THEN NULL ELSE nullif(btrim(cast(o.risk_phase AS text)), '') END)              AS risk_phase,
+  (CASE WHEN o.risk_category IS NULL THEN NULL WHEN upper(btrim(cast(o.risk_category AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL') THEN NULL ELSE nullif(btrim(cast(o.risk_category AS text)), '') END)           AS risk_category,
+  (CASE WHEN o.risk_level IS NULL THEN NULL WHEN upper(btrim(cast(o.risk_level AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL') THEN NULL ELSE nullif(btrim(cast(o.risk_level AS text)), '') END)              AS risk_level,
+  (CASE WHEN o.impact_scope IS NULL THEN NULL WHEN upper(btrim(cast(o.impact_scope AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL') THEN NULL ELSE nullif(btrim(cast(o.impact_scope AS text)), '') END)            AS impact_scope,
+  (CASE WHEN o.response_measure IS NULL THEN NULL WHEN upper(btrim(cast(o.response_measure AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL') THEN NULL ELSE nullif(btrim(cast(o.response_measure AS text)), '') END)        AS response_measure,
+  (CASE WHEN o.monthly_control_plan IS NULL THEN NULL WHEN upper(btrim(cast(o.monthly_control_plan AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL') THEN NULL ELSE nullif(btrim(cast(o.monthly_control_plan AS text)), '') END)    AS monthly_control_plan,
+  (CASE WHEN o.weekly_release_plan IS NULL THEN NULL WHEN upper(btrim(cast(o.weekly_release_plan AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL') THEN NULL ELSE nullif(btrim(cast(o.weekly_release_plan AS text)), '') END)     AS weekly_release_plan,
+  (CASE WHEN o.release_plan_synced IS NULL THEN NULL WHEN upper(btrim(cast(o.release_plan_synced AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL') THEN NULL ELSE nullif(btrim(cast(o.release_plan_synced AS text)), '') END)     AS release_plan_synced,
+  (CASE WHEN o.new_plan_count IS NULL THEN NULL WHEN upper(btrim(cast(o.new_plan_count AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL') THEN NULL ELSE nullif(btrim(cast(o.new_plan_count AS text)), '') END)          AS new_plan_count,
+  (CASE WHEN o.progress_situation IS NULL THEN NULL WHEN upper(btrim(cast(o.progress_situation AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL') THEN NULL ELSE nullif(btrim(cast(o.progress_situation AS text)), '') END)      AS progress_situation,
+  (CASE WHEN o.response_owner IS NULL THEN NULL WHEN upper(btrim(cast(o.response_owner AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL') THEN NULL ELSE nullif(btrim(cast(o.response_owner AS text)), '') END)          AS response_owner,
+  (CASE WHEN o.control_owner IS NULL THEN NULL WHEN upper(btrim(cast(o.control_owner AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL') THEN NULL ELSE nullif(btrim(cast(o.control_owner AS text)), '') END)           AS control_owner,
+  (CASE WHEN o.dept IS NULL THEN NULL WHEN upper(btrim(cast(o.dept AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL') THEN NULL ELSE nullif(btrim(cast(o.dept AS text)), '') END)                    AS dept,
+  (CASE WHEN o.risk_status IS NULL THEN NULL WHEN upper(btrim(cast(o.risk_status AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL') THEN NULL ELSE nullif(btrim(cast(o.risk_status AS text)), '') END)             AS risk_status,
+  (CASE WHEN o.remark IS NULL THEN NULL WHEN upper(btrim(cast(o.remark AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL') THEN NULL ELSE nullif(btrim(cast(o.remark AS text)), '') END)                  AS remark,
+  (CASE WHEN o.filled_by IS NULL THEN NULL WHEN upper(btrim(cast(o.filled_by AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL') THEN NULL ELSE nullif(btrim(cast(o.filled_by AS text)), '') END)               AS filled_by,
 
   -- === 周数字段 ===
-  (
-  CASE
-    WHEN o.risk_submit_week IS NULL THEN NULL
-    WHEN upper(btrim(cast(o.risk_submit_week AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL')
-      THEN NULL
-    ELSE nullif(btrim(cast(o.risk_submit_week AS text)), '')
-  END
-)        AS risk_submit_week,
-  (
-  CASE
-    WHEN o.final_release_week IS NULL THEN NULL
-    WHEN upper(btrim(cast(o.final_release_week AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL')
-      THEN NULL
-    ELSE nullif(btrim(cast(o.final_release_week AS text)), '')
-  END
-)      AS final_release_week,
-  (
-  CASE
-    WHEN o.progress_stat_week IS NULL THEN NULL
-    WHEN upper(btrim(cast(o.progress_stat_week AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL')
-      THEN NULL
-    ELSE nullif(btrim(cast(o.progress_stat_week AS text)), '')
-  END
-)      AS progress_stat_week,
-  (
-  CASE
-    WHEN o.risk_release_week IS NULL THEN NULL
-    WHEN upper(btrim(cast(o.risk_release_week AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL')
-      THEN NULL
-    ELSE nullif(btrim(cast(o.risk_release_week AS text)), '')
-  END
-)       AS risk_release_week,
-  (
-  CASE
-    WHEN o.last_update_week IS NULL THEN NULL
-    WHEN upper(btrim(cast(o.last_update_week AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL')
-      THEN NULL
-    ELSE nullif(btrim(cast(o.last_update_week AS text)), '')
-  END
-)        AS last_update_week,
+  (CASE WHEN o.risk_submit_week IS NULL THEN NULL WHEN upper(btrim(cast(o.risk_submit_week AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL') THEN NULL ELSE nullif(btrim(cast(o.risk_submit_week AS text)), '') END)        AS risk_submit_week,
+  (CASE WHEN o.final_release_week IS NULL THEN NULL WHEN upper(btrim(cast(o.final_release_week AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL') THEN NULL ELSE nullif(btrim(cast(o.final_release_week AS text)), '') END)      AS final_release_week,
+  (CASE WHEN o.progress_stat_week IS NULL THEN NULL WHEN upper(btrim(cast(o.progress_stat_week AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL') THEN NULL ELSE nullif(btrim(cast(o.progress_stat_week AS text)), '') END)      AS progress_stat_week,
+  (CASE WHEN o.risk_release_week IS NULL THEN NULL WHEN upper(btrim(cast(o.risk_release_week AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL') THEN NULL ELSE nullif(btrim(cast(o.risk_release_week AS text)), '') END)       AS risk_release_week,
+  (CASE WHEN o.last_update_week IS NULL THEN NULL WHEN upper(btrim(cast(o.last_update_week AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL') THEN NULL ELSE nullif(btrim(cast(o.last_update_week AS text)), '') END)        AS last_update_week,
 
   -- === 风险等级标准化 ===
-  CASE COALESCE((
-  CASE
-    WHEN o.risk_level IS NULL THEN NULL
-    WHEN upper(btrim(cast(o.risk_level AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL')
-      THEN NULL
-    ELSE nullif(btrim(cast(o.risk_level AS text)), '')
-  END
-), '')
+  CASE COALESCE((CASE WHEN o.risk_level IS NULL THEN NULL WHEN upper(btrim(cast(o.risk_level AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL') THEN NULL ELSE nullif(btrim(cast(o.risk_level AS text)), '') END), '')
     WHEN '高' THEN 3
     WHEN '中' THEN 2
     WHEN '低' THEN 1
@@ -3570,161 +730,27 @@ SELECT
 
   -- === 闭环标志 ===
   CASE
-    WHEN btrim(COALESCE((
-  CASE
-    WHEN o.risk_status IS NULL THEN NULL
-    WHEN upper(btrim(cast(o.risk_status AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL')
-      THEN NULL
-    ELSE nullif(btrim(cast(o.risk_status AS text)), '')
-  END
-), '')) = '已释放' THEN true
+    WHEN btrim(COALESCE((CASE WHEN o.risk_status IS NULL THEN NULL WHEN upper(btrim(cast(o.risk_status AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL') THEN NULL ELSE nullif(btrim(cast(o.risk_status AS text)), '') END), '')) = '已释放' THEN true
     ELSE false
   END AS is_released,
 
   -- === 日期解析 ===
-  (
-  CASE
-    WHEN o.risk_submit_time IS NULL THEN NULL
-    WHEN btrim(cast(o.risk_submit_time AS text)) = '' THEN NULL
-    WHEN btrim(cast(o.risk_submit_time AS text)) ~ '^\d{4}-\d{2}-\d{2}$'
-      THEN to_date(btrim(cast(o.risk_submit_time AS text)), 'YYYY-MM-DD')
-    WHEN btrim(cast(o.risk_submit_time AS text)) ~ '^\d{4}-\d{2}-\d{2}\s+.*$'
-      THEN to_date(substr(btrim(cast(o.risk_submit_time AS text)), 1, 10), 'YYYY-MM-DD')
-    WHEN btrim(cast(o.risk_submit_time AS text)) ~ '^\d{4}/\d{2}/\d{2}$'
-      THEN to_date(replace(btrim(cast(o.risk_submit_time AS text)), '/', '-'), 'YYYY-MM-DD')
-    ELSE NULL
-  END
-)           AS risk_submit_date,
-  (
-  CASE
-    WHEN o.final_release_time IS NULL THEN NULL
-    WHEN btrim(cast(o.final_release_time AS text)) = '' THEN NULL
-    WHEN btrim(cast(o.final_release_time AS text)) ~ '^\d{4}-\d{2}-\d{2}$'
-      THEN to_date(btrim(cast(o.final_release_time AS text)), 'YYYY-MM-DD')
-    WHEN btrim(cast(o.final_release_time AS text)) ~ '^\d{4}-\d{2}-\d{2}\s+.*$'
-      THEN to_date(substr(btrim(cast(o.final_release_time AS text)), 1, 10), 'YYYY-MM-DD')
-    WHEN btrim(cast(o.final_release_time AS text)) ~ '^\d{4}/\d{2}/\d{2}$'
-      THEN to_date(replace(btrim(cast(o.final_release_time AS text)), '/', '-'), 'YYYY-MM-DD')
-    ELSE NULL
-  END
-)         AS final_release_date,
-  (
-  CASE
-    WHEN o.progress_stat_time IS NULL THEN NULL
-    WHEN btrim(cast(o.progress_stat_time AS text)) = '' THEN NULL
-    WHEN btrim(cast(o.progress_stat_time AS text)) ~ '^\d{4}-\d{2}-\d{2}$'
-      THEN to_date(btrim(cast(o.progress_stat_time AS text)), 'YYYY-MM-DD')
-    WHEN btrim(cast(o.progress_stat_time AS text)) ~ '^\d{4}-\d{2}-\d{2}\s+.*$'
-      THEN to_date(substr(btrim(cast(o.progress_stat_time AS text)), 1, 10), 'YYYY-MM-DD')
-    WHEN btrim(cast(o.progress_stat_time AS text)) ~ '^\d{4}/\d{2}/\d{2}$'
-      THEN to_date(replace(btrim(cast(o.progress_stat_time AS text)), '/', '-'), 'YYYY-MM-DD')
-    ELSE NULL
-  END
-)         AS progress_stat_date,
-  (
-  CASE
-    WHEN o.risk_release_date IS NULL THEN NULL
-    WHEN btrim(cast(o.risk_release_date AS text)) = '' THEN NULL
-    WHEN btrim(cast(o.risk_release_date AS text)) ~ '^\d{4}-\d{2}-\d{2}$'
-      THEN to_date(btrim(cast(o.risk_release_date AS text)), 'YYYY-MM-DD')
-    WHEN btrim(cast(o.risk_release_date AS text)) ~ '^\d{4}-\d{2}-\d{2}\s+.*$'
-      THEN to_date(substr(btrim(cast(o.risk_release_date AS text)), 1, 10), 'YYYY-MM-DD')
-    WHEN btrim(cast(o.risk_release_date AS text)) ~ '^\d{4}/\d{2}/\d{2}$'
-      THEN to_date(replace(btrim(cast(o.risk_release_date AS text)), '/', '-'), 'YYYY-MM-DD')
-    ELSE NULL
-  END
-)          AS risk_release_date,
-  (
-  CASE
-    WHEN o.last_update_time IS NULL THEN NULL
-    WHEN btrim(cast(o.last_update_time AS text)) = '' THEN NULL
-    WHEN btrim(cast(o.last_update_time AS text)) ~ '^\d{4}-\d{2}-\d{2}$'
-      THEN to_date(btrim(cast(o.last_update_time AS text)), 'YYYY-MM-DD')
-    WHEN btrim(cast(o.last_update_time AS text)) ~ '^\d{4}-\d{2}-\d{2}\s+.*$'
-      THEN to_date(substr(btrim(cast(o.last_update_time AS text)), 1, 10), 'YYYY-MM-DD')
-    WHEN btrim(cast(o.last_update_time AS text)) ~ '^\d{4}/\d{2}/\d{2}$'
-      THEN to_date(replace(btrim(cast(o.last_update_time AS text)), '/', '-'), 'YYYY-MM-DD')
-    ELSE NULL
-  END
-)           AS last_update_time,
+  (CASE WHEN o.risk_submit_time IS NULL THEN NULL WHEN btrim(cast(o.risk_submit_time AS text)) = '' THEN NULL WHEN btrim(cast(o.risk_submit_time AS text)) ~ '^\d{4}-\d{2}-\d{2}$' THEN to_date(btrim(cast(o.risk_submit_time AS text)), 'YYYY-MM-DD') WHEN btrim(cast(o.risk_submit_time AS text)) ~ '^\d{4}/\d{2}/\d{2}$' THEN to_date(replace(btrim(cast(o.risk_submit_time AS text)), '/', '-'), 'YYYY-MM-DD') ELSE NULL END)           AS risk_submit_date,
+  (CASE WHEN o.final_release_time IS NULL THEN NULL WHEN btrim(cast(o.final_release_time AS text)) = '' THEN NULL WHEN btrim(cast(o.final_release_time AS text)) ~ '^\d{4}-\d{2}-\d{2}$' THEN to_date(btrim(cast(o.final_release_time AS text)), 'YYYY-MM-DD') WHEN btrim(cast(o.final_release_time AS text)) ~ '^\d{4}/\d{2}/\d{2}$' THEN to_date(replace(btrim(cast(o.final_release_time AS text)), '/', '-'), 'YYYY-MM-DD') ELSE NULL END)         AS final_release_date,
+  (CASE WHEN o.progress_stat_time IS NULL THEN NULL WHEN btrim(cast(o.progress_stat_time AS text)) = '' THEN NULL WHEN btrim(cast(o.progress_stat_time AS text)) ~ '^\d{4}-\d{2}-\d{2}$' THEN to_date(btrim(cast(o.progress_stat_time AS text)), 'YYYY-MM-DD') WHEN btrim(cast(o.progress_stat_time AS text)) ~ '^\d{4}/\d{2}/\d{2}$' THEN to_date(replace(btrim(cast(o.progress_stat_time AS text)), '/', '-'), 'YYYY-MM-DD') ELSE NULL END)         AS progress_stat_date,
+  (CASE WHEN o.risk_release_date IS NULL THEN NULL WHEN btrim(cast(o.risk_release_date AS text)) = '' THEN NULL WHEN btrim(cast(o.risk_release_date AS text)) ~ '^\d{4}-\d{2}-\d{2}$' THEN to_date(btrim(cast(o.risk_release_date AS text)), 'YYYY-MM-DD') WHEN btrim(cast(o.risk_release_date AS text)) ~ '^\d{4}/\d{2}/\d{2}$' THEN to_date(replace(btrim(cast(o.risk_release_date AS text)), '/', '-'), 'YYYY-MM-DD') ELSE NULL END)          AS risk_release_date,
+  (CASE WHEN o.last_update_time IS NULL THEN NULL WHEN btrim(cast(o.last_update_time AS text)) = '' THEN NULL WHEN btrim(cast(o.last_update_time AS text)) ~ '^\d{4}-\d{2}-\d{2}$' THEN to_date(btrim(cast(o.last_update_time AS text)), 'YYYY-MM-DD') WHEN btrim(cast(o.last_update_time AS text)) ~ '^\d{4}/\d{2}/\d{2}$' THEN to_date(replace(btrim(cast(o.last_update_time AS text)), '/', '-'), 'YYYY-MM-DD') ELSE NULL END)           AS last_update_time,
 
   -- === 时间维度标签 ===
-  EXTRACT(YEAR FROM (
-  CASE
-    WHEN o.risk_submit_time IS NULL THEN NULL
-    WHEN btrim(cast(o.risk_submit_time AS text)) = '' THEN NULL
-    WHEN btrim(cast(o.risk_submit_time AS text)) ~ '^\d{4}-\d{2}-\d{2}$'
-      THEN to_date(btrim(cast(o.risk_submit_time AS text)), 'YYYY-MM-DD')
-    WHEN btrim(cast(o.risk_submit_time AS text)) ~ '^\d{4}-\d{2}-\d{2}\s+.*$'
-      THEN to_date(substr(btrim(cast(o.risk_submit_time AS text)), 1, 10), 'YYYY-MM-DD')
-    WHEN btrim(cast(o.risk_submit_time AS text)) ~ '^\d{4}/\d{2}/\d{2}$'
-      THEN to_date(replace(btrim(cast(o.risk_submit_time AS text)), '/', '-'), 'YYYY-MM-DD')
-    ELSE NULL
-  END
-))::int     AS submit_year,
-  EXTRACT(QUARTER FROM (
-  CASE
-    WHEN o.risk_submit_time IS NULL THEN NULL
-    WHEN btrim(cast(o.risk_submit_time AS text)) = '' THEN NULL
-    WHEN btrim(cast(o.risk_submit_time AS text)) ~ '^\d{4}-\d{2}-\d{2}$'
-      THEN to_date(btrim(cast(o.risk_submit_time AS text)), 'YYYY-MM-DD')
-    WHEN btrim(cast(o.risk_submit_time AS text)) ~ '^\d{4}-\d{2}-\d{2}\s+.*$'
-      THEN to_date(substr(btrim(cast(o.risk_submit_time AS text)), 1, 10), 'YYYY-MM-DD')
-    WHEN btrim(cast(o.risk_submit_time AS text)) ~ '^\d{4}/\d{2}/\d{2}$'
-      THEN to_date(replace(btrim(cast(o.risk_submit_time AS text)), '/', '-'), 'YYYY-MM-DD')
-    ELSE NULL
-  END
-))::int  AS submit_quarter,
-  to_char((
-  CASE
-    WHEN o.risk_submit_time IS NULL THEN NULL
-    WHEN btrim(cast(o.risk_submit_time AS text)) = '' THEN NULL
-    WHEN btrim(cast(o.risk_submit_time AS text)) ~ '^\d{4}-\d{2}-\d{2}$'
-      THEN to_date(btrim(cast(o.risk_submit_time AS text)), 'YYYY-MM-DD')
-    WHEN btrim(cast(o.risk_submit_time AS text)) ~ '^\d{4}-\d{2}-\d{2}\s+.*$'
-      THEN to_date(substr(btrim(cast(o.risk_submit_time AS text)), 1, 10), 'YYYY-MM-DD')
-    WHEN btrim(cast(o.risk_submit_time AS text)) ~ '^\d{4}/\d{2}/\d{2}$'
-      THEN to_date(replace(btrim(cast(o.risk_submit_time AS text)), '/', '-'), 'YYYY-MM-DD')
-    ELSE NULL
-  END
-), 'YYYY-MM')         AS submit_month,
+  EXTRACT(YEAR FROM (CASE WHEN o.risk_submit_time IS NULL THEN NULL WHEN btrim(cast(o.risk_submit_time AS text)) = '' THEN NULL WHEN btrim(cast(o.risk_submit_time AS text)) ~ '^\d{4}-\d{2}-\d{2}$' THEN to_date(btrim(cast(o.risk_submit_time AS text)), 'YYYY-MM-DD') WHEN btrim(cast(o.risk_submit_time AS text)) ~ '^\d{4}/\d{2}/\d{2}$' THEN to_date(replace(btrim(cast(o.risk_submit_time AS text)), '/', '-'), 'YYYY-MM-DD') ELSE NULL END))::int     AS submit_year,
+  EXTRACT(QUARTER FROM (CASE WHEN o.risk_submit_time IS NULL THEN NULL WHEN btrim(cast(o.risk_submit_time AS text)) = '' THEN NULL WHEN btrim(cast(o.risk_submit_time AS text)) ~ '^\d{4}-\d{2}-\d{2}$' THEN to_date(btrim(cast(o.risk_submit_time AS text)), 'YYYY-MM-DD') WHEN btrim(cast(o.risk_submit_time AS text)) ~ '^\d{4}/\d{2}/\d{2}$' THEN to_date(replace(btrim(cast(o.risk_submit_time AS text)), '/', '-'), 'YYYY-MM-DD') ELSE NULL END))::int  AS submit_quarter,
+  to_char((CASE WHEN o.risk_submit_time IS NULL THEN NULL WHEN btrim(cast(o.risk_submit_time AS text)) = '' THEN NULL WHEN btrim(cast(o.risk_submit_time AS text)) ~ '^\d{4}-\d{2}-\d{2}$' THEN to_date(btrim(cast(o.risk_submit_time AS text)), 'YYYY-MM-DD') WHEN btrim(cast(o.risk_submit_time AS text)) ~ '^\d{4}/\d{2}/\d{2}$' THEN to_date(replace(btrim(cast(o.risk_submit_time AS text)), '/', '-'), 'YYYY-MM-DD') ELSE NULL END), 'YYYY-MM')         AS submit_month,
 
   -- === 滞留天数 ===
   CASE
-    WHEN (
-  CASE
-    WHEN o.risk_submit_time IS NULL THEN NULL
-    WHEN btrim(cast(o.risk_submit_time AS text)) = '' THEN NULL
-    WHEN btrim(cast(o.risk_submit_time AS text)) ~ '^\d{4}-\d{2}-\d{2}$'
-      THEN to_date(btrim(cast(o.risk_submit_time AS text)), 'YYYY-MM-DD')
-    WHEN btrim(cast(o.risk_submit_time AS text)) ~ '^\d{4}-\d{2}-\d{2}\s+.*$'
-      THEN to_date(substr(btrim(cast(o.risk_submit_time AS text)), 1, 10), 'YYYY-MM-DD')
-    WHEN btrim(cast(o.risk_submit_time AS text)) ~ '^\d{4}/\d{2}/\d{2}$'
-      THEN to_date(replace(btrim(cast(o.risk_submit_time AS text)), '/', '-'), 'YYYY-MM-DD')
-    ELSE NULL
-  END
-) IS NOT NULL
-     AND btrim(COALESCE((
-  CASE
-    WHEN o.risk_status IS NULL THEN NULL
-    WHEN upper(btrim(cast(o.risk_status AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL')
-      THEN NULL
-    ELSE nullif(btrim(cast(o.risk_status AS text)), '')
-  END
-), '')) != '已释放'
-    THEN (current_date - (
-  CASE
-    WHEN o.risk_submit_time IS NULL THEN NULL
-    WHEN btrim(cast(o.risk_submit_time AS text)) = '' THEN NULL
-    WHEN btrim(cast(o.risk_submit_time AS text)) ~ '^\d{4}-\d{2}-\d{2}$'
-      THEN to_date(btrim(cast(o.risk_submit_time AS text)), 'YYYY-MM-DD')
-    WHEN btrim(cast(o.risk_submit_time AS text)) ~ '^\d{4}-\d{2}-\d{2}\s+.*$'
-      THEN to_date(substr(btrim(cast(o.risk_submit_time AS text)), 1, 10), 'YYYY-MM-DD')
-    WHEN btrim(cast(o.risk_submit_time AS text)) ~ '^\d{4}/\d{2}/\d{2}$'
-      THEN to_date(replace(btrim(cast(o.risk_submit_time AS text)), '/', '-'), 'YYYY-MM-DD')
-    ELSE NULL
-  END
-))::int
+    WHEN (CASE WHEN o.risk_submit_time IS NULL THEN NULL WHEN btrim(cast(o.risk_submit_time AS text)) = '' THEN NULL WHEN btrim(cast(o.risk_submit_time AS text)) ~ '^\d{4}-\d{2}-\d{2}$' THEN to_date(btrim(cast(o.risk_submit_time AS text)), 'YYYY-MM-DD') WHEN btrim(cast(o.risk_submit_time AS text)) ~ '^\d{4}/\d{2}/\d{2}$' THEN to_date(replace(btrim(cast(o.risk_submit_time AS text)), '/', '-'), 'YYYY-MM-DD') ELSE NULL END) IS NOT NULL
+     AND btrim(COALESCE((CASE WHEN o.risk_status IS NULL THEN NULL WHEN upper(btrim(cast(o.risk_status AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL') THEN NULL ELSE nullif(btrim(cast(o.risk_status AS text)), '') END), '')) != '已释放'
+    THEN (current_date - (CASE WHEN o.risk_submit_time IS NULL THEN NULL WHEN btrim(cast(o.risk_submit_time AS text)) = '' THEN NULL WHEN btrim(cast(o.risk_submit_time AS text)) ~ '^\d{4}-\d{2}-\d{2}$' THEN to_date(btrim(cast(o.risk_submit_time AS text)), 'YYYY-MM-DD') WHEN btrim(cast(o.risk_submit_time AS text)) ~ '^\d{4}/\d{2}/\d{2}$' THEN to_date(replace(btrim(cast(o.risk_submit_time AS text)), '/', '-'), 'YYYY-MM-DD') ELSE NULL END))::int
     ELSE 0
   END AS pending_days,
 
@@ -3747,308 +773,49 @@ SELECT
   ) AS risk_measure_id,
 
   -- === 风险基本信息字段 ===
-  (
-  CASE
-    WHEN o.project_no IS NULL THEN NULL
-    WHEN upper(btrim(cast(o.project_no AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL')
-      THEN NULL
-    ELSE nullif(btrim(cast(o.project_no AS text)), '')
-  END
-)              AS project_no,
-  (
-  CASE
-    WHEN o.risk_name IS NULL THEN NULL
-    WHEN upper(btrim(cast(o.risk_name AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL')
-      THEN NULL
-    ELSE nullif(btrim(cast(o.risk_name AS text)), '')
-  END
-)               AS risk_name,
-  (
-  CASE
-    WHEN o.subsystem IS NULL THEN NULL
-    WHEN upper(btrim(cast(o.subsystem AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL')
-      THEN NULL
-    ELSE nullif(btrim(cast(o.subsystem AS text)), '')
-  END
-)               AS subsystem,
-  (
-  CASE
-    WHEN o.belonging_unit IS NULL THEN NULL
-    WHEN upper(btrim(cast(o.belonging_unit AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL')
-      THEN NULL
-    ELSE nullif(btrim(cast(o.belonging_unit AS text)), '')
-  END
-)          AS belonging_unit,
-  (
-  CASE
-    WHEN o.risk_description IS NULL THEN NULL
-    WHEN upper(btrim(cast(o.risk_description AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL')
-      THEN NULL
-    ELSE nullif(btrim(cast(o.risk_description AS text)), '')
-  END
-)        AS risk_description,
-  (
-  CASE
-    WHEN o.risk_phase IS NULL THEN NULL
-    WHEN upper(btrim(cast(o.risk_phase AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL')
-      THEN NULL
-    ELSE nullif(btrim(cast(o.risk_phase AS text)), '')
-  END
-)              AS risk_phase,
-  (
-  CASE
-    WHEN o.risk_category IS NULL THEN NULL
-    WHEN upper(btrim(cast(o.risk_category AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL')
-      THEN NULL
-    ELSE nullif(btrim(cast(o.risk_category AS text)), '')
-  END
-)           AS risk_category,
-  (
-  CASE
-    WHEN o.risk_level IS NULL THEN NULL
-    WHEN upper(btrim(cast(o.risk_level AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL')
-      THEN NULL
-    ELSE nullif(btrim(cast(o.risk_level AS text)), '')
-  END
-)              AS risk_level,
-  (
-  CASE
-    WHEN o.impact_scope IS NULL THEN NULL
-    WHEN upper(btrim(cast(o.impact_scope AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL')
-      THEN NULL
-    ELSE nullif(btrim(cast(o.impact_scope AS text)), '')
-  END
-)            AS impact_scope,
-  (
-  CASE
-    WHEN o.response_measure IS NULL THEN NULL
-    WHEN upper(btrim(cast(o.response_measure AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL')
-      THEN NULL
-    ELSE nullif(btrim(cast(o.response_measure AS text)), '')
-  END
-)        AS response_measure,
-  (
-  CASE
-    WHEN o.monthly_control_plan IS NULL THEN NULL
-    WHEN upper(btrim(cast(o.monthly_control_plan AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL')
-      THEN NULL
-    ELSE nullif(btrim(cast(o.monthly_control_plan AS text)), '')
-  END
-)    AS monthly_control_plan,
-  (
-  CASE
-    WHEN o.weekly_release_plan IS NULL THEN NULL
-    WHEN upper(btrim(cast(o.weekly_release_plan AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL')
-      THEN NULL
-    ELSE nullif(btrim(cast(o.weekly_release_plan AS text)), '')
-  END
-)     AS weekly_release_plan,
-  (
-  CASE
-    WHEN o.release_plan_synced IS NULL THEN NULL
-    WHEN upper(btrim(cast(o.release_plan_synced AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL')
-      THEN NULL
-    ELSE nullif(btrim(cast(o.release_plan_synced AS text)), '')
-  END
-)     AS release_plan_synced,
-  (
-  CASE
-    WHEN o.new_plan_count IS NULL THEN NULL
-    WHEN upper(btrim(cast(o.new_plan_count AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL')
-      THEN NULL
-    ELSE nullif(btrim(cast(o.new_plan_count AS text)), '')
-  END
-)          AS new_plan_count,
-  (
-  CASE
-    WHEN o.progress_situation IS NULL THEN NULL
-    WHEN upper(btrim(cast(o.progress_situation AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL')
-      THEN NULL
-    ELSE nullif(btrim(cast(o.progress_situation AS text)), '')
-  END
-)      AS progress_situation,
-  (
-  CASE
-    WHEN o.response_owner IS NULL THEN NULL
-    WHEN upper(btrim(cast(o.response_owner AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL')
-      THEN NULL
-    ELSE nullif(btrim(cast(o.response_owner AS text)), '')
-  END
-)          AS response_owner,
-  (
-  CASE
-    WHEN o.control_owner IS NULL THEN NULL
-    WHEN upper(btrim(cast(o.control_owner AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL')
-      THEN NULL
-    ELSE nullif(btrim(cast(o.control_owner AS text)), '')
-  END
-)           AS control_owner,
-  (
-  CASE
-    WHEN o.dept IS NULL THEN NULL
-    WHEN upper(btrim(cast(o.dept AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL')
-      THEN NULL
-    ELSE nullif(btrim(cast(o.dept AS text)), '')
-  END
-)                    AS dept,
-  (
-  CASE
-    WHEN o.risk_status IS NULL THEN NULL
-    WHEN upper(btrim(cast(o.risk_status AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL')
-      THEN NULL
-    ELSE nullif(btrim(cast(o.risk_status AS text)), '')
-  END
-)             AS risk_status,
-  (
-  CASE
-    WHEN o.project_manager IS NULL THEN NULL
-    WHEN upper(btrim(cast(o.project_manager AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL')
-      THEN NULL
-    ELSE nullif(btrim(cast(o.project_manager AS text)), '')
-  END
-)         AS project_manager,
-  (
-  CASE
-    WHEN o.remark IS NULL THEN NULL
-    WHEN upper(btrim(cast(o.remark AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL')
-      THEN NULL
-    ELSE nullif(btrim(cast(o.remark AS text)), '')
-  END
-)                  AS remark,
-  (
-  CASE
-    WHEN o.filled_by IS NULL THEN NULL
-    WHEN upper(btrim(cast(o.filled_by AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL')
-      THEN NULL
-    ELSE nullif(btrim(cast(o.filled_by AS text)), '')
-  END
-)               AS filled_by,
+  (CASE WHEN o.project_no IS NULL THEN NULL WHEN upper(btrim(cast(o.project_no AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL') THEN NULL ELSE nullif(btrim(cast(o.project_no AS text)), '') END)              AS project_no,
+  (CASE WHEN o.risk_name IS NULL THEN NULL WHEN upper(btrim(cast(o.risk_name AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL') THEN NULL ELSE nullif(btrim(cast(o.risk_name AS text)), '') END)               AS risk_name,
+  (CASE WHEN o.subsystem IS NULL THEN NULL WHEN upper(btrim(cast(o.subsystem AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL') THEN NULL ELSE nullif(btrim(cast(o.subsystem AS text)), '') END)               AS subsystem,
+  (CASE WHEN o.belonging_unit IS NULL THEN NULL WHEN upper(btrim(cast(o.belonging_unit AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL') THEN NULL ELSE nullif(btrim(cast(o.belonging_unit AS text)), '') END)          AS belonging_unit,
+  (CASE WHEN o.risk_description IS NULL THEN NULL WHEN upper(btrim(cast(o.risk_description AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL') THEN NULL ELSE nullif(btrim(cast(o.risk_description AS text)), '') END)        AS risk_description,
+  (CASE WHEN o.risk_phase IS NULL THEN NULL WHEN upper(btrim(cast(o.risk_phase AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL') THEN NULL ELSE nullif(btrim(cast(o.risk_phase AS text)), '') END)              AS risk_phase,
+  (CASE WHEN o.risk_category IS NULL THEN NULL WHEN upper(btrim(cast(o.risk_category AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL') THEN NULL ELSE nullif(btrim(cast(o.risk_category AS text)), '') END)           AS risk_category,
+  (CASE WHEN o.risk_level IS NULL THEN NULL WHEN upper(btrim(cast(o.risk_level AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL') THEN NULL ELSE nullif(btrim(cast(o.risk_level AS text)), '') END)              AS risk_level,
+  (CASE WHEN o.impact_scope IS NULL THEN NULL WHEN upper(btrim(cast(o.impact_scope AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL') THEN NULL ELSE nullif(btrim(cast(o.impact_scope AS text)), '') END)            AS impact_scope,
+  (CASE WHEN o.response_measure IS NULL THEN NULL WHEN upper(btrim(cast(o.response_measure AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL') THEN NULL ELSE nullif(btrim(cast(o.response_measure AS text)), '') END)        AS response_measure,
+  (CASE WHEN o.monthly_control_plan IS NULL THEN NULL WHEN upper(btrim(cast(o.monthly_control_plan AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL') THEN NULL ELSE nullif(btrim(cast(o.monthly_control_plan AS text)), '') END)    AS monthly_control_plan,
+  (CASE WHEN o.weekly_release_plan IS NULL THEN NULL WHEN upper(btrim(cast(o.weekly_release_plan AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL') THEN NULL ELSE nullif(btrim(cast(o.weekly_release_plan AS text)), '') END)     AS weekly_release_plan,
+  (CASE WHEN o.release_plan_synced IS NULL THEN NULL WHEN upper(btrim(cast(o.release_plan_synced AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL') THEN NULL ELSE nullif(btrim(cast(o.release_plan_synced AS text)), '') END)     AS release_plan_synced,
+  (CASE WHEN o.new_plan_count IS NULL THEN NULL WHEN upper(btrim(cast(o.new_plan_count AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL') THEN NULL ELSE nullif(btrim(cast(o.new_plan_count AS text)), '') END)          AS new_plan_count,
+  (CASE WHEN o.progress_situation IS NULL THEN NULL WHEN upper(btrim(cast(o.progress_situation AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL') THEN NULL ELSE nullif(btrim(cast(o.progress_situation AS text)), '') END)      AS progress_situation,
+  (CASE WHEN o.response_owner IS NULL THEN NULL WHEN upper(btrim(cast(o.response_owner AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL') THEN NULL ELSE nullif(btrim(cast(o.response_owner AS text)), '') END)          AS response_owner,
+  (CASE WHEN o.control_owner IS NULL THEN NULL WHEN upper(btrim(cast(o.control_owner AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL') THEN NULL ELSE nullif(btrim(cast(o.control_owner AS text)), '') END)           AS control_owner,
+  (CASE WHEN o.dept IS NULL THEN NULL WHEN upper(btrim(cast(o.dept AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL') THEN NULL ELSE nullif(btrim(cast(o.dept AS text)), '') END)                    AS dept,
+  (CASE WHEN o.risk_status IS NULL THEN NULL WHEN upper(btrim(cast(o.risk_status AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL') THEN NULL ELSE nullif(btrim(cast(o.risk_status AS text)), '') END)             AS risk_status,
+  (CASE WHEN o.project_manager IS NULL THEN NULL WHEN upper(btrim(cast(o.project_manager AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL') THEN NULL ELSE nullif(btrim(cast(o.project_manager AS text)), '') END)         AS project_manager,
+  (CASE WHEN o.remark IS NULL THEN NULL WHEN upper(btrim(cast(o.remark AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL') THEN NULL ELSE nullif(btrim(cast(o.remark AS text)), '') END)                  AS remark,
+  (CASE WHEN o.filled_by IS NULL THEN NULL WHEN upper(btrim(cast(o.filled_by AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL') THEN NULL ELSE nullif(btrim(cast(o.filled_by AS text)), '') END)               AS filled_by,
 
   -- === 跟进措施字段 ===
-  (
-  CASE
-    WHEN o.measure_category IS NULL THEN NULL
-    WHEN upper(btrim(cast(o.measure_category AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL')
-      THEN NULL
-    ELSE nullif(btrim(cast(o.measure_category AS text)), '')
-  END
-)        AS measure_category,
-  (
-  CASE
-    WHEN o.measure_title IS NULL THEN NULL
-    WHEN upper(btrim(cast(o.measure_title AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL')
-      THEN NULL
-    ELSE nullif(btrim(cast(o.measure_title AS text)), '')
-  END
-)           AS measure_title,
-  (
-  CASE
-    WHEN o.follow_up_person IS NULL THEN NULL
-    WHEN upper(btrim(cast(o.follow_up_person AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL')
-      THEN NULL
-    ELSE nullif(btrim(cast(o.follow_up_person AS text)), '')
-  END
-)        AS follow_up_person,
-  (
-  CASE
-    WHEN o.main_recipient IS NULL THEN NULL
-    WHEN upper(btrim(cast(o.main_recipient AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL')
-      THEN NULL
-    ELSE nullif(btrim(cast(o.main_recipient AS text)), '')
-  END
-)          AS main_recipient,
-  (
-  CASE
-    WHEN o.cc_recipient IS NULL THEN NULL
-    WHEN upper(btrim(cast(o.cc_recipient AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL')
-      THEN NULL
-    ELSE nullif(btrim(cast(o.cc_recipient AS text)), '')
-  END
-)            AS cc_recipient,
-  (
-  CASE
-    WHEN o.closure_status IS NULL THEN NULL
-    WHEN upper(btrim(cast(o.closure_status AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL')
-      THEN NULL
-    ELSE nullif(btrim(cast(o.closure_status AS text)), '')
-  END
-)          AS closure_status,
-  (
-  CASE
-    WHEN o.closure_deliverable_type IS NULL THEN NULL
-    WHEN upper(btrim(cast(o.closure_deliverable_type AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL')
-      THEN NULL
-    ELSE nullif(btrim(cast(o.closure_deliverable_type AS text)), '')
-  END
-) AS closure_deliverable_type,
-  (
-  CASE
-    WHEN o.closure_deliverable IS NULL THEN NULL
-    WHEN upper(btrim(cast(o.closure_deliverable AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL')
-      THEN NULL
-    ELSE nullif(btrim(cast(o.closure_deliverable AS text)), '')
-  END
-)     AS closure_deliverable,
-  (
-  CASE
-    WHEN o.risk_content IS NULL THEN NULL
-    WHEN upper(btrim(cast(o.risk_content AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL')
-      THEN NULL
-    ELSE nullif(btrim(cast(o.risk_content AS text)), '')
-  END
-)            AS risk_content,
+  (CASE WHEN o.measure_category IS NULL THEN NULL WHEN upper(btrim(cast(o.measure_category AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL') THEN NULL ELSE nullif(btrim(cast(o.measure_category AS text)), '') END)        AS measure_category,
+  (CASE WHEN o.measure_title IS NULL THEN NULL WHEN upper(btrim(cast(o.measure_title AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL') THEN NULL ELSE nullif(btrim(cast(o.measure_title AS text)), '') END)           AS measure_title,
+  (CASE WHEN o.follow_up_person IS NULL THEN NULL WHEN upper(btrim(cast(o.follow_up_person AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL') THEN NULL ELSE nullif(btrim(cast(o.follow_up_person AS text)), '') END)        AS follow_up_person,
+  (CASE WHEN o.main_recipient IS NULL THEN NULL WHEN upper(btrim(cast(o.main_recipient AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL') THEN NULL ELSE nullif(btrim(cast(o.main_recipient AS text)), '') END)          AS main_recipient,
+  (CASE WHEN o.cc_recipient IS NULL THEN NULL WHEN upper(btrim(cast(o.cc_recipient AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL') THEN NULL ELSE nullif(btrim(cast(o.cc_recipient AS text)), '') END)            AS cc_recipient,
+  (CASE WHEN o.closure_status IS NULL THEN NULL WHEN upper(btrim(cast(o.closure_status AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL') THEN NULL ELSE nullif(btrim(cast(o.closure_status AS text)), '') END)          AS closure_status,
+  (CASE WHEN o.closure_deliverable_type IS NULL THEN NULL WHEN upper(btrim(cast(o.closure_deliverable_type AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL') THEN NULL ELSE nullif(btrim(cast(o.closure_deliverable_type AS text)), '') END) AS closure_deliverable_type,
+  (CASE WHEN o.closure_deliverable IS NULL THEN NULL WHEN upper(btrim(cast(o.closure_deliverable AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL') THEN NULL ELSE nullif(btrim(cast(o.closure_deliverable AS text)), '') END)     AS closure_deliverable,
+  (CASE WHEN o.risk_content IS NULL THEN NULL WHEN upper(btrim(cast(o.risk_content AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL') THEN NULL ELSE nullif(btrim(cast(o.risk_content AS text)), '') END)            AS risk_content,
 
   -- === 周数字段 ===
-  (
-  CASE
-    WHEN o.risk_submit_week IS NULL THEN NULL
-    WHEN upper(btrim(cast(o.risk_submit_week AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL')
-      THEN NULL
-    ELSE nullif(btrim(cast(o.risk_submit_week AS text)), '')
-  END
-)        AS risk_submit_week,
-  (
-  CASE
-    WHEN o.progress_stat_week IS NULL THEN NULL
-    WHEN upper(btrim(cast(o.progress_stat_week AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL')
-      THEN NULL
-    ELSE nullif(btrim(cast(o.progress_stat_week AS text)), '')
-  END
-)      AS progress_stat_week,
-  (
-  CASE
-    WHEN o.follow_up_week IS NULL THEN NULL
-    WHEN upper(btrim(cast(o.follow_up_week AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL')
-      THEN NULL
-    ELSE nullif(btrim(cast(o.follow_up_week AS text)), '')
-  END
-)          AS follow_up_week,
-  (
-  CASE
-    WHEN o.final_closure_week IS NULL THEN NULL
-    WHEN upper(btrim(cast(o.final_closure_week AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL')
-      THEN NULL
-    ELSE nullif(btrim(cast(o.final_closure_week AS text)), '')
-  END
-)      AS final_closure_week,
-  (
-  CASE
-    WHEN o.last_update_week IS NULL THEN NULL
-    WHEN upper(btrim(cast(o.last_update_week AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL')
-      THEN NULL
-    ELSE nullif(btrim(cast(o.last_update_week AS text)), '')
-  END
-)        AS last_update_week,
+  (CASE WHEN o.risk_submit_week IS NULL THEN NULL WHEN upper(btrim(cast(o.risk_submit_week AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL') THEN NULL ELSE nullif(btrim(cast(o.risk_submit_week AS text)), '') END)        AS risk_submit_week,
+  (CASE WHEN o.progress_stat_week IS NULL THEN NULL WHEN upper(btrim(cast(o.progress_stat_week AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL') THEN NULL ELSE nullif(btrim(cast(o.progress_stat_week AS text)), '') END)      AS progress_stat_week,
+  (CASE WHEN o.follow_up_week IS NULL THEN NULL WHEN upper(btrim(cast(o.follow_up_week AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL') THEN NULL ELSE nullif(btrim(cast(o.follow_up_week AS text)), '') END)          AS follow_up_week,
+  (CASE WHEN o.final_closure_week IS NULL THEN NULL WHEN upper(btrim(cast(o.final_closure_week AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL') THEN NULL ELSE nullif(btrim(cast(o.final_closure_week AS text)), '') END)      AS final_closure_week,
+  (CASE WHEN o.last_update_week IS NULL THEN NULL WHEN upper(btrim(cast(o.last_update_week AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL') THEN NULL ELSE nullif(btrim(cast(o.last_update_week AS text)), '') END)        AS last_update_week,
 
   -- === 风险等级标准化 ===
-  CASE COALESCE((
-  CASE
-    WHEN o.risk_level IS NULL THEN NULL
-    WHEN upper(btrim(cast(o.risk_level AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL')
-      THEN NULL
-    ELSE nullif(btrim(cast(o.risk_level AS text)), '')
-  END
-), '')
+  CASE COALESCE((CASE WHEN o.risk_level IS NULL THEN NULL WHEN upper(btrim(cast(o.risk_level AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL') THEN NULL ELSE nullif(btrim(cast(o.risk_level AS text)), '') END), '')
     WHEN '高' THEN 3
     WHEN '中' THEN 2
     WHEN '低' THEN 1
@@ -4057,174 +824,28 @@ SELECT
 
   -- === 闭环标志 ===
   CASE
-    WHEN btrim(COALESCE((
-  CASE
-    WHEN o.closure_status IS NULL THEN NULL
-    WHEN upper(btrim(cast(o.closure_status AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL')
-      THEN NULL
-    ELSE nullif(btrim(cast(o.closure_status AS text)), '')
-  END
-), '')) = '已闭环' THEN true
+    WHEN btrim(COALESCE((CASE WHEN o.closure_status IS NULL THEN NULL WHEN upper(btrim(cast(o.closure_status AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL') THEN NULL ELSE nullif(btrim(cast(o.closure_status AS text)), '') END), '')) = '已闭环' THEN true
     ELSE false
   END AS is_closed,
 
   -- === 日期解析 ===
-  (
-  CASE
-    WHEN o.risk_submit_time IS NULL THEN NULL
-    WHEN btrim(cast(o.risk_submit_time AS text)) = '' THEN NULL
-    WHEN btrim(cast(o.risk_submit_time AS text)) ~ '^\d{4}-\d{2}-\d{2}$'
-      THEN to_date(btrim(cast(o.risk_submit_time AS text)), 'YYYY-MM-DD')
-    WHEN btrim(cast(o.risk_submit_time AS text)) ~ '^\d{4}-\d{2}-\d{2}\s+.*$'
-      THEN to_date(substr(btrim(cast(o.risk_submit_time AS text)), 1, 10), 'YYYY-MM-DD')
-    WHEN btrim(cast(o.risk_submit_time AS text)) ~ '^\d{4}/\d{2}/\d{2}$'
-      THEN to_date(replace(btrim(cast(o.risk_submit_time AS text)), '/', '-'), 'YYYY-MM-DD')
-    ELSE NULL
-  END
-)           AS risk_submit_date,
-  (
-  CASE
-    WHEN o.final_release_time IS NULL THEN NULL
-    WHEN btrim(cast(o.final_release_time AS text)) = '' THEN NULL
-    WHEN btrim(cast(o.final_release_time AS text)) ~ '^\d{4}-\d{2}-\d{2}$'
-      THEN to_date(btrim(cast(o.final_release_time AS text)), 'YYYY-MM-DD')
-    WHEN btrim(cast(o.final_release_time AS text)) ~ '^\d{4}-\d{2}-\d{2}\s+.*$'
-      THEN to_date(substr(btrim(cast(o.final_release_time AS text)), 1, 10), 'YYYY-MM-DD')
-    WHEN btrim(cast(o.final_release_time AS text)) ~ '^\d{4}/\d{2}/\d{2}$'
-      THEN to_date(replace(btrim(cast(o.final_release_time AS text)), '/', '-'), 'YYYY-MM-DD')
-    ELSE NULL
-  END
-)         AS final_release_date,
-  (
-  CASE
-    WHEN o.progress_stat_time IS NULL THEN NULL
-    WHEN btrim(cast(o.progress_stat_time AS text)) = '' THEN NULL
-    WHEN btrim(cast(o.progress_stat_time AS text)) ~ '^\d{4}-\d{2}-\d{2}$'
-      THEN to_date(btrim(cast(o.progress_stat_time AS text)), 'YYYY-MM-DD')
-    WHEN btrim(cast(o.progress_stat_time AS text)) ~ '^\d{4}-\d{2}-\d{2}\s+.*$'
-      THEN to_date(substr(btrim(cast(o.progress_stat_time AS text)), 1, 10), 'YYYY-MM-DD')
-    WHEN btrim(cast(o.progress_stat_time AS text)) ~ '^\d{4}/\d{2}/\d{2}$'
-      THEN to_date(replace(btrim(cast(o.progress_stat_time AS text)), '/', '-'), 'YYYY-MM-DD')
-    ELSE NULL
-  END
-)         AS progress_stat_date,
-  (
-  CASE
-    WHEN o.follow_up_date IS NULL THEN NULL
-    WHEN btrim(cast(o.follow_up_date AS text)) = '' THEN NULL
-    WHEN btrim(cast(o.follow_up_date AS text)) ~ '^\d{4}-\d{2}-\d{2}$'
-      THEN to_date(btrim(cast(o.follow_up_date AS text)), 'YYYY-MM-DD')
-    WHEN btrim(cast(o.follow_up_date AS text)) ~ '^\d{4}-\d{2}-\d{2}\s+.*$'
-      THEN to_date(substr(btrim(cast(o.follow_up_date AS text)), 1, 10), 'YYYY-MM-DD')
-    WHEN btrim(cast(o.follow_up_date AS text)) ~ '^\d{4}/\d{2}/\d{2}$'
-      THEN to_date(replace(btrim(cast(o.follow_up_date AS text)), '/', '-'), 'YYYY-MM-DD')
-    ELSE NULL
-  END
-)             AS follow_up_date,
-  (
-  CASE
-    WHEN o.final_closure_date IS NULL THEN NULL
-    WHEN btrim(cast(o.final_closure_date AS text)) = '' THEN NULL
-    WHEN btrim(cast(o.final_closure_date AS text)) ~ '^\d{4}-\d{2}-\d{2}$'
-      THEN to_date(btrim(cast(o.final_closure_date AS text)), 'YYYY-MM-DD')
-    WHEN btrim(cast(o.final_closure_date AS text)) ~ '^\d{4}-\d{2}-\d{2}\s+.*$'
-      THEN to_date(substr(btrim(cast(o.final_closure_date AS text)), 1, 10), 'YYYY-MM-DD')
-    WHEN btrim(cast(o.final_closure_date AS text)) ~ '^\d{4}/\d{2}/\d{2}$'
-      THEN to_date(replace(btrim(cast(o.final_closure_date AS text)), '/', '-'), 'YYYY-MM-DD')
-    ELSE NULL
-  END
-)         AS final_closure_date,
-  (
-  CASE
-    WHEN o.last_update_time IS NULL THEN NULL
-    WHEN btrim(cast(o.last_update_time AS text)) = '' THEN NULL
-    WHEN btrim(cast(o.last_update_time AS text)) ~ '^\d{4}-\d{2}-\d{2}$'
-      THEN to_date(btrim(cast(o.last_update_time AS text)), 'YYYY-MM-DD')
-    WHEN btrim(cast(o.last_update_time AS text)) ~ '^\d{4}-\d{2}-\d{2}\s+.*$'
-      THEN to_date(substr(btrim(cast(o.last_update_time AS text)), 1, 10), 'YYYY-MM-DD')
-    WHEN btrim(cast(o.last_update_time AS text)) ~ '^\d{4}/\d{2}/\d{2}$'
-      THEN to_date(replace(btrim(cast(o.last_update_time AS text)), '/', '-'), 'YYYY-MM-DD')
-    ELSE NULL
-  END
-)           AS last_update_time,
+  (CASE WHEN o.risk_submit_time IS NULL THEN NULL WHEN btrim(cast(o.risk_submit_time AS text)) = '' THEN NULL WHEN btrim(cast(o.risk_submit_time AS text)) ~ '^\d{4}-\d{2}-\d{2}$' THEN to_date(btrim(cast(o.risk_submit_time AS text)), 'YYYY-MM-DD') WHEN btrim(cast(o.risk_submit_time AS text)) ~ '^\d{4}/\d{2}/\d{2}$' THEN to_date(replace(btrim(cast(o.risk_submit_time AS text)), '/', '-'), 'YYYY-MM-DD') ELSE NULL END)           AS risk_submit_date,
+  (CASE WHEN o.final_release_time IS NULL THEN NULL WHEN btrim(cast(o.final_release_time AS text)) = '' THEN NULL WHEN btrim(cast(o.final_release_time AS text)) ~ '^\d{4}-\d{2}-\d{2}$' THEN to_date(btrim(cast(o.final_release_time AS text)), 'YYYY-MM-DD') WHEN btrim(cast(o.final_release_time AS text)) ~ '^\d{4}/\d{2}/\d{2}$' THEN to_date(replace(btrim(cast(o.final_release_time AS text)), '/', '-'), 'YYYY-MM-DD') ELSE NULL END)         AS final_release_date,
+  (CASE WHEN o.progress_stat_time IS NULL THEN NULL WHEN btrim(cast(o.progress_stat_time AS text)) = '' THEN NULL WHEN btrim(cast(o.progress_stat_time AS text)) ~ '^\d{4}-\d{2}-\d{2}$' THEN to_date(btrim(cast(o.progress_stat_time AS text)), 'YYYY-MM-DD') WHEN btrim(cast(o.progress_stat_time AS text)) ~ '^\d{4}/\d{2}/\d{2}$' THEN to_date(replace(btrim(cast(o.progress_stat_time AS text)), '/', '-'), 'YYYY-MM-DD') ELSE NULL END)         AS progress_stat_date,
+  (CASE WHEN o.follow_up_date IS NULL THEN NULL WHEN btrim(cast(o.follow_up_date AS text)) = '' THEN NULL WHEN btrim(cast(o.follow_up_date AS text)) ~ '^\d{4}-\d{2}-\d{2}$' THEN to_date(btrim(cast(o.follow_up_date AS text)), 'YYYY-MM-DD') WHEN btrim(cast(o.follow_up_date AS text)) ~ '^\d{4}/\d{2}/\d{2}$' THEN to_date(replace(btrim(cast(o.follow_up_date AS text)), '/', '-'), 'YYYY-MM-DD') ELSE NULL END)             AS follow_up_date,
+  (CASE WHEN o.final_closure_date IS NULL THEN NULL WHEN btrim(cast(o.final_closure_date AS text)) = '' THEN NULL WHEN btrim(cast(o.final_closure_date AS text)) ~ '^\d{4}-\d{2}-\d{2}$' THEN to_date(btrim(cast(o.final_closure_date AS text)), 'YYYY-MM-DD') WHEN btrim(cast(o.final_closure_date AS text)) ~ '^\d{4}/\d{2}/\d{2}$' THEN to_date(replace(btrim(cast(o.final_closure_date AS text)), '/', '-'), 'YYYY-MM-DD') ELSE NULL END)         AS final_closure_date,
+  (CASE WHEN o.last_update_time IS NULL THEN NULL WHEN btrim(cast(o.last_update_time AS text)) = '' THEN NULL WHEN btrim(cast(o.last_update_time AS text)) ~ '^\d{4}-\d{2}-\d{2}$' THEN to_date(btrim(cast(o.last_update_time AS text)), 'YYYY-MM-DD') WHEN btrim(cast(o.last_update_time AS text)) ~ '^\d{4}/\d{2}/\d{2}$' THEN to_date(replace(btrim(cast(o.last_update_time AS text)), '/', '-'), 'YYYY-MM-DD') ELSE NULL END)           AS last_update_time,
 
   -- === 时间维度标签 ===
-  EXTRACT(YEAR FROM (
-  CASE
-    WHEN o.risk_submit_time IS NULL THEN NULL
-    WHEN btrim(cast(o.risk_submit_time AS text)) = '' THEN NULL
-    WHEN btrim(cast(o.risk_submit_time AS text)) ~ '^\d{4}-\d{2}-\d{2}$'
-      THEN to_date(btrim(cast(o.risk_submit_time AS text)), 'YYYY-MM-DD')
-    WHEN btrim(cast(o.risk_submit_time AS text)) ~ '^\d{4}-\d{2}-\d{2}\s+.*$'
-      THEN to_date(substr(btrim(cast(o.risk_submit_time AS text)), 1, 10), 'YYYY-MM-DD')
-    WHEN btrim(cast(o.risk_submit_time AS text)) ~ '^\d{4}/\d{2}/\d{2}$'
-      THEN to_date(replace(btrim(cast(o.risk_submit_time AS text)), '/', '-'), 'YYYY-MM-DD')
-    ELSE NULL
-  END
-))::int     AS submit_year,
-  EXTRACT(QUARTER FROM (
-  CASE
-    WHEN o.risk_submit_time IS NULL THEN NULL
-    WHEN btrim(cast(o.risk_submit_time AS text)) = '' THEN NULL
-    WHEN btrim(cast(o.risk_submit_time AS text)) ~ '^\d{4}-\d{2}-\d{2}$'
-      THEN to_date(btrim(cast(o.risk_submit_time AS text)), 'YYYY-MM-DD')
-    WHEN btrim(cast(o.risk_submit_time AS text)) ~ '^\d{4}-\d{2}-\d{2}\s+.*$'
-      THEN to_date(substr(btrim(cast(o.risk_submit_time AS text)), 1, 10), 'YYYY-MM-DD')
-    WHEN btrim(cast(o.risk_submit_time AS text)) ~ '^\d{4}/\d{2}/\d{2}$'
-      THEN to_date(replace(btrim(cast(o.risk_submit_time AS text)), '/', '-'), 'YYYY-MM-DD')
-    ELSE NULL
-  END
-))::int  AS submit_quarter,
-  to_char((
-  CASE
-    WHEN o.risk_submit_time IS NULL THEN NULL
-    WHEN btrim(cast(o.risk_submit_time AS text)) = '' THEN NULL
-    WHEN btrim(cast(o.risk_submit_time AS text)) ~ '^\d{4}-\d{2}-\d{2}$'
-      THEN to_date(btrim(cast(o.risk_submit_time AS text)), 'YYYY-MM-DD')
-    WHEN btrim(cast(o.risk_submit_time AS text)) ~ '^\d{4}-\d{2}-\d{2}\s+.*$'
-      THEN to_date(substr(btrim(cast(o.risk_submit_time AS text)), 1, 10), 'YYYY-MM-DD')
-    WHEN btrim(cast(o.risk_submit_time AS text)) ~ '^\d{4}/\d{2}/\d{2}$'
-      THEN to_date(replace(btrim(cast(o.risk_submit_time AS text)), '/', '-'), 'YYYY-MM-DD')
-    ELSE NULL
-  END
-), 'YYYY-MM')         AS submit_month,
+  EXTRACT(YEAR FROM (CASE WHEN o.risk_submit_time IS NULL THEN NULL WHEN btrim(cast(o.risk_submit_time AS text)) = '' THEN NULL WHEN btrim(cast(o.risk_submit_time AS text)) ~ '^\d{4}-\d{2}-\d{2}$' THEN to_date(btrim(cast(o.risk_submit_time AS text)), 'YYYY-MM-DD') WHEN btrim(cast(o.risk_submit_time AS text)) ~ '^\d{4}/\d{2}/\d{2}$' THEN to_date(replace(btrim(cast(o.risk_submit_time AS text)), '/', '-'), 'YYYY-MM-DD') ELSE NULL END))::int     AS submit_year,
+  EXTRACT(QUARTER FROM (CASE WHEN o.risk_submit_time IS NULL THEN NULL WHEN btrim(cast(o.risk_submit_time AS text)) = '' THEN NULL WHEN btrim(cast(o.risk_submit_time AS text)) ~ '^\d{4}-\d{2}-\d{2}$' THEN to_date(btrim(cast(o.risk_submit_time AS text)), 'YYYY-MM-DD') WHEN btrim(cast(o.risk_submit_time AS text)) ~ '^\d{4}/\d{2}/\d{2}$' THEN to_date(replace(btrim(cast(o.risk_submit_time AS text)), '/', '-'), 'YYYY-MM-DD') ELSE NULL END))::int  AS submit_quarter,
+  to_char((CASE WHEN o.risk_submit_time IS NULL THEN NULL WHEN btrim(cast(o.risk_submit_time AS text)) = '' THEN NULL WHEN btrim(cast(o.risk_submit_time AS text)) ~ '^\d{4}-\d{2}-\d{2}$' THEN to_date(btrim(cast(o.risk_submit_time AS text)), 'YYYY-MM-DD') WHEN btrim(cast(o.risk_submit_time AS text)) ~ '^\d{4}/\d{2}/\d{2}$' THEN to_date(replace(btrim(cast(o.risk_submit_time AS text)), '/', '-'), 'YYYY-MM-DD') ELSE NULL END), 'YYYY-MM')         AS submit_month,
 
   -- === 滞留天数 ===
   CASE
-    WHEN (
-  CASE
-    WHEN o.follow_up_date IS NULL THEN NULL
-    WHEN btrim(cast(o.follow_up_date AS text)) = '' THEN NULL
-    WHEN btrim(cast(o.follow_up_date AS text)) ~ '^\d{4}-\d{2}-\d{2}$'
-      THEN to_date(btrim(cast(o.follow_up_date AS text)), 'YYYY-MM-DD')
-    WHEN btrim(cast(o.follow_up_date AS text)) ~ '^\d{4}-\d{2}-\d{2}\s+.*$'
-      THEN to_date(substr(btrim(cast(o.follow_up_date AS text)), 1, 10), 'YYYY-MM-DD')
-    WHEN btrim(cast(o.follow_up_date AS text)) ~ '^\d{4}/\d{2}/\d{2}$'
-      THEN to_date(replace(btrim(cast(o.follow_up_date AS text)), '/', '-'), 'YYYY-MM-DD')
-    ELSE NULL
-  END
-) IS NOT NULL
-     AND btrim(COALESCE((
-  CASE
-    WHEN o.closure_status IS NULL THEN NULL
-    WHEN upper(btrim(cast(o.closure_status AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL')
-      THEN NULL
-    ELSE nullif(btrim(cast(o.closure_status AS text)), '')
-  END
-), '')) != '已闭环'
-    THEN (current_date - (
-  CASE
-    WHEN o.follow_up_date IS NULL THEN NULL
-    WHEN btrim(cast(o.follow_up_date AS text)) = '' THEN NULL
-    WHEN btrim(cast(o.follow_up_date AS text)) ~ '^\d{4}-\d{2}-\d{2}$'
-      THEN to_date(btrim(cast(o.follow_up_date AS text)), 'YYYY-MM-DD')
-    WHEN btrim(cast(o.follow_up_date AS text)) ~ '^\d{4}-\d{2}-\d{2}\s+.*$'
-      THEN to_date(substr(btrim(cast(o.follow_up_date AS text)), 1, 10), 'YYYY-MM-DD')
-    WHEN btrim(cast(o.follow_up_date AS text)) ~ '^\d{4}/\d{2}/\d{2}$'
-      THEN to_date(replace(btrim(cast(o.follow_up_date AS text)), '/', '-'), 'YYYY-MM-DD')
-    ELSE NULL
-  END
-))::int
+    WHEN (CASE WHEN o.follow_up_date IS NULL THEN NULL WHEN btrim(cast(o.follow_up_date AS text)) = '' THEN NULL WHEN btrim(cast(o.follow_up_date AS text)) ~ '^\d{4}-\d{2}-\d{2}$' THEN to_date(btrim(cast(o.follow_up_date AS text)), 'YYYY-MM-DD') WHEN btrim(cast(o.follow_up_date AS text)) ~ '^\d{4}/\d{2}/\d{2}$' THEN to_date(replace(btrim(cast(o.follow_up_date AS text)), '/', '-'), 'YYYY-MM-DD') ELSE NULL END) IS NOT NULL
+     AND btrim(COALESCE((CASE WHEN o.closure_status IS NULL THEN NULL WHEN upper(btrim(cast(o.closure_status AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL') THEN NULL ELSE nullif(btrim(cast(o.closure_status AS text)), '') END), '')) != '已闭环'
+    THEN (current_date - (CASE WHEN o.follow_up_date IS NULL THEN NULL WHEN btrim(cast(o.follow_up_date AS text)) = '' THEN NULL WHEN btrim(cast(o.follow_up_date AS text)) ~ '^\d{4}-\d{2}-\d{2}$' THEN to_date(btrim(cast(o.follow_up_date AS text)), 'YYYY-MM-DD') WHEN btrim(cast(o.follow_up_date AS text)) ~ '^\d{4}/\d{2}/\d{2}$' THEN to_date(replace(btrim(cast(o.follow_up_date AS text)), '/', '-'), 'YYYY-MM-DD') ELSE NULL END))::int
     ELSE 0
   END AS pending_days,
 
@@ -4246,219 +867,44 @@ SELECT
   ) AS material_id,
 
   -- === 原始业务字段 ===
-  (
-  CASE
-    WHEN o.project_no IS NULL THEN NULL
-    WHEN upper(btrim(cast(o.project_no AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL')
-      THEN NULL
-    ELSE nullif(btrim(cast(o.project_no AS text)), '')
-  END
-)              AS project_no,
-  (
-  CASE
-    WHEN o.subsystem IS NULL THEN NULL
-    WHEN upper(btrim(cast(o.subsystem AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL')
-      THEN NULL
-    ELSE nullif(btrim(cast(o.subsystem AS text)), '')
-  END
-)               AS subsystem,
-  (
-  CASE
-    WHEN o.pbs_no IS NULL THEN NULL
-    WHEN upper(btrim(cast(o.pbs_no AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL')
-      THEN NULL
-    ELSE nullif(btrim(cast(o.pbs_no AS text)), '')
-  END
-)                  AS pbs_no,
-  (
-  CASE
-    WHEN o.pbs_name IS NULL THEN NULL
-    WHEN upper(btrim(cast(o.pbs_name AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL')
-      THEN NULL
-    ELSE nullif(btrim(cast(o.pbs_name AS text)), '')
-  END
-)                AS pbs_name,
-  (
-  CASE
-    WHEN o.self_or_outsource IS NULL THEN NULL
-    WHEN upper(btrim(cast(o.self_or_outsource AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL')
-      THEN NULL
-    ELSE nullif(btrim(cast(o.self_or_outsource AS text)), '')
-  END
-)       AS self_or_outsource,
-  (
-  CASE
-    WHEN o.supplier_name IS NULL THEN NULL
-    WHEN upper(btrim(cast(o.supplier_name AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL')
-      THEN NULL
-    ELSE nullif(btrim(cast(o.supplier_name AS text)), '')
-  END
-)           AS supplier_name,
-  (
-  CASE
-    WHEN o.is_long_cycle IS NULL THEN NULL
-    WHEN upper(btrim(cast(o.is_long_cycle AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL')
-      THEN NULL
-    ELSE nullif(btrim(cast(o.is_long_cycle AS text)), '')
-  END
-)           AS is_long_cycle_raw,
-  (
-  CASE
-    WHEN o.dept_owner IS NULL THEN NULL
-    WHEN upper(btrim(cast(o.dept_owner AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL')
-      THEN NULL
-    ELSE nullif(btrim(cast(o.dept_owner AS text)), '')
-  END
-)              AS dept_owner,
-  (
-  CASE
-    WHEN o.control_dept_owner IS NULL THEN NULL
-    WHEN upper(btrim(cast(o.control_dept_owner AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL')
-      THEN NULL
-    ELSE nullif(btrim(cast(o.control_dept_owner AS text)), '')
-  END
-)      AS control_dept_owner,
-  (
-  CASE
-    WHEN o.weekly_progress IS NULL THEN NULL
-    WHEN upper(btrim(cast(o.weekly_progress AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL')
-      THEN NULL
-    ELSE nullif(btrim(cast(o.weekly_progress AS text)), '')
-  END
-)         AS weekly_progress,
-  (
-  CASE
-    WHEN o.affects_major_node IS NULL THEN NULL
-    WHEN upper(btrim(cast(o.affects_major_node AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL')
-      THEN NULL
-    ELSE nullif(btrim(cast(o.affects_major_node AS text)), '')
-  END
-)      AS affects_major_node,
-  (
-  CASE
-    WHEN o.risk_level IS NULL THEN NULL
-    WHEN upper(btrim(cast(o.risk_level AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL')
-      THEN NULL
-    ELSE nullif(btrim(cast(o.risk_level AS text)), '')
-  END
-)              AS risk_level,
-  (
-  CASE
-    WHEN o.risk_content IS NULL THEN NULL
-    WHEN upper(btrim(cast(o.risk_content AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL')
-      THEN NULL
-    ELSE nullif(btrim(cast(o.risk_content AS text)), '')
-  END
-)            AS risk_content,
-  (
-  CASE
-    WHEN o.delay_impact IS NULL THEN NULL
-    WHEN upper(btrim(cast(o.delay_impact AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL')
-      THEN NULL
-    ELSE nullif(btrim(cast(o.delay_impact AS text)), '')
-  END
-)            AS delay_impact,
-  (
-  CASE
-    WHEN o.remark IS NULL THEN NULL
-    WHEN upper(btrim(cast(o.remark AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL')
-      THEN NULL
-    ELSE nullif(btrim(cast(o.remark AS text)), '')
-  END
-)                  AS remark,
+  (CASE WHEN o.project_no IS NULL THEN NULL WHEN upper(btrim(cast(o.project_no AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL') THEN NULL ELSE nullif(btrim(cast(o.project_no AS text)), '') END)              AS project_no,
+  (CASE WHEN o.subsystem IS NULL THEN NULL WHEN upper(btrim(cast(o.subsystem AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL') THEN NULL ELSE nullif(btrim(cast(o.subsystem AS text)), '') END)               AS subsystem,
+  (CASE WHEN o.pbs_no IS NULL THEN NULL WHEN upper(btrim(cast(o.pbs_no AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL') THEN NULL ELSE nullif(btrim(cast(o.pbs_no AS text)), '') END)                  AS pbs_no,
+  (CASE WHEN o.pbs_name IS NULL THEN NULL WHEN upper(btrim(cast(o.pbs_name AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL') THEN NULL ELSE nullif(btrim(cast(o.pbs_name AS text)), '') END)                AS pbs_name,
+  (CASE WHEN o.self_or_outsource IS NULL THEN NULL WHEN upper(btrim(cast(o.self_or_outsource AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL') THEN NULL ELSE nullif(btrim(cast(o.self_or_outsource AS text)), '') END)       AS self_or_outsource,
+  (CASE WHEN o.supplier_name IS NULL THEN NULL WHEN upper(btrim(cast(o.supplier_name AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL') THEN NULL ELSE nullif(btrim(cast(o.supplier_name AS text)), '') END)           AS supplier_name,
+  (CASE WHEN o.is_long_cycle IS NULL THEN NULL WHEN upper(btrim(cast(o.is_long_cycle AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL') THEN NULL ELSE nullif(btrim(cast(o.is_long_cycle AS text)), '') END)           AS is_long_cycle_raw,
+  (CASE WHEN o.dept_owner IS NULL THEN NULL WHEN upper(btrim(cast(o.dept_owner AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL') THEN NULL ELSE nullif(btrim(cast(o.dept_owner AS text)), '') END)              AS dept_owner,
+  (CASE WHEN o.control_dept_owner IS NULL THEN NULL WHEN upper(btrim(cast(o.control_dept_owner AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL') THEN NULL ELSE nullif(btrim(cast(o.control_dept_owner AS text)), '') END)      AS control_dept_owner,
+  (CASE WHEN o.weekly_progress IS NULL THEN NULL WHEN upper(btrim(cast(o.weekly_progress AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL') THEN NULL ELSE nullif(btrim(cast(o.weekly_progress AS text)), '') END)         AS weekly_progress,
+  (CASE WHEN o.affects_major_node IS NULL THEN NULL WHEN upper(btrim(cast(o.affects_major_node AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL') THEN NULL ELSE nullif(btrim(cast(o.affects_major_node AS text)), '') END)      AS affects_major_node,
+  (CASE WHEN o.risk_level IS NULL THEN NULL WHEN upper(btrim(cast(o.risk_level AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL') THEN NULL ELSE nullif(btrim(cast(o.risk_level AS text)), '') END)              AS risk_level,
+  (CASE WHEN o.risk_content IS NULL THEN NULL WHEN upper(btrim(cast(o.risk_content AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL') THEN NULL ELSE nullif(btrim(cast(o.risk_content AS text)), '') END)            AS risk_content,
+  (CASE WHEN o.delay_impact IS NULL THEN NULL WHEN upper(btrim(cast(o.delay_impact AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL') THEN NULL ELSE nullif(btrim(cast(o.delay_impact AS text)), '') END)            AS delay_impact,
+  (CASE WHEN o.remark IS NULL THEN NULL WHEN upper(btrim(cast(o.remark AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL') THEN NULL ELSE nullif(btrim(cast(o.remark AS text)), '') END)                  AS remark,
 
   -- === 周数字段 ===
-  (
-  CASE
-    WHEN o.contract_negotiation_week IS NULL THEN NULL
-    WHEN upper(btrim(cast(o.contract_negotiation_week AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL')
-      THEN NULL
-    ELSE nullif(btrim(cast(o.contract_negotiation_week AS text)), '')
-  END
-) AS contract_negotiation_week,
-  (
-  CASE
-    WHEN o.contract_delivery_week IS NULL THEN NULL
-    WHEN upper(btrim(cast(o.contract_delivery_week AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL')
-      THEN NULL
-    ELSE nullif(btrim(cast(o.contract_delivery_week AS text)), '')
-  END
-)    AS contract_delivery_week,
-  (
-  CASE
-    WHEN o.actual_delivery_week IS NULL THEN NULL
-    WHEN upper(btrim(cast(o.actual_delivery_week AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL')
-      THEN NULL
-    ELSE nullif(btrim(cast(o.actual_delivery_week AS text)), '')
-  END
-)      AS actual_delivery_week,
-  (
-  CASE
-    WHEN o.plan_inspect_week IS NULL THEN NULL
-    WHEN upper(btrim(cast(o.plan_inspect_week AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL')
-      THEN NULL
-    ELSE nullif(btrim(cast(o.plan_inspect_week AS text)), '')
-  END
-)         AS plan_inspect_week,
-  (
-  CASE
-    WHEN o.complete_inspect_week IS NULL THEN NULL
-    WHEN upper(btrim(cast(o.complete_inspect_week AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL')
-      THEN NULL
-    ELSE nullif(btrim(cast(o.complete_inspect_week AS text)), '')
-  END
-)     AS complete_inspect_week,
-  (
-  CASE
-    WHEN o.install_week IS NULL THEN NULL
-    WHEN upper(btrim(cast(o.install_week AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL')
-      THEN NULL
-    ELSE nullif(btrim(cast(o.install_week AS text)), '')
-  END
-)              AS install_week,
-  (
-  CASE
-    WHEN o.last_update_week IS NULL THEN NULL
-    WHEN upper(btrim(cast(o.last_update_week AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL')
-      THEN NULL
-    ELSE nullif(btrim(cast(o.last_update_week AS text)), '')
-  END
-)          AS last_update_week,
+  (CASE WHEN o.contract_negotiation_week IS NULL THEN NULL WHEN upper(btrim(cast(o.contract_negotiation_week AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL') THEN NULL ELSE nullif(btrim(cast(o.contract_negotiation_week AS text)), '') END) AS contract_negotiation_week,
+  (CASE WHEN o.contract_delivery_week IS NULL THEN NULL WHEN upper(btrim(cast(o.contract_delivery_week AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL') THEN NULL ELSE nullif(btrim(cast(o.contract_delivery_week AS text)), '') END)    AS contract_delivery_week,
+  (CASE WHEN o.actual_delivery_week IS NULL THEN NULL WHEN upper(btrim(cast(o.actual_delivery_week AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL') THEN NULL ELSE nullif(btrim(cast(o.actual_delivery_week AS text)), '') END)      AS actual_delivery_week,
+  (CASE WHEN o.plan_inspect_week IS NULL THEN NULL WHEN upper(btrim(cast(o.plan_inspect_week AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL') THEN NULL ELSE nullif(btrim(cast(o.plan_inspect_week AS text)), '') END)         AS plan_inspect_week,
+  (CASE WHEN o.complete_inspect_week IS NULL THEN NULL WHEN upper(btrim(cast(o.complete_inspect_week AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL') THEN NULL ELSE nullif(btrim(cast(o.complete_inspect_week AS text)), '') END)     AS complete_inspect_week,
+  (CASE WHEN o.install_week IS NULL THEN NULL WHEN upper(btrim(cast(o.install_week AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL') THEN NULL ELSE nullif(btrim(cast(o.install_week AS text)), '') END)              AS install_week,
+  (CASE WHEN o.last_update_week IS NULL THEN NULL WHEN upper(btrim(cast(o.last_update_week AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL') THEN NULL ELSE nullif(btrim(cast(o.last_update_week AS text)), '') END)          AS last_update_week,
 
   -- === 布尔派生字段 ===
   CASE
-    WHEN btrim(COALESCE((
-  CASE
-    WHEN o.is_long_cycle IS NULL THEN NULL
-    WHEN upper(btrim(cast(o.is_long_cycle AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL')
-      THEN NULL
-    ELSE nullif(btrim(cast(o.is_long_cycle AS text)), '')
-  END
-), '')) = '是' THEN true
+    WHEN btrim(COALESCE((CASE WHEN o.is_long_cycle IS NULL THEN NULL WHEN upper(btrim(cast(o.is_long_cycle AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL') THEN NULL ELSE nullif(btrim(cast(o.is_long_cycle AS text)), '') END), '')) = '是' THEN true
     ELSE false
   END AS is_long_cycle,
 
   CASE
-    WHEN btrim(COALESCE((
-  CASE
-    WHEN o.self_or_outsource IS NULL THEN NULL
-    WHEN upper(btrim(cast(o.self_or_outsource AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL')
-      THEN NULL
-    ELSE nullif(btrim(cast(o.self_or_outsource AS text)), '')
-  END
-), '')) = '自研' THEN true
+    WHEN btrim(COALESCE((CASE WHEN o.self_or_outsource IS NULL THEN NULL WHEN upper(btrim(cast(o.self_or_outsource AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL') THEN NULL ELSE nullif(btrim(cast(o.self_or_outsource AS text)), '') END), '')) = '自研' THEN true
     ELSE false
   END AS is_self_developed,
 
   -- === 风险等级标准化 ===
-  CASE COALESCE((
-  CASE
-    WHEN o.risk_level IS NULL THEN NULL
-    WHEN upper(btrim(cast(o.risk_level AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL')
-      THEN NULL
-    ELSE nullif(btrim(cast(o.risk_level AS text)), '')
-  END
-), '')
+  CASE COALESCE((CASE WHEN o.risk_level IS NULL THEN NULL WHEN upper(btrim(cast(o.risk_level AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL') THEN NULL ELSE nullif(btrim(cast(o.risk_level AS text)), '') END), '')
     WHEN '高' THEN 3
     WHEN '中' THEN 2
     WHEN '低' THEN 1
@@ -4466,151 +912,19 @@ SELECT
   END AS risk_rank,
 
   -- === 日期解析 ===
-  (
-  CASE
-    WHEN o.contract_negotiation_date IS NULL THEN NULL
-    WHEN btrim(cast(o.contract_negotiation_date AS text)) = '' THEN NULL
-    WHEN btrim(cast(o.contract_negotiation_date AS text)) ~ '^\d{4}-\d{2}-\d{2}$'
-      THEN to_date(btrim(cast(o.contract_negotiation_date AS text)), 'YYYY-MM-DD')
-    WHEN btrim(cast(o.contract_negotiation_date AS text)) ~ '^\d{4}-\d{2}-\d{2}\s+.*$'
-      THEN to_date(substr(btrim(cast(o.contract_negotiation_date AS text)), 1, 10), 'YYYY-MM-DD')
-    WHEN btrim(cast(o.contract_negotiation_date AS text)) ~ '^\d{4}/\d{2}/\d{2}$'
-      THEN to_date(replace(btrim(cast(o.contract_negotiation_date AS text)), '/', '-'), 'YYYY-MM-DD')
-    ELSE NULL
-  END
-)  AS contract_negotiation_date,
-  (
-  CASE
-    WHEN o.contract_delivery_date IS NULL THEN NULL
-    WHEN btrim(cast(o.contract_delivery_date AS text)) = '' THEN NULL
-    WHEN btrim(cast(o.contract_delivery_date AS text)) ~ '^\d{4}-\d{2}-\d{2}$'
-      THEN to_date(btrim(cast(o.contract_delivery_date AS text)), 'YYYY-MM-DD')
-    WHEN btrim(cast(o.contract_delivery_date AS text)) ~ '^\d{4}-\d{2}-\d{2}\s+.*$'
-      THEN to_date(substr(btrim(cast(o.contract_delivery_date AS text)), 1, 10), 'YYYY-MM-DD')
-    WHEN btrim(cast(o.contract_delivery_date AS text)) ~ '^\d{4}/\d{2}/\d{2}$'
-      THEN to_date(replace(btrim(cast(o.contract_delivery_date AS text)), '/', '-'), 'YYYY-MM-DD')
-    ELSE NULL
-  END
-)     AS contract_delivery_date,
-  (
-  CASE
-    WHEN o.actual_delivery_date IS NULL THEN NULL
-    WHEN btrim(cast(o.actual_delivery_date AS text)) = '' THEN NULL
-    WHEN btrim(cast(o.actual_delivery_date AS text)) ~ '^\d{4}-\d{2}-\d{2}$'
-      THEN to_date(btrim(cast(o.actual_delivery_date AS text)), 'YYYY-MM-DD')
-    WHEN btrim(cast(o.actual_delivery_date AS text)) ~ '^\d{4}-\d{2}-\d{2}\s+.*$'
-      THEN to_date(substr(btrim(cast(o.actual_delivery_date AS text)), 1, 10), 'YYYY-MM-DD')
-    WHEN btrim(cast(o.actual_delivery_date AS text)) ~ '^\d{4}/\d{2}/\d{2}$'
-      THEN to_date(replace(btrim(cast(o.actual_delivery_date AS text)), '/', '-'), 'YYYY-MM-DD')
-    ELSE NULL
-  END
-)       AS actual_delivery_date,
-  (
-  CASE
-    WHEN o.plan_inspect_date IS NULL THEN NULL
-    WHEN btrim(cast(o.plan_inspect_date AS text)) = '' THEN NULL
-    WHEN btrim(cast(o.plan_inspect_date AS text)) ~ '^\d{4}-\d{2}-\d{2}$'
-      THEN to_date(btrim(cast(o.plan_inspect_date AS text)), 'YYYY-MM-DD')
-    WHEN btrim(cast(o.plan_inspect_date AS text)) ~ '^\d{4}-\d{2}-\d{2}\s+.*$'
-      THEN to_date(substr(btrim(cast(o.plan_inspect_date AS text)), 1, 10), 'YYYY-MM-DD')
-    WHEN btrim(cast(o.plan_inspect_date AS text)) ~ '^\d{4}/\d{2}/\d{2}$'
-      THEN to_date(replace(btrim(cast(o.plan_inspect_date AS text)), '/', '-'), 'YYYY-MM-DD')
-    ELSE NULL
-  END
-)          AS plan_inspect_date,
-  (
-  CASE
-    WHEN o.complete_inspect_date IS NULL THEN NULL
-    WHEN btrim(cast(o.complete_inspect_date AS text)) = '' THEN NULL
-    WHEN btrim(cast(o.complete_inspect_date AS text)) ~ '^\d{4}-\d{2}-\d{2}$'
-      THEN to_date(btrim(cast(o.complete_inspect_date AS text)), 'YYYY-MM-DD')
-    WHEN btrim(cast(o.complete_inspect_date AS text)) ~ '^\d{4}-\d{2}-\d{2}\s+.*$'
-      THEN to_date(substr(btrim(cast(o.complete_inspect_date AS text)), 1, 10), 'YYYY-MM-DD')
-    WHEN btrim(cast(o.complete_inspect_date AS text)) ~ '^\d{4}/\d{2}/\d{2}$'
-      THEN to_date(replace(btrim(cast(o.complete_inspect_date AS text)), '/', '-'), 'YYYY-MM-DD')
-    ELSE NULL
-  END
-)      AS complete_inspect_date,
-  (
-  CASE
-    WHEN o.install_date IS NULL THEN NULL
-    WHEN btrim(cast(o.install_date AS text)) = '' THEN NULL
-    WHEN btrim(cast(o.install_date AS text)) ~ '^\d{4}-\d{2}-\d{2}$'
-      THEN to_date(btrim(cast(o.install_date AS text)), 'YYYY-MM-DD')
-    WHEN btrim(cast(o.install_date AS text)) ~ '^\d{4}-\d{2}-\d{2}\s+.*$'
-      THEN to_date(substr(btrim(cast(o.install_date AS text)), 1, 10), 'YYYY-MM-DD')
-    WHEN btrim(cast(o.install_date AS text)) ~ '^\d{4}/\d{2}/\d{2}$'
-      THEN to_date(replace(btrim(cast(o.install_date AS text)), '/', '-'), 'YYYY-MM-DD')
-    ELSE NULL
-  END
-)               AS install_date,
-  (
-  CASE
-    WHEN o.last_update_time IS NULL THEN NULL
-    WHEN btrim(cast(o.last_update_time AS text)) = '' THEN NULL
-    WHEN btrim(cast(o.last_update_time AS text)) ~ '^\d{4}-\d{2}-\d{2}$'
-      THEN to_date(btrim(cast(o.last_update_time AS text)), 'YYYY-MM-DD')
-    WHEN btrim(cast(o.last_update_time AS text)) ~ '^\d{4}-\d{2}-\d{2}\s+.*$'
-      THEN to_date(substr(btrim(cast(o.last_update_time AS text)), 1, 10), 'YYYY-MM-DD')
-    WHEN btrim(cast(o.last_update_time AS text)) ~ '^\d{4}/\d{2}/\d{2}$'
-      THEN to_date(replace(btrim(cast(o.last_update_time AS text)), '/', '-'), 'YYYY-MM-DD')
-    ELSE NULL
-  END
-)           AS last_update_time,
+  (CASE WHEN o.contract_negotiation_date IS NULL THEN NULL WHEN btrim(cast(o.contract_negotiation_date AS text)) = '' THEN NULL WHEN btrim(cast(o.contract_negotiation_date AS text)) ~ '^\d{4}-\d{2}-\d{2}$' THEN to_date(btrim(cast(o.contract_negotiation_date AS text)), 'YYYY-MM-DD') WHEN btrim(cast(o.contract_negotiation_date AS text)) ~ '^\d{4}/\d{2}/\d{2}$' THEN to_date(replace(btrim(cast(o.contract_negotiation_date AS text)), '/', '-'), 'YYYY-MM-DD') ELSE NULL END)  AS contract_negotiation_date,
+  (CASE WHEN o.contract_delivery_date IS NULL THEN NULL WHEN btrim(cast(o.contract_delivery_date AS text)) = '' THEN NULL WHEN btrim(cast(o.contract_delivery_date AS text)) ~ '^\d{4}-\d{2}-\d{2}$' THEN to_date(btrim(cast(o.contract_delivery_date AS text)), 'YYYY-MM-DD') WHEN btrim(cast(o.contract_delivery_date AS text)) ~ '^\d{4}/\d{2}/\d{2}$' THEN to_date(replace(btrim(cast(o.contract_delivery_date AS text)), '/', '-'), 'YYYY-MM-DD') ELSE NULL END)     AS contract_delivery_date,
+  (CASE WHEN o.actual_delivery_date IS NULL THEN NULL WHEN btrim(cast(o.actual_delivery_date AS text)) = '' THEN NULL WHEN btrim(cast(o.actual_delivery_date AS text)) ~ '^\d{4}-\d{2}-\d{2}$' THEN to_date(btrim(cast(o.actual_delivery_date AS text)), 'YYYY-MM-DD') WHEN btrim(cast(o.actual_delivery_date AS text)) ~ '^\d{4}/\d{2}/\d{2}$' THEN to_date(replace(btrim(cast(o.actual_delivery_date AS text)), '/', '-'), 'YYYY-MM-DD') ELSE NULL END)       AS actual_delivery_date,
+  (CASE WHEN o.plan_inspect_date IS NULL THEN NULL WHEN btrim(cast(o.plan_inspect_date AS text)) = '' THEN NULL WHEN btrim(cast(o.plan_inspect_date AS text)) ~ '^\d{4}-\d{2}-\d{2}$' THEN to_date(btrim(cast(o.plan_inspect_date AS text)), 'YYYY-MM-DD') WHEN btrim(cast(o.plan_inspect_date AS text)) ~ '^\d{4}/\d{2}/\d{2}$' THEN to_date(replace(btrim(cast(o.plan_inspect_date AS text)), '/', '-'), 'YYYY-MM-DD') ELSE NULL END)          AS plan_inspect_date,
+  (CASE WHEN o.complete_inspect_date IS NULL THEN NULL WHEN btrim(cast(o.complete_inspect_date AS text)) = '' THEN NULL WHEN btrim(cast(o.complete_inspect_date AS text)) ~ '^\d{4}-\d{2}-\d{2}$' THEN to_date(btrim(cast(o.complete_inspect_date AS text)), 'YYYY-MM-DD') WHEN btrim(cast(o.complete_inspect_date AS text)) ~ '^\d{4}/\d{2}/\d{2}$' THEN to_date(replace(btrim(cast(o.complete_inspect_date AS text)), '/', '-'), 'YYYY-MM-DD') ELSE NULL END)      AS complete_inspect_date,
+  (CASE WHEN o.install_date IS NULL THEN NULL WHEN btrim(cast(o.install_date AS text)) = '' THEN NULL WHEN btrim(cast(o.install_date AS text)) ~ '^\d{4}-\d{2}-\d{2}$' THEN to_date(btrim(cast(o.install_date AS text)), 'YYYY-MM-DD') WHEN btrim(cast(o.install_date AS text)) ~ '^\d{4}/\d{2}/\d{2}$' THEN to_date(replace(btrim(cast(o.install_date AS text)), '/', '-'), 'YYYY-MM-DD') ELSE NULL END)               AS install_date,
+  (CASE WHEN o.last_update_time IS NULL THEN NULL WHEN btrim(cast(o.last_update_time AS text)) = '' THEN NULL WHEN btrim(cast(o.last_update_time AS text)) ~ '^\d{4}-\d{2}-\d{2}$' THEN to_date(btrim(cast(o.last_update_time AS text)), 'YYYY-MM-DD') WHEN btrim(cast(o.last_update_time AS text)) ~ '^\d{4}/\d{2}/\d{2}$' THEN to_date(replace(btrim(cast(o.last_update_time AS text)), '/', '-'), 'YYYY-MM-DD') ELSE NULL END)           AS last_update_time,
 
   -- === 交付延迟天数 ===
   CASE
-    WHEN (
-  CASE
-    WHEN o.contract_delivery_date IS NULL THEN NULL
-    WHEN btrim(cast(o.contract_delivery_date AS text)) = '' THEN NULL
-    WHEN btrim(cast(o.contract_delivery_date AS text)) ~ '^\d{4}-\d{2}-\d{2}$'
-      THEN to_date(btrim(cast(o.contract_delivery_date AS text)), 'YYYY-MM-DD')
-    WHEN btrim(cast(o.contract_delivery_date AS text)) ~ '^\d{4}-\d{2}-\d{2}\s+.*$'
-      THEN to_date(substr(btrim(cast(o.contract_delivery_date AS text)), 1, 10), 'YYYY-MM-DD')
-    WHEN btrim(cast(o.contract_delivery_date AS text)) ~ '^\d{4}/\d{2}/\d{2}$'
-      THEN to_date(replace(btrim(cast(o.contract_delivery_date AS text)), '/', '-'), 'YYYY-MM-DD')
-    ELSE NULL
-  END
-) IS NOT NULL
-     AND (
-  CASE
-    WHEN o.actual_delivery_date IS NULL THEN NULL
-    WHEN btrim(cast(o.actual_delivery_date AS text)) = '' THEN NULL
-    WHEN btrim(cast(o.actual_delivery_date AS text)) ~ '^\d{4}-\d{2}-\d{2}$'
-      THEN to_date(btrim(cast(o.actual_delivery_date AS text)), 'YYYY-MM-DD')
-    WHEN btrim(cast(o.actual_delivery_date AS text)) ~ '^\d{4}-\d{2}-\d{2}\s+.*$'
-      THEN to_date(substr(btrim(cast(o.actual_delivery_date AS text)), 1, 10), 'YYYY-MM-DD')
-    WHEN btrim(cast(o.actual_delivery_date AS text)) ~ '^\d{4}/\d{2}/\d{2}$'
-      THEN to_date(replace(btrim(cast(o.actual_delivery_date AS text)), '/', '-'), 'YYYY-MM-DD')
-    ELSE NULL
-  END
-) IS NOT NULL
-    THEN ((
-  CASE
-    WHEN o.actual_delivery_date IS NULL THEN NULL
-    WHEN btrim(cast(o.actual_delivery_date AS text)) = '' THEN NULL
-    WHEN btrim(cast(o.actual_delivery_date AS text)) ~ '^\d{4}-\d{2}-\d{2}$'
-      THEN to_date(btrim(cast(o.actual_delivery_date AS text)), 'YYYY-MM-DD')
-    WHEN btrim(cast(o.actual_delivery_date AS text)) ~ '^\d{4}-\d{2}-\d{2}\s+.*$'
-      THEN to_date(substr(btrim(cast(o.actual_delivery_date AS text)), 1, 10), 'YYYY-MM-DD')
-    WHEN btrim(cast(o.actual_delivery_date AS text)) ~ '^\d{4}/\d{2}/\d{2}$'
-      THEN to_date(replace(btrim(cast(o.actual_delivery_date AS text)), '/', '-'), 'YYYY-MM-DD')
-    ELSE NULL
-  END
-) - (
-  CASE
-    WHEN o.contract_delivery_date IS NULL THEN NULL
-    WHEN btrim(cast(o.contract_delivery_date AS text)) = '' THEN NULL
-    WHEN btrim(cast(o.contract_delivery_date AS text)) ~ '^\d{4}-\d{2}-\d{2}$'
-      THEN to_date(btrim(cast(o.contract_delivery_date AS text)), 'YYYY-MM-DD')
-    WHEN btrim(cast(o.contract_delivery_date AS text)) ~ '^\d{4}-\d{2}-\d{2}\s+.*$'
-      THEN to_date(substr(btrim(cast(o.contract_delivery_date AS text)), 1, 10), 'YYYY-MM-DD')
-    WHEN btrim(cast(o.contract_delivery_date AS text)) ~ '^\d{4}/\d{2}/\d{2}$'
-      THEN to_date(replace(btrim(cast(o.contract_delivery_date AS text)), '/', '-'), 'YYYY-MM-DD')
-    ELSE NULL
-  END
-))::int
+    WHEN (CASE WHEN o.contract_delivery_date IS NULL THEN NULL WHEN btrim(cast(o.contract_delivery_date AS text)) = '' THEN NULL WHEN btrim(cast(o.contract_delivery_date AS text)) ~ '^\d{4}-\d{2}-\d{2}$' THEN to_date(btrim(cast(o.contract_delivery_date AS text)), 'YYYY-MM-DD') WHEN btrim(cast(o.contract_delivery_date AS text)) ~ '^\d{4}/\d{2}/\d{2}$' THEN to_date(replace(btrim(cast(o.contract_delivery_date AS text)), '/', '-'), 'YYYY-MM-DD') ELSE NULL END) IS NOT NULL
+     AND (CASE WHEN o.actual_delivery_date IS NULL THEN NULL WHEN btrim(cast(o.actual_delivery_date AS text)) = '' THEN NULL WHEN btrim(cast(o.actual_delivery_date AS text)) ~ '^\d{4}-\d{2}-\d{2}$' THEN to_date(btrim(cast(o.actual_delivery_date AS text)), 'YYYY-MM-DD') WHEN btrim(cast(o.actual_delivery_date AS text)) ~ '^\d{4}/\d{2}/\d{2}$' THEN to_date(replace(btrim(cast(o.actual_delivery_date AS text)), '/', '-'), 'YYYY-MM-DD') ELSE NULL END) IS NOT NULL
+    THEN ((CASE WHEN o.actual_delivery_date IS NULL THEN NULL WHEN btrim(cast(o.actual_delivery_date AS text)) = '' THEN NULL WHEN btrim(cast(o.actual_delivery_date AS text)) ~ '^\d{4}-\d{2}-\d{2}$' THEN to_date(btrim(cast(o.actual_delivery_date AS text)), 'YYYY-MM-DD') WHEN btrim(cast(o.actual_delivery_date AS text)) ~ '^\d{4}/\d{2}/\d{2}$' THEN to_date(replace(btrim(cast(o.actual_delivery_date AS text)), '/', '-'), 'YYYY-MM-DD') ELSE NULL END) - (CASE WHEN o.contract_delivery_date IS NULL THEN NULL WHEN btrim(cast(o.contract_delivery_date AS text)) = '' THEN NULL WHEN btrim(cast(o.contract_delivery_date AS text)) ~ '^\d{4}-\d{2}-\d{2}$' THEN to_date(btrim(cast(o.contract_delivery_date AS text)), 'YYYY-MM-DD') WHEN btrim(cast(o.contract_delivery_date AS text)) ~ '^\d{4}/\d{2}/\d{2}$' THEN to_date(replace(btrim(cast(o.contract_delivery_date AS text)), '/', '-'), 'YYYY-MM-DD') ELSE NULL END))::int
     ELSE NULL
   END AS delivery_delay_days,
 
@@ -4635,14 +949,7 @@ classified AS (
     b.project_no AS _derived_major_project_name,
     b.subsystem  AS _derived_subproject_name,
     CASE
-      WHEN (
-  CASE
-    WHEN b.incomplete_reason IS NULL THEN NULL
-    WHEN upper(btrim(cast(b.incomplete_reason AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL')
-      THEN NULL
-    ELSE nullif(btrim(cast(b.incomplete_reason AS text)), '')
-  END
-) IS NULL THEN 'normal'
+      WHEN (CASE WHEN b.incomplete_reason IS NULL THEN NULL WHEN upper(btrim(cast(b.incomplete_reason AS text))) IN ('', '/', '-', '--', 'N/A', 'NA', '#N/A', '#VALUE!', '#DIV/0!', 'NULL') THEN NULL ELSE nullif(btrim(cast(b.incomplete_reason AS text)), '') END) IS NULL THEN 'normal'
       WHEN b.incomplete_reason ~ '(算法|技术|仿真|硬件|精度)' THEN 'technical'
       WHEN b.incomplete_reason ~ '(质量|可靠性|返工|故障)' THEN 'quality'
       WHEN b.incomplete_reason ~ '(变更|延误|重新定义)' THEN 'change'
@@ -4743,7 +1050,7 @@ SELECT
 
   COUNT(*)                                                                        AS total_cnt,
   SUM(CASE WHEN d.completion_status = '正常待完成' THEN 1 ELSE 0 END)             AS pending_normal_cnt,
-  SUM(CASE WHEN d.completion_status != '正常待完成' OR d.is_due THEN 1 ELSE 0 END) AS due_cnt,
+  COUNT(*) - SUM(CASE WHEN d.completion_status = '正常待完成' THEN 1 ELSE 0 END) AS due_cnt,
   SUM(CASE WHEN d.is_on_time THEN 1 ELSE 0 END)                                  AS on_time_cnt,
   SUM(CASE WHEN d.is_overdue_completed THEN 1 ELSE 0 END)                        AS overdue_completed_cnt,
   SUM(CASE WHEN d.is_completed THEN 1 ELSE 0 END)                                AS completed_cnt,

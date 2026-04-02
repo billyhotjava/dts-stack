@@ -8,7 +8,7 @@ SELECT
 
   COUNT(*)                                                                        AS total_cnt,
   SUM(CASE WHEN d.completion_status = '正常待完成' THEN 1 ELSE 0 END)             AS pending_normal_cnt,
-  SUM(CASE WHEN d.completion_status != '正常待完成' OR d.is_due THEN 1 ELSE 0 END) AS due_cnt,
+  COUNT(*) - SUM(CASE WHEN d.completion_status = '正常待完成' THEN 1 ELSE 0 END) AS due_cnt,
   SUM(CASE WHEN d.is_on_time THEN 1 ELSE 0 END)                                  AS on_time_cnt,
   SUM(CASE WHEN d.is_overdue_completed THEN 1 ELSE 0 END)                        AS overdue_completed_cnt,
   SUM(CASE WHEN d.is_completed THEN 1 ELSE 0 END)                                AS completed_cnt,

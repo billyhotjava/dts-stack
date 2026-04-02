@@ -13,7 +13,7 @@ const REQUIRED_COMPONENTS: Record<(typeof TEMPLATE_IDS)[number], string[]> = {
     'fin-auxiliary-balance': ['header-bar', 'filter-strip', 'kpi-card', 'summary-table', 'ranking-list'],
     'fin-own-fund': ['header-bar', 'filter-strip', 'kpi-card', 'note-panel'],
     'fin-personal-balance': ['header-bar', 'filter-strip', 'kpi-card', 'summary-table', 'ranking-list'],
-    'fin-project-fund': ['header-bar', 'filter-strip', 'kpi-card', 'status-grid', 'summary-table'],
+    'fin-project-fund': ['header-bar', 'filter-strip', 'kpi-card', 'summary-table'],
 };
 
 test('finance templates are rebuilt on top of finance-kit plugin components', () => {

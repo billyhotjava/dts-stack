@@ -68,8 +68,10 @@ class KeycloakAuthResourceTest {
         when(registry.hasActiveSession("alice", "browser-1")).thenReturn(false);
         when(cookieService.buildBrowserIdCookie("browser-1"))
             .thenReturn(ResponseCookie.from("browser_id", "browser-1").path("/").build());
-        when(cookieService.buildPortalSessionCookie("access-1"))
-            .thenReturn(ResponseCookie.from("portal_session", "access-1").path("/").httpOnly(true).build());
+        // Cookie now stores the Keycloak JWT access token (result.accessToken()),
+        // not the portal session's opaque token.
+        when(cookieService.buildPortalSessionCookie("admin-access"))
+            .thenReturn(ResponseCookie.from("portal_session", "admin-access").path("/").httpOnly(true).build());
         when(registry.createSession(eq("alice"), anyList(), anyList(), any(), any(), any(), eq("browser-1"), any()))
             .thenReturn(
                 new PortalSession(
@@ -98,14 +100,15 @@ class KeycloakAuthResourceTest {
         assertThat(response.getStatusCode().value()).isEqualTo(200);
         assertThat(response.getHeaders().get(HttpHeaders.SET_COOKIE)).contains(
             "browser_id=browser-1; Path=/",
-            "portal_session=access-1; Path=/; HttpOnly"
+            "portal_session=admin-access; Path=/; HttpOnly"
         );
         assertThat(response.getBody()).isNotNull();
-        assertThat(response.getBody().getData())
-            .doesNotContainKeys("accessToken", "refreshToken", "adminAccessToken", "adminRefreshToken");
+        // JWT migration: accessToken and refreshToken are now included in the response
+        assertThat(response.getBody().getData()).containsKey("accessToken");
+        assertThat(response.getBody().getData()).containsKey("refreshToken");
         verify(registry).hasActiveSession("alice", "browser-1");
         verify(registry).createSession(eq("alice"), anyList(), anyList(), any(), any(), any(), eq("browser-1"), any());
-        verify(cookieService).buildPortalSessionCookie("access-1");
+        verify(cookieService).buildPortalSessionCookie("admin-access");
     }
 
     @Test

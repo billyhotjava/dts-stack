@@ -5,7 +5,6 @@ import com.yuzhi.dts.platform.security.AuthoritiesConstants;
 import com.yuzhi.dts.platform.config.DtsAdminProperties;
 import com.yuzhi.dts.platform.security.ServiceDependencyAuthenticationFilter;
 import com.yuzhi.dts.platform.security.session.PortalOpaqueTokenIntrospector;
-import com.yuzhi.dts.platform.security.session.PortalSessionBearerTokenResolver;
 import com.yuzhi.dts.platform.security.session.PortalSessionInactivityFilter;
 import com.yuzhi.dts.platform.web.filter.AuditLoggingFilter;
 import org.springframework.context.annotation.Bean;
@@ -33,7 +32,6 @@ public class SecurityConfiguration {
     public SecurityFilterChain filterChain(
         HttpSecurity http,
         MvcRequestMatcher.Builder mvc,
-        PortalSessionBearerTokenResolver bearerTokenResolver,
         PortalOpaqueTokenIntrospector opaqueTokenIntrospector,
         AuditLoggingFilter auditLoggingFilter,
         ServiceDependencyAuthenticationFilter serviceDependencyAuthenticationFilter,
@@ -50,7 +48,6 @@ public class SecurityConfiguration {
                     .requestMatchers(mvc.pattern("/api/auth-info")).permitAll()
                     // Allow platform login/logout/refresh endpoints without prior auth
                     .requestMatchers(mvc.pattern("/api/keycloak/auth/**")).permitAll()
-                    .requestMatchers(mvc.pattern("/api/session/current")).permitAll()
                     // Allow localization resources without auth (used at boot)
                     .requestMatchers(mvc.pattern("/api/keycloak/localization/**")).permitAll()
                     // Traefik forward-auth probe endpoint must be reachable without prior auth.
@@ -67,11 +64,7 @@ public class SecurityConfiguration {
                     .requestMatchers(mvc.pattern("/management/**")).hasAuthority(AuthoritiesConstants.ADMIN)
             )
             .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
-            .oauth2ResourceServer(oauth2 ->
-                oauth2
-                    .bearerTokenResolver(bearerTokenResolver)
-                    .opaqueToken(opaque -> opaque.introspector(opaqueTokenIntrospector))
-            )
+            .oauth2ResourceServer(oauth2 -> oauth2.opaqueToken(opaque -> opaque.introspector(opaqueTokenIntrospector)))
             .oauth2Client(withDefaults());
         http.addFilterBefore(serviceDependencyAuthenticationFilter, AnonymousAuthenticationFilter.class);
         http.addFilterAfter(auditLoggingFilter, AnonymousAuthenticationFilter.class);

@@ -1894,22 +1894,21 @@ function financeRow(...values: string[]): Record<string, unknown> {
 }
 
 const auxBalanceVariables: ScreenGlobalVariable[] = [
-    createGlobalVariable('filterProject', '项目筛选', 'string', ''),
     createGlobalVariable('filterDept', '部门筛选', 'string', ''),
     createGlobalVariable('searchText', '搜索关键词', 'string', ''),
 ];
 
 const auxiliaryBalanceDashboardTemplate: ScreenTemplate = {
     id: 'fin-auxiliary-balance',
-    name: '辅助余额表_项目维度',
-    description: '项目维度辅助余额驾驶舱：白底财务壳、项目结构、部门占比、余额明细与合同排行。',
+    name: '辅助余额大屏',
+    description: '辅助余额驾驶舱：部门分布、科目TOP、费用结构、余额明细与合同排行。',
     thumbnail: '💼',
     category: 'finance',
-    tags: ['辅助余额', '项目', '合同', '余额', '财务'],
+    tags: ['辅助余额', '部门', '合同', '余额', '财务'],
     recommendedVariables: auxBalanceVariables.map((v) => v.key),
     config: {
-        name: '辅助余额表_项目维度',
-        description: '财务模板族：辅助余额表_项目维度',
+        name: '辅助余额大屏',
+        description: '财务模板族：辅助余额大屏',
         width: 1920,
         height: 1080,
         backgroundColor: '#edf4fb',
@@ -1917,46 +1916,46 @@ const auxiliaryBalanceDashboardTemplate: ScreenTemplate = {
         globalVariables: auxBalanceVariables,
         components: [
             createFinancePluginComponent('ab-header', 'container', 'header-bar', '财务标题栏', 24, 20, 1872, 108, 40, {
-                title: '辅助余额表_项目维度',
-                subtitle: 'Auxiliary balance dashboard · project dimension',
+                title: '辅助余额大屏',
+                subtitle: 'Auxiliary balance dashboard',
                 orgName: 'BI数据平台 / 财务分析中心',
                 dateText: '数据日期：2026-03-30',
             }),
             createFinancePluginComponent('ab-filters', 'container', 'filter-strip', '财务筛选条', 24, 142, 1872, 74, 35, {
-                filters: ['年度: 2026', '项目: 全部', '部门: 全部', '关键词: 合同/科目'],
+                filters: ['部门: 全部', '关键词: 科目/合同'],
             }),
             createFinancePluginComponent('ab-kpi-total', 'number-card', 'kpi-card', '余额合计', 24, 236, 282, 138, 30, {
                 title: '余额合计',
                 value: '4,476.00',
                 unit: '万元',
-                hint: '较上月 +6.8%',
+                hint: '全部筛选项汇总',
                 tone: 'accent',
             }),
-            createFinancePluginComponent('ab-kpi-project', 'number-card', 'kpi-card', '涉及项目', 322, 236, 282, 138, 30, {
-                title: '涉及项目',
-                value: '7',
-                unit: '个',
-                hint: '活跃项目数',
-                tone: 'success',
-            }),
-            createFinancePluginComponent('ab-kpi-subject', 'number-card', 'kpi-card', '科目数量', 620, 236, 282, 138, 30, {
+            createFinancePluginComponent('ab-kpi-subject', 'number-card', 'kpi-card', '科目数量', 322, 236, 282, 138, 30, {
                 title: '科目数量',
                 value: '25',
                 unit: '个',
                 hint: '含合同与费用明细',
                 tone: 'accent',
             }),
-            createFinancePluginComponent('ab-kpi-contract', 'number-card', 'kpi-card', '合同数量', 918, 236, 282, 138, 30, {
+            createFinancePluginComponent('ab-kpi-contract', 'number-card', 'kpi-card', '合同数量', 620, 236, 282, 138, 30, {
                 title: '合同数量',
                 value: '24',
                 unit: '份',
-                hint: '本月新增 2 份',
+                hint: '关联合同总数',
                 tone: 'warning',
             }),
-            createComponent('ab-chart-project', 'bar-chart', '按项目余额分布', 24, 394, 596, 286, 20, {
-                title: '项目余额分布',
-                xAxisData: ['智能电网', '自动化产线', '数据中心', '涡轮组装', 'ERP升级', '供应链', '新材料'],
-                series: [{ name: '余额(万)', data: [1132, 1036, 898, 504, 491, 267, 157] }],
+            createFinancePluginComponent('ab-kpi-dept', 'number-card', 'kpi-card', '部门数量', 918, 236, 282, 138, 30, {
+                title: '部门数量',
+                value: '8',
+                unit: '个',
+                hint: '涉及部门总数',
+                tone: 'success',
+            }),
+            createComponent('ab-chart-subject', 'bar-chart', '按科目分布TOP10', 24, 394, 596, 286, 20, {
+                title: '科目余额 TOP 10',
+                xAxisData: ['自动化设备', '外协加工费', '网络设备', '原材料-钢材', '原材料-铝合金', '安装调试费', '服务器', '设备折旧', '检测试验费', '机房租赁费'],
+                series: [{ name: '余额(万)', data: [680, 215, 156, 128, 86, 72, 65, 43, 38, 32] }],
                 seriesColors: ['#2e73d6'],
                 backgroundColor: '#ffffff',
             }),
@@ -1987,26 +1986,26 @@ const auxiliaryBalanceDashboardTemplate: ScreenTemplate = {
             }),
             createFinancePluginComponent('ab-ranking', 'table', 'ranking-list', '合同TOP', 1500, 394, 396, 286, 20, {
                 items: [
-                    { name: '产线设备采购合同', value: '680.00', extra: '生产线自动化改造' },
-                    { name: '变压器采购合同', value: '520.00', extra: '智能电网升级' },
-                    { name: '服务器采购合同', value: '410.00', extra: '数据中心迁移' },
-                    { name: 'ERP软件许可合同', value: '320.00', extra: 'ERP系统升级' },
+                    { name: '产线设备采购合同', value: '680.00', extra: '制造部' },
+                    { name: '变压器采购合同', value: '520.00', extra: '电力部' },
+                    { name: '服务器采购合同', value: '410.00', extra: 'IT部' },
+                    { name: 'ERP软件许可合同', value: '320.00', extra: 'IT部' },
                 ],
             }),
             createFinancePluginComponent('ab-summary', 'table', 'summary-table', '余额明细表', 24, 700, 1260, 336, 15, {
-                headers: ['科目编号', '科目名称', '所属项目', '余额(万)'],
+                headers: ['科目编号', '科目名称', '部门名称', '合同名称', '余额(万)'],
                 rows: [
-                    financeRow('5001.01', '原材料-钢材', '新一代涡轮组装', '128.00'),
-                    financeRow('5001.02', '原材料-铝合金', '新一代涡轮组装', '86.00'),
-                    financeRow('5101.01', '外协加工费', '智能电网升级', '215.00'),
-                    financeRow('5001.06', '网络设备', '数据中心迁移', '156.00'),
-                    financeRow('5001.07', '自动化设备', '生产线自动化改造', '680.00'),
+                    financeRow('5001.01', '原材料-钢材', '制造部', '钢材采购合同-2025A', '128.00'),
+                    financeRow('5001.02', '原材料-铝合金', '制造部', '铝合金采购协议', '86.00'),
+                    financeRow('5101.01', '外协加工费', '电力部', '精密加工服务合同', '215.00'),
+                    financeRow('5001.06', '网络设备', 'IT部', '服务器采购合同', '156.00'),
+                    financeRow('5001.07', '自动化设备', '制造部', '产线设备采购合同', '680.00'),
                 ],
             }),
             createFinancePluginComponent('ab-note', 'markdown-text', 'note-panel', '口径说明', 1304, 700, 592, 336, 15, {
-                title: '合同与余额口径',
+                title: '余额与口径说明',
                 notes: [
-                    '项目维度模板优先展示合同、科目、余额三条主线。',
+                    '辅助余额按部门、科目、合同三条主线展开分析。',
                     '筛选条和 KPI 卡可在设计器中自由拖拽重排。',
                     '排行与表格块保持财务白底视觉，便于二次替换为实时数据源。',
                 ],
@@ -2102,20 +2101,20 @@ const ownFundDashboardTemplate: ScreenTemplate = {
                 backgroundColor: '#ffffff',
             }),
             createFinancePluginComponent('of-summary', 'table', 'summary-table', '基金汇总表', 24, 700, 1040, 336, 15, {
-                headers: ['基金类型', '年初余额', '本年增加', '年末余额'],
+                headers: ['年度', '事业基金', '折旧基金', '职工福利基金', '安全生产基金', '合计'],
                 rows: [
-                    financeRow('事业基金', '1,260', '450', '1,350'),
-                    financeRow('折旧基金', '735', '220', '810'),
-                    financeRow('职工福利基金', '240', '90', '270'),
-                    financeRow('安全生产基金', '145', '35', '155'),
+                    financeRow('2026年初', '1,200', '850', '320', '180', '2,550'),
+                    financeRow('2026年预计增加', '600', '480', '150', '95', '1,325'),
+                    financeRow('2026年预计使用', '450', '520', '200', '120', '1,290'),
+                    financeRow('2026年余额', '1,350', '810', '270', '155', '2,585'),
                 ],
             }),
             createFinancePluginComponent('of-note', 'markdown-text', 'note-panel', '口径说明', 1084, 700, 812, 336, 15, {
-                title: '自有资金口径与使用建议',
+                title: '自有资金口径说明',
                 notes: [
-                    '瀑布图和柱图保留原型中的资金增减关系，但落在现有大屏引擎组件协议上。',
-                    'KPI 卡、说明块和筛选条均为 finance-kit 插件，可在设计器里继续编辑。',
-                    '后续如需更高保真，可继续扩展 waterfall/gauge 的财务 preset，而不改模板协议。',
+                    '年末余额 = 年初余额 + 预计增加 − 预计使用，合计列直接取自数据表。',
+                    '资金使用率 = 预计使用 ÷（年初 + 预计增加）× 100%。',
+                    '余额增长率 =（年末余额 − 年初）÷ 年初 × 100%，正值=扩大，负值=净消耗。',
                 ],
             }),
         ],
@@ -2218,13 +2217,13 @@ const personalBalanceDashboardTemplate: ScreenTemplate = {
                 ],
             }),
             createFinancePluginComponent('pb-summary', 'table', 'summary-table', '个人余额明细', 24, 700, 1260, 336, 15, {
-                headers: ['科目编号', '科目名称', '部门', '职工'],
+                headers: ['科目编号', '科目名称', '职工部门', '职工名称', '余额'],
                 rows: [
-                    financeRow('1122.01', '备用金', '制造部', '张工'),
-                    financeRow('1122.02', '差旅费借款', 'IT部', '孙磊'),
-                    financeRow('1122.03', '采购预付款', '采购部', '赵敏'),
-                    financeRow('1122.01', '备用金', '研发部', '钱波'),
-                    financeRow('1122.04', '临时借支', '营销部', '郑华'),
+                    financeRow('1122.01', '备用金', '制造部', '张工', '8,500'),
+                    financeRow('1122.02', '差旅费借款', 'IT部', '孙磊', '3,200'),
+                    financeRow('1122.03', '采购预付款', '采购部', '赵敏', '12,600'),
+                    financeRow('1122.01', '备用金', '研发部', '钱波', '5,800'),
+                    financeRow('2211.01', '工资应付', '营销部', '郑华', '-15,400'),
                 ],
             }),
             createFinancePluginComponent('pb-ranking-side', 'table', 'ranking-list', '部门排行', 1304, 700, 592, 336, 15, {
@@ -2239,18 +2238,15 @@ const personalBalanceDashboardTemplate: ScreenTemplate = {
     },
 };
 
-const projectFundVariables: ScreenGlobalVariable[] = [
-    createGlobalVariable('filterDept', '部门筛选', 'string', ''),
-    createGlobalVariable('filterHealth', '健康度筛选', 'string', ''),
-];
+const projectFundVariables: ScreenGlobalVariable[] = [];
 
 const projectFundDashboardTemplate: ScreenTemplate = {
     id: 'fin-project-fund',
     name: '项目经费表',
-    description: '项目经费执行驾驶舱：经费结构、执行率对比、健康度矩阵和项目明细。',
+    description: '项目经费执行驾驶舱：经费结构分布、直接成本执行率、总经费执行率和项目明细。',
     thumbnail: '📊',
     category: 'finance',
-    tags: ['项目经费', '执行率', '健康度', '预算'],
+    tags: ['项目经费', '执行率', '预算', '直接成本'],
     recommendedVariables: projectFundVariables.map((v) => v.key),
     config: {
         name: '项目经费表',
@@ -2268,80 +2264,87 @@ const projectFundDashboardTemplate: ScreenTemplate = {
                 dateText: '数据日期：2026-03-30',
             }),
             createFinancePluginComponent('pf-filters', 'container', 'filter-strip', '财务筛选条', 24, 142, 1872, 74, 35, {
-                filters: ['部门: 全部', '健康度: 全部', '执行周期: 本年度'],
+                filters: ['执行周期: 本年度'],
             }),
-            createFinancePluginComponent('pf-kpi-budget', 'number-card', 'kpi-card', '总经费', 24, 236, 282, 138, 30, {
+            createFinancePluginComponent('pf-kpi-budget', 'number-card', 'kpi-card', '总经费', 24, 236, 230, 138, 30, {
                 title: '总经费',
                 value: '54,500',
                 unit: '万元',
-                hint: '年度项目池',
+                hint: '全部项目合计',
                 tone: 'accent',
             }),
-            createFinancePluginComponent('pf-kpi-direct', 'number-card', 'kpi-card', '直接成本控制数', 322, 236, 282, 138, 30, {
+            createFinancePluginComponent('pf-kpi-direct', 'number-card', 'kpi-card', '直接成本控制数', 270, 236, 230, 138, 30, {
                 title: '直接成本控制数',
                 value: '43,600',
                 unit: '万元',
                 hint: '预算边界',
                 tone: 'accent',
             }),
-            createFinancePluginComponent('pf-kpi-spent', 'number-card', 'kpi-card', '直接成本已支出', 620, 236, 282, 138, 30, {
+            createFinancePluginComponent('pf-kpi-spent', 'number-card', 'kpi-card', '直接成本已支出', 516, 236, 230, 138, 30, {
                 title: '直接成本已支出',
                 value: '37,200',
                 unit: '万元',
-                hint: '执行进度 85.3%',
+                hint: '由控制数×执行率推算',
                 tone: 'warning',
             }),
-            createFinancePluginComponent('pf-kpi-rate', 'number-card', 'kpi-card', '总经费执行率', 918, 236, 282, 138, 30, {
+            createFinancePluginComponent('pf-kpi-drate', 'number-card', 'kpi-card', '直接成本执行率', 762, 236, 230, 138, 30, {
+                title: '直接成本执行率',
+                value: '85.3',
+                unit: '%',
+                hint: '整体加权执行率',
+                tone: 'warning',
+            }),
+            createFinancePluginComponent('pf-kpi-trate', 'number-card', 'kpi-card', '总经费执行率', 1008, 236, 230, 138, 30, {
                 title: '总经费执行率',
                 value: '79.6',
                 unit: '%',
-                hint: '较计划偏快',
-                tone: 'warning',
+                hint: '总支出÷总经费',
+                tone: 'accent',
             }),
-            createComponent('pf-chart-structure', 'bar-chart', '经费结构分布', 24, 394, 720, 286, 20, {
+            createComponent('pf-chart-structure', 'bar-chart', '经费结构分布', 24, 394, 920, 286, 20, {
                 title: '经费结构分布',
-                xAxisData: ['涡轮', '电网', '数据', '供应链', '质量', '产线', 'ERP', '研发'],
+                xAxisData: ['PRJ-001', 'PRJ-002', 'PRJ-003', 'PRJ-004', 'PRJ-005', 'PRJ-006', 'PRJ-007', 'PRJ-008'],
                 series: [
-                    { name: '直接成本', data: [3200, 9800, 4100, 2800, 1350, 5200, 4200, 3800] },
-                    { name: '间接费用', data: [520, 1680, 780, 380, 130, 960, 720, 540] },
+                    { name: '直接成本支出', data: [3200, 9800, 4100, 2800, 1350, 5200, 4200, 3800] },
+                    { name: '间接费用支出', data: [520, 1680, 780, 380, 130, 960, 720, 540] },
+                    { name: '剩余', data: [1080, 520, 1620, 20, -30, 1040, 280, 460] },
                 ],
-                seriesColors: ['#2e73d6', '#8bb6ff'],
+                seriesColors: ['#2e73d6', '#8b5cf6', '#e0eaf4'],
                 backgroundColor: '#ffffff',
             }),
-            createComponent('pf-chart-rate', 'bar-chart', '执行率与时间进度', 764, 394, 540, 286, 20, {
-                title: '执行率 vs 时间进度',
-                xAxisData: ['涡轮', '电网', '数据', '供应链', '质量', '产线', 'ERP', '研发'],
-                series: [
-                    { name: '时间进度(%)', data: [75, 100, 56, 100, 100, 63, 100, 44] },
-                    { name: '成本执行率(%)', data: [83, 102, 79, 109, 113, 74, 95, 66] },
-                ],
-                seriesColors: ['#b7c8e6', '#2e73d6'],
+            createComponent('pf-gauge-direct', 'gauge-chart', '直接成本执行率仪表', 964, 394, 456, 286, 20, {
+                title: '直接成本执行率',
+                value: 85.3,
+                max: 100,
+                unit: '%',
+                seriesColors: ['#2e73d6'],
                 backgroundColor: '#ffffff',
             }),
-            createFinancePluginComponent('pf-status', 'container', 'status-grid', '健康度矩阵', 1324, 394, 572, 286, 20, {
-                items: [
-                    { title: '正常项目', value: '3', hint: '执行与进度基本匹配', tone: 'success' },
-                    { title: '超支项目', value: '3', hint: '需启动预算校正', tone: 'danger' },
-                    { title: '偏快项目', value: '3', hint: '节奏快于里程碑', tone: 'warning' },
-                    { title: '偏慢项目', value: '1', hint: '需补充资源或复盘', tone: 'accent' },
-                ],
+            createComponent('pf-gauge-total', 'gauge-chart', '总经费执行率仪表', 1440, 394, 456, 286, 20, {
+                title: '总经费执行率',
+                value: 79.6,
+                max: 100,
+                unit: '%',
+                seriesColors: ['#2e73d6'],
+                backgroundColor: '#ffffff',
             }),
             createFinancePluginComponent('pf-summary', 'table', 'summary-table', '项目经费明细', 24, 700, 1260, 336, 15, {
-                headers: ['项目编号', '项目名称', '总经费', '总执行率'],
+                headers: ['项目编号', '研制周期', '总经费', '直接成本控制数', '预留间接费用和收益', '直接成本执行率', '间接费用支出和收益总额', '总支出', '总执行率'],
                 rows: [
-                    financeRow('PRJ-M01', '新一代涡轮组装', '4,800', '77.5%'),
-                    financeRow('PRJ-D02', '智能电网升级', '12,000', '95.7%'),
-                    financeRow('PRJ-H03', '数据中心迁移', '6,500', '75.1%'),
-                    financeRow('PRJ-S04', '供应链数字化', '3,200', '99.4%'),
-                    financeRow('PRJ-Q05', '质量体系认证', '1,500', '98.7%'),
+                    financeRow('PRJ-001', '2026.01-2027.06', '4,800', '3,840', '960', '83.3%', '520', '3,721', '77.5%'),
+                    financeRow('PRJ-002', '2025.03-2026.04', '12,000', '9,600', '2,400', '102.1%', '1,680', '11,472', '95.6%'),
+                    financeRow('PRJ-003', '2025.06-2027.01', '6,500', '5,200', '1,300', '78.8%', '780', '4,878', '75.0%'),
+                    financeRow('PRJ-004', '2025.01-2026.03', '3,200', '2,560', '640', '109.4%', '380', '3,180', '99.4%'),
+                    financeRow('PRJ-005', '2024.12-2026.01', '1,500', '1,200', '300', '112.5%', '130', '1,480', '98.7%'),
                 ],
             }),
             createFinancePluginComponent('pf-note', 'markdown-text', 'note-panel', '预算执行说明', 1304, 700, 592, 336, 15, {
-                title: '预算执行说明',
+                title: '指标计算说明',
                 notes: [
-                    '项目经费模板重点保留原型中的经费结构、执行率对比和健康度矩阵。',
-                    '健康度矩阵已迁移为 finance-kit 状态块，支持设计器拖拽重排。',
-                    '后续如需接实时项目库，只需替换数据源，不需要重写模板结构。',
+                    '直接成本已支出 = 直接成本控制数 × 直接成本执行率 / 100（派生字段）。',
+                    '总支出 = 直接成本已支出 + 间接费用支出和收益总额。',
+                    '总经费执行率 = 总支出 ÷ 总经费 × 100%。',
+                    '预留间接费用和收益为原始字段，直接取自数据表。',
                 ],
             }),
         ],

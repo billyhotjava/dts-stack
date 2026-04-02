@@ -3,22 +3,22 @@ import { useTranslation } from "react-i18next";
 import { useNavigate } from "react-router";
 import Character from "@/assets/images/characters/character_1.png";
 import { GLOBAL_CONFIG } from "@/global-config";
-import { usePortalSession } from "@/store/userStore";
+import { useUserToken } from "@/store/userStore";
 import { themeVars } from "@/theme/theme.css";
 import ErrorLayout from "./components/ErrorLayout";
 
 export default function Page404() {
 	const { t } = useTranslation();
 	const navigate = useNavigate();
-	const session = usePortalSession();
+	const token = useUserToken();
 	const homePath = GLOBAL_CONFIG.defaultRoute || "/workbench";
 
 	// If user is authenticated, auto-redirect to the unified home
 	useEffect(() => {
-		if (session.authenticated) {
+		if (token?.accessToken) {
 			navigate(homePath, { replace: true });
 		}
-	}, [homePath, navigate, session.authenticated]);
+	}, [homePath, navigate, token?.accessToken]);
 	const svg = (
 		<svg viewBox="0 0 480 360" xmlns="http://www.w3.org/2000/svg" width={400} height={400} className="w-full">
 			<title>404</title>

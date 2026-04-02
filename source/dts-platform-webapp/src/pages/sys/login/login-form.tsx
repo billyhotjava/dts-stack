@@ -7,7 +7,6 @@ import { KeycloakLocalizationService } from "@/api/services/keycloakLocalization
 import { formatKoalError, type KoalCertificate, KoalMiddlewareClient } from "@/api/services/koalPkiClient";
 import { createPortalSessionFromPki, getPkiChallenge, type PkiChallenge, pkiLogin } from "@/api/services/pkiService";
 import type { SignInReq } from "@/api/services/userService";
-import { PLATFORM_SESSION_KEYS } from "@/auth/session-keys";
 import { GLOBAL_CONFIG } from "@/global-config";
 import { useBilingualText } from "@/hooks/useBilingualText";
 import { useContextActions } from "@/store/contextStore";
@@ -20,8 +19,6 @@ import { Input } from "@/ui/input";
 import { RadioGroup, RadioGroupItem } from "@/ui/radio-group";
 import { cn } from "@/utils";
 import { updateLocalTranslations } from "@/utils/translation";
-import { resetLoginRedirectFlag } from "@/auth/session-auth";
-import { writeLoginActivityMarkers } from "@dts/session-core/storage";
 import { LoginStateEnum, useLoginStateContext } from "./providers/login-provider";
 
 const IS_DEV = typeof import.meta !== "undefined" && Boolean(import.meta.env?.DEV);
@@ -44,27 +41,14 @@ export function LoginForm({ className, ...props }: React.ComponentPropsWithoutRe
 
 	const { loginState } = useLoginStateContext();
 	const signIn = useSignIn();
-	const { setAuthenticatedSession } = useUserActions();
+	const { setUserToken, setUserInfo } = useUserActions();
 	const bilingual = useBilingualText();
 	const contextActions = useContextActions();
 
 	const selectedCert = pkiCerts.find((item) => item.id === selectedCertId);
 
-	// URL ?mode=admin 强制显示密码登录（opadmin 无 PKI 证书的紧急通道）
-	const isAdminMode: boolean = (() => {
-		try {
-			const params = new URLSearchParams(location.search || "");
-			return params.get("mode") === "admin";
-		} catch {
-			return false;
-		}
-	})();
-
 	// 简单开关：默认隐藏账号/密码，仅保留证书登录按钮（仍保留密码登录后端能力）
 	const hidePasswordForm: boolean = (() => {
-		// 0) ?mode=admin 强制显示密码表单
-		if (isAdminMode) return false;
-
 		// 1) 运行时注入配置（容器 entrypoint 生成的 /runtime-config.js）优先
 		try {
 			const rc: any = (typeof window !== "undefined" && (window as any).__RUNTIME_CONFIG__) || {};
@@ -196,12 +180,6 @@ export function LoginForm({ className, ...props }: React.ComponentPropsWithoutRe
 			return;
 		}
 
-		// ?mode=admin 通道仅允许 opadmin 账号
-		if (isAdminMode && normalizedUsername !== "opadmin") {
-			toast.error("此登录通道仅供运维管理员使用，请使用证书登录", { position: "top-center" });
-			return;
-		}
-
 		setLoading(true);
 		try {
 			const signInResult = await signIn({ ...values, username: trimmedUsername });
@@ -217,11 +195,15 @@ export function LoginForm({ className, ...props }: React.ComponentPropsWithoutRe
 					await svc.default.getMenuTree().catch(() => undefined);
 				} catch {}
 			}
-			// Reset analytics auth redirect guard so future session expiry can trigger a new redirect.
-			resetLoginRedirectFlag();
-			// Login redirect: explicit redirect param -> config default -> /workbench fallback
-			const target = safeRedirect || GLOBAL_CONFIG.defaultRoute || "/workbench";
-			navigate(target, { replace: true });
+			// If login was triggered by an embedded module (e.g. /analytics), honor the redirect hint.
+			// Keep this safe: only allow same-origin absolute paths, and use hard navigation for cross-app paths.
+			if (safeRedirect?.startsWith("/analytics")) {
+				window.location.assign(safeRedirect);
+				return;
+			}
+			// 登录后回到平台默认首页（由全局配置/菜单决定）。
+			// 注意：Router 已配置 basename=publicPath，这里必须传入“路由内路径”，不要再拼 publicPath。
+			navigate(safeRedirect || GLOBAL_CONFIG.defaultRoute || "/dashboard/workbench", { replace: true });
 			toast.success(bilingual("sys.login.loginSuccessTitle"), {
 				closeButton: true,
 			});
@@ -379,18 +361,12 @@ export function LoginForm({ className, ...props }: React.ComponentPropsWithoutRe
 
 			const portal = await createPortalSessionFromPki(username, rawUser);
 			const portalUser = portal?.user ?? rawUser;
-			setAuthenticatedSession(
-				{
-					authenticated: true,
-					username: String(portalUser?.username || portalUser?.preferred_username || username).trim(),
-					displayName: String(portalUser?.displayName || portalUser?.fullName || portalUser?.firstName || username).trim(),
-					browserId: typeof portal?.browserId === "string" ? portal.browserId.trim() : undefined,
-					roles: Array.isArray(portalUser?.roles) ? portalUser.roles : undefined,
-					permissions: Array.isArray(portalUser?.permissions) ? portalUser.permissions : undefined,
-				},
-				portalUser,
-			);
-			writeLoginActivityMarkers(PLATFORM_SESSION_KEYS);
+			const accessToken = String(portal?.accessToken || portal?.token || "").trim();
+			const refreshToken = String(portal?.refreshToken || "").trim();
+			if (!accessToken) throw new Error("登录响应缺少访问令牌");
+
+			setUserToken({ accessToken, refreshToken });
+			setUserInfo(portalUser);
 
 			try {
 				contextActions.initDefaults();
@@ -410,10 +386,7 @@ export function LoginForm({ className, ...props }: React.ComponentPropsWithoutRe
 				// ignore
 			}
 
-			// Reset analytics auth redirect guard so future session expiry can trigger a new redirect.
-			resetLoginRedirectFlag();
-			// 配置默认路由 → /workbench 兜底
-			navigate(safeRedirect || GLOBAL_CONFIG.defaultRoute || "/workbench", { replace: true });
+			navigate(GLOBAL_CONFIG.defaultRoute || "/dashboard/workbench", { replace: true });
 			toast.success(bilingual("sys.login.loginSuccessTitle"), { closeButton: true });
 
 			await client.logout();
@@ -440,9 +413,8 @@ export function LoginForm({ className, ...props }: React.ComponentPropsWithoutRe
 				<form onSubmit={form.handleSubmit(handleFinish)} className="space-y-4">
 					<div className="flex flex-col items-center gap-1 text-center">
 						<h1 className="text-2xl font-bold">{bilingual("sys.login.signInFormTitle")}</h1>
-						<p className="text-sm text-muted-foreground">
-							{isAdminMode ? "(运维管理员登录)" : "(业务端)"}
-						</p>
+						<p className="text-sm text-muted-foreground">(业务端)</p>
+						{/* <p className="text-balance text-sm text-muted-foreground">{bilingual("sys.login.signInFormDescription")}</p> */}
 					</div>
 
 					{!hidePasswordForm && (
@@ -521,12 +493,10 @@ export function LoginForm({ className, ...props }: React.ComponentPropsWithoutRe
 							{bilingual("sys.login.loginButton")}
 						</Button>
 					)}
-						{!isAdminMode && (
-						<Button type="button" variant="outline" className="w-full" onClick={handlePkiLogin} disabled={loading}>
-							{loading && <Loader2 className="animate-spin mr-2" />}
-							证书登录
-						</Button>
-					)}
+					<Button type="button" variant="outline" className="w-full" onClick={handlePkiLogin} disabled={loading}>
+						{loading && <Loader2 className="animate-spin mr-2" />}
+						证书登录
+					</Button>
 				</form>
 			</Form>
 			<Dialog open={pkiDialogOpen} onOpenChange={handlePkiDialogOpenChange}>

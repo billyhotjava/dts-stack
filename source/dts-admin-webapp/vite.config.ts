@@ -11,7 +11,6 @@ import { unwrapCssLayers } from "./tools/postcss/unwrap-css-layers";
 import { legacyCssFallbacks } from "./tools/postcss/legacy-css-fallbacks";
 
 const rootDir = fileURLToPath(new URL(".", import.meta.url));
-const sharedSessionCorePackageDir = resolvePath(rootDir, "../dts-session-core");
 const legacySupportedBrowsers = ["chrome >= 95", "edge >= 95", "firefox >= 102", "safari >= 15.4", "ios >= 15.5", "android >= 95"];
 const modernSupportedBrowsers = ["chrome >= 109", "edge >= 109", "firefox >= 115", "safari >= 16.4", "ios >= 16.4", "android >= 109"];
 
@@ -128,7 +127,7 @@ export default defineConfig(({ mode }) => {
 			// Accept requests from reverse proxy with custom Host header (e.g. https://biadmin.<base-domain>)
 			allowedHosts: true,
 			// Decouple from other workspaces; do not traverse outside project root
-			fs: { strict: true, allow: [rootDir, sharedSessionCorePackageDir] },
+			fs: { strict: true, allow: [rootDir] },
 			// Ignore any sibling mounts like /workspace/dts-platform-webapp/**
 			watch: {
 				ignored: [

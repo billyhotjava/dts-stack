@@ -1,20 +1,19 @@
 import { Star } from "lucide-react";
 import { Navigate, useLocation } from "react-router";
-import { shouldAutoRedirectFromLogin, shouldBlockWhileSessionBootstraps } from "@/auth/session-state";
 import TechDataBackground from "@/assets/images/background/tech-data-platform.svg";
 import TechDataBackgroundLight from "@/assets/images/background/tech-data-platform-light.svg";
 import LocalePicker from "@/components/locale-picker";
 import { GLOBAL_CONFIG } from "@/global-config";
 import { useBilingualText } from "@/hooks/useBilingualText";
 import SettingButton from "@/layouts/components/setting-button";
-import { usePortalSession } from "@/store/userStore";
+import { useUserToken } from "@/store/userStore";
 import LoginForm from "./login-form";
 import { LoginProvider } from "./providers/login-provider";
 import RegisterForm from "./register-form";
 import ResetForm from "./reset-form";
 
 function LoginPage() {
-	const session = usePortalSession();
+	const token = useUserToken();
 	const bilingual = useBilingualText();
 	const location = useLocation();
 
@@ -33,11 +32,13 @@ function LoginPage() {
 		}
 	})();
 
-	if (shouldBlockWhileSessionBootstraps(session)) {
-		return null;
-	}
-
-	if (shouldAutoRedirectFromLogin(session)) {
+	if (token.accessToken) {
+		// If we're already authenticated and this page was reached via embedded module redirect,
+		// jump directly to that module with a hard navigation.
+		if (safeRedirect?.startsWith("/analytics")) {
+			window.location.replace(safeRedirect);
+			return null;
+		}
 		return <Navigate to={safeRedirect || GLOBAL_CONFIG.defaultRoute} replace />;
 	}
 
@@ -46,6 +47,7 @@ function LoginPage() {
 
 	return (
 		<div className="relative grid min-h-screen lg:grid-cols-2 bg-background">
+			{/* Illustration at left on desktop to distinguish from admin style */}
 			<div className="relative hidden bg-background lg:block">
 				<img
 					src={TechDataBackgroundLight}
@@ -59,6 +61,7 @@ function LoginPage() {
 				/>
 			</div>
 
+			{/* Login form on the right */}
 			<div className="flex flex-col gap-4 p-6 md:p-10">
 				<div className="flex justify-center gap-2 md:justify-start">
 					<div className="flex items-center gap-3 font-medium cursor-default">

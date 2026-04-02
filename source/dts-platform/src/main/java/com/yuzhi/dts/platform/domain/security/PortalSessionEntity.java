@@ -26,9 +26,6 @@ public class PortalSessionEntity implements Serializable {
     @Column(name = "display_name", length = 255)
     private String displayName;
 
-    @Column(name = "browser_id", length = 128)
-    private String browserId;
-
     @Column(name = "session_id", nullable = false, columnDefinition = "uuid")
     private UUID sessionId;
 
@@ -57,9 +54,6 @@ public class PortalSessionEntity implements Serializable {
 
     @Column(name = "last_seen_at", nullable = false)
     private Instant lastSeenAt;
-
-    @Column(name = "last_renewed_at")
-    private Instant lastRenewedAt;
 
     @Column(name = "created_at", nullable = false)
     private Instant createdAt;
@@ -128,14 +122,6 @@ public class PortalSessionEntity implements Serializable {
         this.displayName = displayName;
     }
 
-    public String getBrowserId() {
-        return browserId;
-    }
-
-    public void setBrowserId(String browserId) {
-        this.browserId = browserId;
-    }
-
     public String getAccessToken() {
         return accessToken;
     }
@@ -198,14 +184,6 @@ public class PortalSessionEntity implements Serializable {
 
     public void setLastSeenAt(Instant lastSeenAt) {
         this.lastSeenAt = lastSeenAt;
-    }
-
-    public Instant getLastRenewedAt() {
-        return lastRenewedAt;
-    }
-
-    public void setLastRenewedAt(Instant lastRenewedAt) {
-        this.lastRenewedAt = lastRenewedAt;
     }
 
     public Instant getCreatedAt() {

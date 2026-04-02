@@ -12,18 +12,18 @@ import { unwrapCssLayers } from "./tools/postcss/unwrap-css-layers";
 import { legacyCssFallbacks } from "./tools/postcss/legacy-css-fallbacks";
 
 const rootDir = fileURLToPath(new URL(".", import.meta.url));
-const sharedSessionCorePackageDir = resolvePath(rootDir, "../dts-session-core");
 const legacySupportedBrowsers = ["chrome >= 95", "edge >= 95", "firefox >= 102", "safari >= 15.4", "ios >= 15.5", "android >= 95"];
 const modernSupportedBrowsers = ["chrome >= 109", "edge >= 109", "firefox >= 115", "safari >= 16.4", "ios >= 16.4", "android >= 109"];
 const adminServiceTarget = { host: "dts-admin", containerPort: 8081, hostPort: 18081 };
 const analyticsApiServiceTarget = { host: "dts-analytics", containerPort: 3000, hostPort: 3000 };
-// analyticsUiServiceTarget removed — analytics UI is now embedded in platform-webapp.
+const analyticsUiServiceTarget = { host: "dts-analytics-webapp-modern", containerPort: 3002, hostPort: 3002 };
 
 type PlatformServerProxyOptions = {
 	apiProxyTarget: string;
 	apiProxyPrefix: string;
 	adminProxyTarget: string;
 	analyticsApiProxyTarget: string;
+	analyticsUiProxyTarget: string;
 };
 
 function resolveServiceProxyTarget(
@@ -44,6 +44,7 @@ export function createPlatformServerProxy({
 	apiProxyPrefix,
 	adminProxyTarget,
 	analyticsApiProxyTarget,
+	analyticsUiProxyTarget,
 }: PlatformServerProxyOptions) {
 	return {
 		"/analytics/api": {
@@ -54,16 +55,12 @@ export function createPlatformServerProxy({
 			ws: true,
 			xfwd: true,
 		},
-		"/bi/api": {
-			target: analyticsApiProxyTarget,
+		"/analytics": {
+			target: analyticsUiProxyTarget,
 			changeOrigin: true,
-			rewrite: (path: string) => path.replace(/^\/bi\/api/, "/api"),
 			secure: false,
-			ws: true,
 			xfwd: true,
 		},
-		// Analytics UI is now embedded in platform-webapp — no proxy needed.
-		// The "/analytics/api" proxy above still forwards API calls to dts-analytics.
 		"/api": {
 			target: apiProxyTarget,
 			changeOrigin: true,
@@ -75,7 +72,8 @@ export function createPlatformServerProxy({
 			secure: false,
 			xfwd: true,
 		},
-		// Keep a legacy same-origin admin proxy for local debugging and backwards compatibility.
+		// Proxy Admin API under same-origin path to avoid browser CORS in dev.
+		// When VITE_ADMIN_API_BASE_URL = '/admin/api', frontend calls hit Vite and are forwarded here.
 		"/admin/api": {
 			target: adminProxyTarget,
 			changeOrigin: true,
@@ -145,6 +143,11 @@ export default defineConfig(({ mode }) => {
 	const analyticsApiProxyTarget = resolveServiceProxyTarget(
 		env.VITE_ANALYTICS_API_PROXY_TARGET || rawEnv.VITE_ANALYTICS_API_PROXY_TARGET,
 		analyticsApiServiceTarget,
+		runningInContainer,
+	);
+	const analyticsUiProxyTarget = resolveServiceProxyTarget(
+		env.VITE_ANALYTICS_UI_PROXY_TARGET || rawEnv.VITE_ANALYTICS_UI_PROXY_TARGET,
+		analyticsUiServiceTarget,
 		runningInContainer,
 	);
 	const pollingEnabled = String(env.CHOKIDAR_USEPOLLING || "").trim().toLowerCase() === "true";
@@ -250,7 +253,7 @@ export default defineConfig(({ mode }) => {
       // like 'dts-platform-webapp'.
       allowedHosts: true,
       // Restrict file serving to this project only
-      fs: { strict: true, allow: [rootDir, sharedSessionCorePackageDir] },
+      fs: { strict: true, allow: [rootDir] },
       // Ignore sibling workspace mounts to avoid cross-project file watching
       watch: {
         ignored: [
@@ -268,6 +271,7 @@ export default defineConfig(({ mode }) => {
 					apiProxyPrefix,
 					adminProxyTarget,
 					analyticsApiProxyTarget,
+					analyticsUiProxyTarget,
 				}),
 			},
 
@@ -283,9 +287,7 @@ export default defineConfig(({ mode }) => {
 						"vendor-core": ["react", "react-dom", "react-router"],
 						"vendor-ui": ["antd", "@ant-design/cssinjs", "styled-components"],
 						"vendor-utils": ["axios", "dayjs", "i18next", "zustand", "@iconify/react"],
-						"vendor-monaco": ["monaco-editor"],
-						"vendor-echarts": ["echarts", "echarts-for-react", "echarts-wordcloud"],
-						"vendor-dnd": ["react-dnd", "react-dnd-html5-backend", "react-grid-layout"],
+						"vendor-charts": ["apexcharts", "react-apexcharts"],
 					},
 				},
 			},

@@ -21,6 +21,15 @@ export interface UserInfo {
     menu?: MenuTree[];
 }
 
+export interface UserToken {
+    accessToken?: string;
+    refreshToken?: string;
+    adminAccessToken?: string;
+    adminRefreshToken?: string;
+    adminAccessTokenExpiresAt?: string;
+    adminRefreshTokenExpiresAt?: string;
+}
+
 export interface Permission_Old {
 	id: string;
 	parentId: string;

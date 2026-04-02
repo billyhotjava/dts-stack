@@ -25,10 +25,10 @@ public class PortalSessionActivityService {
 
     public PortalSessionActivityService(
         PortalSessionRepository sessionRepository,
-        @Value("${dts.platform.session.timeout-minutes:30}") long timeoutMinutes
+        @Value("${dts.platform.session.timeout-minutes:10}") long timeoutMinutes
     ) {
         this.sessionRepository = sessionRepository;
-        long minutes = timeoutMinutes <= 0 ? 30 : timeoutMinutes;
+        long minutes = timeoutMinutes <= 0 ? 10 : timeoutMinutes;
         this.sessionTtl = Duration.ofMinutes(minutes);
     }
 
@@ -51,7 +51,6 @@ public class PortalSessionActivityService {
             return ValidationResult.EXPIRED;
         }
         entity.setLastSeenAt(effectiveNow);
-        entity.setLastRenewedAt(effectiveNow);
         entity.setExpiresAt(effectiveNow.plus(sessionTtl));
         sessionRepository.save(entity);
         return ValidationResult.ACTIVE;

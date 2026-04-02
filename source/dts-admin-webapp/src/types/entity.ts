@@ -155,3 +155,12 @@ export interface AuditLogPageResponse {
 	totalElements: number;
 	totalPages: number;
 }
+
+export interface UserToken {
+	accessToken?: string;
+	refreshToken?: string;
+	adminAccessToken?: string;
+	adminRefreshToken?: string;
+	adminAccessTokenExpiresAt?: string;
+	adminRefreshTokenExpiresAt?: string;
+}

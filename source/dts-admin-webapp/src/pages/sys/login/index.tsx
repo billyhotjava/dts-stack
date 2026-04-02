@@ -1,13 +1,12 @@
 import { Star } from "lucide-react";
-import { Navigate, useLocation, useSearchParams } from "react-router";
-import { shouldAutoRedirectFromLogin, shouldBlockWhileSessionBootstraps } from "@/auth/session-state";
+import { Navigate, useSearchParams } from "react-router";
 import TechDataBackground from "@/assets/images/background/tech-data-platform.svg";
 import TechDataBackgroundLight from "@/assets/images/background/tech-data-platform-light.svg";
 import LocalePicker from "@/components/locale-picker";
 import { GLOBAL_CONFIG } from "@/global-config";
 import { useBilingualText } from "@/hooks/useBilingualText";
 import SettingButton from "@/layouts/components/setting-button";
-import { usePortalSession } from "@/store/userStore";
+import { useUserToken } from "@/store/userStore";
 import { Alert, AlertDescription, AlertTitle } from "@/ui/alert";
 import LoginForm from "./login-form";
 import { LoginProvider } from "./providers/login-provider";
@@ -15,30 +14,12 @@ import RegisterForm from "./register-form";
 import ResetForm from "./reset-form";
 
 function LoginPage() {
-	const session = usePortalSession();
+	const token = useUserToken();
 	const [searchParams] = useSearchParams();
 	const bilingual = useBilingualText();
-	const location = useLocation();
 
-	const safeRedirect = (() => {
-		try {
-			const params = new URLSearchParams(location.search || "");
-			const raw = (params.get("redirect") || "").trim();
-			if (!raw || !raw.startsWith("/") || raw.startsWith("//") || raw.includes("://") || raw.length > 2048) {
-				return null;
-			}
-			return raw;
-		} catch {
-			return null;
-		}
-	})();
-
-	if (shouldBlockWhileSessionBootstraps(session)) {
-		return null;
-	}
-
-	if (shouldAutoRedirectFromLogin(session)) {
-		return <Navigate to={safeRedirect || GLOBAL_CONFIG.defaultRoute} replace />;
+	if (token.accessToken) {
+		return <Navigate to={GLOBAL_CONFIG.defaultRoute} replace />;
 	}
 
 	const reason = searchParams.get("reason");
