@@ -8,6 +8,7 @@ export type CollectionListItem = {
 	description?: string | null;
 	archived?: boolean;
 	location?: string | null;
+	parent_id?: number | null;
 	can_write?: boolean;
 };
 
@@ -1737,6 +1738,12 @@ export const analyticsApi = {
 	listCollections: () => fetchJson<CollectionListItem[]>("/bi/api/collection"),
 	getCollectionItems: (id: string | number) =>
 		fetchJson<CollectionItem[]>(`/bi/api/collection/${encodeURIComponent(String(id))}/items`),
+	createCollection: (body: { name: string; parent_id?: number | null; description?: string | null }) =>
+		sendJson<CollectionListItem>("/bi/api/collection", body),
+	updateCollection: (id: number, body: { name?: string; parent_id?: number | null; description?: string | null }) =>
+		requestJson<CollectionListItem>(`/bi/api/collection/${encodeURIComponent(String(id))}`, "PUT", body),
+	deleteCollection: (id: number) =>
+		requestJson<void>(`/bi/api/collection/${encodeURIComponent(String(id))}`, "DELETE"),
 	listDashboards: () => fetchJson<DashboardListItem[]>("/bi/api/dashboard"),
 	getDashboard: (id: string | number) => fetchJson<DashboardDetail>(`/bi/api/dashboard/${encodeURIComponent(String(id))}`),
 	createDashboard: (body: unknown) => sendJson<DashboardDetail>("/bi/api/dashboard", body),
