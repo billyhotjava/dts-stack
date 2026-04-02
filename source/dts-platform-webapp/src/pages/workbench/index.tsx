@@ -9,7 +9,7 @@ import workbenchService, {
 } from "@/api/services/workbenchService";
 import { useRouter } from "@/routes/hooks";
 import { resolveRouteForOpen } from "@/analytics/helpers/resolveAnalyticsUrl";
-import analyticsApi from "@/analytics/api/analyticsApi";
+import { analyticsApi } from "@/analytics/api/analyticsApi";
 
 
 type PublishedScreen = {
