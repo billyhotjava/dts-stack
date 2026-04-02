@@ -201,3 +201,34 @@ CREATE TABLE ods_material_info (
     source_system       varchar(200) DEFAULT 'excel',
     import_time         timestamp DEFAULT now()
 );
+
+-- ─── 10. 进度跟进措施表 ───
+DROP TABLE IF EXISTS ods_progress_measure CASCADE;
+CREATE TABLE ods_progress_measure (
+    id                       serial PRIMARY KEY,
+    project_no               varchar(500),   -- 项目编号（下拉选择）
+    subsystem                varchar(500),   -- 分系统/分任务
+    node_task                varchar(500),   -- 节点任务及目标
+    plan_date                varchar(500),   -- 节点计划时间（格式：XXXX-XX-XX）
+    plan_week                varchar(500),   -- 节点计划周数
+    completion_status        varchar(500),   -- 完成情况（下拉选择）
+    measure_category         varchar(500),   -- 跟进措施类别（下拉选择）
+    measure_title            varchar(2000),  -- 跟进措施题目
+    follow_up_person         varchar(500),   -- 跟进人
+    main_recipient           varchar(500),   -- 主送
+    cc_recipient             varchar(500),   -- 抄送
+    follow_up_date           varchar(500),   -- 跟进时间（格式：XXXX-XX-XX）
+    follow_up_week           varchar(500),   -- 跟进周数
+    closure_status           varchar(500),   -- 闭环状态（下拉选择）
+    final_closure_date       varchar(500),   -- 最终闭环时间（格式：XXXX-XX-XX）
+    final_closure_week       varchar(500),   -- 最终闭环周数
+    closure_deliverable_type varchar(500),   -- 闭环交付物类别（下拉选择）
+    closure_deliverable      varchar(2000),  -- 闭环交付物
+    risk_content             varchar(2000),  -- 主要风险内容
+    last_update_time         varchar(500),   -- 最后更新时间（格式：XXXX-XX-XX）
+    last_update_week         varchar(500),   -- 最后更新周数
+    remark                   varchar(2000),  -- 备注
+    filled_by                varchar(500),   -- 填写人
+    source_system            varchar(200) DEFAULT 'excel',
+    import_time              timestamp DEFAULT now()
+);

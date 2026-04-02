@@ -2,12 +2,17 @@ version: 2
 sources:
   - name: "pm_ods"
     schema: "public"
-    description: "项目管理 ODS 源表（执行域 + 质量/技术状态/风险/成本域）"
+    description: "项目管理 ODS 源表"
     tables:
-      # ─── 执行域 ───
+      # ─── 执行域（来源: project1.xlsx） ───
       - name: "project_subject_domain"
         identifier: "ods_project_subject_domain"
         description: "项目主体域原始数据 — 进度节点/里程碑事实"
+
+      # ─── 进度跟进域（来源: pmall.pdf） ───
+      - name: "progress_measure"
+        identifier: "ods_progress_measure"
+        description: "进度跟进措施表 — 节点跟进措施与闭环"
 
       # ─── 质量域 ───
       - name: "quality_issue"
@@ -33,17 +38,7 @@ sources:
         identifier: "ods_risk_measure"
         description: "风险跟进措施表 — 风险闭环措施"
 
-      # ─── 成本域 ───
-      - name: "cost_accounting"
-        identifier: "ods_cost_accounting"
-        description: "成本核算基本表 — 成本事实"
-
       # ─── 物料域 ───
       - name: "material_info"
         identifier: "ods_material_info"
         description: "重要物料信息表 — 物料风险与供应链事实"
-
-      # ─── 进度跟进域 ───
-      - name: "progress_measure"
-        identifier: "ods_progress_measure"
-        description: "进度跟进措施表 — 节点跟进措施与闭环"

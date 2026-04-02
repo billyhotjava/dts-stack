@@ -1,0 +1,79 @@
+{{ config(materialized='table', tags=['project-management', 'biz', 'dwd', 'risk']) }}
+
+SELECT
+  -- === 主键 ===
+  md5(
+    COALESCE(btrim(o.project_no), '') || '|' ||
+    COALESCE(btrim(o.risk_name), '') || '|' ||
+    COALESCE(btrim(o.risk_submit_time), '')
+  ) AS risk_id,
+
+  -- === 原始业务字段 ===
+  {{ nullif_placeholder("o.project_no") }}              AS project_no,
+  {{ nullif_placeholder("o.risk_name") }}               AS risk_name,
+  {{ nullif_placeholder("o.subsystem") }}               AS subsystem,
+  {{ nullif_placeholder("o.belonging_unit") }}          AS belonging_unit,
+  {{ nullif_placeholder("o.risk_description") }}        AS risk_description,
+  {{ nullif_placeholder("o.risk_phase") }}              AS risk_phase,
+  {{ nullif_placeholder("o.risk_category") }}           AS risk_category,
+  {{ nullif_placeholder("o.risk_level") }}              AS risk_level,
+  {{ nullif_placeholder("o.impact_scope") }}            AS impact_scope,
+  {{ nullif_placeholder("o.response_measure") }}        AS response_measure,
+  {{ nullif_placeholder("o.monthly_control_plan") }}    AS monthly_control_plan,
+  {{ nullif_placeholder("o.weekly_release_plan") }}     AS weekly_release_plan,
+  {{ nullif_placeholder("o.release_plan_synced") }}     AS release_plan_synced,
+  {{ nullif_placeholder("o.new_plan_count") }}          AS new_plan_count,
+  {{ nullif_placeholder("o.progress_situation") }}      AS progress_situation,
+  {{ nullif_placeholder("o.response_owner") }}          AS response_owner,
+  {{ nullif_placeholder("o.control_owner") }}           AS control_owner,
+  {{ nullif_placeholder("o.dept") }}                    AS dept,
+  {{ nullif_placeholder("o.risk_status") }}             AS risk_status,
+  {{ nullif_placeholder("o.remark") }}                  AS remark,
+  {{ nullif_placeholder("o.filled_by") }}               AS filled_by,
+
+  -- === 周数字段 ===
+  {{ nullif_placeholder("o.risk_submit_week") }}        AS risk_submit_week,
+  {{ nullif_placeholder("o.final_release_week") }}      AS final_release_week,
+  {{ nullif_placeholder("o.progress_stat_week") }}      AS progress_stat_week,
+  {{ nullif_placeholder("o.risk_release_week") }}       AS risk_release_week,
+  {{ nullif_placeholder("o.last_update_week") }}        AS last_update_week,
+
+  -- === 风险等级标准化 ===
+  CASE COALESCE({{ nullif_placeholder("o.risk_level") }}, '')
+    WHEN '高' THEN 3
+    WHEN '中' THEN 2
+    WHEN '低' THEN 1
+    ELSE 0
+  END AS risk_rank,
+
+  -- === 闭环标志 ===
+  CASE
+    WHEN btrim(COALESCE({{ nullif_placeholder("o.risk_status") }}, '')) = '已释放' THEN true
+    ELSE false
+  END AS is_released,
+
+  -- === 日期解析 ===
+  {{ parse_date_safe("o.risk_submit_time") }}           AS risk_submit_date,
+  {{ parse_date_safe("o.final_release_time") }}         AS final_release_date,
+  {{ parse_date_safe("o.progress_stat_time") }}         AS progress_stat_date,
+  {{ parse_date_safe("o.risk_release_date") }}          AS risk_release_date,
+  {{ parse_date_safe("o.last_update_time") }}           AS last_update_time,
+
+  -- === 时间维度标签 ===
+  EXTRACT(YEAR FROM {{ parse_date_safe("o.risk_submit_time") }})::int     AS submit_year,
+  EXTRACT(QUARTER FROM {{ parse_date_safe("o.risk_submit_time") }})::int  AS submit_quarter,
+  to_char({{ parse_date_safe("o.risk_submit_time") }}, 'YYYY-MM')         AS submit_month,
+
+  -- === 滞留天数 ===
+  CASE
+    WHEN {{ parse_date_safe("o.risk_submit_time") }} IS NOT NULL
+     AND btrim(COALESCE({{ nullif_placeholder("o.risk_status") }}, '')) != '已释放'
+    THEN (current_date - {{ parse_date_safe("o.risk_submit_time") }})::int
+    ELSE 0
+  END AS pending_days,
+
+  'ods_risk_info'::text AS source_table,
+  now() AS etl_time
+
+FROM {{ source('pm_ods', 'risk_info') }} o
+WHERE o.project_no IS NOT NULL

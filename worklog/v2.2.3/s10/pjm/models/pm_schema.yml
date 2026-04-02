@@ -1,0 +1,390 @@
+version: 2
+
+models:
+  # ═══════════════════════════════════════════════════════════════
+  #  执行域 — DWD
+  # ═══════════════════════════════════════════════════════════════
+
+  - name: pm_dim_major_project
+    columns:
+      - name: major_project_id
+        tests:
+          - not_null: { config: { severity: warn } }
+          - unique: { config: { severity: warn } }
+      - name: major_project_name
+        tests:
+          - not_null: { config: { severity: warn } }
+
+  - name: pm_dim_subproject
+    columns:
+      - name: subproject_id
+        tests:
+          - not_null: { config: { severity: warn } }
+          - unique: { config: { severity: warn } }
+      - name: major_project_id
+        tests:
+          - not_null: { config: { severity: warn } }
+          - relationships:
+              config: { severity: warn }
+              arguments:
+                to: ref('pm_dim_major_project')
+                field: major_project_id
+
+  - name: pm_dim_delay_reason
+    columns:
+      - name: delay_reason_category
+        tests:
+          - not_null: { config: { severity: warn } }
+          - unique: { config: { severity: warn } }
+
+  - name: pm_map_node_subject
+    columns:
+      - name: map_id
+        tests:
+          - not_null: { config: { severity: warn } }
+          - unique: { config: { severity: warn } }
+      - name: major_project_id
+        tests:
+          - not_null: { config: { severity: warn } }
+          - relationships:
+              config: { severity: warn }
+              arguments:
+                to: ref('pm_dim_major_project')
+                field: major_project_id
+      - name: subproject_id
+        tests:
+          - not_null: { config: { severity: warn } }
+          - relationships:
+              config: { severity: warn }
+              arguments:
+                to: ref('pm_dim_subproject')
+                field: subproject_id
+      - name: node_category
+        tests:
+          - accepted_values:
+              config: { severity: warn }
+              arguments:
+                values: ['milestone', 'critical', 'routine', 'normal']
+      - name: delay_reason_category
+        tests:
+          - accepted_values:
+              config: { severity: warn }
+              arguments:
+                values: ['normal', 'technical', 'quality', 'change', 'coordination', 'supplier', 'test', 'archive']
+
+  - name: biz_dwd_project_node_enriched
+    columns:
+      - name: node_id
+        tests:
+          - not_null: { config: { severity: warn } }
+          - unique: { config: { severity: warn } }
+      - name: major_project_id
+        tests:
+          - not_null: { config: { severity: warn } }
+          - relationships:
+              config: { severity: warn }
+              arguments:
+                to: ref('pm_dim_major_project')
+                field: major_project_id
+      - name: subproject_id
+        tests:
+          - not_null: { config: { severity: warn } }
+          - relationships:
+              config: { severity: warn }
+              arguments:
+                to: ref('pm_dim_subproject')
+                field: subproject_id
+      - name: delay_reason_category
+        tests:
+          - not_null: { config: { severity: warn } }
+          - accepted_values:
+              config: { severity: warn }
+              arguments:
+                values: ['normal', 'technical', 'quality', 'change', 'coordination', 'supplier', 'test', 'archive']
+      - name: node_status_bucket
+        tests:
+          - not_null: { config: { severity: warn } }
+          - accepted_values:
+              config: { severity: warn }
+              arguments:
+                values: ['closed-on-time', 'closed-delayed', 'overdue-open', 'risk-open', 'in-flight', 'planned']
+
+  # ═══════════════════════════════════════════════════════════════
+  #  执行域 — DWS
+  # ═══════════════════════════════════════════════════════════════
+
+  - name: biz_dws_week_subproject_summary
+    columns:
+      - name: subproject_id
+        tests:
+          - not_null: { config: { severity: warn } }
+      - name: plan_iso_week
+        tests:
+          - not_null: { config: { severity: warn } }
+
+  # ═══════════════════════════════════════════════════════════════
+  #  执行域 — ADS
+  # ═══════════════════════════════════════════════════════════════
+
+  - name: biz_ads_major_project_overview
+    columns:
+      - name: major_project_id
+        tests:
+          - not_null: { config: { severity: warn } }
+          - unique: { config: { severity: warn } }
+
+  - name: biz_ads_major_project_tree_snapshot
+    columns:
+      - name: entity_id
+        tests:
+          - not_null: { config: { severity: warn } }
+      - name: snapshot_level
+        tests:
+          - not_null: { config: { severity: warn } }
+          - accepted_values:
+              config: { severity: warn }
+              arguments:
+                values: ['major', 'subproject', 'node']
+
+  - name: biz_ads_delay_reason_trend
+    columns:
+      - name: delay_reason_category
+        tests:
+          - not_null: { config: { severity: warn } }
+      - name: plan_iso_week
+        tests:
+          - not_null: { config: { severity: warn } }
+
+  # ═══════════════════════════════════════════════════════════════
+  #  质量域 — DWD
+  # ═══════════════════════════════════════════════════════════════
+
+  - name: dim_quality_status
+    columns:
+      - name: code
+        tests:
+          - not_null: { config: { severity: warn } }
+          - unique: { config: { severity: warn } }
+
+  - name: dim_change_category
+    columns:
+      - name: code
+        tests:
+          - not_null: { config: { severity: warn } }
+
+  - name: dim_signature_status
+    columns:
+      - name: code
+        tests:
+          - not_null: { config: { severity: warn } }
+          - unique: { config: { severity: warn } }
+
+  - name: biz_dwd_quality_issue
+    columns:
+      - name: issue_id
+        tests:
+          - not_null: { config: { severity: warn } }
+          - unique: { config: { severity: warn } }
+      - name: project_no
+        tests:
+          - not_null: { config: { severity: warn } }
+      - name: issue_category
+        tests:
+          - accepted_values:
+              config: { severity: warn }
+              arguments:
+                values: ['设计', '工艺', '管理', '元器件', '操作', '外协外购', '软件', '其他']
+
+  - name: biz_dwd_quality_measure
+    columns:
+      - name: measure_id
+        tests:
+          - not_null: { config: { severity: warn } }
+      - name: project_no
+        tests:
+          - not_null: { config: { severity: warn } }
+
+  # ═══════════════════════════════════════════════════════════════
+  #  技术状态域 — DWD
+  # ═══════════════════════════════════════════════════════════════
+
+  - name: biz_dwd_tech_state
+    columns:
+      - name: tech_state_id
+        tests:
+          - not_null: { config: { severity: warn } }
+          - unique: { config: { severity: warn } }
+      - name: project_no
+        tests:
+          - not_null: { config: { severity: warn } }
+      - name: change_category
+        tests:
+          - accepted_values:
+              config: { severity: warn }
+              arguments:
+                values: ['I', 'II', 'III']
+
+  - name: biz_dwd_tech_state_measure
+    columns:
+      - name: measure_id
+        tests:
+          - not_null: { config: { severity: warn } }
+      - name: project_no
+        tests:
+          - not_null: { config: { severity: warn } }
+
+  # ═══════════════════════════════════════════════════════════════
+  #  风险域 — DWD
+  # ═══════════════════════════════════════════════════════════════
+
+  - name: biz_dwd_risk_info
+    columns:
+      - name: risk_id
+        tests:
+          - not_null: { config: { severity: warn } }
+          - unique: { config: { severity: warn } }
+      - name: project_no
+        tests:
+          - not_null: { config: { severity: warn } }
+      - name: risk_level
+        tests:
+          - accepted_values:
+              config: { severity: warn }
+              arguments:
+                values: ['高', '中', '低']
+
+  - name: biz_dwd_risk_measure
+    columns:
+      - name: measure_id
+        tests:
+          - not_null: { config: { severity: warn } }
+      - name: project_no
+        tests:
+          - not_null: { config: { severity: warn } }
+
+  # ═══════════════════════════════════════════════════════════════
+  #  成本域 — DWD
+  # ═══════════════════════════════════════════════════════════════
+
+  - name: biz_dwd_cost_accounting
+    columns:
+      - name: cost_id
+        tests:
+          - not_null: { config: { severity: warn } }
+          - unique: { config: { severity: warn } }
+      - name: project_no
+        tests:
+          - not_null: { config: { severity: warn } }
+
+  # ═══════════════════════════════════════════════════════════════
+  #  质量/技术状态/风险/成本 — DWS
+  # ═══════════════════════════════════════════════════════════════
+
+  - name: biz_dws_quality_period_summary
+    columns:
+      - name: period_year
+        tests:
+          - not_null: { config: { severity: warn } }
+      - name: project_no
+        tests:
+          - not_null: { config: { severity: warn } }
+
+  - name: biz_dws_tech_state_period_summary
+    columns:
+      - name: period_year
+        tests:
+          - not_null: { config: { severity: warn } }
+      - name: project_no
+        tests:
+          - not_null: { config: { severity: warn } }
+
+  - name: biz_dws_risk_period_summary
+    columns:
+      - name: period_year
+        tests:
+          - not_null: { config: { severity: warn } }
+      - name: project_no
+        tests:
+          - not_null: { config: { severity: warn } }
+
+  - name: biz_dws_cost_period_summary
+    columns:
+      - name: period_year
+        tests:
+          - not_null: { config: { severity: warn } }
+      - name: project_no
+        tests:
+          - not_null: { config: { severity: warn } }
+
+  # ═══════════════════════════════════════════════════════════════
+  #  质量/技术状态/风险/成本 — ADS
+  # ═══════════════════════════════════════════════════════════════
+
+  - name: biz_ads_quality_kpi
+    columns:
+      - name: period_year
+        tests:
+          - not_null: { config: { severity: warn } }
+
+  - name: biz_ads_tech_state_kpi
+    columns:
+      - name: period_year
+        tests:
+          - not_null: { config: { severity: warn } }
+
+  - name: biz_ads_risk_kpi
+    columns:
+      - name: period_year
+        tests:
+          - not_null: { config: { severity: warn } }
+
+  - name: biz_ads_cost_kpi
+    columns:
+      - name: period_year
+        tests:
+          - not_null: { config: { severity: warn } }
+
+  # ═══════════════════════════════════════════════════════════════
+  #  物料域
+  # ═══════════════════════════════════════════════════════════════
+
+  - name: biz_dwd_material_info
+    columns:
+      - name: material_id
+        tests:
+          - not_null: { config: { severity: warn } }
+          - unique: { config: { severity: warn } }
+      - name: project_no
+        tests:
+          - not_null: { config: { severity: warn } }
+
+  - name: biz_dws_material_period_summary
+    columns:
+      - name: project_no
+        tests:
+          - not_null: { config: { severity: warn } }
+
+  - name: biz_ads_material_kpi
+    columns:
+      - name: project_no
+        tests:
+          - not_null: { config: { severity: warn } }
+
+  # ═══════════════════════════════════════════════════════════════
+  #  进度跟进域
+  # ═══════════════════════════════════════════════════════════════
+
+  - name: biz_dwd_progress_measure
+    columns:
+      - name: measure_id
+        tests:
+          - not_null: { config: { severity: warn } }
+      - name: project_no
+        tests:
+          - not_null: { config: { severity: warn } }
+
+  - name: biz_dws_progress_measure_summary
+    columns:
+      - name: project_no
+        tests:
+          - not_null: { config: { severity: warn } }

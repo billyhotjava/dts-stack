@@ -5,7 +5,7 @@ import { ResultStatus } from "#/enum";
 import { GLOBAL_CONFIG } from "@/global-config";
 import { t } from "@/locales/i18n";
 import { isLoginRouteActive } from "@/routes/constants";
-import { redirectToLoginWithReturn, useRedirectIntentStore } from "@/auth/session-auth";
+import { fetchCurrentSession, redirectToLoginWithReturn, useRedirectIntentStore } from "@/auth/session-auth";
 import { PLATFORM_LEGACY_SESSION_KEYS, PLATFORM_SESSION_KEYS } from "@/auth/session-keys";
 import useContextStore from "@/store/contextStore";
 import userStore from "@/store/userStore";
@@ -195,8 +195,19 @@ axiosInstance.interceptors.response.use(
 				const loginTs = Number(
 					readStorageValue(PLATFORM_SESSION_KEYS.loginTs, PLATFORM_LEGACY_SESSION_KEYS.loginTs, localStorage) || "0",
 				);
-				if (loginTs > 0 && Date.now() - loginTs < 2000) {
+				if (loginTs > 0 && Date.now() - loginTs < 5000) {
 					console.warn("[auth] Suppressing auto-logout due to grace window after login");
+					return Promise.reject(error);
+				}
+			} catch {}
+			// Before forcing logout, re-probe the session — another tab (or this tab's
+			// login flow) may have already established a valid session. This prevents the
+			// race where a stale 401 from the OLD session triggers logout right after a
+			// successful login that created a NEW session.
+			try {
+				const probe = await fetchCurrentSession();
+				if (probe.authenticated) {
+					console.warn("[auth] 401 received but session probe shows authenticated — suppressing logout");
 					return Promise.reject(error);
 				}
 			} catch {}
