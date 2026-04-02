@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef } from "react";
+import { parseLogoutBroadcast } from "@dts-session-core/logout-broadcast";
 import { readStorageValue } from "@dts-session-core/storage";
 import { toast } from "sonner";
 import { fetchCurrentSession, redirectToLoginWithReturn } from "@/auth/session-auth";
@@ -92,6 +93,13 @@ export default function SessionManager() {
 		};
 
 		const onStorage = (event: StorageEvent) => {
+			if (event.key === ADMIN_SESSION_KEYS.logoutTs && event.newValue) {
+				const payload = parseLogoutBroadcast(event.newValue);
+				if (!payload) return;
+				const reason = payload.reason ?? "logged_out";
+				clearUserInfoAndToken(reason, { broadcast: false });
+				return;
+			}
 			if (event.key === ADMIN_SESSION_KEYS.lastActivity) {
 				if (event.newValue) {
 					const next = Number(event.newValue);

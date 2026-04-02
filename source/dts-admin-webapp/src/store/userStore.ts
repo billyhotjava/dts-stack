@@ -2,6 +2,8 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { create } from "zustand";
 import { createJSONStorage, persist } from "zustand/middleware";
+import type { LogoutBroadcastReason } from "@dts-session-core/logout-broadcast";
+import { serializeLogoutBroadcast } from "@dts-session-core/logout-broadcast";
 import { readStorageValue, removeStorageKeys } from "@dts-session-core/storage";
 import type { UserInfo } from "#/entity";
 import type { KeycloakTranslations } from "#/keycloak";
@@ -52,9 +54,28 @@ type UserStore = {
 		setSession: (session: PortalSessionState) => void;
 		markSessionChecking: () => void;
 		setAuthenticatedSession: (session: CurrentSessionPayload, userInfo?: Partial<UserInfo>) => void;
-		clearUserInfoAndToken: (reason?: SessionReason) => void;
+		clearUserInfoAndToken: (reason?: SessionReason, options?: { broadcast?: boolean }) => void;
 	};
 };
+
+function toLogoutBroadcastReason(reason: SessionReason): LogoutBroadcastReason | undefined {
+	switch (reason) {
+		case "logged_out":
+		case "expired":
+		case "taken_over":
+			return reason;
+		default:
+			return undefined;
+	}
+}
+
+function broadcastLogout(storageKey: string, reason: SessionReason): void {
+	const broadcastReason = toLogoutBroadcastReason(reason);
+	if (!broadcastReason) return;
+	try {
+		localStorage.setItem(storageKey, serializeLogoutBroadcast(broadcastReason));
+	} catch {}
+}
 
 function sameStringArray(left: string[] | undefined, right: string[] | undefined): boolean {
 	if (left === right) return true;
@@ -157,7 +178,7 @@ const useUserStore = create<UserStore>()(
 						};
 					});
 				},
-				clearUserInfoAndToken(reason = "logged_out") {
+				clearUserInfoAndToken(reason = "logged_out", options = {}) {
 					set({
 						userInfo: {},
 						session: createAnonymousSessionState(reason),
@@ -168,7 +189,6 @@ const useUserStore = create<UserStore>()(
 							ADMIN_SESSION_KEYS.lastActivity,
 							ADMIN_SESSION_KEYS.sessionId,
 							ADMIN_SESSION_KEYS.sessionUser,
-							ADMIN_SESSION_KEYS.logoutTs,
 							...ADMIN_LEGACY_SESSION_KEYS.loginTs,
 							...ADMIN_LEGACY_SESSION_KEYS.lastActivity,
 							...ADMIN_LEGACY_SESSION_KEYS.sessionId,
@@ -177,6 +197,9 @@ const useUserStore = create<UserStore>()(
 						],
 						localStorage,
 					);
+					if (options.broadcast !== false) {
+						broadcastLogout(ADMIN_SESSION_KEYS.logoutTs, reason);
+					}
 				},
 			},
 		}),

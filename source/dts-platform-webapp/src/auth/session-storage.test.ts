@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { parsePersistedUserStoreSnapshot, readPersistedUserStoreSnapshot } from "@dts-session-core/persisted-store";
+import { parseLogoutBroadcast, serializeLogoutBroadcast } from "@dts-session-core/logout-broadcast";
 import { createSessionStorageKeys, readStorageValue } from "@dts-session-core/storage";
 
 describe("session storage protocol", () => {
@@ -58,6 +59,22 @@ describe("session storage protocol", () => {
 		expect(readPersistedUserStoreSnapshot("dts.platform.userStore", ["userStore"], mockStorage)).toEqual({
 			userInfo: { username: "legacy-admin" },
 			session: {},
+		});
+	});
+
+	it("serializes and parses logout broadcasts with reasons", () => {
+		const raw = serializeLogoutBroadcast("taken_over", 123456);
+
+		expect(parseLogoutBroadcast(raw)).toEqual({
+			ts: 123456,
+			reason: "taken_over",
+		});
+	});
+
+	it("parses legacy numeric logout broadcasts without a reason", () => {
+		expect(parseLogoutBroadcast("123456")).toEqual({
+			ts: 123456,
+			reason: undefined,
 		});
 	});
 });
