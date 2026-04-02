@@ -6,22 +6,22 @@
 -- ================================================================
 
 SELECT
-    plan_year,
-    plan_quarter,
-    plan_month,
-    total_cnt,
-    pending_normal_cnt,
-    due_cnt,
-    outside_completed_cnt,
-    incomplete_cnt,
-    on_time_cnt,
-    overdue_completed_cnt,
-    completed_total_cnt,
-    completion_rate,
-    on_time_rate,
-    overdue_completion_rate,
-    abnormal_pending_cnt,
-    overdue_incomplete_unchanged_cnt,
-    overdue_incomplete_changed_cnt
+    plan_year,                              -- 计划年度
+    plan_quarter,                           -- 计划季度
+    plan_month,                             -- 计划月份
+    total_cnt,                              -- 本周期节点总数
+    pending_normal_cnt,                     -- 正常待完成数
+    due_cnt,                                -- 已到时间节点数（总数-正常待完成）
+    outside_completed_cnt,                  -- 本周期以外完成数
+    incomplete_cnt,                         -- 未完成总数
+    on_time_cnt,                            -- 按时完成数
+    overdue_completed_cnt,                  -- 超期完成数
+    completed_total_cnt,                    -- 完成总数（按时+超期+以外）
+    completion_rate,                        -- 完成百分比
+    on_time_rate,                           -- 按时完成百分比
+    overdue_completion_rate,                -- 超期完成百分比
+    abnormal_pending_cnt,                   -- 不正常待变更数
+    overdue_incomplete_unchanged_cnt,       -- 超期未完成未变更数
+    overdue_incomplete_changed_cnt          -- 超期未完成已变更数
 FROM biz_ads_project_kpi_overview
 ORDER BY plan_year, plan_month

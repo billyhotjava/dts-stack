@@ -5,6 +5,15 @@
 -- 数据表: biz_ads_material_kpi
 -- ================================================================
 
-SELECT *
+SELECT
+    project_no,                             -- 项目编号
+    total_cnt,                              -- 物资总数
+    long_cycle_cnt,                         -- 长周期物资数
+    long_cycle_rate,                        -- 长周期占比
+    self_developed_cnt,                     -- 自研物资数
+    outsource_cnt,                          -- 外协物资数
+    outsource_rate,                         -- 外协占比
+    has_risk_cnt,                           -- 有风险物资数
+    supplier_count                          -- 供应商数量
 FROM biz_ads_material_kpi
 ORDER BY project_no;

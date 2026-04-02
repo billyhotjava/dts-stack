@@ -6,19 +6,19 @@
 -- ================================================================
 
 SELECT
-    major_project_id,
-    major_project_name,
-    total_nodes,
-    subproject_count,
-    completed_nodes,
-    overdue_open_nodes,
-    high_risk_nodes,
-    milestone_nodes,
-    milestone_completed_nodes,
-    avg_health_score,
-    avg_delay_days,
-    max_delay_days,
-    completion_rate,
-    milestone_completion_rate
+    major_project_id,                       -- 项目编号
+    major_project_name,                     -- 项目名称
+    total_nodes,                            -- 节点总数
+    subproject_count,                       -- 子项目数
+    completed_nodes,                        -- 已完成节点数
+    overdue_open_nodes,                     -- 超期未完成节点数
+    high_risk_nodes,                        -- 高风险节点数
+    milestone_nodes,                        -- 里程碑节点数
+    milestone_completed_nodes,              -- 里程碑已完成数
+    avg_health_score,                       -- 平均健康度评分
+    avg_delay_days,                         -- 平均延期天数
+    max_delay_days,                         -- 最大延期天数
+    completion_rate,                        -- 完成率
+    milestone_completion_rate               -- 里程碑完成率
 FROM biz_ads_major_project_overview
 ORDER BY avg_health_score ASC

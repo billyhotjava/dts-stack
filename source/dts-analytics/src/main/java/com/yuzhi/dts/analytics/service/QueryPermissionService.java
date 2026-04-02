@@ -286,9 +286,9 @@ public class QueryPermissionService {
         // Get the permissions graph (there's typically just one)
         List<AnalyticsPermissionsGraph> graphs = permissionsGraphRepository.findAll();
         if (graphs.isEmpty()) {
-            // No permissions configured, default to limited for all users group
+            // No permissions configured — all users are platform-authenticated; grant full access by default
             if (groupId == 1L) {
-                return PermissionLevel.LIMITED;
+                return PermissionLevel.FULL;
             }
             return PermissionLevel.NONE;
         }
@@ -313,10 +313,9 @@ public class QueryPermissionService {
             }
         }
 
-        // Default: no explicit permission means no access
-        // Exception: "All Users" group (ID = 1) might have default access
+        // Default: no explicit permission — all users are platform-authenticated; grant full access
         if (groupId == 1L) {
-            return PermissionLevel.LIMITED;
+            return PermissionLevel.FULL;
         }
         return PermissionLevel.NONE;
     }

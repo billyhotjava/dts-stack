@@ -6,15 +6,15 @@
 -- ================================================================
 
 SELECT
-    major_project_id,
-    major_project_name,
-    dept,
-    week_start_date,
-    plan_iso_week,
-    delay_reason_category,
-    delay_reason_label,
-    delayed_node_count,
-    high_risk_node_count,
-    delayed_subproject_count
+    major_project_id,                       -- 项目编号
+    major_project_name,                     -- 项目名称
+    dept,                                   -- 责任单位
+    week_start_date,                        -- 周开始日期
+    plan_iso_week,                          -- 计划ISO周
+    delay_reason_category,                  -- 延期原因分类
+    delay_reason_label,                     -- 延期原因标签
+    delayed_node_count,                     -- 延期节点数
+    high_risk_node_count,                   -- 高风险节点数
+    delayed_subproject_count                -- 延期子项目数
 FROM biz_ads_delay_reason_trend
 ORDER BY plan_iso_week DESC, delayed_node_count DESC

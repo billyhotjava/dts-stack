@@ -6,13 +6,13 @@
 -- ================================================================
 
 SELECT
-    plan_year,
-    plan_quarter,
-    plan_month,
-    incomplete_high_risk_cnt,
-    incomplete_mid_risk_cnt,
-    incomplete_milestone_cnt,
-    incomplete_major_cnt,
-    incomplete_important_cnt
+    plan_year,                              -- 计划年度
+    plan_quarter,                           -- 计划季度
+    plan_month,                             -- 计划月份
+    incomplete_high_risk_cnt,               -- 未完成高风险节点数
+    incomplete_mid_risk_cnt,                -- 未完成中风险节点数
+    incomplete_milestone_cnt,               -- 未完成里程碑节点数
+    incomplete_major_cnt,                   -- 未完成重大节点数
+    incomplete_important_cnt                -- 未完成重要节点数
 FROM biz_ads_project_incomplete_risk
 ORDER BY plan_year, plan_month
