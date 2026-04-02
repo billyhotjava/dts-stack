@@ -5,6 +5,14 @@ vi.mock("@/routes/constants", () => ({
 	resolveLoginHref: () => "/login",
 }));
 
+vi.mock("@/auth/session-auth", async () => {
+	const actual = await vi.importActual<typeof import("@/auth/session-auth")>("@/auth/session-auth");
+	return {
+		...actual,
+		fetchCurrentSession: vi.fn(async () => ({ authenticated: false as const })),
+	};
+});
+
 vi.mock("@/store/userStore", () => ({
 	default: {
 		getState: () => ({
@@ -17,13 +25,14 @@ vi.mock("@/store/userStore", () => ({
 }));
 
 const { fetchWithPlatformAuth } = await import("./analyticsApi");
-const { useRedirectIntentStore, resetLoginRedirectFlag } = await import("@/auth/session-auth");
+const { fetchCurrentSession, useRedirectIntentStore, resetLoginRedirectFlag } = await import("@/auth/session-auth");
 
 describe("fetchWithPlatformAuth", () => {
 	const originalFetch = globalThis.fetch;
 
 	beforeEach(() => {
 		resetLoginRedirectFlag();
+		vi.mocked(fetchCurrentSession).mockClear();
 	});
 
 	afterEach(() => {
@@ -77,6 +86,22 @@ describe("fetchWithPlatformAuth", () => {
 		const response = await fetchWithPlatformAuth("/bi/api/public/screens/public-uuid", {}, true);
 
 		expect(response.status).toBe(401);
+		expect(useRedirectIntentStore.getState().intent).toBeNull();
+	});
+
+	it("does not redirect on protected 401 when the shared session probe is still authenticated", async () => {
+		vi.mocked(fetchCurrentSession).mockResolvedValueOnce({
+			authenticated: true,
+			username: "alice",
+			roles: ["ROLE_OP_ADMIN"],
+			permissions: ["portal.view"],
+		});
+		globalThis.fetch = vi.fn(async () => new Response("unauthorized", { status: 401 })) as typeof fetch;
+
+		const response = await fetchWithPlatformAuth("/bi/api/screens/66");
+
+		expect(response.status).toBe(401);
+		expect(fetchCurrentSession).toHaveBeenCalled();
 		expect(useRedirectIntentStore.getState().intent).toBeNull();
 	});
 });

@@ -1,4 +1,4 @@
-import { redirectToLoginWithReturn, resetLoginRedirectFlag } from '@/auth/session-auth';
+import { fetchCurrentSession, redirectToLoginWithReturn, resetLoginRedirectFlag } from '@/auth/session-auth';
 
 export type CollectionListItem = {
 	id: number | "root";
@@ -1179,6 +1179,15 @@ async function apiFetch(url: string, init: RequestInit, allowRedirect: boolean):
 	const response = await fetch(url, { ...init, credentials: "include", headers });
 	if (response.status !== 401 || !allowRedirect || isPublicAnalyticsUrl(url)) {
 		return response;
+	}
+	try {
+		const probe = await fetchCurrentSession();
+		if (probe.authenticated) {
+			console.warn("[analytics-auth] 401 received but session probe is still authenticated; suppressing redirect");
+			return response;
+		}
+	} catch (error) {
+		console.warn("[analytics-auth] session probe failed after 401", error);
 	}
 	redirectToLoginWithReturn();
 	return response;
