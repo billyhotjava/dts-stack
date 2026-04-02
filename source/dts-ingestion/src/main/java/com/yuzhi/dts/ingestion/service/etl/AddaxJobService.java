@@ -252,6 +252,13 @@ public class AddaxJobService {
             resolvedReader = ensureDriver(readerType, resolvedReader);
         }
         Map<String, Object> resolvedWriter = ensureDriver(writerType, safeMap(writerConfig));
+        // Fallback: inject data lake credentials if writer has no password
+        if (!StringUtils.hasText(normalizeText(resolvedWriter.get("password")))) {
+            resolvedWriter.put("password", springEnv.getProperty("spring.datasource.password", ""));
+        }
+        if (!StringUtils.hasText(normalizeText(resolvedWriter.get("username")))) {
+            resolvedWriter.put("username", springEnv.getProperty("spring.datasource.username", "postgres"));
+        }
         ensureWriterConnection(writerType, resolvedWriter);
         ensureDefaultExtraColumns(readerConfig, resolvedReader, resolvedWriter, readerType, writerType);
         if (isFileReaderType(readerType) && !fileColumns.isEmpty()) {
@@ -486,15 +493,6 @@ public class AddaxJobService {
             mergeMissing(params, fallbackConfig, "connection");
             mergeMissing(params, fallbackConfig, "table");
             mergeMissing(params, fallbackConfig, "tables");
-        }
-        // Fallback: if writer still missing credentials, use spring.datasource (data lake default)
-        if ("writer".equalsIgnoreCase(key)) {
-            if (!StringUtils.hasText(normalizeText(params.get("username")))) {
-                params.put("username", springEnv.getProperty("spring.datasource.username", "postgres"));
-            }
-            if (!StringUtils.hasText(normalizeText(params.get("password")))) {
-                params.put("password", springEnv.getProperty("spring.datasource.password", ""));
-            }
         }
         ensureDriver(normalizedPlugin, params);
         if ("writer".equalsIgnoreCase(key)) {
