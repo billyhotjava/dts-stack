@@ -62,3 +62,18 @@ export function removeStorageKeys(
 		}
 	}
 }
+
+export function writeLoginActivityMarkers(
+	keys: Pick<SessionStorageKeys, "loginTs" | "lastActivity">,
+	ts: number = Date.now(),
+	storage: StorageLike | null | undefined = globalThis.localStorage,
+): void {
+	if (!storage) return;
+	const value = String(ts);
+	try {
+		storage.setItem(trimKey(keys.loginTs), value);
+		storage.setItem(trimKey(keys.lastActivity), value);
+	} catch {
+		// ignore storage write failures
+	}
+}

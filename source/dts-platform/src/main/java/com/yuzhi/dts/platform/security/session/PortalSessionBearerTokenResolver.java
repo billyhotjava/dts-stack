@@ -38,7 +38,14 @@ public class PortalSessionBearerTokenResolver implements BearerTokenResolver {
 
     private boolean shouldBypassAuthentication(HttpServletRequest request) {
         String uri = request == null ? "" : String.valueOf(request.getRequestURI());
-        return uri.startsWith("/api/session/current");
+        // All auth endpoints are permitAll() in SecurityConfiguration — don't resolve
+        // a token for them. If the browser carries a stale portal_session cookie,
+        // the introspector would reject it and turn the permitAll into a 401.
+        return uri.startsWith("/api/session/current")
+            || uri.startsWith("/api/keycloak/auth/")
+            || uri.startsWith("/api/keycloak/localization/")
+            || uri.startsWith("/api/authenticate")
+            || uri.startsWith("/api/auth-info");
     }
 
     private boolean shouldUseCookieOnly(HttpServletRequest request) {

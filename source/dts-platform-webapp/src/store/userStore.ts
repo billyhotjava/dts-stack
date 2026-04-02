@@ -5,7 +5,7 @@ import { create } from "zustand";
 import { createJSONStorage, persist } from "zustand/middleware";
 import type { LogoutBroadcastReason } from "@dts-session-core/logout-broadcast";
 import { serializeLogoutBroadcast } from "@dts-session-core/logout-broadcast";
-import { readStorageValue, removeStorageKeys } from "@dts-session-core/storage";
+import { readStorageValue, removeStorageKeys, writeLoginActivityMarkers } from "@dts-session-core/storage";
 import type { UserInfo } from "#/entity";
 import type { KeycloakTranslations } from "#/keycloak";
 import { KeycloakLocalizationService } from "@/api/services/keycloakLocalizationService";
@@ -337,10 +337,8 @@ export const useSignIn = () => {
 				});
 			}
 
-			// Mark login timestamp for downstream grace handling on initial 401s
-			try {
-				localStorage.setItem(PLATFORM_SESSION_KEYS.loginTs, String(Date.now()));
-			} catch {}
+			// Refresh shared login/activity markers so older tabs do not idle-logout the new browser session.
+			writeLoginActivityMarkers(PLATFORM_SESSION_KEYS);
 
 			// 登录成功后获取并更新Keycloak翻译词条
 			try {
@@ -439,6 +437,7 @@ const handleDevFallback = ({ error, payload, setAuthenticatedSession }: DevFallb
 		},
 		user,
 	);
+	writeLoginActivityMarkers(PLATFORM_SESSION_KEYS);
 	return { mode: "fallback", user, notice: undefined, takeover: false };
 };
 

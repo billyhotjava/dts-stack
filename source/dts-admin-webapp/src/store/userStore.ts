@@ -4,7 +4,7 @@ import { create } from "zustand";
 import { createJSONStorage, persist } from "zustand/middleware";
 import type { LogoutBroadcastReason } from "@dts-session-core/logout-broadcast";
 import { serializeLogoutBroadcast } from "@dts-session-core/logout-broadcast";
-import { readStorageValue, removeStorageKeys } from "@dts-session-core/storage";
+import { readStorageValue, removeStorageKeys, writeLoginActivityMarkers } from "@dts-session-core/storage";
 import type { UserInfo } from "#/entity";
 import type { KeycloakTranslations } from "#/keycloak";
 import { KeycloakLocalizationService } from "@/api/services/keycloakLocalizationService";
@@ -317,11 +317,7 @@ export const useSignIn = () => {
 			);
 
 			queryClient.removeQueries({ queryKey: ["admin", "whoami"], exact: true });
-			try {
-				localStorage.setItem(ADMIN_SESSION_KEYS.loginTs, String(Date.now()));
-			} catch {
-				// ignore storage errors
-			}
+			writeLoginActivityMarkers(ADMIN_SESSION_KEYS);
 
 			try {
 				const translations: KeycloakTranslations = await KeycloakLocalizationService.getChineseTranslations();

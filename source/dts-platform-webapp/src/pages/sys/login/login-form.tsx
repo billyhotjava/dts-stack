@@ -7,6 +7,7 @@ import { KeycloakLocalizationService } from "@/api/services/keycloakLocalization
 import { formatKoalError, type KoalCertificate, KoalMiddlewareClient } from "@/api/services/koalPkiClient";
 import { createPortalSessionFromPki, getPkiChallenge, type PkiChallenge, pkiLogin } from "@/api/services/pkiService";
 import type { SignInReq } from "@/api/services/userService";
+import { PLATFORM_SESSION_KEYS } from "@/auth/session-keys";
 import { GLOBAL_CONFIG } from "@/global-config";
 import { useBilingualText } from "@/hooks/useBilingualText";
 import { useContextActions } from "@/store/contextStore";
@@ -20,6 +21,7 @@ import { RadioGroup, RadioGroupItem } from "@/ui/radio-group";
 import { cn } from "@/utils";
 import { updateLocalTranslations } from "@/utils/translation";
 import { resetLoginRedirectFlag } from "@/auth/session-auth";
+import { writeLoginActivityMarkers } from "@dts-session-core/storage";
 import { LoginStateEnum, useLoginStateContext } from "./providers/login-provider";
 
 const IS_DEV = typeof import.meta !== "undefined" && Boolean(import.meta.env?.DEV);
@@ -388,6 +390,7 @@ export function LoginForm({ className, ...props }: React.ComponentPropsWithoutRe
 				},
 				portalUser,
 			);
+			writeLoginActivityMarkers(PLATFORM_SESSION_KEYS);
 
 			try {
 				contextActions.initDefaults();

@@ -5,6 +5,7 @@ import { useLocation, useNavigate } from "react-router";
 import { toast } from "sonner";
 import type { SignInReq } from "@/api/services/userService";
 import { resetLoginRedirectFlag } from "@/auth/session-auth";
+import { ADMIN_SESSION_KEYS } from "@/auth/session-keys";
 import { GLOBAL_CONFIG } from "@/global-config";
 import { resolveHomePathForRoles } from "@/routes/sections/dashboard";
 import { useBilingualText } from "@/hooks/useBilingualText";
@@ -19,6 +20,7 @@ import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "
 import { RadioGroup, RadioGroupItem } from "@/ui/radio-group";
 import { getPkiChallenge, pkiLogin, type PkiChallenge } from "@/api/services/pkiService";
 import { KoalMiddlewareClient, KoalCertificate } from "@/api/services/koalPkiClient";
+import { writeLoginActivityMarkers } from "@dts-session-core/storage";
 
 export function LoginForm({ className, ...props }: React.ComponentPropsWithoutRef<"form">) {
 	// 简易调试缓冲：生产构建不会被 esbuild 删除
@@ -320,6 +322,7 @@ export function LoginForm({ className, ...props }: React.ComponentPropsWithoutRe
 				},
 				user,
 			);
+			writeLoginActivityMarkers(ADMIN_SESSION_KEYS);
 			const takeoverNotice = typeof resp?.sessionNotice === "string" && resp.sessionNotice.trim()
 				? resp.sessionNotice.trim()
 				: resp?.sessionTakeover

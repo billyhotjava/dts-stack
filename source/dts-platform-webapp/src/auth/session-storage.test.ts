@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { parsePersistedUserStoreSnapshot, readPersistedUserStoreSnapshot } from "@dts-session-core/persisted-store";
 import { parseLogoutBroadcast, serializeLogoutBroadcast } from "@dts-session-core/logout-broadcast";
-import { createSessionStorageKeys, readStorageValue } from "@dts-session-core/storage";
+import { createSessionStorageKeys, readStorageValue, writeLoginActivityMarkers } from "@dts-session-core/storage";
 
 describe("session storage protocol", () => {
 	it("namespaces app-specific storage keys", () => {
@@ -76,5 +76,20 @@ describe("session storage protocol", () => {
 			ts: 123456,
 			reason: undefined,
 		});
+	});
+
+	it("records both login and activity timestamps after a successful login", () => {
+		const storage = new Map<string, string>();
+		const mockStorage = {
+			getItem: (key: string) => storage.get(key) ?? null,
+			setItem: (key: string, value: string) => storage.set(key, value),
+			removeItem: (key: string) => storage.delete(key),
+		};
+		const keys = createSessionStorageKeys("platform");
+
+		writeLoginActivityMarkers(keys, 123456, mockStorage);
+
+		expect(mockStorage.getItem(keys.loginTs)).toBe("123456");
+		expect(mockStorage.getItem(keys.lastActivity)).toBe("123456");
 	});
 });
