@@ -412,8 +412,8 @@ build_image_ctx() {
   shift 5
   local args=("$@")
 
-  echo "[dts-build] Building ${name} -> ${tag}"
-  docker build -t "$tag" -f "$dockerfile" "${args[@]}" "$context_dir"
+  echo "[dts-build] Building ${name} -> ${tag} (no-cache)"
+  docker build --no-cache -t "$tag" -f "$dockerfile" "${args[@]}" "$context_dir"
   save_image "$tag" "$output_dir"
   # Free dangling layers after each image to prevent OOM on memory-constrained servers
   docker image prune -f >/dev/null 2>&1 || true
