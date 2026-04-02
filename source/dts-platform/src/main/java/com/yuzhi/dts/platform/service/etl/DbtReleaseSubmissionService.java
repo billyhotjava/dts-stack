@@ -127,7 +127,7 @@ public class DbtReleaseSubmissionService {
             selector,
             "SUBMITTED",
             false,
-            !warnings.isEmpty(),
+            false,
             List.of(),
             warnings,
             dagId,
