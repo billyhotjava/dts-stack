@@ -25,9 +25,11 @@ import java.util.Set;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
@@ -95,8 +97,13 @@ public class CollectionResource {
             return ResponseEntity.status(401).contentType(MediaType.TEXT_PLAIN).body("Unauthenticated");
         }
 
-        AnalyticsCollection personal = collectionService.ensurePersonalCollection(user.get());
-        List<Map<String, Object>> result = List.of(ROOT_COLLECTION, toListItem(personal, true));
+        collectionService.ensurePersonalCollection(user.orElseThrow());
+        List<AnalyticsCollection> allCollections = collectionRepository.findAllByArchivedFalseOrderByIdAsc();
+        List<Map<String, Object>> result = new java.util.ArrayList<>();
+        result.add(ROOT_COLLECTION);
+        for (AnalyticsCollection c : allCollections) {
+            result.add(toListItem(c, true));
+        }
         return ResponseEntity.ok(result);
     }
 
@@ -225,7 +232,7 @@ public class CollectionResource {
 
     @PostMapping(consumes = MediaType.APPLICATION_JSON_VALUE, produces = MediaType.APPLICATION_JSON_VALUE)
     public ResponseEntity<?> create(@RequestBody CollectionRequest requestBody, HttpServletRequest request) {
-        Optional<ResponseEntity<String>> auth = MetabaseAuth.requireSuperuser(sessionService, request);
+        Optional<ResponseEntity<String>> auth = MetabaseAuth.requireUser(sessionService, request);
         if (auth.isPresent()) {
             return auth.get();
         }
@@ -250,6 +257,49 @@ public class CollectionResource {
         return ResponseEntity.ok(toListItem(collection, true));
     }
 
+    @PutMapping(path = "/{collectionId}", consumes = MediaType.APPLICATION_JSON_VALUE, produces = MediaType.APPLICATION_JSON_VALUE)
+    public ResponseEntity<?> update(@PathVariable("collectionId") Long collectionId, @RequestBody CollectionRequest requestBody,
+            HttpServletRequest request) {
+        Optional<ResponseEntity<String>> auth = MetabaseAuth.requireUser(sessionService, request);
+        if (auth.isPresent()) {
+            return auth.get();
+        }
+        return collectionRepository.findById(collectionId)
+                .map(collection -> {
+                    if (requestBody.name() != null) {
+                        String name = trimToNull(requestBody.name());
+                        if (name != null) {
+                            collection.setName(name);
+                            collection.setSlug(buildSlug(name));
+                        }
+                    }
+                    if (requestBody.description() != null) {
+                        collection.setDescription(requestBody.description());
+                    }
+                    if (requestBody.parentId() != null) {
+                        collection.setParentId(requestBody.parentId());
+                    }
+                    collection = collectionRepository.save(collection);
+                    return ResponseEntity.ok(toListItem(collection, true));
+                })
+                .orElseGet(() -> ResponseEntity.notFound().build());
+    }
+
+    @DeleteMapping(path = "/{collectionId}", produces = MediaType.APPLICATION_JSON_VALUE)
+    public ResponseEntity<?> delete(@PathVariable("collectionId") Long collectionId, HttpServletRequest request) {
+        Optional<ResponseEntity<String>> auth = MetabaseAuth.requireUser(sessionService, request);
+        if (auth.isPresent()) {
+            return auth.get();
+        }
+        return collectionRepository.findById(collectionId)
+                .map(collection -> {
+                    collection.setArchived(true);
+                    collectionRepository.save(collection);
+                    return ResponseEntity.ok(toListItem(collection, true));
+                })
+                .orElseGet(() -> ResponseEntity.notFound().build());
+    }
+
     private static Map<String, Object> toListItem(AnalyticsCollection collection, boolean canWrite) {
         Map<String, Object> map = new LinkedHashMap<>();
         map.put("authority_level", null);
@@ -261,6 +311,7 @@ public class CollectionResource {
         map.put("name", collection.getName());
         map.put("personal_owner_id", collection.getPersonalOwnerId());
         map.put("id", collection.getId());
+        map.put("parent_id", collection.getParentId());
         map.put("entity_id", collection.getEntityId());
         map.put("location", collection.getLocation());
         map.put("namespace", collection.getNamespace());

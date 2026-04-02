@@ -13,7 +13,7 @@ const STORAGE_KEYS = {
 const genId = () => Math.random().toString(36).slice(2) + Date.now().toString(36);
 const SESSION_TIMEOUT_MINUTES = Math.max(
 	1,
-	Number(import.meta.env.VITE_SESSION_TIMEOUT_MINUTES ?? import.meta.env.VITE_ADMIN_SESSION_TIMEOUT ?? "10"),
+	Number(import.meta.env.VITE_SESSION_TIMEOUT_MINUTES ?? import.meta.env.VITE_ADMIN_SESSION_TIMEOUT ?? "30"),
 );
 const SESSION_TIMEOUT_MS = SESSION_TIMEOUT_MINUTES * 60 * 1000;
 const SESSION_IDLE_GRACE_MS = 30 * 1000;

@@ -1,0 +1,13 @@
+name	layer	sql_path	source_data_source_id	alias	schema_name	materialized	tags	status	enabled	owner_dept	description	csv_path
+biz_dwd_own_fund	DWD	models/dwd/biz_dwd_own_fund.sql			table	finance,biz,dwd	ACTIVE	true	财务部	自有资金明细层：解析年度期间，派生period_year和period_type	
+biz_dwd_project_fund	DWD	models/dwd/biz_dwd_project_fund.sql			table	finance,biz,dwd	ACTIVE	true	财务部	项目经费明细层：派生直接成本支出、总支出、执行率	
+biz_dwd_aux_balance	DWD	models/dwd/biz_dwd_aux_balance.sql			table	finance,biz,dwd	ACTIVE	true	财务部	辅助余额明细层：根据科目编号添加费用类别	
+biz_dwd_aux_balance_personal	DWD	models/dwd/biz_dwd_aux_balance_personal.sql			table	finance,biz,dwd	ACTIVE	true	财务部	个人辅助余额明细层：添加借贷方向和科目类别	
+biz_dws_own_fund_yearly	DWS	models/dws/biz_dws_own_fund_yearly.sql			table	finance,biz,dws	ACTIVE	true	财务部	自有资金年度透视：每年一行含年初/增加/使用/余额及使用率、增长率	
+biz_dws_project_fund_summary	DWS	models/dws/biz_dws_project_fund_summary.sql			table	finance,biz,dws	ACTIVE	true	财务部	项目经费汇总：全部项目的经费KPI指标聚合	
+biz_dws_aux_balance_by_dept	DWS	models/dws/biz_dws_aux_balance_by_dept.sql			table	finance,biz,dws	ACTIVE	true	财务部	辅助余额按部门汇总：各部门余额、科目数、合同数	
+biz_dws_aux_balance_personal_by_dept	DWS	models/dws/biz_dws_aux_balance_personal_by_dept.sql			table	finance,biz,dws	ACTIVE	true	财务部	个人辅助余额按部门汇总：各部门净余额、借方贷方、职工数	
+biz_ads_own_fund_kpi	ADS	models/ads/biz_ads_own_fund_kpi.sql			table	finance,biz,ads	ACTIVE	true	财务部	自有资金大屏KPI：年度透视数据及余额构成	
+biz_ads_project_fund_kpi	ADS	models/ads/biz_ads_project_fund_kpi.sql			table	finance,biz,ads	ACTIVE	true	财务部	项目经费大屏KPI：汇总指标及各项目经费结构明细	
+biz_ads_aux_balance_kpi	ADS	models/ads/biz_ads_aux_balance_kpi.sql			table	finance,biz,ads	ACTIVE	true	财务部	辅助余额大屏KPI：按科目/部门/费用类别/合同的聚合	
+biz_ads_aux_balance_personal_kpi	ADS	models/ads/biz_ads_aux_balance_personal_kpi.sql			table	finance,biz,ads	ACTIVE	true	财务部	个人辅助余额大屏KPI：按职工/部门/科目类别的聚合及借款TOP8	

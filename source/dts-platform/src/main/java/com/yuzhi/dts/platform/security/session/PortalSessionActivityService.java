@@ -25,7 +25,7 @@ public class PortalSessionActivityService {
 
     public PortalSessionActivityService(
         PortalSessionRepository sessionRepository,
-        @Value("${dts.platform.session.timeout-minutes:10}") long timeoutMinutes
+        @Value("${dts.platform.session.timeout-minutes:30}") long timeoutMinutes
     ) {
         this.sessionRepository = sessionRepository;
         long minutes = timeoutMinutes <= 0 ? 10 : timeoutMinutes;

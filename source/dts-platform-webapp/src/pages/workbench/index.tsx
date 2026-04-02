@@ -9,7 +9,7 @@ import workbenchService, {
 } from "@/api/services/workbenchService";
 import { useRouter } from "@/routes/hooks";
 import { resolveRouteForOpen } from "@/analytics/helpers/resolveAnalyticsUrl";
-import apiClient from "@/api/apiClient";
+import analyticsApi from "@/analytics/api/analyticsApi";
 
 
 type PublishedScreen = {
@@ -31,7 +31,7 @@ type FavoriteFormValues = {
 
 async function fetchScreens(): Promise<PublishedScreen[]> {
 	try {
-		const list = await apiClient.get<PublishedScreen[]>({ url: "/bi/api/screens", timeout: 5000 });
+		const list = await analyticsApi.listScreens();
 		return Array.isArray(list) ? list : [];
 	} catch {
 		return [];

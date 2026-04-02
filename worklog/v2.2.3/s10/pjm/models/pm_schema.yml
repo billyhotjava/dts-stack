@@ -255,7 +255,7 @@ models:
 
   - name: biz_dwd_risk_measure
     columns:
-      - name: measure_id
+      - name: risk_measure_id
         tests:
           - not_null: { config: { severity: warn } }
       - name: project_no
@@ -263,21 +263,7 @@ models:
           - not_null: { config: { severity: warn } }
 
   # ═══════════════════════════════════════════════════════════════
-  #  成本域 — DWD
-  # ═══════════════════════════════════════════════════════════════
-
-  - name: biz_dwd_cost_accounting
-    columns:
-      - name: cost_id
-        tests:
-          - not_null: { config: { severity: warn } }
-          - unique: { config: { severity: warn } }
-      - name: project_no
-        tests:
-          - not_null: { config: { severity: warn } }
-
-  # ═══════════════════════════════════════════════════════════════
-  #  质量/技术状态/风险/成本 — DWS
+  #  质量/技术状态/风险 — DWS
   # ═══════════════════════════════════════════════════════════════
 
   - name: biz_dws_quality_period_summary
@@ -307,17 +293,8 @@ models:
         tests:
           - not_null: { config: { severity: warn } }
 
-  - name: biz_dws_cost_period_summary
-    columns:
-      - name: period_year
-        tests:
-          - not_null: { config: { severity: warn } }
-      - name: project_no
-        tests:
-          - not_null: { config: { severity: warn } }
-
   # ═══════════════════════════════════════════════════════════════
-  #  质量/技术状态/风险/成本 — ADS
+  #  质量/技术状态/风险 — ADS
   # ═══════════════════════════════════════════════════════════════
 
   - name: biz_ads_quality_kpi
@@ -333,12 +310,6 @@ models:
           - not_null: { config: { severity: warn } }
 
   - name: biz_ads_risk_kpi
-    columns:
-      - name: period_year
-        tests:
-          - not_null: { config: { severity: warn } }
-
-  - name: biz_ads_cost_kpi
     columns:
       - name: period_year
         tests:

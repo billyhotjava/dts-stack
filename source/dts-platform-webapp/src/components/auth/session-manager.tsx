@@ -13,7 +13,7 @@ const STORAGE_KEYS = {
 
 const SESSION_TIMEOUT_MINUTES = Math.max(
 	1,
-	Number(import.meta.env.VITE_SESSION_TIMEOUT_MINUTES ?? import.meta.env.VITE_PORTAL_SESSION_TIMEOUT ?? "10"),
+	Number(import.meta.env.VITE_SESSION_TIMEOUT_MINUTES ?? import.meta.env.VITE_PORTAL_SESSION_TIMEOUT ?? "30"),
 );
 const SESSION_TIMEOUT_MS = SESSION_TIMEOUT_MINUTES * 60 * 1000;
 const SESSION_IDLE_GRACE_MS = 30 * 1000;
@@ -179,8 +179,7 @@ export default function SessionManager() {
 			const forcedExpiry = idleFor >= SESSION_TIMEOUT_MS + SESSION_IDLE_GRACE_MS;
 			const nearingTimeout = idleFor >= SESSION_TIMEOUT_MS - SESSION_IDLE_GRACE_MS;
 			const shouldBackoff =
-				!forcedExpiry &&
-				(document.visibilityState === "hidden" && idleFor > SESSION_TIMEOUT_MS / 2 ? true : nearingTimeout);
+				!forcedExpiry && nearingTimeout;
 			if (shouldBackoff) {
 				schedule(SESSION_IDLE_GRACE_MS);
 				return;

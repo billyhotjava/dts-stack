@@ -52,10 +52,15 @@ function buildTree(items: CollectionListItem[]): CollectionNode[] {
 	return sortRecursive(roots);
 }
 
+function localizeCollectionName(name: string | undefined): string {
+	if (!name) return "-";
+	return name.replace(/['']s Personal Collection$/, " 的个人收藏");
+}
+
 function toTreeData(nodes: CollectionNode[]): DataNode[] {
 	return nodes.map((n) => ({
 		key: String(n.id),
-		title: n.name ?? "-",
+		title: localizeCollectionName(n.name),
 		icon: n.children.length > 0 ? <FolderOpenOutlined /> : <FolderOutlined />,
 		children: n.children.length > 0 ? toTreeData(n.children) : undefined,
 	}));

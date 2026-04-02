@@ -1,8 +1,8 @@
 {
   "schemaVersion": 2,
-  "id": "gpmc-drill-cost",
-  "name": "执行层-成本与预算控制明细 (实例)",
-  "description": "成本预算钻取页面，展示部门预算执行、成本控制摘要及月度支出趋势。",
+  "id": "gpmc-drill-material",
+  "name": "执行层-重要物料信息明细 (实例)",
+  "description": "重要物料信息钻取页面，展示物料清单、供应链风险及交期跟踪。",
   "width": 1920,
   "height": 1080,
   "backgroundColor": "#eaf2fb",
@@ -31,9 +31,9 @@
   ],
   "components": [
     {
-      "id": "drill-cost-header-bar",
+      "id": "drill-material-header-bar",
       "type": "shape",
-      "name": "drill-cost-header-bar",
+      "name": "drill-material-header-bar",
       "x": 0,
       "y": 0,
       "width": 1920,
@@ -50,9 +50,9 @@
       }
     },
     {
-      "id": "drill-cost-title",
+      "id": "drill-material-title",
       "type": "title",
-      "name": "执行层-成本与预算控制明细",
+      "name": "执行层-重要物料信息明细",
       "x": 20,
       "y": 12,
       "width": 500,
@@ -61,7 +61,7 @@
       "locked": false,
       "visible": true,
       "config": {
-        "text": "执行层-成本与预算控制明细",
+        "text": "执行层-重要物料信息明细",
         "fontSize": 22,
         "fontWeight": "700",
         "color": "#ffffff",
@@ -69,7 +69,7 @@
       }
     },
     {
-      "id": "drill-cost-badge",
+      "id": "drill-material-badge",
       "type": "title",
       "name": "只读执行页",
       "x": 1760,
@@ -90,9 +90,9 @@
       }
     },
     {
-      "id": "drill-cost-kpi-1",
+      "id": "drill-material-kpi-1",
       "type": "number-card",
-      "name": "预算总额",
+      "name": "物料总数",
       "x": 20,
       "y": 70,
       "width": 456,
@@ -101,24 +101,21 @@
       "locked": false,
       "visible": true,
       "config": {
-        "title": "预算总额",
-        "value": "36.8",
-        "unit": "亿",
-        "precision": 1,
+        "title": "物料总数",
+        "value": "156",
+        "unit": "",
+        "precision": 0,
         "titleColor": "#0f172a",
         "valueColor": "#3b82f6",
         "backgroundColor": "#ffffff",
         "borderRadius": 12,
         "fontSize": 36
-      },
-      "dataSource": {
-        "type": "static"
       }
     },
     {
-      "id": "drill-cost-kpi-2",
+      "id": "drill-material-kpi-2",
       "type": "number-card",
-      "name": "累计执行",
+      "name": "长周期物料",
       "x": 490,
       "y": 70,
       "width": 456,
@@ -127,24 +124,21 @@
       "locked": false,
       "visible": true,
       "config": {
-        "title": "累计执行",
-        "value": "26.1",
-        "unit": "亿",
-        "precision": 1,
+        "title": "长周期物料",
+        "value": "42",
+        "unit": "",
+        "precision": 0,
         "titleColor": "#0f172a",
-        "valueColor": "#3b82f6",
+        "valueColor": "#d4850a",
         "backgroundColor": "#ffffff",
         "borderRadius": 12,
         "fontSize": 36
-      },
-      "dataSource": {
-        "type": "static"
       }
     },
     {
-      "id": "drill-cost-kpi-3",
+      "id": "drill-material-kpi-3",
       "type": "number-card",
-      "name": "预算偏差",
+      "name": "外协占比",
       "x": 960,
       "y": 70,
       "width": 456,
@@ -153,24 +147,21 @@
       "locked": false,
       "visible": true,
       "config": {
-        "title": "预算偏差",
-        "value": "+0.72",
-        "unit": "亿",
-        "precision": 1,
+        "title": "外协占比",
+        "value": "63",
+        "unit": "%",
+        "precision": 0,
         "titleColor": "#0f172a",
-        "valueColor": "#c0392b",
+        "valueColor": "#3b82f6",
         "backgroundColor": "#ffffff",
         "borderRadius": 12,
         "fontSize": 36
-      },
-      "dataSource": {
-        "type": "static"
       }
     },
     {
-      "id": "drill-cost-kpi-4",
+      "id": "drill-material-kpi-4",
       "type": "number-card",
-      "name": "燃尽率",
+      "name": "有风险物料",
       "x": 1430,
       "y": 70,
       "width": 470,
@@ -179,24 +170,21 @@
       "locked": false,
       "visible": true,
       "config": {
-        "title": "燃尽率",
-        "value": "71",
-        "unit": "%",
+        "title": "有风险物料",
+        "value": "18",
+        "unit": "",
         "precision": 0,
         "titleColor": "#0f172a",
-        "valueColor": "#d4850a",
+        "valueColor": "#c0392b",
         "backgroundColor": "#ffffff",
         "borderRadius": 12,
         "fontSize": 36
-      },
-      "dataSource": {
-        "type": "static"
       }
     },
     {
-      "id": "drill-cost-detail-table",
+      "id": "drill-material-detail-table",
       "type": "table",
-      "name": "部门预算执行明细",
+      "name": "物料清单",
       "x": 20,
       "y": 175,
       "width": 1145,
@@ -205,43 +193,55 @@
       "locked": false,
       "visible": true,
       "config": {
-        "title": "部门预算执行明细",
+        "title": "物料清单",
         "header": [
-          "责任科室",
-          "预算 (亿)",
-          "实际 (亿)",
-          "执行率 (%)"
+          "PBS编号",
+          "PBS名称",
+          "自研/外协",
+          "供应商",
+          "长周期",
+          "风险等级"
         ],
         "data": [
           [
-            "工程建设中心",
-            9.5,
-            8.6,
-            "90.5%"
+            "PBS-001",
+            "FPGA芯片",
+            "外协",
+            "芯片供应商A",
+            "是",
+            "高"
           ],
           [
-            "数字化事业部",
-            6,
-            5.2,
-            "86.7%"
+            "PBS-002",
+            "射频模块",
+            "外协",
+            "模块厂商B",
+            "是",
+            "中"
           ],
           [
-            "研发中心",
-            8.2,
-            6.8,
-            "82.9%"
+            "PBS-003",
+            "电路板",
+            "自研",
+            "-",
+            "否",
+            "-"
           ],
           [
-            "生产制造中心",
-            10,
-            10.4,
-            "104%"
+            "PBS-004",
+            "电池组",
+            "外协",
+            "电池厂商C",
+            "是",
+            "中"
           ],
           [
-            "采购中心",
-            3.1,
-            2.8,
-            "90.3%"
+            "PBS-005",
+            "壳体",
+            "自研",
+            "-",
+            "否",
+            "-"
           ]
         ],
         "fontSize": 16,
@@ -257,15 +257,12 @@
         "enablePagination": true,
         "pageSize": 8,
         "freezeHeader": true
-      },
-      "dataSource": {
-        "type": "static"
       }
     },
     {
-      "id": "drill-cost-side-panel",
+      "id": "drill-material-side-panel",
       "type": "table",
-      "name": "成本控制摘要",
+      "name": "供应链摘要",
       "x": 1185,
       "y": 175,
       "width": 715,
@@ -274,27 +271,35 @@
       "locked": false,
       "visible": true,
       "config": {
-        "title": "成本控制摘要",
+        "title": "供应链摘要",
         "header": [
           "指标",
           "数值"
         ],
         "data": [
           [
-            "预算总额",
-            "36.8 亿"
+            "物料总数",
+            "156"
           ],
           [
-            "累计执行额",
-            "26.1 亿"
+            "长周期占比",
+            "26.9%"
           ],
           [
-            "预算偏差",
-            "+0.72 亿"
+            "外协占比",
+            "63.5%"
           ],
           [
-            "燃尽率",
-            "71%"
+            "供应商数量",
+            "48"
+          ],
+          [
+            "有风险物料",
+            "18"
+          ],
+          [
+            "延期到货",
+            "5"
           ]
         ],
         "fontSize": 16,
@@ -310,15 +315,12 @@
         "enablePagination": true,
         "pageSize": 8,
         "freezeHeader": true
-      },
-      "dataSource": {
-        "type": "static"
       }
     },
     {
-      "id": "drill-cost-support-table",
+      "id": "drill-material-support-table",
       "type": "table",
-      "name": "月度支出趋势",
+      "name": "交期跟踪",
       "x": 20,
       "y": 610,
       "width": 1880,
@@ -327,47 +329,53 @@
       "locked": false,
       "visible": true,
       "config": {
-        "title": "月度支出趋势",
+        "title": "交期跟踪",
         "header": [
-          "周期",
-          "计划支出 (亿)",
-          "实际支出 (亿)",
-          "偏差 (亿)"
+          "PBS编号",
+          "PBS名称",
+          "合同到货时间",
+          "实际到货时间",
+          "延期影响",
+          "风险等级"
         ],
         "data": [
           [
-            "1月",
-            2.8,
-            2.6,
-            "-0.2"
+            "PBS-001",
+            "FPGA芯片",
+            "2026-06-30",
+            "-",
+            "影响主控单机集成",
+            "高"
           ],
           [
-            "2月",
-            3.1,
-            3.3,
-            "0.2"
+            "PBS-002",
+            "射频模块",
+            "2026-05-15",
+            "-",
+            "影响通信单机联调",
+            "中"
           ],
           [
-            "3月",
-            3.5,
-            3.8,
-            "0.3"
+            "PBS-004",
+            "电池组",
+            "2026-07-20",
+            "-",
+            "影响电源系统测试",
+            "中"
           ],
           [
-            "4月",
-            3.2,
-            3,
-            "-0.2"
+            "PBS-003",
+            "电路板",
+            "2026-04-10",
+            "2026-04-08",
+            "-",
+            "-"
           ],
           [
-            "5月",
-            3.6,
-            3.4,
-            "-0.2"
-          ],
-          [
-            "6月",
-            3.8,
+            "PBS-005",
+            "壳体",
+            "2026-03-30",
+            "2026-03-28",
             "-",
             "-"
           ]
@@ -385,9 +393,6 @@
         "enablePagination": true,
         "pageSize": 8,
         "freezeHeader": true
-      },
-      "dataSource": {
-        "type": "static"
       }
     }
   ]

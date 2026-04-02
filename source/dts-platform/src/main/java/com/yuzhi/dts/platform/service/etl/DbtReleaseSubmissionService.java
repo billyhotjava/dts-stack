@@ -20,6 +20,8 @@ import org.springframework.web.server.ResponseStatusException;
 @Service
 public class DbtReleaseSubmissionService {
 
+    private static final org.slf4j.Logger LOG = org.slf4j.LoggerFactory.getLogger(DbtReleaseSubmissionService.class);
+
     private final DbtQualityGateService qualityGateService;
     private final DbtReleaseGateService releaseGateService;
     private final DbtDagService dbtDagService;
@@ -77,8 +79,22 @@ public class DbtReleaseSubmissionService {
             request == null ? null : request.strictMode()
         );
 
+        LOG.info("[dbt-release] selector={} dagId={} qualityGate=[blocking={}, blockers={}, warnings={}] releaseGate=[blocking={}, blockers={}, warnings={}] confirmWarnings={}",
+            selector, dagId,
+            qualityGate != null ? qualityGate.blocking() : "null",
+            qualityGate != null ? qualityGate.blockers() : "null",
+            qualityGate != null ? qualityGate.warnings() : "null",
+            releaseGate != null ? releaseGate.blocking() : "null",
+            releaseGate != null ? releaseGate.blockers() : "null",
+            releaseGate != null ? releaseGate.warnings() : "null",
+            request != null ? request.confirmWarnings() : "null"
+        );
+
         List<String> warnings = mergeWarnings(qualityGate, releaseGate);
         boolean confirmWarnings = request != null && Boolean.TRUE.equals(request.confirmWarnings());
+        LOG.info("[dbt-release] merged warnings count={} confirmWarnings={} decision={}",
+            warnings.size(), confirmWarnings,
+            (!warnings.isEmpty() && !confirmWarnings) ? "RETURN_WARNING" : "CONTINUE");
         if (!warnings.isEmpty() && !confirmWarnings) {
             return warning(selector, dagId, warnings, qualityGate, releaseGate);
         }
