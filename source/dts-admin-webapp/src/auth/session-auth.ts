@@ -50,12 +50,18 @@ export async function fetchCurrentSession(): Promise<CurrentSessionPayload> {
 					accept: "application/json",
 				},
 			});
+			if (response.status === 401 || response.status === 403) {
+				return { authenticated: false };
+			}
+			if (!response.ok) {
+				throw new Error(`Session probe failed: HTTP ${response.status}`);
+			}
 			const body = await response.json().catch(() => null);
 			const data = body?.data ?? body?.result ?? body?.payload ?? body;
 			return normalizeCurrentSessionPayload(data);
 		} catch (error) {
 			console.warn(LOG_PREFIX, "probe: failed", error);
-			return { authenticated: false };
+			throw error;
 		}
 	})().finally(() => {
 		currentSessionPromise = null;

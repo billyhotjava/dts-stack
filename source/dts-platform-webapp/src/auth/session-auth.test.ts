@@ -96,6 +96,17 @@ describe("fetchCurrentSession", () => {
 		expect(result).toEqual({ authenticated: false });
 		expect(fetchCalls).toHaveLength(1);
 	});
+
+	it("throws on transient probe failures instead of collapsing into anonymous", async () => {
+		globalThis.fetch = vi.fn(async () => {
+			return new Response(JSON.stringify({ message: "temporarily unavailable" }), {
+				status: 503,
+				headers: { "content-type": "application/json" },
+			});
+		}) as typeof fetch;
+
+		await expect(fetchCurrentSession()).rejects.toThrow(/503/);
+	});
 });
 
 describe("redirectToLoginWithReturn", () => {

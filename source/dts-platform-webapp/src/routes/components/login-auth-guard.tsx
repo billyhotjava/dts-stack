@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useEffect, useMemo, useRef } from "react";
 import menuService from "@/api/services/menuService";
 import { canAccessProtectedRoute, shouldBlockWhileSessionBootstraps } from "@/auth/session-state";
 import { redirectToLoginWithReturn } from "@/auth/session-auth";
@@ -15,6 +15,8 @@ export default function LoginAuthGuard({ children }: Props) {
 	const router = useRouter();
 	const session = usePortalSession();
 	const { roles = [] } = useUserInfo();
+	const roleSignature = useMemo(() => (roles as string[]).map((role) => String(role || "").trim()).filter(Boolean).sort().join("|"), [roles]);
+	const lastMenuLoadRef = useRef<string>("");
 
 	useEffect(() => {
 		if (shouldBlockWhileSessionBootstraps(session)) {
@@ -47,8 +49,13 @@ export default function LoginAuthGuard({ children }: Props) {
 				return;
 			}
 		}
+		const menuLoadKey = `${session.authenticated ? "auth" : "anon"}:${roleSignature}`;
+		if (lastMenuLoadRef.current === menuLoadKey) {
+			return;
+		}
+		lastMenuLoadRef.current = menuLoadKey;
 		menuService.getMenuTree().catch(() => undefined);
-	}, [roles, router, session]);
+	}, [roleSignature, roles, router, session.authenticated, session.checking, session.initialized]);
 
 	if (shouldBlockWhileSessionBootstraps(session)) {
 		return null;

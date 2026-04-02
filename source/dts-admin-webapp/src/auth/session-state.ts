@@ -13,7 +13,6 @@ export type PortalSessionState = {
 	reason: SessionReason;
 	browserId?: string;
 	expiresAt?: string;
-	lastCheckedAt?: string;
 };
 
 export type CurrentSessionPayload = {

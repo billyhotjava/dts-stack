@@ -26,4 +26,30 @@ describe("userStore persistence", () => {
 		});
 		expect(persisted.userToken).toBeUndefined();
 	});
+
+	it("drops transient session probe fields from persisted state", () => {
+		const partialize = (useUserStore as any).persist.getOptions().partialize as (state: Record<string, unknown>) => Record<string, unknown>;
+
+		const persisted = partialize({
+			userInfo: { username: "alice" },
+			session: {
+				initialized: true,
+				checking: false,
+				authenticated: true,
+				reason: "authenticated",
+				browserId: "browser-1",
+				expiresAt: "2026-04-02T12:00:00Z",
+				lastCheckedAt: "2026-04-02T12:00:05Z",
+			},
+		});
+
+		expect(persisted.session).toEqual({
+			initialized: true,
+			checking: false,
+			authenticated: true,
+			reason: "authenticated",
+			browserId: "browser-1",
+			expiresAt: "2026-04-02T12:00:00Z",
+		});
+	});
 });

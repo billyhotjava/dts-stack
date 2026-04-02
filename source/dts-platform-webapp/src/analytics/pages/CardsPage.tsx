@@ -236,6 +236,41 @@ export default function CardsPage() {
 		);
 	}, [state, searchQuery]);
 
+	const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
+	const [batchDeleting, setBatchDeleting] = useState(false);
+
+	const handleBatchDelete = () => {
+		if (selectedRowKeys.length === 0) return;
+		Modal.confirm({
+			title: `批量删除 ${selectedRowKeys.length} 张卡片`,
+			content: "确定将选中的卡片移至废纸篓？可在废纸篓中恢复。",
+			okText: "确定",
+			cancelText: "取消",
+			okButtonProps: { danger: true },
+			onOk: async () => {
+				setBatchDeleting(true);
+				let ok = 0;
+				let fail = 0;
+				for (const id of selectedRowKeys) {
+					try {
+						await analyticsApi.deleteCard(Number(id));
+						ok++;
+					} catch {
+						fail++;
+					}
+				}
+				setBatchDeleting(false);
+				setSelectedRowKeys([]);
+				if (fail === 0) {
+					message.success(`已将 ${ok} 张卡片移至废纸篓`);
+				} else {
+					message.warning(`完成：成功 ${ok}，失败 ${fail}`);
+				}
+				loadCards();
+			},
+		});
+	};
+
 	const handleDelete = (id: number, name: string) => {
 		Modal.confirm({
 			title: "移至废纸篓",
@@ -340,8 +375,11 @@ export default function CardsPage() {
 			)}
 			{state.state === "error" && <ErrorNotice locale={locale} error={state.error} />}
 			{state.state === "loaded" && (
-				<Card>
-					<Space className="mb-4">
+				<Card
+					title="卡片清单"
+					extra={<Tag color="blue">{filteredCards.length} 张卡片</Tag>}
+				>
+					<div className="mb-4 flex items-center gap-3 flex-wrap">
 						<Input.Search
 							placeholder={t(locale, "common.search")}
 							value={searchQuery}
@@ -349,7 +387,16 @@ export default function CardsPage() {
 							allowClear
 							style={{ width: 300 }}
 						/>
-					</Space>
+						{selectedRowKeys.length > 0 && (
+							<Space size="small">
+								<span className="text-xs text-text-secondary">已选 {selectedRowKeys.length} 项</span>
+								<Button size="small" onClick={() => setSelectedRowKeys([])}>取消选择</Button>
+								<Button size="small" danger icon={<DeleteOutlined />} loading={batchDeleting} onClick={handleBatchDelete}>
+									批量删除
+								</Button>
+							</Space>
+						)}
+					</div>
 					{filteredCards.length === 0 ? (
 						<EmptyState title={searchQuery ? t(locale, "common.noResults") : t(locale, "common.empty")} />
 					) : (
@@ -357,8 +404,16 @@ export default function CardsPage() {
 							columns={columns}
 							dataSource={filteredCards}
 							rowKey={(r) => r.id}
-							size="small"
-							pagination={filteredCards.length > 15 ? { pageSize: 15, showSizeChanger: true, showTotal: (total) => `${total} 条` } : false}
+							rowSelection={{
+								selectedRowKeys,
+								onChange: (keys) => setSelectedRowKeys(keys),
+							}}
+							pagination={{
+								pageSize: 20,
+								showSizeChanger: true,
+								showQuickJumper: true,
+								showTotal: (total) => `共 ${total} 条`,
+							}}
 						/>
 					)}
 				</Card>

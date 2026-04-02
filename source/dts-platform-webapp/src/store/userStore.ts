@@ -66,6 +66,47 @@ type UserStore = {
 	};
 };
 
+function sameStringArray(left: string[] | undefined, right: string[] | undefined): boolean {
+	if (left === right) return true;
+	if (!left || !right) return (!left || left.length === 0) && (!right || right.length === 0);
+	if (left.length !== right.length) return false;
+	return left.every((item, index) => item === right[index]);
+}
+
+function sameUserInfo(left: Partial<UserInfo>, right: Partial<UserInfo>): boolean {
+	return left.username === right.username
+		&& left.email === right.email
+		&& left.firstName === right.firstName
+		&& left.lastName === right.lastName
+		&& left.fullName === right.fullName
+		&& left.enabled === right.enabled
+		&& left.department === right.department
+		&& left.avatar === right.avatar
+		&& JSON.stringify(left.attributes ?? {}) === JSON.stringify(right.attributes ?? {})
+		&& sameStringArray(normalizeToStringArray(left.roles), normalizeToStringArray(right.roles))
+		&& sameStringArray(normalizeToStringArray(left.permissions), normalizeToStringArray(right.permissions));
+}
+
+function sameSessionState(left: PortalSessionState, right: PortalSessionState): boolean {
+	return left.initialized === right.initialized
+		&& left.checking === right.checking
+		&& left.authenticated === right.authenticated
+		&& left.reason === right.reason
+		&& left.browserId === right.browserId
+		&& left.expiresAt === right.expiresAt;
+}
+
+function toPersistedSession(session: PortalSessionState): PortalSessionState {
+	return {
+		initialized: session.initialized,
+		checking: session.checking,
+		authenticated: session.authenticated,
+		reason: session.reason,
+		browserId: session.browserId,
+		expiresAt: session.expiresAt,
+	};
+}
+
 function buildSessionUserInfo(
 	session: CurrentSessionPayload,
 	currentUserInfo: Partial<UserInfo> = {},
@@ -116,17 +157,23 @@ const useUserStore = create<UserStore>()(
 					}));
 				},
 				setAuthenticatedSession(sessionPayload, userInfo = {}) {
-					set((state) => ({
-						userInfo: buildSessionUserInfo(sessionPayload, {
+					set((state) => {
+						const nextUserInfo = buildSessionUserInfo(sessionPayload, {
 							...state.userInfo,
 							...userInfo,
-						}),
-						session: createAuthenticatedSessionState({
+						});
+						const nextSession = createAuthenticatedSessionState({
 							browserId: sessionPayload.browserId,
 							expiresAt: sessionPayload.expiresAt,
-							lastCheckedAt: new Date().toISOString(),
-						}),
-					}));
+						});
+						if (sameUserInfo(state.userInfo, nextUserInfo) && sameSessionState(state.session, nextSession)) {
+							return state;
+						}
+						return {
+							userInfo: nextUserInfo,
+							session: nextSession,
+						};
+					});
 				},
 				clearUserInfoAndToken(reason = "logged_out") {
 					set({
@@ -168,7 +215,7 @@ const useUserStore = create<UserStore>()(
 			})),
 			partialize: (state) => ({
 				userInfo: state.userInfo,
-				session: state.session,
+				session: toPersistedSession(state.session),
 			}),
 		},
 	),

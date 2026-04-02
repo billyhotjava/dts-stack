@@ -39,26 +39,47 @@ function writeLastActivity(ts: number, lastWriteRef: { current: number }) {
 export default function SessionManager() {
 	const session = usePortalSession();
 	const user = useUserInfo();
-	const { markSessionChecking, setAuthenticatedSession, clearUserInfoAndToken } = useUserActions();
+	const { markSessionChecking, setAuthenticatedSession, setSession, clearUserInfoAndToken } = useUserActions();
 	const lastActivityRef = useRef<number>(readLastActivity());
 	const lastActivityWriteRef = useRef<number>(0);
 	const lastReasonRef = useRef(session.reason);
 	const logoutInProgressRef = useRef(false);
+	const sessionRef = useRef(session);
 
 	const isLoggedIn = useMemo(() => session.authenticated, [session.authenticated]);
+
+	useEffect(() => {
+		sessionRef.current = session;
+	}, [session]);
 
 	useEffect(() => {
 		const syncCurrentSession = async (mode: "bootstrap" | "silent") => {
 			if (mode === "bootstrap") {
 				markSessionChecking();
 			}
-			const current = await fetchCurrentSession();
-			if (current.authenticated) {
-				logoutInProgressRef.current = false;
-				setAuthenticatedSession(current);
+			try {
+				const current = await fetchCurrentSession();
+				if (current.authenticated) {
+					logoutInProgressRef.current = false;
+					setAuthenticatedSession(current);
+					return;
+				}
+				clearUserInfoAndToken(mode === "bootstrap" ? "anonymous" : "expired");
 				return;
+			} catch (error) {
+				console.warn(LOG_PREFIX, "probe: keep current session after transient failure", { mode, error });
+				if (mode === "bootstrap") {
+					if (sessionRef.current.authenticated) {
+						setSession({
+							...sessionRef.current,
+							initialized: true,
+							checking: false,
+						});
+						return;
+					}
+					clearUserInfoAndToken("anonymous");
+				}
 			}
-			clearUserInfoAndToken(mode === "bootstrap" ? "anonymous" : "expired");
 		};
 
 		void syncCurrentSession("bootstrap");
@@ -71,14 +92,13 @@ export default function SessionManager() {
 		};
 
 		const onStorage = (event: StorageEvent) => {
-			if (event.key === ADMIN_SESSION_KEYS.userStore || event.key === ADMIN_SESSION_KEYS.lastActivity) {
-				if (event.key === ADMIN_SESSION_KEYS.lastActivity && event.newValue) {
+			if (event.key === ADMIN_SESSION_KEYS.lastActivity) {
+				if (event.newValue) {
 					const next = Number(event.newValue);
 					if (next > 0) {
 						lastActivityRef.current = next;
 					}
 				}
-				void syncCurrentSession("silent");
 			}
 		};
 
@@ -88,7 +108,7 @@ export default function SessionManager() {
 			window.removeEventListener("focus", handleFocus);
 			window.removeEventListener("storage", onStorage);
 		};
-	}, [clearUserInfoAndToken, markSessionChecking, setAuthenticatedSession]);
+	}, [clearUserInfoAndToken, markSessionChecking, setAuthenticatedSession, setSession]);
 
 	useEffect(() => {
 		if (!isLoggedIn) return;
@@ -102,11 +122,15 @@ export default function SessionManager() {
 		const visibilityHandler = () => {
 			if (document.visibilityState === "visible") {
 				updateActivity();
-				void fetchCurrentSession().then((current) => {
-					if (current.authenticated) {
-						setAuthenticatedSession(current);
-					}
-				});
+				void fetchCurrentSession()
+					.then((current) => {
+						if (current.authenticated) {
+							setAuthenticatedSession(current);
+						}
+					})
+					.catch((error) => {
+						console.warn(LOG_PREFIX, "probe: visibility sync failed", error);
+					});
 			}
 		};
 		document.addEventListener("visibilitychange", visibilityHandler);
