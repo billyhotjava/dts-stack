@@ -5,9 +5,11 @@ import { PageHeader } from "@/components/page-header";
 import { EmptyState } from "../components/EmptyState";
 import { ErrorNotice } from "../components/ErrorNotice";
 import { Button, Card, Input, Modal, Select, Space, Spin, Table, Tag, message } from "antd";
-import { PlusOutlined, EyeOutlined, EditOutlined, DeleteOutlined, UploadOutlined } from "@ant-design/icons";
+import { PlusOutlined, EyeOutlined, EditOutlined, DeleteOutlined, UploadOutlined, FolderOutlined } from "@ant-design/icons";
 import type { ColumnsType } from "antd/es/table";
 import { getEffectiveLocale, t, type Locale } from "../i18n";
+import CollectionTree, { collectDescendantIds } from "../components/CollectionTree";
+import MoveToCollectionModal from "../components/MoveToCollectionModal";
 
 type LoadState<T> =
 	| { state: "loading" }
@@ -217,6 +219,10 @@ export default function CardsPage() {
 	const [state, setState] = useState<LoadState<CardListItem[]>>({ state: "loading" });
 	const [searchQuery, setSearchQuery] = useState("");
 	const [batchImportOpen, setBatchImportOpen] = useState(false);
+	const [selectedCollection, setSelectedCollection] = useState("__all__");
+	const [moveModalOpen, setMoveModalOpen] = useState(false);
+	const [moveCardIds, setMoveCardIds] = useState<number[]>([]);
+	const [collectionsVersion, setCollectionsVersion] = useState(0);
 
 	const loadCards = useCallback(() => {
 		setState({ state: "loading" });
@@ -227,14 +233,47 @@ export default function CardsPage() {
 
 	useEffect(() => { loadCards(); }, [loadCards]);
 
+	const handleCollectionsChange = useCallback(() => {
+		setCollectionsVersion((v) => v + 1);
+		loadCards();
+	}, [loadCards]);
+
+	const handleMoveSuccess = useCallback(() => {
+		setMoveModalOpen(false);
+		setMoveCardIds([]);
+		setSelectedRowKeys([]);
+		setCollectionsVersion((v) => v + 1);
+		loadCards();
+	}, [loadCards]);
+
 	const filteredCards = useMemo(() => {
 		if (state.state !== "loaded") return [];
+		let cards = state.value;
+
+		// Filter by collection
+		if (selectedCollection === "__uncategorized__") {
+			cards = cards.filter((c) => c.collection_id == null);
+		} else if (selectedCollection !== "__all__") {
+			const treeRef = (CollectionTree as any).__treeRef;
+			const tree = treeRef?.tree ?? [];
+			const ids = collectDescendantIds(tree, Number(selectedCollection));
+			if (ids.length > 0) {
+				const idSet = new Set(ids);
+				cards = cards.filter((c) => c.collection_id != null && idSet.has(c.collection_id));
+			} else {
+				cards = cards.filter((c) => c.collection_id === Number(selectedCollection));
+			}
+		}
+
+		// Filter by search keyword
 		const kw = searchQuery.trim().toLowerCase();
-		if (!kw) return state.value;
-		return state.value.filter((c) =>
-			(c.name ?? "").toLowerCase().includes(kw) || (c.description ?? "").toLowerCase().includes(kw)
-		);
-	}, [state, searchQuery]);
+		if (kw) {
+			cards = cards.filter((c) =>
+				(c.name ?? "").toLowerCase().includes(kw) || (c.description ?? "").toLowerCase().includes(kw)
+			);
+		}
+		return cards;
+	}, [state, searchQuery, selectedCollection, collectionsVersion]);
 
 	const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
 	const [batchDeleting, setBatchDeleting] = useState(false);
@@ -324,7 +363,7 @@ export default function CardsPage() {
 		{
 			title: t(locale, "common.actions"),
 			key: "actions",
-			width: 150,
+			width: 200,
 			render: (_, record) => (
 				<Space size={4}>
 					<Link to={`/bi/questions/${record.id}`}>
@@ -333,6 +372,17 @@ export default function CardsPage() {
 					<Link to={`/bi/questions/${record.id}/edit`}>
 						<Button type="link" size="small" icon={<EditOutlined />}>编辑</Button>
 					</Link>
+					<Button
+						type="link"
+						size="small"
+						icon={<FolderOutlined />}
+						onClick={() => {
+							setMoveCardIds([record.id]);
+							setMoveModalOpen(true);
+						}}
+					>
+						移动
+					</Button>
 					<Button
 						type="link"
 						size="small"
@@ -370,54 +420,106 @@ export default function CardsPage() {
 				onSuccess={loadCards}
 			/>
 
-			{state.state === "loading" && (
-				<div className="flex justify-center py-12"><Spin size="large" /></div>
-			)}
 			{state.state === "error" && <ErrorNotice locale={locale} error={state.error} />}
-			{state.state === "loaded" && (
-				<Card
-					title="卡片清单"
-					extra={<Tag color="blue">{filteredCards.length} 张卡片</Tag>}
-				>
-					<div className="mb-4 flex items-center gap-3 flex-wrap">
-						<Input.Search
-							placeholder={t(locale, "common.search")}
-							value={searchQuery}
-							onChange={(e) => setSearchQuery(e.target.value)}
-							allowClear
-							style={{ width: 300 }}
-						/>
-						{selectedRowKeys.length > 0 && (
-							<Space size="small">
-								<span className="text-xs text-text-secondary">已选 {selectedRowKeys.length} 项</span>
-								<Button size="small" onClick={() => setSelectedRowKeys([])}>取消选择</Button>
-								<Button size="small" danger icon={<DeleteOutlined />} loading={batchDeleting} onClick={handleBatchDelete}>
-									批量删除
-								</Button>
-							</Space>
-						)}
+
+			<Card styles={{ body: { padding: 0 } }}>
+				<div className="flex min-h-[720px]">
+					{/* Left: Collection tree */}
+					<CollectionTree
+						selectedKey={selectedCollection}
+						onSelect={setSelectedCollection}
+						onCollectionsChange={handleCollectionsChange}
+					/>
+
+					{/* Right: Cards list */}
+					<div className="flex min-w-0 flex-1 flex-col">
+						{state.state === "loading" ? (
+							<div className="flex justify-center items-center flex-1">
+								<Spin size="large" />
+							</div>
+						) : state.state === "loaded" ? (
+							<div className="p-4">
+								<div className="mb-4 flex items-center justify-between flex-wrap gap-3">
+									<div className="flex items-center gap-3 flex-wrap">
+										<Input.Search
+											placeholder={t(locale, "common.search")}
+											value={searchQuery}
+											onChange={(e) => setSearchQuery(e.target.value)}
+											allowClear
+											style={{ width: 300 }}
+										/>
+										{selectedRowKeys.length > 0 && (
+											<Space size="small">
+												<span className="text-xs text-text-secondary">
+													已选 {selectedRowKeys.length} 项
+												</span>
+												<Button size="small" onClick={() => setSelectedRowKeys([])}>
+													取消选择
+												</Button>
+												<Button
+													size="small"
+													danger
+													icon={<DeleteOutlined />}
+													loading={batchDeleting}
+													onClick={handleBatchDelete}
+												>
+													批量删除
+												</Button>
+												<Button
+													size="small"
+													icon={<FolderOutlined />}
+													onClick={() => {
+														setMoveCardIds(selectedRowKeys.map(Number));
+														setMoveModalOpen(true);
+													}}
+												>
+													{t(locale, "collections.moveTo")}
+												</Button>
+											</Space>
+										)}
+									</div>
+									<Tag color="blue">{filteredCards.length} 张卡片</Tag>
+								</div>
+								{filteredCards.length === 0 ? (
+									<EmptyState
+										title={
+											searchQuery
+												? t(locale, "common.noResults")
+												: t(locale, "common.empty")
+										}
+									/>
+								) : (
+									<Table<CardListItem>
+										columns={columns}
+										dataSource={filteredCards}
+										rowKey={(r) => r.id}
+										rowSelection={{
+											selectedRowKeys,
+											onChange: (keys) => setSelectedRowKeys(keys),
+										}}
+										pagination={{
+											pageSize: 20,
+											showSizeChanger: true,
+											showQuickJumper: true,
+											showTotal: (total) => `共 ${total} 条`,
+										}}
+									/>
+								)}
+							</div>
+						) : null}
 					</div>
-					{filteredCards.length === 0 ? (
-						<EmptyState title={searchQuery ? t(locale, "common.noResults") : t(locale, "common.empty")} />
-					) : (
-						<Table<CardListItem>
-							columns={columns}
-							dataSource={filteredCards}
-							rowKey={(r) => r.id}
-							rowSelection={{
-								selectedRowKeys,
-								onChange: (keys) => setSelectedRowKeys(keys),
-							}}
-							pagination={{
-								pageSize: 20,
-								showSizeChanger: true,
-								showQuickJumper: true,
-								showTotal: (total) => `共 ${total} 条`,
-							}}
-						/>
-					)}
-				</Card>
-			)}
+				</div>
+			</Card>
+
+			<MoveToCollectionModal
+				open={moveModalOpen}
+				cardIds={moveCardIds}
+				onClose={() => {
+					setMoveModalOpen(false);
+					setMoveCardIds([]);
+				}}
+				onSuccess={handleMoveSuccess}
+			/>
 		</div>
 	);
 }
