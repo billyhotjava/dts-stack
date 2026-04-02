@@ -12,6 +12,7 @@ SELECT
     open_issue_cnt,                         -- 未归零问题数
     closed_cnt,                             -- 已归零问题数
     closure_rate,                           -- 归零完成率
+    ROUND(closure_rate * 100, 2) || '%' AS closure_rate_pct,                           -- [显示用] 归零完成率
     has_zero_plan_cnt,                      -- 有归零计划数
     zero_plan_synced_cnt,                   -- 归零计划已同步数
     cat_design,                             -- 设计类问题数

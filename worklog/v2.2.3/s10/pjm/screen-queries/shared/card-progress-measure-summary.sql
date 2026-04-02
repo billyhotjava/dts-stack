@@ -12,6 +12,7 @@ SELECT
     closed_cnt,                             -- 已闭环数
     open_cnt,                               -- 未闭环数
     closure_rate,                           -- 闭环率
+    ROUND(closure_rate * 100, 2) || '%' AS closure_rate_pct,                           -- [显示用] 闭环率
     cat_design_cnt,                         -- 设计类措施数
     cat_process_cnt,                        -- 工艺类措施数
     cat_management_cnt,                     -- 管理类措施数

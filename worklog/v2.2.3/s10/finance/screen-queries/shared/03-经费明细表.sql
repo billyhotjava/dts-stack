@@ -12,10 +12,13 @@ SELECT
     direct_ctrl,                -- 直接成本控制数（万元）
     reserve_indirect,           -- 预留间接费用和收益（万元）
     direct_rate,                -- 直接成本执行率（%）
+    ROUND(direct_rate, 2) || '%' AS direct_rate_pct,                -- [显示用] 直接成本执行率（%）
     indirect_spent,             -- 间接费用支出和收益总额（万元）
     direct_spent,               -- 直接成本支出（万元，派生）
     total_spent,                -- 总支出（万元，派生）
     total_rate,                 -- 总经费执行率（%，派生）
-    indirect_rate               -- 间接费用执行率（%，派生）
+    ROUND(total_rate, 2) || '%' AS total_rate_pct,                 -- [显示用] 总经费执行率（%，派生）
+    indirect_rate,  -- 间接费用执行率（%，派生）
+    ROUND(indirect_rate, 2) || '%' AS indirect_rate_pct               -- [显示用] 间接费用执行率（%，派生）
 FROM biz_dwd_project_fund
 ORDER BY project_id;

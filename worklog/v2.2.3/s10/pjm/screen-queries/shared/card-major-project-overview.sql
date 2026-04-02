@@ -19,6 +19,8 @@ SELECT
     avg_delay_days,                         -- 平均延期天数
     max_delay_days,                         -- 最大延期天数
     completion_rate,                        -- 完成率
-    milestone_completion_rate               -- 里程碑完成率
+    ROUND(completion_rate * 100, 2) || '%' AS completion_rate_pct,                        -- [显示用] 完成率
+    milestone_completion_rate,  -- 里程碑完成率
+    ROUND(milestone_completion_rate * 100, 2) || '%' AS milestone_completion_rate_pct               -- [显示用] 里程碑完成率
 FROM biz_ads_major_project_overview
 ORDER BY avg_health_score ASC

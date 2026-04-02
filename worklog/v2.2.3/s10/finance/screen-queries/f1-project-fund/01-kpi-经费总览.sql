@@ -15,6 +15,9 @@ SELECT
     sum_total_spent,            -- 总支出合计（万元）
     sum_remaining_fund,         -- 剩余经费合计（万元）
     overall_direct_rate,        -- 整体直接成本执行率（%，加权计算）
+    ROUND(overall_direct_rate, 2) || '%' AS overall_direct_rate_pct,        -- [显示用] 整体直接成本执行率（%，加权计算）
     overall_total_rate,         -- 整体总经费执行率（%，加权计算）
-    overall_indirect_rate       -- 整体间接费用执行率（%，加权计算）
+    ROUND(overall_total_rate, 2) || '%' AS overall_total_rate_pct,         -- [显示用] 整体总经费执行率（%，加权计算）
+    overall_indirect_rate,  -- 整体间接费用执行率（%，加权计算）
+    ROUND(overall_indirect_rate, 2) || '%' AS overall_indirect_rate_pct       -- [显示用] 整体间接费用执行率（%，加权计算）
 FROM biz_ads_project_fund_kpi;

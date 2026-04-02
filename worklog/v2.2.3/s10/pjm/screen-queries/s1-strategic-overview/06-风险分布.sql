@@ -14,6 +14,7 @@ SELECT
     low_cnt,                                -- 低风险数
     released_cnt,                           -- 已释放数
     open_cnt,                               -- 未释放数
-    release_rate                            -- 释放率
+    release_rate,  -- 释放率
+    ROUND(release_rate * 100, 2) || '%' AS release_rate_pct                            -- [显示用] 释放率
 FROM biz_ads_risk_kpi
 ORDER BY period_year, period_month;

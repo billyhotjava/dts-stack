@@ -12,6 +12,8 @@ SELECT
     usage_total,                -- 预计使用（万元，本年度消耗资金）
     balance_total,              -- 年末余额（万元，年度结束资金规模）
     usage_rate,                 -- 资金使用率（%，= 预计使用 / (年初+预计增加)，>80% 警惕）
-    growth_rate                 -- 余额增长率（%，= (年末-年初)/年初，正=扩大 负=缩减）
+    ROUND(usage_rate, 2) || '%' AS usage_rate_pct,                 -- [显示用] 资金使用率（%，= 预计使用 / (年初+预计增加)，>80% 警惕）
+    growth_rate,  -- 余额增长率（%，= (年末-年初)/年初，正=扩大 负=缩减）
+    ROUND(growth_rate, 2) || '%' AS growth_rate_pct                 -- [显示用] 余额增长率（%，= (年末-年初)/年初，正=扩大 负=缩减）
 FROM biz_ads_own_fund_kpi
 WHERE period_year = :selected_year;

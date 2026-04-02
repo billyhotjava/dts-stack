@@ -18,8 +18,11 @@ SELECT
     overdue_completed_cnt,                  -- 超期完成数
     completed_total_cnt,                    -- 完成总数（按时+超期+以外）
     completion_rate,                        -- 完成百分比
+    ROUND(completion_rate * 100, 2) || '%' AS completion_rate_pct,                        -- [显示用] 完成百分比
     on_time_rate,                           -- 按时完成百分比
+    ROUND(on_time_rate * 100, 2) || '%' AS on_time_rate_pct,                           -- [显示用] 按时完成百分比
     overdue_completion_rate,                -- 超期完成百分比
+    ROUND(overdue_completion_rate * 100, 2) || '%' AS overdue_completion_rate_pct,                -- [显示用] 超期完成百分比
     abnormal_pending_cnt,                   -- 不正常待变更数
     overdue_incomplete_unchanged_cnt,       -- 超期未完成未变更数
     overdue_incomplete_changed_cnt          -- 超期未完成已变更数

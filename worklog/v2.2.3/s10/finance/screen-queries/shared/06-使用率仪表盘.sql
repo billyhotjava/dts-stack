@@ -6,6 +6,7 @@
 -- ============================================================
 
 SELECT
-    usage_rate                  -- 资金使用率（%，= 预计使用 / (年初+预计增加) x 100）
+    usage_rate,  -- 资金使用率（%，= 预计使用 / (年初+预计增加) x 100）
+    ROUND(usage_rate, 2) || '%' AS usage_rate_pct                  -- [显示用] 资金使用率（%，= 预计使用 / (年初+预计增加) x 100）
 FROM biz_ads_own_fund_kpi
 WHERE period_year = :selected_year;

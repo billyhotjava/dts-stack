@@ -6,5 +6,6 @@
 -- ============================================================
 
 SELECT
-    overall_total_rate          -- 整体总经费执行率（%，加权计算：SUM(总支出)/SUM(总经费)）
+    overall_total_rate,  -- 整体总经费执行率（%，加权计算：SUM(总支出)/SUM(总经费)）
+    ROUND(overall_total_rate, 2) || '%' AS overall_total_rate_pct          -- [显示用] 整体总经费执行率（%，加权计算：SUM(总支出)/SUM(总经费)）
 FROM biz_ads_project_fund_kpi;

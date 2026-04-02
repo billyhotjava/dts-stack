@@ -14,6 +14,7 @@ SELECT
     milestone_pending_cnt,                  -- 里程碑正常待完成数
     milestone_incomplete_cnt,               -- 里程碑未完成数
     milestone_completion_rate,              -- 里程碑完成百分比
+    ROUND(milestone_completion_rate * 100, 2) || '%' AS milestone_completion_rate_pct,              -- [显示用] 里程碑完成百分比
     high_risk_cnt,                          -- 高风险节点数
     mid_risk_cnt,                           -- 中风险节点数
     milestone_total_cnt,                    -- 里程碑节点总数

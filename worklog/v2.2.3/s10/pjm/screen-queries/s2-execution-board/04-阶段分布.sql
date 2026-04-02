@@ -14,6 +14,8 @@ SELECT
     overdue_incomplete_changed_cnt,         -- 超期未完成已变更数（除一般）
     overdue_completed_unchanged_cnt,        -- 超期已完成未变更数（除一般）
     abnormal_rate,                          -- 不正常待变更百分比
-    overdue_rate                            -- 节点超期百分比
+    ROUND(abnormal_rate * 100, 2) || '%' AS abnormal_rate_pct,                          -- [显示用] 不正常待变更百分比
+    overdue_rate,  -- 节点超期百分比
+    ROUND(overdue_rate * 100, 2) || '%' AS overdue_rate_pct                            -- [显示用] 节点超期百分比
 FROM biz_ads_project_non_general_kpi
 ORDER BY plan_year, plan_month

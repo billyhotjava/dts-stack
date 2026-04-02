@@ -23,6 +23,7 @@ SELECT
     plan_end_date,                          -- 计划结束日期
     actual_end_date,                        -- 实际结束日期
     progress_rate,                          -- 进度百分比
+    ROUND(progress_rate * 100, 2) || '%' AS progress_rate_pct,                          -- [显示用] 进度百分比
     sort_order,                             -- 排序序号
     node_id,                                -- 节点编号
     node_task,                              -- 节点任务名称

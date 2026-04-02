@@ -6,6 +6,7 @@
 -- ============================================================
 
 SELECT
-    growth_rate                 -- 余额增长率（%，= (年末余额-年初)/年初 x 100）
+    growth_rate,  -- 余额增长率（%，= (年末余额-年初)/年初 x 100）
+    ROUND(growth_rate, 2) || '%' AS growth_rate_pct                 -- [显示用] 余额增长率（%，= (年末余额-年初)/年初 x 100）
 FROM biz_ads_own_fund_kpi
 WHERE period_year = :selected_year;

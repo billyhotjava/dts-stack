@@ -6,5 +6,6 @@
 -- ============================================================
 
 SELECT
-    overall_direct_rate         -- 整体直接成本执行率（%，加权计算：SUM(直接支出)/SUM(直接控制数)）
+    overall_direct_rate,  -- 整体直接成本执行率（%，加权计算：SUM(直接支出)/SUM(直接控制数)）
+    ROUND(overall_direct_rate, 2) || '%' AS overall_direct_rate_pct         -- [显示用] 整体直接成本执行率（%，加权计算：SUM(直接支出)/SUM(直接控制数)）
 FROM biz_ads_project_fund_kpi;
