@@ -267,7 +267,7 @@
         "type": "sql",
         "sqlConfig": {
           "databaseId": "{{DATABASE_ID}}",
-          "query": "SELECT\n    SUM(balance) / 10000.0 AS net_balance\nFROM aux_balance_personal\nWHERE 1=1\n  AND (:employee_filter IS NULL OR employee_name = :employee_filter)\n  AND (:dept_filter IS NULL OR employee_dept = :dept_filter)\n  AND (:search_text IS NULL\n       OR subject_name LIKE '%' || :search_text || '%'\n       OR subject_code LIKE '%' || :search_text || '%'\n       OR employee_name LIKE '%' || :search_text || '%')",
+          "query": "SELECT\n    SUM(balance::NUMERIC) / 10000.0 AS net_balance\nFROM ods_finance_aux_balance_personal\nWHERE 1=1\n  AND (:employee_filter IS NULL OR employee_name = :employee_filter)\n  AND (:dept_filter IS NULL OR employee_dept = :dept_filter)\n  AND (:search_text IS NULL\n       OR subject_name LIKE '%' || :search_text || '%'\n       OR subject_code LIKE '%' || :search_text || '%'\n       OR employee_name LIKE '%' || :search_text || '%')",
           "queryTimeoutSeconds": 30,
           "maxRows": 2000,
           "parameterBindings": [
@@ -304,7 +304,7 @@
         "type": "sql",
         "sqlConfig": {
           "databaseId": "{{DATABASE_ID}}",
-          "query": "SELECT\n    SUM(CASE WHEN balance > 0 THEN balance ELSE 0 END) / 10000.0 AS debit_total\nFROM aux_balance_personal\nWHERE 1=1\n  AND (:employee_filter IS NULL OR employee_name = :employee_filter)\n  AND (:dept_filter IS NULL OR employee_dept = :dept_filter)\n  AND (:search_text IS NULL\n       OR subject_name LIKE '%' || :search_text || '%'\n       OR subject_code LIKE '%' || :search_text || '%'\n       OR employee_name LIKE '%' || :search_text || '%')",
+          "query": "SELECT\n    SUM(CASE WHEN balance::NUMERIC > 0 THEN balance::NUMERIC ELSE 0 END) / 10000.0 AS debit_total\nFROM ods_finance_aux_balance_personal\nWHERE 1=1\n  AND (:employee_filter IS NULL OR employee_name = :employee_filter)\n  AND (:dept_filter IS NULL OR employee_dept = :dept_filter)\n  AND (:search_text IS NULL\n       OR subject_name LIKE '%' || :search_text || '%'\n       OR subject_code LIKE '%' || :search_text || '%'\n       OR employee_name LIKE '%' || :search_text || '%')",
           "queryTimeoutSeconds": 30,
           "maxRows": 2000,
           "parameterBindings": [
@@ -341,7 +341,7 @@
         "type": "sql",
         "sqlConfig": {
           "databaseId": "{{DATABASE_ID}}",
-          "query": "SELECT\n    SUM(CASE WHEN balance < 0 THEN ABS(balance) ELSE 0 END) / 10000.0 AS credit_total\nFROM aux_balance_personal\nWHERE 1=1\n  AND (:employee_filter IS NULL OR employee_name = :employee_filter)\n  AND (:dept_filter IS NULL OR employee_dept = :dept_filter)\n  AND (:search_text IS NULL\n       OR subject_name LIKE '%' || :search_text || '%'\n       OR subject_code LIKE '%' || :search_text || '%'\n       OR employee_name LIKE '%' || :search_text || '%')",
+          "query": "SELECT\n    SUM(CASE WHEN balance::NUMERIC < 0 THEN ABS(balance::NUMERIC) ELSE 0 END) / 10000.0 AS credit_total\nFROM ods_finance_aux_balance_personal\nWHERE 1=1\n  AND (:employee_filter IS NULL OR employee_name = :employee_filter)\n  AND (:dept_filter IS NULL OR employee_dept = :dept_filter)\n  AND (:search_text IS NULL\n       OR subject_name LIKE '%' || :search_text || '%'\n       OR subject_code LIKE '%' || :search_text || '%'\n       OR employee_name LIKE '%' || :search_text || '%')",
           "queryTimeoutSeconds": 30,
           "maxRows": 2000,
           "parameterBindings": [
@@ -378,7 +378,7 @@
         "type": "sql",
         "sqlConfig": {
           "databaseId": "{{DATABASE_ID}}",
-          "query": "SELECT\n    COUNT(DISTINCT employee_name) AS employee_count\nFROM aux_balance_personal\nWHERE 1=1\n  AND (:employee_filter IS NULL OR employee_name = :employee_filter)\n  AND (:dept_filter IS NULL OR employee_dept = :dept_filter)\n  AND (:search_text IS NULL\n       OR subject_name LIKE '%' || :search_text || '%'\n       OR subject_code LIKE '%' || :search_text || '%'\n       OR employee_name LIKE '%' || :search_text || '%')",
+          "query": "SELECT\n    COUNT(DISTINCT employee_name) AS employee_count\nFROM ods_finance_aux_balance_personal\nWHERE 1=1\n  AND (:employee_filter IS NULL OR employee_name = :employee_filter)\n  AND (:dept_filter IS NULL OR employee_dept = :dept_filter)\n  AND (:search_text IS NULL\n       OR subject_name LIKE '%' || :search_text || '%'\n       OR subject_code LIKE '%' || :search_text || '%'\n       OR employee_name LIKE '%' || :search_text || '%')",
           "queryTimeoutSeconds": 30,
           "maxRows": 2000,
           "parameterBindings": [
@@ -415,7 +415,7 @@
         "type": "sql",
         "sqlConfig": {
           "databaseId": "{{DATABASE_ID}}",
-          "query": "SELECT\n    COUNT(DISTINCT subject_code) AS subject_count\nFROM aux_balance_personal\nWHERE 1=1\n  AND (:employee_filter IS NULL OR employee_name = :employee_filter)\n  AND (:dept_filter IS NULL OR employee_dept = :dept_filter)\n  AND (:search_text IS NULL\n       OR subject_name LIKE '%' || :search_text || '%'\n       OR subject_code LIKE '%' || :search_text || '%'\n       OR employee_name LIKE '%' || :search_text || '%')",
+          "query": "SELECT\n    COUNT(DISTINCT subject_code) AS subject_count\nFROM ods_finance_aux_balance_personal\nWHERE 1=1\n  AND (:employee_filter IS NULL OR employee_name = :employee_filter)\n  AND (:dept_filter IS NULL OR employee_dept = :dept_filter)\n  AND (:search_text IS NULL\n       OR subject_name LIKE '%' || :search_text || '%'\n       OR subject_code LIKE '%' || :search_text || '%'\n       OR employee_name LIKE '%' || :search_text || '%')",
           "queryTimeoutSeconds": 30,
           "maxRows": 2000,
           "parameterBindings": [
@@ -453,7 +453,7 @@
         "type": "sql",
         "sqlConfig": {
           "databaseId": "{{DATABASE_ID}}",
-          "query": "SELECT\n    employee_name AS label,\n    SUM(balance) AS value\nFROM aux_balance_personal\nWHERE 1=1\n  AND (:employee_filter IS NULL OR employee_name = :employee_filter)\n  AND (:dept_filter IS NULL OR employee_dept = :dept_filter)\n  AND (:search_text IS NULL\n       OR subject_name LIKE '%' || :search_text || '%'\n       OR subject_code LIKE '%' || :search_text || '%'\n       OR employee_name LIKE '%' || :search_text || '%')\nGROUP BY employee_name\nORDER BY value DESC",
+          "query": "SELECT\n    employee_name AS label,\n    SUM(balance::NUMERIC) AS value\nFROM ods_finance_aux_balance_personal\nWHERE 1=1\n  AND (:employee_filter IS NULL OR employee_name = :employee_filter)\n  AND (:dept_filter IS NULL OR employee_dept = :dept_filter)\n  AND (:search_text IS NULL\n       OR subject_name LIKE '%' || :search_text || '%'\n       OR subject_code LIKE '%' || :search_text || '%'\n       OR employee_name LIKE '%' || :search_text || '%')\nGROUP BY employee_name\nORDER BY value DESC",
           "queryTimeoutSeconds": 30,
           "maxRows": 2000,
           "parameterBindings": [
@@ -492,7 +492,7 @@
         "type": "sql",
         "sqlConfig": {
           "databaseId": "{{DATABASE_ID}}",
-          "query": "SELECT\n    employee_dept AS label,\n    SUM(ABS(balance)) AS value\nFROM aux_balance_personal\nWHERE 1=1\n  AND (:employee_filter IS NULL OR employee_name = :employee_filter)\n  AND (:dept_filter IS NULL OR employee_dept = :dept_filter)\n  AND (:search_text IS NULL\n       OR subject_name LIKE '%' || :search_text || '%'\n       OR subject_code LIKE '%' || :search_text || '%'\n       OR employee_name LIKE '%' || :search_text || '%')\nGROUP BY employee_dept\nORDER BY value DESC",
+          "query": "SELECT\n    employee_dept AS label,\n    SUM(ABS(balance::NUMERIC)) AS value\nFROM ods_finance_aux_balance_personal\nWHERE 1=1\n  AND (:employee_filter IS NULL OR employee_name = :employee_filter)\n  AND (:dept_filter IS NULL OR employee_dept = :dept_filter)\n  AND (:search_text IS NULL\n       OR subject_name LIKE '%' || :search_text || '%'\n       OR subject_code LIKE '%' || :search_text || '%'\n       OR employee_name LIKE '%' || :search_text || '%')\nGROUP BY employee_dept\nORDER BY value DESC",
           "queryTimeoutSeconds": 30,
           "maxRows": 2000,
           "parameterBindings": [
@@ -530,7 +530,7 @@
         "type": "sql",
         "sqlConfig": {
           "databaseId": "{{DATABASE_ID}}",
-          "query": "SELECT\n    CASE\n        WHEN subject_code LIKE '1122%' THEN '其他应收-借款'\n        WHEN subject_code LIKE '2211%' THEN '应付职工薪酬'\n        ELSE '其他'\n    END AS label,\n    SUM(ABS(balance)) AS value\nFROM aux_balance_personal\nWHERE 1=1\n  AND (:employee_filter IS NULL OR employee_name = :employee_filter)\n  AND (:dept_filter IS NULL OR employee_dept = :dept_filter)\n  AND (:search_text IS NULL\n       OR subject_name LIKE '%' || :search_text || '%'\n       OR subject_code LIKE '%' || :search_text || '%'\n       OR employee_name LIKE '%' || :search_text || '%')\nGROUP BY label\nORDER BY value DESC",
+          "query": "SELECT\n    CASE\n        WHEN subject_code LIKE '1122%' THEN '其他应收-借款'\n        WHEN subject_code LIKE '2211%' THEN '应付职工薪酬'\n        ELSE '其他'\n    END AS label,\n    SUM(ABS(balance::NUMERIC)) AS value\nFROM ods_finance_aux_balance_personal\nWHERE 1=1\n  AND (:employee_filter IS NULL OR employee_name = :employee_filter)\n  AND (:dept_filter IS NULL OR employee_dept = :dept_filter)\n  AND (:search_text IS NULL\n       OR subject_name LIKE '%' || :search_text || '%'\n       OR subject_code LIKE '%' || :search_text || '%'\n       OR employee_name LIKE '%' || :search_text || '%')\nGROUP BY label\nORDER BY value DESC",
           "queryTimeoutSeconds": 30,
           "maxRows": 2000,
           "parameterBindings": [
@@ -584,7 +584,7 @@
         "type": "sql",
         "sqlConfig": {
           "databaseId": "{{DATABASE_ID}}",
-          "query": "SELECT\n    subject_code,\n    subject_name,\n    employee_dept,\n    employee_name,\n    balance\nFROM aux_balance_personal\nWHERE 1=1\n  AND (:employee_filter IS NULL OR employee_name = :employee_filter)\n  AND (:dept_filter IS NULL OR employee_dept = :dept_filter)\n  AND (:search_text IS NULL\n       OR subject_name LIKE '%' || :search_text || '%'\n       OR subject_code LIKE '%' || :search_text || '%'\n       OR employee_name LIKE '%' || :search_text || '%')\nORDER BY employee_name, subject_code",
+          "query": "SELECT\n    subject_code,\n    subject_name,\n    employee_dept,\n    employee_name,\n    balance::NUMERIC\nFROM ods_finance_aux_balance_personal\nWHERE 1=1\n  AND (:employee_filter IS NULL OR employee_name = :employee_filter)\n  AND (:dept_filter IS NULL OR employee_dept = :dept_filter)\n  AND (:search_text IS NULL\n       OR subject_name LIKE '%' || :search_text || '%'\n       OR subject_code LIKE '%' || :search_text || '%'\n       OR employee_name LIKE '%' || :search_text || '%')\nORDER BY employee_name, subject_code",
           "queryTimeoutSeconds": 30,
           "maxRows": 2000,
           "parameterBindings": [
@@ -637,7 +637,7 @@
         "type": "sql",
         "sqlConfig": {
           "databaseId": "{{DATABASE_ID}}",
-          "query": "SELECT\n    employee_name AS label,\n    employee_dept,\n    SUM(balance) AS value\nFROM aux_balance_personal\nWHERE 1=1\n  AND (:employee_filter IS NULL OR employee_name = :employee_filter)\n  AND (:dept_filter IS NULL OR employee_dept = :dept_filter)\n  AND (:search_text IS NULL\n       OR subject_name LIKE '%' || :search_text || '%'\n       OR subject_code LIKE '%' || :search_text || '%'\n       OR employee_name LIKE '%' || :search_text || '%')\nGROUP BY employee_name, employee_dept\nHAVING SUM(balance) > 0\nORDER BY value DESC\nLIMIT 8",
+          "query": "SELECT\n    employee_name AS label,\n    employee_dept,\n    SUM(balance::NUMERIC) AS value\nFROM ods_finance_aux_balance_personal\nWHERE 1=1\n  AND (:employee_filter IS NULL OR employee_name = :employee_filter)\n  AND (:dept_filter IS NULL OR employee_dept = :dept_filter)\n  AND (:search_text IS NULL\n       OR subject_name LIKE '%' || :search_text || '%'\n       OR subject_code LIKE '%' || :search_text || '%'\n       OR employee_name LIKE '%' || :search_text || '%')\nGROUP BY employee_name, employee_dept\nHAVING SUM(balance::NUMERIC) > 0\nORDER BY value DESC\nLIMIT 8",
           "queryTimeoutSeconds": 30,
           "maxRows": 2000,
           "parameterBindings": [

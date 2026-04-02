@@ -85,7 +85,7 @@
         "type": "sql",
         "sqlConfig": {
           "databaseId": "{{DATABASE_ID}}",
-          "query": "SELECT DISTINCT dept_name AS label, dept_name AS value FROM aux_balance ORDER BY dept_name",
+          "query": "SELECT DISTINCT dept_name AS label, dept_name AS value FROM ods_finance_aux_balance ORDER BY dept_name",
           "queryTimeoutSeconds": 30,
           "maxRows": 200
         }
@@ -211,7 +211,7 @@
         "type": "sql",
         "sqlConfig": {
           "databaseId": "{{DATABASE_ID}}",
-          "query": "SELECT\n    SUM(balance) AS total_balance,\n    COUNT(DISTINCT subject_code) AS subject_count,\n    COUNT(DISTINCT CASE WHEN contract_name IS NOT NULL AND contract_name != '\u2014' THEN contract_name END) AS contract_count,\n    COUNT(DISTINCT dept_name) AS dept_count\nFROM aux_balance\nWHERE 1=1\n  AND (:dept_filter IS NULL OR dept_name = :dept_filter)\n  AND (:search_text IS NULL OR subject_name LIKE '%' || :search_text || '%' OR subject_code LIKE '%' || :search_text || '%' OR contract_name LIKE '%' || :search_text || '%')",
+          "query": "SELECT\n    SUM(balance::NUMERIC) AS total_balance,\n    COUNT(DISTINCT subject_code) AS subject_count,\n    COUNT(DISTINCT CASE WHEN contract_name IS NOT NULL AND contract_name != '\u2014' THEN contract_name END) AS contract_count,\n    COUNT(DISTINCT dept_name) AS dept_count\nFROM ods_finance_aux_balance\nWHERE 1=1\n  AND (:dept_filter IS NULL OR dept_name = :dept_filter)\n  AND (:search_text IS NULL OR subject_name LIKE '%' || :search_text || '%' OR subject_code LIKE '%' || :search_text || '%' OR contract_name LIKE '%' || :search_text || '%')",
           "queryTimeoutSeconds": 30,
           "maxRows": 2000,
           "parameterBindings": [
@@ -247,7 +247,7 @@
         "type": "sql",
         "sqlConfig": {
           "databaseId": "{{DATABASE_ID}}",
-          "query": "SELECT\n    SUM(balance) AS total_balance,\n    COUNT(DISTINCT subject_code) AS subject_count,\n    COUNT(DISTINCT CASE WHEN contract_name IS NOT NULL AND contract_name != '\u2014' THEN contract_name END) AS contract_count,\n    COUNT(DISTINCT dept_name) AS dept_count\nFROM aux_balance\nWHERE 1=1\n  AND (:dept_filter IS NULL OR dept_name = :dept_filter)\n  AND (:search_text IS NULL OR subject_name LIKE '%' || :search_text || '%' OR subject_code LIKE '%' || :search_text || '%' OR contract_name LIKE '%' || :search_text || '%')",
+          "query": "SELECT\n    SUM(balance::NUMERIC) AS total_balance,\n    COUNT(DISTINCT subject_code) AS subject_count,\n    COUNT(DISTINCT CASE WHEN contract_name IS NOT NULL AND contract_name != '\u2014' THEN contract_name END) AS contract_count,\n    COUNT(DISTINCT dept_name) AS dept_count\nFROM ods_finance_aux_balance\nWHERE 1=1\n  AND (:dept_filter IS NULL OR dept_name = :dept_filter)\n  AND (:search_text IS NULL OR subject_name LIKE '%' || :search_text || '%' OR subject_code LIKE '%' || :search_text || '%' OR contract_name LIKE '%' || :search_text || '%')",
           "queryTimeoutSeconds": 30,
           "maxRows": 2000,
           "parameterBindings": [
@@ -283,7 +283,7 @@
         "type": "sql",
         "sqlConfig": {
           "databaseId": "{{DATABASE_ID}}",
-          "query": "SELECT\n    SUM(balance) AS total_balance,\n    COUNT(DISTINCT subject_code) AS subject_count,\n    COUNT(DISTINCT CASE WHEN contract_name IS NOT NULL AND contract_name != '\u2014' THEN contract_name END) AS contract_count,\n    COUNT(DISTINCT dept_name) AS dept_count\nFROM aux_balance\nWHERE 1=1\n  AND (:dept_filter IS NULL OR dept_name = :dept_filter)\n  AND (:search_text IS NULL OR subject_name LIKE '%' || :search_text || '%' OR subject_code LIKE '%' || :search_text || '%' OR contract_name LIKE '%' || :search_text || '%')",
+          "query": "SELECT\n    SUM(balance::NUMERIC) AS total_balance,\n    COUNT(DISTINCT subject_code) AS subject_count,\n    COUNT(DISTINCT CASE WHEN contract_name IS NOT NULL AND contract_name != '\u2014' THEN contract_name END) AS contract_count,\n    COUNT(DISTINCT dept_name) AS dept_count\nFROM ods_finance_aux_balance\nWHERE 1=1\n  AND (:dept_filter IS NULL OR dept_name = :dept_filter)\n  AND (:search_text IS NULL OR subject_name LIKE '%' || :search_text || '%' OR subject_code LIKE '%' || :search_text || '%' OR contract_name LIKE '%' || :search_text || '%')",
           "queryTimeoutSeconds": 30,
           "maxRows": 2000,
           "parameterBindings": [
@@ -319,7 +319,7 @@
         "type": "sql",
         "sqlConfig": {
           "databaseId": "{{DATABASE_ID}}",
-          "query": "SELECT\n    SUM(balance) AS total_balance,\n    COUNT(DISTINCT subject_code) AS subject_count,\n    COUNT(DISTINCT CASE WHEN contract_name IS NOT NULL AND contract_name != '\u2014' THEN contract_name END) AS contract_count,\n    COUNT(DISTINCT dept_name) AS dept_count\nFROM aux_balance\nWHERE 1=1\n  AND (:dept_filter IS NULL OR dept_name = :dept_filter)\n  AND (:search_text IS NULL OR subject_name LIKE '%' || :search_text || '%' OR subject_code LIKE '%' || :search_text || '%' OR contract_name LIKE '%' || :search_text || '%')",
+          "query": "SELECT\n    SUM(balance::NUMERIC) AS total_balance,\n    COUNT(DISTINCT subject_code) AS subject_count,\n    COUNT(DISTINCT CASE WHEN contract_name IS NOT NULL AND contract_name != '\u2014' THEN contract_name END) AS contract_count,\n    COUNT(DISTINCT dept_name) AS dept_count\nFROM ods_finance_aux_balance\nWHERE 1=1\n  AND (:dept_filter IS NULL OR dept_name = :dept_filter)\n  AND (:search_text IS NULL OR subject_name LIKE '%' || :search_text || '%' OR subject_code LIKE '%' || :search_text || '%' OR contract_name LIKE '%' || :search_text || '%')",
           "queryTimeoutSeconds": 30,
           "maxRows": 2000,
           "parameterBindings": [
@@ -415,7 +415,7 @@
         "type": "sql",
         "sqlConfig": {
           "databaseId": "{{DATABASE_ID}}",
-          "query": "SELECT\n    subject_code || ' ' || subject_name AS label,\n    SUM(balance) AS value\nFROM aux_balance\nWHERE 1=1\n  AND (:dept_filter IS NULL OR dept_name = :dept_filter)\n  AND (:search_text IS NULL OR subject_name LIKE '%' || :search_text || '%' OR subject_code LIKE '%' || :search_text || '%' OR contract_name LIKE '%' || :search_text || '%')\nGROUP BY subject_code, subject_name\nORDER BY value DESC\nLIMIT 10",
+          "query": "SELECT\n    subject_code || ' ' || subject_name AS label,\n    SUM(balance::NUMERIC) AS value\nFROM ods_finance_aux_balance\nWHERE 1=1\n  AND (:dept_filter IS NULL OR dept_name = :dept_filter)\n  AND (:search_text IS NULL OR subject_name LIKE '%' || :search_text || '%' OR subject_code LIKE '%' || :search_text || '%' OR contract_name LIKE '%' || :search_text || '%')\nGROUP BY subject_code, subject_name\nORDER BY value DESC\nLIMIT 10",
           "queryTimeoutSeconds": 30,
           "maxRows": 2000,
           "parameterBindings": [
@@ -451,7 +451,7 @@
         "type": "sql",
         "sqlConfig": {
           "databaseId": "{{DATABASE_ID}}",
-          "query": "SELECT\n    dept_name AS label,\n    SUM(balance) AS value\nFROM aux_balance\nWHERE 1=1\n  AND (:dept_filter IS NULL OR dept_name = :dept_filter)\n  AND (:search_text IS NULL OR subject_name LIKE '%' || :search_text || '%' OR subject_code LIKE '%' || :search_text || '%' OR contract_name LIKE '%' || :search_text || '%')\nGROUP BY dept_name\nORDER BY value DESC",
+          "query": "SELECT\n    dept_name AS label,\n    SUM(balance::NUMERIC) AS value\nFROM ods_finance_aux_balance\nWHERE 1=1\n  AND (:dept_filter IS NULL OR dept_name = :dept_filter)\n  AND (:search_text IS NULL OR subject_name LIKE '%' || :search_text || '%' OR subject_code LIKE '%' || :search_text || '%' OR contract_name LIKE '%' || :search_text || '%')\nGROUP BY dept_name\nORDER BY value DESC",
           "queryTimeoutSeconds": 30,
           "maxRows": 2000,
           "parameterBindings": [
@@ -486,7 +486,7 @@
         "type": "sql",
         "sqlConfig": {
           "databaseId": "{{DATABASE_ID}}",
-          "query": "SELECT\n    CASE\n        WHEN subject_code LIKE '5001%' THEN '\u539f\u6750\u6599/\u8bbe\u5907'\n        WHEN subject_code LIKE '5101%' THEN '\u5916\u534f/\u670d\u52a1'\n        WHEN subject_code LIKE '5201%' THEN '\u6298\u65e7'\n        WHEN subject_code LIKE '5301%' THEN '\u68c0\u6d4b\u8bd5\u9a8c'\n        WHEN subject_code LIKE '5401%' THEN '\u8bbe\u8ba1\u54a8\u8be2'\n        WHEN subject_code LIKE '5501%' THEN '\u79df\u8d41'\n        WHEN subject_code LIKE '5601%' THEN '\u57f9\u8bad'\n        ELSE '\u5176\u4ed6'\n    END AS label,\n    SUM(balance) AS value\nFROM aux_balance\nWHERE 1=1\n  AND (:dept_filter IS NULL OR dept_name = :dept_filter)\n  AND (:search_text IS NULL OR subject_name LIKE '%' || :search_text || '%' OR subject_code LIKE '%' || :search_text || '%' OR contract_name LIKE '%' || :search_text || '%')\nGROUP BY label\nORDER BY value DESC",
+          "query": "SELECT\n    CASE\n        WHEN subject_code LIKE '5001%' THEN '\u539f\u6750\u6599/\u8bbe\u5907'\n        WHEN subject_code LIKE '5101%' THEN '\u5916\u534f/\u670d\u52a1'\n        WHEN subject_code LIKE '5201%' THEN '\u6298\u65e7'\n        WHEN subject_code LIKE '5301%' THEN '\u68c0\u6d4b\u8bd5\u9a8c'\n        WHEN subject_code LIKE '5401%' THEN '\u8bbe\u8ba1\u54a8\u8be2'\n        WHEN subject_code LIKE '5501%' THEN '\u79df\u8d41'\n        WHEN subject_code LIKE '5601%' THEN '\u57f9\u8bad'\n        ELSE '\u5176\u4ed6'\n    END AS label,\n    SUM(balance::NUMERIC) AS value\nFROM ods_finance_aux_balance\nWHERE 1=1\n  AND (:dept_filter IS NULL OR dept_name = :dept_filter)\n  AND (:search_text IS NULL OR subject_name LIKE '%' || :search_text || '%' OR subject_code LIKE '%' || :search_text || '%' OR contract_name LIKE '%' || :search_text || '%')\nGROUP BY label\nORDER BY value DESC",
           "queryTimeoutSeconds": 30,
           "maxRows": 2000,
           "parameterBindings": [
@@ -586,7 +586,7 @@
         "type": "sql",
         "sqlConfig": {
           "databaseId": "{{DATABASE_ID}}",
-          "query": "SELECT\n    subject_code,\n    subject_name,\n    dept_name,\n    contract_name,\n    balance\nFROM aux_balance\nWHERE 1=1\n  AND (:dept_filter IS NULL OR dept_name = :dept_filter)\n  AND (:search_text IS NULL OR subject_name LIKE '%' || :search_text || '%' OR subject_code LIKE '%' || :search_text || '%' OR contract_name LIKE '%' || :search_text || '%')\nORDER BY subject_code, dept_name",
+          "query": "SELECT\n    subject_code,\n    subject_name,\n    dept_name,\n    contract_name,\n    balance::NUMERIC\nFROM ods_finance_aux_balance\nWHERE 1=1\n  AND (:dept_filter IS NULL OR dept_name = :dept_filter)\n  AND (:search_text IS NULL OR subject_name LIKE '%' || :search_text || '%' OR subject_code LIKE '%' || :search_text || '%' OR contract_name LIKE '%' || :search_text || '%')\nORDER BY subject_code, dept_name",
           "queryTimeoutSeconds": 30,
           "maxRows": 2000,
           "parameterBindings": [
@@ -634,7 +634,7 @@
         "type": "sql",
         "sqlConfig": {
           "databaseId": "{{DATABASE_ID}}",
-          "query": "SELECT\n    contract_name AS contract,\n    dept_name AS dept,\n    SUM(balance) AS balance\nFROM aux_balance\nWHERE 1=1\n  AND (:dept_filter IS NULL OR dept_name = :dept_filter)\n  AND (:search_text IS NULL OR subject_name LIKE '%' || :search_text || '%' OR subject_code LIKE '%' || :search_text || '%' OR contract_name LIKE '%' || :search_text || '%')\n  AND contract_name IS NOT NULL\n  AND contract_name != '\u2014'\nGROUP BY contract_name, dept_name\nORDER BY balance DESC\nLIMIT 8",
+          "query": "SELECT\n    contract_name AS contract,\n    dept_name AS dept,\n    SUM(balance::NUMERIC) AS balance\nFROM ods_finance_aux_balance\nWHERE 1=1\n  AND (:dept_filter IS NULL OR dept_name = :dept_filter)\n  AND (:search_text IS NULL OR subject_name LIKE '%' || :search_text || '%' OR subject_code LIKE '%' || :search_text || '%' OR contract_name LIKE '%' || :search_text || '%')\n  AND contract_name IS NOT NULL\n  AND contract_name != '\u2014'\nGROUP BY contract_name, dept_name\nORDER BY balance DESC\nLIMIT 8",
           "queryTimeoutSeconds": 30,
           "maxRows": 2000,
           "parameterBindings": [

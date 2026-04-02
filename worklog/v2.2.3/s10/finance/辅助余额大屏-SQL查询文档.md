@@ -7,15 +7,15 @@
 
 ## 数据表结构
 
-假设辅助余额表名为 `aux_balance`，字段定义如下：
+辅助余额表名为 `ods_finance_aux_balance`，通过 CSV 导入，所有字段均为 TEXT 类型。查询中对 `balance` 需显式转换 `::NUMERIC`。
 
 | 字段名 | 类型 | 说明 |
 |--------|------|------|
-| `subject_code` | VARCHAR | 科目编号，如 `5001.01` |
-| `subject_name` | VARCHAR | 科目名称，如 `原材料-钢材` |
-| `dept_name` | VARCHAR | 部门名称 |
-| `contract_name` | VARCHAR | 合同名称（无合同时为 `—`） |
-| `balance` | NUMERIC(15,2) | 余额（单位：元） |
+| `subject_code` | TEXT | 科目编号，如 `5001.01`（CSV 导入，原始为 TEXT） |
+| `subject_name` | TEXT | 科目名称，如 `原材料-钢材`（CSV 导入，原始为 TEXT） |
+| `dept_name` | TEXT | 部门名称（CSV 导入，原始为 TEXT） |
+| `contract_name` | TEXT | 合同名称（无合同时为 `—`）（CSV 导入，原始为 TEXT） |
+| `balance` | TEXT | 余额（单位：元），查询时需 `balance::NUMERIC` 转换（CSV 导入，原始为 TEXT） |
 
 ---
 
@@ -49,7 +49,7 @@ WHERE 1=1
 
 ```sql
 SELECT
-    SUM(balance)                                        AS total_balance,
+    SUM(balance::NUMERIC)                               AS total_balance,
     COUNT(DISTINCT subject_code)                        AS subject_count,
     COUNT(DISTINCT CASE
         WHEN contract_name IS NOT NULL
@@ -57,7 +57,7 @@ SELECT
         THEN contract_name
     END)                                                AS contract_count,
     COUNT(DISTINCT dept_name)                           AS dept_count
-FROM aux_balance
+FROM ods_finance_aux_balance
 {WHERE_CLAUSE};
 ```
 
@@ -79,8 +79,8 @@ FROM aux_balance
 ```sql
 SELECT
     subject_code || ' ' || subject_name   AS label,
-    SUM(balance)                          AS value
-FROM aux_balance
+    SUM(balance::NUMERIC)                 AS value
+FROM ods_finance_aux_balance
 {WHERE_CLAUSE}
 GROUP BY subject_code, subject_name
 ORDER BY value DESC
@@ -104,8 +104,8 @@ LIMIT 10;
 ```sql
 SELECT
     dept_name                   AS label,
-    SUM(balance)                AS value
-FROM aux_balance
+    SUM(balance::NUMERIC)       AS value
+FROM ods_finance_aux_balance
 {WHERE_CLAUSE}
 GROUP BY dept_name
 ORDER BY value DESC;
@@ -136,8 +136,8 @@ SELECT
         WHEN subject_code LIKE '5601%' THEN '培训'
         ELSE '其他'
     END                         AS label,
-    SUM(balance)                AS value
-FROM aux_balance
+    SUM(balance::NUMERIC)       AS value
+FROM ods_finance_aux_balance
 {WHERE_CLAUSE}
 GROUP BY label
 ORDER BY value DESC;
@@ -160,8 +160,8 @@ ORDER BY value DESC;
 
 SELECT
     COALESCE(sc.category_name, '其他')   AS label,
-    SUM(ab.balance)                       AS value
-FROM aux_balance ab
+    SUM(ab.balance::NUMERIC)              AS value
+FROM ods_finance_aux_balance ab
 LEFT JOIN dim_subject_category sc
     ON ab.subject_code LIKE sc.subject_code_prefix || '%'
 {WHERE_CLAUSE}
@@ -193,8 +193,8 @@ SELECT
     subject_name,
     dept_name,
     contract_name,
-    balance
-FROM aux_balance
+    balance::NUMERIC
+FROM ods_finance_aux_balance
 {WHERE_CLAUSE}
 ORDER BY subject_code, dept_name;
 ```
@@ -204,8 +204,8 @@ ORDER BY subject_code, dept_name;
 ```sql
 -- 表尾合计行（与明细查询共享同一 WHERE 条件）
 SELECT
-    SUM(balance) AS total_balance
-FROM aux_balance
+    SUM(balance::NUMERIC) AS total_balance
+FROM ods_finance_aux_balance
 {WHERE_CLAUSE};
 ```
 
@@ -229,8 +229,8 @@ FROM aux_balance
 SELECT
     contract_name               AS contract,
     dept_name                   AS dept,
-    SUM(balance)                AS balance
-FROM aux_balance
+    SUM(balance::NUMERIC)       AS balance
+FROM ods_finance_aux_balance
 {WHERE_CLAUSE}
   AND contract_name IS NOT NULL
   AND contract_name != '—'
@@ -254,11 +254,11 @@ LIMIT 8;
 
 ```sql
 -- 基础查询索引
-CREATE INDEX idx_aux_balance_dept    ON aux_balance(dept_name);
-CREATE INDEX idx_aux_balance_code    ON aux_balance(subject_code);
+CREATE INDEX idx_aux_balance_dept    ON ods_finance_aux_balance(dept_name);
+CREATE INDEX idx_aux_balance_code    ON ods_finance_aux_balance(subject_code);
 
 -- 搜索功能索引（如果使用 PostgreSQL 的 pg_trgm 扩展）
-CREATE INDEX idx_aux_balance_search  ON aux_balance
+CREATE INDEX idx_aux_balance_search  ON ods_finance_aux_balance
   USING gin (subject_name gin_trgm_ops);
 ```
 
@@ -268,14 +268,14 @@ CREATE INDEX idx_aux_balance_search  ON aux_balance
 
 ```sql
 WITH filtered AS (
-    SELECT *
-    FROM aux_balance
+    SELECT *, balance::NUMERIC AS balance_num
+    FROM ods_finance_aux_balance
     {WHERE_CLAUSE}
 ),
 -- KPI 指标
 kpi AS (
     SELECT
-        SUM(balance)                   AS total_balance,
+        SUM(balance_num)               AS total_balance,
         COUNT(DISTINCT subject_code)   AS subject_count,
         COUNT(DISTINCT CASE
             WHEN contract_name IS NOT NULL AND contract_name != '—'
@@ -285,7 +285,7 @@ kpi AS (
 ),
 -- 按科目 TOP 10
 by_subject AS (
-    SELECT subject_code || ' ' || subject_name AS label, SUM(balance) AS value
+    SELECT subject_code || ' ' || subject_name AS label, SUM(balance_num) AS value
     FROM filtered
     GROUP BY subject_code, subject_name
     ORDER BY value DESC
@@ -293,7 +293,7 @@ by_subject AS (
 ),
 -- 按部门分布
 by_dept AS (
-    SELECT dept_name AS label, SUM(balance) AS value
+    SELECT dept_name AS label, SUM(balance_num) AS value
     FROM filtered
     GROUP BY dept_name
     ORDER BY value DESC
@@ -311,7 +311,7 @@ by_category AS (
             WHEN subject_code LIKE '5601%' THEN '培训'
             ELSE '其他'
         END AS label,
-        SUM(balance) AS value
+        SUM(balance_num) AS value
     FROM filtered
     GROUP BY label
     ORDER BY value DESC
@@ -321,7 +321,7 @@ top_contracts AS (
     SELECT
         contract_name AS contract,
         dept_name     AS dept,
-        SUM(balance)  AS balance
+        SUM(balance_num)  AS balance
     FROM filtered
     WHERE contract_name IS NOT NULL AND contract_name != '—'
     GROUP BY contract_name, dept_name

@@ -7,7 +7,7 @@
 
 ## 数据表结构
 
-项目经费表名为 `project_fund`，字段定义如下：
+项目经费表名为 `ods_finance_project_fund`，字段定义如下：
 
 | 字段名 | 类型 | 说明 |
 |--------|------|------|
@@ -22,6 +22,8 @@
 > **注意**：与旧版相比，新表没有项目名称、部门、项目经理、起止日期、直接成本支出金额字段。
 > `预留间接费用和收益` 和 `直接成本执行率` 现在是原始字段（旧版为派生字段）。
 > `直接成本支出金额` 需通过 `直接成本控制数 × 直接成本执行率 / 100` 反推。
+>
+> **CSV 导入注意**：通过 CSV 上传导入时，所有列均为 TEXT 类型，数值列需在查询中添加 `::NUMERIC` 显式转型。
 
 ---
 
@@ -35,38 +37,38 @@ SELECT
     project_id,
     cycle,
 
-    -- 原始字段
-    total_fund,
-    direct_ctrl,
-    reserve_indirect,
-    direct_rate,
-    indirect_spent,
+    -- 原始字段（CSV 导入为 TEXT，需显式转型）
+    total_fund::NUMERIC       AS total_fund,
+    direct_ctrl::NUMERIC      AS direct_ctrl,
+    reserve_indirect::NUMERIC AS reserve_indirect,
+    direct_rate::NUMERIC      AS direct_rate,
+    indirect_spent::NUMERIC   AS indirect_spent,
 
     -- ═══ 派生字段 ═══
 
     -- 直接成本支出 = 直接成本控制数 × 直接成本执行率 / 100
-    ROUND(direct_ctrl * direct_rate / 100, 2)
+    ROUND(direct_ctrl::NUMERIC * direct_rate::NUMERIC / 100, 2)
         AS direct_spent,
 
     -- 总支出 = 直接成本支出 + 间接费用支出
-    ROUND(direct_ctrl * direct_rate / 100, 2) + indirect_spent
+    ROUND(direct_ctrl::NUMERIC * direct_rate::NUMERIC / 100, 2) + indirect_spent::NUMERIC
         AS total_spent,
 
     -- 总经费执行率(%) = 总支出 / 总经费 × 100
-    CASE WHEN total_fund > 0
+    CASE WHEN total_fund::NUMERIC > 0
          THEN ROUND(
-             (ROUND(direct_ctrl * direct_rate / 100, 2) + indirect_spent)
-             * 100.0 / total_fund, 1)
+             (ROUND(direct_ctrl::NUMERIC * direct_rate::NUMERIC / 100, 2) + indirect_spent::NUMERIC)
+             * 100.0 / total_fund::NUMERIC, 1)
          ELSE 0 END
         AS total_rate,
 
     -- 间接费用执行率(%) = 间接费用支出 / 预留间接费用 × 100
-    CASE WHEN reserve_indirect > 0
-         THEN ROUND(indirect_spent * 100.0 / reserve_indirect, 1)
+    CASE WHEN reserve_indirect::NUMERIC > 0
+         THEN ROUND(indirect_spent::NUMERIC * 100.0 / reserve_indirect::NUMERIC, 1)
          ELSE 0 END
         AS indirect_rate
 
-FROM project_fund;
+FROM ods_finance_project_fund;
 ```
 
 ### 派生字段汇总表

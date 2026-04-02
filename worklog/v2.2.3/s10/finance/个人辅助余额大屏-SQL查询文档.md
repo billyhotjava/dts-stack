@@ -7,15 +7,15 @@
 
 ## 数据表结构
 
-假设个人辅助余额表名为 `aux_balance_personal`，字段定义如下：
+个人辅助余额表名为 `ods_finance_aux_balance_personal`（通过 CSV 导入），字段定义如下：
 
 | 字段名 | 类型 | 说明 |
 |--------|------|------|
-| `subject_code` | VARCHAR | 科目编号，如 `1122.01`、`2211.01` |
-| `subject_name` | VARCHAR | 科目名称，如 `备用金`、`工资应付` |
-| `employee_dept` | VARCHAR | 职工部门 |
-| `employee_name` | VARCHAR | 职工名称 |
-| `balance` | NUMERIC(15,2) | 余额（单位：元）。正数=借方余额（应收/借款），负数=贷方余额（应付/代扣） |
+| `subject_code` | TEXT | 科目编号，如 `1122.01`、`2211.01` |
+| `subject_name` | TEXT | 科目名称，如 `备用金`、`工资应付` |
+| `employee_dept` | TEXT | 职工部门 |
+| `employee_name` | TEXT | 职工名称 |
+| `balance` | TEXT | 余额（单位：元），CSV 导入为 TEXT 类型，查询时需 `balance::NUMERIC` 转换。正数=借方余额（应收/借款），负数=贷方余额（应付/代扣） |
 
 ### 借贷方向说明
 
@@ -49,20 +49,20 @@ WHERE 1=1
 ```sql
 SELECT
     -- 净余额 = 借方 - 贷方（即全部 balance 之和）
-    SUM(balance)                                            AS net_balance,
+    SUM(balance::NUMERIC)                                            AS net_balance,
 
     -- 借方合计（正数余额之和，代表应收/借款）
-    SUM(CASE WHEN balance > 0 THEN balance ELSE 0 END)     AS debit_total,
+    SUM(CASE WHEN balance::NUMERIC > 0 THEN balance::NUMERIC ELSE 0 END)     AS debit_total,
 
     -- 贷方合计（负数余额的绝对值之和，代表应付/代扣）
-    SUM(CASE WHEN balance < 0 THEN ABS(balance) ELSE 0 END) AS credit_total,
+    SUM(CASE WHEN balance::NUMERIC < 0 THEN ABS(balance::NUMERIC) ELSE 0 END) AS credit_total,
 
     -- 涉及职工数
     COUNT(DISTINCT employee_name)                           AS employee_count,
 
     -- 科目数量
     COUNT(DISTINCT subject_code)                            AS subject_count
-FROM aux_balance_personal
+FROM ods_finance_aux_balance_personal
 {WHERE_CLAUSE};
 ```
 
@@ -85,8 +85,8 @@ FROM aux_balance_personal
 ```sql
 SELECT
     employee_name              AS label,
-    SUM(balance)               AS value
-FROM aux_balance_personal
+    SUM(balance::NUMERIC)      AS value
+FROM ods_finance_aux_balance_personal
 {WHERE_CLAUSE}
 GROUP BY employee_name
 ORDER BY value DESC;
@@ -107,8 +107,8 @@ ORDER BY value DESC;
 ```sql
 SELECT
     employee_dept              AS label,
-    SUM(ABS(balance))          AS value
-FROM aux_balance_personal
+    SUM(ABS(balance::NUMERIC)) AS value
+FROM ods_finance_aux_balance_personal
 {WHERE_CLAUSE}
 GROUP BY employee_dept
 ORDER BY value DESC;
@@ -132,8 +132,8 @@ SELECT
         WHEN subject_code LIKE '2211%' THEN '应付职工薪酬'
         ELSE '其他'
     END                        AS label,
-    SUM(ABS(balance))          AS value
-FROM aux_balance_personal
+    SUM(ABS(balance::NUMERIC)) AS value
+FROM ods_finance_aux_balance_personal
 {WHERE_CLAUSE}
 GROUP BY label
 ORDER BY value DESC;
@@ -158,8 +158,8 @@ SELECT
     subject_name,
     employee_dept,
     employee_name,
-    balance
-FROM aux_balance_personal
+    balance::NUMERIC
+FROM ods_finance_aux_balance_personal
 {WHERE_CLAUSE}
 ORDER BY employee_name, subject_code;
 ```
@@ -167,8 +167,8 @@ ORDER BY employee_name, subject_code;
 ### 5.2 合计行
 
 ```sql
-SELECT SUM(balance) AS total_balance
-FROM aux_balance_personal
+SELECT SUM(balance::NUMERIC) AS total_balance
+FROM ods_finance_aux_balance_personal
 {WHERE_CLAUSE};
 ```
 
@@ -191,11 +191,11 @@ FROM aux_balance_personal
 SELECT
     employee_name              AS label,
     employee_dept,
-    SUM(balance)               AS value
-FROM aux_balance_personal
+    SUM(balance::NUMERIC)      AS value
+FROM ods_finance_aux_balance_personal
 {WHERE_CLAUSE}
 GROUP BY employee_name, employee_dept
-HAVING SUM(balance) > 0          -- 仅取借方净余额为正的职工
+HAVING SUM(balance::NUMERIC) > 0          -- 仅取借方净余额为正的职工
 ORDER BY value DESC
 LIMIT 8;
 ```
@@ -212,7 +212,9 @@ LIMIT 8;
 
 ```sql
 WITH filtered AS (
-    SELECT * FROM aux_balance_personal
+    SELECT subject_code, subject_name, employee_dept, employee_name,
+           balance::NUMERIC AS balance
+    FROM ods_finance_aux_balance_personal
     {WHERE_CLAUSE}
 ),
 kpi AS (

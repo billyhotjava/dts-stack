@@ -4,15 +4,15 @@
 -- 辅助余额 DWD 层：根据科目编号前缀添加费用类别字段
 -- 输入：fin_ods.ods_finance_aux_balance（原始辅助余额表）
 -- 输出：含费用分类标签的辅助余额明细
+-- 注意：CSV 导入后 balance 为 TEXT，此处转型为 NUMERIC
 -- ============================================================
 
 SELECT
-    -- === 原始字段 ===
     subject_code,
     subject_name,
     dept_name,
     contract_name,
-    balance,
+    balance::NUMERIC(15,2) AS balance,
 
     -- === 派生字段：根据科目编号前缀推导费用类别 ===
     CASE

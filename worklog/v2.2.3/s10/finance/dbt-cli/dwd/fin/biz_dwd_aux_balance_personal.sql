@@ -4,26 +4,25 @@
 -- 个人辅助余额 DWD 层：添加借贷方向和科目类别
 -- 输入：fin_ods.ods_finance_aux_balance_personal（原始个人辅助余额表）
 -- 输出：含借贷方向标签和科目分类的个人辅助余额明细
+-- 注意：CSV 导入后 balance 为 TEXT，此处转型为 NUMERIC
 -- ============================================================
 
 SELECT
-    -- === 原始字段 ===
     subject_code,
     subject_name,
     employee_dept,
     employee_name,
-    balance,
+    balance::NUMERIC(15,2) AS balance,
 
     -- === 派生字段：借贷方向 ===
-    -- 正数 = 借方（应收/借款），负数 = 贷方（应付/代扣）
     CASE
-        WHEN balance > 0 THEN 'debit'
-        WHEN balance < 0 THEN 'credit'
+        WHEN balance::NUMERIC > 0 THEN 'debit'
+        WHEN balance::NUMERIC < 0 THEN 'credit'
         ELSE 'zero'
     END AS balance_direction,
 
     -- === 派生字段：余额绝对值（方便下游汇总） ===
-    ABS(balance) AS abs_balance,
+    ABS(balance::NUMERIC(15,2)) AS abs_balance,
 
     -- === 派生字段：科目类别 ===
     CASE

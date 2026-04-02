@@ -150,7 +150,7 @@
         "type": "sql",
         "sqlConfig": {
           "databaseId": "{{DATABASE_ID}}",
-          "query": "WITH base AS (\n  SELECT *,\n    ROUND(direct_ctrl * direct_rate / 100, 2) AS direct_spent,\n    ROUND(direct_ctrl * direct_rate / 100, 2) + indirect_spent AS total_spent,\n    ROUND((ROUND(direct_ctrl * direct_rate / 100, 2) + indirect_spent) * 100.0 / NULLIF(total_fund, 0), 1) AS total_rate\n  FROM project_fund\n)\nSELECT\n  SUM(total_fund) AS sum_total_fund\nFROM base",
+          "query": "WITH base AS (\n  SELECT project_id, cycle,\n    total_fund::NUMERIC AS total_fund,\n    direct_ctrl::NUMERIC AS direct_ctrl,\n    reserve_indirect::NUMERIC AS reserve_indirect,\n    direct_rate::NUMERIC AS direct_rate,\n    indirect_spent::NUMERIC AS indirect_spent,\n    ROUND(direct_ctrl::NUMERIC * direct_rate::NUMERIC / 100, 2) AS direct_spent,\n    ROUND(direct_ctrl::NUMERIC * direct_rate::NUMERIC / 100, 2) + indirect_spent::NUMERIC AS total_spent,\n    ROUND((ROUND(direct_ctrl::NUMERIC * direct_rate::NUMERIC / 100, 2) + indirect_spent::NUMERIC) * 100.0 / NULLIF(total_fund::NUMERIC, 0), 1) AS total_rate\n  FROM ods_finance_project_fund\n)\nSELECT\n  SUM(total_fund) AS sum_total_fund\nFROM base",
           "queryTimeoutSeconds": 30,
           "maxRows": 2000
         }
@@ -182,7 +182,7 @@
         "type": "sql",
         "sqlConfig": {
           "databaseId": "{{DATABASE_ID}}",
-          "query": "WITH base AS (\n  SELECT *,\n    ROUND(direct_ctrl * direct_rate / 100, 2) AS direct_spent,\n    ROUND(direct_ctrl * direct_rate / 100, 2) + indirect_spent AS total_spent,\n    ROUND((ROUND(direct_ctrl * direct_rate / 100, 2) + indirect_spent) * 100.0 / NULLIF(total_fund, 0), 1) AS total_rate\n  FROM project_fund\n)\nSELECT\n  SUM(direct_ctrl) AS sum_direct_ctrl\nFROM base",
+          "query": "WITH base AS (\n  SELECT project_id, cycle,\n    total_fund::NUMERIC AS total_fund,\n    direct_ctrl::NUMERIC AS direct_ctrl,\n    reserve_indirect::NUMERIC AS reserve_indirect,\n    direct_rate::NUMERIC AS direct_rate,\n    indirect_spent::NUMERIC AS indirect_spent,\n    ROUND(direct_ctrl::NUMERIC * direct_rate::NUMERIC / 100, 2) AS direct_spent,\n    ROUND(direct_ctrl::NUMERIC * direct_rate::NUMERIC / 100, 2) + indirect_spent::NUMERIC AS total_spent,\n    ROUND((ROUND(direct_ctrl::NUMERIC * direct_rate::NUMERIC / 100, 2) + indirect_spent::NUMERIC) * 100.0 / NULLIF(total_fund::NUMERIC, 0), 1) AS total_rate\n  FROM ods_finance_project_fund\n)\nSELECT\n  SUM(direct_ctrl) AS sum_direct_ctrl\nFROM base",
           "queryTimeoutSeconds": 30,
           "maxRows": 2000
         }
@@ -214,7 +214,7 @@
         "type": "sql",
         "sqlConfig": {
           "databaseId": "{{DATABASE_ID}}",
-          "query": "WITH base AS (\n  SELECT *,\n    ROUND(direct_ctrl * direct_rate / 100, 2) AS direct_spent,\n    ROUND(direct_ctrl * direct_rate / 100, 2) + indirect_spent AS total_spent,\n    ROUND((ROUND(direct_ctrl * direct_rate / 100, 2) + indirect_spent) * 100.0 / NULLIF(total_fund, 0), 1) AS total_rate\n  FROM project_fund\n)\nSELECT\n  SUM(direct_spent) AS sum_direct_spent\nFROM base",
+          "query": "WITH base AS (\n  SELECT project_id, cycle,\n    total_fund::NUMERIC AS total_fund,\n    direct_ctrl::NUMERIC AS direct_ctrl,\n    reserve_indirect::NUMERIC AS reserve_indirect,\n    direct_rate::NUMERIC AS direct_rate,\n    indirect_spent::NUMERIC AS indirect_spent,\n    ROUND(direct_ctrl::NUMERIC * direct_rate::NUMERIC / 100, 2) AS direct_spent,\n    ROUND(direct_ctrl::NUMERIC * direct_rate::NUMERIC / 100, 2) + indirect_spent::NUMERIC AS total_spent,\n    ROUND((ROUND(direct_ctrl::NUMERIC * direct_rate::NUMERIC / 100, 2) + indirect_spent::NUMERIC) * 100.0 / NULLIF(total_fund::NUMERIC, 0), 1) AS total_rate\n  FROM ods_finance_project_fund\n)\nSELECT\n  SUM(direct_spent) AS sum_direct_spent\nFROM base",
           "queryTimeoutSeconds": 30,
           "maxRows": 2000
         }
@@ -246,7 +246,7 @@
         "type": "sql",
         "sqlConfig": {
           "databaseId": "{{DATABASE_ID}}",
-          "query": "WITH base AS (\n  SELECT *,\n    ROUND(direct_ctrl * direct_rate / 100, 2) AS direct_spent,\n    ROUND(direct_ctrl * direct_rate / 100, 2) + indirect_spent AS total_spent,\n    ROUND((ROUND(direct_ctrl * direct_rate / 100, 2) + indirect_spent) * 100.0 / NULLIF(total_fund, 0), 1) AS total_rate\n  FROM project_fund\n)\nSELECT\n  ROUND(SUM(direct_spent) * 100.0 / NULLIF(SUM(direct_ctrl), 0), 1) AS overall_direct_rate\nFROM base",
+          "query": "WITH base AS (\n  SELECT project_id, cycle,\n    total_fund::NUMERIC AS total_fund,\n    direct_ctrl::NUMERIC AS direct_ctrl,\n    reserve_indirect::NUMERIC AS reserve_indirect,\n    direct_rate::NUMERIC AS direct_rate,\n    indirect_spent::NUMERIC AS indirect_spent,\n    ROUND(direct_ctrl::NUMERIC * direct_rate::NUMERIC / 100, 2) AS direct_spent,\n    ROUND(direct_ctrl::NUMERIC * direct_rate::NUMERIC / 100, 2) + indirect_spent::NUMERIC AS total_spent,\n    ROUND((ROUND(direct_ctrl::NUMERIC * direct_rate::NUMERIC / 100, 2) + indirect_spent::NUMERIC) * 100.0 / NULLIF(total_fund::NUMERIC, 0), 1) AS total_rate\n  FROM ods_finance_project_fund\n)\nSELECT\n  ROUND(SUM(direct_spent) * 100.0 / NULLIF(SUM(direct_ctrl), 0), 1) AS overall_direct_rate\nFROM base",
           "queryTimeoutSeconds": 30,
           "maxRows": 2000
         }
@@ -278,7 +278,7 @@
         "type": "sql",
         "sqlConfig": {
           "databaseId": "{{DATABASE_ID}}",
-          "query": "WITH base AS (\n  SELECT *,\n    ROUND(direct_ctrl * direct_rate / 100, 2) AS direct_spent,\n    ROUND(direct_ctrl * direct_rate / 100, 2) + indirect_spent AS total_spent,\n    ROUND((ROUND(direct_ctrl * direct_rate / 100, 2) + indirect_spent) * 100.0 / NULLIF(total_fund, 0), 1) AS total_rate\n  FROM project_fund\n)\nSELECT\n  ROUND(SUM(total_spent) * 100.0 / NULLIF(SUM(total_fund), 0), 1) AS overall_total_rate\nFROM base",
+          "query": "WITH base AS (\n  SELECT project_id, cycle,\n    total_fund::NUMERIC AS total_fund,\n    direct_ctrl::NUMERIC AS direct_ctrl,\n    reserve_indirect::NUMERIC AS reserve_indirect,\n    direct_rate::NUMERIC AS direct_rate,\n    indirect_spent::NUMERIC AS indirect_spent,\n    ROUND(direct_ctrl::NUMERIC * direct_rate::NUMERIC / 100, 2) AS direct_spent,\n    ROUND(direct_ctrl::NUMERIC * direct_rate::NUMERIC / 100, 2) + indirect_spent::NUMERIC AS total_spent,\n    ROUND((ROUND(direct_ctrl::NUMERIC * direct_rate::NUMERIC / 100, 2) + indirect_spent::NUMERIC) * 100.0 / NULLIF(total_fund::NUMERIC, 0), 1) AS total_rate\n  FROM ods_finance_project_fund\n)\nSELECT\n  ROUND(SUM(total_spent) * 100.0 / NULLIF(SUM(total_fund), 0), 1) AS overall_total_rate\nFROM base",
           "queryTimeoutSeconds": 30,
           "maxRows": 2000
         }
@@ -324,7 +324,7 @@
         "type": "sql",
         "sqlConfig": {
           "databaseId": "{{DATABASE_ID}}",
-          "query": "WITH base AS (\n  SELECT *,\n    ROUND(direct_ctrl * direct_rate / 100, 2) AS direct_spent,\n    ROUND(direct_ctrl * direct_rate / 100, 2) + indirect_spent AS total_spent,\n    ROUND((ROUND(direct_ctrl * direct_rate / 100, 2) + indirect_spent) * 100.0 / NULLIF(total_fund, 0), 1) AS total_rate\n  FROM project_fund\n)\nSELECT\n  project_id,\n  direct_spent,\n  indirect_spent,\n  GREATEST(total_fund - direct_spent - indirect_spent, 0) AS remaining\nFROM base\nORDER BY total_fund DESC",
+          "query": "WITH base AS (\n  SELECT project_id, cycle,\n    total_fund::NUMERIC AS total_fund,\n    direct_ctrl::NUMERIC AS direct_ctrl,\n    reserve_indirect::NUMERIC AS reserve_indirect,\n    direct_rate::NUMERIC AS direct_rate,\n    indirect_spent::NUMERIC AS indirect_spent,\n    ROUND(direct_ctrl::NUMERIC * direct_rate::NUMERIC / 100, 2) AS direct_spent,\n    ROUND(direct_ctrl::NUMERIC * direct_rate::NUMERIC / 100, 2) + indirect_spent::NUMERIC AS total_spent,\n    ROUND((ROUND(direct_ctrl::NUMERIC * direct_rate::NUMERIC / 100, 2) + indirect_spent::NUMERIC) * 100.0 / NULLIF(total_fund::NUMERIC, 0), 1) AS total_rate\n  FROM ods_finance_project_fund\n)\nSELECT\n  project_id,\n  direct_spent,\n  indirect_spent,\n  GREATEST(total_fund - direct_spent - indirect_spent, 0) AS remaining\nFROM base\nORDER BY total_fund DESC",
           "queryTimeoutSeconds": 30,
           "maxRows": 2000
         }
@@ -357,7 +357,7 @@
         "type": "sql",
         "sqlConfig": {
           "databaseId": "{{DATABASE_ID}}",
-          "query": "WITH base AS (\n  SELECT *,\n    ROUND(direct_ctrl * direct_rate / 100, 2) AS direct_spent,\n    ROUND(direct_ctrl * direct_rate / 100, 2) + indirect_spent AS total_spent\n  FROM project_fund\n)\nSELECT\n  ROUND(SUM(direct_spent) * 100.0 / NULLIF(SUM(direct_ctrl), 0), 1) AS overall_direct_rate\nFROM base",
+          "query": "WITH base AS (\n  SELECT project_id, cycle,\n    total_fund::NUMERIC AS total_fund,\n    direct_ctrl::NUMERIC AS direct_ctrl,\n    reserve_indirect::NUMERIC AS reserve_indirect,\n    direct_rate::NUMERIC AS direct_rate,\n    indirect_spent::NUMERIC AS indirect_spent,\n    ROUND(direct_ctrl::NUMERIC * direct_rate::NUMERIC / 100, 2) AS direct_spent,\n    ROUND(direct_ctrl::NUMERIC * direct_rate::NUMERIC / 100, 2) + indirect_spent::NUMERIC AS total_spent\n  FROM ods_finance_project_fund\n)\nSELECT\n  ROUND(SUM(direct_spent) * 100.0 / NULLIF(SUM(direct_ctrl), 0), 1) AS overall_direct_rate\nFROM base",
           "queryTimeoutSeconds": 30,
           "maxRows": 2000
         }
@@ -389,7 +389,7 @@
         "type": "sql",
         "sqlConfig": {
           "databaseId": "{{DATABASE_ID}}",
-          "query": "WITH base AS (\n  SELECT *,\n    ROUND(direct_ctrl * direct_rate / 100, 2) AS direct_spent,\n    ROUND(direct_ctrl * direct_rate / 100, 2) + indirect_spent AS total_spent\n  FROM project_fund\n)\nSELECT\n  ROUND(SUM(total_spent) * 100.0 / NULLIF(SUM(total_fund), 0), 1) AS overall_total_rate\nFROM base",
+          "query": "WITH base AS (\n  SELECT project_id, cycle,\n    total_fund::NUMERIC AS total_fund,\n    direct_ctrl::NUMERIC AS direct_ctrl,\n    reserve_indirect::NUMERIC AS reserve_indirect,\n    direct_rate::NUMERIC AS direct_rate,\n    indirect_spent::NUMERIC AS indirect_spent,\n    ROUND(direct_ctrl::NUMERIC * direct_rate::NUMERIC / 100, 2) AS direct_spent,\n    ROUND(direct_ctrl::NUMERIC * direct_rate::NUMERIC / 100, 2) + indirect_spent::NUMERIC AS total_spent\n  FROM ods_finance_project_fund\n)\nSELECT\n  ROUND(SUM(total_spent) * 100.0 / NULLIF(SUM(total_fund), 0), 1) AS overall_total_rate\nFROM base",
           "queryTimeoutSeconds": 30,
           "maxRows": 2000
         }
@@ -458,7 +458,7 @@
         "type": "sql",
         "sqlConfig": {
           "databaseId": "{{DATABASE_ID}}",
-          "query": "WITH base AS (\n  SELECT *,\n    ROUND(direct_ctrl * direct_rate / 100, 2) AS direct_spent,\n    ROUND(direct_ctrl * direct_rate / 100, 2) + indirect_spent AS total_spent,\n    ROUND((ROUND(direct_ctrl * direct_rate / 100, 2) + indirect_spent) * 100.0 / NULLIF(total_fund, 0), 1) AS total_rate\n  FROM project_fund\n)\nSELECT\n  project_id AS \"项目编号\",\n  cycle AS \"研制周期\",\n  total_fund AS \"总经费(万)\",\n  direct_ctrl AS \"直接成本控制数(万)\",\n  reserve_indirect AS \"预留间接费用和收益(万)\",\n  direct_rate AS \"直接成本执行率(%)\",\n  indirect_spent AS \"间接费用支出和收益总额(万)\",\n  total_spent AS \"总支出(万)\",\n  total_rate AS \"总执行率(%)\"\nFROM base\nORDER BY project_id",
+          "query": "WITH base AS (\n  SELECT project_id, cycle,\n    total_fund::NUMERIC AS total_fund,\n    direct_ctrl::NUMERIC AS direct_ctrl,\n    reserve_indirect::NUMERIC AS reserve_indirect,\n    direct_rate::NUMERIC AS direct_rate,\n    indirect_spent::NUMERIC AS indirect_spent,\n    ROUND(direct_ctrl::NUMERIC * direct_rate::NUMERIC / 100, 2) AS direct_spent,\n    ROUND(direct_ctrl::NUMERIC * direct_rate::NUMERIC / 100, 2) + indirect_spent::NUMERIC AS total_spent,\n    ROUND((ROUND(direct_ctrl::NUMERIC * direct_rate::NUMERIC / 100, 2) + indirect_spent::NUMERIC) * 100.0 / NULLIF(total_fund::NUMERIC, 0), 1) AS total_rate\n  FROM ods_finance_project_fund\n)\nSELECT\n  project_id AS \"项目编号\",\n  cycle AS \"研制周期\",\n  total_fund AS \"总经费(万)\",\n  direct_ctrl AS \"直接成本控制数(万)\",\n  reserve_indirect AS \"预留间接费用和收益(万)\",\n  direct_rate AS \"直接成本执行率(%)\",\n  indirect_spent AS \"间接费用支出和收益总额(万)\",\n  total_spent AS \"总支出(万)\",\n  total_rate AS \"总执行率(%)\"\nFROM base\nORDER BY project_id",
           "queryTimeoutSeconds": 30,
           "maxRows": 2000
         }

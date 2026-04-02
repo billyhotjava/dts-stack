@@ -1,13 +1,14 @@
 -- biz_dwd_aux_balance.sql
 -- DWD层：辅助余额明细，根据科目编号前缀添加费用类别(expense_category)
 -- 源表: public.ods_finance_aux_balance
+-- 注意: CSV导入后所有列为TEXT，此处对balance转型为NUMERIC
 
 SELECT
     subject_code,
     subject_name,
     dept_name,
     contract_name,
-    balance,
+    balance::NUMERIC(15,2) AS balance,
     CASE
         WHEN subject_code LIKE '5001%' THEN '原材料/设备'
         WHEN subject_code LIKE '5101%' THEN '外协/服务'

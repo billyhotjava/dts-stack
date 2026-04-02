@@ -7,18 +7,21 @@
 
 ## 数据表结构
 
-自有资金表名为 `own_fund`，字段定义如下：
+自有资金表名为 `ods_finance_own_fund`，字段定义如下：
 
-| 字段名 | 类型 | 说明 |
-|--------|------|------|
-| `year_period` | VARCHAR | 年度期间，如 `2026年初`、`2026年预计增加`、`2026年预计使用`、`2026年余额` |
-| `career_fund` | NUMERIC(15,2) | 事业基金（万元） |
-| `career_note` | VARCHAR | 事业基金备注 |
-| `deprec_fund` | NUMERIC(15,2) | 折旧基金（万元） |
-| `deprec_note` | VARCHAR | 折旧基金备注 |
-| `welfare_fund` | NUMERIC(15,2) | 职工福利基金（万元） |
-| `safety_fund` | NUMERIC(15,2) | 安全生产基金（万元） |
-| `total` | NUMERIC(15,2) | 合计（四类基金之和，万元） |
+> **注意**：该表由 CSV 文件导入（dbt-web-upload），所有列的数据库类型均为 **TEXT**。
+> 查询中需要对数值列显式添加 `::NUMERIC` 类型转换。
+
+| 字段名 | 数据库类型 | 逻辑类型 | 说明 |
+|--------|-----------|---------|------|
+| `year_period` | TEXT | VARCHAR | 年度期间，如 `2026年初`、`2026年预计增加`、`2026年预计使用`、`2026年余额` |
+| `career_fund` | TEXT | NUMERIC(15,2) | 事业基金（万元），查询时需 `::NUMERIC` |
+| `career_note` | TEXT | VARCHAR | 事业基金备注 |
+| `deprec_fund` | TEXT | NUMERIC(15,2) | 折旧基金（万元），查询时需 `::NUMERIC` |
+| `deprec_note` | TEXT | VARCHAR | 折旧基金备注 |
+| `welfare_fund` | TEXT | NUMERIC(15,2) | 职工福利基金（万元），查询时需 `::NUMERIC` |
+| `safety_fund` | TEXT | NUMERIC(15,2) | 安全生产基金（万元），查询时需 `::NUMERIC` |
+| `total` | TEXT | NUMERIC(15,2) | 合计（四类基金之和，万元），查询时需 `::NUMERIC` |
 
 ### CSV 列映射
 
@@ -68,7 +71,14 @@ END AS period_type
 ```sql
 WITH parsed AS (
     SELECT
-        *,
+        year_period,
+        career_fund::NUMERIC  AS career_fund,
+        career_note,
+        deprec_fund::NUMERIC  AS deprec_fund,
+        deprec_note,
+        welfare_fund::NUMERIC AS welfare_fund,
+        safety_fund::NUMERIC  AS safety_fund,
+        total::NUMERIC        AS total,
         SUBSTRING(year_period FROM '^\d{4}')::INT AS period_year,
         CASE
             WHEN year_period LIKE '%年初'     THEN 'opening'
@@ -76,7 +86,7 @@ WITH parsed AS (
             WHEN year_period LIKE '%预计使用' THEN 'usage'
             WHEN year_period LIKE '%余额'     THEN 'balance'
         END AS period_type
-    FROM own_fund
+    FROM ods_finance_own_fund
 )
 ```
 
@@ -90,7 +100,14 @@ WITH parsed AS (
 -- 获取指定年度的四行数据
 WITH parsed AS (
     SELECT
-        *,
+        year_period,
+        career_fund::NUMERIC  AS career_fund,
+        career_note,
+        deprec_fund::NUMERIC  AS deprec_fund,
+        deprec_note,
+        welfare_fund::NUMERIC AS welfare_fund,
+        safety_fund::NUMERIC  AS safety_fund,
+        total::NUMERIC        AS total,
         SUBSTRING(year_period FROM '^\d{4}')::INT AS period_year,
         CASE
             WHEN year_period LIKE '%年初'     THEN 'opening'
@@ -98,7 +115,7 @@ WITH parsed AS (
             WHEN year_period LIKE '%预计使用' THEN 'usage'
             WHEN year_period LIKE '%余额'     THEN 'balance'
         END AS period_type
-    FROM own_fund
+    FROM ods_finance_own_fund
 )
 SELECT
     period_type,
@@ -112,7 +129,14 @@ WHERE period_year = :selected_year;
 ```sql
 WITH parsed AS (
     SELECT
-        *,
+        year_period,
+        career_fund::NUMERIC  AS career_fund,
+        career_note,
+        deprec_fund::NUMERIC  AS deprec_fund,
+        deprec_note,
+        welfare_fund::NUMERIC AS welfare_fund,
+        safety_fund::NUMERIC  AS safety_fund,
+        total::NUMERIC        AS total,
         SUBSTRING(year_period FROM '^\d{4}')::INT AS period_year,
         CASE
             WHEN year_period LIKE '%年初'     THEN 'opening'
@@ -120,7 +144,7 @@ WITH parsed AS (
             WHEN year_period LIKE '%预计使用' THEN 'usage'
             WHEN year_period LIKE '%余额'     THEN 'balance'
         END AS period_type
-    FROM own_fund
+    FROM ods_finance_own_fund
 ),
 year_data AS (
     SELECT
@@ -182,17 +206,17 @@ SELECT
 
 ```sql
 SELECT
-    '事业基金'     AS label, career_fund   AS value FROM own_fund
+    '事业基金'     AS label, career_fund::NUMERIC   AS value FROM ods_finance_own_fund
     WHERE year_period LIKE '%余额' AND SUBSTRING(year_period FROM '^\d{4}')::INT = :selected_year
 UNION ALL SELECT
-    '折旧基金',          deprec_fund
-    FROM own_fund WHERE year_period LIKE '%余额' AND SUBSTRING(year_period FROM '^\d{4}')::INT = :selected_year
+    '折旧基金',          deprec_fund::NUMERIC
+    FROM ods_finance_own_fund WHERE year_period LIKE '%余额' AND SUBSTRING(year_period FROM '^\d{4}')::INT = :selected_year
 UNION ALL SELECT
-    '职工福利基金',      welfare_fund
-    FROM own_fund WHERE year_period LIKE '%余额' AND SUBSTRING(year_period FROM '^\d{4}')::INT = :selected_year
+    '职工福利基金',      welfare_fund::NUMERIC
+    FROM ods_finance_own_fund WHERE year_period LIKE '%余额' AND SUBSTRING(year_period FROM '^\d{4}')::INT = :selected_year
 UNION ALL SELECT
-    '安全生产基金',      safety_fund
-    FROM own_fund WHERE year_period LIKE '%余额' AND SUBSTRING(year_period FROM '^\d{4}')::INT = :selected_year;
+    '安全生产基金',      safety_fund::NUMERIC
+    FROM ods_finance_own_fund WHERE year_period LIKE '%余额' AND SUBSTRING(year_period FROM '^\d{4}')::INT = :selected_year;
 ```
 
 更简洁的写法（行转列）：
@@ -200,11 +224,11 @@ UNION ALL SELECT
 ```sql
 SELECT label, value FROM (
     SELECT
-        career_fund  AS "事业基金",
-        deprec_fund  AS "折旧基金",
-        welfare_fund AS "职工福利基金",
-        safety_fund  AS "安全生产基金"
-    FROM own_fund
+        career_fund::NUMERIC  AS "事业基金",
+        deprec_fund::NUMERIC  AS "折旧基金",
+        welfare_fund::NUMERIC AS "职工福利基金",
+        safety_fund::NUMERIC  AS "安全生产基金"
+    FROM ods_finance_own_fund
     WHERE year_period LIKE '%余额'
       AND SUBSTRING(year_period FROM '^\d{4}')::INT = :selected_year
 ) t
@@ -231,7 +255,14 @@ ORDER BY value DESC;
 ```sql
 WITH parsed AS (
     SELECT
-        *,
+        year_period,
+        career_fund::NUMERIC  AS career_fund,
+        career_note,
+        deprec_fund::NUMERIC  AS deprec_fund,
+        deprec_note,
+        welfare_fund::NUMERIC AS welfare_fund,
+        safety_fund::NUMERIC  AS safety_fund,
+        total::NUMERIC        AS total,
         SUBSTRING(year_period FROM '^\d{4}')::INT AS period_year,
         CASE
             WHEN year_period LIKE '%年初'     THEN 'opening'
@@ -239,7 +270,7 @@ WITH parsed AS (
             WHEN year_period LIKE '%预计使用' THEN 'usage'
             WHEN year_period LIKE '%余额'     THEN 'balance'
         END AS period_type
-    FROM own_fund
+    FROM ods_finance_own_fund
 )
 SELECT
     period_type,
@@ -279,7 +310,14 @@ ECharts 实现时用透明柱体做基底偏移，视觉上形成瀑布递进效
 ```sql
 WITH parsed AS (
     SELECT
-        *,
+        year_period,
+        career_fund::NUMERIC  AS career_fund,
+        career_note,
+        deprec_fund::NUMERIC  AS deprec_fund,
+        deprec_note,
+        welfare_fund::NUMERIC AS welfare_fund,
+        safety_fund::NUMERIC  AS safety_fund,
+        total::NUMERIC        AS total,
         SUBSTRING(year_period FROM '^\d{4}')::INT AS period_year,
         CASE
             WHEN year_period LIKE '%年初'     THEN 'opening'
@@ -287,7 +325,7 @@ WITH parsed AS (
             WHEN year_period LIKE '%预计使用' THEN 'usage'
             WHEN year_period LIKE '%余额'     THEN 'balance'
         END AS period_type
-    FROM own_fund
+    FROM ods_finance_own_fund
 )
 SELECT
     period_year,
@@ -317,7 +355,14 @@ ORDER BY period_year;
 -- 以事业基金为例，其他三个基金同理替换字段名
 WITH parsed AS (
     SELECT
-        *,
+        year_period,
+        career_fund::NUMERIC  AS career_fund,
+        career_note,
+        deprec_fund::NUMERIC  AS deprec_fund,
+        deprec_note,
+        welfare_fund::NUMERIC AS welfare_fund,
+        safety_fund::NUMERIC  AS safety_fund,
+        total::NUMERIC        AS total,
         SUBSTRING(year_period FROM '^\d{4}')::INT AS period_year,
         CASE
             WHEN year_period LIKE '%年初'     THEN 'opening'
@@ -325,7 +370,7 @@ WITH parsed AS (
             WHEN year_period LIKE '%预计使用' THEN 'usage'
             WHEN year_period LIKE '%余额'     THEN 'balance'
         END AS period_type
-    FROM own_fund
+    FROM ods_finance_own_fund
 )
 SELECT
     period_type,
@@ -346,7 +391,14 @@ ORDER BY
 ```sql
 WITH parsed AS (
     SELECT
-        *,
+        year_period,
+        career_fund::NUMERIC  AS career_fund,
+        career_note,
+        deprec_fund::NUMERIC  AS deprec_fund,
+        deprec_note,
+        welfare_fund::NUMERIC AS welfare_fund,
+        safety_fund::NUMERIC  AS safety_fund,
+        total::NUMERIC        AS total,
         SUBSTRING(year_period FROM '^\d{4}')::INT AS period_year,
         CASE
             WHEN year_period LIKE '%年初'     THEN 'opening'
@@ -354,7 +406,7 @@ WITH parsed AS (
             WHEN year_period LIKE '%预计使用' THEN 'usage'
             WHEN year_period LIKE '%余额'     THEN 'balance'
         END AS period_type
-    FROM own_fund
+    FROM ods_finance_own_fund
 )
 SELECT
     period_type,
@@ -384,7 +436,14 @@ ORDER BY
 ```sql
 WITH parsed AS (
     SELECT
-        *,
+        year_period,
+        career_fund::NUMERIC  AS career_fund,
+        career_note,
+        deprec_fund::NUMERIC  AS deprec_fund,
+        deprec_note,
+        welfare_fund::NUMERIC AS welfare_fund,
+        safety_fund::NUMERIC  AS safety_fund,
+        total::NUMERIC        AS total,
         SUBSTRING(year_period FROM '^\d{4}')::INT AS period_year,
         CASE
             WHEN year_period LIKE '%年初'     THEN 'opening'
@@ -392,7 +451,7 @@ WITH parsed AS (
             WHEN year_period LIKE '%预计使用' THEN 'usage'
             WHEN year_period LIKE '%余额'     THEN 'balance'
         END AS period_type
-    FROM own_fund
+    FROM ods_finance_own_fund
 )
 SELECT
     ROUND(
@@ -414,7 +473,14 @@ SELECT
 ```sql
 WITH parsed AS (
     SELECT
-        *,
+        year_period,
+        career_fund::NUMERIC  AS career_fund,
+        career_note,
+        deprec_fund::NUMERIC  AS deprec_fund,
+        deprec_note,
+        welfare_fund::NUMERIC AS welfare_fund,
+        safety_fund::NUMERIC  AS safety_fund,
+        total::NUMERIC        AS total,
         SUBSTRING(year_period FROM '^\d{4}')::INT AS period_year,
         CASE
             WHEN year_period LIKE '%年初'     THEN 'opening'
@@ -422,7 +488,7 @@ WITH parsed AS (
             WHEN year_period LIKE '%预计使用' THEN 'usage'
             WHEN year_period LIKE '%余额'     THEN 'balance'
         END AS period_type
-    FROM own_fund
+    FROM ods_finance_own_fund
 )
 SELECT
     ROUND(
@@ -448,7 +514,14 @@ SELECT
 ```sql
 WITH parsed AS (
     SELECT
-        *,
+        year_period,
+        career_fund::NUMERIC  AS career_fund,
+        career_note,
+        deprec_fund::NUMERIC  AS deprec_fund,
+        deprec_note,
+        welfare_fund::NUMERIC AS welfare_fund,
+        safety_fund::NUMERIC  AS safety_fund,
+        total::NUMERIC        AS total,
         SUBSTRING(year_period FROM '^\d{4}')::INT AS period_year,
         CASE
             WHEN year_period LIKE '%年初'     THEN 'opening'
@@ -456,7 +529,7 @@ WITH parsed AS (
             WHEN year_period LIKE '%预计使用' THEN 'usage'
             WHEN year_period LIKE '%余额'     THEN 'balance'
         END AS period_type
-    FROM own_fund
+    FROM ods_finance_own_fund
 )
 SELECT
     year_period,
@@ -500,7 +573,14 @@ ORDER BY
 -- 校验每个年度的余额行是否等于 年初 + 增加 - 使用
 WITH parsed AS (
     SELECT
-        *,
+        year_period,
+        career_fund::NUMERIC  AS career_fund,
+        career_note,
+        deprec_fund::NUMERIC  AS deprec_fund,
+        deprec_note,
+        welfare_fund::NUMERIC AS welfare_fund,
+        safety_fund::NUMERIC  AS safety_fund,
+        total::NUMERIC        AS total,
         SUBSTRING(year_period FROM '^\d{4}')::INT AS period_year,
         CASE
             WHEN year_period LIKE '%年初'     THEN 'opening'
@@ -508,7 +588,7 @@ WITH parsed AS (
             WHEN year_period LIKE '%预计使用' THEN 'usage'
             WHEN year_period LIKE '%余额'     THEN 'balance'
         END AS period_type
-    FROM own_fund
+    FROM ods_finance_own_fund
 ),
 checks AS (
     SELECT
@@ -533,10 +613,10 @@ WHERE calc_career_balance != actual_career_balance;
 ```sql
 -- 校验 2027年初 = 2026年余额
 SELECT
-    a.career_fund  AS balance_2026_career,
-    b.career_fund  AS opening_2027_career,
-    a.career_fund - b.career_fund AS diff
-FROM own_fund a, own_fund b
+    a.career_fund::NUMERIC  AS balance_2026_career,
+    b.career_fund::NUMERIC  AS opening_2027_career,
+    a.career_fund::NUMERIC - b.career_fund::NUMERIC AS diff
+FROM ods_finance_own_fund a, ods_finance_own_fund b
 WHERE a.year_period = '2026年余额'
   AND b.year_period = '2027年初'
   AND a.career_fund != b.career_fund;
@@ -549,11 +629,11 @@ WHERE a.year_period = '2026年余额'
 -- 校验合计列是否等于四类基金之和
 SELECT
     year_period,
-    total AS stored_total,
-    career_fund + deprec_fund + welfare_fund + safety_fund AS calc_total,
-    total - (career_fund + deprec_fund + welfare_fund + safety_fund) AS diff
-FROM own_fund
-WHERE total != career_fund + deprec_fund + welfare_fund + safety_fund;
+    total::NUMERIC AS stored_total,
+    career_fund::NUMERIC + deprec_fund::NUMERIC + welfare_fund::NUMERIC + safety_fund::NUMERIC AS calc_total,
+    total::NUMERIC - (career_fund::NUMERIC + deprec_fund::NUMERIC + welfare_fund::NUMERIC + safety_fund::NUMERIC) AS diff
+FROM ods_finance_own_fund
+WHERE total::NUMERIC != career_fund::NUMERIC + deprec_fund::NUMERIC + welfare_fund::NUMERIC + safety_fund::NUMERIC;
 -- 结果应为空，否则合计列数据不一致
 ```
 
@@ -564,7 +644,14 @@ WHERE total != career_fund + deprec_fund + welfare_fund + safety_fund;
 ```sql
 WITH parsed AS (
     SELECT
-        *,
+        year_period,
+        career_fund::NUMERIC  AS career_fund,
+        career_note,
+        deprec_fund::NUMERIC  AS deprec_fund,
+        deprec_note,
+        welfare_fund::NUMERIC AS welfare_fund,
+        safety_fund::NUMERIC  AS safety_fund,
+        total::NUMERIC        AS total,
         SUBSTRING(year_period FROM '^\d{4}')::INT AS period_year,
         CASE
             WHEN year_period LIKE '%年初'     THEN 'opening'
@@ -572,7 +659,7 @@ WITH parsed AS (
             WHEN year_period LIKE '%预计使用' THEN 'usage'
             WHEN year_period LIKE '%余额'     THEN 'balance'
         END AS period_type
-    FROM own_fund
+    FROM ods_finance_own_fund
 ),
 year_data AS (
     SELECT * FROM parsed WHERE period_year = :selected_year

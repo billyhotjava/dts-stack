@@ -1,18 +1,19 @@
 -- biz_dwd_aux_balance_personal.sql
 -- DWD层：个人辅助余额明细，添加借贷方向(debit_credit)和科目类别(subject_category)
 -- 源表: public.ods_finance_aux_balance_personal
+-- 注意: CSV导入后所有列为TEXT，此处对balance转型为NUMERIC
 
 SELECT
     subject_code,
     subject_name,
     employee_dept,
     employee_name,
-    balance,
+    balance::NUMERIC(15,2) AS balance,
 
     -- 借贷方向：正数=借方(应收/借款)，负数=贷方(应付/代扣)
     CASE
-        WHEN balance > 0 THEN 'debit'
-        WHEN balance < 0 THEN 'credit'
+        WHEN balance::NUMERIC > 0 THEN 'debit'
+        WHEN balance::NUMERIC < 0 THEN 'credit'
         ELSE 'zero'
     END AS debit_credit,
 
