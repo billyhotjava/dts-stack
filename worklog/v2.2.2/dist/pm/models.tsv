@@ -1,12 +1,4 @@
 name	layer	sql_path	source_data_source_id	alias	schema_name	materialized	tags	status	enabled	owner_dept	description	csv_path
-ods_project_subject_domain	ODS	models/ods/ods_project_subject_domain.sql			public	view	project-management,ods	DRAFT	true		ODS-项目主体域(31字段/执行域进度节点)
-ods_quality_issue	ODS	models/ods/ods_quality_issue.sql			public	view	project-management,ods	DRAFT	true		ODS-质量信息汇总表(13字段)
-ods_quality_measure	ODS	models/ods/ods_quality_measure.sql			public	view	project-management,ods	DRAFT	true		ODS-质量跟进措施表(10字段)
-ods_tech_state	ODS	models/ods/ods_tech_state.sql			public	view	project-management,ods	DRAFT	true		ODS-技术状态信息汇总表(14字段)
-ods_tech_state_measure	ODS	models/ods/ods_tech_state_measure.sql			public	view	project-management,ods	DRAFT	true		ODS-技术状态跟进措施表(10字段)
-ods_risk_info	ODS	models/ods/ods_risk_info.sql			public	view	project-management,ods	DRAFT	true		ODS-风险信息汇总表(14字段)
-ods_risk_measure	ODS	models/ods/ods_risk_measure.sql			public	view	project-management,ods	DRAFT	true		ODS-风险跟进措施表(11字段)
-ods_cost_accounting	ODS	models/ods/ods_cost_accounting.sql			public	view	project-management,ods	DRAFT	true		ODS-成本核算基本表(8字段)
 biz_dwd_project_node	DWD	models/dwd/biz_dwd_project_node.sql			public	table	project-management,biz,dwd	DRAFT	true		项目管理DWD-进度节点事实表
 biz_dwd_project_node_enriched	DWD	models/dwd/biz_dwd_project_node_enriched.sql			public	table	project-management,biz,dwd	DRAFT	true		项目管理DWD-进度节点宽表
 dim_completion_status	DWD	models/dwd/dim_completion_status.sql			public	table	project-management,dim,dwd	DRAFT	true		完成情况维度表

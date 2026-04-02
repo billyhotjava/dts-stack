@@ -7238,7 +7238,7 @@ function StaticDataEditor({ component, updateComponent }: {
             </div>
 
             {mode === 'table' ? (
-                <div style={{ border: '1px solid var(--color-border, rgba(255,255,255,0.1))', borderRadius: 6, overflow: 'auto', maxHeight: 320, background: 'var(--color-surface, #1e1f26)' }}>
+                <div style={{ border: '1px solid var(--color-border, rgba(255,255,255,0.1))', borderRadius: 6, overflow: 'auto', maxHeight: 320, background: 'var(--color-bg-secondary, #252830)' }}>
                     <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12, color: 'var(--color-text-primary, #e2e8f0)' }}>
                         <thead>
                             <tr>
@@ -7292,17 +7292,17 @@ function StaticDataEditor({ component, updateComponent }: {
                             ))}
                         </tbody>
                     </table>
-                    <div style={{ padding: '4px 8px', borderTop: '1px solid var(--color-border, rgba(255,255,255,0.1))' }}>
+                    <div style={{ padding: '4px 8px', borderTop: '1px solid var(--color-border, rgba(255,255,255,0.1))', background: 'var(--color-bg-secondary, #252830)' }}>
                         <button type="button" onClick={addRow}
-                            style={{ background: 'none', border: '1px dashed var(--color-border, rgba(255,255,255,0.15))', borderRadius: 4, padding: '3px 12px', cursor: 'pointer', fontSize: 11, color: 'var(--color-primary, #509EE3)', width: '100%' }}
+                            style={{ background: 'var(--color-bg-secondary, #252830)', border: '1px dashed var(--color-border, rgba(255,255,255,0.15))', borderRadius: 4, padding: '3px 12px', cursor: 'pointer', fontSize: 11, color: 'var(--color-primary, #509EE3)', width: '100%' }}
                         >+ 添加行</button>
                     </div>
                 </div>
             ) : (
                 <div>
                     <textarea
-                        className="property-input flex-1 px-2.5 py-1.5 border border-border-default rounded bg-surface-card text-text-primary text-xs focus:outline-none focus:border-brand"
-                        style={{ width: '100%', height: 200, fontFamily: 'monospace', fontSize: 11, resize: 'vertical' }}
+                        className="property-input flex-1 px-2.5 py-1.5 border border-border-default rounded text-text-primary text-xs focus:outline-none focus:border-brand"
+                        style={{ width: '100%', height: 200, fontFamily: 'monospace', fontSize: 11, resize: 'vertical', background: 'var(--color-bg-secondary, #252830)', color: 'var(--color-text-primary, #e2e8f0)' }}
                         value={jsonText}
                         onChange={(e) => { setJsonText(e.target.value); setJsonError(null); }}
                         spellCheck={false}

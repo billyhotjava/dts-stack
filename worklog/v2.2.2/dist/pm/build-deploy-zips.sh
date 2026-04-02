@@ -1,5 +1,6 @@
 #!/bin/bash
 # 构建两个部署包：CLI 部署包 + UI 导入包
+# dbt 只管 DWD/DWS/ADS 模型，不碰 ODS 表
 # 用法: cd dist/pm && bash build-deploy-zips.sh
 
 set -e
@@ -12,7 +13,7 @@ mkdir -p "$TEMP_CLI" "$TEMP_UI"
 
 echo "=== 构建 CLI 部署包 ==="
 
-# CLI: macros + models + dbt_project.yml (with on-run-start)
+# CLI: macros + models + dbt_project.yml (无 on-run-start，不碰 ODS)
 cp -r "$DIST_DIR/macros" "$TEMP_CLI/"
 cp -r "$DIST_DIR/models" "$TEMP_CLI/"
 
@@ -28,9 +29,6 @@ macro-paths: ["macros"]
 clean-targets:
   - "target"
   - "dbt_packages"
-
-on-run-start:
-  - "{{ ensure_ods_tables() }}"
 EOF
 
 cd "$TEMP_CLI"
@@ -39,7 +37,7 @@ echo "  -> project-management-cli-deploy.zip"
 
 echo "=== 构建 UI 导入包 ==="
 
-# UI: macros + models + models.tsv (with ODS entries)
+# UI: macros + models + models.tsv
 cp -r "$DIST_DIR/macros" "$TEMP_UI/"
 cp -r "$DIST_DIR/models" "$TEMP_UI/"
 cp "$DIST_DIR/models.tsv" "$TEMP_UI/models.tsv"
