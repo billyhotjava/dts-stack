@@ -44,19 +44,22 @@ public class AddaxJobService {
     private final ObjectMapper objectMapper;
     private final JdbcMetadataService jdbcMetadataService;
     private final AddaxJdbcConfigNormalizer jdbcConfigNormalizer;
+    private final org.springframework.core.env.Environment springEnv;
 
     public AddaxJobService(
         AddaxProperties properties,
         IngestionSettingsService settingsService,
         ObjectMapper objectMapper,
         JdbcMetadataService jdbcMetadataService,
-        AddaxJdbcConfigNormalizer jdbcConfigNormalizer
+        AddaxJdbcConfigNormalizer jdbcConfigNormalizer,
+        org.springframework.core.env.Environment springEnv
     ) {
         this.properties = properties;
         this.settingsService = settingsService;
         this.objectMapper = objectMapper;
         this.jdbcMetadataService = jdbcMetadataService;
         this.jdbcConfigNormalizer = jdbcConfigNormalizer;
+        this.springEnv = springEnv;
     }
 
     public record AddaxJobResult(String jobName, String jobPath, Map<String, Object> jobConfig) {}
@@ -483,6 +486,15 @@ public class AddaxJobService {
             mergeMissing(params, fallbackConfig, "connection");
             mergeMissing(params, fallbackConfig, "table");
             mergeMissing(params, fallbackConfig, "tables");
+        }
+        // Fallback: if writer still missing credentials, use spring.datasource (data lake default)
+        if ("writer".equalsIgnoreCase(key)) {
+            if (!StringUtils.hasText(normalizeText(params.get("username")))) {
+                params.put("username", springEnv.getProperty("spring.datasource.username", "postgres"));
+            }
+            if (!StringUtils.hasText(normalizeText(params.get("password")))) {
+                params.put("password", springEnv.getProperty("spring.datasource.password", ""));
+            }
         }
         ensureDriver(normalizedPlugin, params);
         if ("writer".equalsIgnoreCase(key)) {

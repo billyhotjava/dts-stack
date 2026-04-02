@@ -16,3 +16,18 @@
 | F8-前端架构收敛 | 2 | READY |
 
 **统计**: READY=20, IN_PROGRESS=0, DONE=0, BLOCKED=0
+
+## Sprint-23: 浏览器作用域会话重构 (202604)
+**状态**: IN_PROGRESS
+**类型**: Implementation（实施型，含代码、迁移、发布与回滚）
+
+| Feature | Task 数 | 状态 |
+|---------|---------|------|
+| F1-浏览器作用域会话模型 | 3 | IN_PROGRESS |
+| F2-platform后端会话核心重构 | 3 | READY |
+| F3-前端会话运行时重构 | 3 | READY |
+| F4-analytics与proxy鉴权收敛 | 3 | READY |
+| F5-迁移兼容与运维治理 | 3 | READY |
+| F6-集成验证与回归防线 | 3 | READY |
+
+**统计**: READY=17, IN_PROGRESS=1, DONE=0, BLOCKED=0

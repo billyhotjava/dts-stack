@@ -46,12 +46,17 @@ class AddaxJobServiceTest {
     @BeforeEach
     void setup() {
         objectMapper = new ObjectMapper();
+        org.springframework.mock.env.MockEnvironment mockEnv = new org.springframework.mock.env.MockEnvironment()
+            .withProperty("spring.datasource.url", "jdbc:postgresql://localhost:5432/test")
+            .withProperty("spring.datasource.username", "test")
+            .withProperty("spring.datasource.password", "test");
         addaxJobService = new AddaxJobService(
             addaxProperties,
             settingsService,
             objectMapper,
             jdbcMetadataService,
-            new AddaxJdbcConfigNormalizer(objectMapper)
+            new AddaxJdbcConfigNormalizer(objectMapper),
+            mockEnv
         );
 
         // Mock settings service
