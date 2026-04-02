@@ -11,8 +11,8 @@ SELECT
   SUM(CASE WHEN is_milestone THEN 1 ELSE 0 END) AS milestone_nodes,
   SUM(CASE WHEN is_milestone AND is_completed THEN 1 ELSE 0 END) AS milestone_completed_nodes,
   ROUND(AVG(health_score)::numeric, 2) AS avg_health_score,
-  ROUND(AVG(GREATEST(COALESCE(delay_days, 0), 0))::numeric, 2) AS avg_delay_days,
-  MAX(GREATEST(COALESCE(delay_days, 0), 0)) AS max_delay_days,
+  ROUND(AVG(delay_days) FILTER (WHERE delay_days IS NOT NULL)::numeric, 2) AS avg_delay_days,
+  MAX(delay_days) FILTER (WHERE delay_days IS NOT NULL) AS max_delay_days,
   CASE WHEN COUNT(*) = 0 THEN 0
        ELSE ROUND(SUM(CASE WHEN is_completed THEN 1 ELSE 0 END)::numeric / COUNT(*)::numeric, 4)
   END AS completion_rate,

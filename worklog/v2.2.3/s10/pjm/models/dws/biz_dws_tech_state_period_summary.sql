@@ -9,9 +9,9 @@ SELECT
   COUNT(*)                                                                       AS total_change_cnt,
 
   -- 按 change_category 分类
-  SUM(CASE WHEN d.change_category = 'I类' THEN 1 ELSE 0 END)                    AS cat_i,
-  SUM(CASE WHEN d.change_category = 'II类' THEN 1 ELSE 0 END)                   AS cat_ii,
-  SUM(CASE WHEN d.change_category = 'III类' THEN 1 ELSE 0 END)                  AS cat_iii,
+  SUM(CASE WHEN d.change_category = 'I' THEN 1 ELSE 0 END)                      AS cat_i,
+  SUM(CASE WHEN d.change_category = 'II' THEN 1 ELSE 0 END)                    AS cat_ii,
+  SUM(CASE WHEN d.change_category = 'III' THEN 1 ELSE 0 END)                   AS cat_iii,
 
   -- 签署完成
   SUM(CASE WHEN d.is_signature_completed THEN 1 ELSE 0 END)                     AS signature_completed_cnt,

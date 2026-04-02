@@ -65,10 +65,15 @@ SELECT
   to_char({{ parse_date_safe("o.actual_date") }}, 'YYYY-MM')              AS actual_month,
 
   -- === 衍生字段 ===
+  -- delay_days: 已完成用 actual-plan，未完成用 today-plan（超期天数）
   CASE
     WHEN {{ parse_date_safe("o.plan_date") }} IS NOT NULL
      AND {{ parse_date_safe("o.actual_date") }} IS NOT NULL
     THEN ({{ parse_date_safe("o.actual_date") }} - {{ parse_date_safe("o.plan_date") }})::int
+    WHEN {{ parse_date_safe("o.plan_date") }} IS NOT NULL
+     AND {{ parse_date_safe("o.actual_date") }} IS NULL
+     AND {{ parse_date_safe("o.plan_date") }} < current_date
+    THEN (current_date - {{ parse_date_safe("o.plan_date") }})::int
   END AS delay_days,
 
   CASE

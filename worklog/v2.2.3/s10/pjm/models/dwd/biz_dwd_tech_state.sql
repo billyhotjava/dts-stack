@@ -17,7 +17,13 @@ SELECT
   {{ nullif_placeholder("o.dept_leader") }}              AS dept_leader,
   {{ nullif_placeholder("o.completion_signature") }}     AS completion_signature,
   {{ nullif_placeholder("o.change_reason") }}            AS change_reason,
-  {{ nullif_placeholder("o.change_category") }}          AS change_category,
+  -- 标准化更改类别（兼容 Ⅰ/Ⅱ/Ⅲ、I类/II类/III类 等写法）
+  CASE
+    WHEN upper(btrim(COALESCE(o.change_category, ''))) IN ('I', 'Ⅰ', 'I类', '1', '一') THEN 'I'
+    WHEN upper(btrim(COALESCE(o.change_category, ''))) IN ('II', 'Ⅱ', 'II类', '2', '二') THEN 'II'
+    WHEN upper(btrim(COALESCE(o.change_category, ''))) IN ('III', 'Ⅲ', 'III类', '3', '三') THEN 'III'
+    ELSE {{ nullif_placeholder("o.change_category") }}
+  END AS change_category,
   {{ nullif_placeholder("o.plan_synced") }}              AS plan_synced,
   {{ nullif_placeholder("o.review_situation") }}         AS review_situation,
   {{ nullif_placeholder("o.affected_files") }}           AS affected_files,
