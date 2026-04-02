@@ -1,6 +1,6 @@
 -- biz_dwd_own_fund.sql
 -- DWD层：自有资金明细，从year_period文本中解析period_year和period_type
--- 源表: public.own_fund
+-- 源表: public.ods_finance_own_fund
 
 SELECT
     year_period,
@@ -18,4 +18,4 @@ SELECT
         WHEN year_period LIKE '%预计使用' THEN 'usage'
         WHEN year_period LIKE '%余额'     THEN 'balance'
     END AS period_type
-FROM public.own_fund
+FROM public.ods_finance_own_fund

@@ -2,7 +2,7 @@
 
 -- ============================================================
 -- 个人辅助余额 DWD 层：添加借贷方向和科目类别
--- 输入：fin_ods.aux_balance_personal（原始个人辅助余额表）
+-- 输入：fin_ods.ods_finance_aux_balance_personal（原始个人辅助余额表）
 -- 输出：含借贷方向标签和科目分类的个人辅助余额明细
 -- ============================================================
 
@@ -32,5 +32,5 @@ SELECT
         ELSE '其他'
     END AS subject_category
 
-FROM {{ source('fin_ods', 'aux_balance_personal') }}
+FROM {{ source('fin_ods', 'ods_finance_aux_balance_personal') }}
 WHERE subject_code IS NOT NULL

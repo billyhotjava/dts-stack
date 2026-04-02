@@ -2,7 +2,7 @@
 
 -- ============================================================
 -- 自有资金 DWD 层：解析 year_period 文本，提取年度和期间类型
--- 输入：fin_ods.own_fund（原始自有资金表）
+-- 输入：fin_ods.ods_finance_own_fund（原始自有资金表）
 -- 输出：结构化的年度 + 期间类型 + 各基金金额
 -- ============================================================
 
@@ -38,5 +38,5 @@ SELECT
         WHEN year_period LIKE '%余额'     THEN 4
     END AS period_sort
 
-FROM {{ source('fin_ods', 'own_fund') }}
+FROM {{ source('fin_ods', 'ods_finance_own_fund') }}
 WHERE year_period IS NOT NULL

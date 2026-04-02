@@ -2,7 +2,7 @@
 
 -- ============================================================
 -- 辅助余额 DWD 层：根据科目编号前缀添加费用类别字段
--- 输入：fin_ods.aux_balance（原始辅助余额表）
+-- 输入：fin_ods.ods_finance_aux_balance（原始辅助余额表）
 -- 输出：含费用分类标签的辅助余额明细
 -- ============================================================
 
@@ -33,5 +33,5 @@ SELECT
         ELSE FALSE
     END AS has_contract
 
-FROM {{ source('fin_ods', 'aux_balance') }}
+FROM {{ source('fin_ods', 'ods_finance_aux_balance') }}
 WHERE subject_code IS NOT NULL

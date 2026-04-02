@@ -1,6 +1,6 @@
 -- biz_dwd_aux_balance_personal.sql
 -- DWD层：个人辅助余额明细，添加借贷方向(debit_credit)和科目类别(subject_category)
--- 源表: public.aux_balance_personal
+-- 源表: public.ods_finance_aux_balance_personal
 
 SELECT
     subject_code,
@@ -23,4 +23,4 @@ SELECT
         ELSE '其他'
     END AS subject_category
 
-FROM public.aux_balance_personal
+FROM public.ods_finance_aux_balance_personal

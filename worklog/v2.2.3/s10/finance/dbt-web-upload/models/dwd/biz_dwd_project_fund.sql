@@ -1,6 +1,6 @@
 -- biz_dwd_project_fund.sql
 -- DWD层：项目经费明细，派生直接成本支出、总支出、总经费执行率、间接费用执行率
--- 源表: public.project_fund
+-- 源表: public.ods_finance_project_fund
 
 SELECT
     project_id,
@@ -31,4 +31,4 @@ SELECT
          ELSE 0
     END AS indirect_rate
 
-FROM public.project_fund
+FROM public.ods_finance_project_fund

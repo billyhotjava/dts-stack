@@ -2,7 +2,7 @@
 
 -- ============================================================
 -- 项目经费 DWD 层：计算派生字段（直接成本支出、总支出、总执行率等）
--- 输入：fin_ods.project_fund（原始项目经费表）
+-- 输入：fin_ods.ods_finance_project_fund（原始项目经费表）
 -- 输出：含全部派生指标的项目经费明细
 -- ============================================================
 
@@ -40,5 +40,5 @@ SELECT
         ELSE 0
     END AS indirect_rate
 
-FROM {{ source('fin_ods', 'project_fund') }}
+FROM {{ source('fin_ods', 'ods_finance_project_fund') }}
 WHERE project_id IS NOT NULL

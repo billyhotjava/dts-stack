@@ -1,6 +1,6 @@
 -- biz_dwd_aux_balance.sql
 -- DWD层：辅助余额明细，根据科目编号前缀添加费用类别(expense_category)
--- 源表: public.aux_balance
+-- 源表: public.ods_finance_aux_balance
 
 SELECT
     subject_code,
@@ -18,4 +18,4 @@ SELECT
         WHEN subject_code LIKE '5601%' THEN '培训'
         ELSE '其他'
     END AS expense_category
-FROM public.aux_balance
+FROM public.ods_finance_aux_balance
