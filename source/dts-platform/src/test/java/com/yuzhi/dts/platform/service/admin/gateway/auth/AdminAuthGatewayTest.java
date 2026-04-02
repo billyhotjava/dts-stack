@@ -14,6 +14,7 @@ import java.util.Map;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.web.client.RestTemplateBuilder;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.test.util.ReflectionTestUtils;
 import org.springframework.test.web.client.MockRestServiceServer;
@@ -48,6 +49,7 @@ class AdminAuthGatewayTest {
         server
             .expect(requestTo("http://dts-admin.test:8081/api/keycloak/auth/platform/login?auditSilent=true"))
             .andExpect(method(POST))
+            .andExpect(request -> assertThat(request.getHeaders().containsKey(HttpHeaders.AUTHORIZATION)).isFalse())
             .andRespond(
                 withSuccess(
                     """
@@ -80,6 +82,7 @@ class AdminAuthGatewayTest {
         server
             .expect(requestTo("http://dts-admin.test:8081/api/keycloak/auth/pki-challenge"))
             .andExpect(method(GET))
+            .andExpect(request -> assertThat(request.getHeaders().containsKey(HttpHeaders.AUTHORIZATION)).isFalse())
             .andRespond(
                 withSuccess(
                     """
@@ -110,6 +113,7 @@ class AdminAuthGatewayTest {
         server
             .expect(requestTo("http://dts-admin.test:8081/api/keycloak/auth/pki-login"))
             .andExpect(method(POST))
+            .andExpect(request -> assertThat(request.getHeaders().containsKey(HttpHeaders.AUTHORIZATION)).isFalse())
             .andRespond(
                 withSuccess(
                     """
@@ -130,5 +134,55 @@ class AdminAuthGatewayTest {
         Map<String, Object> response = gateway.pkiLogin(Map.of("challengeId", "c-1", "nonce", "n-1"));
 
         assertThat(response).containsKey("user");
+    }
+
+    @Test
+    void refreshShouldNotSendAuthorizationHeaderToPermitAllEndpoint() {
+        server
+            .expect(requestTo("http://dts-admin.test:8081/api/keycloak/auth/refresh?auditSilent=true"))
+            .andExpect(method(POST))
+            .andExpect(request -> assertThat(request.getHeaders().containsKey(HttpHeaders.AUTHORIZATION)).isFalse())
+            .andRespond(
+                withSuccess(
+                    """
+                    {
+                      "status":"SUCCESS",
+                      "data":{
+                        "accessToken":"access-2",
+                        "refreshToken":"refresh-2",
+                        "expiresIn":300,
+                        "refreshExpiresIn":1800
+                      }
+                    }
+                    """,
+                    MediaType.APPLICATION_JSON
+                )
+            );
+
+        AdminAuthGateway.RefreshResult result = gateway.refresh("refresh-1");
+
+        assertThat(result.accessToken()).isEqualTo("access-2");
+        assertThat(result.refreshToken()).isEqualTo("refresh-2");
+    }
+
+    @Test
+    void logoutShouldNotSendAuthorizationHeaderToPermitAllEndpoint() {
+        server
+            .expect(requestTo("http://dts-admin.test:8081/api/keycloak/auth/logout?auditSilent=true"))
+            .andExpect(method(POST))
+            .andExpect(request -> assertThat(request.getHeaders().containsKey(HttpHeaders.AUTHORIZATION)).isFalse())
+            .andRespond(
+                withSuccess(
+                    """
+                    {
+                      "status":"SUCCESS",
+                      "data":null
+                    }
+                    """,
+                    MediaType.APPLICATION_JSON
+                )
+            );
+
+        gateway.logout("refresh-1");
     }
 }

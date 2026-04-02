@@ -41,7 +41,7 @@ public class AdminAuthGateway {
                 "/keycloak/auth/platform/login?auditSilent=true",
                 Map.of("username", username == null ? "" : username, "password", password == null ? "" : password),
                 MAP_ENVELOPE,
-                AdminGatewayRequestOptions.builder().auditSilent(true).build()
+                AdminGatewayRequestOptions.builder().auditSilent(true).includeServiceAuthorization(false).build()
             );
             @SuppressWarnings("unchecked")
             Map<String, Object> user = data == null ? Map.of() : (Map<String, Object>) data.getOrDefault("user", Map.of());
@@ -69,7 +69,7 @@ public class AdminAuthGateway {
                 "/keycloak/auth/logout?auditSilent=true",
                 StringUtils.hasText(refreshToken) ? Map.of("refreshToken", refreshToken) : Map.of(),
                 MAP_ENVELOPE,
-                AdminGatewayRequestOptions.builder().auditSilent(true).build()
+                AdminGatewayRequestOptions.builder().auditSilent(true).includeServiceAuthorization(false).build()
             );
         } catch (AdminGatewayException ignored) {
             // best effort
@@ -85,7 +85,7 @@ public class AdminAuthGateway {
                 "/keycloak/auth/refresh?auditSilent=true",
                 Map.of("refreshToken", refreshToken == null ? "" : refreshToken),
                 MAP_ENVELOPE,
-                AdminGatewayRequestOptions.builder().auditSilent(true).build()
+                AdminGatewayRequestOptions.builder().auditSilent(true).includeServiceAuthorization(false).build()
             );
             return new RefreshResult(
                 asText(data == null ? null : data.get("accessToken")),
@@ -106,7 +106,7 @@ public class AdminAuthGateway {
             "/keycloak/auth/pki-challenge",
             null,
             PKI_CHALLENGE_ENVELOPE,
-            AdminGatewayRequestOptions.defaults()
+            AdminGatewayRequestOptions.builder().includeServiceAuthorization(false).build()
         );
     }
 
@@ -118,7 +118,7 @@ public class AdminAuthGateway {
             "/keycloak/auth/pki-login",
             payload == null ? Map.of() : payload,
             MAP_ENVELOPE,
-            AdminGatewayRequestOptions.defaults()
+            AdminGatewayRequestOptions.builder().includeServiceAuthorization(false).build()
         );
     }
 
