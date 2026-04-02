@@ -4,10 +4,14 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
+import com.yuzhi.dts.platform.domain.modeling.ModelingSqlModel;
 import com.yuzhi.dts.platform.repository.modeling.ModelingSqlModelRepository;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.time.Instant;
 import java.util.List;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
 
 class DbtQualityGateServiceTest {
 
@@ -58,7 +62,7 @@ class DbtQualityGateServiceTest {
     }
 
     @Test
-    void shouldStillBlockWhenLatestFailedBuildMissesRelations() {
+    void shouldWarnInsteadOfBlockWhenLatestFailedBuildMissesRelations() {
         ModelingSqlModelRepository repository = mock(ModelingSqlModelRepository.class);
         DbtConfigService dbtConfigService = mock(DbtConfigService.class);
         DbtRunResultService runResultService = mock(DbtRunResultService.class);
@@ -97,7 +101,70 @@ class DbtQualityGateServiceTest {
 
         DbtQualityGateService.DbtQualityGateResult result = service.evaluate("tag:project-management");
 
-        assertThat(result.blocking()).isTrue();
-        assertThat(result.blockers()).contains("最近一次质量构建失败（dbt build --select tag:project-management），请先修复后再上线");
+        assertThat(result.blocking()).isFalse();
+        assertThat(result.warning()).isTrue();
+        assertThat(result.warnings()).contains("最近一次质量构建失败（dbt build --select tag:project-management），建议修复后再上线");
+    }
+
+    @Test
+    void shouldDetectRootLevelSchemaYmlForImportedNestedModelPath(@TempDir Path tempDir) throws Exception {
+        ModelingSqlModelRepository repository = mock(ModelingSqlModelRepository.class);
+        DbtConfigService dbtConfigService = mock(DbtConfigService.class);
+        DbtRunResultService runResultService = mock(DbtRunResultService.class);
+
+        Path sqlPath = tempDir.resolve("models/dwd/project_management/biz_dwd_quality_issue.sql");
+        Files.createDirectories(sqlPath.getParent());
+        Files.writeString(sqlPath, "select 1 as issue_id\n");
+        Files.writeString(
+            tempDir.resolve("models/pm_schema.yml"),
+            """
+            version: 2
+            models:
+              - name: biz_dwd_quality_issue
+                columns:
+                  - name: issue_id
+                    tests:
+                      - not_null
+            """
+        );
+
+        ModelingSqlModel model = new ModelingSqlModel();
+        model.setName("biz_dwd_quality_issue");
+        model.setModelPath("models/dwd/project_management/biz_dwd_quality_issue.sql");
+
+        when(repository.findAll()).thenReturn(List.of(model));
+        when(dbtConfigService.loadConfig()).thenReturn(
+            new DbtConfigService.DbtConfigView(
+                true,
+                new DbtConfigService.DbtWorkspaceConfig(true, tempDir.toString(), tempDir.toString(), "dts", "dev", null, null, "public", java.util.Map.of()),
+                DbtConfigService.DbtProfileStatus.skipped("test"),
+                null,
+                new DbtConfigService.DbtWorkspaceStatus(true, "ok", java.util.Map.of())
+            )
+        );
+        when(runResultService.loadLatestSummary(10)).thenReturn(
+            new DbtRunResultService.DbtRunSummary(
+                true,
+                tempDir.toString(),
+                tempDir.resolve("target/run_results.json").toString(),
+                tempDir.resolve("target/manifest.json").toString(),
+                "inv-3",
+                Instant.now().toString(),
+                "dbt test --select model:biz_dwd_quality_issue",
+                "SUCCESS",
+                1,
+                1,
+                0,
+                0,
+                List.of(),
+                List.of()
+            )
+        );
+
+        DbtQualityGateService service = new DbtQualityGateService(repository, dbtConfigService, runResultService);
+
+        DbtQualityGateService.DbtQualityGateResult result = service.evaluate("model:biz_dwd_quality_issue");
+
+        assertThat(result.warnings()).noneMatch(item -> item.contains("未发现测试模板"));
     }
 }

@@ -11,6 +11,7 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Set;
+import java.util.regex.Pattern;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
@@ -216,18 +217,18 @@ public class DbtQualityGateService {
             if (ymlPath.startsWith(project) && Files.exists(ymlPath)) {
                 return ymlPath;
             }
-            // 2) 回退：扫描同目录及父目录的所有 yml，查找包含该模型名的 schema 文件
+            // 2) 回退：从 SQL 目录逐级向上查找到 models/ 根目录，兼容整包 schema（如 models/pm_schema.yml）
             Path searchDir = sqlPath.getParent();
-            Path matched = findSchemaYmlContainingModel(project, searchDir, modelName);
-            if (matched != null) {
-                return matched;
-            }
-            // 3) 再往上找一层（models/ 根目录的 schema yml）
-            if (searchDir != null && searchDir.getParent() != null && searchDir.getParent().startsWith(project)) {
-                matched = findSchemaYmlContainingModel(project, searchDir.getParent(), modelName);
+            Path modelsRoot = project.resolve("models").normalize();
+            while (searchDir != null && searchDir.startsWith(project)) {
+                Path matched = findSchemaYmlContainingModel(project, searchDir, modelName);
                 if (matched != null) {
                     return matched;
                 }
+                if (searchDir.equals(modelsRoot) || searchDir.equals(project)) {
+                    break;
+                }
+                searchDir = searchDir.getParent();
             }
             return null;
         }
@@ -245,7 +246,7 @@ public class DbtQualityGateService {
                     continue;
                 }
                 String content = readText(candidate);
-                if (content != null && content.contains("name: " + modelName)) {
+                if (containsModelDefinition(content, modelName)) {
                     return candidate;
                 }
             }
@@ -265,6 +266,14 @@ public class DbtQualityGateService {
             LOG.warn("[dbt-quality-gate] failed to read {}: {}", path, ex.getMessage());
             return null;
         }
+    }
+
+    private boolean containsModelDefinition(String content, String modelName) {
+        if (!StringUtils.hasText(content) || !StringUtils.hasText(modelName)) {
+            return false;
+        }
+        Pattern pattern = Pattern.compile("(?m)^\\s*-?\\s*name:\\s*[\"']?" + Pattern.quote(modelName.trim()) + "[\"']?\\s*$");
+        return pattern.matcher(content).find();
     }
 
     private String defaultText(String value, String fallback) {

@@ -70,19 +70,12 @@ public class DbtReleaseSubmissionService {
         }
 
         DbtQualityGateService.DbtQualityGateResult qualityGate = qualityGateService.evaluate(selector);
-        if (qualityGate != null && qualityGate.blocking()) {
-            return blocked(selector, dagId, safeList(qualityGate.blockers()), qualityGate, null);
-        }
-
         DbtReleaseGateService.DbtReleaseGateResult releaseGate = releaseGateService.evaluate(
             selector,
             request == null ? null : request.gitRef(),
             request == null ? null : request.commitSha(),
             request == null ? null : request.strictMode()
         );
-        if (releaseGate != null && releaseGate.blocking()) {
-            return blocked(selector, dagId, safeList(releaseGate.blockers()), qualityGate, releaseGate);
-        }
 
         List<String> warnings = mergeWarnings(qualityGate, releaseGate);
         boolean confirmWarnings = request != null && Boolean.TRUE.equals(request.confirmWarnings());
@@ -178,7 +171,9 @@ public class DbtReleaseSubmissionService {
         DbtReleaseGateService.DbtReleaseGateResult releaseGate
     ) {
         Set<String> merged = new LinkedHashSet<>();
+        merged.addAll(safeList(qualityGate == null ? null : qualityGate.blockers()));
         merged.addAll(safeList(qualityGate == null ? null : qualityGate.warnings()));
+        merged.addAll(safeList(releaseGate == null ? null : releaseGate.blockers()));
         merged.addAll(safeList(releaseGate == null ? null : releaseGate.warnings()));
         return new ArrayList<>(merged);
     }

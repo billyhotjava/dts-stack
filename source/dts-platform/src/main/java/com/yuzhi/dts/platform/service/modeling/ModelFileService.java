@@ -340,19 +340,29 @@ public class ModelFileService {
         if (!Files.exists(projectDir)) {
             return;
         }
+        List<Path> files;
         try (var walk = Files.walk(unzipRoot)) {
-            for (Path file : walk.filter(Files::isRegularFile).toList()) {
-                String relative = resolveCompanionWorkspacePath(unzipRoot.relativize(file));
-                if (!StringUtils.hasText(relative)) {
-                    continue;
-                }
-                Path target = projectDir.resolve(relative).normalize();
-                if (!target.startsWith(projectDir)) {
-                    throw new IOException("companion file outside workspace: " + relative);
-                }
-                Files.createDirectories(target.getParent());
-                Files.copy(file, target, StandardCopyOption.REPLACE_EXISTING);
+            files = walk.filter(Files::isRegularFile).toList();
+        }
+        Set<String> incomingPaths = new LinkedHashSet<>();
+        for (Path file : files) {
+            String relative = resolveCompanionWorkspacePath(unzipRoot.relativize(file));
+            if (StringUtils.hasText(relative)) {
+                incomingPaths.add(relative);
             }
+        }
+        deleteLegacyManagedSources(projectDir, incomingPaths);
+        for (Path file : files) {
+            String relative = resolveCompanionWorkspacePath(unzipRoot.relativize(file));
+            if (!StringUtils.hasText(relative)) {
+                continue;
+            }
+            Path target = projectDir.resolve(relative).normalize();
+            if (!target.startsWith(projectDir)) {
+                throw new IOException("companion file outside workspace: " + relative);
+            }
+            Files.createDirectories(target.getParent());
+            Files.copy(file, target, StandardCopyOption.REPLACE_EXISTING);
         }
     }
 
@@ -394,6 +404,13 @@ public class ModelFileService {
         } catch (IOException ex) {
             LOG.warn("[dbt-model] failed to delete companion file {}: {}", path, ex.getMessage());
         }
+    }
+
+    private void deleteLegacyManagedSources(Path projectDir, Set<String> incomingPaths) {
+        if (projectDir == null || incomingPaths == null || !incomingPaths.contains("models/pm_sources.yml")) {
+            return;
+        }
+        deleteCompanionFile(projectDir.resolve("models/pm_ods_sources.yml").normalize(), false);
     }
 
     private Path replaceExtension(Path fileName, String replacement) {

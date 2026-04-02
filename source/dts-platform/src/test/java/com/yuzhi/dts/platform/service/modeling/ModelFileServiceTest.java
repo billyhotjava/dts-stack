@@ -59,4 +59,41 @@ class ModelFileServiceTest {
         assertThat(autoYmlFile).doesNotExist();
         assertThat(manualYmlFile).exists();
     }
+
+    @Test
+    void copyWorkspaceCompanionFilesShouldDeleteLegacyPmOdsSourcesWhenPmSourcesIsImported() throws Exception {
+        when(dbtConfigService.resolveProjectDir()).thenReturn(tempDir.toString());
+
+        Path legacySource = tempDir.resolve("models/pm_ods_sources.yml");
+        Files.createDirectories(legacySource.getParent());
+        Files.writeString(
+            legacySource,
+            """
+            version: 2
+            sources:
+              - name: "pm_ods"
+            """,
+            StandardCharsets.UTF_8
+        );
+
+        Path unzipRoot = tempDir.resolve("incoming");
+        Path incomingSource = unzipRoot.resolve("models/pm_sources.yml");
+        Files.createDirectories(incomingSource.getParent());
+        Files.writeString(
+            incomingSource,
+            """
+            version: 2
+            sources:
+              - name: "pm_ods"
+                schema: "public"
+                tables: []
+            """,
+            StandardCharsets.UTF_8
+        );
+
+        service.copyWorkspaceCompanionFiles(unzipRoot);
+
+        assertThat(tempDir.resolve("models/pm_sources.yml")).exists();
+        assertThat(legacySource).doesNotExist();
+    }
 }

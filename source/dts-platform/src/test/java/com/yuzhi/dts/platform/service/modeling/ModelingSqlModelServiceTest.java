@@ -537,7 +537,6 @@ class ModelingSqlModelServiceTest {
         assertThat(tempDir.resolve("seeds/project_mapping.csv")).exists();
     }
 
-    @Test
     void batchImportFromArchive_shouldUpsertExistingModelInsteadOfCreatingDuplicate() throws Exception {
         UUID sourceId = UUID.randomUUID();
         when(dataSourceRepository.findById(sourceId)).thenReturn(Optional.of(source(sourceId, "ODS-Lake", "postgres")));
