@@ -39,17 +39,20 @@ export default {
 
 /**
  * Normalize menu paths to absolute form.
- * The DB already stores full paths (e.g., "bi/home" not just "home"),
- * so we only need normalizeMenuPath() to add the leading slash.
- * No parent-child joining needed.
+ *
+ * `/menu/tree` may return nested nodes whose child `path` values are relative
+ * segments such as `home` or `screens`. Carry the resolved parent path through
+ * recursion so BI submenus normalize to `/bi/home` instead of `/home`.
+ *
+ * `/menu` flat items that already contain full paths remain unchanged.
  */
-function normalizeMenuTreePaths<T extends Menu | MenuTree>(items: T[]): T[] {
+export function normalizeMenuTreePaths<T extends Menu | MenuTree>(items: T[], parentPath?: string): T[] {
 	return items.map((item) => {
 		const menuTreeItem = item as T & { children?: T[] };
 		const meta = parseMenuMetadata((item as any).metadata);
-		const resolvedPath = resolveMenuPath(item as any, meta);
+		const resolvedPath = resolveMenuPath(item as any, meta, parentPath);
 		const normalizedChildren = Array.isArray(menuTreeItem.children)
-			? normalizeMenuTreePaths(menuTreeItem.children)
+			? normalizeMenuTreePaths(menuTreeItem.children, resolvedPath || parentPath)
 			: undefined;
 
 		return {
