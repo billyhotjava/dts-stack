@@ -97,11 +97,11 @@ public class CollectionResource {
             return ResponseEntity.status(401).contentType(MediaType.TEXT_PLAIN).body("Unauthenticated");
         }
 
-        collectionService.ensurePersonalCollection(user.orElseThrow());
         List<AnalyticsCollection> allCollections = collectionRepository.findAllByArchivedFalseOrderByIdAsc();
         List<Map<String, Object>> result = new java.util.ArrayList<>();
         result.add(ROOT_COLLECTION);
         for (AnalyticsCollection c : allCollections) {
+            if (c.getPersonalOwnerId() != null) continue;
             result.add(toListItem(c, true));
         }
         return ResponseEntity.ok(result);
