@@ -9,6 +9,7 @@ const STORAGE_KEYS = {
 	SESSION_USER: "dts.session.user",
 	LOGOUT_TS: "dts.session.logoutTs",
 	LAST_ACTIVITY: "dts.session.lastActivity",
+	TOKEN_SYNC: "dts.session.tokenSync",
 } as const;
 
 const SESSION_TIMEOUT_MINUTES = Math.max(
@@ -39,8 +40,9 @@ function decodeJwtExp(token?: string): number | null {
 }
 
 function nextRefreshDelayMs(accessToken?: string): number {
-	const MIN_DELAY = 30 * 1000; // 30s
-	const DEFAULT_DELAY = 4 * 60 * 1000; // 4m fallback
+	const MIN_DELAY = 60 * 1000; // 1 min
+	// For non-JWT tokens, refresh at half the session timeout minus 1 min skew
+	const DEFAULT_DELAY = Math.max(MIN_DELAY, Math.floor(SESSION_TIMEOUT_MS / 2) - 60_000);
 	const SKEW = 60 * 1000; // refresh 60s before expiry
 	const expMs = decodeJwtExp(accessToken);
 	if (!expMs) return DEFAULT_DELAY;
@@ -66,6 +68,16 @@ function writeLastActivity(ts: number, lastWriteRef: { current: number }) {
 	lastWriteRef.current = ts;
 	try {
 		localStorage.setItem(STORAGE_KEYS.LAST_ACTIVITY, String(ts));
+	} catch {}
+}
+
+/** Broadcast refreshed tokens to other tabs via localStorage */
+function broadcastTokenSync(tokens: Record<string, unknown>) {
+	try {
+		localStorage.setItem(
+			STORAGE_KEYS.TOKEN_SYNC,
+			JSON.stringify({ ...tokens, ts: Date.now() }),
+		);
 	} catch {}
 }
 
@@ -103,23 +115,32 @@ export default function SessionManager() {
 		}
 	}, [isLoggedIn, loginName]);
 
+	// Listen for cross-tab events: token sync and logout broadcast
 	useEffect(() => {
 		const onStorage = (e: StorageEvent) => {
 			if (!e.key) return;
-			if (e.key === STORAGE_KEYS.SESSION_ID) {
-				const newId = e.newValue;
-				if (isLoggedIn && newId && newId !== mySessionIdRef.current && !logoutInProgressRef.current) {
-					logoutInProgressRef.current = true;
-					toast.error("账号已在其他位置登录，本会话已退出", { id: "session-conflict" });
-					clearUserInfoAndToken();
-					localStorage.setItem(STORAGE_KEYS.LOGOUT_TS, String(Date.now()));
-					window.location.replace(resolveLoginHref());
-				}
+			// Another tab refreshed tokens — adopt them to avoid stale-token 401
+			if (e.key === STORAGE_KEYS.TOKEN_SYNC && e.newValue && isLoggedIn) {
+				try {
+					const synced = JSON.parse(e.newValue);
+					if (synced?.accessToken && synced?.refreshToken) {
+						setUserToken({
+							...token,
+							accessToken: synced.accessToken,
+							refreshToken: synced.refreshToken,
+							adminAccessToken: synced.adminAccessToken || token?.adminAccessToken,
+							adminRefreshToken: synced.adminRefreshToken || token?.adminRefreshToken,
+							adminAccessTokenExpiresAt: synced.adminAccessTokenExpiresAt || token?.adminAccessTokenExpiresAt,
+							adminRefreshTokenExpiresAt: synced.adminRefreshTokenExpiresAt || token?.adminRefreshTokenExpiresAt,
+						});
+					}
+				} catch {}
+				return;
 			}
 			if (e.key === STORAGE_KEYS.LOGOUT_TS && e.newValue) {
 				if (isLoggedIn && !logoutInProgressRef.current) {
 					logoutInProgressRef.current = true;
-					toast.error("账号已在其他位置登录，本会话已退出", { id: "session-conflict" });
+					toast.error("账号已在其他位置退出", { id: "session-conflict" });
 					clearUserInfoAndToken();
 					window.location.replace(resolveLoginHref());
 				}
@@ -127,8 +148,9 @@ export default function SessionManager() {
 		};
 		window.addEventListener("storage", onStorage);
 		return () => window.removeEventListener("storage", onStorage);
-	}, [isLoggedIn, clearUserInfoAndToken]);
+	}, [isLoggedIn, clearUserInfoAndToken, setUserToken, token]);
 
+	// Track user activity
 	useEffect(() => {
 		if (!isLoggedIn) return;
 		const updateActivity = () => {
@@ -152,6 +174,7 @@ export default function SessionManager() {
 		};
 	}, [isLoggedIn]);
 
+	// Token refresh loop
 	useEffect(() => {
 		if (!isLoggedIn || !token?.refreshToken) return;
 		let cancelled = false;
@@ -168,20 +191,17 @@ export default function SessionManager() {
 			if (idleFor > SESSION_TIMEOUT_MS + SESSION_IDLE_GRACE_MS) {
 				if (!logoutInProgressRef.current) {
 					logoutInProgressRef.current = true;
+					const refreshToken = token?.refreshToken;
+					const username = user?.username || user?.email || undefined;
+					if (refreshToken) {
+						userService.logout(refreshToken, username, "IDLE_TIMEOUT").catch(() => undefined);
+					}
 					toast.error("会话已过期，请重新登录", { id: "session-expired" });
 					clearUserInfoAndToken();
 					localStorage.setItem(STORAGE_KEYS.LOGOUT_TS, String(Date.now()));
 					window.location.replace(resolveLoginHref());
 				}
 				cancelled = true;
-				return;
-			}
-			const forcedExpiry = idleFor >= SESSION_TIMEOUT_MS + SESSION_IDLE_GRACE_MS;
-			const nearingTimeout = idleFor >= SESSION_TIMEOUT_MS - SESSION_IDLE_GRACE_MS;
-			const shouldBackoff =
-				!forcedExpiry && nearingTimeout;
-			if (shouldBackoff) {
-				schedule(SESSION_IDLE_GRACE_MS);
 				return;
 			}
 			try {
@@ -197,20 +217,43 @@ export default function SessionManager() {
 				const adminRefreshExpiresAt =
 					normalizeDate((res as any)?.adminRefreshTokenExpiresAt) ?? token.adminRefreshTokenExpiresAt;
 				if (nextAccess) {
-					setUserToken({
+					const newToken = {
 						accessToken: nextAccess,
 						refreshToken: nextRefresh || token.refreshToken,
 						adminAccessToken: nextAdminAccess,
 						adminRefreshToken: nextAdminRefresh,
 						adminAccessTokenExpiresAt: adminAccessExpiresAt,
 						adminRefreshTokenExpiresAt: adminRefreshExpiresAt,
-					});
+					};
+					setUserToken(newToken);
+					broadcastTokenSync(newToken);
 				}
 				if (!cancelled) {
-					const delay = nextRefreshDelayMs(nextAccess || token.accessToken);
-					schedule(delay);
+					schedule(nextRefreshDelayMs(nextAccess || token.accessToken));
 				}
 			} catch (err) {
+				// Don't immediately logout — another tab may have already refreshed.
+				// Check if we received a synced token recently.
+				try {
+					const synced = localStorage.getItem(STORAGE_KEYS.TOKEN_SYNC);
+					if (synced) {
+						const parsed = JSON.parse(synced);
+						if (parsed?.ts && Date.now() - parsed.ts < 30_000 && parsed.accessToken) {
+							// Another tab refreshed recently — adopt its token and retry later
+							setUserToken({
+								...token,
+								accessToken: parsed.accessToken,
+								refreshToken: parsed.refreshToken || token.refreshToken,
+								adminAccessToken: parsed.adminAccessToken || token.adminAccessToken,
+								adminRefreshToken: parsed.adminRefreshToken || token.adminRefreshToken,
+							});
+							if (!cancelled) {
+								schedule(nextRefreshDelayMs(parsed.accessToken));
+							}
+							return;
+						}
+					}
+				} catch {}
 				if (!logoutInProgressRef.current) {
 					logoutInProgressRef.current = true;
 					toast.error("会话已过期，请重新登录", { id: "session-expired" });
@@ -228,8 +271,9 @@ export default function SessionManager() {
 			cancelled = true;
 			if (timer) window.clearTimeout(timer);
 		};
-	}, [isLoggedIn, token?.refreshToken, token?.accessToken, setUserToken, clearUserInfoAndToken]);
+	}, [isLoggedIn, token?.refreshToken, token?.accessToken, setUserToken, clearUserInfoAndToken, user?.username, user?.email]);
 
+	// Pure idle timer — logout after SESSION_TIMEOUT_MS of no interaction
 	useEffect(() => {
 		if (!isLoggedIn) return;
 		let timer: number | undefined;
