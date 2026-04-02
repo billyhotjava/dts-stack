@@ -15,3 +15,7 @@
 - `network-*.har`
 - `logs-*.md`
 - `release-*.md`
+
+## 已补充模板
+- `manual-verification-checklist.md`
+- `release-runbook.md`

@@ -25,3 +25,7 @@
 - 浏览器抓包: `../assets/network-*.har`
 - 日志摘录: `../assets/logs-*.md`
 - 发布和回滚记录: `../assets/release-*.md`
+
+## 手工验证入口
+- 会话矩阵与稳定性验证: `../assets/manual-verification-checklist.md`
+- 发布窗口与回滚执行: `../assets/release-runbook.md`
