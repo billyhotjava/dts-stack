@@ -66,7 +66,8 @@ export default function AdminGuard({ children }: Props) {
 		queryKey: ["admin", "whoami"],
 		queryFn: adminApi.getWhoami,
 		retry: false,
-		enabled: guardState === "idle",
+		// Only fetch when we have a token AND guard is idle — prevents 401 on login page
+		enabled: guardState === "idle" && Boolean(token?.accessToken),
 	});
 
 	const redirectToLogin = useCallback(

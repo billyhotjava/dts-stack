@@ -1,0 +1,648 @@
+{
+  "schemaVersion": 2,
+  "id": "fin-auxiliary-balance",
+  "name": "辅助余额大屏",
+  "description": "辅助余额驾驶舱：部门分布、科目TOP、费用结构、余额明细与合同排行。",
+  "width": 1920,
+  "height": 1080,
+  "backgroundColor": "#eaf2fb",
+  "theme": "light-business",
+  "globalVariables": [
+    {
+      "key": "filterDept",
+      "label": "部门筛选",
+      "type": "string",
+      "defaultValue": ""
+    },
+    {
+      "key": "searchText",
+      "label": "搜索关键词",
+      "type": "string",
+      "defaultValue": ""
+    }
+  ],
+  "components": [
+    {
+      "id": "fin-aux-header-bar",
+      "type": "shape",
+      "name": "头部背景条",
+      "x": 0,
+      "y": 0,
+      "width": 1920,
+      "height": 100,
+      "zIndex": 5,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "shapeType": "rect",
+        "fillColor": "#044B8C",
+        "borderColor": "#044B8C",
+        "borderWidth": 0,
+        "radius": 0
+      }
+    },
+    {
+      "id": "fin-aux-title",
+      "type": "title",
+      "name": "辅助余额大屏",
+      "x": 44,
+      "y": 24,
+      "width": 720,
+      "height": 42,
+      "zIndex": 60,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "text": "辅助余额大屏",
+        "fontSize": 32,
+        "fontWeight": "800",
+        "color": "#ffffff",
+        "textAlign": "flex-start"
+      }
+    },
+    {
+      "id": "fin-aux-filter-dept",
+      "type": "filter-select",
+      "name": "部门筛选",
+      "x": 1400,
+      "y": 28,
+      "width": 180,
+      "height": 58,
+      "zIndex": 65,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "label": "部门",
+        "variableKey": "filterDept",
+        "options": [],
+        "placeholder": "全部部门",
+        "labelColor": "rgba(255, 255, 255, 0.82)",
+        "inputBackground": "rgba(255, 255, 255, 0.18)",
+        "inputBorderColor": "rgba(255, 255, 255, 0.32)",
+        "inputTextColor": "#ffffff"
+      },
+      "dataSource": {
+        "type": "sql",
+        "sqlConfig": {
+          "databaseId": "{{DATABASE_ID}}",
+          "query": "SELECT DISTINCT dept_name AS label, dept_name AS value FROM aux_balance ORDER BY dept_name",
+          "queryTimeoutSeconds": 30,
+          "maxRows": 200
+        }
+      }
+    },
+    {
+      "id": "fin-aux-filter-search",
+      "type": "filter-input",
+      "name": "搜索关键词",
+      "x": 1600,
+      "y": 28,
+      "width": 200,
+      "height": 58,
+      "zIndex": 65,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "label": "搜索",
+        "variableKey": "searchText",
+        "placeholder": "科目/合同关键词",
+        "labelColor": "rgba(255, 255, 255, 0.82)",
+        "inputBackground": "rgba(255, 255, 255, 0.18)",
+        "inputBorderColor": "rgba(255, 255, 255, 0.32)",
+        "inputTextColor": "#ffffff"
+      }
+    },
+    {
+      "id": "fin-aux-explanation-shape",
+      "type": "shape",
+      "name": "说明",
+      "x": 1832,
+      "y": 34,
+      "width": 68,
+      "height": 30,
+      "zIndex": 66,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "shapeType": "rect",
+        "fillColor": "rgba(255, 255, 255, 0.92)",
+        "borderColor": "#3b82f6",
+        "borderWidth": 1,
+        "radius": 999
+      },
+      "actions": [
+        {
+          "type": "open-panel",
+          "panelTitle": "说明卡",
+          "panelBodyTemplate": "辅助余额驾驶舱：聚焦辅助核算科目的余额分布与合同关联。\n\n• 先看 KPI 卡片了解余额总量、科目/合同/部门覆盖面。\n• 中部三图分别从科目TOP10、部门占比、费用类别三个维度拆解余额结构。\n• 底部明细表支持搜索与排序，合同TOP8排行榜定位大额合同。\n\n筛选器联动：选择部门或输入关键词，所有组件同步刷新。"
+        }
+      ]
+    },
+    {
+      "id": "fin-aux-explanation-label",
+      "type": "title",
+      "name": "说明",
+      "x": 1832,
+      "y": 34,
+      "width": 68,
+      "height": 30,
+      "zIndex": 67,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "text": "说明",
+        "fontSize": 16,
+        "fontWeight": "700",
+        "color": "#3b82f6",
+        "textAlign": "center"
+      },
+      "actions": [
+        {
+          "type": "open-panel",
+          "panelTitle": "说明卡",
+          "panelBodyTemplate": "辅助余额驾驶舱：聚焦辅助核算科目的余额分布与合同关联。\n\n• 先看 KPI 卡片了解余额总量、科目/合同/部门覆盖面。\n• 中部三图分别从科目TOP10、部门占比、费用类别三个维度拆解余额结构。\n• 底部明细表支持搜索与排序，合同TOP8排行榜定位大额合同。\n\n筛选器联动：选择部门或输入关键词，所有组件同步刷新。"
+        }
+      ]
+    },
+
+    {
+      "id": "fin-aux-row1-bg",
+      "type": "shape",
+      "name": "KPI行背景",
+      "x": 36,
+      "y": 110,
+      "width": 1848,
+      "height": 140,
+      "zIndex": 1,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "shapeType": "rect",
+        "fillColor": "rgba(255, 255, 255, 0.96)",
+        "borderColor": "rgba(148, 163, 184, 0.24)",
+        "borderWidth": 1,
+        "radius": 18
+      }
+    },
+
+    {
+      "id": "fin-aux-kpi-total-balance",
+      "type": "number-card",
+      "name": "余额合计",
+      "x": 58,
+      "y": 120,
+      "width": 430,
+      "height": 118,
+      "zIndex": 12,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "title": "余额合计",
+        "value": 0,
+        "suffix": " 万",
+        "precision": 2,
+        "titleFontSize": 17,
+        "valueFontSize": 34,
+        "titleColor": "#475569",
+        "valueColor": "#0f172a",
+        "backgroundColor": "#ffffff"
+      },
+      "dataSource": {
+        "type": "sql",
+        "sqlConfig": {
+          "databaseId": "{{DATABASE_ID}}",
+          "query": "SELECT\n    SUM(balance) AS total_balance,\n    COUNT(DISTINCT subject_code) AS subject_count,\n    COUNT(DISTINCT CASE WHEN contract_name IS NOT NULL AND contract_name != '\u2014' THEN contract_name END) AS contract_count,\n    COUNT(DISTINCT dept_name) AS dept_count\nFROM aux_balance\nWHERE 1=1\n  AND (:dept_filter IS NULL OR dept_name = :dept_filter)\n  AND (:search_text IS NULL OR subject_name LIKE '%' || :search_text || '%' OR subject_code LIKE '%' || :search_text || '%' OR contract_name LIKE '%' || :search_text || '%')",
+          "queryTimeoutSeconds": 30,
+          "maxRows": 2000,
+          "parameterBindings": [
+            {"name": "dept_filter", "variableKey": "filterDept"},
+            {"name": "search_text", "variableKey": "searchText"}
+          ]
+        }
+      }
+    },
+    {
+      "id": "fin-aux-kpi-subject-count",
+      "type": "number-card",
+      "name": "科目数量",
+      "x": 510,
+      "y": 120,
+      "width": 430,
+      "height": 118,
+      "zIndex": 12,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "title": "科目数量",
+        "value": 0,
+        "suffix": " 个",
+        "precision": 0,
+        "titleFontSize": 17,
+        "valueFontSize": 34,
+        "titleColor": "#475569",
+        "valueColor": "#1a5276",
+        "backgroundColor": "#ffffff"
+      },
+      "dataSource": {
+        "type": "sql",
+        "sqlConfig": {
+          "databaseId": "{{DATABASE_ID}}",
+          "query": "SELECT\n    SUM(balance) AS total_balance,\n    COUNT(DISTINCT subject_code) AS subject_count,\n    COUNT(DISTINCT CASE WHEN contract_name IS NOT NULL AND contract_name != '\u2014' THEN contract_name END) AS contract_count,\n    COUNT(DISTINCT dept_name) AS dept_count\nFROM aux_balance\nWHERE 1=1\n  AND (:dept_filter IS NULL OR dept_name = :dept_filter)\n  AND (:search_text IS NULL OR subject_name LIKE '%' || :search_text || '%' OR subject_code LIKE '%' || :search_text || '%' OR contract_name LIKE '%' || :search_text || '%')",
+          "queryTimeoutSeconds": 30,
+          "maxRows": 2000,
+          "parameterBindings": [
+            {"name": "dept_filter", "variableKey": "filterDept"},
+            {"name": "search_text", "variableKey": "searchText"}
+          ]
+        }
+      }
+    },
+    {
+      "id": "fin-aux-kpi-contract-count",
+      "type": "number-card",
+      "name": "合同数量",
+      "x": 962,
+      "y": 120,
+      "width": 430,
+      "height": 118,
+      "zIndex": 12,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "title": "合同数量",
+        "value": 0,
+        "suffix": " 份",
+        "precision": 0,
+        "titleFontSize": 17,
+        "valueFontSize": 34,
+        "titleColor": "#475569",
+        "valueColor": "#1e8449",
+        "backgroundColor": "#ffffff"
+      },
+      "dataSource": {
+        "type": "sql",
+        "sqlConfig": {
+          "databaseId": "{{DATABASE_ID}}",
+          "query": "SELECT\n    SUM(balance) AS total_balance,\n    COUNT(DISTINCT subject_code) AS subject_count,\n    COUNT(DISTINCT CASE WHEN contract_name IS NOT NULL AND contract_name != '\u2014' THEN contract_name END) AS contract_count,\n    COUNT(DISTINCT dept_name) AS dept_count\nFROM aux_balance\nWHERE 1=1\n  AND (:dept_filter IS NULL OR dept_name = :dept_filter)\n  AND (:search_text IS NULL OR subject_name LIKE '%' || :search_text || '%' OR subject_code LIKE '%' || :search_text || '%' OR contract_name LIKE '%' || :search_text || '%')",
+          "queryTimeoutSeconds": 30,
+          "maxRows": 2000,
+          "parameterBindings": [
+            {"name": "dept_filter", "variableKey": "filterDept"},
+            {"name": "search_text", "variableKey": "searchText"}
+          ]
+        }
+      }
+    },
+    {
+      "id": "fin-aux-kpi-dept-count",
+      "type": "number-card",
+      "name": "部门数量",
+      "x": 1414,
+      "y": 120,
+      "width": 430,
+      "height": 118,
+      "zIndex": 12,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "title": "部门数量",
+        "value": 0,
+        "suffix": " 个",
+        "precision": 0,
+        "titleFontSize": 17,
+        "valueFontSize": 34,
+        "titleColor": "#475569",
+        "valueColor": "#2980b9",
+        "backgroundColor": "#ffffff"
+      },
+      "dataSource": {
+        "type": "sql",
+        "sqlConfig": {
+          "databaseId": "{{DATABASE_ID}}",
+          "query": "SELECT\n    SUM(balance) AS total_balance,\n    COUNT(DISTINCT subject_code) AS subject_count,\n    COUNT(DISTINCT CASE WHEN contract_name IS NOT NULL AND contract_name != '\u2014' THEN contract_name END) AS contract_count,\n    COUNT(DISTINCT dept_name) AS dept_count\nFROM aux_balance\nWHERE 1=1\n  AND (:dept_filter IS NULL OR dept_name = :dept_filter)\n  AND (:search_text IS NULL OR subject_name LIKE '%' || :search_text || '%' OR subject_code LIKE '%' || :search_text || '%' OR contract_name LIKE '%' || :search_text || '%')",
+          "queryTimeoutSeconds": 30,
+          "maxRows": 2000,
+          "parameterBindings": [
+            {"name": "dept_filter", "variableKey": "filterDept"},
+            {"name": "search_text", "variableKey": "searchText"}
+          ]
+        }
+      }
+    },
+
+    {
+      "id": "fin-aux-row2-left-bg",
+      "type": "shape",
+      "name": "图表行左背景",
+      "x": 36,
+      "y": 268,
+      "width": 608,
+      "height": 360,
+      "zIndex": 1,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "shapeType": "rect",
+        "fillColor": "rgba(255, 255, 255, 0.96)",
+        "borderColor": "rgba(148, 163, 184, 0.24)",
+        "borderWidth": 1,
+        "radius": 18
+      }
+    },
+    {
+      "id": "fin-aux-row2-center-bg",
+      "type": "shape",
+      "name": "图表行中背景",
+      "x": 656,
+      "y": 268,
+      "width": 608,
+      "height": 360,
+      "zIndex": 1,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "shapeType": "rect",
+        "fillColor": "rgba(255, 255, 255, 0.96)",
+        "borderColor": "rgba(148, 163, 184, 0.24)",
+        "borderWidth": 1,
+        "radius": 18
+      }
+    },
+    {
+      "id": "fin-aux-row2-right-bg",
+      "type": "shape",
+      "name": "图表行右背景",
+      "x": 1276,
+      "y": 268,
+      "width": 608,
+      "height": 360,
+      "zIndex": 1,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "shapeType": "rect",
+        "fillColor": "rgba(255, 255, 255, 0.96)",
+        "borderColor": "rgba(148, 163, 184, 0.24)",
+        "borderWidth": 1,
+        "radius": 18
+      }
+    },
+
+    {
+      "id": "fin-aux-chart-subject-top10",
+      "type": "bar-chart",
+      "name": "按科目分布TOP10",
+      "x": 48,
+      "y": 278,
+      "width": 584,
+      "height": 340,
+      "zIndex": 15,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "title": "按科目分布 TOP 10",
+        "direction": "horizontal",
+        "xAxisData": [],
+        "series": [
+          {
+            "name": "余额",
+            "data": []
+          }
+        ],
+        "seriesColors": ["#3b82f6"]
+      },
+      "dataSource": {
+        "type": "sql",
+        "sqlConfig": {
+          "databaseId": "{{DATABASE_ID}}",
+          "query": "SELECT\n    subject_code || ' ' || subject_name AS label,\n    SUM(balance) AS value\nFROM aux_balance\nWHERE 1=1\n  AND (:dept_filter IS NULL OR dept_name = :dept_filter)\n  AND (:search_text IS NULL OR subject_name LIKE '%' || :search_text || '%' OR subject_code LIKE '%' || :search_text || '%' OR contract_name LIKE '%' || :search_text || '%')\nGROUP BY subject_code, subject_name\nORDER BY value DESC\nLIMIT 10",
+          "queryTimeoutSeconds": 30,
+          "maxRows": 2000,
+          "parameterBindings": [
+            {"name": "dept_filter", "variableKey": "filterDept"},
+            {"name": "search_text", "variableKey": "searchText"}
+          ]
+        }
+      }
+    },
+    {
+      "id": "fin-aux-chart-dept-pie",
+      "type": "pie-chart",
+      "name": "按部门占比",
+      "x": 668,
+      "y": 278,
+      "width": 584,
+      "height": 340,
+      "zIndex": 15,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "title": "按部门占比",
+        "pieType": "doughnut",
+        "series": [
+          {
+            "name": "余额",
+            "data": []
+          }
+        ],
+        "seriesColors": ["#3b82f6", "#1e8449", "#d4850a", "#c0392b", "#8e44ad", "#2980b9", "#16a085", "#f39c12"]
+      },
+      "dataSource": {
+        "type": "sql",
+        "sqlConfig": {
+          "databaseId": "{{DATABASE_ID}}",
+          "query": "SELECT\n    dept_name AS label,\n    SUM(balance) AS value\nFROM aux_balance\nWHERE 1=1\n  AND (:dept_filter IS NULL OR dept_name = :dept_filter)\n  AND (:search_text IS NULL OR subject_name LIKE '%' || :search_text || '%' OR subject_code LIKE '%' || :search_text || '%' OR contract_name LIKE '%' || :search_text || '%')\nGROUP BY dept_name\nORDER BY value DESC",
+          "queryTimeoutSeconds": 30,
+          "maxRows": 2000,
+          "parameterBindings": [
+            {"name": "dept_filter", "variableKey": "filterDept"},
+            {"name": "search_text", "variableKey": "searchText"}
+          ]
+        }
+      }
+    },
+    {
+      "id": "fin-aux-chart-category-treemap",
+      "type": "treemap-chart",
+      "name": "按费用类别分布",
+      "x": 1288,
+      "y": 278,
+      "width": 584,
+      "height": 340,
+      "zIndex": 15,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "title": "按费用类别分布",
+        "series": [
+          {
+            "name": "余额",
+            "data": []
+          }
+        ],
+        "seriesColors": ["#3b82f6", "#1e8449", "#d4850a", "#c0392b", "#8e44ad", "#2980b9", "#16a085"]
+      },
+      "dataSource": {
+        "type": "sql",
+        "sqlConfig": {
+          "databaseId": "{{DATABASE_ID}}",
+          "query": "SELECT\n    CASE\n        WHEN subject_code LIKE '5001%' THEN '\u539f\u6750\u6599/\u8bbe\u5907'\n        WHEN subject_code LIKE '5101%' THEN '\u5916\u534f/\u670d\u52a1'\n        WHEN subject_code LIKE '5201%' THEN '\u6298\u65e7'\n        WHEN subject_code LIKE '5301%' THEN '\u68c0\u6d4b\u8bd5\u9a8c'\n        WHEN subject_code LIKE '5401%' THEN '\u8bbe\u8ba1\u54a8\u8be2'\n        WHEN subject_code LIKE '5501%' THEN '\u79df\u8d41'\n        WHEN subject_code LIKE '5601%' THEN '\u57f9\u8bad'\n        ELSE '\u5176\u4ed6'\n    END AS label,\n    SUM(balance) AS value\nFROM aux_balance\nWHERE 1=1\n  AND (:dept_filter IS NULL OR dept_name = :dept_filter)\n  AND (:search_text IS NULL OR subject_name LIKE '%' || :search_text || '%' OR subject_code LIKE '%' || :search_text || '%' OR contract_name LIKE '%' || :search_text || '%')\nGROUP BY label\nORDER BY value DESC",
+          "queryTimeoutSeconds": 30,
+          "maxRows": 2000,
+          "parameterBindings": [
+            {"name": "dept_filter", "variableKey": "filterDept"},
+            {"name": "search_text", "variableKey": "searchText"}
+          ]
+        }
+      }
+    },
+
+    {
+      "id": "fin-aux-row3-left-bg",
+      "type": "shape",
+      "name": "明细行左背景",
+      "x": 36,
+      "y": 646,
+      "width": 1200,
+      "height": 360,
+      "zIndex": 1,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "shapeType": "rect",
+        "fillColor": "rgba(255, 255, 255, 0.96)",
+        "borderColor": "rgba(148, 163, 184, 0.24)",
+        "borderWidth": 1,
+        "radius": 18
+      }
+    },
+    {
+      "id": "fin-aux-row3-right-bg",
+      "type": "shape",
+      "name": "明细行右背景",
+      "x": 1248,
+      "y": 646,
+      "width": 636,
+      "height": 360,
+      "zIndex": 1,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "shapeType": "rect",
+        "fillColor": "rgba(255, 255, 255, 0.96)",
+        "borderColor": "rgba(148, 163, 184, 0.24)",
+        "borderWidth": 1,
+        "radius": 18
+      }
+    },
+
+    {
+      "id": "fin-aux-table-detail",
+      "type": "table",
+      "name": "辅助余额明细表",
+      "x": 48,
+      "y": 656,
+      "width": 1176,
+      "height": 340,
+      "zIndex": 15,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "title": "辅助余额明细表",
+        "header": [
+          "科目编号",
+          "科目名称",
+          "部门名称",
+          "合同名称",
+          "余额"
+        ],
+        "fontSize": 16,
+        "headerAlign": "center",
+        "headerColor": "#0f172a",
+        "headerBackground": "#dbe9f6",
+        "bodyColor": "#334155",
+        "bodyBackground": "#ffffff",
+        "oddRowBackground": "#ffffff",
+        "evenRowBackground": "#f5f9fd",
+        "borderColor": "rgba(148, 163, 184, 0.24)",
+        "enableSort": true,
+        "enablePagination": true,
+        "pageSize": 8,
+        "freezeHeader": true,
+        "conditionalStyles": [
+          {
+            "column": "余额",
+            "condition": "> 3000000",
+            "color": "#c0392b"
+          },
+          {
+            "column": "余额",
+            "condition": "> 1000000",
+            "color": "#d4850a"
+          }
+        ]
+      },
+      "dataSource": {
+        "type": "sql",
+        "sqlConfig": {
+          "databaseId": "{{DATABASE_ID}}",
+          "query": "SELECT\n    subject_code,\n    subject_name,\n    dept_name,\n    contract_name,\n    balance\nFROM aux_balance\nWHERE 1=1\n  AND (:dept_filter IS NULL OR dept_name = :dept_filter)\n  AND (:search_text IS NULL OR subject_name LIKE '%' || :search_text || '%' OR subject_code LIKE '%' || :search_text || '%' OR contract_name LIKE '%' || :search_text || '%')\nORDER BY subject_code, dept_name",
+          "queryTimeoutSeconds": 30,
+          "maxRows": 2000,
+          "parameterBindings": [
+            {"name": "dept_filter", "variableKey": "filterDept"},
+            {"name": "search_text", "variableKey": "searchText"}
+          ]
+        }
+      }
+    },
+    {
+      "id": "fin-aux-table-contract-top8",
+      "type": "table",
+      "name": "合同金额TOP8",
+      "x": 1260,
+      "y": 656,
+      "width": 612,
+      "height": 340,
+      "zIndex": 15,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "title": "合同金额 TOP 8",
+        "header": [
+          "合同名称",
+          "部门",
+          "余额"
+        ],
+        "fontSize": 16,
+        "headerAlign": "center",
+        "headerColor": "#0f172a",
+        "headerBackground": "#dbe9f6",
+        "bodyColor": "#334155",
+        "bodyBackground": "#ffffff",
+        "oddRowBackground": "#ffffff",
+        "evenRowBackground": "#f5f9fd",
+        "borderColor": "rgba(148, 163, 184, 0.24)",
+        "enableSort": false,
+        "enablePagination": false,
+        "pageSize": 8,
+        "freezeHeader": true,
+        "highlightTopN": 3,
+        "highlightBackground": "#e0edfa"
+      },
+      "dataSource": {
+        "type": "sql",
+        "sqlConfig": {
+          "databaseId": "{{DATABASE_ID}}",
+          "query": "SELECT\n    contract_name AS contract,\n    dept_name AS dept,\n    SUM(balance) AS balance\nFROM aux_balance\nWHERE 1=1\n  AND (:dept_filter IS NULL OR dept_name = :dept_filter)\n  AND (:search_text IS NULL OR subject_name LIKE '%' || :search_text || '%' OR subject_code LIKE '%' || :search_text || '%' OR contract_name LIKE '%' || :search_text || '%')\n  AND contract_name IS NOT NULL\n  AND contract_name != '\u2014'\nGROUP BY contract_name, dept_name\nORDER BY balance DESC\nLIMIT 8",
+          "queryTimeoutSeconds": 30,
+          "maxRows": 2000,
+          "parameterBindings": [
+            {"name": "dept_filter", "variableKey": "filterDept"},
+            {"name": "search_text", "variableKey": "searchText"}
+          ]
+        }
+      }
+    }
+  ]
+}

@@ -1,0 +1,652 @@
+{
+  "schemaVersion": 2,
+  "id": "fin-personal-balance",
+  "name": "个人辅助余额大屏",
+  "description": "个人维度辅助余额驾驶舱：借贷分布、人员排行、部门结构和个人明细。",
+  "width": 1920,
+  "height": 1080,
+  "backgroundColor": "#eaf2fb",
+  "theme": "light-business",
+  "globalVariables": [
+    {
+      "key": "filterEmployee",
+      "label": "职工筛选",
+      "type": "string",
+      "defaultValue": ""
+    },
+    {
+      "key": "filterDept",
+      "label": "部门筛选",
+      "type": "string",
+      "defaultValue": ""
+    },
+    {
+      "key": "searchText",
+      "label": "搜索关键词",
+      "type": "string",
+      "defaultValue": ""
+    }
+  ],
+  "components": [
+    {
+      "id": "fin-pb-header-bar",
+      "type": "shape",
+      "name": "header-bar",
+      "x": 0,
+      "y": 0,
+      "width": 1920,
+      "height": 100,
+      "zIndex": 5,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "shapeType": "rect",
+        "fillColor": "#044B8C",
+        "borderColor": "#044B8C",
+        "borderWidth": 0,
+        "radius": 0
+      }
+    },
+    {
+      "id": "fin-pb-title",
+      "type": "title",
+      "name": "个人辅助余额大屏",
+      "x": 44,
+      "y": 24,
+      "width": 720,
+      "height": 42,
+      "zIndex": 60,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "text": "个人辅助余额大屏",
+        "fontSize": 32,
+        "fontWeight": "800",
+        "color": "#ffffff",
+        "textAlign": "flex-start"
+      }
+    },
+    {
+      "id": "fin-pb-filter-employee",
+      "type": "filter-select",
+      "name": "职工筛选",
+      "x": 940,
+      "y": 28,
+      "width": 180,
+      "height": 58,
+      "zIndex": 65,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "label": "职工筛选",
+        "variableKey": "filterEmployee",
+        "labelColor": "rgba(255, 255, 255, 0.82)",
+        "inputBackground": "rgba(255, 255, 255, 0.18)",
+        "inputBorderColor": "rgba(255, 255, 255, 0.32)",
+        "inputTextColor": "#ffffff"
+      }
+    },
+    {
+      "id": "fin-pb-filter-dept",
+      "type": "filter-select",
+      "name": "部门筛选",
+      "x": 1140,
+      "y": 28,
+      "width": 180,
+      "height": 58,
+      "zIndex": 65,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "label": "部门筛选",
+        "variableKey": "filterDept",
+        "labelColor": "rgba(255, 255, 255, 0.82)",
+        "inputBackground": "rgba(255, 255, 255, 0.18)",
+        "inputBorderColor": "rgba(255, 255, 255, 0.32)",
+        "inputTextColor": "#ffffff"
+      }
+    },
+    {
+      "id": "fin-pb-filter-search",
+      "type": "filter-input",
+      "name": "搜索关键词",
+      "x": 1340,
+      "y": 28,
+      "width": 220,
+      "height": 58,
+      "zIndex": 65,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "label": "搜索",
+        "variableKey": "searchText",
+        "placeholder": "科目/职工名称",
+        "labelColor": "rgba(255, 255, 255, 0.82)",
+        "inputBackground": "rgba(255, 255, 255, 0.18)",
+        "inputBorderColor": "rgba(255, 255, 255, 0.32)",
+        "inputTextColor": "#ffffff"
+      }
+    },
+    {
+      "id": "fin-pb-row1-bg",
+      "type": "shape",
+      "name": "row1-background",
+      "x": 36,
+      "y": 110,
+      "width": 1848,
+      "height": 140,
+      "zIndex": 1,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "shapeType": "rect",
+        "fillColor": "rgba(255, 255, 255, 0.96)",
+        "borderColor": "rgba(148, 163, 184, 0.24)",
+        "borderWidth": 1,
+        "radius": 18
+      }
+    },
+    {
+      "id": "fin-pb-row2-left",
+      "type": "shape",
+      "name": "row2-left-background",
+      "x": 36,
+      "y": 268,
+      "width": 608,
+      "height": 360,
+      "zIndex": 1,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "shapeType": "rect",
+        "fillColor": "rgba(255, 255, 255, 0.96)",
+        "borderColor": "rgba(148, 163, 184, 0.24)",
+        "borderWidth": 1,
+        "radius": 18
+      }
+    },
+    {
+      "id": "fin-pb-row2-center",
+      "type": "shape",
+      "name": "row2-center-background",
+      "x": 660,
+      "y": 268,
+      "width": 608,
+      "height": 360,
+      "zIndex": 1,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "shapeType": "rect",
+        "fillColor": "rgba(255, 255, 255, 0.96)",
+        "borderColor": "rgba(148, 163, 184, 0.24)",
+        "borderWidth": 1,
+        "radius": 18
+      }
+    },
+    {
+      "id": "fin-pb-row2-right",
+      "type": "shape",
+      "name": "row2-right-background",
+      "x": 1284,
+      "y": 268,
+      "width": 600,
+      "height": 360,
+      "zIndex": 1,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "shapeType": "rect",
+        "fillColor": "rgba(255, 255, 255, 0.96)",
+        "borderColor": "rgba(148, 163, 184, 0.24)",
+        "borderWidth": 1,
+        "radius": 18
+      }
+    },
+    {
+      "id": "fin-pb-row3-left",
+      "type": "shape",
+      "name": "row3-left-background",
+      "x": 36,
+      "y": 646,
+      "width": 1240,
+      "height": 360,
+      "zIndex": 1,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "shapeType": "rect",
+        "fillColor": "rgba(255, 255, 255, 0.96)",
+        "borderColor": "rgba(148, 163, 184, 0.24)",
+        "borderWidth": 1,
+        "radius": 18
+      }
+    },
+    {
+      "id": "fin-pb-row3-right",
+      "type": "shape",
+      "name": "row3-right-background",
+      "x": 1292,
+      "y": 646,
+      "width": 592,
+      "height": 360,
+      "zIndex": 1,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "shapeType": "rect",
+        "fillColor": "rgba(255, 255, 255, 0.96)",
+        "borderColor": "rgba(148, 163, 184, 0.24)",
+        "borderWidth": 1,
+        "radius": 18
+      }
+    },
+    {
+      "id": "fin-pb-kpi-net",
+      "type": "number-card",
+      "name": "净余额",
+      "x": 58,
+      "y": 120,
+      "width": 340,
+      "height": 118,
+      "zIndex": 12,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "title": "净余额",
+        "value": 0,
+        "suffix": " 万",
+        "precision": 2,
+        "titleFontSize": 17,
+        "valueFontSize": 34,
+        "titleColor": "#475569",
+        "valueColor": "#0f172a",
+        "backgroundColor": "#ffffff"
+      },
+      "dataSource": {
+        "type": "sql",
+        "sqlConfig": {
+          "databaseId": "{{DATABASE_ID}}",
+          "query": "SELECT\n    SUM(balance) / 10000.0 AS net_balance\nFROM aux_balance_personal\nWHERE 1=1\n  AND (:employee_filter IS NULL OR employee_name = :employee_filter)\n  AND (:dept_filter IS NULL OR employee_dept = :dept_filter)\n  AND (:search_text IS NULL\n       OR subject_name LIKE '%' || :search_text || '%'\n       OR subject_code LIKE '%' || :search_text || '%'\n       OR employee_name LIKE '%' || :search_text || '%')",
+          "queryTimeoutSeconds": 30,
+          "maxRows": 2000,
+          "parameterBindings": [
+            { "name": "employee_filter", "variableKey": "filterEmployee" },
+            { "name": "dept_filter", "variableKey": "filterDept" },
+            { "name": "search_text", "variableKey": "searchText" }
+          ]
+        }
+      }
+    },
+    {
+      "id": "fin-pb-kpi-debit",
+      "type": "number-card",
+      "name": "借方合计",
+      "x": 420,
+      "y": 120,
+      "width": 340,
+      "height": 118,
+      "zIndex": 12,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "title": "借方合计",
+        "value": 0,
+        "suffix": " 万",
+        "precision": 2,
+        "titleFontSize": 17,
+        "valueFontSize": 34,
+        "titleColor": "#475569",
+        "valueColor": "#0f172a",
+        "backgroundColor": "#ffffff"
+      },
+      "dataSource": {
+        "type": "sql",
+        "sqlConfig": {
+          "databaseId": "{{DATABASE_ID}}",
+          "query": "SELECT\n    SUM(CASE WHEN balance > 0 THEN balance ELSE 0 END) / 10000.0 AS debit_total\nFROM aux_balance_personal\nWHERE 1=1\n  AND (:employee_filter IS NULL OR employee_name = :employee_filter)\n  AND (:dept_filter IS NULL OR employee_dept = :dept_filter)\n  AND (:search_text IS NULL\n       OR subject_name LIKE '%' || :search_text || '%'\n       OR subject_code LIKE '%' || :search_text || '%'\n       OR employee_name LIKE '%' || :search_text || '%')",
+          "queryTimeoutSeconds": 30,
+          "maxRows": 2000,
+          "parameterBindings": [
+            { "name": "employee_filter", "variableKey": "filterEmployee" },
+            { "name": "dept_filter", "variableKey": "filterDept" },
+            { "name": "search_text", "variableKey": "searchText" }
+          ]
+        }
+      }
+    },
+    {
+      "id": "fin-pb-kpi-credit",
+      "type": "number-card",
+      "name": "贷方合计",
+      "x": 782,
+      "y": 120,
+      "width": 340,
+      "height": 118,
+      "zIndex": 12,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "title": "贷方合计",
+        "value": 0,
+        "suffix": " 万",
+        "precision": 2,
+        "titleFontSize": 17,
+        "valueFontSize": 34,
+        "titleColor": "#475569",
+        "valueColor": "#0f172a",
+        "backgroundColor": "#ffffff"
+      },
+      "dataSource": {
+        "type": "sql",
+        "sqlConfig": {
+          "databaseId": "{{DATABASE_ID}}",
+          "query": "SELECT\n    SUM(CASE WHEN balance < 0 THEN ABS(balance) ELSE 0 END) / 10000.0 AS credit_total\nFROM aux_balance_personal\nWHERE 1=1\n  AND (:employee_filter IS NULL OR employee_name = :employee_filter)\n  AND (:dept_filter IS NULL OR employee_dept = :dept_filter)\n  AND (:search_text IS NULL\n       OR subject_name LIKE '%' || :search_text || '%'\n       OR subject_code LIKE '%' || :search_text || '%'\n       OR employee_name LIKE '%' || :search_text || '%')",
+          "queryTimeoutSeconds": 30,
+          "maxRows": 2000,
+          "parameterBindings": [
+            { "name": "employee_filter", "variableKey": "filterEmployee" },
+            { "name": "dept_filter", "variableKey": "filterDept" },
+            { "name": "search_text", "variableKey": "searchText" }
+          ]
+        }
+      }
+    },
+    {
+      "id": "fin-pb-kpi-employees",
+      "type": "number-card",
+      "name": "涉及职工",
+      "x": 1144,
+      "y": 120,
+      "width": 340,
+      "height": 118,
+      "zIndex": 12,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "title": "涉及职工",
+        "value": 0,
+        "suffix": " 人",
+        "precision": 0,
+        "titleFontSize": 17,
+        "valueFontSize": 34,
+        "titleColor": "#475569",
+        "valueColor": "#0f172a",
+        "backgroundColor": "#ffffff"
+      },
+      "dataSource": {
+        "type": "sql",
+        "sqlConfig": {
+          "databaseId": "{{DATABASE_ID}}",
+          "query": "SELECT\n    COUNT(DISTINCT employee_name) AS employee_count\nFROM aux_balance_personal\nWHERE 1=1\n  AND (:employee_filter IS NULL OR employee_name = :employee_filter)\n  AND (:dept_filter IS NULL OR employee_dept = :dept_filter)\n  AND (:search_text IS NULL\n       OR subject_name LIKE '%' || :search_text || '%'\n       OR subject_code LIKE '%' || :search_text || '%'\n       OR employee_name LIKE '%' || :search_text || '%')",
+          "queryTimeoutSeconds": 30,
+          "maxRows": 2000,
+          "parameterBindings": [
+            { "name": "employee_filter", "variableKey": "filterEmployee" },
+            { "name": "dept_filter", "variableKey": "filterDept" },
+            { "name": "search_text", "variableKey": "searchText" }
+          ]
+        }
+      }
+    },
+    {
+      "id": "fin-pb-kpi-subjects",
+      "type": "number-card",
+      "name": "科目数量",
+      "x": 1506,
+      "y": 120,
+      "width": 340,
+      "height": 118,
+      "zIndex": 12,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "title": "科目数量",
+        "value": 0,
+        "suffix": " 个",
+        "precision": 0,
+        "titleFontSize": 17,
+        "valueFontSize": 34,
+        "titleColor": "#475569",
+        "valueColor": "#0f172a",
+        "backgroundColor": "#ffffff"
+      },
+      "dataSource": {
+        "type": "sql",
+        "sqlConfig": {
+          "databaseId": "{{DATABASE_ID}}",
+          "query": "SELECT\n    COUNT(DISTINCT subject_code) AS subject_count\nFROM aux_balance_personal\nWHERE 1=1\n  AND (:employee_filter IS NULL OR employee_name = :employee_filter)\n  AND (:dept_filter IS NULL OR employee_dept = :dept_filter)\n  AND (:search_text IS NULL\n       OR subject_name LIKE '%' || :search_text || '%'\n       OR subject_code LIKE '%' || :search_text || '%'\n       OR employee_name LIKE '%' || :search_text || '%')",
+          "queryTimeoutSeconds": 30,
+          "maxRows": 2000,
+          "parameterBindings": [
+            { "name": "employee_filter", "variableKey": "filterEmployee" },
+            { "name": "dept_filter", "variableKey": "filterDept" },
+            { "name": "search_text", "variableKey": "searchText" }
+          ]
+        }
+      }
+    },
+    {
+      "id": "fin-pb-chart-by-employee",
+      "type": "bar-chart",
+      "name": "按职工分布",
+      "x": 52,
+      "y": 288,
+      "width": 576,
+      "height": 320,
+      "zIndex": 15,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "title": "按职工余额分布",
+        "xAxisData": [],
+        "series": [
+          {
+            "name": "净余额",
+            "data": []
+          }
+        ],
+        "seriesColors": ["#3b82f6", "#22c55e"],
+        "orientation": "horizontal"
+      },
+      "dataSource": {
+        "type": "sql",
+        "sqlConfig": {
+          "databaseId": "{{DATABASE_ID}}",
+          "query": "SELECT\n    employee_name AS label,\n    SUM(balance) AS value\nFROM aux_balance_personal\nWHERE 1=1\n  AND (:employee_filter IS NULL OR employee_name = :employee_filter)\n  AND (:dept_filter IS NULL OR employee_dept = :dept_filter)\n  AND (:search_text IS NULL\n       OR subject_name LIKE '%' || :search_text || '%'\n       OR subject_code LIKE '%' || :search_text || '%'\n       OR employee_name LIKE '%' || :search_text || '%')\nGROUP BY employee_name\nORDER BY value DESC",
+          "queryTimeoutSeconds": 30,
+          "maxRows": 2000,
+          "parameterBindings": [
+            { "name": "employee_filter", "variableKey": "filterEmployee" },
+            { "name": "dept_filter", "variableKey": "filterDept" },
+            { "name": "search_text", "variableKey": "searchText" }
+          ]
+        }
+      }
+    },
+    {
+      "id": "fin-pb-chart-by-dept",
+      "type": "pie-chart",
+      "name": "按部门分布",
+      "x": 676,
+      "y": 288,
+      "width": 576,
+      "height": 320,
+      "zIndex": 15,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "title": "按部门资金规模分布",
+        "seriesColors": [
+          "#3b82f6",
+          "#38bdf8",
+          "#d4850a",
+          "#c0392b",
+          "#8b5cf6",
+          "#22c55e",
+          "#f59e0b",
+          "#6366f1"
+        ]
+      },
+      "dataSource": {
+        "type": "sql",
+        "sqlConfig": {
+          "databaseId": "{{DATABASE_ID}}",
+          "query": "SELECT\n    employee_dept AS label,\n    SUM(ABS(balance)) AS value\nFROM aux_balance_personal\nWHERE 1=1\n  AND (:employee_filter IS NULL OR employee_name = :employee_filter)\n  AND (:dept_filter IS NULL OR employee_dept = :dept_filter)\n  AND (:search_text IS NULL\n       OR subject_name LIKE '%' || :search_text || '%'\n       OR subject_code LIKE '%' || :search_text || '%'\n       OR employee_name LIKE '%' || :search_text || '%')\nGROUP BY employee_dept\nORDER BY value DESC",
+          "queryTimeoutSeconds": 30,
+          "maxRows": 2000,
+          "parameterBindings": [
+            { "name": "employee_filter", "variableKey": "filterEmployee" },
+            { "name": "dept_filter", "variableKey": "filterDept" },
+            { "name": "search_text", "variableKey": "searchText" }
+          ]
+        }
+      }
+    },
+    {
+      "id": "fin-pb-chart-by-category",
+      "type": "bar-chart",
+      "name": "按科目类别分布",
+      "x": 1300,
+      "y": 288,
+      "width": 568,
+      "height": 320,
+      "zIndex": 15,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "title": "按科目类别分布",
+        "xAxisData": [],
+        "series": [
+          {
+            "name": "金额",
+            "data": []
+          }
+        ],
+        "seriesColors": ["#3b82f6", "#22c55e", "#94a3b8"],
+        "orientation": "horizontal"
+      },
+      "dataSource": {
+        "type": "sql",
+        "sqlConfig": {
+          "databaseId": "{{DATABASE_ID}}",
+          "query": "SELECT\n    CASE\n        WHEN subject_code LIKE '1122%' THEN '其他应收-借款'\n        WHEN subject_code LIKE '2211%' THEN '应付职工薪酬'\n        ELSE '其他'\n    END AS label,\n    SUM(ABS(balance)) AS value\nFROM aux_balance_personal\nWHERE 1=1\n  AND (:employee_filter IS NULL OR employee_name = :employee_filter)\n  AND (:dept_filter IS NULL OR employee_dept = :dept_filter)\n  AND (:search_text IS NULL\n       OR subject_name LIKE '%' || :search_text || '%'\n       OR subject_code LIKE '%' || :search_text || '%'\n       OR employee_name LIKE '%' || :search_text || '%')\nGROUP BY label\nORDER BY value DESC",
+          "queryTimeoutSeconds": 30,
+          "maxRows": 2000,
+          "parameterBindings": [
+            { "name": "employee_filter", "variableKey": "filterEmployee" },
+            { "name": "dept_filter", "variableKey": "filterDept" },
+            { "name": "search_text", "variableKey": "searchText" }
+          ]
+        }
+      }
+    },
+    {
+      "id": "fin-pb-detail-table",
+      "type": "table",
+      "name": "个人余额明细",
+      "x": 52,
+      "y": 666,
+      "width": 1208,
+      "height": 320,
+      "zIndex": 15,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "title": "个人辅助余额明细",
+        "header": [
+          "科目编号",
+          "科目名称",
+          "职工部门",
+          "职工名称",
+          "余额"
+        ],
+        "fontSize": 16,
+        "headerAlign": "center",
+        "headerColor": "#0f172a",
+        "headerBackground": "#dbe9f6",
+        "bodyColor": "#334155",
+        "bodyBackground": "#ffffff",
+        "oddRowBackground": "#ffffff",
+        "evenRowBackground": "#f5f9fd",
+        "borderColor": "rgba(148, 163, 184, 0.24)",
+        "enableSort": true,
+        "enablePagination": true,
+        "pageSize": 8,
+        "freezeHeader": true,
+        "colorRules": [
+          { "column": "余额", "condition": "< 0", "color": "#16a34a" },
+          { "column": "余额", "condition": "> 50000", "color": "#dc2626" },
+          { "column": "余额", "condition": "> 10000", "color": "#ea580c" }
+        ]
+      },
+      "dataSource": {
+        "type": "sql",
+        "sqlConfig": {
+          "databaseId": "{{DATABASE_ID}}",
+          "query": "SELECT\n    subject_code,\n    subject_name,\n    employee_dept,\n    employee_name,\n    balance\nFROM aux_balance_personal\nWHERE 1=1\n  AND (:employee_filter IS NULL OR employee_name = :employee_filter)\n  AND (:dept_filter IS NULL OR employee_dept = :dept_filter)\n  AND (:search_text IS NULL\n       OR subject_name LIKE '%' || :search_text || '%'\n       OR subject_code LIKE '%' || :search_text || '%'\n       OR employee_name LIKE '%' || :search_text || '%')\nORDER BY employee_name, subject_code",
+          "queryTimeoutSeconds": 30,
+          "maxRows": 2000,
+          "parameterBindings": [
+            { "name": "employee_filter", "variableKey": "filterEmployee" },
+            { "name": "dept_filter", "variableKey": "filterDept" },
+            { "name": "search_text", "variableKey": "searchText" }
+          ]
+        }
+      }
+    },
+    {
+      "id": "fin-pb-top8-table",
+      "type": "table",
+      "name": "借款余额TOP8",
+      "x": 1308,
+      "y": 666,
+      "width": 560,
+      "height": 320,
+      "zIndex": 15,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "title": "借款余额 TOP 8",
+        "header": [
+          "职工名称",
+          "所属部门",
+          "借款余额"
+        ],
+        "fontSize": 16,
+        "headerAlign": "center",
+        "headerColor": "#0f172a",
+        "headerBackground": "#dbe9f6",
+        "bodyColor": "#334155",
+        "bodyBackground": "#ffffff",
+        "oddRowBackground": "#ffffff",
+        "evenRowBackground": "#f5f9fd",
+        "borderColor": "rgba(148, 163, 184, 0.24)",
+        "enableSort": false,
+        "enablePagination": false,
+        "pageSize": 8,
+        "freezeHeader": true,
+        "highlightTopN": 3,
+        "highlightBackground": "#e0edfa",
+        "colorRules": [
+          { "column": "借款余额", "condition": "> 100000", "color": "#dc2626" },
+          { "column": "借款余额", "condition": "> 30000", "color": "#ea580c" }
+        ]
+      },
+      "dataSource": {
+        "type": "sql",
+        "sqlConfig": {
+          "databaseId": "{{DATABASE_ID}}",
+          "query": "SELECT\n    employee_name AS label,\n    employee_dept,\n    SUM(balance) AS value\nFROM aux_balance_personal\nWHERE 1=1\n  AND (:employee_filter IS NULL OR employee_name = :employee_filter)\n  AND (:dept_filter IS NULL OR employee_dept = :dept_filter)\n  AND (:search_text IS NULL\n       OR subject_name LIKE '%' || :search_text || '%'\n       OR subject_code LIKE '%' || :search_text || '%'\n       OR employee_name LIKE '%' || :search_text || '%')\nGROUP BY employee_name, employee_dept\nHAVING SUM(balance) > 0\nORDER BY value DESC\nLIMIT 8",
+          "queryTimeoutSeconds": 30,
+          "maxRows": 2000,
+          "parameterBindings": [
+            { "name": "employee_filter", "variableKey": "filterEmployee" },
+            { "name": "dept_filter", "variableKey": "filterDept" },
+            { "name": "search_text", "variableKey": "searchText" }
+          ]
+        }
+      }
+    }
+  ]
+}

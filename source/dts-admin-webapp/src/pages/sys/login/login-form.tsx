@@ -7,6 +7,7 @@ import type { SignInReq } from "@/api/services/userService";
 import { GLOBAL_CONFIG } from "@/global-config";
 import { resolveHomePathForRoles } from "@/routes/sections/dashboard";
 import { useBilingualText } from "@/hooks/useBilingualText";
+import { prefetchPortalMenus } from "@/bootstrap/portal-menu-loader";
 import { useSignIn, useUserActions } from "@/store/userStore";
 import { Button } from "@/ui/button";
 import { Checkbox } from "@/ui/checkbox";
@@ -20,6 +21,14 @@ import { getPkiChallenge, pkiLogin, type PkiChallenge } from "@/api/services/pki
 import { KoalMiddlewareClient, KoalCertificate } from "@/api/services/koalPkiClient";
 
 export function LoginForm({ className, ...props }: React.ComponentPropsWithoutRef<"form">) {
+	async function hydratePortalMenusAfterLogin() {
+		try {
+			await prefetchPortalMenus();
+		} catch {
+			// `prefetchPortalMenus` already handles fallback state and warning logs.
+		}
+	}
+
 	// 简易调试缓冲：生产构建不会被 esbuild 删除
 	function dbg(tag: string, data?: any) {
 		try {
@@ -76,6 +85,7 @@ export function LoginForm({ className, ...props }: React.ComponentPropsWithoutRe
 				toast.error("无权访问管理端，请使用业务端登录", { position: "top-center" });
 				return;
 			}
+			await hydratePortalMenusAfterLogin();
 			const targetRoute = resolveHomePathForRoles(roles);
 			navigate(targetRoute || GLOBAL_CONFIG.defaultRoute, { replace: true });
 			toast.success(bilingual("sys.login.loginSuccessTitle"), {
@@ -298,6 +308,7 @@ export function LoginForm({ className, ...props }: React.ComponentPropsWithoutRe
 			}
 			setUserToken({ accessToken, refreshToken });
 			setUserInfo(user);
+			await hydratePortalMenusAfterLogin();
 			navigate(GLOBAL_CONFIG.defaultRoute, { replace: true });
 			toast.success("登录成功", { closeButton: true });
 			await client.logout();

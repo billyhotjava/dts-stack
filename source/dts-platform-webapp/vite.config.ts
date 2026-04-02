@@ -55,6 +55,15 @@ export function createPlatformServerProxy({
 			ws: true,
 			xfwd: true,
 		},
+		// /bi/api/* → analytics backend (same as /analytics/api but used by embedded analytics pages)
+		"/bi/api": {
+			target: analyticsApiProxyTarget,
+			changeOrigin: true,
+			rewrite: (path: string) => path.replace(/^\/bi\/api/, "/api"),
+			secure: false,
+			ws: true,
+			xfwd: true,
+		},
 		"/analytics": {
 			target: analyticsUiProxyTarget,
 			changeOrigin: true,
