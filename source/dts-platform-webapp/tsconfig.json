@@ -29,8 +29,7 @@
 		"baseUrl": ".",
 		"paths": {
 			"@/*": ["src/*"],
-			"#/*": ["src/types/*"],
-			"@dts-session-core/*": ["../dts-session-core/src/*"]
+			"#/*": ["src/types/*"]
 		}
 	},
 	"include": ["src", "src/types", "tailwind.config.ts"],

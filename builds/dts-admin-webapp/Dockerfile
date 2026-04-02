@@ -18,6 +18,8 @@ ARG WEBAPP_BUILD_CMD=build
 #   docker build -t dts-admin-webapp:TAG -f builds/dts-admin-webapp/Dockerfile .
 # Copy lockfile and manifest first to leverage docker layer caching
 COPY source/dts-admin-webapp/pnpm-lock.yaml source/dts-admin-webapp/package.json ./
+COPY source/dts-session-core/package.json /dts-session-core/package.json
+COPY source/dts-session-core/src/ /dts-session-core/src/
 
 # Install pnpm matching the repo's packageManager. Corepack bundled with Node 20.17 may lack the new signing key,
 # so install via npm to avoid signature verification failures.
@@ -49,9 +51,6 @@ RUN set -eux; \
     pnpm install --frozen-lockfile --ignore-scripts; \
     rm -rf /root/.pnpm-store/*tmp* 2>/dev/null || true; \
     unset npm_config_registry npm_config_proxy npm_config_https_proxy http_proxy https_proxy
-
-# Copy shared session-core package (sibling directory referenced by tsconfig paths)
-COPY source/dts-session-core/ /dts-session-core/
 
 # Copy the remaining project files and build the production bundle
 COPY source/dts-admin-webapp/ ./

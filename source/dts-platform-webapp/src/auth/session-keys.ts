@@ -1,4 +1,4 @@
-import { createSessionStorageKeys } from "@dts-session-core/storage";
+import { createSessionStorageKeys } from "@dts/session-core/storage";
 
 export const PLATFORM_SESSION_KEYS = createSessionStorageKeys("platform");
 

@@ -1,19 +1,12 @@
 import { useEffect, useMemo, useRef } from "react";
-import { parseLogoutBroadcast } from "@dts-session-core/logout-broadcast";
-import { readStorageValue } from "@dts-session-core/storage";
+import { parseLogoutBroadcast } from "@dts/session-core/logout-broadcast";
+import { readStorageValue } from "@dts/session-core/storage";
 import { toast } from "sonner";
-import { fetchCurrentSession, redirectToLoginWithReturn } from "@/auth/session-auth";
+import { fetchCurrentSession } from "@/auth/session-auth";
 import { ADMIN_LEGACY_SESSION_KEYS, ADMIN_SESSION_KEYS } from "@/auth/session-keys";
-import { usePortalSession, useUserActions, useUserInfo } from "@/store/userStore";
-import userService from "@/api/services/userService";
+import { usePortalSession, useUserActions } from "@/store/userStore";
 
 const LOG_PREFIX = "[session:admin]";
-const SESSION_TIMEOUT_MINUTES = Math.max(
-	1,
-	Number(import.meta.env.VITE_SESSION_TIMEOUT_MINUTES ?? import.meta.env.VITE_ADMIN_SESSION_TIMEOUT ?? "10"),
-);
-const SESSION_TIMEOUT_MS = SESSION_TIMEOUT_MINUTES * 60 * 1000;
-
 function readLastActivity(): number {
 	try {
 		const stored = readStorageValue(
@@ -39,12 +32,10 @@ function writeLastActivity(ts: number, lastWriteRef: { current: number }) {
 
 export default function SessionManager() {
 	const session = usePortalSession();
-	const user = useUserInfo();
 	const { markSessionChecking, setAuthenticatedSession, setSession, clearUserInfoAndToken } = useUserActions();
 	const lastActivityRef = useRef<number>(readLastActivity());
 	const lastActivityWriteRef = useRef<number>(0);
 	const lastReasonRef = useRef(session.reason);
-	const logoutInProgressRef = useRef(false);
 	const sessionRef = useRef(session);
 
 	const isLoggedIn = useMemo(() => session.authenticated, [session.authenticated]);
@@ -59,12 +50,11 @@ export default function SessionManager() {
 				markSessionChecking();
 			}
 			try {
-				const current = await fetchCurrentSession();
-				if (current.authenticated) {
-					logoutInProgressRef.current = false;
-					setAuthenticatedSession(current);
-					return;
-				}
+					const current = await fetchCurrentSession();
+					if (current.authenticated) {
+						setAuthenticatedSession(current);
+						return;
+					}
 				clearUserInfoAndToken(mode === "bootstrap" ? "anonymous" : "expired");
 				return;
 			} catch (error) {
@@ -147,44 +137,6 @@ export default function SessionManager() {
 			document.removeEventListener("visibilitychange", visibilityHandler);
 		};
 	}, [isLoggedIn, setAuthenticatedSession]);
-
-	useEffect(() => {
-		if (!isLoggedIn) return;
-		let timer: number | undefined;
-
-		const logoutDueToIdle = () => {
-			if (logoutInProgressRef.current) return;
-			const storedActivity = readLastActivity();
-			if (storedActivity > lastActivityRef.current) {
-				lastActivityRef.current = storedActivity;
-			}
-			const idleFor = Date.now() - lastActivityRef.current;
-			if (idleFor < SESSION_TIMEOUT_MS) {
-				resetTimer();
-				return;
-			}
-			logoutInProgressRef.current = true;
-			console.warn(LOG_PREFIX, "logout: IDLE_TIMEOUT", { idleFor });
-			const username = user?.username || user?.email || undefined;
-			userService.logout(undefined, username, "IDLE_TIMEOUT").catch(() => undefined);
-			clearUserInfoAndToken("expired");
-			redirectToLoginWithReturn();
-		};
-
-		const resetTimer = () => {
-			if (logoutInProgressRef.current) return;
-			if (timer) window.clearTimeout(timer);
-			timer = window.setTimeout(logoutDueToIdle, SESSION_TIMEOUT_MS);
-		};
-
-		const events: Array<keyof WindowEventMap> = ["click", "keydown", "mousemove", "scroll", "touchstart"];
-		events.forEach((event) => window.addEventListener(event, resetTimer, true));
-		resetTimer();
-		return () => {
-			if (timer) window.clearTimeout(timer);
-			events.forEach((event) => window.removeEventListener(event, resetTimer, true));
-		};
-	}, [clearUserInfoAndToken, isLoggedIn, user?.email, user?.username]);
 
 	useEffect(() => {
 		if (lastReasonRef.current === session.reason) return;

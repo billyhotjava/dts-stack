@@ -101,7 +101,7 @@ export default function AdminGuard({ children }: Props) {
 		return null;
 	}
 
-	if (isLoading && !adminSession) {
+	if ((isLoading || isError) && !adminSession) {
 		return (
 			<div className="flex h-full min-h-60 items-center justify-center">
 				<LineLoading />

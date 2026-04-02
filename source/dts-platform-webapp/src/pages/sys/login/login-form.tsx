@@ -21,7 +21,7 @@ import { RadioGroup, RadioGroupItem } from "@/ui/radio-group";
 import { cn } from "@/utils";
 import { updateLocalTranslations } from "@/utils/translation";
 import { resetLoginRedirectFlag } from "@/auth/session-auth";
-import { writeLoginActivityMarkers } from "@dts-session-core/storage";
+import { writeLoginActivityMarkers } from "@dts/session-core/storage";
 import { LoginStateEnum, useLoginStateContext } from "./providers/login-provider";
 
 const IS_DEV = typeof import.meta !== "undefined" && Boolean(import.meta.env?.DEV);

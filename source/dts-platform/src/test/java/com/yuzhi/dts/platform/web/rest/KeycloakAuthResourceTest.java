@@ -6,6 +6,7 @@ import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.anyMap;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -108,32 +109,10 @@ class KeycloakAuthResourceTest {
     }
 
     @Test
-    void refreshShouldRotateCookiesWithoutExposingPortalTokensInResponseBody() {
+    void refreshShouldRejectBrowserRefreshRequests() {
         AdminAuthGateway gateway = mock(AdminAuthGateway.class);
         PortalSessionRegistry registry = mock(PortalSessionRegistry.class);
         PortalSessionCookieService cookieService = mock(PortalSessionCookieService.class);
-        when(registry.resolveUsernameByRefreshToken("refresh-1")).thenReturn(Optional.of("alice"));
-        when(cookieService.buildBrowserIdCookie("browser-1"))
-            .thenReturn(ResponseCookie.from("browser_id", "browser-1").path("/").build());
-        when(cookieService.buildPortalSessionCookie("access-2"))
-            .thenReturn(ResponseCookie.from("portal_session", "access-2").path("/").httpOnly(true).build());
-        when(registry.refreshSession(eq("refresh-1"), any()))
-            .thenReturn(
-                new PortalSession(
-                    "session-1",
-                    "alice",
-                    "Alice",
-                    List.of("ROLE_USER"),
-                    List.of("portal.view"),
-                    null,
-                    null,
-                    "browser-1",
-                    "access-2",
-                    "refresh-2",
-                    Instant.parse("2026-04-02T00:45:00Z"),
-                    null
-                )
-            );
 
         KeycloakAuthResource resource = newResource(gateway, registry, cookieService);
 
@@ -141,15 +120,10 @@ class KeycloakAuthResourceTest {
             new KeycloakAuthResource.RefreshPayload("refresh-1", "alice")
         );
 
-        assertThat(response.getStatusCode().value()).isEqualTo(200);
-        assertThat(response.getHeaders().get(HttpHeaders.SET_COOKIE)).contains(
-            "browser_id=browser-1; Path=/",
-            "portal_session=access-2; Path=/; HttpOnly"
-        );
+        assertThat(response.getStatusCode().value()).isEqualTo(410);
         assertThat(response.getBody()).isNotNull();
-        assertThat(response.getBody().getData())
-            .doesNotContainKeys("accessToken", "refreshToken", "adminAccessToken", "adminRefreshToken");
-        verify(registry).refreshSession(eq("refresh-1"), any());
+        assertThat(response.getBody().getMessage()).contains("停用");
+        verify(registry, never()).refreshSession(eq("refresh-1"), any());
     }
 
     private KeycloakAuthResource newResource(AdminAuthGateway gateway) {

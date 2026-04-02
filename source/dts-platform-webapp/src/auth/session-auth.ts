@@ -1,5 +1,5 @@
 import { create } from "zustand";
-import { currentRoutePath as resolveCurrentRoutePath } from "@dts-session-core/route";
+import { currentRoutePath as resolveCurrentRoutePath } from "@dts/session-core/route";
 import type { CurrentSessionPayload } from "@/auth/session-state";
 import { GLOBAL_CONFIG } from "@/global-config";
 

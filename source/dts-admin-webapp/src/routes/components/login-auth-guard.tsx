@@ -33,6 +33,7 @@ export default function LoginAuthGuard({ children }: Props) {
 		}
 		if (!canAccessProtectedRoute(session)) {
 			redirectToLoginWithReturn();
+			router.replace(LOGIN_ROUTE);
 			return;
 		}
 		const FE_GUARD_ENABLED = String(import.meta.env.VITE_ENABLE_FE_GUARD ?? "true").toLowerCase() === "true";

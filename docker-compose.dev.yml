@@ -293,6 +293,7 @@ services:
       # Enable lightweight HTTP access logging in dev to diagnose 401s and routing
       DTS_HTTP_ACCESS_LOG: "true"
       DTS_FEATURE_PLATFORM_KC_LOCALIZATION: "true"
+      DTS_PLATFORM_SESSION_COOKIE_SECURE: "false"
       DTS_DBT_PROJECT_DIR: /opt/dts/dbt
       DTS_DBT_PROFILES_DIR: /opt/dts/dbt-profiles
       DTS_DBT_CONFIG_PATH: /opt/dts/upload/dbt-config.json
@@ -554,7 +555,7 @@ services:
   # If your project uses Vite/React/Angular dev server, adjust command/port below.
   dts-admin-webapp:
     image: node:22-bookworm
-    working_dir: /workspace
+    working_dir: /workspace-src/dts-admin-webapp
     depends_on:
       - dts-admin
     environment:
@@ -577,12 +578,11 @@ services:
     ports:
       - "18011:3001"
     volumes:
-      - ./source/dts-admin-webapp:/workspace:z
-      - ./source/dts-platform-webapp:/workspace/dts-platform-webapp:ro,z
+      - ./source:/workspace-src:z
       - ./builds:/builds:ro,z
       - ./builds/patch-vite-env.sh:/patches/patch-vite-env.sh:ro,z
       - pnpm-store:/pnpm-store
-      - /workspace/node_modules
+      - /workspace-src/dts-admin-webapp/node_modules
     networks:
       - dts-core
     labels:
@@ -603,7 +603,7 @@ services:
   # Frontend: dts-platform-webapp (optional dev server)
   dts-platform-webapp:
     image: node:22-bookworm
-    working_dir: /workspace
+    working_dir: /workspace-src/dts-platform-webapp
     depends_on:
       - dts-platform
     environment:
@@ -644,10 +644,10 @@ services:
     ports:
       - "18012:3001"
     volumes:
-      - ./source/dts-platform-webapp:/workspace:z
+      - ./source:/workspace-src:z
       - ./builds/patch-vite-env.sh:/patches/patch-vite-env.sh:ro,z
       - pnpm-store:/pnpm-store
-      - /workspace/node_modules
+      - /workspace-src/dts-platform-webapp/node_modules
     networks:
       - dts-core
     labels:

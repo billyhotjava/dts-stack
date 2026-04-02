@@ -13,19 +13,22 @@ import { GLOBAL_CONFIG } from "./global-config";
 import ErrorBoundary from "./routes/components/error-boundary";
 import { getRoutesSection } from "./routes/sections";
 
+async function prefetchPortalMenus() {
+	try {
+		const menus = await adminApi.getPortalMenus();
+		setPortalMenus(menus?.menus ?? [], menus?.allMenus ?? menus?.menus ?? []);
+	} catch (e) {
+		// eslint-disable-next-line no-console
+		console.warn("[main] Failed to prefetch portal menus:", e);
+		setPortalMenus([]);
+	}
+}
+
 await registerLocalIcons();
 
 if (GLOBAL_CONFIG.routerMode === "backend") {
 	await menuService.getMenuList();
-}
-// Always load portal menus so visualization items appear in the sidebar regardless of routing mode.
-try {
-	const menus = await adminApi.getPortalMenus();
-	setPortalMenus(menus?.menus ?? [], menus?.allMenus ?? menus?.menus ?? []);
-} catch (e) {
-	// eslint-disable-next-line no-console
-	console.warn("[main] Failed to prefetch portal menus:", e);
-	setPortalMenus([]);
+	await prefetchPortalMenus();
 }
 
 const router = createBrowserRouter(
@@ -47,3 +50,7 @@ const router = createBrowserRouter(
 
 const root = ReactDOM.createRoot(document.getElementById("root") as HTMLElement);
 root.render(<RouterProvider router={router} />);
+
+if (GLOBAL_CONFIG.routerMode !== "backend") {
+	void prefetchPortalMenus();
+}

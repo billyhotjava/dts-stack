@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { currentRoutePath, buildLoginRedirectHref } from "@dts-session-core/route";
-import { createSessionStorageKeys } from "@dts-session-core/storage";
+import { currentRoutePath, buildLoginRedirectHref } from "@dts/session-core/route";
+import { createSessionStorageKeys } from "@dts/session-core/storage";
 
 describe("session-core: route", () => {
 	it("currentRoutePath reads hash in hash-router mode", () => {

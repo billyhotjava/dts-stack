@@ -619,105 +619,27 @@ public class KeycloakAuthResource {
 
     @PostMapping("/refresh")
     public ResponseEntity<ApiResponse<Map<String, String>>> refresh(@RequestBody RefreshPayload payload) {
-        String actor = resolveRefreshActor(payload.refreshToken());
-        try {
-            PortalSession refreshed = sessionRegistry.refreshSession(
-                payload.refreshToken(),
-                existing -> {
-                    if (existing == null) return null;
-                    AdminTokens tokens = existing.adminTokens();
-                    String adminRefresh = tokens != null ? tokens.refreshToken() : null;
-                    if (!StringUtils.hasText(adminRefresh)) {
-                        return tokens;
-                    }
-                    try {
-                        var result = adminAuthGateway.refresh(adminRefresh);
-                        return computeAdminTokens(
-                            result.accessToken(),
-                            result.accessTokenExpiresIn(),
-                            result.refreshToken(),
-                            result.refreshTokenExpiresIn(),
-                            tokens
-                        );
-                    } catch (Exception ex) {
-                        log.warn("[refresh] admin token refresh failed: {}", ex.getMessage());
-                        return tokens;
-                    }
-                }
+        String actor = resolveRefreshActor(payload == null ? null : payload.refreshToken());
+        if (portalRefreshAuditEnabled && StringUtils.hasText(actor)) {
+            Map<String, Object> failurePayload = authAuditPayload(actor);
+            String actorDisplayName = com.yuzhi.dts.platform.security.SecurityUtils.getCurrentUserDisplayName().orElse(null);
+            applyIdentityMetadata(failurePayload, actorDisplayName, actor);
+            failurePayload.put("summary", buildSummary("业务端刷新会话失败", actorDisplayName, actor));
+            failurePayload.put("operationType", "REFRESH");
+            failurePayload.put("error", "portal_browser_refresh_disabled");
+            failurePayload.put("hasRefreshToken", payload != null && StringUtils.hasText(payload.refreshToken()));
+            audit.recordAs(
+                actor,
+                "AUTH REFRESH",
+                "platform",
+                "portal_user",
+                actor,
+                "FAILED",
+                failurePayload,
+                Map.of("audience", "platform")
             );
-            Map<String, String> data = new LinkedHashMap<>();
-            data.put("browserId", refreshed.browserId());
-            String refreshedActor = sanitizeActor(refreshed.username());
-            if (refreshedActor != null) {
-                actor = refreshedActor;
-            }
-            if (portalRefreshAuditEnabled && StringUtils.hasText(actor)) {
-                Map<String, Object> successPayload = authAuditPayload(actor);
-                String actorDisplayName = com.yuzhi.dts.platform.security.SecurityUtils.getCurrentUserDisplayName().orElse(null);
-                applyIdentityMetadata(successPayload, actorDisplayName, actor);
-                successPayload.put("summary", buildSummary("业务端刷新会话成功", actorDisplayName, actor));
-                successPayload.put("operationType", "REFRESH");
-                successPayload.put("hasRefreshToken", StringUtils.hasText(payload.refreshToken()));
-                audit.recordAs(
-                    actor,
-                    "AUTH REFRESH",
-                    "platform",
-                    "portal_user",
-                    actor,
-                    "SUCCESS",
-                    successPayload,
-                    Map.of("audience", "platform")
-                );
-            }
-            return ResponseEntity
-                .ok()
-                .headers(sessionCookieHeaders(refreshed.browserId(), refreshed.accessToken()))
-                .body(ApiResponses.ok(data));
-        } catch (IllegalArgumentException ex) {
-            String failureActor = actor != null ? actor : resolveRefreshActor(payload.refreshToken());
-            if (portalRefreshAuditEnabled && StringUtils.hasText(failureActor)) {
-                Map<String, Object> failurePayload = authAuditPayload(failureActor);
-                String actorDisplayName = com.yuzhi.dts.platform.security.SecurityUtils.getCurrentUserDisplayName().orElse(null);
-                applyIdentityMetadata(failurePayload, actorDisplayName, failureActor);
-                failurePayload.put("summary", buildSummary("业务端刷新会话失败", actorDisplayName, failureActor));
-                failurePayload.put("operationType", "REFRESH");
-                failurePayload.put("error", ex.getMessage());
-                failurePayload.put("hasRefreshToken", StringUtils.hasText(payload.refreshToken()));
-                audit.recordAs(
-                    failureActor,
-                    "AUTH REFRESH",
-                    "platform",
-                    "portal_user",
-                    failureActor,
-                    "FAILED",
-                    failurePayload,
-                    Map.of("audience", "platform")
-                );
-            }
-            return ResponseEntity.status(401).body(ApiResponses.error("刷新令牌无效，请重新登录"));
-        } catch (IllegalStateException ex) {
-            String failureActor = actor != null ? actor : resolveRefreshActor(payload.refreshToken());
-            if (portalRefreshAuditEnabled && StringUtils.hasText(failureActor)) {
-                Map<String, Object> failurePayload = authAuditPayload(failureActor);
-                String actorDisplayName = com.yuzhi.dts.platform.security.SecurityUtils.getCurrentUserDisplayName().orElse(null);
-                applyIdentityMetadata(failurePayload, actorDisplayName, failureActor);
-                failurePayload.put("summary", buildSummary("业务端刷新会话失败", actorDisplayName, failureActor));
-                failurePayload.put("operationType", "REFRESH");
-                failurePayload.put("error", ex.getMessage());
-                failurePayload.put("hasRefreshToken", StringUtils.hasText(payload.refreshToken()));
-                audit.recordAs(
-                    failureActor,
-                    "AUTH REFRESH",
-                    "platform",
-                    "portal_user",
-                    failureActor,
-                    "FAILED",
-                    failurePayload,
-                    Map.of("audience", "platform")
-                );
-            }
-            return ResponseEntity.status(401).body(ApiResponses.error("会话已过期，请重新登录"));
         }
+        return ResponseEntity.status(HttpStatus.GONE).body(ApiResponses.error("浏览器会话刷新接口已停用，请重新登录"));
     }
 
     private Map<String, Object> authAuditPayload(String username, Object... kvPairs) {

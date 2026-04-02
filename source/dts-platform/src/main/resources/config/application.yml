@@ -292,6 +292,8 @@ dts:
       table-fields: ${DTS_PLATFORM_OPENMETADATA_TABLE_FIELDS:columns,owner,tags,domain,usageSummary,profile}
     session:
       timeout-minutes: ${DTS_PLATFORM_SESSION_TIMEOUT_MINUTES:30}
+      cookie-secure: ${DTS_PLATFORM_SESSION_COOKIE_SECURE:true}
+      browser-cookie-signing-secret: ${DTS_PLATFORM_SESSION_BROWSER_COOKIE_SIGNING_SECRET:${OAUTH2_PLATFORM_CLIENT_SECRET:}}
     hive:
       enabled: false
       jdbc-url: jdbc:hive2://dts-hive:10000/default

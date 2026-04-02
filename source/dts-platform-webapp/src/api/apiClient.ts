@@ -9,7 +9,7 @@ import { fetchCurrentSession, redirectToLoginWithReturn, useRedirectIntentStore 
 import { PLATFORM_LEGACY_SESSION_KEYS, PLATFORM_SESSION_KEYS } from "@/auth/session-keys";
 import useContextStore from "@/store/contextStore";
 import userStore from "@/store/userStore";
-import { readStorageValue } from "@dts-session-core/storage";
+import { readStorageValue } from "@dts/session-core/storage";
 
 function normalizeAxiosErrorMessage(msg: string | undefined): string {
 	if (!msg) return "";

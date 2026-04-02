@@ -24,6 +24,7 @@ export default function LoginAuthGuard({ children }: Props) {
 		}
 		if (!canAccessProtectedRoute(session)) {
 			redirectToLoginWithReturn();
+			router.replace(LOGIN_ROUTE);
 			return;
 		}
 		const expandSynonyms = (list: string[]): Set<string> => {

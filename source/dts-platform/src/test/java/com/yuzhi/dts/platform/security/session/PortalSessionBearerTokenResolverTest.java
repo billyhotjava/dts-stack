@@ -49,4 +49,17 @@ class PortalSessionBearerTokenResolverTest {
         assertThat(resolver.resolve(request)).isEqualTo("cookie-token");
         verify(cookieService).resolvePortalSessionToken(request);
     }
+
+    @Test
+    void ignoresAuthorizationHeaderWhenPortalSessionCookieMissingForBrowserApiRequests() {
+        PortalSessionCookieService cookieService = mock(PortalSessionCookieService.class);
+        PortalSessionBearerTokenResolver resolver = new PortalSessionBearerTokenResolver(cookieService);
+        MockHttpServletRequest request = new MockHttpServletRequest();
+        request.setRequestURI("/api/catalog/datasets");
+        request.addHeader(HttpHeaders.AUTHORIZATION, "Bearer stale-header-token");
+        when(cookieService.resolvePortalSessionToken(request)).thenReturn(null);
+
+        assertThat(resolver.resolve(request)).isNull();
+        verify(cookieService).resolvePortalSessionToken(request);
+    }
 }

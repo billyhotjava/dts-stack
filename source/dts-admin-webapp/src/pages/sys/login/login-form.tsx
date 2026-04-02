@@ -20,7 +20,7 @@ import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "
 import { RadioGroup, RadioGroupItem } from "@/ui/radio-group";
 import { getPkiChallenge, pkiLogin, type PkiChallenge } from "@/api/services/pkiService";
 import { KoalMiddlewareClient, KoalCertificate } from "@/api/services/koalPkiClient";
-import { writeLoginActivityMarkers } from "@dts-session-core/storage";
+import { writeLoginActivityMarkers } from "@dts/session-core/storage";
 
 export function LoginForm({ className, ...props }: React.ComponentPropsWithoutRef<"form">) {
 	// 简易调试缓冲：生产构建不会被 esbuild 删除

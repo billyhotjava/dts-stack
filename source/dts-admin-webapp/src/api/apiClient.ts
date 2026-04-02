@@ -7,7 +7,7 @@ import { t } from "@/locales/i18n";
 import { currentRoutePath, fetchCurrentSession, redirectToLoginWithReturn, useRedirectIntentStore } from "@/auth/session-auth";
 import { ADMIN_LEGACY_SESSION_KEYS, ADMIN_SESSION_KEYS } from "@/auth/session-keys";
 import userStore from "@/store/userStore";
-import { readStorageValue } from "@dts-session-core/storage";
+import { readStorageValue } from "@dts/session-core/storage";
 
 function normalizeAxiosErrorMessage(msg: string | undefined): string {
 	if (!msg) return "";

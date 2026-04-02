@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
-import { parsePersistedUserStoreSnapshot, readPersistedUserStoreSnapshot } from "@dts-session-core/persisted-store";
-import { parseLogoutBroadcast, serializeLogoutBroadcast } from "@dts-session-core/logout-broadcast";
-import { createSessionStorageKeys, readStorageValue, writeLoginActivityMarkers } from "@dts-session-core/storage";
+import { parsePersistedUserStoreSnapshot, readPersistedUserStoreSnapshot } from "@dts/session-core/persisted-store";
+import { parseLogoutBroadcast, serializeLogoutBroadcast } from "@dts/session-core/logout-broadcast";
+import { createSessionStorageKeys, readStorageValue, writeLoginActivityMarkers } from "@dts/session-core/storage";
 
 describe("session storage protocol", () => {
 	it("namespaces app-specific storage keys", () => {
