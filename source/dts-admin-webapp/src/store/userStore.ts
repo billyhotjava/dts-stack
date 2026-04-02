@@ -70,7 +70,6 @@ function sameUserInfo(left: Partial<UserInfo>, right: Partial<UserInfo>): boolea
 		&& left.lastName === right.lastName
 		&& left.fullName === right.fullName
 		&& left.enabled === right.enabled
-		&& left.department === right.department
 		&& left.avatar === right.avatar
 		&& JSON.stringify(left.attributes ?? {}) === JSON.stringify(right.attributes ?? {})
 		&& sameStringArray(normalizeToStringArray(left.roles), normalizeToStringArray(right.roles))
