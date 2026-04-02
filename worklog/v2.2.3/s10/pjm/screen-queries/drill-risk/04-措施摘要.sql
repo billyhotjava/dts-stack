@@ -1,0 +1,61 @@
+-- ================================================================
+-- 查询卡片: 风险措施明细
+-- 用途: 展示风险跟进措施记录，含闭环状态、交付物信息
+-- 对应大屏: Screen 8（风险措施跟进明细表）
+-- 数据表: biz_dwd_risk_measure
+-- ================================================================
+
+SELECT
+    risk_measure_id,
+    project_no,
+    risk_name,
+    subsystem,
+    belonging_unit,
+    risk_description,
+    risk_phase,
+    risk_category,
+    risk_level,
+    impact_scope,
+    response_measure,
+    monthly_control_plan,
+    weekly_release_plan,
+    release_plan_synced,
+    new_plan_count,
+    progress_situation,
+    response_owner,
+    control_owner,
+    dept,
+    risk_status,
+    project_manager,
+    remark,
+    filled_by,
+    measure_category,
+    measure_title,
+    follow_up_person,
+    main_recipient,
+    cc_recipient,
+    closure_status,
+    closure_deliverable_type,
+    closure_deliverable,
+    risk_content,
+    risk_submit_week,
+    progress_stat_week,
+    follow_up_week,
+    final_closure_week,
+    last_update_week,
+    risk_rank,
+    is_closed,
+    risk_submit_date,
+    final_release_date,
+    progress_stat_date,
+    follow_up_date,
+    final_closure_date,
+    last_update_time,
+    submit_year,
+    submit_quarter,
+    submit_month,
+    pending_days,
+    source_table,
+    etl_time
+FROM biz_dwd_risk_measure
+ORDER BY follow_up_date DESC NULLS LAST;
