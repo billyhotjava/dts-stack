@@ -4,7 +4,7 @@ import type { Result } from "#/api";
 import { ResultStatus } from "#/enum";
 import { GLOBAL_CONFIG } from "@/global-config";
 import { t } from "@/locales/i18n";
-import { currentRoutePath, redirectToLoginWithReturn, useRedirectIntentStore } from "@/auth/session-auth";
+import { currentRoutePath, fetchCurrentSession, redirectToLoginWithReturn, useRedirectIntentStore } from "@/auth/session-auth";
 import { ADMIN_LEGACY_SESSION_KEYS, ADMIN_SESSION_KEYS } from "@/auth/session-keys";
 import userStore from "@/store/userStore";
 import { readStorageValue } from "@dts-session-core/storage";
@@ -166,6 +166,13 @@ axiosInstance.interceptors.response.use(
 				);
 				if (loginTs > 0 && Date.now() - loginTs < 2000) {
 					console.warn("[auth] Suppressing auto-logout due to grace window after login");
+					return Promise.reject(error);
+				}
+			} catch {}
+			try {
+				const probe = await fetchCurrentSession();
+				if (probe.authenticated) {
+					console.warn("[auth] 401 received but session probe shows authenticated — suppressing logout");
 					return Promise.reject(error);
 				}
 			} catch {}

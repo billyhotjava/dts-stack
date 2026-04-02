@@ -22,8 +22,9 @@ public class PortalSessionBearerTokenResolver implements BearerTokenResolver {
         if (shouldBypassAuthentication(request)) {
             return null;
         }
-        if (shouldUseCookieOnly(request)) {
-            return cookieService.resolvePortalSessionToken(request);
+        String cookieToken = cookieService.resolvePortalSessionToken(request);
+        if (StringUtils.hasText(cookieToken)) {
+            return cookieToken;
         }
         try {
             String headerToken = delegate.resolve(request);
@@ -33,7 +34,7 @@ public class PortalSessionBearerTokenResolver implements BearerTokenResolver {
         } catch (OAuth2AuthenticationException ex) {
             throw ex;
         }
-        return cookieService.resolvePortalSessionToken(request);
+        return null;
     }
 
     private boolean shouldBypassAuthentication(HttpServletRequest request) {
@@ -46,10 +47,5 @@ public class PortalSessionBearerTokenResolver implements BearerTokenResolver {
             || uri.startsWith("/api/keycloak/localization/")
             || uri.startsWith("/api/authenticate")
             || uri.startsWith("/api/auth-info");
-    }
-
-    private boolean shouldUseCookieOnly(HttpServletRequest request) {
-        String uri = request == null ? "" : String.valueOf(request.getRequestURI());
-        return uri.startsWith("/api/forward-auth");
     }
 }

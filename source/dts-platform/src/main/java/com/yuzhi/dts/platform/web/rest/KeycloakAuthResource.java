@@ -255,18 +255,6 @@ public class KeycloakAuthResource {
             Map<String, Object> data = new LinkedHashMap<>();
             data.put("user", userOut);
             data.put("browserId", browserId);
-            data.put("accessToken", session.accessToken());
-            data.put("refreshToken", session.refreshToken());
-            if (adminTokens != null) {
-                data.put("adminAccessToken", adminTokens.accessToken());
-                if (adminTokens.accessExpiresAt() != null) {
-                    data.put("adminAccessTokenExpiresAt", adminTokens.accessExpiresAt().toString());
-                }
-                data.put("adminRefreshToken", adminTokens.refreshToken());
-                if (adminTokens.refreshExpiresAt() != null) {
-                    data.put("adminRefreshTokenExpiresAt", adminTokens.refreshExpiresAt().toString());
-                }
-            }
             if (log.isInfoEnabled()) {
                 if (takeover && sessionRegistry.isTakeoverAllowed()) {
                     log.info("[login] success username={} roles={} perms={} takeover=true", username, mappedRoles, permissions);
@@ -302,7 +290,7 @@ public class KeycloakAuthResource {
                 data.put("sessionNotice", "已切换到当前登录，其他会话已下线");
                 data.put("sessionTakeover", Boolean.TRUE);
             }
-            return withBrowserCookie(data, browserId);
+            return withBrowserCookie(data, browserId, session.accessToken());
         } catch (org.springframework.security.authentication.BadCredentialsException ex) {
             log.warn("[login] unauthorized username={} reason={}", username, ex.getMessage());
             String auditActor = sanitizeActor(username);
@@ -575,8 +563,6 @@ public class KeycloakAuthResource {
 
             Map<String, Object> data = new java.util.LinkedHashMap<>();
             data.put("user", userOut);
-            data.put("accessToken", session.accessToken());
-            data.put("refreshToken", session.refreshToken());
             data.put("browserId", browserId);
             if (takeover && sessionRegistry.isTakeoverAllowed()) {
                 data.put("sessionNotice", "已切换到当前登录，其他会话已下线");
@@ -603,7 +589,7 @@ public class KeycloakAuthResource {
                     metadata
                 );
             }
-            return withBrowserCookie(data, browserId);
+            return withBrowserCookie(data, browserId, session.accessToken());
         } catch (Exception ex) {
             String msg = ex.getMessage() == null || ex.getMessage().isBlank() ? "登录失败，请稍后重试" : ex.getMessage();
             if (shouldRecordPortalLoginAudit() && auditActor != null) {
@@ -660,19 +646,7 @@ public class KeycloakAuthResource {
                 }
             );
             Map<String, String> data = new LinkedHashMap<>();
-            data.put("accessToken", refreshed.accessToken());
-            data.put("refreshToken", refreshed.refreshToken());
-            AdminTokens adminTokens = refreshed.adminTokens();
-            if (adminTokens != null) {
-                data.put("adminAccessToken", adminTokens.accessToken());
-                if (adminTokens.accessExpiresAt() != null) {
-                    data.put("adminAccessTokenExpiresAt", adminTokens.accessExpiresAt().toString());
-                }
-                data.put("adminRefreshToken", adminTokens.refreshToken());
-                if (adminTokens.refreshExpiresAt() != null) {
-                    data.put("adminRefreshTokenExpiresAt", adminTokens.refreshExpiresAt().toString());
-                }
-            }
+            data.put("browserId", refreshed.browserId());
             String refreshedActor = sanitizeActor(refreshed.username());
             if (refreshedActor != null) {
                 actor = refreshedActor;
@@ -1086,7 +1060,7 @@ public class KeycloakAuthResource {
         return headers;
     }
 
-    private ResponseEntity<ApiResponse<Map<String, Object>>> withBrowserCookie(Map<String, Object> data, String browserId) {
-        return ResponseEntity.ok().headers(sessionCookieHeaders(browserId, String.valueOf(data.get("accessToken")))).body(ApiResponses.ok(data));
+    private ResponseEntity<ApiResponse<Map<String, Object>>> withBrowserCookie(Map<String, Object> data, String browserId, String accessToken) {
+        return ResponseEntity.ok().headers(sessionCookieHeaders(browserId, accessToken)).body(ApiResponses.ok(data));
     }
 }

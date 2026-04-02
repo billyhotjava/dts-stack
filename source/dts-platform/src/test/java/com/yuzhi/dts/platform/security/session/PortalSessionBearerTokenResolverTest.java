@@ -14,15 +14,16 @@ import org.springframework.mock.web.MockHttpServletRequest;
 class PortalSessionBearerTokenResolverTest {
 
     @Test
-    void prefersAuthorizationHeaderOverPortalSessionCookie() {
+    void prefersPortalSessionCookieOverAuthorizationHeaderForBrowserApiRequests() {
         PortalSessionCookieService cookieService = mock(PortalSessionCookieService.class);
         PortalSessionBearerTokenResolver resolver = new PortalSessionBearerTokenResolver(cookieService);
         MockHttpServletRequest request = new MockHttpServletRequest();
+        request.setRequestURI("/api/catalog/datasets");
         request.addHeader(HttpHeaders.AUTHORIZATION, "Bearer header-token");
-        when(cookieService.resolvePortalSessionToken(any())).thenReturn("cookie-token");
+        when(cookieService.resolvePortalSessionToken(request)).thenReturn("cookie-token");
 
-        assertThat(resolver.resolve(request)).isEqualTo("header-token");
-        verify(cookieService, never()).resolvePortalSessionToken(any());
+        assertThat(resolver.resolve(request)).isEqualTo("cookie-token");
+        verify(cookieService).resolvePortalSessionToken(request);
     }
 
     @Test
