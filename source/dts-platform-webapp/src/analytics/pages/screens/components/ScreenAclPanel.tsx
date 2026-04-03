@@ -229,8 +229,8 @@ export function ScreenAclPanel({ open, screenId, onClose, isOwner = false }: Scr
 
 	const assignablePerms: ('MANAGE' | 'READ')[] = isOwner ? ['MANAGE', 'READ'] : ['READ'];
 
-	const cellCls = 'px-3 py-2 text-xs text-text-primary';
-	const headerCls = 'text-left font-medium px-3 py-2 text-xs text-text-secondary bg-surface-secondary';
+	const cellCls = 'px-3 py-2 text-sm text-text-primary';
+	const headerCls = 'text-left font-medium px-3 py-2 text-sm text-text-secondary bg-surface-secondary';
 
 	return (
 		<Modal
@@ -241,14 +241,14 @@ export function ScreenAclPanel({ open, screenId, onClose, isOwner = false }: Scr
 			width={780}
 			styles={{ body: { maxHeight: '72vh', overflowY: 'auto' } }}
 		>
-			{!screenId && <div className="text-xs opacity-80">请先保存大屏后再配置权限。</div>}
+			{!screenId && <div className="text-sm opacity-80">请先保存大屏后再配置权限。</div>}
 			{forbidden && (
 				<div className="border border-warning bg-warning/10 text-text-primary rounded-lg px-4 py-6 mb-3 text-center">
 					<div className="text-sm font-medium mb-1">无权管理此大屏的权限</div>
-					<div className="text-xs text-text-secondary">只有大屏的创建者才能查看和管理权限配置。</div>
+					<div className="text-sm text-text-secondary">只有大屏的创建者才能查看和管理权限配置。</div>
 					<button
 						type="button"
-						className="mt-4 px-4 py-1.5 rounded-md border border-border-default bg-surface-card text-text-primary text-xs cursor-pointer hover:border-brand hover:bg-brand/10"
+						className="mt-4 px-4 py-1.5 rounded-md border border-border-default bg-surface-card text-text-primary text-sm cursor-pointer hover:border-brand hover:bg-brand/10"
 						onClick={onClose}
 					>
 						关闭
@@ -256,7 +256,7 @@ export function ScreenAclPanel({ open, screenId, onClose, isOwner = false }: Scr
 				</div>
 			)}
 			{error && !forbidden && (
-				<div className="border border-error bg-error/10 text-error rounded-lg p-2.5 mb-3 text-xs whitespace-pre-wrap">
+				<div className="border border-error bg-error/10 text-error rounded-lg p-2.5 mb-3 text-sm whitespace-pre-wrap">
 					{error}
 				</div>
 			)}
@@ -265,9 +265,9 @@ export function ScreenAclPanel({ open, screenId, onClose, isOwner = false }: Scr
 			{!forbidden && <div className="mb-5">
 				<div className="text-sm font-medium text-text-primary mb-2">已有权限</div>
 				{loading ? (
-					<div className="text-xs text-text-muted py-4 text-center">加载中...</div>
+					<div className="text-sm text-text-muted py-4 text-center">加载中...</div>
 				) : rows.length === 0 ? (
-					<div className="text-xs text-text-muted py-4 text-center border border-border-default rounded-lg">暂无权限记录</div>
+					<div className="text-sm text-text-muted py-4 text-center border border-border-default rounded-lg">暂无权限记录</div>
 				) : (
 					<div className="rounded-lg border border-border-default overflow-hidden">
 						<table className="w-full border-collapse">
@@ -293,7 +293,7 @@ export function ScreenAclPanel({ open, screenId, onClose, isOwner = false }: Scr
 											{row.perm !== 'OWNER' && row.id != null ? (
 												<button
 													type="button"
-													className="px-2 py-0.5 rounded border border-border-default bg-surface-card text-xs text-error cursor-pointer hover:border-error hover:bg-error/10"
+													className="px-2 py-0.5 rounded border border-border-default bg-surface-card text-sm text-error cursor-pointer hover:border-error hover:bg-error/10"
 													onClick={() => handleRevoke(row.id)}
 												>
 													移除
@@ -316,9 +316,9 @@ export function ScreenAclPanel({ open, screenId, onClose, isOwner = false }: Scr
 					{/* Type & perm selectors */}
 					<div className="flex items-center gap-3 mb-3 flex-wrap">
 						<div className="flex items-center gap-1.5">
-							<span className="text-xs text-text-secondary">授权类型</span>
+							<span className="text-sm text-text-secondary">授权类型</span>
 							<select
-								className="px-2.5 py-1.5 border border-border-default rounded bg-surface-card text-text-primary text-xs focus:outline-none focus:border-brand"
+								className="px-2.5 py-1.5 border border-border-default rounded bg-surface-card text-text-primary text-sm focus:outline-none focus:border-brand"
 								value={granteeType}
 								onChange={(e) => {
 									setGranteeType(e.target.value as 'USER' | 'ROLE');
@@ -330,9 +330,9 @@ export function ScreenAclPanel({ open, screenId, onClose, isOwner = false }: Scr
 							</select>
 						</div>
 						<div className="flex items-center gap-1.5">
-							<span className="text-xs text-text-secondary">权限</span>
+							<span className="text-sm text-text-secondary">权限</span>
 							<select
-								className="px-2.5 py-1.5 border border-border-default rounded bg-surface-card text-text-primary text-xs focus:outline-none focus:border-brand"
+								className="px-2.5 py-1.5 border border-border-default rounded bg-surface-card text-text-primary text-sm focus:outline-none focus:border-brand"
 								value={addPerm}
 								onChange={(e) => setAddPerm(e.target.value as 'MANAGE' | 'READ')}
 							>
@@ -343,7 +343,7 @@ export function ScreenAclPanel({ open, screenId, onClose, isOwner = false }: Scr
 						</div>
 						<div className="flex-1 min-w-[180px]">
 							<input
-								className="w-full px-2.5 py-1.5 border border-border-default rounded bg-surface-card text-text-primary text-xs focus:outline-none focus:border-brand"
+								className="w-full px-2.5 py-1.5 border border-border-default rounded bg-surface-card text-text-primary text-sm focus:outline-none focus:border-brand"
 								value={searchQuery}
 								onChange={(e) => setSearchQuery(e.target.value)}
 								placeholder={granteeType === 'USER' ? '搜索用户名或姓名...' : '搜索角色名称...'}
@@ -382,11 +382,11 @@ export function ScreenAclPanel({ open, screenId, onClose, isOwner = false }: Scr
 							<tbody>
 								{(usersLoading || rolesLoading) ? (
 									<tr>
-										<td colSpan={4} className="text-center text-xs text-text-muted py-6">加载中...</td>
+										<td colSpan={4} className="text-center text-sm text-text-muted py-6">加载中...</td>
 									</tr>
 								) : pagedItems.length === 0 ? (
 									<tr>
-										<td colSpan={4} className="text-center text-xs text-text-muted py-6">
+										<td colSpan={4} className="text-center text-sm text-text-muted py-6">
 											{searchQuery ? '无匹配结果' : '暂无数据'}
 										</td>
 									</tr>
@@ -403,7 +403,7 @@ export function ScreenAclPanel({ open, screenId, onClose, isOwner = false }: Scr
 													<input
 														type="checkbox"
 														checked={selectedIds.has(uid)}
-														onChange={() => toggleSelect(uid)}
+														onChange={(e) => { e.stopPropagation(); toggleSelect(uid); }}
 														className="cursor-pointer"
 													/>
 												</td>
@@ -427,7 +427,7 @@ export function ScreenAclPanel({ open, screenId, onClose, isOwner = false }: Scr
 													<input
 														type="checkbox"
 														checked={selectedIds.has(rid)}
-														onChange={() => toggleSelect(rid)}
+														onChange={(e) => { e.stopPropagation(); toggleSelect(rid); }}
 														className="cursor-pointer"
 													/>
 												</td>
@@ -444,7 +444,7 @@ export function ScreenAclPanel({ open, screenId, onClose, isOwner = false }: Scr
 
 					{/* Pagination & action */}
 					<div className="flex items-center justify-between flex-wrap gap-2">
-						<div className="text-xs text-text-muted">
+						<div className="text-sm text-text-muted">
 							共 {totalItems} 条
 							{selectedIds.size > 0 && (
 								<span className="ml-2 text-brand font-medium">已选 {selectedIds.size} 项</span>
@@ -455,16 +455,16 @@ export function ScreenAclPanel({ open, screenId, onClose, isOwner = false }: Scr
 								<div className="flex items-center gap-1 mr-3">
 									<button
 										type="button"
-										className="px-2 py-1 rounded border border-border-default bg-surface-card text-xs cursor-pointer hover:border-brand disabled:opacity-40 disabled:cursor-not-allowed"
+										className="px-2 py-1 rounded border border-border-default bg-surface-card text-sm cursor-pointer hover:border-brand disabled:opacity-40 disabled:cursor-not-allowed"
 										disabled={safePage <= 1}
 										onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
 									>
 										上一页
 									</button>
-									<span className="text-xs text-text-secondary px-1.5">{safePage} / {totalPages}</span>
+									<span className="text-sm text-text-secondary px-1.5">{safePage} / {totalPages}</span>
 									<button
 										type="button"
-										className="px-2 py-1 rounded border border-border-default bg-surface-card text-xs cursor-pointer hover:border-brand disabled:opacity-40 disabled:cursor-not-allowed"
+										className="px-2 py-1 rounded border border-border-default bg-surface-card text-sm cursor-pointer hover:border-brand disabled:opacity-40 disabled:cursor-not-allowed"
 										disabled={safePage >= totalPages}
 										onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
 									>
@@ -474,7 +474,7 @@ export function ScreenAclPanel({ open, screenId, onClose, isOwner = false }: Scr
 							)}
 							<button
 								type="button"
-								className="px-3 py-1.5 rounded-md border border-brand bg-brand text-white text-xs cursor-pointer hover:opacity-85 disabled:opacity-40 disabled:cursor-not-allowed"
+								className="px-3 py-1.5 rounded-md border border-brand bg-brand text-white text-sm cursor-pointer hover:opacity-85 disabled:opacity-40 disabled:cursor-not-allowed"
 								onClick={handleAddSelected}
 								disabled={adding || selectedIds.size === 0}
 							>
@@ -482,7 +482,7 @@ export function ScreenAclPanel({ open, screenId, onClose, isOwner = false }: Scr
 							</button>
 							<button
 								type="button"
-								className="px-3 py-1.5 rounded-md border border-border-default bg-surface-card text-text-primary text-xs cursor-pointer hover:border-brand hover:bg-brand/10"
+								className="px-3 py-1.5 rounded-md border border-border-default bg-surface-card text-text-primary text-sm cursor-pointer hover:border-brand hover:bg-brand/10"
 								onClick={onClose}
 							>
 								关闭

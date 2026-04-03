@@ -1,0 +1,1168 @@
+{
+  "schemaVersion": 2,
+  "id": "project-cockpit-bigscreen",
+  "name": "项目看板 — 深色大屏",
+  "description": "基于项目看板数据的深色大屏，参考 GPMC BigScreen 风格，覆盖完成率、里程碑、甘特、阶段分布、责任科室负载、延期 TOP10、阻塞链路。",
+  "width": 1920,
+  "height": 1080,
+  "backgroundColor": "#050a14",
+  "theme": "dark-command",
+  "globalVariables": [
+    {
+      "key": "dateFrom",
+      "label": "开始日期",
+      "type": "date",
+      "defaultValue": ""
+    },
+    {
+      "key": "dateTo",
+      "label": "结束日期",
+      "type": "date",
+      "defaultValue": ""
+    },
+    {
+      "key": "deptId",
+      "label": "事业部/科室",
+      "type": "string",
+      "defaultValue": ""
+    },
+    {
+      "key": "projectNo",
+      "label": "项目编号/项目名称",
+      "type": "string",
+      "defaultValue": ""
+    },
+    {
+      "key": "riskLevel",
+      "label": "风险等级",
+      "type": "string",
+      "defaultValue": ""
+    },
+    {
+      "key": "majorProjectId",
+      "label": "大项目",
+      "type": "string",
+      "defaultValue": ""
+    }
+  ],
+  "components": [
+    {
+      "id": "bs-header-bar",
+      "type": "shape",
+      "name": "顶栏背景",
+      "x": 0,
+      "y": 0,
+      "width": 1920,
+      "height": 100,
+      "zIndex": 5,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "shapeType": "rect",
+        "fillColor": "#070e1a",
+        "borderColor": "rgba(34, 195, 255, 0.18)",
+        "borderWidth": 1,
+        "radius": 0
+      }
+    },
+    {
+      "id": "bs-header-glow",
+      "type": "shape",
+      "name": "顶栏底部发光线",
+      "x": 0,
+      "y": 98,
+      "width": 1920,
+      "height": 2,
+      "zIndex": 6,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "shapeType": "rect",
+        "fillColor": "rgba(34, 195, 255, 0.5)",
+        "borderColor": "transparent",
+        "borderWidth": 0,
+        "radius": 0
+      }
+    },
+    {
+      "id": "bs-title",
+      "type": "title",
+      "name": "页面标题",
+      "x": 44,
+      "y": 24,
+      "width": 600,
+      "height": 44,
+      "zIndex": 60,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "text": "项目执行监控",
+        "fontSize": 34,
+        "fontWeight": "800",
+        "color": "#e6f0ff",
+        "textAlign": "flex-start"
+      }
+    },
+    {
+      "id": "bs-tab-overview-shape",
+      "type": "shape",
+      "name": "综合态势-tab",
+      "x": 44,
+      "y": 70,
+      "width": 120,
+      "height": 28,
+      "zIndex": 24,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "shapeType": "rect",
+        "fillColor": "rgba(34, 195, 255, 0.10)",
+        "borderColor": "rgba(34, 195, 255, 0.28)",
+        "borderWidth": 1,
+        "radius": 10
+      }
+    },
+    {
+      "id": "bs-tab-overview-label",
+      "type": "title",
+      "name": "综合态势",
+      "x": 44,
+      "y": 70,
+      "width": 120,
+      "height": 28,
+      "zIndex": 25,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "text": "综合态势",
+        "fontSize": 15,
+        "fontWeight": "500",
+        "color": "rgba(230, 240, 255, 0.7)",
+        "textAlign": "center"
+      }
+    },
+    {
+      "id": "bs-tab-execution-shape",
+      "type": "shape",
+      "name": "执行监控-tab（激活）",
+      "x": 176,
+      "y": 70,
+      "width": 120,
+      "height": 28,
+      "zIndex": 24,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "shapeType": "rect",
+        "fillColor": "rgba(34, 195, 255, 0.22)",
+        "borderColor": "rgba(34, 195, 255, 0.60)",
+        "borderWidth": 1,
+        "radius": 10
+      }
+    },
+    {
+      "id": "bs-tab-execution-label",
+      "type": "title",
+      "name": "执行监控（激活）",
+      "x": 176,
+      "y": 70,
+      "width": 120,
+      "height": 28,
+      "zIndex": 25,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "text": "执行监控",
+        "fontSize": 15,
+        "fontWeight": "700",
+        "color": "#22c3ff",
+        "textAlign": "center"
+      }
+    },
+    {
+      "id": "bs-tab-quality-shape",
+      "type": "shape",
+      "name": "质量跟进-tab",
+      "x": 308,
+      "y": 70,
+      "width": 120,
+      "height": 28,
+      "zIndex": 24,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "shapeType": "rect",
+        "fillColor": "rgba(34, 195, 255, 0.10)",
+        "borderColor": "rgba(34, 195, 255, 0.28)",
+        "borderWidth": 1,
+        "radius": 10
+      }
+    },
+    {
+      "id": "bs-tab-quality-label",
+      "type": "title",
+      "name": "质量跟进",
+      "x": 308,
+      "y": 70,
+      "width": 120,
+      "height": 28,
+      "zIndex": 25,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "text": "质量跟进",
+        "fontSize": 15,
+        "fontWeight": "500",
+        "color": "rgba(230, 240, 255, 0.7)",
+        "textAlign": "center"
+      }
+    },
+    {
+      "id": "bs-tab-tech-shape",
+      "type": "shape",
+      "name": "技术状态-tab",
+      "x": 440,
+      "y": 70,
+      "width": 120,
+      "height": 28,
+      "zIndex": 24,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "shapeType": "rect",
+        "fillColor": "rgba(34, 195, 255, 0.10)",
+        "borderColor": "rgba(34, 195, 255, 0.28)",
+        "borderWidth": 1,
+        "radius": 10
+      }
+    },
+    {
+      "id": "bs-tab-tech-label",
+      "type": "title",
+      "name": "技术状态",
+      "x": 440,
+      "y": 70,
+      "width": 120,
+      "height": 28,
+      "zIndex": 25,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "text": "技术状态",
+        "fontSize": 15,
+        "fontWeight": "500",
+        "color": "rgba(230, 240, 255, 0.7)",
+        "textAlign": "center"
+      }
+    },
+    {
+      "id": "bs-tab-cost-shape",
+      "type": "shape",
+      "name": "成本控制-tab",
+      "x": 572,
+      "y": 70,
+      "width": 120,
+      "height": 28,
+      "zIndex": 24,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "shapeType": "rect",
+        "fillColor": "rgba(34, 195, 255, 0.10)",
+        "borderColor": "rgba(34, 195, 255, 0.28)",
+        "borderWidth": 1,
+        "radius": 10
+      }
+    },
+    {
+      "id": "bs-tab-cost-label",
+      "type": "title",
+      "name": "成本控制",
+      "x": 572,
+      "y": 70,
+      "width": 120,
+      "height": 28,
+      "zIndex": 25,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "text": "成本控制",
+        "fontSize": 15,
+        "fontWeight": "500",
+        "color": "rgba(230, 240, 255, 0.7)",
+        "textAlign": "center"
+      }
+    },
+    {
+      "id": "bs-tab-risk-shape",
+      "type": "shape",
+      "name": "风险预警-tab",
+      "x": 704,
+      "y": 70,
+      "width": 120,
+      "height": 28,
+      "zIndex": 24,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "shapeType": "rect",
+        "fillColor": "rgba(34, 195, 255, 0.10)",
+        "borderColor": "rgba(34, 195, 255, 0.28)",
+        "borderWidth": 1,
+        "radius": 10
+      }
+    },
+    {
+      "id": "bs-tab-risk-label",
+      "type": "title",
+      "name": "风险预警",
+      "x": 704,
+      "y": 70,
+      "width": 120,
+      "height": 28,
+      "zIndex": 25,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "text": "风险预警",
+        "fontSize": 15,
+        "fontWeight": "500",
+        "color": "rgba(230, 240, 255, 0.7)",
+        "textAlign": "center"
+      }
+    },
+    {
+      "id": "bs-filter-dept",
+      "type": "filter-select",
+      "name": "事业部/科室",
+      "x": 880,
+      "y": 24,
+      "width": 160,
+      "height": 52,
+      "zIndex": 65,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "label": "事业部/科室",
+        "variableKey": "deptId",
+        "options": [
+          "全部",
+          "工程建设中心",
+          "数字化事业部",
+          "研发中心",
+          "生产制造中心",
+          "采购中心"
+        ],
+        "placeholder": "全部",
+        "labelColor": "rgba(230, 240, 255, 0.65)",
+        "inputBackground": "rgba(34, 195, 255, 0.10)",
+        "inputBorderColor": "rgba(34, 195, 255, 0.30)",
+        "inputTextColor": "#e6f0ff"
+      }
+    },
+    {
+      "id": "bs-filter-project",
+      "type": "filter-input",
+      "name": "项目编号/项目名称",
+      "x": 1060,
+      "y": 24,
+      "width": 200,
+      "height": 52,
+      "zIndex": 65,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "label": "项目编号/项目名称",
+        "variableKey": "projectNo",
+        "placeholder": "输入关键词",
+        "labelColor": "rgba(230, 240, 255, 0.65)",
+        "inputBackground": "rgba(34, 195, 255, 0.10)",
+        "inputBorderColor": "rgba(34, 195, 255, 0.30)",
+        "inputTextColor": "#e6f0ff"
+      }
+    },
+    {
+      "id": "bs-filter-date",
+      "type": "filter-date-range",
+      "name": "统计周期",
+      "x": 1280,
+      "y": 24,
+      "width": 300,
+      "height": 52,
+      "zIndex": 65,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "label": "统计周期",
+        "startKey": "dateFrom",
+        "endKey": "dateTo",
+        "labelColor": "rgba(230, 240, 255, 0.65)",
+        "inputBackground": "rgba(34, 195, 255, 0.10)",
+        "inputBorderColor": "rgba(34, 195, 255, 0.30)",
+        "inputTextColor": "#e6f0ff"
+      }
+    },
+    {
+      "id": "bs-filter-risk",
+      "type": "filter-select",
+      "name": "风险等级",
+      "x": 1600,
+      "y": 24,
+      "width": 120,
+      "height": 52,
+      "zIndex": 65,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "label": "风险等级",
+        "variableKey": "riskLevel",
+        "options": [
+          "全部",
+          "高",
+          "中",
+          "低"
+        ],
+        "placeholder": "全部",
+        "labelColor": "rgba(230, 240, 255, 0.65)",
+        "inputBackground": "rgba(34, 195, 255, 0.10)",
+        "inputBorderColor": "rgba(34, 195, 255, 0.30)",
+        "inputTextColor": "#e6f0ff"
+      }
+    },
+    {
+      "id": "bs-explanation-shape",
+      "type": "shape",
+      "name": "说明",
+      "x": 1736,
+      "y": 30,
+      "width": 64,
+      "height": 28,
+      "zIndex": 66,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "shapeType": "rect",
+        "fillColor": "rgba(34, 195, 255, 0.12)",
+        "borderColor": "rgba(34, 195, 255, 0.50)",
+        "borderWidth": 1,
+        "radius": 999
+      },
+      "actions": [
+        {
+          "type": "open-panel",
+          "panelTitle": "说明卡",
+          "panelBodyTemplate": "面向 PMO 和部门负责人，定位进度失控点、延期责任和阻塞链路。\n• 重点看完成率、里程碑达成率、延期 TOP10 和责任科室负载。\n• 甘特与阻塞链路用于判断「哪里拖」「谁在拖」。\n• 点击排行、任务和 KPI 可进入执行层只读详情页。"
+        }
+      ]
+    },
+    {
+      "id": "bs-explanation-label",
+      "type": "title",
+      "name": "说明",
+      "x": 1736,
+      "y": 30,
+      "width": 64,
+      "height": 28,
+      "zIndex": 67,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "text": "说明",
+        "fontSize": 14,
+        "fontWeight": "700",
+        "color": "#22c3ff",
+        "textAlign": "center"
+      },
+      "actions": [
+        {
+          "type": "open-panel",
+          "panelTitle": "说明卡",
+          "panelBodyTemplate": "面向 PMO 和部门负责人，定位进度失控点、延期责任和阻塞链路。\n• 重点看完成率、里程碑达成率、延期 TOP10 和责任科室负载。\n• 甘特与阻塞链路用于判断「哪里拖」「谁在拖」。\n• 点击排行、任务和 KPI 可进入执行层只读详情页。"
+        }
+      ]
+    },
+    {
+      "id": "bs-guide-shape",
+      "type": "shape",
+      "name": "导览",
+      "x": 1812,
+      "y": 30,
+      "width": 64,
+      "height": 28,
+      "zIndex": 66,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "shapeType": "rect",
+        "fillColor": "rgba(61, 220, 151, 0.12)",
+        "borderColor": "rgba(61, 220, 151, 0.50)",
+        "borderWidth": 1,
+        "radius": 999
+      },
+      "actions": [
+        {
+          "type": "open-panel",
+          "panelTitle": "导览卡",
+          "panelBodyTemplate": "建议先讲延期和阻塞，再进入执行层明细承载节点、责任人和资源负载。\n• 先用延期 TOP10 和阻塞链路回答「哪里出问题」。\n• 再下钻到执行层查看甘特、节点目标和责任人分析。\n• 如需回到大屏，只讲异常专题回路，不重复讲全量基础信息。"
+        }
+      ]
+    },
+    {
+      "id": "bs-guide-label",
+      "type": "title",
+      "name": "导览",
+      "x": 1812,
+      "y": 30,
+      "width": 64,
+      "height": 28,
+      "zIndex": 67,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "text": "导览",
+        "fontSize": 14,
+        "fontWeight": "700",
+        "color": "#3ddc97",
+        "textAlign": "center"
+      },
+      "actions": [
+        {
+          "type": "open-panel",
+          "panelTitle": "导览卡",
+          "panelBodyTemplate": "建议先讲延期和阻塞，再进入执行层明细承载节点、责任人和资源负载。\n• 先用延期 TOP10 和阻塞链路回答「哪里出问题」。\n• 再下钻到执行层查看甘特、节点目标和责任人分析。\n• 如需回到大屏，只讲异常专题回路，不重复讲全量基础信息。"
+        }
+      ]
+    },
+    {
+      "id": "bs-kpi-area-bg",
+      "type": "shape",
+      "name": "KPI 区背景",
+      "x": 24,
+      "y": 108,
+      "width": 1872,
+      "height": 132,
+      "zIndex": 2,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "shapeType": "rect",
+        "fillColor": "rgba(10, 22, 40, 0.75)",
+        "borderColor": "rgba(34, 195, 255, 0.18)",
+        "borderWidth": 1,
+        "radius": 14
+      }
+    },
+    {
+      "id": "bs-kpi-completion",
+      "type": "number-card",
+      "name": "整体完成率",
+      "x": 46,
+      "y": 120,
+      "width": 246,
+      "height": 108,
+      "zIndex": 12,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "title": "整体完成率",
+        "value": 45.45,
+        "suffix": "%",
+        "precision": 1,
+        "titleFontSize": 16,
+        "valueFontSize": 36,
+        "titleColor": "#6b8ab5",
+        "valueColor": "#22c3ff",
+        "backgroundColor": "transparent"
+      },
+      "dataSource": {
+        "type": "api",
+        "apiConfig": {
+          "url": "/bi/api/project-cockpit/screen/overview",
+          "method": "GET",
+          "params": {
+            "majorProjectId": "{{majorProjectId}}",
+            "dateFrom": "{{dateFrom}}",
+            "dateTo": "{{dateTo}}",
+            "deptId": "{{deptId}}",
+            "riskLevel": "{{riskLevel}}"
+          },
+          "responsePath": "kpis.8"
+        }
+      }
+    },
+    {
+      "id": "bs-kpi-milestone",
+      "type": "number-card",
+      "name": "里程碑达成率",
+      "x": 314,
+      "y": 120,
+      "width": 246,
+      "height": 108,
+      "zIndex": 12,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "title": "里程碑达成率",
+        "value": 45.45,
+        "suffix": "%",
+        "precision": 1,
+        "titleFontSize": 16,
+        "valueFontSize": 36,
+        "titleColor": "#6b8ab5",
+        "valueColor": "#ffb74d",
+        "backgroundColor": "transparent"
+      },
+      "dataSource": {
+        "type": "api",
+        "apiConfig": {
+          "url": "/bi/api/project-cockpit/screen/execution",
+          "method": "GET",
+          "params": {
+            "majorProjectId": "{{majorProjectId}}",
+            "dateFrom": "{{dateFrom}}",
+            "dateTo": "{{dateTo}}",
+            "deptId": "{{deptId}}",
+            "riskLevel": "{{riskLevel}}"
+          },
+          "responsePath": "milestoneKpis.3"
+        }
+      }
+    },
+    {
+      "id": "bs-kpi-overdue",
+      "type": "number-card",
+      "name": "延期任务数",
+      "x": 582,
+      "y": 120,
+      "width": 246,
+      "height": 108,
+      "zIndex": 12,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "title": "延期任务数",
+        "value": 37,
+        "suffix": "",
+        "precision": 0,
+        "titleFontSize": 16,
+        "valueFontSize": 36,
+        "titleColor": "#6b8ab5",
+        "valueColor": "#ff6b7a",
+        "backgroundColor": "transparent",
+        "valueField": "overdueCount"
+      },
+      "dataSource": {
+        "type": "api",
+        "apiConfig": {
+          "url": "/bi/api/project-cockpit/screen/execution",
+          "method": "GET",
+          "params": {
+            "majorProjectId": "{{majorProjectId}}",
+            "dateFrom": "{{dateFrom}}",
+            "dateTo": "{{dateTo}}",
+            "deptId": "{{deptId}}",
+            "riskLevel": "{{riskLevel}}"
+          },
+          "responsePath": "executionSummary"
+        }
+      }
+    },
+    {
+      "id": "bs-kpi-max-delay",
+      "type": "number-card",
+      "name": "最大延期天数",
+      "x": 850,
+      "y": 120,
+      "width": 246,
+      "height": 108,
+      "zIndex": 12,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "title": "最大延期天数",
+        "value": 28,
+        "suffix": " 天",
+        "precision": 0,
+        "titleFontSize": 16,
+        "valueFontSize": 36,
+        "titleColor": "#6b8ab5",
+        "valueColor": "#ff6b7a",
+        "backgroundColor": "transparent",
+        "valueField": "maxDelayDays"
+      },
+      "dataSource": {
+        "type": "api",
+        "apiConfig": {
+          "url": "/bi/api/project-cockpit/screen/execution",
+          "method": "GET",
+          "params": {
+            "majorProjectId": "{{majorProjectId}}",
+            "dateFrom": "{{dateFrom}}",
+            "dateTo": "{{dateTo}}",
+            "deptId": "{{deptId}}",
+            "riskLevel": "{{riskLevel}}"
+          },
+          "responsePath": "executionSummary"
+        }
+      }
+    },
+    {
+      "id": "bs-kpi-due-soon",
+      "type": "number-card",
+      "name": "近期到期",
+      "x": 1118,
+      "y": 120,
+      "width": 246,
+      "height": 108,
+      "zIndex": 12,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "title": "近期到期",
+        "value": 15,
+        "suffix": "",
+        "precision": 0,
+        "titleFontSize": 16,
+        "valueFontSize": 36,
+        "titleColor": "#6b8ab5",
+        "valueColor": "#e6f0ff",
+        "backgroundColor": "transparent",
+        "valueField": "dueSoonCount"
+      },
+      "dataSource": {
+        "type": "api",
+        "apiConfig": {
+          "url": "/bi/api/project-cockpit/screen/execution",
+          "method": "GET",
+          "params": {
+            "majorProjectId": "{{majorProjectId}}",
+            "dateFrom": "{{dateFrom}}",
+            "dateTo": "{{dateTo}}",
+            "deptId": "{{deptId}}",
+            "riskLevel": "{{riskLevel}}"
+          },
+          "responsePath": "executionSummary"
+        }
+      }
+    },
+    {
+      "id": "bs-kpi-blocked",
+      "type": "number-card",
+      "name": "阻塞链路",
+      "x": 1386,
+      "y": 120,
+      "width": 246,
+      "height": 108,
+      "zIndex": 12,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "title": "高风险节点",
+        "value": 6,
+        "suffix": "",
+        "precision": 0,
+        "titleFontSize": 16,
+        "valueFontSize": 36,
+        "titleColor": "#6b8ab5",
+        "valueColor": "#ffb74d",
+        "backgroundColor": "transparent"
+      },
+      "dataSource": {
+        "type": "api",
+        "apiConfig": {
+          "url": "/bi/api/project-cockpit/screen/execution",
+          "method": "GET",
+          "params": {
+            "majorProjectId": "{{majorProjectId}}",
+            "dateFrom": "{{dateFrom}}",
+            "dateTo": "{{dateTo}}",
+            "deptId": "{{deptId}}",
+            "riskLevel": "{{riskLevel}}"
+          },
+          "responsePath": "incompleteKpis.0"
+        }
+      }
+    },
+    {
+      "id": "bs-kpi-owner",
+      "type": "number-card",
+      "name": "责任人聚焦",
+      "x": 1654,
+      "y": 120,
+      "width": 216,
+      "height": 108,
+      "zIndex": 12,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "title": "里程碑待完成",
+        "value": 12,
+        "suffix": "",
+        "precision": 0,
+        "titleFontSize": 16,
+        "valueFontSize": 36,
+        "titleColor": "#6b8ab5",
+        "valueColor": "#3ddc97",
+        "backgroundColor": "transparent"
+      },
+      "dataSource": {
+        "type": "api",
+        "apiConfig": {
+          "url": "/bi/api/project-cockpit/screen/execution",
+          "method": "GET",
+          "params": {
+            "majorProjectId": "{{majorProjectId}}",
+            "dateFrom": "{{dateFrom}}",
+            "dateTo": "{{dateTo}}",
+            "deptId": "{{deptId}}",
+            "riskLevel": "{{riskLevel}}"
+          },
+          "responsePath": "milestoneKpis.2"
+        }
+      }
+    },
+    {
+      "id": "bs-left-panel-bg",
+      "type": "shape",
+      "name": "左侧甘特面板背景",
+      "x": 24,
+      "y": 256,
+      "width": 900,
+      "height": 520,
+      "zIndex": 1,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "shapeType": "rect",
+        "fillColor": "rgba(10, 22, 40, 0.75)",
+        "borderColor": "rgba(34, 195, 255, 0.18)",
+        "borderWidth": 1,
+        "radius": 14
+      }
+    },
+    {
+      "id": "bs-gantt",
+      "type": "gantt-chart",
+      "name": "任务执行甘特",
+      "x": 24,
+      "y": 256,
+      "width": 900,
+      "height": 520,
+      "zIndex": 12,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "title": "",
+        "renderMode": "board",
+        "sideTextColor": "#e6f0ff"
+      },
+      "dataSource": {
+        "type": "api",
+        "apiConfig": {
+          "url": "/bi/api/project-cockpit/screen/execution",
+          "method": "GET",
+          "params": {
+            "majorProjectId": "{{majorProjectId}}",
+            "dateFrom": "{{dateFrom}}",
+            "dateTo": "{{dateTo}}",
+            "deptId": "{{deptId}}",
+            "riskLevel": "{{riskLevel}}"
+          },
+          "responsePath": "ganttTasks"
+        }
+      }
+    },
+    {
+      "id": "bs-right-top-panel-bg",
+      "type": "shape",
+      "name": "右上图表面板背景",
+      "x": 940,
+      "y": 256,
+      "width": 956,
+      "height": 252,
+      "zIndex": 1,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "shapeType": "rect",
+        "fillColor": "rgba(10, 22, 40, 0.75)",
+        "borderColor": "rgba(34, 195, 255, 0.18)",
+        "borderWidth": 1,
+        "radius": 14
+      }
+    },
+    {
+      "id": "bs-stage-bar",
+      "type": "bar-chart",
+      "name": "阶段分布",
+      "x": 948,
+      "y": 264,
+      "width": 440,
+      "height": 236,
+      "zIndex": 12,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "title": "阶段分布",
+        "seriesColors": [
+          "#22c3ff",
+          "#ffb74d",
+          "#3ddc97"
+        ],
+        "xAxisField": "stage",
+        "series": [
+          {
+            "name": "项目数",
+            "field": "count"
+          }
+        ]
+      },
+      "dataSource": {
+        "type": "api",
+        "apiConfig": {
+          "url": "/bi/api/project-cockpit/screen/execution",
+          "method": "GET",
+          "params": {
+            "majorProjectId": "{{majorProjectId}}",
+            "dateFrom": "{{dateFrom}}",
+            "dateTo": "{{dateTo}}",
+            "deptId": "{{deptId}}",
+            "riskLevel": "{{riskLevel}}"
+          },
+          "responsePath": "stageBuckets"
+        }
+      }
+    },
+    {
+      "id": "bs-dept-bar",
+      "type": "bar-chart",
+      "name": "责任科室负载",
+      "x": 1404,
+      "y": 264,
+      "width": 484,
+      "height": 236,
+      "zIndex": 12,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "title": "责任科室负载",
+        "seriesColors": [
+          "#22c3ff",
+          "#ffb74d"
+        ],
+        "xAxisField": "dept",
+        "series": [
+          {
+            "name": "在办任务",
+            "field": "activeCount"
+          },
+          {
+            "name": "延期任务",
+            "field": "overdueCount"
+          }
+        ]
+      },
+      "dataSource": {
+        "type": "api",
+        "apiConfig": {
+          "url": "/bi/api/project-cockpit/screen/execution",
+          "method": "GET",
+          "params": {
+            "majorProjectId": "{{majorProjectId}}",
+            "dateFrom": "{{dateFrom}}",
+            "dateTo": "{{dateTo}}",
+            "deptId": "{{deptId}}",
+            "riskLevel": "{{riskLevel}}"
+          },
+          "responsePath": "workload"
+        }
+      }
+    },
+    {
+      "id": "bs-right-bottom-panel-bg",
+      "type": "shape",
+      "name": "右下延期表格面板背景",
+      "x": 940,
+      "y": 524,
+      "width": 956,
+      "height": 252,
+      "zIndex": 1,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "shapeType": "rect",
+        "fillColor": "rgba(10, 22, 40, 0.75)",
+        "borderColor": "rgba(34, 195, 255, 0.18)",
+        "borderWidth": 1,
+        "radius": 14
+      }
+    },
+    {
+      "id": "bs-delay-table",
+      "type": "table",
+      "name": "延期 TOP 项目",
+      "x": 940,
+      "y": 524,
+      "width": 956,
+      "height": 252,
+      "zIndex": 12,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "title": "延期 TOP 项目",
+        "fontSize": 15,
+        "headerAlign": "center",
+        "headerColor": "#e6f0ff",
+        "headerBackground": "rgba(34, 195, 255, 0.16)",
+        "bodyColor": "#c8d8f0",
+        "bodyBackground": "transparent",
+        "oddRowBackground": "transparent",
+        "evenRowBackground": "rgba(34, 195, 255, 0.05)",
+        "borderColor": "rgba(34, 195, 255, 0.15)",
+        "enableSort": true,
+        "enablePagination": false,
+        "freezeHeader": true,
+        "columns": [
+          {
+            "source": "name",
+            "alias": "任务/节点",
+            "align": "left"
+          },
+          {
+            "source": "majorProjectName",
+            "alias": "项目",
+            "align": "left"
+          },
+          {
+            "source": "dept",
+            "alias": "责任科室",
+            "align": "center"
+          },
+          {
+            "source": "planDate",
+            "alias": "计划完成",
+            "align": "center"
+          },
+          {
+            "source": "delayDays",
+            "alias": "延期天数",
+            "align": "center"
+          },
+          {
+            "source": "riskLevel",
+            "alias": "风险等级",
+            "align": "center"
+          }
+        ]
+      },
+      "dataSource": {
+        "type": "api",
+        "apiConfig": {
+          "url": "/bi/api/project-cockpit/screen/execution",
+          "method": "GET",
+          "params": {
+            "majorProjectId": "{{majorProjectId}}",
+            "dateFrom": "{{dateFrom}}",
+            "dateTo": "{{dateTo}}",
+            "deptId": "{{deptId}}",
+            "riskLevel": "{{riskLevel}}"
+          },
+          "responsePath": "dueList"
+        }
+      }
+    },
+    {
+      "id": "bs-bottom-panel-bg",
+      "type": "shape",
+      "name": "底部阻塞链路面板背景",
+      "x": 24,
+      "y": 792,
+      "width": 1872,
+      "height": 264,
+      "zIndex": 1,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "shapeType": "rect",
+        "fillColor": "rgba(10, 22, 40, 0.75)",
+        "borderColor": "rgba(34, 195, 255, 0.18)",
+        "borderWidth": 1,
+        "radius": 14
+      }
+    },
+    {
+      "id": "bs-blocking-table",
+      "type": "table",
+      "name": "阻塞链路明细",
+      "x": 24,
+      "y": 792,
+      "width": 1872,
+      "height": 264,
+      "zIndex": 12,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "title": "阻塞链路明细",
+        "fontSize": 15,
+        "headerAlign": "center",
+        "headerColor": "#e6f0ff",
+        "headerBackground": "rgba(34, 195, 255, 0.16)",
+        "bodyColor": "#c8d8f0",
+        "bodyBackground": "transparent",
+        "oddRowBackground": "transparent",
+        "evenRowBackground": "rgba(34, 195, 255, 0.05)",
+        "borderColor": "rgba(34, 195, 255, 0.15)",
+        "enableSort": false,
+        "enablePagination": false,
+        "freezeHeader": true,
+        "columns": [
+          {
+            "source": "name",
+            "alias": "任务/节点",
+            "align": "left"
+          },
+          {
+            "source": "majorProjectName",
+            "alias": "项目",
+            "align": "left"
+          },
+          {
+            "source": "owner",
+            "alias": "责任人",
+            "align": "center"
+          },
+          {
+            "source": "dept",
+            "alias": "责任科室",
+            "align": "center"
+          },
+          {
+            "source": "delayDays",
+            "alias": "延期天数",
+            "align": "center"
+          },
+          {
+            "source": "riskLevel",
+            "alias": "风险等级",
+            "align": "center"
+          }
+        ]
+      },
+      "dataSource": {
+        "type": "api",
+        "apiConfig": {
+          "url": "/bi/api/project-cockpit/screen/execution",
+          "method": "GET",
+          "params": {
+            "majorProjectId": "{{majorProjectId}}",
+            "dateFrom": "{{dateFrom}}",
+            "dateTo": "{{dateTo}}",
+            "deptId": "{{deptId}}",
+            "riskLevel": "{{riskLevel}}"
+          },
+          "responsePath": "dueList"
+        }
+      }
+    }
+  ]
+}
