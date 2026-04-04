@@ -95,6 +95,15 @@ export function ScreenAclPanel({ open, screenId, onClose, isOwner = false }: Scr
 	}, []);
 
 	// ── Trigger load on type switch or open ──
+	// Always load both users and roles when panel opens, so resolveGrantLabel
+	// can resolve display names for existing grants regardless of active tab.
+	useEffect(() => {
+		if (!open) return;
+		loadUsers('');
+		loadRoles();
+	}, [open, loadUsers, loadRoles]);
+
+	// Reset selection state when tab or panel changes
 	useEffect(() => {
 		if (!open) return;
 		setSearchQuery('');
@@ -102,10 +111,8 @@ export function ScreenAclPanel({ open, screenId, onClose, isOwner = false }: Scr
 		setCurrentPage(1);
 		if (granteeType === 'USER') {
 			loadUsers('');
-		} else {
-			loadRoles();
 		}
-	}, [open, granteeType, loadUsers, loadRoles]);
+	}, [open, granteeType, loadUsers]);
 
 	// ── Debounced user search ──
 	useEffect(() => {
@@ -282,7 +289,7 @@ export function ScreenAclPanel({ open, screenId, onClose, isOwner = false }: Scr
 							<thead>
 								<tr>
 									<th className={headerCls}>类型</th>
-									<th className={headerCls}>标识</th>
+									<th className={headerCls}>名称</th>
 									<th className={headerCls}>权限</th>
 									<th className={`${headerCls} text-right`}>操作</th>
 								</tr>
