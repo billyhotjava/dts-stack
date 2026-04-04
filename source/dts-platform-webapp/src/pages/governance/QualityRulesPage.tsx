@@ -38,6 +38,7 @@ import {
 	previewTemplateSQL,
 } from "@/api/platformApi";
 import { formatTime } from "@/utils/textUtils";
+import QualityDashboard from "./components/QualityDashboard";
 
 const SEVERITY_OPTIONS = [
 	{ label: "低", value: "LOW" },
@@ -571,7 +572,7 @@ export default function Page() {
 					{
 						key: "overview",
 						label: "概览",
-						children: <div>概览 - 待实现</div>,
+						children: <QualityDashboard />,
 					},
 					{
 						key: "rules",
