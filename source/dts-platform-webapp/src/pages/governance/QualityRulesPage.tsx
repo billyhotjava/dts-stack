@@ -1,21 +1,21 @@
 import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
-import dayjs from "dayjs";
-import type { Dayjs } from "dayjs";
 import {
 	Button,
 	Card,
-	DatePicker,
+
 	Descriptions,
 	Drawer,
 	Empty,
 	Form,
 	Input,
 	Modal,
+	Radio,
 	Select,
 	Switch,
 	Space,
 	Table,
+	Tabs,
 	Tag,
 	Typography,
 } from "antd";
@@ -23,14 +23,10 @@ import type { ColumnsType } from "antd/es/table";
 import { PlusOutlined, PlayCircleOutlined, DeleteOutlined, EditOutlined, EyeOutlined } from "@ant-design/icons";
 import { useSearchParams } from "react-router";
 import { useGovernanceManageAccess } from "@/hooks/useModuleManageAccess";
-import ComplianceCenterPanel from "@/pages/governance/components/ComplianceCenterPanel";
-import IssueWorkflowPanel from "@/pages/governance/components/IssueWorkflowPanel";
-import QualityTasksPanel from "@/pages/governance/components/QualityTasksPanel";
 import {
 	listQualityRules,
 	listQualityRuleVersions,
 	changeQualityRuleVersionStatus,
-	listQualityRuns,
 	createQualityRule,
 	updateQualityRule,
 	deleteQualityRule,
@@ -38,6 +34,8 @@ import {
 	triggerQualityDryRun,
 	triggerQualityRun,
 	listDatasets,
+	listQualityTemplates,
+	previewTemplateSQL,
 } from "@/api/platformApi";
 import { formatTime } from "@/utils/textUtils";
 
@@ -56,8 +54,23 @@ const TYPE_OPTIONS = [
 	{ label: "及时性", value: "TIMELINESS" },
 ];
 
+const ACTION_ON_FAIL_OPTIONS = [
+	{ label: "告警", value: "WARN" },
+	{ label: "阻断", value: "BLOCK" },
+];
+
+type TemplateOption = {
+	id: string;
+	code?: string;
+	name?: string;
+	category?: string;
+	sqlTemplate?: string;
+	paramSchema?: string;
+	severityDefault?: string;
+	actionDefault?: string;
+};
+
 type Rule = any;
-type RunRange = [Dayjs | null, Dayjs | null] | null;
 
 type RuleForm = {
 	code?: string;
@@ -68,6 +81,11 @@ type RuleForm = {
 	enabled?: boolean;
 	publishNow?: boolean;
 	definition?: string;
+	createMode?: "custom" | "template";
+	templateId?: string;
+	templateParams?: string;
+	actionOnFail?: string;
+	autoTrigger?: boolean;
 };
 
 type RuleFilters = {
@@ -144,26 +162,12 @@ export default function Page() {
 	const [versionLoading, setVersionLoading] = useState(false);
 	const [compareLeft, setCompareLeft] = useState<number>();
 	const [compareRight, setCompareRight] = useState<number>();
-	const [runDetailOpen, setRunDetailOpen] = useState(false);
-	const [runDetail, setRunDetail] = useState<QualityRunRow | null>(null);
 	const [editing, setEditing] = useState<Rule | null>(null);
 	const [form] = Form.useForm<RuleForm>();
 	const [datasets, setDatasets] = useState<{ id: string; name: string }[]>([]);
 	const canManage = useGovernanceManageAccess();
-	const [runs, setRuns] = useState<QualityRunRow[]>([]);
-	const [runsLoading, setRunsLoading] = useState(false);
-	const [runStatus, setRunStatus] = useState<string>(searchParams.get("runStatus") || "");
-	const [runDatasetId, setRunDatasetId] = useState<string>(searchParams.get("runDatasetId") || "");
-	const issueStatus = searchParams.get("issueStatus") || undefined;
-	const issueDatasetId = searchParams.get("issueDatasetId") || undefined;
-	const [runRange, setRunRange] = useState<RunRange>(() => {
-		const startedFrom = searchParams.get("startedFrom");
-		const startedTo = searchParams.get("startedTo");
-		if (!startedFrom || !startedTo) return null;
-		const start = dayjs(startedFrom);
-		const end = dayjs(startedTo);
-		return start.isValid() && end.isValid() ? [start, end] : null;
-	});
+	const [templateOptions, setTemplateOptions] = useState<TemplateOption[]>([]);
+	const [previewedSql, setPreviewedSql] = useState<string>("");
 	const [filters, setFilters] = useState<RuleFilters>({
 		keyword: searchParams.get("keyword") || "",
 		type: searchParams.get("type") || undefined,
@@ -194,21 +198,6 @@ export default function Page() {
 		setSearchParams(params, { replace: true });
 	};
 
-	const syncRunParams = (next: { status?: string; datasetId?: string; range?: RunRange }) => {
-		const params = new URLSearchParams(searchParams);
-		const setOrDelete = (key: string, value?: string) => {
-			if (!value) {
-				params.delete(key);
-				return;
-			}
-			params.set(key, value);
-		};
-		setOrDelete("runStatus", next.status?.trim());
-		setOrDelete("runDatasetId", next.datasetId?.trim());
-		setOrDelete("startedFrom", next.range?.[0]?.toISOString());
-		setOrDelete("startedTo", next.range?.[1]?.toISOString());
-		setSearchParams(params, { replace: true });
-	};
 
 	const handleFilterChange = (patch: Partial<RuleFilters>) => {
 		setFilters((prev) => {
@@ -246,37 +235,21 @@ export default function Page() {
 		}
 	};
 
+	const loadTemplates = async () => {
+		try {
+			const list = await listQualityTemplates();
+			setTemplateOptions(Array.isArray(list) ? (list as TemplateOption[]) : []);
+		} catch {
+			// template loading failure is non-critical
+		}
+	};
+
 	useEffect(() => {
 		void loadRules();
 		void loadDatasets();
-		void loadRuns();
+		void loadTemplates();
 	}, []);
 
-	const loadRuns = async (override?: { status?: string; datasetId?: string; range?: RunRange }) => {
-		setRunsLoading(true);
-		try {
-			const effectiveStatus = override?.status ?? runStatus;
-			const effectiveDatasetId = override?.datasetId ?? runDatasetId;
-			const effectiveRange = override?.range ?? runRange;
-			const params: any = {
-				limit: 50,
-				status: effectiveStatus || undefined,
-				datasetId: effectiveDatasetId || undefined,
-			};
-			if (effectiveRange?.[0]?.toISOString) {
-				params.startedFrom = effectiveRange[0].toISOString();
-			}
-			if (effectiveRange?.[1]?.toISOString) {
-				params.startedTo = effectiveRange[1].toISOString();
-			}
-			const list = (await listQualityRuns(params)) as QualityRunRow[];
-			setRuns(Array.isArray(list) ? list : []);
-		} catch (error: any) {
-			toast.error(error?.message || "执行历史加载失败");
-		} finally {
-			setRunsLoading(false);
-		}
-	};
 
 	const openVersionModal = async (rule: Rule) => {
 		if (!rule?.id) return;
@@ -300,6 +273,7 @@ export default function Page() {
 
 	const openModal = (rule?: Rule) => {
 		setEditing(rule || null);
+		setPreviewedSql("");
 		form.setFieldsValue({
 			code: rule?.code || "",
 			name: rule?.name || "",
@@ -313,8 +287,31 @@ export default function Page() {
 				: rule?.definition
 					? JSON.stringify(rule.definition, null, 2)
 					: "",
+			createMode: "custom",
+			templateId: undefined,
+			templateParams: "",
+			actionOnFail: rule?.actionOnFail || "WARN",
+			autoTrigger: rule?.autoTrigger ?? false,
 		});
 		setModalOpen(true);
+	};
+
+	const handleTemplatePreview = async () => {
+		const templateId = form.getFieldValue("templateId");
+		if (!templateId) {
+			toast.error("请先选择模板");
+			return;
+		}
+		try {
+			const paramsText = form.getFieldValue("templateParams") || "{}";
+			const params = JSON.parse(paramsText);
+			const result: any = await previewTemplateSQL(templateId, params);
+			const sql = typeof result === "string" ? result : (result?.sql || JSON.stringify(result, null, 2));
+			setPreviewedSql(sql);
+			toast.success("SQL 预览成功");
+		} catch (error: any) {
+			toast.error(error?.message || "预览失败，请检查参数格式");
+		}
 	};
 
 	const saveRule = async () => {
@@ -338,6 +335,10 @@ export default function Page() {
 				enabled: values.enabled ?? true,
 				publishNow: values.publishNow ?? true,
 				definition: parsedDefinition || undefined,
+				actionOnFail: values.actionOnFail || "WARN",
+				autoTrigger: values.autoTrigger ?? false,
+				templateId: values.createMode === "template" ? values.templateId : undefined,
+				templateParams: values.createMode === "template" ? values.templateParams : undefined,
 			};
 			if (editing?.id) {
 				await updateQualityRule(editing.id, payload);
@@ -392,7 +393,6 @@ export default function Page() {
 		try {
 			await triggerQualityRun({ ruleId: rule.id });
 			toast.success("已触发执行");
-			await loadRuns();
 		} catch (error: any) {
 			toast.error(error?.message || "触发失败");
 		}
@@ -409,7 +409,6 @@ export default function Page() {
 			setDryRunRows(Array.isArray(rows) ? rows : []);
 			setDryRunModalOpen(true);
 			toast.success("试跑完成");
-			await loadRuns();
 		} catch (error: any) {
 			toast.error(error?.message || "试跑失败");
 		}
@@ -453,6 +452,22 @@ export default function Page() {
 			},
 		},
 		{ title: "数据集", dataIndex: "datasetId", render: (v) => datasets.find((d) => d.id === v)?.name || v || "-" },
+		{
+			title: "策略",
+			dataIndex: "actionOnFail",
+			width: 90,
+			render: (v) => (
+				<Tag color={v === "BLOCK" ? "red" : "blue"}>
+					{v === "BLOCK" ? "阻断" : "告警"}
+				</Tag>
+			),
+		},
+		{
+			title: "自动触发",
+			dataIndex: "autoTrigger",
+			width: 90,
+			render: (v) => <Tag color={v ? "green" : "default"}>{v ? "是" : "否"}</Tag>,
+		},
 		{ title: "状态", dataIndex: "enabled", width: 100, render: (v) => <Tag color={v ? "green" : "default"}>{v ? "启用" : "停用"}</Tag> },
 		{
 			title: "操作",
@@ -539,181 +554,53 @@ export default function Page() {
 		return Array.from(keys).filter((key) => JSON.stringify((leftObj as any)[key]) !== JSON.stringify((rightObj as any)[key]));
 	}, [leftVersion, rightVersion]);
 
-	const runMetricRows = useMemo(() => {
-		if (Array.isArray(runDetail?.metrics) && runDetail?.metrics.length > 0) {
-			return runDetail.metrics;
-		}
-		const parsed = parseJsonText(runDetail?.metricsJson);
-		return Array.isArray(parsed) ? parsed : [];
-	}, [runDetail]);
+
+	const activeTab = searchParams.get("tab") || "overview";
+	const handleTabChange = (key: string) => {
+		const params = new URLSearchParams(searchParams);
+		params.set("tab", key);
+		setSearchParams(params, { replace: true });
+	};
 
 	return (
 		<div className="space-y-4">
-			<Card
-				title="质量规则"
-				extra={
-					<Button className="rounded-2xl" type="primary" icon={<PlusOutlined />} onClick={() => openModal()} disabled={!canManage}>
-						新增规则
-					</Button>
-				}
-			>
-				<div className="mb-3 flex flex-wrap items-center gap-2">
-					<Input
-						style={{ width: 240 }}
-						allowClear
-						placeholder="按名称/编码搜索"
-						value={filters.keyword}
-						onChange={(event) => handleFilterChange({ keyword: event.target.value })}
-					/>
-					<Select
-						style={{ width: 160 }}
-						allowClear
-						placeholder="规则类型"
-						options={TYPE_OPTIONS}
-						value={filters.type}
-						onChange={(value) => handleFilterChange({ type: value })}
-					/>
-					<Select
-						style={{ width: 140 }}
-						allowClear
-						placeholder="严重性"
-						options={SEVERITY_OPTIONS}
-						value={filters.severity}
-						onChange={(value) => handleFilterChange({ severity: value })}
-					/>
-					<Select
-						style={{ width: 160 }}
-						allowClear
-						placeholder="启停状态"
-						options={[
-							{ label: "启用", value: "ENABLED" },
-							{ label: "停用", value: "DISABLED" },
-						]}
-						value={filters.enabled}
-						onChange={(value) => handleFilterChange({ enabled: value })}
-					/>
-					<Select
-						style={{ width: 220 }}
-						allowClear
-						placeholder="数据集"
-						options={datasetOptions}
-						value={filters.datasetId}
-						onChange={(value) => handleFilterChange({ datasetId: value })}
-					/>
-					<Button className="rounded-2xl" onClick={resetFilters}>
-						重置筛选
-					</Button>
-				</div>
-				<Table
-					rowKey={(record) => record.id}
-					columns={columns}
-					dataSource={filteredRules}
-					loading={loading}
-					scroll={{ x: 1200 }}
-					pagination={{ showSizeChanger: true }}
-				/>
-			</Card>
+			<Tabs
+				activeKey={activeTab}
+				onChange={handleTabChange}
+				items={[
+					{
+						key: "overview",
+						label: "概览",
+						children: <div>概览 - 待实现</div>,
+					},
+					{
+						key: "rules",
+						label: "质量规则",
+						children: (
+							<div className="space-y-4">
+								<RulesTabContent />
+							</div>
+						),
+					},
+					{
+						key: "tasks",
+						label: "检查任务",
+						children: <div>检查任务 - 待实现</div>,
+					},
+					{
+						key: "report",
+						label: "质量报告",
+						children: <div>质量报告 - 待实现</div>,
+					},
+					{
+						key: "repair",
+						label: "数据修复",
+						children: <div>数据修复 - 待实现</div>,
+					},
+				]}
+			/>
 
-			<Card title="执行历史">
-				<Space wrap style={{ marginBottom: 12 }}>
-					<Select
-						allowClear
-						placeholder="执行状态"
-						style={{ width: 160 }}
-						value={runStatus || undefined}
-						options={[
-							{ label: "成功", value: "SUCCEEDED" },
-							{ label: "失败", value: "FAILED" },
-							{ label: "跳过", value: "SKIPPED" },
-							{ label: "运行中", value: "RUNNING" },
-						]}
-						onChange={(value) => setRunStatus(value || "")}
-					/>
-					<Select
-						allowClear
-						showSearch
-						placeholder="数据集"
-						style={{ width: 260 }}
-						options={datasetOptions}
-						value={runDatasetId || undefined}
-						onChange={(value) => setRunDatasetId(value || "")}
-					/>
-					<DatePicker.RangePicker showTime value={runRange} onChange={setRunRange} />
-					<Button
-						onClick={() => {
-							const next = { status: runStatus, datasetId: runDatasetId, range: runRange };
-							syncRunParams(next);
-							void loadRuns(next);
-						}}
-					>
-						查询
-					</Button>
-					<Button
-						onClick={() => {
-							const next = { status: "", datasetId: "", range: null as RunRange };
-							setRunStatus("");
-							setRunDatasetId("");
-							setRunRange(null);
-							syncRunParams(next);
-							void loadRuns(next);
-						}}
-					>
-						重置
-					</Button>
-				</Space>
-				<Table
-					rowKey={(row) => row.id || row.ruleId || Math.random().toString(36)}
-					loading={runsLoading}
-					dataSource={runs}
-					scroll={{ x: 1300 }}
-					pagination={{ pageSize: 10 }}
-					columns={[
-						{ title: "运行ID", dataIndex: "id", width: 220, render: (v) => v || "-" },
-						{ title: "状态", dataIndex: "status", width: 110, render: (v) => <Tag>{v || "-"}</Tag> },
-						{ title: "触发方式", dataIndex: "triggerType", width: 110, render: (v) => v || "-" },
-						{ title: "错误分类", dataIndex: "errorCategory", width: 140, render: (v) => v || "-" },
-						{
-							title: "数据集",
-							dataIndex: "datasetId",
-							render: (v) => datasets.find((item) => item.id === v)?.name || v || "-",
-						},
-						{ title: "开始时间", dataIndex: "startedAt", width: 180, render: formatTime },
-						{ title: "结束时间", dataIndex: "finishedAt", width: 180, render: formatTime },
-						{ title: "耗时(ms)", dataIndex: "durationMs", width: 120, render: (v) => v ?? "-" },
-						{
-							title: "结果说明",
-							dataIndex: "message",
-							render: (v, row) => (
-								<Space direction="vertical" size={2}>
-									<span>{v || "-"}</span>
-									{Array.isArray(row?.metrics) && row.metrics.length > 0 ? (
-										<Typography.Text type="secondary">指标项: {row.metrics.length}</Typography.Text>
-									) : null}
-								</Space>
-							),
-						},
-						{
-							title: "操作",
-							width: 90,
-							render: (_, row) => (
-								<Button
-									size="small"
-									onClick={() => {
-										setRunDetail(row);
-										setRunDetailOpen(true);
-									}}
-								>
-									详情
-								</Button>
-							),
-						},
-					]}
-				/>
-			</Card>
-			<QualityTasksPanel />
-			<ComplianceCenterPanel />
-			<IssueWorkflowPanel initialDatasetId={issueDatasetId} initialStatus={issueStatus} />
-
+			{/* Modals and Drawers shared across tabs */}
 			<Modal
 				open={modalOpen}
 				title={editing ? "编辑规则" : "新增规则"}
@@ -724,6 +611,14 @@ export default function Page() {
 				width={720}
 			>
 				<Form form={form} layout="vertical">
+					{!editing && (
+						<Form.Item label="创建方式" name="createMode">
+							<Radio.Group>
+								<Radio value="custom">自定义 SQL</Radio>
+								<Radio value="template">从模板创建</Radio>
+							</Radio.Group>
+						</Form.Item>
+					)}
 					<Form.Item label="规则名称" name="name" rules={[{ required: true, message: "请输入规则名称" }]}>
 						<Input placeholder="例如：订单金额非空" />
 					</Form.Item>
@@ -739,11 +634,50 @@ export default function Page() {
 					<Form.Item label="数据集" name="datasetId">
 						<Select options={datasetOptions} allowClear />
 					</Form.Item>
+					<Form.Item label="失败策略" name="actionOnFail">
+						<Select options={ACTION_ON_FAIL_OPTIONS} />
+					</Form.Item>
+					<Form.Item label="自动触发" name="autoTrigger" valuePropName="checked">
+						<Switch checkedChildren="开启" unCheckedChildren="关闭" />
+					</Form.Item>
 					<Form.Item label="保存策略" name="publishNow" valuePropName="checked">
 						<Switch checkedChildren="直接发布" unCheckedChildren="草稿" />
 					</Form.Item>
-					<Form.Item label="规则定义(JSON)" name="definition">
-						<Input.TextArea rows={6} placeholder='例如: {"column":"amount","rule":"not_null"}' />
+					<Form.Item noStyle shouldUpdate={(prev, cur) => prev.createMode !== cur.createMode}>
+						{({ getFieldValue }) =>
+							getFieldValue("createMode") === "template" ? (
+								<>
+									<Form.Item label="选择模板" name="templateId">
+										<Select
+											placeholder="选择规则模板"
+											options={templateOptions.map((t) => ({
+												label: `${t.name || t.code || t.id}`,
+												value: t.id,
+											}))}
+											allowClear
+										/>
+									</Form.Item>
+									<Form.Item label="模板参数 (JSON)" name="templateParams">
+										<Input.TextArea rows={4} placeholder='{"column":"amount","table":"orders"}' />
+									</Form.Item>
+									<div className="mb-4 flex items-center gap-2">
+										<Button onClick={handleTemplatePreview}>预览 SQL</Button>
+										{previewedSql && (
+											<Tag color="green">已生成</Tag>
+										)}
+									</div>
+									{previewedSql && (
+										<pre className="mb-4 rounded bg-gray-50 p-3 text-sm" style={{ whiteSpace: "pre-wrap", maxHeight: 200, overflow: "auto" }}>
+											{previewedSql}
+										</pre>
+									)}
+								</>
+							) : (
+								<Form.Item label="规则定义(JSON)" name="definition">
+									<Input.TextArea rows={6} placeholder='例如: {"column":"amount","rule":"not_null"}' />
+								</Form.Item>
+							)
+						}
 					</Form.Item>
 				</Form>
 			</Modal>
@@ -785,6 +719,16 @@ export default function Page() {
 					<Descriptions.Item label="严重性">{detailRule?.severity || "-"}</Descriptions.Item>
 					<Descriptions.Item label="数据集">
 						{datasets.find((item) => item.id === detailRule?.datasetId)?.name || detailRule?.datasetId || "-"}
+					</Descriptions.Item>
+					<Descriptions.Item label="失败策略">
+						<Tag color={detailRule?.actionOnFail === "BLOCK" ? "red" : "blue"}>
+							{detailRule?.actionOnFail === "BLOCK" ? "阻断" : "告警"}
+						</Tag>
+					</Descriptions.Item>
+					<Descriptions.Item label="自动触发">
+						<Tag color={detailRule?.autoTrigger ? "green" : "default"}>
+							{detailRule?.autoTrigger ? "是" : "否"}
+						</Tag>
 					</Descriptions.Item>
 					<Descriptions.Item label="状态">
 						<Tag color={detailRule?.enabled ? "green" : "default"}>{detailRule?.enabled ? "启用" : "停用"}</Tag>
@@ -870,54 +814,77 @@ export default function Page() {
 					</Space>
 				)}
 			</Modal>
-
-			<Drawer
-				open={runDetailOpen}
-				title="运行日志详情"
-				width={980}
-				onClose={() => setRunDetailOpen(false)}
-			>
-				<Descriptions bordered column={1} size="small">
-					<Descriptions.Item label="运行ID">{runDetail?.id || "-"}</Descriptions.Item>
-					<Descriptions.Item label="状态">{runDetail?.status || "-"}</Descriptions.Item>
-					<Descriptions.Item label="触发方式">{runDetail?.triggerType || "-"}</Descriptions.Item>
-					<Descriptions.Item label="错误分类">{runDetail?.errorCategory || "-"}</Descriptions.Item>
-					<Descriptions.Item label="开始时间">{formatTime(runDetail?.startedAt)}</Descriptions.Item>
-					<Descriptions.Item label="结束时间">{formatTime(runDetail?.finishedAt)}</Descriptions.Item>
-					<Descriptions.Item label="结果说明">{runDetail?.message || "-"}</Descriptions.Item>
-					<Descriptions.Item label="输入参数">
-						<pre style={{ whiteSpace: "pre-wrap", margin: 0 }}>
-							{prettyText(parseJsonText(runDetail?.inputParamsJson || "") || runDetail?.inputParamsJson)}
-						</pre>
-					</Descriptions.Item>
-				</Descriptions>
-				<Card size="small" title="结构化明细" style={{ marginTop: 12 }}>
-					<Table
-						rowKey={(row, idx) => String((row as any)?.id || (row as any)?.metricKey || idx)}
-						pagination={{ pageSize: 8 }}
-						dataSource={runMetricRows}
-						columns={[
-							{
-								title: "检查项",
-								dataIndex: "metricKey",
-								width: 180,
-								render: (v) => v || "-",
-							},
-							{
-								title: "状态",
-								dataIndex: "status",
-								width: 120,
-								render: (v) => <Tag>{String(v || "-")}</Tag>,
-							},
-							{
-								title: "明细",
-								dataIndex: "detail",
-								render: (v) => <pre style={{ whiteSpace: "pre-wrap", margin: 0 }}>{prettyText(v)}</pre>,
-							},
-						]}
-					/>
-				</Card>
-			</Drawer>
 		</div>
 	);
+
+	function RulesTabContent() {
+		return (
+			<>
+			<Card
+				title="质量规则"
+				extra={
+					<Button className="rounded-2xl" type="primary" icon={<PlusOutlined />} onClick={() => openModal()} disabled={!canManage}>
+						新增规则
+					</Button>
+				}
+			>
+				<div className="mb-3 flex flex-wrap items-center gap-2">
+					<Input
+						style={{ width: 240 }}
+						allowClear
+						placeholder="按名称/编码搜索"
+						value={filters.keyword}
+						onChange={(event) => handleFilterChange({ keyword: event.target.value })}
+					/>
+					<Select
+						style={{ width: 160 }}
+						allowClear
+						placeholder="规则类型"
+						options={TYPE_OPTIONS}
+						value={filters.type}
+						onChange={(value) => handleFilterChange({ type: value })}
+					/>
+					<Select
+						style={{ width: 140 }}
+						allowClear
+						placeholder="严重性"
+						options={SEVERITY_OPTIONS}
+						value={filters.severity}
+						onChange={(value) => handleFilterChange({ severity: value })}
+					/>
+					<Select
+						style={{ width: 160 }}
+						allowClear
+						placeholder="启停状态"
+						options={[
+							{ label: "启用", value: "ENABLED" },
+							{ label: "停用", value: "DISABLED" },
+						]}
+						value={filters.enabled}
+						onChange={(value) => handleFilterChange({ enabled: value })}
+					/>
+					<Select
+						style={{ width: 220 }}
+						allowClear
+						placeholder="数据集"
+						options={datasetOptions}
+						value={filters.datasetId}
+						onChange={(value) => handleFilterChange({ datasetId: value })}
+					/>
+					<Button className="rounded-2xl" onClick={resetFilters}>
+						重置筛选
+					</Button>
+				</div>
+				<Table
+					rowKey={(record) => record.id}
+					columns={columns}
+					dataSource={filteredRules}
+					loading={loading}
+					scroll={{ x: 1200 }}
+					pagination={{ showSizeChanger: true }}
+				/>
+			</Card>
+			</>
+		);
+	}
 }
