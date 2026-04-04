@@ -10,5 +10,6 @@ import org.springframework.stereotype.Repository;
 public interface GovRuleBindingRepository extends JpaRepository<GovRuleBinding, UUID> {
     List<GovRuleBinding> findByRuleVersionId(UUID ruleVersionId);
     List<GovRuleBinding> findByDatasetId(UUID datasetId);
+    List<GovRuleBinding> findByDatasetIdAndRuleVersionStatus(UUID datasetId, String status);
 }
 
