@@ -39,6 +39,7 @@ import {
 } from "@/api/platformApi";
 import { formatTime } from "@/utils/textUtils";
 import QualityDashboard from "./components/QualityDashboard";
+import QualityTasksTab from "./components/QualityTasksTab";
 
 const SEVERITY_OPTIONS = [
 	{ label: "低", value: "LOW" },
@@ -586,7 +587,7 @@ export default function Page() {
 					{
 						key: "tasks",
 						label: "检查任务",
-						children: <div>检查任务 - 待实现</div>,
+						children: <QualityTasksTab />,
 					},
 					{
 						key: "report",
