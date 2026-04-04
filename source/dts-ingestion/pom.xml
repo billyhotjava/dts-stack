@@ -33,11 +33,6 @@
             <version>${project.version}</version>
         </dependency>
         <dependency>
-            <groupId>com.yuzhi.dts.platform</groupId>
-            <artifactId>dts-platform</artifactId>
-            <version>${project.version}</version>
-        </dependency>
-        <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-configuration-processor</artifactId>
             <scope>provided</scope>
