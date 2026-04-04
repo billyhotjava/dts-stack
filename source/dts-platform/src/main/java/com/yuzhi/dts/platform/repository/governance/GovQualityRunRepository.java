@@ -23,4 +23,6 @@ public interface GovQualityRunRepository extends JpaRepository<GovQualityRun, UU
     long countByDatasetIdNotIn(java.util.Collection<UUID> datasetIds);
 
     List<GovQualityRun> findByDatasetIdNotIn(java.util.Collection<UUID> datasetIds, Pageable pageable);
+
+    List<GovQualityRun> findByDatasetIdAndFinishedAtAfterOrderByFinishedAtAsc(UUID datasetId, Instant since);
 }
