@@ -36,6 +36,7 @@ import com.yuzhi.dts.platform.service.modeling.ModelingAssetReferenceService;
 import com.yuzhi.dts.platform.service.modeling.DataStandardSecurity;
 import com.yuzhi.dts.platform.service.security.AccessChecker;
 import com.yuzhi.dts.platform.service.security.OrganizationVisibilityService;
+import com.yuzhi.dts.platform.web.rest.errors.BadRequestAlertException;
 import jakarta.persistence.EntityNotFoundException;
 import jakarta.validation.Valid;
 import java.time.Instant;
@@ -1184,7 +1185,8 @@ public class ModelingAuxResource {
         if (currentId != null && currentId.equals(existing.getId())) {
             return;
         }
-        throw new org.springframework.web.server.ResponseStatusException(HttpStatus.BAD_REQUEST, "项目空间名称已存在: " + name);
+        throw new BadRequestAlertException("已存在同名项目空间: " + name,
+            "modelingPlan", "duplicateName");
     }
 
     private String normalizePlanStatus(String status) {

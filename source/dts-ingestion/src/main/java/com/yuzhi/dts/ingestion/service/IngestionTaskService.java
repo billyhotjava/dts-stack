@@ -23,6 +23,7 @@ import com.yuzhi.dts.ingestion.service.etl.ExecutionFailureClassifier;
 import com.yuzhi.dts.ingestion.service.mapper.IngestionExecutionMapper;
 import com.yuzhi.dts.ingestion.service.mapper.IngestionTaskMapper;
 import com.yuzhi.dts.common.audit.AuditStage;
+import com.yuzhi.dts.platform.web.rest.errors.BadRequestAlertException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.data.domain.Page;
@@ -149,6 +150,11 @@ public class IngestionTaskService {
     ) {
         log.info("Creating new ingestion task: {} (skipJob={})", dto.getName(), skipJob);
 
+        if (dto.getSourceDataSourceId() == null) {
+            throw new BadRequestAlertException("来源数据源不能为空，请先选择数据源",
+                "ingestionTask", "sourceDataSourceIdNull");
+        }
+
         IngestionTask task = taskMapper.toEntity(dto);
 
         if (!skipJob) {
@@ -221,6 +227,11 @@ public class IngestionTaskService {
      */
     public IngestionTaskDTO update(Long id, IngestionTaskDTO dto) {
         log.info("Updating ingestion task ID: {}", id);
+
+        if (dto.getSourceDataSourceId() == null) {
+            throw new BadRequestAlertException("来源数据源不能为空，请先选择数据源",
+                "ingestionTask", "sourceDataSourceIdNull");
+        }
 
         return taskRepository.findById(id)
             .map(existingTask -> {
