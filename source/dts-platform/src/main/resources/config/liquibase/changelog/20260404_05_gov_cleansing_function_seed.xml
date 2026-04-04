@@ -1,0 +1,64 @@
+<?xml version="1.0" encoding="utf-8"?>
+<databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+        http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
+
+    <changeSet id="20260404-05-gov-cleansing-function-seed" author="system">
+        <sql><![CDATA[
+INSERT INTO gov_cleansing_function (id, code, name, description, sql_expression, display_order, builtin, enabled, created_by, created_date, last_modified_by, last_modified_date)
+VALUES
+(gen_random_uuid(), 'NORMALIZE_WIDTH', '全角转半角',
+ '将全角字母、数字、常用标点转换为半角',
+ 'translate({{column}}, ''０１２３４５６７８９ＡＢＣＤＥＦＧＨＩＪＫＬＭＮＯＰＱＲＳＴＵＶＷＸＹＺａｂｃｄｅｆｇｈｉｊｋｌｍｎｏｐｑｒｓｔｕｖｗｘｙｚ（）【】，。；：！？'', ''0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz()[],.;:!?'')',
+ 10, true, true, 'system', now(), 'system', now()),
+
+(gen_random_uuid(), 'TRIM_INVISIBLE', '去不可见字符',
+ '去除零宽空格、BOM、控制字符等不可见字符',
+ 'regexp_replace({{column}}, E''[\\x00-\\x1f\\x7f\\xc2\\xa0]|\\u200b|\\ufeff'', '''', ''g'')',
+ 20, true, true, 'system', now(), 'system', now()),
+
+(gen_random_uuid(), 'NORMALIZE_PUNCTUATION', '中文标点规范化',
+ '将中文标点转换为英文标点',
+ 'translate({{column}}, ''，；：！？“”‘’'', '',;:!?""'''''''''')',
+ 30, true, true, 'system', now(), 'system', now()),
+
+(gen_random_uuid(), 'NORMALIZE_DATE_CN', '中文日期转标准',
+ '将"2024年3月15日"格式转换为"2024-3-15"',
+ 'regexp_replace({{column}}, ''(\d{4})年(\d{1,2})月(\d{1,2})日?'', ''\1-\2-\3'', ''g'')',
+ 40, true, true, 'system', now(), 'system', now()),
+
+(gen_random_uuid(), 'STRIP_UNIT', '去除数值单位',
+ '去除万、亿、元、％等常见单位后缀',
+ 'regexp_replace({{column}}, ''[万亿元％%件个台套]'', '''', ''g'')',
+ 50, true, true, 'system', now(), 'system', now()),
+
+(gen_random_uuid(), 'REMOVE_MERGED_BLANKS', '标记合并单元格空行',
+ '对文本列执行 TRIM；合并单元格产生的完全空行需在表级检测中处理',
+ 'TRIM(BOTH FROM {{column}})',
+ 60, true, true, 'system', now(), 'system', now()),
+
+(gen_random_uuid(), 'TRIM_SPACES', '首尾及多余空格',
+ '去除首尾空格并将连续多个空白合并为单个空格',
+ 'regexp_replace(TRIM(BOTH FROM {{column}}), ''\s{2,}'', '' '', ''g'')',
+ 70, true, true, 'system', now(), 'system', now()),
+
+(gen_random_uuid(), 'DATE_NORMALIZE', '日期格式标准化',
+ '将多种日期格式（2024/1/1、2024年1月1日、20240101等）统一为 yyyy-MM-dd',
+ 'CASE WHEN {{column}} ~ ''^\d{4}-\d{2}-\d{2}$'' THEN {{column}} WHEN {{column}} ~ ''^\d{4}/\d{1,2}/\d{1,2}$'' THEN TO_CHAR(TO_DATE({{column}}, ''YYYY/MM/DD''), ''YYYY-MM-DD'') WHEN {{column}} ~ ''^\d{8}$'' THEN TO_CHAR(TO_DATE({{column}}, ''YYYYMMDD''), ''YYYY-MM-DD'') WHEN {{column}} ~ ''^\d{4}年\d{1,2}月\d{1,2}日$'' THEN TO_CHAR(TO_DATE(REGEXP_REPLACE({{column}}, ''[年月日]'', ''-'', ''g''), ''YYYY-MM-DD-''), ''YYYY-MM-DD'') ELSE {{column}} END',
+ 80, true, true, 'system', now(), 'system', now()),
+
+(gen_random_uuid(), 'ENUM_MAP', '枚举值映射',
+ '将同义枚举值映射为标准值，如 male/M/男性 → 男',
+ 'CASE WHEN {{column}} IN ({{aliases}}) THEN ''{{target}}'' ELSE {{column}} END',
+ 90, true, true, 'system', now(), 'system', now()),
+
+(gen_random_uuid(), 'FILL_DEFAULT', '空值填充默认值',
+ '将空值或空字符串替换为指定默认值',
+ 'COALESCE(NULLIF(TRIM({{column}}), ''''), ''{{default_value}}'')',
+ 100, true, true, 'system', now(), 'system', now());
+        ]]></sql>
+    </changeSet>
+
+</databaseChangeLog>
