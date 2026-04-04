@@ -207,9 +207,8 @@ public class PlatformDirectoryResource {
         }
         String username = user.getUsername().trim();
         String displayName = firstNonBlank(
+            firstAttribute(user.getAttributes(), "fullName"),
             user.getFullName(),
-            firstAttribute(user.getAttributes(), "fullName", "fullname", "display_name", "displayName"),
-            combine(user.getFirstName(), user.getLastName()),
             username
         );
         String deptCode = firstAttribute(user.getAttributes(), "dept_code", "deptCode", "department");

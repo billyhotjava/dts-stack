@@ -322,7 +322,6 @@ public class PersonnelImportService {
                 boolean dirty = false;
                 if (!StringUtils.equals(existing.getFullName(), payload.fullName())) {
                     existing.setFullName(payload.fullName());
-                    existing.setFirstName(payload.fullName());
                     dirty = true;
                 }
                 Map<String, List<String>> desiredAttrs = toKcAttributes(payload);
@@ -349,7 +348,6 @@ public class PersonnelImportService {
             KeycloakUserDTO dto = new KeycloakUserDTO();
             dto.setUsername(username);
             dto.setFullName(payload.fullName());
-            dto.setFirstName(payload.fullName());
             dto.setEnabled(mdmEnabled != 0);
             dto.setEmailVerified(false);
             dto.setAttributes(toKcAttributes(payload));

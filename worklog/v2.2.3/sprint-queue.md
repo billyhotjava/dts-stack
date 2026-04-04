@@ -26,3 +26,13 @@
 | F1-分析卡片文件夹管理 | 4 | READY |
 
 **统计**: READY=4, IN_PROGRESS=0, DONE=0, BLOCKED=0
+
+## Sprint-3: IAM 修复 -- displayName 链路 bug 修复 (202604)
+**状态**: READY
+**类型**: Implementation（实施型，为 v2.3.0 IAM 重构做铺垫）
+
+| Feature | Task 数 | 状态 |
+|---------|---------|------|
+| F1-修复displayName链路bug | 4 | READY (T04 DONE) |
+
+**统计**: READY=3, IN_PROGRESS=0, DONE=1, BLOCKED=0

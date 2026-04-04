@@ -748,8 +748,6 @@ public class KeycloakAuthResource {
         }
         return firstNonBlank(
             stringValue(user.get("fullName")),
-            stringValue(user.get("displayName")),
-            stringValue(user.get("nickname")),
             stringValue(user.get("name")),
             stringValue(user.get("username"))
         );
@@ -959,6 +957,15 @@ public class KeycloakAuthResource {
                 default -> false;
             };
             if (handled) {
+                // Also preserve the role's normalized original name as its unique identifier.
+                // AdminDirectoryGateway.normalizeRoleName() produces ROLE_ + sanitized(rawName),
+                // so the granteeId stored in analytics_screen_access uses that same form.
+                // Without this, aliases like "institute_leader" → ROLE_INST_LEADER (canonical)
+                // would never match granteeId ROLE_INSTITUTE_LEADER (from normalizeRoleName).
+                String original = sanitizeRoleToken(up);
+                if (!original.isEmpty()) {
+                    mapped.add("ROLE_" + original);
+                }
                 continue;
             }
             String canonical = sanitizeRoleToken(up);

@@ -127,7 +127,7 @@ export function ScreenAclPanel({ open, screenId, onClose, isOwner = false }: Scr
 		);
 	}, [roles, searchQuery]);
 
-	// ── Build username→displayName map for existing grants ──
+	// ── Build lookup maps for existing grants ──
 	const userDisplayMap = useMemo(() => {
 		const map = new Map<string, PlatformUser>();
 		for (const u of platformUsers) {
@@ -136,14 +136,22 @@ export function ScreenAclPanel({ open, screenId, onClose, isOwner = false }: Scr
 		return map;
 	}, [platformUsers]);
 
+	const roleDisplayMap = useMemo(() => {
+		const map = new Map<string, PlatformRole>();
+		for (const r of roles) {
+			map.set(r.name.toLowerCase(), r);
+		}
+		return map;
+	}, [roles]);
+
 	const resolveGrantLabel = (row: ScreenAclEntry): string => {
 		if (row.subjectType === 'USER') {
 			const u = userDisplayMap.get((row.subjectId || '').toLowerCase());
-			if (u) {
-				const parts = [u.username];
-				if (u.displayName && u.displayName !== u.username) parts.push(u.displayName);
-				return parts.join(' / ');
-			}
+			if (u) return u.displayName || u.username;
+		}
+		if (row.subjectType === 'ROLE') {
+			const r = roleDisplayMap.get((row.subjectId || '').toLowerCase());
+			if (r) return r.description || r.name;
 		}
 		return row.subjectId;
 	};
@@ -403,7 +411,8 @@ export function ScreenAclPanel({ open, screenId, onClose, isOwner = false }: Scr
 													<input
 														type="checkbox"
 														checked={selectedIds.has(uid)}
-														onChange={(e) => { e.stopPropagation(); toggleSelect(uid); }}
+														onChange={() => toggleSelect(uid)}
+														onClick={(e) => e.stopPropagation()}
 														className="cursor-pointer"
 													/>
 												</td>
@@ -427,7 +436,8 @@ export function ScreenAclPanel({ open, screenId, onClose, isOwner = false }: Scr
 													<input
 														type="checkbox"
 														checked={selectedIds.has(rid)}
-														onChange={(e) => { e.stopPropagation(); toggleSelect(rid); }}
+														onChange={() => toggleSelect(rid)}
+														onClick={(e) => e.stopPropagation()}
 														className="cursor-pointer"
 													/>
 												</td>

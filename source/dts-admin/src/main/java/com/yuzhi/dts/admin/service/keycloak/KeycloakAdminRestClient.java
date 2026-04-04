@@ -699,12 +699,8 @@ public class KeycloakAdminRestClient implements KeycloakAdminClient {
         Map<String, Object> rep = new LinkedHashMap<>();
         if (dto.getUsername() != null) rep.put("username", dto.getUsername());
         if (dto.getEmail() != null) rep.put("email", dto.getEmail());
-        if (dto.getFullName() != null && !dto.getFullName().isBlank()) {
-            rep.put("firstName", dto.getFullName());
-        } else {
-            if (dto.getFirstName() != null) rep.put("firstName", dto.getFirstName());
-            if (dto.getLastName() != null) rep.put("lastName", dto.getLastName());
-        }
+        // Do NOT write fullName into firstName — Keycloak User Profile uses attributes.fullName
+        // as the canonical display name; firstName/lastName are not configured in the realm.
         if (dto.getEnabled() != null) rep.put("enabled", dto.getEnabled());
         if (dto.getEmailVerified() != null) rep.put("emailVerified", dto.getEmailVerified());
         Map<String, List<String>> attributes = new LinkedHashMap<>();
@@ -760,20 +756,8 @@ public class KeycloakAdminRestClient implements KeycloakAdminClient {
         dto.setId(stringValue(map.get("id")));
         dto.setUsername(stringValue(map.get("username")));
         dto.setEmail(stringValue(map.get("email")));
-        String first = stringValue(map.get("firstName"));
-        String last = stringValue(map.get("lastName"));
-        dto.setFirstName(first);
-        dto.setLastName(last);
-        dto.setFullName(stringValue(map.get("fullName")));
-        if ((dto.getFullName() == null || dto.getFullName().isBlank()) && (first != null || last != null)) {
-            StringBuilder sb = new StringBuilder();
-            if (first != null) sb.append(first);
-            if (last != null) {
-                if (sb.length() > 0) sb.append(' ');
-                sb.append(last);
-            }
-            dto.setFullName(sb.length() > 0 ? sb.toString() : first);
-        }
+        dto.setFirstName(stringValue(map.get("firstName")));
+        dto.setLastName(stringValue(map.get("lastName")));
         dto.setEnabled(booleanValue(map.get("enabled")));
         dto.setEmailVerified(booleanValue(map.get("emailVerified")));
         dto.setCreatedTimestamp(longValue(map.get("createdTimestamp")));
@@ -781,7 +765,22 @@ public class KeycloakAdminRestClient implements KeycloakAdminClient {
         dto.setGroups(stringList(map.get("groups")));
         dto.setRealmRoles(stringList(map.get("realmRoles")));
         dto.setClientRoles(stringListMap(map.get("clientRoles")));
+        // Resolve fullName from attributes.fullName (canonical source) with fallback to firstName
+        String attrFullName = firstAttributeValue(dto.getAttributes(), "fullName");
+        if (attrFullName != null && !attrFullName.isBlank()) {
+            dto.setFullName(attrFullName.trim());
+        } else if (dto.getFirstName() != null && !dto.getFirstName().isBlank()) {
+            // Legacy compatibility: firstName may contain fullName from older writes
+            dto.setFullName(dto.getFirstName().trim());
+        }
         return dto;
+    }
+
+    private static String firstAttributeValue(Map<String, List<String>> attributes, String key) {
+        if (attributes == null || key == null) return null;
+        List<String> values = attributes.get(key);
+        if (values == null || values.isEmpty()) return null;
+        return values.get(0);
     }
 
     private static String stringValue(Object value) {

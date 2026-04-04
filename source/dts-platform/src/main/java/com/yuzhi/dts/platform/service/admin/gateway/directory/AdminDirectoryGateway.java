@@ -282,7 +282,7 @@ public class AdminDirectoryGateway {
             return null;
         }
         String username = user.getUsername().trim();
-        String displayName = firstNonBlank(user.getFullName(), combine(user.getFirstName(), user.getLastName()), username);
+        String displayName = firstNonBlank(user.getFullName(), firstAttribute(user.getAttributes(), "fullName"), username);
         String dept = firstAttribute(user.getAttributes(), "dept_code", "deptCode", "department");
         return new UserSummary(user.getId(), username, displayName, StringUtils.hasText(dept) ? dept.trim() : null, null);
     }

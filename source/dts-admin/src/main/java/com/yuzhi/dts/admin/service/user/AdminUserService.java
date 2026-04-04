@@ -2297,35 +2297,12 @@ public class AdminUserService {
         if (dto == null) {
             return "";
         }
-        String attributeName = StringUtils.firstNonBlank(
+        String candidate = StringUtils.firstNonBlank(
             extractSingle(dto, "fullName"),
-            extractSingle(dto, "fullname"),
-            extractSingle(dto, "display_name"),
-            extractSingle(dto, "displayName")
-        );
-        String combined = buildName(dto.getFirstName(), dto.getLastName());
-        String fallback = StringUtils.firstNonBlank(
             StringUtils.trimToNull(dto.getFullName()),
-            combined,
             StringUtils.trimToNull(dto.getUsername())
         );
-        String candidate = StringUtils.firstNonBlank(StringUtils.trimToNull(attributeName), fallback);
         return StringUtils.isNotBlank(candidate) ? candidate.trim() : dto.getUsername();
-    }
-
-    private String buildName(String firstName, String lastName) {
-        String first = StringUtils.trimToNull(firstName);
-        String last = StringUtils.trimToNull(lastName);
-        if (first == null && last == null) {
-            return null;
-        }
-        if (last == null) {
-            return first;
-        }
-        if (first == null) {
-            return last;
-        }
-        return last + " " + first;
     }
 
     private String extractSingle(KeycloakUserDTO dto, String key) {
