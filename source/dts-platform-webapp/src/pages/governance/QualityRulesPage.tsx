@@ -40,6 +40,7 @@ import {
 import { formatTime } from "@/utils/textUtils";
 import QualityDashboard from "./components/QualityDashboard";
 import QualityTasksTab from "./components/QualityTasksTab";
+import QualityReportTab from "./components/QualityReportTab";
 
 const SEVERITY_OPTIONS = [
 	{ label: "低", value: "LOW" },
@@ -592,7 +593,7 @@ export default function Page() {
 					{
 						key: "report",
 						label: "质量报告",
-						children: <div>质量报告 - 待实现</div>,
+						children: <QualityReportTab />,
 					},
 					{
 						key: "repair",
