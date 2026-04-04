@@ -41,6 +41,7 @@ import { formatTime } from "@/utils/textUtils";
 import QualityDashboard from "./components/QualityDashboard";
 import QualityTasksTab from "./components/QualityTasksTab";
 import QualityReportTab from "./components/QualityReportTab";
+import DataRepairTab from "./components/DataRepairTab";
 
 const SEVERITY_OPTIONS = [
 	{ label: "低", value: "LOW" },
@@ -598,7 +599,7 @@ export default function Page() {
 					{
 						key: "repair",
 						label: "数据修复",
-						children: <div>数据修复 - 待实现</div>,
+						children: <DataRepairTab />,
 					},
 				]}
 			/>
