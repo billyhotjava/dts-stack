@@ -42,6 +42,7 @@ import QualityDashboard from "./components/QualityDashboard";
 import QualityTasksTab from "./components/QualityTasksTab";
 import QualityReportTab from "./components/QualityReportTab";
 import DataRepairTab from "./components/DataRepairTab";
+import RuleCreateWizard from "./components/RuleCreateWizard";
 
 const SEVERITY_OPTIONS = [
 	{ label: "低", value: "LOW" },
@@ -157,6 +158,7 @@ export default function Page() {
 	const [rules, setRules] = useState<Rule[]>([]);
 	const [loading, setLoading] = useState(false);
 	const [modalOpen, setModalOpen] = useState(false);
+	const [wizardOpen, setWizardOpen] = useState(false);
 	const [detailOpen, setDetailOpen] = useState(false);
 	const [detailRule, setDetailRule] = useState<Rule | null>(null);
 	const [dryRunModalOpen, setDryRunModalOpen] = useState(false);
@@ -818,6 +820,12 @@ export default function Page() {
 					</Space>
 				)}
 			</Modal>
+
+			<RuleCreateWizard
+				open={wizardOpen}
+				onClose={() => setWizardOpen(false)}
+				onSuccess={() => { setWizardOpen(false); void loadRules(); }}
+			/>
 		</div>
 	);
 
@@ -827,7 +835,7 @@ export default function Page() {
 			<Card
 				title="质量规则"
 				extra={
-					<Button className="rounded-2xl" type="primary" icon={<PlusOutlined />} onClick={() => openModal()} disabled={!canManage}>
+					<Button className="rounded-2xl" type="primary" icon={<PlusOutlined />} onClick={() => setWizardOpen(true)} disabled={!canManage}>
 						新增规则
 					</Button>
 				}
