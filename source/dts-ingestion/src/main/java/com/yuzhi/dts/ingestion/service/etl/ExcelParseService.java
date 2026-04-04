@@ -30,7 +30,11 @@ public class ExcelParseService {
     private static final int TYPE_CONFIDENCE_THRESHOLD = 80;
 
     public ParseResult parse(MultipartFile file) throws Exception {
-        try (Workbook workbook = WorkbookFactory.create(file.getInputStream())) {
+        return parse(file.getInputStream());
+    }
+
+    public ParseResult parse(java.io.InputStream inputStream) throws Exception {
+        try (Workbook workbook = WorkbookFactory.create(inputStream)) {
             Sheet sheet = workbook.getSheetAt(0);
             if (sheet == null) {
                 return new ParseResult(0, List.of(), List.of(), List.of(), List.of());

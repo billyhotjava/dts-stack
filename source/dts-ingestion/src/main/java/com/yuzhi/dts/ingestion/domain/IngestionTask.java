@@ -106,6 +106,18 @@ public class IngestionTask extends AbstractAuditingEntity {
     @Column(name = "last_execution_status", length = 50)
     private String lastExecutionStatus; // success, failed, running
 
+    // Excel pre-check fields
+    @Column(name = "quality_pre_check_enabled")
+    private Boolean qualityPreCheckEnabled = false;
+
+    @Size(max = 100)
+    @Column(name = "staging_table_name", length = 100)
+    private String stagingTableName;
+
+    @Size(max = 20)
+    @Column(name = "pre_check_status", length = 20)
+    private String preCheckStatus; // PENDING / CHECKING / PASSED / FAILED
+
     // Getters and Setters
 
     public Long getId() {
@@ -274,6 +286,30 @@ public class IngestionTask extends AbstractAuditingEntity {
 
     public void setLastExecutionStatus(String lastExecutionStatus) {
         this.lastExecutionStatus = lastExecutionStatus;
+    }
+
+    public Boolean getQualityPreCheckEnabled() {
+        return qualityPreCheckEnabled;
+    }
+
+    public void setQualityPreCheckEnabled(Boolean qualityPreCheckEnabled) {
+        this.qualityPreCheckEnabled = qualityPreCheckEnabled;
+    }
+
+    public String getStagingTableName() {
+        return stagingTableName;
+    }
+
+    public void setStagingTableName(String stagingTableName) {
+        this.stagingTableName = stagingTableName;
+    }
+
+    public String getPreCheckStatus() {
+        return preCheckStatus;
+    }
+
+    public void setPreCheckStatus(String preCheckStatus) {
+        this.preCheckStatus = preCheckStatus;
     }
 
     @Override
