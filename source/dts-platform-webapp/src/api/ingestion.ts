@@ -640,6 +640,64 @@ class IngestionTaskAPI {
 	): Promise<IngestionChangeLogDTO> {
 		return api.post({ url: `/ingestion/tasks/changes/${id}/transition`, data });
 	}
+
+	// Staging / pre-check APIs
+
+	async parseExcel(taskId: number): Promise<ParseResult> {
+		return api.post({ url: `/ingestion/tasks/${taskId}/parse` });
+	}
+
+	async preCheck(taskId: number): Promise<PreCheckResult> {
+		return api.post({ url: `/ingestion/tasks/${taskId}/pre-check` });
+	}
+
+	async updateStagingCell(
+		taskId: number,
+		rowNum: number,
+		data: { column: string; value: string },
+	): Promise<void> {
+		return api.put({ url: `/ingestion/tasks/${taskId}/staging/${rowNum}`, data });
+	}
+
+	async reCheck(taskId: number): Promise<PreCheckResult> {
+		return api.post({ url: `/ingestion/tasks/${taskId}/re-check` });
+	}
+
+	async submitFromStaging(taskId: number): Promise<void> {
+		return api.post({ url: `/ingestion/tasks/${taskId}/submit` });
+	}
+
+	async dropStaging(taskId: number): Promise<void> {
+		return api.delete({ url: `/ingestion/tasks/${taskId}/staging` });
+	}
+
+	async getStagingData(
+		taskId: number,
+		params: { errorsOnly?: boolean; page?: number; size?: number } = {},
+	): Promise<StagingPage> {
+		return api.get({ url: `/ingestion/tasks/${taskId}/staging`, params });
+	}
+}
+
+export interface ParseResult {
+	totalRows: number;
+	columns: { name: string; inferredType: string; typeConfidence: number }[];
+	formulaCells: { rowNum: number; columnName: string; formula: string }[];
+	emptyRows: number[];
+}
+
+export interface PreCheckResult {
+	totalRows: number;
+	passedRows: number;
+	failedRows: number;
+	errorsByRule: { ruleName: string; ruleType: string; failCount: number; sampleRows: any[] }[];
+}
+
+export interface StagingPage {
+	content: Record<string, any>[];
+	totalElements: number;
+	totalPages: number;
+	number: number;
 }
 
 export const ingestionTaskAPI = new IngestionTaskAPI();

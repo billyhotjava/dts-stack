@@ -106,7 +106,7 @@ export const submitDbtRelease = (data: any) =>
 
 // dbt execution log (from Airflow)
 export const getDbtRunLog = (dagRunId: string, params?: { dagId?: string; taskId?: string; tryNumber?: number }) =>
-	api.get(withModelingRequestTimeout({ url: `/etl/dbt/runs/${dagRunId}/logs`, params }));
+	api.get(withModelingRequestTimeout({ url: `/etl/dbt/runs/${encodeURIComponent(dagRunId)}/logs`, params }));
 
 // dbt data preview
 export const previewDbtModel = (model: string, limit = 100) =>
@@ -382,6 +382,56 @@ export const getModelTemplateReferences = (id: string) =>
 export const validateModelTemplate = (id: string, tableId: string) =>
 	api.get({ url: `/modeling/templates/${id}/validate`, params: { tableId } });
 
+// Quality dashboard / score / history
+export interface QualityDashboard {
+	ruleCount: number;
+	coveredDatasets: number;
+	totalDatasets: number;
+	todayPassed: number;
+	todayFailed: number;
+	pendingFixRows: number;
+	trend7d: { date: string; passRate: number }[];
+	topFailingDatasets: { name: string; failingRows: number }[];
+	recentFailedRuns: { ruleName: string; dataset: string; time: string; status: string }[];
+}
+
+export interface QualityScoreResult {
+	overall: number;
+	overallDelta: number | null;
+	dimensions: { type: string; score: number; delta: number | null }[];
+	trend: { date: string; overall: number }[];
+}
+
+export interface RuleRunHistory {
+	runId: string;
+	time: string;
+	status: string;
+	passRate: number;
+	failingRows: number;
+}
+
+export const getQualityDashboard = () =>
+	api.get<QualityDashboard>({ url: "/governance/quality/dashboard" });
+
+export const getQualityScore = (datasetId: string, periodDays?: number) =>
+	api.get<QualityScoreResult>({ url: "/governance/quality/score", params: { datasetId, periodDays } });
+
+export const getRuleHistory = (ruleId: string, limit?: number) =>
+	api.get<RuleRunHistory[]>({ url: `/governance/quality/rules/${ruleId}/history`, params: { limit } });
+
+// Batch cleansing preview / execute
+export interface CleansingPreview {
+	affectedRows: number;
+	unresolvableRows: number;
+	samples: { rowId: number; before: string; after: string }[];
+}
+
+export const previewCleansing = (data: { runId: string; functionId: string; limit?: number }) =>
+	api.post<CleansingPreview>({ url: "/governance/quality/cleansing/preview", data });
+
+export const executeCleansing = (data: { runId: string; functionId: string }) =>
+	api.post<{ affectedRows: number }>({ url: "/governance/quality/cleansing/execute", data });
+
 // Governance
 export const listQualityRules = () => api.get({ url: "/governance/quality/rules" });
 export const listQualityRuleVersions = (id: string) => api.get({ url: `/governance/quality/rules/${id}/versions` });
@@ -399,6 +449,33 @@ export const triggerQualityRun = (data: any) => api.post({ url: "/governance/qua
 export const triggerQualityDryRun = (data: any) => api.post({ url: "/governance/quality/runs/dry-run", data });
 export const listQualityRuns = (params: any = {}) => api.get({ url: "/governance/quality/runs", params });
 export const getQualityRun = (id: string) => api.get({ url: `/governance/quality/runs/${id}` });
+
+// Quality templates
+export const listQualityTemplates = () => api.get({ url: "/governance/quality/templates" });
+export const createQualityTemplate = (data: any) => api.post({ url: "/governance/quality/templates", data });
+export const updateQualityTemplate = (id: string, data: any) => api.put({ url: `/governance/quality/templates/${id}`, data });
+export const deleteQualityTemplate = (id: string) => api.delete({ url: `/governance/quality/templates/${id}` });
+export const previewTemplateSQL = (id: string, params: any) => api.post({ url: `/governance/quality/templates/${id}/preview`, data: params });
+
+// Cleansing functions
+export const listCleansingFunctions = () => api.get({ url: "/governance/cleansing/functions" });
+export const createCleansingFunction = (data: any) => api.post({ url: "/governance/cleansing/functions", data });
+export const updateCleansingFunction = (id: string, data: any) => api.put({ url: `/governance/cleansing/functions/${id}`, data });
+export const deleteCleansingFunction = (id: string) => api.delete({ url: `/governance/cleansing/functions/${id}` });
+
+// Quality auto-trigger
+export const triggerAutoQuality = (data: any) => api.post({ url: "/governance/quality/auto-trigger", data });
+
+// Failing rows
+export const listFailingRows = (runId: string, params: any = {}) => api.get({ url: `/governance/quality/runs/${runId}/failing-rows`, params });
+
+// Data editor (ODS)
+export const listOdsTables = () => api.get({ url: "/governance/data-editor/tables" });
+export const listOdsColumns = (tableName: string) => api.get({ url: `/governance/data-editor/${tableName}/columns` });
+export const listOdsRows = (tableName: string, params: any = {}) => api.get({ url: `/governance/data-editor/${tableName}/rows`, params });
+export const updateOdsRow = (tableName: string, rowId: string, data: any) => api.put({ url: `/governance/data-editor/${tableName}/rows/${rowId}`, data });
+export const insertOdsRow = (tableName: string, data: any) => api.post({ url: `/governance/data-editor/${tableName}/rows`, data });
+export const listEditLogs = (params: any = {}) => api.get({ url: "/governance/data-editor/audit-log", params });
 
 // Quality tasks (巡检计划)
 export const listQualityTasks = () => api.get<any[]>({ url: "/governance/quality/tasks" });
