@@ -7,7 +7,6 @@ import {
 	InputNumber,
 	Modal,
 	Radio,
-	Select,
 	Steps,
 	Tag,
 } from "antd";
@@ -20,8 +19,8 @@ import {
 	listQualityTemplates,
 	previewTemplateSQL,
 	createQualityRule,
-	listDatasets,
 } from "@/api/platformApi";
+import { DatasetPicker } from "@/components/catalog/DatasetPicker";
 
 /* ------------------------------------------------------------------ */
 /*  Types                                                              */
@@ -117,7 +116,6 @@ export default function RuleCreateWizard({ open, onClose, onSuccess, editingRule
 	const [method, setMethod] = useState<CreateMethod | null>(null);
 	const [selectedTemplate, setSelectedTemplate] = useState<TemplateOption | null>(null);
 	const [templates, setTemplates] = useState<TemplateOption[]>([]);
-	const [datasets, setDatasets] = useState<{ id: string; name: string }[]>([]);
 	const [previewSql, setPreviewSql] = useState("");
 	const [saving, setSaving] = useState(false);
 
@@ -135,7 +133,6 @@ export default function RuleCreateWizard({ open, onClose, onSuccess, editingRule
 		form.resetFields();
 
 		void loadTemplates();
-		void loadDatasets();
 	}, [open]);
 
 	const loadTemplates = async () => {
@@ -146,21 +143,6 @@ export default function RuleCreateWizard({ open, onClose, onSuccess, editingRule
 			/* non-critical */
 		}
 	};
-
-	const loadDatasets = async () => {
-		try {
-			const resp: any = await listDatasets({ page: 0, size: 200 });
-			const list = Array.isArray(resp?.content) ? resp.content : [];
-			setDatasets(list.map((d: any) => ({ id: String(d.id), name: d.name || d.id })));
-		} catch {
-			/* non-critical */
-		}
-	};
-
-	const datasetOptions = useMemo(
-		() => datasets.map((d) => ({ label: d.name, value: d.id })),
-		[datasets],
-	);
 
 	/* --- template params --- */
 
@@ -243,8 +225,8 @@ export default function RuleCreateWizard({ open, onClose, onSuccess, editingRule
 				actionOnFail: values.actionOnFail || "WARN",
 				enabled: true,
 				publishNow,
-				datasetIds: values.datasetIds || [],
-				datasetId: values.datasetIds?.[0] || undefined,
+				datasetIds: values.datasetId ? [values.datasetId] : [],
+				datasetId: values.datasetId || undefined,
 				templateId: method === "template" ? selectedTemplate?.id : undefined,
 				templateParams: templateParamsStr,
 				definition,
@@ -410,19 +392,10 @@ export default function RuleCreateWizard({ open, onClose, onSuccess, editingRule
 			<Form form={form} layout="vertical" className="mx-auto max-w-lg">
 				<Form.Item
 					label="绑定数据集"
-					name="datasetIds"
-					extra="可选择多个数据集绑定此规则"
+					name="datasetId"
+					extra="选择此规则绑定的数据集"
 				>
-					<Select
-						mode="multiple"
-						placeholder="搜索并选择数据集"
-						options={datasetOptions}
-						showSearch
-						filterOption={(input, option) =>
-							String(option?.label || "").toLowerCase().includes(input.toLowerCase())
-						}
-						allowClear
-					/>
+					<DatasetPicker placeholder="选择数据集（支持域筛选和关键字搜索）" />
 				</Form.Item>
 			</Form>
 		</div>
