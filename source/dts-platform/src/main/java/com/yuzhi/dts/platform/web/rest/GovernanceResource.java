@@ -23,6 +23,7 @@ import com.yuzhi.dts.platform.service.governance.IngestionQualityBridge;
 import com.yuzhi.dts.platform.service.governance.QualityRuleService;
 import com.yuzhi.dts.platform.service.governance.QualityReportExportService;
 import com.yuzhi.dts.platform.service.governance.QualityRunService;
+import com.yuzhi.dts.platform.service.governance.SqlRepairService;
 import com.yuzhi.dts.platform.service.governance.QualityDashboardService;
 import com.yuzhi.dts.platform.service.governance.QualityScoreService;
 import com.yuzhi.dts.platform.service.governance.dto.PreCheckRequest;
@@ -113,6 +114,7 @@ public class GovernanceResource {
     private final QualityDashboardService qualityDashboardService;
     private final IngestionQualityBridge ingestionQualityBridge;
     private final QualityReportExportService qualityReportExportService;
+    private final SqlRepairService sqlRepairService;
 
     public GovernanceResource(
         QualityRuleService qualityRuleService,
@@ -135,7 +137,8 @@ public class GovernanceResource {
         QualityScoreService qualityScoreService,
         QualityDashboardService qualityDashboardService,
         IngestionQualityBridge ingestionQualityBridge,
-        QualityReportExportService qualityReportExportService
+        QualityReportExportService qualityReportExportService,
+        SqlRepairService sqlRepairService
     ) {
         this.qualityRuleService = qualityRuleService;
         this.qualityRunService = qualityRunService;
@@ -158,6 +161,7 @@ public class GovernanceResource {
         this.qualityDashboardService = qualityDashboardService;
         this.ingestionQualityBridge = ingestionQualityBridge;
         this.qualityReportExportService = qualityReportExportService;
+        this.sqlRepairService = sqlRepairService;
     }
 
     // Quality rule APIs ------------------------------------------------------
@@ -1254,5 +1258,27 @@ public class GovernanceResource {
         response.setHeader("Content-Disposition", "attachment; filename=\"" + filename + "\"");
         response.setContentLength(excelBytes.length);
         response.getOutputStream().write(excelBytes);
+    }
+
+    // SQL repair API ----------------------------------------------------------
+
+    @PostMapping("/quality/sql-repair/preview")
+    public ApiResponse<SqlRepairService.SqlRepairPreview> previewSqlRepair(
+        @RequestBody Map<String, Object> body
+    ) {
+        String sql = (String) body.get("sql");
+        int limit = body.containsKey("limit") ? ((Number) body.get("limit")).intValue() : 10;
+        return ApiResponses.ok(sqlRepairService.preview(sql, limit));
+    }
+
+    @PostMapping("/quality/sql-repair/execute")
+    public ApiResponse<SqlRepairService.SqlRepairResult> executeSqlRepair(
+        @RequestBody Map<String, Object> body
+    ) {
+        String sql = (String) body.get("sql");
+        UUID runId = body.containsKey("runId") && body.get("runId") != null
+            ? UUID.fromString((String) body.get("runId"))
+            : null;
+        return ApiResponses.ok(sqlRepairService.execute(sql, runId));
     }
 }

@@ -432,6 +432,19 @@ export const previewCleansing = (data: { runId: string; functionId: string; limi
 export const executeCleansing = (data: { runId: string; functionId: string }) =>
 	api.post<{ affectedRows: number }>({ url: "/governance/quality/cleansing/execute", data });
 
+// SQL Repair
+export const previewSqlRepair = (data: { sql: string; limit?: number }) =>
+	api.post<{ affectedRows: number; samples: { rowId: any; columnValues: Record<string, string> }[] }>({
+		url: "/governance/quality/sql-repair/preview",
+		data,
+	});
+
+export const executeSqlRepair = (data: { sql: string; runId?: string }) =>
+	api.post<{ affectedRows: number; auditLogId: string }>({
+		url: "/governance/quality/sql-repair/execute",
+		data,
+	});
+
 // Governance
 export const listQualityRules = () => api.get({ url: "/governance/quality/rules" });
 export const listQualityRuleVersions = (id: string) => api.get({ url: `/governance/quality/rules/${id}/versions` });

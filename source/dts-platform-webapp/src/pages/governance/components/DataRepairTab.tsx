@@ -5,8 +5,10 @@ import {
 	Button,
 	Card,
 	Empty,
+	Input,
 	InputNumber,
 	Modal,
+	Popconfirm,
 	Radio,
 	Select,
 	Space,
@@ -23,6 +25,7 @@ import {
 	SearchOutlined,
 	ToolOutlined,
 	InfoCircleOutlined,
+	SafetyOutlined,
 } from "@ant-design/icons";
 import { useSearchParams } from "react-router";
 import {
@@ -31,6 +34,8 @@ import {
 	previewCleansing,
 	executeCleansing,
 	listDatasets,
+	previewSqlRepair,
+	executeSqlRepair,
 } from "@/api/platformApi";
 import { ingestionTaskAPI } from "@/api/ingestion";
 import { formatTime } from "@/utils/textUtils";
@@ -211,6 +216,162 @@ function PreCheckMode({ initialTaskId }: { initialTaskId?: number }) {
 					</Button>
 				</div>
 			</Card>
+		</div>
+	);
+}
+
+/* ========== SqlRepairEditor ========== */
+
+type SqlPreviewSample = {
+	rowId: any;
+	columnValues: Record<string, string>;
+};
+
+function SqlRepairEditor({ runId }: { runId?: string }) {
+	const [sql, setSql] = useState("");
+	const [previewLoading, setPreviewLoading] = useState(false);
+	const [executing, setExecuting] = useState(false);
+	const [affectedRows, setAffectedRows] = useState<number | null>(null);
+	const [samples, setSamples] = useState<SqlPreviewSample[]>([]);
+	const [previewed, setPreviewed] = useState(false);
+
+	const handlePreview = async () => {
+		if (!sql.trim()) {
+			toast.error("请输入 SQL 语句");
+			return;
+		}
+		setPreviewLoading(true);
+		setPreviewed(false);
+		setAffectedRows(null);
+		setSamples([]);
+		try {
+			const resp: any = await previewSqlRepair({ sql, limit: 10 });
+			setAffectedRows(resp?.affectedRows ?? 0);
+			setSamples(resp?.samples ?? []);
+			setPreviewed(true);
+			toast.success(`预览完成：影响 ${resp?.affectedRows ?? 0} 行`);
+		} catch (error: any) {
+			toast.error(error?.message || "SQL 预览失败");
+		} finally {
+			setPreviewLoading(false);
+		}
+	};
+
+	const handleExecute = async () => {
+		if (!sql.trim()) return;
+		setExecuting(true);
+		try {
+			const resp: any = await executeSqlRepair({ sql, runId });
+			toast.success(`SQL 修复完成：影响 ${resp?.affectedRows ?? 0} 行`);
+			setSql("");
+			setPreviewed(false);
+			setAffectedRows(null);
+			setSamples([]);
+		} catch (error: any) {
+			toast.error(error?.message || "SQL 执行失败");
+		} finally {
+			setExecuting(false);
+		}
+	};
+
+	// Build dynamic columns from sample data
+	const previewColumns = useMemo(() => {
+		if (samples.length === 0) return [];
+		const cols: ColumnsType<SqlPreviewSample> = [
+			{
+				title: "行ID",
+				dataIndex: "rowId",
+				width: 120,
+				render: (v) => (v != null ? String(v).slice(0, 12) : "-"),
+			},
+		];
+		// Gather all column keys from samples
+		const colKeys = new Set<string>();
+		for (const s of samples) {
+			if (s.columnValues) {
+				for (const k of Object.keys(s.columnValues)) colKeys.add(k);
+			}
+		}
+		for (const key of colKeys) {
+			cols.push({
+				title: key,
+				dataIndex: ["columnValues", key],
+				ellipsis: true,
+				render: (_: any, record: SqlPreviewSample) => record.columnValues?.[key] ?? "-",
+			});
+		}
+		return cols;
+	}, [samples]);
+
+	return (
+		<div className="space-y-3 rounded border border-solid border-blue-200 bg-blue-50/30 p-3">
+			<div className="flex items-center gap-2">
+				<SafetyOutlined className="text-blue-500" />
+				<Typography.Text strong>SQL 修复</Typography.Text>
+			</div>
+
+			<Alert
+				type="warning"
+				showIcon
+				message="安全约束：仅允许 UPDATE ods_* 表，禁止 DELETE/DROP/TRUNCATE/ALTER/CREATE/INSERT INTO/SELECT INTO"
+				className="text-xs"
+			/>
+
+			<Input.TextArea
+				value={sql}
+				onChange={(e) => {
+					setSql(e.target.value);
+					setPreviewed(false);
+				}}
+				placeholder="UPDATE ods_customer SET gender = '男' WHERE gender IN ('male', 'M')"
+				autoSize={{ minRows: 3, maxRows: 8 }}
+				style={{ fontFamily: "monospace" }}
+			/>
+
+			<div className="flex items-center gap-2">
+				<Button
+					loading={previewLoading}
+					onClick={handlePreview}
+					disabled={!sql.trim()}
+				>
+					预览效果
+				</Button>
+				<Popconfirm
+					title="确认执行 SQL 修复？"
+					description={affectedRows != null ? `预计影响 ${affectedRows} 行` : undefined}
+					onConfirm={handleExecute}
+					okText="确认执行"
+					cancelText="取消"
+					disabled={!previewed}
+				>
+					<Button
+						type="primary"
+						loading={executing}
+						disabled={!previewed}
+					>
+						执行修复
+					</Button>
+				</Popconfirm>
+				{affectedRows != null && (
+					<Tag color="orange">影响行数：{affectedRows}</Tag>
+				)}
+			</div>
+
+			{samples.length > 0 && (
+				<div>
+					<Typography.Text type="secondary" className="mb-1 block text-xs">
+						当前数据预览（修复前）
+					</Typography.Text>
+					<Table
+						rowKey={(r) => String(r.rowId ?? Math.random())}
+						columns={previewColumns}
+						dataSource={samples}
+						size="small"
+						pagination={false}
+						scroll={{ x: "max-content", y: 240 }}
+					/>
+				</div>
+			)}
 		</div>
 	);
 }
@@ -498,11 +659,8 @@ function QualityFixMode({ initialRunId }: { initialRunId?: string }) {
 								/>
 							)}
 
-							{/* SQL repair - placeholder */}
-							<div className="rounded border border-dashed border-gray-300 p-3 text-center text-gray-400">
-								<ToolOutlined className="mr-1" />
-								SQL 修复 — 即将支持
-							</div>
+							{/* SQL repair */}
+							<SqlRepairEditor runId={selectedRunId} />
 
 							{/* Manual edit - placeholder */}
 							<div className="rounded border border-dashed border-gray-300 p-3 text-center text-gray-400">
