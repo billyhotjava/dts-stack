@@ -1,4 +1,4 @@
-import { Button } from "@/ui/button";
+import { Button } from "antd";
 import { Title, Text } from "@/ui/typography";
 import { useRouter } from "@/routes/hooks";
 
@@ -13,7 +13,7 @@ export default function ForbiddenView() {
 			<Text variant="body2" className="max-w-md text-muted-foreground">
 				当前账户不在管理端白名单或未分配正确的管理员角色，请联系系统管理员获取访问权限。
 			</Text>
-			<Button onClick={() => router.replace("/auth/login")}>返回登录</Button>
+			<Button type="primary" onClick={() => router.replace("/auth/login")}>返回登录</Button>
 		</div>
 	);
 }

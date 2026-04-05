@@ -1,13 +1,12 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Table } from "antd";
+import { Button, Table } from "antd";
 import type { ColumnsType } from "antd/es/table";
 import { Link } from "react-router";
 import { adminApi } from "@/admin/api/adminApi";
 import type { AdminCustomRole, AdminRoleDetail, ChangeRequest, CreateCustomRolePayload, PortalMenuCollection, PortalMenuItem } from "@/admin/types";
 import { Icon } from "@/components/icon";
 import { Badge } from "@/ui/badge";
-import { Button } from "@/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/ui/card";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/ui/dialog";
 import { Input } from "@/ui/input";
@@ -385,15 +384,12 @@ export default function RoleManagementView() {
                     const roleSlug = encodeURIComponent(toRoleName(record.authority));
                     return (
                         <div className="flex flex-wrap gap-2 justify-end">
-                            <Button size="sm" variant="outline" asChild>
-                                <Link to={`/admin/roles/${roleSlug}`}>详情</Link>
-                            </Button>
-                            <Button size="sm" variant="outline" asChild>
-                                <Link to={`/admin/roles/${roleSlug}/edit`}>编辑</Link>
-                            </Button>
+                            <Link to={`/admin/roles/${roleSlug}`}><Button size="small" type="default">详情</Button></Link>
+                            <Link to={`/admin/roles/${roleSlug}/edit`}><Button size="small" type="default">编辑</Button></Link>
                             <Button
-                                size="sm"
-                                variant="destructive"
+                                size="small"
+                                danger
+                                type="primary"
                                 disabled={immutable}
                                 onClick={() => setDeleteTarget(record)}
                             >
@@ -464,7 +460,7 @@ export default function RoleManagementView() {
                                 展示可管理的角色、默认菜单绑定与当前成员，所有调整将通过审批流生效。
                             </Text>
                         </div>
-                        <Button onClick={() => setCreateOpen(true)}>新增角色</Button>
+                        <Button type="primary" onClick={() => setCreateOpen(true)}>新增角色</Button>
                     </CardHeader>
                     <CardContent>
                         {isLoading ? (
@@ -685,10 +681,10 @@ function CreateRoleDialog({ open, onOpenChange, onSubmitted }: CreateRoleDialogP
                     </div>
                 </div>
                 <DialogFooter className="flex justify-end gap-2">
-                    <Button variant="outline" onClick={() => onOpenChange(false)} disabled={submitting}>
+                    <Button type="default" onClick={() => onOpenChange(false)} disabled={submitting}>
                         取消
                     </Button>
-                    <Button onClick={handleSubmit} disabled={submitting}>
+                    <Button type="primary" onClick={handleSubmit} disabled={submitting}>
                         提交审批
                     </Button>
                 </DialogFooter>
@@ -851,11 +847,12 @@ function DeleteRoleDialog({ target, onClose, onSubmitted }: DeleteRoleDialogProp
                     </div>
                 ) : null}
                 <DialogFooter className="flex justify-end gap-2">
-                    <Button variant="outline" onClick={onClose} disabled={submitting}>
+                    <Button type="default" onClick={onClose} disabled={submitting}>
                         取消
                     </Button>
                     <Button
-                        variant="destructive"
+                        danger
+                        type="primary"
                         onClick={handleSubmit}
                         disabled={submitting || !target || precheck?.reserved === true || hasPendingChange}
                     >

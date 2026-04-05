@@ -3,7 +3,7 @@ import { useQuery, useQueryClient, useMutation } from "@tanstack/react-query";
 import { adminApi } from "@/admin/api/adminApi";
 import type { OpsConfigItem } from "@/admin/types";
 import { Card, CardContent } from "@/ui/card";
-import { Button } from "@/ui/button";
+import { Button } from "antd";
 import { Input } from "@/ui/input";
 import { Switch } from "@/ui/switch";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/ui/tabs";
@@ -171,7 +171,7 @@ export default function OpsConfigView() {
 						共 {total} 项配置，敏感信息已脱敏显示
 					</p>
 				</div>
-				<Button variant="outline" size="sm" onClick={() => refetch()}>
+				<Button type="default" size="small" onClick={() => refetch()}>
 					<RefreshCw className="h-4 w-4 mr-2" />
 					刷新
 				</Button>
@@ -347,8 +347,8 @@ function ConfigItemCard({
 									</span>
 									{isEditable && (
 										<Button
-											variant="ghost"
-											size="sm"
+											type="text"
+											size="small"
 											className="h-6 w-6 p-0"
 											onClick={handleStartEdit}
 										>
@@ -372,8 +372,8 @@ function ConfigItemCard({
 										autoFocus
 									/>
 									<Button
-										variant="ghost"
-										size="sm"
+										type="text"
+										size="small"
 										className="h-6 w-6 p-0 text-green-600 hover:text-green-700"
 										onClick={handleSave}
 										disabled={isSaving}
@@ -381,8 +381,8 @@ function ConfigItemCard({
 										<Check className="h-4 w-4" />
 									</Button>
 									<Button
-										variant="ghost"
-										size="sm"
+										type="text"
+										size="small"
 										className="h-6 w-6 p-0 text-red-600 hover:text-red-700"
 										onClick={handleCancel}
 										disabled={isSaving}

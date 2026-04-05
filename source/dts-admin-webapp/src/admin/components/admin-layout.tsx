@@ -3,7 +3,7 @@ import { getMenusByRole } from "@/admin/config/menus";
 import { useAdminSession } from "@/admin/lib/session-context";
 import { useAdminLocale } from "@/admin/lib/locale";
 import Icon from "@/components/icon/icon";
-import { Button } from "@/ui/button";
+import { Button } from "antd";
 import { Text, Title } from "@/ui/typography";
 
 export default function AdminLayout() {
@@ -64,7 +64,7 @@ export default function AdminLayout() {
 					<Title as="h1" className="text-2xl font-semibold">
 						管理操作
 					</Title>
-					<Button variant="outline" size="sm" onClick={() => window.location.reload()}>
+					<Button type="default" size="small" onClick={() => window.location.reload()}>
 						刷新
 					</Button>
 				</div>

@@ -1,7 +1,7 @@
 import { useCallback, useMemo, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import type { ColumnsType } from "antd/es/table";
-import { Table } from "antd";
+import { Button, Table } from "antd";
 import { adminApi } from "@/admin/api/adminApi";
 import type { ChangeRequest } from "@/admin/types";
 import { useAdminLocale } from "@/admin/lib/locale";
@@ -13,7 +13,6 @@ import { sanitizeChangePayload } from "@/admin/utils/change-sanitizer";
 import { ChangeDiffViewer } from "@/admin/components/change-diff-viewer";
 import { MenuChangeViewer } from "@/admin/components/menu-change-viewer";
 import { Badge } from "@/ui/badge";
-import { Button } from "@/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/ui/card";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/ui/dialog";
 import { Text } from "@/ui/typography";
@@ -184,7 +183,7 @@ export default function MyChangesView() {
 			key: "actions",
 			width: 120,
 			render: (_: unknown, record) => (
-				<Button variant="ghost" size="sm" onClick={() => handleOpenChange(record)}>
+				<Button type="text" size="small" onClick={() => handleOpenChange(record)}>
 					查看详情
 				</Button>
 			),
@@ -201,7 +200,7 @@ export default function MyChangesView() {
 				</Text>
 				<div className="flex items-center gap-2">
 					<Button
-						variant="outline"
+						type="default"
 						onClick={() =>
 							queryClient.invalidateQueries({ queryKey: ["admin", "change-requests", "mine", "dashboard"] })
 						}
@@ -258,7 +257,7 @@ export default function MyChangesView() {
 								</SelectContent>
 							</Select>
 							{categoryFilter ? (
-								<Button variant="ghost" onClick={() => setCategoryFilter(null)}>
+								<Button type="text" onClick={() => setCategoryFilter(null)}>
 									清除筛选
 								</Button>
 							) : null}

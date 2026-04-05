@@ -1,5 +1,5 @@
 import { CUSTOM_USER_ATTRIBUTE_KEYS } from "@/constants/user";
-import { Table } from "antd";
+import { Button, Table } from "antd";
 import type { ColumnsType } from "antd/es/table";
 import { useCallback, useEffect, useState } from "react";
 import type { KeycloakGroup, KeycloakRole, KeycloakUser, UserProfileConfig } from "#/keycloak";
@@ -12,7 +12,6 @@ import { Icon } from "@/components/icon";
 import { useParams, useRouter } from "@/routes/hooks";
 import { Alert, AlertDescription } from "@/ui/alert";
 import { Badge } from "@/ui/badge";
-import { Button } from "@/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/ui/card";
 import { getAttributeDisplayName } from "@/utils/translation";
 // import ResetPasswordModal from "./reset-password-modal";
@@ -324,7 +323,7 @@ export default function UserDetailView() {
 	return (
 		<div className="mx-auto w-full max-w-[1200px] px-6 py-6 space-y-6">
 			<div className="flex items-center gap-3">
-				<Button variant="outline" onClick={back}>
+				<Button type="default" onClick={back}>
 					<Icon icon="mdi:arrow-left" className="mr-1" /> 返回
 				</Button>
 				<h1 className="text-xl font-semibold">用户详情</h1>
@@ -332,7 +331,7 @@ export default function UserDetailView() {
 					{/* <Button variant="outline" onClick={() => setResetPasswordModal(true)}>
             <Icon icon="solar:lock-password-unlocked-broken" className="mr-1" /> 重置密码
           </Button> */}
-					<Button onClick={() => setEditModal(true)}>
+					<Button type="primary" onClick={() => setEditModal(true)}>
 						<Icon icon="solar:pen-new-square-broken" className="mr-1" /> 编辑
 					</Button>
 				</div>

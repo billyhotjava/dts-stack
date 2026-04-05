@@ -7,7 +7,7 @@ import { adminApi } from "@/admin/api/adminApi";
 import type { UpsertWorkflowTemplatePayload, WorkflowTemplateConfig, WorkflowStepConfig } from "@/admin/types";
 import { EmptyState } from "@/components/empty-state";
 import { Badge } from "@/ui/badge";
-import { Button } from "@/ui/button";
+import { Button } from "antd";
 import { Text } from "@/ui/typography";
 import { toast } from "sonner";
 
@@ -154,8 +154,8 @@ export default function WorkflowConfigView() {
 				render: (_, record) => (
 					<div className="flex items-center justify-end gap-2">
 						<Button
-							size="sm"
-							variant="outline"
+							size="small"
+							type="default"
 							onClick={() => {
 								setEditing(record);
 								form.setFieldsValue({
@@ -178,8 +178,9 @@ export default function WorkflowConfigView() {
 							编辑
 						</Button>
 						<Button
-							size="sm"
-							variant="destructive"
+							size="small"
+							danger
+							type="primary"
 							onClick={async () => {
 								const confirmed = await confirmDelete(record.name);
 								if (!confirmed) {
@@ -261,11 +262,11 @@ export default function WorkflowConfigView() {
 				title={"工作流配置"}
 				extra={
 					<>
-						<Button variant="outline" onClick={() => refetch()}>
+						<Button type="default" onClick={() => refetch()}>
 							<ListFilter className="h-4 w-4" />
 							刷新列表
 						</Button>
-						<Button onClick={openCreateModal}>
+						<Button type="primary" onClick={openCreateModal}>
 							<Workflow className="h-4 w-4" />
 							新增配置
 						</Button>
@@ -361,8 +362,8 @@ export default function WorkflowConfigView() {
 										{"审批节点（按顺序执行）"}
 									</Text>
 									<Button
-										size="sm"
-										variant="outline"
+										size="small"
+										type="default"
 										onClick={() =>
 											add({ stepOrder: fields.length + 1, approverRole: "ROLE_DEPT_LEADER", deptBinding: true })
 										}
@@ -377,7 +378,7 @@ export default function WorkflowConfigView() {
 											<Text variant="body2" className="font-semibold">
 												{"第"} {index + 1} {"节点"}
 											</Text>
-											<Button size="sm" variant="ghost" onClick={() => remove(field.name)}>
+											<Button size="small" type="text" onClick={() => remove(field.name)}>
 												{"删除"}
 											</Button>
 										</div>

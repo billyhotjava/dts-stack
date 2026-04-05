@@ -1,11 +1,10 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useLocation, useNavigate, useParams } from "react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { TreeSelect, Select as AntSelect } from "antd";
+import { Button, TreeSelect, Select as AntSelect } from "antd";
 import type { TreeSelectProps } from "antd";
 import { adminApi } from "@/admin/api/adminApi";
 import type { AdminRoleDetail, AdminUser, ChangeRequest, OrganizationNode } from "@/admin/types";
-import { Button } from "@/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/ui/card";
 import { Input } from "@/ui/input";
 import { Textarea } from "@/ui/textarea";
@@ -452,7 +451,7 @@ export default function RoleDetailView() {
 	if (!targetRole) {
 		return (
 			<div className="space-y-6">
-				<Button variant="outline" onClick={() => navigate("/admin/roles")}>
+				<Button type="default" onClick={() => navigate("/admin/roles")}>
 					返回角色列表
 				</Button>
 				<Card>
@@ -475,11 +474,11 @@ export default function RoleDetailView() {
 	return (
 		<div className="space-y-6">
 			<div className="flex items-center justify-between">
-				<Button variant="outline" onClick={() => navigate("/admin/roles")}>
+				<Button type="default" onClick={() => navigate("/admin/roles")}>
 					返回角色列表
 				</Button>
 				{!isEditMode ? (
-					<Button onClick={() => navigate(`/admin/roles/${encodeURIComponent(roleKey)}/edit`)}>
+					<Button type="primary" onClick={() => navigate(`/admin/roles/${encodeURIComponent(roleKey)}/edit`)}>
 						编辑角色
 					</Button>
 				) : null}
@@ -495,10 +494,10 @@ export default function RoleDetailView() {
 							{pendingChange!.requestedAt ? `，提交时间 ${formatDateTime(pendingChange!.requestedAt)}` : ""}）。审批完成前无法提交新的编辑请求。
 						</p>
 						<div className="flex flex-wrap gap-2">
-							<Button variant="outline" size="sm" onClick={() => navigate("/admin/my-changes")}>
+							<Button type="default" size="small" onClick={() => navigate("/admin/my-changes")}>
 								查看我的申请
 							</Button>
-							<Button variant="outline" size="sm" onClick={() => navigate("/admin/approval")}>
+							<Button type="default" size="small" onClick={() => navigate("/admin/approval")}>
 								前往待审批列表
 							</Button>
 						</div>
@@ -654,7 +653,7 @@ export default function RoleDetailView() {
 									<Text variant="body3" className="text-muted-foreground">
 										已选待新增成员 {pendingAdds.size} 人
 									</Text>
-									<Button type="button" onClick={handleQueueAdd}>
+									<Button type="primary" htmlType="button" onClick={handleQueueAdd}>
 										加入待审批列表
 									</Button>
 								</div>
@@ -702,7 +701,7 @@ export default function RoleDetailView() {
 													</Badge>
 												) : null}
 												{isEditMode ? (
-													<Button size="sm" variant="outline" onClick={() => handleToggleMember(member)}>
+													<Button size="small" type="default" onClick={() => handleToggleMember(member)}>
 														{member.origin === "new"
 															? "撤销新增"
 															: member.status === "remove"
@@ -720,7 +719,7 @@ export default function RoleDetailView() {
 
 					{isEditMode ? (
 						<div className="flex justify-end border-t border-slate-200 pt-4">
-				<Button onClick={handleSubmitChanges} disabled={updating || hasPendingChange}>
+				<Button type="primary" onClick={handleSubmitChanges} disabled={updating || hasPendingChange}>
 					{updating ? "提交中…" : "提交角色编辑"}
 				</Button>
 						</div>
@@ -859,13 +858,13 @@ function SelectScope({
 	return (
 		<div className="flex gap-2">
 			<Button
-				type="button"
-				variant={value === "DEPARTMENT" ? "default" : "outline"}
+				htmlType="button"
+				type={value === "DEPARTMENT" ? "primary" : "default"}
 				onClick={() => onChange("DEPARTMENT")}
 			>
 				部门域
 			</Button>
-			<Button type="button" variant={value === "INSTITUTE" ? "default" : "outline"} onClick={() => onChange("INSTITUTE")}>
+			<Button htmlType="button" type={value === "INSTITUTE" ? "primary" : "default"} onClick={() => onChange("INSTITUTE")}>
 				全所共享域
 			</Button>
 		</div>

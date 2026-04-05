@@ -1,11 +1,10 @@
-import { Table } from "antd";
+import { Button, Table } from "antd";
 import type { ColumnsType } from "antd/es/table";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import type { KeycloakUser } from "#/keycloak";
 import { adminApi } from "@/admin/api/adminApi";
 import { Icon } from "@/components/icon";
 import { Badge } from "@/ui/badge";
-import { Button } from "@/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/ui/card";
 import { Input } from "@/ui/input";
 import { Text } from "@/ui/typography";
@@ -390,12 +389,12 @@ export default function UserManagementView() {
         onCell: () => ({ style: { verticalAlign: "middle" } }),
         render: (_, record) => (
           <div className="flex items-center gap-2 justify-end">
-            <Button size="sm" variant="outline" onClick={() => setModalState({ open: true, mode: "edit", target: toKeycloakUser(record) })}>
+            <Button size="small" type="default" onClick={() => setModalState({ open: true, mode: "edit", target: toKeycloakUser(record) })}>
               编辑
             </Button>
             <Button
-              size="sm"
-              variant="ghost"
+              size="small"
+              type="text"
               onClick={() => {
                 const id = record.keycloakId || record.username;
                 if (!id) return;
@@ -442,7 +441,7 @@ export default function UserManagementView() {
               className="w-[240px]"
             />
             <Button
-              variant="outline"
+              type="default"
               onClick={() => {
                 const nextKeyword = keywordInput.trim();
                 if (nextKeyword.length === 1) {
@@ -456,7 +455,7 @@ export default function UserManagementView() {
               <Icon icon="solar:magnifer-linear" className="mr-1 h-4 w-4" />
               搜索
             </Button>
-            <Button onClick={() => setModalState({ open: true, mode: "create" })}>
+            <Button type="primary" onClick={() => setModalState({ open: true, mode: "create" })}>
               <Icon icon="solar:add-circle-bold" className="mr-1 h-4 w-4" />
               新建用户
             </Button>

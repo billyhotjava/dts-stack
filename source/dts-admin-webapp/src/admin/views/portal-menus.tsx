@@ -6,7 +6,7 @@ import { isReservedBusinessRoleName } from "@/constants/keycloak-roles";
 import { setPortalMenus } from "@/store/portalMenuStore";
 import { Card, CardContent, CardHeader, CardTitle } from "@/ui/card";
 import { Text } from "@/ui/typography";
-import { Button } from "@/ui/button";
+import { Button } from "antd";
 import { Badge } from "@/ui/badge";
 import { Input } from "@/ui/input";
 import { Checkbox } from "@/ui/checkbox";
@@ -420,10 +420,10 @@ export default function PortalMenusView() {
 					菜单管理
 				</Text>
 				<div className="flex items-center gap-2">
-					<Button variant="secondary" onClick={handleOpenQuickAdd}>
+					<Button type="default" onClick={handleOpenQuickAdd}>
 						添加菜单
 					</Button>
-					<Button variant="secondary" onClick={handleReset} disabled={resetting}>
+					<Button type="default" onClick={handleReset} disabled={resetting}>
 						{resetting ? "恢复中.." : "恢复默认菜单"}
 					</Button>
 				</div>
@@ -468,14 +468,14 @@ export default function PortalMenusView() {
 								className="w-56"
 							/>
 							{keyword ? (
-								<Button size="sm" variant="ghost" onClick={() => setKeyword("")}>
+								<Button size="small" type="text" onClick={() => setKeyword("")}>
 									清除
 								</Button>
 							) : null}
-							<Button size="sm" variant="outline" onClick={() => setExpanded(collectFolderIds(filteredTreeMenus))}>
+							<Button size="small" type="default" onClick={() => setExpanded(collectFolderIds(filteredTreeMenus))}>
 								全部展开
 							</Button>
-							<Button size="sm" variant="outline" onClick={() => setExpanded(new Set())}>
+							<Button size="small" type="default" onClick={() => setExpanded(new Set())}>
 								全部折叠
 							</Button>
 						</div>
@@ -640,10 +640,10 @@ function QuickAddMenuDialog(props: {
 					</Text>
 				</div>
 				<DialogFooter>
-					<Button variant="outline" onClick={props.onClose} disabled={props.busy}>
+					<Button type="default" onClick={props.onClose} disabled={props.busy}>
 						取消
 					</Button>
-					<Button onClick={props.onSubmit} disabled={props.busy}>
+					<Button type="primary" onClick={props.onSubmit} disabled={props.busy}>
 						{props.busy ? "提交中.." : "提交"}
 					</Button>
 				</DialogFooter>
@@ -766,18 +766,18 @@ function MenuRow({
 						<span className="text-xs text-muted-foreground">--</span>
 					) : (
 						<div className="flex flex-wrap justify-end gap-2">
-							<Button size="sm" variant="outline" onClick={() => onToggle(item)} disabled={busy}>
+							<Button size="small" type="default" onClick={() => onToggle(item)} disabled={busy}>
 								{isDeleted ? "启用菜单" : "禁用菜单"}
 							</Button>
-							<Button size="sm" variant="outline" onClick={() => onEditRoles(item)} disabled={rolesLoading || busy}>
+							<Button size="small" type="default" onClick={() => onEditRoles(item)} disabled={rolesLoading || busy}>
 								配置角色
 							</Button>
 							{isCustom ? (
 								<>
-									<Button size="sm" variant="outline" onClick={() => onEditCustom(item)} disabled={busy}>
+									<Button size="small" type="default" onClick={() => onEditCustom(item)} disabled={busy}>
 										编辑
 									</Button>
-									<Button size="sm" variant="destructive" onClick={() => onDeleteCustom(item)} disabled={busy}>
+									<Button size="small" danger type="primary" onClick={() => onDeleteCustom(item)} disabled={busy}>
 										删除
 									</Button>
 								</>
@@ -857,10 +857,10 @@ function CustomEditMenuDialog(props: {
 					</div>
 				</div>
 				<DialogFooter>
-					<Button variant="outline" onClick={props.onClose} disabled={props.busy}>
+					<Button type="default" onClick={props.onClose} disabled={props.busy}>
 						取消
 					</Button>
-					<Button onClick={props.onSubmit} disabled={props.busy}>
+					<Button type="primary" onClick={props.onSubmit} disabled={props.busy}>
 						{props.busy ? "保存中.." : "保存"}
 					</Button>
 				</DialogFooter>
@@ -892,10 +892,10 @@ function CustomDeleteMenuDialog(props: {
 					</Text>
 				</div>
 				<DialogFooter>
-					<Button variant="outline" onClick={props.onCancel} disabled={props.busy}>
+					<Button type="default" onClick={props.onCancel} disabled={props.busy}>
 						取消
 					</Button>
-					<Button variant="destructive" onClick={props.onConfirm} disabled={props.busy}>
+					<Button danger type="primary" onClick={props.onConfirm} disabled={props.busy}>
 						{props.busy ? "删除中.." : "确认删除"}
 					</Button>
 				</DialogFooter>
@@ -1052,17 +1052,17 @@ function MenuRoleDialog({
 					<div className="flex items-center justify-between text-xs text-muted-foreground">
 						<span>已选择 {selectedCount} 个角色</span>
 						{selectedCount > 0 ? (
-							<Button size="sm" variant="ghost" onClick={() => setSelected(new Set())} disabled={disabled}>
+							<Button size="small" type="text" onClick={() => setSelected(new Set())} disabled={disabled}>
 								清空选择
 							</Button>
 						) : null}
 					</div>
 				</div>
 				<DialogFooter className="flex justify-end gap-2">
-					<Button variant="outline" onClick={onClose} disabled={saving}>
+					<Button type="default" onClick={onClose} disabled={saving}>
 						取消
 					</Button>
-					<Button onClick={handleSave} disabled={disabled}>
+					<Button type="primary" onClick={handleSave} disabled={disabled}>
 						{saving ? "提交中…" : "保存"}
 					</Button>
 				</DialogFooter>
@@ -1139,10 +1139,10 @@ function DisableMenuDialog({ target, onCancel, onConfirm, resolveRoleLabel, busy
 					</div>
 				</div>
 				<DialogFooter className="flex justify-end gap-2">
-					<Button type="button" variant="outline" onClick={onCancel} disabled={busy}>
+					<Button htmlType="button" type="default" onClick={onCancel} disabled={busy}>
 						取消
 					</Button>
-					<Button type="button" variant="destructive" onClick={() => onConfirm()} disabled={busy}>
+					<Button htmlType="button" danger type="primary" onClick={() => onConfirm()} disabled={busy}>
 						{busy ? "提交中..." : "确认禁用"}
 					</Button>
 				</DialogFooter>

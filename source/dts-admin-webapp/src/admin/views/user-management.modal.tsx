@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { TreeSelect } from "antd";
+import { Button, TreeSelect } from "antd";
 import type { CreateUserRequest, KeycloakUser, UpdateUserRequest } from "#/keycloak";
 import { KeycloakUserService } from "@/api/services/keycloakService";
 import { adminApi } from "@/admin/api/adminApi";
@@ -9,7 +9,6 @@ import { adminApi } from "@/admin/api/adminApi";
 import type { OrganizationNode } from "@/admin/types";
 import { Icon } from "@/components/icon";
 import { Alert, AlertDescription } from "@/ui/alert";
-import { Button } from "@/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/ui/card";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/ui/dialog";
 import { Input } from "@/ui/input";
@@ -702,10 +701,10 @@ export default function UserModal({ open, mode, user, onCancel, onSuccess }: Use
 				</div>
 
 				<DialogFooter>
-					<Button variant="outline" onClick={onCancel}>
+					<Button type="default" onClick={onCancel}>
 						取消
 					</Button>
-					<Button onClick={handleSubmit} disabled={loading || userLoading}>
+					<Button type="primary" onClick={handleSubmit} disabled={loading || userLoading}>
 						{userLoading ? "加载中..." : loading ? "处理中..." : "确定"}
 					</Button>
 				</DialogFooter>

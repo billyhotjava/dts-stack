@@ -10,7 +10,7 @@ import type { KeycloakUser } from "#/keycloak";
 import type { OrganizationNode, OrganizationCreatePayload, OrganizationUpdatePayload } from "@/admin/types";
 import { Icon } from "@/components/icon";
 import { Badge } from "@/ui/badge";
-import { Button } from "@/ui/button";
+import { Button } from "antd";
 import { Card, CardContent, CardHeader, CardTitle } from "@/ui/card";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/ui/dialog";
 import { Form, FormControl, FormDescription, FormField, FormItem, FormLabel, FormMessage } from "@/ui/form";
@@ -416,15 +416,16 @@ export default function OrgManagementView() {
 							</div>
 							<div className="flex flex-wrap items-center gap-2">
 								<Button
-									size="sm"
-									variant="secondary"
+									size="small"
+									type="default"
 									onClick={openSyncDialog}
 									disabled={syncMutation.isPending}
 								>
 									{syncMutation.isPending ? "同步中…" : "同步院端数据"}
 								</Button>
 								<Button
-									size="sm"
+									size="small"
+									type="primary"
 									onClick={openCreateRoot}
 									disabled={rootExists}
 									title={rootExists ? "仅允许存在一个根部门" : undefined}
@@ -467,16 +468,16 @@ export default function OrgManagementView() {
 						<CardHeader className="flex flex-wrap items-start justify-between gap-3 border-b border-border/70 pb-4">
 							<CardTitle>组织详情</CardTitle>
 							<div className="flex flex-wrap gap-2">
-								<Button variant="outline" size="sm" onClick={openCreateChild} disabled={!selected}>
+								<Button type="default" size="small" onClick={openCreateChild} disabled={!selected}>
 									创建下级
 								</Button>
-								<Button variant="outline" size="sm" onClick={openEdit} disabled={!selected}>
+								<Button type="default" size="small" onClick={openEdit} disabled={!selected}>
 									编辑
 								</Button>
 								<Button
-									variant="ghost"
-									size="sm"
-									className="text-destructive hover:text-destructive"
+									type="text"
+									size="small"
+									danger
 									onClick={openDelete}
 									disabled={!selected || deleteMutation.isPending}
 								>
@@ -608,10 +609,10 @@ export default function OrgManagementView() {
 						</ul>
 					</div>
 					<DialogFooter className="justify-end gap-2">
-						<Button variant="ghost" onClick={closeSyncDialog} disabled={syncMutation.isPending}>
+						<Button type="text" onClick={closeSyncDialog} disabled={syncMutation.isPending}>
 							取消
 						</Button>
-						<Button variant="destructive" onClick={handleConfirmSync} disabled={syncMutation.isPending}>
+						<Button danger type="primary" onClick={handleConfirmSync} disabled={syncMutation.isPending}>
 							{syncMutation.isPending ? "同步中…" : "确认同步"}
 						</Button>
 					</DialogFooter>
@@ -875,10 +876,10 @@ function OrganizationFormDialog({
 							)}
 						/>
 						<DialogFooter>
-							<Button type="button" variant="outline" onClick={onClose} disabled={loading}>
+							<Button htmlType="button" type="default" onClick={onClose} disabled={loading}>
 								取消
 							</Button>
-							<Button type="submit" disabled={loading}>
+							<Button htmlType="submit" type="primary" disabled={loading}>
 								{loading ? `${submitText}中...` : submitText}
 							</Button>
 						</DialogFooter>
@@ -923,10 +924,10 @@ function ConfirmDeleteDialog({ open, name, childCount = 0, loading, onCancel, on
 					) : null}
 				</div>
 				<DialogFooter>
-					<Button variant="outline" onClick={onCancel} disabled={loading}>
+					<Button type="default" onClick={onCancel} disabled={loading}>
 						取消
 					</Button>
-					<Button variant="destructive" onClick={onConfirm} disabled={loading}>
+					<Button danger type="primary" onClick={onConfirm} disabled={loading}>
 						{loading ? "删除中..." : "确认删除"}
 					</Button>
 				</DialogFooter>

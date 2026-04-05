@@ -7,7 +7,7 @@ import type { PortalMenuItem, SystemConfigItem } from "@/admin/types";
 import { EmptyState } from "@/components/empty-state";
 import { useRouter } from "@/routes/hooks";
 import { Badge } from "@/ui/badge";
-import { Button } from "@/ui/button";
+import { Button } from "antd";
 import { Input } from "@/ui/input";
 import { toast } from "sonner";
 
@@ -111,7 +111,7 @@ export default function AdminOtherConfigView() {
 				extra={
 					<>
 						<Button
-							variant="outline"
+							type="default"
 							onClick={() => {
 								void systemQuery.refetch();
 								void portalQuery.refetch();
@@ -121,11 +121,11 @@ export default function AdminOtherConfigView() {
 							<RefreshCw className="h-4 w-4" />
 							{"刷新总览"}
 						</Button>
-						<Button variant="outline" onClick={() => push("/admin/portal-menus")}>
+						<Button type="default" onClick={() => push("/admin/portal-menus")}>
 							<LayoutGrid className="h-4 w-4" />
 							{"菜单管理"}
 						</Button>
-						<Button onClick={() => push("/admin/ops")}>
+						<Button type="primary" onClick={() => push("/admin/ops")}>
 							<Workflow className="h-4 w-4" />
 							{"运维配置"}
 						</Button>
@@ -142,10 +142,10 @@ export default function AdminOtherConfigView() {
 							className="pl-9"
 						/>
 					</div>
-					<Button variant="outline" onClick={() => push("/admin/infra-settings")}>
+					<Button type="default" onClick={() => push("/admin/infra-settings")}>
 						{"系统集成"}
 					</Button>
-					<Button variant="outline" onClick={() => push("/admin/workflows")}>
+					<Button type="default" onClick={() => push("/admin/workflows")}>
 						{"工作流配置"}
 					</Button>
 				</div>
@@ -182,7 +182,7 @@ export default function AdminOtherConfigView() {
 											</div>
 											{item.description ? <div className="text-sm text-muted-foreground">{item.description}</div> : null}
 										</div>
-										<Button size="sm" variant="outline" onClick={() => handleOpenDraft(item)}>
+										<Button size="small" type="default" onClick={() => handleOpenDraft(item)}>
 											{"发起变更"}
 										</Button>
 									</div>

@@ -1,13 +1,12 @@
 import { useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Table } from "antd";
+import { Button, Table } from "antd";
 import type { ColumnsType } from "antd/es/table";
 import { adminApi } from "@/admin/api/adminApi";
 import { sanitizeChangePayload } from "@/admin/utils/change-sanitizer";
 import type { AdminUser, ChangeRequest } from "@/admin/types";
 import { AdminSessionContext } from "@/admin/lib/session-context";
 import { Badge } from "@/ui/badge";
-import { Button } from "@/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/ui/card";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/ui/select";
@@ -847,8 +846,8 @@ export default function ApprovalCenterView() {
 				align: "right" as const,
 				render: (_: unknown, record) => (
 					<Button
-						size="sm"
-						variant="outline"
+						size="small"
+						type="default"
 						onClick={() => handleOpenTask(record.id)}
 						disabled={decisionLoading && activeTaskId === record.id}
 					>
@@ -1403,22 +1402,23 @@ const handleCloseDialog = () => {
 					) : null}
 					<DialogFooter>
 						<Button
-							type="button"
-							variant="outline"
+							htmlType="button"
+							type="default"
 							onClick={() => handleDecision("ON_HOLD")}
 							disabled={decisionLoading || !activeTask}
 						>
 							{decisionLoading ? "处理中..." : "待定"}
 						</Button>
 						<Button
-							type="button"
-							variant="destructive"
+							htmlType="button"
+							danger
+							type="primary"
 							onClick={() => handleDecision("REJECTED")}
 							disabled={decisionLoading || !activeTask}
 						>
 							{decisionLoading ? "处理中..." : "拒绝"}
 						</Button>
-						<Button type="button" onClick={() => handleDecision("APPROVED")} disabled={decisionLoading || !activeTask}>
+						<Button htmlType="button" type="primary" onClick={() => handleDecision("APPROVED")} disabled={decisionLoading || !activeTask}>
 							{decisionLoading ? "处理中..." : "批准"}
 						</Button>
 					</DialogFooter>

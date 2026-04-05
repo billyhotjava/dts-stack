@@ -3,7 +3,7 @@ import { toast } from "sonner";
 import type { ApprovalRequest } from "#/keycloak";
 import { KeycloakApprovalService } from "@/api/services/approvalService";
 import { Badge } from "@/ui/badge";
-import { Button } from "@/ui/button";
+import { Button } from "antd";
 
 interface ApprovalStatusProps {
 	userId: string;
@@ -53,7 +53,7 @@ export function ApprovalStatus({ userId }: ApprovalStatusProps) {
 		return (
 			<div className="flex items-center gap-2">
 				<Badge variant="destructive">有失败的审批</Badge>
-				<Button variant="ghost" size="sm" onClick={loadApprovals}>
+				<Button type="text" size="small" onClick={loadApprovals}>
 					刷新
 				</Button>
 			</div>
@@ -64,7 +64,7 @@ export function ApprovalStatus({ userId }: ApprovalStatusProps) {
 		return (
 			<div className="flex items-center gap-2">
 				<Badge variant="warning">有待审批请求</Badge>
-				<Button variant="ghost" size="sm" onClick={loadApprovals}>
+				<Button type="text" size="small" onClick={loadApprovals}>
 					刷新
 				</Button>
 			</div>
@@ -74,7 +74,7 @@ export function ApprovalStatus({ userId }: ApprovalStatusProps) {
 	return (
 		<div className="flex items-center gap-2">
 			<Badge variant="secondary">有审批记录</Badge>
-			<Button variant="ghost" size="sm" onClick={loadApprovals}>
+			<Button type="text" size="small" onClick={loadApprovals}>
 				刷新
 			</Button>
 		</div>

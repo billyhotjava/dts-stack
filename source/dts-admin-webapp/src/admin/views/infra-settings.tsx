@@ -1,12 +1,11 @@
 import { useEffect, useState, type ReactNode } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Alert, Button as AntButton, Card, Divider, Form, Input, Space, Switch, Tabs, type FormInstance } from "antd";
+import { Alert, Button, Card, Divider, Form, Input, Space, Switch, Tabs, type FormInstance } from "antd";
 import { Database, RefreshCw, Workflow } from "lucide-react";
 import { adminApi } from "@/admin/api/adminApi";
 import { useRouter } from "@/routes/hooks";
 import type { InfraServiceSettingsPayload, InfraServiceTestResult } from "@/types/infra";
 import { Badge } from "@/ui/badge";
-import { Button } from "@/ui/button";
 import { toast } from "sonner";
 
 type ServiceKey = "addax" | "airflow" | "openmetadata" | "dbt" | "platform";
@@ -113,12 +112,12 @@ function ServicePanel({ service, title, restartHint, capability, formContent }: 
 					{restartHint ? <Alert className="mb-4" type="warning" showIcon message={restartHint} /> : null}
 					<div className="grid gap-x-5 xl:grid-cols-2">{formContent(form)}</div>
 					<Space wrap className="pt-2">
-						<AntButton data-testid={`admin-infra-service-save-${service}`} type="primary" onClick={handleSave}>
+						<Button data-testid={`admin-infra-service-save-${service}`} type="primary" onClick={handleSave}>
 							保存配置
-						</AntButton>
-						<AntButton data-testid={`admin-infra-service-test-${service}`} onClick={handleTest}>
+						</Button>
+						<Button data-testid={`admin-infra-service-test-${service}`} onClick={handleTest}>
 							测试连接
-						</AntButton>
+						</Button>
 					</Space>
 					{testResult ? (
 						<div data-testid={`admin-infra-service-test-result-${service}`}>
@@ -426,11 +425,11 @@ export default function InfraSettingsView() {
 				title={"集成设置"}
 				extra={
 					<>
-						<Button variant="outline" onClick={() => push("/admin/data-lake")}>
+						<Button type="default" onClick={() => push("/admin/data-lake")}>
 							<Database className="h-4 w-4" />
 							数据湖配置
 						</Button>
-						<Button variant="outline" onClick={() => push("/admin/ops")}>
+						<Button type="default" onClick={() => push("/admin/ops")}>
 							<RefreshCw className="h-4 w-4" />
 							运维配置
 						</Button>
@@ -442,8 +441,8 @@ export default function InfraSettingsView() {
 						<Button
 							key={item.key}
 							data-testid={`admin-infra-switch-${item.key}`}
-							variant={activeService === item.key ? "contrast" : "outline"}
-							size="sm"
+							type={activeService === item.key ? "primary" : "default"}
+							size="small"
 							onClick={() => setActiveService(item.key)}
 						>
 							{item.label}

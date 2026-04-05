@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState, type ChangeEvent, type ReactNode } from "react";
-import { Table } from "antd";
+import { Button, Table } from "antd";
 import type { ColumnsType } from "antd/es/table";
 import dayjs from "dayjs";
 import { Calendar as CalendarIcon, Clock3 } from "lucide-react";
@@ -8,7 +8,6 @@ import { AuditLogService } from "@/api/services/auditLogService";
 import type { AuditLog, AuditLogPageResponse, AuditLogDetail } from "#/entity";
 import { GLOBAL_CONFIG } from "@/global-config";
 import { Badge } from "@/ui/badge";
-import { Button } from "@/ui/button";
 import { Calendar } from "@/ui/calendar";
 import { Card, CardAction, CardContent, CardDescription, CardHeader, CardTitle } from "@/ui/card";
 import { Input } from "@/ui/input";
@@ -595,7 +594,7 @@ export default function AuditCenterView() {
 						</CardDescription>
 					</div>
 					<CardAction>
-						<Button onClick={handleExport} disabled={exporting || logs.length === 0}>
+						<Button type="primary" onClick={handleExport} disabled={exporting || logs.length === 0}>
 							{exporting ? "正在导出..." : "导出日志"}
 						</Button>
 					</CardAction>
@@ -675,10 +674,10 @@ export default function AuditCenterView() {
 							{/* 事件类型筛选已移除 */}
 						</div>
 						<div className="flex flex-wrap gap-3">
-							<Button type="button" variant="secondary" className="w-32 text-black" onClick={() => setFilters({})}>
+							<Button htmlType="button" type="default" className="w-32" onClick={() => setFilters({})}>
 								重置条件
 							</Button>
-							<Button type="button" variant="secondary" className="w-32 text-black" onClick={handleRefresh} disabled={loading}>
+							<Button htmlType="button" type="default" className="w-32" onClick={handleRefresh} disabled={loading}>
 								{loading ? "刷新中..." : "刷新"}
 							</Button>
 						</div>
@@ -1366,7 +1365,7 @@ function DateTimeField({ label, value, onChange, placeholder }: FieldProps) {
 			<Popover open={open} onOpenChange={setOpen}>
 				<PopoverTrigger asChild>
 					<Button
-						variant="outline"
+						type="default"
 						className={cn("w-full justify-start text-left font-normal", !parsed && "text-muted-foreground")}
 					>
 						<CalendarIcon className="mr-2 size-4" />
@@ -1386,8 +1385,8 @@ function DateTimeField({ label, value, onChange, placeholder }: FieldProps) {
 							<Clock3 className="pointer-events-none absolute left-2 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
 						</div>
 						<Button
-							variant="ghost"
-							size="sm"
+							type="text"
+							size="small"
 							onClick={() => {
 								onChange(undefined);
 								setOpen(false);
