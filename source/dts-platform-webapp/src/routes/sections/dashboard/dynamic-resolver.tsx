@@ -43,6 +43,7 @@ const PATH_COMPONENT_OVERRIDES: Record<string, string> = {
 	"/governance/indicators/dictionary": "/pages/governance/IndicatorsPage",
 	"/governance/rules": "/pages/governance/QualityRulesPage",
 	"/governance/quality": "/pages/governance/QualityReportPage",
+	"/governance/indicator-center": "/pages/governance/IndicatorCenterPage",
 	"/governance/indicator-dashboard": "/pages/governance/IndicatorDashboardPage",
 	"/governance/indicator-templates": "/pages/governance/IndicatorTemplatePage",
 	"/governance/indicator-wizard": "/pages/governance/IndicatorTemplatePage",
