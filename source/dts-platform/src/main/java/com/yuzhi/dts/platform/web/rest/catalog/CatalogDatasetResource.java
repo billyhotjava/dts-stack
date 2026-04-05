@@ -667,9 +667,12 @@ public class CatalogDatasetResource {
     @GetMapping("/datasets/{id}/indicator-deps")
     @Transactional(readOnly = true)
     public ApiResponse<List<Map<String, Object>>> getIndicatorDeps(@PathVariable UUID id) {
-        datasetRepo.findById(id).orElseThrow(
+        CatalogDataset dataset = datasetRepo.findById(id).orElseThrow(
             () -> new ResponseStatusException(HttpStatus.NOT_FOUND, "数据集不存在")
         );
+        if (dataset.getEnabled() != null && !dataset.getEnabled().booleanValue() && !SecurityUtils.isOpAdminAccount()) {
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "数据集不存在或无权访问");
+        }
         List<Map<String, Object>> result = indicatorRepo.findByDatasetId(id.toString()).stream()
             .map(ind -> {
                 Map<String, Object> m = new LinkedHashMap<>();
@@ -681,13 +684,11 @@ public class CatalogDatasetResource {
                 return m;
             })
             .toList();
-        audit.recordAuxiliary(
-            "READ",
-            "catalog.dataset.indicator-deps",
+        audit.auditAction(
+            "CATALOG_ASSET_VIEW",
+            AuditStage.SUCCESS,
             id.toString(),
-            id.toString(),
-            "SUCCESS",
-            Map.of("count", result.size())
+            Map.of("summary", "查看数据集关联指标", "datasetId", id.toString(), "count", result.size())
         );
         return ApiResponses.ok(result);
     }

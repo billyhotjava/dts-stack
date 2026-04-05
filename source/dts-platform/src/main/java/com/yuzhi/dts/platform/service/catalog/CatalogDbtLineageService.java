@@ -44,8 +44,8 @@ public class CatalogDbtLineageService {
 			}
 		}
 
-		int created = 0;
 		int skipped = 0;
+		List<CatalogDatasetLineage> toCreate = new ArrayList<>();
 
 		for (Map.Entry<String, Object> entry : nodes.entrySet()) {
 			String nodeKey = entry.getKey();
@@ -84,12 +84,13 @@ public class CatalogDbtLineageService {
 					lineage.setRelationType("DBT_MODEL");
 					lineage.setDirection("DOWNSTREAM");
 					lineage.setNotes("Imported from dbt manifest");
-					lineageRepo.save(lineage);
-					created++;
+					toCreate.add(lineage);
 				}
 			}
 		}
 
+		lineageRepo.saveAll(toCreate);
+		int created = toCreate.size();
 		return Map.of("created", created, "skipped", skipped, "total", nodes.size());
 	}
 }
