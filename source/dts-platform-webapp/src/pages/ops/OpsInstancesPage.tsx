@@ -68,7 +68,7 @@ export default function OpsInstancesPage() {
 		if (!record.dagId || !record.externalRunId) return;
 		setTaskLoading((prev) => ({ ...prev, [runId]: true }));
 		try {
-			const result: any = await listAirflowTaskInstances(record.dagId, record.externalRunId);
+			const result = await listAirflowTaskInstances(record.dagId, record.externalRunId);
 			const instances: AirflowTaskInstance[] = Array.isArray(result?.task_instances)
 				? result.task_instances
 				: [];

@@ -392,23 +392,27 @@ export default function OpsOverviewPage() {
 							{
 								title: "操作",
 								width: 80,
-								render: (_: unknown, r: ExternalRun) => (
-									<Button
-										type="link"
-										size="small"
-										onClick={() =>
-											openLogPreview({
-												entryKey: "AIRFLOW_DAG",
-												dagId: r.dagId,
-												dagRunId: r.externalRunId ?? undefined,
-												taskId: "dbt_run",
-												tryNumber: 1,
-											})
-										}
-									>
-										日志
-									</Button>
-								),
+								render: (_: unknown, r: ExternalRun) => {
+									const isDbt = r.dagId?.toLowerCase().includes("dbt") ?? false;
+									if (!isDbt) return null;
+									return (
+										<Button
+											type="link"
+											size="small"
+											onClick={() =>
+												openLogPreview({
+													entryKey: "AIRFLOW_DAG",
+													dagId: r.dagId,
+													dagRunId: r.externalRunId ?? undefined,
+													taskId: "dbt_run",
+													tryNumber: 1,
+												})
+											}
+										>
+											日志
+										</Button>
+									);
+								},
 							},
 						]}
 					/>
@@ -444,23 +448,27 @@ export default function OpsOverviewPage() {
 							{
 								title: "操作",
 								width: 80,
-								render: (_: unknown, r: ExternalRun) => (
-									<Button
-										type="link"
-										size="small"
-										onClick={() =>
-											openLogPreview({
-												entryKey: "AIRFLOW_DAG",
-												dagId: r.dagId,
-												dagRunId: r.externalRunId ?? undefined,
-												taskId: "dbt_run",
-												tryNumber: 1,
-											})
-										}
-									>
-										日志
-									</Button>
-								),
+								render: (_: unknown, r: ExternalRun) => {
+									const isDbt = r.dagId?.toLowerCase().includes("dbt") ?? false;
+									if (!isDbt) return null;
+									return (
+										<Button
+											type="link"
+											size="small"
+											onClick={() =>
+												openLogPreview({
+													entryKey: "AIRFLOW_DAG",
+													dagId: r.dagId,
+													dagRunId: r.externalRunId ?? undefined,
+													taskId: "dbt_run",
+													tryNumber: 1,
+												})
+											}
+										>
+											日志
+										</Button>
+									);
+								},
 							},
 						]}
 					/>
