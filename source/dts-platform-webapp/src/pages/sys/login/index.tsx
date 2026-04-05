@@ -12,6 +12,37 @@ import { LoginProvider } from "./providers/login-provider";
 import RegisterForm from "./register-form";
 import ResetForm from "./reset-form";
 
+function isTokenExpired(token?: string): boolean {
+	if (!token) return true;
+	if (token.startsWith("dev-access-")) return false;
+	try {
+		const parts = token.split(".");
+		if (parts.length < 2) return false; // opaque token, trust it
+		let payload = parts[1].replace(/-/g, "+").replace(/_/g, "/");
+		while (payload.length % 4 !== 0) payload += "=";
+		const obj = JSON.parse(atob(payload));
+		return typeof obj?.exp === "number" ? Date.now() > obj.exp * 1000 - 10_000 : false;
+	} catch {
+		return false;
+	}
+}
+
+function isSessionIdle(): boolean {
+	try {
+		const stored = localStorage.getItem("dts.session.lastActivity");
+		if (!stored) return false;
+		const lastActivity = Number(stored);
+		if (!(lastActivity > 0)) return false;
+		const timeoutMinutes = Math.max(
+			1,
+			Number(import.meta.env.VITE_SESSION_TIMEOUT_MINUTES ?? import.meta.env.VITE_PORTAL_SESSION_TIMEOUT ?? "30"),
+		);
+		return Date.now() - lastActivity > timeoutMinutes * 60 * 1000;
+	} catch {
+		return false;
+	}
+}
+
 function LoginPage() {
 	const token = useUserToken();
 	const bilingual = useBilingualText();
@@ -32,7 +63,7 @@ function LoginPage() {
 		}
 	})();
 
-	if (token.accessToken) {
+	if (token.accessToken && !isTokenExpired(token.accessToken) && !isSessionIdle()) {
 		// If we're already authenticated and this page was reached via embedded module redirect,
 		// jump directly to that module with a hard navigation.
 		if (safeRedirect?.startsWith("/analytics")) {
