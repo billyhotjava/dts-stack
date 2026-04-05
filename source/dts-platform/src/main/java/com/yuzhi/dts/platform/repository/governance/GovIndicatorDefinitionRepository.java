@@ -18,5 +18,7 @@ public interface GovIndicatorDefinitionRepository extends JpaRepository<GovIndic
     List<GovIndicatorDefinition> findByIsDerivedTrue();
 
     List<GovIndicatorDefinition> findByStatusIn(List<String> statuses);
+
+    List<GovIndicatorDefinition> findByDatasetId(String datasetId);
 }
 

@@ -11,8 +11,10 @@ import com.yuzhi.dts.platform.repository.catalog.CatalogDatasetRepository;
 import com.yuzhi.dts.platform.repository.catalog.CatalogDomainRepository;
 import com.yuzhi.dts.platform.repository.catalog.CatalogMaskingRuleRepository;
 import com.yuzhi.dts.platform.repository.catalog.CatalogTableSchemaRepository;
+import com.yuzhi.dts.platform.repository.governance.GovIndicatorDefinitionRepository;
 import com.yuzhi.dts.platform.security.SecurityUtils;
 import com.yuzhi.dts.platform.service.audit.AuditService;
+import com.yuzhi.dts.platform.service.catalog.CatalogDbtLineageService;
 import com.yuzhi.dts.platform.service.catalog.CatalogMetadataService;
 import com.yuzhi.dts.platform.service.openmetadata.OpenMetadataService;
 import com.yuzhi.dts.platform.service.security.OrganizationVisibilityService;
@@ -48,6 +50,8 @@ public class CatalogDatasetResource {
     private final OpenMetadataService openMetadataService;
     private final CatalogMetadataService catalogMetadataService;
     private final CatalogResourceHelper helper;
+    private final GovIndicatorDefinitionRepository indicatorRepo;
+    private final CatalogDbtLineageService dbtLineageService;
 
     public CatalogDatasetResource(
         CatalogDatasetRepository datasetRepo,
@@ -61,7 +65,9 @@ public class CatalogDatasetResource {
         OrganizationVisibilityService organizationVisibilityService,
         OpenMetadataService openMetadataService,
         CatalogMetadataService catalogMetadataService,
-        CatalogResourceHelper helper
+        CatalogResourceHelper helper,
+        GovIndicatorDefinitionRepository indicatorRepo,
+        CatalogDbtLineageService dbtLineageService
     ) {
         this.datasetRepo = datasetRepo;
         this.domainRepo = domainRepo;
@@ -75,6 +81,8 @@ public class CatalogDatasetResource {
         this.openMetadataService = openMetadataService;
         this.catalogMetadataService = catalogMetadataService;
         this.helper = helper;
+        this.indicatorRepo = indicatorRepo;
+        this.dbtLineageService = dbtLineageService;
     }
 
     @GetMapping("/config")
@@ -654,5 +662,44 @@ public class CatalogDatasetResource {
             );
             throw ex;
         }
+    }
+
+    @GetMapping("/datasets/{id}/indicator-deps")
+    @Transactional(readOnly = true)
+    public ApiResponse<List<Map<String, Object>>> getIndicatorDeps(@PathVariable UUID id) {
+        datasetRepo.findById(id).orElseThrow(
+            () -> new ResponseStatusException(HttpStatus.NOT_FOUND, "数据集不存在")
+        );
+        List<Map<String, Object>> result = indicatorRepo.findByDatasetId(id.toString()).stream()
+            .map(ind -> {
+                Map<String, Object> m = new LinkedHashMap<>();
+                m.put("id", ind.getId());
+                m.put("name", ind.getName());
+                m.put("code", ind.getCode());
+                m.put("isDerived", ind.getIsDerived());
+                m.put("status", ind.getStatus());
+                return m;
+            })
+            .toList();
+        audit.recordAuxiliary(
+            "READ",
+            "catalog.dataset.indicator-deps",
+            id.toString(),
+            id.toString(),
+            "SUCCESS",
+            Map.of("count", result.size())
+        );
+        return ApiResponses.ok(result);
+    }
+
+    @PostMapping("/lineage/import-dbt-manifest")
+    @Transactional
+    @PreAuthorize(CATALOG_MAINTAINER_EXPRESSION)
+    public ApiResponse<Map<String, Object>> importDbtManifest(
+        @RequestParam("file") org.springframework.web.multipart.MultipartFile file
+    ) throws java.io.IOException {
+        Map<String, Object> result = dbtLineageService.importManifest(file);
+        audit.audit("CREATE", "catalog.lineage.dbt-import", "file=" + file.getOriginalFilename());
+        return ApiResponses.ok(result);
     }
 }
