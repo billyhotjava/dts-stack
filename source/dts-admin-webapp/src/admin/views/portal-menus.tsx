@@ -6,7 +6,8 @@ import { isReservedBusinessRoleName } from "@/constants/keycloak-roles";
 import { setPortalMenus } from "@/store/portalMenuStore";
 import { Card, CardContent, CardHeader, CardTitle } from "@/ui/card";
 import { Text } from "@/ui/typography";
-import { Button } from "antd";
+import { Button, Dropdown, Tag } from "antd";
+import { MoreOutlined } from "@ant-design/icons";
 import { Badge } from "@/ui/badge";
 import { Input } from "@/ui/input";
 import { Checkbox } from "@/ui/checkbox";
@@ -686,7 +687,8 @@ function MenuRow({
 	const id = item.id as number | undefined;
 	if (id == null) return null;
 	const baseName = item.displayName ?? item.name ?? String(id);
-	const name = id != null ? `id${id}-${baseName}` : baseName;
+	const displayLabel = baseName;                                  // 纯净显示名，不含 id 前缀
+	const name = id != null ? `id${id}-${baseName}` : baseName;    // 仅用于 fullPath 路径 key
 	const children = Array.isArray(item.children) ? item.children : [];
 	const isFolder = children.length > 0;
 	const isExpanded = isFolder && expanded.has(id);
@@ -723,7 +725,7 @@ function MenuRow({
 						>
 							{isFolder ? (isExpanded ? "▾" : "▸") : "·"}
 						</button>
-						<div className="min-w-0 flex-1 truncate font-semibold">{highlightKeyword(name, keyword)}</div>
+						<div className="min-w-0 flex-1 truncate font-semibold" title={fullPathLabel}>{highlightKeyword(displayLabel, keyword)}</div>
 					</div>
 				</td>
 				<td className="px-3 py-2 align-top text-xs text-muted-foreground break-all">{fullPathLabel}</td>
