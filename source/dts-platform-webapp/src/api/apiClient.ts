@@ -333,6 +333,7 @@ axiosInstance.interceptors.response.use(
 					toast.error(combinedMsg, { id: "service-error", duration: 3000, position: "top-center" });
 					setTimeout(() => {
 						if (typeof window !== "undefined" && !isLoginRouteActive()) {
+							userStore.getState().actions.clearUserInfoAndToken();
 							location.replace(resolveLoginHref());
 						}
 					}, 3000);
