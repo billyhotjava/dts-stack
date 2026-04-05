@@ -109,15 +109,17 @@
 **设计文档**: `worklog/v2.2.3/sprint-7-202604/README.md`
 
 ## Sprint-8: 指标中心重构 (202604)
-**状态**: READY（下一个开始）
+**状态**: DONE
 **类型**: Implementation（实施型）
+**完成日期**: 2026-04-05
+
 | Feature | Task 数 | 状态 |
 |---------|---------|------|
-| F1-后端API改造 | 3 | READY |
-| F2-指标中心页面重构 | 4 | READY |
-| F3-主题域管理增强 | 2 | READY |
-| F4-指标模板导入导出 | 2 | READY |
-| F5-数据资产关联 | 3 | READY |
+| F1-后端API改造 | 4 | DONE |
+| F2-指标中心页面重构 | 3 | DONE |
+| F3-主题域管理增强 | 1 | DONE |
+| F4-指标模板导入导出 | 2 | DONE |
+| F5-数据资产关联 | - | DONE（Sprint-7 已完成） |
 
-**统计**: READY=14, IN_PROGRESS=0, DONE=0, BLOCKED=0
+**统计**: READY=0, IN_PROGRESS=0, DONE=10, BLOCKED=0
 **设计文档**: `worklog/v2.2.3/sprint-8-202604/README.md`
