@@ -207,6 +207,17 @@ export const getDomainAssetStats = (domainId: string): Promise<{
 }> =>
 	api.get({ url: `/catalog/domains/${domainId}/asset-stats` }).then((r: any) => r.data?.data);
 
+export type DatasetField = {
+	name: string;
+	dataType: string;
+	comment?: string;
+	nullable?: boolean;
+	tableName?: string;
+};
+
+export const getDatasetFields = (datasetId: string): Promise<DatasetField[]> =>
+	api.get({ url: `/catalog/datasets/${datasetId}/fields` }).then((r: any) => r.data?.data ?? []);
+
 // Asset extras (tasks)
 export const syncDatasetSchema = (datasetId: string, data?: any) =>
     api.post({ url: `/datasets/${datasetId}/sync-schema`, data });
