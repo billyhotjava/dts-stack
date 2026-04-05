@@ -288,7 +288,7 @@ axiosInstance.interceptors.response.use(
 			!(error.config as any)?._retry;
 
 		if (!shouldSuppressAuthHandling && !isLoginRequest && !canSilentRefresh) {
-			toast.error(errMsg, { position: "top-center" });
+			toast.error(errMsg, { id: "session-expired", position: "top-center" });
 		}
 
 		if (is401) {
@@ -331,14 +331,14 @@ axiosInstance.interceptors.response.use(
 									}
 									// refresh 未返回新 token，补弹 toast
 									if (!shouldSuppressAuthHandling) {
-										toast.error(errMsg, { position: "top-center" });
+										toast.error(errMsg, { id: "session-expired", position: "top-center" });
 									}
 									throw error;
 								},
 								(refreshErr) => {
 									// refresh 请求本身失败，补弹 toast
 									if (!shouldSuppressAuthHandling) {
-										toast.error(errMsg, { position: "top-center" });
+										toast.error(errMsg, { id: "session-expired", position: "top-center" });
 									}
 									throw refreshErr;
 								},

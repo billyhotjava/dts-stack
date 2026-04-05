@@ -322,7 +322,7 @@ axiosInstance.interceptors.response.use(
 			}
 		} else {
 			if (!shouldSuppressAuthHandling && !isLoginRequest) {
-				toast.error(combinedMsg, { position: "top-center" });
+				toast.error(combinedMsg, { id: "session-expired", position: "top-center" });
 			}
 		}
 		return Promise.reject(error);

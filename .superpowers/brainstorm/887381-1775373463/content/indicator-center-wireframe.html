@@ -1,0 +1,189 @@
+<h2>指标中心 — 整体线框图（方案 A）</h2>
+<p class="subtitle">域树来自主题域管理，点击域节点过滤右侧指标列表</p>
+
+<div class="mockup">
+  <div class="mockup-header">指标中心 · IndicatorCenterPage</div>
+  <div class="mockup-body" style="padding:0;display:flex;min-height:420px;font-size:11px">
+
+    <!-- 左侧域树 -->
+    <div style="width:200px;flex-shrink:0;border-right:1px solid #e0e7ef;background:#f7f9fc;display:flex;flex-direction:column">
+      <div style="padding:10px 12px 6px;font-weight:700;font-size:11px;color:#1F4E79;border-bottom:1px solid #e0e7ef;display:flex;justify-content:space-between;align-items:center">
+        <span>主题域</span>
+        <span style="font-size:9px;color:#1677ff;cursor:pointer">去管理 ↗</span>
+      </div>
+      <div style="padding:8px 0;flex:1;overflow-y:auto">
+        <!-- 域树节点 -->
+        <div style="padding:4px 12px;display:flex;align-items:center;gap:4px;cursor:pointer;color:#555">
+          <span>▾</span><span style="font-size:10px">全域主题</span>
+          <span style="margin-left:auto;background:#eee;border-radius:8px;padding:0 5px;font-size:9px">86</span>
+        </div>
+        <div style="padding:4px 12px 4px 24px;display:flex;align-items:center;gap:4px;cursor:pointer;color:#555">
+          <span>▾</span><span style="font-size:10px">项目域 PJM</span>
+          <span style="margin-left:auto;background:#eee;border-radius:8px;padding:0 5px;font-size:9px">85</span>
+        </div>
+        <!-- 选中状态 -->
+        <div style="padding:4px 12px 4px 36px;display:flex;align-items:center;gap:4px;cursor:pointer;background:#e6f0ff;border-left:3px solid #1677ff;color:#1677ff">
+          <span style="font-size:10px;font-weight:600">进度域</span>
+          <span style="font-size:9px;color:#888">PJM-Progress</span>
+          <span style="margin-left:auto;background:#cce0ff;border-radius:8px;padding:0 5px;font-size:9px;color:#1677ff">40</span>
+        </div>
+        <div style="padding:4px 12px 4px 36px;display:flex;align-items:center;gap:4px;cursor:pointer;color:#777">
+          <span style="font-size:10px">质量域</span>
+          <span style="font-size:9px;color:#bbb">PJM-Quality</span>
+          <span style="margin-left:auto;background:#eee;border-radius:8px;padding:0 5px;font-size:9px">20</span>
+        </div>
+        <div style="padding:4px 12px 4px 36px;display:flex;align-items:center;gap:4px;cursor:pointer;color:#777">
+          <span style="font-size:10px">技术状态域</span>
+          <span style="margin-left:auto;background:#eee;border-radius:8px;padding:0 5px;font-size:9px">24</span>
+        </div>
+        <div style="padding:4px 12px 4px 36px;display:flex;align-items:center;gap:4px;cursor:pointer;color:#777">
+          <span style="font-size:10px">综合</span>
+          <span style="margin-left:auto;background:#eee;border-radius:8px;padding:0 5px;font-size:9px">2</span>
+        </div>
+        <div style="margin:8px 12px;border-top:1px dashed #ddd"></div>
+        <!-- 类型分组 -->
+        <div style="padding:4px 12px;display:flex;align-items:center;gap:4px;cursor:pointer;color:#999;font-size:10px">
+          <span>📦</span><span>指标模板</span>
+          <span style="margin-left:auto;background:#eee;border-radius:8px;padding:0 5px;font-size:9px">4</span>
+        </div>
+      </div>
+      <!-- 底部类型筛选 -->
+      <div style="border-top:1px solid #e0e7ef;padding:8px 12px">
+        <div style="font-size:9px;color:#888;margin-bottom:4px">指标类型</div>
+        <div style="display:flex;flex-direction:column;gap:3px">
+          <label style="display:flex;align-items:center;gap:4px;font-size:10px;cursor:pointer"><input type="radio" name="itype" checked/> 全部 (40)</label>
+          <label style="display:flex;align-items:center;gap:4px;font-size:10px;cursor:pointer"><input type="radio" name="itype"/> 原始指标 (34)</label>
+          <label style="display:flex;align-items:center;gap:4px;font-size:10px;cursor:pointer"><input type="radio" name="itype"/> 二次指标 (6)</label>
+        </div>
+      </div>
+    </div>
+
+    <!-- 右侧内容区 -->
+    <div style="flex:1;display:flex;flex-direction:column;overflow:hidden">
+      <!-- 工具栏 -->
+      <div style="padding:8px 12px;border-bottom:1px solid #e0e7ef;display:flex;align-items:center;gap:8px">
+        <div style="font-weight:700;font-size:12px;color:#333">进度域</div>
+        <span style="font-size:10px;color:#999">PJM-Progress</span>
+        <div style="margin-left:auto;display:flex;gap:6px;align-items:center">
+          <input style="font-size:10px;border:1px solid #ccc;border-radius:4px;padding:3px 8px;width:160px" placeholder="搜索指标名称 / code…"/>
+          <select style="font-size:10px;border:1px solid #ccc;border-radius:4px;padding:3px">
+            <option>全部状态</option><option>已发布</option><option>草稿</option>
+          </select>
+          <select style="font-size:10px;border:1px solid #ccc;border-radius:4px;padding:3px">
+            <option>全部类别</option><option>完成率类</option><option>超期率类</option><option>里程碑</option><option>健康度</option>
+          </select>
+          <button style="font-size:10px;background:#f5f5f5;border:1px solid #d9d9d9;border-radius:4px;padding:3px 8px">导入模板</button>
+          <button style="font-size:10px;background:#1677ff;color:#fff;border:0;border-radius:4px;padding:3px 10px">+ 新建指标</button>
+        </div>
+      </div>
+
+      <!-- 摘要 bar -->
+      <div style="padding:6px 12px;background:#f0f6ff;border-bottom:1px solid #e0e7ef;display:flex;gap:16px;font-size:10px;color:#555">
+        <span>共 <b>40</b> 个指标</span>
+        <span style="color:#52c41a">● 已发布 28</span>
+        <span style="color:#faad14">● 草稿 10</span>
+        <span style="color:#ff4d4f">● 已归档 2</span>
+        <span style="margin-left:auto;color:#1677ff;cursor:pointer">域级治理指标 ↗</span>
+      </div>
+
+      <!-- 指标卡片网格 -->
+      <div style="flex:1;overflow-y:auto;padding:10px 12px">
+        <!-- 分组标题 -->
+        <div style="font-size:10px;color:#888;font-weight:600;margin-bottom:6px;display:flex;align-items:center;gap:6px">
+          <span>原始指标</span><span style="background:#eee;border-radius:8px;padding:0 6px">34</span>
+          <span style="margin-left:8px;color:#bbb">· 维度: 项目（含一般节点）</span>
+        </div>
+        <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:12px">
+          <!-- 指标卡片 -->
+          <div style="border:1px solid #d9e8ff;border-radius:6px;padding:8px;background:#fff;cursor:pointer;transition:box-shadow .2s" onmouseover="this.style.boxShadow='0 2px 8px #1677ff22'" onmouseout="this.style.boxShadow='none'">
+            <div style="display:flex;justify-content:space-between;align-items:start;margin-bottom:4px">
+              <div style="font-weight:600;font-size:10px;line-height:1.3">节点按时完成率</div>
+              <span style="background:#f6ffed;color:#52c41a;font-size:8px;padding:1px 4px;border-radius:3px;white-space:nowrap">已发布</span>
+            </div>
+            <div style="color:#aaa;font-size:9px;margin-bottom:6px">pjm_prog_on_time_rate</div>
+            <div style="display:flex;gap:3px;flex-wrap:wrap">
+              <span style="background:#fff7e6;color:#fa8c16;font-size:8px;padding:1px 5px;border-radius:3px">RATIO</span>
+              <span style="background:#f0f0f0;font-size:8px;padding:1px 5px;border-radius:3px">%</span>
+              <span style="background:#f9f0ff;color:#722ed1;font-size:8px;padding:1px 5px;border-radius:3px">↑ 越高越好</span>
+            </div>
+          </div>
+          <div style="border:1px solid #d9e8ff;border-radius:6px;padding:8px;background:#fff;cursor:pointer" onmouseover="this.style.boxShadow='0 2px 8px #1677ff22'" onmouseout="this.style.boxShadow='none'">
+            <div style="display:flex;justify-content:space-between;align-items:start;margin-bottom:4px">
+              <div style="font-weight:600;font-size:10px">项目本周期节点总数</div>
+              <span style="background:#f6ffed;color:#52c41a;font-size:8px;padding:1px 4px;border-radius:3px">已发布</span>
+            </div>
+            <div style="color:#aaa;font-size:9px;margin-bottom:6px">pjm_prog_total_nodes</div>
+            <div style="display:flex;gap:3px">
+              <span style="background:#e6f7ff;color:#1677ff;font-size:8px;padding:1px 5px;border-radius:3px">COUNT</span>
+              <span style="background:#f0f0f0;font-size:8px;padding:1px 5px;border-radius:3px">个</span>
+            </div>
+          </div>
+          <div style="border:1px solid #d9e8ff;border-radius:6px;padding:8px;background:#fff;cursor:pointer" onmouseover="this.style.boxShadow='0 2px 8px #1677ff22'" onmouseout="this.style.boxShadow='none'">
+            <div style="display:flex;justify-content:space-between;align-items:start;margin-bottom:4px">
+              <div style="font-weight:600;font-size:10px">节点超期率（未完成）</div>
+              <span style="background:#fff7e6;color:#fa8c16;font-size:8px;padding:1px 4px;border-radius:3px">草稿</span>
+            </div>
+            <div style="color:#aaa;font-size:9px;margin-bottom:6px">pjm_prog_overdue_rate</div>
+            <div style="display:flex;gap:3px">
+              <span style="background:#fff7e6;color:#fa8c16;font-size:8px;padding:1px 5px;border-radius:3px">RATIO</span>
+              <span style="background:#f0f0f0;font-size:8px;padding:1px 5px;border-radius:3px">%</span>
+              <span style="background:#fff1f0;color:#ff4d4f;font-size:8px;padding:1px 5px;border-radius:3px">↓ 越低越好</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- 二次指标分组 -->
+        <div style="font-size:10px;color:#888;font-weight:600;margin-bottom:6px;display:flex;align-items:center;gap:6px">
+          <span>二次指标</span><span style="background:#eee;border-radius:8px;padding:0 6px">6</span>
+          <span style="margin-left:8px;color:#bbb">· 依赖原始指标计算</span>
+        </div>
+        <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px">
+          <div style="border:1px solid #d9d0f5;border-radius:6px;padding:8px;background:#fdf9ff;cursor:pointer" onmouseover="this.style.boxShadow='0 2px 8px #722ed122'" onmouseout="this.style.boxShadow='none'">
+            <div style="display:flex;justify-content:space-between;align-items:start;margin-bottom:4px">
+              <div style="font-weight:600;font-size:10px">进度健康度评分</div>
+              <span style="background:#f9f0ff;color:#722ed1;font-size:8px;padding:1px 4px;border-radius:3px">二次</span>
+            </div>
+            <div style="color:#aaa;font-size:9px;margin-bottom:6px">pjm_prog_health_score</div>
+            <div style="display:flex;gap:3px">
+              <span style="background:#f9f0ff;color:#722ed1;font-size:8px;padding:1px 5px;border-radius:3px">SCORE</span>
+              <span style="background:#f0f0f0;font-size:8px;padding:1px 5px;border-radius:3px">分</span>
+              <span style="background:#f9f0ff;color:#722ed1;font-size:8px;padding:1px 5px;border-radius:3px">依赖 3 个指标</span>
+            </div>
+          </div>
+          <div style="border:1px solid #d9d0f5;border-radius:6px;padding:8px;background:#fdf9ff;opacity:.6">...</div>
+          <div style="border:1px solid #d9d0f5;border-radius:6px;padding:8px;background:#fdf9ff;opacity:.4">...</div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<div style="margin-top:16px">
+<h3>同步改动：主题域管理「域级治理指标」面板</h3>
+<p class="subtitle">主题域管理右侧面板当前全空，接入指标数后变成这样：</p>
+<div class="mockup">
+  <div class="mockup-header">主题域管理 · 进度域 PJM-Progress（右侧详情）</div>
+  <div class="mockup-body" style="font-size:11px;padding:12px">
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+      <div style="border:1px solid #e0e7ef;border-radius:6px;padding:10px">
+        <div style="font-weight:700;margin-bottom:8px">域级治理指标</div>
+        <div style="display:flex;justify-content:space-between;padding:3px 0;border-bottom:1px solid #f0f0f0"><span style="color:#555">指标总数</span><b>40</b></div>
+        <div style="display:flex;justify-content:space-between;padding:3px 0;border-bottom:1px solid #f0f0f0"><span style="color:#555">已发布</span><span style="color:#52c41a">28</span></div>
+        <div style="display:flex;justify-content:space-between;padding:3px 0;border-bottom:1px solid #f0f0f0"><span style="color:#555">草稿</span><span style="color:#faad14">10</span></div>
+        <div style="display:flex;justify-content:space-between;padding:3px 0"><span style="color:#555">健康度评分</span><span style="color:#1677ff;font-weight:700">--</span></div>
+        <div style="margin-top:8px">
+          <a style="font-size:10px;color:#1677ff;cursor:pointer">查看指标列表 →</a>
+        </div>
+      </div>
+      <div style="border:1px solid #e0e7ef;border-radius:6px;padding:10px">
+        <div style="font-weight:700;margin-bottom:8px">关联术语</div>
+        <div style="color:#aaa;font-size:10px">暂无挂载</div>
+        <div style="margin-top:8px;font-size:10px;color:#ccc;border:1px dashed #ddd;border-radius:4px;padding:4px 8px;cursor:pointer">+ 挂载术语</div>
+      </div>
+    </div>
+  </div>
+</div>
+</div>
+
+<p class="subtitle" style="margin-top:16px">这个整体结构是否符合预期？在终端告诉我需要调整的地方</p>

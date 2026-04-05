@@ -1,0 +1,169 @@
+<h2>指标列表展示方式</h2>
+<p class="subtitle">同样的指标数据，卡片 vs 表格 vs 混合模式</p>
+
+<div class="options">
+
+  <div class="option" data-choice="card" onclick="toggleSelect(this)">
+    <div class="letter">A</div>
+    <div class="content">
+      <h3>卡片模式（适合浏览发现）</h3>
+      <p style="margin-bottom:8px;color:#888;font-size:11px">视觉扫描快，适合业务用户浏览指标含义</p>
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;font-size:10px">
+        <div style="border:1px solid #d9e8ff;border-radius:6px;padding:8px;background:#f8fbff">
+          <div style="font-weight:700;margin-bottom:2px">节点按时完成率</div>
+          <div style="color:#aaa;font-size:9px;margin-bottom:6px">pjm_prog_on_time_rate</div>
+          <div style="font-size:9px;color:#555;margin-bottom:4px">节点按时完成数 / 已到时间节点总数</div>
+          <div style="display:flex;gap:3px;flex-wrap:wrap">
+            <span style="background:#fff7e6;color:#fa8c16;font-size:8px;padding:1px 4px;border-radius:3px">RATIO</span>
+            <span style="background:#f0f0f0;font-size:8px;padding:1px 4px;border-radius:3px">%</span>
+            <span style="background:#f6ffed;color:#52c41a;font-size:8px;padding:1px 4px;border-radius:3px">已发布</span>
+          </div>
+        </div>
+        <div style="border:1px solid #d9e8ff;border-radius:6px;padding:8px;background:#f8fbff">
+          <div style="font-weight:700;margin-bottom:2px">项目本周期节点总数</div>
+          <div style="color:#aaa;font-size:9px;margin-bottom:6px">pjm_prog_total_nodes</div>
+          <div style="font-size:9px;color:#555;margin-bottom:4px">plan_date 在统计区间内的节点总数</div>
+          <div style="display:flex;gap:3px">
+            <span style="background:#e6f7ff;color:#1677ff;font-size:8px;padding:1px 4px;border-radius:3px">COUNT</span>
+            <span style="background:#f0f0f0;font-size:8px;padding:1px 4px;border-radius:3px">个</span>
+            <span style="background:#f6ffed;color:#52c41a;font-size:8px;padding:1px 4px;border-radius:3px">已发布</span>
+          </div>
+        </div>
+        <div style="border:1px solid #d9d0f5;border-radius:6px;padding:8px;background:#fdf9ff">
+          <div style="font-weight:700;margin-bottom:2px">进度健康度评分</div>
+          <div style="color:#aaa;font-size:9px;margin-bottom:6px">pjm_prog_health_score</div>
+          <div style="font-size:9px;color:#555;margin-bottom:4px">按时完成率×0.4 + 里程碑×0.3 + …</div>
+          <div style="display:flex;gap:3px">
+            <span style="background:#f9f0ff;color:#722ed1;font-size:8px;padding:1px 4px;border-radius:3px">SCORE·二次</span>
+            <span style="background:#f0f0f0;font-size:8px;padding:1px 4px;border-radius:3px">分</span>
+          </div>
+        </div>
+      </div>
+      <div class="pros-cons" style="margin-top:8px">
+        <div class="pros"><h4>优点</h4><ul><li>一眼看到定义说明</li><li>原始/二次视觉差异明显</li><li>适合非技术用户</li></ul></div>
+        <div class="cons"><h4>缺点</h4><ul><li>100+ 指标时页面很长</li><li>不方便批量操作</li><li>排序/对比不直观</li></ul></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="option" data-choice="table" onclick="toggleSelect(this)">
+    <div class="letter">B</div>
+    <div class="content">
+      <h3>表格模式（适合管理操作）</h3>
+      <p style="margin-bottom:8px;color:#888;font-size:11px">列精确，支持排序/筛选/批量，适合数据治理管理员</p>
+      <table style="width:100%;border-collapse:collapse;font-size:9px">
+        <thead>
+          <tr style="background:#f5f5f5">
+            <th style="padding:4px 6px;text-align:left;border:1px solid #e0e0e0">指标名称</th>
+            <th style="padding:4px 6px;text-align:left;border:1px solid #e0e0e0">代码</th>
+            <th style="padding:4px 6px;text-align:center;border:1px solid #e0e0e0">类型</th>
+            <th style="padding:4px 6px;text-align:center;border:1px solid #e0e0e0">聚合</th>
+            <th style="padding:4px 6px;text-align:center;border:1px solid #e0e0e0">单位</th>
+            <th style="padding:4px 6px;text-align:center;border:1px solid #e0e0e0">状态</th>
+            <th style="padding:4px 6px;text-align:center;border:1px solid #e0e0e0">操作</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr style="background:#fff">
+            <td style="padding:4px 6px;border:1px solid #e8e8e8;font-weight:600">节点按时完成率</td>
+            <td style="padding:4px 6px;border:1px solid #e8e8e8;color:#aaa;font-family:monospace">pjm_prog_on_time_rate</td>
+            <td style="padding:4px 6px;border:1px solid #e8e8e8;text-align:center"><span style="background:#e6f0ff;color:#1677ff;padding:1px 4px;border-radius:3px">原始</span></td>
+            <td style="padding:4px 6px;border:1px solid #e8e8e8;text-align:center"><span style="background:#fff7e6;color:#fa8c16;padding:1px 4px;border-radius:3px">RATIO</span></td>
+            <td style="padding:4px 6px;border:1px solid #e8e8e8;text-align:center">%</td>
+            <td style="padding:4px 6px;border:1px solid #e8e8e8;text-align:center"><span style="color:#52c41a">●已发布</span></td>
+            <td style="padding:4px 6px;border:1px solid #e8e8e8;text-align:center"><span style="color:#1677ff;cursor:pointer">编辑</span></td>
+          </tr>
+          <tr style="background:#fafafa">
+            <td style="padding:4px 6px;border:1px solid #e8e8e8;font-weight:600">项目本周期节点总数</td>
+            <td style="padding:4px 6px;border:1px solid #e8e8e8;color:#aaa;font-family:monospace">pjm_prog_total_nodes</td>
+            <td style="padding:4px 6px;border:1px solid #e8e8e8;text-align:center"><span style="background:#e6f0ff;color:#1677ff;padding:1px 4px;border-radius:3px">原始</span></td>
+            <td style="padding:4px 6px;border:1px solid #e8e8e8;text-align:center"><span style="background:#e6f7ff;color:#1677ff;padding:1px 4px;border-radius:3px">COUNT</span></td>
+            <td style="padding:4px 6px;border:1px solid #e8e8e8;text-align:center">个</td>
+            <td style="padding:4px 6px;border:1px solid #e8e8e8;text-align:center"><span style="color:#52c41a">●已发布</span></td>
+            <td style="padding:4px 6px;border:1px solid #e8e8e8;text-align:center"><span style="color:#1677ff;cursor:pointer">编辑</span></td>
+          </tr>
+          <tr style="background:#fff">
+            <td style="padding:4px 6px;border:1px solid #e8e8e8;font-weight:600">进度健康度评分</td>
+            <td style="padding:4px 6px;border:1px solid #e8e8e8;color:#aaa;font-family:monospace">pjm_prog_health_score</td>
+            <td style="padding:4px 6px;border:1px solid #e8e8e8;text-align:center"><span style="background:#f9f0ff;color:#722ed1;padding:1px 4px;border-radius:3px">二次</span></td>
+            <td style="padding:4px 6px;border:1px solid #e8e8e8;text-align:center"><span style="background:#f9f0ff;color:#722ed1;padding:1px 4px;border-radius:3px">SCORE</span></td>
+            <td style="padding:4px 6px;border:1px solid #e8e8e8;text-align:center">分</td>
+            <td style="padding:4px 6px;border:1px solid #e8e8e8;text-align:center"><span style="color:#faad14">●草稿</span></td>
+            <td style="padding:4px 6px;border:1px solid #e8e8e8;text-align:center"><span style="color:#1677ff;cursor:pointer">编辑</span></td>
+          </tr>
+        </tbody>
+      </table>
+      <div class="pros-cons" style="margin-top:8px">
+        <div class="pros"><h4>优点</h4><ul><li>100+ 指标时密度高</li><li>排序/批量操作自然</li><li>管理员首选</li></ul></div>
+        <div class="cons"><h4>缺点</h4><ul><li>指标定义/说明看不到</li><li>业务用户理解门槛高</li></ul></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="option" data-choice="hybrid" onclick="toggleSelect(this)">
+    <div class="letter">C</div>
+    <div class="content">
+      <h3>混合模式（推荐）</h3>
+      <p style="margin-bottom:8px;color:#888;font-size:11px">右上角切换视图：默认表格，可切卡片。点击行展开详情抽屉</p>
+      <div style="font-size:10px">
+        <div style="display:flex;align-items:center;justify-content:flex-end;gap:6px;margin-bottom:6px">
+          <span style="background:#1677ff;color:#fff;padding:2px 8px;border-radius:3px;font-size:9px">☰ 表格</span>
+          <span style="background:#f0f0f0;padding:2px 8px;border-radius:3px;font-size:9px">⊞ 卡片</span>
+        </div>
+        <!-- 表格 + 展开抽屉示意 -->
+        <div style="display:flex;gap:8px">
+          <div style="flex:1">
+            <table style="width:100%;border-collapse:collapse;font-size:9px">
+              <thead><tr style="background:#f5f5f5">
+                <th style="padding:3px 6px;border:1px solid #e0e0e0;text-align:left">指标名称</th>
+                <th style="padding:3px 6px;border:1px solid #e0e0e0;text-align:center">类型</th>
+                <th style="padding:3px 6px;border:1px solid #e0e0e0;text-align:center">聚合</th>
+                <th style="padding:3px 6px;border:1px solid #e0e0e0;text-align:center">状态</th>
+              </tr></thead>
+              <tbody>
+                <tr style="background:#e6f0ff;cursor:pointer">
+                  <td style="padding:3px 6px;border:1px solid #cce0ff;font-weight:600">节点按时完成率 ▶</td>
+                  <td style="padding:3px 6px;border:1px solid #cce0ff;text-align:center"><span style="background:#e6f0ff;color:#1677ff;padding:0 3px;border-radius:2px;font-size:8px">原始</span></td>
+                  <td style="padding:3px 6px;border:1px solid #cce0ff;text-align:center;font-size:8px">RATIO</td>
+                  <td style="padding:3px 6px;border:1px solid #cce0ff;text-align:center;color:#52c41a;font-size:8px">●发布</td>
+                </tr>
+                <tr style="background:#fafafa">
+                  <td style="padding:3px 6px;border:1px solid #e8e8e8">项目本周期节点总数</td>
+                  <td style="padding:3px 6px;border:1px solid #e8e8e8;text-align:center"><span style="background:#e6f0ff;color:#1677ff;padding:0 3px;border-radius:2px;font-size:8px">原始</span></td>
+                  <td style="padding:3px 6px;border:1px solid #e8e8e8;text-align:center;font-size:8px">COUNT</td>
+                  <td style="padding:3px 6px;border:1px solid #e8e8e8;text-align:center;color:#52c41a;font-size:8px">●发布</td>
+                </tr>
+                <tr style="background:#fff">
+                  <td style="padding:3px 6px;border:1px solid #e8e8e8">进度健康度评分</td>
+                  <td style="padding:3px 6px;border:1px solid #e8e8e8;text-align:center"><span style="background:#f9f0ff;color:#722ed1;padding:0 3px;border-radius:2px;font-size:8px">二次</span></td>
+                  <td style="padding:3px 6px;border:1px solid #e8e8e8;text-align:center;font-size:8px">SCORE</td>
+                  <td style="padding:3px 6px;border:1px solid #e8e8e8;text-align:center;color:#faad14;font-size:8px">●草稿</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <!-- 抽屉展示 -->
+          <div style="width:180px;border:1px solid #1677ff;border-radius:6px;background:#fff;padding:8px;font-size:9px;flex-shrink:0">
+            <div style="font-weight:700;margin-bottom:4px;font-size:10px">节点按时完成率</div>
+            <div style="color:#aaa;margin-bottom:6px;font-family:monospace">pjm_prog_on_time_rate</div>
+            <div style="margin-bottom:3px"><b>定义：</b>节点按时完成数 / 已到时间节点总数</div>
+            <div style="margin-bottom:3px"><b>来源表：</b>ods_project_subject_domain</div>
+            <div style="margin-bottom:3px"><b>依赖字段：</b>plan_date, completion_status</div>
+            <div style="margin-bottom:3px"><b>阈值：</b>≥ 80% 正常</div>
+            <div style="margin-bottom:6px"><b>方向：</b>↑ 越高越好</div>
+            <div style="display:flex;gap:4px">
+              <span style="background:#1677ff;color:#fff;padding:1px 6px;border-radius:3px;cursor:pointer">编辑</span>
+              <span style="background:#52c41a;color:#fff;padding:1px 6px;border-radius:3px;cursor:pointer">发布</span>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="pros-cons" style="margin-top:8px">
+        <div class="pros"><h4>优点</h4><ul><li>管理员用表格高效操作</li><li>业务用户切卡片查含义</li><li>点击展开抽屉看详情，不跳页</li></ul></div>
+        <div class="cons"><h4>缺点</h4><ul><li>需要实现两套视图</li></ul></div>
+      </div>
+    </div>
+  </div>
+
+</div>
+<p class="subtitle" style="margin-top:12px">选择后在终端回复，或同时告诉我问题3（数据资产关联）的方向</p>
