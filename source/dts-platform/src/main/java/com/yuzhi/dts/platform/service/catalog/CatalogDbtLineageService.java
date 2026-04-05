@@ -1,7 +1,6 @@
 package com.yuzhi.dts.platform.service.catalog;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.yuzhi.dts.platform.domain.catalog.CatalogDataset;
 import com.yuzhi.dts.platform.domain.catalog.CatalogDatasetLineage;
 import com.yuzhi.dts.platform.repository.catalog.CatalogDatasetLineageRepository;
 import com.yuzhi.dts.platform.repository.catalog.CatalogDatasetRepository;
@@ -11,6 +10,7 @@ import org.springframework.web.multipart.MultipartFile;
 
 import java.io.IOException;
 import java.util.*;
+import java.util.stream.Collectors;
 
 @Service
 public class CatalogDbtLineageService {
@@ -36,15 +36,24 @@ public class CatalogDbtLineageService {
 		@SuppressWarnings("unchecked")
 		Map<String, Object> nodes = (Map<String, Object>) manifest.getOrDefault("nodes", Collections.emptyMap());
 
-		// Pre-load all datasets indexed by hiveTable (lowercase) for fast lookup
+		// Pre-load datasets indexed by hiveTable (lowercase) using projection query
 		Map<String, UUID> tableIndex = new HashMap<>();
-		for (CatalogDataset ds : datasetRepo.findAll()) {
-			if (ds.getHiveTable() != null) {
-				tableIndex.put(ds.getHiveTable().toLowerCase(), ds.getId());
+		for (Object[] row : datasetRepo.findHiveTableAndIdProjection()) {
+			String hiveTable = (String) row[0];
+			UUID id = (UUID) row[1];
+			if (hiveTable != null) {
+				tableIndex.put(hiveTable.toLowerCase(), id);
 			}
 		}
 
+		// Load existing lineage pairs into memory Set to avoid N+1 queries
+		Set<String> existingPairs = lineageRepo.findAll().stream()
+			.filter(l -> l.getUpstreamDatasetId() != null && l.getDownstreamDatasetId() != null)
+			.map(l -> l.getUpstreamDatasetId() + ":" + l.getDownstreamDatasetId())
+			.collect(Collectors.toSet());
+
 		int skipped = 0;
+		Set<String> toCreateKeys = new HashSet<>();
 		List<CatalogDatasetLineage> toCreate = new ArrayList<>();
 
 		for (Map.Entry<String, Object> entry : nodes.entrySet()) {
@@ -77,7 +86,8 @@ public class CatalogDbtLineageService {
 					continue;
 				}
 
-				if (!lineageRepo.existsByUpstreamDatasetIdAndDownstreamDatasetId(upstreamId, downstreamId)) {
+				String pairKey = upstreamId + ":" + downstreamId;
+				if (!existingPairs.contains(pairKey) && !toCreateKeys.contains(pairKey)) {
 					CatalogDatasetLineage lineage = new CatalogDatasetLineage();
 					lineage.setUpstreamDatasetId(upstreamId);
 					lineage.setDownstreamDatasetId(downstreamId);
@@ -85,6 +95,7 @@ public class CatalogDbtLineageService {
 					lineage.setDirection("DOWNSTREAM");
 					lineage.setNotes("Imported from dbt manifest");
 					toCreate.add(lineage);
+					toCreateKeys.add(pairKey);
 				}
 			}
 		}

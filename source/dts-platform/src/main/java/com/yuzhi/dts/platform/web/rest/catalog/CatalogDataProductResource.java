@@ -6,9 +6,11 @@ import com.yuzhi.dts.platform.service.audit.AuditService;
 import com.yuzhi.dts.platform.web.rest.ApiResponse;
 import com.yuzhi.dts.platform.web.rest.ApiResponses;
 import org.springframework.data.domain.*;
+import org.springframework.http.HttpStatus;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.server.ResponseStatusException;
 
 import java.util.*;
 
@@ -46,6 +48,7 @@ public class CatalogDataProductResource {
 	@Transactional
 	@PreAuthorize(CATALOG_MAINTAINER_EXPRESSION)
 	public ApiResponse<CatalogDataProduct> create(@RequestBody CatalogDataProduct body) {
+		body.setId(null);  // 防止客户端指定 id
 		CatalogDataProduct saved = repo.save(body);
 		audit.audit("CREATE", "catalog.data-product", saved.getId().toString());
 		return ApiResponses.ok(saved);
@@ -72,6 +75,7 @@ public class CatalogDataProductResource {
 	@Transactional
 	@PreAuthorize(CATALOG_MAINTAINER_EXPRESSION)
 	public ApiResponse<Boolean> delete(@PathVariable UUID id) {
+		repo.findById(id).orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "数据产品不存在"));
 		repo.deleteById(id);
 		audit.audit("DELETE", "catalog.data-product", id.toString());
 		return ApiResponses.ok(Boolean.TRUE);

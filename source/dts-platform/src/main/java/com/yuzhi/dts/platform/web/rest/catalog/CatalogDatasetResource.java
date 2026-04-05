@@ -699,6 +699,9 @@ public class CatalogDatasetResource {
     public ApiResponse<Map<String, Object>> importDbtManifest(
         @RequestParam("file") org.springframework.web.multipart.MultipartFile file
     ) throws java.io.IOException {
+        if (file.getSize() > 50 * 1024 * 1024L) {
+            throw new ResponseStatusException(HttpStatus.PAYLOAD_TOO_LARGE, "manifest.json 文件不能超过 50MB");
+        }
         Map<String, Object> result = dbtLineageService.importManifest(file);
         audit.audit("CREATE", "catalog.lineage.dbt-import", "file=" + file.getOriginalFilename());
         return ApiResponses.ok(result);

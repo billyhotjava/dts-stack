@@ -8,6 +8,7 @@ import java.util.Optional;
 import java.util.UUID;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
+import org.springframework.data.jpa.repository.Query;
 import org.springframework.stereotype.Repository;
 
 @Repository
@@ -60,4 +61,7 @@ public interface CatalogDatasetRepository extends JpaRepository<CatalogDataset, 
     long countByEnabledTrueAndSnapshotTimeIsNull();
 
     long countByOwnerDeptIsNull();
+
+    @Query("SELECT d.hiveTable, d.id FROM CatalogDataset d WHERE d.hiveTable IS NOT NULL")
+    List<Object[]> findHiveTableAndIdProjection();
 }
