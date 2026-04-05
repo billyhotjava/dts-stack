@@ -1,6 +1,7 @@
 package com.yuzhi.dts.platform.web.rest.catalog;
 
 import com.yuzhi.dts.platform.domain.catalog.CatalogDomain;
+import com.yuzhi.dts.platform.repository.catalog.CatalogDatasetRepository;
 import com.yuzhi.dts.platform.repository.catalog.CatalogDomainRepository;
 import com.yuzhi.dts.platform.service.audit.AuditService;
 import com.yuzhi.dts.platform.web.rest.ApiResponse;
@@ -22,10 +23,12 @@ import static com.yuzhi.dts.platform.web.rest.catalog.CatalogResourceHelper.CATA
 public class CatalogDomainResource {
 
     private final CatalogDomainRepository domainRepo;
+    private final CatalogDatasetRepository datasetRepo;
     private final AuditService audit;
 
-    public CatalogDomainResource(CatalogDomainRepository domainRepo, AuditService audit) {
+    public CatalogDomainResource(CatalogDomainRepository domainRepo, CatalogDatasetRepository datasetRepo, AuditService audit) {
         this.domainRepo = domainRepo;
+        this.datasetRepo = datasetRepo;
         this.audit = audit;
     }
 
@@ -123,6 +126,20 @@ public class CatalogDomainResource {
         }
         audit.audit("READ", "catalog.domain.tree", "tree");
         return ApiResponses.ok(roots);
+    }
+
+    @GetMapping("/domains/{id}/asset-stats")
+    @Transactional(readOnly = true)
+    public ApiResponse<Map<String, Object>> getDomainAssetStats(@PathVariable UUID id) {
+        CatalogDomain domain = domainRepo.findById(id).orElseThrow();
+        long datasetCount = datasetRepo.countByDomain(domain);
+        Map<String, Object> stats = Map.of(
+            "datasetCount", datasetCount,
+            "indicatorCount", -1L,
+            "qualityRuleCount", -1L
+        );
+        audit.audit("READ", "catalog.domain.asset-stats", id.toString());
+        return ApiResponses.ok(stats);
     }
 
     @PostMapping("/domains/{id}/move")

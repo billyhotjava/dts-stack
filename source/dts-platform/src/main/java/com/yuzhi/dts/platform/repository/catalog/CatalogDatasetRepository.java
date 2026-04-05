@@ -14,6 +14,8 @@ import org.springframework.stereotype.Repository;
 public interface CatalogDatasetRepository extends JpaRepository<CatalogDataset, UUID>, JpaSpecificationExecutor<CatalogDataset> {
     List<CatalogDataset> findByDomain(CatalogDomain domain);
 
+    long countByDomain(CatalogDomain domain);
+
     Optional<CatalogDataset> findFirstByHiveDatabaseIgnoreCaseAndHiveTableIgnoreCase(String hiveDatabase, String hiveTable);
 
     List<CatalogDataset> findByHiveDatabaseIgnoreCaseAndHiveTableIgnoreCase(String hiveDatabase, String hiveTable);
