@@ -886,3 +886,14 @@ export const updateDataProduct = (id: string, data: Partial<DataProduct>) =>
 
 export const deleteDataProduct = (id: string) =>
 	api.delete({ url: `/catalog/data-products/${id}` });
+
+// --- Sprint-8: 指标中心 ---
+
+export const getDomainIndicatorStats = (domainId: string) =>
+	api.get({ url: `/catalog/domains/${domainId}/indicator-stats` }).then((r: any) => r.data?.data);
+
+export const importIndicatorTemplates = (file: File) => {
+	const form = new FormData();
+	form.append("file", file);
+	return api.post({ url: "/governance/indicator-templates/import", data: form, headers: { "Content-Type": "multipart/form-data" } });
+};
