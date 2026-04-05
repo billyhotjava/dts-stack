@@ -2,8 +2,12 @@ package com.yuzhi.dts.ingestion.service.etl;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.yuzhi.dts.ingestion.domain.StagingTableMetadata;
+import com.yuzhi.dts.ingestion.repository.StagingTableMetadataRepository;
 import com.yuzhi.dts.ingestion.service.dto.CellError;
 import com.yuzhi.dts.ingestion.service.dto.ColumnInfo;
+import java.time.Instant;
+import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -34,10 +38,13 @@ public class StagingTableService {
 
     private final JdbcTemplate jdbcTemplate;
     private final ObjectMapper objectMapper;
+    private final StagingTableMetadataRepository metadataRepository;
 
-    public StagingTableService(JdbcTemplate jdbcTemplate, ObjectMapper objectMapper) {
+    public StagingTableService(JdbcTemplate jdbcTemplate, ObjectMapper objectMapper,
+            StagingTableMetadataRepository metadataRepository) {
         this.jdbcTemplate = jdbcTemplate;
         this.objectMapper = objectMapper;
+        this.metadataRepository = metadataRepository;
     }
 
     /**
@@ -70,6 +77,18 @@ public class StagingTableService {
 
         jdbcTemplate.execute(sql.toString());
         log.info("Created staging table: {}", tableName);
+
+        // Save metadata record for TTL tracking
+        StagingTableMetadata metadata = new StagingTableMetadata();
+        metadata.setId(UUID.randomUUID());
+        metadata.setTableName(tableName);
+        metadata.setTaskId(null); // taskId is not directly needed here, could be added if required
+        metadata.setCreatedAt(Instant.now());
+        metadata.setLastAccessedAt(Instant.now());
+        metadata.setTtlHours(24); // Default 24 hour TTL
+        metadata.setStatus("ACTIVE");
+        metadataRepository.save(metadata);
+
         return tableName;
     }
 
@@ -126,6 +145,12 @@ public class StagingTableService {
     public Page<Map<String, Object>> query(String tableName, boolean errorsOnly, Pageable pageable) {
         validateTableName(tableName);
 
+        // Update lastAccessedAt in metadata
+        metadataRepository.findByTableName(tableName).ifPresent(meta -> {
+            meta.setLastAccessedAt(Instant.now());
+            metadataRepository.save(meta);
+        });
+
         String whereClause = errorsOnly ? " WHERE _status = 'ERROR'" : "";
 
         String countSql = "SELECT COUNT(*) FROM " + tableName + whereClause;
@@ -149,6 +174,12 @@ public class StagingTableService {
     public void updateCell(String tableName, int rowNum, String column, String value) {
         validateTableName(tableName);
         String safeColumn = sanitizeColumnName(column);
+
+        // Update lastAccessedAt in metadata
+        metadataRepository.findByTableName(tableName).ifPresent(meta -> {
+            meta.setLastAccessedAt(Instant.now());
+            metadataRepository.save(meta);
+        });
 
         String sql = "UPDATE " + tableName + " SET \"" + safeColumn + "\" = ? WHERE _row_num = ?";
         jdbcTemplate.update(sql, value, rowNum);
@@ -201,23 +232,38 @@ public class StagingTableService {
 
         jdbcTemplate.execute("DROP TABLE IF EXISTS " + tableName);
         log.info("Dropped staging table: {}", tableName);
+
+        // Update metadata status to DROPPED
+        metadataRepository.findByTableName(tableName).ifPresent(meta -> {
+            meta.setStatus("DROPPED");
+            metadataRepository.save(meta);
+        });
     }
 
     /**
-     * Scheduled cleanup: every hour, find tmp_ingestion_% tables.
-     * TODO: Implement TTL tracking via a metadata table to auto-drop expired staging tables.
+     * Scheduled cleanup: every hour, check for expired staging tables via metadata table.
+     * Drops ACTIVE tables where lastAccessedAt + ttlHours < now.
      */
     @Scheduled(fixedRate = 3600000)
     public void cleanupExpired() {
-        List<String> tables = jdbcTemplate.queryForList(
-            "SELECT tablename FROM pg_tables WHERE tablename LIKE ?",
-            String.class,
-            TABLE_PREFIX + "%");
+        Instant cutoff = Instant.now().minus(24, ChronoUnit.HOURS);
+        List<StagingTableMetadata> expired = metadataRepository
+            .findByStatusAndLastAccessedAtBefore("ACTIVE", cutoff);
 
-        if (!tables.isEmpty()) {
-            log.info("Found {} staging tables pending TTL check: {}", tables.size(), tables);
-            // TODO: Add metadata table (staging_table_meta) with created_at column
-            // to track table age and auto-drop tables older than configured TTL.
+        if (expired.isEmpty()) {
+            log.debug("No expired staging tables to clean up");
+            return;
+        }
+
+        log.info("Found {} expired staging tables to clean up", expired.size());
+
+        for (StagingTableMetadata meta : expired) {
+            try {
+                drop(meta.getTableName());
+                log.info("Cleaned up expired staging table: {}", meta.getTableName());
+            } catch (Exception e) {
+                log.warn("Failed to clean up staging table: {}", meta.getTableName(), e);
+            }
         }
     }
 
