@@ -19,7 +19,7 @@ import type { DataNode } from "antd/es/tree";
 import { useSearchParams } from "react-router";
 import { EmptyState } from "@/components/empty-state";
 import { useGovernanceManageAccess } from "@/hooks/useModuleManageAccess";
-import { createDomain, deleteDomain, getDomainTree, updateDomain } from "@/api/platformApi";
+import { createDomain, deleteDomain, getDomainAssetStats, getDomainTree, updateDomain } from "@/api/platformApi";
 import { normalizeText } from "@/utils/textUtils";
 
 const { Sider, Content } = Layout;
@@ -121,6 +121,12 @@ export default function SubjectAreasPage() {
 	const [editing, setEditing] = useState<DomainNode | null>(null);
 	const [form] = Form.useForm();
 	const canManage = useGovernanceManageAccess();
+	const [assetStats, setAssetStats] = useState<{
+		datasetCount: number;
+		indicatorCount: number | null;
+		qualityRuleCount: number | null;
+	} | null>(null);
+	const [statsLoading, setStatsLoading] = useState(false);
 
 	const syncQuery = (patch?: { keyword?: string; active?: string }) => {
 		const params = new URLSearchParams(searchParams);
@@ -159,9 +165,31 @@ export default function SubjectAreasPage() {
 		}
 	}, [selectedKey]);
 
+	const loadAssetStats = useCallback(async (domainId: string) => {
+		setStatsLoading(true);
+		try {
+			const stats = await getDomainAssetStats(domainId);
+			setAssetStats(stats);
+		} catch {
+			setAssetStats(null);
+		} finally {
+			setStatsLoading(false);
+		}
+	}, []);
+
+	const activeDomain = selectedKey !== ROOT_KEY ? domainIndex.get(selectedKey) || null : null;
+
 	useEffect(() => {
 		void loadDomainTree();
 	}, [loadDomainTree]);
+
+	useEffect(() => {
+		if (activeDomain?.id) {
+			void loadAssetStats(activeDomain.id);
+		} else {
+			setAssetStats(null);
+		}
+	}, [activeDomain?.id, loadAssetStats]);
 
 	useEffect(() => {
 		syncQuery();
@@ -178,8 +206,6 @@ export default function SubjectAreasPage() {
 			},
 		];
 	}, [filteredTree]);
-
-	const activeDomain = selectedKey !== ROOT_KEY ? domainIndex.get(selectedKey) || null : null;
 	const activeChildren = activeDomain?.children || [];
 	const openModal = (domain?: DomainNode | null, parentId?: string | null) => {
 		setEditing(domain || null);
@@ -343,7 +369,7 @@ export default function SubjectAreasPage() {
 										{activeDomain.code ? <Tag color="blue">{activeDomain.code}</Tag> : null}
 									</Space>
 									<div className="mt-2 text-sm text-slate-500">
-										负责人：{activeDomain.owner || "未指定"} ｜ 子域数：{activeChildren.length} ｜ 资产数：-
+										负责人：{activeDomain.owner || "未指定"} ｜ 子域数：{activeChildren.length} ｜ 资产数：{statsLoading ? "..." : (assetStats?.datasetCount ?? "-")}
 									</div>
 									{activeDomain.description ? (
 										<Text type="secondary" className="block mt-2">
@@ -376,16 +402,16 @@ export default function SubjectAreasPage() {
 								<div className="rounded-[22px] border border-slate-200 bg-slate-50 px-4 py-4">
 									<div className="mb-3 text-sm font-semibold text-slate-900">域级治理指标</div>
 									<div className="flex items-center justify-between py-1">
-										<Text>落标率</Text>
-										<Text strong>-</Text>
+										<Text>数据集数</Text>
+										<Text strong>{statsLoading ? "..." : (assetStats?.datasetCount ?? "-")}</Text>
 									</div>
 									<div className="flex items-center justify-between py-1">
-										<Text>质量分</Text>
-										<Text strong>-</Text>
+										<Text>指标数</Text>
+										<Text strong>{assetStats?.indicatorCount != null ? assetStats.indicatorCount : "-"}</Text>
 									</div>
 									<div className="flex items-center justify-between py-1">
-										<Text>合规覆盖</Text>
-										<Text strong>-</Text>
+										<Text>质量规则数</Text>
+										<Text strong>{assetStats?.qualityRuleCount != null ? assetStats.qualityRuleCount : "-"}</Text>
 									</div>
 								</div>
 							</div>

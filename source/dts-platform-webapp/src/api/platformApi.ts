@@ -200,6 +200,12 @@ export const deleteDatasetGrant = (datasetId: string, grantId: string) =>
 export const getDomainTree = () => api.get({ url: "/catalog/domains/tree" });
 export const moveDomain = (id: string, data: { newParentId?: string | null }) =>
 	api.post({ url: `/catalog/domains/${id}/move`, data });
+export const getDomainAssetStats = (domainId: string): Promise<{
+	datasetCount: number;
+	indicatorCount: number | null;
+	qualityRuleCount: number | null;
+}> =>
+	api.get({ url: `/catalog/domains/${domainId}/asset-stats` }).then((r: any) => r.data?.data);
 
 // Asset extras (tasks)
 export const syncDatasetSchema = (datasetId: string, data?: any) =>
