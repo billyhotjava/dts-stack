@@ -417,9 +417,16 @@ export default function PortalMenusView() {
 	return (
 		<div className="space-y-6">
 			<div className="flex flex-wrap items-center justify-between gap-3">
-				<Text variant="body1" className="text-lg font-semibold">
-					菜单管理
-				</Text>
+				<div className="flex items-center gap-3">
+					<Text variant="body1" className="text-lg font-semibold">
+						菜单管理
+					</Text>
+					<div className="flex items-center gap-1.5">
+						<Tag>共 {menuStats.total} 项</Tag>
+						<Tag color="success">启用 {menuStats.active}</Tag>
+						{menuStats.disabled > 0 && <Tag color="error">禁用 {menuStats.disabled}</Tag>}
+					</div>
+				</div>
 				<div className="flex items-center gap-2">
 					<Button type="default" onClick={handleOpenQuickAdd}>
 						添加菜单
@@ -428,33 +435,6 @@ export default function PortalMenusView() {
 						{resetting ? "恢复中.." : "恢复默认菜单"}
 					</Button>
 				</div>
-			</div>
-
-			<div className="grid gap-3 sm:grid-cols-3">
-				<Card>
-					<CardContent className="flex flex-col gap-1 px-4 py-3">
-						<Text variant="body3" className="text-muted-foreground">
-							菜单总数
-						</Text>
-						<span className="text-2xl font-semibold">{menuStats.total}</span>
-					</CardContent>
-				</Card>
-				<Card>
-					<CardContent className="flex flex-col gap-1 px-4 py-3">
-						<Text variant="body3" className="text-muted-foreground">
-							已启用
-						</Text>
-						<span className="text-2xl font-semibold text-emerald-600">{menuStats.active}</span>
-					</CardContent>
-				</Card>
-				<Card>
-					<CardContent className="flex flex-col gap-1 px-4 py-3">
-						<Text variant="body3" className="text-muted-foreground">
-							已禁用
-						</Text>
-						<span className="text-2xl font-semibold text-red-500">{menuStats.disabled}</span>
-					</CardContent>
-				</Card>
 			</div>
 
 			<Card>
