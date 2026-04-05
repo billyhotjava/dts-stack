@@ -222,13 +222,13 @@ export default function LineagePage() {
 		if (!impact?.nodes) return [];
 		const layerX: Record<string, number> = { ODS: 0, DWD: 250, DWS: 500, ADS: 750, DIM: 1000 };
 		const layerCount: Record<string, number> = {};
-		return impact.nodes.map((n) => {
+		return impact.nodes.map((n, idx) => {
 			const layer = n.layer?.toUpperCase() ?? "UNKNOWN";
 			const x = layerX[layer] ?? 1100;
 			layerCount[layer] = (layerCount[layer] ?? 0) + 1;
 			const y = (layerCount[layer] - 1) * 80;
 			return {
-				id: n.id ?? Math.random().toString(36),
+				id: n.id ?? (n.db && n.table ? `${n.db}.${n.table}` : `node-${idx}`),
 				position: { x, y },
 				data: { label: n.name ?? n.table ?? "未知" },
 				style: {
@@ -243,13 +243,15 @@ export default function LineagePage() {
 	}, [impact?.nodes]);
 
 	const rfEdges: Edge[] = useMemo(() =>
-		(impact?.edges ?? []).map((e, i) => ({
-			id: e.id ?? `e-${i}`,
-			source: e.upstreamDatasetId ?? "",
-			target: e.downstreamDatasetId ?? "",
-			animated: false,
-			style: { stroke: "#bfbfbf" },
-		})),
+		(impact?.edges ?? [])
+			.filter((e) => e.upstreamDatasetId && e.downstreamDatasetId)
+			.map((e, i) => ({
+				id: e.id ?? `e-${i}`,
+				source: e.upstreamDatasetId!,
+				target: e.downstreamDatasetId!,
+				animated: false,
+				style: { stroke: "#bfbfbf" },
+			})),
 		[impact?.edges],
 	);
 
