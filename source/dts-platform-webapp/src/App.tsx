@@ -8,6 +8,8 @@ import { GLOBAL_CONFIG } from "./global-config";
 import { AntdAdapter } from "./theme/adapter/antd.adapter";
 import { ThemeProvider } from "./theme/theme-provider";
 import SessionManager from "@/components/auth/session-manager";
+import { LogPreviewProvider } from "@/components/log-preview/LogPreviewContext";
+import LogPreviewDrawer from "@/components/log-preview/LogPreviewDrawer";
 
 if (import.meta.env.DEV) {
 	import("react-scan").then(({ scan }) => {
@@ -22,20 +24,23 @@ if (import.meta.env.DEV) {
 
 function App({ children }: { children: React.ReactNode }) {
 	return (
-		<HelmetProvider>
-			<QueryClientProvider client={new QueryClient()}>
-				<ThemeProvider adapters={[AntdAdapter]}>
-					<Helmet>
-						<title>{GLOBAL_CONFIG.appName}</title>
-						<link rel="icon" href={Logo} />
-					</Helmet>
-					<Toast />
-					<RouteLoadingProgress />
-					<SessionManager />
-					<MotionLazy>{children}</MotionLazy>
-				</ThemeProvider>
-			</QueryClientProvider>
-		</HelmetProvider>
+		<LogPreviewProvider>
+			<HelmetProvider>
+				<QueryClientProvider client={new QueryClient()}>
+					<ThemeProvider adapters={[AntdAdapter]}>
+						<Helmet>
+							<title>{GLOBAL_CONFIG.appName}</title>
+							<link rel="icon" href={Logo} />
+						</Helmet>
+						<Toast />
+						<RouteLoadingProgress />
+						<SessionManager />
+						<MotionLazy>{children}</MotionLazy>
+					</ThemeProvider>
+				</QueryClientProvider>
+			</HelmetProvider>
+			<LogPreviewDrawer />
+		</LogPreviewProvider>
 	);
 }
 
