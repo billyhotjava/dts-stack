@@ -80,6 +80,24 @@ export function DatasetPicker({ value, onChange, onFieldsLoaded, placeholder, st
 		void loadDatasets(keyword, selectedDomainId);
 	}, [keyword, selectedDomainId, loadDatasets]);
 
+	// Fix 1: trigger onFieldsLoaded when controlled value is injected externally (e.g. form.setFieldsValue)
+	useEffect(() => {
+		if (value && onFieldsLoaded) {
+			void getDatasetFields(value)
+				.then((fields) => onFieldsLoaded(fields))
+				.catch(() => onFieldsLoaded([]));
+		}
+	}, [value]); // eslint-disable-line react-hooks/exhaustive-deps
+
+	// Fix 2: cleanup debounce timer on unmount
+	useEffect(() => {
+		return () => {
+			if (searchTimerRef.current) {
+				clearTimeout(searchTimerRef.current);
+			}
+		};
+	}, []);
+
 	const handleChange = async (datasetId: string | undefined) => {
 		onChange?.(datasetId);
 		if (datasetId && onFieldsLoaded) {
