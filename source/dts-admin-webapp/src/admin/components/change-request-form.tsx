@@ -5,7 +5,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/ui/tabs";
 import { Input } from "@/ui/input";
 import { Textarea } from "@/ui/textarea";
 import { Label } from "@/ui/label";
-import { Button } from "@/ui/button";
+import { Button } from "antd";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/ui/select";
 import { adminApi } from "@/admin/api/adminApi";
 import type { ChangeRequest } from "@/admin/types";
@@ -264,7 +264,7 @@ export function ChangeRequestForm({ onCreated, initialTab = "user" }: Props) {
 					</div>
 				)}
 
-				<Button type="submit" className="w-full md:w-auto">
+				<Button htmlType="submit" type="primary" className="w-full md:w-auto">
 					提交审批
 				</Button>
 			</form>

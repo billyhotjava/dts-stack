@@ -2,6 +2,7 @@ import React, { useState, useRef, useCallback, useMemo } from 'react';
 import * as XLSX from 'xlsx';
 import Papa from 'papaparse';
 import { analyticsApi } from '../api/analyticsApi';
+import { checkFileUploadClassification } from '@/utils/classification';
 
 /* ------------------------------------------------------------------ */
 /*  Types                                                              */
@@ -152,6 +153,11 @@ export default function UploadedDataEditor({ databaseId, onComplete }: UploadedD
 
 	const handleFile = useCallback((f: File) => {
 		setError(null);
+		const classificationError = checkFileUploadClassification(f.name, false);
+		if (classificationError) {
+			setError(classificationError);
+			return;
+		}
 		if (f.size > MAX_FILE_SIZE) {
 			setError(`文件大小 ${formatFileSize(f.size)} 超过 50MB 限制`);
 			return;

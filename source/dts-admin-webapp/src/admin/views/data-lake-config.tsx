@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react";
 import { useNavigate } from "react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Alert, Button as AntButton, Select, Space, Table, Tag } from "antd";
+import { Alert, Button, Select, Space, Table, Tag } from "antd";
 import type { ColumnsType } from "antd/es/table";
 import { adminApi } from "@/admin/api/adminApi";
 import type { ConnectionTestLog, HiveConnectionTestResult, InfraDataSource } from "@/types/infra";
@@ -123,7 +123,7 @@ export default function DataLakeConfigView() {
 				width: 300,
 				render: (_, record) => (
 					<Space size={8}>
-						<AntButton
+						<Button
 							size="small"
 							onClick={async () => {
 								if (!record.id) return;
@@ -137,11 +137,11 @@ export default function DataLakeConfigView() {
 							}}
 						>
 							设为默认
-						</AntButton>
-						<AntButton size="small" loading={lakeTestingId === record.id} onClick={() => handleTestLake(record)}>
+						</Button>
+						<Button size="small" loading={lakeTestingId === record.id} onClick={() => handleTestLake(record)}>
 							测试
-						</AntButton>
-						<AntButton
+						</Button>
+						<Button
 							size="small"
 							onClick={() => {
 								if (!record.id) return;
@@ -149,8 +149,8 @@ export default function DataLakeConfigView() {
 							}}
 						>
 							详情
-						</AntButton>
-						<AntButton
+						</Button>
+						<Button
 							size="small"
 							onClick={() => {
 								if (!record.id) return;
@@ -158,9 +158,9 @@ export default function DataLakeConfigView() {
 							}}
 						>
 							编辑
-						</AntButton>
+						</Button>
 						{record.defaulted ? null : (
-							<AntButton
+							<Button
 								size="small"
 								danger
 								onClick={async () => {
@@ -175,7 +175,7 @@ export default function DataLakeConfigView() {
 								}}
 							>
 								删除
-							</AntButton>
+							</Button>
 						)}
 					</Space>
 				),
@@ -290,7 +290,7 @@ export default function DataLakeConfigView() {
 						<Text variant="body3" className="text-muted-foreground">
 							统一维护数据湖配置与目标端参数。
 						</Text>
-						<AntButton type="primary" onClick={() => navigate("/admin/data-lake/new")}>新增数据湖</AntButton>
+						<Button type="primary" onClick={() => navigate("/admin/data-lake/new")}>新增数据湖</Button>
 					</div>
 					<Table
 						rowKey={(row) => row.id || `${row.name}-${row.jdbcUrl}`}

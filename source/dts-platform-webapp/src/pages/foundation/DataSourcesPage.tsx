@@ -16,10 +16,10 @@ import {
 	Table,
 	Tag,
 	Typography,
-	Upload,
 	message,
 } from "antd";
 import { PlusOutlined, ReloadOutlined, EditOutlined, DeleteOutlined, ExperimentOutlined, CheckCircleOutlined, CloseCircleOutlined } from "@ant-design/icons";
+import { Upload } from "@/components/upload";
 import RollbackImpactModal, { type RollbackRequest } from "@/components/rollback/RollbackImpactModal";
 import dataSourcesService, {
 	type ConnectionTestResult,
@@ -699,7 +699,7 @@ export default function DataSourcesPage() {
 			>
 				<Space direction="vertical" style={{ width: "100%" }}>
 					<Alert type="warning" showIcon message="非密模块禁止上传涉密数据" />
-					<Upload.Dragger
+					<Upload
 						name="file"
 						multiple={false}
 						maxCount={1}
@@ -713,7 +713,7 @@ export default function DataSourcesPage() {
 						</p>
 						<p className="ant-upload-text">点击或拖拽上传 Excel/CSV 文件（≤200MB）</p>
 						<p className="ant-upload-hint">{excelPrepared?.fileName || "支持 .xlsx / .csv"}</p>
-					</Upload.Dragger>
+					</Upload>
 
 					{excelPrepared?.sheets?.length ? (
 						<Form layout="vertical">

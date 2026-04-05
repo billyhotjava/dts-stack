@@ -88,38 +88,36 @@
 **统计**: READY=0, IN_PROGRESS=0, DONE=14, BLOCKED=0
 
 ## Sprint-7: 数据目录与元数据体系完善 (202604)
-**状态**: READY（下一个开始）
+**状态**: DONE
 **类型**: Implementation（实施型）
-**优先级**: 解除 Sprint-8 阻塞
+**完成日期**: 2026-04-05
 
 | Feature | Task 数 | 状态 |
 |---------|---------|------|
-| F1-主题域与数据集双向绑定 | 5 | READY |
-| F2-指标创建接入数据目录 | 2 | READY |
-| F3-dbt血缘导入 | 3 | READY |
-| F4-指标↔数据集血缘 | 2 | READY |
-| F5-Data Product | 3 | READY |
-| F6-资产地图入口重构 | 4 | READY |
-| F7-资产列表页重构 | 4 | READY |
-| F8-资产详情页重构 | 5 | READY |
-| F9-数据搜索页重构 | 3 | READY |
-| F10-血缘图UX优化 | 4 | READY |
+| F1-主题域与数据集双向绑定 | 5 | DONE |
+| F2-指标创建接入数据目录 | 2 | DONE |
+| F3-dbt血缘导入 | 3 | DONE |
+| F4-指标↔数据集血缘 | 2 | DONE |
+| F5-Data Product | 3 | DONE |
+| F6-资产地图入口重构 | 4 | DONE |
+| F7-资产列表页重构 | 4 | DONE |
+| F8-资产详情页重构 | 5 | DONE |
+| F9-数据搜索页重构 | 3 | DONE |
+| F10-血缘图UX优化 | 4 | DONE |
 
-**统计**: READY=35, IN_PROGRESS=0, DONE=0, BLOCKED=0
+**统计**: READY=0, IN_PROGRESS=0, DONE=35, BLOCKED=0
 **设计文档**: `worklog/v2.2.3/sprint-7-202604/README.md`
 
 ## Sprint-8: 指标中心重构 (202604)
-**状态**: BLOCKED
+**状态**: READY（下一个开始）
 **类型**: Implementation（实施型）
-**阻塞原因**: 依赖 Sprint-7 数据目录/元数据体系完成后，指标与数据资产绑定才能实现
-
 | Feature | Task 数 | 状态 |
 |---------|---------|------|
-| F1-后端API改造 | 3 | BLOCKED |
-| F2-指标中心页面重构 | 4 | BLOCKED |
-| F3-主题域管理增强 | 2 | BLOCKED |
-| F4-指标模板导入导出 | 2 | BLOCKED |
-| F5-数据资产关联 | 3 | BLOCKED |
+| F1-后端API改造 | 3 | READY |
+| F2-指标中心页面重构 | 4 | READY |
+| F3-主题域管理增强 | 2 | READY |
+| F4-指标模板导入导出 | 2 | READY |
+| F5-数据资产关联 | 3 | READY |
 
-**统计**: READY=0, IN_PROGRESS=0, DONE=0, BLOCKED=14
+**统计**: READY=14, IN_PROGRESS=0, DONE=0, BLOCKED=0
 **设计文档**: `worklog/v2.2.3/sprint-8-202604/README.md`

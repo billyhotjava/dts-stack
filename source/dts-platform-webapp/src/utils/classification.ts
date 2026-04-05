@@ -134,7 +134,7 @@ export function checkFileUploadClassification(
 	if (!detected) return null;
 	const detectedRank = CLASSIFICATION_RANK[detected];
 	if (!isSecretModule && detectedRank >= CLASSIFICATION_RANK.SECRET) {
-		return `非密模块禁止上传含"${CLASSIFICATION_LABELS_ZH[detected]}"字样的附件`;
+		return `非密模块禁止上传涉密数据`;
 	}
 	if (isSecretModule && userClassificationRank != null && detectedRank > userClassificationRank) {
 		return `您的密级不足，无法上传"${CLASSIFICATION_LABELS_ZH[detected]}"级别的附件`;

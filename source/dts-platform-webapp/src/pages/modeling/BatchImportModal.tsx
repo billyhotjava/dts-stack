@@ -12,9 +12,9 @@ import {
 	Table,
 	Tabs,
 	Tag,
-	Upload,
 } from "antd";
 import { InboxOutlined, UploadOutlined, DownloadOutlined } from "@ant-design/icons";
+import { Upload } from "@/components/upload";
 import type { UploadFile } from "antd/es/upload/interface";
 import type { ColumnsType } from "antd/es/table";
 import JSZip from "jszip";
@@ -399,7 +399,7 @@ const BatchImportModal = ({
 						children: (
 							<>
 								{renderFormFields(zipForm)}
-								<Upload.Dragger
+								<Upload
 									accept=".zip"
 									beforeUpload={() => false}
 									maxCount={1}
@@ -413,7 +413,7 @@ const BatchImportModal = ({
 									<p className="ant-upload-hint">
 										ZIP 包含 models.tsv 和对应 SQL 文件
 									</p>
-								</Upload.Dragger>
+								</Upload>
 								<Space style={{ marginTop: 16 }}>
 									<Button
 										icon={<DownloadOutlined />}
@@ -439,6 +439,7 @@ const BatchImportModal = ({
 							<>
 								{renderFormFields(fileForm)}
 								<Upload
+									dragger={false}
 									accept=".sql"
 									multiple
 									beforeUpload={(file, fileList) => {

@@ -3,7 +3,7 @@ import bgImg from "@/assets/images/background/banner-1.png";
 import DataPlatform from "@/assets/images/illustrations/data-platform.svg";
 import { Icon } from "@/components/icon";
 import { GLOBAL_CONFIG } from "@/global-config";
-import { Button } from "@/ui/button";
+import { Button } from "antd";
 import { Text, Title } from "@/ui/typography";
 
 export default function BannerCard() {
@@ -35,8 +35,8 @@ export default function BannerCard() {
 							</Text>
 
 							<Button
-								variant="outline"
-								className="w-fit bg-white text-black"
+								type="default"
+								className="w-fit bg-white"
 								onClick={() => window.open("https://github.com/topics/data-governance")}
 							>
 								<Icon icon="solar:database-linear" size={22} />

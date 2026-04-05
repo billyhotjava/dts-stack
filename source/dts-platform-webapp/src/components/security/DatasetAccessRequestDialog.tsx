@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
-import { Button } from "@/ui/button";
+import { Button } from "antd";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/ui/dialog";
 import { Label } from "@/ui/label";
 import { Input } from "@/ui/input";
@@ -284,7 +284,7 @@ export function DatasetAccessRequestDialog({ open, onOpenChange, dataset, defaul
 							<Popover open={userPickerOpen} onOpenChange={setUserPickerOpen}>
 								<PopoverTrigger asChild>
 									<Button
-										variant="outline"
+										type="default"
 										role="combobox"
 										aria-expanded={userPickerOpen}
 										className={cn("justify-between", targetUser?.username ? "" : "text-muted-foreground")}
@@ -388,10 +388,10 @@ export function DatasetAccessRequestDialog({ open, onOpenChange, dataset, defaul
 					</div>
 				</div>
 				<DialogFooter>
-					<Button variant="ghost" onClick={() => onOpenChange(false)} disabled={submitting}>
+					<Button type="text" onClick={() => onOpenChange(false)} disabled={submitting}>
 						取消
 					</Button>
-					<Button onClick={handleSubmit} disabled={submitting || !canProxyApply || !targetUser?.username}>
+					<Button type="primary" onClick={handleSubmit} disabled={submitting || !canProxyApply || !targetUser?.username}>
 						{submitting ? "提交中..." : "提交申请"}
 					</Button>
 				</DialogFooter>

@@ -1,4 +1,5 @@
-import { Alert, Button, Form, Input, Modal, Select, Space, Switch, Upload } from "antd";
+import { Alert, Button, Form, Input, Modal, Select, Space, Switch } from "antd";
+import { Upload } from "@/components/upload";
 import type { UploadFile } from "antd/es/upload/interface";
 import type { ProjectSpace } from "../sqlModeling.types";
 import type { InfraDataSource } from "@/api/services/dataSourcesService";
@@ -128,6 +129,7 @@ export default function ImportModelModal({
 				</div>
 				<Form.Item label="SQL 文件" required>
 					<Upload
+						dragger={false}
 						accept=".sql"
 						beforeUpload={() => false}
 						maxCount={1}
@@ -139,6 +141,7 @@ export default function ImportModelModal({
 				</Form.Item>
 				<Form.Item label="CSV 文件 (可选)">
 					<Upload
+						dragger={false}
 						accept=".csv"
 						beforeUpload={() => false}
 						maxCount={1}

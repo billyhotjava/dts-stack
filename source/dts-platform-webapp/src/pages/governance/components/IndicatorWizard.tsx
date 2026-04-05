@@ -21,9 +21,9 @@ import {
 	listIndicatorTemplates,
 	getIndicatorTemplate,
 	applyIndicatorTemplate,
-	listOdsTables,
-	listOdsColumns,
 } from "@/api/platformApi";
+import type { DatasetField } from "@/api/platformApi";
+import { DatasetPicker } from "@/components/catalog/DatasetPicker";
 
 type Props = {
 	open: boolean;
@@ -52,9 +52,9 @@ export default function IndicatorWizard({ open, template, onClose, onSuccess }: 
 	const [requiredFields, setRequiredFields] = useState<string[]>([]);
 
 	// Step 2: source table & field mapping
-	const [tables, setTables] = useState<{ tableName: string; comment?: string }[]>([]);
 	const [selectedTable, setSelectedTable] = useState<string>("");
-	const [columns, setColumns] = useState<{ columnName: string; dataType?: string; comment?: string }[]>([]);
+	const [selectedDatasetId, setSelectedDatasetId] = useState<string | undefined>();
+	const [pickerFields, setPickerFields] = useState<DatasetField[]>([]);
 	const [fieldMapping, setFieldMapping] = useState<Record<string, string>>({});
 
 	// Step 3: parameters

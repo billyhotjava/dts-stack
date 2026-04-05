@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
-import { Alert, Button, Card, Form, Input, Modal, Space, Table, Tag, Typography, Upload, message } from "antd";
+import { Alert, Button, Card, Form, Input, Modal, Space, Table, Tag, Typography, message } from "antd";
 import { PlusOutlined, ReloadOutlined, EditOutlined, DeleteOutlined, InboxOutlined } from "@ant-design/icons";
+import { Upload } from "@/components/upload";
 type UploadRequestOption = Parameters<NonNullable<import("antd").UploadProps["customRequest"]>>[0];
 import jdbcDriversService, { type InfraJdbcDriver, type JdbcDriverUpdatePayload } from "@/api/services/jdbcDriversService";
 import { formatTime } from "@/utils/textUtils";
@@ -196,7 +197,7 @@ export default function JdbcDriversPage() {
 						showIcon
 						message="非密模块禁止上传涉密数据"
 					/>
-					<Upload.Dragger
+					<Upload
 						name="file"
 						multiple={false}
 						maxCount={1}
@@ -210,7 +211,7 @@ export default function JdbcDriversPage() {
 						</p>
 						<p className="ant-upload-text">点击或拖拽上传 JDBC 驱动 JAR</p>
 						<p className="ant-upload-hint">仅支持 .jar 文件</p>
-					</Upload.Dragger>
+					</Upload>
 				</Space>
 			</Modal>
 

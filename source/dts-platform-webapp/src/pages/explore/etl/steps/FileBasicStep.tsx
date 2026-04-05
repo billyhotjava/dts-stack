@@ -1,6 +1,5 @@
 import { useEffect, useState } from "react";
 import {
-	Alert,
 	Button,
 	Card,
 	Collapse,
@@ -15,9 +14,9 @@ import {
 	Table,
 	Tag,
 	Typography,
-	Upload,
 } from "antd";
 import { InboxOutlined, PlusOutlined, DeleteOutlined } from "@ant-design/icons";
+import { Upload } from "@/components/upload";
 import { toast } from "sonner";
 import type { FormInstance } from "antd/es/form";
 import type { FileUploadResult } from "@/api/ingestion";
@@ -254,9 +253,9 @@ export default function FileBasicStep({
 					<Radio.Button value="file">文件上传</Radio.Button>
 				</Radio.Group>
 			</Form.Item>
-			<Alert type="warning" showIcon message="非密模块禁止上传涉密数据" style={{ marginBottom: 8 }} />
 			<Form.Item label="上传文件" required>
-				<Upload.Dragger
+				<Upload
+					secretModule
 					accept=".xlsx,.csv"
 					maxCount={1}
 					showUploadList={false}
@@ -272,7 +271,7 @@ export default function FileBasicStep({
 						{uploadingFile ? "上传中..." : "点击或拖拽上传 Excel / CSV 文件"}
 					</p>
 					<p className="ant-upload-hint">支持 .xlsx, .csv 格式</p>
-				</Upload.Dragger>
+				</Upload>
 			</Form.Item>
 			{fileUploadResult && (
 				<Card type="inner" title={`已解析文件: ${fileUploadResult.originalName}`} className="mb-4">

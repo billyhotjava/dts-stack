@@ -23,6 +23,14 @@
 
 ---
 
+## 实施进度（2026-04-05 代码审查后更新）
+
+> T1~T4、T6~T8、T10~T13 已在代码中实现，checkbox 未逐一勾选（实现先于本计划落地）。
+> 剩余未完成：**T5**（IndicatorWizard DatasetPicker）、**T9**（DatasetDetailPage 关联指标）。
+> 计划外新增缺口见文末 **Remaining Work** 章节（T14~T18）。
+
+---
+
 ## P0 阶段：解除 Sprint-8 阻塞
 
 ### Task 1: 后端 — 域资产统计端点
@@ -1473,18 +1481,440 @@
 
 ---
 
+---
+
+## Remaining Work（代码审查后补充）
+
+### Task 14: 前端 — IndicatorWizard 接入 DatasetPicker（P0）
+
+**Files:**
+- Modify: `source/dts-platform-webapp/src/pages/governance/components/IndicatorWizard.tsx`
+
+**背景：** IndicatorWizard Step 1「绑定源表」仍调用 `listOdsTables()` + 普通 Select（line 321-333）。DatasetPicker 已存在于 `src/components/catalog/DatasetPicker.tsx`，通过 `onFieldsLoaded` 回调返回 `DatasetField[]`。
+
+- [ ] **Step 1: 读取 IndicatorWizard.tsx 中的 renderStep1 + state 区域（lines 50-175）**
+
+- [ ] **Step 2: 替换 listOdsTables 为 DatasetPicker**
+
+  删除：
+  - `import { listOdsTables, listOdsColumns, ... }` 中的 `listOdsTables, listOdsColumns`
+  - `const [tables, setTables] = useState<any[]>([]);` 状态
+  - `const [columns, setColumns] = useState<any[]>([]);` 状态
+  - `fetchTables()` 函数
+  - `fetchColumns(tableName)` 函数
+  - `useEffect(() => { void fetchTables(); }, [])` 调用
+
+  添加：
+  ```typescript
+  import { DatasetPicker } from "@/components/catalog/DatasetPicker";
+  import type { DatasetField } from "@/api/platformApi";
+
+  // state 区域
+  const [pickerFields, setPickerFields] = useState<DatasetField[]>([]);
+  const [selectedDatasetId, setSelectedDatasetId] = useState<string | undefined>();
+  ```
+
+- [ ] **Step 3: 修改 handleTableChange 为 handleDatasetChange**
+
+  ```typescript
+  const handleDatasetChange = (datasetId: string | undefined, fields: DatasetField[]) => {
+    setSelectedDatasetId(datasetId);
+    setFieldMapping({});
+    setPickerFields(fields);
+    // 取第一个字段的 tableName 作为 sourceTable，格式 "db.tableName"
+    const tableName = fields[0]?.tableName ?? "";
+    setSelectedTable(tableName);
+  };
+  ```
+
+- [ ] **Step 4: 在 renderStep1 中替换 Select 为 DatasetPicker**
+
+  ```tsx
+  const renderStep1 = () => (
+    <div>
+      <Typography.Text strong style={{ display: "block", marginBottom: 12 }}>
+        绑定数据集
+      </Typography.Text>
+      <DatasetPicker
+        value={selectedDatasetId}
+        onChange={(id) => {/* handled by onFieldsLoaded */}}
+        onFieldsLoaded={(fields) => handleDatasetChange(selectedDatasetId, fields)}
+        placeholder="选择数据集（支持域筛选和关键字搜索）"
+        style={{ width: "100%", marginBottom: 16 }}
+      />
+  ```
+
+  注意：`DatasetPicker` 的 `onChange` 先触发，`onFieldsLoaded` 异步后触发。需要同步两个回调：
+
+  ```tsx
+  <DatasetPicker
+    value={selectedDatasetId}
+    onChange={(id) => {
+      setSelectedDatasetId(id);
+      if (!id) {
+        setSelectedTable("");
+        setPickerFields([]);
+        setFieldMapping({});
+      }
+    }}
+    onFieldsLoaded={(fields) => {
+      setPickerFields(fields);
+      setFieldMapping({});
+      const tableName = fields[0]?.tableName ?? "";
+      setSelectedTable(tableName);
+    }}
+    placeholder="选择数据集（支持域筛选和关键字搜索）"
+    style={{ width: "100%", marginBottom: 16 }}
+  />
+  ```
+
+- [ ] **Step 5: 将 columns 来源改为 pickerFields**
+
+  字段映射表中将 `columns` 替换为 `pickerFields`。找到 `mappingColumns` 和 `mappingData` 的计算，将原来依赖 `columns` 的地方改为 `pickerFields.map(f => f.name)`：
+
+  ```typescript
+  const mappingData = requiredFields.map((rf) => ({
+    field: rf,
+    columnOptions: pickerFields.map((f) => ({ label: f.name, value: f.name })),
+  }));
+  ```
+
+- [ ] **Step 6: 确认 canNext 逻辑仍有效**
+
+  Step 1 的 canNext 条件是 `!!selectedTable`。`selectedTable` 在 `onFieldsLoaded` 回调中被赋值（从 `fields[0]?.tableName`）。如果数据集没有字段记录则 `selectedTable` 为空字符串，需要改为：
+
+  ```typescript
+  if (step === 1) return !!selectedDatasetId;
+  ```
+
+- [ ] **Step 7: Commit**
+
+  ```bash
+  git add source/dts-platform-webapp/src/pages/governance/components/IndicatorWizard.tsx
+  git commit -m "feat(catalog/F2): replace listOdsTables with DatasetPicker in IndicatorWizard"
+  ```
+
+---
+
+### Task 15: 前端 — DatasetDetailPage 治理 Tab 添加关联指标（P1）
+
+**Files:**
+- Modify: `source/dts-platform-webapp/src/pages/catalog/DatasetDetailPage.tsx`
+
+**背景：** `DatasetGovernanceTab` 只显示健康分和 quality 统计，没有关联指标列表。`getDatasetIndicatorDeps(datasetId)` 已在 `platformApi.ts` 第 22 行。
+
+- [ ] **Step 1: 读取 DatasetGovernanceTab 函数（lines 146-179）**
+
+- [ ] **Step 2: 扩展 DatasetGovernanceTab 加载关联指标**
+
+  ```typescript
+  function DatasetGovernanceTab({ datasetId }: { datasetId: string }) {
+    const [health, setHealth] = useState<Record<string, any> | null>(null);
+    const [loading, setLoading] = useState(true);
+    const [indicators, setIndicators] = useState<any[]>([]);
+
+    useEffect(() => {
+      void Promise.all([
+        getDatasetGovernanceHealth(datasetId)
+          .then((h: any) => setHealth(h ?? null))
+          .catch(() => setHealth(null)),
+        getDatasetIndicatorDeps(datasetId)
+          .then((r: any) => {
+            const list = Array.isArray(r?.data?.data) ? r.data.data
+              : Array.isArray(r?.data) ? r.data
+              : [];
+            setIndicators(list);
+          })
+          .catch(() => setIndicators([])),
+      ]).finally(() => setLoading(false));
+    }, [datasetId]);
+
+    if (loading) return <div className="py-4"><Spin /></div>;
+
+    // ... existing health score JSX ...
+
+    return (
+      <div className="space-y-4 py-2 text-sm">
+        {/* 现有健康分区块保持不变 */}
+        {score != null && ( ... )}
+        {health?.quality?.totalRuns != null && ( ... )}
+
+        {/* 新增关联指标区块 */}
+        {indicators.length > 0 && (
+          <div>
+            <div className="mb-2 font-medium text-slate-700">关联指标（{indicators.length}）</div>
+            <Table
+              size="small"
+              rowKey={(_, i) => String(i)}
+              dataSource={indicators}
+              pagination={false}
+              columns={[
+                { title: "指标名称", dataIndex: "name", render: (v) => v ?? "-" },
+                { title: "类型", dataIndex: "type", width: 100, render: (v) => v ? <Tag>{v}</Tag> : "-" },
+                { title: "状态", dataIndex: "status", width: 90, render: (v) => v ? <Tag color={v === "PUBLISHED" ? "green" : "default"}>{v}</Tag> : "-" },
+              ]}
+            />
+          </div>
+        )}
+      </div>
+    );
+  }
+  ```
+
+  并在文件顶部 import 补上 `getDatasetIndicatorDeps` 和 `Table`（antd）。
+
+- [ ] **Step 3: Commit**
+
+  ```bash
+  git add source/dts-platform-webapp/src/pages/catalog/DatasetDetailPage.tsx
+  git commit -m "feat(catalog/F4): add indicator-deps section to DatasetDetailPage governance tab"
+  ```
+
+---
+
+### Task 16: 前端 — DatasetDetailPage 血缘 Tab 内嵌迷你图（P_UX）
+
+**Files:**
+- Modify: `source/dts-platform-webapp/src/pages/catalog/DatasetDetailPage.tsx`
+
+**背景：** 血缘 Tab 目前只有一行跳转链接。LineagePage 已用 `@xyflow/react` 渲染图，可复用相同的 `rfNodes`/`rfEdges` 计算逻辑。高度固定 300px，深度限制为 2。
+
+- [ ] **Step 1: 在 DatasetDetailPage 顶部补充导入**
+
+  ```typescript
+  import { ReactFlow, Background, Controls, type Node, type Edge } from "@xyflow/react";
+  import "@xyflow/react/dist/style.css";
+  import { getCatalogLineageImpact } from "@/api/platformApi";
+  ```
+
+- [ ] **Step 2: 新建 DatasetLineageMiniTab 子组件**
+
+  在文件末尾（DatasetGovernanceTab 之后）添加：
+
+  ```typescript
+  const LAYER_BG: Record<string, string> = {
+    ODS: "#f5f5f5", DWD: "#e6f4ff", DWS: "#e6fffb", ADS: "#f6ffed", DIM: "#f9f0ff",
+  };
+
+  function DatasetLineageMiniTab({ datasetId }: { datasetId: string }) {
+    const [rfNodes, setRfNodes] = useState<Node[]>([]);
+    const [rfEdges, setRfEdges] = useState<Edge[]>([]);
+    const [loading, setLoading] = useState(true);
+
+    useEffect(() => {
+      void getCatalogLineageImpact(datasetId, { direction: "BOTH", depth: 2 })
+        .then((resp: any) => {
+          const nodes: any[] = Array.isArray(resp?.nodes) ? resp.nodes : [];
+          const edges: any[] = Array.isArray(resp?.edges) ? resp.edges : [];
+          const layerX: Record<string, number> = { ODS: 0, DWD: 250, DWS: 500, ADS: 750, DIM: 1000 };
+          const layerCount: Record<string, number> = {};
+          setRfNodes(nodes.map((n, idx) => {
+            const layer = n.layer?.toUpperCase() ?? "UNKNOWN";
+            const x = layerX[layer] ?? 1100;
+            layerCount[layer] = (layerCount[layer] ?? 0) + 1;
+            return {
+              id: n.id ?? `node-${idx}`,
+              position: { x, y: (layerCount[layer] - 1) * 80 },
+              data: { label: n.name ?? n.table ?? "未知" },
+              style: { background: LAYER_BG[layer] ?? "#fff", border: "1px solid #d9d9d9", borderRadius: 6, fontSize: 11, padding: "4px 8px" },
+            };
+          }));
+          setRfEdges(edges
+            .filter((e) => e.upstreamDatasetId && e.downstreamDatasetId)
+            .map((e, i) => ({
+              id: e.id ?? `e-${i}`,
+              source: e.upstreamDatasetId,
+              target: e.downstreamDatasetId,
+              style: { stroke: "#bfbfbf" },
+            }))
+          );
+        })
+        .catch(() => {})
+        .finally(() => setLoading(false));
+    }, [datasetId]);
+
+    if (loading) return <div className="py-4"><Spin /></div>;
+    if (!rfNodes.length) return <div className="py-4 text-sm text-slate-500">暂无血缘数据。</div>;
+
+    return (
+      <div className="space-y-2 py-2">
+        <div style={{ height: 300, border: "1px solid #e8e8e8", borderRadius: 8, overflow: "hidden" }}>
+          <ReactFlow nodes={rfNodes} edges={rfEdges} fitView>
+            <Background />
+            <Controls />
+          </ReactFlow>
+        </div>
+        <a href={`/catalog/lineage?selectedId=${datasetId}`} className="text-xs text-blue-600 underline">
+          查看完整血缘 →
+        </a>
+      </div>
+    );
+  }
+  ```
+
+- [ ] **Step 3: 替换血缘 Tab 内容**
+
+  找到 DatasetDetailPage 中：
+  ```tsx
+  {
+    key: "lineage",
+    label: "血缘图",
+    children: (
+      <div className="py-4 text-sm text-slate-500">
+        <a href={`/catalog/lineage?selectedId=${id}`} className="text-blue-600 underline">
+          查看完整血缘 →
+        </a>
+      </div>
+    ),
+  },
+  ```
+
+  替换为：
+  ```tsx
+  {
+    key: "lineage",
+    label: "血缘图",
+    children: <DatasetLineageMiniTab datasetId={id!} />,
+  },
+  ```
+
+- [ ] **Step 4: Commit**
+
+  ```bash
+  git add source/dts-platform-webapp/src/pages/catalog/DatasetDetailPage.tsx
+  git commit -m "feat(catalog/F8): embed mini ReactFlow lineage graph in DatasetDetailPage lineage tab"
+  ```
+
+---
+
+### Task 17: 前端 — RuleCreateWizard datasetIds 改为 DatasetPicker（P0）
+
+**Files:**
+- Modify: `source/dts-platform-webapp/src/pages/governance/components/RuleCreateWizard.tsx`
+
+**背景：** Step 2「绑定数据集」字段 `datasetIds` 使用普通 `<Select mode="multiple">`（line 413-429）。改为 `DatasetPicker` 单选，submit 时封装为数组。
+
+- [ ] **Step 1: 读取 RuleCreateWizard renderStep2 函数（lines 408-429）及 submit 逻辑**
+
+- [ ] **Step 2: 替换 Select 为 DatasetPicker**
+
+  ```tsx
+  import { DatasetPicker } from "@/components/catalog/DatasetPicker";
+
+  // renderStep2 中：
+  <Form.Item
+    label="绑定数据集"
+    name="datasetId"
+    extra="选择此规则绑定的数据集"
+  >
+    <DatasetPicker placeholder="选择数据集" />
+  </Form.Item>
+  ```
+
+  注意：字段名从 `datasetIds`（数组）改为 `datasetId`（字符串）。
+
+- [ ] **Step 3: 更新 submit 逻辑**
+
+  找到 `datasetIds: values.datasetIds || []`，改为：
+  ```typescript
+  datasetIds: values.datasetId ? [values.datasetId] : [],
+  datasetId: values.datasetId || undefined,
+  ```
+
+- [ ] **Step 4: 移除 listDatasets 的 datasetOptions 加载逻辑**
+
+  删除相关 state：`const [datasetOptions, setDatasetOptions] = useState`，以及对应的 `useEffect` 和 `listDatasets` 调用（DatasetPicker 内部自己加载）。
+
+- [ ] **Step 5: Commit**
+
+  ```bash
+  git add source/dts-platform-webapp/src/pages/governance/components/RuleCreateWizard.tsx
+  git commit -m "feat(catalog/F2): replace datasetIds Select with DatasetPicker in RuleCreateWizard"
+  ```
+
+---
+
+### Task 18: 后端 — 保留字段 Liquibase 迁移（Reserved Fields）
+
+**Files:**
+- Create: `source/dts-platform/src/main/resources/config/liquibase/changelog/20260405_11_catalog_reserved_fields.xml`
+- Modify: `source/dts-platform/src/main/resources/config/liquibase/master.xml`
+
+**背景：** Sprint-7 README 要求预留 4 个字段（仅建列，不实现功能）。当前最新 changelog 为 `20260405_10_catalog_data_product.xml`。
+
+- [ ] **Step 1: 创建 changelog 文件**
+
+  ```xml
+  <?xml version="1.0" encoding="UTF-8"?>
+  <databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+      http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.9.xsd">
+
+    <changeSet id="20260405_11_1" author="system">
+      <addColumn tableName="catalog_dataset">
+        <column name="row_security_policy" type="varchar(500)">
+          <constraints nullable="true"/>
+        </column>
+        <column name="sla_refresh_cron" type="varchar(100)">
+          <constraints nullable="true"/>
+        </column>
+      </addColumn>
+    </changeSet>
+
+    <changeSet id="20260405_11_2" author="system">
+      <addColumn tableName="catalog_dataset_lineage">
+        <column name="source_column" type="varchar(255)">
+          <constraints nullable="true"/>
+        </column>
+        <column name="target_column" type="varchar(255)">
+          <constraints nullable="true"/>
+        </column>
+      </addColumn>
+    </changeSet>
+
+  </databaseChangeLog>
+  ```
+
+- [ ] **Step 2: 在 master.xml 末尾添加引用**
+
+  在最后一个 `<include>` 之后添加：
+  ```xml
+  <include file="config/liquibase/changelog/20260405_11_catalog_reserved_fields.xml" relativeToChangelogFile="false"/>
+  ```
+
+- [ ] **Step 3: 编译验证**
+
+  ```bash
+  cd source/dts-platform && mvn compile -q 2>&1 | tail -5
+  ```
+
+- [ ] **Step 4: Commit**
+
+  ```bash
+  git add source/dts-platform/src/main/resources/config/liquibase/changelog/20260405_11_catalog_reserved_fields.xml \
+          source/dts-platform/src/main/resources/config/liquibase/master.xml
+  git commit -m "feat(catalog): add reserved fields migration for catalog_dataset and catalog_dataset_lineage"
+  ```
+
+---
+
 ## 验收检查清单
 
-- [ ] `GET /api/catalog/domains/{id}/asset-stats` 返回真实 datasetCount
-- [ ] SubjectAreasPage 选中域后显示真实资产数
-- [ ] `GET /api/catalog/datasets/{id}/fields` 返回 CatalogColumnSchema 中的字段列表
-- [ ] DatasetPicker 组件可正常使用（域筛选 + 数据集搜索 + 字段回调）
-- [ ] IndicatorsPage 中 sourceTable 改为 DatasetPicker
-- [ ] `POST /api/catalog/lineage/import-dbt-manifest` 接受 manifest.json 文件，返回 created/skipped 统计
-- [ ] LineagePage 新增「血缘图」Tab，使用 @xyflow/react 渲染节点
-- [ ] `GET /api/catalog/datasets/{id}/indicator-deps` 返回依赖指标列表
-- [ ] AssetDetailPage 抽屉显示「关联指标」区块
-- [ ] `catalog_data_product` 表已创建，CRUD API 可用
-- [ ] DatasetsPage 改为左树+卡片网格布局
-- [ ] `/catalog/datasets/:id` 路由可访问，Tab 详情页展示概览/字段/血缘/治理健康/权限
-- [ ] DataSearchPage 搜索结果按类型分 Tab，点击数据集跳转 Tab 详情页
+- [x] `GET /api/catalog/domains/{id}/asset-stats` 返回真实 datasetCount
+- [x] SubjectAreasPage 选中域后显示真实资产数
+- [x] `GET /api/catalog/datasets/{id}/fields` 返回 CatalogColumnSchema 中的字段列表
+- [x] DatasetPicker 组件可正常使用（域筛选 + 数据集搜索 + 字段回调）
+- [ ] IndicatorWizard 中 sourceTable 改为 DatasetPicker（Task 14）
+- [ ] RuleCreateWizard datasetIds 改为 DatasetPicker（Task 17）
+- [x] `POST /api/catalog/lineage/import-dbt-manifest` 接受 manifest.json 文件，返回 created/skipped 统计
+- [x] LineagePage 新增「血缘图」Tab，使用 @xyflow/react 渲染节点
+- [x] `GET /api/catalog/datasets/{id}/indicator-deps` 返回依赖指标列表
+- [ ] DatasetDetailPage 治理 Tab 显示「关联指标」区块（Task 15）
+- [x] `catalog_data_product` 表已创建，CRUD API 可用
+- [x] DatasetsPage 改为左树+卡片网格布局
+- [x] `/catalog/datasets/:id` 路由可访问，Tab 详情页展示概览/字段/血缘/治理健康/权限
+- [ ] DatasetDetailPage 血缘 Tab 内嵌迷你 ReactFlow 图（Task 16）
+- [x] DataSearchPage 搜索结果按类型分 Tab，点击数据集跳转 Tab 详情页
+- [ ] 保留字段 Liquibase 迁移（Task 18）
