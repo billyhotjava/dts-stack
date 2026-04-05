@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import {
 	Alert,
@@ -366,12 +366,23 @@ export default function Page() {
 		}
 	};
 
+	const currentDomain = searchParams.get("domain") || "";
+
 	useEffect(() => {
 		void loadIndicators(1, indicatorPage.size, indicatorFilters);
 		void loadDimensions(1, dimensionPage.size, dimensionFilters);
 		void loadDatasets();
 		void loadIndicatorOverview();
 	}, []);
+
+	// Re-fetch indicators when domain changes via URL (e.g. from IndicatorCenterPage tree)
+	const domainRef = useRef(currentDomain);
+	useEffect(() => {
+		if (domainRef.current !== currentDomain) {
+			domainRef.current = currentDomain;
+			void loadIndicators(1, indicatorPage.size, indicatorFilters);
+		}
+	}, [currentDomain]);
 
 	const openIndicatorModal = (row?: Indicator) => {
 		setEditingIndicator(row || null);
