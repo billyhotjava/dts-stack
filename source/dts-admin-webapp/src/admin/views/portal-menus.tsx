@@ -1239,10 +1239,9 @@ function filterMenusByKeyword(items: PortalMenuItem[], keyword: string): PortalM
 		nodes.forEach((node) => {
 			if (!node) return;
 			const label = (node.displayName || node.name || "").toString();
-			const idName = `id${node.id ?? ""}-${label}`;
 			const children = Array.isArray(node.children) ? node.children : [];
 			const filteredChildren = walk(children, [...trail, label]);
-			const match = label.toLowerCase().includes(lower) || idName.toLowerCase().includes(lower);
+			const match = label.toLowerCase().includes(lower);
 			if (match || filteredChildren.length > 0) {
 				result.push({ ...node, children: filteredChildren });
 			}
