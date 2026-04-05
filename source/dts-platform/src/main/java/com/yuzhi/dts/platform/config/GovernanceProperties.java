@@ -37,6 +37,7 @@ public class GovernanceProperties {
         private int retryCount = 1;
         private Duration timeout = Duration.ofMinutes(10);
         private boolean autoGenerateTicket = true;
+        private boolean autoCleanseEnabled = true;
         private long taskSchedulerDelayMs = 60000L;
 
         public boolean isEnabled() {
@@ -85,6 +86,14 @@ public class GovernanceProperties {
 
         public void setAutoGenerateTicket(boolean autoGenerateTicket) {
             this.autoGenerateTicket = autoGenerateTicket;
+        }
+
+        public boolean isAutoCleanseEnabled() {
+            return autoCleanseEnabled;
+        }
+
+        public void setAutoCleanseEnabled(boolean autoCleanseEnabled) {
+            this.autoCleanseEnabled = autoCleanseEnabled;
         }
 
         public long getTaskSchedulerDelayMs() {

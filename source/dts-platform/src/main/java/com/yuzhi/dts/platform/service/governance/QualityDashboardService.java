@@ -51,15 +51,10 @@ public class QualityDashboardService {
         // 1. ruleCount: enabled rules
         int ruleCount = ruleRepository.countByEnabledTrue();
 
-        // 2. coveredDatasets: distinct dataset IDs from all bindings
-        List<GovRuleBinding> allBindings = bindingRepository.findAll();
-        long coveredDatasets = allBindings.stream()
-            .map(GovRuleBinding::getDatasetId)
-            .distinct()
-            .count();
+        // 2. coveredDatasets: distinct dataset IDs from bindings (use count query, not findAll)
+        long coveredDatasets = bindingRepository.countDistinctDatasetIds();
 
-        // 3. totalDatasets: distinct datasets that have any quality run + covered via bindings
-        //    Use coveredDatasets as total since there is no standalone dataset table
+        // 3. totalDatasets: use coveredDatasets since there is no standalone dataset table
         int totalDatasets = (int) coveredDatasets;
 
         // 4 & 5. todayPassed / todayFailed
@@ -77,12 +72,9 @@ public class QualityDashboardService {
             }
         }
 
-        // 5. pendingFixRows: sum failingRowCount from all FAILED runs (not yet cleansed)
+        // 5. pendingFixRows: count FAILED runs as a proxy (no per-row count available)
         List<GovQualityRun> failedRuns = runRepository.findTop100ByStatusOrderByCreatedDateDesc("FAILED");
-        long pendingFixRows = failedRuns.stream()
-            .filter(r -> r.getFailingRowCount() != null && !Boolean.TRUE.equals(r.getCleansingApplied()))
-            .mapToLong(GovQualityRun::getFailingRowCount)
-            .sum();
+        long pendingFixRows = failedRuns.size();
 
         // 6. trend7d: pass rate per day for the last 7 days
         Instant sevenDaysAgo = Instant.now().minus(7, ChronoUnit.DAYS);
@@ -148,8 +140,8 @@ public class QualityDashboardService {
             if (run.getDatasetId() == null) {
                 continue;
             }
-            int rows = run.getFailingRowCount() != null ? run.getFailingRowCount() : 0;
-            byDataset.merge(run.getDatasetId(), (long) rows, Long::sum);
+            // Count each FAILED run as 1 (no per-row count available on entity)
+            byDataset.merge(run.getDatasetId(), 1L, Long::sum);
             // Use rule name as a proxy for dataset name if binding alias isn't available
             if (!datasetNames.containsKey(run.getDatasetId()) && run.getBinding() != null) {
                 String alias = run.getBinding().getDatasetAlias();

@@ -127,8 +127,7 @@ public class QualityReportExportService {
                     row.createCell(5).setCellValue(0);
                 } else {
                     row.createCell(4).setCellValue("-");
-                    Integer failingRows = latestRun.getFailingRowCount();
-                    row.createCell(5).setCellValue(failingRows != null ? failingRows : 0);
+                    row.createCell(5).setCellValue(0);
                 }
             } else {
                 row.createCell(3).setCellValue("-");

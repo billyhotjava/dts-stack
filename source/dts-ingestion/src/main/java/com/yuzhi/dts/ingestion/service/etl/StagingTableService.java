@@ -25,6 +25,7 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 @Service
 public class StagingTableService {
@@ -249,9 +250,17 @@ public class StagingTableService {
      */
     @Scheduled(fixedRate = 3600000)
     public void cleanupExpired() {
-        Instant cutoff = Instant.now().minus(24, ChronoUnit.HOURS);
-        List<StagingTableMetadata> expired = metadataRepository
-            .findByStatusAndLastAccessedAtBefore("ACTIVE", cutoff);
+        // Query all ACTIVE staging tables, then check per-table TTL
+        List<StagingTableMetadata> activeTables = metadataRepository
+            .findByStatusAndLastAccessedAtBefore("ACTIVE", Instant.now());
+
+        List<StagingTableMetadata> expired = activeTables.stream()
+            .filter(meta -> {
+                int ttl = meta.getTtlHours() > 0 ? meta.getTtlHours() : 24;
+                Instant expiry = meta.getLastAccessedAt().plus(ttl, ChronoUnit.HOURS);
+                return Instant.now().isAfter(expiry);
+            })
+            .toList();
 
         if (expired.isEmpty()) {
             log.debug("No expired staging tables to clean up");
@@ -263,7 +272,7 @@ public class StagingTableService {
         for (StagingTableMetadata meta : expired) {
             try {
                 drop(meta.getTableName());
-                log.info("Cleaned up expired staging table: {}", meta.getTableName());
+                log.info("Cleaned up expired staging table: {} (TTL={}h)", meta.getTableName(), meta.getTtlHours());
             } catch (Exception e) {
                 log.warn("Failed to clean up staging table: {}", meta.getTableName(), e);
             }
@@ -290,6 +299,7 @@ public class StagingTableService {
      * @return the number of rows transferred
      * @throws IllegalStateException if the target table cannot be determined or the transfer fails
      */
+    @Transactional
     public int transferToTarget(String stagingTable, IngestionTask task) {
         validateTableName(stagingTable);
 
@@ -299,6 +309,11 @@ public class StagingTableService {
             throw new IllegalStateException(
                 "Cannot determine target table for task " + task.getId()
                     + ". Ensure tableMapping is configured with a target table.");
+        }
+        // Validate target table name: must be ods_* prefix and safe characters only
+        if (!targetTable.matches("ods_[a-zA-Z0-9_]+")) {
+            throw new IllegalArgumentException(
+                "Target table must start with 'ods_' and contain only safe characters: " + targetTable);
         }
 
         // 2. Get data columns from staging table (exclude internal columns prefixed with _)

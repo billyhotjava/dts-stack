@@ -178,13 +178,7 @@ public class QualityScoreService {
             // Unknown status (e.g. RUNNING, PENDING) — treat as neutral
             return 100;
         }
-        // FAILED: check if we have row-level info
-        Integer failingRows = run.getFailingRowCount();
-        if (failingRows == null || failingRows <= 0) {
-            return 0;
-        }
-        // Without rowsChecked on the entity, a non-zero failingRowCount on FAILED = 0
-        // (we know it failed, and we know rows failed, but we don't know total)
+        // FAILED status = score 0
         return 0;
     }
 

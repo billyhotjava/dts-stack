@@ -56,7 +56,14 @@ public class IngestionQualityBridge {
      * @param totalRows        total number of rows in the staging table
      * @return aggregated pre-check result
      */
+    private static final Pattern VALID_STAGING_TABLE = Pattern.compile("^tmp_ingestion_[0-9a-f]{32}$");
+
     public PreCheckResult preCheck(String stagingTableName, UUID datasetId, int totalRows) {
+        // Validate staging table name to prevent SQL injection
+        if (stagingTableName == null || !VALID_STAGING_TABLE.matcher(stagingTableName).matches()) {
+            throw new IllegalArgumentException("Invalid staging table name: " + stagingTableName);
+        }
+
         List<GovRuleBinding> bindings = bindingRepository
             .findByDatasetIdAndRuleVersionStatus(datasetId, STATUS_PUBLISHED);
 
@@ -70,10 +77,10 @@ public class IngestionQualityBridge {
 
         for (GovRuleBinding binding : bindings) {
             GovRule rule = binding.getRuleVersion().getRule();
-            String renderedSql = rule.getRenderedSql();
+            String renderedSql = rule.getExpression();
 
             if (!StringUtils.hasText(renderedSql)) {
-                log.warn("Rule [{}] has no renderedSql, skipping", rule.getName());
+                log.warn("Rule [{}] has no expression, skipping", rule.getName());
                 continue;
             }
 

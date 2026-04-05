@@ -1001,7 +1001,7 @@ public class GovernanceResource {
             triggerRef = currentUser();
         }
 
-        boolean autoTriggerEnabled = governanceProperties.getQuality().isAutoTriggerEnabled();
+        boolean autoTriggerEnabled = governanceProperties.getQuality().isEnabled();
         boolean autoCleanseEnabled = governanceProperties.getQuality().isAutoCleanseEnabled();
 
         Map<String, Object> result = new LinkedHashMap<>();
@@ -1262,6 +1262,7 @@ public class GovernanceResource {
 
     // SQL repair API ----------------------------------------------------------
 
+    @PreAuthorize(GOVERNANCE_MAINTAINER_EXPRESSION)
     @PostMapping("/quality/sql-repair/preview")
     public ApiResponse<SqlRepairService.SqlRepairPreview> previewSqlRepair(
         @RequestBody Map<String, Object> body
@@ -1271,6 +1272,7 @@ public class GovernanceResource {
         return ApiResponses.ok(sqlRepairService.preview(sql, limit));
     }
 
+    @PreAuthorize(GOVERNANCE_MAINTAINER_EXPRESSION)
     @PostMapping("/quality/sql-repair/execute")
     public ApiResponse<SqlRepairService.SqlRepairResult> executeSqlRepair(
         @RequestBody Map<String, Object> body

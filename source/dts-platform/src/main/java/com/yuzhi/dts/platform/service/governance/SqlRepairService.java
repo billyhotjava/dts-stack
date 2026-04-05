@@ -3,10 +3,6 @@ package com.yuzhi.dts.platform.service.governance;
 import com.yuzhi.dts.platform.domain.governance.GovDataEditLog;
 import com.yuzhi.dts.platform.repository.governance.GovDataEditLogRepository;
 import com.yuzhi.dts.platform.security.SecurityUtils;
-import java.sql.Connection;
-import java.sql.PreparedStatement;
-import java.sql.ResultSet;
-import java.sql.ResultSetMetaData;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -15,9 +11,9 @@ import java.util.Map;
 import java.util.UUID;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
-import javax.sql.DataSource;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -33,7 +29,9 @@ public class SqlRepairService {
 
     /** Dangerous SQL keywords that must never appear in the statement. */
     private static final Pattern FORBIDDEN = Pattern.compile(
-        "\\b(DELETE|DROP|TRUNCATE|ALTER|CREATE|INSERT\\s+INTO|SELECT\\s+INTO)\\b",
+        "\\b(DELETE|DROP|TRUNCATE|ALTER|CREATE|INSERT\\s+INTO|SELECT\\s+INTO"
+        + "|COPY|GRANT|REVOKE|LISTEN|NOTIFY|DO\\s*\\$|EXECUTE|CALL"
+        + "|pg_read_file|pg_write_file|lo_import|lo_export)\\b",
         Pattern.CASE_INSENSITIVE);
 
     /** Extract the WHERE clause from an UPDATE statement (everything after the last WHERE). */
@@ -44,11 +42,11 @@ public class SqlRepairService {
     private static final Pattern SET_CLAUSE = Pattern.compile(
         "\\bSET\\s+(.+?)(?:\\bWHERE\\b|$)", Pattern.CASE_INSENSITIVE | Pattern.DOTALL);
 
-    private final DataSource dataSource;
+    private final JdbcTemplate jdbcTemplate;
     private final GovDataEditLogRepository editLogRepository;
 
-    public SqlRepairService(DataSource dataSource, GovDataEditLogRepository editLogRepository) {
-        this.dataSource = dataSource;
+    public SqlRepairService(JdbcTemplate jdbcTemplate, GovDataEditLogRepository editLogRepository) {
+        this.jdbcTemplate = jdbcTemplate;
         this.editLogRepository = editLogRepository;
     }
 
@@ -93,61 +91,42 @@ public class SqlRepairService {
         // Extract SET column names for "newValues" simulation
         List<String> setColumns = parseSetColumns(sql);
 
-        try (Connection conn = dataSource.getConnection()) {
-            // 1. Count affected rows
-            String countSql = "SELECT count(*) FROM " + quoteIdentifier(tableName);
-            if (whereClause != null && !whereClause.isEmpty()) {
-                countSql += " WHERE " + whereClause;
-            }
+        // 1. Count affected rows using the same WHERE clause
+        String countSql = "SELECT count(*) FROM " + quoteIdentifier(tableName);
+        if (whereClause != null && !whereClause.isEmpty()) {
+            countSql += " WHERE " + whereClause;
+        }
+        Long affectedRows = jdbcTemplate.queryForObject(countSql, Long.class);
+        if (affectedRows == null) affectedRows = 0L;
 
-            long affectedRows;
-            try (PreparedStatement ps = conn.prepareStatement(countSql);
-                 ResultSet rs = ps.executeQuery()) {
-                rs.next();
-                affectedRows = rs.getLong(1);
-            }
+        // 2. Fetch sample "before" rows
+        String selectSql = "SELECT * FROM " + quoteIdentifier(tableName);
+        if (whereClause != null && !whereClause.isEmpty()) {
+            selectSql += " WHERE " + whereClause;
+        }
+        selectSql += " LIMIT " + limit;
 
-            // 2. Fetch sample "before" rows
-            String selectSql = "SELECT * FROM " + quoteIdentifier(tableName);
-            if (whereClause != null && !whereClause.isEmpty()) {
-                selectSql += " WHERE " + whereClause;
-            }
-            selectSql += " LIMIT " + limit;
-
-            List<Map<String, Object>> samples = new ArrayList<>();
-            try (PreparedStatement ps = conn.prepareStatement(selectSql);
-                 ResultSet rs = ps.executeQuery()) {
-                ResultSetMetaData meta = rs.getMetaData();
-                int colCount = meta.getColumnCount();
-                while (rs.next()) {
-                    Map<String, Object> sample = new LinkedHashMap<>();
-
-                    // rowId — use id column if present, else row number
-                    Object rowId = null;
-                    Map<String, Object> columnValues = new LinkedHashMap<>();
-                    for (int i = 1; i <= colCount; i++) {
-                        String colName = meta.getColumnName(i);
-                        Object val = rs.getObject(i);
-                        if ("id".equalsIgnoreCase(colName)) {
-                            rowId = val;
-                        }
-                        // Include SET columns in columnValues (before values)
-                        if (setColumns.isEmpty() || setColumns.stream().anyMatch(c -> c.equalsIgnoreCase(colName))) {
-                            columnValues.put(colName, val == null ? null : val.toString());
-                        }
-                    }
-                    sample.put("rowId", rowId);
-                    sample.put("columnValues", columnValues);
-                    samples.add(sample);
+        List<Map<String, Object>> rawRows = jdbcTemplate.queryForList(selectSql);
+        List<Map<String, Object>> samples = new ArrayList<>();
+        for (Map<String, Object> rawRow : rawRows) {
+            Map<String, Object> sample = new LinkedHashMap<>();
+            Object rowId = rawRow.get("id");
+            Map<String, Object> columnValues = new LinkedHashMap<>();
+            for (var entry : rawRow.entrySet()) {
+                String colName = entry.getKey();
+                if ("id".equalsIgnoreCase(colName)) {
+                    rowId = entry.getValue();
+                }
+                if (setColumns.isEmpty() || setColumns.stream().anyMatch(c -> c.equalsIgnoreCase(colName))) {
+                    columnValues.put(colName, entry.getValue() == null ? null : entry.getValue().toString());
                 }
             }
-
-            return new SqlRepairPreview(affectedRows, samples);
-        } catch (IllegalArgumentException e) {
-            throw e;
-        } catch (Exception e) {
-            throw new RuntimeException("SQL 预览失败: " + e.getMessage(), e);
+            sample.put("rowId", rowId);
+            sample.put("columnValues", columnValues);
+            samples.add(sample);
         }
+
+        return new SqlRepairPreview(affectedRows, samples);
     }
 
     /**
@@ -163,35 +142,26 @@ public class SqlRepairService {
         String tableName = tableMatcher.group(1);
         String currentUser = SecurityUtils.getCurrentUserLogin().orElse("system");
 
-        try (Connection conn = dataSource.getConnection()) {
-            // Execute the UPDATE
-            int affectedRows;
-            try (PreparedStatement ps = conn.prepareStatement(sql)) {
-                affectedRows = ps.executeUpdate();
-            }
+        // Execute the UPDATE via JdbcTemplate (participates in Spring transaction)
+        int affectedRows = jdbcTemplate.update(sql);
 
-            // Record audit log
-            GovDataEditLog logEntry = new GovDataEditLog();
-            logEntry.setTableName(tableName);
-            logEntry.setRowId(runId != null ? runId.toString() : "batch");
-            logEntry.setColumnName(null);
-            logEntry.setOldValue(null);
-            logEntry.setNewValue(sql);
-            logEntry.setEditType("SQL_REPAIR");
-            logEntry.setEditReason("SQL修复: 影响 " + affectedRows + " 行");
-            logEntry.setEditedBy(currentUser);
-            logEntry.setEditedAt(Instant.now());
-            GovDataEditLog saved = editLogRepository.save(logEntry);
+        // Record audit log (same transaction)
+        GovDataEditLog logEntry = new GovDataEditLog();
+        logEntry.setTableName(tableName);
+        logEntry.setRowId(runId != null ? runId.toString() : "batch");
+        logEntry.setColumnName(null);
+        logEntry.setOldValue(null);
+        logEntry.setNewValue(sql);
+        logEntry.setEditType("SQL_REPAIR");
+        logEntry.setEditReason("SQL修复: 影响 " + affectedRows + " 行");
+        logEntry.setEditedBy(currentUser);
+        logEntry.setEditedAt(Instant.now());
+        GovDataEditLog saved = editLogRepository.save(logEntry);
 
-            log.info("SQL repair executed by {}: table={}, affectedRows={}, auditId={}",
-                currentUser, tableName, affectedRows, saved.getId());
+        log.info("SQL repair executed by {}: table={}, affectedRows={}, auditId={}",
+            currentUser, tableName, affectedRows, saved.getId());
 
-            return new SqlRepairResult(affectedRows, saved.getId());
-        } catch (IllegalArgumentException e) {
-            throw e;
-        } catch (Exception e) {
-            throw new RuntimeException("SQL 修复执行失败: " + e.getMessage(), e);
-        }
+        return new SqlRepairResult(affectedRows, saved.getId());
     }
 
     // ---- validation ---------------------------------------------------------
