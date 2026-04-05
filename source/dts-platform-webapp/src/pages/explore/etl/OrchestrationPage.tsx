@@ -12,6 +12,7 @@ import {
 	visitExternalLink,
 } from "@/api/platformApi";
 import { formatDateTime } from "@/utils/textUtils";
+import { useLogPreview } from "@/components/log-preview/LogPreviewContext";
 
 const { Text } = Typography;
 
@@ -118,6 +119,8 @@ export default function OrchestrationPage() {
 	const [projectFilter, setProjectFilter] = useState<string>("ALL");
 	const [tagFilter, setTagFilter] = useState<string>("ALL");
 	const [keyword, setKeyword] = useState<string>("");
+
+	const { openLogPreview } = useLogPreview();
 
 	const loadExternalLink = useCallback(async () => {
 		setLinkLoading(true);
@@ -378,12 +381,35 @@ export default function OrchestrationPage() {
 		{
 			title: "操作",
 			key: "actions",
-			width: 120,
-			render: (_, row) => (
-				<Button type="link" size="small" onClick={() => void handleTrigger(selectedDagId || "", row.runId)} disabled={!selectedDagId}>
-					重跑
-				</Button>
-			),
+			width: 180,
+			render: (_, row) => {
+				const isDbt = Boolean(selectedDagId?.toLowerCase().includes("dbt"));
+				return (
+					<Space size={0}>
+						<Button type="link" size="small" onClick={() => void handleTrigger(selectedDagId || "", row.runId)} disabled={!selectedDagId}>
+							重跑
+						</Button>
+						{isDbt && row.runId && (
+							<Button
+								type="link"
+								size="small"
+								onClick={() =>
+									openLogPreview({
+										entryKey: "AIRFLOW_DAG",
+										dagId: selectedDagId ?? "",
+										dagRunId: row.runId,
+										taskId: "dbt_run",
+										tryNumber: 1,
+										title: `日志 — ${selectedDagId} / ${row.runId}`,
+									})
+								}
+							>
+								日志
+							</Button>
+						)}
+					</Space>
+				);
+			},
 		},
 	];
 
