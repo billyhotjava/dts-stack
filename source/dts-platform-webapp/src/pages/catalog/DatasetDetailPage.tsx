@@ -4,7 +4,7 @@ import { Button, Spin, Table, Tabs, Tag } from "antd";
 import { ReactFlow, Background, Controls, type Node, type Edge } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
 import { useRouter } from "@/routes/hooks";
-import { getDataset, getDatasetFields, getDatasetGovernanceHealth, getCatalogLineageImpact } from "@/api/platformApi";
+import { getDataset, getDatasetFields, getDatasetGovernanceHealth, getDatasetIndicatorDeps, getCatalogLineageImpact } from "@/api/platformApi";
 
 export default function DatasetDetailPage() {
 	const { id } = useParams<{ id: string }>();
@@ -142,32 +142,60 @@ function DatasetFieldsTab({ datasetId }: { datasetId: string }) {
 function DatasetGovernanceTab({ datasetId }: { datasetId: string }) {
 	const [health, setHealth] = useState<Record<string, any> | null>(null);
 	const [loading, setLoading] = useState(true);
+	const [indicators, setIndicators] = useState<any[]>([]);
 
 	useEffect(() => {
-		void getDatasetGovernanceHealth(datasetId)
-			.then((h: any) => setHealth(h ?? null))
-			.catch(() => setHealth(null))
-			.finally(() => setLoading(false));
+		void Promise.all([
+			getDatasetGovernanceHealth(datasetId)
+				.then((h: any) => setHealth(h ?? null))
+				.catch(() => setHealth(null)),
+			getDatasetIndicatorDeps(datasetId)
+				.then((r: any) => {
+					const list = Array.isArray(r?.data?.data) ? r.data.data
+						: Array.isArray(r?.data) ? r.data
+						: Array.isArray(r) ? r
+						: [];
+					setIndicators(list);
+				})
+				.catch(() => setIndicators([])),
+		]).finally(() => setLoading(false));
 	}, [datasetId]);
 
 	if (loading) return <div className="py-4"><Spin /></div>;
-	if (!health) return <div className="py-4 text-sm text-slate-500">暂无治理健康数据。</div>;
 
-	const score = health.healthScore ?? health.quality?.healthScore;
+	const score = health?.healthScore ?? health?.quality?.healthScore;
+
 	return (
-		<div className="space-y-3 py-2 text-sm">
+		<div className="space-y-4 py-2 text-sm">
 			{score != null && (
 				<div className="flex items-center gap-2">
 					<span className="text-slate-500">健康分：</span>
 					<span className="text-lg font-bold text-blue-600">{score}</span>
-					{health.healthLevel && <Tag>{health.healthLevel}</Tag>}
+					{health?.healthLevel && <Tag>{health.healthLevel}</Tag>}
 				</div>
 			)}
-			{health.quality?.totalRuns != null && (
+			{health?.quality?.totalRuns != null && (
 				<div className="grid grid-cols-3 gap-3">
 					<div><span className="text-slate-500">总运行：</span>{health.quality.totalRuns}</div>
 					<div><span className="text-slate-500">通过：</span><span className="text-green-600">{health.quality.passRuns ?? 0}</span></div>
 					<div><span className="text-slate-500">失败：</span><span className="text-red-500">{health.quality.failRuns ?? 0}</span></div>
+				</div>
+			)}
+			{!score && !health?.quality && <div className="text-slate-500">暂无治理健康数据。</div>}
+			{indicators.length > 0 && (
+				<div>
+					<div className="mb-2 font-medium text-slate-700">关联指标（{indicators.length}）</div>
+					<Table
+						size="small"
+						rowKey={(_, i) => String(i)}
+						dataSource={indicators}
+						pagination={false}
+						columns={[
+							{ title: "指标名称", dataIndex: "name", render: (v: any) => v ?? "-" },
+							{ title: "类型", dataIndex: "type", width: 100, render: (v: any) => v ? <Tag>{v}</Tag> : "-" },
+							{ title: "状态", dataIndex: "status", width: 90, render: (v: any) => v ? <Tag color={v === "PUBLISHED" ? "green" : "default"}>{v}</Tag> : "-" },
+						]}
+					/>
 				</div>
 			)}
 		</div>
