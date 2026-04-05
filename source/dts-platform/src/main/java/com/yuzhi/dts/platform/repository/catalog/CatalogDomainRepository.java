@@ -13,6 +13,8 @@ public interface CatalogDomainRepository extends JpaRepository<CatalogDomain, UU
 
     java.util.Optional<CatalogDomain> findFirstByCodeIgnoreCase(String code);
 
+    boolean existsByCodeIgnoreCase(String code);
+
     Page<CatalogDomain> findByNameContainingIgnoreCaseOrCodeContainingIgnoreCaseOrOwnerContainingIgnoreCaseOrDescriptionContainingIgnoreCase(
         String name,
         String code,
