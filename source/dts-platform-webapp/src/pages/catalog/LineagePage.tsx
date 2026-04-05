@@ -1,10 +1,13 @@
 import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
-import { Alert, Button, Card, Collapse, Descriptions, Drawer, Input, Select, Space, Statistic, Table, Tag } from "antd";
+import { Alert, Button, Card, Collapse, Descriptions, Drawer, Input, Select, Space, Statistic, Table, Tabs, Tag, Upload } from "antd";
 import type { ColumnsType } from "antd/es/table";
-import { DownloadOutlined } from "@ant-design/icons";
+import type { UploadProps } from "antd";
+import { DownloadOutlined, UploadOutlined } from "@ant-design/icons";
+import { ReactFlow, Background, Controls, type Node, type Edge } from "@xyflow/react";
+import "@xyflow/react/dist/style.css";
 import { EmptyState } from "@/components/empty-state";
-import { getCatalogLineageImpact, listDatasets } from "@/api/platformApi";
+import { getCatalogLineageImpact, importDbtManifest, listDatasets } from "@/api/platformApi";
 
 type DatasetOption = {
 	id: string;
@@ -108,6 +111,14 @@ const downloadCsv = (name: string, rows: Array<Record<string, unknown>>) => {
 	URL.revokeObjectURL(url);
 };
 
+const LAYER_BG: Record<string, string> = {
+	ODS: "#f5f5f5",
+	DWD: "#e6f4ff",
+	DWS: "#e6fffb",
+	ADS: "#f6ffed",
+	DIM: "#f9f0ff",
+};
+
 export default function LineagePage() {
 	const [datasets, setDatasets] = useState<DatasetOption[]>([]);
 	const [selectedId, setSelectedId] = useState<string | undefined>();
@@ -206,6 +217,58 @@ export default function LineagePage() {
 			return Boolean(byText || byNode);
 		});
 	}, [edgesRaw, keywordLower, nodeIdSet]);
+
+	const rfNodes: Node[] = useMemo(() => {
+		if (!impact?.nodes) return [];
+		const layerX: Record<string, number> = { ODS: 0, DWD: 250, DWS: 500, ADS: 750, DIM: 1000 };
+		const layerCount: Record<string, number> = {};
+		return impact.nodes.map((n) => {
+			const layer = n.layer?.toUpperCase() ?? "UNKNOWN";
+			const x = layerX[layer] ?? 1100;
+			layerCount[layer] = (layerCount[layer] ?? 0) + 1;
+			const y = (layerCount[layer] - 1) * 80;
+			return {
+				id: n.id ?? Math.random().toString(36),
+				position: { x, y },
+				data: { label: n.name ?? n.table ?? "未知" },
+				style: {
+					background: LAYER_BG[layer] ?? "#fff",
+					border: "1px solid #d9d9d9",
+					borderRadius: 6,
+					fontSize: 11,
+					padding: "4px 8px",
+				},
+			};
+		});
+	}, [impact?.nodes]);
+
+	const rfEdges: Edge[] = useMemo(() =>
+		(impact?.edges ?? []).map((e, i) => ({
+			id: e.id ?? `e-${i}`,
+			source: e.upstreamDatasetId ?? "",
+			target: e.downstreamDatasetId ?? "",
+			animated: false,
+			style: { stroke: "#bfbfbf" },
+		})),
+		[impact?.edges],
+	);
+
+	const dbtUploadProps: UploadProps = {
+		accept: ".json",
+		showUploadList: false,
+		beforeUpload: async (file) => {
+			try {
+				const result = await importDbtManifest(file as File);
+				toast.success(`dbt 血缘导入成功：新建 ${result.created} 条，跳过 ${result.skipped} 条`);
+				if (selectedId) {
+					void loadImpact(selectedId, direction, depth, projectName, layerFilters, changedWithinHours);
+				}
+			} catch {
+				// global interceptor handles error toast
+			}
+			return false;
+		},
+	};
 
 	const layerGroupItems = useMemo(() => {
 		const groups = new Map<string, ImpactNode[]>();
@@ -359,9 +422,16 @@ export default function LineagePage() {
 			<Card
 				title="血缘影响分析"
 				extra={
-					<Button className="rounded-2xl" icon={<DownloadOutlined />} onClick={handleExport} disabled={!nodes.length && !edges.length}>
-						导出结果
-					</Button>
+					<Space>
+						<Upload {...dbtUploadProps}>
+							<Button className="rounded-2xl" icon={<UploadOutlined />}>
+								导入 dbt 血缘
+							</Button>
+						</Upload>
+						<Button className="rounded-2xl" icon={<DownloadOutlined />} onClick={handleExport} disabled={!nodes.length && !edges.length}>
+							导出结果
+						</Button>
+					</Space>
 				}
 			>
 				<div className="mb-3 flex flex-wrap items-center gap-2">
@@ -440,58 +510,85 @@ export default function LineagePage() {
 
 			{!selectedId ? <Alert type="info" message="请选择一个数据集开始分析。" showIcon /> : null}
 
-			<Card title="影响概览">
-				<Card bordered={false} loading={loading} bodyStyle={{ padding: 0 }}>
-				<Space size={24} wrap>
-					<Statistic title="节点数" value={Number(impact?.nodeCount || 0)} />
-					<Statistic title="边数" value={Number(impact?.edgeCount || 0)} />
-					<Statistic title="变更节点" value={Number(impact?.impactStats?.changedNodeCount || 0)} />
-					<Statistic title="方向" value={impact?.direction || direction} />
-					<Statistic title="深度" value={Number(impact?.depth || depth)} />
-				</Space>
-				</Card>
-			</Card>
+			{selectedId && (
+				<Tabs
+					defaultActiveKey="table"
+					items={[
+						{
+							key: "table",
+							label: "影响分析表格",
+							children: (
+								<div className="space-y-4">
+									<Card title="影响概览">
+										<Card bordered={false} loading={loading} bodyStyle={{ padding: 0 }}>
+										<Space size={24} wrap>
+											<Statistic title="节点数" value={Number(impact?.nodeCount || 0)} />
+											<Statistic title="边数" value={Number(impact?.edgeCount || 0)} />
+											<Statistic title="变更节点" value={Number(impact?.impactStats?.changedNodeCount || 0)} />
+											<Statistic title="方向" value={impact?.direction || direction} />
+											<Statistic title="深度" value={Number(impact?.depth || depth)} />
+										</Space>
+										</Card>
+									</Card>
 
-			<Card title="分层折叠视图">
-				{layerGroupItems.length ? (
-					<Collapse items={layerGroupItems} defaultActiveKey={layerGroupItems.map((item) => item.key)} />
-				) : (
-					<EmptyState title="暂无分层节点" description="当前筛选条件下无可展示节点。" />
-				)}
-			</Card>
+									<Card title="分层折叠视图">
+										{layerGroupItems.length ? (
+											<Collapse items={layerGroupItems} defaultActiveKey={layerGroupItems.map((item) => item.key)} />
+										) : (
+											<EmptyState title="暂无分层节点" description="当前筛选条件下无可展示节点。" />
+										)}
+									</Card>
 
-			<Card title="节点列表">
-				{nodes.length ? (
-					<Table
-						rowKey={(row, idx) => row.id || `${row.db || "db"}.${row.table || "tb"}-${idx}`}
-						columns={nodeColumns}
-						dataSource={nodes}
-						loading={loading}
-						scroll={{ x: 1200 }}
-						pagination={{ pageSize: 10 }}
-						onRow={(record) => ({
-							onClick: () => setSelectedNode(record),
-						})}
-					/>
-				) : (
-					<EmptyState title="暂无节点" description="当前条件下未检索到血缘节点。" />
-				)}
-			</Card>
+									<Card title="节点列表">
+										{nodes.length ? (
+											<Table
+												rowKey={(row, idx) => row.id || `${row.db || "db"}.${row.table || "tb"}-${idx}`}
+												columns={nodeColumns}
+												dataSource={nodes}
+												loading={loading}
+												scroll={{ x: 1200 }}
+												pagination={{ pageSize: 10 }}
+												onRow={(record) => ({
+													onClick: () => setSelectedNode(record),
+												})}
+											/>
+										) : (
+											<EmptyState title="暂无节点" description="当前条件下未检索到血缘节点。" />
+										)}
+									</Card>
 
-			<Card title="关系边列表">
-				{edges.length ? (
-					<Table
-						rowKey={(row, idx) => row.id || `${row.upstreamDatasetId || "up"}-${row.downstreamDatasetId || "down"}-${idx}`}
-						columns={edgeColumns}
-						dataSource={edges}
-						loading={loading}
-						scroll={{ x: 1000 }}
-						pagination={{ pageSize: 10 }}
-					/>
-				) : (
-					<EmptyState title="暂无关系边" description="当前条件下未检索到血缘关系。" />
-				)}
-			</Card>
+									<Card title="关系边列表">
+										{edges.length ? (
+											<Table
+												rowKey={(row, idx) => row.id || `${row.upstreamDatasetId || "up"}-${row.downstreamDatasetId || "down"}-${idx}`}
+												columns={edgeColumns}
+												dataSource={edges}
+												loading={loading}
+												scroll={{ x: 1000 }}
+												pagination={{ pageSize: 10 }}
+											/>
+										) : (
+											<EmptyState title="暂无关系边" description="当前条件下未检索到血缘关系。" />
+										)}
+									</Card>
+								</div>
+							),
+						},
+						{
+							key: "graph",
+							label: "血缘图",
+							children: (
+								<div style={{ height: 500, border: "1px solid #e8e8e8", borderRadius: 8, overflow: "hidden" }}>
+									<ReactFlow nodes={rfNodes} edges={rfEdges} fitView>
+										<Background />
+										<Controls />
+									</ReactFlow>
+								</div>
+							),
+						},
+					]}
+				/>
+			)}
 
 			<Drawer title="节点详情" open={Boolean(selectedNode)} width={520} onClose={() => setSelectedNode(null)} destroyOnClose>
 				{selectedNode ? (

@@ -696,6 +696,11 @@ export const getCatalogLineageImpact = (
 ) => api.get({ url: "/catalog/lineage/impact", params: { datasetId, ...params } });
 export const createCatalogLineage = (data: any) => api.post({ url: "/catalog/lineage", data });
 export const deleteCatalogLineage = (id: string) => api.delete({ url: `/catalog/lineage/${id}` });
+export const importDbtManifest = (file: File): Promise<{ created: number; skipped: number; total: number }> => {
+	const form = new FormData();
+	form.append("file", file);
+	return api.post({ url: "/catalog/lineage/import-dbt-manifest", data: form, headers: { "Content-Type": "multipart/form-data" } });
+};
 
 // Catalog sync (full scan)
 export type CatalogSyncRequest = { includePrimary?: boolean; includeJdbc?: boolean; reason?: string };
