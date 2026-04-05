@@ -137,21 +137,23 @@ export default function OpsLogCenterPage() {
         const isLoading = logLoading[runId];
         return (
           <Space size="small">
-            <Button
-              type="link"
-              size="small"
-              loading={isLoading}
-              onClick={() => {
-                if (isExpanded) {
-                  setExpandedRunId(null);
-                } else {
-                  setExpandedRunId(runId);
-                  if (!logContent[runId]) void loadLog(record);
-                }
-              }}
-            >
-              {isExpanded ? "收起日志" : "查看日志"}
-            </Button>
+            {(record.entryKey === "AIRFLOW_DAG" || record.entryKey === "DBT_RUN") && (
+              <Button
+                type="link"
+                size="small"
+                loading={isLoading}
+                onClick={() => {
+                  if (isExpanded) {
+                    setExpandedRunId(null);
+                  } else {
+                    setExpandedRunId(runId);
+                    if (!logContent[runId]) void loadLog(record);
+                  }
+                }}
+              >
+                {isExpanded ? "收起日志" : "查看日志"}
+              </Button>
+            )}
           </Space>
         );
       },
