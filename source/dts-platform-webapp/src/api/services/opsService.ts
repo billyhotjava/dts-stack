@@ -116,6 +116,21 @@ export type OpsDevCenterMetrics = {
 	};
 };
 
+export type ExternalRun = {
+	id: string;
+	entryKey?: string;
+	artifactName?: string;
+	artifactType?: string;
+	externalRunId?: string;
+	status?: string;
+	startedAt?: string;
+	finishedAt?: string;
+	durationMs?: number;
+	message?: string;
+	dagId?: string;
+	metricsJson?: string;
+};
+
 export default {
 	overview: () => apiClient.get<OpsOverview>({ url: "/ops/overview" }),
 	instances: (params?: { entryKey?: string; status?: string; keyword?: string; limit?: number }) =>
@@ -126,4 +141,12 @@ export default {
 	backfills: () => apiClient.get<OpsBackfill[]>({ url: "/ops/backfills" }),
 	createBackfill: (payload: OpsBackfillRequest) =>
 		apiClient.post<OpsBackfill>({ url: "/ops/backfills", data: payload }),
+	externalRuns: (params?: {
+		entryKey?: string;
+		status?: string;
+		keyword?: string;
+		limit?: number;
+		startedAfter?: string;
+		startedBefore?: string;
+	}) => apiClient.get<ExternalRun[]>({ url: "/infra/external-runs", params }),
 };

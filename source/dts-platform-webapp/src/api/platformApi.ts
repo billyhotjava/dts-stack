@@ -108,6 +108,36 @@ export const submitDbtRelease = (data: any) =>
 export const getDbtRunLog = (dagRunId: string, params?: { dagId?: string; taskId?: string; tryNumber?: number }) =>
 	api.get(withModelingRequestTimeout({ url: `/etl/dbt/runs/${encodeURIComponent(dagRunId)}/logs`, params }));
 
+// Airflow generic task log (non-dbt DAGs or explicit taskId)
+export const getAirflowTaskLog = (
+	dagId: string,
+	dagRunId: string,
+	taskId: string,
+	tryNumber = 1,
+) =>
+	api.get<{ dagId: string; dagRunId: string; taskId: string; tryNumber: number; log: string }>({
+		url: `/etl/airflow/jobs/${encodeURIComponent(dagId)}/runs/${encodeURIComponent(dagRunId)}/task-logs`,
+		params: { taskId, tryNumber },
+	});
+
+// Airflow task instances for a DAG run
+export const listAirflowTaskInstances = (dagId: string, dagRunId: string) =>
+	api.get<{ task_instances: AirflowTaskInstance[] }>({
+		url: `/etl/airflow/jobs/${encodeURIComponent(dagId)}/runs/${encodeURIComponent(dagRunId)}/tasks`,
+	});
+
+export type AirflowTaskInstance = {
+	task_id: string;
+	dag_id: string;
+	dag_run_id: string;
+	state?: string;
+	start_date?: string;
+	end_date?: string;
+	duration?: number;
+	try_number?: number;
+	operator?: string;
+};
+
 // dbt data preview
 export const previewDbtModel = (model: string, limit = 100) =>
 	api.get(withModelingRequestTimeout({ url: "/etl/dbt/preview", params: { model, limit } }));
