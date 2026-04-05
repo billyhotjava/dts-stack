@@ -21,6 +21,7 @@ import com.yuzhi.dts.platform.service.governance.IssueTicketService;
 import com.yuzhi.dts.platform.service.governance.OdsDataEditorService;
 import com.yuzhi.dts.platform.service.governance.IngestionQualityBridge;
 import com.yuzhi.dts.platform.service.governance.QualityRuleService;
+import com.yuzhi.dts.platform.service.governance.QualityReportExportService;
 import com.yuzhi.dts.platform.service.governance.QualityRunService;
 import com.yuzhi.dts.platform.service.governance.QualityDashboardService;
 import com.yuzhi.dts.platform.service.governance.QualityScoreService;
@@ -45,6 +46,8 @@ import com.yuzhi.dts.platform.service.governance.request.QualityRuleUpsertReques
 import com.yuzhi.dts.platform.service.governance.request.QualityRuleVersionStatusRequest;
 import com.yuzhi.dts.platform.service.governance.request.QualityRunTriggerRequest;
 import com.yuzhi.dts.platform.security.SecurityUtils;
+import jakarta.servlet.http.HttpServletResponse;
+import java.io.IOException;
 import java.math.BigDecimal;
 import java.sql.Connection;
 import java.sql.PreparedStatement;
@@ -109,6 +112,7 @@ public class GovernanceResource {
     private final QualityScoreService qualityScoreService;
     private final QualityDashboardService qualityDashboardService;
     private final IngestionQualityBridge ingestionQualityBridge;
+    private final QualityReportExportService qualityReportExportService;
 
     public GovernanceResource(
         QualityRuleService qualityRuleService,
@@ -130,7 +134,8 @@ public class GovernanceResource {
         GovDataEditLogRepository editLogRepository,
         QualityScoreService qualityScoreService,
         QualityDashboardService qualityDashboardService,
-        IngestionQualityBridge ingestionQualityBridge
+        IngestionQualityBridge ingestionQualityBridge,
+        QualityReportExportService qualityReportExportService
     ) {
         this.qualityRuleService = qualityRuleService;
         this.qualityRunService = qualityRunService;
@@ -152,6 +157,7 @@ public class GovernanceResource {
         this.qualityScoreService = qualityScoreService;
         this.qualityDashboardService = qualityDashboardService;
         this.ingestionQualityBridge = ingestionQualityBridge;
+        this.qualityReportExportService = qualityReportExportService;
     }
 
     // Quality rule APIs ------------------------------------------------------
@@ -1229,5 +1235,24 @@ public class GovernanceResource {
         PreCheckResult result = ingestionQualityBridge.preCheck(
             request.stagingTableName(), request.datasetId(), request.totalRows());
         return ApiResponses.ok(result);
+    }
+
+    // Quality report export API -----------------------------------------------
+
+    @GetMapping("/quality/report/export")
+    public void exportQualityReport(
+        @RequestParam UUID datasetId,
+        @RequestParam(defaultValue = "30") int periodDays,
+        HttpServletResponse response
+    ) throws IOException {
+        byte[] excelBytes = qualityReportExportService.exportExcel(datasetId, periodDays);
+
+        String filename = "quality-report-" + datasetId + "-"
+            + java.time.LocalDate.now() + ".xlsx";
+
+        response.setContentType("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+        response.setHeader("Content-Disposition", "attachment; filename=\"" + filename + "\"");
+        response.setContentLength(excelBytes.length);
+        response.getOutputStream().write(excelBytes);
     }
 }

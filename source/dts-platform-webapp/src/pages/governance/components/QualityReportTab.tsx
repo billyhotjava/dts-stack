@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Card, Col, Radio, Row, Select, Spin, Table, Tag, Typography } from "antd";
+import { Button, Card, Col, Radio, Row, Select, Spin, Table, Tag, Typography } from "antd";
 import type { ColumnsType } from "antd/es/table";
-import { CheckCircleOutlined, CloseCircleOutlined } from "@ant-design/icons";
+import { CheckCircleOutlined, CloseCircleOutlined, DownloadOutlined } from "@ant-design/icons";
 import { toast } from "sonner";
 import { Chart } from "@/components/chart/chart";
 import {
@@ -199,6 +199,13 @@ export default function QualityReportTab() {
 			.finally(() => setRulesLoading(false));
 	}, []);
 
+	/* export handler */
+	const handleExport = useCallback(() => {
+		if (!datasetId) return;
+		const url = `/api/governance/quality/report/export?datasetId=${datasetId}&periodDays=${periodDays}`;
+		window.open(url, "_blank");
+	}, [datasetId, periodDays]);
+
 	/* filter rules by dataset */
 	const filteredRules = useMemo(
 		() => (datasetId ? rules.filter((r) => String(r.datasetId) === datasetId) : rules),
@@ -320,6 +327,13 @@ export default function QualityReportTab() {
 					value={periodDays}
 					onChange={(e) => setPeriodDays(e.target.value)}
 				/>
+				<Button
+					icon={<DownloadOutlined />}
+					disabled={!datasetId}
+					onClick={handleExport}
+				>
+					导出报告
+				</Button>
 			</div>
 
 			{/* Row 1: Score Cards */}

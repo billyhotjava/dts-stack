@@ -10,6 +10,7 @@ import org.springframework.stereotype.Repository;
 @Repository
 public interface GovRuleRepository extends JpaRepository<GovRule, UUID> {
     Optional<GovRule> findByCode(String code);
+    List<GovRule> findByDatasetId(UUID datasetId);
     List<GovRule> findByAutoTriggerTrueAndEnabledTrue();
     int countByEnabledTrue();
 }
