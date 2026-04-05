@@ -243,8 +243,8 @@ public class IngestionPreCheckResource {
 
     /**
      * POST /api/ingestion/tasks/{id}/submit
-     * Verify all rows are clean, then proceed with ingestion.
-     * NOTE: Actual Addax execution integration is deferred; this validates and returns success.
+     * Verify all rows are clean, transfer data from staging to target ODS table,
+     * then clean up the staging table.
      */
     @PostMapping("/{id}/submit")
     @Transactional
@@ -253,25 +253,35 @@ public class IngestionPreCheckResource {
 
         String tableName = task.getStagingTableName();
         if (tableName == null || tableName.isBlank()) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
-                "No staging table found. Run /parse first.");
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "暂存表不存在");
         }
 
         if (!stagingTableService.allClean(tableName)) {
+            long errorCount = stagingTableService.countErrors(tableName);
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
-                "Staging table still has errors. Fix all errors before submitting.");
+                "还有 " + errorCount + " 个错误待修复");
         }
 
-        // TODO: Trigger actual Addax execution with data sourced from staging table.
-        // For now, just mark as submitted and clean up staging table.
+        // Transfer data from staging table to target ODS table
+        try {
+            int rows = stagingTableService.transferToTarget(tableName, task);
+            log.info("Task {}: transferred {} rows from staging to target", id, rows);
+        } catch (Exception e) {
+            log.error("Task {}: failed to transfer staging data to target table", id, e);
+            throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR,
+                "数据提交入湖失败: " + e.getMessage());
+        }
+
+        // Clean up staging table after successful transfer
         stagingTableService.drop(tableName);
         task.setStagingTableName(null);
-        task.setPreCheckStatus(null);
+        task.setPreCheckStatus("SUBMITTED");
         taskRepository.save(task);
 
         return ResponseEntity.ok(Map.of(
             "taskId", id,
-            "status", "submitted"
+            "status", "submitted",
+            "message", "数据已成功提交入湖"
         ));
     }
 

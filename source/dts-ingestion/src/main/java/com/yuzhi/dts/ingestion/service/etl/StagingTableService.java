@@ -4,6 +4,8 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.yuzhi.dts.ingestion.domain.StagingTableMetadata;
 import com.yuzhi.dts.ingestion.repository.StagingTableMetadataRepository;
+import com.fasterxml.jackson.databind.JsonNode;
+import com.yuzhi.dts.ingestion.domain.IngestionTask;
 import com.yuzhi.dts.ingestion.service.dto.CellError;
 import com.yuzhi.dts.ingestion.service.dto.ColumnInfo;
 import java.time.Instant;
@@ -14,6 +16,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import java.util.regex.Pattern;
+import java.util.stream.Collectors;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.data.domain.Page;
@@ -265,6 +268,101 @@ public class StagingTableService {
                 log.warn("Failed to clean up staging table: {}", meta.getTableName(), e);
             }
         }
+    }
+
+    /**
+     * Count rows with ERROR status in the staging table.
+     */
+    public long countErrors(String tableName) {
+        validateTableName(tableName);
+        Long count = jdbcTemplate.queryForObject(
+            "SELECT COUNT(*) FROM " + tableName + " WHERE _status = 'ERROR'", Long.class);
+        return count != null ? count : 0;
+    }
+
+    /**
+     * Transfer data from staging table to the target ODS table.
+     * Resolves the target table name from the task's tableMapping configuration.
+     * Only data columns are transferred (internal columns _row_num, _errors, _status are excluded).
+     *
+     * @param stagingTable the staging table name
+     * @param task         the ingestion task containing tableMapping with target table info
+     * @return the number of rows transferred
+     * @throws IllegalStateException if the target table cannot be determined or the transfer fails
+     */
+    public int transferToTarget(String stagingTable, IngestionTask task) {
+        validateTableName(stagingTable);
+
+        // 1. Resolve target table name from task's tableMapping
+        String targetTable = resolveTargetTable(task);
+        if (targetTable == null || targetTable.isBlank()) {
+            throw new IllegalStateException(
+                "Cannot determine target table for task " + task.getId()
+                    + ". Ensure tableMapping is configured with a target table.");
+        }
+
+        // 2. Get data columns from staging table (exclude internal columns prefixed with _)
+        List<String> columns = jdbcTemplate.queryForList(
+            "SELECT column_name FROM information_schema.columns "
+                + "WHERE table_name = ? AND column_name NOT LIKE '\\_%' "
+                + "ORDER BY ordinal_position",
+            String.class, stagingTable);
+
+        if (columns.isEmpty()) {
+            throw new IllegalStateException(
+                "No data columns found in staging table " + stagingTable);
+        }
+
+        // 3. Build and execute INSERT INTO target SELECT ... FROM staging
+        //    Use quoting for column names to handle special characters / reserved words
+        String cols = columns.stream()
+            .map(c -> "\"" + c + "\"")
+            .collect(Collectors.joining(", "));
+
+        String insertSql = "INSERT INTO " + targetTable + " (" + cols + ") "
+            + "SELECT " + cols + " FROM " + stagingTable;
+
+        log.info("Transferring data from {} to {} (columns: {})", stagingTable, targetTable, cols);
+
+        int rows = jdbcTemplate.update(insertSql);
+        log.info("Transferred {} rows from {} to {}", rows, stagingTable, targetTable);
+        return rows;
+    }
+
+    /**
+     * Resolve the target table name from the task's tableMapping.
+     * tableMapping is a JSON array like: [{"source":"sheet1","target":"ods_my_table"}]
+     * For Excel ingestion there is typically one mapping entry.
+     * Falls back to destinationConfig.table if tableMapping has no target.
+     */
+    private String resolveTargetTable(IngestionTask task) {
+        // Try tableMapping first
+        JsonNode tableMapping = task.getTableMapping();
+        if (tableMapping != null && tableMapping.isArray() && !tableMapping.isEmpty()) {
+            JsonNode first = tableMapping.get(0);
+            if (first != null && first.has("target")) {
+                String target = first.get("target").asText();
+                if (target != null && !target.isBlank()) {
+                    return target;
+                }
+            }
+        }
+
+        // Fallback: try destinationConfig.table
+        JsonNode destConfig = task.getDestinationConfig();
+        if (destConfig != null) {
+            JsonNode tableNode = destConfig.get("table");
+            if (tableNode != null && tableNode.isTextual()) {
+                return tableNode.asText();
+            }
+            // Also try "tables" array
+            JsonNode tablesNode = destConfig.get("tables");
+            if (tablesNode != null && tablesNode.isArray() && !tablesNode.isEmpty()) {
+                return tablesNode.get(0).asText();
+            }
+        }
+
+        return null;
     }
 
     /**
