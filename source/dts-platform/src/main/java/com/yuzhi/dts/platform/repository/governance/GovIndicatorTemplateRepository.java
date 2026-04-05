@@ -12,4 +12,5 @@ public interface GovIndicatorTemplateRepository extends JpaRepository<GovIndicat
     List<GovIndicatorTemplate> findByDomainAndEnabledTrue(String domain);
     List<GovIndicatorTemplate> findByEnabledTrue();
     Optional<GovIndicatorTemplate> findByCode(String code);
+    Optional<GovIndicatorTemplate> findFirstByCodeIgnoreCase(String code);
 }

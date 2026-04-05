@@ -234,6 +234,48 @@ public class IndicatorTemplateService {
         return indicatorRepo.saveAll(created);
     }
 
+    // ---- batch import ----
+
+    @Transactional
+    public Map<String, Integer> batchImport(List<GovIndicatorTemplate> templates) {
+        int created = 0;
+        int updated = 0;
+        int skipped = 0;
+
+        for (GovIndicatorTemplate incoming : templates) {
+            if (incoming.getCode() == null || incoming.getCode().isBlank()) {
+                skipped++;
+                continue;
+            }
+            java.util.Optional<GovIndicatorTemplate> existing = templateRepo.findFirstByCodeIgnoreCase(incoming.getCode());
+            if (existing.isPresent()) {
+                GovIndicatorTemplate exist = existing.orElseThrow();
+                if (Boolean.TRUE.equals(exist.getBuiltin())) {
+                    skipped++;
+                    continue;
+                }
+                exist.setName(incoming.getName());
+                exist.setDescription(incoming.getDescription());
+                exist.setDomain(incoming.getDomain());
+                exist.setIndicatorBlueprints(incoming.getIndicatorBlueprints());
+                exist.setRequiredSourceFields(incoming.getRequiredSourceFields());
+                exist.setSeedTables(incoming.getSeedTables());
+                exist.setRecommendedSnapshot(incoming.getRecommendedSnapshot());
+                exist.setDisplayOrder(incoming.getDisplayOrder());
+                templateRepo.save(exist);
+                updated++;
+            } else {
+                incoming.setId(null);
+                incoming.setBuiltin(Boolean.FALSE);
+                incoming.setEnabled(Boolean.TRUE);
+                templateRepo.save(incoming);
+                created++;
+            }
+        }
+
+        return Map.of("created", created, "updated", updated, "skipped", skipped);
+    }
+
     // ---- helpers ----
 
     private String mapField(String placeholder, Map<String, String> fieldMapping) {
