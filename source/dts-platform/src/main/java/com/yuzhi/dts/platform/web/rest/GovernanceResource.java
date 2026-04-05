@@ -21,7 +21,9 @@ import com.yuzhi.dts.platform.service.governance.IssueTicketService;
 import com.yuzhi.dts.platform.service.governance.OdsDataEditorService;
 import com.yuzhi.dts.platform.service.governance.QualityRuleService;
 import com.yuzhi.dts.platform.service.governance.QualityRunService;
+import com.yuzhi.dts.platform.service.governance.QualityDashboardService;
 import com.yuzhi.dts.platform.service.governance.QualityScoreService;
+import com.yuzhi.dts.platform.service.governance.dto.QualityDashboardDto;
 import com.yuzhi.dts.platform.service.governance.dto.QualityScoreResult;
 import com.yuzhi.dts.platform.service.governance.ReferenceCodeService;
 import com.yuzhi.dts.platform.service.governance.SqlTemplateRenderer;
@@ -102,6 +104,7 @@ public class GovernanceResource {
     private final OdsDataEditorService odsDataEditorService;
     private final GovDataEditLogRepository editLogRepository;
     private final QualityScoreService qualityScoreService;
+    private final QualityDashboardService qualityDashboardService;
 
     public GovernanceResource(
         QualityRuleService qualityRuleService,
@@ -121,7 +124,8 @@ public class GovernanceResource {
         GovernanceProperties governanceProperties,
         OdsDataEditorService odsDataEditorService,
         GovDataEditLogRepository editLogRepository,
-        QualityScoreService qualityScoreService
+        QualityScoreService qualityScoreService,
+        QualityDashboardService qualityDashboardService
     ) {
         this.qualityRuleService = qualityRuleService;
         this.qualityRunService = qualityRunService;
@@ -141,6 +145,7 @@ public class GovernanceResource {
         this.odsDataEditorService = odsDataEditorService;
         this.editLogRepository = editLogRepository;
         this.qualityScoreService = qualityScoreService;
+        this.qualityDashboardService = qualityDashboardService;
     }
 
     // Quality rule APIs ------------------------------------------------------
@@ -1196,5 +1201,12 @@ public class GovernanceResource {
         @RequestParam(defaultValue = "7") int periodDays
     ) {
         return ApiResponses.ok(qualityScoreService.calculate(datasetId, periodDays));
+    }
+
+    // Quality dashboard API ---------------------------------------------------
+
+    @GetMapping("/quality/dashboard")
+    public ApiResponse<QualityDashboardDto> getQualityDashboard() {
+        return ApiResponses.ok(qualityDashboardService.getDashboard());
     }
 }
