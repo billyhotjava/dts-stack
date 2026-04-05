@@ -68,6 +68,9 @@ public class GovRule extends AbstractAuditingEntity<UUID> implements Serializabl
     @Column(name = "executor", length = 64)
     private String executor;
 
+    @Column(name = "auto_trigger")
+    private Boolean autoTrigger = Boolean.FALSE;
+
     @Column(name = "enabled")
     private Boolean enabled = Boolean.TRUE;
 
@@ -199,6 +202,14 @@ public class GovRule extends AbstractAuditingEntity<UUID> implements Serializabl
 
     public void setExecutor(String executor) {
         this.executor = executor;
+    }
+
+    public Boolean getAutoTrigger() {
+        return autoTrigger;
+    }
+
+    public void setAutoTrigger(Boolean autoTrigger) {
+        this.autoTrigger = autoTrigger;
     }
 
     public Boolean getEnabled() {

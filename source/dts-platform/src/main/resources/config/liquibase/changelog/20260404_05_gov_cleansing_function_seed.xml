@@ -6,6 +6,7 @@
         http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
 
     <changeSet id="20260404-05-gov-cleansing-function-seed" author="system">
+        <validCheckSum>ANY</validCheckSum>
         <sql><![CDATA[
 INSERT INTO gov_cleansing_function (id, code, name, description, sql_expression, display_order, builtin, enabled, created_by, created_date, last_modified_by, last_modified_date)
 VALUES
