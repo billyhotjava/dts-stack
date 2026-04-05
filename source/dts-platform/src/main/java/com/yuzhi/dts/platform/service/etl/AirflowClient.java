@@ -27,6 +27,7 @@ public class AirflowClient {
 
     private final RestTemplate restTemplate;
     private final AirflowProperties properties;
+    private final com.fasterxml.jackson.databind.ObjectMapper objectMapper = new com.fasterxml.jackson.databind.ObjectMapper();
 
     public AirflowClient(RestTemplateBuilder builder, AirflowProperties properties) {
         this.restTemplate = builder.setConnectTimeout(Duration.ofSeconds(5)).setReadTimeout(Duration.ofSeconds(10)).build();
@@ -168,6 +169,34 @@ public class AirflowClient {
         } catch (Exception ex) {
             LOG.warn("Airflow task log fetch error: {}", ex.getMessage());
             return "[error] Failed to fetch log: " + ex.getMessage();
+        }
+    }
+
+    /**
+     * List task instances for a DAG run.
+     * GET /api/v1/dags/{dagId}/dagRuns/{dagRunId}/taskInstances
+     */
+    public com.fasterxml.jackson.databind.JsonNode listTaskInstances(String dagId, String dagRunId) {
+        if (!properties.isEnabled()) {
+            return objectMapper.createObjectNode();
+        }
+        if (!StringUtils.hasText(dagId) || !StringUtils.hasText(dagRunId)) {
+            return objectMapper.createObjectNode();
+        }
+        String path = "/dags/" + dagId + "/dagRuns/" + dagRunId + "/taskInstances";
+        URI uri = buildUri(path);
+        try {
+            HttpHeaders headers = defaultHeaders();
+            headers.setAccept(List.of(MediaType.APPLICATION_JSON));
+            HttpEntity<Void> entity = new HttpEntity<>(headers);
+            ResponseEntity<String> response = restTemplate.exchange(uri, HttpMethod.GET, entity, String.class);
+            return objectMapper.readTree(response.getBody() != null ? response.getBody() : "{}");
+        } catch (HttpStatusCodeException ex) {
+            LOG.warn("Airflow listTaskInstances failed status={}", ex.getStatusCode().value());
+            return objectMapper.createObjectNode();
+        } catch (Exception ex) {
+            LOG.warn("Airflow listTaskInstances error: {}", ex.getMessage());
+            return objectMapper.createObjectNode();
         }
     }
 
