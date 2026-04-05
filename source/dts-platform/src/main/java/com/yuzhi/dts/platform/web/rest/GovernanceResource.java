@@ -19,10 +19,13 @@ import com.yuzhi.dts.platform.service.governance.DataCleansingService;
 import com.yuzhi.dts.platform.service.governance.GovernanceOpsMetricsService;
 import com.yuzhi.dts.platform.service.governance.IssueTicketService;
 import com.yuzhi.dts.platform.service.governance.OdsDataEditorService;
+import com.yuzhi.dts.platform.service.governance.IngestionQualityBridge;
 import com.yuzhi.dts.platform.service.governance.QualityRuleService;
 import com.yuzhi.dts.platform.service.governance.QualityRunService;
 import com.yuzhi.dts.platform.service.governance.QualityDashboardService;
 import com.yuzhi.dts.platform.service.governance.QualityScoreService;
+import com.yuzhi.dts.platform.service.governance.dto.PreCheckRequest;
+import com.yuzhi.dts.platform.service.governance.dto.PreCheckResult;
 import com.yuzhi.dts.platform.service.governance.dto.QualityDashboardDto;
 import com.yuzhi.dts.platform.service.governance.dto.QualityScoreResult;
 import com.yuzhi.dts.platform.service.governance.ReferenceCodeService;
@@ -105,6 +108,7 @@ public class GovernanceResource {
     private final GovDataEditLogRepository editLogRepository;
     private final QualityScoreService qualityScoreService;
     private final QualityDashboardService qualityDashboardService;
+    private final IngestionQualityBridge ingestionQualityBridge;
 
     public GovernanceResource(
         QualityRuleService qualityRuleService,
@@ -125,7 +129,8 @@ public class GovernanceResource {
         OdsDataEditorService odsDataEditorService,
         GovDataEditLogRepository editLogRepository,
         QualityScoreService qualityScoreService,
-        QualityDashboardService qualityDashboardService
+        QualityDashboardService qualityDashboardService,
+        IngestionQualityBridge ingestionQualityBridge
     ) {
         this.qualityRuleService = qualityRuleService;
         this.qualityRunService = qualityRunService;
@@ -146,6 +151,7 @@ public class GovernanceResource {
         this.editLogRepository = editLogRepository;
         this.qualityScoreService = qualityScoreService;
         this.qualityDashboardService = qualityDashboardService;
+        this.ingestionQualityBridge = ingestionQualityBridge;
     }
 
     // Quality rule APIs ------------------------------------------------------
@@ -1208,5 +1214,20 @@ public class GovernanceResource {
     @GetMapping("/quality/dashboard")
     public ApiResponse<QualityDashboardDto> getQualityDashboard() {
         return ApiResponses.ok(qualityDashboardService.getDashboard());
+    }
+
+    // Ingestion pre-check API ------------------------------------------------
+
+    /**
+     * Internal endpoint called by dts-ingestion to run governance quality rules
+     * against a staging table before data is committed to the target dataset.
+     */
+    @PostMapping("/quality/pre-check")
+    public ApiResponse<PreCheckResult> preCheckStagingData(@RequestBody PreCheckRequest request) {
+        log.info("Pre-check requested: staging={}, dataset={}, rows={}",
+            request.stagingTableName(), request.datasetId(), request.totalRows());
+        PreCheckResult result = ingestionQualityBridge.preCheck(
+            request.stagingTableName(), request.datasetId(), request.totalRows());
+        return ApiResponses.ok(result);
     }
 }

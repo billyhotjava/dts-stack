@@ -104,6 +104,48 @@ public class PlatformInfraClient {
         }
     }
 
+    /**
+     * Call dts-platform governance pre-check endpoint to run quality rules
+     * against a staging table.
+     *
+     * @param stagingTableName the staging table name in PostgreSQL
+     * @param datasetId        the dataset UUID whose rule bindings to apply
+     * @param totalRows        total number of rows in the staging table
+     * @return pre-check result map with totalRows, passedRows, failedRows, errorsByRule
+     */
+    public Map<String, Object> preCheckStagingData(String stagingTableName, UUID datasetId, int totalRows) {
+        URI uri = buildUri("/governance/quality/pre-check");
+        Map<String, Object> payload = new LinkedHashMap<>();
+        payload.put("stagingTableName", stagingTableName);
+        payload.put("datasetId", datasetId);
+        payload.put("totalRows", totalRows);
+
+        HttpHeaders headers = new HttpHeaders();
+        headers.setAccept(java.util.List.of(MediaType.APPLICATION_JSON));
+        headers.setContentType(MediaType.APPLICATION_JSON);
+        headers.set(SERVICE_HEADER, SERVICE_NAME);
+        try {
+            ResponseEntity<Map> response = restTemplate.exchange(
+                uri, HttpMethod.POST, new HttpEntity<>(payload, headers), Map.class);
+            if (!response.getStatusCode().is2xxSuccessful()) {
+                throw new IllegalStateException("平台预检返回异常状态: " + response.getStatusCode().value());
+            }
+            Map<String, Object> body = response.getBody() == null ? Map.of() : new LinkedHashMap<>(response.getBody());
+            Object data = body.get("data");
+            if (data instanceof Map<?, ?> map) {
+                return castMap(map);
+            }
+            return body;
+        } catch (HttpStatusCodeException ex) {
+            LOG.warn("Platform pre-check failed status={} body={}", ex.getStatusCode().value(), ex.getResponseBodyAsString());
+            throw new IllegalStateException("质量预检调用失败: " + ex.getStatusCode().value());
+        } catch (RuntimeException ex) {
+            throw ex;
+        } catch (Exception ex) {
+            throw new IllegalStateException("质量预检调用失败: " + ex.getMessage(), ex);
+        }
+    }
+
     private URI buildUri(String path) {
         IngestionSettingsService.SettingsSnapshot settings = settingsService.getSettings(IngestionSettingsService.SERVICE_PLATFORM);
         String baseUrl = settings.getString("baseUrl", DEFAULT_BASE_URL);

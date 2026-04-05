@@ -174,6 +174,15 @@ public class StagingTableService {
     }
 
     /**
+     * Count total rows in the staging table.
+     */
+    public int countRows(String tableName) {
+        validateTableName(tableName);
+        Long count = jdbcTemplate.queryForObject("SELECT COUNT(*) FROM " + tableName, Long.class);
+        return count != null ? count.intValue() : 0;
+    }
+
+    /**
      * Check if all rows are CLEAN (no ERROR status rows).
      */
     public boolean allClean(String tableName) {

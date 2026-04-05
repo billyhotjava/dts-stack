@@ -9,6 +9,7 @@ import com.yuzhi.dts.ingestion.service.dto.ParseResult;
 import com.yuzhi.dts.ingestion.service.etl.BuiltInRuleChecker;
 import com.yuzhi.dts.ingestion.service.etl.ExcelParseService;
 import com.yuzhi.dts.ingestion.service.etl.StagingTableService;
+import com.yuzhi.dts.ingestion.service.infra.PlatformInfraClient;
 import java.io.InputStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -44,17 +45,20 @@ public class IngestionPreCheckResource {
     private final ExcelParseService excelParseService;
     private final StagingTableService stagingTableService;
     private final BuiltInRuleChecker builtInRuleChecker;
+    private final PlatformInfraClient platformInfraClient;
 
     public IngestionPreCheckResource(
         IngestionTaskRepository taskRepository,
         ExcelParseService excelParseService,
         StagingTableService stagingTableService,
-        BuiltInRuleChecker builtInRuleChecker
+        BuiltInRuleChecker builtInRuleChecker,
+        PlatformInfraClient platformInfraClient
     ) {
         this.taskRepository = taskRepository;
         this.excelParseService = excelParseService;
         this.stagingTableService = stagingTableService;
         this.builtInRuleChecker = builtInRuleChecker;
+        this.platformInfraClient = platformInfraClient;
     }
 
     // ----- DTOs for request / response -----
@@ -139,15 +143,8 @@ public class IngestionPreCheckResource {
 
     /**
      * POST /api/ingestion/tasks/{id}/pre-check
-     * Run governance quality rules on the staging table data.
-     *
-     * NOTE: IngestionQualityBridge is in dts-platform module and cannot be directly
-     * injected here (cross-module dependency). This endpoint is a placeholder that
-     * should be either:
-     *   (a) moved to dts-platform module, or
-     *   (b) implemented via REST call to dts-platform, or
-     *   (c) extracted to a shared module.
-     * For now, returns a TODO response indicating the cross-module concern.
+     * Run governance quality rules on the staging table data by calling
+     * dts-platform's governance pre-check API via internal REST.
      */
     @PostMapping("/{id}/pre-check")
     @Transactional
@@ -160,28 +157,49 @@ public class IngestionPreCheckResource {
                 "No staging table found. Run /parse first.");
         }
 
-        // TODO: Call IngestionQualityBridge.preCheck(stagingTableName, datasetId, totalRows)
-        // IngestionQualityBridge is in dts-platform module. Options:
-        //   1. Add a REST endpoint in dts-platform and call it via RestTemplate/WebClient
-        //   2. Move this endpoint to dts-platform
-        //   3. Extract bridge interface to a shared module
-        // For now, mark as CHECKING then PASSED (placeholder).
         task.setPreCheckStatus("CHECKING");
         taskRepository.save(task);
 
-        log.warn("Pre-check for task {} is using placeholder logic. " +
-            "IngestionQualityBridge integration pending (cross-module).", id);
+        try {
+            UUID datasetId = task.getSourceDataSourceId();
+            // Count rows via staging table query
+            int totalRows = countStagingRows(tableName);
 
-        task.setPreCheckStatus("PASSED");
-        taskRepository.save(task);
+            Map<String, Object> result = platformInfraClient.preCheckStagingData(
+                tableName, datasetId, totalRows);
 
-        return ResponseEntity.ok(new PreCheckResponse(
-            "PASSED",
-            0,
-            0,
-            0,
-            List.of()
-        ));
+            int passedRows = toInt(result.get("passedRows"));
+            int failedRows = toInt(result.get("failedRows"));
+            int total = toInt(result.get("totalRows"));
+
+            @SuppressWarnings("unchecked")
+            List<Map<String, Object>> errorsByRule =
+                result.get("errorsByRule") instanceof List<?> list ? (List<Map<String, Object>>) list : List.of();
+
+            List<String> failedRuleNames = errorsByRule.stream()
+                .map(r -> r.get("ruleName"))
+                .filter(n -> n != null)
+                .map(String::valueOf)
+                .toList();
+
+            String status = failedRows > 0 ? "FAILED" : "PASSED";
+            task.setPreCheckStatus(status);
+            taskRepository.save(task);
+
+            return ResponseEntity.ok(new PreCheckResponse(
+                status,
+                errorsByRule.size(),
+                errorsByRule.size() - failedRuleNames.size() + passedRows, // approximate passed rules
+                failedRuleNames.size(),
+                failedRuleNames
+            ));
+        } catch (Exception e) {
+            log.error("Pre-check failed for task {} via platform API: {}", id, e.getMessage());
+            task.setPreCheckStatus("FAILED");
+            taskRepository.save(task);
+            throw new ResponseStatusException(HttpStatus.BAD_GATEWAY,
+                "Quality pre-check service unavailable: " + e.getMessage());
+        }
     }
 
     /**
@@ -214,11 +232,12 @@ public class IngestionPreCheckResource {
     /**
      * POST /api/ingestion/tasks/{id}/re-check
      * Re-run pre-check on edited staging data (same flow as pre-check).
+     * After user fixes cells via PUT /staging/{rowNum}, this re-validates
+     * the staging table against governance quality rules.
      */
     @PostMapping("/{id}/re-check")
     @Transactional
     public ResponseEntity<PreCheckResponse> reCheck(@PathVariable Long id) {
-        // Re-check follows the same flow as pre-check
         return preCheck(id);
     }
 
@@ -282,6 +301,20 @@ public class IngestionPreCheckResource {
     private IngestionTask findTaskOrThrow(Long id) {
         return taskRepository.findById(id)
             .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Task not found: " + id));
+    }
+
+    private int countStagingRows(String tableName) {
+        return stagingTableService.countRows(tableName);
+    }
+
+    private int toInt(Object value) {
+        if (value == null) return 0;
+        if (value instanceof Number num) return num.intValue();
+        try {
+            return Integer.parseInt(String.valueOf(value));
+        } catch (NumberFormatException e) {
+            return 0;
+        }
     }
 
     private String extractFilePath(IngestionTask task) {
