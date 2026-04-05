@@ -133,11 +133,10 @@ public class CatalogDomainResource {
     public ApiResponse<Map<String, Object>> getDomainAssetStats(@PathVariable UUID id) {
         CatalogDomain domain = domainRepo.findById(id).orElseThrow();
         long datasetCount = datasetRepo.countByDomain(domain);
-        Map<String, Object> stats = Map.of(
-            "datasetCount", datasetCount,
-            "indicatorCount", -1L,
-            "qualityRuleCount", -1L
-        );
+        Map<String, Object> stats = new java.util.LinkedHashMap<>();
+        stats.put("datasetCount", datasetCount);
+        stats.put("indicatorCount", null);
+        stats.put("qualityRuleCount", null);
         audit.audit("READ", "catalog.domain.asset-stats", id.toString());
         return ApiResponses.ok(stats);
     }
