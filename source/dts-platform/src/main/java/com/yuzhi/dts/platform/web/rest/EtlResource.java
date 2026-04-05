@@ -302,12 +302,16 @@ public class EtlResource {
     @GetMapping("/dbt/runs/{dagRunId}/logs")
     public ApiResponse<Map<String, Object>> getDbtRunLog(
         @PathVariable String dagRunId,
-        @RequestParam(defaultValue = "dbt_load") String dagId,
+        @RequestParam(required = false) String dagId,
         @RequestParam(defaultValue = "dbt_run") String taskId,
         @RequestParam(defaultValue = "1") int tryNumber
     ) {
         if (!airflowProperties.isEnabled()) {
             return ApiResponses.error("Airflow integration is not enabled");
+        }
+        // Resolve dagId: use parameter if provided, otherwise fall back to configured default
+        if (!StringUtils.hasText(dagId)) {
+            dagId = airflowProperties.getDagId();
         }
         String log = airflowClient.getTaskInstanceLog(dagId, dagRunId, taskId, tryNumber);
         Map<String, Object> result = new LinkedHashMap<>();
