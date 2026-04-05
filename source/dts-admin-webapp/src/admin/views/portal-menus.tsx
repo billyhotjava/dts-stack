@@ -462,10 +462,7 @@ export default function PortalMenusView() {
 						</div>
 					</div>
 					<Text variant="body3" className="text-muted-foreground">
-						说明：父节点仅用于分组，不提供启用/禁用按钮；叶子节点可切换状态
-					</Text>
-					<Text variant="body3" color="warning" className="mt-1">
-						提示：禁用此项会触发菜单管理审批，请谨慎处理
+						父节点仅用于分组；禁用叶子节点会触发菜单管理审批
 					</Text>
 				</CardHeader>
 				<CardContent>
