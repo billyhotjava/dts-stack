@@ -479,7 +479,6 @@ export default function PortalMenusView() {
 								<thead className="bg-muted/40 text-left text-xs text-muted-foreground">
 									<tr>
 										<th className="px-3 py-2 font-medium">菜单名称</th>
-										<th className="px-3 py-2 font-medium">完整路径</th>
 										<th className="px-3 py-2 font-medium">状态</th>
 										<th className="px-3 py-2 font-medium">关联角色</th>
 										<th className="px-3 py-2 font-medium text-right">操作</th>
@@ -691,8 +690,8 @@ function MenuRow({
 
 	return (
 		<Fragment>
-			<tr className="border-b last:border-none align-top hover:bg-accent/5">
-				<td className="px-3 py-2 align-top">
+			<tr className="border-b last:border-none hover:bg-accent/5">
+				<td className="px-3 py-2">
 					<div className="flex items-start gap-2">
 						<span style={{ width: level * 16 }} className="shrink-0" />
 						<button
@@ -708,8 +707,7 @@ function MenuRow({
 						<div className="min-w-0 flex-1 truncate font-semibold" title={fullPathLabel}>{highlightKeyword(displayLabel, keyword)}</div>
 					</div>
 				</td>
-				<td className="px-3 py-2 align-top text-xs text-muted-foreground break-all">{fullPathLabel}</td>
-				<td className="px-3 py-2 align-top">
+				<td className="px-3 py-2">
 					{isFolder ? (
 						<Badge variant="outline">目录</Badge>
 					) : (
@@ -721,7 +719,7 @@ function MenuRow({
 						</Badge>
 					)}
 				</td>
-				<td className="px-3 py-2 align-top">
+				<td className="px-3 py-2">
 					{isFolder ? (
 						<span className="text-xs text-muted-foreground">--</span>
 					) : previewRoles.length > 0 ? (
@@ -743,7 +741,7 @@ function MenuRow({
 						</Badge>
 					)}
 				</td>
-				<td className="px-3 py-2 align-top text-right">
+				<td className="px-3 py-2 text-right">
 					{isFolder ? (
 						<span className="text-xs text-muted-foreground">--</span>
 					) : (
