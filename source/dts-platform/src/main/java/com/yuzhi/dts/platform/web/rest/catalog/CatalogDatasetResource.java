@@ -3,10 +3,13 @@ package com.yuzhi.dts.platform.web.rest.catalog;
 import com.yuzhi.dts.common.audit.AuditStage;
 import com.yuzhi.dts.platform.config.CatalogFeatureProperties;
 import com.yuzhi.dts.platform.domain.catalog.CatalogDataset;
+import com.yuzhi.dts.platform.domain.catalog.CatalogTableSchema;
 import com.yuzhi.dts.platform.repository.catalog.CatalogClassificationMappingRepository;
+import com.yuzhi.dts.platform.repository.catalog.CatalogColumnSchemaRepository;
 import com.yuzhi.dts.platform.repository.catalog.CatalogDatasetRepository;
 import com.yuzhi.dts.platform.repository.catalog.CatalogDomainRepository;
 import com.yuzhi.dts.platform.repository.catalog.CatalogMaskingRuleRepository;
+import com.yuzhi.dts.platform.repository.catalog.CatalogTableSchemaRepository;
 import com.yuzhi.dts.platform.security.SecurityUtils;
 import com.yuzhi.dts.platform.service.audit.AuditService;
 import com.yuzhi.dts.platform.service.catalog.CatalogMetadataService;
@@ -36,6 +39,8 @@ public class CatalogDatasetResource {
     private final CatalogDomainRepository domainRepo;
     private final CatalogMaskingRuleRepository maskingRepo;
     private final CatalogClassificationMappingRepository mappingRepo;
+    private final CatalogTableSchemaRepository tableSchemaRepo;
+    private final CatalogColumnSchemaRepository columnSchemaRepo;
     private final AuditService audit;
     private final CatalogFeatureProperties catalogFeatures;
     private final OrganizationVisibilityService organizationVisibilityService;
@@ -48,6 +53,8 @@ public class CatalogDatasetResource {
         CatalogDomainRepository domainRepo,
         CatalogMaskingRuleRepository maskingRepo,
         CatalogClassificationMappingRepository mappingRepo,
+        CatalogTableSchemaRepository tableSchemaRepo,
+        CatalogColumnSchemaRepository columnSchemaRepo,
         AuditService audit,
         CatalogFeatureProperties catalogFeatures,
         OrganizationVisibilityService organizationVisibilityService,
@@ -59,6 +66,8 @@ public class CatalogDatasetResource {
         this.domainRepo = domainRepo;
         this.maskingRepo = maskingRepo;
         this.mappingRepo = mappingRepo;
+        this.tableSchemaRepo = tableSchemaRepo;
+        this.columnSchemaRepo = columnSchemaRepo;
         this.audit = audit;
         this.catalogFeatures = catalogFeatures;
         this.organizationVisibilityService = organizationVisibilityService;
@@ -208,6 +217,28 @@ public class CatalogDatasetResource {
         String resourceRef = "CATALOG_ASSET_LIST".equals(actionCode) ? "page=" + page : null;
         audit.auditAction(actionCode, AuditStage.SUCCESS, resourceRef, auditPayload);
         return ApiResponses.ok(data);
+    }
+
+    @GetMapping("/datasets/{id}/fields")
+    @Transactional(readOnly = true)
+    public ApiResponse<List<Map<String, Object>>> getDatasetFields(@PathVariable UUID id) {
+        CatalogDataset dataset = datasetRepo.findById(id).orElseThrow(
+            () -> new ResponseStatusException(HttpStatus.NOT_FOUND, "数据集不存在")
+        );
+        List<CatalogTableSchema> tables = tableSchemaRepo.findByDataset(dataset);
+        List<Map<String, Object>> fields = tables.stream()
+            .flatMap(table -> columnSchemaRepo.findByTable(table).stream()
+                .map(col -> {
+                    Map<String, Object> m = new java.util.LinkedHashMap<>();
+                    m.put("name", col.getName());
+                    m.put("dataType", col.getDataType());
+                    m.put("comment", col.getComment());
+                    m.put("nullable", col.getNullable());
+                    m.put("tableName", table.getName());
+                    return m;
+                }))
+            .toList();
+        return ApiResponses.ok(fields);
     }
 
     @GetMapping("/datasets/{id}")
