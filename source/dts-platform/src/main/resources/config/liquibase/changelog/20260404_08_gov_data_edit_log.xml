@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="utf-8"?>
+<databaseChangeLog xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+        http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
+
+    <changeSet id="20260404-08-gov-data-edit-log" author="system">
+        <createTable tableName="gov_data_edit_log">
+            <column name="id" type="uuid" defaultValueComputed="gen_random_uuid()">
+                <constraints primaryKey="true" nullable="false"/>
+            </column>
+            <column name="table_name" type="varchar(200)"><constraints nullable="false"/></column>
+            <column name="row_id" type="varchar(64)"><constraints nullable="false"/></column>
+            <column name="column_name" type="varchar(200)"/>
+            <column name="old_value" type="text"/>
+            <column name="new_value" type="text"/>
+            <column name="edit_type" type="varchar(16)"><constraints nullable="false"/></column>
+            <column name="edit_reason" type="varchar(500)"/>
+            <column name="edited_by" type="varchar(64)"><constraints nullable="false"/></column>
+            <column name="edited_at" type="timestamp" defaultValueComputed="now()"><constraints nullable="false"/></column>
+        </createTable>
+        <createIndex tableName="gov_data_edit_log" indexName="idx_gdel_table_row">
+            <column name="table_name"/><column name="row_id"/>
+        </createIndex>
+        <createIndex tableName="gov_data_edit_log" indexName="idx_gdel_edited_at">
+            <column name="edited_at"/>
+        </createIndex>
+    </changeSet>
+</databaseChangeLog>

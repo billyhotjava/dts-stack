@@ -1,0 +1,46 @@
+<?xml version="1.0" encoding="utf-8"?>
+<databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+        http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
+
+    <changeSet id="20260404-06-gov-quality-failing-row" author="system">
+        <createTable tableName="gov_quality_failing_row">
+            <column name="id" type="uuid" defaultValueComputed="gen_random_uuid()">
+                <constraints primaryKey="true" nullable="false"/>
+            </column>
+            <column name="run_id" type="uuid">
+                <constraints nullable="false"/>
+            </column>
+            <column name="rule_id" type="uuid"/>
+            <column name="table_name" type="varchar(200)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="row_id" type="varchar(64)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="column_name" type="varchar(200)"/>
+            <column name="actual_value" type="text"/>
+            <column name="fail_reason" type="varchar(500)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="created_date" type="timestamp" defaultValueComputed="now()"/>
+        </createTable>
+        <addForeignKeyConstraint
+            baseTableName="gov_quality_failing_row"
+            baseColumnNames="run_id"
+            constraintName="fk_gqfr_run"
+            referencedTableName="gov_quality_run"
+            referencedColumnNames="id"
+            onDelete="CASCADE"/>
+        <createIndex tableName="gov_quality_failing_row" indexName="idx_gqfr_run_id">
+            <column name="run_id"/>
+        </createIndex>
+        <createIndex tableName="gov_quality_failing_row" indexName="idx_gqfr_table_row">
+            <column name="table_name"/>
+            <column name="row_id"/>
+        </createIndex>
+    </changeSet>
+
+</databaseChangeLog>

@@ -223,6 +223,17 @@ export default defineConfig(({ mode }) => {
     base,
     envPrefix: ["VITE_", "WEBAPP_"],
     plugins: [
+      // Redirect `import "sonner"` → dedup wrapper everywhere except
+      // dedup-toast.ts itself (which needs the real sonner package).
+      {
+        name: "sonner-dedup",
+        enforce: "pre" as const,
+        resolveId(source: string, importer: string | undefined) {
+          if (source === "sonner" && importer && !importer.includes("dedup-toast")) {
+            return resolvePath(rootDir, "src/utils/dedup-toast.ts");
+          }
+        },
+      },
       react(),
       vanillaExtractPlugin({
         identifiers: ({ debugId }) => `${debugId}`,

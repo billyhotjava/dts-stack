@@ -274,7 +274,7 @@ axiosInstance.interceptors.response.use(
 			typeof response?.status === "number" ? t(`sys.api.errMsg${response.status}`, { defaultValue: "" }) : "";
 		const errMsg = resolvedMessage || statusHint || message || t("sys.api.errorMessage");
 		(error as any).message = errMsg;
-		if (!shouldSuppressAuthHandling) {
+		if (!shouldSuppressAuthHandling && !isLoginRequest) {
 			toast.error(errMsg, { position: "top-center" });
 		}
 
