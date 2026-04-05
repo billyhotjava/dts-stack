@@ -2,6 +2,7 @@ package com.yuzhi.dts.platform.web.rest.catalog;
 
 import com.yuzhi.dts.common.audit.AuditStage;
 import com.yuzhi.dts.platform.config.CatalogFeatureProperties;
+import com.yuzhi.dts.platform.domain.catalog.CatalogColumnSchema;
 import com.yuzhi.dts.platform.domain.catalog.CatalogDataset;
 import com.yuzhi.dts.platform.domain.catalog.CatalogTableSchema;
 import com.yuzhi.dts.platform.repository.catalog.CatalogClassificationMappingRepository;
@@ -225,19 +226,37 @@ public class CatalogDatasetResource {
         CatalogDataset dataset = datasetRepo.findById(id).orElseThrow(
             () -> new ResponseStatusException(HttpStatus.NOT_FOUND, "数据集不存在")
         );
+        // P1: enabled 校验，与 getDataset 等端点保持一致
+        if (dataset.getEnabled() != null && !dataset.getEnabled().booleanValue()
+                && !SecurityUtils.isOpAdminAccount()) {
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "数据集不存在或无权访问");
+        }
         List<CatalogTableSchema> tables = tableSchemaRepo.findByDataset(dataset);
-        List<Map<String, Object>> fields = tables.stream()
-            .flatMap(table -> columnSchemaRepo.findByTable(table).stream()
-                .map(col -> {
-                    Map<String, Object> m = new java.util.LinkedHashMap<>();
-                    m.put("name", col.getName());
-                    m.put("dataType", col.getDataType());
-                    m.put("comment", col.getComment());
-                    m.put("nullable", col.getNullable());
-                    m.put("tableName", table.getName());
-                    return m;
-                }))
+        if (tables.isEmpty()) {
+            return ApiResponses.ok(List.of());
+        }
+        // P0: 批量查询替代 N+1
+        List<CatalogColumnSchema> columns = columnSchemaRepo.findByTableIn(tables);
+        Map<UUID, CatalogTableSchema> tableById = tables.stream()
+            .collect(java.util.stream.Collectors.toMap(CatalogTableSchema::getId, t -> t));
+        List<Map<String, Object>> fields = columns.stream()
+            .map(col -> {
+                Map<String, Object> m = new java.util.LinkedHashMap<>();
+                m.put("name", col.getName());
+                m.put("dataType", col.getDataType());
+                m.put("comment", col.getComment());
+                m.put("nullable", col.getNullable());
+                CatalogTableSchema t = tableById.get(col.getTable().getId());
+                m.put("tableName", t != null ? t.getName() : null);
+                return m;
+            })
             .toList();
+        // P2: 审计日志
+        Map<String, Object> auditPayload = new LinkedHashMap<>();
+        auditPayload.put("summary", "查看数据集字段列表");
+        auditPayload.put("datasetId", id.toString());
+        auditPayload.put("fieldCount", fields.size());
+        audit.auditAction("CATALOG_ASSET_VIEW", AuditStage.SUCCESS, id.toString(), auditPayload);
         return ApiResponses.ok(fields);
     }
 
