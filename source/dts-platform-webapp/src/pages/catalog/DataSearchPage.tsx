@@ -1,10 +1,10 @@
 import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
-import { Button, Card, Input, Select, Space, Table, Tag } from "antd";
-import type { ColumnsType } from "antd/es/table";
+import { Button, Card, Input, Select, Space, Tabs, Tag } from "antd";
 import { EmptyState } from "@/components/empty-state";
 import { PageHeader } from "@/components/page-header";
 import { listDomains, searchCatalog } from "@/api/platformApi";
+import { useRouter } from "@/routes/hooks";
 
 type SearchRow = {
 	id: string;
@@ -52,6 +52,7 @@ const SEARCH_FORM_STORAGE_KEY = "catalog.search.form.v1";
 const DATASET_FILTER_STORAGE_KEY = "catalog.asset.filter.v1";
 
 export default function DataSearchPage() {
+	const router = useRouter();
 	const [keyword, setKeyword] = useState("");
 	const [domain, setDomain] = useState<string | undefined>();
 	const [assetType, setAssetType] = useState<string>("ALL");
@@ -87,6 +88,12 @@ export default function DataSearchPage() {
 			...domains.map((item) => ({ label: item.name, value: item.id })),
 		];
 	}, [domains]);
+
+	const grouped = useMemo(() => ({
+		DATASET: results.filter((r) => r.assetKind === "DATASET"),
+		TABLE: results.filter((r) => r.assetKind === "TABLE"),
+		COLUMN: results.filter((r) => r.assetKind === "COLUMN"),
+	}), [results]);
 
 	const loadDomains = async () => {
 		try {
@@ -230,39 +237,6 @@ export default function DataSearchPage() {
 		}
 	};
 
-	const columns: ColumnsType<SearchRow> = [
-		{
-			title: "资产名称",
-			dataIndex: "name",
-			render: (value) => value || "-",
-		},
-		{
-			title: "类型",
-			dataIndex: "type",
-			render: (value) => (value ? <Tag>{value}</Tag> : "-"),
-		},
-		{
-			title: "主题域",
-			dataIndex: "domain",
-			render: (value) => value || "-",
-		},
-		{
-			title: "负责人",
-			dataIndex: "owner",
-			render: (value) => value || "-",
-		},
-		{
-			title: "来源",
-			dataIndex: "datasetName",
-			render: (value) => value || "-",
-		},
-		{
-			title: "更新时间",
-			dataIndex: "updatedAt",
-			render: (value) => value || "-",
-		},
-	];
-
 	return (
 		<div className="space-y-4">
 			<PageHeader
@@ -329,18 +303,71 @@ export default function DataSearchPage() {
 			</Card>
 
 			<Card title="搜索结果">
-				{results.length ? (
-					<Table
-						rowKey="id"
-						columns={columns}
-						dataSource={results}
-						loading={loading}
-						pagination={{ pageSize: 10 }}
+				{searched ? (
+					<Tabs
+						items={[
+							{
+								key: "DATASET",
+								label: `数据集（${grouped.DATASET.length}）`,
+								children: grouped.DATASET.length ? (
+									<div className="grid grid-cols-1 gap-2 md:grid-cols-2">
+										{grouped.DATASET.map((row) => (
+											<div
+												key={row.id}
+												className="cursor-pointer rounded-[18px] border border-slate-200 bg-white px-4 py-3 hover:border-blue-300 hover:shadow-sm transition-all"
+												onClick={() => router.push(`/catalog/datasets/${row.id}`)}
+											>
+												<div className="font-semibold text-sm text-slate-900">{row.name}</div>
+												<div className="mt-1 text-xs text-slate-500">{row.domain ?? "未归域"}</div>
+												<Tag style={{ fontSize: 10 }} className="mt-1">DATASET</Tag>
+											</div>
+										))}
+									</div>
+								) : (
+									<div className="py-4 text-sm text-slate-400">无匹配数据集</div>
+								),
+							},
+							{
+								key: "TABLE",
+								label: `表（${grouped.TABLE.length}）`,
+								children: grouped.TABLE.length ? (
+									<div className="space-y-2">
+										{grouped.TABLE.map((row) => (
+											<div key={row.id} className="rounded-[14px] border border-slate-200 px-3 py-2 text-sm">
+												<span className="font-medium">{row.name}</span>
+												{row.datasetName && (
+													<span className="ml-2 text-slate-400 text-xs">in {row.datasetName}</span>
+												)}
+											</div>
+										))}
+									</div>
+								) : (
+									<div className="py-4 text-sm text-slate-400">无匹配表</div>
+								),
+							},
+							{
+								key: "COLUMN",
+								label: `字段（${grouped.COLUMN.length}）`,
+								children: grouped.COLUMN.length ? (
+									<div className="space-y-2">
+										{grouped.COLUMN.map((row) => (
+											<div key={row.id} className="rounded-[14px] border border-slate-200 px-3 py-2 text-sm">
+												<span className="font-mono text-xs">{row.name}</span>
+												{row.type && <Tag className="ml-2" style={{ fontSize: 10 }}>{row.type}</Tag>}
+												{row.datasetName && (
+													<span className="ml-2 text-slate-400 text-xs">in {row.datasetName}</span>
+												)}
+											</div>
+										))}
+									</div>
+								) : (
+									<div className="py-4 text-sm text-slate-400">无匹配字段</div>
+								),
+							},
+						]}
 					/>
-				) : searched ? (
-					<EmptyState title="暂无结果" description="调整筛选条件后重新搜索。" />
 				) : (
-					<EmptyState title="开始检索" description="输入关键词并点击搜索。"/>
+					<EmptyState title="开始检索" description="输入关键词并点击搜索。" />
 				)}
 			</Card>
 		</div>
