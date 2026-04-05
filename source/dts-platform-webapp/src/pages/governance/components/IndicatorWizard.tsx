@@ -71,6 +71,8 @@ export default function IndicatorWizard({ open, template, onClose, onSuccess }: 
 			setParams({});
 			setPreviewSql("");
 			setSelectedTable("");
+			setSelectedDatasetId(undefined);
+			setPickerFields([]);
 
 			if (template) {
 				setSelectedTemplateId(template.id);
@@ -81,7 +83,6 @@ export default function IndicatorWizard({ open, template, onClose, onSuccess }: 
 				setRequiredFields([]);
 				fetchTemplates();
 			}
-			fetchTables();
 		}
 	}, [open, template]);
 
@@ -105,30 +106,6 @@ export default function IndicatorWizard({ open, template, onClose, onSuccess }: 
 		} catch {
 			// interceptor handles error
 		}
-	};
-
-	const fetchTables = async () => {
-		try {
-			const res: any = await listOdsTables();
-			setTables(Array.isArray(res) ? res : res?.data ?? []);
-		} catch {
-			// interceptor handles error
-		}
-	};
-
-	const fetchColumns = async (tableName: string) => {
-		try {
-			const res: any = await listOdsColumns(tableName);
-			setColumns(Array.isArray(res) ? res : res?.data ?? []);
-		} catch {
-			setColumns([]);
-		}
-	};
-
-	const handleTableChange = (tableName: string) => {
-		setSelectedTable(tableName);
-		setFieldMapping({});
-		if (tableName) fetchColumns(tableName);
 	};
 
 	const handleSelectTemplate = async (tpl: any) => {
@@ -181,8 +158,8 @@ export default function IndicatorWizard({ open, template, onClose, onSuccess }: 
 			toast.error("请至少选择一个蓝图");
 			return;
 		}
-		if (!selectedTable) {
-			toast.error("请选择源表");
+		if (!selectedDatasetId) {
+			toast.error("请选择数据集");
 			return;
 		}
 		setSubmitting(true);
@@ -198,13 +175,13 @@ export default function IndicatorWizard({ open, template, onClose, onSuccess }: 
 
 	const canNext = () => {
 		if (step === 0) return selectedTemplateId && selectedBlueprints.length > 0;
-		if (step === 1) return !!selectedTable;
+		if (step === 1) return !!selectedDatasetId;
 		return true;
 	};
 
-	const columnOptions = columns.map((c) => ({
-		label: `${c.columnName}${c.comment ? ` (${c.comment})` : ""}`,
-		value: c.columnName,
+	const columnOptions = pickerFields.map((f) => ({
+		label: `${f.name}${f.comment ? ` (${f.comment})` : ""}`,
+		value: f.name,
 	}));
 
 	const mappingColumns = [
@@ -318,19 +295,24 @@ export default function IndicatorWizard({ open, template, onClose, onSuccess }: 
 			<Typography.Text strong style={{ display: "block", marginBottom: 12 }}>
 				绑定源表
 			</Typography.Text>
-			<Select
+			<DatasetPicker
+				value={selectedDatasetId}
+				onChange={(id) => {
+					setSelectedDatasetId(id);
+					if (!id) {
+						setSelectedTable("");
+						setPickerFields([]);
+						setFieldMapping({});
+					}
+				}}
+				onFieldsLoaded={(fields) => {
+					setPickerFields(fields);
+					setFieldMapping({});
+					const tableName = fields[0]?.tableName ?? "";
+					setSelectedTable(tableName);
+				}}
+				placeholder="选择数据集（支持域筛选和关键字搜索）"
 				style={{ width: "100%", marginBottom: 16 }}
-				placeholder="选择 ODS 表"
-				showSearch
-				filterOption={(input, opt) =>
-					(opt?.label as string)?.toLowerCase().includes(input.toLowerCase()) ?? false
-				}
-				options={tables.map((t) => ({
-					label: `${t.tableName}${t.comment ? ` (${t.comment})` : ""}`,
-					value: t.tableName,
-				}))}
-				value={selectedTable || undefined}
-				onChange={handleTableChange}
 			/>
 
 			{requiredFields.length > 0 && (
