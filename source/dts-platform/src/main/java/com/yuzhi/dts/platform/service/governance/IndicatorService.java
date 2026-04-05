@@ -90,11 +90,11 @@ public class IndicatorService {
 
     @Transactional(readOnly = true)
     public Page<IndicatorDto> list(String keyword, String status, Pageable pageable, String activeDept) {
-        return list(keyword, status, null, null, pageable, activeDept);
+        return list(keyword, status, null, null, null, pageable, activeDept);
     }
 
     @Transactional(readOnly = true)
-    public Page<IndicatorDto> list(String keyword, String status, String domain, String category, Pageable pageable, String activeDept) {
+    public Page<IndicatorDto> list(String keyword, String status, String domain, String category, Boolean derived, Pageable pageable, String activeDept) {
         List<GovIndicatorDefinition> all = repository.findAll();
         List<GovIndicatorDefinition> filtered = new ArrayList<>();
         for (GovIndicatorDefinition indicator : all) {
@@ -103,6 +103,7 @@ public class IndicatorService {
             if (!statusMatches(indicator, status)) continue;
             if (!domainMatches(indicator, domain)) continue;
             if (!categoryMatches(indicator, category)) continue;
+            if (!derivedMatches(indicator, derived)) continue;
             if (!deptAllowed(indicator, activeDept)) continue;
             if (!levelAllowed(indicator)) continue;
             filtered.add(indicator);
@@ -885,6 +886,14 @@ public class IndicatorService {
     private boolean categoryMatches(GovIndicatorDefinition entity, String category) {
         if (!StringUtils.hasText(category)) return true;
         return category.trim().equalsIgnoreCase(entity.getCategory() != null ? entity.getCategory().trim() : "");
+    }
+
+    private boolean derivedMatches(GovIndicatorDefinition indicator, Boolean derived) {
+        if (derived == null) return true;
+        if (derived) {
+            return Boolean.TRUE.equals(indicator.getIsDerived());
+        }
+        return !Boolean.TRUE.equals(indicator.getIsDerived());
     }
 
     private void validateDomainCode(String domain) {

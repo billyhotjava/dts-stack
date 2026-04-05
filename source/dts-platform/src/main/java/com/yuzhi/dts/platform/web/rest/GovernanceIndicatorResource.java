@@ -101,11 +101,12 @@ public class GovernanceIndicatorResource {
         @RequestParam(required = false) String keyword,
         @RequestParam(required = false) String domain,
         @RequestParam(required = false) String category,
+        @RequestParam(required = false) Boolean derived,
         @RequestHeader(value = "X-Active-Dept", required = false) String activeDept
     ) {
         long startedAt = System.nanoTime();
         Pageable pageable = PageRequest.of(page, size, Sort.by("lastModifiedDate").descending());
-        Page<IndicatorDto> result = indicators.list(keyword, status, domain, category, pageable, activeDept);
+        Page<IndicatorDto> result = indicators.list(keyword, status, domain, category, derived, pageable, activeDept);
         Map<String, Object> payload = new LinkedHashMap<>();
         payload.put("content", result.getContent());
         payload.put("total", result.getTotalElements());
@@ -134,6 +135,7 @@ public class GovernanceIndicatorResource {
         if (StringUtils.hasText(keyword)) auditPayload.put("keyword", keyword.trim());
         if (StringUtils.hasText(domain)) auditPayload.put("domain", domain.trim());
         if (StringUtils.hasText(category)) auditPayload.put("category", category.trim());
+        if (derived != null) auditPayload.put("derived", derived);
         if (StringUtils.hasText(activeDept)) auditPayload.put("activeDept", activeDept.trim());
         audit.auditAction("GOV_INDICATOR_LIST", AuditStage.SUCCESS, "LIST", auditPayload);
         return ApiResponses.ok(payload);
