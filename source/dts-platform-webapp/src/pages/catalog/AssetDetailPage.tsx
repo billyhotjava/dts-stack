@@ -333,16 +333,6 @@ export default function AssetDetailPage() {
 	};
 
 	useEffect(() => {
-		if (detailRow?.id) {
-			void getDatasetIndicatorDeps(detailRow.id)
-				.then((res: any) => setIndicatorDeps(Array.isArray(res) ? res : (Array.isArray(res?.data) ? res.data : [])))
-				.catch(() => setIndicatorDeps([]));
-		} else {
-			setIndicatorDeps([]);
-		}
-	}, [detailRow?.id]);
-
-	useEffect(() => {
 		const refresh = () => {
 			if (detailRow?.id) {
 				void loadSecurityLinkage(detailRow.id);
@@ -364,6 +354,12 @@ export default function AssetDetailPage() {
 		};
 	}, [detailRow?.id, pageState.page, pageState.size, keyword, domain, assetType, classification, warehouseLayer]);
 
+	const closeDetail = () => {
+		setDetailOpen(false);
+		setDetailRow(null);
+		setIndicatorDeps([]);
+	};
+
 	const openDetail = async (row: AssetRow) => {
 		if (!row?.id) return;
 		setDetailRow(row);
@@ -376,13 +372,14 @@ export default function AssetDetailPage() {
 		setDetailOpen(true);
 		setDetailLoading(true);
 		try {
-			const [datasetResp, tableResp, grantsResp, lineageResp, linkageResp, governanceResp] = await Promise.allSettled([
+			const [datasetResp, tableResp, grantsResp, lineageResp, linkageResp, governanceResp, indicatorDepsResp] = await Promise.allSettled([
 				getDataset(row.id),
 				getTechMetadataTableDetail(`catalog:${row.id}`),
 				listDatasetGrants(row.id),
 				getCatalogLineageImpact(row.id, { direction: "BOTH", depth: 2 }),
 				getClassificationMaskingLinkage(row.id),
 				getDatasetGovernanceHealth(row.id),
+				getDatasetIndicatorDeps(row.id),
 			]);
 			if (datasetResp.status === "fulfilled") {
 				const ds: any = datasetResp.value || null;
@@ -410,6 +407,10 @@ export default function AssetDetailPage() {
 			}
 			if (governanceResp.status === "fulfilled") {
 				setGovernanceHealth((governanceResp.value || null) as GovernanceHealth | null);
+			}
+			if (indicatorDepsResp.status === "fulfilled") {
+				const res: any = indicatorDepsResp.value;
+				setIndicatorDeps(Array.isArray(res) ? res : (Array.isArray(res?.data) ? res.data : []));
 			}
 		} catch {
 			// error toast handled by global interceptor
@@ -662,8 +663,8 @@ export default function AssetDetailPage() {
 			<Modal
 				title="资产字段详情"
 				open={detailOpen}
-				onCancel={() => { setDetailOpen(false); setIndicatorDeps([]); }}
-				footer={<Button onClick={() => { setDetailOpen(false); setIndicatorDeps([]); }}>关闭</Button>}
+				onCancel={closeDetail}
+				footer={<Button onClick={closeDetail}>关闭</Button>}
 				width={860}
 			>
 				<Tabs
