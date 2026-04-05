@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { useLocation, useNavigate, useParams } from "react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Button, TreeSelect, Select as AntSelect } from "antd";
+import { EditOutlined } from "@ant-design/icons";
 import type { TreeSelectProps } from "antd";
 import { adminApi } from "@/admin/api/adminApi";
 import type { AdminRoleDetail, AdminUser, ChangeRequest, OrganizationNode } from "@/admin/types";
@@ -478,7 +479,7 @@ export default function RoleDetailView() {
 					返回角色列表
 				</Button>
 				{!isEditMode ? (
-					<Button type="primary" onClick={() => navigate(`/admin/roles/${encodeURIComponent(roleKey)}/edit`)}>
+					<Button type="primary" icon={<EditOutlined />} onClick={() => navigate(`/admin/roles/${encodeURIComponent(roleKey)}/edit`)}>
 						编辑角色
 					</Button>
 				) : null}

@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Button, Table } from "antd";
+import { EyeOutlined, EditOutlined, DeleteOutlined } from "@ant-design/icons";
 import type { ColumnsType } from "antd/es/table";
 import { Link } from "react-router";
 import { adminApi } from "@/admin/api/adminApi";
@@ -384,12 +385,13 @@ export default function RoleManagementView() {
                     const roleSlug = encodeURIComponent(toRoleName(record.authority));
                     return (
                         <div className="flex flex-wrap gap-2 justify-end">
-                            <Link to={`/admin/roles/${roleSlug}`}><Button size="small" type="default">详情</Button></Link>
-                            <Link to={`/admin/roles/${roleSlug}/edit`}><Button size="small" type="default">编辑</Button></Link>
+                            <Link to={`/admin/roles/${roleSlug}`}><Button size="small" type="default" icon={<EyeOutlined />}>详情</Button></Link>
+                            <Link to={`/admin/roles/${roleSlug}/edit`}><Button size="small" type="default" icon={<EditOutlined />}>编辑</Button></Link>
                             <Button
                                 size="small"
                                 danger
                                 type="primary"
+                                icon={<DeleteOutlined />}
                                 disabled={immutable}
                                 onClick={() => setDeleteTarget(record)}
                             >

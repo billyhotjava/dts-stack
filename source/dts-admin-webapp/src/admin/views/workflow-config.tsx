@@ -8,6 +8,7 @@ import type { UpsertWorkflowTemplatePayload, WorkflowTemplateConfig, WorkflowSte
 import { EmptyState } from "@/components/empty-state";
 import { Badge } from "@/ui/badge";
 import { Button } from "antd";
+import { DeleteOutlined } from "@ant-design/icons";
 import { Text } from "@/ui/typography";
 import { toast } from "sonner";
 
@@ -378,7 +379,7 @@ export default function WorkflowConfigView() {
 											<Text variant="body2" className="font-semibold">
 												{"第"} {index + 1} {"节点"}
 											</Text>
-											<Button size="small" type="text" onClick={() => remove(field.name)}>
+											<Button size="small" type="text" icon={<DeleteOutlined />} onClick={() => remove(field.name)}>
 												{"删除"}
 											</Button>
 										</div>

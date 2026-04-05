@@ -1,5 +1,6 @@
 import { CUSTOM_USER_ATTRIBUTE_KEYS } from "@/constants/user";
 import { Button, Table } from "antd";
+import { EditOutlined } from "@ant-design/icons";
 import type { ColumnsType } from "antd/es/table";
 import { useCallback, useEffect, useState } from "react";
 import type { KeycloakGroup, KeycloakRole, KeycloakUser, UserProfileConfig } from "#/keycloak";
@@ -331,8 +332,8 @@ export default function UserDetailView() {
 					{/* <Button variant="outline" onClick={() => setResetPasswordModal(true)}>
             <Icon icon="solar:lock-password-unlocked-broken" className="mr-1" /> 重置密码
           </Button> */}
-					<Button type="primary" onClick={() => setEditModal(true)}>
-						<Icon icon="solar:pen-new-square-broken" className="mr-1" /> 编辑
+					<Button type="primary" icon={<EditOutlined />} onClick={() => setEditModal(true)}>
+						编辑
 					</Button>
 				</div>
 			</div>

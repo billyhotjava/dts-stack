@@ -1,4 +1,5 @@
 import { Button, Table } from "antd";
+import { EditOutlined, EyeOutlined } from "@ant-design/icons";
 import type { ColumnsType } from "antd/es/table";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import type { KeycloakUser } from "#/keycloak";
@@ -389,12 +390,13 @@ export default function UserManagementView() {
         onCell: () => ({ style: { verticalAlign: "middle" } }),
         render: (_, record) => (
           <div className="flex items-center gap-2 justify-end">
-            <Button size="small" type="default" onClick={() => setModalState({ open: true, mode: "edit", target: toKeycloakUser(record) })}>
+            <Button size="small" type="default" icon={<EditOutlined />} onClick={() => setModalState({ open: true, mode: "edit", target: toKeycloakUser(record) })}>
               编辑
             </Button>
             <Button
               size="small"
               type="text"
+              icon={<EyeOutlined />}
               onClick={() => {
                 const id = record.keycloakId || record.username;
                 if (!id) return;

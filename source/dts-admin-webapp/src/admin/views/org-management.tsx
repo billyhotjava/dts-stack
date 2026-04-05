@@ -11,6 +11,7 @@ import type { OrganizationNode, OrganizationCreatePayload, OrganizationUpdatePay
 import { Icon } from "@/components/icon";
 import { Badge } from "@/ui/badge";
 import { Button } from "antd";
+import { EditOutlined } from "@ant-design/icons";
 import { Card, CardContent, CardHeader, CardTitle } from "@/ui/card";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/ui/dialog";
 import { Form, FormControl, FormDescription, FormField, FormItem, FormLabel, FormMessage } from "@/ui/form";
@@ -471,7 +472,7 @@ export default function OrgManagementView() {
 								<Button type="default" size="small" onClick={openCreateChild} disabled={!selected}>
 									创建下级
 								</Button>
-								<Button type="default" size="small" onClick={openEdit} disabled={!selected}>
+								<Button type="default" size="small" icon={<EditOutlined />} onClick={openEdit} disabled={!selected}>
 									编辑
 								</Button>
 								<Button
