@@ -20,7 +20,8 @@ import type { DataNode } from "antd/es/tree";
 import { useSearchParams } from "react-router";
 import { EmptyState } from "@/components/empty-state";
 import { useGovernanceManageAccess } from "@/hooks/useModuleManageAccess";
-import { createDomain, deleteDomain, getDomainAssetStats, getDomainTree, updateDomain } from "@/api/platformApi";
+import { createDomain, deleteDomain, getDomainAssetStats, getDomainIndicatorStats, getDomainTree, updateDomain } from "@/api/platformApi";
+import { useRouter } from "@/routes/hooks";
 import { normalizeText } from "@/utils/textUtils";
 
 const { Sider, Content } = Layout;
@@ -122,6 +123,9 @@ export default function SubjectAreasPage() {
 	const [editing, setEditing] = useState<DomainNode | null>(null);
 	const [form] = Form.useForm();
 	const canManage = useGovernanceManageAccess();
+	const router = useRouter();
+	const [indicatorStats, setIndicatorStats] = useState<{ total: number; published: number; draft: number } | null>(null);
+	const [indicatorStatsLoading, setIndicatorStatsLoading] = useState(false);
 	const [assetStats, setAssetStats] = useState<{
 		datasetCount: number;
 		indicatorCount: number | null;
@@ -191,6 +195,18 @@ export default function SubjectAreasPage() {
 			setAssetStats(null);
 		}
 	}, [activeDomain?.id, loadAssetStats]);
+
+	useEffect(() => {
+		if (!activeDomain?.id) {
+			setIndicatorStats(null);
+			return;
+		}
+		setIndicatorStatsLoading(true);
+		getDomainIndicatorStats(activeDomain.id)
+			.then((res: any) => setIndicatorStats(res ?? null))
+			.catch(() => setIndicatorStats(null))
+			.finally(() => setIndicatorStatsLoading(false));
+	}, [activeDomain?.id]);
 
 	useEffect(() => {
 		syncQuery();
@@ -414,6 +430,37 @@ export default function SubjectAreasPage() {
 										<Text>质量规则数</Text>
 										<Text strong>{assetStats?.qualityRuleCount != null ? assetStats.qualityRuleCount : "-"}</Text>
 									</div>
+								</div>
+								<div className="rounded-[22px] border border-slate-200 bg-slate-50 px-4 py-4">
+									<div className="mb-3 text-sm font-semibold text-slate-900">域级指标统计</div>
+									{indicatorStatsLoading ? (
+										<div className="text-xs text-slate-400">加载中...</div>
+									) : indicatorStats && indicatorStats.total > 0 ? (
+										<div className="space-y-2">
+											<div className="grid grid-cols-3 gap-3 text-center">
+												<div className="rounded border border-slate-100 bg-slate-50 p-2">
+													<div className="text-lg font-bold text-slate-800">{indicatorStats.total}</div>
+													<div className="text-xs text-slate-500">总数</div>
+												</div>
+												<div className="rounded border border-green-100 bg-green-50 p-2">
+													<div className="text-lg font-bold text-green-600">{indicatorStats.published}</div>
+													<div className="text-xs text-slate-500">已发布</div>
+												</div>
+												<div className="rounded border border-orange-100 bg-orange-50 p-2">
+													<div className="text-lg font-bold text-orange-500">{indicatorStats.draft}</div>
+													<div className="text-xs text-slate-500">草稿</div>
+												</div>
+											</div>
+											<a
+												onClick={() => router.push(`/governance/indicator-center?domain=${activeDomain?.code ?? ""}`)}
+												className="cursor-pointer text-xs text-blue-500 hover:underline"
+											>
+												查看该域全部指标 →
+											</a>
+										</div>
+									) : (
+										<div className="text-xs text-slate-400">暂无指标</div>
+									)}
 								</div>
 							</div>
 
