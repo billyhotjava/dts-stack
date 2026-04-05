@@ -263,11 +263,11 @@ export default function Page() {
 		return Array.from(map.entries()).sort((a, b) => b[1] - a[1]);
 	}, [records]);
 
-	const buildTreeNodes = (nodes: DomainNode[]): any[] =>
-		nodes.map((n) => ({
-			key: n.id ?? n.code ?? n.name ?? Math.random().toString(),
+	const buildTreeNodes = (nodes: DomainNode[], prefix = "domain"): any[] =>
+		nodes.map((n, i) => ({
+			key: n.id ?? `fallback-${prefix}-${i}`,
 			title: n.name ?? n.code ?? "未命名",
-			children: n.children?.length ? buildTreeNodes(n.children) : undefined,
+			children: n.children?.length ? buildTreeNodes(n.children, `${prefix}-${i}`) : undefined,
 		}));
 
 	const treeData = [
@@ -354,7 +354,8 @@ export default function Page() {
 						defaultSelectedKeys={["ALL"]}
 						onSelect={(keys) => {
 							const selected = String(keys?.[0] ?? "ALL");
-							setDomain(selected === "ALL" ? undefined : selected);
+							// key is either "ALL" or n.id (UUID); fallback-* keys have no valid id
+							setDomain(selected === "ALL" || selected.startsWith("fallback-") ? undefined : selected);
 						}}
 					/>
 				</Spin>
