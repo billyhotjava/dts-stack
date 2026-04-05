@@ -231,6 +231,7 @@ export default function DataSearchPage() {
 			setResults(normalizeRows(resp || {}));
 			saveCurrentQuery();
 		} catch {
+			setResults([]);
 			// error toast handled by global interceptor
 		} finally {
 			setLoading(false);
