@@ -895,5 +895,5 @@ export const getDomainIndicatorStats = (domainId: string) =>
 export const importIndicatorTemplates = (file: File) => {
 	const form = new FormData();
 	form.append("file", file);
-	return api.post({ url: "/governance/indicator-templates/import", data: form, headers: { "Content-Type": "multipart/form-data" } });
+	return api.post({ url: "/governance/indicator-templates/import", data: form });
 };
