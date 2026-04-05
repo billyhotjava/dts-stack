@@ -18,7 +18,7 @@ import {
 	Typography,
 	message,
 } from "antd";
-import { PlayCircleOutlined, ReloadOutlined } from "@ant-design/icons";
+import { PlayCircleOutlined, ReloadOutlined, EyeOutlined } from "@ant-design/icons";
 import {
 	ingestionTaskAPI,
 	type IngestionExecutionDTO,
@@ -588,7 +588,7 @@ export default function ExecutionHistoryTable({ taskId }: ExecutionHistoryTableP
 								<Tag color="warning">未推进</Tag>
 							)}
 						</Tooltip>
-						<Button type="link" size="small" onClick={() => openAuditDetail(record)}>
+						<Button type="link" size="small" icon={<EyeOutlined />} onClick={() => openAuditDetail(record)}>
 							详情
 						</Button>
 					</Space>

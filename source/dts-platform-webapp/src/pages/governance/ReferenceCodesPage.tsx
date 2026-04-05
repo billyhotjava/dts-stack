@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import { Alert, Button, Card, Form, Input, List, Modal, Select, Space, Table, Tag, Typography } from "antd";
 import type { ColumnsType } from "antd/es/table";
+import { EditOutlined, DeleteOutlined } from "@ant-design/icons";
 import { useNavigate, useSearchParams } from "react-router";
 import { EmptyState } from "@/components/empty-state";
 import { useGovernanceManageAccess } from "@/hooks/useModuleManageAccess";
@@ -785,10 +786,10 @@ export default function ReferenceCodesPage() {
 					<Button type="link" size="small" onClick={() => openReferences(row)}>
 						引用关系
 					</Button>
-					<Button type="link" size="small" onClick={() => openModal(row)} disabled={!canManage}>
+					<Button type="link" size="small" icon={<EditOutlined />} onClick={() => openModal(row)} disabled={!canManage}>
 						编辑
 					</Button>
-					<Button type="link" size="small" danger onClick={() => removeDirectory(row)} disabled={!canManage}>
+					<Button type="link" size="small" danger icon={<DeleteOutlined />} onClick={() => removeDirectory(row)} disabled={!canManage}>
 						删除
 					</Button>
 				</Space>
@@ -812,10 +813,10 @@ export default function ReferenceCodesPage() {
 				title: "操作",
 				render: (_, row) => (
 					<Space>
-						<Button type="link" size="small" onClick={() => openItemModal(row)} disabled={!canManage}>
+						<Button type="link" size="small" icon={<EditOutlined />} onClick={() => openItemModal(row)} disabled={!canManage}>
 							编辑
 						</Button>
-						<Button type="link" size="small" danger onClick={() => removeItem(row)} disabled={!canManage}>
+						<Button type="link" size="small" danger icon={<DeleteOutlined />} onClick={() => removeItem(row)} disabled={!canManage}>
 							删除
 						</Button>
 					</Space>
@@ -834,10 +835,10 @@ export default function ReferenceCodesPage() {
 				title: "操作",
 				render: (_, row) => (
 					<Space>
-						<Button type="link" size="small" onClick={() => openMappingModal(row)} disabled={!canManage}>
+						<Button type="link" size="small" icon={<EditOutlined />} onClick={() => openMappingModal(row)} disabled={!canManage}>
 							编辑
 						</Button>
-						<Button type="link" size="small" danger onClick={() => removeMapping(row)} disabled={!canManage}>
+						<Button type="link" size="small" danger icon={<DeleteOutlined />} onClick={() => removeMapping(row)} disabled={!canManage}>
 							删除
 						</Button>
 					</Space>

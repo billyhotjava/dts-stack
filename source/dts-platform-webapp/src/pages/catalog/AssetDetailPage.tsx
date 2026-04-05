@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import { Alert, Button, Card, Form, Input, Modal, Select, Space, Table, Tabs, Tag, Typography } from "antd";
 import type { ColumnsType } from "antd/es/table";
+import { EyeOutlined } from "@ant-design/icons";
 import { EmptyState } from "@/components/empty-state";
 import {
 	getCatalogLineageImpact,
@@ -567,7 +568,7 @@ export default function AssetDetailPage() {
 			title: "操作",
 			dataIndex: "actions",
 			render: (_, row) => (
-				<Button type="link" size="small" onClick={() => void openDetail(row)}>
+				<Button type="link" size="small" icon={<EyeOutlined />} onClick={() => void openDetail(row)}>
 					详情
 				</Button>
 			),

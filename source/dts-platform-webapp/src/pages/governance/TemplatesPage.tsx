@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import { Badge, Button, Card, Divider, Form, Input, List, Modal, Select, Space, Spin, Tag, Typography } from "antd";
+import { EditOutlined, DeleteOutlined } from "@ant-design/icons";
 import { useNavigate, useSearchParams } from "react-router";
 import { EmptyState } from "@/components/empty-state";
 import { useGovernanceManageAccess } from "@/hooks/useModuleManageAccess";
@@ -421,10 +422,10 @@ export default function TemplatesPage() {
 					extra={
 						activeTemplate ? (
 							<Space>
-								<Button size="small" onClick={() => openModal(activeTemplate)} disabled={!canManage}>
+								<Button size="small" icon={<EditOutlined />} onClick={() => openModal(activeTemplate)} disabled={!canManage}>
 									编辑
 								</Button>
-								<Button size="small" danger onClick={() => removeTemplate(activeTemplate)} disabled={!canManage}>
+								<Button size="small" danger icon={<DeleteOutlined />} onClick={() => removeTemplate(activeTemplate)} disabled={!canManage}>
 									删除
 								</Button>
 							</Space>

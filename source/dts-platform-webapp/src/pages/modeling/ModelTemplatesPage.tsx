@@ -14,6 +14,7 @@ import {
 	Typography,
 } from "antd";
 import type { ColumnsType } from "antd/es/table";
+import { EditOutlined, DeleteOutlined } from "@ant-design/icons";
 import { EmptyState } from "@/components/empty-state";
 import { PageHeader } from "@/components/page-header";
 import {
@@ -271,7 +272,7 @@ export default function Page() {
 				width: 280,
 				render: (_, row) => (
 					<Space>
-						<Button size="small" onClick={() => openEdit(row)}>
+						<Button size="small" icon={<EditOutlined />} onClick={() => openEdit(row)}>
 							编辑
 						</Button>
 						<Button size="small" onClick={() => openPublish(row)} disabled={normalizeUpper(row.status) === "ARCHIVED"}>
@@ -286,7 +287,7 @@ export default function Page() {
 								归档
 							</Button>
 						)}
-						<Button size="small" danger onClick={() => handleDelete(row)}>
+						<Button size="small" danger icon={<DeleteOutlined />} onClick={() => handleDelete(row)}>
 							删除
 						</Button>
 					</Space>

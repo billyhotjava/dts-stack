@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import { toast } from "sonner";
 import { Button, Card, Descriptions, Divider, Drawer, Form, Input, List, Modal, Space, Spin, Table, Typography } from "antd";
 import type { ColumnsType } from "antd/es/table";
-import { EyeOutlined } from "@ant-design/icons";
+import { EyeOutlined, EditOutlined, DeleteOutlined } from "@ant-design/icons";
 import { useNavigate, useSearchParams } from "react-router";
 import { EmptyState } from "@/components/empty-state";
 import { useGovernanceManageAccess } from "@/hooks/useModuleManageAccess";
@@ -227,10 +227,10 @@ export default function GlossaryPage() {
 					>
 						详情
 					</Button>
-					<Button type="link" size="small" onClick={() => openModal(row)} disabled={!canManage}>
+					<Button type="link" size="small" icon={<EditOutlined />} onClick={() => openModal(row)} disabled={!canManage}>
 						编辑
 					</Button>
-					<Button type="link" size="small" danger onClick={() => removeGlossary(row)} disabled={!canManage}>
+					<Button type="link" size="small" danger icon={<DeleteOutlined />} onClick={() => removeGlossary(row)} disabled={!canManage}>
 						删除
 					</Button>
 				</Space>

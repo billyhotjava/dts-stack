@@ -15,6 +15,7 @@ import {
 	Tree,
 	Typography,
 } from "antd";
+import { EditOutlined, DeleteOutlined } from "@ant-design/icons";
 import type { DataNode } from "antd/es/tree";
 import { useSearchParams } from "react-router";
 import { EmptyState } from "@/components/empty-state";
@@ -378,10 +379,10 @@ export default function SubjectAreasPage() {
 									) : null}
 								</div>
 								<Space>
-									<Button onClick={() => openModal(activeDomain, activeDomain.parentId)} disabled={!canManage}>
+									<Button icon={<EditOutlined />} onClick={() => openModal(activeDomain, activeDomain.parentId)} disabled={!canManage}>
 										编辑域属性
 									</Button>
-									<Button danger onClick={() => confirmDelete(activeDomain)} disabled={!canManage}>
+									<Button danger icon={<DeleteOutlined />} onClick={() => confirmDelete(activeDomain)} disabled={!canManage}>
 										删除域
 									</Button>
 								</Space>

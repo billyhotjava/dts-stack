@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { Button, Card, Select, Space, Table, Tag } from "antd";
 import type { ColumnsType } from "antd/es/table";
+import { EyeOutlined } from "@ant-design/icons";
 import { CheckCircle2, RefreshCw, Shield, Workflow } from "lucide-react";
 import { PlatformSummaryCards } from "@/components/console-page";
 import { EmptyState } from "@/components/empty-state";
@@ -131,7 +132,7 @@ export default function Page() {
 					return <Button onClick={() => push("/dashboard/governance/quality-rules")}>查看质量</Button>;
 				}
 				if (record.type === "SCHEMA_DRIFT") {
-					return <Button onClick={() => push("/dashboard/catalog/datasets")}>查看详情</Button>;
+					return <Button icon={<EyeOutlined />} onClick={() => push("/dashboard/catalog/datasets")}>查看详情</Button>;
 				}
 				return "-";
 			},

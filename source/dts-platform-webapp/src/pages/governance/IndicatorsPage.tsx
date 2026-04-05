@@ -1742,10 +1742,10 @@ export default function Page() {
 								width: 150,
 								render: (_, record) => (
 									<Space>
-										<Button size="small" onClick={() => editReference(record)} disabled={!canManage}>
+										<Button size="small" icon={<EditOutlined />} onClick={() => editReference(record)} disabled={!canManage}>
 											编辑
 										</Button>
-										<Button size="small" danger onClick={() => void removeReference(record.id)} disabled={!canManage}>
+										<Button size="small" danger icon={<DeleteOutlined />} onClick={() => void removeReference(record.id)} disabled={!canManage}>
 											删除
 										</Button>
 									</Space>

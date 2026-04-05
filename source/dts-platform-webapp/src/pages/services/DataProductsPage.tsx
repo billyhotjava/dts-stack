@@ -13,7 +13,7 @@ import {
 	Typography,
 } from "antd";
 import type { ColumnsType } from "antd/es/table";
-import { PlusOutlined, EditOutlined, DeleteOutlined, FileAddOutlined } from "@ant-design/icons";
+import { PlusOutlined, EditOutlined, DeleteOutlined, FileAddOutlined, EyeOutlined } from "@ant-design/icons";
 import { PageHeader } from "@/components/page-header";
 import dataProductsService, {
 	type DataProductDetail,
@@ -177,7 +177,7 @@ export default function Page() {
 			width: 260,
 			render: (_, record) => (
 				<Space>
-					<Button size="small" onClick={() => openDetail(record)}>详情</Button>
+					<Button size="small" icon={<EyeOutlined />} onClick={() => openDetail(record)}>详情</Button>
 					<Button size="small" icon={<FileAddOutlined />} onClick={() => openVersionModal(record)}>
 						新增版本
 					</Button>

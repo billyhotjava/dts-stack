@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { Button, Card, Col, Form, Input, Modal, Row, Select, Space, Table, Tag } from "antd";
+import { EditOutlined } from "@ant-design/icons";
 import { Database, FileCheck, ListTodo, Monitor, RefreshCw, TrendingUp } from "lucide-react";
 import { toast } from "sonner";
 import workbenchService, {
@@ -528,7 +529,7 @@ export default function Page() {
 												<Button size="small" type="primary" onClick={() => openFavorite(favorite)}>
 													打开
 												</Button>
-												<Button size="small" onClick={() => openFavoriteEdit(favorite)}>
+												<Button size="small" icon={<EditOutlined />} onClick={() => openFavoriteEdit(favorite)}>
 													编辑
 												</Button>
 											</Space>
