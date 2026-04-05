@@ -862,3 +862,27 @@ export const deleteSubscription = (id: string) =>
 	api.delete({ url: `/governance/indicators/subscriptions/${id}` });
 export const updateSubscription = (id: string, data: { filterConfig?: string; displayOrder?: number }) =>
 	api.put({ url: `/governance/indicators/subscriptions/${id}`, data });
+
+// Data Products
+export type DataProduct = {
+	id?: string;
+	name: string;
+	code?: string;
+	ownerDept?: string;
+	description?: string;
+	datasetIds?: string;
+	indicatorCodes?: string;
+	status?: "DRAFT" | "PUBLISHED" | "OFFLINE";
+};
+
+export const listDataProducts = (page = 0, size = 20) =>
+	api.get({ url: "/catalog/data-products", params: { page, size } });
+
+export const createDataProduct = (data: Omit<DataProduct, "id">) =>
+	api.post({ url: "/catalog/data-products", data });
+
+export const updateDataProduct = (id: string, data: Partial<DataProduct>) =>
+	api.put({ url: `/catalog/data-products/${id}`, data });
+
+export const deleteDataProduct = (id: string) =>
+	api.delete({ url: `/catalog/data-products/${id}` });
