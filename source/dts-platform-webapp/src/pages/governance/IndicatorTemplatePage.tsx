@@ -11,9 +11,10 @@ import {
 	Tag,
 	Tooltip,
 	Typography,
+	Upload,
 } from "antd";
 import type { ColumnsType } from "antd/es/table";
-import { PlusOutlined, DeleteOutlined, EditOutlined, RocketOutlined } from "@ant-design/icons";
+import { PlusOutlined, DeleteOutlined, EditOutlined, RocketOutlined, UploadOutlined } from "@ant-design/icons";
 import { useGovernanceManageAccess } from "@/hooks/useModuleManageAccess";
 import {
 	listIndicatorTemplates,
@@ -21,25 +22,10 @@ import {
 	createIndicatorTemplate,
 	updateIndicatorTemplate,
 	deleteIndicatorTemplate,
+	getDomainTree,
+	importIndicatorTemplates,
 } from "@/api/platformApi";
 import IndicatorWizard from "./components/IndicatorWizard";
-
-const DOMAIN_TABS = [
-	{ key: "", label: "全部" },
-	{ key: "FINANCE", label: "财务" },
-	{ key: "OPERATION", label: "运营" },
-	{ key: "QUALITY", label: "质量" },
-	{ key: "COMPLIANCE", label: "合规" },
-	{ key: "CUSTOM", label: "自定义" },
-];
-
-const DOMAIN_COLORS: Record<string, string> = {
-	FINANCE: "blue",
-	OPERATION: "green",
-	QUALITY: "orange",
-	COMPLIANCE: "red",
-	CUSTOM: "purple",
-};
 
 type Template = any;
 
@@ -47,6 +33,7 @@ export default function Page() {
 	const [templates, setTemplates] = useState<Template[]>([]);
 	const [loading, setLoading] = useState(false);
 	const [domain, setDomain] = useState("");
+	const [domainTabs, setDomainTabs] = useState<Array<{ key: string; label: string }>>([{ key: "", label: "全部" }]);
 	const [modalOpen, setModalOpen] = useState(false);
 	const [editing, setEditing] = useState<Template | null>(null);
 	const [wizardOpen, setWizardOpen] = useState(false);
@@ -69,6 +56,55 @@ export default function Page() {
 	useEffect(() => {
 		fetchList();
 	}, [domain]);
+
+	useEffect(() => {
+		getDomainTree()
+			.then((res: any) => {
+				const nodes: any[] = Array.isArray(res) ? res : res?.data ?? [];
+				const flatten = (items: any[]): Array<{ key: string; label: string }> =>
+					items.flatMap((n) => [
+						{ key: n.code || "", label: n.name || n.code || "未知" },
+						...(n.children?.length ? flatten(n.children) : []),
+					]).filter((d) => d.key);
+				setDomainTabs([{ key: "", label: "全部" }, ...flatten(nodes)]);
+			})
+			.catch(() => { /* keep default */ });
+	}, []);
+
+	const handleImport = async (file: File) => {
+		try {
+			const result: any = await importIndicatorTemplates(file);
+			toast.success(
+				`导入完成：新增 ${result.created ?? 0}，更新 ${result.updated ?? 0}，跳过 ${result.skipped ?? 0}`
+			);
+			fetchList();
+		} catch {
+			// global interceptor handles
+		}
+		return false;
+	};
+
+	const handleDownloadExample = () => {
+		const example = [
+			{
+				code: "TPL_EXAMPLE",
+				name: "示例模板",
+				domain: "",
+				description: "这是一个示例模板",
+				indicatorBlueprints: "[]",
+				requiredSourceFields: "[]",
+				seedTables: "[]",
+				recommendedSnapshot: false,
+			},
+		];
+		const blob = new Blob([JSON.stringify(example, null, 2)], { type: "application/json" });
+		const url = URL.createObjectURL(blob);
+		const a = document.createElement("a");
+		a.href = url;
+		a.download = "indicator-template-example.json";
+		a.click();
+		URL.revokeObjectURL(url);
+	};
 
 	const openCreate = () => {
 		setEditing(null);
@@ -153,7 +189,7 @@ export default function Page() {
 			title: "领域",
 			dataIndex: "domain",
 			width: 100,
-			render: (v: string) => v ? <Tag color={DOMAIN_COLORS[v] ?? "default"}>{v}</Tag> : "-",
+			render: (v: string) => v ? <Tag color="default">{v}</Tag> : "-",
 		},
 		{
 			title: "蓝图数量",
@@ -223,16 +259,28 @@ export default function Page() {
 			<div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
 				<Typography.Title level={4} style={{ margin: 0 }}>指标模板管理</Typography.Title>
 				{canManage && (
-					<Button type="primary" icon={<PlusOutlined />} onClick={openCreate}>
-						新建模板
-					</Button>
+					<Space>
+						<Button type="primary" icon={<PlusOutlined />} onClick={openCreate}>
+							新建模板
+						</Button>
+						<Upload
+							accept=".json"
+							showUploadList={false}
+							beforeUpload={(file) => { handleImport(file); return false; }}
+						>
+							<Button icon={<UploadOutlined />}>导入</Button>
+						</Upload>
+						<Button type="link" size="small" onClick={handleDownloadExample}>
+							下载格式示例
+						</Button>
+					</Space>
 				)}
 			</div>
 
 			<Tabs
 				activeKey={domain}
 				onChange={setDomain}
-				items={DOMAIN_TABS.map((t) => ({ key: t.key, label: t.label }))}
+				items={domainTabs.map((t) => ({ key: t.key, label: t.label }))}
 				style={{ marginBottom: 16 }}
 			/>
 
