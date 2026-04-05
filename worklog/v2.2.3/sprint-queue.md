@@ -73,16 +73,16 @@
 **统计**: READY=0, IN_PROGRESS=0, DONE=29, BLOCKED=0
 
 ## Sprint-6: Airflow 运维对接体系重构 (202604)
-**状态**: IN_PROGRESS
+**状态**: DONE
 **类型**: Implementation（实施型）
 
 | Feature | Task 数 | 状态 |
 |---------|---------|------|
-| F1-日志中心页面 | 3 | READY |
-| F2-日志预览抽屉 | 2 | READY |
-| F3-任务编排增强 | 2 | READY |
-| F4-运行概览增强 | 2 | READY |
-| F5-任务实例监控增强 | 3 | READY |
-| F6-后端接口补全 | 2 | READY |
+| F1-日志中心页面 | 3 | DONE |
+| F2-日志预览抽屉 | 2 | DONE |
+| F3-任务编排增强 | 2 | DONE |
+| F4-运行概览增强 | 2 | DONE |
+| F5-任务实例监控增强 | 3 | DONE |
+| F6-后端接口补全 | 2 | DONE |
 
-**统计**: READY=14, IN_PROGRESS=0, DONE=0, BLOCKED=0
+**统计**: READY=0, IN_PROGRESS=0, DONE=14, BLOCKED=0
