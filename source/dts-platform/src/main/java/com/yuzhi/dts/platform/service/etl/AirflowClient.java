@@ -29,11 +29,12 @@ public class AirflowClient {
 
     private final RestTemplate restTemplate;
     private final AirflowProperties properties;
-    private final ObjectMapper objectMapper = new ObjectMapper();
+    private final ObjectMapper objectMapper;
 
-    public AirflowClient(RestTemplateBuilder builder, AirflowProperties properties) {
+    public AirflowClient(RestTemplateBuilder builder, AirflowProperties properties, ObjectMapper objectMapper) {
         this.restTemplate = builder.setConnectTimeout(Duration.ofSeconds(5)).setReadTimeout(Duration.ofSeconds(10)).build();
         this.properties = properties;
+        this.objectMapper = objectMapper;
     }
 
     public Optional<Map<String, Object>> triggerDag(String dagId, Map<String, Object> payload) {
