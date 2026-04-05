@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import dayjs from "dayjs";
 import type { EChartsOption } from "echarts";
 import { Alert, Button, Card, Col, Empty, InputNumber, Row, Select, Space, Statistic, Table, Tabs, Tag, Typography } from "antd";
 import { ReloadOutlined } from "@ant-design/icons";
@@ -6,7 +7,9 @@ import type { ColumnsType } from "antd/es/table";
 import { Chart } from "@/components/chart/chart";
 import { EmptyState } from "@/components/empty-state";
 import { PageHeader } from "@/components/page-header";
+import { useLogPreview } from "@/components/log-preview/LogPreviewContext";
 import opsService, {
+	type ExternalRun,
 	type OpsAlert,
 	type OpsDevCenterMetrics,
 	type OpsDevCenterTopFailure,
@@ -71,6 +74,8 @@ const projectLoadColumns = [
 
 // ─── Component ───────────────────────────────────────────────────────
 export default function OpsOverviewPage() {
+	const { openLogPreview } = useLogPreview();
+
 	// ── Dev-center state ──
 	const [overview, setOverview] = useState<OpsOverview | null>(null);
 	const [metrics, setMetrics] = useState<OpsDevCenterMetrics | null>(null);
@@ -92,6 +97,11 @@ export default function OpsOverviewPage() {
 	const [obsDays, setObsDays] = useState<number>(7);
 	const [obsTimeoutMinutes, setObsTimeoutMinutes] = useState<number>(10);
 	const [ingestionTasks, setIngestionTasks] = useState<IngestionTaskDTO[]>([]);
+
+	// ── DAG cards state ──
+	const [runningDags, setRunningDags] = useState<ExternalRun[]>([]);
+	const [failedDags, setFailedDags] = useState<ExternalRun[]>([]);
+	const [dagCardsLoading, setDagCardsLoading] = useState(false);
 
 	// ── Dev-center data loading ──
 	const loadData = async () => {
@@ -115,6 +125,26 @@ export default function OpsOverviewPage() {
 	useEffect(() => {
 		void loadData();
 	}, [days, entryKey, ownerDept, planId]);
+
+	const loadDagCards = async () => {
+		setDagCardsLoading(true);
+		try {
+			const [running, failed] = await Promise.all([
+				opsService.externalRuns({ entryKey: "AIRFLOW_DAG", status: "RUNNING", limit: 10 }),
+				opsService.externalRuns({ entryKey: "AIRFLOW_DAG", status: "FAILED", limit: 10 }),
+			]);
+			setRunningDags(Array.isArray(running) ? running : []);
+			setFailedDags(Array.isArray(failed) ? failed : []);
+		} catch {
+			// handled by interceptor
+		} finally {
+			setDagCardsLoading(false);
+		}
+	};
+
+	useEffect(() => {
+		void loadDagCards();
+	}, []);
 
 	// ── Ingestion data loading ──
 	const loadIngestionTasks = async () => {
@@ -336,6 +366,106 @@ export default function OpsOverviewPage() {
 					/>
 				) : (
 					<EmptyState title="暂无告警" description="当前没有质量或任务告警。" />
+				)}
+			</Card>
+
+			<Card
+				title="当前运行中 DAG"
+				size="small"
+				loading={dagCardsLoading}
+				extra={<Button size="small" onClick={() => void loadDagCards()}>刷新</Button>}
+			>
+				{runningDags.length > 0 ? (
+					<Table
+						size="small"
+						pagination={false}
+						rowKey="id"
+						dataSource={runningDags}
+						columns={[
+							{ title: "DAG", dataIndex: "dagId", render: (v) => v || "-" },
+							{ title: "任务", dataIndex: "artifactName", render: (v) => v || "-" },
+							{
+								title: "开始时间",
+								dataIndex: "startedAt",
+								render: (v) => (v ? dayjs(v).format("MM-DD HH:mm:ss") : "-"),
+							},
+							{
+								title: "操作",
+								width: 80,
+								render: (_: unknown, r: ExternalRun) => (
+									<Button
+										type="link"
+										size="small"
+										onClick={() =>
+											openLogPreview({
+												entryKey: "AIRFLOW_DAG",
+												dagId: r.dagId,
+												dagRunId: r.externalRunId ?? undefined,
+												taskId: "dbt_run",
+												tryNumber: 1,
+											})
+										}
+									>
+										日志
+									</Button>
+								),
+							},
+						]}
+					/>
+				) : (
+					<div className="py-4 text-center text-gray-400 text-sm">当前没有运行中的 DAG</div>
+				)}
+			</Card>
+
+			<Card
+				title="最近失败 DAG Run"
+				size="small"
+				loading={dagCardsLoading}
+			>
+				{failedDags.length > 0 ? (
+					<Table
+						size="small"
+						pagination={false}
+						rowKey="id"
+						dataSource={failedDags}
+						columns={[
+							{ title: "DAG", dataIndex: "dagId", render: (v) => v || "-" },
+							{ title: "任务", dataIndex: "artifactName", render: (v) => v || "-" },
+							{
+								title: "结束时间",
+								dataIndex: "finishedAt",
+								render: (v) => (v ? dayjs(v).format("MM-DD HH:mm:ss") : "-"),
+							},
+							{
+								title: "耗时",
+								dataIndex: "durationMs",
+								render: (v) => (v != null ? `${(v / 1000).toFixed(1)}s` : "-"),
+							},
+							{
+								title: "操作",
+								width: 80,
+								render: (_: unknown, r: ExternalRun) => (
+									<Button
+										type="link"
+										size="small"
+										onClick={() =>
+											openLogPreview({
+												entryKey: "AIRFLOW_DAG",
+												dagId: r.dagId,
+												dagRunId: r.externalRunId ?? undefined,
+												taskId: "dbt_run",
+												tryNumber: 1,
+											})
+										}
+									>
+										日志
+									</Button>
+								),
+							},
+						]}
+					/>
+				) : (
+					<div className="py-4 text-center text-gray-400 text-sm">最近没有失败的 DAG 运行</div>
 				)}
 			</Card>
 		</div>
