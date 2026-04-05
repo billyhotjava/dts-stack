@@ -265,7 +265,7 @@ export default function Page() {
 
 	const buildTreeNodes = (nodes: DomainNode[], prefix = "domain"): any[] =>
 		nodes.map((n, i) => ({
-			key: n.id ?? `fallback-${prefix}-${i}`,
+			key: n.id || `fallback-${prefix}-${i}`,
 			title: n.name ?? n.code ?? "未命名",
 			children: n.children?.length ? buildTreeNodes(n.children, `${prefix}-${i}`) : undefined,
 		}));
@@ -343,7 +343,7 @@ export default function Page() {
 			<Layout.Sider
 				width={240}
 				theme="light"
-				style={{ background: "#fff", borderRight: "1px solid #f0f0f0", padding: "12px 8px" }}
+				style={{ background: "#fff", borderRight: "1px solid #f0f0f0", padding: "12px 8px", overflowY: "auto", height: "calc(100vh - 64px)" }}
 			>
 				<div className="mb-2 px-2 text-xs font-semibold text-slate-500">主题域</div>
 				<Spin spinning={treeLoading}>
@@ -482,7 +482,7 @@ export default function Page() {
 								<div
 									key={row.id}
 									className="cursor-pointer rounded-[20px] border border-slate-200 bg-white px-4 py-3 transition-all hover:border-blue-300 hover:shadow-sm"
-									onClick={() => router.push(`/catalog/asset-detail?id=${row.id}`)}
+									onClick={() => router.push(`/catalog/datasets/${row.id}`)}
 								>
 									<div className="flex items-start justify-between gap-2">
 										<div className="flex-1 truncate text-sm font-semibold text-slate-900">{row.name}</div>
