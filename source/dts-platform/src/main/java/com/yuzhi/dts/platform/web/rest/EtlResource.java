@@ -20,6 +20,7 @@ import com.yuzhi.dts.platform.service.etl.DbtQualityGateService;
 import com.yuzhi.dts.platform.service.etl.DbtReleaseGateService;
 import com.yuzhi.dts.platform.service.etl.DbtReleaseSubmissionService;
 import com.yuzhi.dts.platform.service.etl.DbtSourceService;
+import com.yuzhi.dts.platform.service.governance.IndicatorRunTracker;
 import com.yuzhi.dts.platform.service.ops.ExternalRunLogService;
 import java.time.Duration;
 import java.time.Instant;
@@ -55,6 +56,7 @@ public class EtlResource {
     private final AuditService auditService;
     private final ObjectMapper objectMapper;
     private final ModelingSqlModelRepository sqlModelRepository;
+    private final IndicatorRunTracker indicatorRunTracker;
 
     private static final org.slf4j.Logger LOG = org.slf4j.LoggerFactory.getLogger(EtlResource.class);
 
@@ -76,7 +78,8 @@ public class EtlResource {
         ExternalRunLogService externalRunLogService,
         AuditService auditService,
         ObjectMapper objectMapper,
-        ModelingSqlModelRepository sqlModelRepository
+        ModelingSqlModelRepository sqlModelRepository,
+        IndicatorRunTracker indicatorRunTracker
     ) {
         this.dbtConfigService = dbtConfigService;
         this.manifestService = manifestService;
@@ -96,6 +99,7 @@ public class EtlResource {
         this.auditService = auditService;
         this.objectMapper = objectMapper;
         this.sqlModelRepository = sqlModelRepository;
+        this.indicatorRunTracker = indicatorRunTracker;
     }
 
     @GetMapping("/dbt/config")
@@ -216,6 +220,14 @@ public class EtlResource {
         DbtAssetSyncService.DbtAssetSyncResult assetResult = dbtAssetSyncService.syncFromManifest();
         DbtRunResultService.DbtRunSyncResult runResult = dbtRunResultService.syncFromRunResults();
         recordDbtSyncState(assetResult, runResult);
+        // 指标运行追踪：dbt run 完成后采集指标计算值
+        if (runResult.synced()) {
+            try {
+                indicatorRunTracker.captureResults(runResult.invocationId());
+            } catch (Exception ex) {
+                LOG.warn("Indicator run capture failed: {}", ex.getMessage());
+            }
+        }
         auditService.audit("EXECUTE", "etl.dbt.models", "sync");
         auditService.record(
             "EXECUTE",

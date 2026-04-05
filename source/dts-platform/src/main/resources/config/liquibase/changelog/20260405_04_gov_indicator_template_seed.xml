@@ -1,0 +1,48 @@
+<?xml version="1.0" encoding="utf-8"?>
+<databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+        http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
+
+    <!-- 1. 财务经费管理指标集 -->
+    <changeSet id="20260405-04-seed-tpl-finance-budget" author="system">
+        <sql><![CDATA[
+INSERT INTO gov_indicator_template (code, name, description, domain, indicator_blueprints, required_source_fields, builtin, enabled, display_order, created_by, last_modified_by)
+VALUES (
+    'TPL_FINANCE_BUDGET',
+    '财务经费管理指标集',
+    '包含项目经费执行率、直接/间接成本执行率、经费余额等财务管控核心指标',
+    'FINANCE',
+    '[{"code":"budget_execution_rate","name":"项目经费执行率","aggregationType":"RATIO","numeratorPlaceholder":"direct_expense","denominatorPlaceholder":"direct_budget","dimensionPlaceholders":["project_name","department"],"datePlaceholder":"report_month","windowFunction":"YOY","unit":"%","precisionScale":2,"direction":"HIGHER_BETTER","thresholdMin":0.8,"isDerived":false,"dependencyCodes":[]},{"code":"direct_cost_rate","name":"直接成本执行率","aggregationType":"RATIO","numeratorPlaceholder":"direct_expense","denominatorPlaceholder":"direct_budget","dimensionPlaceholders":["project_name"],"datePlaceholder":"report_month","windowFunction":"NONE","unit":"%","precisionScale":2,"direction":"HIGHER_BETTER","thresholdMin":0.7,"isDerived":false,"dependencyCodes":[]},{"code":"indirect_cost_rate","name":"间接成本执行率","aggregationType":"RATIO","numeratorPlaceholder":"indirect_expense","denominatorPlaceholder":"indirect_budget","dimensionPlaceholders":["project_name"],"datePlaceholder":"report_month","windowFunction":"NONE","unit":"%","precisionScale":2,"direction":"HIGHER_BETTER","thresholdMin":0.6,"isDerived":false,"dependencyCodes":[]},{"code":"budget_balance","name":"经费余额","aggregationType":"CUSTOM","expressionSkeleton":"SUM({{direct_budget}}) - SUM({{direct_expense}})","dimensionPlaceholders":["project_name"],"datePlaceholder":"report_month","windowFunction":"NONE","unit":"元","precisionScale":2,"direction":"HIGHER_BETTER","isDerived":false,"dependencyCodes":[]}]'::jsonb,
+    '[{"name":"direct_expense","type":"numeric","description":"直接支出金额","required":true},{"name":"direct_budget","type":"numeric","description":"直接控制数","required":true},{"name":"indirect_expense","type":"numeric","description":"间接支出金额","required":false},{"name":"indirect_budget","type":"numeric","description":"间接控制数","required":false},{"name":"project_name","type":"varchar","description":"项目名称","required":true},{"name":"department","type":"varchar","description":"部门","required":false},{"name":"report_month","type":"date","description":"报告月份","required":true}]'::jsonb,
+    true,
+    true,
+    1,
+    'system',
+    'system'
+);
+        ]]></sql>
+    </changeSet>
+
+    <!-- 2. 项目进度管理指标集 -->
+    <changeSet id="20260405-04-seed-tpl-project-progress" author="system">
+        <sql><![CDATA[
+INSERT INTO gov_indicator_template (code, name, description, domain, indicator_blueprints, required_source_fields, builtin, enabled, display_order, created_by, last_modified_by)
+VALUES (
+    'TPL_PROJECT_PROGRESS',
+    '项目进度管理指标集',
+    '包含项目完成率、里程碑达成率、节点延期率、逾期任务数等项目管控核心指标',
+    'PROJECT_MGMT',
+    '[{"code":"project_completion_rate","name":"项目完成率","aggregationType":"RATIO","numeratorPlaceholder":"completed_count","denominatorPlaceholder":"total_count","dimensionPlaceholders":["department"],"datePlaceholder":"report_month","windowFunction":"MOM","unit":"%","precisionScale":2,"direction":"HIGHER_BETTER","thresholdMin":0.6,"isDerived":false,"dependencyCodes":[]},{"code":"milestone_hit_rate","name":"里程碑达成率","aggregationType":"RATIO","numeratorPlaceholder":"hit_count","denominatorPlaceholder":"total_milestone","dimensionPlaceholders":["project_name"],"datePlaceholder":"report_month","windowFunction":"NONE","unit":"%","precisionScale":2,"direction":"HIGHER_BETTER","thresholdMin":0.7,"isDerived":false,"dependencyCodes":[]},{"code":"node_delay_rate","name":"节点延期率","aggregationType":"RATIO","numeratorPlaceholder":"delayed_count","denominatorPlaceholder":"total_nodes","dimensionPlaceholders":["project_name"],"datePlaceholder":"report_month","windowFunction":"NONE","unit":"%","precisionScale":2,"direction":"LOWER_BETTER","thresholdMax":0.3,"isDerived":false,"dependencyCodes":[]},{"code":"overdue_task_count","name":"逾期任务数","aggregationType":"COUNT","measurePlaceholder":"task_id","dimensionPlaceholders":["project_name","department"],"datePlaceholder":"report_month","windowFunction":"NONE","unit":"个","precisionScale":0,"direction":"LOWER_BETTER","thresholdMax":10,"isDerived":false,"dependencyCodes":[],"staticFilterSkeleton":"status = ''OVERDUE''"}]'::jsonb,
+    '[{"name":"completed_count","type":"integer","description":"已完成项目数","required":true},{"name":"total_count","type":"integer","description":"总项目数","required":true},{"name":"hit_count","type":"integer","description":"按时达成里程碑数","required":false},{"name":"total_milestone","type":"integer","description":"总里程碑数","required":false},{"name":"delayed_count","type":"integer","description":"延期节点数","required":false},{"name":"total_nodes","type":"integer","description":"总节点数","required":false},{"name":"task_id","type":"varchar","description":"任务ID","required":false},{"name":"project_name","type":"varchar","description":"项目名称","required":true},{"name":"department","type":"varchar","description":"部门","required":false},{"name":"report_month","type":"date","description":"报告月份","required":true}]'::jsonb,
+    true,
+    true,
+    2,
+    'system',
+    'system'
+);
+        ]]></sql>
+    </changeSet>
+
+</databaseChangeLog>

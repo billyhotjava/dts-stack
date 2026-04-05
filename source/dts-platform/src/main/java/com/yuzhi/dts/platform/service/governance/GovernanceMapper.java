@@ -141,6 +141,8 @@ final class GovernanceMapper {
         dto.setMessage(entity.getMessage());
         dto.setInputParamsJson(entity.getInputParamsJson());
         dto.setErrorCategory(entity.getErrorCategory());
+        dto.setRowsTotal(entity.getRowsTotal());
+        dto.setFailingRowCount(entity.getFailingRowCount());
         dto.setMetricsJson(entity.getMetricsJson());
         dto.setCreatedDate(entity.getCreatedDate());
         dto.setCreatedBy(entity.getCreatedBy());

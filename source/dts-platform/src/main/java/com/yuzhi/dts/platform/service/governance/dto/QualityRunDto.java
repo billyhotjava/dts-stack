@@ -24,6 +24,8 @@ public class QualityRunDto {
     private String message;
     private String inputParamsJson;
     private String errorCategory;
+    private Integer rowsTotal;
+    private Integer failingRowCount;
     private String metricsJson;
     private List<QualityMetricDto> metrics;
     private Instant createdDate;
@@ -171,6 +173,22 @@ public class QualityRunDto {
 
     public void setErrorCategory(String errorCategory) {
         this.errorCategory = errorCategory;
+    }
+
+    public Integer getRowsTotal() {
+        return rowsTotal;
+    }
+
+    public void setRowsTotal(Integer rowsTotal) {
+        this.rowsTotal = rowsTotal;
+    }
+
+    public Integer getFailingRowCount() {
+        return failingRowCount;
+    }
+
+    public void setFailingRowCount(Integer failingRowCount) {
+        this.failingRowCount = failingRowCount;
     }
 
     public String getMetricsJson() {

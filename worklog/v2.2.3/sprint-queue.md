@@ -36,3 +36,53 @@
 | F1-修复displayName链路bug | 4 | READY (T04 DONE) |
 
 **统计**: READY=3, IN_PROGRESS=0, DONE=1, BLOCKED=0
+
+## Sprint-4: 数据质量管控体系重构 (202604)
+**状态**: DONE
+**类型**: Implementation（实施型）
+
+| Feature | Task 数 | 状态 |
+|---------|---------|------|
+| F1-规则模板引擎 | 4 | DONE |
+| F2-中文清洗函数库 | 3 | DONE |
+| F3-质量检测增强 | 4 | DONE |
+| F4-数据编辑器 | 4 | DONE |
+| F5-前端重构 | 3 | DONE |
+| F6-质量规则Wizard | 4 | DONE |
+| F7-质量报告 | 3 | DONE |
+| F8-数据修复工作台 | 3 | DONE |
+
+**统计**: READY=0, IN_PROGRESS=0, DONE=28, BLOCKED=0
+
+## Sprint-5: 指标驱动建模体系 (202604)
+**状态**: DONE
+**类型**: Implementation（实施型）
+
+| Feature | Task 数 | 状态 |
+|---------|---------|------|
+| F1-指标元数据模型扩展 | 3 | DONE |
+| F2-指标模板库 | 3 | DONE |
+| F3-dbt 自动生成引擎 | 4 | DONE |
+| F4-配置工作台前端 | 4 | DONE |
+| F5-质量评分修复 | 2 | DONE |
+| F6-运行追踪 | 3 | DONE |
+| F7-指标看板 | 4 | DONE |
+| F8-指标商店 | 4 | DONE |
+| F9-LLM 接口预留 | 2 | DONE |
+
+**统计**: READY=0, IN_PROGRESS=0, DONE=29, BLOCKED=0
+
+## Sprint-6: Airflow 运维对接体系重构 (202604)
+**状态**: IN_PROGRESS
+**类型**: Implementation（实施型）
+
+| Feature | Task 数 | 状态 |
+|---------|---------|------|
+| F1-日志中心页面 | 3 | READY |
+| F2-日志预览抽屉 | 2 | READY |
+| F3-任务编排增强 | 2 | READY |
+| F4-运行概览增强 | 2 | READY |
+| F5-任务实例监控增强 | 3 | READY |
+| F6-后端接口补全 | 2 | READY |
+
+**统计**: READY=14, IN_PROGRESS=0, DONE=0, BLOCKED=0

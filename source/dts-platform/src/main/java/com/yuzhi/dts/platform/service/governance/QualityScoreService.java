@@ -165,21 +165,30 @@ public class QualityScoreService {
 
     /**
      * Compute a single run's score (0-100).
-     * SUCCESS with no failing rows = 100.
-     * FAILED with failingRowCount info = based on pass rate.
-     * FAILED without row info = 0.
+     *
+     * <p>When {@code rowsTotal} is available, score = pass rate =
+     * (rowsTotal - failingRowCount) / rowsTotal * 100.
+     *
+     * <p>For legacy data without {@code rowsTotal}, fall back to status:
+     * SUCCEEDED = 100, FAILED = 0.
      */
     private int computeRunScore(GovQualityRun run) {
+        Integer rowsTotal = run.getRowsTotal();
+        if (rowsTotal != null && rowsTotal > 0) {
+            int failing = run.getFailingRowCount() != null ? run.getFailingRowCount() : 0;
+            double passRate = (rowsTotal - failing) * 100.0 / rowsTotal;
+            return (int) Math.round(Math.max(0.0, Math.min(100.0, passRate)));
+        }
+        // Legacy data: no rowsTotal — use status-based scoring
         String status = run.getStatus();
-        if ("SUCCESS".equalsIgnoreCase(status)) {
+        if ("SUCCEEDED".equalsIgnoreCase(status)) {
             return 100;
         }
-        if (!"FAILED".equalsIgnoreCase(status)) {
-            // Unknown status (e.g. RUNNING, PENDING) — treat as neutral
-            return 100;
+        if ("FAILED".equalsIgnoreCase(status)) {
+            return 0;
         }
-        // FAILED status = score 0
-        return 0;
+        // Unknown/interim status (RUNNING, QUEUED, SKIPPED) — treat as neutral
+        return 100;
     }
 
     private String resolveType(GovQualityRun run) {

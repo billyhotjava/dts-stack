@@ -558,6 +558,14 @@ export const getIndicatorOpsOverview = (params: { hours?: number } = {}) =>
 export const getIndicatorOpsTrend = (params: { hours?: number; bucketHours?: number } = {}) =>
 	api.get({ url: "/governance/indicators/ops/trend", params });
 
+// Indicator Dashboard
+export const getIndicatorDashboard = (params?: { domain?: string; days?: number }) =>
+	api.get({ url: "/governance/indicators/dashboard", params });
+export const getIndicatorDetail = (id: string, params?: { days?: number }) =>
+	api.get({ url: `/governance/indicators/${id}/detail`, params });
+export const getIndicatorDrilldown = (id: string, params: { dimension: string; period?: string }) =>
+	api.get({ url: `/governance/indicators/${id}/drilldown`, params });
+
 // Dimensions
 export const listDimensions = (params: any = {}) => api.get({ url: "/governance/dimensions", params });
 export const getDimension = (id: string) => api.get({ url: `/governance/dimensions/${id}` });
@@ -767,3 +775,35 @@ export const listPermissionAudit = (params: {
 	page?: number;
 	size?: number;
 }) => api.get({ url: "/asset-permission-audit", params });
+
+// Indicator Templates
+export const listIndicatorTemplates = (params?: { domain?: string }) =>
+	api.get({ url: "/governance/indicator-templates", params });
+export const getIndicatorTemplate = (id: string) =>
+	api.get({ url: `/governance/indicator-templates/${id}` });
+export const createIndicatorTemplate = (data: any) =>
+	api.post({ url: "/governance/indicator-templates", data });
+export const updateIndicatorTemplate = (id: string, data: any) =>
+	api.put({ url: `/governance/indicator-templates/${id}`, data });
+export const deleteIndicatorTemplate = (id: string) =>
+	api.delete({ url: `/governance/indicator-templates/${id}` });
+export const applyIndicatorTemplate = (templateId: string, data: any) =>
+	api.post({ url: `/governance/indicator-templates/${templateId}/apply`, data });
+
+// Indicator Generation
+export const previewIndicatorSql = (id: string) =>
+	api.post({ url: `/governance/indicators/${id}/preview-sql` });
+export const generateIndicators = (data: any) =>
+	api.post({ url: "/governance/indicators/generate", data });
+export const generateAndRunIndicators = (data: any) =>
+	api.post({ url: "/governance/indicators/generate-and-run", data });
+
+// Indicator Subscriptions
+export const listSubscriptions = () =>
+	api.get({ url: "/governance/indicators/subscriptions" });
+export const createSubscription = (data: { indicatorId: string; filterConfig?: string; displayOrder?: number }) =>
+	api.post({ url: "/governance/indicators/subscriptions", data });
+export const deleteSubscription = (id: string) =>
+	api.delete({ url: `/governance/indicators/subscriptions/${id}` });
+export const updateSubscription = (id: string, data: { filterConfig?: string; displayOrder?: number }) =>
+	api.put({ url: `/governance/indicators/subscriptions/${id}`, data });

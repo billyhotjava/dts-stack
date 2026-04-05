@@ -117,4 +117,18 @@
     <include file="config/liquibase/changelog/20260316_02_topic_binding_center.xml" relativeToChangelogFile="false"/>
     <include file="config/liquibase/changelog/20260328_01_asset_permission.xml" relativeToChangelogFile="false"/>
     <include file="config/liquibase/changelog/20260328_02_drop_temporary_foundation_features.xml" relativeToChangelogFile="false"/>
+    <include file="config/liquibase/changelog/20260404_01_gov_quality_template.xml" relativeToChangelogFile="false"/>
+    <include file="config/liquibase/changelog/20260404_02_gov_quality_template_seed.xml" relativeToChangelogFile="false"/>
+    <include file="config/liquibase/changelog/20260404_03_gov_rule_template_fields.xml" relativeToChangelogFile="false"/>
+    <include file="config/liquibase/changelog/20260404_04_gov_cleansing_function.xml" relativeToChangelogFile="false"/>
+    <include file="config/liquibase/changelog/20260404_05_gov_cleansing_function_seed.xml" relativeToChangelogFile="false"/>
+    <include file="config/liquibase/changelog/20260404_06_gov_quality_failing_row.xml" relativeToChangelogFile="false"/>
+    <include file="config/liquibase/changelog/20260404_07_gov_quality_run_extend.xml" relativeToChangelogFile="false"/>
+    <include file="config/liquibase/changelog/20260404_08_gov_data_edit_log.xml" relativeToChangelogFile="false"/>
+    <include file="config/liquibase/changelog/20260405_02_gov_quality_run_rows_total.xml" relativeToChangelogFile="false"/>
+    <include file="config/liquibase/changelog/20260405_01_gov_indicator_definition_extend.xml" relativeToChangelogFile="false"/>
+    <include file="config/liquibase/changelog/20260405_03_gov_indicator_template.xml" relativeToChangelogFile="false"/>
+    <include file="config/liquibase/changelog/20260405_04_gov_indicator_template_seed.xml" relativeToChangelogFile="false"/>
+    <include file="config/liquibase/changelog/20260405_05_gov_indicator_run.xml" relativeToChangelogFile="false"/>
+    <include file="config/liquibase/changelog/20260405_06_gov_indicator_subscription.xml" relativeToChangelogFile="false"/>
 </databaseChangeLog>

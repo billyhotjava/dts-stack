@@ -83,6 +83,15 @@ public class GovQualityRun extends AbstractAuditingEntity<UUID> implements Seria
     @Column(name = "error_category", length = 64)
     private String errorCategory;
 
+    @Column(name = "rows_total")
+    private Integer rowsTotal;
+
+    @Column(name = "failing_row_count")
+    private Integer failingRowCount;
+
+    @Column(name = "cleansing_applied")
+    private Boolean cleansingApplied;
+
     @JdbcTypeCode(SqlTypes.JSON)
     @Column(name = "metrics_json", columnDefinition = "jsonb")
     private String metricsJson;
@@ -230,6 +239,30 @@ public class GovQualityRun extends AbstractAuditingEntity<UUID> implements Seria
 
     public void setErrorCategory(String errorCategory) {
         this.errorCategory = errorCategory;
+    }
+
+    public Integer getRowsTotal() {
+        return rowsTotal;
+    }
+
+    public void setRowsTotal(Integer rowsTotal) {
+        this.rowsTotal = rowsTotal;
+    }
+
+    public Integer getFailingRowCount() {
+        return failingRowCount;
+    }
+
+    public void setFailingRowCount(Integer failingRowCount) {
+        this.failingRowCount = failingRowCount;
+    }
+
+    public Boolean getCleansingApplied() {
+        return cleansingApplied;
+    }
+
+    public void setCleansingApplied(Boolean cleansingApplied) {
+        this.cleansingApplied = cleansingApplied;
     }
 
     public String getMetricsJson() {

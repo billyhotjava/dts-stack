@@ -274,11 +274,24 @@ axiosInstance.interceptors.response.use(
 			typeof response?.status === "number" ? t(`sys.api.errMsg${response.status}`, { defaultValue: "" }) : "";
 		const errMsg = resolvedMessage || statusHint || message || t("sys.api.errorMessage");
 		(error as any).message = errMsg;
-		if (!shouldSuppressAuthHandling && !isLoginRequest) {
+
+		// 判断 401 是否可走静默 refresh：若可以则延迟 toast，仅在 refresh 失败后才弹出
+		const is401 = response?.status === 401;
+		const canSilentRefresh =
+			is401 &&
+			!isRefreshRequest &&
+			!isLoginRequest &&
+			!hasHeaderFlag(headers, "x-session-conflict") &&
+			!hasHeaderFlag(headers, "x-session-expired") &&
+			!import.meta.env?.DEV &&
+			Boolean(userStore.getState().userToken?.refreshToken) &&
+			!(error.config as any)?._retry;
+
+		if (!shouldSuppressAuthHandling && !isLoginRequest && !canSilentRefresh) {
 			toast.error(errMsg, { position: "top-center" });
 		}
 
-		if (response?.status === 401) {
+		if (is401) {
 			const state = userStore.getState();
 			const conflictHeader = hasHeaderFlag(headers, "x-session-conflict");
 			const expiredHeader = hasHeaderFlag(headers, "x-session-expired");
@@ -291,7 +304,6 @@ axiosInstance.interceptors.response.use(
 				console.warn("[DEV] 401 received; skipping auto logout");
 			} else {
 				// 优先尝试使用 refreshToken 静默续期并重试原请求（最多一次）
-				// accessToken is intentionally not read here; we'll use the refreshed token when available
 				const { refreshToken } = (state.userToken || ({} as any)) as any;
 				const original = error.config as AxiosRequestConfig & { _retry?: boolean };
 				if (!isRefreshRequest && !isLoginRequest && refreshToken && !original._retry) {
@@ -305,21 +317,32 @@ axiosInstance.interceptors.response.use(
 					return import("@/api/services/userService").then(({ default: userService }) =>
 						userService
 							.refresh(refreshToken)
-							.then((res: any) => {
-								const nextAccess = res?.accessToken as string | undefined;
-								const nextRefresh = (res?.refreshToken as string | undefined) || refreshToken;
-								if (nextAccess) {
-									state.actions.setUserToken({ accessToken: nextAccess, refreshToken: nextRefresh });
-									// 更新原请求的认证头后重试
-									original.headers = original.headers || {};
-									(original.headers as any).Authorization = `Bearer ${nextAccess}`;
-									pendingQueue.forEach((cb) => cb());
-									pendingQueue = [];
-									return axiosInstance.request(original);
-								}
-								// 没有新token则直接抛出，走下方清理逻辑
-								throw error;
-							})
+							.then(
+								(res: any) => {
+									const nextAccess = res?.accessToken as string | undefined;
+									const nextRefresh = (res?.refreshToken as string | undefined) || refreshToken;
+									if (nextAccess) {
+										state.actions.setUserToken({ accessToken: nextAccess, refreshToken: nextRefresh });
+										original.headers = original.headers || {};
+										(original.headers as any).Authorization = `Bearer ${nextAccess}`;
+										pendingQueue.forEach((cb) => cb());
+										pendingQueue = [];
+										return axiosInstance.request(original);
+									}
+									// refresh 未返回新 token，补弹 toast
+									if (!shouldSuppressAuthHandling) {
+										toast.error(errMsg, { position: "top-center" });
+									}
+									throw error;
+								},
+								(refreshErr) => {
+									// refresh 请求本身失败，补弹 toast
+									if (!shouldSuppressAuthHandling) {
+										toast.error(errMsg, { position: "top-center" });
+									}
+									throw refreshErr;
+								},
+							)
 							.finally(() => {
 								isRefreshing = false;
 							}),
@@ -330,7 +353,6 @@ axiosInstance.interceptors.response.use(
 				if (isRefreshRequest) {
 					userStore.getState().actions.clearUserInfoAndToken();
 				} else if (isLoginRequest || isKeycloakAdminEndpoint || shouldSuppressAuthHandling) {
-					// keep session; allow user to continue with permitted features
 					console.warn("[PROD] 401 on non-auth admin endpoint; session preserved");
 				} else {
 					userStore.getState().actions.clearUserInfoAndToken();

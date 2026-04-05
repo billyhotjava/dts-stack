@@ -3,11 +3,14 @@ package com.yuzhi.dts.platform.service.governance;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.yuzhi.dts.platform.config.GovernanceProperties;
+import com.yuzhi.dts.platform.domain.catalog.CatalogDataset;
 import com.yuzhi.dts.platform.domain.governance.GovQualityMetric;
 import com.yuzhi.dts.platform.domain.governance.GovQualityRun;
 import com.yuzhi.dts.platform.domain.governance.GovRule;
 import com.yuzhi.dts.platform.domain.governance.GovRuleBinding;
 import com.yuzhi.dts.platform.domain.governance.GovRuleVersion;
+import com.yuzhi.dts.platform.repository.catalog.CatalogDatasetRepository;
+import com.yuzhi.dts.platform.repository.governance.GovQualityFailingRowRepository;
 import com.yuzhi.dts.platform.repository.governance.GovQualityMetricRepository;
 import com.yuzhi.dts.platform.repository.governance.GovQualityRunRepository;
 import com.yuzhi.dts.platform.repository.governance.GovRuleBindingRepository;
@@ -20,6 +23,8 @@ import com.yuzhi.dts.platform.service.governance.request.QualityRunTriggerReques
 import com.yuzhi.dts.platform.service.security.HiveStatementExecutor;
 import com.yuzhi.dts.platform.service.security.dto.StatementExecutionResult;
 import jakarta.persistence.EntityNotFoundException;
+import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -52,11 +57,15 @@ public class QualityRunService {
     private static final Logger log = LoggerFactory.getLogger(QualityRunService.class);
     private static final TypeReference<Map<String, Object>> MAP_TYPE = new TypeReference<>() {};
 
+    private static final String SAFE_IDENTIFIER = "^[a-zA-Z_][a-zA-Z0-9_.]*$";
+
     private final GovRuleRepository ruleRepository;
     private final GovRuleVersionRepository versionRepository;
     private final GovRuleBindingRepository bindingRepository;
     private final GovQualityRunRepository runRepository;
     private final GovQualityMetricRepository metricRepository;
+    private final GovQualityFailingRowRepository failingRowRepository;
+    private final CatalogDatasetRepository datasetRepository;
     private final Executor taskExecutor;
     private final HiveStatementExecutor hiveExecutor;
     private final AuditService auditService;
@@ -71,6 +80,8 @@ public class QualityRunService {
         GovRuleBindingRepository bindingRepository,
         GovQualityRunRepository runRepository,
         GovQualityMetricRepository metricRepository,
+        GovQualityFailingRowRepository failingRowRepository,
+        CatalogDatasetRepository datasetRepository,
         @Qualifier("taskExecutor") Executor taskExecutor,
         HiveStatementExecutor hiveExecutor,
         AuditService auditService,
@@ -84,6 +95,8 @@ public class QualityRunService {
         this.bindingRepository = bindingRepository;
         this.runRepository = runRepository;
         this.metricRepository = metricRepository;
+        this.failingRowRepository = failingRowRepository;
+        this.datasetRepository = datasetRepository;
         this.taskExecutor = taskExecutor;
         this.hiveExecutor = hiveExecutor;
         this.auditService = auditService;
@@ -237,6 +250,9 @@ public class QualityRunService {
         runRepository.save(run);
 
         try {
+            // Count total rows in target table before executing checks
+            countRowsTotal(run);
+
             Map<String, String> statements = resolveStatements(run.getRuleVersion());
             if (statements.isEmpty()) {
                 run.setStatus("SKIPPED");
@@ -263,6 +279,9 @@ public class QualityRunService {
             Map<String, String> rendered = renderParams(statements, params);
             List<StatementExecutionResult> results = hiveExecutor.execute(rendered, run.getRule() != null ? run.getRule().getOwner() : null);
             persistMetrics(run, results);
+            // Update failing row count from the failing_row table
+            long failCount = failingRowRepository.countByRunId(run.getId());
+            run.setFailingRowCount((int) failCount);
             StatementExecutionResult.Status aggregate = aggregateStatus(results);
             run.setStatus(mapStatus(aggregate));
             run.setMessage(summaryMessage(results));
@@ -481,6 +500,54 @@ public class QualityRunService {
         return tags.isEmpty() ? Collections.emptyMap() : tags;
     }
 
+    private void countRowsTotal(GovQualityRun run) {
+        String tableName = resolveTableName(run);
+        if (tableName == null || !tableName.matches(SAFE_IDENTIFIER)) {
+            return;
+        }
+        try {
+            String countSql = "SELECT count(*) FROM " + tableName;
+            List<StatementExecutionResult> countResults = hiveExecutor.execute(
+                Map.of("__count__", countSql),
+                run.getRule() != null ? run.getRule().getOwner() : null
+            );
+            if (!countResults.isEmpty()) {
+                StatementExecutionResult first = countResults.getFirst();
+                if (first.status() == StatementExecutionResult.Status.SUCCEEDED && first.message() != null) {
+                    try {
+                        String msg = first.message().trim();
+                        // The message may contain the count result; try to parse it
+                        run.setRowsTotal(Integer.parseInt(msg));
+                    } catch (NumberFormatException ignored) {
+                        // Count result not parsable from message
+                    }
+                }
+            }
+        } catch (Exception e) {
+            log.warn("Failed to count rows for {}: {}", tableName, e.getMessage());
+        }
+    }
+
+    private String resolveTableName(GovQualityRun run) {
+        if (run.getDatasetId() == null) {
+            return null;
+        }
+        Optional<CatalogDataset> datasetOpt = datasetRepository.findById(run.getDatasetId());
+        if (datasetOpt.isEmpty()) {
+            return null;
+        }
+        CatalogDataset dataset = datasetOpt.orElseThrow();
+        String db = dataset.getHiveDatabase();
+        String table = dataset.getHiveTable();
+        if (StringUtils.isBlank(table)) {
+            return null;
+        }
+        if (StringUtils.isNotBlank(db)) {
+            return db + "." + table;
+        }
+        return table;
+    }
+
     private GovRule resolveRule(UUID ruleId) {
         if (ruleId == null) {
             throw new IllegalArgumentException("缺少规则ID");
@@ -581,6 +648,35 @@ public class QualityRunService {
             metric.setMetricKey(result.key());
             metric.setDetail(result.message());
             metric.setStatus(result.status().name());
+            // Compute metric_value: pass rate based on rowsTotal and failingRowCount
+            Integer rowsTotal = run.getRowsTotal();
+            Integer failingRows = run.getFailingRowCount();
+            if (rowsTotal != null && rowsTotal > 0) {
+                int failing = failingRows != null ? failingRows : 0;
+                BigDecimal passRate = BigDecimal.valueOf(rowsTotal - failing)
+                    .multiply(BigDecimal.valueOf(100))
+                    .divide(BigDecimal.valueOf(rowsTotal), 6, RoundingMode.HALF_UP);
+                metric.setMetricValue(passRate);
+            } else if (result.status() == StatementExecutionResult.Status.SUCCEEDED) {
+                metric.setMetricValue(BigDecimal.valueOf(100));
+            } else if (result.status() == StatementExecutionResult.Status.FAILED) {
+                metric.setMetricValue(BigDecimal.ZERO);
+            }
+            // Set threshold_value from rule severity config if available
+            GovRule rule = run.getRule();
+            if (rule != null) {
+                String severity = rule.getSeverity();
+                if (StringUtils.isNotBlank(severity)) {
+                    BigDecimal threshold = switch (severity.toUpperCase(Locale.ROOT)) {
+                        case "CRITICAL" -> BigDecimal.valueOf(99);
+                        case "HIGH" -> BigDecimal.valueOf(95);
+                        case "MEDIUM" -> BigDecimal.valueOf(90);
+                        case "LOW" -> BigDecimal.valueOf(80);
+                        default -> null;
+                    };
+                    metric.setThresholdValue(threshold);
+                }
+            }
             metricRepository.save(metric);
         }
     }

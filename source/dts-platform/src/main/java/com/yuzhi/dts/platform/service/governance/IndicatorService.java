@@ -86,12 +86,19 @@ public class IndicatorService {
 
     @Transactional(readOnly = true)
     public Page<IndicatorDto> list(String keyword, String status, Pageable pageable, String activeDept) {
+        return list(keyword, status, null, null, pageable, activeDept);
+    }
+
+    @Transactional(readOnly = true)
+    public Page<IndicatorDto> list(String keyword, String status, String domain, String category, Pageable pageable, String activeDept) {
         List<GovIndicatorDefinition> all = repository.findAll();
         List<GovIndicatorDefinition> filtered = new ArrayList<>();
         for (GovIndicatorDefinition indicator : all) {
             if (indicator == null) continue;
             if (!keywordMatches(indicator, keyword)) continue;
             if (!statusMatches(indicator, status)) continue;
+            if (!domainMatches(indicator, domain)) continue;
+            if (!categoryMatches(indicator, category)) continue;
             if (!deptAllowed(indicator, activeDept)) continue;
             if (!levelAllowed(indicator)) continue;
             filtered.add(indicator);
@@ -318,6 +325,32 @@ public class IndicatorService {
         versionRepository.deleteByIndicator(entity);
         repository.flush();
         repository.delete(entity);
+    }
+
+    @Transactional(readOnly = true)
+    public List<IndicatorDto> listByDomain(String domain, String activeDept) {
+        List<GovIndicatorDefinition> all = repository.findByDomainAndStatusNot(domain, STATUS_ARCHIVED);
+        List<IndicatorDto> result = new ArrayList<>();
+        for (GovIndicatorDefinition indicator : all) {
+            if (indicator == null) continue;
+            if (!deptAllowed(indicator, activeDept)) continue;
+            if (!levelAllowed(indicator)) continue;
+            result.add(IndicatorMapper.toDto(indicator));
+        }
+        return result;
+    }
+
+    @Transactional(readOnly = true)
+    public List<IndicatorDto> listByTemplateId(UUID templateId, String activeDept) {
+        List<GovIndicatorDefinition> all = repository.findByTemplateId(templateId);
+        List<IndicatorDto> result = new ArrayList<>();
+        for (GovIndicatorDefinition indicator : all) {
+            if (indicator == null) continue;
+            if (!deptAllowed(indicator, activeDept)) continue;
+            if (!levelAllowed(indicator)) continue;
+            result.add(IndicatorMapper.toDto(indicator));
+        }
+        return result;
     }
 
     @Transactional(readOnly = true)
@@ -551,6 +584,45 @@ public class IndicatorService {
         entity.setOwnerDept(snapshot.getOwnerDept());
         entity.setDataLevel(snapshot.getDataLevel());
         entity.setTags(snapshot.getTags());
+        // 计算定义
+        entity.setAggregationType(snapshot.getAggregationType());
+        entity.setMeasureField(snapshot.getMeasureField());
+        entity.setNumeratorExpression(snapshot.getNumeratorExpression());
+        entity.setDenominatorExpression(snapshot.getDenominatorExpression());
+        entity.setStaticFilter(snapshot.getStaticFilter());
+        entity.setDynamicFilterConfig(snapshot.getDynamicFilterConfig());
+        entity.setIsDerived(snapshot.getIsDerived());
+        entity.setDependencyIndicators(snapshot.getDependencyIndicators());
+        entity.setWindowFunction(snapshot.getWindowFunction());
+        // 维度与粒度
+        entity.setDimensionFields(snapshot.getDimensionFields());
+        entity.setDateColumn(snapshot.getDateColumn());
+        entity.setTimeGrain(snapshot.getTimeGrain());
+        entity.setGranularity(snapshot.getGranularity());
+        // 数据绑定
+        entity.setSourceTable(snapshot.getSourceTable());
+        entity.setJoinConfig(snapshot.getJoinConfig());
+        entity.setSourceLayer(snapshot.getSourceLayer());
+        entity.setTargetLayer(snapshot.getTargetLayer());
+        entity.setTargetModelName(snapshot.getTargetModelName());
+        // 业务属性
+        entity.setUnit(snapshot.getUnit());
+        entity.setPrecisionScale(snapshot.getPrecisionScale());
+        entity.setThresholdMin(snapshot.getThresholdMin());
+        entity.setThresholdMax(snapshot.getThresholdMax());
+        entity.setDirection(snapshot.getDirection());
+        entity.setBusinessOwner(snapshot.getBusinessOwner());
+        entity.setDataPrivacy(snapshot.getDataPrivacy());
+        // LLM 预留
+        entity.setLlmGenerated(snapshot.getLlmGenerated());
+        entity.setLlmConfidence(snapshot.getLlmConfidence());
+        entity.setLlmSourceRef(snapshot.getLlmSourceRef());
+        entity.setHumanVerified(snapshot.getHumanVerified());
+        // 管理
+        entity.setDomain(snapshot.getDomain());
+        entity.setIcon(snapshot.getIcon());
+        entity.setDisplayOrder(snapshot.getDisplayOrder());
+        entity.setTemplateId(snapshot.getTemplateId());
     }
 
     private void clearValidation(GovIndicatorDefinition entity) {
@@ -797,6 +869,16 @@ public class IndicatorService {
         if (!StringUtils.hasText(keyword)) return true;
         String kw = keyword.trim().toLowerCase(Locale.ROOT);
         return contains(entity.getName(), kw) || contains(entity.getCode(), kw) || contains(entity.getCategory(), kw) || contains(entity.getOwner(), kw);
+    }
+
+    private boolean domainMatches(GovIndicatorDefinition entity, String domain) {
+        if (!StringUtils.hasText(domain)) return true;
+        return domain.trim().equalsIgnoreCase(entity.getDomain() != null ? entity.getDomain().trim() : "");
+    }
+
+    private boolean categoryMatches(GovIndicatorDefinition entity, String category) {
+        if (!StringUtils.hasText(category)) return true;
+        return category.trim().equalsIgnoreCase(entity.getCategory() != null ? entity.getCategory().trim() : "");
     }
 
     private boolean statusMatches(GovIndicatorDefinition entity, String status) {

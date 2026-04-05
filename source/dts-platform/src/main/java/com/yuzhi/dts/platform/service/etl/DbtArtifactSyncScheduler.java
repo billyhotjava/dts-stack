@@ -1,6 +1,7 @@
 package com.yuzhi.dts.platform.service.etl;
 
 import com.yuzhi.dts.platform.config.DbtProperties;
+import com.yuzhi.dts.platform.service.governance.IndicatorRunTracker;
 import java.io.File;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicLong;
@@ -22,6 +23,7 @@ public class DbtArtifactSyncScheduler {
     private final DbtAssetSyncService dbtAssetSyncService;
     private final DbtRunResultService dbtRunResultService;
     private final DbtArtifactSyncState syncState;
+    private final IndicatorRunTracker indicatorRunTracker;
     private final AtomicBoolean running = new AtomicBoolean(false);
     private final AtomicLong lastManifestModified = new AtomicLong(0L);
     private final AtomicLong lastRunResultsModified = new AtomicLong(0L);
@@ -31,13 +33,15 @@ public class DbtArtifactSyncScheduler {
         DbtProperties dbtProperties,
         DbtAssetSyncService dbtAssetSyncService,
         DbtRunResultService dbtRunResultService,
-        DbtArtifactSyncState syncState
+        DbtArtifactSyncState syncState,
+        IndicatorRunTracker indicatorRunTracker
     ) {
         this.dbtConfigService = dbtConfigService;
         this.dbtProperties = dbtProperties;
         this.dbtAssetSyncService = dbtAssetSyncService;
         this.dbtRunResultService = dbtRunResultService;
         this.syncState = syncState;
+        this.indicatorRunTracker = indicatorRunTracker;
     }
 
     @Scheduled(fixedDelayString = "${dts.dbt.sync-interval-ms:60000}")
@@ -97,6 +101,13 @@ public class DbtArtifactSyncScheduler {
         }
         if (result != null && result.synced()) {
             lastRunResultsModified.set(modified);
+            // 指标运行追踪：dbt run 完成后采集指标计算值
+            try {
+                String dbtRunId = result.invocationId();
+                indicatorRunTracker.captureResults(dbtRunId);
+            } catch (Exception ex) {
+                LOG.warn("[dbt-sync] indicator run capture failed: {}", ex.getMessage());
+            }
         }
     }
 
