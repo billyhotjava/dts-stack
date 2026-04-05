@@ -29,7 +29,6 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import org.springframework.http.HttpStatus;
-import org.springframework.http.ResponseEntity;
 import org.springframework.util.StringUtils;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.server.ResponseStatusException;
@@ -301,15 +300,14 @@ public class EtlResource {
     }
 
     @GetMapping("/dbt/runs/{dagRunId}/logs")
-    public ResponseEntity<Map<String, Object>> getDbtRunLog(
+    public ApiResponse<Map<String, Object>> getDbtRunLog(
         @PathVariable String dagRunId,
         @RequestParam(defaultValue = "dbt_load") String dagId,
         @RequestParam(defaultValue = "dbt_run") String taskId,
         @RequestParam(defaultValue = "1") int tryNumber
     ) {
         if (!airflowProperties.isEnabled()) {
-            return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE)
-                .body(Map.of("error", "Airflow integration is not enabled"));
+            return ApiResponses.error("Airflow integration is not enabled");
         }
         String log = airflowClient.getTaskInstanceLog(dagId, dagRunId, taskId, tryNumber);
         Map<String, Object> result = new LinkedHashMap<>();
@@ -319,7 +317,7 @@ public class EtlResource {
         result.put("tryNumber", tryNumber);
         result.put("log", log != null ? log : "");
         auditService.audit("READ", "etl.dbt.logs", dagRunId);
-        return ResponseEntity.ok(result);
+        return ApiResponses.ok(result);
     }
 
     @PostMapping("/dbt/run")
