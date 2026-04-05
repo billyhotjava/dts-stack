@@ -167,6 +167,7 @@ export default function Page() {
 	const initialTabKey = searchParams.get("tab") === "dimensions" ? "dimensions" : "indicators";
 	const initialIndicatorKeyword = searchParams.get("i_kw") || "";
 	const initialIndicatorStatus = searchParams.get("i_st") || undefined;
+	const initialIndicatorDerived = searchParams.get("i_dr") || undefined;
 	const initialDimensionKeyword = searchParams.get("d_kw") || "";
 	const initialDimensionStatus = searchParams.get("d_st") || undefined;
 
@@ -182,9 +183,10 @@ export default function Page() {
 	const [editingDimension, setEditingDimension] = useState<Dimension | null>(null);
 	const [indicatorForm] = Form.useForm();
 	const [dimensionForm] = Form.useForm();
-	const [indicatorFilters, setIndicatorFilters] = useState<{ keyword?: string; status?: string }>({
+	const [indicatorFilters, setIndicatorFilters] = useState<{ keyword?: string; status?: string; derived?: string }>({
 		keyword: initialIndicatorKeyword.trim() || undefined,
 		status: initialIndicatorStatus || undefined,
+		derived: initialIndicatorDerived || undefined,
 	});
 	const [dimensionFilters, setDimensionFilters] = useState<{ keyword?: string; status?: string }>({
 		keyword: initialDimensionKeyword.trim() || undefined,
@@ -192,6 +194,7 @@ export default function Page() {
 	});
 	const [indicatorKeyword, setIndicatorKeyword] = useState(initialIndicatorKeyword);
 	const [indicatorStatus, setIndicatorStatus] = useState<string | undefined>(initialIndicatorStatus);
+	const [indicatorDerived, setIndicatorDerived] = useState<string | undefined>(initialIndicatorDerived);
 	const [dimensionKeyword, setDimensionKeyword] = useState(initialDimensionKeyword);
 	const [dimensionStatus, setDimensionStatus] = useState<string | undefined>(initialDimensionStatus);
 	const [previewLimit, setPreviewLimit] = useState(20);
@@ -237,6 +240,7 @@ export default function Page() {
 		tab?: string;
 		indicatorKeyword?: string;
 		indicatorStatus?: string;
+		indicatorDerived?: string;
 		dimensionKeyword?: string;
 		dimensionStatus?: string;
 	}) => {
@@ -244,6 +248,7 @@ export default function Page() {
 		const tab = patch?.tab ?? tabKey;
 		const iKw = patch?.indicatorKeyword ?? indicatorKeyword;
 		const iSt = patch?.indicatorStatus ?? indicatorStatus;
+		const iDr = patch?.indicatorDerived ?? indicatorDerived;
 		const dKw = patch?.dimensionKeyword ?? dimensionKeyword;
 		const dSt = patch?.dimensionStatus ?? dimensionStatus;
 		const setOrDelete = (key: string, value?: string) => {
@@ -260,6 +265,7 @@ export default function Page() {
 		}
 		setOrDelete("i_kw", iKw);
 		setOrDelete("i_st", iSt);
+		setOrDelete("i_dr", iDr);
 		setOrDelete("d_kw", dKw);
 		setOrDelete("d_st", dSt);
 		setSearchParams(params, { replace: true });
@@ -268,15 +274,19 @@ export default function Page() {
 	const loadIndicators = async (
 		page = indicatorPage.page,
 		size = indicatorPage.size,
-		filters: { keyword?: string; status?: string } = indicatorFilters,
+		filters: { keyword?: string; status?: string; derived?: string } = indicatorFilters,
 	) => {
 		setLoading(true);
 		try {
+			const domain = searchParams.get("domain") || undefined;
+			const derivedValue = filters.derived === "true" ? true : filters.derived === "false" ? false : undefined;
 			const resp: any = await listIndicators({
 				page: page - 1,
 				size,
 				keyword: filters.keyword || undefined,
 				status: filters.status || undefined,
+				domain,
+				derived: derivedValue,
 			});
 			setIndicators(Array.isArray(resp?.content) ? resp.content : []);
 			setIndicatorPage({
@@ -970,11 +980,13 @@ export default function Page() {
 		const filters = {
 			keyword: indicatorKeyword.trim() || undefined,
 			status: indicatorStatus || undefined,
+			derived: indicatorDerived || undefined,
 		};
 		setIndicatorFilters(filters);
 		syncQueryState({
 			indicatorKeyword,
 			indicatorStatus,
+			indicatorDerived,
 		});
 		void loadIndicators(1, indicatorPage.size, filters);
 	};
@@ -982,10 +994,12 @@ export default function Page() {
 	const resetIndicatorSearch = () => {
 		setIndicatorKeyword("");
 		setIndicatorStatus(undefined);
+		setIndicatorDerived(undefined);
 		setIndicatorFilters({});
 		syncQueryState({
 			indicatorKeyword: "",
 			indicatorStatus: undefined,
+			indicatorDerived: undefined,
 		});
 		void loadIndicators(1, indicatorPage.size, {});
 	};
@@ -1117,6 +1131,32 @@ export default function Page() {
 							label: "指标字典",
 							children: (
 								<>
+									<div className="mb-3 flex gap-2">
+										{[
+											{ key: "", label: "全部" },
+											{ key: "false", label: "原始指标" },
+											{ key: "true", label: "二次指标" },
+										].map((tab) => (
+											<Button
+												key={tab.key}
+												type={((indicatorDerived ?? "") === tab.key) ? "primary" : "default"}
+												size="small"
+												onClick={() => {
+													const nextDerived = tab.key || undefined;
+													setIndicatorDerived(nextDerived);
+													const filters = {
+														...indicatorFilters,
+														derived: nextDerived,
+													};
+													setIndicatorFilters(filters);
+													syncQueryState({ indicatorDerived: nextDerived });
+													void loadIndicators(1, indicatorPage.size, filters);
+												}}
+											>
+												{tab.label}
+											</Button>
+										))}
+									</div>
 									<Space className="mb-3" wrap>
 										<Input
 											allowClear
