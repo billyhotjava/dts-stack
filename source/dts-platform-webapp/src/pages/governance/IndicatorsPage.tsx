@@ -25,6 +25,8 @@ import { PlusOutlined, EditOutlined, DeleteOutlined, UploadOutlined } from "@ant
 import { useSearchParams } from "react-router";
 import { useGovernanceManageAccess } from "@/hooks/useModuleManageAccess";
 import { PageHeader } from "@/components/page-header";
+import { DatasetPicker } from "@/components/catalog/DatasetPicker";
+import type { DatasetField } from "@/api/platformApi";
 import {
 	listIndicators,
 	createIndicator,
@@ -228,12 +230,8 @@ export default function Page() {
 	});
 	const [trendRows, setTrendRows] = useState<any[]>([]);
 	const [datasets, setDatasets] = useState<{ id: string; name: string }[]>([]);
+	const [datasetFields, setDatasetFields] = useState<DatasetField[]>([]);
 	const canManage = useGovernanceManageAccess();
-
-	const datasetOptions = useMemo(
-		() => datasets.map((item) => ({ label: item.name, value: item.id })),
-		[datasets],
-	);
 
 	const syncQueryState = (patch?: {
 		tab?: string;
@@ -367,6 +365,7 @@ export default function Page() {
 
 	const openIndicatorModal = (row?: Indicator) => {
 		setEditingIndicator(row || null);
+		setDatasetFields([]);
 		indicatorForm.setFieldsValue({
 			code: row?.code || "",
 			name: row?.name || "",
@@ -374,6 +373,7 @@ export default function Page() {
 			definition: row?.definition || "",
 			expressionSql: row?.expressionSql || "",
 			datasetId: row?.datasetId || undefined,
+			dimensionFields: row?.dimensionFields || undefined,
 			status: row?.status || "DRAFT",
 			versionNotes: row?.versionNotes || "",
 			tags: row?.tags || "",
@@ -1228,8 +1228,20 @@ export default function Page() {
 					<Form.Item label="计算SQL" name="expressionSql">
 						<Input.TextArea rows={4} />
 					</Form.Item>
-					<Form.Item label="数据集" name="datasetId">
-						<Select options={datasetOptions} allowClear />
+					<Form.Item label="来源数据集" name="datasetId">
+						<DatasetPicker
+							onFieldsLoaded={(fields) => setDatasetFields(fields)}
+							placeholder="选择来源数据集"
+						/>
+					</Form.Item>
+					<Form.Item label="维度字段" name="dimensionFields">
+						<Select
+							mode="multiple"
+							placeholder="选择或输入维度字段"
+							options={datasetFields.map((f) => ({ label: `${f.name} (${f.dataType})`, value: f.name }))}
+							allowClear
+							style={{ width: "100%" }}
+						/>
 					</Form.Item>
 					<Form.Item label="状态" name="status">
 						<Select options={STATUS_OPTIONS} />
