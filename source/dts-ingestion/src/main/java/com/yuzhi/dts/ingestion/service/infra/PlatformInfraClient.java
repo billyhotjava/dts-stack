@@ -146,6 +146,45 @@ public class PlatformInfraClient {
         }
     }
 
+    /**
+     * Trigger a quality run on the platform for the given dataset.
+     * Used as a post-ingestion step to automatically run cleansing + quality checks
+     * after data has been successfully loaded.
+     *
+     * @param datasetId   the dataset UUID to run quality checks against
+     * @param triggerType the trigger type (e.g. "INGESTION")
+     */
+    public void triggerQualityRun(UUID datasetId, String triggerType) {
+        if (datasetId == null) {
+            LOG.debug("No datasetId provided — skipping quality run trigger");
+            return;
+        }
+        URI uri = buildUri("/governance/quality/runs");
+        Map<String, Object> payload = new LinkedHashMap<>();
+        payload.put("datasetId", datasetId);
+        payload.put("triggerType", StringUtils.hasText(triggerType) ? triggerType.trim() : "INGESTION");
+
+        HttpHeaders headers = new HttpHeaders();
+        headers.setAccept(java.util.List.of(MediaType.APPLICATION_JSON));
+        headers.setContentType(MediaType.APPLICATION_JSON);
+        headers.set(SERVICE_HEADER, SERVICE_NAME);
+        try {
+            ResponseEntity<Map> response = restTemplate.exchange(
+                uri, HttpMethod.POST, new HttpEntity<>(payload, headers), Map.class);
+            if (!response.getStatusCode().is2xxSuccessful()) {
+                throw new IllegalStateException("平台质量检测触发返回异常状态: " + response.getStatusCode().value());
+            }
+            LOG.info("Quality run triggered for datasetId={} triggerType={}", datasetId, triggerType);
+        } catch (HttpStatusCodeException ex) {
+            LOG.warn("Platform quality run trigger failed status={} body={}", ex.getStatusCode().value(), ex.getResponseBodyAsString());
+            throw new IllegalStateException("质量检测触发失败: " + ex.getStatusCode().value());
+        } catch (RuntimeException ex) {
+            throw ex;
+        } catch (Exception ex) {
+            throw new IllegalStateException("质量检测触发失败: " + ex.getMessage(), ex);
+        }
+    }
+
     private URI buildUri(String path) {
         IngestionSettingsService.SettingsSnapshot settings = settingsService.getSettings(IngestionSettingsService.SERVICE_PLATFORM);
         String baseUrl = settings.getString("baseUrl", DEFAULT_BASE_URL);

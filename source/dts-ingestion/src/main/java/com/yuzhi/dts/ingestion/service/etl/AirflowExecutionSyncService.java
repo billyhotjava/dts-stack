@@ -271,6 +271,7 @@ public class AirflowExecutionSyncService {
         if ("success".equalsIgnoreCase(status)) {
             incrementalSyncService.updateCheckpointOnSuccess(task, execution);
             triggerDbtIfConfigured(task, execution);
+            triggerPostIngestionQualityCheck(task, execution);
             return;
         }
 
@@ -543,6 +544,54 @@ public class AirflowExecutionSyncService {
             meta.put("error", ex.getMessage());
             auditService.auditAction(
                 "INGESTION_TASK_DBT_TRIGGER",
+                AuditStage.FAIL,
+                task.getName(),
+                meta
+            );
+        }
+    }
+
+    /**
+     * After a successful ingestion, trigger cleansing + quality check on the platform.
+     * Only fires for non-pre-check tasks (pre-check tasks already ran their quality validation
+     * before data was committed). This is best-effort — failures are logged but do not
+     * affect the ingestion result.
+     */
+    private void triggerPostIngestionQualityCheck(IngestionTask task, IngestionExecution execution) {
+        if (task == null) {
+            return;
+        }
+        // Pre-check tasks already went through quality validation — skip
+        if (Boolean.TRUE.equals(task.getQualityPreCheckEnabled())) {
+            return;
+        }
+        java.util.UUID datasetId = task.getSourceDataSourceId();
+        if (datasetId == null) {
+            return;
+        }
+        try {
+            LOG.info("[quality] triggering post-ingestion quality check for task={} datasetId={}", task.getId(), datasetId);
+            platformInfraClient.triggerQualityRun(datasetId, "INGESTION");
+            Map<String, Object> meta = new java.util.LinkedHashMap<>();
+            meta.put("taskId", task.getId());
+            meta.put("executionId", execution.getId());
+            meta.put("datasetId", datasetId.toString());
+            meta.put("triggerType", "INGESTION");
+            auditService.auditAction(
+                "INGESTION_TASK_QUALITY_TRIGGER",
+                AuditStage.SUCCESS,
+                task.getName(),
+                meta
+            );
+        } catch (Exception ex) {
+            LOG.warn("[quality] post-ingestion quality check trigger failed for task={}: {}", task.getId(), ex.getMessage());
+            Map<String, Object> meta = new java.util.LinkedHashMap<>();
+            meta.put("taskId", task.getId());
+            meta.put("executionId", execution.getId());
+            meta.put("datasetId", datasetId.toString());
+            meta.put("error", ex.getMessage());
+            auditService.auditAction(
+                "INGESTION_TASK_QUALITY_TRIGGER",
                 AuditStage.FAIL,
                 task.getName(),
                 meta
