@@ -1,8 +1,10 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useParams } from "react-router";
 import { Button, Spin, Table, Tabs, Tag } from "antd";
+import { ReactFlow, Background, Controls, type Node, type Edge } from "@xyflow/react";
+import "@xyflow/react/dist/style.css";
 import { useRouter } from "@/routes/hooks";
-import { getDataset, getDatasetFields, getDatasetGovernanceHealth } from "@/api/platformApi";
+import { getDataset, getDatasetFields, getDatasetGovernanceHealth, getCatalogLineageImpact } from "@/api/platformApi";
 
 export default function DatasetDetailPage() {
 	const { id } = useParams<{ id: string }>();
@@ -61,13 +63,7 @@ export default function DatasetDetailPage() {
 					{
 						key: "lineage",
 						label: "血缘图",
-						children: (
-							<div className="py-4 text-sm text-slate-500">
-								<a href={`/catalog/lineage?selectedId=${id}`} className="text-blue-600 underline">
-									查看完整血缘 →
-								</a>
-							</div>
-						),
+						children: <DatasetLineageTab datasetId={id!} />,
 					},
 					{
 						key: "governance",
@@ -174,6 +170,97 @@ function DatasetGovernanceTab({ datasetId }: { datasetId: string }) {
 					<div><span className="text-slate-500">失败：</span><span className="text-red-500">{health.quality.failRuns ?? 0}</span></div>
 				</div>
 			)}
+		</div>
+	);
+}
+
+const LAYER_BG: Record<string, string> = {
+	ODS: "#f5f5f5",
+	DWD: "#e6f4ff",
+	DWS: "#e6fffb",
+	ADS: "#f6ffed",
+	DIM: "#f9f0ff",
+};
+
+function DatasetLineageTab({ datasetId }: { datasetId: string }) {
+	const [impact, setImpact] = useState<any>(null);
+	const [loading, setLoading] = useState(true);
+
+	useEffect(() => {
+		void getCatalogLineageImpact(datasetId, { direction: "BOTH", depth: 3 })
+			.then((r: any) => setImpact(r ?? null))
+			.catch(() => setImpact(null))
+			.finally(() => setLoading(false));
+	}, [datasetId]);
+
+	const rfNodes: Node[] = useMemo(() => {
+		const nodes = Array.isArray(impact?.nodes) ? impact.nodes : [];
+		if (!nodes.length) return [];
+		const layerX: Record<string, number> = { ODS: 0, DWD: 260, DWS: 520, ADS: 780, DIM: 1040 };
+		const layerCount: Record<string, number> = {};
+		return nodes.map((n: any, idx: number) => {
+			const layer = String(n.layer ?? "").toUpperCase();
+			const x = layerX[layer] ?? 900;
+			layerCount[layer] = (layerCount[layer] ?? 0) + 1;
+			const y = (layerCount[layer] - 1) * 80;
+			return {
+				id: n.id ?? (n.db && n.table ? `${n.db}.${n.table}` : `node-${idx}`),
+				position: { x, y },
+				data: { label: n.name ?? n.table ?? "未知" },
+				style: {
+					background: LAYER_BG[layer] ?? "#fff",
+					border: "1px solid #d9d9d9",
+					borderRadius: 6,
+					fontSize: 11,
+					padding: "4px 8px",
+					maxWidth: 180,
+					overflow: "hidden",
+					textOverflow: "ellipsis",
+					whiteSpace: "nowrap",
+				},
+			};
+		});
+	}, [impact]);
+
+	const rfEdges: Edge[] = useMemo(() =>
+		(Array.isArray(impact?.edges) ? impact.edges : [])
+			.filter((e: any) => e.upstreamDatasetId && e.downstreamDatasetId)
+			.map((e: any, i: number) => ({
+				id: e.id ?? `e-${i}`,
+				source: e.upstreamDatasetId as string,
+				target: e.downstreamDatasetId as string,
+				animated: false,
+				style: { stroke: "#bfbfbf" },
+			})),
+		[impact]
+	);
+
+	if (loading) return <div className="py-6"><Spin /></div>;
+
+	if (!rfNodes.length) {
+		return (
+			<div className="py-4 text-sm text-slate-500 space-y-2">
+				<div>暂无血缘数据。</div>
+				<a href={`/catalog/lineage`} className="text-blue-600 underline text-xs">
+					前往血缘分析页 →
+				</a>
+			</div>
+		);
+	}
+
+	return (
+		<div className="space-y-2">
+			<div style={{ height: 400, border: "1px solid #e8e8e8", borderRadius: 8, overflow: "hidden" }}>
+				<ReactFlow nodes={rfNodes} edges={rfEdges} fitView>
+					<Background />
+					<Controls />
+				</ReactFlow>
+			</div>
+			<div className="text-right">
+				<a href={`/catalog/lineage`} className="text-xs text-blue-500 hover:underline">
+					查看完整血缘分析 →
+				</a>
+			</div>
 		</div>
 	);
 }
