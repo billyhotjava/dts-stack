@@ -1,5 +1,5 @@
-import { useEffect, useState, useCallback } from "react";
-import { Select, Space, Tag } from "antd";
+import { useEffect, useState, useCallback, useRef } from "react";
+import { Select, Space, Spin, Tag } from "antd";
 import { listDatasets, listDomains, getDatasetFields, type DatasetField } from "@/api/platformApi";
 
 type DatasetOption = {
@@ -29,6 +29,12 @@ export function DatasetPicker({ value, onChange, onFieldsLoaded, placeholder, st
 	const [loading, setLoading] = useState(false);
 	const [fieldsLoading, setFieldsLoading] = useState(false);
 	const [keyword, setKeyword] = useState("");
+	const searchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+	const handleSearch = (v: string) => {
+		if (searchTimerRef.current) clearTimeout(searchTimerRef.current);
+		searchTimerRef.current = setTimeout(() => setKeyword(v), 300);
+	};
 	const [selectedDomainId, setSelectedDomainId] = useState<string | undefined>();
 	const [domains, setDomains] = useState<{ id: string; name: string }[]>([]);
 
@@ -104,10 +110,10 @@ export function DatasetPicker({ value, onChange, onFieldsLoaded, placeholder, st
 				style={{ minWidth: 260 }}
 				placeholder={placeholder ?? "选择数据集"}
 				filterOption={false}
-				loading={loading || fieldsLoading}
+				loading={loading}
 				value={value}
 				onChange={handleChange}
-				onSearch={(v) => setKeyword(v)}
+				onSearch={handleSearch}
 				allowClear
 				disabled={disabled}
 				options={options.map((d) => ({
@@ -124,6 +130,7 @@ export function DatasetPicker({ value, onChange, onFieldsLoaded, placeholder, st
 					value: d.id,
 				}))}
 			/>
+			{fieldsLoading && <Spin size="small" />}
 		</Space>
 	);
 }
