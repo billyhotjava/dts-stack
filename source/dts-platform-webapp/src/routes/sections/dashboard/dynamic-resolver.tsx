@@ -54,6 +54,7 @@ const PATH_COMPONENT_OVERRIDES: Record<string, string> = {
 	"/services/products": "/pages/services/DataProductsPage",
 	"/services/tokens": "/pages/services/TokensPage",
 	"/modeling/dbt-files": "/pages/modeling/DbtFileBrowserPage",
+	"/ops/logs": "/pages/ops/OpsLogCenterPage",
 	// Analytics pages are statically registered in static-routes.tsx — no overrides needed.
 };
 
