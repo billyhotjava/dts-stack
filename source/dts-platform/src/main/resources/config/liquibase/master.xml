@@ -131,4 +131,5 @@
     <include file="config/liquibase/changelog/20260405_04_gov_indicator_template_seed.xml" relativeToChangelogFile="false"/>
     <include file="config/liquibase/changelog/20260405_05_gov_indicator_run.xml" relativeToChangelogFile="false"/>
     <include file="config/liquibase/changelog/20260405_06_gov_indicator_subscription.xml" relativeToChangelogFile="false"/>
+    <include file="config/liquibase/changelog/20260405_10_catalog_data_product.xml" relativeToChangelogFile="false"/>
 </databaseChangeLog>
