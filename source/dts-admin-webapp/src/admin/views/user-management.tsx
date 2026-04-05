@@ -2,6 +2,7 @@ import { Button, Table } from "antd";
 import { EditOutlined, EyeOutlined } from "@ant-design/icons";
 import type { ColumnsType } from "antd/es/table";
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import type { KeycloakUser } from "#/keycloak";
 import { adminApi } from "@/admin/api/adminApi";
 import { Icon } from "@/components/icon";
@@ -90,9 +91,7 @@ function normalizeUsersPage(page: unknown): { items: UserSnapshotRow[]; total: n
 
 export default function UserManagementView() {
   const { push } = useRouter();
-  const [list, setList] = useState<UserSnapshotRow[]>([]);
-  const [total, setTotal] = useState(0);
-  const [loading, setLoading] = useState(false);
+  const queryClient = useQueryClient();
   const [keywordInput, setKeywordInput] = useState("");
   const [keyword, setKeyword] = useState("");
   const [pagination, setPagination] = useState<{ current: number; pageSize: number }>({
@@ -114,27 +113,19 @@ export default function UserManagementView() {
     target?: KeycloakUser;
   }>({ open: false, mode: "create" });
 
-  const load = useCallback(async () => {
-    setLoading(true);
-    try {
-      const page = await adminApi.getAdminUsers({
-        page: Math.max(0, pagination.current - 1),
-        size: pagination.pageSize,
-        keyword: keyword.trim() ? keyword.trim() : undefined,
-      });
-      const { items, total: nextTotal } = normalizeUsersPage(page);
-      setList(items);
-      setTotal(nextTotal);
-    } catch (e: any) {
-      toast.error(e?.message || "加载用户失败");
-    } finally {
-      setLoading(false);
-    }
-  }, [keyword, pagination.current, pagination.pageSize]);
-
-  useEffect(() => {
-    load();
-  }, [load]);
+  const usersQueryKey = ["admin", "users", pagination.current, pagination.pageSize, keyword];
+  const { data: usersPage, isLoading: loading } = useQuery({
+    queryKey: usersQueryKey,
+    queryFn: () => adminApi.getAdminUsers({
+      page: Math.max(0, pagination.current - 1),
+      size: pagination.pageSize,
+      keyword: keyword.trim() ? keyword.trim() : undefined,
+    }),
+    refetchInterval: 30_000,
+    select: normalizeUsersPage,
+  });
+  const list = usersPage?.items ?? [];
+  const total = usersPage?.total ?? 0;
 
   useEffect(() => {
     (async () => {
@@ -506,7 +497,7 @@ export default function UserManagementView() {
           onCancel={() => setModalState((s) => ({ ...s, open: false, target: undefined }))}
           onSuccess={() => {
             setModalState((s) => ({ ...s, open: false, target: undefined }));
-            load();
+            queryClient.invalidateQueries({ queryKey: ["admin", "users"] });
           }}
         />
       </div>

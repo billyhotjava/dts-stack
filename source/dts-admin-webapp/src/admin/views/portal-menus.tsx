@@ -461,9 +461,6 @@ export default function PortalMenusView() {
 							</Button>
 						</div>
 					</div>
-					<Text variant="body3" className="text-muted-foreground">
-						父节点仅用于分组；禁用叶子节点会触发菜单管理审批
-					</Text>
 				</CardHeader>
 				<CardContent>
 					{isLoading ? (
@@ -701,7 +698,7 @@ function MenuRow({
 						>
 							{isFolder ? (isExpanded ? "▾" : "▸") : "·"}
 						</button>
-						<div className="min-w-0 flex-1 truncate font-semibold" title={fullPathLabel}>{highlightKeyword(displayLabel, keyword)}</div>
+						<div className={`min-w-0 flex-1 truncate ${isFolder ? "font-semibold" : "font-normal"}`} title={fullPathLabel}>{highlightKeyword(displayLabel, keyword)}</div>
 					</div>
 				</td>
 				<td className="px-3 py-2">
@@ -779,23 +776,23 @@ function MenuRow({
 
 			{isFolder && isExpanded
 				? children.map((c) => (
-						<MenuRow
-							key={c.id}
-							item={c}
-							level={level + 1}
-							pathNames={[...pathNames, name]}
-							expanded={expanded}
-							setExpanded={setExpanded}
-							pending={pending}
-							onToggle={onToggle}
-							onEditCustom={onEditCustom}
-							onDeleteCustom={onDeleteCustom}
-							keyword={keyword}
-							onEditRoles={onEditRoles}
-							resolveRoleLabel={resolveRoleLabel}
-							rolesLoading={rolesLoading}
-						/>
-				  ))
+					<MenuRow
+						key={c.id}
+						item={c}
+						level={level + 1}
+						pathNames={[...pathNames, name]}
+						expanded={expanded}
+						setExpanded={setExpanded}
+						pending={pending}
+						onToggle={onToggle}
+						onEditCustom={onEditCustom}
+						onDeleteCustom={onDeleteCustom}
+						keyword={keyword}
+						onEditRoles={onEditRoles}
+						resolveRoleLabel={resolveRoleLabel}
+						rolesLoading={rolesLoading}
+					/>
+				))
 				: null}
 		</Fragment>
 	);

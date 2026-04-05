@@ -238,6 +238,11 @@ axiosInstance.interceptors.response.use(
 			(error as any).message = toastMsg;
 			if (!shouldSuppressAuthHandling && !isLoginRequest) {
 				toast.error(toastMsg, { id: "api-network-error", position: "top-center" });
+				if (!isNetworkError && typeof window !== "undefined" && !window.location.pathname.includes("/auth/login")) {
+					setTimeout(() => {
+						window.location.replace("/auth/login");
+					}, 3000);
+				}
 			}
 			console.error("API Network Error:", {
 				code,
@@ -287,8 +292,17 @@ axiosInstance.interceptors.response.use(
 			Boolean(userStore.getState().userToken?.refreshToken) &&
 			!(error.config as any)?._retry;
 
+		const SERVICE_UNAVAILABLE = new Set([502, 503, 504]);
+		const isServiceUnavailable = SERVICE_UNAVAILABLE.has(response?.status ?? 0);
+
 		if (!shouldSuppressAuthHandling && !isLoginRequest && !canSilentRefresh) {
-			toast.error(errMsg, { id: "session-expired", position: "top-center" });
+			toast.error(errMsg, { id: "api-error", position: "top-center" });
+		}
+
+		if (isServiceUnavailable && typeof window !== "undefined" && !window.location.pathname.includes("/auth/login")) {
+			setTimeout(() => {
+				window.location.replace("/auth/login");
+			}, 3000);
 		}
 
 		if (is401) {

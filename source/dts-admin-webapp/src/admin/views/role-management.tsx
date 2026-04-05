@@ -72,6 +72,7 @@ export default function RoleManagementView() {
     } = useQuery<AdminRoleDetail[]>({
         queryKey: ["admin", "roles"],
         queryFn: () => adminApi.getAdminRoles(),
+        refetchInterval: 30_000,
     });
     const {
         data: customRoles,
@@ -80,6 +81,7 @@ export default function RoleManagementView() {
     } = useQuery<AdminCustomRole[]>({
         queryKey: ["admin", "custom-roles"],
         queryFn: () => adminApi.getCustomRoles(),
+        refetchInterval: 30_000,
     });
     const {
         data: portalMenus,
@@ -88,6 +90,7 @@ export default function RoleManagementView() {
     } = useQuery<PortalMenuCollection>({
         queryKey: ["admin", "portal-menus"],
         queryFn: () => adminApi.getPortalMenus(),
+        refetchInterval: 30_000,
     });
 
     const [createOpen, setCreateOpen] = useState(false);

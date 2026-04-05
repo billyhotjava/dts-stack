@@ -405,6 +405,7 @@ export default function ApprovalCenterView() {
 	} = useQuery<ChangeRequest[]>({
 		queryKey: ["admin", "change-requests"],
 		queryFn: () => adminApi.getChangeRequests(),
+		refetchInterval: 15_000,
 	});
 	const changeRequests = Array.isArray(changeRequestsData) ? changeRequestsData : [];
 	const shouldFetchFallback = !isChangeRequestsLoading && Array.isArray(changeRequestsData) && changeRequestsData.length === 0;

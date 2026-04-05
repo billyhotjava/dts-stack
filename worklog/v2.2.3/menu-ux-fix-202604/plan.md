@@ -303,12 +303,6 @@ git commit -m "fix(admin/menus): horizontal action buttons, custom menu actions 
 
 找到 CardHeader 内两行提示（约第 483 行）：
 ```tsx
-<Text variant="body3" className="text-muted-foreground">
-    说明：父节点仅用于分组，不提供启用/禁用按钮；叶子节点可切换状态
-</Text>
-<Text variant="body3" color="warning" className="mt-1">
-    提示：禁用此项会触发菜单管理审批，请谨慎处理
-</Text>
 ```
 改为（合并为一行灰色提示）：
 ```tsx

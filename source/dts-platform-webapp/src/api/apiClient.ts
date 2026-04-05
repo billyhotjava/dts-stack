@@ -14,6 +14,9 @@ const axiosInstance = axios.create({
 	headers: { "Content-Type": "application/json;charset=utf-8" },
 });
 
+/** 后台服务不可用类错误（需要跳登录） */
+const SERVICE_UNAVAILABLE_STATUSES = new Set([502, 503, 504]);
+
 const isSuccessStatus = (status: unknown): boolean => {
 	if (status === ResultStatus.SUCCESS) return true;
 	if (typeof status === "string") {
@@ -243,7 +246,10 @@ axiosInstance.interceptors.response.use(
 		const fieldMsg = fieldErrors.length
 			? `${fieldErrors[0]?.field ?? "字段"}: ${fieldErrors[0]?.message ?? "非法"}`
 			: "";
-		const errMsg = (problemDetail ? String(problemDetail) : "") || fieldMsg || message || t("sys.api.errorMessage");
+		const httpStatusMsg = response?.status
+			? t(`sys.api.errMsg${response.status}`, { defaultValue: "" })
+			: (!response ? t("sys.api.networkExceptionMsg") : "");
+		const errMsg = (problemDetail ? String(problemDetail) : "") || fieldMsg || httpStatusMsg || message || t("sys.api.errorMessage");
 		// Friendly hints for security codes
 		let hint = "";
 			switch (String(errCode || "")) {
@@ -322,7 +328,17 @@ axiosInstance.interceptors.response.use(
 			}
 		} else {
 			if (!shouldSuppressAuthHandling && !isLoginRequest) {
-				toast.error(combinedMsg, { id: "session-expired", position: "top-center" });
+				const isServiceUnavailable = !response || SERVICE_UNAVAILABLE_STATUSES.has(response.status ?? 0);
+				if (isServiceUnavailable) {
+					toast.error(combinedMsg, { id: "service-error", duration: 3000, position: "top-center" });
+					setTimeout(() => {
+						if (typeof window !== "undefined" && !isLoginRouteActive()) {
+							location.replace(resolveLoginHref());
+						}
+					}, 3000);
+				} else {
+					toast.error(combinedMsg, { id: "api-error", position: "top-center" });
+				}
 			}
 		}
 		return Promise.reject(error);
