@@ -7,6 +7,7 @@ import com.yuzhi.dts.platform.domain.governance.GovIndicatorDefinition;
 import com.yuzhi.dts.platform.domain.governance.GovIndicatorVersion;
 import com.yuzhi.dts.platform.domain.catalog.CatalogDataset;
 import com.yuzhi.dts.platform.repository.catalog.CatalogDatasetRepository;
+import com.yuzhi.dts.platform.repository.catalog.CatalogDomainRepository;
 import com.yuzhi.dts.platform.repository.governance.GovIndicatorDefinitionRepository;
 import com.yuzhi.dts.platform.repository.governance.GovIndicatorReferenceRepository;
 import com.yuzhi.dts.platform.repository.governance.GovIndicatorVersionRepository;
@@ -61,6 +62,7 @@ public class IndicatorService {
     private final QueryGateway queryGateway;
     private final SecuritySqlRewriter securitySqlRewriter;
     private final ObjectMapper objectMapper;
+    private final CatalogDomainRepository catalogDomainRepository;
 
     public IndicatorService(
         GovIndicatorDefinitionRepository repository,
@@ -71,7 +73,8 @@ public class IndicatorService {
         OrganizationVisibilityService organizationVisibilityService,
         QueryGateway queryGateway,
         SecuritySqlRewriter securitySqlRewriter,
-        ObjectMapper objectMapper
+        ObjectMapper objectMapper,
+        CatalogDomainRepository catalogDomainRepository
     ) {
         this.repository = repository;
         this.versionRepository = versionRepository;
@@ -82,6 +85,7 @@ public class IndicatorService {
         this.queryGateway = queryGateway;
         this.securitySqlRewriter = securitySqlRewriter;
         this.objectMapper = objectMapper;
+        this.catalogDomainRepository = catalogDomainRepository;
     }
 
     @Transactional(readOnly = true)
@@ -130,6 +134,7 @@ public class IndicatorService {
     public IndicatorDto create(IndicatorUpsertRequest request, String activeDept) {
         GovIndicatorDefinition entity = new GovIndicatorDefinition();
         IndicatorMapper.apply(entity, request);
+        validateDomainCode(entity.getDomain());
         applyDefaults(entity, activeDept);
         validateUpsert(entity, null, activeDept);
         GovIndicatorDefinition saved = repository.save(entity);
@@ -143,6 +148,7 @@ public class IndicatorService {
             throw new org.springframework.security.access.AccessDeniedException("Invalid department context");
         }
         IndicatorMapper.apply(entity, request);
+        validateDomainCode(entity.getDomain());
         applyDefaults(entity, activeDept);
         validateUpsert(entity, id, activeDept);
         GovIndicatorDefinition saved = repository.save(entity);
@@ -879,6 +885,15 @@ public class IndicatorService {
     private boolean categoryMatches(GovIndicatorDefinition entity, String category) {
         if (!StringUtils.hasText(category)) return true;
         return category.trim().equalsIgnoreCase(entity.getCategory() != null ? entity.getCategory().trim() : "");
+    }
+
+    private void validateDomainCode(String domain) {
+        if (StringUtils.hasText(domain) && !catalogDomainRepository.existsByCodeIgnoreCase(domain)) {
+            throw new org.springframework.web.server.ResponseStatusException(
+                org.springframework.http.HttpStatus.BAD_REQUEST,
+                "域编码不存在: " + domain
+            );
+        }
     }
 
     private boolean statusMatches(GovIndicatorDefinition entity, String status) {
