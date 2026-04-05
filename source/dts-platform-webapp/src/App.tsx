@@ -35,11 +35,15 @@ function App({ children }: { children: React.ReactNode }) {
 						<Toast />
 						<RouteLoadingProgress />
 						<SessionManager />
-						<MotionLazy>{children}</MotionLazy>
+						<MotionLazy>
+							<>
+								{children}
+								<LogPreviewDrawer />
+							</>
+						</MotionLazy>
 					</ThemeProvider>
 				</QueryClientProvider>
 			</HelmetProvider>
-			<LogPreviewDrawer />
 		</LogPreviewProvider>
 	);
 }
