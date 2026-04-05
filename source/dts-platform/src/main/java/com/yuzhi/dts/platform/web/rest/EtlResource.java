@@ -531,12 +531,13 @@ public class EtlResource {
         if (!StringUtils.hasText(taskId)) {
             return ApiResponses.error("taskId is required");
         }
-        String log = airflowClient.getTaskInstanceLog(dagId, dagRunId, taskId, Math.max(1, tryNumber));
+        int safeTryNumber = Math.max(1, tryNumber);
+        String log = airflowClient.getTaskInstanceLog(dagId, dagRunId, taskId, safeTryNumber);
         Map<String, Object> result = new LinkedHashMap<>();
         result.put("dagId", dagId);
         result.put("dagRunId", dagRunId);
         result.put("taskId", taskId);
-        result.put("tryNumber", tryNumber);
+        result.put("tryNumber", safeTryNumber);
         result.put("log", log != null ? log : "");
         auditService.audit("READ", "etl.airflow.task-logs", dagId + "/" + dagRunId + "/" + taskId);
         return ApiResponses.ok(result);

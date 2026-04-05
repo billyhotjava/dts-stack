@@ -1,5 +1,7 @@
 package com.yuzhi.dts.platform.service.etl;
 
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.yuzhi.dts.platform.config.AirflowProperties;
 import java.net.URI;
 import java.time.Duration;
@@ -27,7 +29,7 @@ public class AirflowClient {
 
     private final RestTemplate restTemplate;
     private final AirflowProperties properties;
-    private final com.fasterxml.jackson.databind.ObjectMapper objectMapper = new com.fasterxml.jackson.databind.ObjectMapper();
+    private final ObjectMapper objectMapper = new ObjectMapper();
 
     public AirflowClient(RestTemplateBuilder builder, AirflowProperties properties) {
         this.restTemplate = builder.setConnectTimeout(Duration.ofSeconds(5)).setReadTimeout(Duration.ofSeconds(10)).build();
@@ -176,7 +178,7 @@ public class AirflowClient {
      * List task instances for a DAG run.
      * GET /api/v1/dags/{dagId}/dagRuns/{dagRunId}/taskInstances
      */
-    public com.fasterxml.jackson.databind.JsonNode listTaskInstances(String dagId, String dagRunId) {
+    public JsonNode listTaskInstances(String dagId, String dagRunId) {
         if (!properties.isEnabled()) {
             return objectMapper.createObjectNode();
         }
