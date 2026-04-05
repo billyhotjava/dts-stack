@@ -18,6 +18,9 @@ export const batchDatasetOpenMetadata = (ids: string[]) =>
 export const getDatasetLineage = (id: string) => api.get({ url: `/catalog/datasets/${id}/lineage` });
 export const getDatasetQuality = (id: string) => api.get({ url: `/catalog/datasets/${id}/quality` });
 export const getDatasetGovernanceHealth = (id: string) => api.get({ url: `/catalog/datasets/${id}/governance-health` });
+export type IndicatorDep = { id: string; name: string; code: string; isDerived: boolean; status: string };
+export const getDatasetIndicatorDeps = (datasetId: string) =>
+	api.get({ url: `/catalog/datasets/${datasetId}/indicator-deps` });
 export const batchDatasetQuality = (ids: string[]) =>
 	api.post({ url: "/catalog/quality/batch", data: { ids } });
 export const getCatalogReconciliation = (sampleLimit = 20) =>

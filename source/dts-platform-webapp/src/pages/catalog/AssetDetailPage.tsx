@@ -8,12 +8,14 @@ import {
 	getClassificationMaskingLinkage,
 	getDataset,
 	getDatasetGovernanceHealth,
+	getDatasetIndicatorDeps,
 	getTechMetadataTableDetail,
 	listDatasetGrants,
 	listDatasets,
 	listDomains,
 	updateDataset,
 } from "@/api/platformApi";
+import type { IndicatorDep } from "@/api/platformApi";
 import { useRouter } from "@/routes/hooks";
 
 const { Text } = Typography;
@@ -176,6 +178,7 @@ export default function AssetDetailPage() {
 	const [impact, setImpact] = useState<GovernanceImpact>({ grantsCount: 0, lineageNodeCount: 0, lineageEdgeCount: 0 });
 	const [securityLinkage, setSecurityLinkage] = useState<DatasetSecurityLinkage | null>(null);
 	const [governanceHealth, setGovernanceHealth] = useState<GovernanceHealth | null>(null);
+	const [indicatorDeps, setIndicatorDeps] = useState<IndicatorDep[]>([]);
 	const [savingProfile, setSavingProfile] = useState(false);
 	const requestSeqRef = useRef(0);
 
@@ -330,6 +333,16 @@ export default function AssetDetailPage() {
 	};
 
 	useEffect(() => {
+		if (detailRow?.id) {
+			void getDatasetIndicatorDeps(detailRow.id)
+				.then((res: any) => setIndicatorDeps(Array.isArray(res) ? res : (Array.isArray(res?.data) ? res.data : [])))
+				.catch(() => setIndicatorDeps([]));
+		} else {
+			setIndicatorDeps([]);
+		}
+	}, [detailRow?.id]);
+
+	useEffect(() => {
 		const refresh = () => {
 			if (detailRow?.id) {
 				void loadSecurityLinkage(detailRow.id);
@@ -358,6 +371,7 @@ export default function AssetDetailPage() {
 		setTableDetail(null);
 		setSecurityLinkage(null);
 		setGovernanceHealth(null);
+		setIndicatorDeps([]);
 		setImpact({ grantsCount: 0, lineageNodeCount: 0, lineageEdgeCount: 0 });
 		setDetailOpen(true);
 		setDetailLoading(true);
@@ -648,8 +662,8 @@ export default function AssetDetailPage() {
 			<Modal
 				title="资产字段详情"
 				open={detailOpen}
-				onCancel={() => setDetailOpen(false)}
-				footer={<Button onClick={() => setDetailOpen(false)}>关闭</Button>}
+				onCancel={() => { setDetailOpen(false); setIndicatorDeps([]); }}
+				footer={<Button onClick={() => { setDetailOpen(false); setIndicatorDeps([]); }}>关闭</Button>}
 				width={860}
 			>
 				<Tabs
@@ -829,6 +843,18 @@ export default function AssetDetailPage() {
 											description={(securityLinkage?.suggestions || []).join("；") || "请补齐脱敏规则。"}
 										/>
 									) : null}
+									{indicatorDeps.length > 0 && (
+										<div className="rounded-[22px] border border-slate-200 bg-slate-50 px-4 py-4">
+											<div className="mb-3 text-sm font-semibold text-slate-900">关联指标（{indicatorDeps.length}）</div>
+											<Space wrap>
+												{indicatorDeps.map((ind) => (
+													<Tag key={ind.id} color={ind.isDerived ? "purple" : "blue"}>
+														{ind.name}（{ind.code}）
+													</Tag>
+												))}
+											</Space>
+										</div>
+									)}
 									<Alert
 										type="info"
 										showIcon
