@@ -1,8 +1,9 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Alert, Button, Card, Input, Select, Space, Tag } from "antd";
+import { Alert, Button, Card, Collapse, Input, Layout, Select, Space, Spin, Tag, Tree } from "antd";
 import { EmptyState } from "@/components/empty-state";
 import {
 	getCatalogReconciliation,
+	getDomainTree,
 	listDatasets,
 	listDomains,
 } from "@/api/platformApi";
@@ -18,6 +19,8 @@ type AssetRow = {
 	warehouseLayer?: string;
 	status?: string;
 };
+
+type DomainNode = { id?: string; name?: string; code?: string; children?: DomainNode[] };
 
 const TYPE_OPTIONS = [
 	{ label: "全部类型", value: "ALL" },
@@ -70,6 +73,13 @@ type ReconciliationResult = {
 	regressionChecklist?: Array<{ code?: string; name?: string; route?: string; description?: string }>;
 };
 
+const LAYER_TAG_COLORS: Record<string, string> = {
+	ODS: "default",
+	DWD: "blue",
+	DWS: "cyan",
+	ADS: "green",
+};
+
 export default function Page() {
 	const router = useRouter();
 	const [keyword, setKeyword] = useState("");
@@ -83,6 +93,8 @@ export default function Page() {
 	const [domains, setDomains] = useState<{ id: string; name: string }[]>([]);
 	const [reconciliation, setReconciliation] = useState<ReconciliationResult | null>(null);
 	const [reconciliationLoading, setReconciliationLoading] = useState(false);
+	const [domainTree, setDomainTree] = useState<DomainNode[]>([]);
+	const [treeLoading, setTreeLoading] = useState(false);
 	const requestSeqRef = useRef(0);
 
 	useEffect(() => {
@@ -102,6 +114,21 @@ export default function Page() {
 
 	useEffect(() => {
 		void loadDomains();
+	}, []);
+
+	useEffect(() => {
+		void (async () => {
+			setTreeLoading(true);
+			try {
+				const tree = await getDomainTree() as any;
+				const data = Array.isArray(tree) ? tree : (Array.isArray(tree?.data) ? tree.data : []);
+				setDomainTree(data);
+			} catch {
+				// error toast handled by global interceptor
+			} finally {
+				setTreeLoading(false);
+			}
+		})();
 	}, []);
 
 	useEffect(() => {
@@ -130,13 +157,6 @@ export default function Page() {
 		return new Map(domains.map((item) => [item.id, item.name]));
 	}, [domains]);
 
-	const domainOptions = useMemo(() => {
-		return [
-			{ label: "全部主题域", value: "ALL" },
-			...domains.map((item) => ({ label: item.name, value: item.id })),
-		];
-	}, [domains]);
-
 	const loadDomains = async () => {
 		try {
 			const resp: any = await listDomains(0, 200, "");
@@ -156,7 +176,7 @@ export default function Page() {
 		try {
 			const result: any = await getCatalogReconciliation(20);
 			setReconciliation((result || null) as ReconciliationResult | null);
-		} catch (error: any) {
+		} catch {
 			// error toast handled by global interceptor
 			setReconciliation(null);
 		} finally {
@@ -243,198 +263,272 @@ export default function Page() {
 		return Array.from(map.entries()).sort((a, b) => b[1] - a[1]);
 	}, [records]);
 
-	return (
-		<div className="space-y-4">
-			<Card
-				title="资产地图"
-				extra={
-					<div className="flex flex-wrap items-center gap-2">
-						<Button className="rounded-2xl" onClick={() => void loadDatasets(1, pageState.size)} loading={loading}>
-							刷新资产
-						</Button>
-						<Button className="rounded-2xl" onClick={() => void loadReconciliation()} loading={reconciliationLoading}>
-							刷新核对
-						</Button>
-					</div>
-				}
-			>
-				<div className="mb-3 flex flex-wrap items-center gap-2">
-					<Select
-						allowClear
-						placeholder="主题域"
-						style={{ minWidth: 180 }}
-						value={domain || "ALL"}
-						onChange={(value) => setDomain(value === "ALL" ? undefined : value)}
-						options={domainOptions}
-					/>
-					<Select
-						allowClear
-						placeholder="资产类型"
-						style={{ minWidth: 180 }}
-						value={assetType}
-						onChange={(value) => setAssetType(value || "ALL")}
-						options={TYPE_OPTIONS}
-					/>
-					<Select
-						allowClear
-						placeholder="密级"
-						style={{ minWidth: 160 }}
-						value={classification}
-						onChange={(value) => setClassification(value || "ALL")}
-						options={CLASSIFICATION_OPTIONS}
-					/>
-					<Select
-						allowClear
-						placeholder="分层"
-						style={{ minWidth: 160 }}
-						value={warehouseLayer}
-						onChange={(value) => setWarehouseLayer(value || "ALL")}
-						options={LAYER_OPTIONS}
-					/>
-					<Input
-						placeholder="搜索资产名称 / 描述"
-						style={{ width: 260 }}
-						value={keyword}
-						onChange={(event) => setKeyword(event.target.value)}
-						allowClear
-					/>
-					<Button
-						onClick={() => {
-							setKeyword("");
-							setDomain(undefined);
-							setAssetType("ALL");
-							setClassification("ALL");
-							setWarehouseLayer("ALL");
-						}}
-					>
-						重置筛选
-					</Button>
+	const buildTreeNodes = (nodes: DomainNode[]): any[] =>
+		nodes.map((n) => ({
+			key: n.id ?? n.code ?? n.name ?? Math.random().toString(),
+			title: n.name ?? n.code ?? "未命名",
+			children: n.children?.length ? buildTreeNodes(n.children) : undefined,
+		}));
+
+	const treeData = [
+		{
+			key: "ALL",
+			title: "全部资产",
+			children: buildTreeNodes(domainTree),
+		},
+	];
+
+	const reconciliationContent = reconciliation ? (
+		<Space direction="vertical" size={12} className="w-full">
+			<div className="grid gap-3 md:grid-cols-4">
+				<Card size="small" title="断言总数">
+					<div className="text-lg font-semibold">{Number(reconciliation.assertionCount || 0)}</div>
+				</Card>
+				<Card size="small" title="失败项">
+					<div className="text-lg font-semibold text-red-600">{Number(reconciliation.failedCount || 0)}</div>
+				</Card>
+				<Card size="small" title="错误级">
+					<div className="text-lg font-semibold text-red-600">{Number(reconciliation.errorCount || 0)}</div>
+				</Card>
+				<Card size="small" title="告警级">
+					<div className="text-lg font-semibold text-amber-600">{Number(reconciliation.warningCount || 0)}</div>
+				</Card>
+			</div>
+			{Array.isArray(reconciliation.assertions) && reconciliation.assertions.some((item) => item.passed === false) ? (
+				<div className="rounded border border-amber-200 bg-amber-50 p-3 text-xs text-amber-700">
+					{reconciliation.assertions
+						.filter((item) => item.passed === false)
+						.slice(0, 6)
+						.map((item) => (
+							<div key={item.code || item.name}>
+								[{item.code || "-"}] {item.name || "未命名检查"}：{item.detail || "-"}；建议：{item.suggestion || "-"}
+							</div>
+						))}
 				</div>
-			</Card>
-
-			<Card title="资产概览">
-				{records.length ? (
-					<div className="space-y-4">
-						<div className="grid gap-3 md:grid-cols-4">
-							<Card size="small" title="资产总量">
-								<div className="text-2xl font-semibold">{pageState.total}</div>
-								<div className="text-xs text-gray-500">已纳入治理的资产记录</div>
-							</Card>
-							<Card size="small" title="主题域">
-								<div className="text-2xl font-semibold">{domains.length}</div>
-								<div className="text-xs text-gray-500">已配置主题域数量</div>
-							</Card>
-							<Card size="small" title="活跃资产">
-								<div className="text-2xl font-semibold">
-									{records.filter((item) => item.status === "启用").length}
+			) : (
+				<Alert type="success" showIcon message="一致性断言通过，未发现阻断项。" />
+			)}
+			<div className="rounded border border-slate-200 bg-slate-50 p-3">
+				<div className="mb-2 text-sm font-medium text-slate-700">核心页面回归清单</div>
+				<Space direction="vertical" size={6} className="w-full">
+					{Array.isArray(reconciliation.regressionChecklist) && reconciliation.regressionChecklist.length > 0 ? (
+						reconciliation.regressionChecklist.map((item) => (
+							<div key={item.code || item.name} className="flex items-center justify-between gap-3 text-xs text-slate-700">
+								<div>
+									<span className="font-medium">[{item.code || "-"}] {item.name || "-"}</span>
+									<div className="text-slate-500">{item.description || "-"}</div>
 								</div>
-								<div className="text-xs text-gray-500">当前页启用资产</div>
-							</Card>
-							<Card size="small" title="资产详情">
-								<Button type="link" onClick={() => router.push("/catalog/asset-detail")} className="p-0">
-									查看全部资产 →
+								<Button
+									size="small"
+									onClick={() => {
+										if (item.route) router.push(item.route);
+									}}
+								>
+									打开页面
 								</Button>
-								<div className="text-xs text-gray-500">进入资产列表查看详情</div>
-							</Card>
-						</div>
+							</div>
+						))
+					) : (
+						<div className="text-xs text-slate-500">暂无回归清单</div>
+					)}
+				</Space>
+			</div>
+		</Space>
+	) : (
+		<EmptyState title="暂无核对结果" description="当前账号无权限或尚未执行核对。" />
+	);
 
-						<div className="grid gap-3 md:grid-cols-3">
-							<Card size="small" title="按类型分布">
-								<div className="flex flex-wrap gap-1.5">
-									{typeStats.map(([type, count]) => (
-										<Tag key={type}>{type}: {count}</Tag>
-									))}
-								</div>
-							</Card>
-							<Card size="small" title="按分层分布">
-								<div className="flex flex-wrap gap-1.5">
-									{layerStats.map(([layer, count]) => (
-										<Tag key={layer}>{layer}: {count}</Tag>
-									))}
-								</div>
-							</Card>
-							<Card size="small" title="按密级分布">
-								<div className="flex flex-wrap gap-1.5">
-									{classificationStats.map(([cls, count]) => (
-										<Tag key={cls}>{cls}: {count}</Tag>
-									))}
-								</div>
-							</Card>
-						</div>
-					</div>
-				) : (
-					<EmptyState title="暂无资产地图" description="请先完成元数据采集或同步资产数据。" />
-				)}
-			</Card>
-
-			<Card
-				title="发布前回归与一致性核对"
-				extra={
-					<Button loading={reconciliationLoading} onClick={() => void loadReconciliation()}>
-						重新核对
-					</Button>
-				}
+	return (
+		<Layout className="min-h-full" style={{ background: "transparent" }}>
+			<Layout.Sider
+				width={240}
+				theme="light"
+				style={{ background: "#fff", borderRight: "1px solid #f0f0f0", padding: "12px 8px" }}
 			>
-				{reconciliation ? (
-					<Space direction="vertical" size={12} className="w-full">
-						<div className="grid gap-3 md:grid-cols-4">
-							<Card size="small" title="断言总数">
-								<div className="text-lg font-semibold">{Number(reconciliation.assertionCount || 0)}</div>
-							</Card>
-							<Card size="small" title="失败项">
-								<div className="text-lg font-semibold text-red-600">{Number(reconciliation.failedCount || 0)}</div>
-							</Card>
-							<Card size="small" title="错误级">
-								<div className="text-lg font-semibold text-red-600">{Number(reconciliation.errorCount || 0)}</div>
-							</Card>
-							<Card size="small" title="告警级">
-								<div className="text-lg font-semibold text-amber-600">{Number(reconciliation.warningCount || 0)}</div>
-							</Card>
+				<div className="mb-2 px-2 text-xs font-semibold text-slate-500">主题域</div>
+				<Spin spinning={treeLoading}>
+					<Tree
+						showLine
+						defaultExpandAll
+						treeData={treeData}
+						defaultSelectedKeys={["ALL"]}
+						onSelect={(keys) => {
+							const selected = String(keys?.[0] ?? "ALL");
+							setDomain(selected === "ALL" ? undefined : selected);
+						}}
+					/>
+				</Spin>
+			</Layout.Sider>
+			<Layout.Content style={{ padding: "0 16px" }}>
+				<div className="space-y-4">
+					<Card
+						title="资产地图"
+						extra={
+							<div className="flex flex-wrap items-center gap-2">
+								<Button className="rounded-2xl" onClick={() => void loadDatasets(1, pageState.size)} loading={loading}>
+									刷新资产
+								</Button>
+								<Button className="rounded-2xl" onClick={() => void loadReconciliation()} loading={reconciliationLoading}>
+									刷新核对
+								</Button>
+							</div>
+						}
+					>
+						<div className="mb-3 flex flex-wrap items-center gap-2">
+							<Select
+								allowClear
+								placeholder="资产类型"
+								style={{ minWidth: 180 }}
+								value={assetType}
+								onChange={(value) => setAssetType(value || "ALL")}
+								options={TYPE_OPTIONS}
+							/>
+							<Select
+								allowClear
+								placeholder="密级"
+								style={{ minWidth: 160 }}
+								value={classification}
+								onChange={(value) => setClassification(value || "ALL")}
+								options={CLASSIFICATION_OPTIONS}
+							/>
+							<Select
+								allowClear
+								placeholder="分层"
+								style={{ minWidth: 160 }}
+								value={warehouseLayer}
+								onChange={(value) => setWarehouseLayer(value || "ALL")}
+								options={LAYER_OPTIONS}
+							/>
+							<Input
+								placeholder="搜索资产名称 / 描述"
+								style={{ width: 260 }}
+								value={keyword}
+								onChange={(event) => setKeyword(event.target.value)}
+								allowClear
+							/>
+							<Button
+								onClick={() => {
+									setKeyword("");
+									setDomain(undefined);
+									setAssetType("ALL");
+									setClassification("ALL");
+									setWarehouseLayer("ALL");
+								}}
+							>
+								重置筛选
+							</Button>
 						</div>
-						{Array.isArray(reconciliation.assertions) && reconciliation.assertions.some((item) => item.passed === false) ? (
-							<div className="rounded border border-amber-200 bg-amber-50 p-3 text-xs text-amber-700">
-								{reconciliation.assertions
-									.filter((item) => item.passed === false)
-									.slice(0, 6)
-									.map((item) => (
-										<div key={item.code || item.name}>
-											[{item.code || "-"}] {item.name || "未命名检查"}：{item.detail || "-"}；建议：{item.suggestion || "-"}
+					</Card>
+
+					<Card title="资产概览">
+						{records.length ? (
+							<div className="space-y-4">
+								<div className="grid gap-3 md:grid-cols-4">
+									<Card size="small" title="资产总量">
+										<div className="text-2xl font-semibold">{pageState.total}</div>
+										<div className="text-xs text-gray-500">已纳入治理的资产记录</div>
+									</Card>
+									<Card size="small" title="主题域">
+										<div className="text-2xl font-semibold">{domains.length}</div>
+										<div className="text-xs text-gray-500">已配置主题域数量</div>
+									</Card>
+									<Card size="small" title="活跃资产">
+										<div className="text-2xl font-semibold">
+											{records.filter((item) => item.status === "启用").length}
 										</div>
-									))}
+										<div className="text-xs text-gray-500">当前页启用资产</div>
+									</Card>
+									<Card size="small" title="资产详情">
+										<Button type="link" onClick={() => router.push("/catalog/asset-detail")} className="p-0">
+											查看全部资产 →
+										</Button>
+										<div className="text-xs text-gray-500">进入资产列表查看详情</div>
+									</Card>
+								</div>
+
+								<div className="grid gap-3 md:grid-cols-3">
+									<Card size="small" title="按类型分布">
+										<div className="flex flex-wrap gap-1.5">
+											{typeStats.map(([type, count]) => (
+												<Tag key={type}>{type}: {count}</Tag>
+											))}
+										</div>
+									</Card>
+									<Card size="small" title="按分层分布">
+										<div className="flex flex-wrap gap-1.5">
+											{layerStats.map(([layer, count]) => (
+												<Tag key={layer}>{layer}: {count}</Tag>
+											))}
+										</div>
+									</Card>
+									<Card size="small" title="按密级分布">
+										<div className="flex flex-wrap gap-1.5">
+											{classificationStats.map(([cls, count]) => (
+												<Tag key={cls}>{cls}: {count}</Tag>
+											))}
+										</div>
+									</Card>
+								</div>
 							</div>
 						) : (
-							<Alert type="success" showIcon message="一致性断言通过，未发现阻断项。" />
+							<EmptyState title="暂无资产地图" description="请先完成元数据采集或同步资产数据。" />
 						)}
-						<div className="rounded border border-slate-200 bg-slate-50 p-3">
-							<div className="mb-2 text-sm font-medium text-slate-700">核心页面回归清单</div>
-							<Space direction="vertical" size={6} className="w-full">
-								{Array.isArray(reconciliation.regressionChecklist) && reconciliation.regressionChecklist.length > 0 ? (
-									reconciliation.regressionChecklist.map((item) => (
-										<div key={item.code || item.name} className="flex items-center justify-between gap-3 text-xs text-slate-700">
-											<div>
-												<span className="font-medium">[{item.code || "-"}] {item.name || "-"}</span>
-												<div className="text-slate-500">{item.description || "-"}</div>
-											</div>
-											<Button
-												size="small"
-												onClick={() => {
-													if (item.route) router.push(item.route);
-												}}
-											>
-												打开页面
-											</Button>
-										</div>
-									))
-								) : (
-									<div className="text-xs text-slate-500">暂无回归清单</div>
-								)}
-							</Space>
+					</Card>
+
+					{records.length > 0 && (
+						<div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3">
+							{records.map((row) => (
+								<div
+									key={row.id}
+									className="cursor-pointer rounded-[20px] border border-slate-200 bg-white px-4 py-3 transition-all hover:border-blue-300 hover:shadow-sm"
+									onClick={() => router.push(`/catalog/asset-detail?id=${row.id}`)}
+								>
+									<div className="flex items-start justify-between gap-2">
+										<div className="flex-1 truncate text-sm font-semibold text-slate-900">{row.name}</div>
+										{row.warehouseLayer && (
+											<Tag color={LAYER_TAG_COLORS[row.warehouseLayer] ?? "default"}>
+												{row.warehouseLayer}
+											</Tag>
+										)}
+									</div>
+									<div className="mt-1 text-xs text-slate-500">{row.domain ?? "未归域"}</div>
+									<div className="mt-2 flex flex-wrap gap-1">
+										{row.classification && (
+											<Tag color="orange" style={{ fontSize: 11 }}>
+												{CLASSIFICATION_LABEL[row.classification.toUpperCase()] ?? row.classification}
+											</Tag>
+										)}
+										<Tag style={{ fontSize: 11 }}>{row.type ?? "未知"}</Tag>
+									</div>
+								</div>
+							))}
 						</div>
-					</Space>
-				) : (
-					<EmptyState title="暂无核对结果" description="当前账号无权限或尚未执行核对。" />
-				)}
-			</Card>
-		</div>
+					)}
+
+					<Collapse
+						defaultActiveKey={[]}
+						items={[
+							{
+								key: "reconciliation",
+								label: "发布前回归与一致性核对",
+								extra: (
+									<Button
+										size="small"
+										loading={reconciliationLoading}
+										onClick={(e) => {
+											e.stopPropagation();
+											void loadReconciliation();
+										}}
+									>
+										重新核对
+									</Button>
+								),
+								children: reconciliationContent,
+							},
+						]}
+					/>
+				</div>
+			</Layout.Content>
+		</Layout>
 	);
 }
