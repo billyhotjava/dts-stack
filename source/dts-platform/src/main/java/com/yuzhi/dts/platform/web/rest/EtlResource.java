@@ -505,6 +505,43 @@ public class EtlResource {
         return ApiResponses.ok(result);
     }
 
+    @GetMapping("/airflow/jobs/{dagId}/runs/{dagRunId}/tasks")
+    public ApiResponse<com.fasterxml.jackson.databind.JsonNode> listAirflowTaskInstances(
+        @PathVariable String dagId,
+        @PathVariable String dagRunId
+    ) {
+        if (!airflowProperties.isEnabled()) {
+            return ApiResponses.error("Airflow integration is not enabled");
+        }
+        com.fasterxml.jackson.databind.JsonNode result = airflowClient.listTaskInstances(dagId, dagRunId);
+        auditService.audit("READ", "etl.airflow.task-instances", dagId + "/" + dagRunId);
+        return ApiResponses.ok(result);
+    }
+
+    @GetMapping("/airflow/jobs/{dagId}/runs/{dagRunId}/task-logs")
+    public ApiResponse<Map<String, Object>> getAirflowTaskLog(
+        @PathVariable String dagId,
+        @PathVariable String dagRunId,
+        @RequestParam String taskId,
+        @RequestParam(defaultValue = "1") int tryNumber
+    ) {
+        if (!airflowProperties.isEnabled()) {
+            return ApiResponses.error("Airflow integration is not enabled");
+        }
+        if (!StringUtils.hasText(taskId)) {
+            return ApiResponses.error("taskId is required");
+        }
+        String log = airflowClient.getTaskInstanceLog(dagId, dagRunId, taskId, Math.max(1, tryNumber));
+        Map<String, Object> result = new LinkedHashMap<>();
+        result.put("dagId", dagId);
+        result.put("dagRunId", dagRunId);
+        result.put("taskId", taskId);
+        result.put("tryNumber", tryNumber);
+        result.put("log", log != null ? log : "");
+        auditService.audit("READ", "etl.airflow.task-logs", dagId + "/" + dagRunId + "/" + taskId);
+        return ApiResponses.ok(result);
+    }
+
     public record DbtRunRequest(
         String models,
         String dagSelector,
