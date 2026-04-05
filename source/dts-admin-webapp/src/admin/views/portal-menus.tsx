@@ -745,22 +745,35 @@ function MenuRow({
 					{isFolder ? (
 						<span className="text-xs text-muted-foreground">--</span>
 					) : (
-						<div className="flex flex-wrap justify-end gap-2">
+						<div className="flex items-center justify-end gap-1 flex-nowrap">
 							<Button size="small" type="default" onClick={() => onToggle(item)} disabled={busy}>
-								{isDeleted ? "启用菜单" : "禁用菜单"}
+								{isDeleted ? "启用" : "禁用"}
 							</Button>
 							<Button size="small" type="default" onClick={() => onEditRoles(item)} disabled={rolesLoading || busy}>
 								配置角色
 							</Button>
 							{isCustom ? (
-								<>
-									<Button size="small" type="default" onClick={() => onEditCustom(item)} disabled={busy}>
-										编辑
-									</Button>
-									<Button size="small" danger type="primary" onClick={() => onDeleteCustom(item)} disabled={busy}>
-										删除
-									</Button>
-								</>
+								<Dropdown
+									trigger={["click"]}
+									disabled={busy}
+									menu={{
+										items: [
+											{
+												key: "edit",
+												label: "编辑",
+												onClick: () => onEditCustom(item),
+											},
+											{
+												key: "delete",
+												label: "删除",
+												danger: true,
+												onClick: () => onDeleteCustom(item),
+											},
+										],
+									}}
+								>
+									<Button size="small" type="text" icon={<MoreOutlined />} disabled={busy} />
+								</Dropdown>
 							) : null}
 						</div>
 					)}
