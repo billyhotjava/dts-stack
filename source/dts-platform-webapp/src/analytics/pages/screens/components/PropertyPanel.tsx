@@ -1653,13 +1653,13 @@ export function PropertyPanel({ activeTab = 'style' }: { activeTab?: PropertyPan
 
     return (
         <div className={`property-panel property-panel--${panelDensity}`}>
-            <div className="property-panel-header px-4 py-3 border-b border-border-default">
+            <div className="property-panel-header border-b border-border-default">
                 <h3>{selectedComponent.name}</h3>
                 <p className="text-xs text-text-muted mt-1">
                     {selectedComponent.type} · {selectedComponent.width} × {selectedComponent.height} · {TAB_LABELS[activeTab]}
                 </p>
             </div>
-            <div className="property-panel-content flex-1 overflow-y-auto px-4 py-2">
+            <div className="property-panel-content flex-1 overflow-y-auto">
                 {isStyleTab && <div className="property-section py-3 border-b border-border-default">
                     <div className="property-section-title property-section-title-collapsible text-xs font-semibold text-text-secondary uppercase tracking-wide mb-2 flex items-center justify-between cursor-pointer select-none">
                         <button
@@ -2059,8 +2059,8 @@ export function PropertyPanel({ activeTab = 'style' }: { activeTab?: PropertyPan
 
                 {/* Data Source */}
                 {isDataTab && shouldRenderSection('data-source', '数据', 'sql', 'card', 'api', 'dataset', 'metric') && (
-                    <div className="property-section py-3 border-b border-border-default">
-                        <div className="property-section-title property-section-title-collapsible text-xs font-semibold text-text-secondary uppercase tracking-wide mb-2 flex items-center justify-between cursor-pointer select-none">
+                    <div className="property-section border-b border-border-default">
+                        <div className="property-section-title property-section-title-collapsible text-xs font-semibold text-text-secondary uppercase tracking-wide flex items-center justify-between cursor-pointer select-none">
                             <button
                                 type="button"
                                 className="property-section-toggle text-[10px] text-text-muted transition-transform duration-200"
