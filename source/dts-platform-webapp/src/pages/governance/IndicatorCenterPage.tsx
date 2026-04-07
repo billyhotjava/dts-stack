@@ -32,20 +32,23 @@ export default function IndicatorCenterPage() {
 	const activeDomain = searchParams.get("domain") || "";
 
 	useEffect(() => {
-		loadTree();
+		const controller = new AbortController();
+		loadTree(controller.signal);
+		return () => controller.abort();
 	}, []);
 
-	const loadTree = () => {
+	const loadTree = (signal?: AbortSignal) => {
 		setTreeLoading(true);
 		setTreeError(false);
 		getDomainTree()
 			.then((res: any) => {
+				if (signal?.aborted) return;
 				const nodes: DomainNode[] = Array.isArray(res) ? res : res?.data ?? [];
 				const allNode: DataNode = { key: "", title: "全部" };
 				setTreeData([allNode, ...buildTreeData(nodes)]);
 			})
-			.catch(() => setTreeError(true))
-			.finally(() => setTreeLoading(false));
+			.catch(() => { if (!signal?.aborted) setTreeError(true); })
+			.finally(() => { if (!signal?.aborted) setTreeLoading(false); });
 	};
 
 	const handleSelect = (selectedKeys: React.Key[]) => {
@@ -75,7 +78,7 @@ export default function IndicatorCenterPage() {
 					<div className="flex justify-center py-8"><Spin size="small" /></div>
 				) : treeError ? (
 					<div className="px-3 py-4 text-xs text-slate-400">
-						加载失败，<a onClick={loadTree} className="text-blue-500 cursor-pointer">点击重试</a>
+						加载失败，<a onClick={() => loadTree()} className="text-blue-500 cursor-pointer">点击重试</a>
 					</div>
 				) : (
 					<Tree

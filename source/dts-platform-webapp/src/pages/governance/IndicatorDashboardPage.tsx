@@ -26,11 +26,11 @@ import type { IndicatorCardData } from "./components/IndicatorCard";
 const { Title, Text } = Typography;
 
 const DOMAIN_TABS = [
-	{ key: "", label: "All" },
-	{ key: "FINANCE", label: "Finance" },
-	{ key: "PROJECT_MGMT", label: "Project Mgmt" },
+	{ key: "", label: "全部" },
+	{ key: "FINANCE", label: "财务" },
+	{ key: "PROJECT_MGMT", label: "项目管理" },
 	{ key: "PLM", label: "PLM" },
-	{ key: "HR", label: "HR" },
+	{ key: "HR", label: "人力资源" },
 ];
 
 const ALERT_COLORS: Record<string, string> = {
@@ -87,7 +87,7 @@ export default function IndicatorDashboardPage() {
 			setIndicators(data.indicators ?? []);
 			setAlertSummary(data.alertSummary ?? { red: 0, yellow: 0, green: 0, noData: 0 });
 		} catch {
-			toast.error("Failed to load indicator dashboard");
+			toast.error("加载指标看板失败");
 		} finally {
 			setLoading(false);
 		}
@@ -109,7 +109,7 @@ export default function IndicatorDashboardPage() {
 			const res: any = await getIndicatorDetail(id, { days: 30 });
 			setDetailData(res?.data ?? res);
 		} catch {
-			toast.error("Failed to load indicator detail");
+			toast.error("加载指标详情失败");
 		} finally {
 			setDetailLoading(false);
 		}
@@ -125,7 +125,7 @@ export default function IndicatorDashboardPage() {
 			});
 			setDrillRows(res?.data ?? res ?? []);
 		} catch {
-			toast.error("Drilldown query failed");
+			toast.error("维度下钻查询失败");
 		} finally {
 			setDrillLoading(false);
 		}
@@ -139,7 +139,7 @@ export default function IndicatorDashboardPage() {
 	return (
 		<div style={{ padding: 16, height: "100%", overflow: "auto" }}>
 			<Title level={4} style={{ marginBottom: 16 }}>
-				Indicator Dashboard
+				指标看板
 			</Title>
 
 			<Tabs
@@ -159,7 +159,7 @@ export default function IndicatorDashboardPage() {
 				style={{ marginBottom: 16, cursor: "pointer" }}
 				message={
 					<div style={{ display: "flex", gap: 24, alignItems: "center" }}>
-						<span style={{ fontWeight: 500 }}>Alert Summary:</span>
+						<span style={{ fontWeight: 500 }}>预警概览：</span>
 						<span
 							style={{
 								color: "#f5222d",
@@ -171,7 +171,7 @@ export default function IndicatorDashboardPage() {
 								setAlertFilterLevel(alertFilterLevel === "RED" ? null : "RED")
 							}
 						>
-							Red: {alertSummary.red}
+							红色: {alertSummary.red}
 						</span>
 						<span
 							style={{
@@ -184,7 +184,7 @@ export default function IndicatorDashboardPage() {
 								setAlertFilterLevel(alertFilterLevel === "YELLOW" ? null : "YELLOW")
 							}
 						>
-							Yellow: {alertSummary.yellow}
+							黄色: {alertSummary.yellow}
 						</span>
 						<span
 							style={{
@@ -197,7 +197,7 @@ export default function IndicatorDashboardPage() {
 								setAlertFilterLevel(alertFilterLevel === "GREEN" ? null : "GREEN")
 							}
 						>
-							Green: {alertSummary.green}
+							绿色: {alertSummary.green}
 						</span>
 						<span
 							style={{
@@ -207,7 +207,7 @@ export default function IndicatorDashboardPage() {
 							}}
 							onClick={() => setAlertFilterLevel(null)}
 						>
-							No Data: {alertSummary.noData}
+							无数据: {alertSummary.noData}
 						</span>
 						{alertFilterLevel && (
 							<a
@@ -217,7 +217,7 @@ export default function IndicatorDashboardPage() {
 									setAlertFilterLevel(null);
 								}}
 							>
-								Clear filter
+								清除筛选
 							</a>
 						)}
 					</div>
@@ -229,7 +229,7 @@ export default function IndicatorDashboardPage() {
 					<Spin />
 				</div>
 			) : displayedIndicators.length === 0 ? (
-				<Empty description="No indicators found" />
+				<Empty description="暂无指标数据" />
 			) : (
 				<Row gutter={[16, 16]}>
 					{displayedIndicators.map((ind) => (
@@ -245,7 +245,7 @@ export default function IndicatorDashboardPage() {
 
 			{/* Detail Drawer */}
 			<Drawer
-				title={detailData?.indicator?.name ?? "Indicator Detail"}
+				title={detailData?.indicator?.name ?? "指标详情"}
 				open={drawerOpen}
 				onClose={() => setDrawerOpen(false)}
 				width={720}
@@ -262,32 +262,32 @@ export default function IndicatorDashboardPage() {
 							column={2}
 							bordered
 							size="small"
-							title="Indicator Metadata"
+							title="指标元数据"
 						>
-							<Descriptions.Item label="Code">
+							<Descriptions.Item label="编码">
 								{detailData.indicator.code}
 							</Descriptions.Item>
-							<Descriptions.Item label="Domain">
+							<Descriptions.Item label="所属域">
 								{detailData.indicator.domain}
 							</Descriptions.Item>
-							<Descriptions.Item label="Category">
+							<Descriptions.Item label="分类">
 								{detailData.indicator.category}
 							</Descriptions.Item>
-							<Descriptions.Item label="Unit">
+							<Descriptions.Item label="单位">
 								{detailData.indicator.unit}
 							</Descriptions.Item>
-							<Descriptions.Item label="Direction">
+							<Descriptions.Item label="方向">
 								{detailData.indicator.direction}
 							</Descriptions.Item>
-							<Descriptions.Item label="Status">
+							<Descriptions.Item label="状态">
 								<Tag>{detailData.indicator.status}</Tag>
 							</Descriptions.Item>
-							<Descriptions.Item label="Current Value">
+							<Descriptions.Item label="当前值">
 								<span style={{ fontSize: 18, fontWeight: 700 }}>
 									{detailData.indicator.currentValue ?? "--"}
 								</span>
 							</Descriptions.Item>
-							<Descriptions.Item label="Alert Level">
+							<Descriptions.Item label="预警等级">
 								{detailData.indicator.alertLevel ? (
 									<Tag
 										color={
@@ -300,26 +300,26 @@ export default function IndicatorDashboardPage() {
 									"--"
 								)}
 							</Descriptions.Item>
-							<Descriptions.Item label="Threshold">
+							<Descriptions.Item label="阈值">
 								{[
 									detailData.indicator.thresholdMin != null
-										? `Min: ${detailData.indicator.thresholdMin}`
+										? `最小: ${detailData.indicator.thresholdMin}`
 										: null,
 									detailData.indicator.thresholdMax != null
-										? `Max: ${detailData.indicator.thresholdMax}`
+										? `最大: ${detailData.indicator.thresholdMax}`
 										: null,
 								]
 									.filter(Boolean)
 									.join(" / ") || "--"}
 							</Descriptions.Item>
-							<Descriptions.Item label="Owner">
+							<Descriptions.Item label="负责人">
 								{detailData.indicator.owner ?? "--"}
 							</Descriptions.Item>
-							<Descriptions.Item label="Source Table" span={2}>
+							<Descriptions.Item label="源表" span={2}>
 								{detailData.indicator.sourceTable ?? "--"}
 							</Descriptions.Item>
 							{detailData.indicator.definition && (
-								<Descriptions.Item label="Definition" span={2}>
+								<Descriptions.Item label="定义" span={2}>
 									{detailData.indicator.definition}
 								</Descriptions.Item>
 							)}
@@ -328,13 +328,13 @@ export default function IndicatorDashboardPage() {
 						{/* Trend Chart (div bars) */}
 						<div>
 							<Text strong style={{ display: "block", marginBottom: 8 }}>
-								Trend (Last 30 Days)
+								趋势（近 30 天）
 							</Text>
 							{detailData.trend && detailData.trend.length > 0 ? (
 								<TrendBarChart trend={detailData.trend} />
 							) : (
 								<Empty
-									description="No trend data"
+									description="暂无趋势数据"
 									image={Empty.PRESENTED_IMAGE_SIMPLE}
 								/>
 							)}
@@ -343,7 +343,7 @@ export default function IndicatorDashboardPage() {
 						{/* Drilldown */}
 						<div>
 							<Text strong style={{ display: "block", marginBottom: 8 }}>
-								Dimension Drilldown
+								维度下钻
 							</Text>
 							<div
 								style={{
@@ -354,16 +354,16 @@ export default function IndicatorDashboardPage() {
 								}}
 							>
 								<Select
-									placeholder="Select dimension"
+									placeholder="选择维度"
 									style={{ width: 180 }}
 									value={drillDimension || undefined}
 									onChange={(v) => setDrillDimension(v)}
 									options={[
-										{ value: "department", label: "Department" },
-										{ value: "project", label: "Project" },
-										{ value: "category", label: "Category" },
-										{ value: "region", label: "Region" },
-										{ value: "product", label: "Product" },
+										{ value: "department", label: "部门" },
+										{ value: "project", label: "项目" },
+										{ value: "category", label: "分类" },
+										{ value: "region", label: "区域" },
+										{ value: "product", label: "产品" },
 									]}
 									allowClear
 								/>
@@ -387,7 +387,7 @@ export default function IndicatorDashboardPage() {
 									}}
 									onClick={() => drillDimension && runDrilldown()}
 								>
-									Query
+									查询
 								</a>
 							</div>
 							{drillLoading ? (
@@ -409,7 +409,7 @@ export default function IndicatorDashboardPage() {
 							) : (
 								drillDimension && (
 									<Empty
-										description="No drilldown data"
+										description="暂无下钻数据"
 										image={Empty.PRESENTED_IMAGE_SIMPLE}
 									/>
 								)
@@ -419,7 +419,7 @@ export default function IndicatorDashboardPage() {
 						{/* Run History */}
 						<div>
 							<Text strong style={{ display: "block", marginBottom: 8 }}>
-								Run History
+								运行记录
 							</Text>
 							{detailData.history && detailData.history.length > 0 ? (
 								<Table
@@ -429,7 +429,7 @@ export default function IndicatorDashboardPage() {
 									pagination={{ pageSize: 8 }}
 									columns={[
 										{
-											title: "Run At",
+											title: "运行时间",
 											dataIndex: "runAt",
 											width: 170,
 											render: (v: string) =>
@@ -438,7 +438,7 @@ export default function IndicatorDashboardPage() {
 													: "--",
 										},
 										{
-											title: "Status",
+											title: "状态",
 											dataIndex: "status",
 											width: 80,
 											render: (v: string) => (
@@ -456,14 +456,14 @@ export default function IndicatorDashboardPage() {
 											),
 										},
 										{
-											title: "Value",
+											title: "计算值",
 											dataIndex: "computedValue",
 											width: 100,
 											render: (v: any) =>
 												v != null ? String(v) : "--",
 										},
 										{
-											title: "Change",
+											title: "变化率",
 											dataIndex: "changeRate",
 											width: 80,
 											render: (v: any) =>
@@ -472,7 +472,7 @@ export default function IndicatorDashboardPage() {
 													: "--",
 										},
 										{
-											title: "Alert",
+											title: "预警",
 											dataIndex: "alertLevel",
 											width: 70,
 											render: (v: string) =>
@@ -489,14 +489,14 @@ export default function IndicatorDashboardPage() {
 												),
 										},
 										{
-											title: "Duration",
+											title: "耗时",
 											dataIndex: "durationMs",
 											width: 80,
 											render: (v: number) =>
 												v != null ? `${v}ms` : "--",
 										},
 										{
-											title: "Error",
+											title: "错误信息",
 											dataIndex: "errorMessage",
 											ellipsis: true,
 											render: (v: string) => v ?? "--",
@@ -505,14 +505,14 @@ export default function IndicatorDashboardPage() {
 								/>
 							) : (
 								<Empty
-									description="No run history"
+									description="暂无运行记录"
 									image={Empty.PRESENTED_IMAGE_SIMPLE}
 								/>
 							)}
 						</div>
 					</div>
 				) : (
-					<Empty description="Failed to load detail" />
+					<Empty description="加载详情失败" />
 				)}
 			</Drawer>
 		</div>
@@ -560,7 +560,7 @@ function TrendBarChart({
 							opacity: 0.8,
 							transition: "height 0.2s",
 						}}
-						title={`${point.date}\nValue: ${point.value}`}
+						title={`${point.date}\n值: ${point.value}`}
 					/>
 				);
 			})}

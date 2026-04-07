@@ -5,10 +5,14 @@ import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
 @Repository
-public interface GovIndicatorDefinitionRepository extends JpaRepository<GovIndicatorDefinition, UUID> {
+public interface GovIndicatorDefinitionRepository extends JpaRepository<GovIndicatorDefinition, UUID>,
+    JpaSpecificationExecutor<GovIndicatorDefinition> {
     Optional<GovIndicatorDefinition> findFirstByCodeIgnoreCase(String code);
 
     List<GovIndicatorDefinition> findByDomainAndStatusNot(String domain, String excludedStatus);
@@ -22,5 +26,11 @@ public interface GovIndicatorDefinitionRepository extends JpaRepository<GovIndic
     List<GovIndicatorDefinition> findByDatasetId(String datasetId);
 
     List<GovIndicatorDefinition> findByDomainIgnoreCase(String domain);
+
+    @Query("SELECT COUNT(g) FROM GovIndicatorDefinition g WHERE LOWER(g.domain) = LOWER(:domain)")
+    long countByDomainIgnoreCase(@Param("domain") String domain);
+
+    @Query("SELECT COUNT(g) FROM GovIndicatorDefinition g WHERE LOWER(g.domain) = LOWER(:domain) AND UPPER(g.status) = :status")
+    long countByDomainIgnoreCaseAndStatusUpper(@Param("domain") String domain, @Param("status") String status);
 }
 

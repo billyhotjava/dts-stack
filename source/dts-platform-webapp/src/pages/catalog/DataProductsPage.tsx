@@ -84,15 +84,24 @@ export default function DataProductsPage() {
 		}
 	};
 
-	const handleDelete = async (product: DataProduct) => {
+	const handleDelete = (product: DataProduct) => {
 		if (!product.id) return;
-		try {
-			await deleteDataProduct(product.id);
-			toast.success("已删除");
-			void load();
-		} catch {
-			// global interceptor
-		}
+		Modal.confirm({
+			title: "确认删除",
+			content: `确定要删除数据产品「${product.name || product.code || ""}」吗？此操作不可撤销。`,
+			okText: "删除",
+			okType: "danger",
+			cancelText: "取消",
+			onOk: async () => {
+				try {
+					await deleteDataProduct(product.id!);
+					toast.success("已删除");
+					void load();
+				} catch {
+					// global interceptor
+				}
+			},
+		});
 	};
 
 	return (
@@ -152,7 +161,7 @@ export default function DataProductsPage() {
 											size="small"
 											danger
 											icon={<DeleteOutlined />}
-											onClick={() => void handleDelete(product)}
+											onClick={() => handleDelete(product)}
 										>
 											删除
 										</Button>

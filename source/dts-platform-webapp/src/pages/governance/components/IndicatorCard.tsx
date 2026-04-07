@@ -31,7 +31,7 @@ const ALERT_COLORS: Record<string, string> = {
 
 function MiniTrendBars({ trend }: { trend?: TrendPoint[] }) {
 	if (!trend || trend.length === 0) {
-		return <div style={{ color: "#bbb", fontSize: 12, marginTop: 8 }}>No trend data</div>;
+		return <div style={{ color: "#bbb", fontSize: 12, marginTop: 8 }}>暂无趋势数据</div>;
 	}
 
 	const values = trend.map((t) => t.value ?? 0);
@@ -84,8 +84,8 @@ export default function IndicatorCard({ indicator, onClick }: IndicatorCardProps
 	}
 
 	const thresholdText: string[] = [];
-	if (indicator.thresholdMin != null) thresholdText.push(`Min: ${indicator.thresholdMin}`);
-	if (indicator.thresholdMax != null) thresholdText.push(`Max: ${indicator.thresholdMax}`);
+	if (indicator.thresholdMin != null) thresholdText.push(`最小: ${indicator.thresholdMin}`);
+	if (indicator.thresholdMax != null) thresholdText.push(`最大: ${indicator.thresholdMax}`);
 
 	return (
 		<Card
@@ -138,7 +138,7 @@ export default function IndicatorCard({ indicator, onClick }: IndicatorCardProps
 
 			{thresholdText.length > 0 && (
 				<div style={{ fontSize: 11, color: "#999", marginTop: 6 }}>
-					Threshold: {thresholdText.join(" / ")}
+					阈值: {thresholdText.join(" / ")}
 				</div>
 			)}
 		</Card>

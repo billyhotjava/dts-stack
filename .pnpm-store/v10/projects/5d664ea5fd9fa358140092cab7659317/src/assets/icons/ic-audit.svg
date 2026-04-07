@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none">
+  <!-- Clock -->
+  <circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="2" fill="none"/>
+  <path fill="currentColor" d="M12 7h-1v6l5 3 .5-.86L12 12.5V7Z"/>
+</svg>

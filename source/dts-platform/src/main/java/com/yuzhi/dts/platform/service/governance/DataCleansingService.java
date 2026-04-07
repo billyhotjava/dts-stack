@@ -138,6 +138,11 @@ public class DataCleansingService {
      * 将 function.getSqlExpression() 中的 {{column}} 替换为实际列名，
      * 生成 UPDATE SQL 并执行，返回影响行数。
      */
+    // SQL 表达式中禁止出现的危险关键词（防止注入）
+    private static final Pattern DANGEROUS_SQL_PATTERN = Pattern.compile(
+        "(?i)\\b(INSERT|DELETE|DROP|TRUNCATE|ALTER|CREATE|GRANT|REVOKE|COPY|EXEC|EXECUTE|INTO|FROM|UNION|;|--)\\b"
+    );
+
     private int applyFunction(Connection conn, String tableName, String columnName,
                               GovCleansingFunction function) throws SQLException {
         // 列名安全校验
@@ -145,8 +150,18 @@ public class DataCleansingService {
             throw new IllegalArgumentException("Column name contains illegal characters: " + columnName);
         }
 
+        // SQL 表达式安全校验
+        String rawExpression = function.getSqlExpression();
+        if (rawExpression == null || rawExpression.isBlank()) {
+            throw new IllegalArgumentException("Cleansing function SQL expression is empty: " + function.getCode());
+        }
+        if (DANGEROUS_SQL_PATTERN.matcher(rawExpression).find()) {
+            throw new IllegalArgumentException(
+                "Cleansing function [" + function.getCode() + "] SQL expression contains forbidden keywords");
+        }
+
         // 1. 将 {{column}} 替换为实际列名
-        String renderedExpression = function.getSqlExpression().replace("{{column}}", columnName);
+        String renderedExpression = rawExpression.replace("{{column}}", columnName);
 
         // 2. 生成 UPDATE SQL
         String sql = "UPDATE " + tableName

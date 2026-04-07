@@ -31,10 +31,18 @@ public class CatalogDbtLineageService {
 
 	@Transactional
 	public Map<String, Object> importManifest(MultipartFile file) throws IOException {
+		Map<?, ?> rawManifest = objectMapper.readValue(file.getInputStream(), Map.class);
+		if (rawManifest == null || rawManifest.isEmpty()) {
+			throw new IllegalArgumentException("manifest.json 内容为空");
+		}
+		Object nodesObj = rawManifest.get("nodes");
+		if (nodesObj != null && !(nodesObj instanceof Map)) {
+			throw new IllegalArgumentException("manifest.json 中 nodes 字段格式不正确，期望为对象");
+		}
 		@SuppressWarnings("unchecked")
-		Map<String, Object> manifest = objectMapper.readValue(file.getInputStream(), Map.class);
+		Map<String, Object> manifest = (Map<String, Object>) rawManifest;
 		@SuppressWarnings("unchecked")
-		Map<String, Object> nodes = (Map<String, Object>) manifest.getOrDefault("nodes", Collections.emptyMap());
+		Map<String, Object> nodes = nodesObj != null ? (Map<String, Object>) nodesObj : Collections.emptyMap();
 
 		// Pre-load datasets indexed by hiveTable (lowercase) using projection query
 		Map<String, UUID> tableIndex = new HashMap<>();
@@ -61,15 +69,29 @@ public class CatalogDbtLineageService {
 			if (!nodeKey.startsWith("model.")) {
 				continue;
 			}
+			if (!(entry.getValue() instanceof Map)) {
+				skipped++;
+				continue;
+			}
 
 			@SuppressWarnings("unchecked")
 			Map<String, Object> node = (Map<String, Object>) entry.getValue();
 			String modelName = String.valueOf(node.getOrDefault("name", ""));
 
+			Object depsObj = node.getOrDefault("depends_on", Collections.emptyMap());
+			if (!(depsObj instanceof Map)) {
+				skipped++;
+				continue;
+			}
 			@SuppressWarnings("unchecked")
-			Map<String, Object> dependsOn = (Map<String, Object>) node.getOrDefault("depends_on", Collections.emptyMap());
+			Map<String, Object> dependsOn = (Map<String, Object>) depsObj;
+			Object parentObj = dependsOn.getOrDefault("nodes", Collections.emptyList());
+			if (!(parentObj instanceof List)) {
+				skipped++;
+				continue;
+			}
 			@SuppressWarnings("unchecked")
-			List<String> parentKeys = (List<String>) dependsOn.getOrDefault("nodes", Collections.emptyList());
+			List<String> parentKeys = (List<String>) parentObj;
 
 			UUID downstreamId = tableIndex.get(modelName.toLowerCase());
 			if (downstreamId == null) {

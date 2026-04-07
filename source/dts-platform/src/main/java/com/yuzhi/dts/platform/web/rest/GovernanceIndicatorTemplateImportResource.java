@@ -51,7 +51,25 @@ public class GovernanceIndicatorTemplateImportResource {
                 new TypeReference<List<GovIndicatorTemplate>>() {}
             );
         } catch (Exception e) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "JSON 格式错误: " + e.getMessage());
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "JSON 格式错误");
+        }
+
+        if (templates == null || templates.isEmpty()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "文件内容为空");
+        }
+        if (templates.size() > 1000) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "单次导入不能超过 1000 个模板");
+        }
+        for (int i = 0; i < templates.size(); i++) {
+            GovIndicatorTemplate t = templates.get(i);
+            if (t == null || t.getCode() == null || t.getCode().isBlank()) {
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                    "第 " + (i + 1) + " 个模板缺少 code 字段");
+            }
+            if (t.getName() == null || t.getName().isBlank()) {
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                    "第 " + (i + 1) + " 个模板缺少 name 字段");
+            }
         }
 
         Map<String, Integer> result = templateService.batchImport(templates);

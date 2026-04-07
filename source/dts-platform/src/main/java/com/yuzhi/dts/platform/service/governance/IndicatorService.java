@@ -24,6 +24,7 @@ import com.yuzhi.dts.platform.service.security.AccessChecker;
 import com.yuzhi.dts.platform.service.security.SecuritySqlRewriter;
 import com.yuzhi.dts.platform.service.security.OrganizationVisibilityService;
 import com.yuzhi.dts.platform.service.security.SecurityGuardException;
+import jakarta.persistence.criteria.Predicate;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -39,6 +40,7 @@ import org.apache.commons.codec.digest.DigestUtils;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
@@ -95,15 +97,15 @@ public class IndicatorService {
 
     @Transactional(readOnly = true)
     public Page<IndicatorDto> list(String keyword, String status, String domain, String category, Boolean derived, Pageable pageable, String activeDept) {
-        List<GovIndicatorDefinition> all = repository.findAll();
+        // Push domain/status/category/derived filtering to the database via Specification
+        Specification<GovIndicatorDefinition> spec = buildSpec(status, domain, category, derived);
+        List<GovIndicatorDefinition> dbFiltered = repository.findAll(spec);
+
+        // Keyword and security filters remain in-memory (cross-field search + runtime context)
         List<GovIndicatorDefinition> filtered = new ArrayList<>();
-        for (GovIndicatorDefinition indicator : all) {
+        for (GovIndicatorDefinition indicator : dbFiltered) {
             if (indicator == null) continue;
             if (!keywordMatches(indicator, keyword)) continue;
-            if (!statusMatches(indicator, status)) continue;
-            if (!domainMatches(indicator, domain)) continue;
-            if (!categoryMatches(indicator, category)) continue;
-            if (!derivedMatches(indicator, derived)) continue;
             if (!deptAllowed(indicator, activeDept)) continue;
             if (!levelAllowed(indicator)) continue;
             filtered.add(indicator);
@@ -123,9 +125,39 @@ public class IndicatorService {
         return new PageImpl<>(content, pageable, total);
     }
 
+    private Specification<GovIndicatorDefinition> buildSpec(String status, String domain, String category, Boolean derived) {
+        return (root, query, cb) -> {
+            List<Predicate> predicates = new ArrayList<>();
+            if (StringUtils.hasText(status)) {
+                String normalizedStatus = normalizeStatus(status, "");
+                if (StringUtils.hasText(normalizedStatus)) {
+                    predicates.add(cb.equal(cb.upper(root.get("status")), normalizedStatus));
+                }
+            }
+            if (StringUtils.hasText(domain)) {
+                predicates.add(cb.equal(cb.lower(root.get("domain")), domain.trim().toLowerCase(Locale.ROOT)));
+            }
+            if (StringUtils.hasText(category)) {
+                predicates.add(cb.equal(cb.lower(root.get("category")), category.trim().toLowerCase(Locale.ROOT)));
+            }
+            if (derived != null) {
+                if (derived) {
+                    predicates.add(cb.equal(root.get("isDerived"), true));
+                } else {
+                    predicates.add(cb.or(
+                        cb.equal(root.get("isDerived"), false),
+                        cb.isNull(root.get("isDerived"))
+                    ));
+                }
+            }
+            return predicates.isEmpty() ? cb.conjunction() : cb.and(predicates.toArray(new Predicate[0]));
+        };
+    }
+
     @Transactional(readOnly = true)
     public IndicatorDto get(UUID id, String activeDept) {
-        GovIndicatorDefinition entity = repository.findById(id).orElseThrow();
+        GovIndicatorDefinition entity = repository.findById(id)
+            .orElseThrow(() -> new IllegalArgumentException("指标不存在: " + id));
         if (!deptAllowed(entity, activeDept) || !levelAllowed(entity)) {
             throw new org.springframework.security.access.AccessDeniedException("Access denied for indicator");
         }
@@ -144,7 +176,8 @@ public class IndicatorService {
     }
 
     public IndicatorDto update(UUID id, IndicatorUpsertRequest request, String activeDept) {
-        GovIndicatorDefinition entity = repository.findById(id).orElseThrow();
+        GovIndicatorDefinition entity = repository.findById(id)
+            .orElseThrow(() -> new IllegalArgumentException("指标不存在: " + id));
         if (!deptAllowed(entity, activeDept)) {
             throw new org.springframework.security.access.AccessDeniedException("Invalid department context");
         }
@@ -158,7 +191,8 @@ public class IndicatorService {
     }
 
     public IndicatorDto publish(UUID id, String activeDept) {
-        GovIndicatorDefinition entity = repository.findById(id).orElseThrow();
+        GovIndicatorDefinition entity = repository.findById(id)
+            .orElseThrow(() -> new IllegalArgumentException("指标不存在: " + id));
         if (!deptAllowed(entity, activeDept)) {
             throw new org.springframework.security.access.AccessDeniedException("Invalid department context");
         }
@@ -171,7 +205,8 @@ public class IndicatorService {
     }
 
     public IndicatorValidationResultDto validateComputeRule(UUID id, String activeDept) {
-        GovIndicatorDefinition entity = repository.findById(id).orElseThrow();
+        GovIndicatorDefinition entity = repository.findById(id)
+            .orElseThrow(() -> new IllegalArgumentException("指标不存在: " + id));
         if (!deptAllowed(entity, activeDept) || !levelAllowed(entity)) {
             throw new org.springframework.security.access.AccessDeniedException("Access denied for indicator");
         }
@@ -237,7 +272,8 @@ public class IndicatorService {
      */
     @Transactional(readOnly = true)
     public Map<String, Object> previewComputeRule(UUID id, int limit, String activeDept) {
-        GovIndicatorDefinition entity = repository.findById(id).orElseThrow();
+        GovIndicatorDefinition entity = repository.findById(id)
+            .orElseThrow(() -> new IllegalArgumentException("指标不存在: " + id));
         if (!deptAllowed(entity, activeDept) || !levelAllowed(entity)) {
             throw new org.springframework.security.access.AccessDeniedException("Access denied for indicator");
         }
@@ -312,7 +348,8 @@ public class IndicatorService {
     }
 
     public IndicatorDto archive(UUID id, String activeDept) {
-        GovIndicatorDefinition entity = repository.findById(id).orElseThrow();
+        GovIndicatorDefinition entity = repository.findById(id)
+            .orElseThrow(() -> new IllegalArgumentException("指标不存在: " + id));
         if (!deptAllowed(entity, activeDept)) {
             throw new org.springframework.security.access.AccessDeniedException("Invalid department context");
         }
@@ -324,7 +361,8 @@ public class IndicatorService {
     }
 
     public void delete(UUID id, String activeDept) {
-        GovIndicatorDefinition entity = repository.findById(id).orElseThrow();
+        GovIndicatorDefinition entity = repository.findById(id)
+            .orElseThrow(() -> new IllegalArgumentException("指标不存在: " + id));
         if (!deptAllowed(entity, activeDept)) {
             throw new org.springframework.security.access.AccessDeniedException("Invalid department context");
         }
@@ -362,7 +400,8 @@ public class IndicatorService {
 
     @Transactional(readOnly = true)
     public List<IndicatorVersionDto> listVersions(UUID indicatorId, String activeDept) {
-        GovIndicatorDefinition entity = repository.findById(indicatorId).orElseThrow();
+        GovIndicatorDefinition entity = repository.findById(indicatorId)
+            .orElseThrow(() -> new IllegalArgumentException("指标不存在: " + indicatorId));
         if (!deptAllowed(entity, activeDept) || !levelAllowed(entity)) {
             throw new org.springframework.security.access.AccessDeniedException("Access denied for indicator");
         }
@@ -375,7 +414,8 @@ public class IndicatorService {
 
     @Transactional(readOnly = true)
     public IndicatorVersionDto getVersion(UUID indicatorId, String version, String activeDept) {
-        GovIndicatorDefinition entity = repository.findById(indicatorId).orElseThrow();
+        GovIndicatorDefinition entity = repository.findById(indicatorId)
+            .orElseThrow(() -> new IllegalArgumentException("指标不存在: " + indicatorId));
         if (!deptAllowed(entity, activeDept) || !levelAllowed(entity)) {
             throw new org.springframework.security.access.AccessDeniedException("Access denied for indicator");
         }
@@ -387,7 +427,8 @@ public class IndicatorService {
 
     @Transactional(readOnly = true)
     public Map<String, Object> compareVersions(UUID indicatorId, String leftVersion, String rightVersion, String activeDept) {
-        GovIndicatorDefinition entity = repository.findById(indicatorId).orElseThrow();
+        GovIndicatorDefinition entity = repository.findById(indicatorId)
+            .orElseThrow(() -> new IllegalArgumentException("指标不存在: " + indicatorId));
         if (!deptAllowed(entity, activeDept) || !levelAllowed(entity)) {
             throw new org.springframework.security.access.AccessDeniedException("Access denied for indicator");
         }
@@ -415,7 +456,8 @@ public class IndicatorService {
         String reason,
         boolean publishAfterRollback
     ) {
-        GovIndicatorDefinition entity = repository.findById(indicatorId).orElseThrow();
+        GovIndicatorDefinition entity = repository.findById(indicatorId)
+            .orElseThrow(() -> new IllegalArgumentException("指标不存在: " + indicatorId));
         if (!deptAllowed(entity, activeDept)) {
             throw new org.springframework.security.access.AccessDeniedException("Invalid department context");
         }

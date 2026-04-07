@@ -1,0 +1,117 @@
+import { Fragment, useMemo, useState, type CSSProperties } from 'react';
+import { Modal } from 'antd';
+import { useScreenRuntime } from '../ScreenRuntimeContext';
+
+interface InteractionDebugPanelProps {
+	open: boolean;
+	cycleWarnings?: string[];
+	onClose: () => void;
+}
+
+export function InteractionDebugPanel({ open, cycleWarnings, onClose }: InteractionDebugPanelProps) {
+	const { definitions, values, getEvents } = useScreenRuntime();
+	const [kindFilter, setKindFilter] = useState<'all' | 'variable' | 'filter' | 'interaction' | 'drill-down' | 'drill-up' | 'jump' | 'action' | 'panel' | 'intent'>('all');
+	const events = getEvents();
+	const filteredEvents = useMemo(() => (
+		kindFilter === 'all' ? events : events.filter((item) => item.kind === kindFilter)
+	), [events, kindFilter]);
+
+	return (
+		<Modal open={open} onCancel={onClose} title="联动调试台" width={960}>
+			<div className="grid grid-cols-2" style={{ gap: 12 }}>
+				<section className="rounded-md" style={{ border: '1px solid rgba(148,163,184,0.25)', padding: 10 }}>
+					<div className="text-xs font-semibold" style={{ marginBottom: 8 }}>变量实时值</div>
+					<div className="grid text-xs" style={{ gridTemplateColumns: '140px 1fr', gap: 8 }}>
+						{definitions.length === 0 && <div className="col-span-full" style={{ opacity: 0.7 }}>暂无变量定义</div>}
+						{definitions.map((item) => (
+							<Fragment key={item.key}>
+								<div style={{ opacity: 0.9 }}>{item.label || item.key}</div>
+								<code className="text-xs">{values[item.key] ?? '(空)'}</code>
+							</Fragment>
+						))}
+					</div>
+				</section>
+
+				<section className="rounded-md" style={{ border: '1px solid rgba(148,163,184,0.25)', padding: 10 }}>
+					<div className="text-xs font-semibold" style={{ marginBottom: 8 }}>循环/冲突检测</div>
+					{cycleWarnings && cycleWarnings.length > 0 ? (
+						<div className="flex flex-col text-xs" style={{ gap: 6 }}>
+							{cycleWarnings.map((item, idx) => (
+								<div key={`${item}-${idx}`} style={{ color: '#f59e0b' }}>{item}</div>
+							))}
+						</div>
+					) : (
+						<div className="text-xs" style={{ opacity: 0.75 }}>未发现循环依赖</div>
+					)}
+				</section>
+			</div>
+
+			<section className="rounded-md" style={{ marginTop: 12, border: '1px solid rgba(148,163,184,0.25)', padding: 10 }}>
+				<div className="flex justify-between items-center" style={{ marginBottom: 8 }}>
+					<div className="text-xs font-semibold">事件链路（最近 100 条）</div>
+					<select
+						value={kindFilter}
+						onChange={(e) => setKindFilter(e.target.value as typeof kindFilter)}
+						style={{ fontSize: 12, minWidth: 130 }}
+					>
+						<option value="all">全部类型</option>
+						<option value="variable">变量写入</option>
+						<option value="filter">筛选器</option>
+						<option value="interaction">联动写入</option>
+						<option value="drill-down">钻取下钻</option>
+						<option value="drill-up">钻取回退</option>
+						<option value="jump">页面跳转</option>
+						<option value="action">动作入口</option>
+						<option value="panel">详情面板</option>
+						<option value="intent">意图事件</option>
+					</select>
+				</div>
+				<div className="overflow-auto text-xs" style={{ maxHeight: 320 }}>
+					{filteredEvents.length === 0 ? (
+						<div style={{ opacity: 0.7 }}>暂无事件</div>
+					) : (
+						<table style={{ width: '100%', borderCollapse: 'collapse' }}>
+							<thead>
+								<tr>
+									<th style={th}>时间</th>
+									<th style={th}>类型</th>
+									<th style={th}>变量</th>
+									<th style={th}>值</th>
+									<th style={th}>来源</th>
+									<th style={th}>详情</th>
+								</tr>
+							</thead>
+							<tbody>
+								{filteredEvents.map((event) => (
+									<tr key={event.id}>
+										<td style={td}>{event.at.replace('T', ' ').replace('Z', '')}</td>
+										<td style={td}>{event.kind}</td>
+										<td style={td}>{event.key}</td>
+										<td style={td}><code>{event.value || '(空)'}</code></td>
+										<td style={td}>{event.source || '-'}</td>
+										<td style={td}>{event.meta || '-'}</td>
+									</tr>
+								))}
+							</tbody>
+						</table>
+					)}
+				</div>
+			</section>
+		</Modal>
+	);
+}
+
+const th: CSSProperties = {
+	textAlign: 'left',
+	borderBottom: '1px solid rgba(148,163,184,0.3)',
+	padding: '6px 8px',
+	position: 'sticky',
+	top: 0,
+	background: 'rgba(2,6,23,0.95)',
+};
+
+const td: CSSProperties = {
+	borderBottom: '1px solid rgba(148,163,184,0.15)',
+	padding: '6px 8px',
+	verticalAlign: 'top',
+};

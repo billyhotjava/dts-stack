@@ -151,7 +151,7 @@ public class IngestionTaskService {
     ) {
         log.info("Creating new ingestion task: {} (skipJob={})", dto.getName(), skipJob);
 
-        if (dto.getSourceDataSourceId() == null) {
+        if (!isFileSourceType(dto.getSourceType()) && dto.getSourceDataSourceId() == null) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "来源数据源不能为空，请先选择数据源");
         }
 
@@ -228,7 +228,7 @@ public class IngestionTaskService {
     public IngestionTaskDTO update(Long id, IngestionTaskDTO dto) {
         log.info("Updating ingestion task ID: {}", id);
 
-        if (dto.getSourceDataSourceId() == null) {
+        if (!isFileSourceType(dto.getSourceType()) && dto.getSourceDataSourceId() == null) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "来源数据源不能为空，请先选择数据源");
         }
 
