@@ -64,3 +64,4 @@ docs/intergration/mdm/mdmdemo/target
 .vscode
 .specify
 **/log.root_IS_UNDEFINED/
+.pnpm-store/
