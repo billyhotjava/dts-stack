@@ -25,14 +25,15 @@ const SCREEN_REF_PREFIX = 'screen-ref:';
 const SCREEN_REF_CACHE_TTL_MS = 30_000;
 let screenRefCache: { expiresAt: number; items: ScreenListItem[] } | null = null;
 
-function parseScreenReferenceUrl(targetUrl: string): { screenName: string; fallbackUrl: string } | null {
+function parseScreenReferenceUrl(targetUrl: string): { screenName: string; fallbackUrl: string | null } | null {
     if (!targetUrl.startsWith(SCREEN_REF_PREFIX)) {
         return null;
     }
     const raw = targetUrl.slice(SCREEN_REF_PREFIX.length);
     const [screenNamePart, fallbackPart = ''] = raw.split('|', 2);
     const screenName = decodeURIComponent(screenNamePart || '').trim();
-    const fallbackUrl = decodeURIComponent(fallbackPart || '').trim() || '/bi/screens';
+    const fallbackRaw = decodeURIComponent(fallbackPart || '').trim();
+    const fallbackUrl = fallbackRaw || null;
     if (!screenName) {
         return { screenName: '', fallbackUrl };
     }
@@ -45,7 +46,7 @@ export async function resolveScreenReferenceUrl(targetUrl: string): Promise<stri
         return targetUrl;
     }
     if (!parsed.screenName) {
-        return parsed.fallbackUrl;
+        return parsed.fallbackUrl ?? '';
     }
     try {
         const now = Date.now();
@@ -63,7 +64,7 @@ export async function resolveScreenReferenceUrl(targetUrl: string): Promise<stri
     } catch (error) {
         console.error('Failed to resolve screen reference jump target:', error);
     }
-    return parsed.fallbackUrl;
+    return parsed.fallbackUrl ?? '';
 }
 
 // ---------------------------------------------------------------------------
