@@ -1,7 +1,7 @@
 {
   "schemaVersion": 3,
   "id": "gpmc-drill-risk-v2",
-  "name": "执行层-风险与预警中心明细 (实例)",
+  "name": "执行层-风险与预警中心明细",
   "description": "风险预警钻取页面，展示风险清单、风险分类摘要及应对措施。",
   "width": 1920,
   "height": 1080,
@@ -95,6 +95,58 @@
         "backgroundColor": "rgba(255, 255, 255, 0.18)",
         "borderRadius": 14
       }
+    },
+    {
+      "id": "drill-risk-back-shape",
+      "type": "shape",
+      "name": "返回风险看板",
+      "x": 1600,
+      "y": 14,
+      "width": 150,
+      "height": 28,
+      "zIndex": 60,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "shapeType": "rect",
+        "fillColor": "rgba(255, 255, 255, 0.18)",
+        "borderColor": "rgba(255, 255, 255, 0.42)",
+        "borderWidth": 1,
+        "radius": 14
+      },
+      "actions": [
+        {
+          "type": "jump-url",
+          "jumpUrlTemplate": "screen-ref:GPMC%20%E9%A3%8E%E9%99%A9%E4%B8%8E%E9%A2%84%E8%AD%A6%E4%B8%AD%E5%BF%83|%2Fbi%2Fgpmc%2Frisk",
+          "jumpOpenMode": "self"
+        }
+      ]
+    },
+    {
+      "id": "drill-risk-back-label",
+      "type": "title",
+      "name": "返回风险看板",
+      "x": 1600,
+      "y": 14,
+      "width": 150,
+      "height": 28,
+      "zIndex": 61,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "text": "← 返回风险看板",
+        "fontSize": 13,
+        "fontWeight": "600",
+        "color": "#ffffff",
+        "textAlign": "center"
+      },
+      "actions": [
+        {
+          "type": "jump-url",
+          "jumpUrlTemplate": "screen-ref:GPMC%20%E9%A3%8E%E9%99%A9%E4%B8%8E%E9%A2%84%E8%AD%A6%E4%B8%AD%E5%BF%83|%2Fbi%2Fgpmc%2Frisk",
+          "jumpOpenMode": "self"
+        }
+      ]
     },
     {
       "id": "drill-risk-kpi-1",

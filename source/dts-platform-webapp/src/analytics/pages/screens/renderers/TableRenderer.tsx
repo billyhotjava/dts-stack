@@ -9,7 +9,7 @@ import type { ScreenThemeTokens } from '../screenThemes';
 import type { ScreenTheme } from '../types';
 import { resolveTextColor } from './shared/chartUtils';
 import {
-    compareTableValues, resolveTableConditionalStyle,
+    compareTableValues, estimateTablePlaceholderRowCount, resolveTableConditionalStyle,
     ThemedScrollTable, resolveBoundTableData,
 } from './shared/tableUtils';
 import {
@@ -227,6 +227,19 @@ export function renderTable(props: TableRendererProps): ReactNode {
             const pageRows = enablePagination
                 ? sortedRows.slice((safePage - 1) * pageSize, safePage * pageSize)
                 : sortedRows;
+            const paginationFooterHeight = enablePagination && totalPages > 1 ? 40 : 0;
+            const estimatedHeaderHeight = displayHeader.length > 0 ? Math.max(36, Math.ceil(headerFontSize * 1.8)) : 0;
+            const estimatedBodyRowHeight = Math.max(36, Math.ceil(fontSize * 1.8));
+            const fillerRowCount = displayHeader.length > 0
+                ? estimateTablePlaceholderRowCount({
+                    containerHeight: height,
+                    headerHeight: estimatedHeaderHeight,
+                    rowHeight: estimatedBodyRowHeight,
+                    footerHeight: paginationFooterHeight,
+                    currentRowCount: pageRows.length,
+                    minimumVisibleRows: pageRows.length > 0 || sortedRows.length > 0 ? 1 : 0,
+                })
+                : 0;
             const canRunTableActions = mode === 'preview' && componentActions.length > 0;
             const canRunTableDefaultDrill = mode === 'preview' && !canRunTableActions && drillRuntimeEnabled && drillState.canDrillDown;
 
@@ -383,6 +396,47 @@ export function renderTable(props: TableRendererProps): ReactNode {
                                     })}
                                 </tr>
                             ))}
+                            {Array.from({ length: fillerRowCount }, (_, fillerIndex) => {
+                                const visualRowIndex = pageRows.length + fillerIndex;
+                                const fillerBackground = visualRowIndex % 2 === 0 ? oddRowBackground : evenRowBackground;
+                                return (
+                                    <tr
+                                        key={`placeholder-row-${fillerIndex}`}
+                                        aria-hidden="true"
+                                        style={{ background: fillerBackground }}
+                                    >
+                                        {displayHeader.map((_, colIndex) => (
+                                            <td key={colIndex} style={{
+                                                fontSize,
+                                                color: 'transparent',
+                                                background: fillerBackground,
+                                                borderBottom: '1px solid ' + borderColor,
+                                                borderRight: colIndex < displayHeader.length - 1 ? '1px solid ' + borderColor : 'none',
+                                                padding: '8px 10px',
+                                                height: estimatedBodyRowHeight,
+                                                textAlign: columnMeta[colIndex]?.align || 'left',
+                                                whiteSpace: columnMeta[colIndex]?.wrap ? 'normal' : 'nowrap',
+                                                overflow: 'hidden',
+                                                textOverflow: columnMeta[colIndex]?.wrap ? undefined : 'ellipsis',
+                                                overflowWrap: columnMeta[colIndex]?.wrap ? 'anywhere' : undefined,
+                                                wordBreak: columnMeta[colIndex]?.wrap ? 'break-word' : undefined,
+                                                lineHeight: columnMeta[colIndex]?.wrap ? 1.35 : undefined,
+                                                ...(freezeFirstColumn && colIndex === 0
+                                                    ? {
+                                                        position: 'sticky',
+                                                        left: 0,
+                                                        zIndex: 1,
+                                                        boxShadow: `1px 0 0 ${borderColor}`,
+                                                        background: fillerBackground,
+                                                    }
+                                                    : {}),
+                                            }}>
+                                                {'\u00A0'}
+                                            </td>
+                                        ))}
+                                    </tr>
+                                );
+                            })}
                         </tbody>
                     </table>
                     </div>

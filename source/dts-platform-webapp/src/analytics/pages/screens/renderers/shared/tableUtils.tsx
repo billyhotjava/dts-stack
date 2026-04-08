@@ -77,6 +77,45 @@ export function compareTableValues(a: unknown, b: unknown): number {
     return String(a ?? '').localeCompare(String(b ?? ''), 'zh-CN');
 }
 
+export function estimateTablePlaceholderRowCount({
+    containerHeight,
+    headerHeight = 0,
+    rowHeight,
+    footerHeight = 0,
+    currentRowCount,
+    minimumVisibleRows = 0,
+}: {
+    containerHeight: number;
+    headerHeight?: number;
+    rowHeight: number;
+    footerHeight?: number;
+    currentRowCount: number;
+    minimumVisibleRows?: number;
+}): number {
+    const safeContainerHeight = Math.max(0, Number(containerHeight) || 0);
+    const safeHeaderHeight = Math.max(0, Number(headerHeight) || 0);
+    const safeFooterHeight = Math.max(0, Number(footerHeight) || 0);
+    const safeRowHeight = Math.max(1, Number(rowHeight) || 0);
+    const safeCurrentRowCount = Math.max(0, Math.floor(Number(currentRowCount) || 0));
+    const safeMinimumVisibleRows = Math.max(0, Math.floor(Number(minimumVisibleRows) || 0));
+
+    if (safeContainerHeight <= 0) {
+        return 0;
+    }
+
+    const availableHeight = Math.max(0, safeContainerHeight - safeHeaderHeight - safeFooterHeight);
+    if (availableHeight <= 0) {
+        return 0;
+    }
+
+    const estimatedVisibleRows = Math.max(
+        safeMinimumVisibleRows,
+        Math.floor(availableHeight / safeRowHeight),
+    );
+
+    return Math.max(0, estimatedVisibleRows - safeCurrentRowCount);
+}
+
 export function resolveTableConditionalStyle(
     rules: unknown,
     columnIndex: number,

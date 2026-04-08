@@ -1,7 +1,7 @@
 {
   "schemaVersion": 3,
   "id": "gpmc-drill-execution-v2",
-  "name": "执行层-项目执行详情 (实例)",
+  "name": "执行层-项目执行详情",
   "description": "项目执行监控钻取页面，展示关键任务节点、资源负载及延期项目排行。",
   "width": 1920,
   "height": 1080,
@@ -95,6 +95,58 @@
         "backgroundColor": "rgba(255, 255, 255, 0.18)",
         "borderRadius": 14
       }
+    },
+    {
+      "id": "drill-exec-back-shape",
+      "type": "shape",
+      "name": "返回执行监控",
+      "x": 1600,
+      "y": 14,
+      "width": 150,
+      "height": 28,
+      "zIndex": 60,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "shapeType": "rect",
+        "fillColor": "rgba(255, 255, 255, 0.18)",
+        "borderColor": "rgba(255, 255, 255, 0.42)",
+        "borderWidth": 1,
+        "radius": 14
+      },
+      "actions": [
+        {
+          "type": "jump-url",
+          "jumpUrlTemplate": "screen-ref:GPMC%20%E9%A1%B9%E7%9B%AE%E6%89%A7%E8%A1%8C%E7%9B%91%E6%8E%A7|%2Fbi%2Fgpmc%2Fexecution",
+          "jumpOpenMode": "self"
+        }
+      ]
+    },
+    {
+      "id": "drill-exec-back-label",
+      "type": "title",
+      "name": "返回执行监控",
+      "x": 1600,
+      "y": 14,
+      "width": 150,
+      "height": 28,
+      "zIndex": 61,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "text": "← 返回执行监控",
+        "fontSize": 13,
+        "fontWeight": "600",
+        "color": "#ffffff",
+        "textAlign": "center"
+      },
+      "actions": [
+        {
+          "type": "jump-url",
+          "jumpUrlTemplate": "screen-ref:GPMC%20%E9%A1%B9%E7%9B%AE%E6%89%A7%E8%A1%8C%E7%9B%91%E6%8E%A7|%2Fbi%2Fgpmc%2Fexecution",
+          "jumpOpenMode": "self"
+        }
+      ]
     },
     {
       "id": "drill-exec-kpi-1",

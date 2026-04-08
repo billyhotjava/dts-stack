@@ -1,7 +1,7 @@
 {
   "schemaVersion": 3,
   "id": "gpmc-drill-quality-v2",
-  "name": "执行层-质量问题与跟进明细 (实例)",
+  "name": "执行层-质量问题与跟进明细",
   "description": "质量问题钻取页面，展示质量问题清单、闭环摘要及跟进措施。",
   "width": 1920,
   "height": 1080,
@@ -28,6 +28,11 @@
     {
       "key": "deptId",
       "label": "事业部/科室",
+      "type": "string"
+    },
+    {
+      "key": "riskLevel",
+      "label": "风险等级",
       "type": "string"
     }
   ],
@@ -90,6 +95,58 @@
         "backgroundColor": "rgba(255, 255, 255, 0.18)",
         "borderRadius": 14
       }
+    },
+    {
+      "id": "drill-quality-back-shape",
+      "type": "shape",
+      "name": "返回质量看板",
+      "x": 1600,
+      "y": 14,
+      "width": 150,
+      "height": 28,
+      "zIndex": 60,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "shapeType": "rect",
+        "fillColor": "rgba(255, 255, 255, 0.18)",
+        "borderColor": "rgba(255, 255, 255, 0.42)",
+        "borderWidth": 1,
+        "radius": 14
+      },
+      "actions": [
+        {
+          "type": "jump-url",
+          "jumpUrlTemplate": "screen-ref:GPMC%20%E8%B4%A8%E9%87%8F%E4%BF%A1%E6%81%AF%E4%B8%8E%E8%B7%9F%E8%BF%9B%E6%8E%AA%E6%96%BD|%2Fbi%2Fgpmc%2Fquality",
+          "jumpOpenMode": "self"
+        }
+      ]
+    },
+    {
+      "id": "drill-quality-back-label",
+      "type": "title",
+      "name": "返回质量看板",
+      "x": 1600,
+      "y": 14,
+      "width": 150,
+      "height": 28,
+      "zIndex": 61,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "text": "← 返回质量看板",
+        "fontSize": 13,
+        "fontWeight": "600",
+        "color": "#ffffff",
+        "textAlign": "center"
+      },
+      "actions": [
+        {
+          "type": "jump-url",
+          "jumpUrlTemplate": "screen-ref:GPMC%20%E8%B4%A8%E9%87%8F%E4%BF%A1%E6%81%AF%E4%B8%8E%E8%B7%9F%E8%BF%9B%E6%8E%AA%E6%96%BD|%2Fbi%2Fgpmc%2Fquality",
+          "jumpOpenMode": "self"
+        }
+      ]
     },
     {
       "id": "drill-quality-kpi-1",

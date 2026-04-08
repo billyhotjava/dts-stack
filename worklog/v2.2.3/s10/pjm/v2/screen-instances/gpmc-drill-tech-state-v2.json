@@ -1,7 +1,7 @@
 {
   "schemaVersion": 3,
   "id": "gpmc-drill-tech-state-v2",
-  "name": "执行层-技术状态与跟进明细 (实例)",
+  "name": "执行层-技术状态与跟进明细",
   "description": "技术状态变更钻取页面，展示变更清单、状态分布及跟进措施。",
   "width": 1920,
   "height": 1080,
@@ -28,6 +28,11 @@
     {
       "key": "deptId",
       "label": "事业部/科室",
+      "type": "string"
+    },
+    {
+      "key": "riskLevel",
+      "label": "风险等级",
       "type": "string"
     }
   ],
@@ -90,6 +95,58 @@
         "backgroundColor": "rgba(255, 255, 255, 0.18)",
         "borderRadius": 14
       }
+    },
+    {
+      "id": "drill-tech-back-shape",
+      "type": "shape",
+      "name": "返回技术状态看板",
+      "x": 1600,
+      "y": 14,
+      "width": 150,
+      "height": 28,
+      "zIndex": 60,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "shapeType": "rect",
+        "fillColor": "rgba(255, 255, 255, 0.18)",
+        "borderColor": "rgba(255, 255, 255, 0.42)",
+        "borderWidth": 1,
+        "radius": 14
+      },
+      "actions": [
+        {
+          "type": "jump-url",
+          "jumpUrlTemplate": "screen-ref:GPMC%20%E6%8A%80%E6%9C%AF%E7%8A%B6%E6%80%81%E4%B8%8E%E8%B7%9F%E8%BF%9B|%2Fbi%2Fgpmc%2Ftech-state",
+          "jumpOpenMode": "self"
+        }
+      ]
+    },
+    {
+      "id": "drill-tech-back-label",
+      "type": "title",
+      "name": "返回技术状态看板",
+      "x": 1600,
+      "y": 14,
+      "width": 150,
+      "height": 28,
+      "zIndex": 61,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "text": "← 返回技术状态看板",
+        "fontSize": 13,
+        "fontWeight": "600",
+        "color": "#ffffff",
+        "textAlign": "center"
+      },
+      "actions": [
+        {
+          "type": "jump-url",
+          "jumpUrlTemplate": "screen-ref:GPMC%20%E6%8A%80%E6%9C%AF%E7%8A%B6%E6%80%81%E4%B8%8E%E8%B7%9F%E8%BF%9B|%2Fbi%2Fgpmc%2Ftech-state",
+          "jumpOpenMode": "self"
+        }
+      ]
     },
     {
       "id": "drill-tech-kpi-1",
