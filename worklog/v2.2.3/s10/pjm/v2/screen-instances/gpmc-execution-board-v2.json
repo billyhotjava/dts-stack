@@ -1014,7 +1014,7 @@
     {
       "id": "gpmc-execution-gantt",
       "type": "gantt-chart",
-      "name": "任务执行甘特",
+      "name": "重大项目执行甘特",
       "x": 56,
       "y": 288,
       "width": 860,
@@ -1023,180 +1023,19 @@
       "locked": false,
       "visible": true,
       "config": {
-        "title": "任务执行甘特",
-        "renderMode": "board",
-        "sideTextColor": "#1c2833",
-        "tasks": [
-          {
-            "name": "需求分析",
-            "type": "一般任务",
-            "planDate": "2026-01-06",
-            "actualDate": "2026-02-15",
-            "owner": "张工",
-            "riskLevel": "低",
-            "majorProjectName": "制造协同平台",
-            "subprojectName": "平台基础",
-            "status": "已完成",
-            "isCompleted": true,
-            "isOverdue": false
-          },
-          {
-            "name": "系统设计",
-            "type": "一般任务",
-            "planDate": "2026-02-10",
-            "actualDate": "2026-03-20",
-            "owner": "李工",
-            "riskLevel": "低",
-            "majorProjectName": "制造协同平台",
-            "subprojectName": "平台基础",
-            "status": "已完成",
-            "isCompleted": true,
-            "isOverdue": false
-          },
-          {
-            "name": "里程碑 M1",
-            "type": "里程碑节点",
-            "planDate": "2026-03-20",
-            "actualDate": "2026-03-20",
-            "owner": "张工",
-            "riskLevel": "低",
-            "majorProjectName": "制造协同平台",
-            "status": "已完成",
-            "isCompleted": true,
-            "isOverdue": false
-          },
-          {
-            "name": "核心开发",
-            "type": "一般任务",
-            "planDate": "2026-03-01",
-            "actualDate": "2026-05-30",
-            "owner": "陈工",
-            "riskLevel": "中",
-            "majorProjectName": "制造协同平台",
-            "subprojectName": "核心模块",
-            "status": "进行中",
-            "isCompleted": false,
-            "isOverdue": false
-          },
-          {
-            "name": "联调测试",
-            "type": "一般任务",
-            "planDate": "2026-05-15",
-            "actualDate": "2026-06-30",
-            "owner": "王工",
-            "riskLevel": "中",
-            "majorProjectName": "制造协同平台",
-            "subprojectName": "核心模块",
-            "status": "进行中",
-            "isCompleted": false,
-            "isOverdue": false
-          },
-          {
-            "name": "里程碑 M2",
-            "type": "里程碑节点",
-            "planDate": "2026-06-30",
-            "actualDate": "2026-06-30",
-            "owner": "张工",
-            "riskLevel": "中",
-            "majorProjectName": "制造协同平台",
-            "status": "未开始"
-          },
-          {
-            "name": "基建施工",
-            "type": "一般任务",
-            "planDate": "2026-01-15",
-            "actualDate": "2026-06-30",
-            "owner": "刘工",
-            "riskLevel": "高",
-            "majorProjectName": "新能源工厂",
-            "subprojectName": "厂房建设",
-            "status": "延期",
-            "isCompleted": false,
-            "isOverdue": true,
-            "isIncomplete": true,
-            "delayDays": 28
-          },
-          {
-            "name": "设备采购",
-            "type": "一般任务",
-            "planDate": "2026-03-01",
-            "actualDate": "2026-05-15",
-            "owner": "李工",
-            "riskLevel": "中",
-            "majorProjectName": "新能源工厂",
-            "subprojectName": "设备线",
-            "status": "进行中",
-            "isCompleted": false,
-            "isOverdue": false
-          },
-          {
-            "name": "设备安装调试",
-            "type": "一般任务",
-            "planDate": "2026-05-01",
-            "actualDate": "2026-07-15",
-            "owner": "赵工",
-            "riskLevel": "高",
-            "majorProjectName": "新能源工厂",
-            "subprojectName": "设备线",
-            "status": "延期",
-            "isCompleted": false,
-            "isOverdue": true,
-            "isIncomplete": true,
-            "delayDays": 18
-          },
-          {
-            "name": "里程碑 M3",
-            "type": "里程碑节点",
-            "planDate": "2026-07-15",
-            "actualDate": "2026-07-15",
-            "owner": "刘工",
-            "riskLevel": "高",
-            "majorProjectName": "新能源工厂",
-            "status": "未开始"
-          },
-          {
-            "name": "数据建模",
-            "type": "一般任务",
-            "planDate": "2026-02-01",
-            "actualDate": "2026-04-10",
-            "owner": "孙工",
-            "riskLevel": "低",
-            "majorProjectName": "数据治理工程",
-            "subprojectName": "主数据",
-            "status": "已完成",
-            "isCompleted": true,
-            "isOverdue": true,
-            "delayDays": 5
-          },
-          {
-            "name": "接口开发",
-            "type": "一般任务",
-            "planDate": "2026-04-01",
-            "actualDate": "2026-06-15",
-            "owner": "周工",
-            "riskLevel": "中",
-            "majorProjectName": "数据治理工程",
-            "subprojectName": "主数据",
-            "status": "进行中",
-            "isCompleted": false,
-            "isOverdue": false
-          }
-        ]
+        "title": "重大项目执行甘特(点击下钻子项目)",
+        "renderMode": "board-hierarchical",
+        "drillMode": "modal",
+        "sideTextColor": "#1c2833"
       },
-      "actions": [
-        {
-          "type": "jump-url",
-          "jumpUrlTemplate": "screen-ref:%E6%89%A7%E8%A1%8C%E5%B1%82-%E9%A1%B9%E7%9B%AE%E6%89%A7%E8%A1%8C%E8%AF%A6%E6%83%85|",
-          "jumpOpenMode": "new-tab"
-        }
-      ],
+      "actions": [],
       "dataSource": {
         "type": "sql",
         "sqlConfig": {
           "databaseId": "{{DATABASE_ID}}",
-          "query": "WITH project_level AS (SELECT 'project'::text AS level, d.project_no AS id, NULL::text AS parent_id, d.project_no AS \"name\", COUNT(*) AS \"total_cnt\", SUM(CASE WHEN d.is_completed THEN 1 ELSE 0 END) AS \"completed_cnt\", SUM(CASE WHEN d.is_incomplete THEN 1 ELSE 0 END) AS \"incomplete_cnt\", MIN(d.plan_date) AS \"plan_date\", MAX(d.plan_date) AS \"plan_end\", MAX(d.actual_date) AS \"actual_date\", CASE WHEN COUNT(*)=0 THEN 0 ELSE ROUND(SUM(CASE WHEN d.is_completed THEN 1 ELSE 0 END)::numeric/COUNT(*)::numeric*100,2) END AS \"completion_rate\", NULL::text AS \"node_type\", NULL::text AS \"completion_status\", 0 AS sort_order FROM biz_dwd_project_node_v2 d WHERE d.plan_month >= to_char({{dateFrom}}::date, 'YYYY-MM') AND d.plan_month <= to_char({{dateTo}}::date, 'YYYY-MM') [[AND d.project_no ILIKE '%' || {{projectNo}} || '%']] [[AND d.dept = {{deptId}}]] GROUP BY d.project_no), subsystem_level AS (SELECT 'subsystem'::text AS level, d.project_no||'|'||COALESCE(d.subsystem,'(无)') AS id, d.project_no AS parent_id, COALESCE(d.subsystem,'(无分系统)') AS \"name\", COUNT(*) AS \"total_cnt\", SUM(CASE WHEN d.is_completed THEN 1 ELSE 0 END) AS \"completed_cnt\", SUM(CASE WHEN d.is_incomplete THEN 1 ELSE 0 END) AS \"incomplete_cnt\", MIN(d.plan_date) AS \"plan_date\", MAX(d.plan_date) AS \"plan_end\", MAX(d.actual_date) AS \"actual_date\", CASE WHEN COUNT(*)=0 THEN 0 ELSE ROUND(SUM(CASE WHEN d.is_completed THEN 1 ELSE 0 END)::numeric/COUNT(*)::numeric*100,2) END AS \"completion_rate\", NULL::text AS \"node_type\", NULL::text AS \"completion_status\", 1 AS sort_order FROM biz_dwd_project_node_v2 d WHERE d.plan_month >= to_char({{dateFrom}}::date, 'YYYY-MM') AND d.plan_month <= to_char({{dateTo}}::date, 'YYYY-MM') [[AND d.project_no ILIKE '%' || {{projectNo}} || '%']] [[AND d.dept = {{deptId}}]] GROUP BY d.project_no, d.subsystem), node_level AS (SELECT 'node'::text AS level, d.node_id AS id, d.project_no||'|'||COALESCE(d.subsystem,'(无)') AS parent_id, d.node_task AS \"name\", 1 AS \"total_cnt\", CASE WHEN d.is_completed THEN 1 ELSE 0 END AS \"completed_cnt\", CASE WHEN d.is_incomplete THEN 1 ELSE 0 END AS \"incomplete_cnt\", d.plan_date AS \"plan_date\", d.plan_date AS \"plan_end\", d.actual_date AS \"actual_date\", CASE WHEN d.is_completed THEN 100.00 ELSE 0.00 END AS \"completion_rate\", d.node_type AS \"node_type\", d.completion_status AS \"completion_status\", 2 AS sort_order FROM biz_dwd_project_node_v2 d WHERE d.plan_month >= to_char({{dateFrom}}::date, 'YYYY-MM') AND d.plan_month <= to_char({{dateTo}}::date, 'YYYY-MM') [[AND d.project_no ILIKE '%' || {{projectNo}} || '%']] [[AND d.dept = {{deptId}}]] [[AND d.risk_level = {{riskLevel}}]]) SELECT * FROM project_level UNION ALL SELECT * FROM subsystem_level UNION ALL SELECT * FROM node_level ORDER BY id, sort_order",
+          "query": "SELECT d.project_no AS \"重大项目\", COALESCE(d.subsystem, '(无子项目)') AS \"子项目\", d.node_task AS \"任务\", d.node_type AS \"类型\", to_char(d.plan_date, 'YYYY-MM-DD') AS \"计划日期\", to_char(d.actual_date, 'YYYY-MM-DD') AS \"实际日期\", to_char(d.original_plan_date, 'YYYY-MM-DD') AS \"基线日期\", d.is_completed AS \"是否完成\", d.is_overdue_completed AS \"是否超期完成\", d.is_incomplete AS \"是否未完成\", COALESCE(d.delay_days, 0) AS \"延期天数\", d.risk_level AS \"风险等级\", d.completion_status AS \"完成情况\", d.dept AS \"责任科室\", d.owner AS \"责任人\", d.project_manager AS \"项目经理\", d.institute_leader AS \"所长\", d.risk_content AS \"风险内容\", d.delay_impact AS \"延期影响\" FROM biz_dwd_project_node_v2 d WHERE d.plan_month >= to_char({{dateFrom}}::date, 'YYYY-MM') AND d.plan_month <= to_char({{dateTo}}::date, 'YYYY-MM') [[AND d.project_no ILIKE '%' || {{projectNo}} || '%']] [[AND d.dept = {{deptId}}]] [[AND d.risk_level = {{riskLevel}}]] ORDER BY d.project_no, d.subsystem NULLS LAST, d.plan_date",
           "queryTimeoutSeconds": 30,
-          "maxRows": 2000,
+          "maxRows": 5000,
           "parameterBindings": [
             {
               "name": "dateFrom",
