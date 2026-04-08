@@ -143,8 +143,19 @@ export function useComponentInteractions(
     ), [component.actions, mode]);
 
     const navigateToResolvedUrl = useCallback(async (targetUrl: string, openMode: 'self' | 'new-tab', source: string) => {
+        const resolved = await resolveScreenReferenceUrl(targetUrl);
+        if (!resolved) {
+            runtime.trackEvent({
+                kind: 'jump',
+                key: 'jumpUrl',
+                value: '',
+                source,
+                meta: `cancelled;raw=${targetUrl}`,
+            });
+            return;
+        }
         const resolvedTargetUrl = normalizeRuntimeJumpUrl(
-            await resolveScreenReferenceUrl(targetUrl),
+            resolved,
             {
                 currentOrigin: window.location.origin,
                 resolveAppRoute: resolveRouteForOpen,
