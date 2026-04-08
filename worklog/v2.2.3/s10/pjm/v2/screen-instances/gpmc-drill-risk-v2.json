@@ -1,0 +1,372 @@
+{
+  "schemaVersion": 3,
+  "id": "gpmc-drill-risk-v2",
+  "name": "执行层-风险与预警中心明细 (实例)",
+  "description": "风险预警钻取页面，展示风险清单、风险分类摘要及应对措施。",
+  "width": 1920,
+  "height": 1080,
+  "backgroundColor": "#eaf2fb",
+  "theme": "enterprise-light",
+  "globalVariables": [
+    {
+      "key": "dateFrom",
+      "label": "开始日期",
+      "type": "date",
+      "defaultValue": "2024-01-01"
+    },
+    {
+      "key": "dateTo",
+      "label": "结束日期",
+      "type": "date",
+      "defaultValue": "2026-12-31"
+    },
+    {
+      "key": "projectNo",
+      "label": "项目编号",
+      "type": "string"
+    },
+    {
+      "key": "deptId",
+      "label": "事业部/科室",
+      "type": "string"
+    },
+    {
+      "key": "riskLevel",
+      "label": "风险等级",
+      "type": "string"
+    }
+  ],
+  "components": [
+    {
+      "id": "drill-risk-header-bar",
+      "type": "shape",
+      "name": "drill-risk-header-bar",
+      "x": 0,
+      "y": 0,
+      "width": 1920,
+      "height": 56,
+      "zIndex": 5,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "shapeType": "rect",
+        "fillColor": "#044B8C",
+        "borderColor": "#044B8C",
+        "borderWidth": 0,
+        "radius": 0
+      }
+    },
+    {
+      "id": "drill-risk-title",
+      "type": "title",
+      "name": "执行层-风险与预警中心明细",
+      "x": 20,
+      "y": 12,
+      "width": 500,
+      "height": 32,
+      "zIndex": 60,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "text": "执行层-风险与预警中心明细",
+        "fontSize": 22,
+        "fontWeight": "700",
+        "color": "#ffffff",
+        "textAlign": "flex-start"
+      }
+    },
+    {
+      "id": "drill-risk-badge",
+      "type": "title",
+      "name": "只读执行页",
+      "x": 1760,
+      "y": 14,
+      "width": 140,
+      "height": 28,
+      "zIndex": 60,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "text": "只读执行页",
+        "fontSize": 13,
+        "fontWeight": "600",
+        "color": "#ffffff",
+        "textAlign": "center",
+        "backgroundColor": "rgba(255, 255, 255, 0.18)",
+        "borderRadius": 14
+      }
+    },
+    {
+      "id": "drill-risk-kpi-1",
+      "type": "number-card",
+      "name": "风险总数",
+      "x": 20,
+      "y": 70,
+      "width": 456,
+      "height": 90,
+      "zIndex": 10,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "title": "风险总数",
+        "value": "89",
+        "unit": "",
+        "precision": 0,
+        "titleColor": "#0f172a",
+        "valueColor": "#3b82f6",
+        "backgroundColor": "#ffffff",
+        "borderRadius": 12,
+        "fontSize": 36
+      },
+      "dataSource": {
+        "type": "sql",
+        "sqlConfig": {
+          "databaseId": "{{DATABASE_ID}}",
+          "query": "SELECT SUM(total_risk_cnt) AS \"风险总数\", SUM(high_cnt) AS \"高风险\", SUM(mid_cnt) AS \"中风险\", SUM(low_cnt) AS \"低风险\", SUM(released_cnt) AS \"已释放\", SUM(open_cnt) AS \"未释放\" FROM biz_dws_risk_monthly_v2 WHERE period_month >= to_char({{dateFrom}}::date, 'YYYY-MM') AND period_month <= to_char({{dateTo}}::date, 'YYYY-MM') AND ({{deptId}} IS NULL OR {{deptId}} = '' OR dept = {{deptId}}) AND ({{projectNo}} IS NULL OR {{projectNo}} = '' OR project_no ILIKE '%' || {{projectNo}} || '%')",
+          "queryTimeoutSeconds": 30,
+          "maxRows": 2000
+        }
+      }
+    },
+    {
+      "id": "drill-risk-kpi-2",
+      "type": "number-card",
+      "name": "高风险",
+      "x": 490,
+      "y": 70,
+      "width": 456,
+      "height": 90,
+      "zIndex": 10,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "title": "高风险",
+        "value": "14",
+        "unit": "",
+        "precision": 0,
+        "titleColor": "#0f172a",
+        "valueColor": "#c0392b",
+        "backgroundColor": "#ffffff",
+        "borderRadius": 12,
+        "fontSize": 36
+      },
+      "dataSource": {
+        "type": "sql",
+        "sqlConfig": {
+          "databaseId": "{{DATABASE_ID}}",
+          "query": "SELECT SUM(total_risk_cnt) AS \"风险总数\", SUM(high_cnt) AS \"高风险\", SUM(mid_cnt) AS \"中风险\", SUM(low_cnt) AS \"低风险\", SUM(released_cnt) AS \"已释放\", SUM(open_cnt) AS \"未释放\" FROM biz_dws_risk_monthly_v2 WHERE period_month >= to_char({{dateFrom}}::date, 'YYYY-MM') AND period_month <= to_char({{dateTo}}::date, 'YYYY-MM') AND ({{deptId}} IS NULL OR {{deptId}} = '' OR dept = {{deptId}}) AND ({{projectNo}} IS NULL OR {{projectNo}} = '' OR project_no ILIKE '%' || {{projectNo}} || '%')",
+          "queryTimeoutSeconds": 30,
+          "maxRows": 2000
+        }
+      }
+    },
+    {
+      "id": "drill-risk-kpi-3",
+      "type": "number-card",
+      "name": "中风险",
+      "x": 960,
+      "y": 70,
+      "width": 456,
+      "height": 90,
+      "zIndex": 10,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "title": "中风险",
+        "value": "31",
+        "unit": "",
+        "precision": 0,
+        "titleColor": "#0f172a",
+        "valueColor": "#d4850a",
+        "backgroundColor": "#ffffff",
+        "borderRadius": 12,
+        "fontSize": 36
+      },
+      "dataSource": {
+        "type": "sql",
+        "sqlConfig": {
+          "databaseId": "{{DATABASE_ID}}",
+          "query": "SELECT SUM(total_risk_cnt) AS \"风险总数\", SUM(high_cnt) AS \"高风险\", SUM(mid_cnt) AS \"中风险\", SUM(low_cnt) AS \"低风险\", SUM(released_cnt) AS \"已释放\", SUM(open_cnt) AS \"未释放\" FROM biz_dws_risk_monthly_v2 WHERE period_month >= to_char({{dateFrom}}::date, 'YYYY-MM') AND period_month <= to_char({{dateTo}}::date, 'YYYY-MM') AND ({{deptId}} IS NULL OR {{deptId}} = '' OR dept = {{deptId}}) AND ({{projectNo}} IS NULL OR {{projectNo}} = '' OR project_no ILIKE '%' || {{projectNo}} || '%')",
+          "queryTimeoutSeconds": 30,
+          "maxRows": 2000
+        }
+      }
+    },
+    {
+      "id": "drill-risk-kpi-4",
+      "type": "number-card",
+      "name": "低风险",
+      "x": 1430,
+      "y": 70,
+      "width": 470,
+      "height": 90,
+      "zIndex": 10,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "title": "低风险",
+        "value": "44",
+        "unit": "",
+        "precision": 0,
+        "titleColor": "#0f172a",
+        "valueColor": "#1e8449",
+        "backgroundColor": "#ffffff",
+        "borderRadius": 12,
+        "fontSize": 36
+      },
+      "dataSource": {
+        "type": "sql",
+        "sqlConfig": {
+          "databaseId": "{{DATABASE_ID}}",
+          "query": "SELECT SUM(total_risk_cnt) AS \"风险总数\", SUM(high_cnt) AS \"高风险\", SUM(mid_cnt) AS \"中风险\", SUM(low_cnt) AS \"低风险\", SUM(released_cnt) AS \"已释放\", SUM(open_cnt) AS \"未释放\" FROM biz_dws_risk_monthly_v2 WHERE period_month >= to_char({{dateFrom}}::date, 'YYYY-MM') AND period_month <= to_char({{dateTo}}::date, 'YYYY-MM') AND ({{deptId}} IS NULL OR {{deptId}} = '' OR dept = {{deptId}}) AND ({{projectNo}} IS NULL OR {{projectNo}} = '' OR project_no ILIKE '%' || {{projectNo}} || '%')",
+          "queryTimeoutSeconds": 30,
+          "maxRows": 2000
+        }
+      }
+    },
+    {
+      "id": "drill-risk-detail-table",
+      "type": "table",
+      "name": "风险清单",
+      "x": 20,
+      "y": 175,
+      "width": 1145,
+      "height": 420,
+      "zIndex": 15,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "title": "风险清单",
+        "header": [
+          "项目编号",
+          "风险名称",
+          "分系统",
+          "责任科室",
+          "风险等级",
+          "风险类别",
+          "风险状态",
+          "应对措施",
+          "提交日期",
+          "释放日期",
+          "滞留天数"
+        ],
+        "data": [],
+        "fontSize": 16,
+        "headerAlign": "center",
+        "headerColor": "#0f172a",
+        "headerBackground": "#dbe9f6",
+        "bodyColor": "#334155",
+        "bodyBackground": "rgba(255, 255, 255, 0.98)",
+        "oddRowBackground": "rgba(255, 255, 255, 0.98)",
+        "evenRowBackground": "rgba(241, 245, 249, 0.98)",
+        "borderColor": "rgba(148, 163, 184, 0.24)",
+        "enableSort": true,
+        "enablePagination": true,
+        "pageSize": 8,
+        "freezeHeader": true
+      },
+      "dataSource": {
+        "type": "sql",
+        "sqlConfig": {
+          "databaseId": "{{DATABASE_ID}}",
+          "query": "SELECT project_no AS \"项目编号\", risk_name AS \"风险名称\", subsystem AS \"分系统\", dept AS \"责任科室\", risk_level AS \"风险等级\", risk_category AS \"风险类别\", risk_status AS \"风险状态\", response_measure AS \"应对措施\", risk_submit_date AS \"提交日期\", final_release_date AS \"释放日期\", pending_days AS \"滞留天数\" FROM biz_dwd_risk_info_v2 WHERE submit_month >= to_char({{dateFrom}}::date, 'YYYY-MM') AND submit_month <= to_char({{dateTo}}::date, 'YYYY-MM') AND ({{deptId}} IS NULL OR {{deptId}} = '' OR dept = {{deptId}}) AND ({{projectNo}} IS NULL OR {{projectNo}} = '' OR project_no ILIKE '%' || {{projectNo}} || '%') AND ({{riskLevel}} IS NULL OR {{riskLevel}} = '' OR risk_level = {{riskLevel}}) ORDER BY pending_days DESC NULLS LAST",
+          "queryTimeoutSeconds": 30,
+          "maxRows": 2000
+        }
+      }
+    },
+    {
+      "id": "drill-risk-side-panel",
+      "type": "table",
+      "name": "风险分类摘要",
+      "x": 1185,
+      "y": 175,
+      "width": 715,
+      "height": 420,
+      "zIndex": 15,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "title": "风险分类摘要",
+        "header": [
+          "指标",
+          "数值"
+        ],
+        "data": [],
+        "fontSize": 16,
+        "headerAlign": "center",
+        "headerColor": "#0f172a",
+        "headerBackground": "#dbe9f6",
+        "bodyColor": "#334155",
+        "bodyBackground": "rgba(255, 255, 255, 0.98)",
+        "oddRowBackground": "rgba(255, 255, 255, 0.98)",
+        "evenRowBackground": "rgba(241, 245, 249, 0.98)",
+        "borderColor": "rgba(148, 163, 184, 0.24)",
+        "enableSort": true,
+        "enablePagination": true,
+        "pageSize": 8,
+        "freezeHeader": true
+      },
+      "dataSource": {
+        "type": "sql",
+        "sqlConfig": {
+          "databaseId": "{{DATABASE_ID}}",
+          "query": "SELECT SUM(total_risk_cnt) AS \"风险总数\", SUM(high_cnt) AS \"高风险\", SUM(mid_cnt) AS \"中风险\", SUM(low_cnt) AS \"低风险\", SUM(released_cnt) AS \"已释放\", SUM(open_cnt) AS \"未释放\" FROM biz_dws_risk_monthly_v2 WHERE period_month >= to_char({{dateFrom}}::date, 'YYYY-MM') AND period_month <= to_char({{dateTo}}::date, 'YYYY-MM') AND ({{deptId}} IS NULL OR {{deptId}} = '' OR dept = {{deptId}}) AND ({{projectNo}} IS NULL OR {{projectNo}} = '' OR project_no ILIKE '%' || {{projectNo}} || '%')",
+          "queryTimeoutSeconds": 30,
+          "maxRows": 2000
+        }
+      }
+    },
+    {
+      "id": "drill-risk-support-table",
+      "type": "table",
+      "name": "风险措施摘要",
+      "x": 20,
+      "y": 610,
+      "width": 1880,
+      "height": 440,
+      "zIndex": 15,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "title": "风险措施摘要",
+        "header": [
+          "项目编号",
+          "风险名称",
+          "分系统",
+          "责任科室",
+          "风险等级",
+          "风险类别",
+          "风险状态",
+          "应对措施",
+          "提交日期",
+          "释放日期",
+          "滞留天数"
+        ],
+        "data": [],
+        "fontSize": 16,
+        "headerAlign": "center",
+        "headerColor": "#0f172a",
+        "headerBackground": "#dbe9f6",
+        "bodyColor": "#334155",
+        "bodyBackground": "rgba(255, 255, 255, 0.98)",
+        "oddRowBackground": "rgba(255, 255, 255, 0.98)",
+        "evenRowBackground": "rgba(241, 245, 249, 0.98)",
+        "borderColor": "rgba(148, 163, 184, 0.24)",
+        "enableSort": true,
+        "enablePagination": true,
+        "pageSize": 8,
+        "freezeHeader": true
+      },
+      "dataSource": {
+        "type": "sql",
+        "sqlConfig": {
+          "databaseId": "{{DATABASE_ID}}",
+          "query": "SELECT project_no AS \"项目编号\", risk_name AS \"风险名称\", subsystem AS \"分系统\", dept AS \"责任科室\", risk_level AS \"风险等级\", risk_category AS \"风险类别\", risk_status AS \"风险状态\", response_measure AS \"应对措施\", risk_submit_date AS \"提交日期\", final_release_date AS \"释放日期\", pending_days AS \"滞留天数\" FROM biz_dwd_risk_info_v2 WHERE submit_month >= to_char({{dateFrom}}::date, 'YYYY-MM') AND submit_month <= to_char({{dateTo}}::date, 'YYYY-MM') AND ({{deptId}} IS NULL OR {{deptId}} = '' OR dept = {{deptId}}) AND ({{projectNo}} IS NULL OR {{projectNo}} = '' OR project_no ILIKE '%' || {{projectNo}} || '%') AND ({{riskLevel}} IS NULL OR {{riskLevel}} = '' OR risk_level = {{riskLevel}}) ORDER BY pending_days DESC NULLS LAST",
+          "queryTimeoutSeconds": 30,
+          "maxRows": 2000
+        }
+      }
+    }
+  ]
+}

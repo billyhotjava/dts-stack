@@ -5461,7 +5461,7 @@ function renderDataSourceConfig(
                         <label className="property-label w-20 text-xs text-text-secondary">参数提取</label>
                         <button
                             type="button"
-                            className="header-btn inline-flex items-center gap-1.5 min-h-8 rounded-md border border-border-default bg-surface-card text-text-primary px-3 text-xs cursor-pointer hover:border-brand hover:bg-brand/10 disabled:opacity-40 disabled:cursor-not-allowed"
+                            className="property-btn-small inline-flex items-center justify-center px-3 py-1.5 min-h-8 border border-border-default rounded bg-surface-card text-text-primary text-xs cursor-pointer transition-all duration-200 hover:border-brand hover:bg-brand/10 disabled:opacity-45 disabled:cursor-not-allowed"
                             onClick={() => {
                                 const names = extractSqlTemplateParameterNames(sqlConfig?.query ?? '');
                                 if (names.length === 0) {
@@ -7238,13 +7238,19 @@ function StaticDataEditor({ component, updateComponent }: {
             </div>
 
             {mode === 'table' ? (
-                <div style={{ border: '1px solid var(--color-border, rgba(255,255,255,0.1))', borderRadius: 6, overflow: 'auto', maxHeight: 320, background: 'var(--color-bg-secondary, #252830)' }}>
-                    <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12, color: 'var(--color-text-primary, #e2e8f0)' }}>
+                <div
+                    className="border border-border-default rounded bg-surface-card"
+                    style={{ overflow: 'auto', maxHeight: 320 }}
+                >
+                    <table
+                        className="bg-surface-card"
+                        style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12, color: 'var(--color-text-primary, #e2e8f0)' }}
+                    >
                         <thead>
                             <tr>
-                                <th style={{ width: 28, padding: '4px 2px', background: 'var(--color-bg-secondary, #252830)', borderBottom: '1px solid var(--color-border, rgba(255,255,255,0.1))', fontSize: 10, color: 'var(--color-text-tertiary)' }}>#</th>
+                                <th className="bg-surface-card" style={{ width: 28, padding: '4px 2px', borderBottom: '1px solid var(--color-border, rgba(255,255,255,0.1))', fontSize: 10, color: 'var(--color-text-tertiary)' }}>#</th>
                                 {headers.map((h, ci) => (
-                                    <th key={ci} style={{ padding: 0, background: 'var(--color-bg-secondary, #252830)', borderBottom: '1px solid var(--color-border, rgba(255,255,255,0.1))', position: 'relative' }}>
+                                    <th key={ci} className="bg-surface-card" style={{ padding: 0, borderBottom: '1px solid var(--color-border, rgba(255,255,255,0.1))', position: 'relative' }}>
                                         <input
                                             type="text"
                                             value={h}
@@ -7258,7 +7264,7 @@ function StaticDataEditor({ component, updateComponent }: {
                                         )}
                                     </th>
                                 ))}
-                                <th style={{ width: 28, padding: 0, background: 'var(--color-bg-secondary, #252830)', borderBottom: '1px solid var(--color-border, rgba(255,255,255,0.1))' }}>
+                                <th className="bg-surface-card" style={{ width: 28, padding: 0, borderBottom: '1px solid var(--color-border, rgba(255,255,255,0.1))' }}>
                                     <button type="button" onClick={addColumn}
                                         style={{ background: 'none', border: 'none', color: 'var(--color-primary, #509EE3)', cursor: 'pointer', fontSize: 14, padding: '2px 6px' }}
                                         title="添加列">+</button>
@@ -7292,17 +7298,18 @@ function StaticDataEditor({ component, updateComponent }: {
                             ))}
                         </tbody>
                     </table>
-                    <div style={{ padding: '4px 8px', borderTop: '1px solid var(--color-border, rgba(255,255,255,0.1))', background: 'var(--color-bg-secondary, #252830)' }}>
+                    <div className="bg-surface-card" style={{ padding: '4px 8px', borderTop: '1px solid var(--color-border, rgba(255,255,255,0.1))' }}>
                         <button type="button" onClick={addRow}
-                            style={{ background: 'var(--color-bg-secondary, #252830)', border: '1px dashed var(--color-border, rgba(255,255,255,0.15))', borderRadius: 4, padding: '3px 12px', cursor: 'pointer', fontSize: 11, color: 'var(--color-primary, #509EE3)', width: '100%' }}
+                            className="bg-surface-card"
+                            style={{ border: '1px dashed var(--color-border, rgba(255,255,255,0.15))', borderRadius: 4, padding: '3px 12px', cursor: 'pointer', fontSize: 11, color: 'var(--color-primary, #509EE3)', width: '100%' }}
                         >+ 添加行</button>
                     </div>
                 </div>
             ) : (
-                <div>
+                <div className="border border-border-default rounded bg-surface-card p-2">
                     <textarea
-                        className="property-input flex-1 px-2.5 py-1.5 border border-border-default rounded text-text-primary text-xs focus:outline-none focus:border-brand"
-                        style={{ width: '100%', height: 200, fontFamily: 'monospace', fontSize: 11, resize: 'vertical', background: 'var(--color-bg-secondary, #252830)', color: 'var(--color-text-primary, #e2e8f0)' }}
+                        className="property-input flex-1 px-2.5 py-1.5 border border-border-default rounded bg-surface-card text-text-primary text-xs focus:outline-none focus:border-brand"
+                        style={{ width: '100%', height: 200, fontFamily: 'monospace', fontSize: 11, resize: 'vertical', color: 'var(--color-text-primary, #e2e8f0)' }}
                         value={jsonText}
                         onChange={(e) => { setJsonText(e.target.value); setJsonError(null); }}
                         spellCheck={false}

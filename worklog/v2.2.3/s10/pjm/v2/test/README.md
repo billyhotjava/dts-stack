@@ -1,60 +1,64 @@
 # ODS v2 测试数据
 
+## Excel 文件（数据入湖起点）
+
+| 文件 | Sheet | ODS 目标表 | 行数 | 列数 |
+|------|-------|-----------|------|------|
+| **ods_project_subject_domain_v2.xlsx** | 进度信息汇总表 | ods_project_subject_domain_v2 | 15 | 31 |
+| **ods_progress_measure_v2.xlsx** | 进度跟进措施表 | ods_progress_measure_v2 | 10 | 23 |
+| **ods_quality_issue_v2.xlsx** | 质量信息汇总表 | ods_quality_issue_v2 | 10 | 21 |
+| **ods_quality_measure_v2.xlsx** | 质量跟进措施表 | ods_quality_measure_v2 | 10 | 33 |
+| **ods_tech_state_v2.xlsx** | 技术状态信息汇总表 | ods_tech_state_v2 | 8 | 33 |
+| **ods_tech_state_measure_v2.xlsx** | 技术状态跟进措施表 | ods_tech_state_measure_v2 | 8 | 41 |
+| **ods_risk_info_v2.xlsx** | 风险信息汇总表 | ods_risk_info_v2 | 10 | 31 |
+| **ods_risk_measure_v2.xlsx** | 风险跟进措施表 | ods_risk_measure_v2 | 10 | 42 |
+| **ods_material_info_v2.xlsx** | 重要物料信息表 | ods_material_info_v2 | 10 | 29 |
+
+**合计**: 91 行测试数据
+
 ## 数据设计
 
-- **项目**: 2 个主项目 (PJ-2025-001 卫星导航系统, PJ-2025-002 深空探测器)
-- **分系统**: 结构/电子/软件/热控
-- **时间跨度**: 2025-01 ~ 2025-12 (覆盖多月聚合)
-- **数据量**: 每张 ODS 表 8~15 行，合计约 90 行
+- **项目**: PJ-2025-001 (卫星导航系统), PJ-2025-002 (深空探测器)
+- **分系统**: 结构/电子/软件/热控/推进
+- **时间跨度**: 2025-01 ~ 2025-09（覆盖多月/季/周聚合）
+- **列头**: 与 ODS DDL 字段中文注释严格对齐
 
-## 覆盖场景
+## 枚举覆盖
 
 | 维度 | 覆盖值 |
 |------|--------|
-| completion_status | 全部 7 种 |
-| node_type | 一般/重要/重大/里程碑 |
-| risk_level | 高/中/低 |
-| change_category | I/II/III |
-| issue_category | 设计/工艺/管理/元器件/操作/外协外购/软件/其他 |
-| closure_status | 已闭环 / NULL(未闭环) |
-| risk_status | 已释放 / 跟踪中 / 待处理 |
+| 完成情况 | 全部 7 种（按时完成/正常待完成/超期已完成已变更/超期已完成未变更/不正常待变更/超期未完成未变更/超期未完成已变更） |
+| 节点类型 | 一般节点/重要节点/重大节点/里程碑节点 |
+| 风险等级 | 高/中/低 |
+| 更改类别 | I/II/III |
+| 原因分类 | 设计/工艺/管理/元器件/操作/外协外购/软件/其他 |
+| 闭环状态 | 已闭环/空（未闭环） |
+| 风险状态 | 已释放/跟踪中/待处理 |
 
-## 文件清单
-
-| 文件 | 表 | 行数 |
-|------|----|------|
-| 00_project_subject_domain.sql | ods_project_subject_domain_v2 | 15 |
-| 01_progress_measure.sql | ods_progress_measure_v2 | 10 |
-| 02_quality_issue.sql | ods_quality_issue_v2 | 10 |
-| 03_quality_measure.sql | ods_quality_measure_v2 | 10 |
-| 04_tech_state.sql | ods_tech_state_v2 | 8 |
-| 05_tech_state_measure.sql | ods_tech_state_measure_v2 | 8 |
-| 06_risk_info.sql | ods_risk_info_v2 | 10 |
-| 07_risk_measure.sql | ods_risk_measure_v2 | 10 |
-| 08_material_info.sql | ods_material_info_v2 | 10 |
-
-## 使用方式
+## 测试流程
 
 ```bash
-# 1. 先执行建表 DDL
-docker cp ../ods/ods_create_tables_v2.sql s10-stack_dts-pg_1:/tmp/
-docker exec s10-stack_dts-pg_1 psql -U biadmin -d biadmin -f /tmp/ods_create_tables_v2.sql
+# 1. 通过 Addax 将 Excel 导入 ODS 表
+#    配置 Addax reader=excelreader, writer=postgresqlwriter
+#    每个 Excel 文件只有 1 个 sheet，对应 1 张 ODS 表
 
-# 2. 灌入测试数据
-for f in /opt/prod/s10/s10-stack/worklog/v2.2.3/s10/pjm/v2/test/0*.sql; do
-  docker cp "$f" s10-stack_dts-pg_1:/tmp/
-  docker exec s10-stack_dts-pg_1 psql -U biadmin -d biadmin -f "/tmp/$(basename $f)"
-done
+# 2. 执行 dbt 构建
+docker run --rm --privileged --network dts-core \
+  -v /opt/prod/s10-stack/services/dts-dbt:/opt/dbt \
+  dts-dbt:1.10.0 build --project-dir /opt/dbt --target dev --threads 1
 
-# 3. 验证行数
-docker exec s10-stack_dts-pg_1 psql -U biadmin -d biadmin -c \
-  "SELECT 'project_subject_domain_v2' as t, count(*) FROM ods_project_subject_domain_v2
-   UNION ALL SELECT 'progress_measure_v2', count(*) FROM ods_progress_measure_v2
-   UNION ALL SELECT 'quality_issue_v2', count(*) FROM ods_quality_issue_v2
-   UNION ALL SELECT 'quality_measure_v2', count(*) FROM ods_quality_measure_v2
-   UNION ALL SELECT 'tech_state_v2', count(*) FROM ods_tech_state_v2
-   UNION ALL SELECT 'tech_state_measure_v2', count(*) FROM ods_tech_state_measure_v2
-   UNION ALL SELECT 'risk_info_v2', count(*) FROM ods_risk_info_v2
-   UNION ALL SELECT 'risk_measure_v2', count(*) FROM ods_risk_measure_v2
-   UNION ALL SELECT 'material_info_v2', count(*) FROM ods_material_info_v2;"
+# 3. 验证各层行数
+docker exec s10-stack_dts-pg_1 psql -U biadmin -d biadmin -c "
+  SELECT 'ODS' as layer, count(*) FROM ods_project_subject_domain_v2
+  UNION ALL SELECT 'DWD', count(*) FROM biz_dwd_project_node
+  UNION ALL SELECT 'DWS', count(*) FROM biz_dws_period_node_summary
+  UNION ALL SELECT 'ADS', count(*) FROM biz_ads_project_kpi_overview;"
 ```
+
+## 其他文件
+
+| 文件 | 用途 |
+|------|------|
+| gen_excel.py | 生成脚本（纯标准库，无依赖） |
+| load_all.sh | SQL INSERT 方式直灌（跳过 ETL，调试用） |
+| 0*.sql | 各表 INSERT 语句（与 Excel 数据一致） |

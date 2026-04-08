@@ -12,6 +12,7 @@ mkdir -p "$TEMP_CLI" "$TEMP_UI"
 echo "=== 构建 CLI 部署包 (v2) ==="
 cp -r "$DIST_DIR/macros" "$TEMP_CLI/"
 cp -r "$DIST_DIR/models" "$TEMP_CLI/"
+cp "$DIST_DIR/patch-cleanup.sh" "$TEMP_CLI/"
 
 cat > "$TEMP_CLI/dbt_project.yml" << 'EOF'
 name: 'pm_analytics_v2'

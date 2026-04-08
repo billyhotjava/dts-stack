@@ -1,0 +1,1324 @@
+{
+  "schemaVersion": 3,
+  "id": "gpmc-execution-board-v2",
+  "name": "GPMC 项目执行监控 v2 (实例)",
+  "description": "管控层项目执行监控模板，覆盖进度、里程碑、甘特和延期项目。",
+  "width": 1920,
+  "height": 1080,
+  "backgroundColor": "#eaf2fb",
+  "theme": "glacier",
+  "globalVariables": [
+    {
+      "key": "dateFrom",
+      "label": "开始日期",
+      "type": "date",
+      "defaultValue": "2024-01-01"
+    },
+    {
+      "key": "dateTo",
+      "label": "结束日期",
+      "type": "date",
+      "defaultValue": "2026-12-31"
+    },
+    {
+      "key": "deptId",
+      "label": "事业部/科室",
+      "type": "string",
+      "defaultValue": ""
+    },
+    {
+      "key": "projectNo",
+      "label": "项目编号/项目名称",
+      "type": "string",
+      "defaultValue": ""
+    },
+    {
+      "key": "riskLevel",
+      "label": "风险等级",
+      "type": "string",
+      "defaultValue": ""
+    }
+  ],
+  "components": [
+    {
+      "id": "gpmc-execution-top",
+      "type": "shape",
+      "name": "gpmc-execution-top",
+      "x": 36,
+      "y": 110,
+      "width": 1848,
+      "height": 140,
+      "zIndex": 1,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "shapeType": "rect",
+        "fillColor": "rgba(255, 255, 255, 0.96)",
+        "borderColor": "rgba(148, 163, 184, 0.24)",
+        "borderWidth": 1,
+        "radius": 18
+      }
+    },
+    {
+      "id": "gpmc-execution-left",
+      "type": "shape",
+      "name": "gpmc-execution-left",
+      "x": 36,
+      "y": 268,
+      "width": 900,
+      "height": 500,
+      "zIndex": 1,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "shapeType": "rect",
+        "fillColor": "rgba(255, 255, 255, 0.96)",
+        "borderColor": "rgba(148, 163, 184, 0.24)",
+        "borderWidth": 1,
+        "radius": 18
+      }
+    },
+    {
+      "id": "gpmc-execution-right-top",
+      "type": "shape",
+      "name": "gpmc-execution-right-top",
+      "x": 954,
+      "y": 268,
+      "width": 930,
+      "height": 242,
+      "zIndex": 1,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "shapeType": "rect",
+        "fillColor": "rgba(255, 255, 255, 0.96)",
+        "borderColor": "rgba(148, 163, 184, 0.24)",
+        "borderWidth": 1,
+        "radius": 18
+      }
+    },
+    {
+      "id": "gpmc-execution-right-bottom",
+      "type": "shape",
+      "name": "gpmc-execution-right-bottom",
+      "x": 954,
+      "y": 528,
+      "width": 930,
+      "height": 240,
+      "zIndex": 1,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "shapeType": "rect",
+        "fillColor": "rgba(255, 255, 255, 0.96)",
+        "borderColor": "rgba(148, 163, 184, 0.24)",
+        "borderWidth": 1,
+        "radius": 18
+      }
+    },
+    {
+      "id": "gpmc-execution-bottom",
+      "type": "shape",
+      "name": "gpmc-execution-bottom",
+      "x": 36,
+      "y": 786,
+      "width": 1848,
+      "height": 220,
+      "zIndex": 1,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "shapeType": "rect",
+        "fillColor": "rgba(255, 255, 255, 0.96)",
+        "borderColor": "rgba(148, 163, 184, 0.24)",
+        "borderWidth": 1,
+        "radius": 18
+      }
+    },
+    {
+      "id": "项目执行监控-header-bar",
+      "type": "shape",
+      "name": "项目执行监控-header-bar",
+      "x": 0,
+      "y": 0,
+      "width": 1920,
+      "height": 100,
+      "zIndex": 5,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "shapeType": "rect",
+        "fillColor": "#044B8C",
+        "borderColor": "#044B8C",
+        "borderWidth": 0,
+        "radius": 0
+      }
+    },
+    {
+      "id": "项目执行监控-title",
+      "type": "title",
+      "name": "项目执行监控",
+      "x": 44,
+      "y": 24,
+      "width": 720,
+      "height": 42,
+      "zIndex": 60,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "text": "项目执行监控",
+        "fontSize": 32,
+        "fontWeight": "800",
+        "color": "#ffffff",
+        "textAlign": "flex-start"
+      }
+    },
+    {
+      "id": "execution-topic-overview-shape",
+      "type": "shape",
+      "name": "综合态势",
+      "x": 44,
+      "y": 78,
+      "width": 132,
+      "height": 36,
+      "zIndex": 24,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "shapeType": "rect",
+        "fillColor": "rgba(255, 255, 255, 0.14)",
+        "borderColor": "rgba(255, 255, 255, 0.26)",
+        "borderWidth": 1,
+        "radius": 12
+      },
+      "actions": [
+        {
+          "type": "jump-url",
+          "jumpUrlTemplate": "screen-ref:GPMC%20%E6%88%98%E7%95%A5%E5%B1%82%E5%A4%A7%E5%B1%8F|%2Fbi%2Fgpmc",
+          "jumpOpenMode": "self"
+        }
+      ]
+    },
+    {
+      "id": "execution-topic-overview-label",
+      "type": "title",
+      "name": "综合态势",
+      "x": 44,
+      "y": 78,
+      "width": 132,
+      "height": 36,
+      "zIndex": 25,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "text": "综合态势",
+        "fontSize": 17,
+        "fontWeight": "600",
+        "color": "#ffffff",
+        "textAlign": "center"
+      },
+      "actions": [
+        {
+          "type": "jump-url",
+          "jumpUrlTemplate": "screen-ref:GPMC%20%E6%88%98%E7%95%A5%E5%B1%82%E5%A4%A7%E5%B1%8F|%2Fbi%2Fgpmc",
+          "jumpOpenMode": "self"
+        }
+      ]
+    },
+    {
+      "id": "execution-topic-execution-shape",
+      "type": "shape",
+      "name": "执行监控",
+      "x": 188,
+      "y": 78,
+      "width": 132,
+      "height": 36,
+      "zIndex": 24,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "shapeType": "rect",
+        "fillColor": "rgba(255, 255, 255, 0.22)",
+        "borderColor": "rgba(255, 255, 255, 0.42)",
+        "borderWidth": 1,
+        "radius": 12
+      },
+      "actions": [
+        {
+          "type": "jump-url",
+          "jumpUrlTemplate": "screen-ref:GPMC%20%E9%A1%B9%E7%9B%AE%E6%89%A7%E8%A1%8C%E7%9B%91%E6%8E%A7|%2Fbi%2Fgpmc%2Fexecution",
+          "jumpOpenMode": "self"
+        }
+      ]
+    },
+    {
+      "id": "execution-topic-execution-label",
+      "type": "title",
+      "name": "执行监控",
+      "x": 188,
+      "y": 78,
+      "width": 132,
+      "height": 36,
+      "zIndex": 25,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "text": "执行监控",
+        "fontSize": 17,
+        "fontWeight": "700",
+        "color": "#ffffff",
+        "textAlign": "center"
+      },
+      "actions": [
+        {
+          "type": "jump-url",
+          "jumpUrlTemplate": "screen-ref:GPMC%20%E9%A1%B9%E7%9B%AE%E6%89%A7%E8%A1%8C%E7%9B%91%E6%8E%A7|%2Fbi%2Fgpmc%2Fexecution",
+          "jumpOpenMode": "self"
+        }
+      ]
+    },
+    {
+      "id": "execution-topic-quality-shape",
+      "type": "shape",
+      "name": "质量跟进",
+      "x": 332,
+      "y": 78,
+      "width": 132,
+      "height": 36,
+      "zIndex": 24,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "shapeType": "rect",
+        "fillColor": "rgba(255, 255, 255, 0.14)",
+        "borderColor": "rgba(255, 255, 255, 0.26)",
+        "borderWidth": 1,
+        "radius": 12
+      },
+      "actions": [
+        {
+          "type": "jump-url",
+          "jumpUrlTemplate": "screen-ref:GPMC%20%E8%B4%A8%E9%87%8F%E4%BF%A1%E6%81%AF%E4%B8%8E%E8%B7%9F%E8%BF%9B%E6%8E%AA%E6%96%BD|%2Fbi%2Fgpmc%2Fquality",
+          "jumpOpenMode": "self"
+        }
+      ]
+    },
+    {
+      "id": "execution-topic-quality-label",
+      "type": "title",
+      "name": "质量跟进",
+      "x": 332,
+      "y": 78,
+      "width": 132,
+      "height": 36,
+      "zIndex": 25,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "text": "质量跟进",
+        "fontSize": 17,
+        "fontWeight": "600",
+        "color": "#ffffff",
+        "textAlign": "center"
+      },
+      "actions": [
+        {
+          "type": "jump-url",
+          "jumpUrlTemplate": "screen-ref:GPMC%20%E8%B4%A8%E9%87%8F%E4%BF%A1%E6%81%AF%E4%B8%8E%E8%B7%9F%E8%BF%9B%E6%8E%AA%E6%96%BD|%2Fbi%2Fgpmc%2Fquality",
+          "jumpOpenMode": "self"
+        }
+      ]
+    },
+    {
+      "id": "execution-topic-tech-state-shape",
+      "type": "shape",
+      "name": "技术状态",
+      "x": 476,
+      "y": 78,
+      "width": 132,
+      "height": 36,
+      "zIndex": 24,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "shapeType": "rect",
+        "fillColor": "rgba(255, 255, 255, 0.14)",
+        "borderColor": "rgba(255, 255, 255, 0.26)",
+        "borderWidth": 1,
+        "radius": 12
+      },
+      "actions": [
+        {
+          "type": "jump-url",
+          "jumpUrlTemplate": "screen-ref:GPMC%20%E6%8A%80%E6%9C%AF%E7%8A%B6%E6%80%81%E4%B8%8E%E8%B7%9F%E8%BF%9B|%2Fbi%2Fgpmc%2Ftech-state",
+          "jumpOpenMode": "self"
+        }
+      ]
+    },
+    {
+      "id": "execution-topic-tech-state-label",
+      "type": "title",
+      "name": "技术状态",
+      "x": 476,
+      "y": 78,
+      "width": 132,
+      "height": 36,
+      "zIndex": 25,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "text": "技术状态",
+        "fontSize": 17,
+        "fontWeight": "600",
+        "color": "#ffffff",
+        "textAlign": "center"
+      },
+      "actions": [
+        {
+          "type": "jump-url",
+          "jumpUrlTemplate": "screen-ref:GPMC%20%E6%8A%80%E6%9C%AF%E7%8A%B6%E6%80%81%E4%B8%8E%E8%B7%9F%E8%BF%9B|%2Fbi%2Fgpmc%2Ftech-state",
+          "jumpOpenMode": "self"
+        }
+      ]
+    },
+    {
+      "id": "execution-topic-cost-shape",
+      "type": "shape",
+      "name": "成本控制",
+      "x": 620,
+      "y": 78,
+      "width": 132,
+      "height": 36,
+      "zIndex": 24,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "shapeType": "rect",
+        "fillColor": "rgba(255, 255, 255, 0.14)",
+        "borderColor": "rgba(255, 255, 255, 0.26)",
+        "borderWidth": 1,
+        "radius": 12
+      },
+      "actions": [
+        {
+          "type": "jump-url",
+          "jumpUrlTemplate": "screen-ref:GPMC%20%E6%88%90%E6%9C%AC%E4%B8%8E%E9%A2%84%E7%AE%97%E6%8E%A7%E5%88%B6|%2Fbi%2Fgpmc%2Fcost",
+          "jumpOpenMode": "self"
+        }
+      ]
+    },
+    {
+      "id": "execution-topic-cost-label",
+      "type": "title",
+      "name": "成本控制",
+      "x": 620,
+      "y": 78,
+      "width": 132,
+      "height": 36,
+      "zIndex": 25,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "text": "成本控制",
+        "fontSize": 17,
+        "fontWeight": "600",
+        "color": "#ffffff",
+        "textAlign": "center"
+      },
+      "actions": [
+        {
+          "type": "jump-url",
+          "jumpUrlTemplate": "screen-ref:GPMC%20%E6%88%90%E6%9C%AC%E4%B8%8E%E9%A2%84%E7%AE%97%E6%8E%A7%E5%88%B6|%2Fbi%2Fgpmc%2Fcost",
+          "jumpOpenMode": "self"
+        }
+      ]
+    },
+    {
+      "id": "execution-topic-risk-shape",
+      "type": "shape",
+      "name": "风险预警",
+      "x": 764,
+      "y": 78,
+      "width": 132,
+      "height": 36,
+      "zIndex": 24,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "shapeType": "rect",
+        "fillColor": "rgba(255, 255, 255, 0.14)",
+        "borderColor": "rgba(255, 255, 255, 0.26)",
+        "borderWidth": 1,
+        "radius": 12
+      },
+      "actions": [
+        {
+          "type": "jump-url",
+          "jumpUrlTemplate": "screen-ref:GPMC%20%E9%A3%8E%E9%99%A9%E4%B8%8E%E9%A2%84%E8%AD%A6%E4%B8%AD%E5%BF%83|%2Fbi%2Fgpmc%2Frisk",
+          "jumpOpenMode": "self"
+        }
+      ]
+    },
+    {
+      "id": "execution-topic-risk-label",
+      "type": "title",
+      "name": "风险预警",
+      "x": 764,
+      "y": 78,
+      "width": 132,
+      "height": 36,
+      "zIndex": 25,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "text": "风险预警",
+        "fontSize": 17,
+        "fontWeight": "600",
+        "color": "#ffffff",
+        "textAlign": "center"
+      },
+      "actions": [
+        {
+          "type": "jump-url",
+          "jumpUrlTemplate": "screen-ref:GPMC%20%E9%A3%8E%E9%99%A9%E4%B8%8E%E9%A2%84%E8%AD%A6%E4%B8%AD%E5%BF%83|%2Fbi%2Fgpmc%2Frisk",
+          "jumpOpenMode": "self"
+        }
+      ]
+    },
+    {
+      "id": "项目执行监控-date",
+      "type": "filter-date-range",
+      "name": "统计周期",
+      "x": 1260,
+      "y": 28,
+      "width": 320,
+      "height": 58,
+      "zIndex": 65,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "label": "统计周期",
+        "startKey": "dateFrom",
+        "endKey": "dateTo",
+        "labelColor": "rgba(255, 255, 255, 0.82)",
+        "inputBackground": "rgba(255, 255, 255, 0.18)",
+        "inputBorderColor": "rgba(255, 255, 255, 0.32)",
+        "inputTextColor": "#ffffff"
+      }
+    },
+    {
+      "id": "项目执行监控-dept",
+      "type": "filter-select",
+      "name": "事业部/科室",
+      "x": 940,
+      "y": 28,
+      "width": 150,
+      "height": 58,
+      "zIndex": 65,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "label": "事业部/科室",
+        "variableKey": "deptId",
+        "options": [
+          "全部",
+          "工程建设中心",
+          "数字化事业部",
+          "研发中心",
+          "生产制造中心"
+        ],
+        "placeholder": "全部",
+        "labelColor": "rgba(255, 255, 255, 0.82)",
+        "inputBackground": "rgba(255, 255, 255, 0.18)",
+        "inputBorderColor": "rgba(255, 255, 255, 0.32)",
+        "inputTextColor": "#ffffff"
+      }
+    },
+    {
+      "id": "项目执行监控-project",
+      "type": "filter-input",
+      "name": "项目编号/项目名称",
+      "x": 1104,
+      "y": 28,
+      "width": 140,
+      "height": 58,
+      "zIndex": 65,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "label": "项目编号/项目名称",
+        "variableKey": "projectNo",
+        "placeholder": "输入关键词",
+        "labelColor": "rgba(255, 255, 255, 0.82)",
+        "inputBackground": "rgba(255, 255, 255, 0.18)",
+        "inputBorderColor": "rgba(255, 255, 255, 0.32)",
+        "inputTextColor": "#ffffff"
+      }
+    },
+    {
+      "id": "项目执行监控-risk",
+      "type": "filter-select",
+      "name": "风险等级",
+      "x": 1596,
+      "y": 28,
+      "width": 120,
+      "height": 58,
+      "zIndex": 65,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "label": "风险等级",
+        "variableKey": "riskLevel",
+        "options": [
+          "全部",
+          "高",
+          "中",
+          "低"
+        ],
+        "placeholder": "全部",
+        "labelColor": "rgba(255, 255, 255, 0.82)",
+        "inputBackground": "rgba(255, 255, 255, 0.18)",
+        "inputBorderColor": "rgba(255, 255, 255, 0.32)",
+        "inputTextColor": "#ffffff"
+      }
+    },
+    {
+      "id": "项目执行监控-explanation-shape",
+      "type": "shape",
+      "name": "说明",
+      "x": 1732,
+      "y": 34,
+      "width": 68,
+      "height": 30,
+      "zIndex": 66,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "shapeType": "rect",
+        "fillColor": "rgba(255, 255, 255, 0.92)",
+        "borderColor": "#3b82f6",
+        "borderWidth": 1,
+        "radius": 999
+      },
+      "actions": [
+        {
+          "type": "open-panel",
+          "panelTitle": "说明卡",
+          "panelBodyTemplate": "面向 PMO 和部门负责人，定位进度失控点、延期责任和阻塞链路。\n• 重点看完成率、里程碑达成率、延期 TOP10 和责任科室负载。\n• 甘特与阻塞链路用于判断“哪里拖”“谁在拖”。\n• 点击排行、任务和 KPI 可进入执行层只读详情页。"
+        }
+      ]
+    },
+    {
+      "id": "项目执行监控-explanation-label",
+      "type": "title",
+      "name": "说明",
+      "x": 1732,
+      "y": 34,
+      "width": 68,
+      "height": 30,
+      "zIndex": 67,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "text": "说明",
+        "fontSize": 16,
+        "fontWeight": "700",
+        "color": "#3b82f6",
+        "textAlign": "center"
+      },
+      "actions": [
+        {
+          "type": "open-panel",
+          "panelTitle": "说明卡",
+          "panelBodyTemplate": "面向 PMO 和部门负责人，定位进度失控点、延期责任和阻塞链路。\n• 重点看完成率、里程碑达成率、延期 TOP10 和责任科室负载。\n• 甘特与阻塞链路用于判断“哪里拖”“谁在拖”。\n• 点击排行、任务和 KPI 可进入执行层只读详情页。"
+        }
+      ]
+    },
+    {
+      "id": "项目执行监控-guide-shape",
+      "type": "shape",
+      "name": "导览",
+      "x": 1808,
+      "y": 34,
+      "width": 68,
+      "height": 30,
+      "zIndex": 66,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "shapeType": "rect",
+        "fillColor": "rgba(255, 255, 255, 0.92)",
+        "borderColor": "#1e8449",
+        "borderWidth": 1,
+        "radius": 999
+      },
+      "actions": [
+        {
+          "type": "open-panel",
+          "panelTitle": "导览卡",
+          "panelBodyTemplate": "建议先讲延期和阻塞，再进入执行层明细承载节点、责任人和资源负载。\n• 先用延期 TOP10 和阻塞链路回答“哪里出问题”。\n• 再下钻到执行层查看甘特、节点目标和责任人分析。\n• 如需回到大屏，只讲异常专题回路，不重复讲全量基础信息。\n\n→ 进入执行层详情：查看甘特、节点、责任人、资源负载等只读明细。\n→ 返回战略层大屏：回到全局态势总览继续讲解战略视角。"
+        }
+      ]
+    },
+    {
+      "id": "项目执行监控-guide-label",
+      "type": "title",
+      "name": "导览",
+      "x": 1808,
+      "y": 34,
+      "width": 68,
+      "height": 30,
+      "zIndex": 67,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "text": "导览",
+        "fontSize": 16,
+        "fontWeight": "700",
+        "color": "#1e8449",
+        "textAlign": "center"
+      },
+      "actions": [
+        {
+          "type": "open-panel",
+          "panelTitle": "导览卡",
+          "panelBodyTemplate": "建议先讲延期和阻塞，再进入执行层明细承载节点、责任人和资源负载。\n• 先用延期 TOP10 和阻塞链路回答“哪里出问题”。\n• 再下钻到执行层查看甘特、节点目标和责任人分析。\n• 如需回到大屏，只讲异常专题回路，不重复讲全量基础信息。\n\n→ 进入执行层详情：查看甘特、节点、责任人、资源负载等只读明细。\n→ 返回战略层大屏：回到全局态势总览继续讲解战略视角。"
+        }
+      ]
+    },
+    {
+      "id": "gpmc-execution-kpi-completion",
+      "type": "number-card",
+      "name": "整体完成率",
+      "x": 58,
+      "y": 126,
+      "width": 260,
+      "height": 118,
+      "zIndex": 12,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "title": "整体完成率",
+        "value": 72.4,
+        "suffix": "%",
+        "precision": 1,
+        "titleFontSize": 17,
+        "valueFontSize": 34,
+        "titleColor": "#475569",
+        "valueColor": "#1a5276",
+        "backgroundColor": "#ffffff"
+      },
+      "dataSource": {
+        "type": "sql",
+        "sqlConfig": {
+          "databaseId": "{{DATABASE_ID}}",
+          "query": "SELECT CASE WHEN (SUM(s.due_cnt)+SUM(s.outside_completed_cnt))=0 THEN 0 ELSE ROUND(SUM(s.completed_total_cnt)::numeric/(SUM(s.due_cnt)+SUM(s.outside_completed_cnt))::numeric*100,2) END AS \"完成率\", CASE WHEN (SUM(s.incomplete_milestone_cnt)+SUM(s.milestone_on_time_cnt)+SUM(s.milestone_overdue_completed_cnt))=0 THEN 0 ELSE ROUND((SUM(s.milestone_on_time_cnt)+SUM(s.milestone_overdue_completed_cnt))::numeric/(SUM(s.incomplete_milestone_cnt)+SUM(s.milestone_on_time_cnt)+SUM(s.milestone_overdue_completed_cnt))::numeric*100,2) END AS \"里程碑完成率\", SUM(s.incomplete_cnt) AS \"未完成总数\", SUM(s.incomplete_high_risk_cnt) AS \"未完成高风险\" FROM biz_dws_progress_monthly_v2 s WHERE s.plan_month >= to_char({{dateFrom}}::date, 'YYYY-MM') AND s.plan_month <= to_char({{dateTo}}::date, 'YYYY-MM') AND ({{projectNo}} IS NULL OR {{projectNo}} = '' OR s.project_no ILIKE '%' || {{projectNo}} || '%')",
+          "queryTimeoutSeconds": 30,
+          "maxRows": 2000
+        }
+      }
+    },
+    {
+      "id": "gpmc-execution-kpi-milestone",
+      "type": "number-card",
+      "name": "里程碑达成率",
+      "x": 332,
+      "y": 126,
+      "width": 260,
+      "height": 118,
+      "zIndex": 12,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "title": "里程碑达成率",
+        "value": 68,
+        "suffix": "%",
+        "precision": 0,
+        "titleFontSize": 17,
+        "valueFontSize": 34,
+        "titleColor": "#475569",
+        "valueColor": "#d4850a",
+        "backgroundColor": "#ffffff"
+      },
+      "dataSource": {
+        "type": "sql",
+        "sqlConfig": {
+          "databaseId": "{{DATABASE_ID}}",
+          "query": "SELECT CASE WHEN (SUM(s.due_cnt)+SUM(s.outside_completed_cnt))=0 THEN 0 ELSE ROUND(SUM(s.completed_total_cnt)::numeric/(SUM(s.due_cnt)+SUM(s.outside_completed_cnt))::numeric*100,2) END AS \"完成率\", CASE WHEN (SUM(s.incomplete_milestone_cnt)+SUM(s.milestone_on_time_cnt)+SUM(s.milestone_overdue_completed_cnt))=0 THEN 0 ELSE ROUND((SUM(s.milestone_on_time_cnt)+SUM(s.milestone_overdue_completed_cnt))::numeric/(SUM(s.incomplete_milestone_cnt)+SUM(s.milestone_on_time_cnt)+SUM(s.milestone_overdue_completed_cnt))::numeric*100,2) END AS \"里程碑完成率\", SUM(s.incomplete_cnt) AS \"未完成总数\", SUM(s.incomplete_high_risk_cnt) AS \"未完成高风险\" FROM biz_dws_progress_monthly_v2 s WHERE s.plan_month >= to_char({{dateFrom}}::date, 'YYYY-MM') AND s.plan_month <= to_char({{dateTo}}::date, 'YYYY-MM') AND ({{projectNo}} IS NULL OR {{projectNo}} = '' OR s.project_no ILIKE '%' || {{projectNo}} || '%')",
+          "queryTimeoutSeconds": 30,
+          "maxRows": 2000
+        }
+      }
+    },
+    {
+      "id": "gpmc-execution-kpi-overdue",
+      "type": "number-card",
+      "name": "延期任务数",
+      "x": 606,
+      "y": 126,
+      "width": 260,
+      "height": 118,
+      "zIndex": 12,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "title": "延期任务数",
+        "value": 37,
+        "suffix": "",
+        "precision": 0,
+        "titleFontSize": 17,
+        "valueFontSize": 34,
+        "titleColor": "#475569",
+        "valueColor": "#c0392b",
+        "backgroundColor": "#ffffff"
+      },
+      "dataSource": {
+        "type": "sql",
+        "sqlConfig": {
+          "databaseId": "{{DATABASE_ID}}",
+          "query": "SELECT CASE WHEN (SUM(s.due_cnt)+SUM(s.outside_completed_cnt))=0 THEN 0 ELSE ROUND(SUM(s.completed_total_cnt)::numeric/(SUM(s.due_cnt)+SUM(s.outside_completed_cnt))::numeric*100,2) END AS \"完成率\", CASE WHEN (SUM(s.incomplete_milestone_cnt)+SUM(s.milestone_on_time_cnt)+SUM(s.milestone_overdue_completed_cnt))=0 THEN 0 ELSE ROUND((SUM(s.milestone_on_time_cnt)+SUM(s.milestone_overdue_completed_cnt))::numeric/(SUM(s.incomplete_milestone_cnt)+SUM(s.milestone_on_time_cnt)+SUM(s.milestone_overdue_completed_cnt))::numeric*100,2) END AS \"里程碑完成率\", SUM(s.incomplete_cnt) AS \"未完成总数\", SUM(s.incomplete_high_risk_cnt) AS \"未完成高风险\" FROM biz_dws_progress_monthly_v2 s WHERE s.plan_month >= to_char({{dateFrom}}::date, 'YYYY-MM') AND s.plan_month <= to_char({{dateTo}}::date, 'YYYY-MM') AND ({{projectNo}} IS NULL OR {{projectNo}} = '' OR s.project_no ILIKE '%' || {{projectNo}} || '%')",
+          "queryTimeoutSeconds": 30,
+          "maxRows": 2000
+        }
+      }
+    },
+    {
+      "id": "gpmc-execution-kpi-max-delay",
+      "type": "number-card",
+      "name": "最大延期天数",
+      "x": 880,
+      "y": 126,
+      "width": 260,
+      "height": 118,
+      "zIndex": 12,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "title": "最大延期天数",
+        "value": 28,
+        "suffix": " 天",
+        "precision": 0,
+        "titleFontSize": 17,
+        "valueFontSize": 34,
+        "titleColor": "#475569",
+        "valueColor": "#c0392b",
+        "backgroundColor": "#ffffff"
+      },
+      "actions": [
+        {
+          "type": "jump-url",
+          "jumpUrlTemplate": "/bi/gpmc/drill/execution",
+          "jumpOpenMode": "new-tab"
+        }
+      ],
+      "dataSource": {
+        "type": "sql",
+        "sqlConfig": {
+          "databaseId": "{{DATABASE_ID}}",
+          "query": "SELECT MAX(delay_days) AS \"最大延期天数\" FROM biz_dwd_project_node_v2 WHERE plan_month >= to_char({{dateFrom}}::date, 'YYYY-MM') AND plan_month <= to_char({{dateTo}}::date, 'YYYY-MM') AND ({{projectNo}} IS NULL OR {{projectNo}} = '' OR project_no ILIKE '%' || {{projectNo}} || '%')",
+          "queryTimeoutSeconds": 30,
+          "maxRows": 2000
+        }
+      }
+    },
+    {
+      "id": "gpmc-execution-kpi-due-soon",
+      "type": "number-card",
+      "name": "异常率",
+      "x": 1154,
+      "y": 126,
+      "width": 260,
+      "height": 118,
+      "zIndex": 12,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "title": "异常率",
+        "value": 15,
+        "suffix": "%",
+        "precision": 2,
+        "titleFontSize": 17,
+        "valueFontSize": 34,
+        "titleColor": "#475569",
+        "valueColor": "#0f172a",
+        "backgroundColor": "#ffffff"
+      },
+      "dataSource": {
+        "type": "sql",
+        "sqlConfig": {
+          "databaseId": "{{DATABASE_ID}}",
+          "query": "WITH agg AS (SELECT SUM(s.due_cnt) AS due_cnt, SUM(s.outside_completed_cnt) AS outside_completed_cnt, SUM(s.completed_total_cnt) AS completed_total_cnt, SUM(s.incomplete_cnt) AS incomplete_cnt, SUM(s.incomplete_high_risk_cnt) AS incomplete_high_risk_cnt FROM biz_dws_progress_monthly_v2 s WHERE s.plan_month >= to_char({{dateFrom}}::date, 'YYYY-MM') AND s.plan_month <= to_char({{dateTo}}::date, 'YYYY-MM') AND ({{projectNo}} IS NULL OR {{projectNo}} = '' OR s.project_no ILIKE '%' || {{projectNo}} || '%')) SELECT CASE WHEN (agg.due_cnt + agg.outside_completed_cnt) = 0 THEN 0 ELSE ROUND((agg.incomplete_cnt)::numeric / (agg.due_cnt + agg.outside_completed_cnt)::numeric * 100, 2) END AS \"异常率\", CASE WHEN (agg.due_cnt + agg.outside_completed_cnt) = 0 THEN 0 ELSE ROUND(agg.completed_total_cnt::numeric / (agg.due_cnt + agg.outside_completed_cnt)::numeric * 100, 2) END AS \"进度健康度\" FROM agg",
+          "queryTimeoutSeconds": 30,
+          "maxRows": 2000
+        }
+      }
+    },
+    {
+      "id": "gpmc-execution-kpi-blocked",
+      "type": "number-card",
+      "name": "进度健康度",
+      "x": 1428,
+      "y": 126,
+      "width": 260,
+      "height": 118,
+      "zIndex": 12,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "title": "进度健康度",
+        "value": 6,
+        "suffix": "%",
+        "precision": 2,
+        "titleFontSize": 17,
+        "valueFontSize": 34,
+        "titleColor": "#475569",
+        "valueColor": "#d4850a",
+        "backgroundColor": "#ffffff"
+      },
+      "dataSource": {
+        "type": "sql",
+        "sqlConfig": {
+          "databaseId": "{{DATABASE_ID}}",
+          "query": "WITH agg AS (SELECT SUM(s.due_cnt) AS due_cnt, SUM(s.outside_completed_cnt) AS outside_completed_cnt, SUM(s.completed_total_cnt) AS completed_total_cnt, SUM(s.incomplete_cnt) AS incomplete_cnt, SUM(s.incomplete_high_risk_cnt) AS incomplete_high_risk_cnt FROM biz_dws_progress_monthly_v2 s WHERE s.plan_month >= to_char({{dateFrom}}::date, 'YYYY-MM') AND s.plan_month <= to_char({{dateTo}}::date, 'YYYY-MM') AND ({{projectNo}} IS NULL OR {{projectNo}} = '' OR s.project_no ILIKE '%' || {{projectNo}} || '%')) SELECT CASE WHEN (agg.due_cnt + agg.outside_completed_cnt) = 0 THEN 0 ELSE ROUND((agg.incomplete_cnt)::numeric / (agg.due_cnt + agg.outside_completed_cnt)::numeric * 100, 2) END AS \"异常率\", CASE WHEN (agg.due_cnt + agg.outside_completed_cnt) = 0 THEN 0 ELSE ROUND(agg.completed_total_cnt::numeric / (agg.due_cnt + agg.outside_completed_cnt)::numeric * 100, 2) END AS \"进度健康度\" FROM agg",
+          "queryTimeoutSeconds": 30,
+          "maxRows": 2000
+        }
+      }
+    },
+    {
+      "id": "gpmc-execution-kpi-owner",
+      "type": "number-card",
+      "name": "高风险未完成",
+      "x": 1702,
+      "y": 126,
+      "width": 166,
+      "height": 118,
+      "zIndex": 12,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "title": "高风险未完成",
+        "value": 12,
+        "suffix": "",
+        "precision": 0,
+        "titleFontSize": 17,
+        "valueFontSize": 34,
+        "titleColor": "#475569",
+        "valueColor": "#2980b9",
+        "backgroundColor": "#ffffff"
+      },
+      "dataSource": {
+        "type": "sql",
+        "sqlConfig": {
+          "databaseId": "{{DATABASE_ID}}",
+          "query": "SELECT CASE WHEN (SUM(s.due_cnt)+SUM(s.outside_completed_cnt))=0 THEN 0 ELSE ROUND(SUM(s.completed_total_cnt)::numeric/(SUM(s.due_cnt)+SUM(s.outside_completed_cnt))::numeric*100,2) END AS \"完成率\", CASE WHEN (SUM(s.incomplete_milestone_cnt)+SUM(s.milestone_on_time_cnt)+SUM(s.milestone_overdue_completed_cnt))=0 THEN 0 ELSE ROUND((SUM(s.milestone_on_time_cnt)+SUM(s.milestone_overdue_completed_cnt))::numeric/(SUM(s.incomplete_milestone_cnt)+SUM(s.milestone_on_time_cnt)+SUM(s.milestone_overdue_completed_cnt))::numeric*100,2) END AS \"里程碑完成率\", SUM(s.incomplete_cnt) AS \"未完成总数\", SUM(s.incomplete_high_risk_cnt) AS \"未完成高风险\" FROM biz_dws_progress_monthly_v2 s WHERE s.plan_month >= to_char({{dateFrom}}::date, 'YYYY-MM') AND s.plan_month <= to_char({{dateTo}}::date, 'YYYY-MM') AND ({{projectNo}} IS NULL OR {{projectNo}} = '' OR s.project_no ILIKE '%' || {{projectNo}} || '%')",
+          "queryTimeoutSeconds": 30,
+          "maxRows": 2000
+        }
+      }
+    },
+    {
+      "id": "gpmc-execution-gantt",
+      "type": "gantt-chart",
+      "name": "任务执行甘特",
+      "x": 56,
+      "y": 288,
+      "width": 860,
+      "height": 460,
+      "zIndex": 15,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "title": "任务执行甘特",
+        "renderMode": "board",
+        "sideTextColor": "#1c2833",
+        "tasks": [
+          {
+            "name": "需求分析",
+            "type": "一般任务",
+            "planDate": "2026-01-06",
+            "actualDate": "2026-02-15",
+            "owner": "张工",
+            "riskLevel": "低",
+            "majorProjectName": "制造协同平台",
+            "subprojectName": "平台基础",
+            "status": "已完成",
+            "isCompleted": true,
+            "isOverdue": false
+          },
+          {
+            "name": "系统设计",
+            "type": "一般任务",
+            "planDate": "2026-02-10",
+            "actualDate": "2026-03-20",
+            "owner": "李工",
+            "riskLevel": "低",
+            "majorProjectName": "制造协同平台",
+            "subprojectName": "平台基础",
+            "status": "已完成",
+            "isCompleted": true,
+            "isOverdue": false
+          },
+          {
+            "name": "里程碑 M1",
+            "type": "里程碑节点",
+            "planDate": "2026-03-20",
+            "actualDate": "2026-03-20",
+            "owner": "张工",
+            "riskLevel": "低",
+            "majorProjectName": "制造协同平台",
+            "status": "已完成",
+            "isCompleted": true,
+            "isOverdue": false
+          },
+          {
+            "name": "核心开发",
+            "type": "一般任务",
+            "planDate": "2026-03-01",
+            "actualDate": "2026-05-30",
+            "owner": "陈工",
+            "riskLevel": "中",
+            "majorProjectName": "制造协同平台",
+            "subprojectName": "核心模块",
+            "status": "进行中",
+            "isCompleted": false,
+            "isOverdue": false
+          },
+          {
+            "name": "联调测试",
+            "type": "一般任务",
+            "planDate": "2026-05-15",
+            "actualDate": "2026-06-30",
+            "owner": "王工",
+            "riskLevel": "中",
+            "majorProjectName": "制造协同平台",
+            "subprojectName": "核心模块",
+            "status": "进行中",
+            "isCompleted": false,
+            "isOverdue": false
+          },
+          {
+            "name": "里程碑 M2",
+            "type": "里程碑节点",
+            "planDate": "2026-06-30",
+            "actualDate": "2026-06-30",
+            "owner": "张工",
+            "riskLevel": "中",
+            "majorProjectName": "制造协同平台",
+            "status": "未开始"
+          },
+          {
+            "name": "基建施工",
+            "type": "一般任务",
+            "planDate": "2026-01-15",
+            "actualDate": "2026-06-30",
+            "owner": "刘工",
+            "riskLevel": "高",
+            "majorProjectName": "新能源工厂",
+            "subprojectName": "厂房建设",
+            "status": "延期",
+            "isCompleted": false,
+            "isOverdue": true,
+            "isIncomplete": true,
+            "delayDays": 28
+          },
+          {
+            "name": "设备采购",
+            "type": "一般任务",
+            "planDate": "2026-03-01",
+            "actualDate": "2026-05-15",
+            "owner": "李工",
+            "riskLevel": "中",
+            "majorProjectName": "新能源工厂",
+            "subprojectName": "设备线",
+            "status": "进行中",
+            "isCompleted": false,
+            "isOverdue": false
+          },
+          {
+            "name": "设备安装调试",
+            "type": "一般任务",
+            "planDate": "2026-05-01",
+            "actualDate": "2026-07-15",
+            "owner": "赵工",
+            "riskLevel": "高",
+            "majorProjectName": "新能源工厂",
+            "subprojectName": "设备线",
+            "status": "延期",
+            "isCompleted": false,
+            "isOverdue": true,
+            "isIncomplete": true,
+            "delayDays": 18
+          },
+          {
+            "name": "里程碑 M3",
+            "type": "里程碑节点",
+            "planDate": "2026-07-15",
+            "actualDate": "2026-07-15",
+            "owner": "刘工",
+            "riskLevel": "高",
+            "majorProjectName": "新能源工厂",
+            "status": "未开始"
+          },
+          {
+            "name": "数据建模",
+            "type": "一般任务",
+            "planDate": "2026-02-01",
+            "actualDate": "2026-04-10",
+            "owner": "孙工",
+            "riskLevel": "低",
+            "majorProjectName": "数据治理工程",
+            "subprojectName": "主数据",
+            "status": "已完成",
+            "isCompleted": true,
+            "isOverdue": true,
+            "delayDays": 5
+          },
+          {
+            "name": "接口开发",
+            "type": "一般任务",
+            "planDate": "2026-04-01",
+            "actualDate": "2026-06-15",
+            "owner": "周工",
+            "riskLevel": "中",
+            "majorProjectName": "数据治理工程",
+            "subprojectName": "主数据",
+            "status": "进行中",
+            "isCompleted": false,
+            "isOverdue": false
+          }
+        ]
+      },
+      "actions": [
+        {
+          "type": "jump-url",
+          "jumpUrlTemplate": "/bi/gpmc/drill/execution",
+          "jumpOpenMode": "new-tab"
+        }
+      ],
+      "dataSource": {
+        "type": "sql",
+        "sqlConfig": {
+          "databaseId": "{{DATABASE_ID}}",
+          "query": "WITH project_level AS (SELECT 'project'::text AS level, d.project_no AS id, NULL::text AS parent_id, d.project_no AS \"名称\", COUNT(*) AS \"节点总数\", SUM(CASE WHEN d.is_completed THEN 1 ELSE 0 END) AS \"已完成\", SUM(CASE WHEN d.is_incomplete THEN 1 ELSE 0 END) AS \"未完成\", MIN(d.plan_date) AS \"计划开始\", MAX(d.plan_date) AS \"计划结束\", MAX(d.actual_date) AS \"实际结束\", CASE WHEN COUNT(*)=0 THEN 0 ELSE ROUND(SUM(CASE WHEN d.is_completed THEN 1 ELSE 0 END)::numeric/COUNT(*)::numeric*100,2) END AS \"完成率\", NULL::text AS \"节点类型\", NULL::text AS \"完成情况\", 0 AS sort_order FROM biz_dwd_project_node_v2 d WHERE d.plan_month >= to_char({{dateFrom}}::date, 'YYYY-MM') AND d.plan_month <= to_char({{dateTo}}::date, 'YYYY-MM') AND ({{projectNo}} IS NULL OR {{projectNo}} = '' OR d.project_no ILIKE '%' || {{projectNo}} || '%') AND ({{deptId}} IS NULL OR {{deptId}} = '' OR d.dept = {{deptId}}) GROUP BY d.project_no), subsystem_level AS (SELECT 'subsystem'::text AS level, d.project_no||'|'||COALESCE(d.subsystem,'(无)') AS id, d.project_no AS parent_id, COALESCE(d.subsystem,'(无分系统)') AS \"名称\", COUNT(*) AS \"节点总数\", SUM(CASE WHEN d.is_completed THEN 1 ELSE 0 END) AS \"已完成\", SUM(CASE WHEN d.is_incomplete THEN 1 ELSE 0 END) AS \"未完成\", MIN(d.plan_date) AS \"计划开始\", MAX(d.plan_date) AS \"计划结束\", MAX(d.actual_date) AS \"实际结束\", CASE WHEN COUNT(*)=0 THEN 0 ELSE ROUND(SUM(CASE WHEN d.is_completed THEN 1 ELSE 0 END)::numeric/COUNT(*)::numeric*100,2) END AS \"完成率\", NULL::text AS \"节点类型\", NULL::text AS \"完成情况\", 1 AS sort_order FROM biz_dwd_project_node_v2 d WHERE d.plan_month >= to_char({{dateFrom}}::date, 'YYYY-MM') AND d.plan_month <= to_char({{dateTo}}::date, 'YYYY-MM') AND ({{projectNo}} IS NULL OR {{projectNo}} = '' OR d.project_no ILIKE '%' || {{projectNo}} || '%') AND ({{deptId}} IS NULL OR {{deptId}} = '' OR d.dept = {{deptId}}) GROUP BY d.project_no, d.subsystem), node_level AS (SELECT 'node'::text AS level, d.node_id AS id, d.project_no||'|'||COALESCE(d.subsystem,'(无)') AS parent_id, d.node_task AS \"名称\", 1 AS \"节点总数\", CASE WHEN d.is_completed THEN 1 ELSE 0 END AS \"已完成\", CASE WHEN d.is_incomplete THEN 1 ELSE 0 END AS \"未完成\", d.plan_date AS \"计划开始\", d.plan_date AS \"计划结束\", d.actual_date AS \"实际结束\", CASE WHEN d.is_completed THEN 100.00 ELSE 0.00 END AS \"完成率\", d.node_type AS \"节点类型\", d.completion_status AS \"完成情况\", 2 AS sort_order FROM biz_dwd_project_node_v2 d WHERE d.plan_month >= to_char({{dateFrom}}::date, 'YYYY-MM') AND d.plan_month <= to_char({{dateTo}}::date, 'YYYY-MM') AND ({{projectNo}} IS NULL OR {{projectNo}} = '' OR d.project_no ILIKE '%' || {{projectNo}} || '%') AND ({{deptId}} IS NULL OR {{deptId}} = '' OR d.dept = {{deptId}}) AND ({{riskLevel}} IS NULL OR {{riskLevel}} = '' OR d.risk_level = {{riskLevel}})) SELECT * FROM project_level UNION ALL SELECT * FROM subsystem_level UNION ALL SELECT * FROM node_level ORDER BY id, sort_order",
+          "queryTimeoutSeconds": 30,
+          "maxRows": 2000
+        }
+      }
+    },
+    {
+      "id": "gpmc-execution-stage",
+      "type": "bar-chart",
+      "name": "阶段分布",
+      "x": 976,
+      "y": 288,
+      "width": 430,
+      "height": 202,
+      "zIndex": 15,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "title": "阶段分布",
+        "xAxisData": [
+          "策划中",
+          "执行中",
+          "验收中",
+          "已完成",
+          "已暂停"
+        ],
+        "series": [
+          {
+            "name": "项目数",
+            "data": [
+              18,
+              52,
+              14,
+              32,
+              6
+            ]
+          }
+        ],
+        "seriesColors": [
+          "#3b82f6",
+          "#d4850a",
+          "#1e8449"
+        ]
+      },
+      "dataSource": {
+        "type": "sql",
+        "sqlConfig": {
+          "databaseId": "{{DATABASE_ID}}",
+          "query": "SELECT s.completion_status AS \"阶段\", SUM(s.total_cnt) AS \"节点数\" FROM biz_dws_progress_monthly_v2 s WHERE s.plan_month >= to_char({{dateFrom}}::date, 'YYYY-MM') AND s.plan_month <= to_char({{dateTo}}::date, 'YYYY-MM') AND ({{projectNo}} IS NULL OR {{projectNo}} = '' OR s.project_no ILIKE '%' || {{projectNo}} || '%') GROUP BY s.completion_status ORDER BY SUM(s.total_cnt) DESC",
+          "queryTimeoutSeconds": 30,
+          "maxRows": 2000
+        }
+      }
+    },
+    {
+      "id": "gpmc-execution-workload",
+      "type": "bar-chart",
+      "name": "责任科室负载",
+      "x": 1424,
+      "y": 288,
+      "width": 440,
+      "height": 202,
+      "zIndex": 15,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "title": "责任科室负载",
+        "xAxisData": [
+          "工程建设",
+          "数字化",
+          "研发",
+          "生产制造",
+          "采购"
+        ],
+        "series": [
+          {
+            "name": "在办任务",
+            "data": [
+              24,
+              18,
+              22,
+              15,
+              12
+            ]
+          },
+          {
+            "name": "延期任务",
+            "data": [
+              8,
+              3,
+              6,
+              4,
+              2
+            ]
+          }
+        ],
+        "seriesColors": [
+          "#3b82f6",
+          "#d4850a",
+          "#1e8449"
+        ]
+      },
+      "actions": [
+        {
+          "type": "jump-url",
+          "jumpUrlTemplate": "/bi/gpmc/drill/execution",
+          "jumpOpenMode": "new-tab"
+        }
+      ],
+      "dataSource": {
+        "type": "sql",
+        "sqlConfig": {
+          "databaseId": "{{DATABASE_ID}}",
+          "query": "SELECT d.dept AS \"责任科室\", COUNT(*) AS \"节点总数\", SUM(CASE WHEN d.is_completed THEN 1 ELSE 0 END) AS \"已完成\", SUM(CASE WHEN d.is_incomplete THEN 1 ELSE 0 END) AS \"未完成\" FROM biz_dwd_project_node_v2 d WHERE d.plan_month >= to_char({{dateFrom}}::date, 'YYYY-MM') AND d.plan_month <= to_char({{dateTo}}::date, 'YYYY-MM') AND ({{projectNo}} IS NULL OR {{projectNo}} = '' OR d.project_no ILIKE '%' || {{projectNo}} || '%') AND d.dept IS NOT NULL GROUP BY d.dept ORDER BY SUM(CASE WHEN d.is_incomplete THEN 1 ELSE 0 END) DESC",
+          "queryTimeoutSeconds": 30,
+          "maxRows": 2000
+        }
+      }
+    },
+    {
+      "id": "gpmc-execution-delay-top",
+      "type": "table",
+      "name": "延期 TOP10 项目",
+      "x": 976,
+      "y": 548,
+      "width": 888,
+      "height": 200,
+      "zIndex": 15,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "title": "延期 TOP10 项目",
+        "header": [
+          "项目",
+          "延期天数",
+          "责任科室",
+          "风险等级"
+        ],
+        "fontSize": 16,
+        "headerAlign": "center",
+        "headerColor": "#0f172a",
+        "headerBackground": "#dbe9f6",
+        "bodyColor": "#334155",
+        "bodyBackground": "#ffffff",
+        "oddRowBackground": "#ffffff",
+        "evenRowBackground": "#f5f9fd",
+        "borderColor": "rgba(148, 163, 184, 0.24)",
+        "enableSort": true,
+        "enablePagination": true,
+        "pageSize": 6,
+        "freezeHeader": true
+      },
+      "actions": [
+        {
+          "type": "jump-url",
+          "jumpUrlTemplate": "/bi/gpmc/drill/execution",
+          "jumpOpenMode": "new-tab"
+        }
+      ],
+      "dataSource": {
+        "type": "sql",
+        "sqlConfig": {
+          "databaseId": "{{DATABASE_ID}}",
+          "query": "SELECT d.node_task AS \"任务/节点\", d.project_no AS \"项目编号\", d.delay_days AS \"延期天数\", d.dept AS \"责任科室\", d.risk_level AS \"风险等级\", d.node_type AS \"节点类型\", d.completion_status AS \"完成情况\" FROM biz_dwd_project_node_v2 d WHERE d.plan_month >= to_char({{dateFrom}}::date, 'YYYY-MM') AND d.plan_month <= to_char({{dateTo}}::date, 'YYYY-MM') AND ({{projectNo}} IS NULL OR {{projectNo}} = '' OR d.project_no ILIKE '%' || {{projectNo}} || '%') AND d.delay_days > 0 ORDER BY d.delay_days DESC LIMIT 10",
+          "queryTimeoutSeconds": 30,
+          "maxRows": 2000
+        }
+      }
+    },
+    {
+      "id": "gpmc-execution-block-chain",
+      "type": "table",
+      "name": "未完成高风险节点",
+      "x": 56,
+      "y": 806,
+      "width": 1808,
+      "height": 180,
+      "zIndex": 15,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "title": "未完成高风险节点",
+        "header": [
+          "任务/节点",
+          "阻塞原因",
+          "责任人",
+          "责任科室",
+          "建议动作"
+        ],
+        "fontSize": 16,
+        "headerAlign": "center",
+        "headerColor": "#0f172a",
+        "headerBackground": "#dbe9f6",
+        "bodyColor": "#334155",
+        "bodyBackground": "#ffffff",
+        "oddRowBackground": "#ffffff",
+        "evenRowBackground": "#f5f9fd",
+        "borderColor": "rgba(148, 163, 184, 0.24)",
+        "enableSort": true,
+        "enablePagination": true,
+        "pageSize": 6,
+        "freezeHeader": true
+      },
+      "actions": [
+        {
+          "type": "jump-url",
+          "jumpUrlTemplate": "/bi/gpmc/drill/execution",
+          "jumpOpenMode": "new-tab"
+        }
+      ],
+      "dataSource": {
+        "type": "sql",
+        "sqlConfig": {
+          "databaseId": "{{DATABASE_ID}}",
+          "query": "SELECT d.node_task AS \"任务/节点\", d.project_no AS \"项目编号\", d.delay_days AS \"延期天数\", d.dept AS \"责任科室\", d.risk_level AS \"风险等级\", d.node_type AS \"节点类型\", d.completion_status AS \"完成情况\", d.subsystem AS \"分系统\" FROM biz_dwd_project_node_v2 d WHERE d.plan_month >= to_char({{dateFrom}}::date, 'YYYY-MM') AND d.plan_month <= to_char({{dateTo}}::date, 'YYYY-MM') AND ({{projectNo}} IS NULL OR {{projectNo}} = '' OR d.project_no ILIKE '%' || {{projectNo}} || '%') AND d.is_incomplete = true AND d.risk_level = '高' ORDER BY d.delay_days DESC",
+          "queryTimeoutSeconds": 30,
+          "maxRows": 2000
+        }
+      }
+    }
+  ]
+}

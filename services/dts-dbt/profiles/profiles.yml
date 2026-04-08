@@ -6,7 +6,7 @@ dts:
       host: dts-pg
       port: 5432
       user: biadmin
-      password: Devops123@
+      password: 
       dbname: biadmin
       schema: public
       threads: 4
