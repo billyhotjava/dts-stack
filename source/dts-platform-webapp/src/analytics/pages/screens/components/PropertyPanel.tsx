@@ -2470,10 +2470,42 @@ export function PropertyPanel({ activeTab = 'style' }: { activeTab?: PropertyPan
                 )}
 
                 {isInteractionTab && !drillDownContent && !interactionContent && !actionContent && (
-                    <div className="flex items-center justify-center h-full text-xs text-text-muted">
+                    <div className="flex flex-col items-center justify-center text-xs text-text-muted" style={{ minHeight: 220, padding: 24 }}>
                         <div className="text-3xl opacity-30 mb-2">🔗</div>
                         <div className="text-xs text-text-muted">当前组件暂无交互配置</div>
-                        <div className="text-xs text-text-muted text-center py-8">图表类组件支持下钻、联动和动作配置</div>
+                        <div className="text-xs text-text-muted text-center mt-2">图表类组件支持下钻、联动和动作配置</div>
+                    </div>
+                )}
+
+                {/* Filler hint card — fills the blank space below sparse sections in 交互 tab */}
+                {isInteractionTab && (drillDownContent || interactionContent || actionContent) && (
+                    <div
+                        style={{
+                            flex: 1,
+                            minHeight: 80,
+                            display: 'flex',
+                            flexDirection: 'column',
+                            justifyContent: 'flex-end',
+                            padding: '16px 4px 8px',
+                        }}
+                    >
+                        <div
+                            style={{
+                                border: '1px dashed rgba(148,163,184,0.32)',
+                                borderRadius: 8,
+                                padding: 12,
+                                background: 'rgba(248,250,252,0.55)',
+                                fontSize: 11,
+                                color: 'var(--color-text-secondary)',
+                                lineHeight: 1.6,
+                            }}
+                        >
+                            <div style={{ fontWeight: 600, marginBottom: 6, color: 'var(--color-text-primary)' }}>💡 交互配置说明</div>
+                            <div>· <b>动作入口</b>：点击触发跳转、写变量、打开面板等</div>
+                            <div>· <b>页面跳转</b>：选「选择大屏」可挑选已发布大屏，自动生成 screen-ref 链接</div>
+                            <div>· <b>预览生效</b>：动作仅在预览/发布模式下响应点击</div>
+                            <div>· <b>支持类型</b>：图表 / 表格 / 形状 / 标题 / 数字卡 / Markdown</div>
+                        </div>
                     </div>
                 )}
                 {isAdvancedTab && (
