@@ -138,7 +138,13 @@ export function resolveInteractionUrlTemplate(template: string, params: Record<s
         return value == null ? '' : encodeURIComponent(value);
     }).trim();
     if (!withValues) return undefined;
-    if (/^https?:\/\//i.test(withValues) || withValues.startsWith('/')) {
+    // Allow http(s) absolute URLs, app-relative paths, and screen-ref: protocol
+    // (resolved at navigation time by resolveScreenReferenceUrl).
+    if (
+        /^https?:\/\//i.test(withValues)
+        || withValues.startsWith('/')
+        || withValues.startsWith('screen-ref:')
+    ) {
         return withValues;
     }
     return undefined;

@@ -5775,6 +5775,12 @@ const ACTION_COMPONENT_TYPES = new Set<ComponentType>([
     'table',
     'scroll-board',
     'scroll-ranking',
+    // Runtime click wrapper (ComponentRenderer.supportsRuntimeActionWrapper)
+    // already supports these basic types — keep editor whitelist in sync.
+    'shape',
+    'title',
+    'number-card',
+    'markdown-text',
 ]);
 
 const DRILL_CONFIGURABLE_TYPES = new Set<ComponentType>([
