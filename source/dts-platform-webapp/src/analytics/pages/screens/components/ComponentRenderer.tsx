@@ -1347,6 +1347,7 @@ export const ComponentRenderer = memo(function ComponentRenderer({ component, mo
                     seriesLabelLineLength, seriesLabelLineLength2, seriesLabelMinAngle,
                     echartsClickHandler, componentActions, executeComponentActions,
                     mapDrillRegion, setMapDrillRegion, mapReadyVersion, hasMapFn,
+                    cardData,
                 });
 
             // ==================== 基础 + 形状 + 媒体组件 ====================

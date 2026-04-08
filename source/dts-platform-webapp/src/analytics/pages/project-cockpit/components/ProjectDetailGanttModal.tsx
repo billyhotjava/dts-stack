@@ -1,13 +1,136 @@
 // @ts-nocheck — relies on @ts-nocheck'd ProjectGanttBoard, JSX-heavy modal
 import { useEffect, useMemo, useState } from "react";
 import ReactDOM from "react-dom";
-import type { MajorProject, MajorProjectRisk } from "../../screens/types";
+import type { CardData, MajorProject, MajorProjectRisk } from "../../screens/types";
+import { aggregateMajorProjects, type FlatProjectNodeRow } from "../utils/majorProjectAggregator";
 import { ProjectGanttBoard, type ProjectGanttTask } from "./ProjectGanttBoard";
 import "./ProjectDetailGanttModal.css";
 
 interface Props {
 	project: MajorProject | null;
 	onClose: () => void;
+}
+
+/**
+ * Wrapper that combines:
+ *  - hierarchical ProjectGanttBoard rendering one row per major project
+ *  - ProjectDetailGanttModal that opens on row click
+ *
+ * Used by EChartsRenderer when a gantt-chart's renderMode is 'board-hierarchical'.
+ * Accepts CardData (SQL query result) and converts the flat rows into MajorProject[].
+ */
+export function BoardHierarchicalGanttWithModal({
+	cardData,
+	maxHeight,
+	dark,
+	sideTextColor,
+}: {
+	cardData: CardData | null | undefined;
+	maxHeight?: number;
+	dark?: boolean;
+	sideTextColor?: string;
+}) {
+	const [activeProject, setActiveProject] = useState<MajorProject | null>(null);
+
+	const majorProjects = useMemo(() => {
+		if (!cardData?.rows?.length || !cardData.cols?.length) return [];
+		const flatRows = buildFlatRowsFromCardData(cardData);
+		return aggregateMajorProjects(flatRows);
+	}, [cardData]);
+
+	return (
+		<>
+			<ProjectGanttBoard
+				renderMode="hierarchical"
+				majorProjects={majorProjects}
+				maxHeight={maxHeight}
+				dark={dark}
+				sideTextColor={sideTextColor}
+				onProjectClick={setActiveProject}
+			/>
+			<ProjectDetailGanttModal
+				project={activeProject}
+				onClose={() => setActiveProject(null)}
+			/>
+		</>
+	);
+}
+
+/**
+ * Build FlatProjectNodeRow[] from CardData {rows, cols} where cols.name uses
+ * Chinese aliases matching the SQL query in F6-T01 (e.g. "重大项目", "子项目").
+ * Unrecognized columns are silently ignored; missing columns map to undefined.
+ */
+function buildFlatRowsFromCardData(cardData: CardData): FlatProjectNodeRow[] {
+	const cols = cardData.cols ?? [];
+	const colIndex = (name: string) => cols.findIndex((c) => c.name === name);
+	const indices = {
+		重大项目: colIndex("重大项目"),
+		子项目: colIndex("子项目"),
+		任务: colIndex("任务"),
+		类型: colIndex("类型"),
+		计划日期: colIndex("计划日期"),
+		实际日期: colIndex("实际日期"),
+		基线日期: colIndex("基线日期"),
+		是否完成: colIndex("是否完成"),
+		是否超期完成: colIndex("是否超期完成"),
+		是否未完成: colIndex("是否未完成"),
+		延期天数: colIndex("延期天数"),
+		风险等级: colIndex("风险等级"),
+		完成情况: colIndex("完成情况"),
+		责任科室: colIndex("责任科室"),
+		责任人: colIndex("责任人"),
+		项目经理: colIndex("项目经理"),
+		所长: colIndex("所长"),
+		风险内容: colIndex("风险内容"),
+		延期影响: colIndex("延期影响"),
+	};
+
+	const pickStr = (row: unknown[], idx: number): string | null => {
+		if (idx < 0) return null;
+		const v = row[idx];
+		return v == null ? null : String(v);
+	};
+	const pickBool = (row: unknown[], idx: number): boolean | null => {
+		if (idx < 0) return null;
+		const v = row[idx];
+		if (v == null) return null;
+		if (typeof v === "boolean") return v;
+		if (typeof v === "number") return v !== 0;
+		const s = String(v).trim().toLowerCase();
+		if (s === "true" || s === "t" || s === "1" || s === "yes") return true;
+		if (s === "false" || s === "f" || s === "0" || s === "no") return false;
+		return null;
+	};
+	const pickNum = (row: unknown[], idx: number): number | null => {
+		if (idx < 0) return null;
+		const v = row[idx];
+		if (v == null) return null;
+		const n = Number(v);
+		return Number.isFinite(n) ? n : null;
+	};
+
+	return cardData.rows.map((row): FlatProjectNodeRow => ({
+		重大项目: pickStr(row, indices.重大项目),
+		子项目: pickStr(row, indices.子项目),
+		任务: pickStr(row, indices.任务),
+		类型: pickStr(row, indices.类型),
+		计划日期: pickStr(row, indices.计划日期),
+		实际日期: pickStr(row, indices.实际日期),
+		基线日期: pickStr(row, indices.基线日期),
+		是否完成: pickBool(row, indices.是否完成),
+		是否超期完成: pickBool(row, indices.是否超期完成),
+		是否未完成: pickBool(row, indices.是否未完成),
+		延期天数: pickNum(row, indices.延期天数),
+		风险等级: pickStr(row, indices.风险等级),
+		完成情况: pickStr(row, indices.完成情况),
+		责任科室: pickStr(row, indices.责任科室),
+		责任人: pickStr(row, indices.责任人),
+		项目经理: pickStr(row, indices.项目经理),
+		所长: pickStr(row, indices.所长),
+		风险内容: pickStr(row, indices.风险内容),
+		延期影响: pickStr(row, indices.延期影响),
+	}));
 }
 
 export function ProjectDetailGanttModal({ project, onClose }: Props) {

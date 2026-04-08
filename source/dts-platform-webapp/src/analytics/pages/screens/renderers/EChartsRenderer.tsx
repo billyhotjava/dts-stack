@@ -1,8 +1,10 @@
 // @ts-nocheck — migrated from analytics-webapp, pending unused-import cleanup
 import type { ReactNode, ComponentType } from 'react';
 import type { ScreenThemeTokens } from '../screenThemes';
+import type { CardData } from '../types';
 import type { ReactEChartsComponent } from './types';
 import { ProjectGanttBoard, type ProjectGanttTask } from '../../project-cockpit/components/ProjectGanttBoard';
+import { BoardHierarchicalGanttWithModal } from '../../project-cockpit/components/ProjectDetailGanttModal';
 
 const SCREEN_UI_FONT_FAMILY = '"Lato", "Open Sans Variable", "Inter Variable", system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, "PingFang SC", "Microsoft YaHei", "Noto Sans CJK SC", "Noto Sans", sans-serif';
 
@@ -102,6 +104,9 @@ export interface EChartsRendererProps {
     setMapDrillRegion: (region: string | null) => void;
     mapReadyVersion: number;
     hasMapFn: ((mapName: string) => boolean) | null;
+
+    // Raw SQL data (used by gantt board-hierarchical mode)
+    cardData?: CardData | null;
 }
 
 // ── Renderer ──
@@ -122,6 +127,7 @@ export function renderECharts(props: EChartsRendererProps): ReactNode | null {
         seriesLabelLineLength, seriesLabelLineLength2, seriesLabelMinAngle,
         echartsClickHandler, componentActions, executeComponentActions,
         mapDrillRegion, setMapDrillRegion, mapReadyVersion, hasMapFn,
+        cardData,
     } = props;
 
     const axisLabelColor = axisLabelColorOverride || t.echarts.axisLabelColor;
@@ -324,6 +330,16 @@ export function renderECharts(props: EChartsRendererProps): ReactNode | null {
             /* eslint-disable @typescript-eslint/no-explicit-any */
             const tasks = Array.isArray(c.tasks) ? (c.tasks as Array<Record<string, any>>) : [];
             const ganttRenderMode = String(c.renderMode ?? '').trim().toLowerCase();
+            if (ganttRenderMode === 'board-hierarchical') {
+                return (
+                    <BoardHierarchicalGanttWithModal
+                        cardData={cardData ?? null}
+                        maxHeight={height}
+                        sideTextColor={typeof c.sideTextColor === 'string' ? c.sideTextColor : undefined}
+                        dark={isLightColor(t.textPrimary)}
+                    />
+                );
+            }
             if (ganttRenderMode === 'board') {
                 const onTaskClick = mode === 'preview' && componentActions.length > 0
                     ? (task: ProjectGanttTask) => {
