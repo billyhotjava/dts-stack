@@ -502,7 +502,6 @@
         "label": "事业部/科室",
         "variableKey": "deptId",
         "options": [
-          "全部",
           "工程建设中心",
           "数字化事业部",
           "研发中心",
@@ -512,7 +511,17 @@
         "labelColor": "rgba(255, 255, 255, 0.82)",
         "inputBackground": "rgba(255, 255, 255, 0.18)",
         "inputBorderColor": "rgba(255, 255, 255, 0.32)",
-        "inputTextColor": "#ffffff"
+        "inputTextColor": "#ffffff",
+        "optionSourceMode": "data"
+      },
+      "dataSource": {
+        "type": "sql",
+        "sqlConfig": {
+          "databaseId": "{{DATABASE_ID}}",
+          "query": "SELECT DISTINCT d.dept AS label, d.dept AS value FROM biz_dwd_project_node_v2 d WHERE d.dept IS NOT NULL AND d.dept != '' ORDER BY d.dept",
+          "queryTimeoutSeconds": 10,
+          "maxRows": 200
+        }
       }
     },
     {
@@ -551,7 +560,6 @@
         "label": "风险等级",
         "variableKey": "riskLevel",
         "options": [
-          "全部",
           "高",
           "中",
           "低"
@@ -693,7 +701,7 @@
         "type": "sql",
         "sqlConfig": {
           "databaseId": "{{DATABASE_ID}}",
-          "query": "SELECT COUNT(DISTINCT s.project_no) AS \"预警项目数\", SUM(s.total_risk_cnt) AS \"风险总数\", SUM(s.high_cnt) AS \"高风险\", SUM(s.mid_cnt) AS \"中风险\", SUM(s.low_cnt) AS \"低风险\", SUM(s.released_cnt) AS \"已释放\", SUM(s.open_cnt) AS \"未释放\", CASE WHEN SUM(s.total_risk_cnt)=0 THEN 0 ELSE ROUND(SUM(s.released_cnt)::numeric/SUM(s.total_risk_cnt)::numeric*100,2) END AS \"释放率\" FROM biz_dws_risk_monthly_v2 s WHERE s.period_month >= to_char({{dateFrom}}::date, 'YYYY-MM') AND s.period_month <= to_char({{dateTo}}::date, 'YYYY-MM') AND ({{deptId}} IS NULL OR {{deptId}} = '' OR s.dept = {{deptId}}) AND ({{projectNo}} IS NULL OR {{projectNo}} = '' OR s.project_no ILIKE '%' || {{projectNo}} || '%')",
+          "query": "SELECT COUNT(DISTINCT s.project_no) AS \"预警项目数\", SUM(s.total_risk_cnt) AS \"风险总数\", SUM(s.high_cnt) AS \"高风险\", SUM(s.mid_cnt) AS \"中风险\", SUM(s.low_cnt) AS \"低风险\", SUM(s.released_cnt) AS \"已释放\", SUM(s.open_cnt) AS \"未释放\", CASE WHEN SUM(s.total_risk_cnt)=0 THEN 0 ELSE ROUND(SUM(s.released_cnt)::numeric/SUM(s.total_risk_cnt)::numeric*100,2) END AS \"释放率\" FROM biz_dws_risk_monthly_v2 s WHERE s.period_month >= to_char({{dateFrom}}::date, 'YYYY-MM') AND s.period_month <= to_char({{dateTo}}::date, 'YYYY-MM') [[AND s.dept = {{deptId}}]] [[AND s.project_no ILIKE '%' || {{projectNo}} || '%']]",
           "queryTimeoutSeconds": 30,
           "maxRows": 2000,
           "parameterBindings": [
@@ -743,7 +751,7 @@
         "type": "sql",
         "sqlConfig": {
           "databaseId": "{{DATABASE_ID}}",
-          "query": "SELECT COUNT(DISTINCT s.project_no) AS \"预警项目数\", SUM(s.total_risk_cnt) AS \"风险总数\", SUM(s.high_cnt) AS \"高风险\", SUM(s.mid_cnt) AS \"中风险\", SUM(s.low_cnt) AS \"低风险\", SUM(s.released_cnt) AS \"已释放\", SUM(s.open_cnt) AS \"未释放\", CASE WHEN SUM(s.total_risk_cnt)=0 THEN 0 ELSE ROUND(SUM(s.released_cnt)::numeric/SUM(s.total_risk_cnt)::numeric*100,2) END AS \"释放率\" FROM biz_dws_risk_monthly_v2 s WHERE s.period_month >= to_char({{dateFrom}}::date, 'YYYY-MM') AND s.period_month <= to_char({{dateTo}}::date, 'YYYY-MM') AND ({{deptId}} IS NULL OR {{deptId}} = '' OR s.dept = {{deptId}}) AND ({{projectNo}} IS NULL OR {{projectNo}} = '' OR s.project_no ILIKE '%' || {{projectNo}} || '%')",
+          "query": "SELECT COUNT(DISTINCT s.project_no) AS \"预警项目数\", SUM(s.total_risk_cnt) AS \"风险总数\", SUM(s.high_cnt) AS \"高风险\", SUM(s.mid_cnt) AS \"中风险\", SUM(s.low_cnt) AS \"低风险\", SUM(s.released_cnt) AS \"已释放\", SUM(s.open_cnt) AS \"未释放\", CASE WHEN SUM(s.total_risk_cnt)=0 THEN 0 ELSE ROUND(SUM(s.released_cnt)::numeric/SUM(s.total_risk_cnt)::numeric*100,2) END AS \"释放率\" FROM biz_dws_risk_monthly_v2 s WHERE s.period_month >= to_char({{dateFrom}}::date, 'YYYY-MM') AND s.period_month <= to_char({{dateTo}}::date, 'YYYY-MM') [[AND s.dept = {{deptId}}]] [[AND s.project_no ILIKE '%' || {{projectNo}} || '%']]",
           "queryTimeoutSeconds": 30,
           "maxRows": 2000,
           "parameterBindings": [
@@ -793,7 +801,7 @@
         "type": "sql",
         "sqlConfig": {
           "databaseId": "{{DATABASE_ID}}",
-          "query": "SELECT COUNT(DISTINCT s.project_no) AS \"预警项目数\", SUM(s.total_risk_cnt) AS \"风险总数\", SUM(s.high_cnt) AS \"高风险\", SUM(s.mid_cnt) AS \"中风险\", SUM(s.low_cnt) AS \"低风险\", SUM(s.released_cnt) AS \"已释放\", SUM(s.open_cnt) AS \"未释放\", CASE WHEN SUM(s.total_risk_cnt)=0 THEN 0 ELSE ROUND(SUM(s.released_cnt)::numeric/SUM(s.total_risk_cnt)::numeric*100,2) END AS \"释放率\" FROM biz_dws_risk_monthly_v2 s WHERE s.period_month >= to_char({{dateFrom}}::date, 'YYYY-MM') AND s.period_month <= to_char({{dateTo}}::date, 'YYYY-MM') AND ({{deptId}} IS NULL OR {{deptId}} = '' OR s.dept = {{deptId}}) AND ({{projectNo}} IS NULL OR {{projectNo}} = '' OR s.project_no ILIKE '%' || {{projectNo}} || '%')",
+          "query": "SELECT COUNT(DISTINCT s.project_no) AS \"预警项目数\", SUM(s.total_risk_cnt) AS \"风险总数\", SUM(s.high_cnt) AS \"高风险\", SUM(s.mid_cnt) AS \"中风险\", SUM(s.low_cnt) AS \"低风险\", SUM(s.released_cnt) AS \"已释放\", SUM(s.open_cnt) AS \"未释放\", CASE WHEN SUM(s.total_risk_cnt)=0 THEN 0 ELSE ROUND(SUM(s.released_cnt)::numeric/SUM(s.total_risk_cnt)::numeric*100,2) END AS \"释放率\" FROM biz_dws_risk_monthly_v2 s WHERE s.period_month >= to_char({{dateFrom}}::date, 'YYYY-MM') AND s.period_month <= to_char({{dateTo}}::date, 'YYYY-MM') [[AND s.dept = {{deptId}}]] [[AND s.project_no ILIKE '%' || {{projectNo}} || '%']]",
           "queryTimeoutSeconds": 30,
           "maxRows": 2000,
           "parameterBindings": [
@@ -843,7 +851,7 @@
         "type": "sql",
         "sqlConfig": {
           "databaseId": "{{DATABASE_ID}}",
-          "query": "SELECT COUNT(DISTINCT s.project_no) AS \"预警项目数\", SUM(s.total_risk_cnt) AS \"风险总数\", SUM(s.high_cnt) AS \"高风险\", SUM(s.mid_cnt) AS \"中风险\", SUM(s.low_cnt) AS \"低风险\", SUM(s.released_cnt) AS \"已释放\", SUM(s.open_cnt) AS \"未释放\", CASE WHEN SUM(s.total_risk_cnt)=0 THEN 0 ELSE ROUND(SUM(s.released_cnt)::numeric/SUM(s.total_risk_cnt)::numeric*100,2) END AS \"释放率\" FROM biz_dws_risk_monthly_v2 s WHERE s.period_month >= to_char({{dateFrom}}::date, 'YYYY-MM') AND s.period_month <= to_char({{dateTo}}::date, 'YYYY-MM') AND ({{deptId}} IS NULL OR {{deptId}} = '' OR s.dept = {{deptId}}) AND ({{projectNo}} IS NULL OR {{projectNo}} = '' OR s.project_no ILIKE '%' || {{projectNo}} || '%')",
+          "query": "SELECT COUNT(DISTINCT s.project_no) AS \"预警项目数\", SUM(s.total_risk_cnt) AS \"风险总数\", SUM(s.high_cnt) AS \"高风险\", SUM(s.mid_cnt) AS \"中风险\", SUM(s.low_cnt) AS \"低风险\", SUM(s.released_cnt) AS \"已释放\", SUM(s.open_cnt) AS \"未释放\", CASE WHEN SUM(s.total_risk_cnt)=0 THEN 0 ELSE ROUND(SUM(s.released_cnt)::numeric/SUM(s.total_risk_cnt)::numeric*100,2) END AS \"释放率\" FROM biz_dws_risk_monthly_v2 s WHERE s.period_month >= to_char({{dateFrom}}::date, 'YYYY-MM') AND s.period_month <= to_char({{dateTo}}::date, 'YYYY-MM') [[AND s.dept = {{deptId}}]] [[AND s.project_no ILIKE '%' || {{projectNo}} || '%']]",
           "queryTimeoutSeconds": 30,
           "maxRows": 2000,
           "parameterBindings": [
@@ -893,7 +901,7 @@
         "type": "sql",
         "sqlConfig": {
           "databaseId": "{{DATABASE_ID}}",
-          "query": "SELECT COUNT(DISTINCT s.project_no) AS \"预警项目数\", SUM(s.total_risk_cnt) AS \"风险总数\", SUM(s.high_cnt) AS \"高风险\", SUM(s.mid_cnt) AS \"中风险\", SUM(s.low_cnt) AS \"低风险\", SUM(s.released_cnt) AS \"已释放\", SUM(s.open_cnt) AS \"未释放\", CASE WHEN SUM(s.total_risk_cnt)=0 THEN 0 ELSE ROUND(SUM(s.released_cnt)::numeric/SUM(s.total_risk_cnt)::numeric*100,2) END AS \"释放率\" FROM biz_dws_risk_monthly_v2 s WHERE s.period_month >= to_char({{dateFrom}}::date, 'YYYY-MM') AND s.period_month <= to_char({{dateTo}}::date, 'YYYY-MM') AND ({{deptId}} IS NULL OR {{deptId}} = '' OR s.dept = {{deptId}}) AND ({{projectNo}} IS NULL OR {{projectNo}} = '' OR s.project_no ILIKE '%' || {{projectNo}} || '%')",
+          "query": "SELECT COUNT(DISTINCT s.project_no) AS \"预警项目数\", SUM(s.total_risk_cnt) AS \"风险总数\", SUM(s.high_cnt) AS \"高风险\", SUM(s.mid_cnt) AS \"中风险\", SUM(s.low_cnt) AS \"低风险\", SUM(s.released_cnt) AS \"已释放\", SUM(s.open_cnt) AS \"未释放\", CASE WHEN SUM(s.total_risk_cnt)=0 THEN 0 ELSE ROUND(SUM(s.released_cnt)::numeric/SUM(s.total_risk_cnt)::numeric*100,2) END AS \"释放率\" FROM biz_dws_risk_monthly_v2 s WHERE s.period_month >= to_char({{dateFrom}}::date, 'YYYY-MM') AND s.period_month <= to_char({{dateTo}}::date, 'YYYY-MM') [[AND s.dept = {{deptId}}]] [[AND s.project_no ILIKE '%' || {{projectNo}} || '%']]",
           "queryTimeoutSeconds": 30,
           "maxRows": 2000,
           "parameterBindings": [
@@ -943,7 +951,7 @@
         "type": "sql",
         "sqlConfig": {
           "databaseId": "{{DATABASE_ID}}",
-          "query": "SELECT COUNT(DISTINCT s.project_no) AS \"预警项目数\", SUM(s.total_risk_cnt) AS \"风险总数\", SUM(s.high_cnt) AS \"高风险\", SUM(s.mid_cnt) AS \"中风险\", SUM(s.low_cnt) AS \"低风险\", SUM(s.released_cnt) AS \"已释放\", SUM(s.open_cnt) AS \"未释放\", CASE WHEN SUM(s.total_risk_cnt)=0 THEN 0 ELSE ROUND(SUM(s.released_cnt)::numeric/SUM(s.total_risk_cnt)::numeric*100,2) END AS \"释放率\" FROM biz_dws_risk_monthly_v2 s WHERE s.period_month >= to_char({{dateFrom}}::date, 'YYYY-MM') AND s.period_month <= to_char({{dateTo}}::date, 'YYYY-MM') AND ({{deptId}} IS NULL OR {{deptId}} = '' OR s.dept = {{deptId}}) AND ({{projectNo}} IS NULL OR {{projectNo}} = '' OR s.project_no ILIKE '%' || {{projectNo}} || '%')",
+          "query": "SELECT COUNT(DISTINCT s.project_no) AS \"预警项目数\", SUM(s.total_risk_cnt) AS \"风险总数\", SUM(s.high_cnt) AS \"高风险\", SUM(s.mid_cnt) AS \"中风险\", SUM(s.low_cnt) AS \"低风险\", SUM(s.released_cnt) AS \"已释放\", SUM(s.open_cnt) AS \"未释放\", CASE WHEN SUM(s.total_risk_cnt)=0 THEN 0 ELSE ROUND(SUM(s.released_cnt)::numeric/SUM(s.total_risk_cnt)::numeric*100,2) END AS \"释放率\" FROM biz_dws_risk_monthly_v2 s WHERE s.period_month >= to_char({{dateFrom}}::date, 'YYYY-MM') AND s.period_month <= to_char({{dateTo}}::date, 'YYYY-MM') [[AND s.dept = {{deptId}}]] [[AND s.project_no ILIKE '%' || {{projectNo}} || '%']]",
           "queryTimeoutSeconds": 30,
           "maxRows": 2000,
           "parameterBindings": [
@@ -993,7 +1001,7 @@
         "type": "sql",
         "sqlConfig": {
           "databaseId": "{{DATABASE_ID}}",
-          "query": "SELECT COUNT(DISTINCT s.project_no) AS \"预警项目数\", SUM(s.total_risk_cnt) AS \"风险总数\", SUM(s.high_cnt) AS \"高风险\", SUM(s.mid_cnt) AS \"中风险\", SUM(s.low_cnt) AS \"低风险\", SUM(s.released_cnt) AS \"已释放\", SUM(s.open_cnt) AS \"未释放\", CASE WHEN SUM(s.total_risk_cnt)=0 THEN 0 ELSE ROUND(SUM(s.released_cnt)::numeric/SUM(s.total_risk_cnt)::numeric*100,2) END AS \"释放率\" FROM biz_dws_risk_monthly_v2 s WHERE s.period_month >= to_char({{dateFrom}}::date, 'YYYY-MM') AND s.period_month <= to_char({{dateTo}}::date, 'YYYY-MM') AND ({{deptId}} IS NULL OR {{deptId}} = '' OR s.dept = {{deptId}}) AND ({{projectNo}} IS NULL OR {{projectNo}} = '' OR s.project_no ILIKE '%' || {{projectNo}} || '%')",
+          "query": "SELECT COUNT(DISTINCT s.project_no) AS \"预警项目数\", SUM(s.total_risk_cnt) AS \"风险总数\", SUM(s.high_cnt) AS \"高风险\", SUM(s.mid_cnt) AS \"中风险\", SUM(s.low_cnt) AS \"低风险\", SUM(s.released_cnt) AS \"已释放\", SUM(s.open_cnt) AS \"未释放\", CASE WHEN SUM(s.total_risk_cnt)=0 THEN 0 ELSE ROUND(SUM(s.released_cnt)::numeric/SUM(s.total_risk_cnt)::numeric*100,2) END AS \"释放率\" FROM biz_dws_risk_monthly_v2 s WHERE s.period_month >= to_char({{dateFrom}}::date, 'YYYY-MM') AND s.period_month <= to_char({{dateTo}}::date, 'YYYY-MM') [[AND s.dept = {{deptId}}]] [[AND s.project_no ILIKE '%' || {{projectNo}} || '%']]",
           "queryTimeoutSeconds": 30,
           "maxRows": 2000,
           "parameterBindings": [
@@ -1068,7 +1076,7 @@
         "type": "sql",
         "sqlConfig": {
           "databaseId": "{{DATABASE_ID}}",
-          "query": "SELECT COUNT(DISTINCT s.project_no) AS \"预警项目数\", SUM(s.total_risk_cnt) AS \"风险总数\", SUM(s.high_cnt) AS \"高风险\", SUM(s.mid_cnt) AS \"中风险\", SUM(s.low_cnt) AS \"低风险\", SUM(s.released_cnt) AS \"已释放\", SUM(s.open_cnt) AS \"未释放\", CASE WHEN SUM(s.total_risk_cnt)=0 THEN 0 ELSE ROUND(SUM(s.released_cnt)::numeric/SUM(s.total_risk_cnt)::numeric*100,2) END AS \"释放率\" FROM biz_dws_risk_monthly_v2 s WHERE s.period_month >= to_char({{dateFrom}}::date, 'YYYY-MM') AND s.period_month <= to_char({{dateTo}}::date, 'YYYY-MM') AND ({{deptId}} IS NULL OR {{deptId}} = '' OR s.dept = {{deptId}}) AND ({{projectNo}} IS NULL OR {{projectNo}} = '' OR s.project_no ILIKE '%' || {{projectNo}} || '%')",
+          "query": "SELECT COUNT(DISTINCT s.project_no) AS \"预警项目数\", SUM(s.total_risk_cnt) AS \"风险总数\", SUM(s.high_cnt) AS \"高风险\", SUM(s.mid_cnt) AS \"中风险\", SUM(s.low_cnt) AS \"低风险\", SUM(s.released_cnt) AS \"已释放\", SUM(s.open_cnt) AS \"未释放\", CASE WHEN SUM(s.total_risk_cnt)=0 THEN 0 ELSE ROUND(SUM(s.released_cnt)::numeric/SUM(s.total_risk_cnt)::numeric*100,2) END AS \"释放率\" FROM biz_dws_risk_monthly_v2 s WHERE s.period_month >= to_char({{dateFrom}}::date, 'YYYY-MM') AND s.period_month <= to_char({{dateTo}}::date, 'YYYY-MM') [[AND s.dept = {{deptId}}]] [[AND s.project_no ILIKE '%' || {{projectNo}} || '%']]",
           "queryTimeoutSeconds": 30,
           "maxRows": 2000,
           "parameterBindings": [
@@ -1117,7 +1125,7 @@
         "type": "sql",
         "sqlConfig": {
           "databaseId": "{{DATABASE_ID}}",
-          "query": "SELECT d.risk_category AS \"风险分类\", COUNT(*) AS \"数量\", SUM(CASE WHEN d.risk_level='高' THEN 1 ELSE 0 END) AS \"高\", SUM(CASE WHEN d.risk_level='中' THEN 1 ELSE 0 END) AS \"中\", SUM(CASE WHEN d.risk_level='低' THEN 1 ELSE 0 END) AS \"低\" FROM biz_dwd_risk_info_v2 d WHERE d.submit_month >= to_char({{dateFrom}}::date, 'YYYY-MM') AND d.submit_month <= to_char({{dateTo}}::date, 'YYYY-MM') AND ({{deptId}} IS NULL OR {{deptId}} = '' OR d.dept = {{deptId}}) AND ({{projectNo}} IS NULL OR {{projectNo}} = '' OR d.project_no ILIKE '%' || {{projectNo}} || '%') AND d.risk_category IS NOT NULL GROUP BY d.risk_category ORDER BY COUNT(*) DESC",
+          "query": "SELECT d.risk_category AS \"风险分类\", COUNT(*) AS \"数量\", SUM(CASE WHEN d.risk_level='高' THEN 1 ELSE 0 END) AS \"高\", SUM(CASE WHEN d.risk_level='中' THEN 1 ELSE 0 END) AS \"中\", SUM(CASE WHEN d.risk_level='低' THEN 1 ELSE 0 END) AS \"低\" FROM biz_dwd_risk_info_v2 d WHERE d.submit_month >= to_char({{dateFrom}}::date, 'YYYY-MM') AND d.submit_month <= to_char({{dateTo}}::date, 'YYYY-MM') [[AND d.dept = {{deptId}}]] [[AND d.project_no ILIKE '%' || {{projectNo}} || '%']] AND d.risk_category IS NOT NULL GROUP BY d.risk_category ORDER BY COUNT(*) DESC",
           "queryTimeoutSeconds": 30,
           "maxRows": 2000,
           "parameterBindings": [
@@ -1185,7 +1193,7 @@
         "type": "sql",
         "sqlConfig": {
           "databaseId": "{{DATABASE_ID}}",
-          "query": "SELECT project_no AS \"项目编号\", risk_name AS \"风险名称\", subsystem AS \"分系统\", risk_level AS \"风险等级\", risk_phase AS \"阶段\", risk_category AS \"分类\", risk_status AS \"状态\", risk_submit_date AS \"提出时间\", final_release_date AS \"计划释放\", response_owner AS \"负责人\", dept AS \"责任科室\", pending_days AS \"滞留天数\" FROM biz_dwd_risk_info_v2 WHERE submit_month >= to_char({{dateFrom}}::date, 'YYYY-MM') AND submit_month <= to_char({{dateTo}}::date, 'YYYY-MM') AND ({{deptId}} IS NULL OR {{deptId}} = '' OR dept = {{deptId}}) AND ({{projectNo}} IS NULL OR {{projectNo}} = '' OR project_no ILIKE '%' || {{projectNo}} || '%') AND ({{riskLevel}} IS NULL OR {{riskLevel}} = '' OR risk_level = {{riskLevel}}) ORDER BY risk_rank DESC, pending_days DESC",
+          "query": "SELECT project_no AS \"项目编号\", risk_name AS \"风险名称\", subsystem AS \"分系统\", risk_level AS \"风险等级\", risk_phase AS \"阶段\", risk_category AS \"分类\", risk_status AS \"状态\", risk_submit_date AS \"提出时间\", final_release_date AS \"计划释放\", response_owner AS \"负责人\", dept AS \"责任科室\", pending_days AS \"滞留天数\" FROM biz_dwd_risk_info_v2 WHERE submit_month >= to_char({{dateFrom}}::date, 'YYYY-MM') AND submit_month <= to_char({{dateTo}}::date, 'YYYY-MM') [[AND dept = {{deptId}}]] [[AND project_no ILIKE '%' || {{projectNo}} || '%']] [[AND risk_level = {{riskLevel}}]] ORDER BY risk_rank DESC, pending_days DESC",
           "queryTimeoutSeconds": 30,
           "maxRows": 2000,
           "parameterBindings": [
@@ -1259,7 +1267,7 @@
         "type": "sql",
         "sqlConfig": {
           "databaseId": "{{DATABASE_ID}}",
-          "query": "SELECT project_no AS \"项目编号\", risk_name AS \"风险名称\", subsystem AS \"分系统\", risk_level AS \"风险等级\", risk_phase AS \"阶段\", risk_category AS \"分类\", risk_status AS \"状态\", risk_submit_date AS \"提出时间\", final_release_date AS \"计划释放\", response_owner AS \"负责人\", dept AS \"责任科室\", pending_days AS \"滞留天数\" FROM biz_dwd_risk_info_v2 WHERE submit_month >= to_char({{dateFrom}}::date, 'YYYY-MM') AND submit_month <= to_char({{dateTo}}::date, 'YYYY-MM') AND ({{deptId}} IS NULL OR {{deptId}} = '' OR dept = {{deptId}}) AND ({{projectNo}} IS NULL OR {{projectNo}} = '' OR project_no ILIKE '%' || {{projectNo}} || '%') AND ({{riskLevel}} IS NULL OR {{riskLevel}} = '' OR risk_level = {{riskLevel}}) ORDER BY risk_rank DESC, pending_days DESC",
+          "query": "SELECT project_no AS \"项目编号\", risk_name AS \"风险名称\", subsystem AS \"分系统\", risk_level AS \"风险等级\", risk_phase AS \"阶段\", risk_category AS \"分类\", risk_status AS \"状态\", risk_submit_date AS \"提出时间\", final_release_date AS \"计划释放\", response_owner AS \"负责人\", dept AS \"责任科室\", pending_days AS \"滞留天数\" FROM biz_dwd_risk_info_v2 WHERE submit_month >= to_char({{dateFrom}}::date, 'YYYY-MM') AND submit_month <= to_char({{dateTo}}::date, 'YYYY-MM') [[AND dept = {{deptId}}]] [[AND project_no ILIKE '%' || {{projectNo}} || '%']] [[AND risk_level = {{riskLevel}}]] ORDER BY risk_rank DESC, pending_days DESC",
           "queryTimeoutSeconds": 30,
           "maxRows": 2000,
           "parameterBindings": [

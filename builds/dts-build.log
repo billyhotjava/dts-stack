@@ -4168,3 +4168,30 @@ and
 #22 exporting manifest list sha256:ff9a2243f8422ed382b99cf9eb10d4046afe9c48e2da87fbbe720c1456b1f296 0.0s done
 #22 naming to docker.io/library/dts-platform:1.0.0 done
 #22 unpacking to docker.io/library/dts-platform:1.0.0
+#22 unpacking to docker.io/library/dts-platform:1.0.0 0.9s done
+#22 DONE 5.3s
+[dts-build] Saved /opt/prod/s10-stack/builds/dist/dts-platform_1.0.0-20260408-085355.tar
+[dts-build] Building dts-ingestion -> dts-ingestion:1.0.0 (no-cache)
+#0 building with "default" instance using docker driver
+
+#1 [internal] load build definition from Dockerfile
+#1 transferring dockerfile: 6.29kB done
+#1 DONE 0.0s
+
+#2 [internal] load metadata for docker.io/library/maven:3.9.9-eclipse-temurin-21
+#2 DONE 0.0s
+
+#3 [internal] load metadata for docker.io/library/eclipse-temurin:21-jre
+#3 ERROR: failed to do request: Head "https://registry-1.docker.io/v2/library/eclipse-temurin/manifests/21-jre": writing response to registry-1.docker.io:443: connecting to 127.0.0.1:10808: dial tcp 127.0.0.1:10808: connectex: No connection could be made because the target machine actively refused it.
+------
+ > [internal] load metadata for docker.io/library/eclipse-temurin:21-jre:
+------
+Dockerfile:101
+--------------------
+  99 |     # ---------- runtime stage ----------
+ 100 |     # Runtime stage uses Temurin JRE 21
+ 101 | >>> FROM ${RUNTIME_BASE_IMAGE} AS runtime
+ 102 |     ARG UBUNTU_PORTS_MIRROR=https://mirrors.aliyun.com/ubuntu-ports
+ 103 |     ARG UBUNTU_ARCHIVE_MIRROR=https://mirrors.aliyun.com/ubuntu
+--------------------
+ERROR: failed to build: failed to solve: eclipse-temurin:21-jre: failed to resolve source metadata for docker.io/library/eclipse-temurin:21-jre: failed to do request: Head "https://registry-1.docker.io/v2/library/eclipse-temurin/manifests/21-jre": writing response to registry-1.docker.io:443: connecting to 127.0.0.1:10808: dial tcp 127.0.0.1:10808: connectex: No connection could be made because the target machine actively refused it.

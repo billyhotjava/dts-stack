@@ -521,7 +521,6 @@
         "label": "事业部/科室",
         "variableKey": "deptId",
         "options": [
-          "全部",
           "工程建设中心",
           "数字化事业部",
           "研发中心",
@@ -531,7 +530,17 @@
         "labelColor": "rgba(255, 255, 255, 0.82)",
         "inputBackground": "rgba(255, 255, 255, 0.18)",
         "inputBorderColor": "rgba(255, 255, 255, 0.32)",
-        "inputTextColor": "#ffffff"
+        "inputTextColor": "#ffffff",
+        "optionSourceMode": "data"
+      },
+      "dataSource": {
+        "type": "sql",
+        "sqlConfig": {
+          "databaseId": "{{DATABASE_ID}}",
+          "query": "SELECT DISTINCT d.dept AS label, d.dept AS value FROM biz_dwd_project_node_v2 d WHERE d.dept IS NOT NULL AND d.dept != '' ORDER BY d.dept",
+          "queryTimeoutSeconds": 10,
+          "maxRows": 200
+        }
       }
     },
     {
@@ -570,7 +579,6 @@
         "label": "风险等级",
         "variableKey": "riskLevel",
         "options": [
-          "全部",
           "高",
           "中",
           "低"
@@ -712,7 +720,7 @@
         "type": "sql",
         "sqlConfig": {
           "databaseId": "{{DATABASE_ID}}",
-          "query": "SELECT CASE WHEN (SUM(s.due_cnt)+SUM(s.outside_completed_cnt))=0 THEN 0 ELSE ROUND(SUM(s.completed_total_cnt)::numeric/(SUM(s.due_cnt)+SUM(s.outside_completed_cnt))::numeric*100,2) END AS \"完成率\", CASE WHEN (SUM(s.incomplete_milestone_cnt)+SUM(s.milestone_on_time_cnt)+SUM(s.milestone_overdue_completed_cnt))=0 THEN 0 ELSE ROUND((SUM(s.milestone_on_time_cnt)+SUM(s.milestone_overdue_completed_cnt))::numeric/(SUM(s.incomplete_milestone_cnt)+SUM(s.milestone_on_time_cnt)+SUM(s.milestone_overdue_completed_cnt))::numeric*100,2) END AS \"里程碑完成率\", SUM(s.incomplete_cnt) AS \"未完成总数\", SUM(s.incomplete_high_risk_cnt) AS \"未完成高风险\" FROM biz_dws_progress_monthly_v2 s WHERE s.plan_month >= to_char({{dateFrom}}::date, 'YYYY-MM') AND s.plan_month <= to_char({{dateTo}}::date, 'YYYY-MM') AND ({{projectNo}} IS NULL OR {{projectNo}} = '' OR s.project_no ILIKE '%' || {{projectNo}} || '%')",
+          "query": "SELECT CASE WHEN (SUM(s.due_cnt)+SUM(s.outside_completed_cnt))=0 THEN 0 ELSE ROUND(SUM(s.completed_total_cnt)::numeric/(SUM(s.due_cnt)+SUM(s.outside_completed_cnt))::numeric*100,2) END AS \"完成率\", CASE WHEN (SUM(s.incomplete_milestone_cnt)+SUM(s.milestone_on_time_cnt)+SUM(s.milestone_overdue_completed_cnt))=0 THEN 0 ELSE ROUND((SUM(s.milestone_on_time_cnt)+SUM(s.milestone_overdue_completed_cnt))::numeric/(SUM(s.incomplete_milestone_cnt)+SUM(s.milestone_on_time_cnt)+SUM(s.milestone_overdue_completed_cnt))::numeric*100,2) END AS \"里程碑完成率\", SUM(s.incomplete_cnt) AS \"未完成总数\", SUM(s.incomplete_high_risk_cnt) AS \"未完成高风险\" FROM biz_dws_progress_monthly_v2 s WHERE s.plan_month >= to_char({{dateFrom}}::date, 'YYYY-MM') AND s.plan_month <= to_char({{dateTo}}::date, 'YYYY-MM') [[AND s.project_no ILIKE '%' || {{projectNo}} || '%']]",
           "queryTimeoutSeconds": 30,
           "maxRows": 2000,
           "parameterBindings": [
@@ -758,7 +766,7 @@
         "type": "sql",
         "sqlConfig": {
           "databaseId": "{{DATABASE_ID}}",
-          "query": "SELECT CASE WHEN (SUM(s.due_cnt)+SUM(s.outside_completed_cnt))=0 THEN 0 ELSE ROUND(SUM(s.completed_total_cnt)::numeric/(SUM(s.due_cnt)+SUM(s.outside_completed_cnt))::numeric*100,2) END AS \"完成率\", CASE WHEN (SUM(s.incomplete_milestone_cnt)+SUM(s.milestone_on_time_cnt)+SUM(s.milestone_overdue_completed_cnt))=0 THEN 0 ELSE ROUND((SUM(s.milestone_on_time_cnt)+SUM(s.milestone_overdue_completed_cnt))::numeric/(SUM(s.incomplete_milestone_cnt)+SUM(s.milestone_on_time_cnt)+SUM(s.milestone_overdue_completed_cnt))::numeric*100,2) END AS \"里程碑完成率\", SUM(s.incomplete_cnt) AS \"未完成总数\", SUM(s.incomplete_high_risk_cnt) AS \"未完成高风险\" FROM biz_dws_progress_monthly_v2 s WHERE s.plan_month >= to_char({{dateFrom}}::date, 'YYYY-MM') AND s.plan_month <= to_char({{dateTo}}::date, 'YYYY-MM') AND ({{projectNo}} IS NULL OR {{projectNo}} = '' OR s.project_no ILIKE '%' || {{projectNo}} || '%')",
+          "query": "SELECT CASE WHEN (SUM(s.due_cnt)+SUM(s.outside_completed_cnt))=0 THEN 0 ELSE ROUND(SUM(s.completed_total_cnt)::numeric/(SUM(s.due_cnt)+SUM(s.outside_completed_cnt))::numeric*100,2) END AS \"完成率\", CASE WHEN (SUM(s.incomplete_milestone_cnt)+SUM(s.milestone_on_time_cnt)+SUM(s.milestone_overdue_completed_cnt))=0 THEN 0 ELSE ROUND((SUM(s.milestone_on_time_cnt)+SUM(s.milestone_overdue_completed_cnt))::numeric/(SUM(s.incomplete_milestone_cnt)+SUM(s.milestone_on_time_cnt)+SUM(s.milestone_overdue_completed_cnt))::numeric*100,2) END AS \"里程碑完成率\", SUM(s.incomplete_cnt) AS \"未完成总数\", SUM(s.incomplete_high_risk_cnt) AS \"未完成高风险\" FROM biz_dws_progress_monthly_v2 s WHERE s.plan_month >= to_char({{dateFrom}}::date, 'YYYY-MM') AND s.plan_month <= to_char({{dateTo}}::date, 'YYYY-MM') [[AND s.project_no ILIKE '%' || {{projectNo}} || '%']]",
           "queryTimeoutSeconds": 30,
           "maxRows": 2000,
           "parameterBindings": [
@@ -804,7 +812,7 @@
         "type": "sql",
         "sqlConfig": {
           "databaseId": "{{DATABASE_ID}}",
-          "query": "SELECT CASE WHEN (SUM(s.due_cnt)+SUM(s.outside_completed_cnt))=0 THEN 0 ELSE ROUND(SUM(s.completed_total_cnt)::numeric/(SUM(s.due_cnt)+SUM(s.outside_completed_cnt))::numeric*100,2) END AS \"完成率\", CASE WHEN (SUM(s.incomplete_milestone_cnt)+SUM(s.milestone_on_time_cnt)+SUM(s.milestone_overdue_completed_cnt))=0 THEN 0 ELSE ROUND((SUM(s.milestone_on_time_cnt)+SUM(s.milestone_overdue_completed_cnt))::numeric/(SUM(s.incomplete_milestone_cnt)+SUM(s.milestone_on_time_cnt)+SUM(s.milestone_overdue_completed_cnt))::numeric*100,2) END AS \"里程碑完成率\", SUM(s.incomplete_cnt) AS \"未完成总数\", SUM(s.incomplete_high_risk_cnt) AS \"未完成高风险\" FROM biz_dws_progress_monthly_v2 s WHERE s.plan_month >= to_char({{dateFrom}}::date, 'YYYY-MM') AND s.plan_month <= to_char({{dateTo}}::date, 'YYYY-MM') AND ({{projectNo}} IS NULL OR {{projectNo}} = '' OR s.project_no ILIKE '%' || {{projectNo}} || '%')",
+          "query": "SELECT CASE WHEN (SUM(s.due_cnt)+SUM(s.outside_completed_cnt))=0 THEN 0 ELSE ROUND(SUM(s.completed_total_cnt)::numeric/(SUM(s.due_cnt)+SUM(s.outside_completed_cnt))::numeric*100,2) END AS \"完成率\", CASE WHEN (SUM(s.incomplete_milestone_cnt)+SUM(s.milestone_on_time_cnt)+SUM(s.milestone_overdue_completed_cnt))=0 THEN 0 ELSE ROUND((SUM(s.milestone_on_time_cnt)+SUM(s.milestone_overdue_completed_cnt))::numeric/(SUM(s.incomplete_milestone_cnt)+SUM(s.milestone_on_time_cnt)+SUM(s.milestone_overdue_completed_cnt))::numeric*100,2) END AS \"里程碑完成率\", SUM(s.incomplete_cnt) AS \"未完成总数\", SUM(s.incomplete_high_risk_cnt) AS \"未完成高风险\" FROM biz_dws_progress_monthly_v2 s WHERE s.plan_month >= to_char({{dateFrom}}::date, 'YYYY-MM') AND s.plan_month <= to_char({{dateTo}}::date, 'YYYY-MM') [[AND s.project_no ILIKE '%' || {{projectNo}} || '%']]",
           "queryTimeoutSeconds": 30,
           "maxRows": 2000,
           "parameterBindings": [
@@ -857,7 +865,7 @@
         "type": "sql",
         "sqlConfig": {
           "databaseId": "{{DATABASE_ID}}",
-          "query": "SELECT MAX(delay_days) AS \"最大延期天数\" FROM biz_dwd_project_node_v2 WHERE plan_month >= to_char({{dateFrom}}::date, 'YYYY-MM') AND plan_month <= to_char({{dateTo}}::date, 'YYYY-MM') AND ({{projectNo}} IS NULL OR {{projectNo}} = '' OR project_no ILIKE '%' || {{projectNo}} || '%')",
+          "query": "SELECT MAX(delay_days) AS \"最大延期天数\" FROM biz_dwd_project_node_v2 WHERE plan_month >= to_char({{dateFrom}}::date, 'YYYY-MM') AND plan_month <= to_char({{dateTo}}::date, 'YYYY-MM') [[AND project_no ILIKE '%' || {{projectNo}} || '%']]",
           "queryTimeoutSeconds": 30,
           "maxRows": 2000,
           "parameterBindings": [
@@ -903,7 +911,7 @@
         "type": "sql",
         "sqlConfig": {
           "databaseId": "{{DATABASE_ID}}",
-          "query": "WITH agg AS (SELECT SUM(s.due_cnt) AS due_cnt, SUM(s.outside_completed_cnt) AS outside_completed_cnt, SUM(s.completed_total_cnt) AS completed_total_cnt, SUM(s.incomplete_cnt) AS incomplete_cnt, SUM(s.incomplete_high_risk_cnt) AS incomplete_high_risk_cnt FROM biz_dws_progress_monthly_v2 s WHERE s.plan_month >= to_char({{dateFrom}}::date, 'YYYY-MM') AND s.plan_month <= to_char({{dateTo}}::date, 'YYYY-MM') AND ({{projectNo}} IS NULL OR {{projectNo}} = '' OR s.project_no ILIKE '%' || {{projectNo}} || '%')) SELECT CASE WHEN (agg.due_cnt + agg.outside_completed_cnt) = 0 THEN 0 ELSE ROUND((agg.incomplete_cnt)::numeric / (agg.due_cnt + agg.outside_completed_cnt)::numeric * 100, 2) END AS \"异常率\", CASE WHEN (agg.due_cnt + agg.outside_completed_cnt) = 0 THEN 0 ELSE ROUND(agg.completed_total_cnt::numeric / (agg.due_cnt + agg.outside_completed_cnt)::numeric * 100, 2) END AS \"进度健康度\" FROM agg",
+          "query": "WITH agg AS (SELECT SUM(s.due_cnt) AS due_cnt, SUM(s.outside_completed_cnt) AS outside_completed_cnt, SUM(s.completed_total_cnt) AS completed_total_cnt, SUM(s.incomplete_cnt) AS incomplete_cnt, SUM(s.incomplete_high_risk_cnt) AS incomplete_high_risk_cnt FROM biz_dws_progress_monthly_v2 s WHERE s.plan_month >= to_char({{dateFrom}}::date, 'YYYY-MM') AND s.plan_month <= to_char({{dateTo}}::date, 'YYYY-MM') [[AND s.project_no ILIKE '%' || {{projectNo}} || '%']]) SELECT CASE WHEN (agg.due_cnt + agg.outside_completed_cnt) = 0 THEN 0 ELSE ROUND((agg.incomplete_cnt)::numeric / (agg.due_cnt + agg.outside_completed_cnt)::numeric * 100, 2) END AS \"异常率\", CASE WHEN (agg.due_cnt + agg.outside_completed_cnt) = 0 THEN 0 ELSE ROUND(agg.completed_total_cnt::numeric / (agg.due_cnt + agg.outside_completed_cnt)::numeric * 100, 2) END AS \"进度健康度\" FROM agg",
           "queryTimeoutSeconds": 30,
           "maxRows": 2000,
           "parameterBindings": [
@@ -949,7 +957,7 @@
         "type": "sql",
         "sqlConfig": {
           "databaseId": "{{DATABASE_ID}}",
-          "query": "WITH agg AS (SELECT SUM(s.due_cnt) AS due_cnt, SUM(s.outside_completed_cnt) AS outside_completed_cnt, SUM(s.completed_total_cnt) AS completed_total_cnt, SUM(s.incomplete_cnt) AS incomplete_cnt, SUM(s.incomplete_high_risk_cnt) AS incomplete_high_risk_cnt FROM biz_dws_progress_monthly_v2 s WHERE s.plan_month >= to_char({{dateFrom}}::date, 'YYYY-MM') AND s.plan_month <= to_char({{dateTo}}::date, 'YYYY-MM') AND ({{projectNo}} IS NULL OR {{projectNo}} = '' OR s.project_no ILIKE '%' || {{projectNo}} || '%')) SELECT CASE WHEN (agg.due_cnt + agg.outside_completed_cnt) = 0 THEN 0 ELSE ROUND((agg.incomplete_cnt)::numeric / (agg.due_cnt + agg.outside_completed_cnt)::numeric * 100, 2) END AS \"异常率\", CASE WHEN (agg.due_cnt + agg.outside_completed_cnt) = 0 THEN 0 ELSE ROUND(agg.completed_total_cnt::numeric / (agg.due_cnt + agg.outside_completed_cnt)::numeric * 100, 2) END AS \"进度健康度\" FROM agg",
+          "query": "WITH agg AS (SELECT SUM(s.due_cnt) AS due_cnt, SUM(s.outside_completed_cnt) AS outside_completed_cnt, SUM(s.completed_total_cnt) AS completed_total_cnt, SUM(s.incomplete_cnt) AS incomplete_cnt, SUM(s.incomplete_high_risk_cnt) AS incomplete_high_risk_cnt FROM biz_dws_progress_monthly_v2 s WHERE s.plan_month >= to_char({{dateFrom}}::date, 'YYYY-MM') AND s.plan_month <= to_char({{dateTo}}::date, 'YYYY-MM') [[AND s.project_no ILIKE '%' || {{projectNo}} || '%']]) SELECT CASE WHEN (agg.due_cnt + agg.outside_completed_cnt) = 0 THEN 0 ELSE ROUND((agg.incomplete_cnt)::numeric / (agg.due_cnt + agg.outside_completed_cnt)::numeric * 100, 2) END AS \"异常率\", CASE WHEN (agg.due_cnt + agg.outside_completed_cnt) = 0 THEN 0 ELSE ROUND(agg.completed_total_cnt::numeric / (agg.due_cnt + agg.outside_completed_cnt)::numeric * 100, 2) END AS \"进度健康度\" FROM agg",
           "queryTimeoutSeconds": 30,
           "maxRows": 2000,
           "parameterBindings": [
@@ -995,7 +1003,7 @@
         "type": "sql",
         "sqlConfig": {
           "databaseId": "{{DATABASE_ID}}",
-          "query": "SELECT CASE WHEN (SUM(s.due_cnt)+SUM(s.outside_completed_cnt))=0 THEN 0 ELSE ROUND(SUM(s.completed_total_cnt)::numeric/(SUM(s.due_cnt)+SUM(s.outside_completed_cnt))::numeric*100,2) END AS \"完成率\", CASE WHEN (SUM(s.incomplete_milestone_cnt)+SUM(s.milestone_on_time_cnt)+SUM(s.milestone_overdue_completed_cnt))=0 THEN 0 ELSE ROUND((SUM(s.milestone_on_time_cnt)+SUM(s.milestone_overdue_completed_cnt))::numeric/(SUM(s.incomplete_milestone_cnt)+SUM(s.milestone_on_time_cnt)+SUM(s.milestone_overdue_completed_cnt))::numeric*100,2) END AS \"里程碑完成率\", SUM(s.incomplete_cnt) AS \"未完成总数\", SUM(s.incomplete_high_risk_cnt) AS \"未完成高风险\" FROM biz_dws_progress_monthly_v2 s WHERE s.plan_month >= to_char({{dateFrom}}::date, 'YYYY-MM') AND s.plan_month <= to_char({{dateTo}}::date, 'YYYY-MM') AND ({{projectNo}} IS NULL OR {{projectNo}} = '' OR s.project_no ILIKE '%' || {{projectNo}} || '%')",
+          "query": "SELECT CASE WHEN (SUM(s.due_cnt)+SUM(s.outside_completed_cnt))=0 THEN 0 ELSE ROUND(SUM(s.completed_total_cnt)::numeric/(SUM(s.due_cnt)+SUM(s.outside_completed_cnt))::numeric*100,2) END AS \"完成率\", CASE WHEN (SUM(s.incomplete_milestone_cnt)+SUM(s.milestone_on_time_cnt)+SUM(s.milestone_overdue_completed_cnt))=0 THEN 0 ELSE ROUND((SUM(s.milestone_on_time_cnt)+SUM(s.milestone_overdue_completed_cnt))::numeric/(SUM(s.incomplete_milestone_cnt)+SUM(s.milestone_on_time_cnt)+SUM(s.milestone_overdue_completed_cnt))::numeric*100,2) END AS \"里程碑完成率\", SUM(s.incomplete_cnt) AS \"未完成总数\", SUM(s.incomplete_high_risk_cnt) AS \"未完成高风险\" FROM biz_dws_progress_monthly_v2 s WHERE s.plan_month >= to_char({{dateFrom}}::date, 'YYYY-MM') AND s.plan_month <= to_char({{dateTo}}::date, 'YYYY-MM') [[AND s.project_no ILIKE '%' || {{projectNo}} || '%']]",
           "queryTimeoutSeconds": 30,
           "maxRows": 2000,
           "parameterBindings": [
@@ -1198,7 +1206,7 @@
         "type": "sql",
         "sqlConfig": {
           "databaseId": "{{DATABASE_ID}}",
-          "query": "WITH project_level AS (SELECT 'project'::text AS level, d.project_no AS id, NULL::text AS parent_id, d.project_no AS \"名称\", COUNT(*) AS \"节点总数\", SUM(CASE WHEN d.is_completed THEN 1 ELSE 0 END) AS \"已完成\", SUM(CASE WHEN d.is_incomplete THEN 1 ELSE 0 END) AS \"未完成\", MIN(d.plan_date) AS \"计划开始\", MAX(d.plan_date) AS \"计划结束\", MAX(d.actual_date) AS \"实际结束\", CASE WHEN COUNT(*)=0 THEN 0 ELSE ROUND(SUM(CASE WHEN d.is_completed THEN 1 ELSE 0 END)::numeric/COUNT(*)::numeric*100,2) END AS \"完成率\", NULL::text AS \"节点类型\", NULL::text AS \"完成情况\", 0 AS sort_order FROM biz_dwd_project_node_v2 d WHERE d.plan_month >= to_char({{dateFrom}}::date, 'YYYY-MM') AND d.plan_month <= to_char({{dateTo}}::date, 'YYYY-MM') AND ({{projectNo}} IS NULL OR {{projectNo}} = '' OR d.project_no ILIKE '%' || {{projectNo}} || '%') AND ({{deptId}} IS NULL OR {{deptId}} = '' OR d.dept = {{deptId}}) GROUP BY d.project_no), subsystem_level AS (SELECT 'subsystem'::text AS level, d.project_no||'|'||COALESCE(d.subsystem,'(无)') AS id, d.project_no AS parent_id, COALESCE(d.subsystem,'(无分系统)') AS \"名称\", COUNT(*) AS \"节点总数\", SUM(CASE WHEN d.is_completed THEN 1 ELSE 0 END) AS \"已完成\", SUM(CASE WHEN d.is_incomplete THEN 1 ELSE 0 END) AS \"未完成\", MIN(d.plan_date) AS \"计划开始\", MAX(d.plan_date) AS \"计划结束\", MAX(d.actual_date) AS \"实际结束\", CASE WHEN COUNT(*)=0 THEN 0 ELSE ROUND(SUM(CASE WHEN d.is_completed THEN 1 ELSE 0 END)::numeric/COUNT(*)::numeric*100,2) END AS \"完成率\", NULL::text AS \"节点类型\", NULL::text AS \"完成情况\", 1 AS sort_order FROM biz_dwd_project_node_v2 d WHERE d.plan_month >= to_char({{dateFrom}}::date, 'YYYY-MM') AND d.plan_month <= to_char({{dateTo}}::date, 'YYYY-MM') AND ({{projectNo}} IS NULL OR {{projectNo}} = '' OR d.project_no ILIKE '%' || {{projectNo}} || '%') AND ({{deptId}} IS NULL OR {{deptId}} = '' OR d.dept = {{deptId}}) GROUP BY d.project_no, d.subsystem), node_level AS (SELECT 'node'::text AS level, d.node_id AS id, d.project_no||'|'||COALESCE(d.subsystem,'(无)') AS parent_id, d.node_task AS \"名称\", 1 AS \"节点总数\", CASE WHEN d.is_completed THEN 1 ELSE 0 END AS \"已完成\", CASE WHEN d.is_incomplete THEN 1 ELSE 0 END AS \"未完成\", d.plan_date AS \"计划开始\", d.plan_date AS \"计划结束\", d.actual_date AS \"实际结束\", CASE WHEN d.is_completed THEN 100.00 ELSE 0.00 END AS \"完成率\", d.node_type AS \"节点类型\", d.completion_status AS \"完成情况\", 2 AS sort_order FROM biz_dwd_project_node_v2 d WHERE d.plan_month >= to_char({{dateFrom}}::date, 'YYYY-MM') AND d.plan_month <= to_char({{dateTo}}::date, 'YYYY-MM') AND ({{projectNo}} IS NULL OR {{projectNo}} = '' OR d.project_no ILIKE '%' || {{projectNo}} || '%') AND ({{deptId}} IS NULL OR {{deptId}} = '' OR d.dept = {{deptId}}) AND ({{riskLevel}} IS NULL OR {{riskLevel}} = '' OR d.risk_level = {{riskLevel}})) SELECT * FROM project_level UNION ALL SELECT * FROM subsystem_level UNION ALL SELECT * FROM node_level ORDER BY id, sort_order",
+          "query": "WITH project_level AS (SELECT 'project'::text AS level, d.project_no AS id, NULL::text AS parent_id, d.project_no AS \"name\", COUNT(*) AS \"total_cnt\", SUM(CASE WHEN d.is_completed THEN 1 ELSE 0 END) AS \"completed_cnt\", SUM(CASE WHEN d.is_incomplete THEN 1 ELSE 0 END) AS \"incomplete_cnt\", MIN(d.plan_date) AS \"plan_date\", MAX(d.plan_date) AS \"plan_end\", MAX(d.actual_date) AS \"actual_date\", CASE WHEN COUNT(*)=0 THEN 0 ELSE ROUND(SUM(CASE WHEN d.is_completed THEN 1 ELSE 0 END)::numeric/COUNT(*)::numeric*100,2) END AS \"completion_rate\", NULL::text AS \"node_type\", NULL::text AS \"completion_status\", 0 AS sort_order FROM biz_dwd_project_node_v2 d WHERE d.plan_month >= to_char({{dateFrom}}::date, 'YYYY-MM') AND d.plan_month <= to_char({{dateTo}}::date, 'YYYY-MM') [[AND d.project_no ILIKE '%' || {{projectNo}} || '%']] [[AND d.dept = {{deptId}}]] GROUP BY d.project_no), subsystem_level AS (SELECT 'subsystem'::text AS level, d.project_no||'|'||COALESCE(d.subsystem,'(无)') AS id, d.project_no AS parent_id, COALESCE(d.subsystem,'(无分系统)') AS \"name\", COUNT(*) AS \"total_cnt\", SUM(CASE WHEN d.is_completed THEN 1 ELSE 0 END) AS \"completed_cnt\", SUM(CASE WHEN d.is_incomplete THEN 1 ELSE 0 END) AS \"incomplete_cnt\", MIN(d.plan_date) AS \"plan_date\", MAX(d.plan_date) AS \"plan_end\", MAX(d.actual_date) AS \"actual_date\", CASE WHEN COUNT(*)=0 THEN 0 ELSE ROUND(SUM(CASE WHEN d.is_completed THEN 1 ELSE 0 END)::numeric/COUNT(*)::numeric*100,2) END AS \"completion_rate\", NULL::text AS \"node_type\", NULL::text AS \"completion_status\", 1 AS sort_order FROM biz_dwd_project_node_v2 d WHERE d.plan_month >= to_char({{dateFrom}}::date, 'YYYY-MM') AND d.plan_month <= to_char({{dateTo}}::date, 'YYYY-MM') [[AND d.project_no ILIKE '%' || {{projectNo}} || '%']] [[AND d.dept = {{deptId}}]] GROUP BY d.project_no, d.subsystem), node_level AS (SELECT 'node'::text AS level, d.node_id AS id, d.project_no||'|'||COALESCE(d.subsystem,'(无)') AS parent_id, d.node_task AS \"name\", 1 AS \"total_cnt\", CASE WHEN d.is_completed THEN 1 ELSE 0 END AS \"completed_cnt\", CASE WHEN d.is_incomplete THEN 1 ELSE 0 END AS \"incomplete_cnt\", d.plan_date AS \"plan_date\", d.plan_date AS \"plan_end\", d.actual_date AS \"actual_date\", CASE WHEN d.is_completed THEN 100.00 ELSE 0.00 END AS \"completion_rate\", d.node_type AS \"node_type\", d.completion_status AS \"completion_status\", 2 AS sort_order FROM biz_dwd_project_node_v2 d WHERE d.plan_month >= to_char({{dateFrom}}::date, 'YYYY-MM') AND d.plan_month <= to_char({{dateTo}}::date, 'YYYY-MM') [[AND d.project_no ILIKE '%' || {{projectNo}} || '%']] [[AND d.dept = {{deptId}}]] [[AND d.risk_level = {{riskLevel}}]]) SELECT * FROM project_level UNION ALL SELECT * FROM subsystem_level UNION ALL SELECT * FROM node_level ORDER BY id, sort_order",
           "queryTimeoutSeconds": 30,
           "maxRows": 2000,
           "parameterBindings": [
@@ -1268,7 +1276,7 @@
         "type": "sql",
         "sqlConfig": {
           "databaseId": "{{DATABASE_ID}}",
-          "query": "SELECT s.completion_status AS \"阶段\", SUM(s.total_cnt) AS \"节点数\" FROM biz_dws_progress_monthly_v2 s WHERE s.plan_month >= to_char({{dateFrom}}::date, 'YYYY-MM') AND s.plan_month <= to_char({{dateTo}}::date, 'YYYY-MM') AND ({{projectNo}} IS NULL OR {{projectNo}} = '' OR s.project_no ILIKE '%' || {{projectNo}} || '%') GROUP BY s.completion_status ORDER BY SUM(s.total_cnt) DESC",
+          "query": "SELECT v.\"阶段\", v.\"节点数\" FROM (SELECT '按时完成' AS \"阶段\", SUM(s.on_time_cnt) AS \"节点数\" FROM biz_dws_progress_monthly_v2 s WHERE s.plan_month >= to_char({{dateFrom}}::date, 'YYYY-MM') AND s.plan_month <= to_char({{dateTo}}::date, 'YYYY-MM') [[AND s.project_no ILIKE '%' || {{projectNo}} || '%']] UNION ALL SELECT '超期完成', SUM(s.overdue_completed_cnt) FROM biz_dws_progress_monthly_v2 s WHERE s.plan_month >= to_char({{dateFrom}}::date, 'YYYY-MM') AND s.plan_month <= to_char({{dateTo}}::date, 'YYYY-MM') [[AND s.project_no ILIKE '%' || {{projectNo}} || '%']] UNION ALL SELECT '正常待完成', SUM(s.pending_normal_cnt) FROM biz_dws_progress_monthly_v2 s WHERE s.plan_month >= to_char({{dateFrom}}::date, 'YYYY-MM') AND s.plan_month <= to_char({{dateTo}}::date, 'YYYY-MM') [[AND s.project_no ILIKE '%' || {{projectNo}} || '%']] UNION ALL SELECT '超期未完成', SUM(s.overdue_incomplete_unchanged_non_general_cnt + s.overdue_incomplete_changed_non_general_cnt) FROM biz_dws_progress_monthly_v2 s WHERE s.plan_month >= to_char({{dateFrom}}::date, 'YYYY-MM') AND s.plan_month <= to_char({{dateTo}}::date, 'YYYY-MM') [[AND s.project_no ILIKE '%' || {{projectNo}} || '%']]) v WHERE v.\"节点数\" > 0 ORDER BY v.\"节点数\" DESC",
           "queryTimeoutSeconds": 30,
           "maxRows": 2000,
           "parameterBindings": [
@@ -1347,7 +1355,7 @@
         "type": "sql",
         "sqlConfig": {
           "databaseId": "{{DATABASE_ID}}",
-          "query": "SELECT d.dept AS \"责任科室\", COUNT(*) AS \"节点总数\", SUM(CASE WHEN d.is_completed THEN 1 ELSE 0 END) AS \"已完成\", SUM(CASE WHEN d.is_incomplete THEN 1 ELSE 0 END) AS \"未完成\" FROM biz_dwd_project_node_v2 d WHERE d.plan_month >= to_char({{dateFrom}}::date, 'YYYY-MM') AND d.plan_month <= to_char({{dateTo}}::date, 'YYYY-MM') AND ({{projectNo}} IS NULL OR {{projectNo}} = '' OR d.project_no ILIKE '%' || {{projectNo}} || '%') AND d.dept IS NOT NULL GROUP BY d.dept ORDER BY SUM(CASE WHEN d.is_incomplete THEN 1 ELSE 0 END) DESC",
+          "query": "SELECT d.dept AS \"责任科室\", COUNT(*) AS \"节点总数\", SUM(CASE WHEN d.is_completed THEN 1 ELSE 0 END) AS \"已完成\", SUM(CASE WHEN d.is_incomplete THEN 1 ELSE 0 END) AS \"未完成\" FROM biz_dwd_project_node_v2 d WHERE d.plan_month >= to_char({{dateFrom}}::date, 'YYYY-MM') AND d.plan_month <= to_char({{dateTo}}::date, 'YYYY-MM') [[AND d.project_no ILIKE '%' || {{projectNo}} || '%']] AND d.dept IS NOT NULL GROUP BY d.dept ORDER BY SUM(CASE WHEN d.is_incomplete THEN 1 ELSE 0 END) DESC",
           "queryTimeoutSeconds": 30,
           "maxRows": 2000,
           "parameterBindings": [
@@ -1411,7 +1419,7 @@
         "type": "sql",
         "sqlConfig": {
           "databaseId": "{{DATABASE_ID}}",
-          "query": "SELECT d.node_task AS \"任务/节点\", d.project_no AS \"项目编号\", d.delay_days AS \"延期天数\", d.dept AS \"责任科室\", d.risk_level AS \"风险等级\", d.node_type AS \"节点类型\", d.completion_status AS \"完成情况\" FROM biz_dwd_project_node_v2 d WHERE d.plan_month >= to_char({{dateFrom}}::date, 'YYYY-MM') AND d.plan_month <= to_char({{dateTo}}::date, 'YYYY-MM') AND ({{projectNo}} IS NULL OR {{projectNo}} = '' OR d.project_no ILIKE '%' || {{projectNo}} || '%') AND d.delay_days > 0 ORDER BY d.delay_days DESC LIMIT 10",
+          "query": "SELECT d.node_task AS \"任务/节点\", d.project_no AS \"项目编号\", d.delay_days AS \"延期天数\", d.dept AS \"责任科室\", d.risk_level AS \"风险等级\", d.node_type AS \"节点类型\", d.completion_status AS \"完成情况\" FROM biz_dwd_project_node_v2 d WHERE d.plan_month >= to_char({{dateFrom}}::date, 'YYYY-MM') AND d.plan_month <= to_char({{dateTo}}::date, 'YYYY-MM') [[AND d.project_no ILIKE '%' || {{projectNo}} || '%']] AND d.delay_days > 0 ORDER BY d.delay_days DESC LIMIT 10",
           "queryTimeoutSeconds": 30,
           "maxRows": 2000,
           "parameterBindings": [
@@ -1476,7 +1484,7 @@
         "type": "sql",
         "sqlConfig": {
           "databaseId": "{{DATABASE_ID}}",
-          "query": "SELECT d.node_task AS \"任务/节点\", d.project_no AS \"项目编号\", d.delay_days AS \"延期天数\", d.dept AS \"责任科室\", d.risk_level AS \"风险等级\", d.node_type AS \"节点类型\", d.completion_status AS \"完成情况\", d.subsystem AS \"分系统\" FROM biz_dwd_project_node_v2 d WHERE d.plan_month >= to_char({{dateFrom}}::date, 'YYYY-MM') AND d.plan_month <= to_char({{dateTo}}::date, 'YYYY-MM') AND ({{projectNo}} IS NULL OR {{projectNo}} = '' OR d.project_no ILIKE '%' || {{projectNo}} || '%') AND d.is_incomplete = true AND d.risk_level = '高' ORDER BY d.delay_days DESC",
+          "query": "SELECT d.node_task AS \"任务/节点\", d.project_no AS \"项目编号\", d.delay_days AS \"延期天数\", d.dept AS \"责任科室\", d.risk_level AS \"风险等级\", d.node_type AS \"节点类型\", d.completion_status AS \"完成情况\", d.subsystem AS \"分系统\" FROM biz_dwd_project_node_v2 d WHERE d.plan_month >= to_char({{dateFrom}}::date, 'YYYY-MM') AND d.plan_month <= to_char({{dateTo}}::date, 'YYYY-MM') [[AND d.project_no ILIKE '%' || {{projectNo}} || '%']] AND d.is_incomplete = true AND d.risk_level = '高' ORDER BY d.delay_days DESC",
           "queryTimeoutSeconds": 30,
           "maxRows": 2000,
           "parameterBindings": [
