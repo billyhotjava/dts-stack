@@ -26,7 +26,7 @@ import {
     buildTableRowActionParams,
     resolvePreferredDrillValue,
 } from '../renderers/shared/actionUtils';
-import { useComponentInteractions } from '../renderers/InteractionLayer';
+import { useComponentInteractions, useResolvableJumpStatus, hasNonJumpInteractivity } from '../renderers/InteractionLayer';
 import {
     compareTableValues, resolveTableConditionalStyle,
     normalizeColumnAlign, formatTableCell, clampColumnWidth, normalizeColumnFormatter,
@@ -215,12 +215,24 @@ export const ComponentRenderer = memo(function ComponentRenderer({ component, mo
         scheduleFilterVariableUpdate,
         interactionMappings,
         interactionJump,
-        componentActions,
+        componentActions: rawComponentActions,
         navigateToResolvedUrl,
-        executeComponentActions,
-        echartsClickHandler,
+        executeComponentActions: rawExecuteComponentActions,
+        echartsClickHandler: rawEchartsClickHandler,
         filterVariableTimersRef,
     } = useComponentInteractions(component, mode, runtime, drillState, drillRuntimeEnabled, drillActive);
+
+    // F1-T05: visual disable when component has no usable interactivity
+    const { hasResolvableJump, isResolving: isResolvingJumpStatus } = useResolvableJumpStatus(component, mode);
+    const isFullyDisabled = !isResolvingJumpStatus
+        && !hasResolvableJump
+        && !hasNonJumpInteractivity(component);
+
+    const componentActions = isFullyDisabled ? [] : rawComponentActions;
+    const echartsClickHandler = isFullyDisabled ? undefined : rawEchartsClickHandler;
+    const executeComponentActions = isFullyDisabled
+        ? (() => { /* no-op when disabled */ })
+        : rawExecuteComponentActions;
 
     // Persist _sourceColumns to saved config so PropertyPanel can read them
     const onConfigMetaRef = useRef(onConfigMeta);
