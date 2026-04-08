@@ -124,7 +124,25 @@
           "databaseId": "{{DATABASE_ID}}",
           "query": "SELECT SUM(total_risk_cnt) AS \"风险总数\", SUM(high_cnt) AS \"高风险\", SUM(mid_cnt) AS \"中风险\", SUM(low_cnt) AS \"低风险\", SUM(released_cnt) AS \"已释放\", SUM(open_cnt) AS \"未释放\" FROM biz_dws_risk_monthly_v2 WHERE period_month >= to_char({{dateFrom}}::date, 'YYYY-MM') AND period_month <= to_char({{dateTo}}::date, 'YYYY-MM') AND ({{deptId}} IS NULL OR {{deptId}} = '' OR dept = {{deptId}}) AND ({{projectNo}} IS NULL OR {{projectNo}} = '' OR project_no ILIKE '%' || {{projectNo}} || '%')",
           "queryTimeoutSeconds": 30,
-          "maxRows": 2000
+          "maxRows": 2000,
+          "parameterBindings": [
+            {
+              "name": "dateFrom",
+              "variableKey": "dateFrom"
+            },
+            {
+              "name": "dateTo",
+              "variableKey": "dateTo"
+            },
+            {
+              "name": "deptId",
+              "variableKey": "deptId"
+            },
+            {
+              "name": "projectNo",
+              "variableKey": "projectNo"
+            }
+          ]
         }
       }
     },
@@ -156,7 +174,25 @@
           "databaseId": "{{DATABASE_ID}}",
           "query": "SELECT SUM(total_risk_cnt) AS \"风险总数\", SUM(high_cnt) AS \"高风险\", SUM(mid_cnt) AS \"中风险\", SUM(low_cnt) AS \"低风险\", SUM(released_cnt) AS \"已释放\", SUM(open_cnt) AS \"未释放\" FROM biz_dws_risk_monthly_v2 WHERE period_month >= to_char({{dateFrom}}::date, 'YYYY-MM') AND period_month <= to_char({{dateTo}}::date, 'YYYY-MM') AND ({{deptId}} IS NULL OR {{deptId}} = '' OR dept = {{deptId}}) AND ({{projectNo}} IS NULL OR {{projectNo}} = '' OR project_no ILIKE '%' || {{projectNo}} || '%')",
           "queryTimeoutSeconds": 30,
-          "maxRows": 2000
+          "maxRows": 2000,
+          "parameterBindings": [
+            {
+              "name": "dateFrom",
+              "variableKey": "dateFrom"
+            },
+            {
+              "name": "dateTo",
+              "variableKey": "dateTo"
+            },
+            {
+              "name": "deptId",
+              "variableKey": "deptId"
+            },
+            {
+              "name": "projectNo",
+              "variableKey": "projectNo"
+            }
+          ]
         }
       }
     },
@@ -188,7 +224,25 @@
           "databaseId": "{{DATABASE_ID}}",
           "query": "SELECT SUM(total_risk_cnt) AS \"风险总数\", SUM(high_cnt) AS \"高风险\", SUM(mid_cnt) AS \"中风险\", SUM(low_cnt) AS \"低风险\", SUM(released_cnt) AS \"已释放\", SUM(open_cnt) AS \"未释放\" FROM biz_dws_risk_monthly_v2 WHERE period_month >= to_char({{dateFrom}}::date, 'YYYY-MM') AND period_month <= to_char({{dateTo}}::date, 'YYYY-MM') AND ({{deptId}} IS NULL OR {{deptId}} = '' OR dept = {{deptId}}) AND ({{projectNo}} IS NULL OR {{projectNo}} = '' OR project_no ILIKE '%' || {{projectNo}} || '%')",
           "queryTimeoutSeconds": 30,
-          "maxRows": 2000
+          "maxRows": 2000,
+          "parameterBindings": [
+            {
+              "name": "dateFrom",
+              "variableKey": "dateFrom"
+            },
+            {
+              "name": "dateTo",
+              "variableKey": "dateTo"
+            },
+            {
+              "name": "deptId",
+              "variableKey": "deptId"
+            },
+            {
+              "name": "projectNo",
+              "variableKey": "projectNo"
+            }
+          ]
         }
       }
     },
@@ -220,7 +274,25 @@
           "databaseId": "{{DATABASE_ID}}",
           "query": "SELECT SUM(total_risk_cnt) AS \"风险总数\", SUM(high_cnt) AS \"高风险\", SUM(mid_cnt) AS \"中风险\", SUM(low_cnt) AS \"低风险\", SUM(released_cnt) AS \"已释放\", SUM(open_cnt) AS \"未释放\" FROM biz_dws_risk_monthly_v2 WHERE period_month >= to_char({{dateFrom}}::date, 'YYYY-MM') AND period_month <= to_char({{dateTo}}::date, 'YYYY-MM') AND ({{deptId}} IS NULL OR {{deptId}} = '' OR dept = {{deptId}}) AND ({{projectNo}} IS NULL OR {{projectNo}} = '' OR project_no ILIKE '%' || {{projectNo}} || '%')",
           "queryTimeoutSeconds": 30,
-          "maxRows": 2000
+          "maxRows": 2000,
+          "parameterBindings": [
+            {
+              "name": "dateFrom",
+              "variableKey": "dateFrom"
+            },
+            {
+              "name": "dateTo",
+              "variableKey": "dateTo"
+            },
+            {
+              "name": "deptId",
+              "variableKey": "deptId"
+            },
+            {
+              "name": "projectNo",
+              "variableKey": "projectNo"
+            }
+          ]
         }
       }
     },
@@ -271,7 +343,29 @@
           "databaseId": "{{DATABASE_ID}}",
           "query": "SELECT project_no AS \"项目编号\", risk_name AS \"风险名称\", subsystem AS \"分系统\", dept AS \"责任科室\", risk_level AS \"风险等级\", risk_category AS \"风险类别\", risk_status AS \"风险状态\", response_measure AS \"应对措施\", risk_submit_date AS \"提交日期\", final_release_date AS \"释放日期\", pending_days AS \"滞留天数\" FROM biz_dwd_risk_info_v2 WHERE submit_month >= to_char({{dateFrom}}::date, 'YYYY-MM') AND submit_month <= to_char({{dateTo}}::date, 'YYYY-MM') AND ({{deptId}} IS NULL OR {{deptId}} = '' OR dept = {{deptId}}) AND ({{projectNo}} IS NULL OR {{projectNo}} = '' OR project_no ILIKE '%' || {{projectNo}} || '%') AND ({{riskLevel}} IS NULL OR {{riskLevel}} = '' OR risk_level = {{riskLevel}}) ORDER BY pending_days DESC NULLS LAST",
           "queryTimeoutSeconds": 30,
-          "maxRows": 2000
+          "maxRows": 2000,
+          "parameterBindings": [
+            {
+              "name": "dateFrom",
+              "variableKey": "dateFrom"
+            },
+            {
+              "name": "dateTo",
+              "variableKey": "dateTo"
+            },
+            {
+              "name": "deptId",
+              "variableKey": "deptId"
+            },
+            {
+              "name": "projectNo",
+              "variableKey": "projectNo"
+            },
+            {
+              "name": "riskLevel",
+              "variableKey": "riskLevel"
+            }
+          ]
         }
       }
     },
@@ -313,7 +407,25 @@
           "databaseId": "{{DATABASE_ID}}",
           "query": "SELECT SUM(total_risk_cnt) AS \"风险总数\", SUM(high_cnt) AS \"高风险\", SUM(mid_cnt) AS \"中风险\", SUM(low_cnt) AS \"低风险\", SUM(released_cnt) AS \"已释放\", SUM(open_cnt) AS \"未释放\" FROM biz_dws_risk_monthly_v2 WHERE period_month >= to_char({{dateFrom}}::date, 'YYYY-MM') AND period_month <= to_char({{dateTo}}::date, 'YYYY-MM') AND ({{deptId}} IS NULL OR {{deptId}} = '' OR dept = {{deptId}}) AND ({{projectNo}} IS NULL OR {{projectNo}} = '' OR project_no ILIKE '%' || {{projectNo}} || '%')",
           "queryTimeoutSeconds": 30,
-          "maxRows": 2000
+          "maxRows": 2000,
+          "parameterBindings": [
+            {
+              "name": "dateFrom",
+              "variableKey": "dateFrom"
+            },
+            {
+              "name": "dateTo",
+              "variableKey": "dateTo"
+            },
+            {
+              "name": "deptId",
+              "variableKey": "deptId"
+            },
+            {
+              "name": "projectNo",
+              "variableKey": "projectNo"
+            }
+          ]
         }
       }
     },
@@ -364,7 +476,29 @@
           "databaseId": "{{DATABASE_ID}}",
           "query": "SELECT project_no AS \"项目编号\", risk_name AS \"风险名称\", subsystem AS \"分系统\", dept AS \"责任科室\", risk_level AS \"风险等级\", risk_category AS \"风险类别\", risk_status AS \"风险状态\", response_measure AS \"应对措施\", risk_submit_date AS \"提交日期\", final_release_date AS \"释放日期\", pending_days AS \"滞留天数\" FROM biz_dwd_risk_info_v2 WHERE submit_month >= to_char({{dateFrom}}::date, 'YYYY-MM') AND submit_month <= to_char({{dateTo}}::date, 'YYYY-MM') AND ({{deptId}} IS NULL OR {{deptId}} = '' OR dept = {{deptId}}) AND ({{projectNo}} IS NULL OR {{projectNo}} = '' OR project_no ILIKE '%' || {{projectNo}} || '%') AND ({{riskLevel}} IS NULL OR {{riskLevel}} = '' OR risk_level = {{riskLevel}}) ORDER BY pending_days DESC NULLS LAST",
           "queryTimeoutSeconds": 30,
-          "maxRows": 2000
+          "maxRows": 2000,
+          "parameterBindings": [
+            {
+              "name": "dateFrom",
+              "variableKey": "dateFrom"
+            },
+            {
+              "name": "dateTo",
+              "variableKey": "dateTo"
+            },
+            {
+              "name": "deptId",
+              "variableKey": "deptId"
+            },
+            {
+              "name": "projectNo",
+              "variableKey": "projectNo"
+            },
+            {
+              "name": "riskLevel",
+              "variableKey": "riskLevel"
+            }
+          ]
         }
       }
     }

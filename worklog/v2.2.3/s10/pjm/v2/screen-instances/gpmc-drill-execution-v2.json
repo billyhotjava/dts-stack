@@ -124,7 +124,21 @@
           "databaseId": "{{DATABASE_ID}}",
           "query": "SELECT CASE WHEN (SUM(due_cnt)+SUM(outside_completed_cnt))=0 THEN 0 ELSE ROUND(SUM(completed_total_cnt)::numeric/(SUM(due_cnt)+SUM(outside_completed_cnt))::numeric*100,2) END AS \"完成率\", CASE WHEN (SUM(incomplete_milestone_cnt)+SUM(milestone_on_time_cnt)+SUM(milestone_overdue_completed_cnt))=0 THEN 0 ELSE ROUND((SUM(milestone_on_time_cnt)+SUM(milestone_overdue_completed_cnt))::numeric/(SUM(incomplete_milestone_cnt)+SUM(milestone_on_time_cnt)+SUM(milestone_overdue_completed_cnt))::numeric*100,2) END AS \"里程碑完成率\" FROM biz_dws_progress_monthly_v2 WHERE plan_month >= to_char({{dateFrom}}::date, 'YYYY-MM') AND plan_month <= to_char({{dateTo}}::date, 'YYYY-MM') AND ({{projectNo}} IS NULL OR {{projectNo}} = '' OR project_no ILIKE '%' || {{projectNo}} || '%')",
           "queryTimeoutSeconds": 30,
-          "maxRows": 2000
+          "maxRows": 2000,
+          "parameterBindings": [
+            {
+              "name": "dateFrom",
+              "variableKey": "dateFrom"
+            },
+            {
+              "name": "dateTo",
+              "variableKey": "dateTo"
+            },
+            {
+              "name": "projectNo",
+              "variableKey": "projectNo"
+            }
+          ]
         }
       }
     },
@@ -156,7 +170,21 @@
           "databaseId": "{{DATABASE_ID}}",
           "query": "SELECT CASE WHEN (SUM(due_cnt)+SUM(outside_completed_cnt))=0 THEN 0 ELSE ROUND(SUM(completed_total_cnt)::numeric/(SUM(due_cnt)+SUM(outside_completed_cnt))::numeric*100,2) END AS \"完成率\", CASE WHEN (SUM(incomplete_milestone_cnt)+SUM(milestone_on_time_cnt)+SUM(milestone_overdue_completed_cnt))=0 THEN 0 ELSE ROUND((SUM(milestone_on_time_cnt)+SUM(milestone_overdue_completed_cnt))::numeric/(SUM(incomplete_milestone_cnt)+SUM(milestone_on_time_cnt)+SUM(milestone_overdue_completed_cnt))::numeric*100,2) END AS \"里程碑完成率\" FROM biz_dws_progress_monthly_v2 WHERE plan_month >= to_char({{dateFrom}}::date, 'YYYY-MM') AND plan_month <= to_char({{dateTo}}::date, 'YYYY-MM') AND ({{projectNo}} IS NULL OR {{projectNo}} = '' OR project_no ILIKE '%' || {{projectNo}} || '%')",
           "queryTimeoutSeconds": 30,
-          "maxRows": 2000
+          "maxRows": 2000,
+          "parameterBindings": [
+            {
+              "name": "dateFrom",
+              "variableKey": "dateFrom"
+            },
+            {
+              "name": "dateTo",
+              "variableKey": "dateTo"
+            },
+            {
+              "name": "projectNo",
+              "variableKey": "projectNo"
+            }
+          ]
         }
       }
     },
@@ -188,7 +216,29 @@
           "databaseId": "{{DATABASE_ID}}",
           "query": "SELECT CASE WHEN SUM(due_cnt)=0 THEN 0 ELSE ROUND((SUM(abnormal_pending_non_general_cnt)+SUM(overdue_incomplete_unchanged_non_general_cnt))::numeric/SUM(due_cnt)::numeric*100,2) END AS \"异常率\" FROM biz_dws_progress_monthly_v2 WHERE plan_month >= to_char({{dateFrom}}::date, 'YYYY-MM') AND plan_month <= to_char({{dateTo}}::date, 'YYYY-MM') AND ({{deptId}} IS NULL OR {{deptId}} = '' OR project_no IN (SELECT DISTINCT project_no FROM biz_dwd_project_node_v2 WHERE dept = {{deptId}})) AND ({{projectNo}} IS NULL OR {{projectNo}} = '' OR project_no ILIKE '%' || {{projectNo}} || '%') AND ({{riskLevel}} IS NULL OR {{riskLevel}} = '' OR project_no IN (SELECT DISTINCT project_no FROM biz_dwd_project_node_v2 WHERE risk_level = {{riskLevel}}))",
           "queryTimeoutSeconds": 30,
-          "maxRows": 2000
+          "maxRows": 2000,
+          "parameterBindings": [
+            {
+              "name": "dateFrom",
+              "variableKey": "dateFrom"
+            },
+            {
+              "name": "dateTo",
+              "variableKey": "dateTo"
+            },
+            {
+              "name": "deptId",
+              "variableKey": "deptId"
+            },
+            {
+              "name": "projectNo",
+              "variableKey": "projectNo"
+            },
+            {
+              "name": "riskLevel",
+              "variableKey": "riskLevel"
+            }
+          ]
         }
       }
     },
@@ -220,7 +270,29 @@
           "databaseId": "{{DATABASE_ID}}",
           "query": "SELECT CASE WHEN SUM(incomplete_cnt)=0 THEN 0 ELSE ROUND(SUM(incomplete_high_risk_cnt)::numeric/SUM(incomplete_cnt)::numeric*100,2) END AS \"风险预警指数\" FROM biz_dws_progress_monthly_v2 WHERE plan_month >= to_char({{dateFrom}}::date, 'YYYY-MM') AND plan_month <= to_char({{dateTo}}::date, 'YYYY-MM') AND ({{deptId}} IS NULL OR {{deptId}} = '' OR project_no IN (SELECT DISTINCT project_no FROM biz_dwd_project_node_v2 WHERE dept = {{deptId}})) AND ({{projectNo}} IS NULL OR {{projectNo}} = '' OR project_no ILIKE '%' || {{projectNo}} || '%') AND ({{riskLevel}} IS NULL OR {{riskLevel}} = '' OR project_no IN (SELECT DISTINCT project_no FROM biz_dwd_project_node_v2 WHERE risk_level = {{riskLevel}}))",
           "queryTimeoutSeconds": 30,
-          "maxRows": 2000
+          "maxRows": 2000,
+          "parameterBindings": [
+            {
+              "name": "dateFrom",
+              "variableKey": "dateFrom"
+            },
+            {
+              "name": "dateTo",
+              "variableKey": "dateTo"
+            },
+            {
+              "name": "deptId",
+              "variableKey": "deptId"
+            },
+            {
+              "name": "projectNo",
+              "variableKey": "projectNo"
+            },
+            {
+              "name": "riskLevel",
+              "variableKey": "riskLevel"
+            }
+          ]
         }
       }
     },
@@ -272,7 +344,29 @@
           "databaseId": "{{DATABASE_ID}}",
           "query": "SELECT project_no AS \"项目编号\", subsystem AS \"分系统\", node_task AS \"节点任务\", node_type AS \"节点类型\", owner AS \"负责人\", dept AS \"责任科室\", completion_status AS \"完成情况\", risk_level AS \"风险等级\", plan_date AS \"计划时间\", actual_date AS \"实际完成\", delay_days AS \"延期天数\", incomplete_reason AS \"未完成原因\" FROM biz_dwd_project_node_v2 WHERE plan_month >= to_char({{dateFrom}}::date, 'YYYY-MM') AND plan_month <= to_char({{dateTo}}::date, 'YYYY-MM') AND ({{deptId}} IS NULL OR {{deptId}} = '' OR dept = {{deptId}}) AND ({{projectNo}} IS NULL OR {{projectNo}} = '' OR project_no ILIKE '%' || {{projectNo}} || '%') AND ({{riskLevel}} IS NULL OR {{riskLevel}} = '' OR risk_level = {{riskLevel}}) ORDER BY delay_days DESC NULLS LAST",
           "queryTimeoutSeconds": 30,
-          "maxRows": 2000
+          "maxRows": 2000,
+          "parameterBindings": [
+            {
+              "name": "dateFrom",
+              "variableKey": "dateFrom"
+            },
+            {
+              "name": "dateTo",
+              "variableKey": "dateTo"
+            },
+            {
+              "name": "deptId",
+              "variableKey": "deptId"
+            },
+            {
+              "name": "projectNo",
+              "variableKey": "projectNo"
+            },
+            {
+              "name": "riskLevel",
+              "variableKey": "riskLevel"
+            }
+          ]
         }
       }
     },
@@ -316,7 +410,25 @@
           "databaseId": "{{DATABASE_ID}}",
           "query": "SELECT dept AS \"责任科室\", COUNT(*) AS \"节点总数\", SUM(CASE WHEN is_completed THEN 1 ELSE 0 END) AS \"已完成\", SUM(CASE WHEN is_incomplete THEN 1 ELSE 0 END) AS \"未完成\" FROM biz_dwd_project_node_v2 WHERE plan_month >= to_char({{dateFrom}}::date, 'YYYY-MM') AND plan_month <= to_char({{dateTo}}::date, 'YYYY-MM') AND ({{deptId}} IS NULL OR {{deptId}} = '' OR dept = {{deptId}}) AND ({{projectNo}} IS NULL OR {{projectNo}} = '' OR project_no ILIKE '%' || {{projectNo}} || '%') AND dept IS NOT NULL GROUP BY dept ORDER BY SUM(CASE WHEN is_incomplete THEN 1 ELSE 0 END) DESC",
           "queryTimeoutSeconds": 30,
-          "maxRows": 2000
+          "maxRows": 2000,
+          "parameterBindings": [
+            {
+              "name": "dateFrom",
+              "variableKey": "dateFrom"
+            },
+            {
+              "name": "dateTo",
+              "variableKey": "dateTo"
+            },
+            {
+              "name": "deptId",
+              "variableKey": "deptId"
+            },
+            {
+              "name": "projectNo",
+              "variableKey": "projectNo"
+            }
+          ]
         }
       }
     },
@@ -368,7 +480,29 @@
           "databaseId": "{{DATABASE_ID}}",
           "query": "SELECT project_no AS \"项目编号\", subsystem AS \"分系统\", node_task AS \"节点任务\", node_type AS \"节点类型\", owner AS \"负责人\", dept AS \"责任科室\", completion_status AS \"完成情况\", risk_level AS \"风险等级\", plan_date AS \"计划时间\", actual_date AS \"实际完成\", delay_days AS \"延期天数\", incomplete_reason AS \"未完成原因\" FROM biz_dwd_project_node_v2 WHERE plan_month >= to_char({{dateFrom}}::date, 'YYYY-MM') AND plan_month <= to_char({{dateTo}}::date, 'YYYY-MM') AND ({{deptId}} IS NULL OR {{deptId}} = '' OR dept = {{deptId}}) AND ({{projectNo}} IS NULL OR {{projectNo}} = '' OR project_no ILIKE '%' || {{projectNo}} || '%') AND ({{riskLevel}} IS NULL OR {{riskLevel}} = '' OR risk_level = {{riskLevel}}) AND is_incomplete = true ORDER BY delay_days DESC NULLS LAST",
           "queryTimeoutSeconds": 30,
-          "maxRows": 2000
+          "maxRows": 2000,
+          "parameterBindings": [
+            {
+              "name": "dateFrom",
+              "variableKey": "dateFrom"
+            },
+            {
+              "name": "dateTo",
+              "variableKey": "dateTo"
+            },
+            {
+              "name": "deptId",
+              "variableKey": "deptId"
+            },
+            {
+              "name": "projectNo",
+              "variableKey": "projectNo"
+            },
+            {
+              "name": "riskLevel",
+              "variableKey": "riskLevel"
+            }
+          ]
         }
       }
     }

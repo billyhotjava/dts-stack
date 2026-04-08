@@ -695,7 +695,25 @@
           "databaseId": "{{DATABASE_ID}}",
           "query": "SELECT COUNT(DISTINCT s.project_no) AS \"涉及项目\", SUM(s.total_change_cnt) AS \"变更总数\", SUM(s.new_cat_i) AS \"I类更改\", SUM(s.new_cat_ii) AS \"II类更改\", SUM(s.new_cat_iii) AS \"III类更改\", SUM(s.file_submitted_not_reviewed_i_ii) AS \"已提出未评审(I,II)\", SUM(s.file_reviewed_not_signed_i_ii) AS \"已评审未签署(I,II)\", SUM(s.file_reviewed_signed_i_ii) AS \"已评审已签署(I,II)\", SUM(s.file_submitted_not_signed_iii) AS \"已提出未签署(III)\", SUM(s.file_submitted_signed_iii) AS \"已提出已签署(III)\", SUM(s.file_submitted_not_reviewed_i_ii)+SUM(s.file_reviewed_not_signed_i_ii)+SUM(s.file_submitted_not_signed_iii) AS \"未签署项\", SUM(s.order_unsigned_cat_i)+SUM(s.order_unsigned_cat_ii)+SUM(s.order_unsigned_cat_iii) AS \"变更单未签署\", SUM(s.order_signed_cnt) AS \"变更单已签署\", CASE WHEN (SUM(s.order_signed_cnt)+SUM(s.order_unsigned_cat_i)+SUM(s.order_unsigned_cat_ii)+SUM(s.order_unsigned_cat_iii))=0 THEN 0 ELSE ROUND(SUM(s.order_signed_cnt)::numeric/(SUM(s.order_signed_cnt)+SUM(s.order_unsigned_cat_i)+SUM(s.order_unsigned_cat_ii)+SUM(s.order_unsigned_cat_iii))::numeric*100,2) END AS \"签署完成率\", SUM(s.reform_pending_i_ii) AS \"未落实整改\", SUM(s.reform_done_i_ii) AS \"已落实整改\", SUM(s.reform_na_iii) AS \"不涉及整改\", CASE WHEN (SUM(s.reform_done_i_ii)+SUM(s.reform_pending_i_ii))=0 THEN 0 ELSE ROUND(SUM(s.reform_done_i_ii)::numeric/(SUM(s.reform_done_i_ii)+SUM(s.reform_pending_i_ii))::numeric*100,2) END AS \"整改完成率\" FROM biz_dws_tech_state_monthly_v2 s WHERE s.period_month >= to_char({{dateFrom}}::date, 'YYYY-MM') AND s.period_month <= to_char({{dateTo}}::date, 'YYYY-MM') AND ({{deptId}} IS NULL OR {{deptId}} = '' OR s.dept = {{deptId}}) AND ({{projectNo}} IS NULL OR {{projectNo}} = '' OR s.project_no ILIKE '%' || {{projectNo}} || '%')",
           "queryTimeoutSeconds": 30,
-          "maxRows": 2000
+          "maxRows": 2000,
+          "parameterBindings": [
+            {
+              "name": "dateFrom",
+              "variableKey": "dateFrom"
+            },
+            {
+              "name": "dateTo",
+              "variableKey": "dateTo"
+            },
+            {
+              "name": "deptId",
+              "variableKey": "deptId"
+            },
+            {
+              "name": "projectNo",
+              "variableKey": "projectNo"
+            }
+          ]
         }
       }
     },
@@ -727,7 +745,25 @@
           "databaseId": "{{DATABASE_ID}}",
           "query": "SELECT COUNT(DISTINCT s.project_no) AS \"涉及项目\", SUM(s.total_change_cnt) AS \"变更总数\", SUM(s.new_cat_i) AS \"I类更改\", SUM(s.new_cat_ii) AS \"II类更改\", SUM(s.new_cat_iii) AS \"III类更改\", SUM(s.file_submitted_not_reviewed_i_ii) AS \"已提出未评审(I,II)\", SUM(s.file_reviewed_not_signed_i_ii) AS \"已评审未签署(I,II)\", SUM(s.file_reviewed_signed_i_ii) AS \"已评审已签署(I,II)\", SUM(s.file_submitted_not_signed_iii) AS \"已提出未签署(III)\", SUM(s.file_submitted_signed_iii) AS \"已提出已签署(III)\", SUM(s.file_submitted_not_reviewed_i_ii)+SUM(s.file_reviewed_not_signed_i_ii)+SUM(s.file_submitted_not_signed_iii) AS \"未签署项\", SUM(s.order_unsigned_cat_i)+SUM(s.order_unsigned_cat_ii)+SUM(s.order_unsigned_cat_iii) AS \"变更单未签署\", SUM(s.order_signed_cnt) AS \"变更单已签署\", CASE WHEN (SUM(s.order_signed_cnt)+SUM(s.order_unsigned_cat_i)+SUM(s.order_unsigned_cat_ii)+SUM(s.order_unsigned_cat_iii))=0 THEN 0 ELSE ROUND(SUM(s.order_signed_cnt)::numeric/(SUM(s.order_signed_cnt)+SUM(s.order_unsigned_cat_i)+SUM(s.order_unsigned_cat_ii)+SUM(s.order_unsigned_cat_iii))::numeric*100,2) END AS \"签署完成率\", SUM(s.reform_pending_i_ii) AS \"未落实整改\", SUM(s.reform_done_i_ii) AS \"已落实整改\", SUM(s.reform_na_iii) AS \"不涉及整改\", CASE WHEN (SUM(s.reform_done_i_ii)+SUM(s.reform_pending_i_ii))=0 THEN 0 ELSE ROUND(SUM(s.reform_done_i_ii)::numeric/(SUM(s.reform_done_i_ii)+SUM(s.reform_pending_i_ii))::numeric*100,2) END AS \"整改完成率\" FROM biz_dws_tech_state_monthly_v2 s WHERE s.period_month >= to_char({{dateFrom}}::date, 'YYYY-MM') AND s.period_month <= to_char({{dateTo}}::date, 'YYYY-MM') AND ({{deptId}} IS NULL OR {{deptId}} = '' OR s.dept = {{deptId}}) AND ({{projectNo}} IS NULL OR {{projectNo}} = '' OR s.project_no ILIKE '%' || {{projectNo}} || '%')",
           "queryTimeoutSeconds": 30,
-          "maxRows": 2000
+          "maxRows": 2000,
+          "parameterBindings": [
+            {
+              "name": "dateFrom",
+              "variableKey": "dateFrom"
+            },
+            {
+              "name": "dateTo",
+              "variableKey": "dateTo"
+            },
+            {
+              "name": "deptId",
+              "variableKey": "deptId"
+            },
+            {
+              "name": "projectNo",
+              "variableKey": "projectNo"
+            }
+          ]
         }
       }
     },
@@ -759,7 +795,25 @@
           "databaseId": "{{DATABASE_ID}}",
           "query": "SELECT COUNT(DISTINCT s.project_no) AS \"涉及项目\", SUM(s.total_change_cnt) AS \"变更总数\", SUM(s.new_cat_i) AS \"I类更改\", SUM(s.new_cat_ii) AS \"II类更改\", SUM(s.new_cat_iii) AS \"III类更改\", SUM(s.file_submitted_not_reviewed_i_ii) AS \"已提出未评审(I,II)\", SUM(s.file_reviewed_not_signed_i_ii) AS \"已评审未签署(I,II)\", SUM(s.file_reviewed_signed_i_ii) AS \"已评审已签署(I,II)\", SUM(s.file_submitted_not_signed_iii) AS \"已提出未签署(III)\", SUM(s.file_submitted_signed_iii) AS \"已提出已签署(III)\", SUM(s.file_submitted_not_reviewed_i_ii)+SUM(s.file_reviewed_not_signed_i_ii)+SUM(s.file_submitted_not_signed_iii) AS \"未签署项\", SUM(s.order_unsigned_cat_i)+SUM(s.order_unsigned_cat_ii)+SUM(s.order_unsigned_cat_iii) AS \"变更单未签署\", SUM(s.order_signed_cnt) AS \"变更单已签署\", CASE WHEN (SUM(s.order_signed_cnt)+SUM(s.order_unsigned_cat_i)+SUM(s.order_unsigned_cat_ii)+SUM(s.order_unsigned_cat_iii))=0 THEN 0 ELSE ROUND(SUM(s.order_signed_cnt)::numeric/(SUM(s.order_signed_cnt)+SUM(s.order_unsigned_cat_i)+SUM(s.order_unsigned_cat_ii)+SUM(s.order_unsigned_cat_iii))::numeric*100,2) END AS \"签署完成率\", SUM(s.reform_pending_i_ii) AS \"未落实整改\", SUM(s.reform_done_i_ii) AS \"已落实整改\", SUM(s.reform_na_iii) AS \"不涉及整改\", CASE WHEN (SUM(s.reform_done_i_ii)+SUM(s.reform_pending_i_ii))=0 THEN 0 ELSE ROUND(SUM(s.reform_done_i_ii)::numeric/(SUM(s.reform_done_i_ii)+SUM(s.reform_pending_i_ii))::numeric*100,2) END AS \"整改完成率\" FROM biz_dws_tech_state_monthly_v2 s WHERE s.period_month >= to_char({{dateFrom}}::date, 'YYYY-MM') AND s.period_month <= to_char({{dateTo}}::date, 'YYYY-MM') AND ({{deptId}} IS NULL OR {{deptId}} = '' OR s.dept = {{deptId}}) AND ({{projectNo}} IS NULL OR {{projectNo}} = '' OR s.project_no ILIKE '%' || {{projectNo}} || '%')",
           "queryTimeoutSeconds": 30,
-          "maxRows": 2000
+          "maxRows": 2000,
+          "parameterBindings": [
+            {
+              "name": "dateFrom",
+              "variableKey": "dateFrom"
+            },
+            {
+              "name": "dateTo",
+              "variableKey": "dateTo"
+            },
+            {
+              "name": "deptId",
+              "variableKey": "deptId"
+            },
+            {
+              "name": "projectNo",
+              "variableKey": "projectNo"
+            }
+          ]
         }
       }
     },
@@ -791,7 +845,25 @@
           "databaseId": "{{DATABASE_ID}}",
           "query": "SELECT COUNT(DISTINCT s.project_no) AS \"涉及项目\", SUM(s.total_change_cnt) AS \"变更总数\", SUM(s.new_cat_i) AS \"I类更改\", SUM(s.new_cat_ii) AS \"II类更改\", SUM(s.new_cat_iii) AS \"III类更改\", SUM(s.file_submitted_not_reviewed_i_ii) AS \"已提出未评审(I,II)\", SUM(s.file_reviewed_not_signed_i_ii) AS \"已评审未签署(I,II)\", SUM(s.file_reviewed_signed_i_ii) AS \"已评审已签署(I,II)\", SUM(s.file_submitted_not_signed_iii) AS \"已提出未签署(III)\", SUM(s.file_submitted_signed_iii) AS \"已提出已签署(III)\", SUM(s.file_submitted_not_reviewed_i_ii)+SUM(s.file_reviewed_not_signed_i_ii)+SUM(s.file_submitted_not_signed_iii) AS \"未签署项\", SUM(s.order_unsigned_cat_i)+SUM(s.order_unsigned_cat_ii)+SUM(s.order_unsigned_cat_iii) AS \"变更单未签署\", SUM(s.order_signed_cnt) AS \"变更单已签署\", CASE WHEN (SUM(s.order_signed_cnt)+SUM(s.order_unsigned_cat_i)+SUM(s.order_unsigned_cat_ii)+SUM(s.order_unsigned_cat_iii))=0 THEN 0 ELSE ROUND(SUM(s.order_signed_cnt)::numeric/(SUM(s.order_signed_cnt)+SUM(s.order_unsigned_cat_i)+SUM(s.order_unsigned_cat_ii)+SUM(s.order_unsigned_cat_iii))::numeric*100,2) END AS \"签署完成率\", SUM(s.reform_pending_i_ii) AS \"未落实整改\", SUM(s.reform_done_i_ii) AS \"已落实整改\", SUM(s.reform_na_iii) AS \"不涉及整改\", CASE WHEN (SUM(s.reform_done_i_ii)+SUM(s.reform_pending_i_ii))=0 THEN 0 ELSE ROUND(SUM(s.reform_done_i_ii)::numeric/(SUM(s.reform_done_i_ii)+SUM(s.reform_pending_i_ii))::numeric*100,2) END AS \"整改完成率\" FROM biz_dws_tech_state_monthly_v2 s WHERE s.period_month >= to_char({{dateFrom}}::date, 'YYYY-MM') AND s.period_month <= to_char({{dateTo}}::date, 'YYYY-MM') AND ({{deptId}} IS NULL OR {{deptId}} = '' OR s.dept = {{deptId}}) AND ({{projectNo}} IS NULL OR {{projectNo}} = '' OR s.project_no ILIKE '%' || {{projectNo}} || '%')",
           "queryTimeoutSeconds": 30,
-          "maxRows": 2000
+          "maxRows": 2000,
+          "parameterBindings": [
+            {
+              "name": "dateFrom",
+              "variableKey": "dateFrom"
+            },
+            {
+              "name": "dateTo",
+              "variableKey": "dateTo"
+            },
+            {
+              "name": "deptId",
+              "variableKey": "deptId"
+            },
+            {
+              "name": "projectNo",
+              "variableKey": "projectNo"
+            }
+          ]
         }
       }
     },
@@ -823,7 +895,25 @@
           "databaseId": "{{DATABASE_ID}}",
           "query": "SELECT COUNT(DISTINCT s.project_no) AS \"涉及项目\", SUM(s.total_change_cnt) AS \"变更总数\", SUM(s.new_cat_i) AS \"I类更改\", SUM(s.new_cat_ii) AS \"II类更改\", SUM(s.new_cat_iii) AS \"III类更改\", SUM(s.file_submitted_not_reviewed_i_ii) AS \"已提出未评审(I,II)\", SUM(s.file_reviewed_not_signed_i_ii) AS \"已评审未签署(I,II)\", SUM(s.file_reviewed_signed_i_ii) AS \"已评审已签署(I,II)\", SUM(s.file_submitted_not_signed_iii) AS \"已提出未签署(III)\", SUM(s.file_submitted_signed_iii) AS \"已提出已签署(III)\", SUM(s.file_submitted_not_reviewed_i_ii)+SUM(s.file_reviewed_not_signed_i_ii)+SUM(s.file_submitted_not_signed_iii) AS \"未签署项\", SUM(s.order_unsigned_cat_i)+SUM(s.order_unsigned_cat_ii)+SUM(s.order_unsigned_cat_iii) AS \"变更单未签署\", SUM(s.order_signed_cnt) AS \"变更单已签署\", CASE WHEN (SUM(s.order_signed_cnt)+SUM(s.order_unsigned_cat_i)+SUM(s.order_unsigned_cat_ii)+SUM(s.order_unsigned_cat_iii))=0 THEN 0 ELSE ROUND(SUM(s.order_signed_cnt)::numeric/(SUM(s.order_signed_cnt)+SUM(s.order_unsigned_cat_i)+SUM(s.order_unsigned_cat_ii)+SUM(s.order_unsigned_cat_iii))::numeric*100,2) END AS \"签署完成率\", SUM(s.reform_pending_i_ii) AS \"未落实整改\", SUM(s.reform_done_i_ii) AS \"已落实整改\", SUM(s.reform_na_iii) AS \"不涉及整改\", CASE WHEN (SUM(s.reform_done_i_ii)+SUM(s.reform_pending_i_ii))=0 THEN 0 ELSE ROUND(SUM(s.reform_done_i_ii)::numeric/(SUM(s.reform_done_i_ii)+SUM(s.reform_pending_i_ii))::numeric*100,2) END AS \"整改完成率\" FROM biz_dws_tech_state_monthly_v2 s WHERE s.period_month >= to_char({{dateFrom}}::date, 'YYYY-MM') AND s.period_month <= to_char({{dateTo}}::date, 'YYYY-MM') AND ({{deptId}} IS NULL OR {{deptId}} = '' OR s.dept = {{deptId}}) AND ({{projectNo}} IS NULL OR {{projectNo}} = '' OR s.project_no ILIKE '%' || {{projectNo}} || '%')",
           "queryTimeoutSeconds": 30,
-          "maxRows": 2000
+          "maxRows": 2000,
+          "parameterBindings": [
+            {
+              "name": "dateFrom",
+              "variableKey": "dateFrom"
+            },
+            {
+              "name": "dateTo",
+              "variableKey": "dateTo"
+            },
+            {
+              "name": "deptId",
+              "variableKey": "deptId"
+            },
+            {
+              "name": "projectNo",
+              "variableKey": "projectNo"
+            }
+          ]
         }
       }
     },
@@ -855,7 +945,25 @@
           "databaseId": "{{DATABASE_ID}}",
           "query": "SELECT COUNT(DISTINCT s.project_no) AS \"涉及项目\", SUM(s.total_change_cnt) AS \"变更总数\", SUM(s.new_cat_i) AS \"I类更改\", SUM(s.new_cat_ii) AS \"II类更改\", SUM(s.new_cat_iii) AS \"III类更改\", SUM(s.file_submitted_not_reviewed_i_ii) AS \"已提出未评审(I,II)\", SUM(s.file_reviewed_not_signed_i_ii) AS \"已评审未签署(I,II)\", SUM(s.file_reviewed_signed_i_ii) AS \"已评审已签署(I,II)\", SUM(s.file_submitted_not_signed_iii) AS \"已提出未签署(III)\", SUM(s.file_submitted_signed_iii) AS \"已提出已签署(III)\", SUM(s.file_submitted_not_reviewed_i_ii)+SUM(s.file_reviewed_not_signed_i_ii)+SUM(s.file_submitted_not_signed_iii) AS \"未签署项\", SUM(s.order_unsigned_cat_i)+SUM(s.order_unsigned_cat_ii)+SUM(s.order_unsigned_cat_iii) AS \"变更单未签署\", SUM(s.order_signed_cnt) AS \"变更单已签署\", CASE WHEN (SUM(s.order_signed_cnt)+SUM(s.order_unsigned_cat_i)+SUM(s.order_unsigned_cat_ii)+SUM(s.order_unsigned_cat_iii))=0 THEN 0 ELSE ROUND(SUM(s.order_signed_cnt)::numeric/(SUM(s.order_signed_cnt)+SUM(s.order_unsigned_cat_i)+SUM(s.order_unsigned_cat_ii)+SUM(s.order_unsigned_cat_iii))::numeric*100,2) END AS \"签署完成率\", SUM(s.reform_pending_i_ii) AS \"未落实整改\", SUM(s.reform_done_i_ii) AS \"已落实整改\", SUM(s.reform_na_iii) AS \"不涉及整改\", CASE WHEN (SUM(s.reform_done_i_ii)+SUM(s.reform_pending_i_ii))=0 THEN 0 ELSE ROUND(SUM(s.reform_done_i_ii)::numeric/(SUM(s.reform_done_i_ii)+SUM(s.reform_pending_i_ii))::numeric*100,2) END AS \"整改完成率\" FROM biz_dws_tech_state_monthly_v2 s WHERE s.period_month >= to_char({{dateFrom}}::date, 'YYYY-MM') AND s.period_month <= to_char({{dateTo}}::date, 'YYYY-MM') AND ({{deptId}} IS NULL OR {{deptId}} = '' OR s.dept = {{deptId}}) AND ({{projectNo}} IS NULL OR {{projectNo}} = '' OR s.project_no ILIKE '%' || {{projectNo}} || '%')",
           "queryTimeoutSeconds": 30,
-          "maxRows": 2000
+          "maxRows": 2000,
+          "parameterBindings": [
+            {
+              "name": "dateFrom",
+              "variableKey": "dateFrom"
+            },
+            {
+              "name": "dateTo",
+              "variableKey": "dateTo"
+            },
+            {
+              "name": "deptId",
+              "variableKey": "deptId"
+            },
+            {
+              "name": "projectNo",
+              "variableKey": "projectNo"
+            }
+          ]
         }
       }
     },
@@ -887,7 +995,25 @@
           "databaseId": "{{DATABASE_ID}}",
           "query": "SELECT COUNT(DISTINCT s.project_no) AS \"涉及项目\", SUM(s.total_change_cnt) AS \"变更总数\", SUM(s.new_cat_i) AS \"I类更改\", SUM(s.new_cat_ii) AS \"II类更改\", SUM(s.new_cat_iii) AS \"III类更改\", SUM(s.file_submitted_not_reviewed_i_ii) AS \"已提出未评审(I,II)\", SUM(s.file_reviewed_not_signed_i_ii) AS \"已评审未签署(I,II)\", SUM(s.file_reviewed_signed_i_ii) AS \"已评审已签署(I,II)\", SUM(s.file_submitted_not_signed_iii) AS \"已提出未签署(III)\", SUM(s.file_submitted_signed_iii) AS \"已提出已签署(III)\", SUM(s.file_submitted_not_reviewed_i_ii)+SUM(s.file_reviewed_not_signed_i_ii)+SUM(s.file_submitted_not_signed_iii) AS \"未签署项\", SUM(s.order_unsigned_cat_i)+SUM(s.order_unsigned_cat_ii)+SUM(s.order_unsigned_cat_iii) AS \"变更单未签署\", SUM(s.order_signed_cnt) AS \"变更单已签署\", CASE WHEN (SUM(s.order_signed_cnt)+SUM(s.order_unsigned_cat_i)+SUM(s.order_unsigned_cat_ii)+SUM(s.order_unsigned_cat_iii))=0 THEN 0 ELSE ROUND(SUM(s.order_signed_cnt)::numeric/(SUM(s.order_signed_cnt)+SUM(s.order_unsigned_cat_i)+SUM(s.order_unsigned_cat_ii)+SUM(s.order_unsigned_cat_iii))::numeric*100,2) END AS \"签署完成率\", SUM(s.reform_pending_i_ii) AS \"未落实整改\", SUM(s.reform_done_i_ii) AS \"已落实整改\", SUM(s.reform_na_iii) AS \"不涉及整改\", CASE WHEN (SUM(s.reform_done_i_ii)+SUM(s.reform_pending_i_ii))=0 THEN 0 ELSE ROUND(SUM(s.reform_done_i_ii)::numeric/(SUM(s.reform_done_i_ii)+SUM(s.reform_pending_i_ii))::numeric*100,2) END AS \"整改完成率\" FROM biz_dws_tech_state_monthly_v2 s WHERE s.period_month >= to_char({{dateFrom}}::date, 'YYYY-MM') AND s.period_month <= to_char({{dateTo}}::date, 'YYYY-MM') AND ({{deptId}} IS NULL OR {{deptId}} = '' OR s.dept = {{deptId}}) AND ({{projectNo}} IS NULL OR {{projectNo}} = '' OR s.project_no ILIKE '%' || {{projectNo}} || '%')",
           "queryTimeoutSeconds": 30,
-          "maxRows": 2000
+          "maxRows": 2000,
+          "parameterBindings": [
+            {
+              "name": "dateFrom",
+              "variableKey": "dateFrom"
+            },
+            {
+              "name": "dateTo",
+              "variableKey": "dateTo"
+            },
+            {
+              "name": "deptId",
+              "variableKey": "deptId"
+            },
+            {
+              "name": "projectNo",
+              "variableKey": "projectNo"
+            }
+          ]
         }
       }
     },
@@ -937,7 +1063,25 @@
           "databaseId": "{{DATABASE_ID}}",
           "query": "SELECT project_no AS \"项目编号\", tech_state_name AS \"技术状态项\", change_item AS \"更改事项\", owner AS \"负责人\", dept AS \"责任科室\", change_category AS \"更改类别\", change_submit_time AS \"提出时间\", completion_signature AS \"变更单签署\", file_signature_status AS \"文件签署\", reform_status AS \"整改状态\" FROM biz_dwd_tech_state_v2 WHERE submit_month >= to_char({{dateFrom}}::date, 'YYYY-MM') AND submit_month <= to_char({{dateTo}}::date, 'YYYY-MM') AND ({{deptId}} IS NULL OR {{deptId}} = '' OR dept = {{deptId}}) AND ({{projectNo}} IS NULL OR {{projectNo}} = '' OR project_no ILIKE '%' || {{projectNo}} || '%') ORDER BY change_submit_time DESC",
           "queryTimeoutSeconds": 30,
-          "maxRows": 2000
+          "maxRows": 2000,
+          "parameterBindings": [
+            {
+              "name": "dateFrom",
+              "variableKey": "dateFrom"
+            },
+            {
+              "name": "dateTo",
+              "variableKey": "dateTo"
+            },
+            {
+              "name": "deptId",
+              "variableKey": "deptId"
+            },
+            {
+              "name": "projectNo",
+              "variableKey": "projectNo"
+            }
+          ]
         }
       }
     },
@@ -968,7 +1112,25 @@
           "databaseId": "{{DATABASE_ID}}",
           "query": "SELECT COUNT(DISTINCT s.project_no) AS \"涉及项目\", SUM(s.total_change_cnt) AS \"变更总数\", SUM(s.new_cat_i) AS \"I类更改\", SUM(s.new_cat_ii) AS \"II类更改\", SUM(s.new_cat_iii) AS \"III类更改\", SUM(s.file_submitted_not_reviewed_i_ii) AS \"已提出未评审(I,II)\", SUM(s.file_reviewed_not_signed_i_ii) AS \"已评审未签署(I,II)\", SUM(s.file_reviewed_signed_i_ii) AS \"已评审已签署(I,II)\", SUM(s.file_submitted_not_signed_iii) AS \"已提出未签署(III)\", SUM(s.file_submitted_signed_iii) AS \"已提出已签署(III)\", SUM(s.file_submitted_not_reviewed_i_ii)+SUM(s.file_reviewed_not_signed_i_ii)+SUM(s.file_submitted_not_signed_iii) AS \"未签署项\", SUM(s.order_unsigned_cat_i)+SUM(s.order_unsigned_cat_ii)+SUM(s.order_unsigned_cat_iii) AS \"变更单未签署\", SUM(s.order_signed_cnt) AS \"变更单已签署\", CASE WHEN (SUM(s.order_signed_cnt)+SUM(s.order_unsigned_cat_i)+SUM(s.order_unsigned_cat_ii)+SUM(s.order_unsigned_cat_iii))=0 THEN 0 ELSE ROUND(SUM(s.order_signed_cnt)::numeric/(SUM(s.order_signed_cnt)+SUM(s.order_unsigned_cat_i)+SUM(s.order_unsigned_cat_ii)+SUM(s.order_unsigned_cat_iii))::numeric*100,2) END AS \"签署完成率\", SUM(s.reform_pending_i_ii) AS \"未落实整改\", SUM(s.reform_done_i_ii) AS \"已落实整改\", SUM(s.reform_na_iii) AS \"不涉及整改\", CASE WHEN (SUM(s.reform_done_i_ii)+SUM(s.reform_pending_i_ii))=0 THEN 0 ELSE ROUND(SUM(s.reform_done_i_ii)::numeric/(SUM(s.reform_done_i_ii)+SUM(s.reform_pending_i_ii))::numeric*100,2) END AS \"整改完成率\" FROM biz_dws_tech_state_monthly_v2 s WHERE s.period_month >= to_char({{dateFrom}}::date, 'YYYY-MM') AND s.period_month <= to_char({{dateTo}}::date, 'YYYY-MM') AND ({{deptId}} IS NULL OR {{deptId}} = '' OR s.dept = {{deptId}}) AND ({{projectNo}} IS NULL OR {{projectNo}} = '' OR s.project_no ILIKE '%' || {{projectNo}} || '%')",
           "queryTimeoutSeconds": 30,
-          "maxRows": 2000
+          "maxRows": 2000,
+          "parameterBindings": [
+            {
+              "name": "dateFrom",
+              "variableKey": "dateFrom"
+            },
+            {
+              "name": "dateTo",
+              "variableKey": "dateTo"
+            },
+            {
+              "name": "deptId",
+              "variableKey": "deptId"
+            },
+            {
+              "name": "projectNo",
+              "variableKey": "projectNo"
+            }
+          ]
         }
       }
     },
@@ -999,7 +1161,25 @@
           "databaseId": "{{DATABASE_ID}}",
           "query": "SELECT COUNT(DISTINCT s.project_no) AS \"涉及项目\", SUM(s.total_change_cnt) AS \"变更总数\", SUM(s.new_cat_i) AS \"I类更改\", SUM(s.new_cat_ii) AS \"II类更改\", SUM(s.new_cat_iii) AS \"III类更改\", SUM(s.file_submitted_not_reviewed_i_ii) AS \"已提出未评审(I,II)\", SUM(s.file_reviewed_not_signed_i_ii) AS \"已评审未签署(I,II)\", SUM(s.file_reviewed_signed_i_ii) AS \"已评审已签署(I,II)\", SUM(s.file_submitted_not_signed_iii) AS \"已提出未签署(III)\", SUM(s.file_submitted_signed_iii) AS \"已提出已签署(III)\", SUM(s.file_submitted_not_reviewed_i_ii)+SUM(s.file_reviewed_not_signed_i_ii)+SUM(s.file_submitted_not_signed_iii) AS \"未签署项\", SUM(s.order_unsigned_cat_i)+SUM(s.order_unsigned_cat_ii)+SUM(s.order_unsigned_cat_iii) AS \"变更单未签署\", SUM(s.order_signed_cnt) AS \"变更单已签署\", CASE WHEN (SUM(s.order_signed_cnt)+SUM(s.order_unsigned_cat_i)+SUM(s.order_unsigned_cat_ii)+SUM(s.order_unsigned_cat_iii))=0 THEN 0 ELSE ROUND(SUM(s.order_signed_cnt)::numeric/(SUM(s.order_signed_cnt)+SUM(s.order_unsigned_cat_i)+SUM(s.order_unsigned_cat_ii)+SUM(s.order_unsigned_cat_iii))::numeric*100,2) END AS \"签署完成率\", SUM(s.reform_pending_i_ii) AS \"未落实整改\", SUM(s.reform_done_i_ii) AS \"已落实整改\", SUM(s.reform_na_iii) AS \"不涉及整改\", CASE WHEN (SUM(s.reform_done_i_ii)+SUM(s.reform_pending_i_ii))=0 THEN 0 ELSE ROUND(SUM(s.reform_done_i_ii)::numeric/(SUM(s.reform_done_i_ii)+SUM(s.reform_pending_i_ii))::numeric*100,2) END AS \"整改完成率\" FROM biz_dws_tech_state_monthly_v2 s WHERE s.period_month >= to_char({{dateFrom}}::date, 'YYYY-MM') AND s.period_month <= to_char({{dateTo}}::date, 'YYYY-MM') AND ({{deptId}} IS NULL OR {{deptId}} = '' OR s.dept = {{deptId}}) AND ({{projectNo}} IS NULL OR {{projectNo}} = '' OR s.project_no ILIKE '%' || {{projectNo}} || '%')",
           "queryTimeoutSeconds": 30,
-          "maxRows": 2000
+          "maxRows": 2000,
+          "parameterBindings": [
+            {
+              "name": "dateFrom",
+              "variableKey": "dateFrom"
+            },
+            {
+              "name": "dateTo",
+              "variableKey": "dateTo"
+            },
+            {
+              "name": "deptId",
+              "variableKey": "deptId"
+            },
+            {
+              "name": "projectNo",
+              "variableKey": "projectNo"
+            }
+          ]
         }
       }
     },
@@ -1049,7 +1229,25 @@
           "databaseId": "{{DATABASE_ID}}",
           "query": "SELECT project_no AS \"项目编号\", tech_state_name AS \"技术状态项\", change_item AS \"更改事项\", owner AS \"负责人\", dept AS \"责任科室\", change_category AS \"更改类别\", change_submit_time AS \"提出时间\", completion_signature AS \"变更单签署\", file_signature_status AS \"文件签署\", reform_status AS \"整改状态\" FROM biz_dwd_tech_state_v2 WHERE submit_month >= to_char({{dateFrom}}::date, 'YYYY-MM') AND submit_month <= to_char({{dateTo}}::date, 'YYYY-MM') AND ({{deptId}} IS NULL OR {{deptId}} = '' OR dept = {{deptId}}) AND ({{projectNo}} IS NULL OR {{projectNo}} = '' OR project_no ILIKE '%' || {{projectNo}} || '%') ORDER BY change_submit_time DESC",
           "queryTimeoutSeconds": 30,
-          "maxRows": 2000
+          "maxRows": 2000,
+          "parameterBindings": [
+            {
+              "name": "dateFrom",
+              "variableKey": "dateFrom"
+            },
+            {
+              "name": "dateTo",
+              "variableKey": "dateTo"
+            },
+            {
+              "name": "deptId",
+              "variableKey": "deptId"
+            },
+            {
+              "name": "projectNo",
+              "variableKey": "projectNo"
+            }
+          ]
         }
       }
     },
@@ -1081,7 +1279,25 @@
           "databaseId": "{{DATABASE_ID}}",
           "query": "SELECT COUNT(DISTINCT s.project_no) AS \"涉及项目\", SUM(s.total_change_cnt) AS \"变更总数\", SUM(s.new_cat_i) AS \"I类更改\", SUM(s.new_cat_ii) AS \"II类更改\", SUM(s.new_cat_iii) AS \"III类更改\", SUM(s.file_submitted_not_reviewed_i_ii) AS \"已提出未评审(I,II)\", SUM(s.file_reviewed_not_signed_i_ii) AS \"已评审未签署(I,II)\", SUM(s.file_reviewed_signed_i_ii) AS \"已评审已签署(I,II)\", SUM(s.file_submitted_not_signed_iii) AS \"已提出未签署(III)\", SUM(s.file_submitted_signed_iii) AS \"已提出已签署(III)\", SUM(s.file_submitted_not_reviewed_i_ii)+SUM(s.file_reviewed_not_signed_i_ii)+SUM(s.file_submitted_not_signed_iii) AS \"未签署项\", SUM(s.order_unsigned_cat_i)+SUM(s.order_unsigned_cat_ii)+SUM(s.order_unsigned_cat_iii) AS \"变更单未签署\", SUM(s.order_signed_cnt) AS \"变更单已签署\", CASE WHEN (SUM(s.order_signed_cnt)+SUM(s.order_unsigned_cat_i)+SUM(s.order_unsigned_cat_ii)+SUM(s.order_unsigned_cat_iii))=0 THEN 0 ELSE ROUND(SUM(s.order_signed_cnt)::numeric/(SUM(s.order_signed_cnt)+SUM(s.order_unsigned_cat_i)+SUM(s.order_unsigned_cat_ii)+SUM(s.order_unsigned_cat_iii))::numeric*100,2) END AS \"签署完成率\", SUM(s.reform_pending_i_ii) AS \"未落实整改\", SUM(s.reform_done_i_ii) AS \"已落实整改\", SUM(s.reform_na_iii) AS \"不涉及整改\", CASE WHEN (SUM(s.reform_done_i_ii)+SUM(s.reform_pending_i_ii))=0 THEN 0 ELSE ROUND(SUM(s.reform_done_i_ii)::numeric/(SUM(s.reform_done_i_ii)+SUM(s.reform_pending_i_ii))::numeric*100,2) END AS \"整改完成率\" FROM biz_dws_tech_state_monthly_v2 s WHERE s.period_month >= to_char({{dateFrom}}::date, 'YYYY-MM') AND s.period_month <= to_char({{dateTo}}::date, 'YYYY-MM') AND ({{deptId}} IS NULL OR {{deptId}} = '' OR s.dept = {{deptId}}) AND ({{projectNo}} IS NULL OR {{projectNo}} = '' OR s.project_no ILIKE '%' || {{projectNo}} || '%')",
           "queryTimeoutSeconds": 30,
-          "maxRows": 2000
+          "maxRows": 2000,
+          "parameterBindings": [
+            {
+              "name": "dateFrom",
+              "variableKey": "dateFrom"
+            },
+            {
+              "name": "dateTo",
+              "variableKey": "dateTo"
+            },
+            {
+              "name": "deptId",
+              "variableKey": "deptId"
+            },
+            {
+              "name": "projectNo",
+              "variableKey": "projectNo"
+            }
+          ]
         }
       }
     }

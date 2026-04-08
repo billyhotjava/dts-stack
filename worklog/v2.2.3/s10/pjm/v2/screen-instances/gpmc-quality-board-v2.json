@@ -695,7 +695,25 @@
           "databaseId": "{{DATABASE_ID}}",
           "query": "SELECT SUM(s.new_issue_cnt) AS \"新增质量问题\", SUM(s.open_issue_cnt) AS \"现存质量问题\", SUM(s.zero_completed_cnt) AS \"归零合计\", SUM(s.no_zero_plan_cnt) AS \"未提交归零计划\", COUNT(DISTINCT s.project_no) AS \"问题项目数\", SUM(s.tech_zero_cnt) AS \"技术归零\", SUM(s.mgmt_zero_cnt) AS \"管理归零\", SUM(s.both_zero_cnt) AS \"双归零\", SUM(s.open_cat_design) AS \"设计\", SUM(s.open_cat_process) AS \"工艺\", SUM(s.open_cat_management) AS \"管理\", SUM(s.open_cat_component) AS \"元器件\", SUM(s.open_cat_operation) AS \"操作\", SUM(s.open_cat_outsource) AS \"外协外购\", SUM(s.open_cat_software) AS \"软件\", SUM(s.open_cat_other) AS \"其他\" FROM biz_dws_quality_monthly_v2 s WHERE s.period_month >= to_char({{dateFrom}}::date, 'YYYY-MM') AND s.period_month <= to_char({{dateTo}}::date, 'YYYY-MM') AND ({{deptId}} IS NULL OR {{deptId}} = '' OR s.dept = {{deptId}}) AND ({{projectNo}} IS NULL OR {{projectNo}} = '' OR s.project_no ILIKE '%' || {{projectNo}} || '%')",
           "queryTimeoutSeconds": 30,
-          "maxRows": 2000
+          "maxRows": 2000,
+          "parameterBindings": [
+            {
+              "name": "dateFrom",
+              "variableKey": "dateFrom"
+            },
+            {
+              "name": "dateTo",
+              "variableKey": "dateTo"
+            },
+            {
+              "name": "deptId",
+              "variableKey": "deptId"
+            },
+            {
+              "name": "projectNo",
+              "variableKey": "projectNo"
+            }
+          ]
         }
       }
     },
@@ -727,7 +745,25 @@
           "databaseId": "{{DATABASE_ID}}",
           "query": "SELECT SUM(s.new_issue_cnt) AS \"新增质量问题\", SUM(s.open_issue_cnt) AS \"现存质量问题\", SUM(s.zero_completed_cnt) AS \"归零合计\", SUM(s.no_zero_plan_cnt) AS \"未提交归零计划\", COUNT(DISTINCT s.project_no) AS \"问题项目数\", SUM(s.tech_zero_cnt) AS \"技术归零\", SUM(s.mgmt_zero_cnt) AS \"管理归零\", SUM(s.both_zero_cnt) AS \"双归零\", SUM(s.open_cat_design) AS \"设计\", SUM(s.open_cat_process) AS \"工艺\", SUM(s.open_cat_management) AS \"管理\", SUM(s.open_cat_component) AS \"元器件\", SUM(s.open_cat_operation) AS \"操作\", SUM(s.open_cat_outsource) AS \"外协外购\", SUM(s.open_cat_software) AS \"软件\", SUM(s.open_cat_other) AS \"其他\" FROM biz_dws_quality_monthly_v2 s WHERE s.period_month >= to_char({{dateFrom}}::date, 'YYYY-MM') AND s.period_month <= to_char({{dateTo}}::date, 'YYYY-MM') AND ({{deptId}} IS NULL OR {{deptId}} = '' OR s.dept = {{deptId}}) AND ({{projectNo}} IS NULL OR {{projectNo}} = '' OR s.project_no ILIKE '%' || {{projectNo}} || '%')",
           "queryTimeoutSeconds": 30,
-          "maxRows": 2000
+          "maxRows": 2000,
+          "parameterBindings": [
+            {
+              "name": "dateFrom",
+              "variableKey": "dateFrom"
+            },
+            {
+              "name": "dateTo",
+              "variableKey": "dateTo"
+            },
+            {
+              "name": "deptId",
+              "variableKey": "deptId"
+            },
+            {
+              "name": "projectNo",
+              "variableKey": "projectNo"
+            }
+          ]
         }
       }
     },
@@ -759,7 +795,25 @@
           "databaseId": "{{DATABASE_ID}}",
           "query": "SELECT SUM(s.new_issue_cnt) AS \"新增质量问题\", SUM(s.open_issue_cnt) AS \"现存质量问题\", SUM(s.zero_completed_cnt) AS \"归零合计\", SUM(s.no_zero_plan_cnt) AS \"未提交归零计划\", COUNT(DISTINCT s.project_no) AS \"问题项目数\", SUM(s.tech_zero_cnt) AS \"技术归零\", SUM(s.mgmt_zero_cnt) AS \"管理归零\", SUM(s.both_zero_cnt) AS \"双归零\", SUM(s.open_cat_design) AS \"设计\", SUM(s.open_cat_process) AS \"工艺\", SUM(s.open_cat_management) AS \"管理\", SUM(s.open_cat_component) AS \"元器件\", SUM(s.open_cat_operation) AS \"操作\", SUM(s.open_cat_outsource) AS \"外协外购\", SUM(s.open_cat_software) AS \"软件\", SUM(s.open_cat_other) AS \"其他\" FROM biz_dws_quality_monthly_v2 s WHERE s.period_month >= to_char({{dateFrom}}::date, 'YYYY-MM') AND s.period_month <= to_char({{dateTo}}::date, 'YYYY-MM') AND ({{deptId}} IS NULL OR {{deptId}} = '' OR s.dept = {{deptId}}) AND ({{projectNo}} IS NULL OR {{projectNo}} = '' OR s.project_no ILIKE '%' || {{projectNo}} || '%')",
           "queryTimeoutSeconds": 30,
-          "maxRows": 2000
+          "maxRows": 2000,
+          "parameterBindings": [
+            {
+              "name": "dateFrom",
+              "variableKey": "dateFrom"
+            },
+            {
+              "name": "dateTo",
+              "variableKey": "dateTo"
+            },
+            {
+              "name": "deptId",
+              "variableKey": "deptId"
+            },
+            {
+              "name": "projectNo",
+              "variableKey": "projectNo"
+            }
+          ]
         }
       }
     },
@@ -798,7 +852,25 @@
           "databaseId": "{{DATABASE_ID}}",
           "query": "SELECT SUM(s.new_issue_cnt) AS \"新增质量问题\", SUM(s.open_issue_cnt) AS \"现存质量问题\", SUM(s.zero_completed_cnt) AS \"归零合计\", SUM(s.no_zero_plan_cnt) AS \"未提交归零计划\", COUNT(DISTINCT s.project_no) AS \"问题项目数\", SUM(s.tech_zero_cnt) AS \"技术归零\", SUM(s.mgmt_zero_cnt) AS \"管理归零\", SUM(s.both_zero_cnt) AS \"双归零\", SUM(s.open_cat_design) AS \"设计\", SUM(s.open_cat_process) AS \"工艺\", SUM(s.open_cat_management) AS \"管理\", SUM(s.open_cat_component) AS \"元器件\", SUM(s.open_cat_operation) AS \"操作\", SUM(s.open_cat_outsource) AS \"外协外购\", SUM(s.open_cat_software) AS \"软件\", SUM(s.open_cat_other) AS \"其他\" FROM biz_dws_quality_monthly_v2 s WHERE s.period_month >= to_char({{dateFrom}}::date, 'YYYY-MM') AND s.period_month <= to_char({{dateTo}}::date, 'YYYY-MM') AND ({{deptId}} IS NULL OR {{deptId}} = '' OR s.dept = {{deptId}}) AND ({{projectNo}} IS NULL OR {{projectNo}} = '' OR s.project_no ILIKE '%' || {{projectNo}} || '%')",
           "queryTimeoutSeconds": 30,
-          "maxRows": 2000
+          "maxRows": 2000,
+          "parameterBindings": [
+            {
+              "name": "dateFrom",
+              "variableKey": "dateFrom"
+            },
+            {
+              "name": "dateTo",
+              "variableKey": "dateTo"
+            },
+            {
+              "name": "deptId",
+              "variableKey": "deptId"
+            },
+            {
+              "name": "projectNo",
+              "variableKey": "projectNo"
+            }
+          ]
         }
       }
     },
@@ -830,7 +902,25 @@
           "databaseId": "{{DATABASE_ID}}",
           "query": "WITH q AS (SELECT SUM(new_issue_cnt) AS n, SUM(open_issue_cnt) AS o, SUM(zero_completed_cnt) AS z, SUM(no_zero_plan_cnt) AS np, SUM(open_cat_design) AS d FROM biz_dws_quality_monthly_v2 s WHERE s.period_month >= to_char({{dateFrom}}::date, 'YYYY-MM') AND s.period_month <= to_char({{dateTo}}::date, 'YYYY-MM') AND ({{deptId}} IS NULL OR {{deptId}} = '' OR s.dept = {{deptId}}) AND ({{projectNo}} IS NULL OR {{projectNo}} = '' OR s.project_no ILIKE '%' || {{projectNo}} || '%')) SELECT CASE WHEN q.n=0 THEN 0 ELSE ROUND(q.z::numeric/q.n::numeric*100,2) END AS \"归零率\", CASE WHEN q.o=0 THEN 0 ELSE ROUND(q.d::numeric/q.o::numeric*100,2) END AS \"设计类占比\", CASE WHEN q.n=0 THEN 0 ELSE ROUND((q.n-q.np)::numeric/q.n::numeric*100,2) END AS \"计划提交率\", ROUND((CASE WHEN q.n=0 THEN 0 ELSE q.z::numeric/q.n::numeric*100 END)*0.5+(CASE WHEN q.n=0 THEN 0 ELSE (q.n-q.np)::numeric/q.n::numeric*100 END)*0.3+(100-(CASE WHEN q.n=0 THEN 0 ELSE q.o::numeric/q.n::numeric*100 END))*0.2,2) AS \"质量健康度\" FROM q",
           "queryTimeoutSeconds": 30,
-          "maxRows": 2000
+          "maxRows": 2000,
+          "parameterBindings": [
+            {
+              "name": "dateFrom",
+              "variableKey": "dateFrom"
+            },
+            {
+              "name": "dateTo",
+              "variableKey": "dateTo"
+            },
+            {
+              "name": "deptId",
+              "variableKey": "deptId"
+            },
+            {
+              "name": "projectNo",
+              "variableKey": "projectNo"
+            }
+          ]
         }
       }
     },
@@ -862,7 +952,25 @@
           "databaseId": "{{DATABASE_ID}}",
           "query": "WITH q AS (SELECT SUM(new_issue_cnt) AS n, SUM(open_issue_cnt) AS o, SUM(zero_completed_cnt) AS z, SUM(no_zero_plan_cnt) AS np, SUM(open_cat_design) AS d FROM biz_dws_quality_monthly_v2 s WHERE s.period_month >= to_char({{dateFrom}}::date, 'YYYY-MM') AND s.period_month <= to_char({{dateTo}}::date, 'YYYY-MM') AND ({{deptId}} IS NULL OR {{deptId}} = '' OR s.dept = {{deptId}}) AND ({{projectNo}} IS NULL OR {{projectNo}} = '' OR s.project_no ILIKE '%' || {{projectNo}} || '%')) SELECT CASE WHEN q.n=0 THEN 0 ELSE ROUND(q.z::numeric/q.n::numeric*100,2) END AS \"归零率\", CASE WHEN q.o=0 THEN 0 ELSE ROUND(q.d::numeric/q.o::numeric*100,2) END AS \"设计类占比\", CASE WHEN q.n=0 THEN 0 ELSE ROUND((q.n-q.np)::numeric/q.n::numeric*100,2) END AS \"计划提交率\", ROUND((CASE WHEN q.n=0 THEN 0 ELSE q.z::numeric/q.n::numeric*100 END)*0.5+(CASE WHEN q.n=0 THEN 0 ELSE (q.n-q.np)::numeric/q.n::numeric*100 END)*0.3+(100-(CASE WHEN q.n=0 THEN 0 ELSE q.o::numeric/q.n::numeric*100 END))*0.2,2) AS \"质量健康度\" FROM q",
           "queryTimeoutSeconds": 30,
-          "maxRows": 2000
+          "maxRows": 2000,
+          "parameterBindings": [
+            {
+              "name": "dateFrom",
+              "variableKey": "dateFrom"
+            },
+            {
+              "name": "dateTo",
+              "variableKey": "dateTo"
+            },
+            {
+              "name": "deptId",
+              "variableKey": "deptId"
+            },
+            {
+              "name": "projectNo",
+              "variableKey": "projectNo"
+            }
+          ]
         }
       }
     },
@@ -894,7 +1002,25 @@
           "databaseId": "{{DATABASE_ID}}",
           "query": "SELECT SUM(s.new_issue_cnt) AS \"新增质量问题\", SUM(s.open_issue_cnt) AS \"现存质量问题\", SUM(s.zero_completed_cnt) AS \"归零合计\", SUM(s.no_zero_plan_cnt) AS \"未提交归零计划\", COUNT(DISTINCT s.project_no) AS \"问题项目数\", SUM(s.tech_zero_cnt) AS \"技术归零\", SUM(s.mgmt_zero_cnt) AS \"管理归零\", SUM(s.both_zero_cnt) AS \"双归零\", SUM(s.open_cat_design) AS \"设计\", SUM(s.open_cat_process) AS \"工艺\", SUM(s.open_cat_management) AS \"管理\", SUM(s.open_cat_component) AS \"元器件\", SUM(s.open_cat_operation) AS \"操作\", SUM(s.open_cat_outsource) AS \"外协外购\", SUM(s.open_cat_software) AS \"软件\", SUM(s.open_cat_other) AS \"其他\" FROM biz_dws_quality_monthly_v2 s WHERE s.period_month >= to_char({{dateFrom}}::date, 'YYYY-MM') AND s.period_month <= to_char({{dateTo}}::date, 'YYYY-MM') AND ({{deptId}} IS NULL OR {{deptId}} = '' OR s.dept = {{deptId}}) AND ({{projectNo}} IS NULL OR {{projectNo}} = '' OR s.project_no ILIKE '%' || {{projectNo}} || '%')",
           "queryTimeoutSeconds": 30,
-          "maxRows": 2000
+          "maxRows": 2000,
+          "parameterBindings": [
+            {
+              "name": "dateFrom",
+              "variableKey": "dateFrom"
+            },
+            {
+              "name": "dateTo",
+              "variableKey": "dateTo"
+            },
+            {
+              "name": "deptId",
+              "variableKey": "deptId"
+            },
+            {
+              "name": "projectNo",
+              "variableKey": "projectNo"
+            }
+          ]
         }
       }
     },
@@ -925,7 +1051,25 @@
           "databaseId": "{{DATABASE_ID}}",
           "query": "SELECT SUM(s.new_issue_cnt) AS \"新增质量问题\", SUM(s.open_issue_cnt) AS \"现存质量问题\", SUM(s.zero_completed_cnt) AS \"归零合计\", SUM(s.no_zero_plan_cnt) AS \"未提交归零计划\", COUNT(DISTINCT s.project_no) AS \"问题项目数\", SUM(s.tech_zero_cnt) AS \"技术归零\", SUM(s.mgmt_zero_cnt) AS \"管理归零\", SUM(s.both_zero_cnt) AS \"双归零\", SUM(s.open_cat_design) AS \"设计\", SUM(s.open_cat_process) AS \"工艺\", SUM(s.open_cat_management) AS \"管理\", SUM(s.open_cat_component) AS \"元器件\", SUM(s.open_cat_operation) AS \"操作\", SUM(s.open_cat_outsource) AS \"外协外购\", SUM(s.open_cat_software) AS \"软件\", SUM(s.open_cat_other) AS \"其他\" FROM biz_dws_quality_monthly_v2 s WHERE s.period_month >= to_char({{dateFrom}}::date, 'YYYY-MM') AND s.period_month <= to_char({{dateTo}}::date, 'YYYY-MM') AND ({{deptId}} IS NULL OR {{deptId}} = '' OR s.dept = {{deptId}}) AND ({{projectNo}} IS NULL OR {{projectNo}} = '' OR s.project_no ILIKE '%' || {{projectNo}} || '%')",
           "queryTimeoutSeconds": 30,
-          "maxRows": 2000
+          "maxRows": 2000,
+          "parameterBindings": [
+            {
+              "name": "dateFrom",
+              "variableKey": "dateFrom"
+            },
+            {
+              "name": "dateTo",
+              "variableKey": "dateTo"
+            },
+            {
+              "name": "deptId",
+              "variableKey": "deptId"
+            },
+            {
+              "name": "projectNo",
+              "variableKey": "projectNo"
+            }
+          ]
         }
       }
     },
@@ -978,7 +1122,25 @@
           "databaseId": "{{DATABASE_ID}}",
           "query": "SELECT SUM(s.new_issue_cnt) AS \"新增质量问题\", SUM(s.open_issue_cnt) AS \"现存质量问题\", SUM(s.zero_completed_cnt) AS \"归零合计\", SUM(s.no_zero_plan_cnt) AS \"未提交归零计划\", COUNT(DISTINCT s.project_no) AS \"问题项目数\", SUM(s.tech_zero_cnt) AS \"技术归零\", SUM(s.mgmt_zero_cnt) AS \"管理归零\", SUM(s.both_zero_cnt) AS \"双归零\", SUM(s.open_cat_design) AS \"设计\", SUM(s.open_cat_process) AS \"工艺\", SUM(s.open_cat_management) AS \"管理\", SUM(s.open_cat_component) AS \"元器件\", SUM(s.open_cat_operation) AS \"操作\", SUM(s.open_cat_outsource) AS \"外协外购\", SUM(s.open_cat_software) AS \"软件\", SUM(s.open_cat_other) AS \"其他\" FROM biz_dws_quality_monthly_v2 s WHERE s.period_month >= to_char({{dateFrom}}::date, 'YYYY-MM') AND s.period_month <= to_char({{dateTo}}::date, 'YYYY-MM') AND ({{deptId}} IS NULL OR {{deptId}} = '' OR s.dept = {{deptId}}) AND ({{projectNo}} IS NULL OR {{projectNo}} = '' OR s.project_no ILIKE '%' || {{projectNo}} || '%')",
           "queryTimeoutSeconds": 30,
-          "maxRows": 2000
+          "maxRows": 2000,
+          "parameterBindings": [
+            {
+              "name": "dateFrom",
+              "variableKey": "dateFrom"
+            },
+            {
+              "name": "dateTo",
+              "variableKey": "dateTo"
+            },
+            {
+              "name": "deptId",
+              "variableKey": "deptId"
+            },
+            {
+              "name": "projectNo",
+              "variableKey": "projectNo"
+            }
+          ]
         }
       }
     },
@@ -1041,7 +1203,25 @@
           "databaseId": "{{DATABASE_ID}}",
           "query": "SELECT s.period_month AS \"月份\", SUM(s.new_issue_cnt) AS \"新增问题\", SUM(s.zero_completed_cnt) AS \"归零完成\", SUM(s.open_issue_cnt) AS \"现存问题\" FROM biz_dws_quality_monthly_v2 s WHERE s.period_month >= to_char({{dateFrom}}::date, 'YYYY-MM') AND s.period_month <= to_char({{dateTo}}::date, 'YYYY-MM') AND ({{deptId}} IS NULL OR {{deptId}} = '' OR s.dept = {{deptId}}) AND ({{projectNo}} IS NULL OR {{projectNo}} = '' OR s.project_no ILIKE '%' || {{projectNo}} || '%') GROUP BY s.period_month ORDER BY s.period_month",
           "queryTimeoutSeconds": 30,
-          "maxRows": 2000
+          "maxRows": 2000,
+          "parameterBindings": [
+            {
+              "name": "dateFrom",
+              "variableKey": "dateFrom"
+            },
+            {
+              "name": "dateTo",
+              "variableKey": "dateTo"
+            },
+            {
+              "name": "deptId",
+              "variableKey": "deptId"
+            },
+            {
+              "name": "projectNo",
+              "variableKey": "projectNo"
+            }
+          ]
         }
       }
     },
@@ -1091,7 +1271,25 @@
           "databaseId": "{{DATABASE_ID}}",
           "query": "SELECT project_no AS \"项目编号\", issue_name AS \"问题名称\", dept AS \"责任单位\", issue_category AS \"原因分类\", status AS \"状态\", issue_date AS \"发生时间\", zero_complete_date AS \"归零时间\", current_progress AS \"当前进展\", pending_days AS \"滞留天数\", CASE WHEN has_zero_plan THEN '是' ELSE '否' END AS \"有归零计划\" FROM biz_dwd_quality_issue_v2 WHERE issue_month >= to_char({{dateFrom}}::date, 'YYYY-MM') AND issue_month <= to_char({{dateTo}}::date, 'YYYY-MM') AND ({{deptId}} IS NULL OR {{deptId}} = '' OR dept = {{deptId}}) AND ({{projectNo}} IS NULL OR {{projectNo}} = '' OR project_no ILIKE '%' || {{projectNo}} || '%') ORDER BY pending_days DESC",
           "queryTimeoutSeconds": 30,
-          "maxRows": 2000
+          "maxRows": 2000,
+          "parameterBindings": [
+            {
+              "name": "dateFrom",
+              "variableKey": "dateFrom"
+            },
+            {
+              "name": "dateTo",
+              "variableKey": "dateTo"
+            },
+            {
+              "name": "deptId",
+              "variableKey": "deptId"
+            },
+            {
+              "name": "projectNo",
+              "variableKey": "projectNo"
+            }
+          ]
         }
       }
     },
@@ -1142,7 +1340,25 @@
           "databaseId": "{{DATABASE_ID}}",
           "query": "SELECT project_no AS \"项目编号\", issue_name AS \"问题名称\", dept AS \"责任单位\", issue_category AS \"原因分类\", status AS \"状态\", issue_date AS \"发生时间\", zero_complete_date AS \"归零时间\", current_progress AS \"当前进展\", pending_days AS \"滞留天数\", CASE WHEN has_zero_plan THEN '是' ELSE '否' END AS \"有归零计划\" FROM biz_dwd_quality_issue_v2 WHERE issue_month >= to_char({{dateFrom}}::date, 'YYYY-MM') AND issue_month <= to_char({{dateTo}}::date, 'YYYY-MM') AND ({{deptId}} IS NULL OR {{deptId}} = '' OR dept = {{deptId}}) AND ({{projectNo}} IS NULL OR {{projectNo}} = '' OR project_no ILIKE '%' || {{projectNo}} || '%') ORDER BY pending_days DESC",
           "queryTimeoutSeconds": 30,
-          "maxRows": 2000
+          "maxRows": 2000,
+          "parameterBindings": [
+            {
+              "name": "dateFrom",
+              "variableKey": "dateFrom"
+            },
+            {
+              "name": "dateTo",
+              "variableKey": "dateTo"
+            },
+            {
+              "name": "deptId",
+              "variableKey": "deptId"
+            },
+            {
+              "name": "projectNo",
+              "variableKey": "projectNo"
+            }
+          ]
         }
       }
     }
