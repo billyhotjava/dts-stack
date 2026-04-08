@@ -1,4 +1,4 @@
-import { useMemo, useCallback, useRef } from 'react';
+import { useMemo, useCallback, useRef, useState, useEffect } from 'react';
 import { analyticsApi, type ScreenListItem } from '../../../api/analyticsApi';
 import type { ScreenComponent, ComponentInteractionMapping, ScreenComponentAction } from '../types';
 import type { DrillState } from '../hooks/useDrillDown';
@@ -357,4 +357,69 @@ export function useComponentInteractions(
         echartsClickHandler,
         filterVariableTimersRef,
     };
+}
+
+// ---------------------------------------------------------------------------
+// Resolvable jump status — pre-flight check for visual disable
+// ---------------------------------------------------------------------------
+
+export function useResolvableJumpStatus(component: ScreenComponent, mode: string): {
+    hasResolvableJump: boolean;
+    isResolving: boolean;
+} {
+    const [status, setStatus] = useState<{ hasResolvableJump: boolean; isResolving: boolean }>({
+        hasResolvableJump: true,
+        isResolving: true,
+    });
+    useEffect(() => {
+        // Outside preview mode, don't pre-resolve — assume clickable
+        if (mode !== 'preview') {
+            setStatus({ hasResolvableJump: true, isResolving: false });
+            return;
+        }
+        const candidates: string[] = [];
+        for (const a of component.actions ?? []) {
+            if (a?.type === 'jump-url' && String(a.jumpUrlTemplate || '').trim()) {
+                candidates.push(String(a.jumpUrlTemplate));
+            }
+        }
+        if (component.interaction?.enabled === true
+            && component.interaction?.jumpEnabled === true
+            && String(component.interaction?.jumpUrlTemplate || '').trim()) {
+            candidates.push(String(component.interaction.jumpUrlTemplate));
+        }
+        // No jump templates at all → cannot jump
+        if (candidates.length === 0) {
+            setStatus({ hasResolvableJump: false, isResolving: false });
+            return;
+        }
+        let cancelled = false;
+        (async () => {
+            for (const tmpl of candidates) {
+                const resolved = await resolveScreenReferenceUrl(tmpl).catch(() => '');
+                if (cancelled) return;
+                if (resolved) {
+                    setStatus({ hasResolvableJump: true, isResolving: false });
+                    return;
+                }
+            }
+            setStatus({ hasResolvableJump: false, isResolving: false });
+        })();
+        return () => { cancelled = true; };
+    }, [component.actions, component.interaction, mode]);
+    return status;
+}
+
+export function hasNonJumpInteractivity(component: ScreenComponent): boolean {
+    const actions = component.actions ?? [];
+    const hasOtherAction = actions.some((a) => {
+        const t = a?.type;
+        return t === 'drill-down' || t === 'drill-up' || t === 'open-panel' || t === 'set-variable' || t === 'emit-intent';
+    });
+    if (hasOtherAction) return true;
+    const interaction = component.interaction;
+    if (interaction?.enabled === true) {
+        if (Array.isArray(interaction.mappings) && interaction.mappings.length > 0) return true;
+    }
+    return false;
 }
