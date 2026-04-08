@@ -1,5 +1,7 @@
 // Screen Designer Component Types
 
+import type { ProjectGanttTask } from '../project-cockpit/components/ProjectGanttBoard';
+
 export type ScreenTheme = 'legacy-dark' | 'titanium' | 'glacier' | 'light-business' | 'dark-command' | 'brand-custom' | 'enterprise-light' | 'enterprise-dark';
 
 export interface ScreenGlobalVariable {
@@ -329,4 +331,35 @@ export interface ComponentItem {
     defaultWidth: number;
     defaultHeight: number;
     defaultConfig: Record<string, unknown>;
+}
+
+export interface MajorProjectKPI {
+    completionRate?: number;       // 0-100
+    milestoneRate?: number;        // 0-1, undefined when no milestones exist
+    highRiskCount?: number;
+    delayDays?: number;
+}
+
+export interface MajorProjectRisk {
+    level: 'high' | 'warn' | 'normal';
+    label: string;
+    taskRef?: string;              // matches a task name in subprojects[*].tasks[*]
+}
+
+export interface SubProject {
+    name: string;
+    tasks: ProjectGanttTask[];
+}
+
+export interface MajorProject {
+    name: string;                  // = project_no from biz_dwd_project_node_v2
+    responsibleDept?: string;      // = first non-empty dept
+    manager?: string;              // = first non-empty project_manager
+    instituteLeader?: string;
+    startDate?: string;            // = MIN(plan_date), YYYY-MM-DD
+    plannedDeliveryDate?: string;  // = MAX(plan_date), YYYY-MM-DD
+    stage?: string;                // derived: 进行中/已完成/存在延期
+    kpi?: MajorProjectKPI;
+    risks?: MajorProjectRisk[];
+    subprojects: SubProject[];
 }
