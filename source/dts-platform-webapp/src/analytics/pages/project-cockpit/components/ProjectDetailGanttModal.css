@@ -1,0 +1,43 @@
+.pgm-modal-overlay {
+	position: fixed;
+	inset: 0;
+	z-index: 9999;
+	background: rgba(2, 6, 23, 0.72);
+	-webkit-backdrop-filter: blur(8px);
+	backdrop-filter: blur(8px);
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	animation: pgm-fade-in 200ms ease-out;
+}
+
+.pgm-modal-window {
+	width: 1440px;
+	height: 820px;
+	max-width: calc(100vw - 80px);
+	max-height: calc(100vh - 80px);
+	background: linear-gradient(180deg, #ffffff 0%, #f8fafc 100%);
+	border-radius: 20px;
+	box-shadow: 0 32px 80px rgba(2, 6, 23, 0.5),
+	            0 0 0 1px rgba(148, 163, 184, 0.18);
+	overflow: hidden;
+	display: flex;
+	flex-direction: column;
+	animation: pgm-scale-in 300ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.pgm-modal-body {
+	flex: 1;
+	display: flex;
+	min-height: 0;
+}
+
+@keyframes pgm-fade-in {
+	from { opacity: 0; }
+	to   { opacity: 1; }
+}
+
+@keyframes pgm-scale-in {
+	from { opacity: 0; transform: scale(0.96); }
+	to   { opacity: 1; transform: scale(1); }
+}
