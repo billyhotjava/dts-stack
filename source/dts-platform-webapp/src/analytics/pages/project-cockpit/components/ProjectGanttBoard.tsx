@@ -1,5 +1,6 @@
 // @ts-nocheck — migrated from analytics-webapp, pending unused-import cleanup
 import { useState } from "react";
+import type { MajorProject } from "../../screens/types";
 import { getGanttOwnerLabelPlacement, resolveGanttBaselineRange, resolveGanttSideTextStyle } from "./projectGanttBoard.helpers";
 
 export type ProjectGanttTask = {
@@ -19,9 +20,13 @@ export type ProjectGanttTask = {
 };
 
 type Props = {
-	tasks: ProjectGanttTask[];
-	maxHeight?: number;
+	tasks?: ProjectGanttTask[];
+	majorProjects?: MajorProject[];
+	renderMode?: "flat" | "hierarchical";
 	onTaskClick?: (task: ProjectGanttTask) => void;
+	onProjectClick?: (project: MajorProject) => void;
+	highlightedTaskName?: string;
+	maxHeight?: number;
 	sideTextColor?: string;
 	dark?: boolean;
 };
@@ -71,7 +76,38 @@ const OWNER_TONE_DARK: Record<string, string> = {
 	high: "border-red-500/[0.35] bg-red-600/[0.22] text-red-300",
 };
 
-export function ProjectGanttBoard({ tasks, maxHeight, onTaskClick, sideTextColor, dark }: Props) {
+export function ProjectGanttBoard(props: Props) {
+	if (props.renderMode === "hierarchical" && props.majorProjects) {
+		return (
+			<HierarchicalGantt
+				majorProjects={props.majorProjects}
+				onProjectClick={props.onProjectClick}
+				maxHeight={props.maxHeight}
+				dark={props.dark}
+				sideTextColor={props.sideTextColor}
+			/>
+		);
+	}
+	return (
+		<FlatGantt
+			tasks={props.tasks ?? []}
+			maxHeight={props.maxHeight}
+			onTaskClick={props.onTaskClick}
+			sideTextColor={props.sideTextColor}
+			dark={props.dark}
+			highlightedTaskName={props.highlightedTaskName}
+		/>
+	);
+}
+
+function FlatGantt({ tasks, maxHeight, onTaskClick, sideTextColor, dark, highlightedTaskName }: {
+	tasks: ProjectGanttTask[];
+	maxHeight?: number;
+	onTaskClick?: (task: ProjectGanttTask) => void;
+	sideTextColor?: string;
+	dark?: boolean;
+	highlightedTaskName?: string;
+}) {
 	const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(new Set());
 	const sideTextStyle = resolveGanttSideTextStyle(sideTextColor);
 
@@ -126,6 +162,9 @@ export function ProjectGanttBoard({ tasks, maxHeight, onTaskClick, sideTextColor
 		? "repeating-linear-gradient(90deg, rgba(148,163,184,0.14) 0, rgba(148,163,184,0.14) 8%, transparent 8%, transparent 16%)"
 		: "repeating-linear-gradient(90deg, rgba(148,163,184,0.08) 0, rgba(148,163,184,0.08) 8%, transparent 8%, transparent 16%)";
 
+	const todayPosPercent = ((Date.now() - start) / total) * 100;
+	const showTodayLine = todayPosPercent >= 0 && todayPosPercent <= 100;
+
 	const renderRow = (task: ProjectGanttTask) => {
 		const planStart = toDateValue(task.planDate) ?? start;
 		const planEnd = toDateValue(task.planEndDate) ?? planStart;
@@ -134,6 +173,8 @@ export function ProjectGanttBoard({ tasks, maxHeight, onTaskClick, sideTextColor
 		const baselineEnd = toDateValue(baseline.endDate) ?? baselineStart;
 		const actual = toDateValue(task.actualDate) ?? Date.now();
 		const isOngoing = !task.actualDate;
+		const isMilestone = task.type === "里程碑节点";
+		const isHighlighted = !!highlightedTaskName && highlightedTaskName === task.name;
 
 		// Baseline bar (plan)
 		const baseLeft = ((baselineStart - start) / total) * 100;
@@ -170,6 +211,9 @@ export function ProjectGanttBoard({ tasks, maxHeight, onTaskClick, sideTextColor
 		} else {
 			barStyle.background = TONE_BG[tone];
 		}
+		if (isHighlighted) {
+			barStyle.boxShadow = "0 0 0 3px rgba(239,68,68,0.5), 0 8px 16px rgba(15,23,42,0.12)";
+		}
 
 		return (
 			<div
@@ -196,7 +240,7 @@ export function ProjectGanttBoard({ tasks, maxHeight, onTaskClick, sideTextColor
 					style={{ background: trackBg }}
 				>
 					{/* Baseline bar (gray, behind) */}
-					{baselineEnd >= baselineStart && (
+					{!isMilestone && baselineEnd >= baselineStart && (
 						<div
 							className="absolute top-3 h-2 rounded"
 							style={{
@@ -208,30 +252,59 @@ export function ProjectGanttBoard({ tasks, maxHeight, onTaskClick, sideTextColor
 							title={`基线: ${baseline.startDate ?? ""} → ${baseline.endDate ?? ""}`}
 						/>
 					)}
-					{/* Actual bar (colored, front) */}
-					<div
-						className="absolute top-1 h-6 inline-flex items-center justify-center px-2.5 rounded-full text-white text-xs whitespace-nowrap overflow-hidden shadow-[0_8px_16px_rgba(15,23,42,0.12)] z-[1]"
-						style={barStyle}
-						title={owner || undefined}
-					>
-						{owner && ownerPlacement === "inside" ? (
-							<span className="text-xs font-bold tracking-wide text-white/[0.98] [text-shadow:0_1px_2px_rgba(15,23,42,0.28)]">{owner}</span>
-						) : null}
-					</div>
-					{/* Owner outside label */}
-					{owner && ownerPlacement !== "inside" ? (
-						<span
-							className={`absolute top-1/2 z-[2] max-w-24 px-2 py-0.5 border rounded-full whitespace-nowrap overflow-hidden text-ellipsis text-xs font-bold tracking-wide pointer-events-none ${dark ? `shadow-[0_8px_18px_rgba(0,0,0,0.35)] ${OWNER_TONE_DARK[tone]}` : `shadow-[0_8px_18px_rgba(15,23,42,0.14)] bg-white/[0.98] ${OWNER_TONE_LIGHT[tone]}`}`}
+					{isMilestone ? (
+						/* Milestone diamond */
+						<div
+							className="absolute z-[1]"
 							style={{
-								left: `${Math.min(ownerAnchor, 100)}%`,
-								transform: ownerPlacement === "outside-left"
-									? "translate(calc(-100% - 6px), -50%)"
-									: "translate(6px, -50%)",
+								left: `${actLeft}%`,
+								top: "50%",
+								width: 16,
+								height: 16,
+								transform: "translate(-50%, -50%) rotate(45deg)",
+								background: TONE_BG[tone],
+								boxShadow: isHighlighted
+									? "0 0 0 3px rgba(239,68,68,0.5), 0 4px 8px rgba(15,23,42,0.18)"
+									: "0 4px 8px rgba(15,23,42,0.18)",
+								border: dark ? "1px solid rgba(255,255,255,0.6)" : "1px solid rgba(15,23,42,0.3)",
 							}}
-							title={owner}
-						>
-							{owner}
-						</span>
+							title={`里程碑: ${task.name}`}
+						/>
+					) : (
+						<>
+							{/* Actual bar (colored, front) */}
+							<div
+								className="absolute top-1 h-6 inline-flex items-center justify-center px-2.5 rounded-full text-white text-xs whitespace-nowrap overflow-hidden shadow-[0_8px_16px_rgba(15,23,42,0.12)] z-[1]"
+								style={barStyle}
+								title={owner || undefined}
+							>
+								{owner && ownerPlacement === "inside" ? (
+									<span className="text-xs font-bold tracking-wide text-white/[0.98] [text-shadow:0_1px_2px_rgba(15,23,42,0.28)]">{owner}</span>
+								) : null}
+							</div>
+							{/* Owner outside label */}
+							{owner && ownerPlacement !== "inside" ? (
+								<span
+									className={`absolute top-1/2 z-[2] max-w-24 px-2 py-0.5 border rounded-full whitespace-nowrap overflow-hidden text-ellipsis text-xs font-bold tracking-wide pointer-events-none ${dark ? `shadow-[0_8px_18px_rgba(0,0,0,0.35)] ${OWNER_TONE_DARK[tone]}` : `shadow-[0_8px_18px_rgba(15,23,42,0.14)] bg-white/[0.98] ${OWNER_TONE_LIGHT[tone]}`}`}
+									style={{
+										left: `${Math.min(ownerAnchor, 100)}%`,
+										transform: ownerPlacement === "outside-left"
+											? "translate(calc(-100% - 6px), -50%)"
+											: "translate(6px, -50%)",
+									}}
+									title={owner}
+								>
+									{owner}
+								</span>
+							) : null}
+						</>
+					)}
+					{/* Today red line */}
+					{showTodayLine ? (
+						<div
+							className="absolute top-0 bottom-0 w-0.5 bg-red-500/60 pointer-events-none z-[3]"
+							style={{ left: `${todayPosPercent}%` }}
+						/>
 					) : null}
 				</div>
 				{/* Side column */}
@@ -266,6 +339,129 @@ export function ProjectGanttBoard({ tasks, maxHeight, onTaskClick, sideTextColor
 						);
 				  })
 				: tasks.map(renderRow)}
+		</div>
+	);
+}
+
+function HierarchicalGantt({ majorProjects, onProjectClick, maxHeight, dark, sideTextColor }: {
+	majorProjects: MajorProject[];
+	onProjectClick?: (project: MajorProject) => void;
+	maxHeight?: number;
+	dark?: boolean;
+	sideTextColor?: string;
+}) {
+	if (majorProjects.length === 0) {
+		return (
+			<div className={`flex items-center justify-center min-h-[220px] border border-dashed rounded-2xl ${dark ? "border-slate-400/20 bg-slate-900/60 text-white/50" : "border-border-default bg-surface-muted text-text-secondary"}`}>
+				当前筛选范围暂无重大项目。
+			</div>
+		);
+	}
+
+	const allDates = majorProjects
+		.flatMap((p) =>
+			p.subprojects.flatMap((sp) =>
+				sp.tasks.flatMap((t) => [
+					toDateValue(t.planDate),
+					toDateValue(t.planEndDate),
+					toDateValue(t.actualDate),
+				])
+			)
+		)
+		.filter((value): value is number => value != null);
+
+	if (allDates.length === 0) {
+		return (
+			<div className={`flex items-center justify-center min-h-[220px] border border-dashed rounded-2xl ${dark ? "border-slate-400/20 bg-slate-900/60 text-white/50" : "border-border-default bg-surface-muted text-text-secondary"}`}>
+				缺少计划日期，无法渲染甘特视图。
+			</div>
+		);
+	}
+
+	const start = Math.min(...allDates);
+	const end = Math.max(...allDates, Date.now());
+	const total = Math.max(end - start, 1);
+
+	const trackBg = dark
+		? "repeating-linear-gradient(90deg, rgba(148,163,184,0.14) 0, rgba(148,163,184,0.14) 8%, transparent 8%, transparent 16%)"
+		: "repeating-linear-gradient(90deg, rgba(148,163,184,0.08) 0, rgba(148,163,184,0.08) 8%, transparent 8%, transparent 16%)";
+
+	const sideTextStyle = resolveGanttSideTextStyle(sideTextColor);
+	const todayPosPercent = ((Date.now() - start) / total) * 100;
+	const showTodayLine = todayPosPercent >= 0 && todayPosPercent <= 100;
+
+	const renderProjectRow = (project: MajorProject) => {
+		const allTasks = project.subprojects.flatMap((sp) => sp.tasks);
+		const dates = allTasks
+			.map((t) => toDateValue(t.planDate))
+			.filter((v): v is number => v != null);
+		if (dates.length === 0) {
+			return null;
+		}
+		const projectStart = Math.min(...dates);
+		const projectEnd = Math.max(...dates);
+		const left = ((projectStart - start) / total) * 100;
+		const width = Math.max(((projectEnd - projectStart) / total) * 100, 2);
+		const tone = (project.kpi?.highRiskCount ?? 0) > 0
+			? "high"
+			: (project.kpi?.delayDays ?? 0) > 0
+				? "warn"
+				: "normal";
+		const interactive = typeof onProjectClick === "function";
+		const triggerClick = () => {
+			onProjectClick?.(project);
+		};
+
+		return (
+			<div
+				key={project.name}
+				className={`grid grid-cols-[240px_1fr_170px] gap-3 items-center rounded-xl transition-[background,box-shadow] duration-[180ms] py-2 px-3 max-[1200px]:grid-cols-1${interactive ? ` cursor-pointer ${dark ? "hover:bg-blue-500/[0.12]" : "hover:bg-blue-600/[0.06]"} focus-visible:outline-2 focus-visible:outline-blue-400/50 focus-visible:outline-offset-2` : ""}`}
+				role={interactive ? "button" : undefined}
+				tabIndex={interactive ? 0 : undefined}
+				onClick={interactive ? triggerClick : undefined}
+				onKeyDown={interactive ? (event) => {
+					if (event.key === "Enter" || event.key === " ") {
+						event.preventDefault();
+						triggerClick();
+					}
+				} : undefined}
+			>
+				{/* Meta column */}
+				<div className={`flex flex-col gap-0.5 text-xs ${dark ? "text-white/85" : "text-text-secondary"}`}>
+					<strong className={`text-[14px] ${dark ? "text-[#e8ecf2]" : "text-text-primary"}`}>{project.name}</strong>
+					<span>{project.responsibleDept ?? ""}{project.manager ? ` · ${project.manager}` : ""}</span>
+				</div>
+				{/* Track */}
+				<div className="relative h-10 rounded-full overflow-visible" style={{ background: trackBg }}>
+					<div
+						className="absolute top-2 h-6 inline-flex items-center justify-center px-3 rounded-full text-white text-xs whitespace-nowrap overflow-hidden shadow-[0_8px_16px_rgba(15,23,42,0.12)] z-[1]"
+						style={{
+							left: `${left}%`,
+							width: `${width}%`,
+							background: TONE_BG[tone],
+						}}
+					>
+						{project.subprojects.length} 子项目 · {allTasks.length} 任务
+					</div>
+					{showTodayLine ? (
+						<div
+							className="absolute top-0 bottom-0 w-0.5 bg-red-500/60 pointer-events-none z-[3]"
+							style={{ left: `${todayPosPercent}%` }}
+						/>
+					) : null}
+				</div>
+				{/* Side column */}
+				<div className={`flex flex-col gap-0.5 text-xs ${dark ? "text-white/85" : "text-text-secondary"}`}>
+					<span className="text-[18px] font-bold" style={sideTextStyle}>{project.kpi?.completionRate ?? 0}%</span>
+					<span style={sideTextStyle}>交付 {project.plannedDeliveryDate ?? "--"}</span>
+				</div>
+			</div>
+		);
+	};
+
+	return (
+		<div className="flex flex-col gap-3" style={{ maxHeight: maxHeight ?? 520, overflowY: "auto" }}>
+			{majorProjects.map(renderProjectRow)}
 		</div>
 	);
 }
