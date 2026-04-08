@@ -829,7 +829,9 @@ async function fetchScreenList(): Promise<ScreenListItem[]> {
 
 function ScreenJumpPicker({ value, onChange }: { value: string; onChange: (url: string) => void }) {
     const isScreenRef = value.startsWith(SCREEN_REF_PREFIX);
-    const [mode, setMode] = useState<'screen' | 'custom'>(isScreenRef ? 'screen' : 'custom');
+    const [mode, setMode] = useState<'screen' | 'custom'>(
+        !value || isScreenRef ? 'screen' : 'custom'
+    );
     const [screens, setScreens] = useState<ScreenListItem[]>([]);
     const [loading, setLoading] = useState(false);
     const [search, setSearch] = useState('');
@@ -883,16 +885,8 @@ function ScreenJumpPicker({ value, onChange }: { value: string; onChange: (url: 
                         </button>
 
                         {open && (
-                            <div
-                                style={{
-                                    position: 'absolute', top: '100%', left: 0, right: 0, zIndex: 999,
-                                    maxHeight: 240, overflowY: 'auto',
-                                    border: '1px solid rgba(148,163,184,0.3)', borderRadius: 6,
-                                    background: 'var(--color-surface-card, #fff)',
-                                    boxShadow: '0 4px 12px rgba(0,0,0,0.08)',
-                                }}
-                            >
-                                <div style={{ padding: '6px 8px', borderBottom: '1px solid rgba(148,163,184,0.18)' }}>
+                            <div className="absolute top-full left-0 right-0 z-[999] max-h-60 overflow-y-auto border border-border-default rounded-md bg-surface-card shadow-lg mt-1">
+                                <div className="px-2 py-1.5 border-b border-border-default">
                                     <input
                                         type="text"
                                         className={inputCls + ' w-full'}
@@ -903,9 +897,9 @@ function ScreenJumpPicker({ value, onChange }: { value: string; onChange: (url: 
                                     />
                                 </div>
                                 {loading ? (
-                                    <div style={{ padding: '12px 14px', fontSize: 12, color: '#94a3b8' }}>加载中...</div>
+                                    <div className="px-3.5 py-3 text-xs text-text-tertiary">加载中...</div>
                                 ) : filtered.length === 0 ? (
-                                    <div style={{ padding: '12px 14px', fontSize: 12, color: '#94a3b8' }}>
+                                    <div className="px-3.5 py-3 text-xs text-text-tertiary">
                                         {search ? '无匹配结果' : '暂无大屏'}
                                     </div>
                                 ) : (
@@ -916,22 +910,12 @@ function ScreenJumpPicker({ value, onChange }: { value: string; onChange: (url: 
                                             <div
                                                 key={String(s.id)}
                                                 onClick={() => { onChange(buildScreenRefUrl(s)); setOpen(false); setSearch(''); }}
-                                                style={{
-                                                    padding: '8px 14px', cursor: 'pointer', fontSize: 12,
-                                                    display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-                                                    background: isSelected ? 'rgba(37,99,235,0.08)' : 'transparent',
-                                                }}
-                                                onMouseEnter={(e) => { (e.currentTarget as HTMLDivElement).style.background = 'rgba(37,99,235,0.06)'; }}
-                                                onMouseLeave={(e) => { (e.currentTarget as HTMLDivElement).style.background = isSelected ? 'rgba(37,99,235,0.08)' : 'transparent'; }}
+                                                className={`flex items-center justify-between gap-2 px-3.5 py-2 cursor-pointer text-xs hover:bg-brand/[0.06] ${isSelected ? 'bg-brand/[0.08]' : ''}`}
                                             >
-                                                <span style={{ fontWeight: isSelected ? 600 : 400 }}>
+                                                <span className={`flex-1 min-w-0 truncate ${isSelected ? 'font-semibold' : ''}`}>
                                                     {isSelected ? '✓ ' : ''}{s.name || `大屏 #${s.id}`}
                                                 </span>
-                                                <span style={{
-                                                    fontSize: 10, padding: '1px 6px', borderRadius: 4,
-                                                    background: isPublished ? 'rgba(16,185,129,0.12)' : 'rgba(148,163,184,0.12)',
-                                                    color: isPublished ? '#059669' : '#94a3b8',
-                                                }}>
+                                                <span className={`flex-shrink-0 text-[10px] px-1.5 py-0.5 rounded ${isPublished ? 'bg-emerald-500/10 text-emerald-500' : 'bg-slate-400/10 text-text-tertiary'}`}>
                                                     {isPublished ? '已发布' : '草稿'}
                                                 </span>
                                             </div>
@@ -6085,13 +6069,7 @@ function renderActionConfig(
                 return (
                     <div
                         key={`action-${index}`}
-                        style={{
-                            border: '1px solid rgba(148,163,184,0.18)',
-                            borderRadius: 10,
-                            padding: 10,
-                            marginBottom: 10,
-                            background: 'rgba(248,250,252,0.72)',
-                        }}
+                        className="border border-border-default rounded-[10px] p-2.5 mb-2.5 bg-surface-muted/40"
                     >
                         <div className="property-row flex items-center mb-3">
                             <label className="property-label w-20 text-xs text-text-secondary">动作标题</label>
@@ -6125,12 +6103,7 @@ function renderActionConfig(
                                 {mappings.map((mapping, mappingIndex) => (
                                     <div
                                         key={`action-${index}-mapping-${mappingIndex}`}
-                                        style={{
-                                            border: '1px dashed rgba(148,163,184,0.22)',
-                                            borderRadius: 8,
-                                            padding: 8,
-                                            marginBottom: 8,
-                                        }}
+                                        className="border border-dashed border-border-default rounded-lg p-2 mb-2"
                                     >
                                         <div className="property-row flex items-center mb-3">
                                             <label className="property-label w-20 text-xs text-text-secondary">目标变量</label>
