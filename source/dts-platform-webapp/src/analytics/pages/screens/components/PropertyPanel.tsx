@@ -85,6 +85,11 @@ const PROPERTY_FOCUS_SECTION_KEYS = new Set<string>([
     'plugin-config',
     'component-config',
     'data-source',
+    // Allow Interaction tab sections in focus mode — without these, switching
+    // to the 交互 tab on a basic component (shape/title/...) shows an empty pane.
+    'interaction',
+    'actions',
+    'drill-down',
 ]);
 const PROPERTY_SECTION_ESSENTIAL_COLLAPSED = [
     'plugin-config',
