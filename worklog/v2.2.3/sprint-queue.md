@@ -123,3 +123,20 @@
 
 **统计**: READY=0, IN_PROGRESS=0, DONE=10, BLOCKED=0
 **设计文档**: `worklog/v2.2.3/sprint-8-202604/README.md`
+
+## Sprint-9: GPMC 大屏跳转修复 + 甘特图弹层下钻 (202604)
+**状态**: READY
+**类型**: Implementation（实施型）
+
+| Feature | Task 数 | 状态 |
+|---------|---------|------|
+| F1-跳转引擎"无目标=不跳"修复 | 5 | READY |
+| F2-编辑器 ScreenJumpPicker UI 修复 | 4 | READY |
+| F3-JSON 实例死链清理 | 1 | READY |
+| F4-父项目汇总甘特组件改造 | 4 | READY |
+| F5-ProjectDetailGanttModal 弹层组件 | 2 | READY |
+| F6-gpmc-execution-gantt JSON 改造 | 1 | READY |
+| F7-文档与索引 | 1 | READY |
+
+**统计**: READY=18, IN_PROGRESS=0, DONE=0, BLOCKED=0
+**设计文档**: `worklog/v2.2.3/sprint-9-202604/README.md`
