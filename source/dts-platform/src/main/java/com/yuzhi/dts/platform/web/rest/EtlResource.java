@@ -10,6 +10,7 @@ import com.yuzhi.dts.platform.service.etl.DbtConfigService;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.yuzhi.dts.platform.service.etl.DbtManifestService;
+import com.yuzhi.dts.platform.service.etl.DbtModelDiagnosticsService;
 import com.yuzhi.dts.platform.service.etl.DbtAssetSyncService;
 import com.yuzhi.dts.platform.service.etl.DbtDagService;
 import com.yuzhi.dts.platform.service.etl.DbtPreviewService;
@@ -39,6 +40,7 @@ public class EtlResource {
 
     private final DbtConfigService dbtConfigService;
     private final DbtManifestService manifestService;
+    private final DbtModelDiagnosticsService dbtModelDiagnosticsService;
     private final DbtSourceService dbtSourceService;
     private final DbtAssetSyncService dbtAssetSyncService;
     private final DbtDagService dbtDagService;
@@ -62,6 +64,7 @@ public class EtlResource {
     public EtlResource(
         DbtConfigService dbtConfigService,
         DbtManifestService manifestService,
+        DbtModelDiagnosticsService dbtModelDiagnosticsService,
         DbtSourceService dbtSourceService,
         DbtAssetSyncService dbtAssetSyncService,
         DbtDagService dbtDagService,
@@ -82,6 +85,7 @@ public class EtlResource {
     ) {
         this.dbtConfigService = dbtConfigService;
         this.manifestService = manifestService;
+        this.dbtModelDiagnosticsService = dbtModelDiagnosticsService;
         this.dbtSourceService = dbtSourceService;
         this.dbtAssetSyncService = dbtAssetSyncService;
         this.dbtDagService = dbtDagService;
@@ -121,6 +125,13 @@ public class EtlResource {
     public ApiResponse<DbtManifestService.DbtModelResult> listDbtModels() {
         ApiResponse<DbtManifestService.DbtModelResult> response = ApiResponses.ok(manifestService.listModels());
         auditService.audit("READ", "etl.dbt.models", "list");
+        return response;
+    }
+
+    @GetMapping("/dbt/models/{model}/diagnostics")
+    public ApiResponse<DbtModelDiagnosticsService.ModelDiagnostics> diagnoseDbtModel(@PathVariable String model) {
+        ApiResponse<DbtModelDiagnosticsService.ModelDiagnostics> response = ApiResponses.ok(dbtModelDiagnosticsService.diagnose(model));
+        auditService.audit("READ", "etl.dbt.model.diagnostics", model);
         return response;
     }
 

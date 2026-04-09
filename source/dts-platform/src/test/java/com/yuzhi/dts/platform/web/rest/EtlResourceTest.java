@@ -21,6 +21,7 @@ import com.yuzhi.dts.platform.service.etl.DbtAssetSyncService;
 import com.yuzhi.dts.platform.service.etl.DbtConfigService;
 import com.yuzhi.dts.platform.service.etl.DbtDagService;
 import com.yuzhi.dts.platform.service.etl.DbtManifestService;
+import com.yuzhi.dts.platform.service.etl.DbtModelDiagnosticsService;
 import com.yuzhi.dts.platform.service.etl.DbtOutputRelationService;
 import com.yuzhi.dts.platform.service.etl.DbtPreviewService;
 import com.yuzhi.dts.platform.service.etl.DbtQualityGateService;
@@ -35,6 +36,54 @@ import org.junit.jupiter.api.Test;
 import org.springframework.web.server.ResponseStatusException;
 
 class EtlResourceTest {
+
+    @Test
+    void diagnoseDbtModelShouldReturnServicePayload() {
+        DbtModelDiagnosticsService diagnosticsService = mock(DbtModelDiagnosticsService.class);
+        DbtModelDiagnosticsService.ModelDiagnostics diagnostics = new DbtModelDiagnosticsService.ModelDiagnostics(
+            true,
+            true,
+            "biz_dws_progress_monthly_v2",
+            "model.demo.biz_dws_progress_monthly_v2",
+            "model",
+            "models/dws/biz_dws_progress_monthly_v2.sql",
+            "\"public\".\"biz_dws_progress_monthly_v2\"",
+            new DbtModelDiagnosticsService.RelationStats("public", "biz_dws_progress_monthly_v2", "\"public\".\"biz_dws_progress_monthly_v2\"", true, 0L, null),
+            java.util.List.of(),
+            null,
+            java.util.List.of("当前模型 0 行，但存在 1 个非空上游，优先检查模型 WHERE 过滤、日期解析和聚合条件"),
+            java.util.List.of("SELECT COUNT(*) FROM \"public\".\"biz_dws_progress_monthly_v2\";"),
+            null
+        );
+        when(diagnosticsService.diagnose("biz_dws_progress_monthly_v2")).thenReturn(diagnostics);
+
+        EtlResource resource = new EtlResource(
+            mock(DbtConfigService.class),
+            mock(DbtManifestService.class),
+            diagnosticsService,
+            mock(DbtSourceService.class),
+            mock(DbtAssetSyncService.class),
+            mock(DbtDagService.class),
+            mock(DbtPreviewService.class),
+            mock(DbtOutputRelationService.class),
+            mock(DbtRunResultService.class),
+            mock(DbtQualityGateService.class),
+            mock(DbtReleaseGateService.class),
+            mock(DbtReleaseSubmissionService.class),
+            new DbtArtifactSyncState(),
+            mock(AirflowClient.class),
+            airflowProperties(0, 0),
+            mock(ExternalRunLogService.class),
+            mock(AuditService.class),
+            new ObjectMapper(),
+            mock(ModelingSqlModelRepository.class),
+            mock(com.yuzhi.dts.platform.service.governance.IndicatorRunTracker.class)
+        );
+
+        ApiResponse<DbtModelDiagnosticsService.ModelDiagnostics> response = resource.diagnoseDbtModel("biz_dws_progress_monthly_v2");
+
+        assertThat(response.getData()).isEqualTo(diagnostics);
+    }
 
     @Test
     void triggerDbtCompileShouldFailFastWhenDagIsNotReady() {
@@ -172,6 +221,7 @@ class EtlResourceTest {
         EtlResource resource = new EtlResource(
             mock(DbtConfigService.class),
             mock(DbtManifestService.class),
+            mock(DbtModelDiagnosticsService.class),
             mock(DbtSourceService.class),
             mock(DbtAssetSyncService.class),
             mock(DbtDagService.class),
@@ -187,7 +237,8 @@ class EtlResourceTest {
             mock(ExternalRunLogService.class),
             mock(AuditService.class),
             new ObjectMapper(),
-            mock(ModelingSqlModelRepository.class)
+            mock(ModelingSqlModelRepository.class),
+            mock(com.yuzhi.dts.platform.service.governance.IndicatorRunTracker.class)
         );
 
         assertThatThrownBy(() -> resource.analyzeDbtOutputRelation(modelId))
@@ -238,6 +289,7 @@ class EtlResourceTest {
         EtlResource resource = new EtlResource(
             mock(DbtConfigService.class),
             mock(DbtManifestService.class),
+            mock(DbtModelDiagnosticsService.class),
             dbtSourceService,
             mock(DbtAssetSyncService.class),
             dbtDagService,
@@ -253,7 +305,8 @@ class EtlResourceTest {
             mock(ExternalRunLogService.class),
             mock(AuditService.class),
             new ObjectMapper(),
-            sqlModelRepository
+            sqlModelRepository,
+            mock(com.yuzhi.dts.platform.service.governance.IndicatorRunTracker.class)
         );
 
         ApiResponse<Map<String, Object>> response = resource.truncateDbtOutputRelation(
@@ -288,6 +341,7 @@ class EtlResourceTest {
         return new EtlResource(
             mock(DbtConfigService.class),
             mock(DbtManifestService.class),
+            mock(DbtModelDiagnosticsService.class),
             dbtSourceService,
             mock(DbtAssetSyncService.class),
             dbtDagService,
@@ -303,7 +357,8 @@ class EtlResourceTest {
             mock(ExternalRunLogService.class),
             mock(AuditService.class),
             new ObjectMapper(),
-            mock(ModelingSqlModelRepository.class)
+            mock(ModelingSqlModelRepository.class),
+            mock(com.yuzhi.dts.platform.service.governance.IndicatorRunTracker.class)
         );
     }
 

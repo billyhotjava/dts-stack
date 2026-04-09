@@ -44,6 +44,7 @@ import {
 	ThunderboltOutlined,
 	SafetyCertificateOutlined,
 	InboxOutlined,
+	BugOutlined,
 } from "@ant-design/icons";
 import type { UploadFile } from "antd/es/upload/interface";
 import type { ColumnsType } from "antd/es/table";
@@ -76,6 +77,7 @@ import {
 	listTemplateLayers,
 	getDbtRunLog,
 	previewDbtModel,
+	getDbtModelDiagnostics,
 	truncateDbtOutputRelation,
 	rebuildDbtOutputRelation,
 	getDbtGitStatus,
@@ -95,6 +97,7 @@ import ImportModelModal from "./components/ImportModelModal";
 import OdsGenerateModal from "./components/OdsGenerateModal";
 import SnippetDrawer from "./components/SnippetDrawer";
 import OutputRelationModal from "./components/OutputRelationModal";
+import DbtModelDiagnosticsDrawer from "./components/DbtModelDiagnosticsDrawer";
 import { useRouter } from "@/routes/hooks";
 import { buildArchivePayload, collectUnassignedModelIds } from "./sqlModelArchive.helpers";
 import { resolveBatchImportNavigation } from "./batchImportNavigation.helpers";
@@ -148,6 +151,7 @@ import type {
 	DbtRunSummary,
 	DbtSyncStatus,
 	DbtOutputRelation,
+	DbtModelDiagnostics,
 	SqlModel,
 	ProjectSpace,
 	DagRun,
@@ -328,6 +332,11 @@ export default function SqlModelingPage() {
 	const [outputRelationSubmitting, setOutputRelationSubmitting] = useState(false);
 	const [outputRelation, setOutputRelation] = useState<DbtOutputRelation | null>(null);
 	const [outputRelationError, setOutputRelationError] = useState<string | null>(null);
+	const [diagnosticsOpen, setDiagnosticsOpen] = useState(false);
+	const [diagnosticsLoading, setDiagnosticsLoading] = useState(false);
+	const [diagnosticsModel, setDiagnosticsModel] = useState<SqlModel | null>(null);
+	const [diagnosticsResult, setDiagnosticsResult] = useState<DbtModelDiagnostics | null>(null);
+	const [diagnosticsError, setDiagnosticsError] = useState<string | null>(null);
 	const [governanceOpen, setGovernanceOpen] = useState(false);
 	const [governancePreviewLoading, setGovernancePreviewLoading] = useState(false);
 	const [governanceExecuting, setGovernanceExecuting] = useState(false);
@@ -540,14 +549,14 @@ export default function SqlModelingPage() {
 	}, []);
 
 	// FE-004: Load execution log from Airflow
-	const loadExecLog = useCallback(async (dagRunId?: string, dagId?: string) => {
+	const loadExecLog = useCallback(async (dagRunId?: string, dagId?: string, taskId?: string) => {
 		if (!dagRunId) {
 			setExecLog("");
 			return;
 		}
 		setExecLogLoading(true);
 		try {
-			const resp = await getDbtRunLog(dagRunId, dagId ? { dagId } : undefined);
+			const resp = await getDbtRunLog(dagRunId, dagId || taskId ? { dagId, taskId } : undefined);
 			setExecLog(typeof resp === "string" ? resp : (resp as any)?.log || (resp as any)?.content || JSON.stringify(resp, null, 2));
 		} catch {
 			setExecLog("日志加载失败，请稍后重试。");
@@ -574,6 +583,56 @@ export default function SqlModelingPage() {
 			setPreviewLoading(false);
 		}
 	}, []);
+
+	const loadDiagnostics = useCallback(async (model?: SqlModel | null) => {
+		const targetModel = model || null;
+		if (!targetModel?.name) {
+			setDiagnosticsResult(null);
+			setDiagnosticsError("请先选择一个模型");
+			return;
+		}
+		setDiagnosticsLoading(true);
+		setDiagnosticsResult(null);
+		setDiagnosticsError(null);
+		try {
+			const resp = (await getDbtModelDiagnostics(targetModel.name)) as DbtModelDiagnostics;
+			setDiagnosticsResult(resp || null);
+		} catch (err: any) {
+			setDiagnosticsResult(null);
+			setDiagnosticsError(normalizeText(err?.message) || "诊断加载失败，请稍后重试。");
+		} finally {
+			setDiagnosticsLoading(false);
+		}
+	}, []);
+
+	const openDiagnosticsDrawer = useCallback(async (model?: SqlModel | null) => {
+		const targetModel = model || null;
+		if (!targetModel?.name) {
+			toast.error("请先选择一个模型");
+			return;
+		}
+		setDiagnosticsModel(targetModel);
+		setDiagnosticsOpen(true);
+		await loadDiagnostics(targetModel);
+	}, [loadDiagnostics]);
+
+	const openDiagnosticsPreview = useCallback(() => {
+		if (!diagnosticsModel?.name) {
+			return;
+		}
+		setBottomTab("preview");
+		void loadPreview(diagnosticsModel.name, previewLimit);
+	}, [diagnosticsModel, loadPreview, previewLimit]);
+
+	const openDiagnosticsLogs = useCallback(() => {
+		setBottomTab("operations");
+		setOpsSubTab("execlog");
+		const dagRunId = normalizeText(diagnosticsResult?.runtime?.airflowRun?.dagRunId);
+		const taskId = normalizeText(diagnosticsResult?.runtime?.airflowRun?.taskId);
+		if (dagRunId) {
+			void loadExecLog(dagRunId, undefined, taskId || undefined);
+		}
+	}, [diagnosticsResult, loadExecLog]);
 
 	// FE-006: Load git status + log + diff
 	const loadGitInfo = useCallback(async () => {
@@ -2193,6 +2252,9 @@ export default function SqlModelingPage() {
 					>
 						保存
 					</Button>
+					<Button icon={<BugOutlined />} onClick={() => void openDiagnosticsDrawer(activeModel)} disabled={!activeModel?.name}>
+						断链诊断
+					</Button>
 					{/* 插入代码 */}
 						<Dropdown menu={{ items: insertMenuItems }} trigger={["click"]}>
 							<Button icon={<CodeOutlined />} disabled={!activeModel}>
@@ -2412,6 +2474,11 @@ export default function SqlModelingPage() {
 									归档到项目空间
 								</Button>
 							)}
+							{activeModel?.name ? (
+								<Button size="small" icon={<BugOutlined />} onClick={() => void openDiagnosticsDrawer(activeModel)}>
+									诊断
+								</Button>
+							) : null}
 							<Tooltip title="刷新模型列表">
 								<Button size="small" icon={<SyncOutlined />} onClick={loadModels} loading={modelsLoading} />
 							</Tooltip>
@@ -2471,6 +2538,17 @@ export default function SqlModelingPage() {
 										{activeModel ? (
 											<div className="space-y-3">
 												<div className="space-y-1 text-xs">
+													<div className="rounded border border-border bg-muted/20 px-2 py-2">
+														<div className="mb-2 flex items-center justify-between">
+															<span className="text-muted-foreground">模型诊断</span>
+															<Button size="small" type="link" className="px-0" onClick={() => void openDiagnosticsDrawer(activeModel)}>
+																打开
+															</Button>
+														</div>
+														<div className="text-[11px] text-muted-foreground">
+															查看 ODS → DWD → DWS 断链提示、上游行数和推荐排查 SQL。
+														</div>
+													</div>
 													<div className="flex justify-between">
 														<span className="text-muted-foreground">数据源</span>
 														<span className="font-medium">{activeModel.sourceDataSourceName || "-"}</span>
@@ -3449,7 +3527,7 @@ export default function SqlModelingPage() {
 				filteredRefs={filteredDbtRefs}
 				onInsertSnippet={insertSnippet}
 			/>
-				<OutputRelationModal
+			<OutputRelationModal
 					open={outputModalOpen}
 					onClose={() => {
 						setOutputModalOpen(false);
@@ -3465,6 +3543,17 @@ export default function SqlModelingPage() {
 					errorMessage={outputRelationError}
 					activeModel={activeModel}
 				/>
+			<DbtModelDiagnosticsDrawer
+				open={diagnosticsOpen}
+				onClose={() => setDiagnosticsOpen(false)}
+				onReload={() => void loadDiagnostics(diagnosticsModel)}
+				onOpenPreview={openDiagnosticsPreview}
+				onOpenLogs={openDiagnosticsLogs}
+				loading={diagnosticsLoading}
+				model={diagnosticsModel}
+				diagnostics={diagnosticsResult}
+				errorMessage={diagnosticsError}
+			/>
 			</div>
 		);
 	}

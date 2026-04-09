@@ -33,6 +33,7 @@ import java.time.Duration;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.time.LocalTime;
 import java.time.format.DateTimeFormatter;
 import java.util.Date;
 import java.util.ArrayList;
@@ -793,7 +794,7 @@ public class ExcelImportService {
                 case STRING:
                 case DIRECT_STRING:
                 case RICH_TEXT_STRING:
-                    return safe(cell.getStringValue());
+                    return normalizePotentialDateString(safe(cell.getStringValue()), dateFormat);
                 case BOOLEAN:
                     return cell.getBooleanValue() == null ? "" : cell.getBooleanValue().toString();
                 case NUMBER:
@@ -806,10 +807,10 @@ public class ExcelImportService {
                 case EMPTY:
                     return "";
                 default:
-                    return safe(cell.getStringValue());
+                    return normalizePotentialDateString(safe(cell.getStringValue()), dateFormat);
             }
         } catch (Exception ex) {
-            return safe(cell.getStringValue());
+            return normalizePotentialDateString(safe(cell.getStringValue()), dateFormat);
         }
     }
 
@@ -845,6 +846,59 @@ public class ExcelImportService {
     private String safe(String value) {
         if (!StringUtils.hasText(value)) return "";
         return value.trim();
+    }
+
+    private String normalizePotentialDateString(String value, String dateFormat) {
+        String trimmed = safe(value);
+        if (!StringUtils.hasText(trimmed)) {
+            return "";
+        }
+        LocalDateTime parsed = parseLooseDateTime(trimmed);
+        if (parsed == null) {
+            return trimmed;
+        }
+        try {
+            return DateTimeFormatter.ofPattern(dateFormat).format(parsed);
+        } catch (IllegalArgumentException ex) {
+            return trimmed;
+        }
+    }
+
+    private LocalDateTime parseLooseDateTime(String value) {
+        if (!StringUtils.hasText(value)) {
+            return null;
+        }
+        String normalized = value.trim().replace('T', ' ');
+        java.util.regex.Matcher matcher = java.util.regex.Pattern
+            .compile(
+                "^(\\d{4})[-/.年](\\d{1,2})[-/.月](\\d{1,2})(?:日)?(?:\\s+(\\d{1,2})(?::(\\d{1,2}))(?::(\\d{1,2}))?)?$"
+            )
+            .matcher(normalized);
+        if (!matcher.matches()) {
+            return null;
+        }
+        try {
+            int year = Integer.parseInt(matcher.group(1));
+            int month = Integer.parseInt(matcher.group(2));
+            int day = Integer.parseInt(matcher.group(3));
+            int hour = parseIntOrDefault(matcher.group(4), 0);
+            int minute = parseIntOrDefault(matcher.group(5), 0);
+            int second = parseIntOrDefault(matcher.group(6), 0);
+            return LocalDateTime.of(LocalDate.of(year, month, day), LocalTime.of(hour, minute, second));
+        } catch (RuntimeException ex) {
+            return null;
+        }
+    }
+
+    private int parseIntOrDefault(String value, int defaultValue) {
+        if (!StringUtils.hasText(value)) {
+            return defaultValue;
+        }
+        try {
+            return Integer.parseInt(value);
+        } catch (NumberFormatException ex) {
+            return defaultValue;
+        }
     }
 
     private String normalizeNumber(String value) {

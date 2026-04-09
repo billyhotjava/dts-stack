@@ -87,6 +87,64 @@ export type DbtOutputRelation = {
 	checkMessage?: string;
 };
 
+export type DbtModelRelationStats = {
+	schema?: string;
+	identifier?: string;
+	relationName?: string;
+	exists?: boolean;
+	rowCount?: number | null;
+	error?: string | null;
+};
+
+export type DbtModelDependencyDiagnostic = {
+	dependency?: {
+		uniqueId?: string;
+		name?: string;
+		resourceType?: string;
+		path?: string;
+		relationName?: string;
+	};
+	stats?: DbtModelRelationStats | null;
+};
+
+export type DbtModelRuntimeRunInfo = {
+	present?: boolean;
+	invocationId?: string;
+	status?: string;
+	command?: string;
+	generatedAt?: string;
+};
+
+export type DbtModelAirflowRunInfo = {
+	present?: boolean;
+	dagRunId?: string;
+	state?: string;
+	logicalDate?: string;
+	taskId?: string;
+	logSnippet?: string;
+};
+
+export type DbtModelRuntimeDiagnostics = {
+	dbtRun?: DbtModelRuntimeRunInfo | null;
+	airflowRun?: DbtModelAirflowRunInfo | null;
+};
+
+export type DbtModelDiagnostics = {
+	enabled?: boolean;
+	success?: boolean;
+	model?: string;
+	uniqueId?: string;
+	resourceType?: string;
+	path?: string;
+	relationName?: string;
+	current?: DbtModelRelationStats | null;
+	upstreams?: DbtModelDependencyDiagnostic[];
+	runtime?: DbtModelRuntimeDiagnostics | null;
+	findings?: string[];
+	recommendedQueries?: string[];
+	message?: string | null;
+};
+
 export type SqlModel = {
 	id?: string;
 	planId?: string;

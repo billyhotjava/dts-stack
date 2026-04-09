@@ -144,6 +144,8 @@ export type AirflowTaskInstance = {
 // dbt data preview
 export const previewDbtModel = (model: string, limit = 100) =>
 	api.get(withModelingRequestTimeout({ url: "/etl/dbt/preview", params: { model, limit } }));
+export const getDbtModelDiagnostics = (model: string) =>
+	api.get(withModelingRequestTimeout({ url: `/etl/dbt/models/${encodeURIComponent(model)}/diagnostics` }));
 export const getDbtOutputRelation = (modelId: string) =>
 	api.get(withModelingRequestTimeout({ url: "/etl/dbt/output", params: { modelId } }));
 export const truncateDbtOutputRelation = (data: { modelId: string; target?: string }) =>

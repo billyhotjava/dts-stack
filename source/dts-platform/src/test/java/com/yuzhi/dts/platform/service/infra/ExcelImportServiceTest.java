@@ -16,6 +16,7 @@ import java.time.Instant;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
+import org.apache.poi.ss.usermodel.CellType;
 import org.apache.poi.ss.usermodel.FormulaError;
 import org.apache.poi.xssf.usermodel.XSSFWorkbook;
 import org.junit.jupiter.api.BeforeEach;
@@ -113,6 +114,75 @@ class ExcelImportServiceTest {
         assertThat(response.rowCount()).isEqualTo(1);
         assertThat(response.errorCount()).isZero();
         assertThat(Files.readAllLines(Path.of(response.csvPath()))).containsExactly("col_a,formula_value", "demo,");
+    }
+
+    @Test
+    void parseShouldNormalizeLooseDateStringsIntoConfiguredFormat() throws Exception {
+        UUID fileId = UUID.randomUUID();
+        Path source = tempDir.resolve("exchange/excel/date-string/source.xlsx");
+        Files.createDirectories(source.getParent());
+        try (XSSFWorkbook workbook = new XSSFWorkbook(); OutputStream out = Files.newOutputStream(source)) {
+            var sheet = workbook.createSheet("sheet1");
+            var header = sheet.createRow(0);
+            header.createCell(0).setCellValue("project_no");
+            header.createCell(1).setCellValue("plan_date");
+            header.createCell(2).setCellValue("issue_date");
+
+            var row = sheet.createRow(1);
+            row.createCell(0).setCellValue("P-001");
+            row.createCell(1, CellType.STRING).setCellValue("2026/1/2");
+            row.createCell(2, CellType.STRING).setCellValue("2026-1-3 4:5:6");
+
+            workbook.write(out);
+        }
+
+        InfraExternalExchangeFile file = buildFile(fileId, source, "date-string.xlsx");
+        when(repository.findById(fileId)).thenReturn(Optional.of(file));
+
+        var response = excelImportService.parse(
+            new ExcelImportParseRequest(fileId, "sheet1", null, 1, 2, ",", 20, true, true, "yyyy-MM-dd HH:mm:ss"),
+            "tester",
+            "信息科",
+            true
+        );
+
+        assertThat(Files.readAllLines(Path.of(response.csvPath())))
+            .containsExactly(
+                "project_no,plan_date,issue_date",
+                "P-001,2026-01-02 00:00:00,2026-01-03 04:05:06"
+            );
+    }
+
+    @Test
+    void parseShouldKeepNonDateStringsUnchanged() throws Exception {
+        UUID fileId = UUID.randomUUID();
+        Path source = tempDir.resolve("exchange/excel/non-date-string/source.xlsx");
+        Files.createDirectories(source.getParent());
+        try (XSSFWorkbook workbook = new XSSFWorkbook(); OutputStream out = Files.newOutputStream(source)) {
+            var sheet = workbook.createSheet("sheet1");
+            var header = sheet.createRow(0);
+            header.createCell(0).setCellValue("project_no");
+            header.createCell(1).setCellValue("remark");
+
+            var row = sheet.createRow(1);
+            row.createCell(0).setCellValue("P-002");
+            row.createCell(1, CellType.STRING).setCellValue("2026年计划待确认");
+
+            workbook.write(out);
+        }
+
+        InfraExternalExchangeFile file = buildFile(fileId, source, "non-date-string.xlsx");
+        when(repository.findById(fileId)).thenReturn(Optional.of(file));
+
+        var response = excelImportService.parse(
+            new ExcelImportParseRequest(fileId, "sheet1", null, 1, 2, ",", 20, true, true, "yyyy-MM-dd HH:mm:ss"),
+            "tester",
+            "信息科",
+            true
+        );
+
+        assertThat(Files.readAllLines(Path.of(response.csvPath())))
+            .containsExactly("project_no,remark", "P-002,2026年计划待确认");
     }
 
     private InfraExternalExchangeFile buildFile(UUID fileId, Path source, String fileName) {

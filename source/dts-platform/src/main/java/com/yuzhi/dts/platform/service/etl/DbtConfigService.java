@@ -242,16 +242,52 @@ public class DbtConfigService {
                     when {{ nullif_placeholder(expr) }} is null then null
                     when {{ nullif_placeholder(expr) }} ~ '^\\d{4}-\\d{2}-\\d{2}$'
                       then to_date({{ nullif_placeholder(expr) }}, 'YYYY-MM-DD')
+                    when {{ nullif_placeholder(expr) }} ~ '^\\d{4}-\\d{1,2}-\\d{1,2}$'
+                      then make_date(
+                        split_part({{ nullif_placeholder(expr) }}, '-', 1)::int,
+                        split_part({{ nullif_placeholder(expr) }}, '-', 2)::int,
+                        split_part({{ nullif_placeholder(expr) }}, '-', 3)::int
+                      )
                     when {{ nullif_placeholder(expr) }} ~ '^\\d{4}-\\d{2}-\\d{2}\\s+.*$'
                       then to_date(substr({{ nullif_placeholder(expr) }}, 1, 10), 'YYYY-MM-DD')
+                    when {{ nullif_placeholder(expr) }} ~ '^\\d{4}-\\d{1,2}-\\d{1,2}\\s+.*$'
+                      then make_date(
+                        split_part(split_part({{ nullif_placeholder(expr) }}, ' ', 1), '-', 1)::int,
+                        split_part(split_part({{ nullif_placeholder(expr) }}, ' ', 1), '-', 2)::int,
+                        split_part(split_part({{ nullif_placeholder(expr) }}, ' ', 1), '-', 3)::int
+                      )
                     when {{ nullif_placeholder(expr) }} ~ '^\\d{4}/\\d{2}/\\d{2}$'
                       then to_date(replace({{ nullif_placeholder(expr) }}, '/', '-'), 'YYYY-MM-DD')
+                    when {{ nullif_placeholder(expr) }} ~ '^\\d{4}/\\d{1,2}/\\d{1,2}$'
+                      then make_date(
+                        split_part(replace({{ nullif_placeholder(expr) }}, '/', '-'), '-', 1)::int,
+                        split_part(replace({{ nullif_placeholder(expr) }}, '/', '-'), '-', 2)::int,
+                        split_part(replace({{ nullif_placeholder(expr) }}, '/', '-'), '-', 3)::int
+                      )
                     when {{ nullif_placeholder(expr) }} ~ '^\\d{4}/\\d{2}/\\d{2}\\s+.*$'
                       then to_date(replace(substr({{ nullif_placeholder(expr) }}, 1, 10), '/', '-'), 'YYYY-MM-DD')
+                    when {{ nullif_placeholder(expr) }} ~ '^\\d{4}/\\d{1,2}/\\d{1,2}\\s+.*$'
+                      then make_date(
+                        split_part(replace(split_part({{ nullif_placeholder(expr) }}, ' ', 1), '/', '-'), '-', 1)::int,
+                        split_part(replace(split_part({{ nullif_placeholder(expr) }}, ' ', 1), '/', '-'), '-', 2)::int,
+                        split_part(replace(split_part({{ nullif_placeholder(expr) }}, ' ', 1), '/', '-'), '-', 3)::int
+                      )
                     when {{ nullif_placeholder(expr) }} ~ '^\\d{4}\\.\\d{2}\\.\\d{2}$'
                       then to_date(replace({{ nullif_placeholder(expr) }}, '.', '-'), 'YYYY-MM-DD')
+                    when {{ nullif_placeholder(expr) }} ~ '^\\d{4}\\.\\d{1,2}\\.\\d{1,2}$'
+                      then make_date(
+                        split_part(replace({{ nullif_placeholder(expr) }}, '.', '-'), '-', 1)::int,
+                        split_part(replace({{ nullif_placeholder(expr) }}, '.', '-'), '-', 2)::int,
+                        split_part(replace({{ nullif_placeholder(expr) }}, '.', '-'), '-', 3)::int
+                      )
                     when {{ nullif_placeholder(expr) }} ~ '^\\d{4}\\.\\d{2}\\.\\d{2}\\s+.*$'
                       then to_date(replace(substr({{ nullif_placeholder(expr) }}, 1, 10), '.', '-'), 'YYYY-MM-DD')
+                    when {{ nullif_placeholder(expr) }} ~ '^\\d{4}\\.\\d{1,2}\\.\\d{1,2}\\s+.*$'
+                      then make_date(
+                        split_part(replace(split_part({{ nullif_placeholder(expr) }}, ' ', 1), '.', '-'), '-', 1)::int,
+                        split_part(replace(split_part({{ nullif_placeholder(expr) }}, ' ', 1), '.', '-'), '-', 2)::int,
+                        split_part(replace(split_part({{ nullif_placeholder(expr) }}, ' ', 1), '.', '-'), '-', 3)::int
+                      )
                     when {{ nullif_placeholder(expr) }} ~ '^\\d{8}$'
                       then to_date({{ nullif_placeholder(expr) }}, 'YYYYMMDD')
                     else null
