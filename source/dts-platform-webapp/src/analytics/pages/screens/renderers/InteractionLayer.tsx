@@ -378,15 +378,33 @@ export function useResolvableJumpStatus(component: ScreenComponent, mode: string
             return;
         }
         const candidates: string[] = [];
+        // Templates containing {{var}} placeholders cannot be pre-resolved (they get
+        // substituted at click time with runtime values). Treat their presence as
+        // "potentially resolvable" so we don't false-positive into visual disable.
+        let hasUnresolvableTemplate = false;
+        const considerCandidate = (raw: string) => {
+            if (raw.includes('{{')) {
+                hasUnresolvableTemplate = true;
+                return;
+            }
+            candidates.push(raw);
+        };
         for (const a of component.actions ?? []) {
-            if (a?.type === 'jump-url' && String(a.jumpUrlTemplate || '').trim()) {
-                candidates.push(String(a.jumpUrlTemplate));
+            if (a?.type === 'jump-url') {
+                const tmpl = String(a.jumpUrlTemplate || '').trim();
+                if (tmpl) considerCandidate(tmpl);
             }
         }
         if (component.interaction?.enabled === true
-            && component.interaction?.jumpEnabled === true
-            && String(component.interaction?.jumpUrlTemplate || '').trim()) {
-            candidates.push(String(component.interaction.jumpUrlTemplate));
+            && component.interaction?.jumpEnabled === true) {
+            const tmpl = String(component.interaction?.jumpUrlTemplate || '').trim();
+            if (tmpl) considerCandidate(tmpl);
+        }
+        // If any template has runtime placeholders, we can't reliably check it
+        // beforehand — leave the component clickable and let click-time logic decide.
+        if (hasUnresolvableTemplate) {
+            setStatus({ hasResolvableJump: true, isResolving: false });
+            return;
         }
         // No jump templates at all → cannot jump
         if (candidates.length === 0) {
@@ -414,7 +432,12 @@ export function hasNonJumpInteractivity(component: ScreenComponent): boolean {
     const actions = component.actions ?? [];
     const hasOtherAction = actions.some((a) => {
         const t = a?.type;
-        return t === 'drill-down' || t === 'drill-up' || t === 'open-panel' || t === 'set-variable' || t === 'emit-intent';
+        return t === 'drill-down'
+            || t === 'drill-up'
+            || t === 'drill-view'
+            || t === 'open-panel'
+            || t === 'set-variable'
+            || t === 'emit-intent';
     });
     if (hasOtherAction) return true;
     const interaction = component.interaction;

@@ -335,15 +335,18 @@ const [mode, setMode] = useState<'screen' | 'custom'>(
 
 | 现状 | 处理 |
 |------|------|
-| `screen-ref:GPMC%20...\|%2Fbi%2Fgpmc...` | 改为 `screen-ref:GPMC%20...\|`（清空 fallback） |
-| `/bi/gpmc/drill/{execution,quality,risk,tech-state}` 直链 | 整条 action 删除 |
+| `screen-ref:GPMC%20...\|%2Fbi%2Fscreens` (跳到 BI 大屏列表首页) | 改为 `screen-ref:GPMC%20...\|`（清空 fallback） |
+| `/bi/gpmc/drill/{execution,quality,risk,tech-state}` 直链 | 整条 action 删除（如有残留） |
 
-涉及文件与处理量：
-- `gpmc-strategic-overview-v2.json`: 28 处 fallback 清空 + 1 处直链 action 删除
-- `gpmc-execution-board-v2.json`: 14 处 fallback 清空 + 5 处直链 action 删除
-- `gpmc-quality-board-v2.json`: 14 处 fallback 清空 + 4 处直链 action 删除
-- `gpmc-risk-board-v2.json`: 14 处 fallback 清空 + 3 处直链 action 删除
-- `gpmc-tech-state-board-v2.json`: 14 处 fallback 清空 + 2 处直链 action 删除
+实际清理量（按当前 git tree 起始状态）：
+- `gpmc-strategic-overview-v2.json`: 24 处 fallback 清空
+- `gpmc-execution-board-v2.json`: 15 处 fallback 清空
+- `gpmc-quality-board-v2.json`: 14 处 fallback 清空
+- `gpmc-risk-board-v2.json`: 13 处 fallback 清空
+- `gpmc-tech-state-board-v2.json`: 12 处 fallback 清空
+- 共 78 处 fallback 清空，0 处直链 action（直链路径已被早期 commit 清理过）
+
+注意：原设计假设 fallback 指向 `/bi/gpmc/...`，实际起始状态指向的是 `/bi/screens`（BI 大屏列表首页），但症状一致 — 用户点击解析失败的 screen-ref 时被路由到这个无关页面。修复方式（清空 fallback + 引擎层 sentinel）对两种 fallback 都有效。
 
 每次修改后用 `python -m json.tool` 验证 JSON 仍合法。
 

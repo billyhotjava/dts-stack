@@ -1,5 +1,5 @@
 // @ts-nocheck — relies on @ts-nocheck'd ProjectGanttBoard, JSX-heavy modal
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import ReactDOM from "react-dom";
 import type { CardData, MajorProject, MajorProjectRisk } from "../../screens/types";
 import { aggregateMajorProjects, type FlatProjectNodeRow } from "../utils/majorProjectAggregator";
@@ -38,6 +38,9 @@ export function BoardHierarchicalGanttWithModal({
 		return aggregateMajorProjects(flatRows);
 	}, [cardData]);
 
+	// Stable identity so child useEffect deps don't churn on each parent re-render
+	const handleClose = useCallback(() => setActiveProject(null), []);
+
 	return (
 		<>
 			<ProjectGanttBoard
@@ -50,7 +53,7 @@ export function BoardHierarchicalGanttWithModal({
 			/>
 			<ProjectDetailGanttModal
 				project={activeProject}
-				onClose={() => setActiveProject(null)}
+				onClose={handleClose}
 			/>
 		</>
 	);
@@ -136,17 +139,40 @@ function buildFlatRowsFromCardData(cardData: CardData): FlatProjectNodeRow[] {
 export function ProjectDetailGanttModal({ project, onClose }: Props) {
 	const [highlightedTask, setHighlightedTask] = useState<string | undefined>(undefined);
 	const [activeSub, setActiveSub] = useState<string>("全部");
+	const highlightTimerRef = useRef<number | null>(null);
 
+	// Reset chip + highlight whenever the project changes (depend on project only,
+	// NOT onClose — otherwise an unstable parent callback would reset state on every
+	// parent re-render mid-modal-open and lose the user's chip selection).
 	useEffect(() => {
 		if (!project) return;
 		setActiveSub("全部");
 		setHighlightedTask(undefined);
+		if (highlightTimerRef.current != null) {
+			window.clearTimeout(highlightTimerRef.current);
+			highlightTimerRef.current = null;
+		}
+	}, [project]);
+
+	// ESC handler — separate effect so onClose changes don't reset chip state.
+	useEffect(() => {
+		if (!project) return;
 		const onKey = (e: KeyboardEvent) => {
 			if (e.key === "Escape") onClose();
 		};
 		window.addEventListener("keydown", onKey);
 		return () => window.removeEventListener("keydown", onKey);
 	}, [project, onClose]);
+
+	// Cleanup any pending highlight timer on unmount.
+	useEffect(() => {
+		return () => {
+			if (highlightTimerRef.current != null) {
+				window.clearTimeout(highlightTimerRef.current);
+				highlightTimerRef.current = null;
+			}
+		};
+	}, []);
 
 	const allTasks: ProjectGanttTask[] = useMemo(() => {
 		if (!project) return [];
@@ -164,9 +190,17 @@ export function ProjectDetailGanttModal({ project, onClose }: Props) {
 
 	const handleRiskClick = (taskRef: string | undefined) => {
 		if (!taskRef) return;
+		// Clear any in-flight timer so a quick second click doesn't get prematurely
+		// faded by the previous click's pending timer.
+		if (highlightTimerRef.current != null) {
+			window.clearTimeout(highlightTimerRef.current);
+			highlightTimerRef.current = null;
+		}
 		setHighlightedTask(taskRef);
-		// Auto-clear highlight after 1.2s so the ring fades naturally
-		window.setTimeout(() => setHighlightedTask(undefined), 1200);
+		highlightTimerRef.current = window.setTimeout(() => {
+			setHighlightedTask(undefined);
+			highlightTimerRef.current = null;
+		}, 1200);
 	};
 
 	return ReactDOM.createPortal(
