@@ -8,12 +8,13 @@ import java.time.Instant;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Optional;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
+import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
-import jakarta.servlet.http.HttpServletRequest;
 
 @RestController
 @RequestMapping("/api/session")
@@ -22,6 +23,7 @@ public class PortalSessionStatusResource {
     private final PortalSessionRepository sessionRepository;
     private final Clock clock;
 
+    @Autowired
     public PortalSessionStatusResource(PortalSessionRepository sessionRepository) {
         this(sessionRepository, Clock.systemUTC());
     }
