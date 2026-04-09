@@ -59,21 +59,12 @@ export function ImportPreviewModal({
 		<Modal
 			open={isOpen}
 			onCancel={onClose}
+			onOk={() => onConfirm(selectedAction)}
 			title="导入预览"
 			width={520}
-			footer={
-				<div className="flex justify-end gap-sm">
-					<button type="button" className="header-btn" onClick={onClose}>取消</button>
-					<button
-						type="button"
-						className="header-btn save-btn"
-						disabled={hasErrors}
-						onClick={() => onConfirm(selectedAction)}
-					>
-						确认导入
-					</button>
-				</div>
-			}
+			okText="确认导入"
+			cancelText="取消"
+			okButtonProps={{ disabled: hasErrors }}
 		>
 			<div className="grid" style={{ gap: 16 }}>
 				<div className="text-sm text-secondary">
