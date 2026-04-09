@@ -290,6 +290,8 @@ export default function SqlModelingPage() {
 	const [runs, setRuns] = useState<DagRun[]>([]);
 	const [runOpen, setRunOpen] = useState(false);
 	const [runSubmitting, setRunSubmitting] = useState(false);
+	const [runSelectedModelIds, setRunSelectedModelIds] = useState<string[]>([]);
+	const [runModelKeyword, setRunModelKeyword] = useState("");
 	const [buildTriggering, setBuildTriggering] = useState<"compile" | "test" | "docs" | "build" | null>(null);
 	const [compileResult, setCompileResult] = useState<DbtRunSummary | null>(null);
 	const [testResult, setTestResult] = useState<DbtRunSummary | null>(null);
@@ -886,15 +888,16 @@ export default function SqlModelingPage() {
 
 	const openRun = () => {
 		runForm.resetFields();
-		const selector = resolveDbtSelector(activeModel?.dagSelector) || (activeModel?.name ? `model:${activeModel.name}` : "");
 		runForm.setFieldsValue({
-			models: selector,
 			target: dbtConfig?.config?.targetName || "",
 			vars: "",
 			gitRef: "",
 			commitSha: "",
 			strictMode: false,
 		});
+		const activeId = String(activeModel?.id || "").trim();
+		setRunSelectedModelIds(activeId ? [activeId] : []);
+		setRunModelKeyword("");
 		setRunOpen(true);
 	};
 
@@ -956,10 +959,23 @@ export default function SqlModelingPage() {
 	);
 
 	const submitRun = async () => {
+		if (runSelectedModelIds.length === 0) {
+			toast.error("请至少勾选一个模型");
+			return;
+		}
 		setRunSubmitting(true);
 		try {
 			const values = await runForm.validateFields();
-			const modelsSelector = resolveDbtSelector(values.models) || "all";
+			const selectedIdSet = new Set(runSelectedModelIds);
+			const selectedNames = sqlModels
+				.filter((model) => selectedIdSet.has(String(model.id || "").trim()))
+				.map((model) => normalizeText(model.name))
+				.filter(Boolean);
+			if (selectedNames.length === 0) {
+				toast.error("勾选的模型已失效，请重新选择");
+				return;
+			}
+			const modelsSelector = selectedNames.map((name) => `model:${name}`).join(" ");
 			const payload = {
 				models: modelsSelector,
 				target: normalizeText(values.target) || undefined,
@@ -2105,6 +2121,17 @@ export default function SqlModelingPage() {
 	}, [activeSpace, activeSpaceKey, filteredModels, unassignedModels]);
 
 	const activeLayerNodes = useMemo(() => buildLayerNodes(activeSpaceModels), [buildLayerNodes, activeSpaceModels]);
+
+	const runFilteredModels = useMemo(() => {
+		const keyword = runModelKeyword.trim().toLowerCase();
+		if (!keyword) return sqlModels;
+		return sqlModels.filter((model) => {
+			const fields = [model.name, model.planName, model.layer, model.alias]
+				.map((value) => normalizeText(value).toLowerCase())
+				.filter(Boolean);
+			return fields.some((value) => value.includes(keyword));
+		});
+	}, [sqlModels, runModelKeyword]);
 	const canArchiveActiveModel = !!activeModel?.id && !activeModel?.planId && spaces.length > 0;
 	const canBatchArchive = unassignedModels.length > 0 && spaces.length > 0;
 	const checkedModelKeys = useMemo(
@@ -3282,11 +3309,90 @@ export default function SqlModelingPage() {
 				okText="提交"
 				cancelText="取消"
 				confirmLoading={runSubmitting}
-				width={560}
+				width={760}
 			>
 				<Form layout="vertical" form={runForm}>
-					<Form.Item name="models" label="模型选择器" rules={[{ required: true, message: "请输入模型选择器" }]}>
-						<Input placeholder="例如：tag:crm 或 model:xxx" />
+					<Form.Item
+						label="模型选择器"
+						required
+						help={
+							runSelectedModelIds.length === 0
+								? "请至少勾选一个模型"
+								: `已选 ${runSelectedModelIds.length} / ${sqlModels.length} 个模型`
+						}
+						validateStatus={runSelectedModelIds.length === 0 ? "error" : undefined}
+					>
+						<div className="flex flex-col gap-2">
+							<div className="flex items-center gap-2">
+								<Input.Search
+									allowClear
+									placeholder="按名称 / 空间 / 层搜索"
+									value={runModelKeyword}
+									onChange={(e) => setRunModelKeyword(e.target.value)}
+									style={{ flex: 1 }}
+								/>
+								<Button
+									size="small"
+									onClick={() => {
+										const ids = runFilteredModels.map((m) => String(m.id || "").trim()).filter(Boolean);
+										setRunSelectedModelIds((prev) => Array.from(new Set([...prev, ...ids])));
+									}}
+								>
+									全选当前结果
+								</Button>
+								<Button
+									size="small"
+									disabled={!activeSpace}
+									onClick={() => {
+										const ids = activeSpaceModels
+											.map((m) => String(m.id || "").trim())
+											.filter(Boolean);
+										setRunSelectedModelIds(ids);
+									}}
+								>
+									按当前空间全选
+								</Button>
+								<Button size="small" onClick={() => setRunSelectedModelIds([])}>
+									清空
+								</Button>
+							</div>
+							<Table<SqlModel>
+								size="small"
+								rowKey={(record) => String(record.id || "")}
+								dataSource={runFilteredModels}
+								pagination={{ pageSize: 8, size: "small", showSizeChanger: false }}
+								scroll={{ y: 260 }}
+								rowSelection={{
+									selectedRowKeys: runSelectedModelIds,
+									onChange: (keys) => setRunSelectedModelIds(keys.map((k) => String(k))),
+									preserveSelectedRowKeys: true,
+								}}
+								columns={[
+									{
+										title: "模型名",
+										dataIndex: "name",
+										key: "name",
+										ellipsis: true,
+										render: (value: string) => <span style={{ fontFamily: "monospace" }}>{value}</span>,
+									},
+									{
+										title: "项目空间",
+										dataIndex: "planName",
+										key: "planName",
+										width: 140,
+										ellipsis: true,
+										render: (value: string) => value || <span className="text-muted-foreground">未分配</span>,
+									},
+									{
+										title: "层",
+										dataIndex: "layer",
+										key: "layer",
+										width: 80,
+										render: (value: string) => value || "-",
+									},
+								]}
+							/>
+						</div>
 					</Form.Item>
 					<Form.Item name="target" label="目标">
 						<Input placeholder="dev" />
