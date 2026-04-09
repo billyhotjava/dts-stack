@@ -1,4 +1,6 @@
+import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
+import { getPortalSessionStatus, type PortalSessionStatus } from "@/api/platformApi";
 import { useLoginStateContext } from "@/pages/sys/login/providers/login-provider";
 import { LOGIN_ROUTE } from "@/routes/constants";
 import { useRouter } from "@/routes/hooks";
@@ -11,6 +13,7 @@ import {
 	DropdownMenuSeparator,
 	DropdownMenuTrigger,
 } from "@/ui/dropdown-menu";
+import { formatPortalSessionStatus, resolveSessionStatusTone } from "./sessionStatus.helpers";
 
 /**
  * Account Dropdown
@@ -21,6 +24,9 @@ export default function AccountDropdown() {
 	const signOut = useSignOut();
 	const { backToLogin } = useLoginStateContext();
 	const { t } = useTranslation();
+	const [open, setOpen] = useState(false);
+	const [status, setStatus] = useState<PortalSessionStatus | null>(null);
+	const [loading, setLoading] = useState(false);
 
 	const logout = async () => {
 		try {
@@ -33,8 +39,52 @@ export default function AccountDropdown() {
 		}
 	};
 
+	useEffect(() => {
+		if (!open) return;
+		let cancelled = false;
+		let timer: number | undefined;
+
+		const load = async () => {
+			try {
+				setLoading(true);
+				const next = await getPortalSessionStatus();
+				if (!cancelled) {
+					setStatus(next);
+				}
+			} catch {
+				if (!cancelled) {
+					setStatus(null);
+				}
+			} finally {
+				if (!cancelled) {
+					setLoading(false);
+				}
+			}
+		};
+
+		void load();
+		timer = window.setInterval(() => {
+			void load();
+		}, 30_000);
+
+		return () => {
+			cancelled = true;
+			if (timer) {
+				window.clearInterval(timer);
+			}
+		};
+	}, [open]);
+
+	const statusTone = resolveSessionStatusTone(status);
+	const statusClassName =
+		statusTone === "danger"
+			? "text-destructive"
+			: statusTone === "warning"
+				? "text-warning"
+				: "text-text-secondary";
+
 	return (
-		<DropdownMenu>
+		<DropdownMenu open={open} onOpenChange={setOpen}>
 			<DropdownMenuTrigger asChild>
 				<Button
 					variant="ghost"
@@ -52,6 +102,15 @@ export default function AccountDropdown() {
 						<div className="truncate text-text-secondary text-xs">{email}</div>
 					</div>
 				</div>
+				<div className="px-3 py-2">
+					<div className="text-[11px] uppercase tracking-[0.14em] text-text-tertiary">Session</div>
+					<div className={`mt-1 text-xs ${statusClassName}`}>
+						{loading ? "正在同步服务器会话状态..." : formatPortalSessionStatus(status)}
+					</div>
+					{status?.expiresAt ? (
+						<div className="mt-1 text-[11px] text-text-tertiary">到期时间 {status.expiresAt}</div>
+					) : null}
+				</div>
 				<DropdownMenuSeparator />
 				<DropdownMenuItem className="font-bold text-warning" onClick={logout}>
 					{t("sys.login.logout")}
@@ -60,4 +119,3 @@ export default function AccountDropdown() {
 		</DropdownMenu>
 	);
 }
-

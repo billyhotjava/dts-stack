@@ -27,22 +27,6 @@ function isTokenExpired(token?: string): boolean {
 	}
 }
 
-function isSessionIdle(): boolean {
-	try {
-		const stored = localStorage.getItem("dts.session.lastActivity");
-		if (!stored) return false;
-		const lastActivity = Number(stored);
-		if (!(lastActivity > 0)) return false;
-		const timeoutMinutes = Math.max(
-			1,
-			Number(import.meta.env.VITE_SESSION_TIMEOUT_MINUTES ?? import.meta.env.VITE_PORTAL_SESSION_TIMEOUT ?? "30"),
-		);
-		return Date.now() - lastActivity > timeoutMinutes * 60 * 1000;
-	} catch {
-		return false;
-	}
-}
-
 function LoginPage() {
 	const token = useUserToken();
 	const bilingual = useBilingualText();
@@ -63,7 +47,7 @@ function LoginPage() {
 		}
 	})();
 
-	if (token.accessToken && !isTokenExpired(token.accessToken) && !isSessionIdle()) {
+	if (token.accessToken && !isTokenExpired(token.accessToken)) {
 		// If we're already authenticated and this page was reached via embedded module redirect,
 		// jump directly to that module with a hard navigation.
 		if (safeRedirect?.startsWith("/analytics")) {

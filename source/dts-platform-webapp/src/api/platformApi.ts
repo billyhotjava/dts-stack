@@ -1,6 +1,17 @@
 import api from "@/api/apiClient";
 import { withModelingRequestTimeout } from "@/api/modelingRequestTimeout";
 
+export type PortalSessionStatus = {
+	authenticated?: boolean;
+	username?: string;
+	displayName?: string;
+	expiresAt?: string;
+	serverNow?: string;
+	remainingSeconds?: number | null;
+};
+
+export const getPortalSessionStatus = () => api.get<PortalSessionStatus>({ url: "/session/status" });
+
 // Catalog
 export const getCatalogSummary = () => api.get({ url: "/catalog/summary" });
 export const getCatalogConfig = () => api.get({ url: "/catalog/config" });

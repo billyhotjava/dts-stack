@@ -31,24 +31,6 @@ function isTokenExpired(token?: string): boolean {
 	return Date.now() > exp - 10_000;
 }
 
-/** Check whether the session has been idle beyond the configured timeout. */
-function isSessionIdle(): boolean {
-	try {
-		const stored = localStorage.getItem("dts.session.lastActivity");
-		if (!stored) return false; // No record yet (first login); don't block.
-		const lastActivity = Number(stored);
-		if (!(lastActivity > 0)) return false;
-		const timeoutMinutes = Math.max(
-			1,
-			Number(import.meta.env.VITE_SESSION_TIMEOUT_MINUTES ?? import.meta.env.VITE_PORTAL_SESSION_TIMEOUT ?? "30"),
-		);
-		const timeoutMs = timeoutMinutes * 60 * 1000;
-		return Date.now() - lastActivity > timeoutMs;
-	} catch {
-		return false;
-	}
-}
-
 type Props = {
 	children: React.ReactNode;
 };
@@ -60,11 +42,10 @@ export default function LoginAuthGuard({ children }: Props) {
 	const isLocalDevToken = (token?: string) => Boolean(token?.startsWith("dev-access-"));
 
     const check = useCallback(() => {
-        if (!accessToken || isTokenExpired(accessToken) || isSessionIdle()) {
-            console.warn("[LoginAuthGuard] redirect: no token or expired/idle", {
+        if (!accessToken || isTokenExpired(accessToken)) {
+            console.warn("[LoginAuthGuard] redirect: no token or expired", {
                 hasToken: !!accessToken,
                 expired: accessToken ? isTokenExpired(accessToken) : "N/A",
-                idle: isSessionIdle(),
             });
             if (accessToken) {
                 useUserStore.getState().actions.clearUserInfoAndToken();
@@ -110,7 +91,7 @@ export default function LoginAuthGuard({ children }: Props) {
     useEffect(() => {
         if (!accessToken) return;
         const timer = window.setInterval(() => {
-            if (isTokenExpired(accessToken) || isSessionIdle()) {
+            if (isTokenExpired(accessToken)) {
                 useUserStore.getState().actions.clearUserInfoAndToken();
                 window.location.replace(resolveLoginHref());
             }
@@ -131,8 +112,8 @@ export default function LoginAuthGuard({ children }: Props) {
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [accessToken]);
 
-	// Block rendering if the token is missing, expired, or session is idle — prevents dashboard flash before redirect.
-	if (!accessToken || isTokenExpired(accessToken) || isSessionIdle()) {
+	// Block rendering if the token is missing or expired — prevents dashboard flash before redirect.
+	if (!accessToken || isTokenExpired(accessToken)) {
 		return null;
 	}
 

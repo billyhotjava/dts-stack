@@ -3,6 +3,12 @@ import { toast } from "sonner";
 import { resolveLoginHref } from "@/routes/constants";
 import { useUserActions, useUserInfo, useUserToken } from "@/store/userStore";
 import userService from "@/api/services/userService";
+import {
+	buildSessionLeaderLease,
+	isSessionLeaderActive,
+	parseSessionLeaderLease,
+	shouldAcquireSessionLeadership,
+} from "./sessionLeadership.helpers";
 
 const STORAGE_KEYS = {
 	SESSION_ID: "dts.session.id",
@@ -10,6 +16,7 @@ const STORAGE_KEYS = {
 	LOGOUT_TS: "dts.session.logoutTs",
 	LAST_ACTIVITY: "dts.session.lastActivity",
 	TOKEN_SYNC: "dts.session.tokenSync",
+	REFRESH_LEADER: "dts.session.refreshLeader",
 } as const;
 
 const SESSION_TIMEOUT_MINUTES = Math.max(
@@ -18,6 +25,9 @@ const SESSION_TIMEOUT_MINUTES = Math.max(
 );
 const SESSION_TIMEOUT_MS = SESSION_TIMEOUT_MINUTES * 60 * 1000;
 const SESSION_IDLE_GRACE_MS = 30 * 1000;
+const LEADER_LEASE_MS = 45 * 1000;
+const LEADER_HEARTBEAT_MS = 15 * 1000;
+const FOLLOWER_RECHECK_MS = 15 * 1000;
 
 const genId = () => Math.random().toString(36).slice(2) + Date.now().toString(36);
 
@@ -62,6 +72,25 @@ function readLastActivity(): number {
 	return Date.now();
 }
 
+function resolveSharedLastActivity(fallback: number): number {
+	try {
+		const stored = localStorage.getItem(STORAGE_KEYS.LAST_ACTIVITY);
+		if (stored) {
+			const ts = Number(stored);
+			if (ts > 0) return ts;
+		}
+	} catch {}
+	return fallback;
+}
+
+function readLeaderLease() {
+	try {
+		return parseSessionLeaderLease(localStorage.getItem(STORAGE_KEYS.REFRESH_LEADER));
+	} catch {
+		return null;
+	}
+}
+
 function writeLastActivity(ts: number, lastWriteRef: { current: number }) {
 	// Throttle writes to localStorage: at most once per 10 seconds
 	if (ts - lastWriteRef.current < 10_000) return;
@@ -91,6 +120,7 @@ export default function SessionManager() {
 	const lastActivityRef = useRef<number>(readLastActivity());
 	const lastActivityWriteRef = useRef<number>(0);
 	const logoutInProgressRef = useRef(false);
+	const isLeaderRef = useRef(false);
 
 	const isLoggedIn = useMemo(() => Boolean(token?.accessToken), [token?.accessToken]);
 	const loginName = user?.username || user?.email || "";
@@ -137,6 +167,18 @@ export default function SessionManager() {
 				} catch {}
 				return;
 			}
+			if (e.key === STORAGE_KEYS.LAST_ACTIVITY && e.newValue) {
+				const ts = Number(e.newValue);
+				if (ts > 0) {
+					lastActivityRef.current = ts;
+				}
+				return;
+			}
+			if (e.key === STORAGE_KEYS.REFRESH_LEADER) {
+				const lease = parseSessionLeaderLease(e.newValue);
+				isLeaderRef.current = lease?.tabId === tabIdRef.current && isSessionLeaderActive(lease, Date.now());
+				return;
+			}
 			if (e.key === STORAGE_KEYS.LOGOUT_TS && e.newValue) {
 				if (isLoggedIn && !logoutInProgressRef.current) {
 					logoutInProgressRef.current = true;
@@ -149,6 +191,52 @@ export default function SessionManager() {
 		window.addEventListener("storage", onStorage);
 		return () => window.removeEventListener("storage", onStorage);
 	}, [isLoggedIn, clearUserInfoAndToken, setUserToken, token]);
+
+	useEffect(() => {
+		if (!isLoggedIn) {
+			isLeaderRef.current = false;
+			try {
+				const lease = readLeaderLease();
+				if (lease?.tabId === tabIdRef.current) {
+					localStorage.removeItem(STORAGE_KEYS.REFRESH_LEADER);
+				}
+			} catch {}
+			return;
+		}
+
+		const claimLeadership = () => {
+			const now = Date.now();
+			const currentLease = readLeaderLease();
+			if (!shouldAcquireSessionLeadership(currentLease, tabIdRef.current, now)) {
+				isLeaderRef.current = currentLease?.tabId === tabIdRef.current && isSessionLeaderActive(currentLease, now);
+				return;
+			}
+			const nextLease = buildSessionLeaderLease(tabIdRef.current, now, LEADER_LEASE_MS);
+			try {
+				localStorage.setItem(STORAGE_KEYS.REFRESH_LEADER, JSON.stringify(nextLease));
+				const confirmedLease = readLeaderLease();
+				isLeaderRef.current = confirmedLease?.tabId === tabIdRef.current && isSessionLeaderActive(confirmedLease, now);
+			} catch {
+				isLeaderRef.current = false;
+			}
+		};
+
+		claimLeadership();
+		const timer = window.setInterval(() => {
+			claimLeadership();
+		}, LEADER_HEARTBEAT_MS);
+
+		return () => {
+			window.clearInterval(timer);
+			try {
+				const lease = readLeaderLease();
+				if (lease?.tabId === tabIdRef.current) {
+					localStorage.removeItem(STORAGE_KEYS.REFRESH_LEADER);
+				}
+			} catch {}
+			isLeaderRef.current = false;
+		};
+	}, [isLoggedIn]);
 
 	// Track user activity
 	useEffect(() => {
@@ -187,21 +275,21 @@ export default function SessionManager() {
 
 		const run = async () => {
 			if (cancelled) return;
-			const idleFor = Date.now() - lastActivityRef.current;
+			const currentLease = readLeaderLease();
+			if (!currentLease || currentLease.tabId !== tabIdRef.current || !isSessionLeaderActive(currentLease, Date.now())) {
+				isLeaderRef.current = false;
+				schedule(FOLLOWER_RECHECK_MS);
+				return;
+			}
+			isLeaderRef.current = true;
+			const sharedLastActivity = resolveSharedLastActivity(lastActivityRef.current);
+			lastActivityRef.current = sharedLastActivity;
+			const idleFor = Date.now() - sharedLastActivity;
 			if (idleFor > SESSION_TIMEOUT_MS + SESSION_IDLE_GRACE_MS) {
-				if (!logoutInProgressRef.current) {
-					logoutInProgressRef.current = true;
-					const refreshToken = token?.refreshToken;
-					const username = user?.username || user?.email || undefined;
-					if (refreshToken) {
-						userService.logout(refreshToken, username, "IDLE_TIMEOUT").catch(() => undefined);
-					}
-					toast.error("会话已过期，请重新登录", { id: "session-expired" });
-					clearUserInfoAndToken();
-					localStorage.setItem(STORAGE_KEYS.LOGOUT_TS, String(Date.now()));
-					window.location.replace(resolveLoginHref());
-				}
-				cancelled = true;
+				// Browser-side inactivity only stops proactive refresh. The backend remains
+				// the single source of truth for session expiry and will return 401 once the
+				// shared portal session actually times out.
+				schedule(SESSION_IDLE_GRACE_MS);
 				return;
 			}
 			try {
@@ -272,41 +360,6 @@ export default function SessionManager() {
 			if (timer) window.clearTimeout(timer);
 		};
 	}, [isLoggedIn, token?.refreshToken, token?.accessToken, setUserToken, clearUserInfoAndToken, user?.username, user?.email]);
-
-	// Pure idle timer — logout after SESSION_TIMEOUT_MS of no interaction
-	useEffect(() => {
-		if (!isLoggedIn) return;
-		let timer: number | undefined;
-
-		const logoutDueToIdle = () => {
-			if (logoutInProgressRef.current) return;
-			logoutInProgressRef.current = true;
-			const refreshToken = token?.refreshToken;
-			const username = user?.username || user?.email || undefined;
-			if (refreshToken) {
-				userService.logout(refreshToken, username, "IDLE_TIMEOUT").catch(() => undefined);
-			}
-			toast.error("长时间未操作，已自动退出，请重新登录", { id: "session-expired" });
-			clearUserInfoAndToken();
-			localStorage.setItem(STORAGE_KEYS.LOGOUT_TS, String(Date.now()));
-			window.location.replace(resolveLoginHref());
-		};
-
-		const resetTimer = () => {
-			if (logoutInProgressRef.current) return;
-			if (timer) window.clearTimeout(timer);
-			timer = window.setTimeout(logoutDueToIdle, SESSION_TIMEOUT_MS);
-		};
-
-		const events: Array<keyof WindowEventMap> = ["click", "keydown", "mousemove", "scroll", "touchstart"];
-		events.forEach((event) => window.addEventListener(event, resetTimer, true));
-		resetTimer();
-
-		return () => {
-			if (timer) window.clearTimeout(timer);
-			events.forEach((event) => window.removeEventListener(event, resetTimer, true));
-		};
-	}, [isLoggedIn, clearUserInfoAndToken, token?.refreshToken, user?.username, user?.email]);
 
 	return null;
 }
