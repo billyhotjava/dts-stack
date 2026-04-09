@@ -14,8 +14,9 @@ import org.springframework.stereotype.Service;
  *
  * <p>Permission levels:
  * <ul>
- *   <li>OWNER   → {@link PermissionSnapshot#all()} (canRead + canEdit + isOwner)</li>
- *   <li>MANAGER → {@link PermissionSnapshot#managerOnly()} (canRead + isOwner, no canEdit)</li>
+ *   <li>OWNER   → {@link PermissionSnapshot#all()} (canRead + canEdit + isOwner; original creator)</li>
+ *   <li>MANAGER → {@link PermissionSnapshot#managerOnly()} (canRead + canEdit + isOwner; granted manager,
+ *       structurally identical to OWNER but tracked separately in the grant table)</li>
  *   <li>VIEWER  → {@link PermissionSnapshot#readOnly()} (canRead only)</li>
  *   <li>no grant → {@link PermissionSnapshot#none()}</li>
  * </ul>
@@ -49,9 +50,13 @@ public class ScreenPermissionService {
             return new PermissionSnapshot(true, true, true);
         }
 
-        /** MANAGER: can read and manage grants, but cannot edit screen content. */
+        /**
+         * MANAGER: granted full management — can read, edit content, and manage grants.
+         * Structurally identical to {@link #all()}; kept as a separate factory to express
+         * caller intent (granted manager vs. original owner / superuser).
+         */
         public static PermissionSnapshot managerOnly() {
-            return new PermissionSnapshot(true, false, true);
+            return new PermissionSnapshot(true, true, true);
         }
 
         public static PermissionSnapshot readOnly() {

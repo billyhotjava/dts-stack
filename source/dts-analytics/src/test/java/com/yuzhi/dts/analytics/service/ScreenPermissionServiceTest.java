@@ -83,13 +83,13 @@ class ScreenPermissionServiceTest {
     }
 
     @Test
-    void manager_can_read_and_manage_but_not_edit() {
+    void manager_can_read_edit_and_manage_grants() {
         AnalyticsUser u = user(3L, false);
         when(repo.findGrantsForUser(eq(10L), eq("3"), any())).thenReturn(
             List.of(access(10L, "USER", "3", "MANAGER")));
         PermissionSnapshot snap = service.snapshot(screen(10L), u, List.of());
         assertThat(snap.canRead()).isTrue();
-        assertThat(snap.canEdit()).isFalse();
+        assertThat(snap.canEdit()).isTrue();
         assertThat(snap.isOwner()).isTrue();
     }
 
