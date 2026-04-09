@@ -25,41 +25,88 @@ const SCREEN_REF_PREFIX = 'screen-ref:';
 const SCREEN_REF_CACHE_TTL_MS = 30_000;
 let screenRefCache: { expiresAt: number; items: ScreenListItem[] } | null = null;
 
-function parseScreenReferenceUrl(targetUrl: string): { screenName: string; fallbackUrl: string | null } | null {
+interface ParsedScreenRef {
+    /** Database id, when the legacy ref carries an `id=` segment. */
+    screenId: string | null;
+    /** Legacy display name (only used as a hint, never as the primary key). */
+    screenName: string;
+    fallbackUrl: string | null;
+}
+
+/**
+ * Parse a legacy `screen-ref:{name}|{fallback}|id={id}` URL.
+ *
+ * Object linking should be by stable id, not by name. New data written by
+ * the dropdown is a plain `/bi/screens/{id}/preview` URL and bypasses this
+ * parser entirely. This function exists only as a read-only compatibility
+ * layer for old user data and v2 instance template JSON.
+ */
+export function parseScreenReferenceUrl(targetUrl: string): ParsedScreenRef | null {
     if (!targetUrl.startsWith(SCREEN_REF_PREFIX)) {
         return null;
     }
     const raw = targetUrl.slice(SCREEN_REF_PREFIX.length);
-    const [screenNamePart, fallbackPart = ''] = raw.split('|', 2);
-    const screenName = decodeURIComponent(screenNamePart || '').trim();
-    const fallbackRaw = decodeURIComponent(fallbackPart || '').trim();
+    const segments = raw.split('|');
+    const screenName = decodeURIComponent(segments[0] || '').trim();
+    const fallbackRaw = decodeURIComponent(segments[1] || '').trim();
     const fallbackUrl = fallbackRaw || null;
-    if (!screenName) {
-        return { screenName: '', fallbackUrl };
+    let screenId: string | null = null;
+    for (let i = 2; i < segments.length; i += 1) {
+        const seg = decodeURIComponent(segments[i] || '').trim();
+        if (seg.startsWith('id=')) {
+            const candidate = seg.slice(3).trim();
+            screenId = candidate || null;
+            break;
+        }
     }
-    return { screenName, fallbackUrl };
+    return { screenId, screenName, fallbackUrl };
+}
+
+async function getCachedScreenList(): Promise<ScreenListItem[]> {
+    const now = Date.now();
+    if (screenRefCache && screenRefCache.expiresAt > now) {
+        return screenRefCache.items;
+    }
+    const items = await analyticsApi.listScreens();
+    screenRefCache = { expiresAt: now + SCREEN_REF_CACHE_TTL_MS, items };
+    return items;
 }
 
 export async function resolveScreenReferenceUrl(targetUrl: string): Promise<string> {
     const parsed = parseScreenReferenceUrl(targetUrl);
     if (!parsed) {
+        // Not a screen-ref: URL — pass through. Canonical id-based jump URLs
+        // (`/bi/screens/{id}/preview`) take this branch and need no resolution.
         return targetUrl;
     }
-    if (!parsed.screenName) {
+    if (!parsed.screenId && !parsed.screenName) {
         return parsed.fallbackUrl ?? '';
     }
     try {
-        const now = Date.now();
-        let items = screenRefCache && screenRefCache.expiresAt > now ? screenRefCache.items : null;
-        if (!items) {
-            items = await analyticsApi.listScreens();
-            screenRefCache = { expiresAt: now + SCREEN_REF_CACHE_TTL_MS, items };
+        const items = await getCachedScreenList();
+
+        // Primary: lookup by id. This is the only stable identity for an
+        // object — names can be edited freely by users.
+        if (parsed.screenId) {
+            const byId = items.find((item) => String(item.id) === parsed.screenId);
+            if (byId?.id != null) {
+                return resolveRouteForOpen(`/bi/screens/${encodeURIComponent(String(byId.id))}/preview`);
+            }
+            // id no longer exists in this environment (screen deleted, or ref
+            // came from a different db) → fall through to fallback.
         }
-        const exact = items
-            .filter((item) => String(item.name || '').trim() === parsed.screenName)
-            .sort((a, b) => new Date(String(b.updatedAt || 0)).getTime() - new Date(String(a.updatedAt || 0)).getTime())[0];
-        if (exact?.id != null) {
-            return resolveRouteForOpen(`/bi/screens/${encodeURIComponent(String(exact.id))}/preview`);
+
+        // Legacy: exact name lookup. Only used for old data without an id
+        // segment. New writes never reach this branch. Kept narrow on purpose:
+        // exact match only, no fuzzy/normalized matching, because matching
+        // objects by user-editable names is fundamentally unreliable.
+        if (!parsed.screenId && parsed.screenName) {
+            const exact = items
+                .filter((item) => String(item.name || '').trim() === parsed.screenName)
+                .sort((a, b) => new Date(String(b.updatedAt || 0)).getTime() - new Date(String(a.updatedAt || 0)).getTime())[0];
+            if (exact?.id != null) {
+                return resolveRouteForOpen(`/bi/screens/${encodeURIComponent(String(exact.id))}/preview`);
+            }
         }
     } catch (error) {
         console.error('Failed to resolve screen reference jump target:', error);

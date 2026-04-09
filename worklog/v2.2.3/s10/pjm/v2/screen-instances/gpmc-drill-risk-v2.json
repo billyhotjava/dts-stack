@@ -117,7 +117,7 @@
       "actions": [
         {
           "type": "jump-url",
-          "jumpUrlTemplate": "screen-ref:GPMC%20%E9%A3%8E%E9%99%A9%E4%B8%8E%E9%A2%84%E8%AD%A6%E4%B8%AD%E5%BF%83|%2Fbi%2Fscreens",
+          "jumpUrlTemplate": "",
           "jumpOpenMode": "self"
         }
       ]
@@ -143,7 +143,7 @@
       "actions": [
         {
           "type": "jump-url",
-          "jumpUrlTemplate": "screen-ref:GPMC%20%E9%A3%8E%E9%99%A9%E4%B8%8E%E9%A2%84%E8%AD%A6%E4%B8%AD%E5%BF%83|%2Fbi%2Fscreens",
+          "jumpUrlTemplate": "",
           "jumpOpenMode": "self"
         }
       ]

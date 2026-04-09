@@ -799,18 +799,44 @@ export type PropertyPanelTab = 'style' | 'data' | 'interaction' | 'advanced';
 // ── Screen Jump Picker: 大屏选择器（用于 jump-url 动作配置）──────────
 
 const SCREEN_REF_PREFIX = 'screen-ref:';
+const SCREEN_PREVIEW_URL_RE = /^\/bi\/screens\/([^/]+)\/preview$/;
 
-function parseScreenRefName(url: string): string | null {
-    if (!url.startsWith(SCREEN_REF_PREFIX)) return null;
-    const raw = url.slice(SCREEN_REF_PREFIX.length);
-    const [namePart] = raw.split('|', 2);
-    return decodeURIComponent(namePart || '').trim() || null;
+/**
+ * Object references should be by stable id, not by name. Dropdown writes a
+ * direct preview URL `/bi/screens/{id}/preview` so the link survives renames
+ * and re-imports. The `screen-ref:` form is kept only as a read-only legacy
+ * compatibility layer for v2 instance JSON and old user data.
+ */
+function buildScreenJumpUrl(screen: ScreenListItem): string {
+    return `/bi/screens/${encodeURIComponent(String(screen.id))}/preview`;
 }
 
-function buildScreenRefUrl(screen: ScreenListItem): string {
-    const name = encodeURIComponent(String(screen.name || '').trim());
-    const fallback = encodeURIComponent(`/bi/screens/${screen.id}/preview`);
-    return `${SCREEN_REF_PREFIX}${name}|${fallback}`;
+/** Extract the screen id this jumpUrlTemplate points at, in either format. */
+function extractScreenIdFromJumpUrl(url: string): string | null {
+    if (!url) return null;
+    // New canonical format: /bi/screens/{id}/preview
+    const direct = url.match(SCREEN_PREVIEW_URL_RE);
+    if (direct) return decodeURIComponent(direct[1]);
+    // Legacy: screen-ref:{name}|{fallback}|id={id}  — read id segment if present
+    if (url.startsWith(SCREEN_REF_PREFIX)) {
+        const segments = url.slice(SCREEN_REF_PREFIX.length).split('|');
+        for (let i = 2; i < segments.length; i += 1) {
+            const seg = decodeURIComponent(segments[i] || '').trim();
+            if (seg.startsWith('id=')) return seg.slice(3).trim() || null;
+        }
+        // Legacy fallback URL embedded in 2nd segment may also be a /preview path
+        const fallback = decodeURIComponent(segments[1] || '').trim();
+        const fbMatch = fallback.match(SCREEN_PREVIEW_URL_RE);
+        if (fbMatch) return decodeURIComponent(fbMatch[1]);
+    }
+    return null;
+}
+
+/** Extract the legacy `screen-ref:{name}|...` name segment for display only. */
+function extractLegacyScreenRefName(url: string): string | null {
+    if (!url.startsWith(SCREEN_REF_PREFIX)) return null;
+    const namePart = url.slice(SCREEN_REF_PREFIX.length).split('|')[0] ?? '';
+    return decodeURIComponent(namePart).trim() || null;
 }
 
 let _screenListCache: { items: ScreenListItem[]; ts: number } | null = null;
@@ -828,16 +854,26 @@ async function fetchScreenList(): Promise<ScreenListItem[]> {
 }
 
 function ScreenJumpPicker({ value, onChange }: { value: string; onChange: (url: string) => void }) {
-    const isScreenRef = value.startsWith(SCREEN_REF_PREFIX);
-    const [mode, setMode] = useState<'screen' | 'custom'>(
-        !value || isScreenRef ? 'screen' : 'custom'
-    );
+    // "Screen" mode covers both the canonical id-based URL and the legacy
+    // screen-ref:{name}|... form (kept for back-compat reading only).
+    const isScreenJump = !value
+        || SCREEN_PREVIEW_URL_RE.test(value)
+        || value.startsWith(SCREEN_REF_PREFIX);
+    const [mode, setMode] = useState<'screen' | 'custom'>(isScreenJump ? 'screen' : 'custom');
     const [screens, setScreens] = useState<ScreenListItem[]>([]);
     const [loading, setLoading] = useState(false);
     const [search, setSearch] = useState('');
     const [open, setOpen] = useState(false);
 
-    const selectedName = parseScreenRefName(value);
+    // Resolve display name strictly by id. listScreens is the source of truth.
+    // Falls back to legacy `screen-ref:{name}` only if the id can't be resolved
+    // (e.g. v2 instance JSON imported template not yet re-saved by user).
+    const selectedScreenId = extractScreenIdFromJumpUrl(value);
+    const selectedScreen = selectedScreenId
+        ? screens.find((s) => String(s.id) === selectedScreenId)
+        : undefined;
+    const selectedName = selectedScreen?.name
+        ?? (selectedScreenId ? `大屏 #${selectedScreenId}` : extractLegacyScreenRefName(value));
 
     const loadScreens = useCallback(async () => {
         if (screens.length > 0) return;
@@ -848,6 +884,14 @@ function ScreenJumpPicker({ value, onChange }: { value: string; onChange: (url: 
         } catch { /* ignore */ }
         setLoading(false);
     }, [screens.length]);
+
+    // If the value already references a screen by id, eagerly load the list
+    // so the dropdown button can show the screen's actual name (not "大屏 #42").
+    useEffect(() => {
+        if (selectedScreenId && screens.length === 0 && !loading) {
+            void loadScreens();
+        }
+    }, [selectedScreenId, screens.length, loading, loadScreens]);
 
     const filtered = screens.filter(s => !search || (s.name || '').toLowerCase().includes(search.toLowerCase()));
 
@@ -904,12 +948,12 @@ function ScreenJumpPicker({ value, onChange }: { value: string; onChange: (url: 
                                     </div>
                                 ) : (
                                     filtered.map(s => {
-                                        const isSelected = selectedName === String(s.name || '').trim();
+                                        const isSelected = selectedScreenId != null && String(s.id) === selectedScreenId;
                                         const isPublished = s.publishedVersionNo != null && s.publishedVersionNo > 0;
                                         return (
                                             <div
                                                 key={String(s.id)}
-                                                onClick={() => { onChange(buildScreenRefUrl(s)); setOpen(false); setSearch(''); }}
+                                                onClick={() => { onChange(buildScreenJumpUrl(s)); setOpen(false); setSearch(''); }}
                                                 className={`flex items-center justify-between gap-2 px-3.5 py-2 cursor-pointer text-xs hover:bg-brand/[0.06] ${isSelected ? 'bg-brand/[0.08]' : ''}`}
                                             >
                                                 <span className={`flex-1 min-w-0 truncate ${isSelected ? 'font-semibold' : ''}`}>
