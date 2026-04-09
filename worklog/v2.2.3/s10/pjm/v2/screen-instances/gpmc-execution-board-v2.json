@@ -191,13 +191,7 @@
         "borderWidth": 1,
         "radius": 12
       },
-      "actions": [
-        {
-          "type": "jump-url",
-          "jumpUrlTemplate": "",
-          "jumpOpenMode": "self"
-        }
-      ]
+      "actions": []
     },
     {
       "id": "execution-topic-overview-label",
@@ -217,13 +211,7 @@
         "color": "#ffffff",
         "textAlign": "center"
       },
-      "actions": [
-        {
-          "type": "jump-url",
-          "jumpUrlTemplate": "",
-          "jumpOpenMode": "self"
-        }
-      ]
+      "actions": []
     },
     {
       "id": "execution-topic-execution-shape",
@@ -243,13 +231,7 @@
         "borderWidth": 1,
         "radius": 12
       },
-      "actions": [
-        {
-          "type": "jump-url",
-          "jumpUrlTemplate": "",
-          "jumpOpenMode": "self"
-        }
-      ]
+      "actions": []
     },
     {
       "id": "execution-topic-execution-label",
@@ -269,13 +251,7 @@
         "color": "#ffffff",
         "textAlign": "center"
       },
-      "actions": [
-        {
-          "type": "jump-url",
-          "jumpUrlTemplate": "",
-          "jumpOpenMode": "self"
-        }
-      ]
+      "actions": []
     },
     {
       "id": "execution-topic-quality-shape",
@@ -295,13 +271,7 @@
         "borderWidth": 1,
         "radius": 12
       },
-      "actions": [
-        {
-          "type": "jump-url",
-          "jumpUrlTemplate": "",
-          "jumpOpenMode": "self"
-        }
-      ]
+      "actions": []
     },
     {
       "id": "execution-topic-quality-label",
@@ -321,13 +291,7 @@
         "color": "#ffffff",
         "textAlign": "center"
       },
-      "actions": [
-        {
-          "type": "jump-url",
-          "jumpUrlTemplate": "",
-          "jumpOpenMode": "self"
-        }
-      ]
+      "actions": []
     },
     {
       "id": "execution-topic-tech-state-shape",
@@ -347,13 +311,7 @@
         "borderWidth": 1,
         "radius": 12
       },
-      "actions": [
-        {
-          "type": "jump-url",
-          "jumpUrlTemplate": "",
-          "jumpOpenMode": "self"
-        }
-      ]
+      "actions": []
     },
     {
       "id": "execution-topic-tech-state-label",
@@ -373,13 +331,7 @@
         "color": "#ffffff",
         "textAlign": "center"
       },
-      "actions": [
-        {
-          "type": "jump-url",
-          "jumpUrlTemplate": "",
-          "jumpOpenMode": "self"
-        }
-      ]
+      "actions": []
     },
     {
       "id": "execution-topic-cost-shape",
@@ -439,13 +391,7 @@
         "borderWidth": 1,
         "radius": 12
       },
-      "actions": [
-        {
-          "type": "jump-url",
-          "jumpUrlTemplate": "",
-          "jumpOpenMode": "self"
-        }
-      ]
+      "actions": []
     },
     {
       "id": "execution-topic-risk-label",
@@ -465,13 +411,7 @@
         "color": "#ffffff",
         "textAlign": "center"
       },
-      "actions": [
-        {
-          "type": "jump-url",
-          "jumpUrlTemplate": "",
-          "jumpOpenMode": "self"
-        }
-      ]
+      "actions": []
     },
     {
       "id": "项目执行监控-date",
@@ -842,13 +782,7 @@
         "valueColor": "#c0392b",
         "backgroundColor": "#ffffff"
       },
-      "actions": [
-        {
-          "type": "jump-url",
-          "jumpUrlTemplate": "",
-          "jumpOpenMode": "new-tab"
-        }
-      ],
+      "actions": [],
       "dataSource": {
         "type": "sql",
         "sqlConfig": {
@@ -1171,13 +1105,7 @@
           "#1e8449"
         ]
       },
-      "actions": [
-        {
-          "type": "jump-url",
-          "jumpUrlTemplate": "",
-          "jumpOpenMode": "new-tab"
-        }
-      ],
+      "actions": [],
       "dataSource": {
         "type": "sql",
         "sqlConfig": {
@@ -1235,13 +1163,7 @@
         "pageSize": 6,
         "freezeHeader": true
       },
-      "actions": [
-        {
-          "type": "jump-url",
-          "jumpUrlTemplate": "",
-          "jumpOpenMode": "new-tab"
-        }
-      ],
+      "actions": [],
       "dataSource": {
         "type": "sql",
         "sqlConfig": {
@@ -1300,13 +1222,7 @@
         "pageSize": 6,
         "freezeHeader": true
       },
-      "actions": [
-        {
-          "type": "jump-url",
-          "jumpUrlTemplate": "",
-          "jumpOpenMode": "new-tab"
-        }
-      ],
+      "actions": [],
       "dataSource": {
         "type": "sql",
         "sqlConfig": {

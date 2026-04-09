@@ -305,13 +305,7 @@
         "borderWidth": 1,
         "radius": 12
       },
-      "actions": [
-        {
-          "type": "jump-url",
-          "jumpUrlTemplate": "",
-          "jumpOpenMode": "self"
-        }
-      ]
+      "actions": []
     },
     {
       "id": "overview-topic-overview-label",
@@ -331,13 +325,7 @@
         "color": "#ffffff",
         "textAlign": "center"
       },
-      "actions": [
-        {
-          "type": "jump-url",
-          "jumpUrlTemplate": "",
-          "jumpOpenMode": "self"
-        }
-      ]
+      "actions": []
     },
     {
       "id": "overview-topic-execution-shape",
@@ -357,13 +345,7 @@
         "borderWidth": 1,
         "radius": 12
       },
-      "actions": [
-        {
-          "type": "jump-url",
-          "jumpUrlTemplate": "",
-          "jumpOpenMode": "self"
-        }
-      ]
+      "actions": []
     },
     {
       "id": "overview-topic-execution-label",
@@ -383,13 +365,7 @@
         "color": "#ffffff",
         "textAlign": "center"
       },
-      "actions": [
-        {
-          "type": "jump-url",
-          "jumpUrlTemplate": "",
-          "jumpOpenMode": "self"
-        }
-      ]
+      "actions": []
     },
     {
       "id": "overview-topic-quality-shape",
@@ -409,13 +385,7 @@
         "borderWidth": 1,
         "radius": 12
       },
-      "actions": [
-        {
-          "type": "jump-url",
-          "jumpUrlTemplate": "",
-          "jumpOpenMode": "self"
-        }
-      ]
+      "actions": []
     },
     {
       "id": "overview-topic-quality-label",
@@ -435,13 +405,7 @@
         "color": "#ffffff",
         "textAlign": "center"
       },
-      "actions": [
-        {
-          "type": "jump-url",
-          "jumpUrlTemplate": "",
-          "jumpOpenMode": "self"
-        }
-      ]
+      "actions": []
     },
     {
       "id": "overview-topic-tech-state-shape",
@@ -461,13 +425,7 @@
         "borderWidth": 1,
         "radius": 12
       },
-      "actions": [
-        {
-          "type": "jump-url",
-          "jumpUrlTemplate": "",
-          "jumpOpenMode": "self"
-        }
-      ]
+      "actions": []
     },
     {
       "id": "overview-topic-tech-state-label",
@@ -487,13 +445,7 @@
         "color": "#ffffff",
         "textAlign": "center"
       },
-      "actions": [
-        {
-          "type": "jump-url",
-          "jumpUrlTemplate": "",
-          "jumpOpenMode": "self"
-        }
-      ]
+      "actions": []
     },
     {
       "id": "overview-topic-cost-shape",
@@ -553,13 +505,7 @@
         "borderWidth": 1,
         "radius": 12
       },
-      "actions": [
-        {
-          "type": "jump-url",
-          "jumpUrlTemplate": "",
-          "jumpOpenMode": "self"
-        }
-      ]
+      "actions": []
     },
     {
       "id": "overview-topic-risk-label",
@@ -579,13 +525,7 @@
         "color": "#ffffff",
         "textAlign": "center"
       },
-      "actions": [
-        {
-          "type": "jump-url",
-          "jumpUrlTemplate": "",
-          "jumpOpenMode": "self"
-        }
-      ]
+      "actions": []
     },
     {
       "id": "gpmc-overview-assist-explanation-shape",
@@ -713,13 +653,7 @@
         "valueColor": "#0f172a",
         "backgroundColor": "#ffffff"
       },
-      "actions": [
-        {
-          "type": "jump-url",
-          "jumpUrlTemplate": "",
-          "jumpOpenMode": "self"
-        }
-      ],
+      "actions": [],
       "dataSource": {
         "type": "sql",
         "sqlConfig": {
@@ -766,13 +700,7 @@
         "valueColor": "#0f172a",
         "backgroundColor": "#ffffff"
       },
-      "actions": [
-        {
-          "type": "jump-url",
-          "jumpUrlTemplate": "",
-          "jumpOpenMode": "self"
-        }
-      ],
+      "actions": [],
       "dataSource": {
         "type": "sql",
         "sqlConfig": {
@@ -819,13 +747,7 @@
         "valueColor": "#c0392b",
         "backgroundColor": "#ffffff"
       },
-      "actions": [
-        {
-          "type": "jump-url",
-          "jumpUrlTemplate": "",
-          "jumpOpenMode": "self"
-        }
-      ],
+      "actions": [],
       "dataSource": {
         "type": "sql",
         "sqlConfig": {
@@ -872,13 +794,7 @@
         "valueColor": "#1e8449",
         "backgroundColor": "#ffffff"
       },
-      "actions": [
-        {
-          "type": "jump-url",
-          "jumpUrlTemplate": "",
-          "jumpOpenMode": "self"
-        }
-      ],
+      "actions": [],
       "dataSource": {
         "type": "sql",
         "sqlConfig": {
@@ -925,13 +841,7 @@
         "valueColor": "#c0392b",
         "backgroundColor": "#ffffff"
       },
-      "actions": [
-        {
-          "type": "jump-url",
-          "jumpUrlTemplate": "",
-          "jumpOpenMode": "self"
-        }
-      ],
+      "actions": [],
       "dataSource": {
         "type": "sql",
         "sqlConfig": {
@@ -1013,13 +923,7 @@
           "#1e8449"
         ]
       },
-      "actions": [
-        {
-          "type": "jump-url",
-          "jumpUrlTemplate": "",
-          "jumpOpenMode": "self"
-        }
-      ],
+      "actions": [],
       "dataSource": {
         "type": "sql",
         "sqlConfig": {
@@ -1065,13 +969,7 @@
           "#8b5cf6"
         ]
       },
-      "actions": [
-        {
-          "type": "jump-url",
-          "jumpUrlTemplate": "",
-          "jumpOpenMode": "self"
-        }
-      ],
+      "actions": [],
       "dataSource": {
         "type": "sql",
         "sqlConfig": {
@@ -1127,13 +1025,7 @@
         "pageSize": 6,
         "freezeHeader": true
       },
-      "actions": [
-        {
-          "type": "jump-url",
-          "jumpUrlTemplate": "",
-          "jumpOpenMode": "self"
-        }
-      ],
+      "actions": [],
       "dataSource": {
         "type": "sql",
         "sqlConfig": {
@@ -1193,13 +1085,7 @@
         "pageSize": 6,
         "freezeHeader": true
       },
-      "actions": [
-        {
-          "type": "jump-url",
-          "jumpUrlTemplate": "",
-          "jumpOpenMode": "self"
-        }
-      ],
+      "actions": [],
       "dataSource": {
         "type": "sql",
         "sqlConfig": {
@@ -1468,13 +1354,7 @@
           "#d4850a"
         ]
       },
-      "actions": [
-        {
-          "type": "jump-url",
-          "jumpUrlTemplate": "",
-          "jumpOpenMode": "self"
-        }
-      ],
+      "actions": [],
       "dataSource": {
         "type": "sql",
         "sqlConfig": {
@@ -1548,13 +1428,7 @@
         "chartPaddingLeft": 20,
         "xAxisLabelMaxLength": 5
       },
-      "actions": [
-        {
-          "type": "jump-url",
-          "jumpUrlTemplate": "",
-          "jumpOpenMode": "self"
-        }
-      ],
+      "actions": [],
       "dataSource": {
         "type": "sql",
         "sqlConfig": {
@@ -1630,13 +1504,7 @@
         "chartPaddingLeft": 18,
         "seriesLabelStrategy": "first-only"
       },
-      "actions": [
-        {
-          "type": "jump-url",
-          "jumpUrlTemplate": "",
-          "jumpOpenMode": "self"
-        }
-      ],
+      "actions": [],
       "dataSource": {
         "type": "sql",
         "sqlConfig": {
@@ -1722,13 +1590,7 @@
         "pageSize": 6,
         "freezeHeader": true
       },
-      "actions": [
-        {
-          "type": "jump-url",
-          "jumpUrlTemplate": "",
-          "jumpOpenMode": "self"
-        }
-      ],
+      "actions": [],
       "dataSource": {
         "type": "sql",
         "sqlConfig": {
@@ -1790,13 +1652,7 @@
         "pageSize": 6,
         "freezeHeader": true
       },
-      "actions": [
-        {
-          "type": "jump-url",
-          "jumpUrlTemplate": "",
-          "jumpOpenMode": "new-tab"
-        }
-      ],
+      "actions": [],
       "dataSource": {
         "type": "sql",
         "sqlConfig": {

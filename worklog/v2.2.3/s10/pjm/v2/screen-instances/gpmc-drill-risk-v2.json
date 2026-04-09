@@ -114,13 +114,7 @@
         "borderWidth": 1,
         "radius": 14
       },
-      "actions": [
-        {
-          "type": "jump-url",
-          "jumpUrlTemplate": "",
-          "jumpOpenMode": "self"
-        }
-      ]
+      "actions": []
     },
     {
       "id": "drill-risk-back-label",
@@ -140,13 +134,7 @@
         "color": "#ffffff",
         "textAlign": "center"
       },
-      "actions": [
-        {
-          "type": "jump-url",
-          "jumpUrlTemplate": "",
-          "jumpOpenMode": "self"
-        }
-      ]
+      "actions": []
     },
     {
       "id": "drill-risk-kpi-1",

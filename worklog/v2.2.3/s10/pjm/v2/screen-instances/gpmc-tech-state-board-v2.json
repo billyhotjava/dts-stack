@@ -172,13 +172,7 @@
         "borderWidth": 1,
         "radius": 12
       },
-      "actions": [
-        {
-          "type": "jump-url",
-          "jumpUrlTemplate": "",
-          "jumpOpenMode": "self"
-        }
-      ]
+      "actions": []
     },
     {
       "id": "tech-state-topic-overview-label",
@@ -198,13 +192,7 @@
         "color": "#ffffff",
         "textAlign": "center"
       },
-      "actions": [
-        {
-          "type": "jump-url",
-          "jumpUrlTemplate": "",
-          "jumpOpenMode": "self"
-        }
-      ]
+      "actions": []
     },
     {
       "id": "tech-state-topic-execution-shape",
@@ -224,13 +212,7 @@
         "borderWidth": 1,
         "radius": 12
       },
-      "actions": [
-        {
-          "type": "jump-url",
-          "jumpUrlTemplate": "",
-          "jumpOpenMode": "self"
-        }
-      ]
+      "actions": []
     },
     {
       "id": "tech-state-topic-execution-label",
@@ -250,13 +232,7 @@
         "color": "#ffffff",
         "textAlign": "center"
       },
-      "actions": [
-        {
-          "type": "jump-url",
-          "jumpUrlTemplate": "",
-          "jumpOpenMode": "self"
-        }
-      ]
+      "actions": []
     },
     {
       "id": "tech-state-topic-quality-shape",
@@ -276,13 +252,7 @@
         "borderWidth": 1,
         "radius": 12
       },
-      "actions": [
-        {
-          "type": "jump-url",
-          "jumpUrlTemplate": "",
-          "jumpOpenMode": "self"
-        }
-      ]
+      "actions": []
     },
     {
       "id": "tech-state-topic-quality-label",
@@ -302,13 +272,7 @@
         "color": "#ffffff",
         "textAlign": "center"
       },
-      "actions": [
-        {
-          "type": "jump-url",
-          "jumpUrlTemplate": "",
-          "jumpOpenMode": "self"
-        }
-      ]
+      "actions": []
     },
     {
       "id": "tech-state-topic-tech-state-shape",
@@ -328,13 +292,7 @@
         "borderWidth": 1,
         "radius": 12
       },
-      "actions": [
-        {
-          "type": "jump-url",
-          "jumpUrlTemplate": "",
-          "jumpOpenMode": "self"
-        }
-      ]
+      "actions": []
     },
     {
       "id": "tech-state-topic-tech-state-label",
@@ -354,13 +312,7 @@
         "color": "#ffffff",
         "textAlign": "center"
       },
-      "actions": [
-        {
-          "type": "jump-url",
-          "jumpUrlTemplate": "",
-          "jumpOpenMode": "self"
-        }
-      ]
+      "actions": []
     },
     {
       "id": "tech-state-topic-cost-shape",
@@ -420,13 +372,7 @@
         "borderWidth": 1,
         "radius": 12
       },
-      "actions": [
-        {
-          "type": "jump-url",
-          "jumpUrlTemplate": "",
-          "jumpOpenMode": "self"
-        }
-      ]
+      "actions": []
     },
     {
       "id": "tech-state-topic-risk-label",
@@ -446,13 +392,7 @@
         "color": "#ffffff",
         "textAlign": "center"
       },
-      "actions": [
-        {
-          "type": "jump-url",
-          "jumpUrlTemplate": "",
-          "jumpOpenMode": "self"
-        }
-      ]
+      "actions": []
     },
     {
       "id": "技术状态与跟进-date",
@@ -1046,13 +986,7 @@
         "pageSize": 6,
         "freezeHeader": true
       },
-      "actions": [
-        {
-          "type": "jump-url",
-          "jumpUrlTemplate": "",
-          "jumpOpenMode": "new-tab"
-        }
-      ],
+      "actions": [],
       "dataSource": {
         "type": "sql",
         "sqlConfig": {
@@ -1212,13 +1146,7 @@
         "pageSize": 6,
         "freezeHeader": true
       },
-      "actions": [
-        {
-          "type": "jump-url",
-          "jumpUrlTemplate": "",
-          "jumpOpenMode": "new-tab"
-        }
-      ],
+      "actions": [],
       "dataSource": {
         "type": "sql",
         "sqlConfig": {
