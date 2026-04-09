@@ -26,6 +26,7 @@ services/dts-airflow/dags/*.json
 services/dts-airflow/dags/dwh/
 services/dts-airflow/dags/ods/
 services/dts-airflow/dags/exchange/
+services/dts-airflow/dags/uploads/
 services/dts-airflow/logs/
 services/dts-airflow/**/__pycache__/
 services/dts-airflow/**/*.pyc

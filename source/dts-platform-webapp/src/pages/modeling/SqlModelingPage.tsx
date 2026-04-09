@@ -292,6 +292,7 @@ export default function SqlModelingPage() {
 	const [runSubmitting, setRunSubmitting] = useState(false);
 	const [runSelectedModelIds, setRunSelectedModelIds] = useState<string[]>([]);
 	const [runModelKeyword, setRunModelKeyword] = useState("");
+	const [runSpaceFilter, setRunSpaceFilter] = useState<string | undefined>(undefined);
 	const [buildTriggering, setBuildTriggering] = useState<"compile" | "test" | "docs" | "build" | null>(null);
 	const [compileResult, setCompileResult] = useState<DbtRunSummary | null>(null);
 	const [testResult, setTestResult] = useState<DbtRunSummary | null>(null);
@@ -898,6 +899,7 @@ export default function SqlModelingPage() {
 		const activeId = String(activeModel?.id || "").trim();
 		setRunSelectedModelIds(activeId ? [activeId] : []);
 		setRunModelKeyword("");
+		setRunSpaceFilter(activeModel?.planId ? String(activeModel.planId) : undefined);
 		setRunOpen(true);
 	};
 
@@ -2124,14 +2126,19 @@ export default function SqlModelingPage() {
 
 	const runFilteredModels = useMemo(() => {
 		const keyword = runModelKeyword.trim().toLowerCase();
-		if (!keyword) return sqlModels;
-		return sqlModels.filter((model) => {
+		const bySpace = sqlModels.filter((model) => {
+			if (!runSpaceFilter) return true;
+			if (runSpaceFilter === UNASSIGNED_SPACE_KEY) return !model.planId;
+			return String(model.planId || "") === runSpaceFilter;
+		});
+		if (!keyword) return bySpace;
+		return bySpace.filter((model) => {
 			const fields = [model.name, model.planName, model.layer, model.alias]
 				.map((value) => normalizeText(value).toLowerCase())
 				.filter(Boolean);
 			return fields.some((value) => value.includes(keyword));
 		});
-	}, [sqlModels, runModelKeyword]);
+	}, [sqlModels, runModelKeyword, runSpaceFilter]);
 	const canArchiveActiveModel = !!activeModel?.id && !activeModel?.planId && spaces.length > 0;
 	const canBatchArchive = unassignedModels.length > 0 && spaces.length > 0;
 	const checkedModelKeys = useMemo(
@@ -3318,12 +3325,30 @@ export default function SqlModelingPage() {
 						help={
 							runSelectedModelIds.length === 0
 								? "请至少勾选一个模型"
-								: `已选 ${runSelectedModelIds.length} / ${sqlModels.length} 个模型`
+								: `已选 ${runSelectedModelIds.length} 个模型，当前筛选结果 ${runFilteredModels.length} / 全部 ${sqlModels.length}`
 						}
 						validateStatus={runSelectedModelIds.length === 0 ? "error" : undefined}
 					>
 						<div className="flex flex-col gap-2">
 							<div className="flex items-center gap-2">
+								<Select<string>
+									allowClear
+									showSearch
+									placeholder="按项目空间筛选"
+									value={runSpaceFilter}
+									onChange={(value) => setRunSpaceFilter(value)}
+									style={{ width: 200 }}
+									optionFilterProp="label"
+									options={[
+										...spaces.map((space) => ({
+											value: String(space.id || ""),
+											label: space.name || "未命名项目空间",
+										})),
+										...(unassignedModels.length > 0
+											? [{ value: UNASSIGNED_SPACE_KEY, label: `未分配 (${unassignedModels.length})` }]
+											: []),
+									]}
+								/>
 								<Input.Search
 									allowClear
 									placeholder="按名称 / 空间 / 层搜索"
@@ -3342,9 +3367,19 @@ export default function SqlModelingPage() {
 								</Button>
 								<Button
 									size="small"
-									disabled={!activeSpace}
+									disabled={!runSpaceFilter && !activeSpace}
 									onClick={() => {
-										const ids = activeSpaceModels
+										let targetModels: SqlModel[];
+										if (runSpaceFilter === UNASSIGNED_SPACE_KEY) {
+											targetModels = sqlModels.filter((m) => !m.planId);
+										} else if (runSpaceFilter) {
+											targetModels = sqlModels.filter(
+												(m) => String(m.planId || "") === runSpaceFilter,
+											);
+										} else {
+											targetModels = activeSpaceModels;
+										}
+										const ids = targetModels
 											.map((m) => String(m.id || "").trim())
 											.filter(Boolean);
 										setRunSelectedModelIds(ids);

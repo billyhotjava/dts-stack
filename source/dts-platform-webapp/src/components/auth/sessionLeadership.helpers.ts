@@ -1,5 +1,6 @@
 export type SessionLeaderLease = {
 	tabId: string;
+	effectiveAt: number;
 	expiresAt: number;
 };
 
@@ -12,18 +13,22 @@ export function parseSessionLeaderLease(raw: string | null | undefined): Session
 			typeof parsed === "object" &&
 			typeof parsed.tabId === "string" &&
 			parsed.tabId &&
+			typeof parsed.effectiveAt === "number" &&
+			Number.isFinite(parsed.effectiveAt) &&
 			typeof parsed.expiresAt === "number" &&
 			Number.isFinite(parsed.expiresAt)
 		) {
-			return { tabId: parsed.tabId, expiresAt: parsed.expiresAt };
+			return { tabId: parsed.tabId, effectiveAt: parsed.effectiveAt, expiresAt: parsed.expiresAt };
 		}
 	} catch {}
 	return null;
 }
 
-export function buildSessionLeaderLease(tabId: string, now: number, leaseMs: number): SessionLeaderLease {
+export function buildSessionLeaderLease(tabId: string, now: number, leaseMs: number, confirmationMs: number): SessionLeaderLease {
+	const effectiveAt = now + Math.max(0, confirmationMs);
 	return {
 		tabId,
+		effectiveAt,
 		expiresAt: now + Math.max(1, leaseMs),
 	};
 }
@@ -41,5 +46,5 @@ export function shouldAcquireSessionLeadership(
 
 export function isSessionLeaderActive(lease: SessionLeaderLease | null | undefined, now: number): boolean {
 	if (!lease) return false;
-	return lease.expiresAt > now;
+	return lease.effectiveAt <= now && lease.expiresAt > now;
 }

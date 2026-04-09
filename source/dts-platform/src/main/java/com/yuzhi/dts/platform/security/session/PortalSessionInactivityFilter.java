@@ -48,6 +48,9 @@ public class PortalSessionInactivityFilter extends OncePerRequestFilter {
         if (uri.startsWith("/api/keycloak/auth/")) {
             return true;
         }
+        if ("/api/session/status".equals(uri)) {
+            return true;
+        }
         String header = request.getHeader(HttpHeaders.AUTHORIZATION);
         return header == null || !header.startsWith("Bearer ");
     }

@@ -28,6 +28,7 @@ const SESSION_IDLE_GRACE_MS = 30 * 1000;
 const LEADER_LEASE_MS = 45 * 1000;
 const LEADER_HEARTBEAT_MS = 15 * 1000;
 const FOLLOWER_RECHECK_MS = 15 * 1000;
+const LEADER_CONFIRM_MS = 250;
 
 const genId = () => Math.random().toString(36).slice(2) + Date.now().toString(36);
 
@@ -211,7 +212,7 @@ export default function SessionManager() {
 				isLeaderRef.current = currentLease?.tabId === tabIdRef.current && isSessionLeaderActive(currentLease, now);
 				return;
 			}
-			const nextLease = buildSessionLeaderLease(tabIdRef.current, now, LEADER_LEASE_MS);
+			const nextLease = buildSessionLeaderLease(tabIdRef.current, now, LEADER_LEASE_MS, LEADER_CONFIRM_MS);
 			try {
 				localStorage.setItem(STORAGE_KEYS.REFRESH_LEADER, JSON.stringify(nextLease));
 				const confirmedLease = readLeaderLease();

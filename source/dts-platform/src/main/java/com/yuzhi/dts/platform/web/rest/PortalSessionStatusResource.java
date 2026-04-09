@@ -1,54 +1,74 @@
 package com.yuzhi.dts.platform.web.rest;
 
+import com.yuzhi.dts.platform.domain.security.PortalSessionEntity;
+import com.yuzhi.dts.platform.repository.security.PortalSessionRepository;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
-import java.time.format.DateTimeParseException;
 import java.util.LinkedHashMap;
 import java.util.Map;
+import java.util.Optional;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
-import org.springframework.security.core.Authentication;
-import org.springframework.security.core.context.SecurityContextHolder;
-import org.springframework.security.oauth2.core.OAuth2AuthenticatedPrincipal;
-import org.springframework.security.oauth2.core.OAuth2TokenIntrospectionClaimNames;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
+import jakarta.servlet.http.HttpServletRequest;
 
 @RestController
 @RequestMapping("/api/session")
 public class PortalSessionStatusResource {
 
+    private final PortalSessionRepository sessionRepository;
     private final Clock clock;
 
-    public PortalSessionStatusResource() {
-        this(Clock.systemUTC());
+    public PortalSessionStatusResource(PortalSessionRepository sessionRepository) {
+        this(sessionRepository, Clock.systemUTC());
     }
 
-    PortalSessionStatusResource(Clock clock) {
+    PortalSessionStatusResource(PortalSessionRepository sessionRepository, Clock clock) {
+        this.sessionRepository = sessionRepository;
         this.clock = clock == null ? Clock.systemUTC() : clock;
     }
 
     @GetMapping(value = "/status", produces = MediaType.APPLICATION_JSON_VALUE)
-    public ApiResponse<Map<String, Object>> status() {
+    public ApiResponse<Map<String, Object>> status(HttpServletRequest request) {
         Map<String, Object> data = new LinkedHashMap<>();
         Instant now = Instant.now(clock);
         data.put("serverNow", now.toString());
 
-        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
-        if (auth == null || !auth.isAuthenticated()) {
+        String token = extractBearerToken(request);
+        if (token == null) {
             data.put("authenticated", false);
             return ApiResponses.ok(data);
         }
 
+        Optional<PortalSessionEntity> session = sessionRepository.findByAccessToken(token);
+        if (session.isEmpty()) {
+            data.put("authenticated", false);
+            return ApiResponses.ok(data);
+        }
+        PortalSessionEntity entity = session.get();
+        if (entity.getRevokedAt() != null) {
+            data.put("authenticated", false);
+            return ApiResponses.ok(data);
+        }
+
+        Instant expiresAt = entity.getExpiresAt();
+        if (expiresAt != null && expiresAt.isBefore(now)) {
+            data.put("authenticated", false);
+            data.put("expiresAt", expiresAt.toString());
+            data.put("remainingSeconds", 0L);
+            return ApiResponses.ok(data);
+        }
+
         data.put("authenticated", true);
-        data.put("username", resolveUsername(auth));
-        String displayName = resolveDisplayName(auth);
+        data.put("username", entity.getUsername());
+        String displayName = entity.getDisplayName();
         if (displayName != null && !displayName.isBlank()) {
             data.put("displayName", displayName);
         }
 
-        Instant expiresAt = resolveExpiresAt(auth);
         if (expiresAt != null) {
             data.put("expiresAt", expiresAt.toString());
             long remainingSeconds = Math.max(0L, Duration.between(now, expiresAt).toSeconds());
@@ -59,72 +79,26 @@ public class PortalSessionStatusResource {
         return ApiResponses.ok(data);
     }
 
-    private String resolveUsername(Authentication auth) {
-        if (auth.getPrincipal() instanceof OAuth2AuthenticatedPrincipal principal) {
-            String username = firstText(
-                principal.getAttribute(OAuth2TokenIntrospectionClaimNames.USERNAME),
-                principal.getAttribute("preferred_username"),
-                principal.getAttribute("sub")
-            );
-            if (username != null) {
-                return username;
-            }
-        }
-        return auth.getName();
-    }
-
-    private String resolveDisplayName(Authentication auth) {
-        if (auth.getPrincipal() instanceof OAuth2AuthenticatedPrincipal principal) {
-            return firstText(principal.getAttribute("displayName"), principal.getAttribute("full_name"), principal.getAttribute("name"));
-        }
-        return null;
-    }
-
-    private Instant resolveExpiresAt(Authentication auth) {
-        if (!(auth.getPrincipal() instanceof OAuth2AuthenticatedPrincipal principal)) {
+    private String extractBearerToken(HttpServletRequest request) {
+        if (request == null) {
             return null;
         }
-        return toInstant(principal.getAttribute(OAuth2TokenIntrospectionClaimNames.EXP));
-    }
-
-    private String firstText(Object... candidates) {
-        if (candidates == null) {
+        String header = request.getHeader(HttpHeaders.AUTHORIZATION);
+        if (header == null || header.isBlank()) {
             return null;
         }
-        for (Object candidate : candidates) {
-            if (candidate instanceof String text && !text.isBlank()) {
-                return text;
-            }
+        int idx = header.indexOf(' ');
+        if (idx < 0) {
+            return header.trim().isEmpty() ? null : header.trim();
         }
-        return null;
-    }
-
-    private Instant toInstant(Object value) {
-        if (value == null) {
+        String scheme = header.substring(0, idx).trim();
+        if (!"Bearer".equalsIgnoreCase(scheme)) {
             return null;
         }
-        if (value instanceof Instant instant) {
-            return instant;
+        String token = header.substring(idx + 1).trim();
+        if (token.isEmpty()) {
+            return null;
         }
-        if (value instanceof Number number) {
-            long epoch = number.longValue();
-            if (String.valueOf(Math.abs(epoch)).length() > 10) {
-                return Instant.ofEpochMilli(epoch);
-            }
-            return Instant.ofEpochSecond(epoch);
-        }
-        if (value instanceof String text && !text.isBlank()) {
-            try {
-                return Instant.parse(text);
-            } catch (DateTimeParseException ignored) {
-                try {
-                    long epoch = Long.parseLong(text);
-                    return toInstant(epoch);
-                } catch (NumberFormatException ignoredAgain) {
-                    return null;
-                }
-            }
-        }
-        return null;
+        return token;
     }
 }

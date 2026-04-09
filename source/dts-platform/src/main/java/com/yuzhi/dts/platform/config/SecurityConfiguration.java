@@ -46,6 +46,7 @@ public class SecurityConfiguration {
                     .requestMatchers(mvc.pattern("/openapi/**")).permitAll()
                     .requestMatchers(mvc.pattern("/api/authenticate")).permitAll()
                     .requestMatchers(mvc.pattern("/api/auth-info")).permitAll()
+                    .requestMatchers(mvc.pattern("/api/session/status")).permitAll()
                     // Allow platform login/logout/refresh endpoints without prior auth
                     .requestMatchers(mvc.pattern("/api/keycloak/auth/**")).permitAll()
                     // Allow localization resources without auth (used at boot)

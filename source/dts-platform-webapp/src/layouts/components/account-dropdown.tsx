@@ -42,7 +42,6 @@ export default function AccountDropdown() {
 	useEffect(() => {
 		if (!open) return;
 		let cancelled = false;
-		let timer: number | undefined;
 
 		const load = async () => {
 			try {
@@ -63,15 +62,9 @@ export default function AccountDropdown() {
 		};
 
 		void load();
-		timer = window.setInterval(() => {
-			void load();
-		}, 30_000);
 
 		return () => {
 			cancelled = true;
-			if (timer) {
-				window.clearInterval(timer);
-			}
 		};
 	}, [open]);
 
