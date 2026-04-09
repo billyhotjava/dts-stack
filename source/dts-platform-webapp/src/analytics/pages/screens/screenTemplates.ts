@@ -1,8 +1,6 @@
 import type { ScreenConfig, ScreenComponent, ScreenGlobalVariable } from './types';
 import { SCREEN_SCHEMA_VERSION } from './specV2';
 import { projectManagementCommandCenterTemplate } from './projectManagementCommandCenterTemplate';
-import { gpmcTemplates } from './gpmcTemplates';
-import { gpmcDrillTemplates } from './gpmcDrillTemplates';
 import {
     ENTERPRISE, resetIdCounter,
     headerBar, sectionPanel, chart, gradientDivider, kpiRow, threeColumnGrid,
@@ -2542,8 +2540,6 @@ export const screenTemplates: ScreenTemplate[] = [
     qmsCockpitTemplate,
     plmCockpitTemplate,
     hrCockpitTemplate,
-    ...gpmcTemplates,
-    ...gpmcDrillTemplates,
     projectManagementCommandCenterTemplate,
     auxiliaryBalanceDashboardTemplate,
     ownFundDashboardTemplate,

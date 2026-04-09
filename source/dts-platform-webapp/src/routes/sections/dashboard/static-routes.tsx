@@ -32,7 +32,6 @@ const CollectionsPage = lazy(() => import("@/analytics/pages/CollectionsPage"));
 const CollectionItemsPage = lazy(() => import("@/analytics/pages/CollectionItemsPage"));
 const SearchPage = lazy(() => import("@/analytics/pages/SearchPage"));
 const ProjectCockpitPage = lazy(() => import("@/analytics/pages/project-cockpit/ProjectCockpitPage"));
-const GpmcPage = lazy(() => import("@/analytics/pages/gpmc/GpmcPage"));
 
 const ExploreSessionsPage = lazy(() => import("@/analytics/pages/ExploreSessionsPage"));
 const ReportFactoryPage = lazy(() => import("@/analytics/pages/ReportFactoryPage"));
@@ -78,8 +77,6 @@ export const STATIC_DASHBOARD_ROUTES: RouteObject[] = [
 	{ path: "bi/collections/:id", element: <S><CollectionItemsPage /></S> },
 	{ path: "bi/search", element: <S><SearchPage /></S> },
 	{ path: "bi/project-cockpit", element: <S><ProjectCockpitPage /></S> },
-	{ path: "bi/gpmc", element: <S><GpmcPage /></S> },
-	{ path: "bi/gpmc/:screenId", element: <S><GpmcPage /></S> },
 
 	{ path: "bi/explore-sessions", element: <S><ExploreSessionsPage /></S> },
 	{ path: "bi/report-factory", element: <S><ReportFactoryPage /></S> },
