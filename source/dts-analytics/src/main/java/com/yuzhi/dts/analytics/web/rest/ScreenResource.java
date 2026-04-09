@@ -2306,6 +2306,213 @@ public class ScreenResource {
             "skipped", skipped));
     }
 
+    /**
+     * One-time admin endpoint: rewrite legacy `screen-ref:{name}|...` jump-url
+     * action templates in every draft screen's components_json into the new
+     * canonical id-based form `/bi/screens/{id}/preview`.
+     *
+     * The legacy form looks up the target screen by user-editable name, which
+     * silently breaks the moment a user renames the screen or imports it into
+     * a different environment. The new form is permanent because id is the
+     * only stable identity for a screen object.
+     *
+     * Lookup strategy per ref:
+     *   1. exact name match against analytics_screen.name
+     *   2. normalized fuzzy match (strip "GPMC " prefix / trailing "v2"
+     *      / trailing "(实例)" parens / collapse whitespace / lowercase)
+     *      Multiple normalized hits are disambiguated by most-recent updatedAt.
+     *
+     * Refs that match nothing are listed in the response and left untouched.
+     *
+     * Call with `?dryRun=true` (default) first to preview the rewrite plan,
+     * then call with `?dryRun=false` to apply. Response includes per-ref
+     * before/after so the operator can audit exactly what was changed.
+     *
+     * Restricted to superuser. Bypasses the per-screen edit lock — this is
+     * a maintenance operation, not a normal edit, and the rewrite is
+     * idempotent (running it twice on the same screen is a no-op).
+     */
+    @PostMapping(path = "/admin/migrate-jump-refs", produces = MediaType.APPLICATION_JSON_VALUE)
+    public ResponseEntity<?> migrateJumpRefs(
+            @RequestParam(value = "dryRun", defaultValue = "true") boolean dryRun,
+            HttpServletRequest request) {
+        Optional<ResponseEntity<String>> authError = MetabaseAuth.requireSuperuser(sessionService, request);
+        if (authError.isPresent()) {
+            return authError.orElseThrow();
+        }
+
+        List<AnalyticsScreen> allScreens = screenRepository.findAllByArchivedFalseOrderByIdDesc();
+
+        // Build name → screen index. We keep two indexes:
+        //   - exactByName: literal match on trimmed name
+        //   - normByName : normalized fuzzy match (multiple buckets per key)
+        Map<String, AnalyticsScreen> exactByName = new LinkedHashMap<>();
+        Map<String, List<AnalyticsScreen>> normByName = new LinkedHashMap<>();
+        for (AnalyticsScreen s : allScreens) {
+            String name = s.getName();
+            if (name == null || name.isBlank()) continue;
+            exactByName.putIfAbsent(name.trim(), s);
+            String norm = normalizeScreenName(name);
+            if (!norm.isBlank()) {
+                normByName.computeIfAbsent(norm, k -> new ArrayList<>()).add(s);
+            }
+        }
+
+        int updatedScreens = 0;
+        int rewrittenRefs = 0;
+        int unresolvedRefs = 0;
+        ArrayNode rewrittenLog = objectMapper.createArrayNode();
+        ArrayNode unresolvedLog = objectMapper.createArrayNode();
+        String requestId = requestIdFrom(request);
+
+        for (AnalyticsScreen screen : allScreens) {
+            String json = screen.getComponentsJson();
+            // Cheap pre-filter: skip screens with no legacy refs at all.
+            if (json == null || json.isBlank() || !json.contains("screen-ref:")) {
+                continue;
+            }
+
+            JsonNode parsed;
+            try {
+                parsed = objectMapper.readTree(json);
+            } catch (Exception ex) {
+                ObjectNode err = unresolvedLog.addObject();
+                err.put("screenId", screen.getId());
+                err.put("screenName", screen.getName());
+                err.put("error", "componentsJson parse failed: " + ex.getMessage());
+                unresolvedRefs++;
+                continue;
+            }
+            if (!(parsed instanceof ArrayNode components)) {
+                continue;
+            }
+
+            boolean dirty = false;
+            String beforeJson = json;
+
+            for (JsonNode component : components) {
+                JsonNode actions = component.path("actions");
+                if (!actions.isArray()) continue;
+                for (JsonNode action : actions) {
+                    if (!"jump-url".equals(action.path("type").asText(""))) continue;
+                    String tmpl = action.path("jumpUrlTemplate").asText("");
+                    if (!tmpl.startsWith("screen-ref:")) continue;
+
+                    String raw = tmpl.substring("screen-ref:".length());
+                    int pipe = raw.indexOf('|');
+                    String namePart = pipe >= 0 ? raw.substring(0, pipe) : raw;
+                    String oldName;
+                    try {
+                        oldName = java.net.URLDecoder
+                                .decode(namePart, java.nio.charset.StandardCharsets.UTF_8)
+                                .trim();
+                    } catch (Exception ex) {
+                        continue;
+                    }
+                    if (oldName.isBlank()) continue;
+
+                    AnalyticsScreen target = exactByName.get(oldName);
+                    String strategy = "exact";
+                    if (target == null) {
+                        String norm = normalizeScreenName(oldName);
+                        List<AnalyticsScreen> hits = normByName.getOrDefault(norm, List.of());
+                        if (hits.size() == 1) {
+                            target = hits.get(0);
+                            strategy = "normalize";
+                        } else if (hits.size() > 1) {
+                            // Disambiguate ambiguous normalized matches by most-recent updatedAt.
+                            target = hits.stream()
+                                    .filter(s -> s.getUpdatedAt() != null)
+                                    .max((a, b) -> a.getUpdatedAt().compareTo(b.getUpdatedAt()))
+                                    .orElse(hits.get(0));
+                            strategy = "normalize-ambiguous";
+                        }
+                    }
+
+                    if (target == null) {
+                        ObjectNode entry = unresolvedLog.addObject();
+                        entry.put("screenId", screen.getId());
+                        entry.put("screenName", screen.getName());
+                        entry.put("componentName", component.path("name").asText(null));
+                        entry.put("oldRef", oldName);
+                        unresolvedRefs++;
+                        continue;
+                    }
+
+                    String newUrl = "/bi/screens/" + target.getId() + "/preview";
+                    ObjectNode entry = rewrittenLog.addObject();
+                    entry.put("screenId", screen.getId());
+                    entry.put("screenName", screen.getName());
+                    entry.put("componentName", component.path("name").asText(null));
+                    entry.put("oldRef", oldName);
+                    entry.put("targetId", target.getId());
+                    entry.put("targetName", target.getName());
+                    entry.put("newUrl", newUrl);
+                    entry.put("strategy", strategy);
+
+                    if (action instanceof ObjectNode actionObj) {
+                        actionObj.put("jumpUrlTemplate", newUrl);
+                        dirty = true;
+                        rewrittenRefs++;
+                    }
+                }
+            }
+
+            if (dirty) {
+                updatedScreens++;
+                if (!dryRun) {
+                    String afterJson = parsed.toString();
+                    screen.setComponentsJson(afterJson);
+                    screenRepository.save(screen);
+
+                    ObjectNode auditBefore = objectMapper.createObjectNode();
+                    auditBefore.put("componentsJson", beforeJson);
+                    ObjectNode auditAfter = objectMapper.createObjectNode();
+                    auditAfter.put("componentsJson", afterJson);
+                    screenAuditService.log(
+                        screen.getId(),
+                        null,
+                        "screen.migrate-jump-refs",
+                        auditBefore,
+                        auditAfter,
+                        requestId);
+                }
+            }
+        }
+
+        ObjectNode result = objectMapper.createObjectNode();
+        result.put("dryRun", dryRun);
+        result.put("totalScreens", allScreens.size());
+        result.put("updatedScreens", updatedScreens);
+        result.put("rewrittenRefs", rewrittenRefs);
+        result.put("unresolvedRefs", unresolvedRefs);
+        result.set("rewritten", rewrittenLog);
+        result.set("unresolved", unresolvedLog);
+        return ResponseEntity.ok(result);
+    }
+
+    /**
+     * Normalize a screen name for one-shot fuzzy matching during the
+     * migrate-jump-refs admin operation.
+     *
+     * Strips: "GPMC " prefix, trailing "(实例)"-style parens, trailing
+     * version markers like " v2", and collapses whitespace + lowercases.
+     *
+     * NOT used at runtime navigation — runtime resolution is strict id-only
+     * (see InteractionLayer.resolveScreenReferenceUrl). This helper exists
+     * solely as a one-shot heuristic to absorb the historical naming drift
+     * between v2 instance template JSON and the user-renamed screens in db.
+     */
+    private static String normalizeScreenName(String name) {
+        if (name == null) return "";
+        String s = name;
+        s = s.replaceAll("(?i)^GPMC[\\s\\u3000]+", "");
+        s = s.replaceAll("[\\s\\u3000]*[(（][^)）]*[)）][\\s\\u3000]*$", "");
+        s = s.replaceAll("(?i)[\\s\\u3000]+v\\d+[\\s\\u3000]*$", "");
+        s = s.replaceAll("[\\s\\u3000]+", " ").trim().toLowerCase();
+        return s;
+    }
+
     private static String trimToNull(String value) {
         if (value == null) {
             return null;
