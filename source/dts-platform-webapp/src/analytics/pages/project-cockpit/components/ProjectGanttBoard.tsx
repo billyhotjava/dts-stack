@@ -393,17 +393,6 @@ function FlatGantt({ tasks, maxHeight, onTaskClick, sideTextColor, dark, highlig
 
 	const { zoom, setZoom, scale } = useGanttTimeScale(allDates);
 
-	if (tasks.length === 0) {
-		return (
-			<EmptyShell dark={dark} message="当前筛选范围暂无执行任务。" />
-		);
-	}
-	if (!scale) {
-		return (
-			<EmptyShell dark={dark} message="缺少计划日期，无法渲染甘特视图。" />
-		);
-	}
-
 	const groups = useMemo(() => groupByProject(tasks), [tasks]);
 	const useGroups = groups.length > 1;
 
@@ -415,6 +404,17 @@ function FlatGantt({ tasks, maxHeight, onTaskClick, sideTextColor, dark, highlig
 			return next;
 		});
 	}, []);
+
+	if (tasks.length === 0) {
+		return (
+			<EmptyShell dark={dark} message="当前筛选范围暂无执行任务。" />
+		);
+	}
+	if (!scale) {
+		return (
+			<EmptyShell dark={dark} message="缺少计划日期，无法渲染甘特视图。" />
+		);
+	}
 
 	const headerBg = dark ? "rgba(15,23,36,0.95)" : "#f8fafc";
 	const rowBg = dark ? "rgba(15,23,36,0.6)" : "#ffffff";
