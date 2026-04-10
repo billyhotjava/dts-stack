@@ -3,7 +3,7 @@ export const PERSONNEL_SECURITY_LEVEL_OPTIONS = ["一般", "重要", "核心"] a
 export const DEPARTMENT_SUGGESTIONS = ["研究所", "财务", "二级部门A"] as const;
 
 // Deprecated: 职位字段已改为联系方式
-export const POSITION_SUGGESTIONS = ["所长", "副所长", "财务主管", "部门领导", "业务骨干"] as const;
+export const POSITION_SUGGESTIONS = ["所领导", "副所长", "财务主管", "部门领导", "业务骨干"] as const;
 
 // Reserve custom user attributes that should not appear in the generic attributes list
 // Include dept_code so it’s treated as a system field (mapped from Keycloak group dts_org_id)
