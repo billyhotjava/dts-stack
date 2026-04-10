@@ -8,10 +8,10 @@ import java.time.Instant;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Optional;
+import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
-import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
@@ -50,7 +50,7 @@ public class PortalSessionStatusResource {
             data.put("authenticated", false);
             return ApiResponses.ok(data);
         }
-        PortalSessionEntity entity = session.get();
+        PortalSessionEntity entity = session.orElseThrow();
         if (entity.getRevokedAt() != null) {
             data.put("authenticated", false);
             return ApiResponses.ok(data);
