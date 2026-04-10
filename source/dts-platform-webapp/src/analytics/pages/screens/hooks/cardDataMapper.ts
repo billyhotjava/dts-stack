@@ -91,6 +91,7 @@ export function mapCardDataToConfig(
         case 'gantt-chart': {
             const colIndex = (name: string) => cols.findIndex((c) => c.name === name);
             const firstIndex = (...names: string[]) => names.map(colIndex).find((idx) => idx >= 0) ?? -1;
+            const levelIdx = firstIndex('level');
             const idIdx = firstIndex('id', 'node_id');
             const nameIdx = firstIndex('node_task', 'task_name', 'name');
             const typeIdx = firstIndex('node_type', 'task_type', 'type');
@@ -110,8 +111,13 @@ export function mapCardDataToConfig(
             const subprojectIdIdx = firstIndex('subproject_id', 'subprojectId');
             const subprojectIdx = firstIndex('subproject_name', 'subprojectName');
             const statusIdx = firstIndex('completion_status', 'status');
+            // When a 'level' column exists (hierarchical SQL), only keep leaf 'node' rows
+            // to avoid rendering summary rows (project/subsystem) as gantt bars.
+            const effectiveRows = levelIdx >= 0
+                ? rows.filter((row) => String(row[levelIdx]) === 'node')
+                : rows;
             return {
-                tasks: rows.map((row) => ({
+                tasks: effectiveRows.map((row) => ({
                     id: idIdx >= 0 ? String(row[idIdx] ?? '') : '',
                     name: String(row[nameIdx] ?? ''),
                     type: String(row[typeIdx] ?? ''),

@@ -77,6 +77,31 @@ test('gantt-chart: maps project-management alias fields for cockpit reuse', () =
     assert.equal(tasks[0].subprojectName, '导航处理机');
 });
 
+test('gantt-chart: filters to node-level rows when level column exists', () => {
+    const cols = [
+        { name: 'level', display_name: '层级', base_type: 'type/Text' },
+        { name: 'node_task', display_name: '任务', base_type: 'type/Text' },
+        { name: 'node_type', display_name: '类型', base_type: 'type/Text' },
+        { name: 'plan_date', display_name: '计划日期', base_type: 'type/Date' },
+        { name: 'actual_date', display_name: '实际日期', base_type: 'type/Date' },
+        { name: 'risk_level', display_name: '风险等级', base_type: 'type/Text' },
+        { name: 'owner', display_name: '责任人', base_type: 'type/Text' },
+    ];
+    const rows = [
+        ['project', '制造协同平台', null, '2026-01-06', '2026-03-20', null, null],
+        ['subsystem', '平台基础', null, '2026-01-06', '2026-02-15', null, null],
+        ['node', '需求分析', '一般任务', '2026-01-06', '2026-02-15', '低', '张工'],
+        ['node', '系统设计', '一般任务', '2026-02-10', '2026-03-20', '低', '李工'],
+    ];
+
+    const result = mapCardDataToConfig('gantt-chart', { rows, cols });
+    const tasks = result.tasks as Array<Record<string, unknown>>;
+
+    assert.equal(tasks.length, 2, 'should only contain node rows');
+    assert.equal(tasks[0].name, '需求分析');
+    assert.equal(tasks[1].name, '系统设计');
+});
+
 test('gantt-chart: maps screen execution camelCase fields for command center board mode', () => {
     const cols = [
         { name: 'id', display_name: 'ID', base_type: 'type/Text' },
