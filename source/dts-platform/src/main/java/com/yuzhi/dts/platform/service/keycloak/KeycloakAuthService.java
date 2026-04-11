@@ -147,6 +147,88 @@ public class KeycloakAuthService {
         }
     }
 
+    /**
+     * Perform Keycloak Token Exchange to obtain tokens for a given user.
+     * Used by PKI login: admin verifies the certificate, then platform uses token-exchange
+     * to get a Keycloak JWT for the verified user without knowing their password.
+     *
+     * Requires Keycloak Token Exchange + impersonation permissions on this client.
+     */
+    public LoginResult loginByTokenExchange(String requestedSubject) {
+        TokenResponse tokens = tokenExchangeForUser(requestedSubject);
+        Map<String, Object> claims = decodeTokenClaims(tokens.accessToken());
+        Map<String, Object> userInfo = fetchUserInfo(tokens.accessToken());
+        Map<String, Object> enrichedUser = buildUserProfile(requestedSubject, userInfo, claims);
+        return new LoginResult(tokens, enrichedUser);
+    }
+
+    private TokenResponse tokenExchangeForUser(String requestedSubject) {
+        if (requestedSubject == null || requestedSubject.isBlank()) {
+            throw new IllegalArgumentException("requestedSubject must not be blank");
+        }
+        // Obtain a service-account token for this client
+        TokenResponse sa = obtainClientCredentialsToken();
+
+        MultiValueMap<String, String> form = new LinkedMultiValueMap<>();
+        form.add("grant_type", "urn:ietf:params:oauth:grant-type:token-exchange");
+        form.add("subject_token", sa.accessToken());
+        form.add("requested_token_type", "urn:ietf:params:oauth:token-type:access_token");
+        form.add("client_id", clientId);
+        if (!clientSecret.isBlank()) {
+            form.add("client_secret", clientSecret);
+        }
+        form.add("requested_subject", requestedSubject);
+        if (!scopeParam.isBlank()) {
+            form.add("scope", scopeParam);
+        }
+
+        HttpHeaders headers = new HttpHeaders();
+        headers.setContentType(MediaType.APPLICATION_FORM_URLENCODED);
+        try {
+            ResponseEntity<TokenResponse> response = restTemplate.exchange(
+                tokenEndpoint,
+                HttpMethod.POST,
+                new HttpEntity<>(form, headers),
+                TokenResponse.class
+            );
+            TokenResponse body = response.getBody();
+            if (body == null || body.accessToken() == null) {
+                throw new IllegalStateException("Keycloak token-exchange response missing access_token");
+            }
+            return body;
+        } catch (HttpStatusCodeException ex) {
+            throw translateAuthError(ex);
+        }
+    }
+
+    private TokenResponse obtainClientCredentialsToken() {
+        MultiValueMap<String, String> form = new LinkedMultiValueMap<>();
+        form.add("grant_type", "client_credentials");
+        form.add("client_id", clientId);
+        if (!clientSecret.isBlank()) {
+            form.add("client_secret", clientSecret);
+        }
+
+        HttpHeaders headers = new HttpHeaders();
+        headers.setContentType(MediaType.APPLICATION_FORM_URLENCODED);
+
+        try {
+            ResponseEntity<TokenResponse> response = restTemplate.exchange(
+                tokenEndpoint,
+                HttpMethod.POST,
+                new HttpEntity<>(form, headers),
+                TokenResponse.class
+            );
+            TokenResponse body = response.getBody();
+            if (body == null || body.accessToken() == null) {
+                throw new IllegalStateException("Keycloak client credentials response missing access_token");
+            }
+            return body;
+        } catch (HttpStatusCodeException ex) {
+            throw translateAuthError(ex);
+        }
+    }
+
     public void logout(String refreshToken) {
         if (refreshToken == null || refreshToken.isBlank()) {
             throw new IllegalArgumentException("refreshToken must not be blank");

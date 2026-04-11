@@ -12,31 +12,26 @@ import { LoginProvider } from "./providers/login-provider";
 import RegisterForm from "./register-form";
 import ResetForm from "./reset-form";
 
-function isRecentLogin(): boolean {
-	try {
-		const ts = Number(localStorage.getItem("dts.session.loginTs") || "0");
-		return ts > 0 && Date.now() - ts < 120_000;
-	} catch {
-		return false;
-	}
-}
-
-function isTokenExpired(token?: string): boolean {
+function isTokenExpired(token?: string, tokenExpiresAt?: number): boolean {
 	if (!token) return true;
 	if (token.startsWith("dev-access-")) return false;
 	try {
 		const parts = token.split(".");
-		if (parts.length < 2) return !isRecentLogin();
-		let payload = parts[1].replace(/-/g, "+").replace(/_/g, "/");
-		while (payload.length % 4 !== 0) payload += "=";
-		const obj = JSON.parse(atob(payload));
-		if (typeof obj?.exp === "number") {
-			return Date.now() > obj.exp * 1000 - 10_000;
+		if (parts.length >= 2) {
+			let payload = parts[1].replace(/-/g, "+").replace(/_/g, "/");
+			while (payload.length % 4 !== 0) payload += "=";
+			const obj = JSON.parse(atob(payload));
+			if (typeof obj?.exp === "number") {
+				return Date.now() > obj.exp * 1000 - 10_000;
+			}
 		}
-		return !isRecentLogin();
-	} catch {
-		return !isRecentLogin();
+	} catch {}
+	// Non-JWT: use backend-provided tokenExpiresAt
+	if (tokenExpiresAt && tokenExpiresAt > 0) {
+		return Date.now() > tokenExpiresAt - 10_000;
 	}
+	// No expiry info — trust the token
+	return false;
 }
 
 function LoginPage() {
@@ -59,7 +54,7 @@ function LoginPage() {
 		}
 	})();
 
-	if (token.accessToken && !isTokenExpired(token.accessToken)) {
+	if (token.accessToken && !isTokenExpired(token.accessToken, token.tokenExpiresAt)) {
 		// If we're already authenticated and this page was reached via embedded module redirect,
 		// jump directly to that module with a hard navigation.
 		if (safeRedirect?.startsWith("/analytics")) {

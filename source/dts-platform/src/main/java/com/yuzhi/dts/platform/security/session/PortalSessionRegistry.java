@@ -95,13 +95,9 @@ public class PortalSessionRegistry {
         PortalSession current = toPortalSession(existing);
         AdminTokens tokens = current.adminTokens();
         if (adminTokenProvider != null) {
-            try {
-                AdminTokens refreshed = adminTokenProvider.apply(current);
-                if (refreshed != null) {
-                    tokens = refreshed;
-                }
-            } catch (Exception ignored) {
-                // keep previous tokens when refresh fails
+            AdminTokens refreshed = adminTokenProvider.apply(current);
+            if (refreshed != null) {
+                tokens = refreshed;
             }
         }
 

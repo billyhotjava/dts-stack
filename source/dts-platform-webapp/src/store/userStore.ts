@@ -204,9 +204,14 @@ export const useSignIn = () => {
 				}
 			}
 
+			// Compute tokenExpiresAt from Keycloak expiresIn (seconds)
+			const expiresInSec = Number((res as any)?.expiresIn ?? 0);
+			const tokenExpiresAt = expiresInSec > 0 ? Date.now() + expiresInSec * 1000 : undefined;
+
 			setUserToken({
 				accessToken,
 				refreshToken,
+				tokenExpiresAt,
 				adminAccessToken,
 				adminRefreshToken,
 				adminAccessTokenExpiresAt,

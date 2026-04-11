@@ -297,6 +297,9 @@ export default function SessionManager() {
 				const res = await userService.refresh(token.refreshToken!);
 				const nextAccess = (res as any)?.accessToken;
 				const nextRefresh = (res as any)?.refreshToken;
+				// Derive tokenExpiresAt from backend expiresIn (Keycloak token lifetime)
+				const expiresInSec = Number((res as any)?.expiresIn ?? 0);
+				const nextTokenExpiresAt = expiresInSec > 0 ? Date.now() + expiresInSec * 1000 : token.tokenExpiresAt;
 				const normalizeDate = (value: unknown): string | undefined =>
 					typeof value === "string" && value.trim() ? value.trim() : undefined;
 				const nextAdminAccess = (res as any)?.adminAccessToken || token.adminAccessToken;
@@ -309,6 +312,7 @@ export default function SessionManager() {
 					const newToken = {
 						accessToken: nextAccess,
 						refreshToken: nextRefresh || token.refreshToken,
+						tokenExpiresAt: nextTokenExpiresAt,
 						adminAccessToken: nextAdminAccess,
 						adminRefreshToken: nextAdminRefresh,
 						adminAccessTokenExpiresAt: adminAccessExpiresAt,
@@ -318,7 +322,11 @@ export default function SessionManager() {
 					broadcastTokenSync(newToken);
 				}
 				if (!cancelled) {
-					schedule(nextRefreshDelayMs(nextAccess || token.accessToken));
+					// Use expiresIn from Keycloak for precise scheduling
+					const refreshDelay = expiresInSec > 0
+						? Math.max(60_000, expiresInSec * 1000 - 60_000)
+						: nextRefreshDelayMs(nextAccess || token.accessToken);
+					schedule(refreshDelay);
 				}
 			} catch (err) {
 				// Don't immediately logout — another tab may have already refreshed.

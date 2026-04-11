@@ -21,20 +21,8 @@ function decodeJwtExp(token?: string): number | null {
 	}
 }
 
-/** Grace period (ms) after login during which non-JWT tokens are trusted. */
-const LOGIN_GRACE_MS = 120_000;
-
-function isRecentLogin(): boolean {
-	try {
-		const ts = Number(localStorage.getItem("dts.session.loginTs") || "0");
-		return ts > 0 && Date.now() - ts < LOGIN_GRACE_MS;
-	} catch {
-		return false;
-	}
-}
-
-/** Check whether a JWT access token is expired (with 10s skew). */
-function isTokenExpired(token?: string): boolean {
+/** Check whether an access token is expired (with 10s skew). */
+function isTokenExpired(token?: string, tokenExpiresAt?: number): boolean {
 	if (!token) return true;
 	// Dev tokens are not JWTs; treat them as always valid.
 	if (token.startsWith("dev-access-")) return false;
@@ -43,9 +31,13 @@ function isTokenExpired(token?: string): boolean {
 		// Valid JWT with exp claim — check expiry directly.
 		return Date.now() > exp - 10_000;
 	}
-	// Non-JWT token (e.g. Keycloak opaque token):
-	// Trust it only if login happened recently; otherwise treat as stale.
-	return !isRecentLogin();
+	// Non-JWT token (e.g. platform opaque token):
+	// Use backend-provided tokenExpiresAt (derived from Keycloak expiresIn at login/refresh).
+	if (tokenExpiresAt && tokenExpiresAt > 0) {
+		return Date.now() > tokenExpiresAt - 10_000;
+	}
+	// No expiry info at all — trust the token (backend is the source of truth via 401).
+	return false;
 }
 
 type Props = {
@@ -53,16 +45,16 @@ type Props = {
 };
 export default function LoginAuthGuard({ children }: Props) {
     const router = useRouter();
-    const { accessToken } = useUserToken();
+    const { accessToken, tokenExpiresAt } = useUserToken();
     const { roles = [] } = useUserInfo();
 
 	const isLocalDevToken = (token?: string) => Boolean(token?.startsWith("dev-access-"));
 
     const check = useCallback(() => {
-        if (!accessToken || isTokenExpired(accessToken)) {
+        if (!accessToken || isTokenExpired(accessToken, tokenExpiresAt)) {
             console.warn("[LoginAuthGuard] redirect: no token or expired", {
                 hasToken: !!accessToken,
-                expired: accessToken ? isTokenExpired(accessToken) : "N/A",
+                expired: accessToken ? isTokenExpired(accessToken, tokenExpiresAt) : "N/A",
             });
             if (accessToken) {
                 useUserStore.getState().actions.clearUserInfoAndToken();
@@ -95,7 +87,7 @@ export default function LoginAuthGuard({ children }: Props) {
                 router.replace(LOGIN_ROUTE);
             }
         }
-    }, [router, accessToken, roles]);
+    }, [router, accessToken, tokenExpiresAt, roles]);
 
     useEffect(() => {
         check();
@@ -108,7 +100,8 @@ export default function LoginAuthGuard({ children }: Props) {
     useEffect(() => {
         if (!accessToken) return;
         const timer = window.setInterval(() => {
-            if (isTokenExpired(accessToken)) {
+            const currentToken = useUserStore.getState().userToken;
+            if (isTokenExpired(currentToken?.accessToken, currentToken?.tokenExpiresAt)) {
                 useUserStore.getState().actions.clearUserInfoAndToken();
                 window.location.replace(resolveLoginHref());
             }
@@ -130,7 +123,7 @@ export default function LoginAuthGuard({ children }: Props) {
     }, [accessToken]);
 
 	// Block rendering if the token is missing or expired — prevents dashboard flash before redirect.
-	if (!accessToken || isTokenExpired(accessToken)) {
+	if (!accessToken || isTokenExpired(accessToken, tokenExpiresAt)) {
 		return null;
 	}
 

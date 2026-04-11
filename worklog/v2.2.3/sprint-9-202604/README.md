@@ -786,3 +786,38 @@ case 'gantt-chart': {
 - [ ] 甘特：在 Chrome 95 上验证 backdrop-filter 和动效正常
 - [ ] 测试：majorProjectAggregator 单测通过
 - [ ] 测试：InteractionLayer sentinel 行为单测通过
+
+---
+
+## F8: Session 管理加固（Keycloak 对接完善）
+
+**状态**: READY
+**约束**: 不改动 PKI 验签逻辑；admin 和 platform 保持独立
+
+根因：Platform 通过 admin 间接对接 Keycloak，认证和数据获取混在一起，Keycloak session 信息被两层 opaque token 吞掉。
+
+### F8a: Platform 直接对接 Keycloak（架构修复，第一阶段）
+
+| ID | Task | 优先级 | 状态 | 依赖 |
+|----|------|--------|------|------|
+| T08 | Platform 配置自己的 Keycloak OIDC client | P0 | READY | - |
+| T09 | 新增 KeycloakDirectAuthService | P0 | READY | T08 |
+| T10 | Login 直接调 Keycloak + admin 仅供业务数据 | P0 | READY | T09 |
+| T11 | Refresh 直接调 Keycloak | P0 | READY | T09 |
+| T12 | PKI Token Exchange 改用 platform client | P0 | READY | T09 |
+| T13 | Logout 直接调 Keycloak | P1 | READY | T09 |
+| T14 | 前端 session 管理适配（expiresIn） | P0 | READY | T10,T11 |
+| T15 | 移除 AdminAuthGateway 认证代理 | P1 | READY | T10-T13 |
+| T16 | 集成测试 + PKI 回归 | P0 | READY | T14,T15 |
+
+### F8b: Session 防护层加固（第二阶段）
+
+| ID | Task | 优先级 | 状态 | 依赖 |
+|----|------|--------|------|------|
+| T01 | Admin token refresh 失败降级处理 | P0 | READY | - |
+| T04 | Session 刷新乐观锁 | P1 | READY | - |
+| T05 | CORS 配置收敛 | P2 | READY | - |
+| T06 | Cookie SameSite/Secure 配置 | P2 | READY | T05 |
+| T07 | Token 存储迁移 HttpOnly cookie | P1 | READY | T06 |
+
+详细设计见 `features/F8-Session管理加固/`。

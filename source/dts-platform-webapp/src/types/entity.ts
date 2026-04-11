@@ -24,6 +24,8 @@ export interface UserInfo {
 export interface UserToken {
     accessToken?: string;
     refreshToken?: string;
+    /** Epoch ms when the access token expires (derived from Keycloak expiresIn at login/refresh time). */
+    tokenExpiresAt?: number;
     adminAccessToken?: string;
     adminRefreshToken?: string;
     adminAccessTokenExpiresAt?: string;

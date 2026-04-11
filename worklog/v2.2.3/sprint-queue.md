@@ -124,10 +124,10 @@
 **统计**: READY=0, IN_PROGRESS=0, DONE=10, BLOCKED=0
 **设计文档**: `worklog/v2.2.3/sprint-8-202604/README.md`
 
-## Sprint-9: GPMC 大屏跳转修复 + 甘特图弹层下钻 (202604)
-**状态**: DONE
+## Sprint-9: GPMC 大屏跳转修复 + 甘特图弹层下钻 + Session 管理加固 (202604)
+**状态**: IN_PROGRESS
 **类型**: Implementation（实施型）
-**完成日期**: 2026-04-09
+**完成日期**: F1-F7 完成于 2026-04-09
 
 | Feature | Task 数 | 状态 |
 |---------|---------|------|
@@ -138,6 +138,23 @@
 | F5-ProjectDetailGanttModal 弹层组件 | 2 | DONE |
 | F6-gpmc-execution-gantt JSON 改造 | 1 | DONE |
 | F7-文档与索引 | 1 | DONE |
+| F8a-Platform直接对接Keycloak(架构修复) | 9 | READY |
+| F8b-Session防护层加固 | 5 | READY |
 
-**统计**: READY=0, IN_PROGRESS=0, DONE=18, BLOCKED=0
+**统计**: READY=14, IN_PROGRESS=0, DONE=18, BLOCKED=0
 **设计文档**: `worklog/v2.2.3/sprint-9-202604/README.md`
+
+## Sprint-10: 大屏编辑器 Phase 1 — 组件配置增强 + 主题修复 + 发布弹窗 (202604)
+**状态**: READY
+**类型**: Implementation（实施型）
+
+| Feature | Task 数 | 状态 |
+|---------|---------|------|
+| F1-Schema 基础设施(类型 + 通用渲染器 + 4 个复合编辑器) | 6 | READY |
+| F2-47 个组件 Schema 定义(basic/enterprise/table/charts/datav/filters/3d) | 7 | READY |
+| F3-PropertyPanel 切换到 SchemaConfigRenderer | 2 | READY |
+| F4-主题系统修复(切换自动应用 + Schema 驱动 patch) | 2 | READY |
+| F5-发布弹窗重构(PublishResultModal + ScreenGrantManager 提取) | 3 | READY |
+
+**统计**: READY=20, IN_PROGRESS=0, DONE=0, BLOCKED=0
+**设计文档**: `worklog/v2.2.3/sprint-10-202604/README.md`

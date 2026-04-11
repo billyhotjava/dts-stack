@@ -5,6 +5,7 @@ import com.yuzhi.dts.platform.security.session.PortalSessionRegistry;
 import com.yuzhi.dts.platform.security.session.PortalSessionRegistry.AdminTokens;
 import com.yuzhi.dts.platform.security.session.PortalSessionRegistry.PortalSession;
 import com.yuzhi.dts.platform.service.admin.gateway.auth.AdminAuthGateway;
+import com.yuzhi.dts.platform.service.keycloak.KeycloakAuthService;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -27,6 +28,7 @@ public class KeycloakAuthResource {
 
     private static final Logger log = LoggerFactory.getLogger(KeycloakAuthResource.class);
     private final PortalSessionRegistry sessionRegistry;
+    private final KeycloakAuthService keycloakAuthService;
     private final AdminAuthGateway adminAuthGateway;
     private final com.yuzhi.dts.platform.service.audit.AuditService audit;
     private final com.yuzhi.dts.platform.service.infra.InceptorDataSourceRegistry inceptorRegistry;
@@ -35,6 +37,7 @@ public class KeycloakAuthResource {
 
     public KeycloakAuthResource(
         PortalSessionRegistry sessionRegistry,
+        KeycloakAuthService keycloakAuthService,
         AdminAuthGateway adminAuthGateway,
         com.yuzhi.dts.platform.service.audit.AuditService audit,
         com.yuzhi.dts.platform.service.infra.InceptorDataSourceRegistry inceptorRegistry,
@@ -42,6 +45,7 @@ public class KeycloakAuthResource {
         @Value("${auditing.portal-auth.refresh-enabled:false}") boolean portalRefreshAuditEnabled
     ) {
         this.sessionRegistry = sessionRegistry;
+        this.keycloakAuthService = keycloakAuthService;
         this.adminAuthGateway = adminAuthGateway;
         this.audit = audit;
         this.inceptorRegistry = inceptorRegistry;
@@ -79,12 +83,12 @@ public class KeycloakAuthResource {
             if (log.isInfoEnabled()) {
                 log.info("[login] attempt username={}", username);
             }
-            var result = adminAuthGateway.login(username, password);
-            Map<String, Object> user = result.user();
+            // Authenticate directly against Keycloak (no admin proxy)
+            var kcResult = keycloakAuthService.login(username, password);
+            var kcTokens = kcResult.tokens();
+            Map<String, Object> user = kcResult.user();
             String displayName = resolveUserDisplayName(user);
-            // Role-based blocks are handled by admin; platform trusts admin decision
             List<String> rawRoles = toStringList(user.get("roles"));
-            // Normalize and map roles from Keycloak into platform authorities
             List<String> mappedRoles = mapRoles(rawRoles);
 
             // Derive basic permissions
@@ -155,11 +159,12 @@ public class KeycloakAuthResource {
                     .status(HttpStatus.CONFLICT)
                     .body(ApiResponses.error("该账号已在其他浏览器登录，请先退出后再尝试"));
             }
-            AdminTokens adminTokens = computeAdminTokens(
-                result.accessToken(),
-                result.accessTokenExpiresIn(),
-                result.refreshToken(),
-                result.refreshTokenExpiresIn(),
+            // Store Keycloak tokens in the adminTokens fields (reusing the DB columns for Keycloak tokens)
+            AdminTokens keycloakTokens = computeAdminTokens(
+                kcTokens.accessToken(),
+                kcTokens.expiresIn(),
+                kcTokens.refreshToken(),
+                kcTokens.refreshExpiresIn(),
                 null
             );
             PortalSession session;
@@ -171,7 +176,7 @@ public class KeycloakAuthResource {
                     deptCode,
                     personnelLevel,
                     displayName,
-                    adminTokens
+                    keycloakTokens
                 );
             } catch (PortalSessionRegistry.ActiveSessionExistsException ex) {
                 log.warn("[login] denied username={} reason=race-active-session", username);
@@ -216,14 +221,12 @@ public class KeycloakAuthResource {
                 userOut.put("displayName", displayName);
                 userOut.put("name", displayName);
             }
-            // Propagate ABAC attributes so frontend can initialize active context (scope/dept)
             if (deptCode != null && !deptCode.isBlank()) {
                 userOut.put("dept_code", deptCode);
             }
             if (personnelLevel != null && !personnelLevel.isBlank()) {
                 userOut.put("personnel_level", personnelLevel);
             }
-            // Ensure nested attributes map contains dept_code/personnel_level for FE store defaults
             try {
                 Object existingAttrs = userOut.get("attributes");
                 java.util.Map<String, Object> attrs = new java.util.LinkedHashMap<>();
@@ -246,6 +249,13 @@ public class KeycloakAuthResource {
             Map<String, Object> data = new LinkedHashMap<>();
             data.put("accessToken", session.accessToken());
             data.put("refreshToken", session.refreshToken());
+            // Expose Keycloak token lifetime so frontend can correctly judge expiry
+            if (kcTokens.expiresIn() != null) {
+                data.put("expiresIn", kcTokens.expiresIn());
+            }
+            if (kcTokens.refreshExpiresIn() != null) {
+                data.put("refreshExpiresIn", kcTokens.refreshExpiresIn());
+            }
             data.put("user", userOut);
             if (log.isInfoEnabled()) {
                 if (takeover && sessionRegistry.isTakeoverAllowed()) {
@@ -371,11 +381,16 @@ public class KeycloakAuthResource {
         boolean revokeFailed = false;
         String revokeError = null;
         if (session != null) {
-            AdminTokens adminTokens = session.adminTokens();
-            if (adminTokens != null && StringUtils.hasText(adminTokens.refreshToken())) {
+            AdminTokens keycloakTokens = session.adminTokens();
+            if (keycloakTokens != null && StringUtils.hasText(keycloakTokens.refreshToken())) {
+                // Revoke Keycloak session directly (no admin proxy)
                 try {
-                    adminAuthGateway.logout(adminTokens.refreshToken());
+                    keycloakAuthService.logout(keycloakTokens.refreshToken());
                 } catch (Exception ex) {
+                    // Best-effort: try revoke as fallback
+                    try {
+                        keycloakAuthService.revokeRefreshToken(keycloakTokens.refreshToken());
+                    } catch (Exception ignored) {}
                     revokeFailed = true;
                     revokeError = ex.getMessage();
                 }
@@ -497,7 +512,33 @@ public class KeycloakAuthResource {
                     .status(HttpStatus.CONFLICT)
                     .body(ApiResponses.error("该账号已在其他浏览器登录，请先退出后再尝试"));
             }
-            AdminTokens adminTokens = null;
+            // Obtain Keycloak JWT via Token Exchange using platform's own client
+            AdminTokens keycloakTokens = null;
+            KeycloakAuthService.TokenResponse kcTokens = null;
+            try {
+                var kcResult = keycloakAuthService.loginByTokenExchange(username);
+                kcTokens = kcResult.tokens();
+                keycloakTokens = computeAdminTokens(
+                    kcTokens.accessToken(),
+                    kcTokens.expiresIn(),
+                    kcTokens.refreshToken(),
+                    kcTokens.refreshExpiresIn(),
+                    null
+                );
+                // Enrich roles from Keycloak token if upstream provided more
+                Map<String, Object> kcUser = kcResult.user();
+                List<String> kcRoles = toStringList(kcUser.get("roles"));
+                if (!kcRoles.isEmpty()) {
+                    List<String> merged = new java.util.ArrayList<>(new java.util.LinkedHashSet<>(mappedRoles));
+                    for (String r : mapRoles(kcRoles)) {
+                        if (!merged.contains(r)) merged.add(r);
+                    }
+                    mappedRoles = merged;
+                }
+            } catch (Exception ex) {
+                log.warn("[pki-login] Keycloak token-exchange failed for username={}, proceeding without KC tokens: {}", username, ex.getMessage());
+                // PKI login can still succeed without KC tokens; refresh will be limited
+            }
             PortalSession session;
             try {
                 session = sessionRegistry.createSession(
@@ -507,7 +548,7 @@ public class KeycloakAuthResource {
                     deptCode,
                     personnelLevel,
                     displayName,
-                    adminTokens
+                    keycloakTokens
                 );
             } catch (PortalSessionRegistry.ActiveSessionExistsException ex) {
                 log.warn("[pki-login] denied username={} reason=race-active-session", username);
@@ -530,7 +571,6 @@ public class KeycloakAuthResource {
             }
             if (deptCode != null && !deptCode.isBlank()) userOut.put("dept_code", deptCode);
             if (personnelLevel != null && !personnelLevel.isBlank()) userOut.put("personnel_level", personnelLevel);
-            // Ensure nested attributes map contains dept_code/personnel_level for FE store defaults
             try {
                 Object existingAttrs = userOut.get("attributes");
                 java.util.Map<String, Object> attrs = new java.util.LinkedHashMap<>();
@@ -547,6 +587,12 @@ public class KeycloakAuthResource {
             Map<String, Object> data = new java.util.LinkedHashMap<>();
             data.put("accessToken", session.accessToken());
             data.put("refreshToken", session.refreshToken());
+            if (kcTokens != null && kcTokens.expiresIn() != null) {
+                data.put("expiresIn", kcTokens.expiresIn());
+            }
+            if (kcTokens != null && kcTokens.refreshExpiresIn() != null) {
+                data.put("refreshExpiresIn", kcTokens.refreshExpiresIn());
+            }
             data.put("user", userOut);
             if (takeover && sessionRegistry.isTakeoverAllowed()) {
                 data.put("sessionNotice", "已切换到当前登录，其他会话已下线");
@@ -602,7 +648,7 @@ public class KeycloakAuthResource {
     }
 
     @PostMapping("/refresh")
-    public ResponseEntity<ApiResponse<Map<String, String>>> refresh(@RequestBody RefreshPayload payload) {
+    public ResponseEntity<ApiResponse<Map<String, Object>>> refresh(@RequestBody RefreshPayload payload) {
         String actor = resolveRefreshActor(payload == null ? null : payload.refreshToken());
         try {
             PortalSession refreshed = sessionRegistry.refreshSession(
@@ -610,41 +656,41 @@ public class KeycloakAuthResource {
                 existing -> {
                     if (existing == null) return null;
                     AdminTokens tokens = existing.adminTokens();
-                    String adminRefresh = tokens != null ? tokens.refreshToken() : null;
-                    if (!StringUtils.hasText(adminRefresh)) {
+                    String kcRefresh = tokens != null ? tokens.refreshToken() : null;
+                    if (!StringUtils.hasText(kcRefresh)) {
                         return tokens;
                     }
+                    // Refresh directly against Keycloak (no admin proxy)
                     try {
-                        var result = adminAuthGateway.refresh(adminRefresh);
+                        var kcTokens = keycloakAuthService.refreshTokens(kcRefresh);
                         return computeAdminTokens(
-                            result.accessToken(),
-                            result.accessTokenExpiresIn(),
-                            result.refreshToken(),
-                            result.refreshTokenExpiresIn(),
+                            kcTokens.accessToken(),
+                            kcTokens.expiresIn(),
+                            kcTokens.refreshToken(),
+                            kcTokens.refreshExpiresIn(),
                             tokens
                         );
                     } catch (Exception ex) {
-                        log.warn("[refresh] admin token refresh failed: {}", ex.getMessage());
-                        return tokens;
+                        log.warn("[refresh] Keycloak token refresh failed: {}", ex.getMessage());
+                        // Keycloak refresh failed = upstream session is dead.
+                        // Propagate the failure so the portal session refresh also fails → frontend gets 401.
+                        throw new IllegalStateException("keycloak_session_expired", ex);
                     }
                 }
             );
-            Map<String, String> data = new LinkedHashMap<>();
+            Map<String, Object> data = new LinkedHashMap<>();
             data.put("accessToken", refreshed.accessToken());
             data.put("refreshToken", refreshed.refreshToken());
-            AdminTokens adminTokens = refreshed.adminTokens();
-            if (adminTokens != null) {
-                if (StringUtils.hasText(adminTokens.accessToken())) {
-                    data.put("adminAccessToken", adminTokens.accessToken());
+            // Expose Keycloak token lifetime so frontend can correctly judge expiry
+            AdminTokens keycloakTokens = refreshed.adminTokens();
+            if (keycloakTokens != null) {
+                if (keycloakTokens.accessExpiresAt() != null) {
+                    long expiresInSec = Math.max(0, keycloakTokens.accessExpiresAt().getEpochSecond() - Instant.now().getEpochSecond());
+                    data.put("expiresIn", expiresInSec);
                 }
-                if (adminTokens.accessExpiresAt() != null) {
-                    data.put("adminAccessTokenExpiresAt", adminTokens.accessExpiresAt().toString());
-                }
-                if (StringUtils.hasText(adminTokens.refreshToken())) {
-                    data.put("adminRefreshToken", adminTokens.refreshToken());
-                }
-                if (adminTokens.refreshExpiresAt() != null) {
-                    data.put("adminRefreshTokenExpiresAt", adminTokens.refreshExpiresAt().toString());
+                if (keycloakTokens.refreshExpiresAt() != null) {
+                    long refreshExpiresInSec = Math.max(0, keycloakTokens.refreshExpiresAt().getEpochSecond() - Instant.now().getEpochSecond());
+                    data.put("refreshExpiresIn", refreshExpiresInSec);
                 }
             }
             String refreshedActor = sanitizeActor(refreshed.username());
