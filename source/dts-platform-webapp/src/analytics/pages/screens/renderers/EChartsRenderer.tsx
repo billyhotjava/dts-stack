@@ -1097,6 +1097,491 @@ export function renderECharts(props: EChartsRendererProps): ReactNode | null {
             );
         }
 
+        case 'sankey-chart': {
+            /* eslint-disable @typescript-eslint/no-explicit-any */
+            const sankeyRows = Array.isArray(c.rows) ? (c.rows as Array<Record<string, any>>) : [];
+            const sankeyNodeSet = new Set<string>();
+            const sankeyLinks: Array<{ source: string; target: string; value: number }> = [];
+            for (const row of sankeyRows) {
+                const vals = Array.isArray(row) ? row : Object.values(row);
+                const source = String(vals[0] ?? '');
+                const target = String(vals[1] ?? '');
+                const value = Number(vals[2] ?? 1);
+                if (source && target) {
+                    sankeyNodeSet.add(source);
+                    sankeyNodeSet.add(target);
+                    sankeyLinks.push({ source, target, value });
+                }
+            }
+            const sankeyNodes = Array.from(sankeyNodeSet).map(name => ({ name }));
+            return renderEChartWithHandles({
+                ...themeOptions,
+                ...chartMotionOption,
+                title: chartTitleLayout.titleOption,
+                tooltip: { ...themeOptions.tooltip, trigger: 'item' },
+                series: [{
+                    type: 'sankey',
+                    data: sankeyNodes,
+                    links: sankeyLinks,
+                    nodeAlign: (c.nodeAlign as string) || 'justify',
+                    orient: (c.orient as string) || 'horizontal',
+                    draggable: c.draggable !== false,
+                    lineStyle: { color: 'gradient', curveness: 0.5 },
+                    emphasis: { focus: 'adjacency' },
+                    label: { color: t.textPrimary, fontSize: seriesLabelFontSize },
+                }],
+            }, echartsClickHandler);
+            /* eslint-enable @typescript-eslint/no-explicit-any */
+        }
+
+        case 'heatmap-chart': {
+            /* eslint-disable @typescript-eslint/no-explicit-any */
+            const heatmapRows = Array.isArray(c.rows) ? (c.rows as Array<Record<string, any>>) : [];
+            const xCatSet = new Set<string>();
+            const yCatSet = new Set<string>();
+            const heatmapParsed: Array<[string, string, number]> = [];
+            for (const row of heatmapRows) {
+                const vals = Array.isArray(row) ? row : Object.values(row);
+                const x = String(vals[0] ?? '');
+                const y = String(vals[1] ?? '');
+                const v = Number(vals[2] ?? 0);
+                xCatSet.add(x);
+                yCatSet.add(y);
+                heatmapParsed.push([x, y, v]);
+            }
+            const xCategories = Array.from(xCatSet);
+            const yCategories = Array.from(yCatSet);
+            const heatmapData = heatmapParsed.map(([x, y, v]) => [xCategories.indexOf(x), yCategories.indexOf(y), v]);
+            return renderEChartWithHandles({
+                ...themeOptions,
+                ...chartMotionOption,
+                title: chartTitleLayout.titleOption,
+                tooltip: { ...themeOptions.tooltip, position: 'top' },
+                xAxis: {
+                    type: 'category',
+                    data: xCategories,
+                    axisLine: { lineStyle: { color: t.echarts.axisLineColor } },
+                    axisLabel: { color: axisLabelColor, fontSize: axisFontSize, rotate: xAxisLabelRotate, hideOverlap: true },
+                },
+                yAxis: {
+                    type: 'category',
+                    data: yCategories,
+                    axisLine: { lineStyle: { color: t.echarts.axisLineColor } },
+                    axisLabel: { color: axisLabelColor, fontSize: axisFontSize },
+                },
+                visualMap: {
+                    min: (c.visualMapMin as number) ?? 0,
+                    max: (c.visualMapMax as number) ?? 100,
+                    inRange: { color: (c.visualMapColors as string[]) || ['#313695', '#4575b4', '#74add1', '#abd9e9', '#fee090', '#fdae61', '#f46d43', '#d73027', '#a50026'] },
+                    calculable: true,
+                    textStyle: { color: t.textSecondary },
+                },
+                series: [{
+                    type: 'heatmap',
+                    data: heatmapData,
+                    emphasis: { itemStyle: { shadowBlur: 10 } },
+                    label: { show: axisSeriesLabelShow, color: t.textPrimary, fontSize: seriesLabelFontSize },
+                }],
+                grid: axisGrid,
+            }, echartsClickHandler);
+            /* eslint-enable @typescript-eslint/no-explicit-any */
+        }
+
+        case 'graph-chart': {
+            /* eslint-disable @typescript-eslint/no-explicit-any */
+            let graphNodes: Array<{ name: string; symbolSize?: number; category?: number }> = [];
+            let graphLinks: Array<{ source: string; target: string; value?: number }> = [];
+            // Try JSON structure first
+            if (typeof c.data === 'string') {
+                try {
+                    const parsed = JSON.parse(c.data as string);
+                    if (parsed.nodes) graphNodes = parsed.nodes;
+                    if (parsed.links) graphLinks = parsed.links;
+                } catch { /* fall through to rows */ }
+            } else if (c.data && typeof c.data === 'object' && !Array.isArray(c.data)) {
+                const d = c.data as any;
+                if (d.nodes) graphNodes = d.nodes;
+                if (d.links) graphLinks = d.links;
+            }
+            if (graphNodes.length === 0) {
+                const graphRows = Array.isArray(c.rows) ? (c.rows as Array<Record<string, any>>) : [];
+                const nodeSet = new Set<string>();
+                for (const row of graphRows) {
+                    const vals = Array.isArray(row) ? row : Object.values(row);
+                    const source = String(vals[0] ?? '');
+                    const target = String(vals[1] ?? '');
+                    const value = vals[2] != null ? Number(vals[2]) : undefined;
+                    if (source && target) {
+                        nodeSet.add(source);
+                        nodeSet.add(target);
+                        graphLinks.push({ source, target, value });
+                    }
+                }
+                graphNodes = Array.from(nodeSet).map(name => ({ name }));
+            }
+            return renderEChartWithHandles({
+                ...themeOptions,
+                ...chartMotionOption,
+                title: chartTitleLayout.titleOption,
+                tooltip: { ...themeOptions.tooltip },
+                series: [{
+                    type: 'graph',
+                    layout: (c.layout as string) || 'force',
+                    roam: c.roam !== false,
+                    draggable: c.draggable !== false,
+                    data: graphNodes.map(n => ({
+                        ...n,
+                        symbolSize: n.symbolSize || (c.symbolSize as number) || 20,
+                        label: { show: true, color: t.textPrimary, fontSize: seriesLabelFontSize },
+                    })),
+                    links: graphLinks,
+                    force: { repulsion: (c.repulsion as number) || 200, edgeLength: [50, 200] },
+                    emphasis: { focus: 'adjacency' },
+                    lineStyle: { curveness: 0.3, color: t.echarts.splitLineColor },
+                    label: { show: true, position: 'right', color: t.textPrimary, fontSize: seriesLabelFontSize },
+                }],
+            }, echartsClickHandler);
+            /* eslint-enable @typescript-eslint/no-explicit-any */
+        }
+
+        case 'candlestick-chart': {
+            /* eslint-disable @typescript-eslint/no-explicit-any */
+            const candleRows = Array.isArray(c.rows) ? (c.rows as Array<Record<string, any>>) : [];
+            const candleDates: string[] = [];
+            const ohlcData: number[][] = [];
+            for (const row of candleRows) {
+                const vals = Array.isArray(row) ? row : Object.values(row);
+                candleDates.push(String(vals[0] ?? ''));
+                ohlcData.push([Number(vals[1] ?? 0), Number(vals[2] ?? 0), Number(vals[3] ?? 0), Number(vals[4] ?? 0)]);
+            }
+            const candleSeries: Array<Record<string, any>> = [
+                {
+                    type: 'candlestick',
+                    data: ohlcData,
+                    itemStyle: {
+                        color: (c.upColor as string) || '#ec0000',
+                        color0: (c.downColor as string) || '#00da3c',
+                        borderColor: (c.upColor as string) || '#ec0000',
+                        borderColor0: (c.downColor as string) || '#00da3c',
+                    },
+                },
+            ];
+            if (c.showMA) {
+                const maPeriods = String(c.maPeriods ?? '5,10,20').split(',').map(Number).filter(n => n > 0);
+                const maColors = ['#f5a623', '#f56c6c', '#409eff', '#67c23a'];
+                for (let pi = 0; pi < maPeriods.length; pi++) {
+                    const period = maPeriods[pi];
+                    const maData: (number | null)[] = [];
+                    for (let i = 0; i < ohlcData.length; i++) {
+                        if (i < period - 1) {
+                            maData.push(null);
+                        } else {
+                            let sum = 0;
+                            for (let j = 0; j < period; j++) sum += ohlcData[i - j][1]; // close
+                            maData.push(sum / period);
+                        }
+                    }
+                    candleSeries.push({
+                        name: `MA${period}`,
+                        type: 'line',
+                        data: maData,
+                        smooth: true,
+                        showSymbol: false,
+                        lineStyle: { width: 1, color: maColors[pi % maColors.length] },
+                        itemStyle: { color: maColors[pi % maColors.length] },
+                    });
+                }
+            }
+            return renderEChartWithHandles({
+                ...themeOptions,
+                ...chartMotionOption,
+                title: chartTitleLayout.titleOption,
+                legend: legendConfig,
+                tooltip: {
+                    ...themeOptions.tooltip,
+                    trigger: 'axis',
+                    axisPointer: { type: 'cross' },
+                },
+                xAxis: {
+                    type: 'category',
+                    data: candleDates,
+                    axisLine: { lineStyle: { color: t.echarts.axisLineColor } },
+                    axisLabel: { color: axisLabelColor, fontSize: axisFontSize, rotate: xAxisLabelRotate, hideOverlap: true },
+                },
+                yAxis: {
+                    type: 'value',
+                    axisLine: { lineStyle: { color: t.echarts.axisLineColor } },
+                    axisLabel: { color: axisLabelColor, fontSize: axisFontSize },
+                    splitLine: { lineStyle: { color: t.echarts.splitLineColor } },
+                },
+                series: candleSeries,
+                grid: axisGrid,
+            }, echartsClickHandler);
+            /* eslint-enable @typescript-eslint/no-explicit-any */
+        }
+
+        case 'boxplot-chart': {
+            /* eslint-disable @typescript-eslint/no-explicit-any */
+            const boxRows = Array.isArray(c.rows) ? (c.rows as Array<Record<string, any>>) : [];
+            const boxCategories: string[] = [];
+            const boxData: number[][] = [];
+            const outlierData: Array<[number, number]> = [];
+            for (let i = 0; i < boxRows.length; i++) {
+                const row = boxRows[i];
+                const vals = Array.isArray(row) ? row : Object.values(row);
+                if (vals.length >= 6) {
+                    boxCategories.push(String(vals[0] ?? ''));
+                    boxData.push([Number(vals[1]), Number(vals[2]), Number(vals[3]), Number(vals[4]), Number(vals[5])]);
+                    // outliers from index 6+
+                    if (c.showOutliers) {
+                        for (let j = 6; j < vals.length; j++) {
+                            if (vals[j] != null) outlierData.push([i, Number(vals[j])]);
+                        }
+                    }
+                } else if (vals.length >= 5) {
+                    boxData.push([Number(vals[0]), Number(vals[1]), Number(vals[2]), Number(vals[3]), Number(vals[4])]);
+                }
+            }
+            const boxHorizontal = c.orient === 'horizontal';
+            const boxCategoryAxis = {
+                type: 'category' as const,
+                data: boxCategories,
+                axisLine: { lineStyle: { color: t.echarts.axisLineColor } },
+                axisLabel: { color: axisLabelColor, fontSize: axisFontSize },
+            };
+            const boxValueAxis = {
+                type: 'value' as const,
+                axisLine: { lineStyle: { color: t.echarts.axisLineColor } },
+                axisLabel: { color: axisLabelColor, fontSize: axisFontSize },
+                splitLine: { lineStyle: { color: t.echarts.splitLineColor } },
+            };
+            const boxSeries: Array<Record<string, any>> = [
+                { type: 'boxplot', data: boxData },
+            ];
+            if (c.showOutliers && outlierData.length > 0) {
+                boxSeries.push({
+                    type: 'scatter',
+                    data: outlierData,
+                    symbolSize: 6,
+                    itemStyle: { color: seriesColors[0] || t.scatterColor },
+                });
+            }
+            return renderEChartWithHandles({
+                ...themeOptions,
+                ...chartMotionOption,
+                title: chartTitleLayout.titleOption,
+                tooltip: { ...themeOptions.tooltip, trigger: 'item' },
+                xAxis: boxHorizontal ? boxValueAxis : boxCategoryAxis,
+                yAxis: boxHorizontal ? boxCategoryAxis : boxValueAxis,
+                series: boxSeries,
+                grid: axisGrid,
+            }, echartsClickHandler);
+            /* eslint-enable @typescript-eslint/no-explicit-any */
+        }
+
+        case 'parallel-chart': {
+            /* eslint-disable @typescript-eslint/no-explicit-any */
+            const parallelRows = Array.isArray(c.rows) ? (c.rows as Array<Record<string, any>>) : [];
+            let parallelDims: string[] = [];
+            let parallelData: number[][] = [];
+            if (parallelRows.length > 0) {
+                const firstRow = parallelRows[0];
+                const firstVals = Array.isArray(firstRow) ? firstRow : Object.values(firstRow);
+                // Check if first row looks like dimension names (all strings)
+                if (firstVals.every((v: any) => typeof v === 'string' && isNaN(Number(v)))) {
+                    parallelDims = firstVals.map(String);
+                    parallelData = parallelRows.slice(1).map(row => {
+                        const vals = Array.isArray(row) ? row : Object.values(row);
+                        return vals.map(Number);
+                    });
+                } else {
+                    // Use column keys or indices as dimension names
+                    if (Array.isArray(c.cols) && (c.cols as any[]).length > 0) {
+                        parallelDims = (c.cols as any[]).map((col: any) => String(col.name ?? col.label ?? col));
+                    } else {
+                        parallelDims = firstVals.map((_: any, i: number) => `Dim ${i + 1}`);
+                    }
+                    parallelData = parallelRows.map(row => {
+                        const vals = Array.isArray(row) ? row : Object.values(row);
+                        return vals.map(Number);
+                    });
+                }
+            }
+            return renderEChartWithHandles({
+                ...themeOptions,
+                ...chartMotionOption,
+                title: chartTitleLayout.titleOption,
+                parallelAxis: parallelDims.map((name, i) => ({
+                    dim: i,
+                    name,
+                    nameTextStyle: { color: t.textPrimary, fontSize: axisFontSize },
+                    axisLabel: { color: axisLabelColor, fontSize: axisFontSize },
+                    axisLine: { lineStyle: { color: t.echarts.axisLineColor } },
+                })),
+                series: [{
+                    type: 'parallel',
+                    data: parallelData,
+                    lineStyle: { opacity: (c.lineOpacity as number) ?? 0.5 },
+                    smooth: !!c.smooth,
+                }],
+            }, echartsClickHandler);
+            /* eslint-enable @typescript-eslint/no-explicit-any */
+        }
+
+        case 'calendar-chart': {
+            /* eslint-disable @typescript-eslint/no-explicit-any */
+            const calendarRows = Array.isArray(c.rows) ? (c.rows as Array<Record<string, any>>) : [];
+            const calendarData: Array<[string, number]> = [];
+            let calendarMax = 0;
+            for (const row of calendarRows) {
+                const vals = Array.isArray(row) ? row : Object.values(row);
+                const date = String(vals[0] ?? '');
+                const value = Number(vals[1] ?? 0);
+                calendarData.push([date, value]);
+                if (value > calendarMax) calendarMax = value;
+            }
+            return renderEChartWithHandles({
+                ...themeOptions,
+                ...chartMotionOption,
+                title: chartTitleLayout.titleOption,
+                tooltip: { ...themeOptions.tooltip, formatter: (params: any) => `${params.value?.[0]}: ${params.value?.[1]}` },
+                visualMap: {
+                    min: 0,
+                    max: calendarMax || 100,
+                    inRange: { color: (c.visualMapColors as string[]) || ['#ebedf0', '#9be9a8', '#40c463', '#30a14e', '#216e39'] },
+                    show: false,
+                },
+                calendar: {
+                    range: (c.yearRange as string) || new Date().getFullYear().toString(),
+                    cellSize: [(c.cellSize as number) || 16, (c.cellSize as number) || 16],
+                    orient: (c.orient as string) || 'horizontal',
+                    itemStyle: { borderColor: t.echarts.splitLineColor },
+                    dayLabel: { color: axisLabelColor, fontSize: axisFontSize },
+                    monthLabel: { color: axisLabelColor, fontSize: axisFontSize },
+                    yearLabel: { color: t.textPrimary },
+                },
+                series: [{
+                    type: 'heatmap',
+                    coordinateSystem: 'calendar',
+                    data: calendarData,
+                }],
+            }, echartsClickHandler);
+            /* eslint-enable @typescript-eslint/no-explicit-any */
+        }
+
+        case 'tree-chart': {
+            /* eslint-disable @typescript-eslint/no-explicit-any */
+            let treeData: Record<string, any> = { name: 'root', children: [] };
+            if (typeof c.data === 'string') {
+                try { treeData = JSON.parse(c.data as string); } catch { /* use default */ }
+            } else if (c.data && typeof c.data === 'object') {
+                treeData = c.data as any;
+            }
+            return renderEChartWithHandles({
+                ...themeOptions,
+                ...chartMotionOption,
+                title: chartTitleLayout.titleOption,
+                tooltip: { ...themeOptions.tooltip, trigger: 'item' },
+                series: [{
+                    type: 'tree',
+                    data: [treeData],
+                    layout: (c.layout as string) || 'orthogonal',
+                    orient: (c.orient as string) || 'LR',
+                    expandAndCollapse: c.expandAndCollapse !== false,
+                    symbolSize: (c.symbolSize as number) || 14,
+                    label: {
+                        position: 'left',
+                        verticalAlign: 'middle',
+                        align: 'right',
+                        color: t.textPrimary,
+                        fontSize: seriesLabelFontSize,
+                    },
+                    leaves: {
+                        label: {
+                            position: 'right',
+                            align: 'left',
+                            color: t.textPrimary,
+                            fontSize: seriesLabelFontSize,
+                        },
+                    },
+                    lineStyle: { color: t.echarts.splitLineColor },
+                    animationDurationUpdate: 750,
+                }],
+            }, echartsClickHandler);
+            /* eslint-enable @typescript-eslint/no-explicit-any */
+        }
+
+        case 'themeRiver-chart': {
+            /* eslint-disable @typescript-eslint/no-explicit-any */
+            const riverRows = Array.isArray(c.rows) ? (c.rows as Array<Record<string, any>>) : [];
+            const riverData: Array<[string, number, string]> = [];
+            for (const row of riverRows) {
+                const vals = Array.isArray(row) ? row : Object.values(row);
+                riverData.push([String(vals[0] ?? ''), Number(vals[1] ?? 0), String(vals[2] ?? '')]);
+            }
+            return renderEChartWithHandles({
+                ...themeOptions,
+                ...chartMotionOption,
+                title: chartTitleLayout.titleOption,
+                tooltip: { ...themeOptions.tooltip, trigger: 'axis' },
+                singleAxis: {
+                    type: 'time',
+                    axisTick: {},
+                    axisLabel: { color: axisLabelColor, fontSize: axisFontSize },
+                    axisLine: { lineStyle: { color: t.echarts.axisLineColor } },
+                },
+                series: [{
+                    type: 'themeRiver',
+                    data: riverData,
+                    emphasis: { focus: 'series' },
+                    label: { color: t.textPrimary, fontSize: seriesLabelFontSize },
+                }],
+            }, echartsClickHandler);
+            /* eslint-enable @typescript-eslint/no-explicit-any */
+        }
+
+        case 'pictorialBar-chart': {
+            /* eslint-disable @typescript-eslint/no-explicit-any */
+            const picRows = Array.isArray(c.rows) ? (c.rows as Array<Record<string, any>>) : [];
+            const picCategories: string[] = [];
+            const picValues: number[] = [];
+            for (const row of picRows) {
+                const vals = Array.isArray(row) ? row : Object.values(row);
+                picCategories.push(String(vals[0] ?? ''));
+                picValues.push(Number(vals[1] ?? 0));
+            }
+            return renderEChartWithHandles({
+                ...themeOptions,
+                ...chartMotionOption,
+                title: chartTitleLayout.titleOption,
+                legend: legendConfig,
+                tooltip: { ...themeOptions.tooltip, trigger: 'axis', axisPointer: { type: 'shadow' } },
+                xAxis: {
+                    type: 'category',
+                    data: picCategories,
+                    axisLine: { lineStyle: { color: t.echarts.axisLineColor } },
+                    axisLabel: { color: axisLabelColor, fontSize: axisFontSize, rotate: xAxisLabelRotate, hideOverlap: true },
+                },
+                yAxis: {
+                    type: 'value',
+                    axisLine: { lineStyle: { color: t.echarts.axisLineColor } },
+                    axisLabel: { color: axisLabelColor, fontSize: axisFontSize },
+                    splitLine: { lineStyle: { color: t.echarts.splitLineColor } },
+                },
+                series: [{
+                    type: 'pictorialBar',
+                    data: picValues,
+                    symbol: (c.symbol as string) || 'circle',
+                    symbolRepeat: c.symbolRepeat ? 'fixed' : false,
+                    barWidth: (c.barWidth as number) || 30,
+                    symbolSize: ['100%', '100%'],
+                    itemStyle: { color: seriesColors[0] || t.echarts.colorPalette[0] },
+                }],
+                grid: axisGrid,
+            }, echartsClickHandler);
+            /* eslint-enable @typescript-eslint/no-explicit-any */
+        }
+
         default:
             return null;
     }

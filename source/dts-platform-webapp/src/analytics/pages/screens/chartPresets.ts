@@ -16,6 +16,16 @@ export const CHART_COMPONENT_TYPES: ReadonlySet<ComponentType> = new Set([
     'treemap-chart',
     'sunburst-chart',
     'waterfall-chart',
+    'sankey-chart',
+    'heatmap-chart',
+    'graph-chart',
+    'candlestick-chart',
+    'boxplot-chart',
+    'parallel-chart',
+    'calendar-chart',
+    'tree-chart',
+    'themeRiver-chart',
+    'pictorialBar-chart',
 ]);
 
 const CHART_PRESET_PATCH: Record<ChartPreset, Record<string, unknown>> = {

@@ -199,6 +199,154 @@ const ganttChartSchema: ComponentConfigSchema = {
     ],
 };
 
+const sankeyChartSchema: ComponentConfigSchema = {
+    type: 'sankey-chart',
+    groups: [STANDARD_GROUPS.chart, STANDARD_GROUPS.behavior, STANDARD_GROUPS.advanced],
+    fields: [
+        ...ECHARTS_COMMON_FIELDS,
+        { key: 'nodeAlign', label: '节点对齐', type: 'select', group: 'chart', options: [
+            { label: '左对齐', value: 'left' },
+            { label: '右对齐', value: 'right' },
+            { label: '两端对齐', value: 'justify' },
+        ] },
+        { key: 'orient', label: '方向', type: 'radio', group: 'chart', options: [
+            { label: '水平', value: 'horizontal' },
+            { label: '垂直', value: 'vertical' },
+        ] },
+        { key: 'draggable', label: '拖拽节点', type: 'boolean', group: 'chart' },
+    ],
+};
+
+const heatmapChartSchema: ComponentConfigSchema = {
+    type: 'heatmap-chart',
+    groups: [STANDARD_GROUPS.chart, STANDARD_GROUPS.behavior, STANDARD_GROUPS.advanced],
+    fields: [
+        ...ECHARTS_COMMON_FIELDS,
+        ...AXIS_CHART_FIELDS,
+        { key: 'visualMapMin', label: '最小值', type: 'number', group: 'chart', min: 0 },
+        { key: 'visualMapMax', label: '最大值', type: 'number', group: 'chart' },
+        { key: 'visualMapColors', label: '色带颜色', type: 'color-array', group: 'chart' },
+    ],
+};
+
+const graphChartSchema: ComponentConfigSchema = {
+    type: 'graph-chart',
+    groups: [STANDARD_GROUPS.chart, STANDARD_GROUPS.behavior, STANDARD_GROUPS.advanced],
+    fields: [
+        ...ECHARTS_COMMON_FIELDS,
+        { key: 'layout', label: '布局', type: 'select', group: 'chart', options: [
+            { label: '力导向', value: 'force' },
+            { label: '环形', value: 'circular' },
+            { label: '自定义', value: 'none' },
+        ] },
+        { key: 'roam', label: '缩放平移', type: 'boolean', group: 'chart' },
+        { key: 'draggable', label: '拖拽节点', type: 'boolean', group: 'chart' },
+        { key: 'repulsion', label: '斥力', type: 'slider', group: 'chart', min: 50, max: 500, step: 10, defaultValue: 200 },
+        { key: 'symbolSize', label: '节点大小', type: 'slider', group: 'chart', min: 5, max: 50, defaultValue: 20 },
+    ],
+};
+
+const candlestickChartSchema: ComponentConfigSchema = {
+    type: 'candlestick-chart',
+    groups: [STANDARD_GROUPS.chart, STANDARD_GROUPS.behavior, STANDARD_GROUPS.advanced],
+    fields: [
+        ...ECHARTS_COMMON_FIELDS,
+        ...AXIS_CHART_FIELDS,
+        { key: 'upColor', label: '阳线颜色', type: 'color', group: 'chart', defaultValue: '#ec0000' },
+        { key: 'downColor', label: '阴线颜色', type: 'color', group: 'chart', defaultValue: '#00da3c' },
+        { key: 'showMA', label: '显示均线', type: 'boolean', group: 'chart' },
+        { key: 'maPeriods', label: '均线周期', type: 'text', group: 'chart', placeholder: '5,10,20',
+            showIf: (config) => !!config.showMA,
+        },
+    ],
+};
+
+const boxplotChartSchema: ComponentConfigSchema = {
+    type: 'boxplot-chart',
+    groups: [STANDARD_GROUPS.chart, STANDARD_GROUPS.behavior, STANDARD_GROUPS.advanced],
+    fields: [
+        ...ECHARTS_COMMON_FIELDS,
+        ...AXIS_CHART_FIELDS,
+        { key: 'orient', label: '方向', type: 'radio', group: 'chart', options: [
+            { label: '垂直', value: 'vertical' },
+            { label: '水平', value: 'horizontal' },
+        ] },
+        { key: 'showOutliers', label: '显示异常值', type: 'boolean', group: 'chart' },
+    ],
+};
+
+const parallelChartSchema: ComponentConfigSchema = {
+    type: 'parallel-chart',
+    groups: [STANDARD_GROUPS.chart, STANDARD_GROUPS.behavior, STANDARD_GROUPS.advanced],
+    fields: [
+        ...ECHARTS_COMMON_FIELDS,
+        { key: 'lineOpacity', label: '线条透明度', type: 'slider', group: 'chart', min: 0, max: 1, step: 0.05, defaultValue: 0.5 },
+        { key: 'smooth', label: '平滑曲线', type: 'boolean', group: 'chart' },
+    ],
+};
+
+const calendarChartSchema: ComponentConfigSchema = {
+    type: 'calendar-chart',
+    groups: [STANDARD_GROUPS.chart, STANDARD_GROUPS.behavior, STANDARD_GROUPS.advanced],
+    fields: [
+        ...ECHARTS_COMMON_FIELDS,
+        { key: 'cellSize', label: '格子大小', type: 'number', group: 'chart', min: 10, max: 30, defaultValue: 16 },
+        { key: 'orient', label: '方向', type: 'radio', group: 'chart', options: [
+            { label: '水平', value: 'horizontal' },
+            { label: '垂直', value: 'vertical' },
+        ] },
+        { key: 'yearRange', label: '年份范围', type: 'text', group: 'chart', placeholder: '2026' },
+        { key: 'visualMapColors', label: '色带颜色', type: 'color-array', group: 'chart' },
+    ],
+};
+
+const treeChartSchema: ComponentConfigSchema = {
+    type: 'tree-chart',
+    groups: [STANDARD_GROUPS.chart, STANDARD_GROUPS.behavior, STANDARD_GROUPS.advanced],
+    fields: [
+        ...ECHARTS_COMMON_FIELDS,
+        { key: 'layout', label: '布局', type: 'select', group: 'chart', options: [
+            { label: '正交', value: 'orthogonal' },
+            { label: '径向', value: 'radial' },
+        ] },
+        { key: 'orient', label: '方向', type: 'select', group: 'chart', options: [
+            { label: '左到右', value: 'LR' },
+            { label: '右到左', value: 'RL' },
+            { label: '上到下', value: 'TB' },
+            { label: '下到上', value: 'BT' },
+        ], showIf: (config) => config.layout !== 'radial' },
+        { key: 'expandAndCollapse', label: '展开折叠', type: 'boolean', group: 'chart' },
+        { key: 'symbolSize', label: '节点大小', type: 'slider', group: 'chart', min: 5, max: 30, defaultValue: 14 },
+    ],
+};
+
+const themeRiverChartSchema: ComponentConfigSchema = {
+    type: 'themeRiver-chart',
+    groups: [STANDARD_GROUPS.chart, STANDARD_GROUPS.behavior, STANDARD_GROUPS.advanced],
+    fields: [
+        ...ECHARTS_COMMON_FIELDS,
+    ],
+};
+
+const pictorialBarChartSchema: ComponentConfigSchema = {
+    type: 'pictorialBar-chart',
+    groups: [STANDARD_GROUPS.chart, STANDARD_GROUPS.behavior, STANDARD_GROUPS.advanced],
+    fields: [
+        ...ECHARTS_COMMON_FIELDS,
+        ...AXIS_CHART_FIELDS,
+        { key: 'symbol', label: '图形', type: 'select', group: 'chart', options: [
+            { label: '圆形', value: 'circle' },
+            { label: '矩形', value: 'rect' },
+            { label: '圆角矩形', value: 'roundRect' },
+            { label: '三角形', value: 'triangle' },
+            { label: '菱形', value: 'diamond' },
+            { label: '箭头', value: 'arrow' },
+        ] },
+        { key: 'symbolRepeat', label: '重复填充', type: 'boolean', group: 'chart' },
+        { key: 'barWidth', label: '柱宽', type: 'slider', group: 'chart', min: 10, max: 60, defaultValue: 30 },
+    ],
+};
+
 export const CHART_SCHEMAS: ComponentConfigSchema[] = [
     lineChartSchema,
     barChartSchema,
@@ -214,4 +362,14 @@ export const CHART_SCHEMAS: ComponentConfigSchema[] = [
     wordcloudChartSchema,
     waterfallChartSchema,
     ganttChartSchema,
+    sankeyChartSchema,
+    heatmapChartSchema,
+    graphChartSchema,
+    candlestickChartSchema,
+    boxplotChartSchema,
+    parallelChartSchema,
+    calendarChartSchema,
+    treeChartSchema,
+    themeRiverChartSchema,
+    pictorialBarChartSchema,
 ];
