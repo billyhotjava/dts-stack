@@ -12,18 +12,30 @@ import { LoginProvider } from "./providers/login-provider";
 import RegisterForm from "./register-form";
 import ResetForm from "./reset-form";
 
+function isRecentLogin(): boolean {
+	try {
+		const ts = Number(localStorage.getItem("dts.session.loginTs") || "0");
+		return ts > 0 && Date.now() - ts < 120_000;
+	} catch {
+		return false;
+	}
+}
+
 function isTokenExpired(token?: string): boolean {
 	if (!token) return true;
 	if (token.startsWith("dev-access-")) return false;
 	try {
 		const parts = token.split(".");
-		if (parts.length < 2) return true; // not a JWT — treat as expired
+		if (parts.length < 2) return !isRecentLogin();
 		let payload = parts[1].replace(/-/g, "+").replace(/_/g, "/");
 		while (payload.length % 4 !== 0) payload += "=";
 		const obj = JSON.parse(atob(payload));
-		return typeof obj?.exp === "number" ? Date.now() > obj.exp * 1000 - 10_000 : true;
+		if (typeof obj?.exp === "number") {
+			return Date.now() > obj.exp * 1000 - 10_000;
+		}
+		return !isRecentLogin();
 	} catch {
-		return true;
+		return !isRecentLogin();
 	}
 }
 

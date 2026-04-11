@@ -21,14 +21,31 @@ function decodeJwtExp(token?: string): number | null {
 	}
 }
 
+/** Grace period (ms) after login during which non-JWT tokens are trusted. */
+const LOGIN_GRACE_MS = 120_000;
+
+function isRecentLogin(): boolean {
+	try {
+		const ts = Number(localStorage.getItem("dts.session.loginTs") || "0");
+		return ts > 0 && Date.now() - ts < LOGIN_GRACE_MS;
+	} catch {
+		return false;
+	}
+}
+
 /** Check whether a JWT access token is expired (with 10s skew). */
 function isTokenExpired(token?: string): boolean {
 	if (!token) return true;
 	// Dev tokens are not JWTs; treat them as always valid.
 	if (token.startsWith("dev-access-")) return false;
 	const exp = decodeJwtExp(token);
-	if (exp === null) return true; // Cannot verify token — treat as expired to force re-login.
-	return Date.now() > exp - 10_000;
+	if (exp !== null) {
+		// Valid JWT with exp claim — check expiry directly.
+		return Date.now() > exp - 10_000;
+	}
+	// Non-JWT token (e.g. Keycloak opaque token):
+	// Trust it only if login happened recently; otherwise treat as stale.
+	return !isRecentLogin();
 }
 
 type Props = {

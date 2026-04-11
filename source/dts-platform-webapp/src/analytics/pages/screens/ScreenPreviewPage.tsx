@@ -170,33 +170,6 @@ export default function ScreenPreviewPage() {
 			});
 	}, [id]);
 
-	const computeScale = useCallback(() => {
-		if (!screen) return;
-		const viewport = window.visualViewport;
-		const vw = viewport?.width ?? window.innerWidth;
-		const vh = viewport?.height ?? window.innerHeight;
-		const nextMode: DeviceMode = resolveDeviceModeByViewport(vw);
-		setDeviceMode(nextMode);
-		const nextAutoScale = resolveRuntimeScale({
-			viewportWidth: vw,
-			viewportHeight: vh,
-			screenWidth: screen.width || 1920,
-			screenHeight: screen.height || 1080,
-			fullscreen: true,
-			allowUpscale: true,
-		}).scale;
-		setAutoScale(nextAutoScale);
-		if (manualScale === null) {
-			setScale(nextAutoScale);
-		}
-	}, [manualScale, screen]);
-
-	useEffect(() => {
-		computeScale();
-		window.addEventListener('resize', computeScale);
-		return () => window.removeEventListener('resize', computeScale);
-	}, [computeScale]);
-
 	// Multi-page carousel support
 	const carousel = useScreenCarousel(screen?.pages, screen?.components || [], screen?.carouselConfig);
 	const components = carousel.currentPageComponents;
@@ -235,6 +208,33 @@ export default function ScreenPreviewPage() {
 			height: Math.max(1, maxBottom - minTop),
 		};
 	}, [screen, visibleSortedComponents]);
+
+	const computeScale = useCallback(() => {
+		if (!screen) return;
+		const viewport = window.visualViewport;
+		const vw = viewport?.width ?? window.innerWidth;
+		const vh = viewport?.height ?? window.innerHeight;
+		const nextMode: DeviceMode = resolveDeviceModeByViewport(vw);
+		setDeviceMode(nextMode);
+		const nextAutoScale = resolveRuntimeScale({
+			viewportWidth: vw,
+			viewportHeight: vh,
+			screenWidth: contentBounds.width,
+			screenHeight: contentBounds.height,
+			fullscreen: true,
+			allowUpscale: true,
+		}).scale;
+		setAutoScale(nextAutoScale);
+		if (manualScale === null) {
+			setScale(nextAutoScale);
+		}
+	}, [manualScale, screen, contentBounds]);
+
+	useEffect(() => {
+		computeScale();
+		window.addEventListener('resize', computeScale);
+		return () => window.removeEventListener('resize', computeScale);
+	}, [computeScale]);
 
 	useEffect(() => {
 		if (!visibleSortedComponents.length) {
