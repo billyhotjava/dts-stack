@@ -466,23 +466,23 @@ export function ScreenHeader({
 
     useEffect(() => {
         if (!id || typeof window === 'undefined') {
-            setPublishNotice(null);
+            setPublishInfo(null);
             return;
         }
         try {
             const raw = window.localStorage.getItem(buildPublishNoticeStorageKey(id));
             if (!raw) {
-                setPublishNotice(null);
+                setPublishInfo(null);
                 return;
             }
-            const parsed = JSON.parse(raw) as PublishNotice;
+            const parsed = JSON.parse(raw) as PublishInfo;
             if (!parsed || String(parsed.screenId || '') !== String(id)) {
-                setPublishNotice(null);
+                setPublishInfo(null);
                 return;
             }
-            setPublishNotice(parsed);
+            setPublishInfo(parsed);
         } catch {
-            setPublishNotice(null);
+            setPublishInfo(null);
         }
     }, [id]);
 
@@ -1000,7 +1000,7 @@ export function ScreenHeader({
     }, [handleLockHttpError, handleUpdateConflictError, isPublishing, saveScreen]);
 
     useEffect(() => {
-        if (!id || !permissions.canRead || publishNotice || publishNoticeDismissed) {
+        if (!id || !permissions.canRead || publishInfo) {
             return;
         }
         let cancelled = false;
@@ -1014,11 +1014,11 @@ export function ScreenHeader({
                 if (versionNo <= 0) {
                     return;
                 }
-                setPublishNotice({
+                setPublishInfo({
                     screenId: id,
                     versionNo,
                     previewUrl: resolveRouteHref(`/bi/screens/${encodeURIComponent(String(id))}/preview`),
-                    publicUrl: null,
+                    publicUrl: undefined,
                     warmupText: '',
                 });
             } catch {
@@ -1029,7 +1029,7 @@ export function ScreenHeader({
         return () => {
             cancelled = true;
         };
-    }, [id, permissions.canRead, publishNotice, publishNoticeDismissed]);
+    }, [id, permissions.canRead, publishInfo]);
 
     const handleVersionHistory = useCallback(async () => {
         if (!id || isLoadingVersions) return;
@@ -2302,72 +2302,6 @@ export function ScreenHeader({
                     </div>
                 </div>
             )}
-            {publishNotice && (
-                <div className="flex items-start justify-between gap-3 px-3 py-2.5 border-t border-[rgba(34,197,94,0.32)] bg-[rgba(34,197,94,0.08)] relative z-[1100] shrink-0" data-testid="analytics-screen-publish-notice">
-                    <div className="min-w-0 grid gap-1.5 flex-auto">
-                        <div className="text-[13px] text-[var(--color-text-primary)] font-semibold">
-                            已发布 v{publishNotice.versionNo}（大屏 #{publishNotice.screenId}）
-                        </div>
-                        <div className="flex items-center gap-2 flex-wrap text-xs text-[var(--color-text-primary)]">
-                            <span className="text-[var(--color-text-secondary)] w-14 shrink-0">预览链接</span>
-                            <a href={publishNotice.previewUrl} target="_blank" rel="noreferrer">{publishNotice.previewUrl}</a>
-                            <button
-                                type="button"
-                                className="header-btn flex items-center gap-1.5 px-4 py-2 border border-[var(--color-border)] rounded-md bg-[var(--color-surface)] text-[var(--color-text-primary)] text-[13px] font-medium cursor-pointer transition-all duration-200 whitespace-nowrap shrink-0 w-full justify-start py-[7px] px-2.5 hover:border-[var(--color-primary)] hover:bg-[var(--color-primary-light)] disabled:opacity-50 disabled:cursor-not-allowed"
-                                onClick={() => void handleCopyUrl(publishNotice.previewUrl)}
-                            >
-                                复制
-                            </button>
-                        </div>
-                        <div className="flex items-center gap-2 flex-wrap text-xs text-[var(--color-text-primary)]">
-                            <span className="text-[var(--color-text-secondary)] w-14 shrink-0">公开链接</span>
-                            {publishNotice.publicUrl ? (
-                                <>
-                                    <a href={publishNotice.publicUrl} target="_blank" rel="noreferrer">{publishNotice.publicUrl}</a>
-                                    <button
-                                        type="button"
-                                        className="header-btn flex items-center gap-1.5 px-4 py-2 border border-[var(--color-border)] rounded-md bg-[var(--color-surface)] text-[var(--color-text-primary)] text-[13px] font-medium cursor-pointer transition-all duration-200 whitespace-nowrap shrink-0 w-full justify-start py-[7px] px-2.5 hover:border-[var(--color-primary)] hover:bg-[var(--color-primary-light)] disabled:opacity-50 disabled:cursor-not-allowed"
-                                        onClick={() => void handleCopyUrl(publishNotice.publicUrl!)}
-                                    >
-                                        复制
-                                    </button>
-                                </>
-                            ) : (
-                                <span className="text-xs text-[var(--color-text-secondary)]">未生成（可在“更多/治理/分享链接”中重试）</span>
-                            )}
-                        </div>
-                        {publishNotice.warmupText ? (
-                            <div className="text-xs text-[var(--color-text-secondary)]">{publishNotice.warmupText.trim()}</div>
-                        ) : null}
-                    </div>
-                    <div className="flex items-center gap-2 shrink-0 flex-wrap">
-                        <button
-                            type="button"
-                            className="header-btn flex items-center gap-1.5 px-4 py-2 border border-[var(--color-border)] rounded-md bg-[var(--color-surface)] text-[var(--color-text-primary)] text-[13px] font-medium cursor-pointer transition-all duration-200 whitespace-nowrap shrink-0 w-full justify-start py-[7px] px-2.5 hover:border-[var(--color-primary)] hover:bg-[var(--color-primary-light)] disabled:opacity-50 disabled:cursor-not-allowed"
-                            onClick={() => navigate('/bi')}
-                            title="返回 Analytics 首页"
-                        >
-                            Analytics首页
-                        </button>
-                        <button
-                            type="button"
-                            className="header-btn flex items-center gap-1.5 px-4 py-2 border border-[var(--color-border)] rounded-md bg-[var(--color-surface)] text-[var(--color-text-primary)] text-[13px] font-medium cursor-pointer transition-all duration-200 whitespace-nowrap shrink-0 w-full justify-start py-[7px] px-2.5 hover:border-[var(--color-primary)] hover:bg-[var(--color-primary-light)] disabled:opacity-50 disabled:cursor-not-allowed"
-                            onClick={() => navigate('/bi/screens')}
-                            title="进入大屏管理列表"
-                        >
-                            大屏中心
-                        </button>
-                        <button
-                            type="button"
-                            className="header-btn flex items-center gap-1.5 px-4 py-2 border border-[var(--color-border)] rounded-md bg-[var(--color-surface)] text-[var(--color-text-primary)] text-[13px] font-medium cursor-pointer transition-all duration-200 whitespace-nowrap shrink-0 w-full justify-start py-[7px] px-2.5 hover:border-[var(--color-primary)] hover:bg-[var(--color-primary-light)] disabled:opacity-50 disabled:cursor-not-allowed"
-                            onClick={() => { setPublishNotice(null); setPublishNoticeDismissed(true); }}
-                            title="收起发布信息"
-                        >
-                            收起
-                        </button>
-                    </div>
-                </div>
-            )}
 
             {showQuickActions ? (
                 <div
@@ -2537,6 +2471,13 @@ export function ScreenHeader({
                 open={showAclPanel}
                 screenId={id}
                 onClose={() => setShowAclPanel(false)}
+                isOwner={permissions.isOwner}
+            />
+
+            <PublishResultModal
+                open={publishModalOpen}
+                onClose={() => setPublishModalOpen(false)}
+                publishInfo={publishInfo}
                 isOwner={permissions.isOwner}
             />
 
