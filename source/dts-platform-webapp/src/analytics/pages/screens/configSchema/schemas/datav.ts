@@ -50,10 +50,10 @@ const scrollBoardSchema: ComponentConfigSchema = {
         { key: 'header',    label: '表头数据',   type: 'json',    group: 'content' },
         { key: 'data',      label: '表体数据',   type: 'json',    group: 'content' },
         // Header
-        { key: 'headerBGC', label: '表头背景色', type: 'color',   group: 'header', themeTokenKey: 'scrollBoard.headerBGC' },
+        { key: 'headerBGC', label: '表头背景色', type: 'color',   group: 'header', themeTokenKey: 'scrollBoard.headerBg' },
         // Body
-        { key: 'oddRowBGC',  label: '奇数行背景', type: 'color',  group: 'body', themeTokenKey: 'scrollBoard.oddRowBGC' },
-        { key: 'evenRowBGC', label: '偶数行背景', type: 'color',  group: 'body', themeTokenKey: 'scrollBoard.evenRowBGC' },
+        { key: 'oddRowBGC',  label: '奇数行背景', type: 'color',  group: 'body', themeTokenKey: 'scrollBoard.oddRowBg' },
+        { key: 'evenRowBGC', label: '偶数行背景', type: 'color',  group: 'body', themeTokenKey: 'scrollBoard.evenRowBg' },
         // Behavior
         { key: 'rowNum',   label: '显示行数',     type: 'number',  group: 'behavior', min: 1, max: 20, defaultValue: 5 },
         { key: 'waitTime', label: '轮播等待(ms)', type: 'number',  group: 'behavior', min: 500, max: 10000, step: 500, defaultValue: 2000 },
@@ -99,7 +99,7 @@ const percentPondSchema: ComponentConfigSchema = {
     groups: [STANDARD_GROUPS.content, STANDARD_GROUPS.appearance],
     fields: [
         { key: 'value',        label: '百分比值',  type: 'slider',      group: 'content', min: 0, max: 100 },
-        { key: 'colors',       label: '颜色',      type: 'color-array', group: 'appearance', themeTokenKey: 'progressBar.fillColor' },
+        { key: 'colors',       label: '颜色',      type: 'color-array', group: 'appearance', themeTokenKey: 'progressBar.fillGradient' },
         { key: 'borderRadius', label: '圆角',      type: 'number',      group: 'appearance', min: 0, max: 20, defaultValue: 5 },
         { key: 'borderWidth',  label: '边框宽度',  type: 'number',      group: 'appearance', min: 0, max: 10, defaultValue: 2 },
     ],

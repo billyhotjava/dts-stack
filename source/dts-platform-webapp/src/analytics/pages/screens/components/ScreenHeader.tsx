@@ -15,6 +15,7 @@ import { GlobalVariableManager } from './GlobalVariableManager';
 import { CacheObservabilityPanel } from './CacheObservabilityPanel';
 import { ScreenCompliancePanel } from './ScreenCompliancePanel';
 import { ScreenAclPanel } from './ScreenAclPanel';
+import { PublishResultModal } from './PublishResultModal';
 import { ScreenAuditPanel } from './ScreenAuditPanel';
 import { ScreenSharePolicyPanel } from './ScreenSharePolicyPanel';
 import { ScreenSharePanel } from './ScreenSharePanel';
@@ -43,11 +44,11 @@ import { inlineResources } from '../utils/resourceInliner';
 import { ImportPreviewModal } from './ImportPreviewModal';
 import { countInlinedResources } from '../utils/resourceRestorer';
 
-type PublishNotice = {
+type PublishInfo = {
     screenId: string | number;
     versionNo: number | string;
     previewUrl: string;
-    publicUrl: string | null;
+    publicUrl?: string;
     warmupText?: string;
 };
 
@@ -345,8 +346,9 @@ export function ScreenHeader({
         const value = e.target.value as ScreenTheme | '';
         const theme = value || undefined;
         const tokens = getThemeTokens(theme);
-        updateConfig({ theme, backgroundColor: tokens.canvasBackground });
-    }, [updateConfig]);
+        const updatedComponents = applyThemeToComponents(config.components || [], theme, 'force');
+        updateConfig({ theme, backgroundColor: tokens.canvasBackground, components: updatedComponents });
+    }, [config.components, updateConfig]);
 
     const applyThemeToAllComponents = useCallback((mode: ThemeComponentApplyMode) => {
         const nextComponents = applyThemeToComponents(config.components, config.theme, mode);
@@ -442,8 +444,8 @@ export function ScreenHeader({
     const [versionCandidates, setVersionCandidates] = useState<ScreenVersion[]>([]);
     const [editLock, setEditLock] = useState<ScreenEditLock | null>(null);
     const [lockErrorText, setLockErrorText] = useState<string | null>(null);
-    const [publishNotice, setPublishNotice] = useState<PublishNotice | null>(null);
-    const [publishNoticeDismissed, setPublishNoticeDismissed] = useState(false);
+    const [publishModalOpen, setPublishModalOpen] = useState(false);
+    const [publishInfo, setPublishInfo] = useState<PublishInfo | null>(null);
     const importInputRef = useRef<HTMLInputElement | null>(null);
     const quickInputRef = useRef<HTMLInputElement | null>(null);
     const quickActionRefs = useRef<Array<HTMLButtonElement | null>>([]);
@@ -489,12 +491,12 @@ export function ScreenHeader({
             return;
         }
         const key = buildPublishNoticeStorageKey(id);
-        if (!publishNotice || String(publishNotice.screenId || '') !== String(id)) {
+        if (!publishInfo || String(publishInfo.screenId || '') !== String(id)) {
             window.localStorage.removeItem(key);
             return;
         }
-        window.localStorage.setItem(key, JSON.stringify(publishNotice));
-    }, [id, publishNotice]);
+        window.localStorage.setItem(key, JSON.stringify(publishInfo));
+    }, [id, publishInfo]);
 
     // designAction / governanceAction localStorage persistence removed — menus use direct buttons now
 
@@ -977,13 +979,14 @@ export function ScreenHeader({
             } catch (linkError) {
                 console.warn('Publish succeeded but creating public link failed:', linkError);
             }
-            setPublishNotice({
+            setPublishInfo({
                 screenId,
                 versionNo,
                 previewUrl,
-                publicUrl,
-                warmupText,
+                publicUrl: publicUrl ?? undefined,
+                warmupText: warmupText || undefined,
             });
+            setPublishModalOpen(true);
             toast.success('发布成功，版本 v' + versionNo + warmupText);
         } catch (error) {
             console.error('Failed to publish screen:', error);
