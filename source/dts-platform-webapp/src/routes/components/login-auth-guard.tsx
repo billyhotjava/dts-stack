@@ -27,7 +27,7 @@ function isTokenExpired(token?: string): boolean {
 	// Dev tokens are not JWTs; treat them as always valid.
 	if (token.startsWith("dev-access-")) return false;
 	const exp = decodeJwtExp(token);
-	if (exp === null) return false; // Opaque token; can't check locally, trust it.
+	if (exp === null) return true; // Cannot verify token — treat as expired to force re-login.
 	return Date.now() > exp - 10_000;
 }
 

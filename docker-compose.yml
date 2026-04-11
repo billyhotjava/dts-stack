@@ -57,8 +57,7 @@ services:
       - /var/run/docker.sock:/var/run/docker.sock:ro
       - ./services/dts-proxy/dynamic:/etc/traefik/dynamic:ro,z
       - ./services/certs:/etc/traefik/certs:ro,z
-      - ./services/certs/server.crt:/certs/server.crt:ro,z
-      - ./services/certs/server.key:/certs/server.key:ro,z
+      - ./services/certs:/certs:ro,z
       - ./logs/traefik:/var/log/traefik:z
     labels:
       - "traefik.enable=true"

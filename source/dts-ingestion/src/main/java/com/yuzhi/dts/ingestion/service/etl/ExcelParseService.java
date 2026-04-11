@@ -3,13 +3,20 @@ package com.yuzhi.dts.ingestion.service.etl;
 import com.yuzhi.dts.ingestion.service.dto.ColumnInfo;
 import com.yuzhi.dts.ingestion.service.dto.FormulaCell;
 import com.yuzhi.dts.ingestion.service.dto.ParseResult;
+import java.math.BigDecimal;
+import java.time.LocalDateTime;
+import java.time.LocalTime;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import org.apache.poi.ss.usermodel.Cell;
 import org.apache.poi.ss.usermodel.CellType;
+import org.apache.poi.ss.usermodel.CellValue;
+import org.apache.poi.ss.usermodel.DataFormatter;
 import org.apache.poi.ss.usermodel.DateUtil;
+import org.apache.poi.ss.usermodel.FormulaEvaluator;
 import org.apache.poi.ss.usermodel.Row;
 import org.apache.poi.ss.usermodel.Sheet;
 import org.apache.poi.ss.usermodel.Workbook;
@@ -47,6 +54,15 @@ public class ExcelParseService {
             if (sheet == null) {
                 return new ParseResult(0, List.of(), List.of(), List.of(), List.of());
             }
+
+            // Create evaluator for formula calculation (consistent with ExcelImportService)
+            FormulaEvaluator evaluator = null;
+            try {
+                evaluator = workbook.getCreationHelper().createFormulaEvaluator();
+            } catch (Exception e) {
+                LOG.warn("Cannot create FormulaEvaluator, will fallback to cached values: {}", e.getMessage());
+            }
+            DataFormatter dataFormatter = new DataFormatter(Locale.ROOT);
 
             // 1. Read header row (row 0)
             Row headerRow = sheet.getRow(0);
@@ -92,12 +108,15 @@ public class ExcelParseService {
                     Cell cell = row.getCell(c);
                     if (cell != null && cell.getCellType() == CellType.FORMULA) {
                         formulaCells.add(new FormulaCell(r, headers.get(c), cell.getCellFormula()));
-                        // Extract cached formula result value instead of discarding
-                        String cachedValue = getFormulaCachedValue(cell);
-                        rowData.add(cachedValue);
-                        if (cachedValue != null) {
+                        // Try evaluating the formula first, fallback to cached value
+                        String formulaValue = evaluateFormulaCell(cell, evaluator, dataFormatter);
+                        if (formulaValue == null) {
+                            formulaValue = getFormulaCachedValue(cell);
+                        }
+                        rowData.add(formulaValue);
+                        if (formulaValue != null) {
                             allBlank = false;
-                            String inferred = inferCellType(cachedValue);
+                            String inferred = inferCellType(formulaValue);
                             typeStats.computeIfAbsent(c, k -> new HashMap<>())
                                 .merge(inferred, 1, Integer::sum);
                             nonNullCounts.merge(c, 1, Integer::sum);
@@ -168,18 +187,43 @@ public class ExcelParseService {
             case STRING -> cell.getStringCellValue();
             case NUMERIC -> {
                 if (DateUtil.isCellDateFormatted(cell)) {
-                    yield cell.getLocalDateTimeCellValue().toLocalDate().toString();
+                    yield formatDateTime(cell.getLocalDateTimeCellValue());
                 }
-                double num = cell.getNumericCellValue();
-                if (num == Math.floor(num) && !Double.isInfinite(num)) {
-                    yield String.valueOf((long) num);
-                }
-                yield String.valueOf(num);
+                yield formatNumeric(cell.getNumericCellValue());
             }
             case BOOLEAN -> String.valueOf(cell.getBooleanCellValue());
             case BLANK -> null;
             default -> null;
         };
+    }
+
+    private static final double SAFE_INTEGER_LIMIT = 1E15;
+
+    private String formatNumeric(double num) {
+        if (Double.isNaN(num) || Double.isInfinite(num)) {
+            return String.valueOf(num);
+        }
+        if (num == Math.floor(num) && Math.abs(num) < SAFE_INTEGER_LIMIT) {
+            return String.valueOf((long) num);
+        }
+        if (num == Math.floor(num)) {
+            // >15 digits: double has already lost precision (IEEE 754 limit).
+            // Log warning — the cell should have been stored as text in Excel.
+            LOG.warn("Numeric cell with value {} exceeds 15-digit safe integer range, "
+                + "precision may be lost. Consider storing as text in Excel.", BigDecimal.valueOf(num).toPlainString());
+            return BigDecimal.valueOf(num).toPlainString();
+        }
+        return BigDecimal.valueOf(num).stripTrailingZeros().toPlainString();
+    }
+
+    private String formatDateTime(LocalDateTime dateTime) {
+        if (dateTime == null) {
+            return null;
+        }
+        if (dateTime.toLocalTime().equals(LocalTime.MIDNIGHT)) {
+            return dateTime.toLocalDate().toString();
+        }
+        return dateTime.toString().replace('T', ' ');
     }
 
     private String inferCellType(String value) {
@@ -192,7 +236,10 @@ public class ExcelParseService {
         if (value.matches("-?\\d+\\.\\d+")) {
             return "DOUBLE";
         }
-        if (value.matches("\\d{4}-\\d{2}-\\d{2}.*")) {
+        if (value.matches("\\d{4}-\\d{2}-\\d{2} \\d{2}:\\d{2}(:\\d{2})?.*")) {
+            return "TIMESTAMP";
+        }
+        if (value.matches("\\d{4}-\\d{2}-\\d{2}")) {
             return "DATE";
         }
         if ("true".equalsIgnoreCase(value) || "false".equalsIgnoreCase(value)) {
@@ -201,19 +248,49 @@ public class ExcelParseService {
         return "STRING";
     }
 
+    /**
+     * Evaluate a formula cell using FormulaEvaluator + DataFormatter.
+     * Uses formatter.formatCellValue() for consistent output with ExcelImportService,
+     * with special handling for dates (which need our formatDateTime) and large numbers.
+     */
+    private String evaluateFormulaCell(Cell cell, FormulaEvaluator evaluator, DataFormatter formatter) {
+        if (evaluator == null) {
+            return null;
+        }
+        try {
+            // For date-formatted cells, use our formatDateTime to preserve full datetime
+            CellValue cellValue = evaluator.evaluate(cell);
+            if (cellValue == null) {
+                return null;
+            }
+            if (cellValue.getCellType() == CellType.ERROR) {
+                return null;
+            }
+            if (cellValue.getCellType() == CellType.NUMERIC && DateUtil.isCellDateFormatted(cell)) {
+                return formatDateTime(cell.getLocalDateTimeCellValue());
+            }
+            // For all other cases, use DataFormatter for consistent display formatting
+            String formatted = formatter.formatCellValue(cell, evaluator);
+            if (formatted == null || formatted.isBlank()) {
+                return null;
+            }
+            return formatted.trim();
+        } catch (Exception e) {
+            LOG.debug("Formula evaluation failed at row {}, col {}: {}",
+                cell.getRowIndex(), cell.getColumnIndex(), e.getMessage());
+            return null;
+        }
+    }
+
     private String getFormulaCachedValue(Cell cell) {
         try {
             return switch (cell.getCachedFormulaResultType()) {
                 case STRING -> cell.getStringCellValue();
                 case NUMERIC -> {
                     if (DateUtil.isCellDateFormatted(cell)) {
-                        yield cell.getLocalDateTimeCellValue().toLocalDate().toString();
+                        yield formatDateTime(cell.getLocalDateTimeCellValue());
                     }
-                    double num = cell.getNumericCellValue();
-                    if (num == Math.floor(num) && !Double.isInfinite(num)) {
-                        yield String.valueOf((long) num);
-                    }
-                    yield String.valueOf(num);
+                    yield formatNumeric(cell.getNumericCellValue());
                 }
                 case BOOLEAN -> String.valueOf(cell.getBooleanCellValue());
                 default -> null;

@@ -328,16 +328,54 @@ public class StagingTableService {
                 "No data columns found in staging table " + stagingTable);
         }
 
-        // 3. Build and execute INSERT INTO target SELECT ... FROM staging
-        //    Use quoting for column names to handle special characters / reserved words
-        String cols = columns.stream()
+        // 3. Query target table column types to build proper CAST expressions.
+        //    Parse schema from target table name (e.g., "ods.my_table" → schema=ods, table=my_table).
+        String targetSchema = null;
+        String targetTableName = targetTable;
+        int dotIdx = targetTable.indexOf('.');
+        if (dotIdx > 0 && dotIdx < targetTable.length() - 1) {
+            targetSchema = targetTable.substring(0, dotIdx);
+            targetTableName = targetTable.substring(dotIdx + 1);
+        }
+
+        Map<String, String> targetColumnTypes = new LinkedHashMap<>();
+        try {
+            String metaQuery;
+            Object[] metaParams;
+            if (targetSchema != null) {
+                metaQuery = "SELECT column_name, data_type FROM information_schema.columns "
+                    + "WHERE table_schema = ? AND table_name = ? ORDER BY ordinal_position";
+                metaParams = new Object[] { targetSchema, targetTableName };
+            } else {
+                metaQuery = "SELECT column_name, data_type FROM information_schema.columns "
+                    + "WHERE table_name = ? AND table_schema = current_schema() ORDER BY ordinal_position";
+                metaParams = new Object[] { targetTableName };
+            }
+            List<Map<String, Object>> targetColMeta = jdbcTemplate.queryForList(metaQuery, metaParams);
+            for (Map<String, Object> row : targetColMeta) {
+                String colName = (String) row.get("column_name");
+                String dataType = (String) row.get("data_type");
+                if (colName != null && dataType != null) {
+                    targetColumnTypes.put(colName.toLowerCase(), dataType.toLowerCase());
+                }
+            }
+        } catch (Exception e) {
+            log.warn("Cannot query target table column types, will use direct transfer: {}", e.getMessage());
+        }
+
+        // 4. Build INSERT INTO target SELECT ... FROM staging with appropriate CAST
+        String colList = columns.stream()
             .map(c -> "\"" + c + "\"")
             .collect(Collectors.joining(", "));
 
-        String insertSql = "INSERT INTO " + targetTable + " (" + cols + ") "
-            + "SELECT " + cols + " FROM " + stagingTable;
+        String selectExprs = columns.stream()
+            .map(c -> buildCastExpression(c, targetColumnTypes))
+            .collect(Collectors.joining(", "));
 
-        log.info("Transferring data from {} to {} (columns: {})", stagingTable, targetTable, cols);
+        String insertSql = "INSERT INTO " + targetTable + " (" + colList + ") "
+            + "SELECT " + selectExprs + " FROM " + stagingTable;
+
+        log.info("Transferring data from {} to {} (columns: {})", stagingTable, targetTable, colList);
 
         int rows = jdbcTemplate.update(insertSql);
         log.info("Transferred {} rows from {} to {}", rows, stagingTable, targetTable);
@@ -378,6 +416,55 @@ public class StagingTableService {
         }
 
         return null;
+    }
+
+    /**
+     * Build a SELECT expression with CAST for date/time columns.
+     * Staging table stores everything as TEXT; target table may have typed columns.
+     * Handles Chinese date formats like "2024年3月15日 14时30分00秒" via regex replacement.
+     */
+    private String buildCastExpression(String column, Map<String, String> targetColumnTypes) {
+        String quoted = "\"" + column + "\"";
+        String targetType = targetColumnTypes.get(column.toLowerCase());
+        if (targetType == null) {
+            return quoted;
+        }
+        if (targetType.contains("timestamp") || "date".equals(targetType)
+            || "time without time zone".equals(targetType) || "time".equals(targetType)) {
+            // Normalize Chinese date/time delimiters before casting:
+            // "2024年3月15日 14时30分00秒" → "2024-3-15 14:30:00"
+            // Also handle fullwidth digits (０-９ → 0-9) and 上午/下午
+            String normalized = "REGEXP_REPLACE("
+                + "REGEXP_REPLACE("
+                + "REGEXP_REPLACE("
+                + "REGEXP_REPLACE("
+                + "REGEXP_REPLACE("
+                + "REGEXP_REPLACE("
+                + "REGEXP_REPLACE("
+                + quoted
+                + ", '[上下]午\\s*', '', 'g')"       // strip 上午/下午
+                + ", '秒', '', 'g')"                  // 秒 → remove
+                + ", '分', ':', 'g')"                  // 分 → :
+                + ", '时', ':', 'g')"                  // 时 → :
+                + ", '日', '', 'g')"                   // 日 → remove
+                + ", '月', '-', 'g')"                  // 月 → -
+                + ", '年', '-', 'g')";                 // 年 → -
+            // Preserve the exact target type (e.g. "timestamp with time zone")
+            String castType = targetType.toUpperCase();
+            return "CASE WHEN " + quoted + " IS NULL OR TRIM(" + quoted + ") = '' THEN NULL "
+                + "ELSE CAST(" + normalized + " AS " + castType + ") END";
+        }
+        if (targetType.contains("int") || targetType.contains("numeric")
+            || targetType.contains("decimal") || targetType.contains("double")
+            || targetType.contains("real") || targetType.contains("float")) {
+            return "CASE WHEN " + quoted + " IS NULL OR TRIM(" + quoted + ") = '' THEN NULL "
+                + "ELSE CAST(" + quoted + " AS " + targetType.toUpperCase() + ") END";
+        }
+        if ("boolean".equals(targetType)) {
+            return "CASE WHEN " + quoted + " IS NULL OR TRIM(" + quoted + ") = '' THEN NULL "
+                + "ELSE CAST(" + quoted + " AS BOOLEAN) END";
+        }
+        return quoted;
     }
 
     /**

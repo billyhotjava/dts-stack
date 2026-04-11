@@ -847,7 +847,7 @@ export default function TransformCreatePage() {
 			previewLimit: previewLimit || 20,
 			delimiter: ",",
 			skipErrors: true,
-			fillMerged: true,
+			fillMerged: false,
 			dateFormat: "yyyy-MM-dd HH:mm:ss",
 		});
 		return buildTransformFileUploadResult(fileName, batchCode, fileId, sheets, parseResult, selectedSheet);

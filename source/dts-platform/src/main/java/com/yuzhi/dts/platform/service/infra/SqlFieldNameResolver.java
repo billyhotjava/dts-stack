@@ -25,7 +25,10 @@ public final class SqlFieldNameResolver {
     private static final Pattern CAMEL_CASE_BOUNDARY = Pattern.compile("([a-z0-9])([A-Z])");
     private static final Pattern NON_ALNUM = Pattern.compile("[^a-z0-9]+");
     private static final Pattern MULTI_UNDERSCORE = Pattern.compile("_+");
-    private static final Pattern CHINESE_PATTERN = Pattern.compile("[\\u4E00-\\u9FFF]");
+    private static final Pattern CHINESE_PATTERN = Pattern.compile(
+        "[\\u4E00-\\u9FFF\\u3400-\\u4DBF\\uF900-\\uFAFF]"
+        + "|[\\uD840-\\uD87F][\\uDC00-\\uDFFF]"  // surrogate pairs for CJK Extension B-F
+    );
     private static final Pattern COMPACT_KEY_STRIP = Pattern.compile("[\\s_\\-()（）\\[\\]{}<>《》\"'`·、，,。:：;；/\\\\]+");
 
     private static final Set<String> RESERVED_KEYWORDS = Set.of(
@@ -66,29 +69,35 @@ public final class SqlFieldNameResolver {
         List<String> tokens = new ArrayList<>();
         StringBuilder segment = new StringBuilder();
         Boolean segmentChinese = null;
-        for (int i = 0; i < raw.length(); i++) {
-            char ch = raw.charAt(i);
-            boolean isChinese = isChineseChar(ch);
-            boolean isAsciiAlphaNum = isAsciiAlphaNum(ch);
+        // Use codepoint iteration to handle CJK Extension B+ (surrogate pairs)
+        for (int i = 0; i < raw.length(); ) {
+            int cp = raw.codePointAt(i);
+            int charCount = Character.charCount(cp);
+            boolean isChinese = isChineseCodePoint(cp);
+            boolean isAsciiAlphaNum = cp < 128 && isAsciiAlphaNum((char) cp);
             if (!isChinese && !isAsciiAlphaNum) {
                 flushSegment(segment, segmentChinese, tokens);
                 segment.setLength(0);
                 segmentChinese = null;
+                i += charCount;
                 continue;
             }
             if (segmentChinese == null) {
                 segmentChinese = isChinese;
-                segment.append(ch);
+                segment.appendCodePoint(cp);
+                i += charCount;
                 continue;
             }
             if (segmentChinese.booleanValue() == isChinese) {
-                segment.append(ch);
+                segment.appendCodePoint(cp);
+                i += charCount;
                 continue;
             }
             flushSegment(segment, segmentChinese, tokens);
             segment.setLength(0);
-            segment.append(ch);
+            segment.appendCodePoint(cp);
             segmentChinese = isChinese;
+            i += charCount;
         }
         flushSegment(segment, segmentChinese, tokens);
         return String.join("_", tokens);
@@ -216,7 +225,19 @@ public final class SqlFieldNameResolver {
     }
 
     private static boolean isChineseChar(char ch) {
-        return ch >= '\u4E00' && ch <= '\u9FFF';
+        return isChineseCodePoint(ch);
+    }
+
+    private static boolean isChineseCodePoint(int cp) {
+        return (cp >= 0x4E00 && cp <= 0x9FFF)       // CJK Unified Ideographs
+            || (cp >= 0x3400 && cp <= 0x4DBF)        // CJK Extension A (rare chars in names)
+            || (cp >= 0xF900 && cp <= 0xFAFF)        // CJK Compatibility Ideographs
+            || (cp >= 0x20000 && cp <= 0x2A6DF)      // CJK Extension B (surrogate pairs)
+            || (cp >= 0x2A700 && cp <= 0x2B73F)      // CJK Extension C
+            || (cp >= 0x2B740 && cp <= 0x2B81F)      // CJK Extension D
+            || (cp >= 0x2B820 && cp <= 0x2CEAF)      // CJK Extension E
+            || (cp >= 0x2CEB0 && cp <= 0x2EBEF)      // CJK Extension F
+            || (cp >= 0x2F800 && cp <= 0x2FA1F);     // CJK Compatibility Supplement
     }
 
     private static boolean isAsciiAlphaNum(char ch) {
@@ -375,7 +396,6 @@ public final class SqlFieldNameResolver {
         map.put("门", "men");
         map.put("代", "dai");
         map.put("理", "li");
-        map.put("公", "gong");
         map.put("司", "si");
         map.put("状", "zhuang");
         map.put("态", "tai");
@@ -385,6 +405,172 @@ public final class SqlFieldNameResolver {
         map.put("月", "month");
         map.put("天", "day");
         map.put("值", "zhi");
+        // 常见业务字段用字
+        map.put("薪", "xin");
+        map.put("资", "zi");
+        map.put("工", "gong");
+        map.put("龄", "ling");
+        map.put("岗", "gang");
+        map.put("位", "wei");
+        map.put("级", "ji");
+        map.put("别", "bie");
+        map.put("性", "xing");
+        map.put("族", "zu");
+        map.put("民", "min");
+        map.put("籍", "ji");
+        map.put("贯", "guan");
+        map.put("址", "zhi");
+        map.put("话", "hua");
+        map.put("件", "jian");
+        map.put("邮", "you");
+        map.put("箱", "xiang");
+        map.put("期", "qi");
+        map.put("始", "shi");
+        map.put("止", "zhi");
+        map.put("终", "zhong");
+        map.put("总", "zong");
+        map.put("额", "e");
+        map.put("价", "jia");
+        map.put("格", "ge");
+        map.put("单", "dan");
+        map.put("量", "liang");
+        map.put("重", "zhong");
+        map.put("高", "gao");
+        map.put("长", "chang");
+        map.put("宽", "kuan");
+        map.put("面", "mian");
+        map.put("积", "ji");
+        map.put("率", "lv");
+        map.put("比", "bi");
+        map.put("例", "li");
+        map.put("百", "bai");
+        map.put("分", "fen");
+        map.put("人", "ren");
+        map.put("员", "yuan");
+        map.put("组", "zu");
+        map.put("室", "shi");
+        map.put("院", "yuan");
+        map.put("所", "suo");
+        map.put("厂", "chang");
+        map.put("产", "chan");
+        map.put("品", "pin");
+        map.put("物", "wu");
+        map.put("料", "liao");
+        map.put("材", "cai");
+        map.put("设", "she");
+        map.put("备", "bei");
+        map.put("器", "qi");
+        map.put("机", "ji");
+        map.put("车", "che");
+        map.put("间", "jian");
+        map.put("段", "duan");
+        map.put("区", "qu");
+        map.put("域", "yu");
+        map.put("层", "ceng");
+        map.put("线", "xian");
+        map.put("路", "lu");
+        map.put("号", "hao");
+        map.put("栋", "dong");
+        map.put("楼", "lou");
+        map.put("入", "ru");
+        map.put("出", "chu");
+        map.put("收", "shou");
+        map.put("发", "fa");
+        map.put("送", "song");
+        map.put("到", "dao");
+        map.put("回", "hui");
+        map.put("用", "yong");
+        map.put("费", "fei");
+        map.put("支", "zhi");
+        map.put("付", "fu");
+        map.put("账", "zhang");
+        map.put("款", "kuan");
+        map.put("税", "shui");
+        map.put("票", "piao");
+        map.put("订", "ding");
+        map.put("合", "he");
+        map.put("同", "tong");
+        map.put("签", "qian");
+        map.put("审", "shen");
+        map.put("批", "pi");
+        map.put("核", "he");
+        map.put("验", "yan");
+        map.put("检", "jian");
+        map.put("测", "ce");
+        map.put("试", "shi");
+        map.put("评", "ping");
+        map.put("定", "ding");
+        map.put("结", "jie");
+        map.put("果", "guo");
+        map.put("方", "fang");
+        map.put("案", "an");
+        map.put("法", "fa");
+        map.put("规", "gui");
+        map.put("则", "ze");
+        map.put("标", "biao");
+        map.put("准", "zhun");
+        map.put("要", "yao");
+        map.put("求", "qiu");
+        map.put("条", "tiao");
+        map.put("目", "mu");
+        map.put("主", "zhu");
+        map.put("副", "fu");
+        map.put("正", "zheng");
+        map.put("负", "fu");
+        map.put("是", "shi");
+        map.put("否", "fou");
+        map.put("有", "you");
+        map.put("无", "wu");
+        map.put("大", "da");
+        map.put("小", "xiao");
+        map.put("新", "xin");
+        map.put("旧", "jiu");
+        map.put("上", "shang");
+        map.put("下", "xia");
+        map.put("前", "qian");
+        map.put("后", "hou");
+        map.put("左", "zuo");
+        map.put("右", "you");
+        map.put("内", "nei");
+        map.put("外", "wai");
+        map.put("第", "di");
+        map.put("次", "ci");
+        map.put("版", "ban");
+        map.put("本", "ben");
+        map.put("全", "quan");
+        map.put("半", "ban");
+        map.put("初", "chu");
+        map.put("末", "mo");
+        map.put("中", "zhong");
+        map.put("首", "shou");
+        map.put("尾", "wei");
+        map.put("头", "tou");
+        map.put("身", "shen");
+        map.put("份", "fen");
+        map.put("证", "zheng");
+        map.put("照", "zhao");
+        map.put("册", "ce");
+        map.put("记", "ji");
+        map.put("录", "lu");
+        map.put("志", "zhi");
+        map.put("信", "xin");
+        map.put("息", "xi");
+        map.put("告", "gao");
+        map.put("知", "zhi");
+        map.put("通", "tong");
+        map.put("报", "bao");
+        map.put("表", "biao");
+        map.put("图", "tu");
+        map.put("文", "wen");
+        map.put("字", "zi");
+        map.put("码", "ma");
+        map.put("密", "mi");
+        map.put("网", "wang");
+        map.put("链", "lian");
+        map.put("接", "jie");
+        map.put("系", "xi");
+        map.put("关", "guan");
+        map.put("联", "lian");
         return Collections.unmodifiableMap(map);
     }
 }

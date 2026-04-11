@@ -17,13 +17,13 @@ function isTokenExpired(token?: string): boolean {
 	if (token.startsWith("dev-access-")) return false;
 	try {
 		const parts = token.split(".");
-		if (parts.length < 2) return false; // opaque token, trust it
+		if (parts.length < 2) return true; // not a JWT — treat as expired
 		let payload = parts[1].replace(/-/g, "+").replace(/_/g, "/");
 		while (payload.length % 4 !== 0) payload += "=";
 		const obj = JSON.parse(atob(payload));
-		return typeof obj?.exp === "number" ? Date.now() > obj.exp * 1000 - 10_000 : false;
+		return typeof obj?.exp === "number" ? Date.now() > obj.exp * 1000 - 10_000 : true;
 	} catch {
-		return false;
+		return true;
 	}
 }
 

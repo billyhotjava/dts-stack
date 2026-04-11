@@ -38,6 +38,7 @@ public class BuiltInRuleChecker {
         checkDuplicateRows(tableName, columns, errors);
         checkNumericWithUnit(tableName, columns, errors);
         checkDateFormatInconsistency(tableName, columns, errors);
+        checkLargeNumericPrecision(tableName, columns, errors);
 
         return errors;
     }
@@ -133,20 +134,35 @@ public class BuiltInRuleChecker {
     }
 
     /**
-     * Check 4: Date format inconsistency -- DATE columns not matching yyyy-MM-dd.
+     * Check 4: Date/timestamp format inconsistency.
+     * DATE columns must match yyyy-MM-dd.
+     * TIMESTAMP columns must match yyyy-MM-dd HH:mm or yyyy-MM-dd HH:mm:ss.
      */
     private void checkDateFormatInconsistency(String tableName, List<ColumnInfo> columns,
                                               Map<Integer, List<CellError>> errors) {
         for (ColumnInfo col : columns) {
-            if (!"DATE".equals(col.inferredType())) {
+            String inferredType = col.inferredType();
+            if (!"DATE".equals(inferredType) && !"TIMESTAMP".equals(inferredType)) {
                 continue;
             }
 
             String sanitized = sanitizeColumnName(col.name());
+            String regex;
+            String expected;
+            if ("TIMESTAMP".equals(inferredType)) {
+                // Accept yyyy-MM-dd HH:mm:ss or yyyy-MM-dd HH:mm
+                regex = "^\\d{4}-\\d{2}-\\d{2} \\d{2}:\\d{2}(:\\d{2})?$";
+                expected = "yyyy-MM-dd HH:mm:ss";
+            } else {
+                // Accept yyyy-MM-dd (pure date) or yyyy-MM-dd HH:mm:ss (datetime is also acceptable for DATE)
+                regex = "^\\d{4}-\\d{2}-\\d{2}( \\d{2}:\\d{2}(:\\d{2})?)?$";
+                expected = "yyyy-MM-dd 或 yyyy-MM-dd HH:mm:ss";
+            }
+
             String sql = "SELECT _row_num, \"" + sanitized + "\" AS val FROM " + tableName
                 + " WHERE \"" + sanitized + "\" IS NOT NULL"
                 + " AND \"" + sanitized + "\" != ''"
-                + " AND \"" + sanitized + "\" !~ '^\\d{4}-\\d{2}-\\d{2}$'";
+                + " AND \"" + sanitized + "\" !~ '" + regex + "'";
 
             try {
                 List<Map<String, Object>> rows = jdbcTemplate.queryForList(sql);
@@ -155,10 +171,45 @@ public class BuiltInRuleChecker {
                     String val = (String) row.get("val");
                     errors.computeIfAbsent(rowNum, k -> new ArrayList<>())
                         .add(new CellError(col.name(), "[内置]日期格式",
-                            "日期格式不统一，期望 yyyy-MM-dd，实际: " + val));
+                            "日期格式不统一，期望 " + expected + "，实际: " + val));
                 }
             } catch (Exception e) {
                 log.error("Date format check failed on {}.{}: {}", tableName, sanitized, e.getMessage());
+            }
+        }
+    }
+
+    /**
+     * Check 5: Large numeric values (>15 digits) that may have lost precision.
+     * IEEE 754 double only has ~15.9 significant digits; IDs, card numbers etc. stored
+     * as numeric cells in Excel will silently lose trailing digits.
+     */
+    private void checkLargeNumericPrecision(String tableName, List<ColumnInfo> columns,
+                                             Map<Integer, List<CellError>> errors) {
+        for (ColumnInfo col : columns) {
+            String type = col.inferredType();
+            if (!"LONG".equals(type) && !"DOUBLE".equals(type)) {
+                continue;
+            }
+
+            String sanitized = sanitizeColumnName(col.name());
+            // Detect values that are pure digits with length > 15 (precision loss territory)
+            // or values ending in multiple zeros (common sign of precision truncation)
+            String sql = "SELECT _row_num, \"" + sanitized + "\" AS val FROM " + tableName
+                + " WHERE \"" + sanitized + "\" IS NOT NULL"
+                + " AND \"" + sanitized + "\" ~ '^-?\\d{16,}$'";
+
+            try {
+                List<Map<String, Object>> rows = jdbcTemplate.queryForList(sql);
+                for (Map<String, Object> row : rows) {
+                    int rowNum = ((Number) row.get("_row_num")).intValue();
+                    String val = (String) row.get("val");
+                    errors.computeIfAbsent(rowNum, k -> new ArrayList<>())
+                        .add(new CellError(col.name(), "[内置]大数精度",
+                            "数值超过15位，可能存在精度损失（如身份证号、长编号应存为文本）: " + val));
+                }
+            } catch (Exception e) {
+                log.error("Large numeric check failed on {}.{}: {}", tableName, sanitized, e.getMessage());
             }
         }
     }

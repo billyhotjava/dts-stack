@@ -174,7 +174,7 @@ public class ExcelImportService {
         int previewLimit = normalizeInt(request.previewLimit(), DEFAULT_PREVIEW);
         String delimiter = StringUtils.hasText(request.delimiter()) ? request.delimiter().trim() : DEFAULT_DELIMITER;
         boolean skipErrors = request.skipErrors() == null || request.skipErrors();
-        boolean fillMerged = request.fillMerged() == null || request.fillMerged();
+        boolean fillMerged = request.fillMerged() != null && request.fillMerged();
         String dateFormat = StringUtils.hasText(request.dateFormat()) ? request.dateFormat().trim() : DEFAULT_DATE_FORMAT;
 
         ParseContext ctx = new ParseContext(headerRow, dataStartRow, previewLimit, delimiter, skipErrors, fillMerged, dateFormat);
@@ -868,10 +868,26 @@ public class ExcelImportService {
         if (!StringUtils.hasText(value)) {
             return null;
         }
-        String normalized = value.trim().replace('T', ' ');
+        // Pre-process: convert fullwidth digits ０-９ to ASCII 0-9
+        String normalized = value.trim();
+        StringBuilder sb = new StringBuilder(normalized.length());
+        for (int i = 0; i < normalized.length(); i++) {
+            char ch = normalized.charAt(i);
+            if (ch >= '\uFF10' && ch <= '\uFF19') {
+                sb.append((char) ('0' + (ch - '\uFF10')));
+            } else {
+                sb.append(ch);
+            }
+        }
+        normalized = sb.toString();
+        // Strip 上午/下午/AM/PM (we don't attempt 12h conversion — just remove)
+        normalized = normalized.replaceAll("[上下]午\\s*", "").replaceAll("(?i)\\s*[AP]M\\s*", " ").trim();
+        normalized = normalized.replace('T', ' ');
+
+        // Pattern 1: Standard delimiters (-, /) with optional time
         java.util.regex.Matcher matcher = java.util.regex.Pattern
             .compile(
-                "^(\\d{4})[-/.年](\\d{1,2})[-/.月](\\d{1,2})(?:日)?(?:\\s+(\\d{1,2})(?::(\\d{1,2}))(?::(\\d{1,2}))?)?$"
+                "^(\\d{4})[-/年](\\d{1,2})[-/月](\\d{1,2})(?:日)?(?:\\s+(\\d{1,2})(?:[时:])(\\d{1,2})(?:[分:](?:(\\d{1,2})秒?)?)?)?$"
             )
             .matcher(normalized);
         if (!matcher.matches()) {
@@ -881,6 +897,9 @@ public class ExcelImportService {
             int year = Integer.parseInt(matcher.group(1));
             int month = Integer.parseInt(matcher.group(2));
             int day = Integer.parseInt(matcher.group(3));
+            if (month < 1 || month > 12 || day < 1 || day > 31) {
+                return null;
+            }
             int hour = parseIntOrDefault(matcher.group(4), 0);
             int minute = parseIntOrDefault(matcher.group(5), 0);
             int second = parseIntOrDefault(matcher.group(6), 0);

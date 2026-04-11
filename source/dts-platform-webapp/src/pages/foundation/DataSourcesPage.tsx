@@ -126,7 +126,7 @@ export default function DataSourcesPage() {
 	const [excelDelimiter, setExcelDelimiter] = useState(",");
 	const [excelDateFormat, setExcelDateFormat] = useState("yyyy-MM-dd HH:mm:ss");
 	const [excelSkipErrors, setExcelSkipErrors] = useState(true);
-	const [excelFillMerged, setExcelFillMerged] = useState(true);
+	const [excelFillMerged, setExcelFillMerged] = useState(false);
 	const [excelParseResult, setExcelParseResult] = useState<ExcelImportParseResponse | null>(null);
 	const [rollbackOpen, setRollbackOpen] = useState(false);
 	const [rollbackRequest, setRollbackRequest] = useState<RollbackRequest | null>(null);
