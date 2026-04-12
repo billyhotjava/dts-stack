@@ -1,5 +1,5 @@
 import { Button, message } from "antd";
-import { type FC, useCallback, useState } from "react";
+import { type FC, useCallback, useEffect, useRef, useState } from "react";
 import { ActivityBar } from "./layout/ActivityBar";
 import { SidePanel } from "./layout/SidePanel";
 import { BottomPanel } from "./layout/BottomPanel";
@@ -11,13 +11,20 @@ export const SqlIde: FC = () => {
   const [sql, setSql] = useState<string>("-- SQL IDE v2\nSELECT 1;");
   const [helpOpen, setHelpOpen] = useState(false);
 
+  const sqlRef = useRef(sql);
+  useEffect(() => { sqlRef.current = sql; });
+
   const handleFormat = useCallback(async () => {
+    const input = sql;
     try {
-      const next = await formatSql(sql, "generic");
+      const next = await formatSql(input, "generic");
+      if (sqlRef.current !== input) {
+        // User kept typing while format chunk was loading; discard stale result
+        return;
+      }
       setSql(next);
     } catch (err) {
       message.error("格式化失败，请检查 SQL 语法");
-      // still log to console in dev so stack trace is visible
       if (import.meta.env.DEV) {
         // eslint-disable-next-line no-console
         console.error("[SqlIde] format failed", err);

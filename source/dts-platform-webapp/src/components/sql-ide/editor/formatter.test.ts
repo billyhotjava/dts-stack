@@ -12,3 +12,16 @@ describe("formatSql", () => {
     expect(typeof result).toBe("string");
   });
 });
+
+describe("formatSql additional", () => {
+  it("is idempotent", async () => {
+    const once = await formatSql("select 1 from t", "generic");
+    const twice = await formatSql(once, "generic");
+    expect(twice).toBe(once);
+  });
+
+  it("handles empty string without throwing", async () => {
+    const out = await formatSql("", "generic");
+    expect(out).toBe("");
+  });
+});
