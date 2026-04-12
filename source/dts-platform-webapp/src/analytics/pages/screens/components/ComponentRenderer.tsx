@@ -183,9 +183,14 @@ export const ComponentRenderer = memo(function ComponentRenderer({ component, mo
         }
     }, [pluginMeta, runtimePlugin]);
 
-    // Build ECharts base options from theme tokens
+    // Build ECharts base options from theme tokens.
+    // Read c.backgroundColor directly from component.config so the chart respects
+    // user-configured background (schema: ECHARTS_COMMON_FIELDS.backgroundColor).
+    const componentConfigBg = (component.config as Record<string, unknown> | undefined)?.backgroundColor;
     const themeOptions = useMemo(() => ({
-        backgroundColor: "transparent",
+        backgroundColor: (typeof componentConfigBg === 'string' && componentConfigBg.trim().length > 0)
+            ? componentConfigBg
+            : 'transparent',
         color: t.echarts.colorPalette,
         textStyle: { color: t.textPrimary, fontFamily: SCREEN_UI_FONT_FAMILY },
         legend: { textStyle: { color: t.textPrimary, fontFamily: SCREEN_UI_FONT_FAMILY } },
@@ -194,7 +199,7 @@ export const ComponentRenderer = memo(function ComponentRenderer({ component, mo
             borderColor: t.echarts.tooltipBorder,
             textStyle: { color: t.textPrimary, fontFamily: SCREEN_UI_FONT_FAMILY },
         },
-    }), [t]);
+    }), [t, componentConfigBg]);
 
     const {
         EChartsComponent, registerMapFn, hasMapFn,
@@ -1420,6 +1425,7 @@ export const ComponentRenderer = memo(function ComponentRenderer({ component, mo
                         data={c.data as Array<{ name: string; value: number }>}
                         color={c.color as string[] | undefined}
                         textColor={c.textColor as string | undefined}
+                        backgroundColor={c.backgroundColor as string | undefined}
                         duration={c.duration as number | undefined}
                         rowCount={c.rowNum as number | undefined}
                         style={{ width: '100%', height: '100%' }}
@@ -1433,6 +1439,7 @@ export const ComponentRenderer = memo(function ComponentRenderer({ component, mo
                         shape={c.shape as string}
                         color={c.color as string[]}
                         textColor={c.textColor as string | undefined}
+                        backgroundColor={c.backgroundColor as string | undefined}
                         width={component.width}
                         height={component.height}
                     />
@@ -1444,6 +1451,7 @@ export const ComponentRenderer = memo(function ComponentRenderer({ component, mo
                         number={Array.isArray(c.number) ? (c.number as number[])[0] : (c.number as number)}
                         content={c.content as string}
                         style={c.style as { fontSize?: number; fill?: string }}
+                        backgroundColor={c.backgroundColor as string | undefined}
                     />
                 );
 
@@ -1453,6 +1461,7 @@ export const ComponentRenderer = memo(function ComponentRenderer({ component, mo
                         value={c.value as number}
                         colors={c.colors as string[] || [t.progressBar.fillGradient[0], t.progressBar.fillGradient[1]]}
                         textColor={c.textColor as string | undefined}
+                        backgroundColor={c.backgroundColor as string | undefined}
                         borderRadius={c.borderRadius as number}
                         borderWidth={c.borderWidth as number}
                         width={width}
@@ -1465,6 +1474,7 @@ export const ComponentRenderer = memo(function ComponentRenderer({ component, mo
                     <FlylineChart
                         points={c.points as Array<{ from: [number, number]; to: [number, number] }>}
                         color={c.color as string[]}
+                        backgroundColor={c.backgroundColor as string | undefined}
                         duration={c.duration as number}
                         width={width}
                         height={height}

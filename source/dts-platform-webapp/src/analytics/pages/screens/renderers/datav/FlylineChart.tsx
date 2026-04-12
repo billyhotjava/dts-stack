@@ -3,6 +3,7 @@ import React, { useMemo } from 'react';
 interface FlylineChartProps {
   points?: Array<{ from: [number, number]; to: [number, number] }>;
   color?: string[];
+  backgroundColor?: string;
   duration?: number;
   width: number;
   height: number;
@@ -24,6 +25,7 @@ function computeControlPoint(
 export const FlylineChart: React.FC<FlylineChartProps> = ({
   points,
   color,
+  backgroundColor,
   duration = 2,
   width,
   height,
@@ -58,7 +60,7 @@ export const FlylineChart: React.FC<FlylineChartProps> = ({
 
   if (lines.length === 0) {
     return (
-      <svg width={width} height={height}>
+      <svg width={width} height={height} style={backgroundColor ? { background: backgroundColor } : undefined}>
         <text
           x={width / 2}
           y={height / 2}
@@ -73,7 +75,7 @@ export const FlylineChart: React.FC<FlylineChartProps> = ({
   }
 
   return (
-    <svg width={width} height={height} viewBox={`0 0 ${width} ${height}`}>
+    <svg width={width} height={height} viewBox={`0 0 ${width} ${height}`} style={backgroundColor ? { background: backgroundColor } : undefined}>
       <style>{`
         @keyframes flyline-dash {
           from { stroke-dashoffset: var(--fl-len); }

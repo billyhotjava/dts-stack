@@ -5,6 +5,7 @@ interface WaterLevelProps {
   shape?: string;
   color?: string[];
   textColor?: string;
+  backgroundColor?: string;
   width: number;
   height: number;
 }
@@ -18,6 +19,7 @@ export const WaterLevel: React.FC<WaterLevelProps> = ({
   shape = 'round',
   color,
   textColor,
+  backgroundColor,
   width,
   height,
 }) => {
@@ -54,7 +56,7 @@ export const WaterLevel: React.FC<WaterLevelProps> = ({
         borderRadius,
         overflow: 'hidden',
         border: `1px solid ${primary}40`,
-        background: 'rgba(0,0,0,0.1)',
+        background: backgroundColor || 'rgba(0,0,0,0.1)',
       }}
     >
       <style>{`

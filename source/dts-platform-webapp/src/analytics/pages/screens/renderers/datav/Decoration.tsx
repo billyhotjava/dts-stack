@@ -4,6 +4,7 @@ import './Decoration.css';
 interface DecorationProps {
   decorationType?: number;
   color?: string[];
+  backgroundColor?: string;
   duration?: number;
   style?: React.CSSProperties;
 }
@@ -13,6 +14,7 @@ const VALID_TYPES = [1, 2, 3, 4, 5, 6, 8, 10] as const;
 export const Decoration: React.FC<DecorationProps> = ({
   decorationType = 1,
   color,
+  backgroundColor,
   duration = 3,
   style,
 }) => {
@@ -141,7 +143,7 @@ export const Decoration: React.FC<DecorationProps> = ({
   return (
     <div
       className={`datav-decoration datav-decoration--${type}`}
-      style={{ ...cssVars, ...style }}
+      style={{ ...cssVars, ...style, ...(backgroundColor ? { background: backgroundColor } : {}) }}
     >
       {renderContent()}
     </div>

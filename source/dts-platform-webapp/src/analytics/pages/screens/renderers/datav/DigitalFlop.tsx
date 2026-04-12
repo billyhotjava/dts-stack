@@ -4,6 +4,7 @@ interface DigitalFlopProps {
   number?: number;
   content?: string;
   style?: { fontSize?: number; fill?: string };
+  backgroundColor?: string;
 }
 
 const DigitSpan: React.FC<{ digit: string; fontSize: number; color: string }> = ({
@@ -47,6 +48,7 @@ export const DigitalFlop: React.FC<DigitalFlopProps> = ({
   number = 0,
   content,
   style,
+  backgroundColor,
 }) => {
   const fontSize = style?.fontSize ?? 30;
   const color = style?.fill ?? 'var(--color-text-primary, #fff)';
@@ -67,6 +69,7 @@ export const DigitalFlop: React.FC<DigitalFlopProps> = ({
         display: 'inline-flex',
         alignItems: 'baseline',
         fontVariantNumeric: 'tabular-nums',
+        ...(backgroundColor ? { background: backgroundColor, padding: '4px 8px', borderRadius: 4 } : {}),
       }}
     >
       {chars.map((ch, i) => (

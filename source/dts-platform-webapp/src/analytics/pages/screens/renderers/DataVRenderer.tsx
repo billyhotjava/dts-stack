@@ -20,6 +20,7 @@ export function renderDataV({ type, c, width, height }: DataVRendererProps): Rea
                 <BorderBox
                     boxType={(c.boxType as number) || 1}
                     color={c.color as string[] | undefined}
+                    backgroundColor={c.backgroundColor as string | undefined}
                     duration={c.duration as number | undefined}
                     width={width}
                     height={height}
@@ -33,6 +34,7 @@ export function renderDataV({ type, c, width, height }: DataVRendererProps): Rea
                 <Decoration
                     decorationType={(c.decorationType as number) || 1}
                     color={c.color as string[] | undefined}
+                    backgroundColor={c.backgroundColor as string | undefined}
                     duration={c.duration as number | undefined}
                     style={{ width: '100%', height: '100%' }}
                 />

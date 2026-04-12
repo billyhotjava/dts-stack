@@ -4,6 +4,7 @@ import './BorderBox.css';
 interface BorderBoxProps {
   boxType?: number;
   color?: string[];
+  backgroundColor?: string;
   duration?: number;
   children?: React.ReactNode;
   width: number;
@@ -13,6 +14,7 @@ interface BorderBoxProps {
 export const BorderBox: React.FC<BorderBoxProps> = ({
   boxType = 1,
   color,
+  backgroundColor,
   duration = 3,
   children,
   width,
@@ -53,7 +55,7 @@ export const BorderBox: React.FC<BorderBoxProps> = ({
   return (
     <div
       className={`datav-border-box datav-border-box--${type}`}
-      style={{ width, height, ...cssVars }}
+      style={{ width, height, ...cssVars, ...(backgroundColor ? { background: backgroundColor } : {}) }}
     >
       {type === 4 && (
         <svg

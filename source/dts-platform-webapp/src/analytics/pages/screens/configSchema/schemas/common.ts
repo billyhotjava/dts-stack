@@ -6,9 +6,10 @@ import type { ConfigField } from '../types';
 
 /** Common fields present on virtually every ECharts chart component. */
 export const ECHARTS_COMMON_FIELDS: ConfigField[] = [
-    { key: 'title',          label: '标题',     type: 'text',        group: 'chart' },
-    { key: 'titleColor',     label: '标题颜色', type: 'color',       group: 'chart', themeTokenKey: 'textPrimary' },
-    { key: 'titleFontSize',  label: '标题字号', type: 'number',      group: 'chart', min: 10, max: 48, defaultValue: 16 },
+    { key: 'title',           label: '标题',     type: 'text',        group: 'chart' },
+    { key: 'titleColor',      label: '标题颜色', type: 'color',       group: 'chart', themeTokenKey: 'textPrimary' },
+    { key: 'titleFontSize',   label: '标题字号', type: 'number',      group: 'chart', min: 10, max: 48, defaultValue: 16 },
+    { key: 'backgroundColor', label: '背景色',   type: 'color',       group: 'appearance', themeTokenKey: 'cardBackground' },
     { key: 'legend',         label: '图例',     type: 'legend-config', group: 'chart' },
     { key: 'seriesColors',   label: '系列颜色', type: 'color-array', group: 'chart', themeTokenKey: 'echarts.colorPalette' },
     { key: 'tooltip',        label: '提示框',   type: 'json',        group: 'advanced' },

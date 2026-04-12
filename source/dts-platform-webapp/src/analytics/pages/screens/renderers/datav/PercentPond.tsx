@@ -4,6 +4,7 @@ interface PercentPondProps {
   value?: number;
   colors?: string[];
   textColor?: string;
+  backgroundColor?: string;
   borderRadius?: number;
   borderWidth?: number;
   width: number;
@@ -14,6 +15,7 @@ export const PercentPond: React.FC<PercentPondProps> = ({
   value = 0,
   colors,
   textColor,
+  backgroundColor,
   borderRadius = 8,
   borderWidth = 2,
   width,
@@ -33,6 +35,7 @@ export const PercentPond: React.FC<PercentPondProps> = ({
         borderRadius,
         overflow: 'hidden',
         boxSizing: 'border-box',
+        ...(backgroundColor ? { background: backgroundColor } : {}),
       }}
     >
       <style>{`

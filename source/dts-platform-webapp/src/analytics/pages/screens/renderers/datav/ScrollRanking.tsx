@@ -4,6 +4,7 @@ interface ScrollRankingProps {
   data?: Array<{ name: string; value: number }>;
   color?: string[];
   textColor?: string;
+  backgroundColor?: string;
   duration?: number;
   rowCount?: number;
   style?: React.CSSProperties;
@@ -13,6 +14,7 @@ export const ScrollRanking: React.FC<ScrollRankingProps> = ({
   data,
   color,
   textColor,
+  backgroundColor,
   duration = 10,
   rowCount = 5,
   style,
@@ -98,9 +100,11 @@ export const ScrollRanking: React.FC<ScrollRankingProps> = ({
     );
   };
 
+  const bgStyle = backgroundColor ? { background: backgroundColor } : {};
+
   if (items.length === 0) {
     return (
-      <div style={{ ...style, color: 'rgba(255,255,255,0.3)', textAlign: 'center', padding: 16 }}>
+      <div style={{ ...style, ...bgStyle, color: 'rgba(255,255,255,0.3)', textAlign: 'center', padding: 16 }}>
         No data
       </div>
     );
@@ -108,7 +112,7 @@ export const ScrollRanking: React.FC<ScrollRankingProps> = ({
 
   if (!needsScroll) {
     return (
-      <div style={{ ...style, padding: '4px 0' }}>
+      <div style={{ ...style, ...bgStyle, padding: '4px 0' }}>
         {items.map((item, i) => renderRow(item, i))}
       </div>
     );
@@ -121,6 +125,7 @@ export const ScrollRanking: React.FC<ScrollRankingProps> = ({
     <div
       style={{
         ...style,
+        ...bgStyle,
         height: visibleHeight,
         overflow: 'hidden',
         position: 'relative',
