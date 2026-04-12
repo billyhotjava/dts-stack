@@ -506,7 +506,26 @@ export const ComponentRenderer = memo(function ComponentRenderer({ component, mo
         }
         const axisFontSize = (c.axisFontSize as number) || 15;
         const axisLabelColor = typeof c.axisLabelColor === 'string' && c.axisLabelColor.trim() ? c.axisLabelColor.trim() : undefined;
-        const legendFontSize = (c.legendFontSize as number) || 15;
+        // Legend compat shim: nested `c.legend.{show,position,fontSize,color}` (new schema) wins over
+        // legacy flat keys `c.legendDisplay/legendPosition/legendFontSize`. Presets/heuristics still
+        // write the legacy shape, so we fall back to them when the nested object is unset.
+        const legendNested = (c.legend && typeof c.legend === 'object' ? c.legend : {}) as Partial<{
+            show: boolean;
+            position: 'top' | 'bottom' | 'left' | 'right';
+            fontSize: number;
+            color: string;
+        }>;
+        const legendDisplayOverride: 'show' | 'hide' | undefined =
+            legendNested.show === true ? 'show'
+            : legendNested.show === false ? 'hide'
+            : undefined;
+        const legendPositionOverride = legendNested.position;
+        const legendColorOverride = typeof legendNested.color === 'string' && legendNested.color.trim()
+            ? legendNested.color.trim()
+            : undefined;
+        const legendFontSize = (typeof legendNested.fontSize === 'number' && legendNested.fontSize > 0
+            ? legendNested.fontSize
+            : (c.legendFontSize as number)) || 15;
         const seriesColors = Array.isArray(c.seriesColors)
             ? (c.seriesColors as string[]).filter((color) => typeof color === 'string' && color.trim().length > 0)
             : [];
@@ -574,7 +593,8 @@ export const ComponentRenderer = memo(function ComponentRenderer({ component, mo
             return out;
         })();
         const legendCount = legendNames.length;
-        const legendDisplayRaw = String(c.legendDisplay ?? 'auto').trim().toLowerCase();
+        // Nested legend.show overrides legacy legendDisplay
+        const legendDisplayRaw = String(legendDisplayOverride ?? c.legendDisplay ?? 'auto').trim().toLowerCase();
         const legendDisplayMode = legendDisplayRaw === 'show' || legendDisplayRaw === 'hide' ? legendDisplayRaw : 'auto';
         const longestLegendTextWidth = legendNames.reduce(
             (max, name) => Math.max(max, estimateVisualTextWidth(name, legendFontSize)),
@@ -588,7 +608,8 @@ export const ComponentRenderer = memo(function ComponentRenderer({ component, mo
             ? true
             : (legendDisplayMode === 'hide' ? false : legendVisibleByAuto);
         const autoLegendAvoid = c.autoLegendAvoid !== false;
-        const legendPosRaw = String(c.legendPosition ?? 'auto').trim().toLowerCase();
+        // Nested legend.position overrides legacy legendPosition
+        const legendPosRaw = String(legendPositionOverride ?? c.legendPosition ?? 'auto').trim().toLowerCase();
         const legendPosMode = legendPosRaw === 'top'
             || legendPosRaw === 'bottom'
             || legendPosRaw === 'left'
@@ -851,8 +872,8 @@ export const ComponentRenderer = memo(function ComponentRenderer({ component, mo
             orient: legendOrient,
             itemGap: legendItemGap,
             ...(shouldTruncateLegend ? { formatter: (name: string) => formatLegendText(name) } : {}),
-            textStyle: { color: t.textPrimary, fontSize: legendFontSize },
-            pageTextStyle: { color: t.textSecondary, fontSize: Math.max(10, legendFontSize - 1) },
+            textStyle: { color: legendColorOverride ?? t.textPrimary, fontSize: legendFontSize },
+            pageTextStyle: { color: legendColorOverride ?? t.textSecondary, fontSize: Math.max(10, legendFontSize - 1) },
             pageIconColor: t.textSecondary,
             pageIconInactiveColor: t.textMuted,
             ...legendLayout,
