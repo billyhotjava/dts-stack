@@ -665,7 +665,7 @@ export const ComponentRenderer = memo(function ComponentRenderer({ component, mo
             width,
             height,
             fontSize: (c.titleFontSize as number) || 18,
-            color: t.textPrimary,
+            color: resolveTextColor(c.titleColor as string | undefined, t.textPrimary),
             positionRaw: c.titlePosition,
             offsetX: titleOffsetX,
             offsetY: titleOffsetY,
@@ -1419,6 +1419,7 @@ export const ComponentRenderer = memo(function ComponentRenderer({ component, mo
                     <ScrollRanking
                         data={c.data as Array<{ name: string; value: number }>}
                         color={c.color as string[] | undefined}
+                        textColor={c.textColor as string | undefined}
                         duration={c.duration as number | undefined}
                         rowCount={c.rowNum as number | undefined}
                         style={{ width: '100%', height: '100%' }}
@@ -1431,6 +1432,7 @@ export const ComponentRenderer = memo(function ComponentRenderer({ component, mo
                         value={c.value as number}
                         shape={c.shape as string}
                         color={c.color as string[]}
+                        textColor={c.textColor as string | undefined}
                         width={component.width}
                         height={component.height}
                     />
@@ -1450,6 +1452,7 @@ export const ComponentRenderer = memo(function ComponentRenderer({ component, mo
                     <PercentPond
                         value={c.value as number}
                         colors={c.colors as string[] || [t.progressBar.fillGradient[0], t.progressBar.fillGradient[1]]}
+                        textColor={c.textColor as string | undefined}
                         borderRadius={c.borderRadius as number}
                         borderWidth={c.borderWidth as number}
                         width={width}

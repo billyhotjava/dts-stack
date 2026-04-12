@@ -62,20 +62,24 @@ const scrollBoardSchema: ComponentConfigSchema = {
 
 const scrollRankingSchema: ComponentConfigSchema = {
     type: 'scroll-ranking',
-    groups: [STANDARD_GROUPS.content, STANDARD_GROUPS.behavior],
+    groups: [STANDARD_GROUPS.content, STANDARD_GROUPS.typography, STANDARD_GROUPS.behavior],
     fields: [
-        { key: 'data',     label: '排名数据',     type: 'json',   group: 'content' },
-        { key: 'rowNum',   label: '显示行数',     type: 'number', group: 'behavior', min: 1, max: 20, defaultValue: 5 },
-        { key: 'waitTime', label: '轮播等待(ms)', type: 'number', group: 'behavior', min: 500, max: 10000, step: 500, defaultValue: 2000 },
+        { key: 'data',       label: '排名数据',     type: 'json',   group: 'content' },
+        { key: 'color',      label: '进度条颜色',   type: 'color-array', group: 'typography' },
+        { key: 'textColor',  label: '文字颜色',     type: 'color',  group: 'typography' },
+        { key: 'rowNum',     label: '显示行数',     type: 'number', group: 'behavior', min: 1, max: 20, defaultValue: 5 },
+        { key: 'waitTime',   label: '轮播等待(ms)', type: 'number', group: 'behavior', min: 500, max: 10000, step: 500, defaultValue: 2000 },
     ],
 };
 
 const waterLevelSchema: ComponentConfigSchema = {
     type: 'water-level',
-    groups: [STANDARD_GROUPS.content, STANDARD_GROUPS.appearance],
+    groups: [STANDARD_GROUPS.content, STANDARD_GROUPS.typography, STANDARD_GROUPS.appearance],
     fields: [
-        { key: 'value', label: '水位值',   type: 'number', group: 'content', min: 0, max: 100 },
-        { key: 'shape', label: '形状',     type: 'select', group: 'appearance', options: [
+        { key: 'value',      label: '水位值',   type: 'number', group: 'content', min: 0, max: 100 },
+        { key: 'color',      label: '水波颜色', type: 'color-array', group: 'appearance' },
+        { key: 'textColor',  label: '文字颜色', type: 'color',  group: 'typography' },
+        { key: 'shape',      label: '形状',     type: 'select', group: 'appearance', options: [
             { label: '圆形',     value: 'round' },
             { label: '矩形',     value: 'rect' },
             { label: '圆角矩形', value: 'roundRect' },
@@ -96,10 +100,11 @@ const digitalFlopSchema: ComponentConfigSchema = {
 
 const percentPondSchema: ComponentConfigSchema = {
     type: 'percent-pond',
-    groups: [STANDARD_GROUPS.content, STANDARD_GROUPS.appearance],
+    groups: [STANDARD_GROUPS.content, STANDARD_GROUPS.typography, STANDARD_GROUPS.appearance],
     fields: [
         { key: 'value',        label: '百分比值',  type: 'slider',      group: 'content', min: 0, max: 100 },
-        { key: 'colors',       label: '颜色',      type: 'color-array', group: 'appearance', themeTokenKey: 'progressBar.fillGradient' },
+        { key: 'textColor',    label: '文字颜色',  type: 'color',       group: 'typography' },
+        { key: 'colors',       label: '填充颜色',  type: 'color-array', group: 'appearance', themeTokenKey: 'progressBar.fillGradient' },
         { key: 'borderRadius', label: '圆角',      type: 'number',      group: 'appearance', min: 0, max: 20, defaultValue: 5 },
         { key: 'borderWidth',  label: '边框宽度',  type: 'number',      group: 'appearance', min: 0, max: 10, defaultValue: 2 },
     ],
@@ -111,7 +116,7 @@ const flylineChartSchema: ComponentConfigSchema = {
     fields: [
         { key: 'points', label: '坐标点', type: 'json',  group: 'content' },
         { key: 'lines',  label: '飞线数据', type: 'json', group: 'content' },
-        { key: 'color',  label: '颜色',   type: 'color', group: 'appearance' },
+        { key: 'color',  label: '颜色',   type: 'color-array', group: 'appearance' },
     ],
 };
 

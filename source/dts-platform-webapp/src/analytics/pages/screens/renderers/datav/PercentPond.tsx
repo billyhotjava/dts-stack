@@ -3,6 +3,7 @@ import React from 'react';
 interface PercentPondProps {
   value?: number;
   colors?: string[];
+  textColor?: string;
   borderRadius?: number;
   borderWidth?: number;
   width: number;
@@ -12,6 +13,7 @@ interface PercentPondProps {
 export const PercentPond: React.FC<PercentPondProps> = ({
   value = 0,
   colors,
+  textColor,
   borderRadius = 8,
   borderWidth = 2,
   width,
@@ -68,7 +70,7 @@ export const PercentPond: React.FC<PercentPondProps> = ({
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
-          color: '#fff',
+          color: textColor || '#fff',
           fontSize: Math.max(12, height * 0.45),
           fontWeight: 600,
           textShadow: '0 1px 2px rgba(0,0,0,0.3)',

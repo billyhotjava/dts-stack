@@ -3,6 +3,7 @@ import React, { useMemo } from 'react';
 interface ScrollRankingProps {
   data?: Array<{ name: string; value: number }>;
   color?: string[];
+  textColor?: string;
   duration?: number;
   rowCount?: number;
   style?: React.CSSProperties;
@@ -11,6 +12,7 @@ interface ScrollRankingProps {
 export const ScrollRanking: React.FC<ScrollRankingProps> = ({
   data,
   color,
+  textColor,
   duration = 10,
   rowCount = 5,
   style,
@@ -40,7 +42,7 @@ export const ScrollRanking: React.FC<ScrollRankingProps> = ({
           height: rowHeight,
           gap: 8,
           fontSize: 13,
-          color: 'var(--color-text-primary, #e0e0e0)',
+          color: textColor || 'var(--color-text-primary, #e0e0e0)',
         }}
       >
         <span
