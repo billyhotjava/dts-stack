@@ -362,13 +362,23 @@ export default function SessionManager() {
 			}
 		};
 
-		schedule(nextRefreshDelayMs(token.accessToken));
+		// Use tokenExpiresAt (from Keycloak expiresIn) for precise initial scheduling.
+		// For opaque tokens without expiresIn, fall back to heuristic.
+		const initialDelay = (() => {
+			if (token.tokenExpiresAt && token.tokenExpiresAt > 0) {
+				const msUntilExpiry = token.tokenExpiresAt - Date.now();
+				// Refresh 60s before expiry, minimum 30s
+				return Math.max(30_000, msUntilExpiry - 60_000);
+			}
+			return nextRefreshDelayMs(token.accessToken);
+		})();
+		schedule(initialDelay);
 
 		return () => {
 			cancelled = true;
 			if (timer) window.clearTimeout(timer);
 		};
-	}, [isLoggedIn, token?.refreshToken, token?.accessToken, setUserToken, clearUserInfoAndToken, user?.username, user?.email]);
+	}, [isLoggedIn, token?.refreshToken, token?.accessToken, token?.tokenExpiresAt, setUserToken, clearUserInfoAndToken, user?.username, user?.email]);
 
 	return null;
 }

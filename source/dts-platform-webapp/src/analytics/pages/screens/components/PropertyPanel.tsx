@@ -3,7 +3,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { message } from 'antd';
 import { toast } from 'sonner';
 import { useScreen } from '../ScreenContext';
-import { SchemaConfigRenderer } from '../configSchema/editors/SchemaConfigRenderer';
+import SchemaConfigRenderer from '../configSchema/editors/SchemaConfigRenderer';
 import { COMPONENT_CONFIG_SCHEMAS } from '../configSchema/schemas';
 import type {
     CardParameterBinding,

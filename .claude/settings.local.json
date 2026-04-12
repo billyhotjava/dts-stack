@@ -119,7 +119,9 @@
       "Bash(SSHPASS='Devops123@' sshpass -e ssh -o StrictHostKeyChecking=no -o PreferredAuthentications=password root@121.36.37.162 \"docker logs s10-stack_dts-platform_1 --tail 300 2>&1 | grep -iE 'fintest|trigger|execution|airflow|preparing' | tail -30\")",
       "Bash(SSHPASS='Devops123@' sshpass -e ssh -o StrictHostKeyChecking=no -o PreferredAuthentications=password root@121.36.37.162 \"docker logs s10-stack_dts-ingestion_1 --tail 500 2>&1 | grep -iE 'execution|trigger|airflow.*dag_run|dag_run|preparing|submit' | tail -30\")",
       "Bash(wc -l *.json)",
-      "WebFetch(domain:www.anthropic.com)"
+      "WebFetch(domain:www.anthropic.com)",
+      "Bash(/home/billy/.claude/plugins/cache/claude-plugins-official/superpowers/5.0.6/skills/brainstorming/scripts/start-server.sh:*)",
+      "Bash(sudo sysctl:*)"
     ]
   }
 }

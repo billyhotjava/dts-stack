@@ -33,6 +33,7 @@ const CollectionItemsPage = lazy(() => import("@/analytics/pages/CollectionItems
 const SearchPage = lazy(() => import("@/analytics/pages/SearchPage"));
 const ProjectCockpitPage = lazy(() => import("@/analytics/pages/project-cockpit/ProjectCockpitPage"));
 
+const ProfilePage = lazy(() => import("@/pages/settings/profile/ProfilePage"));
 const ExploreSessionsPage = lazy(() => import("@/analytics/pages/ExploreSessionsPage"));
 const ReportFactoryPage = lazy(() => import("@/analytics/pages/ReportFactoryPage"));
 const MetricLensPage = lazy(() => import("@/analytics/pages/MetricLensPage"));
@@ -49,6 +50,7 @@ export const STATIC_DASHBOARD_ROUTES: RouteObject[] = [
 	{ path: "explore/etl/transform/:id", element: <S><TransformDetailPage /></S> },
 	{ path: "explore/etl/transform/:id/edit", element: <S><TransformCreatePage /></S> },
 	{ path: "explore/etl/transform/:id/executions", element: <S><TransformExecutionHistoryPage /></S> },
+	{ path: "settings/profile", element: <S><ProfilePage /></S> },
 	{ path: "governance/asset-ownership", element: <S><AssetOwnershipPage /></S> },
 	{ path: "governance/asset-grants", element: <S><AssetGrantPage /></S> },
 	{ path: "my/asset-grants", element: <S><MyGrantsPage /></S> },

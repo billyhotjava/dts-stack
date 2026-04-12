@@ -285,6 +285,30 @@ axiosInstance.interceptors.response.use(
 			const cfg = response.config || {};
 			// prevent infinite loop
 			if (!(cfg as any)._retry) {
+				// Race-safe: SessionManager may have already refreshed (or is about to).
+				// Check if the store has a different token than what this request used.
+				const requestAuth = String((cfg.headers as any)?.Authorization || "");
+				const requestToken = requestAuth.startsWith("Bearer ") ? requestAuth.slice(7).trim() : "";
+				const checkStoreForNewerToken = (): string | null => {
+					const current = String(userStore.getState().userToken?.accessToken || "").trim();
+					return (requestToken && current && requestToken !== current) ? current : null;
+				};
+				// Immediate check
+				let newerToken = checkStoreForNewerToken();
+				// If not yet updated, wait briefly for SessionManager to finish
+				if (!newerToken && (sessionExpiredHeader || sessionConflictHeader)) {
+					await new Promise((r) => setTimeout(r, 500));
+					newerToken = checkStoreForNewerToken();
+				}
+				if (newerToken) {
+					(cfg.headers as any).Authorization = `Bearer ${newerToken}`;
+					(cfg as any)._retry = true;
+					try {
+						return await axiosInstance.request(cfg as any);
+					} catch (_e) {
+						// fallthrough to normal refresh below
+					}
+				}
 				const refreshed = await refreshTokenIfPossible();
 				if (refreshed) {
 					// retry original request with updated access token

@@ -83,10 +83,20 @@ public class KeycloakAuthResource {
             if (log.isInfoEnabled()) {
                 log.info("[login] attempt username={}", username);
             }
-            // Authenticate directly against Keycloak (no admin proxy)
+            // Step 1: Authenticate directly against Keycloak → get KC tokens
             var kcResult = keycloakAuthService.login(username, password);
             var kcTokens = kcResult.tokens();
-            Map<String, Object> user = kcResult.user();
+
+            // Step 2: Get enriched user data from admin (roles/permissions/profile from admin DB)
+            // Authentication is already done via Keycloak; admin call is only for business data.
+            Map<String, Object> user;
+            try {
+                var adminResult = adminAuthGateway.login(username, password);
+                user = adminResult.user();
+            } catch (Exception ex) {
+                log.warn("[login] admin user data unavailable, falling back to Keycloak profile: {}", ex.getMessage());
+                user = kcResult.user();
+            }
             String displayName = resolveUserDisplayName(user);
             List<String> rawRoles = toStringList(user.get("roles"));
             List<String> mappedRoles = mapRoles(rawRoles);
