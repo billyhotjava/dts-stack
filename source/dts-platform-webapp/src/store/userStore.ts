@@ -76,8 +76,8 @@ const useUserStore = create<UserStore>()(
 						// Reset scoped context so the next user doesn't inherit prior dept/scope
 						const ctx = useContextStore.getState();
 					ctx.actions.setActiveDept(undefined);
-						localStorage.removeItem("dts.session.loginTs");
-						localStorage.removeItem("dts.session.lastActivity");
+						localStorage.removeItem("dts.platform.session.loginTs");
+						localStorage.removeItem("dts.platform.session.lastActivity");
 					} catch {
 						// ignore store access errors (e.g., during SSR)
 					}
@@ -228,7 +228,7 @@ export const useSignIn = () => {
 
 			// Mark login timestamp for downstream grace handling on initial 401s
 			try {
-				localStorage.setItem("dts.session.loginTs", String(Date.now()));
+				localStorage.setItem("dts.platform.session.loginTs", String(Date.now()));
 			} catch {}
 
 			// 登录成功后获取并更新Keycloak翻译词条

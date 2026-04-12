@@ -11,12 +11,12 @@ import {
 } from "./sessionLeadership.helpers";
 
 const STORAGE_KEYS = {
-	SESSION_ID: "dts.session.id",
-	SESSION_USER: "dts.session.user",
-	LOGOUT_TS: "dts.session.logoutTs",
-	LAST_ACTIVITY: "dts.session.lastActivity",
-	TOKEN_SYNC: "dts.session.tokenSync",
-	REFRESH_LEADER: "dts.session.refreshLeader",
+	SESSION_ID: "dts.platform.session.id",
+	SESSION_USER: "dts.platform.session.user",
+	LOGOUT_TS: "dts.platform.session.logoutTs",
+	LAST_ACTIVITY: "dts.platform.session.lastActivity",
+	TOKEN_SYNC: "dts.platform.session.tokenSync",
+	REFRESH_LEADER: "dts.platform.session.refreshLeader",
 } as const;
 
 const SESSION_TIMEOUT_MINUTES = Math.max(

@@ -1,0 +1,3 @@
+{"type":"server-started","port":65243,"host":"0.0.0.0","url_host":"localhost","url":"http://localhost:65243","screen_dir":"/opt/prod/s10/s10-stack/.superpowers/brainstorm/1597090-1775960450/content","state_dir":"/opt/prod/s10/s10-stack/.superpowers/brainstorm/1597090-1775960450/state"}
+{"type":"screen-added","file":"/opt/prod/s10/s10-stack/.superpowers/brainstorm/1597090-1775960450/content/layout-approaches.html"}
+{"type":"server-stopped","reason":"idle timeout"}

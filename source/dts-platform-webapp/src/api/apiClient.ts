@@ -105,7 +105,7 @@ function ensureKeepAliveTimer() {
 		if (!userToken?.refreshToken) {
 			return;
 		}
-		const loginTs = Number(localStorage.getItem("dts.session.loginTs") || "0");
+		const loginTs = Number(localStorage.getItem("dts.platform.session.loginTs") || "0");
 		if (loginTs > 0 && Date.now() - loginTs > TEST_SESSION_MAX_AGE_MS) {
 			return;
 		}
@@ -325,7 +325,7 @@ axiosInstance.interceptors.response.use(
 			}
 			// Grace window just after login to avoid kicking user out on in-flight 401s
 			try {
-				const loginTs = Number(localStorage.getItem("dts.session.loginTs") || "0");
+					const loginTs = Number(localStorage.getItem("dts.platform.session.loginTs") || "0");
 				if (loginTs > 0 && Date.now() - loginTs < 2000) {
 					console.warn("[auth] Suppressing auto-logout due to grace window after login");
 					return Promise.reject(error);
@@ -334,7 +334,7 @@ axiosInstance.interceptors.response.use(
 			if (!TEST_SESSION_ENABLED || shouldForceLogout) {
 				userStore.getState().actions.clearUserInfoAndToken();
 				try {
-					localStorage.setItem("dts.session.logoutTs", String(Date.now()));
+						localStorage.setItem("dts.platform.session.logoutTs", String(Date.now()));
 				} catch {}
 				if (typeof window !== "undefined" && !isLoginRouteActive()) {
 					location.replace(resolveLoginHref());
@@ -345,7 +345,7 @@ axiosInstance.interceptors.response.use(
 		} else if (shouldForceLogout && !TEST_SESSION_ENABLED) {
 			userStore.getState().actions.clearUserInfoAndToken();
 			try {
-				localStorage.setItem("dts.session.logoutTs", String(Date.now()));
+				localStorage.setItem("dts.platform.session.logoutTs", String(Date.now()));
 			} catch {}
 			if (typeof window !== "undefined" && !isLoginRouteActive()) {
 				location.replace(resolveLoginHref());

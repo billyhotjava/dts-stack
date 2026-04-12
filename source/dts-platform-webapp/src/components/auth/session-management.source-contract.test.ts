@@ -21,11 +21,22 @@ describe("platform session management source contract", () => {
 
 	it("lets the backend remain the single source of truth for portal session expiry", () => {
 		const sessionManagerSource = fs.readFileSync(path.resolve(import.meta.dirname, "./session-manager.tsx"), "utf8");
+		const guardSource = fs.readFileSync(
+			path.resolve(import.meta.dirname, "../../routes/components/login-auth-guard.tsx"),
+			"utf8",
+		);
+		const loginPageSource = fs.readFileSync(
+			path.resolve(import.meta.dirname, "../../pages/sys/login/index.tsx"),
+			"utf8",
+		);
 
 		expect(sessionManagerSource.includes("logoutDueToIdle")).toBe(false);
 		expect(sessionManagerSource.includes("window.setTimeout(logoutDueToIdle")).toBe(false);
 		expect(sessionManagerSource.includes("backend remains")).toBe(true);
-		expect(sessionManagerSource.includes('REFRESH_LEADER: "dts.session.refreshLeader"')).toBe(true);
+		expect(sessionManagerSource.includes('REFRESH_LEADER: "dts.platform.session.refreshLeader"')).toBe(true);
+		expect(sessionManagerSource.includes('SESSION_ID: "dts.platform.session.id"')).toBe(true);
 		expect(sessionManagerSource.includes("FOLLOWER_RECHECK_MS")).toBe(true);
+		expect(guardSource.includes("tokenExpiresAt - 10_000")).toBe(false);
+		expect(loginPageSource.includes("tokenExpiresAt - 10_000")).toBe(false);
 	});
 });

@@ -12,7 +12,7 @@ import { LoginProvider } from "./providers/login-provider";
 import RegisterForm from "./register-form";
 import ResetForm from "./reset-form";
 
-function isTokenExpired(token?: string, tokenExpiresAt?: number): boolean {
+function isTokenExpired(token?: string): boolean {
 	if (!token) return true;
 	if (token.startsWith("dev-access-")) return false;
 	try {
@@ -26,11 +26,7 @@ function isTokenExpired(token?: string, tokenExpiresAt?: number): boolean {
 			}
 		}
 	} catch {}
-	// Non-JWT: use backend-provided tokenExpiresAt
-	if (tokenExpiresAt && tokenExpiresAt > 0) {
-		return Date.now() > tokenExpiresAt - 10_000;
-	}
-	// No expiry info — trust the token
+	// Opaque platform tokens are validated by the backend portal session.
 	return false;
 }
 
@@ -54,7 +50,7 @@ function LoginPage() {
 		}
 	})();
 
-	if (token.accessToken && !isTokenExpired(token.accessToken, token.tokenExpiresAt)) {
+	if (token.accessToken && !isTokenExpired(token.accessToken)) {
 		// If we're already authenticated and this page was reached via embedded module redirect,
 		// jump directly to that module with a hard navigation.
 		if (safeRedirect?.startsWith("/analytics")) {

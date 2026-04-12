@@ -129,6 +129,12 @@ const useUserStore = create<UserStore>()(
 				},
 				clearUserInfoAndToken() {
 					set({ userInfo: {}, userToken: {} });
+					try {
+						localStorage.removeItem("dts.admin.session.tokenSync");
+						localStorage.removeItem("dts.admin.session.logoutTs");
+					} catch {
+						// ignore storage cleanup failures
+					}
 				},
 			},
 		}),

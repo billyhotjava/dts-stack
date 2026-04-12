@@ -59,9 +59,6 @@ importers:
       '@iconify/utils':
         specifier: ^2.3.0
         version: 2.3.0
-      '@jiaminghi/data-view-react':
-        specifier: ^1.2.5
-        version: 1.2.5(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
       '@monaco-editor/react':
         specifier: ^4.6.0
         version: 4.7.0(monaco-editor@0.52.2)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
@@ -1379,28 +1376,6 @@ packages:
 
   '@iconify/utils@2.3.0':
     resolution: {integrity: sha512-GmQ78prtwYW6EtzXRU1rY+KwOKfz32PD7iJh6Iyqw68GiKuoZ2A6pRtzWONz5VQJbp50mEjXh/7NkumtrAgRKA==}
-
-  '@jiaminghi/bezier-curve@0.0.9':
-    resolution: {integrity: sha512-u9xJPOEl6Dri2E9FfmJoGxYQY7vYJkURNX04Vj64tdi535tPrpkuf9Sm0lNr3QTKdHQh0DdNRsaa62FLQNQEEw==}
-
-  '@jiaminghi/c-render@0.4.3':
-    resolution: {integrity: sha512-FJfzj5hGj7MLqqqI2D7vEzHKbQ1Ynnn7PJKgzsjXaZpJzTqs2Yw5OSeZnm6l7Qj7jyPAP53lFvEQNH4o4j6s+Q==}
-
-  '@jiaminghi/charts@0.2.18':
-    resolution: {integrity: sha512-K+HXaOOeWG9OOY1VG6M4mBreeeIAPhb9X+khG651AbnwEwL6G2UtcAQ8GWCq6GzhczcLwwhIhuaHqRygwHC0sA==}
-
-  '@jiaminghi/color@1.1.3':
-    resolution: {integrity: sha512-ZY3hdorgODk4OSTbxyXBPxAxHPIVf9rPlKJyK1C1db46a50J0reFKpAvfZG8zMG3lvM60IR7Qawgcu4ZDO3+Hg==}
-
-  '@jiaminghi/data-view-react@1.2.5':
-    resolution: {integrity: sha512-hxlfg0yULj7nUde8oj5hB9pUWrHqFyuPUeJWNG70YPPHFnWXqmlWCx1aB1OpqD3lwxaI1aKkA4YJRhkvfLyKrg==}
-    engines: {node: '>=8', npm: '>=5'}
-    peerDependencies:
-      react: ^16.8.0
-      react-dom: ^16.8.0
-
-  '@jiaminghi/transition@1.1.11':
-    resolution: {integrity: sha512-owBggipoHMikDHHDW5Gc7RZYlVuvxHADiU4bxfjBVkHDAmmck+fCkm46n2JzC3j33hWvP9nSCAeh37t6stgWeg==}
 
   '@jridgewell/gen-mapping@0.3.13':
     resolution: {integrity: sha512-2kkt/7niJ6MgEPxF0bYdQ6etZaA+fQvDcLKckhy1yIQOzaoKjBBjSj63/aLVjYE3qhRt5dvM+uUyfCg6UKCBbA==}
@@ -6647,34 +6622,6 @@ snapshots:
       mlly: 1.7.4
     transitivePeerDependencies:
       - supports-color
-
-  '@jiaminghi/bezier-curve@0.0.9':
-    dependencies:
-      '@babel/runtime': 7.27.0
-
-  '@jiaminghi/c-render@0.4.3':
-    dependencies:
-      '@babel/runtime': 7.27.0
-      '@jiaminghi/bezier-curve': 0.0.9
-      '@jiaminghi/color': 1.1.3
-      '@jiaminghi/transition': 1.1.11
-
-  '@jiaminghi/charts@0.2.18':
-    dependencies:
-      '@babel/runtime': 7.27.0
-      '@jiaminghi/c-render': 0.4.3
-
-  '@jiaminghi/color@1.1.3': {}
-
-  '@jiaminghi/data-view-react@1.2.5(react-dom@18.3.1(react@18.3.1))(react@18.3.1)':
-    dependencies:
-      '@jiaminghi/charts': 0.2.18
-      react: 18.3.1
-      react-dom: 18.3.1(react@18.3.1)
-
-  '@jiaminghi/transition@1.1.11':
-    dependencies:
-      '@babel/runtime': 7.27.0
 
   '@jridgewell/gen-mapping@0.3.13':
     dependencies:
