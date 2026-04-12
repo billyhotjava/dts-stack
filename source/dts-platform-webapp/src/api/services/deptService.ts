@@ -12,6 +12,7 @@ export interface DeptDto {
 type OrgNode = {
 	id: number;
 	name: string;
+	deptCode?: string;
 	parentId?: number;
 	children?: OrgNode[];
 	isRoot?: boolean;
@@ -19,8 +20,9 @@ type OrgNode = {
 
 function flattenOrgs(nodes: OrgNode[], out: DeptDto[] = []): DeptDto[] {
 	for (const n of nodes || []) {
+		const deptCode = typeof n.deptCode === "string" && n.deptCode.trim() ? n.deptCode.trim() : String(n.id);
 		out.push({
-			code: String(n.id),
+			code: deptCode,
 			nameZh: n.name,
 			nameEn: n.name,
 			parentId: n.parentId ?? null,

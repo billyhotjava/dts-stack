@@ -8,6 +8,7 @@ export interface UserDirectoryEntry {
 	displayName?: string;
 	fullName?: string;
 	deptCode?: string;
+	deptName?: string;
 }
 
 const API_BASE = GLOBAL_CONFIG.apiBaseUrl.replace(/\/+$/, "");
@@ -55,12 +56,15 @@ export async function searchUsers(keyword?: string): Promise<UserDirectoryEntry[
 				const displayName = String((item?.displayName ?? fallbackDisplay) || username).trim();
 				const deptCodeRaw = item?.deptCode ?? item?.department ?? item?.dept_code;
 				const deptCode = typeof deptCodeRaw === "string" ? deptCodeRaw.trim() : "";
+				const deptNameRaw = item?.deptName ?? item?.departmentName ?? item?.dept_name ?? item?.org_name;
+				const deptName = typeof deptNameRaw === "string" ? deptNameRaw.trim() : "";
 				return {
 					id,
 					username,
 					displayName,
 					fullName: rawFullName || undefined,
 					deptCode: deptCode || undefined,
+					deptName: deptName || undefined,
 				} as UserDirectoryEntry;
 			})
 			.filter((it: UserDirectoryEntry | null): it is UserDirectoryEntry => Boolean(it));

@@ -128,6 +128,10 @@ public class PlatformDirectoryResource {
             summaries.putIfAbsent(key, summary);
         }
 
+        List<String> usernames = summaries.values().stream().map(UserSummary::username).filter(StringUtils::hasText).toList();
+        Map<String, String> displayNameMap = adminUserService.resolveDisplayNames(usernames);
+        Map<String, AdminUserService.DepartmentInfo> deptInfoMap = adminUserService.resolveDepartments(usernames);
+
         // Resolve deptCode → deptName via organization_node table.
         // Keycloak dept_code may match either organization_node.dept_code or organization_node.id.
         Set<String> deptCodes = summaries.values().stream()
@@ -151,14 +155,27 @@ public class PlatformDirectoryResource {
         }
         List<UserSummary> result = new ArrayList<>(summaries.size());
         for (UserSummary s : summaries.values()) {
-            String resolvedName = StringUtils.hasText(s.deptName())
-                ? s.deptName()
-                : deptNameMap.get(s.deptCode());
-            if (resolvedName != null && !resolvedName.equals(s.deptName())) {
-                result.add(new UserSummary(s.id(), s.username(), s.displayName(), s.deptCode(), resolvedName));
-            } else {
-                result.add(s);
-            }
+            String usernameKey = s.username() == null ? null : s.username().toLowerCase(Locale.ROOT);
+            String resolvedDisplayName = usernameKey == null ? null : displayNameMap.get(usernameKey);
+            AdminUserService.DepartmentInfo deptInfo = usernameKey == null ? null : deptInfoMap.get(usernameKey);
+            String resolvedDeptCode = firstNonBlank(
+                deptInfo == null ? null : deptInfo.deptCode(),
+                s.deptCode()
+            );
+            String resolvedDeptName = firstNonBlank(
+                deptInfo == null ? null : deptInfo.deptName(),
+                s.deptName(),
+                resolvedDeptCode == null ? null : deptNameMap.get(resolvedDeptCode)
+            );
+            result.add(
+                new UserSummary(
+                    s.id(),
+                    s.username(),
+                    firstNonBlank(resolvedDisplayName, s.displayName()),
+                    resolvedDeptCode,
+                    resolvedDeptName
+                )
+            );
         }
         return ResponseEntity.ok(ApiResponse.ok(result));
     }

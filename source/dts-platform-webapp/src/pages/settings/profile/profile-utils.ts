@@ -6,7 +6,13 @@ const ATTRIBUTE_NAME_KEYS = [
   "fullName",
   "fullname",
   "displayName",
+  "display_name",
+  "display_name_cn",
   "nameZh",
+  "cnName",
+  "chineseName",
+  "realName",
+  "real_name",
   "name_cn",
   "name",
   "full_name",
@@ -20,6 +26,11 @@ const normalize = (value: string | null | undefined): string => {
 const composeName = (first?: string | null, last?: string | null): string => {
   const parts = [first, last].map(normalize).filter(Boolean);
   return parts.join(" ");
+};
+
+const composeChineseName = (last?: string | null, first?: string | null): string => {
+  const parts = [last, first].map(normalize).filter(Boolean);
+  return parts.join("");
 };
 
 type ResolveProfileNameParams = {
@@ -57,12 +68,20 @@ export function resolveProfileName(params: ResolveProfileNameParams): string {
     }, []) ?? [];
 
   const composedDetailName = composeName(detail?.firstName, detail?.lastName);
+  const composedChineseDetailName = composeChineseName(detail?.lastName, detail?.firstName);
+  const composedStoreName = composeName(storeFirstName, null);
   const candidates = [
     detail?.fullName,
     ...attributeCandidates,
+    (detail as Record<string, unknown> | undefined)?.["displayName"] as string | undefined,
+    (detail as Record<string, unknown> | undefined)?.["nameZh"] as string | undefined,
     storeFullName,
+    (detail as Record<string, unknown> | undefined)?.["name"] as string | undefined,
     composedDetailName,
+    composedChineseDetailName,
+    composedStoreName,
     detail?.firstName,
+    detail?.lastName,
     storeFirstName,
     fallbackName,
   ];

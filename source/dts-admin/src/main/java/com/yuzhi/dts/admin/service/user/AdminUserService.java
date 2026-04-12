@@ -437,6 +437,33 @@ public class AdminUserService {
                     }
                 });
         }
+        if (!lowerCase.isEmpty()) {
+            try {
+                personProfileRepository.findByAnyIdentifierLowerIn(lowerCase).forEach(profile -> {
+                    if (profile == null) {
+                        return;
+                    }
+                    String display = StringUtils.trimToNull(profile.getFullName());
+                    if (StringUtils.isBlank(display)) {
+                        return;
+                    }
+                    String account = StringUtils.trimToNull(profile.getAccount());
+                    if (account != null) {
+                        cached.putIfAbsent(account.toLowerCase(Locale.ROOT), display);
+                    }
+                    String personCode = StringUtils.trimToNull(profile.getPersonCode());
+                    if (personCode != null) {
+                        cached.putIfAbsent(personCode.toLowerCase(Locale.ROOT), display);
+                    }
+                    String externalId = StringUtils.trimToNull(profile.getExternalId());
+                    if (externalId != null) {
+                        cached.putIfAbsent(externalId.toLowerCase(Locale.ROOT), display);
+                    }
+                });
+            } catch (Exception ex) {
+                LOG.warn("resolve display names from person profiles failed: {}", ex.getMessage());
+            }
+        }
         String managementToken = null;
         boolean tokenResolved = false;
         for (String username : normalized) {

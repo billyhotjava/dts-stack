@@ -1,12 +1,14 @@
+import { useEffect, useMemo, useState } from "react";
 import { Star } from "lucide-react";
 import { Navigate, useLocation } from "react-router";
+import { getPortalSessionStatus } from "@/api/platformApi";
 import TechDataBackground from "@/assets/images/background/tech-data-platform.svg";
 import TechDataBackgroundLight from "@/assets/images/background/tech-data-platform-light.svg";
 import LocalePicker from "@/components/locale-picker";
 import { GLOBAL_CONFIG } from "@/global-config";
 import { useBilingualText } from "@/hooks/useBilingualText";
 import SettingButton from "@/layouts/components/setting-button";
-import { useUserToken } from "@/store/userStore";
+import { useUserActions, useUserToken } from "@/store/userStore";
 import LoginForm from "./login-form";
 import { LoginProvider } from "./providers/login-provider";
 import RegisterForm from "./register-form";
@@ -32,8 +34,16 @@ function isTokenExpired(token?: string): boolean {
 
 function LoginPage() {
 	const token = useUserToken();
+	const { clearUserInfoAndToken } = useUserActions();
 	const bilingual = useBilingualText();
 	const location = useLocation();
+	const [sessionChecked, setSessionChecked] = useState(false);
+	const [sessionAuthenticated, setSessionAuthenticated] = useState(false);
+
+	const hasLocallyValidToken = useMemo(
+		() => Boolean(token.accessToken && !isTokenExpired(token.accessToken)),
+		[token.accessToken],
+	);
 
 	const safeRedirect = (() => {
 		try {
@@ -50,7 +60,58 @@ function LoginPage() {
 		}
 	})();
 
-	if (token.accessToken && !isTokenExpired(token.accessToken)) {
+	useEffect(() => {
+		let alive = true;
+
+		const verifySession = async () => {
+			if (!hasLocallyValidToken) {
+				if (alive) {
+					setSessionAuthenticated(false);
+					setSessionChecked(true);
+				}
+				return;
+			}
+
+			try {
+				const lastLogoutTs = Number(localStorage.getItem("dts.platform.session.logoutTs") || "0");
+				if (lastLogoutTs > 0 && Date.now() - lastLogoutTs < 15_000) {
+					clearUserInfoAndToken();
+					if (alive) {
+						setSessionAuthenticated(false);
+						setSessionChecked(true);
+					}
+					return;
+				}
+			} catch {}
+
+			try {
+				const status = await getPortalSessionStatus();
+				if (!alive) return;
+				const authenticated = Boolean(status?.authenticated);
+				setSessionAuthenticated(authenticated);
+				setSessionChecked(true);
+				if (!authenticated) {
+					clearUserInfoAndToken();
+				}
+			} catch {
+				if (!alive) return;
+				setSessionAuthenticated(false);
+				setSessionChecked(true);
+				clearUserInfoAndToken();
+			}
+		};
+
+		void verifySession();
+		return () => {
+			alive = false;
+		};
+	}, [clearUserInfoAndToken, hasLocallyValidToken]);
+
+	if (hasLocallyValidToken && !sessionChecked) {
+		return null;
+	}
+
+	if (hasLocallyValidToken && sessionAuthenticated) {
 		// If we're already authenticated and this page was reached via embedded module redirect,
 		// jump directly to that module with a hard navigation.
 		if (safeRedirect?.startsWith("/analytics")) {
