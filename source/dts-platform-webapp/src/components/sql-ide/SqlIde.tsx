@@ -1,14 +1,24 @@
 import { Button } from "antd";
-import { type FC, useState } from "react";
+import { type FC, useCallback, useState } from "react";
 import { ActivityBar } from "./layout/ActivityBar";
 import { SidePanel } from "./layout/SidePanel";
 import { BottomPanel } from "./layout/BottomPanel";
 import { SqlEditor } from "./editor/SqlEditor";
 import { ShortcutsHelp } from "./ShortcutsHelp";
+import { formatSql } from "./editor/formatter";
 
 export const SqlIde: FC = () => {
   const [sql, setSql] = useState<string>("-- SQL IDE v2\nSELECT 1;");
   const [helpOpen, setHelpOpen] = useState(false);
+
+  const handleFormat = useCallback(async () => {
+    try {
+      const next = await formatSql(sql, "generic");
+      setSql(next);
+    } catch (err) {
+      console.error("[SqlIde] format failed", err);
+    }
+  }, [sql]);
 
   return (
     <div
@@ -29,7 +39,7 @@ export const SqlIde: FC = () => {
             isDark={true}
             onExecute={(s) => console.info("[SqlIde] execute:", s)}
             onExecuteInNewTab={(s) => console.info("[SqlIde] executeInNewTab:", s)}
-            onFormat={() => console.info("[SqlIde] format placeholder (T06)")}
+            onFormat={handleFormat}
             onSaveAsQuery={(s) => console.info("[SqlIde] saveAsQuery:", s)}
             onToggleBottomPanel={() => console.info("[SqlIde] toggleBottomPanel")}
           />
