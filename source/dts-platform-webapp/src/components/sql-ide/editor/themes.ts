@@ -3,7 +3,11 @@ import type * as MonacoNs from "monaco-editor";
 export const SQLIDE_DARK = "sqlide-dark";
 export const SQLIDE_LIGHT = "sqlide-light";
 
+let registered = false;
+
 export function registerSqlIdeThemes(monaco: typeof MonacoNs): void {
+  if (registered) return;
+  registered = true;
   monaco.editor.defineTheme(SQLIDE_DARK, {
     base: "vs-dark",
     inherit: true,

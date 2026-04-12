@@ -1,5 +1,5 @@
-import Editor, { type OnMount, useMonaco } from "@monaco-editor/react";
-import { type FC, useCallback, useEffect } from "react";
+import Editor, { type OnMount } from "@monaco-editor/react";
+import { type FC, useCallback, useEffect, useRef } from "react";
 import { SQLIDE_DARK, SQLIDE_LIGHT, registerSqlIdeThemes } from "./themes";
 
 export type Engine = "trino" | "hive" | "postgresql" | "generic";
@@ -26,24 +26,36 @@ export const SqlEditor: FC<SqlEditorProps> = ({
   onExecute,
   onCursorPositionChange,
 }) => {
-  const monaco = useMonaco();
-
+  // Keep a ref to the latest callback so the listener never captures a stale closure
+  const onCursorPositionChangeRef = useRef(onCursorPositionChange);
   useEffect(() => {
-    if (monaco) registerSqlIdeThemes(monaco);
-  }, [monaco]);
+    onCursorPositionChangeRef.current = onCursorPositionChange;
+  });
+
+  // Disposables registered during mount — cleaned up when the component unmounts
+  const disposablesRef = useRef<{ dispose(): void }[]>([]);
+  useEffect(() => {
+    return () => {
+      disposablesRef.current.forEach((d) => d.dispose());
+    };
+  }, []);
 
   const handleMount: OnMount = useCallback(
     (editor, mo) => {
       registerSqlIdeThemes(mo);
-      editor.onDidChangeCursorPosition((e) => {
-        onCursorPositionChange?.({ line: e.position.lineNumber, column: e.position.column });
+      const cursorDisposable = editor.onDidChangeCursorPosition((e) => {
+        onCursorPositionChangeRef.current?.({
+          line: e.position.lineNumber,
+          column: e.position.column,
+        });
       });
+      disposablesRef.current.push(cursorDisposable);
       // Ctrl+Enter placeholder — full keymap in T05
       editor.addCommand(mo.KeyMod.CtrlCmd | mo.KeyCode.Enter, () => {
         onExecute?.(editor.getValue());
       });
     },
-    [onCursorPositionChange, onExecute],
+    [onExecute],
   );
 
   return (
