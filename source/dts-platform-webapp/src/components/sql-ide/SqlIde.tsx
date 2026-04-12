@@ -1,4 +1,4 @@
-import { Button } from "antd";
+import { Button, message } from "antd";
 import { type FC, useCallback, useState } from "react";
 import { ActivityBar } from "./layout/ActivityBar";
 import { SidePanel } from "./layout/SidePanel";
@@ -16,7 +16,12 @@ export const SqlIde: FC = () => {
       const next = await formatSql(sql, "generic");
       setSql(next);
     } catch (err) {
-      console.error("[SqlIde] format failed", err);
+      message.error("格式化失败，请检查 SQL 语法");
+      // still log to console in dev so stack trace is visible
+      if (import.meta.env.DEV) {
+        // eslint-disable-next-line no-console
+        console.error("[SqlIde] format failed", err);
+      }
     }
   }, [sql]);
 
