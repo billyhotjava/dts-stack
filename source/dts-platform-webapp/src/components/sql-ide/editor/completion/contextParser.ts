@@ -16,9 +16,10 @@ export function parseContext(textBeforeCursor: string): SqlContext {
   const cleaned = stripStrings(textBeforeCursor);
   const trimmed = cleaned.replace(/\s+$/u, "");
 
-  // afterDot: identifier followed by "." with no identifier chars immediately after
-  // (covers "u. FROM ..." where no column name has been typed yet, or "public." at end)
-  const dotMatch = /(\b[\p{L}_][\p{L}\p{N}_]*)\.(?![\p{L}\p{N}_])/u.exec(cleaned);
+  // afterDot: identifier immediately before end of string (optionally trailed by whitespace)
+  // End-anchored so we match the dot closest to the cursor, not the first one in the string.
+  // Unicode-aware negative lookbehind replaces \b so CJK identifiers (e.g. 表名) are handled.
+  const dotMatch = /(?<![\p{L}\p{N}_])([\p{L}_][\p{L}\p{N}_]*)\.\s*$/u.exec(cleaned);
   if (dotMatch) return { kind: "afterDot", alias: dotMatch[1] };
 
   // afterFrom: FROM or JOIN followed by optional whitespace (cursor is where table name goes)
