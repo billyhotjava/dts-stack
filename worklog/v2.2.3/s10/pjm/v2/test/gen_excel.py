@@ -1207,6 +1207,293 @@ material_info_rows = [
 ]
 
 
+# ─── 数据扩展：8 项目、主表扩至 1000 行、混入异常数据 ────────
+#
+# 设计原则：
+#   - 保留上方手写的 "金标准" 种子数据（已精心覆盖各枚举值）
+#   - 程序化追加更多行，将主表扩至 1000 行，其他表按比例放大
+#   - 共 8 个项目（PJ-2025-001 ~ 008），其中前 2 个沿用种子
+#   - 约 15% 的行注入异常数据，用于测试 ETL 清洗/告警能力
+#
+# 异常类型（仅作用于时间字段）：
+#   - "/" 分隔符:        2025/07/08
+#   - 5 位年份拼写错误:   20205/07/08
+#   - 中文日期:          2025年7月8日 / 2025年07月
+#   - "." 分隔符:        2025.7.8
+#   - 非法日期:          2025-13-45 / 2025-02-30
+#   - 占位符:            待定 / TBD / 未知
+#   - 月份单字段:         2025-9 (缺零填充)
+
+import random
+
+random.seed(20260412)  # 固定种子，保证生成结果可复现
+
+# 8 个项目定义（前 2 个与种子数据保持一致）
+ALL_PROJECTS = [
+    ("PJ-2025-001", "卫星导航系统",   "王总", "赵志强", "project1.xlsx"),
+    ("PJ-2025-002", "深空探测器",     "李总", "钱学文", "project1.xlsx"),
+    ("PJ-2025-003", "遥感观测卫星",   "张总", "孙明远", "pmall.xlsx"),
+    ("PJ-2025-004", "通信中继星座",   "刘总", "周建华", "pmall.xlsx"),
+    ("PJ-2025-005", "空间站实验舱",   "马总", "郑晓阳", "pmall.xlsx"),
+    ("PJ-2025-006", "月球着陆器",     "韩总", "冯志远", "pmall.xlsx"),
+    ("PJ-2025-007", "火星巡视器",     "崔总", "何俊杰", "pmall.xlsx"),
+    ("PJ-2025-008", "低轨互联网卫星", "高总", "吕文博", "pmall.xlsx"),
+]
+
+SUBSYSTEMS = ["结构分系统", "电子分系统", "软件分系统", "热控分系统", "推进分系统"]
+SUBSYS_DEPT = {
+    "结构分系统": ("结构室", "李刚", "张明" ),
+    "电子分系统": ("电子室", "王磊", "陈辉" ),
+    "软件分系统": ("软件室", "陈峰", "刘芳" ),
+    "热控分系统": ("热控室", "赵勇", "孙伟" ),
+    "推进分系统": ("推进室", "张海", "吴勇" ),
+}
+
+NODE_TASKS = {
+    "结构分系统": ["结构方案评审", "结构图纸出图", "力学试验", "结构总装", "振动试验",
+                  "冲击试验", "结构件加工", "总装测试", "密封性检测", "结构称重"],
+    "电子分系统": ["电子方案设计", "电路板设计", "单板联调", "电磁兼容测试", "FPGA开发",
+                  "供电测试", "信号完整性分析", "电性能测试", "热设计评审", "可靠性分析"],
+    "软件分系统": ["需求分析", "概要设计", "详细设计", "模块编码", "单元测试",
+                  "集成测试", "系统测试", "代码走查", "配置管理评审", "验收测试"],
+    "热控分系统": ["热分析建模", "热仿真计算", "热平衡试验", "热真空试验", "散热器设计",
+                  "热管性能测试", "涂层工艺验证", "多层隔热试验", "温度场分析", "热控方案评审"],
+    "推进分系统": ["推进方案论证", "发动机设计", "点火试验", "推力校准", "推进剂兼容性",
+                  "贮箱压力试验", "管路连接测试", "姿控发动机试车", "推进剂加注演练", "喷管烧蚀试验"],
+}
+
+COMPLETION_STATES = [
+    "按时完成", "正常待完成", "超期已完成已变更", "超期已完成未变更",
+    "不正常待变更", "超期未完成未变更", "超期未完成已变更",
+]
+NODE_TYPES = ["一般节点", "重要节点", "重大节点", "里程碑节点"]
+RISK_LEVELS = ["高", "中", "低"]
+CHANGE_CATEGORIES = ["I", "II", "III"]
+CAUSE_CATEGORIES = ["设计", "工艺", "管理", "元器件", "操作", "外协外购", "软件", "其他"]
+RISK_STATUS = ["已释放", "跟踪中", "待处理"]
+RISK_STAGE = ["方案阶段", "初样阶段", "正样阶段"]
+RISK_KIND = ["技术", "供应链", "管理", "资源", "进度"]
+COAUTHOR = ["张明", "陈辉", "刘芳", "孙伟", "吴勇", "周强", "林小明", "赵敏",
+            "王鹏", "李雪", "郭伟", "黄磊", "钱海", "秦川"]
+DEPTS_CO = ["总体室", "总装室", "测试室", "环境试验室", "质量管理处", "科研管理处",
+            "采购室", "信息中心", "安全室", ""]
+
+# ─── 日期工具 + 异常注入 ───────────────────────────────────────
+
+def _date_iso(y, m, d):
+    return f"{y:04d}-{m:02d}-{d:02d}"
+
+def _week_of(y, m, d):
+    # 简化估算：每年 1 月 1 日为第 1 周
+    from datetime import date
+    return ((date(y, m, d) - date(y, 1, 1)).days) // 7 + 1
+
+DIRTY_DATE_PROB = 0.15  # 单元格级异常概率
+
+def _dirty_date(y, m, d):
+    """返回一个异常格式的时间字符串。"""
+    variants = [
+        f"{y}/{m:02d}/{d:02d}",                # 斜杠
+        f"{y}/{m}/{d}",                        # 斜杠 + 不补零
+        f"2{y}/{m:02d}/{d:02d}",               # 5 位年（20205/07/08）
+        f"{y}年{m}月{d}日",                    # 中文
+        f"{y}年{m:02d}月{d:02d}日",            # 中文补零
+        f"{y}.{m}.{d}",                        # 点分隔
+        f"{y}-{m}-{d}",                        # 无零填充
+        f"{y}-{m:02d}",                        # 只到月
+        f"{y}-13-{d:02d}",                     # 非法月份
+        f"{y}-{m:02d}-32",                     # 非法日
+        f"{y}-02-30",                          # 日期不存在
+        "待定",
+        "TBD",
+        "未知",
+        "",
+    ]
+    return random.choice(variants)
+
+def mk_date(y, m, d, allow_dirty=True):
+    """生成日期，按概率注入异常。"""
+    if allow_dirty and random.random() < DIRTY_DATE_PROB:
+        return _dirty_date(y, m, d)
+    return _date_iso(y, m, d)
+
+def mk_week(y, m, d, allow_dirty=True):
+    if allow_dirty and random.random() < DIRTY_DATE_PROB / 2:
+        return random.choice(["", "待定", "N/A", "-1", "０"])  # 含全角零
+    return str(_week_of(y, m, d))
+
+# ─── 主表扩展：项目×分系统×月份 → 1000 行 ─────────────────────
+
+def _gen_project_subject_domain_rows():
+    rows = []
+    # 组合枚举：8 项目 × 5 分系统 × 25 个月窗口 = 1000 行
+    months = []
+    for y in (2025, 2026):
+        for m in range(1, 13):
+            months.append((y, m))
+    months = months[:25]  # 2025-01 ~ 2027-01
+
+    for proj in ALL_PROJECTS:
+        pcode, pname, leader, pm, source = proj
+        for sub in SUBSYSTEMS:
+            dept, dep_leader, owner_default = SUBSYS_DEPT[sub]
+            for yi, (y, m) in enumerate(months):
+                task_list = NODE_TASKS[sub]
+                task = task_list[yi % len(task_list)]
+                plan_day = random.randint(5, 28)
+                state = random.choice(COMPLETION_STATES)
+                node_type = random.choice(NODE_TYPES)
+                risk = random.choice(RISK_LEVELS)
+                owner = random.choice(COAUTHOR)
+                deliv = task + "报告"
+                planned = (y, m, plan_day)
+
+                # 是否有实际完成时间（依据完成情况）
+                has_actual = state in ("按时完成",
+                                       "超期已完成已变更", "超期已完成未变更")
+                actual_date = ""
+                actual_week = ""
+                if has_actual:
+                    if state == "按时完成":
+                        ay, am, ad = y, m, max(1, plan_day - random.randint(0, 3))
+                    else:  # 超期已完成
+                        delta = random.randint(5, 45)
+                        from datetime import date, timedelta
+                        d2 = date(y, m, plan_day) + timedelta(days=delta)
+                        ay, am, ad = d2.year, d2.month, d2.day
+                    actual_date = mk_date(ay, am, ad)
+                    actual_week = mk_week(ay, am, ad, allow_dirty=False)
+
+                # 延期预计完成时间（变更类状态有）
+                delay_plan = ""
+                if "变更" in state and "已完成" not in state:
+                    delay_plan = mk_date(y, m + 1 if m < 12 else 12,
+                                         random.randint(1, 28))
+
+                # 原计划时间（超期类）
+                orig_date = ""
+                if "超期" in state or "变更" in state:
+                    orig_date = mk_date(y, m, plan_day, allow_dirty=False)
+
+                changed_weeks = ""
+                unchanged_weeks = ""
+                if state == "超期已完成已变更":
+                    changed_weeks = str(random.randint(2, 8))
+                elif state == "超期已完成未变更":
+                    unchanged_weeks = str(random.randint(2, 8))
+                elif state == "超期未完成未变更":
+                    unchanged_weeks = str(random.randint(1, 6))
+
+                delay_apply = ""
+                if "变更" in state:
+                    delay_apply = random.choice(["是", "否"])
+
+                reason_text = ""
+                if state not in ("按时完成", "正常待完成"):
+                    reason_text = random.choice([
+                        "外协件到货延迟", "仿真资源紧张", "需求变更导致返工",
+                        "试验设备排期冲突", "关键元器件供货周期长",
+                        "工艺良率不足", "人员调配冲突", "评审意见整改中",
+                    ])
+
+                risk_text = ""
+                if risk in ("高", "中"):
+                    risk_text = random.choice([
+                        "关键供应商产能不足", "新工艺良率风险", "进口元器件断供风险",
+                        "接口协议变更风险", "试验失败返工风险", "",
+                    ])
+
+                impact_text = ""
+                if state not in ("按时完成", "正常待完成"):
+                    impact_text = random.choice([
+                        "影响下游联调节点", "不影响主线进度", "压缩后续2周工期",
+                        "可能影响里程碑交付", "",
+                    ])
+
+                coop = random.choice(DEPTS_CO)
+                regul = random.choice(["质量管理处", "科研管理处"])
+
+                update_day = random.randint(1, 28)
+                highlight = ""
+                if state == "按时完成" and random.random() < 0.12:
+                    highlight = random.choice([
+                        "提前完成，获专家组一致通过",
+                        "创新方案获技术委员会好评",
+                        "效率较基线提升25%",
+                        "首件合格率100%",
+                    ])
+
+                row = [
+                    pcode, sub, task,
+                    mk_date(*planned),                      # 节点计划时间
+                    mk_week(*planned, allow_dirty=False),   # 节点计划周数
+                    deliv, node_type, owner, dept, dep_leader,
+                    state, coop, regul,
+                    delay_plan,
+                    reason_text, risk, risk_text, impact_text,
+                    actual_date, actual_week, leader, source,
+                    orig_date, changed_weeks, unchanged_weeks,
+                    delay_apply, pm,
+                    mk_date(y, m, update_day, allow_dirty=False),
+                    mk_week(y, m, update_day, allow_dirty=False),
+                    owner, highlight,
+                ]
+                rows.append(row)
+    return rows
+
+# 用生成数据替换种子数据（主表需要精确 1000 行）
+project_subject_domain_rows = _gen_project_subject_domain_rows()
+
+# ─── 其他表按比例放大到 ~80 行 ────────────────────────────────
+
+def _extend_rows(seed_rows, headers, target_count, mutator):
+    """
+    以种子行为模板，克隆+扰动直至达到目标行数。
+    mutator(row_list, idx) -> row_list  对单行做字段级替换。
+    """
+    out = list(seed_rows)
+    i = 0
+    while len(out) < target_count:
+        base = [c for c in seed_rows[i % len(seed_rows)]]
+        out.append(mutator(base, i))
+        i += 1
+    return out
+
+def _replace_project(row, headers, idx):
+    """随机替换项目编号（第一列）、把部分时间字段脏化。"""
+    proj = random.choice(ALL_PROJECTS)
+    row[0] = proj[0]
+    # 扫描 headers，对含"时间"的列按概率脏化
+    for ci, h in enumerate(headers):
+        if "时间" in h and isinstance(row[ci], str) and row[ci]:
+            if random.random() < DIRTY_DATE_PROB:
+                # 尝试解析原值 yyyy-mm-dd，若失败随机生成
+                parts = row[ci].split("-")
+                try:
+                    y, m, d = int(parts[0]), int(parts[1]), int(parts[2])
+                except Exception:
+                    y, m, d = 2025, random.randint(1, 12), random.randint(1, 28)
+                row[ci] = _dirty_date(y, m, d)
+    # 末列填写人随机换
+    if headers and headers[-1] == "填写人":
+        row[-1] = random.choice(COAUTHOR)
+    return row
+
+def _make_mutator(headers):
+    def _m(row, idx):
+        return _replace_project(row, headers, idx)
+    return _m
+
+progress_measure_rows  = _extend_rows(progress_measure_rows,  progress_measure_headers,  80, _make_mutator(progress_measure_headers))
+quality_issue_rows     = _extend_rows(quality_issue_rows,     quality_issue_headers,     80, _make_mutator(quality_issue_headers))
+quality_measure_rows   = _extend_rows(quality_measure_rows,   quality_measure_headers,   80, _make_mutator(quality_measure_headers))
+tech_state_rows        = _extend_rows(tech_state_rows,        tech_state_headers,        80, _make_mutator(tech_state_headers))
+tech_state_measure_rows= _extend_rows(tech_state_measure_rows,tech_state_measure_headers,80, _make_mutator(tech_state_measure_headers))
+risk_info_rows         = _extend_rows(risk_info_rows,         risk_info_headers,         80, _make_mutator(risk_info_headers))
+risk_measure_rows      = _extend_rows(risk_measure_rows,      risk_measure_headers,      80, _make_mutator(risk_measure_headers))
+material_info_rows     = _extend_rows(material_info_rows,     material_info_headers,     80, _make_mutator(material_info_headers))
+
+
 # ─── 主流程 ──────────────────────────────────────────────────
 
 print("生成 ODS v2 测试数据 Excel 文件...")

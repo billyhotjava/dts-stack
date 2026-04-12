@@ -5,7 +5,7 @@
   "description": "一级看板：项目综合态势总览，进度为主轴 + 异常标红，核心维度：项目 + 科室。",
   "width": 1920,
   "height": 1080,
-  "backgroundColor": "#030a18",
+  "backgroundColor": "#071a34",
   "theme": "dark-command",
   "globalVariables": [
     {
@@ -63,7 +63,7 @@
       "locked": true,
       "visible": true,
       "config": {
-        "content": "<div style=\"width:100%;height:100%;background:\n      radial-gradient(circle at 50% 26%, rgba(11,46,103,0.95) 0%, rgba(8,28,63,0.92) 28%, rgba(6,20,44,0.98) 72%, rgba(3,10,24,1) 100%),\n      radial-gradient(circle at center, transparent 40%, rgba(0,0,0,0.28) 100%);\n      position:relative;overflow:hidden;\">\n      <div style=\"position:absolute;inset:0;background-image:\n        linear-gradient(rgba(52,113,196,0.18) 1px, transparent 1px),\n        linear-gradient(90deg, rgba(52,113,196,0.18) 1px, transparent 1px);\n        background-size:28px 28px;opacity:0.42;\"></div>\n      <div style=\"position:absolute;inset:0;background:radial-gradient(circle at center, transparent 40%, rgba(0,0,0,0.28) 100%);\"></div>\n    </div>",
+        "content": "<div style=\"width:100%;height:100%;background:\n      radial-gradient(circle at 50% 26%, rgba(22,72,142,0.92) 0%, rgba(14,47,96,0.88) 28%, rgba(7,26,52,0.95) 72%, rgba(4,12,28,1) 100%),\n      radial-gradient(circle at center, transparent 40%, rgba(0,0,0,0.22) 100%);\n      position:relative;overflow:hidden;\">\n      <div style=\"position:absolute;inset:0;background-image:\n        linear-gradient(rgba(70,132,210,0.16) 1px, transparent 1px),\n        linear-gradient(90deg, rgba(70,132,210,0.16) 1px, transparent 1px);\n        background-size:28px 28px;opacity:0.42;\"></div>\n      <div style=\"position:absolute;inset:0;background:radial-gradient(circle at center, transparent 42%, rgba(0,0,0,0.22) 100%);\"></div>\n    </div>",
         "padding": 0,
         "overflow": "hidden"
       }
@@ -81,8 +81,8 @@
       "visible": true,
       "config": {
         "shapeType": "rect",
-        "fillColor": "#06142c",
-        "borderColor": "#06142c",
+        "fillColor": "#071a34",
+        "borderColor": "#071a34",
         "borderWidth": 0,
         "radius": 0
       }
@@ -100,8 +100,8 @@
       "visible": true,
       "config": {
         "shapeType": "rect",
-        "fillColor": "rgba(8, 28, 63, 0.92)",
-        "borderColor": "rgba(69, 164, 255, 0.38)",
+        "fillColor": "rgba(14, 47, 96, 0.90)",
+        "borderColor": "rgba(88, 180, 255, 0.34)",
         "borderWidth": 1,
         "radius": 10
       }
@@ -354,7 +354,7 @@
         "valueFontSize": 32,
         "titleColor": "#c3e6ff",
         "valueColor": "#27d8ff",
-        "backgroundColor": "rgba(9, 36, 90, 0.82)",
+        "backgroundColor": "rgba(14, 47, 96, 0.74)",
         "valueField": "项目总数"
       },
       "dataSource": {
@@ -405,7 +405,7 @@
         "valueFontSize": 32,
         "titleColor": "#c3e6ff",
         "valueColor": "#2ee6a6",
-        "backgroundColor": "rgba(9, 36, 90, 0.82)",
+        "backgroundColor": "rgba(14, 47, 96, 0.74)",
         "valueField": "项目完成率"
       },
       "dataSource": {
@@ -456,7 +456,7 @@
         "valueFontSize": 32,
         "titleColor": "#c3e6ff",
         "valueColor": "#ff5d73",
-        "backgroundColor": "rgba(9, 36, 90, 0.82)",
+        "backgroundColor": "rgba(14, 47, 96, 0.74)",
         "valueField": "未闭环质量问题数"
       },
       "dataSource": {
@@ -507,7 +507,7 @@
         "valueFontSize": 32,
         "titleColor": "#c3e6ff",
         "valueColor": "#ffd54f",
-        "backgroundColor": "rgba(9, 36, 90, 0.82)",
+        "backgroundColor": "rgba(14, 47, 96, 0.74)",
         "valueField": "未整改落实技术更改单数"
       },
       "dataSource": {
@@ -558,7 +558,7 @@
         "valueFontSize": 32,
         "titleColor": "#c3e6ff",
         "valueColor": "#ff9f43",
-        "backgroundColor": "rgba(9, 36, 90, 0.82)",
+        "backgroundColor": "rgba(14, 47, 96, 0.74)",
         "valueField": "高风险数量"
       },
       "dataSource": {
@@ -1091,8 +1091,8 @@
       "visible": true,
       "config": {
         "shapeType": "rect",
-        "fillColor": "rgba(9, 36, 90, 0.82)",
-        "borderColor": "rgba(69, 164, 255, 0.38)",
+        "fillColor": "rgba(14, 47, 96, 0.74)",
+        "borderColor": "rgba(88, 180, 255, 0.32)",
         "borderWidth": 1,
         "radius": 16
       }
@@ -1304,7 +1304,7 @@
       "height": 40,
       "zIndex": 70,
       "locked": false,
-      "visible": true,
+      "visible": false,
       "config": {
         "label": "周期",
         "startVariableKey": "dateFrom",
@@ -1325,7 +1325,7 @@
       "height": 40,
       "zIndex": 70,
       "locked": false,
-      "visible": true,
+      "visible": false,
       "config": {
         "label": "科室",
         "variableKey": "deptId",
@@ -1356,7 +1356,7 @@
       "height": 40,
       "zIndex": 70,
       "locked": false,
-      "visible": true,
+      "visible": false,
       "config": {
         "label": "项目",
         "variableKey": "projectNo",
@@ -1380,8 +1380,8 @@
       "visible": true,
       "config": {
         "shapeType": "rect",
-        "fillColor": "rgba(9, 36, 90, 0.82)",
-        "borderColor": "rgba(69, 164, 255, 0.38)",
+        "fillColor": "rgba(14, 47, 96, 0.74)",
+        "borderColor": "rgba(88, 180, 255, 0.32)",
         "borderWidth": 1,
         "radius": 16
       }
@@ -1399,8 +1399,8 @@
       "visible": true,
       "config": {
         "shapeType": "rect",
-        "fillColor": "rgba(9, 36, 90, 0.82)",
-        "borderColor": "rgba(69, 164, 255, 0.38)",
+        "fillColor": "rgba(14, 47, 96, 0.74)",
+        "borderColor": "rgba(88, 180, 255, 0.32)",
         "borderWidth": 1,
         "radius": 16
       }
@@ -1418,8 +1418,8 @@
       "visible": true,
       "config": {
         "shapeType": "rect",
-        "fillColor": "rgba(9, 36, 90, 0.82)",
-        "borderColor": "rgba(69, 164, 255, 0.38)",
+        "fillColor": "rgba(14, 47, 96, 0.74)",
+        "borderColor": "rgba(88, 180, 255, 0.32)",
         "borderWidth": 1,
         "radius": 16
       }
@@ -1437,8 +1437,8 @@
       "visible": true,
       "config": {
         "shapeType": "rect",
-        "fillColor": "rgba(9, 36, 90, 0.82)",
-        "borderColor": "rgba(69, 164, 255, 0.38)",
+        "fillColor": "rgba(14, 47, 96, 0.74)",
+        "borderColor": "rgba(88, 180, 255, 0.32)",
         "borderWidth": 1,
         "radius": 16
       }
@@ -1456,8 +1456,8 @@
       "visible": true,
       "config": {
         "shapeType": "rect",
-        "fillColor": "rgba(9, 36, 90, 0.82)",
-        "borderColor": "rgba(69, 164, 255, 0.38)",
+        "fillColor": "rgba(14, 47, 96, 0.74)",
+        "borderColor": "rgba(88, 180, 255, 0.32)",
         "borderWidth": 1,
         "radius": 16
       }
@@ -1475,8 +1475,8 @@
       "visible": true,
       "config": {
         "shapeType": "rect",
-        "fillColor": "rgba(9, 36, 90, 0.82)",
-        "borderColor": "rgba(69, 164, 255, 0.38)",
+        "fillColor": "rgba(14, 47, 96, 0.74)",
+        "borderColor": "rgba(88, 180, 255, 0.32)",
         "borderWidth": 1,
         "radius": 16
       }
@@ -1494,8 +1494,8 @@
       "visible": true,
       "config": {
         "shapeType": "rect",
-        "fillColor": "rgba(9, 36, 90, 0.82)",
-        "borderColor": "rgba(69, 164, 255, 0.38)",
+        "fillColor": "rgba(14, 47, 96, 0.74)",
+        "borderColor": "rgba(88, 180, 255, 0.32)",
         "borderWidth": 1,
         "radius": 16
       }
@@ -1513,8 +1513,8 @@
       "visible": true,
       "config": {
         "shapeType": "rect",
-        "fillColor": "rgba(9, 36, 90, 0.82)",
-        "borderColor": "rgba(69, 164, 255, 0.38)",
+        "fillColor": "rgba(14, 47, 96, 0.74)",
+        "borderColor": "rgba(88, 180, 255, 0.32)",
         "borderWidth": 1,
         "radius": 16
       }
@@ -1532,8 +1532,8 @@
       "visible": true,
       "config": {
         "shapeType": "rect",
-        "fillColor": "rgba(9, 36, 90, 0.82)",
-        "borderColor": "rgba(69, 164, 255, 0.38)",
+        "fillColor": "rgba(14, 47, 96, 0.74)",
+        "borderColor": "rgba(88, 180, 255, 0.32)",
         "borderWidth": 1,
         "radius": 16
       }
@@ -1748,7 +1748,7 @@
         "valueFontSize": 24,
         "titleColor": "#8cb9df",
         "valueColor": "#ff5d73",
-        "backgroundColor": "rgba(10, 39, 100, 0.70)",
+        "backgroundColor": "rgba(16, 52, 104, 0.64)",
         "valueField": "未闭环质量问题数"
       },
       "dataSource": {
@@ -1799,7 +1799,7 @@
         "valueFontSize": 24,
         "titleColor": "#8cb9df",
         "valueColor": "#ffd54f",
-        "backgroundColor": "rgba(10, 39, 100, 0.70)",
+        "backgroundColor": "rgba(16, 52, 104, 0.64)",
         "valueField": "未整改落实技术更改单数"
       },
       "dataSource": {
@@ -1850,7 +1850,7 @@
         "valueFontSize": 24,
         "titleColor": "#8cb9df",
         "valueColor": "#ff9f43",
-        "backgroundColor": "rgba(10, 39, 100, 0.70)",
+        "backgroundColor": "rgba(16, 52, 104, 0.64)",
         "valueField": "高风险数量"
       },
       "dataSource": {
@@ -1901,7 +1901,7 @@
         "valueFontSize": 24,
         "titleColor": "#8cb9df",
         "valueColor": "#27d8ff",
-        "backgroundColor": "rgba(10, 39, 100, 0.70)",
+        "backgroundColor": "rgba(16, 52, 104, 0.64)",
         "valueField": "项目完成率"
       },
       "dataSource": {
