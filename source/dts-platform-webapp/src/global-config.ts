@@ -22,6 +22,8 @@ export type GlobalConfig = {
 	enablePortalMenuMgmt: boolean;
     /** Enable experimental SQL workbench experience */
     enableSqlWorkbench: boolean;
+    /** Enable Sprint-11 new SQL IDE (replaces QueryWorkbenchPage when true) */
+    enableSqlIdeV2: boolean;
     /** Allowed roles to sign in; empty means allow all authenticated users */
     allowedLoginRoles: string[];
     /** Local Koal middleware endpoints, used for PKI login */
@@ -118,6 +120,7 @@ declare global {
         __RUNTIME_CONFIG__?: {
             koalPkiEndpoints?: string[];
             enableSqlWorkbench?: string | boolean;
+            enableSqlIdeV2?: string | boolean;
         };
     }
 }
@@ -154,6 +157,18 @@ const resolveEnableSqlWorkbench = (): boolean => {
     return String(import.meta.env.VITE_ENABLE_SQL_WORKBENCH || "false").toLowerCase() === "true";
 };
 
+const resolveEnableSqlIdeV2 = (): boolean => {
+    try {
+        const rc = (typeof window !== "undefined" && window.__RUNTIME_CONFIG__) || {};
+        if (rc && typeof rc.enableSqlIdeV2 !== "undefined") {
+            const raw = String(rc.enableSqlIdeV2).trim().toLowerCase();
+            if (raw === "true" || raw === "1") return true;
+            if (raw === "false" || raw === "0") return false;
+        }
+    } catch {}
+    return String(import.meta.env.VITE_ENABLE_SQL_IDE_V2 || "false").toLowerCase() === "true";
+};
+
 export const GLOBAL_CONFIG: GlobalConfig = {
 	appName: import.meta.env.VITE_APP_NAME || "BI数智平台",
 	appVersion: packageJson.version,
@@ -168,6 +183,7 @@ export const GLOBAL_CONFIG: GlobalConfig = {
 		| "hash",
     enablePortalMenuMgmt: String(import.meta.env.VITE_ENABLE_PORTAL_MENU_MGMT || "true").toLowerCase() === "true",
     enableSqlWorkbench: resolveEnableSqlWorkbench(),
+    enableSqlIdeV2: resolveEnableSqlIdeV2(),
     allowedLoginRoles: resolveAllowedLoginRoles(),
     koalPkiEndpoints: resolveKoalPkiEndpoints(),
 };

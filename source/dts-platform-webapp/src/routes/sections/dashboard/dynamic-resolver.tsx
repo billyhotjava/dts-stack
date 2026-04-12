@@ -19,6 +19,10 @@ import { Component } from "./utils";
 
 type Props = { base?: string };
 
+const workbenchComponentPath = GLOBAL_CONFIG.enableSqlIdeV2
+	? "/pages/explore/SqlIdePage"
+	: "/pages/explore/QueryWorkbenchPage";
+
 const PATH_COMPONENT_OVERRIDES: Record<string, string> = {
 	// ── Platform pages ──
 	"/governance": "/pages/governance/GovernanceCenterPage",
@@ -34,7 +38,7 @@ const PATH_COMPONENT_OVERRIDES: Record<string, string> = {
 	"/foundation/jdbc-drivers": "/pages/foundation/JdbcDriversPage",
 	"/explore/etl/scripts": "/pages/explore/etl/ScriptStudioPage",
 	"/explore/etl/orchestration": "/pages/explore/etl/OrchestrationPage",
-	"/explore/workbench": "/pages/explore/QueryWorkbenchPage",
+	"/explore/workbench": workbenchComponentPath,
 	"/governance/subjects": "/pages/governance/SubjectAreasPage",
 	"/governance/standards/glossary": "/pages/governance/GlossaryPage",
 	"/governance/standards/elements": "/pages/governance/ElementsPage",

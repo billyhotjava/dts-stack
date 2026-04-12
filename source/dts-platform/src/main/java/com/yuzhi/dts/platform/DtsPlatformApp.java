@@ -13,6 +13,7 @@ import com.yuzhi.dts.platform.config.GovernanceProperties;
 import com.yuzhi.dts.platform.config.HiveExecutionProperties;
 import com.yuzhi.dts.platform.config.CRLFLogConverter;
 import com.yuzhi.dts.platform.config.OpenMetadataProperties;
+import com.yuzhi.dts.platform.config.SqlIdeFeatureProperties;
 import jakarta.annotation.PostConstruct;
 import java.net.InetAddress;
 import java.net.UnknownHostException;
@@ -47,6 +48,7 @@ import tech.jhipster.config.JHipsterConstants;
     AirflowProperties.class,
     DtsIngestionProperties.class,
     DtsAnalyticsProperties.class,
+    SqlIdeFeatureProperties.class,
 })
 public class DtsPlatformApp {
 

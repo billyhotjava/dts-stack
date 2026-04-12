@@ -275,6 +275,9 @@ dts:
     admin-api-path: ${DTS_ADMIN_ADMIN_API_PATH:/api/admin}
     service-token: ${DTS_ADMIN_SERVICE_TOKEN:}
     service-name: ${DTS_ADMIN_SERVICE_NAME:dts-admin,dts-ingestion,dts-airflow,dts-analytics}
+  sql-ide:
+    v2:
+      enabled: ${DTS_SQL_IDE_V2_ENABLED:false}
   platform:
     features:
       # Serve Keycloak localization resources from platform to avoid browser TLS trust issues to admin domain in dev
