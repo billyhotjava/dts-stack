@@ -3,6 +3,7 @@ import { DndProvider } from 'react-dnd';
 import { HTML5Backend } from 'react-dnd-html5-backend';
 import { useLocation, useNavigate, useParams } from 'react-router';
 import { toast } from 'sonner';
+import { ConfigProvider, theme as antdTheme } from 'antd';
 import { ScreenProvider, useScreen } from './ScreenContext';
 import { ScreenRuntimeProvider } from './ScreenRuntimeContext';
 import { analyticsApi } from '../../api/analyticsApi';
@@ -478,10 +479,31 @@ function ScreenDesignerContent() {
 
 export default function ScreenDesignerPage() {
     return (
-        <DndProvider backend={HTML5Backend}>
-            <ScreenProvider>
-                <ScreenDesignerContent />
-            </ScreenProvider>
-        </DndProvider>
+        <ConfigProvider
+            theme={{
+                algorithm: antdTheme.darkAlgorithm,
+                token: {
+                    // popup layer must win over .screen-designer container (z-index: 9999)
+                    zIndexPopupBase: 10050,
+                    // dark-mode surfaces that match the screen designer container
+                    colorBgContainer: '#2a2b36',
+                    colorBgElevated: '#262730',
+                    colorBorder: 'rgba(255, 255, 255, 0.12)',
+                    colorBorderSecondary: 'rgba(255, 255, 255, 0.08)',
+                    colorText: 'rgba(255, 255, 255, 0.92)',
+                    colorTextSecondary: 'rgba(255, 255, 255, 0.60)',
+                    colorTextTertiary: 'rgba(255, 255, 255, 0.40)',
+                    colorTextPlaceholder: 'rgba(255, 255, 255, 0.35)',
+                    colorFillAlter: 'rgba(255, 255, 255, 0.04)',
+                    colorFillSecondary: 'rgba(255, 255, 255, 0.08)',
+                },
+            }}
+        >
+            <DndProvider backend={HTML5Backend}>
+                <ScreenProvider>
+                    <ScreenDesignerContent />
+                </ScreenProvider>
+            </DndProvider>
+        </ConfigProvider>
     );
 }

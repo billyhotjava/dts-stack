@@ -3,15 +3,8 @@
 
 import type { CardData, CardParameterBinding, ComponentInteractionMapping, ScreenComponent } from '../../types';
 
-const LEGACY_LIGHT_TEXT_COLORS = new Set(["#fff", "#ffffff", "#e5e7eb", "#d1d5db", "#cbd5e1", "#94a3b8"]);
-
 export function resolveTextColor(candidate: string | undefined, fallback: string): string {
     if (!candidate || candidate.trim().length === 0) {
-        return fallback;
-    }
-    const normalized = candidate.trim().toLowerCase();
-    const fallbackNormalized = (fallback || "").trim().toLowerCase();
-    if (LEGACY_LIGHT_TEXT_COLORS.has(normalized) && !LEGACY_LIGHT_TEXT_COLORS.has(fallbackNormalized)) {
         return fallback;
     }
     return candidate;

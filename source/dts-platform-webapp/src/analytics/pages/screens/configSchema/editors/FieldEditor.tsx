@@ -75,25 +75,32 @@ const FieldEditor: React.FC<FieldEditorProps> = ({ field, value, onChange, theme
         />
       );
 
-    case 'color':
+    case 'color': {
+      const colorValue = typeof value === 'string' && value.length > 0 ? value : undefined;
       return (
         <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
           <ColorPicker
             size="small"
-            value={value as string}
+            value={colorValue}
             onChange={(_, hex) => onChange(hex)}
             allowClear
             onClear={() => onChange(undefined)}
+            showText={false}
           />
           <Input
             size="small"
-            value={value as string}
-            onChange={(e) => onChange(e.target.value)}
+            value={colorValue ?? ''}
+            onChange={(e) => {
+              const next = e.target.value.trim();
+              onChange(next.length === 0 ? undefined : next);
+            }}
             placeholder={placeholder ?? '#000000'}
             style={{ flex: 1 }}
+            allowClear
           />
         </div>
       );
+    }
 
     case 'boolean':
       return <Switch size="small" checked={!!value} onChange={(v) => onChange(v)} />;
