@@ -141,6 +141,12 @@ if [ -n "${VITE_ENABLE_SQL_WORKBENCH:-}" ]; then
   echo "[entrypoint] runtime-config.js: enableSqlWorkbench=${VITE_ENABLE_SQL_WORKBENCH}"
 fi
 
+if [ -n "${WEBAPP_ENABLE_SQL_IDE_V2:-}" ]; then
+  val=$(printf '%s' "$WEBAPP_ENABLE_SQL_IDE_V2" | tr '[:upper:]' '[:lower:]')
+  printf '%s\n' "(function(w){w.__RUNTIME_CONFIG__=w.__RUNTIME_CONFIG__||{};w.__RUNTIME_CONFIG__.enableSqlIdeV2='${val}';})(window);" >> "$RUNTIME_JS"
+  echo "[entrypoint] runtime-config.js: enableSqlIdeV2=${WEBAPP_ENABLE_SQL_IDE_V2}"
+fi
+
 if [ -n "${PLATFORM_PUBLIC_BASE_URL:-}" ]; then
   val=$(printf '%s' "$PLATFORM_PUBLIC_BASE_URL" | tr -d '\r\n')
   printf '%s\n' "(function(w){w.__RUNTIME_CONFIG__=w.__RUNTIME_CONFIG__||{};w.__RUNTIME_CONFIG__.platformBaseUrl='${val}';})(window);" >> "$RUNTIME_JS"
