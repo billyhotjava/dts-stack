@@ -37,9 +37,14 @@ import { renderECharts } from '../renderers/EChartsRenderer';
 import { renderBasic } from '../renderers/BasicRenderer';
 import { renderDataV } from '../renderers/DataVRenderer';
 import { renderTable } from '../renderers/TableRenderer';
+import { WaterLevel } from '../renderers/datav/WaterLevel';
+import { DigitalFlop as DigitalFlopComponent } from '../renderers/datav/DigitalFlop';
+import { PercentPond } from '../renderers/datav/PercentPond';
+import { ScrollRanking } from '../renderers/datav/ScrollRanking';
+import { FlylineChart } from '../renderers/datav/FlylineChart';
 import {
     useEChartsLoader, isWebGLSupported,
-    ECHART_COMPONENT_TYPES, ECHART_3D_TYPES, DATAV_COMPONENT_TYPES,
+    ECHART_COMPONENT_TYPES, ECHART_3D_TYPES,
 } from '../hooks/useEChartsLoader';
 
 import { DelayReasonMatrix } from '../../project-cockpit/components/DelayReasonMatrix';
@@ -193,7 +198,7 @@ export const ComponentRenderer = memo(function ComponentRenderer({ component, mo
 
     const {
         EChartsComponent, registerMapFn, hasMapFn,
-        dataViewModule, borderBoxComponents, decorationComponents, mapReadyVersion,
+        mapReadyVersion,
     } = useEChartsLoader(type, config as Record<string, unknown>);
     const [mapDrillRegion, setMapDrillRegion] = useState<string | null>(null);
     const [tableSort, setTableSort] = useState<{ colIndex: number; order: 'asc' | 'desc' } | null>(null);
@@ -1149,15 +1154,7 @@ export const ComponentRenderer = memo(function ComponentRenderer({ component, mo
         if (ECHART_COMPONENT_TYPES.has(type) && !EChartsComponent) {
             return renderUnavailableState('图表引擎未就绪', '正在加载 ECharts 运行时，请稍候。');
         }
-        if (DATAV_COMPONENT_TYPES.has(type) && !dataViewModule) {
-            return renderUnavailableState('DataV 运行时未就绪', '正在加载 DataV 组件运行时，请稍候。');
-        }
-
         const EChart = EChartsComponent as ReactEChartsComponent;
-        const ScrollBoard = dataViewModule?.ScrollBoard;
-        const ScrollRankingBoard = dataViewModule?.ScrollRankingBoard;
-        const WaterLevelPond = dataViewModule?.WaterLevelPond;
-        const DigitalFlop = dataViewModule?.DigitalFlop;
         const renderEChartWithHandles = (
             option: Record<string, unknown>,
             onEvents?: Record<string, (params: Record<string, unknown>) => void>,
@@ -1389,12 +1386,11 @@ export const ComponentRenderer = memo(function ComponentRenderer({ component, mo
             // ==================== DataV 组件 (delegated to DataVRenderer) ====================
             case 'border-box':
             case 'decoration':
-                return renderDataV({ type, c, borderBoxComponents, decorationComponents, renderUnavailableState });
+                return renderDataV({ type, c, width, height });
 
             // ==================== Table-family (delegated to TableRenderer) ====================
             case 'scroll-board':
             case 'table':
-            case 'scroll-ranking':
                 return renderTable({
                     type,
                     c,
@@ -1415,75 +1411,62 @@ export const ComponentRenderer = memo(function ComponentRenderer({ component, mo
                     drillRuntimeEnabled,
                     componentActions: componentActions as any,
                     executeComponentActions,
-                    dataViewModule: dataViewModule as Record<string, React.ComponentType<Record<string, unknown>>> | null,
                     renderUnavailableState,
                 });
 
-            case 'water-level':
-                if (!WaterLevelPond) return renderUnavailableState('DataV 运行时未就绪');
+            case 'scroll-ranking':
                 return (
-                    <WaterLevelPond
-                        config={{
-                            data: [c.value as number],
-                            shape: c.shape as 'rect' | 'round' | 'roundRect' || 'round',
-                        }}
+                    <ScrollRanking
+                        data={c.data as Array<{ name: string; value: number }>}
+                        color={c.color as string[] | undefined}
+                        duration={c.duration as number | undefined}
+                        rowCount={c.rowNum as number | undefined}
                         style={{ width: '100%', height: '100%' }}
+                    />
+                );
+
+            case 'water-level':
+                return (
+                    <WaterLevel
+                        value={c.value as number}
+                        shape={c.shape as string}
+                        color={c.color as string[]}
+                        width={component.width}
+                        height={component.height}
                     />
                 );
 
             case 'digital-flop':
-                if (!DigitalFlop) return renderUnavailableState('DataV 运行时未就绪');
                 return (
-                    <DigitalFlop
-                        config={{
-                            number: c.number as number[],
-                            content: c.content as string,
-                            style: c.style as { fontSize?: number; fill?: string },
-                        }}
-                        style={{ width: '100%', height: '100%' }}
+                    <DigitalFlopComponent
+                        number={Array.isArray(c.number) ? (c.number as number[])[0] : (c.number as number)}
+                        content={c.content as string}
+                        style={c.style as { fontSize?: number; fill?: string }}
                     />
                 );
 
-            case 'percent-pond': {
-                const percentValue = c.value as number;
-                const colors = c.colors as string[] || [t.progressBar.fillGradient[0], t.progressBar.fillGradient[1]];
+            case 'percent-pond':
                 return (
-                    <div style={{
-                        width: '100%',
-                        height: '100%',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        position: 'relative',
-                    }}>
-                        <div style={{
-                            width: '100%',
-                            height: 20,
-                            background: t.progressBar.trackBg,
-                            borderRadius: c.borderRadius as number || 5,
-                            border: `${c.borderWidth as number || 2}px solid ${colors[0]}`,
-                            overflow: 'hidden',
-                            position: 'relative',
-                        }}>
-                            <div style={{
-                                width: `${percentValue}%`,
-                                height: '100%',
-                                background: `linear-gradient(90deg, ${colors[0]} 0%, ${colors[1] || colors[0]} 100%)`,
-                                transition: 'width 0.5s ease',
-                            }} />
-                        </div>
-                        <span style={{
-                            position: 'absolute',
-                            color: t.progressBar.labelColor,
-                            fontSize: 14,
-                            fontWeight: 'bold',
-                            textShadow: '0 0 4px rgba(0,0,0,0.8)',
-                        }}>
-                            {percentValue}%
-                        </span>
-                    </div>
+                    <PercentPond
+                        value={c.value as number}
+                        colors={c.colors as string[] || [t.progressBar.fillGradient[0], t.progressBar.fillGradient[1]]}
+                        borderRadius={c.borderRadius as number}
+                        borderWidth={c.borderWidth as number}
+                        width={width}
+                        height={height}
+                    />
                 );
-            }
+
+            case 'flyline-chart':
+                return (
+                    <FlylineChart
+                        points={c.points as Array<{ from: [number, number]; to: [number, number] }>}
+                        color={c.color as string[]}
+                        duration={c.duration as number}
+                        width={width}
+                        height={height}
+                    />
+                );
 
             // ==================== 3D 可视化 (echarts-gl) ====================
             case 'globe-chart': {
@@ -1687,9 +1670,6 @@ export const ComponentRenderer = memo(function ComponentRenderer({ component, mo
         theme,
         themeOptions,
         EChartsComponent,
-        dataViewModule,
-        borderBoxComponents,
-        decorationComponents,
         cardData,
         component,
         mode,

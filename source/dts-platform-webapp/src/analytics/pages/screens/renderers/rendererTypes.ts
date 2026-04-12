@@ -7,7 +7,6 @@ import type { CardData } from '../types';
 import type { ScreenThemeTokens } from '../screenThemes';
 
 export type ReactEChartsComponent = ReactComponentType<Record<string, unknown>>;
-export type DataViewModule = Record<string, ReactComponentType<Record<string, unknown>>>;
 
 export interface RendererProps {
     c: Record<string, unknown>;
@@ -19,7 +18,6 @@ export interface RendererProps {
     cardData: CardData | null;
     echartsClickHandler?: Record<string, (params: Record<string, unknown>) => void>;
     EChartsComponent: ReactEChartsComponent | null;
-    dataViewModule: DataViewModule | null;
     mode: string;
     componentId: string;
     componentType: string;

@@ -1,0 +1,168 @@
+.datav-border-box {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+}
+
+.datav-border-box__inner {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  padding: 12px;
+  box-sizing: border-box;
+  z-index: 1;
+}
+
+/* Type 1 - 简约线框 */
+.datav-border-box--1 {
+  border: 1px solid var(--bb-primary, var(--color-primary, #409eff));
+  border-radius: 4px;
+}
+
+.datav-border-box--1::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 3px;
+  background: var(--bb-primary, var(--color-primary, #409eff));
+  border-radius: 4px 4px 0 0;
+}
+
+/* Type 2 - 渐变边框 */
+.datav-border-box--2 {
+  border: 2px solid transparent;
+  background-image:
+    linear-gradient(var(--card-bg, #1e1f26), var(--card-bg, #1e1f26)),
+    linear-gradient(135deg, var(--bb-primary, var(--color-primary, #409eff)), var(--bb-secondary, rgba(64, 158, 255, 0.5)));
+  background-origin: border-box;
+  background-clip: padding-box, border-box;
+  border-radius: 8px;
+}
+
+/* Type 3 - 毛玻璃 */
+.datav-border-box--3 {
+  backdrop-filter: blur(12px) saturate(1.2);
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 12px;
+}
+
+/* Type 4 - 科技线框 */
+.datav-border-box--4 {
+  clip-path: polygon(
+    0 10px, 10px 0, calc(100% - 10px) 0, 100% 10px,
+    100% calc(100% - 10px), calc(100% - 10px) 100%,
+    10px 100%, 0 calc(100% - 10px)
+  );
+  background: rgba(255, 255, 255, 0.02);
+}
+
+.datav-border-box--4 .datav-border-box__svg {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  z-index: 0;
+  pointer-events: none;
+}
+
+.datav-border-box--4 .datav-border-box__svg polygon {
+  fill: none;
+  stroke: var(--bb-primary, var(--color-primary, #409eff));
+  stroke-width: 1.5;
+  stroke-dasharray: 20 5;
+  animation: border-box-scan var(--bb-duration, 3s) linear infinite;
+}
+
+@keyframes border-box-scan {
+  from { stroke-dashoffset: 0; }
+  to { stroke-dashoffset: -100; }
+}
+
+/* Type 5 - 霓虹发光 */
+.datav-border-box--5 {
+  border: 1px solid var(--bb-primary, var(--color-primary, #409eff));
+  border-radius: 6px;
+  box-shadow:
+    0 0 8px var(--bb-glow-1, rgba(64, 158, 255, 0.25)),
+    0 0 20px var(--bb-glow-2, rgba(64, 158, 255, 0.12)),
+    inset 0 0 8px var(--bb-glow-3, rgba(64, 158, 255, 0.06));
+  animation: neon-pulse var(--bb-duration, 3s) ease-in-out infinite;
+}
+
+@keyframes neon-pulse {
+  0%, 100% {
+    box-shadow:
+      0 0 8px var(--bb-glow-1, rgba(64, 158, 255, 0.25)),
+      0 0 20px var(--bb-glow-2, rgba(64, 158, 255, 0.12)),
+      inset 0 0 8px var(--bb-glow-3, rgba(64, 158, 255, 0.06));
+  }
+  50% {
+    box-shadow:
+      0 0 12px var(--bb-glow-1-bright, rgba(64, 158, 255, 0.6)),
+      0 0 30px var(--bb-glow-2-bright, rgba(64, 158, 255, 0.35)),
+      inset 0 0 12px var(--bb-glow-3-bright, rgba(64, 158, 255, 0.15));
+  }
+}
+
+/* Type 6 - 流光边框 */
+@property --bb-angle {
+  syntax: '<angle>';
+  initial-value: 0deg;
+  inherits: false;
+}
+
+.datav-border-box--6 {
+  position: relative;
+  border-radius: 8px;
+  padding: 2px;
+  background: conic-gradient(
+    from var(--bb-angle, 0deg),
+    var(--bb-primary, var(--color-primary, #409eff)),
+    transparent 30%,
+    var(--bb-secondary, var(--bb-primary, var(--color-primary, #409eff))),
+    transparent 70%
+  );
+  animation: border-box-rotate var(--bb-duration, 3s) linear infinite;
+}
+
+.datav-border-box--6 .datav-border-box__inner {
+  background: var(--card-bg, #1e1f26);
+  border-radius: 6px;
+}
+
+@keyframes border-box-rotate {
+  from { --bb-angle: 0deg; }
+  to { --bb-angle: 360deg; }
+}
+
+/* Fallback for browsers without @property support */
+@supports not (background: conic-gradient(from 0deg, red, blue)) {
+  .datav-border-box--6 {
+    border: 2px solid var(--bb-primary, var(--color-primary, #409eff));
+  }
+}
+
+/* Type 7 - 卡片阴影 */
+.datav-border-box--7 {
+  border-radius: 12px;
+  background: var(--card-bg, #262730);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15), 0 1px 3px rgba(0, 0, 0, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+/* Type 8 - 极简强调 */
+.datav-border-box--8 {
+  border: none;
+  border-left: 3px solid var(--bb-primary, var(--color-primary, #409eff));
+  padding-left: 12px;
+  background: transparent;
+}
+
+.datav-border-box--8 .datav-border-box__inner {
+  padding-left: 0;
+}

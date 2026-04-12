@@ -10,8 +10,6 @@ export type ReactEChartsComponent = ComponentType<{
     onEvents?: Record<string, (params: Record<string, unknown>) => void>;
 }>;
 
-export type DataViewModule = typeof import('@jiaminghi/data-view-react');
-
 export interface ComponentRendererProps {
     component: ScreenComponent;
     mode?: 'designer' | 'preview';

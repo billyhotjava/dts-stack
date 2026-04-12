@@ -49,7 +49,6 @@ export interface TableRendererProps {
     drillRuntimeEnabled: boolean;
     componentActions: Array<Record<string, unknown>>;
     executeComponentActions: (params: Record<string, unknown>) => void;
-    dataViewModule: Record<string, ComponentType<Record<string, unknown>>> | null;
     renderUnavailableState: (title: string, detail?: string) => ReactNode;
 }
 
@@ -73,12 +72,8 @@ export function renderTable(props: TableRendererProps): ReactNode {
         drillRuntimeEnabled,
         componentActions,
         executeComponentActions,
-        dataViewModule,
         renderUnavailableState,
     } = props;
-
-    const ScrollBoard = dataViewModule?.ScrollBoard as ComponentType<{ config: Record<string, unknown>; style?: React.CSSProperties }> | undefined;
-    const ScrollRankingBoard = dataViewModule?.ScrollRankingBoard as ComponentType<{ config: Record<string, unknown>; style?: React.CSSProperties }> | undefined;
 
     switch (type) {
         case 'scroll-board': {
@@ -109,38 +104,12 @@ export function renderTable(props: TableRendererProps): ReactNode {
                 drillState.handleDrill(clickedValue);
             };
 
-            // DataV ScrollBoard 硬编码 color:#fff 且无法通过 CSS/style 覆盖
-            // 非 legacy-dark 主题使用自定义表格组件
-            if (theme && theme !== 'legacy-dark') {
-                return (
-                    <ThemedScrollTable
-                        config={filteredConfig}
-                        tokens={t}
-                        isRowInteractive={canRunScrollBoardActions || canRunScrollBoardDefaultDrill}
-                        onRowClick={handleScrollBoardRowClick}
-                    />
-                );
-            }
-            if (!ScrollBoard) return renderUnavailableState('DataV 运行时未就绪');
-            const allHaveWidth = columnMeta.length > 0 && columnMeta.every((col) => typeof col.width === 'number');
-            const columnWidth = allHaveWidth
-                ? columnMeta.map((col) => Math.max(40, Math.round((width * Number(col.width)) / 100)))
-                : undefined;
             return (
-                <ScrollBoard
-                    config={{
-                        header: displayHeader,
-                        data: displayData,
-                        rowNum: c.rowNum as number,
-                        headerBGC: c.headerBGC as string,
-                        oddRowBGC: c.oddRowBGC as string,
-                        evenRowBGC: c.evenRowBGC as string,
-                        waitTime: c.waitTime as number || 2000,
-                        headerHeight: 35,
-                        align: columnMeta.map((col) => col.align || 'center'),
-                        ...(columnWidth ? { columnWidth } : {}),
-                    }}
-                    style={{ width: '100%', height: '100%' }}
+                <ThemedScrollTable
+                    config={filteredConfig}
+                    tokens={t}
+                    isRowInteractive={canRunScrollBoardActions || canRunScrollBoardDefaultDrill}
+                    onRowClick={handleScrollBoardRowClick}
                 />
             );
         }
@@ -472,20 +441,6 @@ export function renderTable(props: TableRendererProps): ReactNode {
                 </div>
             );
         }
-        case 'scroll-ranking':
-            if (!ScrollRankingBoard) return renderUnavailableState('DataV 运行时未就绪');
-            return (
-                <ScrollRankingBoard
-                    config={{
-                        data: c.data as Array<{ name: string; value: number }>,
-                        rowNum: c.rowNum as number || 5,
-                        waitTime: c.waitTime as number || 2000,
-                        carousel: 'single',
-                    }}
-                    style={{ width: '100%', height: '100%' }}
-                />
-            );
-
         default:
             return null;
     }
