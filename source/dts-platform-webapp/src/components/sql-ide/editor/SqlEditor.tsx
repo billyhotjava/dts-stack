@@ -1,5 +1,6 @@
-import Editor, { type OnMount } from "@monaco-editor/react";
+import Editor, { useMonaco, type OnMount } from "@monaco-editor/react";
 import { type FC, useCallback, useEffect, useRef } from "react";
+import { NOOP_CATALOG, registerSqlCatalogCompletion, type CatalogSource } from "./completion/catalogProvider";
 import { SQLIDE_DARK, SQLIDE_LIGHT, registerSqlIdeThemes } from "./themes";
 
 export type Engine = "trino" | "hive" | "postgresql" | "generic";
@@ -14,6 +15,7 @@ export interface SqlEditorProps {
   isDark?: boolean;
   onExecute?: (sql: string) => void;
   onCursorPositionChange?: (pos: { line: number; column: number }) => void;
+  catalog?: CatalogSource;
 }
 
 export const SqlEditor: FC<SqlEditorProps> = ({
@@ -25,7 +27,17 @@ export const SqlEditor: FC<SqlEditorProps> = ({
   isDark = true,
   onExecute,
   onCursorPositionChange,
+  catalog,
 }) => {
+  const monaco = useMonaco();
+
+  // Register SQL catalog completion provider; re-register when catalog source changes
+  useEffect(() => {
+    if (!monaco) return;
+    const disposable = registerSqlCatalogCompletion(monaco, catalog ?? NOOP_CATALOG);
+    return () => disposable.dispose();
+  }, [monaco, catalog]);
+
   // Keep a ref to the latest callback so the listener never captures a stale closure
   const onCursorPositionChangeRef = useRef(onCursorPositionChange);
   useEffect(() => {
