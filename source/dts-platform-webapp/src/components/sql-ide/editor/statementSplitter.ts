@@ -5,18 +5,65 @@ export interface Statement {
 }
 
 /**
- * Split SQL by `;` while ignoring semicolons inside single-quoted strings.
+ * Split SQL by `;` while ignoring semicolons inside single-quoted strings,
+ * block comments (/* ... *\/), and line comments (-- ...\n).
  * A full SQL parser is out of scope; this covers the common cases.
  */
 export function splitStatements(sql: string): Statement[] {
   const out: Statement[] = [];
   let inString = false;
+  let inBlockComment = false;
+  let inLineComment = false;
   let stmtStart = 0;
   let i = 0;
   while (i < sql.length) {
     const ch = sql[i];
-    if (ch === "'" && sql[i - 1] !== "\\") inString = !inString;
-    if (ch === ";" && !inString) {
+    const next = sql[i + 1];
+
+    if (inLineComment) {
+      if (ch === "\n") {
+        inLineComment = false;
+        // If the pending statement so far is only whitespace + this line comment,
+        // advance stmtStart past the newline so it doesn't pollute the next statement.
+        if (sql.slice(stmtStart, i + 1).trim().length === 0 ||
+            /^\s*--[^\n]*\n$/.test(sql.slice(stmtStart, i + 1))) {
+          stmtStart = i + 1;
+        }
+      }
+      i++;
+      continue;
+    }
+    if (inBlockComment) {
+      if (ch === "*" && next === "/") {
+        inBlockComment = false;
+        i += 2;
+        continue;
+      }
+      i++;
+      continue;
+    }
+    if (inString) {
+      if (ch === "'" && sql[i - 1] !== "\\") inString = false;
+      i++;
+      continue;
+    }
+    // outside all of the above
+    if (ch === "'") {
+      inString = true;
+      i++;
+      continue;
+    }
+    if (ch === "-" && next === "-") {
+      inLineComment = true;
+      i += 2;
+      continue;
+    }
+    if (ch === "/" && next === "*") {
+      inBlockComment = true;
+      i += 2;
+      continue;
+    }
+    if (ch === ";") {
       const end = i + 1;
       out.push({ start: stmtStart, end, text: sql.slice(stmtStart, end) });
       stmtStart = end;

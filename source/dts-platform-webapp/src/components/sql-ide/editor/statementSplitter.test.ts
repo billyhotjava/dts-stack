@@ -23,6 +23,32 @@ describe("splitStatements", () => {
   });
 });
 
+describe("splitStatements comments", () => {
+  it("ignores semicolons in block comments", () => {
+    const parts = splitStatements("SELECT 1 /* a;b */; SELECT 2;");
+    expect(parts).toHaveLength(2);
+    expect(parts[0].text).toBe("SELECT 1 /* a;b */;");
+    expect(parts[1].text).toBe("SELECT 2;");
+  });
+
+  it("handles multiline block comments", () => {
+    const parts = splitStatements("SELECT 1 /* line1;\nline2; */ FROM t;");
+    expect(parts).toHaveLength(1);
+  });
+
+  it("ignores semicolons in line comments", () => {
+    const parts = splitStatements("SELECT 1; -- a;b\nSELECT 2;");
+    expect(parts).toHaveLength(2);
+    expect(parts[1].text).toBe("SELECT 2;");
+  });
+
+  it("line comment terminates at newline", () => {
+    const parts = splitStatements("SELECT 1; -- x\n; SELECT 2;");
+    // The standalone `;` on line 2 should split statement 2 off
+    expect(parts.length).toBeGreaterThanOrEqual(2);
+  });
+});
+
 describe("findStatementAt", () => {
   it("returns statement containing offset", () => {
     const sql = "SELECT 1; SELECT 2; SELECT 3;";
