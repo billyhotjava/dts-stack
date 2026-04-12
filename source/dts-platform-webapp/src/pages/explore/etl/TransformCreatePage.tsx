@@ -186,7 +186,11 @@ export default function TransformCreatePage() {
 		[dataSources, selectedDataSourceId]
 	);
 	const lakeDatasourceId = useMemo(() => {
-		if (!defaultDestinationStatus?.destinationName || !dataSources.length) return null;
+		if (!defaultDestinationStatus) return null;
+		if (defaultDestinationStatus.dataSourceId) {
+			return defaultDestinationStatus.dataSourceId;
+		}
+		if (!defaultDestinationStatus.destinationName || !dataSources.length) return null;
 		const match = dataSources.find(ds => ds.name === defaultDestinationStatus.destinationName);
 		return match?.id ?? null;
 	}, [dataSources, defaultDestinationStatus]);

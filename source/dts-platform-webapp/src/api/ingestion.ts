@@ -224,6 +224,7 @@ export interface DefaultDestinationStatus {
 	destinationName?: string;
 	writerType?: string;
 	message?: string;
+	dataSourceId?: string;
 }
 
 export interface IngestionConnectorCapabilityDTO {
