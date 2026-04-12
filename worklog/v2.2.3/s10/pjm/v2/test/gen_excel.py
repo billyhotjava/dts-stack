@@ -1295,7 +1295,8 @@ def _dirty_date(y, m, d):
     variants = [
         f"{y}/{m:02d}/{d:02d}",                # 斜杠
         f"{y}/{m}/{d}",                        # 斜杠 + 不补零
-        f"2{y}/{m:02d}/{d:02d}",               # 5 位年（20205/07/08）
+        f"20{y % 100 // 10}0{y % 10}/{m:02d}/{d:02d}",   # 5 位年拼写错误：2025 → 20205
+        f"{y}0/{m:02d}/{d:02d}",                         # 5 位年：末尾多 0 → 20250
         f"{y}年{m}月{d}日",                    # 中文
         f"{y}年{m:02d}月{d:02d}日",            # 中文补零
         f"{y}.{m}.{d}",                        # 点分隔
@@ -1328,10 +1329,10 @@ def _gen_project_subject_domain_rows():
     rows = []
     # 组合枚举：8 项目 × 5 分系统 × 25 个月窗口 = 1000 行
     months = []
-    for y in (2025, 2026):
+    for y in (2025, 2026, 2027):
         for m in range(1, 13):
             months.append((y, m))
-    months = months[:25]  # 2025-01 ~ 2027-01
+    months = months[:25]  # 25 个月窗口：2025-01 ~ 2027-01
 
     for proj in ALL_PROJECTS:
         pcode, pname, leader, pm, source = proj
