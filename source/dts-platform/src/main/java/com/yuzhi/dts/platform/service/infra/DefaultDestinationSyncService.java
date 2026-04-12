@@ -8,6 +8,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.UUID;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
@@ -70,7 +71,56 @@ public class DefaultDestinationSyncService {
             message = "默认数据湖未配置写入器参数";
         }
         String destinationName = firstNonEmpty(lake.getDestinationName(), lake.getName());
-        return new DefaultDestinationStatus(true, hasWriterType, hasConfig, destinationName, writerType, message);
+        String dataSourceId = resolveLocalDataSourceId(lake);
+        return new DefaultDestinationStatus(true, hasWriterType, hasConfig, destinationName, writerType, message, dataSourceId);
+    }
+
+    private String resolveLocalDataSourceId(LakeSnapshot lake) {
+        if (lake == null) {
+            return null;
+        }
+        if (StringUtils.hasText(lake.getDataSourceId())) {
+            return lake.getDataSourceId();
+        }
+        String lakeName = normalize(lake.getName());
+        String lakeDestName = normalize(lake.getDestinationName());
+        String lakeJdbc = normalize(lake.getJdbcUrl());
+        if (!StringUtils.hasText(lakeName) && !StringUtils.hasText(lakeDestName) && !StringUtils.hasText(lakeJdbc)) {
+            return null;
+        }
+        try {
+            List<InfraDataSource> candidates = dataSourceRepository.findByStatusIgnoreCase(STATUS_ACTIVE);
+            if (candidates.isEmpty()) {
+                candidates = dataSourceRepository.findAll();
+            }
+            InfraDataSource matched = null;
+            for (InfraDataSource source : candidates) {
+                String name = normalize(source.getName());
+                if (StringUtils.hasText(lakeName) && lakeName.equalsIgnoreCase(name)) {
+                    matched = source;
+                    break;
+                }
+                if (StringUtils.hasText(lakeDestName) && lakeDestName.equalsIgnoreCase(name)) {
+                    matched = source;
+                    break;
+                }
+            }
+            if (matched == null && StringUtils.hasText(lakeJdbc)) {
+                for (InfraDataSource source : candidates) {
+                    String jdbc = normalize(source.getJdbcUrl());
+                    if (StringUtils.hasText(jdbc) && lakeJdbc.equalsIgnoreCase(jdbc)) {
+                        matched = source;
+                        break;
+                    }
+                }
+            }
+            if (matched != null && matched.getId() != null) {
+                return matched.getId().toString();
+            }
+        } catch (RuntimeException ex) {
+            LOG.debug("Failed to resolve local data source id for default lake: {}", ex.getMessage());
+        }
+        return null;
     }
 
     private Optional<LakeSnapshot> resolveDefaultLake() {
@@ -189,6 +239,7 @@ public class DefaultDestinationSyncService {
         String destinationName = firstNonEmpty(normalize(props.get("destinationName")), normalize(source.getName()));
         String destinationDefinitionId = firstNonEmpty(normalize(props.get("destinationDefinitionId")), writerType);
 
+        UUID sourceId = source.getId();
         return new LakeSnapshot(
             normalize(source.getName()),
             normalize(source.getType()),
@@ -197,7 +248,8 @@ public class DefaultDestinationSyncService {
             password,
             destinationName,
             destinationDefinitionId,
-            destinationConfig
+            destinationConfig,
+            sourceId == null ? null : sourceId.toString()
         );
     }
 
@@ -427,6 +479,7 @@ public class DefaultDestinationSyncService {
         private final String destinationName;
         private final String destinationDefinitionId;
         private final Map<String, Object> destinationConfig;
+        private final String dataSourceId;
 
         private LakeSnapshot(
             String name,
@@ -436,7 +489,8 @@ public class DefaultDestinationSyncService {
             String password,
             String destinationName,
             String destinationDefinitionId,
-            Map<String, Object> destinationConfig
+            Map<String, Object> destinationConfig,
+            String dataSourceId
         ) {
             this.name = name;
             this.type = type;
@@ -446,6 +500,7 @@ public class DefaultDestinationSyncService {
             this.destinationName = destinationName;
             this.destinationDefinitionId = destinationDefinitionId;
             this.destinationConfig = destinationConfig == null ? Map.of() : new LinkedHashMap<>(destinationConfig);
+            this.dataSourceId = dataSourceId;
         }
 
         private static LakeSnapshot fromAdmin(AdminInfraClient.AdminDataLakeConfig lake) {
@@ -457,8 +512,13 @@ public class DefaultDestinationSyncService {
                 lake.getPassword(),
                 lake.getDestinationName(),
                 lake.getDestinationDefinitionId(),
-                lake.getDestinationConfig()
+                lake.getDestinationConfig(),
+                null
             );
+        }
+
+        private String getDataSourceId() {
+            return dataSourceId;
         }
 
         private String getName() {
@@ -516,10 +576,11 @@ public class DefaultDestinationSyncService {
         boolean writerConfigReady,
         String destinationName,
         String writerType,
-        String message
+        String message,
+        String dataSourceId
     ) {
         public static DefaultDestinationStatus missing(String message) {
-            return new DefaultDestinationStatus(false, false, false, null, null, message);
+            return new DefaultDestinationStatus(false, false, false, null, null, message, null);
         }
     }
 }
