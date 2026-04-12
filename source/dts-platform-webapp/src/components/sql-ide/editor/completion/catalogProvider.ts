@@ -19,6 +19,12 @@ export const NOOP_CATALOG: CatalogSource = {
   },
 };
 
+// FIXME(Sprint-11 F2/T11): monaco.languages.registerCompletionItemProvider
+// registers globally per `language`. If multiple <SqlEditor/> instances mount
+// simultaneously, each registers its own provider and suggestions will be
+// duplicated. Safe today because only one SqlEditor exists at a time, but
+// must be addressed when Tab-scoped catalogs land (F2/T11) — likely via
+// a module-level singleton registry with reference counting.
 export function registerSqlCatalogCompletion(
   monaco: typeof MonacoNs,
   source: CatalogSource,
@@ -43,28 +49,34 @@ export function registerSqlCatalogCompletion(
       const ctx = parseContext(textBefore);
       if (ctx.kind === "afterDot") {
         const cols = await source.listColumns(ctx.alias);
-        return {
-          suggestions: cols.map((c) => ({
-            label: c.name,
-            kind: monaco.languages.CompletionItemKind.Field,
-            detail: c.dataType,
-            documentation: c.comment ?? undefined,
-            insertText: c.name,
-            range,
-          })),
-        };
+        if (cols.length > 0) {
+          return {
+            suggestions: cols.map((c) => ({
+              label: c.name,
+              kind: monaco.languages.CompletionItemKind.Field,
+              detail: c.dataType,
+              documentation: c.comment ?? undefined,
+              insertText: c.name,
+              range,
+            })),
+          };
+        }
+        return { suggestions: buildKeywordSuggestions(monaco, range) };
       }
       if (ctx.kind === "afterFrom") {
         const tables = await source.listTables();
-        return {
-          suggestions: tables.map((t) => ({
-            label: `${t.schema}.${t.name}`,
-            kind: monaco.languages.CompletionItemKind.Struct,
-            detail: t.comment ?? "table",
-            insertText: `${t.schema}.${t.name}`,
-            range,
-          })),
-        };
+        if (tables.length > 0) {
+          return {
+            suggestions: tables.map((t) => ({
+              label: `${t.schema}.${t.name}`,
+              kind: monaco.languages.CompletionItemKind.Struct,
+              detail: t.comment ?? "table",
+              insertText: `${t.schema}.${t.name}`,
+              range,
+            })),
+          };
+        }
+        return { suggestions: buildKeywordSuggestions(monaco, range) };
       }
       return { suggestions: buildKeywordSuggestions(monaco, range) };
     },

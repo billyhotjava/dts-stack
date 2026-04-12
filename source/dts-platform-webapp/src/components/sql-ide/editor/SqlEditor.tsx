@@ -38,10 +38,15 @@ export const SqlEditor: FC<SqlEditorProps> = ({
     return () => disposable.dispose();
   }, [monaco, catalog]);
 
-  // Keep a ref to the latest callback so the listener never captures a stale closure
+  // Keep refs to the latest callbacks so listeners never capture stale closures
   const onCursorPositionChangeRef = useRef(onCursorPositionChange);
   useEffect(() => {
     onCursorPositionChangeRef.current = onCursorPositionChange;
+  });
+
+  const onExecuteRef = useRef(onExecute);
+  useEffect(() => {
+    onExecuteRef.current = onExecute;
   });
 
   // Disposables registered during mount — cleaned up when the component unmounts
@@ -64,10 +69,10 @@ export const SqlEditor: FC<SqlEditorProps> = ({
       disposablesRef.current.push(cursorDisposable);
       // Ctrl+Enter placeholder — full keymap in T05
       editor.addCommand(mo.KeyMod.CtrlCmd | mo.KeyCode.Enter, () => {
-        onExecute?.(editor.getValue());
+        onExecuteRef.current?.(editor.getValue());
       });
     },
-    [onExecute],
+    [],
   );
 
   return (

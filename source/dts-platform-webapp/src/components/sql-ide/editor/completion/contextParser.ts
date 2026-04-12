@@ -21,8 +21,8 @@ export function parseContext(textBeforeCursor: string): SqlContext {
   const dotMatch = /(\b[\p{L}_][\p{L}\p{N}_]*)\.(?![\p{L}\p{N}_])/u.exec(cleaned);
   if (dotMatch) return { kind: "afterDot", alias: dotMatch[1] };
 
-  // afterFrom: FROM or JOIN followed by whitespace (cursor is where table name goes)
-  if (/\b(?:FROM|JOIN)\s+$/iu.test(trimmed + " ")) return { kind: "afterFrom" };
+  // afterFrom: FROM or JOIN followed by optional whitespace (cursor is where table name goes)
+  if (/\b(?:FROM|JOIN)\s*$/iu.test(trimmed)) return { kind: "afterFrom" };
 
   return { kind: "default" };
 }

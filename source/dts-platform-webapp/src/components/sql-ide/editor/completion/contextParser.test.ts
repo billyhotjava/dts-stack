@@ -30,4 +30,12 @@ describe("parseContext", () => {
   it("ignores dots inside string literals", () => {
     expect(parseContext("SELECT 'foo.bar' FROM ")).toEqual({ kind: "afterFrom" });
   });
+
+  it("returns default for empty input", () => {
+    expect(parseContext("")).toEqual({ kind: "default" });
+  });
+
+  it("does not treat numeric dots as afterDot", () => {
+    expect(parseContext("SELECT 3.14 FROM t WHERE")).toEqual({ kind: "default" });
+  });
 });
