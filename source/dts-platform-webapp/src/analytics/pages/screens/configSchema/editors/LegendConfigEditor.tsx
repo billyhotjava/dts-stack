@@ -6,6 +6,10 @@ export interface LegendConfig {
   position?: 'top' | 'bottom' | 'left' | 'right';
   fontSize?: number;
   color?: string;
+  /** Space between legend and chart body (px). Controls visual gap. */
+  reserveSize?: number;
+  /** Gap between individual legend items (px). */
+  itemGap?: number;
 }
 
 export interface LegendConfigEditorProps {
@@ -59,6 +63,29 @@ const LegendConfigEditor: React.FC<LegendConfigEditorProps> = ({ value = {}, onC
           size="small"
           value={value.color}
           onChange={(_, hex) => update({ color: hex })}
+        />
+      </LabelRow>
+      <LabelRow label="与图形间距">
+        <InputNumber
+          size="small"
+          value={value.reserveSize}
+          onChange={(v) => update({ reserveSize: v ?? undefined })}
+          min={0}
+          max={200}
+          step={2}
+          style={{ width: '100%' }}
+          placeholder="自动"
+        />
+      </LabelRow>
+      <LabelRow label="条目间距">
+        <InputNumber
+          size="small"
+          value={value.itemGap}
+          onChange={(v) => update({ itemGap: v ?? undefined })}
+          min={0}
+          max={80}
+          style={{ width: '100%' }}
+          placeholder="12"
         />
       </LabelRow>
     </div>

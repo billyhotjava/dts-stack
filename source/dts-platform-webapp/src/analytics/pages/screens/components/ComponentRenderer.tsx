@@ -506,14 +506,17 @@ export const ComponentRenderer = memo(function ComponentRenderer({ component, mo
         }
         const axisFontSize = (c.axisFontSize as number) || 15;
         const axisLabelColor = typeof c.axisLabelColor === 'string' && c.axisLabelColor.trim() ? c.axisLabelColor.trim() : undefined;
-        // Legend compat shim: nested `c.legend.{show,position,fontSize,color}` (new schema) wins over
-        // legacy flat keys `c.legendDisplay/legendPosition/legendFontSize`. Presets/heuristics still
-        // write the legacy shape, so we fall back to them when the nested object is unset.
+        // Legend compat shim: nested `c.legend.{show,position,fontSize,color,reserveSize,itemGap}`
+        // (new schema) wins over legacy flat keys `c.legendDisplay/legendPosition/legendFontSize/
+        // legendReserveSize/legendItemGap`. Presets/heuristics still write the legacy shape, so we
+        // fall back to them when the nested object is unset.
         const legendNested = (c.legend && typeof c.legend === 'object' ? c.legend : {}) as Partial<{
             show: boolean;
             position: 'top' | 'bottom' | 'left' | 'right';
             fontSize: number;
             color: string;
+            reserveSize: number;
+            itemGap: number;
         }>;
         const legendDisplayOverride: 'show' | 'hide' | undefined =
             legendNested.show === true ? 'show'
@@ -526,6 +529,12 @@ export const ComponentRenderer = memo(function ComponentRenderer({ component, mo
         const legendFontSize = (typeof legendNested.fontSize === 'number' && legendNested.fontSize > 0
             ? legendNested.fontSize
             : (c.legendFontSize as number)) || 15;
+        const legendReserveOverrideFromNested = typeof legendNested.reserveSize === 'number' && legendNested.reserveSize >= 0
+            ? legendNested.reserveSize
+            : undefined;
+        const legendItemGapOverrideFromNested = typeof legendNested.itemGap === 'number' && legendNested.itemGap >= 0
+            ? legendNested.itemGap
+            : undefined;
         const seriesColors = Array.isArray(c.seriesColors)
             ? (c.seriesColors as string[]).filter((color) => typeof color === 'string' && color.trim().length > 0)
             : [];
@@ -645,8 +654,13 @@ export const ComponentRenderer = memo(function ComponentRenderer({ component, mo
         const legendAlign = legendAlignRaw === 'start' || legendAlignRaw === 'center' || legendAlignRaw === 'end'
             ? legendAlignRaw
             : 'auto';
-        const legendItemGap = toNumber(c.legendItemGap, 12, 0, 80);
-        const legendReserveOverrideRaw = Number(c.legendReserveSize);
+        // Nested legend.itemGap / legend.reserveSize override legacy flat keys
+        const legendItemGap = legendItemGapOverrideFromNested !== undefined
+            ? toNumber(legendItemGapOverrideFromNested, 12, 0, 80)
+            : toNumber(c.legendItemGap, 12, 0, 80);
+        const legendReserveOverrideRaw = legendReserveOverrideFromNested !== undefined
+            ? legendReserveOverrideFromNested
+            : Number(c.legendReserveSize);
         const legendReserveOverride = Number.isFinite(legendReserveOverrideRaw) && legendReserveOverrideRaw > 0
             ? Math.round(Math.min(360, Math.max(20, legendReserveOverrideRaw)))
             : undefined;

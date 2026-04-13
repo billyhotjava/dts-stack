@@ -39,6 +39,12 @@ export const ECHARTS_COMMON_FIELDS: ConfigField[] = [
         ],
         defaultValue: 'auto',
     },
+    // Chart body padding overrides — let users precisely tune space around the plot area,
+    // useful when legend position makes chart body sit too far from legend.
+    { key: 'chartPaddingTop',    label: '图形上边距',   type: 'number', group: 'layout', min: 0, max: 300, step: 2, placeholder: '自动' },
+    { key: 'chartPaddingRight',  label: '图形右边距',   type: 'number', group: 'layout', min: 0, max: 300, step: 2, placeholder: '自动' },
+    { key: 'chartPaddingBottom', label: '图形下边距',   type: 'number', group: 'layout', min: 0, max: 300, step: 2, placeholder: '自动' },
+    { key: 'chartPaddingLeft',   label: '图形左边距',   type: 'number', group: 'layout', min: 0, max: 300, step: 2, placeholder: '自动' },
 ];
 
 /** Extra fields for axis-based charts (line, bar, scatter, combo, waterfall). */
