@@ -11,23 +11,23 @@ public final class SqlIdeAuditActions {
     private SqlIdeAuditActions() {}
 
     // ---- Execution lifecycle ----
-    public static final String SQL_EXECUTE_SUBMIT   = "SQL_EXECUTE_SUBMIT";
-    public static final String SQL_EXECUTE_CANCEL   = "SQL_EXECUTE_CANCEL";
-    public static final String SQL_EXECUTE_COMPLETE = "SQL_EXECUTE_COMPLETE";
+    public static final String SQL_EXECUTE_SUBMIT   = "sql.ide.execute.submit";
+    public static final String SQL_EXECUTE_CANCEL   = "sql.ide.execute.cancel";
+    public static final String SQL_EXECUTE_COMPLETE = "sql.ide.execute.complete";
 
     // ---- Result interactions ----
-    public static final String SQL_RESULT_VIEW   = "SQL_RESULT_VIEW";
-    public static final String SQL_RESULT_EXPORT = "SQL_RESULT_EXPORT";
-    public static final String SQL_RESULT_COPY   = "SQL_RESULT_COPY";
+    public static final String SQL_RESULT_VIEW   = "sql.ide.result.view";
+    public static final String SQL_RESULT_EXPORT = "sql.ide.result.export";
+    public static final String SQL_RESULT_COPY   = "sql.ide.result.copy";
 
     // ---- F5 future placeholders ----
-    public static final String SQL_TEMP_VIEW_CREATE = "SQL_TEMP_VIEW_CREATE";
-    public static final String SQL_SUBQUERY_EXECUTE = "SQL_SUBQUERY_EXECUTE";
-    public static final String SQL_PLAN_VIEW        = "SQL_PLAN_VIEW";
+    public static final String SQL_TEMP_VIEW_CREATE = "sql.ide.temp_view.create";
+    public static final String SQL_SUBQUERY_EXECUTE = "sql.ide.subquery.execute";
+    public static final String SQL_PLAN_VIEW        = "sql.ide.plan.view";
 
     // ---- IDE workspace ----
-    public static final String SQL_IDE_TAB_SAVE    = "SQL_IDE_TAB_SAVE";
-    public static final String SAVED_QUERY_LOAD    = "SAVED_QUERY_LOAD";
-    public static final String SQL_CATALOG_BROWSE  = "SQL_CATALOG_BROWSE";
-    public static final String SQL_HISTORY_VIEW    = "SQL_HISTORY_VIEW";
+    public static final String SQL_IDE_TAB_SAVE    = "sql.ide.tab.save";
+    public static final String SAVED_QUERY_LOAD    = "sql.workbench.saved-query.load";
+    public static final String SQL_CATALOG_BROWSE  = "sql.ide.catalog.browse";
+    public static final String SQL_HISTORY_VIEW    = "sql.ide.history";
 }
