@@ -1,18 +1,13 @@
 import { Input, Select, Spin } from "antd";
-import { type FC, useMemo, useState } from "react";
+import { type FC, useEffect, useMemo, useState } from "react";
 import { Tree, type NodeApi, type NodeRendererProps } from "react-arborist";
 import { TableContextMenu } from "./SchemaContextMenu";
 import { TableDetailPopover } from "./TableDetailPopover";
 import { useDatasourcesQuery, useSchemasQuery, useTablesQuery } from "./useSchemaTreeData";
 
-interface TreeNode {
-  id: string;
-  name: string;
-  kind: "schema" | "table";
-  schema: string;
-  table?: string;
-  children?: TreeNode[];
-}
+type TreeNode =
+  | { id: string; name: string; kind: "schema"; schema: string; children?: TreeNode[] }
+  | { id: string; name: string; kind: "table"; schema: string; table: string };
 
 export interface SchemaTreeProps {
   /** Called when user double-clicks a table — receives "schema.table". */
@@ -29,9 +24,11 @@ export const SchemaTree: FC<SchemaTreeProps> = ({ onInsertIdentifier, onInsertSq
   const { data: schemas, isLoading: schemasLoading } = useSchemasQuery(dsId);
 
   // Default-pick first datasource
-  if (dsId === null && datasources && datasources.length > 0) {
-    setDsId(datasources[0].id);
-  }
+  useEffect(() => {
+    if (dsId === null && datasources && datasources.length > 0) {
+      setDsId(datasources[0].id);
+    }
+  }, [dsId, datasources]);
 
   const treeData: TreeNode[] = useMemo(() => {
     if (!schemas) return [];
@@ -114,23 +111,26 @@ const SchemaTreeRow: FC<RowProps> = ({ node, style, dragHandle, dsId, onInsertId
           onInsertIdentifier={onInsertIdentifier}
           onInsertSqlAtCursor={onInsertSqlAtCursor}
         />
-      ) : (
-        <TableContextMenu
-          dsId={dsId}
-          schema={node.data.schema}
-          table={node.data.table!}
-          onInsertSqlAtCursor={(sql) => onInsertSqlAtCursor?.(sql)}
-        >
-          <TableDetailPopover dsId={dsId} schema={node.data.schema} table={node.data.table!}>
-            <span
-              style={{ fontSize: 12, color: "var(--ant-color-text)", cursor: "pointer", userSelect: "none" }}
-              onDoubleClick={() => onInsertIdentifier?.(`${node.data.schema}.${node.data.table}`)}
-            >
-              📄 {node.data.name}
-            </span>
-          </TableDetailPopover>
-        </TableContextMenu>
-      )}
+      ) : (() => {
+        const d = node.data as Extract<TreeNode, { kind: "table" }>;
+        return (
+          <TableContextMenu
+            dsId={dsId}
+            schema={d.schema}
+            table={d.table}
+            onInsertSqlAtCursor={(sql) => onInsertSqlAtCursor?.(sql)}
+          >
+            <TableDetailPopover dsId={dsId} schema={d.schema} table={d.table}>
+              <span
+                style={{ fontSize: 12, color: "var(--ant-color-text)", cursor: "pointer", userSelect: "none" }}
+                onDoubleClick={() => onInsertIdentifier?.(`${d.schema}.${d.table}`)}
+              >
+                📄 {d.name}
+              </span>
+            </TableDetailPopover>
+          </TableContextMenu>
+        );
+      })()}
     </div>
   );
 };
@@ -147,12 +147,13 @@ const SchemaRow: FC<{
   );
 
   // Populate children lazily when expanded and tables are loaded
-  if (node.isOpen && tables && (node.data.children?.length ?? 0) === 0) {
-    node.data.children = tables.map((t) => ({
-      id: `table:${node.data.schema}.${t.name}`,
+  const schemaData = node.data as Extract<TreeNode, { kind: "schema" }>;
+  if (node.isOpen && tables && (schemaData.children?.length ?? 0) === 0) {
+    schemaData.children = tables.map((t) => ({
+      id: `table:${schemaData.schema}.${t.name}`,
       name: t.name,
       kind: "table" as const,
-      schema: node.data.schema,
+      schema: schemaData.schema,
       table: t.name,
     }));
   }

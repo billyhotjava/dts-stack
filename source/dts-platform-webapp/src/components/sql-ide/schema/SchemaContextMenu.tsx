@@ -1,6 +1,7 @@
 import { Dropdown, type MenuProps, message } from "antd";
+import { useQueryClient } from "@tanstack/react-query";
 import { type FC, type PropsWithChildren } from "react";
-import { useColumnsQuery } from "./useSchemaTreeData";
+import { listColumns } from "../api/sqlIdeCatalog";
 import { copyName, generateInsert, generateSelect } from "./sqlGenerators";
 
 interface TableContextMenuProps {
@@ -13,22 +14,31 @@ interface TableContextMenuProps {
 export const TableContextMenu: FC<PropsWithChildren<TableContextMenuProps>> = ({
   dsId, schema, table, onInsertSqlAtCursor, children,
 }) => {
-  const { data: columns } = useColumnsQuery(dsId, `${schema}.${table}`);
+  const qc = useQueryClient();
   const items: MenuProps["items"] = [
     { key: "select", label: "Generate SELECT" },
     { key: "insert", label: "Generate INSERT" },
     { key: "copy-name", label: "Copy Name" },
   ];
-  const onClick: MenuProps["onClick"] = ({ key }) => {
+  const onClick: MenuProps["onClick"] = async ({ key }) => {
     switch (key) {
       case "select":
         onInsertSqlAtCursor(generateSelect(schema, table, null));
         break;
       case "insert": {
-        const cols = (columns ?? []).map((c) => c.name);
-        const sql = generateInsert(schema, table, cols);
-        if (sql) onInsertSqlAtCursor(sql);
-        else void message.info("列信息加载中，请稍后再试");
+        try {
+          const cols = await qc.fetchQuery({
+            queryKey: ["sqlide", "catalog", "columns", dsId, `${schema}.${table}`],
+            queryFn: () => listColumns(dsId, `${schema}.${table}`),
+            staleTime: 5 * 60 * 1000,
+          });
+          const colNames = cols.map((c) => c.name);
+          const sql = generateInsert(schema, table, colNames);
+          if (sql) onInsertSqlAtCursor(sql);
+          else void message.info("该表暂无列信息");
+        } catch (err) {
+          void message.warning("无法加载列信息");
+        }
         break;
       }
       case "copy-name":

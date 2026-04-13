@@ -1,5 +1,5 @@
 import { Popover, Spin } from "antd";
-import { type FC, type PropsWithChildren } from "react";
+import { type FC, type PropsWithChildren, useState } from "react";
 import { useColumnsQuery } from "./useSchemaTreeData";
 
 interface TableDetailPopoverProps {
@@ -11,10 +11,14 @@ interface TableDetailPopoverProps {
 export const TableDetailPopover: FC<PropsWithChildren<TableDetailPopoverProps>> = ({
   dsId, schema, table, children,
 }) => {
-  const { data, isLoading } = useColumnsQuery(dsId, `${schema}.${table}`);
+  const [open, setOpen] = useState(false);
+  // Only fetch when popover is visible — gates per-row preload
+  const { data, isLoading } = useColumnsQuery(open ? dsId : null, open ? `${schema}.${table}` : null);
 
   return (
     <Popover
+      open={open}
+      onOpenChange={setOpen}
       placement="rightTop"
       mouseEnterDelay={0.5}
       mouseLeaveDelay={0.2}
