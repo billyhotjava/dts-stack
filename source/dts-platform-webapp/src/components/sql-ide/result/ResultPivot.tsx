@@ -24,17 +24,21 @@ function aggregate(values: unknown[], fn: AggFn): number | string {
   const nums = values.filter((v) => typeof v === "number") as number[];
   switch (fn) {
     case "SUM":
-      return nums.reduce((a, b) => a + b, 0);
-    case "COUNT":
-      return values.filter((v) => v !== null && v !== undefined).length;
+      return nums.length === 0 ? "" : nums.reduce((a, b) => a + b, 0);
+    case "COUNT": {
+      const n = values.filter((v) => v !== null && v !== undefined).length;
+      return n === 0 ? "" : n;
+    }
     case "AVG":
-      return nums.length === 0 ? 0 : nums.reduce((a, b) => a + b, 0) / nums.length;
+      return nums.length === 0 ? "" : nums.reduce((a, b) => a + b, 0) / nums.length;
     case "MIN":
-      return nums.length === 0 ? "" : Math.min(...nums);
+      return nums.length === 0 ? "" : nums.reduce((a, b) => (a < b ? a : b));
     case "MAX":
-      return nums.length === 0 ? "" : Math.max(...nums);
-    case "DISTINCT_COUNT":
-      return new Set(values).size;
+      return nums.length === 0 ? "" : nums.reduce((a, b) => (a > b ? a : b));
+    case "DISTINCT_COUNT": {
+      const distinct = new Set(values.filter((v) => v !== null && v !== undefined));
+      return distinct.size === 0 ? "" : distinct.size;
+    }
   }
 }
 
@@ -80,6 +84,20 @@ export const ResultPivot: FC<ResultPivotProps> = ({ executionId }) => {
     return { rows: sortedRows, cols: sortedCols, cell };
   }, [page, rowField, colField, valueField]);
 
+  const aggregated = useMemo(() => {
+    if (!pivot) return null;
+    const map = new Map<string, Map<string, number | string>>();
+    for (const rk of pivot.rows) {
+      const inner = new Map<string, number | string>();
+      for (const ck of pivot.cols) {
+        const vals = pivot.cell.get(rk)?.get(ck) ?? [];
+        inner.set(ck, aggregate(vals, aggFn));
+      }
+      map.set(rk, inner);
+    }
+    return map;
+  }, [pivot, aggFn]);
+
   if (metaLoading || pageLoading) {
     return <div style={{ padding: 24, textAlign: "center" }}><Spin /></div>;
   }
@@ -107,14 +125,11 @@ export const ResultPivot: FC<ResultPivotProps> = ({ executionId }) => {
               {pivot.rows.map((rk) => (
                 <tr key={rk}>
                   <td style={{ padding: "4px 8px", border: "1px solid var(--ant-color-border)" }}>{rk}</td>
-                  {pivot.cols.map((ck) => {
-                    const vals = pivot.cell.get(rk)?.get(ck) ?? [];
-                    return (
-                      <td key={ck} style={{ padding: "4px 8px", border: "1px solid var(--ant-color-border)", textAlign: "right" }}>
-                        {String(aggregate(vals, aggFn))}
-                      </td>
-                    );
-                  })}
+                  {pivot.cols.map((ck) => (
+                    <td key={ck} style={{ padding: "4px 8px", border: "1px solid var(--ant-color-border)", textAlign: "right" }}>
+                      {String(aggregated?.get(rk)?.get(ck) ?? "")}
+                    </td>
+                  ))}
                 </tr>
               ))}
             </tbody>
