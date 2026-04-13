@@ -61,6 +61,7 @@ interface LayoutStore extends LayoutSnapshot {
   setActivity(id: ActivityId | null): void;
   setSidePanelWidth(w: number): void;
   setBottomPanelHeight(h: number): void;
+  __resetForTest(): void;
 }
 
 const initial = loadSnapshot();
@@ -81,5 +82,15 @@ export const useLayoutStore = create<LayoutStore>((set, get) => ({
   setBottomPanelHeight(h) {
     set({ bottomPanelHeight: h });
     persist({ ...get(), bottomPanelHeight: h });
+  },
+  __resetForTest() {
+    if (typeof window !== "undefined") {
+      try { window.localStorage.removeItem(STORAGE_KEY); } catch { /* ignore */ }
+    }
+    set({
+      activeActivity: "schema",
+      sidePanelWidth: DEFAULT_SIDE_PANEL_WIDTH,
+      bottomPanelHeight: DEFAULT_BOTTOM_PANEL_HEIGHT,
+    });
   },
 }));

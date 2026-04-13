@@ -1,6 +1,14 @@
 import { type FC, type PropsWithChildren, useCallback, useEffect, useRef } from "react";
 import { useShallow } from "zustand/react/shallow";
-import { useLayoutStore } from "./useLayoutStore";
+import { type ActivityId, useLayoutStore } from "./useLayoutStore";
+
+const ACTIVITY_LABELS: Record<ActivityId, string> = {
+  schema: "Schema",
+  history: "History",
+  saved: "Saved Queries",
+  search: "Search",
+  copilot: "Copilot",
+};
 
 export const SidePanel: FC<PropsWithChildren> = ({ children }) => {
   const { sidePanelWidth, setSidePanelWidth, activeActivity } = useLayoutStore(
@@ -18,7 +26,14 @@ export const SidePanel: FC<PropsWithChildren> = ({ children }) => {
     (e: MouseEvent) => {
       if (!draggingRef.current) return;
       const delta = e.clientX - startXRef.current;
-      setSidePanelWidth(startWidthRef.current + delta);
+      const desired = startWidthRef.current + delta;
+      const clamped = Math.min(500, Math.max(200, desired));
+      setSidePanelWidth(clamped);
+      // If the desired width was outside the clamp range, re-anchor so reverse motion is responsive
+      if (desired !== clamped) {
+        startXRef.current = e.clientX;
+        startWidthRef.current = clamped;
+      }
     },
     [setSidePanelWidth],
   );
@@ -42,6 +57,7 @@ export const SidePanel: FC<PropsWithChildren> = ({ children }) => {
   return (
     <aside
       data-testid="sqlide-side-panel"
+      aria-label={`SQL IDE ${ACTIVITY_LABELS[activeActivity]} panel`}
       style={{
         width: sidePanelWidth,
         flexShrink: 0,
