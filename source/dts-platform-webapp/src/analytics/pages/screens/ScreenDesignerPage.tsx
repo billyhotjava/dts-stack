@@ -372,6 +372,7 @@ function ScreenDesignerContent() {
             >
                 <ScreenHeader
                     currentPageIndex={currentPageIndex}
+                    onResetPageIndex={() => setCurrentPageIndex(0)}
                     focusMode={focusMode}
                     onToggleFocusMode={() => setFocusMode((prev) => !prev)}
                     showLibraryPanel={showLibraryPanel}

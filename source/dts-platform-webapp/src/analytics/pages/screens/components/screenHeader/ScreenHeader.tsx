@@ -62,6 +62,7 @@ import {
 
 interface ScreenHeaderProps {
     currentPageIndex?: number;
+    onResetPageIndex?: () => void;
     focusMode?: boolean;
     onToggleFocusMode?: () => void;
     showLibraryPanel?: boolean;
@@ -72,6 +73,7 @@ interface ScreenHeaderProps {
 
 export function ScreenHeader({
     currentPageIndex = 0,
+    onResetPageIndex,
     focusMode,
     onToggleFocusMode,
     showLibraryPanel,
@@ -1421,7 +1423,12 @@ export function ScreenHeader({
 
         try {
             if (action === 'replace') {
-                loadConfig(materializeScreenPage(importedConfig, currentPageIndex));
+                // Always materialize to page 0 on import: the editor's
+                // currentPageIndex belongs to the previous config and may be
+                // out-of-bounds or misaligned with the imported pages array,
+                // which would wipe the canvas to an empty page.
+                onResetPageIndex?.();
+                loadConfig(materializeScreenPage(importedConfig, 0));
                 setImportPreview(null);
             } else if (action === 'create-screen') {
                 const spec = buildScreenPayload(importedConfig);

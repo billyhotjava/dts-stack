@@ -27,10 +27,18 @@ export function materializeScreenPage(config: ScreenConfig, pageIndex: number): 
     if (!page) {
         return config;
     }
+    const pageComponents = Array.isArray(page.components) ? page.components : [];
+    const fallbackComponents = Array.isArray(config.components) ? config.components : [];
+    // If the selected page has no committed components but the top-level config
+    // carries components (import path / desync after publish), keep the top-level
+    // ones so the canvas is not wiped.
+    const nextComponents = pageComponents.length === 0 && fallbackComponents.length > 0
+        ? fallbackComponents
+        : pageComponents;
     const nextBackgroundColor = page.backgroundColor ?? config.backgroundColor;
     const nextBackgroundImage = page.backgroundImage ?? config.backgroundImage;
     if (
-        config.components === page.components
+        config.components === nextComponents
         && config.backgroundColor === nextBackgroundColor
         && config.backgroundImage === nextBackgroundImage
     ) {
@@ -38,7 +46,7 @@ export function materializeScreenPage(config: ScreenConfig, pageIndex: number): 
     }
     return {
         ...config,
-        components: page.components || [],
+        components: nextComponents,
         backgroundColor: nextBackgroundColor,
         backgroundImage: nextBackgroundImage,
     };
