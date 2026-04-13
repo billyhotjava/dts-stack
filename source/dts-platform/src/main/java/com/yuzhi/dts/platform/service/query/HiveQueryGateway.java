@@ -38,7 +38,7 @@ import javax.sql.DataSource;
 public class HiveQueryGateway implements QueryGateway {
 
     private static final Logger LOG = LoggerFactory.getLogger(HiveQueryGateway.class);
-    private static final int MAX_ROWS = 5000;
+    private static final int MAX_ROWS = 100_000;
     private static final String TYPE_POSTGRES = "POSTGRES";
     private static final String STATUS_ACTIVE = "ACTIVE";
 

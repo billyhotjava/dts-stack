@@ -40,6 +40,9 @@ class SqlExecutionServiceTest {
     private ResultSetRepository resultSetRepository;
 
     @Mock
+    private com.yuzhi.dts.platform.repository.explore.QueryExecutionChunkRepository chunkRepository;
+
+    @Mock
     private AuditService auditService;
 
     @Mock
@@ -55,6 +58,7 @@ class SqlExecutionServiceTest {
         service = new SqlExecutionService(
             queryExecutionRepository,
             resultSetRepository,
+            chunkRepository,
             auditService,
             queryGateway,
             validationService,

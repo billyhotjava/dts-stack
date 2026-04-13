@@ -3,7 +3,9 @@ package com.yuzhi.dts.platform.service.sql;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.yuzhi.dts.platform.domain.explore.ExecEnums;
 import com.yuzhi.dts.platform.domain.explore.QueryExecution;
+import com.yuzhi.dts.platform.domain.explore.QueryExecutionChunk;
 import com.yuzhi.dts.platform.domain.explore.ResultSet;
+import com.yuzhi.dts.platform.repository.explore.QueryExecutionChunkRepository;
 import com.yuzhi.dts.platform.repository.explore.QueryExecutionRepository;
 import com.yuzhi.dts.platform.repository.explore.ResultSetRepository;
 import com.yuzhi.dts.platform.service.audit.AuditService;
@@ -45,8 +47,11 @@ public class SqlExecutionService {
     private static final int EXECUTION_VISIBILITY_RETRIES = 20;
     private static final long EXECUTION_VISIBILITY_RETRY_MILLIS = 50L;
 
+    private static final int CHUNK_SIZE = 2000;
+
     private final QueryExecutionRepository queryExecutionRepository;
     private final ResultSetRepository resultSetRepository;
+    private final QueryExecutionChunkRepository chunkRepository;
     private final AuditService auditService;
     private final QueryGateway queryGateway;
     private final SqlValidationService validationService;
@@ -57,6 +62,7 @@ public class SqlExecutionService {
     public SqlExecutionService(
         QueryExecutionRepository queryExecutionRepository,
         ResultSetRepository resultSetRepository,
+        QueryExecutionChunkRepository chunkRepository,
         AuditService auditService,
         QueryGateway queryGateway,
         SqlValidationService validationService,
@@ -64,6 +70,7 @@ public class SqlExecutionService {
     ) {
         this.queryExecutionRepository = queryExecutionRepository;
         this.resultSetRepository = resultSetRepository;
+        this.chunkRepository = chunkRepository;
         this.auditService = auditService;
         this.queryGateway = queryGateway;
         this.validationService = validationService;
@@ -232,12 +239,36 @@ public class SqlExecutionService {
             long totalRows = rowCountRaw != null ? rowCountRaw : rows.size();
 
             if (!headers.isEmpty()) {
+                // Write chunk records
+                int chunkIndex = 0;
+                for (int offset = 0; offset < rows.size(); offset += CHUNK_SIZE) {
+                    int end = Math.min(rows.size(), offset + CHUNK_SIZE);
+                    QueryExecutionChunk chunk = new QueryExecutionChunk();
+                    chunk.setExecutionId(execution.getId());
+                    chunk.setChunkIndex(chunkIndex++);
+                    try {
+                        chunk.setRowsJson(objectMapper.writeValueAsString(rows.subList(offset, end)));
+                    } catch (Exception ex) {
+                        chunk.setRowsJson("[]");
+                    }
+                    chunk.setRowStart((long) offset);
+                    chunk.setRowEnd((long) end);
+                    chunk.setCreatedDate(Instant.now());
+                    chunkRepository.save(chunk);
+                }
+
+                // Legacy preview blob — first 100 rows kept for /api/sql/result-page v1 compatibility
+                List<Map<String, Object>> previewRows = rows.size() <= PREVIEW_LIMIT
+                    ? rows
+                    : rows.subList(0, PREVIEW_LIMIT);
+
                 ResultSet rs = new ResultSet();
                 rs.setStorageUri("inline://result-set/pending");
                 rs.setStorageFormat(ResultSet.StorageFormat.JSON);
                 rs.setColumns(String.join(",", headers));
                 rs.setRowCount(totalRows);
-                rs.setPreviewColumns(buildStoredResultJson(headers, rows, totalRows));
+                rs.setChunkCount(chunkIndex);
+                rs.setPreviewColumns(buildStoredResultJson(headers, previewRows, totalRows));
                 rs.setTtlDays(7);
                 rs.setExpiresAt(Instant.now().plus(7, ChronoUnit.DAYS));
                 rs = resultSetRepository.save(rs);
