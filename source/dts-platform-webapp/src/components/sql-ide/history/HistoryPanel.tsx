@@ -1,6 +1,6 @@
 import { CheckCircleOutlined, CloseCircleOutlined, LoadingOutlined, StopOutlined } from "@ant-design/icons";
 import { Empty, Input, List, Select, Spin, Typography } from "antd";
-import { type FC, useState } from "react";
+import { type FC, useEffect, useState } from "react";
 import type { HistoryStatus, QueryHistoryItem } from "../api/sqlIdeHistory";
 import type { Engine } from "../editor/SqlEditor";
 import { useTabStore } from "../tabs/useTabStore";
@@ -39,11 +39,17 @@ function StatusIcon({ status }: { status: HistoryStatus | null | undefined }) {
 
 export const HistoryPanel: FC = () => {
   const [statusFilter, setStatusFilter] = useState<HistoryStatus | "">("");
-  const [qFilter, setQFilter] = useState("");
+  const [qInput, setQInput] = useState("");
+  const [qDebounced, setQDebounced] = useState("");
+
+  useEffect(() => {
+    const t = setTimeout(() => setQDebounced(qInput), 300);
+    return () => clearTimeout(t);
+  }, [qInput]);
 
   const { data: items, isLoading } = useHistoryQuery({
     status: statusFilter || undefined,
-    q: qFilter || undefined,
+    q: qDebounced || undefined,
   });
 
   const openTab = useTabStore((s) => s.openTab);
@@ -74,8 +80,8 @@ export const HistoryPanel: FC = () => {
           size="small"
           placeholder="搜索 SQL…"
           allowClear
-          onSearch={setQFilter}
-          onChange={(e) => { if (!e.target.value) setQFilter(""); }}
+          value={qInput}
+          onChange={(e) => setQInput(e.target.value)}
         />
       </div>
 

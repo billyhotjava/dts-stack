@@ -17,7 +17,7 @@ export interface QueryHistoryItem {
 
 export interface HistoryParams {
   status?: HistoryStatus | "";
-  datasource?: string;
+  connection?: string;
   q?: string;
   limit?: number;
 }
@@ -25,7 +25,7 @@ export interface HistoryParams {
 export async function listHistory(params: HistoryParams = {}): Promise<QueryHistoryItem[]> {
   const searchParams = new URLSearchParams();
   if (params.status) searchParams.set("status", params.status);
-  if (params.datasource) searchParams.set("datasource", params.datasource);
+  if (params.connection) searchParams.set("connection", params.connection);
   if (params.q) searchParams.set("q", params.q);
   if (params.limit != null) searchParams.set("limit", String(params.limit));
 
