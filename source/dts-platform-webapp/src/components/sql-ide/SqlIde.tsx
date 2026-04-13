@@ -14,6 +14,7 @@ import { HistoryPanel } from "./history/HistoryPanel";
 import { SchemaTree } from "./schema/SchemaTree";
 import { TabBar } from "./tabs/TabBar";
 import { useTabStore } from "./tabs/useTabStore";
+import { ExportMenu } from "./result/ExportMenu";
 import { ResultGrid } from "./result/ResultGrid";
 import { SavedPanel } from "./saved/SavedPanel";
 import { SaveQueryDialog } from "./saved/SaveQueryDialog";
@@ -224,6 +225,9 @@ export const SqlIde: FC = () => {
                   <Button danger size="small" onClick={sqlExec.cancel}>
                     取消
                   </Button>
+                )}
+                {activeTab?.lastExecutionId && (
+                  <ExportMenu executionId={activeTab.lastExecutionId} />
                 )}
                 <Button size="small" onClick={() => setHelpOpen(true)}>
                   ⌨ Shortcuts

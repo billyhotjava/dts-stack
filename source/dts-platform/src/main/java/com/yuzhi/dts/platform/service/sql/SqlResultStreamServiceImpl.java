@@ -184,6 +184,91 @@ public class SqlResultStreamServiceImpl implements SqlResultStreamService {
         }
     }
 
+    @Override
+    public void exportCsv(UUID executionId, java.io.OutputStream out) {
+        ResultMetaDto meta = getMeta(executionId);
+        java.io.PrintWriter writer = new java.io.PrintWriter(new java.io.OutputStreamWriter(out, java.nio.charset.StandardCharsets.UTF_8));
+        // BOM for Excel-friendly UTF-8
+        try { out.write(0xEF); out.write(0xBB); out.write(0xBF); } catch (java.io.IOException ignored) {}
+        // Header
+        writer.println(meta.columns().stream().map(c -> escapeCsv(c.name())).reduce((a, b) -> a + "," + b).orElse(""));
+        streamRange(executionId, 0, meta.totalRows()).forEach(row -> {
+            StringBuilder sb = new StringBuilder();
+            for (int i = 0; i < meta.columns().size(); i++) {
+                if (i > 0) sb.append(',');
+                Object v = row.get(meta.columns().get(i).name());
+                sb.append(escapeCsv(v == null ? "" : String.valueOf(v)));
+            }
+            writer.println(sb);
+        });
+        writer.flush();
+    }
+
+    private static String escapeCsv(String v) {
+        if (v.contains(",") || v.contains("\"") || v.contains("\n") || v.contains("\r")) {
+            return '"' + v.replace("\"", "\"\"") + '"';
+        }
+        return v;
+    }
+
+    @Override
+    public void exportJson(UUID executionId, java.io.OutputStream out) {
+        ResultMetaDto meta = getMeta(executionId);
+        com.fasterxml.jackson.core.JsonFactory factory = objectMapper.getFactory();
+        try (com.fasterxml.jackson.core.JsonGenerator gen = factory.createGenerator(out, com.fasterxml.jackson.core.JsonEncoding.UTF8)) {
+            gen.writeStartArray();
+            streamRange(executionId, 0, meta.totalRows()).forEach(row -> {
+                try {
+                    gen.writeStartObject();
+                    for (var col : meta.columns()) {
+                        Object v = row.get(col.name());
+                        gen.writeFieldName(col.name());
+                        objectMapper.writeValue(gen, v);
+                    }
+                    gen.writeEndObject();
+                } catch (java.io.IOException e) {
+                    throw new java.io.UncheckedIOException(e);
+                }
+            });
+            gen.writeEndArray();
+            gen.flush();
+        } catch (java.io.IOException e) {
+            throw new java.io.UncheckedIOException(e);
+        }
+    }
+
+    @Override
+    public void exportExcel(UUID executionId, java.io.OutputStream out) {
+        ResultMetaDto meta = getMeta(executionId);
+        try (org.apache.poi.xssf.streaming.SXSSFWorkbook wb = new org.apache.poi.xssf.streaming.SXSSFWorkbook(100)) {
+            org.apache.poi.ss.usermodel.Sheet sheet = wb.createSheet("results");
+            org.apache.poi.ss.usermodel.Row header = sheet.createRow(0);
+            for (int i = 0; i < meta.columns().size(); i++) {
+                header.createCell(i).setCellValue(meta.columns().get(i).name());
+            }
+            int[] rowIndex = { 1 };
+            streamRange(executionId, 0, meta.totalRows()).forEach(row -> {
+                org.apache.poi.ss.usermodel.Row r = sheet.createRow(rowIndex[0]++);
+                for (int c = 0; c < meta.columns().size(); c++) {
+                    Object v = row.get(meta.columns().get(c).name());
+                    if (v == null) {
+                        r.createCell(c).setBlank();
+                    } else if (v instanceof Number n) {
+                        r.createCell(c).setCellValue(n.doubleValue());
+                    } else if (v instanceof Boolean b) {
+                        r.createCell(c).setCellValue(b);
+                    } else {
+                        r.createCell(c).setCellValue(String.valueOf(v));
+                    }
+                }
+            });
+            wb.write(out);
+            wb.dispose();
+        } catch (java.io.IOException e) {
+            throw new java.io.UncheckedIOException(e);
+        }
+    }
+
     private List<ColumnMetaDto> parseColumns(String columnsStr) {
         if (!StringUtils.hasText(columnsStr)) {
             return List.of();
