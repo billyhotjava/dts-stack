@@ -237,12 +237,18 @@ public class SqlExecutionService {
             String rewrittenSqlHash = Integer.toHexString(
                 validation.rewrittenSql() == null ? 0 : validation.rewrittenSql().hashCode()
             );
-            String execUser = SecurityUtils.getCurrentUserLogin().orElse("anonymous");
-            auditService.audit(
-                SqlIdeAuditActions.SQL_EXECUTE_SUBMIT,
-                "executionId=" + execution.getId() + " engine=" + execution.getEngine().name()
-                    + " sqlHash=" + rawSqlHash + " rewrittenHash=" + rewrittenSqlHash,
-                execUser
+            java.util.Map<String, Object> submitPayload = new java.util.LinkedHashMap<>();
+            submitPayload.put("engine", execution.getEngine() == null ? null : execution.getEngine().name());
+            submitPayload.put("sqlHash", rawSqlHash);
+            submitPayload.put("rewrittenHash", rewrittenSqlHash);
+            submitPayload.put("actionCode", SqlIdeAuditActions.SQL_EXECUTE_SUBMIT);
+            auditService.record(
+                "EXECUTE",
+                "sql.ide.execute",
+                "sql.execution",
+                execution.getId().toString(),
+                "SUCCESS",
+                submitPayload
             );
 
             UUID datasourceId = parseDatasourceId(request.datasource());
@@ -374,15 +380,7 @@ public class SqlExecutionService {
         }
         payload.put("status", execution.getStatus() != null ? execution.getStatus().name() : ExecEnums.ExecStatus.PENDING.name());
         auditService.record("EXECUTE", "sql.query", "sql.query", execution.getId().toString(), "SUCCESS", payload);
-        // T20: structured action constant + SQL hash (rewrittenHash filled in executeQueued after validation)
-        String rawHash = Integer.toHexString(request.sqlText() == null ? 0 : request.sqlText().hashCode());
-        String userLogin = SecurityUtils.getCurrentUserLogin().orElse("anonymous");
-        auditService.audit(
-            SqlIdeAuditActions.SQL_EXECUTE_SUBMIT,
-            "executionId=" + execution.getId() + " engine=" + execution.getEngine().name()
-                + " sqlHash=" + rawHash + " rewrittenHash=" + rawHash,
-            userLogin
-        );
+        // T20: rich SUBMIT audit (with rewrittenHash) is emitted in executeQueued after validation; no duplicate here.
     }
 
     private void recordCancelAudit(QueryExecution execution, Principal principal) {
@@ -405,12 +403,17 @@ public class SqlExecutionService {
         }
         payload.put("status", execution.getStatus() != null ? execution.getStatus().name() : ExecEnums.ExecStatus.CANCELED.name());
         auditService.record("CANCEL", "sql.query", "sql.query", execution.getId().toString(), "SUCCESS", payload);
-        // T20: structured action constant
-        String cancelUser = principal != null && principal.getName() != null ? principal.getName() : "anonymous";
-        auditService.audit(
-            SqlIdeAuditActions.SQL_EXECUTE_CANCEL,
-            "executionId=" + execution.getId(),
-            cancelUser
+        // T20: structured action constant + reason for forward-compat with T18 timeout path
+        java.util.Map<String, Object> cancelPayload = new java.util.LinkedHashMap<>();
+        cancelPayload.put("reason", "user");
+        cancelPayload.put("actionCode", SqlIdeAuditActions.SQL_EXECUTE_CANCEL);
+        auditService.record(
+            "CANCEL",
+            "sql.ide.execute",
+            "sql.execution",
+            execution.getId().toString(),
+            "SUCCESS",
+            cancelPayload
         );
     }
 
@@ -429,14 +432,19 @@ public class SqlExecutionService {
             payload.put("message", truncate(message, 1024));
         }
         auditService.record("READ", "sql.query", "sql.query", execution.getId().toString(), "SUCCESS", payload);
-        // T20: structured action constant
-        String completionUser = SecurityUtils.getCurrentUserLogin().orElse("anonymous");
-        auditService.audit(
-            SqlIdeAuditActions.SQL_EXECUTE_COMPLETE,
-            "executionId=" + execution.getId() + " status=" + phase
-                + " rows=" + (execution.getRowCount() == null ? -1 : execution.getRowCount())
-                + " elapsedMs=" + (execution.getElapsedMs() == null ? -1 : execution.getElapsedMs()),
-            completionUser
+        // T20: structured action constant with typed fields
+        java.util.Map<String, Object> completePayload = new java.util.LinkedHashMap<>();
+        completePayload.put("status", phase);
+        completePayload.put("rows", execution.getRowCount() == null ? -1L : execution.getRowCount());
+        completePayload.put("elapsedMs", execution.getElapsedMs() == null ? -1L : execution.getElapsedMs());
+        completePayload.put("actionCode", SqlIdeAuditActions.SQL_EXECUTE_COMPLETE);
+        auditService.record(
+            "EXECUTE",
+            "sql.ide.execute",
+            "sql.execution",
+            execution.getId().toString(),
+            phase,
+            completePayload
         );
     }
 

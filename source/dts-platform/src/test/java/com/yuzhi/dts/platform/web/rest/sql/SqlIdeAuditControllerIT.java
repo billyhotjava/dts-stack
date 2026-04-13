@@ -36,4 +36,12 @@ class SqlIdeAuditControllerIT {
             .andExpect(status().isOk())
             .andExpect(jsonPath("$.status").value(200));
     }
+
+    @Test
+    void copyAuditRejectsInvalidExecutionId() throws Exception {
+        mvc.perform(post("/api/sql/v2/audit/copy")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"executionId\":\"not-a-uuid\",\"cellCount\":10}"))
+            .andExpect(status().isBadRequest());
+    }
 }

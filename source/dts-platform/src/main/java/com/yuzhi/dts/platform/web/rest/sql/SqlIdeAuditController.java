@@ -1,14 +1,18 @@
 package com.yuzhi.dts.platform.web.rest.sql;
 
-import com.yuzhi.dts.platform.security.SecurityUtils;
 import com.yuzhi.dts.platform.service.audit.AuditService;
 import com.yuzhi.dts.platform.service.audit.SqlIdeAuditActions;
 import com.yuzhi.dts.platform.web.rest.ApiResponse;
 import com.yuzhi.dts.platform.web.rest.ApiResponses;
+import jakarta.validation.Valid;
+import jakarta.validation.constraints.Min;
+import jakarta.validation.constraints.NotBlank;
+import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.server.ResponseStatusException;
 
 /**
  * REST endpoints for client-side audit events that cannot be captured server-side
@@ -26,15 +30,28 @@ public class SqlIdeAuditController {
         this.auditService = auditService;
     }
 
-    public record CopyAuditRequest(String executionId, int cellCount) {}
+    public record CopyAuditRequest(
+        @NotBlank String executionId,
+        @Min(0) int cellCount
+    ) {}
 
     @PostMapping("/copy")
-    public ApiResponse<Void> copy(@RequestBody CopyAuditRequest req) {
-        String user = SecurityUtils.getCurrentUserLogin().orElse("anonymous");
-        auditService.audit(
-            SqlIdeAuditActions.SQL_RESULT_COPY,
-            "executionId=" + req.executionId() + " cells=" + req.cellCount(),
-            user
+    public ApiResponse<Void> copy(@Valid @RequestBody CopyAuditRequest req) {
+        try {
+            java.util.UUID.fromString(req.executionId());
+        } catch (IllegalArgumentException e) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "invalid executionId");
+        }
+        java.util.Map<String, Object> payload = new java.util.LinkedHashMap<>();
+        payload.put("cells", req.cellCount());
+        payload.put("actionCode", SqlIdeAuditActions.SQL_RESULT_COPY);
+        auditService.record(
+            "READ",
+            "sql.ide.result",
+            "sql.execution",
+            req.executionId(),
+            "SUCCESS",
+            payload
         );
         return ApiResponses.ok(null);
     }
