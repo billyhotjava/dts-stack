@@ -31,6 +31,15 @@ export function useSqlExecution(): SqlExecutionResult {
   const pollTimerRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const startedAtRef = useRef<number>(0);
   const elapsedIntervalRef = useRef<ReturnType<typeof setInterval> | undefined>(undefined);
+  // Generation counter — increments on every submit; closures bail when stale
+  const runIdRef = useRef(0);
+
+  const stopPolling = useCallback(() => {
+    if (pollTimerRef.current !== undefined) {
+      clearTimeout(pollTimerRef.current);
+      pollTimerRef.current = undefined;
+    }
+  }, []);
 
   const stopElapsedTicker = useCallback(() => {
     if (elapsedIntervalRef.current !== undefined) {
@@ -47,20 +56,20 @@ export function useSqlExecution(): SqlExecutionResult {
   }, [stopElapsedTicker]);
 
   const pollUntilDone = useCallback(
-    (id: string, attempt: number): Promise<void> => {
+    (id: string, runId: number, attempt: number): Promise<void> => {
       return new Promise((resolve) => {
         const delay = BACKOFF[Math.min(attempt, BACKOFF.length - 1)];
         pollTimerRef.current = setTimeout(() => {
-          if (cancelledRef.current) {
-            resolve();
-            return;
-          }
+          // Bail if superseded or cancelled
+          if (runId !== runIdRef.current) { resolve(); return; }
+          if (cancelledRef.current) { resolve(); return; }
+
           getExecutionStatus(id)
             .then((status) => {
-              if (cancelledRef.current) {
-                resolve();
-                return;
-              }
+              // Bail again after async fetch
+              if (runId !== runIdRef.current) { resolve(); return; }
+              if (cancelledRef.current) { resolve(); return; }
+
               if (status.status === "SUCCESS") {
                 stopElapsedTicker();
                 setElapsedMs(status.elapsedMs ?? Date.now() - startedAtRef.current);
@@ -79,15 +88,13 @@ export function useSqlExecution(): SqlExecutionResult {
                 resolve();
               } else {
                 // PENDING or RUNNING — keep polling
-                pollUntilDone(id, attempt + 1).then(resolve);
+                pollUntilDone(id, runId, attempt + 1).then(resolve);
               }
             })
             .catch(() => {
-              if (cancelledRef.current) {
-                resolve();
-                return;
-              }
-              pollUntilDone(id, attempt + 1).then(resolve);
+              if (runId !== runIdRef.current) { resolve(); return; }
+              if (cancelledRef.current) { resolve(); return; }
+              pollUntilDone(id, runId, attempt + 1).then(resolve);
             });
         }, delay);
       });
@@ -97,30 +104,42 @@ export function useSqlExecution(): SqlExecutionResult {
 
   const submit = useCallback(
     async (payload: SubmitPayload): Promise<string | null> => {
-      // Reset state
+      // Bump generation counter — any in-flight closure with old runId will bail
+      runIdRef.current += 1;
+      const runId = runIdRef.current;
+
       cancelledRef.current = false;
-      if (pollTimerRef.current !== undefined) {
-        clearTimeout(pollTimerRef.current);
-        pollTimerRef.current = undefined;
-      }
+      stopPolling();
       stopElapsedTicker();
 
       setState("running");
-      setExecutionId(null);
       setElapsedMs(0);
       setRowCount(null);
       setErrorMessage(null);
+      setExecutionId(null);
+
+      // Fix #3 (Important): cancel previous server-side execution before starting a new one
+      const prevId = executionId;
+      if (prevId) {
+        void cancelExecution(prevId).catch(() => {});
+      }
 
       startedAtRef.current = Date.now();
       startElapsedTicker();
 
       try {
         const res = await submitSql(payload);
+        // Fix #1 (Critical): bail if superseded or cancelled before touching state
+        if (runId !== runIdRef.current) return null;
         if (cancelledRef.current) return null;
         setExecutionId(res.executionId);
-        await pollUntilDone(res.executionId, 0);
-        return res.executionId;
+        await pollUntilDone(res.executionId, runId, 0);
+        return runId === runIdRef.current ? res.executionId : null;
       } catch (err) {
+        // Fix #1 (Critical): bail if superseded
+        if (runId !== runIdRef.current) return null;
+        // Fix #4 (Important): don't overwrite "canceled" with "failed"
+        if (cancelledRef.current) return null;
         stopElapsedTicker();
         const msg = err instanceof Error ? err.message : String(err);
         setErrorMessage(msg);
@@ -128,30 +147,29 @@ export function useSqlExecution(): SqlExecutionResult {
         return null;
       }
     },
-    [startElapsedTicker, stopElapsedTicker, pollUntilDone],
+    // executionId needed to cancel previous; stable refs don't need to be listed
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [executionId, startElapsedTicker, stopElapsedTicker, stopPolling, pollUntilDone],
   );
 
   const cancel = useCallback(() => {
     cancelledRef.current = true;
-    if (pollTimerRef.current !== undefined) {
-      clearTimeout(pollTimerRef.current);
-      pollTimerRef.current = undefined;
-    }
+    stopPolling();
     stopElapsedTicker();
     setState("canceled");
     if (executionId) {
       void cancelExecution(executionId);
     }
-  }, [executionId, stopElapsedTicker]);
+  }, [executionId, stopPolling, stopElapsedTicker]);
 
   // Cleanup on unmount
   useEffect(() => {
     return () => {
       cancelledRef.current = true;
-      if (pollTimerRef.current !== undefined) clearTimeout(pollTimerRef.current);
+      stopPolling();
       stopElapsedTicker();
     };
-  }, [stopElapsedTicker]);
+  }, [stopPolling, stopElapsedTicker]);
 
   return { state, executionId, elapsedMs, rowCount, errorMessage, submit, cancel };
 }

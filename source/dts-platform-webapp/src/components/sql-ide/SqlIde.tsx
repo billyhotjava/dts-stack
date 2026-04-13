@@ -63,13 +63,6 @@ export const SqlIde: FC = () => {
 
   const sqlExec = useSqlExecution();
 
-  // Write executionId back to TabState so ResultGrid auto-displays
-  useEffect(() => {
-    if (!sqlExec.executionId || !activeTab) return;
-    if (sqlExec.executionId === activeTab.lastExecutionId) return;
-    updateTab(activeTab.id, { lastExecutionId: sqlExec.executionId });
-  }, [sqlExec.executionId, activeTab, updateTab]);
-
   const handleSqlChange = useCallback(
     (next: string) => {
       if (activeTab) updateTab(activeTab.id, { sqlText: next });
@@ -175,12 +168,21 @@ export const SqlIde: FC = () => {
               isDark={true}
               onExecute={(s) => {
                 if (!s.trim() || !activeTab) return;
-                void sqlExec.submit({
-                  sqlText: s,
-                  datasource: activeTab.datasourceId,
-                  catalog: activeTab.schemaContext,
-                  schema: null,
-                });
+                // Fix #5 (Important): hammer guard — no re-submit while running
+                if (sqlExec.state === "running") return;
+                // Fix #2 (Critical): capture tabId at submit time so a mid-flight
+                // tab switch cannot write lastExecutionId to the wrong tab
+                const targetTabId = activeTab.id;
+                void sqlExec
+                  .submit({
+                    sqlText: s,
+                    datasource: activeTab.datasourceId,
+                    catalog: activeTab.schemaContext,
+                    schema: null,
+                  })
+                  .then((id) => {
+                    if (id) updateTab(targetTabId, { lastExecutionId: id });
+                  });
               }}
               onExecuteInNewTab={(s) =>
                 console.info("[SqlIde] executeInNewTab:", s)
