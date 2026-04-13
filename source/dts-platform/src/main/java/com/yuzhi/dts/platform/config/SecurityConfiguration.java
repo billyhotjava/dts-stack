@@ -7,6 +7,7 @@ import com.yuzhi.dts.platform.security.ServiceDependencyAuthenticationFilter;
 import com.yuzhi.dts.platform.security.session.PortalOpaqueTokenIntrospector;
 import com.yuzhi.dts.platform.security.session.PortalSessionInactivityFilter;
 import com.yuzhi.dts.platform.web.filter.AuditLoggingFilter;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
@@ -23,6 +24,10 @@ import tech.jhipster.config.JHipsterProperties;
 public class SecurityConfiguration {
 
     private final JHipsterProperties jHipsterProperties;
+
+    // 由 .env 的 APP_API_DOCS_PUBLIC 控制 Swagger UI 与 /v3/api-docs 是否匿名可访问。
+    @Value("${app.api-docs.public:false}")
+    private boolean apiDocsPublic;
 
     public SecurityConfiguration(JHipsterProperties jHipsterProperties) {
         this.jHipsterProperties = jHipsterProperties;
@@ -57,7 +62,23 @@ public class SecurityConfiguration {
                     // Menus must be fetched under authentication so role-based filtering works
                     // Platform has no /api/admin/** endpoints; remove legacy matchers
                     .requestMatchers(mvc.pattern("/api/**")).authenticated()
-                    .requestMatchers(mvc.pattern("/v3/api-docs/**")).hasAuthority(AuthoritiesConstants.ADMIN)
+                    // Swagger UI + OpenAPI spec: APP_API_DOCS_PUBLIC=true 时匿名可访问；否则需 ROLE_ADMIN。
+                    .requestMatchers(
+                        mvc.pattern("/v3/api-docs"),
+                        mvc.pattern("/v3/api-docs/**"),
+                        mvc.pattern("/v3/api-docs.yaml"),
+                        mvc.pattern("/swagger-ui.html"),
+                        mvc.pattern("/swagger-ui/**"),
+                        mvc.pattern("/webjars/**")
+                    ).access((authentication, context) -> {
+                        if (apiDocsPublic) {
+                            return new org.springframework.security.authorization.AuthorizationDecision(true);
+                        }
+                        var auth = authentication.get();
+                        boolean allowed = auth != null && auth.isAuthenticated() && auth.getAuthorities().stream()
+                            .anyMatch(a -> AuthoritiesConstants.ADMIN.equals(a.getAuthority()));
+                        return new org.springframework.security.authorization.AuthorizationDecision(allowed);
+                    })
                     .requestMatchers(mvc.pattern("/management/health")).permitAll()
                     .requestMatchers(mvc.pattern("/management/health/**")).permitAll()
                     .requestMatchers(mvc.pattern("/management/info")).permitAll()

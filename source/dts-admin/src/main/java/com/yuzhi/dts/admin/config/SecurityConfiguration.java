@@ -35,6 +35,11 @@ public class SecurityConfiguration {
     @Value("${spring.security.oauth2.client.provider.oidc.issuer-uri}")
     private String issuerUri;
 
+    // 由 .env 的 APP_API_DOCS_PUBLIC 控制：true 时 Swagger UI 与 /v3/api-docs 匿名可访问；
+    // 生产环境务必保持 false，此时保留原三员角色限制。
+    @Value("${app.api-docs.public:false}")
+    private boolean apiDocsPublic;
+
     public SecurityConfiguration(JHipsterProperties jHipsterProperties) {
         this.jHipsterProperties = jHipsterProperties;
     }
@@ -102,15 +107,31 @@ public class SecurityConfiguration {
                             "ROLE_AUDIT_ADMIN",
                             "ROLE_AUDITADMIN"
                         )
-                    .requestMatchers(mvc.pattern("/v3/api-docs/**"))
-                        .hasAnyAuthority(
-                            AuthoritiesConstants.SYS_ADMIN,
-                            AuthoritiesConstants.AUTH_ADMIN,
-                            AuthoritiesConstants.AUDITOR_ADMIN,
-                            "ROLE_AUDITOR_ADMIN",
-                            "ROLE_AUDIT_ADMIN",
-                            "ROLE_AUDITADMIN"
-                        )
+                    // Swagger UI + OpenAPI spec: APP_API_DOCS_PUBLIC=true 时匿名可访问（dev/test），
+                    // 否则仍受三员角色限制（生产默认）。
+                    .requestMatchers(
+                        mvc.pattern("/v3/api-docs"),
+                        mvc.pattern("/v3/api-docs/**"),
+                        mvc.pattern("/v3/api-docs.yaml"),
+                        mvc.pattern("/swagger-ui.html"),
+                        mvc.pattern("/swagger-ui/**"),
+                        mvc.pattern("/webjars/**")
+                    ).access((authentication, context) -> {
+                        if (apiDocsPublic) {
+                            return new org.springframework.security.authorization.AuthorizationDecision(true);
+                        }
+                        var auth = authentication.get();
+                        boolean allowed = auth != null && auth.isAuthenticated() && auth.getAuthorities().stream()
+                            .map(org.springframework.security.core.GrantedAuthority::getAuthority)
+                            .anyMatch(a ->
+                                AuthoritiesConstants.SYS_ADMIN.equals(a)
+                                || AuthoritiesConstants.AUTH_ADMIN.equals(a)
+                                || AuthoritiesConstants.AUDITOR_ADMIN.equals(a)
+                                || "ROLE_AUDITOR_ADMIN".equals(a)
+                                || "ROLE_AUDIT_ADMIN".equals(a)
+                                || "ROLE_AUDITADMIN".equals(a));
+                        return new org.springframework.security.authorization.AuthorizationDecision(allowed);
+                    })
                     .requestMatchers(mvc.pattern("/management/health")).permitAll()
                     .requestMatchers(mvc.pattern("/management/health/**")).permitAll()
                     .requestMatchers(mvc.pattern("/management/info")).permitAll()

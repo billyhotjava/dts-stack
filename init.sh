@@ -908,6 +908,14 @@ generate_env_base(){
   # ---------- Admin password-login IP allowlist (triad only; PKI unaffected) ----------
   : "${DTS_SECURITY_IP_ALLOWLIST_ENABLED:=false}"
   : "${DTS_SECURITY_IP_ALLOWLIST_TRIAD_USERNAMES:=sysadmin,authadmin,auditadmin}"
+
+  # ---------- Test / API-debug switches (KEEP DEFAULTS on prod) ----------
+  # Swagger UI + /v3/api-docs 匿名访问开关；生产务必 false，dev/test 可 true
+  : "${APP_API_DOCS_PUBLIC:=false}"
+  # /test/** 辅助接口（TestApiResource）总开关；true 时由 X-Test-Token 单独鉴权
+  : "${APP_TEST_API_ENABLED:=false}"
+  # /test/** 使用的 token，建议: openssl rand -hex 32；留空表示所有访问都被拒
+  : "${APP_TEST_API_TOKEN:=}"
   : "${DTS_PKI_DIGEST:=SHA1}"
   : "${DTS_PKI_VENDOR_JAR:=/opt/dts/vendor}"
   : "${DTS_ADMIN_JAVA_TOOL_OPTIONS_EXTRA:=--add-exports=java.base/sun.security.x509=ALL-UNNAMED --add-exports=java.base/sun.security.util=ALL-UNNAMED --add-opens=java.base/sun.security.x509=ALL-UNNAMED --add-opens=java.base/sun.security.util=ALL-UNNAMED}"
@@ -1082,6 +1090,13 @@ DTS_ADMIN_JAVA_TOOL_OPTIONS_EXTRA=${DTS_ADMIN_JAVA_TOOL_OPTIONS_EXTRA_ESCAPED}
 # ====== Admin password-login IP allowlist (triad only; PKI unaffected) ======
 DTS_SECURITY_IP_ALLOWLIST_ENABLED=${DTS_SECURITY_IP_ALLOWLIST_ENABLED}
 DTS_SECURITY_IP_ALLOWLIST_TRIAD_USERNAMES=${DTS_SECURITY_IP_ALLOWLIST_TRIAD_USERNAMES}
+
+# ====== Test / API-debug switches (生产务必保持 false) ======
+# Swagger UI + /v3/api-docs 是否匿名可访问（dev/test=true 方便排查，prod=false）
+APP_API_DOCS_PUBLIC=${APP_API_DOCS_PUBLIC}
+# /test/** 辅助接口总开关；true 时由 X-Test-Token 鉴权（非 OIDC）
+APP_TEST_API_ENABLED=${APP_TEST_API_ENABLED}
+APP_TEST_API_TOKEN=${APP_TEST_API_TOKEN}
 
 # ====== Frontend PKI defaults ======
 VITE_ADMIN_API_BASE_URL=${VITE_ADMIN_API_BASE_URL}

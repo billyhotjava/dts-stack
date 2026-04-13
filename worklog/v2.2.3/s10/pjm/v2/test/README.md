@@ -4,24 +4,41 @@
 
 | 文件 | Sheet | ODS 目标表 | 行数 | 列数 |
 |------|-------|-----------|------|------|
-| **ods_project_subject_domain_v2.xlsx** | 进度信息汇总表 | ods_project_subject_domain_v2 | 15 | 31 |
-| **ods_progress_measure_v2.xlsx** | 进度跟进措施表 | ods_progress_measure_v2 | 10 | 23 |
-| **ods_quality_issue_v2.xlsx** | 质量信息汇总表 | ods_quality_issue_v2 | 10 | 21 |
-| **ods_quality_measure_v2.xlsx** | 质量跟进措施表 | ods_quality_measure_v2 | 10 | 33 |
-| **ods_tech_state_v2.xlsx** | 技术状态信息汇总表 | ods_tech_state_v2 | 8 | 33 |
-| **ods_tech_state_measure_v2.xlsx** | 技术状态跟进措施表 | ods_tech_state_measure_v2 | 8 | 41 |
-| **ods_risk_info_v2.xlsx** | 风险信息汇总表 | ods_risk_info_v2 | 10 | 31 |
-| **ods_risk_measure_v2.xlsx** | 风险跟进措施表 | ods_risk_measure_v2 | 10 | 42 |
-| **ods_material_info_v2.xlsx** | 重要物料信息表 | ods_material_info_v2 | 10 | 29 |
+| **ods_project_subject_domain_v2.xlsx** | 进度信息汇总表 | ods_project_subject_domain_v2 | 1000 | 31 |
+| **ods_progress_measure_v2.xlsx** | 进度跟进措施表 | ods_progress_measure_v2 | 80 | 23 |
+| **ods_quality_issue_v2.xlsx** | 质量信息汇总表 | ods_quality_issue_v2 | 80 | 21 |
+| **ods_quality_measure_v2.xlsx** | 质量跟进措施表 | ods_quality_measure_v2 | 80 | 33 |
+| **ods_tech_state_v2.xlsx** | 技术状态信息汇总表 | ods_tech_state_v2 | 80 | 33 |
+| **ods_tech_state_measure_v2.xlsx** | 技术状态跟进措施表 | ods_tech_state_measure_v2 | 80 | 41 |
+| **ods_risk_info_v2.xlsx** | 风险信息汇总表 | ods_risk_info_v2 | 80 | 31 |
+| **ods_risk_measure_v2.xlsx** | 风险跟进措施表 | ods_risk_measure_v2 | 80 | 42 |
+| **ods_material_info_v2.xlsx** | 重要物料信息表 | ods_material_info_v2 | 80 | 29 |
 
-**合计**: 91 行测试数据
+**合计**: 1640 行测试数据
 
 ## 数据设计
 
-- **项目**: PJ-2025-001 (卫星导航系统), PJ-2025-002 (深空探测器)
-- **分系统**: 结构/电子/软件/热控/推进
-- **时间跨度**: 2025-01 ~ 2025-09（覆盖多月/季/周聚合）
+- **项目**（8 个）: PJ-2025-001 卫星导航系统、002 深空探测器、003 遥感观测卫星、
+  004 通信中继星座、005 空间站实验舱、006 月球着陆器、007 火星巡视器、008 低轨互联网卫星
+- **分系统**: 结构/电子/软件/热控/推进（主表为 8 项目 × 5 分系统 × 25 月 = 1000 行）
+- **时间跨度**: 2025-01 ~ 2027-01（覆盖多月/季/周聚合）
 - **列头**: 与 ODS DDL 字段中文注释严格对齐
+
+## 异常数据注入（用于 ETL 健壮性测试）
+
+生成脚本（固定随机种子 `20260412`）会以约 15% 概率对时间字段注入异常格式：
+
+| 异常类型 | 样例 |
+|---------|------|
+| 斜杠分隔 | `2025/07/08`、`2025/7/8` |
+| 5 位年份拼写错 | `20205/07/08`、`20250/07/08` |
+| 中文日期 | `2025年7月8日`、`2025年07月08日` |
+| 点分隔 | `2025.7.8` |
+| 缺零填充 | `2025-7-8`、`2025-9` |
+| 非法月/日 | `2025-13-08`、`2025-07-32`、`2025-02-30` |
+| 占位符 | `待定`、`TBD`、`未知`、空字符串 |
+
+周数字段也会按半概率注入 `待定` / `N/A` / `-1` / 全角 `０` 等值。
 
 ## 枚举覆盖
 
