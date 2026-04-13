@@ -43,6 +43,7 @@ export interface TabState {
   updatedAt: string | null;       // ISO-8601, server's lastModifiedDate
   createdLocally: boolean;        // true until first successful POST
   gridState: GridColumnState;
+  subqueryViewName: string | null;
 }
 
 /** Server DTO matching SqlIdeTabDto record on Java side. */
