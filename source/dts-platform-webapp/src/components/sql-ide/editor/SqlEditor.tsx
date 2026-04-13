@@ -139,17 +139,21 @@ export const SqlEditor = forwardRef<SqlEditorHandle, SqlEditorProps>(function Sq
         if (!model) return "";
         if (sel && !sel.isEmpty()) return model.getValueInRange(sel);
         const offset = model.getOffsetAt(editor.getPosition() ?? { lineNumber: 1, column: 1 });
-        return findStatementAt(model.getValue(), offset)?.text ?? model.getValue();
+        return findStatementAt(model.getValue(), offset)?.text ?? "";
       };
 
       // Ctrl+Enter — execute current SQL (selection or statement at cursor)
       editor.addCommand(mo.KeyMod.CtrlCmd | mo.KeyCode.Enter, () => {
-        onExecuteRef.current?.(getCurrentSql());
+        const sql = getCurrentSql();
+        if (!sql.trim()) return;
+        onExecuteRef.current?.(sql);
       });
 
       // Ctrl+Shift+Enter — execute in new tab
       editor.addCommand(mo.KeyMod.CtrlCmd | mo.KeyMod.Shift | mo.KeyCode.Enter, () => {
-        onExecuteInNewTabRef.current?.(getCurrentSql());
+        const sql = getCurrentSql();
+        if (!sql.trim()) return;
+        onExecuteInNewTabRef.current?.(sql);
       });
 
       // Ctrl+Alt+F — format
@@ -166,38 +170,6 @@ export const SqlEditor = forwardRef<SqlEditorHandle, SqlEditorProps>(function Sq
       editor.addCommand(mo.KeyMod.CtrlCmd | mo.KeyCode.Backquote, () => {
         onToggleBottomPanelRef.current?.();
       });
-
-      // Ctrl+/ — toggle line comment (built-in)
-      disposablesRef.current.push(editor.addAction({
-        id: "sqlide.toggleLineComment",
-        label: "Toggle Line Comment",
-        keybindings: [mo.KeyMod.CtrlCmd | mo.KeyCode.Slash],
-        run: (ed) => ed.trigger("sqlide", "editor.action.commentLine", {}),
-      }));
-
-      // Ctrl+D — add selection to next match (built-in)
-      disposablesRef.current.push(editor.addAction({
-        id: "sqlide.addNextMatch",
-        label: "Add Selection To Next Match",
-        keybindings: [mo.KeyMod.CtrlCmd | mo.KeyCode.KeyD],
-        run: (ed) => ed.trigger("sqlide", "editor.action.addSelectionToNextFindMatch", {}),
-      }));
-
-      // Alt+↑ — move line up (built-in)
-      disposablesRef.current.push(editor.addAction({
-        id: "sqlide.moveLineUp",
-        label: "Move Line Up",
-        keybindings: [mo.KeyMod.Alt | mo.KeyCode.UpArrow],
-        run: (ed) => ed.trigger("sqlide", "editor.action.moveLinesUpAction", {}),
-      }));
-
-      // Alt+↓ — move line down (built-in)
-      disposablesRef.current.push(editor.addAction({
-        id: "sqlide.moveLineDown",
-        label: "Move Line Down",
-        keybindings: [mo.KeyMod.Alt | mo.KeyCode.DownArrow],
-        run: (ed) => ed.trigger("sqlide", "editor.action.moveLinesDownAction", {}),
-      }));
 
       // F8 — go to next error marker (built-in)
       disposablesRef.current.push(editor.addAction({
