@@ -2,15 +2,18 @@ import { Button, message } from "antd";
 import { type FC, useCallback, useEffect, useRef, useState } from "react";
 import { useShallow } from "zustand/react/shallow";
 import { ShortcutsHelp } from "./ShortcutsHelp";
+import { CopilotSlot } from "./copilot/CopilotSlot";
 import { SqlEditor, type SqlEditorHandle } from "./editor/SqlEditor";
 import { formatSql } from "./editor/formatter";
 import { ActivityBar } from "./layout/ActivityBar";
 import { BottomPanel } from "./layout/BottomPanel";
 import { SidePanel } from "./layout/SidePanel";
+import { useLayoutStore } from "./layout/useLayoutStore";
 import { TabBar } from "./tabs/TabBar";
 import { useTabStore } from "./tabs/useTabStore";
 
 export const SqlIde: FC = () => {
+  const activeActivity = useLayoutStore((s) => s.activeActivity);
   const { tabs, activeTabId, hydrated } = useTabStore(
     useShallow((s) => ({ tabs: s.tabs, activeTabId: s.activeTabId, hydrated: s.hydrated })),
   );
@@ -73,9 +76,19 @@ export const SqlIde: FC = () => {
     >
       <ActivityBar />
       <SidePanel>
-        <div style={{ padding: 12, color: "var(--ant-color-text-secondary)" }}>
-          Schema · 骨架
-        </div>
+        {activeActivity === "schema" && (
+          <div style={{ padding: 12, color: "var(--ant-color-text-secondary)" }}>Schema · T13 待完成</div>
+        )}
+        {activeActivity === "history" && (
+          <div style={{ padding: 12, color: "var(--ant-color-text-secondary)" }}>History · T14 待完成</div>
+        )}
+        {activeActivity === "saved" && (
+          <div style={{ padding: 12, color: "var(--ant-color-text-secondary)" }}>Saved · T15 待完成</div>
+        )}
+        {activeActivity === "search" && (
+          <div style={{ padding: 12, color: "var(--ant-color-text-secondary)" }}>Search · 暂未实现</div>
+        )}
+        {activeActivity === "copilot" && <CopilotSlot />}
       </SidePanel>
       <div
         style={{ flex: 1, display: "flex", flexDirection: "column", minWidth: 0 }}
