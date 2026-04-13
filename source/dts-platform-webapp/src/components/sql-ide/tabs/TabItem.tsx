@@ -8,7 +8,6 @@ export interface TabItemProps {
   onActivate: (id: string) => void;
   onClose: (id: string) => void;
   onRename: (id: string, title: string) => void;
-  onContextMenu?: (id: string, event: React.MouseEvent) => void;
 }
 
 export const TabItem: FC<TabItemProps> = ({
@@ -19,7 +18,6 @@ export const TabItem: FC<TabItemProps> = ({
   onActivate,
   onClose,
   onRename,
-  onContextMenu,
 }) => {
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(title);
@@ -36,15 +34,23 @@ export const TabItem: FC<TabItemProps> = ({
       data-testid={`sqlide-tab-${id}`}
       role="tab"
       aria-selected={active}
+      tabIndex={active ? 0 : -1}
       onClick={() => !editing && onActivate(id)}
       onDoubleClick={() => {
         setDraft(title);
         setEditing(true);
         setTimeout(() => inputRef.current?.select(), 0);
       }}
-      onContextMenu={(e) => {
-        e.preventDefault();
-        onContextMenu?.(id, e);
+      onContextMenu={(e) => e.preventDefault()}
+      onKeyDown={(e) => {
+        if (editing) return;
+        if (e.key === "Enter" || e.key === " ") {
+          e.preventDefault();
+          onActivate(id);
+        } else if (e.key === "Delete" || e.key === "Backspace") {
+          e.preventDefault();
+          onClose(id);
+        }
       }}
       style={{
         display: "inline-flex",
@@ -96,8 +102,7 @@ export const TabItem: FC<TabItemProps> = ({
             </span>
           )}
           <span
-            aria-label="关闭"
-            role="button"
+            aria-hidden="true"
             onClick={(e) => {
               e.stopPropagation();
               onClose(id);

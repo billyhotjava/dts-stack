@@ -1,5 +1,6 @@
 import { Button, message } from "antd";
 import { type FC, useCallback, useEffect, useRef, useState } from "react";
+import { useShallow } from "zustand/react/shallow";
 import { ShortcutsHelp } from "./ShortcutsHelp";
 import { SqlEditor, type SqlEditorHandle } from "./editor/SqlEditor";
 import { formatSql } from "./editor/formatter";
@@ -10,8 +11,12 @@ import { TabBar } from "./tabs/TabBar";
 import { useTabStore } from "./tabs/useTabStore";
 
 export const SqlIde: FC = () => {
-  const { tabs, activeTabId, hydrated, hydrate, openTab, updateTab } =
-    useTabStore();
+  const { tabs, activeTabId, hydrated } = useTabStore(
+    useShallow((s) => ({ tabs: s.tabs, activeTabId: s.activeTabId, hydrated: s.hydrated })),
+  );
+  const hydrate = useTabStore((s) => s.hydrate);
+  const openTab = useTabStore((s) => s.openTab);
+  const updateTab = useTabStore((s) => s.updateTab);
   const editorHandleRef = useRef<SqlEditorHandle>(null);
   const [helpOpen, setHelpOpen] = useState(false);
 

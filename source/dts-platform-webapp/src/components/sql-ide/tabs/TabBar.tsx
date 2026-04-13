@@ -1,12 +1,18 @@
 import { Dropdown, type MenuProps, message } from "antd";
 import { type FC, useCallback } from "react";
-import { confirmCloseDirtyTab } from "./ConfirmCloseDialog";
+import { useShallow } from "zustand/react/shallow";
+import { confirmCloseDirtyTab, confirmCloseDirtyTabs } from "./ConfirmCloseDialog";
 import { TabItem } from "./TabItem";
 import { useTabStore } from "./useTabStore";
 
 export const TabBar: FC = () => {
-  const { tabs, activeTabId, openTab, closeTab, updateTab, setActive } =
-    useTabStore();
+  const { tabs, activeTabId } = useTabStore(
+    useShallow((s) => ({ tabs: s.tabs, activeTabId: s.activeTabId })),
+  );
+  const openTab = useTabStore((s) => s.openTab);
+  const closeTab = useTabStore((s) => s.closeTab);
+  const updateTab = useTabStore((s) => s.updateTab);
+  const setActive = useTabStore((s) => s.setActive);
 
   const handleClose = useCallback(
     async (id: string) => {
@@ -19,6 +25,26 @@ export const TabBar: FC = () => {
       void closeTab(id);
     },
     [closeTab],
+  );
+
+  const batchClose = useCallback(
+    async (targetIds: string[]) => {
+      const state = useTabStore.getState();
+      const targets = targetIds
+        .map((id) => state.tabs.find((t) => t.id === id))
+        .filter(Boolean) as (typeof state.tabs)[number][];
+
+      const dirtyCount = targets.filter((t) => t.dirty).length;
+      if (dirtyCount > 0) {
+        const ok = await confirmCloseDirtyTabs(dirtyCount);
+        if (!ok) return;
+      }
+
+      for (const t of targets) {
+        await useTabStore.getState().closeTab(t.id);
+      }
+    },
+    [],
   );
 
   const handleRename = useCallback(
@@ -58,16 +84,14 @@ export const TabBar: FC = () => {
           void handleClose(id);
           break;
         case "close-others":
-          state.tabs
-            .filter((t) => t.id !== id)
-            .forEach((t) => void handleClose(t.id));
+          void batchClose(state.tabs.filter((t) => t.id !== id).map((t) => t.id));
           break;
         case "close-all":
-          state.tabs.forEach((t) => void handleClose(t.id));
+          void batchClose(state.tabs.map((t) => t.id));
           break;
       }
     },
-    [handleClose],
+    [handleClose, batchClose],
   );
 
   return (
