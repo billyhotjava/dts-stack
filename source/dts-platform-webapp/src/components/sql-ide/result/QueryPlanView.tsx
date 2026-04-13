@@ -44,6 +44,7 @@ export const QueryPlanView: FC<QueryPlanViewProps> = ({ sql, engine, datasourceI
           padding: 6,
           fontSize: 11,
           border: `1px solid ${costColor(n.data.node.estimatedCost)}`,
+          whiteSpace: "pre-line",
         },
       })),
       edges: edges.map<Edge>((e) => ({ id: e.id, source: e.source, target: e.target })),

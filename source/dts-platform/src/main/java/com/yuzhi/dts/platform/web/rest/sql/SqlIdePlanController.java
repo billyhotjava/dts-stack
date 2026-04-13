@@ -35,14 +35,20 @@ public class SqlIdePlanController {
     @PostMapping("/explain")
     public ApiResponse<PlanResultDto> explain(@RequestBody ExplainRequest req) {
         PlanResultDto result = planService.explain(req);
+        String operator = result.root() == null ? null : result.root().operator();
+        boolean failed = "ExplainError".equals(operator) || "ParseError".equals(operator);
+        String outcome = failed ? "FAILED" : "SUCCESS";
         String sqlHash = Integer.toHexString(req.sql() == null ? 0 : req.sql().hashCode());
         Map<String, Object> payload = new LinkedHashMap<>();
         payload.put("engine", req.engine());
         payload.put("sqlHash", sqlHash);
         payload.put("actionCode", SqlIdeAuditActions.SQL_PLAN_VIEW);
+        if (failed && result.rawText() != null) {
+            payload.put("errorSnippet", result.rawText().substring(0, Math.min(200, result.rawText().length())));
+        }
         auditService.record(
             "READ", "sql.ide.plan", "sql.explain",
-            "sqlHash:" + sqlHash, "SUCCESS", payload
+            "sqlHash:" + sqlHash, outcome, payload
         );
         return ApiResponses.ok(result);
     }
