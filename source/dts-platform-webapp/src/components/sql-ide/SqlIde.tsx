@@ -3,7 +3,7 @@ import { type FC, useCallback, useEffect, useRef, useState } from "react";
 import { ActivityBar } from "./layout/ActivityBar";
 import { SidePanel } from "./layout/SidePanel";
 import { BottomPanel } from "./layout/BottomPanel";
-import { SqlEditor } from "./editor/SqlEditor";
+import { SqlEditor, type SqlEditorHandle } from "./editor/SqlEditor";
 import { ShortcutsHelp } from "./ShortcutsHelp";
 import { formatSql } from "./editor/formatter";
 
@@ -13,6 +13,8 @@ export const SqlIde: FC = () => {
 
   const sqlRef = useRef(sql);
   useEffect(() => { sqlRef.current = sql; });
+
+  const editorHandleRef = useRef<SqlEditorHandle>(null);
 
   const handleFormat = useCallback(async () => {
     const input = sql;
@@ -44,6 +46,7 @@ export const SqlIde: FC = () => {
       <div style={{ flex: 1, display: "flex", flexDirection: "column", minWidth: 0 }}>
         <div style={{ flex: 1, minHeight: 0 }}>
           <SqlEditor
+            ref={editorHandleRef}
             value={sql}
             onChange={setSql}
             engine="generic"

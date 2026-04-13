@@ -1,11 +1,21 @@
 import Editor, { useMonaco, type OnMount } from "@monaco-editor/react";
-import { type FC, useCallback, useEffect, useRef } from "react";
+import { forwardRef, useCallback, useEffect, useImperativeHandle, useRef } from "react";
+import type { editor as MonacoEditor } from "monaco-editor";
 import { NOOP_CATALOG, registerSqlCatalogCompletion, type CatalogSource } from "./completion/catalogProvider";
 import { SQLIDE_DARK, SQLIDE_LIGHT, registerSqlIdeThemes } from "./themes";
 import { findStatementAt } from "./statementSplitter";
 
 export type Engine = "trino" | "hive" | "postgresql" | "generic";
 export type EditorMode = "simple" | "advanced";
+
+export interface SqlEditorHandle {
+  /** Replace editor content while preserving cursor/selection/scroll via model.pushEditOperations. */
+  replaceContent(newValue: string): void;
+  /** Focus the editor. */
+  focus(): void;
+  /** Get the underlying monaco editor (for advanced use cases — prefer named methods above). */
+  getEditor(): MonacoEditor.IStandaloneCodeEditor | null;
+}
 
 export interface SqlEditorProps {
   value: string;
@@ -23,7 +33,7 @@ export interface SqlEditorProps {
   catalog?: CatalogSource;
 }
 
-export const SqlEditor: FC<SqlEditorProps> = ({
+export const SqlEditor = forwardRef<SqlEditorHandle, SqlEditorProps>(function SqlEditor({
   value,
   onChange,
   engine = "generic",
@@ -37,8 +47,9 @@ export const SqlEditor: FC<SqlEditorProps> = ({
   onToggleBottomPanel,
   onCursorPositionChange,
   catalog,
-}) => {
+}, ref) {
   const monaco = useMonaco();
+  const editorInstanceRef = useRef<MonacoEditor.IStandaloneCodeEditor | null>(null);
 
   // Register SQL catalog completion provider; re-register when catalog source changes
   useEffect(() => {
@@ -86,8 +97,32 @@ export const SqlEditor: FC<SqlEditorProps> = ({
     };
   }, []);
 
+  // Clear editor ref on unmount
+  useEffect(() => () => { editorInstanceRef.current = null; }, []);
+
+  useImperativeHandle(ref, () => ({
+    replaceContent(newValue: string) {
+      const editor = editorInstanceRef.current;
+      if (!editor) return;
+      const model = editor.getModel();
+      if (!model) return;
+      const viewState = editor.saveViewState();
+      const fullRange = model.getFullModelRange();
+      model.pushEditOperations([], [{ range: fullRange, text: newValue }], () => null);
+      if (viewState) editor.restoreViewState(viewState);
+      editor.focus();
+    },
+    focus() {
+      editorInstanceRef.current?.focus();
+    },
+    getEditor() {
+      return editorInstanceRef.current;
+    },
+  }), []);
+
   const handleMount: OnMount = useCallback(
     (editor, mo) => {
+      editorInstanceRef.current = editor;
       registerSqlIdeThemes(mo);
 
       const cursorDisposable = editor.onDidChangeCursorPosition((e) => {
@@ -206,4 +241,4 @@ export const SqlEditor: FC<SqlEditorProps> = ({
       />
     </div>
   );
-};
+});
