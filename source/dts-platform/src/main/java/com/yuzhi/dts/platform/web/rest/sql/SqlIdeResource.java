@@ -2,7 +2,13 @@ package com.yuzhi.dts.platform.web.rest.sql;
 
 import com.yuzhi.dts.platform.security.SecurityUtils;
 import com.yuzhi.dts.platform.service.audit.AuditService;
+import com.yuzhi.dts.platform.service.sql.SqlCatalogLazyService;
 import com.yuzhi.dts.platform.service.sql.SqlIdeTabService;
+import com.yuzhi.dts.platform.service.sql.dto.CatalogColumnDto;
+import com.yuzhi.dts.platform.service.sql.dto.CatalogDatasourceDto;
+import com.yuzhi.dts.platform.service.sql.dto.CatalogSchemaDto;
+import com.yuzhi.dts.platform.service.sql.dto.CatalogSearchHitDto;
+import com.yuzhi.dts.platform.service.sql.dto.CatalogTableDto;
 import com.yuzhi.dts.platform.service.sql.dto.CreateTabRequest;
 import com.yuzhi.dts.platform.service.sql.dto.PatchTabRequest;
 import com.yuzhi.dts.platform.service.sql.dto.SqlIdeTabDto;
@@ -19,6 +25,7 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 /**
@@ -36,10 +43,12 @@ public class SqlIdeResource {
 
     private final SqlIdeTabService tabService;
     private final AuditService auditService;
+    private final SqlCatalogLazyService catalogService;
 
-    public SqlIdeResource(SqlIdeTabService tabService, AuditService auditService) {
+    public SqlIdeResource(SqlIdeTabService tabService, AuditService auditService, SqlCatalogLazyService catalogService) {
         this.tabService = tabService;
         this.auditService = auditService;
+        this.catalogService = catalogService;
     }
 
     @GetMapping("/ping")
@@ -85,5 +94,48 @@ public class SqlIdeResource {
         List<SqlIdeTabDto> out = tabService.batchUpsert(user, reqs);
         auditService.audit("UPDATE", "sql.ide.tabs.batch", String.valueOf(out.size()));
         return ApiResponses.ok(out);
+    }
+
+    @GetMapping("/catalog/datasources")
+    public ApiResponse<List<CatalogDatasourceDto>> catalogDatasources() {
+        String user = SecurityUtils.getCurrentUserLogin().orElse("anonymous");
+        auditService.audit("READ", "sql.ide.catalog.datasources", user);
+        return ApiResponses.ok(catalogService.listDatasources());
+    }
+
+    @GetMapping("/catalog/{dsId}/schemas")
+    public ApiResponse<List<CatalogSchemaDto>> catalogSchemas(@PathVariable String dsId) {
+        String user = SecurityUtils.getCurrentUserLogin().orElse("anonymous");
+        auditService.audit("READ", "sql.ide.catalog.schemas", dsId);
+        return ApiResponses.ok(catalogService.listSchemas(dsId));
+    }
+
+    @GetMapping("/catalog/{dsId}/schemas/{schema}/tables")
+    public ApiResponse<List<CatalogTableDto>> catalogTables(
+        @PathVariable String dsId, @PathVariable String schema
+    ) {
+        String user = SecurityUtils.getCurrentUserLogin().orElse("anonymous");
+        auditService.audit("READ", "sql.ide.catalog.tables", dsId + "/" + schema);
+        return ApiResponses.ok(catalogService.listTables(dsId, schema));
+    }
+
+    @GetMapping("/catalog/{dsId}/tables/{schemaTable}/columns")
+    public ApiResponse<List<CatalogColumnDto>> catalogColumns(
+        @PathVariable String dsId, @PathVariable String schemaTable
+    ) {
+        String user = SecurityUtils.getCurrentUserLogin().orElse("anonymous");
+        auditService.audit("READ", "sql.ide.catalog.columns", dsId + "/" + schemaTable);
+        return ApiResponses.ok(catalogService.listColumns(dsId, schemaTable));
+    }
+
+    @GetMapping("/catalog/{dsId}/search")
+    public ApiResponse<List<CatalogSearchHitDto>> catalogSearch(
+        @PathVariable String dsId,
+        @RequestParam("q") String q,
+        @RequestParam(value = "limit", defaultValue = "50") int limit
+    ) {
+        String user = SecurityUtils.getCurrentUserLogin().orElse("anonymous");
+        auditService.audit("READ", "sql.ide.catalog.search", dsId + ":" + q);
+        return ApiResponses.ok(catalogService.search(dsId, q, limit));
     }
 }
