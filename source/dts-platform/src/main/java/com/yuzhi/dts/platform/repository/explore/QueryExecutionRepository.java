@@ -1,5 +1,6 @@
 package com.yuzhi.dts.platform.repository.explore;
 
+import com.yuzhi.dts.platform.domain.explore.ExecEnums;
 import com.yuzhi.dts.platform.domain.explore.QueryExecution;
 import java.time.Instant;
 import java.util.List;
@@ -27,6 +28,26 @@ public interface QueryExecutionRepository extends JpaRepository<QueryExecution, 
         """
     )
     Object[] aggregateUsage(@Param("datasetId") UUID datasetId, @Param("since") Instant since);
+
+    @Query(
+        value = """
+        select * from query_execution q
+        where q.created_by = :user
+          and (:status is null or q.status = :status)
+          and (:connection is null or q.connection = :connection)
+          and (:q is null or q.sql_text ilike concat('%', :q, '%'))
+        order by q.started_at desc
+        limit :lim
+        """,
+        nativeQuery = true
+    )
+    List<QueryExecution> findHistoryByUser(
+        @Param("user") String user,
+        @Param("status") String status,
+        @Param("connection") String connection,
+        @Param("q") String q,
+        @Param("lim") int lim
+    );
 
     @Modifying
     @Query("update QueryExecution q set q.resultSetId = null where q.resultSetId = ?1")

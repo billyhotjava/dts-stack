@@ -1,5 +1,7 @@
 package com.yuzhi.dts.platform.web.rest.sql;
 
+import com.yuzhi.dts.platform.domain.explore.QueryExecution;
+import com.yuzhi.dts.platform.repository.explore.QueryExecutionRepository;
 import com.yuzhi.dts.platform.security.SecurityUtils;
 import com.yuzhi.dts.platform.service.audit.AuditService;
 import com.yuzhi.dts.platform.service.sql.SqlCatalogLazyService;
@@ -11,10 +13,12 @@ import com.yuzhi.dts.platform.service.sql.dto.CatalogSearchHitDto;
 import com.yuzhi.dts.platform.service.sql.dto.CatalogTableDto;
 import com.yuzhi.dts.platform.service.sql.dto.CreateTabRequest;
 import com.yuzhi.dts.platform.service.sql.dto.PatchTabRequest;
+import com.yuzhi.dts.platform.service.sql.dto.QueryHistoryItemDto;
 import com.yuzhi.dts.platform.service.sql.dto.SqlIdeTabDto;
 import com.yuzhi.dts.platform.service.sql.dto.UpsertTabRequest;
 import com.yuzhi.dts.platform.web.rest.ApiResponse;
 import com.yuzhi.dts.platform.web.rest.ApiResponses;
+import jakarta.transaction.Transactional;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -44,11 +48,18 @@ public class SqlIdeResource {
     private final SqlIdeTabService tabService;
     private final AuditService auditService;
     private final SqlCatalogLazyService catalogService;
+    private final QueryExecutionRepository queryExecutionRepository;
 
-    public SqlIdeResource(SqlIdeTabService tabService, AuditService auditService, SqlCatalogLazyService catalogService) {
+    public SqlIdeResource(
+        SqlIdeTabService tabService,
+        AuditService auditService,
+        SqlCatalogLazyService catalogService,
+        QueryExecutionRepository queryExecutionRepository
+    ) {
         this.tabService = tabService;
         this.auditService = auditService;
         this.catalogService = catalogService;
+        this.queryExecutionRepository = queryExecutionRepository;
     }
 
     @GetMapping("/ping")
@@ -94,6 +105,45 @@ public class SqlIdeResource {
         List<SqlIdeTabDto> out = tabService.batchUpsert(user, reqs);
         auditService.audit("UPDATE", "sql.ide.tabs.batch", String.valueOf(out.size()));
         return ApiResponses.ok(out);
+    }
+
+    @Transactional
+    @GetMapping("/history")
+    public ApiResponse<List<QueryHistoryItemDto>> history(
+        @RequestParam(value = "status", required = false) String status,
+        @RequestParam(value = "datasource", required = false) String datasource,
+        @RequestParam(value = "q", required = false) String q,
+        @RequestParam(value = "limit", defaultValue = "50") int limit
+    ) {
+        String user = SecurityUtils.getCurrentUserLogin().orElse("anonymous");
+        auditService.audit("READ", "sql.ide.history", user);
+
+        int clampedLimit = Math.max(1, Math.min(200, limit));
+
+        String statusFilter = (status != null && !status.isBlank()) ? status.toUpperCase() : null;
+        String connectionFilter = (datasource != null && !datasource.isBlank()) ? datasource : null;
+        String qFilter = (q != null && !q.isBlank()) ? q : null;
+
+        List<QueryExecution> rows = queryExecutionRepository.findHistoryByUser(
+            user, statusFilter, connectionFilter, qFilter, clampedLimit
+        );
+
+        List<QueryHistoryItemDto> result = rows.stream()
+            .map(e -> new QueryHistoryItemDto(
+                e.getId(),
+                e.getSqlText(),
+                e.getEngine() != null ? e.getEngine().name() : null,
+                e.getConnection(),
+                e.getStatus() != null ? e.getStatus().name() : null,
+                e.getStartedAt(),
+                e.getFinishedAt(),
+                e.getRowCount(),
+                e.getElapsedMs(),
+                e.getCreatedBy()
+            ))
+            .toList();
+
+        return ApiResponses.ok(result);
     }
 
     @GetMapping("/catalog/datasources")

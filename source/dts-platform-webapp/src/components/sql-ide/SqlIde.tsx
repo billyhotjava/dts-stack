@@ -9,6 +9,7 @@ import { ActivityBar } from "./layout/ActivityBar";
 import { BottomPanel } from "./layout/BottomPanel";
 import { SidePanel } from "./layout/SidePanel";
 import { useLayoutStore } from "./layout/useLayoutStore";
+import { HistoryPanel } from "./history/HistoryPanel";
 import { SchemaTree } from "./schema/SchemaTree";
 import { TabBar } from "./tabs/TabBar";
 import { useTabStore } from "./tabs/useTabStore";
@@ -119,9 +120,7 @@ export const SqlIde: FC = () => {
             }}
           />
         )}
-        {activeActivity === "history" && (
-          <div style={{ padding: 12, color: "var(--ant-color-text-secondary)" }}>History · T14 待完成</div>
-        )}
+        {activeActivity === "history" && <HistoryPanel />}
         {activeActivity === "saved" && (
           <div style={{ padding: 12, color: "var(--ant-color-text-secondary)" }}>Saved · T15 待完成</div>
         )}
