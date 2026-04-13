@@ -18,6 +18,7 @@ import { ResultGrid } from "./result/ResultGrid";
 import { SavedPanel } from "./saved/SavedPanel";
 import { SaveQueryDialog } from "./saved/SaveQueryDialog";
 import { listSavedQueries } from "./api/sqlIdeSaved";
+import { useSqlExecution } from "./hooks/useSqlExecution";
 
 export const SqlIde: FC = () => {
   const activeActivity = useLayoutStore((s) => s.activeActivity);
@@ -59,6 +60,15 @@ export const SqlIde: FC = () => {
   }, [hydrated, tabs.length, openTab]);
 
   const activeTab = tabs.find((t) => t.id === activeTabId) ?? null;
+
+  const sqlExec = useSqlExecution();
+
+  // Write executionId back to TabState so ResultGrid auto-displays
+  useEffect(() => {
+    if (!sqlExec.executionId || !activeTab) return;
+    if (sqlExec.executionId === activeTab.lastExecutionId) return;
+    updateTab(activeTab.id, { lastExecutionId: sqlExec.executionId });
+  }, [sqlExec.executionId, activeTab, updateTab]);
 
   const handleSqlChange = useCallback(
     (next: string) => {
@@ -163,7 +173,15 @@ export const SqlIde: FC = () => {
               engine={activeTab.engine}
               mode="simple"
               isDark={true}
-              onExecute={(s) => console.info("[SqlIde] execute:", s)}
+              onExecute={(s) => {
+                if (!s.trim() || !activeTab) return;
+                void sqlExec.submit({
+                  sqlText: s,
+                  datasource: activeTab.datasourceId,
+                  catalog: activeTab.schemaContext,
+                  schema: null,
+                });
+              }}
               onExecuteInNewTab={(s) =>
                 console.info("[SqlIde] executeInNewTab:", s)
               }
@@ -193,13 +211,22 @@ export const SqlIde: FC = () => {
               }}
             >
               <span style={{ fontSize: 11, color: "var(--ant-color-text-secondary)" }}>
-                {activeTab?.lastExecutionId
-                  ? `执行 ID: ${activeTab.lastExecutionId.slice(0, 8)}`
-                  : "未运行"}
+                {sqlExec.state === "running" && `运行中 · ${(sqlExec.elapsedMs / 1000).toFixed(1)}s`}
+                {sqlExec.state === "success" && `成功 · ${sqlExec.rowCount ?? 0} 行 · ${(sqlExec.elapsedMs / 1000).toFixed(1)}s`}
+                {sqlExec.state === "failed" && `失败 · ${sqlExec.errorMessage ?? ""}`}
+                {sqlExec.state === "canceled" && "已取消"}
+                {sqlExec.state === "idle" && "未运行"}
               </span>
-              <Button size="small" onClick={() => setHelpOpen(true)}>
-                ⌨ Shortcuts
-              </Button>
+              <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+                {sqlExec.state === "running" && (
+                  <Button danger size="small" onClick={sqlExec.cancel}>
+                    取消
+                  </Button>
+                )}
+                <Button size="small" onClick={() => setHelpOpen(true)}>
+                  ⌨ Shortcuts
+                </Button>
+              </div>
             </div>
             <div style={{ flex: 1, minHeight: 0 }}>
               {activeTab?.lastExecutionId ? (

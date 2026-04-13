@@ -1,5 +1,51 @@
 import apiClient from "@/api/apiClient";
 
+// ---- Submit / Status / Cancel ----
+
+export interface SubmitPayload {
+  sqlText: string;
+  /** Maps to `datasource` field on server (SqlSubmitRequest.datasource) */
+  datasource: string | null;
+  catalog: string | null;
+  schema: string | null;
+}
+
+export interface SubmitResponse {
+  executionId: string;
+}
+
+export type ExecutionStatusCode = "PENDING" | "RUNNING" | "SUCCESS" | "FAILED" | "CANCELED";
+
+export interface ExecutionStatus {
+  executionId: string;
+  status: ExecutionStatusCode;
+  elapsedMs: number | null;
+  rows: number | null;
+  errorMessage: string | null;
+}
+
+export async function submitSql(payload: SubmitPayload): Promise<SubmitResponse> {
+  return apiClient.post<SubmitResponse>({
+    url: "/api/sql/submit",
+    data: {
+      sqlText: payload.sqlText,
+      datasource: payload.datasource,
+      catalog: payload.catalog,
+      schema: payload.schema,
+    },
+  });
+}
+
+export async function getExecutionStatus(executionId: string): Promise<ExecutionStatus> {
+  return apiClient.get<ExecutionStatus>({ url: `/api/sql/status/${executionId}` });
+}
+
+export async function cancelExecution(executionId: string): Promise<void> {
+  await apiClient.post<unknown>({ url: `/api/sql/cancel/${executionId}`, data: {} });
+}
+
+// ---- Result pages (v2) ----
+
 export interface ColumnMeta {
   name: string;
   dataType: string;
