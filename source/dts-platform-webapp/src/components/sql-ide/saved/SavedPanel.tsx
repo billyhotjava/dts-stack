@@ -60,7 +60,7 @@ export const SavedPanel: FC = () => {
     openTab({
       title: item.name,
       sqlText: item.sqlText ?? "",
-      engine: (item.datasourceName as any) ?? "generic",
+      engine: "generic", // TODO: map datasource → engine when datasource→engine registry exists (F3 followup)
     });
   };
 
