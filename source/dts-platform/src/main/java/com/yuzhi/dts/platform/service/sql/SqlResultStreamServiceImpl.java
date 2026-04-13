@@ -16,6 +16,7 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import java.util.stream.Stream;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -23,6 +24,7 @@ import org.springframework.util.StringUtils;
 import org.springframework.web.server.ResponseStatusException;
 
 @Service
+@Transactional(readOnly = true)
 public class SqlResultStreamServiceImpl implements SqlResultStreamService {
 
     private static final int MIN_PAGE_SIZE = 1;
@@ -46,68 +48,74 @@ public class SqlResultStreamServiceImpl implements SqlResultStreamService {
     }
 
     @Override
-    @Transactional(readOnly = true)
     public ResultMetaDto getMeta(UUID executionId) {
-        QueryExecution execution = queryExecutionRepository
+        QueryExecution exec = queryExecutionRepository
             .findById(executionId)
             .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "query execution not found: " + executionId));
 
-        if (execution.getResultSetId() == null) {
+        if (exec.getResultSetId() == null) {
             throw new ResponseStatusException(HttpStatus.NOT_FOUND, "result set not available for execution: " + executionId);
         }
 
         ResultSet rs = resultSetRepository
-            .findById(execution.getResultSetId())
-            .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "result set not found: " + execution.getResultSetId()));
+            .findById(exec.getResultSetId())
+            .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "result set not found: " + exec.getResultSetId()));
 
         List<ColumnMetaDto> columns = parseColumns(rs.getColumns());
-        long rowCount = rs.getRowCount() != null ? rs.getRowCount() : 0L;
-        int chunkCount = rs.getChunkCount() != null ? rs.getChunkCount() : 0;
+        long totalRows = rs.getRowCount() != null ? rs.getRowCount() : 0L;
+        boolean truncated = totalRows >= 100_000;
+        String status = exec.getStatus() == null ? null : exec.getStatus().name();
 
-        return new ResultMetaDto(executionId, rs.getId(), rowCount, chunkCount, columns);
+        return new ResultMetaDto(
+            executionId,
+            status,
+            columns,
+            totalRows,
+            truncated,
+            exec.getElapsedMs(),
+            exec.getBytesProcessed()
+        );
     }
 
     @Override
-    @Transactional(readOnly = true)
-    public ResultPageDto streamRange(UUID executionId, long from, int size) {
-        QueryExecution execution = queryExecutionRepository
+    public ResultPageDto getPage(UUID executionId, int page, int pageSize) {
+        int safePage = Math.max(1, page);
+        int safePageSize = Math.min(MAX_PAGE_SIZE, Math.max(MIN_PAGE_SIZE, pageSize));
+        long fromRow = (long) (safePage - 1) * safePageSize;
+        long toRow = fromRow + safePageSize;
+
+        ResultMetaDto meta = getMeta(executionId);
+        List<Map<String, Object>> rows = streamRange(executionId, fromRow, toRow).toList();
+
+        return new ResultPageDto(rows, meta.columns(), safePage, safePageSize, meta.totalRows(), meta.truncated());
+    }
+
+    @Override
+    public Stream<Map<String, Object>> streamRange(UUID executionId, long from, long to) {
+        QueryExecution exec = queryExecutionRepository
             .findById(executionId)
             .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "query execution not found: " + executionId));
 
-        if (execution.getResultSetId() == null) {
+        if (exec.getResultSetId() == null) {
             throw new ResponseStatusException(HttpStatus.NOT_FOUND, "result set not available for execution: " + executionId);
         }
 
         ResultSet rs = resultSetRepository
-            .findById(execution.getResultSetId())
-            .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "result set not found: " + execution.getResultSetId()));
-
-        int safeSize = Math.max(MIN_PAGE_SIZE, Math.min(MAX_PAGE_SIZE, size));
-        long totalRows = rs.getRowCount() != null ? rs.getRowCount() : 0L;
-        long safeFrom = Math.max(0L, from);
+            .findById(exec.getResultSetId())
+            .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "result set not found: " + exec.getResultSetId()));
 
         List<QueryExecutionChunk> chunks = chunkRepository.findByExecutionIdOrderByChunkIndexAsc(executionId);
 
-        List<String> headers = parseHeaderList(rs.getColumns());
-        List<Map<String, Object>> rows;
-
         if (chunks.isEmpty()) {
             // Legacy fallback: read from preview blob
-            rows = readLegacyRows(rs.getPreviewColumns(), safeFrom, safeSize);
-            if (totalRows == 0L) {
-                totalRows = rows.size();
-            }
-        } else {
-            rows = readFromChunks(chunks, safeFrom, safeSize);
+            List<Map<String, Object>> rows = readLegacyRows(rs.getPreviewColumns(), from, (int) Math.min(to - from, MAX_PAGE_SIZE));
+            return rows.stream();
         }
 
-        long actualTo = safeFrom + rows.size();
-        boolean hasMore = actualTo < totalRows;
-
-        return new ResultPageDto(executionId, safeFrom, actualTo, totalRows, hasMore, headers, rows);
+        return readFromChunks(chunks, from, to).stream();
     }
 
-    private List<Map<String, Object>> readFromChunks(List<QueryExecutionChunk> chunks, long from, int size) {
+    private List<Map<String, Object>> readFromChunks(List<QueryExecutionChunk> chunks, long from, long to) {
         List<Map<String, Object>> result = new ArrayList<>();
         for (QueryExecutionChunk chunk : chunks) {
             long chunkStart = chunk.getRowStart();
@@ -116,23 +124,19 @@ public class SqlResultStreamServiceImpl implements SqlResultStreamService {
             if (chunkEnd <= from) {
                 continue;
             }
-            if (chunkStart >= from + size) {
+            if (chunkStart >= to) {
                 break;
             }
 
             List<Map<String, Object>> chunkRows = parseChunkRows(chunk.getRowsJson());
             long overlapStart = Math.max(from, chunkStart);
-            long overlapEnd = Math.min(from + size, chunkEnd);
+            long overlapEnd = Math.min(to, chunkEnd);
             int localFrom = (int) (overlapStart - chunkStart);
             int localTo = (int) (overlapEnd - chunkStart);
 
             if (localFrom < chunkRows.size()) {
                 int actualLocalTo = Math.min(localTo, chunkRows.size());
                 result.addAll(chunkRows.subList(localFrom, actualLocalTo));
-            }
-
-            if (result.size() >= size) {
-                break;
             }
         }
         return result;
@@ -187,17 +191,7 @@ public class SqlResultStreamServiceImpl implements SqlResultStreamService {
         return Arrays.stream(columnsStr.split(","))
             .map(String::trim)
             .filter(s -> !s.isEmpty())
-            .map(name -> new ColumnMetaDto(name, "string"))
-            .toList();
-    }
-
-    private List<String> parseHeaderList(String columnsStr) {
-        if (!StringUtils.hasText(columnsStr)) {
-            return List.of();
-        }
-        return Arrays.stream(columnsStr.split(","))
-            .map(String::trim)
-            .filter(s -> !s.isEmpty())
+            .map(name -> new ColumnMetaDto(name, "string", true))
             .toList();
     }
 }

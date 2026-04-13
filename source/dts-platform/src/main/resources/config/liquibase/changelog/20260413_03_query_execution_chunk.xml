@@ -4,7 +4,7 @@
     xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
     xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.22.xsd">
 
-    <changeSet id="20260413_03_query_execution_chunk" author="billy">
+    <changeSet id="20260413_03_query_execution_chunk" author="platform">
         <createTable tableName="query_execution_chunk">
             <column name="id" type="uuid">
                 <constraints primaryKey="true" nullable="false"/>
@@ -35,6 +35,12 @@
         <createIndex indexName="idx_qec_created" tableName="query_execution_chunk">
             <column name="created_date"/>
         </createIndex>
+
+        <rollback>
+            <dropIndex tableName="query_execution_chunk" indexName="idx_qec_created"/>
+            <dropIndex tableName="query_execution_chunk" indexName="idx_qec_exec_idx"/>
+            <dropTable tableName="query_execution_chunk"/>
+        </rollback>
     </changeSet>
 
 </databaseChangeLog>

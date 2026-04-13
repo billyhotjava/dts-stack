@@ -5,8 +5,10 @@ import java.util.UUID;
 
 public record ResultMetaDto(
     UUID executionId,
-    UUID resultSetId,
-    long rowCount,
-    int chunkCount,
-    List<ColumnMetaDto> columns
+    String status,
+    List<ColumnMetaDto> columns,
+    long totalRows,
+    boolean truncated,
+    Long elapsedMs,
+    Long bytesProcessed
 ) {}

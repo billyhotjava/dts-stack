@@ -7,7 +7,6 @@ import com.yuzhi.dts.platform.service.sql.dto.ResultMetaDto;
 import com.yuzhi.dts.platform.service.sql.dto.ResultPageDto;
 import com.yuzhi.dts.platform.web.rest.ApiResponse;
 import com.yuzhi.dts.platform.web.rest.ApiResponses;
-import java.util.Map;
 import java.util.UUID;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -25,8 +24,6 @@ import org.springframework.web.bind.annotation.RestController;
 @RequestMapping("/api/sql/v2/executions")
 public class SqlIdeExecutionController {
 
-    private static final int DEFAULT_PAGE_SIZE = 200;
-
     private final SqlResultStreamService streamService;
     private final AuditService auditService;
 
@@ -37,7 +34,6 @@ public class SqlIdeExecutionController {
 
     @GetMapping("/{id}/meta")
     public ApiResponse<ResultMetaDto> getMeta(@PathVariable UUID id) {
-        String user = SecurityUtils.getCurrentUserLogin().orElse("anonymous");
         auditService.audit("READ", "sql.ide.execution.meta", id.toString());
         ResultMetaDto meta = streamService.getMeta(id);
         return ApiResponses.ok(meta);
@@ -46,20 +42,10 @@ public class SqlIdeExecutionController {
     @GetMapping("/{id}/page")
     public ApiResponse<ResultPageDto> getPage(
         @PathVariable UUID id,
-        @RequestParam(required = false, defaultValue = "0") long from,
-        @RequestParam(required = false) Integer size
+        @RequestParam(defaultValue = "1") int page,
+        @RequestParam(defaultValue = "200") int size
     ) {
-        String user = SecurityUtils.getCurrentUserLogin().orElse("anonymous");
-        int pageSize = size != null ? size : DEFAULT_PAGE_SIZE;
-        auditService.record(
-            "READ",
-            "sql.ide.execution.page",
-            "sql.ide.execution.page",
-            id.toString(),
-            "SUCCESS",
-            Map.of("from", from, "size", pageSize, "user", user)
-        );
-        ResultPageDto page = streamService.streamRange(id, from, pageSize);
-        return ApiResponses.ok(page);
+        auditService.audit("READ", "sql.ide.execution.page", id + "?page=" + page + "&size=" + size);
+        return ApiResponses.ok(streamService.getPage(id, page, size));
     }
 }

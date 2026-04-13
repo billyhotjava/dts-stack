@@ -14,7 +14,7 @@ import org.springframework.test.web.servlet.MockMvc;
 
 @IntegrationTest
 @AutoConfigureMockMvc
-@WithMockUser
+@WithMockUser(username = "alice")
 class SqlIdeExecutionControllerIT {
 
     @Autowired
@@ -31,7 +31,7 @@ class SqlIdeExecutionControllerIT {
     void pageForUnknownExecutionReturns404() throws Exception {
         UUID unknownId = UUID.randomUUID();
         mvc.perform(get("/api/sql/v2/executions/{id}/page", unknownId)
-                .param("from", "0")
+                .param("page", "1")
                 .param("size", "100"))
             .andExpect(status().isNotFound());
     }
@@ -42,7 +42,7 @@ class SqlIdeExecutionControllerIT {
         // 404 is expected for unknown executionId (not a 400/500)
         UUID unknownId = UUID.randomUUID();
         mvc.perform(get("/api/sql/v2/executions/{id}/page", unknownId)
-                .param("from", "0")
+                .param("page", "1")
                 .param("size", "50"))
             .andExpect(status().isNotFound());
     }
