@@ -187,9 +187,15 @@ public class SqlResultStreamServiceImpl implements SqlResultStreamService {
     @Override
     public void exportCsv(UUID executionId, java.io.OutputStream out) {
         ResultMetaDto meta = getMeta(executionId);
+        // BOM for Excel-friendly UTF-8 — write to OutputStream BEFORE wrapping in writer
+        try {
+            out.write(0xEF);
+            out.write(0xBB);
+            out.write(0xBF);
+        } catch (java.io.IOException e) {
+            throw new java.io.UncheckedIOException(e);
+        }
         java.io.PrintWriter writer = new java.io.PrintWriter(new java.io.OutputStreamWriter(out, java.nio.charset.StandardCharsets.UTF_8));
-        // BOM for Excel-friendly UTF-8
-        try { out.write(0xEF); out.write(0xBB); out.write(0xBF); } catch (java.io.IOException ignored) {}
         // Header
         writer.println(meta.columns().stream().map(c -> escapeCsv(c.name())).reduce((a, b) -> a + "," + b).orElse(""));
         streamRange(executionId, 0, meta.totalRows()).forEach(row -> {
@@ -263,7 +269,7 @@ public class SqlResultStreamServiceImpl implements SqlResultStreamService {
                 }
             });
             wb.write(out);
-            wb.dispose();
+            // wb.dispose() removed: POI 5.x close() (called by try-with-resources) invokes dispose() internally
         } catch (java.io.IOException e) {
             throw new java.io.UncheckedIOException(e);
         }

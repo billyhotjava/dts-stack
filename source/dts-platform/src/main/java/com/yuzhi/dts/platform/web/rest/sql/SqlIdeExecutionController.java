@@ -67,19 +67,20 @@ public class SqlIdeExecutionController {
         if (!rateLimiter.tryAcquire(user)) {
             return ResponseEntity.status(429).build();
         }
-        String fmt = format.toLowerCase();
+        String fmt = format == null ? "csv" : format.toLowerCase();
         String contentType;
         String ext;
         switch (fmt) {
+            case "csv" -> { contentType = "text/csv; charset=utf-8"; ext = "csv"; }
             case "json" -> { contentType = "application/json"; ext = "json"; }
             case "xlsx", "excel" -> { contentType = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"; ext = "xlsx"; }
-            default -> { contentType = "text/csv; charset=utf-8"; ext = "csv"; }
+            default -> { return ResponseEntity.badRequest().build(); }
         }
         StreamingResponseBody body = out -> {
             switch (fmt) {
                 case "json" -> streamService.exportJson(id, out);
                 case "xlsx", "excel" -> streamService.exportExcel(id, out);
-                default -> streamService.exportCsv(id, out);
+                default -> streamService.exportCsv(id, out); // fmt already validated above
             }
         };
         auditService.audit("EXPORT", "sql.ide.execution.export", id + ":" + ext);
