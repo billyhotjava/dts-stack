@@ -1395,10 +1395,21 @@ export function ScreenHeader({
             const parsed = JSON.parse(content) as Record<string, unknown>;
             const source = (parsed.screenSpec || parsed) as Record<string, unknown>;
             const templateMeta = parsed.templateMeta as { name: string; description?: string; category?: string; tags?: string[] } | undefined;
+            console.log('[screen-import] raw source:', {
+                hasScreenSpec: 'screenSpec' in parsed,
+                topComponents: Array.isArray((source as any).components) ? (source as any).components.length : 'N/A',
+                topPages: Array.isArray((source as any).pages) ? (source as any).pages.length : 'N/A',
+                schemaVersion: (source as any).schemaVersion,
+            });
             const normalized = normalizeScreenConfig(source, { id: id || '' });
             if (normalized.warnings.length > 0) {
                 console.warn('[screen-import] normalized warnings:', normalized.warnings);
             }
+            console.log('[screen-import] normalized:', {
+                components: normalized.config.components?.length ?? 0,
+                pages: normalized.config.pages?.length ?? 0,
+                width: normalized.config.width, height: normalized.config.height,
+            });
             const validation = validateScreenPayload(buildScreenPayload(normalized.config));
             const resourcesInlined = parsed.resourcesInlined === true;
             const inlinedResourceCount = resourcesInlined ? countInlinedResources(source) : 0;
@@ -1427,8 +1438,14 @@ export function ScreenHeader({
                 // currentPageIndex belongs to the previous config and may be
                 // out-of-bounds or misaligned with the imported pages array,
                 // which would wipe the canvas to an empty page.
+                const materialized = materializeScreenPage(importedConfig, 0);
+                console.log('[screen-import] confirm replace:', {
+                    importedComponents: importedConfig.components?.length ?? 0,
+                    importedPages: importedConfig.pages?.length ?? 0,
+                    materializedComponents: materialized.components?.length ?? 0,
+                });
                 onResetPageIndex?.();
-                loadConfig(materializeScreenPage(importedConfig, 0));
+                loadConfig(materialized);
                 setImportPreview(null);
             } else if (action === 'create-screen') {
                 const spec = buildScreenPayload(importedConfig);
