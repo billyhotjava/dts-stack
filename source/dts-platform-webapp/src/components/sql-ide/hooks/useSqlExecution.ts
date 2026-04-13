@@ -14,7 +14,7 @@ export interface SqlExecutionResult {
   elapsedMs: number;
   rowCount: number | null;
   errorMessage: string | null;
-  submit: (payload: SubmitPayload) => Promise<void>;
+  submit: (payload: SubmitPayload) => Promise<string | null>;
   cancel: () => void;
 }
 
@@ -47,42 +47,56 @@ export function useSqlExecution(): SqlExecutionResult {
   }, [stopElapsedTicker]);
 
   const pollUntilDone = useCallback(
-    (id: string, attempt: number) => {
-      const delay = BACKOFF[Math.min(attempt, BACKOFF.length - 1)];
-      pollTimerRef.current = setTimeout(() => {
-        if (cancelledRef.current) return;
-        getExecutionStatus(id)
-          .then((status) => {
-            if (cancelledRef.current) return;
-            if (status.status === "SUCCESS") {
-              stopElapsedTicker();
-              setElapsedMs(status.elapsedMs ?? Date.now() - startedAtRef.current);
-              setRowCount(status.rows ?? null);
-              setState("success");
-            } else if (status.status === "FAILED") {
-              stopElapsedTicker();
-              setElapsedMs(status.elapsedMs ?? Date.now() - startedAtRef.current);
-              setErrorMessage(status.errorMessage ?? null);
-              setState("failed");
-            } else if (status.status === "CANCELED") {
-              stopElapsedTicker();
-              setState("canceled");
-            } else {
-              // PENDING or RUNNING — keep polling
-              pollUntilDone(id, attempt + 1);
-            }
-          })
-          .catch(() => {
-            if (cancelledRef.current) return;
-            pollUntilDone(id, attempt + 1);
-          });
-      }, delay);
+    (id: string, attempt: number): Promise<void> => {
+      return new Promise((resolve) => {
+        const delay = BACKOFF[Math.min(attempt, BACKOFF.length - 1)];
+        pollTimerRef.current = setTimeout(() => {
+          if (cancelledRef.current) {
+            resolve();
+            return;
+          }
+          getExecutionStatus(id)
+            .then((status) => {
+              if (cancelledRef.current) {
+                resolve();
+                return;
+              }
+              if (status.status === "SUCCESS") {
+                stopElapsedTicker();
+                setElapsedMs(status.elapsedMs ?? Date.now() - startedAtRef.current);
+                setRowCount(status.rows ?? null);
+                setState("success");
+                resolve();
+              } else if (status.status === "FAILED") {
+                stopElapsedTicker();
+                setElapsedMs(status.elapsedMs ?? Date.now() - startedAtRef.current);
+                setErrorMessage(status.errorMessage ?? null);
+                setState("failed");
+                resolve();
+              } else if (status.status === "CANCELED") {
+                stopElapsedTicker();
+                setState("canceled");
+                resolve();
+              } else {
+                // PENDING or RUNNING — keep polling
+                pollUntilDone(id, attempt + 1).then(resolve);
+              }
+            })
+            .catch(() => {
+              if (cancelledRef.current) {
+                resolve();
+                return;
+              }
+              pollUntilDone(id, attempt + 1).then(resolve);
+            });
+        }, delay);
+      });
     },
     [stopElapsedTicker],
   );
 
   const submit = useCallback(
-    async (payload: SubmitPayload) => {
+    async (payload: SubmitPayload): Promise<string | null> => {
       // Reset state
       cancelledRef.current = false;
       if (pollTimerRef.current !== undefined) {
@@ -102,14 +116,16 @@ export function useSqlExecution(): SqlExecutionResult {
 
       try {
         const res = await submitSql(payload);
-        if (cancelledRef.current) return;
+        if (cancelledRef.current) return null;
         setExecutionId(res.executionId);
-        pollUntilDone(res.executionId, 0);
+        await pollUntilDone(res.executionId, 0);
+        return res.executionId;
       } catch (err) {
         stopElapsedTicker();
         const msg = err instanceof Error ? err.message : String(err);
         setErrorMessage(msg);
         setState("failed");
+        return null;
       }
     },
     [startElapsedTicker, stopElapsedTicker, pollUntilDone],
