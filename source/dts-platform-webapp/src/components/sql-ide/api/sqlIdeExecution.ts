@@ -84,3 +84,15 @@ export async function getExecutionPage(
     url: `/api/sql/v2/executions/${executionId}/page?page=${page}&size=${size}`,
   });
 }
+
+// ---- Audit ----
+
+/**
+ * Reports a clipboard-copy event to the server audit log (Sprint-11 F4 T20).
+ *
+ * @param executionId - the execution whose result grid was copied
+ * @param cellCount   - total number of cells copied (rows × visible columns)
+ */
+export async function postCopyAudit(executionId: string, cellCount: number): Promise<void> {
+  await apiClient.post<void>({ url: "/api/sql/v2/audit/copy", data: { executionId, cellCount } });
+}

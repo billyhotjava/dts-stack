@@ -10,7 +10,7 @@ import {
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { Empty, Pagination, Spin, message } from "antd";
 import { type FC, useEffect, useMemo, useRef, useState } from "react";
-import { getExecutionPage, type ColumnMeta, type ResultPage } from "../api/sqlIdeExecution";
+import { getExecutionPage, postCopyAudit, type ColumnMeta, type ResultPage } from "../api/sqlIdeExecution";
 import { rowsToTSV } from "./cellCopy";
 import { applyColumnAction, type GridColumnState } from "./columnState";
 
@@ -112,6 +112,7 @@ export const ResultGrid: FC<ResultGridProps> = ({ executionId, gridState, onGrid
     try {
       await navigator.clipboard.writeText(tsv);
       void message.success(`已复制 ${data.rows.length} 行 ${visibleColumns.length} 列`);
+      void postCopyAudit(executionId, data.rows.length * visibleColumns.length);
     } catch {
       void message.warning("复制失败");
     }

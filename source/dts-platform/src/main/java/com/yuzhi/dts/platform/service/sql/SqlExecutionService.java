@@ -9,6 +9,8 @@ import com.yuzhi.dts.platform.repository.explore.QueryExecutionChunkRepository;
 import com.yuzhi.dts.platform.repository.explore.QueryExecutionRepository;
 import com.yuzhi.dts.platform.repository.explore.ResultSetRepository;
 import com.yuzhi.dts.platform.service.audit.AuditService;
+import com.yuzhi.dts.platform.service.audit.SqlIdeAuditActions;
+import com.yuzhi.dts.platform.security.SecurityUtils;
 import com.yuzhi.dts.platform.service.query.QueryGateway;
 import com.yuzhi.dts.platform.service.sql.dto.SqlResultPageResponse;
 import com.yuzhi.dts.platform.service.sql.dto.SqlResultPreview;
@@ -230,6 +232,19 @@ public class SqlExecutionService {
             execution.setLimitApplied(validation.limitInfo() != null && validation.limitInfo().enforced());
             queryExecutionRepository.save(execution);
 
+            // T20: emit rewritten-hash audit now that we have validation.rewrittenSql()
+            String rawSqlHash = Integer.toHexString(request.sqlText() == null ? 0 : request.sqlText().hashCode());
+            String rewrittenSqlHash = Integer.toHexString(
+                validation.rewrittenSql() == null ? 0 : validation.rewrittenSql().hashCode()
+            );
+            String execUser = SecurityUtils.getCurrentUserLogin().orElse("anonymous");
+            auditService.audit(
+                SqlIdeAuditActions.SQL_EXECUTE_SUBMIT,
+                "executionId=" + execution.getId() + " engine=" + execution.getEngine().name()
+                    + " sqlHash=" + rawSqlHash + " rewrittenHash=" + rewrittenSqlHash,
+                execUser
+            );
+
             UUID datasourceId = parseDatasourceId(request.datasource());
             Map<String, Object> payload = queryGateway.execute(validation.rewrittenSql(), datasourceId);
 
@@ -359,6 +374,15 @@ public class SqlExecutionService {
         }
         payload.put("status", execution.getStatus() != null ? execution.getStatus().name() : ExecEnums.ExecStatus.PENDING.name());
         auditService.record("EXECUTE", "sql.query", "sql.query", execution.getId().toString(), "SUCCESS", payload);
+        // T20: structured action constant + SQL hash (rewrittenHash filled in executeQueued after validation)
+        String rawHash = Integer.toHexString(request.sqlText() == null ? 0 : request.sqlText().hashCode());
+        String userLogin = SecurityUtils.getCurrentUserLogin().orElse("anonymous");
+        auditService.audit(
+            SqlIdeAuditActions.SQL_EXECUTE_SUBMIT,
+            "executionId=" + execution.getId() + " engine=" + execution.getEngine().name()
+                + " sqlHash=" + rawHash + " rewrittenHash=" + rawHash,
+            userLogin
+        );
     }
 
     private void recordCancelAudit(QueryExecution execution, Principal principal) {
@@ -381,6 +405,13 @@ public class SqlExecutionService {
         }
         payload.put("status", execution.getStatus() != null ? execution.getStatus().name() : ExecEnums.ExecStatus.CANCELED.name());
         auditService.record("CANCEL", "sql.query", "sql.query", execution.getId().toString(), "SUCCESS", payload);
+        // T20: structured action constant
+        String cancelUser = principal != null && principal.getName() != null ? principal.getName() : "anonymous";
+        auditService.audit(
+            SqlIdeAuditActions.SQL_EXECUTE_CANCEL,
+            "executionId=" + execution.getId(),
+            cancelUser
+        );
     }
 
     private void recordCompletionAudit(QueryExecution execution, String phase, String message) {
@@ -398,6 +429,15 @@ public class SqlExecutionService {
             payload.put("message", truncate(message, 1024));
         }
         auditService.record("READ", "sql.query", "sql.query", execution.getId().toString(), "SUCCESS", payload);
+        // T20: structured action constant
+        String completionUser = SecurityUtils.getCurrentUserLogin().orElse("anonymous");
+        auditService.audit(
+            SqlIdeAuditActions.SQL_EXECUTE_COMPLETE,
+            "executionId=" + execution.getId() + " status=" + phase
+                + " rows=" + (execution.getRowCount() == null ? -1 : execution.getRowCount())
+                + " elapsedMs=" + (execution.getElapsedMs() == null ? -1 : execution.getElapsedMs()),
+            completionUser
+        );
     }
 
     private String truncate(String value, int maxLen) {
