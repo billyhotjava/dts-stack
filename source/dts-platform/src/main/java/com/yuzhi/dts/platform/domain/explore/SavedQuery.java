@@ -35,6 +35,9 @@ public class SavedQuery extends AbstractAuditingEntity<UUID> implements Serializ
     @Column(name = "tags", length = 256)
     private String tags;
 
+    @Column(name = "folder", length = 200)
+    private String folder;
+
     @Override
     public UUID getId() { return id; }
     public void setId(UUID id) { this.id = id; }
@@ -50,5 +53,7 @@ public class SavedQuery extends AbstractAuditingEntity<UUID> implements Serializ
     public void setLevel(ExecEnums.SecurityLevel level) { this.level = level; }
     public String getTags() { return tags; }
     public void setTags(String tags) { this.tags = tags; }
+    public String getFolder() { return folder; }
+    public void setFolder(String folder) { this.folder = folder; }
 }
 

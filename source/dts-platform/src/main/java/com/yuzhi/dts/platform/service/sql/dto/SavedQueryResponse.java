@@ -11,5 +11,6 @@ public record SavedQueryResponse(
     String datasourceName,
     String createdBy,
     String createdAt,
-    String updatedAt
+    String updatedAt,
+    String folder
 ) {}

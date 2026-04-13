@@ -1,6 +1,7 @@
 import { Button, message } from "antd";
-import { type FC, useCallback, useEffect, useRef, useState } from "react";
+import { type FC, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useShallow } from "zustand/react/shallow";
+import { useQuery } from "@tanstack/react-query";
 import { ShortcutsHelp } from "./ShortcutsHelp";
 import { CopilotSlot } from "./copilot/CopilotSlot";
 import { SqlEditor, type SqlEditorHandle } from "./editor/SqlEditor";
@@ -13,6 +14,9 @@ import { HistoryPanel } from "./history/HistoryPanel";
 import { SchemaTree } from "./schema/SchemaTree";
 import { TabBar } from "./tabs/TabBar";
 import { useTabStore } from "./tabs/useTabStore";
+import { SavedPanel } from "./saved/SavedPanel";
+import { SaveQueryDialog } from "./saved/SaveQueryDialog";
+import { listSavedQueries } from "./api/sqlIdeSaved";
 
 export const SqlIde: FC = () => {
   const activeActivity = useLayoutStore((s) => s.activeActivity);
@@ -24,6 +28,23 @@ export const SqlIde: FC = () => {
   const updateTab = useTabStore((s) => s.updateTab);
   const editorHandleRef = useRef<SqlEditorHandle>(null);
   const [helpOpen, setHelpOpen] = useState(false);
+  const [saveDialogOpen, setSaveDialogOpen] = useState(false);
+  const [pendingSql, setPendingSql] = useState("");
+
+  const { data: savedList } = useQuery({
+    queryKey: ["sqlide", "saved"],
+    queryFn: listSavedQueries,
+    staleTime: 60_000,
+  });
+
+  const existingFolders = useMemo(() => {
+    if (!savedList) return [];
+    const set = new Set<string>();
+    for (const item of savedList) {
+      if (item.folder?.trim()) set.add(item.folder.trim());
+    }
+    return [...set].sort();
+  }, [savedList]);
 
   // Hydrate on mount
   useEffect(() => {
@@ -121,9 +142,7 @@ export const SqlIde: FC = () => {
           />
         )}
         {activeActivity === "history" && <HistoryPanel />}
-        {activeActivity === "saved" && (
-          <div style={{ padding: 12, color: "var(--ant-color-text-secondary)" }}>Saved · T15 待完成</div>
-        )}
+        {activeActivity === "saved" && <SavedPanel />}
         {activeActivity === "search" && (
           <div style={{ padding: 12, color: "var(--ant-color-text-secondary)" }}>Search · 暂未实现</div>
         )}
@@ -147,7 +166,7 @@ export const SqlIde: FC = () => {
                 console.info("[SqlIde] executeInNewTab:", s)
               }
               onFormat={handleFormat}
-              onSaveAsQuery={(s) => console.info("[SqlIde] saveAsQuery:", s)}
+              onSaveAsQuery={(s) => { setPendingSql(s); setSaveDialogOpen(true); }}
               onToggleBottomPanel={() =>
                 console.info("[SqlIde] toggleBottomPanel")
               }
@@ -177,6 +196,12 @@ export const SqlIde: FC = () => {
         </BottomPanel>
       </div>
       <ShortcutsHelp open={helpOpen} onClose={() => setHelpOpen(false)} />
+      <SaveQueryDialog
+        open={saveDialogOpen}
+        initialSql={pendingSql}
+        existingFolders={existingFolders}
+        onClose={() => setSaveDialogOpen(false)}
+      />
     </div>
   );
 };

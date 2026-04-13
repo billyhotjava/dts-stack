@@ -7,5 +7,6 @@ public record SavedQueryRequest(
     String description,
     String sqlText,
     UUID datasourceId,
-    String datasourceName
+    String datasourceName,
+    String folder
 ) {}

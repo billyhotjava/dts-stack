@@ -31,6 +31,7 @@ public class SavedQueryService {
         entity.setLevel(ExecEnums.SecurityLevel.INTERNAL);
         entity.setConnection(request.datasourceName());
         entity.setTags(request.description());
+        entity.setFolder(request.folder());
 
         SavedQuery saved = repository.save(entity);
         return toResponse(saved);
@@ -45,6 +46,7 @@ public class SavedQueryService {
         entity.setSqlText(request.sqlText());
         entity.setConnection(request.datasourceName());
         entity.setTags(request.description());
+        entity.setFolder(request.folder());
 
         SavedQuery saved = repository.save(entity);
         return toResponse(saved);
@@ -83,7 +85,8 @@ public class SavedQueryService {
             entity.getConnection(),
             entity.getCreatedBy(),
             entity.getCreatedDate() != null ? entity.getCreatedDate().toString() : null,
-            entity.getLastModifiedDate() != null ? entity.getLastModifiedDate().toString() : null
+            entity.getLastModifiedDate() != null ? entity.getLastModifiedDate().toString() : null,
+            entity.getFolder()
         );
     }
 }
