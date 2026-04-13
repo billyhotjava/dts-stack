@@ -1,40 +1,54 @@
 import type { ColumnMeta } from "../api/sqlIdeExecution";
 
 export type ChartType = "bar" | "line" | "pie" | "scatter" | "area";
+export type AxisType = "category" | "value" | "time";
 
 export interface ChartConfig {
   type: ChartType;
   xAxis: string;
+  xAxisType: AxisType;
   yAxis: string[];
   groupBy: string | null;
 }
 
-const NUMERIC_TYPES = /^(BIGINT|INT|INTEGER|SMALLINT|TINYINT|DOUBLE|FLOAT|REAL|DECIMAL|NUMERIC)$/i;
-const TIME_TYPES = /^(TIMESTAMP|DATE|TIME|DATETIME)/i;
+function normalizeSqlType(raw: string | undefined | null): string {
+  if (!raw) return "";
+  // Strip precision/scale and trailing modifiers: DECIMAL(10,2) → DECIMAL, INT(11) → INT, TIMESTAMP WITH TIME ZONE → TIMESTAMP
+  return raw.trim().toUpperCase().split("(")[0].split(" ")[0];
+}
 
 function isNumeric(col: ColumnMeta): boolean {
-  return NUMERIC_TYPES.test(col.dataType ?? "");
+  const t = normalizeSqlType(col.dataType);
+  return /^(BIGINT|INT|INTEGER|SMALLINT|TINYINT|DOUBLE|FLOAT|REAL|DECIMAL|NUMERIC)$/.test(t);
 }
 
 function isTime(col: ColumnMeta): boolean {
-  return TIME_TYPES.test(col.dataType ?? "");
+  const t = normalizeSqlType(col.dataType);
+  return /^(TIMESTAMP|DATE|TIME|DATETIME)$/.test(t);
 }
 
 export function recommendChart(columns: ColumnMeta[]): ChartConfig {
   if (columns.length === 0) {
-    return { type: "bar", xAxis: "", yAxis: [], groupBy: null };
+    return { type: "bar", xAxis: "", xAxisType: "category", yAxis: [], groupBy: null };
   }
   const timeCol = columns.find(isTime);
   const numericCols = columns.filter(isNumeric);
   const stringCols = columns.filter((c) => !isNumeric(c) && !isTime(c));
 
   if (timeCol && numericCols.length >= 1) {
-    return { type: "line", xAxis: timeCol.name, yAxis: [numericCols[0].name], groupBy: null };
+    return {
+      type: "line",
+      xAxis: timeCol.name,
+      xAxisType: "time",
+      yAxis: [numericCols[0].name],
+      groupBy: null,
+    };
   }
   if (numericCols.length >= 2) {
     return {
       type: "scatter",
       xAxis: numericCols[0].name,
+      xAxisType: "value",
       yAxis: [numericCols[1].name],
       groupBy: null,
     };
@@ -43,11 +57,12 @@ export function recommendChart(columns: ColumnMeta[]): ChartConfig {
     return {
       type: "bar",
       xAxis: stringCols[0].name,
+      xAxisType: "category",
       yAxis: [numericCols[0].name],
       groupBy: null,
     };
   }
-  return { type: "bar", xAxis: columns[0].name, yAxis: [], groupBy: null };
+  return { type: "bar", xAxis: columns[0].name, xAxisType: "category", yAxis: [], groupBy: null };
 }
 
 export function buildEChartsOption(
@@ -69,7 +84,23 @@ export function buildEChartsOption(
       ],
     };
   }
-  const xData = rows.map((r) => r[cfg.xAxis]);
+  if (cfg.type === "scatter") {
+    const series = cfg.yAxis.map((y) => ({
+      name: y,
+      type: "scatter",
+      data: rows.map((r) => [r[cfg.xAxis], r[y]]),
+    }));
+    return {
+      tooltip: { trigger: "item" },
+      xAxis: { type: "value" },
+      yAxis: { type: "value" },
+      series,
+    };
+  }
+  const xAxisConfig = {
+    type: cfg.xAxisType,
+    data: cfg.xAxisType === "category" ? rows.map((r) => r[cfg.xAxis]) : undefined,
+  };
   const series = cfg.yAxis.map((y) => ({
     name: y,
     type: cfg.type === "area" ? "line" : cfg.type,
@@ -78,7 +109,7 @@ export function buildEChartsOption(
   }));
   return {
     tooltip: { trigger: "axis" },
-    xAxis: { type: "category", data: xData },
+    xAxis: xAxisConfig,
     yAxis: { type: "value" },
     series,
     legend: { top: 4 },

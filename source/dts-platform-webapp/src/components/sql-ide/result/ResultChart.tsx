@@ -51,7 +51,10 @@ export const ResultChart: FC<ResultChartProps> = ({ executionId }) => {
   }
   if (!effectiveConfig) return <Empty description="正在准备图表配置" />;
 
-  const option = buildEChartsOption(effectiveConfig, page.rows);
+  const option = useMemo(
+    () => buildEChartsOption(effectiveConfig, page.rows),
+    [effectiveConfig, page.rows],
+  );
   const colOptions = meta.columns.map((c) => ({ value: c.name, label: c.name }));
 
   return (
