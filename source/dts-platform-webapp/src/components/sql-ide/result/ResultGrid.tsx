@@ -2,12 +2,14 @@ import { useQuery } from "@tanstack/react-query";
 import {
   flexRender,
   getCoreRowModel,
+  getSortedRowModel,
   type ColumnDef,
+  type SortingState,
   useReactTable,
 } from "@tanstack/react-table";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { Empty, Pagination, Spin, message } from "antd";
-import { type FC, useMemo, useRef, useState } from "react";
+import { type FC, useEffect, useMemo, useRef, useState } from "react";
 import { getExecutionPage, type ColumnMeta, type ResultPage } from "../api/sqlIdeExecution";
 import { rowsToTSV } from "./cellCopy";
 import { applyColumnAction, type GridColumnState } from "./columnState";
@@ -57,14 +59,30 @@ export const ResultGrid: FC<ResultGridProps> = ({ executionId, gridState, onGrid
     [visibleColumns, gridState.columnWidths],
   );
 
+  const sortingState: SortingState = useMemo(
+    () =>
+      gridState.sort
+        ? [{ id: gridState.sort.name, desc: gridState.sort.direction === "desc" }]
+        : [],
+    [gridState.sort],
+  );
+
   const table = useReactTable({
     data: data?.rows ?? [],
     columns: tableColumns,
+    state: { sorting: sortingState },
     getCoreRowModel: getCoreRowModel(),
+    getSortedRowModel: getSortedRowModel(),
     columnResizeMode: "onChange",
+    manualSorting: false,
   });
 
   const containerRef = useRef<HTMLDivElement>(null);
+
+  // Fix 3: reset scroll position when the user switches pages
+  useEffect(() => {
+    containerRef.current?.scrollTo({ top: 0 });
+  }, [page]);
   const rowVirtualizer = useVirtualizer({
     count: data?.rows.length ?? 0,
     getScrollElement: () => containerRef.current,

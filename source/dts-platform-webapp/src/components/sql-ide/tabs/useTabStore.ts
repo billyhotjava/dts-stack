@@ -218,12 +218,13 @@ export const useTabStore = create<TabStore>((set, get) => ({
   updateGridState(tabId, partial) {
     const tabs = get().tabs.map((t) =>
       t.id === tabId
-        ? { ...t, gridState: { ...t.gridState, ...partial }, dirty: true, updatedAt: new Date().toISOString() }
+        ? { ...t, gridState: { ...t.gridState, ...partial } }
         : t,
     );
     set({ tabs });
     persistLocal(tabs);
-    scheduleDebouncedSync(get);
+    // intentionally NO dirty=true, NO updatedAt bump, NO scheduleDebouncedSync
+    // gridState is a per-device client preference; it is not in stateToPayload
   },
 
   setActive(id) {
@@ -370,7 +371,12 @@ function loadLocal(): TabState[] {
   try {
     const raw = window.localStorage.getItem(LOCAL_STORAGE_KEY);
     if (!raw) return [];
-    return JSON.parse(raw) as TabState[];
+    const parsed = JSON.parse(raw) as TabState[];
+    // Migration: pre-T17 tabs lack gridState
+    return parsed.map((t) => ({
+      ...t,
+      gridState: t.gridState ?? emptyGridColumnState(),
+    }));
   } catch {
     return [];
   }
