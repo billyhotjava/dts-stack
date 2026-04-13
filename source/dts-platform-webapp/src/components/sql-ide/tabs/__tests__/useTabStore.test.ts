@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { beforeEach, afterEach, describe, expect, it, vi } from "vitest";
 
 // Mock the API module so apiClient (and its transitive localStorage deps) never loads
 vi.mock("../../api/sqlIdeTabs", () => ({
@@ -9,7 +9,111 @@ vi.mock("../../api/sqlIdeTabs", () => ({
   batchUpsertTabs: vi.fn().mockResolvedValue([]),
 }));
 
+import * as api from "../../api/sqlIdeTabs";
 import { useTabStore } from "../useTabStore";
+
+describe("useTabStore syncDirty", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    useTabStore.getState().__resetForTest();
+    vi.useFakeTimers();
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it("sends dirty tabs to server after debounce", async () => {
+    const mockBatch = vi.mocked(api.batchUpsertTabs);
+    mockBatch.mockResolvedValue([
+      {
+        id: "server-id-1",
+        title: "Query 1",
+        sqlText: "SELECT 1",
+        engine: "generic",
+        datasourceId: null,
+        schemaCtx: null,
+        cursorLine: null,
+        cursorCol: null,
+        selectionJson: null,
+        lastExecutionId: null,
+        sortOrder: 0,
+        active: false,
+        updatedAt: "2026-04-13T10:00:00.000Z",
+      },
+    ]);
+
+    useTabStore.getState().openTab();
+    const localId = useTabStore.getState().tabs[0].id;
+    useTabStore.getState().updateTab(localId, { sqlText: "SELECT 1" });
+
+    await vi.advanceTimersByTimeAsync(2100);
+    await vi.waitFor(() => expect(mockBatch).toHaveBeenCalled());
+
+    // Tab should now have server-assigned id and dirty=false
+    const tabs = useTabStore.getState().tabs;
+    expect(tabs[0].id).toBe("server-id-1");
+    expect(tabs[0].dirty).toBe(false);
+    expect(tabs[0].createdLocally).toBe(false);
+  });
+
+  it("keeps dirty=true if user edits during in-flight sync", async () => {
+    const mockBatch = vi.mocked(api.batchUpsertTabs);
+    let resolve: (v: any) => void = () => {};
+    mockBatch.mockImplementation(() => new Promise((r) => { resolve = r; }));
+
+    useTabStore.getState().openTab();
+    const localId = useTabStore.getState().tabs[0].id;
+    useTabStore.getState().updateTab(localId, { sqlText: "SELECT 1" });
+
+    // Fire debounce, sync in-flight
+    await vi.advanceTimersByTimeAsync(2100);
+
+    // User types while sync is pending
+    useTabStore.getState().updateTab(localId, { sqlText: "SELECT 2" });
+
+    // Now resolve the sync with a stale snapshot's server response
+    resolve([
+      {
+        id: "server-id-1",
+        title: "Query 1",
+        sqlText: "SELECT 1", // old value
+        engine: "generic",
+        datasourceId: null,
+        schemaCtx: null,
+        cursorLine: null,
+        cursorCol: null,
+        selectionJson: null,
+        lastExecutionId: null,
+        sortOrder: 0,
+        active: false,
+        updatedAt: "2026-04-13T10:00:00.000Z",
+      },
+    ]);
+
+    await vi.waitFor(() => {
+      const tab = useTabStore.getState().tabs[0];
+      // Tab's updatedAt was changed by the second updateTab → dirty must remain true
+      expect(tab.dirty).toBe(true);
+      expect(tab.sqlText).toBe("SELECT 2");
+    });
+  });
+
+  it("schedules retry on syncDirty failure", async () => {
+    const mockBatch = vi.mocked(api.batchUpsertTabs);
+    mockBatch.mockRejectedValue(new Error("network error"));
+
+    useTabStore.getState().openTab();
+    useTabStore.getState().updateTab(useTabStore.getState().tabs[0].id, { sqlText: "SELECT 1" });
+
+    await vi.advanceTimersByTimeAsync(2100);
+    await vi.waitFor(() => expect(mockBatch).toHaveBeenCalledTimes(1));
+
+    // Now a retry should be scheduled with backoff (2^1 * 2000 = 4s)
+    await vi.advanceTimersByTimeAsync(5000);
+    await vi.waitFor(() => expect(mockBatch).toHaveBeenCalledTimes(2));
+  });
+});
 
 describe("useTabStore basic operations", () => {
   beforeEach(() => {

@@ -126,6 +126,23 @@ interface TabStore {
 
 let debounceTimer: ReturnType<typeof setTimeout> | null = null;
 let nextTitleCounter = 1;
+let retryCount = 0;
+let retryTimer: ReturnType<typeof setTimeout> | null = null;
+const MAX_RETRIES = 3;
+
+function scheduleRetry(get: () => TabStore) {
+  if (retryTimer) clearTimeout(retryTimer);
+  if (retryCount >= MAX_RETRIES) {
+    retryCount = 0; // reset for next round
+    return;
+  }
+  retryCount++;
+  const delay = Math.min(30_000, DEBOUNCE_MS * Math.pow(2, retryCount));
+  retryTimer = setTimeout(() => {
+    retryTimer = null;
+    void get().syncDirty();
+  }, delay);
+}
 
 export const useTabStore = create<TabStore>((set, get) => ({
   tabs: [],
@@ -217,38 +234,89 @@ export const useTabStore = create<TabStore>((set, get) => ({
     } catch {
       /* offline — carry on with local */
     }
-    const { tabs, toPush } = mergeHydration(local, remote);
-    set({ tabs, hydrated: true, activeTabId: tabs[0]?.id ?? null });
+    const merge = mergeHydration(local, remote);
+
+    if (merge.toPush.length > 0) {
+      try {
+        await batchUpsertTabs(merge.toPush);
+        // Re-fetch to get server-assigned ids for locally-created tabs
+        const fresh = await listTabs();
+        // Re-merge: clear createdLocally/dirty on the local snapshot so server state wins
+        const reconciled = mergeHydration(
+          merge.tabs.map((t) => ({ ...t, createdLocally: false, dirty: false })),
+          fresh,
+        );
+        set({ tabs: reconciled.tabs, hydrated: true, activeTabId: reconciled.tabs[0]?.id ?? null });
+        nextTitleCounter =
+          Math.max(
+            1,
+            ...reconciled.tabs.map((t) => parseInt(t.title.match(/^Query (\d+)$/)?.[1] ?? "0", 10)),
+          ) + 1;
+        persistLocal(reconciled.tabs);
+        return;
+      } catch {
+        /* fall through — use pre-push merge state */
+      }
+    }
+
+    set({ tabs: merge.tabs, hydrated: true, activeTabId: merge.tabs[0]?.id ?? null });
     nextTitleCounter =
       Math.max(
         1,
-        ...tabs.map((t) => parseInt(t.title.match(/^Query (\d+)$/)?.[1] ?? "0", 10)),
+        ...merge.tabs.map((t) => parseInt(t.title.match(/^Query (\d+)$/)?.[1] ?? "0", 10)),
       ) + 1;
-    if (toPush.length > 0) {
-      try {
-        await batchUpsertTabs(toPush);
-      } catch {
-        /* will retry on next sync */
-      }
-    }
+    persistLocal(merge.tabs);
   },
 
   async syncDirty() {
-    const dirty = get().tabs.filter((t) => t.dirty);
-    if (dirty.length === 0) return;
-    const payload: UpsertTabPayload[] = dirty.map((t) => stateToPayload(t, !t.createdLocally));
+    const snapshot = get().tabs.filter((t) => t.dirty);
+    if (snapshot.length === 0) return;
+
+    // Map of id → updatedAt at the time of the snapshot
+    const pushedAtMap = new Map(snapshot.map((t) => [t.id, t.updatedAt]));
+
+    const payload: UpsertTabPayload[] = snapshot.map((t) =>
+      stateToPayload(t, !t.createdLocally),
+    );
+
     try {
-      await batchUpsertTabs(payload);
-      // fetch fresh list after batch to pick up server-assigned ids
-      const fresh = await listTabs();
-      const { tabs: merged } = mergeHydration(
-        get().tabs.map((t) => ({ ...t, dirty: false })),
-        fresh,
-      );
-      set({ tabs: merged });
-      persistLocal(merged);
-    } catch {
-      // silent — will retry on next debounce tick
+      const resp = await batchUpsertTabs(payload);
+      // Build mapping from local id → server-assigned id + updatedAt (response is in request order)
+      const idRemap = new Map<string, { newId: string; newUpdatedAt: string }>();
+      snapshot.forEach((t, i) => {
+        const server = resp[i];
+        if (server) {
+          idRemap.set(t.id, { newId: server.id, newUpdatedAt: server.updatedAt });
+        }
+      });
+
+      // Only clear dirty on tabs whose updatedAt hasn't changed since the snapshot
+      const tabs = get().tabs.map((t) => {
+        const remap = idRemap.get(t.id);
+        const pushedAt = pushedAtMap.get(t.id);
+        if (!remap || !pushedAt) return t; // tab wasn't in the snapshot
+        if (t.updatedAt !== pushedAt) return t; // user edited during await → keep dirty
+        return {
+          ...t,
+          id: remap.newId,               // adopt server-assigned id for creates
+          updatedAt: remap.newUpdatedAt,  // adopt server's authoritative updatedAt
+          dirty: false,
+          createdLocally: false,
+        };
+      });
+
+      // Reset retry state on success
+      retryCount = 0;
+      if (retryTimer) {
+        clearTimeout(retryTimer);
+        retryTimer = null;
+      }
+
+      set({ tabs });
+      persistLocal(tabs);
+    } catch (err) {
+      // Retry with exponential backoff (up to MAX_RETRIES, then give up until next updateTab)
+      scheduleRetry(get);
     }
   },
 
@@ -257,6 +325,11 @@ export const useTabStore = create<TabStore>((set, get) => ({
     if (debounceTimer) {
       clearTimeout(debounceTimer);
       debounceTimer = null;
+    }
+    retryCount = 0;
+    if (retryTimer) {
+      clearTimeout(retryTimer);
+      retryTimer = null;
     }
     set({ tabs: [], activeTabId: null, hydrated: false });
     if (typeof window !== "undefined") {
