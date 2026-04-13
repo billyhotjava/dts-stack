@@ -30,6 +30,15 @@ export interface SqlEditorProps {
   onSaveAsQuery?: (sql: string) => void;
   onToggleBottomPanel?: () => void;
   onCursorPositionChange?: (pos: { line: number; column: number }) => void;
+  /**
+   * Catalog source for SQL completion (tables, columns).
+   *
+   * **IMPORTANT**: callers MUST pass a stable (memoized) reference.
+   * Creating a new catalog instance on every render will cause the
+   * Monaco completion provider to be re-registered each render,
+   * which invalidates Monaco's suggestion cache.
+   * Use `useMemo` or define the catalog at module scope.
+   */
   catalog?: CatalogSource;
 }
 

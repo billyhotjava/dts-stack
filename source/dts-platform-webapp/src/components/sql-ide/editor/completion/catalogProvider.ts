@@ -19,7 +19,7 @@ export const NOOP_CATALOG: CatalogSource = {
   },
 };
 
-// FIXME(Sprint-11 F2/T11): monaco.languages.registerCompletionItemProvider
+// FIXME(Sprint-11 F3/T11): monaco.languages.registerCompletionItemProvider
 // registers globally per `language`. If multiple <SqlEditor/> instances mount
 // simultaneously, each registers its own provider and suggestions will be
 // duplicated. Safe today because only one SqlEditor exists at a time, but
@@ -61,7 +61,19 @@ export function registerSqlCatalogCompletion(
             })),
           };
         }
-        return { suggestions: buildKeywordSuggestions(monaco, range) };
+        // Empty column list — showing keywords here is misleading; show an info item instead.
+        return {
+          suggestions: [{
+            label: "（未加载到表）",
+            kind: monaco.languages.CompletionItemKind.Text,
+            detail: "catalog is empty or not configured",
+            insertText: "",
+            range,
+            filterText: "",
+            sortText: "0_",
+          }],
+          incomplete: true,
+        };
       }
       if (ctx.kind === "afterFrom") {
         const tables = await source.listTables();
@@ -76,7 +88,19 @@ export function registerSqlCatalogCompletion(
             })),
           };
         }
-        return { suggestions: buildKeywordSuggestions(monaco, range) };
+        // Empty catalog — showing keywords while the user types a table name is misleading.
+        return {
+          suggestions: [{
+            label: "（未加载到表）",
+            kind: monaco.languages.CompletionItemKind.Text,
+            detail: "catalog is empty or not configured",
+            insertText: "",
+            range,
+            filterText: "",
+            sortText: "0_",
+          }],
+          incomplete: true,
+        };
       }
       return { suggestions: buildKeywordSuggestions(monaco, range) };
     },
