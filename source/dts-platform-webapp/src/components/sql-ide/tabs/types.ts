@@ -1,4 +1,5 @@
 import type { Engine } from "../editor/SqlEditor";
+import type { GridColumnState } from "../result/columnState";
 
 export interface CursorPosition {
   line: number;
@@ -41,6 +42,7 @@ export interface TabState {
   sortOrder: number;
   updatedAt: string | null;       // ISO-8601, server's lastModifiedDate
   createdLocally: boolean;        // true until first successful POST
+  gridState: GridColumnState;
 }
 
 /** Server DTO matching SqlIdeTabDto record on Java side. */

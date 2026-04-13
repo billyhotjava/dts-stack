@@ -1,5 +1,6 @@
 import { create } from "zustand";
 import { batchUpsertTabs, deleteTab, listTabs, type UpsertTabPayload } from "../api/sqlIdeTabs";
+import { emptyGridColumnState, type GridColumnState } from "../result/columnState";
 import type { TabDto, TabState } from "./types";
 
 const MAX_TABS = 30;
@@ -83,6 +84,7 @@ function fromDto(r: TabDto): TabState {
     sortOrder: r.sortOrder,
     updatedAt: r.updatedAt,
     createdLocally: false,
+    gridState: emptyGridColumnState(),
   };
 }
 
@@ -114,6 +116,7 @@ interface TabStore {
   openTab(initial?: Partial<TabState>): string;
   closeTab(id: string): Promise<void>;
   updateTab(id: string, patch: Partial<TabState>): void;
+  updateGridState(tabId: string, partial: Partial<GridColumnState>): void;
   setActive(id: string): void;
   reorder(from: number, to: number): void;
 
@@ -171,6 +174,7 @@ export const useTabStore = create<TabStore>((set, get) => ({
       sortOrder: cur.length,
       updatedAt: null,
       createdLocally: true,
+      gridState: emptyGridColumnState(),
       ...initial,
     };
     set({ tabs: [...cur, tab], activeTabId: id });
@@ -205,6 +209,17 @@ export const useTabStore = create<TabStore>((set, get) => ({
     const now = new Date().toISOString();
     const tabs = get().tabs.map((t) =>
       t.id === id ? { ...t, ...patch, dirty: true, updatedAt: now } : t,
+    );
+    set({ tabs });
+    persistLocal(tabs);
+    scheduleDebouncedSync(get);
+  },
+
+  updateGridState(tabId, partial) {
+    const tabs = get().tabs.map((t) =>
+      t.id === tabId
+        ? { ...t, gridState: { ...t.gridState, ...partial }, dirty: true, updatedAt: new Date().toISOString() }
+        : t,
     );
     set({ tabs });
     persistLocal(tabs);

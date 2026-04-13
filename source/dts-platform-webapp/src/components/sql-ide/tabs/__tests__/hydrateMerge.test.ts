@@ -11,6 +11,7 @@ vi.mock("../../api/sqlIdeTabs", () => ({
 
 import { mergeHydration } from "../useTabStore";
 import type { TabDto } from "../types";
+import { emptyGridColumnState } from "../../result/columnState";
 
 function makeLocal(overrides: Partial<import("../types").TabState>): import("../types").TabState {
   return {
@@ -28,6 +29,7 @@ function makeLocal(overrides: Partial<import("../types").TabState>): import("../
     sortOrder: overrides.sortOrder ?? 0,
     updatedAt: overrides.updatedAt ?? null,
     createdLocally: overrides.createdLocally ?? false,
+    gridState: emptyGridColumnState(),
   };
 }
 

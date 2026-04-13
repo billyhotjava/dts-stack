@@ -14,6 +14,7 @@ import { HistoryPanel } from "./history/HistoryPanel";
 import { SchemaTree } from "./schema/SchemaTree";
 import { TabBar } from "./tabs/TabBar";
 import { useTabStore } from "./tabs/useTabStore";
+import { ResultGrid } from "./result/ResultGrid";
 import { SavedPanel } from "./saved/SavedPanel";
 import { SaveQueryDialog } from "./saved/SaveQueryDialog";
 import { listSavedQueries } from "./api/sqlIdeSaved";
@@ -26,6 +27,7 @@ export const SqlIde: FC = () => {
   const hydrate = useTabStore((s) => s.hydrate);
   const openTab = useTabStore((s) => s.openTab);
   const updateTab = useTabStore((s) => s.updateTab);
+  const updateGridState = useTabStore((s) => s.updateGridState);
   const editorHandleRef = useRef<SqlEditorHandle>(null);
   const [helpOpen, setHelpOpen] = useState(false);
   const [saveDialogOpen, setSaveDialogOpen] = useState(false);
@@ -180,18 +182,38 @@ export const SqlIde: FC = () => {
           )}
         </div>
         <BottomPanel>
-          <div
-            style={{
-              padding: "8px 12px",
-              display: "flex",
-              alignItems: "center",
-              gap: 8,
-            }}
-          >
-            <span style={{ flex: 1 }}>Bottom · 骨架</span>
-            <Button size="small" onClick={() => setHelpOpen(true)}>
-              ⌨ Shortcuts
-            </Button>
+          <div style={{ height: "100%", display: "flex", flexDirection: "column" }}>
+            <div
+              style={{
+                padding: "4px 8px",
+                display: "flex",
+                justifyContent: "space-between",
+                alignItems: "center",
+                borderBottom: "1px solid var(--ant-color-border-secondary)",
+              }}
+            >
+              <span style={{ fontSize: 11, color: "var(--ant-color-text-secondary)" }}>
+                {activeTab?.lastExecutionId
+                  ? `执行 ID: ${activeTab.lastExecutionId.slice(0, 8)}`
+                  : "未运行"}
+              </span>
+              <Button size="small" onClick={() => setHelpOpen(true)}>
+                ⌨ Shortcuts
+              </Button>
+            </div>
+            <div style={{ flex: 1, minHeight: 0 }}>
+              {activeTab?.lastExecutionId ? (
+                <ResultGrid
+                  executionId={activeTab.lastExecutionId}
+                  gridState={activeTab.gridState}
+                  onGridStateChange={(next) => updateGridState(activeTab.id, next)}
+                />
+              ) : (
+                <div style={{ padding: 12, color: "var(--ant-color-text-tertiary)" }}>
+                  运行 SQL 后结果出现在这里
+                </div>
+              )}
+            </div>
           </div>
         </BottomPanel>
       </div>
