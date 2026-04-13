@@ -97,7 +97,7 @@ public class HiveQueryGateway implements QueryGateway {
                 List<String> headers = new ArrayList<>();
                 List<Map<String, Object>> rows = new ArrayList<>();
                 try (Statement stmt = connection.createStatement()) {
-                    stmt.setMaxRows(MAX_ROWS);
+                    stmt.setMaxRows(MAX_ROWS + 1);
                     stmt.setFetchSize(2000);
                     try (ResultSet rs = stmt.executeQuery(effectiveSql)) {
                         ResultSetMetaData meta = rs.getMetaData();
@@ -115,11 +115,20 @@ public class HiveQueryGateway implements QueryGateway {
                     }
                 }
 
+                boolean truncated;
+                if (rows.size() > MAX_ROWS) {
+                    rows.subList(MAX_ROWS, rows.size()).clear();
+                    truncated = true;
+                } else {
+                    truncated = false;
+                }
+
                 long queryMillis = TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - queryStart);
                 Map<String, Object> result = new LinkedHashMap<>();
                 result.put("headers", headers);
                 result.put("rows", rows);
                 result.put("rowCount", rows.size());
+                result.put("truncated", truncated);
                 result.put("connectMillis", connectMillis);
                 result.put("queryMillis", queryMillis);
                 result.put("effectiveSql", effectiveSql);
@@ -134,7 +143,7 @@ public class HiveQueryGateway implements QueryGateway {
                         Instant.now()
                     )
                 );
-                LOG.debug("Hive query executed. rows={}, connect={}ms, query={}ms", rows.size(), connectMillis, queryMillis);
+                LOG.debug("Hive query executed. rows={}, truncated={}, connect={}ms, query={}ms", rows.size(), truncated, connectMillis, queryMillis);
                 return result;
             });
         } catch (Exception e) {
@@ -209,7 +218,7 @@ public class HiveQueryGateway implements QueryGateway {
             List<String> headers = new ArrayList<>();
             List<Map<String, Object>> rows = new ArrayList<>();
             try (Statement stmt = connection.createStatement()) {
-                stmt.setMaxRows(MAX_ROWS);
+                stmt.setMaxRows(MAX_ROWS + 1);
                 stmt.setFetchSize(2000);
                 try (ResultSet rs = stmt.executeQuery(effectiveSql)) {
                     ResultSetMetaData meta = rs.getMetaData();
@@ -227,11 +236,20 @@ public class HiveQueryGateway implements QueryGateway {
                 }
             }
 
+            boolean truncated;
+            if (rows.size() > MAX_ROWS) {
+                rows.subList(MAX_ROWS, rows.size()).clear();
+                truncated = true;
+            } else {
+                truncated = false;
+            }
+
             long queryMillis = TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - queryStart);
             Map<String, Object> result = new LinkedHashMap<>();
             result.put("headers", headers);
             result.put("rows", rows);
             result.put("rowCount", rows.size());
+            result.put("truncated", truncated);
             result.put("connectMillis", connectMillis);
             result.put("queryMillis", queryMillis);
             result.put("effectiveSql", effectiveSql);
@@ -242,7 +260,7 @@ public class HiveQueryGateway implements QueryGateway {
                     "timestamp", Instant.now()
                 )
             );
-            LOG.debug("PostgreSQL query executed via registered datasource. rows={}, connect={}ms, query={}ms", rows.size(), connectMillis, queryMillis);
+            LOG.debug("PostgreSQL query executed via registered datasource. rows={}, truncated={}, connect={}ms, query={}ms", rows.size(), truncated, connectMillis, queryMillis);
             return result;
         } catch (SQLException e) {
             String message = resolveMessage(e);
@@ -260,7 +278,7 @@ public class HiveQueryGateway implements QueryGateway {
             List<String> headers = new ArrayList<>();
             List<Map<String, Object>> rows = new ArrayList<>();
             try (Statement stmt = connection.createStatement()) {
-                stmt.setMaxRows(MAX_ROWS);
+                stmt.setMaxRows(MAX_ROWS + 1);
                 stmt.setFetchSize(2000);
                 try (ResultSet rs = stmt.executeQuery(effectiveSql)) {
                     ResultSetMetaData meta = rs.getMetaData();
@@ -278,11 +296,20 @@ public class HiveQueryGateway implements QueryGateway {
                 }
             }
 
+            boolean truncated;
+            if (rows.size() > MAX_ROWS) {
+                rows.subList(MAX_ROWS, rows.size()).clear();
+                truncated = true;
+            } else {
+                truncated = false;
+            }
+
             long queryMillis = TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - queryStart);
             Map<String, Object> result = new LinkedHashMap<>();
             result.put("headers", headers);
             result.put("rows", rows);
             result.put("rowCount", rows.size());
+            result.put("truncated", truncated);
             result.put("connectMillis", connectMillis);
             result.put("queryMillis", queryMillis);
             result.put("effectiveSql", effectiveSql);
@@ -295,7 +322,7 @@ public class HiveQueryGateway implements QueryGateway {
                     Instant.now()
                 )
             );
-            LOG.debug("PostgreSQL query executed via platform datasource. rows={}, connect={}ms, query={}ms", rows.size(), connectMillis, queryMillis);
+            LOG.debug("PostgreSQL query executed via platform datasource. rows={}, truncated={}, connect={}ms, query={}ms", rows.size(), truncated, connectMillis, queryMillis);
             return result;
         } catch (SQLException e) {
             String message = resolveMessage(e);

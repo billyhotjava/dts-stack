@@ -33,7 +33,9 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionTemplate;
 import org.springframework.util.StringUtils;
 import org.springframework.web.server.ResponseStatusException;
 
@@ -56,6 +58,7 @@ public class SqlExecutionService {
     private final QueryGateway queryGateway;
     private final SqlValidationService validationService;
     private final ObjectMapper objectMapper;
+    private final TransactionTemplate persistTransactionTemplate;
     private final ConcurrentMap<UUID, CompletableFuture<Void>> runningTasks = new ConcurrentHashMap<>();
     private final Set<UUID> cancelRequested = ConcurrentHashMap.newKeySet();
 
@@ -66,7 +69,8 @@ public class SqlExecutionService {
         AuditService auditService,
         QueryGateway queryGateway,
         SqlValidationService validationService,
-        ObjectMapper objectMapper
+        ObjectMapper objectMapper,
+        PlatformTransactionManager transactionManager
     ) {
         this.queryExecutionRepository = queryExecutionRepository;
         this.resultSetRepository = resultSetRepository;
@@ -75,6 +79,7 @@ public class SqlExecutionService {
         this.queryGateway = queryGateway;
         this.validationService = validationService;
         this.objectMapper = objectMapper;
+        this.persistTransactionTemplate = new TransactionTemplate(transactionManager);
     }
 
     @Transactional
@@ -237,56 +242,69 @@ public class SqlExecutionService {
             List<Map<String, Object>> rows = normalizeRows(payload.get("rows"));
             Long rowCountRaw = extractLong(payload.get("rowCount"));
             long totalRows = rowCountRaw != null ? rowCountRaw : rows.size();
+            boolean truncated = Boolean.TRUE.equals(payload.get("truncated"));
+            Long elapsedMs = extractLong(payload.get("queryMillis"));
+            Long connectMs = extractLong(payload.get("connectMillis"));
+            long totalElapsedMs = elapsedMs != null
+                ? (connectMs != null ? connectMs + elapsedMs : elapsedMs)
+                : 0L;
 
-            if (!headers.isEmpty()) {
-                // Write chunk records
-                int chunkIndex = 0;
-                for (int offset = 0; offset < rows.size(); offset += CHUNK_SIZE) {
-                    int end = Math.min(rows.size(), offset + CHUNK_SIZE);
-                    QueryExecutionChunk chunk = new QueryExecutionChunk();
-                    chunk.setExecutionId(execution.getId());
-                    chunk.setChunkIndex(chunkIndex++);
-                    try {
-                        chunk.setRowsJson(objectMapper.writeValueAsString(rows.subList(offset, end)));
-                    } catch (Exception ex) {
-                        chunk.setRowsJson("[]");
+            final List<String> finalHeaders = headers;
+            final List<Map<String, Object>> finalRows = rows;
+            final long finalTotalRows = totalRows;
+            final boolean finalTruncated = truncated;
+            final long finalElapsedMs = totalElapsedMs;
+
+            persistTransactionTemplate.executeWithoutResult(status -> {
+                if (!finalHeaders.isEmpty()) {
+                    // Write chunk records
+                    int chunkIndex = 0;
+                    for (int offset = 0; offset < finalRows.size(); offset += CHUNK_SIZE) {
+                        int end = Math.min(finalRows.size(), offset + CHUNK_SIZE);
+                        QueryExecutionChunk chunk = new QueryExecutionChunk();
+                        chunk.setExecutionId(execution.getId());
+                        chunk.setChunkIndex(chunkIndex++);
+                        try {
+                            chunk.setRowsJson(objectMapper.writeValueAsString(finalRows.subList(offset, end)));
+                        } catch (Exception ex) {
+                            chunk.setRowsJson("[]");
+                        }
+                        chunk.setRowStart((long) offset);
+                        chunk.setRowEnd((long) end);
+                        chunk.setCreatedDate(Instant.now());
+                        chunkRepository.save(chunk);
                     }
-                    chunk.setRowStart((long) offset);
-                    chunk.setRowEnd((long) end);
-                    chunk.setCreatedDate(Instant.now());
-                    chunkRepository.save(chunk);
+
+                    // Legacy preview blob — first 100 rows kept for /api/sql/result-page v1 compatibility
+                    List<Map<String, Object>> previewRows = finalRows.size() <= PREVIEW_LIMIT
+                        ? finalRows
+                        : finalRows.subList(0, PREVIEW_LIMIT);
+
+                    ResultSet rs = new ResultSet();
+                    rs.setStorageUri("inline://result-set/pending");
+                    rs.setStorageFormat(ResultSet.StorageFormat.JSON);
+                    rs.setColumns(String.join(",", finalHeaders));
+                    rs.setRowCount(finalTotalRows);
+                    rs.setChunkCount(chunkIndex);
+                    rs.setPreviewColumns(buildStoredResultJson(finalHeaders, previewRows, finalTotalRows));
+                    rs.setTtlDays(7);
+                    rs.setExpiresAt(Instant.now().plus(7, ChronoUnit.DAYS));
+                    rs = resultSetRepository.save(rs);
+                    rs.setStorageUri("inline://result-set/" + rs.getId());
+                    rs = resultSetRepository.save(rs);
+                    execution.setResultSetId(rs.getId());
                 }
 
-                // Legacy preview blob — first 100 rows kept for /api/sql/result-page v1 compatibility
-                List<Map<String, Object>> previewRows = rows.size() <= PREVIEW_LIMIT
-                    ? rows
-                    : rows.subList(0, PREVIEW_LIMIT);
-
-                ResultSet rs = new ResultSet();
-                rs.setStorageUri("inline://result-set/pending");
-                rs.setStorageFormat(ResultSet.StorageFormat.JSON);
-                rs.setColumns(String.join(",", headers));
-                rs.setRowCount(totalRows);
-                rs.setChunkCount(chunkIndex);
-                rs.setPreviewColumns(buildStoredResultJson(headers, previewRows, totalRows));
-                rs.setTtlDays(7);
-                rs.setExpiresAt(Instant.now().plus(7, ChronoUnit.DAYS));
-                rs = resultSetRepository.save(rs);
-                rs.setStorageUri("inline://result-set/" + rs.getId());
-                rs = resultSetRepository.save(rs);
-                execution.setResultSetId(rs.getId());
-            }
-
-            execution.setRowCount(totalRows);
-            Long elapsedMs = extractLong(payload.get("queryMillis"));
-            if (elapsedMs != null) {
-                Long connectMs = extractLong(payload.get("connectMillis"));
-                execution.setElapsedMs(connectMs != null ? connectMs + elapsedMs : elapsedMs);
-            }
-            execution.setStatus(ExecEnums.ExecStatus.SUCCESS);
-            execution.setFinishedAt(Instant.now());
-            execution.setErrorMessage(null);
-            queryExecutionRepository.save(execution);
+                execution.setRowCount(finalTotalRows);
+                if (finalElapsedMs > 0L) {
+                    execution.setElapsedMs(finalElapsedMs);
+                }
+                execution.setLimitApplied(finalTruncated);
+                execution.setStatus(ExecEnums.ExecStatus.SUCCESS);
+                execution.setFinishedAt(Instant.now());
+                execution.setErrorMessage(null);
+                queryExecutionRepository.save(execution);
+            });
             recordCompletionAudit(execution, "SUCCESS", null);
         } catch (Exception ex) {
             QueryExecution latest = queryExecutionRepository.findById(executionId).orElse(execution);

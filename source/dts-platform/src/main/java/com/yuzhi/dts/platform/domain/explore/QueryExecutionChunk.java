@@ -5,6 +5,8 @@ import jakarta.persistence.Entity;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
+import org.hibernate.annotations.JdbcTypeCode;
+import java.sql.Types;
 import java.io.Serializable;
 import java.time.Instant;
 import java.util.UUID;
@@ -24,7 +26,8 @@ public class QueryExecutionChunk implements Serializable {
     @Column(name = "chunk_index", nullable = false)
     private Integer chunkIndex;
 
-    @Column(name = "rows_json", nullable = false, columnDefinition = "text")
+    @JdbcTypeCode(Types.OTHER)
+    @Column(name = "rows_json", nullable = false, columnDefinition = "jsonb")
     private String rowsJson;
 
     @Column(name = "row_start", nullable = false)

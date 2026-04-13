@@ -1,6 +1,5 @@
 package com.yuzhi.dts.platform.web.rest.sql;
 
-import com.yuzhi.dts.platform.security.SecurityUtils;
 import com.yuzhi.dts.platform.service.audit.AuditService;
 import com.yuzhi.dts.platform.service.sql.SqlResultStreamService;
 import com.yuzhi.dts.platform.service.sql.dto.ResultMetaDto;

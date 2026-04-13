@@ -63,7 +63,7 @@ public class SqlResultStreamServiceImpl implements SqlResultStreamService {
 
         List<ColumnMetaDto> columns = parseColumns(rs.getColumns());
         long totalRows = rs.getRowCount() != null ? rs.getRowCount() : 0L;
-        boolean truncated = totalRows >= 100_000;
+        boolean truncated = exec.getLimitApplied() != null && exec.getLimitApplied();
         String status = exec.getStatus() == null ? null : exec.getStatus().name();
 
         return new ResultMetaDto(

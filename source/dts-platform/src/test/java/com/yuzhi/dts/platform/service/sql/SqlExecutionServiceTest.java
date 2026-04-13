@@ -29,6 +29,8 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.TransactionStatus;
 
 @ExtendWith(MockitoExtension.class)
 class SqlExecutionServiceTest {
@@ -51,10 +53,17 @@ class SqlExecutionServiceTest {
     @Mock
     private SqlValidationService validationService;
 
+    @Mock
+    private PlatformTransactionManager transactionManager;
+
     private SqlExecutionService service;
 
     @BeforeEach
     void setUp() {
+        // Make TransactionTemplate execute the callback synchronously
+        TransactionStatus txStatus = org.mockito.Mockito.mock(TransactionStatus.class);
+        when(transactionManager.getTransaction(any())).thenReturn(txStatus);
+
         service = new SqlExecutionService(
             queryExecutionRepository,
             resultSetRepository,
@@ -62,7 +71,8 @@ class SqlExecutionServiceTest {
             auditService,
             queryGateway,
             validationService,
-            new ObjectMapper()
+            new ObjectMapper(),
+            transactionManager
         );
     }
 
