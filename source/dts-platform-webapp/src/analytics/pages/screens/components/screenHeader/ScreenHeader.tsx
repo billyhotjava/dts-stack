@@ -103,6 +103,17 @@ export function ScreenHeader({
         () => commitScreenPageDraft(config, currentPageIndex),
         [config, currentPageIndex],
     );
+    // DEBUG: expose live config on window so we can inspect in Console.
+    useEffect(() => {
+        (window as any)._dtsScreenState = {
+            name: config.name,
+            id: config.id,
+            components: config.components?.length ?? 0,
+            pages: config.pages?.length ?? 0,
+            currentPageIndex,
+            ts: Date.now(),
+        };
+    }, [config, currentPageIndex]);
     const [isEditingName, setIsEditingName] = useState(false);
     const [nameValue, setNameValue] = useState(config.name);
     const [isSharing, setIsSharing] = useState(false);
@@ -1439,14 +1450,33 @@ export function ScreenHeader({
                 // out-of-bounds or misaligned with the imported pages array,
                 // which would wipe the canvas to an empty page.
                 const materialized = materializeScreenPage(importedConfig, 0);
-                console.log('[screen-import] confirm replace:', {
+                console.log('[screen-import] confirm replace BEFORE dispatch:', {
+                    importedName: importedConfig.name,
                     importedComponents: importedConfig.components?.length ?? 0,
                     importedPages: importedConfig.pages?.length ?? 0,
                     materializedComponents: materialized.components?.length ?? 0,
+                    currentStateBeforeDispatch: {
+                        name: state.config.name,
+                        components: state.config.components?.length ?? 0,
+                    },
                 });
                 onResetPageIndex?.();
                 loadConfig(materialized);
                 setImportPreview(null);
+                // Verify state landed after React flushes.
+                requestAnimationFrame(() => {
+                    // state here is the CLOSURE value from the render that produced
+                    // this handler. React's actual reducer state may differ — use a
+                    // DOM probe instead.
+                    const rootEl = document.querySelector('[data-testid=analytics-screen-designer]');
+                    console.log('[screen-import] AFTER RAF (closure state snapshot):', {
+                        closureName: state.config.name,
+                        closureComponents: state.config.components?.length ?? 0,
+                        rootExists: !!rootEl,
+                    });
+                });
+                // Expose the payload we pushed so you can inspect in console.
+                (window as any)._dtsScreenLastImport = materialized;
             } else if (action === 'create-screen') {
                 const spec = buildScreenPayload(importedConfig);
                 const created = await analyticsApi.createScreen(spec);
