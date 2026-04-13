@@ -65,8 +65,8 @@
       "name": "gpmc-tech-left",
       "x": 36,
       "y": 268,
-      "width": 860,
-      "height": 360,
+      "width": 936,
+      "height": 316,
       "zIndex": 1,
       "locked": false,
       "visible": true,
@@ -82,10 +82,10 @@
       "id": "gpmc-tech-right",
       "type": "shape",
       "name": "gpmc-tech-right",
-      "x": 914,
+      "x": 984,
       "y": 268,
-      "width": 970,
-      "height": 360,
+      "width": 900,
+      "height": 316,
       "zIndex": 1,
       "locked": false,
       "visible": true,
@@ -102,9 +102,9 @@
       "type": "shape",
       "name": "gpmc-tech-bottom",
       "x": 36,
-      "y": 646,
+      "y": 838,
       "width": 1848,
-      "height": 360,
+      "height": 220,
       "zIndex": 1,
       "locked": false,
       "visible": true,
@@ -604,232 +604,32 @@
       ]
     },
     {
-      "id": "gpmc-tech-kpi-change",
+      "id": "gpmc-tech-kpi-total",
       "type": "number-card",
-      "name": "技术状态变更数",
-      "x": 58,
+      "name": "变更单总数",
+      "x": 44,
       "y": 126,
-      "width": 260,
+      "width": 350,
       "height": 118,
       "zIndex": 12,
       "locked": false,
       "visible": true,
       "config": {
-        "title": "技术状态变更数",
-        "value": 18,
+        "title": "变更单总数",
+        "value": 0,
         "suffix": "",
         "precision": 0,
         "titleFontSize": 17,
         "valueFontSize": 34,
         "titleColor": "#8cb9df",
-        "valueColor": "#ff9f43",
+        "valueColor": "#d9eeff",
         "backgroundColor": "#ffffff"
       },
       "dataSource": {
         "type": "sql",
         "sqlConfig": {
           "databaseId": "{{DATABASE_ID}}",
-          "query": "SELECT COUNT(DISTINCT s.project_no) AS \"涉及项目\", SUM(s.total_change_cnt) AS \"变更总数\", SUM(s.new_cat_i) AS \"I类更改\", SUM(s.new_cat_ii) AS \"II类更改\", SUM(s.new_cat_iii) AS \"III类更改\", SUM(s.file_submitted_not_reviewed_i_ii) AS \"已提出未评审(I,II)\", SUM(s.file_reviewed_not_signed_i_ii) AS \"已评审未签署(I,II)\", SUM(s.file_reviewed_signed_i_ii) AS \"已评审已签署(I,II)\", SUM(s.file_submitted_not_signed_iii) AS \"已提出未签署(III)\", SUM(s.file_submitted_signed_iii) AS \"已提出已签署(III)\", SUM(s.file_submitted_not_reviewed_i_ii)+SUM(s.file_reviewed_not_signed_i_ii)+SUM(s.file_submitted_not_signed_iii) AS \"未签署项\", SUM(s.order_unsigned_cat_i)+SUM(s.order_unsigned_cat_ii)+SUM(s.order_unsigned_cat_iii) AS \"变更单未签署\", SUM(s.order_signed_cnt) AS \"变更单已签署\", CASE WHEN (SUM(s.order_signed_cnt)+SUM(s.order_unsigned_cat_i)+SUM(s.order_unsigned_cat_ii)+SUM(s.order_unsigned_cat_iii))=0 THEN 0 ELSE ROUND(SUM(s.order_signed_cnt)::numeric/(SUM(s.order_signed_cnt)+SUM(s.order_unsigned_cat_i)+SUM(s.order_unsigned_cat_ii)+SUM(s.order_unsigned_cat_iii))::numeric*100,2) END AS \"签署完成率\", SUM(s.reform_pending_i_ii) AS \"未落实整改\", SUM(s.reform_done_i_ii) AS \"已落实整改\", SUM(s.reform_na_iii) AS \"不涉及整改\", CASE WHEN (SUM(s.reform_done_i_ii)+SUM(s.reform_pending_i_ii))=0 THEN 0 ELSE ROUND(SUM(s.reform_done_i_ii)::numeric/(SUM(s.reform_done_i_ii)+SUM(s.reform_pending_i_ii))::numeric*100,2) END AS \"整改完成率\" FROM biz_dws_tech_state_monthly_v2 s WHERE s.period_month >= to_char({{dateFrom}}::date, 'YYYY-MM') AND s.period_month <= to_char({{dateTo}}::date, 'YYYY-MM') [[AND s.dept = {{deptId}}]] [[AND s.project_no ILIKE '%' || {{projectNo}} || '%']]",
-          "queryTimeoutSeconds": 30,
-          "maxRows": 2000,
-          "parameterBindings": [
-            {
-              "name": "dateFrom",
-              "variableKey": "dateFrom"
-            },
-            {
-              "name": "dateTo",
-              "variableKey": "dateTo"
-            },
-            {
-              "name": "deptId",
-              "variableKey": "deptId"
-            },
-            {
-              "name": "projectNo",
-              "variableKey": "projectNo"
-            }
-          ]
-        }
-      }
-    },
-    {
-      "id": "gpmc-tech-kpi-sign",
-      "type": "number-card",
-      "name": "文件签署完成率",
-      "x": 332,
-      "y": 126,
-      "width": 260,
-      "height": 118,
-      "zIndex": 12,
-      "locked": false,
-      "visible": true,
-      "config": {
-        "title": "文件签署完成率",
-        "value": 82,
-        "suffix": "%",
-        "precision": 0,
-        "titleFontSize": 17,
-        "valueFontSize": 34,
-        "titleColor": "#8cb9df",
-        "valueColor": "#2ee6a6",
-        "backgroundColor": "#ffffff"
-      },
-      "dataSource": {
-        "type": "sql",
-        "sqlConfig": {
-          "databaseId": "{{DATABASE_ID}}",
-          "query": "SELECT COUNT(DISTINCT s.project_no) AS \"涉及项目\", SUM(s.total_change_cnt) AS \"变更总数\", SUM(s.new_cat_i) AS \"I类更改\", SUM(s.new_cat_ii) AS \"II类更改\", SUM(s.new_cat_iii) AS \"III类更改\", SUM(s.file_submitted_not_reviewed_i_ii) AS \"已提出未评审(I,II)\", SUM(s.file_reviewed_not_signed_i_ii) AS \"已评审未签署(I,II)\", SUM(s.file_reviewed_signed_i_ii) AS \"已评审已签署(I,II)\", SUM(s.file_submitted_not_signed_iii) AS \"已提出未签署(III)\", SUM(s.file_submitted_signed_iii) AS \"已提出已签署(III)\", SUM(s.file_submitted_not_reviewed_i_ii)+SUM(s.file_reviewed_not_signed_i_ii)+SUM(s.file_submitted_not_signed_iii) AS \"未签署项\", SUM(s.order_unsigned_cat_i)+SUM(s.order_unsigned_cat_ii)+SUM(s.order_unsigned_cat_iii) AS \"变更单未签署\", SUM(s.order_signed_cnt) AS \"变更单已签署\", CASE WHEN (SUM(s.order_signed_cnt)+SUM(s.order_unsigned_cat_i)+SUM(s.order_unsigned_cat_ii)+SUM(s.order_unsigned_cat_iii))=0 THEN 0 ELSE ROUND(SUM(s.order_signed_cnt)::numeric/(SUM(s.order_signed_cnt)+SUM(s.order_unsigned_cat_i)+SUM(s.order_unsigned_cat_ii)+SUM(s.order_unsigned_cat_iii))::numeric*100,2) END AS \"签署完成率\", SUM(s.reform_pending_i_ii) AS \"未落实整改\", SUM(s.reform_done_i_ii) AS \"已落实整改\", SUM(s.reform_na_iii) AS \"不涉及整改\", CASE WHEN (SUM(s.reform_done_i_ii)+SUM(s.reform_pending_i_ii))=0 THEN 0 ELSE ROUND(SUM(s.reform_done_i_ii)::numeric/(SUM(s.reform_done_i_ii)+SUM(s.reform_pending_i_ii))::numeric*100,2) END AS \"整改完成率\" FROM biz_dws_tech_state_monthly_v2 s WHERE s.period_month >= to_char({{dateFrom}}::date, 'YYYY-MM') AND s.period_month <= to_char({{dateTo}}::date, 'YYYY-MM') [[AND s.dept = {{deptId}}]] [[AND s.project_no ILIKE '%' || {{projectNo}} || '%']]",
-          "queryTimeoutSeconds": 30,
-          "maxRows": 2000,
-          "parameterBindings": [
-            {
-              "name": "dateFrom",
-              "variableKey": "dateFrom"
-            },
-            {
-              "name": "dateTo",
-              "variableKey": "dateTo"
-            },
-            {
-              "name": "deptId",
-              "variableKey": "deptId"
-            },
-            {
-              "name": "projectNo",
-              "variableKey": "projectNo"
-            }
-          ]
-        }
-      }
-    },
-    {
-      "id": "gpmc-tech-kpi-pending",
-      "type": "number-card",
-      "name": "未闭环项",
-      "x": 606,
-      "y": 126,
-      "width": 260,
-      "height": 118,
-      "zIndex": 12,
-      "locked": false,
-      "visible": true,
-      "config": {
-        "title": "未闭环项",
-        "value": 7,
-        "suffix": "",
-        "precision": 0,
-        "titleFontSize": 17,
-        "valueFontSize": 34,
-        "titleColor": "#8cb9df",
-        "valueColor": "#ff5d73",
-        "backgroundColor": "#ffffff"
-      },
-      "dataSource": {
-        "type": "sql",
-        "sqlConfig": {
-          "databaseId": "{{DATABASE_ID}}",
-          "query": "SELECT COUNT(DISTINCT s.project_no) AS \"涉及项目\", SUM(s.total_change_cnt) AS \"变更总数\", SUM(s.new_cat_i) AS \"I类更改\", SUM(s.new_cat_ii) AS \"II类更改\", SUM(s.new_cat_iii) AS \"III类更改\", SUM(s.file_submitted_not_reviewed_i_ii) AS \"已提出未评审(I,II)\", SUM(s.file_reviewed_not_signed_i_ii) AS \"已评审未签署(I,II)\", SUM(s.file_reviewed_signed_i_ii) AS \"已评审已签署(I,II)\", SUM(s.file_submitted_not_signed_iii) AS \"已提出未签署(III)\", SUM(s.file_submitted_signed_iii) AS \"已提出已签署(III)\", SUM(s.file_submitted_not_reviewed_i_ii)+SUM(s.file_reviewed_not_signed_i_ii)+SUM(s.file_submitted_not_signed_iii) AS \"未签署项\", SUM(s.order_unsigned_cat_i)+SUM(s.order_unsigned_cat_ii)+SUM(s.order_unsigned_cat_iii) AS \"变更单未签署\", SUM(s.order_signed_cnt) AS \"变更单已签署\", CASE WHEN (SUM(s.order_signed_cnt)+SUM(s.order_unsigned_cat_i)+SUM(s.order_unsigned_cat_ii)+SUM(s.order_unsigned_cat_iii))=0 THEN 0 ELSE ROUND(SUM(s.order_signed_cnt)::numeric/(SUM(s.order_signed_cnt)+SUM(s.order_unsigned_cat_i)+SUM(s.order_unsigned_cat_ii)+SUM(s.order_unsigned_cat_iii))::numeric*100,2) END AS \"签署完成率\", SUM(s.reform_pending_i_ii) AS \"未落实整改\", SUM(s.reform_done_i_ii) AS \"已落实整改\", SUM(s.reform_na_iii) AS \"不涉及整改\", CASE WHEN (SUM(s.reform_done_i_ii)+SUM(s.reform_pending_i_ii))=0 THEN 0 ELSE ROUND(SUM(s.reform_done_i_ii)::numeric/(SUM(s.reform_done_i_ii)+SUM(s.reform_pending_i_ii))::numeric*100,2) END AS \"整改完成率\" FROM biz_dws_tech_state_monthly_v2 s WHERE s.period_month >= to_char({{dateFrom}}::date, 'YYYY-MM') AND s.period_month <= to_char({{dateTo}}::date, 'YYYY-MM') [[AND s.dept = {{deptId}}]] [[AND s.project_no ILIKE '%' || {{projectNo}} || '%']]",
-          "queryTimeoutSeconds": 30,
-          "maxRows": 2000,
-          "parameterBindings": [
-            {
-              "name": "dateFrom",
-              "variableKey": "dateFrom"
-            },
-            {
-              "name": "dateTo",
-              "variableKey": "dateTo"
-            },
-            {
-              "name": "deptId",
-              "variableKey": "deptId"
-            },
-            {
-              "name": "projectNo",
-              "variableKey": "projectNo"
-            }
-          ]
-        }
-      }
-    },
-    {
-      "id": "gpmc-tech-kpi-cover",
-      "type": "number-card",
-      "name": "整改完成率",
-      "x": 880,
-      "y": 126,
-      "width": 260,
-      "height": 118,
-      "zIndex": 12,
-      "locked": false,
-      "visible": true,
-      "config": {
-        "title": "整改完成率",
-        "value": 76,
-        "suffix": "%",
-        "precision": 0,
-        "titleFontSize": 17,
-        "valueFontSize": 34,
-        "titleColor": "#8cb9df",
-        "valueColor": "#27d8ff",
-        "backgroundColor": "#ffffff"
-      },
-      "dataSource": {
-        "type": "sql",
-        "sqlConfig": {
-          "databaseId": "{{DATABASE_ID}}",
-          "query": "SELECT COUNT(DISTINCT s.project_no) AS \"涉及项目\", SUM(s.total_change_cnt) AS \"变更总数\", SUM(s.new_cat_i) AS \"I类更改\", SUM(s.new_cat_ii) AS \"II类更改\", SUM(s.new_cat_iii) AS \"III类更改\", SUM(s.file_submitted_not_reviewed_i_ii) AS \"已提出未评审(I,II)\", SUM(s.file_reviewed_not_signed_i_ii) AS \"已评审未签署(I,II)\", SUM(s.file_reviewed_signed_i_ii) AS \"已评审已签署(I,II)\", SUM(s.file_submitted_not_signed_iii) AS \"已提出未签署(III)\", SUM(s.file_submitted_signed_iii) AS \"已提出已签署(III)\", SUM(s.file_submitted_not_reviewed_i_ii)+SUM(s.file_reviewed_not_signed_i_ii)+SUM(s.file_submitted_not_signed_iii) AS \"未签署项\", SUM(s.order_unsigned_cat_i)+SUM(s.order_unsigned_cat_ii)+SUM(s.order_unsigned_cat_iii) AS \"变更单未签署\", SUM(s.order_signed_cnt) AS \"变更单已签署\", CASE WHEN (SUM(s.order_signed_cnt)+SUM(s.order_unsigned_cat_i)+SUM(s.order_unsigned_cat_ii)+SUM(s.order_unsigned_cat_iii))=0 THEN 0 ELSE ROUND(SUM(s.order_signed_cnt)::numeric/(SUM(s.order_signed_cnt)+SUM(s.order_unsigned_cat_i)+SUM(s.order_unsigned_cat_ii)+SUM(s.order_unsigned_cat_iii))::numeric*100,2) END AS \"签署完成率\", SUM(s.reform_pending_i_ii) AS \"未落实整改\", SUM(s.reform_done_i_ii) AS \"已落实整改\", SUM(s.reform_na_iii) AS \"不涉及整改\", CASE WHEN (SUM(s.reform_done_i_ii)+SUM(s.reform_pending_i_ii))=0 THEN 0 ELSE ROUND(SUM(s.reform_done_i_ii)::numeric/(SUM(s.reform_done_i_ii)+SUM(s.reform_pending_i_ii))::numeric*100,2) END AS \"整改完成率\" FROM biz_dws_tech_state_monthly_v2 s WHERE s.period_month >= to_char({{dateFrom}}::date, 'YYYY-MM') AND s.period_month <= to_char({{dateTo}}::date, 'YYYY-MM') [[AND s.dept = {{deptId}}]] [[AND s.project_no ILIKE '%' || {{projectNo}} || '%']]",
-          "queryTimeoutSeconds": 30,
-          "maxRows": 2000,
-          "parameterBindings": [
-            {
-              "name": "dateFrom",
-              "variableKey": "dateFrom"
-            },
-            {
-              "name": "dateTo",
-              "variableKey": "dateTo"
-            },
-            {
-              "name": "deptId",
-              "variableKey": "deptId"
-            },
-            {
-              "name": "projectNo",
-              "variableKey": "projectNo"
-            }
-          ]
-        }
-      }
-    },
-    {
-      "id": "gpmc-tech-kpi-level1",
-      "type": "number-card",
-      "name": "Ⅰ类更改",
-      "x": 1154,
-      "y": 126,
-      "width": 260,
-      "height": 118,
-      "zIndex": 12,
-      "locked": false,
-      "visible": true,
-      "config": {
-        "title": "Ⅰ类更改",
-        "value": 4,
-        "suffix": "",
-        "precision": 0,
-        "titleFontSize": 17,
-        "valueFontSize": 34,
-        "titleColor": "#8cb9df",
-        "valueColor": "#ff5d73",
-        "backgroundColor": "#ffffff"
-      },
-      "dataSource": {
-        "type": "sql",
-        "sqlConfig": {
-          "databaseId": "{{DATABASE_ID}}",
-          "query": "SELECT COUNT(DISTINCT s.project_no) AS \"涉及项目\", SUM(s.total_change_cnt) AS \"变更总数\", SUM(s.new_cat_i) AS \"I类更改\", SUM(s.new_cat_ii) AS \"II类更改\", SUM(s.new_cat_iii) AS \"III类更改\", SUM(s.file_submitted_not_reviewed_i_ii) AS \"已提出未评审(I,II)\", SUM(s.file_reviewed_not_signed_i_ii) AS \"已评审未签署(I,II)\", SUM(s.file_reviewed_signed_i_ii) AS \"已评审已签署(I,II)\", SUM(s.file_submitted_not_signed_iii) AS \"已提出未签署(III)\", SUM(s.file_submitted_signed_iii) AS \"已提出已签署(III)\", SUM(s.file_submitted_not_reviewed_i_ii)+SUM(s.file_reviewed_not_signed_i_ii)+SUM(s.file_submitted_not_signed_iii) AS \"未签署项\", SUM(s.order_unsigned_cat_i)+SUM(s.order_unsigned_cat_ii)+SUM(s.order_unsigned_cat_iii) AS \"变更单未签署\", SUM(s.order_signed_cnt) AS \"变更单已签署\", CASE WHEN (SUM(s.order_signed_cnt)+SUM(s.order_unsigned_cat_i)+SUM(s.order_unsigned_cat_ii)+SUM(s.order_unsigned_cat_iii))=0 THEN 0 ELSE ROUND(SUM(s.order_signed_cnt)::numeric/(SUM(s.order_signed_cnt)+SUM(s.order_unsigned_cat_i)+SUM(s.order_unsigned_cat_ii)+SUM(s.order_unsigned_cat_iii))::numeric*100,2) END AS \"签署完成率\", SUM(s.reform_pending_i_ii) AS \"未落实整改\", SUM(s.reform_done_i_ii) AS \"已落实整改\", SUM(s.reform_na_iii) AS \"不涉及整改\", CASE WHEN (SUM(s.reform_done_i_ii)+SUM(s.reform_pending_i_ii))=0 THEN 0 ELSE ROUND(SUM(s.reform_done_i_ii)::numeric/(SUM(s.reform_done_i_ii)+SUM(s.reform_pending_i_ii))::numeric*100,2) END AS \"整改完成率\" FROM biz_dws_tech_state_monthly_v2 s WHERE s.period_month >= to_char({{dateFrom}}::date, 'YYYY-MM') AND s.period_month <= to_char({{dateTo}}::date, 'YYYY-MM') [[AND s.dept = {{deptId}}]] [[AND s.project_no ILIKE '%' || {{projectNo}} || '%']]",
+          "query": "SELECT COALESCE(SUM(s.total_change_cnt),0) AS v FROM biz_dws_tech_state_monthly_v2 s WHERE s.period_month >= to_char({{dateFrom}}::date,'YYYY-MM') AND s.period_month <= to_char({{dateTo}}::date,'YYYY-MM') [[AND s.dept = {{deptId}}]] [[AND s.project_no ILIKE '%' || {{projectNo}} || '%']]",
           "queryTimeoutSeconds": 30,
           "maxRows": 2000,
           "parameterBindings": [
@@ -856,30 +656,30 @@
     {
       "id": "gpmc-tech-kpi-unsigned",
       "type": "number-card",
-      "name": "未签署项",
-      "x": 1428,
+      "name": "未签署数",
+      "x": 414,
       "y": 126,
-      "width": 260,
+      "width": 350,
       "height": 118,
       "zIndex": 12,
       "locked": false,
       "visible": true,
       "config": {
-        "title": "未签署项",
-        "value": 2,
+        "title": "未签署数",
+        "value": 0,
         "suffix": "",
         "precision": 0,
         "titleFontSize": 17,
         "valueFontSize": 34,
         "titleColor": "#8cb9df",
-        "valueColor": "#ff9f43",
+        "valueColor": "#d9eeff",
         "backgroundColor": "#ffffff"
       },
       "dataSource": {
         "type": "sql",
         "sqlConfig": {
           "databaseId": "{{DATABASE_ID}}",
-          "query": "SELECT COUNT(DISTINCT s.project_no) AS \"涉及项目\", SUM(s.total_change_cnt) AS \"变更总数\", SUM(s.new_cat_i) AS \"I类更改\", SUM(s.new_cat_ii) AS \"II类更改\", SUM(s.new_cat_iii) AS \"III类更改\", SUM(s.file_submitted_not_reviewed_i_ii) AS \"已提出未评审(I,II)\", SUM(s.file_reviewed_not_signed_i_ii) AS \"已评审未签署(I,II)\", SUM(s.file_reviewed_signed_i_ii) AS \"已评审已签署(I,II)\", SUM(s.file_submitted_not_signed_iii) AS \"已提出未签署(III)\", SUM(s.file_submitted_signed_iii) AS \"已提出已签署(III)\", SUM(s.file_submitted_not_reviewed_i_ii)+SUM(s.file_reviewed_not_signed_i_ii)+SUM(s.file_submitted_not_signed_iii) AS \"未签署项\", SUM(s.order_unsigned_cat_i)+SUM(s.order_unsigned_cat_ii)+SUM(s.order_unsigned_cat_iii) AS \"变更单未签署\", SUM(s.order_signed_cnt) AS \"变更单已签署\", CASE WHEN (SUM(s.order_signed_cnt)+SUM(s.order_unsigned_cat_i)+SUM(s.order_unsigned_cat_ii)+SUM(s.order_unsigned_cat_iii))=0 THEN 0 ELSE ROUND(SUM(s.order_signed_cnt)::numeric/(SUM(s.order_signed_cnt)+SUM(s.order_unsigned_cat_i)+SUM(s.order_unsigned_cat_ii)+SUM(s.order_unsigned_cat_iii))::numeric*100,2) END AS \"签署完成率\", SUM(s.reform_pending_i_ii) AS \"未落实整改\", SUM(s.reform_done_i_ii) AS \"已落实整改\", SUM(s.reform_na_iii) AS \"不涉及整改\", CASE WHEN (SUM(s.reform_done_i_ii)+SUM(s.reform_pending_i_ii))=0 THEN 0 ELSE ROUND(SUM(s.reform_done_i_ii)::numeric/(SUM(s.reform_done_i_ii)+SUM(s.reform_pending_i_ii))::numeric*100,2) END AS \"整改完成率\" FROM biz_dws_tech_state_monthly_v2 s WHERE s.period_month >= to_char({{dateFrom}}::date, 'YYYY-MM') AND s.period_month <= to_char({{dateTo}}::date, 'YYYY-MM') [[AND s.dept = {{deptId}}]] [[AND s.project_no ILIKE '%' || {{projectNo}} || '%']]",
+          "query": "SELECT COALESCE(SUM(s.order_unsigned_cat_i)+SUM(s.order_unsigned_cat_ii)+SUM(s.order_unsigned_cat_iii),0) AS v FROM biz_dws_tech_state_monthly_v2 s WHERE s.period_month >= to_char({{dateFrom}}::date,'YYYY-MM') AND s.period_month <= to_char({{dateTo}}::date,'YYYY-MM') [[AND s.dept = {{deptId}}]] [[AND s.project_no ILIKE '%' || {{projectNo}} || '%']]",
           "queryTimeoutSeconds": 30,
           "maxRows": 2000,
           "parameterBindings": [
@@ -904,19 +704,69 @@
       }
     },
     {
-      "id": "gpmc-tech-kpi-projects",
+      "id": "gpmc-tech-kpi-sign-rate",
       "type": "number-card",
-      "name": "涉及项目",
-      "x": 1702,
+      "name": "签署率",
+      "x": 784,
       "y": 126,
-      "width": 166,
+      "width": 350,
       "height": 118,
       "zIndex": 12,
       "locked": false,
       "visible": true,
       "config": {
-        "title": "涉及项目",
-        "value": 9,
+        "title": "签署率",
+        "value": 0,
+        "suffix": "%",
+        "precision": 2,
+        "titleFontSize": 17,
+        "valueFontSize": 34,
+        "titleColor": "#8cb9df",
+        "valueColor": "#d9eeff",
+        "backgroundColor": "#ffffff"
+      },
+      "dataSource": {
+        "type": "sql",
+        "sqlConfig": {
+          "databaseId": "{{DATABASE_ID}}",
+          "query": "SELECT CASE WHEN SUM(s.total_change_cnt)=0 THEN 0 ELSE ROUND(SUM(s.order_signed_cnt)::numeric/NULLIF(SUM(s.total_change_cnt),0)::numeric*100,2) END AS v FROM biz_dws_tech_state_monthly_v2 s WHERE s.period_month >= to_char({{dateFrom}}::date,'YYYY-MM') AND s.period_month <= to_char({{dateTo}}::date,'YYYY-MM') [[AND s.dept = {{deptId}}]] [[AND s.project_no ILIKE '%' || {{projectNo}} || '%']]",
+          "queryTimeoutSeconds": 30,
+          "maxRows": 2000,
+          "parameterBindings": [
+            {
+              "name": "dateFrom",
+              "variableKey": "dateFrom"
+            },
+            {
+              "name": "dateTo",
+              "variableKey": "dateTo"
+            },
+            {
+              "name": "deptId",
+              "variableKey": "deptId"
+            },
+            {
+              "name": "projectNo",
+              "variableKey": "projectNo"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "gpmc-tech-kpi-reform-pending",
+      "type": "number-card",
+      "name": "未整改数",
+      "x": 1154,
+      "y": 126,
+      "width": 350,
+      "height": 118,
+      "zIndex": 12,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "title": "未整改数",
+        "value": 0,
         "suffix": "",
         "precision": 0,
         "titleFontSize": 17,
@@ -929,7 +779,359 @@
         "type": "sql",
         "sqlConfig": {
           "databaseId": "{{DATABASE_ID}}",
-          "query": "SELECT COUNT(DISTINCT s.project_no) AS \"涉及项目\", SUM(s.total_change_cnt) AS \"变更总数\", SUM(s.new_cat_i) AS \"I类更改\", SUM(s.new_cat_ii) AS \"II类更改\", SUM(s.new_cat_iii) AS \"III类更改\", SUM(s.file_submitted_not_reviewed_i_ii) AS \"已提出未评审(I,II)\", SUM(s.file_reviewed_not_signed_i_ii) AS \"已评审未签署(I,II)\", SUM(s.file_reviewed_signed_i_ii) AS \"已评审已签署(I,II)\", SUM(s.file_submitted_not_signed_iii) AS \"已提出未签署(III)\", SUM(s.file_submitted_signed_iii) AS \"已提出已签署(III)\", SUM(s.file_submitted_not_reviewed_i_ii)+SUM(s.file_reviewed_not_signed_i_ii)+SUM(s.file_submitted_not_signed_iii) AS \"未签署项\", SUM(s.order_unsigned_cat_i)+SUM(s.order_unsigned_cat_ii)+SUM(s.order_unsigned_cat_iii) AS \"变更单未签署\", SUM(s.order_signed_cnt) AS \"变更单已签署\", CASE WHEN (SUM(s.order_signed_cnt)+SUM(s.order_unsigned_cat_i)+SUM(s.order_unsigned_cat_ii)+SUM(s.order_unsigned_cat_iii))=0 THEN 0 ELSE ROUND(SUM(s.order_signed_cnt)::numeric/(SUM(s.order_signed_cnt)+SUM(s.order_unsigned_cat_i)+SUM(s.order_unsigned_cat_ii)+SUM(s.order_unsigned_cat_iii))::numeric*100,2) END AS \"签署完成率\", SUM(s.reform_pending_i_ii) AS \"未落实整改\", SUM(s.reform_done_i_ii) AS \"已落实整改\", SUM(s.reform_na_iii) AS \"不涉及整改\", CASE WHEN (SUM(s.reform_done_i_ii)+SUM(s.reform_pending_i_ii))=0 THEN 0 ELSE ROUND(SUM(s.reform_done_i_ii)::numeric/(SUM(s.reform_done_i_ii)+SUM(s.reform_pending_i_ii))::numeric*100,2) END AS \"整改完成率\" FROM biz_dws_tech_state_monthly_v2 s WHERE s.period_month >= to_char({{dateFrom}}::date, 'YYYY-MM') AND s.period_month <= to_char({{dateTo}}::date, 'YYYY-MM') [[AND s.dept = {{deptId}}]] [[AND s.project_no ILIKE '%' || {{projectNo}} || '%']]",
+          "query": "SELECT COALESCE(SUM(s.reform_pending_i_ii),0) AS v FROM biz_dws_tech_state_monthly_v2 s WHERE s.period_month >= to_char({{dateFrom}}::date,'YYYY-MM') AND s.period_month <= to_char({{dateTo}}::date,'YYYY-MM') [[AND s.dept = {{deptId}}]] [[AND s.project_no ILIKE '%' || {{projectNo}} || '%']]",
+          "queryTimeoutSeconds": 30,
+          "maxRows": 2000,
+          "parameterBindings": [
+            {
+              "name": "dateFrom",
+              "variableKey": "dateFrom"
+            },
+            {
+              "name": "dateTo",
+              "variableKey": "dateTo"
+            },
+            {
+              "name": "deptId",
+              "variableKey": "deptId"
+            },
+            {
+              "name": "projectNo",
+              "variableKey": "projectNo"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "gpmc-tech-kpi-reform-rate",
+      "type": "number-card",
+      "name": "整改完成率",
+      "x": 1524,
+      "y": 126,
+      "width": 350,
+      "height": 118,
+      "zIndex": 12,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "title": "整改完成率",
+        "value": 0,
+        "suffix": "%",
+        "precision": 2,
+        "titleFontSize": 17,
+        "valueFontSize": 34,
+        "titleColor": "#8cb9df",
+        "valueColor": "#d9eeff",
+        "backgroundColor": "#ffffff"
+      },
+      "dataSource": {
+        "type": "sql",
+        "sqlConfig": {
+          "databaseId": "{{DATABASE_ID}}",
+          "query": "SELECT CASE WHEN (SUM(s.reform_pending_i_ii)+SUM(s.reform_done_i_ii))=0 THEN 0 ELSE ROUND(SUM(s.reform_done_i_ii)::numeric/NULLIF(SUM(s.reform_pending_i_ii)+SUM(s.reform_done_i_ii),0)::numeric*100,2) END AS v FROM biz_dws_tech_state_monthly_v2 s WHERE s.period_month >= to_char({{dateFrom}}::date,'YYYY-MM') AND s.period_month <= to_char({{dateTo}}::date,'YYYY-MM') [[AND s.dept = {{deptId}}]] [[AND s.project_no ILIKE '%' || {{projectNo}} || '%']]",
+          "queryTimeoutSeconds": 30,
+          "maxRows": 2000,
+          "parameterBindings": [
+            {
+              "name": "dateFrom",
+              "variableKey": "dateFrom"
+            },
+            {
+              "name": "dateTo",
+              "variableKey": "dateTo"
+            },
+            {
+              "name": "deptId",
+              "variableKey": "deptId"
+            },
+            {
+              "name": "projectNo",
+              "variableKey": "projectNo"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "gpmc-tech-project-sign",
+      "type": "bar-chart",
+      "name": "项目变更签署",
+      "x": 48,
+      "y": 278,
+      "width": 912,
+      "height": 296,
+      "zIndex": 15,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "title": "项目变更签署（堆叠·按变更总数排序）",
+        "xAxis": {
+          "type": "value",
+          "name": "数量"
+        },
+        "yAxis": {
+          "type": "category",
+          "name": "项目"
+        },
+        "stack": "total",
+        "orientation": "horizontal",
+        "legend": {
+          "show": true
+        },
+        "colors": [
+          "#8fa7c4",
+          "#ffc645",
+          "#2ee6a6"
+        ],
+        "categoryKey": "项目编号",
+        "series": [
+          {
+            "name": "变更总数",
+            "dataKey": "变更总数",
+            "color": "#8fa7c4"
+          },
+          {
+            "name": "未签署",
+            "dataKey": "未签署",
+            "color": "#ffc645"
+          },
+          {
+            "name": "已签署",
+            "dataKey": "已签署",
+            "color": "#2ee6a6"
+          }
+        ]
+      },
+      "dataSource": {
+        "type": "sql",
+        "sqlConfig": {
+          "databaseId": "{{DATABASE_ID}}",
+          "query": "SELECT s.project_no AS \"项目编号\", SUM(s.total_change_cnt) AS \"变更总数\", SUM(s.order_unsigned_cat_i)+SUM(s.order_unsigned_cat_ii)+SUM(s.order_unsigned_cat_iii) AS \"未签署\", SUM(s.order_signed_cnt) AS \"已签署\" FROM biz_dws_tech_state_monthly_v2 s WHERE s.period_month >= to_char({{dateFrom}}::date,'YYYY-MM') AND s.period_month <= to_char({{dateTo}}::date,'YYYY-MM') [[AND s.dept = {{deptId}}]] [[AND s.project_no ILIKE '%' || {{projectNo}} || '%']] GROUP BY s.project_no ORDER BY SUM(s.total_change_cnt) DESC LIMIT 12",
+          "queryTimeoutSeconds": 30,
+          "maxRows": 2000,
+          "parameterBindings": [
+            {
+              "name": "dateFrom",
+              "variableKey": "dateFrom"
+            },
+            {
+              "name": "dateTo",
+              "variableKey": "dateTo"
+            },
+            {
+              "name": "deptId",
+              "variableKey": "deptId"
+            },
+            {
+              "name": "projectNo",
+              "variableKey": "projectNo"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "gpmc-tech-dept-review",
+      "type": "bar-chart",
+      "name": "科室变更评估评审",
+      "x": 972,
+      "y": 278,
+      "width": 896,
+      "height": 296,
+      "zIndex": 15,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "title": "科室变更评估评审（按变更总数排序）",
+        "xAxis": {
+          "type": "category",
+          "name": "责任科室"
+        },
+        "yAxis": {
+          "type": "value",
+          "name": "数量"
+        },
+        "orientation": "vertical",
+        "legend": {
+          "show": true
+        },
+        "colors": [
+          "#45a4ff",
+          "#ffc645",
+          "#2ee6a6",
+          "#ff5d73"
+        ],
+        "categoryKey": "责任科室",
+        "series": [
+          {
+            "name": "已提出",
+            "dataKey": "已提出",
+            "color": "#45a4ff"
+          },
+          {
+            "name": "未提出",
+            "dataKey": "未提出",
+            "color": "#ffc645"
+          },
+          {
+            "name": "已评估评审",
+            "dataKey": "已评估评审",
+            "color": "#2ee6a6"
+          },
+          {
+            "name": "未评估评审",
+            "dataKey": "未评估评审",
+            "color": "#ff5d73"
+          }
+        ]
+      },
+      "dataSource": {
+        "type": "sql",
+        "sqlConfig": {
+          "databaseId": "{{DATABASE_ID}}",
+          "query": "SELECT s.dept AS \"责任科室\", COALESCE(SUM(s.file_submitted_not_reviewed_i_ii)+SUM(s.file_reviewed_not_signed_i_ii)+SUM(s.file_reviewed_signed_i_ii)+SUM(s.file_submitted_not_signed_iii)+SUM(s.file_submitted_signed_iii),0) AS \"已提出\", 0 AS \"未提出\", COALESCE(SUM(s.file_reviewed_not_signed_i_ii)+SUM(s.file_reviewed_signed_i_ii),0) AS \"已评估评审\", COALESCE(SUM(s.file_submitted_not_reviewed_i_ii),0) AS \"未评估评审\" FROM biz_dws_tech_state_monthly_v2 s WHERE s.period_month >= to_char({{dateFrom}}::date,'YYYY-MM') AND s.period_month <= to_char({{dateTo}}::date,'YYYY-MM') [[AND s.project_no ILIKE '%' || {{projectNo}} || '%']] AND s.dept IS NOT NULL GROUP BY s.dept ORDER BY SUM(s.total_change_cnt) DESC LIMIT 12",
+          "queryTimeoutSeconds": 30,
+          "maxRows": 2000,
+          "parameterBindings": [
+            {
+              "name": "dateFrom",
+              "variableKey": "dateFrom"
+            },
+            {
+              "name": "dateTo",
+              "variableKey": "dateTo"
+            },
+            {
+              "name": "deptId",
+              "variableKey": "deptId"
+            },
+            {
+              "name": "projectNo",
+              "variableKey": "projectNo"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "gpmc-tech-dept-reform",
+      "type": "line-chart",
+      "name": "科室变更整改",
+      "x": 48,
+      "y": 586,
+      "width": 912,
+      "height": 250,
+      "zIndex": 15,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "title": "科室变更整改（按变更总数排序）",
+        "xAxis": {
+          "type": "category",
+          "name": "责任科室"
+        },
+        "yAxis": {
+          "type": "value",
+          "name": "数量"
+        },
+        "legend": {
+          "show": true
+        },
+        "colors": [
+          "#8fa7c4",
+          "#ff5d73"
+        ],
+        "categoryKey": "责任科室",
+        "series": [
+          {
+            "name": "总数量",
+            "dataKey": "总数量",
+            "color": "#8fa7c4"
+          },
+          {
+            "name": "未落实整改数量",
+            "dataKey": "未落实整改数量",
+            "color": "#ff5d73"
+          }
+        ]
+      },
+      "dataSource": {
+        "type": "sql",
+        "sqlConfig": {
+          "databaseId": "{{DATABASE_ID}}",
+          "query": "SELECT s.dept AS \"责任科室\", SUM(s.total_change_cnt) AS \"总数量\", SUM(s.reform_pending_i_ii) AS \"未落实整改数量\" FROM biz_dws_tech_state_monthly_v2 s WHERE s.period_month >= to_char({{dateFrom}}::date,'YYYY-MM') AND s.period_month <= to_char({{dateTo}}::date,'YYYY-MM') [[AND s.project_no ILIKE '%' || {{projectNo}} || '%']] AND s.dept IS NOT NULL GROUP BY s.dept ORDER BY SUM(s.total_change_cnt) DESC LIMIT 12",
+          "queryTimeoutSeconds": 30,
+          "maxRows": 2000,
+          "parameterBindings": [
+            {
+              "name": "dateFrom",
+              "variableKey": "dateFrom"
+            },
+            {
+              "name": "dateTo",
+              "variableKey": "dateTo"
+            },
+            {
+              "name": "deptId",
+              "variableKey": "deptId"
+            },
+            {
+              "name": "projectNo",
+              "variableKey": "projectNo"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "gpmc-tech-project-reform",
+      "type": "bar-chart",
+      "name": "项目变更整改",
+      "x": 972,
+      "y": 586,
+      "width": 896,
+      "height": 250,
+      "zIndex": 15,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "title": "项目变更整改（按变更总数排序）",
+        "xAxis": {
+          "type": "value",
+          "name": "数量"
+        },
+        "yAxis": {
+          "type": "category",
+          "name": "项目"
+        },
+        "orientation": "horizontal",
+        "legend": {
+          "show": true
+        },
+        "colors": [
+          "#8fa7c4",
+          "#ff5d73"
+        ],
+        "categoryKey": "项目编号",
+        "series": [
+          {
+            "name": "总数量",
+            "dataKey": "总数量",
+            "color": "#8fa7c4"
+          },
+          {
+            "name": "未落实整改数量",
+            "dataKey": "未落实整改数量",
+            "color": "#ff5d73"
+          }
+        ]
+      },
+      "dataSource": {
+        "type": "sql",
+        "sqlConfig": {
+          "databaseId": "{{DATABASE_ID}}",
+          "query": "SELECT s.project_no AS \"项目编号\", SUM(s.total_change_cnt) AS \"总数量\", SUM(s.reform_pending_i_ii) AS \"未落实整改数量\" FROM biz_dws_tech_state_monthly_v2 s WHERE s.period_month >= to_char({{dateFrom}}::date,'YYYY-MM') AND s.period_month <= to_char({{dateTo}}::date,'YYYY-MM') [[AND s.dept = {{deptId}}]] [[AND s.project_no ILIKE '%' || {{projectNo}} || '%']] GROUP BY s.project_no ORDER BY SUM(s.total_change_cnt) DESC LIMIT 12",
           "queryTimeoutSeconds": 30,
           "maxRows": 2000,
           "parameterBindings": [
@@ -957,272 +1159,138 @@
       "id": "gpmc-tech-change-list",
       "type": "table",
       "name": "技术状态变更清单",
-      "x": 56,
-      "y": 288,
-      "width": 840,
-      "height": 320,
+      "x": 36,
+      "y": 848,
+      "width": 1848,
+      "height": 208,
       "zIndex": 15,
       "locked": false,
       "visible": true,
       "config": {
-        "title": "技术状态变更清单",
-        "header": [
-          "技术状态",
-          "项目",
-          "更改类别",
-          "签署状态"
+        "title": "技术状态变更清单（按更改提出时间倒序）",
+        "columns": [
+          {
+            "key": "项目编号",
+            "title": "项目编号",
+            "width": 110
+          },
+          {
+            "key": "技术状态项名称",
+            "title": "技术状态项名称",
+            "width": 200
+          },
+          {
+            "key": "更改事项",
+            "title": "更改事项",
+            "width": 260
+          },
+          {
+            "key": "负责人",
+            "title": "负责人",
+            "width": 90
+          },
+          {
+            "key": "责任科室",
+            "title": "责任科室",
+            "width": 140
+          },
+          {
+            "key": "更改提出时间",
+            "title": "更改提出时间",
+            "width": 120
+          },
+          {
+            "key": "更改类别",
+            "title": "更改类别",
+            "width": 90
+          },
+          {
+            "key": "变更单签署状态",
+            "title": "变更单签署状态",
+            "width": 140
+          },
+          {
+            "key": "整改落实状态",
+            "title": "整改落实状态",
+            "width": 130
+          },
+          {
+            "key": "整改落实时间",
+            "title": "整改落实时间",
+            "width": 120
+          }
         ],
-        "fontSize": 16,
-        "headerAlign": "center",
+        "pageSize": 20,
+        "showHeader": true,
         "headerColor": "#d9eeff",
-        "headerBackground": "#0f2a55",
-        "bodyColor": "#8cb9df",
-        "bodyBackground": "#ffffff",
-        "oddRowBackground": "#ffffff",
-        "evenRowBackground": "#081c3f",
+        "rowColor": "#c9d4e4",
+        "stripeColor": "rgba(88,180,255,0.08)",
+        "backgroundColor": "rgba(9,36,90,0.50)"
+      },
+      "dataSource": {
+        "type": "sql",
+        "sqlConfig": {
+          "databaseId": "{{DATABASE_ID}}",
+          "query": "SELECT d.project_no AS \"项目编号\", d.tech_state_name AS \"技术状态项名称\", d.change_item AS \"更改事项\", d.owner AS \"负责人\", d.dept AS \"责任科室\", to_char(d.change_submit_time,'YYYY-MM-DD') AS \"更改提出时间\", d.change_category AS \"更改类别\", CASE WHEN d.is_signature_completed THEN '已签署' ELSE '未签署' END AS \"变更单签署状态\", COALESCE(d.reform_status,'-') AS \"整改落实状态\", to_char(d.reform_date,'YYYY-MM-DD') AS \"整改落实时间\" FROM biz_dwd_tech_state_v2 d WHERE to_char(d.change_submit_time,'YYYY-MM') >= to_char({{dateFrom}}::date,'YYYY-MM') AND to_char(d.change_submit_time,'YYYY-MM') <= to_char({{dateTo}}::date,'YYYY-MM') [[AND d.dept = {{deptId}}]] [[AND d.project_no ILIKE '%' || {{projectNo}} || '%']] ORDER BY d.change_submit_time DESC LIMIT 500",
+          "queryTimeoutSeconds": 30,
+          "maxRows": 2000,
+          "parameterBindings": [
+            {
+              "name": "dateFrom",
+              "variableKey": "dateFrom"
+            },
+            {
+              "name": "dateTo",
+              "variableKey": "dateTo"
+            },
+            {
+              "name": "deptId",
+              "variableKey": "deptId"
+            },
+            {
+              "name": "projectNo",
+              "variableKey": "projectNo"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "gpmc-tech-mid2-left",
+      "type": "shape",
+      "name": "gpmc-tech-mid2-left",
+      "x": 36,
+      "y": 576,
+      "width": 936,
+      "height": 254,
+      "zIndex": 1,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "shapeType": "rect",
+        "fillColor": "rgba(9, 36, 90, 0.82)",
         "borderColor": "rgba(69, 164, 255, 0.38)",
-        "enableSort": true,
-        "enablePagination": true,
-        "pageSize": 6,
-        "freezeHeader": true
-      },
-      "actions": [],
-      "dataSource": {
-        "type": "sql",
-        "sqlConfig": {
-          "databaseId": "{{DATABASE_ID}}",
-          "query": "SELECT project_no AS \"项目编号\", tech_state_name AS \"技术状态项\", change_item AS \"更改事项\", owner AS \"负责人\", dept AS \"责任科室\", change_category AS \"更改类别\", change_submit_time AS \"提出时间\", completion_signature AS \"变更单签署\", file_signature_status AS \"文件签署\", reform_status AS \"整改状态\" FROM biz_dwd_tech_state_v2 WHERE submit_month >= to_char({{dateFrom}}::date, 'YYYY-MM') AND submit_month <= to_char({{dateTo}}::date, 'YYYY-MM') [[AND dept = {{deptId}}]] [[AND project_no ILIKE '%' || {{projectNo}} || '%']] ORDER BY change_submit_time DESC",
-          "queryTimeoutSeconds": 30,
-          "maxRows": 2000,
-          "parameterBindings": [
-            {
-              "name": "dateFrom",
-              "variableKey": "dateFrom"
-            },
-            {
-              "name": "dateTo",
-              "variableKey": "dateTo"
-            },
-            {
-              "name": "deptId",
-              "variableKey": "deptId"
-            },
-            {
-              "name": "projectNo",
-              "variableKey": "projectNo"
-            }
-          ]
-        }
+        "borderWidth": 1,
+        "radius": 18
       }
     },
     {
-      "id": "gpmc-tech-type-pie",
-      "type": "pie-chart",
-      "name": "更改类别分布",
-      "x": 934,
-      "y": 288,
-      "width": 430,
-      "height": 320,
-      "zIndex": 15,
+      "id": "gpmc-tech-mid2-right",
+      "type": "shape",
+      "name": "gpmc-tech-mid2-right",
+      "x": 984,
+      "y": 576,
+      "width": 900,
+      "height": 254,
+      "zIndex": 1,
       "locked": false,
       "visible": true,
       "config": {
-        "title": "更改类别分布",
-        "seriesColors": [
-          "#3b82ff",
-          "#27d8ff",
-          "#ff9f43",
-          "#ff5d73",
-          "#8a7dff"
-        ]
-      },
-      "dataSource": {
-        "type": "sql",
-        "sqlConfig": {
-          "databaseId": "{{DATABASE_ID}}",
-          "query": "SELECT COUNT(DISTINCT s.project_no) AS \"涉及项目\", SUM(s.total_change_cnt) AS \"变更总数\", SUM(s.new_cat_i) AS \"I类更改\", SUM(s.new_cat_ii) AS \"II类更改\", SUM(s.new_cat_iii) AS \"III类更改\", SUM(s.file_submitted_not_reviewed_i_ii) AS \"已提出未评审(I,II)\", SUM(s.file_reviewed_not_signed_i_ii) AS \"已评审未签署(I,II)\", SUM(s.file_reviewed_signed_i_ii) AS \"已评审已签署(I,II)\", SUM(s.file_submitted_not_signed_iii) AS \"已提出未签署(III)\", SUM(s.file_submitted_signed_iii) AS \"已提出已签署(III)\", SUM(s.file_submitted_not_reviewed_i_ii)+SUM(s.file_reviewed_not_signed_i_ii)+SUM(s.file_submitted_not_signed_iii) AS \"未签署项\", SUM(s.order_unsigned_cat_i)+SUM(s.order_unsigned_cat_ii)+SUM(s.order_unsigned_cat_iii) AS \"变更单未签署\", SUM(s.order_signed_cnt) AS \"变更单已签署\", CASE WHEN (SUM(s.order_signed_cnt)+SUM(s.order_unsigned_cat_i)+SUM(s.order_unsigned_cat_ii)+SUM(s.order_unsigned_cat_iii))=0 THEN 0 ELSE ROUND(SUM(s.order_signed_cnt)::numeric/(SUM(s.order_signed_cnt)+SUM(s.order_unsigned_cat_i)+SUM(s.order_unsigned_cat_ii)+SUM(s.order_unsigned_cat_iii))::numeric*100,2) END AS \"签署完成率\", SUM(s.reform_pending_i_ii) AS \"未落实整改\", SUM(s.reform_done_i_ii) AS \"已落实整改\", SUM(s.reform_na_iii) AS \"不涉及整改\", CASE WHEN (SUM(s.reform_done_i_ii)+SUM(s.reform_pending_i_ii))=0 THEN 0 ELSE ROUND(SUM(s.reform_done_i_ii)::numeric/(SUM(s.reform_done_i_ii)+SUM(s.reform_pending_i_ii))::numeric*100,2) END AS \"整改完成率\" FROM biz_dws_tech_state_monthly_v2 s WHERE s.period_month >= to_char({{dateFrom}}::date, 'YYYY-MM') AND s.period_month <= to_char({{dateTo}}::date, 'YYYY-MM') [[AND s.dept = {{deptId}}]] [[AND s.project_no ILIKE '%' || {{projectNo}} || '%']]",
-          "queryTimeoutSeconds": 30,
-          "maxRows": 2000,
-          "parameterBindings": [
-            {
-              "name": "dateFrom",
-              "variableKey": "dateFrom"
-            },
-            {
-              "name": "dateTo",
-              "variableKey": "dateTo"
-            },
-            {
-              "name": "deptId",
-              "variableKey": "deptId"
-            },
-            {
-              "name": "projectNo",
-              "variableKey": "projectNo"
-            }
-          ]
-        }
-      }
-    },
-    {
-      "id": "gpmc-tech-sign-pie",
-      "type": "pie-chart",
-      "name": "签署状态分布",
-      "x": 1380,
-      "y": 288,
-      "width": 484,
-      "height": 320,
-      "zIndex": 15,
-      "locked": false,
-      "visible": true,
-      "config": {
-        "title": "签署状态分布",
-        "seriesColors": [
-          "#3b82ff",
-          "#27d8ff",
-          "#ff9f43",
-          "#ff5d73",
-          "#8a7dff"
-        ]
-      },
-      "dataSource": {
-        "type": "sql",
-        "sqlConfig": {
-          "databaseId": "{{DATABASE_ID}}",
-          "query": "SELECT COUNT(DISTINCT s.project_no) AS \"涉及项目\", SUM(s.total_change_cnt) AS \"变更总数\", SUM(s.new_cat_i) AS \"I类更改\", SUM(s.new_cat_ii) AS \"II类更改\", SUM(s.new_cat_iii) AS \"III类更改\", SUM(s.file_submitted_not_reviewed_i_ii) AS \"已提出未评审(I,II)\", SUM(s.file_reviewed_not_signed_i_ii) AS \"已评审未签署(I,II)\", SUM(s.file_reviewed_signed_i_ii) AS \"已评审已签署(I,II)\", SUM(s.file_submitted_not_signed_iii) AS \"已提出未签署(III)\", SUM(s.file_submitted_signed_iii) AS \"已提出已签署(III)\", SUM(s.file_submitted_not_reviewed_i_ii)+SUM(s.file_reviewed_not_signed_i_ii)+SUM(s.file_submitted_not_signed_iii) AS \"未签署项\", SUM(s.order_unsigned_cat_i)+SUM(s.order_unsigned_cat_ii)+SUM(s.order_unsigned_cat_iii) AS \"变更单未签署\", SUM(s.order_signed_cnt) AS \"变更单已签署\", CASE WHEN (SUM(s.order_signed_cnt)+SUM(s.order_unsigned_cat_i)+SUM(s.order_unsigned_cat_ii)+SUM(s.order_unsigned_cat_iii))=0 THEN 0 ELSE ROUND(SUM(s.order_signed_cnt)::numeric/(SUM(s.order_signed_cnt)+SUM(s.order_unsigned_cat_i)+SUM(s.order_unsigned_cat_ii)+SUM(s.order_unsigned_cat_iii))::numeric*100,2) END AS \"签署完成率\", SUM(s.reform_pending_i_ii) AS \"未落实整改\", SUM(s.reform_done_i_ii) AS \"已落实整改\", SUM(s.reform_na_iii) AS \"不涉及整改\", CASE WHEN (SUM(s.reform_done_i_ii)+SUM(s.reform_pending_i_ii))=0 THEN 0 ELSE ROUND(SUM(s.reform_done_i_ii)::numeric/(SUM(s.reform_done_i_ii)+SUM(s.reform_pending_i_ii))::numeric*100,2) END AS \"整改完成率\" FROM biz_dws_tech_state_monthly_v2 s WHERE s.period_month >= to_char({{dateFrom}}::date, 'YYYY-MM') AND s.period_month <= to_char({{dateTo}}::date, 'YYYY-MM') [[AND s.dept = {{deptId}}]] [[AND s.project_no ILIKE '%' || {{projectNo}} || '%']]",
-          "queryTimeoutSeconds": 30,
-          "maxRows": 2000,
-          "parameterBindings": [
-            {
-              "name": "dateFrom",
-              "variableKey": "dateFrom"
-            },
-            {
-              "name": "dateTo",
-              "variableKey": "dateTo"
-            },
-            {
-              "name": "deptId",
-              "variableKey": "deptId"
-            },
-            {
-              "name": "projectNo",
-              "variableKey": "projectNo"
-            }
-          ]
-        }
-      }
-    },
-    {
-      "id": "gpmc-tech-measures",
-      "type": "table",
-      "name": "技术状态跟进动作",
-      "x": 56,
-      "y": 666,
-      "width": 1808,
-      "height": 320,
-      "zIndex": 15,
-      "locked": false,
-      "visible": true,
-      "config": {
-        "title": "技术状态跟进动作",
-        "header": [
-          "技术状态",
-          "项目",
-          "跟进动作",
-          "当前状态"
-        ],
-        "fontSize": 16,
-        "headerAlign": "center",
-        "headerColor": "#d9eeff",
-        "headerBackground": "#0f2a55",
-        "bodyColor": "#8cb9df",
-        "bodyBackground": "#ffffff",
-        "oddRowBackground": "#ffffff",
-        "evenRowBackground": "#081c3f",
+        "shapeType": "rect",
+        "fillColor": "rgba(9, 36, 90, 0.82)",
         "borderColor": "rgba(69, 164, 255, 0.38)",
-        "enableSort": true,
-        "enablePagination": true,
-        "pageSize": 6,
-        "freezeHeader": true
-      },
-      "actions": [],
-      "dataSource": {
-        "type": "sql",
-        "sqlConfig": {
-          "databaseId": "{{DATABASE_ID}}",
-          "query": "SELECT project_no AS \"项目编号\", tech_state_name AS \"技术状态项\", change_item AS \"更改事项\", owner AS \"负责人\", dept AS \"责任科室\", change_category AS \"更改类别\", change_submit_time AS \"提出时间\", completion_signature AS \"变更单签署\", file_signature_status AS \"文件签署\", reform_status AS \"整改状态\" FROM biz_dwd_tech_state_v2 WHERE submit_month >= to_char({{dateFrom}}::date, 'YYYY-MM') AND submit_month <= to_char({{dateTo}}::date, 'YYYY-MM') [[AND dept = {{deptId}}]] [[AND project_no ILIKE '%' || {{projectNo}} || '%']] ORDER BY change_submit_time DESC",
-          "queryTimeoutSeconds": 30,
-          "maxRows": 2000,
-          "parameterBindings": [
-            {
-              "name": "dateFrom",
-              "variableKey": "dateFrom"
-            },
-            {
-              "name": "dateTo",
-              "variableKey": "dateTo"
-            },
-            {
-              "name": "deptId",
-              "variableKey": "deptId"
-            },
-            {
-              "name": "projectNo",
-              "variableKey": "projectNo"
-            }
-          ]
-        }
-      }
-    },
-    {
-      "id": "gpmc-tech-health-gauge",
-      "type": "number-card",
-      "name": "技术状态健康度",
-      "x": 880,
-      "y": 246,
-      "width": 260,
-      "height": 118,
-      "zIndex": 12,
-      "locked": false,
-      "visible": true,
-      "config": {
-        "title": "技术状态健康度",
-        "value": 0,
-        "suffix": "",
-        "precision": 2,
-        "titleFontSize": 17,
-        "valueFontSize": 34,
-        "titleColor": "#8cb9df",
-        "valueColor": "#27d8ff",
-        "backgroundColor": "#ffffff"
-      },
-      "dataSource": {
-        "type": "sql",
-        "sqlConfig": {
-          "databaseId": "{{DATABASE_ID}}",
-          "query": "SELECT COUNT(DISTINCT s.project_no) AS \"涉及项目\", SUM(s.total_change_cnt) AS \"变更总数\", SUM(s.new_cat_i) AS \"I类更改\", SUM(s.new_cat_ii) AS \"II类更改\", SUM(s.new_cat_iii) AS \"III类更改\", SUM(s.file_submitted_not_reviewed_i_ii) AS \"已提出未评审(I,II)\", SUM(s.file_reviewed_not_signed_i_ii) AS \"已评审未签署(I,II)\", SUM(s.file_reviewed_signed_i_ii) AS \"已评审已签署(I,II)\", SUM(s.file_submitted_not_signed_iii) AS \"已提出未签署(III)\", SUM(s.file_submitted_signed_iii) AS \"已提出已签署(III)\", SUM(s.file_submitted_not_reviewed_i_ii)+SUM(s.file_reviewed_not_signed_i_ii)+SUM(s.file_submitted_not_signed_iii) AS \"未签署项\", SUM(s.order_unsigned_cat_i)+SUM(s.order_unsigned_cat_ii)+SUM(s.order_unsigned_cat_iii) AS \"变更单未签署\", SUM(s.order_signed_cnt) AS \"变更单已签署\", CASE WHEN (SUM(s.order_signed_cnt)+SUM(s.order_unsigned_cat_i)+SUM(s.order_unsigned_cat_ii)+SUM(s.order_unsigned_cat_iii))=0 THEN 0 ELSE ROUND(SUM(s.order_signed_cnt)::numeric/(SUM(s.order_signed_cnt)+SUM(s.order_unsigned_cat_i)+SUM(s.order_unsigned_cat_ii)+SUM(s.order_unsigned_cat_iii))::numeric*100,2) END AS \"签署完成率\", SUM(s.reform_pending_i_ii) AS \"未落实整改\", SUM(s.reform_done_i_ii) AS \"已落实整改\", SUM(s.reform_na_iii) AS \"不涉及整改\", CASE WHEN (SUM(s.reform_done_i_ii)+SUM(s.reform_pending_i_ii))=0 THEN 0 ELSE ROUND(SUM(s.reform_done_i_ii)::numeric/(SUM(s.reform_done_i_ii)+SUM(s.reform_pending_i_ii))::numeric*100,2) END AS \"整改完成率\" FROM biz_dws_tech_state_monthly_v2 s WHERE s.period_month >= to_char({{dateFrom}}::date, 'YYYY-MM') AND s.period_month <= to_char({{dateTo}}::date, 'YYYY-MM') [[AND s.dept = {{deptId}}]] [[AND s.project_no ILIKE '%' || {{projectNo}} || '%']]",
-          "queryTimeoutSeconds": 30,
-          "maxRows": 2000,
-          "parameterBindings": [
-            {
-              "name": "dateFrom",
-              "variableKey": "dateFrom"
-            },
-            {
-              "name": "dateTo",
-              "variableKey": "dateTo"
-            },
-            {
-              "name": "deptId",
-              "variableKey": "deptId"
-            },
-            {
-              "name": "projectNo",
-              "variableKey": "projectNo"
-            }
-          ]
-        }
+        "borderWidth": 1,
+        "radius": 18
       }
     }
   ]

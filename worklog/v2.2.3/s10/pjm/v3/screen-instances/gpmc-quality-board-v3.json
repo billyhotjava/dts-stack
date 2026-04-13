@@ -65,8 +65,8 @@
       "name": "gpmc-quality-left",
       "x": 36,
       "y": 268,
-      "width": 860,
-      "height": 360,
+      "width": 936,
+      "height": 316,
       "zIndex": 1,
       "locked": false,
       "visible": true,
@@ -82,10 +82,10 @@
       "id": "gpmc-quality-right",
       "type": "shape",
       "name": "gpmc-quality-right",
-      "x": 914,
+      "x": 984,
       "y": 268,
-      "width": 970,
-      "height": 360,
+      "width": 900,
+      "height": 316,
       "zIndex": 1,
       "locked": false,
       "visible": true,
@@ -102,9 +102,9 @@
       "type": "shape",
       "name": "gpmc-quality-bottom",
       "x": 36,
-      "y": 646,
+      "y": 838,
       "width": 1848,
-      "height": 360,
+      "height": 220,
       "zIndex": 1,
       "locked": false,
       "visible": true,
@@ -604,320 +604,19 @@
       ]
     },
     {
-      "id": "gpmc-quality-kpi-new",
+      "id": "gpmc-quality-kpi-total",
       "type": "number-card",
-      "name": "新增质量问题",
-      "x": 58,
+      "name": "质量问题总数",
+      "x": 44,
       "y": 126,
-      "width": 260,
+      "width": 440,
       "height": 118,
       "zIndex": 12,
       "locked": false,
       "visible": true,
       "config": {
-        "title": "新增质量问题",
-        "value": 23,
-        "suffix": "",
-        "precision": 0,
-        "titleFontSize": 17,
-        "valueFontSize": 34,
-        "titleColor": "#8cb9df",
-        "valueColor": "#ff5d73",
-        "backgroundColor": "#ffffff"
-      },
-      "dataSource": {
-        "type": "sql",
-        "sqlConfig": {
-          "databaseId": "{{DATABASE_ID}}",
-          "query": "SELECT SUM(s.new_issue_cnt) AS \"新增质量问题\", SUM(s.open_issue_cnt) AS \"现存质量问题\", SUM(s.zero_completed_cnt) AS \"归零合计\", SUM(s.no_zero_plan_cnt) AS \"未提交归零计划\", COUNT(DISTINCT s.project_no) AS \"问题项目数\", SUM(s.tech_zero_cnt) AS \"技术归零\", SUM(s.mgmt_zero_cnt) AS \"管理归零\", SUM(s.both_zero_cnt) AS \"双归零\", SUM(s.open_cat_design) AS \"设计\", SUM(s.open_cat_process) AS \"工艺\", SUM(s.open_cat_management) AS \"管理\", SUM(s.open_cat_component) AS \"元器件\", SUM(s.open_cat_operation) AS \"操作\", SUM(s.open_cat_outsource) AS \"外协外购\", SUM(s.open_cat_software) AS \"软件\", SUM(s.open_cat_other) AS \"其他\" FROM biz_dws_quality_monthly_v2 s WHERE s.period_month >= to_char({{dateFrom}}::date, 'YYYY-MM') AND s.period_month <= to_char({{dateTo}}::date, 'YYYY-MM') [[AND s.dept = {{deptId}}]] [[AND s.project_no ILIKE '%' || {{projectNo}} || '%']]",
-          "queryTimeoutSeconds": 30,
-          "maxRows": 2000,
-          "parameterBindings": [
-            {
-              "name": "dateFrom",
-              "variableKey": "dateFrom"
-            },
-            {
-              "name": "dateTo",
-              "variableKey": "dateTo"
-            },
-            {
-              "name": "deptId",
-              "variableKey": "deptId"
-            },
-            {
-              "name": "projectNo",
-              "variableKey": "projectNo"
-            }
-          ]
-        }
-      }
-    },
-    {
-      "id": "gpmc-quality-kpi-existing",
-      "type": "number-card",
-      "name": "现存质量问题",
-      "x": 332,
-      "y": 126,
-      "width": 260,
-      "height": 118,
-      "zIndex": 12,
-      "locked": false,
-      "visible": true,
-      "config": {
-        "title": "现存质量问题",
-        "value": 47,
-        "suffix": "",
-        "precision": 0,
-        "titleFontSize": 17,
-        "valueFontSize": 34,
-        "titleColor": "#8cb9df",
-        "valueColor": "#ff9f43",
-        "backgroundColor": "#ffffff"
-      },
-      "dataSource": {
-        "type": "sql",
-        "sqlConfig": {
-          "databaseId": "{{DATABASE_ID}}",
-          "query": "SELECT SUM(s.new_issue_cnt) AS \"新增质量问题\", SUM(s.open_issue_cnt) AS \"现存质量问题\", SUM(s.zero_completed_cnt) AS \"归零合计\", SUM(s.no_zero_plan_cnt) AS \"未提交归零计划\", COUNT(DISTINCT s.project_no) AS \"问题项目数\", SUM(s.tech_zero_cnt) AS \"技术归零\", SUM(s.mgmt_zero_cnt) AS \"管理归零\", SUM(s.both_zero_cnt) AS \"双归零\", SUM(s.open_cat_design) AS \"设计\", SUM(s.open_cat_process) AS \"工艺\", SUM(s.open_cat_management) AS \"管理\", SUM(s.open_cat_component) AS \"元器件\", SUM(s.open_cat_operation) AS \"操作\", SUM(s.open_cat_outsource) AS \"外协外购\", SUM(s.open_cat_software) AS \"软件\", SUM(s.open_cat_other) AS \"其他\" FROM biz_dws_quality_monthly_v2 s WHERE s.period_month >= to_char({{dateFrom}}::date, 'YYYY-MM') AND s.period_month <= to_char({{dateTo}}::date, 'YYYY-MM') [[AND s.dept = {{deptId}}]] [[AND s.project_no ILIKE '%' || {{projectNo}} || '%']]",
-          "queryTimeoutSeconds": 30,
-          "maxRows": 2000,
-          "parameterBindings": [
-            {
-              "name": "dateFrom",
-              "variableKey": "dateFrom"
-            },
-            {
-              "name": "dateTo",
-              "variableKey": "dateTo"
-            },
-            {
-              "name": "deptId",
-              "variableKey": "deptId"
-            },
-            {
-              "name": "projectNo",
-              "variableKey": "projectNo"
-            }
-          ]
-        }
-      }
-    },
-    {
-      "id": "gpmc-quality-kpi-close",
-      "type": "number-card",
-      "name": "归零完成率",
-      "x": 606,
-      "y": 126,
-      "width": 260,
-      "height": 118,
-      "zIndex": 12,
-      "locked": false,
-      "visible": true,
-      "config": {
-        "title": "归零完成率",
-        "value": 68.3,
-        "suffix": "%",
-        "precision": 1,
-        "titleFontSize": 17,
-        "valueFontSize": 34,
-        "titleColor": "#8cb9df",
-        "valueColor": "#2ee6a6",
-        "backgroundColor": "#ffffff"
-      },
-      "dataSource": {
-        "type": "sql",
-        "sqlConfig": {
-          "databaseId": "{{DATABASE_ID}}",
-          "query": "SELECT SUM(s.new_issue_cnt) AS \"新增质量问题\", SUM(s.open_issue_cnt) AS \"现存质量问题\", SUM(s.zero_completed_cnt) AS \"归零合计\", SUM(s.no_zero_plan_cnt) AS \"未提交归零计划\", COUNT(DISTINCT s.project_no) AS \"问题项目数\", SUM(s.tech_zero_cnt) AS \"技术归零\", SUM(s.mgmt_zero_cnt) AS \"管理归零\", SUM(s.both_zero_cnt) AS \"双归零\", SUM(s.open_cat_design) AS \"设计\", SUM(s.open_cat_process) AS \"工艺\", SUM(s.open_cat_management) AS \"管理\", SUM(s.open_cat_component) AS \"元器件\", SUM(s.open_cat_operation) AS \"操作\", SUM(s.open_cat_outsource) AS \"外协外购\", SUM(s.open_cat_software) AS \"软件\", SUM(s.open_cat_other) AS \"其他\" FROM biz_dws_quality_monthly_v2 s WHERE s.period_month >= to_char({{dateFrom}}::date, 'YYYY-MM') AND s.period_month <= to_char({{dateTo}}::date, 'YYYY-MM') [[AND s.dept = {{deptId}}]] [[AND s.project_no ILIKE '%' || {{projectNo}} || '%']]",
-          "queryTimeoutSeconds": 30,
-          "maxRows": 2000,
-          "parameterBindings": [
-            {
-              "name": "dateFrom",
-              "variableKey": "dateFrom"
-            },
-            {
-              "name": "dateTo",
-              "variableKey": "dateTo"
-            },
-            {
-              "name": "deptId",
-              "variableKey": "deptId"
-            },
-            {
-              "name": "projectNo",
-              "variableKey": "projectNo"
-            }
-          ]
-        }
-      }
-    },
-    {
-      "id": "gpmc-quality-kpi-no-plan",
-      "type": "number-card",
-      "name": "未提交归零计划",
-      "x": 880,
-      "y": 126,
-      "width": 260,
-      "height": 118,
-      "zIndex": 12,
-      "locked": false,
-      "visible": true,
-      "config": {
-        "title": "未提交归零计划",
-        "value": 8,
-        "suffix": "",
-        "precision": 0,
-        "titleFontSize": 17,
-        "valueFontSize": 34,
-        "titleColor": "#8cb9df",
-        "valueColor": "#ff5d73",
-        "backgroundColor": "#ffffff"
-      },
-      "actions": [],
-      "dataSource": {
-        "type": "sql",
-        "sqlConfig": {
-          "databaseId": "{{DATABASE_ID}}",
-          "query": "SELECT SUM(s.new_issue_cnt) AS \"新增质量问题\", SUM(s.open_issue_cnt) AS \"现存质量问题\", SUM(s.zero_completed_cnt) AS \"归零合计\", SUM(s.no_zero_plan_cnt) AS \"未提交归零计划\", COUNT(DISTINCT s.project_no) AS \"问题项目数\", SUM(s.tech_zero_cnt) AS \"技术归零\", SUM(s.mgmt_zero_cnt) AS \"管理归零\", SUM(s.both_zero_cnt) AS \"双归零\", SUM(s.open_cat_design) AS \"设计\", SUM(s.open_cat_process) AS \"工艺\", SUM(s.open_cat_management) AS \"管理\", SUM(s.open_cat_component) AS \"元器件\", SUM(s.open_cat_operation) AS \"操作\", SUM(s.open_cat_outsource) AS \"外协外购\", SUM(s.open_cat_software) AS \"软件\", SUM(s.open_cat_other) AS \"其他\" FROM biz_dws_quality_monthly_v2 s WHERE s.period_month >= to_char({{dateFrom}}::date, 'YYYY-MM') AND s.period_month <= to_char({{dateTo}}::date, 'YYYY-MM') [[AND s.dept = {{deptId}}]] [[AND s.project_no ILIKE '%' || {{projectNo}} || '%']]",
-          "queryTimeoutSeconds": 30,
-          "maxRows": 2000,
-          "parameterBindings": [
-            {
-              "name": "dateFrom",
-              "variableKey": "dateFrom"
-            },
-            {
-              "name": "dateTo",
-              "variableKey": "dateTo"
-            },
-            {
-              "name": "deptId",
-              "variableKey": "deptId"
-            },
-            {
-              "name": "projectNo",
-              "variableKey": "projectNo"
-            }
-          ]
-        }
-      }
-    },
-    {
-      "id": "gpmc-quality-kpi-high",
-      "type": "number-card",
-      "name": "设计类问题占比",
-      "x": 1154,
-      "y": 126,
-      "width": 260,
-      "height": 118,
-      "zIndex": 12,
-      "locked": false,
-      "visible": true,
-      "config": {
-        "title": "设计类问题占比",
-        "value": 37,
-        "suffix": "",
-        "precision": 0,
-        "titleFontSize": 17,
-        "valueFontSize": 34,
-        "titleColor": "#8cb9df",
-        "valueColor": "#ff5d73",
-        "backgroundColor": "#ffffff"
-      },
-      "dataSource": {
-        "type": "sql",
-        "sqlConfig": {
-          "databaseId": "{{DATABASE_ID}}",
-          "query": "WITH q AS (SELECT SUM(new_issue_cnt) AS n, SUM(open_issue_cnt) AS o, SUM(zero_completed_cnt) AS z, SUM(no_zero_plan_cnt) AS np, SUM(open_cat_design) AS d FROM biz_dws_quality_monthly_v2 s WHERE s.period_month >= to_char({{dateFrom}}::date, 'YYYY-MM') AND s.period_month <= to_char({{dateTo}}::date, 'YYYY-MM') [[AND s.dept = {{deptId}}]] [[AND s.project_no ILIKE '%' || {{projectNo}} || '%']]) SELECT CASE WHEN q.n=0 THEN 0 ELSE ROUND(q.z::numeric/q.n::numeric*100,2) END AS \"归零率\", CASE WHEN q.o=0 THEN 0 ELSE ROUND(q.d::numeric/q.o::numeric*100,2) END AS \"设计类占比\", CASE WHEN q.n=0 THEN 0 ELSE ROUND((q.n-q.np)::numeric/q.n::numeric*100,2) END AS \"计划提交率\", ROUND((CASE WHEN q.n=0 THEN 0 ELSE q.z::numeric/q.n::numeric*100 END)*0.5+(CASE WHEN q.n=0 THEN 0 ELSE (q.n-q.np)::numeric/q.n::numeric*100 END)*0.3+(100-(CASE WHEN q.n=0 THEN 0 ELSE q.o::numeric/q.n::numeric*100 END))*0.2,2) AS \"质量健康度\" FROM q",
-          "queryTimeoutSeconds": 30,
-          "maxRows": 2000,
-          "parameterBindings": [
-            {
-              "name": "dateFrom",
-              "variableKey": "dateFrom"
-            },
-            {
-              "name": "dateTo",
-              "variableKey": "dateTo"
-            },
-            {
-              "name": "deptId",
-              "variableKey": "deptId"
-            },
-            {
-              "name": "projectNo",
-              "variableKey": "projectNo"
-            }
-          ]
-        }
-      }
-    },
-    {
-      "id": "gpmc-quality-kpi-measure",
-      "type": "number-card",
-      "name": "归零计划提交率",
-      "x": 1428,
-      "y": 126,
-      "width": 260,
-      "height": 118,
-      "zIndex": 12,
-      "locked": false,
-      "visible": true,
-      "config": {
-        "title": "归零计划提交率",
-        "value": 76,
-        "suffix": "%",
-        "precision": 0,
-        "titleFontSize": 17,
-        "valueFontSize": 34,
-        "titleColor": "#8cb9df",
-        "valueColor": "#27d8ff",
-        "backgroundColor": "#ffffff"
-      },
-      "dataSource": {
-        "type": "sql",
-        "sqlConfig": {
-          "databaseId": "{{DATABASE_ID}}",
-          "query": "WITH q AS (SELECT SUM(new_issue_cnt) AS n, SUM(open_issue_cnt) AS o, SUM(zero_completed_cnt) AS z, SUM(no_zero_plan_cnt) AS np, SUM(open_cat_design) AS d FROM biz_dws_quality_monthly_v2 s WHERE s.period_month >= to_char({{dateFrom}}::date, 'YYYY-MM') AND s.period_month <= to_char({{dateTo}}::date, 'YYYY-MM') [[AND s.dept = {{deptId}}]] [[AND s.project_no ILIKE '%' || {{projectNo}} || '%']]) SELECT CASE WHEN q.n=0 THEN 0 ELSE ROUND(q.z::numeric/q.n::numeric*100,2) END AS \"归零率\", CASE WHEN q.o=0 THEN 0 ELSE ROUND(q.d::numeric/q.o::numeric*100,2) END AS \"设计类占比\", CASE WHEN q.n=0 THEN 0 ELSE ROUND((q.n-q.np)::numeric/q.n::numeric*100,2) END AS \"计划提交率\", ROUND((CASE WHEN q.n=0 THEN 0 ELSE q.z::numeric/q.n::numeric*100 END)*0.5+(CASE WHEN q.n=0 THEN 0 ELSE (q.n-q.np)::numeric/q.n::numeric*100 END)*0.3+(100-(CASE WHEN q.n=0 THEN 0 ELSE q.o::numeric/q.n::numeric*100 END))*0.2,2) AS \"质量健康度\" FROM q",
-          "queryTimeoutSeconds": 30,
-          "maxRows": 2000,
-          "parameterBindings": [
-            {
-              "name": "dateFrom",
-              "variableKey": "dateFrom"
-            },
-            {
-              "name": "dateTo",
-              "variableKey": "dateTo"
-            },
-            {
-              "name": "deptId",
-              "variableKey": "deptId"
-            },
-            {
-              "name": "projectNo",
-              "variableKey": "projectNo"
-            }
-          ]
-        }
-      }
-    },
-    {
-      "id": "gpmc-quality-kpi-projects",
-      "type": "number-card",
-      "name": "问题项目数",
-      "x": 1702,
-      "y": 126,
-      "width": 166,
-      "height": 118,
-      "zIndex": 12,
-      "locked": false,
-      "visible": true,
-      "config": {
-        "title": "问题项目数",
-        "value": 15,
+        "title": "质量问题总数",
+        "value": 0,
         "suffix": "",
         "precision": 0,
         "titleFontSize": 17,
@@ -930,7 +629,312 @@
         "type": "sql",
         "sqlConfig": {
           "databaseId": "{{DATABASE_ID}}",
-          "query": "SELECT SUM(s.new_issue_cnt) AS \"新增质量问题\", SUM(s.open_issue_cnt) AS \"现存质量问题\", SUM(s.zero_completed_cnt) AS \"归零合计\", SUM(s.no_zero_plan_cnt) AS \"未提交归零计划\", COUNT(DISTINCT s.project_no) AS \"问题项目数\", SUM(s.tech_zero_cnt) AS \"技术归零\", SUM(s.mgmt_zero_cnt) AS \"管理归零\", SUM(s.both_zero_cnt) AS \"双归零\", SUM(s.open_cat_design) AS \"设计\", SUM(s.open_cat_process) AS \"工艺\", SUM(s.open_cat_management) AS \"管理\", SUM(s.open_cat_component) AS \"元器件\", SUM(s.open_cat_operation) AS \"操作\", SUM(s.open_cat_outsource) AS \"外协外购\", SUM(s.open_cat_software) AS \"软件\", SUM(s.open_cat_other) AS \"其他\" FROM biz_dws_quality_monthly_v2 s WHERE s.period_month >= to_char({{dateFrom}}::date, 'YYYY-MM') AND s.period_month <= to_char({{dateTo}}::date, 'YYYY-MM') [[AND s.dept = {{deptId}}]] [[AND s.project_no ILIKE '%' || {{projectNo}} || '%']]",
+          "query": "SELECT COALESCE(SUM(s.new_issue_cnt),0) AS v FROM biz_dws_quality_monthly_v2 s WHERE s.period_month >= to_char({{dateFrom}}::date,'YYYY-MM') AND s.period_month <= to_char({{dateTo}}::date,'YYYY-MM') [[AND s.dept = {{deptId}}]] [[AND s.project_no ILIKE '%' || {{projectNo}} || '%']]",
+          "queryTimeoutSeconds": 30,
+          "maxRows": 2000,
+          "parameterBindings": [
+            {
+              "name": "dateFrom",
+              "variableKey": "dateFrom"
+            },
+            {
+              "name": "dateTo",
+              "variableKey": "dateTo"
+            },
+            {
+              "name": "deptId",
+              "variableKey": "deptId"
+            },
+            {
+              "name": "projectNo",
+              "variableKey": "projectNo"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "gpmc-quality-kpi-open",
+      "type": "number-card",
+      "name": "未闭环质量问题数",
+      "x": 508,
+      "y": 126,
+      "width": 440,
+      "height": 118,
+      "zIndex": 12,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "title": "未闭环质量问题数",
+        "value": 0,
+        "suffix": "",
+        "precision": 0,
+        "titleFontSize": 17,
+        "valueFontSize": 34,
+        "titleColor": "#8cb9df",
+        "valueColor": "#d9eeff",
+        "backgroundColor": "#ffffff"
+      },
+      "dataSource": {
+        "type": "sql",
+        "sqlConfig": {
+          "databaseId": "{{DATABASE_ID}}",
+          "query": "SELECT COALESCE(SUM(s.open_issue_cnt),0) AS v FROM biz_dws_quality_monthly_v2 s WHERE s.period_month >= to_char({{dateFrom}}::date,'YYYY-MM') AND s.period_month <= to_char({{dateTo}}::date,'YYYY-MM') [[AND s.dept = {{deptId}}]] [[AND s.project_no ILIKE '%' || {{projectNo}} || '%']]",
+          "queryTimeoutSeconds": 30,
+          "maxRows": 2000,
+          "parameterBindings": [
+            {
+              "name": "dateFrom",
+              "variableKey": "dateFrom"
+            },
+            {
+              "name": "dateTo",
+              "variableKey": "dateTo"
+            },
+            {
+              "name": "deptId",
+              "variableKey": "deptId"
+            },
+            {
+              "name": "projectNo",
+              "variableKey": "projectNo"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "gpmc-quality-kpi-close-rate",
+      "type": "number-card",
+      "name": "质量问题闭环率",
+      "x": 972,
+      "y": 126,
+      "width": 440,
+      "height": 118,
+      "zIndex": 12,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "title": "质量问题闭环率",
+        "value": 0,
+        "suffix": "%",
+        "precision": 2,
+        "titleFontSize": 17,
+        "valueFontSize": 34,
+        "titleColor": "#8cb9df",
+        "valueColor": "#d9eeff",
+        "backgroundColor": "#ffffff"
+      },
+      "dataSource": {
+        "type": "sql",
+        "sqlConfig": {
+          "databaseId": "{{DATABASE_ID}}",
+          "query": "SELECT CASE WHEN SUM(s.new_issue_cnt)=0 THEN 0 ELSE ROUND(SUM(s.zero_completed_cnt)::numeric/NULLIF(SUM(s.new_issue_cnt),0)::numeric*100,2) END AS v FROM biz_dws_quality_monthly_v2 s WHERE s.period_month >= to_char({{dateFrom}}::date,'YYYY-MM') AND s.period_month <= to_char({{dateTo}}::date,'YYYY-MM') [[AND s.dept = {{deptId}}]] [[AND s.project_no ILIKE '%' || {{projectNo}} || '%']]",
+          "queryTimeoutSeconds": 30,
+          "maxRows": 2000,
+          "parameterBindings": [
+            {
+              "name": "dateFrom",
+              "variableKey": "dateFrom"
+            },
+            {
+              "name": "dateTo",
+              "variableKey": "dateTo"
+            },
+            {
+              "name": "deptId",
+              "variableKey": "deptId"
+            },
+            {
+              "name": "projectNo",
+              "variableKey": "projectNo"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "gpmc-quality-kpi-top1",
+      "type": "number-card",
+      "name": "TOP1质量问题数",
+      "x": 1436,
+      "y": 126,
+      "width": 440,
+      "height": 118,
+      "zIndex": 12,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "title": "TOP1质量问题数",
+        "value": 0,
+        "suffix": "",
+        "precision": 0,
+        "titleFontSize": 17,
+        "valueFontSize": 34,
+        "titleColor": "#8cb9df",
+        "valueColor": "#d9eeff",
+        "backgroundColor": "#ffffff"
+      },
+      "dataSource": {
+        "type": "sql",
+        "sqlConfig": {
+          "databaseId": "{{DATABASE_ID}}",
+          "query": "SELECT COALESCE(MAX(cnt),0) AS v FROM (SELECT s.project_no, SUM(s.new_issue_cnt) AS cnt FROM biz_dws_quality_monthly_v2 s WHERE s.period_month >= to_char({{dateFrom}}::date,'YYYY-MM') AND s.period_month <= to_char({{dateTo}}::date,'YYYY-MM') [[AND s.dept = {{deptId}}]] [[AND s.project_no ILIKE '%' || {{projectNo}} || '%']] GROUP BY s.project_no) t",
+          "queryTimeoutSeconds": 30,
+          "maxRows": 2000,
+          "parameterBindings": [
+            {
+              "name": "dateFrom",
+              "variableKey": "dateFrom"
+            },
+            {
+              "name": "dateTo",
+              "variableKey": "dateTo"
+            },
+            {
+              "name": "deptId",
+              "variableKey": "deptId"
+            },
+            {
+              "name": "projectNo",
+              "variableKey": "projectNo"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "gpmc-quality-project",
+      "type": "bar-chart",
+      "name": "项目质量问题",
+      "x": 48,
+      "y": 278,
+      "width": 912,
+      "height": 296,
+      "zIndex": 15,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "title": "项目质量问题（按问题总数排序）",
+        "xAxis": {
+          "type": "value",
+          "name": "数量"
+        },
+        "yAxis": {
+          "type": "category",
+          "name": "项目"
+        },
+        "stack": "total",
+        "orientation": "horizontal",
+        "legend": {
+          "show": true
+        },
+        "colors": [
+          "#8fa7c4",
+          "#2ee6a6",
+          "#ff5d73"
+        ],
+        "categoryKey": "项目编号",
+        "series": [
+          {
+            "name": "问题总数",
+            "dataKey": "问题总数",
+            "color": "#8fa7c4"
+          },
+          {
+            "name": "已归零",
+            "dataKey": "已归零",
+            "color": "#2ee6a6"
+          },
+          {
+            "name": "未归零",
+            "dataKey": "未归零",
+            "color": "#ff5d73"
+          }
+        ]
+      },
+      "dataSource": {
+        "type": "sql",
+        "sqlConfig": {
+          "databaseId": "{{DATABASE_ID}}",
+          "query": "SELECT s.project_no AS \"项目编号\", SUM(s.new_issue_cnt) AS \"问题总数\", SUM(s.zero_completed_cnt) AS \"已归零\", SUM(s.open_issue_cnt) AS \"未归零\" FROM biz_dws_quality_monthly_v2 s WHERE s.period_month >= to_char({{dateFrom}}::date,'YYYY-MM') AND s.period_month <= to_char({{dateTo}}::date,'YYYY-MM') [[AND s.dept = {{deptId}}]] [[AND s.project_no ILIKE '%' || {{projectNo}} || '%']] GROUP BY s.project_no ORDER BY SUM(s.new_issue_cnt) DESC LIMIT 12",
+          "queryTimeoutSeconds": 30,
+          "maxRows": 2000,
+          "parameterBindings": [
+            {
+              "name": "dateFrom",
+              "variableKey": "dateFrom"
+            },
+            {
+              "name": "dateTo",
+              "variableKey": "dateTo"
+            },
+            {
+              "name": "deptId",
+              "variableKey": "deptId"
+            },
+            {
+              "name": "projectNo",
+              "variableKey": "projectNo"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "gpmc-quality-dept",
+      "type": "bar-chart",
+      "name": "科室质量问题",
+      "x": 972,
+      "y": 278,
+      "width": 896,
+      "height": 296,
+      "zIndex": 15,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "title": "科室质量问题（按问题总数排序）",
+        "xAxis": {
+          "type": "category",
+          "name": "责任科室"
+        },
+        "yAxis": {
+          "type": "value",
+          "name": "数量"
+        },
+        "orientation": "vertical",
+        "legend": {
+          "show": true
+        },
+        "colors": [
+          "#8fa7c4",
+          "#2ee6a6",
+          "#ff5d73"
+        ],
+        "categoryKey": "责任科室",
+        "series": [
+          {
+            "name": "质量问题总数",
+            "dataKey": "质量问题总数",
+            "color": "#8fa7c4"
+          },
+          {
+            "name": "已归零",
+            "dataKey": "已归零",
+            "color": "#2ee6a6"
+          },
+          {
+            "name": "未归零",
+            "dataKey": "未归零",
+            "color": "#ff5d73"
+          }
+        ]
+      },
+      "dataSource": {
+        "type": "sql",
+        "sqlConfig": {
+          "databaseId": "{{DATABASE_ID}}",
+          "query": "SELECT s.dept AS \"责任科室\", SUM(s.new_issue_cnt) AS \"质量问题总数\", SUM(s.zero_completed_cnt) AS \"已归零\", SUM(s.open_issue_cnt) AS \"未归零\" FROM biz_dws_quality_monthly_v2 s WHERE s.period_month >= to_char({{dateFrom}}::date,'YYYY-MM') AND s.period_month <= to_char({{dateTo}}::date,'YYYY-MM') [[AND s.project_no ILIKE '%' || {{projectNo}} || '%']] AND s.dept IS NOT NULL GROUP BY s.dept ORDER BY SUM(s.new_issue_cnt) DESC LIMIT 12",
           "queryTimeoutSeconds": 30,
           "maxRows": 2000,
           "parameterBindings": [
@@ -957,175 +961,37 @@
     {
       "id": "gpmc-quality-category",
       "type": "pie-chart",
-      "name": "质量问题分类",
-      "x": 56,
-      "y": 288,
-      "width": 394,
-      "height": 320,
+      "name": "质量问题类别",
+      "x": 48,
+      "y": 586,
+      "width": 912,
+      "height": 250,
       "zIndex": 15,
       "locked": false,
       "visible": true,
       "config": {
-        "title": "质量问题分类",
-        "seriesColors": [
-          "#3b82ff",
-          "#27d8ff",
-          "#ff9f43",
+        "title": "质量问题类别（按原因分类）",
+        "legend": {
+          "show": true
+        },
+        "colors": [
+          "#45a4ff",
+          "#2ee6a6",
+          "#ffc645",
           "#ff5d73",
-          "#8a7dff"
-        ]
-      },
-      "dataSource": {
-        "type": "sql",
-        "sqlConfig": {
-          "databaseId": "{{DATABASE_ID}}",
-          "query": "SELECT SUM(s.new_issue_cnt) AS \"新增质量问题\", SUM(s.open_issue_cnt) AS \"现存质量问题\", SUM(s.zero_completed_cnt) AS \"归零合计\", SUM(s.no_zero_plan_cnt) AS \"未提交归零计划\", COUNT(DISTINCT s.project_no) AS \"问题项目数\", SUM(s.tech_zero_cnt) AS \"技术归零\", SUM(s.mgmt_zero_cnt) AS \"管理归零\", SUM(s.both_zero_cnt) AS \"双归零\", SUM(s.open_cat_design) AS \"设计\", SUM(s.open_cat_process) AS \"工艺\", SUM(s.open_cat_management) AS \"管理\", SUM(s.open_cat_component) AS \"元器件\", SUM(s.open_cat_operation) AS \"操作\", SUM(s.open_cat_outsource) AS \"外协外购\", SUM(s.open_cat_software) AS \"软件\", SUM(s.open_cat_other) AS \"其他\" FROM biz_dws_quality_monthly_v2 s WHERE s.period_month >= to_char({{dateFrom}}::date, 'YYYY-MM') AND s.period_month <= to_char({{dateTo}}::date, 'YYYY-MM') [[AND s.dept = {{deptId}}]] [[AND s.project_no ILIKE '%' || {{projectNo}} || '%']]",
-          "queryTimeoutSeconds": 30,
-          "maxRows": 2000,
-          "parameterBindings": [
-            {
-              "name": "dateFrom",
-              "variableKey": "dateFrom"
-            },
-            {
-              "name": "dateTo",
-              "variableKey": "dateTo"
-            },
-            {
-              "name": "deptId",
-              "variableKey": "deptId"
-            },
-            {
-              "name": "projectNo",
-              "variableKey": "projectNo"
-            }
-          ]
-        }
-      }
-    },
-    {
-      "id": "gpmc-quality-project-rank",
-      "type": "bar-chart",
-      "name": "项目质量问题排名",
-      "x": 468,
-      "y": 288,
-      "width": 408,
-      "height": 320,
-      "zIndex": 15,
-      "locked": false,
-      "visible": true,
-      "config": {
-        "title": "项目质量问题排名",
-        "xAxisData": [
-          "核心器件研发",
-          "新能源工厂",
-          "制造协同平台",
-          "数据治理工程"
-        ],
-        "series": [
-          {
-            "name": "问题数",
-            "data": [
-              14,
-              11,
-              9,
-              6
-            ]
-          }
-        ],
-        "seriesColors": [
-          "#3b82ff",
-          "#ff9f43",
-          "#2ee6a6"
-        ]
-      },
-      "actions": [],
-      "dataSource": {
-        "type": "sql",
-        "sqlConfig": {
-          "databaseId": "{{DATABASE_ID}}",
-          "query": "SELECT SUM(s.new_issue_cnt) AS \"新增质量问题\", SUM(s.open_issue_cnt) AS \"现存质量问题\", SUM(s.zero_completed_cnt) AS \"归零合计\", SUM(s.no_zero_plan_cnt) AS \"未提交归零计划\", COUNT(DISTINCT s.project_no) AS \"问题项目数\", SUM(s.tech_zero_cnt) AS \"技术归零\", SUM(s.mgmt_zero_cnt) AS \"管理归零\", SUM(s.both_zero_cnt) AS \"双归零\", SUM(s.open_cat_design) AS \"设计\", SUM(s.open_cat_process) AS \"工艺\", SUM(s.open_cat_management) AS \"管理\", SUM(s.open_cat_component) AS \"元器件\", SUM(s.open_cat_operation) AS \"操作\", SUM(s.open_cat_outsource) AS \"外协外购\", SUM(s.open_cat_software) AS \"软件\", SUM(s.open_cat_other) AS \"其他\" FROM biz_dws_quality_monthly_v2 s WHERE s.period_month >= to_char({{dateFrom}}::date, 'YYYY-MM') AND s.period_month <= to_char({{dateTo}}::date, 'YYYY-MM') [[AND s.dept = {{deptId}}]] [[AND s.project_no ILIKE '%' || {{projectNo}} || '%']]",
-          "queryTimeoutSeconds": 30,
-          "maxRows": 2000,
-          "parameterBindings": [
-            {
-              "name": "dateFrom",
-              "variableKey": "dateFrom"
-            },
-            {
-              "name": "dateTo",
-              "variableKey": "dateTo"
-            },
-            {
-              "name": "deptId",
-              "variableKey": "deptId"
-            },
-            {
-              "name": "projectNo",
-              "variableKey": "projectNo"
-            }
-          ]
-        }
-      }
-    },
-    {
-      "id": "gpmc-quality-close-trend",
-      "type": "line-chart",
-      "name": "质量闭环趋势",
-      "x": 934,
-      "y": 288,
-      "width": 428,
-      "height": 320,
-      "zIndex": 15,
-      "locked": false,
-      "visible": true,
-      "config": {
-        "title": "质量闭环趋势",
-        "xAxisData": [
-          "1月",
-          "2月",
-          "3月",
-          "4月",
-          "5月",
-          "6月"
-        ],
-        "series": [
-          {
-            "name": "新增问题",
-            "data": [
-              32,
-              28,
-              35,
-              22,
-              25,
-              23
-            ]
-          },
-          {
-            "name": "已闭环",
-            "data": [
-              28,
-              30,
-              25,
-              32,
-              24,
-              18
-            ]
-          }
-        ],
-        "lineSmooth": true,
-        "areaStyle": true,
-        "seriesColors": [
-          "#3b82ff",
+          "#a978ff",
           "#27d8ff",
-          "#ff9f43"
-        ]
+          "#ff8f45",
+          "#8fa7c4"
+        ],
+        "categoryKey": "类别",
+        "valueKey": "数量"
       },
       "dataSource": {
         "type": "sql",
         "sqlConfig": {
           "databaseId": "{{DATABASE_ID}}",
-          "query": "SELECT s.period_month AS \"月份\", SUM(s.new_issue_cnt) AS \"新增问题\", SUM(s.zero_completed_cnt) AS \"归零完成\", SUM(s.open_issue_cnt) AS \"现存问题\" FROM biz_dws_quality_monthly_v2 s WHERE s.period_month >= to_char({{dateFrom}}::date, 'YYYY-MM') AND s.period_month <= to_char({{dateTo}}::date, 'YYYY-MM') [[AND s.dept = {{deptId}}]] [[AND s.project_no ILIKE '%' || {{projectNo}} || '%']] GROUP BY s.period_month ORDER BY s.period_month",
+          "query": "SELECT v.\"类别\", v.\"数量\" FROM (SELECT '设计' AS \"类别\", SUM(s.open_cat_design) AS \"数量\" FROM biz_dws_quality_monthly_v2 s WHERE s.period_month >= to_char({{dateFrom}}::date,'YYYY-MM') AND s.period_month <= to_char({{dateTo}}::date,'YYYY-MM') [[AND s.dept = {{deptId}}]] [[AND s.project_no ILIKE '%' || {{projectNo}} || '%']] UNION ALL SELECT '工艺', SUM(s.open_cat_process) FROM biz_dws_quality_monthly_v2 s WHERE s.period_month >= to_char({{dateFrom}}::date,'YYYY-MM') AND s.period_month <= to_char({{dateTo}}::date,'YYYY-MM') [[AND s.dept = {{deptId}}]] [[AND s.project_no ILIKE '%' || {{projectNo}} || '%']] UNION ALL SELECT '管理', SUM(s.open_cat_management) FROM biz_dws_quality_monthly_v2 s WHERE s.period_month >= to_char({{dateFrom}}::date,'YYYY-MM') AND s.period_month <= to_char({{dateTo}}::date,'YYYY-MM') [[AND s.dept = {{deptId}}]] [[AND s.project_no ILIKE '%' || {{projectNo}} || '%']] UNION ALL SELECT '元器件', SUM(s.open_cat_component) FROM biz_dws_quality_monthly_v2 s WHERE s.period_month >= to_char({{dateFrom}}::date,'YYYY-MM') AND s.period_month <= to_char({{dateTo}}::date,'YYYY-MM') [[AND s.dept = {{deptId}}]] [[AND s.project_no ILIKE '%' || {{projectNo}} || '%']] UNION ALL SELECT '操作', SUM(s.open_cat_operation) FROM biz_dws_quality_monthly_v2 s WHERE s.period_month >= to_char({{dateFrom}}::date,'YYYY-MM') AND s.period_month <= to_char({{dateTo}}::date,'YYYY-MM') [[AND s.dept = {{deptId}}]] [[AND s.project_no ILIKE '%' || {{projectNo}} || '%']] UNION ALL SELECT '外协外购', SUM(s.open_cat_outsource) FROM biz_dws_quality_monthly_v2 s WHERE s.period_month >= to_char({{dateFrom}}::date,'YYYY-MM') AND s.period_month <= to_char({{dateTo}}::date,'YYYY-MM') [[AND s.dept = {{deptId}}]] [[AND s.project_no ILIKE '%' || {{projectNo}} || '%']] UNION ALL SELECT '软件', SUM(s.open_cat_software) FROM biz_dws_quality_monthly_v2 s WHERE s.period_month >= to_char({{dateFrom}}::date,'YYYY-MM') AND s.period_month <= to_char({{dateTo}}::date,'YYYY-MM') [[AND s.dept = {{deptId}}]] [[AND s.project_no ILIKE '%' || {{projectNo}} || '%']] UNION ALL SELECT '其他', SUM(s.open_cat_other) FROM biz_dws_quality_monthly_v2 s WHERE s.period_month >= to_char({{dateFrom}}::date,'YYYY-MM') AND s.period_month <= to_char({{dateTo}}::date,'YYYY-MM') [[AND s.dept = {{deptId}}]] [[AND s.project_no ILIKE '%' || {{projectNo}} || '%']]) v WHERE v.\"数量\" > 0",
           "queryTimeoutSeconds": 30,
           "maxRows": 2000,
           "parameterBindings": [
@@ -1150,44 +1016,46 @@
       }
     },
     {
-      "id": "gpmc-quality-measures",
-      "type": "table",
-      "name": "质量问题与跟进措施摘要",
-      "x": 1380,
-      "y": 288,
-      "width": 484,
-      "height": 320,
+      "id": "gpmc-quality-trend",
+      "type": "line-chart",
+      "name": "月度质量问题趋势",
+      "x": 972,
+      "y": 586,
+      "width": 896,
+      "height": 250,
       "zIndex": 15,
       "locked": false,
       "visible": true,
       "config": {
-        "title": "质量问题与跟进措施摘要",
-        "header": [
-          "项目",
-          "问题",
-          "状态",
-          "建议措施"
+        "title": "月度质量问题趋势（近12月·日期筛选无效）",
+        "xAxis": {
+          "type": "category",
+          "name": "月份"
+        },
+        "yAxis": {
+          "type": "value",
+          "name": "质量问题总数"
+        },
+        "legend": {
+          "show": false
+        },
+        "colors": [
+          "#45a4ff"
         ],
-        "fontSize": 16,
-        "headerAlign": "center",
-        "headerColor": "#d9eeff",
-        "headerBackground": "#0f2a55",
-        "bodyColor": "#8cb9df",
-        "bodyBackground": "#ffffff",
-        "oddRowBackground": "#ffffff",
-        "evenRowBackground": "#081c3f",
-        "borderColor": "rgba(69, 164, 255, 0.38)",
-        "enableSort": true,
-        "enablePagination": true,
-        "pageSize": 6,
-        "freezeHeader": true
+        "categoryKey": "月份",
+        "series": [
+          {
+            "name": "质量问题总数",
+            "dataKey": "质量问题总数",
+            "color": "#45a4ff"
+          }
+        ]
       },
-      "actions": [],
       "dataSource": {
         "type": "sql",
         "sqlConfig": {
           "databaseId": "{{DATABASE_ID}}",
-          "query": "SELECT project_no AS \"项目编号\", issue_name AS \"问题名称\", dept AS \"责任单位\", issue_category AS \"原因分类\", status AS \"状态\", issue_date AS \"发生时间\", zero_complete_date AS \"归零时间\", current_progress AS \"当前进展\", pending_days AS \"滞留天数\", CASE WHEN has_zero_plan THEN '是' ELSE '否' END AS \"有归零计划\" FROM biz_dwd_quality_issue_v2 WHERE issue_month >= to_char({{dateFrom}}::date, 'YYYY-MM') AND issue_month <= to_char({{dateTo}}::date, 'YYYY-MM') [[AND dept = {{deptId}}]] [[AND project_no ILIKE '%' || {{projectNo}} || '%']] ORDER BY pending_days DESC",
+          "query": "SELECT s.period_month AS \"月份\", SUM(s.new_issue_cnt) AS \"质量问题总数\" FROM biz_dws_quality_monthly_v2 s WHERE s.period_month >= to_char(current_date - INTERVAL '11 months','YYYY-MM') [[AND s.dept = {{deptId}}]] [[AND s.project_no ILIKE '%' || {{projectNo}} || '%']] GROUP BY s.period_month ORDER BY s.period_month",
           "queryTimeoutSeconds": 30,
           "maxRows": 2000,
           "parameterBindings": [
@@ -1215,42 +1083,79 @@
       "id": "gpmc-quality-detail",
       "type": "table",
       "name": "质量问题清单",
-      "x": 56,
-      "y": 666,
-      "width": 1808,
-      "height": 320,
+      "x": 36,
+      "y": 848,
+      "width": 1848,
+      "height": 208,
       "zIndex": 15,
       "locked": false,
       "visible": true,
       "config": {
-        "title": "质量问题清单",
-        "header": [
-          "项目",
-          "问题",
-          "分类",
-          "状态",
-          "滞留天数"
+        "title": "质量问题清单（按提出时间倒序）",
+        "columns": [
+          {
+            "key": "项目编号",
+            "title": "项目编号",
+            "width": 110
+          },
+          {
+            "key": "分系统/分任务",
+            "title": "分系统/分任务",
+            "width": 150
+          },
+          {
+            "key": "问题名称",
+            "title": "问题名称",
+            "width": 240
+          },
+          {
+            "key": "责任单位",
+            "title": "责任单位",
+            "width": 140
+          },
+          {
+            "key": "团队及负责人",
+            "title": "团队及负责人",
+            "width": 160
+          },
+          {
+            "key": "责任单位领导",
+            "title": "责任单位领导",
+            "width": 130
+          },
+          {
+            "key": "质量问题发生时间",
+            "title": "发生时间",
+            "width": 110
+          },
+          {
+            "key": "原因分类",
+            "title": "原因分类",
+            "width": 110
+          },
+          {
+            "key": "状态",
+            "title": "状态",
+            "width": 110
+          },
+          {
+            "key": "归零完成时间",
+            "title": "归零完成时间",
+            "width": 120
+          }
         ],
-        "fontSize": 16,
-        "headerAlign": "center",
+        "pageSize": 20,
+        "showHeader": true,
         "headerColor": "#d9eeff",
-        "headerBackground": "#0f2a55",
-        "bodyColor": "#8cb9df",
-        "bodyBackground": "#ffffff",
-        "oddRowBackground": "#ffffff",
-        "evenRowBackground": "#081c3f",
-        "borderColor": "rgba(69, 164, 255, 0.38)",
-        "enableSort": true,
-        "enablePagination": true,
-        "pageSize": 6,
-        "freezeHeader": true
+        "rowColor": "#c9d4e4",
+        "stripeColor": "rgba(88,180,255,0.08)",
+        "backgroundColor": "rgba(9,36,90,0.50)"
       },
-      "actions": [],
       "dataSource": {
         "type": "sql",
         "sqlConfig": {
           "databaseId": "{{DATABASE_ID}}",
-          "query": "SELECT project_no AS \"项目编号\", issue_name AS \"问题名称\", dept AS \"责任单位\", issue_category AS \"原因分类\", status AS \"状态\", issue_date AS \"发生时间\", zero_complete_date AS \"归零时间\", current_progress AS \"当前进展\", pending_days AS \"滞留天数\", CASE WHEN has_zero_plan THEN '是' ELSE '否' END AS \"有归零计划\" FROM biz_dwd_quality_issue_v2 WHERE issue_month >= to_char({{dateFrom}}::date, 'YYYY-MM') AND issue_month <= to_char({{dateTo}}::date, 'YYYY-MM') [[AND dept = {{deptId}}]] [[AND project_no ILIKE '%' || {{projectNo}} || '%']] ORDER BY pending_days DESC",
+          "query": "SELECT d.project_no AS \"项目编号\", COALESCE(d.subsystem,'') AS \"分系统/分任务\", d.issue_name AS \"问题名称\", d.dept AS \"责任单位\", COALESCE(d.team_leader,'') AS \"团队及负责人\", COALESCE(d.dept_leader,'') AS \"责任单位领导\", to_char(d.issue_date,'YYYY-MM-DD') AS \"质量问题发生时间\", COALESCE(d.issue_category,'-') AS \"原因分类\", COALESCE(d.status,'-') AS \"状态\", to_char(d.zero_complete_date,'YYYY-MM-DD') AS \"归零完成时间\" FROM biz_dwd_quality_issue_v2 d WHERE to_char(d.issue_date,'YYYY-MM') >= to_char({{dateFrom}}::date,'YYYY-MM') AND to_char(d.issue_date,'YYYY-MM') <= to_char({{dateTo}}::date,'YYYY-MM') [[AND d.dept = {{deptId}}]] [[AND d.project_no ILIKE '%' || {{projectNo}} || '%']] ORDER BY d.issue_date DESC LIMIT 500",
           "queryTimeoutSeconds": 30,
           "maxRows": 2000,
           "parameterBindings": [
@@ -1272,6 +1177,44 @@
             }
           ]
         }
+      }
+    },
+    {
+      "id": "gpmc-quality-mid2-left",
+      "type": "shape",
+      "name": "gpmc-quality-mid2-left",
+      "x": 36,
+      "y": 576,
+      "width": 936,
+      "height": 254,
+      "zIndex": 1,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "shapeType": "rect",
+        "fillColor": "rgba(9, 36, 90, 0.82)",
+        "borderColor": "rgba(69, 164, 255, 0.38)",
+        "borderWidth": 1,
+        "radius": 18
+      }
+    },
+    {
+      "id": "gpmc-quality-mid2-right",
+      "type": "shape",
+      "name": "gpmc-quality-mid2-right",
+      "x": 984,
+      "y": 576,
+      "width": 900,
+      "height": 254,
+      "zIndex": 1,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "shapeType": "rect",
+        "fillColor": "rgba(9, 36, 90, 0.82)",
+        "borderColor": "rgba(69, 164, 255, 0.38)",
+        "borderWidth": 1,
+        "radius": 18
       }
     }
   ]

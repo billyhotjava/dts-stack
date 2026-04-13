@@ -65,8 +65,8 @@
       "name": "gpmc-risk-left",
       "x": 36,
       "y": 268,
-      "width": 860,
-      "height": 360,
+      "width": 936,
+      "height": 316,
       "zIndex": 1,
       "locked": false,
       "visible": true,
@@ -82,10 +82,10 @@
       "id": "gpmc-risk-right",
       "type": "shape",
       "name": "gpmc-risk-right",
-      "x": 914,
+      "x": 984,
       "y": 268,
-      "width": 970,
-      "height": 360,
+      "width": 900,
+      "height": 316,
       "zIndex": 1,
       "locked": false,
       "visible": true,
@@ -102,9 +102,9 @@
       "type": "shape",
       "name": "gpmc-risk-bottom",
       "x": 36,
-      "y": 646,
+      "y": 838,
       "width": 1848,
-      "height": 360,
+      "height": 220,
       "zIndex": 1,
       "locked": false,
       "visible": true,
@@ -607,16 +607,16 @@
       "id": "gpmc-risk-kpi-total",
       "type": "number-card",
       "name": "风险总数",
-      "x": 58,
+      "x": 44,
       "y": 126,
-      "width": 260,
+      "width": 350,
       "height": 118,
       "zIndex": 12,
       "locked": false,
       "visible": true,
       "config": {
         "title": "风险总数",
-        "value": 89,
+        "value": 0,
         "suffix": "",
         "precision": 0,
         "titleFontSize": 17,
@@ -629,7 +629,7 @@
         "type": "sql",
         "sqlConfig": {
           "databaseId": "{{DATABASE_ID}}",
-          "query": "SELECT COUNT(DISTINCT s.project_no) AS \"预警项目数\", SUM(s.total_risk_cnt) AS \"风险总数\", SUM(s.high_cnt) AS \"高风险\", SUM(s.mid_cnt) AS \"中风险\", SUM(s.low_cnt) AS \"低风险\", SUM(s.released_cnt) AS \"已释放\", SUM(s.open_cnt) AS \"未释放\", CASE WHEN SUM(s.total_risk_cnt)=0 THEN 0 ELSE ROUND(SUM(s.released_cnt)::numeric/SUM(s.total_risk_cnt)::numeric*100,2) END AS \"释放率\" FROM biz_dws_risk_monthly_v2 s WHERE s.period_month >= to_char({{dateFrom}}::date, 'YYYY-MM') AND s.period_month <= to_char({{dateTo}}::date, 'YYYY-MM') [[AND s.dept = {{deptId}}]] [[AND s.project_no ILIKE '%' || {{projectNo}} || '%']]",
+          "query": "SELECT COALESCE(SUM(s.total_risk_cnt),0) AS v FROM biz_dws_risk_monthly_v2 s WHERE s.period_month >= to_char({{dateFrom}}::date,'YYYY-MM') AND s.period_month <= to_char({{dateTo}}::date,'YYYY-MM') [[AND s.dept = {{deptId}}]] [[AND s.project_no ILIKE '%' || {{projectNo}} || '%']]",
           "queryTimeoutSeconds": 30,
           "maxRows": 2000,
           "parameterBindings": [
@@ -648,6 +648,10 @@
             {
               "name": "projectNo",
               "variableKey": "projectNo"
+            },
+            {
+              "name": "riskLevel",
+              "variableKey": "riskLevel"
             }
           ]
         }
@@ -656,30 +660,30 @@
     {
       "id": "gpmc-risk-kpi-high",
       "type": "number-card",
-      "name": "高风险",
-      "x": 332,
+      "name": "高风险数",
+      "x": 414,
       "y": 126,
-      "width": 260,
+      "width": 350,
       "height": 118,
       "zIndex": 12,
       "locked": false,
       "visible": true,
       "config": {
-        "title": "高风险",
-        "value": 14,
+        "title": "高风险数",
+        "value": 0,
         "suffix": "",
         "precision": 0,
         "titleFontSize": 17,
         "valueFontSize": 34,
         "titleColor": "#8cb9df",
-        "valueColor": "#ff5d73",
+        "valueColor": "#d9eeff",
         "backgroundColor": "#ffffff"
       },
       "dataSource": {
         "type": "sql",
         "sqlConfig": {
           "databaseId": "{{DATABASE_ID}}",
-          "query": "SELECT COUNT(DISTINCT s.project_no) AS \"预警项目数\", SUM(s.total_risk_cnt) AS \"风险总数\", SUM(s.high_cnt) AS \"高风险\", SUM(s.mid_cnt) AS \"中风险\", SUM(s.low_cnt) AS \"低风险\", SUM(s.released_cnt) AS \"已释放\", SUM(s.open_cnt) AS \"未释放\", CASE WHEN SUM(s.total_risk_cnt)=0 THEN 0 ELSE ROUND(SUM(s.released_cnt)::numeric/SUM(s.total_risk_cnt)::numeric*100,2) END AS \"释放率\" FROM biz_dws_risk_monthly_v2 s WHERE s.period_month >= to_char({{dateFrom}}::date, 'YYYY-MM') AND s.period_month <= to_char({{dateTo}}::date, 'YYYY-MM') [[AND s.dept = {{deptId}}]] [[AND s.project_no ILIKE '%' || {{projectNo}} || '%']]",
+          "query": "SELECT COALESCE(SUM(s.high_cnt),0) AS v FROM biz_dws_risk_monthly_v2 s WHERE s.period_month >= to_char({{dateFrom}}::date,'YYYY-MM') AND s.period_month <= to_char({{dateTo}}::date,'YYYY-MM') [[AND s.dept = {{deptId}}]] [[AND s.project_no ILIKE '%' || {{projectNo}} || '%']]",
           "queryTimeoutSeconds": 30,
           "maxRows": 2000,
           "parameterBindings": [
@@ -698,6 +702,10 @@
             {
               "name": "projectNo",
               "variableKey": "projectNo"
+            },
+            {
+              "name": "riskLevel",
+              "variableKey": "riskLevel"
             }
           ]
         }
@@ -706,30 +714,30 @@
     {
       "id": "gpmc-risk-kpi-mid",
       "type": "number-card",
-      "name": "中风险",
-      "x": 606,
+      "name": "中风险数",
+      "x": 784,
       "y": 126,
-      "width": 260,
+      "width": 350,
       "height": 118,
       "zIndex": 12,
       "locked": false,
       "visible": true,
       "config": {
-        "title": "中风险",
-        "value": 31,
+        "title": "中风险数",
+        "value": 0,
         "suffix": "",
         "precision": 0,
         "titleFontSize": 17,
         "valueFontSize": 34,
         "titleColor": "#8cb9df",
-        "valueColor": "#ff9f43",
+        "valueColor": "#d9eeff",
         "backgroundColor": "#ffffff"
       },
       "dataSource": {
         "type": "sql",
         "sqlConfig": {
           "databaseId": "{{DATABASE_ID}}",
-          "query": "SELECT COUNT(DISTINCT s.project_no) AS \"预警项目数\", SUM(s.total_risk_cnt) AS \"风险总数\", SUM(s.high_cnt) AS \"高风险\", SUM(s.mid_cnt) AS \"中风险\", SUM(s.low_cnt) AS \"低风险\", SUM(s.released_cnt) AS \"已释放\", SUM(s.open_cnt) AS \"未释放\", CASE WHEN SUM(s.total_risk_cnt)=0 THEN 0 ELSE ROUND(SUM(s.released_cnt)::numeric/SUM(s.total_risk_cnt)::numeric*100,2) END AS \"释放率\" FROM biz_dws_risk_monthly_v2 s WHERE s.period_month >= to_char({{dateFrom}}::date, 'YYYY-MM') AND s.period_month <= to_char({{dateTo}}::date, 'YYYY-MM') [[AND s.dept = {{deptId}}]] [[AND s.project_no ILIKE '%' || {{projectNo}} || '%']]",
+          "query": "SELECT COALESCE(SUM(s.mid_cnt),0) AS v FROM biz_dws_risk_monthly_v2 s WHERE s.period_month >= to_char({{dateFrom}}::date,'YYYY-MM') AND s.period_month <= to_char({{dateTo}}::date,'YYYY-MM') [[AND s.dept = {{deptId}}]] [[AND s.project_no ILIKE '%' || {{projectNo}} || '%']]",
           "queryTimeoutSeconds": 30,
           "maxRows": 2000,
           "parameterBindings": [
@@ -748,188 +756,42 @@
             {
               "name": "projectNo",
               "variableKey": "projectNo"
+            },
+            {
+              "name": "riskLevel",
+              "variableKey": "riskLevel"
             }
           ]
         }
       }
     },
     {
-      "id": "gpmc-risk-kpi-close",
+      "id": "gpmc-risk-kpi-open",
       "type": "number-card",
-      "name": "风险闭环率",
-      "x": 880,
-      "y": 126,
-      "width": 260,
-      "height": 118,
-      "zIndex": 12,
-      "locked": false,
-      "visible": true,
-      "config": {
-        "title": "风险闭环率",
-        "value": 62.4,
-        "suffix": "%",
-        "precision": 1,
-        "titleFontSize": 17,
-        "valueFontSize": 34,
-        "titleColor": "#8cb9df",
-        "valueColor": "#2ee6a6",
-        "backgroundColor": "#ffffff"
-      },
-      "dataSource": {
-        "type": "sql",
-        "sqlConfig": {
-          "databaseId": "{{DATABASE_ID}}",
-          "query": "SELECT COUNT(DISTINCT s.project_no) AS \"预警项目数\", SUM(s.total_risk_cnt) AS \"风险总数\", SUM(s.high_cnt) AS \"高风险\", SUM(s.mid_cnt) AS \"中风险\", SUM(s.low_cnt) AS \"低风险\", SUM(s.released_cnt) AS \"已释放\", SUM(s.open_cnt) AS \"未释放\", CASE WHEN SUM(s.total_risk_cnt)=0 THEN 0 ELSE ROUND(SUM(s.released_cnt)::numeric/SUM(s.total_risk_cnt)::numeric*100,2) END AS \"释放率\" FROM biz_dws_risk_monthly_v2 s WHERE s.period_month >= to_char({{dateFrom}}::date, 'YYYY-MM') AND s.period_month <= to_char({{dateTo}}::date, 'YYYY-MM') [[AND s.dept = {{deptId}}]] [[AND s.project_no ILIKE '%' || {{projectNo}} || '%']]",
-          "queryTimeoutSeconds": 30,
-          "maxRows": 2000,
-          "parameterBindings": [
-            {
-              "name": "dateFrom",
-              "variableKey": "dateFrom"
-            },
-            {
-              "name": "dateTo",
-              "variableKey": "dateTo"
-            },
-            {
-              "name": "deptId",
-              "variableKey": "deptId"
-            },
-            {
-              "name": "projectNo",
-              "variableKey": "projectNo"
-            }
-          ]
-        }
-      }
-    },
-    {
-      "id": "gpmc-risk-kpi-freq",
-      "type": "number-card",
-      "name": "未释放数",
+      "name": "未释放风险数",
       "x": 1154,
       "y": 126,
-      "width": 260,
+      "width": 350,
       "height": 118,
       "zIndex": 12,
       "locked": false,
       "visible": true,
       "config": {
-        "title": "未释放数",
-        "value": 3.2,
-        "suffix": " 次/周",
-        "precision": 1,
-        "titleFontSize": 17,
-        "valueFontSize": 34,
-        "titleColor": "#8cb9df",
-        "valueColor": "#27d8ff",
-        "backgroundColor": "#ffffff"
-      },
-      "dataSource": {
-        "type": "sql",
-        "sqlConfig": {
-          "databaseId": "{{DATABASE_ID}}",
-          "query": "SELECT COUNT(DISTINCT s.project_no) AS \"预警项目数\", SUM(s.total_risk_cnt) AS \"风险总数\", SUM(s.high_cnt) AS \"高风险\", SUM(s.mid_cnt) AS \"中风险\", SUM(s.low_cnt) AS \"低风险\", SUM(s.released_cnt) AS \"已释放\", SUM(s.open_cnt) AS \"未释放\", CASE WHEN SUM(s.total_risk_cnt)=0 THEN 0 ELSE ROUND(SUM(s.released_cnt)::numeric/SUM(s.total_risk_cnt)::numeric*100,2) END AS \"释放率\" FROM biz_dws_risk_monthly_v2 s WHERE s.period_month >= to_char({{dateFrom}}::date, 'YYYY-MM') AND s.period_month <= to_char({{dateTo}}::date, 'YYYY-MM') [[AND s.dept = {{deptId}}]] [[AND s.project_no ILIKE '%' || {{projectNo}} || '%']]",
-          "queryTimeoutSeconds": 30,
-          "maxRows": 2000,
-          "parameterBindings": [
-            {
-              "name": "dateFrom",
-              "variableKey": "dateFrom"
-            },
-            {
-              "name": "dateTo",
-              "variableKey": "dateTo"
-            },
-            {
-              "name": "deptId",
-              "variableKey": "deptId"
-            },
-            {
-              "name": "projectNo",
-              "variableKey": "projectNo"
-            }
-          ]
-        }
-      }
-    },
-    {
-      "id": "gpmc-risk-kpi-days",
-      "type": "number-card",
-      "name": "低风险",
-      "x": 1428,
-      "y": 126,
-      "width": 260,
-      "height": 118,
-      "zIndex": 12,
-      "locked": false,
-      "visible": true,
-      "config": {
-        "title": "低风险",
-        "value": 18.5,
-        "suffix": " 天",
-        "precision": 1,
-        "titleFontSize": 17,
-        "valueFontSize": 34,
-        "titleColor": "#8cb9df",
-        "valueColor": "#ff9f43",
-        "backgroundColor": "#ffffff"
-      },
-      "dataSource": {
-        "type": "sql",
-        "sqlConfig": {
-          "databaseId": "{{DATABASE_ID}}",
-          "query": "SELECT COUNT(DISTINCT s.project_no) AS \"预警项目数\", SUM(s.total_risk_cnt) AS \"风险总数\", SUM(s.high_cnt) AS \"高风险\", SUM(s.mid_cnt) AS \"中风险\", SUM(s.low_cnt) AS \"低风险\", SUM(s.released_cnt) AS \"已释放\", SUM(s.open_cnt) AS \"未释放\", CASE WHEN SUM(s.total_risk_cnt)=0 THEN 0 ELSE ROUND(SUM(s.released_cnt)::numeric/SUM(s.total_risk_cnt)::numeric*100,2) END AS \"释放率\" FROM biz_dws_risk_monthly_v2 s WHERE s.period_month >= to_char({{dateFrom}}::date, 'YYYY-MM') AND s.period_month <= to_char({{dateTo}}::date, 'YYYY-MM') [[AND s.dept = {{deptId}}]] [[AND s.project_no ILIKE '%' || {{projectNo}} || '%']]",
-          "queryTimeoutSeconds": 30,
-          "maxRows": 2000,
-          "parameterBindings": [
-            {
-              "name": "dateFrom",
-              "variableKey": "dateFrom"
-            },
-            {
-              "name": "dateTo",
-              "variableKey": "dateTo"
-            },
-            {
-              "name": "deptId",
-              "variableKey": "deptId"
-            },
-            {
-              "name": "projectNo",
-              "variableKey": "projectNo"
-            }
-          ]
-        }
-      }
-    },
-    {
-      "id": "gpmc-risk-kpi-alert",
-      "type": "number-card",
-      "name": "预警项目数",
-      "x": 1702,
-      "y": 126,
-      "width": 166,
-      "height": 118,
-      "zIndex": 12,
-      "locked": false,
-      "visible": true,
-      "config": {
-        "title": "预警项目数",
-        "value": 12,
+        "title": "未释放风险数",
+        "value": 0,
         "suffix": "",
         "precision": 0,
         "titleFontSize": 17,
         "valueFontSize": 34,
         "titleColor": "#8cb9df",
-        "valueColor": "#ff5d73",
+        "valueColor": "#d9eeff",
         "backgroundColor": "#ffffff"
       },
       "dataSource": {
         "type": "sql",
         "sqlConfig": {
           "databaseId": "{{DATABASE_ID}}",
-          "query": "SELECT COUNT(DISTINCT s.project_no) AS \"预警项目数\", SUM(s.total_risk_cnt) AS \"风险总数\", SUM(s.high_cnt) AS \"高风险\", SUM(s.mid_cnt) AS \"中风险\", SUM(s.low_cnt) AS \"低风险\", SUM(s.released_cnt) AS \"已释放\", SUM(s.open_cnt) AS \"未释放\", CASE WHEN SUM(s.total_risk_cnt)=0 THEN 0 ELSE ROUND(SUM(s.released_cnt)::numeric/SUM(s.total_risk_cnt)::numeric*100,2) END AS \"释放率\" FROM biz_dws_risk_monthly_v2 s WHERE s.period_month >= to_char({{dateFrom}}::date, 'YYYY-MM') AND s.period_month <= to_char({{dateTo}}::date, 'YYYY-MM') [[AND s.dept = {{deptId}}]] [[AND s.project_no ILIKE '%' || {{projectNo}} || '%']]",
+          "query": "SELECT COALESCE(SUM(s.open_cnt),0) AS v FROM biz_dws_risk_monthly_v2 s WHERE s.period_month >= to_char({{dateFrom}}::date,'YYYY-MM') AND s.period_month <= to_char({{dateTo}}::date,'YYYY-MM') [[AND s.dept = {{deptId}}]] [[AND s.project_no ILIKE '%' || {{projectNo}} || '%']]",
           "queryTimeoutSeconds": 30,
           "maxRows": 2000,
           "parameterBindings": [
@@ -948,57 +810,123 @@
             {
               "name": "projectNo",
               "variableKey": "projectNo"
+            },
+            {
+              "name": "riskLevel",
+              "variableKey": "riskLevel"
             }
           ]
         }
       }
     },
     {
-      "id": "gpmc-risk-matrix",
+      "id": "gpmc-risk-kpi-release-rate",
+      "type": "number-card",
+      "name": "风险释放率",
+      "x": 1524,
+      "y": 126,
+      "width": 350,
+      "height": 118,
+      "zIndex": 12,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "title": "风险释放率",
+        "value": 0,
+        "suffix": "%",
+        "precision": 2,
+        "titleFontSize": 17,
+        "valueFontSize": 34,
+        "titleColor": "#8cb9df",
+        "valueColor": "#d9eeff",
+        "backgroundColor": "#ffffff"
+      },
+      "dataSource": {
+        "type": "sql",
+        "sqlConfig": {
+          "databaseId": "{{DATABASE_ID}}",
+          "query": "SELECT CASE WHEN SUM(s.total_risk_cnt)=0 THEN 0 ELSE ROUND(SUM(s.released_cnt)::numeric/NULLIF(SUM(s.total_risk_cnt),0)::numeric*100,2) END AS v FROM biz_dws_risk_monthly_v2 s WHERE s.period_month >= to_char({{dateFrom}}::date,'YYYY-MM') AND s.period_month <= to_char({{dateTo}}::date,'YYYY-MM') [[AND s.dept = {{deptId}}]] [[AND s.project_no ILIKE '%' || {{projectNo}} || '%']]",
+          "queryTimeoutSeconds": 30,
+          "maxRows": 2000,
+          "parameterBindings": [
+            {
+              "name": "dateFrom",
+              "variableKey": "dateFrom"
+            },
+            {
+              "name": "dateTo",
+              "variableKey": "dateTo"
+            },
+            {
+              "name": "deptId",
+              "variableKey": "deptId"
+            },
+            {
+              "name": "projectNo",
+              "variableKey": "projectNo"
+            },
+            {
+              "name": "riskLevel",
+              "variableKey": "riskLevel"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "gpmc-risk-project",
       "type": "bar-chart",
-      "name": "风险等级分布",
-      "x": 56,
-      "y": 288,
-      "width": 860,
-      "height": 320,
+      "name": "项目风险统计",
+      "x": 48,
+      "y": 278,
+      "width": 912,
+      "height": 296,
       "zIndex": 15,
       "locked": false,
       "visible": true,
       "config": {
-        "title": "风险等级分布",
-        "xAxisData": [
-          "高×高",
-          "高×中",
-          "中×高",
-          "中×中",
-          "低×中",
-          "低×低"
+        "title": "项目风险统计（按风险总数排序）",
+        "xAxis": {
+          "type": "value",
+          "name": "数量"
+        },
+        "yAxis": {
+          "type": "category",
+          "name": "项目"
+        },
+        "orientation": "horizontal",
+        "legend": {
+          "show": true
+        },
+        "colors": [
+          "#8fa7c4",
+          "#ff5d73",
+          "#ffc645"
         ],
+        "categoryKey": "项目编号",
         "series": [
           {
-            "name": "风险数",
-            "data": [
-              4,
-              6,
-              5,
-              12,
-              10,
-              15
-            ]
+            "name": "风险总数",
+            "dataKey": "风险总数",
+            "color": "#8fa7c4"
+          },
+          {
+            "name": "高风险数",
+            "dataKey": "高风险数",
+            "color": "#ff5d73"
+          },
+          {
+            "name": "未释放风险数",
+            "dataKey": "未释放风险数",
+            "color": "#ffc645"
           }
-        ],
-        "seriesColors": [
-          "#3b82ff",
-          "#ff9f43",
-          "#2ee6a6"
         ]
       },
-      "actions": [],
       "dataSource": {
         "type": "sql",
         "sqlConfig": {
           "databaseId": "{{DATABASE_ID}}",
-          "query": "SELECT COUNT(DISTINCT s.project_no) AS \"预警项目数\", SUM(s.total_risk_cnt) AS \"风险总数\", SUM(s.high_cnt) AS \"高风险\", SUM(s.mid_cnt) AS \"中风险\", SUM(s.low_cnt) AS \"低风险\", SUM(s.released_cnt) AS \"已释放\", SUM(s.open_cnt) AS \"未释放\", CASE WHEN SUM(s.total_risk_cnt)=0 THEN 0 ELSE ROUND(SUM(s.released_cnt)::numeric/SUM(s.total_risk_cnt)::numeric*100,2) END AS \"释放率\" FROM biz_dws_risk_monthly_v2 s WHERE s.period_month >= to_char({{dateFrom}}::date, 'YYYY-MM') AND s.period_month <= to_char({{dateTo}}::date, 'YYYY-MM') [[AND s.dept = {{deptId}}]] [[AND s.project_no ILIKE '%' || {{projectNo}} || '%']]",
+          "query": "SELECT s.project_no AS \"项目编号\", SUM(s.total_risk_cnt) AS \"风险总数\", SUM(s.high_cnt) AS \"高风险数\", SUM(s.open_cnt) AS \"未释放风险数\" FROM biz_dws_risk_monthly_v2 s WHERE s.period_month >= to_char({{dateFrom}}::date,'YYYY-MM') AND s.period_month <= to_char({{dateTo}}::date,'YYYY-MM') [[AND s.dept = {{deptId}}]] [[AND s.project_no ILIKE '%' || {{projectNo}} || '%']] GROUP BY s.project_no ORDER BY SUM(s.total_risk_cnt) DESC LIMIT 12",
           "queryTimeoutSeconds": 30,
           "maxRows": 2000,
           "parameterBindings": [
@@ -1017,6 +945,10 @@
             {
               "name": "projectNo",
               "variableKey": "projectNo"
+            },
+            {
+              "name": "riskLevel",
+              "variableKey": "riskLevel"
             }
           ]
         }
@@ -1026,28 +958,36 @@
       "id": "gpmc-risk-category",
       "type": "pie-chart",
       "name": "风险分类分布",
-      "x": 934,
-      "y": 288,
-      "width": 430,
-      "height": 320,
+      "x": 972,
+      "y": 278,
+      "width": 896,
+      "height": 296,
       "zIndex": 15,
       "locked": false,
       "visible": true,
       "config": {
-        "title": "风险分类分布",
-        "seriesColors": [
-          "#3b82ff",
-          "#27d8ff",
-          "#ff9f43",
+        "title": "风险分类分布（按风险类型统计）",
+        "legend": {
+          "show": true
+        },
+        "colors": [
+          "#45a4ff",
+          "#2ee6a6",
+          "#ffc645",
           "#ff5d73",
-          "#8a7dff"
-        ]
+          "#a978ff",
+          "#27d8ff",
+          "#ff8f45",
+          "#8fa7c4"
+        ],
+        "categoryKey": "风险类型",
+        "valueKey": "数量"
       },
       "dataSource": {
         "type": "sql",
         "sqlConfig": {
           "databaseId": "{{DATABASE_ID}}",
-          "query": "SELECT d.risk_category AS \"风险分类\", COUNT(*) AS \"数量\", SUM(CASE WHEN d.risk_level='高' THEN 1 ELSE 0 END) AS \"高\", SUM(CASE WHEN d.risk_level='中' THEN 1 ELSE 0 END) AS \"中\", SUM(CASE WHEN d.risk_level='低' THEN 1 ELSE 0 END) AS \"低\" FROM biz_dwd_risk_info_v2 d WHERE d.submit_month >= to_char({{dateFrom}}::date, 'YYYY-MM') AND d.submit_month <= to_char({{dateTo}}::date, 'YYYY-MM') [[AND d.dept = {{deptId}}]] [[AND d.project_no ILIKE '%' || {{projectNo}} || '%']] AND d.risk_category IS NOT NULL GROUP BY d.risk_category ORDER BY COUNT(*) DESC",
+          "query": "SELECT COALESCE(d.risk_category,'未分类') AS \"风险类型\", COUNT(*) AS \"数量\" FROM biz_dwd_risk_info_v2 d WHERE to_char(d.risk_submit_date,'YYYY-MM') >= to_char({{dateFrom}}::date,'YYYY-MM') AND to_char(d.risk_submit_date,'YYYY-MM') <= to_char({{dateTo}}::date,'YYYY-MM') [[AND d.dept = {{deptId}}]] [[AND d.project_no ILIKE '%' || {{projectNo}} || '%']] [[AND d.risk_level = {{riskLevel}}]] GROUP BY COALESCE(d.risk_category,'未分类') ORDER BY COUNT(*) DESC",
           "queryTimeoutSeconds": 30,
           "maxRows": 2000,
           "parameterBindings": [
@@ -1066,50 +1006,69 @@
             {
               "name": "projectNo",
               "variableKey": "projectNo"
+            },
+            {
+              "name": "riskLevel",
+              "variableKey": "riskLevel"
             }
           ]
         }
       }
     },
     {
-      "id": "gpmc-risk-measure",
-      "type": "table",
-      "name": "风险与措施摘要",
-      "x": 1380,
-      "y": 288,
-      "width": 484,
-      "height": 320,
+      "id": "gpmc-risk-dept",
+      "type": "bar-chart",
+      "name": "科室风险统计",
+      "x": 48,
+      "y": 586,
+      "width": 1820,
+      "height": 250,
       "zIndex": 15,
       "locked": false,
       "visible": true,
       "config": {
-        "title": "风险与措施摘要",
-        "header": [
-          "项目",
-          "风险",
-          "等级",
-          "措施"
+        "title": "科室风险统计（按风险总数排序）",
+        "xAxis": {
+          "type": "category",
+          "name": "责任科室"
+        },
+        "yAxis": {
+          "type": "value",
+          "name": "数量"
+        },
+        "orientation": "vertical",
+        "legend": {
+          "show": true
+        },
+        "colors": [
+          "#8fa7c4",
+          "#ff5d73",
+          "#ffc645"
         ],
-        "fontSize": 16,
-        "headerAlign": "center",
-        "headerColor": "#d9eeff",
-        "headerBackground": "#0f2a55",
-        "bodyColor": "#8cb9df",
-        "bodyBackground": "#ffffff",
-        "oddRowBackground": "#ffffff",
-        "evenRowBackground": "#081c3f",
-        "borderColor": "rgba(69, 164, 255, 0.38)",
-        "enableSort": true,
-        "enablePagination": true,
-        "pageSize": 6,
-        "freezeHeader": true
+        "categoryKey": "责任科室",
+        "series": [
+          {
+            "name": "风险总数",
+            "dataKey": "风险总数",
+            "color": "#8fa7c4"
+          },
+          {
+            "name": "高风险数",
+            "dataKey": "高风险数",
+            "color": "#ff5d73"
+          },
+          {
+            "name": "未释放风险数",
+            "dataKey": "未释放风险数",
+            "color": "#ffc645"
+          }
+        ]
       },
-      "actions": [],
       "dataSource": {
         "type": "sql",
         "sqlConfig": {
           "databaseId": "{{DATABASE_ID}}",
-          "query": "SELECT project_no AS \"项目编号\", risk_name AS \"风险名称\", subsystem AS \"分系统\", risk_level AS \"风险等级\", risk_phase AS \"阶段\", risk_category AS \"分类\", risk_status AS \"状态\", risk_submit_date AS \"提出时间\", final_release_date AS \"计划释放\", response_owner AS \"负责人\", dept AS \"责任科室\", pending_days AS \"滞留天数\" FROM biz_dwd_risk_info_v2 WHERE submit_month >= to_char({{dateFrom}}::date, 'YYYY-MM') AND submit_month <= to_char({{dateTo}}::date, 'YYYY-MM') [[AND dept = {{deptId}}]] [[AND project_no ILIKE '%' || {{projectNo}} || '%']] [[AND risk_level = {{riskLevel}}]] ORDER BY risk_rank DESC, pending_days DESC",
+          "query": "SELECT s.dept AS \"责任科室\", SUM(s.total_risk_cnt) AS \"风险总数\", SUM(s.high_cnt) AS \"高风险数\", SUM(s.open_cnt) AS \"未释放风险数\" FROM biz_dws_risk_monthly_v2 s WHERE s.period_month >= to_char({{dateFrom}}::date,'YYYY-MM') AND s.period_month <= to_char({{dateTo}}::date,'YYYY-MM') [[AND s.project_no ILIKE '%' || {{projectNo}} || '%']] AND s.dept IS NOT NULL GROUP BY s.dept ORDER BY SUM(s.total_risk_cnt) DESC LIMIT 12",
           "queryTimeoutSeconds": 30,
           "maxRows": 2000,
           "parameterBindings": [
@@ -1140,44 +1099,90 @@
     {
       "id": "gpmc-risk-detail",
       "type": "table",
-      "name": "风险清单",
-      "x": 56,
-      "y": 666,
-      "width": 1808,
-      "height": 320,
+      "name": "项目风险汇总列表",
+      "x": 36,
+      "y": 848,
+      "width": 1848,
+      "height": 208,
       "zIndex": 15,
       "locked": false,
       "visible": true,
       "config": {
-        "title": "风险清单",
-        "header": [
-          "风险",
-          "项目",
-          "等级",
-          "状态",
-          "滞留天数",
-          "应对措施"
+        "title": "项目风险汇总列表（按风险级别·提出时间倒序）",
+        "columns": [
+          {
+            "key": "项目编号",
+            "title": "项目编号",
+            "width": 100
+          },
+          {
+            "key": "分系统/分任务",
+            "title": "分系统/分任务",
+            "width": 130
+          },
+          {
+            "key": "风险名称",
+            "title": "风险名称",
+            "width": 200
+          },
+          {
+            "key": "风险等级",
+            "title": "风险等级",
+            "width": 80
+          },
+          {
+            "key": "风险分类",
+            "title": "风险分类",
+            "width": 100
+          },
+          {
+            "key": "风险状态",
+            "title": "风险状态",
+            "width": 100
+          },
+          {
+            "key": "提出时间",
+            "title": "提出时间",
+            "width": 110
+          },
+          {
+            "key": "计划释放时间",
+            "title": "计划释放时间",
+            "width": 120
+          },
+          {
+            "key": "负责人",
+            "title": "负责人",
+            "width": 90
+          },
+          {
+            "key": "责任科室",
+            "title": "责任科室",
+            "width": 130
+          },
+          {
+            "key": "实际释放时间",
+            "title": "实际释放时间",
+            "width": 120
+          },
+          {
+            "key": "滞留天数",
+            "title": "滞留天数",
+            "width": 90
+          }
         ],
-        "fontSize": 16,
-        "headerAlign": "center",
+        "pageSize": 20,
+        "showHeader": true,
         "headerColor": "#d9eeff",
-        "headerBackground": "#0f2a55",
-        "bodyColor": "#8cb9df",
-        "bodyBackground": "#ffffff",
-        "oddRowBackground": "#ffffff",
-        "evenRowBackground": "#081c3f",
-        "borderColor": "rgba(69, 164, 255, 0.38)",
-        "enableSort": true,
-        "enablePagination": true,
-        "pageSize": 6,
-        "freezeHeader": true
+        "rowColor": "#c9d4e4",
+        "stripeColor": "rgba(88,180,255,0.08)",
+        "backgroundColor": "rgba(9,36,90,0.50)"
       },
-      "actions": [],
       "dataSource": {
         "type": "sql",
         "sqlConfig": {
           "databaseId": "{{DATABASE_ID}}",
-          "query": "SELECT project_no AS \"项目编号\", risk_name AS \"风险名称\", subsystem AS \"分系统\", risk_level AS \"风险等级\", risk_phase AS \"阶段\", risk_category AS \"分类\", risk_status AS \"状态\", risk_submit_date AS \"提出时间\", final_release_date AS \"计划释放\", response_owner AS \"负责人\", dept AS \"责任科室\", pending_days AS \"滞留天数\" FROM biz_dwd_risk_info_v2 WHERE submit_month >= to_char({{dateFrom}}::date, 'YYYY-MM') AND submit_month <= to_char({{dateTo}}::date, 'YYYY-MM') [[AND dept = {{deptId}}]] [[AND project_no ILIKE '%' || {{projectNo}} || '%']] [[AND risk_level = {{riskLevel}}]] ORDER BY risk_rank DESC, pending_days DESC",
+          "query": "SELECT d.project_no AS \"项目编号\", COALESCE(d.subsystem,'') AS \"分系统/分任务\", d.risk_name AS \"风险名称\", COALESCE(d.risk_level,'-') AS \"风险等级\", COALESCE(d.risk_category,'-') AS \"风险分类\", COALESCE(d.risk_status,'-') AS \"风险状态\", to_char(d.risk_submit_date,'YYYY-MM-DD') AS \"提出时间\", to_char(d.final_release_date,'YYYY-MM-DD') AS \"计划释放时间\", COALESCE(d.response_owner,'-') AS \"负责人\", COALESCE(d.dept,'-') AS \"责任科室\", to_char(d.risk_release_date,'YYYY-MM-DD') AS \"实际释放时间\", d.pending_days AS \"滞留天数\" FROM biz_dwd_risk_info_v2 d WHERE to_char(d.risk_submit_date,'YYYY-MM') >= to_char({{dateFrom}}::date,'YYYY-MM') AND to_char(d.risk_submit_date,'YYYY-MM') <= to_char({{dateTo}}::date,'YYYY-MM') [[AND d.dept = {{deptId}}]] [[AND d.project_no ILIKE '%' || {{projectNo}} || '%']] [[AND d.risk_level = {{riskLevel}}]] ORDER BY d.risk_rank DESC, d.risk_submit_date DESC LIMIT 500",
           "queryTimeoutSeconds": 30,
           "maxRows": 2000,
           "parameterBindings": [
@@ -1203,6 +1208,44 @@
             }
           ]
         }
+      }
+    },
+    {
+      "id": "gpmc-risk-mid2-left",
+      "type": "shape",
+      "name": "gpmc-risk-mid2-left",
+      "x": 36,
+      "y": 576,
+      "width": 1848,
+      "height": 254,
+      "zIndex": 1,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "shapeType": "rect",
+        "fillColor": "rgba(9, 36, 90, 0.82)",
+        "borderColor": "rgba(69, 164, 255, 0.38)",
+        "borderWidth": 1,
+        "radius": 18
+      }
+    },
+    {
+      "id": "gpmc-risk-mid2-right",
+      "type": "shape",
+      "name": "gpmc-risk-mid2-right",
+      "x": 984,
+      "y": 576,
+      "width": 900,
+      "height": 254,
+      "zIndex": 1,
+      "locked": false,
+      "visible": false,
+      "config": {
+        "shapeType": "rect",
+        "fillColor": "rgba(9, 36, 90, 0.82)",
+        "borderColor": "rgba(69, 164, 255, 0.38)",
+        "borderWidth": 1,
+        "radius": 18
       }
     }
   ]
