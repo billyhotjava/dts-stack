@@ -121,4 +121,59 @@ class SqlIdeTabResourceIT {
         mvc.perform(delete("/api/sql/v2/tabs/00000000-0000-0000-0000-000000000000"))
             .andExpect(status().isOk());
     }
+
+    @Test
+    void patchWithValidUpdatedAtReturnsFreshTab() throws Exception {
+        // 1. Create a tab
+        Map<String, Object> createBody = Map.of("title", "Q", "sqlText", "SELECT 1");
+        MvcResult created = mvc.perform(post("/api/sql/v2/tabs").contentType(MediaType.APPLICATION_JSON)
+            .content(mapper.writeValueAsBytes(createBody))).andReturn();
+        Map<?, ?> resp = mapper.readValue(created.getResponse().getContentAsByteArray(), Map.class);
+        Map<?, ?> data = (Map<?, ?>) resp.get("data");
+        String id = (String) data.get("id");
+        String initialUpdatedAt = (String) data.get("updatedAt");
+
+        // Sleep a tick so the subsequent save produces a distinct timestamp
+        Thread.sleep(10);
+
+        // 2. Patch with the updatedAt we just received
+        Map<String, Object> patchBody = Map.of(
+            "sqlText", "SELECT 2",
+            "updatedAt", initialUpdatedAt
+        );
+        MvcResult patched = mvc.perform(patch("/api/sql/v2/tabs/" + id).contentType(MediaType.APPLICATION_JSON)
+            .content(mapper.writeValueAsBytes(patchBody)))
+           .andExpect(status().isOk())
+           .andExpect(jsonPath("$.data.sqlText").value("SELECT 2"))
+           .andReturn();
+
+        Map<?, ?> patchedResp = mapper.readValue(patched.getResponse().getContentAsByteArray(), Map.class);
+        Map<?, ?> patchedData = (Map<?, ?>) patchedResp.get("data");
+        String newUpdatedAt = (String) patchedData.get("updatedAt");
+
+        // Response must carry a FRESH updatedAt (not the stale one)
+        org.junit.jupiter.api.Assertions.assertNotEquals(initialUpdatedAt, newUpdatedAt,
+            "PATCH response must return fresh updatedAt, not the value we sent");
+
+        // 3. Using the NEW updatedAt, a subsequent PATCH should also succeed (proves round-trip works)
+        Map<String, Object> patchBody2 = Map.of(
+            "sqlText", "SELECT 3",
+            "updatedAt", newUpdatedAt
+        );
+        mvc.perform(patch("/api/sql/v2/tabs/" + id).contentType(MediaType.APPLICATION_JSON)
+            .content(mapper.writeValueAsBytes(patchBody2)))
+           .andExpect(status().isOk())
+           .andExpect(jsonPath("$.data.sqlText").value("SELECT 3"));
+    }
+
+    @Test
+    void batchOver50ReturnsBadRequest() throws Exception {
+        java.util.List<java.util.Map<String, Object>> over = new java.util.ArrayList<>();
+        for (int i = 0; i < 51; i++) {
+            over.add(java.util.Map.of("title", "t" + i, "sqlText", "SELECT 1"));
+        }
+        mvc.perform(post("/api/sql/v2/tabs/batch").contentType(MediaType.APPLICATION_JSON)
+            .content(mapper.writeValueAsBytes(over)))
+           .andExpect(status().isBadRequest());
+    }
 }

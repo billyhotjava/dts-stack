@@ -6,8 +6,10 @@ import com.yuzhi.dts.platform.service.sql.dto.CreateTabRequest;
 import com.yuzhi.dts.platform.service.sql.dto.PatchTabRequest;
 import com.yuzhi.dts.platform.service.sql.dto.SqlIdeTabDto;
 import com.yuzhi.dts.platform.service.sql.dto.UpsertTabRequest;
+import com.yuzhi.dts.platform.web.rest.errors.BatchSizeExceededException;
 import com.yuzhi.dts.platform.web.rest.errors.TabConflictException;
 import com.yuzhi.dts.platform.web.rest.errors.TooManyTabsException;
+import jakarta.persistence.EntityManager;
 import jakarta.persistence.EntityNotFoundException;
 import java.util.List;
 import java.util.UUID;
@@ -21,9 +23,11 @@ public class SqlIdeTabServiceImpl implements SqlIdeTabService {
     private static final int BATCH_MAX = 50;
 
     private final SqlIdeTabRepository repository;
+    private final EntityManager em;
 
-    public SqlIdeTabServiceImpl(SqlIdeTabRepository repository) {
+    public SqlIdeTabServiceImpl(SqlIdeTabRepository repository, EntityManager em) {
         this.repository = repository;
+        this.em = em;
     }
 
     @Override
@@ -49,8 +53,8 @@ public class SqlIdeTabServiceImpl implements SqlIdeTabService {
         tab.setSelectionJson(req.selectionJson());
         tab.setLastExecutionId(req.lastExecutionId());
         tab.setSortOrder(req.sortOrder() == null ? 0 : req.sortOrder());
-        tab.setActive(Boolean.TRUE.equals(req.active()));
-        return toDto(repository.save(tab));
+        if (req.active() != null) tab.setActive(req.active());
+        return toDto(saveFlushRefresh(tab));
     }
 
     @Override
@@ -75,7 +79,7 @@ public class SqlIdeTabServiceImpl implements SqlIdeTabService {
         if (req.lastExecutionId() != null) tab.setLastExecutionId(req.lastExecutionId());
         if (req.sortOrder() != null) tab.setSortOrder(req.sortOrder());
         if (req.active() != null) tab.setActive(req.active());
-        return toDto(repository.save(tab));
+        return toDto(saveFlushRefresh(tab));
     }
 
     @Override
@@ -89,7 +93,7 @@ public class SqlIdeTabServiceImpl implements SqlIdeTabService {
     @Override
     public List<SqlIdeTabDto> batchUpsert(String userLogin, List<UpsertTabRequest> reqs) {
         if (reqs.size() > BATCH_MAX) {
-            throw new IllegalArgumentException("batch size exceeds " + BATCH_MAX);
+            throw new BatchSizeExceededException("batch size exceeds " + BATCH_MAX);
         }
         long existing = repository.countByUserLogin(userLogin);
         long newCount = reqs.stream().filter(r -> r.id() == null).count();
@@ -114,6 +118,18 @@ public class SqlIdeTabServiceImpl implements SqlIdeTabService {
             r.sortOrder(), r.active()
         );
         return create(userLogin, createReq);
+    }
+
+    /**
+     * Save, flush to DB, then refresh the in-memory entity from the DB so that
+     * audit timestamps reflect the DB-truncated value (microseconds in Postgres).
+     * This ensures the DTO returned to the client carries the exact same timestamp
+     * that subsequent reads from DB will return, preventing false 409s on next PATCH.
+     */
+    private SqlIdeTab saveFlushRefresh(SqlIdeTab tab) {
+        SqlIdeTab saved = repository.saveAndFlush(tab);
+        em.refresh(saved);
+        return saved;
     }
 
     private SqlIdeTabDto toDto(SqlIdeTab t) {
