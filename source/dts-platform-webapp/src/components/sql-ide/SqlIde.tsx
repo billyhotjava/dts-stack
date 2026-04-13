@@ -9,6 +9,7 @@ import { ActivityBar } from "./layout/ActivityBar";
 import { BottomPanel } from "./layout/BottomPanel";
 import { SidePanel } from "./layout/SidePanel";
 import { useLayoutStore } from "./layout/useLayoutStore";
+import { SchemaTree } from "./schema/SchemaTree";
 import { TabBar } from "./tabs/TabBar";
 import { useTabStore } from "./tabs/useTabStore";
 
@@ -77,7 +78,46 @@ export const SqlIde: FC = () => {
       <ActivityBar />
       <SidePanel>
         {activeActivity === "schema" && (
-          <div style={{ padding: 12, color: "var(--ant-color-text-secondary)" }}>Schema · T13 待完成</div>
+          <SchemaTree
+            onInsertIdentifier={(name) => {
+              const handle = editorHandleRef.current;
+              if (!handle) return;
+              const ed = handle.getEditor();
+              if (!ed) return;
+              const pos = ed.getPosition();
+              const op = pos
+                ? {
+                    range: {
+                      startLineNumber: pos.lineNumber,
+                      startColumn: pos.column,
+                      endLineNumber: pos.lineNumber,
+                      endColumn: pos.column,
+                    },
+                    text: name,
+                  }
+                : null;
+              if (op) ed.executeEdits("sqlide.schema-insert", [op]);
+            }}
+            onInsertSqlAtCursor={(sql) => {
+              const handle = editorHandleRef.current;
+              if (!handle) return;
+              const ed = handle.getEditor();
+              if (!ed) return;
+              const pos = ed.getPosition();
+              const op = pos
+                ? {
+                    range: {
+                      startLineNumber: pos.lineNumber,
+                      startColumn: pos.column,
+                      endLineNumber: pos.lineNumber,
+                      endColumn: pos.column,
+                    },
+                    text: sql,
+                  }
+                : null;
+              if (op) ed.executeEdits("sqlide.schema-sql", [op]);
+            }}
+          />
         )}
         {activeActivity === "history" && (
           <div style={{ padding: 12, color: "var(--ant-color-text-secondary)" }}>History · T14 待完成</div>
