@@ -24,7 +24,15 @@ export const SqlIde: FC = () => {
         // User kept typing while format chunk was loading; discard stale result
         return;
       }
-      setSql(next);
+      const handle = editorHandleRef.current;
+      if (handle) {
+        // Cursor-preserving replace: saveViewState → pushEditOperations → restoreViewState.
+        // Monaco fires onDidChangeModelContent → onChange → setSql, so no explicit setSql needed.
+        handle.replaceContent(next);
+      } else {
+        // Fallback: editor not mounted yet — update React state directly.
+        setSql(next);
+      }
     } catch (err) {
       message.error("格式化失败，请检查 SQL 语法");
       if (import.meta.env.DEV) {
