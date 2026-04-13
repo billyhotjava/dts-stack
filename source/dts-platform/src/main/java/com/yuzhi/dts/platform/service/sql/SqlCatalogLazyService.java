@@ -51,10 +51,11 @@ public class SqlCatalogLazyService {
         return datasetRepository
             .findAll()
             .stream()
-            .map(CatalogDataset::getName)
+            .filter(d -> matchesDatasource(d, datasourceId))
+            .map(this::extractSchema)
             .filter(Objects::nonNull)
             .distinct()
-            .map(name -> new CatalogSchemaDto(name, null))
+            .map(schema -> new CatalogSchemaDto(schema, null))
             .toList();
     }
 
@@ -63,7 +64,8 @@ public class SqlCatalogLazyService {
         return datasetRepository
             .findAll()
             .stream()
-            .filter(d -> schema == null || schema.equalsIgnoreCase(d.getName()))
+            .filter(d -> matchesDatasource(d, datasourceId))
+            .filter(d -> schema == null || schema.equalsIgnoreCase(extractSchema(d)))
             .flatMap(d -> tableRepository.findByDataset(d).stream())
             .map(t -> new CatalogTableDto(t.getName(), "TABLE", null, null))
             .toList();
@@ -79,7 +81,8 @@ public class SqlCatalogLazyService {
         return datasetRepository
             .findAll()
             .stream()
-            .filter(d -> schema == null || schema.equalsIgnoreCase(d.getName()))
+            .filter(d -> matchesDatasource(d, datasourceId))
+            .filter(d -> schema == null || schema.equalsIgnoreCase(extractSchema(d)))
             .flatMap(d -> tableRepository.findByDataset(d).stream())
             .filter(t -> table.equalsIgnoreCase(t.getName()))
             .findFirst()
@@ -105,6 +108,33 @@ public class SqlCatalogLazyService {
     }
 
     /* ----- helpers ----- */
+
+    /**
+     * Returns true when the dataset belongs to the requested datasource.
+     * "default" (or null) is treated as a wildcard that matches all datasets,
+     * preserving placeholder behaviour while the static DATASOURCES list is in use.
+     * Non-default ids are matched against {@code CatalogDataset.trinoCatalog}
+     * (case-insensitive).
+     */
+    private boolean matchesDatasource(CatalogDataset d, String datasourceId) {
+        if (datasourceId == null || "default".equals(datasourceId)) {
+            return true;
+        }
+        String trinoCatalog = d.getTrinoCatalog();
+        return trinoCatalog != null && trinoCatalog.equalsIgnoreCase(datasourceId);
+    }
+
+    /**
+     * Returns the logical schema name for a dataset.
+     * Prefers {@code hiveDatabase} (the natural schema identifier, e.g. "public",
+     * "analytics") over {@code name}, which is a human-readable display label and
+     * not a reliable schema identifier.
+     */
+    private String extractSchema(CatalogDataset d) {
+        String hive = d.getHiveDatabase();
+        if (hive != null && !hive.isBlank()) return hive;
+        return d.getName() != null ? d.getName() : "default";
+    }
 
     private List<CatalogColumnDto> columnsOf(CatalogTableSchema t) {
         return columnRepository

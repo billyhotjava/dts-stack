@@ -116,6 +116,9 @@ public class CacheConfiguration {
         config.setManagementCenterConfig(new ManagementCenterConfig());
         config.addMapConfig(initializeDefaultMapConfig(jHipsterProperties));
         config.addMapConfig(initializeDomainMapConfig(jHipsterProperties));
+        config.addMapConfig(buildSqlIdeMapConfig("sqlIdeSchemas"));
+        config.addMapConfig(buildSqlIdeMapConfig("sqlIdeTables"));
+        config.addMapConfig(buildSqlIdeMapConfig("sqlIdeColumns"));
         return Hazelcast.newHazelcastInstance(config);
     }
 
@@ -153,6 +156,19 @@ public class CacheConfiguration {
         MapConfig mapConfig = new MapConfig("com.yuzhi.dts.platform.domain.*");
         mapConfig.setTimeToLiveSeconds(jHipsterProperties.getCache().getHazelcast().getTimeToLiveSeconds());
         return mapConfig;
+    }
+
+    private MapConfig buildSqlIdeMapConfig(String name) {
+        MapConfig m = new MapConfig(name);
+        m.setTimeToLiveSeconds(300); // 5 minutes — matches original commit claim
+        m.setEvictionConfig(
+            new EvictionConfig()
+                .setEvictionPolicy(EvictionPolicy.LRU)
+                .setMaxSizePolicy(MaxSizePolicy.PER_NODE)
+                .setSize(2000)
+        );
+        m.setBackupCount(0);
+        return m;
     }
 
     @Autowired(required = false)
