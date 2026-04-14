@@ -55,7 +55,8 @@ const TAB_ITEMS = (props: BottomTabsProps) => [
     children: (
       <div style={{ height: "100%", overflow: "auto" }}>
         <QueryPlanView
-          sql={props.sql}
+          executionId={props.executionId}
+          fallbackSql={props.sql}
           engine={props.engine}
           datasourceId={props.datasourceId}
           catalog={props.catalog}

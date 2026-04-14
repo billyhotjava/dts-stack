@@ -48,11 +48,20 @@ public class SqlResultStreamServiceImpl implements SqlResultStreamService {
         this.objectMapper = objectMapper;
     }
 
+    private void verifyExecutionOwner(QueryExecution e) {
+        String currentUser = com.yuzhi.dts.platform.security.SecurityUtils.getCurrentUserLogin().orElse("anonymous");
+        String owner = e.getCreatedBy();
+        if (owner != null && !owner.equals(currentUser)) {
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "execution not found");
+        }
+    }
+
     @Override
     public ResultMetaDto getMeta(UUID executionId) {
         QueryExecution exec = queryExecutionRepository
             .findById(executionId)
             .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "query execution not found: " + executionId));
+        verifyExecutionOwner(exec);
 
         if (exec.getResultSetId() == null) {
             throw new ResponseStatusException(HttpStatus.NOT_FOUND, "result set not available for execution: " + executionId);
@@ -281,6 +290,7 @@ public class SqlResultStreamServiceImpl implements SqlResultStreamService {
         QueryExecution e = queryExecutionRepository
             .findById(executionId)
             .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "query execution not found: " + executionId));
+        verifyExecutionOwner(e);
 
         // TODO F5 followup: store rewritten separately
         return new QueryLogDto(

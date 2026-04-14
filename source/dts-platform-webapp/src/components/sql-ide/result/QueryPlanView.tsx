@@ -1,36 +1,47 @@
 import { Background, Controls, ReactFlow, type Edge, type Node } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
+import { useQuery } from "@tanstack/react-query";
 import { Button, Spin, Tabs, message } from "antd";
 import { type FC, useCallback, useMemo, useState } from "react";
+import { getExecutionLog } from "../api/sqlIdeLog";
 import { postExplain, type PlanResult } from "../api/sqlIdePlan";
 import { layoutPlanNodes, type PlanNode } from "./planLayout";
 
 export interface QueryPlanViewProps {
-  sql: string;
+  executionId: string | null;
+  fallbackSql: string;
   engine: string;
   datasourceId: string | null;
   catalog: string | null;
 }
 
-export const QueryPlanView: FC<QueryPlanViewProps> = ({ sql, engine, datasourceId, catalog }) => {
+export const QueryPlanView: FC<QueryPlanViewProps> = ({ executionId, fallbackSql, engine, datasourceId, catalog }) => {
   const [result, setResult] = useState<PlanResult | null>(null);
   const [loading, setLoading] = useState(false);
 
+  const { data: logData } = useQuery({
+    queryKey: ["sqlide", "execution", "log", executionId],
+    queryFn: () => getExecutionLog(executionId!),
+    enabled: !!executionId,
+    staleTime: 60_000,
+  });
+  const effectiveSql = logData?.originalSql ?? fallbackSql;
+
   const handleExplain = useCallback(async () => {
-    if (!sql.trim()) {
+    if (!effectiveSql.trim()) {
       void message.warning("请先输入 SQL");
       return;
     }
     setLoading(true);
     try {
-      const r = await postExplain({ sql, engine, datasourceId, catalog });
+      const r = await postExplain({ sql: effectiveSql, engine, datasourceId, catalog });
       setResult(r);
     } catch {
       void message.error("EXPLAIN 失败");
     } finally {
       setLoading(false);
     }
-  }, [sql, engine, datasourceId, catalog]);
+  }, [effectiveSql, engine, datasourceId, catalog]);
 
   const flow = useMemo(() => {
     if (!result) return { nodes: [] as Node[], edges: [] as Edge[] };

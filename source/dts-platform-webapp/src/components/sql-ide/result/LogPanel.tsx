@@ -1,6 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { Empty, Spin, Switch } from "antd";
-import { type FC, useState } from "react";
+import { type FC, useEffect, useState } from "react";
 import { getExecutionLog } from "../api/sqlIdeLog";
 
 export interface LogPanelProps {
@@ -33,6 +33,9 @@ function formatTimestamp(ts: string | null): string {
 
 export const LogPanel: FC<LogPanelProps> = ({ executionId, showAdvanced = false }) => {
   const [advancedOpen, setAdvancedOpen] = useState(showAdvanced);
+  useEffect(() => {
+    setAdvancedOpen(showAdvanced);
+  }, [showAdvanced]);
 
   const { data: log, isLoading, isError } = useQuery({
     queryKey: ["sqlide", "execution", "log", executionId],
