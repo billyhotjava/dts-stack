@@ -1,5 +1,6 @@
 package com.yuzhi.dts.platform.web.rest.sql;
 
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -26,6 +27,13 @@ class SqlIdeSubqueryControllerIT {
     void createTempViewForUnknownExecutionReturns200WithEmptyView() throws Exception {
         mvc.perform(post("/api/sql/v2/temp-views")
                 .param("executionId", UUID.randomUUID().toString()))
+            .andExpect(status().isOk());
+    }
+
+    @Test
+    void deleteViewByOtherUserReturnsOk_noop() throws Exception {
+        // Fix 2: cross-user DELETE is a silent no-op — returns 200, no existence leak
+        mvc.perform(delete("/api/sql/v2/temp-views/sqlide_view_doesnotexist"))
             .andExpect(status().isOk());
     }
 }
