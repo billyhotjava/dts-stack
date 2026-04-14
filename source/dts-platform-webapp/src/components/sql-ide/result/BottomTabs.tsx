@@ -69,7 +69,7 @@ const TAB_ITEMS = (props: BottomTabsProps) => [
     label: "日志",
     children: (
       <div style={{ height: "100%", overflow: "auto" }}>
-        <LogPanel executionId={props.executionId} showAdvanced={false} />
+        <LogPanel executionId={props.executionId} />
       </div>
     ),
   },

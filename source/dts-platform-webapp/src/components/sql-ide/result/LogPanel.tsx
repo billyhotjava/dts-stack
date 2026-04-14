@@ -2,10 +2,10 @@ import { useQuery } from "@tanstack/react-query";
 import { Empty, Spin, Switch } from "antd";
 import { type FC, useEffect, useState } from "react";
 import { getExecutionLog } from "../api/sqlIdeLog";
+import { useUiModeStore } from "../store/useUiModeStore";
 
 export interface LogPanelProps {
   executionId: string;
-  showAdvanced?: boolean;
 }
 
 function formatBytes(bytes: number | null): string {
@@ -31,7 +31,9 @@ function formatTimestamp(ts: string | null): string {
   }
 }
 
-export const LogPanel: FC<LogPanelProps> = ({ executionId, showAdvanced = false }) => {
+export const LogPanel: FC<LogPanelProps> = ({ executionId }) => {
+  const mode = useUiModeStore((s) => s.mode);
+  const showAdvanced = mode === "advanced";
   const [advancedOpen, setAdvancedOpen] = useState(showAdvanced);
   useEffect(() => {
     setAdvancedOpen(showAdvanced);

@@ -3,6 +3,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { type FC, type PropsWithChildren } from "react";
 import { listColumns } from "../api/sqlIdeCatalog";
 import { copyName, generateInsert, generateSelect } from "./sqlGenerators";
+import { useUiModeStore } from "../store/useUiModeStore";
 
 interface TableContextMenuProps {
   dsId: string;
@@ -15,11 +16,18 @@ export const TableContextMenu: FC<PropsWithChildren<TableContextMenuProps>> = ({
   dsId, schema, table, onInsertSqlAtCursor, children,
 }) => {
   const qc = useQueryClient();
-  const items: MenuProps["items"] = [
-    { key: "select", label: "Generate SELECT" },
-    { key: "insert", label: "Generate INSERT" },
-    { key: "copy-name", label: "Copy Name" },
-  ];
+  const mode = useUiModeStore((s) => s.mode);
+
+  const items: MenuProps["items"] = mode === "simple"
+    ? [
+        { key: "select", label: "Generate SELECT" },
+        { key: "copy-name", label: "Copy Name" },
+      ]
+    : [
+        { key: "select", label: "Generate SELECT" },
+        { key: "insert", label: "Generate INSERT" },
+        { key: "copy-name", label: "Copy Name" },
+      ];
   const onClick: MenuProps["onClick"] = async ({ key }) => {
     switch (key) {
       case "select":

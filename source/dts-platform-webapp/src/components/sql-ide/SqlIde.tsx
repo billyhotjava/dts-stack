@@ -3,7 +3,9 @@ import { type FC, useCallback, useEffect, useMemo, useRef, useState } from "reac
 import { useShallow } from "zustand/react/shallow";
 import { useQuery } from "@tanstack/react-query";
 import { ShortcutsHelp } from "./ShortcutsHelp";
+import { ModeSwitcher } from "./ModeSwitcher";
 import { CopilotSlot } from "./copilot/CopilotSlot";
+import { useUiModeStore } from "./store/useUiModeStore";
 import { SqlEditor, type SqlEditorHandle } from "./editor/SqlEditor";
 import { formatSql } from "./editor/formatter";
 import { ActivityBar } from "./layout/ActivityBar";
@@ -62,6 +64,8 @@ export const SqlIde: FC = () => {
   }, [hydrated, tabs.length, openTab]);
 
   const activeTab = tabs.find((t) => t.id === activeTabId) ?? null;
+
+  const uiMode = useUiModeStore((s) => s.mode);
 
   const sqlExec = useSqlExecution();
 
@@ -158,6 +162,16 @@ export const SqlIde: FC = () => {
       <div
         style={{ flex: 1, display: "flex", flexDirection: "column", minWidth: 0 }}
       >
+        <div style={{
+          display: "flex",
+          justifyContent: "flex-end",
+          alignItems: "center",
+          padding: "4px 8px",
+          borderBottom: "1px solid var(--ant-color-border-secondary)",
+          gap: 8,
+        }}>
+          <ModeSwitcher />
+        </div>
         <TabBar />
         <div style={{ flex: 1, minHeight: 0 }}>
           {activeTab ? (
@@ -166,7 +180,7 @@ export const SqlIde: FC = () => {
               value={activeTab.sqlText}
               onChange={handleSqlChange}
               engine={activeTab.engine}
-              mode="simple"
+              mode={uiMode}
               isDark={true}
               onExecute={(s) => {
                 if (!s.trim() || !activeTab) return;

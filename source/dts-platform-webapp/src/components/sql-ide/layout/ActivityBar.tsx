@@ -1,6 +1,7 @@
 import { type FC } from "react";
 import { useShallow } from "zustand/react/shallow";
 import { useLayoutStore, type ActivityId } from "./useLayoutStore";
+import { useUiModeStore } from "../store/useUiModeStore";
 
 interface ActivityIconDef {
   id: ActivityId;
@@ -20,6 +21,12 @@ export const ActivityBar: FC = () => {
   const { activeActivity, setActivity } = useLayoutStore(
     useShallow((s) => ({ activeActivity: s.activeActivity, setActivity: s.setActivity })),
   );
+  const mode = useUiModeStore((s) => s.mode);
+
+  const visibleActivities = ACTIVITIES.filter((a) => {
+    if (mode === "simple" && (a.id === "search" || a.id === "copilot")) return false;
+    return true;
+  });
 
   return (
     <div
@@ -40,7 +47,7 @@ export const ActivityBar: FC = () => {
         gap: 6,
       }}
     >
-      {ACTIVITIES.map((a) => {
+      {visibleActivities.map((a) => {
         const active = activeActivity === a.id;
         return (
           <button
