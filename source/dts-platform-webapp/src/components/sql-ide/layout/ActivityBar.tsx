@@ -1,4 +1,4 @@
-import { type FC } from "react";
+import { type FC, useEffect } from "react";
 import { useShallow } from "zustand/react/shallow";
 import { useLayoutStore, type ActivityId } from "./useLayoutStore";
 import { useUiModeStore } from "../store/useUiModeStore";
@@ -22,6 +22,12 @@ export const ActivityBar: FC = () => {
     useShallow((s) => ({ activeActivity: s.activeActivity, setActivity: s.setActivity })),
   );
   const mode = useUiModeStore((s) => s.mode);
+
+  useEffect(() => {
+    if (mode === "simple" && (activeActivity === "search" || activeActivity === "copilot")) {
+      setActivity("schema");
+    }
+  }, [mode, activeActivity, setActivity]);
 
   const visibleActivities = ACTIVITIES.filter((a) => {
     if (mode === "simple" && (a.id === "search" || a.id === "copilot")) return false;

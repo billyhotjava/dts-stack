@@ -123,30 +123,32 @@ export const LogPanel: FC<LogPanelProps> = ({ executionId }) => {
         </pre>
       </div>
 
-      {/* Advanced toggle — rewritten SQL (F6 will wire showAdvanced) */}
-      <div style={{ marginTop: 8 }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6 }}>
-          <span style={{ fontSize: 11, color: "var(--ant-color-text-secondary)" }}>高级模式（改写 SQL）</span>
-          <Switch size="small" checked={advancedOpen} onChange={setAdvancedOpen} />
+      {/* Advanced toggle — rewritten SQL (only visible in advanced mode) */}
+      {showAdvanced && (
+        <div style={{ marginTop: 8 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6 }}>
+            <span style={{ fontSize: 11, color: "var(--ant-color-text-secondary)" }}>高级模式（改写 SQL）</span>
+            <Switch size="small" checked={advancedOpen} onChange={setAdvancedOpen} />
+          </div>
+          {advancedOpen && (
+            <pre
+              style={{
+                margin: 0,
+                padding: "8px 12px",
+                background: "var(--ant-color-fill-quaternary)",
+                borderRadius: 4,
+                whiteSpace: "pre-wrap",
+                wordBreak: "break-all",
+                fontSize: 12,
+                fontFamily: "monospace",
+                color: "var(--ant-color-text-secondary)",
+              }}
+            >
+              {log.rewrittenSql}
+            </pre>
+          )}
         </div>
-        {advancedOpen && (
-          <pre
-            style={{
-              margin: 0,
-              padding: "8px 12px",
-              background: "var(--ant-color-fill-quaternary)",
-              borderRadius: 4,
-              whiteSpace: "pre-wrap",
-              wordBreak: "break-all",
-              fontSize: 12,
-              fontFamily: "monospace",
-              color: "var(--ant-color-text-secondary)",
-            }}
-          >
-            {log.rewrittenSql}
-          </pre>
-        )}
-      </div>
+      )}
     </div>
   );
 };
