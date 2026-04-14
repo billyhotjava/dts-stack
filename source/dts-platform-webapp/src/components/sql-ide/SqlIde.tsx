@@ -14,8 +14,9 @@ import { HistoryPanel } from "./history/HistoryPanel";
 import { SchemaTree } from "./schema/SchemaTree";
 import { TabBar } from "./tabs/TabBar";
 import { useTabStore } from "./tabs/useTabStore";
+import { BottomTabs } from "./result/BottomTabs";
 import { ExportMenu } from "./result/ExportMenu";
-import { ResultGrid } from "./result/ResultGrid";
+import { SubQueryButton } from "./result/SubQueryButton";
 import { SavedPanel } from "./saved/SavedPanel";
 import { SaveQueryDialog } from "./saved/SaveQueryDialog";
 import { listSavedQueries } from "./api/sqlIdeSaved";
@@ -229,6 +230,9 @@ export const SqlIde: FC = () => {
                 {activeTab?.lastExecutionId && (
                   <ExportMenu executionId={activeTab.lastExecutionId} />
                 )}
+                {activeTab?.lastExecutionId && (
+                  <SubQueryButton executionId={activeTab.lastExecutionId} />
+                )}
                 <Button size="small" onClick={() => setHelpOpen(true)}>
                   ⌨ Shortcuts
                 </Button>
@@ -236,15 +240,17 @@ export const SqlIde: FC = () => {
             </div>
             <div style={{ flex: 1, minHeight: 0 }}>
               {activeTab?.lastExecutionId ? (
-                <ResultGrid
+                <BottomTabs
                   executionId={activeTab.lastExecutionId}
+                  sql={activeTab.sqlText}
+                  engine={activeTab.engine}
+                  datasourceId={activeTab.datasourceId}
+                  catalog={activeTab.schemaContext}
                   gridState={activeTab.gridState}
                   onGridStateChange={(next) => updateGridState(activeTab.id, next)}
                 />
               ) : (
-                <div style={{ padding: 12, color: "var(--ant-color-text-tertiary)" }}>
-                  运行 SQL 后结果出现在这里
-                </div>
+                <div style={{ padding: 12, color: "var(--ant-color-text-tertiary)" }}>运行 SQL 后结果出现在这里</div>
               )}
             </div>
           </div>
