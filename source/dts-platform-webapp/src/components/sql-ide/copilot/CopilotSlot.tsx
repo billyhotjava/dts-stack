@@ -20,5 +20,8 @@ export const CopilotSlot: FC = () => (
       · SQL 解释与优化建议<br />
       · 智能错误修复
     </div>
+    <div style={{ fontSize: 10, color: "var(--ant-color-text-quaternary)", marginTop: 16 }}>
+      接入指南：<code>src/components/sql-ide/copilot/README.md</code>
+    </div>
   </div>
 );
