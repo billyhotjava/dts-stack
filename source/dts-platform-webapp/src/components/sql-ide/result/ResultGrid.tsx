@@ -253,54 +253,72 @@ export const ResultGrid: FC<ResultGridProps> = ({ executionId, gridState, onGrid
               </tr>
             ))}
           </thead>
-          <tbody
-            style={{
-              position: "relative",
-              height: rowVirtualizer.getTotalSize(),
-            }}
-          >
-            {rowVirtualizer.getVirtualItems().map((virtualRow) => {
-              const row = table.getRowModel().rows[virtualRow.index];
-              if (!row) return null;
-              const zebra = virtualRow.index % 2 === 1;
+          <tbody>
+            {(() => {
+              // Spacer-row virtualization (instead of position:absolute on <tr>):
+              // absolute-positioned rows are taken out of table flow, so their
+              // <td> widths no longer line up with the <colgroup>/<thead> column
+              // widths — that was the "header doesn't match data column widths"
+              // bug. Real <tr> elements with top/bottom spacer rows preserve
+              // table layout while still rendering only the visible window.
+              const virtualItems = rowVirtualizer.getVirtualItems();
+              if (virtualItems.length === 0) return null;
+              const totalSize = rowVirtualizer.getTotalSize();
+              const paddingTop = virtualItems[0].start;
+              const paddingBottom =
+                totalSize - virtualItems[virtualItems.length - 1].end;
               return (
-                <tr
-                  key={row.id}
-                  data-zebra={zebra ? "1" : "0"}
-                  style={{
-                    position: "absolute",
-                    top: virtualRow.start,
-                    left: 0,
-                    height: virtualRow.size,
-                    width: "100%",
-                    background: zebra ? ROW_STRIPE_BG : "transparent",
-                  }}
-                >
-                  {row.getVisibleCells().map((cell, idx) => (
-                    <td
-                      key={cell.id}
-                      style={{
-                        padding: "6px 12px",
-                        borderBottom: `1px solid ${BORDER_SOFT}`,
-                        borderRight:
-                          idx < row.getVisibleCells().length - 1
-                            ? `1px solid ${BORDER_SOFT}`
-                            : "none",
-                        fontSize: 12,
-                        color: "var(--ant-color-text, rgba(0, 0, 0, 0.88))",
-                        whiteSpace: "nowrap",
-                        overflow: "hidden",
-                        textOverflow: "ellipsis",
-                        width: cell.column.getSize(),
-                        verticalAlign: "middle",
-                      }}
-                    >
-                      {flexRender(cell.column.columnDef.cell, cell.getContext())}
-                    </td>
-                  ))}
-                </tr>
+                <>
+                  {paddingTop > 0 && (
+                    <tr aria-hidden style={{ height: paddingTop }}>
+                      <td colSpan={visibleColumns.length} style={{ padding: 0, border: "none" }} />
+                    </tr>
+                  )}
+                  {virtualItems.map((virtualRow) => {
+                    const row = table.getRowModel().rows[virtualRow.index];
+                    if (!row) return null;
+                    const zebra = virtualRow.index % 2 === 1;
+                    return (
+                      <tr
+                        key={row.id}
+                        data-zebra={zebra ? "1" : "0"}
+                        style={{
+                          height: virtualRow.size,
+                          background: zebra ? ROW_STRIPE_BG : "transparent",
+                        }}
+                      >
+                        {row.getVisibleCells().map((cell, idx) => (
+                          <td
+                            key={cell.id}
+                            style={{
+                              padding: "6px 12px",
+                              borderBottom: `1px solid ${BORDER_SOFT}`,
+                              borderRight:
+                                idx < row.getVisibleCells().length - 1
+                                  ? `1px solid ${BORDER_SOFT}`
+                                  : "none",
+                              fontSize: 12,
+                              color: "var(--ant-color-text, rgba(0, 0, 0, 0.88))",
+                              whiteSpace: "nowrap",
+                              overflow: "hidden",
+                              textOverflow: "ellipsis",
+                              verticalAlign: "middle",
+                            }}
+                          >
+                            {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                          </td>
+                        ))}
+                      </tr>
+                    );
+                  })}
+                  {paddingBottom > 0 && (
+                    <tr aria-hidden style={{ height: paddingBottom }}>
+                      <td colSpan={visibleColumns.length} style={{ padding: 0, border: "none" }} />
+                    </tr>
+                  )}
+                </>
               );
-            })}
+            })()}
           </tbody>
         </table>
       </div>
