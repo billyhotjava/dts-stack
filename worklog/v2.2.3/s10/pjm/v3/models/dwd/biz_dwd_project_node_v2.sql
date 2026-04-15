@@ -1,4 +1,4 @@
-{{ config(materialized='table', tags=['project-management-v3', 'biz', 'dwd']) }}
+{{ config(materialized='table', tags=['project-management-v2', 'biz', 'dwd']) }}
 
 SELECT
   -- === 主键 ===

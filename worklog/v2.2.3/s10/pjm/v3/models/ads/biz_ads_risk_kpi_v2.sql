@@ -1,4 +1,4 @@
-{{ config(materialized='table', tags=['project-management-v3', 'biz', 'ads', 'kpi', 'risk']) }}
+{{ config(materialized='table', tags=['project-management-v2', 'biz', 'ads', 'kpi', 'risk']) }}
 
 -- 风险域 KPI：月度聚合
 -- 存储分子/分母，支持跨月查询

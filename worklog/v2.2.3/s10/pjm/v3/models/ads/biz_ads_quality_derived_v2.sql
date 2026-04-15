@@ -1,4 +1,4 @@
-{{ config(materialized='table', tags=['project-management-v3', 'biz', 'ads', 'derived', 'quality']) }}
+{{ config(materialized='table', tags=['project-management-v2', 'biz', 'ads', 'derived', 'quality']) }}
 
 -- 质量域二次指标：对齐二次指标大表 #7-11
 -- 依赖: biz_ads_quality_kpi_v2

@@ -1,4 +1,4 @@
-{{ config(materialized='table', tags=['project-management-v3', 'biz', 'ads', 'derived']) }}
+{{ config(materialized='table', tags=['project-management-v2', 'biz', 'ads', 'derived']) }}
 
 -- 进度域二次指标：对齐二次指标大表 #1-6
 -- 依赖: biz_ads_progress_kpi_v2

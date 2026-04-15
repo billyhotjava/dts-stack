@@ -1,4 +1,4 @@
-{{ config(materialized='table', tags=['project-management-v3', 'biz', 'dws', 'quality']) }}
+{{ config(materialized='table', tags=['project-management-v2', 'biz', 'dws', 'quality']) }}
 
 -- 质量域月度汇总：对齐原始指标大表 #34-48
 -- 粒度: project_no × dept × issue_month

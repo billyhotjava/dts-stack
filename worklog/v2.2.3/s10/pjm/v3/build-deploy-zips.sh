@@ -25,8 +25,8 @@ clean-targets: ["target", "dbt_packages"]
 EOF
 
 cd "$TEMP_CLI"
-zip -r "$DIST_DIR/project-management-v3-cli-deploy.zip" . -x '*/.*'
-echo "  -> project-management-v3-cli-deploy.zip"
+zip -r "$DIST_DIR/project-management-v2-cli-deploy.zip" . -x '*/.*'
+echo "  -> project-management-v2-cli-deploy.zip"
 
 echo "=== 构建 UI 导入包 (v2) ==="
 cp -r "$DIST_DIR/macros" "$TEMP_UI/"
@@ -34,8 +34,8 @@ cp -r "$DIST_DIR/models" "$TEMP_UI/"
 cp "$DIST_DIR/models.tsv" "$TEMP_UI/models.tsv"
 
 cd "$TEMP_UI"
-zip -r "$DIST_DIR/project-management-v3-ui-import.zip" . -x '*/.*'
-echo "  -> project-management-v3-ui-import.zip"
+zip -r "$DIST_DIR/project-management-v2-ui-import.zip" . -x '*/.*'
+echo "  -> project-management-v2-ui-import.zip"
 
 rm -rf "$TEMP_CLI" "$TEMP_UI"
 
