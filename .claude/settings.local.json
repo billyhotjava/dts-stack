@@ -131,7 +131,8 @@
       "Bash(./mvnw -q -pl . -am compile -DskipTests)",
       "Bash(sudo chown *)",
       "Bash(./mvnw -q compile -DskipTests)",
-      "Bash(git add *)"
+      "Bash(git add *)",
+      "Bash(git commit *)"
     ]
   }
 }

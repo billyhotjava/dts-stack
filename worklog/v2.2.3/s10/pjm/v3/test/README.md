@@ -4,7 +4,7 @@
 
 | 文件 | Sheet | ODS 目标表 | 行数 | 列数 |
 |------|-------|-----------|------|------|
-| **ods_project_subject_domain_v2.xlsx** | 进度信息汇总表 | ods_project_subject_domain_v2 | 1000 | 31 |
+| **ods_project_subject_domain_v2.xlsx** | 进度信息汇总表 | ods_project_subject_domain_v2 | 1000 | 33 |
 | **ods_progress_measure_v2.xlsx** | 进度跟进措施表 | ods_progress_measure_v2 | 80 | 23 |
 | **ods_quality_issue_v2.xlsx** | 质量信息汇总表 | ods_quality_issue_v2 | 80 | 21 |
 | **ods_quality_measure_v2.xlsx** | 质量跟进措施表 | ods_quality_measure_v2 | 80 | 33 |

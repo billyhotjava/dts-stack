@@ -42,7 +42,9 @@ SELECT
   {{ nullif_placeholder("o.delay_applied") }}       AS delay_applied,
 
   -- === 日期解析 ===
+  {{ parse_date_safe("o.plan_start_date") }}        AS plan_start_date,
   {{ parse_date_safe("o.plan_date") }}              AS plan_date,
+  {{ parse_date_safe("o.actual_start_date") }}      AS actual_start_date,
   {{ parse_date_safe("o.actual_date") }}            AS actual_date,
   {{ parse_date_safe("o.delay_expected_date") }}    AS delay_expected_date,
   {{ parse_date_safe("o.original_plan_date") }}     AS original_plan_date,

@@ -6,7 +6,7 @@ sources:
     tables:
       - name: "project_subject_domain_v2"
         identifier: "ods_project_subject_domain_v2"
-        description: "进度信息汇总表 — 项目节点/里程碑事实（31个业务字段）"
+        description: "进度信息汇总表 — 项目节点/里程碑事实（33个业务字段）"
 
       - name: "quality_issue_v2"
         identifier: "ods_quality_issue_v2"

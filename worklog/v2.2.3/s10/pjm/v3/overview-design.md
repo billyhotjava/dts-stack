@@ -321,9 +321,9 @@ WITH project_summary AS (
              ELSE ROUND(SUM(CASE WHEN d.is_completed THEN 1 ELSE 0 END)::numeric
                       / COUNT(*)::numeric * 100, 1)
         END                                          AS completion_rate,
-        MIN(d.plan_date)                             AS plan_start,
+        MIN(d.plan_start_date)                       AS plan_start,
         MAX(d.plan_date)                             AS plan_end,
-        MIN(d.actual_date)                           AS actual_start,
+        COALESCE(MIN(d.actual_start_date), MIN(d.plan_start_date)) AS actual_start,
         MAX(CASE WHEN d.is_completed THEN d.actual_date END) AS actual_end,
         -- 是否有延期未完成节点
         SUM(CASE WHEN d.is_incomplete AND d.delay_days > 0 THEN 1 ELSE 0 END) AS delayed_incomplete_cnt,

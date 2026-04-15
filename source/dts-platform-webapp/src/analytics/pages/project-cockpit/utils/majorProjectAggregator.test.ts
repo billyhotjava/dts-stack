@@ -73,10 +73,40 @@ describe('aggregateMajorProjects', () => {
         expect(result.find(p => p.name === '新能源工厂')?.manager).toBe('刘工');
     });
 
-    it('derives startDate as earliest planDate', () => {
-        const result = aggregateMajorProjects(sampleRows);
-        expect(result.find(p => p.name === '制造协同平台')?.startDate).toBe('2026-01-06');
-    });
+	it('derives startDate as earliest planDate', () => {
+		const result = aggregateMajorProjects(sampleRows);
+		expect(result.find(p => p.name === '制造协同平台')?.startDate).toBe('2026-01-06');
+	});
+
+	it('prefers explicit planned start/end aliases when present', () => {
+		const rows: FlatProjectNodeRow[] = [
+			{
+				重大项目: '星链工程',
+				子项目: '平台总装',
+				任务: '总装集成',
+				类型: '重大节点',
+				计划开始日期: '2026-01-03',
+				计划完成日期: '2026-01-20',
+				实际开始日期: '2026-01-05',
+				实际完成日期: '2026-01-22',
+				是否完成: true,
+				延期天数: 2,
+				风险等级: '中',
+				责任科室: '总装室',
+				项目经理: '周工',
+			},
+		];
+		const result = aggregateMajorProjects(rows);
+		const project = result[0];
+		const task = project.subprojects[0].tasks[0];
+
+		expect(project.startDate).toBe('2026-01-03');
+		expect(project.plannedDeliveryDate).toBe('2026-01-20');
+		expect(task.planDate).toBe('2026-01-05');
+		expect(task.baselineStartDate).toBe('2026-01-03');
+		expect(task.baselineEndDate).toBe('2026-01-20');
+		expect(task.actualDate).toBe('2026-01-22');
+	});
 
     it('handles rows with empty 重大项目 by skipping', () => {
         const rows: FlatProjectNodeRow[] = [

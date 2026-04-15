@@ -15,9 +15,11 @@
     "subsystem",
     "dept",
     "node_type",
+    "plan_start_date",
     "plan_date",
     "completion_status",
     "risk_level",
+    "actual_start_date",
     "actual_date",
     "node_type"
   ],

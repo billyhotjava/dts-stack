@@ -5,6 +5,7 @@
 """
 
 import zipfile, xml.etree.ElementTree as ET, os, io
+from datetime import date, timedelta
 
 OUT_DIR = os.path.dirname(os.path.abspath(__file__))
 
@@ -117,11 +118,11 @@ def write_xlsx(filepath, sheets_data):
 # project1.xlsx — 进度信息汇总表 (ods_project_subject_domain_v2)
 # ====================================================================
 project_subject_domain_headers = [
-    "项目编号", "分系统/分任务", "节点任务及目标", "节点计划时间", "节点计划周数",
+    "项目编号", "分系统/分任务", "节点任务及目标", "计划开始日期", "节点计划时间", "节点计划周数",
     "交付物", "节点类型", "负责人", "责任科室", "分管室领导",
     "完成情况", "协同部门", "责任监管部门", "延期预计完成时间",
     "未完成原因及当前进展", "风险等级", "主要风险内容及措施", "延期影响分析",
-    "实际完成时间", "实际完成周数", "所领导", "来源",
+    "实际开始日期", "实际完成时间", "实际完成周数", "所领导", "来源",
     "延期项目原计划时间", "计划延误时间（已变更）", "计划延误时间（未变更）",
     "是否提交延期申请", "项目主管", "最后更新时间", "最后更新周数",
     "填写人", "亮点工作",
@@ -1348,10 +1349,20 @@ def _gen_project_subject_domain_rows():
                 owner = random.choice(COAUTHOR)
                 deliv = task + "报告"
                 planned = (y, m, plan_day)
+                plan_end_dt = date(y, m, plan_day)
+                span_min, span_max = {
+                    "一般节点": (5, 15),
+                    "重要节点": (10, 24),
+                    "重大节点": (15, 32),
+                    "里程碑节点": (20, 45),
+                }.get(node_type, (7, 21))
+                plan_start_dt = plan_end_dt - timedelta(days=random.randint(span_min, span_max))
+                plan_start_date = mk_date(plan_start_dt.year, plan_start_dt.month, plan_start_dt.day)
 
                 # 是否有实际完成时间（依据完成情况）
                 has_actual = state in ("按时完成",
                                        "超期已完成已变更", "超期已完成未变更")
+                actual_start_date = ""
                 actual_date = ""
                 actual_week = ""
                 if has_actual:
@@ -1359,11 +1370,22 @@ def _gen_project_subject_domain_rows():
                         ay, am, ad = y, m, max(1, plan_day - random.randint(0, 3))
                     else:  # 超期已完成
                         delta = random.randint(5, 45)
-                        from datetime import date, timedelta
-                        d2 = date(y, m, plan_day) + timedelta(days=delta)
+                        d2 = plan_end_dt + timedelta(days=delta)
                         ay, am, ad = d2.year, d2.month, d2.day
+                    actual_end_dt = date(ay, am, ad)
+                    actual_start_dt = plan_start_dt + timedelta(
+                        days=random.randint(0, max(0, min(7, (actual_end_dt - plan_start_dt).days)))
+                    )
+                    actual_start_date = mk_date(
+                        actual_start_dt.year, actual_start_dt.month, actual_start_dt.day
+                    )
                     actual_date = mk_date(ay, am, ad)
                     actual_week = mk_week(ay, am, ad, allow_dirty=False)
+                elif state != "正常待完成":
+                    actual_start_dt = plan_start_dt + timedelta(days=random.randint(0, 7))
+                    actual_start_date = mk_date(
+                        actual_start_dt.year, actual_start_dt.month, actual_start_dt.day
+                    )
 
                 # 延期预计完成时间（变更类状态有）
                 delay_plan = ""
@@ -1426,12 +1448,14 @@ def _gen_project_subject_domain_rows():
 
                 row = [
                     pcode, sub, task,
+                    plan_start_date,                         # 计划开始日期
                     mk_date(*planned),                      # 节点计划时间
                     mk_week(*planned, allow_dirty=False),   # 节点计划周数
                     deliv, node_type, owner, dept, dep_leader,
                     state, coop, regul,
                     delay_plan,
                     reason_text, risk, risk_text, impact_text,
+                    actual_start_date,
                     actual_date, actual_week, leader, source,
                     orig_date, changed_weeks, unchanged_weeks,
                     delay_apply, pm,
@@ -1464,9 +1488,9 @@ def _replace_project(row, headers, idx):
     """随机替换项目编号（第一列）、把部分时间字段脏化。"""
     proj = random.choice(ALL_PROJECTS)
     row[0] = proj[0]
-    # 扫描 headers，对含"时间"的列按概率脏化
+    # 扫描 headers，对日期/时间列按概率脏化
     for ci, h in enumerate(headers):
-        if "时间" in h and isinstance(row[ci], str) and row[ci]:
+        if ("时间" in h or "日期" in h) and isinstance(row[ci], str) and row[ci]:
             if random.random() < DIRTY_DATE_PROB:
                 # 尝试解析原值 yyyy-mm-dd，若失败随机生成
                 parts = row[ci].split("-")

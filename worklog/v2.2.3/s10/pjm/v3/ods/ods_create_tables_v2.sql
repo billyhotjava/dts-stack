@@ -6,13 +6,14 @@
 -- 所有字段 varchar — 类型转换由 dbt DWD 层处理
 -- ============================================================
 
--- ─── 0. 进度信息汇总表（来源: project1.xlsx，31个业务字段） ───
+-- ─── 0. 进度信息汇总表（来源: project1.xlsx，33个业务字段） ───
 DROP TABLE IF EXISTS ods_project_subject_domain_v2 CASCADE;
 CREATE TABLE ods_project_subject_domain_v2 (
     id                   serial PRIMARY KEY,
     project_no           varchar(500),   -- 项目编号
     subsystem            varchar(500),   -- 分系统/分任务
     node_task            varchar(500),   -- 节点任务及目标
+    plan_start_date      varchar(500),   -- 计划开始日期（格式：XXXX-XX-XX）
     plan_date            varchar(500),   -- 节点计划时间（格式：XXXX-XX-XX）
     plan_week            varchar(500),   -- 节点计划周数
     deliverable          varchar(2000),  -- 交付物
@@ -28,6 +29,7 @@ CREATE TABLE ods_project_subject_domain_v2 (
     risk_level           varchar(500),   -- 风险等级（下拉选择：高/中/低）
     risk_content         varchar(2000),  -- 主要风险内容及措施
     delay_impact         varchar(2000),  -- 延期影响分析
+    actual_start_date    varchar(500),   -- 实际开始日期（格式：XXXX-XX-XX）
     actual_date          varchar(500),   -- 实际完成时间（格式：XXXX-XX-XX）
     actual_week          varchar(500),   -- 实际完成周数
     institute_leader     varchar(500),   -- 所领导

@@ -6,6 +6,12 @@ export interface FlatProjectNodeRow {
     子项目?: string | null;
     任务?: string | null;
     类型?: string | null;
+    计划开始日期?: string | null;
+    计划完成日期?: string | null;
+    实际开始日期?: string | null;
+    实际完成日期?: string | null;
+    基线开始日期?: string | null;
+    基线结束日期?: string | null;
     计划日期?: string | null;
     实际日期?: string | null;
     基线日期?: string | null;
@@ -26,14 +32,18 @@ export interface FlatProjectNodeRow {
 function rowToTask(r: FlatProjectNodeRow): ProjectGanttTask {
     const isCompleted = r.是否完成 === true;
     const isOverdue = r.是否超期完成 === true || (r.延期天数 != null && r.延期天数 > 0);
+    const baselineStart = r.基线开始日期 ?? r.计划开始日期 ?? r.基线日期 ?? r.计划日期 ?? undefined;
+    const baselineEnd = r.基线结束日期 ?? r.计划完成日期 ?? r.计划日期 ?? baselineStart ?? undefined;
+    const actualStart = r.实际开始日期 ?? r.计划日期 ?? baselineStart ?? undefined;
+    const actualEnd = r.实际完成日期 ?? r.实际日期 ?? undefined;
     return {
         name: String(r.任务 ?? '').trim(),
         type: String(r.类型 ?? '一般任务'),
-        planDate: r.计划日期 ?? undefined,
-        planEndDate: r.计划日期 ?? undefined,
-        baselineStartDate: r.基线日期 ?? undefined,
-        baselineEndDate: r.基线日期 ?? undefined,
-        actualDate: r.实际日期 ?? undefined,
+        planDate: actualStart,
+        planEndDate: actualEnd ?? actualStart,
+        baselineStartDate: baselineStart,
+        baselineEndDate: baselineEnd,
+        actualDate: actualEnd,
         delayDays: r.延期天数 ?? 0,
         riskLevel: String(r.风险等级 ?? ''),
         owner: String(r.责任人 ?? r.责任科室 ?? ''),
@@ -62,8 +72,13 @@ function aggregateMeta(rows: FlatProjectNodeRow[]): {
     plannedDeliveryDate?: string;
     stage?: string;
 } {
-    const planDates = rows
-        .map(r => r.计划日期)
+    const plannedStarts = rows
+        .map(r => r.计划开始日期 ?? r.基线开始日期 ?? r.基线日期 ?? r.计划日期)
+        .filter((v): v is string => !!v)
+        .slice()
+        .sort();
+    const plannedEnds = rows
+        .map(r => r.计划完成日期 ?? r.基线结束日期 ?? r.计划日期)
         .filter((v): v is string => !!v)
         .slice()
         .sort();
@@ -78,8 +93,8 @@ function aggregateMeta(rows: FlatProjectNodeRow[]): {
         responsibleDept: pickFirstNonEmpty(rows, '责任科室'),
         manager: pickFirstNonEmpty(rows, '项目经理'),
         instituteLeader: pickFirstNonEmpty(rows, '所长'),
-        startDate: planDates[0],
-        plannedDeliveryDate: planDates[planDates.length - 1],
+        startDate: plannedStarts[0],
+        plannedDeliveryDate: plannedEnds[plannedEnds.length - 1],
         stage: stages[0] ?? derivedStage,
     };
 }
