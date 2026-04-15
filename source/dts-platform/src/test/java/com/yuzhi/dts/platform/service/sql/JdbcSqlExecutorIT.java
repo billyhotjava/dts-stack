@@ -9,7 +9,11 @@ import com.yuzhi.dts.platform.service.sql.JdbcSqlExecutor.ExecutionResult;
 import java.sql.Connection;
 import java.sql.SQLException;
 import java.sql.Statement;
+import java.util.UUID;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicInteger;
 import javax.sql.DataSource;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -102,24 +106,75 @@ class JdbcSqlExecutorIT {
     }
 
     // ------------------------------------------------------------------
-    // 3. execute_cancelStopsEarly
+    // 3. execute_cancelStopsEarly — via Statement.cancel() mid-flight
     // ------------------------------------------------------------------
 
     @Test
     void execute_cancelStopsEarly() throws Exception {
-        // We can't reliably create a truly long-running query in TC, so we set the cancel flag
-        // immediately before calling execute — the implementation checks cancelFlag before reading each row.
-        String tableName = "jdbcit_cancel_" + randomSuffix();
-        createAndPopulate(tableName, 100);
-        try {
-            AtomicBoolean cancelFlag = new AtomicBoolean(false);
-            // Set cancel immediately
-            cancelFlag.set(true);
-            // null executionId to skip JPA chunk persistence
-            ExecutionResult result = executor.execute(ds, "SELECT * FROM " + tableName, null, 10_000, null, cancelFlag);
+        // Use pg_sleep to produce a genuinely long-running query.
+        // Start execution on a background thread, then call jdbcSqlExecutor.cancel() from the
+        // main thread after a short delay — verifying Statement.cancel() actually interrupts it.
+        UUID execId = UUID.randomUUID();
+        long startMs = System.currentTimeMillis();
 
-            // With cancel=true from the start, 0 rows should be read
-            assertThat(result.rowCount()).isEqualTo(0);
+        CompletableFuture<Throwable> future = CompletableFuture.supplyAsync(() -> {
+            try {
+                // pg_sleep(5) would block for 5 seconds without cancellation
+                executor.execute(ds, "SELECT pg_sleep(5)", execId, 10_000, null, new AtomicBoolean(false));
+                return null; // completed without exception — unexpected
+            } catch (Exception ex) {
+                return ex; // expect a cancellation exception
+            }
+        });
+
+        // Allow the query to start executing
+        Thread.sleep(200);
+
+        // Cancel via Statement.cancel() — this is the real test of Critical #2
+        boolean cancelled = executor.cancel(execId);
+        assertThat(cancelled).isTrue();
+
+        // The future should complete well under 5 seconds
+        Throwable thrown = future.get(4, TimeUnit.SECONDS);
+
+        long elapsedMs = System.currentTimeMillis() - startMs;
+        assertThat(elapsedMs).isLessThan(4_000L);
+
+        // PG driver raises "ERROR: canceling statement due to user request"
+        assertThat(thrown).isNotNull();
+        assertThat(thrown.getMessage().toLowerCase())
+            .matches(msg -> msg.contains("cancel") || msg.contains("interrupt"));
+    }
+
+    // ------------------------------------------------------------------
+    // 6. execute_largeResult_streamsWithCursor
+    // ------------------------------------------------------------------
+
+    @Test
+    void execute_largeResult_streamsWithCursor() throws Exception {
+        // Verify that progressHook fires multiple times, proving the result is streamed in chunks
+        // rather than materialised as one large batch.
+        String tableName = "jdbcit_stream_" + randomSuffix();
+        int totalRows = 10_000;
+        createAndPopulate(tableName, totalRows);
+        try {
+            AtomicInteger progressCallbacks = new AtomicInteger(0);
+
+            ExecutionResult result = executor.execute(
+                ds,
+                "SELECT * FROM " + tableName,
+                null,       // null executionId — skip JPA persistence
+                100_000,    // row limit well above row count
+                count -> progressCallbacks.incrementAndGet(),
+                new AtomicBoolean(false)
+            );
+
+            assertThat(result.rowCount()).isEqualTo(totalRows);
+            // With STREAM_CHUNK_SIZE=1000 and 10k rows, expect at least 9 flush callbacks
+            // (the last partial chunk fires as well — so exactly 10 for 10k rows).
+            assertThat(progressCallbacks.get())
+                .as("progressHook should fire multiple times, proving streaming not full materialisation")
+                .isGreaterThanOrEqualTo(9);
         } finally {
             dropTable(tableName);
         }
@@ -162,8 +217,16 @@ class JdbcSqlExecutorIT {
     private void createAndPopulate(String tableName, int rows) throws Exception {
         try (Connection conn = dataSource.getConnection(); Statement stmt = conn.createStatement()) {
             stmt.execute("CREATE TABLE IF NOT EXISTS " + tableName + " (id INT PRIMARY KEY, val VARCHAR(50))");
-            for (int i = 1; i <= rows; i++) {
-                stmt.execute("INSERT INTO " + tableName + " VALUES (" + i + ", 'row_" + i + "')");
+            // Use generate_series for large row counts to avoid per-row round trips
+            if (rows > 100) {
+                stmt.execute(
+                    "INSERT INTO " + tableName + " (id, val) " +
+                    "SELECT g, 'row_' || g FROM generate_series(1, " + rows + ") g"
+                );
+            } else {
+                for (int i = 1; i <= rows; i++) {
+                    stmt.execute("INSERT INTO " + tableName + " VALUES (" + i + ", 'row_" + i + "')");
+                }
             }
         }
     }

@@ -21,6 +21,8 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.UUID;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Consumer;
@@ -41,6 +43,12 @@ public class JdbcSqlExecutor {
 
     /** Internal chunk size when streaming rows into QueryExecutionChunk records. */
     static final int STREAM_CHUNK_SIZE = 1000;
+
+    /**
+     * Tracks in-flight JDBC Statements keyed by executionId so that {@link #cancel(UUID)} can
+     * call {@link Statement#cancel()} on the executing thread's statement — not just flip a flag.
+     */
+    private final ConcurrentMap<UUID, Statement> activeStatements = new ConcurrentHashMap<>();
 
     private final InfraSecretService secretService;
     private final QueryExecutionChunkRepository chunkRepository;
@@ -98,7 +106,14 @@ public class JdbcSqlExecutor {
         try (Connection conn = openConnection(ds.getJdbcUrl().trim(), ds.getUsername(), password)) {
             long connectMs = TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - connectStart);
 
-            List<ColumnMeta> columns;
+            // Critical #3: PG JDBC ignores setFetchSize() unless autoCommit=false (server-side cursor)
+            boolean isPostgres = conn.getMetaData().getDatabaseProductName()
+                .toLowerCase(Locale.ROOT).contains("postgres");
+            if (isPostgres) {
+                conn.setAutoCommit(false);
+            }
+
+            List<ColumnMeta> columns = List.of();
             long totalRows = 0;
             boolean truncated = false;
             int chunkIndex = 0;
@@ -106,6 +121,11 @@ public class JdbcSqlExecutor {
 
             try (PreparedStatement ps = conn.prepareStatement(sql)) {
                 ps.setFetchSize(STREAM_CHUNK_SIZE);
+
+                // Critical #2: register statement BEFORE executeQuery so cancel() can reach it
+                if (executionId != null) {
+                    activeStatements.put(executionId, ps);
+                }
 
                 try (ResultSet rs = ps.executeQuery()) {
                     ResultSetMetaData meta = rs.getMetaData();
@@ -151,6 +171,17 @@ public class JdbcSqlExecutor {
                         flushChunk(executionId, chunkIndex++, buffer, totalRows, headers);
                     }
                 }
+            } finally {
+                // Critical #2: deregister statement whether execution succeeded or was canceled
+                if (executionId != null) {
+                    activeStatements.remove(executionId);
+                }
+                // Critical #3: commit (or rollback on exception) to close the server-side cursor
+                if (isPostgres) {
+                    try {
+                        conn.commit();
+                    } catch (SQLException ignored) {}
+                }
             }
 
             long queryMs = TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - queryStart);
@@ -160,6 +191,33 @@ public class JdbcSqlExecutor {
             );
             return new ExecutionResult(columns, totalRows, truncated, connectMs + queryMs, chunkIndex);
         }
+    }
+
+    /**
+     * Cancel the in-flight JDBC Statement for the given {@code executionId}.
+     * This calls {@link Statement#cancel()} on the executing thread's statement, which causes the
+     * underlying driver to interrupt the blocking {@code executeQuery()} call — unlike the
+     * {@code AtomicBoolean cancelFlag} which is only checked at chunk boundaries.
+     *
+     * @param executionId the execution to cancel
+     * @return {@code true} if a statement was found and cancel() was called; {@code false} otherwise
+     */
+    public boolean cancel(UUID executionId) {
+        if (executionId == null) {
+            return false;
+        }
+        Statement s = activeStatements.get(executionId);
+        if (s != null) {
+            try {
+                s.cancel();
+                LOG.debug("JdbcSqlExecutor.cancel: Statement.cancel() called for executionId={}", executionId);
+                return true;
+            } catch (SQLException ex) {
+                LOG.warn("JdbcSqlExecutor.cancel: Statement.cancel() threw for executionId={}: {}",
+                    executionId, ex.getMessage());
+            }
+        }
+        return false;
     }
 
     /**

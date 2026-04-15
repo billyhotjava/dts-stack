@@ -52,6 +52,9 @@ class SqlExecutionServiceTest {
     private QueryGateway queryGateway;
 
     @Mock
+    private JdbcSqlExecutor jdbcSqlExecutor;
+
+    @Mock
     private SqlValidationService validationService;
 
     @Mock
@@ -74,6 +77,7 @@ class SqlExecutionServiceTest {
             chunkRepository,
             auditService,
             queryGateway,
+            jdbcSqlExecutor,
             validationService,
             new ObjectMapper(),
             transactionManager,
@@ -104,7 +108,7 @@ class SqlExecutionServiceTest {
         when(validationService.validate(any(), any())).thenReturn(
             new SqlValidateResponse(true, "select 1", new SqlSummary(List.of(), null, List.of()), List.of(), List.of(), null, null)
         );
-        when(queryGateway.execute(eq("select 1"), any())).thenReturn(
+        when(queryGateway.execute(eq("select 1"), any(), any())).thenReturn(
             Map.of(
                 "headers",
                 List.of("value"),
@@ -126,7 +130,7 @@ class SqlExecutionServiceTest {
 
         service.submit(new SqlSubmitRequest("select 1", saved.getDatasource(), null, null, null, 100, false), null);
 
-        verify(queryGateway, timeout(2000)).execute(eq("select 1"), any());
+        verify(queryGateway, timeout(2000)).execute(eq("select 1"), any(), any());
         assertEventually(() -> saved.getStatus() == ExecEnums.ExecStatus.SUCCESS);
     }
 

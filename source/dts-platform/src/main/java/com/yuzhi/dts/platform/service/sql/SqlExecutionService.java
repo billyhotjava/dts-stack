@@ -60,6 +60,7 @@ public class SqlExecutionService {
     private final QueryExecutionChunkRepository chunkRepository;
     private final AuditService auditService;
     private final QueryGateway queryGateway;
+    private final JdbcSqlExecutor jdbcSqlExecutor;
     private final SqlValidationService validationService;
     private final ObjectMapper objectMapper;
     private final TransactionTemplate persistTransactionTemplate;
@@ -73,6 +74,7 @@ public class SqlExecutionService {
         QueryExecutionChunkRepository chunkRepository,
         AuditService auditService,
         QueryGateway queryGateway,
+        JdbcSqlExecutor jdbcSqlExecutor,
         SqlValidationService validationService,
         ObjectMapper objectMapper,
         PlatformTransactionManager transactionManager,
@@ -83,6 +85,7 @@ public class SqlExecutionService {
         this.chunkRepository = chunkRepository;
         this.auditService = auditService;
         this.queryGateway = queryGateway;
+        this.jdbcSqlExecutor = jdbcSqlExecutor;
         this.validationService = validationService;
         this.objectMapper = objectMapper;
         this.persistTransactionTemplate = new TransactionTemplate(transactionManager);
@@ -196,6 +199,8 @@ public class SqlExecutionService {
             return;
         }
         cancelRequested.add(executionId);
+        // Cancel the in-flight JDBC Statement (Critical #2: Statement.cancel() on the executing thread)
+        jdbcSqlExecutor.cancel(executionId);
         CompletableFuture<Void> runningFuture = runningTasks.get(executionId);
         if (runningFuture != null) {
             runningFuture.cancel(true);
@@ -260,7 +265,7 @@ public class SqlExecutionService {
             );
 
             UUID datasourceId = parseDatasourceId(request.datasource());
-            Map<String, Object> payload = queryGateway.execute(validation.rewrittenSql(), datasourceId);
+            Map<String, Object> payload = queryGateway.execute(validation.rewrittenSql(), datasourceId, executionId);
 
             if (cancelRequested.contains(executionId)) {
                 markCanceled(execution, "查询执行过程中被取消");
@@ -283,10 +288,12 @@ public class SqlExecutionService {
             final long finalTotalRows = totalRows;
             final boolean finalTruncated = truncated;
             final long finalElapsedMs = totalElapsedMs;
+            // When JdbcQueryGateway pre-persisted chunks, chunkCount comes from the payload
+            final Integer payloadChunkCount = payload.get("chunkCount") instanceof Integer n ? n : null;
 
             persistTransactionTemplate.executeWithoutResult(status -> {
                 if (!finalHeaders.isEmpty()) {
-                    // Write chunk records
+                    // Write chunk records (only when rows were not already persisted by JdbcSqlExecutor)
                     int chunkIndex = 0;
                     for (int offset = 0; offset < finalRows.size(); offset += CHUNK_SIZE) {
                         int end = Math.min(finalRows.size(), offset + CHUNK_SIZE);
@@ -303,6 +310,10 @@ public class SqlExecutionService {
                         chunk.setCreatedDate(Instant.now());
                         chunkRepository.save(chunk);
                     }
+                    // If JdbcSqlExecutor pre-persisted the chunks, use the count it reported
+                    int effectiveChunkCount = (payloadChunkCount != null && finalRows.isEmpty())
+                        ? payloadChunkCount
+                        : chunkIndex;
 
                     // Legacy preview blob — first 100 rows kept for /api/sql/result-page v1 compatibility
                     List<Map<String, Object>> previewRows = finalRows.size() <= PREVIEW_LIMIT
@@ -314,7 +325,7 @@ public class SqlExecutionService {
                     rs.setStorageFormat(ResultSet.StorageFormat.JSON);
                     rs.setColumns(String.join(",", finalHeaders));
                     rs.setRowCount(finalTotalRows);
-                    rs.setChunkCount(chunkIndex);
+                    rs.setChunkCount(effectiveChunkCount);
                     rs.setPreviewColumns(buildStoredResultJson(finalHeaders, previewRows, finalTotalRows));
                     rs.setTtlDays(7);
                     rs.setExpiresAt(Instant.now().plus(7, ChronoUnit.DAYS));
@@ -612,7 +623,11 @@ public class SqlExecutionService {
                 return switch (type) {
                     case "HIVE", "INCEPTOR" -> ExecEnums.ExecEngine.HIVE;
                     case "POSTGRESQL", "POSTGRES", "JDBC" -> ExecEnums.ExecEngine.POSTGRESQL;
-                    default -> ExecEnums.ExecEngine.POSTGRESQL;
+                    default -> {
+                        LOG.warn("Unknown datasource type '{}' for datasource {}, defaulting to POSTGRESQL",
+                            type, ds.getId());
+                        yield ExecEnums.ExecEngine.POSTGRESQL;
+                    }
                 };
             })
             .orElse(ExecEnums.ExecEngine.POSTGRESQL);

@@ -28,13 +28,11 @@ import java.util.UUID;
 import java.util.concurrent.TimeUnit;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.context.annotation.Primary;
 import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
 import javax.sql.DataSource;
 
 @Service
-@Primary
 public class HiveQueryGateway implements QueryGateway {
 
     private static final Logger LOG = LoggerFactory.getLogger(HiveQueryGateway.class);
