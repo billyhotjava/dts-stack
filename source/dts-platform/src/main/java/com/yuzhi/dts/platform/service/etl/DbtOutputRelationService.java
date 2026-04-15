@@ -187,9 +187,16 @@ public class DbtOutputRelationService {
     private String resolveSelector(ModelingSqlModel model) {
         String selector = stringVal(model.getDagSelector());
         if (StringUtils.hasText(selector)) {
-            return selector;
+            // 历史数据里可能存的是 `model:xxx`，dbt 无此 method，去前缀
+            return stripModelPrefix(selector);
         }
-        return "model:" + resolveIdentifier(model);
+        // dbt 选择器默认语义就是模型名本身（fqn），不要加 `model:` 前缀
+        return resolveIdentifier(model);
+    }
+
+    private String stripModelPrefix(String selector) {
+        // 剥掉 "model:" 前缀，同时兼容 +model:xxx / model:xxx+ / 逗号分隔多项
+        return selector.replaceAll("(^|[^A-Za-z0-9_])model:", "$1");
     }
 
     private String normalizeMaterialized(String materialized) {
