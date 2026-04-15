@@ -26,7 +26,7 @@ export interface ExecutionStatus {
 
 export async function submitSql(payload: SubmitPayload): Promise<SubmitResponse> {
   return apiClient.post<SubmitResponse>({
-    url: "/api/sql/submit",
+    url: "/sql/submit",
     data: {
       sqlText: payload.sqlText,
       datasource: payload.datasource,
@@ -37,11 +37,11 @@ export async function submitSql(payload: SubmitPayload): Promise<SubmitResponse>
 }
 
 export async function getExecutionStatus(executionId: string): Promise<ExecutionStatus> {
-  return apiClient.get<ExecutionStatus>({ url: `/api/sql/status/${executionId}` });
+  return apiClient.get<ExecutionStatus>({ url: `/sql/status/${executionId}` });
 }
 
 export async function cancelExecution(executionId: string): Promise<void> {
-  await apiClient.post<unknown>({ url: `/api/sql/cancel/${executionId}`, data: {} });
+  await apiClient.post<unknown>({ url: `/sql/cancel/${executionId}`, data: {} });
 }
 
 // ---- Result pages (v2) ----
@@ -72,7 +72,7 @@ export interface ResultPage {
 }
 
 export async function getExecutionMeta(executionId: string): Promise<ResultMeta> {
-  return apiClient.get<ResultMeta>({ url: `/api/sql/v2/executions/${executionId}/meta` });
+  return apiClient.get<ResultMeta>({ url: `/sql/v2/executions/${executionId}/meta` });
 }
 
 export async function getExecutionPage(
@@ -81,7 +81,7 @@ export async function getExecutionPage(
   size = 200,
 ): Promise<ResultPage> {
   return apiClient.get<ResultPage>({
-    url: `/api/sql/v2/executions/${executionId}/page?page=${page}&size=${size}`,
+    url: `/sql/v2/executions/${executionId}/page?page=${page}&size=${size}`,
   });
 }
 
@@ -94,5 +94,5 @@ export async function getExecutionPage(
  * @param cellCount   - total number of cells copied (rows × visible columns)
  */
 export async function postCopyAudit(executionId: string, cellCount: number): Promise<void> {
-  await apiClient.post<void>({ url: "/api/sql/v2/audit/copy", data: { executionId, cellCount } });
+  await apiClient.post<void>({ url: "/sql/v2/audit/copy", data: { executionId, cellCount } });
 }

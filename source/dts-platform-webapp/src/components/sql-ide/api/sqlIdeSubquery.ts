@@ -9,10 +9,10 @@ export interface TempView {
 
 export async function createTempView(executionId: string): Promise<TempView> {
   return apiClient.post<TempView>({
-    url: `/api/sql/v2/temp-views?executionId=${encodeURIComponent(executionId)}`,
+    url: `/sql/v2/temp-views?executionId=${encodeURIComponent(executionId)}`,
   });
 }
 
 export async function deleteTempView(viewName: string): Promise<void> {
-  await apiClient.delete<void>({ url: `/api/sql/v2/temp-views/${encodeURIComponent(viewName)}` });
+  await apiClient.delete<void>({ url: `/sql/v2/temp-views/${encodeURIComponent(viewName)}` });
 }

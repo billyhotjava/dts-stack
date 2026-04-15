@@ -35,22 +35,22 @@ export interface CatalogSearchHit {
 }
 
 export async function listDatasources(): Promise<CatalogDatasource[]> {
-  return apiClient.get<CatalogDatasource[]>({ url: "/api/sql/v2/catalog/datasources" });
+  return apiClient.get<CatalogDatasource[]>({ url: "/sql/v2/catalog/datasources" });
 }
 
 export async function listSchemas(dsId: string): Promise<CatalogSchema[]> {
-  return apiClient.get<CatalogSchema[]>({ url: `/api/sql/v2/catalog/${encodeURIComponent(dsId)}/schemas` });
+  return apiClient.get<CatalogSchema[]>({ url: `/sql/v2/catalog/${encodeURIComponent(dsId)}/schemas` });
 }
 
 export async function listTables(dsId: string, schema: string): Promise<CatalogTable[]> {
   return apiClient.get<CatalogTable[]>({
-    url: `/api/sql/v2/catalog/${encodeURIComponent(dsId)}/schemas/${encodeURIComponent(schema)}/tables`,
+    url: `/sql/v2/catalog/${encodeURIComponent(dsId)}/schemas/${encodeURIComponent(schema)}/tables`,
   });
 }
 
 export async function listColumns(dsId: string, schemaTable: string): Promise<CatalogColumn[]> {
   return apiClient.get<CatalogColumn[]>({
-    url: `/api/sql/v2/catalog/${encodeURIComponent(dsId)}/tables/${encodeURIComponent(schemaTable)}/columns`,
+    url: `/sql/v2/catalog/${encodeURIComponent(dsId)}/tables/${encodeURIComponent(schemaTable)}/columns`,
   });
 }
 
@@ -60,6 +60,6 @@ export async function searchCatalog(
   limit = 50,
 ): Promise<CatalogSearchHit[]> {
   return apiClient.get<CatalogSearchHit[]>({
-    url: `/api/sql/v2/catalog/${encodeURIComponent(dsId)}/search?q=${encodeURIComponent(q)}&limit=${limit}`,
+    url: `/sql/v2/catalog/${encodeURIComponent(dsId)}/search?q=${encodeURIComponent(q)}&limit=${limit}`,
   });
 }

@@ -24,21 +24,21 @@ export interface UpsertTabPayload extends PatchTabPayload {
 }
 
 export async function listTabs(): Promise<TabDto[]> {
-  return apiClient.get<TabDto[]>({ url: "/api/sql/v2/tabs" });
+  return apiClient.get<TabDto[]>({ url: "/sql/v2/tabs" });
 }
 
 export async function createTab(payload: CreateTabPayload): Promise<TabDto> {
-  return apiClient.post<TabDto>({ url: "/api/sql/v2/tabs", data: payload });
+  return apiClient.post<TabDto>({ url: "/sql/v2/tabs", data: payload });
 }
 
 export async function patchTab(id: string, payload: PatchTabPayload): Promise<TabDto> {
-  return apiClient.request<TabDto>({ url: `/api/sql/v2/tabs/${id}`, method: "PATCH", data: payload });
+  return apiClient.request<TabDto>({ url: `/sql/v2/tabs/${id}`, method: "PATCH", data: payload });
 }
 
 export async function deleteTab(id: string): Promise<void> {
-  await apiClient.delete<void>({ url: `/api/sql/v2/tabs/${id}` });
+  await apiClient.delete<void>({ url: `/sql/v2/tabs/${id}` });
 }
 
 export async function batchUpsertTabs(payload: UpsertTabPayload[]): Promise<TabDto[]> {
-  return apiClient.post<TabDto[]>({ url: "/api/sql/v2/tabs/batch", data: payload });
+  return apiClient.post<TabDto[]>({ url: "/sql/v2/tabs/batch", data: payload });
 }

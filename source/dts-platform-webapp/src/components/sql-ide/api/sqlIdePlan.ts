@@ -16,5 +16,5 @@ export interface ExplainPayload {
 }
 
 export async function postExplain(payload: ExplainPayload): Promise<PlanResult> {
-  return apiClient.post<PlanResult>({ url: "/api/sql/v2/explain", data: payload });
+  return apiClient.post<PlanResult>({ url: "/sql/v2/explain", data: payload });
 }

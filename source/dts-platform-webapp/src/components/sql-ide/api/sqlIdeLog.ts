@@ -14,5 +14,5 @@ export interface QueryLog {
 }
 
 export async function getExecutionLog(executionId: string): Promise<QueryLog> {
-  return apiClient.get<QueryLog>({ url: `/api/sql/v2/executions/${executionId}/log` });
+  return apiClient.get<QueryLog>({ url: `/sql/v2/executions/${executionId}/log` });
 }

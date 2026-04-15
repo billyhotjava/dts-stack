@@ -253,7 +253,15 @@ export const SqlIde: FC = () => {
               </div>
             </div>
             <div style={{ flex: 1, minHeight: 0 }}>
-              {activeTab?.lastExecutionId ? (
+              {sqlExec.state === "failed" ? (
+                <div style={{ padding: 12, color: "var(--ant-color-error)", whiteSpace: "pre-wrap", fontFamily: "monospace", fontSize: 12 }}>
+                  ❌ 执行失败
+                  {"\n\n"}
+                  {sqlExec.errorMessage ?? "(未返回错误信息)"}
+                </div>
+              ) : sqlExec.state === "canceled" ? (
+                <div style={{ padding: 12, color: "var(--ant-color-text-secondary)" }}>⏹ 已取消</div>
+              ) : activeTab?.lastExecutionId && sqlExec.state !== "running" ? (
                 <BottomTabs
                   executionId={activeTab.lastExecutionId}
                   sql={activeTab.sqlText}
@@ -263,6 +271,8 @@ export const SqlIde: FC = () => {
                   gridState={activeTab.gridState}
                   onGridStateChange={(next) => updateGridState(activeTab.id, next)}
                 />
+              ) : sqlExec.state === "running" ? (
+                <div style={{ padding: 12, color: "var(--ant-color-text-secondary)" }}>⏳ 运行中……</div>
               ) : (
                 <div style={{ padding: 12, color: "var(--ant-color-text-tertiary)" }}>运行 SQL 后结果出现在这里</div>
               )}

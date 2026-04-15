@@ -30,5 +30,5 @@ export async function listHistory(params: HistoryParams = {}): Promise<QueryHist
   if (params.limit != null) searchParams.set("limit", String(params.limit));
 
   const qs = searchParams.toString();
-  return apiClient.get<QueryHistoryItem[]>({ url: `/api/sql/v2/history${qs ? `?${qs}` : ""}` });
+  return apiClient.get<QueryHistoryItem[]>({ url: `/sql/v2/history${qs ? `?${qs}` : ""}` });
 }
