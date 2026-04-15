@@ -77,12 +77,38 @@ const TAB_ITEMS = (props: BottomTabsProps) => [
 
 export const BottomTabs: FC<BottomTabsProps> = (props) => {
   return (
-    <Tabs
-      defaultActiveKey="results"
-      size="small"
-      style={{ height: "100%", display: "flex", flexDirection: "column" }}
-      tabBarStyle={{ margin: 0, paddingLeft: 8, flexShrink: 0 }}
-      items={TAB_ITEMS(props)}
-    />
+    <div
+      className="sqlide-bottom-tabs"
+      style={{ height: "100%", display: "flex", flexDirection: "column", minHeight: 0 }}
+    >
+      <Tabs
+        defaultActiveKey="results"
+        size="small"
+        style={{ flex: 1, minHeight: 0, display: "flex", flexDirection: "column" }}
+        tabBarStyle={{ margin: 0, paddingLeft: 8, flexShrink: 0 }}
+        items={TAB_ITEMS(props)}
+      />
+      {/*
+        antd v5 default is `.ant-tabs-tabpane { flex: none }`, which collapses the
+        pane height to its content. That breaks the inner `height: 100%` chain used
+        by ResultGrid's scroll container (flex:1 + overflow:auto), so scrolling
+        silently "disappears" and rows overflow into the clipped BottomPanel.
+        Force the active pane to fill its flex parent so the inner grid can own
+        its scroll and the sticky thead actually sticks.
+      */}
+      <style>{`
+        .sqlide-bottom-tabs .ant-tabs-content-holder,
+        .sqlide-bottom-tabs .ant-tabs-content {
+          display: flex;
+          flex-direction: column;
+          flex: 1 1 auto;
+          min-height: 0;
+        }
+        .sqlide-bottom-tabs .ant-tabs-tabpane {
+          height: 100%;
+          min-height: 0;
+        }
+      `}</style>
+    </div>
   );
 };
