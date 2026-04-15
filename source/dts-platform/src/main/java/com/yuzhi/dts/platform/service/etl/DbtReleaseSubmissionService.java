@@ -50,7 +50,8 @@ public class DbtReleaseSubmissionService {
 
     public DbtReleaseSubmitResult submit(DbtReleaseSubmitRequest request, String activeDept) {
         String selector = resolveSelector(request == null ? null : request.models());
-        String dagSelector = resolveDagSelector(selector);
+        String requestDagSelector = normalizeText(request == null ? null : request.dagSelector());
+        String dagSelector = StringUtils.hasText(requestDagSelector) ? requestDagSelector : resolveDagSelector(selector);
         String dagId = resolveDagId(dagSelector);
 
         if (!airflowProperties.isEnabled()) {
@@ -101,7 +102,7 @@ public class DbtReleaseSubmissionService {
 
         ensureDagActive(dagId, dag);
 
-        Map<String, Object> conf = buildTriggerConf(selector, request, releaseGate);
+        Map<String, Object> conf = buildTriggerConf(selector, dagSelector, request, releaseGate);
         Map<String, Object> payload = Map.of("conf", conf, "logical_date", Instant.now().toString());
         Map<String, Object> triggerResult = airflowClient
             .triggerDag(dagId, payload)
@@ -200,6 +201,7 @@ public class DbtReleaseSubmissionService {
 
     private Map<String, Object> buildTriggerConf(
         String selector,
+        String dagSelector,
         DbtReleaseSubmitRequest request,
         DbtReleaseGateService.DbtReleaseGateResult releaseGate
     ) {
@@ -207,7 +209,7 @@ public class DbtReleaseSubmissionService {
         conf.put("operation", "build");
         if (StringUtils.hasText(selector)) {
             conf.put("models", expandBuildSelector(selector));
-            conf.put("dagSelector", selector);
+            conf.put("dagSelector", StringUtils.hasText(dagSelector) ? dagSelector : selector);
         }
         if (StringUtils.hasText(request == null ? null : request.target())) {
             conf.put("target", request.target().trim());
@@ -306,17 +308,25 @@ public class DbtReleaseSubmissionService {
         if (!StringUtils.hasText(normalized) || "all".equalsIgnoreCase(normalized)) {
             return StringUtils.hasText(normalized) ? normalized : "all";
         }
-        if (normalized.startsWith("+")) {
-            return normalized;
+        // Tokenize on whitespace; for each token, ensure ancestors are included via leading '+',
+        // unless the token already carries graph-operator or is itself "all"/empty. Also strip
+        // the invalid 'model:' method prefix (dbt has no such method; bare name is the model selector).
+        StringBuilder out = new StringBuilder();
+        for (String raw : normalized.split("\\s+")) {
+            if (raw.isEmpty()) continue;
+            String token = raw;
+            if (token.regionMatches(true, 0, "model:", 0, 6)) {
+                token = token.substring(6);
+            }
+            if (token.isEmpty() || "all".equalsIgnoreCase(token)) continue;
+            boolean hasOperator = token.startsWith("+") || token.endsWith("+") || token.contains("@");
+            if (!hasOperator) {
+                token = "+" + token;
+            }
+            if (out.length() > 0) out.append(' ');
+            out.append(token);
         }
-        if (
-            normalized.startsWith("tag:") ||
-            normalized.startsWith("model:") ||
-            normalized.startsWith("source:")
-        ) {
-            return "+" + normalized;
-        }
-        return normalized;
+        return out.length() == 0 ? "all" : out.toString();
     }
 
     private String normalizeText(String raw) {
@@ -341,6 +351,7 @@ public class DbtReleaseSubmissionService {
 
     public record DbtReleaseSubmitRequest(
         String models,
+        String dagSelector,
         String target,
         Map<String, Object> vars,
         String gitRef,

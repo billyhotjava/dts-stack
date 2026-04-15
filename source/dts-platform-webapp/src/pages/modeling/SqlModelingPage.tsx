@@ -971,40 +971,88 @@ export default function SqlModelingPage() {
 		try {
 			const values = await runForm.validateFields();
 			const selectedIdSet = new Set(runSelectedModelIds);
-			const selectedNames = sqlModels
-				.filter((model) => selectedIdSet.has(String(model.id || "").trim()))
-				.map((model) => normalizeText(model.name))
-				.filter(Boolean);
-			if (selectedNames.length === 0) {
+			const selectedModels = sqlModels.filter((model) => selectedIdSet.has(String(model.id || "").trim()));
+			if (selectedModels.length === 0) {
 				toast.error("勾选的模型已失效，请重新选择");
 				return;
 			}
-			const modelsSelector = selectedNames.map((name) => `model:${name}`).join(" ");
+			type Group = { dagSelector?: string; names: string[]; planName?: string };
+			const groupMap = new Map<string, Group>();
+			selectedModels.forEach((m) => {
+				const ds = normalizeText(m.dagSelector) || "";
+				const key = ds || "__none__";
+				let g = groupMap.get(key);
+				if (!g) {
+					g = { dagSelector: ds || undefined, names: [], planName: m.planName || undefined };
+					groupMap.set(key, g);
+				}
+				const nm = normalizeText(m.name);
+				if (nm) g.names.push(nm);
+			});
+			const groups = Array.from(groupMap.values()).filter((g) => g.names.length > 0);
+			if (groups.length === 0) {
+				toast.error("勾选的模型已失效，请重新选择");
+				return;
+			}
 			if (runMode === "build") {
-				const buildPayload = {
-					models: modelsSelector,
-					target: normalizeText(values.target) || "dev",
-					vars: tryParseJsonObject(values.vars),
-					operation: "build" as const,
-				};
-				const triggerResp: any = await triggerDbtRun(buildPayload);
-				const dagRunId = normalizeText(triggerResp?.dag_run_id || triggerResp?.dagRunId);
-				const dagId = normalizeText(triggerResp?.dag_id || triggerResp?.dagId);
+				const target = normalizeText(values.target) || "dev";
+				const vars = tryParseJsonObject(values.vars);
+				let lastDagId: string | undefined;
+				let lastDagRunId: string | undefined;
+				let lastSelector = "";
+				for (const g of groups) {
+					const modelsSelector = g.names.join(" ");
+					const triggerResp: any = await triggerDbtRun({
+						models: modelsSelector,
+						dagSelector: g.dagSelector,
+						target,
+						vars,
+						operation: "build",
+					});
+					lastDagRunId = normalizeText(triggerResp?.dag_run_id || triggerResp?.dagRunId);
+					lastDagId = normalizeText(triggerResp?.dag_id || triggerResp?.dagId);
+					lastSelector = modelsSelector;
+				}
 				setRunResult({
-					...createPendingBuildSummary("build", modelsSelector),
-					dagRunId,
-					dagId,
+					...createPendingBuildSummary("build", lastSelector),
+					dagRunId: lastDagRunId,
+					dagId: lastDagId,
 				});
-				toast.success(buildOperationQueuedMessage("build"));
+				toast.success(
+					groups.length > 1
+						? `已提交 ${groups.length} 个项目空间的 dbt build`
+						: buildOperationQueuedMessage("build"),
+				);
 				setRunOpen(false);
 				setExecLog("");
 				setBottomTab("operations");
 				setOpsSubTab("execlog");
-				void loadRuns({ dagId: dagId || undefined, selector: modelsSelector });
+				void loadRuns({ dagId: lastDagId || undefined, selector: lastSelector });
 				return;
 			}
+			if (groups.length > 1) {
+				Modal.warning({
+					title: "跨项目空间上线",
+					content: (
+						<div style={{ fontSize: 12 }}>
+							<p>勾选的模型分布在多个项目空间，上线需按空间分别提交。当前勾选分组：</p>
+							<ul style={{ paddingLeft: 18, margin: 0 }}>
+								{groups.map((g, idx) => (
+									<li key={`${g.dagSelector || "none"}-${idx}`}>
+										{(g.planName || g.dagSelector || "未分配")} · {g.names.length} 个模型
+									</li>
+								))}
+							</ul>
+						</div>
+					),
+				});
+				return;
+			}
+			const onlyGroup = groups[0];
+			const modelsSelector = onlyGroup.names.join(" ");
 			const payload = {
 				models: modelsSelector,
+				dagSelector: onlyGroup.dagSelector,
 				target: normalizeText(values.target) || undefined,
 				vars: tryParseJsonObject(values.vars),
 				gitRef: normalizeText(values.gitRef) || undefined,
