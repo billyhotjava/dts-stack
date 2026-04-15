@@ -8,7 +8,7 @@ import { ECHARTS_COMMON_FIELDS, AXIS_CHART_FIELDS } from './common';
 
 const lineChartSchema: ComponentConfigSchema = {
     type: 'line-chart',
-    groups: [STANDARD_GROUPS.chart, STANDARD_GROUPS.behavior, STANDARD_GROUPS.advanced],
+    groups: [STANDARD_GROUPS.chart, STANDARD_GROUPS.appearance, STANDARD_GROUPS.layout, STANDARD_GROUPS.behavior, STANDARD_GROUPS.advanced],
     fields: [
         ...ECHARTS_COMMON_FIELDS,
         ...AXIS_CHART_FIELDS,
@@ -21,7 +21,7 @@ const lineChartSchema: ComponentConfigSchema = {
 
 const barChartSchema: ComponentConfigSchema = {
     type: 'bar-chart',
-    groups: [STANDARD_GROUPS.chart, STANDARD_GROUPS.behavior, STANDARD_GROUPS.advanced],
+    groups: [STANDARD_GROUPS.chart, STANDARD_GROUPS.appearance, STANDARD_GROUPS.layout, STANDARD_GROUPS.behavior, STANDARD_GROUPS.advanced],
     fields: [
         ...ECHARTS_COMMON_FIELDS,
         ...AXIS_CHART_FIELDS,
@@ -38,7 +38,7 @@ const barChartSchema: ComponentConfigSchema = {
 
 const pieChartSchema: ComponentConfigSchema = {
     type: 'pie-chart',
-    groups: [STANDARD_GROUPS.chart, STANDARD_GROUPS.behavior, STANDARD_GROUPS.advanced],
+    groups: [STANDARD_GROUPS.chart, STANDARD_GROUPS.appearance, STANDARD_GROUPS.layout, STANDARD_GROUPS.behavior, STANDARD_GROUPS.advanced],
     fields: [
         ...ECHARTS_COMMON_FIELDS,
     ],
@@ -46,7 +46,7 @@ const pieChartSchema: ComponentConfigSchema = {
 
 const gaugeChartSchema: ComponentConfigSchema = {
     type: 'gauge-chart',
-    groups: [STANDARD_GROUPS.chart, STANDARD_GROUPS.behavior, STANDARD_GROUPS.advanced],
+    groups: [STANDARD_GROUPS.chart, STANDARD_GROUPS.appearance, STANDARD_GROUPS.layout, STANDARD_GROUPS.behavior, STANDARD_GROUPS.advanced],
     fields: [
         ...ECHARTS_COMMON_FIELDS,
         { key: 'min',         label: '最小值',   type: 'number', group: 'chart', defaultValue: 0 },
@@ -57,7 +57,7 @@ const gaugeChartSchema: ComponentConfigSchema = {
 
 const scatterChartSchema: ComponentConfigSchema = {
     type: 'scatter-chart',
-    groups: [STANDARD_GROUPS.chart, STANDARD_GROUPS.behavior, STANDARD_GROUPS.advanced],
+    groups: [STANDARD_GROUPS.chart, STANDARD_GROUPS.appearance, STANDARD_GROUPS.layout, STANDARD_GROUPS.behavior, STANDARD_GROUPS.advanced],
     fields: [
         ...ECHARTS_COMMON_FIELDS,
         ...AXIS_CHART_FIELDS,
@@ -68,7 +68,7 @@ const scatterChartSchema: ComponentConfigSchema = {
 
 const radarChartSchema: ComponentConfigSchema = {
     type: 'radar-chart',
-    groups: [STANDARD_GROUPS.chart, STANDARD_GROUPS.behavior, STANDARD_GROUPS.advanced],
+    groups: [STANDARD_GROUPS.chart, STANDARD_GROUPS.appearance, STANDARD_GROUPS.layout, STANDARD_GROUPS.behavior, STANDARD_GROUPS.advanced],
     fields: [
         ...ECHARTS_COMMON_FIELDS,
         { key: 'indicator', label: '指标配置', type: 'json', group: 'chart' },
@@ -77,7 +77,7 @@ const radarChartSchema: ComponentConfigSchema = {
 
 const funnelChartSchema: ComponentConfigSchema = {
     type: 'funnel-chart',
-    groups: [STANDARD_GROUPS.chart, STANDARD_GROUPS.behavior, STANDARD_GROUPS.advanced],
+    groups: [STANDARD_GROUPS.chart, STANDARD_GROUPS.appearance, STANDARD_GROUPS.layout, STANDARD_GROUPS.behavior, STANDARD_GROUPS.advanced],
     fields: [
         ...ECHARTS_COMMON_FIELDS,
     ],
@@ -85,7 +85,7 @@ const funnelChartSchema: ComponentConfigSchema = {
 
 const mapChartSchema: ComponentConfigSchema = {
     type: 'map-chart',
-    groups: [STANDARD_GROUPS.chart, STANDARD_GROUPS.behavior, STANDARD_GROUPS.advanced],
+    groups: [STANDARD_GROUPS.chart, STANDARD_GROUPS.appearance, STANDARD_GROUPS.layout, STANDARD_GROUPS.behavior, STANDARD_GROUPS.advanced],
     fields: [
         ...ECHARTS_COMMON_FIELDS,
         { key: 'mapScope', label: '地图范围', type: 'select', group: 'chart', options: [
@@ -133,7 +133,7 @@ const mapChartSchema: ComponentConfigSchema = {
 
 const comboChartSchema: ComponentConfigSchema = {
     type: 'combo-chart',
-    groups: [STANDARD_GROUPS.chart, STANDARD_GROUPS.behavior, STANDARD_GROUPS.advanced],
+    groups: [STANDARD_GROUPS.chart, STANDARD_GROUPS.appearance, STANDARD_GROUPS.layout, STANDARD_GROUPS.behavior, STANDARD_GROUPS.advanced],
     fields: [
         ...ECHARTS_COMMON_FIELDS,
         ...AXIS_CHART_FIELDS,
@@ -142,7 +142,7 @@ const comboChartSchema: ComponentConfigSchema = {
 
 const treemapChartSchema: ComponentConfigSchema = {
     type: 'treemap-chart',
-    groups: [STANDARD_GROUPS.chart, STANDARD_GROUPS.behavior, STANDARD_GROUPS.advanced],
+    groups: [STANDARD_GROUPS.chart, STANDARD_GROUPS.appearance, STANDARD_GROUPS.layout, STANDARD_GROUPS.behavior, STANDARD_GROUPS.advanced],
     fields: [
         ...ECHARTS_COMMON_FIELDS,
     ],
@@ -150,7 +150,7 @@ const treemapChartSchema: ComponentConfigSchema = {
 
 const sunburstChartSchema: ComponentConfigSchema = {
     type: 'sunburst-chart',
-    groups: [STANDARD_GROUPS.chart, STANDARD_GROUPS.behavior, STANDARD_GROUPS.advanced],
+    groups: [STANDARD_GROUPS.chart, STANDARD_GROUPS.appearance, STANDARD_GROUPS.layout, STANDARD_GROUPS.behavior, STANDARD_GROUPS.advanced],
     fields: [
         ...ECHARTS_COMMON_FIELDS,
     ],
@@ -158,7 +158,7 @@ const sunburstChartSchema: ComponentConfigSchema = {
 
 const wordcloudChartSchema: ComponentConfigSchema = {
     type: 'wordcloud-chart',
-    groups: [STANDARD_GROUPS.chart, STANDARD_GROUPS.behavior, STANDARD_GROUPS.advanced],
+    groups: [STANDARD_GROUPS.chart, STANDARD_GROUPS.appearance, STANDARD_GROUPS.layout, STANDARD_GROUPS.behavior, STANDARD_GROUPS.advanced],
     fields: [
         ...ECHARTS_COMMON_FIELDS,
         { key: 'shape', label: '词云形状', type: 'select', group: 'chart', options: [
@@ -177,7 +177,7 @@ const wordcloudChartSchema: ComponentConfigSchema = {
 
 const waterfallChartSchema: ComponentConfigSchema = {
     type: 'waterfall-chart',
-    groups: [STANDARD_GROUPS.chart, STANDARD_GROUPS.behavior, STANDARD_GROUPS.advanced],
+    groups: [STANDARD_GROUPS.chart, STANDARD_GROUPS.appearance, STANDARD_GROUPS.layout, STANDARD_GROUPS.behavior, STANDARD_GROUPS.advanced],
     fields: [
         ...ECHARTS_COMMON_FIELDS,
         ...AXIS_CHART_FIELDS,
@@ -201,7 +201,7 @@ const ganttChartSchema: ComponentConfigSchema = {
 
 const sankeyChartSchema: ComponentConfigSchema = {
     type: 'sankey-chart',
-    groups: [STANDARD_GROUPS.chart, STANDARD_GROUPS.behavior, STANDARD_GROUPS.advanced],
+    groups: [STANDARD_GROUPS.chart, STANDARD_GROUPS.appearance, STANDARD_GROUPS.layout, STANDARD_GROUPS.behavior, STANDARD_GROUPS.advanced],
     fields: [
         ...ECHARTS_COMMON_FIELDS,
         { key: 'nodeAlign', label: '节点对齐', type: 'select', group: 'chart', options: [
@@ -219,7 +219,7 @@ const sankeyChartSchema: ComponentConfigSchema = {
 
 const heatmapChartSchema: ComponentConfigSchema = {
     type: 'heatmap-chart',
-    groups: [STANDARD_GROUPS.chart, STANDARD_GROUPS.behavior, STANDARD_GROUPS.advanced],
+    groups: [STANDARD_GROUPS.chart, STANDARD_GROUPS.appearance, STANDARD_GROUPS.layout, STANDARD_GROUPS.behavior, STANDARD_GROUPS.advanced],
     fields: [
         ...ECHARTS_COMMON_FIELDS,
         ...AXIS_CHART_FIELDS,
@@ -231,7 +231,7 @@ const heatmapChartSchema: ComponentConfigSchema = {
 
 const graphChartSchema: ComponentConfigSchema = {
     type: 'graph-chart',
-    groups: [STANDARD_GROUPS.chart, STANDARD_GROUPS.behavior, STANDARD_GROUPS.advanced],
+    groups: [STANDARD_GROUPS.chart, STANDARD_GROUPS.appearance, STANDARD_GROUPS.layout, STANDARD_GROUPS.behavior, STANDARD_GROUPS.advanced],
     fields: [
         ...ECHARTS_COMMON_FIELDS,
         { key: 'layout', label: '布局', type: 'select', group: 'chart', options: [
@@ -248,7 +248,7 @@ const graphChartSchema: ComponentConfigSchema = {
 
 const candlestickChartSchema: ComponentConfigSchema = {
     type: 'candlestick-chart',
-    groups: [STANDARD_GROUPS.chart, STANDARD_GROUPS.behavior, STANDARD_GROUPS.advanced],
+    groups: [STANDARD_GROUPS.chart, STANDARD_GROUPS.appearance, STANDARD_GROUPS.layout, STANDARD_GROUPS.behavior, STANDARD_GROUPS.advanced],
     fields: [
         ...ECHARTS_COMMON_FIELDS,
         ...AXIS_CHART_FIELDS,
@@ -263,7 +263,7 @@ const candlestickChartSchema: ComponentConfigSchema = {
 
 const boxplotChartSchema: ComponentConfigSchema = {
     type: 'boxplot-chart',
-    groups: [STANDARD_GROUPS.chart, STANDARD_GROUPS.behavior, STANDARD_GROUPS.advanced],
+    groups: [STANDARD_GROUPS.chart, STANDARD_GROUPS.appearance, STANDARD_GROUPS.layout, STANDARD_GROUPS.behavior, STANDARD_GROUPS.advanced],
     fields: [
         ...ECHARTS_COMMON_FIELDS,
         ...AXIS_CHART_FIELDS,
@@ -277,7 +277,7 @@ const boxplotChartSchema: ComponentConfigSchema = {
 
 const parallelChartSchema: ComponentConfigSchema = {
     type: 'parallel-chart',
-    groups: [STANDARD_GROUPS.chart, STANDARD_GROUPS.behavior, STANDARD_GROUPS.advanced],
+    groups: [STANDARD_GROUPS.chart, STANDARD_GROUPS.appearance, STANDARD_GROUPS.layout, STANDARD_GROUPS.behavior, STANDARD_GROUPS.advanced],
     fields: [
         ...ECHARTS_COMMON_FIELDS,
         { key: 'lineOpacity', label: '线条透明度', type: 'slider', group: 'chart', min: 0, max: 1, step: 0.05, defaultValue: 0.5 },
@@ -287,7 +287,7 @@ const parallelChartSchema: ComponentConfigSchema = {
 
 const calendarChartSchema: ComponentConfigSchema = {
     type: 'calendar-chart',
-    groups: [STANDARD_GROUPS.chart, STANDARD_GROUPS.behavior, STANDARD_GROUPS.advanced],
+    groups: [STANDARD_GROUPS.chart, STANDARD_GROUPS.appearance, STANDARD_GROUPS.layout, STANDARD_GROUPS.behavior, STANDARD_GROUPS.advanced],
     fields: [
         ...ECHARTS_COMMON_FIELDS,
         { key: 'cellSize', label: '格子大小', type: 'number', group: 'chart', min: 10, max: 30, defaultValue: 16 },
@@ -302,7 +302,7 @@ const calendarChartSchema: ComponentConfigSchema = {
 
 const treeChartSchema: ComponentConfigSchema = {
     type: 'tree-chart',
-    groups: [STANDARD_GROUPS.chart, STANDARD_GROUPS.behavior, STANDARD_GROUPS.advanced],
+    groups: [STANDARD_GROUPS.chart, STANDARD_GROUPS.appearance, STANDARD_GROUPS.layout, STANDARD_GROUPS.behavior, STANDARD_GROUPS.advanced],
     fields: [
         ...ECHARTS_COMMON_FIELDS,
         { key: 'layout', label: '布局', type: 'select', group: 'chart', options: [
@@ -322,7 +322,7 @@ const treeChartSchema: ComponentConfigSchema = {
 
 const themeRiverChartSchema: ComponentConfigSchema = {
     type: 'themeRiver-chart',
-    groups: [STANDARD_GROUPS.chart, STANDARD_GROUPS.behavior, STANDARD_GROUPS.advanced],
+    groups: [STANDARD_GROUPS.chart, STANDARD_GROUPS.appearance, STANDARD_GROUPS.layout, STANDARD_GROUPS.behavior, STANDARD_GROUPS.advanced],
     fields: [
         ...ECHARTS_COMMON_FIELDS,
     ],
@@ -330,7 +330,7 @@ const themeRiverChartSchema: ComponentConfigSchema = {
 
 const pictorialBarChartSchema: ComponentConfigSchema = {
     type: 'pictorialBar-chart',
-    groups: [STANDARD_GROUPS.chart, STANDARD_GROUPS.behavior, STANDARD_GROUPS.advanced],
+    groups: [STANDARD_GROUPS.chart, STANDARD_GROUPS.appearance, STANDARD_GROUPS.layout, STANDARD_GROUPS.behavior, STANDARD_GROUPS.advanced],
     fields: [
         ...ECHARTS_COMMON_FIELDS,
         ...AXIS_CHART_FIELDS,

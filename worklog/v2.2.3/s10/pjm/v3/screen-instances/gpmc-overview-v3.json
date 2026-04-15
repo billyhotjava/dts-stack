@@ -618,7 +618,7 @@
       "locked": false,
       "visible": true,
       "config": {
-        "title": "进度计划",
+        "title": "",
         "stackMode": true,
         "series": [
           {
@@ -639,7 +639,17 @@
           "#1f85ff",
           "#a666ff",
           "#ffd54f"
-        ]
+        ],
+        "titleFontSize": 0,
+        "chartPaddingTop": 8,
+        "chartPaddingRight": 16,
+        "chartPaddingBottom": 28,
+        "chartPaddingLeft": 40,
+        "legend": {
+          "show": true,
+          "position": "bottom",
+          "align": "center"
+        }
       },
       "dataSource": {
         "type": "sql",
@@ -681,7 +691,7 @@
       "locked": false,
       "visible": true,
       "config": {
-        "title": "进度计划",
+        "title": "",
         "horizontal": true,
         "stackMode": true,
         "series": [
@@ -698,7 +708,17 @@
           "#2ee6a6",
           "#a666ff",
           "#2fffff"
-        ]
+        ],
+        "titleFontSize": 0,
+        "chartPaddingTop": 8,
+        "chartPaddingRight": 16,
+        "chartPaddingBottom": 28,
+        "chartPaddingLeft": 40,
+        "legend": {
+          "show": true,
+          "position": "bottom",
+          "align": "center"
+        }
       },
       "dataSource": {
         "type": "sql",
@@ -740,7 +760,7 @@
       "locked": false,
       "visible": true,
       "config": {
-        "title": "质量问题",
+        "title": "",
         "horizontal": false,
         "series": [
           {
@@ -754,7 +774,17 @@
         "smooth": true,
         "areaStyle": true,
         "stack": false,
-        "stackMode": false
+        "stackMode": false,
+        "titleFontSize": 0,
+        "chartPaddingTop": 8,
+        "chartPaddingRight": 16,
+        "chartPaddingBottom": 28,
+        "chartPaddingLeft": 40,
+        "legend": {
+          "show": true,
+          "position": "bottom",
+          "align": "center"
+        }
       },
       "dataSource": {
         "type": "sql",
@@ -796,7 +826,7 @@
       "locked": false,
       "visible": true,
       "config": {
-        "title": "质量问题",
+        "title": "",
         "horizontal": true,
         "series": [
           {
@@ -814,7 +844,17 @@
         ],
         "innerRadius": 0,
         "roseType": false,
-        "labelPosition": "outside"
+        "labelPosition": "outside",
+        "titleFontSize": 0,
+        "chartPaddingTop": 8,
+        "chartPaddingRight": 16,
+        "chartPaddingBottom": 28,
+        "chartPaddingLeft": 40,
+        "legend": {
+          "show": true,
+          "position": "bottom",
+          "align": "center"
+        }
       },
       "dataSource": {
         "type": "sql",
@@ -856,7 +896,7 @@
       "locked": false,
       "visible": true,
       "config": {
-        "title": "技术状态",
+        "title": "",
         "series": [
           {
             "name": "已整改",
@@ -879,7 +919,17 @@
         "stackMode": false,
         "smooth": true,
         "areaStyle": false,
-        "stack": false
+        "stack": false,
+        "titleFontSize": 0,
+        "chartPaddingTop": 8,
+        "chartPaddingRight": 16,
+        "chartPaddingBottom": 28,
+        "chartPaddingLeft": 40,
+        "legend": {
+          "show": true,
+          "position": "bottom",
+          "align": "center"
+        }
       },
       "dataSource": {
         "type": "sql",
@@ -921,7 +971,7 @@
       "locked": false,
       "visible": true,
       "config": {
-        "title": "技术状态",
+        "title": "",
         "horizontal": true,
         "series": [
           {
@@ -931,7 +981,17 @@
         ],
         "seriesColors": [
           "#ff9f43"
-        ]
+        ],
+        "titleFontSize": 0,
+        "chartPaddingTop": 8,
+        "chartPaddingRight": 16,
+        "chartPaddingBottom": 28,
+        "chartPaddingLeft": 40,
+        "legend": {
+          "show": true,
+          "position": "bottom",
+          "align": "center"
+        }
       },
       "dataSource": {
         "type": "sql",
@@ -973,7 +1033,7 @@
       "locked": false,
       "visible": true,
       "config": {
-        "title": "项目风险",
+        "title": "",
         "stackMode": true,
         "series": [
           {
@@ -993,7 +1053,17 @@
           "#ff5d73",
           "#ff9f43",
           "#ffd54f"
-        ]
+        ],
+        "titleFontSize": 0,
+        "chartPaddingTop": 8,
+        "chartPaddingRight": 16,
+        "chartPaddingBottom": 28,
+        "chartPaddingLeft": 40,
+        "legend": {
+          "show": true,
+          "position": "bottom",
+          "align": "center"
+        }
       },
       "dataSource": {
         "type": "sql",
@@ -1035,7 +1105,7 @@
       "locked": false,
       "visible": true,
       "config": {
-        "title": "项目风险",
+        "title": "",
         "horizontal": true,
         "series": [
           {
@@ -1058,7 +1128,17 @@
         ],
         "innerRadius": 55,
         "roseType": false,
-        "labelPosition": "outside"
+        "labelPosition": "outside",
+        "titleFontSize": 0,
+        "chartPaddingTop": 8,
+        "chartPaddingRight": 16,
+        "chartPaddingBottom": 28,
+        "chartPaddingLeft": 40,
+        "legend": {
+          "show": true,
+          "position": "bottom",
+          "align": "center"
+        }
       },
       "dataSource": {
         "type": "sql",
