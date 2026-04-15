@@ -8,6 +8,7 @@ import {
   listDatasources,
   listSchemas,
   listTables,
+  searchCatalog,
 } from "../api/sqlIdeCatalog";
 
 const STALE_5_MIN = 5 * 60 * 1000;
@@ -48,6 +49,16 @@ export function useColumnsQuery(dsId: string | null, schemaTable: string | null)
     queryFn: () => listColumns(dsId!, schemaTable!),
     enabled: !!dsId && !!schemaTable,
     staleTime: STALE_5_MIN,
+    gcTime: CACHE_30_MIN,
+  });
+}
+
+export function useSearchCatalogQuery(dsId: string | null, q: string) {
+  return useQuery({
+    queryKey: ["sqlide", "catalog", "search", dsId, q],
+    queryFn: () => searchCatalog(dsId!, q),
+    enabled: !!dsId && q.length >= 2,
+    staleTime: 30_000,
     gcTime: CACHE_30_MIN,
   });
 }
