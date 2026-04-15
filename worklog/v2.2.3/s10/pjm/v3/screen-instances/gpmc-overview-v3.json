@@ -1346,7 +1346,7 @@
       "locked": false,
       "visible": false,
       "config": {
-        "text": "质量问题趋势",
+        "text": "质量问题趋势(近12个月)",
         "fontSize": 20,
         "fontWeight": "700",
         "color": "#c0392b",
@@ -1365,7 +1365,7 @@
       "locked": false,
       "visible": false,
       "config": {
-        "text": "技术变更趋势",
+        "text": "技术变更趋势(近12个月)",
         "fontSize": 20,
         "fontWeight": "700",
         "color": "#e67e22",
