@@ -14,6 +14,7 @@ import com.yuzhi.dts.platform.domain.explore.QueryExecution;
 import com.yuzhi.dts.platform.domain.explore.ResultSet;
 import com.yuzhi.dts.platform.repository.explore.QueryExecutionRepository;
 import com.yuzhi.dts.platform.repository.explore.ResultSetRepository;
+import com.yuzhi.dts.platform.repository.service.InfraDataSourceRepository;
 import com.yuzhi.dts.platform.service.audit.AuditService;
 import com.yuzhi.dts.platform.service.query.QueryGateway;
 import com.yuzhi.dts.platform.service.sql.dto.SqlSubmitRequest;
@@ -56,6 +57,9 @@ class SqlExecutionServiceTest {
     @Mock
     private PlatformTransactionManager transactionManager;
 
+    @Mock
+    private InfraDataSourceRepository infraDataSourceRepository;
+
     private SqlExecutionService service;
 
     @BeforeEach
@@ -72,7 +76,8 @@ class SqlExecutionServiceTest {
             queryGateway,
             validationService,
             new ObjectMapper(),
-            transactionManager
+            transactionManager,
+            infraDataSourceRepository
         );
     }
 
