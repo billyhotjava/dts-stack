@@ -162,7 +162,17 @@ export const SqlIde: FC = () => {
         {activeActivity === "copilot" && <CopilotSlot />}
       </SidePanel>
       <div
-        style={{ flex: 1, display: "flex", flexDirection: "column", minWidth: 0 }}
+        style={{
+          flex: 1,
+          display: "flex",
+          flexDirection: "column",
+          minWidth: 0,
+          // Right column owns its own vertical scroll: editor is given a fixed
+          // 80-line height and BottomPanel a fixed 486 — together they can
+          // overflow the viewport, so the column needs a scrollbar.
+          overflowY: "auto",
+          minHeight: 0,
+        }}
       >
         <div style={{
           display: "flex",
@@ -171,11 +181,21 @@ export const SqlIde: FC = () => {
           padding: "4px 8px",
           borderBottom: "1px solid var(--ant-color-border-secondary)",
           gap: 8,
+          // Keep the mode switcher visible while the column scrolls.
+          position: "sticky",
+          top: 0,
+          zIndex: 5,
+          background: "var(--ant-color-bg-container, #fff)",
         }}>
           <ModeSwitcher />
         </div>
         <TabBar />
-        <div style={{ flex: 1, minHeight: 0 }}>
+        {/*
+          Editor wrapper: fixed 80-line height so users get a roomy SQL workspace
+          regardless of viewport. Monaco line height ≈ 19px at fontSize 14 → 80*19=1520.
+          flexShrink: 0 prevents the column flex layout from squeezing it.
+        */}
+        <div style={{ height: 1520, flexShrink: 0, minHeight: 0 }}>
           {activeTab ? (
             <SqlEditor
               ref={editorHandleRef}

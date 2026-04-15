@@ -108,6 +108,11 @@ export const TabBar: FC = () => {
         borderBottom: "1px solid var(--ant-color-border)",
         background: "var(--ant-color-bg-layout)",
         overflowX: "auto",
+        // Keep visible when the right column scrolls vertically.
+        position: "sticky",
+        top: 32,
+        zIndex: 4,
+        flexShrink: 0,
       }}
     >
       {tabs.map((t) => (

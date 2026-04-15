@@ -255,8 +255,19 @@ const SchemaRow: FC<{
     }
   }, [node.isOpen, tables, schemaData.schema, schemaData.children?.length, onTablesLoaded]);
 
+  // UX fix (2026-04-16): clicking the schema name itself toggles expansion.
+  // Previously only the tiny ▸/▾ chevron toggled, which was hard to hit.
   return (
-    <span style={{ fontSize: 12, color: "var(--ant-color-text)", userSelect: "none" }}>
+    <span
+      onClick={() => node.toggle()}
+      style={{
+        fontSize: 12,
+        color: "var(--ant-color-text)",
+        userSelect: "none",
+        cursor: "pointer",
+        flex: 1,
+      }}
+    >
       📁 {node.data.name}
     </span>
   );
