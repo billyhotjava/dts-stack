@@ -404,12 +404,21 @@ function loadLocal(): TabState[] {
     const parsed = JSON.parse(raw) as TabState[];
     // Migrations: pre-T17 lacks gridState; pre-T24 lacks subqueryViewName;
     // pre-staleUpdatedAt-fix lacks localEditVersion.
-    return parsed.map((t) => ({
-      ...t,
-      gridState: t.gridState ?? emptyGridColumnState(),
-      subqueryViewName: t.subqueryViewName ?? null,
-      localEditVersion: t.localEditVersion ?? 0,
-    }));
+    // CRITICAL: pre-staleUpdatedAt-fix entries have a client-generated updatedAt
+    // (updateTab used to overwrite it with Date.now()); that token will never match
+    // the server's lastModifiedDate → 409 on next PATCH. Strip updatedAt so the
+    // server-side comparison short-circuits via the null guard and the next sync
+    // adopts the server's authoritative token.
+    return parsed.map((t) => {
+      const isLegacy = t.localEditVersion === undefined;
+      return {
+        ...t,
+        gridState: t.gridState ?? emptyGridColumnState(),
+        subqueryViewName: t.subqueryViewName ?? null,
+        localEditVersion: t.localEditVersion ?? 0,
+        updatedAt: isLegacy ? null : t.updatedAt,
+      };
+    });
   } catch {
     return [];
   }
