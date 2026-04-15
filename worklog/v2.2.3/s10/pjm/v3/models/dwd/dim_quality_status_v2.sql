@@ -1,4 +1,4 @@
-{{ config(materialized='table', tags=['project-management-v2', 'dim', 'dwd']) }}
+{{ config(materialized='table', tags=['project-management-v3', 'dim', 'dwd']) }}
 
 SELECT code, label, is_zero_completed, is_tech_zero, is_mgmt_zero, is_both_zero, sort_order
 FROM (VALUES

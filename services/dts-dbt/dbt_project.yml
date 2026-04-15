@@ -4,6 +4,9 @@ config-version: 2
 
 profile: "dts"
 
+on-run-start:
+  - "{{ ensure_date_helpers() }}"
+
 model-paths: ["models"]
 seed-paths: ["seeds"]
 macro-paths: ["macros"]

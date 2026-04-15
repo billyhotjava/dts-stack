@@ -20,9 +20,11 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
+import java.util.UUID;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
 
 @Service
@@ -88,9 +90,27 @@ public class CatalogColumnSyncService {
         return upsertColumns(table, specs, STATUS_ACTIVE);
     }
 
+    /**
+     * Upserts a table's columns in a single short transaction. Uses REQUIRED propagation
+     * so that callers already in a transaction (e.g. user-triggered modeling flows) join
+     * their outer tx; callers without a tx (e.g. the dbt scheduler after the outer-tx
+     * removal) get their own per-table tx, keeping locks short-lived.
+     */
+    @Transactional
     public int upsertColumns(CatalogTableSchema table, Collection<ColumnSpec> specs, String status) {
         if (table == null || specs == null || specs.isEmpty()) {
             return 0;
+        }
+        // Serialize concurrent writers on the same catalog table's columns to avoid
+        // Postgres row-level deadlocks when two flows (scheduler, REST sync, modeling upsert…)
+        // update overlapping rows in different orders. The advisory lock is held for the
+        // duration of the surrounding transaction and released on commit/rollback.
+        if (table.getId() != null) {
+            try {
+                columnRepository.acquireTableColumnsLock(advisoryLockKey(table.getId()));
+            } catch (Exception ex) {
+                LOG.warn("[column-sync] failed to acquire advisory lock for table {}: {}", table.getId(), ex.getMessage());
+            }
         }
         String normalizedStatus = StringUtils.hasText(status) ? status.trim().toUpperCase(Locale.ROOT) : null;
         List<CatalogColumnSchema> existing = columnRepository.findByTable(table);
@@ -106,8 +126,16 @@ public class CatalogColumnSyncService {
             }
         }
         Map<String, DataStandard> standardsByCode = loadStandards(standardCodes);
+        // Iterate by a stable order (lower-cased name) so concurrent callers acquire
+        // row locks in the same sequence — defense-in-depth alongside the advisory lock.
+        List<ColumnSpec> orderedSpecs = new ArrayList<>(specs);
+        orderedSpecs.sort((a, b) -> {
+            String na = a == null || a.name() == null ? "" : a.name().trim().toLowerCase(Locale.ROOT);
+            String nb = b == null || b.name() == null ? "" : b.name().trim().toLowerCase(Locale.ROOT);
+            return na.compareTo(nb);
+        });
         int updated = 0;
-        for (ColumnSpec spec : specs) {
+        for (ColumnSpec spec : orderedSpecs) {
             if (spec == null || !StringUtils.hasText(spec.name())) continue;
             String key = spec.name().trim().toLowerCase(Locale.ROOT);
             CatalogColumnSchema column = byName.get(key);
@@ -250,6 +278,16 @@ public class CatalogColumnSyncService {
         if (value == null) return null;
         String text = String.valueOf(value).trim();
         return text.isEmpty() ? null : text;
+    }
+
+    /**
+     * Map a UUID to a stable long suitable for pg_advisory_xact_lock(bigint).
+     * Namespace the key so it doesn't collide with other advisory locks elsewhere.
+     */
+    private static long advisoryLockKey(UUID id) {
+        long mixed = id.getMostSignificantBits() ^ id.getLeastSignificantBits();
+        // Namespace: arbitrary constant unlikely to collide with other call sites.
+        return mixed ^ 0x5C01_0C01_0000_0001L;
     }
 
     private Map<String, Object> asMap(Object value) {

@@ -289,6 +289,7 @@ export default function SqlModelingPage() {
 	const [runsLoading, setRunsLoading] = useState(false);
 	const [runs, setRuns] = useState<DagRun[]>([]);
 	const [runOpen, setRunOpen] = useState(false);
+	const [runMode, setRunMode] = useState<"release" | "build">("release");
 	const [runSubmitting, setRunSubmitting] = useState(false);
 	const [runSelectedModelIds, setRunSelectedModelIds] = useState<string[]>([]);
 	const [runModelKeyword, setRunModelKeyword] = useState("");
@@ -887,7 +888,7 @@ export default function SqlModelingPage() {
 		}
 	};
 
-	const openRun = () => {
+	const openRun = (mode: "release" | "build" = "release") => {
 		runForm.resetFields();
 		runForm.setFieldsValue({
 			target: dbtConfig?.config?.targetName || "",
@@ -897,9 +898,26 @@ export default function SqlModelingPage() {
 			strictMode: false,
 		});
 		const activeId = String(activeModel?.id || "").trim();
-		setRunSelectedModelIds(activeId ? [activeId] : []);
+		let prefillIds: string[];
+		if (activeId) {
+			prefillIds = [activeId];
+		} else if (activeSpace && activeSpaceModels.length > 0) {
+			prefillIds = activeSpaceModels
+				.map((m) => String(m.id || "").trim())
+				.filter(Boolean);
+		} else {
+			prefillIds = [];
+		}
+		setRunSelectedModelIds(prefillIds);
 		setRunModelKeyword("");
-		setRunSpaceFilter(activeModel?.planId ? String(activeModel.planId) : undefined);
+		setRunSpaceFilter(
+			activeModel?.planId
+				? String(activeModel.planId)
+				: activeSpace?.id
+					? String(activeSpace.id)
+					: undefined,
+		);
+		setRunMode(mode);
 		setRunOpen(true);
 	};
 
@@ -969,17 +987,88 @@ export default function SqlModelingPage() {
 		try {
 			const values = await runForm.validateFields();
 			const selectedIdSet = new Set(runSelectedModelIds);
-			const selectedNames = sqlModels
-				.filter((model) => selectedIdSet.has(String(model.id || "").trim()))
-				.map((model) => normalizeText(model.name))
-				.filter(Boolean);
-			if (selectedNames.length === 0) {
+			const selectedModels = sqlModels.filter((model) => selectedIdSet.has(String(model.id || "").trim()));
+			if (selectedModels.length === 0) {
 				toast.error("勾选的模型已失效，请重新选择");
 				return;
 			}
-			const modelsSelector = selectedNames.map((name) => `model:${name}`).join(" ");
+			type Group = { dagSelector?: string; names: string[]; planName?: string };
+			const groupMap = new Map<string, Group>();
+			selectedModels.forEach((m) => {
+				const ds = normalizeText(m.dagSelector) || "";
+				const key = ds || "__none__";
+				let g = groupMap.get(key);
+				if (!g) {
+					g = { dagSelector: ds || undefined, names: [], planName: m.planName || undefined };
+					groupMap.set(key, g);
+				}
+				const nm = normalizeText(m.name);
+				if (nm) g.names.push(nm);
+			});
+			const groups = Array.from(groupMap.values()).filter((g) => g.names.length > 0);
+			if (groups.length === 0) {
+				toast.error("勾选的模型已失效，请重新选择");
+				return;
+			}
+			if (runMode === "build") {
+				const target = normalizeText(values.target) || "dev";
+				const vars = tryParseJsonObject(values.vars);
+				let lastDagId: string | undefined;
+				let lastDagRunId: string | undefined;
+				let lastSelector = "";
+				for (const g of groups) {
+					const modelsSelector = g.names.join(" ");
+					const triggerResp: any = await triggerDbtRun({
+						models: modelsSelector,
+						dagSelector: g.dagSelector,
+						target,
+						vars,
+						operation: "build",
+					});
+					lastDagRunId = normalizeText(triggerResp?.dag_run_id || triggerResp?.dagRunId);
+					lastDagId = normalizeText(triggerResp?.dag_id || triggerResp?.dagId);
+					lastSelector = modelsSelector;
+				}
+				setRunResult({
+					...createPendingBuildSummary("build", lastSelector),
+					dagRunId: lastDagRunId,
+					dagId: lastDagId,
+				});
+				toast.success(
+					groups.length > 1
+						? `已提交 ${groups.length} 个项目空间的 dbt build`
+						: buildOperationQueuedMessage("build"),
+				);
+				setRunOpen(false);
+				setExecLog("");
+				setBottomTab("operations");
+				setOpsSubTab("execlog");
+				void loadRuns({ dagId: lastDagId || undefined, selector: lastSelector });
+				return;
+			}
+			if (groups.length > 1) {
+				Modal.warning({
+					title: "跨项目空间上线",
+					content: (
+						<div style={{ fontSize: 12 }}>
+							<p>勾选的模型分布在多个项目空间，上线需按空间分别提交。当前勾选分组：</p>
+							<ul style={{ paddingLeft: 18, margin: 0 }}>
+								{groups.map((g, idx) => (
+									<li key={`${g.dagSelector || "none"}-${idx}`}>
+										{(g.planName || g.dagSelector || "未分配")} · {g.names.length} 个模型
+									</li>
+								))}
+							</ul>
+						</div>
+					),
+				});
+				return;
+			}
+			const onlyGroup = groups[0];
+			const modelsSelector = onlyGroup.names.join(" ");
 			const payload = {
 				models: modelsSelector,
+				dagSelector: onlyGroup.dagSelector,
 				target: normalizeText(values.target) || undefined,
 				vars: tryParseJsonObject(values.vars),
 				gitRef: normalizeText(values.gitRef) || undefined,
@@ -1070,11 +1159,28 @@ export default function SqlModelingPage() {
 	const triggerBuildOperation = async (operation: "compile" | "test" | "docs" | "build") => {
 		setBuildTriggering(operation);
 		try {
-			const selector = resolveDbtSelector(activeModel?.dagSelector) || (activeModel?.name ? `model:${activeModel.name}` : "all");
+			let selector: string;
+			let dagSelector: string | undefined;
+			if (activeModel) {
+				selector = normalizeText(activeModel.name) || "all";
+				dagSelector = normalizeText(activeModel.dagSelector) || undefined;
+			} else if (activeSpace && activeSpaceModels.length > 0) {
+				const names = activeSpaceModels
+					.map((m) => normalizeText(m.name))
+					.filter(Boolean) as string[];
+				selector = names.length > 0 ? names.join(" ") : "all";
+				dagSelector = activeSpaceModels
+					.map((m) => normalizeText(m.dagSelector))
+					.find(Boolean) || undefined;
+			} else {
+				selector = "all";
+				dagSelector = undefined;
+			}
 			const baselineStatus = (await getDbtSyncStatus(selector ? { models: selector } : undefined)) as DbtSyncStatus;
 			const baselineRun = baselineStatus?.latestRun || null;
 			const payload = {
 				models: selector,
+				dagSelector,
 				target: normalizeText(dbtConfig?.config?.targetName) || "dev",
 			};
 			let triggerResp: any;
@@ -2305,7 +2411,7 @@ export default function SqlModelingPage() {
 										icon={<CodeOutlined />}
 										onClick={() => triggerBuildOperation("compile")}
 										loading={buildTriggering === "compile"}
-										disabled={!activeModel || !configEnabled || !workspaceOk || buildTriggering != null}
+										disabled={(!activeModel && !(activeSpace && activeSpaceModels.length > 0)) || !configEnabled || !workspaceOk || buildTriggering != null}
 										data-testid="platform-sql-modeling-compile"
 									>
 										{action.label}
@@ -2319,7 +2425,7 @@ export default function SqlModelingPage() {
 										icon={<CheckCircleOutlined />}
 										onClick={() => triggerBuildOperation("test")}
 										loading={buildTriggering === "test"}
-										disabled={!activeModel || !configEnabled || !workspaceOk || buildTriggering != null}
+										disabled={(!activeModel && !(activeSpace && activeSpaceModels.length > 0)) || !configEnabled || !workspaceOk || buildTriggering != null}
 										data-testid="platform-sql-modeling-test"
 									>
 										{action.label}
@@ -2332,9 +2438,15 @@ export default function SqlModelingPage() {
 											key={action.key}
 											type="primary"
 											icon={<ThunderboltOutlined />}
-											onClick={() => triggerBuildOperation("build")}
+											onClick={() => {
+												if (activeModel || (activeSpace && activeSpaceModels.length > 0)) {
+													void triggerBuildOperation("build");
+												} else {
+													openRun("build");
+												}
+											}}
 											loading={buildTriggering === "build"}
-											disabled={!activeModel || !configEnabled || !workspaceOk || buildTriggering != null}
+											disabled={!configEnabled || !workspaceOk || buildTriggering != null}
 											data-testid="platform-sql-modeling-build"
 										>
 											{action.label}
@@ -2345,8 +2457,8 @@ export default function SqlModelingPage() {
 									<Button
 										key={action.key}
 										icon={<RocketOutlined />}
-										onClick={openRun}
-										disabled={!activeModel || !workspaceOk}
+										onClick={() => openRun("release")}
+										disabled={!workspaceOk}
 										data-testid="platform-sql-modeling-release"
 									>
 										{action.label}
@@ -3310,10 +3422,10 @@ export default function SqlModelingPage() {
 
 				<Modal
 					open={runOpen}
-					title="上线 (dbt build)"
+					title={runMode === "build" ? "构建 (dbt build)" : "上线 (dbt build)"}
 					onCancel={() => setRunOpen(false)}
 					onOk={submitRun}
-				okText="提交"
+				okText={runMode === "build" ? "开始构建" : "提交"}
 				cancelText="取消"
 				confirmLoading={runSubmitting}
 				width={760}
@@ -3432,25 +3544,29 @@ export default function SqlModelingPage() {
 					<Form.Item name="target" label="目标">
 						<Input placeholder="dev" />
 					</Form.Item>
-					<div className="grid gap-3 md:grid-cols-2">
-						<Form.Item
-							name="gitRef"
-							label="Git 分支"
-							tooltip="可选。仅在环境维护 Git 版本追溯时填写，允许 main/master/release/*/hotfix/*"
-						>
-							<Input placeholder="可选，例如：release/2.2.1" />
-						</Form.Item>
-						<Form.Item
-							name="commitSha"
-							label="Commit SHA"
-							tooltip="可选。用于将本次发布与具体代码版本绑定"
-						>
-							<Input placeholder="可选，例如：a1b2c3d4" />
-						</Form.Item>
-					</div>
-					<Form.Item name="strictMode" valuePropName="checked">
-						<Checkbox>启用严格发布门禁（客户环境无 Git 时可关闭）</Checkbox>
-					</Form.Item>
+					{runMode === "release" && (
+						<>
+							<div className="grid gap-3 md:grid-cols-2">
+								<Form.Item
+									name="gitRef"
+									label="Git 分支"
+									tooltip="可选。仅在环境维护 Git 版本追溯时填写，允许 main/master/release/*/hotfix/*"
+								>
+									<Input placeholder="可选，例如：release/2.2.1" />
+								</Form.Item>
+								<Form.Item
+									name="commitSha"
+									label="Commit SHA"
+									tooltip="可选。用于将本次发布与具体代码版本绑定"
+								>
+									<Input placeholder="可选，例如：a1b2c3d4" />
+								</Form.Item>
+							</div>
+							<Form.Item name="strictMode" valuePropName="checked">
+								<Checkbox>启用严格发布门禁（客户环境无 Git 时可关闭）</Checkbox>
+							</Form.Item>
+						</>
+					)}
 					<Form.Item name="vars" label="运行变量">
 						<Input.TextArea rows={3} placeholder='JSON 结构，例如 {"run_date":"2026-01-19"}' />
 					</Form.Item>

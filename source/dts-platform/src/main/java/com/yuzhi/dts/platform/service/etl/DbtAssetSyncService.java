@@ -29,7 +29,6 @@ import java.util.UUID;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
 
 @Service
@@ -69,7 +68,14 @@ public class DbtAssetSyncService {
         this.auditService = auditService;
     }
 
-    @Transactional
+    /**
+     * Not wrapped in a single @Transactional on purpose. Each sub-step is its own short
+     * transaction (repository.save opens one implicitly; upsertColumns is @Transactional).
+     * Rationale: a manifest-wide transaction holds row locks on catalog_column_schema for
+     * the entire sync, which previously deadlocked with concurrent user-triggered writers
+     * (modeling / ods mapping / REST manual sync). Idempotent upserts mean partial failure
+     * converges on the next tick.
+     */
     public DbtAssetSyncResult syncFromManifest() {
         if (!properties.isEnabled()) {
             return DbtAssetSyncResult.disabled("dbt 未启用");

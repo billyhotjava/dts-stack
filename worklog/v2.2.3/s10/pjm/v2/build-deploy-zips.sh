@@ -22,6 +22,8 @@ profile: 'pm_analytics_v2'
 model-paths: ["models"]
 macro-paths: ["macros"]
 clean-targets: ["target", "dbt_packages"]
+on-run-start:
+  - "{{ ensure_date_helpers() }}"
 EOF
 
 cd "$TEMP_CLI"

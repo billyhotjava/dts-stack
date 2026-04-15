@@ -127,7 +127,11 @@
       "Bash(git pull *)",
       "Bash(git rebase *)",
       "Bash(git merge *)",
-      "Bash(git push *)"
+      "Bash(git push *)",
+      "Bash(./mvnw -q -pl . -am compile -DskipTests)",
+      "Bash(sudo chown *)",
+      "Bash(./mvnw -q compile -DskipTests)",
+      "Bash(git add *)"
     ]
   }
 }

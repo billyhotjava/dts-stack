@@ -990,7 +990,7 @@
         "type": "sql",
         "sqlConfig": {
           "databaseId": "{{DATABASE_ID}}",
-          "query": "SELECT s.dept AS \"责任科室\", COALESCE(SUM(s.file_submitted_not_reviewed_i_ii)+SUM(s.file_reviewed_not_signed_i_ii)+SUM(s.file_reviewed_signed_i_ii)+SUM(s.file_submitted_not_signed_iii)+SUM(s.file_submitted_signed_iii),0) AS \"已提出\", 0 AS \"未提出\", COALESCE(SUM(s.file_reviewed_not_signed_i_ii)+SUM(s.file_reviewed_signed_i_ii),0) AS \"已评估评审\", COALESCE(SUM(s.file_submitted_not_reviewed_i_ii),0) AS \"未评估评审\" FROM biz_dws_tech_state_monthly_v2 s WHERE s.period_month >= to_char({{dateFrom}}::date,'YYYY-MM') AND s.period_month <= to_char({{dateTo}}::date,'YYYY-MM') [[AND s.project_no ILIKE '%' || {{projectNo}} || '%']] AND s.dept IS NOT NULL GROUP BY s.dept ORDER BY SUM(s.total_change_cnt) DESC LIMIT 12",
+          "query": "SELECT s.dept AS \"责任科室\", SUM(s.requirement_submitted_cnt) AS \"已提出\", SUM(s.requirement_not_submitted_cnt) AS \"未提出\", SUM(s.review_done_cnt) AS \"已评估评审\", SUM(s.review_pending_cnt) AS \"未评估评审\" FROM biz_dws_tech_state_monthly_v2 s WHERE s.period_month >= to_char({{dateFrom}}::date,'YYYY-MM') AND s.period_month <= to_char({{dateTo}}::date,'YYYY-MM') [[AND s.project_no ILIKE '%' || {{projectNo}} || '%']] AND s.dept IS NOT NULL GROUP BY s.dept ORDER BY SUM(s.total_change_cnt) DESC LIMIT 12",
           "queryTimeoutSeconds": 30,
           "maxRows": 2000,
           "parameterBindings": [
