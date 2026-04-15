@@ -38,6 +38,50 @@ export const SqlIde: FC = () => {
   const [saveDialogOpen, setSaveDialogOpen] = useState(false);
   const [pendingSql, setPendingSql] = useState("");
 
+  // Resizable editor area. Default = 20 lines @ ~19px Monaco line-height = 380px.
+  // Height persists per-browser via localStorage so user drags survive reload.
+  const EDITOR_HEIGHT_KEY = "sqlide.editor.height.v1";
+  const EDITOR_MIN_HEIGHT = 120;
+  const EDITOR_MAX_HEIGHT = 2400;
+  const EDITOR_DEFAULT_HEIGHT = 380;
+  const [editorHeight, setEditorHeight] = useState<number>(() => {
+    if (typeof window === "undefined") return EDITOR_DEFAULT_HEIGHT;
+    const saved = Number(window.localStorage.getItem(EDITOR_HEIGHT_KEY));
+    return Number.isFinite(saved) && saved >= EDITOR_MIN_HEIGHT ? saved : EDITOR_DEFAULT_HEIGHT;
+  });
+  const dragStartRef = useRef<{ y: number; h: number } | null>(null);
+  const handleResizeStart = useCallback((e: React.MouseEvent) => {
+    dragStartRef.current = { y: e.clientY, h: editorHeight };
+    document.body.style.cursor = "row-resize";
+    document.body.style.userSelect = "none";
+  }, [editorHeight]);
+  useEffect(() => {
+    const onMove = (e: MouseEvent) => {
+      const start = dragStartRef.current;
+      if (!start) return;
+      const next = Math.min(EDITOR_MAX_HEIGHT, Math.max(EDITOR_MIN_HEIGHT, start.h + (e.clientY - start.y)));
+      setEditorHeight(next);
+    };
+    const onUp = () => {
+      if (!dragStartRef.current) return;
+      dragStartRef.current = null;
+      document.body.style.cursor = "";
+      document.body.style.userSelect = "";
+      // persist on release (avoids spamming localStorage during the drag)
+      try {
+        window.localStorage.setItem(EDITOR_HEIGHT_KEY, String(editorHeight));
+      } catch {
+        /* quota — ignore */
+      }
+    };
+    window.addEventListener("mousemove", onMove);
+    window.addEventListener("mouseup", onUp);
+    return () => {
+      window.removeEventListener("mousemove", onMove);
+      window.removeEventListener("mouseup", onUp);
+    };
+  }, [editorHeight]);
+
   const { data: savedList } = useQuery({
     queryKey: ["sqlide", "saved"],
     queryFn: listSavedQueries,
@@ -191,11 +235,11 @@ export const SqlIde: FC = () => {
         </div>
         <TabBar />
         {/*
-          Editor wrapper: fixed 80-line height so users get a roomy SQL workspace
-          regardless of viewport. Monaco line height ≈ 19px at fontSize 14 → 80*19=1520.
+          Editor wrapper: user-resizable height, default 20 lines (380px).
+          Drag the row-resize handle below to grow/shrink. Persisted in localStorage.
           flexShrink: 0 prevents the column flex layout from squeezing it.
         */}
-        <div style={{ height: 1520, flexShrink: 0, minHeight: 0 }}>
+        <div style={{ height: editorHeight, flexShrink: 0, minHeight: 0 }}>
           {activeTab ? (
             <SqlEditor
               ref={editorHandleRef}
@@ -245,6 +289,32 @@ export const SqlIde: FC = () => {
             </div>
           )}
         </div>
+        {/* Drag handle to resize the SQL editor area (between editor and result panel) */}
+        <div
+          role="separator"
+          aria-orientation="horizontal"
+          aria-label="拖动调整 SQL 编辑器高度"
+          onMouseDown={handleResizeStart}
+          onDoubleClick={() => setEditorHeight(EDITOR_DEFAULT_HEIGHT)}
+          title="拖动调整高度，双击恢复默认"
+          style={{
+            height: 6,
+            flexShrink: 0,
+            cursor: "row-resize",
+            background: "var(--ant-color-fill-secondary, rgba(0,0,0,0.06))",
+            borderTop: "1px solid var(--ant-color-border-secondary, rgba(5,5,5,0.06))",
+            borderBottom: "1px solid var(--ant-color-border-secondary, rgba(5,5,5,0.06))",
+            transition: "background 120ms",
+          }}
+          onMouseEnter={(e) => {
+            (e.currentTarget as HTMLDivElement).style.background =
+              "var(--ant-color-primary, #1677ff)";
+          }}
+          onMouseLeave={(e) => {
+            (e.currentTarget as HTMLDivElement).style.background =
+              "var(--ant-color-fill-secondary, rgba(0,0,0,0.06))";
+          }}
+        />
         <BottomPanel>
           <div style={{ height: "100%", display: "flex", flexDirection: "column" }}>
             <div
