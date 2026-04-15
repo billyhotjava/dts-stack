@@ -2,6 +2,7 @@ package com.yuzhi.dts.platform.web.rest;
 
 import com.yuzhi.dts.platform.service.audit.AuditService;
 import com.yuzhi.dts.platform.service.etl.DbtFileService;
+import com.yuzhi.dts.platform.service.etl.DbtFileService.DbtArchiveUploadResult;
 import com.yuzhi.dts.platform.service.etl.DbtFileService.DbtFileContent;
 import com.yuzhi.dts.platform.service.etl.DbtFileService.DbtFileCreateRequest;
 import com.yuzhi.dts.platform.service.etl.DbtFileService.DbtFileNode;
@@ -14,7 +15,9 @@ import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.RequestPart;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.multipart.MultipartFile;
 
 @RestController
 @RequestMapping("/api/etl/dbt/files")
@@ -68,6 +71,23 @@ public class DbtFileResource {
         fileService.renameFile(request.oldPath(), request.newPath());
         auditService.audit("UPDATE", "etl.dbt.files", request.oldPath() + " -> " + request.newPath());
         return ApiResponses.ok(null);
+    }
+
+    @PostMapping("/upload-archive")
+    public ApiResponse<DbtArchiveUploadResult> uploadArchive(
+        @RequestPart("archive") MultipartFile archive,
+        @RequestParam(name = "clean", required = false, defaultValue = "false") boolean clean
+    ) {
+        DbtArchiveUploadResult result = fileService.uploadArchive(archive, clean);
+        auditService.audit(
+            "UPLOAD",
+            "etl.dbt.files",
+            "archive: extracted=" + result.extracted().size()
+                + " skipped=" + result.skipped().size()
+                + " cleaned=" + result.cleaned().size()
+                + " clean=" + clean
+        );
+        return ApiResponses.ok(result);
     }
 
 }

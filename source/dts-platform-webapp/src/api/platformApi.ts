@@ -99,6 +99,10 @@ export const deleteDbtFile = (path: string) =>
 	api.delete({ url: "/etl/dbt/files", params: { path } });
 export const renameDbtFile = (data: { oldPath: string; newPath: string }) =>
 	api.put({ url: "/etl/dbt/files/rename", data });
+export const uploadDbtArchive = (data: FormData, clean = false) =>
+	api.post<{ extracted: string[]; skipped: string[]; cleaned: string[]; cleanBeforeExtract: boolean }>(
+		withModelingRequestTimeout({ url: "/etl/dbt/files/upload-archive", params: { clean }, data }),
+	);
 export const listDbtModels = () => api.get({ url: "/etl/dbt/models" });
 export const syncDbtModels = () => api.post(withModelingRequestTimeout({ url: "/etl/dbt/models/sync" }));
 export const getDbtSyncStatus = (params?: { models?: string }) =>

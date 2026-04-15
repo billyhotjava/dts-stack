@@ -4,6 +4,7 @@ import com.yuzhi.dts.platform.config.DbtProperties;
 import com.yuzhi.dts.platform.domain.modeling.ModelingSqlModel;
 import com.yuzhi.dts.platform.repository.modeling.ModelingSqlModelRepository;
 import java.io.IOException;
+import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.FileVisitResult;
 import java.nio.file.Files;
@@ -14,12 +15,16 @@ import java.nio.file.attribute.BasicFileAttributes;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Set;
+import java.util.zip.ZipEntry;
+import java.util.zip.ZipInputStream;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
+import org.springframework.web.multipart.MultipartFile;
 
 @Service
 public class DbtFileService {
@@ -40,6 +45,12 @@ public class DbtFileService {
     );
 
     private static final long MAX_FILE_SIZE = 1024 * 1024; // 1 MB
+
+    // Zip upload safety limits
+    private static final int MAX_ZIP_ENTRIES = 5000;
+    private static final long MAX_ZIP_ENTRY_SIZE = 20L * 1024 * 1024;  // 20 MB per entry
+    private static final long MAX_ZIP_TOTAL_SIZE = 200L * 1024 * 1024; // 200 MB total
+    private static final long MAX_ARCHIVE_FILE_SIZE = 100L * 1024 * 1024; // 100 MB zip file
     private final DbtProperties properties;
     private final DbtConfigService configService;
     private final ModelingSqlModelRepository sqlModelRepository;
@@ -233,6 +244,193 @@ public class DbtFileService {
         }
     }
 
+    // ── Archive Upload (ZIP overwrite) ────────────────────────
+
+    /**
+     * Extract a user-uploaded ZIP on top of the dbt project directory.
+     *
+     * @param archive the uploaded zip file
+     * @param cleanBeforeExtract if true, for each top-level directory present in the zip
+     *                           (e.g. "macros/", "models/") the corresponding directory under
+     *                           projectDir is deleted first. Protected files and ignored dirs
+     *                           (dbt_project.yml, profiles/, target/, logs/, dbt_packages/, .git/, ...)
+     *                           are never touched.
+     */
+    public DbtArchiveUploadResult uploadArchive(MultipartFile archive, boolean cleanBeforeExtract) {
+        if (archive == null || archive.isEmpty()) {
+            throw new IllegalArgumentException("请上传 ZIP 压缩包");
+        }
+        String originalName = archive.getOriginalFilename();
+        if (originalName != null && !originalName.toLowerCase().endsWith(".zip")) {
+            throw new IllegalArgumentException("仅支持 .zip 格式");
+        }
+        if (archive.getSize() > MAX_ARCHIVE_FILE_SIZE) {
+            throw new IllegalArgumentException("压缩包过大，最大允许 " + (MAX_ARCHIVE_FILE_SIZE / 1024 / 1024) + " MB");
+        }
+
+        Path projectDir = resolveProjectDir();
+        try {
+            Files.createDirectories(projectDir);
+        } catch (IOException ex) {
+            throw new IllegalStateException("创建项目目录失败: " + ex.getMessage(), ex);
+        }
+
+        Path tempFile;
+        try {
+            tempFile = Files.createTempFile("dbt-upload-", ".zip");
+            archive.transferTo(tempFile.toFile());
+        } catch (IOException ex) {
+            throw new IllegalStateException("保存上传文件失败: " + ex.getMessage(), ex);
+        }
+
+        List<String> extracted = new ArrayList<>();
+        List<String> skipped = new ArrayList<>();
+        List<String> cleaned = new ArrayList<>();
+        try {
+            if (cleanBeforeExtract) {
+                Set<String> topLevels = peekTopLevelEntries(tempFile);
+                for (String top : topLevels) {
+                    if (isProtectedTopLevel(top)) {
+                        continue;
+                    }
+                    Path target = projectDir.resolve(top).normalize();
+                    if (!target.startsWith(projectDir) || target.equals(projectDir)) {
+                        continue;
+                    }
+                    if (Files.exists(target)) {
+                        deleteRecursively(target);
+                        cleaned.add(top);
+                    }
+                }
+            }
+            extractZip(tempFile, projectDir, extracted, skipped);
+        } catch (IOException ex) {
+            throw new IllegalStateException("解压失败: " + ex.getMessage(), ex);
+        } finally {
+            try { Files.deleteIfExists(tempFile); } catch (IOException ignored) {}
+        }
+
+        LOG.info("[dbt-files] archive uploaded: extracted={}, skipped={}, cleaned={}, clean={}",
+            extracted.size(), skipped.size(), cleaned.size(), cleanBeforeExtract);
+        return new DbtArchiveUploadResult(extracted, skipped, cleaned, cleanBeforeExtract);
+    }
+
+    private Set<String> peekTopLevelEntries(Path zipPath) throws IOException {
+        Set<String> result = new LinkedHashSet<>();
+        try (ZipInputStream zis = new ZipInputStream(Files.newInputStream(zipPath), StandardCharsets.UTF_8)) {
+            ZipEntry entry;
+            while ((entry = zis.getNextEntry()) != null) {
+                String name = entry.getName().replace('\\', '/');
+                if (name.startsWith("/") || name.contains("..")) {
+                    continue;
+                }
+                int slash = name.indexOf('/');
+                String top = slash < 0 ? name : name.substring(0, slash);
+                if (StringUtils.hasText(top)) {
+                    result.add(top);
+                }
+            }
+        }
+        return result;
+    }
+
+    private boolean isProtectedTopLevel(String top) {
+        if (!StringUtils.hasText(top)) return true;
+        if (IGNORED_DIRS.contains(top)) return true;
+        if ("profiles".equals(top)) return true;
+        if ("dbt_project.yml".equals(top)) return true;
+        return false;
+    }
+
+    private void extractZip(Path zipPath, Path destDir, List<String> extracted, List<String> skipped) throws IOException {
+        int count = 0;
+        long total = 0;
+        try (ZipInputStream zis = new ZipInputStream(Files.newInputStream(zipPath), StandardCharsets.UTF_8)) {
+            ZipEntry entry;
+            while ((entry = zis.getNextEntry()) != null) {
+                if (++count > MAX_ZIP_ENTRIES) {
+                    throw new IOException("压缩包条目过多 (> " + MAX_ZIP_ENTRIES + ")");
+                }
+                String name = entry.getName().replace('\\', '/');
+                if (name.startsWith("/") || name.contains("..")) {
+                    skipped.add(name + " (非法路径)");
+                    continue;
+                }
+                // Skip top-level protected/ignored directories
+                int firstSlash = name.indexOf('/');
+                String top = firstSlash < 0 ? name : name.substring(0, firstSlash);
+                if (IGNORED_DIRS.contains(top)) {
+                    skipped.add(name + " (忽略目录)");
+                    continue;
+                }
+                // Skip read-only files
+                if (READ_ONLY_FILES.contains(name) || "dbt_project.yml".equals(name)) {
+                    skipped.add(name + " (只读)");
+                    continue;
+                }
+                Path target = destDir.resolve(name).normalize();
+                if (!target.startsWith(destDir)) {
+                    skipped.add(name + " (路径越权)");
+                    continue;
+                }
+                if (entry.isDirectory()) {
+                    Files.createDirectories(target);
+                    continue;
+                }
+                if (!hasAllowedExtension(name)) {
+                    skipped.add(name + " (不支持的类型)");
+                    continue;
+                }
+                long entrySize = entry.getSize();
+                if (entrySize > MAX_ZIP_ENTRY_SIZE) {
+                    skipped.add(name + " (单文件过大)");
+                    continue;
+                }
+
+                Files.createDirectories(target.getParent());
+                long written = copyBounded(zis, target, MAX_ZIP_ENTRY_SIZE);
+                total += written;
+                if (total > MAX_ZIP_TOTAL_SIZE) {
+                    throw new IOException("解压总大小超过 " + (MAX_ZIP_TOTAL_SIZE / 1024 / 1024) + " MB");
+                }
+                extracted.add(name);
+            }
+        }
+    }
+
+    private long copyBounded(InputStream in, Path target, long maxBytes) throws IOException {
+        byte[] buf = new byte[8192];
+        long total = 0;
+        try (var out = Files.newOutputStream(target)) {
+            int n;
+            while ((n = in.read(buf)) > 0) {
+                total += n;
+                if (total > maxBytes) {
+                    throw new IOException("单文件超过限制 " + (maxBytes / 1024 / 1024) + " MB: " + target.getFileName());
+                }
+                out.write(buf, 0, n);
+            }
+        }
+        return total;
+    }
+
+    private void deleteRecursively(Path root) throws IOException {
+        if (!Files.exists(root)) return;
+        Files.walkFileTree(root, new SimpleFileVisitor<>() {
+            @Override
+            public FileVisitResult visitFile(Path file, BasicFileAttributes attrs) throws IOException {
+                Files.delete(file);
+                return FileVisitResult.CONTINUE;
+            }
+
+            @Override
+            public FileVisitResult postVisitDirectory(Path dir, IOException exc) throws IOException {
+                Files.delete(dir);
+                return FileVisitResult.CONTINUE;
+            }
+        });
+    }
+
     // ── Security Helpers ──────────────────────────────────────
 
     private Path resolveProjectDir() {
@@ -343,4 +541,11 @@ public class DbtFileService {
     public record DbtFileCreateRequest(String path, String type, String content) {}
 
     public record DbtFileRenameRequest(String oldPath, String newPath) {}
+
+    public record DbtArchiveUploadResult(
+        List<String> extracted,
+        List<String> skipped,
+        List<String> cleaned,
+        boolean cleanBeforeExtract
+    ) {}
 }

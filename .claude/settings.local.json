@@ -132,7 +132,12 @@
       "Bash(sudo chown *)",
       "Bash(./mvnw -q compile -DskipTests)",
       "Bash(git add *)",
-      "Bash(git commit *)"
+      "Bash(git commit *)",
+      "Bash(./mvnw -q -pl dts-platform -am compile -DskipTests)",
+      "Bash(/opt/prod/s10-stack/source/dts-platform/mvnw -q install -DskipTests)",
+      "Bash(/opt/prod/s10-stack/source/dts-platform/mvnw install *)",
+      "Bash(npx tsc *)",
+      "Bash(./node_modules/.bin/tsc --noEmit -p tsconfig.json)"
     ]
   }
 }

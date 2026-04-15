@@ -5,6 +5,7 @@ import { registerDbtLanguage, DBT_SQL_LANGUAGE_ID } from "./dbt-monaco-lang";
 import {
 	Button,
 	Card,
+	Checkbox,
 	Dropdown,
 	Form,
 	Input,
@@ -15,7 +16,9 @@ import {
 	Tag,
 	Tree,
 	Typography,
+	Upload,
 } from "antd";
+import type { UploadFile } from "antd/es/upload/interface";
 import {
 	FileOutlined,
 	FileTextOutlined,
@@ -27,6 +30,8 @@ import {
 	EditOutlined,
 	ExclamationCircleOutlined,
 	RocketOutlined,
+	UploadOutlined,
+	InboxOutlined,
 } from "@ant-design/icons";
 import type { DataNode } from "antd/es/tree";
 import {
@@ -41,6 +46,7 @@ import {
 	triggerDbtCompile,
 	triggerDbtTest,
 	triggerDbtDocs,
+	uploadDbtArchive,
 } from "@/api/platformApi";
 import { useRouter } from "@/routes/hooks";
 
@@ -189,6 +195,12 @@ export default function DbtFileBrowserPage() {
 	const editorRef = useRef<any>(null);
 
 	const [batchDeleting, setBatchDeleting] = useState(false);
+
+	// Upload ZIP modal
+	const [uploadOpen, setUploadOpen] = useState(false);
+	const [uploadFile, setUploadFile] = useState<UploadFile | null>(null);
+	const [uploadClean, setUploadClean] = useState(false);
+	const [uploading, setUploading] = useState(false);
 
 	// ── Load Tree ─────────────────────────────────────────────
 
@@ -515,6 +527,80 @@ export default function DbtFileBrowserPage() {
 		[loadSyncStatus],
 	);
 
+	// ── Upload ZIP archive ────────────────────────────────────
+
+	const handleUploadArchive = useCallback(async () => {
+		if (!uploadFile || !uploadFile.originFileObj) {
+			toast.error("请选择 ZIP 文件");
+			return;
+		}
+		const doUpload = async () => {
+			setUploading(true);
+			try {
+				const fd = new FormData();
+				fd.append("archive", uploadFile.originFileObj as File);
+				const result = (await uploadDbtArchive(fd, uploadClean)) as any as {
+					extracted: string[];
+					skipped: string[];
+					cleaned: string[];
+				};
+				const extractedN = result?.extracted?.length ?? 0;
+				const skippedN = result?.skipped?.length ?? 0;
+				const cleanedN = result?.cleaned?.length ?? 0;
+				toast.success(`上传完成：写入 ${extractedN}，跳过 ${skippedN}${cleanedN ? `，清空 ${cleanedN} 个目录` : ""}`);
+				if (skippedN > 0) {
+					// Show details in a follow-up modal
+					Modal.info({
+						title: "部分条目被跳过",
+						width: 560,
+						content: (
+							<div style={{ maxHeight: 320, overflow: "auto" }}>
+								<ul className="text-xs">
+									{result.skipped.map((s, i) => (
+										<li key={i} className="font-mono">{s}</li>
+									))}
+								</ul>
+							</div>
+						),
+					});
+				}
+				setUploadOpen(false);
+				setUploadFile(null);
+				setUploadClean(false);
+				await loadTree();
+				// Refresh current file if its content was overwritten
+				if (activeFile?.path) {
+					try {
+						const refreshed = (await getDbtFileContent(activeFile.path)) as any as FileContent;
+						setActiveFile(refreshed);
+						setEditorValue(refreshed.content);
+						setDirty(false);
+					} catch {
+						// file may have been removed by clean; ignore
+					}
+				}
+			} catch {
+				// global interceptor handles toast
+			} finally {
+				setUploading(false);
+			}
+		};
+		if (uploadClean) {
+			Modal.confirm({
+				title: "确认清空后写入？",
+				icon: <ExclamationCircleOutlined />,
+				content:
+					"将删除 ZIP 中涉及的顶层目录（如 macros/、models/）后再写入新文件；dbt_project.yml、profiles/、.git 等不会被动。",
+				okText: "继续",
+				okButtonProps: { danger: true },
+				cancelText: "取消",
+				onOk: doUpload,
+			});
+		} else {
+			await doUpload();
+		}
+	}, [uploadFile, uploadClean, loadTree, activeFile?.path]);
+
 	// ── Render ────────────────────────────────────────────────
 
 	const latestRun = syncStatus?.latestRun || null;
@@ -574,6 +660,11 @@ export default function DbtFileBrowserPage() {
 						<Button className="rounded-2xl" icon={<ReloadOutlined />} onClick={loadTree}>
 							刷新
 						</Button>
+						<Tooltip title="上传 ZIP 覆盖 dbt 项目文件（macros/models/seeds 等）">
+							<Button className="rounded-2xl" icon={<UploadOutlined />} onClick={() => setUploadOpen(true)}>
+								上传 ZIP
+							</Button>
+						</Tooltip>
 						{activeFile && dirty ? (
 							<Button className="rounded-2xl" type="primary" icon={<SaveOutlined />} loading={saving} onClick={saveFile}>
 								保存
@@ -836,6 +927,65 @@ export default function DbtFileBrowserPage() {
 						<Input placeholder="dev" />
 					</Form.Item>
 				</Form>
+			</Modal>
+
+			<Modal
+				title="上传 ZIP 覆盖 dbt 项目"
+				open={uploadOpen}
+				onOk={handleUploadArchive}
+				onCancel={() => {
+					if (uploading) return;
+					setUploadOpen(false);
+					setUploadFile(null);
+					setUploadClean(false);
+				}}
+				okText="上传并覆盖"
+				cancelText="取消"
+				confirmLoading={uploading}
+				okButtonProps={{ disabled: !uploadFile }}
+			>
+				<div className="space-y-3 text-xs">
+					<div className="rounded-md bg-muted/30 p-3 leading-5 text-muted-foreground">
+						<div className="mb-1 font-semibold text-foreground">说明</div>
+						<ul className="list-disc pl-4">
+							<li>仅允许 .sql / .yml / .yaml / .csv / .tsv / .md / .json / .py / .sh 等白名单扩展名。</li>
+							<li><code>dbt_project.yml</code>、<code>profiles/</code>、<code>target/</code>、<code>logs/</code>、<code>dbt_packages/</code>、<code>.git/</code> 永远被跳过。</li>
+							<li>默认为"覆盖式写入"：ZIP 里有的文件会替换同名文件，其他文件保留不动。</li>
+							<li>勾选"清空后写入"会先删除 ZIP 顶层目录下已有的所有内容（仅限 ZIP 中出现的顶层），再展开 ZIP。</li>
+							<li>单文件 ≤ 20 MB、压缩包 ≤ 100 MB、条目数 ≤ 5000。</li>
+						</ul>
+					</div>
+					<Upload.Dragger
+						accept=".zip"
+						multiple={false}
+						maxCount={1}
+						fileList={uploadFile ? [uploadFile] : []}
+						beforeUpload={(file) => {
+							const uf: UploadFile = {
+								uid: String(Date.now()),
+								name: file.name,
+								size: file.size,
+								status: "done",
+								originFileObj: file as any,
+							};
+							setUploadFile(uf);
+							return false; // prevent auto upload
+						}}
+						onRemove={() => {
+							setUploadFile(null);
+							return true;
+						}}
+					>
+						<p className="ant-upload-drag-icon">
+							<InboxOutlined />
+						</p>
+						<p className="ant-upload-text">点击或拖拽 .zip 到此处</p>
+						<p className="ant-upload-hint">例如 project-management-v3-cli-deploy.zip</p>
+					</Upload.Dragger>
+					<Checkbox checked={uploadClean} onChange={(e) => setUploadClean(e.target.checked)}>
+						清空后写入（删除 ZIP 顶层目录的旧内容再解压）
+					</Checkbox>
+				</div>
 			</Modal>
 		</div>
 	);
