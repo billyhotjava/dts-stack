@@ -7,7 +7,10 @@ export function generateSelect(
   table: string,
   columns: string[] | null,
 ): string {
-  const cols = columns && columns.length > 0 ? columns.join(", ") : "*";
+  const cols =
+    columns && columns.length > 0
+      ? columns.map(quoteIfNeeded).join(", ")
+      : "*";
   return `SELECT ${cols} FROM ${quoteIfNeeded(schema)}.${quoteIfNeeded(table)} LIMIT 100`;
 }
 
@@ -17,8 +20,9 @@ export function generateInsert(
   columns: string[],
 ): string {
   if (columns.length === 0) return "";
+  const quotedCols = columns.map(quoteIfNeeded).join(", ");
   const placeholders = columns.map(() => "?").join(", ");
-  return `INSERT INTO ${quoteIfNeeded(schema)}.${quoteIfNeeded(table)} (${columns.join(", ")}) VALUES (${placeholders})`;
+  return `INSERT INTO ${quoteIfNeeded(schema)}.${quoteIfNeeded(table)} (${quotedCols}) VALUES (${placeholders})`;
 }
 
 export function copyName(schema: string, table: string): string {

@@ -147,6 +147,7 @@ export const SqlIde: FC = () => {
                       endColumn: pos.column,
                     },
                     text: sql,
+                    forceMoveMarkers: true,
                   }
                 : null;
               if (op) ed.executeEdits("sqlide.schema-sql", [op]);
