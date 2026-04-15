@@ -193,11 +193,11 @@ function groupByProject(tasks: ProjectGanttTask[]): GroupedProject[] {
 	return Array.from(map.entries()).map(([name, items]) => ({ name, tasks: items }));
 }
 
-/* ── Gantt bar gradient backgrounds ── */
+/* ── Gantt bar gradient backgrounds (aligned to dashboard palette) ── */
 const TONE_BG: Record<string, string> = {
-	normal: "linear-gradient(90deg, #2563eb, #1d4ed8)",
-	warn: "linear-gradient(90deg, #f59e0b, #d97706)",
-	high: "linear-gradient(90deg, #ef4444, #dc2626)",
+	normal: "linear-gradient(90deg, #2f8cff, #1c74ff)",
+	warn:   "linear-gradient(90deg, #ffcb3d, #ff7a21)",
+	high:   "linear-gradient(90deg, #ff5b2f, #d93f1d)",
 };
 
 /* ── Owner outside-label tone styles ── */
