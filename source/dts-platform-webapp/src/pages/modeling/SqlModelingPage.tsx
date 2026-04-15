@@ -898,9 +898,25 @@ export default function SqlModelingPage() {
 			strictMode: false,
 		});
 		const activeId = String(activeModel?.id || "").trim();
-		setRunSelectedModelIds(activeId ? [activeId] : []);
+		let prefillIds: string[];
+		if (activeId) {
+			prefillIds = [activeId];
+		} else if (activeSpace && activeSpaceModels.length > 0) {
+			prefillIds = activeSpaceModels
+				.map((m) => String(m.id || "").trim())
+				.filter(Boolean);
+		} else {
+			prefillIds = [];
+		}
+		setRunSelectedModelIds(prefillIds);
 		setRunModelKeyword("");
-		setRunSpaceFilter(activeModel?.planId ? String(activeModel.planId) : undefined);
+		setRunSpaceFilter(
+			activeModel?.planId
+				? String(activeModel.planId)
+				: activeSpace?.id
+					? String(activeSpace.id)
+					: undefined,
+		);
 		setRunMode(mode);
 		setRunOpen(true);
 	};
@@ -1143,11 +1159,28 @@ export default function SqlModelingPage() {
 	const triggerBuildOperation = async (operation: "compile" | "test" | "docs" | "build") => {
 		setBuildTriggering(operation);
 		try {
-			const selector = resolveDbtSelector(activeModel?.dagSelector) || (activeModel?.name ? `model:${activeModel.name}` : "all");
+			let selector: string;
+			let dagSelector: string | undefined;
+			if (activeModel) {
+				selector = normalizeText(activeModel.name) || "all";
+				dagSelector = normalizeText(activeModel.dagSelector) || undefined;
+			} else if (activeSpace && activeSpaceModels.length > 0) {
+				const names = activeSpaceModels
+					.map((m) => normalizeText(m.name))
+					.filter(Boolean) as string[];
+				selector = names.length > 0 ? names.join(" ") : "all";
+				dagSelector = activeSpaceModels
+					.map((m) => normalizeText(m.dagSelector))
+					.find(Boolean) || undefined;
+			} else {
+				selector = "all";
+				dagSelector = undefined;
+			}
 			const baselineStatus = (await getDbtSyncStatus(selector ? { models: selector } : undefined)) as DbtSyncStatus;
 			const baselineRun = baselineStatus?.latestRun || null;
 			const payload = {
 				models: selector,
+				dagSelector,
 				target: normalizeText(dbtConfig?.config?.targetName) || "dev",
 			};
 			let triggerResp: any;
@@ -2378,7 +2411,7 @@ export default function SqlModelingPage() {
 										icon={<CodeOutlined />}
 										onClick={() => triggerBuildOperation("compile")}
 										loading={buildTriggering === "compile"}
-										disabled={!activeModel || !configEnabled || !workspaceOk || buildTriggering != null}
+										disabled={(!activeModel && !(activeSpace && activeSpaceModels.length > 0)) || !configEnabled || !workspaceOk || buildTriggering != null}
 										data-testid="platform-sql-modeling-compile"
 									>
 										{action.label}
@@ -2392,7 +2425,7 @@ export default function SqlModelingPage() {
 										icon={<CheckCircleOutlined />}
 										onClick={() => triggerBuildOperation("test")}
 										loading={buildTriggering === "test"}
-										disabled={!activeModel || !configEnabled || !workspaceOk || buildTriggering != null}
+										disabled={(!activeModel && !(activeSpace && activeSpaceModels.length > 0)) || !configEnabled || !workspaceOk || buildTriggering != null}
 										data-testid="platform-sql-modeling-test"
 									>
 										{action.label}
@@ -2405,7 +2438,13 @@ export default function SqlModelingPage() {
 											key={action.key}
 											type="primary"
 											icon={<ThunderboltOutlined />}
-											onClick={() => openRun("build")}
+											onClick={() => {
+												if (activeModel || (activeSpace && activeSpaceModels.length > 0)) {
+													void triggerBuildOperation("build");
+												} else {
+													openRun("build");
+												}
+											}}
 											loading={buildTriggering === "build"}
 											disabled={!configEnabled || !workspaceOk || buildTriggering != null}
 											data-testid="platform-sql-modeling-build"
