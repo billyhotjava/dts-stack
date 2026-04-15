@@ -778,7 +778,7 @@
       "config": {
         "title": "",
         "titleFontSize": 0,
-        "chartPaddingTop": 8,
+        "chartPaddingTop": 28,
         "chartPaddingRight": 16,
         "chartPaddingBottom": 40,
         "chartPaddingLeft": 40,
@@ -799,7 +799,10 @@
         "yAxis": {
           "show": true,
           "labelFontSize": 11
-        }
+        },
+        "axisSeriesLabelStrategy": "all",
+        "seriesLabelFontSize": 12,
+        "seriesLabelPosition": "top"
       },
       "dataSource": {
         "type": "sql",
@@ -1953,7 +1956,7 @@
       "type": "shape",
       "name": "ov3-header-sideline-left",
       "x": 380,
-      "y": 56,
+      "y": 66,
       "width": 360,
       "height": 2,
       "zIndex": 58,
@@ -1972,7 +1975,7 @@
       "type": "shape",
       "name": "ov3-header-sideline-right",
       "x": 1180,
-      "y": 56,
+      "y": 66,
       "width": 360,
       "height": 2,
       "zIndex": 58,
@@ -1984,196 +1987,6 @@
         "borderColor": "transparent",
         "borderWidth": 0,
         "radius": 0
-      }
-    },
-    {
-      "id": "ov3-kpi-1-icon",
-      "type": "shape",
-      "name": "ov3-kpi-1-icon",
-      "x": 306,
-      "y": 106,
-      "width": 56,
-      "height": 56,
-      "zIndex": 26,
-      "locked": false,
-      "visible": true,
-      "config": {
-        "shapeType": "rect",
-        "fillColor": "rgba(52,174,255,0.10)",
-        "borderColor": "rgba(49,181,255,0.80)",
-        "borderWidth": 2,
-        "radius": 999
-      }
-    },
-    {
-      "id": "ov3-kpi-1-icon-glyph",
-      "type": "title",
-      "name": "ov3-kpi-1-icon-glyph",
-      "x": 306,
-      "y": 106,
-      "width": 56,
-      "height": 56,
-      "zIndex": 27,
-      "locked": false,
-      "visible": true,
-      "config": {
-        "text": "◉",
-        "fontSize": 28,
-        "fontWeight": "800",
-        "color": "#33d6ff",
-        "textAlign": "center"
-      }
-    },
-    {
-      "id": "ov3-kpi-2-icon",
-      "type": "shape",
-      "name": "ov3-kpi-2-icon",
-      "x": 682,
-      "y": 106,
-      "width": 56,
-      "height": 56,
-      "zIndex": 26,
-      "locked": false,
-      "visible": true,
-      "config": {
-        "shapeType": "rect",
-        "fillColor": "rgba(52,174,255,0.10)",
-        "borderColor": "rgba(49,181,255,0.80)",
-        "borderWidth": 2,
-        "radius": 999
-      }
-    },
-    {
-      "id": "ov3-kpi-2-icon-glyph",
-      "type": "title",
-      "name": "ov3-kpi-2-icon-glyph",
-      "x": 682,
-      "y": 106,
-      "width": 56,
-      "height": 56,
-      "zIndex": 27,
-      "locked": false,
-      "visible": true,
-      "config": {
-        "text": "▣",
-        "fontSize": 28,
-        "fontWeight": "800",
-        "color": "#33d6ff",
-        "textAlign": "center"
-      }
-    },
-    {
-      "id": "ov3-kpi-3-icon",
-      "type": "shape",
-      "name": "ov3-kpi-3-icon",
-      "x": 1058,
-      "y": 106,
-      "width": 56,
-      "height": 56,
-      "zIndex": 26,
-      "locked": false,
-      "visible": true,
-      "config": {
-        "shapeType": "rect",
-        "fillColor": "rgba(52,174,255,0.10)",
-        "borderColor": "rgba(49,181,255,0.80)",
-        "borderWidth": 2,
-        "radius": 999
-      }
-    },
-    {
-      "id": "ov3-kpi-3-icon-glyph",
-      "type": "title",
-      "name": "ov3-kpi-3-icon-glyph",
-      "x": 1058,
-      "y": 106,
-      "width": 56,
-      "height": 56,
-      "zIndex": 27,
-      "locked": false,
-      "visible": true,
-      "config": {
-        "text": "⚙",
-        "fontSize": 28,
-        "fontWeight": "800",
-        "color": "#33d6ff",
-        "textAlign": "center"
-      }
-    },
-    {
-      "id": "ov3-kpi-4-icon",
-      "type": "shape",
-      "name": "ov3-kpi-4-icon",
-      "x": 1434,
-      "y": 106,
-      "width": 56,
-      "height": 56,
-      "zIndex": 26,
-      "locked": false,
-      "visible": true,
-      "config": {
-        "shapeType": "rect",
-        "fillColor": "rgba(52,174,255,0.10)",
-        "borderColor": "rgba(49,181,255,0.80)",
-        "borderWidth": 2,
-        "radius": 999
-      }
-    },
-    {
-      "id": "ov3-kpi-4-icon-glyph",
-      "type": "title",
-      "name": "ov3-kpi-4-icon-glyph",
-      "x": 1434,
-      "y": 106,
-      "width": 56,
-      "height": 56,
-      "zIndex": 27,
-      "locked": false,
-      "visible": true,
-      "config": {
-        "text": "▤",
-        "fontSize": 28,
-        "fontWeight": "800",
-        "color": "#33d6ff",
-        "textAlign": "center"
-      }
-    },
-    {
-      "id": "ov3-kpi-5-icon",
-      "type": "shape",
-      "name": "ov3-kpi-5-icon",
-      "x": 1810,
-      "y": 106,
-      "width": 56,
-      "height": 56,
-      "zIndex": 26,
-      "locked": false,
-      "visible": true,
-      "config": {
-        "shapeType": "rect",
-        "fillColor": "rgba(52,174,255,0.10)",
-        "borderColor": "rgba(49,181,255,0.80)",
-        "borderWidth": 2,
-        "radius": 999
-      }
-    },
-    {
-      "id": "ov3-kpi-5-icon-glyph",
-      "type": "title",
-      "name": "ov3-kpi-5-icon-glyph",
-      "x": 1810,
-      "y": 106,
-      "width": 56,
-      "height": 56,
-      "zIndex": 27,
-      "locked": false,
-      "visible": true,
-      "config": {
-        "text": "✦",
-        "fontSize": 28,
-        "fontWeight": "800",
-        "color": "#33d6ff",
-        "textAlign": "center"
       }
     }
   ],
