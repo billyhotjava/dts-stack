@@ -40,7 +40,8 @@ export interface TabState {
   resultSnapshot: ResultSnapshot | null;  // memory-only, not persisted
   dirty: boolean;                 // pending server sync
   sortOrder: number;
-  updatedAt: string | null;       // ISO-8601, server's lastModifiedDate
+  updatedAt: string | null;       // ISO-8601 server-assigned lastModifiedDate (optimistic lock token)
+  localEditVersion: number;       // monotonic counter, incremented on every local edit; used to detect mid-flight edits
   createdLocally: boolean;        // true until first successful POST
   gridState: GridColumnState;
   subqueryViewName: string | null;

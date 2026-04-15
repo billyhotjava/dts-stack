@@ -137,3 +137,39 @@ source/dts-platform/src/main/java/com/yuzhi/dts/platform/
 - 老实现: `source/dts-platform-webapp/src/components/sql/SqlWorkbenchExperimental.tsx`
 - 后端基准: `source/dts-platform/src/main/java/com/yuzhi/dts/platform/service/sql/SqlExecutionService.java`
 - 安全基准: `source/dts-platform/src/main/java/com/yuzhi/dts/platform/service/security/SecuritySqlRewriter.java`
+
+## Post-close findings + fixes
+
+10 E2E-class bugs discovered only after driving the UI end-to-end — none were caught by spec review, Opus code review, or unit/IT tests:
+
+1. **API URL double-prefix** — 9 `api/sqlIde*.ts` files constructed URLs as `/api/sql/v2/...` while `apiClient` already prepends `/api`, producing `/api/api/sql/v2/...`. Fixed by stripping the leading `/api` from all 9 call sites.
+
+2. **Catalog DTOs not Serializable** — 5 catalog response DTOs (`CatalogDatasource`, `CatalogSchema`, `CatalogTable`, `CatalogColumn`, `CatalogSearchHit`) were missing `implements Serializable`, causing Hazelcast distributed-cache to throw `NotSerializableException` on the first request in a clustered environment.
+
+3. **`QueryExecutionChunk.rowsJson` wrong JPA type code** — annotated with `@JdbcTypeCode(Types.OTHER)` instead of `@JdbcTypeCode(SqlTypes.JSON)`. On PostgreSQL, Hibernate could not resolve a writer for the `jsonb` column, crashing every INSERT into `query_execution_chunk`.
+
+4. **`SqlCatalogLazyService` hardcoded placeholder datasources + wrong table** — the service had 3 hardcoded stub datasource entries (carried over from scaffolding) and queried `catalog_dataset` instead of `infra_data_source`. No real datasource ever appeared in the Schema Browser.
+
+5. **`SqlExecutionService` wired engine=TRINO but `TrinoGateway` did not exist** — the execution dispatch switched on `engine` and fell through to a TRINO branch that referenced a class that was never implemented, so every "Run" produced a `ClassNotFoundException` / `NullPointerException`. No real SQL was executed.
+
+6. **`PortalMenuService.java:89` + DB row 3119 mapped wrong page** — `studio.adhoc` was bound to the old `QueryWorkbenchPage` route instead of `SqlIdePage`, and the DB seed row (id 3119) still referenced the legacy path. Opening the Workbench nav item loaded the MVP textarea, not the new IDE.
+
+7. **`SqlIdePage.tsx` layout escape to viewport** — the IDE root element used `position: absolute; inset: 0` inside a `<main>` that had no `position: relative`, so the IDE painted over the entire browser window including the top nav bar.
+
+8. **`useTabStore.syncDirty` lost `activeTabId` after server response** — when the server returned a new canonical tab id, `syncDirty` remapped `tab.id` in the tabs array but never updated `activeTabId`. The active-tab pointer became stale, the store could never find the active tab, and the "正在恢复 Tab" skeleton persisted indefinitely.
+
+9. **`useTabStore.updateTab` overwrote `updatedAt` with client timestamp** — `updateTab` stamped the local `Date.now()` into `updatedAt` before sending a PATCH. The server uses `updatedAt` as an optimistic-lock token; the client-generated value always differed from the server's, producing a 409 Conflict on every save.
+
+10. **`ResultChart.tsx` conditional `useMemo` after early return** — a `useMemo` for series data was placed after a guard `if (!rows) return null`, violating the Rules of Hooks. React threw "Rendered more hooks than during the previous render" whenever the result set transitioned from empty to populated.
+
+### Final QueryGateway wiring
+
+`JdbcQueryGateway` is marked `@Primary` and is the sole execution path. A `ConcurrentHashMap<executionId, Statement>` tracks live statements to support real cancellation. PostgreSQL connections call `setAutoCommit(false)` to enable server-side cursor streaming, which is required for large result sets.
+
+### Playwright smoke suite
+
+5 end-to-end tests covering the critical path (login → open workbench → write SQL → execute → open chart) live at `source/dts-platform-webapp/e2e/`. Added in commit `285266e0b`.
+
+---
+
+**Process retrospective**: spec review + opus code review + unit/IT tests all approved these fixes without catching any of the 10 bugs. The single factor that would have caught all 10 is an E2E smoke test that exercises the actual user path (login → open workbench → write SQL → execute → open chart). Sprint-12 starts with that smoke suite already in place (commit 285266e0b) and CI gating is the immediate followup.

@@ -127,6 +127,7 @@ export const SqlIde: FC = () => {
                       endColumn: pos.column,
                     },
                     text: name,
+                    forceMoveMarkers: true,
                   }
                 : null;
               if (op) ed.executeEdits("sqlide.schema-insert", [op]);

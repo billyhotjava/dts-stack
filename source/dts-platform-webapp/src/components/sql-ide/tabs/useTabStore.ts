@@ -51,15 +51,20 @@ export function mergeHydration(local: TabState[], remote: TabDto[]): HydrationRe
       continue;
     }
     if (l && r) {
-      const localTs = l.updatedAt ? Date.parse(l.updatedAt) : 0;
-      const remoteTs = Date.parse(r.updatedAt);
-      if (remoteTs > localTs) {
-        tabs.push(fromDto(r));
-      } else if (localTs > remoteTs) {
+      // If local has unpushed edits, always prefer local + re-push.
+      // Otherwise compare ts (local.updatedAt now always equals last-seen-server ts since
+      // updateTab stopped bumping it; dirty flag is the authoritative "has local changes" signal).
+      if (l.dirty) {
         tabs.push(l);
         toPush.push(stateToPayload(l, /* includeId */ true));
       } else {
-        tabs.push(l);  // equal → no-op
+        const localTs = l.updatedAt ? Date.parse(l.updatedAt) : 0;
+        const remoteTs = Date.parse(r.updatedAt);
+        if (remoteTs > localTs) {
+          tabs.push(fromDto(r));
+        } else {
+          tabs.push(l);  // same or local ahead (shouldn't happen post-fix) → keep local
+        }
       }
     }
   }
@@ -83,6 +88,7 @@ function fromDto(r: TabDto): TabState {
     dirty: false,
     sortOrder: r.sortOrder,
     updatedAt: r.updatedAt,
+    localEditVersion: 0,
     createdLocally: false,
     gridState: emptyGridColumnState(),
     subqueryViewName: null,
@@ -174,6 +180,7 @@ export const useTabStore = create<TabStore>((set, get) => ({
       dirty: true,
       sortOrder: cur.length,
       updatedAt: null,
+      localEditVersion: 0,
       createdLocally: true,
       gridState: emptyGridColumnState(),
       subqueryViewName: null,
@@ -208,9 +215,13 @@ export const useTabStore = create<TabStore>((set, get) => ({
   },
 
   updateTab(id, patch) {
-    const now = new Date().toISOString();
+    // Do NOT overwrite updatedAt here — it is the server-assigned optimistic lock token
+    // and must match the server's last response on the next PATCH, or the server rejects
+    // with 409 "stale updatedAt". Use localEditVersion for mid-flight edit detection.
     const tabs = get().tabs.map((t) =>
-      t.id === id ? { ...t, ...patch, dirty: true, updatedAt: now } : t,
+      t.id === id
+        ? { ...t, ...patch, dirty: true, localEditVersion: t.localEditVersion + 1 }
+        : t,
     );
     set({ tabs });
     persistLocal(tabs);
@@ -290,8 +301,12 @@ export const useTabStore = create<TabStore>((set, get) => ({
     const snapshot = get().tabs.filter((t) => t.dirty);
     if (snapshot.length === 0) return;
 
-    // Map of id → updatedAt at the time of the snapshot
-    const pushedAtMap = new Map(snapshot.map((t) => [t.id, t.updatedAt]));
+    // Map of id → localEditVersion at the time of the snapshot.
+    // Used AFTER the server response to detect "user edited during await" — any
+    // edit during the await would bump localEditVersion and we must keep dirty=true.
+    // NOTE: do NOT use updatedAt for this — updatedAt is the server's optimistic lock
+    // token and stays constant across local edits.
+    const pushedVersionMap = new Map(snapshot.map((t) => [t.id, t.localEditVersion]));
 
     const payload: UpsertTabPayload[] = snapshot.map((t) =>
       stateToPayload(t, !t.createdLocally),
@@ -308,20 +323,33 @@ export const useTabStore = create<TabStore>((set, get) => ({
         }
       });
 
-      // Only clear dirty on tabs whose updatedAt hasn't changed since the snapshot
+      // Only clear dirty on tabs whose localEditVersion hasn't incremented since the snapshot.
+      // If it has, the user edited during the await and we must keep dirty=true so the next
+      // scheduled sync picks up the latest changes.
+      const appliedRemaps = new Map<string, string>(); // oldId → newId
       const tabs = get().tabs.map((t) => {
         const remap = idRemap.get(t.id);
-        const pushedAt = pushedAtMap.get(t.id);
-        if (!remap || !pushedAt) return t; // tab wasn't in the snapshot
-        if (t.updatedAt !== pushedAt) return t; // user edited during await → keep dirty
+        const pushedVersion = pushedVersionMap.get(t.id);
+        if (!remap || pushedVersion === undefined) return t; // tab wasn't in the snapshot
+        if (t.localEditVersion !== pushedVersion) return t; // user edited during await → keep dirty
+        if (remap.newId !== t.id) {
+          appliedRemaps.set(t.id, remap.newId);
+        }
         return {
           ...t,
           id: remap.newId,               // adopt server-assigned id for creates
-          updatedAt: remap.newUpdatedAt,  // adopt server's authoritative updatedAt
+          updatedAt: remap.newUpdatedAt,  // adopt server's authoritative updatedAt (optimistic-lock token)
           dirty: false,
           createdLocally: false,
         };
       });
+
+      // Remap activeTabId if it pointed at a tab whose id just changed.
+      // Without this the UI renders "正在恢复 Tab" because activeTabId is stale.
+      const currentActive = get().activeTabId;
+      const nextActive = currentActive && appliedRemaps.has(currentActive)
+        ? appliedRemaps.get(currentActive)!
+        : currentActive;
 
       // Reset retry state on success
       retryCount = 0;
@@ -330,7 +358,7 @@ export const useTabStore = create<TabStore>((set, get) => ({
         retryTimer = null;
       }
 
-      set({ tabs });
+      set({ tabs, activeTabId: nextActive });
       persistLocal(tabs);
     } catch (err) {
       // Retry with exponential backoff (up to MAX_RETRIES, then give up until next updateTab)
@@ -374,11 +402,13 @@ function loadLocal(): TabState[] {
     const raw = window.localStorage.getItem(LOCAL_STORAGE_KEY);
     if (!raw) return [];
     const parsed = JSON.parse(raw) as TabState[];
-    // Migration: pre-T17 tabs lack gridState; pre-T24 tabs lack subqueryViewName
+    // Migrations: pre-T17 lacks gridState; pre-T24 lacks subqueryViewName;
+    // pre-staleUpdatedAt-fix lacks localEditVersion.
     return parsed.map((t) => ({
       ...t,
       gridState: t.gridState ?? emptyGridColumnState(),
       subqueryViewName: t.subqueryViewName ?? null,
+      localEditVersion: t.localEditVersion ?? 0,
     }));
   } catch {
     return [];
