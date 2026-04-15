@@ -340,7 +340,7 @@
       "y": 90,
       "width": 264,
       "height": 88,
-      "zIndex": 20,
+      "zIndex": 25,
       "locked": false,
       "visible": true,
       "config": {
@@ -391,7 +391,7 @@
       "y": 90,
       "width": 264,
       "height": 88,
-      "zIndex": 20,
+      "zIndex": 25,
       "locked": false,
       "visible": true,
       "config": {
@@ -442,7 +442,7 @@
       "y": 90,
       "width": 264,
       "height": 88,
-      "zIndex": 20,
+      "zIndex": 25,
       "locked": false,
       "visible": true,
       "config": {
@@ -493,7 +493,7 @@
       "y": 90,
       "width": 264,
       "height": 88,
-      "zIndex": 20,
+      "zIndex": 25,
       "locked": false,
       "visible": true,
       "config": {
@@ -544,7 +544,7 @@
       "y": 90,
       "width": 264,
       "height": 88,
-      "zIndex": 20,
+      "zIndex": 25,
       "locked": false,
       "visible": true,
       "config": {
@@ -1952,7 +1952,7 @@
       "y": 92,
       "width": 78,
       "height": 78,
-      "zIndex": 40,
+      "zIndex": 30,
       "locked": true,
       "visible": true,
       "config": {
@@ -1969,7 +1969,7 @@
       "y": 92,
       "width": 78,
       "height": 78,
-      "zIndex": 40,
+      "zIndex": 30,
       "locked": true,
       "visible": true,
       "config": {
@@ -1986,7 +1986,7 @@
       "y": 92,
       "width": 78,
       "height": 78,
-      "zIndex": 40,
+      "zIndex": 30,
       "locked": true,
       "visible": true,
       "config": {
@@ -2003,7 +2003,7 @@
       "y": 92,
       "width": 78,
       "height": 78,
-      "zIndex": 40,
+      "zIndex": 30,
       "locked": true,
       "visible": true,
       "config": {
@@ -2020,7 +2020,7 @@
       "y": 92,
       "width": 78,
       "height": 78,
-      "zIndex": 40,
+      "zIndex": 30,
       "locked": true,
       "visible": true,
       "config": {
@@ -2037,7 +2037,7 @@
       "y": 84,
       "width": 370,
       "height": 100,
-      "zIndex": 20,
+      "zIndex": 15,
       "locked": true,
       "visible": true,
       "config": {
@@ -2056,7 +2056,7 @@
       "y": 84,
       "width": 370,
       "height": 100,
-      "zIndex": 20,
+      "zIndex": 15,
       "locked": true,
       "visible": true,
       "config": {
@@ -2075,7 +2075,7 @@
       "y": 84,
       "width": 370,
       "height": 100,
-      "zIndex": 20,
+      "zIndex": 15,
       "locked": true,
       "visible": true,
       "config": {
@@ -2094,7 +2094,7 @@
       "y": 84,
       "width": 370,
       "height": 100,
-      "zIndex": 20,
+      "zIndex": 15,
       "locked": true,
       "visible": true,
       "config": {
@@ -2113,7 +2113,7 @@
       "y": 84,
       "width": 370,
       "height": 100,
-      "zIndex": 20,
+      "zIndex": 15,
       "locked": true,
       "visible": true,
       "config": {
