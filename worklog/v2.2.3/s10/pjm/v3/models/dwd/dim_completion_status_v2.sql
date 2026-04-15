@@ -1,4 +1,4 @@
-{{ config(materialized='table', tags=['project-management-v2', 'dim', 'dwd']) }}
+{{ config(materialized='table', tags=['project-management-v3', 'dim', 'dwd']) }}
 
 SELECT code, label, is_completed, is_on_time, is_overdue_completed, is_incomplete, sort_order
 FROM (VALUES

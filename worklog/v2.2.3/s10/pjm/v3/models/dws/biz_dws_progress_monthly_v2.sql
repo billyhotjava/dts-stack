@@ -1,4 +1,4 @@
-{{ config(materialized='table', tags=['project-management-v2', 'biz', 'dws']) }}
+{{ config(materialized='table', tags=['project-management-v3', 'biz', 'dws']) }}
 
 -- 进度域月度汇总：对齐原始指标大表 #1-33
 -- 粒度: project_no × plan_month

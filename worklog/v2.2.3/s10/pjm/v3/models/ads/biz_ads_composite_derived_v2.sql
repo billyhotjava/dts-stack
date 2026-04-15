@@ -1,4 +1,4 @@
-{{ config(materialized='table', tags=['project-management-v2', 'biz', 'ads', 'derived', 'composite']) }}
+{{ config(materialized='table', tags=['project-management-v3', 'biz', 'ads', 'derived', 'composite']) }}
 
 -- 综合域二次指标：对齐二次指标大表 #17-18
 -- 依赖: 3 个 derived 表 + progress kpi 表

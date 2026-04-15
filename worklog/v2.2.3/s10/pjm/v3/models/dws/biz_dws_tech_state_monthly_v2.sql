@@ -1,4 +1,4 @@
-{{ config(materialized='table', tags=['project-management-v2', 'biz', 'dws', 'tech-state']) }}
+{{ config(materialized='table', tags=['project-management-v3', 'biz', 'dws', 'tech-state']) }}
 
 -- 技术状态域月度汇总：对齐原始指标大表 #49-67
 -- 粒度: project_no × dept × submit_month
@@ -17,6 +17,23 @@ SELECT
   SUM(CASE WHEN d.change_category = 'I' THEN 1 ELSE 0 END)                         AS new_cat_i,
   SUM(CASE WHEN d.change_category = 'II' THEN 1 ELSE 0 END)                        AS new_cat_ii,
   SUM(CASE WHEN d.change_category = 'III' THEN 1 ELSE 0 END)                       AS new_cat_iii,
+
+  -- === 需求提出口径（v3 科室变更评估评审看板用）===
+  -- "已提出需求" = file_signature_status 非空（枚举值均以"已提出需求"或"已评估评审"起始）
+  -- "未提出需求" = file_signature_status IS NULL 或空串（变更单已创建但尚未进入签署流程）
+  SUM(CASE WHEN btrim(COALESCE(d.file_signature_status,'')) <> '' THEN 1 ELSE 0 END)
+                                                                                    AS requirement_submitted_cnt,
+  SUM(CASE WHEN btrim(COALESCE(d.file_signature_status,'')) = '' THEN 1 ELSE 0 END)
+                                                                                    AS requirement_not_submitted_cnt,
+  -- "已评估评审" = I/II 类且 file_signature_status 在已评估的两个状态之一
+  SUM(CASE WHEN d.change_category IN ('I','II')
+           AND d.file_signature_status IN ('已评估评审，未签署','已评估评审，已签署')
+           THEN 1 ELSE 0 END)                                                      AS review_done_cnt,
+  -- "未评估评审" = I/II 类且 file_signature_status 尚未进入评审
+  SUM(CASE WHEN d.change_category IN ('I','II')
+           AND (d.file_signature_status IS NULL
+                OR d.file_signature_status = '已提出需求，未评估评审')
+           THEN 1 ELSE 0 END)                                                      AS review_pending_cnt,
 
   -- #52-56 文件签署状态 5 种 (TBD-4)
   SUM(CASE WHEN d.change_category IN ('I','II')
