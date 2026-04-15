@@ -657,8 +657,8 @@ const FlatGanttRow = memo(function FlatGanttRow({ task, scale, dark, rowBg, rowH
 				style={{ width: scale.totalPx, background: effectiveBg }}
 			>
 				<GanttTrackGrid scale={scale} dark={dark} />
-				{/* Baseline bar (gray, behind) */}
-				{!isMilestone && baselineEnd >= baselineStart && (
+				{/* Plan bar (gray backdrop, 计划开始→计划完成) */}
+				{!isMilestone && planEnd >= planStart && (
 					<div
 						className="absolute rounded-full"
 						style={{
