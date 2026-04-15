@@ -730,7 +730,7 @@
     },
     {
       "id": "ov3-quality-by-project",
-      "type": "bar-chart",
+      "type": "line-chart",
       "name": "质量-按项目",
       "x": 500,
       "y": 228,
@@ -750,7 +750,11 @@
         ],
         "seriesColors": [
           "#ff5d73"
-        ]
+        ],
+        "smooth": true,
+        "areaStyle": true,
+        "stack": false,
+        "stackMode": false
       },
       "dataSource": {
         "type": "sql",
@@ -782,7 +786,7 @@
     },
     {
       "id": "ov3-quality-by-dept",
-      "type": "bar-chart",
+      "type": "pie-chart",
       "name": "质量-按科室",
       "x": 500,
       "y": 521,
@@ -807,7 +811,10 @@
         "seriesColors": [
           "#ff5d73",
           "#2ee6a6"
-        ]
+        ],
+        "innerRadius": 0,
+        "roseType": false,
+        "labelPosition": "outside"
       },
       "dataSource": {
         "type": "sql",
@@ -839,7 +846,7 @@
     },
     {
       "id": "ov3-techstate-by-project",
-      "type": "bar-chart",
+      "type": "line-chart",
       "name": "技术状态-按项目",
       "x": 978,
       "y": 228,
@@ -869,7 +876,10 @@
           "#ff5d73",
           "#ff9f43"
         ],
-        "stackMode": false
+        "stackMode": false,
+        "smooth": true,
+        "areaStyle": false,
+        "stack": false
       },
       "dataSource": {
         "type": "sql",
@@ -1015,7 +1025,7 @@
     },
     {
       "id": "ov3-risk-by-dept",
-      "type": "bar-chart",
+      "type": "pie-chart",
       "name": "风险-按科室",
       "x": 1456,
       "y": 521,
@@ -1027,7 +1037,6 @@
       "config": {
         "title": "项目风险",
         "horizontal": true,
-        "stackMode": true,
         "series": [
           {
             "name": "高风险",
@@ -1046,7 +1055,10 @@
           "#ff5d73",
           "#ff9f43",
           "#ffd54f"
-        ]
+        ],
+        "innerRadius": 55,
+        "roseType": false,
+        "labelPosition": "outside"
       },
       "dataSource": {
         "type": "sql",
@@ -1107,10 +1119,10 @@
       "locked": false,
       "visible": true,
       "config": {
-        "text": "项目进度甘特图",
+        "text": "项目进度清单",
         "fontSize": 16,
         "fontWeight": "700",
-        "color": "#ffffff",
+        "color": "#e6f6ff",
         "textAlign": "flex-start"
       }
     },
@@ -1186,7 +1198,9 @@
         "title": "",
         "renderMode": "board-hierarchical",
         "drillMode": "modal",
-        "sideTextColor": "#ffffff"
+        "sideTextColor": "#ffffff",
+        "backgroundColor": "transparent",
+        "titleColor": "#e6f6ff"
       },
       "dataSource": {
         "type": "sql",
