@@ -161,6 +161,66 @@
 	[data-theme-mode="dark"] .ant-modal-content .ant-btn-dangerous {
 		color: var(--destructive-foreground, #fff) !important;
 	}
+
+	/* Force light styling for the publish-result modal even in dark mode */
+	.publish-result-modal-root .ant-modal-content {
+		background: #ffffff !important;
+		color: rgba(15, 23, 42, 0.92) !important;
+	}
+	.publish-result-modal-root .ant-modal-header {
+		background: #ffffff !important;
+		border-bottom-color: rgba(15, 23, 42, 0.08) !important;
+	}
+	.publish-result-modal-root .ant-modal-title,
+	.publish-result-modal-root .ant-modal-body,
+	.publish-result-modal-root .ant-modal-close,
+	.publish-result-modal-root .ant-modal-close-x {
+		color: rgba(15, 23, 42, 0.92) !important;
+	}
+	.publish-result-modal-root .ant-modal-footer {
+		border-top-color: rgba(15, 23, 42, 0.08) !important;
+	}
+	/* Reset dark-mode CSS variables inside this modal so Tailwind tokens
+	   (--text-primary, --surface-card, etc.) resolve to light-mode values */
+	.publish-result-modal-root .ant-modal-content {
+		--surface-page: #ffffff;
+		--surface-card: #ffffff;
+		--surface-float: #ffffff;
+		--surface-muted: #f1f5f9;
+		--surface-secondary: #f8fafc;
+		--surface-workspace: #ffffff;
+		--text-primary: rgba(15, 23, 42, 0.92);
+		--text-secondary: rgba(15, 23, 42, 0.65);
+		--text-muted: rgba(15, 23, 42, 0.5);
+		--text-disabled: rgba(15, 23, 42, 0.35);
+		--border-subtle: rgba(15, 23, 42, 0.08);
+		--border-strong: rgba(15, 23, 42, 0.14);
+		--border-default: rgba(15, 23, 42, 0.10);
+		--background: #ffffff;
+		--foreground: rgba(15, 23, 42, 0.92);
+		--card: #ffffff;
+		--card-foreground: rgba(15, 23, 42, 0.92);
+		--popover: #ffffff;
+		--popover-foreground: rgba(15, 23, 42, 0.92);
+		--border: rgba(15, 23, 42, 0.08);
+		--input: rgba(15, 23, 42, 0.08);
+		--muted: #f1f5f9;
+		--muted-foreground: rgba(15, 23, 42, 0.5);
+		--colors-text-primary: rgba(15, 23, 42, 0.92);
+		--colors-text-secondary: rgba(15, 23, 42, 0.65);
+		--colors-text-tertiary: rgba(15, 23, 42, 0.5);
+	}
+	/* Restore default antd button styling inside this light modal */
+	.publish-result-modal-root .ant-modal-content .ant-btn-default {
+		background: #ffffff !important;
+		border-color: rgba(15, 23, 42, 0.15) !important;
+		color: rgba(15, 23, 42, 0.92) !important;
+	}
+	.publish-result-modal-root .ant-modal-content .ant-btn-default:hover {
+		background: #f8fafc !important;
+		border-color: #7AB8E8 !important;
+		color: #0f172a !important;
+	}
 }
 
 @theme {

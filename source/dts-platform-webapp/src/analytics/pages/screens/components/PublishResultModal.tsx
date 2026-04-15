@@ -34,6 +34,7 @@ export function PublishResultModal({ open, onClose, publishInfo, isOwner }: Prop
 			}}
 		>
 			<Modal open={open} onCancel={onClose} title={null} width={720}
+				rootClassName="publish-result-modal-root"
 				footer={<div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}><Button onClick={onClose}>关闭</Button></div>}
 				styles={{ body: { maxHeight: '76vh', overflowY: 'auto', color: LIGHT_TEXT } }}>
 				<div className="publish-result-modal" style={{ display: 'grid', gap: 16, color: LIGHT_TEXT }}>
