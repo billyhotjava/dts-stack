@@ -187,13 +187,7 @@ export const ResultGrid: FC<ResultGridProps> = ({ executionId, gridState, onGrid
               />
             ))}
           </colgroup>
-          <thead
-            style={{
-              position: "sticky",
-              top: 0,
-              zIndex: 2,
-            }}
-          >
+          <thead>
             {table.getHeaderGroups().map((hg) => (
               <tr key={hg.id}>
                 {hg.headers.map((header, idx) => {
@@ -202,10 +196,19 @@ export const ResultGrid: FC<ResultGridProps> = ({ executionId, gridState, onGrid
                     <th
                       key={header.id}
                       style={{
+                        // position: sticky must be on the <th> itself (not on <thead>)
+                        // to work reliably with borderCollapse: separate across browsers.
+                        position: "sticky",
+                        top: 0,
+                        zIndex: 3,
                         width: header.getSize(),
                         padding: "8px 12px",
                         background: HEADER_BG,
-                        borderBottom: `1px solid ${BORDER_COLOR}`,
+                        // Use box-shadow for the sticky bottom divider — border-bottom on a
+                        // sticky cell doesn't repaint correctly as rows scroll underneath
+                        // (the border appears to "tear" on some browsers). Shadow paints
+                        // on every frame and gives a clean, crisp edge.
+                        boxShadow: `inset 0 -1px 0 ${BORDER_COLOR}`,
                         borderRight:
                           idx < hg.headers.length - 1 ? `1px solid ${BORDER_SOFT}` : "none",
                         fontSize: 12,
