@@ -629,7 +629,7 @@
         "type": "sql",
         "sqlConfig": {
           "databaseId": "{{DATABASE_ID}}",
-          "query": "SELECT COALESCE(SUM(s.total_change_cnt),0) AS v FROM biz_dws_tech_state_monthly_v2 s WHERE s.period_month >= to_char({{dateFrom}}::date,'YYYY-MM') AND s.period_month <= to_char({{dateTo}}::date,'YYYY-MM') [[AND s.dept = {{deptId}}]] [[AND s.project_no ILIKE '%' || {{projectNo}} || '%']]",
+          "query": "SELECT COALESCE(SUM(s.total_change_cnt),0) AS v FROM biz_dws_tech_state_monthly_v2 s WHERE s.period_month >= to_char({{dateFrom}}::date,'YYYY-MM') AND s.period_month <= to_char({{dateTo}}::date,'YYYY-MM') AND (NULLIF({{deptId}},'') IS NULL OR s.dept = {{deptId}}) AND (NULLIF({{projectNo}},'') IS NULL OR s.project_no ILIKE '%' || {{projectNo}} || '%')",
           "queryTimeoutSeconds": 30,
           "maxRows": 2000,
           "parameterBindings": [
@@ -679,7 +679,7 @@
         "type": "sql",
         "sqlConfig": {
           "databaseId": "{{DATABASE_ID}}",
-          "query": "SELECT COALESCE(SUM(s.order_unsigned_cat_i)+SUM(s.order_unsigned_cat_ii)+SUM(s.order_unsigned_cat_iii),0) AS v FROM biz_dws_tech_state_monthly_v2 s WHERE s.period_month >= to_char({{dateFrom}}::date,'YYYY-MM') AND s.period_month <= to_char({{dateTo}}::date,'YYYY-MM') [[AND s.dept = {{deptId}}]] [[AND s.project_no ILIKE '%' || {{projectNo}} || '%']]",
+          "query": "SELECT COALESCE(SUM(s.order_unsigned_cat_i)+SUM(s.order_unsigned_cat_ii)+SUM(s.order_unsigned_cat_iii),0) AS v FROM biz_dws_tech_state_monthly_v2 s WHERE s.period_month >= to_char({{dateFrom}}::date,'YYYY-MM') AND s.period_month <= to_char({{dateTo}}::date,'YYYY-MM') AND (NULLIF({{deptId}},'') IS NULL OR s.dept = {{deptId}}) AND (NULLIF({{projectNo}},'') IS NULL OR s.project_no ILIKE '%' || {{projectNo}} || '%')",
           "queryTimeoutSeconds": 30,
           "maxRows": 2000,
           "parameterBindings": [
@@ -729,7 +729,7 @@
         "type": "sql",
         "sqlConfig": {
           "databaseId": "{{DATABASE_ID}}",
-          "query": "SELECT CASE WHEN SUM(s.total_change_cnt)=0 THEN 0 ELSE ROUND(SUM(s.order_signed_cnt)::numeric/NULLIF(SUM(s.total_change_cnt),0)::numeric*100,2) END AS v FROM biz_dws_tech_state_monthly_v2 s WHERE s.period_month >= to_char({{dateFrom}}::date,'YYYY-MM') AND s.period_month <= to_char({{dateTo}}::date,'YYYY-MM') [[AND s.dept = {{deptId}}]] [[AND s.project_no ILIKE '%' || {{projectNo}} || '%']]",
+          "query": "SELECT CASE WHEN SUM(s.total_change_cnt)=0 THEN 0 ELSE ROUND(SUM(s.order_signed_cnt)::numeric/NULLIF(SUM(s.total_change_cnt),0)::numeric*100,2) END AS v FROM biz_dws_tech_state_monthly_v2 s WHERE s.period_month >= to_char({{dateFrom}}::date,'YYYY-MM') AND s.period_month <= to_char({{dateTo}}::date,'YYYY-MM') AND (NULLIF({{deptId}},'') IS NULL OR s.dept = {{deptId}}) AND (NULLIF({{projectNo}},'') IS NULL OR s.project_no ILIKE '%' || {{projectNo}} || '%')",
           "queryTimeoutSeconds": 30,
           "maxRows": 2000,
           "parameterBindings": [
@@ -779,7 +779,7 @@
         "type": "sql",
         "sqlConfig": {
           "databaseId": "{{DATABASE_ID}}",
-          "query": "SELECT COALESCE(SUM(s.reform_pending_i_ii),0) AS v FROM biz_dws_tech_state_monthly_v2 s WHERE s.period_month >= to_char({{dateFrom}}::date,'YYYY-MM') AND s.period_month <= to_char({{dateTo}}::date,'YYYY-MM') [[AND s.dept = {{deptId}}]] [[AND s.project_no ILIKE '%' || {{projectNo}} || '%']]",
+          "query": "SELECT COALESCE(SUM(s.reform_pending_i_ii),0) AS v FROM biz_dws_tech_state_monthly_v2 s WHERE s.period_month >= to_char({{dateFrom}}::date,'YYYY-MM') AND s.period_month <= to_char({{dateTo}}::date,'YYYY-MM') AND (NULLIF({{deptId}},'') IS NULL OR s.dept = {{deptId}}) AND (NULLIF({{projectNo}},'') IS NULL OR s.project_no ILIKE '%' || {{projectNo}} || '%')",
           "queryTimeoutSeconds": 30,
           "maxRows": 2000,
           "parameterBindings": [
@@ -829,7 +829,7 @@
         "type": "sql",
         "sqlConfig": {
           "databaseId": "{{DATABASE_ID}}",
-          "query": "SELECT CASE WHEN (SUM(s.reform_pending_i_ii)+SUM(s.reform_done_i_ii))=0 THEN 0 ELSE ROUND(SUM(s.reform_done_i_ii)::numeric/NULLIF(SUM(s.reform_pending_i_ii)+SUM(s.reform_done_i_ii),0)::numeric*100,2) END AS v FROM biz_dws_tech_state_monthly_v2 s WHERE s.period_month >= to_char({{dateFrom}}::date,'YYYY-MM') AND s.period_month <= to_char({{dateTo}}::date,'YYYY-MM') [[AND s.dept = {{deptId}}]] [[AND s.project_no ILIKE '%' || {{projectNo}} || '%']]",
+          "query": "SELECT CASE WHEN (SUM(s.reform_pending_i_ii)+SUM(s.reform_done_i_ii))=0 THEN 0 ELSE ROUND(SUM(s.reform_done_i_ii)::numeric/NULLIF(SUM(s.reform_pending_i_ii)+SUM(s.reform_done_i_ii),0)::numeric*100,2) END AS v FROM biz_dws_tech_state_monthly_v2 s WHERE s.period_month >= to_char({{dateFrom}}::date,'YYYY-MM') AND s.period_month <= to_char({{dateTo}}::date,'YYYY-MM') AND (NULLIF({{deptId}},'') IS NULL OR s.dept = {{deptId}}) AND (NULLIF({{projectNo}},'') IS NULL OR s.project_no ILIKE '%' || {{projectNo}} || '%')",
           "queryTimeoutSeconds": 30,
           "maxRows": 2000,
           "parameterBindings": [
@@ -909,7 +909,7 @@
         "type": "sql",
         "sqlConfig": {
           "databaseId": "{{DATABASE_ID}}",
-          "query": "SELECT s.project_no AS \"项目编号\", SUM(s.total_change_cnt) AS \"变更总数\", SUM(s.order_unsigned_cat_i)+SUM(s.order_unsigned_cat_ii)+SUM(s.order_unsigned_cat_iii) AS \"未签署\", SUM(s.order_signed_cnt) AS \"已签署\" FROM biz_dws_tech_state_monthly_v2 s WHERE s.period_month >= to_char({{dateFrom}}::date,'YYYY-MM') AND s.period_month <= to_char({{dateTo}}::date,'YYYY-MM') [[AND s.dept = {{deptId}}]] [[AND s.project_no ILIKE '%' || {{projectNo}} || '%']] GROUP BY s.project_no ORDER BY SUM(s.total_change_cnt) DESC LIMIT 12",
+          "query": "SELECT s.project_no AS \"项目编号\", SUM(s.total_change_cnt) AS \"变更总数\", SUM(s.order_unsigned_cat_i)+SUM(s.order_unsigned_cat_ii)+SUM(s.order_unsigned_cat_iii) AS \"未签署\", SUM(s.order_signed_cnt) AS \"已签署\" FROM biz_dws_tech_state_monthly_v2 s WHERE s.period_month >= to_char({{dateFrom}}::date,'YYYY-MM') AND s.period_month <= to_char({{dateTo}}::date,'YYYY-MM') AND (NULLIF({{deptId}},'') IS NULL OR s.dept = {{deptId}}) AND (NULLIF({{projectNo}},'') IS NULL OR s.project_no ILIKE '%' || {{projectNo}} || '%') GROUP BY s.project_no ORDER BY SUM(s.total_change_cnt) DESC LIMIT 12",
           "queryTimeoutSeconds": 30,
           "maxRows": 2000,
           "parameterBindings": [
@@ -994,7 +994,7 @@
         "type": "sql",
         "sqlConfig": {
           "databaseId": "{{DATABASE_ID}}",
-          "query": "SELECT s.dept AS \"责任科室\", SUM(s.requirement_submitted_cnt) AS \"已提出\", SUM(s.requirement_not_submitted_cnt) AS \"未提出\", SUM(s.review_done_cnt) AS \"已评估评审\", SUM(s.review_pending_cnt) AS \"未评估评审\" FROM biz_dws_tech_state_monthly_v2 s WHERE s.period_month >= to_char({{dateFrom}}::date,'YYYY-MM') AND s.period_month <= to_char({{dateTo}}::date,'YYYY-MM') [[AND s.project_no ILIKE '%' || {{projectNo}} || '%']] AND s.dept IS NOT NULL GROUP BY s.dept ORDER BY SUM(s.total_change_cnt) DESC LIMIT 12",
+          "query": "SELECT s.dept AS \"责任科室\", SUM(s.requirement_submitted_cnt) AS \"已提出\", SUM(s.requirement_not_submitted_cnt) AS \"未提出\", SUM(s.review_done_cnt) AS \"已评估评审\", SUM(s.review_pending_cnt) AS \"未评估评审\" FROM biz_dws_tech_state_monthly_v2 s WHERE s.period_month >= to_char({{dateFrom}}::date,'YYYY-MM') AND s.period_month <= to_char({{dateTo}}::date,'YYYY-MM') AND (NULLIF({{projectNo}},'') IS NULL OR s.project_no ILIKE '%' || {{projectNo}} || '%') AND s.dept IS NOT NULL GROUP BY s.dept ORDER BY SUM(s.total_change_cnt) DESC LIMIT 12",
           "queryTimeoutSeconds": 30,
           "maxRows": 2000,
           "parameterBindings": [
@@ -1066,7 +1066,7 @@
         "type": "sql",
         "sqlConfig": {
           "databaseId": "{{DATABASE_ID}}",
-          "query": "SELECT s.dept AS \"责任科室\", SUM(s.total_change_cnt) AS \"总数量\", SUM(s.reform_pending_i_ii) AS \"未落实整改数量\" FROM biz_dws_tech_state_monthly_v2 s WHERE s.period_month >= to_char({{dateFrom}}::date,'YYYY-MM') AND s.period_month <= to_char({{dateTo}}::date,'YYYY-MM') [[AND s.project_no ILIKE '%' || {{projectNo}} || '%']] AND s.dept IS NOT NULL GROUP BY s.dept ORDER BY SUM(s.total_change_cnt) DESC LIMIT 12",
+          "query": "SELECT s.dept AS \"责任科室\", SUM(s.total_change_cnt) AS \"总数量\", SUM(s.reform_pending_i_ii) AS \"未落实整改数量\" FROM biz_dws_tech_state_monthly_v2 s WHERE s.period_month >= to_char({{dateFrom}}::date,'YYYY-MM') AND s.period_month <= to_char({{dateTo}}::date,'YYYY-MM') AND (NULLIF({{projectNo}},'') IS NULL OR s.project_no ILIKE '%' || {{projectNo}} || '%') AND s.dept IS NOT NULL GROUP BY s.dept ORDER BY SUM(s.total_change_cnt) DESC LIMIT 12",
           "queryTimeoutSeconds": 30,
           "maxRows": 2000,
           "parameterBindings": [
@@ -1139,7 +1139,7 @@
         "type": "sql",
         "sqlConfig": {
           "databaseId": "{{DATABASE_ID}}",
-          "query": "SELECT s.project_no AS \"项目编号\", SUM(s.total_change_cnt) AS \"总数量\", SUM(s.reform_pending_i_ii) AS \"未落实整改数量\" FROM biz_dws_tech_state_monthly_v2 s WHERE s.period_month >= to_char({{dateFrom}}::date,'YYYY-MM') AND s.period_month <= to_char({{dateTo}}::date,'YYYY-MM') [[AND s.dept = {{deptId}}]] [[AND s.project_no ILIKE '%' || {{projectNo}} || '%']] GROUP BY s.project_no ORDER BY SUM(s.total_change_cnt) DESC LIMIT 12",
+          "query": "SELECT s.project_no AS \"项目编号\", SUM(s.total_change_cnt) AS \"总数量\", SUM(s.reform_pending_i_ii) AS \"未落实整改数量\" FROM biz_dws_tech_state_monthly_v2 s WHERE s.period_month >= to_char({{dateFrom}}::date,'YYYY-MM') AND s.period_month <= to_char({{dateTo}}::date,'YYYY-MM') AND (NULLIF({{deptId}},'') IS NULL OR s.dept = {{deptId}}) AND (NULLIF({{projectNo}},'') IS NULL OR s.project_no ILIKE '%' || {{projectNo}} || '%') GROUP BY s.project_no ORDER BY SUM(s.total_change_cnt) DESC LIMIT 12",
           "queryTimeoutSeconds": 30,
           "maxRows": 2000,
           "parameterBindings": [
@@ -1241,7 +1241,7 @@
         "type": "sql",
         "sqlConfig": {
           "databaseId": "{{DATABASE_ID}}",
-          "query": "SELECT d.project_no AS \"项目编号\", d.tech_state_name AS \"技术状态项名称\", d.change_item AS \"更改事项\", d.owner AS \"负责人\", d.dept AS \"责任科室\", to_char(d.change_submit_time,'YYYY-MM-DD') AS \"更改提出时间\", d.change_category AS \"更改类别\", CASE WHEN d.is_signature_completed THEN '已签署' ELSE '未签署' END AS \"变更单签署状态\", COALESCE(d.reform_status,'-') AS \"整改落实状态\", to_char(d.reform_date,'YYYY-MM-DD') AS \"整改落实时间\" FROM biz_dwd_tech_state_v2 d WHERE to_char(d.change_submit_time,'YYYY-MM') >= to_char({{dateFrom}}::date,'YYYY-MM') AND to_char(d.change_submit_time,'YYYY-MM') <= to_char({{dateTo}}::date,'YYYY-MM') [[AND d.dept = {{deptId}}]] [[AND d.project_no ILIKE '%' || {{projectNo}} || '%']] ORDER BY d.change_submit_time DESC LIMIT 500",
+          "query": "SELECT d.project_no AS \"项目编号\", d.tech_state_name AS \"技术状态项名称\", d.change_item AS \"更改事项\", d.owner AS \"负责人\", d.dept AS \"责任科室\", to_char(d.change_submit_time,'YYYY-MM-DD') AS \"更改提出时间\", d.change_category AS \"更改类别\", CASE WHEN d.is_signature_completed THEN '已签署' ELSE '未签署' END AS \"变更单签署状态\", COALESCE(d.reform_status,'-') AS \"整改落实状态\", to_char(d.reform_date,'YYYY-MM-DD') AS \"整改落实时间\" FROM biz_dwd_tech_state_v2 d WHERE to_char(d.change_submit_time,'YYYY-MM') >= to_char({{dateFrom}}::date,'YYYY-MM') AND to_char(d.change_submit_time,'YYYY-MM') <= to_char({{dateTo}}::date,'YYYY-MM') AND (NULLIF({{deptId}},'') IS NULL OR d.dept = {{deptId}}) AND (NULLIF({{projectNo}},'') IS NULL OR d.project_no ILIKE '%' || {{projectNo}} || '%') ORDER BY d.change_submit_time DESC LIMIT 500",
           "queryTimeoutSeconds": 30,
           "maxRows": 2000,
           "parameterBindings": [

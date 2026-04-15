@@ -629,7 +629,7 @@
         "type": "sql",
         "sqlConfig": {
           "databaseId": "{{DATABASE_ID}}",
-          "query": "SELECT COALESCE(SUM(s.new_issue_cnt),0) AS v FROM biz_dws_quality_monthly_v2 s WHERE s.period_month >= to_char({{dateFrom}}::date,'YYYY-MM') AND s.period_month <= to_char({{dateTo}}::date,'YYYY-MM') [[AND s.dept = {{deptId}}]] [[AND s.project_no ILIKE '%' || {{projectNo}} || '%']]",
+          "query": "SELECT COALESCE(SUM(s.new_issue_cnt),0) AS v FROM biz_dws_quality_monthly_v2 s WHERE s.period_month >= to_char({{dateFrom}}::date,'YYYY-MM') AND s.period_month <= to_char({{dateTo}}::date,'YYYY-MM') AND (NULLIF({{deptId}},'') IS NULL OR s.dept = {{deptId}}) AND (NULLIF({{projectNo}},'') IS NULL OR s.project_no ILIKE '%' || {{projectNo}} || '%')",
           "queryTimeoutSeconds": 30,
           "maxRows": 2000,
           "parameterBindings": [
@@ -679,7 +679,7 @@
         "type": "sql",
         "sqlConfig": {
           "databaseId": "{{DATABASE_ID}}",
-          "query": "SELECT COALESCE(SUM(s.open_issue_cnt),0) AS v FROM biz_dws_quality_monthly_v2 s WHERE s.period_month >= to_char({{dateFrom}}::date,'YYYY-MM') AND s.period_month <= to_char({{dateTo}}::date,'YYYY-MM') [[AND s.dept = {{deptId}}]] [[AND s.project_no ILIKE '%' || {{projectNo}} || '%']]",
+          "query": "SELECT COALESCE(SUM(s.open_issue_cnt),0) AS v FROM biz_dws_quality_monthly_v2 s WHERE s.period_month >= to_char({{dateFrom}}::date,'YYYY-MM') AND s.period_month <= to_char({{dateTo}}::date,'YYYY-MM') AND (NULLIF({{deptId}},'') IS NULL OR s.dept = {{deptId}}) AND (NULLIF({{projectNo}},'') IS NULL OR s.project_no ILIKE '%' || {{projectNo}} || '%')",
           "queryTimeoutSeconds": 30,
           "maxRows": 2000,
           "parameterBindings": [
@@ -729,7 +729,7 @@
         "type": "sql",
         "sqlConfig": {
           "databaseId": "{{DATABASE_ID}}",
-          "query": "SELECT CASE WHEN SUM(s.new_issue_cnt)=0 THEN 0 ELSE ROUND(SUM(s.zero_completed_cnt)::numeric/NULLIF(SUM(s.new_issue_cnt),0)::numeric*100,2) END AS v FROM biz_dws_quality_monthly_v2 s WHERE s.period_month >= to_char({{dateFrom}}::date,'YYYY-MM') AND s.period_month <= to_char({{dateTo}}::date,'YYYY-MM') [[AND s.dept = {{deptId}}]] [[AND s.project_no ILIKE '%' || {{projectNo}} || '%']]",
+          "query": "SELECT CASE WHEN SUM(s.new_issue_cnt)=0 THEN 0 ELSE ROUND(SUM(s.zero_completed_cnt)::numeric/NULLIF(SUM(s.new_issue_cnt),0)::numeric*100,2) END AS v FROM biz_dws_quality_monthly_v2 s WHERE s.period_month >= to_char({{dateFrom}}::date,'YYYY-MM') AND s.period_month <= to_char({{dateTo}}::date,'YYYY-MM') AND (NULLIF({{deptId}},'') IS NULL OR s.dept = {{deptId}}) AND (NULLIF({{projectNo}},'') IS NULL OR s.project_no ILIKE '%' || {{projectNo}} || '%')",
           "queryTimeoutSeconds": 30,
           "maxRows": 2000,
           "parameterBindings": [
@@ -779,7 +779,7 @@
         "type": "sql",
         "sqlConfig": {
           "databaseId": "{{DATABASE_ID}}",
-          "query": "SELECT COALESCE(MAX(cnt),0) AS v FROM (SELECT s.project_no, SUM(s.new_issue_cnt) AS cnt FROM biz_dws_quality_monthly_v2 s WHERE s.period_month >= to_char({{dateFrom}}::date,'YYYY-MM') AND s.period_month <= to_char({{dateTo}}::date,'YYYY-MM') [[AND s.dept = {{deptId}}]] [[AND s.project_no ILIKE '%' || {{projectNo}} || '%']] GROUP BY s.project_no) t",
+          "query": "SELECT COALESCE(MAX(cnt),0) AS v FROM (SELECT s.project_no, SUM(s.new_issue_cnt) AS cnt FROM biz_dws_quality_monthly_v2 s WHERE s.period_month >= to_char({{dateFrom}}::date,'YYYY-MM') AND s.period_month <= to_char({{dateTo}}::date,'YYYY-MM') AND (NULLIF({{deptId}},'') IS NULL OR s.dept = {{deptId}}) AND (NULLIF({{projectNo}},'') IS NULL OR s.project_no ILIKE '%' || {{projectNo}} || '%') GROUP BY s.project_no) t",
           "queryTimeoutSeconds": 30,
           "maxRows": 2000,
           "parameterBindings": [
@@ -859,7 +859,7 @@
         "type": "sql",
         "sqlConfig": {
           "databaseId": "{{DATABASE_ID}}",
-          "query": "SELECT s.project_no AS \"项目编号\", SUM(s.new_issue_cnt) AS \"问题总数\", SUM(s.zero_completed_cnt) AS \"已归零\", SUM(s.open_issue_cnt) AS \"未归零\" FROM biz_dws_quality_monthly_v2 s WHERE s.period_month >= to_char({{dateFrom}}::date,'YYYY-MM') AND s.period_month <= to_char({{dateTo}}::date,'YYYY-MM') [[AND s.dept = {{deptId}}]] [[AND s.project_no ILIKE '%' || {{projectNo}} || '%']] GROUP BY s.project_no ORDER BY SUM(s.new_issue_cnt) DESC LIMIT 12",
+          "query": "SELECT s.project_no AS \"项目编号\", SUM(s.new_issue_cnt) AS \"问题总数\", SUM(s.zero_completed_cnt) AS \"已归零\", SUM(s.open_issue_cnt) AS \"未归零\" FROM biz_dws_quality_monthly_v2 s WHERE s.period_month >= to_char({{dateFrom}}::date,'YYYY-MM') AND s.period_month <= to_char({{dateTo}}::date,'YYYY-MM') AND (NULLIF({{deptId}},'') IS NULL OR s.dept = {{deptId}}) AND (NULLIF({{projectNo}},'') IS NULL OR s.project_no ILIKE '%' || {{projectNo}} || '%') GROUP BY s.project_no ORDER BY SUM(s.new_issue_cnt) DESC LIMIT 12",
           "queryTimeoutSeconds": 30,
           "maxRows": 2000,
           "parameterBindings": [
@@ -938,7 +938,7 @@
         "type": "sql",
         "sqlConfig": {
           "databaseId": "{{DATABASE_ID}}",
-          "query": "SELECT s.dept AS \"责任科室\", SUM(s.new_issue_cnt) AS \"质量问题总数\", SUM(s.zero_completed_cnt) AS \"已归零\", SUM(s.open_issue_cnt) AS \"未归零\" FROM biz_dws_quality_monthly_v2 s WHERE s.period_month >= to_char({{dateFrom}}::date,'YYYY-MM') AND s.period_month <= to_char({{dateTo}}::date,'YYYY-MM') [[AND s.project_no ILIKE '%' || {{projectNo}} || '%']] AND s.dept IS NOT NULL GROUP BY s.dept ORDER BY SUM(s.new_issue_cnt) DESC LIMIT 12",
+          "query": "SELECT s.dept AS \"责任科室\", SUM(s.new_issue_cnt) AS \"质量问题总数\", SUM(s.zero_completed_cnt) AS \"已归零\", SUM(s.open_issue_cnt) AS \"未归零\" FROM biz_dws_quality_monthly_v2 s WHERE s.period_month >= to_char({{dateFrom}}::date,'YYYY-MM') AND s.period_month <= to_char({{dateTo}}::date,'YYYY-MM') AND (NULLIF({{projectNo}},'') IS NULL OR s.project_no ILIKE '%' || {{projectNo}} || '%') AND s.dept IS NOT NULL GROUP BY s.dept ORDER BY SUM(s.new_issue_cnt) DESC LIMIT 12",
           "queryTimeoutSeconds": 30,
           "maxRows": 2000,
           "parameterBindings": [
@@ -997,7 +997,7 @@
         "type": "sql",
         "sqlConfig": {
           "databaseId": "{{DATABASE_ID}}",
-          "query": "SELECT v.\"类别\", v.\"数量\" FROM (SELECT '设计' AS \"类别\", SUM(s.open_cat_design) AS \"数量\" FROM biz_dws_quality_monthly_v2 s WHERE s.period_month >= to_char({{dateFrom}}::date,'YYYY-MM') AND s.period_month <= to_char({{dateTo}}::date,'YYYY-MM') [[AND s.dept = {{deptId}}]] [[AND s.project_no ILIKE '%' || {{projectNo}} || '%']] UNION ALL SELECT '工艺', SUM(s.open_cat_process) FROM biz_dws_quality_monthly_v2 s WHERE s.period_month >= to_char({{dateFrom}}::date,'YYYY-MM') AND s.period_month <= to_char({{dateTo}}::date,'YYYY-MM') [[AND s.dept = {{deptId}}]] [[AND s.project_no ILIKE '%' || {{projectNo}} || '%']] UNION ALL SELECT '管理', SUM(s.open_cat_management) FROM biz_dws_quality_monthly_v2 s WHERE s.period_month >= to_char({{dateFrom}}::date,'YYYY-MM') AND s.period_month <= to_char({{dateTo}}::date,'YYYY-MM') [[AND s.dept = {{deptId}}]] [[AND s.project_no ILIKE '%' || {{projectNo}} || '%']] UNION ALL SELECT '元器件', SUM(s.open_cat_component) FROM biz_dws_quality_monthly_v2 s WHERE s.period_month >= to_char({{dateFrom}}::date,'YYYY-MM') AND s.period_month <= to_char({{dateTo}}::date,'YYYY-MM') [[AND s.dept = {{deptId}}]] [[AND s.project_no ILIKE '%' || {{projectNo}} || '%']] UNION ALL SELECT '操作', SUM(s.open_cat_operation) FROM biz_dws_quality_monthly_v2 s WHERE s.period_month >= to_char({{dateFrom}}::date,'YYYY-MM') AND s.period_month <= to_char({{dateTo}}::date,'YYYY-MM') [[AND s.dept = {{deptId}}]] [[AND s.project_no ILIKE '%' || {{projectNo}} || '%']] UNION ALL SELECT '外协外购', SUM(s.open_cat_outsource) FROM biz_dws_quality_monthly_v2 s WHERE s.period_month >= to_char({{dateFrom}}::date,'YYYY-MM') AND s.period_month <= to_char({{dateTo}}::date,'YYYY-MM') [[AND s.dept = {{deptId}}]] [[AND s.project_no ILIKE '%' || {{projectNo}} || '%']] UNION ALL SELECT '软件', SUM(s.open_cat_software) FROM biz_dws_quality_monthly_v2 s WHERE s.period_month >= to_char({{dateFrom}}::date,'YYYY-MM') AND s.period_month <= to_char({{dateTo}}::date,'YYYY-MM') [[AND s.dept = {{deptId}}]] [[AND s.project_no ILIKE '%' || {{projectNo}} || '%']] UNION ALL SELECT '其他', SUM(s.open_cat_other) FROM biz_dws_quality_monthly_v2 s WHERE s.period_month >= to_char({{dateFrom}}::date,'YYYY-MM') AND s.period_month <= to_char({{dateTo}}::date,'YYYY-MM') [[AND s.dept = {{deptId}}]] [[AND s.project_no ILIKE '%' || {{projectNo}} || '%']]) v WHERE v.\"数量\" > 0",
+          "query": "SELECT v.\"类别\", v.\"数量\" FROM (SELECT '设计' AS \"类别\", SUM(s.open_cat_design) AS \"数量\" FROM biz_dws_quality_monthly_v2 s WHERE s.period_month >= to_char({{dateFrom}}::date,'YYYY-MM') AND s.period_month <= to_char({{dateTo}}::date,'YYYY-MM') AND (NULLIF({{deptId}},'') IS NULL OR s.dept = {{deptId}}) AND (NULLIF({{projectNo}},'') IS NULL OR s.project_no ILIKE '%' || {{projectNo}} || '%') UNION ALL SELECT '工艺', SUM(s.open_cat_process) FROM biz_dws_quality_monthly_v2 s WHERE s.period_month >= to_char({{dateFrom}}::date,'YYYY-MM') AND s.period_month <= to_char({{dateTo}}::date,'YYYY-MM') AND (NULLIF({{deptId}},'') IS NULL OR s.dept = {{deptId}}) AND (NULLIF({{projectNo}},'') IS NULL OR s.project_no ILIKE '%' || {{projectNo}} || '%') UNION ALL SELECT '管理', SUM(s.open_cat_management) FROM biz_dws_quality_monthly_v2 s WHERE s.period_month >= to_char({{dateFrom}}::date,'YYYY-MM') AND s.period_month <= to_char({{dateTo}}::date,'YYYY-MM') AND (NULLIF({{deptId}},'') IS NULL OR s.dept = {{deptId}}) AND (NULLIF({{projectNo}},'') IS NULL OR s.project_no ILIKE '%' || {{projectNo}} || '%') UNION ALL SELECT '元器件', SUM(s.open_cat_component) FROM biz_dws_quality_monthly_v2 s WHERE s.period_month >= to_char({{dateFrom}}::date,'YYYY-MM') AND s.period_month <= to_char({{dateTo}}::date,'YYYY-MM') AND (NULLIF({{deptId}},'') IS NULL OR s.dept = {{deptId}}) AND (NULLIF({{projectNo}},'') IS NULL OR s.project_no ILIKE '%' || {{projectNo}} || '%') UNION ALL SELECT '操作', SUM(s.open_cat_operation) FROM biz_dws_quality_monthly_v2 s WHERE s.period_month >= to_char({{dateFrom}}::date,'YYYY-MM') AND s.period_month <= to_char({{dateTo}}::date,'YYYY-MM') AND (NULLIF({{deptId}},'') IS NULL OR s.dept = {{deptId}}) AND (NULLIF({{projectNo}},'') IS NULL OR s.project_no ILIKE '%' || {{projectNo}} || '%') UNION ALL SELECT '外协外购', SUM(s.open_cat_outsource) FROM biz_dws_quality_monthly_v2 s WHERE s.period_month >= to_char({{dateFrom}}::date,'YYYY-MM') AND s.period_month <= to_char({{dateTo}}::date,'YYYY-MM') AND (NULLIF({{deptId}},'') IS NULL OR s.dept = {{deptId}}) AND (NULLIF({{projectNo}},'') IS NULL OR s.project_no ILIKE '%' || {{projectNo}} || '%') UNION ALL SELECT '软件', SUM(s.open_cat_software) FROM biz_dws_quality_monthly_v2 s WHERE s.period_month >= to_char({{dateFrom}}::date,'YYYY-MM') AND s.period_month <= to_char({{dateTo}}::date,'YYYY-MM') AND (NULLIF({{deptId}},'') IS NULL OR s.dept = {{deptId}}) AND (NULLIF({{projectNo}},'') IS NULL OR s.project_no ILIKE '%' || {{projectNo}} || '%') UNION ALL SELECT '其他', SUM(s.open_cat_other) FROM biz_dws_quality_monthly_v2 s WHERE s.period_month >= to_char({{dateFrom}}::date,'YYYY-MM') AND s.period_month <= to_char({{dateTo}}::date,'YYYY-MM') AND (NULLIF({{deptId}},'') IS NULL OR s.dept = {{deptId}}) AND (NULLIF({{projectNo}},'') IS NULL OR s.project_no ILIKE '%' || {{projectNo}} || '%')) v WHERE v.\"数量\" > 0",
           "queryTimeoutSeconds": 30,
           "maxRows": 2000,
           "parameterBindings": [
@@ -1063,7 +1063,7 @@
         "type": "sql",
         "sqlConfig": {
           "databaseId": "{{DATABASE_ID}}",
-          "query": "SELECT s.period_month AS \"月份\", SUM(s.new_issue_cnt) AS \"质量问题总数\" FROM biz_dws_quality_monthly_v2 s WHERE s.period_month >= to_char(current_date - INTERVAL '11 months','YYYY-MM') [[AND s.dept = {{deptId}}]] [[AND s.project_no ILIKE '%' || {{projectNo}} || '%']] GROUP BY s.period_month ORDER BY s.period_month",
+          "query": "SELECT s.period_month AS \"月份\", SUM(s.new_issue_cnt) AS \"质量问题总数\" FROM biz_dws_quality_monthly_v2 s WHERE s.period_month >= to_char(current_date - INTERVAL '11 months','YYYY-MM') AND (NULLIF({{deptId}},'') IS NULL OR s.dept = {{deptId}}) AND (NULLIF({{projectNo}},'') IS NULL OR s.project_no ILIKE '%' || {{projectNo}} || '%') GROUP BY s.period_month ORDER BY s.period_month",
           "queryTimeoutSeconds": 30,
           "maxRows": 2000,
           "parameterBindings": [
@@ -1165,7 +1165,7 @@
         "type": "sql",
         "sqlConfig": {
           "databaseId": "{{DATABASE_ID}}",
-          "query": "SELECT d.project_no AS \"项目编号\", COALESCE(d.subsystem,'') AS \"分系统/分任务\", d.issue_name AS \"问题名称\", d.dept AS \"责任单位\", COALESCE(d.team_leader,'') AS \"团队及负责人\", COALESCE(d.dept_leader,'') AS \"责任单位领导\", to_char(d.issue_date,'YYYY-MM-DD') AS \"质量问题发生时间\", COALESCE(d.issue_category,'-') AS \"原因分类\", COALESCE(d.status,'-') AS \"状态\", to_char(d.zero_complete_date,'YYYY-MM-DD') AS \"归零完成时间\" FROM biz_dwd_quality_issue_v2 d WHERE to_char(d.issue_date,'YYYY-MM') >= to_char({{dateFrom}}::date,'YYYY-MM') AND to_char(d.issue_date,'YYYY-MM') <= to_char({{dateTo}}::date,'YYYY-MM') [[AND d.dept = {{deptId}}]] [[AND d.project_no ILIKE '%' || {{projectNo}} || '%']] ORDER BY d.issue_date DESC LIMIT 500",
+          "query": "SELECT d.project_no AS \"项目编号\", COALESCE(d.subsystem,'') AS \"分系统/分任务\", d.issue_name AS \"问题名称\", d.dept AS \"责任单位\", COALESCE(d.team_leader,'') AS \"团队及负责人\", COALESCE(d.dept_leader,'') AS \"责任单位领导\", to_char(d.issue_date,'YYYY-MM-DD') AS \"质量问题发生时间\", COALESCE(d.issue_category,'-') AS \"原因分类\", COALESCE(d.status,'-') AS \"状态\", to_char(d.zero_complete_date,'YYYY-MM-DD') AS \"归零完成时间\" FROM biz_dwd_quality_issue_v2 d WHERE to_char(d.issue_date,'YYYY-MM') >= to_char({{dateFrom}}::date,'YYYY-MM') AND to_char(d.issue_date,'YYYY-MM') <= to_char({{dateTo}}::date,'YYYY-MM') AND (NULLIF({{deptId}},'') IS NULL OR d.dept = {{deptId}}) AND (NULLIF({{projectNo}},'') IS NULL OR d.project_no ILIKE '%' || {{projectNo}} || '%') ORDER BY d.issue_date DESC LIMIT 500",
           "queryTimeoutSeconds": 30,
           "maxRows": 2000,
           "parameterBindings": [
