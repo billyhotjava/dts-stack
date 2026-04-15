@@ -1,6 +1,9 @@
 import type { FC, PropsWithChildren } from "react";
 
-export const BottomPanel: FC<PropsWithChildren<{ height?: number }>> = ({ height = 260, children }) => (
+// Default sized to comfortably fit a 10-row page at ROW_HEIGHT=32 in ResultGrid:
+//   tab bar (~32) + grid toolbar (~36) + thead (~38) + 10×32 rows + pagination (~40) + paddings
+//   ≈ 32 + 36 + 38 + 320 + 40 + 20 ≈ 486
+export const BottomPanel: FC<PropsWithChildren<{ height?: number }>> = ({ height = 486, children }) => (
   <div
     style={{
       height,
