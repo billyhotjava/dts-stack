@@ -140,6 +140,45 @@ let retryCount = 0;
 let retryTimer: ReturnType<typeof setTimeout> | null = null;
 const MAX_RETRIES = 3;
 
+// oldId → newId chain retained after syncDirty remaps local ids to server ids.
+// External callers (e.g. async onExecute callbacks) may still hold a stale id;
+// resolveId() walks the chain so their mutations land on the correct tab.
+// Entries are retained for the session — the memory footprint is tiny (<100 tabs
+// per session realistically), and dropping them too early reintroduces the race.
+const idRemap = new Map<string, string>();
+
+export function resolveId(id: string | null | undefined): string | null {
+  if (!id) return null;
+  let cur = id;
+  const seen = new Set<string>();
+  while (idRemap.has(cur)) {
+    if (seen.has(cur)) break; // cycle guard (shouldn't happen)
+    seen.add(cur);
+    cur = idRemap.get(cur)!;
+  }
+  return cur;
+}
+
+let quotaWarned = false;
+function warnQuotaOnce(err: unknown) {
+  if (quotaWarned) return;
+  quotaWarned = true;
+  if (import.meta.env?.DEV) {
+    // eslint-disable-next-line no-console
+    console.warn("[SqlIde] localStorage persist failed", err);
+  }
+  if (typeof window !== "undefined") {
+    // Lazy-import antd message to avoid a hard dep cycle in SSR/tests
+    import("antd")
+      .then(({ message }) => {
+        message.warning("本地存储已满，Tab 将在当前会话内保留但不会持久化");
+      })
+      .catch(() => {
+        /* ignore */
+      });
+  }
+}
+
 function scheduleRetry(get: () => TabStore) {
   if (retryTimer) clearTimeout(retryTimer);
   if (retryCount >= MAX_RETRIES) {
@@ -193,13 +232,14 @@ export const useTabStore = create<TabStore>((set, get) => ({
   },
 
   async closeTab(id) {
+    const resolved = resolveId(id) ?? id;
     const tabs = get().tabs;
-    const idx = tabs.findIndex((t) => t.id === id);
+    const idx = tabs.findIndex((t) => t.id === resolved);
     if (idx < 0) return;
     const removed = tabs[idx];
-    const next = tabs.filter((t) => t.id !== id);
+    const next = tabs.filter((t) => t.id !== resolved);
     const newActive =
-      get().activeTabId === id
+      get().activeTabId === resolved
         ? (next[Math.min(idx, next.length - 1)]?.id ?? null)
         : get().activeTabId;
     set({ tabs: next, activeTabId: newActive });
@@ -207,7 +247,7 @@ export const useTabStore = create<TabStore>((set, get) => ({
     // only call server if tab was previously pushed
     if (!removed.createdLocally) {
       try {
-        await deleteTab(id);
+        await deleteTab(resolved);
       } catch {
         /* ignore */
       }
@@ -218,8 +258,17 @@ export const useTabStore = create<TabStore>((set, get) => ({
     // Do NOT overwrite updatedAt here — it is the server-assigned optimistic lock token
     // and must match the server's last response on the next PATCH, or the server rejects
     // with 409 "stale updatedAt". Use localEditVersion for mid-flight edit detection.
-    const tabs = get().tabs.map((t) =>
-      t.id === id
+    const resolved = resolveId(id) ?? id;
+    const cur = get().tabs;
+    if (!cur.some((t) => t.id === resolved)) {
+      if (import.meta.env?.DEV) {
+        // eslint-disable-next-line no-console
+        console.warn("[SqlIde] updateTab: tab not found", { id, resolved });
+      }
+      return;
+    }
+    const tabs = cur.map((t) =>
+      t.id === resolved
         ? { ...t, ...patch, dirty: true, localEditVersion: t.localEditVersion + 1 }
         : t,
     );
@@ -229,8 +278,9 @@ export const useTabStore = create<TabStore>((set, get) => ({
   },
 
   updateGridState(tabId, partial) {
+    const resolved = resolveId(tabId) ?? tabId;
     const tabs = get().tabs.map((t) =>
-      t.id === tabId
+      t.id === resolved
         ? { ...t, gridState: { ...t.gridState, ...partial } }
         : t,
     );
@@ -241,7 +291,22 @@ export const useTabStore = create<TabStore>((set, get) => ({
   },
 
   setActive(id) {
-    if (get().tabs.some((t) => t.id === id)) set({ activeTabId: id });
+    const resolved = resolveId(id) ?? id;
+    const tabs = get().tabs;
+    if (tabs.some((t) => t.id === resolved)) {
+      set({ activeTabId: resolved });
+    } else if (tabs.length > 0) {
+      // Defensive fallback: requested tab no longer exists (e.g. closed mid-await).
+      // Surface this loudly in dev so the offending call site can be traced, but in
+      // prod pick the first tab instead of leaving activeTabId as an orphan string.
+      if (import.meta.env?.DEV) {
+        // eslint-disable-next-line no-console
+        console.warn("[SqlIde] setActive: unknown tab id, falling back to first", { id, resolved });
+      }
+      set({ activeTabId: tabs[0].id });
+    } else {
+      set({ activeTabId: null });
+    }
   },
 
   reorder(from, to) {
@@ -314,12 +379,13 @@ export const useTabStore = create<TabStore>((set, get) => ({
 
     try {
       const resp = await batchUpsertTabs(payload);
-      // Build mapping from local id → server-assigned id + updatedAt (response is in request order)
-      const idRemap = new Map<string, { newId: string; newUpdatedAt: string }>();
+      // Build mapping from local id → server-assigned id + updatedAt (response is in request order).
+      // Named serverIdMap to avoid shadowing the module-level idRemap (oldId → newId chain).
+      const serverIdMap = new Map<string, { newId: string; newUpdatedAt: string }>();
       snapshot.forEach((t, i) => {
         const server = resp[i];
         if (server) {
-          idRemap.set(t.id, { newId: server.id, newUpdatedAt: server.updatedAt });
+          serverIdMap.set(t.id, { newId: server.id, newUpdatedAt: server.updatedAt });
         }
       });
 
@@ -328,7 +394,7 @@ export const useTabStore = create<TabStore>((set, get) => ({
       // scheduled sync picks up the latest changes.
       const appliedRemaps = new Map<string, string>(); // oldId → newId
       const tabs = get().tabs.map((t) => {
-        const remap = idRemap.get(t.id);
+        const remap = serverIdMap.get(t.id);
         const pushedVersion = pushedVersionMap.get(t.id);
         if (!remap || pushedVersion === undefined) return t; // tab wasn't in the snapshot
         if (t.localEditVersion !== pushedVersion) return t; // user edited during await → keep dirty
@@ -344,12 +410,24 @@ export const useTabStore = create<TabStore>((set, get) => ({
         };
       });
 
-      // Remap activeTabId if it pointed at a tab whose id just changed.
-      // Without this the UI renders "正在恢复 Tab" because activeTabId is stale.
+      // Persist the oldId → newId mapping in the module-level idRemap so external
+      // callers (async callbacks that captured the pre-remap id) can still resolve
+      // to the live tab via resolveId(). Without this, a SQL submit kicked off
+      // before the sync completes will try to writeback to an id that no longer
+      // exists in the tabs array — producing the "tab not found" symptom.
+      for (const [oldId, newId] of appliedRemaps) {
+        idRemap.set(oldId, newId);
+      }
+
+      // Atomically resolve activeTabId through the (now-updated) remap chain so
+      // it never lingers as an orphan after sync. Falls back to the first tab if
+      // the current active id was closed mid-flight.
       const currentActive = get().activeTabId;
-      const nextActive = currentActive && appliedRemaps.has(currentActive)
-        ? appliedRemaps.get(currentActive)!
-        : currentActive;
+      const resolvedActive = resolveId(currentActive);
+      const nextActive =
+        resolvedActive && tabs.some((t) => t.id === resolvedActive)
+          ? resolvedActive
+          : (tabs[0]?.id ?? null);
 
       // Reset retry state on success
       retryCount = 0;
@@ -377,6 +455,8 @@ export const useTabStore = create<TabStore>((set, get) => ({
       clearTimeout(retryTimer);
       retryTimer = null;
     }
+    idRemap.clear();
+    quotaWarned = false;
     set({ tabs: [], activeTabId: null, hydrated: false });
     if (typeof window !== "undefined") {
       window.localStorage?.removeItem(LOCAL_STORAGE_KEY);
@@ -391,37 +471,85 @@ function persistLocal(tabs: TabState[]) {
   try {
     const slim = tabs.map((t) => ({ ...t, resultSnapshot: null }));
     window.localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(slim));
-  } catch {
-    /* quota or serialization — ignore */
+  } catch (err) {
+    // Quota exceeded or serialization failure. Surface it to the user once so
+    // they know the tab state won't survive a reload — silently swallowing this
+    // is what let "tabs mysteriously disappeared after refresh" reports through.
+    warnQuotaOnce(err);
   }
 }
 
 function loadLocal(): TabState[] {
   if (typeof window === "undefined") return [];
+  let raw: string | null;
   try {
-    const raw = window.localStorage.getItem(LOCAL_STORAGE_KEY);
-    if (!raw) return [];
-    const parsed = JSON.parse(raw) as TabState[];
-    // Migrations: pre-T17 lacks gridState; pre-T24 lacks subqueryViewName;
-    // pre-staleUpdatedAt-fix lacks localEditVersion.
-    // CRITICAL: pre-staleUpdatedAt-fix entries have a client-generated updatedAt
-    // (updateTab used to overwrite it with Date.now()); that token will never match
-    // the server's lastModifiedDate → 409 on next PATCH. Strip updatedAt so the
-    // server-side comparison short-circuits via the null guard and the next sync
-    // adopts the server's authoritative token.
-    return parsed.map((t) => {
-      const isLegacy = t.localEditVersion === undefined;
-      return {
-        ...t,
-        gridState: t.gridState ?? emptyGridColumnState(),
-        subqueryViewName: t.subqueryViewName ?? null,
-        localEditVersion: t.localEditVersion ?? 0,
-        updatedAt: isLegacy ? null : t.updatedAt,
-      };
-    });
+    raw = window.localStorage.getItem(LOCAL_STORAGE_KEY);
   } catch {
     return [];
   }
+  if (!raw) return [];
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(raw);
+  } catch (err) {
+    // Top-level JSON corruption — dump the payload and return empty rather than
+    // blocking IDE boot. Keep the raw string in a side-channel key so support can
+    // inspect it if a user reports "all my tabs disappeared".
+    if (import.meta.env?.DEV) {
+      // eslint-disable-next-line no-console
+      console.warn("[SqlIde] localStorage root JSON corrupt, dropping", err);
+    }
+    try {
+      window.localStorage.setItem(`${LOCAL_STORAGE_KEY}.corrupt`, raw ?? "");
+    } catch {
+      /* ignore */
+    }
+    return [];
+  }
+  if (!Array.isArray(parsed)) return [];
+
+  // Migrations: pre-T17 lacks gridState; pre-T24 lacks subqueryViewName;
+  // pre-staleUpdatedAt-fix lacks localEditVersion.
+  // CRITICAL: pre-staleUpdatedAt-fix entries have a client-generated updatedAt
+  // (updateTab used to overwrite it with Date.now()); that token will never match
+  // the server's lastModifiedDate → 409 on next PATCH. Strip updatedAt so the
+  // server-side comparison short-circuits via the null guard and the next sync
+  // adopts the server's authoritative token.
+  const out: TabState[] = [];
+  for (const entry of parsed as unknown[]) {
+    try {
+      const t = entry as Partial<TabState> | null;
+      if (!t || typeof t !== "object") continue;
+      if (typeof t.id !== "string" || !t.id) continue;
+      const isLegacy = (t as { localEditVersion?: unknown }).localEditVersion === undefined;
+      out.push({
+        id: t.id,
+        title: t.title ?? "Untitled",
+        sqlText: t.sqlText ?? "",
+        engine: (t.engine as TabState["engine"]) ?? "generic",
+        datasourceId: t.datasourceId ?? null,
+        schemaContext: t.schemaContext ?? null,
+        cursor: t.cursor ?? { line: 1, column: 1 },
+        selection: t.selection ?? null,
+        lastExecutionId: t.lastExecutionId ?? null,
+        resultSnapshot: null,
+        dirty: t.dirty ?? false,
+        sortOrder: t.sortOrder ?? out.length,
+        updatedAt: isLegacy ? null : (t.updatedAt ?? null),
+        localEditVersion: t.localEditVersion ?? 0,
+        createdLocally: t.createdLocally ?? false,
+        gridState: t.gridState ?? emptyGridColumnState(),
+        subqueryViewName: t.subqueryViewName ?? null,
+      });
+    } catch (err) {
+      // Single-tab corruption: skip it, don't blow away the whole list.
+      if (import.meta.env?.DEV) {
+        // eslint-disable-next-line no-console
+        console.warn("[SqlIde] skipping corrupt tab entry", err);
+      }
+    }
+  }
+  return out;
 }
 
 // -------- debounced sync --------

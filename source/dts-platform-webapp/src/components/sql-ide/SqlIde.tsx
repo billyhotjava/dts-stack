@@ -15,7 +15,7 @@ import { useLayoutStore } from "./layout/useLayoutStore";
 import { HistoryPanel } from "./history/HistoryPanel";
 import { SchemaTree } from "./schema/SchemaTree";
 import { TabBar } from "./tabs/TabBar";
-import { useTabStore } from "./tabs/useTabStore";
+import { resolveId, useTabStore } from "./tabs/useTabStore";
 import { BottomTabs } from "./result/BottomTabs";
 import { ExportMenu } from "./result/ExportMenu";
 import { SubQueryButton } from "./result/SubQueryButton";
@@ -189,7 +189,11 @@ export const SqlIde: FC = () => {
                 // Fix #5 (Important): hammer guard — no re-submit while running
                 if (sqlExec.state === "running") return;
                 // Fix #2 (Critical): capture tabId at submit time so a mid-flight
-                // tab switch cannot write lastExecutionId to the wrong tab
+                // tab switch cannot write lastExecutionId to the wrong tab.
+                // If the tab's id is remapped by syncDirty() between submit and
+                // the promise resolving, resolveId() walks the oldId→newId chain
+                // so updateTab still lands on the live tab instead of silently
+                // failing (which is what produced the "tab not found" toast).
                 const targetTabId = activeTab.id;
                 void sqlExec
                   .submit({
@@ -199,7 +203,9 @@ export const SqlIde: FC = () => {
                     schema: null,
                   })
                   .then((id) => {
-                    if (id) updateTab(targetTabId, { lastExecutionId: id });
+                    if (!id) return;
+                    const live = resolveId(targetTabId) ?? targetTabId;
+                    updateTab(live, { lastExecutionId: id });
                   });
               }}
               onExecuteInNewTab={(s) =>
