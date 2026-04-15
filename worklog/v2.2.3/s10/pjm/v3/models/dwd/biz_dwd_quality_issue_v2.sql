@@ -30,6 +30,18 @@ SELECT
   COALESCE(qs.is_mgmt_zero, false)                   AS is_mgmt_zero,
   COALESCE(qs.is_both_zero, false)                   AS is_both_zero,
 
+  -- 原因分类布尔（按标准 7 类，其他归 other）
+  CASE WHEN btrim(COALESCE(o.issue_category,''))='设计'     THEN true ELSE false END AS cat_design,
+  CASE WHEN btrim(COALESCE(o.issue_category,''))='工艺'     THEN true ELSE false END AS cat_process,
+  CASE WHEN btrim(COALESCE(o.issue_category,''))='管理'     THEN true ELSE false END AS cat_management,
+  CASE WHEN btrim(COALESCE(o.issue_category,''))='元器件'   THEN true ELSE false END AS cat_component,
+  CASE WHEN btrim(COALESCE(o.issue_category,''))='操作'     THEN true ELSE false END AS cat_operation,
+  CASE WHEN btrim(COALESCE(o.issue_category,''))='外协外购' THEN true ELSE false END AS cat_outsource,
+  CASE WHEN btrim(COALESCE(o.issue_category,''))='软件'     THEN true ELSE false END AS cat_software,
+  CASE WHEN btrim(COALESCE(o.issue_category,'')) NOT IN
+       ('设计','工艺','管理','元器件','操作','外协外购','软件','')
+       THEN true ELSE false END                      AS cat_other,
+
   -- === 数值字段 ===
   {{ parse_numeric_safe("o.new_plan_count") }}::int  AS new_plan_count,
 

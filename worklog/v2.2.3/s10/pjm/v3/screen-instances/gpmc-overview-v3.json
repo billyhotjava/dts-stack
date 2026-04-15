@@ -645,7 +645,7 @@
         "type": "sql",
         "sqlConfig": {
           "databaseId": "{{DATABASE_ID}}",
-          "query": "SELECT d.project_no AS \"项目编号\", SUM(CASE WHEN d.is_completed THEN 1 ELSE 0 END) AS \"已完成\", SUM(CASE WHEN d.is_incomplete THEN 1 ELSE 0 END) AS \"未完成\", SUM(CASE WHEN d.completion_status = '正常待完成' THEN 1 ELSE 0 END) AS \"正常待完成\", CASE WHEN COUNT(*) = 0 THEN 0 ELSE ROUND(SUM(CASE WHEN d.is_completed THEN 1 ELSE 0 END)::numeric / COUNT(*)::numeric * 100, 1) END AS \"完成率\" FROM biz_dwd_project_node_v2 d WHERE d.plan_month >= to_char({{dateFrom}}::date, 'YYYY-MM') AND d.plan_month <= to_char({{dateTo}}::date, 'YYYY-MM') [[AND d.project_no ILIKE '%' || {{projectNo}} || '%']] [[AND d.dept = {{deptId}}]] GROUP BY d.project_no ORDER BY SUM(CASE WHEN d.is_incomplete THEN 1 ELSE 0 END) DESC",
+          "query": "SELECT d.project_no AS \"项目编号\", SUM(CASE WHEN d.is_completed THEN 1 ELSE 0 END) AS \"已完成\", SUM(CASE WHEN d.is_incomplete THEN 1 ELSE 0 END) AS \"未完成\", SUM(CASE WHEN d.is_pending_normal THEN 1 ELSE 0 END) AS \"正常待完成\", CASE WHEN COUNT(*) = 0 THEN 0 ELSE ROUND(SUM(CASE WHEN d.is_completed THEN 1 ELSE 0 END)::numeric / COUNT(*)::numeric * 100, 1) END AS \"完成率\" FROM biz_dwd_project_node_v2 d WHERE d.plan_month >= to_char({{dateFrom}}::date, 'YYYY-MM') AND d.plan_month <= to_char({{dateTo}}::date, 'YYYY-MM') [[AND d.project_no ILIKE '%' || {{projectNo}} || '%']] [[AND d.dept = {{deptId}}]] GROUP BY d.project_no ORDER BY SUM(CASE WHEN d.is_incomplete THEN 1 ELSE 0 END) DESC",
           "queryTimeoutSeconds": 30,
           "maxRows": 2000,
           "parameterBindings": [

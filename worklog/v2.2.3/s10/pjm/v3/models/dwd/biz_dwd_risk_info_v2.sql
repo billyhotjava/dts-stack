@@ -40,13 +40,11 @@ SELECT
   {{ parse_numeric_safe("o.risk_release_week") }}::int  AS risk_release_week,
   {{ parse_numeric_safe("o.last_update_week") }}::int   AS last_update_week,
 
-  -- === 风险等级数值 ===
-  CASE COALESCE({{ nullif_placeholder("o.risk_level") }}, '')
-    WHEN '高' THEN 3
-    WHEN '中' THEN 2
-    WHEN '低' THEN 1
-    ELSE 0
-  END AS risk_rank,
+  -- === 风险等级（字典派生） ===
+  COALESCE(rl.severity_rank, 0)                         AS risk_rank,
+  COALESCE(rl.is_high, false)                           AS is_high_risk,
+  COALESCE(rl.is_mid,  false)                           AS is_mid_risk,
+  COALESCE(rl.is_low,  false)                           AS is_low_risk,
 
   -- === 释放标志 ===
   CASE
@@ -78,5 +76,7 @@ SELECT
   now() AS etl_time
 
 FROM {{ source('pm_ods_v2', 'risk_info_v2') }} o
+LEFT JOIN {{ ref('dim_risk_level_v2') }} rl
+  ON rl.code = {{ nullif_placeholder("o.risk_level") }}
 WHERE o.project_no IS NOT NULL
   AND btrim(COALESCE(o.project_no, '')) != ''

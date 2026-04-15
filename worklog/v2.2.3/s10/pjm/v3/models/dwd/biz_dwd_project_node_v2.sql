@@ -33,11 +33,23 @@ SELECT
   COALESCE(cs.is_on_time, false)                    AS is_on_time,
   COALESCE(cs.is_overdue_completed, false)          AS is_overdue_completed,
   COALESCE(cs.is_incomplete, false)                 AS is_incomplete,
+  COALESCE(cs.is_pending_normal, false)             AS is_pending_normal,
+  COALESCE(cs.is_abnormal_pending, false)           AS is_abnormal_pending,
+  COALESCE(cs.is_overdue_unchanged, false)          AS is_overdue_unchanged,
+  COALESCE(cs.is_overdue_changed, false)            AS is_overdue_changed,
+  COALESCE(cs.is_overdue_done_unchanged, false)     AS is_overdue_done_unchanged,
+  COALESCE(cs.is_overdue_done_changed, false)       AS is_overdue_done_changed,
 
   {{ nullif_placeholder("o.node_type") }}           AS node_type,
   COALESCE(nt.is_general, false)                    AS is_general_node,
+  COALESCE(nt.is_important, false)                  AS is_important_node,
+  COALESCE(nt.is_major, false)                      AS is_major_node,
+  COALESCE(nt.is_milestone, false)                  AS is_milestone_node,
 
   {{ nullif_placeholder("o.risk_level") }}          AS risk_level,
+  COALESCE(rl.is_high, false)                       AS is_high_risk,
+  COALESCE(rl.is_mid, false)                        AS is_mid_risk,
+  COALESCE(rl.is_low, false)                        AS is_low_risk,
   {{ nullif_placeholder("o.source") }}              AS data_source,
   {{ nullif_placeholder("o.delay_applied") }}       AS delay_applied,
 
@@ -89,5 +101,7 @@ LEFT JOIN {{ ref('dim_completion_status_v2') }} cs
   ON cs.code = {{ nullif_placeholder("o.completion_status") }}
 LEFT JOIN {{ ref('dim_node_type_v2') }} nt
   ON nt.code = {{ nullif_placeholder("o.node_type") }}
+LEFT JOIN {{ ref('dim_risk_level_v2') }} rl
+  ON rl.code = {{ nullif_placeholder("o.risk_level") }}
 WHERE btrim(COALESCE(o.project_no, '')) != ''
   AND btrim(COALESCE(o.plan_date, '')) != ''
