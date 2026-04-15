@@ -121,7 +121,13 @@
       "Bash(wc -l *.json)",
       "WebFetch(domain:www.anthropic.com)",
       "Bash(/home/billy/.claude/plugins/cache/claude-plugins-official/superpowers/5.0.6/skills/brainstorming/scripts/start-server.sh:*)",
-      "Bash(sudo sysctl:*)"
+      "Bash(sudo sysctl:*)",
+      "Bash(git fetch *)",
+      "Bash(git stash *)",
+      "Bash(git pull *)",
+      "Bash(git rebase *)",
+      "Bash(git merge *)",
+      "Bash(git push *)"
     ]
   }
 }
