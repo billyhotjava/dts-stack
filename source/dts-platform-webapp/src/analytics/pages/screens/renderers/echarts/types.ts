@@ -38,6 +38,7 @@ export interface EChartsRendererProps {
     axisLabelColor?: string;
     seriesLabelFontSize: number;
     xAxisLabelRotate: number;
+    yAxisLabelRotate: number;
     xAxisLabelInterval: number;
     formatXAxisLabel: (value: unknown) => string;
 

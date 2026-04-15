@@ -504,8 +504,19 @@ export const ComponentRenderer = memo(function ComponentRenderer({ component, mo
                 </PluginRenderBoundary>
             );
         }
-        const axisFontSize = (c.axisFontSize as number) || 15;
-        const axisLabelColor = typeof c.axisLabelColor === 'string' && c.axisLabelColor.trim() ? c.axisLabelColor.trim() : undefined;
+        // Axis-config compat shim: nested `c.xAxis.{labelFontSize,labelRotate,labelColor,show,splitLineShow,splitLineColor}`
+        // (AxisConfigEditor output) wins over legacy flat keys `c.axisFontSize/c.axisLabelColor/c.xAxisLabelRotate`.
+        const xAxisCfg = (c.xAxis && typeof c.xAxis === 'object' ? c.xAxis : {}) as Record<string, unknown>;
+        const yAxisCfg = (c.yAxis && typeof c.yAxis === 'object' ? c.yAxis : {}) as Record<string, unknown>;
+        const pickNum = (v: unknown): number | undefined => {
+            const n = Number(v);
+            return Number.isFinite(n) ? n : undefined;
+        };
+        const pickStr = (v: unknown): string | undefined =>
+            (typeof v === 'string' && v.trim()) ? v.trim() : undefined;
+        const axisFontSize = pickNum(xAxisCfg.labelFontSize) ?? pickNum(yAxisCfg.labelFontSize) ?? pickNum(c.axisFontSize) ?? 15;
+        const axisLabelColor = pickStr(xAxisCfg.labelColor) ?? pickStr(yAxisCfg.labelColor) ?? pickStr(c.axisLabelColor);
+        const yAxisLabelRotate = pickNum(yAxisCfg.labelRotate) ?? 0;
         // Legend compat shim: nested `c.legend.{show,position,fontSize,color,reserveSize,itemGap}`
         // (new schema) wins over legacy flat keys `c.legendDisplay/legendPosition/legendFontSize/
         // legendReserveSize/legendItemGap`. Presets/heuristics still write the legacy shape, so we
@@ -560,13 +571,17 @@ export const ComponentRenderer = memo(function ComponentRenderer({ component, mo
             (max, item) => Math.max(max, String(item ?? '').trim().length),
             0,
         );
+        // Nested xAxis.labelRotate (AxisConfigEditor) wins over flat xAxisLabelRotate.
+        const xAxisNestedRotate = pickNum(xAxisCfg.labelRotate);
         const xAxisLabelRotateRaw = Number(c.xAxisLabelRotate);
         const autoXAxisLabelRotate = isCompactCanvas && (xAxisCategoryCount >= 7 || longestXAxisLabelLength >= 8)
             ? (isTinyCanvas ? -45 : -30)
             : 0;
-        const xAxisLabelRotate = Number.isFinite(xAxisLabelRotateRaw)
-            ? toNumber(c.xAxisLabelRotate, 0, -90, 90)
-            : autoXAxisLabelRotate;
+        const xAxisLabelRotate = xAxisNestedRotate !== undefined
+            ? toNumber(xAxisNestedRotate, 0, -90, 90)
+            : (Number.isFinite(xAxisLabelRotateRaw)
+                ? toNumber(c.xAxisLabelRotate, 0, -90, 90)
+                : autoXAxisLabelRotate);
         const xAxisLabelMaxLengthRaw = Number(c.xAxisLabelMaxLength);
         const autoXAxisLabelMaxLength = isCompactCanvas ? (isTinyCanvas ? 8 : 12) : 0;
         const xAxisLabelMaxLength = Number.isFinite(xAxisLabelMaxLengthRaw)
@@ -1205,6 +1220,8 @@ export const ComponentRenderer = memo(function ComponentRenderer({ component, mo
                 <EChart
                     style={{ width: '100%', height: '100%' }}
                     option={annotatedOption}
+                    notMerge
+                    lazyUpdate={false}
                     onEvents={onEvents}
                 />
             );
@@ -1374,7 +1391,7 @@ export const ComponentRenderer = memo(function ComponentRenderer({ component, mo
                     EChart, renderEChartWithHandles,
                     themeOptions, chartMotionOption, chartTitleLayout, legendConfig, axisGrid, seriesColors,
                     axisFontSize, axisLabelColor, seriesLabelFontSize,
-                    xAxisLabelRotate, xAxisLabelInterval, formatXAxisLabel,
+                    xAxisLabelRotate, yAxisLabelRotate, xAxisLabelInterval, formatXAxisLabel,
                     axisSeriesLabelShow, resolvedAxisSeriesLabelStrategy, axisSeriesLabelFormatter,
                     axisLineLabelPosition, axisBarLabelPosition, axisBarLabelColor, axisTooltipFormatter,
                     isCompactCanvas, isTinyCanvas, xAxisCategoryCount,

@@ -8,7 +8,7 @@ export function renderAxisChart(type: string, props: EChartsRendererProps): Reac
         renderEChartWithHandles,
         themeOptions, chartMotionOption, chartTitleLayout, legendConfig, axisGrid, seriesColors,
         axisFontSize, axisLabelColor: axisLabelColorOverride, seriesLabelFontSize,
-        xAxisLabelRotate, xAxisLabelInterval, formatXAxisLabel,
+        xAxisLabelRotate, yAxisLabelRotate, xAxisLabelInterval, formatXAxisLabel,
         axisSeriesLabelShow, resolvedAxisSeriesLabelStrategy, axisSeriesLabelFormatter,
         axisLineLabelPosition, axisBarLabelPosition, axisBarLabelColor, axisTooltipFormatter,
         isCompactCanvas, isTinyCanvas, xAxisCategoryCount,
@@ -47,7 +47,7 @@ export function renderAxisChart(type: string, props: EChartsRendererProps): Reac
                 yAxis: {
                     type: 'value',
                     axisLine: { lineStyle: { color: t.echarts.axisLineColor } },
-                    axisLabel: { color: axisLabelColor, fontSize: axisFontSize },
+                    axisLabel: { color: axisLabelColor, fontSize: axisFontSize, rotate: yAxisLabelRotate },
                     splitLine: { lineStyle: { color: t.echarts.splitLineColor } },
                 },
                 series: (Array.isArray(c.series) ? c.series as Array<{ name: string; data: number[] }> : []).map((s, idx) => {
@@ -104,7 +104,13 @@ export function renderAxisChart(type: string, props: EChartsRendererProps): Reac
             const valueAxisConfig = {
                 type: 'value' as const,
                 axisLine: { lineStyle: { color: t.echarts.axisLineColor } },
-                axisLabel: { color: axisLabelColor, fontSize: axisFontSize },
+                // In vertical bar, valueAxis=yAxis → use yAxisLabelRotate;
+                // In horizontal bar, valueAxis=xAxis → use xAxisLabelRotate.
+                axisLabel: {
+                    color: axisLabelColor,
+                    fontSize: axisFontSize,
+                    rotate: barHorizontal ? xAxisLabelRotate : yAxisLabelRotate,
+                },
                 splitLine: { lineStyle: { color: t.echarts.splitLineColor } },
             };
             return renderEChartWithHandles({
