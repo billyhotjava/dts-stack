@@ -1,4 +1,4 @@
-{{ config(materialized='table', tags=['project-management-v2', 'biz', 'dws', 'tech-state']) }}
+{{ config(materialized='table', tags=['project-management-v3', 'biz', 'dws', 'tech-state']) }}
 
 -- 技术状态域月度汇总：对齐原始指标大表 #49-67
 -- 粒度: project_no × dept × submit_month

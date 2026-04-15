@@ -1,4 +1,4 @@
-{{ config(materialized='table', tags=['project-management-v2', 'biz', 'ads', 'derived', 'tech-state']) }}
+{{ config(materialized='table', tags=['project-management-v3', 'biz', 'ads', 'derived', 'tech-state']) }}
 
 -- 技术状态域二次指标：对齐二次指标大表 #12-16
 -- 依赖: biz_ads_tech_state_kpi_v2

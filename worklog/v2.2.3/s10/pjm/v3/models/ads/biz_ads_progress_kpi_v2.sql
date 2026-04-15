@@ -1,4 +1,4 @@
-{{ config(materialized='table', tags=['project-management-v2', 'biz', 'ads', 'kpi']) }}
+{{ config(materialized='table', tags=['project-management-v3', 'biz', 'ads', 'kpi']) }}
 
 -- 进度域原始指标 ADS：对齐原始指标大表 #1-33
 -- 粒度: plan_month（跨项目聚合）

@@ -1,4 +1,4 @@
-{{ config(materialized='table', tags=['project-management-v2', 'biz', 'dws', 'risk']) }}
+{{ config(materialized='table', tags=['project-management-v3', 'biz', 'dws', 'risk']) }}
 
 -- 风险域月度汇总
 -- 粒度: project_no × dept × submit_month
