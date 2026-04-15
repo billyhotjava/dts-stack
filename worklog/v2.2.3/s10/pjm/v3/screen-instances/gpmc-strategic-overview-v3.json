@@ -53,8 +53,8 @@
       "visible": true,
       "config": {
         "shapeType": "rect",
-        "fillColor": "rgba(14, 47, 96, 0.90)",
-        "borderColor": "rgba(14, 47, 96, 0.90)",
+        "fillColor": "rgba(12, 38, 82, 0.18)",
+        "borderColor": "transparent",
         "borderWidth": 0,
         "radius": 0
       }
@@ -72,9 +72,9 @@
       "visible": true,
       "config": {
         "shapeType": "rect",
-        "fillColor": "rgba(9, 36, 90, 0.82)",
-        "borderColor": "rgba(69, 164, 255, 0.38)",
-        "borderWidth": 1,
+        "fillColor": "rgba(12, 38, 82, 0.18)",
+        "borderColor": "transparent",
+        "borderWidth": 0,
         "radius": 18
       }
     },
@@ -91,9 +91,9 @@
       "visible": true,
       "config": {
         "shapeType": "rect",
-        "fillColor": "rgba(9, 36, 90, 0.82)",
-        "borderColor": "rgba(69, 164, 255, 0.38)",
-        "borderWidth": 1,
+        "fillColor": "rgba(12, 38, 82, 0.18)",
+        "borderColor": "transparent",
+        "borderWidth": 0,
         "radius": 18
       }
     },
@@ -110,9 +110,9 @@
       "visible": true,
       "config": {
         "shapeType": "rect",
-        "fillColor": "rgba(9, 36, 90, 0.82)",
-        "borderColor": "rgba(69, 164, 255, 0.38)",
-        "borderWidth": 1,
+        "fillColor": "rgba(12, 38, 82, 0.18)",
+        "borderColor": "transparent",
+        "borderWidth": 0,
         "radius": 18
       }
     },
@@ -129,9 +129,9 @@
       "visible": true,
       "config": {
         "shapeType": "rect",
-        "fillColor": "rgba(9, 36, 90, 0.82)",
-        "borderColor": "rgba(69, 164, 255, 0.38)",
-        "borderWidth": 1,
+        "fillColor": "rgba(12, 38, 82, 0.18)",
+        "borderColor": "transparent",
+        "borderWidth": 0,
         "radius": 18
       }
     },
@@ -148,9 +148,9 @@
       "visible": true,
       "config": {
         "shapeType": "rect",
-        "fillColor": "rgba(9, 36, 90, 0.82)",
-        "borderColor": "rgba(69, 164, 255, 0.38)",
-        "borderWidth": 1,
+        "fillColor": "rgba(12, 38, 82, 0.18)",
+        "borderColor": "transparent",
+        "borderWidth": 0,
         "radius": 18
       }
     },
@@ -167,9 +167,9 @@
       "visible": true,
       "config": {
         "shapeType": "rect",
-        "fillColor": "rgba(9, 36, 90, 0.82)",
-        "borderColor": "rgba(69, 164, 255, 0.38)",
-        "borderWidth": 1,
+        "fillColor": "rgba(12, 38, 82, 0.18)",
+        "borderColor": "transparent",
+        "borderWidth": 0,
         "radius": 18
       }
     },
@@ -186,9 +186,9 @@
       "visible": true,
       "config": {
         "shapeType": "rect",
-        "fillColor": "rgba(9, 36, 90, 0.82)",
-        "borderColor": "rgba(69, 164, 255, 0.38)",
-        "borderWidth": 1,
+        "fillColor": "rgba(12, 38, 82, 0.18)",
+        "borderColor": "transparent",
+        "borderWidth": 0,
         "radius": 18
       }
     },
@@ -205,9 +205,9 @@
       "visible": true,
       "config": {
         "shapeType": "rect",
-        "fillColor": "rgba(9, 36, 90, 0.82)",
-        "borderColor": "rgba(69, 164, 255, 0.38)",
-        "borderWidth": 1,
+        "fillColor": "rgba(12, 38, 82, 0.18)",
+        "borderColor": "transparent",
+        "borderWidth": 0,
         "radius": 18
       }
     },
@@ -224,9 +224,9 @@
       "visible": true,
       "config": {
         "shapeType": "rect",
-        "fillColor": "rgba(9, 36, 90, 0.82)",
-        "borderColor": "rgba(69, 164, 255, 0.38)",
-        "borderWidth": 1,
+        "fillColor": "rgba(12, 38, 82, 0.18)",
+        "borderColor": "transparent",
+        "borderWidth": 0,
         "radius": 18
       }
     },
@@ -243,9 +243,9 @@
       "visible": true,
       "config": {
         "shapeType": "rect",
-        "fillColor": "rgba(9, 36, 90, 0.82)",
-        "borderColor": "rgba(69, 164, 255, 0.38)",
-        "borderWidth": 1,
+        "fillColor": "rgba(12, 38, 82, 0.18)",
+        "borderColor": "transparent",
+        "borderWidth": 0,
         "radius": 18
       }
     },
@@ -262,9 +262,9 @@
       "visible": true,
       "config": {
         "shapeType": "rect",
-        "fillColor": "rgba(9, 36, 90, 0.82)",
-        "borderColor": "rgba(69, 164, 255, 0.38)",
-        "borderWidth": 1,
+        "fillColor": "rgba(12, 38, 82, 0.18)",
+        "borderColor": "transparent",
+        "borderWidth": 0,
         "radius": 18
       }
     },

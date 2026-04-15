@@ -600,9 +600,9 @@
       "visible": false,
       "config": {
         "shapeType": "rect",
-        "fillColor": "rgba(255, 255, 255, 0.96)",
-        "borderColor": "rgba(178,196,221,0.24)",
-        "borderWidth": 1,
+        "fillColor": "rgba(12, 38, 82, 0.18)",
+        "borderColor": "transparent",
+        "borderWidth": 0,
         "radius": 14
       }
     },
@@ -1194,9 +1194,9 @@
       "visible": true,
       "config": {
         "shapeType": "rect",
-        "fillColor": "rgba(17,56,115,0.74)",
-        "borderColor": "rgba(106,216,255,0.32)",
-        "borderWidth": 1,
+        "fillColor": "rgba(12, 38, 82, 0.18)",
+        "borderColor": "transparent",
+        "borderWidth": 0,
         "radius": 16
       }
     },
@@ -1485,9 +1485,9 @@
       "visible": true,
       "config": {
         "shapeType": "rect",
-        "fillColor": "rgba(17,56,115,0.74)",
-        "borderColor": "rgba(106,216,255,0.32)",
-        "borderWidth": 1,
+        "fillColor": "rgba(12, 38, 82, 0.18)",
+        "borderColor": "transparent",
+        "borderWidth": 0,
         "radius": 16
       }
     },
@@ -1504,9 +1504,9 @@
       "visible": true,
       "config": {
         "shapeType": "rect",
-        "fillColor": "rgba(17,56,115,0.74)",
-        "borderColor": "rgba(106,216,255,0.32)",
-        "borderWidth": 1,
+        "fillColor": "rgba(12, 38, 82, 0.18)",
+        "borderColor": "transparent",
+        "borderWidth": 0,
         "radius": 16
       }
     },
@@ -1523,9 +1523,9 @@
       "visible": true,
       "config": {
         "shapeType": "rect",
-        "fillColor": "rgba(17,56,115,0.74)",
-        "borderColor": "rgba(106,216,255,0.32)",
-        "borderWidth": 1,
+        "fillColor": "rgba(12, 38, 82, 0.18)",
+        "borderColor": "transparent",
+        "borderWidth": 0,
         "radius": 16
       }
     },
@@ -1542,9 +1542,9 @@
       "visible": true,
       "config": {
         "shapeType": "rect",
-        "fillColor": "rgba(17,56,115,0.74)",
-        "borderColor": "rgba(106,216,255,0.32)",
-        "borderWidth": 1,
+        "fillColor": "rgba(12, 38, 82, 0.18)",
+        "borderColor": "transparent",
+        "borderWidth": 0,
         "radius": 16
       }
     },
@@ -1561,9 +1561,9 @@
       "visible": true,
       "config": {
         "shapeType": "rect",
-        "fillColor": "rgba(17,56,115,0.74)",
-        "borderColor": "rgba(106,216,255,0.32)",
-        "borderWidth": 1,
+        "fillColor": "rgba(12, 38, 82, 0.18)",
+        "borderColor": "transparent",
+        "borderWidth": 0,
         "radius": 16
       }
     },
@@ -1580,9 +1580,9 @@
       "visible": true,
       "config": {
         "shapeType": "rect",
-        "fillColor": "rgba(17,56,115,0.74)",
-        "borderColor": "rgba(106,216,255,0.32)",
-        "borderWidth": 1,
+        "fillColor": "rgba(12, 38, 82, 0.18)",
+        "borderColor": "transparent",
+        "borderWidth": 0,
         "radius": 16
       }
     },
@@ -1599,9 +1599,9 @@
       "visible": true,
       "config": {
         "shapeType": "rect",
-        "fillColor": "rgba(17,56,115,0.74)",
-        "borderColor": "rgba(106,216,255,0.32)",
-        "borderWidth": 1,
+        "fillColor": "rgba(12, 38, 82, 0.18)",
+        "borderColor": "transparent",
+        "borderWidth": 0,
         "radius": 16
       }
     },
@@ -1618,9 +1618,9 @@
       "visible": true,
       "config": {
         "shapeType": "rect",
-        "fillColor": "rgba(17,56,115,0.74)",
-        "borderColor": "rgba(106,216,255,0.32)",
-        "borderWidth": 1,
+        "fillColor": "rgba(12, 38, 82, 0.18)",
+        "borderColor": "transparent",
+        "borderWidth": 0,
         "radius": 16
       }
     },
@@ -1637,9 +1637,9 @@
       "visible": true,
       "config": {
         "shapeType": "rect",
-        "fillColor": "rgba(17,56,115,0.74)",
-        "borderColor": "rgba(106,216,255,0.32)",
-        "borderWidth": 1,
+        "fillColor": "rgba(12, 38, 82, 0.18)",
+        "borderColor": "transparent",
+        "borderWidth": 0,
         "radius": 16
       }
     },
@@ -2135,9 +2135,9 @@
       "visible": true,
       "config": {
         "shapeType": "rect",
-        "fillColor": "rgba(20,67,138,0.38)",
-        "borderColor": "rgba(132,217,255,0.28)",
-        "borderWidth": 1,
+        "fillColor": "rgba(20, 67, 138, 0.22)",
+        "borderColor": "transparent",
+        "borderWidth": 0,
         "radius": 14
       }
     },
@@ -2154,9 +2154,9 @@
       "visible": true,
       "config": {
         "shapeType": "rect",
-        "fillColor": "rgba(20,67,138,0.38)",
-        "borderColor": "rgba(132,217,255,0.28)",
-        "borderWidth": 1,
+        "fillColor": "rgba(20, 67, 138, 0.22)",
+        "borderColor": "transparent",
+        "borderWidth": 0,
         "radius": 14
       }
     },
@@ -2173,9 +2173,9 @@
       "visible": true,
       "config": {
         "shapeType": "rect",
-        "fillColor": "rgba(20,67,138,0.38)",
-        "borderColor": "rgba(132,217,255,0.28)",
-        "borderWidth": 1,
+        "fillColor": "rgba(20, 67, 138, 0.22)",
+        "borderColor": "transparent",
+        "borderWidth": 0,
         "radius": 14
       }
     },
@@ -2192,9 +2192,9 @@
       "visible": true,
       "config": {
         "shapeType": "rect",
-        "fillColor": "rgba(20,67,138,0.38)",
-        "borderColor": "rgba(132,217,255,0.28)",
-        "borderWidth": 1,
+        "fillColor": "rgba(20, 67, 138, 0.22)",
+        "borderColor": "transparent",
+        "borderWidth": 0,
         "radius": 14
       }
     },
@@ -2211,9 +2211,9 @@
       "visible": true,
       "config": {
         "shapeType": "rect",
-        "fillColor": "rgba(20,67,138,0.38)",
-        "borderColor": "rgba(132,217,255,0.28)",
-        "borderWidth": 1,
+        "fillColor": "rgba(20, 67, 138, 0.22)",
+        "borderColor": "transparent",
+        "borderWidth": 0,
         "radius": 14
       }
     },
