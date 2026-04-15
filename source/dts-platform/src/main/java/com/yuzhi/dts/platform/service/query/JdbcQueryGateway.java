@@ -100,6 +100,10 @@ public class JdbcQueryGateway implements QueryGateway {
             payload.put("queryMillis", elapsedMs);
             payload.put("effectiveSql", effectiveSql);
             payload.put("chunkCount", result.chunkCount());
+            // Signal to SqlExecutionService that JdbcSqlExecutor already persisted chunks directly —
+            // the service must NOT double-write them.  Checked explicitly instead of inferring from
+            // finalRows.isEmpty() (which would conflate empty result sets from the legacy Hive path).
+            payload.put("chunksPrePersisted", true);
             payload.put("executionContext", Map.of(
                 "database", ds.getName() != null ? ds.getName() : ds.getJdbcUrl(),
                 "timestamp", Instant.now()

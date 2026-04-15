@@ -119,68 +119,87 @@ public class JdbcSqlExecutor {
             int chunkIndex = 0;
             long queryStart = System.nanoTime();
 
-            try (PreparedStatement ps = conn.prepareStatement(sql)) {
-                ps.setFetchSize(STREAM_CHUNK_SIZE);
+            // ok-flag: set to true only after the chunk loop completes normally.
+            // Used in finally to decide commit vs rollback and to ensure autoCommit is restored.
+            boolean ok = false;
+            try {
+                try (PreparedStatement ps = conn.prepareStatement(sql)) {
+                    ps.setFetchSize(STREAM_CHUNK_SIZE);
 
-                // Critical #2: register statement BEFORE executeQuery so cancel() can reach it
-                if (executionId != null) {
-                    activeStatements.put(executionId, ps);
-                }
+                    // Critical #2: register statement BEFORE executeQuery so cancel() can reach it
+                    if (executionId != null) {
+                        activeStatements.put(executionId, ps);
+                    }
 
-                try (ResultSet rs = ps.executeQuery()) {
-                    ResultSetMetaData meta = rs.getMetaData();
-                    int colCount = meta.getColumnCount();
-                    columns = buildColumnMeta(meta, colCount);
-                    List<String> headers = columns.stream().map(ColumnMeta::name).toList();
+                    try (ResultSet rs = ps.executeQuery()) {
+                        ResultSetMetaData meta = rs.getMetaData();
+                        int colCount = meta.getColumnCount();
+                        columns = buildColumnMeta(meta, colCount);
+                        List<String> headers = columns.stream().map(ColumnMeta::name).toList();
 
-                    List<Map<String, Object>> buffer = new ArrayList<>(STREAM_CHUNK_SIZE);
+                        List<Map<String, Object>> buffer = new ArrayList<>(STREAM_CHUNK_SIZE);
 
-                    while (rs.next()) {
-                        // Check cancel flag at row boundary
-                        if (cancelFlag != null && cancelFlag.get()) {
-                            try {
-                                ps.cancel();
-                            } catch (SQLException ignored) {}
-                            break;
-                        }
-
-                        Map<String, Object> row = new LinkedHashMap<>();
-                        for (int i = 1; i <= colCount; i++) {
-                            row.put(headers.get(i - 1), readValue(rs, i));
-                        }
-                        buffer.add(row);
-                        totalRows++;
-
-                        // Enforce rowLimit (stop early rather than after-the-fact filter)
-                        if (rowLimit > 0 && totalRows >= rowLimit) {
-                            truncated = rs.next(); // peek — if more rows exist, mark truncated
-                            break;
-                        }
-
-                        if (buffer.size() >= STREAM_CHUNK_SIZE) {
-                            flushChunk(executionId, chunkIndex++, buffer, totalRows, headers);
-                            if (progressHook != null) {
-                                progressHook.accept((int) Math.min(totalRows, Integer.MAX_VALUE));
+                        while (rs.next()) {
+                            // Check cancel flag at row boundary
+                            if (cancelFlag != null && cancelFlag.get()) {
+                                try {
+                                    ps.cancel();
+                                } catch (SQLException ignored) {}
+                                break;
                             }
-                            buffer.clear();
+
+                            Map<String, Object> row = new LinkedHashMap<>();
+                            for (int i = 1; i <= colCount; i++) {
+                                row.put(headers.get(i - 1), readValue(rs, i));
+                            }
+                            buffer.add(row);
+                            totalRows++;
+
+                            // Enforce rowLimit (stop early rather than after-the-fact filter)
+                            if (rowLimit > 0 && totalRows >= rowLimit) {
+                                truncated = rs.next(); // peek — if more rows exist, mark truncated
+                                break;
+                            }
+
+                            if (buffer.size() >= STREAM_CHUNK_SIZE) {
+                                flushChunk(executionId, chunkIndex++, buffer, totalRows, headers);
+                                if (progressHook != null) {
+                                    progressHook.accept((int) Math.min(totalRows, Integer.MAX_VALUE));
+                                }
+                                buffer.clear();
+                            }
+                        }
+
+                        // Flush remaining
+                        if (!buffer.isEmpty()) {
+                            flushChunk(executionId, chunkIndex++, buffer, totalRows, headers);
                         }
                     }
-
-                    // Flush remaining
-                    if (!buffer.isEmpty()) {
-                        flushChunk(executionId, chunkIndex++, buffer, totalRows, headers);
-                    }
                 }
+                // Chunk loop completed without exception — mark success before finally runs
+                ok = true;
             } finally {
                 // Critical #2: deregister statement whether execution succeeded or was canceled
                 if (executionId != null) {
                     activeStatements.remove(executionId);
                 }
-                // Critical #3: commit (or rollback on exception) to close the server-side cursor
+                // Critical #3: commit on success / rollback on exception to close the server-side
+                // cursor, then ALWAYS restore autoCommit so the pooled connection is not poisoned.
                 if (isPostgres) {
                     try {
-                        conn.commit();
-                    } catch (SQLException ignored) {}
+                        if (ok) {
+                            conn.commit();
+                        } else {
+                            conn.rollback();
+                        }
+                    } catch (SQLException e) {
+                        LOG.warn("txn {} failed for execution {}", ok ? "commit" : "rollback", executionId, e);
+                    }
+                    try {
+                        conn.setAutoCommit(true);
+                    } catch (SQLException e) {
+                        LOG.warn("failed to restore autoCommit for execution {}", executionId, e);
+                    }
                 }
             }
 

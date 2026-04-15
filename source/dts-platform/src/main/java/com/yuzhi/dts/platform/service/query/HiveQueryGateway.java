@@ -69,6 +69,18 @@ public class HiveQueryGateway implements QueryGateway {
         this.adminInfraClient = adminInfraClient;
     }
 
+    /**
+     * {@inheritDoc}
+     *
+     * <p>NOTE: {@code executionId} is accepted but not forwarded to the underlying Hive/JDBC path —
+     * the legacy Hive code has no chunk-persistence support.
+     * TODO: wire executionId when hive gateway supports chunk persistence.
+     */
+    @Override
+    public Map<String, Object> execute(String effectiveSql, UUID datasourceId, UUID executionId) {
+        return execute(effectiveSql, datasourceId);
+    }
+
     @Override
     public Map<String, Object> execute(String effectiveSql) {
         Optional<InceptorDataSourceState> stateOpt = registry.getActive();

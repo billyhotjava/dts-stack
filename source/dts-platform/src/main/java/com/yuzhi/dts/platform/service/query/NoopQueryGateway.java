@@ -1,6 +1,7 @@
 package com.yuzhi.dts.platform.service.query;
 
 import java.util.*;
+import java.util.UUID;
 import java.util.concurrent.ThreadLocalRandom;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -12,6 +13,18 @@ import org.springframework.stereotype.Service;
 public class NoopQueryGateway implements QueryGateway {
 
     private static final Logger log = LoggerFactory.getLogger(NoopQueryGateway.class);
+
+    /**
+     * {@inheritDoc}
+     *
+     * <p>NOTE: {@code datasourceId} and {@code executionId} are accepted but ignored — the Noop
+     * gateway simulates a fixed result set regardless of datasource or execution context.
+     * TODO: wire executionId when hive gateway supports chunk persistence.
+     */
+    @Override
+    public Map<String, Object> execute(String effectiveSql, UUID datasourceId, UUID executionId) {
+        return execute(effectiveSql);
+    }
 
     @Override
     public Map<String, Object> execute(String effectiveSql) {

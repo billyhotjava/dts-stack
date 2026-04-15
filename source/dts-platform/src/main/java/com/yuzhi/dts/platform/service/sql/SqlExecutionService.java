@@ -288,8 +288,11 @@ public class SqlExecutionService {
             final long finalTotalRows = totalRows;
             final boolean finalTruncated = truncated;
             final long finalElapsedMs = totalElapsedMs;
-            // When JdbcQueryGateway pre-persisted chunks, chunkCount comes from the payload
+            // When JdbcQueryGateway pre-persisted chunks, chunkCount comes from the payload.
+            // The explicit chunksPrePersisted flag is used — NOT inferring from finalRows.isEmpty()
+            // (which would conflate an empty Hive result set with pre-persisted JDBC chunks).
             final Integer payloadChunkCount = payload.get("chunkCount") instanceof Integer n ? n : null;
+            final boolean chunksPrePersisted = Boolean.TRUE.equals(payload.get("chunksPrePersisted"));
 
             persistTransactionTemplate.executeWithoutResult(status -> {
                 if (!finalHeaders.isEmpty()) {
@@ -310,8 +313,10 @@ public class SqlExecutionService {
                         chunk.setCreatedDate(Instant.now());
                         chunkRepository.save(chunk);
                     }
-                    // If JdbcSqlExecutor pre-persisted the chunks, use the count it reported
-                    int effectiveChunkCount = (payloadChunkCount != null && finalRows.isEmpty())
+                    // If JdbcSqlExecutor pre-persisted the chunks, use the count it reported.
+                    // Check the explicit flag — not finalRows.isEmpty() — to avoid conflating
+                    // a genuine empty result from the Hive path with pre-persisted JDBC chunks.
+                    int effectiveChunkCount = (chunksPrePersisted && payloadChunkCount != null)
                         ? payloadChunkCount
                         : chunkIndex;
 

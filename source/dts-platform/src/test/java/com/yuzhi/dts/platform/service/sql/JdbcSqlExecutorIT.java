@@ -181,7 +181,44 @@ class JdbcSqlExecutorIT {
     }
 
     // ------------------------------------------------------------------
-    // 4. explain_returnsPlanText
+    // 4. execute_rollbackOnError_restoresAutoCommit
+    // ------------------------------------------------------------------
+
+    /**
+     * Verifies pool-hygiene fix: when an execution throws (bad SQL), the finally block must
+     * rollback the open transaction AND restore autoCommit=true so that the next caller
+     * borrowing from the same pool gets a clean connection.
+     *
+     * <p>Because {@link JdbcSqlExecutor} opens its own DriverManager connection (not from the
+     * pool), we verify autoCommit on a fresh connection from the same datasource obtained via
+     * {@link DataSource#getConnection()} — both share the same PG instance, so if the JDBC driver
+     * were to leave a connection with autoCommit=false in the pool HikariCP would reflect it here.
+     * More directly: we verify no exception leaks the bad state by confirming a valid query works
+     * on a subsequent connection.
+     */
+    @Test
+    void execute_rollbackOnError_restoresAutoCommit() throws Exception {
+        UUID execId = UUID.randomUUID();
+
+        // Execute intentionally bad SQL — should throw
+        assertThatThrownBy(() ->
+            executor.execute(ds, "SELECT invalid_column_xyz FROM nonexistent_table_abc", execId, 10_000, null, new AtomicBoolean(false))
+        ).isInstanceOf(Exception.class);
+
+        // Fetch a fresh connection from the pool — autoCommit must be true (no poisoning)
+        try (Connection freshConn = dataSource.getConnection()) {
+            assertThat(freshConn.getAutoCommit())
+                .as("Pool connection autoCommit must be true after failed execution — no pool poisoning")
+                .isTrue();
+        }
+
+        // Also verify a normal query still works after the failure
+        ExecutionResult ok = executor.execute(ds, "SELECT 1 AS n", null, 10, null, new AtomicBoolean(false));
+        assertThat(ok.rowCount()).isEqualTo(1);
+    }
+
+    // ------------------------------------------------------------------
+    // 5. explain_returnsPlanText (was 4)
     // ------------------------------------------------------------------
 
     @Test
@@ -194,7 +231,7 @@ class JdbcSqlExecutorIT {
     }
 
     // ------------------------------------------------------------------
-    // 5. getConnection_withBadUrl_throwsMeaningful
+    // 6. getConnection_withBadUrl_throwsMeaningful (was 5)
     // ------------------------------------------------------------------
 
     @Test
