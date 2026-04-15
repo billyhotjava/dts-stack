@@ -39,6 +39,17 @@ export const ResultChart: FC<ResultChartProps> = ({ executionId }) => {
   const [config, setConfig] = useState<ChartConfig | null>(null);
   const effectiveConfig = config ?? initial;
 
+  // All hooks MUST run on every render — keep them above early returns.
+  // Rules of Hooks violation otherwise ("Rendered more hooks than during previous render").
+  const option = useMemo(
+    () => (effectiveConfig && page ? buildEChartsOption(effectiveConfig, page.rows) : null),
+    [effectiveConfig, page],
+  );
+  const colOptions = useMemo(
+    () => (meta ? meta.columns.map((c) => ({ value: c.name, label: c.name })) : []),
+    [meta],
+  );
+
   if (metaLoading || pageLoading) {
     return (
       <div style={{ padding: 24, textAlign: "center" }}>
@@ -49,13 +60,7 @@ export const ResultChart: FC<ResultChartProps> = ({ executionId }) => {
   if (!meta || !page || meta.columns.length === 0) {
     return <Empty description="无数据" />;
   }
-  if (!effectiveConfig) return <Empty description="正在准备图表配置" />;
-
-  const option = useMemo(
-    () => buildEChartsOption(effectiveConfig, page.rows),
-    [effectiveConfig, page.rows],
-  );
-  const colOptions = meta.columns.map((c) => ({ value: c.name, label: c.name }));
+  if (!effectiveConfig || !option) return <Empty description="正在准备图表配置" />;
 
   return (
     <div style={{ display: "flex", height: "100%" }}>
