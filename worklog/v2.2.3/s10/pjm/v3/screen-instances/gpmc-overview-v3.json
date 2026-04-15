@@ -5,7 +5,7 @@
   "description": "一级看板：项目综合态势总览，进度为主轴 + 异常标红，核心维度：项目 + 科室。",
   "width": 1920,
   "height": 1080,
-  "backgroundColor": "#04142f",
+  "backgroundColor": "#081f3e",
   "theme": "dark-command",
   "globalVariables": [
     {
@@ -81,7 +81,7 @@
       "visible": true,
       "config": {
         "shapeType": "rect",
-        "fillColor": "#04142f",
+        "fillColor": "#081f3e",
         "borderColor": "#081f3e",
         "borderWidth": 0,
         "radius": 0
@@ -348,11 +348,11 @@
         "value": 8,
         "suffix": "",
         "precision": 0,
-        "titleFontSize": 16,
-        "valueFontSize": 44,
-        "titleColor": "#dcecff",
+        "titleFontSize": 14,
+        "valueFontSize": 34,
+        "titleColor": "#aed3f0",
         "valueColor": "#ffffff",
-        "backgroundColor": "rgba(9, 28, 68, 0.70)",
+        "backgroundColor": "transparent",
         "valueField": "项目总数"
       },
       "dataSource": {
@@ -399,11 +399,11 @@
         "value": 67.5,
         "suffix": "%",
         "precision": 1,
-        "titleFontSize": 16,
-        "valueFontSize": 44,
-        "titleColor": "#dcecff",
+        "titleFontSize": 14,
+        "valueFontSize": 34,
+        "titleColor": "#aed3f0",
         "valueColor": "#ffffff",
-        "backgroundColor": "rgba(9, 28, 68, 0.70)",
+        "backgroundColor": "transparent",
         "valueField": "项目完成率"
       },
       "dataSource": {
@@ -450,11 +450,11 @@
         "value": 5,
         "suffix": "",
         "precision": 0,
-        "titleFontSize": 16,
-        "valueFontSize": 44,
-        "titleColor": "#dcecff",
+        "titleFontSize": 14,
+        "valueFontSize": 34,
+        "titleColor": "#aed3f0",
         "valueColor": "#ffffff",
-        "backgroundColor": "rgba(9, 28, 68, 0.70)",
+        "backgroundColor": "transparent",
         "valueField": "未闭环质量问题数"
       },
       "dataSource": {
@@ -501,11 +501,11 @@
         "value": 3,
         "suffix": "",
         "precision": 0,
-        "titleFontSize": 16,
-        "valueFontSize": 44,
-        "titleColor": "#dcecff",
+        "titleFontSize": 14,
+        "valueFontSize": 34,
+        "titleColor": "#aed3f0",
         "valueColor": "#ffffff",
-        "backgroundColor": "rgba(9, 28, 68, 0.70)",
+        "backgroundColor": "transparent",
         "valueField": "未整改落实技术更改单数"
       },
       "dataSource": {
@@ -552,11 +552,11 @@
         "value": 2,
         "suffix": "",
         "precision": 0,
-        "titleFontSize": 16,
-        "valueFontSize": 44,
-        "titleColor": "#dcecff",
+        "titleFontSize": 14,
+        "valueFontSize": 34,
+        "titleColor": "#aed3f0",
         "valueColor": "#ffffff",
-        "backgroundColor": "rgba(9, 28, 68, 0.70)",
+        "backgroundColor": "transparent",
         "valueField": "高风险数量"
       },
       "dataSource": {
@@ -600,9 +600,9 @@
       "visible": false,
       "config": {
         "shapeType": "rect",
-        "fillColor": "rgba(9, 28, 68, 0.70)",
-        "borderColor": "rgba(82, 178, 255, 0.35)",
-        "borderWidth": 1,
+        "fillColor": "rgba(12, 38, 82, 0.18)",
+        "borderColor": "transparent",
+        "borderWidth": 0,
         "radius": 14
       }
     },
@@ -635,10 +635,10 @@
           }
         ],
         "seriesColors": [
-          "#24d26f",
-          "#2f8cff",
-          "#ffcb3d",
-          "#ff5b2f"
+          "#2ee6a6",
+          "#45a4ff",
+          "#ffc645",
+          "#ff5d73"
         ],
         "titleFontSize": 0,
         "chartPaddingTop": 8,
@@ -715,10 +715,10 @@
           }
         ],
         "seriesColors": [
-          "#24d26f",
-          "#2f8cff",
-          "#ffcb3d",
-          "#ff5b2f"
+          "#2ee6a6",
+          "#45a4ff",
+          "#ffc645",
+          "#ff5d73"
         ],
         "titleFontSize": 0,
         "chartPaddingTop": 8,
@@ -788,8 +788,8 @@
           "fontSize": 12
         },
         "seriesColors": [
-          "#2f8cff",
-          "#33d6ff"
+          "#45a4ff",
+          "#ff5d73"
         ],
         "xAxis": {
           "show": true,
@@ -853,15 +853,15 @@
           "fontSize": 12
         },
         "seriesColors": [
-          "#2f8cff",
-          "#6cbcff",
-          "#24d26f",
-          "#ffcb3d",
-          "#c9d7e5",
-          "#7247ff",
-          "#ff7a21",
-          "#33d6ff",
-          "#ff5b2f"
+          "#45a4ff",
+          "#2ee6a6",
+          "#ffc645",
+          "#ff5d73",
+          "#a978ff",
+          "#27d8ff",
+          "#ff8f45",
+          "#8fa7c4",
+          "#94a3b8"
         ],
         "categoryKey": "分类",
         "valueKey": "数量",
@@ -918,7 +918,7 @@
           "show": false
         },
         "seriesColors": [
-          "#2f8cff"
+          "#27d8ff"
         ],
         "xAxis": {
           "show": true,
@@ -979,8 +979,8 @@
           }
         ],
         "seriesColors": [
-          "#2f8cff",
-          "#33d6ff"
+          "#ffc645",
+          "#ff5d73"
         ],
         "titleFontSize": 0,
         "chartPaddingTop": 8,
@@ -1056,9 +1056,9 @@
           }
         ],
         "seriesColors": [
-          "#ff5b2f",
-          "#ffcb3d",
-          "#2f8cff"
+          "#ff5d73",
+          "#ffc645",
+          "#45a4ff"
         ],
         "titleFontSize": 0,
         "chartPaddingTop": 8,
@@ -1133,12 +1133,12 @@
           "fontSize": 12
         },
         "seriesColors": [
-          "#33d6ff",
-          "#2f8cff",
-          "#ffcb3d",
-          "#20d17a",
-          "#d8dee8",
-          "#7247ff"
+          "#45a4ff",
+          "#2ee6a6",
+          "#ffc645",
+          "#ff5d73",
+          "#a978ff",
+          "#94a3b8"
         ],
         "categoryKey": "风险类型",
         "valueKey": "数量",
@@ -1186,10 +1186,10 @@
       "visible": true,
       "config": {
         "shapeType": "rect",
-        "fillColor": "rgba(9, 28, 68, 0.70)",
-        "borderColor": "rgba(82, 178, 255, 0.35)",
-        "borderWidth": 1,
-        "radius": 14
+        "fillColor": "rgba(12, 38, 82, 0.18)",
+        "borderColor": "transparent",
+        "borderWidth": 0,
+        "radius": 16
       }
     },
     {
@@ -1477,10 +1477,10 @@
       "visible": true,
       "config": {
         "shapeType": "rect",
-        "fillColor": "rgba(9, 28, 68, 0.70)",
-        "borderColor": "rgba(82, 178, 255, 0.35)",
-        "borderWidth": 1,
-        "radius": 14
+        "fillColor": "rgba(12, 38, 82, 0.18)",
+        "borderColor": "transparent",
+        "borderWidth": 0,
+        "radius": 16
       }
     },
     {
@@ -1496,10 +1496,10 @@
       "visible": true,
       "config": {
         "shapeType": "rect",
-        "fillColor": "rgba(9, 28, 68, 0.70)",
-        "borderColor": "rgba(82, 178, 255, 0.35)",
-        "borderWidth": 1,
-        "radius": 14
+        "fillColor": "rgba(12, 38, 82, 0.18)",
+        "borderColor": "transparent",
+        "borderWidth": 0,
+        "radius": 16
       }
     },
     {
@@ -1515,10 +1515,10 @@
       "visible": true,
       "config": {
         "shapeType": "rect",
-        "fillColor": "rgba(9, 28, 68, 0.70)",
-        "borderColor": "rgba(82, 178, 255, 0.35)",
-        "borderWidth": 1,
-        "radius": 14
+        "fillColor": "rgba(12, 38, 82, 0.18)",
+        "borderColor": "transparent",
+        "borderWidth": 0,
+        "radius": 16
       }
     },
     {
@@ -1534,10 +1534,10 @@
       "visible": true,
       "config": {
         "shapeType": "rect",
-        "fillColor": "rgba(9, 28, 68, 0.70)",
-        "borderColor": "rgba(82, 178, 255, 0.35)",
-        "borderWidth": 1,
-        "radius": 14
+        "fillColor": "rgba(12, 38, 82, 0.18)",
+        "borderColor": "transparent",
+        "borderWidth": 0,
+        "radius": 16
       }
     },
     {
@@ -1553,10 +1553,10 @@
       "visible": true,
       "config": {
         "shapeType": "rect",
-        "fillColor": "rgba(9, 28, 68, 0.70)",
-        "borderColor": "rgba(82, 178, 255, 0.35)",
-        "borderWidth": 1,
-        "radius": 14
+        "fillColor": "rgba(12, 38, 82, 0.18)",
+        "borderColor": "transparent",
+        "borderWidth": 0,
+        "radius": 16
       }
     },
     {
@@ -1572,10 +1572,10 @@
       "visible": true,
       "config": {
         "shapeType": "rect",
-        "fillColor": "rgba(9, 28, 68, 0.70)",
-        "borderColor": "rgba(82, 178, 255, 0.35)",
-        "borderWidth": 1,
-        "radius": 14
+        "fillColor": "rgba(12, 38, 82, 0.18)",
+        "borderColor": "transparent",
+        "borderWidth": 0,
+        "radius": 16
       }
     },
     {
@@ -1591,10 +1591,10 @@
       "visible": true,
       "config": {
         "shapeType": "rect",
-        "fillColor": "rgba(9, 28, 68, 0.70)",
-        "borderColor": "rgba(82, 178, 255, 0.35)",
-        "borderWidth": 1,
-        "radius": 14
+        "fillColor": "rgba(12, 38, 82, 0.18)",
+        "borderColor": "transparent",
+        "borderWidth": 0,
+        "radius": 16
       }
     },
     {
@@ -1610,10 +1610,10 @@
       "visible": true,
       "config": {
         "shapeType": "rect",
-        "fillColor": "rgba(9, 28, 68, 0.70)",
-        "borderColor": "rgba(82, 178, 255, 0.35)",
-        "borderWidth": 1,
-        "radius": 14
+        "fillColor": "rgba(12, 38, 82, 0.18)",
+        "borderColor": "transparent",
+        "borderWidth": 0,
+        "radius": 16
       }
     },
     {
@@ -1946,234 +1946,6 @@
         "borderColor": "transparent",
         "borderWidth": 0,
         "radius": 14
-      }
-    },
-    {
-      "id": "ov3-header-sideline-left",
-      "type": "shape",
-      "name": "ov3-header-sideline-left",
-      "x": 380,
-      "y": 56,
-      "width": 360,
-      "height": 2,
-      "zIndex": 58,
-      "locked": false,
-      "visible": true,
-      "config": {
-        "shapeType": "rect",
-        "fillColor": "rgba(96,195,255,0.55)",
-        "borderColor": "transparent",
-        "borderWidth": 0,
-        "radius": 0
-      }
-    },
-    {
-      "id": "ov3-header-sideline-right",
-      "type": "shape",
-      "name": "ov3-header-sideline-right",
-      "x": 1180,
-      "y": 56,
-      "width": 360,
-      "height": 2,
-      "zIndex": 58,
-      "locked": false,
-      "visible": true,
-      "config": {
-        "shapeType": "rect",
-        "fillColor": "rgba(96,195,255,0.55)",
-        "borderColor": "transparent",
-        "borderWidth": 0,
-        "radius": 0
-      }
-    },
-    {
-      "id": "ov3-kpi-1-icon",
-      "type": "shape",
-      "name": "ov3-kpi-1-icon",
-      "x": 306,
-      "y": 106,
-      "width": 56,
-      "height": 56,
-      "zIndex": 26,
-      "locked": false,
-      "visible": true,
-      "config": {
-        "shapeType": "rect",
-        "fillColor": "rgba(52,174,255,0.10)",
-        "borderColor": "rgba(49,181,255,0.80)",
-        "borderWidth": 2,
-        "radius": 999
-      }
-    },
-    {
-      "id": "ov3-kpi-1-icon-glyph",
-      "type": "title",
-      "name": "ov3-kpi-1-icon-glyph",
-      "x": 306,
-      "y": 106,
-      "width": 56,
-      "height": 56,
-      "zIndex": 27,
-      "locked": false,
-      "visible": true,
-      "config": {
-        "text": "◉",
-        "fontSize": 28,
-        "fontWeight": "800",
-        "color": "#33d6ff",
-        "textAlign": "center"
-      }
-    },
-    {
-      "id": "ov3-kpi-2-icon",
-      "type": "shape",
-      "name": "ov3-kpi-2-icon",
-      "x": 682,
-      "y": 106,
-      "width": 56,
-      "height": 56,
-      "zIndex": 26,
-      "locked": false,
-      "visible": true,
-      "config": {
-        "shapeType": "rect",
-        "fillColor": "rgba(52,174,255,0.10)",
-        "borderColor": "rgba(49,181,255,0.80)",
-        "borderWidth": 2,
-        "radius": 999
-      }
-    },
-    {
-      "id": "ov3-kpi-2-icon-glyph",
-      "type": "title",
-      "name": "ov3-kpi-2-icon-glyph",
-      "x": 682,
-      "y": 106,
-      "width": 56,
-      "height": 56,
-      "zIndex": 27,
-      "locked": false,
-      "visible": true,
-      "config": {
-        "text": "▣",
-        "fontSize": 28,
-        "fontWeight": "800",
-        "color": "#33d6ff",
-        "textAlign": "center"
-      }
-    },
-    {
-      "id": "ov3-kpi-3-icon",
-      "type": "shape",
-      "name": "ov3-kpi-3-icon",
-      "x": 1058,
-      "y": 106,
-      "width": 56,
-      "height": 56,
-      "zIndex": 26,
-      "locked": false,
-      "visible": true,
-      "config": {
-        "shapeType": "rect",
-        "fillColor": "rgba(52,174,255,0.10)",
-        "borderColor": "rgba(49,181,255,0.80)",
-        "borderWidth": 2,
-        "radius": 999
-      }
-    },
-    {
-      "id": "ov3-kpi-3-icon-glyph",
-      "type": "title",
-      "name": "ov3-kpi-3-icon-glyph",
-      "x": 1058,
-      "y": 106,
-      "width": 56,
-      "height": 56,
-      "zIndex": 27,
-      "locked": false,
-      "visible": true,
-      "config": {
-        "text": "⚙",
-        "fontSize": 28,
-        "fontWeight": "800",
-        "color": "#33d6ff",
-        "textAlign": "center"
-      }
-    },
-    {
-      "id": "ov3-kpi-4-icon",
-      "type": "shape",
-      "name": "ov3-kpi-4-icon",
-      "x": 1434,
-      "y": 106,
-      "width": 56,
-      "height": 56,
-      "zIndex": 26,
-      "locked": false,
-      "visible": true,
-      "config": {
-        "shapeType": "rect",
-        "fillColor": "rgba(52,174,255,0.10)",
-        "borderColor": "rgba(49,181,255,0.80)",
-        "borderWidth": 2,
-        "radius": 999
-      }
-    },
-    {
-      "id": "ov3-kpi-4-icon-glyph",
-      "type": "title",
-      "name": "ov3-kpi-4-icon-glyph",
-      "x": 1434,
-      "y": 106,
-      "width": 56,
-      "height": 56,
-      "zIndex": 27,
-      "locked": false,
-      "visible": true,
-      "config": {
-        "text": "▤",
-        "fontSize": 28,
-        "fontWeight": "800",
-        "color": "#33d6ff",
-        "textAlign": "center"
-      }
-    },
-    {
-      "id": "ov3-kpi-5-icon",
-      "type": "shape",
-      "name": "ov3-kpi-5-icon",
-      "x": 1810,
-      "y": 106,
-      "width": 56,
-      "height": 56,
-      "zIndex": 26,
-      "locked": false,
-      "visible": true,
-      "config": {
-        "shapeType": "rect",
-        "fillColor": "rgba(52,174,255,0.10)",
-        "borderColor": "rgba(49,181,255,0.80)",
-        "borderWidth": 2,
-        "radius": 999
-      }
-    },
-    {
-      "id": "ov3-kpi-5-icon-glyph",
-      "type": "title",
-      "name": "ov3-kpi-5-icon-glyph",
-      "x": 1810,
-      "y": 106,
-      "width": 56,
-      "height": 56,
-      "zIndex": 27,
-      "locked": false,
-      "visible": true,
-      "config": {
-        "text": "✦",
-        "fontSize": 28,
-        "fontWeight": "800",
-        "color": "#33d6ff",
-        "textAlign": "center"
       }
     }
   ],
