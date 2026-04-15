@@ -32,17 +32,22 @@ export interface FlatProjectNodeRow {
 function rowToTask(r: FlatProjectNodeRow): ProjectGanttTask {
     const isCompleted = r.是否完成 === true;
     const isOverdue = r.是否超期完成 === true || (r.延期天数 != null && r.延期天数 > 0);
-    const baselineStart = r.基线开始日期 ?? r.计划开始日期 ?? r.基线日期 ?? r.计划日期 ?? undefined;
-    const baselineEnd = r.基线结束日期 ?? r.计划完成日期 ?? r.计划日期 ?? baselineStart ?? undefined;
-    const actualStart = r.实际开始日期 ?? r.计划日期 ?? baselineStart ?? undefined;
-    const actualEnd = r.实际完成日期 ?? r.实际日期 ?? undefined;
+    const planStart = r.计划开始日期 ?? r.基线开始日期 ?? r.基线日期 ?? undefined;
+    const planEnd   = r.计划完成日期 ?? r.基线结束日期 ?? r.计划日期 ?? undefined;
+    const actualStart = r.实际开始日期 ?? undefined;
+    const actualEnd   = r.实际完成日期 ?? r.实际日期 ?? undefined;
     return {
         name: String(r.任务 ?? '').trim(),
         type: String(r.类型 ?? '一般任务'),
-        planDate: actualStart,
-        planEndDate: actualEnd ?? actualStart,
-        baselineStartDate: baselineStart,
-        baselineEndDate: baselineEnd,
+        // planDate/planEndDate 语义 = 计划范围（甘特底色条）
+        planDate: planStart,
+        planEndDate: planEnd,
+        planStartDate: planStart,
+        // baseline 兼容字段，同计划（ODS 暂无单独基线）
+        baselineStartDate: planStart,
+        baselineEndDate: planEnd,
+        // 实际范围（叠加在计划条上的彩色条）
+        actualStartDate: actualStart,
         actualDate: actualEnd,
         delayDays: r.延期天数 ?? 0,
         riskLevel: String(r.风险等级 ?? ''),

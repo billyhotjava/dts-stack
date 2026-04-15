@@ -815,7 +815,7 @@
       "locked": false,
       "visible": true,
       "config": {
-        "title": "项目质量问题（按问题总数排序）",
+        "title": "",
         "xAxis": {
           "type": "value",
           "name": "数量"
@@ -851,7 +851,9 @@
             "dataKey": "未归零",
             "color": "#ff5d73"
           }
-        ]
+        ],
+        "titleFontSize": 0,
+        "chartPaddingTop": 36
       },
       "dataSource": {
         "type": "sql",
@@ -893,7 +895,7 @@
       "locked": false,
       "visible": true,
       "config": {
-        "title": "科室质量问题（按问题总数排序）",
+        "title": "",
         "xAxis": {
           "type": "category",
           "name": "责任科室"
@@ -928,7 +930,9 @@
             "dataKey": "未归零",
             "color": "#ff5d73"
           }
-        ]
+        ],
+        "titleFontSize": 0,
+        "chartPaddingTop": 36
       },
       "dataSource": {
         "type": "sql",
@@ -970,7 +974,7 @@
       "locked": false,
       "visible": true,
       "config": {
-        "title": "质量问题类别（按原因分类）",
+        "title": "",
         "legend": {
           "show": true
         },
@@ -985,7 +989,9 @@
           "#8fa7c4"
         ],
         "categoryKey": "类别",
-        "valueKey": "数量"
+        "valueKey": "数量",
+        "titleFontSize": 0,
+        "chartPaddingTop": 36
       },
       "dataSource": {
         "type": "sql",
@@ -1027,7 +1033,7 @@
       "locked": false,
       "visible": true,
       "config": {
-        "title": "月度质量问题趋势（近12月·日期筛选无效）",
+        "title": "",
         "xAxis": {
           "type": "category",
           "name": "月份"
@@ -1049,7 +1055,9 @@
             "dataKey": "质量问题总数",
             "color": "#45a4ff"
           }
-        ]
+        ],
+        "titleFontSize": 0,
+        "chartPaddingTop": 36
       },
       "dataSource": {
         "type": "sql",
@@ -1091,7 +1099,7 @@
       "locked": false,
       "visible": true,
       "config": {
-        "title": "质量问题清单（按提出时间倒序）",
+        "title": "",
         "columns": [
           {
             "key": "项目编号",
@@ -1149,7 +1157,9 @@
         "headerColor": "#d9eeff",
         "rowColor": "#c9d4e4",
         "stripeColor": "rgba(88,180,255,0.08)",
-        "backgroundColor": "rgba(9,36,90,0.50)"
+        "backgroundColor": "rgba(9,36,90,0.50)",
+        "titleFontSize": 0,
+        "chartPaddingTop": 36
       },
       "dataSource": {
         "type": "sql",
@@ -1215,6 +1225,101 @@
         "borderColor": "rgba(69, 164, 255, 0.38)",
         "borderWidth": 1,
         "radius": 18
+      }
+    },
+    {
+      "id": "gpmc-quality-project-overlay-title",
+      "type": "title",
+      "name": "项目质量问题-标题",
+      "x": 64,
+      "y": 286,
+      "width": 360,
+      "height": 28,
+      "zIndex": 20,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "text": "项目质量问题（按问题总数排序）",
+        "fontSize": 20,
+        "fontWeight": "700",
+        "color": "#d9eeff",
+        "textAlign": "flex-start"
+      }
+    },
+    {
+      "id": "gpmc-quality-dept-overlay-title",
+      "type": "title",
+      "name": "科室质量问题-标题",
+      "x": 988,
+      "y": 286,
+      "width": 360,
+      "height": 28,
+      "zIndex": 20,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "text": "科室质量问题（按问题总数排序）",
+        "fontSize": 20,
+        "fontWeight": "700",
+        "color": "#d9eeff",
+        "textAlign": "flex-start"
+      }
+    },
+    {
+      "id": "gpmc-quality-category-overlay-title",
+      "type": "title",
+      "name": "质量问题类别-标题",
+      "x": 64,
+      "y": 594,
+      "width": 360,
+      "height": 28,
+      "zIndex": 20,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "text": "质量问题类别（按原因分类）",
+        "fontSize": 20,
+        "fontWeight": "700",
+        "color": "#d9eeff",
+        "textAlign": "flex-start"
+      }
+    },
+    {
+      "id": "gpmc-quality-trend-overlay-title",
+      "type": "title",
+      "name": "月度质量问题趋势-标题",
+      "x": 988,
+      "y": 594,
+      "width": 360,
+      "height": 28,
+      "zIndex": 20,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "text": "月度质量问题趋势（近12月·日期筛选无效）",
+        "fontSize": 20,
+        "fontWeight": "700",
+        "color": "#d9eeff",
+        "textAlign": "flex-start"
+      }
+    },
+    {
+      "id": "gpmc-quality-detail-overlay-title",
+      "type": "title",
+      "name": "质量问题清单-标题",
+      "x": 52,
+      "y": 856,
+      "width": 360,
+      "height": 28,
+      "zIndex": 20,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "text": "质量问题清单（按提出时间倒序）",
+        "fontSize": 20,
+        "fontWeight": "700",
+        "color": "#d9eeff",
+        "textAlign": "flex-start"
       }
     }
   ]

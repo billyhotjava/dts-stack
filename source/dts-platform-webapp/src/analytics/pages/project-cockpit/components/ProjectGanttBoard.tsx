@@ -9,6 +9,8 @@ export type ProjectGanttTask = {
 	type?: string;
 	planDate?: string;
 	planEndDate?: string;
+	planStartDate?: string;
+	actualStartDate?: string;
 	baselineStartDate?: string;
 	baselineEndDate?: string;
 	actualDate?: string;
@@ -381,8 +383,9 @@ function FlatGantt({ tasks, maxHeight, onTaskClick, sideTextColor, dark, highlig
 			.flatMap((task) => {
 				const baseline = resolveGanttBaselineRange(task);
 				return [
-					toDateValue(task.planDate),
+					toDateValue(task.planStartDate ?? task.planDate),
 					toDateValue(task.planEndDate),
+					toDateValue(task.actualStartDate),
 					toDateValue(task.actualDate),
 					toDateValue(baseline.startDate),
 					toDateValue(baseline.endDate),
@@ -538,21 +541,28 @@ const FlatGanttRow = memo(function FlatGanttRow({ task, scale, dark, rowBg, rowH
 	highlightedTaskName?: string;
 	onTaskClick?: (task: ProjectGanttTask) => void;
 }) {
-	const planStart = toDateValue(task.planDate) ?? scale.start;
+	// Plan range (gray backdrop) — 计划开始 → 计划完成
+	const planStart = toDateValue(task.planStartDate ?? task.planDate) ?? scale.start;
 	const planEnd = toDateValue(task.planEndDate) ?? planStart;
-	const baseline = resolveGanttBaselineRange(task);
-	const baselineStart = toDateValue(baseline.startDate) ?? planStart;
-	const baselineEnd = toDateValue(baseline.endDate) ?? baselineStart;
-	const actual = toDateValue(task.actualDate) ?? Date.now();
-	const isOngoing = !task.actualDate;
+	// Actual range (colored overlay) — 实际开始 → 实际完成
+	const actualStart = toDateValue(task.actualStartDate);
+	const actualEnd = toDateValue(task.actualDate);
+	const hasActualStart = actualStart != null;
+	const hasActualEnd = actualEnd != null;
+	const isOngoing = hasActualStart && !hasActualEnd;
+	const isUnstarted = !hasActualStart;
+	// Effective actual bar: [actualStart, actualEnd || today]
+	const actual = hasActualEnd ? actualEnd! : (hasActualStart ? Date.now() : planStart);
 	const isMilestone = task.type === "里程碑节点";
 	const isHighlighted = !!highlightedTaskName && highlightedTaskName === task.name;
 
 	// Pixel positions against the current scale
-	const baseLeftPx = scale.toPx(baselineStart);
-	const baseWidthPx = scale.widthPx(baselineStart, baselineEnd);
-	const actLeftPx = scale.toPx(Math.min(planStart, actual));
-	const actWidthPx = scale.widthPx(Math.min(planStart, actual), isOngoing ? actual : Math.max(planStart, actual));
+	const planLeftPx = scale.toPx(planStart);
+	const planWidthPx = scale.widthPx(planStart, planEnd);
+	const actLeftPx = hasActualStart ? scale.toPx(actualStart!) : planLeftPx;
+	const actWidthPx = hasActualStart
+		? scale.widthPx(actualStart!, Math.max(actualStart!, actual))
+		: 0;
 	const todayPx = scale.toPx(Date.now());
 	const showToday = todayPx >= 0 && todayPx <= scale.totalPx;
 
@@ -575,9 +585,12 @@ const FlatGanttRow = memo(function FlatGanttRow({ task, scale, dark, rowBg, rowH
 
 	const barStyle: React.CSSProperties = {
 		left: actLeftPx,
-		width: actWidthPx,
+		width: Math.max(0, actWidthPx),
 	};
-	if (isOngoing) {
+	if (isUnstarted) {
+		// 未开始 — 不显示实际条（只显示计划底色条）
+		barStyle.display = "none";
+	} else if (isOngoing) {
 		barStyle.border = "2px dashed currentColor";
 		barStyle.background = "none";
 		barStyle.color = dark ? "rgba(255,255,255,0.5)" : "#6b7280";
@@ -585,7 +598,7 @@ const FlatGanttRow = memo(function FlatGanttRow({ task, scale, dark, rowBg, rowH
 	} else {
 		barStyle.background = TONE_BG[tone];
 	}
-	if (isHighlighted) {
+	if (isHighlighted && !isUnstarted) {
 		barStyle.boxShadow = "0 0 0 3px rgba(239,68,68,0.5), 0 8px 16px rgba(15,23,42,0.12)";
 	}
 
@@ -631,8 +644,8 @@ const FlatGanttRow = memo(function FlatGanttRow({ task, scale, dark, rowBg, rowH
 				<span className={`truncate text-xs ${dark ? "text-white/85" : "text-text-secondary"}`} title={owner || undefined}>
 					{owner || "--"}
 				</span>
-				<span className="text-xs truncate" style={sideTextStyle}>{task.planDate || "--"}</span>
-				<span className="text-xs truncate" style={sideTextStyle}>{task.actualDate || "进行中"}</span>
+				<span className="text-xs truncate" style={sideTextStyle} title="计划完成日期">{task.planEndDate || task.planDate || "--"}</span>
+				<span className="text-xs truncate" style={sideTextStyle} title="实际完成日期">{task.actualDate || (task.actualStartDate ? "进行中" : "未开始")}</span>
 				<span className="text-xs text-right" style={deviationLabel ? { color: deviationColor, fontWeight: 600 } : sideTextStyle}>
 					{deviationLabel ?? "--"}
 				</span>
@@ -647,16 +660,17 @@ const FlatGanttRow = memo(function FlatGanttRow({ task, scale, dark, rowBg, rowH
 				{/* Baseline bar (gray, behind) */}
 				{!isMilestone && baselineEnd >= baselineStart && (
 					<div
-						className="absolute rounded"
+						className="absolute rounded-full"
 						style={{
-							left: baseLeftPx,
-							width: baseWidthPx,
-							top: FLAT_ROW_HEIGHT / 2 + 6,
-							height: 6,
-							background: dark ? "rgba(148,163,184,0.35)" : "#e5e7eb",
+							left: planLeftPx,
+							width: Math.max(2, planWidthPx),
+							top: FLAT_ROW_HEIGHT / 2 - 12,
+							height: 24,
+							background: dark ? "rgba(148,163,184,0.30)" : "#e5e7eb",
+							border: dark ? "1px dashed rgba(148,163,184,0.6)" : "1px dashed #94a3b8",
 							zIndex: 1,
 						}}
-						title={`基线: ${baseline.startDate ?? ""} → ${baseline.endDate ?? ""}`}
+						title={`计划: ${task.planStartDate ?? task.planDate ?? ""} → ${task.planEndDate ?? ""}`}
 					/>
 				)}
 				{isMilestone ? (
@@ -739,8 +753,9 @@ function HierarchicalGantt({ majorProjects, onProjectClick, maxHeight, dark, sid
 			.flatMap((p) =>
 				p.subprojects.flatMap((sp) =>
 					sp.tasks.flatMap((t) => [
-						toDateValue(t.planDate),
+						toDateValue(t.planStartDate ?? t.planDate),
 						toDateValue(t.planEndDate),
+						toDateValue(t.actualStartDate),
 						toDateValue(t.actualDate),
 					])
 				)

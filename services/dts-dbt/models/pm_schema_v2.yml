@@ -55,6 +55,26 @@ models:
           - not_null:
               severity: warn
 
+  - name: dim_quality_category_v2
+    description: "质量问题原因分类字典（9类：设计/工艺/管理/元器件/操作/外协/软件/环境/其他，含别名 外协外购→外协）"
+    columns:
+      - name: code
+        tests:
+          - unique:
+              severity: warn
+          - not_null:
+              severity: warn
+
+  - name: dim_risk_category_v2
+    description: "风险类型字典（5类标准值：技术/进度/成本/设计/质量，含其他兜底）"
+    columns:
+      - name: code
+        tests:
+          - unique:
+              severity: warn
+          - not_null:
+              severity: warn
+
   # ═══ DWD 事实表 ═══
   - name: biz_dwd_project_node_v2
     description: "进度节点事实表 — ODS清洗+枚举标准化+日期解析"

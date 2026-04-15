@@ -5,6 +5,8 @@ dim_risk_level_v2	DWD	models/dwd/dim_risk_level_v2.sql			public	table	project-ma
 dim_quality_status_v2	DWD	models/dwd/dim_quality_status_v2.sql			public	table	project-management-v3,dim,dwd	DRAFT	true		质量归零状态维度表
 dim_change_category_v2	DWD	models/dwd/dim_change_category_v2.sql			public	table	project-management-v3,dim,dwd	DRAFT	true		更改类别维度表
 dim_signature_status_v2	DWD	models/dwd/dim_signature_status_v2.sql			public	table	project-management-v3,dim,dwd	DRAFT	true		文件签署状态维度表
+dim_quality_category_v2	DWD	models/dwd/dim_quality_category_v2.sql			public	table	project-management-v3,dim,dwd	DRAFT	true		质量问题原因分类字典
+dim_risk_category_v2	DWD	models/dwd/dim_risk_category_v2.sql			public	table	project-management-v3,dim,dwd	DRAFT	true		风险类型字典
 biz_dwd_project_node_v2	DWD	models/dwd/biz_dwd_project_node_v2.sql			public	table	project-management-v3,biz,dwd	DRAFT	true		进度节点事实表
 biz_dwd_quality_issue_v2	DWD	models/dwd/biz_dwd_quality_issue_v2.sql			public	table	project-management-v3,biz,dwd,quality	DRAFT	true		质量问题事实表
 biz_dwd_tech_state_v2	DWD	models/dwd/biz_dwd_tech_state_v2.sql			public	table	project-management-v3,biz,dwd,tech-state	DRAFT	true		技术状态事实表

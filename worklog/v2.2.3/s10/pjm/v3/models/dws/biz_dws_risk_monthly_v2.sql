@@ -18,7 +18,15 @@ SELECT
 
   -- 释放状态
   SUM(CASE WHEN d.is_released THEN 1 ELSE 0 END)                                AS released_cnt,
-  SUM(CASE WHEN NOT d.is_released THEN 1 ELSE 0 END)                            AS open_cnt
+  SUM(CASE WHEN NOT d.is_released THEN 1 ELSE 0 END)                            AS open_cnt,
+
+  -- 风险类型分类（5 类 + 其他，字典派生）
+  SUM(CASE WHEN d.is_risk_technical THEN 1 ELSE 0 END)                          AS cat_technical_cnt,
+  SUM(CASE WHEN d.is_risk_schedule  THEN 1 ELSE 0 END)                          AS cat_schedule_cnt,
+  SUM(CASE WHEN d.is_risk_cost      THEN 1 ELSE 0 END)                          AS cat_cost_cnt,
+  SUM(CASE WHEN d.is_risk_design    THEN 1 ELSE 0 END)                          AS cat_design_cnt,
+  SUM(CASE WHEN d.is_risk_quality   THEN 1 ELSE 0 END)                          AS cat_quality_cnt,
+  SUM(CASE WHEN d.is_risk_other     THEN 1 ELSE 0 END)                          AS cat_other_cnt
 
 FROM {{ ref('biz_dwd_risk_info_v2') }} d
 WHERE d.submit_year IS NOT NULL

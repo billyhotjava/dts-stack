@@ -865,7 +865,7 @@
       "locked": false,
       "visible": true,
       "config": {
-        "title": "项目变更签署（堆叠·按变更总数排序）",
+        "title": "",
         "xAxis": {
           "type": "value",
           "name": "数量"
@@ -901,7 +901,9 @@
             "dataKey": "已签署",
             "color": "#2ee6a6"
           }
-        ]
+        ],
+        "titleFontSize": 0,
+        "chartPaddingTop": 36
       },
       "dataSource": {
         "type": "sql",
@@ -943,7 +945,7 @@
       "locked": false,
       "visible": true,
       "config": {
-        "title": "科室变更评估评审（按变更总数排序）",
+        "title": "",
         "xAxis": {
           "type": "category",
           "name": "责任科室"
@@ -984,7 +986,9 @@
             "dataKey": "未评估评审",
             "color": "#ff5d73"
           }
-        ]
+        ],
+        "titleFontSize": 0,
+        "chartPaddingTop": 36
       },
       "dataSource": {
         "type": "sql",
@@ -1026,7 +1030,7 @@
       "locked": false,
       "visible": true,
       "config": {
-        "title": "科室变更整改（按变更总数排序）",
+        "title": "",
         "xAxis": {
           "type": "category",
           "name": "责任科室"
@@ -1054,7 +1058,9 @@
             "dataKey": "未落实整改数量",
             "color": "#ff5d73"
           }
-        ]
+        ],
+        "titleFontSize": 0,
+        "chartPaddingTop": 36
       },
       "dataSource": {
         "type": "sql",
@@ -1096,7 +1102,7 @@
       "locked": false,
       "visible": true,
       "config": {
-        "title": "项目变更整改（按变更总数排序）",
+        "title": "",
         "xAxis": {
           "type": "value",
           "name": "数量"
@@ -1125,7 +1131,9 @@
             "dataKey": "未落实整改数量",
             "color": "#ff5d73"
           }
-        ]
+        ],
+        "titleFontSize": 0,
+        "chartPaddingTop": 36
       },
       "dataSource": {
         "type": "sql",
@@ -1167,7 +1175,7 @@
       "locked": false,
       "visible": true,
       "config": {
-        "title": "技术状态变更清单（按更改提出时间倒序）",
+        "title": "",
         "columns": [
           {
             "key": "项目编号",
@@ -1225,7 +1233,9 @@
         "headerColor": "#d9eeff",
         "rowColor": "#c9d4e4",
         "stripeColor": "rgba(88,180,255,0.08)",
-        "backgroundColor": "rgba(9,36,90,0.50)"
+        "backgroundColor": "rgba(9,36,90,0.50)",
+        "titleFontSize": 0,
+        "chartPaddingTop": 36
       },
       "dataSource": {
         "type": "sql",
@@ -1291,6 +1301,101 @@
         "borderColor": "rgba(69, 164, 255, 0.38)",
         "borderWidth": 1,
         "radius": 18
+      }
+    },
+    {
+      "id": "gpmc-tech-project-sign-overlay-title",
+      "type": "title",
+      "name": "项目变更签署-标题",
+      "x": 64,
+      "y": 286,
+      "width": 360,
+      "height": 28,
+      "zIndex": 20,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "text": "项目变更签署（堆叠·按变更总数排序）",
+        "fontSize": 20,
+        "fontWeight": "700",
+        "color": "#d9eeff",
+        "textAlign": "flex-start"
+      }
+    },
+    {
+      "id": "gpmc-tech-dept-review-overlay-title",
+      "type": "title",
+      "name": "科室变更评估评审-标题",
+      "x": 988,
+      "y": 286,
+      "width": 360,
+      "height": 28,
+      "zIndex": 20,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "text": "科室变更评估评审（按变更总数排序）",
+        "fontSize": 20,
+        "fontWeight": "700",
+        "color": "#d9eeff",
+        "textAlign": "flex-start"
+      }
+    },
+    {
+      "id": "gpmc-tech-dept-reform-overlay-title",
+      "type": "title",
+      "name": "科室变更整改-标题",
+      "x": 64,
+      "y": 594,
+      "width": 360,
+      "height": 28,
+      "zIndex": 20,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "text": "科室变更整改（按变更总数排序）",
+        "fontSize": 20,
+        "fontWeight": "700",
+        "color": "#d9eeff",
+        "textAlign": "flex-start"
+      }
+    },
+    {
+      "id": "gpmc-tech-project-reform-overlay-title",
+      "type": "title",
+      "name": "项目变更整改-标题",
+      "x": 988,
+      "y": 594,
+      "width": 360,
+      "height": 28,
+      "zIndex": 20,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "text": "项目变更整改（按变更总数排序）",
+        "fontSize": 20,
+        "fontWeight": "700",
+        "color": "#d9eeff",
+        "textAlign": "flex-start"
+      }
+    },
+    {
+      "id": "gpmc-tech-change-list-overlay-title",
+      "type": "title",
+      "name": "技术状态变更清单-标题",
+      "x": 52,
+      "y": 856,
+      "width": 360,
+      "height": 28,
+      "zIndex": 20,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "text": "技术状态变更清单（按更改提出时间倒序）",
+        "fontSize": 20,
+        "fontWeight": "700",
+        "color": "#d9eeff",
+        "textAlign": "flex-start"
       }
     }
   ]

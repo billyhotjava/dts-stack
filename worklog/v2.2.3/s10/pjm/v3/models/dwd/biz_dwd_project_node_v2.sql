@@ -39,6 +39,9 @@ SELECT
   COALESCE(cs.is_overdue_changed, false)            AS is_overdue_changed,
   COALESCE(cs.is_overdue_done_unchanged, false)     AS is_overdue_done_unchanged,
   COALESCE(cs.is_overdue_done_changed, false)       AS is_overdue_done_changed,
+  -- 业务 4 大分类（含不正常待变更归并）
+  COALESCE(cs.is_overdue_completed_effective, false)  AS is_overdue_completed_effective,
+  COALESCE(cs.is_overdue_incomplete_effective, false) AS is_overdue_incomplete_effective,
 
   {{ nullif_placeholder("o.node_type") }}           AS node_type,
   COALESCE(nt.is_general, false)                    AS is_general_node,

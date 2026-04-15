@@ -29,14 +29,26 @@ SELECT
   SUM(CASE WHEN NOT d.has_zero_plan THEN 1 ELSE 0 END)                              AS no_zero_plan_cnt,
 
   -- #41-48 按原因分类（限定未归零）
-  SUM(CASE WHEN NOT d.is_zero_completed AND d.cat_design     THEN 1 ELSE 0 END)     AS open_cat_design,
-  SUM(CASE WHEN NOT d.is_zero_completed AND d.cat_process    THEN 1 ELSE 0 END)     AS open_cat_process,
-  SUM(CASE WHEN NOT d.is_zero_completed AND d.cat_management THEN 1 ELSE 0 END)     AS open_cat_management,
-  SUM(CASE WHEN NOT d.is_zero_completed AND d.cat_component  THEN 1 ELSE 0 END)     AS open_cat_component,
-  SUM(CASE WHEN NOT d.is_zero_completed AND d.cat_operation  THEN 1 ELSE 0 END)     AS open_cat_operation,
-  SUM(CASE WHEN NOT d.is_zero_completed AND d.cat_outsource  THEN 1 ELSE 0 END)     AS open_cat_outsource,
-  SUM(CASE WHEN NOT d.is_zero_completed AND d.cat_software   THEN 1 ELSE 0 END)     AS open_cat_software,
-  SUM(CASE WHEN NOT d.is_zero_completed AND d.cat_other      THEN 1 ELSE 0 END)     AS open_cat_other
+  SUM(CASE WHEN NOT d.is_zero_completed AND d.cat_design      THEN 1 ELSE 0 END)    AS open_cat_design,
+  SUM(CASE WHEN NOT d.is_zero_completed AND d.cat_process     THEN 1 ELSE 0 END)    AS open_cat_process,
+  SUM(CASE WHEN NOT d.is_zero_completed AND d.cat_management  THEN 1 ELSE 0 END)    AS open_cat_management,
+  SUM(CASE WHEN NOT d.is_zero_completed AND d.cat_component   THEN 1 ELSE 0 END)    AS open_cat_component,
+  SUM(CASE WHEN NOT d.is_zero_completed AND d.cat_operation   THEN 1 ELSE 0 END)    AS open_cat_operation,
+  SUM(CASE WHEN NOT d.is_zero_completed AND d.cat_outsource   THEN 1 ELSE 0 END)    AS open_cat_outsource,
+  SUM(CASE WHEN NOT d.is_zero_completed AND d.cat_software    THEN 1 ELSE 0 END)    AS open_cat_software,
+  SUM(CASE WHEN NOT d.is_zero_completed AND d.cat_environment THEN 1 ELSE 0 END)    AS open_cat_environment,
+  SUM(CASE WHEN NOT d.is_zero_completed AND d.cat_other       THEN 1 ELSE 0 END)    AS open_cat_other,
+
+  -- 全量（不限定未归零）9 分类 — 用于"质量问题占比"总量视图
+  SUM(CASE WHEN d.cat_design      THEN 1 ELSE 0 END)                                AS total_cat_design,
+  SUM(CASE WHEN d.cat_process     THEN 1 ELSE 0 END)                                AS total_cat_process,
+  SUM(CASE WHEN d.cat_management  THEN 1 ELSE 0 END)                                AS total_cat_management,
+  SUM(CASE WHEN d.cat_component   THEN 1 ELSE 0 END)                                AS total_cat_component,
+  SUM(CASE WHEN d.cat_operation   THEN 1 ELSE 0 END)                                AS total_cat_operation,
+  SUM(CASE WHEN d.cat_outsource   THEN 1 ELSE 0 END)                                AS total_cat_outsource,
+  SUM(CASE WHEN d.cat_software    THEN 1 ELSE 0 END)                                AS total_cat_software,
+  SUM(CASE WHEN d.cat_environment THEN 1 ELSE 0 END)                                AS total_cat_environment,
+  SUM(CASE WHEN d.cat_other       THEN 1 ELSE 0 END)                                AS total_cat_other
 
 FROM {{ ref('biz_dwd_quality_issue_v2') }} d
 WHERE d.issue_year IS NOT NULL

@@ -634,10 +634,12 @@
       "locked": false,
       "visible": true,
       "config": {
-        "title": "项目进度甘特图（重大项目·按计划完成日期正序）",
+        "title": "",
         "renderMode": "board-hierarchical",
         "drillMode": "modal",
-        "sideTextColor": "#081c3f"
+        "sideTextColor": "#081c3f",
+        "titleFontSize": 0,
+        "chartPaddingTop": 36
       },
       "actions": [],
       "dataSource": {
@@ -680,7 +682,7 @@
       "locked": false,
       "visible": true,
       "config": {
-        "title": "项目状态分布图",
+        "title": "",
         "xAxis": {
           "type": "value",
           "name": "节点数"
@@ -728,7 +730,9 @@
             "color": "#ff5d73"
           }
         ],
-        "categoryKey": "项目编号"
+        "categoryKey": "项目编号",
+        "titleFontSize": 0,
+        "chartPaddingTop": 36
       },
       "dataSource": {
         "type": "sql",
@@ -770,7 +774,7 @@
       "locked": false,
       "visible": true,
       "config": {
-        "title": "责任科室负载",
+        "title": "",
         "xAxis": {
           "type": "category",
           "name": "责任科室"
@@ -805,7 +809,9 @@
             "color": "#ff5d73"
           }
         ],
-        "categoryKey": "责任科室"
+        "categoryKey": "责任科室",
+        "titleFontSize": 0,
+        "chartPaddingTop": 36
       },
       "actions": [],
       "dataSource": {
@@ -1198,7 +1204,7 @@
       "locked": false,
       "visible": true,
       "config": {
-        "title": "任务进度列表（按计划完成日期正序）",
+        "title": "",
         "columns": [
           {
             "key": "项目编号",
@@ -1251,7 +1257,9 @@
         "headerColor": "#d9eeff",
         "rowColor": "#c9d4e4",
         "stripeColor": "rgba(88,180,255,0.08)",
-        "backgroundColor": "rgba(9,36,90,0.50)"
+        "backgroundColor": "rgba(9,36,90,0.50)",
+        "titleFontSize": 0,
+        "chartPaddingTop": 36
       },
       "dataSource": {
         "type": "sql",
@@ -1279,6 +1287,82 @@
             }
           ]
         }
+      }
+    },
+    {
+      "id": "gpmc-execution-gantt-overlay-title",
+      "type": "title",
+      "name": "项目进度甘特图-标题",
+      "x": 72,
+      "y": 296,
+      "width": 360,
+      "height": 28,
+      "zIndex": 20,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "text": "项目进度甘特图（重大项目·按计划完成日期正序）",
+        "fontSize": 20,
+        "fontWeight": "700",
+        "color": "#d9eeff",
+        "textAlign": "flex-start"
+      }
+    },
+    {
+      "id": "gpmc-execution-stage-overlay-title",
+      "type": "title",
+      "name": "项目状态分布图-标题",
+      "x": 952,
+      "y": 296,
+      "width": 360,
+      "height": 28,
+      "zIndex": 20,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "text": "项目状态分布图",
+        "fontSize": 20,
+        "fontWeight": "700",
+        "color": "#d9eeff",
+        "textAlign": "flex-start"
+      }
+    },
+    {
+      "id": "gpmc-execution-workload-overlay-title",
+      "type": "title",
+      "name": "责任科室负载-标题",
+      "x": 1432,
+      "y": 296,
+      "width": 360,
+      "height": 28,
+      "zIndex": 20,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "text": "责任科室负载",
+        "fontSize": 20,
+        "fontWeight": "700",
+        "color": "#d9eeff",
+        "textAlign": "flex-start"
+      }
+    },
+    {
+      "id": "gpmc-execution-task-list-overlay-title",
+      "type": "title",
+      "name": "任务进度列表-标题",
+      "x": 52,
+      "y": 778,
+      "width": 360,
+      "height": 28,
+      "zIndex": 20,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "text": "任务进度列表（按计划完成日期正序）",
+        "fontSize": 20,
+        "fontWeight": "700",
+        "color": "#d9eeff",
+        "textAlign": "flex-start"
       }
     }
   ]

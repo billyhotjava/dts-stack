@@ -885,7 +885,7 @@
       "locked": false,
       "visible": true,
       "config": {
-        "title": "项目风险统计（按风险总数排序）",
+        "title": "",
         "xAxis": {
           "type": "value",
           "name": "数量"
@@ -920,7 +920,9 @@
             "dataKey": "未释放风险数",
             "color": "#ffc645"
           }
-        ]
+        ],
+        "titleFontSize": 0,
+        "chartPaddingTop": 36
       },
       "dataSource": {
         "type": "sql",
@@ -966,7 +968,7 @@
       "locked": false,
       "visible": true,
       "config": {
-        "title": "风险分类分布（按风险类型统计）",
+        "title": "",
         "legend": {
           "show": true
         },
@@ -981,7 +983,9 @@
           "#8fa7c4"
         ],
         "categoryKey": "风险类型",
-        "valueKey": "数量"
+        "valueKey": "数量",
+        "titleFontSize": 0,
+        "chartPaddingTop": 36
       },
       "dataSource": {
         "type": "sql",
@@ -1027,7 +1031,7 @@
       "locked": false,
       "visible": true,
       "config": {
-        "title": "科室风险统计（按风险总数排序）",
+        "title": "",
         "xAxis": {
           "type": "category",
           "name": "责任科室"
@@ -1062,7 +1066,9 @@
             "dataKey": "未释放风险数",
             "color": "#ffc645"
           }
-        ]
+        ],
+        "titleFontSize": 0,
+        "chartPaddingTop": 36
       },
       "dataSource": {
         "type": "sql",
@@ -1108,7 +1114,7 @@
       "locked": false,
       "visible": true,
       "config": {
-        "title": "项目风险汇总列表（按风险级别·提出时间倒序）",
+        "title": "",
         "columns": [
           {
             "key": "项目编号",
@@ -1176,7 +1182,9 @@
         "headerColor": "#d9eeff",
         "rowColor": "#c9d4e4",
         "stripeColor": "rgba(88,180,255,0.08)",
-        "backgroundColor": "rgba(9,36,90,0.50)"
+        "backgroundColor": "rgba(9,36,90,0.50)",
+        "titleFontSize": 0,
+        "chartPaddingTop": 36
       },
       "dataSource": {
         "type": "sql",
@@ -1246,6 +1254,82 @@
         "borderColor": "rgba(69, 164, 255, 0.38)",
         "borderWidth": 1,
         "radius": 18
+      }
+    },
+    {
+      "id": "gpmc-risk-project-overlay-title",
+      "type": "title",
+      "name": "项目风险统计-标题",
+      "x": 64,
+      "y": 286,
+      "width": 360,
+      "height": 28,
+      "zIndex": 20,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "text": "项目风险统计（按风险总数排序）",
+        "fontSize": 20,
+        "fontWeight": "700",
+        "color": "#d9eeff",
+        "textAlign": "flex-start"
+      }
+    },
+    {
+      "id": "gpmc-risk-category-overlay-title",
+      "type": "title",
+      "name": "风险分类分布-标题",
+      "x": 988,
+      "y": 286,
+      "width": 360,
+      "height": 28,
+      "zIndex": 20,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "text": "风险分类分布（按风险类型统计）",
+        "fontSize": 20,
+        "fontWeight": "700",
+        "color": "#d9eeff",
+        "textAlign": "flex-start"
+      }
+    },
+    {
+      "id": "gpmc-risk-dept-overlay-title",
+      "type": "title",
+      "name": "科室风险统计-标题",
+      "x": 64,
+      "y": 594,
+      "width": 360,
+      "height": 28,
+      "zIndex": 20,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "text": "科室风险统计（按风险总数排序）",
+        "fontSize": 20,
+        "fontWeight": "700",
+        "color": "#d9eeff",
+        "textAlign": "flex-start"
+      }
+    },
+    {
+      "id": "gpmc-risk-detail-overlay-title",
+      "type": "title",
+      "name": "项目风险汇总列表-标题",
+      "x": 52,
+      "y": 856,
+      "width": 360,
+      "height": 28,
+      "zIndex": 20,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "text": "项目风险汇总列表（按风险级别·提出时间倒序）",
+        "fontSize": 20,
+        "fontWeight": "700",
+        "color": "#d9eeff",
+        "textAlign": "flex-start"
       }
     }
   ]

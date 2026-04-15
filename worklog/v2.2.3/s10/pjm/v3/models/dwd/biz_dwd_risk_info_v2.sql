@@ -16,6 +16,14 @@ SELECT
   {{ nullif_placeholder("o.risk_description") }}        AS risk_description,
   {{ nullif_placeholder("o.risk_phase") }}              AS risk_phase,
   {{ nullif_placeholder("o.risk_category") }}           AS risk_category,
+  -- 风险类型布尔（5 类，字典派生）
+  COALESCE(rc.cat_technical, false)                     AS is_risk_technical,
+  COALESCE(rc.cat_schedule,  false)                     AS is_risk_schedule,
+  COALESCE(rc.cat_cost,      false)                     AS is_risk_cost,
+  COALESCE(rc.cat_design,    false)                     AS is_risk_design,
+  COALESCE(rc.cat_quality,   false)                     AS is_risk_quality,
+  CASE WHEN rc.code IS NULL OR COALESCE(rc.cat_other, false)
+       THEN true ELSE false END                         AS is_risk_other,
   {{ nullif_placeholder("o.risk_level") }}              AS risk_level,
   {{ nullif_placeholder("o.impact_scope") }}            AS impact_scope,
   {{ nullif_placeholder("o.response_measure") }}        AS response_measure,
@@ -78,5 +86,7 @@ SELECT
 FROM {{ source('pm_ods_v2', 'risk_info_v2') }} o
 LEFT JOIN {{ ref('dim_risk_level_v2') }} rl
   ON rl.code = {{ nullif_placeholder("o.risk_level") }}
+LEFT JOIN {{ ref('dim_risk_category_v2') }} rc
+  ON rc.code = {{ nullif_placeholder("o.risk_category") }}
 WHERE o.project_no IS NOT NULL
   AND btrim(COALESCE(o.project_no, '')) != ''

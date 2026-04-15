@@ -57,6 +57,12 @@ period_stats AS (
     SUM(CASE WHEN is_milestone_node AND is_overdue_completed THEN 1 ELSE 0 END)      AS milestone_overdue_completed_cnt,
     SUM(CASE WHEN is_milestone_node AND is_pending_normal THEN 1 ELSE 0 END)         AS milestone_pending_cnt,
 
+    -- 业务 4 大分类（gpmc-overview-v3 口径：不正常待变更合并入"超期未完成"）
+    SUM(CASE WHEN is_on_time                      THEN 1 ELSE 0 END)                 AS on_time_cnt_v2,
+    SUM(CASE WHEN is_pending_normal               THEN 1 ELSE 0 END)                 AS pending_normal_cnt_v2,
+    SUM(CASE WHEN is_overdue_completed_effective  THEN 1 ELSE 0 END)                 AS overdue_completed_effective_cnt,
+    SUM(CASE WHEN is_overdue_incomplete_effective THEN 1 ELSE 0 END)                 AS overdue_incomplete_effective_cnt,
+
     -- #27-28 风险节点数（全量）
     SUM(CASE WHEN is_high_risk THEN 1 ELSE 0 END)                                    AS high_risk_cnt,
     SUM(CASE WHEN is_mid_risk  THEN 1 ELSE 0 END)                                    AS mid_risk_cnt,
@@ -128,7 +134,13 @@ SELECT
   -- 节点类型总数 (#29-31)
   p.milestone_total_cnt,
   p.major_total_cnt,
-  p.important_total_cnt
+  p.important_total_cnt,
+
+  -- 业务 4 大分类（对齐 gpmc-overview-v3 口径）
+  p.on_time_cnt_v2,
+  p.pending_normal_cnt_v2,
+  p.overdue_completed_effective_cnt,
+  p.overdue_incomplete_effective_cnt
 
 FROM period_stats p
 LEFT JOIN outside_completed oc

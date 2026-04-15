@@ -609,7 +609,7 @@
     {
       "id": "ov3-progress-by-project",
       "type": "bar-chart",
-      "name": "进度-按项目",
+      "name": "项目节点统计",
       "x": 22,
       "y": 228,
       "width": 444,
@@ -619,7 +619,7 @@
       "visible": true,
       "config": {
         "title": "",
-        "stackMode": true,
+        "stackMode": "stack",
         "series": [
           {
             "name": "已完成",
@@ -635,27 +635,37 @@
           }
         ],
         "seriesColors": [
-          "#32ddff",
-          "#1f85ff",
-          "#a666ff",
-          "#ffd54f"
+          "#2ee6a6",
+          "#45a4ff",
+          "#ffc645",
+          "#ff5d73"
         ],
         "titleFontSize": 0,
         "chartPaddingTop": 8,
         "chartPaddingRight": 16,
-        "chartPaddingBottom": 28,
+        "chartPaddingBottom": 40,
         "chartPaddingLeft": 40,
         "legend": {
           "show": true,
           "position": "bottom",
-          "align": "center"
+          "fontSize": 12
+        },
+        "horizontal": false,
+        "xAxis": {
+          "show": true,
+          "labelFontSize": 11,
+          "labelRotate": -20
+        },
+        "yAxis": {
+          "show": true,
+          "labelFontSize": 11
         }
       },
       "dataSource": {
         "type": "sql",
         "sqlConfig": {
           "databaseId": "{{DATABASE_ID}}",
-          "query": "SELECT d.project_no AS \"项目编号\", SUM(CASE WHEN d.is_completed THEN 1 ELSE 0 END) AS \"已完成\", SUM(CASE WHEN d.is_incomplete THEN 1 ELSE 0 END) AS \"未完成\", SUM(CASE WHEN d.is_pending_normal THEN 1 ELSE 0 END) AS \"正常待完成\", CASE WHEN COUNT(*) = 0 THEN 0 ELSE ROUND(SUM(CASE WHEN d.is_completed THEN 1 ELSE 0 END)::numeric / COUNT(*)::numeric * 100, 1) END AS \"完成率\" FROM biz_dwd_project_node_v2 d WHERE d.plan_month >= to_char({{dateFrom}}::date, 'YYYY-MM') AND d.plan_month <= to_char({{dateTo}}::date, 'YYYY-MM') [[AND d.project_no ILIKE '%' || {{projectNo}} || '%']] [[AND d.dept = {{deptId}}]] GROUP BY d.project_no ORDER BY SUM(CASE WHEN d.is_incomplete THEN 1 ELSE 0 END) DESC",
+          "query": "SELECT s.project_no AS \"项目\", SUM(s.on_time_cnt_v2) AS \"按时完成\", SUM(s.pending_normal_cnt_v2) AS \"正常待完成\", SUM(s.overdue_completed_effective_cnt) AS \"超期完成\", SUM(s.overdue_incomplete_effective_cnt) AS \"超期未完成\" FROM biz_dws_progress_monthly_v2 s WHERE s.plan_month >= to_char({{dateFrom}}::date,'YYYY-MM') AND s.plan_month <= to_char({{dateTo}}::date,'YYYY-MM') [[AND s.dept = {{deptId}}]] [[AND s.project_no ILIKE '%' || {{projectNo}} || '%']] GROUP BY s.project_no ORDER BY SUM(s.total_cnt) DESC LIMIT 10",
           "queryTimeoutSeconds": 30,
           "maxRows": 2000,
           "parameterBindings": [
@@ -668,12 +678,12 @@
               "variableKey": "dateTo"
             },
             {
-              "name": "projectNo",
-              "variableKey": "projectNo"
-            },
-            {
               "name": "deptId",
               "variableKey": "deptId"
+            },
+            {
+              "name": "projectNo",
+              "variableKey": "projectNo"
             }
           ]
         }
@@ -682,7 +692,7 @@
     {
       "id": "ov3-progress-by-dept",
       "type": "bar-chart",
-      "name": "进度-按科室",
+      "name": "科室项目节点统计",
       "x": 22,
       "y": 521,
       "width": 444,
@@ -692,8 +702,8 @@
       "visible": true,
       "config": {
         "title": "",
-        "horizontal": true,
-        "stackMode": true,
+        "horizontal": false,
+        "stackMode": "stack",
         "series": [
           {
             "name": "已完成",
@@ -706,25 +716,35 @@
         ],
         "seriesColors": [
           "#2ee6a6",
-          "#a666ff",
-          "#2fffff"
+          "#45a4ff",
+          "#ffc645",
+          "#ff5d73"
         ],
         "titleFontSize": 0,
         "chartPaddingTop": 8,
         "chartPaddingRight": 16,
-        "chartPaddingBottom": 28,
+        "chartPaddingBottom": 40,
         "chartPaddingLeft": 40,
         "legend": {
           "show": true,
           "position": "bottom",
-          "align": "center"
+          "fontSize": 12
+        },
+        "xAxis": {
+          "show": true,
+          "labelFontSize": 11,
+          "labelRotate": -20
+        },
+        "yAxis": {
+          "show": true,
+          "labelFontSize": 11
         }
       },
       "dataSource": {
         "type": "sql",
         "sqlConfig": {
           "databaseId": "{{DATABASE_ID}}",
-          "query": "SELECT d.dept AS \"责任科室\", SUM(CASE WHEN d.is_completed THEN 1 ELSE 0 END) AS \"已完成\", SUM(CASE WHEN d.is_incomplete THEN 1 ELSE 0 END) AS \"未完成\", CASE WHEN COUNT(*) = 0 THEN 0 ELSE ROUND(SUM(CASE WHEN d.is_completed THEN 1 ELSE 0 END)::numeric / COUNT(*)::numeric * 100, 1) END AS \"完成率\" FROM biz_dwd_project_node_v2 d WHERE d.plan_month >= to_char({{dateFrom}}::date, 'YYYY-MM') AND d.plan_month <= to_char({{dateTo}}::date, 'YYYY-MM') [[AND d.project_no ILIKE '%' || {{projectNo}} || '%']] [[AND d.dept = {{deptId}}]] AND d.dept IS NOT NULL GROUP BY d.dept ORDER BY SUM(CASE WHEN d.is_incomplete THEN 1 ELSE 0 END) DESC",
+          "query": "SELECT COALESCE(d.dept,'未填') AS \"科室\", SUM(CASE WHEN d.is_on_time THEN 1 ELSE 0 END) AS \"按时完成\", SUM(CASE WHEN d.is_pending_normal THEN 1 ELSE 0 END) AS \"正常待完成\", SUM(CASE WHEN d.is_overdue_completed_effective THEN 1 ELSE 0 END) AS \"超期完成\", SUM(CASE WHEN d.is_overdue_incomplete_effective THEN 1 ELSE 0 END) AS \"超期未完成\" FROM biz_dwd_project_node_v2 d WHERE d.plan_month >= to_char({{dateFrom}}::date,'YYYY-MM') AND d.plan_month <= to_char({{dateTo}}::date,'YYYY-MM') [[AND d.project_no ILIKE '%' || {{projectNo}} || '%']] GROUP BY d.dept ORDER BY COUNT(*) DESC LIMIT 12",
           "queryTimeoutSeconds": 30,
           "maxRows": 2000,
           "parameterBindings": [
@@ -737,12 +757,12 @@
               "variableKey": "dateTo"
             },
             {
-              "name": "projectNo",
-              "variableKey": "projectNo"
-            },
-            {
               "name": "deptId",
               "variableKey": "deptId"
+            },
+            {
+              "name": "projectNo",
+              "variableKey": "projectNo"
             }
           ]
         }
@@ -750,10 +770,204 @@
     },
     {
       "id": "ov3-quality-by-project",
-      "type": "line-chart",
-      "name": "质量-按项目",
+      "type": "combo-chart",
+      "name": "质量问题趋势",
       "x": 500,
       "y": 228,
+      "width": 444,
+      "height": 239,
+      "zIndex": 20,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "title": "",
+        "titleFontSize": 0,
+        "chartPaddingTop": 8,
+        "chartPaddingRight": 16,
+        "chartPaddingBottom": 40,
+        "chartPaddingLeft": 40,
+        "legend": {
+          "show": true,
+          "position": "bottom",
+          "fontSize": 12
+        },
+        "seriesColors": [
+          "#45a4ff",
+          "#ff5d73"
+        ],
+        "xAxis": {
+          "show": true,
+          "labelFontSize": 11,
+          "labelRotate": -30
+        },
+        "yAxis": {
+          "show": true,
+          "labelFontSize": 11
+        }
+      },
+      "dataSource": {
+        "type": "sql",
+        "sqlConfig": {
+          "databaseId": "{{DATABASE_ID}}",
+          "query": "SELECT s.period_month AS \"月份\", SUM(s.new_issue_cnt) AS \"当月新增\", SUM(s.open_issue_cnt) AS \"月末未闭环\" FROM biz_dws_quality_monthly_v2 s WHERE s.period_month >= to_char(current_date - INTERVAL '11 months','YYYY-MM') [[AND s.dept = {{deptId}}]] [[AND s.project_no ILIKE '%' || {{projectNo}} || '%']] GROUP BY s.period_month ORDER BY s.period_month",
+          "queryTimeoutSeconds": 30,
+          "maxRows": 2000,
+          "parameterBindings": [
+            {
+              "name": "dateFrom",
+              "variableKey": "dateFrom"
+            },
+            {
+              "name": "dateTo",
+              "variableKey": "dateTo"
+            },
+            {
+              "name": "deptId",
+              "variableKey": "deptId"
+            },
+            {
+              "name": "projectNo",
+              "variableKey": "projectNo"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "ov3-quality-by-dept",
+      "type": "pie-chart",
+      "name": "质量问题占比",
+      "x": 500,
+      "y": 521,
+      "width": 444,
+      "height": 239,
+      "zIndex": 20,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "title": "",
+        "titleFontSize": 0,
+        "chartPaddingTop": 8,
+        "chartPaddingRight": 16,
+        "chartPaddingBottom": 16,
+        "chartPaddingLeft": 16,
+        "legend": {
+          "show": true,
+          "position": "right",
+          "fontSize": 12
+        },
+        "seriesColors": [
+          "#45a4ff",
+          "#2ee6a6",
+          "#ffc645",
+          "#ff5d73",
+          "#a978ff",
+          "#27d8ff",
+          "#ff8f45",
+          "#8fa7c4",
+          "#94a3b8"
+        ],
+        "categoryKey": "分类",
+        "valueKey": "数量",
+        "pieInnerRadius": 0,
+        "pieOuterRadius": 75
+      },
+      "dataSource": {
+        "type": "sql",
+        "sqlConfig": {
+          "databaseId": "{{DATABASE_ID}}",
+          "query": "SELECT v.\"分类\", v.\"数量\" FROM (\nSELECT '设计' AS \"分类\", SUM(s.total_cat_design) AS \"数量\" FROM biz_dws_quality_monthly_v2 s WHERE s.period_month >= to_char({{dateFrom}}::date,'YYYY-MM') AND s.period_month <= to_char({{dateTo}}::date,'YYYY-MM') [[AND s.dept = {{deptId}}]] [[AND s.project_no ILIKE '%' || {{projectNo}} || '%']]\nUNION ALL SELECT '工艺',   SUM(s.total_cat_process)     FROM biz_dws_quality_monthly_v2 s WHERE s.period_month >= to_char({{dateFrom}}::date,'YYYY-MM') AND s.period_month <= to_char({{dateTo}}::date,'YYYY-MM') [[AND s.dept = {{deptId}}]] [[AND s.project_no ILIKE '%' || {{projectNo}} || '%']]\nUNION ALL SELECT '管理',   SUM(s.total_cat_management)  FROM biz_dws_quality_monthly_v2 s WHERE s.period_month >= to_char({{dateFrom}}::date,'YYYY-MM') AND s.period_month <= to_char({{dateTo}}::date,'YYYY-MM') [[AND s.dept = {{deptId}}]] [[AND s.project_no ILIKE '%' || {{projectNo}} || '%']]\nUNION ALL SELECT '元器件', SUM(s.total_cat_component)   FROM biz_dws_quality_monthly_v2 s WHERE s.period_month >= to_char({{dateFrom}}::date,'YYYY-MM') AND s.period_month <= to_char({{dateTo}}::date,'YYYY-MM') [[AND s.dept = {{deptId}}]] [[AND s.project_no ILIKE '%' || {{projectNo}} || '%']]\nUNION ALL SELECT '操作',   SUM(s.total_cat_operation)   FROM biz_dws_quality_monthly_v2 s WHERE s.period_month >= to_char({{dateFrom}}::date,'YYYY-MM') AND s.period_month <= to_char({{dateTo}}::date,'YYYY-MM') [[AND s.dept = {{deptId}}]] [[AND s.project_no ILIKE '%' || {{projectNo}} || '%']]\nUNION ALL SELECT '外协',   SUM(s.total_cat_outsource)   FROM biz_dws_quality_monthly_v2 s WHERE s.period_month >= to_char({{dateFrom}}::date,'YYYY-MM') AND s.period_month <= to_char({{dateTo}}::date,'YYYY-MM') [[AND s.dept = {{deptId}}]] [[AND s.project_no ILIKE '%' || {{projectNo}} || '%']]\nUNION ALL SELECT '软件',   SUM(s.total_cat_software)    FROM biz_dws_quality_monthly_v2 s WHERE s.period_month >= to_char({{dateFrom}}::date,'YYYY-MM') AND s.period_month <= to_char({{dateTo}}::date,'YYYY-MM') [[AND s.dept = {{deptId}}]] [[AND s.project_no ILIKE '%' || {{projectNo}} || '%']]\nUNION ALL SELECT '环境',   SUM(s.total_cat_environment) FROM biz_dws_quality_monthly_v2 s WHERE s.period_month >= to_char({{dateFrom}}::date,'YYYY-MM') AND s.period_month <= to_char({{dateTo}}::date,'YYYY-MM') [[AND s.dept = {{deptId}}]] [[AND s.project_no ILIKE '%' || {{projectNo}} || '%']]\nUNION ALL SELECT '其他',   SUM(s.total_cat_other)       FROM biz_dws_quality_monthly_v2 s WHERE s.period_month >= to_char({{dateFrom}}::date,'YYYY-MM') AND s.period_month <= to_char({{dateTo}}::date,'YYYY-MM') [[AND s.dept = {{deptId}}]] [[AND s.project_no ILIKE '%' || {{projectNo}} || '%']]\n) v WHERE v.\"数量\" > 0",
+          "queryTimeoutSeconds": 30,
+          "maxRows": 2000,
+          "parameterBindings": [
+            {
+              "name": "dateFrom",
+              "variableKey": "dateFrom"
+            },
+            {
+              "name": "dateTo",
+              "variableKey": "dateTo"
+            },
+            {
+              "name": "deptId",
+              "variableKey": "deptId"
+            },
+            {
+              "name": "projectNo",
+              "variableKey": "projectNo"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "ov3-techstate-by-project",
+      "type": "line-chart",
+      "name": "技术变更趋势",
+      "x": 978,
+      "y": 228,
+      "width": 444,
+      "height": 239,
+      "zIndex": 20,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "title": "",
+        "titleFontSize": 0,
+        "chartPaddingTop": 8,
+        "chartPaddingRight": 16,
+        "chartPaddingBottom": 40,
+        "chartPaddingLeft": 40,
+        "legend": {
+          "show": false
+        },
+        "seriesColors": [
+          "#27d8ff"
+        ],
+        "xAxis": {
+          "show": true,
+          "labelFontSize": 11,
+          "labelRotate": -30
+        },
+        "yAxis": {
+          "show": true,
+          "labelFontSize": 11
+        }
+      },
+      "dataSource": {
+        "type": "sql",
+        "sqlConfig": {
+          "databaseId": "{{DATABASE_ID}}",
+          "query": "SELECT s.period_month AS \"月份\", SUM(s.total_change_cnt) AS \"变更总数\" FROM biz_dws_tech_state_monthly_v2 s WHERE s.period_month >= to_char(current_date - INTERVAL '11 months','YYYY-MM') [[AND s.dept = {{deptId}}]] [[AND s.project_no ILIKE '%' || {{projectNo}} || '%']] GROUP BY s.period_month ORDER BY s.period_month",
+          "queryTimeoutSeconds": 30,
+          "maxRows": 2000,
+          "parameterBindings": [
+            {
+              "name": "dateFrom",
+              "variableKey": "dateFrom"
+            },
+            {
+              "name": "dateTo",
+              "variableKey": "dateTo"
+            },
+            {
+              "name": "deptId",
+              "variableKey": "deptId"
+            },
+            {
+              "name": "projectNo",
+              "variableKey": "projectNo"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "ov3-techstate-by-dept",
+      "type": "bar-chart",
+      "name": "科室技术变更",
+      "x": 978,
+      "y": 521,
       "width": 444,
       "height": 239,
       "zIndex": 20,
@@ -764,33 +978,40 @@
         "horizontal": false,
         "series": [
           {
-            "name": "现存问题",
+            "name": "未整改",
             "data": []
           }
         ],
         "seriesColors": [
+          "#ffc645",
           "#ff5d73"
         ],
-        "smooth": true,
-        "areaStyle": true,
-        "stack": false,
-        "stackMode": false,
         "titleFontSize": 0,
         "chartPaddingTop": 8,
         "chartPaddingRight": 16,
-        "chartPaddingBottom": 28,
+        "chartPaddingBottom": 40,
         "chartPaddingLeft": 40,
         "legend": {
           "show": true,
           "position": "bottom",
-          "align": "center"
+          "fontSize": 12
+        },
+        "stackMode": "off",
+        "xAxis": {
+          "show": true,
+          "labelFontSize": 11,
+          "labelRotate": -20
+        },
+        "yAxis": {
+          "show": true,
+          "labelFontSize": 11
         }
       },
       "dataSource": {
         "type": "sql",
         "sqlConfig": {
           "databaseId": "{{DATABASE_ID}}",
-          "query": "SELECT q.project_no AS \"label\", SUM(q.open_issue_cnt) AS \"value\" FROM biz_dws_quality_monthly_v2 q WHERE q.period_month >= to_char({{dateFrom}}::date, 'YYYY-MM') AND q.period_month <= to_char({{dateTo}}::date, 'YYYY-MM') [[AND q.project_no ILIKE '%' || {{projectNo}} || '%']] [[AND q.dept = {{deptId}}]] GROUP BY q.project_no HAVING SUM(q.open_issue_cnt) > 0 ORDER BY SUM(q.open_issue_cnt) DESC",
+          "query": "SELECT COALESCE(s.dept,'未填') AS \"科室\", SUM(s.order_unsigned_cat_i + s.order_unsigned_cat_ii + s.order_unsigned_cat_iii) AS \"未签署\", SUM(s.reform_pending_i_ii) AS \"未落实整改\" FROM biz_dws_tech_state_monthly_v2 s WHERE s.period_month >= to_char({{dateFrom}}::date,'YYYY-MM') AND s.period_month <= to_char({{dateTo}}::date,'YYYY-MM') [[AND s.project_no ILIKE '%' || {{projectNo}} || '%']] GROUP BY s.dept ORDER BY SUM(s.total_change_cnt) DESC LIMIT 12",
           "queryTimeoutSeconds": 30,
           "maxRows": 2000,
           "parameterBindings": [
@@ -803,219 +1024,12 @@
               "variableKey": "dateTo"
             },
             {
-              "name": "projectNo",
-              "variableKey": "projectNo"
-            },
-            {
               "name": "deptId",
               "variableKey": "deptId"
-            }
-          ]
-        }
-      }
-    },
-    {
-      "id": "ov3-quality-by-dept",
-      "type": "pie-chart",
-      "name": "质量-按科室",
-      "x": 500,
-      "y": 521,
-      "width": 444,
-      "height": 239,
-      "zIndex": 20,
-      "locked": false,
-      "visible": true,
-      "config": {
-        "title": "",
-        "horizontal": true,
-        "series": [
-          {
-            "name": "现存问题",
-            "data": []
-          },
-          {
-            "name": "已归零",
-            "data": []
-          }
-        ],
-        "seriesColors": [
-          "#ff5d73",
-          "#2ee6a6"
-        ],
-        "innerRadius": 0,
-        "roseType": false,
-        "labelPosition": "outside",
-        "titleFontSize": 0,
-        "chartPaddingTop": 8,
-        "chartPaddingRight": 16,
-        "chartPaddingBottom": 28,
-        "chartPaddingLeft": 40,
-        "legend": {
-          "show": true,
-          "position": "bottom",
-          "align": "center"
-        }
-      },
-      "dataSource": {
-        "type": "sql",
-        "sqlConfig": {
-          "databaseId": "{{DATABASE_ID}}",
-          "query": "SELECT q.dept AS \"责任科室\", SUM(q.open_issue_cnt) AS \"现存问题\", SUM(q.zero_completed_cnt) AS \"已归零\" FROM biz_dws_quality_monthly_v2 q WHERE q.period_month >= to_char({{dateFrom}}::date, 'YYYY-MM') AND q.period_month <= to_char({{dateTo}}::date, 'YYYY-MM') [[AND q.project_no ILIKE '%' || {{projectNo}} || '%']] [[AND q.dept = {{deptId}}]] AND q.dept IS NOT NULL GROUP BY q.dept ORDER BY SUM(q.open_issue_cnt) DESC",
-          "queryTimeoutSeconds": 30,
-          "maxRows": 2000,
-          "parameterBindings": [
-            {
-              "name": "dateFrom",
-              "variableKey": "dateFrom"
-            },
-            {
-              "name": "dateTo",
-              "variableKey": "dateTo"
             },
             {
               "name": "projectNo",
               "variableKey": "projectNo"
-            },
-            {
-              "name": "deptId",
-              "variableKey": "deptId"
-            }
-          ]
-        }
-      }
-    },
-    {
-      "id": "ov3-techstate-by-project",
-      "type": "line-chart",
-      "name": "技术状态-按项目",
-      "x": 978,
-      "y": 228,
-      "width": 444,
-      "height": 239,
-      "zIndex": 20,
-      "locked": false,
-      "visible": true,
-      "config": {
-        "title": "",
-        "series": [
-          {
-            "name": "已整改",
-            "data": []
-          },
-          {
-            "name": "未整改",
-            "data": []
-          },
-          {
-            "name": "未签署",
-            "data": []
-          }
-        ],
-        "seriesColors": [
-          "#2ee6a6",
-          "#ff5d73",
-          "#ff9f43"
-        ],
-        "stackMode": false,
-        "smooth": true,
-        "areaStyle": false,
-        "stack": false,
-        "titleFontSize": 0,
-        "chartPaddingTop": 8,
-        "chartPaddingRight": 16,
-        "chartPaddingBottom": 28,
-        "chartPaddingLeft": 40,
-        "legend": {
-          "show": true,
-          "position": "bottom",
-          "align": "center"
-        }
-      },
-      "dataSource": {
-        "type": "sql",
-        "sqlConfig": {
-          "databaseId": "{{DATABASE_ID}}",
-          "query": "SELECT t.project_no AS \"项目编号\", SUM(t.reform_done_i_ii) AS \"已整改\", SUM(t.reform_pending_i_ii) AS \"未整改\", SUM(t.order_unsigned_cat_i + t.order_unsigned_cat_ii + t.order_unsigned_cat_iii) AS \"未签署\" FROM biz_dws_tech_state_monthly_v2 t WHERE t.period_month >= to_char({{dateFrom}}::date, 'YYYY-MM') AND t.period_month <= to_char({{dateTo}}::date, 'YYYY-MM') [[AND t.project_no ILIKE '%' || {{projectNo}} || '%']] [[AND t.dept = {{deptId}}]] GROUP BY t.project_no ORDER BY SUM(t.reform_pending_i_ii) DESC",
-          "queryTimeoutSeconds": 30,
-          "maxRows": 2000,
-          "parameterBindings": [
-            {
-              "name": "dateFrom",
-              "variableKey": "dateFrom"
-            },
-            {
-              "name": "dateTo",
-              "variableKey": "dateTo"
-            },
-            {
-              "name": "projectNo",
-              "variableKey": "projectNo"
-            },
-            {
-              "name": "deptId",
-              "variableKey": "deptId"
-            }
-          ]
-        }
-      }
-    },
-    {
-      "id": "ov3-techstate-by-dept",
-      "type": "bar-chart",
-      "name": "技术状态-按科室",
-      "x": 978,
-      "y": 521,
-      "width": 444,
-      "height": 239,
-      "zIndex": 20,
-      "locked": false,
-      "visible": true,
-      "config": {
-        "title": "",
-        "horizontal": true,
-        "series": [
-          {
-            "name": "未整改",
-            "data": []
-          }
-        ],
-        "seriesColors": [
-          "#ff9f43"
-        ],
-        "titleFontSize": 0,
-        "chartPaddingTop": 8,
-        "chartPaddingRight": 16,
-        "chartPaddingBottom": 28,
-        "chartPaddingLeft": 40,
-        "legend": {
-          "show": true,
-          "position": "bottom",
-          "align": "center"
-        }
-      },
-      "dataSource": {
-        "type": "sql",
-        "sqlConfig": {
-          "databaseId": "{{DATABASE_ID}}",
-          "query": "SELECT t.dept AS \"label\", SUM(t.reform_pending_i_ii) AS \"value\" FROM biz_dws_tech_state_monthly_v2 t WHERE t.period_month >= to_char({{dateFrom}}::date, 'YYYY-MM') AND t.period_month <= to_char({{dateTo}}::date, 'YYYY-MM') [[AND t.project_no ILIKE '%' || {{projectNo}} || '%']] [[AND t.dept = {{deptId}}]] AND t.dept IS NOT NULL GROUP BY t.dept HAVING SUM(t.reform_pending_i_ii) > 0 ORDER BY SUM(t.reform_pending_i_ii) DESC",
-          "queryTimeoutSeconds": 30,
-          "maxRows": 2000,
-          "parameterBindings": [
-            {
-              "name": "dateFrom",
-              "variableKey": "dateFrom"
-            },
-            {
-              "name": "dateTo",
-              "variableKey": "dateTo"
-            },
-            {
-              "name": "projectNo",
-              "variableKey": "projectNo"
-            },
-            {
-              "name": "deptId",
-              "variableKey": "deptId"
             }
           ]
         }
@@ -1024,7 +1038,7 @@
     {
       "id": "ov3-risk-by-project",
       "type": "bar-chart",
-      "name": "风险-按项目",
+      "name": "项目风险统计",
       "x": 1456,
       "y": 228,
       "width": 444,
@@ -1034,7 +1048,7 @@
       "visible": true,
       "config": {
         "title": "",
-        "stackMode": true,
+        "stackMode": "stack",
         "series": [
           {
             "name": "高风险",
@@ -1051,25 +1065,35 @@
         ],
         "seriesColors": [
           "#ff5d73",
-          "#ff9f43",
-          "#ffd54f"
+          "#ffc645",
+          "#45a4ff"
         ],
         "titleFontSize": 0,
         "chartPaddingTop": 8,
         "chartPaddingRight": 16,
-        "chartPaddingBottom": 28,
+        "chartPaddingBottom": 40,
         "chartPaddingLeft": 40,
         "legend": {
           "show": true,
           "position": "bottom",
-          "align": "center"
+          "fontSize": 12
+        },
+        "horizontal": false,
+        "xAxis": {
+          "show": true,
+          "labelFontSize": 11,
+          "labelRotate": -20
+        },
+        "yAxis": {
+          "show": true,
+          "labelFontSize": 11
         }
       },
       "dataSource": {
         "type": "sql",
         "sqlConfig": {
           "databaseId": "{{DATABASE_ID}}",
-          "query": "SELECT r.project_no AS \"项目编号\", SUM(r.high_cnt) AS \"高风险\", SUM(r.mid_cnt) AS \"中风险\", SUM(r.low_cnt) AS \"低风险\" FROM biz_dws_risk_monthly_v2 r WHERE r.period_month >= to_char({{dateFrom}}::date, 'YYYY-MM') AND r.period_month <= to_char({{dateTo}}::date, 'YYYY-MM') [[AND r.project_no ILIKE '%' || {{projectNo}} || '%']] [[AND r.dept = {{deptId}}]] GROUP BY r.project_no ORDER BY SUM(r.high_cnt) DESC",
+          "query": "SELECT s.project_no AS \"项目\", SUM(s.high_cnt) AS \"高风险\", SUM(s.mid_cnt) AS \"中风险\", SUM(s.low_cnt) AS \"低风险\" FROM biz_dws_risk_monthly_v2 s WHERE s.period_month >= to_char({{dateFrom}}::date,'YYYY-MM') AND s.period_month <= to_char({{dateTo}}::date,'YYYY-MM') [[AND s.dept = {{deptId}}]] [[AND s.project_no ILIKE '%' || {{projectNo}} || '%']] GROUP BY s.project_no ORDER BY SUM(s.total_risk_cnt) DESC LIMIT 10",
           "queryTimeoutSeconds": 30,
           "maxRows": 2000,
           "parameterBindings": [
@@ -1082,12 +1106,12 @@
               "variableKey": "dateTo"
             },
             {
-              "name": "projectNo",
-              "variableKey": "projectNo"
-            },
-            {
               "name": "deptId",
               "variableKey": "deptId"
+            },
+            {
+              "name": "projectNo",
+              "variableKey": "projectNo"
             }
           ]
         }
@@ -1096,7 +1120,7 @@
     {
       "id": "ov3-risk-by-dept",
       "type": "pie-chart",
-      "name": "风险-按科室",
+      "name": "风险类型占比",
       "x": 1456,
       "y": 521,
       "width": 444,
@@ -1106,45 +1130,34 @@
       "visible": true,
       "config": {
         "title": "",
-        "horizontal": true,
-        "series": [
-          {
-            "name": "高风险",
-            "data": []
-          },
-          {
-            "name": "中风险",
-            "data": []
-          },
-          {
-            "name": "低风险",
-            "data": []
-          }
-        ],
-        "seriesColors": [
-          "#ff5d73",
-          "#ff9f43",
-          "#ffd54f"
-        ],
-        "innerRadius": 55,
-        "roseType": false,
-        "labelPosition": "outside",
         "titleFontSize": 0,
         "chartPaddingTop": 8,
         "chartPaddingRight": 16,
-        "chartPaddingBottom": 28,
-        "chartPaddingLeft": 40,
+        "chartPaddingBottom": 16,
+        "chartPaddingLeft": 16,
         "legend": {
           "show": true,
-          "position": "bottom",
-          "align": "center"
-        }
+          "position": "right",
+          "fontSize": 12
+        },
+        "seriesColors": [
+          "#45a4ff",
+          "#2ee6a6",
+          "#ffc645",
+          "#ff5d73",
+          "#a978ff",
+          "#94a3b8"
+        ],
+        "categoryKey": "风险类型",
+        "valueKey": "数量",
+        "pieInnerRadius": 50,
+        "pieOuterRadius": 75
       },
       "dataSource": {
         "type": "sql",
         "sqlConfig": {
           "databaseId": "{{DATABASE_ID}}",
-          "query": "SELECT r.dept AS \"责任科室\", SUM(r.high_cnt) AS \"高风险\", SUM(r.mid_cnt) AS \"中风险\", SUM(r.low_cnt) AS \"低风险\" FROM biz_dws_risk_monthly_v2 r WHERE r.period_month >= to_char({{dateFrom}}::date, 'YYYY-MM') AND r.period_month <= to_char({{dateTo}}::date, 'YYYY-MM') [[AND r.project_no ILIKE '%' || {{projectNo}} || '%']] [[AND r.dept = {{deptId}}]] AND r.dept IS NOT NULL GROUP BY r.dept ORDER BY SUM(r.high_cnt) DESC",
+          "query": "SELECT v.\"风险类型\", v.\"数量\" FROM (\nSELECT '技术' AS \"风险类型\", SUM(s.cat_technical_cnt) AS \"数量\" FROM biz_dws_risk_monthly_v2 s WHERE s.period_month >= to_char({{dateFrom}}::date,'YYYY-MM') AND s.period_month <= to_char({{dateTo}}::date,'YYYY-MM') [[AND s.dept = {{deptId}}]] [[AND s.project_no ILIKE '%' || {{projectNo}} || '%']]\nUNION ALL SELECT '进度', SUM(s.cat_schedule_cnt)  FROM biz_dws_risk_monthly_v2 s WHERE s.period_month >= to_char({{dateFrom}}::date,'YYYY-MM') AND s.period_month <= to_char({{dateTo}}::date,'YYYY-MM') [[AND s.dept = {{deptId}}]] [[AND s.project_no ILIKE '%' || {{projectNo}} || '%']]\nUNION ALL SELECT '成本', SUM(s.cat_cost_cnt)      FROM biz_dws_risk_monthly_v2 s WHERE s.period_month >= to_char({{dateFrom}}::date,'YYYY-MM') AND s.period_month <= to_char({{dateTo}}::date,'YYYY-MM') [[AND s.dept = {{deptId}}]] [[AND s.project_no ILIKE '%' || {{projectNo}} || '%']]\nUNION ALL SELECT '设计', SUM(s.cat_design_cnt)    FROM biz_dws_risk_monthly_v2 s WHERE s.period_month >= to_char({{dateFrom}}::date,'YYYY-MM') AND s.period_month <= to_char({{dateTo}}::date,'YYYY-MM') [[AND s.dept = {{deptId}}]] [[AND s.project_no ILIKE '%' || {{projectNo}} || '%']]\nUNION ALL SELECT '质量', SUM(s.cat_quality_cnt)   FROM biz_dws_risk_monthly_v2 s WHERE s.period_month >= to_char({{dateFrom}}::date,'YYYY-MM') AND s.period_month <= to_char({{dateTo}}::date,'YYYY-MM') [[AND s.dept = {{deptId}}]] [[AND s.project_no ILIKE '%' || {{projectNo}} || '%']]\nUNION ALL SELECT '其他', SUM(s.cat_other_cnt)     FROM biz_dws_risk_monthly_v2 s WHERE s.period_month >= to_char({{dateFrom}}::date,'YYYY-MM') AND s.period_month <= to_char({{dateTo}}::date,'YYYY-MM') [[AND s.dept = {{deptId}}]] [[AND s.project_no ILIKE '%' || {{projectNo}} || '%']]\n) v WHERE v.\"数量\" > 0",
           "queryTimeoutSeconds": 30,
           "maxRows": 2000,
           "parameterBindings": [
@@ -1157,12 +1170,12 @@
               "variableKey": "dateTo"
             },
             {
-              "name": "projectNo",
-              "variableKey": "projectNo"
-            },
-            {
               "name": "deptId",
               "variableKey": "deptId"
+            },
+            {
+              "name": "projectNo",
+              "variableKey": "projectNo"
             }
           ]
         }
@@ -1199,8 +1212,8 @@
       "locked": false,
       "visible": true,
       "config": {
-        "text": "项目进度清单",
-        "fontSize": 16,
+        "text": "项目进度详情",
+        "fontSize": 20,
         "fontWeight": "700",
         "color": "#e6f6ff",
         "textAlign": "flex-start"
@@ -1322,8 +1335,8 @@
       "locked": false,
       "visible": false,
       "config": {
-        "text": "进度计划",
-        "fontSize": 15,
+        "text": "项目节点统计",
+        "fontSize": 20,
         "fontWeight": "700",
         "color": "#319ade",
         "textAlign": "center"
@@ -1341,8 +1354,8 @@
       "locked": false,
       "visible": false,
       "config": {
-        "text": "质量问题",
-        "fontSize": 15,
+        "text": "质量问题趋势",
+        "fontSize": 20,
         "fontWeight": "700",
         "color": "#c0392b",
         "textAlign": "center"
@@ -1360,8 +1373,8 @@
       "locked": false,
       "visible": false,
       "config": {
-        "text": "技术状态",
-        "fontSize": 15,
+        "text": "技术变更趋势",
+        "fontSize": 20,
         "fontWeight": "700",
         "color": "#e67e22",
         "textAlign": "center"
@@ -1379,8 +1392,8 @@
       "locked": false,
       "visible": false,
       "config": {
-        "text": "项目风险",
-        "fontSize": 15,
+        "text": "项目风险统计",
+        "fontSize": 20,
         "fontWeight": "700",
         "color": "#aa52d0",
         "textAlign": "center"
@@ -1718,8 +1731,8 @@
       "locked": false,
       "visible": true,
       "config": {
-        "text": "进度计划",
-        "fontSize": 15,
+        "text": "科室项目节点统计",
+        "fontSize": 20,
         "fontWeight": "700",
         "color": "#ffffff",
         "textAlign": "flex-start"
@@ -1737,8 +1750,8 @@
       "locked": false,
       "visible": true,
       "config": {
-        "text": "质量问题",
-        "fontSize": 15,
+        "text": "质量问题占比",
+        "fontSize": 20,
         "fontWeight": "700",
         "color": "#ffffff",
         "textAlign": "flex-start"
@@ -1756,8 +1769,8 @@
       "locked": false,
       "visible": true,
       "config": {
-        "text": "技术状态",
-        "fontSize": 15,
+        "text": "科室技术变更",
+        "fontSize": 20,
         "fontWeight": "700",
         "color": "#ffffff",
         "textAlign": "flex-start"
@@ -1775,8 +1788,8 @@
       "locked": false,
       "visible": true,
       "config": {
-        "text": "项目风险",
-        "fontSize": 15,
+        "text": "风险类型占比",
+        "fontSize": 20,
         "fontWeight": "700",
         "color": "#ffffff",
         "textAlign": "flex-start"
