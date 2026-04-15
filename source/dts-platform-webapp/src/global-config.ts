@@ -166,7 +166,7 @@ const resolveEnableSqlIdeV2 = (): boolean => {
             if (raw === "false" || raw === "0") return false;
         }
     } catch {}
-    return String(import.meta.env.VITE_ENABLE_SQL_IDE_V2 || "false").toLowerCase() === "true";
+    return String(import.meta.env.VITE_ENABLE_SQL_IDE_V2 || "true").toLowerCase() === "true";
 };
 
 export const GLOBAL_CONFIG: GlobalConfig = {

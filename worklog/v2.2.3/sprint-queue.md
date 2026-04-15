@@ -160,17 +160,18 @@
 **设计文档**: `worklog/v2.2.3/sprint-10-202604/README.md`
 
 ## Sprint-11: 数据开发 SQL IDE 重构 (202604)
-**状态**: READY
+**状态**: DONE
 **类型**: Implementation（实施型，全新重写 + Feature Flag 切换）
+**完成日期**: 2026-04-14
 
 | Feature | Task 数 | 状态 |
 |---------|---------|------|
-| F1-架构骨架与Monaco编辑器 | 6 | READY |
-| F2-多Tab持久化 | 4 | READY |
-| F3-Schema浏览器与Activity-Bar | 5 | READY |
-| F4-专业结果表格与导出 | 5 | READY |
-| F5-Chart-Pivot-Plan-二次查询 | 5 | READY |
-| F6-简洁高级模式与Copilot插槽 | 3 | READY |
+| F1-架构骨架与Monaco编辑器 | 6 | DONE |
+| F2-多Tab持久化 | 4 | DONE |
+| F3-Schema浏览器与Activity-Bar | 5 | DONE |
+| F4-专业结果表格与导出 | 5 | DONE |
+| F5-Chart-Pivot-Plan-二次查询 | 5 | DONE |
+| F6-简洁高级模式与Copilot插槽 | 3 | DONE |
 
-**统计**: READY=28, IN_PROGRESS=0, DONE=0, BLOCKED=0
+**统计**: READY=0, IN_PROGRESS=0, DONE=28, BLOCKED=0
 **设计文档**: `worklog/v2.2.3/sprint-11-202604/README.md` + `plan.md`

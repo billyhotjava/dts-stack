@@ -1,5 +1,6 @@
 package com.yuzhi.dts.platform.service.sql;
 
+import com.yuzhi.dts.platform.service.sql.dto.QueryLogDto;
 import com.yuzhi.dts.platform.service.sql.dto.ResultMetaDto;
 import com.yuzhi.dts.platform.service.sql.dto.ResultPageDto;
 import java.io.OutputStream;
@@ -12,4 +13,5 @@ public interface SqlResultStreamService {
     void exportCsv(UUID executionId, OutputStream out);
     void exportJson(UUID executionId, OutputStream out);
     void exportExcel(UUID executionId, OutputStream out);
+    QueryLogDto getLog(UUID executionId);
 }

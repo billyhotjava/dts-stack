@@ -22,6 +22,7 @@ public final class SqlIdeAuditActions {
 
     // ---- F5 future placeholders ----
     public static final String SQL_TEMP_VIEW_CREATE = "sql.ide.temp_view.create";
+    public static final String SQL_TEMP_VIEW_DROP   = "sql.ide.temp_view.drop";
     public static final String SQL_SUBQUERY_EXECUTE = "sql.ide.subquery.execute";
     public static final String SQL_PLAN_VIEW        = "sql.ide.plan.view";
 

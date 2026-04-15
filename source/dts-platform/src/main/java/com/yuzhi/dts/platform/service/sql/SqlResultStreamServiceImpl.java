@@ -9,6 +9,7 @@ import com.yuzhi.dts.platform.repository.explore.QueryExecutionChunkRepository;
 import com.yuzhi.dts.platform.repository.explore.QueryExecutionRepository;
 import com.yuzhi.dts.platform.repository.explore.ResultSetRepository;
 import com.yuzhi.dts.platform.service.sql.dto.ColumnMetaDto;
+import com.yuzhi.dts.platform.service.sql.dto.QueryLogDto;
 import com.yuzhi.dts.platform.service.sql.dto.ResultMetaDto;
 import com.yuzhi.dts.platform.service.sql.dto.ResultPageDto;
 import java.util.ArrayList;
@@ -47,11 +48,20 @@ public class SqlResultStreamServiceImpl implements SqlResultStreamService {
         this.objectMapper = objectMapper;
     }
 
+    private void verifyExecutionOwner(QueryExecution e) {
+        String currentUser = com.yuzhi.dts.platform.security.SecurityUtils.getCurrentUserLogin().orElse("anonymous");
+        String owner = e.getCreatedBy();
+        if (owner != null && !owner.equals(currentUser)) {
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "execution not found");
+        }
+    }
+
     @Override
     public ResultMetaDto getMeta(UUID executionId) {
         QueryExecution exec = queryExecutionRepository
             .findById(executionId)
             .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "query execution not found: " + executionId));
+        verifyExecutionOwner(exec);
 
         if (exec.getResultSetId() == null) {
             throw new ResponseStatusException(HttpStatus.NOT_FOUND, "result set not available for execution: " + executionId);
@@ -273,6 +283,28 @@ public class SqlResultStreamServiceImpl implements SqlResultStreamService {
         } catch (java.io.IOException e) {
             throw new java.io.UncheckedIOException(e);
         }
+    }
+
+    @Override
+    public QueryLogDto getLog(UUID executionId) {
+        QueryExecution e = queryExecutionRepository
+            .findById(executionId)
+            .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "query execution not found: " + executionId));
+        verifyExecutionOwner(e);
+
+        // TODO F5 followup: store rewritten separately
+        return new QueryLogDto(
+            e.getId(),
+            e.getSqlText(),
+            e.getSqlText(),
+            e.getStatus() == null ? null : e.getStatus().name(),
+            e.getStartedAt(),
+            e.getFinishedAt(),
+            e.getRowCount(),
+            e.getElapsedMs(),
+            e.getErrorMessage(),
+            e.getBytesProcessed()
+        );
     }
 
     private List<ColumnMetaDto> parseColumns(String columnsStr) {

@@ -1,3 +1,5 @@
 package com.yuzhi.dts.platform.service.sql.dto;
 
-public record CatalogSchemaDto(String name, String catalog) {}
+import java.io.Serializable;
+
+public record CatalogSchemaDto(String name, String catalog) implements Serializable {}

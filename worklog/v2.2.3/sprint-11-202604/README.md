@@ -1,7 +1,7 @@
 # Sprint-11: 数据开发模块 SQL IDE 重构
 
 **时间**: 2026-04
-**状态**: READY
+**状态**: DONE
 **类型**: Implementation（实施型，全新重写）
 **目标**: 将数据开发模块的即席查询从 MVP 原生 textarea 升级为专业级 SQL IDE，对标 DataGrip / DataWorks / Superset SQL Lab，支撑分析师与数据开发工程师双角色场景。
 
@@ -48,14 +48,14 @@
 
 | ID | Feature | Task 数 | 状态 | 优先级 |
 |----|---------|---------|------|--------|
-| F1 | 架构骨架与 Monaco 编辑器 | 6 | READY | P0 |
-| F2 | 多 Tab 持久化 | 4 | READY | P0 |
-| F3 | Schema 浏览器与 Activity Bar | 5 | READY | P0 |
-| F4 | 专业结果表格与导出 | 5 | READY | P0 |
-| F5 | Chart / Pivot / Plan / 二次查询 | 5 | READY | P1 |
-| F6 | 简洁-高级模式与 Copilot 插槽 | 3 | READY | P1 |
+| F1 | 架构骨架与 Monaco 编辑器 | 6 | DONE | P0 |
+| F2 | 多 Tab 持久化 | 4 | DONE | P0 |
+| F3 | Schema 浏览器与 Activity Bar | 5 | DONE | P0 |
+| F4 | 专业结果表格与导出 | 5 | DONE | P0 |
+| F5 | Chart / Pivot / Plan / 二次查询 | 5 | DONE | P1 |
+| F6 | 简洁-高级模式与 Copilot 插槽 | 3 | DONE | P1 |
 
-**统计**: READY=28, IN_PROGRESS=0, DONE=0, BLOCKED=0
+**统计**: READY=0, IN_PROGRESS=0, DONE=28, BLOCKED=0
 
 ## 技术选型
 

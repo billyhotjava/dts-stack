@@ -14,6 +14,7 @@ import com.yuzhi.dts.platform.domain.explore.QueryExecution;
 import com.yuzhi.dts.platform.domain.explore.ResultSet;
 import com.yuzhi.dts.platform.repository.explore.QueryExecutionRepository;
 import com.yuzhi.dts.platform.repository.explore.ResultSetRepository;
+import com.yuzhi.dts.platform.repository.service.InfraDataSourceRepository;
 import com.yuzhi.dts.platform.service.audit.AuditService;
 import com.yuzhi.dts.platform.service.query.QueryGateway;
 import com.yuzhi.dts.platform.service.sql.dto.SqlSubmitRequest;
@@ -51,10 +52,16 @@ class SqlExecutionServiceTest {
     private QueryGateway queryGateway;
 
     @Mock
+    private JdbcSqlExecutor jdbcSqlExecutor;
+
+    @Mock
     private SqlValidationService validationService;
 
     @Mock
     private PlatformTransactionManager transactionManager;
+
+    @Mock
+    private InfraDataSourceRepository infraDataSourceRepository;
 
     private SqlExecutionService service;
 
@@ -70,9 +77,11 @@ class SqlExecutionServiceTest {
             chunkRepository,
             auditService,
             queryGateway,
+            jdbcSqlExecutor,
             validationService,
             new ObjectMapper(),
-            transactionManager
+            transactionManager,
+            infraDataSourceRepository
         );
     }
 
@@ -99,7 +108,7 @@ class SqlExecutionServiceTest {
         when(validationService.validate(any(), any())).thenReturn(
             new SqlValidateResponse(true, "select 1", new SqlSummary(List.of(), null, List.of()), List.of(), List.of(), null, null)
         );
-        when(queryGateway.execute(eq("select 1"), any())).thenReturn(
+        when(queryGateway.execute(eq("select 1"), any(), any())).thenReturn(
             Map.of(
                 "headers",
                 List.of("value"),
@@ -121,7 +130,7 @@ class SqlExecutionServiceTest {
 
         service.submit(new SqlSubmitRequest("select 1", saved.getDatasource(), null, null, null, 100, false), null);
 
-        verify(queryGateway, timeout(2000)).execute(eq("select 1"), any());
+        verify(queryGateway, timeout(2000)).execute(eq("select 1"), any(), any());
         assertEventually(() -> saved.getStatus() == ExecEnums.ExecStatus.SUCCESS);
     }
 

@@ -28,13 +28,11 @@ import java.util.UUID;
 import java.util.concurrent.TimeUnit;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.context.annotation.Primary;
 import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
 import javax.sql.DataSource;
 
 @Service
-@Primary
 public class HiveQueryGateway implements QueryGateway {
 
     private static final Logger LOG = LoggerFactory.getLogger(HiveQueryGateway.class);
@@ -69,6 +67,18 @@ public class HiveQueryGateway implements QueryGateway {
         this.infraDataSourceRepository = infraDataSourceRepository;
         this.infraSecretService = infraSecretService;
         this.adminInfraClient = adminInfraClient;
+    }
+
+    /**
+     * {@inheritDoc}
+     *
+     * <p>NOTE: {@code executionId} is accepted but not forwarded to the underlying Hive/JDBC path —
+     * the legacy Hive code has no chunk-persistence support.
+     * TODO: wire executionId when hive gateway supports chunk persistence.
+     */
+    @Override
+    public Map<String, Object> execute(String effectiveSql, UUID datasourceId, UUID executionId) {
+        return execute(effectiveSql, datasourceId);
     }
 
     @Override

@@ -23,13 +23,13 @@ export interface SaveQueryPayload {
 }
 
 export async function listSavedQueries(): Promise<SavedQueryItem[]> {
-  return apiClient.get<SavedQueryItem[]>({ url: "/api/sql/saved-queries" });
+  return apiClient.get<SavedQueryItem[]>({ url: "/sql/saved-queries" });
 }
 
 export async function createSavedQuery(payload: SaveQueryPayload): Promise<SavedQueryItem> {
-  return apiClient.post<SavedQueryItem>({ url: "/api/sql/saved-queries", data: payload });
+  return apiClient.post<SavedQueryItem>({ url: "/sql/saved-queries", data: payload });
 }
 
 export async function deleteSavedQuery(id: string): Promise<void> {
-  return apiClient.delete<void>({ url: `/api/sql/saved-queries/${id}` });
+  return apiClient.delete<void>({ url: `/sql/saved-queries/${id}` });
 }

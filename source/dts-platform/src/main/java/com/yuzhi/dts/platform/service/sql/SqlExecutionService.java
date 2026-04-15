@@ -11,6 +11,8 @@ import com.yuzhi.dts.platform.repository.explore.ResultSetRepository;
 import com.yuzhi.dts.platform.service.audit.AuditService;
 import com.yuzhi.dts.platform.service.audit.SqlIdeAuditActions;
 import com.yuzhi.dts.platform.security.SecurityUtils;
+import com.yuzhi.dts.platform.domain.service.InfraDataSource;
+import com.yuzhi.dts.platform.repository.service.InfraDataSourceRepository;
 import com.yuzhi.dts.platform.service.query.QueryGateway;
 import com.yuzhi.dts.platform.service.sql.dto.SqlResultPageResponse;
 import com.yuzhi.dts.platform.service.sql.dto.SqlResultPreview;
@@ -58,9 +60,11 @@ public class SqlExecutionService {
     private final QueryExecutionChunkRepository chunkRepository;
     private final AuditService auditService;
     private final QueryGateway queryGateway;
+    private final JdbcSqlExecutor jdbcSqlExecutor;
     private final SqlValidationService validationService;
     private final ObjectMapper objectMapper;
     private final TransactionTemplate persistTransactionTemplate;
+    private final InfraDataSourceRepository infraDataSourceRepository;
     private final ConcurrentMap<UUID, CompletableFuture<Void>> runningTasks = new ConcurrentHashMap<>();
     private final Set<UUID> cancelRequested = ConcurrentHashMap.newKeySet();
 
@@ -70,25 +74,32 @@ public class SqlExecutionService {
         QueryExecutionChunkRepository chunkRepository,
         AuditService auditService,
         QueryGateway queryGateway,
+        JdbcSqlExecutor jdbcSqlExecutor,
         SqlValidationService validationService,
         ObjectMapper objectMapper,
-        PlatformTransactionManager transactionManager
+        PlatformTransactionManager transactionManager,
+        InfraDataSourceRepository infraDataSourceRepository
     ) {
         this.queryExecutionRepository = queryExecutionRepository;
         this.resultSetRepository = resultSetRepository;
         this.chunkRepository = chunkRepository;
         this.auditService = auditService;
         this.queryGateway = queryGateway;
+        this.jdbcSqlExecutor = jdbcSqlExecutor;
         this.validationService = validationService;
         this.objectMapper = objectMapper;
         this.persistTransactionTemplate = new TransactionTemplate(transactionManager);
+        this.infraDataSourceRepository = infraDataSourceRepository;
     }
 
     @Transactional
     public SqlSubmitResponse submit(SqlSubmitRequest request, Principal principal) {
         QueryExecution execution = new QueryExecution();
-        execution.setEngine(ExecEnums.ExecEngine.TRINO);
-        execution.setDatasource(StringUtils.hasText(request.datasource()) ? request.datasource() : "trino");
+        // Resolve engine from the actual datasource type; fall back to POSTGRESQL (our only deployed DB).
+        String resolvedDatasource = StringUtils.hasText(request.datasource()) ? request.datasource() : null;
+        ExecEnums.ExecEngine resolvedEngine = resolveEngine(resolvedDatasource);
+        execution.setEngine(resolvedEngine);
+        execution.setDatasource(resolvedDatasource);
         execution.setConnection(request.catalog());
         execution.setSqlText(request.sqlText());
         execution.setStatus(ExecEnums.ExecStatus.PENDING);
@@ -188,6 +199,8 @@ public class SqlExecutionService {
             return;
         }
         cancelRequested.add(executionId);
+        // Cancel the in-flight JDBC Statement (Critical #2: Statement.cancel() on the executing thread)
+        jdbcSqlExecutor.cancel(executionId);
         CompletableFuture<Void> runningFuture = runningTasks.get(executionId);
         if (runningFuture != null) {
             runningFuture.cancel(true);
@@ -252,7 +265,7 @@ public class SqlExecutionService {
             );
 
             UUID datasourceId = parseDatasourceId(request.datasource());
-            Map<String, Object> payload = queryGateway.execute(validation.rewrittenSql(), datasourceId);
+            Map<String, Object> payload = queryGateway.execute(validation.rewrittenSql(), datasourceId, executionId);
 
             if (cancelRequested.contains(executionId)) {
                 markCanceled(execution, "查询执行过程中被取消");
@@ -275,10 +288,15 @@ public class SqlExecutionService {
             final long finalTotalRows = totalRows;
             final boolean finalTruncated = truncated;
             final long finalElapsedMs = totalElapsedMs;
+            // When JdbcQueryGateway pre-persisted chunks, chunkCount comes from the payload.
+            // The explicit chunksPrePersisted flag is used — NOT inferring from finalRows.isEmpty()
+            // (which would conflate an empty Hive result set with pre-persisted JDBC chunks).
+            final Integer payloadChunkCount = payload.get("chunkCount") instanceof Integer n ? n : null;
+            final boolean chunksPrePersisted = Boolean.TRUE.equals(payload.get("chunksPrePersisted"));
 
             persistTransactionTemplate.executeWithoutResult(status -> {
                 if (!finalHeaders.isEmpty()) {
-                    // Write chunk records
+                    // Write chunk records (only when rows were not already persisted by JdbcSqlExecutor)
                     int chunkIndex = 0;
                     for (int offset = 0; offset < finalRows.size(); offset += CHUNK_SIZE) {
                         int end = Math.min(finalRows.size(), offset + CHUNK_SIZE);
@@ -295,6 +313,12 @@ public class SqlExecutionService {
                         chunk.setCreatedDate(Instant.now());
                         chunkRepository.save(chunk);
                     }
+                    // If JdbcSqlExecutor pre-persisted the chunks, use the count it reported.
+                    // Check the explicit flag — not finalRows.isEmpty() — to avoid conflating
+                    // a genuine empty result from the Hive path with pre-persisted JDBC chunks.
+                    int effectiveChunkCount = (chunksPrePersisted && payloadChunkCount != null)
+                        ? payloadChunkCount
+                        : chunkIndex;
 
                     // Legacy preview blob — first 100 rows kept for /api/sql/result-page v1 compatibility
                     List<Map<String, Object>> previewRows = finalRows.size() <= PREVIEW_LIMIT
@@ -306,7 +330,7 @@ public class SqlExecutionService {
                     rs.setStorageFormat(ResultSet.StorageFormat.JSON);
                     rs.setColumns(String.join(",", finalHeaders));
                     rs.setRowCount(finalTotalRows);
-                    rs.setChunkCount(chunkIndex);
+                    rs.setChunkCount(effectiveChunkCount);
                     rs.setPreviewColumns(buildStoredResultJson(finalHeaders, previewRows, finalTotalRows));
                     rs.setTtlDays(7);
                     rs.setExpiresAt(Instant.now().plus(7, ChronoUnit.DAYS));
@@ -579,6 +603,39 @@ public class SqlExecutionService {
             }
         }
         return null;
+    }
+
+    /**
+     * Resolve the execution engine from the datasource id string.
+     * Falls back to {@link ExecEnums.ExecEngine#POSTGRESQL} when the datasource cannot be
+     * resolved (the only engine deployed in this environment).
+     */
+    private ExecEnums.ExecEngine resolveEngine(String datasourceId) {
+        if (datasourceId == null) {
+            return ExecEnums.ExecEngine.POSTGRESQL;
+        }
+        UUID id;
+        try {
+            id = UUID.fromString(datasourceId);
+        } catch (IllegalArgumentException ex) {
+            return ExecEnums.ExecEngine.POSTGRESQL;
+        }
+        return infraDataSourceRepository
+            .findById(id)
+            .map(ds -> {
+                if (ds.getType() == null) return ExecEnums.ExecEngine.POSTGRESQL;
+                String type = ds.getType().trim().toUpperCase(java.util.Locale.ROOT);
+                return switch (type) {
+                    case "HIVE", "INCEPTOR" -> ExecEnums.ExecEngine.HIVE;
+                    case "POSTGRESQL", "POSTGRES", "JDBC" -> ExecEnums.ExecEngine.POSTGRESQL;
+                    default -> {
+                        LOG.warn("Unknown datasource type '{}' for datasource {}, defaulting to POSTGRESQL",
+                            type, ds.getId());
+                        yield ExecEnums.ExecEngine.POSTGRESQL;
+                    }
+                };
+            })
+            .orElse(ExecEnums.ExecEngine.POSTGRESQL);
     }
 
     private record StoredResult(List<String> headers, List<Map<String, Object>> rows, long rowCount) {}

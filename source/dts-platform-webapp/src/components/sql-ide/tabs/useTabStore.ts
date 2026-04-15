@@ -85,6 +85,7 @@ function fromDto(r: TabDto): TabState {
     updatedAt: r.updatedAt,
     createdLocally: false,
     gridState: emptyGridColumnState(),
+    subqueryViewName: null,
   };
 }
 
@@ -175,6 +176,7 @@ export const useTabStore = create<TabStore>((set, get) => ({
       updatedAt: null,
       createdLocally: true,
       gridState: emptyGridColumnState(),
+      subqueryViewName: null,
       ...initial,
     };
     set({ tabs: [...cur, tab], activeTabId: id });
@@ -372,10 +374,11 @@ function loadLocal(): TabState[] {
     const raw = window.localStorage.getItem(LOCAL_STORAGE_KEY);
     if (!raw) return [];
     const parsed = JSON.parse(raw) as TabState[];
-    // Migration: pre-T17 tabs lack gridState
+    // Migration: pre-T17 tabs lack gridState; pre-T24 tabs lack subqueryViewName
     return parsed.map((t) => ({
       ...t,
       gridState: t.gridState ?? emptyGridColumnState(),
+      subqueryViewName: t.subqueryViewName ?? null,
     }));
   } catch {
     return [];

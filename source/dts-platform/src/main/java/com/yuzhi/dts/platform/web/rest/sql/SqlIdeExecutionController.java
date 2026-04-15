@@ -4,6 +4,7 @@ import com.yuzhi.dts.platform.security.SecurityUtils;
 import com.yuzhi.dts.platform.service.audit.AuditService;
 import com.yuzhi.dts.platform.service.sql.SqlExecutionExportRateLimiter;
 import com.yuzhi.dts.platform.service.sql.SqlResultStreamService;
+import com.yuzhi.dts.platform.service.sql.dto.QueryLogDto;
 import com.yuzhi.dts.platform.service.sql.dto.ResultMetaDto;
 import com.yuzhi.dts.platform.service.sql.dto.ResultPageDto;
 import com.yuzhi.dts.platform.web.rest.ApiResponse;
@@ -56,6 +57,11 @@ public class SqlIdeExecutionController {
     ) {
         auditService.audit("READ", "sql.ide.execution.page", id + "?page=" + page + "&size=" + size);
         return ApiResponses.ok(streamService.getPage(id, page, size));
+    }
+
+    @GetMapping("/{id}/log")
+    public ApiResponse<QueryLogDto> log(@PathVariable UUID id) {
+        return ApiResponses.ok(streamService.getLog(id));
     }
 
     @GetMapping("/{id}/export")

@@ -2,14 +2,14 @@
 
 本目录用于保存 Sprint-11 的集成测试结果、性能压测证据、灰度/回滚 SOP、以及 GA 前的验证材料。
 
-## 待填充产出（T28 交付）
+## T28 交付产出
 
-- [ ] `e2e-report.md` — Playwright E2E 套件执行报告
-- [ ] `perf-report.md` — 性能压测详细数据（首渲、滚动 FPS、分页 P99、导出耗时）
-- [ ] `regression-matrix.md` — 老 `SqlWorkbenchExperimental` 全功能回归对照表（勾选证据）
-- [ ] `audit-coverage.md` — 13 类审计动作点实测命中截图/日志
-- [ ] `grayscale-runbook.md` — 灰度上线 SOP（阶段 0/1/2 触发条件、责任人、观测指标）
-- [ ] `rollback-runbook.md` — 回滚 SOP（触发条件、动作步骤、恢复验证）
+- [x] [e2e-report.md](e2e-report.md) — Playwright E2E 套件执行报告（17+ 用例计划）
+- [x] [perf-report.md](perf-report.md) — 性能压测详细数据（首渲、滚动 FPS、分页 P99、导出耗时）
+- [x] [regression-matrix.md](regression-matrix.md) — 老 `SqlWorkbenchExperimental` 全功能回归对照表（23 项映射）
+- [x] [audit-coverage.md](audit-coverage.md) — 13 类审计动作点实测命中截图/日志
+- [x] [grayscale-runbook.md](grayscale-runbook.md) — 灰度上线 SOP（阶段 0/1/2 触发条件、责任人、观测指标）
+- [x] [rollback-runbook.md](rollback-runbook.md) — 回滚 SOP（触发条件、动作步骤、恢复验证）
 - [ ] `security-review.md` — 安全 Review 记录（SQL 注入、跨用户、导出频控）
 
 ## 验收闸门

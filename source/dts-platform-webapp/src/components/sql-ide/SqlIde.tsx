@@ -3,7 +3,9 @@ import { type FC, useCallback, useEffect, useMemo, useRef, useState } from "reac
 import { useShallow } from "zustand/react/shallow";
 import { useQuery } from "@tanstack/react-query";
 import { ShortcutsHelp } from "./ShortcutsHelp";
+import { ModeSwitcher } from "./ModeSwitcher";
 import { CopilotSlot } from "./copilot/CopilotSlot";
+import { useUiModeStore } from "./store/useUiModeStore";
 import { SqlEditor, type SqlEditorHandle } from "./editor/SqlEditor";
 import { formatSql } from "./editor/formatter";
 import { ActivityBar } from "./layout/ActivityBar";
@@ -14,8 +16,9 @@ import { HistoryPanel } from "./history/HistoryPanel";
 import { SchemaTree } from "./schema/SchemaTree";
 import { TabBar } from "./tabs/TabBar";
 import { useTabStore } from "./tabs/useTabStore";
+import { BottomTabs } from "./result/BottomTabs";
 import { ExportMenu } from "./result/ExportMenu";
-import { ResultGrid } from "./result/ResultGrid";
+import { SubQueryButton } from "./result/SubQueryButton";
 import { SavedPanel } from "./saved/SavedPanel";
 import { SaveQueryDialog } from "./saved/SaveQueryDialog";
 import { listSavedQueries } from "./api/sqlIdeSaved";
@@ -61,6 +64,8 @@ export const SqlIde: FC = () => {
   }, [hydrated, tabs.length, openTab]);
 
   const activeTab = tabs.find((t) => t.id === activeTabId) ?? null;
+
+  const uiMode = useUiModeStore((s) => s.mode);
 
   const sqlExec = useSqlExecution();
 
@@ -157,6 +162,16 @@ export const SqlIde: FC = () => {
       <div
         style={{ flex: 1, display: "flex", flexDirection: "column", minWidth: 0 }}
       >
+        <div style={{
+          display: "flex",
+          justifyContent: "flex-end",
+          alignItems: "center",
+          padding: "4px 8px",
+          borderBottom: "1px solid var(--ant-color-border-secondary)",
+          gap: 8,
+        }}>
+          <ModeSwitcher />
+        </div>
         <TabBar />
         <div style={{ flex: 1, minHeight: 0 }}>
           {activeTab ? (
@@ -165,7 +180,7 @@ export const SqlIde: FC = () => {
               value={activeTab.sqlText}
               onChange={handleSqlChange}
               engine={activeTab.engine}
-              mode="simple"
+              mode={uiMode}
               isDark={true}
               onExecute={(s) => {
                 if (!s.trim() || !activeTab) return;
@@ -229,22 +244,37 @@ export const SqlIde: FC = () => {
                 {activeTab?.lastExecutionId && (
                   <ExportMenu executionId={activeTab.lastExecutionId} />
                 )}
+                {activeTab?.lastExecutionId && (
+                  <SubQueryButton executionId={activeTab.lastExecutionId} />
+                )}
                 <Button size="small" onClick={() => setHelpOpen(true)}>
                   ⌨ Shortcuts
                 </Button>
               </div>
             </div>
             <div style={{ flex: 1, minHeight: 0 }}>
-              {activeTab?.lastExecutionId ? (
-                <ResultGrid
+              {sqlExec.state === "failed" ? (
+                <div style={{ padding: 12, color: "var(--ant-color-error)", whiteSpace: "pre-wrap", fontFamily: "monospace", fontSize: 12 }}>
+                  ❌ 执行失败
+                  {"\n\n"}
+                  {sqlExec.errorMessage ?? "(未返回错误信息)"}
+                </div>
+              ) : sqlExec.state === "canceled" ? (
+                <div style={{ padding: 12, color: "var(--ant-color-text-secondary)" }}>⏹ 已取消</div>
+              ) : activeTab?.lastExecutionId && sqlExec.state !== "running" ? (
+                <BottomTabs
                   executionId={activeTab.lastExecutionId}
+                  sql={activeTab.sqlText}
+                  engine={activeTab.engine}
+                  datasourceId={activeTab.datasourceId}
+                  catalog={activeTab.schemaContext}
                   gridState={activeTab.gridState}
                   onGridStateChange={(next) => updateGridState(activeTab.id, next)}
                 />
+              ) : sqlExec.state === "running" ? (
+                <div style={{ padding: 12, color: "var(--ant-color-text-secondary)" }}>⏳ 运行中……</div>
               ) : (
-                <div style={{ padding: 12, color: "var(--ant-color-text-tertiary)" }}>
-                  运行 SQL 后结果出现在这里
-                </div>
+                <div style={{ padding: 12, color: "var(--ant-color-text-tertiary)" }}>运行 SQL 后结果出现在这里</div>
               )}
             </div>
           </div>

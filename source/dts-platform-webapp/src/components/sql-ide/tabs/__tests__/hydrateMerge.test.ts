@@ -30,6 +30,7 @@ function makeLocal(overrides: Partial<import("../types").TabState>): import("../
     updatedAt: overrides.updatedAt ?? null,
     createdLocally: overrides.createdLocally ?? false,
     gridState: emptyGridColumnState(),
+    subqueryViewName: null,
   };
 }
 

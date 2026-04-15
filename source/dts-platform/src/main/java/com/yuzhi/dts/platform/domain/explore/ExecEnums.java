@@ -5,7 +5,7 @@ public final class ExecEnums {
 
     public enum SecurityLevel { PUBLIC, INTERNAL, SECRET, CONFIDENTIAL }
     public enum DataSourceType { HIVE, TRINO, JDBC }
-    public enum ExecEngine { TRINO, HIVE }
+    public enum ExecEngine { TRINO, HIVE, POSTGRESQL }
     public enum ExecStatus { PENDING, RUNNING, SUCCESS, FAILED, CANCELED }
     public enum VizType { TABLE, LINE, BAR, PIE, AREA, SCATTER }
 }

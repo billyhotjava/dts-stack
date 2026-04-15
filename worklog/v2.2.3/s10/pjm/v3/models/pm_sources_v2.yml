@@ -1,0 +1,21 @@
+version: 2
+sources:
+  - name: "pm_ods_v2"
+    schema: "public"
+    description: "项目管理 ODS v2 源表"
+    tables:
+      - name: "project_subject_domain_v2"
+        identifier: "ods_project_subject_domain_v2"
+        description: "进度信息汇总表 — 项目节点/里程碑事实（31个业务字段）"
+
+      - name: "quality_issue_v2"
+        identifier: "ods_quality_issue_v2"
+        description: "质量信息汇总表 — 质量问题事实（21个业务字段）"
+
+      - name: "tech_state_v2"
+        identifier: "ods_tech_state_v2"
+        description: "技术状态信息汇总表 — 技术状态变更事实（33个业务字段）"
+
+      - name: "risk_info_v2"
+        identifier: "ods_risk_info_v2"
+        description: "风险信息汇总表 — 风险台账事实（31个业务字段）"
