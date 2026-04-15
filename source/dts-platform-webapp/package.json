@@ -10,7 +10,10 @@
 		"build": "LEGACY_BROWSER_BUILD=1 VITE_CACHE_DIR=.vite-cache tsc && LEGACY_BROWSER_BUILD=1 VITE_CACHE_DIR=.vite-cache vite build",
 		"build:modern": "LEGACY_BROWSER_BUILD=0 VITE_CACHE_DIR=.vite-cache tsc && LEGACY_BROWSER_BUILD=0 VITE_CACHE_DIR=.vite-cache vite build",
 		"preview": "vite preview",
-		"preinstall": "lefthook install || true"
+		"preinstall": "lefthook install || true",
+		"e2e": "playwright test",
+		"e2e:ui": "playwright test --ui",
+		"e2e:headed": "playwright test --headed"
 	},
 	"dependencies": {
 		"@ant-design/cssinjs": "^1.22.0",
@@ -94,6 +97,7 @@
 		"@commitlint/cli": "^17.8.1",
 		"@commitlint/config-conventional": "^17.8.1",
 		"@faker-js/faker": "^8.4.1",
+		"@playwright/test": "^1.59.1",
 		"@types/color": "^3.0.6",
 		"@types/numeral": "^2.0.5",
 		"@types/papaparse": "^5.5.2",
