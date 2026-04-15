@@ -20,8 +20,14 @@ export interface ResultGridProps {
   onGridStateChange: (next: GridColumnState) => void;
 }
 
-const ROW_HEIGHT = 28;
-const DEFAULT_COL_WIDTH = 140;
+const ROW_HEIGHT = 32;
+const DEFAULT_COL_WIDTH = 160;
+
+const BORDER_COLOR = "var(--ant-color-border, rgba(5, 5, 5, 0.12))";
+const BORDER_SOFT = "var(--ant-color-border-secondary, rgba(5, 5, 5, 0.06))";
+const HEADER_BG = "var(--ant-color-fill-alter, #fafafa)";
+const ROW_STRIPE_BG = "var(--ant-color-fill-quaternary, rgba(0, 0, 0, 0.02))";
+const ROW_HOVER_BG = "var(--ant-color-primary-bg, rgba(22, 119, 255, 0.06))";
 
 export const ResultGrid: FC<ResultGridProps> = ({ executionId, gridState, onGridStateChange }) => {
   const [page, setPage] = useState(1);
@@ -119,15 +125,22 @@ export const ResultGrid: FC<ResultGridProps> = ({ executionId, gridState, onGrid
   };
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", height: "100%" }}>
+    <div
+      className="sqlide-result-grid"
+      style={{ display: "flex", flexDirection: "column", height: "100%", padding: 8, gap: 0 }}
+    >
       <div
         style={{
           display: "flex",
           justifyContent: "space-between",
           alignItems: "center",
-          padding: "4px 8px",
-          fontSize: 11,
-          borderBottom: "1px solid var(--ant-color-border-secondary)",
+          padding: "6px 10px",
+          fontSize: 12,
+          border: `1px solid ${BORDER_COLOR}`,
+          borderBottom: "none",
+          borderTopLeftRadius: 6,
+          borderTopRightRadius: 6,
+          background: HEADER_BG,
         }}
       >
         <span style={{ color: "var(--ant-color-text-secondary)" }}>
@@ -142,89 +155,137 @@ export const ResultGrid: FC<ResultGridProps> = ({ executionId, gridState, onGrid
             background: "transparent",
             cursor: "pointer",
             color: "var(--ant-color-primary)",
+            fontSize: 12,
           }}
         >
           复制全部 (TSV)
         </button>
       </div>
-      <div ref={containerRef} style={{ flex: 1, overflow: "auto" }}>
+      <div
+        ref={containerRef}
+        style={{
+          flex: 1,
+          overflow: "auto",
+          border: `1px solid ${BORDER_COLOR}`,
+          background: "var(--ant-color-bg-container, #fff)",
+        }}
+      >
         <table
-          style={{ borderCollapse: "collapse", width: "100%", tableLayout: "fixed" }}
+          style={{
+            borderCollapse: "separate",
+            borderSpacing: 0,
+            width: "100%",
+            tableLayout: "fixed",
+            fontVariantNumeric: "tabular-nums",
+          }}
         >
+          <colgroup>
+            {visibleColumns.map((col) => (
+              <col
+                key={col.name}
+                style={{ width: gridState.columnWidths[col.name] ?? DEFAULT_COL_WIDTH }}
+              />
+            ))}
+          </colgroup>
           <thead
             style={{
               position: "sticky",
               top: 0,
-              background: "var(--ant-color-bg-elevated)",
-              zIndex: 1,
+              zIndex: 2,
             }}
           >
             {table.getHeaderGroups().map((hg) => (
               <tr key={hg.id}>
-                {hg.headers.map((header) => (
-                  <th
-                    key={header.id}
-                    style={{
-                      width: header.getSize(),
-                      padding: "4px 8px",
-                      borderBottom: "1px solid var(--ant-color-border)",
-                      fontSize: 11,
-                      textAlign: "left",
-                      cursor: "pointer",
-                    }}
-                    onClick={() =>
-                      onGridStateChange(
-                        applyColumnAction(gridState, {
-                          type: "setSort",
-                          name: header.column.id,
-                          direction:
-                            gridState.sort?.name === header.column.id &&
-                            gridState.sort.direction === "asc"
-                              ? "desc"
-                              : "asc",
-                        }),
-                      )
-                    }
-                  >
-                    {flexRender(header.column.columnDef.header, header.getContext())}
-                    {gridState.sort?.name === header.column.id && (
-                      <span style={{ marginLeft: 4, color: "var(--ant-color-text-secondary)" }}>
-                        {gridState.sort.direction === "asc" ? "▲" : "▼"}
-                      </span>
-                    )}
-                  </th>
-                ))}
+                {hg.headers.map((header, idx) => {
+                  const isSorted = gridState.sort?.name === header.column.id;
+                  return (
+                    <th
+                      key={header.id}
+                      style={{
+                        width: header.getSize(),
+                        padding: "8px 12px",
+                        background: HEADER_BG,
+                        borderBottom: `1px solid ${BORDER_COLOR}`,
+                        borderRight:
+                          idx < hg.headers.length - 1 ? `1px solid ${BORDER_SOFT}` : "none",
+                        fontSize: 12,
+                        fontWeight: 600,
+                        color: "var(--ant-color-text, rgba(0, 0, 0, 0.88))",
+                        textAlign: "left",
+                        cursor: "pointer",
+                        userSelect: "none",
+                        whiteSpace: "nowrap",
+                        overflow: "hidden",
+                        textOverflow: "ellipsis",
+                      }}
+                      onClick={() =>
+                        onGridStateChange(
+                          applyColumnAction(gridState, {
+                            type: "setSort",
+                            name: header.column.id,
+                            direction: isSorted && gridState.sort?.direction === "asc" ? "desc" : "asc",
+                          }),
+                        )
+                      }
+                    >
+                      {flexRender(header.column.columnDef.header, header.getContext())}
+                      {isSorted && (
+                        <span
+                          style={{
+                            marginLeft: 4,
+                            color: "var(--ant-color-primary, #1677ff)",
+                            fontSize: 10,
+                          }}
+                        >
+                          {gridState.sort?.direction === "asc" ? "▲" : "▼"}
+                        </span>
+                      )}
+                    </th>
+                  );
+                })}
               </tr>
             ))}
           </thead>
           <tbody
-            style={{ position: "relative", height: rowVirtualizer.getTotalSize() }}
+            style={{
+              position: "relative",
+              height: rowVirtualizer.getTotalSize(),
+            }}
           >
             {rowVirtualizer.getVirtualItems().map((virtualRow) => {
               const row = table.getRowModel().rows[virtualRow.index];
               if (!row) return null;
+              const zebra = virtualRow.index % 2 === 1;
               return (
                 <tr
                   key={row.id}
+                  data-zebra={zebra ? "1" : "0"}
                   style={{
                     position: "absolute",
                     top: virtualRow.start,
                     left: 0,
                     height: virtualRow.size,
                     width: "100%",
+                    background: zebra ? ROW_STRIPE_BG : "transparent",
                   }}
                 >
-                  {row.getVisibleCells().map((cell) => (
+                  {row.getVisibleCells().map((cell, idx) => (
                     <td
                       key={cell.id}
                       style={{
-                        padding: "2px 8px",
-                        borderBottom: "1px solid var(--ant-color-border-secondary)",
+                        padding: "6px 12px",
+                        borderBottom: `1px solid ${BORDER_SOFT}`,
+                        borderRight:
+                          idx < row.getVisibleCells().length - 1
+                            ? `1px solid ${BORDER_SOFT}`
+                            : "none",
                         fontSize: 12,
+                        color: "var(--ant-color-text, rgba(0, 0, 0, 0.88))",
                         whiteSpace: "nowrap",
                         overflow: "hidden",
                         textOverflow: "ellipsis",
                         width: cell.column.getSize(),
+                        verticalAlign: "middle",
                       }}
                     >
                       {flexRender(cell.column.columnDef.cell, cell.getContext())}
@@ -236,7 +297,18 @@ export const ResultGrid: FC<ResultGridProps> = ({ executionId, gridState, onGrid
           </tbody>
         </table>
       </div>
-      <div style={{ padding: "4px 8px", borderTop: "1px solid var(--ant-color-border-secondary)" }}>
+      <div
+        style={{
+          padding: "6px 10px",
+          border: `1px solid ${BORDER_COLOR}`,
+          borderTop: "none",
+          borderBottomLeftRadius: 6,
+          borderBottomRightRadius: 6,
+          background: HEADER_BG,
+          display: "flex",
+          justifyContent: "flex-end",
+        }}
+      >
         <Pagination
           current={page}
           pageSize={data.pageSize}
@@ -246,6 +318,11 @@ export const ResultGrid: FC<ResultGridProps> = ({ executionId, gridState, onGrid
           size="small"
         />
       </div>
+      <style>{`
+        .sqlide-result-grid tbody tr:hover {
+          background: ${ROW_HOVER_BG} !important;
+        }
+      `}</style>
     </div>
   );
 };
