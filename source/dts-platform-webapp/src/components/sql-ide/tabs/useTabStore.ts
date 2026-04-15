@@ -309,11 +309,16 @@ export const useTabStore = create<TabStore>((set, get) => ({
       });
 
       // Only clear dirty on tabs whose updatedAt hasn't changed since the snapshot
+      // AND track id remaps actually applied (skipped if user edited mid-flight)
+      const appliedRemaps = new Map<string, string>(); // oldId → newId
       const tabs = get().tabs.map((t) => {
         const remap = idRemap.get(t.id);
         const pushedAt = pushedAtMap.get(t.id);
         if (!remap || !pushedAt) return t; // tab wasn't in the snapshot
         if (t.updatedAt !== pushedAt) return t; // user edited during await → keep dirty
+        if (remap.newId !== t.id) {
+          appliedRemaps.set(t.id, remap.newId);
+        }
         return {
           ...t,
           id: remap.newId,               // adopt server-assigned id for creates
@@ -323,6 +328,13 @@ export const useTabStore = create<TabStore>((set, get) => ({
         };
       });
 
+      // Remap activeTabId if it pointed at a tab whose id just changed.
+      // Without this the UI renders "正在恢复 Tab" because activeTabId is stale.
+      const currentActive = get().activeTabId;
+      const nextActive = currentActive && appliedRemaps.has(currentActive)
+        ? appliedRemaps.get(currentActive)!
+        : currentActive;
+
       // Reset retry state on success
       retryCount = 0;
       if (retryTimer) {
@@ -330,7 +342,7 @@ export const useTabStore = create<TabStore>((set, get) => ({
         retryTimer = null;
       }
 
-      set({ tabs });
+      set({ tabs, activeTabId: nextActive });
       persistLocal(tabs);
     } catch (err) {
       // Retry with exponential backoff (up to MAX_RETRIES, then give up until next updateTab)
