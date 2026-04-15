@@ -29,11 +29,15 @@ const HEADER_BG = "var(--ant-color-fill-alter, #fafafa)";
 const ROW_STRIPE_BG = "var(--ant-color-fill-quaternary, rgba(0, 0, 0, 0.02))";
 const ROW_HOVER_BG = "var(--ant-color-primary-bg, rgba(22, 119, 255, 0.06))";
 
+const DEFAULT_PAGE_SIZE = 10;
+const PAGE_SIZE_OPTIONS = ["10", "20", "50", "100", "200"];
+
 export const ResultGrid: FC<ResultGridProps> = ({ executionId, gridState, onGridStateChange }) => {
   const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState<number>(DEFAULT_PAGE_SIZE);
   const { data, isLoading, isError } = useQuery<ResultPage>({
-    queryKey: ["sqlide", "execution", "page", executionId, page],
-    queryFn: () => getExecutionPage(executionId, page, 200),
+    queryKey: ["sqlide", "execution", "page", executionId, page, pageSize],
+    queryFn: () => getExecutionPage(executionId, page, pageSize),
     enabled: !!executionId,
     staleTime: 60_000,
   });
@@ -314,10 +318,19 @@ export const ResultGrid: FC<ResultGridProps> = ({ executionId, gridState, onGrid
       >
         <Pagination
           current={page}
-          pageSize={data.pageSize}
+          pageSize={pageSize}
           total={data.total}
-          onChange={(p) => setPage(p)}
-          showSizeChanger={false}
+          onChange={(p, ps) => {
+            setPage(p);
+            if (ps && ps !== pageSize) setPageSize(ps);
+          }}
+          onShowSizeChange={(_, ps) => {
+            setPageSize(ps);
+            setPage(1);
+          }}
+          showSizeChanger
+          pageSizeOptions={PAGE_SIZE_OPTIONS}
+          showTotal={(t, [from, to]) => `${from}-${to} / 共 ${t} 条`}
           size="small"
         />
       </div>
