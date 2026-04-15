@@ -289,6 +289,7 @@ export default function SqlModelingPage() {
 	const [runsLoading, setRunsLoading] = useState(false);
 	const [runs, setRuns] = useState<DagRun[]>([]);
 	const [runOpen, setRunOpen] = useState(false);
+	const [runMode, setRunMode] = useState<"release" | "build">("release");
 	const [runSubmitting, setRunSubmitting] = useState(false);
 	const [runSelectedModelIds, setRunSelectedModelIds] = useState<string[]>([]);
 	const [runModelKeyword, setRunModelKeyword] = useState("");
@@ -887,7 +888,7 @@ export default function SqlModelingPage() {
 		}
 	};
 
-	const openRun = () => {
+	const openRun = (mode: "release" | "build" = "release") => {
 		runForm.resetFields();
 		runForm.setFieldsValue({
 			target: dbtConfig?.config?.targetName || "",
@@ -900,6 +901,7 @@ export default function SqlModelingPage() {
 		setRunSelectedModelIds(activeId ? [activeId] : []);
 		setRunModelKeyword("");
 		setRunSpaceFilter(activeModel?.planId ? String(activeModel.planId) : undefined);
+		setRunMode(mode);
 		setRunOpen(true);
 	};
 
@@ -978,6 +980,29 @@ export default function SqlModelingPage() {
 				return;
 			}
 			const modelsSelector = selectedNames.map((name) => `model:${name}`).join(" ");
+			if (runMode === "build") {
+				const buildPayload = {
+					models: modelsSelector,
+					target: normalizeText(values.target) || "dev",
+					vars: tryParseJsonObject(values.vars),
+					operation: "build" as const,
+				};
+				const triggerResp: any = await triggerDbtRun(buildPayload);
+				const dagRunId = normalizeText(triggerResp?.dag_run_id || triggerResp?.dagRunId);
+				const dagId = normalizeText(triggerResp?.dag_id || triggerResp?.dagId);
+				setRunResult({
+					...createPendingBuildSummary("build", modelsSelector),
+					dagRunId,
+					dagId,
+				});
+				toast.success(buildOperationQueuedMessage("build"));
+				setRunOpen(false);
+				setExecLog("");
+				setBottomTab("operations");
+				setOpsSubTab("execlog");
+				void loadRuns({ dagId: dagId || undefined, selector: modelsSelector });
+				return;
+			}
 			const payload = {
 				models: modelsSelector,
 				target: normalizeText(values.target) || undefined,
@@ -2332,9 +2357,9 @@ export default function SqlModelingPage() {
 											key={action.key}
 											type="primary"
 											icon={<ThunderboltOutlined />}
-											onClick={() => triggerBuildOperation("build")}
+											onClick={() => openRun("build")}
 											loading={buildTriggering === "build"}
-											disabled={!activeModel || !configEnabled || !workspaceOk || buildTriggering != null}
+											disabled={!configEnabled || !workspaceOk || buildTriggering != null}
 											data-testid="platform-sql-modeling-build"
 										>
 											{action.label}
@@ -2345,8 +2370,8 @@ export default function SqlModelingPage() {
 									<Button
 										key={action.key}
 										icon={<RocketOutlined />}
-										onClick={openRun}
-										disabled={!activeModel || !workspaceOk}
+										onClick={() => openRun("release")}
+										disabled={!workspaceOk}
 										data-testid="platform-sql-modeling-release"
 									>
 										{action.label}
@@ -3310,10 +3335,10 @@ export default function SqlModelingPage() {
 
 				<Modal
 					open={runOpen}
-					title="上线 (dbt build)"
+					title={runMode === "build" ? "构建 (dbt build)" : "上线 (dbt build)"}
 					onCancel={() => setRunOpen(false)}
 					onOk={submitRun}
-				okText="提交"
+				okText={runMode === "build" ? "开始构建" : "提交"}
 				cancelText="取消"
 				confirmLoading={runSubmitting}
 				width={760}
@@ -3432,25 +3457,29 @@ export default function SqlModelingPage() {
 					<Form.Item name="target" label="目标">
 						<Input placeholder="dev" />
 					</Form.Item>
-					<div className="grid gap-3 md:grid-cols-2">
-						<Form.Item
-							name="gitRef"
-							label="Git 分支"
-							tooltip="可选。仅在环境维护 Git 版本追溯时填写，允许 main/master/release/*/hotfix/*"
-						>
-							<Input placeholder="可选，例如：release/2.2.1" />
-						</Form.Item>
-						<Form.Item
-							name="commitSha"
-							label="Commit SHA"
-							tooltip="可选。用于将本次发布与具体代码版本绑定"
-						>
-							<Input placeholder="可选，例如：a1b2c3d4" />
-						</Form.Item>
-					</div>
-					<Form.Item name="strictMode" valuePropName="checked">
-						<Checkbox>启用严格发布门禁（客户环境无 Git 时可关闭）</Checkbox>
-					</Form.Item>
+					{runMode === "release" && (
+						<>
+							<div className="grid gap-3 md:grid-cols-2">
+								<Form.Item
+									name="gitRef"
+									label="Git 分支"
+									tooltip="可选。仅在环境维护 Git 版本追溯时填写，允许 main/master/release/*/hotfix/*"
+								>
+									<Input placeholder="可选，例如：release/2.2.1" />
+								</Form.Item>
+								<Form.Item
+									name="commitSha"
+									label="Commit SHA"
+									tooltip="可选。用于将本次发布与具体代码版本绑定"
+								>
+									<Input placeholder="可选，例如：a1b2c3d4" />
+								</Form.Item>
+							</div>
+							<Form.Item name="strictMode" valuePropName="checked">
+								<Checkbox>启用严格发布门禁（客户环境无 Git 时可关闭）</Checkbox>
+							</Form.Item>
+						</>
+					)}
 					<Form.Item name="vars" label="运行变量">
 						<Input.TextArea rows={3} placeholder='JSON 结构，例如 {"run_date":"2026-01-19"}' />
 					</Form.Item>
