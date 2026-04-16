@@ -5,7 +5,6 @@ import com.yuzhi.dts.platform.web.rest.ApiResponses;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.nio.file.Paths;
 import java.nio.file.StandardCopyOption;
 import java.util.Locale;
 import java.util.Map;
@@ -42,7 +41,7 @@ public class ScreenImageResource {
     public ScreenImageResource(
         @Value("${dts.screen-images.storage-dir:/opt/dts/upload/screen-images}") String storageDirStr
     ) {
-        this.storageDir = Paths.get(storageDirStr);
+        this.storageDir = Path.of(storageDirStr);
         try {
             Files.createDirectories(this.storageDir);
         } catch (IOException e) {
