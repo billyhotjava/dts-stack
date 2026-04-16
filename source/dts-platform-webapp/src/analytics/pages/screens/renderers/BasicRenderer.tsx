@@ -58,6 +58,7 @@ export function renderBasic(
                     borderRadius: t.cardBorderRadius,
                     border: t.numberCard.border,
                     boxShadow: t.cardShadow,
+                    fontFamily: c.fontFamily ? (c.fontFamily as string) : undefined,
                 }}>
                     <div style={{
                         fontSize: (c.titleFontSize as number) || 16,
@@ -89,6 +90,7 @@ export function renderBasic(
                     justifyContent: c.textAlign as string,
                     fontSize: c.fontSize as number,
                     fontWeight: c.fontWeight as string,
+                    fontFamily: c.fontFamily ? (c.fontFamily as string) : undefined,
                     color: resolveTextColor(c.color as string | undefined, t.textPrimary),
                 }}>
                     {c.text as string}
@@ -106,6 +108,7 @@ export function renderBasic(
                         overflow: 'auto',
                         color: resolveTextColor(c.color as string | undefined, t.textPrimary),
                         fontSize: (c.fontSize as number) || 14,
+                        fontFamily: c.fontFamily ? (c.fontFamily as string) : undefined,
                         lineHeight: Number(c.lineHeight || 1.6),
                         padding: 8,
                     }}
@@ -162,7 +165,7 @@ export function renderBasic(
                     justifyContent: 'center',
                     fontSize: c.fontSize as number,
                     color: resolveTextColor(c.color as string | undefined, t.textPrimary),
-                    fontFamily: 'monospace',
+                    fontFamily: c.fontFamily ? (c.fontFamily as string) : 'monospace',
                 }}>
                     {formatted}
                 </div>

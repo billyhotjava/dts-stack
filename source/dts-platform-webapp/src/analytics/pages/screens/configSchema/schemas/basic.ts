@@ -11,6 +11,7 @@ const titleSchema: ComponentConfigSchema = {
     fields: [
         { key: 'text',       label: '文本内容', type: 'text',        group: 'content' },
         { key: 'fontSize',   label: '字号',     type: 'number',      group: 'typography', min: 10, max: 120, defaultValue: 16 },
+        { key: 'fontFamily', label: '字体',     type: 'font-family', group: 'typography' },
         { key: 'fontWeight',  label: '字重',     type: 'select',      group: 'typography', options: [
             { label: '正常', value: 'normal' },
             { label: '粗体', value: 'bold' },
@@ -40,6 +41,7 @@ const numberCardSchema: ComponentConfigSchema = {
         { key: 'titleColor',      label: '标题颜色',   type: 'color',  group: 'typography', themeTokenKey: 'numberCard.titleColor' },
         { key: 'valueFontSize',   label: '数值字号',   type: 'number', group: 'typography', min: 12, max: 120, defaultValue: 34 },
         { key: 'valueColor',      label: '数值颜色',   type: 'color',  group: 'typography', themeTokenKey: 'numberCard.valueColor' },
+        { key: 'fontFamily',      label: '字体',       type: 'font-family', group: 'typography' },
         { key: 'backgroundColor', label: '背景色',     type: 'color',  group: 'appearance', themeTokenKey: 'numberCard.background' },
     ],
 };
@@ -48,10 +50,11 @@ const markdownTextSchema: ComponentConfigSchema = {
     type: 'markdown-text',
     groups: [STANDARD_GROUPS.content, STANDARD_GROUPS.typography],
     fields: [
-        { key: 'markdown',   label: 'Markdown 内容', type: 'textarea', group: 'content' },
-        { key: 'fontSize',   label: '字号',           type: 'number',   group: 'typography', min: 10, max: 60, defaultValue: 14 },
-        { key: 'color',      label: '颜色',           type: 'color',    group: 'typography', themeTokenKey: 'textPrimary' },
-        { key: 'lineHeight', label: '行高',           type: 'number',   group: 'typography', min: 1, max: 3, step: 0.1, defaultValue: 1.6 },
+        { key: 'markdown',   label: 'Markdown 内容', type: 'textarea',    group: 'content' },
+        { key: 'fontSize',   label: '字号',           type: 'number',      group: 'typography', min: 10, max: 60, defaultValue: 14 },
+        { key: 'fontFamily', label: '字体',           type: 'font-family', group: 'typography' },
+        { key: 'color',      label: '颜色',           type: 'color',       group: 'typography', themeTokenKey: 'textPrimary' },
+        { key: 'lineHeight', label: '行高',           type: 'number',      group: 'typography', min: 1, max: 3, step: 0.1, defaultValue: 1.6 },
     ],
 };
 
@@ -78,9 +81,10 @@ const datetimeSchema: ComponentConfigSchema = {
     type: 'datetime',
     groups: [STANDARD_GROUPS.content, STANDARD_GROUPS.typography],
     fields: [
-        { key: 'format',   label: '格式',   type: 'text',   group: 'content', defaultValue: 'YYYY-MM-DD HH:mm:ss', placeholder: 'YYYY-MM-DD HH:mm:ss' },
-        { key: 'fontSize', label: '字号',   type: 'number', group: 'typography', min: 10, max: 60 },
-        { key: 'color',    label: '颜色',   type: 'color',  group: 'typography', themeTokenKey: 'textPrimary' },
+        { key: 'format',     label: '格式',   type: 'text',        group: 'content', defaultValue: 'YYYY-MM-DD HH:mm:ss', placeholder: 'YYYY-MM-DD HH:mm:ss' },
+        { key: 'fontSize',   label: '字号',   type: 'number',      group: 'typography', min: 10, max: 60 },
+        { key: 'fontFamily', label: '字体',   type: 'font-family', group: 'typography' },
+        { key: 'color',      label: '颜色',   type: 'color',       group: 'typography', themeTokenKey: 'textPrimary' },
     ],
 };
 
