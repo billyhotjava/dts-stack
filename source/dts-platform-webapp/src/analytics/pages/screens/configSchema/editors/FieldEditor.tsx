@@ -142,7 +142,7 @@ const FieldEditor: React.FC<FieldEditorProps> = ({ field, value, onChange, theme
         formData.append('file', file);
         setUploading(true);
         try {
-          const res = await apiClient.post<{ data: { url: string } }>({ url: '/api/infra/screen-images/upload', data: formData });
+          const res = await apiClient.post<{ data: { url: string } }>({ url: '/infra/screen-images/upload', data: formData });
           const url = (res as any)?.data?.url ?? (res as any)?.url;
           if (url) { onChange(url); message.success('上传成功'); }
           else { message.error('上传返回格式异常'); }
@@ -187,7 +187,7 @@ const FieldEditor: React.FC<FieldEditorProps> = ({ field, value, onChange, theme
       const fontsLoaded = useRef(false);
       if (!fontsLoaded.current) {
         fontsLoaded.current = true;
-        apiClient.post<any>({ url: '/api/infra/screen-fonts', method: 'GET' } as any)
+        apiClient.post<any>({ url: '/infra/screen-fonts', method: 'GET' } as any)
           .catch(() => fetch('/api/infra/screen-fonts').then(r => r.json()))
           .then((res: any) => {
             const list = res?.data ?? res ?? [];
@@ -207,7 +207,7 @@ const FieldEditor: React.FC<FieldEditorProps> = ({ field, value, onChange, theme
         formData.append('file', file);
         setFontUploading(true);
         try {
-          const res = await apiClient.post<any>({ url: '/api/infra/screen-fonts/upload', data: formData });
+          const res = await apiClient.post<any>({ url: '/infra/screen-fonts/upload', data: formData });
           const d = (res as any)?.data ?? res;
           if (d?.fontFamily) {
             onChange(d.fontFamily);

@@ -103,7 +103,7 @@ function BackgroundImageRow({ value, onChange }: { value: string; onChange: (url
         formData.append('file', file);
         setUploading(true);
         try {
-            const res = await apiClient.post<{ data: { url: string } }>({ url: '/api/infra/screen-images/upload', data: formData });
+            const res = await apiClient.post<{ data: { url: string } }>({ url: '/infra/screen-images/upload', data: formData });
             const url = (res as any)?.data?.url ?? (res as any)?.url;
             if (url) { onChange(url); message.success('上传成功'); }
             else { message.error('上传返回格式异常'); }
