@@ -15,6 +15,7 @@ services/certs/*.srl
 services/certs/*.jks
 services/dts-minio/data/
 services/dts-platform/upload/data-standard
+services/dts-platform/upload/screen-images
 services/dts-elasticsearch/data/
 services/dts-addax/jobs/*.json
 services/dts-airflow/dags/*.json
