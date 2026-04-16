@@ -648,10 +648,6 @@
             {
               "name": "projectNo",
               "variableKey": "projectNo"
-            },
-            {
-              "name": "riskLevel",
-              "variableKey": "riskLevel"
             }
           ]
         }
@@ -702,10 +698,6 @@
             {
               "name": "projectNo",
               "variableKey": "projectNo"
-            },
-            {
-              "name": "riskLevel",
-              "variableKey": "riskLevel"
             }
           ]
         }
@@ -756,10 +748,6 @@
             {
               "name": "projectNo",
               "variableKey": "projectNo"
-            },
-            {
-              "name": "riskLevel",
-              "variableKey": "riskLevel"
             }
           ]
         }
@@ -810,10 +798,6 @@
             {
               "name": "projectNo",
               "variableKey": "projectNo"
-            },
-            {
-              "name": "riskLevel",
-              "variableKey": "riskLevel"
             }
           ]
         }
@@ -864,10 +848,6 @@
             {
               "name": "projectNo",
               "variableKey": "projectNo"
-            },
-            {
-              "name": "riskLevel",
-              "variableKey": "riskLevel"
             }
           ]
         }
@@ -947,10 +927,6 @@
             {
               "name": "projectNo",
               "variableKey": "projectNo"
-            },
-            {
-              "name": "riskLevel",
-              "variableKey": "riskLevel"
             }
           ]
         }
@@ -1087,16 +1063,8 @@
               "variableKey": "dateTo"
             },
             {
-              "name": "deptId",
-              "variableKey": "deptId"
-            },
-            {
               "name": "projectNo",
               "variableKey": "projectNo"
-            },
-            {
-              "name": "riskLevel",
-              "variableKey": "riskLevel"
             }
           ]
         }

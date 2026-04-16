@@ -448,7 +448,7 @@ export default function ScreenPreviewPage() {
 						width: screenWidth, height: screenHeight,
 						backgroundColor: carousel.currentPageBgColor || screen.backgroundColor || '#1e1f26',
 						backgroundImage: safeCssBackgroundUrl(carousel.currentPageBgImage || screen.backgroundImage),
-						backgroundSize: 'cover', backgroundPosition: 'center',
+						backgroundSize: 'cover', backgroundPosition: 'center', backgroundRepeat: 'no-repeat',
 					}}>
 						{visibleSortedComponents.map((comp) => (
 							<div key={comp.id} style={{ position: 'absolute', left: comp.x, top: comp.y, width: comp.width, height: comp.height, zIndex: comp.zIndex, ...resolveEntryAnimationStyle(comp.config), ...resolveComponentAppearanceStyle(comp.config) }}>
@@ -474,6 +474,7 @@ export default function ScreenPreviewPage() {
 								backgroundImage: safeCssBackgroundUrl(carousel.currentPageBgImage || screen.backgroundImage),
 								backgroundSize: 'cover',
 								backgroundPosition: 'center',
+								backgroundRepeat: 'no-repeat',
 								...runtimeCanvasScaleStyle,
 							}}
 						>

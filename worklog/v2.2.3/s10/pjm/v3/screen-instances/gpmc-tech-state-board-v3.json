@@ -1007,10 +1007,6 @@
               "variableKey": "dateTo"
             },
             {
-              "name": "deptId",
-              "variableKey": "deptId"
-            },
-            {
               "name": "projectNo",
               "variableKey": "projectNo"
             }
@@ -1077,10 +1073,6 @@
             {
               "name": "dateTo",
               "variableKey": "dateTo"
-            },
-            {
-              "name": "deptId",
-              "variableKey": "deptId"
             },
             {
               "name": "projectNo",

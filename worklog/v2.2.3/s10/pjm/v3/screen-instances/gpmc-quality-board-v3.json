@@ -951,10 +951,6 @@
               "variableKey": "dateTo"
             },
             {
-              "name": "deptId",
-              "variableKey": "deptId"
-            },
-            {
               "name": "projectNo",
               "variableKey": "projectNo"
             }
@@ -1067,14 +1063,6 @@
           "queryTimeoutSeconds": 30,
           "maxRows": 2000,
           "parameterBindings": [
-            {
-              "name": "dateFrom",
-              "variableKey": "dateFrom"
-            },
-            {
-              "name": "dateTo",
-              "variableKey": "dateTo"
-            },
             {
               "name": "deptId",
               "variableKey": "deptId"
