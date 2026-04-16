@@ -6,7 +6,6 @@ import java.io.IOException;
 import java.nio.file.DirectoryStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.nio.file.Paths;
 import java.nio.file.StandardCopyOption;
 import java.util.ArrayList;
 import java.util.List;
@@ -45,7 +44,7 @@ public class ScreenFontResource {
     public ScreenFontResource(
         @Value("${dts.screen-fonts.storage-dir:/opt/dts/upload/screen-fonts}") String storageDirStr
     ) {
-        this.storageDir = Paths.get(storageDirStr);
+        this.storageDir = Path.of(storageDirStr);
         try {
             Files.createDirectories(this.storageDir);
         } catch (IOException e) {
