@@ -1,5 +1,7 @@
-import React from 'react';
-import { ColorPicker, Input, InputNumber, Radio, Select, Slider, Switch } from 'antd';
+import React, { useRef, useState } from 'react';
+import { Button, ColorPicker, Input, InputNumber, message, Radio, Select, Slider, Switch } from 'antd';
+import { UploadOutlined } from '@ant-design/icons';
+import apiClient from '../../../../../api/apiClient';
 
 import type { ConfigField } from '../types';
 
@@ -129,20 +131,46 @@ const FieldEditor: React.FC<FieldEditorProps> = ({ field, value, onChange, theme
         </Radio.Group>
       );
 
-    case 'image-url':
+    case 'image-url': {
+      const fileInputRef = useRef<HTMLInputElement>(null);
+      const [uploading, setUploading] = useState(false);
+      const handleUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (!file) return;
+        if (file.size > 10 * 1024 * 1024) { message.error('文件大小不能超过 10MB'); return; }
+        const formData = new FormData();
+        formData.append('file', file);
+        setUploading(true);
+        try {
+          const res = await apiClient.post<{ data: { url: string } }>({ url: '/infra/screen-images/upload', data: formData });
+          const url = (res as any)?.data?.url ?? (res as any)?.url;
+          if (url) { onChange(url); message.success('上传成功'); }
+          else { message.error('上传返回格式异常'); }
+        } catch (err: any) { message.error(err?.message || '上传失败'); }
+        finally { setUploading(false); if (fileInputRef.current) fileInputRef.current.value = ''; }
+      };
       return (
-        <Input
-          size="small"
-          value={value as string}
-          onChange={(e) => onChange(e.target.value)}
-          placeholder="图片 URL"
-          allowClear
-        />
+        <div style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
+          <Input
+            size="small"
+            value={value as string}
+            onChange={(e) => onChange(e.target.value)}
+            placeholder="图片 URL 或点击上传"
+            allowClear
+            style={{ flex: 1 }}
+          />
+          <Button size="small" icon={<UploadOutlined />} loading={uploading}
+            onClick={() => fileInputRef.current?.click()}>
+            上传
+          </Button>
+          <input ref={fileInputRef} type="file" accept="image/*" style={{ display: 'none' }}
+            onChange={handleUpload} />
+        </div>
       );
+    }
 
     case 'gradient':
     case 'icon-select':
-    case 'font-family':
       return (
         <Input
           size="small"
@@ -151,6 +179,69 @@ const FieldEditor: React.FC<FieldEditorProps> = ({ field, value, onChange, theme
           placeholder={placeholder}
         />
       );
+
+    case 'font-family': {
+      const fontInputRef = useRef<HTMLInputElement>(null);
+      const [fontUploading, setFontUploading] = useState(false);
+      const [uploadedFonts, setUploadedFonts] = useState<Array<{ fontFamily: string; url: string; format: string }>>([]);
+      const fontsLoaded = useRef(false);
+      if (!fontsLoaded.current) {
+        fontsLoaded.current = true;
+        apiClient.post<any>({ url: '/infra/screen-fonts', method: 'GET' } as any)
+          .catch(() => fetch('/api/infra/screen-fonts').then(r => r.json()))
+          .then((res: any) => {
+            const list = res?.data ?? res ?? [];
+            if (Array.isArray(list)) setUploadedFonts(list);
+          }).catch(() => {});
+      }
+      const PRESET_FONTS = [
+        '微软雅黑', '宋体', '黑体', '楷体', '仿宋',
+        'PingFang SC', 'Noto Sans SC',
+        'Arial', 'Helvetica', 'Times New Roman', 'Georgia',
+      ];
+      const handleFontUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (!file) return;
+        if (file.size > 20 * 1024 * 1024) { message.error('字体文件不能超过 20MB'); return; }
+        const formData = new FormData();
+        formData.append('file', file);
+        setFontUploading(true);
+        try {
+          const res = await apiClient.post<any>({ url: '/infra/screen-fonts/upload', data: formData });
+          const d = (res as any)?.data ?? res;
+          if (d?.fontFamily) {
+            onChange(d.fontFamily);
+            setUploadedFonts(prev => [...prev, { fontFamily: d.fontFamily, url: d.url, format: d.filename?.split('.').pop() || 'ttf' }]);
+            message.success(`字体 "${d.fontFamily}" 上传成功`);
+          } else { message.error('上传返回格式异常'); }
+        } catch (err: any) { message.error(err?.message || '上传失败'); }
+        finally { setFontUploading(false); if (fontInputRef.current) fontInputRef.current.value = ''; }
+      };
+      const options = [
+        ...PRESET_FONTS.map(f => ({ label: f, value: f })),
+        ...uploadedFonts.map(f => ({ label: `📦 ${f.fontFamily}`, value: f.fontFamily })),
+      ];
+      return (
+        <div style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
+          <Select
+            size="small"
+            showSearch
+            value={(value as string) || undefined}
+            onChange={(v) => onChange(v)}
+            placeholder="选择字体"
+            options={options}
+            style={{ flex: 1 }}
+            allowClear
+          />
+          <Button size="small" icon={<UploadOutlined />} loading={fontUploading}
+            onClick={() => fontInputRef.current?.click()}>
+            上传
+          </Button>
+          <input ref={fontInputRef} type="file" accept=".ttf,.otf,.woff,.woff2" style={{ display: 'none' }}
+            onChange={handleFontUpload} />
+        </div>
+      );
+    }
 
     default:
       // Complex types with JSON fallback

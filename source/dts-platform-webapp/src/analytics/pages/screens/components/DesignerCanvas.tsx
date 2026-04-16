@@ -28,6 +28,25 @@ export function DesignerCanvas() {
     useEffect(() => {
         if (canvasRef.current) applyThemeCssVariables(canvasRef.current, editorTheme);
     }, [editorTheme]);
+
+    // Inject @font-face for uploaded custom fonts so they're available everywhere
+    useEffect(() => {
+        const styleId = 'screen-custom-fonts';
+        fetch('/api/infra/screen-fonts')
+            .then(r => r.ok ? r.json() : null)
+            .then(res => {
+                const fonts = res?.data ?? res ?? [];
+                if (!Array.isArray(fonts) || fonts.length === 0) return;
+                let el = document.getElementById(styleId) as HTMLStyleElement | null;
+                if (!el) { el = document.createElement('style'); el.id = styleId; document.head.appendChild(el); }
+                const formatMap: Record<string, string> = { ttf: 'truetype', otf: 'opentype', woff: 'woff', woff2: 'woff2' };
+                el.textContent = fonts.map((f: any) =>
+                    `@font-face { font-family: "${f.fontFamily}"; src: url("${f.url}") format("${formatMap[f.format] || 'truetype'}"); font-display: swap; }`
+                ).join('\n');
+            })
+            .catch(() => {});
+        return () => { document.getElementById(styleId)?.remove(); };
+    }, []);
     const [fitScale, setFitScale] = useState(1);
 
     // Phase 4.4: resize debounce with requestAnimationFrame
@@ -256,6 +275,7 @@ export function DesignerCanvas() {
                         backgroundImage: safeCssBackgroundUrl(config.backgroundImage),
                         backgroundSize: 'cover',
                         backgroundPosition: 'center',
+                        backgroundRepeat: 'no-repeat',
                         transform: `scale(${scale})`,
                         transformOrigin: 'top left',
                     }}

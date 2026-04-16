@@ -170,6 +170,7 @@ const shapeSchema: ComponentConfigSchema = {
         { key: 'radius',      label: '圆角',     type: 'number', group: 'appearance', min: 0, max: 100, defaultValue: 8,
             showIf: (config) => config.shapeType !== 'line' && config.shapeType !== 'arrow' && config.shapeType !== 'circle',
         },
+        { key: 'backgroundImage', label: '背景图', type: 'image-url', group: 'appearance' },
     ],
 };
 
