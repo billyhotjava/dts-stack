@@ -10,6 +10,7 @@ import com.yuzhi.dts.platform.web.filter.AuditLoggingFilter;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.http.HttpMethod;
 import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.http.SessionCreationPolicy;
@@ -59,6 +60,10 @@ public class SecurityConfiguration {
                     // Traefik forward-auth probe endpoint must be reachable without prior auth.
                     // The endpoint itself returns 2xx only when the incoming session/token is valid.
                     .requestMatchers(mvc.pattern("/api/forward-auth")).permitAll()
+                    // Public static assets for screen designer (uploaded images/fonts).
+                    // Only GET by filename is public; upload endpoints fall through to authenticated().
+                    .requestMatchers(HttpMethod.GET, "/api/infra/screen-images/*").permitAll()
+                    .requestMatchers(HttpMethod.GET, "/api/infra/screen-fonts/*").permitAll()
                     // Menus must be fetched under authentication so role-based filtering works
                     // Platform has no /api/admin/** endpoints; remove legacy matchers
                     .requestMatchers(mvc.pattern("/api/**")).authenticated()
