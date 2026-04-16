@@ -41,6 +41,7 @@ const defaultConfig: ScreenConfig = {
     width: 1920,
     height: 1080,
     backgroundColor: '#1e1f26',
+    backgroundImage: '',
     components: [],
     globalVariables: [],
 };

@@ -465,13 +465,16 @@ export function renderBasic(
                     </svg>
                 );
             }
+            const bgImageStyle: React.CSSProperties = (c.backgroundImage && isSafeSrcUrl(c.backgroundImage))
+                ? { backgroundImage: `url(${c.backgroundImage as string})`, backgroundSize: 'cover', backgroundPosition: 'center', backgroundRepeat: 'no-repeat' }
+                : {};
             if (shapeType === 'circle') {
                 return (
-                    <div style={{ width: '100%', height: '100%', borderRadius: '50%', background: fillColor, border: `${borderWidth}px solid ${borderColor}` }} />
+                    <div style={{ width: '100%', height: '100%', borderRadius: '50%', background: fillColor, border: `${borderWidth}px solid ${borderColor}`, ...bgImageStyle }} />
                 );
             }
             return (
-                <div style={{ width: '100%', height: '100%', borderRadius: radius, background: fillColor, border: `${borderWidth}px solid ${borderColor}` }} />
+                <div style={{ width: '100%', height: '100%', borderRadius: radius, background: fillColor, border: `${borderWidth}px solid ${borderColor}`, ...bgImageStyle }} />
             );
         }
 
