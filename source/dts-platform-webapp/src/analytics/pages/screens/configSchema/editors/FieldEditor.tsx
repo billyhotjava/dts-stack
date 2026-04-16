@@ -1,5 +1,7 @@
-import React from 'react';
-import { ColorPicker, Input, InputNumber, Radio, Select, Slider, Switch } from 'antd';
+import React, { useRef, useState } from 'react';
+import { Button, ColorPicker, Input, InputNumber, message, Radio, Select, Slider, Switch } from 'antd';
+import { UploadOutlined } from '@ant-design/icons';
+import apiClient from '../../../../../api/apiClient';
 
 import type { ConfigField } from '../types';
 
@@ -129,16 +131,43 @@ const FieldEditor: React.FC<FieldEditorProps> = ({ field, value, onChange, theme
         </Radio.Group>
       );
 
-    case 'image-url':
+    case 'image-url': {
+      const fileInputRef = useRef<HTMLInputElement>(null);
+      const [uploading, setUploading] = useState(false);
+      const handleUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (!file) return;
+        if (file.size > 10 * 1024 * 1024) { message.error('文件大小不能超过 10MB'); return; }
+        const formData = new FormData();
+        formData.append('file', file);
+        setUploading(true);
+        try {
+          const res = await apiClient.post<{ data: { url: string } }>({ url: '/api/infra/screen-images/upload', data: formData });
+          const url = (res as any)?.data?.url ?? (res as any)?.url;
+          if (url) { onChange(url); message.success('上传成功'); }
+          else { message.error('上传返回格式异常'); }
+        } catch (err: any) { message.error(err?.message || '上传失败'); }
+        finally { setUploading(false); if (fileInputRef.current) fileInputRef.current.value = ''; }
+      };
       return (
-        <Input
-          size="small"
-          value={value as string}
-          onChange={(e) => onChange(e.target.value)}
-          placeholder="图片 URL"
-          allowClear
-        />
+        <div style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
+          <Input
+            size="small"
+            value={value as string}
+            onChange={(e) => onChange(e.target.value)}
+            placeholder="图片 URL 或点击上传"
+            allowClear
+            style={{ flex: 1 }}
+          />
+          <Button size="small" icon={<UploadOutlined />} loading={uploading}
+            onClick={() => fileInputRef.current?.click()}>
+            上传
+          </Button>
+          <input ref={fileInputRef} type="file" accept="image/*" style={{ display: 'none' }}
+            onChange={handleUpload} />
+        </div>
       );
+    }
 
     case 'gradient':
     case 'icon-select':
