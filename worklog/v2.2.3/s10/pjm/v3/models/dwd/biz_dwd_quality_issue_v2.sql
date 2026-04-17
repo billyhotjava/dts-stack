@@ -12,7 +12,7 @@ WITH cleaned AS (
     {{ nullif_placeholder("o.issue_category") }}            AS issue_category,
     {{ nullif_placeholder("o.zero_plan") }}                 AS zero_plan,
     {{ nullif_placeholder("o.zero_plan_synced") }}          AS zero_plan_synced,
-    {{ nullif_placeholder("o.status") }}                    AS status,
+    {{ nullif_placeholder("o.status") }}                    AS status_raw,
     {{ nullif_placeholder("o.current_progress") }}          AS current_progress,
     {{ nullif_placeholder("o.project_manager") }}           AS project_manager,
     {{ nullif_placeholder("o.filled_by") }}                 AS filled_by,
@@ -60,7 +60,8 @@ SELECT
   t.issue_category,
   t.zero_plan,
   t.zero_plan_synced,
-  t.status,
+  COALESCE(qs.standard_code, t.status_raw)                  AS status,
+  t.status_raw,
   t.current_progress,
   t.project_manager,
   t.filled_by,
@@ -117,6 +118,6 @@ SELECT
 
 FROM typed t
 LEFT JOIN {{ ref('dim_quality_status_v2') }} qs
-  ON qs.code = t.status
+  ON qs.code = t.status_raw
 LEFT JOIN {{ ref('dim_quality_category_v2') }} qc
   ON qc.code = t.issue_category

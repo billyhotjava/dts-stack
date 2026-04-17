@@ -1,4 +1,4 @@
-import Editor, { useMonaco, type OnMount } from "@monaco-editor/react";
+import Editor, { useMonaco, type BeforeMount, type OnMount } from "@monaco-editor/react";
 import { forwardRef, useCallback, useEffect, useImperativeHandle, useRef } from "react";
 import type { editor as MonacoEditor } from "monaco-editor";
 import { NOOP_CATALOG, registerSqlCatalogCompletion, type CatalogSource } from "./completion/catalogProvider";
@@ -60,6 +60,13 @@ export const SqlEditor = forwardRef<SqlEditorHandle, SqlEditorProps>(function Sq
   const monaco = useMonaco();
   const editorInstanceRef = useRef<MonacoEditor.IStandaloneCodeEditor | null>(null);
 
+  // Register themes as soon as monaco is available, so the Editor's initial
+  // `theme` prop is honored on first paint (prevents a white flash on refresh).
+  useEffect(() => {
+    if (!monaco) return;
+    registerSqlIdeThemes(monaco);
+  }, [monaco]);
+
   // Register SQL catalog completion provider; re-register when catalog source changes
   useEffect(() => {
     if (!monaco) return;
@@ -68,6 +75,11 @@ export const SqlEditor = forwardRef<SqlEditorHandle, SqlEditorProps>(function Sq
   }, [monaco, catalog]);
 
   // Keep refs to the latest callbacks so listeners never capture stale closures
+  const isDarkRef = useRef(isDark);
+  useEffect(() => {
+    isDarkRef.current = isDark;
+  });
+
   const onCursorPositionChangeRef = useRef(onCursorPositionChange);
   useEffect(() => {
     onCursorPositionChangeRef.current = onCursorPositionChange;
@@ -129,10 +141,15 @@ export const SqlEditor = forwardRef<SqlEditorHandle, SqlEditorProps>(function Sq
     },
   }), []);
 
+  const handleBeforeMount: BeforeMount = useCallback((mo) => {
+    registerSqlIdeThemes(mo);
+  }, []);
+
   const handleMount: OnMount = useCallback(
     (editor, mo) => {
       editorInstanceRef.current = editor;
       registerSqlIdeThemes(mo);
+      mo.editor.setTheme(isDarkRef.current ? SQLIDE_DARK : SQLIDE_LIGHT);
 
       const cursorDisposable = editor.onDidChangeCursorPosition((e) => {
         onCursorPositionChangeRef.current?.({
@@ -204,6 +221,7 @@ export const SqlEditor = forwardRef<SqlEditorHandle, SqlEditorProps>(function Sq
         value={value}
         onChange={(v) => onChange(v ?? "")}
         theme={isDark ? SQLIDE_DARK : SQLIDE_LIGHT}
+        beforeMount={handleBeforeMount}
         onMount={handleMount}
         options={{
           automaticLayout: true,
