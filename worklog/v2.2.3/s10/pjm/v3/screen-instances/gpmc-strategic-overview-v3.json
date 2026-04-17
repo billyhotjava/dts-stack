@@ -658,7 +658,7 @@
         "type": "sql",
         "sqlConfig": {
           "databaseId": "{{DATABASE_ID}}",
-          "query": "SELECT COUNT(DISTINCT s.project_no) AS \"项目总数\", COUNT(DISTINCT CASE WHEN s.incomplete_cnt > 0 THEN s.project_no END) AS \"进行中项目\", COUNT(DISTINCT CASE WHEN s.incomplete_cnt > 0 AND (s.overdue_incomplete_unchanged_non_general_cnt > 0 OR s.overdue_incomplete_changed_non_general_cnt > 0) THEN s.project_no END) AS \"延期项目\" FROM biz_dws_progress_monthly_v2 s WHERE s.plan_month >= to_char({{dateFrom}}::date, 'YYYY-MM') AND s.plan_month <= to_char({{dateTo}}::date, 'YYYY-MM') [[AND s.project_no ILIKE '%' || {{projectNo}} || '%']]",
+          "query": "SELECT COUNT(DISTINCT s.project_no) AS \"项目总数\", COUNT(DISTINCT CASE WHEN s.incomplete_cnt > 0 THEN s.project_no END) AS \"进行中项目\", COUNT(DISTINCT CASE WHEN s.incomplete_cnt > 0 AND (s.overdue_incomplete_unchanged_non_general_cnt > 0 OR s.overdue_incomplete_changed_non_general_cnt > 0) THEN s.project_no END) AS \"延期项目\" FROM biz_dws_progress_monthly_v2 s WHERE s.plan_month >= to_char({{dateFrom}}::date, 'YYYY-MM') AND s.plan_month <= to_char({{dateTo}}::date, 'YYYY-MM') [[AND s.project_no = {{projectNo}}]]",
           "queryTimeoutSeconds": 30,
           "maxRows": 2000,
           "parameterBindings": [
@@ -705,7 +705,7 @@
         "type": "sql",
         "sqlConfig": {
           "databaseId": "{{DATABASE_ID}}",
-          "query": "SELECT COUNT(DISTINCT s.project_no) AS \"项目总数\", COUNT(DISTINCT CASE WHEN s.incomplete_cnt > 0 THEN s.project_no END) AS \"进行中项目\", COUNT(DISTINCT CASE WHEN s.incomplete_cnt > 0 AND (s.overdue_incomplete_unchanged_non_general_cnt > 0 OR s.overdue_incomplete_changed_non_general_cnt > 0) THEN s.project_no END) AS \"延期项目\" FROM biz_dws_progress_monthly_v2 s WHERE s.plan_month >= to_char({{dateFrom}}::date, 'YYYY-MM') AND s.plan_month <= to_char({{dateTo}}::date, 'YYYY-MM') [[AND s.project_no ILIKE '%' || {{projectNo}} || '%']]",
+          "query": "SELECT COUNT(DISTINCT s.project_no) AS \"项目总数\", COUNT(DISTINCT CASE WHEN s.incomplete_cnt > 0 THEN s.project_no END) AS \"进行中项目\", COUNT(DISTINCT CASE WHEN s.incomplete_cnt > 0 AND (s.overdue_incomplete_unchanged_non_general_cnt > 0 OR s.overdue_incomplete_changed_non_general_cnt > 0) THEN s.project_no END) AS \"延期项目\" FROM biz_dws_progress_monthly_v2 s WHERE s.plan_month >= to_char({{dateFrom}}::date, 'YYYY-MM') AND s.plan_month <= to_char({{dateTo}}::date, 'YYYY-MM') [[AND s.project_no = {{projectNo}}]]",
           "queryTimeoutSeconds": 30,
           "maxRows": 2000,
           "parameterBindings": [
@@ -752,7 +752,7 @@
         "type": "sql",
         "sqlConfig": {
           "databaseId": "{{DATABASE_ID}}",
-          "query": "SELECT COUNT(DISTINCT s.project_no) AS \"项目总数\", COUNT(DISTINCT CASE WHEN s.incomplete_cnt > 0 THEN s.project_no END) AS \"进行中项目\", COUNT(DISTINCT CASE WHEN s.incomplete_cnt > 0 AND (s.overdue_incomplete_unchanged_non_general_cnt > 0 OR s.overdue_incomplete_changed_non_general_cnt > 0) THEN s.project_no END) AS \"延期项目\" FROM biz_dws_progress_monthly_v2 s WHERE s.plan_month >= to_char({{dateFrom}}::date, 'YYYY-MM') AND s.plan_month <= to_char({{dateTo}}::date, 'YYYY-MM') [[AND s.project_no ILIKE '%' || {{projectNo}} || '%']]",
+          "query": "SELECT COUNT(DISTINCT s.project_no) AS \"项目总数\", COUNT(DISTINCT CASE WHEN s.incomplete_cnt > 0 THEN s.project_no END) AS \"进行中项目\", COUNT(DISTINCT CASE WHEN s.incomplete_cnt > 0 AND (s.overdue_incomplete_unchanged_non_general_cnt > 0 OR s.overdue_incomplete_changed_non_general_cnt > 0) THEN s.project_no END) AS \"延期项目\" FROM biz_dws_progress_monthly_v2 s WHERE s.plan_month >= to_char({{dateFrom}}::date, 'YYYY-MM') AND s.plan_month <= to_char({{dateTo}}::date, 'YYYY-MM') [[AND s.project_no = {{projectNo}}]]",
           "queryTimeoutSeconds": 30,
           "maxRows": 2000,
           "parameterBindings": [
@@ -799,7 +799,7 @@
         "type": "sql",
         "sqlConfig": {
           "databaseId": "{{DATABASE_ID}}",
-          "query": "WITH p AS (SELECT SUM(due_cnt) AS due, SUM(on_time_cnt) AS on_time, SUM(incomplete_cnt) AS incomplete, SUM(incomplete_high_risk_cnt) AS hi_inc, SUM(milestone_on_time_cnt) AS ms_ot, SUM(milestone_total_cnt) AS ms_t, SUM(abnormal_pending_non_general_cnt) AS abn, SUM(overdue_incomplete_unchanged_non_general_cnt) AS ov_unc, SUM(overdue_incomplete_changed_non_general_cnt) AS ov_chg, SUM(incomplete_milestone_cnt) AS inc_ms FROM biz_dws_progress_monthly_v2 WHERE plan_month >= to_char({{dateFrom}}::date, 'YYYY-MM') AND plan_month <= to_char({{dateTo}}::date, 'YYYY-MM') [[AND project_no ILIKE '%' || {{projectNo}} || '%']]) SELECT CASE WHEN p.due=0 THEN 0 ELSE ROUND(p.on_time::numeric/p.due::numeric*100,2) END AS \"按时完成率\", CASE WHEN p.due=0 THEN 0 ELSE ROUND((p.ov_unc+p.ov_chg)::numeric/p.due::numeric*100,2) END AS \"超期率\", CASE WHEN p.due=0 THEN 0 ELSE ROUND((p.abn+p.ov_unc)::numeric/p.due::numeric*100,2) END AS \"异常率\", CASE WHEN p.ms_t=0 THEN 0 ELSE ROUND(p.ms_ot::numeric/p.ms_t::numeric*100,2) END AS \"里程碑按时率\", CASE WHEN p.incomplete=0 THEN 0 ELSE ROUND(p.hi_inc::numeric/p.incomplete::numeric*100,2) END AS \"高风险未完成占比\", ROUND((CASE WHEN p.due=0 THEN 0 ELSE p.on_time::numeric/p.due::numeric*100 END)*0.4+(CASE WHEN p.ms_t=0 THEN 0 ELSE p.ms_ot::numeric/p.ms_t::numeric*100 END)*0.3+(100-(CASE WHEN p.due=0 THEN 0 ELSE (p.abn+p.ov_unc)::numeric/p.due::numeric*100 END))*0.3,2) AS \"进度健康度\", p.inc_ms*3+p.hi_inc*2+p.ov_unc*1 AS \"风险预警指数\" FROM p",
+          "query": "WITH p AS (SELECT SUM(due_cnt) AS due, SUM(on_time_cnt) AS on_time, SUM(incomplete_cnt) AS incomplete, SUM(incomplete_high_risk_cnt) AS hi_inc, SUM(milestone_on_time_cnt) AS ms_ot, SUM(milestone_total_cnt) AS ms_t, SUM(abnormal_pending_non_general_cnt) AS abn, SUM(overdue_incomplete_unchanged_non_general_cnt) AS ov_unc, SUM(overdue_incomplete_changed_non_general_cnt) AS ov_chg, SUM(incomplete_milestone_cnt) AS inc_ms FROM biz_dws_progress_monthly_v2 WHERE plan_month >= to_char({{dateFrom}}::date, 'YYYY-MM') AND plan_month <= to_char({{dateTo}}::date, 'YYYY-MM') [[AND project_no = {{projectNo}}]]) SELECT CASE WHEN p.due=0 THEN 0 ELSE ROUND(p.on_time::numeric/p.due::numeric*100,2) END AS \"按时完成率\", CASE WHEN p.due=0 THEN 0 ELSE ROUND((p.ov_unc+p.ov_chg)::numeric/p.due::numeric*100,2) END AS \"超期率\", CASE WHEN p.due=0 THEN 0 ELSE ROUND((p.abn+p.ov_unc)::numeric/p.due::numeric*100,2) END AS \"异常率\", CASE WHEN p.ms_t=0 THEN 0 ELSE ROUND(p.ms_ot::numeric/p.ms_t::numeric*100,2) END AS \"里程碑按时率\", CASE WHEN p.incomplete=0 THEN 0 ELSE ROUND(p.hi_inc::numeric/p.incomplete::numeric*100,2) END AS \"高风险未完成占比\", ROUND((CASE WHEN p.due=0 THEN 0 ELSE p.on_time::numeric/p.due::numeric*100 END)*0.4+(CASE WHEN p.ms_t=0 THEN 0 ELSE p.ms_ot::numeric/p.ms_t::numeric*100 END)*0.3+(100-(CASE WHEN p.due=0 THEN 0 ELSE (p.abn+p.ov_unc)::numeric/p.due::numeric*100 END))*0.3,2) AS \"进度健康度\", p.inc_ms*3+p.hi_inc*2+p.ov_unc*1 AS \"风险预警指数\" FROM p",
           "queryTimeoutSeconds": 30,
           "maxRows": 2000,
           "parameterBindings": [
@@ -846,7 +846,7 @@
         "type": "sql",
         "sqlConfig": {
           "databaseId": "{{DATABASE_ID}}",
-          "query": "WITH p AS (SELECT SUM(due_cnt) AS due, SUM(on_time_cnt) AS on_time, SUM(incomplete_cnt) AS incomplete, SUM(incomplete_high_risk_cnt) AS hi_inc, SUM(milestone_on_time_cnt) AS ms_ot, SUM(milestone_total_cnt) AS ms_t, SUM(abnormal_pending_non_general_cnt) AS abn, SUM(overdue_incomplete_unchanged_non_general_cnt) AS ov_unc, SUM(overdue_incomplete_changed_non_general_cnt) AS ov_chg, SUM(incomplete_milestone_cnt) AS inc_ms FROM biz_dws_progress_monthly_v2 WHERE plan_month >= to_char({{dateFrom}}::date, 'YYYY-MM') AND plan_month <= to_char({{dateTo}}::date, 'YYYY-MM') [[AND project_no ILIKE '%' || {{projectNo}} || '%']]) SELECT CASE WHEN p.due=0 THEN 0 ELSE ROUND(p.on_time::numeric/p.due::numeric*100,2) END AS \"按时完成率\", CASE WHEN p.due=0 THEN 0 ELSE ROUND((p.ov_unc+p.ov_chg)::numeric/p.due::numeric*100,2) END AS \"超期率\", CASE WHEN p.due=0 THEN 0 ELSE ROUND((p.abn+p.ov_unc)::numeric/p.due::numeric*100,2) END AS \"异常率\", CASE WHEN p.ms_t=0 THEN 0 ELSE ROUND(p.ms_ot::numeric/p.ms_t::numeric*100,2) END AS \"里程碑按时率\", CASE WHEN p.incomplete=0 THEN 0 ELSE ROUND(p.hi_inc::numeric/p.incomplete::numeric*100,2) END AS \"高风险未完成占比\", ROUND((CASE WHEN p.due=0 THEN 0 ELSE p.on_time::numeric/p.due::numeric*100 END)*0.4+(CASE WHEN p.ms_t=0 THEN 0 ELSE p.ms_ot::numeric/p.ms_t::numeric*100 END)*0.3+(100-(CASE WHEN p.due=0 THEN 0 ELSE (p.abn+p.ov_unc)::numeric/p.due::numeric*100 END))*0.3,2) AS \"进度健康度\", p.inc_ms*3+p.hi_inc*2+p.ov_unc*1 AS \"风险预警指数\" FROM p",
+          "query": "WITH p AS (SELECT SUM(due_cnt) AS due, SUM(on_time_cnt) AS on_time, SUM(incomplete_cnt) AS incomplete, SUM(incomplete_high_risk_cnt) AS hi_inc, SUM(milestone_on_time_cnt) AS ms_ot, SUM(milestone_total_cnt) AS ms_t, SUM(abnormal_pending_non_general_cnt) AS abn, SUM(overdue_incomplete_unchanged_non_general_cnt) AS ov_unc, SUM(overdue_incomplete_changed_non_general_cnt) AS ov_chg, SUM(incomplete_milestone_cnt) AS inc_ms FROM biz_dws_progress_monthly_v2 WHERE plan_month >= to_char({{dateFrom}}::date, 'YYYY-MM') AND plan_month <= to_char({{dateTo}}::date, 'YYYY-MM') [[AND project_no = {{projectNo}}]]) SELECT CASE WHEN p.due=0 THEN 0 ELSE ROUND(p.on_time::numeric/p.due::numeric*100,2) END AS \"按时完成率\", CASE WHEN p.due=0 THEN 0 ELSE ROUND((p.ov_unc+p.ov_chg)::numeric/p.due::numeric*100,2) END AS \"超期率\", CASE WHEN p.due=0 THEN 0 ELSE ROUND((p.abn+p.ov_unc)::numeric/p.due::numeric*100,2) END AS \"异常率\", CASE WHEN p.ms_t=0 THEN 0 ELSE ROUND(p.ms_ot::numeric/p.ms_t::numeric*100,2) END AS \"里程碑按时率\", CASE WHEN p.incomplete=0 THEN 0 ELSE ROUND(p.hi_inc::numeric/p.incomplete::numeric*100,2) END AS \"高风险未完成占比\", ROUND((CASE WHEN p.due=0 THEN 0 ELSE p.on_time::numeric/p.due::numeric*100 END)*0.4+(CASE WHEN p.ms_t=0 THEN 0 ELSE p.ms_ot::numeric/p.ms_t::numeric*100 END)*0.3+(100-(CASE WHEN p.due=0 THEN 0 ELSE (p.abn+p.ov_unc)::numeric/p.due::numeric*100 END))*0.3,2) AS \"进度健康度\", p.inc_ms*3+p.hi_inc*2+p.ov_unc*1 AS \"风险预警指数\" FROM p",
           "queryTimeoutSeconds": 30,
           "maxRows": 2000,
           "parameterBindings": [
@@ -929,7 +929,7 @@
         "type": "sql",
         "sqlConfig": {
           "databaseId": "{{DATABASE_ID}}",
-          "query": "SELECT s.plan_month AS \"月份\", SUM(s.on_time_cnt) AS \"按时完成\", SUM(s.overdue_completed_cnt) AS \"超期完成\", SUM(s.incomplete_cnt) AS \"未完成\" FROM biz_dws_progress_monthly_v2 s WHERE s.plan_month >= to_char({{dateFrom}}::date, 'YYYY-MM') AND s.plan_month <= to_char({{dateTo}}::date, 'YYYY-MM') [[AND s.project_no ILIKE '%' || {{projectNo}} || '%']] GROUP BY s.plan_month ORDER BY s.plan_month",
+          "query": "SELECT s.plan_month AS \"月份\", SUM(s.on_time_cnt) AS \"按时完成\", SUM(s.overdue_completed_cnt) AS \"超期完成\", SUM(s.incomplete_cnt) AS \"未完成\" FROM biz_dws_progress_monthly_v2 s WHERE s.plan_month >= to_char({{dateFrom}}::date, 'YYYY-MM') AND s.plan_month <= to_char({{dateTo}}::date, 'YYYY-MM') [[AND s.project_no = {{projectNo}}]] GROUP BY s.plan_month ORDER BY s.plan_month",
           "queryTimeoutSeconds": 30,
           "maxRows": 2000,
           "parameterBindings": [
@@ -975,7 +975,7 @@
         "type": "sql",
         "sqlConfig": {
           "databaseId": "{{DATABASE_ID}}",
-          "query": "SELECT SUM(s.on_time_cnt) AS \"按时完成\", SUM(s.overdue_completed_cnt) AS \"超期完成\", SUM(s.incomplete_cnt) AS \"未完成\", SUM(s.pending_normal_cnt) AS \"正常待完成\", SUM(s.abnormal_pending_non_general_cnt) AS \"不正常待变更\" FROM biz_dws_progress_monthly_v2 s WHERE s.plan_month >= to_char({{dateFrom}}::date, 'YYYY-MM') AND s.plan_month <= to_char({{dateTo}}::date, 'YYYY-MM') [[AND s.project_no ILIKE '%' || {{projectNo}} || '%']]",
+          "query": "SELECT SUM(s.on_time_cnt) AS \"按时完成\", SUM(s.overdue_completed_cnt) AS \"超期完成\", SUM(s.incomplete_cnt) AS \"未完成\", SUM(s.pending_normal_cnt) AS \"正常待完成\", SUM(s.abnormal_pending_non_general_cnt) AS \"不正常待变更\" FROM biz_dws_progress_monthly_v2 s WHERE s.plan_month >= to_char({{dateFrom}}::date, 'YYYY-MM') AND s.plan_month <= to_char({{dateTo}}::date, 'YYYY-MM') [[AND s.project_no = {{projectNo}}]]",
           "queryTimeoutSeconds": 30,
           "maxRows": 2000,
           "parameterBindings": [
@@ -1031,7 +1031,7 @@
         "type": "sql",
         "sqlConfig": {
           "databaseId": "{{DATABASE_ID}}",
-          "query": "SELECT SUM(s.open_cat_design) AS \"设计\", SUM(s.open_cat_process) AS \"工艺\", SUM(s.open_cat_management) AS \"管理\", SUM(s.open_cat_component) AS \"元器件\", SUM(s.open_cat_operation) AS \"操作\", SUM(s.open_cat_outsource) AS \"外协外购\", SUM(s.open_cat_software) AS \"软件\", SUM(s.open_cat_other) AS \"其他\" FROM biz_dws_quality_monthly_v2 s WHERE s.period_month >= to_char({{dateFrom}}::date, 'YYYY-MM') AND s.period_month <= to_char({{dateTo}}::date, 'YYYY-MM') [[AND s.dept = {{deptId}}]] [[AND s.project_no ILIKE '%' || {{projectNo}} || '%']]",
+          "query": "SELECT SUM(s.open_cat_design) AS \"设计\", SUM(s.open_cat_process) AS \"工艺\", SUM(s.open_cat_management) AS \"管理\", SUM(s.open_cat_component) AS \"元器件\", SUM(s.open_cat_operation) AS \"操作\", SUM(s.open_cat_outsource) AS \"外协外购\", SUM(s.open_cat_software) AS \"软件\", SUM(s.open_cat_other) AS \"其他\" FROM biz_dws_quality_monthly_v2 s WHERE s.period_month >= to_char({{dateFrom}}::date, 'YYYY-MM') AND s.period_month <= to_char({{dateTo}}::date, 'YYYY-MM') [[AND s.dept = {{deptId}}]] [[AND s.project_no = {{projectNo}}]]",
           "queryTimeoutSeconds": 30,
           "maxRows": 2000,
           "parameterBindings": [
@@ -1091,7 +1091,7 @@
         "type": "sql",
         "sqlConfig": {
           "databaseId": "{{DATABASE_ID}}",
-          "query": "SELECT project_no AS \"项目编号\", subsystem AS \"分系统\", node_task AS \"节点任务\", node_type AS \"节点类型\", owner AS \"负责人\", dept AS \"责任科室\", completion_status AS \"完成情况\", risk_level AS \"风险等级\", plan_date AS \"计划时间\", delay_days AS \"延期天数\" FROM biz_dwd_project_node_v2 WHERE plan_month >= to_char({{dateFrom}}::date, 'YYYY-MM') AND plan_month <= to_char({{dateTo}}::date, 'YYYY-MM') [[AND dept = {{deptId}}]] [[AND project_no ILIKE '%' || {{projectNo}} || '%']] AND is_incomplete = true ORDER BY delay_days DESC NULLS LAST LIMIT 5",
+          "query": "SELECT project_no AS \"项目编号\", subsystem AS \"分系统\", node_task AS \"节点任务\", node_type AS \"节点类型\", owner AS \"负责人\", dept AS \"责任科室\", completion_status AS \"完成情况\", risk_level AS \"风险等级\", plan_date AS \"计划时间\", delay_days AS \"延期天数\" FROM biz_dwd_project_node_v2 WHERE plan_month >= to_char({{dateFrom}}::date, 'YYYY-MM') AND plan_month <= to_char({{dateTo}}::date, 'YYYY-MM') [[AND dept = {{deptId}}]] [[AND project_no = {{projectNo}}]] AND is_incomplete = true ORDER BY delay_days DESC NULLS LAST LIMIT 5",
           "queryTimeoutSeconds": 30,
           "maxRows": 2000,
           "parameterBindings": [
@@ -1136,7 +1136,7 @@
         "type": "sql",
         "sqlConfig": {
           "databaseId": "{{DATABASE_ID}}",
-          "query": "WITH p AS (SELECT SUM(due_cnt) AS due, SUM(on_time_cnt) AS on_time, SUM(milestone_on_time_cnt) AS ms_ot, SUM(milestone_total_cnt) AS ms_t, SUM(abnormal_pending_non_general_cnt) AS abn, SUM(overdue_incomplete_unchanged_non_general_cnt) AS ov_unc FROM biz_dws_progress_monthly_v2 WHERE plan_month >= to_char({{dateFrom}}::date, 'YYYY-MM') AND plan_month <= to_char({{dateTo}}::date, 'YYYY-MM') [[AND project_no ILIKE '%' || {{projectNo}} || '%']]), q AS (SELECT SUM(new_issue_cnt) AS n, SUM(open_issue_cnt) AS o, SUM(zero_completed_cnt) AS z, SUM(no_zero_plan_cnt) AS np FROM biz_dws_quality_monthly_v2 WHERE period_month >= to_char({{dateFrom}}::date, 'YYYY-MM') AND period_month <= to_char({{dateTo}}::date, 'YYYY-MM') [[AND project_no ILIKE '%' || {{projectNo}} || '%']]), t AS (SELECT SUM(total_change_cnt) AS total, SUM(order_signed_cnt) AS sgn, SUM(order_unsigned_cat_i)+SUM(order_unsigned_cat_ii)+SUM(order_unsigned_cat_iii) AS unsgn, SUM(reform_done_i_ii) AS rd, SUM(reform_pending_i_ii) AS rp FROM biz_dws_tech_state_monthly_v2 WHERE period_month >= to_char({{dateFrom}}::date, 'YYYY-MM') AND period_month <= to_char({{dateTo}}::date, 'YYYY-MM') [[AND project_no ILIKE '%' || {{projectNo}} || '%']]), prog_h AS (SELECT ((CASE WHEN p.due=0 THEN 0 ELSE p.on_time::numeric/p.due::numeric*100 END)*0.4+(CASE WHEN p.ms_t=0 THEN 0 ELSE p.ms_ot::numeric/p.ms_t::numeric*100 END)*0.3+(100-(CASE WHEN p.due=0 THEN 0 ELSE (p.abn+p.ov_unc)::numeric/p.due::numeric*100 END))*0.3) AS h FROM p), qual_h AS (SELECT ((CASE WHEN q.n=0 THEN 0 ELSE q.z::numeric/q.n::numeric*100 END)*0.5+(CASE WHEN q.n=0 THEN 0 ELSE (q.n-q.np)::numeric/q.n::numeric*100 END)*0.3+(100-(CASE WHEN q.n=0 THEN 0 ELSE q.o::numeric/q.n::numeric*100 END))*0.2) AS h FROM q), tech_h AS (SELECT ((CASE WHEN (t.sgn+t.unsgn)=0 THEN 0 ELSE t.sgn::numeric/(t.sgn+t.unsgn)::numeric*100 END)*0.4+(CASE WHEN (t.rd+t.rp)=0 THEN 0 ELSE t.rd::numeric/(t.rd+t.rp)::numeric*100 END)*0.4+(100-(CASE WHEN t.total=0 THEN 0 ELSE t.unsgn::numeric/t.total::numeric*100 END))*0.2) AS h FROM t) SELECT ROUND((prog_h.h*0.4 + qual_h.h*0.3 + tech_h.h*0.3)::numeric, 2) AS \"综合健康度\" FROM prog_h, qual_h, tech_h",
+          "query": "WITH p AS (SELECT SUM(due_cnt) AS due, SUM(on_time_cnt) AS on_time, SUM(milestone_on_time_cnt) AS ms_ot, SUM(milestone_total_cnt) AS ms_t, SUM(abnormal_pending_non_general_cnt) AS abn, SUM(overdue_incomplete_unchanged_non_general_cnt) AS ov_unc FROM biz_dws_progress_monthly_v2 WHERE plan_month >= to_char({{dateFrom}}::date, 'YYYY-MM') AND plan_month <= to_char({{dateTo}}::date, 'YYYY-MM') [[AND project_no = {{projectNo}}]]), q AS (SELECT SUM(new_issue_cnt) AS n, SUM(open_issue_cnt) AS o, SUM(zero_completed_cnt) AS z, SUM(no_zero_plan_cnt) AS np FROM biz_dws_quality_monthly_v2 WHERE period_month >= to_char({{dateFrom}}::date, 'YYYY-MM') AND period_month <= to_char({{dateTo}}::date, 'YYYY-MM') [[AND project_no = {{projectNo}}]]), t AS (SELECT SUM(total_change_cnt) AS total, SUM(order_signed_cnt) AS sgn, SUM(order_unsigned_cat_i)+SUM(order_unsigned_cat_ii)+SUM(order_unsigned_cat_iii) AS unsgn, SUM(reform_done_i_ii) AS rd, SUM(reform_pending_i_ii) AS rp FROM biz_dws_tech_state_monthly_v2 WHERE period_month >= to_char({{dateFrom}}::date, 'YYYY-MM') AND period_month <= to_char({{dateTo}}::date, 'YYYY-MM') [[AND project_no = {{projectNo}}]]), prog_h AS (SELECT ((CASE WHEN p.due=0 THEN 0 ELSE p.on_time::numeric/p.due::numeric*100 END)*0.4+(CASE WHEN p.ms_t=0 THEN 0 ELSE p.ms_ot::numeric/p.ms_t::numeric*100 END)*0.3+(100-(CASE WHEN p.due=0 THEN 0 ELSE (p.abn+p.ov_unc)::numeric/p.due::numeric*100 END))*0.3) AS h FROM p), qual_h AS (SELECT ((CASE WHEN q.n=0 THEN 0 ELSE q.z::numeric/q.n::numeric*100 END)*0.5+(CASE WHEN q.n=0 THEN 0 ELSE (q.n-q.np)::numeric/q.n::numeric*100 END)*0.3+(100-(CASE WHEN q.n=0 THEN 0 ELSE q.o::numeric/q.n::numeric*100 END))*0.2) AS h FROM q), tech_h AS (SELECT ((CASE WHEN (t.sgn+t.unsgn)=0 THEN 0 ELSE t.sgn::numeric/(t.sgn+t.unsgn)::numeric*100 END)*0.4+(CASE WHEN (t.rd+t.rp)=0 THEN 0 ELSE t.rd::numeric/(t.rd+t.rp)::numeric*100 END)*0.4+(100-(CASE WHEN t.total=0 THEN 0 ELSE t.unsgn::numeric/t.total::numeric*100 END))*0.2) AS h FROM t) SELECT ROUND((prog_h.h*0.4 + qual_h.h*0.3 + tech_h.h*0.3)::numeric, 2) AS \"综合健康度\" FROM prog_h, qual_h, tech_h",
           "queryTimeoutSeconds": 30,
           "maxRows": 2000,
           "parameterBindings": [
@@ -1182,7 +1182,7 @@
         "type": "sql",
         "sqlConfig": {
           "databaseId": "{{DATABASE_ID}}",
-          "query": "WITH p AS (SELECT SUM(due_cnt) AS due, SUM(on_time_cnt) AS on_time, SUM(milestone_on_time_cnt) AS ms_ot, SUM(milestone_total_cnt) AS ms_t, SUM(abnormal_pending_non_general_cnt) AS abn, SUM(overdue_incomplete_unchanged_non_general_cnt) AS ov_unc FROM biz_dws_progress_monthly_v2 WHERE plan_month >= to_char({{dateFrom}}::date, 'YYYY-MM') AND plan_month <= to_char({{dateTo}}::date, 'YYYY-MM') [[AND project_no ILIKE '%' || {{projectNo}} || '%']]) SELECT ROUND((CASE WHEN p.due=0 THEN 0 ELSE p.on_time::numeric/p.due::numeric*100 END)*0.4+(CASE WHEN p.ms_t=0 THEN 0 ELSE p.ms_ot::numeric/p.ms_t::numeric*100 END)*0.3+(100-(CASE WHEN p.due=0 THEN 0 ELSE (p.abn+p.ov_unc)::numeric/p.due::numeric*100 END))*0.3, 2) AS \"进度健康分\" FROM p",
+          "query": "WITH p AS (SELECT SUM(due_cnt) AS due, SUM(on_time_cnt) AS on_time, SUM(milestone_on_time_cnt) AS ms_ot, SUM(milestone_total_cnt) AS ms_t, SUM(abnormal_pending_non_general_cnt) AS abn, SUM(overdue_incomplete_unchanged_non_general_cnt) AS ov_unc FROM biz_dws_progress_monthly_v2 WHERE plan_month >= to_char({{dateFrom}}::date, 'YYYY-MM') AND plan_month <= to_char({{dateTo}}::date, 'YYYY-MM') [[AND project_no = {{projectNo}}]]) SELECT ROUND((CASE WHEN p.due=0 THEN 0 ELSE p.on_time::numeric/p.due::numeric*100 END)*0.4+(CASE WHEN p.ms_t=0 THEN 0 ELSE p.ms_ot::numeric/p.ms_t::numeric*100 END)*0.3+(100-(CASE WHEN p.due=0 THEN 0 ELSE (p.abn+p.ov_unc)::numeric/p.due::numeric*100 END))*0.3, 2) AS \"进度健康分\" FROM p",
           "queryTimeoutSeconds": 30,
           "maxRows": 2000,
           "parameterBindings": [
@@ -1228,7 +1228,7 @@
         "type": "sql",
         "sqlConfig": {
           "databaseId": "{{DATABASE_ID}}",
-          "query": "WITH q AS (SELECT SUM(new_issue_cnt) AS n, SUM(open_issue_cnt) AS o, SUM(zero_completed_cnt) AS z, SUM(no_zero_plan_cnt) AS np, SUM(open_cat_design) AS d FROM biz_dws_quality_monthly_v2 WHERE period_month >= to_char({{dateFrom}}::date, 'YYYY-MM') AND period_month <= to_char({{dateTo}}::date, 'YYYY-MM') [[AND dept = {{deptId}}]] [[AND project_no ILIKE '%' || {{projectNo}} || '%']]) SELECT CASE WHEN q.n=0 THEN 0 ELSE ROUND(q.z::numeric/q.n::numeric*100,2) END AS \"归零率\", ROUND((CASE WHEN q.n=0 THEN 0 ELSE q.z::numeric/q.n::numeric*100 END)*0.5+(CASE WHEN q.n=0 THEN 0 ELSE (q.n-q.np)::numeric/q.n::numeric*100 END)*0.3+(100-(CASE WHEN q.n=0 THEN 0 ELSE q.o::numeric/q.n::numeric*100 END))*0.2,2) AS \"质量健康分\" FROM q",
+          "query": "WITH q AS (SELECT SUM(new_issue_cnt) AS n, SUM(open_issue_cnt) AS o, SUM(zero_completed_cnt) AS z, SUM(no_zero_plan_cnt) AS np, SUM(open_cat_design) AS d FROM biz_dws_quality_monthly_v2 WHERE period_month >= to_char({{dateFrom}}::date, 'YYYY-MM') AND period_month <= to_char({{dateTo}}::date, 'YYYY-MM') [[AND dept = {{deptId}}]] [[AND project_no = {{projectNo}}]]) SELECT CASE WHEN q.n=0 THEN 0 ELSE ROUND(q.z::numeric/q.n::numeric*100,2) END AS \"归零率\", ROUND((CASE WHEN q.n=0 THEN 0 ELSE q.z::numeric/q.n::numeric*100 END)*0.5+(CASE WHEN q.n=0 THEN 0 ELSE (q.n-q.np)::numeric/q.n::numeric*100 END)*0.3+(100-(CASE WHEN q.n=0 THEN 0 ELSE q.o::numeric/q.n::numeric*100 END))*0.2,2) AS \"质量健康分\" FROM q",
           "queryTimeoutSeconds": 30,
           "maxRows": 2000,
           "parameterBindings": [
@@ -1278,7 +1278,7 @@
         "type": "sql",
         "sqlConfig": {
           "databaseId": "{{DATABASE_ID}}",
-          "query": "WITH t AS (SELECT SUM(total_change_cnt) AS total, SUM(new_cat_i) AS cat_i, SUM(order_signed_cnt) AS signed, SUM(order_unsigned_cat_i)+SUM(order_unsigned_cat_ii)+SUM(order_unsigned_cat_iii) AS unsigned, SUM(reform_done_i_ii) AS reform_done, SUM(reform_pending_i_ii) AS reform_pending FROM biz_dws_tech_state_monthly_v2 WHERE period_month >= to_char({{dateFrom}}::date, 'YYYY-MM') AND period_month <= to_char({{dateTo}}::date, 'YYYY-MM') [[AND dept = {{deptId}}]] [[AND project_no ILIKE '%' || {{projectNo}} || '%']]) SELECT ROUND((CASE WHEN (t.signed+t.unsigned)=0 THEN 0 ELSE t.signed::numeric/(t.signed+t.unsigned)::numeric*100 END)*0.4+(CASE WHEN (t.reform_done+t.reform_pending)=0 THEN 0 ELSE t.reform_done::numeric/(t.reform_done+t.reform_pending)::numeric*100 END)*0.4+(100-(CASE WHEN t.total=0 THEN 0 ELSE t.unsigned::numeric/t.total::numeric*100 END))*0.2,2) AS \"技术状态健康分\" FROM t",
+          "query": "WITH t AS (SELECT SUM(total_change_cnt) AS total, SUM(new_cat_i) AS cat_i, SUM(order_signed_cnt) AS signed, SUM(order_unsigned_cat_i)+SUM(order_unsigned_cat_ii)+SUM(order_unsigned_cat_iii) AS unsigned, SUM(reform_done_i_ii) AS reform_done, SUM(reform_pending_i_ii) AS reform_pending FROM biz_dws_tech_state_monthly_v2 WHERE period_month >= to_char({{dateFrom}}::date, 'YYYY-MM') AND period_month <= to_char({{dateTo}}::date, 'YYYY-MM') [[AND dept = {{deptId}}]] [[AND project_no = {{projectNo}}]]) SELECT ROUND((CASE WHEN (t.signed+t.unsigned)=0 THEN 0 ELSE t.signed::numeric/(t.signed+t.unsigned)::numeric*100 END)*0.4+(CASE WHEN (t.reform_done+t.reform_pending)=0 THEN 0 ELSE t.reform_done::numeric/(t.reform_done+t.reform_pending)::numeric*100 END)*0.4+(100-(CASE WHEN t.total=0 THEN 0 ELSE t.unsigned::numeric/t.total::numeric*100 END))*0.2,2) AS \"技术状态健康分\" FROM t",
           "queryTimeoutSeconds": 30,
           "maxRows": 2000,
           "parameterBindings": [
@@ -1361,7 +1361,7 @@
         "type": "sql",
         "sqlConfig": {
           "databaseId": "{{DATABASE_ID}}",
-          "query": "SELECT s.period_month AS \"月份\", SUM(s.new_issue_cnt) AS \"新增问题\", SUM(s.zero_completed_cnt) AS \"归零完成\", SUM(s.open_issue_cnt) AS \"现存问题\" FROM biz_dws_quality_monthly_v2 s WHERE s.period_month >= to_char({{dateFrom}}::date, 'YYYY-MM') AND s.period_month <= to_char({{dateTo}}::date, 'YYYY-MM') [[AND s.dept = {{deptId}}]] [[AND s.project_no ILIKE '%' || {{projectNo}} || '%']] GROUP BY s.period_month ORDER BY s.period_month",
+          "query": "SELECT s.period_month AS \"月份\", SUM(s.new_issue_cnt) AS \"新增问题\", SUM(s.zero_completed_cnt) AS \"归零完成\", SUM(s.open_issue_cnt) AS \"现存问题\" FROM biz_dws_quality_monthly_v2 s WHERE s.period_month >= to_char({{dateFrom}}::date, 'YYYY-MM') AND s.period_month <= to_char({{dateTo}}::date, 'YYYY-MM') [[AND s.dept = {{deptId}}]] [[AND s.project_no = {{projectNo}}]] GROUP BY s.period_month ORDER BY s.period_month",
           "queryTimeoutSeconds": 30,
           "maxRows": 2000,
           "parameterBindings": [
@@ -1436,7 +1436,7 @@
         "type": "sql",
         "sqlConfig": {
           "databaseId": "{{DATABASE_ID}}",
-          "query": "SELECT SUM(s.high_cnt) AS \"高风险\", SUM(s.mid_cnt) AS \"中风险\", SUM(s.low_cnt) AS \"低风险\" FROM biz_dws_risk_monthly_v2 s WHERE s.period_month >= to_char({{dateFrom}}::date, 'YYYY-MM') AND s.period_month <= to_char({{dateTo}}::date, 'YYYY-MM') [[AND s.dept = {{deptId}}]] [[AND s.project_no ILIKE '%' || {{projectNo}} || '%']]",
+          "query": "SELECT SUM(s.high_cnt) AS \"高风险\", SUM(s.mid_cnt) AS \"中风险\", SUM(s.low_cnt) AS \"低风险\" FROM biz_dws_risk_monthly_v2 s WHERE s.period_month >= to_char({{dateFrom}}::date, 'YYYY-MM') AND s.period_month <= to_char({{dateTo}}::date, 'YYYY-MM') [[AND s.dept = {{deptId}}]] [[AND s.project_no = {{projectNo}}]]",
           "queryTimeoutSeconds": 30,
           "maxRows": 2000,
           "parameterBindings": [
@@ -1513,7 +1513,7 @@
         "type": "sql",
         "sqlConfig": {
           "databaseId": "{{DATABASE_ID}}",
-          "query": "SELECT SUM(s.new_cat_i) AS \"I类更改\", SUM(s.new_cat_ii) AS \"II类更改\", SUM(s.new_cat_iii) AS \"III类更改\" FROM biz_dws_tech_state_monthly_v2 s WHERE s.period_month >= to_char({{dateFrom}}::date, 'YYYY-MM') AND s.period_month <= to_char({{dateTo}}::date, 'YYYY-MM') [[AND s.dept = {{deptId}}]] [[AND s.project_no ILIKE '%' || {{projectNo}} || '%']]",
+          "query": "SELECT SUM(s.new_cat_i) AS \"I类更改\", SUM(s.new_cat_ii) AS \"II类更改\", SUM(s.new_cat_iii) AS \"III类更改\" FROM biz_dws_tech_state_monthly_v2 s WHERE s.period_month >= to_char({{dateFrom}}::date, 'YYYY-MM') AND s.period_month <= to_char({{dateTo}}::date, 'YYYY-MM') [[AND s.dept = {{deptId}}]] [[AND s.project_no = {{projectNo}}]]",
           "queryTimeoutSeconds": 30,
           "maxRows": 2000,
           "parameterBindings": [
@@ -1599,7 +1599,7 @@
         "type": "sql",
         "sqlConfig": {
           "databaseId": "{{DATABASE_ID}}",
-          "query": "SELECT SUM(s.total_risk_cnt) AS \"风险总数\", SUM(s.high_cnt) AS \"高风险\", SUM(s.mid_cnt) AS \"中风险\", SUM(s.low_cnt) AS \"低风险\", SUM(s.released_cnt) AS \"已释放\", SUM(s.open_cnt) AS \"未释放\" FROM biz_dws_risk_monthly_v2 s WHERE s.period_month >= to_char({{dateFrom}}::date, 'YYYY-MM') AND s.period_month <= to_char({{dateTo}}::date, 'YYYY-MM') [[AND s.dept = {{deptId}}]] [[AND s.project_no ILIKE '%' || {{projectNo}} || '%']]",
+          "query": "SELECT SUM(s.total_risk_cnt) AS \"风险总数\", SUM(s.high_cnt) AS \"高风险\", SUM(s.mid_cnt) AS \"中风险\", SUM(s.low_cnt) AS \"低风险\", SUM(s.released_cnt) AS \"已释放\", SUM(s.open_cnt) AS \"未释放\" FROM biz_dws_risk_monthly_v2 s WHERE s.period_month >= to_char({{dateFrom}}::date, 'YYYY-MM') AND s.period_month <= to_char({{dateTo}}::date, 'YYYY-MM') [[AND s.dept = {{deptId}}]] [[AND s.project_no = {{projectNo}}]]",
           "queryTimeoutSeconds": 30,
           "maxRows": 2000,
           "parameterBindings": [
@@ -1661,7 +1661,7 @@
         "type": "sql",
         "sqlConfig": {
           "databaseId": "{{DATABASE_ID}}",
-          "query": "SELECT SUM(s.on_time_cnt) AS \"按时完成\", SUM(s.overdue_completed_cnt) AS \"超期完成\", SUM(s.incomplete_cnt) AS \"未完成\", SUM(s.pending_normal_cnt) AS \"正常待完成\", SUM(s.abnormal_pending_non_general_cnt)+SUM(s.overdue_incomplete_unchanged_non_general_cnt) AS \"异常\" FROM biz_dws_progress_monthly_v2 s WHERE s.plan_month >= to_char({{dateFrom}}::date, 'YYYY-MM') AND s.plan_month <= to_char({{dateTo}}::date, 'YYYY-MM') [[AND s.project_no ILIKE '%' || {{projectNo}} || '%']]",
+          "query": "SELECT SUM(s.on_time_cnt) AS \"按时完成\", SUM(s.overdue_completed_cnt) AS \"超期完成\", SUM(s.incomplete_cnt) AS \"未完成\", SUM(s.pending_normal_cnt) AS \"正常待完成\", SUM(s.abnormal_pending_non_general_cnt)+SUM(s.overdue_incomplete_unchanged_non_general_cnt) AS \"异常\" FROM biz_dws_progress_monthly_v2 s WHERE s.plan_month >= to_char({{dateFrom}}::date, 'YYYY-MM') AND s.plan_month <= to_char({{dateTo}}::date, 'YYYY-MM') [[AND s.project_no = {{projectNo}}]]",
           "queryTimeoutSeconds": 30,
           "maxRows": 2000,
           "parameterBindings": [

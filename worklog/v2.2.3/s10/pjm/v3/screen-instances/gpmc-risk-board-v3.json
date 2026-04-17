@@ -639,7 +639,7 @@
         "type": "sql",
         "sqlConfig": {
           "databaseId": "{{DATABASE_ID}}",
-          "query": "SELECT COALESCE(SUM(s.total_risk_cnt),0) AS v FROM biz_dws_risk_monthly_v2 s WHERE s.period_month >= to_char({{dateFrom}}::date,'YYYY-MM') AND s.period_month <= to_char({{dateTo}}::date,'YYYY-MM') [[AND s.dept = {{deptId}}]] [[AND s.project_no ILIKE '%' || {{projectNo}} || '%']]",
+          "query": "SELECT COALESCE(SUM(s.total_risk_cnt),0) AS v FROM biz_dws_risk_monthly_v2 s WHERE s.period_month >= to_char({{dateFrom}}::date,'YYYY-MM') AND s.period_month <= to_char({{dateTo}}::date,'YYYY-MM') [[AND s.dept = {{deptId}}]] [[AND s.project_no = {{projectNo}}]]",
           "queryTimeoutSeconds": 30,
           "maxRows": 2000,
           "parameterBindings": [
@@ -689,7 +689,7 @@
         "type": "sql",
         "sqlConfig": {
           "databaseId": "{{DATABASE_ID}}",
-          "query": "SELECT COALESCE(SUM(s.high_cnt),0) AS v FROM biz_dws_risk_monthly_v2 s WHERE s.period_month >= to_char({{dateFrom}}::date,'YYYY-MM') AND s.period_month <= to_char({{dateTo}}::date,'YYYY-MM') [[AND s.dept = {{deptId}}]] [[AND s.project_no ILIKE '%' || {{projectNo}} || '%']]",
+          "query": "SELECT COALESCE(SUM(s.high_cnt),0) AS v FROM biz_dws_risk_monthly_v2 s WHERE s.period_month >= to_char({{dateFrom}}::date,'YYYY-MM') AND s.period_month <= to_char({{dateTo}}::date,'YYYY-MM') [[AND s.dept = {{deptId}}]] [[AND s.project_no = {{projectNo}}]]",
           "queryTimeoutSeconds": 30,
           "maxRows": 2000,
           "parameterBindings": [
@@ -739,7 +739,7 @@
         "type": "sql",
         "sqlConfig": {
           "databaseId": "{{DATABASE_ID}}",
-          "query": "SELECT COALESCE(SUM(s.mid_cnt),0) AS v FROM biz_dws_risk_monthly_v2 s WHERE s.period_month >= to_char({{dateFrom}}::date,'YYYY-MM') AND s.period_month <= to_char({{dateTo}}::date,'YYYY-MM') [[AND s.dept = {{deptId}}]] [[AND s.project_no ILIKE '%' || {{projectNo}} || '%']]",
+          "query": "SELECT COALESCE(SUM(s.mid_cnt),0) AS v FROM biz_dws_risk_monthly_v2 s WHERE s.period_month >= to_char({{dateFrom}}::date,'YYYY-MM') AND s.period_month <= to_char({{dateTo}}::date,'YYYY-MM') [[AND s.dept = {{deptId}}]] [[AND s.project_no = {{projectNo}}]]",
           "queryTimeoutSeconds": 30,
           "maxRows": 2000,
           "parameterBindings": [
@@ -789,7 +789,7 @@
         "type": "sql",
         "sqlConfig": {
           "databaseId": "{{DATABASE_ID}}",
-          "query": "SELECT COALESCE(SUM(s.open_cnt),0) AS v FROM biz_dws_risk_monthly_v2 s WHERE s.period_month >= to_char({{dateFrom}}::date,'YYYY-MM') AND s.period_month <= to_char({{dateTo}}::date,'YYYY-MM') [[AND s.dept = {{deptId}}]] [[AND s.project_no ILIKE '%' || {{projectNo}} || '%']]",
+          "query": "SELECT COALESCE(SUM(s.open_cnt),0) AS v FROM biz_dws_risk_monthly_v2 s WHERE s.period_month >= to_char({{dateFrom}}::date,'YYYY-MM') AND s.period_month <= to_char({{dateTo}}::date,'YYYY-MM') [[AND s.dept = {{deptId}}]] [[AND s.project_no = {{projectNo}}]]",
           "queryTimeoutSeconds": 30,
           "maxRows": 2000,
           "parameterBindings": [
@@ -839,7 +839,7 @@
         "type": "sql",
         "sqlConfig": {
           "databaseId": "{{DATABASE_ID}}",
-          "query": "SELECT CASE WHEN SUM(s.total_risk_cnt)=0 THEN 0 ELSE ROUND(SUM(s.released_cnt)::numeric/NULLIF(SUM(s.total_risk_cnt),0)::numeric*100,2) END AS v FROM biz_dws_risk_monthly_v2 s WHERE s.period_month >= to_char({{dateFrom}}::date,'YYYY-MM') AND s.period_month <= to_char({{dateTo}}::date,'YYYY-MM') [[AND s.dept = {{deptId}}]] [[AND s.project_no ILIKE '%' || {{projectNo}} || '%']]",
+          "query": "SELECT CASE WHEN SUM(s.total_risk_cnt)=0 THEN 0 ELSE ROUND(SUM(s.released_cnt)::numeric/NULLIF(SUM(s.total_risk_cnt),0)::numeric*100,2) END AS v FROM biz_dws_risk_monthly_v2 s WHERE s.period_month >= to_char({{dateFrom}}::date,'YYYY-MM') AND s.period_month <= to_char({{dateTo}}::date,'YYYY-MM') [[AND s.dept = {{deptId}}]] [[AND s.project_no = {{projectNo}}]]",
           "queryTimeoutSeconds": 30,
           "maxRows": 2000,
           "parameterBindings": [
@@ -919,7 +919,7 @@
         "type": "sql",
         "sqlConfig": {
           "databaseId": "{{DATABASE_ID}}",
-          "query": "SELECT s.project_no AS \"项目编号\", SUM(s.total_risk_cnt) AS \"风险总数\", SUM(s.high_cnt) AS \"高风险数\", SUM(s.open_cnt) AS \"未释放风险数\" FROM biz_dws_risk_monthly_v2 s WHERE s.period_month >= to_char({{dateFrom}}::date,'YYYY-MM') AND s.period_month <= to_char({{dateTo}}::date,'YYYY-MM') [[AND s.dept = {{deptId}}]] [[AND s.project_no ILIKE '%' || {{projectNo}} || '%']] GROUP BY s.project_no ORDER BY SUM(s.total_risk_cnt) DESC LIMIT 12",
+          "query": "SELECT s.project_no AS \"项目编号\", SUM(s.total_risk_cnt) AS \"风险总数\", SUM(s.high_cnt) AS \"高风险数\", SUM(s.open_cnt) AS \"未释放风险数\" FROM biz_dws_risk_monthly_v2 s WHERE s.period_month >= to_char({{dateFrom}}::date,'YYYY-MM') AND s.period_month <= to_char({{dateTo}}::date,'YYYY-MM') [[AND s.dept = {{deptId}}]] [[AND s.project_no = {{projectNo}}]] GROUP BY s.project_no ORDER BY SUM(s.total_risk_cnt) DESC LIMIT 12",
           "queryTimeoutSeconds": 30,
           "maxRows": 2000,
           "parameterBindings": [
@@ -978,7 +978,7 @@
         "type": "sql",
         "sqlConfig": {
           "databaseId": "{{DATABASE_ID}}",
-          "query": "SELECT COALESCE(d.risk_category,'未分类') AS \"风险类型\", COUNT(*) AS \"数量\" FROM biz_dwd_risk_info_v2 d WHERE to_char(d.risk_submit_date,'YYYY-MM') >= to_char({{dateFrom}}::date,'YYYY-MM') AND to_char(d.risk_submit_date,'YYYY-MM') <= to_char({{dateTo}}::date,'YYYY-MM') [[AND d.dept = {{deptId}}]] [[AND d.project_no ILIKE '%' || {{projectNo}} || '%']] [[AND d.risk_level = {{riskLevel}}]] GROUP BY COALESCE(d.risk_category,'未分类') ORDER BY COUNT(*) DESC",
+          "query": "SELECT COALESCE(d.risk_category,'未分类') AS \"风险类型\", COUNT(*) AS \"数量\" FROM biz_dwd_risk_info_v2 d WHERE to_char(d.risk_submit_date,'YYYY-MM') >= to_char({{dateFrom}}::date,'YYYY-MM') AND to_char(d.risk_submit_date,'YYYY-MM') <= to_char({{dateTo}}::date,'YYYY-MM') [[AND d.dept = {{deptId}}]] [[AND d.project_no = {{projectNo}}]] [[AND d.risk_level = {{riskLevel}}]] GROUP BY COALESCE(d.risk_category,'未分类') ORDER BY COUNT(*) DESC",
           "queryTimeoutSeconds": 30,
           "maxRows": 2000,
           "parameterBindings": [
@@ -1062,7 +1062,7 @@
         "type": "sql",
         "sqlConfig": {
           "databaseId": "{{DATABASE_ID}}",
-          "query": "SELECT s.dept AS \"责任科室\", SUM(s.total_risk_cnt) AS \"风险总数\", SUM(s.high_cnt) AS \"高风险数\", SUM(s.open_cnt) AS \"未释放风险数\" FROM biz_dws_risk_monthly_v2 s WHERE s.period_month >= to_char({{dateFrom}}::date,'YYYY-MM') AND s.period_month <= to_char({{dateTo}}::date,'YYYY-MM') [[AND s.project_no ILIKE '%' || {{projectNo}} || '%']] AND s.dept IS NOT NULL GROUP BY s.dept ORDER BY SUM(s.total_risk_cnt) DESC LIMIT 12",
+          "query": "SELECT s.dept AS \"责任科室\", SUM(s.total_risk_cnt) AS \"风险总数\", SUM(s.high_cnt) AS \"高风险数\", SUM(s.open_cnt) AS \"未释放风险数\" FROM biz_dws_risk_monthly_v2 s WHERE s.period_month >= to_char({{dateFrom}}::date,'YYYY-MM') AND s.period_month <= to_char({{dateTo}}::date,'YYYY-MM') [[AND s.project_no = {{projectNo}}]] AND s.dept IS NOT NULL GROUP BY s.dept ORDER BY SUM(s.total_risk_cnt) DESC LIMIT 12",
           "queryTimeoutSeconds": 30,
           "maxRows": 2000,
           "parameterBindings": [
@@ -1097,63 +1097,63 @@
         "title": "",
         "columns": [
           {
-            "key": "项目编号",
-            "title": "项目编号",
+            "source": "项目编号",
+            "alias": "项目编号",
             "width": 100
           },
           {
-            "key": "分系统/分任务",
-            "title": "分系统/分任务",
+            "source": "分系统/分任务",
+            "alias": "分系统/分任务",
             "width": 130
           },
           {
-            "key": "风险名称",
-            "title": "风险名称",
+            "source": "风险名称",
+            "alias": "风险名称",
             "width": 200
           },
           {
-            "key": "风险等级",
-            "title": "风险等级",
+            "source": "风险等级",
+            "alias": "风险等级",
             "width": 80
           },
           {
-            "key": "风险分类",
-            "title": "风险分类",
+            "source": "风险分类",
+            "alias": "风险分类",
             "width": 100
           },
           {
-            "key": "风险状态",
-            "title": "风险状态",
+            "source": "风险状态",
+            "alias": "风险状态",
             "width": 100
           },
           {
-            "key": "提出时间",
-            "title": "提出时间",
+            "source": "提出时间",
+            "alias": "提出时间",
             "width": 110
           },
           {
-            "key": "计划释放时间",
-            "title": "计划释放时间",
+            "source": "计划释放时间",
+            "alias": "计划释放时间",
             "width": 120
           },
           {
-            "key": "负责人",
-            "title": "负责人",
+            "source": "负责人",
+            "alias": "负责人",
             "width": 90
           },
           {
-            "key": "责任科室",
-            "title": "责任科室",
+            "source": "责任科室",
+            "alias": "责任科室",
             "width": 130
           },
           {
-            "key": "实际释放时间",
-            "title": "实际释放时间",
+            "source": "实际释放时间",
+            "alias": "实际释放时间",
             "width": 120
           },
           {
-            "key": "滞留天数",
-            "title": "滞留天数",
+            "source": "滞留天数",
+            "alias": "滞留天数",
             "width": 90
           }
         ],
@@ -1170,7 +1170,7 @@
         "type": "sql",
         "sqlConfig": {
           "databaseId": "{{DATABASE_ID}}",
-          "query": "SELECT d.project_no AS \"项目编号\", COALESCE(d.subsystem,'') AS \"分系统/分任务\", d.risk_name AS \"风险名称\", COALESCE(d.risk_level,'-') AS \"风险等级\", COALESCE(d.risk_category,'-') AS \"风险分类\", COALESCE(d.risk_status,'-') AS \"风险状态\", to_char(d.risk_submit_date,'YYYY-MM-DD') AS \"提出时间\", to_char(d.final_release_date,'YYYY-MM-DD') AS \"计划释放时间\", COALESCE(d.response_owner,'-') AS \"负责人\", COALESCE(d.dept,'-') AS \"责任科室\", to_char(d.risk_release_date,'YYYY-MM-DD') AS \"实际释放时间\", d.pending_days AS \"滞留天数\" FROM biz_dwd_risk_info_v2 d WHERE to_char(d.risk_submit_date,'YYYY-MM') >= to_char({{dateFrom}}::date,'YYYY-MM') AND to_char(d.risk_submit_date,'YYYY-MM') <= to_char({{dateTo}}::date,'YYYY-MM') [[AND d.dept = {{deptId}}]] [[AND d.project_no ILIKE '%' || {{projectNo}} || '%']] [[AND d.risk_level = {{riskLevel}}]] ORDER BY d.risk_rank DESC, d.risk_submit_date DESC LIMIT 500",
+          "query": "SELECT d.project_no AS \"项目编号\", COALESCE(d.subsystem,'') AS \"分系统/分任务\", d.risk_name AS \"风险名称\", COALESCE(d.risk_level,'-') AS \"风险等级\", COALESCE(d.risk_category,'-') AS \"风险分类\", COALESCE(d.risk_status,'-') AS \"风险状态\", to_char(d.risk_submit_date,'YYYY-MM-DD') AS \"提出时间\", to_char(d.final_release_date,'YYYY-MM-DD') AS \"计划释放时间\", COALESCE(d.response_owner,'-') AS \"负责人\", COALESCE(d.dept,'-') AS \"责任科室\", to_char(d.risk_release_date,'YYYY-MM-DD') AS \"实际释放时间\", d.pending_days AS \"滞留天数\" FROM biz_dwd_risk_info_v2 d WHERE to_char(d.risk_submit_date,'YYYY-MM') >= to_char({{dateFrom}}::date,'YYYY-MM') AND to_char(d.risk_submit_date,'YYYY-MM') <= to_char({{dateTo}}::date,'YYYY-MM') [[AND d.dept = {{deptId}}]] [[AND d.project_no = {{projectNo}}]] [[AND d.risk_level = {{riskLevel}}]] ORDER BY d.risk_rank DESC, d.risk_submit_date DESC LIMIT 500",
           "queryTimeoutSeconds": 30,
           "maxRows": 2000,
           "parameterBindings": [
