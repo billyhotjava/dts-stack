@@ -68,22 +68,32 @@ public class BiadminDataSourceInitializer {
         }
 
         try {
+            String jdbcUrl = String.format("jdbc:postgresql://%s:%s/%s", pgHost, pgPort, pgDbBiadmin);
+
             // 检查是否已存在 biadmin 数据源
-            boolean exists = dataSourceRepository.findAll()
+            InfraDataSource existing = dataSourceRepository.findAll()
                 .stream()
-                .anyMatch(ds -> ds != null && (
+                .filter(ds -> ds != null && (
                     BIADMIN_DATASOURCE_NAME.equalsIgnoreCase(ds.getName()) ||
                     (ds.getJdbcUrl() != null && ds.getJdbcUrl().contains("/" + pgDbBiadmin))
-                ));
+                ))
+                .findFirst()
+                .orElse(null);
 
-            if (exists) {
-                LOG.info("[biadmin-init] biadmin datasource already exists, skipping initialization");
+            if (existing != null) {
+                // 记录已存在，但可能是 Liquibase seed 创建的（无密码），补写密码
+                if (existing.getSecureProps() == null || existing.getSecureProps().length == 0) {
+                    LOG.info("[biadmin-init] biadmin datasource exists but has no password, patching secrets");
+                    secretService.applySecrets(existing, Map.of("password", pgPwdBiadmin));
+                    dataSourceRepository.save(existing);
+                    LOG.info("[biadmin-init] Successfully patched biadmin datasource password");
+                } else {
+                    LOG.info("[biadmin-init] biadmin datasource already exists with secrets, skipping");
+                }
                 return;
             }
 
             // 直接创建实体，绕过安全检查（系统启动时无安全上下文）
-            String jdbcUrl = String.format("jdbc:postgresql://%s:%s/%s", pgHost, pgPort, pgDbBiadmin);
-
             InfraDataSource entity = new InfraDataSource();
             entity.setName(BIADMIN_DATASOURCE_NAME);
             entity.setType(BIADMIN_TYPE);
