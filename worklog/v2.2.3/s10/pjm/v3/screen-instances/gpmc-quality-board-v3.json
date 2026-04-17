@@ -1154,11 +1154,12 @@
         "pageSize": 20,
         "showHeader": true,
         "headerColor": "#d9eeff",
-        "rowColor": "#c9d4e4",
         "stripeColor": "rgba(88,180,255,0.08)",
         "backgroundColor": "rgba(9,36,90,0.50)",
         "titleFontSize": 0,
-        "chartPaddingTop": 36
+        "chartPaddingTop": 36,
+        "bodyColor": "#ffffff",
+        "freezeHeader": true
       },
       "dataSource": {
         "type": "sql",
