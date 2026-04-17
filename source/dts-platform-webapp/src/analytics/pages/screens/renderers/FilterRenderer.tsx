@@ -102,6 +102,9 @@ export function renderFilter(
             const inputTextColor = String(c.inputTextColor || t.textPrimary);
             const inputBorderColor = String(c.inputBorderColor || 'rgba(148,163,184,0.4)');
             const inputBackground = String(c.inputBackground || (theme === 'glacier' ? '#ffffff' : 'rgba(15,23,42,0.65)'));
+            const optionBackground = String(c.optionBackground || (theme === 'glacier' ? '#ffffff' : '#0b2652'));
+            const optionTextColor = String(c.optionTextColor || (theme === 'glacier' ? '#1f2937' : '#ffffff'));
+            const optionStyle = { background: optionBackground, color: optionTextColor };
             return (
                 <div style={{ width: '100%', height: '100%', display: 'flex', flexDirection: 'column', gap: 6 }}>
                     <div style={{ fontSize: 12, color: labelColor }}>{label}</div>
@@ -120,9 +123,9 @@ export function renderFilter(
                             outline: 'none',
                         }}
                     >
-                        <option value="">{placeholder}</option>
+                        <option value="" style={optionStyle}>{placeholder}</option>
                         {options.map((option) => (
-                            <option key={option.value} value={option.value}>{option.label}</option>
+                            <option key={option.value} value={option.value} style={optionStyle}>{option.label}</option>
                         ))}
                     </select>
                 </div>
