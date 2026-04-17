@@ -65,6 +65,7 @@ public class SqlExecutionService {
     private final ObjectMapper objectMapper;
     private final TransactionTemplate persistTransactionTemplate;
     private final InfraDataSourceRepository infraDataSourceRepository;
+    private final DataSourceAccessGuard accessGuard;
     private final ConcurrentMap<UUID, CompletableFuture<Void>> runningTasks = new ConcurrentHashMap<>();
     private final Set<UUID> cancelRequested = ConcurrentHashMap.newKeySet();
 
@@ -78,7 +79,8 @@ public class SqlExecutionService {
         SqlValidationService validationService,
         ObjectMapper objectMapper,
         PlatformTransactionManager transactionManager,
-        InfraDataSourceRepository infraDataSourceRepository
+        InfraDataSourceRepository infraDataSourceRepository,
+        DataSourceAccessGuard accessGuard
     ) {
         this.queryExecutionRepository = queryExecutionRepository;
         this.resultSetRepository = resultSetRepository;
@@ -90,10 +92,17 @@ public class SqlExecutionService {
         this.objectMapper = objectMapper;
         this.persistTransactionTemplate = new TransactionTemplate(transactionManager);
         this.infraDataSourceRepository = infraDataSourceRepository;
+        this.accessGuard = accessGuard;
     }
 
     @Transactional
     public SqlSubmitResponse submit(SqlSubmitRequest request, Principal principal) {
+        return submit(request, principal, null);
+    }
+
+    @Transactional
+    public SqlSubmitResponse submit(SqlSubmitRequest request, Principal principal, String activeDept) {
+        accessGuard.assertReadable(request.datasource(), activeDept);
         QueryExecution execution = new QueryExecution();
         // Resolve engine from the actual datasource type; fall back to POSTGRESQL (our only deployed DB).
         String resolvedDatasource = StringUtils.hasText(request.datasource()) ? request.datasource() : null;
@@ -109,15 +118,26 @@ public class SqlExecutionService {
         QueryExecution saved = queryExecutionRepository.save(execution);
         recordSubmitAudit(saved, request);
 
-        CompletableFuture<Void> future = CompletableFuture
-            .runAsync(() -> executeQueued(saved.getId(), request, principal))
-            .whenComplete((unused, throwable) -> {
-                runningTasks.remove(saved.getId());
-                cancelRequested.remove(saved.getId());
-                if (throwable != null) {
-                    LOG.warn("sql async execution ended with exception executionId={}", saved.getId(), throwable);
-                }
-            });
+        CompletableFuture<Void> future;
+        try {
+            future = CompletableFuture
+                .runAsync(() -> executeQueued(saved.getId(), request, principal))
+                .whenComplete((unused, throwable) -> {
+                    runningTasks.remove(saved.getId());
+                    cancelRequested.remove(saved.getId());
+                    if (throwable != null) {
+                        LOG.warn("sql async execution ended with exception executionId={}", saved.getId(), throwable);
+                        // Don't let the QueryExecution row stay in PENDING/RUNNING forever when
+                        // the async worker crashed before it could record FAILED itself.
+                        markExecutionFailedIfNotFinal(saved.getId(), throwable);
+                    }
+                });
+        } catch (java.util.concurrent.RejectedExecutionException rex) {
+            // Defensive: the default ForkJoinPool doesn't reject, but if the executor is ever
+            // swapped out for a bounded one, keep the PENDING row from being orphaned.
+            markExecutionFailedIfNotFinal(saved.getId(), rex);
+            throw rex;
+        }
         runningTasks.put(saved.getId(), future);
 
         return new SqlSubmitResponse(saved.getId(), saved.getTrinoQueryId(), true, null, null);
@@ -125,6 +145,11 @@ public class SqlExecutionService {
 
     @Transactional(readOnly = true)
     public SqlStatusResponse status(UUID executionId) {
+        return status(executionId, null);
+    }
+
+    @Transactional(readOnly = true)
+    public SqlStatusResponse status(UUID executionId, Principal principal) {
         QueryExecution execution = queryExecutionRepository
             .findById(executionId)
             .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "query execution not found"));
@@ -153,6 +178,16 @@ public class SqlExecutionService {
 
     @Transactional(readOnly = true)
     public SqlResultPageResponse resultPage(UUID executionId, Integer page, Integer pageSize) {
+        return resultPage(executionId, page, pageSize, null);
+    }
+
+    /**
+     * True pagination backed by {@link QueryExecutionChunk} rows. Previously this method
+     * read from the 100-row preview blob and sliced in memory — pages beyond the first
+     * would silently return empty even though {@code totalRows} advertised more data.
+     */
+    @Transactional(readOnly = true)
+    public SqlResultPageResponse resultPage(UUID executionId, Integer page, Integer pageSize, Principal principal) {
         QueryExecution execution = queryExecutionRepository
             .findById(executionId)
             .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "query execution not found"));
@@ -163,19 +198,24 @@ public class SqlExecutionService {
         ResultSet resultSet = resultSetRepository
             .findById(execution.getResultSetId())
             .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "result set not found"));
+
+        // Headers come from the preview blob (single source of truth for column metadata).
         StoredResult stored = parseStoredResult(resultSet.getPreviewColumns());
+        List<String> headers = stored.headers();
+        long totalRows = resultSet.getRowCount() != null ? resultSet.getRowCount() : stored.rowCount();
 
         int safePageSize = normalizePageSize(pageSize);
         int safePage = Math.max(1, page == null ? 1 : page);
-        long totalRows = stored.rowCount();
         int totalPages = totalRows <= 0 ? 0 : (int) Math.ceil((double) totalRows / safePageSize);
         if (totalPages > 0 && safePage > totalPages) {
             safePage = totalPages;
         }
 
-        int from = Math.max(0, (safePage - 1) * safePageSize);
-        int to = Math.min(stored.rows().size(), from + safePageSize);
-        List<Map<String, Object>> rows = from >= to ? List.of() : new ArrayList<>(stored.rows().subList(from, to));
+        long fromRow = Math.max(0L, (long) (safePage - 1) * safePageSize);
+        long toRow = Math.min(totalRows, fromRow + safePageSize);
+        List<Map<String, Object>> rows = fromRow >= toRow
+            ? List.of()
+            : readRowsFromChunks(executionId, fromRow, toRow, stored);
 
         return new SqlResultPageResponse(
             execution.getId(),
@@ -185,9 +225,55 @@ public class SqlExecutionService {
             totalRows,
             totalPages,
             safePage < totalPages,
-            stored.headers(),
+            headers,
             rows
         );
+    }
+
+    /**
+     * Stream-read the row window {@code [fromRow, toRow)} from persisted chunks; falls back
+     * to the preview blob when no chunks exist (e.g. older executions before chunk rollout).
+     */
+    private List<Map<String, Object>> readRowsFromChunks(
+        UUID executionId, long fromRow, long toRow, StoredResult fallback
+    ) {
+        List<QueryExecutionChunk> chunks = chunkRepository
+            .findByExecutionIdOrderByChunkIndexAsc(executionId);
+        if (chunks == null || chunks.isEmpty()) {
+            // Legacy path — slice the in-blob preview (bounded to PREVIEW_LIMIT rows).
+            int localFrom = (int) Math.min(fallback.rows().size(), Math.max(0L, fromRow));
+            int localTo = (int) Math.min(fallback.rows().size(), Math.max(0L, toRow));
+            if (localFrom >= localTo) return List.of();
+            return new ArrayList<>(fallback.rows().subList(localFrom, localTo));
+        }
+
+        List<Map<String, Object>> out = new ArrayList<>((int) (toRow - fromRow));
+        for (QueryExecutionChunk chunk : chunks) {
+            long chunkStart = chunk.getRowStart() != null ? chunk.getRowStart() : 0L;
+            long chunkEnd = chunk.getRowEnd() != null ? chunk.getRowEnd() : chunkStart;
+            if (chunkEnd <= fromRow || chunkStart >= toRow) {
+                continue; // outside window
+            }
+            List<Map<String, Object>> chunkRows = parseChunkRows(chunk.getRowsJson());
+            int localFrom = (int) Math.max(0L, fromRow - chunkStart);
+            int localTo = (int) Math.min(chunkRows.size(), toRow - chunkStart);
+            if (localFrom < localTo) {
+                out.addAll(chunkRows.subList(localFrom, localTo));
+            }
+            if (out.size() >= (toRow - fromRow)) break;
+        }
+        return out;
+    }
+
+    private List<Map<String, Object>> parseChunkRows(String json) {
+        if (!StringUtils.hasText(json)) return List.of();
+        try {
+            Object parsed = objectMapper.readValue(json, Object.class);
+            return normalizeRows(parsed);
+        } catch (Exception ex) {
+            LOG.warn("failed to parse chunk rows json", ex);
+            return List.of();
+        }
     }
 
     @Transactional
@@ -362,6 +448,26 @@ public class SqlExecutionService {
             latest.setFinishedAt(Instant.now());
             queryExecutionRepository.save(latest);
             recordCompletionAudit(latest, "FAILED", resolveMessage(ex));
+        }
+    }
+
+    /**
+     * If the async worker was never able to move the execution out of PENDING/RUNNING,
+     * mark it FAILED so polling clients don't wait forever. Called from the
+     * {@code whenComplete} hook on the outer async chain.
+     */
+    private void markExecutionFailedIfNotFinal(UUID executionId, Throwable cause) {
+        try {
+            QueryExecution execution = queryExecutionRepository.findById(executionId).orElse(null);
+            if (execution == null || isFinalStatus(execution.getStatus())) {
+                return;
+            }
+            execution.setStatus(ExecEnums.ExecStatus.FAILED);
+            execution.setErrorMessage(truncate("执行器异常: " + resolveMessage(cause instanceof Exception ex ? ex : new RuntimeException(cause)), 1024));
+            execution.setFinishedAt(Instant.now());
+            queryExecutionRepository.save(execution);
+        } catch (Exception inner) {
+            LOG.warn("failed to mark orphaned execution {} as FAILED", executionId, inner);
         }
     }
 

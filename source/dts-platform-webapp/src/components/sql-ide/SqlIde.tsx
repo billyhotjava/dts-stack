@@ -113,12 +113,42 @@ export const SqlIde: FC = () => {
 
   const sqlExec = useSqlExecution();
 
+  // Read activeTabId at call time, not from closure — prevents Monaco onChange
+  // events triggered mid-switch from writing back into the previously-active tab.
   const handleSqlChange = useCallback(
     (next: string) => {
-      if (activeTab) updateTab(activeTab.id, { sqlText: next });
+      const id = useTabStore.getState().activeTabId;
+      if (id) updateTab(id, { sqlText: next });
     },
-    [activeTab, updateTab],
+    [updateTab],
   );
+
+  // Insert text at the current cursor position and immediately sync the new editor
+  // value into the tab store. Monaco's model-change event will also fire onChange,
+  // but calling updateTab explicitly removes any window where the store lags behind
+  // the editor and a subsequent Run would submit the pre-insert SQL.
+  const insertAtCursor = useCallback((source: string, text: string) => {
+    const handle = editorHandleRef.current;
+    if (!handle) return;
+    const ed = handle.getEditor();
+    if (!ed) return;
+    const pos = ed.getPosition();
+    if (!pos) return;
+    ed.executeEdits(source, [
+      {
+        range: {
+          startLineNumber: pos.lineNumber,
+          startColumn: pos.column,
+          endLineNumber: pos.lineNumber,
+          endColumn: pos.column,
+        },
+        text,
+        forceMoveMarkers: true,
+      },
+    ]);
+    const id = useTabStore.getState().activeTabId;
+    if (id) updateTab(id, { sqlText: ed.getValue() });
+  }, [updateTab]);
 
   const handleFormat = useCallback(async () => {
     if (!activeTab) return;
@@ -157,44 +187,10 @@ export const SqlIde: FC = () => {
         {activeActivity === "schema" && (
           <SchemaTree
             onInsertIdentifier={(name) => {
-              const handle = editorHandleRef.current;
-              if (!handle) return;
-              const ed = handle.getEditor();
-              if (!ed) return;
-              const pos = ed.getPosition();
-              const op = pos
-                ? {
-                    range: {
-                      startLineNumber: pos.lineNumber,
-                      startColumn: pos.column,
-                      endLineNumber: pos.lineNumber,
-                      endColumn: pos.column,
-                    },
-                    text: name,
-                    forceMoveMarkers: true,
-                  }
-                : null;
-              if (op) ed.executeEdits("sqlide.schema-insert", [op]);
+              insertAtCursor("sqlide.schema-insert", name);
             }}
             onInsertSqlAtCursor={(sql) => {
-              const handle = editorHandleRef.current;
-              if (!handle) return;
-              const ed = handle.getEditor();
-              if (!ed) return;
-              const pos = ed.getPosition();
-              const op = pos
-                ? {
-                    range: {
-                      startLineNumber: pos.lineNumber,
-                      startColumn: pos.column,
-                      endLineNumber: pos.lineNumber,
-                      endColumn: pos.column,
-                    },
-                    text: sql,
-                    forceMoveMarkers: true,
-                  }
-                : null;
-              if (op) ed.executeEdits("sqlide.schema-sql", [op]);
+              insertAtCursor("sqlide.schema-sql", sql);
             }}
           />
         )}

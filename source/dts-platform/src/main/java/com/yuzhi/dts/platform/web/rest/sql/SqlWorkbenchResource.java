@@ -86,16 +86,20 @@ public class SqlWorkbenchResource {
     }
 
     @PostMapping("/submit")
-    public ApiResponse<SqlSubmitResponse> submit(@RequestBody SqlSubmitRequest request, Principal principal) {
-        ApiResponse<SqlSubmitResponse> response = ApiResponses.ok(executionService.submit(request, principal));
+    public ApiResponse<SqlSubmitResponse> submit(
+        @RequestBody SqlSubmitRequest request,
+        @RequestHeader(value = "X-Active-Dept", required = false) String activeDept,
+        Principal principal
+    ) {
+        ApiResponse<SqlSubmitResponse> response = ApiResponses.ok(executionService.submit(request, principal, activeDept));
         auditService.audit("EXECUTE", "sql.workbench.submit", principal != null ? principal.getName() : "anonymous");
         return response;
     }
 
     @GetMapping("/status/{id}")
-    public ApiResponse<SqlStatusResponse> status(@PathVariable UUID id) {
-        ApiResponse<SqlStatusResponse> response = ApiResponses.ok(executionService.status(id));
-        auditService.audit("READ", "sql.workbench.status", id.toString());
+    public ApiResponse<SqlStatusResponse> status(@PathVariable UUID id, Principal principal) {
+        ApiResponse<SqlStatusResponse> response = ApiResponses.ok(executionService.status(id, principal));
+        auditService.audit("READ", "sql.workbench.status", principal != null ? principal.getName() : "anonymous");
         return response;
     }
 
@@ -103,10 +107,13 @@ public class SqlWorkbenchResource {
     public ApiResponse<SqlResultPageResponse> resultPage(
         @PathVariable UUID id,
         @RequestParam(name = "page", required = false) Integer page,
-        @RequestParam(name = "pageSize", required = false) Integer pageSize
+        @RequestParam(name = "pageSize", required = false) Integer pageSize,
+        Principal principal
     ) {
-        ApiResponse<SqlResultPageResponse> response = ApiResponses.ok(executionService.resultPage(id, page, pageSize));
-        auditService.audit("READ", "sql.workbench.result-page", id.toString());
+        ApiResponse<SqlResultPageResponse> response = ApiResponses.ok(
+            executionService.resultPage(id, page, pageSize, principal)
+        );
+        auditService.audit("READ", "sql.workbench.result-page", principal != null ? principal.getName() : "anonymous");
         return response;
     }
 
@@ -118,8 +125,12 @@ public class SqlWorkbenchResource {
     }
 
     @GetMapping("/tables/{datasourceId}")
-    public ApiResponse<List<TableInfo>> listTables(@PathVariable UUID datasourceId, Principal principal) {
-        List<TableInfo> tables = metadataService.listTables(datasourceId);
+    public ApiResponse<List<TableInfo>> listTables(
+        @PathVariable UUID datasourceId,
+        @RequestHeader(value = "X-Active-Dept", required = false) String activeDept,
+        Principal principal
+    ) {
+        List<TableInfo> tables = metadataService.listTables(datasourceId, activeDept);
         auditService.audit("READ", "sql.workbench.tables", principal != null ? principal.getName() : "anonymous");
         return ApiResponses.ok(tables);
     }
@@ -129,9 +140,10 @@ public class SqlWorkbenchResource {
         @PathVariable UUID datasourceId,
         @RequestParam String schema,
         @RequestParam String table,
+        @RequestHeader(value = "X-Active-Dept", required = false) String activeDept,
         Principal principal
     ) {
-        List<Map<String, String>> columns = metadataService.listColumns(datasourceId, schema, table);
+        List<Map<String, String>> columns = metadataService.listColumns(datasourceId, schema, table, activeDept);
         auditService.audit("READ", "sql.workbench.columns", principal != null ? principal.getName() : "anonymous");
         return ApiResponses.ok(columns);
     }

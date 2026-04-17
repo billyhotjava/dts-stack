@@ -1,6 +1,7 @@
 package com.yuzhi.dts.platform.config;
 
 import java.util.concurrent.Executor;
+import java.util.concurrent.ThreadPoolExecutor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.aop.interceptor.AsyncUncaughtExceptionHandler;
@@ -38,6 +39,11 @@ public class AsyncConfiguration implements AsyncConfigurer {
         executor.setMaxPoolSize(taskExecutionProperties.getPool().getMaxSize());
         executor.setQueueCapacity(taskExecutionProperties.getPool().getQueueCapacity());
         executor.setThreadNamePrefix(taskExecutionProperties.getThreadNamePrefix());
+        // When the queue and all threads are saturated, run the task on the caller thread
+        // instead of rejecting it — prevents background jobs (incl. SQL exec workers, when
+        // they migrate off ForkJoinPool) from being silently dropped and leaving downstream
+        // state machines (e.g. QueryExecution rows) stuck in PENDING.
+        executor.setRejectedExecutionHandler(new ThreadPoolExecutor.CallerRunsPolicy());
         return new ExceptionHandlingAsyncTaskExecutor(executor);
     }
 

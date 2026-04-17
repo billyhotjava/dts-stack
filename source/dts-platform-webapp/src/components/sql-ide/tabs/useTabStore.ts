@@ -143,8 +143,8 @@ const MAX_RETRIES = 3;
 // oldId → newId chain retained after syncDirty remaps local ids to server ids.
 // External callers (e.g. async onExecute callbacks) may still hold a stale id;
 // resolveId() walks the chain so their mutations land on the correct tab.
-// Entries are retained for the session — the memory footprint is tiny (<100 tabs
-// per session realistically), and dropping them too early reintroduces the race.
+// Entries are pruned via pruneIdRemap() once the terminal live id is gone, so
+// long-lived sessions don't accumulate a forever-growing map.
 const idRemap = new Map<string, string>();
 
 export function resolveId(id: string | null | undefined): string | null {
@@ -157,6 +157,17 @@ export function resolveId(id: string | null | undefined): string | null {
     cur = idRemap.get(cur)!;
   }
   return cur;
+}
+
+/** Remove chains whose terminal server id is no longer present in the live tab list. */
+function pruneIdRemap(liveIds: Set<string>): void {
+  if (idRemap.size === 0) return;
+  for (const oldId of Array.from(idRemap.keys())) {
+    const terminal = resolveId(oldId);
+    if (!terminal || !liveIds.has(terminal)) {
+      idRemap.delete(oldId);
+    }
+  }
 }
 
 let quotaWarned = false;
@@ -244,6 +255,9 @@ export const useTabStore = create<TabStore>((set, get) => ({
         : get().activeTabId;
     set({ tabs: next, activeTabId: newActive });
     persistLocal(next);
+    // Prune any oldId→newId mappings whose terminal target was this tab — keeps
+    // the idRemap from growing unbounded across long sessions with lots of churn.
+    pruneIdRemap(new Set(next.map((t) => t.id)));
     // only call server if tab was previously pushed
     if (!removed.createdLocally) {
       try {
@@ -504,6 +518,15 @@ function loadLocal(): TabState[] {
     } catch {
       /* ignore */
     }
+    // Surface to the user so "my tabs vanished" isn't silent. Lazy-import
+    // antd to avoid a hard SSR/test dep.
+    import("antd")
+      .then(({ message }) => {
+        message.warning("本地 Tab 存储损坏，已保留副本 (sqlide.tabs.v1.corrupt) 以便排查。");
+      })
+      .catch(() => {
+        /* ignore */
+      });
     return [];
   }
   if (!Array.isArray(parsed)) return [];

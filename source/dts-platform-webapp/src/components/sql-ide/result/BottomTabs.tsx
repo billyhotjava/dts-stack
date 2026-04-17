@@ -1,5 +1,5 @@
 import { Tabs } from "antd";
-import { type FC } from "react";
+import { type FC, useMemo } from "react";
 import { ResultGrid } from "./ResultGrid";
 import { ResultChart } from "./ResultChart";
 import { ResultPivot } from "./ResultPivot";
@@ -17,65 +17,72 @@ export interface BottomTabsProps {
   onGridStateChange: (next: GridColumnState) => void;
 }
 
-const TAB_ITEMS = (props: BottomTabsProps) => [
-  {
-    key: "results",
-    label: "结果",
-    children: (
-      <div style={{ height: "100%", overflow: "hidden" }}>
-        <ResultGrid
-          executionId={props.executionId}
-          gridState={props.gridState}
-          onGridStateChange={props.onGridStateChange}
-        />
-      </div>
-    ),
-  },
-  {
-    key: "chart",
-    label: "图表",
-    children: (
-      <div style={{ height: "100%", overflow: "auto" }}>
-        <ResultChart executionId={props.executionId} />
-      </div>
-    ),
-  },
-  {
-    key: "pivot",
-    label: "透视表",
-    children: (
-      <div style={{ height: "100%", overflow: "auto" }}>
-        <ResultPivot executionId={props.executionId} />
-      </div>
-    ),
-  },
-  {
-    key: "plan",
-    label: "查询计划",
-    children: (
-      <div style={{ height: "100%", overflow: "auto" }}>
-        <QueryPlanView
-          executionId={props.executionId}
-          fallbackSql={props.sql}
-          engine={props.engine}
-          datasourceId={props.datasourceId}
-          catalog={props.catalog}
-        />
-      </div>
-    ),
-  },
-  {
-    key: "log",
-    label: "日志",
-    children: (
-      <div style={{ height: "100%", overflow: "auto" }}>
-        <LogPanel executionId={props.executionId} />
-      </div>
-    ),
-  },
-];
-
 export const BottomTabs: FC<BottomTabsProps> = (props) => {
+  const { executionId, sql, engine, datasourceId, catalog, gridState, onGridStateChange } = props;
+  // Memoise the items array — previously it was rebuilt on every render, which
+  // caused antd to remount every panel and reset inner state (chart config,
+  // pivot selections, grid scroll).
+  const items = useMemo(
+    () => [
+      {
+        key: "results",
+        label: "结果",
+        children: (
+          <div style={{ height: "100%", overflow: "hidden" }}>
+            <ResultGrid
+              executionId={executionId}
+              gridState={gridState}
+              onGridStateChange={onGridStateChange}
+            />
+          </div>
+        ),
+      },
+      {
+        key: "chart",
+        label: "图表",
+        children: (
+          <div style={{ height: "100%", overflow: "auto" }}>
+            <ResultChart executionId={executionId} />
+          </div>
+        ),
+      },
+      {
+        key: "pivot",
+        label: "透视表",
+        children: (
+          <div style={{ height: "100%", overflow: "auto" }}>
+            <ResultPivot executionId={executionId} />
+          </div>
+        ),
+      },
+      {
+        key: "plan",
+        label: "查询计划",
+        children: (
+          <div style={{ height: "100%", overflow: "auto" }}>
+            <QueryPlanView
+              executionId={executionId}
+              fallbackSql={sql}
+              engine={engine}
+              datasourceId={datasourceId}
+              catalog={catalog}
+            />
+          </div>
+        ),
+      },
+      {
+        key: "log",
+        label: "日志",
+        children: (
+          <div style={{ height: "100%", overflow: "auto" }}>
+            <LogPanel executionId={executionId} />
+          </div>
+        ),
+      },
+    ],
+    [executionId, sql, engine, datasourceId, catalog, gridState, onGridStateChange],
+  );
+
   return (
     <div
       className="sqlide-bottom-tabs"
@@ -86,7 +93,7 @@ export const BottomTabs: FC<BottomTabsProps> = (props) => {
         size="small"
         style={{ flex: 1, minHeight: 0, display: "flex", flexDirection: "column" }}
         tabBarStyle={{ margin: 0, paddingLeft: 8, flexShrink: 0 }}
-        items={TAB_ITEMS(props)}
+        items={items}
       />
       {/*
         antd v5 default is `.ant-tabs-tabpane { flex: none }`, which collapses the

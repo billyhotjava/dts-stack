@@ -33,6 +33,10 @@ export function useSqlExecution(): SqlExecutionResult {
   const elapsedIntervalRef = useRef<ReturnType<typeof setInterval> | undefined>(undefined);
   // Generation counter — increments on every submit; closures bail when stale
   const runIdRef = useRef(0);
+  // Mirror of executionId readable synchronously inside callbacks — avoids
+  // the stale-closure race where two submits in the same React tick both see
+  // `executionId = null` and fail to cancel the first run.
+  const executionIdRef = useRef<string | null>(null);
 
   const stopPolling = useCallback(() => {
     if (pollTimerRef.current !== undefined) {
@@ -116,10 +120,14 @@ export function useSqlExecution(): SqlExecutionResult {
       setElapsedMs(0);
       setRowCount(null);
       setErrorMessage(null);
+
+      // Read via ref — reflects the latest value even when two submits land in
+      // the same React tick before setState flushes.
+      const prevId = executionIdRef.current;
+      executionIdRef.current = null;
       setExecutionId(null);
 
       // Fix #3 (Important): cancel previous server-side execution before starting a new one
-      const prevId = executionId;
       if (prevId) {
         void cancelExecution(prevId).catch(() => {});
       }
@@ -132,6 +140,7 @@ export function useSqlExecution(): SqlExecutionResult {
         // Fix #1 (Critical): bail if superseded or cancelled before touching state
         if (runId !== runIdRef.current) return null;
         if (cancelledRef.current) return null;
+        executionIdRef.current = res.executionId;
         setExecutionId(res.executionId);
         await pollUntilDone(res.executionId, runId, 0);
         return runId === runIdRef.current ? res.executionId : null;
@@ -147,9 +156,7 @@ export function useSqlExecution(): SqlExecutionResult {
         return null;
       }
     },
-    // executionId needed to cancel previous; stable refs don't need to be listed
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [executionId, startElapsedTicker, stopElapsedTicker, stopPolling, pollUntilDone],
+    [startElapsedTicker, stopElapsedTicker, stopPolling, pollUntilDone],
   );
 
   const cancel = useCallback(() => {
@@ -157,10 +164,11 @@ export function useSqlExecution(): SqlExecutionResult {
     stopPolling();
     stopElapsedTicker();
     setState("canceled");
-    if (executionId) {
-      void cancelExecution(executionId);
+    const id = executionIdRef.current;
+    if (id) {
+      void cancelExecution(id);
     }
-  }, [executionId, stopPolling, stopElapsedTicker]);
+  }, [stopPolling, stopElapsedTicker]);
 
   // Cleanup on unmount
   useEffect(() => {

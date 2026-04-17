@@ -28,6 +28,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Consumer;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 import org.springframework.util.StringUtils;
 
@@ -53,15 +54,24 @@ public class JdbcSqlExecutor {
     private final InfraSecretService secretService;
     private final QueryExecutionChunkRepository chunkRepository;
     private final ObjectMapper objectMapper;
+    /**
+     * Per-statement query timeout (seconds). Capped at the JDBC driver's reported resolution.
+     * Set to 0 or negative to disable. Default 30 min — prevents runaway queries from pinning
+     * executor threads indefinitely, which previously left {@link JdbcSqlExecutor#cancel(UUID)}
+     * as the only way out and failed silently when the connection was also stuck.
+     */
+    private final int queryTimeoutSeconds;
 
     public JdbcSqlExecutor(
         InfraSecretService secretService,
         QueryExecutionChunkRepository chunkRepository,
-        ObjectMapper objectMapper
+        ObjectMapper objectMapper,
+        @Value("${dts.sql.query-timeout-seconds:1800}") int queryTimeoutSeconds
     ) {
         this.secretService = secretService;
         this.chunkRepository = chunkRepository;
         this.objectMapper = objectMapper;
+        this.queryTimeoutSeconds = queryTimeoutSeconds;
     }
 
     // -----------------------------------------------------------------------
@@ -125,6 +135,13 @@ public class JdbcSqlExecutor {
             try {
                 try (PreparedStatement ps = conn.prepareStatement(sql)) {
                     ps.setFetchSize(STREAM_CHUNK_SIZE);
+                    if (queryTimeoutSeconds > 0) {
+                        try {
+                            ps.setQueryTimeout(queryTimeoutSeconds);
+                        } catch (SQLException ignored) {
+                            // Some drivers don't support setQueryTimeout — non-fatal
+                        }
+                    }
 
                     // Critical #2: register statement BEFORE executeQuery so cancel() can reach it
                     if (executionId != null) {
@@ -198,7 +215,10 @@ public class JdbcSqlExecutor {
                     try {
                         conn.setAutoCommit(true);
                     } catch (SQLException e) {
-                        LOG.warn("failed to restore autoCommit for execution {}", executionId, e);
+                        // If we later switch to a pooled DataSource this connection must not be
+                        // returned with autoCommit=false — force-close so the pool rebuilds it.
+                        LOG.error("failed to restore autoCommit for execution {} — closing connection", executionId, e);
+                        try { conn.close(); } catch (SQLException ignored) {}
                     }
                 }
             }

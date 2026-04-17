@@ -16,6 +16,7 @@ import java.util.Map;
 import java.util.UUID;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.cache.annotation.Cacheable;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
@@ -33,21 +34,28 @@ public class SqlMetadataService {
     private final InfraDataSourceRepository dataSourceRepository;
     private final InfraSecretService secretService;
     private final AdminInfraClient adminInfraClient;
+    private final DataSourceAccessGuard accessGuard;
 
     public SqlMetadataService(
         InfraDataSourceRepository dataSourceRepository,
         InfraSecretService secretService,
-        AdminInfraClient adminInfraClient
+        AdminInfraClient adminInfraClient,
+        DataSourceAccessGuard accessGuard
     ) {
         this.dataSourceRepository = dataSourceRepository;
         this.secretService = secretService;
         this.adminInfraClient = adminInfraClient;
+        this.accessGuard = accessGuard;
     }
 
     /**
-     * 列出数据源中的所有表
+     * 列出数据源中的所有表。结果由 {@code sqlIdeTables} 缓存承载（TTL 5 分钟，
+     * 见 {@code CacheConfiguration.buildSqlIdeMapConfig}）。依据 datasourceId 单独作 key，
+     * activeDept 仅影响权限校验不影响列表内容。
      */
-    public List<TableInfo> listTables(UUID datasourceId) {
+    @Cacheable(cacheNames = "sqlIdeTables", key = "#datasourceId")
+    public List<TableInfo> listTables(UUID datasourceId, String activeDept) {
+        accessGuard.assertReadable(datasourceId, activeDept);
         JdbcConnectionTarget target = resolveConnectionTarget(datasourceId);
 
         List<TableInfo> tables = new ArrayList<>();
@@ -104,7 +112,9 @@ public class SqlMetadataService {
     /**
      * 列出表的列信息
      */
-    public List<Map<String, String>> listColumns(UUID datasourceId, String schema, String tableName) {
+    @Cacheable(cacheNames = "sqlIdeColumns", key = "#datasourceId + ':' + #schema + '.' + #tableName")
+    public List<Map<String, String>> listColumns(UUID datasourceId, String schema, String tableName, String activeDept) {
+        accessGuard.assertReadable(datasourceId, activeDept);
         JdbcConnectionTarget target = resolveConnectionTarget(datasourceId);
 
         List<Map<String, String>> columns = new ArrayList<>();
