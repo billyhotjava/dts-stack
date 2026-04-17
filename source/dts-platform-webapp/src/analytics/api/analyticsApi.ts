@@ -377,6 +377,15 @@ export type DatasetCachePolicy = {
 export type DatabaseValidateResponse = Record<string, unknown>;
 export type DatabaseCreateResponse = Record<string, unknown>;
 
+export type PlatformSourceWithDbId = {
+	platformId: string;
+	name?: string;
+	type?: string;
+	jdbcUrl?: string;
+	description?: string | null;
+	analyticsDbId?: number | null;
+};
+
 export type PlatformDataSourceItem = {
 	id: string;
 	name?: string;
@@ -1725,6 +1734,11 @@ export const analyticsApi = {
 	},
 	listDatabases: () => fetchJson<DatabaseListResponse>("/bi/api/database"),
 	listPlatformDataSources: () => fetchJson<PlatformDataSourceItem[]>("/bi/api/platform/data-sources"),
+	/** 从 platform 数据源列表获取（附带已注册的 analytics DB ID） */
+	listPlatformSources: () => fetchJson<PlatformSourceWithDbId[]>("/bi/api/database/platform-sources"),
+	/** 按需注册 platform 数据源到 analytics，返回 analytics database 信息 */
+	ensureFromPlatform: (platformDataSourceId: string) =>
+		sendJson<DatabaseCreateResponse>(`/bi/api/database/ensure-from-platform/${encodeURIComponent(platformDataSourceId)}`, {}),
 	listTables: (dbId: string | number) =>
 		fetchJson<TableSummary[]>(`/bi/api/table?db_id=${encodeURIComponent(String(dbId))}`),
 	getTable: (tableId: string | number) =>

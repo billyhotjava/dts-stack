@@ -60,5 +60,5 @@ SELECT
   SUM(CASE WHEN d.is_cat_iii AND d.is_reform_na                     THEN 1 ELSE 0 END) AS reform_na_iii
 
 FROM {{ ref('biz_dwd_tech_state_v2') }} d
-WHERE d.submit_year IS NOT NULL
+WHERE d.submit_month IS NOT NULL
 GROUP BY d.submit_year, d.submit_month, d.project_no, d.dept

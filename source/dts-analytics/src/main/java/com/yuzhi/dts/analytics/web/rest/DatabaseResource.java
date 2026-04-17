@@ -551,6 +551,84 @@ public class DatabaseResource {
         }
     }
 
+    /**
+     * 代理 platform 的数据源列表，同时附带已注册的 analytics database ID。
+     * 前端 DatabaseIdPicker 直接调用此接口，无需 analytics 提前注册。
+     */
+    @GetMapping(path = "/platform-sources", produces = MediaType.APPLICATION_JSON_VALUE)
+    public ResponseEntity<?> listPlatformSources(HttpServletRequest servletRequest) {
+        Optional<ResponseEntity<String>> auth = MetabaseAuth.requireUser(sessionService, servletRequest);
+        if (auth.isPresent()) {
+            return auth.orElseThrow();
+        }
+        try {
+            List<PlatformInfraClient.DataSourceSummary> sources = platformInfraClient.listDataSources();
+            List<AnalyticsDatabase> allDbs = databaseRepository.findAll();
+            List<Map<String, Object>> result = sources.stream()
+                .filter(s -> "ACTIVE".equalsIgnoreCase(s.status()))
+                .map(s -> {
+                    Map<String, Object> item = new LinkedHashMap<>();
+                    item.put("platformId", s.id());
+                    item.put("name", s.name());
+                    item.put("type", s.type());
+                    item.put("jdbcUrl", s.jdbcUrl());
+                    item.put("description", s.description());
+                    // 查找已注册的 analytics database ID
+                    UUID pid = s.id() != null ? parseUuid(s.id()) : null;
+                    Long analyticsDbId = pid == null ? null : allDbs.stream()
+                        .filter(db -> pid.equals(resolvePlatformDataSourceId(db.getDetailsJson())))
+                        .map(AnalyticsDatabase::getId)
+                        .findFirst()
+                        .orElse(null);
+                    item.put("analyticsDbId", analyticsDbId);
+                    return item;
+                })
+                .toList();
+            return ResponseEntity.ok(result);
+        } catch (Exception ex) {
+            return ResponseEntity.status(502).body(Map.of("error", "获取平台数据源失败: " + ex.getMessage()));
+        }
+    }
+
+    /**
+     * 按需注册：给定 platform 数据源 ID，在 analytics 中创建/关联数据库，并返回 analytics database ID。
+     */
+    @PostMapping(path = "/ensure-from-platform/{platformDataSourceId}", produces = MediaType.APPLICATION_JSON_VALUE)
+    public ResponseEntity<?> ensureFromPlatform(
+            @PathVariable("platformDataSourceId") UUID platformDataSourceId,
+            HttpServletRequest servletRequest) {
+        Optional<ResponseEntity<String>> auth = MetabaseAuth.requireUser(sessionService, servletRequest);
+        if (auth.isPresent()) {
+            return auth.orElseThrow();
+        }
+        // 如果已存在则直接返回
+        Optional<AnalyticsDatabase> existing = findByPlatformDataSource(platformDataSourceId);
+        if (existing.isPresent()) {
+            return ResponseEntity.ok(toDatabaseGet(existing.orElseThrow(), false));
+        }
+        // 从 platform 获取详情并创建
+        try {
+            PlatformInfraClient.DataSourceDetail detail = platformInfraClient.fetchDataSourceDetail(platformDataSourceId);
+            if (!StringUtils.hasText(detail.jdbcUrl())) {
+                return ResponseEntity.badRequest().body(Map.of("error", "平台数据源缺少 JDBC URL"));
+            }
+            AnalyticsDatabase db = new AnalyticsDatabase();
+            applyPlatformDetail(db, platformDataSourceId, detail);
+            applyNewDefaults(db);
+            db = databaseRepository.save(db);
+            // 异步同步元数据
+            final long dbId = db.getId();
+            try {
+                metadataSyncService.syncDatabaseSchema(dbId);
+            } catch (Exception ex) {
+                // 不阻塞返回
+            }
+            return ResponseEntity.ok(toDatabaseGet(db, false));
+        } catch (Exception ex) {
+            return ResponseEntity.status(502).body(Map.of("error", "注册数据源失败: " + ex.getMessage()));
+        }
+    }
+
     @PostMapping(path = "/validate", consumes = MediaType.APPLICATION_JSON_VALUE, produces = MediaType.APPLICATION_JSON_VALUE)
     public ResponseEntity<?> validateConnection(@RequestBody DatabaseRequest request, HttpServletRequest servletRequest) {
         Optional<ResponseEntity<String>> auth = MetabaseAuth.requireDataAdmin(sessionService, servletRequest);

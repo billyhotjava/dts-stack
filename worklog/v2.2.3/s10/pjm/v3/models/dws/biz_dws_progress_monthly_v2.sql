@@ -6,7 +6,7 @@
 
 WITH base AS (
   SELECT * FROM {{ ref('biz_dwd_project_node_v2') }}
-  WHERE plan_year IS NOT NULL
+  WHERE plan_month IS NOT NULL
 ),
 
 -- 周期内节点统计 (#1-11)
@@ -85,7 +85,7 @@ outside_completed AS (
     COUNT(*)     AS outside_completed_cnt
   FROM base
   WHERE is_completed = true
-    AND actual_year IS NOT NULL
+    AND actual_month IS NOT NULL
     AND (plan_year != actual_year OR plan_month != actual_month)
   GROUP BY actual_year, actual_month, project_no
 )

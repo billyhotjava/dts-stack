@@ -29,5 +29,5 @@ SELECT
   SUM(CASE WHEN d.is_risk_other     THEN 1 ELSE 0 END)                          AS cat_other_cnt
 
 FROM {{ ref('biz_dwd_risk_info_v2') }} d
-WHERE d.submit_year IS NOT NULL
+WHERE d.submit_month IS NOT NULL
 GROUP BY d.submit_year, d.submit_month, d.project_no, d.dept

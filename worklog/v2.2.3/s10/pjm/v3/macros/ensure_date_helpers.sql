@@ -7,7 +7,7 @@ DECLARE
   parts text[];
 BEGIN
   IF v IS NULL THEN RETURN NULL; END IF;
-  s := btrim(v);
+  s := btrim(regexp_replace(v, '[\u00A0\uFEFF\u200B\u200C\u200D]', '', 'g'));
   IF s = '' THEN RETURN NULL; END IF;
   IF upper(s) IN ('#N/A','#VALUE!','#DIV/0!','#REF!','#NAME?','#NULL!','#NUM!','N/A','NA','NULL','-','/','--') THEN
     RETURN NULL;
@@ -21,8 +21,8 @@ BEGIN
       RETURN make_date(parts[1]::int, parts[2]::int, parts[3]::int);
     END IF;
 
-    -- YYYY年M月D日  (1-2 digit month/day)
-    parts := regexp_match(s, '^(\d{4})年(\d{1,2})月(\d{1,2})日$');
+    -- YYYY年M月D日  (1-2 digit month/day, optional time suffix)
+    parts := regexp_match(s, '^(\d{4})年(\d{1,2})月(\d{1,2})日(?:[ T].*)?$');
     IF parts IS NOT NULL THEN
       RETURN make_date(parts[1]::int, parts[2]::int, parts[3]::int);
     END IF;

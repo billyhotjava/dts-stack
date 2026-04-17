@@ -103,6 +103,14 @@ models:
           - accepted_values:
               values: ['高', '中', '低']
               severity: warn
+      - name: plan_date
+        tests:
+          - not_null:
+              severity: warn
+      - name: plan_month
+        tests:
+          - not_null:
+              severity: warn
 
   - name: biz_dwd_quality_issue_v2
     description: "质量问题事实表 — 归零状态+分类+计划标志"
@@ -125,6 +133,14 @@ models:
           - accepted_values:
               values: ['设计', '工艺', '管理', '元器件', '操作', '外协外购', '软件', '其他']
               severity: warn
+      - name: issue_date
+        tests:
+          - not_null:
+              severity: warn
+      - name: issue_month
+        tests:
+          - not_null:
+              severity: warn
 
   - name: biz_dwd_tech_state_v2
     description: "技术状态事实表 — 更改类别标准化+签署/整改状态"
@@ -142,6 +158,14 @@ models:
           - accepted_values:
               values: ['I', 'II', 'III']
               severity: warn
+      - name: change_submit_time
+        tests:
+          - not_null:
+              severity: warn
+      - name: submit_month
+        tests:
+          - not_null:
+              severity: warn
 
   - name: biz_dwd_risk_info_v2
     description: "风险事实表 — 风险台账清洗+等级标准化+释放标志"
@@ -158,6 +182,14 @@ models:
         tests:
           - accepted_values:
               values: ['高', '中', '低']
+              severity: warn
+      - name: risk_submit_date
+        tests:
+          - not_null:
+              severity: warn
+      - name: submit_month
+        tests:
+          - not_null:
               severity: warn
 
   # ═══ DWS 汇总表 ═══

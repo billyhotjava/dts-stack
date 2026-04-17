@@ -1,5 +1,5 @@
-import { useEffect, useMemo, useState } from 'react';
-import { analyticsApi, type DatabaseListItem } from '../../../api/analyticsApi';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import { analyticsApi, type PlatformSourceWithDbId } from '../../../api/analyticsApi';
 
 interface DatabaseIdPickerProps {
     value: number;
@@ -7,73 +7,122 @@ interface DatabaseIdPickerProps {
     placeholder?: string;
 }
 
-let cachedDatabases: DatabaseListItem[] | null = null;
-let fetchPromise: Promise<DatabaseListItem[]> | null = null;
+let cachedSources: PlatformSourceWithDbId[] | null = null;
+let fetchPromise: Promise<PlatformSourceWithDbId[]> | null = null;
 
-function loadDatabases(): Promise<DatabaseListItem[]> {
-    if (cachedDatabases) return Promise.resolve(cachedDatabases);
+function loadPlatformSources(): Promise<PlatformSourceWithDbId[]> {
+    if (cachedSources) return Promise.resolve(cachedSources);
     if (fetchPromise) return fetchPromise;
 
-    fetchPromise = analyticsApi.listDatabases()
-        .then((resp) => {
-            const list = (resp?.data ?? []).filter((d) => d?.id != null);
-            cachedDatabases = list;
-            return list;
+    fetchPromise = analyticsApi.listPlatformSources()
+        .then((list) => {
+            const filtered = (Array.isArray(list) ? list : []).filter((s) => s?.platformId != null);
+            cachedSources = filtered;
+            return filtered;
         })
         .catch(() => {
             fetchPromise = null;
-            return [] as DatabaseListItem[];
+            return [] as PlatformSourceWithDbId[];
         });
 
     return fetchPromise;
 }
 
 export function DatabaseIdPicker({ value, onChange, placeholder }: DatabaseIdPickerProps) {
-    const [databases, setDatabases] = useState<DatabaseListItem[]>(cachedDatabases ?? []);
-    const [loading, setLoading] = useState(!cachedDatabases);
-    const [error, setError] = useState(false);
+    const [sources, setSources] = useState<PlatformSourceWithDbId[]>(cachedSources ?? []);
+    const [loading, setLoading] = useState(!cachedSources);
+    const [registering, setRegistering] = useState(false);
+    const [error, setError] = useState('');
 
     useEffect(() => {
-        if (cachedDatabases) {
-            setDatabases(cachedDatabases);
+        if (cachedSources) {
+            setSources(cachedSources);
             setLoading(false);
             return;
         }
-
         let cancelled = false;
         setLoading(true);
-        setError(false);
-        loadDatabases().then((list) => {
+        setError('');
+        loadPlatformSources().then((list) => {
             if (!cancelled) {
-                setDatabases(list);
-                setError(list.length === 0);
+                setSources(list);
+                if (list.length === 0) setError('无可用数据源');
                 setLoading(false);
             }
         });
         return () => { cancelled = true; };
     }, []);
 
+    const handleChange = useCallback(async (e: React.ChangeEvent<HTMLSelectElement>) => {
+        const selected = e.target.value;
+        // 已经是 analytics DB ID（数字）
+        const numVal = Number(selected);
+        if (Number.isFinite(numVal) && numVal > 0) {
+            onChange(numVal);
+            return;
+        }
+        // 是 platform data source ID（UUID），需要按需注册
+        if (!selected || selected === '0') {
+            onChange(0);
+            return;
+        }
+        setRegistering(true);
+        setError('');
+        try {
+            const result = await analyticsApi.ensureFromPlatform(selected);
+            const dbId = (result as any)?.id;
+            if (typeof dbId === 'number' && dbId > 0) {
+                // 更新缓存中的 analyticsDbId
+                const updated = sources.map((s) =>
+                    s.platformId === selected ? { ...s, analyticsDbId: dbId } : s
+                );
+                cachedSources = updated;
+                setSources(updated);
+                onChange(dbId);
+            } else {
+                setError('注册数据源失败');
+            }
+        } catch (ex: any) {
+            setError(ex?.message || '注册数据源失败');
+        } finally {
+            setRegistering(false);
+        }
+    }, [sources, onChange]);
+
+    // 当前值是否在列表中
     const hasCurrentInList = useMemo(
-        () => (value > 0 ? databases.some((d) => d.id === value) : true),
-        [databases, value],
+        () => (value > 0 ? sources.some((s) => s.analyticsDbId === value) : true),
+        [sources, value],
     );
+
+    // 下拉选项值：已注册的用 analyticsDbId，未注册的用 platformId
+    const optionValue = (s: PlatformSourceWithDbId) =>
+        s.analyticsDbId != null && s.analyticsDbId > 0 ? String(s.analyticsDbId) : s.platformId;
+
+    const statusText = loading
+        ? '加载中...'
+        : registering
+            ? '注册数据源中...'
+            : error
+                ? `⚠ ${error}`
+                : (placeholder ?? '-- 选择数据库 --');
 
     return (
         <select
             className="property-input"
-            value={value || 0}
-            onChange={(e) => onChange(Number(e.target.value))}
+            value={value > 0 ? String(value) : '0'}
+            onChange={handleChange}
+            disabled={loading || registering}
             style={value > 0 ? undefined : { color: '#888' }}
         >
-            <option value={0}>
-                {loading ? '加载中...' : error ? '⚠ 无可用数据库连接' : (placeholder ?? '-- 选择数据库 --')}
-            </option>
+            <option value="0">{statusText}</option>
             {!hasCurrentInList && value > 0 && (
-                <option value={value}>#{value} (手工输入)</option>
+                <option value={String(value)}>#{value} (手工输入)</option>
             )}
-            {databases.map((db) => (
-                <option key={db.id} value={db.id}>
-                    #{db.id} {db.name || '(未命名数据库)'}{db.engine ? ` (${db.engine})` : ''}
+            {sources.map((s) => (
+                <option key={s.platformId} value={optionValue(s)}>
+                    {s.name || '(未命名)'}{s.type ? ` (${s.type})` : ''}
+                    {s.analyticsDbId ? ` #${s.analyticsDbId}` : ''}
                 </option>
             ))}
         </select>
@@ -81,6 +130,6 @@ export function DatabaseIdPicker({ value, onChange, placeholder }: DatabaseIdPic
 }
 
 export function invalidateDatabaseCache() {
-    cachedDatabases = null;
+    cachedSources = null;
     fetchPromise = null;
 }

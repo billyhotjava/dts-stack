@@ -51,5 +51,5 @@ SELECT
   SUM(CASE WHEN d.cat_other       THEN 1 ELSE 0 END)                                AS total_cat_other
 
 FROM {{ ref('biz_dwd_quality_issue_v2') }} d
-WHERE d.issue_year IS NOT NULL
+WHERE d.issue_month IS NOT NULL
 GROUP BY d.issue_year, d.issue_month, d.project_no, d.dept
