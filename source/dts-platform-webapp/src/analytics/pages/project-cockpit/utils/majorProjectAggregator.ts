@@ -24,7 +24,7 @@ export interface FlatProjectNodeRow {
     责任科室?: string | null;
     责任人?: string | null;
     项目经理?: string | null;
-    所长?: string | null;
+    所领导?: string | null;
     风险内容?: string | null;
     延期影响?: string | null;
 }
@@ -33,9 +33,9 @@ function rowToTask(r: FlatProjectNodeRow): ProjectGanttTask {
     const isCompleted = r.是否完成 === true;
     const isOverdue = r.是否超期完成 === true || (r.延期天数 != null && r.延期天数 > 0);
     const planStart = r.计划开始日期 ?? r.基线开始日期 ?? r.基线日期 ?? undefined;
-    const planEnd   = r.计划完成日期 ?? r.基线结束日期 ?? r.计划日期 ?? undefined;
+    const planEnd = r.计划完成日期 ?? r.基线结束日期 ?? r.计划日期 ?? undefined;
     const actualStart = r.实际开始日期 ?? undefined;
-    const actualEnd   = r.实际完成日期 ?? r.实际日期 ?? undefined;
+    const actualEnd = r.实际完成日期 ?? r.实际日期 ?? undefined;
     return {
         name: String(r.任务 ?? '').trim(),
         type: String(r.类型 ?? '一般任务'),
@@ -97,7 +97,7 @@ function aggregateMeta(rows: FlatProjectNodeRow[]): {
     return {
         responsibleDept: pickFirstNonEmpty(rows, '责任科室'),
         manager: pickFirstNonEmpty(rows, '项目经理'),
-        instituteLeader: pickFirstNonEmpty(rows, '所长'),
+        instituteLeader: pickFirstNonEmpty(rows, '所领导'),
         startDate: plannedStarts[0],
         plannedDeliveryDate: plannedEnds[plannedEnds.length - 1],
         stage: stages[0] ?? derivedStage,

@@ -31,6 +31,7 @@ type Props = {
 	maxHeight?: number;
 	sideTextColor?: string;
 	dark?: boolean;
+	defaultZoom?: ZoomLevel;
 };
 
 // ──────────────────────────────────────────────────────────────────────────
@@ -159,13 +160,13 @@ function buildTimeScale(allDates: number[], zoom: ZoomLevel): TimeScale | null {
 	return { start, end, pxPerDay, totalPx, zoom, ticks, toPx, widthPx };
 }
 
-function useGanttTimeScale(allDates: number[]) {
+function useGanttTimeScale(allDates: number[], defaultZoom?: ZoomLevel) {
 	const totalDays = useMemo(() => {
 		if (allDates.length === 0) return 30;
 		const { min, max } = minMax(allDates);
 		return Math.max(1, (max - min) / MS_PER_DAY);
 	}, [allDates]);
-	const [zoom, setZoom] = useState<ZoomLevel>(() => pickDefaultZoom(totalDays));
+	const [zoom, setZoom] = useState<ZoomLevel>(() => defaultZoom ?? pickDefaultZoom(totalDays));
 	const scale = useMemo(() => buildTimeScale(allDates, zoom), [allDates, zoom]);
 	return { zoom, setZoom, scale };
 }
@@ -348,6 +349,7 @@ export function ProjectGanttBoard(props: Props) {
 				maxHeight={props.maxHeight}
 				dark={props.dark}
 				sideTextColor={props.sideTextColor}
+				defaultZoom={props.defaultZoom}
 			/>
 		);
 	}
@@ -359,6 +361,7 @@ export function ProjectGanttBoard(props: Props) {
 			sideTextColor={props.sideTextColor}
 			dark={props.dark}
 			highlightedTaskName={props.highlightedTaskName}
+			defaultZoom={props.defaultZoom}
 		/>
 	);
 }
@@ -367,13 +370,14 @@ export function ProjectGanttBoard(props: Props) {
 // FlatGantt — two-pane layout with sticky left grid + scrollable timeline
 // ──────────────────────────────────────────────────────────────────────────
 
-function FlatGantt({ tasks, maxHeight, onTaskClick, sideTextColor, dark, highlightedTaskName }: {
+function FlatGantt({ tasks, maxHeight, onTaskClick, sideTextColor, dark, highlightedTaskName, defaultZoom }: {
 	tasks: ProjectGanttTask[];
 	maxHeight?: number;
 	onTaskClick?: (task: ProjectGanttTask) => void;
 	sideTextColor?: string;
 	dark?: boolean;
 	highlightedTaskName?: string;
+	defaultZoom?: ZoomLevel;
 }) {
 	const sideTextStyle = resolveGanttSideTextStyle(sideTextColor);
 	const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(new Set());
@@ -394,7 +398,7 @@ function FlatGantt({ tasks, maxHeight, onTaskClick, sideTextColor, dark, highlig
 			.filter((value): value is number => value != null)
 	), [tasks]);
 
-	const { zoom, setZoom, scale } = useGanttTimeScale(allDates);
+	const { zoom, setZoom, scale } = useGanttTimeScale(allDates, defaultZoom);
 
 	const groups = useMemo(() => groupByProject(tasks), [tasks]);
 	const useGroups = groups.length > 1;
@@ -739,12 +743,13 @@ const FlatGanttRow = memo(function FlatGanttRow({ task, scale, dark, rowBg, rowH
 // HierarchicalGantt — same two-pane layout, project-level rows
 // ──────────────────────────────────────────────────────────────────────────
 
-function HierarchicalGantt({ majorProjects, onProjectClick, maxHeight, dark, sideTextColor }: {
+function HierarchicalGantt({ majorProjects, onProjectClick, maxHeight, dark, sideTextColor, defaultZoom }: {
 	majorProjects: MajorProject[];
 	onProjectClick?: (project: MajorProject) => void;
 	maxHeight?: number;
 	dark?: boolean;
 	sideTextColor?: string;
+	defaultZoom?: ZoomLevel;
 }) {
 	const sideTextStyle = resolveGanttSideTextStyle(sideTextColor);
 
@@ -763,7 +768,7 @@ function HierarchicalGantt({ majorProjects, onProjectClick, maxHeight, dark, sid
 			.filter((value): value is number => value != null)
 	), [majorProjects]);
 
-	const { zoom, setZoom, scale } = useGanttTimeScale(allDates);
+	const { zoom, setZoom, scale } = useGanttTimeScale(allDates, defaultZoom);
 
 	if (majorProjects.length === 0) {
 		return <EmptyShell dark={dark} message="当前筛选范围暂无重大项目。" />;

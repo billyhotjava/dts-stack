@@ -5,7 +5,7 @@
   "description": "管控层项目执行监控模板，覆盖进度、里程碑、甘特和延期项目。",
   "width": 1920,
   "height": 1080,
-  "backgroundColor": "#06142c",
+  "backgroundColor": "#1D6FCC",
   "theme": "dark-command",
   "globalVariables": [
     {
@@ -72,9 +72,9 @@
       "visible": true,
       "config": {
         "shapeType": "rect",
-        "fillColor": "rgba(12, 38, 82, 0.18)",
-        "borderColor": "transparent",
-        "borderWidth": 0,
+        "fillColor": "rgba(255, 255, 255, 0.16)",
+        "borderColor": "rgba(255, 255, 255, 0.24)",
+        "borderWidth": 1,
         "radius": 18
       }
     },
@@ -637,7 +637,10 @@
         "title": "",
         "renderMode": "board-hierarchical",
         "drillMode": "modal",
-        "sideTextColor": "#081c3f",
+        "defaultZoom": "month",
+        "sideTextColor": "#ffffff",
+        "backgroundColor": "transparent",
+        "titleColor": "#e6f6ff",
         "titleFontSize": 0,
         "chartPaddingTop": 36
       },
@@ -860,9 +863,9 @@
         "precision": 0,
         "titleFontSize": 17,
         "valueFontSize": 34,
-        "titleColor": "#8cb9df",
-        "valueColor": "#d9eeff",
-        "backgroundColor": "#ffffff"
+        "titleColor": "#d9eeff",
+        "valueColor": "#ffffff",
+        "backgroundColor": "transparent"
       },
       "dataSource": {
         "type": "sql",
@@ -910,9 +913,9 @@
         "precision": 2,
         "titleFontSize": 17,
         "valueFontSize": 34,
-        "titleColor": "#8cb9df",
-        "valueColor": "#d9eeff",
-        "backgroundColor": "#ffffff"
+        "titleColor": "#d9eeff",
+        "valueColor": "#ffffff",
+        "backgroundColor": "transparent"
       },
       "dataSource": {
         "type": "sql",
@@ -960,9 +963,9 @@
         "precision": 2,
         "titleFontSize": 17,
         "valueFontSize": 34,
-        "titleColor": "#8cb9df",
-        "valueColor": "#d9eeff",
-        "backgroundColor": "#ffffff"
+        "titleColor": "#d9eeff",
+        "valueColor": "#ffffff",
+        "backgroundColor": "transparent"
       },
       "dataSource": {
         "type": "sql",
@@ -1010,9 +1013,9 @@
         "precision": 2,
         "titleFontSize": 17,
         "valueFontSize": 34,
-        "titleColor": "#8cb9df",
-        "valueColor": "#d9eeff",
-        "backgroundColor": "#ffffff"
+        "titleColor": "#d9eeff",
+        "valueColor": "#ffffff",
+        "backgroundColor": "transparent"
       },
       "dataSource": {
         "type": "sql",
@@ -1060,9 +1063,9 @@
         "precision": 2,
         "titleFontSize": 17,
         "valueFontSize": 34,
-        "titleColor": "#8cb9df",
-        "valueColor": "#d9eeff",
-        "backgroundColor": "#ffffff"
+        "titleColor": "#d9eeff",
+        "valueColor": "#ffffff",
+        "backgroundColor": "transparent"
       },
       "dataSource": {
         "type": "sql",
@@ -1110,9 +1113,9 @@
         "precision": 0,
         "titleFontSize": 17,
         "valueFontSize": 34,
-        "titleColor": "#8cb9df",
-        "valueColor": "#d9eeff",
-        "backgroundColor": "#ffffff"
+        "titleColor": "#d9eeff",
+        "valueColor": "#ffffff",
+        "backgroundColor": "transparent"
       },
       "dataSource": {
         "type": "sql",
@@ -1160,9 +1163,9 @@
         "precision": 0,
         "titleFontSize": 17,
         "valueFontSize": 34,
-        "titleColor": "#8cb9df",
-        "valueColor": "#d9eeff",
-        "backgroundColor": "#ffffff"
+        "titleColor": "#d9eeff",
+        "valueColor": "#ffffff",
+        "backgroundColor": "transparent"
       },
       "dataSource": {
         "type": "sql",

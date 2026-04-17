@@ -24,11 +24,13 @@ export function BoardHierarchicalGanttWithModal({
 	maxHeight,
 	dark,
 	sideTextColor,
+	defaultZoom,
 }: {
 	cardData: CardData | null | undefined;
 	maxHeight?: number;
 	dark?: boolean;
 	sideTextColor?: string;
+	defaultZoom?: "day" | "week" | "month" | "quarter";
 }) {
 	const [activeProject, setActiveProject] = useState<MajorProject | null>(null);
 
@@ -49,6 +51,7 @@ export function BoardHierarchicalGanttWithModal({
 				maxHeight={maxHeight}
 				dark={dark}
 				sideTextColor={sideTextColor}
+				defaultZoom={defaultZoom}
 				onProjectClick={setActiveProject}
 			/>
 			<ProjectDetailGanttModal
@@ -90,7 +93,7 @@ function buildFlatRowsFromCardData(cardData: CardData): FlatProjectNodeRow[] {
 		责任科室: colIndex("责任科室"),
 		责任人: colIndex("责任人"),
 		项目经理: colIndex("项目经理"),
-		所长: colIndex("所长"),
+		所领导: colIndex("所领导"),
 		风险内容: colIndex("风险内容"),
 		延期影响: colIndex("延期影响"),
 	};
@@ -142,7 +145,7 @@ function buildFlatRowsFromCardData(cardData: CardData): FlatProjectNodeRow[] {
 		责任科室: pickStr(row, indices.责任科室),
 		责任人: pickStr(row, indices.责任人),
 		项目经理: pickStr(row, indices.项目经理),
-		所长: pickStr(row, indices.所长),
+		所领导: pickStr(row, indices.所领导),
 		风险内容: pickStr(row, indices.风险内容),
 		延期影响: pickStr(row, indices.延期影响),
 	}));
@@ -272,7 +275,7 @@ function ModalSidebar({ project, onRiskClick }: { project: MajorProject; onRiskC
 					<dd className="font-semibold text-slate-700">{project.responsibleDept ?? "--"}</dd>
 					<dt className="text-slate-500">项目经理</dt>
 					<dd className="font-semibold text-slate-700">{project.manager ?? "--"}</dd>
-					<dt className="text-slate-500">所长</dt>
+					<dt className="text-slate-500">所领导</dt>
 					<dd className="font-semibold text-slate-700">{project.instituteLeader ?? "--"}</dd>
 					<dt className="text-slate-500">启动</dt>
 					<dd className="font-semibold text-slate-700">{project.startDate ?? "--"}</dd>
@@ -365,11 +368,10 @@ function ModalGanttArea({
 						key={name}
 						type="button"
 						onClick={() => onSubChange(name)}
-						className={`px-2.5 py-1 rounded-full text-xs ${
-							activeSub === name
+						className={`px-2.5 py-1 rounded-full text-xs ${activeSub === name
 								? "bg-blue-600 text-white"
 								: "bg-slate-100 text-slate-600 hover:bg-slate-200"
-						}`}
+							}`}
 					>
 						{name}
 					</button>

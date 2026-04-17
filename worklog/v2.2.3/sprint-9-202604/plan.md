@@ -790,7 +790,7 @@ export interface FlatProjectNodeRow {
     责任科室?: string | null;
     责任人?: string | null;
     项目经理?: string | null;
-    所长?: string | null;
+    所领导?: string | null;
     风险内容?: string | null;
     延期影响?: string | null;
 }
@@ -838,7 +838,7 @@ function aggregateMeta(rows: FlatProjectNodeRow[]): Pick<MajorProject, 'responsi
     return {
         responsibleDept: pickFirstNonEmpty(rows, '责任科室'),
         manager: pickFirstNonEmpty(rows, '项目经理'),
-        instituteLeader: pickFirstNonEmpty(rows, '所长'),
+        instituteLeader: pickFirstNonEmpty(rows, '所领导'),
         startDate: planDates[0],
         plannedDeliveryDate: planDates[planDates.length - 1],
         stage: stages[0] ?? derivedStage,
@@ -1303,7 +1303,7 @@ function ModalSidebar({ project, onRiskClick }: { project: MajorProject; onRiskC
                 <dl className="grid grid-cols-[80px_1fr] gap-y-1.5 text-xs">
                     <dt className="text-slate-500">责任部门</dt><dd className="font-semibold text-slate-700">{project.responsibleDept ?? '--'}</dd>
                     <dt className="text-slate-500">项目经理</dt><dd className="font-semibold text-slate-700">{project.manager ?? '--'}</dd>
-                    <dt className="text-slate-500">所长</dt><dd className="font-semibold text-slate-700">{project.instituteLeader ?? '--'}</dd>
+                    <dt className="text-slate-500">所领导</dt><dd className="font-semibold text-slate-700">{project.instituteLeader ?? '--'}</dd>
                     <dt className="text-slate-500">启动</dt><dd className="font-semibold text-slate-700">{project.startDate ?? '--'}</dd>
                     <dt className="text-slate-500">计划交付</dt><dd className="font-semibold text-slate-700">{project.plannedDeliveryDate ?? '--'}</dd>
                     <dt className="text-slate-500">阶段</dt><dd className="font-semibold text-slate-700">{project.stage ?? '--'}</dd>
@@ -1593,7 +1593,7 @@ git commit -m "feat(S9/F5-T02): EChartsRenderer 接入 gantt-chart board-hierarc
   "type": "sql",
   "sqlConfig": {
     "databaseId": "{{DATABASE_ID}}",
-    "query": "SELECT d.project_no AS \"重大项目\", COALESCE(d.subsystem, '(无子项目)') AS \"子项目\", d.node_task AS \"任务\", d.node_type AS \"类型\", to_char(d.plan_date, 'YYYY-MM-DD') AS \"计划日期\", to_char(d.actual_date, 'YYYY-MM-DD') AS \"实际日期\", to_char(d.original_plan_date, 'YYYY-MM-DD') AS \"基线日期\", d.is_completed AS \"是否完成\", d.is_overdue_completed AS \"是否超期完成\", d.is_incomplete AS \"是否未完成\", COALESCE(d.delay_days, 0) AS \"延期天数\", d.risk_level AS \"风险等级\", d.completion_status AS \"完成情况\", d.dept AS \"责任科室\", d.owner AS \"责任人\", d.project_manager AS \"项目经理\", d.institute_leader AS \"所长\", d.risk_content AS \"风险内容\", d.delay_impact AS \"延期影响\" FROM biz_dwd_project_node_v2 d WHERE d.plan_month >= to_char({{dateFrom}}::date, 'YYYY-MM') AND d.plan_month <= to_char({{dateTo}}::date, 'YYYY-MM') AND ({{projectNo}} IS NULL OR {{projectNo}} = '' OR d.project_no ILIKE '%' || {{projectNo}} || '%') AND ({{deptId}} IS NULL OR {{deptId}} = '' OR d.dept = {{deptId}}) AND ({{riskLevel}} IS NULL OR {{riskLevel}} = '' OR d.risk_level = {{riskLevel}}) ORDER BY d.project_no, d.subsystem NULLS LAST, d.plan_date",
+    "query": "SELECT d.project_no AS \"重大项目\", COALESCE(d.subsystem, '(无子项目)') AS \"子项目\", d.node_task AS \"任务\", d.node_type AS \"类型\", to_char(d.plan_date, 'YYYY-MM-DD') AS \"计划日期\", to_char(d.actual_date, 'YYYY-MM-DD') AS \"实际日期\", to_char(d.original_plan_date, 'YYYY-MM-DD') AS \"基线日期\", d.is_completed AS \"是否完成\", d.is_overdue_completed AS \"是否超期完成\", d.is_incomplete AS \"是否未完成\", COALESCE(d.delay_days, 0) AS \"延期天数\", d.risk_level AS \"风险等级\", d.completion_status AS \"完成情况\", d.dept AS \"责任科室\", d.owner AS \"责任人\", d.project_manager AS \"项目经理\", d.institute_leader AS \"所领导\", d.risk_content AS \"风险内容\", d.delay_impact AS \"延期影响\" FROM biz_dwd_project_node_v2 d WHERE d.plan_month >= to_char({{dateFrom}}::date, 'YYYY-MM') AND d.plan_month <= to_char({{dateTo}}::date, 'YYYY-MM') AND ({{projectNo}} IS NULL OR {{projectNo}} = '' OR d.project_no ILIKE '%' || {{projectNo}} || '%') AND ({{deptId}} IS NULL OR {{deptId}} = '' OR d.dept = {{deptId}}) AND ({{riskLevel}} IS NULL OR {{riskLevel}} = '' OR d.risk_level = {{riskLevel}}) ORDER BY d.project_no, d.subsystem NULLS LAST, d.plan_date",
     "queryTimeoutSeconds": 30,
     "maxRows": 5000
   }

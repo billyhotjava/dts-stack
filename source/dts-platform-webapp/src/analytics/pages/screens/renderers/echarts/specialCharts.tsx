@@ -27,6 +27,10 @@ export function renderSpecialChart(type: string, props: EChartsRendererProps): R
             /* eslint-disable @typescript-eslint/no-explicit-any */
             const tasks = Array.isArray(c.tasks) ? (c.tasks as Array<Record<string, any>>) : [];
             const ganttRenderMode = String(c.renderMode ?? '').trim().toLowerCase();
+            const defaultZoomRaw = typeof c.defaultZoom === 'string' ? c.defaultZoom.trim().toLowerCase() : '';
+            const defaultZoom = (['day', 'week', 'month', 'quarter'] as const).includes(defaultZoomRaw as any)
+                ? (defaultZoomRaw as 'day' | 'week' | 'month' | 'quarter')
+                : undefined;
             if (ganttRenderMode === 'board-hierarchical') {
                 return (
                     <BoardHierarchicalGanttWithModal
@@ -34,6 +38,7 @@ export function renderSpecialChart(type: string, props: EChartsRendererProps): R
                         maxHeight={height}
                         sideTextColor={typeof c.sideTextColor === 'string' ? c.sideTextColor : undefined}
                         dark={isLightColor(t.textPrimary)}
+                        defaultZoom={defaultZoom}
                     />
                 );
             }
@@ -54,6 +59,7 @@ export function renderSpecialChart(type: string, props: EChartsRendererProps): R
                         onTaskClick={onTaskClick}
                         sideTextColor={typeof c.sideTextColor === 'string' ? c.sideTextColor : undefined}
                         dark={isLightColor(t.textPrimary)}
+                        defaultZoom={defaultZoom}
                     />
                 );
             }

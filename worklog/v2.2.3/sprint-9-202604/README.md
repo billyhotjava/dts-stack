@@ -406,7 +406,7 @@ type FlatRow = {
     是否完成?: boolean; 是否超期?: boolean; 延期天数?: number;
     风险等级?: string; 责任科室?: string; 责任人?: string;
     项目经理?: string; 风险内容?: string; 延期影响?: string;
-    所长?: string;
+    所领导?: string;
 };
 
 export function aggregateMajorProjects(rows: FlatRow[]): MajorProject[] {
@@ -601,7 +601,7 @@ Chrome 95 已稳定支持 `backdrop-filter` 和 cubic-bezier。`<dialog>` 元素
 
 **ModalSidebar（320px 宽，三个区段）**
 
-- 区段 1 — 项目元信息：责任部门 / 项目经理 / 所长 / 启动日期 / 计划交付 / 阶段
+- 区段 1 — 项目元信息：责任部门 / 项目经理 / 所领导 / 启动日期 / 计划交付 / 阶段
 - 区段 2 — KPI 小条：完成率 / 里程碑 / 高风险 / 累计延期，2×2 grid，bg-slate-50 圆角 + 大数字
 - 区段 3 — 风险提示列表：逐项 `🔴 设备线延期 (28d)`，cursor-pointer 点击触发 `onRiskClick(taskRef)`，最多 8 项
 
@@ -699,7 +699,7 @@ case 'gantt-chart': {
     "type": "sql",
     "sqlConfig": {
       "databaseId": "{{DATABASE_ID}}",
-      "query": "SELECT d.project_no AS \"重大项目\", COALESCE(d.subsystem, '(无子项目)') AS \"子项目\", d.node_task AS \"任务\", d.node_type AS \"类型\", to_char(d.plan_date, 'YYYY-MM-DD') AS \"计划日期\", to_char(d.actual_date, 'YYYY-MM-DD') AS \"实际日期\", to_char(d.original_plan_date, 'YYYY-MM-DD') AS \"基线日期\", d.is_completed AS \"是否完成\", d.is_overdue_completed AS \"是否超期完成\", d.is_incomplete AS \"是否未完成\", COALESCE(d.delay_days, 0) AS \"延期天数\", d.risk_level AS \"风险等级\", d.completion_status AS \"完成情况\", d.dept AS \"责任科室\", d.owner AS \"责任人\", d.project_manager AS \"项目经理\", d.institute_leader AS \"所长\", d.risk_content AS \"风险内容\", d.delay_impact AS \"延期影响\" FROM biz_dwd_project_node_v2 d WHERE d.plan_month >= to_char({{dateFrom}}::date, 'YYYY-MM') AND d.plan_month <= to_char({{dateTo}}::date, 'YYYY-MM') AND ({{projectNo}} IS NULL OR {{projectNo}} = '' OR d.project_no ILIKE '%' || {{projectNo}} || '%') AND ({{deptId}} IS NULL OR {{deptId}} = '' OR d.dept = {{deptId}}) AND ({{riskLevel}} IS NULL OR {{riskLevel}} = '' OR d.risk_level = {{riskLevel}}) ORDER BY d.project_no, d.subsystem NULLS LAST, d.plan_date",
+      "query": "SELECT d.project_no AS \"重大项目\", COALESCE(d.subsystem, '(无子项目)') AS \"子项目\", d.node_task AS \"任务\", d.node_type AS \"类型\", to_char(d.plan_date, 'YYYY-MM-DD') AS \"计划日期\", to_char(d.actual_date, 'YYYY-MM-DD') AS \"实际日期\", to_char(d.original_plan_date, 'YYYY-MM-DD') AS \"基线日期\", d.is_completed AS \"是否完成\", d.is_overdue_completed AS \"是否超期完成\", d.is_incomplete AS \"是否未完成\", COALESCE(d.delay_days, 0) AS \"延期天数\", d.risk_level AS \"风险等级\", d.completion_status AS \"完成情况\", d.dept AS \"责任科室\", d.owner AS \"责任人\", d.project_manager AS \"项目经理\", d.institute_leader AS \"所领导\", d.risk_content AS \"风险内容\", d.delay_impact AS \"延期影响\" FROM biz_dwd_project_node_v2 d WHERE d.plan_month >= to_char({{dateFrom}}::date, 'YYYY-MM') AND d.plan_month <= to_char({{dateTo}}::date, 'YYYY-MM') AND ({{projectNo}} IS NULL OR {{projectNo}} = '' OR d.project_no ILIKE '%' || {{projectNo}} || '%') AND ({{deptId}} IS NULL OR {{deptId}} = '' OR d.dept = {{deptId}}) AND ({{riskLevel}} IS NULL OR {{riskLevel}} = '' OR d.risk_level = {{riskLevel}}) ORDER BY d.project_no, d.subsystem NULLS LAST, d.plan_date",
       "queryTimeoutSeconds": 30,
       "maxRows": 5000
     }
