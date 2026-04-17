@@ -8,7 +8,7 @@ import { flattenTrees } from "@/utils/tree";
 import { getBackendDashboardRoutes } from "./backend";
 import { getFrontendDashboardRoutes } from "./frontend";
 import { LineLoading } from "@/components/loading";
-import { useUserInfo } from "@/store/userStore";
+import { useUserInfo, useUserToken } from "@/store/userStore";
 
 const getRoutes = (): RouteObject[] => {
 	if (GLOBAL_CONFIG.routerMode === "frontend") {
@@ -46,6 +46,7 @@ function DashboardIndexRedirect() {
 	const navigate = useNavigate();
 	const filteredNavData = useFilteredNavData();
 	const userInfo = useUserInfo();
+	const { accessToken } = useUserToken();
 	const normalizedRoles = useMemo(() => {
 		const raw = Array.isArray(userInfo?.roles) ? userInfo?.roles : [];
 		return raw
@@ -71,6 +72,7 @@ function DashboardIndexRedirect() {
 	}, [filteredNavData]);
 
 	useEffect(() => {
+		if (!accessToken) return;
 		if (!filteredNavData.length && !accessiblePaths.length && !fallbackPath) return;
 		const defaultRoute = GLOBAL_CONFIG.defaultRoute;
 		const candidate =
@@ -82,7 +84,12 @@ function DashboardIndexRedirect() {
 			return;
 		}
 		navigate(candidate, { replace: true });
-	}, [accessiblePaths, filteredNavData, fallbackPath, navigate]);
+	}, [accessToken, accessiblePaths, filteredNavData, fallbackPath, navigate]);
+
+	// 没 token 时不再根据 localStorage 里残留角色去推受保护页面；交给 LoginAuthGuard 去登录页
+	if (!accessToken) {
+		return <Navigate to="/auth/login" replace />;
+	}
 
 	if (!filteredNavData.length && !accessiblePaths.length && !fallbackPath) {
 		return (

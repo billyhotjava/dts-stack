@@ -295,7 +295,10 @@ axiosInstance.interceptors.response.use(
 		const SERVICE_UNAVAILABLE = new Set([502, 503, 504]);
 		const isServiceUnavailable = SERVICE_UNAVAILABLE.has(response?.status ?? 0);
 
-		if (!shouldSuppressAuthHandling && !isLoginRequest && !canSilentRefresh) {
+		// session-expired / session-conflict 场景由 AdminGuard 统一弹 toast 并跳转，避免双 toast
+		const hasSessionSignalHeader =
+			hasHeaderFlag(headers, "x-session-conflict") || hasHeaderFlag(headers, "x-session-expired");
+		if (!shouldSuppressAuthHandling && !isLoginRequest && !canSilentRefresh && !hasSessionSignalHeader) {
 			toast.error(errMsg, { id: "api-error", position: "top-center" });
 		}
 

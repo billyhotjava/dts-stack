@@ -55,7 +55,7 @@ export default function AdminGuard({ children }: Props) {
 	const router = useRouter();
 	const signOut = useSignOut();
 	const token = useUserToken();
-	const { setUserToken } = useUserActions();
+	const { setUserToken, clearUserInfoAndToken } = useUserActions();
 	const queryClient = useQueryClient();
 	const [guardState, setGuardState] = useState<GuardState>("idle");
 	const [triedRefresh, setTriedRefresh] = useState(false);
@@ -71,7 +71,7 @@ export default function AdminGuard({ children }: Props) {
 	});
 
 	const redirectToLogin = useCallback(
-		async (reason: "session-expired" | "concurrent-login" | "signed-out") => {
+		(reason: "session-expired" | "concurrent-login" | "signed-out") => {
 			if (redirectingRef.current && lastReasonRef.current === reason) {
 				return;
 			}
@@ -84,15 +84,15 @@ export default function AdminGuard({ children }: Props) {
 			} else if (reason === "session-expired") {
 				toast.error("会话已过期，请重新登录", { id: "session-expired" });
 			}
-			try {
-				await signOut();
-			} finally {
-				const params = new URLSearchParams();
-				params.set("reason", reason);
-				router.replace(`/auth/login?${params.toString()}`);
-			}
+			// 立即清 token + 跳登录页，不再 await signOut —— signOut 里的 logout API
+			// 本身也可能 401/挂起，会让整个重定向卡住导致页面在死循环里刷新
+			clearUserInfoAndToken();
+			const params = new URLSearchParams();
+			params.set("reason", reason);
+			router.replace(`/auth/login?${params.toString()}`);
+			void signOut().catch(() => {}); // 在后台撤销远端会话，失败忽略
 		},
-		[queryClient, router, signOut],
+		[clearUserInfoAndToken, queryClient, router, signOut],
 	);
 
 	useEffect(() => {
