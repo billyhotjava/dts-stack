@@ -898,8 +898,13 @@ export default function SqlModelingPage() {
 			strictMode: false,
 		});
 		const activeId = String(activeModel?.id || "").trim();
+		const checkedIds = Array.from(
+			new Set((bulkSelection.selectedIds || []).map((id) => String(id || "").trim()).filter(Boolean)),
+		);
 		let prefillIds: string[];
-		if (activeId) {
+		if (checkedIds.length > 0) {
+			prefillIds = checkedIds;
+		} else if (activeId) {
 			prefillIds = [activeId];
 		} else if (activeSpace && activeSpaceModels.length > 0) {
 			prefillIds = activeSpaceModels
@@ -1161,7 +1166,21 @@ export default function SqlModelingPage() {
 		try {
 			let selector: string;
 			let dagSelector: string | undefined;
-			if (activeModel) {
+			const checkedIdSet = new Set(
+				(bulkSelection.selectedIds || []).map((id) => String(id || "").trim()).filter(Boolean),
+			);
+			const checkedModels =
+				checkedIdSet.size > 0
+					? sqlModels.filter((m) => checkedIdSet.has(String(m.id || "").trim()))
+					: [];
+			if (checkedModels.length > 0) {
+				const names = checkedModels
+					.map((m) => normalizeText(m.name))
+					.filter(Boolean) as string[];
+				selector = names.length > 0 ? names.join(" ") : "all";
+				dagSelector =
+					checkedModels.map((m) => normalizeText(m.dagSelector)).find(Boolean) || undefined;
+			} else if (activeModel) {
 				selector = normalizeText(activeModel.name) || "all";
 				dagSelector = normalizeText(activeModel.dagSelector) || undefined;
 			} else if (activeSpace && activeSpaceModels.length > 0) {
@@ -2439,7 +2458,11 @@ export default function SqlModelingPage() {
 											type="primary"
 											icon={<ThunderboltOutlined />}
 											onClick={() => {
-												if (activeModel || (activeSpace && activeSpaceModels.length > 0)) {
+												if (
+													bulkSelection.selectedIds.length > 0 ||
+													activeModel ||
+													(activeSpace && activeSpaceModels.length > 0)
+												) {
 													void triggerBuildOperation("build");
 												} else {
 													openRun("build");
