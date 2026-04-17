@@ -152,8 +152,8 @@
         "value": "66.7",
         "unit": "%",
         "precision": 1,
-        "titleColor": "#d9eeff",
-        "valueColor": "#3b82ff",
+        "titleColor": "#ffffff",
+        "valueColor": "#ffffff",
         "backgroundColor": "#ffffff",
         "borderRadius": 12,
         "fontSize": 36
@@ -202,8 +202,8 @@
         "value": "75.0",
         "unit": "%",
         "precision": 1,
-        "titleColor": "#d9eeff",
-        "valueColor": "#2ee6a6",
+        "titleColor": "#ffffff",
+        "valueColor": "#ffffff",
         "backgroundColor": "#ffffff",
         "borderRadius": 12,
         "fontSize": 36
@@ -252,8 +252,8 @@
         "value": "22.2",
         "unit": "%",
         "precision": 1,
-        "titleColor": "#d9eeff",
-        "valueColor": "#ff9f43",
+        "titleColor": "#ffffff",
+        "valueColor": "#ffffff",
         "backgroundColor": "#ffffff",
         "borderRadius": 12,
         "fontSize": 36
@@ -302,8 +302,8 @@
         "value": "74",
         "unit": "",
         "precision": 0,
-        "titleColor": "#d9eeff",
-        "valueColor": "#2ee6a6",
+        "titleColor": "#ffffff",
+        "valueColor": "#ffffff",
         "backgroundColor": "#ffffff",
         "borderRadius": 12,
         "fontSize": 36

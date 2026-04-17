@@ -138,7 +138,7 @@
         "text": "项目综合看板",
         "fontSize": 28,
         "fontWeight": "800",
-        "color": "#e6f6ff",
+        "color": "#ffffff",
         "textAlign": "center"
       }
     },
@@ -176,7 +176,7 @@
         "text": "Decision Twins · Project Command Center",
         "fontSize": 11,
         "fontWeight": "500",
-        "color": "#a8deff",
+        "color": "#ffffff",
         "textAlign": "flex-start"
       }
     },
@@ -350,7 +350,7 @@
         "precision": 0,
         "titleFontSize": 14,
         "valueFontSize": 34,
-        "titleColor": "#aed3f0",
+        "titleColor": "#ffffff",
         "valueColor": "#ffffff",
         "backgroundColor": "transparent",
         "valueField": "项目总数"
@@ -401,7 +401,7 @@
         "precision": 1,
         "titleFontSize": 14,
         "valueFontSize": 34,
-        "titleColor": "#aed3f0",
+        "titleColor": "#ffffff",
         "valueColor": "#ffffff",
         "backgroundColor": "transparent",
         "valueField": "项目完成率"
@@ -452,7 +452,7 @@
         "precision": 0,
         "titleFontSize": 14,
         "valueFontSize": 34,
-        "titleColor": "#aed3f0",
+        "titleColor": "#ffffff",
         "valueColor": "#ffffff",
         "backgroundColor": "transparent",
         "valueField": "未闭环质量问题数"
@@ -503,7 +503,7 @@
         "precision": 0,
         "titleFontSize": 14,
         "valueFontSize": 34,
-        "titleColor": "#aed3f0",
+        "titleColor": "#ffffff",
         "valueColor": "#ffffff",
         "backgroundColor": "transparent",
         "valueField": "未整改落实技术更改单数"
@@ -554,7 +554,7 @@
         "precision": 0,
         "titleFontSize": 14,
         "valueFontSize": 34,
-        "titleColor": "#aed3f0",
+        "titleColor": "#ffffff",
         "valueColor": "#ffffff",
         "backgroundColor": "transparent",
         "valueField": "高风险数量"
@@ -659,7 +659,8 @@
         "yAxis": {
           "show": true,
           "labelFontSize": 11
-        }
+        },
+        "axisLabelColor": "#ffffff"
       },
       "dataSource": {
         "type": "sql",
@@ -738,7 +739,8 @@
         "yAxis": {
           "show": true,
           "labelFontSize": 11
-        }
+        },
+        "axisLabelColor": "#ffffff"
       },
       "dataSource": {
         "type": "sql",
@@ -928,7 +930,8 @@
         "yAxis": {
           "show": true,
           "labelFontSize": 11
-        }
+        },
+        "axisLabelColor": "#ffffff"
       },
       "dataSource": {
         "type": "sql",
@@ -1001,7 +1004,8 @@
         "yAxis": {
           "show": true,
           "labelFontSize": 11
-        }
+        },
+        "axisLabelColor": "#ffffff"
       },
       "dataSource": {
         "type": "sql",
@@ -1079,7 +1083,8 @@
         "yAxis": {
           "show": true,
           "labelFontSize": 11
-        }
+        },
+        "axisLabelColor": "#ffffff"
       },
       "dataSource": {
         "type": "sql",
@@ -1207,7 +1212,7 @@
         "text": "项目进度详情",
         "fontSize": 20,
         "fontWeight": "700",
-        "color": "#e6f6ff",
+        "color": "#ffffff",
         "textAlign": "flex-start"
       }
     },
@@ -1331,7 +1336,7 @@
         "text": "项目节点统计",
         "fontSize": 20,
         "fontWeight": "700",
-        "color": "#319ade",
+        "color": "#ffffff",
         "textAlign": "center"
       }
     },
@@ -1350,7 +1355,7 @@
         "text": "质量问题趋势(近12个月)",
         "fontSize": 20,
         "fontWeight": "700",
-        "color": "#c0392b",
+        "color": "#ffffff",
         "textAlign": "center"
       }
     },
@@ -1369,7 +1374,7 @@
         "text": "技术变更趋势(近12个月)",
         "fontSize": 20,
         "fontWeight": "700",
-        "color": "#e67e22",
+        "color": "#ffffff",
         "textAlign": "center"
       }
     },
@@ -1388,7 +1393,7 @@
         "text": "项目风险统计",
         "fontSize": 20,
         "fontWeight": "700",
-        "color": "#aa52d0",
+        "color": "#ffffff",
         "textAlign": "center"
       }
     },

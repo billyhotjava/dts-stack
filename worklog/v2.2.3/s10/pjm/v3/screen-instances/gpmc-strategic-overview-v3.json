@@ -649,8 +649,8 @@
         "precision": 0,
         "titleFontSize": 17,
         "valueFontSize": 34,
-        "titleColor": "#8cb9df",
-        "valueColor": "#d9eeff",
+        "titleColor": "#ffffff",
+        "valueColor": "#ffffff",
         "backgroundColor": "#ffffff"
       },
       "actions": [],
@@ -696,8 +696,8 @@
         "precision": 0,
         "titleFontSize": 17,
         "valueFontSize": 34,
-        "titleColor": "#8cb9df",
-        "valueColor": "#d9eeff",
+        "titleColor": "#ffffff",
+        "valueColor": "#ffffff",
         "backgroundColor": "#ffffff"
       },
       "actions": [],
@@ -743,8 +743,8 @@
         "precision": 0,
         "titleFontSize": 17,
         "valueFontSize": 34,
-        "titleColor": "#8cb9df",
-        "valueColor": "#ff5d73",
+        "titleColor": "#ffffff",
+        "valueColor": "#ffffff",
         "backgroundColor": "#ffffff"
       },
       "actions": [],
@@ -790,8 +790,8 @@
         "precision": 0,
         "titleFontSize": 17,
         "valueFontSize": 34,
-        "titleColor": "#8cb9df",
-        "valueColor": "#2ee6a6",
+        "titleColor": "#ffffff",
+        "valueColor": "#ffffff",
         "backgroundColor": "#ffffff"
       },
       "actions": [],
@@ -837,8 +837,8 @@
         "precision": 1,
         "titleFontSize": 17,
         "valueFontSize": 34,
-        "titleColor": "#8cb9df",
-        "valueColor": "#ff5d73",
+        "titleColor": "#ffffff",
+        "valueColor": "#ffffff",
         "backgroundColor": "#ffffff"
       },
       "actions": [],
@@ -921,7 +921,8 @@
           "#3b82ff",
           "#ff9f43",
           "#2ee6a6"
-        ]
+        ],
+        "axisLabelColor": "#ffffff"
       },
       "actions": [],
       "dataSource": {
@@ -1173,8 +1174,8 @@
         "precision": 0,
         "titleFontSize": 17,
         "valueFontSize": 34,
-        "titleColor": "#8cb9df",
-        "valueColor": "#1a6fdc",
+        "titleColor": "#ffffff",
+        "valueColor": "#ffffff",
         "backgroundColor": "#ffffff"
       },
       "dataSource": {
@@ -1219,8 +1220,8 @@
         "precision": 0,
         "titleFontSize": 17,
         "valueFontSize": 34,
-        "titleColor": "#8cb9df",
-        "valueColor": "#2ee6a6",
+        "titleColor": "#ffffff",
+        "valueColor": "#ffffff",
         "backgroundColor": "#ffffff"
       },
       "dataSource": {
@@ -1269,8 +1270,8 @@
         "precision": 0,
         "titleFontSize": 17,
         "valueFontSize": 34,
-        "titleColor": "#8cb9df",
-        "valueColor": "#ff5d73",
+        "titleColor": "#ffffff",
+        "valueColor": "#ffffff",
         "backgroundColor": "#ffffff"
       },
       "dataSource": {
@@ -1352,7 +1353,8 @@
           "#3b82ff",
           "#27d8ff",
           "#ff9f43"
-        ]
+        ],
+        "axisLabelColor": "#ffffff"
       },
       "actions": [],
       "dataSource": {
@@ -1426,7 +1428,8 @@
         "chartPaddingRight": 14,
         "chartPaddingBottom": 20,
         "chartPaddingLeft": 20,
-        "xAxisLabelMaxLength": 5
+        "xAxisLabelMaxLength": 5,
+        "axisLabelColor": "#ffffff"
       },
       "actions": [],
       "dataSource": {
@@ -1502,7 +1505,8 @@
         "chartPaddingRight": 14,
         "chartPaddingBottom": 18,
         "chartPaddingLeft": 18,
-        "seriesLabelStrategy": "first-only"
+        "seriesLabelStrategy": "first-only",
+        "axisLabelColor": "#ffffff"
       },
       "actions": [],
       "dataSource": {

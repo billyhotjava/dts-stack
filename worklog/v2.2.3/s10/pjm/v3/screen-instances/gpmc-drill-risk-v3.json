@@ -152,8 +152,8 @@
         "value": "89",
         "unit": "",
         "precision": 0,
-        "titleColor": "#d9eeff",
-        "valueColor": "#3b82ff",
+        "titleColor": "#ffffff",
+        "valueColor": "#ffffff",
         "backgroundColor": "#ffffff",
         "borderRadius": 12,
         "fontSize": 36
@@ -202,8 +202,8 @@
         "value": "14",
         "unit": "",
         "precision": 0,
-        "titleColor": "#d9eeff",
-        "valueColor": "#ff5d73",
+        "titleColor": "#ffffff",
+        "valueColor": "#ffffff",
         "backgroundColor": "#ffffff",
         "borderRadius": 12,
         "fontSize": 36
@@ -252,8 +252,8 @@
         "value": "31",
         "unit": "",
         "precision": 0,
-        "titleColor": "#d9eeff",
-        "valueColor": "#ff9f43",
+        "titleColor": "#ffffff",
+        "valueColor": "#ffffff",
         "backgroundColor": "#ffffff",
         "borderRadius": 12,
         "fontSize": 36
@@ -302,8 +302,8 @@
         "value": "44",
         "unit": "",
         "precision": 0,
-        "titleColor": "#d9eeff",
-        "valueColor": "#2ee6a6",
+        "titleColor": "#ffffff",
+        "valueColor": "#ffffff",
         "backgroundColor": "#ffffff",
         "borderRadius": 12,
         "fontSize": 36

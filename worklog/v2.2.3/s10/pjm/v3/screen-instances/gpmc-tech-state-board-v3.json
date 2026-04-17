@@ -429,18 +429,15 @@
       "config": {
         "label": "事业部/科室",
         "variableKey": "deptId",
-        "options": [
-          "工程建设中心",
-          "数字化事业部",
-          "研发中心",
-          "生产制造中心"
-        ],
         "placeholder": "全部",
         "labelColor": "rgba(9, 36, 90, 0.70)",
         "inputBackground": "rgba(88, 180, 255, 0.20)",
         "inputBorderColor": "rgba(39, 216, 255, 0.18)",
         "inputTextColor": "#ffffff",
-        "optionSourceMode": "data"
+        "optionSourceMode": "data",
+        "dataOptionLabelField": "label",
+        "dataOptionValueField": "value",
+        "dataOptionMax": 200
       },
       "dataSource": {
         "type": "sql",
@@ -454,8 +451,8 @@
     },
     {
       "id": "技术状态与跟进-project",
-      "type": "filter-input",
-      "name": "项目编号/项目名称",
+      "type": "filter-select",
+      "name": "项目编号",
       "x": 1104,
       "y": 28,
       "width": 140,
@@ -464,13 +461,26 @@
       "locked": false,
       "visible": true,
       "config": {
-        "label": "项目编号/项目名称",
+        "label": "项目编号",
         "variableKey": "projectNo",
-        "placeholder": "输入关键词",
+        "placeholder": "全部",
         "labelColor": "rgba(9, 36, 90, 0.70)",
         "inputBackground": "rgba(88, 180, 255, 0.20)",
         "inputBorderColor": "rgba(39, 216, 255, 0.18)",
-        "inputTextColor": "#ffffff"
+        "inputTextColor": "#ffffff",
+        "optionSourceMode": "data",
+        "dataOptionLabelField": "label",
+        "dataOptionValueField": "value",
+        "dataOptionMax": 500
+      },
+      "dataSource": {
+        "type": "sql",
+        "sqlConfig": {
+          "databaseId": "{{DATABASE_ID}}",
+          "query": "SELECT DISTINCT d.project_no AS label, d.project_no AS value FROM biz_dwd_project_node_v2 d WHERE d.project_no IS NOT NULL AND d.project_no != '' ORDER BY d.project_no",
+          "queryTimeoutSeconds": 10,
+          "maxRows": 500
+        }
       }
     },
     {
@@ -621,8 +631,8 @@
         "precision": 0,
         "titleFontSize": 17,
         "valueFontSize": 34,
-        "titleColor": "#8cb9df",
-        "valueColor": "#d9eeff",
+        "titleColor": "#ffffff",
+        "valueColor": "#ffffff",
         "backgroundColor": "#ffffff"
       },
       "dataSource": {
@@ -671,8 +681,8 @@
         "precision": 0,
         "titleFontSize": 17,
         "valueFontSize": 34,
-        "titleColor": "#8cb9df",
-        "valueColor": "#d9eeff",
+        "titleColor": "#ffffff",
+        "valueColor": "#ffffff",
         "backgroundColor": "#ffffff"
       },
       "dataSource": {
@@ -721,8 +731,8 @@
         "precision": 2,
         "titleFontSize": 17,
         "valueFontSize": 34,
-        "titleColor": "#8cb9df",
-        "valueColor": "#d9eeff",
+        "titleColor": "#ffffff",
+        "valueColor": "#ffffff",
         "backgroundColor": "#ffffff"
       },
       "dataSource": {
@@ -771,8 +781,8 @@
         "precision": 0,
         "titleFontSize": 17,
         "valueFontSize": 34,
-        "titleColor": "#8cb9df",
-        "valueColor": "#d9eeff",
+        "titleColor": "#ffffff",
+        "valueColor": "#ffffff",
         "backgroundColor": "#ffffff"
       },
       "dataSource": {
@@ -821,8 +831,8 @@
         "precision": 2,
         "titleFontSize": 17,
         "valueFontSize": 34,
-        "titleColor": "#8cb9df",
-        "valueColor": "#d9eeff",
+        "titleColor": "#ffffff",
+        "valueColor": "#ffffff",
         "backgroundColor": "#ffffff"
       },
       "dataSource": {
@@ -902,7 +912,8 @@
           }
         ],
         "titleFontSize": 0,
-        "chartPaddingTop": 36
+        "chartPaddingTop": 36,
+        "axisLabelColor": "#ffffff"
       },
       "dataSource": {
         "type": "sql",
@@ -987,7 +998,8 @@
           }
         ],
         "titleFontSize": 0,
-        "chartPaddingTop": 36
+        "chartPaddingTop": 36,
+        "axisLabelColor": "#ffffff"
       },
       "dataSource": {
         "type": "sql",
@@ -1061,7 +1073,8 @@
           }
         ],
         "titleFontSize": 0,
-        "chartPaddingTop": 36
+        "chartPaddingTop": 36,
+        "axisLabelColor": "#ffffff"
       },
       "dataSource": {
         "type": "sql",
@@ -1128,7 +1141,8 @@
           }
         ],
         "titleFontSize": 0,
-        "chartPaddingTop": 36
+        "chartPaddingTop": 36,
+        "axisLabelColor": "#ffffff"
       },
       "dataSource": {
         "type": "sql",
@@ -1313,7 +1327,7 @@
         "text": "项目变更签署率",
         "fontSize": 20,
         "fontWeight": "700",
-        "color": "#d9eeff",
+        "color": "#ffffff",
         "textAlign": "flex-start"
       }
     },
@@ -1332,7 +1346,7 @@
         "text": "科室变更签署审查",
         "fontSize": 20,
         "fontWeight": "700",
-        "color": "#d9eeff",
+        "color": "#ffffff",
         "textAlign": "flex-start"
       }
     },
@@ -1351,7 +1365,7 @@
         "text": "科室变更趋势",
         "fontSize": 20,
         "fontWeight": "700",
-        "color": "#d9eeff",
+        "color": "#ffffff",
         "textAlign": "flex-start"
       }
     },
@@ -1370,7 +1384,7 @@
         "text": "项目变更次数",
         "fontSize": 20,
         "fontWeight": "700",
-        "color": "#d9eeff",
+        "color": "#ffffff",
         "textAlign": "flex-start"
       }
     },
@@ -1389,7 +1403,7 @@
         "text": "技术状态变更清单（按更改提出时间倒序）",
         "fontSize": 20,
         "fontWeight": "700",
-        "color": "#d9eeff",
+        "color": "#ffffff",
         "textAlign": "flex-start"
       }
     }

@@ -152,8 +152,8 @@
         "value": "72.4",
         "unit": "%",
         "precision": 1,
-        "titleColor": "#d9eeff",
-        "valueColor": "#3b82ff",
+        "titleColor": "#ffffff",
+        "valueColor": "#ffffff",
         "backgroundColor": "#ffffff",
         "borderRadius": 12,
         "fontSize": 36
@@ -198,8 +198,8 @@
         "value": "68",
         "unit": "%",
         "precision": 0,
-        "titleColor": "#d9eeff",
-        "valueColor": "#ff9f43",
+        "titleColor": "#ffffff",
+        "valueColor": "#ffffff",
         "backgroundColor": "#ffffff",
         "borderRadius": 12,
         "fontSize": 36
@@ -244,8 +244,8 @@
         "value": "4.6",
         "unit": "%",
         "precision": 1,
-        "titleColor": "#d9eeff",
-        "valueColor": "#ff9f43",
+        "titleColor": "#ffffff",
+        "valueColor": "#ffffff",
         "backgroundColor": "#ffffff",
         "borderRadius": 12,
         "fontSize": 36
@@ -298,8 +298,8 @@
         "value": "37",
         "unit": "",
         "precision": 0,
-        "titleColor": "#d9eeff",
-        "valueColor": "#ff5d73",
+        "titleColor": "#ffffff",
+        "valueColor": "#ffffff",
         "backgroundColor": "#ffffff",
         "borderRadius": 12,
         "fontSize": 36
