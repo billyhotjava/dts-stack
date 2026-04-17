@@ -1181,6 +1181,16 @@ async function apiFetch(url: string, init: RequestInit, allowRedirect: boolean):
 	if (response.status !== 401 || !allowRedirect || isPublicAnalyticsUrl(url)) {
 		return response;
 	}
+	// Only redirect to login when there is genuinely no valid session.
+	// Check whether SessionManager already refreshed the token while this request was in flight.
+	const currentToken = userStore.getState().userToken?.accessToken;
+	if (currentToken && currentToken !== accessToken) {
+		// Token was refreshed by another request; retry with the new token silently.
+		const retryHeaders = withPlatformAuthorization(init.headers, currentToken);
+		if (!retryHeaders.has("accept")) retryHeaders.set("accept", "application/json");
+		return await fetch(url, { ...init, credentials: "include", headers: retryHeaders });
+	}
+	// No valid token — redirect to login.
 	window.location.replace(resolveLoginHref());
 	return response;
 }

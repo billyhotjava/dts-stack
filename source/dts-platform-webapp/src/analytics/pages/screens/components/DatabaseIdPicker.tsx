@@ -31,6 +31,7 @@ function loadDatabases(): Promise<DatabaseListItem[]> {
 export function DatabaseIdPicker({ value, onChange, placeholder }: DatabaseIdPickerProps) {
     const [databases, setDatabases] = useState<DatabaseListItem[]>(cachedDatabases ?? []);
     const [loading, setLoading] = useState(!cachedDatabases);
+    const [error, setError] = useState(false);
 
     useEffect(() => {
         if (cachedDatabases) {
@@ -41,9 +42,11 @@ export function DatabaseIdPicker({ value, onChange, placeholder }: DatabaseIdPic
 
         let cancelled = false;
         setLoading(true);
+        setError(false);
         loadDatabases().then((list) => {
             if (!cancelled) {
                 setDatabases(list);
+                setError(list.length === 0);
                 setLoading(false);
             }
         });
@@ -63,7 +66,7 @@ export function DatabaseIdPicker({ value, onChange, placeholder }: DatabaseIdPic
             style={value > 0 ? undefined : { color: '#888' }}
         >
             <option value={0}>
-                {loading ? '加载中...' : (placeholder ?? '-- 选择数据库 --')}
+                {loading ? '加载中...' : error ? '⚠ 无可用数据库连接' : (placeholder ?? '-- 选择数据库 --')}
             </option>
             {!hasCurrentInList && value > 0 && (
                 <option value={value}>#{value} (手工输入)</option>

@@ -354,13 +354,7 @@ axiosInstance.interceptors.response.use(
 			if (!shouldSuppressAuthHandling && !isLoginRequest) {
 				const isServiceUnavailable = !response || SERVICE_UNAVAILABLE_STATUSES.has(response.status ?? 0);
 				if (isServiceUnavailable) {
-					toast.error(combinedMsg, { id: "service-error", duration: 3000, position: "top-center" });
-					setTimeout(() => {
-						if (typeof window !== "undefined" && !isLoginRouteActive()) {
-							userStore.getState().actions.clearUserInfoAndToken();
-							location.replace(resolveLoginHref());
-						}
-					}, 3000);
+					toast.error(combinedMsg, { id: "service-error", duration: 5000, position: "top-center" });
 				} else {
 					toast.error(combinedMsg, { id: "api-error", position: "top-center" });
 				}
