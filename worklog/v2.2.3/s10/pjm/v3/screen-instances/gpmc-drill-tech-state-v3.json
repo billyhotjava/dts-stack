@@ -5,7 +5,7 @@
   "description": "技术状态变更钻取页面，展示变更清单、状态分布及跟进措施。",
   "width": 1920,
   "height": 1080,
-  "backgroundColor": "#06142c",
+  "backgroundColor": "#115AAD",
   "theme": "dark-command",
   "globalVariables": [
     {

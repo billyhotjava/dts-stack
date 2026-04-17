@@ -5,7 +5,7 @@
   "description": "项目执行监控钻取页面，展示关键任务节点、资源负载及延期项目排行。",
   "width": 1920,
   "height": 1080,
-  "backgroundColor": "#06142c",
+  "backgroundColor": "#115AAD",
   "theme": "dark-command",
   "globalVariables": [
     {

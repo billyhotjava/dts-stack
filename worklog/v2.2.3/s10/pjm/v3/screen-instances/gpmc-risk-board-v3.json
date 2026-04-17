@@ -5,7 +5,7 @@
   "description": "管控层风险看板模板，覆盖风险矩阵、分类分布、清单和措施摘要。",
   "width": 1920,
   "height": 1080,
-  "backgroundColor": "#06142c",
+  "backgroundColor": "#115AAD",
   "theme": "dark-command",
   "globalVariables": [
     {

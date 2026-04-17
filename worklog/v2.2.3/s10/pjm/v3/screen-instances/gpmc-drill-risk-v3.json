@@ -5,7 +5,7 @@
   "description": "风险预警钻取页面，展示风险清单、风险分类摘要及应对措施。",
   "width": 1920,
   "height": 1080,
-  "backgroundColor": "#06142c",
+  "backgroundColor": "#115AAD",
   "theme": "dark-command",
   "globalVariables": [
     {

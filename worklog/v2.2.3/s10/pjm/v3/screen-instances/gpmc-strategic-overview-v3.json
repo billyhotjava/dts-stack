@@ -5,7 +5,7 @@
   "description": "项目综合态势总览模板，面向集团领导的一屏全局态势感知。",
   "width": 1920,
   "height": 1080,
-  "backgroundColor": "#06142c",
+  "backgroundColor": "#115AAD",
   "theme": "dark-command",
   "globalVariables": [
     {
