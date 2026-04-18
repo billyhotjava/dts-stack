@@ -7,6 +7,10 @@ import java.util.Locale;
 import java.util.Map;
 import org.apache.commons.lang3.StringUtils;
 
+/**
+ * 纯函数：将 PersonnelPayload 映射为 Keycloak user attributes Map。
+ * 所有 attribute key 统一为 snake_case，对齐 Sprint-2 F2 MDM 约定。
+ */
 public final class KeycloakUserAttributesMapper {
 
     private KeycloakUserAttributesMapper() {}
