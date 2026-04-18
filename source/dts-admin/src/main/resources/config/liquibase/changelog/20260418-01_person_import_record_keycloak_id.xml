@@ -8,7 +8,7 @@
         <addColumn tableName="person_import_record">
             <column name="keycloak_user_id" type="varchar(64)"/>
         </addColumn>
-        <createIndex tableName="person_import_record" indexName="idx_person_import_record_kc_id">
+        <createIndex tableName="person_import_record" indexName="idx_person_record_kc_id">
             <column name="keycloak_user_id"/>
         </createIndex>
     </changeSet>
