@@ -23,7 +23,7 @@
 | 文件 | 改动 |
 |------|------|
 | `KeycloakApiResource.java` 中用户启用/禁用逻辑 | 改为直接操作 Keycloak enabled 标志 |
-| `PlatformDirectoryResource.fallbackFromSnapshots()` | 已在 F3 删除 |
+| `PlatformDirectoryResource.fallbackFromSnapshots()` | 已在 F2/T03 删除 |
 | 审计相关代码中 `resolveDisplayNames()` | 已在 F2/T04 改为查缓存 |
 
 ### mdmEnabled 字段处理

@@ -17,13 +17,12 @@
 | `PersonProfileRepository.java` | 删除 | Repository |
 | `PersonnelImportService.java` | 修改 | 移除 PersonProfile upsert，保留 import_record |
 | `AdminUserService.refreshSnapshotsFromProfiles()` | 删除 | 从 PersonProfile 刷新 AdminKeycloakUser |
-| `PlatformDirectoryResource.fallbackFromSnapshots()` | 已在 F3/T03 删除 | - |
+| `PlatformDirectoryResource.fallbackFromSnapshots()` | 已在 F2/T03 删除 | - |
 
 ### 保留的表
 
 - `person_import_batch` — 导入批次记录
-- `person_import_record` — 导入明细记录
-- `person_sensitive_data` — 敏感数据（如 national_id）
+- `person_import_record` — 导入明细记录（含 national_id 明文，溯源用）
 
 ### Liquibase
 
@@ -34,7 +33,7 @@
 </changeSet>
 ```
 
-下个大版本（v2.5.0）再 DROP。
+DROP 在本 Sprint F5/T01 内执行（v2.3.0），不延后。
 
 ## 验证
 - [ ] 编译通过，无 PersonProfile 引用残留

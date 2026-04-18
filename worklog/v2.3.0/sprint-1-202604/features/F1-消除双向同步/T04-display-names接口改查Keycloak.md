@@ -24,16 +24,20 @@
 3. 写入缓存
 ```
 
-### 为 Phase 3 预留接口
+### 分阶段实现策略
 
-引入 `UserDisplayNameResolver` 接口：
+引入 `UserDisplayNameResolver` 接口作为稳定抽象，调用点（审计、审批等）永远只依赖接口，不触碰具体实现：
+
 ```java
 public interface UserDisplayNameResolver {
     Map<String, String> resolve(Collection<String> usernames);
 }
 ```
 
-Phase 1 实现查 Keycloak + 简单内存缓存，Phase 3 改为查 kc_user_cache 表。
+- **Phase 1（本 Task）**: 实现 `InMemoryKeycloakDisplayNameResolver` — 查 Keycloak Admin API + Caffeine 本地缓存（TTL 5min）
+- **Phase 2（F2/T03）**: 新增 `CachedDisplayNameResolver` — 查 `kc_user_cache` 表；通过 Spring 配置切换 primary bean，**调用点零改动**
+
+这样避免 Phase 1 → Phase 2 时需要改所有调用处的"双改"。
 
 ## 影响范围
 

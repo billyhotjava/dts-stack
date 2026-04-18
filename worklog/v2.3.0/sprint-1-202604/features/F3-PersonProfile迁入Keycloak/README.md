@@ -14,7 +14,7 @@
 | email | email (内置字段) | 已有 |
 | phone | phone | 已有 |
 | personCode | person_code | 新增 |
-| nationalId | national_id | 新增（敏感数据，需评估） |
+| nationalId | national_id | 新增（普通 attribute，不加密） |
 | deptCode | dept_code | 已有 |
 | deptName | dept_name | 新增 |
 | title | title | 新增 |
@@ -36,5 +36,5 @@
 ## 完成标准
 - [ ] PersonProfile 所有有效数据迁入 Keycloak attributes
 - [ ] Keycloak User Profile 配置包含所有新 attributes
-- [ ] PersonProfile 表标记为废弃（下个版本删除）
+- [ ] PersonProfile 表在本 Sprint F5/T01 内 DROP
 - [ ] 依赖 PersonProfile 的查询全部改为走缓存层

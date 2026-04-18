@@ -26,17 +26,19 @@
 | Attribute | Display name | Validation |
 |-----------|-------------|------------|
 | person_code | 人员编码 | 长度 <= 64 |
-| national_id | 身份证号 | 长度 <= 64，需加密存储 |
+| national_id | 身份证号 | 长度 <= 64 |
 | dept_name | 部门名称 | 长度 <= 256 |
 | title | 职务 | 长度 <= 128 |
 | grade | 职级 | 长度 <= 64 |
 
-### 安全考虑
+### national_id 处理
 
-- `national_id` 是敏感数据，Keycloak attributes 不加密
-- **方案 A**: 不迁入 national_id，保留在本地加密表
-- **方案 B**: 迁入但使用 Keycloak 的字段级权限控制（仅 admin 可读）
-- **推荐方案 A**，national_id 保留在 `person_sensitive_data` 表（新建）
+按**普通 attribute** 处理，不做加密、不做字段级权限特殊化。依据：
+1. 本系统部署在内网/气隙环境，无强制合规加密要求
+2. 现状 `person_profile.national_id`、`person_import_record.national_id` 本地即明文，迁入 Keycloak 不构成新增风险
+3. 业务上 `person_profile.national_id` 基本不使用（下游无回读场景）
+
+**不建** `person_sensitive_data` 表；`person_import_record.national_id` 仍保留（导入溯源，明文）。
 
 ### 配置方式
 
@@ -57,11 +59,10 @@
 ## 验证
 - [ ] Keycloak 管理控制台可见新 attributes
 - [ ] 通过 Admin API 可设置和读取新 attributes
-- [ ] 用户 token 中不包含 national_id（安全验证）
+- [ ] 用户 token 中不包含 national_id（默认 claim 白名单不含该 attribute）
 
 ## 完成标准
 - [ ] 5 个新 attributes 注册完成
-- [ ] national_id 处理方案确定并实施
 
 ## Sprint-2 追加要求（person_security_level 规范化）
 
