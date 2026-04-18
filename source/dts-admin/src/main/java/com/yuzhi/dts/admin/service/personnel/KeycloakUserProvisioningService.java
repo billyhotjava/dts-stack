@@ -19,6 +19,8 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Propagation;
+import org.springframework.transaction.annotation.Transactional;
 
 /**
  * 封装「按 PersonnelPayload 在 Keycloak 中创建/更新 user」的直写流程。
@@ -56,7 +58,15 @@ public class KeycloakUserProvisioningService {
     /**
      * 创建或更新 Keycloak 用户；返回 keycloakUserId。
      * 调用方负责区分成功/失败（异常抛出）。
+     *
+     * <p>传播模式使用 {@link Propagation#MANDATORY}：本方法会通过 {@code organizationRepository.save(...)}
+     * 把 {@code keycloakGroupId} 回写到 {@code organization_node}，必须运行在调用方（例如
+     * {@code PersonnelImportService.processBatch}）已开启的事务中，和 person_import_record 写入
+     * 处于同一事务。若未来有新的调用方忘记开事务，这里会直接抛
+     * {@link org.springframework.transaction.IllegalTransactionStateException}，暴露问题而不是
+     * 悄悄产生跨事务写入的一致性漏洞。
      */
+    @Transactional(propagation = Propagation.MANDATORY)
     public String provision(PersonnelPayload payload) {
         String username = firstNonBlank(payload.account(), payload.personCode());
         if (StringUtils.isBlank(username)) {
@@ -217,24 +227,35 @@ public class KeycloakUserProvisioningService {
         return "/" + String.join("/", segments);
     }
 
-    /** 当 JPA 未加载 parent 时，基于 parentCode 逐级查询数据库补齐路径。 */
+    /**
+     * 当 JPA 未加载 parent 时，使用递归 CTE 一次性拉回整条祖先链，避免之前
+     * 每层都 {@code findFirstByDeptCodeIgnoreCase(...)} 造成的 N+1 查询。
+     * 1000 条人员导入、最坏每人部门 20 层祖先 → 从 20,000 次 SELECT 降到 1000 次。
+     *
+     * <p>CTE 返回按 depth DESC 排序（根节点在前，目标节点在后），因此可以直接
+     * 顺序拼接 segment，无需再反转。
+     */
     private String buildGroupPathFromRepository(OrganizationNode node) {
         if (node == null) {
             return null;
         }
-        List<String> segments = new java.util.ArrayList<>();
-        OrganizationNode cursor = node;
-        int guard = 20;
-        while (cursor != null && guard-- > 0) {
-            String name = StringUtils.trimToNull(cursor.getName());
+        String deptCode = StringUtils.trimToNull(node.getDeptCode());
+        if (deptCode == null) {
+            // 没有 deptCode 无法走 CTE，退化到只用当前节点名构造单段路径。
+            String name = StringUtils.trimToNull(node.getName());
+            return name == null ? null : "/" + name;
+        }
+        List<Object[]> rows = organizationRepository.findAncestorChainByDeptCode(deptCode);
+        if (rows == null || rows.isEmpty()) {
+            return null;
+        }
+        List<String> segments = new java.util.ArrayList<>(rows.size());
+        for (Object[] row : rows) {
+            // row layout: [id, dept_code, parent_id, name]
+            String name = row.length > 3 ? StringUtils.trimToNull(Objects.toString(row[3], null)) : null;
             if (name != null) {
-                segments.add(0, name);
+                segments.add(name);
             }
-            OrganizationNode parent = cursor.getParent();
-            if (parent == null && StringUtils.isNotBlank(cursor.getParentCode())) {
-                parent = organizationRepository.findFirstByDeptCodeIgnoreCase(cursor.getParentCode()).orElse(null);
-            }
-            cursor = parent;
         }
         if (segments.isEmpty()) {
             return null;
