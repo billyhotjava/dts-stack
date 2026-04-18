@@ -16,29 +16,19 @@ import com.yuzhi.dts.admin.service.auditv2.AuditV2Service;
 import com.yuzhi.dts.admin.service.auditv2.ButtonCodes;
 import com.yuzhi.dts.admin.service.dto.personnel.PersonnelImportResult;
 import com.yuzhi.dts.admin.service.dto.personnel.PersonnelPayload;
-import com.yuzhi.dts.admin.service.keycloak.KeycloakAdminClient;
-import com.yuzhi.dts.admin.service.keycloak.KeycloakAuthService;
-import com.yuzhi.dts.admin.service.keycloak.KeycloakAuthService.TokenResponse;
-import com.yuzhi.dts.admin.service.dto.keycloak.KeycloakUserDTO;
 import com.yuzhi.dts.admin.config.MdmGatewayProperties;
 import com.yuzhi.dts.admin.domain.AdminKeycloakUser;
-import com.yuzhi.dts.admin.domain.OrganizationNode;
 import com.yuzhi.dts.admin.repository.AdminKeycloakUserRepository;
-import com.yuzhi.dts.admin.repository.OrganizationRepository;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.time.Instant;
-import java.util.Arrays;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
-import java.util.Objects;
-import java.util.UUID;
 import org.apache.commons.lang3.StringUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -55,15 +45,10 @@ public class PersonnelImportService {
     private final PersonnelExcelParser excelParser;
     private final PersonnelApiClient apiClient;
     private final AuditV2Service auditV2Service;
-    private final KeycloakAdminClient keycloakAdminClient;
-    private final KeycloakAuthService keycloakAuthService;
+    private final KeycloakUserProvisioningService provisioningService;
     private final AdminKeycloakUserRepository adminKeycloakUserRepository;
-    private final OrganizationRepository organizationRepository;
     private final ObjectMapper objectMapper;
-    private final String managementClientId;
-    private final String managementClientSecret;
     private final MdmGatewayProperties mdmGatewayProperties;
-    private static final String RANDOM_PASSWORD_PREFIX = "mdm$";
 
     public PersonnelImportService(
         PersonImportBatchRepository batchRepository,
@@ -72,13 +57,9 @@ public class PersonnelImportService {
         PersonnelExcelParser excelParser,
         PersonnelApiClient apiClient,
         AuditV2Service auditV2Service,
-        KeycloakAdminClient keycloakAdminClient,
-        KeycloakAuthService keycloakAuthService,
+        KeycloakUserProvisioningService provisioningService,
         AdminKeycloakUserRepository adminKeycloakUserRepository,
-        OrganizationRepository organizationRepository,
         ObjectMapper objectMapper,
-        @Value("${dts.keycloak.admin-client-id:${OAUTH2_ADMIN_CLIENT_ID:}}") String managementClientId,
-        @Value("${dts.keycloak.admin-client-secret:${OAUTH2_ADMIN_CLIENT_SECRET:}}") String managementClientSecret,
         MdmGatewayProperties mdmGatewayProperties
     ) {
         this.batchRepository = batchRepository;
@@ -87,13 +68,9 @@ public class PersonnelImportService {
         this.excelParser = excelParser;
         this.apiClient = apiClient;
         this.auditV2Service = auditV2Service;
-        this.keycloakAdminClient = keycloakAdminClient;
-        this.keycloakAuthService = keycloakAuthService;
+        this.provisioningService = provisioningService;
         this.adminKeycloakUserRepository = adminKeycloakUserRepository;
-        this.organizationRepository = organizationRepository;
         this.objectMapper = objectMapper;
-        this.managementClientId = managementClientId == null ? "" : managementClientId.trim();
-        this.managementClientSecret = managementClientSecret == null ? "" : managementClientSecret.trim();
         this.mdmGatewayProperties = mdmGatewayProperties;
     }
 
@@ -151,14 +128,22 @@ public class PersonnelImportService {
             try {
                 if (dryRun) {
                     record.setStatus(PersonRecordStatus.SKIPPED);
-                    record.setMessage("Dry-run 模式，未写入主数据");
+                    record.setMessage("Dry-run 模式，未写入 Keycloak");
                     skipped++;
                 } else {
-                    var profile = profileService.upsert(payload, batch.getId(), sourceType, reference);
-                    record.setProfileId(profile.getId());
+                    String keycloakUserId = provisioningService.provision(payload);
+                    record.setKeycloakUserId(keycloakUserId);
+                    upsertSnapshot(
+                        keycloakUserId,
+                        firstNonBlank(payload.account(), payload.personCode()),
+                        payload.fullName(),
+                        payload.attributes().getOrDefault("securityLevel", payload.attributes().get("person_security_level")),
+                        null,
+                        null,
+                        resolveMdmEnabled(payload)
+                    );
                     record.setStatus(PersonRecordStatus.SUCCESS);
                     record.setMessage("OK");
-                    provisionKeycloakUser(payload);
                     success++;
                 }
             } catch (PersonnelImportException ex) {
@@ -301,130 +286,6 @@ public class PersonnelImportService {
         auditV2Service.record(builder.build());
     }
 
-    private void provisionKeycloakUser(PersonnelPayload payload) {
-        if (mdmGatewayProperties == null || !mdmGatewayProperties.isAutoProvisionUsers()) {
-            return;
-        }
-        String username = firstNonBlank(payload.account(), payload.personCode());
-        if (!StringUtils.isNotBlank(username)) {
-            return;
-        }
-        int mdmEnabled = resolveMdmEnabled(payload);
-        String token = resolveManagementToken();
-        if (token == null) {
-            OPS_LOG.warn("skip keycloak provisioning for user {}: management token unavailable", username);
-            return;
-        }
-        try {
-            var existingOpt = keycloakAdminClient.findByUsername(username, token);
-            if (existingOpt.isPresent()) {
-                KeycloakUserDTO existing = existingOpt.orElseThrow();
-                boolean dirty = false;
-                if (!StringUtils.equals(existing.getFullName(), payload.fullName())) {
-                    existing.setFullName(payload.fullName());
-                    dirty = true;
-                }
-                Map<String, List<String>> desiredAttrs = toKcAttributes(payload);
-                if (!attributesEqual(existing.getAttributes(), desiredAttrs)) {
-                    existing.setAttributes(desiredAttrs);
-                    dirty = true;
-                }
-                if (dirty) {
-                    keycloakAdminClient.updateUser(existing.getId(), existing, token);
-                }
-                upsertSnapshot(
-                    existing.getId(),
-                    username,
-                    payload.fullName(),
-                    desiredAttrs.get("person_security_level"),
-                    null,
-                    existing.getEnabled(),
-                    mdmEnabled
-                );
-                assignBaseRoles(existing.getId(), token);
-                assignDeptGroup(existing.getId(), payload, token);
-                return;
-            }
-            KeycloakUserDTO dto = new KeycloakUserDTO();
-            dto.setUsername(username);
-            dto.setFullName(payload.fullName());
-            dto.setEnabled(mdmEnabled != 0);
-            dto.setEmailVerified(false);
-            dto.setAttributes(toKcAttributes(payload));
-            KeycloakUserDTO created = keycloakAdminClient.createUser(dto, token);
-            String kcId = created != null && StringUtils.isNotBlank(created.getId()) ? created.getId() : dto.getId();
-            // 设定随机密码（临时），PKI 环境不强依赖密码，但可避免无口令账号
-            if (mdmGatewayProperties.isAutoProvisionEnableLogin()) {
-                String pwd = RANDOM_PASSWORD_PREFIX + UUID.randomUUID().toString().replace("-", "").substring(0, 8);
-                try {
-                    if (StringUtils.isNotBlank(kcId)) {
-                        keycloakAdminClient.resetPassword(kcId, pwd, true, token);
-                    }
-                } catch (Exception ex) {
-                    OPS_LOG.warn("set temp password failed for user {}: {}", username, ex.getMessage());
-                }
-            }
-            upsertSnapshot(
-                kcId,
-                username,
-                payload.fullName(),
-                dto.getAttributes().get("person_security_level"),
-                null,
-                dto.getEnabled(),
-                mdmEnabled
-            );
-            assignBaseRoles(kcId, token);
-            assignDeptGroup(kcId, payload, token);
-            // 若有部门组同步，可在此按 deptCode 挂组；依赖外层已开启组同步
-        } catch (Exception ex) {
-            OPS_LOG.warn("auto-provision keycloak user failed: username={} reason={}", username, ex.getMessage());
-        }
-    }
-
-    private boolean attributesEqual(Map<String, List<String>> left, Map<String, List<String>> right) {
-        return normalizeAttributes(left).equals(normalizeAttributes(right));
-    }
-
-    private Map<String, List<String>> normalizeAttributes(Map<String, List<String>> source) {
-        if (source == null) {
-            return Map.of();
-        }
-        Map<String, List<String>> normalized = new HashMap<>();
-        source.forEach((k, v) -> {
-            List<String> vals = v == null
-                ? List.of()
-                : v
-                    .stream()
-                    .filter(Objects::nonNull)
-                    .map(String::valueOf)
-                    .map(StringUtils::trimToEmpty)
-                    .sorted()
-                    .toList();
-            normalized.put(k, vals);
-        });
-        return normalized;
-    }
-
-    private Map<String, List<String>> toKcAttributes(PersonnelPayload payload) {
-        return KeycloakUserAttributesMapper.toAttributes(payload);
-    }
-
-    private void persistUserGroupPath(String keycloakUserId, PersonnelPayload payload, String rawPath) {
-        String normalized = normalizeGroupPath(rawPath);
-        if (StringUtils.isBlank(keycloakUserId) || StringUtils.isBlank(normalized)) {
-            return;
-        }
-        upsertSnapshot(
-            keycloakUserId,
-            firstNonBlank(payload.account(), payload.personCode()),
-            payload.fullName(),
-            payload.attributes().get("person_security_level"),
-            normalized,
-            null,
-            null
-        );
-    }
-
     private void upsertSnapshot(
         String keycloakUserId,
         String username,
@@ -506,10 +367,6 @@ public class PersonnelImportService {
         return trimmed;
     }
 
-    private String safeString(Object obj) {
-        return obj == null ? "" : String.valueOf(obj);
-    }
-
     private String normalizeSecurityLevel(String level) {
         if (level == null) {
             return null;
@@ -536,128 +393,6 @@ public class PersonnelImportService {
             }
         }
         return null;
-    }
-
-    private void assignBaseRoles(String userId, String token) {
-        if (userId == null || token == null) {
-            return;
-        }
-        String rolesCsv = mdmGatewayProperties.getAutoProvisionRoles();
-        if (!StringUtils.isNotBlank(rolesCsv)) {
-            return;
-        }
-        List<String> roles = Arrays.stream(rolesCsv.split(",")).map(String::trim).filter(StringUtils::isNotBlank).toList();
-        if (roles.isEmpty()) {
-            return;
-        }
-        try {
-            keycloakAdminClient.addRealmRolesToUser(userId, roles, token);
-        } catch (Exception ex) {
-            OPS_LOG.warn("assign base roles failed for user {} roles={} reason={}", userId, roles, ex.getMessage());
-        }
-    }
-
-    private void assignDeptGroup(String userId, PersonnelPayload payload, String token) {
-        if (userId == null || token == null) {
-            return;
-        }
-        String deptCode = safeString(payload.deptCode());
-        if (!StringUtils.isNotBlank(deptCode)) {
-            return;
-        }
-        organizationRepository
-            .findFirstByDeptCodeIgnoreCase(deptCode)
-            .ifPresent(node -> {
-                String groupId = node.getKeycloakGroupId();
-                String groupPath = buildGroupPath(node);
-                if (StringUtils.isBlank(groupId)) {
-                    if (StringUtils.isBlank(groupPath)) {
-                        groupPath = buildGroupPathFromRepository(node);
-                    }
-                    if (StringUtils.isNotBlank(groupPath)) {
-                        keycloakAdminClient.findGroupByPath(groupPath, token).ifPresent(found -> {
-                            node.setKeycloakGroupId(found.getId());
-                            organizationRepository.save(node);
-                        });
-                        groupId = node.getKeycloakGroupId();
-                    }
-                }
-                if (StringUtils.isNotBlank(groupId)) {
-                    try {
-                        keycloakAdminClient.addUserToGroup(userId, groupId, token);
-                        persistUserGroupPath(userId, payload, groupPath);
-                        OPS_LOG.info("bind user {} to dept {} group {}", userId, deptCode, groupId);
-                    } catch (Exception ex) {
-                        OPS_LOG.warn("bind user {} to org {} failed: {}", userId, deptCode, ex.getMessage());
-                    }
-                } else {
-                    OPS_LOG.warn(
-                        "skip binding user {}: dept {} has no Keycloak group id; set dts.keycloak.group-provisioning-enabled=true and推送组织树",
-                        userId,
-                        deptCode
-                    );
-                }
-            });
-    }
-
-    private String buildGroupPath(OrganizationNode node) {
-        if (node == null) {
-            return null;
-        }
-        List<String> segments = new java.util.ArrayList<>();
-        OrganizationNode cursor = node;
-        while (cursor != null) {
-            String name = StringUtils.trimToNull(cursor.getName());
-            if (name != null) {
-                segments.add(0, name);
-            }
-            cursor = cursor.getParent();
-        }
-        if (segments.isEmpty()) {
-            return null;
-        }
-        return "/" + String.join("/", segments);
-    }
-
-    /**
-     * 当 JPA 未加载 parent 时，基于 parentCode 逐级查询数据库补齐路径。
-     */
-    private String buildGroupPathFromRepository(OrganizationNode node) {
-        if (node == null) {
-            return null;
-        }
-        List<String> segments = new java.util.ArrayList<>();
-        OrganizationNode cursor = node;
-        int guard = 20; // 防止环
-        while (cursor != null && guard-- > 0) {
-            String name = StringUtils.trimToNull(cursor.getName());
-            if (name != null) {
-                segments.add(0, name);
-            }
-            OrganizationNode parent = cursor.getParent();
-            if (parent == null && StringUtils.isNotBlank(cursor.getParentCode())) {
-                parent = organizationRepository.findFirstByDeptCodeIgnoreCase(cursor.getParentCode()).orElse(null);
-            }
-            cursor = parent;
-        }
-        if (segments.isEmpty()) {
-            return null;
-        }
-        return "/" + String.join("/", segments);
-    }
-
-    private String resolveManagementToken() {
-        if (!StringUtils.isNotBlank(managementClientId)) {
-            OPS_LOG.warn("skip keycloak auto-provision: management clientId missing");
-            return null;
-        }
-        try {
-            TokenResponse sa = keycloakAuthService.obtainClientCredentialsToken(managementClientId, managementClientSecret);
-            return sa.accessToken();
-        } catch (Exception ex) {
-            OPS_LOG.warn("skip keycloak auto-provision: cannot obtain service token ({})", ex.getMessage());
-            return null;
-        }
     }
 
     private String resolveButtonCode(PersonSourceType sourceType) {
