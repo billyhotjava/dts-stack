@@ -38,6 +38,9 @@ public class PersonImportRecord extends AbstractAuditingEntity<Long> implements 
     @Column(name = "national_id", length = 64)
     private String nationalId;
 
+    @Column(name = "keycloak_user_id", length = 64)
+    private String keycloakUserId;
+
     @Column(name = "dept_code", length = 64)
     private String deptCode;
 
@@ -145,6 +148,14 @@ public class PersonImportRecord extends AbstractAuditingEntity<Long> implements 
 
     public void setNationalId(String nationalId) {
         this.nationalId = nationalId;
+    }
+
+    public String getKeycloakUserId() {
+        return keycloakUserId;
+    }
+
+    public void setKeycloakUserId(String keycloakUserId) {
+        this.keycloakUserId = keycloakUserId;
     }
 
     public String getDeptCode() {
