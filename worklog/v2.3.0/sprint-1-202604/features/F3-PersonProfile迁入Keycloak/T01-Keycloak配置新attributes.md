@@ -62,3 +62,14 @@
 ## 完成标准
 - [ ] 5 个新 attributes 注册完成
 - [ ] national_id 处理方案确定并实施
+
+## Sprint-2 追加要求（person_security_level 规范化）
+
+Sprint-2 的 MDM（F2）和审批引擎（F1-lite）依赖 `person_security_level` 有**稳定可解析的取值规范**：
+
+- 取值域：**数字码 `0 / 1 / 2`**（当前存量格式）或 **语义码 `GENERAL / IMPORTANT / CORE`**，二选一即可
+- **强烈建议**：迁移时统一采用 `GENERAL / IMPORTANT / CORE`，对齐 `dts-common.SecurityLevelCatalog.PersonnelSecurityLevel.code()`；老数据按 `SecurityLevelCatalog.PersonnelSecurityLevel.parse()` 归一化后再写入 Keycloak
+- Keycloak User Profile 校验：`pattern` 限定在上述枚举值
+- 若因存量迁移成本保留数字码，MDM 侧由 `parseMaxDataLevel` 宽松兼容，但前端/API 展示统一用语义码（通过 `labelZh()` 查 label）
+
+> **背景**：Sprint-2 F2 MDM `/mdm/v1/persons/{username}` 对外返回的 `personnelSecurityLevel` 字段需要来自此 attribute，所有下游都会消费，不能再漂移。

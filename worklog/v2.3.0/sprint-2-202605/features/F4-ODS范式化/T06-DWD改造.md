@@ -1,11 +1,11 @@
-# T06: DWD 改造与指标对齐
+# T06: DWD 改造 + classification 贯通
 
 **优先级**: P0
 **状态**: READY
 **依赖**: T05
 
 ## 目标
-DWD 全量改造引用新结构；对比新老 DWS/ADS 指标，保证零偏差或解释所有偏差。
+DWD 全量改造引用新结构；每个 DWD 表新增 `classification` 列并在 dbt yaml meta 声明；对比新老 DWS/ADS 指标，保证零偏差或解释所有偏差。
 
 ## 技术设计
 详细技术方案在 F4 brainstorming 阶段产出，本文件仅占位。

@@ -8,17 +8,19 @@
 
 当前 S10 平台存在以下根本性缺陷：
 
-1. **缺乏主数据管理**: 业务主数据（project / dept / person / subsystem / supplier / pbs）在 9 张 ODS 表里以 `varchar` 重复出现，没有权威源，无法跨系统复用，无法做主数据治理
+1. **缺乏主数据管理**: 业务主数据（project / dept / subsystem / supplier / pbs）在 9 张 ODS 表里以 `varchar` 重复出现，没有权威源，无法跨系统复用，无法做主数据治理；人员信息在各系统分散查询，缺统一对外入口
 2. **Excel 直灌 ODS 质量失控**: 字段漂移、中英文别名、枚举硬编码、主键靠 MD5 拼串 → DWD 主键抖动、指标失真
 3. **缺乏填报规范化通道**: 低质量数据只能靠 Excel 反复返工，没有"带下拉/校验的结构化填报"路径
 4. **业务审批能力空白**: admin 只做三员账号审批，不做业务审批；未来资产访问审批、主数据变更审批、填报数据入库审批都缺基础设施
+5. **密级属性跨系统不一致**: 数据密级 4 级（PUBLIC/INTERNAL/SECRET/CONFIDENTIAL）与人员密级 3 级（GENERAL/IMPORTANT/CORE）在前端 / admin / platform 有多份硬编码；dts-common 里已有 `SecurityLevelCatalog` 但未在全链路使用
 
 **架构决策**（2026-04-18 确认）：
 
-- **dts-approval** 抽取为独立服务，承担所有业务审批（不做账号审批——那仍在 admin）
-- **dts-mdm** 独立服务，与 admin/platform 平级，作为所有业务主数据的权威源，对外提供 REST API 供其他系统对接
+- **dts-approval** 抽取为独立服务，承担所有业务审批（不做账号审批——那仍在 admin）；本 Sprint 先做 **lite 版**（契约+Stub），full 版延后
+- **dts-mdm** 独立服务，与 admin/platform 平级，作为所有业务主数据的权威源，对外提供 REST API 供其他系统对接；**person 作为统一查询代理入口**（内部走 admin/Keycloak，不维护数据本身）
 - **dts-intake** 独立的轻量填报服务，作为 Excel 的结构化替代路径；下拉引用 dts-mdm，提交入库走 dts-approval
 - **dbt 层范式化**：ODS 重构时引用 dts-mdm 维表，清掉之前 12 项 dbt 遗留债务
+- **密级全链路统一**：数据密级 4 级、人员密级 3 级，规则法定常量写死在 `dts-common.SecurityLevelCatalog`；所有服务（含前端）都通过 shared lib 或 MDM API 获取，不再硬编码
 
 **约束**:
 - Sprint-1（IAM 重构）完成后才开始本 Sprint，因为 F1 审批引擎需要 Keycloak 组织树作为真源
@@ -30,13 +32,15 @@
 
 | ID | Feature | Task 数 | 状态 | 设计阶段 | 优先级 | 依赖 |
 |----|---------|---------|------|---------|--------|------|
-| F0 | [消息事件基础设施](features/F0-消息事件基础设施/README.md) | 5 | READY | 骨架 | P0 | Sprint-1 |
-| F1 | [审批引擎 MVP](features/F1-审批引擎MVP/README.md) | 6 | READY | 骨架 | P0 | F0 |
-| F2 | [主数据管理 MDM](features/F2-主数据管理MDM/README.md) | 7 | READY | 骨架 | P0 | F1 |
+| F0 | [消息事件基础设施](features/F0-消息事件基础设施/README.md) | 5 | READY | spec 就绪 | P0 | Sprint-1 |
+| F1 | [审批契约与 Stub（lite）](features/F1-审批契约与Stub/README.md) | 4 | READY | 骨架 | P0 | F0 |
+| F2 | [主数据管理 MDM](features/F2-主数据管理MDM/README.md) | 7 | READY | 骨架 | P0 | F1-lite |
 | F3 | [轻量填报](features/F3-轻量填报/README.md) | 6 | READY | 骨架 | P1 | F2 |
 | F4 | [ODS 范式化](features/F4-ODS范式化/README.md) | 7 | READY | 骨架 | P1 | F2 |
 
-**依赖链**: `Sprint-1 → F0 → F1 → F2 → {F3, F4 并行}`
+**依赖链**: `Sprint-1 → F0 → F1-lite → {F2, F3, F4 并行}`
+
+**F1 拆分说明**：F1 在本 Sprint 只做 **lite 版**（契约+Stub+SDK），让 F2/F3 日一可集成；**F1-full 完整审批引擎**（审批链、规则、前端、组织树、通知）延到后续 Sprint，待客户内部审批制度讨论输入。F1-lite 契约稳定后，F1-full 上线**业务方零改动**。
 
 ## 设计阶段定义（增量式 brainstorm 流程）
 
@@ -56,48 +60,57 @@
 ## 模块边界
 
 ```
-┌───────────────────────────────────────────────────────────┐
-│ Keycloak (身份+组织真源，Sprint-1 成果)                      │
-└───────────────────────────────────────────────────────────┘
-           ▲
-           │ 认证/组织查询
-           │
-┌──────────┴──────────┐     ┌──────────────────────┐
-│ dts-admin            │     │ Kafka (F0 业务事件总线)│
-│ (仅账号/三员/部门)    │     │ +Outbox 保强一致       │
-└──────────────────────┘     └──────────────────────┘
-                                ▲     │
-                         发事件 │     │ 订阅事件
-                                │     ▼
-┌──────────────────────┐   ┌────┴─────────────┐
-│ dts-approval (F1)    │──▶│ dts-mdm (F2)      │──┐
-│ 业务审批引擎          │   │ 主数据权威源        │  │ 对外提供主数据
-└──────────────────────┘   └───────────────────┘  │
-       ▲                       ▲   ▲              │
-  提单 │                  查询 │   │ 变更事件     │
-       │                       │   │              ▼
-┌──────┴──────────┐   ┌────────┴───┴───┐   ┌──────────────┐
-│ dts-intake (F3) │   │ dts-platform   │   │ 财务/PLM/ERP │
-│ 轻量填报        │   │ (资产/大屏)    │   │ (将来对接)    │
-└─────────────────┘   └────────────────┘   └──────────────┘
+┌───────────────────────────────────────────────────────────────┐
+│ Keycloak (身份+组织真源，Sprint-1 成果)                          │
+│  user attributes: person_security_level (GENERAL/IMPORTANT/CORE) │
+└───────────────────────────────────────────────────────────────┘
+           ▲                                    ▲
+           │ 认证/组织/密级查询                 │
+           │                                    │
+┌──────────┴──────────┐     ┌──────────────────┴─────┐
+│ dts-admin            │     │ Kafka (F0 业务事件总线)   │
+│ (仅账号/三员/部门)    │     │ +Outbox 保强一致          │
+│                      │     │ 信封带 dataClassification │
+└──────────────────────┘     └────────────────────────┘
+                                 ▲     │
+                          发事件 │     │ 订阅事件
+                                 │     ▼
+┌────────────────────────┐   ┌────┴──────────────┐
+│ dts-approval (F1-lite) │◀─▶│ dts-mdm (F2)       │──┐
+│ 契约+Stub+SDK           │   │ 主数据权威源 (5类)  │  │ 对外提供主数据
+│ (full 版后续 Sprint)    │   │ + person 查询代理   │  │ + 密级字典只读
+└────────────────────────┘   └────────────────────┘  │
+       ▲                         ▲   ▲                │
+  提单 │                    查询 │   │ 变更事件       │
+       │                         │   │                ▼
+┌──────┴──────────┐   ┌──────────┴───┴──┐   ┌────────────────┐
+│ dts-intake (F3) │   │ dts-platform     │   │ 财务/PLM/ERP   │
+│ 轻量填报         │   │ (资产/大屏/ABAC) │   │ (将来对接)      │
+│ form_classif.   │   └──────────────────┘   └────────────────┘
+└─────────────────┘
        │
-       │ 填报数据结构化入 ODS
+       │ 填报数据结构化入 ODS (带 classification)
        ▼
-┌───────────────────────────┐
-│ dts-dbt (F4)              │
-│ ODS 范式化 + DWD + 流批一体 │
-└───────────────────────────┘
+┌──────────────────────────────────┐       ┌──────────────────────────┐
+│ dts-dbt (F4)                     │ uses  │ dts-common (shared)      │
+│ ODS/STG/DWD 均带 classification   │──────▶│ SecurityLevelCatalog      │
+│ yaml meta.classification         │       │ (法定常量+规则函数)       │
+└──────────────────────────────────┘       └──────────────────────────┘
 ```
+
+**密级一致性**：`dts-common.SecurityLevelCatalog` 是唯一代码真源；MDM 把密级以"只读字典"对外暴露；前端原有硬编码映射改调 MDM API。
 
 ## 完成标准
 
-- [ ] Kafka（单节点 KRaft）接入 docker-compose 并作为 F1/F2/F3/F4 的统一事件总线；outbox 样例可复用
-- [ ] dts-approval 独立服务上线，提供通用审批 API（提单/审批/驳回/查询/回调），至少被 MDM、intake 两个业务方真实使用
-- [ ] dts-mdm 独立服务上线，6 类主数据 + 字典可在 UI 中管理，变更走审批引擎；对外 REST API 稳定版发布
-- [ ] dts-intake 独立服务上线，至少替代 1 张低质量 Excel 表的数据采集路径（由业务方选定）
-- [ ] dbt ODS 层范式化完成：9 张 v2 表完成主从拆分、引用 MDM 维表、稳定代理键；`feedback_dbt_pjm_v3_pending.md` 12 项债务全部清零
+- [ ] Kafka（单节点 KRaft）接入 docker-compose 并作为 F1/F2/F3/F4 的统一事件总线；outbox 样例可复用；信封含 `dataClassification`
+- [ ] dts-approval **lite 版**上线：REST + Kafka 契约稳定、Stub 自动 approve、`ApprovalPort` SDK 发布；至少被 MDM / intake 使用
+- [ ] dts-mdm 独立服务上线：5 类实存主数据 + person 代理查询 + 业务字典 + 密级只读字典；变更走 F1-lite 审批；对外 REST API 稳定
+- [ ] dts-intake 独立服务上线，至少替代 1 张低质量 Excel 表；表单带 `form_classification`，提交继承
+- [ ] dbt ODS 层范式化完成：9 张 v2 表完成主从拆分、引用 MDM 维表、稳定代理键、每表带 classification；12 项 dbt 债务清零
+- [ ] 前端 `value-localization.ts` 硬编码改为调 MDM 密级字典 API；admin/platform/其他前端消除密级本地映射
 - [ ] 所有模块的 IT（集成测试）在 `it/` 下有可重现的验证脚本与证据
 - [ ] admin 的三员审批代码**不被 dts-approval 吸收**，保持原地（明确职责边界）
+- [ ] **Sprint-1 F3 追加要求**：Keycloak `person_security_level` attribute 取值统一为 `GENERAL/IMPORTANT/CORE`（或至少存量数字码可被 `SecurityLevelCatalog.parse` 正确归一化）
 
 ## 后续动作
 

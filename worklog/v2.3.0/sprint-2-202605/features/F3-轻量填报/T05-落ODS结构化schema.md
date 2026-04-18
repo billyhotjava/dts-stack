@@ -1,11 +1,11 @@
-# T05: 落 ODS 结构化 schema
+# T05: 落 ODS 结构化 schema（带 classification）
 
 **优先级**: P0
 **状态**: READY
 **依赖**: T04
 
 ## 目标
-填报数据不再写入 `ods_*_v2`（varchar 大杂烩），而是写入新的 `ods_intake_*` 结构化表（字段类型正确、外键引用 MDM、时间戳规范）。
+填报数据不再写入 `ods_*_v2`（varchar 大杂烩），而是写入新的 `ods_intake_*` 结构化表（字段类型正确、外键引用 MDM 主数据 code、时间戳规范、**带 `classification` 列**继承表单密级）。
 
 ## 技术设计
 详细技术方案在 F3 brainstorming 阶段产出，本文件仅占位。
