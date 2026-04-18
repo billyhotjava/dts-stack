@@ -95,7 +95,10 @@ public class KeycloakUserProvisioningService {
             dto.setAttributes(desiredAttrs);
             KeycloakUserDTO created = keycloakAdminClient.createUser(dto, token);
             keycloakUserId = created != null && StringUtils.isNotBlank(created.getId()) ? created.getId() : dto.getId();
-            if (mdmGatewayProperties != null && mdmGatewayProperties.isAutoProvisionEnableLogin() && StringUtils.isNotBlank(keycloakUserId)) {
+            if (StringUtils.isBlank(keycloakUserId)) {
+                throw new PersonnelImportException("Keycloak 返回的 user id 为空，无法确定 " + username + " 的 keycloakUserId");
+            }
+            if (mdmGatewayProperties != null && mdmGatewayProperties.isAutoProvisionEnableLogin()) {
                 String pwd = RANDOM_PASSWORD_PREFIX + UUID.randomUUID().toString().replace("-", "").substring(0, 8);
                 try {
                     keycloakAdminClient.resetPassword(keycloakUserId, pwd, true, token);
@@ -170,6 +173,19 @@ public class KeycloakUserProvisioningService {
         }
         organizationRepository.findFirstByDeptCodeIgnoreCase(deptCode).ifPresent(node -> {
             String groupId = node.getKeycloakGroupId();
+            String groupPath = buildGroupPath(node);
+            if (StringUtils.isBlank(groupId)) {
+                if (StringUtils.isBlank(groupPath)) {
+                    groupPath = buildGroupPathFromRepository(node);
+                }
+                if (StringUtils.isNotBlank(groupPath)) {
+                    keycloakAdminClient.findGroupByPath(groupPath, token).ifPresent(found -> {
+                        node.setKeycloakGroupId(found.getId());
+                        organizationRepository.save(node);
+                    });
+                    groupId = node.getKeycloakGroupId();
+                }
+            }
             if (StringUtils.isBlank(groupId)) {
                 LOG.warn("dept {} has no Keycloak group id; user {} not bound to group", deptCode, userId);
                 return;
@@ -180,6 +196,50 @@ public class KeycloakUserProvisioningService {
                 LOG.warn("bind user {} to dept {} group failed: {}", userId, deptCode, ex.getMessage());
             }
         });
+    }
+
+    private String buildGroupPath(OrganizationNode node) {
+        if (node == null) {
+            return null;
+        }
+        List<String> segments = new java.util.ArrayList<>();
+        OrganizationNode cursor = node;
+        while (cursor != null) {
+            String name = StringUtils.trimToNull(cursor.getName());
+            if (name != null) {
+                segments.add(0, name);
+            }
+            cursor = cursor.getParent();
+        }
+        if (segments.isEmpty()) {
+            return null;
+        }
+        return "/" + String.join("/", segments);
+    }
+
+    /** 当 JPA 未加载 parent 时，基于 parentCode 逐级查询数据库补齐路径。 */
+    private String buildGroupPathFromRepository(OrganizationNode node) {
+        if (node == null) {
+            return null;
+        }
+        List<String> segments = new java.util.ArrayList<>();
+        OrganizationNode cursor = node;
+        int guard = 20;
+        while (cursor != null && guard-- > 0) {
+            String name = StringUtils.trimToNull(cursor.getName());
+            if (name != null) {
+                segments.add(0, name);
+            }
+            OrganizationNode parent = cursor.getParent();
+            if (parent == null && StringUtils.isNotBlank(cursor.getParentCode())) {
+                parent = organizationRepository.findFirstByDeptCodeIgnoreCase(cursor.getParentCode()).orElse(null);
+            }
+            cursor = parent;
+        }
+        if (segments.isEmpty()) {
+            return null;
+        }
+        return "/" + String.join("/", segments);
     }
 
     private String resolveManagementToken() {
