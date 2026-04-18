@@ -406,27 +406,7 @@ public class PersonnelImportService {
     }
 
     private Map<String, List<String>> toKcAttributes(PersonnelPayload payload) {
-        Map<String, List<String>> attrs = new HashMap<>();
-        String secLevelRaw = safeString(payload.attributes().getOrDefault("securityLevel", payload.attributes().get("person_security_level")));
-        String secLevel = normalizeSecurityLevel(secLevelRaw);
-        if (StringUtils.isBlank(secLevel)) {
-            secLevel = "GENERAL";
-        }
-        attrs.put("person_security_level", List.of(secLevel));
-        attrs.put("person_level", List.of(secLevel));
-        attrs.put("deptCode", List.of(safeString(payload.deptCode())));
-        attrs.put("deptName", List.of(safeString(payload.deptName())));
-        attrs.put("deptPath", List.of(safeString(payload.deptPath())));
-        attrs.put("dept_code", List.of(safeString(payload.deptCode())));
-        attrs.put("externalId", List.of(safeString(payload.externalId())));
-        attrs.put("nationalId", List.of(safeString(payload.nationalId())));
-        attrs.put("fullName", List.of(safeString(payload.fullName())));
-        payload.safeAttributes().forEach((k, v) -> {
-            if (v != null) {
-                attrs.putIfAbsent(k, List.of(String.valueOf(v)));
-            }
-        });
-        return attrs;
+        return KeycloakUserAttributesMapper.toAttributes(payload);
     }
 
     private void persistUserGroupPath(String keycloakUserId, PersonnelPayload payload, String rawPath) {
