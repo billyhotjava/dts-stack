@@ -1,4 +1,8 @@
 name	layer	sql_path	source_data_source_id	alias	schema_name	materialized	tags	status	enabled	owner_dept	description	csv_path
+stg_pm__project_subject_domain_v2	STG	models/stg/stg_pm__project_subject_domain_v2.sql			public	view	project-management-v3,stg,progress	DRAFT	true		进度 ODS 结构化语义层
+stg_pm__quality_issue_v2	STG	models/stg/stg_pm__quality_issue_v2.sql			public	view	project-management-v3,stg,quality	DRAFT	true		质量 ODS 结构化语义层
+stg_pm__tech_state_v2	STG	models/stg/stg_pm__tech_state_v2.sql			public	view	project-management-v3,stg,tech-state	DRAFT	true		技术状态 ODS 结构化语义层
+stg_pm__risk_info_v2	STG	models/stg/stg_pm__risk_info_v2.sql			public	view	project-management-v3,stg,risk	DRAFT	true		风险 ODS 结构化语义层
 dim_completion_status_v2	DWD	models/dwd/dim_completion_status_v2.sql			public	table	project-management-v3,dim,dwd	DRAFT	true		完成情况维度表
 dim_node_type_v2	DWD	models/dwd/dim_node_type_v2.sql			public	table	project-management-v3,dim,dwd	DRAFT	true		节点类型维度表
 dim_risk_level_v2	DWD	models/dwd/dim_risk_level_v2.sql			public	table	project-management-v3,dim,dwd	DRAFT	true		风险等级维度表

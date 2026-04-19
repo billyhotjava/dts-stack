@@ -24,12 +24,10 @@ export type QuickActionItem = {
     run: () => void | Promise<void>;
 };
 
-// DESIGN_ACTION_STORAGE_KEY and GOVERNANCE_ACTION_STORAGE_KEY removed — menus use direct buttons now
+// DESIGN_ACTION_STORAGE_KEY / GOVERNANCE_ACTION_STORAGE_KEY / EXPORT_ACTION_STORAGE_KEY removed — menus use direct buttons now
 export const VERSION_ACTION_STORAGE_KEY = 'dts.analytics.screen.header.versionAction';
-export const EXPORT_ACTION_STORAGE_KEY = 'dts.analytics.screen.header.exportAction';
 export const QUICK_ACTION_RECENT_STORAGE_KEY = 'dts.analytics.screen.header.quickRecentActions';
 export const PRIMARY_ACTION_STORAGE_KEY = 'dts.analytics.screen.header.primaryAction';
-export const TOOLS_SECTION_STORAGE_KEY = 'dts.analytics.screen.header.toolsSection';
 
 export const THEME_OPTIONS: { value: ScreenTheme | ''; label: string }[] = [
     { value: '', label: '经典深蓝' },

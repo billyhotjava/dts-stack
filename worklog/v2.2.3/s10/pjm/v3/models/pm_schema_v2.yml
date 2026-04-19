@@ -3,77 +3,100 @@ version: 2
 models:
   # ═══ DWD 维度表 ═══
   - name: dim_completion_status_v2
-    description: "完成情况维度表（7种状态枚举）"
+    description: "完成情况维度表（稳定 ID + 中文标签）"
     columns:
-      - name: code
+      - name: completion_status_id
         tests:
           - unique:
-              severity: warn
+              config:
+                severity: warn
           - not_null:
-              severity: warn
+              config:
+                severity: warn
 
   - name: dim_node_type_v2
-    description: "节点类型维度表（一般/重要/重大/里程碑）"
+    description: "节点类型维度表（稳定 ID + 中文标签）"
     columns:
-      - name: code
+      - name: node_type_id
         tests:
           - unique:
-              severity: warn
+              config:
+                severity: warn
           - not_null:
-              severity: warn
+              config:
+                severity: warn
 
   - name: dim_risk_level_v2
-    description: "风险等级维度表（高/中/低）"
+    description: "风险等级维度表（稳定 ID + 中文标签）"
     columns:
-      - name: code
+      - name: risk_level_id
         tests:
           - unique:
-              severity: warn
+              config:
+                severity: warn
           - not_null:
-              severity: warn
+              config:
+                severity: warn
 
   - name: dim_quality_status_v2
-    description: "质量归零状态维度表（4种状态）"
+    description: "质量归零状态维度表（稳定 ID + 中文标签）"
     columns:
-      - name: code
+      - name: quality_status_id
         tests:
           - unique:
-              severity: warn
+              config:
+                severity: warn
           - not_null:
-              severity: warn
+              config:
+                severity: warn
 
   - name: dim_change_category_v2
-    description: "更改类别维度表（I/II/III，含全角兼容）"
+    description: "更改类别维度表（稳定 ID + 中文标签）"
+    columns:
+      - name: change_category_id
+        tests:
+          - unique:
+              config:
+                severity: warn
+          - not_null:
+              config:
+                severity: warn
 
   - name: dim_signature_status_v2
-    description: "文件签署状态维度表（5种状态，区分 I,II 类和 III 类）"
+    description: "文件签署状态维度表（稳定 ID + 中文标签）"
     columns:
-      - name: code
+      - name: signature_status_id
         tests:
           - unique:
-              severity: warn
+              config:
+                severity: warn
           - not_null:
-              severity: warn
+              config:
+                severity: warn
 
   - name: dim_quality_category_v2
-    description: "质量问题原因分类字典（9类：设计/工艺/管理/元器件/操作/外协/软件/环境/其他，含别名 外协外购→外协）"
+    description: "质量问题原因分类字典（稳定 ID + 中文标签）"
     columns:
-      - name: code
+      - name: quality_category_id
         tests:
           - unique:
-              severity: warn
+              config:
+                severity: warn
           - not_null:
-              severity: warn
+              config:
+                severity: warn
 
   - name: dim_risk_category_v2
-    description: "风险类型字典（5类标准值：技术/进度/成本/设计/质量，含其他兜底）"
+    description: "风险类型字典（稳定 ID + 中文标签）"
     columns:
-      - name: code
+      - name: risk_category_id
         tests:
           - unique:
-              severity: warn
+              config:
+                severity: warn
           - not_null:
-              severity: warn
+              config:
+                severity: warn
 
   # ═══ DWD 事实表 ═══
   - name: biz_dwd_project_node_v2
@@ -81,116 +104,165 @@ models:
     columns:
       - name: node_id
         tests:
+          - unique:
+              config:
+                severity: warn
           - not_null:
-              severity: warn
+              config:
+                severity: warn
       - name: project_no
         tests:
           - not_null:
-              severity: warn
+              config:
+                severity: warn
       - name: completion_status
         tests:
           - accepted_values:
-              values: ['正常待完成', '按时完成', '超期已完成已变更', '超期已完成未变更',
-                       '不正常待变更', '超期未完成未变更', '超期未完成已变更']
-              severity: warn
+              arguments:
+                values: ['正常待完成', '按时完成', '超期已完成已变更', '超期已完成未变更',
+                         '不正常待变更', '超期未完成未变更', '超期未完成已变更']
+              config:
+                severity: warn
       - name: node_type
         tests:
           - accepted_values:
-              values: ['一般节点', '重要节点', '重大节点', '里程碑节点']
-              severity: warn
+              arguments:
+                values: ['一般节点', '重要节点', '重大节点', '里程碑节点']
+              config:
+                severity: warn
       - name: risk_level
         tests:
           - accepted_values:
-              values: ['高', '中', '低']
-              severity: warn
+              arguments:
+                values: ['高', '中', '低']
+              config:
+                severity: warn
       - name: plan_date
         tests:
           - not_null:
-              severity: warn
+              config:
+                severity: warn
       - name: plan_month
         tests:
           - not_null:
-              severity: warn
+              config:
+                severity: warn
 
   - name: biz_dwd_quality_issue_v2
     description: "质量问题事实表 — 归零状态+分类+计划标志"
     columns:
       - name: issue_id
         tests:
+          - unique:
+              config:
+                severity: warn
           - not_null:
-              severity: warn
+              config:
+                severity: warn
       - name: project_no
         tests:
           - not_null:
-              severity: warn
+              config:
+                severity: warn
       - name: status
         tests:
           - accepted_values:
-              values: ['未完成归零', '已完成技术归零', '已完成管理归零', '已完成技术和管理归零']
-              severity: warn
+              arguments:
+                values: ['未完成归零', '已完成技术归零', '已完成管理归零', '已完成技术和管理归零']
+              config:
+                severity: warn
       - name: issue_category
         tests:
           - accepted_values:
-              values: ['设计', '工艺', '管理', '元器件', '操作', '外协外购', '软件', '其他']
-              severity: warn
+              arguments:
+                values: ['设计', '工艺', '管理', '元器件', '操作', '外协', '软件', '环境', '其他']
+              config:
+                severity: warn
       - name: issue_date
         tests:
           - not_null:
-              severity: warn
+              config:
+                severity: warn
       - name: issue_month
         tests:
           - not_null:
-              severity: warn
+              config:
+                severity: warn
 
   - name: biz_dwd_tech_state_v2
     description: "技术状态事实表 — 更改类别标准化+签署/整改状态"
     columns:
       - name: tech_state_id
         tests:
+          - unique:
+              config:
+                severity: warn
           - not_null:
-              severity: warn
+              config:
+                severity: warn
       - name: project_no
         tests:
           - not_null:
-              severity: warn
+              config:
+                severity: warn
       - name: change_category
         tests:
           - accepted_values:
-              values: ['I', 'II', 'III']
-              severity: warn
+              arguments:
+                values: ['I', 'II', 'III']
+              config:
+                severity: warn
       - name: change_submit_time
         tests:
           - not_null:
-              severity: warn
+              config:
+                severity: warn
       - name: submit_month
         tests:
           - not_null:
-              severity: warn
+              config:
+                severity: warn
 
   - name: biz_dwd_risk_info_v2
     description: "风险事实表 — 风险台账清洗+等级标准化+释放标志"
     columns:
       - name: risk_id
         tests:
+          - unique:
+              config:
+                severity: warn
           - not_null:
-              severity: warn
+              config:
+                severity: warn
       - name: project_no
         tests:
           - not_null:
-              severity: warn
+              config:
+                severity: warn
       - name: risk_level
         tests:
           - accepted_values:
-              values: ['高', '中', '低']
-              severity: warn
+              arguments:
+                values: ['高', '中', '低']
+              config:
+                severity: warn
+      - name: risk_category
+        tests:
+          - accepted_values:
+              arguments:
+                values: ['技术', '进度', '成本', '设计', '质量', '其他']
+              config:
+                severity: warn
       - name: risk_submit_date
         tests:
           - not_null:
-              severity: warn
+              config:
+                severity: warn
       - name: submit_month
         tests:
           - not_null:
-              severity: warn
+              config:
+                severity: warn
 
   # ═══ DWS 汇总表 ═══
   - name: biz_dws_progress_monthly_v2
@@ -199,7 +271,8 @@ models:
       - name: plan_month
         tests:
           - not_null:
-              severity: warn
+              config:
+                severity: warn
 
   - name: biz_dws_quality_monthly_v2
     description: "质量域月度汇总 — 按 project×dept×month 聚合，对齐原始指标 #34-48"
@@ -207,7 +280,8 @@ models:
       - name: period_month
         tests:
           - not_null:
-              severity: warn
+              config:
+                severity: warn
 
   - name: biz_dws_tech_state_monthly_v2
     description: "技术状态域月度汇总 — 按 project×dept×month 聚合，对齐原始指标 #49-67"
@@ -215,7 +289,8 @@ models:
       - name: period_month
         tests:
           - not_null:
-              severity: warn
+              config:
+                severity: warn
 
   - name: biz_dws_risk_monthly_v2
     description: "风险域月度汇总 — 按 project×dept×month 聚合"
@@ -223,7 +298,8 @@ models:
       - name: period_month
         tests:
           - not_null:
-              severity: warn
+              config:
+                severity: warn
 
   # ═══ ADS 原始指标 (kpi) ═══
   - name: biz_ads_progress_kpi_v2

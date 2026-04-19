@@ -44,6 +44,10 @@ CREATE TABLE ods_project_subject_domain_v2 (
     filled_by            varchar(500),   -- 填写人
     highlight            varchar(2000),  -- 亮点工作
     source_system        varchar(200) DEFAULT 'excel',
+    source_file          varchar(1000), -- 来源文件名/路径
+    sheet_name           varchar(500),  -- 来源 sheet 名称
+    batch_id             varchar(500),  -- 导入批次 ID
+    row_num              varchar(500),  -- 来源行号（原始值）
     import_time          timestamp DEFAULT now()
 );
 
@@ -75,6 +79,10 @@ CREATE TABLE ods_progress_measure_v2 (
     remark                   varchar(2000),  -- 备注
     filled_by                varchar(500),   -- 填写人
     source_system            varchar(200) DEFAULT 'excel',
+    source_file              varchar(1000), -- 来源文件名/路径
+    sheet_name               varchar(500),  -- 来源 sheet 名称
+    batch_id                 varchar(500),  -- 导入批次 ID
+    row_num                  varchar(500),  -- 来源行号（原始值）
     import_time              timestamp DEFAULT now()
 );
 
@@ -104,6 +112,10 @@ CREATE TABLE ods_quality_issue_v2 (
     project_manager          varchar(500),   -- 项目主管（下拉选择）
     filled_by                varchar(500),   -- 填写人
     source_system            varchar(200) DEFAULT 'excel',
+    source_file              varchar(1000), -- 来源文件名/路径
+    sheet_name               varchar(500),  -- 来源 sheet 名称
+    batch_id                 varchar(500),  -- 导入批次 ID
+    row_num                  varchar(500),  -- 来源行号（原始值）
     import_time              timestamp DEFAULT now()
 );
 
@@ -145,6 +157,10 @@ CREATE TABLE ods_quality_measure_v2 (
     remark                   varchar(2000),  -- 备注
     filled_by                varchar(500),   -- 填写人
     source_system            varchar(200) DEFAULT 'excel',
+    source_file              varchar(1000), -- 来源文件名/路径
+    sheet_name               varchar(500),  -- 来源 sheet 名称
+    batch_id                 varchar(500),  -- 导入批次 ID
+    row_num                  varchar(500),  -- 来源行号（原始值）
     import_time              timestamp DEFAULT now()
 );
 
@@ -186,6 +202,10 @@ CREATE TABLE ods_tech_state_v2 (
     filled_by                varchar(500),   -- 填写人
     remark                   varchar(2000),  -- 备注
     source_system            varchar(200) DEFAULT 'excel',
+    source_file              varchar(1000), -- 来源文件名/路径
+    sheet_name               varchar(500),  -- 来源 sheet 名称
+    batch_id                 varchar(500),  -- 导入批次 ID
+    row_num                  varchar(500),  -- 来源行号（原始值）
     import_time              timestamp DEFAULT now()
 );
 
@@ -235,6 +255,10 @@ CREATE TABLE ods_tech_state_measure_v2 (
     remark                   varchar(2000),  -- 备注
     filled_by                varchar(500),   -- 填写人
     source_system            varchar(200) DEFAULT 'excel',
+    source_file              varchar(1000), -- 来源文件名/路径
+    sheet_name               varchar(500),  -- 来源 sheet 名称
+    batch_id                 varchar(500),  -- 导入批次 ID
+    row_num                  varchar(500),  -- 来源行号（原始值）
     import_time              timestamp DEFAULT now()
 );
 
@@ -274,6 +298,10 @@ CREATE TABLE ods_risk_info_v2 (
     last_update_week         varchar(500),   -- 最后更新周数
     filled_by                varchar(500),   -- 填写人
     source_system            varchar(200) DEFAULT 'excel',
+    source_file              varchar(1000), -- 来源文件名/路径
+    sheet_name               varchar(500),  -- 来源 sheet 名称
+    batch_id                 varchar(500),  -- 导入批次 ID
+    row_num                  varchar(500),  -- 来源行号（原始值）
     import_time              timestamp DEFAULT now()
 );
 
@@ -324,6 +352,10 @@ CREATE TABLE ods_risk_measure_v2 (
     remark                   varchar(2000),  -- 备注
     filled_by                varchar(500),   -- 填写人
     source_system            varchar(200) DEFAULT 'excel',
+    source_file              varchar(1000), -- 来源文件名/路径
+    sheet_name               varchar(500),  -- 来源 sheet 名称
+    batch_id                 varchar(500),  -- 导入批次 ID
+    row_num                  varchar(500),  -- 来源行号（原始值）
     import_time              timestamp DEFAULT now()
 );
 
@@ -361,5 +393,9 @@ CREATE TABLE ods_material_info_v2 (
     last_update_week         varchar(500),   -- 最后更新周数
     remark                   varchar(2000),  -- 备注
     source_system            varchar(200) DEFAULT 'excel',
+    source_file              varchar(1000), -- 来源文件名/路径
+    sheet_name               varchar(500),  -- 来源 sheet 名称
+    batch_id                 varchar(500),  -- 导入批次 ID
+    row_num                  varchar(500),  -- 来源行号（原始值）
     import_time              timestamp DEFAULT now()
 );

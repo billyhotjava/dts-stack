@@ -1,0 +1,21 @@
+name	layer	sql_path	source_data_source_id	alias	schema_name	materialized	tags	status	enabled	owner_dept	description	csv_path
+stg_fin__own_fund	STG	models/stg/stg_fin__own_fund.sql			public	view	finance,stg,own-fund	DRAFT	true		自有资金 ODS 结构化语义层
+stg_fin__project_fund	STG	models/stg/stg_fin__project_fund.sql			public	view	finance,stg,project-fund	DRAFT	true		项目经费 ODS 结构化语义层
+stg_fin__aux_balance	STG	models/stg/stg_fin__aux_balance.sql			public	view	finance,stg,aux-balance	DRAFT	true		辅助余额 ODS 结构化语义层
+stg_fin__aux_balance_personal	STG	models/stg/stg_fin__aux_balance_personal.sql			public	view	finance,stg,aux-balance-personal	DRAFT	true		个人辅助余额 ODS 结构化语义层
+dim_own_fund_period_type	DWD	models/dwd/dim_own_fund_period_type.sql			public	table	finance,dim,dwd	DRAFT	true		自有资金期间类型维度表
+dim_expense_category	DWD	models/dwd/dim_expense_category.sql			public	table	finance,dim,dwd	DRAFT	true		辅助余额费用类别维度表
+dim_balance_direction	DWD	models/dwd/dim_balance_direction.sql			public	table	finance,dim,dwd	DRAFT	true		个人辅助余额借贷方向维度表
+dim_personal_subject_category	DWD	models/dwd/dim_personal_subject_category.sql			public	table	finance,dim,dwd	DRAFT	true		个人辅助余额科目类别维度表
+biz_dwd_own_fund	DWD	models/dwd/biz_dwd_own_fund.sql			public	table	finance,biz,dwd,own-fund	DRAFT	true		自有资金明细事实表
+biz_dwd_project_fund	DWD	models/dwd/biz_dwd_project_fund.sql			public	table	finance,biz,dwd,project-fund	DRAFT	true		项目经费明细事实表
+biz_dwd_aux_balance	DWD	models/dwd/biz_dwd_aux_balance.sql			public	table	finance,biz,dwd,aux-balance	DRAFT	true		辅助余额明细事实表
+biz_dwd_aux_balance_personal	DWD	models/dwd/biz_dwd_aux_balance_personal.sql			public	table	finance,biz,dwd,aux-balance-personal	DRAFT	true		个人辅助余额明细事实表
+biz_dws_own_fund_yearly	DWS	models/dws/biz_dws_own_fund_yearly.sql			public	table	finance,biz,dws,own-fund	DRAFT	true		自有资金年度汇总表
+biz_dws_project_fund_summary	DWS	models/dws/biz_dws_project_fund_summary.sql			public	table	finance,biz,dws,project-fund	DRAFT	true		项目经费整体汇总表
+biz_dws_aux_balance_by_dept	DWS	models/dws/biz_dws_aux_balance_by_dept.sql			public	table	finance,biz,dws,aux-balance	DRAFT	true		辅助余额按部门汇总表
+biz_dws_aux_balance_personal_by_dept	DWS	models/dws/biz_dws_aux_balance_personal_by_dept.sql			public	table	finance,biz,dws,aux-balance-personal	DRAFT	true		个人辅助余额按部门汇总表
+biz_ads_own_fund_kpi	ADS	models/ads/biz_ads_own_fund_kpi.sql			public	table	finance,biz,ads,kpi,own-fund	DRAFT	true		自有资金大屏 KPI 表
+biz_ads_project_fund_kpi	ADS	models/ads/biz_ads_project_fund_kpi.sql			public	table	finance,biz,ads,kpi,project-fund	DRAFT	true		项目经费大屏 KPI 表
+biz_ads_aux_balance_kpi	ADS	models/ads/biz_ads_aux_balance_kpi.sql			public	table	finance,biz,ads,kpi,aux-balance	DRAFT	true		辅助余额大屏 KPI 表
+biz_ads_aux_balance_personal_kpi	ADS	models/ads/biz_ads_aux_balance_personal_kpi.sql			public	table	finance,biz,ads,kpi,aux-balance-personal	DRAFT	true		个人辅助余额大屏 KPI 表

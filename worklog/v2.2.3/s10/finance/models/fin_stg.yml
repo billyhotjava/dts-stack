@@ -1,0 +1,98 @@
+version: 2
+
+models:
+  - name: stg_fin__own_fund
+    description: "自有资金 ODS 结构化层：统一数值类型并拆解年度与期间类型。"
+    columns:
+      - name: source_row_id
+        tests:
+          - unique:
+              config:
+                severity: warn
+          - not_null:
+              config:
+                severity: warn
+      - name: period_year
+        tests:
+          - not_null:
+              config:
+                severity: warn
+      - name: period_type
+        tests:
+          - accepted_values:
+              arguments:
+                values: ['opening', 'increase', 'usage', 'balance']
+              config:
+                severity: warn
+
+  - name: stg_fin__project_fund
+    description: "项目经费 ODS 结构化层：清洗项目编号、周期、金额和执行率字段。"
+    columns:
+      - name: source_row_id
+        tests:
+          - unique:
+              config:
+                severity: warn
+          - not_null:
+              config:
+                severity: warn
+      - name: project_id
+        tests:
+          - not_null:
+              config:
+                severity: warn
+
+  - name: stg_fin__aux_balance
+    description: "辅助余额 ODS 结构化层：标准化合同占位值并派生费用类别。"
+    columns:
+      - name: source_row_id
+        tests:
+          - unique:
+              config:
+                severity: warn
+          - not_null:
+              config:
+                severity: warn
+      - name: subject_code
+        tests:
+          - not_null:
+              config:
+                severity: warn
+      - name: expense_category
+        tests:
+          - accepted_values:
+              arguments:
+                values: ['原材料/设备', '外协/服务', '折旧', '检测试验', '设计咨询', '租赁', '培训', '其他']
+              config:
+                severity: warn
+
+  - name: stg_fin__aux_balance_personal
+    description: "个人辅助余额 ODS 结构化层：派生借贷方向和个人科目类别。"
+    columns:
+      - name: source_row_id
+        tests:
+          - unique:
+              config:
+                severity: warn
+          - not_null:
+              config:
+                severity: warn
+      - name: subject_code
+        tests:
+          - not_null:
+              config:
+                severity: warn
+      - name: balance_direction
+        tests:
+          - accepted_values:
+              arguments:
+                values: ['debit', 'credit', 'zero']
+              config:
+                severity: warn
+      - name: subject_category
+        tests:
+          - accepted_values:
+              arguments:
+                values: ['其他应收-借款', '应付职工薪酬', '其他']
+              config:
+                severity: warn

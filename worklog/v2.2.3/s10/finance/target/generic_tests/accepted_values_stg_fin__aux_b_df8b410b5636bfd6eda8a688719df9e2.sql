@@ -1,0 +1,2 @@
+{{ config({"severity":"Warn","tags":[]}) }}
+{{ test_accepted_values(column_name="expense_category", model=get_where_subquery(ref('stg_fin__aux_balance')), values=["原材料/设备","外协/服务","折旧","检测试验","设计咨询","租赁","培训","其他"]) }}

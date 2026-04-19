@@ -1,0 +1,2 @@
+{{ config({"severity":"Warn","tags":[]}) }}
+{{ test_not_null(column_name="quality_category_id", model=get_where_subquery(ref('dim_quality_category_v2'))) }}

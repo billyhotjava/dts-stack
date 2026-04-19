@@ -2,13 +2,17 @@ import { useEffect, useState, useCallback, useMemo, useRef } from 'react';
 import { useNavigate } from 'react-router';
 import { message } from 'antd';
 import { toast } from 'sonner';
-import { analyticsApi, ScreenListItem, type ScreenAiGenerationResponse } from '../../api/analyticsApi';
+import { analyticsApi, type ScreenListItem, type ScreenAiGenerationResponse } from '../../api/analyticsApi';
 import { resolveRouteForOpen } from '../../helpers/resolveAnalyticsUrl';
 import { PageContainer } from '../../components/PageContainer/PageContainer';
 import { writeTextToClipboard } from '../../hooks/clipboard';
 import { TemplateGallery, ScreenAclPanel, type TemplateSelection } from './components';
+import { ImportPreviewModal } from './components/ImportPreviewModal';
 import { createConfigFromTemplate } from './screenTemplates';
-import { buildScreenPayload, normalizeScreenConfig } from './specV2';
+import { buildScreenPayload, normalizeScreenConfig, validateScreenPayload } from './specV2';
+import { inlineResources } from './utils/resourceInliner';
+import { countInlinedResources } from './utils/resourceRestorer';
+import type { ScreenConfig } from './types';
 const SCREEN_LIST_PREF_KEY = 'dts.analytics.screens.listPref.v1';
 
 export default function ScreensPage() {
@@ -30,6 +34,17 @@ export default function ScreensPage() {
 	const [aiContextHistory, setAiContextHistory] = useState<string[]>([]);
 	const [activeCardMenuId, setActiveCardMenuId] = useState<string | number | null>(null);
 	const [aclScreenId, setAclScreenId] = useState<string | number | null>(null);
+	const [exportingId, setExportingId] = useState<string | number | null>(null);
+	const [importPreview, setImportPreview] = useState<{
+		fileName: string;
+		parsedSpec: ScreenConfig;
+		templateMeta?: { name: string; description?: string; category?: string; tags?: string[] };
+		validation: { errors: string[]; warnings: string[] };
+		resourcesInlined: boolean;
+		inlinedResourceCount: number;
+	} | null>(null);
+	const [isImporting, setIsImporting] = useState(false);
+	const importInputRef = useRef<HTMLInputElement | null>(null);
 	const [searchKeyword, setSearchKeyword] = useState(() => {
 		if (typeof window === 'undefined') return '';
 		try {
@@ -392,6 +407,110 @@ export default function ScreensPage() {
 		}
 	};
 
+	const sanitizeFileName = (name: string) => {
+		const trimmed = (name || '').trim() || 'screen';
+		return trimmed.replace(/[\\/:*?"<>|]+/g, '_');
+	};
+
+	const handleExportJson = useCallback(async (screen: ScreenListItem) => {
+		if (exportingId !== null) return;
+		setExportingId(screen.id);
+		try {
+			const detail = await analyticsApi.getScreen(screen.id, { mode: 'draft', fallbackDraft: true });
+			const normalized = normalizeScreenConfig(detail, { id: detail.id });
+			if (normalized.warnings.length > 0) {
+				console.warn('[screens-export] normalized warnings:', normalized.warnings);
+			}
+			const rawSpec = buildScreenPayload(normalized.config) as Record<string, unknown>;
+			const { spec: inlinedSpec, inlinedCount, errors: inlineErrors } = await inlineResources(rawSpec);
+			if (inlineErrors.length > 0) {
+				console.warn('[screens-export] resource inlining warnings:', inlineErrors);
+			}
+			const payload = {
+				schema: 'dts.screen.spec',
+				exportedAt: new Date().toISOString(),
+				resourcesInlined: inlinedCount > 0,
+				screenSpec: inlinedSpec,
+			};
+			const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json;charset=utf-8' });
+			const url = URL.createObjectURL(blob);
+			const link = document.createElement('a');
+			link.href = url;
+			link.download = `${sanitizeFileName(String(detail.name || screen.name || 'screen'))}-spec.json`;
+			document.body.appendChild(link);
+			link.click();
+			document.body.removeChild(link);
+			URL.revokeObjectURL(url);
+			toast.success('已导出大屏 JSON');
+		} catch (err) {
+			console.error('Failed to export screen json:', err);
+			toast.error(err instanceof Error ? err.message : '导出 JSON 失败');
+		} finally {
+			setExportingId(null);
+		}
+	}, [exportingId]);
+
+	const handleOpenImport = useCallback(() => {
+		if (isImporting) return;
+		importInputRef.current?.click();
+	}, [isImporting]);
+
+	const handleImportJsonFile = useCallback(async (event: React.ChangeEvent<HTMLInputElement>) => {
+		const file = event.target.files?.[0];
+		event.target.value = '';
+		if (!file) return;
+		try {
+			const content = await file.text();
+			const parsed = JSON.parse(content) as Record<string, unknown>;
+			const source = (parsed.screenSpec || parsed) as Record<string, unknown>;
+			const templateMeta = parsed.templateMeta as { name: string; description?: string; category?: string; tags?: string[] } | undefined;
+			const normalized = normalizeScreenConfig(source, { id: '' });
+			if (normalized.warnings.length > 0) {
+				console.warn('[screens-import] normalized warnings:', normalized.warnings);
+			}
+			const validation = validateScreenPayload(buildScreenPayload(normalized.config));
+			const resourcesInlined = parsed.resourcesInlined === true;
+			const inlinedResourceCount = resourcesInlined ? countInlinedResources(source) : 0;
+			setImportPreview({
+				fileName: file.name,
+				parsedSpec: normalized.config,
+				templateMeta: templateMeta || undefined,
+				validation,
+				resourcesInlined,
+				inlinedResourceCount,
+			});
+		} catch (err) {
+			console.error('Failed to parse import file:', err);
+			toast.error('JSON 导入失败，请检查文件格式');
+		}
+	}, []);
+
+	const handleImportConfirm = useCallback(async (action: 'replace' | 'create-screen' | 'register-template') => {
+		if (!importPreview) return;
+		if (action !== 'create-screen') {
+			toast.error('大屏列表仅支持创建新大屏，请在模板资产中心注册模板');
+			return;
+		}
+		const { parsedSpec } = importPreview;
+		setIsImporting(true);
+		try {
+			const spec = buildScreenPayload({
+				...parsedSpec,
+				name: importPreview.templateMeta?.name || parsedSpec.name || '导入大屏',
+				description: importPreview.templateMeta?.description || parsedSpec.description || '',
+			});
+			const created = await analyticsApi.createScreen(spec);
+			setImportPreview(null);
+			toast.success('已导入大屏草稿');
+			navigate(`/bi/screens/${created.id}/edit`);
+		} catch (err) {
+			console.error('Failed to import screen:', err);
+			toast.error(err instanceof Error ? err.message : '导入失败');
+		} finally {
+			setIsImporting(false);
+		}
+	}, [importPreview, navigate]);
+
 	const formatDate = (dateStr?: string) => {
 		if (!dateStr) return '-';
 		const date = new Date(dateStr);
@@ -410,6 +529,15 @@ export default function ScreensPage() {
 				<div className="flex items-center justify-between gap-3 pt-1 flex-wrap">
 					<h1 className="m-0 text-xl font-semibold text-text-primary">大屏管理</h1>
 					<div className="flex gap-2.5">
+						<button
+							className="inline-flex items-center justify-center h-8 px-4 text-sm font-normal leading-normal border border-border-default rounded-md bg-surface-card text-text-primary cursor-pointer transition-all duration-200 whitespace-nowrap hover:border-brand hover:bg-brand/10 disabled:opacity-50 disabled:cursor-not-allowed"
+							data-testid="analytics-screen-import"
+							onClick={handleOpenImport}
+							disabled={isImporting}
+							title="从 JSON 文件导入大屏配置（将创建为新草稿）"
+						>
+							{isImporting ? '导入中...' : '导入 JSON'}
+						</button>
 						<button className="inline-flex items-center justify-center h-8 px-4 text-sm font-normal leading-normal border border-brand rounded-md bg-brand text-white cursor-pointer transition-all duration-200 whitespace-nowrap hover:opacity-85 disabled:opacity-50 disabled:cursor-not-allowed" onClick={handleOpenAiGenerator}>
 							自动生成
 						</button>
@@ -417,6 +545,13 @@ export default function ScreensPage() {
 							新建大屏
 						</button>
 					</div>
+					<input
+						ref={importInputRef}
+						type="file"
+						accept="application/json,.json"
+						className="hidden"
+						onChange={handleImportJsonFile}
+					/>
 				</div>
 
 				<div className="space-y-4">
@@ -586,7 +721,20 @@ export default function ScreensPage() {
 															更多
 														</button>
 														{activeCardMenuId === screen.id ? (
-															<div className="absolute right-0 top-[calc(100%+4px)] min-w-[140px] z-[900] bg-surface-card text-text-primary border border-border-default rounded-lg shadow-[0_8px_24px_rgba(15,23,42,0.2)] p-1.5 grid gap-0.5">
+															<div className="absolute right-0 top-[calc(100%+4px)] min-w-[160px] z-[900] bg-surface-card text-text-primary border border-border-default rounded-lg shadow-[0_8px_24px_rgba(15,23,42,0.2)] p-1.5 grid gap-0.5">
+																<button
+																	type="button"
+																	className="border border-transparent rounded-md px-3 py-[7px] bg-transparent text-text-primary text-xs text-left cursor-pointer hover:border-brand hover:bg-brand/10 disabled:opacity-55 disabled:cursor-not-allowed"
+																	data-testid={`analytics-screen-export-${screen.id}`}
+																	onClick={() => {
+																		setActiveCardMenuId(null);
+																		void handleExportJson(screen);
+																	}}
+																	disabled={exportingId === screen.id}
+																	title="导出当前大屏为 JSON（含内联资源）"
+																>
+																	{exportingId === screen.id ? '导出中...' : '导出 JSON'}
+																</button>
 																<button
 																	type="button"
 																	className="border border-transparent rounded-md px-3 py-[7px] bg-transparent text-text-primary text-xs text-left cursor-pointer hover:border-brand hover:bg-brand/10 disabled:opacity-55 disabled:cursor-not-allowed"
@@ -800,6 +948,20 @@ export default function ScreensPage() {
 				onClose={() => setAclScreenId(null)}
 				isOwner={true}
 			/>
+			{importPreview && (
+				<ImportPreviewModal
+					isOpen={!!importPreview}
+					onClose={() => setImportPreview(null)}
+					fileName={importPreview.fileName}
+					parsedSpec={importPreview.parsedSpec}
+					templateMeta={importPreview.templateMeta}
+					validation={importPreview.validation}
+					resourcesInlined={importPreview.resourcesInlined}
+					inlinedResourceCount={importPreview.inlinedResourceCount}
+					mode="list"
+					onConfirm={handleImportConfirm}
+				/>
+			)}
 		</PageContainer>
 	);
 }

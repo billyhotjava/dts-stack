@@ -19,10 +19,10 @@
 
 实际链路是：
 
-- 进度：`ODS -> DWD -> DWS -> 页面`
-- 质量：`ODS -> DWD -> DWS -> 页面`
-- 技术状态：`ODS -> DWD -> DWS -> 页面`
-- 风险：`ODS -> DWD -> DWS -> 页面`
+- 进度：`ODS -> STG -> DWD -> DWS -> 页面`
+- 质量：`ODS -> STG -> DWD -> DWS -> 页面`
+- 技术状态：`ODS -> STG -> DWD -> DWS -> 页面`
+- 风险：`ODS -> STG -> DWD -> DWS -> 页面`
 
 只有甘特图和科室下拉会直接查 DWD。
 

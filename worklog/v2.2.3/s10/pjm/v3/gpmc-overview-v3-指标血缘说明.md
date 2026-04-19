@@ -5,28 +5,32 @@
 `gpmc-overview-v3.json` 这张屏当前不走 ADS，实际数据链路是：
 
 ```text
-ODS -> DWD -> DWS -> 页面
+ODS -> STG -> DWD -> DWS -> 页面
 ```
 
 按域拆开是：
 
 - 进度域
   - `ods_project_subject_domain_v2`
+  - `stg_pm__project_subject_domain_v2`
   - `biz_dwd_project_node_v2`
   - `biz_dws_progress_monthly_v2`
   - `gpmc-overview-v3.json`
 - 质量域
   - `ods_quality_issue_v2`
+  - `stg_pm__quality_issue_v2`
   - `biz_dwd_quality_issue_v2`
   - `biz_dws_quality_monthly_v2`
   - `gpmc-overview-v3.json`
 - 技术状态域
   - `ods_tech_state_v2`
+  - `stg_pm__tech_state_v2`
   - `biz_dwd_tech_state_v2`
   - `biz_dws_tech_state_monthly_v2`
   - `gpmc-overview-v3.json`
 - 风险域
   - `ods_risk_info_v2`
+  - `stg_pm__risk_info_v2`
   - `biz_dwd_risk_info_v2`
   - `biz_dws_risk_monthly_v2`
   - `gpmc-overview-v3.json`

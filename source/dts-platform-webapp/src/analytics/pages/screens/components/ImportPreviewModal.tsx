@@ -20,8 +20,9 @@ export type ImportPreviewModalProps = {
 	validation: { errors: string[]; warnings: string[] };
 	resourcesInlined: boolean;
 	inlinedResourceCount: number;
-	mode: 'editor' | 'marketplace';
+	mode: 'editor' | 'marketplace' | 'list';
 	onConfirm: (action: ImportAction) => void;
+	allowedActions?: ImportAction[];
 };
 
 export function ImportPreviewModal({
@@ -35,22 +36,29 @@ export function ImportPreviewModal({
 	inlinedResourceCount,
 	mode,
 	onConfirm,
+	allowedActions,
 }: ImportPreviewModalProps) {
-	const [selectedAction, setSelectedAction] = useState<ImportAction>(
-		mode === 'editor' ? 'replace' : 'create-screen'
-	);
-	const hasErrors = validation.errors.length > 0;
-
-	const actions: Array<{ value: ImportAction; label: string; description: string }> =
+	const defaultActions: Array<{ value: ImportAction; label: string; description: string }> =
 		mode === 'editor'
 			? [
 				{ value: 'replace', label: '替换当前大屏', description: '用导入内容替换当前编辑中的大屏配置' },
 				{ value: 'create-screen', label: '创建为新大屏', description: '保留当前大屏，将导入内容创建为新大屏' },
 			]
+			: mode === 'list'
+			? [
+				{ value: 'create-screen', label: '创建为新大屏', description: '使用导入内容创建一个新的大屏草稿，导入后自动跳转编辑器' },
+			]
 			: [
 				{ value: 'register-template', label: '注册为模板', description: '将导入内容添加到模板库中' },
 				{ value: 'create-screen', label: '创建为大屏', description: '直接用导入内容创建一个新大屏' },
 			];
+	const actions = allowedActions && allowedActions.length > 0
+		? defaultActions.filter((item) => allowedActions.includes(item.value))
+		: defaultActions;
+	const [selectedAction, setSelectedAction] = useState<ImportAction>(
+		actions[0]?.value ?? (mode === 'editor' ? 'replace' : 'create-screen')
+	);
+	const hasErrors = validation.errors.length > 0;
 
 	const componentCount = parsedSpec.components?.length ?? 0;
 	const pageCount = parsedSpec.pages?.length ?? 0;

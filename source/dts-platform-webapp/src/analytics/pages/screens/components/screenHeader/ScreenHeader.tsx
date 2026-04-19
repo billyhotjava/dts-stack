@@ -37,17 +37,12 @@ import { commitScreenPageDraft, materializeScreenPage } from '../../screenPageSt
 import { resolveScreenTheme, applyThemeToComponents, getThemeTokens, type ThemeComponentApplyMode } from '../../screenThemes';
 import type { ScreenTheme } from '../../types';
 import { LinkageGraphPanel } from '../LinkageGraphPanel';
-import type { ScreenConfig } from '../../types';
 import { writeTextToClipboard } from '../../../../hooks/clipboard';
 import { resolveRouteForOpen, resolveRouteHref } from '../../../../helpers/resolveAnalyticsUrl';
-import { inlineResources } from '../../utils/resourceInliner';
-import { ImportPreviewModal } from '../ImportPreviewModal';
-import { countInlinedResources } from '../../utils/resourceRestorer';
 import { HeaderMenu } from './HeaderMenu';
 import { ThemeSelector } from './ThemeSelector';
 import {
     VERSION_ACTION_STORAGE_KEY,
-    EXPORT_ACTION_STORAGE_KEY,
     QUICK_ACTION_RECENT_STORAGE_KEY,
     PRIMARY_ACTION_STORAGE_KEY,
     BATCH_ACTION_OPTIONS,
@@ -162,14 +157,6 @@ export function ScreenHeader({
         const raw = window.localStorage.getItem(VERSION_ACTION_STORAGE_KEY);
         return raw === 'compare' ? 'compare' : 'history';
     });
-    const [exportAction, setExportAction] = useState<'json' | 'png' | 'pdf'>(() => {
-        if (typeof window === 'undefined') return 'png';
-        const raw = window.localStorage.getItem(EXPORT_ACTION_STORAGE_KEY);
-        if (raw === 'json' || raw === 'pdf' || raw === 'png') {
-            return raw;
-        }
-        return 'png';
-    });
     const [primaryAction, setPrimaryAction] = useState<'preview' | 'publish' | 'save'>(() => {
         if (typeof window === 'undefined') return 'save';
         const raw = window.localStorage.getItem(PRIMARY_ACTION_STORAGE_KEY);
@@ -198,14 +185,6 @@ export function ScreenHeader({
     const [batchAction, setBatchAction] = useState<BatchAction>('duplicate');
     const [themeApplyMode, setThemeApplyMode] = useState<ThemeComponentApplyMode>('force');
     const [showLinkageGraph, setShowLinkageGraph] = useState(false);
-    const [importPreview, setImportPreview] = useState<{
-        fileName: string;
-        parsedSpec: ScreenConfig;
-        templateMeta?: { name: string; description?: string; category?: string; tags?: string[] };
-        validation: { errors: string[]; warnings: string[] };
-        resourcesInlined: boolean;
-        inlinedResourceCount: number;
-    } | null>(null);
     const themeInputRef = useRef<HTMLInputElement | null>(null);
     const { selectedIds, showGrid, zoom } = state;
 
@@ -347,7 +326,6 @@ export function ScreenHeader({
     const [lockErrorText, setLockErrorText] = useState<string | null>(null);
     const [publishModalOpen, setPublishModalOpen] = useState(false);
     const [publishInfo, setPublishInfo] = useState<PublishInfo | null>(null);
-    const importInputRef = useRef<HTMLInputElement | null>(null);
     const quickInputRef = useRef<HTMLInputElement | null>(null);
     const quickActionRefs = useRef<Array<HTMLButtonElement | null>>([]);
     const menuContainerRef = useRef<HTMLDivElement | null>(null);
@@ -405,11 +383,6 @@ export function ScreenHeader({
         if (typeof window === 'undefined') return;
         window.localStorage.setItem(VERSION_ACTION_STORAGE_KEY, versionAction);
     }, [versionAction]);
-
-    useEffect(() => {
-        if (typeof window === 'undefined') return;
-        window.localStorage.setItem(EXPORT_ACTION_STORAGE_KEY, exportAction);
-    }, [exportAction]);
 
     useEffect(() => {
         if (typeof window === 'undefined') return;
@@ -1115,70 +1088,6 @@ export function ScreenHeader({
         }
     }, [id, previewDeviceMode]);
 
-    const handleExportJson = async () => {
-        let preparedRequestId: string | undefined;
-        try {
-            const prepared = await ensureExportAllowed('json');
-            preparedRequestId = prepared?.requestId || undefined;
-        } catch (error) {
-            toast.error(error instanceof Error ? error.message : '导出失败');
-            if (id) {
-                void analyticsApi.reportScreenExport(id, {
-                    status: 'failed',
-                    format: 'json',
-                    mode: 'draft',
-                    ...(previewDeviceMode === 'auto' ? {} : { device: previewDeviceMode }),
-                    requestId: preparedRequestId,
-                    message: error instanceof Error ? error.message : 'prepare_failed',
-                });
-            }
-            return;
-        }
-        try {
-            const rawSpec = buildScreenPayload(persistedConfig) as Record<string, unknown>;
-            const { spec: inlinedSpec, inlinedCount, errors: inlineErrors } = await inlineResources(rawSpec);
-            if (inlineErrors.length > 0) {
-                console.warn('[export] Resource inlining warnings:', inlineErrors);
-            }
-            const payload = {
-                schema: 'dts.screen.spec',
-                exportedAt: new Date().toISOString(),
-                resourcesInlined: inlinedCount > 0,
-                screenSpec: inlinedSpec,
-            };
-            const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json;charset=utf-8' });
-            const url = URL.createObjectURL(blob);
-            const link = document.createElement('a');
-            link.href = url;
-            link.download = `${config.name || 'screen'}-spec.json`;
-            document.body.appendChild(link);
-            link.click();
-            document.body.removeChild(link);
-            URL.revokeObjectURL(url);
-            if (id) {
-                void analyticsApi.reportScreenExport(id, {
-                    status: 'success',
-                    format: 'json',
-                    mode: 'draft',
-                    ...(previewDeviceMode === 'auto' ? {} : { device: previewDeviceMode }),
-                    requestId: preparedRequestId,
-                });
-            }
-        } catch (error) {
-            if (id) {
-                void analyticsApi.reportScreenExport(id, {
-                    status: 'failed',
-                    format: 'json',
-                    mode: 'draft',
-                    ...(previewDeviceMode === 'auto' ? {} : { device: previewDeviceMode }),
-                    requestId: preparedRequestId,
-                    message: error instanceof Error ? error.message : 'export_failed',
-                });
-            }
-            toast.error(error instanceof Error ? error.message : 'JSON 导出失败');
-        }
-    };
-
     const openExportWindow = useCallback((format: 'png' | 'pdf') => {
         if (!id) {
             throw new Error('请先保存大屏后再导出');
@@ -1392,103 +1301,6 @@ export function ScreenHeader({
         }
     };
 
-    const handleOpenImport = () => {
-        importInputRef.current?.click();
-    };
-
-    const handleImportJson = async (event: React.ChangeEvent<HTMLInputElement>) => {
-        const file = event.target.files?.[0];
-        event.target.value = '';
-        if (!file) return;
-
-        try {
-            const content = await file.text();
-            const parsed = JSON.parse(content) as Record<string, unknown>;
-            const source = (parsed.screenSpec || parsed) as Record<string, unknown>;
-            const templateMeta = parsed.templateMeta as { name: string; description?: string; category?: string; tags?: string[] } | undefined;
-            console.log('[screen-import] raw source:', {
-                hasScreenSpec: 'screenSpec' in parsed,
-                topComponents: Array.isArray((source as any).components) ? (source as any).components.length : 'N/A',
-                topPages: Array.isArray((source as any).pages) ? (source as any).pages.length : 'N/A',
-                schemaVersion: (source as any).schemaVersion,
-            });
-            const normalized = normalizeScreenConfig(source, { id: id || '' });
-            if (normalized.warnings.length > 0) {
-                console.warn('[screen-import] normalized warnings:', normalized.warnings);
-            }
-            console.log('[screen-import] normalized:', {
-                components: normalized.config.components?.length ?? 0,
-                pages: normalized.config.pages?.length ?? 0,
-                width: normalized.config.width, height: normalized.config.height,
-            });
-            const validation = validateScreenPayload(buildScreenPayload(normalized.config));
-            const resourcesInlined = parsed.resourcesInlined === true;
-            const inlinedResourceCount = resourcesInlined ? countInlinedResources(source) : 0;
-
-            setImportPreview({
-                fileName: file.name,
-                parsedSpec: normalized.config,
-                templateMeta: templateMeta || undefined,
-                validation,
-                resourcesInlined,
-                inlinedResourceCount,
-            });
-        } catch (error) {
-            console.error('Failed to parse import file:', error);
-            toast.error('JSON 导入失败，请检查文件格式');
-        }
-    };
-
-    const handleImportConfirm = async (action: 'replace' | 'create-screen' | 'register-template') => {
-        if (!importPreview) return;
-        const { parsedSpec: importedConfig } = importPreview;
-
-        try {
-            if (action === 'replace') {
-                // Always materialize to page 0 on import: the editor's
-                // currentPageIndex belongs to the previous config and may be
-                // out-of-bounds or misaligned with the imported pages array,
-                // which would wipe the canvas to an empty page.
-                const materialized = materializeScreenPage(importedConfig, 0);
-                console.log('[screen-import] confirm replace BEFORE dispatch:', {
-                    importedName: importedConfig.name,
-                    importedComponents: importedConfig.components?.length ?? 0,
-                    importedPages: importedConfig.pages?.length ?? 0,
-                    materializedComponents: materialized.components?.length ?? 0,
-                    currentStateBeforeDispatch: {
-                        name: state.config.name,
-                        components: state.config.components?.length ?? 0,
-                    },
-                });
-                onResetPageIndex?.();
-                loadConfig(materialized);
-                setImportPreview(null);
-                // Verify state landed after React flushes.
-                requestAnimationFrame(() => {
-                    // state here is the CLOSURE value from the render that produced
-                    // this handler. React's actual reducer state may differ — use a
-                    // DOM probe instead.
-                    const rootEl = document.querySelector('[data-testid=analytics-screen-designer]');
-                    console.log('[screen-import] AFTER RAF (closure state snapshot):', {
-                        closureName: state.config.name,
-                        closureComponents: state.config.components?.length ?? 0,
-                        rootExists: !!rootEl,
-                    });
-                });
-                // Expose the payload we pushed so you can inspect in console.
-                (window as any)._dtsScreenLastImport = materialized;
-            } else if (action === 'create-screen') {
-                const spec = buildScreenPayload(importedConfig);
-                const created = await analyticsApi.createScreen(spec);
-                setImportPreview(null);
-                window.location.href = resolveRouteForOpen(`/bi/screens/${String(created.id)}/edit`);
-            }
-        } catch (error) {
-            console.error('Import action failed:', error);
-            toast.error(error instanceof Error ? error.message : '导入操作失败');
-        }
-    };
-
     const handleShare = async () => {
         if (!id || isSharing) return;
         setIsSharing(true);
@@ -1622,18 +1434,6 @@ export function ScreenHeader({
         versionAction,
     ]);
 
-    const executeExportAction = useCallback(() => {
-        if (exportAction === 'json') {
-            void executeMenuAction(handleExportJson);
-            return;
-        }
-        if (exportAction === 'pdf') {
-            void executeMenuAction(handleExportPdf);
-            return;
-        }
-        void executeMenuAction(handleExportPng);
-    }, [executeMenuAction, exportAction, handleExportJson, handleExportPdf, handleExportPng]);
-
     // canExecuteDesignAction / executeDesignAction / canExecuteGovernanceAction / executeGovernanceAction
     // removed — menus now use direct onClick buttons instead of select+execute pattern
 
@@ -1761,13 +1561,6 @@ export function ScreenHeader({
                 run: handleExportPdf,
             },
             {
-                id: 'export-json',
-                label: '导出 JSON',
-                keywords: '导出 export json',
-                disabled: false,
-                run: handleExportJson,
-            },
-            {
                 id: 'command-help',
                 label: '命令面板帮助',
                 keywords: '命令 面板 help 快捷键',
@@ -1777,7 +1570,6 @@ export function ScreenHeader({
             },
         ];
     }, [
-        handleExportJson,
         handleExportPdf,
         handleExportPng,
         handlePreview,
@@ -2060,7 +1852,7 @@ export function ScreenHeader({
                                 <ThemeSelector value={config.theme || ''} onChange={handleToolbarThemeChange} />
                             </div>
                             <div className="grid gap-1.5 py-1 pb-2 border-b border-[var(--color-border)] last:border-b-0 last:pb-1">
-                                <div className="text-[11px] font-semibold text-[var(--color-text-secondary)] tracking-[0.04em] uppercase px-1 py-0.5">应用与导入导出</div>
+                                <div className="text-[11px] font-semibold text-[var(--color-text-secondary)] tracking-[0.04em] uppercase px-1 py-0.5">应用与主题包</div>
                                 <select className="px-2.5 py-[7px] border border-[var(--color-border)] rounded-md bg-[var(--color-surface)] text-[var(--color-text-primary)] text-[13px] font-medium min-w-[110px] w-full focus:outline-none focus:border-[var(--color-primary)]" value={themeApplyMode} onChange={(e) => setThemeApplyMode(e.target.value === 'safe' ? 'safe' : 'force')} title="组件样式应用策略">
                                     <option value="force">强制覆盖</option>
                                     <option value="safe">仅补缺省</option>
@@ -2070,18 +1862,14 @@ export function ScreenHeader({
                                 <button type="button" className="header-btn flex items-center gap-1.5 px-4 py-2 border border-[var(--color-border)] rounded-md bg-[var(--color-surface)] text-[var(--color-text-primary)] text-[13px] font-medium cursor-pointer transition-all duration-200 whitespace-nowrap shrink-0 w-full justify-start py-[7px] px-2.5 hover:border-[var(--color-primary)] hover:bg-[var(--color-primary-light)] disabled:opacity-50 disabled:cursor-not-allowed" onClick={handleImportThemePackClick} title="导入主题包">导入主题</button>
                             </div>
                         </HeaderMenu>
-                        {/* --- 导入导出 --- */}
+                        {/* --- 导出快照（JSON 导入导出已迁移至大屏列表页） --- */}
                         <HeaderMenu
-                            label="导入导出"
+                            label="导出"
                             open={activeMenu === 'tools-io'}
                             onToggle={() => setActiveMenu((prev) => (prev === 'tools-io' ? null : 'tools-io'))}
                         >
                             <div className="grid gap-1.5 py-1 pb-2 border-b border-[var(--color-border)] last:border-b-0 last:pb-1">
-                                <div className="text-[11px] font-semibold text-[var(--color-text-secondary)] tracking-[0.04em] uppercase px-1 py-0.5">导入</div>
-                                <button type="button" className="header-btn flex items-center gap-1.5 px-4 py-2 border border-[var(--color-border)] rounded-md bg-[var(--color-surface)] text-[var(--color-text-primary)] text-[13px] font-medium cursor-pointer transition-all duration-200 whitespace-nowrap shrink-0 w-full justify-start py-[7px] px-2.5 hover:border-[var(--color-primary)] hover:bg-[var(--color-primary-light)] disabled:opacity-50 disabled:cursor-not-allowed" onClick={() => executeMenuAction(handleOpenImport)} title="从 JSON 文件导入大屏配置">选择 JSON 文件...</button>
-                            </div>
-                            <div className="grid gap-1.5 py-1 pb-2 border-b border-[var(--color-border)] last:border-b-0 last:pb-1">
-                                <div className="text-[11px] font-semibold text-[var(--color-text-secondary)] tracking-[0.04em] uppercase px-1 py-0.5">导出</div>
+                                <div className="text-[11px] font-semibold text-[var(--color-text-secondary)] tracking-[0.04em] uppercase px-1 py-0.5">导出快照</div>
                                 <label className="text-xs text-[var(--color-text-secondary)] px-1" htmlFor="screen-io-device-mode">预览设备</label>
                                 <select id="screen-io-device-mode" className="px-2.5 py-[7px] border border-[var(--color-border)] rounded-md bg-[var(--color-surface)] text-[var(--color-text-primary)] text-[13px] font-medium min-w-[110px] w-full focus:outline-none focus:border-[var(--color-primary)]" value={previewDeviceMode} onChange={(e) => { const next = e.target.value; if (next === 'pc' || next === 'tablet' || next === 'mobile') { setPreviewDeviceMode(next); return; } setPreviewDeviceMode('auto'); }} title="预览设备模式">
                                     <option value="auto">自动</option>
@@ -2089,9 +1877,9 @@ export function ScreenHeader({
                                     <option value="tablet">平板</option>
                                     <option value="mobile">手机</option>
                                 </select>
-                                <button type="button" className="header-btn flex items-center gap-1.5 px-4 py-2 border border-[var(--color-border)] rounded-md bg-[var(--color-surface)] text-[var(--color-text-primary)] text-[13px] font-medium cursor-pointer transition-all duration-200 whitespace-nowrap shrink-0 w-full justify-start py-[7px] px-2.5 hover:border-[var(--color-primary)] hover:bg-[var(--color-primary-light)] disabled:opacity-50 disabled:cursor-not-allowed" onClick={() => executeMenuAction(handleExportJson)} title="导出 JSON（含内联资源）">导出 JSON</button>
                                 <button type="button" className="header-btn flex items-center gap-1.5 px-4 py-2 border border-[var(--color-border)] rounded-md bg-[var(--color-surface)] text-[var(--color-text-primary)] text-[13px] font-medium cursor-pointer transition-all duration-200 whitespace-nowrap shrink-0 w-full justify-start py-[7px] px-2.5 hover:border-[var(--color-primary)] hover:bg-[var(--color-primary-light)] disabled:opacity-50 disabled:cursor-not-allowed" onClick={() => executeMenuAction(handleExportPng)} disabled={!id} title="导出 PNG 图片">导出 PNG</button>
                                 <button type="button" className="header-btn flex items-center gap-1.5 px-4 py-2 border border-[var(--color-border)] rounded-md bg-[var(--color-surface)] text-[var(--color-text-primary)] text-[13px] font-medium cursor-pointer transition-all duration-200 whitespace-nowrap shrink-0 w-full justify-start py-[7px] px-2.5 hover:border-[var(--color-primary)] hover:bg-[var(--color-primary-light)] disabled:opacity-50 disabled:cursor-not-allowed" onClick={() => executeMenuAction(handleExportPdf)} disabled={!id} title="导出 PDF 文档">导出 PDF</button>
+                                <div className="text-[11px] text-[var(--color-text-secondary)] px-1 py-0.5">JSON 导入/导出请前往「大屏列表」。</div>
                             </div>
                         </HeaderMenu>
                         {/* --- 4. 版本导出 (kept as-is) --- */}
@@ -2180,27 +1968,6 @@ export function ScreenHeader({
                             {isSaving ? '保存中...' : '保存'}
                         </button>
                     </div>
-                    <input
-                        ref={importInputRef}
-                        type="file"
-                        accept="application/json,.json"
-                        style={{ display: 'none' }}
-                        onChange={handleImportJson}
-                    />
-                    {importPreview && (
-                        <ImportPreviewModal
-                            isOpen={!!importPreview}
-                            onClose={() => setImportPreview(null)}
-                            fileName={importPreview.fileName}
-                            parsedSpec={importPreview.parsedSpec}
-                            templateMeta={importPreview.templateMeta}
-                            validation={importPreview.validation}
-                            resourcesInlined={importPreview.resourcesInlined}
-                            inlinedResourceCount={importPreview.inlinedResourceCount}
-                            mode="editor"
-                            onConfirm={handleImportConfirm}
-                        />
-                    )}
                 </div>
             </div>
             {lockedByOther && (

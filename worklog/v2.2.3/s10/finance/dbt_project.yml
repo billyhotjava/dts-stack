@@ -1,0 +1,23 @@
+name: "finance_analytics"
+version: "1.0.0"
+config-version: 2
+profile: "dts"
+
+model-paths: ["models"]
+macro-paths: ["macros"]
+clean-targets: ["target", "dbt_packages"]
+
+models:
+  finance_analytics:
+    +persist_docs:
+      relation: true
+      columns: true
+    stg:
+      +materialized: view
+      +tags: ["finance", "stg"]
+    dwd:
+      +materialized: table
+    dws:
+      +materialized: table
+    ads:
+      +materialized: table
