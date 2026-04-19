@@ -7,6 +7,13 @@ export type BulkSelectionState = {
 	lastChangedAt: number | null;
 };
 
+export type TreeSelectableModel = {
+	id?: string;
+	planId?: string;
+	layer?: string;
+	name?: string;
+};
+
 export const EMPTY_BULK_SELECTION: BulkSelectionState = {
 	selectedIds: [],
 	sourceSelections: {
@@ -28,6 +35,62 @@ export function deriveSelectedModelIdsFromCheckedKeys(checkedKeys: string[]) {
 			.filter((key) => key.startsWith("model:"))
 			.map((key) => key.slice("model:".length)),
 	);
+}
+
+export function resolveSelectedModelIdsFromTreeKeys(
+	checkedKeys: string[],
+	options: {
+		models: TreeSelectableModel[];
+		activeSpaceModels: TreeSelectableModel[];
+		unassignedModels: TreeSelectableModel[];
+		spaceKeyToPlanId: Record<string, string>;
+		unassignedSpaceKey: string;
+		inferLayer: (name?: string) => string;
+	},
+) {
+	const result = new Set<string>();
+	const addModels = (models: TreeSelectableModel[]) => {
+		models.forEach((model) => {
+			const id = String(model.id || "").trim();
+			if (id) {
+				result.add(id);
+			}
+		});
+	};
+	const checked = checkedKeys.map((key) => String(key || "").trim()).filter(Boolean);
+	checked.forEach((key) => {
+		if (key.startsWith("model:")) {
+			const id = key.slice("model:".length).trim();
+			if (id) {
+				result.add(id);
+			}
+			return;
+		}
+		if (key === options.unassignedSpaceKey) {
+			addModels(options.unassignedModels);
+			return;
+		}
+		if (key.startsWith("space-")) {
+			const planId = String(options.spaceKeyToPlanId[key] || "").trim();
+			if (planId) {
+				addModels(options.models.filter((model) => String(model.planId || "").trim() === planId));
+			}
+			return;
+		}
+		if (key.startsWith("layer-")) {
+			const layer = key.slice("layer-".length).trim();
+			if (!layer) {
+				return;
+			}
+			addModels(
+				options.activeSpaceModels.filter((model) => {
+					const modelLayer = String(model.layer || options.inferLayer(model.name)).trim();
+					return modelLayer === layer;
+				}),
+			);
+		}
+	});
+	return normalizeIds(Array.from(result));
 }
 
 export function applyBulkSelectionChange(

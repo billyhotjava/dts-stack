@@ -127,7 +127,7 @@ import {
 	applyBulkSelectionChange,
 	clearBulkSelectionSource,
 	clearDeletedBulkSelection,
-	deriveSelectedModelIdsFromCheckedKeys,
+	resolveSelectedModelIdsFromTreeKeys,
 	summarizeBulkSelection,
 	type BulkSelectionState,
 } from "./sqlModelBulkSelection.helpers";
@@ -251,6 +251,20 @@ const layerTag = (layer?: string) => {
 	return <Tag color={color}>{layer}</Tag>;
 };
 
+const buildRunModalTitle = (mode: "compile" | "test" | "build" | "release") => {
+	if (mode === "compile") return "编译 (dbt compile)";
+	if (mode === "test") return "测试 (dbt test)";
+	if (mode === "build") return "构建 (dbt build)";
+	return "上线 (dbt build)";
+};
+
+const buildRunModalOkText = (mode: "compile" | "test" | "build" | "release") => {
+	if (mode === "compile") return "开始编译";
+	if (mode === "test") return "开始测试";
+	if (mode === "build") return "开始构建";
+	return "提交";
+};
+
 const resolveModelKey = (model: SqlModel, fallback: string) => model.id || model.name || fallback;
 const resolveSpaceKey = (space: ProjectSpace, index: number) => `space-${space.id || index}`;
 const UNASSIGNED_SPACE_KEY = "space-unassigned";
@@ -289,7 +303,7 @@ export default function SqlModelingPage() {
 	const [runsLoading, setRunsLoading] = useState(false);
 	const [runs, setRuns] = useState<DagRun[]>([]);
 	const [runOpen, setRunOpen] = useState(false);
-	const [runMode, setRunMode] = useState<"release" | "build">("release");
+	const [runMode, setRunMode] = useState<"compile" | "test" | "build" | "release">("release");
 	const [runSubmitting, setRunSubmitting] = useState(false);
 	const [runSelectedModelIds, setRunSelectedModelIds] = useState<string[]>([]);
 	const [runModelKeyword, setRunModelKeyword] = useState("");
@@ -888,7 +902,7 @@ export default function SqlModelingPage() {
 		}
 	};
 
-	const openRun = (mode: "release" | "build" = "release") => {
+	const openRun = (mode: "compile" | "test" | "build" | "release" = "release") => {
 		runForm.resetFields();
 		runForm.setFieldsValue({
 			target: dbtConfig?.config?.targetName || "",
@@ -1015,39 +1029,64 @@ export default function SqlModelingPage() {
 				toast.error("勾选的模型已失效，请重新选择");
 				return;
 			}
-			if (runMode === "build") {
+			if (runMode === "compile" || runMode === "test" || runMode === "build") {
 				const target = normalizeText(values.target) || "dev";
 				const vars = tryParseJsonObject(values.vars);
 				let lastDagId: string | undefined;
 				let lastDagRunId: string | undefined;
 				let lastSelector = "";
+				const operation = runMode;
 				for (const g of groups) {
 					const modelsSelector = g.names.join(" ");
-					const triggerResp: any = await triggerDbtRun({
-						models: modelsSelector,
-						dagSelector: g.dagSelector,
-						target,
-						vars,
-						operation: "build",
-					});
+					let triggerResp: any;
+					if (operation === "compile") {
+						triggerResp = await triggerDbtCompile({
+							models: modelsSelector,
+							dagSelector: g.dagSelector,
+							target,
+							vars,
+						});
+					} else if (operation === "test") {
+						triggerResp = await triggerDbtTest({
+							models: modelsSelector,
+							dagSelector: g.dagSelector,
+							target,
+							vars,
+						});
+					} else {
+						triggerResp = await triggerDbtRun({
+							models: modelsSelector,
+							dagSelector: g.dagSelector,
+							target,
+							vars,
+							operation: "build",
+						});
+					}
 					lastDagRunId = normalizeText(triggerResp?.dag_run_id || triggerResp?.dagRunId);
 					lastDagId = normalizeText(triggerResp?.dag_id || triggerResp?.dagId);
 					lastSelector = modelsSelector;
 				}
-				setRunResult({
-					...createPendingBuildSummary("build", lastSelector),
+				const pendingRun = {
+					...createPendingBuildSummary(operation, lastSelector),
 					dagRunId: lastDagRunId,
 					dagId: lastDagId,
-				});
+				} as DbtRunSummary;
+				if (operation === "compile") {
+					setCompileResult(pendingRun);
+				} else if (operation === "test") {
+					setTestResult(pendingRun);
+				} else {
+					setRunResult(pendingRun);
+				}
 				toast.success(
 					groups.length > 1
-						? `已提交 ${groups.length} 个项目空间的 dbt build`
-						: buildOperationQueuedMessage("build"),
+						? `已提交 ${groups.length} 个项目空间的 dbt ${operation}`
+						: buildOperationQueuedMessage(operation),
 				);
 				setRunOpen(false);
 				setExecLog("");
 				setBottomTab("operations");
-				setOpsSubTab("execlog");
+				setOpsSubTab(operation === "compile" ? "compile" : operation === "test" ? "test" : "execlog");
 				void loadRuns({ dagId: lastDagId || undefined, selector: lastSelector });
 				return;
 			}
@@ -2428,9 +2467,9 @@ export default function SqlModelingPage() {
 									<Button
 										key={action.key}
 										icon={<CodeOutlined />}
-										onClick={() => triggerBuildOperation("compile")}
+										onClick={() => openRun("compile")}
 										loading={buildTriggering === "compile"}
-										disabled={(!activeModel && !(activeSpace && activeSpaceModels.length > 0)) || !configEnabled || !workspaceOk || buildTriggering != null}
+										disabled={sqlModels.length === 0 || !configEnabled || !workspaceOk || buildTriggering != null}
 										data-testid="platform-sql-modeling-compile"
 									>
 										{action.label}
@@ -2442,9 +2481,9 @@ export default function SqlModelingPage() {
 										<Button
 										key={action.key}
 										icon={<CheckCircleOutlined />}
-										onClick={() => triggerBuildOperation("test")}
+										onClick={() => openRun("test")}
 										loading={buildTriggering === "test"}
-										disabled={(!activeModel && !(activeSpace && activeSpaceModels.length > 0)) || !configEnabled || !workspaceOk || buildTriggering != null}
+										disabled={sqlModels.length === 0 || !configEnabled || !workspaceOk || buildTriggering != null}
 										data-testid="platform-sql-modeling-test"
 									>
 										{action.label}
@@ -2457,19 +2496,9 @@ export default function SqlModelingPage() {
 											key={action.key}
 											type="primary"
 											icon={<ThunderboltOutlined />}
-											onClick={() => {
-												if (
-													bulkSelection.selectedIds.length > 0 ||
-													activeModel ||
-													(activeSpace && activeSpaceModels.length > 0)
-												) {
-													void triggerBuildOperation("build");
-												} else {
-													openRun("build");
-												}
-											}}
+											onClick={() => openRun("build")}
 											loading={buildTriggering === "build"}
-											disabled={!configEnabled || !workspaceOk || buildTriggering != null}
+											disabled={sqlModels.length === 0 || !configEnabled || !workspaceOk || buildTriggering != null}
 											data-testid="platform-sql-modeling-build"
 										>
 											{action.label}
@@ -2612,7 +2641,20 @@ export default function SqlModelingPage() {
 					}}
 					onCheck={(keys: string[]) =>
 						setBulkSelection((current) =>
-							applyBulkSelectionChange(current, deriveSelectedModelIdsFromCheckedKeys(keys), "tree"),
+							applyBulkSelectionChange(
+								current,
+								resolveSelectedModelIdsFromTreeKeys(keys, {
+									models: sqlModels,
+									activeSpaceModels,
+									unassignedModels,
+									spaceKeyToPlanId: Object.fromEntries(
+										Array.from(spaceKeyMap.entries()).map(([key, space]) => [key, String(space.id || "").trim()]),
+									),
+									unassignedSpaceKey: UNASSIGNED_SPACE_KEY,
+									inferLayer,
+								}),
+								"tree",
+							),
 						)
 					}
 					onExpand={setExpandedTreeKeys}
@@ -3445,10 +3487,10 @@ export default function SqlModelingPage() {
 
 				<Modal
 					open={runOpen}
-					title={runMode === "build" ? "构建 (dbt build)" : "上线 (dbt build)"}
+					title={buildRunModalTitle(runMode)}
 					onCancel={() => setRunOpen(false)}
 					onOk={submitRun}
-				okText={runMode === "build" ? "开始构建" : "提交"}
+				okText={buildRunModalOkText(runMode)}
 				cancelText="取消"
 				confirmLoading={runSubmitting}
 				width={760}

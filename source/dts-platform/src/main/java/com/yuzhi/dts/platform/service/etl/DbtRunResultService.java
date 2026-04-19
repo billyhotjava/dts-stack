@@ -51,14 +51,17 @@ public class DbtRunResultService {
     }
 
     public DbtRunSyncResult syncFromRunResults() {
+        return syncFromRunResults(resolveProjectDir());
+    }
+
+    public DbtRunSyncResult syncFromRunResults(String projectDir) {
         if (!properties.isEnabled()) {
             return DbtRunSyncResult.disabled("dbt 未启用");
         }
-        String projectDir = resolveProjectDir();
         if (!StringUtils.hasText(projectDir)) {
             return DbtRunSyncResult.empty("dbt 项目目录未配置");
         }
-        DbtRunSummary summary = loadLatestSummary(50);
+        DbtRunSummary summary = loadLatestSummary(projectDir, 50);
         if (summary == null || !summary.present()) {
             return DbtRunSyncResult.empty("run_results.json 不存在，请先执行 dbt run");
         }
@@ -129,10 +132,13 @@ public class DbtRunResultService {
     }
 
     public DbtRunSummary loadLatestSummary(int failureLimit) {
+        return loadLatestSummary(resolveProjectDir(), failureLimit);
+    }
+
+    public DbtRunSummary loadLatestSummary(String projectDir, int failureLimit) {
         if (!properties.isEnabled()) {
             return DbtRunSummary.empty("dbt 未启用");
         }
-        String projectDir = resolveProjectDir();
         if (!StringUtils.hasText(projectDir)) {
             return DbtRunSummary.empty("dbt 项目目录未配置");
         }
@@ -283,7 +289,7 @@ public class DbtRunResultService {
 
     public boolean hasRecentCompatibleBuildEvidence(String selector, int limit) {
         int safeLimit = Math.max(1, limit);
-        DbtRunSummary latestSummary = loadLatestSummary(safeLimit);
+        DbtRunSummary latestSummary = loadLatestSummary(resolveProjectDir(), safeLimit);
         if (latestSummary != null && latestSummary.present() && isBuildLikeCommand(latestSummary.command())) {
             if (commandMatchesSelector(latestSummary.command(), selector)) {
                 return true;

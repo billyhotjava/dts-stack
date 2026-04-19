@@ -25,6 +25,7 @@ public class DbtReleaseSubmissionService {
     private final DbtQualityGateService qualityGateService;
     private final DbtReleaseGateService releaseGateService;
     private final DbtDagService dbtDagService;
+    private final DbtScopedProjectService dbtScopedProjectService;
     private final AirflowClient airflowClient;
     private final AirflowProperties airflowProperties;
     private final ExternalRunLogService externalRunLogService;
@@ -34,6 +35,7 @@ public class DbtReleaseSubmissionService {
         DbtQualityGateService qualityGateService,
         DbtReleaseGateService releaseGateService,
         DbtDagService dbtDagService,
+        DbtScopedProjectService dbtScopedProjectService,
         AirflowClient airflowClient,
         AirflowProperties airflowProperties,
         ExternalRunLogService externalRunLogService,
@@ -42,6 +44,7 @@ public class DbtReleaseSubmissionService {
         this.qualityGateService = qualityGateService;
         this.releaseGateService = releaseGateService;
         this.dbtDagService = dbtDagService;
+        this.dbtScopedProjectService = dbtScopedProjectService;
         this.airflowClient = airflowClient;
         this.airflowProperties = airflowProperties;
         this.externalRunLogService = externalRunLogService;
@@ -206,10 +209,15 @@ public class DbtReleaseSubmissionService {
         DbtReleaseGateService.DbtReleaseGateResult releaseGate
     ) {
         Map<String, Object> conf = new LinkedHashMap<>();
+        DbtScopedProjectService.ScopedProject scopedProject = dbtScopedProjectService.prepare(selector).orElse(null);
         conf.put("operation", "build");
         if (StringUtils.hasText(selector)) {
             conf.put("models", expandBuildSelector(selector));
             conf.put("dagSelector", StringUtils.hasText(dagSelector) ? dagSelector : selector);
+        }
+        if (scopedProject != null && StringUtils.hasText(scopedProject.projectDir())) {
+            conf.put("projectDir", scopedProject.projectDir());
+            conf.put("syncManifest", true);
         }
         if (StringUtils.hasText(request == null ? null : request.target())) {
             conf.put("target", request.target().trim());

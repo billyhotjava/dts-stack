@@ -269,6 +269,14 @@ public class DbtDagService {
                     "operation=\\"{{ dag_run.conf.get('operation', 'run') | lower }}\\"\\n"
                     "selector=\\"{{ dag_run.conf.get('models', '%s') }}\\"\\n"
                     "macro_name=\\"{{ dag_run.conf.get('macro_name', '') }}\\"\\n"
+                    "project_dir=$(python - <<'PY'\\n"
+                    "raw = {{ dag_run.conf.get('projectDir', '') | tojson }}\\n"
+                    "if raw is None:\\n"
+                    "    print('', end='')\\n"
+                    "else:\\n"
+                    "    print(raw, end='')\\n"
+                    "PY\\n"
+                    ")\\n"
                     "target=\\"{{ dag_run.conf.get('target', '%s') }}\\"\\n"
                     "threads=\\"{{ dag_run.conf.get('threads', '') }}\\"\\n"
                     "full_refresh=\\"{{ dag_run.conf.get('full_refresh', '') }}\\"\\n"
@@ -291,11 +299,15 @@ public class DbtDagService {
                     "selector_trim=$(echo \\"$selector\\" | tr -d '[:space:]')\\n"
                     "selector_norm=$(echo \\"$selector\\" | tr '[:upper:]' '[:lower:]')\\n"
                     "macro_name_trim=$(echo \\"$macro_name\\" | tr -d '[:space:]')\\n"
+                    "project_dir_trim=$(echo \\"$project_dir\\" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')\\n"
                     "macro_args_trim=$(echo \\"$macro_args_json\\" | tr -d '[:space:]')\\n"
                     "threads_trim=$(echo \\"$threads\\" | tr -d '[:space:]')\\n"
                     "vars_trim=$(echo \\"$vars_json\\" | tr -d '[:space:]')\\n"
                     "if [ -z \\"$threads_trim\\" ]; then\\n"
                     "  threads_trim=\\"$DBT_THREADS_DEFAULT\\"\\n"
+                    "fi\\n"
+                    "if [ -n \\"$project_dir_trim\\" ]; then\\n"
+                    "  DBT_PROJECT_DIR=\\"$project_dir_trim\\"\\n"
                     "fi\\n"
                     "docker_cmd=(docker run --rm --network \\"$DBT_DOCKER_NETWORK\\")\\n"
                     "if [ \\"$DBT_DOCKER_PRIVILEGED\\" = \\"true\\" ]; then\\n"
@@ -341,6 +353,53 @@ public class DbtDagService {
                     "\\"${docker_cmd[@]}\\"\\n"
                 )
 
+            def build_sync_command():
+                return (
+                    "set -euo pipefail\\n"
+                    f"DTS_PLATFORM_BASE_URL=\\"{DTS_PLATFORM_BASE_URL}\\"\\n"
+                    f"DTS_PLATFORM_SYNC_PATH=\\"{DTS_PLATFORM_SYNC_PATH}\\"\\n"
+                    f"DTS_PLATFORM_SERVICE=\\"{DTS_PLATFORM_SERVICE}\\"\\n"
+                    "operation=\\"{{ dag_run.conf.get('operation', 'run') | lower }}\\"\\n"
+                    "project_dir=$(python - <<'PY'\\n"
+                    "raw = {{ dag_run.conf.get('projectDir', '') | tojson }}\\n"
+                    "if raw is None:\\n"
+                    "    print('', end='')\\n"
+                    "else:\\n"
+                    "    print(raw, end='')\\n"
+                    "PY\\n"
+                    ")\\n"
+                    "sync_manifest=$(python - <<'PY'\\n"
+                    "raw = {{ dag_run.conf.get('syncManifest', '') | tojson }}\\n"
+                    "if raw is None:\\n"
+                    "    print('', end='')\\n"
+                    "else:\\n"
+                    "    print(raw, end='')\\n"
+                    "PY\\n"
+                    ")\\n"
+                    "if [ \\"$operation\\" = \\"run-operation\\" ]; then\\n"
+                    "  exit 0\\n"
+                    "fi\\n"
+                    "payload=$(PROJECT_DIR=\\"$project_dir\\" SYNC_MANIFEST=\\"$sync_manifest\\" python - <<'PY'\\n"
+                    "import json\\n"
+                    "import os\\n"
+                    "payload = {}\\n"
+                    "project_dir = (os.environ.get('PROJECT_DIR') or '').strip()\\n"
+                    "sync_manifest = (os.environ.get('SYNC_MANIFEST') or '').strip()\\n"
+                    "if project_dir:\\n"
+                    "    payload['projectDir'] = project_dir\\n"
+                    "if sync_manifest:\\n"
+                    "    payload['syncManifest'] = sync_manifest.lower() == 'true'\\n"
+                    "print(json.dumps(payload), end='')\\n"
+                    "PY\\n"
+                    ")\\n"
+                    "curl -sSf -X POST "
+                    "-H \\"Content-Type: application/json\\" "
+                    "-H \\"X-DTS-Service: $DTS_PLATFORM_SERVICE\\" "
+                    "--data \\"$payload\\" "
+                    "\\"$DTS_PLATFORM_BASE_URL$DTS_PLATFORM_SYNC_PATH\\" "
+                    "|| true\\n"
+                )
+
 
             with DAG(
                 dag_id="%s",
@@ -356,13 +415,7 @@ public class DbtDagService {
 
                 sync_models = BashOperator(
                     task_id="sync_models",
-                    bash_command=(
-                        f"curl -sSf -X POST "
-                        f"-H \\"Content-Type: application/json\\" "
-                        f"-H \\"X-DTS-Service: {DTS_PLATFORM_SERVICE}\\" "
-                        f"\\"{DTS_PLATFORM_BASE_URL}{DTS_PLATFORM_SYNC_PATH}\\" "
-                        f"|| true"
-                    ),
+                    bash_command=build_sync_command(),
                     trigger_rule="all_done",
                 )
 

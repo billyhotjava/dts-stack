@@ -20,6 +20,7 @@ import com.yuzhi.dts.platform.service.etl.DbtRunResultService;
 import com.yuzhi.dts.platform.service.etl.DbtQualityGateService;
 import com.yuzhi.dts.platform.service.etl.DbtReleaseGateService;
 import com.yuzhi.dts.platform.service.etl.DbtReleaseSubmissionService;
+import com.yuzhi.dts.platform.service.etl.DbtScopedProjectService;
 import com.yuzhi.dts.platform.service.etl.DbtSourceService;
 import com.yuzhi.dts.platform.service.governance.IndicatorRunTracker;
 import com.yuzhi.dts.platform.service.ops.ExternalRunLogService;
@@ -50,6 +51,7 @@ public class EtlResource {
     private final DbtQualityGateService dbtQualityGateService;
     private final DbtReleaseGateService dbtReleaseGateService;
     private final DbtReleaseSubmissionService dbtReleaseSubmissionService;
+    private final DbtScopedProjectService dbtScopedProjectService;
     private final DbtArtifactSyncState dbtArtifactSyncState;
     private final AirflowClient airflowClient;
     private final AirflowProperties airflowProperties;
@@ -74,6 +76,7 @@ public class EtlResource {
         DbtQualityGateService dbtQualityGateService,
         DbtReleaseGateService dbtReleaseGateService,
         DbtReleaseSubmissionService dbtReleaseSubmissionService,
+        DbtScopedProjectService dbtScopedProjectService,
         DbtArtifactSyncState dbtArtifactSyncState,
         AirflowClient airflowClient,
         AirflowProperties airflowProperties,
@@ -95,6 +98,7 @@ public class EtlResource {
         this.dbtQualityGateService = dbtQualityGateService;
         this.dbtReleaseGateService = dbtReleaseGateService;
         this.dbtReleaseSubmissionService = dbtReleaseSubmissionService;
+        this.dbtScopedProjectService = dbtScopedProjectService;
         this.dbtArtifactSyncState = dbtArtifactSyncState;
         this.airflowClient = airflowClient;
         this.airflowProperties = airflowProperties;
@@ -226,9 +230,17 @@ public class EtlResource {
     }
 
     @PostMapping("/dbt/models/sync")
-    public ApiResponse<DbtAssetSyncService.DbtAssetSyncResult> syncDbtModels() {
-        DbtAssetSyncService.DbtAssetSyncResult assetResult = dbtAssetSyncService.syncFromManifest();
-        DbtRunResultService.DbtRunSyncResult runResult = dbtRunResultService.syncFromRunResults();
+    public ApiResponse<DbtAssetSyncService.DbtAssetSyncResult> syncDbtModels(
+        @RequestBody(required = false) DbtArtifactSyncRequest request
+    ) {
+        String projectDir = normalizeText(request == null ? null : request.projectDir());
+        boolean syncManifest = request == null || request.syncManifest() == null || request.syncManifest();
+        DbtAssetSyncService.DbtAssetSyncResult assetResult = syncManifest
+            ? (StringUtils.hasText(projectDir) ? dbtAssetSyncService.syncFromManifest(projectDir) : dbtAssetSyncService.syncFromManifest())
+            : new DbtAssetSyncService.DbtAssetSyncResult(true, false, "已跳过 scoped manifest 同步", null, new DbtAssetSyncService.SyncStats());
+        DbtRunResultService.DbtRunSyncResult runResult = StringUtils.hasText(projectDir)
+            ? dbtRunResultService.syncFromRunResults(projectDir)
+            : dbtRunResultService.syncFromRunResults();
         recordDbtSyncState(assetResult, runResult);
         // 指标运行追踪：dbt run 完成后采集指标计算值
         if (runResult.synced()) {
@@ -565,6 +577,7 @@ public class EtlResource {
         String commitSha,
         String buildInvocationId
     ) {}
+    public record DbtArtifactSyncRequest(String projectDir, Boolean syncManifest) {}
     public record DbtOutputRelationRequest(java.util.UUID modelId, String target, Map<String, Object> vars) {}
     public record DbtQualityGateRequest(String models) {}
     public record DbtReleaseGateRequest(String models, String gitRef, String commitSha, Boolean strictMode) {}
@@ -611,12 +624,17 @@ public class EtlResource {
         }
         Map<String, Object> conf = new LinkedHashMap<>();
         dbtSourceService.refreshOdsSources();
+        DbtScopedProjectService.ScopedProject scopedProject = dbtScopedProjectService.prepare(selector).orElse(null);
         conf.put("operation", operation);
         if (fullRefresh) {
             conf.put("full_refresh", true);
         }
         if (StringUtils.hasText(selector)) {
             conf.put("models", selector);
+        }
+        if (scopedProject != null && StringUtils.hasText(scopedProject.projectDir())) {
+            conf.put("projectDir", scopedProject.projectDir());
+            conf.put("syncManifest", shouldSyncManifest(operation));
         }
         if (StringUtils.hasText(request == null ? null : request.dagSelector())) {
             conf.put("dagSelector", dagSelector);
@@ -850,6 +868,10 @@ public class EtlResource {
         return StringUtils.hasText(selector) ? selector : "all";
     }
 
+    private boolean shouldSyncManifest(String operation) {
+        return "run".equalsIgnoreCase(operation) || "build".equalsIgnoreCase(operation) || "docs".equalsIgnoreCase(operation);
+    }
+
     private String resolveDagSelector(DbtRunRequest request, String selector) {
         String dagSelector = request == null ? null : stringVal(request.dagSelector());
         if (StringUtils.hasText(dagSelector)) {
@@ -882,6 +904,14 @@ public class EtlResource {
         } catch (JsonProcessingException ex) {
             return String.valueOf(vars);
         }
+    }
+
+    private String normalizeText(String raw) {
+        if (!StringUtils.hasText(raw)) {
+            return null;
+        }
+        String normalized = raw.trim();
+        return normalized.isEmpty() ? null : normalized;
     }
 
     private Map<String, Object> normalizeTriggerPayload(Map<String, Object> body) {

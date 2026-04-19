@@ -77,13 +77,21 @@ public class DbtAssetSyncService {
      * converges on the next tick.
      */
     public DbtAssetSyncResult syncFromManifest() {
-        if (!properties.isEnabled()) {
-            return DbtAssetSyncResult.disabled("dbt 未启用");
-        }
         DbtConfigService.DbtConfigView view = configService.loadConfig();
         String projectDir = view.config() != null && StringUtils.hasText(view.config().projectDir())
             ? view.config().projectDir()
             : properties.getProjectDir();
+        return syncFromManifest(projectDir, view);
+    }
+
+    public DbtAssetSyncResult syncFromManifest(String projectDir) {
+        return syncFromManifest(projectDir, configService.loadConfig());
+    }
+
+    private DbtAssetSyncResult syncFromManifest(String projectDir, DbtConfigService.DbtConfigView view) {
+        if (!properties.isEnabled()) {
+            return DbtAssetSyncResult.disabled("dbt 未启用");
+        }
         if (!StringUtils.hasText(projectDir)) {
             return DbtAssetSyncResult.empty("dbt 项目目录未配置");
         }
