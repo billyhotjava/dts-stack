@@ -11,6 +11,12 @@ if [ ! -d "$SRC_DIR" ]; then
   exit 1
 fi
 
+if [ ! -f "$SRC_DIR/models.tsv" ]; then
+  echo "[ERROR] 缺少模型清单文件: $SRC_DIR/models.tsv" >&2
+  echo "        UI 导入需要 models.tsv，请先生成或恢复该文件" >&2
+  exit 1
+fi
+
 rm -f "$ZIP_FILE"
 
 echo "=== 打包 pjm dbt_model ==="
@@ -21,6 +27,14 @@ zip -r "$ZIP_FILE" "dbt_model" \
   -x 'dbt_model/dbt_packages/*' \
   -x 'dbt_model/.*' \
   -x '*/.DS_Store'
+
+echo ""
+echo "--- 校验 zip 内含 models.tsv ---"
+unzip -l "$ZIP_FILE" | grep -q 'dbt_model/models\.tsv$' || {
+  echo "[ERROR] 打包后 zip 未包含 models.tsv，构建失败" >&2
+  exit 1
+}
+echo "  -> dbt_model/models.tsv ✓"
 
 echo ""
 echo "=== 完成 ==="
