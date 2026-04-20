@@ -1,0 +1,26 @@
+# dbt runtime artifacts
+target/
+logs/
+dbt_packages/
+
+# local runtime/config state
+profiles/.user.yml
+.user.yml
+
+# business-generated files (created by platform at runtime)
+models/ads/
+models/dwd/
+models/dws/
+models/ods/
+models/model/
+models/__topic_bindings/
+models/ods_sources.yml
+models/project_cockpit_schema.yml
+models/project_management_sources.yml
+macros/parse_date_safe.sql
+seeds/*.csv
+deploy/project-cockpit/
+
+# editor/system noise
+.DS_Store
+*.swp
