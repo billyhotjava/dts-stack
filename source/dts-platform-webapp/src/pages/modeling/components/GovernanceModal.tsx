@@ -94,6 +94,7 @@ export default function GovernanceModal({
 							placeholder="可选"
 							options={[
 								{ label: "ODS", value: "ODS" },
+								{ label: "STG", value: "STG" },
 								{ label: "DWD", value: "DWD" },
 								{ label: "DWS", value: "DWS" },
 								{ label: "ADS", value: "ADS" },

@@ -738,9 +738,19 @@ public class ModelingAuxResource {
         // 如果没有模板数据，返回默认分层
         if (result.isEmpty()) {
             result.add(Map.of("layer", "ODS", "name", "ODS", "description", "操作数据层（原始数据）"));
-            result.add(Map.of("layer", "DWD", "name", "DWD", "description", "明细数据层（清洗数据）"));
+            result.add(Map.of("layer", "STG", "name", "STG", "description", "结构化层（仅清洗+类型转换，不含业务派生）"));
+            result.add(Map.of("layer", "DWD", "name", "DWD", "description", "明细数据层（业务语义+维度打标）"));
             result.add(Map.of("layer", "DWS", "name", "DWS", "description", "汇总数据层（轻度聚合）"));
             result.add(Map.of("layer", "ADS", "name", "ADS", "description", "应用数据层（报表数据）"));
+        } else {
+            // 若已有模板但缺少 STG（常见：标准模板库未及时更新），补齐 STG 让前端下拉可选
+            if (!seenLayers.contains("STG")) {
+                result.add(Map.of(
+                    "layer", "STG",
+                    "name", "STG",
+                    "description", "结构化层（仅清洗+类型转换，不含业务派生）"
+                ));
+            }
         }
 
         auditService.audit("READ", "modeling.template.layers", "list");
@@ -751,7 +761,8 @@ public class ModelingAuxResource {
         if (layer == null) return "";
         return switch (layer.toUpperCase(Locale.ROOT)) {
             case "ODS" -> "操作数据层（原始数据）";
-            case "DWD" -> "明细数据层（清洗数据）";
+            case "STG" -> "结构化层（仅清洗+类型转换，不含业务派生）";
+            case "DWD" -> "明细数据层（业务语义+维度打标）";
             case "DWS" -> "汇总数据层（轻度聚合）";
             case "ADS" -> "应用数据层（报表数据）";
             default -> "";

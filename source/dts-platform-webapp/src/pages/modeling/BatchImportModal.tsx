@@ -49,6 +49,7 @@ interface ResultRow {
 
 const LAYER_OPTIONS = [
 	{ label: "ODS", value: "ODS" },
+	{ label: "STG", value: "STG" },
 	{ label: "DWD", value: "DWD" },
 	{ label: "DWS", value: "DWS" },
 	{ label: "ADS", value: "ADS" },

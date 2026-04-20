@@ -475,6 +475,7 @@ export default function LineagePage() {
 						value={layerFilters}
 						options={[
 							{ label: "ODS", value: "ODS" },
+							{ label: "STG", value: "STG" },
 							{ label: "DWD", value: "DWD" },
 							{ label: "DWS", value: "DWS" },
 							{ label: "ADS", value: "ADS" },

@@ -118,6 +118,7 @@ const CLASSIFICATION_OPTIONS = [
 const LAYER_OPTIONS = [
 	{ label: "全部分层", value: "ALL" },
 	{ label: "ODS", value: "ODS" },
+	{ label: "STG", value: "STG" },
 	{ label: "DWD", value: "DWD" },
 	{ label: "DWS", value: "DWS" },
 	{ label: "ADS", value: "ADS" },
