@@ -281,6 +281,12 @@ fi
 # Ensure local bind-mount directories exist (avoid Docker creating them as root).
 mkdir -p logs/dts-admin logs/dts-platform logs/dts-analytics logs/dts-ingestion
 
+# Expose host-side dbt workspace path so the platform backend (running inside container) can
+# translate scoped-project paths to the host view Airflow needs for `docker -v HOST:CONTAINER`.
+# The container mounts services/dts-dbt -> /opt/dts/dbt; Airflow runs on the host and must bind
+# the same physical directory, i.e. the services/dts-dbt absolute path derived from SCRIPT_DIR.
+export DTS_DBT_HOST_PROJECT_DIR="${DTS_DBT_HOST_PROJECT_DIR:-${SCRIPT_DIR}/services/dts-dbt}"
+
 # Load optional image versions into current env (does not modify files)
 load_img_versions_dev
 

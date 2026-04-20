@@ -770,6 +770,9 @@ generate_env_base(){
   : "${DTS_DBT_PROJECT_DIR:=/opt/dts/dbt}"
   : "${DTS_DBT_PROFILES_DIR:=/opt/dts/dbt-profiles}"
   : "${DTS_DBT_CONFIG_PATH:=/opt/dts/upload/dbt-config.json}"
+  # Host-side mapping for DTS_DBT_PROJECT_DIR — reuses DBT_PROJECT_DIR (stack-root relative).
+  # The platform backend returns this path to Airflow as the HOST side of docker -v mounts.
+  : "${DTS_DBT_HOST_PROJECT_DIR:=${DBT_PROJECT_DIR}}"
   : "${AIRFLOW_ADMIN_USERNAME:=airflow}"
   : "${AIRFLOW_ADMIN_PASSWORD:=${SECRET}}"
   : "${AIRFLOW_ADMIN_EMAIL:=airflow@example.com}"
@@ -1154,6 +1157,7 @@ OPENMETADATA_INGEST_CONFIG_DIR=${OPENMETADATA_INGEST_CONFIG_DIR}
 DTS_DBT_PROJECT_DIR=${DTS_DBT_PROJECT_DIR}
 DTS_DBT_PROFILES_DIR=${DTS_DBT_PROFILES_DIR}
 DTS_DBT_CONFIG_PATH=${DTS_DBT_CONFIG_PATH}
+DTS_DBT_HOST_PROJECT_DIR=${DTS_DBT_HOST_PROJECT_DIR}
 DOCKER_GID=${DOCKER_GID}
 IMAGE_ADDAX=${IMAGE_ADDAX}
 ADDAX_DOCKER_NETWORK=${ADDAX_DOCKER_NETWORK}

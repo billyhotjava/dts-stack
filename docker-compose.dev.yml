@@ -312,6 +312,11 @@ services:
       DTS_DBT_PROJECT_DIR: /opt/dts/dbt
       DTS_DBT_PROFILES_DIR: /opt/dts/dbt-profiles
       DTS_DBT_CONFIG_PATH: /opt/dts/upload/dbt-config.json
+      # Host-side absolute path mapping to DTS_DBT_PROJECT_DIR. Airflow uses this as the HOST
+      # part of `docker -v HOST:CONTAINER`, so it must resolve to the same physical directory
+      # the backend writes into. dev-up.sh exports DTS_DBT_HOST_PROJECT_DIR from SCRIPT_DIR;
+      # leave blank in production when container and host paths are identical.
+      DTS_DBT_HOST_PROJECT_DIR: ${DTS_DBT_HOST_PROJECT_DIR:-}
       DTS_AIRFLOW_BASE_URL: ${DTS_AIRFLOW_BASE_URL:-http://dts-airflow-webserver:8080}
       DTS_AIRFLOW_USERNAME: ${DTS_AIRFLOW_USERNAME:-${AIRFLOW_ADMIN_USERNAME:-airflow}}
       DTS_AIRFLOW_PASSWORD: ${DTS_AIRFLOW_PASSWORD:-${AIRFLOW_ADMIN_PASSWORD:-airflow}}

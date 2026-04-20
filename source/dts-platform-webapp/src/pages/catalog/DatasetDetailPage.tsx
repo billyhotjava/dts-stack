@@ -40,8 +40,10 @@ export default function DatasetDetailPage() {
 				{dataset.warehouseLayer && (
 					<Tag color={
 						dataset.warehouseLayer === "ODS" ? "default" :
+						dataset.warehouseLayer === "STG" ? "gold" :
 						dataset.warehouseLayer === "DWD" ? "blue" :
-						dataset.warehouseLayer === "DWS" ? "cyan" : "green"
+						dataset.warehouseLayer === "DWS" ? "cyan" :
+						dataset.warehouseLayer === "ADS" ? "green" : "default"
 					}>
 						{dataset.warehouseLayer}
 					</Tag>

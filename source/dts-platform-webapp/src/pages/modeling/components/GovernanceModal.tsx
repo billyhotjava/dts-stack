@@ -3,7 +3,13 @@ import type { SqlModelGovernancePreviewItem, ProjectSpace } from "../sqlModeling
 
 const layerTag = (layer?: string) => {
 	if (!layer) return <Tag>未分层</Tag>;
-	const color = layer === "ODS" ? "blue" : layer === "DWD" ? "cyan" : layer === "DWS" ? "purple" : layer === "ADS" ? "geekblue" : "default";
+	const color =
+		layer === "ODS" ? "blue"
+		: layer === "STG" ? "gold"
+		: layer === "DWD" ? "cyan"
+		: layer === "DWS" ? "purple"
+		: layer === "ADS" ? "geekblue"
+		: "default";
 	return <Tag color={color}>{layer}</Tag>;
 };
 

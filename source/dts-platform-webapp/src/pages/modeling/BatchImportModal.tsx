@@ -64,6 +64,7 @@ const inferLayer = (filename: string): string => {
 	const name = filename.replace(/\.sql$/i, "").toLowerCase();
 	if (name.startsWith("ads_") || name.startsWith("biz_ads_")) return "ADS";
 	if (name.startsWith("dws_") || name.startsWith("biz_dws_")) return "DWS";
+	if (name.startsWith("stg_")) return "STG";
 	if (name.startsWith("dim_")) return "DWD";
 	return "DWD";
 };

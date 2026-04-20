@@ -565,7 +565,13 @@ public class ModelingSqlModelService {
             return null;
         }
         String normalized = layer.trim().toUpperCase(Locale.ROOT);
-        if ("ODS".equals(normalized) || "DWD".equals(normalized) || "DWS".equals(normalized) || "ADS".equals(normalized)) {
+        if (
+            "ODS".equals(normalized)
+            || "STG".equals(normalized)
+            || "DWD".equals(normalized)
+            || "DWS".equals(normalized)
+            || "ADS".equals(normalized)
+        ) {
             return normalized;
         }
         return null;
@@ -575,6 +581,7 @@ public class ModelingSqlModelService {
         if (!StringUtils.hasText(name)) return null;
         String normalized = name.trim().toLowerCase(Locale.ROOT);
         if (normalized.startsWith("ods_")) return "ODS";
+        if (normalized.startsWith("stg_")) return "STG";
         if (normalized.startsWith("dwd_")) return "DWD";
         if (normalized.startsWith("dws_")) return "DWS";
         if (normalized.startsWith("ads_")) return "ADS";
@@ -1028,6 +1035,7 @@ public class ModelingSqlModelService {
     private String resolveLayerDir(String layer) {
         String normalized = normalizeLayer(layer);
         if ("ODS".equals(normalized)) return "ods";
+        if ("STG".equals(normalized)) return "stg";
         if ("DWD".equals(normalized)) return "dwd";
         if ("DWS".equals(normalized)) return "dws";
         if ("ADS".equals(normalized)) return "ads";

@@ -239,6 +239,7 @@ const skippedSeverityTag = (severity: OdsSkippedSeverity) => {
 const inferLayer = (name?: string) => {
 	const normalized = (name || "").toLowerCase();
 	if (normalized.startsWith("ods_")) return "ODS";
+	if (normalized.startsWith("stg_")) return "STG";
 	if (normalized.startsWith("dwd_")) return "DWD";
 	if (normalized.startsWith("dws_")) return "DWS";
 	if (normalized.startsWith("ads_")) return "ADS";
@@ -247,7 +248,13 @@ const inferLayer = (name?: string) => {
 
 const layerTag = (layer?: string) => {
 	if (!layer) return <Tag>未分层</Tag>;
-	const color = layer === "ODS" ? "blue" : layer === "DWD" ? "cyan" : layer === "DWS" ? "purple" : layer === "ADS" ? "geekblue" : "default";
+	const color =
+		layer === "ODS" ? "blue"
+		: layer === "STG" ? "gold"
+		: layer === "DWD" ? "cyan"
+		: layer === "DWS" ? "purple"
+		: layer === "ADS" ? "geekblue"
+		: "default";
 	return <Tag color={color}>{layer}</Tag>;
 };
 
@@ -469,7 +476,8 @@ export default function SqlModelingPage() {
 			// 如果获取分层失败，使用默认值
 			setLayers([
 				{ layer: "ODS", name: "ODS", description: "操作数据层（原始数据）" },
-				{ layer: "DWD", name: "DWD", description: "明细数据层（清洗数据）" },
+				{ layer: "STG", name: "STG", description: "结构化层（仅清洗+类型转换，不含业务派生）" },
+				{ layer: "DWD", name: "DWD", description: "明细数据层（业务语义+维度打标）" },
 				{ layer: "DWS", name: "DWS", description: "汇总数据层（轻度聚合）" },
 				{ layer: "ADS", name: "ADS", description: "应用数据层（报表数据）" },
 			]);

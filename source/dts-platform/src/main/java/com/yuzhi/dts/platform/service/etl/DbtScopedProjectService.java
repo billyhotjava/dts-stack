@@ -1,5 +1,6 @@
 package com.yuzhi.dts.platform.service.etl;
 
+import com.yuzhi.dts.platform.config.DbtProperties;
 import com.yuzhi.dts.platform.domain.modeling.ModelingSqlModel;
 import com.yuzhi.dts.platform.repository.modeling.ModelingSqlModelRepository;
 import java.io.IOException;
@@ -47,10 +48,16 @@ public class DbtScopedProjectService {
     private static final int MAX_SCOPED_DIRS = 30;
 
     private final DbtConfigService dbtConfigService;
+    private final DbtProperties dbtProperties;
     private final ModelingSqlModelRepository modelingSqlModelRepository;
 
-    public DbtScopedProjectService(DbtConfigService dbtConfigService, ModelingSqlModelRepository modelingSqlModelRepository) {
+    public DbtScopedProjectService(
+        DbtConfigService dbtConfigService,
+        DbtProperties dbtProperties,
+        ModelingSqlModelRepository modelingSqlModelRepository
+    ) {
         this.dbtConfigService = dbtConfigService;
+        this.dbtProperties = dbtProperties;
         this.modelingSqlModelRepository = modelingSqlModelRepository;
     }
 
@@ -68,9 +75,15 @@ public class DbtScopedProjectService {
 
         Map<String, Path> seedsByName = indexResourceFiles(workspaceDir.resolve("seeds"), Set.of(".csv", ".tsv"));
         Map<String, Path> snapshotsByName = indexResourceFiles(workspaceDir.resolve("snapshots"), Set.of(".sql"));
+        // Filesystem fallback: include workspace model files that were not registered in the logical
+        // modeling DB (e.g. STG-layer views, which ModelingSqlModelService.normalizeLayer does not
+        // accept). DWD models that ref() them would otherwise fail dbt compilation with
+        // "depends on a node named '...' which was not found".
+        Map<String, Path> modelFilesByName = indexResourceFiles(workspaceDir.resolve("models"), Set.of(".sql"));
 
         Set<String> requestedModelNames = new LinkedHashSet<>(parsedSelector.modelNames());
         Set<String> includedModelNames = new LinkedHashSet<>();
+        Set<String> includedFilesystemModelNames = new LinkedHashSet<>();
         Set<String> requiredSourceNames = new LinkedHashSet<>();
         Set<String> requiredSeedNames = new LinkedHashSet<>();
         Set<String> requiredSnapshotNames = new LinkedHashSet<>();
@@ -79,23 +92,35 @@ public class DbtScopedProjectService {
         while (!queue.isEmpty()) {
             String modelName = queue.removeFirst();
             String normalizedName = normalizeName(modelName);
-            if (!StringUtils.hasText(normalizedName) || includedModelNames.contains(normalizedName)) {
+            if (
+                !StringUtils.hasText(normalizedName)
+                || includedModelNames.contains(normalizedName)
+                || includedFilesystemModelNames.contains(normalizedName)
+            ) {
                 continue;
             }
             ModelingSqlModel model = modelByName.get(normalizedName);
-            if (model == null) {
+            String dependencyText;
+            if (model != null) {
+                includedModelNames.add(normalizedName);
+                dependencyText = buildDependencyText(workspaceDir, model);
+            } else if (modelFilesByName.containsKey(normalizedName)) {
+                includedFilesystemModelNames.add(normalizedName);
+                dependencyText = readWorkspaceModelDependencyText(modelFilesByName.get(normalizedName));
+            } else {
                 continue;
             }
-            includedModelNames.add(normalizedName);
-            String dependencyText = buildDependencyText(workspaceDir, model);
             requiredSourceNames.addAll(extractSources(dependencyText));
             for (String refName : extractRefs(dependencyText)) {
                 String normalizedRefName = normalizeName(refName);
                 if (!StringUtils.hasText(normalizedRefName)) {
                     continue;
                 }
-                if (modelByName.containsKey(normalizedRefName)) {
-                    if (!includedModelNames.contains(normalizedRefName)) {
+                if (modelByName.containsKey(normalizedRefName) || modelFilesByName.containsKey(normalizedRefName)) {
+                    if (
+                        !includedModelNames.contains(normalizedRefName)
+                        && !includedFilesystemModelNames.contains(normalizedRefName)
+                    ) {
                         queue.addLast(normalizedRefName);
                     }
                     continue;
@@ -125,6 +150,9 @@ public class DbtScopedProjectService {
                     copyModelResources(workspaceDir, scopedProjectDir, model);
                 }
             }
+            for (String modelName : includedFilesystemModelNames) {
+                copyResourceWithCompanions(workspaceDir, scopedProjectDir, modelFilesByName.get(modelName));
+            }
             for (String seedName : requiredSeedNames) {
                 copyResourceWithCompanions(workspaceDir, scopedProjectDir, seedsByName.get(seedName));
             }
@@ -133,14 +161,54 @@ public class DbtScopedProjectService {
             }
             copyRelevantSourceFiles(workspaceDir, scopedProjectDir, requiredSourceNames);
         } catch (IOException ex) {
+            deleteRecursively(scopedProjectDir);
             throw new IllegalStateException("构造临时 dbt 项目失败: " + ex.getMessage(), ex);
+        } catch (RuntimeException ex) {
+            deleteRecursively(scopedProjectDir);
+            throw ex;
         }
 
         List<String> requested = requestedModelNames.stream().toList();
         List<String> included = includedModelNames.stream().toList();
-        LOG.info("[dbt-scoped] prepared scoped project {} with {} requested models and {} total models",
-            scopedProjectDir, requested.size(), included.size());
-        return Optional.of(new ScopedProject(scopedProjectDir.toString(), requested, included));
+        String externalProjectDir = toExternalProjectDir(workspaceDir, scopedProjectDir);
+        LOG.info(
+            "[dbt-scoped] prepared scoped project {} (external view: {}) with {} requested, {} DB-registered, {} filesystem-only models",
+            scopedProjectDir,
+            externalProjectDir,
+            requested.size(),
+            included.size(),
+            includedFilesystemModelNames.size()
+        );
+        return Optional.of(new ScopedProject(externalProjectDir, requested, included));
+    }
+
+    /**
+     * Translate a scoped-project path from the container view ({@code workspaceDir}) to the host view
+     * ({@code hostProjectDir}). Used so that paths handed to Airflow as {@code docker -v HOST:CONTAINER}
+     * bind-mount sources resolve to the same physical directory the backend wrote to. When no host
+     * mapping is configured, returns the path unchanged — correct for deployments where the backend is
+     * not containerized or container and host paths are identical.
+     */
+    private String toExternalProjectDir(Path workspaceDir, Path scopedProjectDir) {
+        String hostProjectDir = dbtProperties == null ? null : dbtProperties.getHostProjectDir();
+        String scopedPath = scopedProjectDir.toString();
+        if (!StringUtils.hasText(hostProjectDir)) {
+            return scopedPath;
+        }
+        String workspacePath = workspaceDir.toString();
+        String normalizedHost = Path.of(hostProjectDir).normalize().toString();
+        if (workspacePath.equals(normalizedHost)) {
+            return scopedPath;
+        }
+        if (!scopedPath.startsWith(workspacePath)) {
+            LOG.warn(
+                "[dbt-scoped] scoped path {} does not start with workspace path {}; returning container view",
+                scopedPath,
+                workspacePath
+            );
+            return scopedPath;
+        }
+        return normalizedHost + scopedPath.substring(workspacePath.length());
     }
 
     private Path resolveWorkspaceDir() {
@@ -151,6 +219,18 @@ public class DbtScopedProjectService {
         Path workspaceDir = Path.of(projectDir).normalize();
         if (!Files.isDirectory(workspaceDir)) {
             throw new IllegalStateException("dbt projectDir 不存在: " + workspaceDir);
+        }
+        // 关键前置校验：dbt_project.yml 必须存在
+        // 若缺失，后续 copyRootFiles 会静默跳过，生成的 scoped 目录无法被 dbt 识别，
+        // 容器里才报 "No dbt_project.yml found at /opt/dbt/dbt_project.yml"，
+        // 该错误指向容器挂载路径而非实际 workspace，排查非常困难。
+        Path dbtProjectYml = workspaceDir.resolve("dbt_project.yml");
+        if (!Files.isRegularFile(dbtProjectYml)) {
+            throw new IllegalStateException(
+                "dbt workspace 不完整：缺少 " + dbtProjectYml
+                + "。请确认已将完整 dbt 项目部署到 " + workspaceDir
+                + "（或在平台的 dbt 配置中将 projectDir 指向实际项目根目录）。"
+            );
         }
         return workspaceDir;
     }
@@ -275,6 +355,25 @@ public class DbtScopedProjectService {
             }
         }
         return model == null ? null : model.getSqlText();
+    }
+
+    /**
+     * Build the ref()/source() dependency text for a workspace model that is not registered in the
+     * logical modeling DB (e.g. STG-layer views). Appends adjacent .yml/.yaml companion files so
+     * sources referenced via schema files are still discovered.
+     */
+    private String readWorkspaceModelDependencyText(Path modelFile) {
+        StringBuilder builder = new StringBuilder();
+        if (modelFile != null && Files.isRegularFile(modelFile)) {
+            try {
+                builder.append(Files.readString(modelFile, StandardCharsets.UTF_8)).append('\n');
+            } catch (IOException ex) {
+                LOG.warn("[dbt-scoped] failed to read workspace model file {}: {}", modelFile, ex.getMessage());
+            }
+            appendIfPresent(builder, resolveCompanionPath(modelFile, ".yml"));
+            appendIfPresent(builder, resolveCompanionPath(modelFile, ".yaml"));
+        }
+        return builder.toString();
     }
 
     private void appendIfPresent(StringBuilder builder, Path path) {
