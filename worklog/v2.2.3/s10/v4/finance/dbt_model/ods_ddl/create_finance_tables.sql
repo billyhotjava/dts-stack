@@ -14,7 +14,7 @@
 -- 字段: 年度 | 基金来源 | 基金类别 | 金额 | 备注
 --   基金来源枚举: 年初 / 预计使用 / 预计增加
 --   基金类别枚举: 事业基金 / 职工福利基金 / 安全生产基金
-DROP TABLE IF EXISTS ods_finance_own_fund;
+DROP TABLE IF EXISTS ods_finance_own_fund CASCADE;
 CREATE TABLE ods_finance_own_fund (
     year_num       INT            NOT NULL,   -- 年度（如 2026、2027）
     fund_source    VARCHAR(50)    NOT NULL,   -- 基金来源（枚举）
@@ -37,7 +37,7 @@ COMMENT ON COLUMN ods_finance_own_fund.note           IS '备注';
 --       直接成本账面支出总额 | 直接成本执行率 |
 --       间接费用支出和收益总额 | 已收款 | 待收经费
 --   项目状态枚举: 已完成待收款 / 已完成审计 / 在研 / 支出待处理
-DROP TABLE IF EXISTS ods_finance_project_fund;
+DROP TABLE IF EXISTS ods_finance_project_fund CASCADE;
 CREATE TABLE ods_finance_project_fund (
     row_no              INT,                       -- 行号
     project_id          VARCHAR(50)    NOT NULL,   -- 项目编号
@@ -74,7 +74,7 @@ COMMENT ON COLUMN ods_finance_project_fund.receivable_fund    IS '待收经费�
 
 -- 5.3 辅助余额表-合同
 -- 字段: 科目编号 | 科目名称 | 部门名称 | 合同名称 | 余额
-DROP TABLE IF EXISTS ods_finance_aux_balance;
+DROP TABLE IF EXISTS ods_finance_aux_balance CASCADE;
 CREATE TABLE ods_finance_aux_balance (
     subject_code   VARCHAR(20)    NOT NULL,   -- 科目编号（如 5001.01）
     subject_name   VARCHAR(100),              -- 科目名称（如 "原材料-钢材"）
@@ -93,7 +93,7 @@ COMMENT ON COLUMN ods_finance_aux_balance.balance        IS '余额（元）';
 
 -- 5.4 辅助余额表-个人维度
 -- 字段: 科目编号 | 科目名称 | 职工部门 | 职工名称 | 余额（元）
-DROP TABLE IF EXISTS ods_finance_aux_balance_personal;
+DROP TABLE IF EXISTS ods_finance_aux_balance_personal CASCADE;
 CREATE TABLE ods_finance_aux_balance_personal (
     subject_code   VARCHAR(20)    NOT NULL,   -- 科目编号（如 1122.01、2211.01）
     subject_name   VARCHAR(100),              -- 科目名称（如 "备用金"、"工资应付"）
