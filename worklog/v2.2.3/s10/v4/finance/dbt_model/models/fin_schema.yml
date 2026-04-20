@@ -1,0 +1,283 @@
+version: 2
+
+models:
+  - name: dim_own_fund_period_type
+    description: "自有资金期间类型维度表。"
+    columns:
+      - name: period_type_id
+        tests:
+          - unique:
+              config:
+                severity: warn
+          - not_null:
+              config:
+                severity: warn
+
+  - name: dim_expense_category
+    description: "辅助余额费用类别维度表。"
+    columns:
+      - name: expense_category_id
+        tests:
+          - unique:
+              config:
+                severity: warn
+          - not_null:
+              config:
+                severity: warn
+
+  - name: dim_balance_direction
+    description: "个人辅助余额借贷方向维度表。"
+    columns:
+      - name: balance_direction_id
+        tests:
+          - unique:
+              config:
+                severity: warn
+          - not_null:
+              config:
+                severity: warn
+
+  - name: dim_personal_subject_category
+    description: "个人辅助余额科目类别维度表。"
+    columns:
+      - name: subject_category_id
+        tests:
+          - unique:
+              config:
+                severity: warn
+          - not_null:
+              config:
+                severity: warn
+
+  - name: dim_expense_code_prefix
+    description: "辅助余额科目编号前缀 → 费用类别映射表（subject_code 前 4 位）。"
+    columns:
+      - name: prefix
+        tests:
+          - unique:
+              config:
+                severity: warn
+          - not_null:
+              config:
+                severity: warn
+
+  - name: dim_personal_subject_code_prefix
+    description: "个人辅助余额科目编号前缀 → 科目类别映射表（subject_code 前 4 位）。"
+    columns:
+      - name: prefix
+        tests:
+          - unique:
+              config:
+                severity: warn
+          - not_null:
+              config:
+                severity: warn
+
+  - name: dim_year_period_suffix
+    description: "自有资金年度期间后缀 → period_type 映射表（年初/预计增加/预计使用/余额）。"
+    columns:
+      - name: suffix
+        tests:
+          - unique:
+              config:
+                severity: warn
+          - not_null:
+              config:
+                severity: warn
+      - name: period_type_code
+        tests:
+          - accepted_values:
+              arguments:
+                values: ['opening', 'increase', 'usage', 'balance']
+              config:
+                severity: warn
+
+  - name: biz_dwd_own_fund
+    description: "自有资金事实表：保留年初/增加/使用/余额四类期间明细并校验合计。"
+    columns:
+      - name: own_fund_id
+        tests:
+          - unique:
+              config:
+                severity: warn
+          - not_null:
+              config:
+                severity: warn
+      - name: period_year
+        tests:
+          - not_null:
+              config:
+                severity: warn
+      - name: period_type
+        tests:
+          - accepted_values:
+              arguments:
+                values: ['opening', 'increase', 'usage', 'balance']
+              config:
+                severity: warn
+
+  - name: biz_dwd_project_fund
+    description: "项目经费事实表：补全直接支出、总支出、执行率与剩余经费。"
+    columns:
+      - name: project_fund_id
+        tests:
+          - unique:
+              config:
+                severity: warn
+          - not_null:
+              config:
+                severity: warn
+      - name: project_id
+        tests:
+          - not_null:
+              config:
+                severity: warn
+
+  - name: biz_dwd_aux_balance
+    description: "辅助余额事实表：保留合同信息并补齐费用类别、合同标记和余额方向。"
+    columns:
+      - name: aux_balance_id
+        tests:
+          - unique:
+              config:
+                severity: warn
+          - not_null:
+              config:
+                severity: warn
+      - name: expense_category
+        tests:
+          - accepted_values:
+              arguments:
+                values: ['原材料/设备', '外协/服务', '折旧', '检测试验', '设计咨询', '租赁', '培训', '其他']
+              config:
+                severity: warn
+
+  - name: biz_dwd_aux_balance_personal
+    description: "个人辅助余额事实表：补齐借贷方向、余额绝对值和科目类别。"
+    columns:
+      - name: personal_balance_id
+        tests:
+          - unique:
+              config:
+                severity: warn
+          - not_null:
+              config:
+                severity: warn
+      - name: balance_direction
+        tests:
+          - accepted_values:
+              arguments:
+                values: ['debit', 'credit', 'zero']
+              config:
+                severity: warn
+      - name: subject_category
+        tests:
+          - accepted_values:
+              arguments:
+                values: ['其他应收-借款', '应付职工薪酬', '其他']
+              config:
+                severity: warn
+
+  - name: biz_dws_own_fund_yearly
+    description: "自有资金年度汇总表：按年汇总四类期间和四类基金余额。"
+    columns:
+      - name: period_year
+        tests:
+          - unique:
+              config:
+                severity: warn
+          - not_null:
+              config:
+                severity: warn
+
+  - name: biz_dws_project_fund_summary
+    description: "项目经费主题汇总表：沉淀整体金额汇总、周期范围与超额执行计数。"
+    columns:
+      - name: summary_scope
+        tests:
+          - unique:
+              config:
+                severity: warn
+          - not_null:
+              config:
+                severity: warn
+
+  - name: biz_dws_aux_balance_by_dept
+    description: "辅助余额部门汇总表：按部门聚合余额、合同数和科目数。"
+    columns:
+      - name: dept_name
+        tests:
+          - unique:
+              config:
+                severity: warn
+          - not_null:
+              config:
+                severity: warn
+
+  - name: biz_dws_aux_balance_personal_by_dept
+    description: "个人辅助余额部门汇总表：按部门聚合净余额、借方、贷方和人员规模。"
+    columns:
+      - name: employee_dept
+        tests:
+          - unique:
+              config:
+                severity: warn
+          - not_null:
+              config:
+                severity: warn
+
+  - name: biz_ads_own_fund_kpi
+    description: "自有资金 KPI 表：按年度输出总额、使用率、增长率与告警等级。"
+    columns:
+      - name: period_year
+        tests:
+          - unique:
+              config:
+                severity: warn
+          - not_null:
+              config:
+                severity: warn
+      - name: usage_rate_level
+        tests:
+          - accepted_values:
+              arguments:
+                values: ['healthy', 'warning', 'danger']
+              config:
+                severity: warn
+      - name: growth_direction
+        tests:
+          - accepted_values:
+              arguments:
+                values: ['growth', 'decline', 'flat']
+              config:
+                severity: warn
+
+  - name: biz_ads_project_fund_kpi
+    description: "项目经费 KPI 表：输出大屏总览所需的整体金额与加权执行率。"
+    columns:
+      - name: summary_scope
+        tests:
+          - unique:
+              config:
+                severity: warn
+          - not_null:
+              config:
+                severity: warn
+
+  - name: biz_ads_aux_balance_kpi
+    description: "辅助余额 KPI 表：输出余额总览、部门数、合同数和科目数。"
+    columns:
+      - name: total_balance
+        tests:
+          - not_null:
+              config:
+                severity: warn
+
+  - name: biz_ads_aux_balance_personal_kpi
+    description: "个人辅助余额 KPI 表：输出净余额、借方贷方合计和人员规模。"
+    columns:
+      - name: net_balance
+        tests:
+          - not_null:
+              config:
+                severity: warn

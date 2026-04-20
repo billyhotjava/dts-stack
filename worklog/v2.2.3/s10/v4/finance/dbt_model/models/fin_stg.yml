@@ -1,0 +1,70 @@
+version: 2
+
+models:
+  - name: stg_fin__own_fund
+    description: "自有资金 ODS 结构化层：仅做类型转换 + 占位符收敛 + 字段改名，不含业务派生。"
+    columns:
+      - name: source_row_id
+        tests:
+          - unique:
+              config:
+                severity: warn
+          - not_null:
+              config:
+                severity: warn
+      - name: year_period
+        tests:
+          - not_null:
+              config:
+                severity: warn
+
+  - name: stg_fin__project_fund
+    description: "项目经费 ODS 结构化层：仅做类型转换与占位符收敛。周期字符串解析下沉 DWD。"
+    columns:
+      - name: source_row_id
+        tests:
+          - unique:
+              config:
+                severity: warn
+          - not_null:
+              config:
+                severity: warn
+      - name: project_id
+        tests:
+          - not_null:
+              config:
+                severity: warn
+
+  - name: stg_fin__aux_balance
+    description: "辅助余额 ODS 结构化层：仅做类型转换 + 占位符收敛。费用分类派生下沉 DWD。"
+    columns:
+      - name: source_row_id
+        tests:
+          - unique:
+              config:
+                severity: warn
+          - not_null:
+              config:
+                severity: warn
+      - name: subject_code
+        tests:
+          - not_null:
+              config:
+                severity: warn
+
+  - name: stg_fin__aux_balance_personal
+    description: "个人辅助余额 ODS 结构化层：仅做类型转换与占位符收敛。借贷方向与科目类别下沉 DWD。"
+    columns:
+      - name: source_row_id
+        tests:
+          - unique:
+              config:
+                severity: warn
+          - not_null:
+              config:
+                severity: warn
+      - name: subject_code
+        tests:
+          - not_null:
+              config:
+                severity: warn

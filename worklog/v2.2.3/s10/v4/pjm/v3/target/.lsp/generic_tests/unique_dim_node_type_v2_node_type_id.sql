@@ -1,2 +1,0 @@
-{{ config({"severity":"Warn","tags":[]}) }}
-{{ test_unique(column_name="node_type_id", model=get_where_subquery(ref('dim_node_type_v2'))) }}

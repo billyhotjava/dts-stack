@@ -1,2 +1,0 @@
-{{ config({"severity":"Warn","tags":[]}) }}
-{{ test_unique(column_name="quality_category_id", model=get_where_subquery(ref('dim_quality_category_v2'))) }}
