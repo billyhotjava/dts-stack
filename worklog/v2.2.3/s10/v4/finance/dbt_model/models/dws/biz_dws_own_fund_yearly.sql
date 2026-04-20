@@ -1,78 +1,80 @@
 {{ config(materialized='table', tags=['finance', 'biz', 'dws', 'own-fund']) }}
 
+-- 年度基金汇总表：按 年度 × 基金类别 透视
+-- 派生: derived_balance = opening + increase - usage
+-- 同时产出 fund_category='全部' 的年度总量行，便于 ADS 直接消费
+
 WITH base AS (
-  SELECT *
-  FROM {{ ref('biz_dwd_own_fund') }}
+  SELECT * FROM {{ ref('biz_dwd_own_fund') }}
 ),
-yearly AS (
+pivot_by_category AS (
   SELECT
-    period_year,
-    count(*) AS record_count,
-    count(DISTINCT period_type) AS period_type_count,
-    coalesce(sum(CASE WHEN period_type = 'opening' THEN career_fund ELSE 0 END), 0)::numeric(15,2) AS opening_career,
-    coalesce(sum(CASE WHEN period_type = 'opening' THEN deprec_fund ELSE 0 END), 0)::numeric(15,2) AS opening_deprec,
-    coalesce(sum(CASE WHEN period_type = 'opening' THEN welfare_fund ELSE 0 END), 0)::numeric(15,2) AS opening_welfare,
-    coalesce(sum(CASE WHEN period_type = 'opening' THEN safety_fund ELSE 0 END), 0)::numeric(15,2) AS opening_safety,
-    coalesce(sum(CASE WHEN period_type = 'increase' THEN career_fund ELSE 0 END), 0)::numeric(15,2) AS increase_career,
-    coalesce(sum(CASE WHEN period_type = 'increase' THEN deprec_fund ELSE 0 END), 0)::numeric(15,2) AS increase_deprec,
-    coalesce(sum(CASE WHEN period_type = 'increase' THEN welfare_fund ELSE 0 END), 0)::numeric(15,2) AS increase_welfare,
-    coalesce(sum(CASE WHEN period_type = 'increase' THEN safety_fund ELSE 0 END), 0)::numeric(15,2) AS increase_safety,
-    coalesce(sum(CASE WHEN period_type = 'usage' THEN career_fund ELSE 0 END), 0)::numeric(15,2) AS usage_career,
-    coalesce(sum(CASE WHEN period_type = 'usage' THEN deprec_fund ELSE 0 END), 0)::numeric(15,2) AS usage_deprec,
-    coalesce(sum(CASE WHEN period_type = 'usage' THEN welfare_fund ELSE 0 END), 0)::numeric(15,2) AS usage_welfare,
-    coalesce(sum(CASE WHEN period_type = 'usage' THEN safety_fund ELSE 0 END), 0)::numeric(15,2) AS usage_safety,
-    coalesce(sum(CASE WHEN period_type = 'balance' THEN career_fund ELSE 0 END), 0)::numeric(15,2) AS career_balance,
-    coalesce(sum(CASE WHEN period_type = 'balance' THEN deprec_fund ELSE 0 END), 0)::numeric(15,2) AS deprec_balance,
-    coalesce(sum(CASE WHEN period_type = 'balance' THEN welfare_fund ELSE 0 END), 0)::numeric(15,2) AS welfare_balance,
-    coalesce(sum(CASE WHEN period_type = 'balance' THEN safety_fund ELSE 0 END), 0)::numeric(15,2) AS safety_balance,
-    coalesce(sum(CASE WHEN period_type = 'opening' THEN total ELSE 0 END), 0)::numeric(15,2) AS opening_total,
-    coalesce(sum(CASE WHEN period_type = 'increase' THEN total ELSE 0 END), 0)::numeric(15,2) AS increase_total,
-    coalesce(sum(CASE WHEN period_type = 'usage' THEN total ELSE 0 END), 0)::numeric(15,2) AS usage_total,
-    coalesce(sum(CASE WHEN period_type = 'balance' THEN total ELSE 0 END), 0)::numeric(15,2) AS balance_total,
-    bool_and(is_total_balanced) AS is_total_balanced
+    year_num,
+    fund_category_code,
+    fund_category_label,
+    fund_category_sort,
+    coalesce(sum(CASE WHEN fund_source_code = '年初'     THEN amount ELSE 0 END), 0)::numeric(15,2) AS opening_amount,
+    coalesce(sum(CASE WHEN fund_source_code = '预计增加' THEN amount ELSE 0 END), 0)::numeric(15,2) AS increase_amount,
+    coalesce(sum(CASE WHEN fund_source_code = '预计使用' THEN amount ELSE 0 END), 0)::numeric(15,2) AS usage_amount,
+    count(DISTINCT fund_source_code) AS source_count,
+    count(*) AS record_count
   FROM base
-  GROUP BY period_year
+  GROUP BY year_num, fund_category_code, fund_category_label, fund_category_sort
+),
+year_totals AS (
+  SELECT
+    year_num,
+    '全部'::text AS fund_category_code,
+    '全部基金'::text AS fund_category_label,
+    99::int AS fund_category_sort,
+    coalesce(sum(opening_amount), 0)::numeric(15,2) AS opening_amount,
+    coalesce(sum(increase_amount), 0)::numeric(15,2) AS increase_amount,
+    coalesce(sum(usage_amount), 0)::numeric(15,2) AS usage_amount,
+    max(source_count) AS source_count,
+    sum(record_count) AS record_count
+  FROM pivot_by_category
+  GROUP BY year_num
+),
+unioned AS (
+  SELECT * FROM pivot_by_category
+  UNION ALL
+  SELECT * FROM year_totals
 )
 
 SELECT
-  period_year,
+  year_num,
+  fund_category_code,
+  fund_category_label,
+  fund_category_sort,
+
+  opening_amount,
+  increase_amount,
+  usage_amount,
+  (opening_amount + increase_amount - usage_amount)::numeric(15,2) AS derived_balance,
+
+  source_count,
   record_count,
-  period_type_count,
-  opening_career,
-  opening_deprec,
-  opening_welfare,
-  opening_safety,
-  increase_career,
-  increase_deprec,
-  increase_welfare,
-  increase_safety,
-  usage_career,
-  usage_deprec,
-  usage_welfare,
-  usage_safety,
-  career_balance,
-  deprec_balance,
-  welfare_balance,
-  safety_balance,
-  opening_total,
-  increase_total,
-  usage_total,
-  balance_total,
-  (opening_total + increase_total - usage_total - balance_total)::numeric(15,2) AS reconciliation_gap,
-  is_total_balanced,
+
   CASE
-    WHEN period_type_count = 4 THEN true
+    WHEN source_count = 3 THEN true
     ELSE false
-  END AS is_complete_year,
+  END AS is_complete_sources,
+
   CASE
-    WHEN opening_total + increase_total > 0 THEN
-      round(usage_total * 100.0 / (opening_total + increase_total), 2)
+    WHEN (opening_amount + increase_amount) > 0 THEN
+      round(usage_amount * 100.0 / (opening_amount + increase_amount), 2)
     ELSE 0
   END AS usage_rate,
+
   CASE
-    WHEN opening_total > 0 THEN
-      round((balance_total - opening_total) * 100.0 / opening_total, 2)
+    WHEN opening_amount > 0 THEN
+      round(
+        ((opening_amount + increase_amount - usage_amount) - opening_amount) * 100.0 / opening_amount,
+        2
+      )
     ELSE 0
   END AS growth_rate,
+
   now() AS etl_time
-FROM yearly
+FROM unioned
+ORDER BY year_num, fund_category_sort

@@ -7,16 +7,16 @@ sources:
     tables:
       - name: "own_fund"
         identifier: "ods_finance_own_fund"
-        description: "自有资金表，按年度期间记录事业基金、折旧基金、福利基金、安全生产基金"
+        description: "年度基金表（长表结构）。每行 = 年度 × 基金来源(年初/预计增加/预计使用) × 基金类别(事业/职工福利/安全生产)。年末余额由 DWS 派生 = 年初 + 预计增加 − 预计使用。"
 
       - name: "project_fund"
         identifier: "ods_finance_project_fund"
-        description: "项目经费表，按项目记录总经费、直接成本控制数、间接费用及执行率"
+        description: "项目经费表。含行号、项目编号、研制周期、总经费、是否重大项目、研究室、项目状态、直接/间接口径、已收/待收款项。"
 
       - name: "aux_balance"
         identifier: "ods_finance_aux_balance"
-        description: "辅助余额表，按科目/部门/合同记录辅助核算余额"
+        description: "辅助余额表-合同。按科目/部门/合同记录辅助核算余额。"
 
       - name: "aux_balance_personal"
         identifier: "ods_finance_aux_balance_personal"
-        description: "个人辅助余额表，按科目/部门/职工记录个人辅助核算余额"
+        description: "辅助余额表-个人维度。按科目/部门/职工记录个人辅助核算余额。"

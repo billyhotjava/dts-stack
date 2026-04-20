@@ -1,77 +1,76 @@
 {{ config(materialized='table', tags=['finance', 'biz', 'dwd', 'own-fund']) }}
 
+-- 年度基金事实表：长表结构
+-- 每行 = (年度, 基金来源, 基金类别, 金额)
+-- 基金来源: 年初 / 预计增加 / 预计使用（ODS 不含"余额"，年末余额由 DWS 派生）
+-- 基金类别: 事业基金 / 职工福利基金 / 安全生产基金
+
 WITH stg AS (
   SELECT * FROM {{ ref('stg_fin__own_fund') }}
 ),
-normalized AS (
+joined AS (
   SELECT
     s.*,
-    substring(s.year_period from '^\d{4}')::int AS period_year,
-    ys.period_type_code AS period_type,
-    ys.sort_order AS period_sort
+    fs.fund_source_id,
+    fs.code        AS fund_source_code,
+    fs.label       AS fund_source_label,
+    fs.sort_order  AS fund_source_sort,
+    fs.is_opening,
+    fs.is_increase,
+    fs.is_usage,
+    fc.fund_category_id,
+    fc.code        AS fund_category_code,
+    fc.label       AS fund_category_label,
+    fc.sort_order  AS fund_category_sort,
+    fc.is_career,
+    fc.is_welfare,
+    fc.is_safety
   FROM stg s
-  LEFT JOIN {{ ref('dim_year_period_suffix') }} ys
-    ON s.year_period LIKE '%' || ys.suffix
-),
-derived AS (
-  SELECT
-    n.*,
-    (
-      coalesce(n.career_fund, 0)
-      + coalesce(n.deprec_fund, 0)
-      + coalesce(n.welfare_fund, 0)
-      + coalesce(n.safety_fund, 0)
-    )::numeric(15,2) AS total_recalc,
-    (
-      coalesce(n.total, 0)
-      - (
-        coalesce(n.career_fund, 0)
-        + coalesce(n.deprec_fund, 0)
-        + coalesce(n.welfare_fund, 0)
-        + coalesce(n.safety_fund, 0)
-      )
-    )::numeric(15,2) AS total_gap,
-    CASE
-      WHEN n.period_type = 'balance' THEN true
-      ELSE false
-    END AS is_balance_row
-  FROM normalized n
+  LEFT JOIN {{ ref('dim_fund_source') }} fs
+    ON fs.code = s.fund_source
+  LEFT JOIN {{ ref('dim_fund_category') }} fc
+    ON fc.code = s.fund_category
 )
 
 SELECT
   concat(
     'own_fund:',
-    coalesce(d.period_year::text, 'unknown'),
+    coalesce(year_num::text, 'unknown'),
     ':',
-    coalesce(d.period_type, 'unknown')
+    coalesce(fund_source_code, 'unknown'),
+    ':',
+    coalesce(fund_category_code, 'unknown')
   ) AS own_fund_id,
 
-  d.source_row_id,
-  d.source_table,
-  d.year_period_raw,
-  d.year_period,
-  d.period_year,
+  source_row_id,
+  source_table,
 
-  d.period_type,
-  pt.period_type_id,
-  pt.label AS period_type_label,
-  d.period_sort,
-  d.is_balance_row,
+  year_num,
 
-  d.career_fund,
-  d.career_note,
-  d.deprec_fund,
-  d.deprec_note,
-  d.welfare_fund,
-  d.safety_fund,
-  d.total,
-  d.total_recalc,
-  d.total_gap,
-  CASE WHEN abs(d.total_gap) <= 0.01 THEN true ELSE false END AS is_total_balanced,
+  fund_source_raw,
+  fund_source,
+  fund_source_id,
+  fund_source_code,
+  fund_source_label,
+  fund_source_sort,
+  is_opening,
+  is_increase,
+  is_usage,
+
+  fund_category_raw,
+  fund_category,
+  fund_category_id,
+  fund_category_code,
+  fund_category_label,
+  fund_category_sort,
+  is_career,
+  is_welfare,
+  is_safety,
+
+  amount,
+  note,
 
   now() AS etl_time
-FROM derived d
-LEFT JOIN {{ ref('dim_own_fund_period_type') }} pt
-  ON pt.code = d.period_type
-WHERE d.period_year IS NOT NULL
-  AND d.period_type IS NOT NULL
+FROM joined
+WHERE fund_source_code IS NOT NULL
+  AND fund_category_code IS NOT NULL

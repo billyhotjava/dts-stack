@@ -1,15 +1,61 @@
 version: 2
 
 models:
-  - name: dim_own_fund_period_type
-    description: "自有资金期间类型维度表。"
+  # ─── 维度字典 ─────────────────────────────────────────
+  - name: dim_fund_source
+    description: "基金来源维度字典（年初 / 预计增加 / 预计使用）。"
     columns:
-      - name: period_type_id
+      - name: fund_source_id
         tests:
           - unique:
               config:
                 severity: warn
           - not_null:
+              config:
+                severity: warn
+      - name: code
+        tests:
+          - accepted_values:
+              arguments:
+                values: ['年初', '预计增加', '预计使用']
+              config:
+                severity: warn
+
+  - name: dim_fund_category
+    description: "基金类别维度字典（事业基金 / 职工福利基金 / 安全生产基金）。"
+    columns:
+      - name: fund_category_id
+        tests:
+          - unique:
+              config:
+                severity: warn
+          - not_null:
+              config:
+                severity: warn
+      - name: code
+        tests:
+          - accepted_values:
+              arguments:
+                values: ['事业基金', '职工福利基金', '安全生产基金']
+              config:
+                severity: warn
+
+  - name: dim_project_status
+    description: "项目状态维度字典（在研 / 支出待处理 / 已完成待收款 / 已完成审计）。"
+    columns:
+      - name: project_status_id
+        tests:
+          - unique:
+              config:
+                severity: warn
+          - not_null:
+              config:
+                severity: warn
+      - name: code
+        tests:
+          - accepted_values:
+              arguments:
+                values: ['在研', '支出待处理', '已完成待收款', '已完成审计']
               config:
                 severity: warn
 
@@ -73,27 +119,9 @@ models:
               config:
                 severity: warn
 
-  - name: dim_year_period_suffix
-    description: "自有资金年度期间后缀 → period_type 映射表（年初/预计增加/预计使用/余额）。"
-    columns:
-      - name: suffix
-        tests:
-          - unique:
-              config:
-                severity: warn
-          - not_null:
-              config:
-                severity: warn
-      - name: period_type_code
-        tests:
-          - accepted_values:
-              arguments:
-                values: ['opening', 'increase', 'usage', 'balance']
-              config:
-                severity: warn
-
+  # ─── DWD 事实 ─────────────────────────────────────────
   - name: biz_dwd_own_fund
-    description: "自有资金事实表：保留年初/增加/使用/余额四类期间明细并校验合计。"
+    description: "年度基金事实表（长表）：按 年度 × 基金来源 × 基金类别 记录金额；年末余额由 DWS 派生。"
     columns:
       - name: own_fund_id
         tests:
@@ -103,21 +131,28 @@ models:
           - not_null:
               config:
                 severity: warn
-      - name: period_year
+      - name: year_num
         tests:
           - not_null:
               config:
                 severity: warn
-      - name: period_type
+      - name: fund_source_code
         tests:
           - accepted_values:
               arguments:
-                values: ['opening', 'increase', 'usage', 'balance']
+                values: ['年初', '预计增加', '预计使用']
+              config:
+                severity: warn
+      - name: fund_category_code
+        tests:
+          - accepted_values:
+              arguments:
+                values: ['事业基金', '职工福利基金', '安全生产基金']
               config:
                 severity: warn
 
   - name: biz_dwd_project_fund
-    description: "项目经费事实表：补全直接支出、总支出、执行率与剩余经费。"
+    description: "项目经费事实表：补全 direct_spent 直读、总支出、执行率、已收/待收口径，关联项目状态字典。"
     columns:
       - name: project_fund_id
         tests:
@@ -178,26 +213,26 @@ models:
               config:
                 severity: warn
 
+  # ─── DWS 汇总 ─────────────────────────────────────────
   - name: biz_dws_own_fund_yearly
-    description: "自有资金年度汇总表：按年汇总四类期间和四类基金余额。"
+    description: "年度基金汇总表：按 年度 × 基金类别 透视 opening/increase/usage，派生 year_end_balance。同时产出 fund_category='全部' 的年度合计。"
     columns:
-      - name: period_year
+      - name: year_num
         tests:
-          - unique:
-              config:
-                severity: warn
           - not_null:
               config:
                 severity: warn
 
   - name: biz_dws_project_fund_summary
-    description: "项目经费主题汇总表：沉淀整体金额汇总、周期范围与超额执行计数。"
+    description: "项目经费汇总表：多 scope（all_projects / by_major / by_status），含已收/待收/剩余金额与项目计数。"
     columns:
       - name: summary_scope
         tests:
-          - unique:
+          - not_null:
               config:
                 severity: warn
+      - name: scope_key
+        tests:
           - not_null:
               config:
                 severity: warn
@@ -226,14 +261,12 @@ models:
               config:
                 severity: warn
 
+  # ─── ADS KPI ──────────────────────────────────────────
   - name: biz_ads_own_fund_kpi
-    description: "自有资金 KPI 表：按年度输出总额、使用率、增长率与告警等级。"
+    description: "年度基金 KPI：按 年度 × 基金类别 输出金额、年末余额、使用率、增长率、告警等级。"
     columns:
-      - name: period_year
+      - name: year_num
         tests:
-          - unique:
-              config:
-                severity: warn
           - not_null:
               config:
                 severity: warn
@@ -253,13 +286,15 @@ models:
                 severity: warn
 
   - name: biz_ads_project_fund_kpi
-    description: "项目经费 KPI 表：输出大屏总览所需的整体金额与加权执行率。"
+    description: "项目经费 KPI：按 summary_scope × scope_key 输出金额汇总、加权执行率、已收/待收/剩余占比、项目计数。"
     columns:
       - name: summary_scope
         tests:
-          - unique:
+          - not_null:
               config:
                 severity: warn
+      - name: scope_key
+        tests:
           - not_null:
               config:
                 severity: warn

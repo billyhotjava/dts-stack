@@ -2,7 +2,7 @@ version: 2
 
 models:
   - name: stg_fin__own_fund
-    description: "自有资金 ODS 结构化层：仅做类型转换 + 占位符收敛 + 字段改名，不含业务派生。"
+    description: "年度基金 ODS 结构化层：长表（年度×基金来源×基金类别）。仅做类型转换 + 占位符收敛，不含业务派生。"
     columns:
       - name: source_row_id
         tests:
@@ -12,9 +12,29 @@ models:
           - not_null:
               config:
                 severity: warn
-      - name: year_period
+      - name: year_num
         tests:
           - not_null:
+              config:
+                severity: warn
+      - name: fund_source
+        tests:
+          - not_null:
+              config:
+                severity: warn
+          - accepted_values:
+              arguments:
+                values: ['年初', '预计增加', '预计使用']
+              config:
+                severity: warn
+      - name: fund_category
+        tests:
+          - not_null:
+              config:
+                severity: warn
+          - accepted_values:
+              arguments:
+                values: ['事业基金', '职工福利基金', '安全生产基金']
               config:
                 severity: warn
 

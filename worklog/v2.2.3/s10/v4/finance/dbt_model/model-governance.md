@@ -47,13 +47,14 @@ ODS -> STG -> DWD -> DWS -> ADS
 | Prefix / Suffix 映射 | `dim_*_code_prefix` / `dim_*_suffix` | 科目前缀或年度后缀 → canonical code |
 
 当前 Finance dim 清单：
+- `dim_fund_source`（年初/预计增加/预计使用）
+- `dim_fund_category`（事业基金/职工福利基金/安全生产基金）
+- `dim_project_status`（在研/支出待处理/已完成待收款/已完成审计）
 - `dim_balance_direction`（借方/贷方/零）
 - `dim_expense_category`（8 类费用）
-- `dim_own_fund_period_type`（年初/增加/使用/余额）
 - `dim_personal_subject_category`（借款/薪酬/其他）
 - `dim_expense_code_prefix`（`5001` → 原材料/设备 等）
 - `dim_personal_subject_code_prefix`（`1122` → 借款 等）
-- `dim_year_period_suffix`（`年初` → opening 等）
 
 ### 3.2 biz_dwd 流水线模板（三段论）
 
@@ -89,8 +90,8 @@ stg → normalized (prefix/suffix join 归一化) → derived (跨列派生) →
 - `stg_fin__aux_balance_personal`
 
 ### DWD
-- 维度：`dim_balance_direction` / `dim_expense_category` / `dim_own_fund_period_type` / `dim_personal_subject_category`
-- 映射：`dim_expense_code_prefix` / `dim_personal_subject_code_prefix` / `dim_year_period_suffix`
+- 维度：`dim_fund_source` / `dim_fund_category` / `dim_project_status` / `dim_balance_direction` / `dim_expense_category` / `dim_personal_subject_category`
+- 映射：`dim_expense_code_prefix` / `dim_personal_subject_code_prefix`
 - 事实：`biz_dwd_own_fund` / `biz_dwd_project_fund` / `biz_dwd_aux_balance` / `biz_dwd_aux_balance_personal`
 
 ### DWS
