@@ -1,0 +1,2 @@
+{{ config({"severity":"Warn","tags":[]}) }}
+{{ test_accepted_values(column_name="completion_status", model=get_where_subquery(ref('biz_dwd_project_node_v2')), values=["正常待完成","按时完成","超期已完成已变更","超期已完成未变更","不正常待变更","超期未完成未变更","超期未完成已变更"]) }}

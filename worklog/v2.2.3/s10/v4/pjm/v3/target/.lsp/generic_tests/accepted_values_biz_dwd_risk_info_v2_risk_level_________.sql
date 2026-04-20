@@ -1,0 +1,2 @@
+{{ config({"severity":"Warn","tags":[]}) }}
+{{ test_accepted_values(column_name="risk_level", model=get_where_subquery(ref('biz_dwd_risk_info_v2')), values=["高","中","低"]) }}

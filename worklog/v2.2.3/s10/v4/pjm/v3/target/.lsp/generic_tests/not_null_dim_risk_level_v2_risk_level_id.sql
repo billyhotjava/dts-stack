@@ -1,0 +1,2 @@
+{{ config({"severity":"Warn","tags":[]}) }}
+{{ test_not_null(column_name="risk_level_id", model=get_where_subquery(ref('dim_risk_level_v2'))) }}

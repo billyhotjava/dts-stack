@@ -1,0 +1,115 @@
+==================== 2026-04-20T03:06:03.518031Z | a95d8016-a977-462f-b2bd-c759dff2de67 ====================
+03:06:03.518062 [info ]: Starting dbt LSP server
+03:06:03.518072 [info ]: Connecting to LSP client on port 8001
+03:06:03.518146 [info ]: Successfully connected to LSP client
+03:06:03.518152 [info ]: Creating LSP service...
+03:06:03.565757 [info ]: Creating LSP server...
+03:06:03.565774 [info ]: Starting LSP server...
+03:06:03.573627 [info ]: Loading ../../../../../services/dts-dbt/profiles/profiles.yml
+03:06:03.657812 [info ]: Started loading project
+03:06:03.657991 [info ]: Loading ../../../../../services/dts-dbt/profiles/profiles.yml
+03:06:03.662159 [debug]:    Started loading packages
+03:06:03.662797 [debug]:     Loaded [  0.00s] packages
+03:06:03.663272 [info ]: Started parsing
+03:06:03.696382 [info ]: Finished loading project [  0.04s]
+03:06:03.698156 [debug]: Finished parsing models/pm_schema_v2.yml [  0.00s]
+03:06:03.698543 [debug]: Finished parsing models/pm_sources_v2.yml [  0.00s]
+03:06:03.698862 [debug]: Finished parsing models/pm_stg_v2.yml [  0.00s]
+03:06:03.702122 [debug]: Finished parsing models/ads/biz_ads_composite_derived_v2.sql [  0.00s]
+03:06:03.702617 [debug]: Finished parsing models/ads/biz_ads_progress_derived_v2.sql [  0.00s]
+03:06:03.703215 [debug]: Finished parsing models/ads/biz_ads_progress_kpi_v2.sql [  0.00s]
+03:06:03.703772 [debug]: Finished parsing models/ads/biz_ads_quality_derived_v2.sql [  0.00s]
+03:06:03.704262 [debug]: Finished parsing models/ads/biz_ads_quality_kpi_v2.sql [  0.00s]
+03:06:03.704708 [debug]: Finished parsing models/ads/biz_ads_risk_kpi_v2.sql [  0.00s]
+03:06:03.705276 [debug]: Finished parsing models/ads/biz_ads_tech_state_derived_v2.sql [  0.00s]
+03:06:03.705947 [debug]: Finished parsing models/ads/biz_ads_tech_state_kpi_v2.sql [  0.00s]
+03:06:03.706818 [debug]: Finished parsing models/dwd/biz_dwd_project_node_v2.sql [  0.00s]
+03:06:03.707362 [debug]: Finished parsing models/dwd/biz_dwd_quality_issue_v2.sql [  0.00s]
+03:06:03.707874 [debug]: Finished parsing models/dwd/biz_dwd_risk_info_v2.sql [  0.00s]
+03:06:03.708341 [debug]: Finished parsing models/dwd/biz_dwd_tech_state_v2.sql [  0.00s]
+03:06:03.708803 [debug]: Finished parsing models/dwd/dim_change_category_v2.sql [  0.00s]
+03:06:03.709203 [debug]: Finished parsing models/dwd/dim_completion_status_v2.sql [  0.00s]
+03:06:03.709573 [debug]: Finished parsing models/dwd/dim_node_type_v2.sql [  0.00s]
+03:06:03.709956 [debug]: Finished parsing models/dwd/dim_quality_category_v2.sql [  0.00s]
+03:06:03.710353 [debug]: Finished parsing models/dwd/dim_quality_status_v2.sql [  0.00s]
+03:06:03.710713 [debug]: Finished parsing models/dwd/dim_risk_category_v2.sql [  0.00s]
+03:06:03.711093 [debug]: Finished parsing models/dwd/dim_risk_level_v2.sql [  0.00s]
+03:06:03.711449 [debug]: Finished parsing models/dwd/dim_signature_status_v2.sql [  0.00s]
+03:06:03.711884 [debug]: Finished parsing models/dws/biz_dws_progress_monthly_v2.sql [  0.00s]
+03:06:03.712323 [debug]: Finished parsing models/dws/biz_dws_quality_monthly_v2.sql [  0.00s]
+03:06:03.712686 [debug]: Finished parsing models/dws/biz_dws_risk_monthly_v2.sql [  0.00s]
+03:06:03.713159 [debug]: Finished parsing models/dws/biz_dws_tech_state_monthly_v2.sql [  0.00s]
+03:06:03.714638 [debug]: Finished parsing models/stg/stg_pm__project_subject_domain_v2.sql [  0.00s]
+03:06:03.716153 [debug]: Finished parsing models/stg/stg_pm__quality_issue_v2.sql [  0.00s]
+03:06:03.718805 [debug]: Finished parsing models/stg/stg_pm__risk_info_v2.sql [  0.00s]
+03:06:03.736732 [debug]: Finished parsing models/stg/stg_pm__tech_state_v2.sql [  0.02s]
+03:06:03.737759 [debug]: Finished parsing target/generic_tests/not_null_biz_dwd_project_node_v2_plan_date.sql [  0.00s]
+03:06:03.737775 [debug]: Finished parsing target/generic_tests/unique_stg_pm__risk_info_v2_source_row_id.sql [  0.00s]
+03:06:03.737794 [debug]: Finished parsing target/generic_tests/not_null_biz_dwd_quality_issue_v2_issue_month.sql [  0.00s]
+03:06:03.737805 [debug]: Finished parsing target/generic_tests/accepted_values_biz_dwd_risk_i_8a66c18523f776c3b06aaef326a6aea2.sql [  0.00s]
+03:06:03.737879 [debug]: Finished parsing target/generic_tests/unique_dim_change_category_v2_change_category_id.sql [  0.00s]
+03:06:03.737903 [debug]: Finished parsing target/generic_tests/unique_dim_risk_level_v2_risk_level_id.sql [  0.00s]
+03:06:03.738061 [debug]: Finished parsing target/generic_tests/unique_stg_pm__project_subject_domain_v2_source_row_id.sql [  0.00s]
+03:06:03.738438 [debug]: Finished parsing target/generic_tests/unique_dim_node_type_v2_node_type_id.sql [  0.00s]
+03:06:03.738449 [debug]: Finished parsing target/generic_tests/not_null_biz_dwd_tech_state_v2_project_no.sql [  0.00s]
+03:06:03.738473 [debug]: Finished parsing target/generic_tests/accepted_values_biz_dwd_projec_c765a464de91b228b9949010c3db001e.sql [  0.00s]
+03:06:03.738486 [debug]: Finished parsing target/generic_tests/not_null_biz_dws_progress_monthly_v2_plan_month.sql [  0.00s]
+03:06:03.738496 [debug]: Finished parsing target/generic_tests/not_null_biz_dwd_risk_info_v2_risk_submit_date.sql [  0.00s]
+03:06:03.738505 [debug]: Finished parsing target/generic_tests/accepted_values_biz_dwd_qualit_c0ce69954241c7dd96e3503a45d81948.sql [  0.00s]
+03:06:03.738510 [debug]: Finished parsing target/generic_tests/unique_dim_quality_status_v2_quality_status_id.sql [  0.00s]
+03:06:03.738981 [debug]: Finished parsing target/generic_tests/not_null_biz_dwd_project_node_v2_plan_month.sql [  0.00s]
+03:06:03.738999 [debug]: Finished parsing target/generic_tests/not_null_biz_dwd_quality_issue_v2_project_no.sql [  0.00s]
+03:06:03.739043 [debug]: Finished parsing target/generic_tests/not_null_stg_pm__risk_info_v2_source_row_id.sql [  0.00s]
+03:06:03.739079 [debug]: Finished parsing target/generic_tests/not_null_dim_change_category_v2_change_category_id.sql [  0.00s]
+03:06:03.739435 [debug]: Finished parsing target/generic_tests/not_null_dim_node_type_v2_node_type_id.sql [  0.00s]
+03:06:03.739450 [debug]: Finished parsing target/generic_tests/unique_biz_dwd_risk_info_v2_risk_id.sql [  0.00s]
+03:06:03.739463 [debug]: Finished parsing target/generic_tests/not_null_stg_pm__project_subject_domain_v2_source_row_id.sql [  0.00s]
+03:06:03.739481 [debug]: Finished parsing target/generic_tests/not_null_dim_risk_level_v2_risk_level_id.sql [  0.00s]
+03:06:03.740072 [debug]: Finished parsing target/generic_tests/unique_dim_quality_category_v2_quality_category_id.sql [  0.00s]
+03:06:03.740122 [debug]: Finished parsing target/generic_tests/unique_stg_pm__tech_state_v2_source_row_id.sql [  0.00s]
+03:06:03.740124 [debug]: Finished parsing target/generic_tests/not_null_biz_dwd_project_node_v2_project_no.sql [  0.00s]
+03:06:03.740124 [debug]: Finished parsing target/generic_tests/not_null_biz_dwd_risk_info_v2_risk_id.sql [  0.00s]
+03:06:03.740137 [debug]: Finished parsing target/generic_tests/not_null_biz_dwd_quality_issue_v2_issue_date.sql [  0.00s]
+03:06:03.740154 [debug]: Finished parsing target/generic_tests/unique_dim_completion_status_v2_completion_status_id.sql [  0.00s]
+03:06:03.740168 [debug]: Finished parsing target/generic_tests/unique_dim_signature_status_v2_signature_status_id.sql [  0.00s]
+03:06:03.740177 [debug]: Finished parsing target/generic_tests/not_null_biz_dws_quality_monthly_v2_period_month.sql [  0.00s]
+03:06:03.740229 [debug]: Finished parsing target/generic_tests/accepted_values_biz_dwd_quality_issue_v2_status____________.sql [  0.00s]
+03:06:03.740236 [debug]: Finished parsing target/generic_tests/unique_stg_pm__quality_issue_v2_source_row_id.sql [  0.00s]
+03:06:03.740404 [debug]: Finished parsing target/generic_tests/not_null_biz_dwd_risk_info_v2_submit_month.sql [  0.00s]
+03:06:03.740480 [debug]: Finished parsing target/generic_tests/not_null_biz_dwd_tech_state_v2_submit_month.sql [  0.00s]
+03:06:03.740572 [debug]: Finished parsing target/generic_tests/unique_biz_dwd_project_node_v2_node_id.sql [  0.00s]
+03:06:03.740975 [debug]: Finished parsing target/generic_tests/accepted_values_biz_dwd_project_node_v2_risk_level_________.sql [  0.00s]
+03:06:03.741059 [debug]: Finished parsing target/generic_tests/accepted_values_biz_dwd_tech_s_064a50944203d1c7aa917d4f494c3ad9.sql [  0.00s]
+03:06:03.741081 [debug]: Finished parsing target/generic_tests/not_null_biz_dwd_risk_info_v2_project_no.sql [  0.00s]
+03:06:03.741115 [debug]: Finished parsing target/generic_tests/not_null_dim_quality_status_v2_quality_status_id.sql [  0.00s]
+03:06:03.741196 [debug]: Finished parsing target/generic_tests/not_null_biz_dwd_project_node_v2_node_id.sql [  0.00s]
+03:06:03.741604 [debug]: Finished parsing target/generic_tests/accepted_values_biz_dwd_risk_info_v2_risk_level_________.sql [  0.00s]
+03:06:03.741633 [debug]: Finished parsing target/generic_tests/unique_dim_risk_category_v2_risk_category_id.sql [  0.00s]
+03:06:03.741651 [debug]: Finished parsing target/generic_tests/accepted_values_biz_dwd_project_node_v2_node_type____________.sql [  0.00s]
+03:06:03.741664 [debug]: Finished parsing target/generic_tests/not_null_stg_pm__quality_issue_v2_source_row_id.sql [  0.00s]
+03:06:03.741678 [debug]: Finished parsing target/generic_tests/not_null_biz_dws_risk_monthly_v2_period_month.sql [  0.00s]
+03:06:03.741686 [debug]: Finished parsing target/generic_tests/not_null_stg_pm__tech_state_v2_source_row_id.sql [  0.00s]
+03:06:03.741691 [debug]: Finished parsing target/generic_tests/unique_biz_dwd_quality_issue_v2_issue_id.sql [  0.00s]
+03:06:03.741703 [debug]: Finished parsing target/generic_tests/not_null_dim_completion_status_v2_completion_status_id.sql [  0.00s]
+03:06:03.741980 [debug]: Finished parsing target/generic_tests/not_null_biz_dwd_tech_state_v2_change_submit_time.sql [  0.00s]
+03:06:03.742130 [debug]: Finished parsing target/generic_tests/not_null_biz_dws_tech_state_monthly_v2_period_month.sql [  0.00s]
+03:06:03.742172 [debug]: Finished parsing target/generic_tests/not_null_dim_signature_status_v2_signature_status_id.sql [  0.00s]
+03:06:03.742230 [debug]: Finished parsing target/generic_tests/not_null_biz_dwd_quality_issue_v2_issue_id.sql [  0.00s]
+03:06:03.742356 [debug]: Finished parsing target/generic_tests/unique_biz_dwd_tech_state_v2_tech_state_id.sql [  0.00s]
+03:06:03.742911 [debug]: Finished parsing target/generic_tests/not_null_biz_dwd_tech_state_v2_tech_state_id.sql [  0.00s]
+03:06:03.743162 [debug]: Finished parsing target/generic_tests/not_null_dim_quality_category_v2_quality_category_id.sql [  0.00s]
+03:06:03.743608 [debug]: Finished parsing target/generic_tests/not_null_dim_risk_category_v2_risk_category_id.sql [  0.00s]
+03:06:03.759892 [info ]: Finished parsing [  0.10s]
+03:06:03.760072 [info ]: Cached model count updated: 28 models (estimate)
+03:06:03.760095 [info ]: Cached model count updated: 28 models (accurate)
+03:06:03.760255 [info ]: Started scheduling
+03:06:03.760688 [info ]: Finished scheduling [  0.00s]
+03:06:03.760708 [debug]: Compilation - 28 nodes selected: {"model.pm_analytics_v3.biz_ads_composite_derived_v2", "model.pm_analytics_v3.biz_ads_progress_derived_v2", "model.pm_analytics_v3.biz_ads_progress_kpi_v2", "model.pm_analytics_v3.biz_ads_quality_derived_v2", "model.pm_analytics_v3.biz_ads_quality_kpi_v2", "model.pm_analytics_v3.biz_ads_risk_kpi_v2", "model.pm_analytics_v3.biz_ads_tech_state_derived_v2", "model.pm_analytics_v3.biz_ads_tech_state_kpi_v2", "model.pm_analytics_v3.biz_dwd_project_node_v2", "model.pm_analytics_v3.biz_dwd_quality_issue_v2", "model.pm_analytics_v3.biz_dwd_risk_info_v2", "model.pm_analytics_v3.biz_dwd_tech_state_v2", "model.pm_analytics_v3.biz_dws_progress_monthly_v2", "model.pm_analytics_v3.biz_dws_quality_monthly_v2", "model.pm_analytics_v3.biz_dws_risk_monthly_v2", "model.pm_analytics_v3.biz_dws_tech_state_monthly_v2", "model.pm_analytics_v3.dim_change_category_v2", "model.pm_analytics_v3.dim_completion_status_v2", "model.pm_analytics_v3.dim_node_type_v2", "model.pm_analytics_v3.dim_quality_category_v2", "model.pm_analytics_v3.dim_quality_status_v2", "model.pm_analytics_v3.dim_risk_category_v2", "model.pm_analytics_v3.dim_risk_level_v2", "model.pm_analytics_v3.dim_signature_status_v2", "model.pm_analytics_v3.stg_pm__project_subject_domain_v2", "model.pm_analytics_v3.stg_pm__quality_issue_v2", "model.pm_analytics_v3.stg_pm__risk_info_v2", "model.pm_analytics_v3.stg_pm__tech_state_v2"}
+03:06:03.760720 [info ]: Started scheduling
+03:06:03.760939 [info ]: Finished scheduling [  0.00s]
+03:06:03.761086 [debug]: Initializing schema store with entry: Frontier(CanonicalFqn { catalog: "biadmin", schema: "public", table: "ods_tech_state_v2" }) and interval: None
+03:06:03.761125 [debug]: Initializing schema store with entry: Frontier(CanonicalFqn { catalog: "biadmin", schema: "public", table: "ods_quality_issue_v2" }) and interval: None
+03:06:03.761130 [debug]: Initializing schema store with entry: Frontier(CanonicalFqn { catalog: "biadmin", schema: "public", table: "ods_risk_info_v2" }) and interval: None
+03:06:03.761135 [debug]: Initializing schema store with entry: Frontier(CanonicalFqn { catalog: "biadmin", schema: "public", table: "ods_project_subject_domain_v2" }) and interval: None
+03:06:03.762077 [info ]: Started downloading schemas
+03:06:03.762239 [info ]: Finished downloading schemas [  0.00s]

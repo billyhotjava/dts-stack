@@ -1,0 +1,105 @@
+==================== 2026-04-20T02:11:55.433723Z | 679b2683-7b97-42ac-860c-b40a2492ce30 ====================
+02:11:55.435445 [info ]: Starting dbt LSP server
+02:11:55.435560 [info ]: Connecting to LSP client on port 8001
+02:11:55.436394 [info ]: Successfully connected to LSP client
+02:11:55.436400 [info ]: Creating LSP service...
+02:11:55.499910 [info ]: Creating LSP server...
+02:11:55.499926 [info ]: Starting LSP server...
+02:11:55.550787 [info ]: Loading ../../../../services/dts-dbt/profiles/profiles.yml
+02:11:55.668995 [info ]: Started loading project
+02:11:55.669217 [info ]: Loading ../../../../services/dts-dbt/profiles/profiles.yml
+02:11:55.681893 [debug]:    Started loading packages
+02:11:55.682598 [debug]:     Loaded [  0.00s] packages
+02:11:55.692639 [info ]: Started parsing
+02:11:55.728334 [info ]: Finished loading project [  0.06s]
+02:11:55.738315 [debug]: Finished parsing models/fin_schema.yml [  0.01s]
+02:11:55.738880 [debug]: Finished parsing models/fin_sources.yml [  0.00s]
+02:11:55.739296 [debug]: Finished parsing models/fin_stg.yml [  0.00s]
+02:11:55.752442 [debug]: Finished parsing models/ads/biz_ads_aux_balance_kpi.sql [  0.00s]
+02:11:55.752936 [debug]: Finished parsing models/ads/biz_ads_aux_balance_personal_kpi.sql [  0.00s]
+02:11:55.753426 [debug]: Finished parsing models/ads/biz_ads_own_fund_kpi.sql [  0.00s]
+02:11:55.753898 [debug]: Finished parsing models/ads/biz_ads_project_fund_kpi.sql [  0.00s]
+02:11:55.754443 [debug]: Finished parsing models/dwd/biz_dwd_aux_balance.sql [  0.00s]
+02:11:55.754952 [debug]: Finished parsing models/dwd/biz_dwd_aux_balance_personal.sql [  0.00s]
+02:11:55.755425 [debug]: Finished parsing models/dwd/biz_dwd_own_fund.sql [  0.00s]
+02:11:55.755881 [debug]: Finished parsing models/dwd/biz_dwd_project_fund.sql [  0.00s]
+02:11:55.756360 [debug]: Finished parsing models/dwd/dim_balance_direction.sql [  0.00s]
+02:11:55.756789 [debug]: Finished parsing models/dwd/dim_expense_category.sql [  0.00s]
+02:11:55.757195 [debug]: Finished parsing models/dwd/dim_own_fund_period_type.sql [  0.00s]
+02:11:55.757610 [debug]: Finished parsing models/dwd/dim_personal_subject_category.sql [  0.00s]
+02:11:55.758037 [debug]: Finished parsing models/dws/biz_dws_aux_balance_by_dept.sql [  0.00s]
+02:11:55.758504 [debug]: Finished parsing models/dws/biz_dws_aux_balance_personal_by_dept.sql [  0.00s]
+02:11:55.758979 [debug]: Finished parsing models/dws/biz_dws_own_fund_yearly.sql [  0.00s]
+02:11:55.759498 [debug]: Finished parsing models/dws/biz_dws_project_fund_summary.sql [  0.00s]
+02:11:55.760460 [debug]: Finished parsing models/stg/stg_fin__aux_balance.sql [  0.00s]
+02:11:55.761073 [debug]: Finished parsing models/stg/stg_fin__aux_balance_personal.sql [  0.00s]
+02:11:55.761866 [debug]: Finished parsing models/stg/stg_fin__own_fund.sql [  0.00s]
+02:11:55.779654 [debug]: Finished parsing models/stg/stg_fin__project_fund.sql [  0.02s]
+02:11:55.781105 [debug]: Finished parsing target/generic_tests/not_null_stg_fin__own_fund_period_year.sql [  0.00s]
+02:11:55.781132 [debug]: Finished parsing target/generic_tests/unique_stg_fin__project_fund_source_row_id.sql [  0.00s]
+02:11:55.781297 [debug]: Finished parsing target/generic_tests/unique_dim_expense_category_expense_category_id.sql [  0.00s]
+02:11:55.781330 [debug]: Finished parsing target/generic_tests/not_null_stg_fin__aux_balance_personal_source_row_id.sql [  0.00s]
+02:11:55.781535 [debug]: Finished parsing target/generic_tests/unique_biz_dws_project_fund_summary_summary_scope.sql [  0.00s]
+02:11:55.781543 [debug]: Finished parsing target/generic_tests/not_null_stg_fin__aux_balance_source_row_id.sql [  0.00s]
+02:11:55.781553 [debug]: Finished parsing target/generic_tests/unique_biz_dwd_aux_balance_personal_personal_balance_id.sql [  0.00s]
+02:11:55.781565 [debug]: Finished parsing target/generic_tests/not_null_biz_dwd_own_fund_own_fund_id.sql [  0.00s]
+02:11:55.781575 [debug]: Finished parsing target/generic_tests/not_null_biz_dwd_project_fund_project_fund_id.sql [  0.00s]
+02:11:55.781577 [debug]: Finished parsing target/generic_tests/unique_biz_dws_aux_balance_personal_by_dept_employee_dept.sql [  0.00s]
+02:11:55.781590 [debug]: Finished parsing target/generic_tests/unique_dim_personal_subject_category_subject_category_id.sql [  0.00s]
+02:11:55.781677 [debug]: Finished parsing target/generic_tests/not_null_biz_ads_own_fund_kpi_period_year.sql [  0.00s]
+02:11:55.781704 [debug]: Finished parsing target/generic_tests/not_null_stg_fin__project_fund_source_row_id.sql [  0.00s]
+02:11:55.781717 [debug]: Finished parsing target/generic_tests/unique_biz_dwd_aux_balance_aux_balance_id.sql [  0.00s]
+02:11:55.781753 [debug]: Finished parsing target/generic_tests/not_null_biz_ads_aux_balance_kpi_total_balance.sql [  0.00s]
+02:11:55.781763 [debug]: Finished parsing target/generic_tests/unique_stg_fin__own_fund_source_row_id.sql [  0.00s]
+02:11:55.782473 [debug]: Finished parsing target/generic_tests/not_null_biz_dwd_aux_balance_personal_personal_balance_id.sql [  0.00s]
+02:11:55.782481 [debug]: Finished parsing target/generic_tests/not_null_dim_expense_category_expense_category_id.sql [  0.00s]
+02:11:55.782492 [debug]: Finished parsing target/generic_tests/accepted_values_biz_ads_own_fu_0e605fef36c20481a8c4f1405af71bd5.sql [  0.00s]
+02:11:55.782502 [debug]: Finished parsing target/generic_tests/not_null_biz_dwd_project_fund_project_id.sql [  0.00s]
+02:11:55.782513 [debug]: Finished parsing target/generic_tests/not_null_biz_dws_aux_balance_personal_by_dept_employee_dept.sql [  0.00s]
+02:11:55.782517 [debug]: Finished parsing target/generic_tests/not_null_biz_dwd_aux_balance_aux_balance_id.sql [  0.00s]
+02:11:55.782549 [debug]: Finished parsing target/generic_tests/accepted_values_biz_dwd_own_fu_af4e378810583f7d6f3d4ed52b5f2f94.sql [  0.00s]
+02:11:55.782562 [debug]: Finished parsing target/generic_tests/not_null_biz_dws_project_fund_summary_summary_scope.sql [  0.00s]
+02:11:55.782565 [debug]: Finished parsing target/generic_tests/not_null_stg_fin__aux_balance_subject_code.sql [  0.00s]
+02:11:55.782572 [debug]: Finished parsing target/generic_tests/not_null_biz_ads_aux_balance_personal_kpi_net_balance.sql [  0.00s]
+02:11:55.782575 [debug]: Finished parsing target/generic_tests/not_null_dim_personal_subject_category_subject_category_id.sql [  0.00s]
+02:11:55.782655 [debug]: Finished parsing target/generic_tests/accepted_values_stg_fin__aux_b_76839bdd188a232dd44ad825a677dc13.sql [  0.00s]
+02:11:55.782691 [debug]: Finished parsing target/generic_tests/not_null_stg_fin__own_fund_source_row_id.sql [  0.00s]
+02:11:55.783378 [debug]: Finished parsing target/generic_tests/accepted_values_stg_fin__aux_b_8948930f6a10efd42b5001da2fea1e34.sql [  0.00s]
+02:11:55.783390 [debug]: Finished parsing target/generic_tests/unique_dim_own_fund_period_type_period_type_id.sql [  0.00s]
+02:11:55.783413 [debug]: Finished parsing target/generic_tests/accepted_values_biz_dwd_aux_ba_b220f364a4a6deb9c0fffb925c9b2820.sql [  0.00s]
+02:11:55.783416 [debug]: Finished parsing target/generic_tests/unique_biz_dws_aux_balance_by_dept_dept_name.sql [  0.00s]
+02:11:55.783434 [debug]: Finished parsing target/generic_tests/accepted_values_biz_dwd_aux_ba_c9f15d5b1ec5bddae23c7a6dfe4eea39.sql [  0.00s]
+02:11:55.783435 [debug]: Finished parsing target/generic_tests/not_null_biz_dwd_own_fund_period_year.sql [  0.00s]
+02:11:55.783442 [debug]: Finished parsing target/generic_tests/unique_biz_dws_own_fund_yearly_period_year.sql [  0.00s]
+02:11:55.783449 [debug]: Finished parsing target/generic_tests/accepted_values_biz_ads_own_fu_5c30f134a7ea2fe8f08d3cbc3355b2a5.sql [  0.00s]
+02:11:55.783466 [debug]: Finished parsing target/generic_tests/not_null_stg_fin__aux_balance_personal_subject_code.sql [  0.00s]
+02:11:55.783477 [debug]: Finished parsing target/generic_tests/not_null_stg_fin__project_fund_project_id.sql [  0.00s]
+02:11:55.783522 [debug]: Finished parsing target/generic_tests/unique_biz_ads_project_fund_kpi_summary_scope.sql [  0.00s]
+02:11:55.783541 [debug]: Finished parsing target/generic_tests/unique_dim_balance_direction_balance_direction_id.sql [  0.00s]
+02:11:55.783557 [debug]: Finished parsing target/generic_tests/accepted_values_stg_fin__aux_b_df8b410b5636bfd6eda8a688719df9e2.sql [  0.00s]
+02:11:55.784383 [debug]: Finished parsing target/generic_tests/unique_stg_fin__aux_balance_personal_source_row_id.sql [  0.00s]
+02:11:55.784406 [debug]: Finished parsing target/generic_tests/not_null_biz_dws_aux_balance_by_dept_dept_name.sql [  0.00s]
+02:11:55.784451 [debug]: Finished parsing target/generic_tests/unique_stg_fin__aux_balance_source_row_id.sql [  0.00s]
+02:11:55.784466 [debug]: Finished parsing target/generic_tests/unique_biz_ads_own_fund_kpi_period_year.sql [  0.00s]
+02:11:55.784471 [debug]: Finished parsing target/generic_tests/unique_biz_dwd_own_fund_own_fund_id.sql [  0.00s]
+02:11:55.784475 [debug]: Finished parsing target/generic_tests/accepted_values_biz_dwd_aux_ba_3b1622150ca1353437b1c070dfb91f15.sql [  0.00s]
+02:11:55.784489 [debug]: Finished parsing target/generic_tests/not_null_dim_own_fund_period_type_period_type_id.sql [  0.00s]
+02:11:55.784504 [debug]: Finished parsing target/generic_tests/not_null_dim_balance_direction_balance_direction_id.sql [  0.00s]
+02:11:55.784518 [debug]: Finished parsing target/generic_tests/not_null_biz_ads_project_fund_kpi_summary_scope.sql [  0.00s]
+02:11:55.784533 [debug]: Finished parsing target/generic_tests/accepted_values_stg_fin__own_f_0a5e5fa743fee9da6bc981320281af79.sql [  0.00s]
+02:11:55.784545 [debug]: Finished parsing target/generic_tests/not_null_biz_dws_own_fund_yearly_period_year.sql [  0.00s]
+02:11:55.784556 [debug]: Finished parsing target/generic_tests/unique_biz_dwd_project_fund_project_fund_id.sql [  0.00s]
+02:11:55.802512 [info ]: Finished parsing [  0.11s]
+02:11:55.803466 [info ]: Cached model count updated: 20 models (estimate)
+02:11:55.803476 [info ]: Cached model count updated: 20 models (accurate)
+02:11:55.806386 [info ]: Started scheduling
+02:11:55.809346 [info ]: Finished scheduling [  0.00s]
+02:11:55.809364 [debug]: Compilation - 20 nodes selected: {"model.finance_analytics.biz_ads_aux_balance_kpi", "model.finance_analytics.biz_ads_aux_balance_personal_kpi", "model.finance_analytics.biz_ads_own_fund_kpi", "model.finance_analytics.biz_ads_project_fund_kpi", "model.finance_analytics.biz_dwd_aux_balance", "model.finance_analytics.biz_dwd_aux_balance_personal", "model.finance_analytics.biz_dwd_own_fund", "model.finance_analytics.biz_dwd_project_fund", "model.finance_analytics.biz_dws_aux_balance_by_dept", "model.finance_analytics.biz_dws_aux_balance_personal_by_dept", "model.finance_analytics.biz_dws_own_fund_yearly", "model.finance_analytics.biz_dws_project_fund_summary", "model.finance_analytics.dim_balance_direction", "model.finance_analytics.dim_expense_category", "model.finance_analytics.dim_own_fund_period_type", "model.finance_analytics.dim_personal_subject_category", "model.finance_analytics.stg_fin__aux_balance", "model.finance_analytics.stg_fin__aux_balance_personal", "model.finance_analytics.stg_fin__own_fund", "model.finance_analytics.stg_fin__project_fund"}
+02:11:55.809553 [info ]: Started scheduling
+02:11:55.809716 [info ]: Finished scheduling [  0.00s]
+02:11:55.815446 [debug]: Initializing schema store with entry: Frontier(CanonicalFqn { catalog: "biadmin", schema: "public", table: "ods_finance_aux_balance_personal" }) and interval: None
+02:11:55.815466 [debug]: Initializing schema store with entry: Frontier(CanonicalFqn { catalog: "biadmin", schema: "public", table: "ods_finance_aux_balance" }) and interval: None
+02:11:55.815472 [debug]: Initializing schema store with entry: Frontier(CanonicalFqn { catalog: "biadmin", schema: "public", table: "ods_finance_project_fund" }) and interval: None
+02:11:55.815476 [debug]: Initializing schema store with entry: Frontier(CanonicalFqn { catalog: "biadmin", schema: "public", table: "ods_finance_own_fund" }) and interval: None
+02:11:55.821225 [info ]: Started downloading schemas
+02:11:55.831066 [info ]: Finished downloading schemas [  0.01s]

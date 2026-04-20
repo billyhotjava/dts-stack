@@ -1,0 +1,2 @@
+{{ config({"severity":"Warn","tags":[]}) }}
+{{ test_accepted_values(column_name="balance_direction", model=get_where_subquery(ref('stg_fin__aux_balance_personal')), values=["debit","credit","zero"]) }}

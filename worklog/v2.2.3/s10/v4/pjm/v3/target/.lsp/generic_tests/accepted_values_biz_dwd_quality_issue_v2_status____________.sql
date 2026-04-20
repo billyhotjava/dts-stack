@@ -1,0 +1,2 @@
+{{ config({"severity":"Warn","tags":[]}) }}
+{{ test_accepted_values(column_name="status", model=get_where_subquery(ref('biz_dwd_quality_issue_v2')), values=["未完成归零","已完成技术归零","已完成管理归零","已完成技术和管理归零"]) }}
