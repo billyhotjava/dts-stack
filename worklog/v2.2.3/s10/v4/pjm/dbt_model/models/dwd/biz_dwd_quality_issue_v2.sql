@@ -41,10 +41,6 @@ SELECT
   d.source_row_id,
   d.source_table,
   d.source_system,
-  d.source_file,
-  d.source_sheet_name,
-  d.source_batch_id,
-  d.source_row_num,
   d.imported_at AS source_imported_at,
 
   d.project_no,

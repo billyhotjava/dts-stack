@@ -4,10 +4,6 @@ SELECT
   o.id AS source_row_id,
   'ods_tech_state_v2'::text AS source_table,
   COALESCE({{ nullif_placeholder("o.source_system") }}, 'excel') AS source_system,
-  {{ nullif_placeholder("o.source_file") }} AS source_file,
-  {{ nullif_placeholder("o.sheet_name") }} AS source_sheet_name,
-  {{ nullif_placeholder("o.batch_id") }} AS source_batch_id,
-  {{ parse_numeric_safe("o.row_num") }}::int AS source_row_num,
   o.import_time AS imported_at,
 
   {{ nullif_placeholder("o.project_no") }} AS project_no,
