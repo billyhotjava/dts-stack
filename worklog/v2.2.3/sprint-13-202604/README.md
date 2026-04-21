@@ -48,6 +48,27 @@
 - 国产化数据库特殊方言 driver（仅保证现有 PG/Doris 可跑）
 - 查询结果导出 PDF（沿用老 Card 导出）
 
+## Chrome 95 兼容清单（客户环境硬约束）
+
+客户浏览器是 **Chrome 95**，F5 前端的所有依赖都必须在该版本下可运行。与 Sprint-12 保持一致口径。
+
+| 特性 | Chrome 95 支持 | 对策 |
+|---|---|---|
+| `apache-arrow` (JS) | 需验证 | F1/T04 选型时做 smoke；必要时锁 `apache-arrow@^12` 或 `^13`（避开用 top-level-await 的 esnext-esm 版本） |
+| `ReactFlow` | v11 引入 `@container queries` ❌ | **锁 `reactflow@^10`**；F5/T03 首任务做 Chrome 95 实机验证 |
+| `@container queries` / `:has()` | ❌（Chrome 105+） | 全面禁用，前端受容器影响的布局用 `ResizeObserver` + React state |
+| `structuredClone` | ❌（Chrome 98+） | 用 `lodash.cloneDeep`（项目已有） |
+| `<dialog>` 原生元素 | ❌ partial | 用 React Portal（AntD Modal 已覆盖） |
+| `BigInt` / `TextDecoder` | ✅ | Arrow IPC 解码依赖，可用 |
+| `ResizeObserver` | ✅ | 替代 container queries |
+| `monaco-editor`（只读预览） | ✅ | 复用 Sprint-11 经验（SQL IDE 已在 Chrome 95 运行） |
+| `ECharts` (结果渲染) | ✅ | 复用 Sprint-11 / Sprint-12 的经验 |
+
+**验证门禁**：
+- F5 所有 P0 task 完成前必须在 Chrome 95 实机跑通 smoke 场景（参见 `it/README.md`）
+- CI 构建 `LEGACY_BROWSER_BUILD=1`（vite legacy target chrome95）必须通过
+- ReactFlow / apache-arrow 的版本锁定写入 `package.json`，升级需重新跑 Chrome 95 smoke
+
 ## 架构概览
 
 ```

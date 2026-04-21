@@ -115,6 +115,27 @@
 - [ ] 无路由冲突
 - [ ] 两套 engine 的 Card 在同一 Dashboard 里可共存
 
+### 九、Chrome 95 兼容（客户环境硬约束）
+
+存 `evidence/chrome-95/`：
+
+#### 依赖版本锁（预设）
+- [ ] `reactflow@^10.x`（避开 v11 的 container queries）
+- [ ] `apache-arrow@^12` 或 `^13`（避开 top-level-await 的 esnext-esm 版本）
+- [ ] 全代码库禁用 `:has()` / `@container` / `structuredClone`（grep 检查通过）
+- [ ] vite 构建 `LEGACY_BROWSER_BUILD=1`（target chrome95）通过无 error
+
+#### 实机 smoke 场景（客户 Chrome 95 浏览器）
+- [ ] TC-CR-01：打开 `/bi/explore`，指标树和维度树加载成功
+- [ ] TC-CR-02：进 `/bi/card/new`，拖入 1 个 base + 1 metric + 1 dimension 出 SQL 预览
+- [ ] TC-CR-03：模型画布拖 3 个模型并连接 join，fanout 警告正常显示
+- [ ] TC-CR-04：派生指标编辑器输入公式 `revenue / cost`，SQL 预览正确
+- [ ] TC-CR-05：Card 执行，结果表格 + 图表都能渲染，无 console error
+
+#### 证据
+- 每个 TC 截图或录屏存 `evidence/chrome-95/TC-CR-0X-*.png`
+- 有任何 TC 不通过，fallback 方案写入 `issues/chrome-95-<slug>.md`
+
 ## 缺陷跟踪
 
 运行 IT 期间发现的 bug 写入 `issues/`，每个以日期命名：`20260423-<slug>.md`，含复现步骤 + 影响范围 + fix PR 链接。
