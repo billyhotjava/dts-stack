@@ -3,7 +3,7 @@ set -euo pipefail
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 cd "$SCRIPT_DIR"
 
-if [[ $# -gt 0 && "$1" =~ ^(single|ha2|cluster)$ ]]; then
+if [[ $# -gt 0 && "$1" =~ ^(single|ha2|cluster|legacy)$ ]]; then
   MODE="$1"
   shift
 else
@@ -28,12 +28,20 @@ case "$MODE" in
   cluster)
     COMPOSE_FILE="docker-compose.cluster.yml"
     ;;
+  legacy)
+    COMPOSE_FILE="docker-compose.legacy.yml"
+    ;;
   *)
     echo "[stop.sh] Unknown mode '${MODE}'." >&2
-    echo "Usage: $0 [single|ha2|cluster] [docker compose down options]" >&2
+    echo "Usage: $0 [single|ha2|cluster|legacy] [docker compose down options]" >&2
     exit 1
     ;;
 esac
+
+# 即使是 stop/down，docker compose 仍要 resolve compose 文件里的变量，
+# 避免 "variable is not set" 警告；与 start.sh / dev-up.sh 保持一致。
+export DTS_DBT_HOST_PROJECT_DIR="${DTS_DBT_HOST_PROJECT_DIR:-${SCRIPT_DIR}/services/dts-dbt}"
+export STACK_ROOT="${STACK_ROOT:-${SCRIPT_DIR}}"
 
 if docker compose version >/dev/null 2>&1; then
   compose_cmd=(docker compose)

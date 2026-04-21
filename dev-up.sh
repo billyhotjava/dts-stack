@@ -286,6 +286,9 @@ mkdir -p logs/dts-admin logs/dts-platform logs/dts-analytics logs/dts-ingestion
 # The container mounts services/dts-dbt -> /opt/dts/dbt; Airflow runs on the host and must bind
 # the same physical directory, i.e. the services/dts-dbt absolute path derived from SCRIPT_DIR.
 export DTS_DBT_HOST_PROJECT_DIR="${DTS_DBT_HOST_PROJECT_DIR:-${SCRIPT_DIR}/services/dts-dbt}"
+# compose 文件里 DTS_DBT_HOST_PROJECT_DIR 的 fallback 依赖 STACK_ROOT，
+# 显式 export 确保老 .env 缺该键时 fallback 能求值到正确路径。
+export STACK_ROOT="${STACK_ROOT:-${SCRIPT_DIR}}"
 
 # Load optional image versions into current env (does not modify files)
 load_img_versions_dev

@@ -28,6 +28,11 @@ fi
 # Load envs if present to avoid compose warnings on missing variables
 if [[ -f ./.env ]]; then set -a; source ./.env; set +a; fi
 
+# 与 start.sh / dev-up.sh 对齐：即使是 stop，docker compose 仍要 resolve 变量，
+# 否则会打出 "variable is not set, defaulting to a blank string" 警告。
+export DTS_DBT_HOST_PROJECT_DIR="${DTS_DBT_HOST_PROJECT_DIR:-${SCRIPT_DIR}/services/dts-dbt}"
+export STACK_ROOT="${STACK_ROOT:-${SCRIPT_DIR}}"
+
 # Fill missing optional PG triplets to avoid compose interpolation warnings on stop
 set -a
 : "${PG_DB_DTADMIN:=dts_admin}"
