@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef } from "react";
 import { toast } from "sonner";
-import { resolveLoginHref } from "@/routes/constants";
+import { resolveCurrentAppPath, resolveLoginHref } from "@/routes/constants";
 import { useUserActions, useUserInfo, useUserToken } from "@/store/userStore";
 import userService from "@/api/services/userService";
 import {
@@ -185,7 +185,7 @@ export default function SessionManager() {
 					logoutInProgressRef.current = true;
 					toast.error("账号已在其他位置退出", { id: "session-conflict" });
 					clearUserInfoAndToken();
-					window.location.replace(resolveLoginHref());
+					window.location.replace(resolveLoginHref(resolveCurrentAppPath()));
 				}
 			}
 		};
@@ -356,7 +356,7 @@ export default function SessionManager() {
 					toast.error("会话已过期，请重新登录", { id: "session-expired" });
 					clearUserInfoAndToken();
 					localStorage.setItem(STORAGE_KEYS.LOGOUT_TS, String(Date.now()));
-					window.location.replace(resolveLoginHref());
+					window.location.replace(resolveLoginHref(resolveCurrentAppPath()));
 				}
 				cancelled = true;
 			}

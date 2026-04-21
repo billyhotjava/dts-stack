@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { getPortalSessionStatus } from "@/api/platformApi";
 import menuService from "@/api/services/menuService";
 import useUserStore, { useUserInfo, useUserToken } from "@/store/userStore";
-import { LOGIN_ROUTE, resolveLoginHref } from "../constants";
+import { LOGIN_ROUTE, resolveCurrentAppPath, resolveLoginHref } from "../constants";
 import { useRouter } from "../hooks";
 import { GLOBAL_CONFIG } from "@/global-config";
 
@@ -56,7 +56,7 @@ export default function LoginAuthGuard({ children }: Props) {
 
 	const forceLogout = useCallback(() => {
 		useUserStore.getState().actions.clearUserInfoAndToken();
-		window.location.replace(resolveLoginHref());
+		window.location.replace(resolveLoginHref(resolveCurrentAppPath()));
 	}, []);
 
 	const verifyBackendSession = useCallback(async () => {
@@ -153,7 +153,7 @@ export default function LoginAuthGuard({ children }: Props) {
 			const currentToken = useUserStore.getState().userToken;
 			if (isTokenExpired(currentToken?.accessToken)) {
 				useUserStore.getState().actions.clearUserInfoAndToken();
-				window.location.replace(resolveLoginHref());
+				window.location.replace(resolveLoginHref(resolveCurrentAppPath()));
 				return;
 			}
 			if (requiresBackendSessionValidation(currentToken?.accessToken)) {

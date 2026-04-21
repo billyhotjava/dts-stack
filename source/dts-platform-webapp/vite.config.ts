@@ -182,6 +182,12 @@ export default defineConfig(({ mode }) => {
     const hideRaw = (env as any).VITE_HIDE_PASSWORD_LOGIN ?? "";
     const vendorBase = (env as any).KOAL_VENDOR_BASE || (env as any).VITE_KOAL_VENDOR_BASE || "";
     const platformBase = (env as any).PLATFORM_PUBLIC_BASE_URL || (env as any).VITE_PLATFORM_PUBLIC_BASE_URL || "";
+    const allowedExternalHostsRaw =
+      (env as any).ALLOWED_EXTERNAL_REDIRECT_HOSTS || (env as any).VITE_ALLOWED_EXTERNAL_REDIRECT_HOSTS || "";
+    const allowedExternalHosts = String(allowedExternalHostsRaw)
+      .split(",")
+      .map((item) => item.trim())
+      .filter(Boolean);
     const sqlWorkbenchRaw = (env as any).VITE_ENABLE_SQL_WORKBENCH ?? (env as any).WEBAPP_ENABLE_SQL_WORKBENCH ?? "";
     const sqlIdeV2Raw = (env as any).VITE_ENABLE_SQL_IDE_V2 ?? (env as any).WEBAPP_ENABLE_SQL_IDE_V2 ?? "";
     const enable = String(enableRaw).trim().toLowerCase();
@@ -215,6 +221,9 @@ export default defineConfig(({ mode }) => {
             }
             if (String(platformBase).trim()) {
               js += `w.__RUNTIME_CONFIG__.platformBaseUrl=${JSON.stringify(String(platformBase).trim())};`;
+            }
+            if (allowedExternalHosts.length > 0) {
+              js += `w.__RUNTIME_CONFIG__.allowedExternalRedirectHosts=${JSON.stringify(allowedExternalHosts)};`;
             }
             js += "})(window);\n";
             res.setHeader("Content-Type", "application/javascript; charset=utf-8");

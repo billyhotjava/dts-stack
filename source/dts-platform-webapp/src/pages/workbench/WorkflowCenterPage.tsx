@@ -126,13 +126,13 @@ export default function Page() {
 			width: 160,
 			render: (_, record) => {
 				if (record.type === "ACCESS_APPROVAL") {
-					return <Button onClick={() => push("/dashboard/security/dataset-access-approval")}>前往审批</Button>;
+					return <Button onClick={() => push("/security/dataset-access-approval")}>前往审批</Button>;
 				}
 				if (record.type === "QUALITY") {
-					return <Button onClick={() => push("/dashboard/governance/quality-rules")}>查看质量</Button>;
+					return <Button onClick={() => push("/governance/quality-rules")}>查看质量</Button>;
 				}
 				if (record.type === "SCHEMA_DRIFT") {
-					return <Button icon={<EyeOutlined />} onClick={() => push("/dashboard/catalog/datasets")}>查看详情</Button>;
+					return <Button icon={<EyeOutlined />} onClick={() => push("/catalog/assets")}>查看详情</Button>;
 				}
 				return "-";
 			},
@@ -145,7 +145,7 @@ export default function Page() {
 				title="待办中心"
 				extra={
 					<Space>
-						<Button onClick={() => push("/dashboard/workbench")}>
+						<Button onClick={() => push("/workbench")}>
 							返回工作台
 						</Button>
 						<Button type="primary" onClick={() => void loadTodos()}>
@@ -169,10 +169,10 @@ export default function Page() {
 						options={TYPE_OPTIONS}
 						style={{ width: 180 }}
 					/>
-					<Button onClick={() => push("/dashboard/security/dataset-access-approval")}>
+					<Button onClick={() => push("/security/dataset-access-approval")}>
 						审批入口
 					</Button>
-					<Button onClick={() => push("/dashboard/governance/quality-rules")}>
+					<Button onClick={() => push("/governance/quality-rules")}>
 						质量规则
 					</Button>
 				</div>

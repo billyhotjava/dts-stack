@@ -1,4 +1,4 @@
-import { resolveLoginHref } from '@/routes/constants';
+import { resolveCurrentAppPath, resolveLoginHref } from "@/routes/constants";
 import userStore from "@/store/userStore";
 import { withPlatformAuthorization } from "./platform-auth-header";
 
@@ -1181,6 +1181,14 @@ function isPublicAnalyticsUrl(url: string): boolean {
 	);
 }
 
+function redirectToLoginWithCurrentPath() {
+	userStore.getState().actions.clearUserInfoAndToken();
+	try {
+		localStorage.setItem("dts.platform.session.logoutTs", String(Date.now()));
+	} catch {}
+	window.location.replace(resolveLoginHref(resolveCurrentAppPath()));
+}
+
 async function apiFetch(url: string, init: RequestInit, allowRedirect: boolean): Promise<Response> {
 	const accessToken = userStore.getState().userToken?.accessToken;
 	const headers = withPlatformAuthorization(init.headers, accessToken);
@@ -1200,7 +1208,7 @@ async function apiFetch(url: string, init: RequestInit, allowRedirect: boolean):
 		return await fetch(url, { ...init, credentials: "include", headers: retryHeaders });
 	}
 	// No valid token — redirect to login.
-	window.location.replace(resolveLoginHref());
+	redirectToLoginWithCurrentPath();
 	return response;
 }
 

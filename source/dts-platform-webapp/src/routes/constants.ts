@@ -2,6 +2,7 @@ import { GLOBAL_CONFIG } from "@/global-config";
 import { urlJoin } from "@/utils";
 
 const ensureLeadingSlash = (path: string) => (path.startsWith("/") ? path : `/${path}`);
+const MAX_REDIRECT_LENGTH = 4096;
 
 export const LOGIN_ROUTE = "/auth/login";
 
@@ -14,7 +15,47 @@ export const resolveAppHref = (route: string) => {
 	return urlJoin(GLOBAL_CONFIG.publicPath, normalizedRoute);
 };
 
-export const resolveLoginHref = () => resolveAppHref(LOGIN_ROUTE);
+const stripPublicPath = (pathname: string) => {
+	const publicPath = GLOBAL_CONFIG.publicPath;
+	if (!publicPath || publicPath === "/") {
+		return pathname || "/";
+	}
+	if (pathname === publicPath) {
+		return "/";
+	}
+	if (pathname.startsWith(`${publicPath}/`)) {
+		return pathname.slice(publicPath.length) || "/";
+	}
+	return pathname || "/";
+};
+
+const sanitizeRedirectPath = (redirect?: string | null) => {
+	const normalized = String(redirect || "").trim();
+	if (!normalized) return null;
+	if (!normalized.startsWith("/")) return null;
+	if (normalized.startsWith("//")) return null;
+	if (normalized.includes("://")) return null;
+	if (normalized.length > MAX_REDIRECT_LENGTH) return null;
+	return normalized;
+};
+
+export const resolveCurrentAppPath = () => {
+	if (typeof window === "undefined") return null;
+	if (GLOBAL_CONFIG.routerHistory === "hash") {
+		const hashPath = window.location.hash.replace(/^#/, "");
+		return sanitizeRedirectPath(hashPath || "/");
+	}
+	const currentPath = `${stripPublicPath(window.location.pathname)}${window.location.search}${window.location.hash}`;
+	return sanitizeRedirectPath(currentPath);
+};
+
+export const resolveLoginHref = (redirect?: string | null) => {
+	const safeRedirect = sanitizeRedirectPath(redirect);
+	if (!safeRedirect) {
+		return resolveAppHref(LOGIN_ROUTE);
+	}
+	return resolveAppHref(`${LOGIN_ROUTE}?redirect=${encodeURIComponent(safeRedirect)}`);
+};
 
 export const isLoginRouteActive = () => {
 	if (typeof window === "undefined") return false;

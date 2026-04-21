@@ -4,7 +4,7 @@ import type { Result } from "#/api";
 import { ResultStatus } from "#/enum";
 import { GLOBAL_CONFIG } from "@/global-config";
 import { t } from "@/locales/i18n";
-import { isLoginRouteActive, resolveLoginHref } from "@/routes/constants";
+import { isLoginRouteActive, resolveCurrentAppPath, resolveLoginHref } from "@/routes/constants";
 import useContextStore from "@/store/contextStore";
 import userStore from "@/store/userStore";
 
@@ -120,6 +120,13 @@ function ensureKeepAliveTimer() {
 if (typeof window !== "undefined") {
 	ensureKeepAliveTimer();
 	window.addEventListener("focus", ensureKeepAliveTimer);
+}
+
+function redirectToLoginWithCurrentPath() {
+	if (typeof window === "undefined") {
+		return;
+	}
+	location.replace(resolveLoginHref(resolveCurrentAppPath()));
 }
 
 axiosInstance.interceptors.request.use(
@@ -345,7 +352,7 @@ axiosInstance.interceptors.response.use(
 						localStorage.setItem("dts.platform.session.logoutTs", String(Date.now()));
 				} catch {}
 				if (typeof window !== "undefined" && !isLoginRouteActive()) {
-					location.replace(resolveLoginHref());
+					redirectToLoginWithCurrentPath();
 				}
 			} else {
 				console.warn("[DEV/TEST] 401 after refresh; skipping auto logout");
@@ -356,7 +363,7 @@ axiosInstance.interceptors.response.use(
 				localStorage.setItem("dts.platform.session.logoutTs", String(Date.now()));
 			} catch {}
 			if (typeof window !== "undefined" && !isLoginRouteActive()) {
-				location.replace(resolveLoginHref());
+				redirectToLoginWithCurrentPath();
 			}
 		} else {
 			if (!shouldSuppressAuthHandling && !isLoginRequest && !isSqlTabRaceCondition) {

@@ -121,6 +121,8 @@ declare global {
             koalPkiEndpoints?: string[];
             enableSqlWorkbench?: string | boolean;
             enableSqlIdeV2?: string | boolean;
+            platformBaseUrl?: string;
+            allowedExternalRedirectHosts?: string[] | string;
         };
     }
 }

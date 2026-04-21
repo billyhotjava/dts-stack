@@ -33,28 +33,62 @@ import org.springframework.web.bind.annotation.RestController;
 @RequestMapping("/api")
 public class ForwardAuthResource {
 
+    private static final String EXTERNAL_REDIRECT_ROUTE = "/external-redirect?target=";
+    private static final List<String> API_PREFIXES = List.of(
+        "/api",
+        "/analytics/api",
+        "/bi/api",
+        "/openapi",
+        "/graphql",
+        "/ws",
+        "/socket",
+        "/sockjs",
+        "/websocket"
+    );
+    private static final List<String> STATIC_ASSET_SUFFIXES = List.of(
+        ".js",
+        ".mjs",
+        ".css",
+        ".map",
+        ".png",
+        ".jpg",
+        ".jpeg",
+        ".gif",
+        ".svg",
+        ".webp",
+        ".ico",
+        ".woff",
+        ".woff2",
+        ".ttf",
+        ".eot",
+        ".json",
+        ".txt"
+    );
+
+    @org.springframework.beans.factory.annotation.Value("${dts.platform.public-base-url:}")
+    private String platformPublicBaseUrl = "";
+
+    ForwardAuthResource() {}
+
+    ForwardAuthResource(String platformPublicBaseUrl) {
+        this.platformPublicBaseUrl = platformPublicBaseUrl;
+    }
+
     @RequestMapping(path = "/forward-auth", method = {RequestMethod.GET, RequestMethod.HEAD})
     public ResponseEntity<Void> forwardAuth(Authentication authentication, HttpServletRequest request) {
         String forwardedUri = request == null ? null : request.getHeader("X-Forwarded-Uri");
         String forwardedPrefix = request == null ? null : request.getHeader("X-Forwarded-Prefix");
-
-        boolean isAnalyticsRequest =
-                (forwardedUri != null && forwardedUri.startsWith("/analytics"))
-                        || (forwardedPrefix != null && (forwardedPrefix.equals("/analytics") || forwardedPrefix.startsWith("/analytics/")));
-
-        boolean isAnalyticsApiRequest =
-                (forwardedUri != null && forwardedUri.startsWith("/analytics/api"))
-                        || (isAnalyticsRequest && forwardedUri != null && forwardedUri.startsWith("/api"));
-
-        boolean isAnalyticsUiRequest = isAnalyticsRequest && !isAnalyticsApiRequest;
+        String requestedPath = resolveRequestedPath(forwardedUri, forwardedPrefix);
+        boolean isApiRequest = isApiRequestPath(requestedPath);
+        boolean isUiRequest = !isApiRequest && !isStaticAssetRequest(requestedPath);
 
         if (authentication == null || !authentication.isAuthenticated()) {
-            return unauthorized(isAnalyticsApiRequest, isAnalyticsUiRequest, forwardedUri, forwardedPrefix, request);
+            return unauthorized(isApiRequest, isUiRequest, requestedPath, request);
         }
 
         String username = SecurityUtils.getCurrentUserLogin().orElse(null);
         if (!StringUtils.hasText(username)) {
-            return unauthorized(isAnalyticsApiRequest, isAnalyticsUiRequest, forwardedUri, forwardedPrefix, request);
+            return unauthorized(isApiRequest, isUiRequest, requestedPath, request);
         }
 
         HttpHeaders headers = new HttpHeaders();
@@ -98,44 +132,144 @@ public class ForwardAuthResource {
         return ResponseEntity.noContent().headers(headers).build();
     }
 
-    private static ResponseEntity<Void> unauthorized(
-            boolean isAnalyticsApiRequest,
-            boolean isAnalyticsUiRequest,
-            String forwardedUri,
-            String forwardedPrefix,
+    private ResponseEntity<Void> unauthorized(
+            boolean isApiRequest,
+            boolean isUiRequest,
+            String requestedPath,
             HttpServletRequest request
     ) {
-        if (isAnalyticsUiRequest) {
-            String returnTo = "/analytics";
-            if (StringUtils.hasText(forwardedUri) && forwardedUri.startsWith("/analytics")) {
-                returnTo = forwardedUri;
-            } else if (StringUtils.hasText(forwardedPrefix) && forwardedPrefix.startsWith("/analytics")) {
-                returnTo = forwardedPrefix;
-            }
-            String encodedReturnTo = URLEncoder.encode(returnTo, StandardCharsets.UTF_8);
-            String loginPath = "/#/auth/login?redirect=" + encodedReturnTo;
-
-            // Build an absolute URL using X-Forwarded-* (original external request), to avoid leaking
-            // internal docker hostname (e.g. "dts-platform:8081") to the browser.
-            // If X-Forwarded-* are absent, fall back to a relative URL.
-            String loginUrl = loginPath;
-            if (request != null) {
-                String xfProtoRaw = request.getHeader("X-Forwarded-Proto");
-                String xfHostRaw = request.getHeader("X-Forwarded-Host");
-                String xfProto = StringUtils.hasText(xfProtoRaw) ? xfProtoRaw.split(",")[0].trim() : null;
-                String xfHost = StringUtils.hasText(xfHostRaw) ? xfHostRaw.split(",")[0].trim() : null;
-                if (StringUtils.hasText(xfProto) && StringUtils.hasText(xfHost)) {
-                    loginUrl = xfProto + "://" + xfHost + loginPath;
-                }
-            }
-            HttpHeaders headers = new HttpHeaders();
-            headers.add(HttpHeaders.LOCATION, loginUrl);
-            return ResponseEntity.status(302).headers(headers).build();
+        if (isUiRequest) {
+            return ResponseEntity.status(302).headers(buildRedirectHeaders(requestedPath, request)).build();
         }
-        if (isAnalyticsApiRequest) {
+        if (isApiRequest) {
             return ResponseEntity.status(401).build();
         }
         return ResponseEntity.status(401).build();
+    }
+
+    private HttpHeaders buildRedirectHeaders(String requestedPath, HttpServletRequest request) {
+        String redirectTarget = buildLoginRedirectTarget(requestedPath, request);
+        String encodedRedirectTarget = URLEncoder.encode(redirectTarget, StandardCharsets.UTF_8);
+        String loginPath =
+            "/auth/login?redirect=" + encodedRedirectTarget + "#/auth/login?redirect=" + encodedRedirectTarget;
+        String loginOrigin = resolvePlatformOrigin(request);
+        String loginUrl = StringUtils.hasText(loginOrigin) ? loginOrigin + loginPath : loginPath;
+        HttpHeaders headers = new HttpHeaders();
+        headers.add(HttpHeaders.LOCATION, loginUrl);
+        return headers;
+    }
+
+    private String buildLoginRedirectTarget(String requestedPath, HttpServletRequest request) {
+        String absoluteTarget = resolveAbsoluteTarget(requestedPath, request);
+        if (StringUtils.hasText(absoluteTarget)) {
+            return EXTERNAL_REDIRECT_ROUTE + URLEncoder.encode(absoluteTarget, StandardCharsets.UTF_8);
+        }
+        return StringUtils.hasText(requestedPath) ? requestedPath : "/bi";
+    }
+
+    private String resolvePlatformOrigin(HttpServletRequest request) {
+        String configured = normalizeOrigin(platformPublicBaseUrl);
+        if (StringUtils.hasText(configured)) {
+            return configured;
+        }
+        return resolveForwardedOrigin(request);
+    }
+
+    private static String resolveAbsoluteTarget(String requestedPath, HttpServletRequest request) {
+        String origin = resolveForwardedOrigin(request);
+        if (!StringUtils.hasText(origin) || !StringUtils.hasText(requestedPath)) {
+            return null;
+        }
+        return origin + requestedPath;
+    }
+
+    private static String resolveForwardedOrigin(HttpServletRequest request) {
+        if (request == null) {
+            return null;
+        }
+        String xfProtoRaw = request.getHeader("X-Forwarded-Proto");
+        String xfHostRaw = request.getHeader("X-Forwarded-Host");
+        String xfProto = StringUtils.hasText(xfProtoRaw) ? xfProtoRaw.split(",")[0].trim() : null;
+        String xfHost = StringUtils.hasText(xfHostRaw) ? xfHostRaw.split(",")[0].trim() : null;
+        if (!StringUtils.hasText(xfProto) || !StringUtils.hasText(xfHost)) {
+            return null;
+        }
+        return normalizeOrigin(xfProto + "://" + xfHost);
+    }
+
+    private static String normalizeOrigin(String value) {
+        if (!StringUtils.hasText(value)) {
+            return null;
+        }
+        String trimmed = value.trim().replaceAll("/+$", "");
+        return trimmed.isEmpty() ? null : trimmed;
+    }
+
+    private static boolean isApiRequestPath(String path) {
+        String normalized = normalizeComparablePath(path);
+        if (!StringUtils.hasText(normalized)) {
+            return false;
+        }
+        return API_PREFIXES.stream().anyMatch(prefix -> normalized.equals(prefix) || normalized.startsWith(prefix + "/"));
+    }
+
+    private static boolean isStaticAssetRequest(String path) {
+        String normalized = normalizeComparablePath(path);
+        if (!StringUtils.hasText(normalized)) {
+            return false;
+        }
+        return STATIC_ASSET_SUFFIXES.stream().anyMatch(normalized::endsWith);
+    }
+
+    private static String normalizeComparablePath(String path) {
+        if (!StringUtils.hasText(path)) {
+            return null;
+        }
+        String normalized = path.trim().toLowerCase();
+        int queryIdx = normalized.indexOf('?');
+        if (queryIdx >= 0) {
+            normalized = normalized.substring(0, queryIdx);
+        }
+        int hashIdx = normalized.indexOf('#');
+        if (hashIdx >= 0) {
+            normalized = normalized.substring(0, hashIdx);
+        }
+        return normalized;
+    }
+
+    private static String resolveRequestedPath(String forwardedUri, String forwardedPrefix) {
+        String normalizedUri = normalizePath(forwardedUri);
+        String normalizedPrefix = normalizePath(forwardedPrefix);
+        if (StringUtils.hasText(normalizedUri) && normalizedUri.startsWith("/")) {
+            return normalizedUri;
+        }
+        if (StringUtils.hasText(normalizedPrefix) && StringUtils.hasText(normalizedUri)) {
+            return joinPaths(normalizedPrefix, normalizedUri);
+        }
+        if (StringUtils.hasText(normalizedPrefix)) {
+            return normalizedPrefix;
+        }
+        return "/";
+    }
+
+    private static String normalizePath(String path) {
+        if (!StringUtils.hasText(path)) {
+            return null;
+        }
+        String trimmed = path.trim();
+        return trimmed.isEmpty() ? null : trimmed;
+    }
+
+    private static String joinPaths(String prefix, String suffix) {
+        if (!StringUtils.hasText(prefix)) {
+            return suffix;
+        }
+        if (!StringUtils.hasText(suffix)) {
+            return prefix;
+        }
+        String normalizedPrefix = prefix.endsWith("/") ? prefix.substring(0, prefix.length() - 1) : prefix;
+        String normalizedSuffix = suffix.startsWith("/") ? suffix : "/" + suffix;
+        return normalizedPrefix + normalizedSuffix;
     }
 
     private static List<String> authorities(Authentication authentication) {

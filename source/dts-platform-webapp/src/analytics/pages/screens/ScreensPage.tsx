@@ -530,7 +530,7 @@ export default function ScreensPage() {
 					<h1 className="m-0 text-xl font-semibold text-text-primary">大屏管理</h1>
 					<div className="flex gap-2.5">
 						<button
-							className="inline-flex items-center justify-center h-8 px-4 text-sm font-normal leading-normal border border-border-default rounded-md bg-surface-card text-text-primary cursor-pointer transition-all duration-200 whitespace-nowrap hover:border-brand hover:bg-brand/10 disabled:opacity-50 disabled:cursor-not-allowed"
+							className="inline-flex items-center justify-center h-8 px-4 text-sm font-normal leading-normal border border-brand rounded-md  bg-brand text-white cursor-pointer transition-all duration-200 whitespace-nowrap hover:opacity-85 disabled:opacity-50 disabled:cursor-not-allowed"
 							data-testid="analytics-screen-import"
 							onClick={handleOpenImport}
 							disabled={isImporting}
@@ -538,10 +538,13 @@ export default function ScreensPage() {
 						>
 							{isImporting ? '导入中...' : '导入 JSON'}
 						</button>
-						<button className="inline-flex items-center justify-center h-8 px-4 text-sm font-normal leading-normal border border-brand rounded-md bg-brand text-white cursor-pointer transition-all duration-200 whitespace-nowrap hover:opacity-85 disabled:opacity-50 disabled:cursor-not-allowed" onClick={handleOpenAiGenerator}>
+						{/* <button className="inline-flex items-center justify-center h-8 px-4 text-sm font-normal leading-normal border border-brand rounded-md bg-brand text-white cursor-pointer transition-all duration-200 whitespace-nowrap hover:opacity-85 disabled:opacity-50 disabled:cursor-not-allowed" onClick={handleOpenAiGenerator}>
 							自动生成
-						</button>
-						<button className="inline-flex items-center justify-center h-8 px-4 text-sm font-normal leading-normal border border-brand rounded-md bg-brand text-white cursor-pointer transition-all duration-200 whitespace-nowrap hover:opacity-85 disabled:opacity-50 disabled:cursor-not-allowed" data-testid="analytics-screen-create" onClick={handleCreate}>
+						</button> */}
+						<button 
+							className="inline-flex items-center justify-center h-8 px-4 text-sm font-normal leading-normal border border-brand rounded-md bg-brand text-white cursor-pointer transition-all duration-200 whitespace-nowrap hover:opacity-85 disabled:opacity-50 disabled:cursor-not-allowed" 
+							data-testid="analytics-screen-create" 
+							onClick={handleCreate}>
 							新建大屏
 						</button>
 					</div>

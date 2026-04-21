@@ -110,6 +110,7 @@ fi
 #   - VITE_HIDE_PASSWORD_LOGIN: hide password login UI
 #   - VITE_ENABLE_SQL_WORKBENCH: enable SQL Workbench at runtime
 #   - PLATFORM_PUBLIC_BASE_URL: preferred absolute domain for BI links (e.g., https://bi.example.com)
+#   - ALLOWED_EXTERNAL_REDIRECT_HOSTS: comma-separated allowlist for post-login external relay
 RUNTIME_JS="$RUNTIME_CONFIG_PATH"
 # Initialize stub to ensure file exists
 printf '%s\n' '(function(w){w.__RUNTIME_CONFIG__=w.__RUNTIME_CONFIG__||{};})(window);' > "$RUNTIME_JS"
@@ -151,6 +152,12 @@ if [ -n "${PLATFORM_PUBLIC_BASE_URL:-}" ]; then
   val=$(printf '%s' "$PLATFORM_PUBLIC_BASE_URL" | tr -d '\r\n')
   printf '%s\n' "(function(w){w.__RUNTIME_CONFIG__=w.__RUNTIME_CONFIG__||{};w.__RUNTIME_CONFIG__.platformBaseUrl='${val}';})(window);" >> "$RUNTIME_JS"
   echo "[entrypoint] runtime-config.js: platformBaseUrl=${PLATFORM_PUBLIC_BASE_URL}"
+fi
+
+if [ -n "${ALLOWED_EXTERNAL_REDIRECT_HOSTS:-}" ]; then
+  json=$(printf '%s' "$ALLOWED_EXTERNAL_REDIRECT_HOSTS" | awk -F',' 'BEGIN{printf("[");first=1} {for(i=1;i<=NF;i++){gsub(/^ +| +$/, "", $i); if(length($i)){ if(!first) printf(","); printf("\"%s\"", $i); first=0}}} END{printf("]")}')
+  printf '%s\n' "(function(w){w.__RUNTIME_CONFIG__=w.__RUNTIME_CONFIG__||{};w.__RUNTIME_CONFIG__.allowedExternalRedirectHosts=${json};})(window);" >> "$RUNTIME_JS"
+  echo "[entrypoint] runtime-config.js: allowedExternalRedirectHosts=${ALLOWED_EXTERNAL_REDIRECT_HOSTS}"
 fi
 
 # Fix permissions for vendor assets so nginx workers can read them (avoid 403 -> HTML)

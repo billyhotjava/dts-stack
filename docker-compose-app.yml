@@ -277,6 +277,7 @@ services:
       DTS_AIRFLOW_DAG_ID: ${DTS_AIRFLOW_DAG_ID:-dbt_load}
       DTS_INGESTION_BASE_URL: ${DTS_INGESTION_BASE_URL:-http://dts-ingestion:8083}
       DTS_INGESTION_SERVICE_NAME: ${DTS_INGESTION_SERVICE_NAME:-dts-platform}
+      DTS_PLATFORM_PUBLIC_BASE_URL: "https://${HOST_PLATFORM_UI}"
       LOG_ROOT: /logs
       # Data Standard attachments: encrypted filesystem storage
       DATA_STANDARD_ATTACHMENT_STORAGE_STRATEGY: "filesystem"
@@ -519,6 +520,7 @@ services:
       VITE_ADMIN_API_BASE_URL: "https://${HOST_ADMIN_UI}/api"
       # Preferred public domain for BI links (used to rewrite Hetu IP links)
       PLATFORM_PUBLIC_BASE_URL: "https://${HOST_PLATFORM_UI}"
+      ALLOWED_EXTERNAL_REDIRECT_HOSTS: "${HOST_PLATFORM_UI},${HOST_META},${HOST_FLOW}"
       # Enable experimental SQL workbench by default (can be overridden in .env)
       VITE_ENABLE_SQL_WORKBENCH: ${VITE_ENABLE_SQL_WORKBENCH:-true}
       # Unified PKI endpoints for both webapps (optional). Comma-separated list.
