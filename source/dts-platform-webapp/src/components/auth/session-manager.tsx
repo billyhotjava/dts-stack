@@ -4,7 +4,7 @@ import { isWithinLoginProbeGrace } from "@/api/apiClient";
 import { getPortalSessionStatus } from "@/api/platformApi";
 import userService from "@/api/services/userService";
 import { resolveCurrentAppPath, resolveLoginHref } from "@/routes/constants";
-import { useUserActions, useUserInfo, useUserToken } from "@/store/userStore";
+import useUserStore, { useUserActions, useUserInfo, useUserToken } from "@/store/userStore";
 import {
 	buildSessionLeaderLease,
 	isSessionLeaderActive,
@@ -278,6 +278,12 @@ export default function SessionManager() {
 		let cancelled = false;
 		let timer: number | undefined;
 		let probing = false;
+		// 连续失败阈值：单次 /session/status 返回 authenticated=false 不立即踢人，
+		// 需连续 2 次确认；portal_session 查询在并发写入 / refresh 瞬间换 token
+		// 等场景下可能出现事务级别的假阴性（见 PortalSessionRegistry.refreshSession
+		// 会 revoke 旧 session 并新建）。CONCURRENT（被顶号）是后端明确信号，
+		// 不走阈值，收到即立即失效。
+		let consecutiveExpiredFails = 0;
 
 		const schedule = (delay = SESSION_STATUS_POLL_MS) => {
 			if (cancelled) return;
@@ -298,7 +304,10 @@ export default function SessionManager() {
 			}
 			probing = true;
 			try {
-				const status = await getPortalSessionStatus(token.accessToken);
+				// 探活前从 store 实时取 token（token 可能被 apiClient silent-refresh 换过，
+				// 闭包里的 token.accessToken 会成旧值 → 后端查旧 token 必然 authenticated=false）。
+				const currentAccessToken = useUserStore.getState().userToken?.accessToken || token.accessToken;
+				const status = await getPortalSessionStatus(currentAccessToken);
 				if (cancelled || logoutInProgressRef.current) {
 					return;
 				}
@@ -308,9 +317,23 @@ export default function SessionManager() {
 						return;
 					}
 					const reason = status?.reason === "CONCURRENT" ? "CONCURRENT" : "EXPIRED";
-					finishSession(clearUserInfoAndToken, logoutInProgressRef, reason);
-					cancelled = true;
-					return;
+					if (reason === "CONCURRENT") {
+						// 并发顶号是后端明确信号，立即结束会话，不等第二次确认。
+						finishSession(clearUserInfoAndToken, logoutInProgressRef, reason);
+						cancelled = true;
+						return;
+					}
+					consecutiveExpiredFails += 1;
+					if (consecutiveExpiredFails >= 2) {
+						finishSession(clearUserInfoAndToken, logoutInProgressRef, reason);
+						cancelled = true;
+						return;
+					}
+					console.warn(
+						`[session] probe authenticated=false (attempt ${consecutiveExpiredFails}/2) — waiting for next tick to confirm`,
+					);
+				} else {
+					consecutiveExpiredFails = 0;
 				}
 			} catch (error) {
 				console.warn("[session] status probe failed", error);

@@ -51,6 +51,10 @@ export default function LoginAuthGuard({ children }: Props) {
 	const { roles = [] } = useUserInfo();
 	const [sessionChecked, setSessionChecked] = useState(false);
 	const [sessionAuthenticated, setSessionAuthenticated] = useState(false);
+	// 连续失败阈值：首次 probe 返回 authenticated=false 不立即踢，等下次 30s interval
+	// 再确认一次（与 SessionManager 的 2 次阈值对齐）。这样 portal_session 查询在
+	// silent-refresh 换 token / 并发事务的瞬间假阴不会误杀用户。
+	const failCountRef = useRef(0);
 
 	const isLocalDevToken = (token?: string) => Boolean(token?.startsWith("dev-access-"));
 	const needsBackendSessionCheck = requiresBackendSessionValidation(accessToken);
@@ -71,20 +75,51 @@ export default function LoginAuthGuard({ children }: Props) {
 		if (isWithinLoginProbeGrace()) {
 			setSessionAuthenticated(true);
 			setSessionChecked(true);
+			failCountRef.current = 0;
 			return;
 		}
 		try {
 			const status = await getPortalSessionStatus();
 			const authenticated = Boolean(status?.authenticated);
-			setSessionAuthenticated(authenticated);
-			setSessionChecked(true);
-			if (!authenticated) {
-				forceLogout();
+			if (authenticated) {
+				failCountRef.current = 0;
+				setSessionAuthenticated(true);
+				setSessionChecked(true);
+				return;
 			}
-		} catch {
-			setSessionAuthenticated(false);
+			// CONCURRENT（被顶号）是后端明确信号，立即失效；其他原因走连续 2 次阈值。
+			const reason = (status as any)?.reason;
+			if (reason === "CONCURRENT") {
+				setSessionAuthenticated(false);
+				setSessionChecked(true);
+				forceLogout();
+				return;
+			}
+			failCountRef.current += 1;
+			if (failCountRef.current >= 2) {
+				setSessionAuthenticated(false);
+				setSessionChecked(true);
+				forceLogout();
+				return;
+			}
+			console.warn(
+				`[LoginAuthGuard] backend session authenticated=false (attempt ${failCountRef.current}/2), 等待下次确认`,
+			);
+			// 单次失败不切换 sessionAuthenticated，避免页面闪烁或拒绝渲染。
+			setSessionAuthenticated(true);
 			setSessionChecked(true);
-			forceLogout();
+		} catch (err) {
+			// 网络/异常也走阈值，避免网络抖动误杀。
+			failCountRef.current += 1;
+			console.warn(`[LoginAuthGuard] backend session probe error (attempt ${failCountRef.current}/2)`, err);
+			if (failCountRef.current >= 2) {
+				setSessionAuthenticated(false);
+				setSessionChecked(true);
+				forceLogout();
+				return;
+			}
+			setSessionAuthenticated(true);
+			setSessionChecked(true);
 		}
 	}, [accessToken, forceLogout, needsBackendSessionCheck]);
 
