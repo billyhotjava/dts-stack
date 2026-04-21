@@ -205,6 +205,9 @@ export default function ScreensPage() {
 		setAiContextHistory([]);
 		setShowAiGenerator(true);
 	};
+	// "自动生成" 入口按钮目前被注释（见下方 JSX），但函数保留以便一键恢复。
+	// 这一行的作用只是让 TS `noUnusedLocals` 认为该变量被读取，避免构建失败。
+	void handleOpenAiGenerator;
 
 	const handleTemplateSelect = async (selection: TemplateSelection) => {
 		setShowTemplateGallery(false);
