@@ -789,12 +789,15 @@ export const componentLibrary: ComponentCategory[] = [
                 },
             },
             {
-                type: 'scroll-board',
+                // 收编入 table 组件的 renderMode='scroll' 模式，不再暴露独立 scroll-board 入口。
+                // 历史大屏中 type='scroll-board' 的组件仍然兼容渲染（ComponentRenderer/TableRenderer 保留分支）。
+                type: 'table',
                 name: '轮播表',
                 icon: '📜',
                 defaultWidth: 400,
                 defaultHeight: 250,
                 defaultConfig: {
+                    renderMode: 'scroll',
                     header: ['列1', '列2', '列3'],
                     data: [
                         ['行1-1', '行1-2', '行1-3'],

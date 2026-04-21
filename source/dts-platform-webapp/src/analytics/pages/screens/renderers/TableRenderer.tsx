@@ -75,47 +75,58 @@ export function renderTable(props: TableRendererProps): ReactNode {
         renderUnavailableState,
     } = props;
 
+    // 抽出的"滚动表格"渲染逻辑 —— 供 legacy `type='scroll-board'` 与
+    // 新的 `type='table' && renderMode='scroll'` 两处调用，保证行为完全一致。
+    const renderAsScrollBoard = (sourceTag: string): ReactNode => {
+        const { header: displayHeader, data: displayData, columnMeta } = resolveBoundTableData(c, { defaultAlign: 'center' });
+        const filteredConfig = { ...c, header: displayHeader, data: displayData, _columnMeta: columnMeta };
+        const canRunScrollBoardActions = mode === 'preview' && componentActions.length > 0;
+        const canRunScrollBoardDefaultDrill = mode === 'preview' && !canRunScrollBoardActions && drillRuntimeEnabled && drillState.canDrillDown;
+        const handleScrollBoardRowClick = (row: string[]) => {
+            const params = buildTableRowActionParams(displayHeader, row);
+            if (canRunScrollBoardActions) {
+                executeComponentActions(params);
+                return;
+            }
+            if (!canRunScrollBoardDefaultDrill) {
+                return;
+            }
+            const clickedValue = resolvePreferredDrillValue(params);
+            if (!clickedValue) {
+                return;
+            }
+            runtime.trackEvent({
+                kind: 'drill-down',
+                key: 'drillValue',
+                value: clickedValue,
+                source: `drill:${component.id}:${sourceTag}`,
+                meta: `depth=${drillState.breadcrumbs.length}`,
+            });
+            drillState.handleDrill(clickedValue);
+        };
+
+        return (
+            <ThemedScrollTable
+                config={filteredConfig}
+                tokens={t}
+                isRowInteractive={canRunScrollBoardActions || canRunScrollBoardDefaultDrill}
+                onRowClick={handleScrollBoardRowClick}
+            />
+        );
+    };
+
     switch (type) {
         case 'scroll-board': {
-            const { header: displayHeader, data: displayData, columnMeta } = resolveBoundTableData(c, { defaultAlign: 'center' });
-            const filteredConfig = { ...c, header: displayHeader, data: displayData, _columnMeta: columnMeta };
-            const canRunScrollBoardActions = mode === 'preview' && componentActions.length > 0;
-            const canRunScrollBoardDefaultDrill = mode === 'preview' && !canRunScrollBoardActions && drillRuntimeEnabled && drillState.canDrillDown;
-            const handleScrollBoardRowClick = (row: string[]) => {
-                const params = buildTableRowActionParams(displayHeader, row);
-                if (canRunScrollBoardActions) {
-                    executeComponentActions(params);
-                    return;
-                }
-                if (!canRunScrollBoardDefaultDrill) {
-                    return;
-                }
-                const clickedValue = resolvePreferredDrillValue(params);
-                if (!clickedValue) {
-                    return;
-                }
-                runtime.trackEvent({
-                    kind: 'drill-down',
-                    key: 'drillValue',
-                    value: clickedValue,
-                    source: `drill:${component.id}:scroll-board`,
-                    meta: `depth=${drillState.breadcrumbs.length}`,
-                });
-                drillState.handleDrill(clickedValue);
-            };
-
-            return (
-                <ThemedScrollTable
-                    config={filteredConfig}
-                    tokens={t}
-                    isRowInteractive={canRunScrollBoardActions || canRunScrollBoardDefaultDrill}
-                    onRowClick={handleScrollBoardRowClick}
-                />
-            );
+            // 历史数据兼容路径：type='scroll-board' 直接按滚动表格渲染。
+            return renderAsScrollBoard('scroll-board');
         }
 
         case 'table': {
             const tableRenderMode = String(c.renderMode ?? '').trim().toLowerCase();
+            // 新路径：table 组件的滚动模式
+            if (tableRenderMode === 'scroll') {
+                return renderAsScrollBoard('table-scroll');
+            }
             if (tableRenderMode === 'delay-reason-matrix') {
                 const sourceCols = Array.isArray(cardData?.cols) ? cardData.cols : [];
                 const sourceRows = Array.isArray(cardData?.rows) ? cardData.rows : [];

@@ -44,8 +44,31 @@ const tableSchema: ComponentConfigSchema = {
         // Advanced group
         { key: 'renderMode',     label: '渲染模式',     type: 'select',  group: 'advanced', options: [
             { label: '标准表格',     value: '' },
+            { label: '滚动表格',     value: 'scroll' },
             { label: '归因矩阵',     value: 'delay-reason-matrix' },
         ], defaultValue: '' },
+        // ---- Scroll-mode 专属字段（原 scroll-board 的字段全部收编为 table.renderMode='scroll'） ----
+        // 放到 behavior/body 分组下，showIf 限定仅在 scroll 模式才显示。
+        { key: 'rowNum',     label: '显示行数',     type: 'number', group: 'behavior',
+            min: 1, max: 20, defaultValue: 5,
+            showIf: (c) => c.renderMode === 'scroll',
+        },
+        { key: 'waitTime',   label: '轮播等待(ms)', type: 'number', group: 'behavior',
+            min: 500, max: 10000, step: 500, defaultValue: 2000,
+            showIf: (c) => c.renderMode === 'scroll',
+        },
+        { key: 'headerBGC',  label: '滚动表头背景', type: 'color',  group: 'header',
+            themeTokenKey: 'scrollBoard.headerBg',
+            showIf: (c) => c.renderMode === 'scroll',
+        },
+        { key: 'oddRowBGC',  label: '滚动奇数行底',  type: 'color',  group: 'body',
+            themeTokenKey: 'scrollBoard.oddRowBg',
+            showIf: (c) => c.renderMode === 'scroll',
+        },
+        { key: 'evenRowBGC', label: '滚动偶数行底',  type: 'color',  group: 'body',
+            themeTokenKey: 'scrollBoard.evenRowBg',
+            showIf: (c) => c.renderMode === 'scroll',
+        },
     ],
 };
 
