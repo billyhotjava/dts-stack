@@ -40,8 +40,19 @@ const TEST_SESSION_REFRESH_MS = Number(import.meta.env.VITE_TEST_SESSION_PING_MS
 const TEST_SESSION_MAX_AGE_MS = Number(import.meta.env.VITE_TEST_SESSION_MAX_AGE_MS ?? 4 * 60 * 60 * 1000);
 const LOGOUT_TS_KEY = "dts.platform.session.logoutTs";
 
+export type PortalRefreshResult = {
+	accessToken: string;
+	refreshToken: string;
+	tokenExpiresAt?: number;
+	expiresIn?: number;
+	adminAccessToken?: string;
+	adminRefreshToken?: string;
+	adminAccessTokenExpiresAt?: string;
+	adminRefreshTokenExpiresAt?: string;
+};
+
 // Token refresh coordination to avoid stampedes
-let refreshingPromise: Promise<boolean> | null = null;
+let refreshingPromise: Promise<PortalRefreshResult | null> | null = null;
 
 function hasRecentLoginGraceWindow(): boolean {
 	try {
@@ -78,13 +89,26 @@ function forceLogoutToLogin() {
 	}
 }
 
-async function refreshTokenIfPossible(): Promise<boolean> {
+function normalizeDate(value: unknown): string | undefined {
+	if (typeof value === "string" && value.trim()) return value.trim();
+	if (value instanceof Date) return value.toISOString();
+	if (typeof value === "number" && Number.isFinite(value)) {
+		try {
+			return new Date(value).toISOString();
+		} catch {
+			return String(value);
+		}
+	}
+	return undefined;
+}
+
+export async function refreshPortalSessionIfPossible(): Promise<PortalRefreshResult | null> {
 	const { userToken, actions } = userStore.getState() as any;
 	const refresh = String(userToken?.refreshToken || "").trim();
-	if (!refresh) return false;
+	if (!refresh) return null;
 	// Only one refresh at a time
 	if (!refreshingPromise) {
-		const refreshTask = (async (): Promise<boolean> => {
+		const refreshTask = (async (): Promise<PortalRefreshResult | null> => {
 			try {
 				const resp: any = await axiosInstance.post(
 					"/keycloak/auth/refresh",
@@ -95,24 +119,31 @@ async function refreshTokenIfPossible(): Promise<boolean> {
 				const nextRefresh = String(resp?.refreshToken || resp?.data?.refreshToken || "").trim();
 				const adminAccessToken = String(resp?.adminAccessToken || resp?.data?.adminAccessToken || "").trim();
 				const adminRefreshToken = String(resp?.adminRefreshToken || resp?.data?.adminRefreshToken || "").trim();
-				const adminAccessTokenExpiresAt = String(
-					resp?.adminAccessTokenExpiresAt || resp?.data?.adminAccessTokenExpiresAt || "",
-				).trim();
-				const adminRefreshTokenExpiresAt = String(
-					resp?.adminRefreshTokenExpiresAt || resp?.data?.adminRefreshTokenExpiresAt || "",
-				).trim();
+				const expiresIn = Number(resp?.expiresIn ?? resp?.data?.expiresIn ?? 0);
+				const tokenExpiresAt = expiresIn > 0 ? Date.now() + expiresIn * 1000 : userToken?.tokenExpiresAt;
+				const adminAccessTokenExpiresAt =
+					normalizeDate(resp?.adminAccessTokenExpiresAt ?? resp?.data?.adminAccessTokenExpiresAt) ??
+					userToken?.adminAccessTokenExpiresAt;
+				const adminRefreshTokenExpiresAt =
+					normalizeDate(resp?.adminRefreshTokenExpiresAt ?? resp?.data?.adminRefreshTokenExpiresAt) ??
+					userToken?.adminRefreshTokenExpiresAt;
 				if (!nextAccess) throw new Error("no_access_token");
-				actions.setUserToken({
+				const nextUserToken = {
 					accessToken: nextAccess,
 					refreshToken: nextRefresh || refresh,
+					tokenExpiresAt,
 					adminAccessToken: adminAccessToken || userToken?.adminAccessToken,
 					adminRefreshToken: adminRefreshToken || userToken?.adminRefreshToken,
-					adminAccessTokenExpiresAt: adminAccessTokenExpiresAt || userToken?.adminAccessTokenExpiresAt,
-					adminRefreshTokenExpiresAt: adminRefreshTokenExpiresAt || userToken?.adminRefreshTokenExpiresAt,
-				});
-				return true;
+					adminAccessTokenExpiresAt,
+					adminRefreshTokenExpiresAt,
+				};
+				actions.setUserToken(nextUserToken);
+				return {
+					...nextUserToken,
+					expiresIn: expiresIn > 0 ? expiresIn : undefined,
+				};
 			} catch {
-				return false;
+				return null;
 			}
 		})();
 		const coordinatedTask = refreshTask.finally(() => {
@@ -123,6 +154,11 @@ async function refreshTokenIfPossible(): Promise<boolean> {
 		refreshingPromise = coordinatedTask;
 	}
 	return refreshingPromise;
+}
+
+export async function refreshTokenIfPossible(): Promise<boolean> {
+	const refreshed = await refreshPortalSessionIfPossible();
+	return Boolean(refreshed?.accessToken);
 }
 
 let keepAliveTimer: number | null = null;

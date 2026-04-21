@@ -2,10 +2,10 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { isWithinLoginProbeGrace } from "@/api/apiClient";
 import { getPortalSessionStatus } from "@/api/platformApi";
 import menuService from "@/api/services/menuService";
+import { GLOBAL_CONFIG } from "@/global-config";
 import useUserStore, { useUserInfo, useUserToken } from "@/store/userStore";
 import { LOGIN_ROUTE, resolveCurrentAppPath, resolveLoginHref } from "../constants";
 import { useRouter } from "../hooks";
-import { GLOBAL_CONFIG } from "@/global-config";
 
 /** Decode JWT exp claim. Returns expiry in ms or null if not a valid JWT. */
 function decodeJwtExp(token?: string): number | null {
@@ -52,11 +52,10 @@ export default function LoginAuthGuard({ children }: Props) {
 	const [sessionChecked, setSessionChecked] = useState(false);
 	const [sessionAuthenticated, setSessionAuthenticated] = useState(false);
 	// 连续失败阈值：首次 probe 返回 authenticated=false 不立即踢，等下次 30s interval
-	// 再确认一次（与 SessionManager 的 2 次阈值对齐）。这样 portal_session 查询在
-	// silent-refresh 换 token / 并发事务的瞬间假阴不会误杀用户。
+	// 再确认一次（与 SessionManager 的 2 次阈值对齐），避免并发刷新或短暂探活异常
+	// 造成瞬时假阴后直接误杀用户。
 	const failCountRef = useRef(0);
 
-	const isLocalDevToken = (token?: string) => Boolean(token?.startsWith("dev-access-"));
 	const needsBackendSessionCheck = requiresBackendSessionValidation(accessToken);
 
 	const forceLogout = useCallback(() => {
@@ -79,7 +78,8 @@ export default function LoginAuthGuard({ children }: Props) {
 			return;
 		}
 		try {
-			const status = await getPortalSessionStatus();
+			const currentAccessToken = useUserStore.getState().userToken?.accessToken || accessToken;
+			const status = await getPortalSessionStatus(currentAccessToken);
 			const authenticated = Boolean(status?.authenticated);
 			if (authenticated) {
 				failCountRef.current = 0;
@@ -209,14 +209,11 @@ export default function LoginAuthGuard({ children }: Props) {
 	// Ensure menus reflect the current identity. Reload on token change even if a previous menu exists.
 	// This fixes a stale-menu issue when switching accounts without a full page reload.
 	useEffect(() => {
-		if (accessToken && !isLocalDevToken(accessToken)) {
-			menuService
-				.getMenuTree()
-				.catch(() => {
-					/* ignore */
-				});
+		if (accessToken && !accessToken.startsWith("dev-access-")) {
+			menuService.getMenuTree().catch(() => {
+				/* ignore */
+			});
 		}
-		// eslint-disable-next-line react-hooks/exhaustive-deps
 	}, [accessToken]);
 
 	// Block rendering if the token is missing or expired — prevents dashboard flash before redirect.

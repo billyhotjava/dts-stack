@@ -36,7 +36,9 @@ describe("platform session management source contract", () => {
 		expect(sessionManagerSource.includes('REFRESH_LEADER: "dts.platform.session.refreshLeader"')).toBe(true);
 		expect(sessionManagerSource.includes('SESSION_ID: "dts.platform.session.id"')).toBe(true);
 		expect(sessionManagerSource.includes("FOLLOWER_RECHECK_MS")).toBe(true);
+		expect(sessionManagerSource.includes("refreshPortalSessionIfPossible")).toBe(true);
 		expect(guardSource.includes("tokenExpiresAt - 10_000")).toBe(false);
 		expect(loginPageSource.includes("tokenExpiresAt - 10_000")).toBe(false);
+		expect(guardSource.includes("getPortalSessionStatus(currentAccessToken)")).toBe(true);
 	});
 });

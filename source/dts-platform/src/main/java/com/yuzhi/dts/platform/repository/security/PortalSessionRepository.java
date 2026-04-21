@@ -16,6 +16,10 @@ public interface PortalSessionRepository extends JpaRepository<PortalSessionEnti
 
     Optional<PortalSessionEntity> findByRefreshToken(String refreshToken);
 
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("select ps from PortalSessionEntity ps where ps.refreshToken = :refreshToken")
+    Optional<PortalSessionEntity> findByRefreshTokenForUpdate(@Param("refreshToken") String refreshToken);
+
     Optional<PortalSessionEntity> findByNormalizedUsernameAndRevokedAtIsNull(String normalizedUsername);
 
     @Lock(LockModeType.PESSIMISTIC_WRITE)

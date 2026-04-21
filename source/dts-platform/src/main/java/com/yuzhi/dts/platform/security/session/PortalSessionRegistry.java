@@ -80,7 +80,7 @@ public class PortalSessionRegistry {
 
     public PortalSession refreshSession(String refreshToken, Function<PortalSession, AdminTokens> adminTokenProvider) {
         PortalSessionEntity existing = sessionRepository
-            .findByRefreshToken(refreshToken)
+            .findByRefreshTokenForUpdate(refreshToken)
             .orElseThrow(() -> new IllegalArgumentException("unknown_refresh_token"));
 
         Instant now = Instant.now();
@@ -101,12 +101,16 @@ public class PortalSessionRegistry {
             }
         }
 
-        PortalSession renewed = current.renew(sessionTtl, tokens);
-        revokeSession(existing, PortalSessionCloseReason.EXPIRED, UUID.fromString(renewed.sessionId()), now);
-
-        PortalSessionEntity entity = toEntity(renewed, existing.getNormalizedUsername(), now);
-        sessionRepository.save(entity);
-        return toPortalSession(entity);
+        existing.setExpiresAt(now.plus(sessionTtl));
+        existing.setLastSeenAt(now);
+        if (tokens != null) {
+            existing.setAdminAccessToken(tokens.accessToken());
+            existing.setAdminAccessTokenExpiresAt(tokens.accessExpiresAt());
+            existing.setAdminRefreshToken(tokens.refreshToken());
+            existing.setAdminRefreshTokenExpiresAt(tokens.refreshExpiresAt());
+        }
+        PortalSessionEntity saved = sessionRepository.saveAndFlush(existing);
+        return toPortalSession(saved);
     }
 
     public Optional<PortalSession> findByAccessToken(String accessToken) {

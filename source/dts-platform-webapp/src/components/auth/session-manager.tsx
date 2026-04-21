@@ -1,8 +1,7 @@
 import { useEffect, useMemo, useRef } from "react";
 import { toast } from "sonner";
-import { isWithinLoginProbeGrace } from "@/api/apiClient";
+import { isWithinLoginProbeGrace, refreshPortalSessionIfPossible } from "@/api/apiClient";
 import { getPortalSessionStatus } from "@/api/platformApi";
-import userService from "@/api/services/userService";
 import { resolveCurrentAppPath, resolveLoginHref } from "@/routes/constants";
 import useUserStore, { useUserActions, useUserInfo, useUserToken } from "@/store/userStore";
 import {
@@ -279,9 +278,8 @@ export default function SessionManager() {
 		let timer: number | undefined;
 		let probing = false;
 		// 连续失败阈值：单次 /session/status 返回 authenticated=false 不立即踢人，
-		// 需连续 2 次确认；portal_session 查询在并发写入 / refresh 瞬间换 token
-		// 等场景下可能出现事务级别的假阴性（见 PortalSessionRegistry.refreshSession
-		// 会 revoke 旧 session 并新建）。CONCURRENT（被顶号）是后端明确信号，
+		// 需连续 2 次确认；探活在并发刷新、事务可见性切换或短暂网络抖动时
+		// 仍可能出现瞬时假阴性。CONCURRENT（被顶号）是后端明确信号，
 		// 不走阈值，收到即立即失效。
 		let consecutiveExpiredFails = 0;
 
@@ -431,39 +429,17 @@ export default function SessionManager() {
 				return;
 			}
 			try {
-				const res = await userService.refresh(currentRefreshToken);
-				const nextAccess = (res as any)?.accessToken;
-				const nextRefresh = (res as any)?.refreshToken;
-				// Derive tokenExpiresAt from backend expiresIn (Keycloak token lifetime)
-				const expiresInSec = Number((res as any)?.expiresIn ?? 0);
-				const nextTokenExpiresAt = expiresInSec > 0 ? Date.now() + expiresInSec * 1000 : token.tokenExpiresAt;
-				const normalizeDate = (value: unknown): string | undefined =>
-					typeof value === "string" && value.trim() ? value.trim() : undefined;
-				const nextAdminAccess = (res as any)?.adminAccessToken || token.adminAccessToken;
-				const nextAdminRefresh = (res as any)?.adminRefreshToken || token.adminRefreshToken;
-				const adminAccessExpiresAt =
-					normalizeDate((res as any)?.adminAccessTokenExpiresAt) ?? token.adminAccessTokenExpiresAt;
-				const adminRefreshExpiresAt =
-					normalizeDate((res as any)?.adminRefreshTokenExpiresAt) ?? token.adminRefreshTokenExpiresAt;
-				if (nextAccess) {
-					const newToken = {
-						accessToken: nextAccess,
-						refreshToken: nextRefresh || token.refreshToken,
-						tokenExpiresAt: nextTokenExpiresAt,
-						adminAccessToken: nextAdminAccess,
-						adminRefreshToken: nextAdminRefresh,
-						adminAccessTokenExpiresAt: adminAccessExpiresAt,
-						adminRefreshTokenExpiresAt: adminRefreshExpiresAt,
-					};
-					setUserToken(newToken);
-					broadcastTokenSync(newToken);
+				const refreshed = await refreshPortalSessionIfPossible();
+				if (!refreshed?.accessToken) {
+					throw new Error("portal_refresh_failed");
 				}
+				broadcastTokenSync(refreshed);
 				if (!cancelled) {
 					// Use expiresIn from Keycloak for precise scheduling
 					const refreshDelay =
-						expiresInSec > 0
-							? Math.max(60_000, expiresInSec * 1000 - 60_000)
-							: nextRefreshDelayMs(nextAccess || token.accessToken);
+						typeof refreshed.expiresIn === "number" && refreshed.expiresIn > 0
+							? Math.max(60_000, refreshed.expiresIn * 1000 - 60_000)
+							: nextRefreshDelayMs(refreshed.accessToken || token.accessToken);
 					schedule(refreshDelay);
 				}
 			} catch {
