@@ -2,6 +2,40 @@
 import type { ReactNode } from 'react';
 import type { EChartsRendererProps } from './types';
 
+// ---- 小工具 ----
+const pickNum = (v: unknown): number | undefined => {
+    const n = Number(v);
+    return Number.isFinite(n) ? n : undefined;
+};
+
+// 把 hex / rgb / rgba / hsl / var(--x) 颜色附加 alpha，生成 ECharts 可接受的颜色串。
+// 当传入颜色本身已含 alpha（如 rgba），使用 global-composite 简化：直接返回原色（ECharts 会按原色计算）。
+function toAlphaHex(color: string, alpha: number): string {
+    if (typeof color !== 'string' || !color.trim()) return `rgba(99,102,241,${alpha})`;
+    const c = color.trim();
+    const a = Math.max(0, Math.min(1, alpha));
+    if (c.startsWith('#')) {
+        // 扩展 #abc → #aabbcc
+        const hex = c.length === 4
+            ? '#' + c.slice(1).split('').map((ch) => ch + ch).join('')
+            : c;
+        if (hex.length === 7) {
+            const r = parseInt(hex.slice(1, 3), 16);
+            const g = parseInt(hex.slice(3, 5), 16);
+            const b = parseInt(hex.slice(5, 7), 16);
+            if ([r, g, b].every(Number.isFinite)) return `rgba(${r},${g},${b},${a})`;
+        }
+    }
+    if (c.startsWith('rgb(') || c.startsWith('rgba(')) {
+        return c.replace(/rgba?\(([^)]+)\)/, (_, body) => {
+            const parts = body.split(',').map((s: string) => s.trim());
+            return `rgba(${parts[0]},${parts[1]},${parts[2]},${a})`;
+        });
+    }
+    // 其他（hsl/var/命名色）直接返回原色——ECharts 仍可用，但无法注入 alpha。
+    return c;
+}
+
 export function renderAxisChart(type: string, props: EChartsRendererProps): ReactNode | null {
     const {
         c, t,
@@ -58,6 +92,23 @@ export function renderAxisChart(type: string, props: EChartsRendererProps): Reac
         onEvents?: Record<string, (params: Record<string, unknown>) => void>,
     ) => renderEChartRaw(applyAxisOverrides(option), onEvents);
 
+    // ---- 通用视觉增强开关（由 schema 暴露，默认商业化观感） ----
+    const showArea = c.showArea !== false;                 // line 是否显示区域填充渐变
+    const smoothLine = c.smooth !== false;                 // line 是否平滑
+    const lineWidth = pickNum(c.lineWidth) ?? 2.5;         // line 描边粗细
+    const barBorderRadius = pickNum(c.barBorderRadius) ?? 6; // bar 顶部圆角
+    // 把用户选 / 主题给出的色 + 透明版本组合为 LinearGradient，用于面积填充。
+    // 透明度由 opacityTop -> opacityBottom，ECharts 支持 hex+alpha 或 rgba。
+    const makeAreaGradient = (baseColor: string) => ({
+        type: 'linear',
+        x: 0, y: 0, x2: 0, y2: 1,
+        colorStops: [
+            { offset: 0, color: toAlphaHex(baseColor, 0.42) },
+            { offset: 1, color: toAlphaHex(baseColor, 0.02) },
+        ],
+    });
+    const enableDataZoom = c.enableDataZoom === true;      // 是否启用缩放滑块（大数据场景）
+
     switch (type) {
         case 'line-chart':
             return renderEChartWithHandles({
@@ -94,13 +145,15 @@ export function renderAxisChart(type: string, props: EChartsRendererProps): Reac
                 series: (Array.isArray(c.series) ? c.series as Array<{ name: string; data: number[] }> : []).map((s, idx) => {
                     const lineStackMode = String(c.stackMode ?? 'off');
                     const stackGroup = lineStackMode !== 'off' ? 'stack' : undefined;
+                    const baseColor = seriesColors[idx] ?? t.echarts.colorPalette[idx % t.echarts.colorPalette.length];
                     return {
                         name: s.name,
                         type: 'line' as const,
                         data: s.data,
-                        smooth: true,
+                        smooth: smoothLine,
                         stack: stackGroup,
                         showSymbol: !isCompactCanvas || xAxisCategoryCount <= 24,
+                        symbolSize: 6,
                         label: {
                             show: axisSeriesLabelShow && (resolvedAxisSeriesLabelStrategy === 'all' || idx === 0),
                             position: axisLineLabelPosition,
@@ -113,16 +166,27 @@ export function renderAxisChart(type: string, props: EChartsRendererProps): Reac
                             hideOverlap: true,
                             moveOverlap: 'shiftY',
                         },
-                        areaStyle: {
-                            opacity: stackGroup ? 0.6 : 0.3,
-                            ...(seriesColors[idx] ? { color: seriesColors[idx] } : {}),
-                        },
-                        ...(seriesColors[idx]
-                            ? { lineStyle: { color: seriesColors[idx] }, itemStyle: { color: seriesColors[idx] } }
-                            : {}),
+                        // 面积渐变：顶部不透明度 0.42，底部 0.02，和主线同色；用户 c.showArea=false 可关闭。
+                        ...(showArea ? {
+                            areaStyle: {
+                                opacity: 1,
+                                color: stackGroup
+                                    ? toAlphaHex(baseColor, 0.6)
+                                    : makeAreaGradient(baseColor),
+                            },
+                        } : {}),
+                        lineStyle: { color: baseColor, width: lineWidth },
+                        itemStyle: { color: baseColor, borderWidth: 2, borderColor: t.echarts.tooltipBg || '#fff' },
+                        emphasis: { focus: 'series', lineStyle: { width: lineWidth + 1 } },
                     };
                 }),
                 grid: axisGrid,
+                ...(enableDataZoom ? {
+                    dataZoom: [
+                        { type: 'inside', start: 0, end: 100 },
+                        { type: 'slider', height: 18, bottom: 4 },
+                    ],
+                } : {}),
             }, echartsClickHandler);
 
         case 'bar-chart': {
@@ -168,37 +232,62 @@ export function renderAxisChart(type: string, props: EChartsRendererProps): Reac
                 },
                 xAxis: barHorizontal ? valueAxisConfig : categoryAxisConfig,
                 yAxis: barHorizontal ? categoryAxisConfig : valueAxisConfig,
-                series: (Array.isArray(c.series) ? c.series as Array<{ name: string; data: number[] }> : []).map((s, idx) => ({
-                    name: s.name,
-                    type: 'bar',
-                    data: s.data,
-                    stack: barStackGroup,
-                    label: {
-                        show: axisSeriesLabelShow && (resolvedAxisSeriesLabelStrategy === 'all' || idx === 0),
-                        position: barHorizontal ? 'right' : axisBarLabelPosition,
-                        color: axisBarLabelColor,
-                        fontSize: seriesLabelFontSize,
-                        distance: isTinyCanvas ? 2 : 6,
-                        formatter: axisSeriesLabelFormatter,
-                    },
-                    labelLayout: {
-                        hideOverlap: true,
-                    },
-                    itemStyle: {
-                        borderRadius: barHorizontal ? [0, 4, 4, 0] : [4, 4, 0, 0],
-                        color: seriesColors[idx]
-                            ? seriesColors[idx]
-                            : {
-                                type: 'linear',
-                                x: 0, y: 0, x2: barHorizontal ? 1 : 0, y2: barHorizontal ? 0 : 1,
-                                colorStops: [
-                                    { offset: 0, color: t.barGradient[0] },
-                                    { offset: 1, color: t.barGradient[1] },
-                                ],
+                series: (Array.isArray(c.series) ? c.series as Array<{ name: string; data: number[] }> : []).map((s, idx) => {
+                    const baseColor = seriesColors[idx] ?? t.echarts.colorPalette[idx % t.echarts.colorPalette.length];
+                    return {
+                        name: s.name,
+                        type: 'bar',
+                        data: s.data,
+                        stack: barStackGroup,
+                        label: {
+                            show: axisSeriesLabelShow && (resolvedAxisSeriesLabelStrategy === 'all' || idx === 0),
+                            position: barHorizontal ? 'right' : axisBarLabelPosition,
+                            color: axisBarLabelColor,
+                            fontSize: seriesLabelFontSize,
+                            distance: isTinyCanvas ? 2 : 6,
+                            formatter: axisSeriesLabelFormatter,
+                        },
+                        labelLayout: { hideOverlap: true },
+                        itemStyle: {
+                            // c.barBorderRadius 控制圆角，横向柱子顶部在右，纵向柱子顶部在上
+                            borderRadius: barHorizontal
+                                ? [0, barBorderRadius, barBorderRadius, 0]
+                                : [barBorderRadius, barBorderRadius, 0, 0],
+                            color: seriesColors[idx]
+                                ? {
+                                    // 用户指定单色 → 做一个同色系渐变（浅到深）避免死板
+                                    type: 'linear',
+                                    x: 0, y: 0, x2: barHorizontal ? 1 : 0, y2: barHorizontal ? 0 : 1,
+                                    colorStops: [
+                                        { offset: 0, color: toAlphaHex(baseColor, 0.95) },
+                                        { offset: 1, color: toAlphaHex(baseColor, 0.55) },
+                                    ],
+                                }
+                                : {
+                                    type: 'linear',
+                                    x: 0, y: 0, x2: barHorizontal ? 1 : 0, y2: barHorizontal ? 0 : 1,
+                                    colorStops: [
+                                        { offset: 0, color: t.barGradient[0] },
+                                        { offset: 1, color: t.barGradient[1] },
+                                    ],
+                                },
+                        },
+                        emphasis: {
+                            focus: 'series',
+                            itemStyle: {
+                                shadowBlur: 10,
+                                shadowColor: 'rgba(0,0,0,0.18)',
                             },
-                    },
-                })),
+                        },
+                    };
+                }),
                 grid: axisGrid,
+                ...(enableDataZoom ? {
+                    dataZoom: [
+                        { type: 'inside', start: 0, end: 100 },
+                        { type: 'slider', height: 18, bottom: 4 },
+                    ],
+                } : {}),
             }, echartsClickHandler);
         }
 
@@ -255,6 +344,26 @@ export function renderAxisChart(type: string, props: EChartsRendererProps): Reac
                 },
                 series: builtSeries,
                 grid: axisGrid,
+                // 启用 visualMap 时依据 value[2] 将数据按范围映射到调色板
+                ...(c.enableVisualMap === true ? {
+                    visualMap: {
+                        min: pickNum(c.visualMapMin) ?? 0,
+                        max: pickNum(c.visualMapMax) ?? 100,
+                        dimension: 2,
+                        calculable: true,
+                        orient: 'horizontal',
+                        left: 'center',
+                        bottom: 8,
+                        inRange: { color: t.echarts.colorPalette },
+                        textStyle: { color: t.textSecondary },
+                    },
+                } : {}),
+                ...(enableDataZoom ? {
+                    dataZoom: [
+                        { type: 'inside', xAxisIndex: 0, start: 0, end: 100 },
+                        { type: 'slider', xAxisIndex: 0, height: 18, bottom: 4 },
+                    ],
+                } : {}),
             }, echartsClickHandler);
             /* eslint-enable @typescript-eslint/no-explicit-any */
         }

@@ -25,6 +25,12 @@ export function DesignerCanvas() {
 
     // Apply theme CSS Variables to canvas so components pick up theme changes
     const editorTheme = resolveScreenTheme(config.theme, config.backgroundColor);
+    const editorThemeTokens = getThemeTokens(editorTheme);
+    // 画布底色优先使用用户自定义 (config.backgroundColor)；未设置/空时跟主题走
+    // 以避免"浅色主题 + 深色画布"视觉错位。
+    const resolvedCanvasBackground = (typeof config.backgroundColor === 'string' && config.backgroundColor.trim().length > 0)
+        ? config.backgroundColor
+        : editorThemeTokens.canvasBackground;
     useEffect(() => {
         if (canvasRef.current) applyThemeCssVariables(canvasRef.current, editorTheme);
     }, [editorTheme]);
@@ -271,7 +277,7 @@ export function DesignerCanvas() {
                     style={{
                         width: config.width,
                         height: config.height,
-                        backgroundColor: config.backgroundColor,
+                        backgroundColor: resolvedCanvasBackground,
                         backgroundImage: safeCssBackgroundUrl(config.backgroundImage),
                         backgroundSize: 'cover',
                         backgroundPosition: 'center',

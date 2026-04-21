@@ -16,6 +16,10 @@ const lineChartSchema: ComponentConfigSchema = {
             { label: '关闭', value: 'off' },
             { label: '堆叠', value: 'stack' },
         ], defaultValue: 'off' },
+        { key: 'smooth', label: '平滑曲线', type: 'boolean', group: 'chart', defaultValue: true },
+        { key: 'showArea', label: '面积填充', type: 'boolean', group: 'chart', defaultValue: true },
+        { key: 'lineWidth', label: '线宽', type: 'number', group: 'chart', min: 1, max: 6, step: 0.5, defaultValue: 2.5 },
+        { key: 'enableDataZoom', label: '启用缩放滑块', type: 'boolean', group: 'behavior', defaultValue: false },
     ],
 };
 
@@ -33,6 +37,8 @@ const barChartSchema: ComponentConfigSchema = {
             { label: '关闭', value: 'off' },
             { label: '堆叠', value: 'stack' },
         ], defaultValue: 'off' },
+        { key: 'barBorderRadius', label: '柱子圆角', type: 'number', group: 'chart', min: 0, max: 16, step: 1, defaultValue: 6 },
+        { key: 'enableDataZoom', label: '启用缩放滑块', type: 'boolean', group: 'behavior', defaultValue: false },
     ],
 };
 
@@ -41,6 +47,13 @@ const pieChartSchema: ComponentConfigSchema = {
     groups: [STANDARD_GROUPS.chart, STANDARD_GROUPS.appearance, STANDARD_GROUPS.layout, STANDARD_GROUPS.behavior, STANDARD_GROUPS.advanced],
     fields: [
         ...ECHARTS_COMMON_FIELDS,
+        { key: 'roseType', label: '玫瑰模式', type: 'select', group: 'chart', options: [
+            { label: '关闭', value: '' },
+            { label: '按半径', value: 'radius' },
+            { label: '按面积', value: 'area' },
+        ], defaultValue: '' },
+        { key: 'padAngle', label: '扇形间距', type: 'number', group: 'chart', min: 0, max: 10, step: 0.5, defaultValue: 2 },
+        { key: 'pieBorderRadius', label: '扇形圆角', type: 'number', group: 'chart', min: 0, max: 20, step: 1, defaultValue: 6 },
     ],
 };
 
@@ -63,6 +76,12 @@ const scatterChartSchema: ComponentConfigSchema = {
         ...AXIS_CHART_FIELDS,
         { key: 'xAxisName', label: 'X 轴名称', type: 'text', group: 'chart' },
         { key: 'yAxisName', label: 'Y 轴名称', type: 'text', group: 'chart' },
+        { key: 'enableVisualMap', label: '启用视觉映射', type: 'boolean', group: 'chart', defaultValue: false },
+        { key: 'visualMapMin', label: '映射最小值', type: 'number', group: 'chart',
+            showIf: (c) => c.enableVisualMap === true },
+        { key: 'visualMapMax', label: '映射最大值', type: 'number', group: 'chart',
+            showIf: (c) => c.enableVisualMap === true },
+        { key: 'enableDataZoom', label: '启用缩放滑块', type: 'boolean', group: 'behavior', defaultValue: false },
     ],
 };
 

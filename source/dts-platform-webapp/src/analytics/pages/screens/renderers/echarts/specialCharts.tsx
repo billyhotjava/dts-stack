@@ -208,9 +208,19 @@ export function renderSpecialChart(type: string, props: EChartsRendererProps): R
                     ? mappedSeries.map((item, index) => ({
                         name: item.name,
                         value: Array.isArray(item.data) ? item.data : [],
-                        areaStyle: { opacity: Math.max(0.14, 0.32 - (index * 0.08)) },
+                        // 默认填充透明度统一到 0.25 起步，逐系列递减，视觉更饱满
+                        areaStyle: { opacity: Math.max(0.18, 0.35 - (index * 0.08)) },
+                        lineStyle: { width: 2 },
+                        symbol: 'circle',
+                        symbolSize: 5,
                     }))
-                    : [{ value: c.data as number[], areaStyle: { opacity: 0.3 } }];
+                    : [{
+                        value: c.data as number[],
+                        areaStyle: { opacity: 0.32 },
+                        lineStyle: { width: 2 },
+                        symbol: 'circle',
+                        symbolSize: 5,
+                    }];
             return renderEChartWithHandles({
                 ...themeOptions,
                 ...chartMotionOption,
@@ -221,12 +231,20 @@ export function renderSpecialChart(type: string, props: EChartsRendererProps): R
                     indicator: c.indicator as Array<{ name: string; max: number }>,
                     center: [plotCenterX, plotCenterY],
                     radius: radarRadius,
-                    axisName: { color: t.radar.axisNameColor },
+                    axisName: { color: t.radar.axisNameColor, fontSize: 12 },
+                    axisLine: { lineStyle: { color: t.radar.splitLineColor } },
                     splitLine: { lineStyle: { color: t.radar.splitLineColor } },
-                    splitArea: { areaStyle: { color: ['transparent'] } },
+                    // 交错色带替代单色背景，视觉更专业
+                    splitArea: {
+                        show: true,
+                        areaStyle: {
+                            color: ['rgba(148,163,184,0.04)', 'rgba(148,163,184,0.01)'],
+                        },
+                    },
                 },
                 series: [{
                     type: 'radar',
+                    emphasis: { focus: 'self', lineStyle: { width: 3 } },
                     data: radarSeries,
                 }],
             }, echartsClickHandler);
@@ -547,7 +565,13 @@ export function renderSpecialChart(type: string, props: EChartsRendererProps): R
                 series: [{
                     type: 'heatmap',
                     data: heatmapData,
-                    emphasis: { itemStyle: { shadowBlur: 10 } },
+                    itemStyle: {
+                        // 单元格圆角 + 2px 间隙让热力图更像"卡片阵列"而不是一整块色块
+                        borderRadius: 4,
+                        borderColor: t.echarts.tooltipBg || 'rgba(255,255,255,0.85)',
+                        borderWidth: 1,
+                    },
+                    emphasis: { itemStyle: { shadowBlur: 12, shadowColor: 'rgba(0,0,0,0.2)' } },
                     label: { show: axisSeriesLabelShow, color: t.textPrimary, fontSize: seriesLabelFontSize },
                 }],
                 grid: axisGrid,
