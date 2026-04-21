@@ -5,7 +5,7 @@ import type { EChartsRendererProps } from './types';
 export function renderAxisChart(type: string, props: EChartsRendererProps): ReactNode | null {
     const {
         c, t,
-        renderEChartWithHandles,
+        renderEChartWithHandles: renderEChartRaw,
         themeOptions, chartMotionOption, chartTitleLayout, legendConfig, axisGrid, seriesColors,
         axisFontSize, axisLabelColor: axisLabelColorOverride, seriesLabelFontSize,
         xAxisLabelRotate, yAxisLabelRotate, xAxisLabelInterval, formatXAxisLabel,
@@ -13,9 +13,50 @@ export function renderAxisChart(type: string, props: EChartsRendererProps): Reac
         axisLineLabelPosition, axisBarLabelPosition, axisBarLabelColor, axisTooltipFormatter,
         isCompactCanvas, isTinyCanvas, xAxisCategoryCount,
         echartsClickHandler,
+        axisOverrides,
     } = props;
 
     const axisLabelColor = axisLabelColorOverride || t.echarts.axisLabelColor;
+
+    // AxisConfigEditor / 嵌套 c.xAxis / c.yAxis 里的 show / splitLineShow / min / max / type
+    // 需要在这里统一 merge 到 ECharts option 上。之前每个 case 里自己写 xAxis/yAxis，
+    // 这些字段完全被忽略导致"UI 设置不生效"。
+    const mergeAxis = (axis: any, ov: any): any => {
+        if (!axis || !ov) return axis;
+        const next = { ...axis };
+        if (ov.show === false || ov.show === true) next.show = ov.show;
+        if (ov.type !== undefined) next.type = ov.type;
+        if (ov.min !== undefined) next.min = ov.min;
+        if (ov.max !== undefined) next.max = ov.max;
+        if (ov.splitLineShow === true || ov.splitLineShow === false || ov.splitLineColor !== undefined) {
+            const prev = axis.splitLine || {};
+            const prevStyle = prev.lineStyle || {};
+            next.splitLine = {
+                ...prev,
+                ...(ov.splitLineShow === true || ov.splitLineShow === false ? { show: ov.splitLineShow } : {}),
+                ...(ov.splitLineColor !== undefined
+                    ? { lineStyle: { ...prevStyle, color: ov.splitLineColor } }
+                    : {}),
+            };
+        }
+        return next;
+    };
+    const applyToAxis = (val: any, ov: any) => {
+        if (!ov) return val;
+        if (Array.isArray(val)) return val.map((v) => mergeAxis(v, ov));
+        return mergeAxis(val, ov);
+    };
+    const applyAxisOverrides = (option: Record<string, unknown>): Record<string, unknown> => {
+        if (!axisOverrides) return option;
+        const out = { ...option };
+        if (out.xAxis && axisOverrides.x) out.xAxis = applyToAxis(out.xAxis, axisOverrides.x);
+        if (out.yAxis && axisOverrides.y) out.yAxis = applyToAxis(out.yAxis, axisOverrides.y);
+        return out;
+    };
+    const renderEChartWithHandles = (
+        option: Record<string, unknown>,
+        onEvents?: Record<string, (params: Record<string, unknown>) => void>,
+    ) => renderEChartRaw(applyAxisOverrides(option), onEvents);
 
     switch (type) {
         case 'line-chart':

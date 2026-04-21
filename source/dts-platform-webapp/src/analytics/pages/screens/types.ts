@@ -310,7 +310,7 @@ export type ScreenAction =
     | { type: 'MARK_BASELINE'; payload: ScreenConfig }
     | { type: 'MERGE_CONFIG'; payload: Partial<ScreenConfig> }
     | { type: 'ADD_COMPONENT'; payload: ScreenComponent }
-    | { type: 'UPDATE_COMPONENT'; payload: { id: string; updates: Partial<ScreenComponent> } }
+    | { type: 'UPDATE_COMPONENT'; payload: { id: string; updates: Partial<ScreenComponent> | ((prev: ScreenComponent) => Partial<ScreenComponent>) } }
     | { type: 'DELETE_COMPONENTS'; payload: string[] }
     | { type: 'DUPLICATE_COMPONENTS'; payload: { sourceIds: string[] } }
     | { type: 'COPY_COMPONENTS'; payload: string[] }  // Copy to clipboard

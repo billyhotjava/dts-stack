@@ -85,6 +85,53 @@ export const STYLE_CONFIG_EXCLUDE_KEYS = new Set<string>([
     'drillDown',
 ]);
 
+/**
+ * 把 "a.b.c" 路径的值写入对象，返回新对象，保留其他嵌套属性不变。
+ * 与 SchemaConfigRenderer 的 resolveNestedValue 读路径对称。
+ */
+export function setByPath(
+    obj: Record<string, unknown> | undefined | null,
+    path: string,
+    value: unknown,
+): Record<string, unknown> {
+    const base = (obj && typeof obj === 'object') ? obj : {};
+    if (!path) return { ...base };
+    const parts = path.split('.');
+    if (parts.length === 1) return { ...base, [path]: value };
+    const [head, ...rest] = parts;
+    const prev = base[head];
+    const prevObj = (prev && typeof prev === 'object' && !Array.isArray(prev))
+        ? (prev as Record<string, unknown>)
+        : {};
+    return { ...base, [head]: setByPath(prevObj, rest.join('.'), value) };
+}
+
+/**
+ * 深合并两个对象，source 的值覆盖 target 的值；对嵌套对象递归合并。
+ * 数组、null、primitive 直接替换，不做合并。
+ */
+export function deepMergeConfig(
+    target: Record<string, unknown> | undefined | null,
+    source: Record<string, unknown> | undefined | null,
+): Record<string, unknown> {
+    const a = (target && typeof target === 'object') ? target : {};
+    const b = (source && typeof source === 'object') ? source : {};
+    const out: Record<string, unknown> = { ...a };
+    for (const key of Object.keys(b)) {
+        const sv = b[key];
+        const tv = a[key];
+        if (
+            sv && typeof sv === 'object' && !Array.isArray(sv)
+            && tv && typeof tv === 'object' && !Array.isArray(tv)
+        ) {
+            out[key] = deepMergeConfig(tv as Record<string, unknown>, sv as Record<string, unknown>);
+        } else {
+            out[key] = sv;
+        }
+    }
+    return out;
+}
+
 export function isVisualConfigKey(key: string): boolean {
     const normalized = String(key || '').trim();
     if (!normalized) return false;

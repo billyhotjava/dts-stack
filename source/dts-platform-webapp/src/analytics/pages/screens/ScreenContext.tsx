@@ -169,9 +169,15 @@ function screenReducer(state: ScreenState, action: ScreenAction): ScreenState {
         }
 
         case 'UPDATE_COMPONENT': {
-            const nextComponents = state.config.components.map((comp) =>
-                comp.id === action.payload.id ? { ...comp, ...action.payload.updates } : comp
-            );
+            // 支持函数式 updater：reducer 内部用"当前最新"的 comp 作为基线，
+            // 避免调用方在闭包里持有旧 config 时，合并后反向覆盖掉其他字段的最新值。
+            const nextComponents = state.config.components.map((comp) => {
+                if (comp.id !== action.payload.id) return comp;
+                const upd = typeof action.payload.updates === 'function'
+                    ? action.payload.updates(comp)
+                    : action.payload.updates;
+                return { ...comp, ...upd };
+            });
             const newComponents = sanitizeComponents(nextComponents);
             const newConfig = { ...state.config, components: newComponents };
             return {
@@ -392,7 +398,10 @@ interface ScreenContextValue {
     state: ScreenState;
     dispatch: React.Dispatch<ScreenAction>;
     addComponent: (component: ScreenComponent) => void;
-    updateComponent: (id: string, updates: Partial<ScreenComponent>) => void;
+    updateComponent: (
+        id: string,
+        updates: Partial<ScreenComponent> | ((prev: ScreenComponent) => Partial<ScreenComponent>),
+    ) => void;
     deleteComponents: (ids: string[]) => void;
     selectComponents: (ids: string[]) => void;
     undo: () => void;
@@ -460,9 +469,15 @@ export function ScreenProvider({ children }: { children: ReactNode }) {
         dispatch({ type: 'ADD_COMPONENT', payload: component });
     }, []);
 
-    const updateComponent = useCallback((id: string, updates: Partial<ScreenComponent>) => {
-        dispatch({ type: 'UPDATE_COMPONENT', payload: { id, updates } });
-    }, []);
+    const updateComponent = useCallback(
+        (
+            id: string,
+            updates: Partial<ScreenComponent> | ((prev: ScreenComponent) => Partial<ScreenComponent>),
+        ) => {
+            dispatch({ type: 'UPDATE_COMPONENT', payload: { id, updates } });
+        },
+        [],
+    );
 
     const deleteComponents = useCallback((ids: string[]) => {
         dispatch({ type: 'DELETE_COMPONENTS', payload: ids });

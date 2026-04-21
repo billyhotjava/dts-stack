@@ -517,6 +517,33 @@ export const ComponentRenderer = memo(function ComponentRenderer({ component, mo
         const axisFontSize = pickNum(xAxisCfg.labelFontSize) ?? pickNum(yAxisCfg.labelFontSize) ?? pickNum(c.axisFontSize) ?? 15;
         const axisLabelColor = pickStr(xAxisCfg.labelColor) ?? pickStr(yAxisCfg.labelColor) ?? pickStr(c.axisLabelColor);
         const yAxisLabelRotate = pickNum(yAxisCfg.labelRotate) ?? 0;
+        // AxisConfigEditor 额外字段 (show / splitLineShow / splitLineColor / min / max / type)
+        // 之前只读 label 相关，导致 UI 勾选"隐藏轴/分割线/设置 min-max"完全不生效。
+        const pickBool = (v: unknown): boolean | undefined =>
+            (typeof v === 'boolean') ? v : undefined;
+        const pickAxisBound = (v: unknown): number | string | undefined => {
+            if (typeof v === 'number' && Number.isFinite(v)) return v;
+            if (typeof v === 'string' && v.trim()) return v.trim();
+            return undefined;
+        };
+        const axisOverrides = {
+            x: {
+                show: pickBool(xAxisCfg.show),
+                splitLineShow: pickBool(xAxisCfg.splitLineShow),
+                splitLineColor: pickStr(xAxisCfg.splitLineColor),
+                min: pickAxisBound(xAxisCfg.min),
+                max: pickAxisBound(xAxisCfg.max),
+                type: pickStr(xAxisCfg.type),
+            },
+            y: {
+                show: pickBool(yAxisCfg.show),
+                splitLineShow: pickBool(yAxisCfg.splitLineShow),
+                splitLineColor: pickStr(yAxisCfg.splitLineColor),
+                min: pickAxisBound(yAxisCfg.min),
+                max: pickAxisBound(yAxisCfg.max),
+                type: pickStr(yAxisCfg.type),
+            },
+        };
         // Legend compat shim: nested `c.legend.{show,position,fontSize,color,reserveSize,itemGap}`
         // (new schema) wins over legacy flat keys `c.legendDisplay/legendPosition/legendFontSize/
         // legendReserveSize/legendItemGap`. Presets/heuristics still write the legacy shape, so we
@@ -1390,6 +1417,7 @@ export const ComponentRenderer = memo(function ComponentRenderer({ component, mo
                     type, c, t, width, height, mode, componentId: component.id, runtime,
                     EChart, renderEChartWithHandles,
                     themeOptions, chartMotionOption, chartTitleLayout, legendConfig, axisGrid, seriesColors,
+                    axisOverrides,
                     axisFontSize, axisLabelColor, seriesLabelFontSize,
                     xAxisLabelRotate, yAxisLabelRotate, xAxisLabelInterval, formatXAxisLabel,
                     axisSeriesLabelShow, resolvedAxisSeriesLabelStrategy, axisSeriesLabelFormatter,

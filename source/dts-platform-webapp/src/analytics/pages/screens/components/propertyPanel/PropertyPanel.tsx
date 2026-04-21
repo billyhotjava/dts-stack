@@ -59,6 +59,7 @@ import {
     applyLegendHeuristicLayout,
     buildScreenJumpUrl,
     buildStyleClipboardPayload,
+    deepMergeConfig,
     extractScreenIdFromJumpUrl,
     extractSqlTemplateParameterNames,
     getActionSourcePathCandidates,
@@ -73,6 +74,7 @@ import {
     safeJsonParse,
     safeJsonStringify,
     serializeVisibilityMatchValues,
+    setByPath,
 } from './helpers';
 import { ScreenJumpPicker } from './ScreenJumpPicker';
 import { CardSourceColumnBindingsEditor } from './CardSourceColumnBindingsEditor';
@@ -486,9 +488,11 @@ export function PropertyPanel({ activeTab = 'style' }: { activeTab?: PropertyPan
     };
 
     const handleConfigChange = (key: string, value: unknown) => {
-        updateComponent(selectedComponent.id, {
-            config: { ...selectedComponent.config, [key]: value },
-        });
+        // 用函数式 updater：reducer 会用 store 里最新的 prev，而不是渲染时闭包里的快照。
+        // 避免连续多次写入（或快速切换组件）时后一次覆盖前一次的其他字段。
+        updateComponent(selectedComponent.id, (prev) => ({
+            config: { ...(prev.config as Record<string, unknown>), [key]: value },
+        }));
     };
 
     const canvasWidth = Number(config.width) || 1920;
@@ -618,10 +622,12 @@ export function PropertyPanel({ activeTab = 'style' }: { activeTab?: PropertyPan
         updateComponent(selectedComponent.id, {
             width: Math.max(50, Number(styleClipboard.width) || selectedComponent.width),
             height: Math.max(50, Number(styleClipboard.height) || selectedComponent.height),
-            config: {
-                ...selectedComponent.config,
-                ...styleClipboard.config,
-            },
+            // 用 deepMerge：如 style / xAxis / legend 等嵌套对象，只想覆盖其中一部分子字段时，
+            // 避免把剪贴板里没有的子字段直接清零。
+            config: deepMergeConfig(
+                selectedComponent.config as Record<string, unknown>,
+                styleClipboard.config as Record<string, unknown>,
+            ),
         });
     };
 
@@ -1200,8 +1206,16 @@ export function PropertyPanel({ activeTab = 'style' }: { activeTab?: PropertyPan
                                     schema={schema}
                                     config={(selectedComponent.config as Record<string, unknown>) ?? {}}
                                     onChange={(key, value) => {
-                                        const nextConfig = { ...(selectedComponent.config as Record<string, unknown>), [key]: value };
-                                        updateComponent(selectedComponent.id, { config: nextConfig });
+                                        // 读取侧（SchemaConfigRenderer.resolveNestedValue）按 "a.b.c" 逐层访问，
+                                        // 写入侧必须对称，否则 "style.fontSize" 会被存成扁平键，导致刷新后读不回。
+                                        // 用函数式 updater 避免闭包陈旧值覆盖最新 store 状态。
+                                        updateComponent(selectedComponent.id, (prev) => ({
+                                            config: setByPath(
+                                                prev.config as Record<string, unknown>,
+                                                key,
+                                                value,
+                                            ),
+                                        }));
                                     }}
                                     theme={config.theme}
                                 />
@@ -1787,7 +1801,10 @@ function renderPluginSchemaFields(
                 const key = String(field?.key || '').trim();
                 if (!key) return null;
                 const label = field?.label || key;
-                const value = component.config[key] ?? field?.defaultValue;
+                // 不用 `??`：否则用户显式设的 0 / '' / false 会被 defaultValue 覆盖。
+                const hasExplicitValue = Object.prototype.hasOwnProperty.call(component.config, key)
+                    && component.config[key] !== undefined;
+                const value = hasExplicitValue ? component.config[key] : field?.defaultValue;
                 const description = String(field?.description || '').trim();
                 const descriptionNode = description ? (
                     <div style={{ fontSize: 11, color: 'var(--color-text-secondary)', marginTop: 4, lineHeight: 1.45 }}>

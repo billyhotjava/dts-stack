@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useMemo, useRef } from 'react';
 import { Button, Collapse, Input, InputNumber, Radio, Switch } from 'antd';
 import { DeleteOutlined, PlusOutlined } from '@ant-design/icons';
 
@@ -24,6 +24,21 @@ const LabelRow: React.FC<{ label: string; children: React.ReactNode }> = ({ labe
 );
 
 const ColumnStyleEditor: React.FC<ColumnStyleEditorProps> = ({ value = [], onChange }) => {
+  // 为每个列生成一个稳定的内部 uid，只在内部使用，不污染数据。
+  // 用数组映射位置 -> uid，删除/新增时同步维护，保证 Collapse 打开状态不会错位到其他列。
+  const uidsRef = useRef<string[]>([]);
+  const uids = useMemo(() => {
+    const cur = uidsRef.current;
+    if (cur.length < value.length) {
+      while (cur.length < value.length) {
+        cur.push(`col-${Math.random().toString(36).slice(2, 10)}`);
+      }
+    } else if (cur.length > value.length) {
+      cur.length = value.length;
+    }
+    return cur.slice();
+  }, [value.length]);
+
   const updateAt = (idx: number, patch: Partial<ColumnConfig>) => {
     const next = [...value];
     next[idx] = { ...next[idx], ...patch };
@@ -31,6 +46,7 @@ const ColumnStyleEditor: React.FC<ColumnStyleEditorProps> = ({ value = [], onCha
   };
 
   const removeAt = (idx: number) => {
+    uidsRef.current.splice(idx, 1);
     onChange(value.filter((_, i) => i !== idx));
   };
 
@@ -39,7 +55,7 @@ const ColumnStyleEditor: React.FC<ColumnStyleEditorProps> = ({ value = [], onCha
   };
 
   const items = value.map((col, idx) => ({
-    key: String(idx),
+    key: uids[idx] ?? `col-${idx}`,
     label: col.label || col.key || `列 ${idx + 1}`,
     extra: (
       <Button

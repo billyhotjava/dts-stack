@@ -71,7 +71,9 @@ const scrollRankingSchema: ComponentConfigSchema = {
         { key: 'textColor',       label: '文字颜色',     type: 'color',       group: 'typography' },
         { key: 'backgroundColor', label: '背景色',       type: 'color',       group: 'appearance' },
         { key: 'rowNum',          label: '显示行数',     type: 'number',      group: 'behavior', min: 1, max: 20, defaultValue: 5 },
-        { key: 'waitTime',        label: '轮播等待(ms)', type: 'number',      group: 'behavior', min: 500, max: 10000, step: 500, defaultValue: 2000 },
+        // ScrollRanking 内部使用 CSS animation duration（秒），之前 schema 只暴露 waitTime(ms)，
+        // 字段名完全对不上 renderer 读的 c.duration，导致 UI 设置永远不生效。
+        { key: 'duration',        label: '滚动时长(s)',  type: 'number',      group: 'behavior', min: 1, max: 60, step: 1, defaultValue: 10 },
     ],
 };
 
@@ -81,8 +83,9 @@ const waterLevelSchema: ComponentConfigSchema = {
     fields: [
         { key: 'value',           label: '水位值',   type: 'number',      group: 'content', min: 0, max: 100 },
         { key: 'color',           label: '水波颜色', type: 'color-array', group: 'appearance' },
-        { key: 'backgroundColor', label: '背景色',   type: 'color',       group: 'appearance' },
-        { key: 'textColor',       label: '文字颜色', type: 'color',       group: 'typography' },
+        // 关联主题 token：暗色主题下 fallback 'rgba(0,0,0,0.1)' 近乎不可见。
+        { key: 'backgroundColor', label: '背景色',   type: 'color',       group: 'appearance', themeTokenKey: 'cardBackground' },
+        { key: 'textColor',       label: '文字颜色', type: 'color',       group: 'typography', themeTokenKey: 'textPrimary' },
         { key: 'shape',           label: '形状',     type: 'select',      group: 'appearance', options: [
             { label: '圆形',     value: 'round' },
             { label: '矩形',     value: 'rect' },
@@ -97,8 +100,8 @@ const digitalFlopSchema: ComponentConfigSchema = {
     fields: [
         { key: 'number',          label: '数值',   type: 'json',   group: 'content' },
         { key: 'content',         label: '模板',   type: 'text',   group: 'content', placeholder: '{nt}个' },
-        { key: 'style.fontSize',  label: '字号',   type: 'number', group: 'typography', min: 10, max: 80 },
-        { key: 'style.fill',      label: '颜色',   type: 'color',  group: 'typography' },
+        { key: 'style.fontSize',  label: '字号',   type: 'number', group: 'typography', min: 10, max: 80, defaultValue: 30 },
+        { key: 'style.fill',      label: '颜色',   type: 'color',  group: 'typography', themeTokenKey: 'textPrimary' },
         { key: 'backgroundColor', label: '背景色', type: 'color',  group: 'appearance' },
     ],
 };

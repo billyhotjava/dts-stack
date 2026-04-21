@@ -20,11 +20,11 @@ const tableSchema: ComponentConfigSchema = {
         // Header group
         { key: 'headerBackground', label: '表头背景',   type: 'color',  group: 'header', defaultValue: 'rgba(148, 163, 184, 0.16)' },
         { key: 'headerColor',      label: '表头文字色', type: 'color',  group: 'header', themeTokenKey: 'textPrimary' },
-        { key: 'headerFontSize',   label: '表头字号',   type: 'number', group: 'header', min: 10, max: 30 },
+        { key: 'headerFontSize',   label: '表头字号',   type: 'number', group: 'header', min: 10, max: 30, defaultValue: 16 },
         // Body group
         { key: 'bodyColor',          label: '数据文字色',   type: 'color',  group: 'body', themeTokenKey: 'textSecondary' },
         { key: 'bodyBackground',     label: '数据行背景',   type: 'color',  group: 'body', defaultValue: 'transparent' },
-        { key: 'oddRowBackground',   label: '奇数行背景',   type: 'color',  group: 'body' },
+        { key: 'oddRowBackground',   label: '奇数行背景',   type: 'color',  group: 'body', defaultValue: 'transparent' },
         { key: 'evenRowBackground',  label: '偶数行背景',   type: 'color',  group: 'body', defaultValue: 'rgba(148, 163, 184, 0.06)' },
         { key: 'fontSize',           label: '数据字号',     type: 'number', group: 'body', min: 10, max: 30, defaultValue: 16 },
         // Column group

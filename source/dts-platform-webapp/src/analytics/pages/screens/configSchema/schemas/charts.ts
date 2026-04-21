@@ -252,8 +252,10 @@ const candlestickChartSchema: ComponentConfigSchema = {
     fields: [
         ...ECHARTS_COMMON_FIELDS,
         ...AXIS_CHART_FIELDS,
-        { key: 'upColor', label: '阳线颜色', type: 'color', group: 'chart', defaultValue: '#ec0000' },
-        { key: 'downColor', label: '阴线颜色', type: 'color', group: 'chart', defaultValue: '#00da3c' },
+        // 使用 Tailwind 化的红/绿：在浅色与暗色主题下对比度都更稳定；
+        // 纯 #ec0000 / #00da3c 在暗色主题上容易糊成一团。
+        { key: 'upColor', label: '阳线颜色', type: 'color', group: 'chart', defaultValue: '#ef4444' },
+        { key: 'downColor', label: '阴线颜色', type: 'color', group: 'chart', defaultValue: '#10b981' },
         { key: 'showMA', label: '显示均线', type: 'boolean', group: 'chart' },
         { key: 'maPeriods', label: '均线周期', type: 'text', group: 'chart', placeholder: '5,10,20',
             showIf: (config) => !!config.showMA,

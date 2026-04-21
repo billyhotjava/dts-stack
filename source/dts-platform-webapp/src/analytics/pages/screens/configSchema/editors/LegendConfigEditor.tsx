@@ -46,6 +46,8 @@ const LegendConfigEditor: React.FC<LegendConfigEditorProps> = ({ value = {}, onC
           value={value.position}
           onChange={(v) => update({ position: v })}
           options={POSITION_OPTIONS}
+          placeholder="自动（跟随图表）"
+          allowClear
         />
       </LabelRow>
       <LabelRow label="字号">

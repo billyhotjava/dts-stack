@@ -54,8 +54,9 @@ const AxisConfigEditor: React.FC<AxisConfigEditorProps> = ({ value = {}, onChang
           </LabelRow>
           <LabelRow label="旋转角度">
             <Slider
-              value={value.labelRotate ?? 0}
-              onChange={(v) => update({ labelRotate: v })}
+              value={typeof value.labelRotate === 'number' ? value.labelRotate : 0}
+              // 拖动时立即 commit，确保序列化后不会出现 undefined vs 0 混用。
+              onChange={(v) => update({ labelRotate: typeof v === 'number' ? v : 0 })}
               min={-90}
               max={90}
               step={5}
