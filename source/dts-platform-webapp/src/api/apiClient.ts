@@ -134,13 +134,14 @@ axiosInstance.interceptors.request.use(
 		const { userToken } = userStore.getState();
 		const url = config.url || "";
 		const isAuthPath = url.includes("/keycloak/auth/");
+		const skipAuth = (config as any)._skipAuth === true;
 		// For FormData uploads, let the browser set the proper multipart boundary
 		if (typeof FormData !== "undefined" && config.data instanceof FormData) {
 			if (config.headers) {
 				delete (config.headers as any)["Content-Type"];
 			}
 		}
-		if (userToken.accessToken && !isAuthPath) {
+		if (userToken.accessToken && !isAuthPath && !skipAuth) {
 			const raw = String(userToken.accessToken).trim();
 			const token = raw.startsWith("Bearer ") ? raw.slice(7).trim() : raw;
 			if (token) {

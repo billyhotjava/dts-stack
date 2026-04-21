@@ -7,7 +7,10 @@ const platformApiPath = new URL("./platformApi.ts", import.meta.url);
 test("platformApi uses modeling request timeout for long-running dbt modeling actions", async () => {
 	const source = await readFile(platformApiPath, "utf8");
 
-	assert.equal(source.includes('export const getPortalSessionStatus = () => api.get<PortalSessionStatus>({ url: "/session/status" });'), true);
+	assert.equal(
+		source.includes('api.get<PortalSessionStatus>({ url: "/session/status", _skipAuth: true } as any);'),
+		true,
+	);
 	assert.equal(source.includes('export const submitDbtRelease = (data: any) =>\n\tapi.post(withModelingRequestTimeout({ url: "/etl/dbt/release/submit", data }));'), true);
 	assert.equal(source.includes('export const checkDagReady = (params?: { selector?: string }) =>\n\tapi.get(withModelingRequestTimeout({ url: "/etl/dbt/dag/ready", params }));'), true);
 	assert.equal(source.includes('export const triggerDbtRun = (data: any) => api.post(withModelingRequestTimeout({ url: "/etl/dbt/run", data }));'), true);

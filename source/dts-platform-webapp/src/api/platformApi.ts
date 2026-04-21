@@ -10,7 +10,11 @@ export type PortalSessionStatus = {
 	remainingSeconds?: number | null;
 };
 
-export const getPortalSessionStatus = () => api.get<PortalSessionStatus>({ url: "/session/status" });
+// Session status is intentionally public on the backend.
+// Do not attach stale bearer tokens here, otherwise a kicked/revoked token is intercepted
+// by the resource server first and the SPA sees a 401 instead of a clean authenticated=false probe.
+export const getPortalSessionStatus = () =>
+	api.get<PortalSessionStatus>({ url: "/session/status", _skipAuth: true } as any);
 
 // Catalog
 export const getCatalogSummary = () => api.get({ url: "/catalog/summary" });
