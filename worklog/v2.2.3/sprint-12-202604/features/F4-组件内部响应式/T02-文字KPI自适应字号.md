@@ -1,7 +1,7 @@
 # T02: 文字 / KPI 自适应字号
 
 **优先级**: P0
-**状态**: READY
+**状态**: DONE
 **依赖**: 无
 
 ## 目标
@@ -95,6 +95,6 @@ KPI / Text 组件 schema 增加：
 
 ## 完成标准
 
-- [ ] hook 可用
-- [ ] KPI/Text/Title 组件接入
-- [ ] schema 参数暴露到属性面板
+- [x] hook 可用 — `src/analytics/pages/screens/v2/hooks/useContainerFontSize.ts`
+- [x] KPI/Text/Title 组件接入 — `renderers/basic/ResponsiveText.tsx` 里的 TitleBasic / NumberCardBasic / StatCardBasic 分别用 hook 驱动字号
+- [x] schema 参数暴露到属性面板 — `configSchema/schemas/basic.ts`（title/number-card）与 `enterprise.ts`（stat-card）新增 `fontSizeRatio` / `fontSizeMin` / `fontSizeMax`（以及 title/value 前缀的 number-card/stat-card 变体）。默认 ratio=0 保持旧行为（固定字号），用户在属性面板把比例调 >0 即进入自适应模式

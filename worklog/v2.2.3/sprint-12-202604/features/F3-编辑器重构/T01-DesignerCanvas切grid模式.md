@@ -1,7 +1,7 @@
 # T01: DesignerCanvas 切换为 GridLayout 编辑模式
 
 **优先级**: P0
-**状态**: READY
+**状态**: DONE
 **依赖**: F1-T02
 
 ## 目标
@@ -72,6 +72,6 @@
 
 ## 完成标准
 
-- [ ] v2 编辑分支可用
-- [ ] 保存 / 读取 round-trip 保持一致
-- [ ] v1 兼容不破坏
+- [x] v2 编辑分支可用 — `v2/DesignerCanvasV2.tsx` + `v2/ScreenDesignerV2Page.tsx`，路由 `/bi/screens/:id/designer-v2`
+- [x] 保存 / 读取 round-trip 保持一致 — getScreen 走 tryLoadV2，save 走 `buildV2Payload`（透传 v2Spec + components）
+- [x] v1 兼容不破坏 — v1 路由 `/bi/screens/:id/edit` 未触及；handleCreateV2 按钮改跳 designer-v2

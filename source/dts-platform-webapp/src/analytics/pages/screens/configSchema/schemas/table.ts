@@ -32,9 +32,15 @@ const tableSchema: ComponentConfigSchema = {
         { key: 'conditionalRules',  label: '条件样式规则', type: 'json',         group: 'column' },
         // Pagination group
         { key: 'enablePagination', label: '启用分页',     type: 'boolean', group: 'pagination', defaultValue: false },
-        { key: 'pageSize',        label: '每页行数',     type: 'number',  group: 'pagination', min: 1, max: 100, defaultValue: 10,
+        // v2: autoPageSize=true 时按容器高度动态计算每页行数，会覆盖 pageSize
+        { key: 'autoPageSize',    label: '自适应每页行数', type: 'boolean', group: 'pagination', defaultValue: false,
             showIf: (config) => config.enablePagination === true,
         },
+        { key: 'pageSize',        label: '每页行数',     type: 'number',  group: 'pagination', min: 1, max: 100, defaultValue: 10,
+            showIf: (config) => config.enablePagination === true && config.autoPageSize !== true,
+        },
+        // v2: 列宽下限，容器窄于 minColumnWidth × 列数时触发横向滚动
+        { key: 'minColumnWidth',  label: '列宽下限(px)', type: 'number', group: 'column', min: 60, max: 400, defaultValue: 100 },
         // Appearance group
         { key: 'borderColor',     label: '边框颜色',     type: 'color',   group: 'appearance', defaultValue: 'rgba(148, 163, 184, 0.24)' },
         // Behavior group

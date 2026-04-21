@@ -24,6 +24,13 @@ const statCardSchema: ComponentConfigSchema = {
         // Typography
         { key: 'titleColor',     label: '标题颜色',   type: 'color',   group: 'typography', themeTokenKey: 'textSecondary' },
         { key: 'valueColor',     label: '数值颜色',   type: 'color',   group: 'typography', themeTokenKey: 'textPrimary' },
+        // v2 自适应字号（ratio > 0 时启用）
+        { key: 'titleFontSizeRatio', label: '标题自适应比例', type: 'number', group: 'typography', min: 0, max: 0.15, step: 0.005, defaultValue: 0 },
+        { key: 'titleFontSizeMin',   label: '标题自适应最小值', type: 'number', group: 'typography', min: 8,  max: 24,  defaultValue: 11 },
+        { key: 'titleFontSizeMax',   label: '标题自适应最大值', type: 'number', group: 'typography', min: 12, max: 48,  defaultValue: 18 },
+        { key: 'valueFontSizeRatio', label: '数值自适应比例', type: 'number', group: 'typography', min: 0, max: 0.3,  step: 0.005, defaultValue: 0 },
+        { key: 'valueFontSizeMin',   label: '数值自适应最小值', type: 'number', group: 'typography', min: 10, max: 48,  defaultValue: 16 },
+        { key: 'valueFontSizeMax',   label: '数值自适应最大值', type: 'number', group: 'typography', min: 20, max: 160, defaultValue: 64 },
         // Appearance
         { key: 'accentColor',    label: '强调色',     type: 'color',   group: 'appearance', defaultValue: '#3b82f6' },
         { key: 'showAccentBar',  label: '显示强调条', type: 'boolean', group: 'appearance', defaultValue: true },

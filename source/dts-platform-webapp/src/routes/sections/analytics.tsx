@@ -5,6 +5,7 @@ import LoginAuthGuard from "@/routes/components/login-auth-guard";
 
 // ── Full-screen pages (no sidebar, outside DashboardLayout) ──
 const ScreenDesignerPage = lazy(() => import("@/analytics/pages/screens/ScreenDesignerPage"));
+const ScreenDesignerV2Page = lazy(() => import("@/analytics/pages/screens/v2/ScreenDesignerV2Page"));
 const ScreenPreviewPage = lazy(() => import("@/analytics/pages/screens/ScreenPreviewPage"));
 const ScreenExportPage = lazy(() => import("@/analytics/pages/screens/ScreenExportPage"));
 
@@ -42,6 +43,11 @@ export const analyticsStandaloneRoutes: RouteObject[] = [
 	{
 		path: "bi/screens/:id/edit",
 		element: <LoginAuthGuard><S><ScreenDesignerPage /></S></LoginAuthGuard>,
+	},
+	// Sprint-12 F3 — v2 自适应大屏编辑器（与 v1 并存，handleCreateV2 跳转到此）
+	{
+		path: "bi/screens/:id/designer-v2",
+		element: <LoginAuthGuard><S><ScreenDesignerV2Page /></S></LoginAuthGuard>,
 	},
 	{
 		path: "bi/screens/:id/preview",

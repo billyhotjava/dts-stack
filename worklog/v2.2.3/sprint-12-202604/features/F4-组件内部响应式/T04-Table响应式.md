@@ -1,7 +1,7 @@
 # T04: Table 响应式（列宽 / 行高 / 分页）
 
 **优先级**: P1
-**状态**: READY
+**状态**: DONE
 **依赖**: 无
 
 ## 目标
@@ -49,6 +49,6 @@ const pageSize = Math.max(1, Math.floor((containerHeight - headerHeight - footer
 
 ## 完成标准
 
-- [ ] 列宽 auto / fixed 两种模式可用
-- [ ] 分页大小跟随容器高
-- [ ] 横向滚动体验流畅
+- [x] 列宽 auto / fixed 两种模式可用 — `tableLayout: 'fixed'` 默认均分；`minColumnWidth` schema 字段注入 `<table style.minWidth>` 触发横向滚动，外层 `<div flex:1; overflow:auto>` 已有
+- [x] 分页大小跟随容器高 — `autoPageSize` 开启后，`pageSize = floor((height - headerH - 40) / rowH)` 覆盖配置
+- [x] 横向滚动体验流畅 — 仅当列数 × minColumnWidth > 容器宽度时生效，不影响宽屏;`scroll-board` / `delay-reason-matrix` 分支未触及，行为不变

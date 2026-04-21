@@ -10,7 +10,11 @@ const titleSchema: ComponentConfigSchema = {
     groups: [STANDARD_GROUPS.content, STANDARD_GROUPS.typography],
     fields: [
         { key: 'text',       label: '文本内容', type: 'text',        group: 'content' },
-        { key: 'fontSize',   label: '字号',     type: 'number',      group: 'typography', min: 10, max: 120, defaultValue: 16 },
+        { key: 'fontSize',   label: '字号（固定）', type: 'number',      group: 'typography', min: 10, max: 120, defaultValue: 16 },
+        // v2 自适应：fontSizeRatio > 0 时启用按容器宽度缩放，覆盖固定字号
+        { key: 'fontSizeRatio', label: '自适应比例',  type: 'number', group: 'typography', min: 0, max: 0.3, step: 0.005, defaultValue: 0 },
+        { key: 'fontSizeMin',   label: '自适应最小值', type: 'number', group: 'typography', min: 8, max: 40, defaultValue: 14 },
+        { key: 'fontSizeMax',   label: '自适应最大值', type: 'number', group: 'typography', min: 16, max: 200, defaultValue: 40 },
         { key: 'fontFamily', label: '字体',     type: 'font-family', group: 'typography' },
         { key: 'fontWeight',  label: '字重',     type: 'select',      group: 'typography', options: [
             { label: '正常', value: 'normal' },
@@ -37,9 +41,15 @@ const numberCardSchema: ComponentConfigSchema = {
         { key: 'value',           label: '数值',       type: 'number', group: 'content' },
         { key: 'prefix',          label: '前缀',       type: 'text',   group: 'content' },
         { key: 'suffix',          label: '后缀',       type: 'text',   group: 'content' },
-        { key: 'titleFontSize',   label: '标题字号',   type: 'number', group: 'typography', min: 10, max: 60, defaultValue: 16 },
+        { key: 'titleFontSize',   label: '标题字号（固定）',   type: 'number', group: 'typography', min: 10, max: 60, defaultValue: 16 },
+        { key: 'titleFontSizeRatio', label: '标题自适应比例', type: 'number', group: 'typography', min: 0, max: 0.2, step: 0.005, defaultValue: 0 },
+        { key: 'titleFontSizeMin',   label: '标题自适应最小值', type: 'number', group: 'typography', min: 8,  max: 40,  defaultValue: 12 },
+        { key: 'titleFontSizeMax',   label: '标题自适应最大值', type: 'number', group: 'typography', min: 12, max: 120, defaultValue: 20 },
         { key: 'titleColor',      label: '标题颜色',   type: 'color',  group: 'typography', themeTokenKey: 'numberCard.titleColor' },
-        { key: 'valueFontSize',   label: '数值字号',   type: 'number', group: 'typography', min: 12, max: 120, defaultValue: 34 },
+        { key: 'valueFontSize',   label: '数值字号（固定）',   type: 'number', group: 'typography', min: 12, max: 120, defaultValue: 34 },
+        { key: 'valueFontSizeRatio', label: '数值自适应比例', type: 'number', group: 'typography', min: 0, max: 0.4, step: 0.005, defaultValue: 0 },
+        { key: 'valueFontSizeMin',   label: '数值自适应最小值', type: 'number', group: 'typography', min: 10, max: 60,  defaultValue: 16 },
+        { key: 'valueFontSizeMax',   label: '数值自适应最大值', type: 'number', group: 'typography', min: 16, max: 240, defaultValue: 96 },
         { key: 'valueColor',      label: '数值颜色',   type: 'color',  group: 'typography', themeTokenKey: 'numberCard.valueColor' },
         { key: 'fontFamily',      label: '字体',       type: 'font-family', group: 'typography' },
         { key: 'backgroundColor', label: '背景色',     type: 'color',  group: 'appearance', themeTokenKey: 'numberCard.background' },
@@ -197,11 +207,25 @@ const imageSchema: ComponentConfigSchema = {
     groups: [STANDARD_GROUPS.content, STANDARD_GROUPS.appearance],
     fields: [
         { key: 'src', label: '图片地址', type: 'image-url', group: 'content' },
+        // v2 默认 contain 避免变形；保留原 cover 选项给有封面需求的场景
         { key: 'fit', label: '缩放方式', type: 'select',    group: 'appearance', options: [
-            { label: '覆盖', value: 'cover' },
-            { label: '包含', value: 'contain' },
-            { label: '拉伸', value: 'fill' },
-        ], defaultValue: 'cover' },
+            { label: '包含（默认，保持比例）', value: 'contain' },
+            { label: '覆盖（裁剪填满）',       value: 'cover' },
+            { label: '拉伸（变形填满）',       value: 'fill' },
+            { label: '原尺寸',                 value: 'none' },
+            { label: '缩小至容器',             value: 'scale-down' },
+        ], defaultValue: 'contain' },
+        { key: 'objectPosition', label: '对齐方式', type: 'select', group: 'appearance', options: [
+            { label: '居中',    value: 'center' },
+            { label: '顶部',    value: 'top' },
+            { label: '底部',    value: 'bottom' },
+            { label: '左侧',    value: 'left' },
+            { label: '右侧',    value: 'right' },
+            { label: '左上',    value: 'top left' },
+            { label: '右上',    value: 'top right' },
+            { label: '左下',    value: 'bottom left' },
+            { label: '右下',    value: 'bottom right' },
+        ], defaultValue: 'center' },
     ],
 };
 

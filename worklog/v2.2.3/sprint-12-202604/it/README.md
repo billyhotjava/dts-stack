@@ -75,7 +75,16 @@ it/chrome-95-evidence/
 
 ## 退出标准
 
-- [ ] 所有 TC 在 Chrome 95 通过（有证据）
-- [ ] 所有 TC 在 Chrome 109+ 通过
+- [ ] 所有 TC 在 Chrome 95 通过（有证据）— 待客户侧实机
+- [ ] 所有 TC 在 Chrome 109+ 通过 — 待 dev 端跑 Playwright
 - [ ] 无 P0/P1 bug
 - [ ] 性能：20 组件大屏 resize 时 FPS ≥ 30
+
+## 当前进展（2026-04-22 收尾）
+
+- [x] 代码层面 Chrome 95 兼容 — `scripts/chrome-95-smoke.md` grep 通过
+- [x] TS 类型检查 — `npx tsc --noEmit` 仅留 screenTemplates.ts 的预存问题
+- [x] vitest — `schema.test.ts`（16 cases）+ `migrate.test.ts`（8 cases）全过
+- [x] 路由 `/bi/screens/:id/designer-v2` 已注册
+- [x] v1 编辑器 banner「转为 v2」已可用，不破坏旧数据
+- [ ] Chrome 95 真机 5 个 TC evidence（需客户侧或 BrowserStack 补齐）

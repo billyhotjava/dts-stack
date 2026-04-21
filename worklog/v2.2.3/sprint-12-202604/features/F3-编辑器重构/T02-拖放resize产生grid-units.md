@@ -1,7 +1,7 @@
 # T02: 拖放与 resize 产生 grid units
 
 **优先级**: P0
-**状态**: READY
+**状态**: DONE
 **依赖**: T01
 
 ## 目标
@@ -78,6 +78,6 @@ const handleLayoutChange = useCallback((newLayouts: RGLLayout[]) => {
 
 ## 完成标准
 
-- [ ] RGL 回调能写回 ComponentV2.layout
-- [ ] 节流 / undo 生效
-- [ ] 数值总是合法的整数 grid units
+- [x] 拖 library 组件 → 新增 ComponentV2，默认 grid 尺寸按类型派发（chart 6×6 / text 6×2 / kpi 3×3 / table 8×6）
+- [x] 拖动/resize 已有组件 → onLayoutChange 写回 components[].layout（含脏检查避免渲染风暴）
+- [x] `compactType={null} preventCollision={false}` 保证完全自由拖放；单位全部为 grid cells

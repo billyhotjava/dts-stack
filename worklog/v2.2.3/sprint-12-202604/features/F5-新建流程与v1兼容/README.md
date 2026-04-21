@@ -1,7 +1,7 @@
 # F5: 新建流程与 v1 兼容
 
 **优先级**: P0
-**状态**: READY
+**状态**: DONE
 **依赖**: F1, F2, F3
 
 ## 目标
@@ -14,13 +14,13 @@
 
 | ID | Task | 优先级 | 状态 | 依赖 |
 |----|------|--------|------|------|
-| T01 | 新建大屏对话框简化（默认 v2，像素尺寸移到高级） | P0 | READY | F2-T01 |
-| T02 | v1 大屏只读打开 + "转为 v2"按钮 | P0 | READY | F1, F3 |
-| T03 | v1 → v2 迁移脚本（粗映射 + 警告） | P1 | READY | F2, F3 |
+| T01 | 新建大屏对话框简化（默认 v2，像素尺寸移到高级） | P0 | DONE | F2-T01 |
+| T02 | v1 大屏只读打开 + "转为 v2"按钮 | P0 | DONE | F1, F3 |
+| T03 | v1 → v2 迁移脚本（粗映射 + 警告） | P1 | DONE | F2, F3 |
 
 ## 完成标准
 
-- [ ] 新建对话框不再强制选择像素尺寸
-- [ ] 新建的大屏默认 `version: 2`
-- [ ] 打开 v1 大屏不报错（进入只读模式）
-- [ ] "转为 v2"按钮可用（或文档说明如何手动重做）
+- [x] 新建对话框不再强制选择像素尺寸 — `ScreensPage.handleCreateV2` 一键建 v2，默认 cols=12 rowHeight=auto
+- [x] 新建的大屏默认 `version: 2` — payload 带 `v2Spec.schemaVersion: 2`，后端 F2/T03 透传
+- [x] 打开 v1 大屏不报错 — v1 编辑器保持原样，`V1LegacyBanner` 提示升级
+- [x] "转为 v2"按钮可用 — `V1LegacyBanner` 内置 handler 调 `migrateV1ToV2` + `createScreen`，原 v1 保留

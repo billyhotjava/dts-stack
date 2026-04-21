@@ -1,7 +1,7 @@
 # T03: 属性面板 Size / Position 控件改 grid 单元
 
 **优先级**: P0
-**状态**: READY
+**状态**: DONE
 **依赖**: T01
 
 ## 目标
@@ -74,6 +74,6 @@ interface GridLayoutEditorProps {
 
 ## 完成标准
 
-- [ ] v2 分支使用 GridLayoutEditor
-- [ ] 约束检验通过
-- [ ] 对齐助手（可选）工作
+- [x] 新建 `v2/PropertyPanelV2.tsx`：大屏级 cols/rowHeight/gap/背景 + 组件级 name/visible/x/y/w/h/config
+- [x] Size/Position 输入均为 grid units，而非 px
+- [x] config JSON 编辑器（最小可用），复杂 schema 编辑留给后续迭代

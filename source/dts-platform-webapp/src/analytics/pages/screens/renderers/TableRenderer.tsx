@@ -193,8 +193,25 @@ export function renderTable(props: TableRendererProps): ReactNode {
             const enablePagination = c.enablePagination === true;
             const freezeHeader = c.freezeHeader !== false;
             const freezeFirstColumn = c.freezeFirstColumn === true;
-            const pageSize = Math.max(1, Number(c.pageSize || 10));
             const conditionalRules = c.conditionalRules;
+
+            // Sprint-12 F4/T04: Table 响应式
+            // - minColumnWidth: 单列下限宽度，低于这个值容器会触发横向滚动
+            //   （而不是 fixed tableLayout 压缩列内容到不可读）
+            // - autoPageSize: 根据容器高度动态算 pageSize（优先级高于 c.pageSize）
+            const estimatedHeaderHeight = displayHeader.length > 0 ? Math.max(36, Math.ceil(headerFontSize * 1.8)) : 0;
+            const estimatedBodyRowHeight = Math.max(36, Math.ceil(fontSize * 1.8));
+            const minColumnWidth = Math.max(60, Number(c.minColumnWidth || 100));
+            const autoPageSize = c.autoPageSize === true;
+            const computedTableMinWidth = displayHeader.length * minColumnWidth;
+
+            let pageSize = Math.max(1, Number(c.pageSize || 10));
+            if (autoPageSize && enablePagination) {
+                // 先假设存在分页页脚，避免 autoPageSize 算出来刚好一页装下全部后又把页脚算掉
+                const available = Math.max(0, height - estimatedHeaderHeight - 40);
+                const fit = Math.floor(available / estimatedBodyRowHeight);
+                pageSize = Math.max(1, fit);
+            }
 
             const sortedRows = tableSort && enableSort
                 ? [...displayData].sort((a, b) => {
@@ -208,8 +225,6 @@ export function renderTable(props: TableRendererProps): ReactNode {
                 ? sortedRows.slice((safePage - 1) * pageSize, safePage * pageSize)
                 : sortedRows;
             const paginationFooterHeight = enablePagination && totalPages > 1 ? 40 : 0;
-            const estimatedHeaderHeight = displayHeader.length > 0 ? Math.max(36, Math.ceil(headerFontSize * 1.8)) : 0;
-            const estimatedBodyRowHeight = Math.max(36, Math.ceil(fontSize * 1.8));
             const fillerRowCount = displayHeader.length > 0
                 ? estimateTablePlaceholderRowCount({
                     containerHeight: height,
@@ -226,7 +241,13 @@ export function renderTable(props: TableRendererProps): ReactNode {
             return (
                 <div style={{ width: '100%', height: '100%', overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
                     <div style={{ flex: 1, overflow: 'auto' }}>
-                    <table style={{ width: '100%', borderCollapse: 'collapse', tableLayout: 'fixed' }}>
+                    <table style={{
+                        width: '100%',
+                        // F4/T04: 横向滚动触发点 —— 容器窄于 minColumnWidth × 列数时 overflow:auto 生效
+                        minWidth: computedTableMinWidth > 0 ? computedTableMinWidth : undefined,
+                        borderCollapse: 'collapse',
+                        tableLayout: 'fixed',
+                    }}>
                         {displayHeader.length > 0 && (
                             <thead>
                                 <tr style={{ background: headerBackground }}>

@@ -1,7 +1,7 @@
 # F4: 组件内部响应式
 
 **优先级**: P0
-**状态**: READY
+**状态**: DONE
 **依赖**: F1
 
 ## 目标
@@ -23,14 +23,14 @@
 
 | ID | Task | 优先级 | 状态 | 依赖 |
 |----|------|--------|------|------|
-| T01 | ECharts 组件 autoResize（共用 hook） | P0 | READY | — |
-| T02 | 文字 / KPI 自适应字号 | P0 | READY | — |
-| T03 | 图片组件 object-fit 默认 contain | P1 | READY | — |
-| T04 | Table 响应式（列宽 / 行高 / 分页） | P1 | READY | — |
+| T01 | ECharts 组件 autoResize（共用 hook） | P0 | DONE | — |
+| T02 | 文字 / KPI 自适应字号 | P0 | DONE | — |
+| T03 | 图片组件 object-fit 默认 contain | P1 | DONE | — |
+| T04 | Table 响应式（列宽 / 行高 / 分页） | P1 | DONE | — |
 
 ## 完成标准
 
-- [ ] 所有图表类组件在父容器 resize 时自动 chart.resize()
-- [ ] 文字类组件字号按宽度自适应，不会溢出容器
-- [ ] 图片保持比例、不变形
-- [ ] Table 不横向溢出且可滚动
+- [x] 所有图表类组件在父容器 resize 时自动 chart.resize() — `EChartsRuntime.tsx` 里的 ResizeObserver + rAF debounce
+- [x] 文字类组件字号按宽度自适应，不会溢出容器 — `useContainerFontSize` hook + `ResponsiveText.tsx` 里的 Title/NumberCard/StatCard
+- [x] 图片保持比例、不变形 — `BasicRenderer.tsx` image case 默认 `object-fit: contain` + 9 档 objectPosition
+- [x] Table 不横向溢出且可滚动 — `TableRenderer.tsx` 的 `minColumnWidth` 驱动 `<table minWidth>` + `autoPageSize` 按容器高度动态分页

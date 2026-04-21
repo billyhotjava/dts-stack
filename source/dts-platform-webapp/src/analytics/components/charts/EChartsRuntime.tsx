@@ -1,4 +1,4 @@
-import type { CSSProperties } from "react";
+import { useEffect, useRef, type CSSProperties } from "react";
 import ReactEChartsCore from "echarts-for-react/lib/core";
 import * as echarts from "echarts/core";
 import {
@@ -94,12 +94,48 @@ export interface EChartsRuntimeProps {
 }
 
 export default function EChartsRuntime(props: EChartsRuntimeProps) {
+	// Sprint-12 F4/T01: 监听父容器尺寸变化并调 chart.resize()。
+	// echarts-for-react 只监听 window resize，不监听父容器；在 v2 网格布局里，
+	// 组件容器会被 react-grid-layout / CSS flex 改变大小而 window 不变，
+	// 这时需要我们主动触发 resize，否则图表保持旧尺寸被裁剪或留空。
+	// Chrome 95 原生支持 ResizeObserver，无需 polyfill。
+	const wrapperRef = useRef<HTMLDivElement | null>(null);
+	const chartRef = useRef<ReactEChartsCore | null>(null);
+
+	useEffect(() => {
+		const el = wrapperRef.current;
+		if (!el || typeof ResizeObserver === "undefined") return;
+		let rafId = 0;
+		const observer = new ResizeObserver(() => {
+			// 用 rAF 合并高频回调，避免拖动 resize 期间每帧重复调用
+			if (rafId) cancelAnimationFrame(rafId);
+			rafId = requestAnimationFrame(() => {
+				const instance = chartRef.current?.getEchartsInstance?.();
+				if (instance && typeof instance.resize === "function") {
+					instance.resize();
+				}
+			});
+		});
+		observer.observe(el);
+		return () => {
+			if (rafId) cancelAnimationFrame(rafId);
+			observer.disconnect();
+		};
+	}, []);
+
+	const style: CSSProperties = { width: "100%", height: "100%", ...props.style };
+
 	return (
-		<ReactEChartsCore
-			echarts={echarts}
-			option={props.option}
-			style={props.style}
-			onEvents={props.onEvents as Record<string, (params: unknown) => void> | undefined}
-		/>
+		<div ref={wrapperRef} style={style}>
+			<ReactEChartsCore
+				ref={(inst) => {
+					chartRef.current = inst as unknown as ReactEChartsCore | null;
+				}}
+				echarts={echarts}
+				option={props.option}
+				style={{ width: "100%", height: "100%" }}
+				onEvents={props.onEvents as Record<string, (params: unknown) => void> | undefined}
+			/>
+		</div>
 	);
 }

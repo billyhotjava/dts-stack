@@ -1,7 +1,7 @@
 # T03: 图片组件 object-fit 默认 contain
 
 **优先级**: P1
-**状态**: READY
+**状态**: DONE
 **依赖**: 无
 
 ## 目标
@@ -47,6 +47,6 @@
 
 ## 完成标准
 
-- [ ] 图片组件默认 `object-fit: contain`
-- [ ] 配置可切换
-- [ ] 背景图维持现有 cover 行为
+- [x] 图片组件默认 `object-fit: contain` — `BasicRenderer.tsx` image case
+- [x] 配置可切换 — `configSchema/schemas/basic.ts` 新增 5 档 fit + 9 档 objectPosition
+- [x] 背景图维持现有 cover 行为 — 未改 ResponsiveScreenLayout 背景图逻辑

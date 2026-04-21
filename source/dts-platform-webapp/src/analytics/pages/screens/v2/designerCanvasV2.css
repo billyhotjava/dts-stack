@@ -1,0 +1,74 @@
+/* Sprint-12 F3/T01 — v2 DesignerCanvas 样式 */
+
+.v2-designer-canvas {
+    /* 编辑器容器；网格线背景由 inline style 控制（因为 grid 列宽要动态算） */
+    min-height: 240px;
+}
+
+.v2-designer-grid .react-grid-item {
+    /* react-grid-layout 默认有 transition，编辑器里关掉更干脆 */
+    transition: none;
+}
+
+.v2-designer-grid .react-grid-item.react-grid-placeholder {
+    background: rgba(99, 102, 241, 0.2);
+    border: 1px dashed rgba(99, 102, 241, 0.6);
+    border-radius: 6px;
+}
+
+.v2-designer-grid .react-resizable-handle::after {
+    /* 默认右下角 resize 三角（14x14），加深对比度方便操作 */
+    border-right-color: rgba(148, 163, 184, 0.9);
+    border-bottom-color: rgba(148, 163, 184, 0.9);
+}
+
+.v2-designer-cell {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    box-sizing: border-box;
+    background: rgba(15, 23, 42, 0.35);
+    border: 1px solid rgba(148, 163, 184, 0.25);
+    border-radius: 6px;
+    overflow: hidden;
+    cursor: default;
+}
+
+.v2-designer-cell.is-selected {
+    border-color: #6366f1;
+    box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.35);
+}
+
+.v2-component-drag-handle {
+    flex: 0 0 auto;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 8px;
+    background: rgba(30, 41, 59, 0.7);
+    color: rgba(226, 232, 240, 0.85);
+    font-size: 12px;
+    line-height: 1.4;
+    cursor: move;
+    user-select: none;
+    border-bottom: 1px solid rgba(148, 163, 184, 0.15);
+}
+
+.v2-component-drag-handle__grip {
+    letter-spacing: -2px;
+    color: rgba(148, 163, 184, 0.7);
+}
+
+.v2-component-drag-handle__label {
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+    font-weight: 500;
+}
+
+.v2-designer-cell__body {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow: hidden;
+    position: relative;
+}

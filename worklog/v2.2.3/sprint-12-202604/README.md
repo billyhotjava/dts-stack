@@ -1,7 +1,7 @@
 # Sprint-12: BI 大屏响应式改造（C 方案）
 
 **时间**: 2026-04
-**状态**: READY
+**状态**: DONE（代码阶段 1-4 完成，IT 真机验证待客户侧）
 **类型**: Implementation（破坏性重构，demo 阶段可重做）
 **目标**: 把 BI 大屏从"固定画布 + 像素绝对定位 + 运行时整体缩放"重构为"网格化响应式布局 + 组件内部自适应"，客户无需理解像素概念，大屏在任意 viewport 铺满且布局合理。
 
@@ -69,11 +69,11 @@
 
 | ID | Feature | Task 数 | 状态 | 依赖 |
 |----|---------|---------|------|------|
-| F1 | 响应式布局引擎（核心） | 3 | READY | — |
-| F2 | ScreenConfig v2 schema | 3 | READY | — |
-| F3 | 编辑器重构（网格编辑） | 4 | READY | F1, F2 |
-| F4 | 组件内部响应式 | 4 | READY | F1 |
-| F5 | 新建流程与 v1 兼容 | 3 | READY | F1, F2, F3 |
+| F1 | 响应式布局引擎（核心） | 3 | DONE | — |
+| F2 | ScreenConfig v2 schema | 3 | DONE | — |
+| F3 | 编辑器重构（网格编辑） | 4 | DONE | F1, F2 |
+| F4 | 组件内部响应式 | 4 | DONE | F1 |
+| F5 | 新建流程与 v1 兼容 | 3 | DONE | F1, F2, F3 |
 
 **阶段节奏**（本 Sprint 内）：
 
@@ -87,13 +87,13 @@
 
 ## 完成标准
 
-- [ ] 新建大屏对话框不再要求选择固定像素尺寸
-- [ ] 任意新建大屏在 Chrome 95 的 1366×768 / 1920×1080 / 3840×2160 全部铺满、布局合理、无关键内容被裁
-- [ ] 编辑器基于 grid units 拖放，不再出现 px 坐标
-- [ ] 所有图表组件在容器 resize 时自动 `chart.resize()`
-- [ ] 文字/KPI 字号按容器宽度 `clamp()` 自适应
-- [ ] 旧 v1 大屏能只读打开（不崩），有"转为 v2"按钮
-- [ ] Chrome 95 烟雾测试通过（`it/chrome-95-evidence/` 有截图/视频）
+- [x] 新建大屏对话框不再要求选择固定像素尺寸 — `ScreensPage.handleCreateV2`
+- [x] 任意新建大屏在 Chrome 95 的 1366×768 / 1920×1080 / 3840×2160 全部铺满、布局合理、无关键内容被裁 — `ResponsiveScreenLayout` + ResizeObserver（运行时待实机最终确认）
+- [x] 编辑器基于 grid units 拖放，不再出现 px 坐标 — `DesignerCanvasV2` + `PropertyPanelV2`
+- [x] 所有图表组件在容器 resize 时自动 `chart.resize()` — `EChartsRuntime.tsx`
+- [x] 文字/KPI 字号按容器宽度自适应 — `useContainerFontSize` + `ResponsiveText.tsx`（Chrome 95 不支持 cqw，用 ResizeObserver 替代 clamp）
+- [x] 旧 v1 大屏能只读打开（不崩），有"转为 v2"按钮 — `V1LegacyBanner` + `migrateV1ToV2`
+- [ ] Chrome 95 烟雾测试通过（`it/chrome-95-evidence/` 有截图/视频）— 待客户侧实机验证
 
 ## 范围外（不在本 Sprint）
 

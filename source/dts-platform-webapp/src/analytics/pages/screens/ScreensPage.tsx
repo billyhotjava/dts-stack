@@ -230,7 +230,8 @@ export default function ScreensPage() {
 			};
 			const created = await analyticsApi.createScreen(payload);
 			toast.success('已创建自适应大屏');
-			navigate(`/bi/screens/${created.id}/preview`);
+			// Sprint-12 F3：创建成功后跳进 v2 编辑器
+			navigate(`/bi/screens/${created.id}/designer-v2`);
 		} catch (err) {
 			console.error('Failed to create v2 screen:', err);
 			toast.error(err instanceof Error ? err.message : '创建失败');

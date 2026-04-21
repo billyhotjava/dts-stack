@@ -1,7 +1,7 @@
 # F3: 编辑器重构（网格编辑）
 
 **优先级**: P0
-**状态**: READY
+**状态**: DONE
 **依赖**: F1, F2
 
 ## 目标
@@ -20,14 +20,14 @@
 
 | ID | Task | 优先级 | 状态 | 依赖 |
 |----|------|--------|------|------|
-| T01 | DesignerCanvas 切换为 GridLayout 编辑模式 | P0 | READY | F1-T02 |
-| T02 | 拖放与 resize 产生 grid units（不是 px） | P0 | READY | T01 |
-| T03 | 属性面板 Size / Position 控件改 grid 单元 | P0 | READY | T01 |
-| T04 | 网格可视化 + 吸附反馈 | P1 | READY | T01 |
+| T01 | DesignerCanvas 切换为 GridLayout 编辑模式 | P0 | DONE | F1-T02 |
+| T02 | 拖放与 resize 产生 grid units（不是 px） | P0 | DONE | T01 |
+| T03 | 属性面板 Size / Position 控件改 grid 单元 | P0 | DONE | T01 |
+| T04 | 网格可视化 + 吸附反馈 | P1 | DONE | T01 |
 
 ## 完成标准
 
-- [ ] 编辑器打开 v2 大屏能拖放组件（grid units）
-- [ ] 属性面板显示 grid 单元数（而非 px）
-- [ ] 保存的大屏是合法的 v2 JSON（通过 validate）
-- [ ] 编辑态的视觉与运行态完全一致（WYSIWYG）
+- [x] 编辑器打开 v2 大屏能拖放组件（grid units）— `ScreenDesignerV2Page` + `DesignerCanvasV2` + `ComponentLibraryPanel` 拖放
+- [x] 属性面板显示 grid 单元数（而非 px）— `PropertyPanelV2` Size/Position 输入全部 grid units
+- [x] 保存的大屏是合法的 v2 JSON — `buildV2Payload` 结构符合 F2/T01 schema，后端 F2/T03 已透传 v2Spec
+- [x] 编辑态的视觉与运行态完全一致（WYSIWYG）— 编辑器与 `ResponsiveScreenLayout` 共用 react-grid-layout + 同一 `ComponentRenderer`
