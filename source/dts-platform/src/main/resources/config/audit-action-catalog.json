@@ -33,7 +33,8 @@
             { "code": "CATALOG_SCHEMA_DRIFT_VIEW", "display": "查看 Schema 漂移详情", "phases": ["SUCCESS"], "supportsFlow": false },
             { "code": "CATALOG_METADATA_TABLE_EDIT", "display": "维护数据表元数据", "phases": ["BEGIN", "SUCCESS", "FAIL"], "supportsFlow": true },
             { "code": "CATALOG_METADATA_COLUMN_EDIT", "display": "维护数据字段元数据", "phases": ["BEGIN", "SUCCESS", "FAIL"], "supportsFlow": true },
-            { "code": "CATALOG_METADATA_CHANGELOG_VIEW", "display": "查看元数据变更历史", "phases": ["SUCCESS"], "supportsFlow": false }
+            { "code": "CATALOG_METADATA_CHANGELOG_VIEW", "display": "查看元数据变更历史", "phases": ["SUCCESS"], "supportsFlow": false },
+            { "code": "DBT_MODEL_SYNC", "display": "同步 dbt 模型到数据资产", "phases": ["SUCCESS", "FAIL"], "supportsFlow": false }
           ]
         },
         {
