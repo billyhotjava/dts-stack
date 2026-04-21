@@ -191,3 +191,21 @@
 
 **统计**: READY=17, IN_PROGRESS=0, DONE=0, BLOCKED=0
 **设计文档**: `worklog/v2.2.3/sprint-12-202604/README.md`
+
+## Sprint-13: 自助 BI 与可视化语义层（Phase 1）(202604)
+**状态**: READY
+**类型**: Implementation（新架构落地，非破坏——新语义层与老 Metabase fork 并行）
+**目标**: 在 dbt 产出的 DWS/ADS 之上建薄语义层，让分析师通过拖拽组合指标/维度/join 建 Card；工程师用 dbt schema.yml 声明原子指标与 join 关系图作为唯一真源；LLM 本 Sprint 不上但 schema 预留字段
+**参考架构**: Lightdash（dbt-native semantic layer），非 Cube 级自研
+
+| Feature | Task 数 | 状态 |
+|---------|---------|------|
+| F1-接口合约与 DSL 规范 | 4 | READY |
+| F2-语义层后端核心 | 5 | READY |
+| F3-Join 与虚拟数据集 | 4 | READY |
+| F4-派生指标引擎 | 3 | READY |
+| F5-前端建模与 Card Editor | 5 | READY |
+| F6-治理护栏与提升通道 | 4 | READY |
+
+**统计**: READY=25, IN_PROGRESS=0, DONE=0, BLOCKED=0
+**设计文档**: `worklog/v2.2.3/sprint-13-202604/README.md`
