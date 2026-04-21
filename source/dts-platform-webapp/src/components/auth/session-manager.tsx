@@ -1,8 +1,9 @@
 import { useEffect, useMemo, useRef } from "react";
 import { toast } from "sonner";
+import { getPortalSessionStatus } from "@/api/platformApi";
+import userService from "@/api/services/userService";
 import { resolveCurrentAppPath, resolveLoginHref } from "@/routes/constants";
 import { useUserActions, useUserInfo, useUserToken } from "@/store/userStore";
-import userService from "@/api/services/userService";
 import {
 	buildSessionLeaderLease,
 	isSessionLeaderActive,
@@ -29,6 +30,7 @@ const LEADER_LEASE_MS = 45 * 1000;
 const LEADER_HEARTBEAT_MS = 15 * 1000;
 const FOLLOWER_RECHECK_MS = 15 * 1000;
 const LEADER_CONFIRM_MS = 250;
+const SESSION_STATUS_POLL_MS = Math.max(10 * 1000, Number(import.meta.env.VITE_SESSION_STATUS_POLL_MS ?? 15 * 1000));
 
 const genId = () => Math.random().toString(36).slice(2) + Date.now().toString(36);
 
@@ -104,11 +106,40 @@ function writeLastActivity(ts: number, lastWriteRef: { current: number }) {
 /** Broadcast refreshed tokens to other tabs via localStorage */
 function broadcastTokenSync(tokens: Record<string, unknown>) {
 	try {
-		localStorage.setItem(
-			STORAGE_KEYS.TOKEN_SYNC,
-			JSON.stringify({ ...tokens, ts: Date.now() }),
-		);
+		localStorage.setItem(STORAGE_KEYS.TOKEN_SYNC, JSON.stringify({ ...tokens, ts: Date.now() }));
 	} catch {}
+}
+
+function wasLogoutTriggeredRecently(): boolean {
+	try {
+		const logoutTs = Number(localStorage.getItem(STORAGE_KEYS.LOGOUT_TS) || "0");
+		return logoutTs > 0 && Date.now() - logoutTs < 5000;
+	} catch {
+		return false;
+	}
+}
+
+function finishSession(
+	clearUserInfoAndToken: () => void,
+	logoutInProgressRef: { current: boolean },
+	reason: "CONCURRENT" | "EXPIRED" | "LOGOUT" | "UNKNOWN" = "EXPIRED",
+	broadcast = true,
+) {
+	if (logoutInProgressRef.current) {
+		return;
+	}
+	logoutInProgressRef.current = true;
+	const isConcurrent = reason === "CONCURRENT";
+	toast.error(isConcurrent ? "账号已在其他位置登录，当前会话已失效" : "会话已过期，请重新登录", {
+		id: isConcurrent ? "session-conflict" : "session-expired",
+	});
+	clearUserInfoAndToken();
+	if (broadcast) {
+		try {
+			localStorage.setItem(STORAGE_KEYS.LOGOUT_TS, String(Date.now()));
+		} catch {}
+	}
+	window.location.replace(resolveLoginHref(resolveCurrentAppPath()));
 }
 
 export default function SessionManager() {
@@ -183,7 +214,7 @@ export default function SessionManager() {
 			if (e.key === STORAGE_KEYS.LOGOUT_TS && e.newValue) {
 				if (isLoggedIn && !logoutInProgressRef.current) {
 					logoutInProgressRef.current = true;
-					toast.error("账号已在其他位置退出", { id: "session-conflict" });
+					toast.error("当前会话已失效，请重新登录", { id: "session-expired" });
 					clearUserInfoAndToken();
 					window.location.replace(resolveLoginHref(resolveCurrentAppPath()));
 				}
@@ -239,6 +270,73 @@ export default function SessionManager() {
 		};
 	}, [isLoggedIn]);
 
+	// Probe the current portal session while the page is open so takeover is visible
+	// even if the user is idle and no business API is being called.
+	useEffect(() => {
+		if (!isLoggedIn || !token?.accessToken) return;
+		let cancelled = false;
+		let timer: number | undefined;
+		let probing = false;
+
+		const schedule = (delay = SESSION_STATUS_POLL_MS) => {
+			if (cancelled) return;
+			timer = window.setTimeout(() => {
+				void probe();
+			}, delay);
+		};
+
+		const probe = async () => {
+			if (cancelled || probing || logoutInProgressRef.current) {
+				return;
+			}
+			probing = true;
+			try {
+				const status = await getPortalSessionStatus(token.accessToken);
+				if (cancelled || logoutInProgressRef.current) {
+					return;
+				}
+				if (!status?.authenticated) {
+					if (wasLogoutTriggeredRecently()) {
+						cancelled = true;
+						return;
+					}
+					const reason = status?.reason === "CONCURRENT" ? "CONCURRENT" : "EXPIRED";
+					finishSession(clearUserInfoAndToken, logoutInProgressRef, reason);
+					cancelled = true;
+					return;
+				}
+			} catch (error) {
+				console.warn("[session] status probe failed", error);
+			} finally {
+				probing = false;
+			}
+			schedule();
+		};
+
+		const handleForegroundProbe = () => {
+			if (document.visibilityState === "hidden") {
+				return;
+			}
+			if (timer) {
+				window.clearTimeout(timer);
+			}
+			void probe();
+		};
+
+		schedule();
+		window.addEventListener("focus", handleForegroundProbe);
+		document.addEventListener("visibilitychange", handleForegroundProbe);
+
+		return () => {
+			cancelled = true;
+			if (timer) {
+				window.clearTimeout(timer);
+			}
+			window.removeEventListener("focus", handleForegroundProbe);
+			document.removeEventListener("visibilitychange", handleForegroundProbe);
+		};
+	}, [isLoggedIn, token?.accessToken, clearUserInfoAndToken]);
+
 	// Track user activity
 	useEffect(() => {
 		if (!isLoggedIn) return;
@@ -276,8 +374,17 @@ export default function SessionManager() {
 
 		const run = async () => {
 			if (cancelled) return;
+			const currentRefreshToken = token?.refreshToken;
+			if (!currentRefreshToken) {
+				cancelled = true;
+				return;
+			}
 			const currentLease = readLeaderLease();
-			if (!currentLease || currentLease.tabId !== tabIdRef.current || !isSessionLeaderActive(currentLease, Date.now())) {
+			if (
+				!currentLease ||
+				currentLease.tabId !== tabIdRef.current ||
+				!isSessionLeaderActive(currentLease, Date.now())
+			) {
 				isLeaderRef.current = false;
 				schedule(FOLLOWER_RECHECK_MS);
 				return;
@@ -294,7 +401,7 @@ export default function SessionManager() {
 				return;
 			}
 			try {
-				const res = await userService.refresh(token.refreshToken!);
+				const res = await userService.refresh(currentRefreshToken);
 				const nextAccess = (res as any)?.accessToken;
 				const nextRefresh = (res as any)?.refreshToken;
 				// Derive tokenExpiresAt from backend expiresIn (Keycloak token lifetime)
@@ -323,12 +430,13 @@ export default function SessionManager() {
 				}
 				if (!cancelled) {
 					// Use expiresIn from Keycloak for precise scheduling
-					const refreshDelay = expiresInSec > 0
-						? Math.max(60_000, expiresInSec * 1000 - 60_000)
-						: nextRefreshDelayMs(nextAccess || token.accessToken);
+					const refreshDelay =
+						expiresInSec > 0
+							? Math.max(60_000, expiresInSec * 1000 - 60_000)
+							: nextRefreshDelayMs(nextAccess || token.accessToken);
 					schedule(refreshDelay);
 				}
-			} catch (err) {
+			} catch {
 				// Don't immediately logout — another tab may have already refreshed.
 				// Check if we received a synced token recently.
 				try {
@@ -351,12 +459,12 @@ export default function SessionManager() {
 						}
 					}
 				} catch {}
+				if (wasLogoutTriggeredRecently()) {
+					cancelled = true;
+					return;
+				}
 				if (!logoutInProgressRef.current) {
-					logoutInProgressRef.current = true;
-					toast.error("会话已过期，请重新登录", { id: "session-expired" });
-					clearUserInfoAndToken();
-					localStorage.setItem(STORAGE_KEYS.LOGOUT_TS, String(Date.now()));
-					window.location.replace(resolveLoginHref(resolveCurrentAppPath()));
+					finishSession(clearUserInfoAndToken, logoutInProgressRef, "EXPIRED");
 				}
 				cancelled = true;
 			}
@@ -378,7 +486,7 @@ export default function SessionManager() {
 			cancelled = true;
 			if (timer) window.clearTimeout(timer);
 		};
-	}, [isLoggedIn, token?.refreshToken, token?.accessToken, token?.tokenExpiresAt, setUserToken, clearUserInfoAndToken, user?.username, user?.email]);
+	}, [isLoggedIn, token, setUserToken, clearUserInfoAndToken]);
 
 	return null;
 }

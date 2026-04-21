@@ -38,16 +38,37 @@ const TEST_SESSION_ENABLED =
 	"true";
 const TEST_SESSION_REFRESH_MS = Number(import.meta.env.VITE_TEST_SESSION_PING_MS ?? 5 * 60 * 1000);
 const TEST_SESSION_MAX_AGE_MS = Number(import.meta.env.VITE_TEST_SESSION_MAX_AGE_MS ?? 4 * 60 * 60 * 1000);
+const LOGOUT_TS_KEY = "dts.platform.session.logoutTs";
 
 // Token refresh coordination to avoid stampedes
-let refreshingPromise: Promise<void> | null = null;
+let refreshingPromise: Promise<boolean> | null = null;
+
+function hasRecentLoginGraceWindow(): boolean {
+	try {
+		const loginTs = Number(localStorage.getItem("dts.platform.session.loginTs") || "0");
+		return loginTs > 0 && Date.now() - loginTs < 2000;
+	} catch {
+		return false;
+	}
+}
+
+function forceLogoutToLogin() {
+	userStore.getState().actions.clearUserInfoAndToken();
+	try {
+		localStorage.setItem(LOGOUT_TS_KEY, String(Date.now()));
+	} catch {}
+	if (typeof window !== "undefined" && !isLoginRouteActive()) {
+		redirectToLoginWithCurrentPath();
+	}
+}
+
 async function refreshTokenIfPossible(): Promise<boolean> {
 	const { userToken, actions } = userStore.getState() as any;
 	const refresh = String(userToken?.refreshToken || "").trim();
 	if (!refresh) return false;
 	// Only one refresh at a time
 	if (!refreshingPromise) {
-		refreshingPromise = (async () => {
+		const refreshTask = (async (): Promise<boolean> => {
 			try {
 				const resp: any = await axiosInstance.post(
 					"/keycloak/auth/refresh",
@@ -73,23 +94,19 @@ async function refreshTokenIfPossible(): Promise<boolean> {
 					adminAccessTokenExpiresAt: adminAccessTokenExpiresAt || userToken?.adminAccessTokenExpiresAt,
 					adminRefreshTokenExpiresAt: adminRefreshTokenExpiresAt || userToken?.adminRefreshTokenExpiresAt,
 				});
-			} finally {
-				// Allow subsequent refresh attempts
-				const p = refreshingPromise;
-				refreshingPromise = null;
-				// Wait a tick to let store update propagate
-				try {
-					await p;
-				} catch {}
+				return true;
+			} catch {
+				return false;
 			}
 		})();
+		const coordinatedTask = refreshTask.finally(() => {
+			if (refreshingPromise === coordinatedTask) {
+				refreshingPromise = null;
+			}
+		});
+		refreshingPromise = coordinatedTask;
 	}
-	try {
-		await refreshingPromise;
-		return true;
-	} catch {
-		return false;
-	}
+	return refreshingPromise;
 }
 
 let keepAliveTimer: number | null = null;
@@ -229,15 +246,14 @@ axiosInstance.interceptors.response.use(
 		const isLoginRequest =
 			typeof requestUrl === "string" &&
 			(requestUrl.includes("/keycloak/auth/login") || requestUrl.includes("/keycloak/auth/platform/login"));
+		const isRefreshRequest = typeof requestUrl === "string" && requestUrl.includes("/keycloak/auth/refresh");
 		const shouldSuppressAuthHandling = typeof requestUrl === "string" && requestUrl.includes("/keycloak/localization/");
 		// SQL IDE tab race condition: if another window/session already closed the tab,
 		// the backend returns 404 "tab not found". Frontend useTabStore reconciles via
 		// its idRemap chain on the next hydrate; surfacing a toast here only confuses users.
 		// We still reject the promise so callers can handle it; only the toast is suppressed.
 		const isSqlTabRaceCondition =
-			typeof requestUrl === "string" &&
-			requestUrl.includes("/sql/v2/tabs") &&
-			response?.status === 404;
+			typeof requestUrl === "string" && requestUrl.includes("/sql/v2/tabs") && response?.status === 404;
 		if (!(isLoginRequest && response?.status === 401)) {
 			console.error("API Response Error:", response?.status, response?.data, error.message);
 		}
@@ -264,26 +280,29 @@ axiosInstance.interceptors.response.use(
 			: "";
 		const httpStatusMsg = response?.status
 			? t(`sys.api.errMsg${response.status}`, { defaultValue: "" })
-			: (!response ? t("sys.api.networkExceptionMsg") : "");
-		const errMsg = (problemDetail ? String(problemDetail) : "") || fieldMsg || httpStatusMsg || message || t("sys.api.errorMessage");
+			: !response
+				? t("sys.api.networkExceptionMsg")
+				: "";
+		const errMsg =
+			(problemDetail ? String(problemDetail) : "") || fieldMsg || httpStatusMsg || message || t("sys.api.errorMessage");
 		// Friendly hints for security codes
 		let hint = "";
-			switch (String(errCode || "")) {
+		switch (String(errCode || "")) {
 			case "dts-sec-0001":
 				hint = "动作权限不足，请联系管理员申请更高权限";
 				break;
 			case "dts-sec-0002":
 				hint = "作用域/部门不匹配，请在右上角切换上下文后重试";
 				break;
-				case "dts-sec-0003":
-					hint = "权限不足，当前密级不可访问";
-					break;
-				case "dts-sec-0004":
-					hint = "需要审批授权后才能访问数据内容";
-					break;
-				case "dts-sec-0007":
-					hint = "资源不存在或不可见";
-					break;
+			case "dts-sec-0003":
+				hint = "权限不足，当前密级不可访问";
+				break;
+			case "dts-sec-0004":
+				hint = "需要审批授权后才能访问数据内容";
+				break;
+			case "dts-sec-0007":
+				hint = "资源不存在或不可见";
+				break;
 			case "dts-sec-0005":
 			case "dts-sec-0006":
 				hint = "缺少或非法上下文，请设置作用域/部门后重试";
@@ -296,8 +315,20 @@ axiosInstance.interceptors.response.use(
 		const sessionErrorByMessage =
 			typeof combinedMsg === "string" && /已在其他位置登录|会话已超时|重新登录|session/i.test(combinedMsg);
 		const shouldForceLogout = sessionExpiredHeader || sessionConflictHeader || sessionErrorByMessage;
+		if (response?.status === 401 && !shouldSuppressAuthHandling && isRefreshRequest) {
+			if (hasRecentLoginGraceWindow()) {
+				console.warn("[auth] Suppressing refresh logout due to grace window after login");
+				return Promise.reject(error);
+			}
+			if (!TEST_SESSION_ENABLED || shouldForceLogout) {
+				forceLogoutToLogin();
+			} else {
+				console.warn("[DEV/TEST] refresh 401 received; skipping auto logout");
+			}
+			return Promise.reject(error);
+		}
 		// Attempt silent refresh on 401 (non-auth endpoints) and retry once
-		if (response?.status === 401 && !shouldSuppressAuthHandling && !isLoginRequest) {
+		if (response?.status === 401 && !shouldSuppressAuthHandling && !isLoginRequest && !isRefreshRequest) {
 			const cfg = response.config || {};
 			// prevent infinite loop
 			if (!(cfg as any)._retry) {
@@ -307,7 +338,7 @@ axiosInstance.interceptors.response.use(
 				const requestToken = requestAuth.startsWith("Bearer ") ? requestAuth.slice(7).trim() : "";
 				const checkStoreForNewerToken = (): string | null => {
 					const current = String(userStore.getState().userToken?.accessToken || "").trim();
-					return (requestToken && current && requestToken !== current) ? current : null;
+					return requestToken && current && requestToken !== current ? current : null;
 				};
 				// Immediate check
 				let newerToken = checkStoreForNewerToken();
@@ -340,32 +371,17 @@ axiosInstance.interceptors.response.use(
 				}
 			}
 			// Grace window just after login to avoid kicking user out on in-flight 401s
-			try {
-					const loginTs = Number(localStorage.getItem("dts.platform.session.loginTs") || "0");
-				if (loginTs > 0 && Date.now() - loginTs < 2000) {
-					console.warn("[auth] Suppressing auto-logout due to grace window after login");
-					return Promise.reject(error);
-				}
-			} catch {}
+			if (hasRecentLoginGraceWindow()) {
+				console.warn("[auth] Suppressing auto-logout due to grace window after login");
+				return Promise.reject(error);
+			}
 			if (!TEST_SESSION_ENABLED || shouldForceLogout) {
-				userStore.getState().actions.clearUserInfoAndToken();
-				try {
-						localStorage.setItem("dts.platform.session.logoutTs", String(Date.now()));
-				} catch {}
-				if (typeof window !== "undefined" && !isLoginRouteActive()) {
-					redirectToLoginWithCurrentPath();
-				}
+				forceLogoutToLogin();
 			} else {
 				console.warn("[DEV/TEST] 401 after refresh; skipping auto logout");
 			}
 		} else if (shouldForceLogout && !TEST_SESSION_ENABLED) {
-			userStore.getState().actions.clearUserInfoAndToken();
-			try {
-				localStorage.setItem("dts.platform.session.logoutTs", String(Date.now()));
-			} catch {}
-			if (typeof window !== "undefined" && !isLoginRouteActive()) {
-				redirectToLoginWithCurrentPath();
-			}
+			forceLogoutToLogin();
 		} else {
 			if (!shouldSuppressAuthHandling && !isLoginRequest && !isSqlTabRaceCondition) {
 				const isServiceUnavailable = !response || SERVICE_UNAVAILABLE_STATUSES.has(response.status ?? 0);

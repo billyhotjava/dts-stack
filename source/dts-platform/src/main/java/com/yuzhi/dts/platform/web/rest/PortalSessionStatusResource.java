@@ -1,17 +1,19 @@
 package com.yuzhi.dts.platform.web.rest;
 
+import com.yuzhi.dts.platform.domain.security.PortalSessionCloseReason;
 import com.yuzhi.dts.platform.domain.security.PortalSessionEntity;
 import com.yuzhi.dts.platform.repository.security.PortalSessionRepository;
+import jakarta.servlet.http.HttpServletRequest;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Optional;
-import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
+import org.springframework.util.StringUtils;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
@@ -19,6 +21,8 @@ import org.springframework.web.bind.annotation.RestController;
 @RestController
 @RequestMapping("/api/session")
 public class PortalSessionStatusResource {
+
+    private static final String PORTAL_ACCESS_TOKEN_HEADER = "X-Portal-Access-Token";
 
     private final PortalSessionRepository sessionRepository;
     private final Clock clock;
@@ -39,7 +43,7 @@ public class PortalSessionStatusResource {
         Instant now = Instant.now(clock);
         data.put("serverNow", now.toString());
 
-        String token = extractBearerToken(request);
+        String token = extractToken(request);
         if (token == null) {
             data.put("authenticated", false);
             return ApiResponses.ok(data);
@@ -53,12 +57,14 @@ public class PortalSessionStatusResource {
         PortalSessionEntity entity = session.orElseThrow();
         if (entity.getRevokedAt() != null) {
             data.put("authenticated", false);
+            appendReason(data, entity.getRevokedReason());
             return ApiResponses.ok(data);
         }
 
         Instant expiresAt = entity.getExpiresAt();
         if (expiresAt != null && expiresAt.isBefore(now)) {
             data.put("authenticated", false);
+            appendReason(data, PortalSessionCloseReason.EXPIRED);
             data.put("expiresAt", expiresAt.toString());
             data.put("remainingSeconds", 0L);
             return ApiResponses.ok(data);
@@ -79,6 +85,24 @@ public class PortalSessionStatusResource {
             data.put("remainingSeconds", null);
         }
         return ApiResponses.ok(data);
+    }
+
+    private void appendReason(Map<String, Object> data, PortalSessionCloseReason reason) {
+        if (data == null || reason == null) {
+            return;
+        }
+        data.put("reason", reason.name());
+    }
+
+    private String extractToken(HttpServletRequest request) {
+        if (request == null) {
+            return null;
+        }
+        String directToken = request.getHeader(PORTAL_ACCESS_TOKEN_HEADER);
+        if (StringUtils.hasText(directToken)) {
+            return directToken.trim();
+        }
+        return extractBearerToken(request);
     }
 
     private String extractBearerToken(HttpServletRequest request) {

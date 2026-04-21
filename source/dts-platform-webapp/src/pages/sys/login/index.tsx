@@ -1,5 +1,5 @@
-import { useEffect, useMemo, useState } from "react";
 import { Star } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
 import { Navigate, useLocation } from "react-router";
 import { getPortalSessionStatus } from "@/api/platformApi";
 import TechDataBackground from "@/assets/images/background/tech-data-platform.svg";
@@ -85,7 +85,7 @@ function LoginPage() {
 			} catch {}
 
 			try {
-				const status = await getPortalSessionStatus();
+				const status = await getPortalSessionStatus(token.accessToken);
 				if (!alive) return;
 				const authenticated = Boolean(status?.authenticated);
 				setSessionAuthenticated(authenticated);
@@ -105,7 +105,7 @@ function LoginPage() {
 		return () => {
 			alive = false;
 		};
-	}, [clearUserInfoAndToken, hasLocallyValidToken]);
+	}, [clearUserInfoAndToken, hasLocallyValidToken, token.accessToken]);
 
 	if (hasLocallyValidToken && !sessionChecked) {
 		return null;

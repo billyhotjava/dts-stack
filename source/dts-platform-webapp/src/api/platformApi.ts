@@ -8,13 +8,19 @@ export type PortalSessionStatus = {
 	expiresAt?: string;
 	serverNow?: string;
 	remainingSeconds?: number | null;
+	reason?: "CONCURRENT" | "EXPIRED" | "LOGOUT";
 };
 
 // Session status is intentionally public on the backend.
-// Do not attach stale bearer tokens here, otherwise a kicked/revoked token is intercepted
+// Do not attach Authorization here, otherwise a kicked/revoked token is intercepted
 // by the resource server first and the SPA sees a 401 instead of a clean authenticated=false probe.
-export const getPortalSessionStatus = () =>
-	api.get<PortalSessionStatus>({ url: "/session/status", _skipAuth: true } as any);
+// Pass the portal access token via a dedicated header so the status resource can inspect it directly.
+export const getPortalSessionStatus = (accessToken?: string) =>
+	api.get<PortalSessionStatus>({
+		url: "/session/status",
+		headers: accessToken ? { "X-Portal-Access-Token": accessToken } : undefined,
+		_skipAuth: true,
+	} as any);
 
 // Catalog
 export const getCatalogSummary = () => api.get({ url: "/catalog/summary" });
