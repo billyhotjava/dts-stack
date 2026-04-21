@@ -10,6 +10,9 @@ import type { ScreenConfig, ScreenTheme } from './types';
 import { resolveScreenTheme } from './screenThemes';
 import { applyThemeCssVariables } from './themes/screenCssVariables';
 import { normalizeScreenConfig } from './specV2';
+import { tryLoadV2 } from './v2/loader';
+import type { ScreenConfigV2 } from './v2/types';
+import { ResponsiveScreenLayout } from './v2/ResponsiveScreenLayout';
 import { buildComponentMap, isComponentEffectivelyVisible } from './componentHierarchy';
 import { safeCssBackgroundUrl } from './sanitize';
 import { useScreenCarousel } from './hooks/useScreenCarousel';
@@ -131,6 +134,8 @@ function fabDividerBg(isDark: boolean): string {
 export default function ScreenPreviewPage() {
 	const { id } = useParams<{ id: string }>();
 	const [screen, setScreen] = useState<ScreenConfig | null>(null);
+	/** Sprint-12 F1/T03: v2 响应式大屏走 ResponsiveScreenLayout，与 v1 state 并存。 */
+	const [v2Config, setV2Config] = useState<ScreenConfigV2 | null>(null);
 	const [loading, setLoading] = useState(true);
 	const [error, setError] = useState<string | null>(null);
 	const [scale, setScale] = useState(1);
@@ -162,6 +167,13 @@ export default function ScreenPreviewPage() {
 
 		analyticsApi.getScreen(id, { mode: 'draft' })
 			.then((data) => {
+				// Sprint-12 F1/T03: 优先尝试 v2 loader；不匹配才走 v1 normalizer。
+				const v2 = tryLoadV2(data);
+				if (v2) {
+					setV2Config(v2);
+					setLoading(false);
+					return;
+				}
 				const normalized = normalizeScreenConfig(data, { id: data.id });
 				if (normalized.warnings.length > 0) {
 					console.warn('[screen-spec-v2] normalized with warnings:', normalized.warnings);
@@ -422,7 +434,7 @@ export default function ScreenPreviewPage() {
 		);
 	}
 
-	if (error || !screen) {
+	if (error || (!screen && !v2Config)) {
 		return (
 			<div
 				className="fixed inset-0 overflow-hidden p-0 box-border"
@@ -446,6 +458,20 @@ export default function ScreenPreviewPage() {
 				</div>
 			</div>
 		);
+	}
+
+	// Sprint-12 F1/T03: v2 响应式大屏走 ResponsiveScreenLayout，跳过 v1 scale 逻辑。
+	if (v2Config) {
+		return (
+			<div className="fixed inset-0 overflow-hidden p-0 box-border" data-testid="analytics-screen-preview-v2">
+				<ResponsiveScreenLayout screen={v2Config} theme={v2Config.theme} />
+			</div>
+		);
+	}
+
+	// 从这里开始是 v1 渲染路径（screen 非 null）
+	if (!screen) {
+		return null;
 	}
 
 	const screenWidth = contentBounds.width;

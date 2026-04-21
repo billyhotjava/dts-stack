@@ -58,6 +58,10 @@ public class AnalyticsScreenVersion implements Serializable {
     @Column(name = "carousel_json", columnDefinition = "text")
     private String carouselJson;
 
+    /** Sprint-12 v2 ScreenConfig 扩展字段（见 AnalyticsScreen.v2SpecJson）。 */
+    @Column(name = "v2_spec_json", columnDefinition = "text")
+    private String v2SpecJson;
+
     @Column(name = "creator_id")
     private Long creatorId;
 
@@ -188,6 +192,14 @@ public class AnalyticsScreenVersion implements Serializable {
 
     public void setCarouselJson(String carouselJson) {
         this.carouselJson = carouselJson;
+    }
+
+    public String getV2SpecJson() {
+        return v2SpecJson;
+    }
+
+    public void setV2SpecJson(String v2SpecJson) {
+        this.v2SpecJson = v2SpecJson;
     }
 
     public Long getCreatorId() {

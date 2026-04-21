@@ -759,6 +759,10 @@ public class ScreenResource {
         screen.setCarouselJson(body != null && body.has("carouselConfig") && body.path("carouselConfig").isObject()
                 ? body.path("carouselConfig").toString()
                 : null);
+        // Sprint-12 F2/T03: 透传 v2Spec（schemaVersion / layout / referenceViewport）
+        screen.setV2SpecJson(body != null && body.has("v2Spec") && body.path("v2Spec").isObject()
+                ? body.path("v2Spec").toString()
+                : null);
         screen.setCreatorId(user.orElseThrow().getId());
         screen.setArchived(false);
 
@@ -851,6 +855,12 @@ public class ScreenResource {
         if (effectiveBody != null && effectiveBody.has("carouselConfig")) {
             screen.setCarouselJson(effectiveBody.path("carouselConfig").isObject()
                     ? effectiveBody.path("carouselConfig").toString()
+                    : null);
+        }
+        // Sprint-12 F2/T03: 透传 v2Spec（客户端可 explicit set null 清理 v2 扩展）
+        if (effectiveBody != null && effectiveBody.has("v2Spec")) {
+            screen.setV2SpecJson(effectiveBody.path("v2Spec").isObject()
+                    ? effectiveBody.path("v2Spec").toString()
                     : null);
         }
 
@@ -1262,6 +1272,7 @@ public class ScreenResource {
         version.setVariablesJson(screen.getVariablesJson());
         version.setPagesJson(screen.getPagesJson());
         version.setCarouselJson(screen.getCarouselJson());
+        version.setV2SpecJson(screen.getV2SpecJson());
         version.setCreatorId(creatorId);
         version.setCurrentPublished(currentPublished);
         version.setPublishedAt(publishedAt);
@@ -1280,6 +1291,7 @@ public class ScreenResource {
         screen.setVariablesJson(version.getVariablesJson());
         screen.setPagesJson(version.getPagesJson());
         screen.setCarouselJson(version.getCarouselJson());
+        screen.setV2SpecJson(version.getV2SpecJson());
     }
 
     private ObjectNode toListResponse(
@@ -1468,6 +1480,11 @@ public class ScreenResource {
             if (carouselConfig != null) {
                 node.set("carouselConfig", carouselConfig);
             }
+            // Sprint-12 F2/T03: v2Spec 从 version 快照回吐
+            JsonNode v2Spec = parseV2Spec(effectiveVersion.getV2SpecJson());
+            if (v2Spec != null) {
+                node.set("v2Spec", v2Spec);
+            }
         } else {
             node.put("backgroundColor", screen.getBackgroundColor());
             node.put("backgroundImage", screen.getBackgroundImage());
@@ -1478,9 +1495,27 @@ public class ScreenResource {
             if (carouselConfig != null) {
                 node.set("carouselConfig", carouselConfig);
             }
+            // Sprint-12 F2/T03: v2Spec 从 draft screen 回吐
+            JsonNode v2Spec = parseV2Spec(screen.getV2SpecJson());
+            if (v2Spec != null) {
+                node.set("v2Spec", v2Spec);
+            }
         }
         node.put("sourceMode", sourceMode);
         return node;
+    }
+
+    /** Sprint-12 F2/T03: 解析透传存储的 v2 扩展 JSON。解析失败返回 null。 */
+    private JsonNode parseV2Spec(String raw) {
+        if (raw == null || raw.isBlank()) {
+            return null;
+        }
+        try {
+            JsonNode parsed = objectMapper.readTree(raw);
+            return parsed.isObject() ? parsed : null;
+        } catch (Exception ex) {
+            return null;
+        }
     }
 
     private ObjectNode toAuditScreenSnapshot(AnalyticsScreen screen, AnalyticsScreenVersion currentPublishedVersion) {

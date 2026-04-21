@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="utf-8"?>
+<databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.22.xsd">
+
+    <!--
+        Sprint-12 F2/T03: 透传 v2 ScreenConfig 的 schemaVersion / layout /
+        referenceViewport 等扩展字段。旧 v1 大屏保持 NULL，向前兼容。
+    -->
+    <changeSet id="0045-add-v2-spec-to-screen" author="codex">
+        <addColumn tableName="analytics_screen">
+            <column name="v2_spec_json" type="text"/>
+        </addColumn>
+
+        <addColumn tableName="analytics_screen_version">
+            <column name="v2_spec_json" type="text"/>
+        </addColumn>
+    </changeSet>
+
+</databaseChangeLog>

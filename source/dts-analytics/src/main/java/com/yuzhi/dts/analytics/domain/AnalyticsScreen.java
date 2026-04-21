@@ -53,6 +53,13 @@ public class AnalyticsScreen implements Serializable {
     @Column(name = "carousel_json", columnDefinition = "text")
     private String carouselJson;
 
+    /**
+     * Sprint-12 v2 ScreenConfig 扩展字段（schemaVersion / layout / referenceViewport 等）。
+     * v1 大屏为 null。存原始 JSON，不拆字段；前端负责 shape。
+     */
+    @Column(name = "v2_spec_json", columnDefinition = "text")
+    private String v2SpecJson;
+
     @Column(name = "classification", length = 32)
     private String classification;
 
@@ -165,6 +172,14 @@ public class AnalyticsScreen implements Serializable {
 
     public void setCarouselJson(String carouselJson) {
         this.carouselJson = carouselJson;
+    }
+
+    public String getV2SpecJson() {
+        return v2SpecJson;
+    }
+
+    public void setV2SpecJson(String v2SpecJson) {
+        this.v2SpecJson = v2SpecJson;
     }
 
     public String getClassification() {
