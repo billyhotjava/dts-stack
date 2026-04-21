@@ -187,7 +187,11 @@ const FieldEditor: React.FC<FieldEditorProps> = ({ field, value, onChange, theme
       const fontsLoaded = useRef(false);
       if (!fontsLoaded.current) {
         fontsLoaded.current = true;
-        apiClient.post<any>({ url: '/infra/screen-fonts', method: 'GET' } as any)
+        // Bug fix: `apiClient.post({ ..., method: 'GET' })` does NOT actually GET —
+        // apiClient.post spreads config then forces `method: "POST"`, so the request
+        // goes out as POST and the backend replies 405 "Request method 'POST' is not
+        // supported" (the endpoint is GET-only). Use apiClient.get directly.
+        apiClient.get<any>({ url: '/infra/screen-fonts' })
           .catch(() => fetch('/api/infra/screen-fonts').then(r => r.json()))
           .then((res: any) => {
             const list = res?.data ?? res ?? [];

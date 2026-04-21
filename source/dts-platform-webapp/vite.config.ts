@@ -109,12 +109,15 @@ export default defineConfig(({ mode }) => {
 	const isProduction = mode === "production";
 	const runningInContainer = existsSync("/.dockerenv");
 
+	// Default to legacy build (chrome 95+) for both dev and prod so the app loads
+	// on older browsers used by customers. Modern-only build still available via
+	// LEGACY_BROWSER_BUILD=0 (e.g. when debugging with chrome 109+ features).
 	const legacyFlagRaw =
 		env.LEGACY_BROWSER_BUILD ??
 		rawEnv.LEGACY_BROWSER_BUILD ??
 		env.VITE_LEGACY_BUILD ??
 		rawEnv.VITE_LEGACY_BUILD ??
-		(isProduction ? "1" : "0");
+		"1";
 	const normalizedLegacyFlag = String(legacyFlagRaw).trim().toLowerCase();
 	const legacyEnabled = normalizedLegacyFlag !== "0" && normalizedLegacyFlag !== "false";
 	const browserTargets = legacyEnabled ? legacySupportedBrowsers : modernSupportedBrowsers;

@@ -187,7 +187,7 @@ const SchemaTreeRow: FC<RowProps> = ({
   onTablesLoaded,
 }) => {
   return (
-    <div ref={dragHandle} style={{ ...style, display: "flex", alignItems: "center", paddingLeft: 4 }}>
+    <div ref={dragHandle} style={{ ...style, display: "flex", alignItems: "center", paddingLeft: 4, overflow: "hidden", minWidth: 0 }}>
       <span
         onClick={() => node.toggle()}
         style={{ cursor: "pointer", width: 14, fontSize: 10, color: "var(--ant-color-text-tertiary)" }}
@@ -213,7 +213,8 @@ const SchemaTreeRow: FC<RowProps> = ({
           >
             <TableDetailPopover dsId={dsId} schema={d.schema} table={d.table}>
               <span
-                style={{ fontSize: 12, color: "var(--ant-color-text)", cursor: "pointer", userSelect: "none" }}
+                title={`${d.schema}.${d.table}`}
+                style={{ fontSize: 12, color: "var(--ant-color-text)", cursor: "pointer", userSelect: "none", flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}
                 onDoubleClick={() => onInsertIdentifier?.(`${d.schema}.${d.table}`)}
               >
                 📄 {d.name}
@@ -260,12 +261,17 @@ const SchemaRow: FC<{
   return (
     <span
       onClick={() => node.toggle()}
+      title={node.data.name}
       style={{
         fontSize: 12,
         color: "var(--ant-color-text)",
         userSelect: "none",
         cursor: "pointer",
         flex: 1,
+        minWidth: 0,
+        overflow: "hidden",
+        textOverflow: "ellipsis",
+        whiteSpace: "nowrap",
       }}
     >
       📁 {node.data.name}

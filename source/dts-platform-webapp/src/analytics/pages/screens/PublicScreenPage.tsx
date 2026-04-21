@@ -106,6 +106,10 @@ export default function PublicScreenPage() {
 	const [scale, setScale] = useState(1);
 	const [autoScale, setAutoScale] = useState(1);
 	const [manualScale, setManualScale] = useState<number | null>(null);
+	// Stretch-mode axis scales: fill viewport without letterbox when manualScale===null.
+	const [autoScaleX, setAutoScaleX] = useState(1);
+	const [autoScaleY, setAutoScaleY] = useState(1);
+	const [viewportSize, setViewportSize] = useState({ w: 0, h: 0 });
 	const [deviceMode, setDeviceMode] = useState<DeviceMode>('pc');
 	const [fabOpen, setFabOpen] = useState(false);
 	const [authError, setAuthError] = useState<'not-authenticated' | 'forbidden' | null>(null);
@@ -204,6 +208,7 @@ export default function PublicScreenPage() {
 		const viewport = window.visualViewport;
 		const vw = viewport?.width ?? window.innerWidth;
 		const vh = viewport?.height ?? window.innerHeight;
+		setViewportSize({ w: vw, h: vh });
 		const nextMode: DeviceMode = resolveDeviceModeByViewport(vw);
 		setDeviceMode(nextMode);
 		const nextAutoScale = resolveRuntimeScale({
@@ -215,6 +220,11 @@ export default function PublicScreenPage() {
 			allowUpscale: true,
 		}).scale;
 		setAutoScale(nextAutoScale);
+		// Stretch axes: each axis fills the viewport independently (no letterbox).
+		const sx = vw / Math.max(1, contentBounds.width);
+		const sy = vh / Math.max(1, contentBounds.height);
+		setAutoScaleX(sx);
+		setAutoScaleY(sy);
 		if (manualScale === null) {
 			setScale(nextAutoScale);
 		}
@@ -315,10 +325,17 @@ export default function PublicScreenPage() {
 			return override !== undefined ? { ...gv, defaultValue: override } : gv;
 		});
 	}, [globalVariables, urlVariableOverrides]);
-	const runtimeCanvasScaleStyle = useMemo(
-		() => resolveRuntimeCanvasScaleStyle(scale, components),
-		[components, scale],
-	);
+	// Auto mode = stretch (fill viewport, no letterbox); manual zoom = uniform.
+	const useStretchFill = manualScale === null;
+	const runtimeCanvasScaleStyle = useMemo(() => {
+		if (useStretchFill) {
+			return {
+				transform: `scale(${autoScaleX}, ${autoScaleY})`,
+				transformOrigin: 'top left',
+			} as const;
+		}
+		return resolveRuntimeCanvasScaleStyle(scale, components);
+	}, [useStretchFill, autoScaleX, autoScaleY, scale, components]);
 
 	const isDark = useMemo(() => {
 		if (!screen) return true; // default dark for loading/error states
@@ -409,8 +426,14 @@ export default function PublicScreenPage() {
 	const carouselDuration = screen.carouselConfig?.transitionDuration ?? 800;
 	const screenWidth = contentBounds.width;
 	const screenHeight = contentBounds.height;
-	const stageWidth = Math.max(1, screenWidth * scale);
-	const stageHeight = Math.max(1, screenHeight * scale);
+	// In stretch-fill mode the stage matches the viewport exactly; in manual-zoom
+	// mode the stage is sized from the uniform scale (legacy behaviour).
+	const stageWidth = useStretchFill
+		? Math.max(1, viewportSize.w || screenWidth * scale)
+		: Math.max(1, screenWidth * scale);
+	const stageHeight = useStretchFill
+		? Math.max(1, viewportSize.h || screenHeight * scale)
+		: Math.max(1, screenHeight * scale);
 	const scalePercent = Math.round(scale * 100);
 
 	return (
@@ -423,11 +446,10 @@ export default function PublicScreenPage() {
 				style={{ ...themeVars(isDark), background: themeBg(isDark), color: themeColor(isDark) }}
 			>
 				<div ref={scrollContainerRef} className="w-full h-full overflow-auto">
-					<div className="min-w-full min-h-full flex items-start justify-start p-0 box-border">
+					<div className="min-w-full min-h-full flex items-center justify-center p-0 box-border">
 						<div className="relative flex-none" style={{ width: stageWidth, height: stageHeight }}>
 							<div
 								className="relative w-full h-full overflow-hidden"
-								style={{ borderRadius: 28, boxShadow: '0 30px 64px rgba(15, 23, 42, 0.24)' }}
 							>
 							<div
 								ref={publicCanvasRef}

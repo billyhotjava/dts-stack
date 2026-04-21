@@ -595,12 +595,12 @@ export const SqlWorkbenchExperimental = () => {
 									{Object.entries(groupedTables).map(([schema, schemaTables]) => (
 										<li key={schema} className="mb-1">
 											<div
-												className="flex items-center font-medium cursor-pointer hover:bg-muted p-1 rounded"
+												className="flex items-center font-medium cursor-pointer hover:bg-muted p-1 rounded min-w-0"
 												onClick={() => toggleSchema(schema)}
 											>
 												<svg
 													className={cn(
-														"w-3 h-3 mr-1 transition-transform text-muted-foreground",
+														"w-3 h-3 mr-1 transition-transform text-muted-foreground flex-shrink-0",
 														expandedSchemas.has(schema) && "rotate-90"
 													)}
 													fill="currentColor"
@@ -608,8 +608,8 @@ export const SqlWorkbenchExperimental = () => {
 												>
 													<path d="M6 6L14 10L6 14V6Z" />
 												</svg>
-												<span className="truncate">{schema}</span>
-												<span className="ml-auto text-muted-foreground">{schemaTables.length}</span>
+												<span className="truncate flex-1 min-w-0">{schema}</span>
+												<span className="ml-2 text-muted-foreground flex-shrink-0">{schemaTables.length}</span>
 											</div>
 											{expandedSchemas.has(schema) && (
 												<ul className="ml-4 mt-0.5 space-y-px">
@@ -617,7 +617,7 @@ export const SqlWorkbenchExperimental = () => {
 														<li
 															key={`${table.schema}.${table.name}`}
 															className={cn(
-																"flex items-center p-1 rounded cursor-pointer",
+																"flex items-center p-1 rounded cursor-pointer min-w-0",
 																selectedTable === `${table.schema}.${table.name}`
 																	? "bg-primary/10 text-primary"
 																	: "hover:bg-muted"

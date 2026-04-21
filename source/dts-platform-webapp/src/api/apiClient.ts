@@ -222,6 +222,14 @@ axiosInstance.interceptors.response.use(
 			typeof requestUrl === "string" &&
 			(requestUrl.includes("/keycloak/auth/login") || requestUrl.includes("/keycloak/auth/platform/login"));
 		const shouldSuppressAuthHandling = typeof requestUrl === "string" && requestUrl.includes("/keycloak/localization/");
+		// SQL IDE tab race condition: if another window/session already closed the tab,
+		// the backend returns 404 "tab not found". Frontend useTabStore reconciles via
+		// its idRemap chain on the next hydrate; surfacing a toast here only confuses users.
+		// We still reject the promise so callers can handle it; only the toast is suppressed.
+		const isSqlTabRaceCondition =
+			typeof requestUrl === "string" &&
+			requestUrl.includes("/sql/v2/tabs") &&
+			response?.status === 404;
 		if (!(isLoginRequest && response?.status === 401)) {
 			console.error("API Response Error:", response?.status, response?.data, error.message);
 		}
@@ -351,7 +359,7 @@ axiosInstance.interceptors.response.use(
 				location.replace(resolveLoginHref());
 			}
 		} else {
-			if (!shouldSuppressAuthHandling && !isLoginRequest) {
+			if (!shouldSuppressAuthHandling && !isLoginRequest && !isSqlTabRaceCondition) {
 				const isServiceUnavailable = !response || SERVICE_UNAVAILABLE_STATUSES.has(response.status ?? 0);
 				if (isServiceUnavailable) {
 					toast.error(combinedMsg, { id: "service-error", duration: 5000, position: "top-center" });

@@ -136,6 +136,12 @@ export default function ScreenPreviewPage() {
 	const [scale, setScale] = useState(1);
 	const [autoScale, setAutoScale] = useState(1);
 	const [manualScale, setManualScale] = useState<number | null>(null);
+	// Stretch-mode axis scales: distinct sx/sy so the canvas fills the viewport
+	// with zero letterbox regardless of screen aspect ratio. Only active when
+	// manualScale === null (auto fit-to-screen). Manual zoom still uses uniform scale.
+	const [autoScaleX, setAutoScaleX] = useState(1);
+	const [autoScaleY, setAutoScaleY] = useState(1);
+	const [viewportSize, setViewportSize] = useState({ w: 0, h: 0 });
 	const [deviceMode, setDeviceMode] = useState<DeviceMode>('pc');
 	const [visibleCount, setVisibleCount] = useState(PREVIEW_BATCH_SIZE);
 	// ScaleAdapter mode: activated via ?scaleMode=fit|fill|stretch
@@ -214,6 +220,7 @@ export default function ScreenPreviewPage() {
 		const viewport = window.visualViewport;
 		const vw = viewport?.width ?? window.innerWidth;
 		const vh = viewport?.height ?? window.innerHeight;
+		setViewportSize({ w: vw, h: vh });
 		const nextMode: DeviceMode = resolveDeviceModeByViewport(vw);
 		setDeviceMode(nextMode);
 		const nextAutoScale = resolveRuntimeScale({
@@ -225,6 +232,12 @@ export default function ScreenPreviewPage() {
 			allowUpscale: true,
 		}).scale;
 		setAutoScale(nextAutoScale);
+		// Stretch axes: each axis fills the viewport independently, eliminating
+		// letterbox when the viewport aspect ratio differs from the design canvas.
+		const sx = vw / Math.max(1, contentBounds.width);
+		const sy = vh / Math.max(1, contentBounds.height);
+		setAutoScaleX(sx);
+		setAutoScaleY(sy);
 		if (manualScale === null) {
 			setScale(nextAutoScale);
 		}
@@ -356,10 +369,18 @@ export default function ScreenPreviewPage() {
 		return () => document.removeEventListener('mousedown', handleClick);
 	}, [fabOpen]);
 
-	const runtimeCanvasScaleStyle = useMemo(
-		() => resolveRuntimeCanvasScaleStyle(scale, components),
-		[components, scale],
-	);
+	// Auto mode = stretch (fill viewport, no letterbox); manual zoom = uniform.
+	// Uniform path preserves legacy behaviour including zoom-fallback for interactive filters.
+	const useStretchFill = manualScale === null;
+	const runtimeCanvasScaleStyle = useMemo(() => {
+		if (useStretchFill) {
+			return {
+				transform: `scale(${autoScaleX}, ${autoScaleY})`,
+				transformOrigin: 'top left',
+			} as const;
+		}
+		return resolveRuntimeCanvasScaleStyle(scale, components);
+	}, [useStretchFill, autoScaleX, autoScaleY, scale, components]);
 
 	const canvasRef = useRef<HTMLDivElement>(null);
 	const rawTheme = (!loading && !error && screen) ? (screen as { theme?: string }).theme as ScreenTheme | undefined : undefined;
@@ -429,8 +450,14 @@ export default function ScreenPreviewPage() {
 
 	const screenWidth = contentBounds.width;
 	const screenHeight = contentBounds.height;
-	const stageWidth = Math.max(1, screenWidth * scale);
-	const stageHeight = Math.max(1, screenHeight * scale);
+	// In stretch-fill mode the stage matches the viewport exactly (no letterbox);
+	// in manual-zoom mode the stage is sized from the uniform scale (legacy behaviour).
+	const stageWidth = useStretchFill
+		? Math.max(1, viewportSize.w || screenWidth * scale)
+		: Math.max(1, screenWidth * scale);
+	const stageHeight = useStretchFill
+		? Math.max(1, viewportSize.h || screenHeight * scale)
+		: Math.max(1, screenHeight * scale);
 	const scalePercent = Math.round(scale * 100);
 
 	return (
@@ -443,7 +470,7 @@ export default function ScreenPreviewPage() {
 		>
 			<div ref={scrollContainerRef} className="w-full h-full overflow-auto">
 				{scaleModeParam ? (
-				<ScaleAdapter designWidth={screenWidth} designHeight={screenHeight} mode={scaleModeParam} className="min-w-full min-h-full flex items-start justify-start p-0 box-border">
+				<ScaleAdapter designWidth={screenWidth} designHeight={screenHeight} mode={scaleModeParam} className="min-w-full min-h-full flex items-center justify-center p-0 box-border">
 					<div ref={canvasRef} className="relative overflow-hidden origin-top-left" style={{
 						width: screenWidth, height: screenHeight,
 						backgroundColor: carousel.currentPageBgColor || screen.backgroundColor || '#1e1f26',
@@ -458,11 +485,10 @@ export default function ScreenPreviewPage() {
 					</div>
 				</ScaleAdapter>
 				) : (
-				<div className="min-w-full min-h-full flex items-start justify-start p-0 box-border">
+				<div className="min-w-full min-h-full flex items-center justify-center p-0 box-border">
 					<div className="relative flex-none" style={{ width: stageWidth, height: stageHeight }}>
 						<div
 							className="relative w-full h-full overflow-hidden"
-							style={{ borderRadius: 28, boxShadow: '0 30px 64px rgba(15, 23, 42, 0.24)' }}
 						>
 						<div
 							ref={canvasRef}
