@@ -11,9 +11,23 @@ const ECHART_COMPONENT_TYPES = new Set([
     'radar-chart', 'funnel-chart', 'scatter-chart', 'map-chart', 'combo-chart',
     'wordcloud-chart', 'treemap-chart', 'sunburst-chart', 'waterfall-chart',
     'globe-chart', 'bar3d-chart', 'scatter3d-chart',
+    // 新增图表（P2/P3）
+    'effectScatter-chart', 'lines-chart', 'bar-racing-chart',
+    'polar-line-chart', 'polar-bar-chart', 'liquidFill-chart',
+    'bar3D-chart', 'scatter3D-chart', 'line3D-chart', 'surface-chart', 'map3D-chart',
+    // 其他已有但曾遗漏的
+    'heatmap-chart', 'graph-chart', 'candlestick-chart', 'boxplot-chart',
+    'parallel-chart', 'calendar-chart', 'tree-chart',
+    'themeRiver-chart', 'pictorialBar-chart',
 ]);
 
-const ECHART_3D_TYPES = new Set(['globe-chart', 'bar3d-chart', 'scatter3d-chart']);
+const ECHART_3D_TYPES = new Set([
+    'globe-chart', 'bar3d-chart', 'scatter3d-chart',
+    // 新 3D 族
+    'bar3D-chart', 'scatter3D-chart', 'line3D-chart', 'surface-chart', 'map3D-chart',
+]);
+
+const ECHART_LIQUIDFILL_TYPES = new Set(['liquidFill-chart']);
 
 export { ECHART_COMPONENT_TYPES, ECHART_3D_TYPES };
 
@@ -56,6 +70,11 @@ export function useEChartsLoader(
         if (ECHART_3D_TYPES.has(type)) {
             const glPkg = 'echarts-gl';
             imports.push(import(/* @vite-ignore */ glPkg).catch(() => null));
+        }
+        if (ECHART_LIQUIDFILL_TYPES.has(type)) {
+            const liquidPkg = 'echarts-liquidfill';
+            // 水球图扩展：未安装时安静降级（renderer 会回退提示）
+            imports.push(import(/* @vite-ignore */ liquidPkg).catch(() => null));
         }
         Promise.all(imports).then(([echartsModule]) => {
             const mod = echartsModule as typeof import('../../../components/charts/EChartsRuntime');

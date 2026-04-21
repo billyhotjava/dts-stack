@@ -1413,6 +1413,18 @@ export const ComponentRenderer = memo(function ComponentRenderer({ component, mo
             case 'wordcloud-chart':
             case 'waterfall-chart':
             case 'map-chart':
+            // 新增 ECharts 扩展图表（P2/P3）
+            case 'effectScatter-chart':
+            case 'lines-chart':
+            case 'bar-racing-chart':
+            case 'polar-line-chart':
+            case 'polar-bar-chart':
+            case 'liquidFill-chart':
+            case 'bar3D-chart':
+            case 'scatter3D-chart':
+            case 'line3D-chart':
+            case 'surface-chart':
+            case 'map3D-chart':
                 return renderECharts({
                     type, c, t, width, height, mode, componentId: component.id, runtime,
                     EChart, renderEChartWithHandles,

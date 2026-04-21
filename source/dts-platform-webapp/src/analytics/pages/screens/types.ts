@@ -160,6 +160,18 @@ export type ComponentType =
     | 'tree-chart'
     | 'themeRiver-chart'
     | 'pictorialBar-chart'
+    // 新增 ECharts 扩展图表（P2/P3）
+    | 'effectScatter-chart'
+    | 'lines-chart'
+    | 'bar-racing-chart'
+    | 'polar-line-chart'
+    | 'polar-bar-chart'
+    | 'liquidFill-chart'
+    | 'bar3D-chart'
+    | 'scatter3D-chart'
+    | 'line3D-chart'
+    | 'surface-chart'
+    | 'map3D-chart'
     // DataV 装饰
     | 'border-box'
     | 'decoration'

@@ -368,6 +368,144 @@ const pictorialBarChartSchema: ComponentConfigSchema = {
     ],
 };
 
+// ===========================================================================
+// 扩展图表 Schema（P2/P3）：effectScatter / lines / bar-racing /
+// polar-line / polar-bar / liquidFill / bar3D / scatter3D / line3D / surface / map3D
+// ===========================================================================
+
+const effectScatterChartSchema: ComponentConfigSchema = {
+    type: 'effectScatter-chart',
+    groups: [STANDARD_GROUPS.chart, STANDARD_GROUPS.appearance, STANDARD_GROUPS.layout, STANDARD_GROUPS.behavior, STANDARD_GROUPS.advanced],
+    fields: [
+        ...ECHARTS_COMMON_FIELDS,
+        { key: 'data', label: '数据 (JSON)', type: 'json', group: 'chart' },
+        { key: 'symbolSize', label: '点大小', type: 'number', group: 'chart', min: 4, max: 40, defaultValue: 12 },
+        { key: 'rippleScale', label: '涟漪倍率', type: 'number', group: 'chart', min: 1, max: 6, step: 0.5, defaultValue: 2.5 },
+    ],
+};
+
+const linesChartSchema: ComponentConfigSchema = {
+    type: 'lines-chart',
+    groups: [STANDARD_GROUPS.chart, STANDARD_GROUPS.appearance, STANDARD_GROUPS.layout, STANDARD_GROUPS.behavior, STANDARD_GROUPS.advanced],
+    fields: [
+        ...ECHARTS_COMMON_FIELDS,
+        { key: 'data', label: '轨迹数据 (JSON)', type: 'json', group: 'chart' },
+        { key: 'effectShow', label: '显示流光', type: 'boolean', group: 'chart', defaultValue: true },
+        { key: 'trailLength', label: '流光长度', type: 'number', group: 'chart', min: 0, max: 1, step: 0.1, defaultValue: 0.6 },
+        { key: 'lineWidth', label: '线宽', type: 'number', group: 'chart', min: 1, max: 6, step: 0.5, defaultValue: 2 },
+        { key: 'lineColor', label: '线颜色', type: 'color', group: 'chart', themeTokenKey: 'accentColor' },
+    ],
+};
+
+const barRacingChartSchema: ComponentConfigSchema = {
+    type: 'bar-racing-chart',
+    groups: [STANDARD_GROUPS.chart, STANDARD_GROUPS.appearance, STANDARD_GROUPS.layout, STANDARD_GROUPS.behavior, STANDARD_GROUPS.advanced],
+    fields: [
+        ...ECHARTS_COMMON_FIELDS,
+        { key: 'series', label: '序列数据 (JSON)', type: 'json', group: 'chart' },
+        { key: 'categories', label: '时间点列表', type: 'json', group: 'chart' },
+        { key: 'topN', label: '展示数量', type: 'number', group: 'chart', min: 3, max: 20, defaultValue: 10 },
+    ],
+};
+
+const polarLineChartSchema: ComponentConfigSchema = {
+    type: 'polar-line-chart',
+    groups: [STANDARD_GROUPS.chart, STANDARD_GROUPS.appearance, STANDARD_GROUPS.layout, STANDARD_GROUPS.behavior, STANDARD_GROUPS.advanced],
+    fields: [
+        ...ECHARTS_COMMON_FIELDS,
+        { key: 'series', label: '系列数据 (JSON)', type: 'json', group: 'chart' },
+        { key: 'categories', label: '角度类别', type: 'json', group: 'chart' },
+        { key: 'polarRadius', label: '极坐标半径', type: 'number', group: 'layout', min: 60, max: 400, defaultValue: 160 },
+    ],
+};
+
+const polarBarChartSchema: ComponentConfigSchema = {
+    type: 'polar-bar-chart',
+    groups: [STANDARD_GROUPS.chart, STANDARD_GROUPS.appearance, STANDARD_GROUPS.layout, STANDARD_GROUPS.behavior, STANDARD_GROUPS.advanced],
+    fields: [
+        ...ECHARTS_COMMON_FIELDS,
+        { key: 'series', label: '系列数据 (JSON)', type: 'json', group: 'chart' },
+        { key: 'categories', label: '角度类别', type: 'json', group: 'chart' },
+        { key: 'polarRadius', label: '极坐标半径', type: 'number', group: 'layout', min: 60, max: 400, defaultValue: 160 },
+    ],
+};
+
+const liquidFillChartSchema: ComponentConfigSchema = {
+    type: 'liquidFill-chart',
+    groups: [STANDARD_GROUPS.chart, STANDARD_GROUPS.appearance, STANDARD_GROUPS.layout, STANDARD_GROUPS.behavior, STANDARD_GROUPS.advanced],
+    fields: [
+        ...ECHARTS_COMMON_FIELDS,
+        { key: 'value', label: '当前比例', type: 'number', group: 'chart', min: 0, max: 1, step: 0.01, defaultValue: 0.65 },
+        { key: 'values', label: '多层值 (JSON)', type: 'json', group: 'chart' },
+        { key: 'shape', label: '形状', type: 'select', group: 'appearance', options: [
+            { label: '圆形', value: 'circle' },
+            { label: '矩形', value: 'rect' },
+            { label: '圆角矩形', value: 'roundRect' },
+            { label: '三角形', value: 'triangle' },
+            { label: '菱形', value: 'diamond' },
+            { label: '图钉', value: 'pin' },
+            { label: '箭头', value: 'arrow' },
+        ], defaultValue: 'circle' },
+        { key: 'primaryColor', label: '主色', type: 'color', group: 'appearance', themeTokenKey: 'accentColor' },
+        { key: 'outlineColor', label: '外圈颜色', type: 'color', group: 'appearance', themeTokenKey: 'accentColor' },
+        { key: 'labelFontSize', label: '标签字号', type: 'number', group: 'appearance', min: 12, max: 64, defaultValue: 28 },
+    ],
+};
+
+const bar3DChartSchema: ComponentConfigSchema = {
+    type: 'bar3D-chart',
+    groups: [STANDARD_GROUPS.chart, STANDARD_GROUPS.appearance, STANDARD_GROUPS.layout, STANDARD_GROUPS.behavior, STANDARD_GROUPS.advanced],
+    fields: [
+        ...ECHARTS_COMMON_FIELDS,
+        { key: 'rows', label: '数据 (JSON)', type: 'json', group: 'chart' },
+        { key: 'visualMapMax', label: '映射最大值', type: 'number', group: 'chart', defaultValue: 100 },
+    ],
+};
+
+const scatter3DChartSchema: ComponentConfigSchema = {
+    type: 'scatter3D-chart',
+    groups: [STANDARD_GROUPS.chart, STANDARD_GROUPS.appearance, STANDARD_GROUPS.layout, STANDARD_GROUPS.behavior, STANDARD_GROUPS.advanced],
+    fields: [
+        ...ECHARTS_COMMON_FIELDS,
+        { key: 'rows', label: '数据 (JSON)', type: 'json', group: 'chart' },
+        { key: 'symbolSize', label: '点大小', type: 'number', group: 'chart', min: 4, max: 30, defaultValue: 10 },
+        { key: 'visualMapMax', label: '映射最大值', type: 'number', group: 'chart', defaultValue: 100 },
+    ],
+};
+
+const line3DChartSchema: ComponentConfigSchema = {
+    type: 'line3D-chart',
+    groups: [STANDARD_GROUPS.chart, STANDARD_GROUPS.appearance, STANDARD_GROUPS.layout, STANDARD_GROUPS.behavior, STANDARD_GROUPS.advanced],
+    fields: [
+        ...ECHARTS_COMMON_FIELDS,
+        { key: 'data', label: '数据 (JSON)', type: 'json', group: 'chart' },
+    ],
+};
+
+const surfaceChartSchema: ComponentConfigSchema = {
+    type: 'surface-chart',
+    groups: [STANDARD_GROUPS.chart, STANDARD_GROUPS.appearance, STANDARD_GROUPS.layout, STANDARD_GROUPS.behavior, STANDARD_GROUPS.advanced],
+    fields: [
+        ...ECHARTS_COMMON_FIELDS,
+        { key: 'data', label: '数据 (JSON)', type: 'json', group: 'chart' },
+        { key: 'visualMapMin', label: '映射最小', type: 'number', group: 'chart', defaultValue: -1 },
+        { key: 'visualMapMax', label: '映射最大', type: 'number', group: 'chart', defaultValue: 1 },
+    ],
+};
+
+const map3DChartSchema: ComponentConfigSchema = {
+    type: 'map3D-chart',
+    groups: [STANDARD_GROUPS.chart, STANDARD_GROUPS.appearance, STANDARD_GROUPS.layout, STANDARD_GROUPS.behavior, STANDARD_GROUPS.advanced],
+    fields: [
+        ...ECHARTS_COMMON_FIELDS,
+        { key: 'mapName',   label: '地图名',   type: 'text',   group: 'chart', defaultValue: 'china' },
+        { key: 'mapScope',  label: '地图范围', type: 'text',   group: 'chart', defaultValue: 'china' },
+        { key: 'geoJsonUrl', label: 'GeoJSON URL', type: 'text', group: 'chart' },
+        { key: 'data', label: '数据 (JSON)', type: 'json', group: 'chart' },
+        { key: 'visualMapMax', label: '映射最大值', type: 'number', group: 'chart', defaultValue: 100 },
+    ],
+};
+
 export const CHART_SCHEMAS: ComponentConfigSchema[] = [
     lineChartSchema,
     barChartSchema,
@@ -393,4 +531,16 @@ export const CHART_SCHEMAS: ComponentConfigSchema[] = [
     treeChartSchema,
     themeRiverChartSchema,
     pictorialBarChartSchema,
+    // P2/P3 扩展图表
+    effectScatterChartSchema,
+    linesChartSchema,
+    barRacingChartSchema,
+    polarLineChartSchema,
+    polarBarChartSchema,
+    liquidFillChartSchema,
+    bar3DChartSchema,
+    scatter3DChartSchema,
+    line3DChartSchema,
+    surfaceChartSchema,
+    map3DChartSchema,
 ];

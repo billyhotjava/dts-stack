@@ -580,6 +580,185 @@ export const componentLibrary: ComponentCategory[] = [
                     symbol: 'roundRect',
                 },
             },
+            // ---- P2/P3 扩展图表 ----
+            {
+                type: 'effectScatter-chart',
+                name: '涟漪散点',
+                icon: '💧',
+                defaultWidth: 400,
+                defaultHeight: 300,
+                defaultConfig: {
+                    title: '涟漪散点',
+                    data: [[20, 30, 15], [40, 60, 20], [60, 40, 12], [80, 70, 18]],
+                    symbolSize: 14,
+                    rippleScale: 2.5,
+                },
+            },
+            {
+                type: 'lines-chart',
+                name: '飞线（ECharts）',
+                icon: '✈️',
+                defaultWidth: 520,
+                defaultHeight: 320,
+                defaultConfig: {
+                    title: '轨迹',
+                    data: [
+                        { coords: [[20, 30], [80, 60]] },
+                        { coords: [[30, 60], [70, 20]] },
+                        { coords: [[50, 20], [50, 80]] },
+                    ],
+                    effectShow: true,
+                    trailLength: 0.6,
+                    lineWidth: 2,
+                },
+            },
+            {
+                type: 'bar-racing-chart',
+                name: '动态排序柱',
+                icon: '🏁',
+                defaultWidth: 520,
+                defaultHeight: 360,
+                defaultConfig: {
+                    title: '动态排名',
+                    series: [
+                        { name: 'A', data: [10, 20, 35, 55] },
+                        { name: 'B', data: [12, 30, 40, 48] },
+                        { name: 'C', data: [8, 18, 30, 52] },
+                        { name: 'D', data: [15, 22, 28, 40] },
+                    ],
+                    categories: ['T1', 'T2', 'T3', 'T4'],
+                    topN: 10,
+                },
+            },
+            {
+                type: 'polar-line-chart',
+                name: '极坐标折线',
+                icon: '🔘',
+                defaultWidth: 400,
+                defaultHeight: 400,
+                defaultConfig: {
+                    title: '极坐标折线',
+                    series: [{ name: '系列1', data: [80, 60, 70, 50, 90, 40, 65] }],
+                    categories: ['A', 'B', 'C', 'D', 'E', 'F', 'G'],
+                    polarRadius: 160,
+                },
+            },
+            {
+                type: 'polar-bar-chart',
+                name: '极坐标柱',
+                icon: '⭕',
+                defaultWidth: 400,
+                defaultHeight: 400,
+                defaultConfig: {
+                    title: '极坐标柱',
+                    series: [{ name: '系列1', data: [8, 4, 3, 5, 6] }],
+                    categories: ['A', 'B', 'C', 'D', 'E'],
+                    polarRadius: 160,
+                },
+            },
+            {
+                type: 'liquidFill-chart',
+                name: '水球图',
+                icon: '🌊',
+                defaultWidth: 320,
+                defaultHeight: 320,
+                defaultConfig: {
+                    title: '完成率',
+                    value: 0.68,
+                    values: [0.68, 0.55],
+                    shape: 'circle',
+                    labelFontSize: 28,
+                },
+            },
+            {
+                type: 'bar3D-chart',
+                name: '3D 柱状图',
+                icon: '📦',
+                defaultWidth: 520,
+                defaultHeight: 400,
+                defaultConfig: {
+                    title: '3D 柱状',
+                    rows: [
+                        [0, 0, 10], [1, 0, 20], [2, 0, 30],
+                        [0, 1, 15], [1, 1, 25], [2, 1, 35],
+                        [0, 2, 20], [1, 2, 30], [2, 2, 45],
+                    ],
+                    visualMapMax: 50,
+                },
+            },
+            {
+                type: 'scatter3D-chart',
+                name: '3D 散点图',
+                icon: '✨',
+                defaultWidth: 520,
+                defaultHeight: 400,
+                defaultConfig: {
+                    title: '3D 散点',
+                    rows: [
+                        [10, 20, 30, 5], [15, 25, 35, 8], [20, 30, 40, 12],
+                        [25, 35, 45, 16], [30, 40, 50, 20],
+                    ],
+                    symbolSize: 12,
+                    visualMapMax: 30,
+                },
+            },
+            {
+                type: 'line3D-chart',
+                name: '3D 曲线',
+                icon: '〰️',
+                defaultWidth: 520,
+                defaultHeight: 400,
+                defaultConfig: {
+                    title: '3D 曲线',
+                    data: Array.from({ length: 60 }, (_, i) => {
+                        const t = i / 60;
+                        return [
+                            Math.cos(t * Math.PI * 4) * 10,
+                            Math.sin(t * Math.PI * 4) * 10,
+                            t * 20,
+                        ];
+                    }),
+                },
+            },
+            {
+                type: 'surface-chart',
+                name: '3D 曲面',
+                icon: '🌐',
+                defaultWidth: 520,
+                defaultHeight: 400,
+                defaultConfig: {
+                    title: '3D 曲面',
+                    data: (() => {
+                        const out: number[][] = [];
+                        for (let x = -Math.PI; x < Math.PI; x += 0.2) {
+                            for (let y = -Math.PI; y < Math.PI; y += 0.2) {
+                                out.push([x, y, Math.sin(x) * Math.cos(y)]);
+                            }
+                        }
+                        return out;
+                    })(),
+                    visualMapMin: -1,
+                    visualMapMax: 1,
+                },
+            },
+            {
+                type: 'map3D-chart',
+                name: '3D 地图',
+                icon: '🗺️',
+                defaultWidth: 600,
+                defaultHeight: 440,
+                defaultConfig: {
+                    title: '3D 地图',
+                    mapName: 'china',
+                    mapScope: 'china',
+                    data: [
+                        { name: '北京市', value: 120 },
+                        { name: '上海市', value: 100 },
+                        { name: '广东省', value: 85 },
+                    ],
+                    visualMapMax: 150,
+                },
+            },
         ],
     },
     {

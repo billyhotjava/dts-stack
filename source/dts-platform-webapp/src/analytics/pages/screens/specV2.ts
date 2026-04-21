@@ -58,9 +58,21 @@ const COMPONENT_TYPES = new Set<ScreenComponent['type']>([
     'globe-chart',
     'bar3d-chart',
     'scatter3d-chart',
+    // P2/P3 扩展图表
+    'effectScatter-chart',
+    'lines-chart',
+    'bar-racing-chart',
+    'polar-line-chart',
+    'polar-bar-chart',
+    'liquidFill-chart',
+    'bar3D-chart',
+    'scatter3D-chart',
+    'line3D-chart',
+    'surface-chart',
+    'map3D-chart',
 ]);
 
-const THEMES = new Set<ScreenTheme>(['legacy-dark', 'titanium', 'glacier', 'light-business', 'dark-command', 'brand-custom']);
+const THEMES = new Set<ScreenTheme>(['legacy-dark', 'titanium', 'glacier', 'light-business', 'dark-command', 'enterprise-light', 'enterprise-dark', 'brand-custom']);
 const DATA_SOURCE_TYPES = new Set(['static', 'api', 'card', 'sql', 'dataset', 'metric', 'database']);
 const VARIABLE_TYPES = new Set(['string', 'number', 'date']);
 const VARIABLE_KEY_PATTERN = /^[A-Za-z_][A-Za-z0-9_:\.-]{0,63}$/;
