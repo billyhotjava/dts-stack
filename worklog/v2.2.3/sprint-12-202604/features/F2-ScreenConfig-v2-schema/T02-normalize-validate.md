@@ -1,8 +1,17 @@
 # T02: normalizeScreenConfigV2 / validateScreenConfigV2
 
 **优先级**: P0
-**状态**: READY
+**状态**: DONE（2026-04-21）
 **依赖**: T01
+
+## 执行纪要
+
+- 新建 `src/analytics/pages/screens/v2/schema.ts`
+- `normalizeScreenConfigV2` 宽容读取：schemaVersion 非 2 / layout 非对象 / cols 非法 / 组件 id 缺失或重复 / x+w 越界 / type 缺失 / 负坐标 均有兜底
+- `validateScreenConfigV2` 严格校验：返回错误清单，空数组表示通过
+- id 生成复用项目既有 `crypto.randomUUID()` 模式（Chrome 92+ 支持）
+- 单元测试 `schema.test.ts` — **16 个 case 全部通过**
+  - `isScreenConfigV2` / `createEmptyScreenV2` / normalize 6 case / validate 4 case
 
 ## 目标
 

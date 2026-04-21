@@ -1,0 +1,28 @@
+/* v2 响应式大屏 — 布局基础样式。
+ *
+ * 引入 react-grid-layout / react-resizable 的核心 CSS。
+ * Chrome 95 兼容校验：2026-04-21 通过 grep 检查，无 @container / :has() /
+ * structuredClone 等不兼容特性。
+ */
+@import 'react-grid-layout/css/styles.css';
+@import 'react-resizable/css/styles.css';
+
+.v2-screen-root {
+  width: 100vw;
+  height: 100vh;
+  overflow: auto;
+  position: relative;
+}
+
+.v2-screen-grid {
+  width: 100%;
+}
+
+/* 拖动占位（编辑态） */
+.v2-screen-grid .react-grid-placeholder {
+  background: rgba(37, 99, 235, 0.15);
+  border: 1px dashed rgba(37, 99, 235, 0.6);
+  border-radius: 4px;
+  opacity: 1;
+  transition: none;
+}

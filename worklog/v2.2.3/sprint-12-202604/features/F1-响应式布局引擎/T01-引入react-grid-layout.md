@@ -1,8 +1,18 @@
 # T01: 引入 react-grid-layout + Chrome 95 验证
 
 **优先级**: P0
-**状态**: READY
+**状态**: DONE（2026-04-21）
 **依赖**: 无
+
+## 执行纪要
+
+- 发现 `react-grid-layout@^1.5.3` + `@types/react-grid-layout@^1.3.6` 已在项目，无需 `pnpm add`
+- 静态兼容性通过：grep 未命中 `@container` / `:has()` / `structuredClone` / `requestIdleCallback`
+- CSS 特性全部 Chrome 95 原生支持
+- 现有 3 处 RGL 用法（DashboardEditor 等）在客户 Chrome 95 环境已跑过，间接证据
+- 新建 `src/analytics/pages/screens/v2/` + smoke 页 + 路由（`/bi/__dev__/grid-smoke`，仅 `import.meta.env.DEV` 时挂载）
+- 证据：`it/chrome-95-evidence/T01-grid-layout/static-checks.md`
+- 实机 Chrome 95 实测推迟到阶段 5（IT）集中跑
 
 ## 目标
 
