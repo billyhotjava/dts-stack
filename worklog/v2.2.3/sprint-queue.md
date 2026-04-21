@@ -175,3 +175,19 @@
 
 **统计**: READY=0, IN_PROGRESS=0, DONE=28, BLOCKED=0
 **设计文档**: `worklog/v2.2.3/sprint-11-202604/README.md` + `plan.md`
+
+## Sprint-12: BI 大屏响应式改造（C 方案）(202604)
+**状态**: READY
+**类型**: Implementation（破坏性重构，demo 阶段可重做）
+**约束**: 客户 Chrome 95
+
+| Feature | Task 数 | 状态 |
+|---------|---------|------|
+| F1-响应式布局引擎（核心） | 3 | READY |
+| F2-ScreenConfig v2 schema | 3 | READY |
+| F3-编辑器重构（网格编辑） | 4 | READY |
+| F4-组件内部响应式 | 4 | READY |
+| F5-新建流程与 v1 兼容 | 3 | READY |
+
+**统计**: READY=17, IN_PROGRESS=0, DONE=0, BLOCKED=0
+**设计文档**: `worklog/v2.2.3/sprint-12-202604/README.md`
