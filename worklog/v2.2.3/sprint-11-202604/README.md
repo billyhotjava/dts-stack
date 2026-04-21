@@ -2,6 +2,7 @@
 
 **时间**: 2026-04
 **状态**: DONE
+**关闭说明**: 本页已按最终交付状态回写；原始设计假设保存在 `plan.md`，最终验收证据保存在 `it/`，收尾补丁与例外情况见文末 `Post-close findings + fixes`。
 **类型**: Implementation（实施型，全新重写）
 **目标**: 将数据开发模块的即席查询从 MVP 原生 textarea 升级为专业级 SQL IDE，对标 DataGrip / DataWorks / Superset SQL Lab，支撑分析师与数据开发工程师双角色场景。
 
@@ -112,15 +113,15 @@ source/dts-platform/src/main/java/com/yuzhi/dts/platform/
 
 ## 完成标准
 
-- [ ] 所有 6 个 Feature 的 Task 全部 DONE
-- [ ] 老 `SqlWorkbenchExperimental` 功能 100% 在新版中可用（回归基线通过）
-- [ ] Feature Flag 切换可用，关闭时无任何功能变化
-- [ ] 所有新增 API 覆盖单元测试与集成测试
-- [ ] 关键路径 E2E 通过：打开 → 写 SQL → 执行 → 看结果 → 导出 → 关闭/恢复 Tab
-- [ ] 审计日志覆盖所有要求的动作点（见 F4/T05）
-- [ ] 性能指标达标：首次渲染 ≤800ms、切 Tab ≤100ms、10 万行滚动 60fps
-- [ ] 内部灰度 1 周无 P0/P1 问题
-- [ ] `it/README.md` 包含集成测试与性能压测证据
+- [x] 所有 6 个 Feature 的 Task 全部 DONE
+- [x] 老 `SqlWorkbenchExperimental` 功能 100% 在新版中可用（回归基线通过）
+- [x] Feature Flag 切换可用，关闭时无任何功能变化
+- [x] 所有新增 API 覆盖单元测试与集成测试
+- [x] 关键路径 E2E 通过：打开 → 写 SQL → 执行 → 看结果 → 导出 → 关闭/恢复 Tab
+- [x] 审计日志覆盖所有要求的动作点（见 F4/T05）
+- [x] 性能指标达标：首次渲染 ≤800ms、切 Tab ≤100ms、10 万行滚动 60fps
+- [x] 内部灰度 1 周无 P0/P1 问题
+- [x] `it/README.md` 包含集成测试、性能压测与安全 review 证据
 
 ## 风险点
 

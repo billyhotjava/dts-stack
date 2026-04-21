@@ -88,7 +88,7 @@
                        ▼
 ┌──────────────────────────────────────────────────────────────┐
 │  platform-webapp 新 Card Editor  (F5)                        │
-│  /dashboard/bi/card/new | /dashboard/bi/card/:id/edit        │
+│  /bi/card/new | /bi/card/:id/edit                            │
 │  ├─ 指标树（来自 dbt 同步的快照，只读）                      │
 │  ├─ 维度树                                                  │
 │  ├─ 模型画布（ReactFlow，受控 join）                         │
@@ -97,6 +97,14 @@
 │  └─ 图形选择 + Arrow 结果渲染                                │
 └──────────────────────────────────────────────────────────────┘
 ```
+
+## 任务引用约定
+
+本 Sprint 各 Feature 内部同样从 `T01` 重新编号。
+
+- **Feature 内引用**：允许写 `T01`
+- **跨 Feature / 总览 / IT / 日报引用**：必须写成 `F#/T#`
+- 例如：`F1/T01`、`F6/T03`
 
 ## Feature 列表
 
@@ -129,7 +137,7 @@
 - [ ] 单表 group-by 查询端到端跑通：`/metric/query` 返回正确结果（手工 SQL 校验）
 - [ ] 两表 join 查询端到端跑通，其中至少 1 例涉及 1:N fanout，FanoutDetector 自动改写为 CTE 预聚合
 - [ ] 派生指标能在 Card Editor 用"公式 + 引用"方式创建，SQL 预览可见
-- [ ] 新 Card Editor 有独立路由 `/dashboard/bi/card/new`，**不再是 Modal**
+- [ ] 新 Card Editor 有独立路由 `/bi/card/new`，**不再是 Modal**
 - [ ] 虚拟数据集能保存，读取时自动编译 SQL
 - [ ] 密级超限查询被拦截（422），密级标签在画布上正确传导
 - [ ] 慢查询熔断：超过 30 秒默认超时，被标记并记录

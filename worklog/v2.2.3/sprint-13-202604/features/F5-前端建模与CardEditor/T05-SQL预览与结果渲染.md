@@ -88,7 +88,7 @@ function toEChartsOption(
 - 用户点"保存"：
   - 新建模式 → POST 创建 AnalyticsCard，`query.engine = "semantic_v1"`，携带 CardEditorState 的语义层字段
   - 编辑模式 → PUT 更新
-- 保存成功跳转 `/dashboard/bi/explore` 或 Card 详情页（沿用老 Metabase fork 的详情页）
+- 保存成功跳转 `/bi/explore` 或 Card 详情页（沿用老 Metabase fork 的详情页）
 
 ### 8. 保存 VirtualDataset
 

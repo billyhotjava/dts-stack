@@ -19,15 +19,15 @@
 
 | 路由 | 用途 | 谁用 |
 |---|---|---|
-| `/dashboard/bi/explore` | 浏览所有可用指标 | 分析师 / 业务 |
-| `/dashboard/bi/card/new` | 新建 Card（核心） | 分析师 |
-| `/dashboard/bi/card/:id/edit` | 编辑 Card | 分析师 |
-| `/dashboard/bi/virtual-datasets` | 虚拟数据集列表 | 分析师 |
-| `/dashboard/bi/virtual-datasets/new` | 新建虚拟数据集（画布） | 分析师 |
-| `/dashboard/bi/virtual-datasets/:id` | 编辑虚拟数据集 | 分析师 |
+| `/bi/explore` | 浏览所有可用指标 | 分析师 / 业务 |
+| `/bi/card/new` | 新建 Card（核心） | 分析师 |
+| `/bi/card/:id/edit` | 编辑 Card | 分析师 |
+| `/bi/virtual-datasets` | 虚拟数据集列表 | 分析师 |
+| `/bi/virtual-datasets/new` | 新建虚拟数据集（画布） | 分析师 |
+| `/bi/virtual-datasets/:id` | 编辑虚拟数据集 | 分析师 |
 
 **老路由处理**：
-- `/governance/indicators/dictionary`（`IndicatorsPage.tsx`）保留，但"新建指标"按钮改为跳转 `/dashboard/bi/card/new` + 提示"指标必须在 dbt 中声明"
+- `/governance/indicators/dictionary`（`IndicatorsPage.tsx`）保留，但"新建指标"按钮改为跳转 `/bi/card/new` + 提示"指标必须在 dbt 中声明"
 - 其它 6 个孤岛页 `/governance/indicator-*` 的菜单项本 Sprint 不启用
 
 ## 技术栈

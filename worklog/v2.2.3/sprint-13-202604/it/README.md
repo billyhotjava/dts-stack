@@ -2,6 +2,11 @@
 
 **目的**：保证 Sprint-13 交付物端到端正确，而不只是各自单元测试过。
 
+## 任务引用约定
+
+跨 Feature 引用统一使用 `F#/T#`。
+例如：`F1/T01` 表示“接口合约与 DSL 规范”的第一项任务；裸 `T01` 只在单个 Feature 文档内部使用。
+
 ## 验证矩阵
 
 ### 一、Spec 冻结证据（F1）
@@ -19,7 +24,7 @@
 存 `evidence/e2e/`：
 
 #### 场景 A：单表指标查询
-1. 工程师按 T01 规范写 `ads_sales_daily.schema.yml`（3 个 metric + 2 个 dimension）
+1. 工程师按 `F1/T01` 规范写 `ads_sales_daily.schema.yml`（3 个 metric + 2 个 dimension）
 2. `dbt run` + `dbt compile` 产出 manifest.json
 3. 平台 ingest manifest
 4. 分析师在 `/bi/card/new` 选择 base + measure + dimension + time granularity
@@ -65,7 +70,7 @@
 - UI 拖拽 attempt → 前端拦截 + toast
 - **双重保险验证**：前端绕过 devtool 直接 call API，后端仍 422
 
-### 四、治理验证（F6/T03, T04）
+### 四、治理验证（F6/T03, F6/T04）
 
 存 `evidence/governance/`：
 
