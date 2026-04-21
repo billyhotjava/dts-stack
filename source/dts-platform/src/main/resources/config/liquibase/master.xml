@@ -138,4 +138,5 @@
     <include file="config/liquibase/changelog/20260413_02_saved_query_folder.xml" relativeToChangelogFile="false"/>
     <include file="config/liquibase/changelog/20260413_03_query_execution_chunk.xml" relativeToChangelogFile="false"/>
     <include file="config/liquibase/changelog/20260413_04_chunk_jsonb.xml" relativeToChangelogFile="false"/>
+    <include file="config/liquibase/changelog/20260421_01_catalog_lineage_direction_widen.xml" relativeToChangelogFile="false"/>
 </databaseChangeLog>

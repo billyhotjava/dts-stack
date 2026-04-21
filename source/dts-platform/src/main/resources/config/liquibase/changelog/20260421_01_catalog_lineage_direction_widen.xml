@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="utf-8"?>
+<databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.22.xsd">
+
+    <!--
+        修复：catalog_dataset_lineage.direction 列定义为 varchar(16)，
+        但实际代码会写入 "UPSTREAM_TO_DOWNSTREAM"（22 字符），
+        导致 JDBC 编目同步在 INSERT 时抛 "value too long for type character varying(16)"，
+        随后事务中止整个批处理失败。
+        统一拓宽至 varchar(32)，与 relation_type / upstream_asset_type / downstream_asset_type 对齐。
+    -->
+    <changeSet id="20260421_01_catalog_lineage_direction_widen" author="platform">
+        <preConditions onFail="MARK_RAN">
+            <columnExists tableName="catalog_dataset_lineage" columnName="direction"/>
+        </preConditions>
+        <modifyDataType tableName="catalog_dataset_lineage" columnName="direction" newDataType="varchar(32)"/>
+    </changeSet>
+
+</databaseChangeLog>

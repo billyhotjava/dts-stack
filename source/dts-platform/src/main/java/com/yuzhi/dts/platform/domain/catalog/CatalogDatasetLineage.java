@@ -36,7 +36,8 @@ public class CatalogDatasetLineage extends AbstractAuditingEntity<UUID> implemen
     @Column(name = "downstream_asset_type", length = 32)
     private String downstreamAssetType;
 
-    @Column(name = "direction", length = 16)
+    // direction 枚举值如 "UPSTREAM_TO_DOWNSTREAM" 长度 22，原 16 会溢出；统一到 32 与其他枚举列对齐。
+    @Column(name = "direction", length = 32)
     private String direction;
 
     @Column(name = "project_name", length = 128)
