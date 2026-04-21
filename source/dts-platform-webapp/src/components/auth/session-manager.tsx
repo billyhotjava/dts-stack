@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef } from "react";
 import { toast } from "sonner";
+import { isWithinLoginProbeGrace } from "@/api/apiClient";
 import { getPortalSessionStatus } from "@/api/platformApi";
 import userService from "@/api/services/userService";
 import { resolveCurrentAppPath, resolveLoginHref } from "@/routes/constants";
@@ -287,6 +288,12 @@ export default function SessionManager() {
 
 		const probe = async () => {
 			if (cancelled || probing || logoutInProgressRef.current) {
+				return;
+			}
+			// 登录后 grace window：portal_session 刚保存对本次探活事务可能不可见，
+			// 直接跳过并稍后重试，避免误判为 EXPIRED 把用户本机踢掉。
+			if (isWithinLoginProbeGrace()) {
+				schedule(1_000);
 				return;
 			}
 			probing = true;

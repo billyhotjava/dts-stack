@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import { isWithinLoginProbeGrace } from "@/api/apiClient";
 import { getPortalSessionStatus } from "@/api/platformApi";
 import menuService from "@/api/services/menuService";
 import useUserStore, { useUserInfo, useUserToken } from "@/store/userStore";
@@ -62,6 +63,13 @@ export default function LoginAuthGuard({ children }: Props) {
 	const verifyBackendSession = useCallback(async () => {
 		if (!accessToken || isTokenExpired(accessToken) || !needsBackendSessionCheck) {
 			setSessionAuthenticated(Boolean(accessToken) && !isTokenExpired(accessToken));
+			setSessionChecked(true);
+			return;
+		}
+		// 登录后 grace window：portal_session 刚 save 可能对新事务不可见，直接信任本地 token。
+		// 周期探活仍会在窗口外命中，不影响异地登录 / session 失效感知。
+		if (isWithinLoginProbeGrace()) {
+			setSessionAuthenticated(true);
 			setSessionChecked(true);
 			return;
 		}

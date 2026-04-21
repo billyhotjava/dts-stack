@@ -1,6 +1,7 @@
 import { Star } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { Navigate, useLocation } from "react-router";
+import { isWithinLoginProbeGrace } from "@/api/apiClient";
 import { getPortalSessionStatus } from "@/api/platformApi";
 import TechDataBackground from "@/assets/images/background/tech-data-platform.svg";
 import TechDataBackgroundLight from "@/assets/images/background/tech-data-platform-light.svg";
@@ -83,6 +84,16 @@ function LoginPage() {
 					return;
 				}
 			} catch {}
+
+			// 登录后 grace window：portal_session 刚 save 可能还未对新请求可见，
+			// 直接信任本地 token 跳转主页，让后续 SessionManager probe 继续负责失效感知。
+			if (isWithinLoginProbeGrace()) {
+				if (alive) {
+					setSessionAuthenticated(true);
+					setSessionChecked(true);
+				}
+				return;
+			}
 
 			try {
 				const status = await getPortalSessionStatus(token.accessToken);

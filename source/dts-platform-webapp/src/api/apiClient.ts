@@ -52,6 +52,22 @@ function hasRecentLoginGraceWindow(): boolean {
 	}
 }
 
+/**
+ * 登录后的"安全窗"：用于 session/status 探活场景。登录返回的 accessToken 是平台侧
+ * opaque token（"demo-<uuid>"），portal_session 刚 save 的瞬间，并发的探活请求
+ * 可能在不同事务里查不到它。把前 5 秒视为可信窗口，三处探活（LoginPage、
+ * SessionManager、LoginAuthGuard）统一使用本 helper 跳过探活、直接信任本地 token。
+ * 此窗口外才会让探活正常工作以支持异地登录顶掉、session 失效等场景。
+ */
+export function isWithinLoginProbeGrace(): boolean {
+	try {
+		const loginTs = Number(localStorage.getItem("dts.platform.session.loginTs") || "0");
+		return loginTs > 0 && Date.now() - loginTs < 5000;
+	} catch {
+		return false;
+	}
+}
+
 function forceLogoutToLogin() {
 	userStore.getState().actions.clearUserInfoAndToken();
 	try {
