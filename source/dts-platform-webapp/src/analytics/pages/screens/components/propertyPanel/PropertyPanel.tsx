@@ -1795,6 +1795,14 @@ function renderPluginSchemaFields(
     if (!Array.isArray(fields) || fields.length === 0) {
         return null;
     }
+    const pluginMeta = component.config?.__plugin as { pluginId?: string; componentId?: string } | undefined;
+    const autoManualValueMode = pluginMeta?.pluginId === 'finance-kit' && pluginMeta?.componentId === 'kpi-card';
+    const applyPluginFieldChange = (key: string, value: unknown) => {
+        if (autoManualValueMode && key === 'value') {
+            onChange('valueSourceMode', 'manual');
+        }
+        onChange(key, value);
+    };
     return (
         <>
             {fields.map((field) => {
@@ -1819,7 +1827,7 @@ function renderPluginSchemaFields(
                                 <input
                                     type="checkbox"
                                     checked={Boolean(value)}
-                                    onChange={(e) => onChange(key, e.target.checked)}
+                                    onChange={(e) => applyPluginFieldChange(key, e.target.checked)}
                                 />
                                 {descriptionNode}
                             </div>
@@ -1841,7 +1849,7 @@ function renderPluginSchemaFields(
                                     max={max}
                                     step={step}
                                     value={Number(value ?? 0)}
-                                    onChange={(e) => onChange(key, Number(e.target.value))}
+                                    onChange={(e) => applyPluginFieldChange(key, Number(e.target.value))}
                                 />
                                 {descriptionNode}
                             </div>
@@ -1883,7 +1891,7 @@ function renderPluginSchemaFields(
                                         if (!Number.isFinite(nextIdx) || nextIdx < 0 || nextIdx >= options.length) {
                                             return;
                                         }
-                                        onChange(key, options[nextIdx].value);
+                                        applyPluginFieldChange(key, options[nextIdx].value);
                                     }}
                                 >
                                     {selectedIndex < 0 && (
@@ -1910,7 +1918,7 @@ function renderPluginSchemaFields(
                                     type="color"
                                     className="property-color-input w-8 h-7 border border-border-default rounded cursor-pointer p-0"
                                     value={fallback}
-                                    onChange={(e) => onChange(key, e.target.value)}
+                                    onChange={(e) => applyPluginFieldChange(key, e.target.value)}
                                 />
                                 {descriptionNode}
                             </div>
@@ -1944,7 +1952,7 @@ function renderPluginSchemaFields(
                                                 toast.error(`${label} 需要是 JSON 对象`);
                                                 return;
                                             }
-                                            onChange(key, parsed);
+                                            applyPluginFieldChange(key, parsed);
                                         } catch {
                                             toast.error(`${label} JSON 格式错误`);
                                         }
@@ -1978,7 +1986,7 @@ function renderPluginSchemaFields(
                                 className="property-input flex-1 px-2.5 py-1.5 border border-border-default rounded bg-surface-card text-text-primary text-xs focus:outline-none focus:border-brand"
                                 value={String(value ?? '')}
                                 placeholder={String(field?.placeholder || '')}
-                                onChange={(e) => onChange(key, e.target.value)}
+                                onChange={(e) => applyPluginFieldChange(key, e.target.value)}
                             />
                             {descriptionNode}
                         </div>
@@ -3254,4 +3262,3 @@ function renderDrillDownConfig(
         </div>
     );
 }
-

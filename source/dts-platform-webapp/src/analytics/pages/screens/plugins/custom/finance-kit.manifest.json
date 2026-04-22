@@ -79,6 +79,7 @@
       "defaultHeight": 140,
       "defaultConfig": {
         "title": "本期余额",
+        "valueSourceMode": "data",
         "value": "12,580.00",
         "unit": "万元",
         "hint": "较上期 +12.6%",
@@ -88,7 +89,19 @@
         "version": "1.0.0",
         "fields": [
           { "key": "title", "label": "标题", "type": "string", "defaultValue": "本期余额" },
+          {
+            "key": "valueSourceMode",
+            "label": "数值来源",
+            "type": "select",
+            "defaultValue": "data",
+            "options": [
+              { "label": "数据", "value": "data" },
+              { "label": "手工", "value": "manual" }
+            ]
+          },
           { "key": "value", "label": "数值", "type": "string", "defaultValue": "12,580.00" },
+          { "key": "prefix", "label": "前缀", "type": "string", "defaultValue": "" },
+          { "key": "suffix", "label": "后缀", "type": "string", "defaultValue": "" },
           { "key": "unit", "label": "单位", "type": "string", "defaultValue": "万元" },
           { "key": "hint", "label": "说明", "type": "string", "defaultValue": "较上期 +12.6%" },
           {

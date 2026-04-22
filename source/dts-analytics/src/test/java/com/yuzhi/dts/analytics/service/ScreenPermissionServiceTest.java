@@ -4,6 +4,7 @@ import com.yuzhi.dts.analytics.domain.AnalyticsScreen;
 import com.yuzhi.dts.analytics.domain.AnalyticsScreenAccess;
 import com.yuzhi.dts.analytics.domain.AnalyticsUser;
 import com.yuzhi.dts.analytics.repository.AnalyticsScreenAccessRepository;
+import com.yuzhi.dts.analytics.repository.AnalyticsScreenRepository;
 import com.yuzhi.dts.analytics.service.ScreenPermissionService.PermissionSnapshot;
 import com.yuzhi.dts.analytics.web.support.PlatformContext;
 import java.util.List;
@@ -19,6 +20,7 @@ import static org.mockito.Mockito.when;
 class ScreenPermissionServiceTest {
 
     private AnalyticsScreenAccessRepository repo;
+    private AnalyticsScreenRepository screenRepository;
     private ScreenPermissionService service;
 
     private AnalyticsUser user(long id, boolean superuser) {
@@ -50,7 +52,8 @@ class ScreenPermissionServiceTest {
     @BeforeEach
     void setUp() {
         repo = Mockito.mock(AnalyticsScreenAccessRepository.class);
-        service = new ScreenPermissionService(repo);
+        screenRepository = Mockito.mock(AnalyticsScreenRepository.class);
+        service = new ScreenPermissionService(repo, screenRepository);
     }
 
     @Test
@@ -80,6 +83,20 @@ class ScreenPermissionServiceTest {
         assertThat(snap.canRead()).isTrue();
         assertThat(snap.canEdit()).isTrue();
         assertThat(snap.isOwner()).isTrue();
+    }
+
+    @Test
+    void creator_gets_all_permissions_without_grant() {
+        AnalyticsUser u = user(22L, false);
+        AnalyticsScreen s = screen(10L);
+        s.setCreatorId(22L);
+
+        PermissionSnapshot snap = service.snapshot(s, u, List.of());
+
+        assertThat(snap.canRead()).isTrue();
+        assertThat(snap.canEdit()).isTrue();
+        assertThat(snap.isOwner()).isTrue();
+        Mockito.verifyNoInteractions(repo);
     }
 
     @Test
@@ -142,9 +159,21 @@ class ScreenPermissionServiceTest {
     @Test
     void list_accessible_uses_no_role_sentinel_when_empty_roles() {
         AnalyticsUser u = user(7L, false);
+        when(screenRepository.findIdsByCreatorIdAndArchivedFalse(7L)).thenReturn(List.of());
         when(repo.findAccessibleScreenIds(eq("7"), eq(List.of("__NO_ROLE__")))).thenReturn(List.of(1L, 2L));
         List<Long> ids = service.listAccessibleScreenIds(u, List.of());
         assertThat(ids).containsExactly(1L, 2L);
+    }
+
+    @Test
+    void list_accessible_includes_owned_screens_even_without_grant() {
+        AnalyticsUser u = user(9L, false);
+        when(screenRepository.findIdsByCreatorIdAndArchivedFalse(9L)).thenReturn(List.of(101L));
+        when(repo.findAccessibleScreenIds(eq("9"), eq(List.of("__NO_ROLE__")))).thenReturn(List.of(202L));
+
+        List<Long> ids = service.listAccessibleScreenIds(u, List.of());
+
+        assertThat(ids).containsExactly(101L, 202L);
     }
 
     @Test

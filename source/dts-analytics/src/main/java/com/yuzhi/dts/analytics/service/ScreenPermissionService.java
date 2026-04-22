@@ -4,8 +4,10 @@ import com.yuzhi.dts.analytics.domain.AnalyticsScreen;
 import com.yuzhi.dts.analytics.domain.AnalyticsScreenAccess;
 import com.yuzhi.dts.analytics.domain.AnalyticsUser;
 import com.yuzhi.dts.analytics.repository.AnalyticsScreenAccessRepository;
+import com.yuzhi.dts.analytics.repository.AnalyticsScreenRepository;
 import com.yuzhi.dts.analytics.web.support.PlatformContext;
 import java.util.Collections;
+import java.util.LinkedHashSet;
 import java.util.List;
 import org.springframework.stereotype.Service;
 
@@ -37,9 +39,13 @@ public class ScreenPermissionService {
     private static final String NO_ROLE_PLACEHOLDER = "__NO_ROLE__";
 
     private final AnalyticsScreenAccessRepository accessRepository;
+    private final AnalyticsScreenRepository screenRepository;
 
-    public ScreenPermissionService(AnalyticsScreenAccessRepository accessRepository) {
+    public ScreenPermissionService(
+            AnalyticsScreenAccessRepository accessRepository,
+            AnalyticsScreenRepository screenRepository) {
         this.accessRepository = accessRepository;
+        this.screenRepository = screenRepository;
     }
 
     // ---- Permission snapshot ----
@@ -80,6 +86,9 @@ public class ScreenPermissionService {
             return PermissionSnapshot.none();
         }
         if (user.isSuperuser()) {
+            return PermissionSnapshot.all();
+        }
+        if (screen.getCreatorId() != null && screen.getCreatorId().equals(user.getId())) {
             return PermissionSnapshot.all();
         }
 
@@ -132,7 +141,11 @@ public class ScreenPermissionService {
         String userId = resolveUserId(user);
         List<String> safeRoles = safeRoles(roles);
 
-        List<Long> ids = accessRepository.findAccessibleScreenIds(userId, safeRoles);
+        LinkedHashSet<Long> ids = new LinkedHashSet<>();
+        if (user.getId() != null) {
+            ids.addAll(screenRepository.findIdsByCreatorIdAndArchivedFalse(user.getId()));
+        }
+        ids.addAll(accessRepository.findAccessibleScreenIds(userId, safeRoles));
         return ids.isEmpty() ? Collections.emptyList() : List.copyOf(ids);
     }
 

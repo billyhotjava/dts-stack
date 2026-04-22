@@ -42,16 +42,20 @@ public class PlatformSessionBridgeFilter extends OncePerRequestFilter {
     @Override
     protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response, FilterChain filterChain)
             throws ServletException, IOException {
-        if (sessionService.resolveSessionId(request).isEmpty()) {
-            Optional<AnalyticsUser> user = sessionService.resolveUser(request);
-            if (user.isPresent()) {
-                boolean secure = "https".equalsIgnoreCase(request.getHeader("X-Forwarded-Proto"))
-                        || "https".equalsIgnoreCase(request.getScheme());
-                UUID deviceId = resolveDeviceId(request).orElseGet(UUID::randomUUID);
-                UUID sessionId = sessionService.createSession(user.get().getId());
-                for (String cookie : MetabaseCookies.loginCookieHeaders(sessionId, deviceId, secure)) {
-                    response.addHeader("Set-Cookie", cookie);
-                }
+        Optional<UUID> existingSessionId = sessionService.resolveSessionId(request);
+        Optional<AnalyticsUser> sessionUser = sessionService.resolveUserFromSession(request);
+        Optional<AnalyticsUser> effectiveUser = sessionService.resolveUser(request);
+
+        boolean shouldIssueSession = effectiveUser.isPresent()
+                && (sessionUser.isEmpty() || !sameUser(sessionUser.get(), effectiveUser.get()));
+        if (shouldIssueSession) {
+            existingSessionId.ifPresent(sessionService::revokeSession);
+            boolean secure = "https".equalsIgnoreCase(request.getHeader("X-Forwarded-Proto"))
+                    || "https".equalsIgnoreCase(request.getScheme());
+            UUID deviceId = resolveDeviceId(request).orElseGet(UUID::randomUUID);
+            UUID sessionId = sessionService.createSession(effectiveUser.orElseThrow().getId());
+            for (String cookie : MetabaseCookies.loginCookieHeaders(sessionId, deviceId, secure)) {
+                response.addHeader("Set-Cookie", cookie);
             }
         }
         filterChain.doFilter(request, response);
@@ -78,5 +82,8 @@ public class PlatformSessionBridgeFilter extends OncePerRequestFilter {
         }
         return Optional.empty();
     }
-}
 
+    private static boolean sameUser(AnalyticsUser left, AnalyticsUser right) {
+        return left.getId() != null && left.getId().equals(right.getId());
+    }
+}

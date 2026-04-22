@@ -189,6 +189,41 @@ test('combo-chart: maps rows using same axis chart logic as bar/line', () => {
     assert.deepStrictEqual(series[0].data, [65, 72]);
 });
 
+test('number-card: keeps manual value when valueSourceMode is manual', () => {
+    const cardData = {
+        cols: [
+            { name: 'amount', display_name: '金额', base_type: 'type/Float' },
+        ],
+        rows: [
+            [1280.5],
+        ],
+    };
+
+    const result = mapCardDataToConfig('number-card', cardData, {
+        valueSourceMode: 'manual',
+        value: '手工值',
+    });
+
+    assert.deepStrictEqual(result, {});
+});
+
+test('number-card: still maps datasource value when valueSourceMode is data', () => {
+    const cardData = {
+        cols: [
+            { name: 'amount', display_name: '金额', base_type: 'type/Float' },
+        ],
+        rows: [
+            [1280.5],
+        ],
+    };
+
+    const result = mapCardDataToConfig('number-card', cardData, {
+        valueSourceMode: 'data',
+    });
+
+    assert.deepStrictEqual(result, { value: 1280.5 });
+});
+
 test('scatter-chart: maps rows to multi-series scatter data by category', () => {
     const cardData = {
         cols: [

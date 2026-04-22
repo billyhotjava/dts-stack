@@ -16,6 +16,10 @@ export function mapCardDataToConfig(
     switch (type) {
         case 'number-card':
         case 'gauge-chart': {
+            const valueSourceMode = String(config?.valueSourceMode ?? 'data').trim().toLowerCase();
+            if (valueSourceMode === 'manual') {
+                return {};
+            }
             const vf = config?.valueField as string | undefined;
             if (vf) {
                 const colIdx = cols.findIndex((c) => c.name === vf);

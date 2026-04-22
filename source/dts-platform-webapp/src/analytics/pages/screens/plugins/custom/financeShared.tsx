@@ -28,6 +28,16 @@ function text(value: unknown, fallback = ''): string {
     return typeof value === 'string' && value.trim() ? value.trim() : fallback;
 }
 
+function hasOwnConfig(config: Record<string, unknown>, key: string): boolean {
+    return Object.prototype.hasOwnProperty.call(config, key) && config[key] !== undefined;
+}
+
+function rawText(value: unknown, fallback = ''): string {
+    if (typeof value === 'string') return value;
+    if (value == null) return fallback;
+    return String(value);
+}
+
 function valueText(value: unknown, fallback = '', precision?: number): string {
     if (typeof value === 'string' && value.trim()) return value.trim();
     if (typeof value === 'number' && Number.isFinite(value)) {
@@ -246,28 +256,48 @@ export function FinanceKpiCard(context: RendererPluginRenderContext): ReactNode 
         '12,580.00',
         typeof context.config.precision === 'number' ? context.config.precision : undefined,
     );
+    const prefix = hasOwnConfig(context.config, 'prefix')
+        ? rawText(context.config.prefix)
+        : '';
+    const suffix = hasOwnConfig(context.config, 'suffix')
+        ? rawText(context.config.suffix)
+        : text(context.config.unit, '万元');
     const unit = text(context.config.unit, '万元');
     const hint = text(context.config.hint, '较上期 +12.6%');
     const tone = text(context.config.tone, 'accent');
     const toneColor = resolveToneColor(tone);
+    const backgroundColor = text(context.config.backgroundColor, COLORS.card);
+    const titleColor = text(context.config.titleColor, COLORS.text);
+    const valueColor = text(context.config.valueColor, COLORS.text);
+    const fontFamily = text(context.config.fontFamily, FONT_STACK);
+    const titleFontSize = px(context.config.titleFontSize, 14);
+    const valueFontSize = px(context.config.valueFontSize, 34);
+    const borderRadius = px(context.config.borderRadius, 18);
+    const shadow = text(context.config.shadow, 'subtle');
+    const borderColor = text(context.config.borderColor, COLORS.border);
+    const shadowMap: Record<string, string> = {
+        none: 'none',
+        subtle: '0 10px 24px rgba(21,35,59,0.06)',
+        medium: '0 14px 32px rgba(21,35,59,0.1)',
+    };
     return (
         <section
             style={{
                 width: '100%',
                 height: '100%',
                 padding: '18px 20px',
-                borderRadius: 18,
-                background: COLORS.card,
-                border: `1px solid ${COLORS.border}`,
-                boxShadow: '0 10px 24px rgba(21,35,59,0.06)',
-                fontFamily: FONT_STACK,
+                borderRadius,
+                background: backgroundColor,
+                border: `1px solid ${borderColor}`,
+                boxShadow: shadowMap[shadow] || shadowMap.subtle,
+                fontFamily,
                 display: 'flex',
                 flexDirection: 'column',
                 justifyContent: 'space-between',
             }}
         >
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10 }}>
-                <span style={{ fontSize: 14, fontWeight: 700, color: COLORS.text }}>{title}</span>
+                <span style={{ fontSize: titleFontSize, fontWeight: 700, color: titleColor }}>{title}</span>
                 <span
                     style={{
                         minWidth: 10,
@@ -279,10 +309,11 @@ export function FinanceKpiCard(context: RendererPluginRenderContext): ReactNode 
                 />
             </div>
             <div style={{ display: 'flex', alignItems: 'flex-end', gap: 8 }}>
-                <span style={{ fontSize: 34, fontWeight: 800, lineHeight: 1, color: COLORS.text }}>{value}</span>
-                <span style={{ marginBottom: 4, fontSize: 14, color: COLORS.muted }}>{unit}</span>
+                {prefix ? <span style={{ marginBottom: 4, fontSize: 14, color: COLORS.muted }}>{prefix}</span> : null}
+                <span style={{ fontSize: valueFontSize, fontWeight: 800, lineHeight: 1, color: valueColor }}>{value}</span>
+                {suffix ? <span style={{ marginBottom: 4, fontSize: 14, color: COLORS.muted }}>{suffix}</span> : null}
             </div>
-            <div style={{ fontSize: 12, fontWeight: 600, color: toneColor }}>{hint}</div>
+            <div style={{ fontSize: 12, fontWeight: 600, color: toneColor }}>{hint || unit}</div>
         </section>
     );
 }

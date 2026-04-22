@@ -51,24 +51,31 @@ public class AnalyticsSessionService {
             return Optional.empty();
         }
 
-        Optional<AnalyticsUser> byMetabaseSession = resolveSessionId(request)
-                .flatMap(sessionId -> sessionRepository.findByIdAndRevokedFalseAndExpiresAtAfter(sessionId, Instant.now()))
-                .map(session -> touchSession(session))
-                .flatMap(session -> userRepository.findById(session.getUserId()))
-                .filter(AnalyticsUser::isActive);
+        Optional<AnalyticsUser> byMetabaseSession = resolveUserFromSession(request);
         if (byMetabaseSession.isPresent()) {
-            AnalyticsUser user = byMetabaseSession.get();
-            // platform_username 在 session 路径下不会被自动填充（resolveOrProvision 被跳过）。
-            // 对于存量用户（platform_username 列新增之前已有 session），需要在这里从 forward-auth
-            // 补填 platform_username 和 superuser，否则权限检查会用 UUID 前缀作为 username，
-            // 导致无法匹配 grant，且 superuser 标志可能是旧值（false）。
-            // 使用 refreshKnownUserAttributes 而非 resolveOrProvision，确保不会切换 session 对应的用户。
-            if (user.getPlatformUsername() == null || user.getPlatformUsername().isBlank()) {
-                user = platformTrustedUserService.refreshKnownUserAttributes(request, user);
+            AnalyticsUser sessionUser = byMetabaseSession.get();
+            String forwardedUsername = trimToNull(request.getHeader("X-DTS-User"));
+            if (forwardedUsername == null) {
+                request.setAttribute(ATTR_RESOLVED_USER, sessionUser);
+                return Optional.of(sessionUser);
             }
-            request.setAttribute(ATTR_RESOLVED_USER, user);
-            return Optional.of(user);
+
+            String sessionUsername = trimToNull(sessionUser.getPlatformUsername());
+            if (forwardedUsername.equals(sessionUsername)) {
+                AnalyticsUser refreshed = platformTrustedUserService.refreshKnownUserAttributes(request, sessionUser);
+                request.setAttribute(ATTR_RESOLVED_USER, refreshed);
+                return Optional.of(refreshed);
+            }
+
+            Optional<AnalyticsUser> trustedUser = platformTrustedUserService.resolveOrProvision(request).filter(AnalyticsUser::isActive);
+            if (trustedUser.isPresent()) {
+                request.setAttribute(ATTR_RESOLVED_USER, trustedUser.get());
+                return trustedUser;
+            }
+            request.setAttribute(ATTR_RESOLVED_USER, Boolean.FALSE);
+            return Optional.empty();
         }
+
         Optional<AnalyticsUser> resolved = platformTrustedUserService.resolveOrProvision(request).filter(AnalyticsUser::isActive);
         if (resolved.isPresent()) {
             request.setAttribute(ATTR_RESOLVED_USER, resolved.get());
@@ -76,6 +83,14 @@ public class AnalyticsSessionService {
             request.setAttribute(ATTR_RESOLVED_USER, Boolean.FALSE);
         }
         return resolved;
+    }
+
+    public Optional<AnalyticsUser> resolveUserFromSession(HttpServletRequest request) {
+        return resolveSessionId(request)
+                .flatMap(sessionId -> sessionRepository.findByIdAndRevokedFalseAndExpiresAtAfter(sessionId, Instant.now()))
+                .map(this::touchSession)
+                .flatMap(session -> userRepository.findById(session.getUserId()))
+                .filter(AnalyticsUser::isActive);
     }
 
     @Transactional(readOnly = true)
@@ -114,5 +129,13 @@ public class AnalyticsSessionService {
     private AnalyticsSession touchSession(AnalyticsSession session) {
         session.setLastSeenAt(Instant.now());
         return sessionRepository.save(session);
+    }
+
+    private static String trimToNull(String value) {
+        if (value == null) {
+            return null;
+        }
+        String trimmed = value.trim();
+        return trimmed.isEmpty() ? null : trimmed;
     }
 }

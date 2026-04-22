@@ -1853,7 +1853,19 @@ const FINANCE_PLUGIN_PROPERTY_SCHEMAS: Record<string, Record<string, unknown>> =
         version: '1.0.0',
         fields: [
             { key: 'title', label: '标题', type: 'string', defaultValue: '核心指标' },
+            {
+                key: 'valueSourceMode',
+                label: '数值来源',
+                type: 'select',
+                defaultValue: 'data',
+                options: [
+                    { label: '数据', value: 'data' },
+                    { label: '手工', value: 'manual' },
+                ],
+            },
             { key: 'value', label: '数值', type: 'string', defaultValue: '0' },
+            { key: 'prefix', label: '前缀', type: 'string', defaultValue: '' },
+            { key: 'suffix', label: '后缀', type: 'string', defaultValue: '' },
             { key: 'unit', label: '单位', type: 'string', defaultValue: '万元' },
             { key: 'hint', label: '说明', type: 'string', defaultValue: '较上期持平' },
             {
@@ -1939,8 +1951,11 @@ function createFinancePluginComponent(
     zIndex: number,
     config: Record<string, unknown>,
 ): ScreenComponent {
+    const resolvedConfig = componentId === 'kpi-card' && config.valueSourceMode === undefined
+        ? { valueSourceMode: 'data', ...config }
+        : config;
     return createComponent(id, type, name, x, y, width, height, zIndex, {
-        ...config,
+        ...resolvedConfig,
         __plugin: {
             pluginId: FINANCE_PLUGIN_ID,
             componentId,

@@ -1,5 +1,6 @@
 package com.yuzhi.dts.analytics.web.rest;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -20,6 +21,7 @@ import org.springframework.test.annotation.DirtiesContext;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
+import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder;
 
 @SpringBootTest
 @AutoConfigureMockMvc
@@ -202,6 +204,58 @@ class ScreenResourceIT {
                 .andExpect(jsonPath("$.focusNodes").isArray());
     }
 
+    @Test
+    void forwardedPlatformIdentityShouldOverrideStaleMetabaseSessionForScreenIsolation() throws Exception {
+        MvcResult aliceCreate = mockMvc.perform(withPlatformHeaders(
+                        post("/api/screens")
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content("""
+                                        {
+                                          "name": "Alice Screen",
+                                          "description": "alice-owned",
+                                          "components": []
+                                        }
+                                        """),
+                        "alice",
+                        "Alice",
+                        "alice-id",
+                        "ROLE_ANALYST"))
+                .andExpect(status().isOk())
+                .andReturn();
+
+        Cookie aliceSession = aliceCreate.getResponse().getCookie("metabase.SESSION");
+        assertThat(aliceSession).isNotNull();
+
+        mockMvc.perform(withPlatformHeaders(
+                        post("/api/screens")
+                                .cookie(aliceSession)
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content("""
+                                        {
+                                          "name": "Bob Screen",
+                                          "description": "bob-owned",
+                                          "components": []
+                                        }
+                                        """),
+                        "bob",
+                        "Bob",
+                        "bob-id",
+                        "ROLE_ANALYST"))
+                .andExpect(status().isOk());
+
+        mockMvc.perform(withPlatformHeaders(get("/api/screens").cookie(aliceSession), "bob", "Bob", "bob-id", "ROLE_ANALYST"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.length()").value(1))
+                .andExpect(jsonPath("$[0].name").value("Bob Screen"))
+                .andExpect(jsonPath("$[0].isOwner").value(true));
+
+        mockMvc.perform(withPlatformHeaders(get("/api/screens").cookie(aliceSession), "alice", "Alice", "alice-id", "ROLE_ANALYST"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.length()").value(1))
+                .andExpect(jsonPath("$[0].name").value("Alice Screen"))
+                .andExpect(jsonPath("$[0].isOwner").value(true));
+    }
+
     private Cookie authenticate() {
         return authenticate("admin@example.com", true);
     }
@@ -221,6 +275,20 @@ class ScreenResourceIT {
         userRepository.save(admin);
         String sessionId = sessionService.createSession(admin.getId()).toString();
         return new Cookie("metabase.SESSION", sessionId);
+    }
+
+    private MockHttpServletRequestBuilder withPlatformHeaders(
+            MockHttpServletRequestBuilder builder,
+            String username,
+            String displayName,
+            String userId,
+            String roles) {
+        return builder
+                .header("X-Forwarded-Proto", "https")
+                .header("X-DTS-User", username)
+                .header("X-DTS-Display-Name", displayName)
+                .header("X-DTS-User-Id", userId)
+                .header("X-DTS-Roles", roles);
     }
 
 }

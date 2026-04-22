@@ -181,3 +181,36 @@ test('finance plugin renderers consume runtime SQL results for value, ranking, t
     assert.match(statusHtml, /超支项目/);
     assert.match(statusHtml, /当前无负余额项目/);
 });
+
+test('finance kpi-card honors editable number-card prefix and suffix fields', () => {
+    const kpiPlugin = createKpiCardPlugin();
+    const component: ScreenComponent = {
+        id: 'kpi-prefix-suffix',
+        type: 'number-card',
+        name: '金额指标',
+        x: 0,
+        y: 0,
+        width: 320,
+        height: 120,
+        zIndex: 1,
+        locked: false,
+        visible: true,
+        config: {
+            title: '预算余额',
+            value: 1280.5,
+            precision: 1,
+            prefix: '¥',
+            suffix: '万',
+            unit: '元',
+            hint: '可编辑前后缀',
+        },
+    };
+
+    const html = renderToStaticMarkup(<React.Fragment>{kpiPlugin.render(buildRenderContext(component))}</React.Fragment>);
+
+    assert.match(html, /预算余额/);
+    assert.match(html, /¥/);
+    assert.match(html, /1,280\.5/);
+    assert.match(html, /万/);
+    assert.doesNotMatch(html, />元</);
+});
