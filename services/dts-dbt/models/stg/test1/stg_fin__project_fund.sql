@@ -19,7 +19,12 @@ SELECT
 
   {{ parse_numeric_safe("total_fund") }}::numeric(15,2) AS total_fund,
 
-  is_major_project,
+  CASE
+    WHEN {{ nullif_placeholder("is_major_project") }} IS NULL THEN NULL
+    WHEN upper({{ nullif_placeholder("is_major_project") }}) IN ('Y', 'YES', 'TRUE', 'T', '1', '是') THEN true
+    WHEN upper({{ nullif_placeholder("is_major_project") }}) IN ('N', 'NO', 'FALSE', 'F', '0', '否') THEN false
+    ELSE NULL
+  END AS is_major_project,
 
   {{ nullif_placeholder("research_dept") }} AS research_dept,
 
