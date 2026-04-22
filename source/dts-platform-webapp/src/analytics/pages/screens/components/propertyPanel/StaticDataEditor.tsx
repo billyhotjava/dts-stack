@@ -33,6 +33,8 @@ export function StaticDataEditor({ component, updateComponent }: {
 }) {
     const config = component.config;
     const componentType = component.type;
+    const pluginMeta = config.__plugin as { pluginId?: string; componentId?: string } | undefined;
+    const isFinanceSummaryTable = pluginMeta?.pluginId === 'finance-kit' && pluginMeta?.componentId === 'summary-table';
     const [mode, setMode] = useState<'table' | 'json'>('table');
 
     const defaultTemplate = STATIC_DATA_TEMPLATES[componentType] || { headers: ['列1', '列2', '列3'], rows: [['', '', ''], ['', '', '']] };
@@ -41,11 +43,21 @@ export function StaticDataEditor({ component, updateComponent }: {
     const [headers, setHeaders] = useState<string[]>(() => {
         const h = config.header as string[] | undefined;
         if (Array.isArray(h) && h.length > 0) return h.map(String);
+        if (isFinanceSummaryTable) {
+            const financeHeaders = config.headers as string[] | undefined;
+            if (Array.isArray(financeHeaders) && financeHeaders.length > 0) return financeHeaders.map(String);
+        }
         return defaultTemplate.headers;
     });
     const [rows, setRows] = useState<string[][]>(() => {
         const d = config.data as string[][] | undefined;
         if (Array.isArray(d) && d.length > 0) return d.map((r) => Array.isArray(r) ? r.map(String) : []);
+        if (isFinanceSummaryTable) {
+            const financeRows = config.rows as Array<Record<string, unknown>> | undefined;
+            if (Array.isArray(financeRows) && financeRows.length > 0) {
+                return financeRows.map((row) => Object.values(row).map((cell) => String(cell ?? '')));
+            }
+        }
         return defaultTemplate.rows;
     });
     const [jsonText, setJsonText] = useState('');
@@ -53,7 +65,19 @@ export function StaticDataEditor({ component, updateComponent }: {
 
     // Sync to component config
     const applyTableData = (nextHeaders: string[], nextRows: string[][]) => {
-        updateComponent(component.id, { config: { ...config, header: nextHeaders, data: nextRows } });
+        updateComponent(component.id, {
+            config: {
+                ...config,
+                header: nextHeaders,
+                data: nextRows,
+                ...(isFinanceSummaryTable
+                    ? {
+                        headers: nextHeaders,
+                        headerSourceMode: 'manual',
+                    }
+                    : {}),
+            },
+        });
     };
 
     const updateCell = (rowIdx: number, colIdx: number, value: string) => {

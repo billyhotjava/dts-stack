@@ -58,12 +58,12 @@ export function mapCardDataToConfig(
 
         case 'scroll-board':
         case 'table': {
+            const headerSourceMode = String(config?.headerSourceMode ?? 'data').trim().toLowerCase();
             const fields = config?.fields as string[] | undefined;
             if (fields?.length) {
                 const indices = fields.map((f) => cols.findIndex((c) => c.name === f)).filter((i) => i >= 0);
                 if (indices.length) {
-                    return {
-                        header: indices.map((i) => cols[i].display_name || cols[i].name),
+                    const result: Record<string, unknown> = {
                         data: rows.map((row) => indices.map((i) => String(row[i] ?? ''))),
                         _sourceColumns: indices.map((i) => ({
                             name: cols[i].name,
@@ -71,10 +71,13 @@ export function mapCardDataToConfig(
                             baseType: cols[i].base_type,
                         })),
                     };
+                    if (headerSourceMode !== 'manual') {
+                        result.header = indices.map((i) => cols[i].display_name || cols[i].name);
+                    }
+                    return result;
                 }
             }
-            return {
-                header: cols.map((c) => c.display_name || c.name),
+            const result: Record<string, unknown> = {
                 data: rows.map((row) => row.map((cell) => String(cell ?? ''))),
                 _sourceColumns: cols.map((c) => ({
                     name: c.name,
@@ -82,6 +85,10 @@ export function mapCardDataToConfig(
                     baseType: c.base_type,
                 })),
             };
+            if (headerSourceMode !== 'manual') {
+                result.header = cols.map((c) => c.display_name || c.name);
+            }
+            return result;
         }
 
         case 'scroll-ranking':

@@ -56,7 +56,18 @@ ODS -> STG -> DWD -> DWS -> ADS
 | 辅助余额表_个人维度 | 部门 / 职工 / 科目 | `filterDept`、`filterEmployee`、`searchText` |
 | 项目经费表 | 研制周期 / 研究室 / 重大项目 | 无，当前模板未绑定真实筛选变量 |
 
-## 3. 基础表字段口径
+## 3. 基础表与 ADS 口径
+
+这一章补的是“完整数据链”里最容易缺失的部分：`ADS` 本身怎么从 `DWS/DWD` 算出来。
+
+### 3.0 四条完整链路总览
+
+| 主题 | ODS | STG | DWD | DWS | ADS | 当前大屏实际主要取数层 |
+| --- | --- | --- | --- | --- | --- | --- |
+| 辅助余额 | `ods_finance_aux_balance` | `stg_fin__aux_balance` | `biz_dwd_aux_balance` | `biz_dws_aux_balance_by_dept` | `biz_ads_aux_balance_kpi` | `DWD` |
+| 个人辅助余额 | `ods_finance_aux_balance_personal` | `stg_fin__aux_balance_personal` | `biz_dwd_aux_balance_personal` | `biz_dws_aux_balance_personal_by_dept` | `biz_ads_aux_balance_personal_kpi` | `DWD` |
+| 自有资金 | `ods_finance_own_fund` | `stg_fin__own_fund` | `biz_dwd_own_fund` | `biz_dws_own_fund_yearly` | `biz_ads_own_fund_kpi` | `ADS + DWS` |
+| 项目经费 | `ods_finance_project_fund` | `stg_fin__project_fund` | `biz_dwd_project_fund` | `biz_dws_project_fund_summary` | `biz_ads_project_fund_kpi` | `ADS + DWD` |
 
 ### 3.1 `biz_dwd_aux_balance`
 
@@ -117,7 +128,250 @@ ODS -> STG -> DWD -> DWS -> ADS
 - `is_direct_rate_over_100 = direct_rate > 100`
 - `is_total_rate_over_100 = total_rate > 100`
 
-### 3.5 `biz_ads_project_fund_kpi`
+### 3.5 `biz_ads_aux_balance_kpi`
+
+来源：`biz_dwd_aux_balance`
+
+SQL 原理很直接，这张表就是辅助余额的“全局汇总快照”：
+
+- `total_balance = SUM(balance)`
+- `total_abs_balance = SUM(abs_balance)`
+- `subject_count = COUNT(DISTINCT subject_code)`
+- `contract_count = COUNT(DISTINCT contract_name_norm)`
+- `dept_count = COUNT(DISTINCT dept_name)`
+- `record_count = COUNT(*)`
+
+可以理解成：
+
+```text
+biz_ads_aux_balance_kpi
+  = 对 biz_dwd_aux_balance 做一次无筛选全表聚合
+```
+
+当前模板里，这张 ADS 表没有被 `fin-auxiliary-balance` 直接使用；当前大屏是直接查 `biz_dwd_aux_balance` 做现算。
+
+#### 3.5.1 字段级血缘
+
+| ADS 字段 | 直接来源 | 计算方式 | 备注 |
+| --- | --- | --- | --- |
+| `total_balance` | `biz_dwd_aux_balance.balance` | `SUM(balance)` | 余额代数和 |
+| `total_abs_balance` | `biz_dwd_aux_balance.abs_balance` | `SUM(abs_balance)` | 绝对值总额 |
+| `subject_count` | `biz_dwd_aux_balance.subject_code` | `COUNT(DISTINCT subject_code)` | 科目去重数 |
+| `contract_count` | `biz_dwd_aux_balance.contract_name_norm` | `COUNT(DISTINCT contract_name_norm)` | `NULL` 不计数 |
+| `dept_count` | `biz_dwd_aux_balance.dept_name` | `COUNT(DISTINCT dept_name)` | 空部门已在 DWD 归一到“未分配部门” |
+| `record_count` | `biz_dwd_aux_balance.*` | `COUNT(*)` | 明细行数 |
+
+### 3.6 `biz_ads_aux_balance_personal_kpi`
+
+来源：`biz_dwd_aux_balance_personal`
+
+SQL 原理：
+
+- `net_balance = SUM(balance)`
+- `debit_total = SUM(balance WHERE balance_direction = 'debit')`
+- `credit_total = SUM(abs_balance WHERE balance_direction = 'credit')`
+- `employee_count = COUNT(DISTINCT employee_name)`
+- `subject_count = COUNT(DISTINCT subject_code)`
+- `dept_count = COUNT(DISTINCT employee_dept)`
+- `record_count = COUNT(*)`
+
+可以理解成：
+
+```text
+biz_ads_aux_balance_personal_kpi
+  = 对 biz_dwd_aux_balance_personal 做一次无筛选全表聚合
+```
+
+当前模板里，这张 ADS 表也没有被 `fin-personal-balance` 直接使用；当前大屏是直接查 `biz_dwd_aux_balance_personal` 做现算。
+
+#### 3.6.1 字段级血缘
+
+| ADS 字段 | 直接来源 | 计算方式 | 备注 |
+| --- | --- | --- | --- |
+| `net_balance` | `biz_dwd_aux_balance_personal.balance` | `SUM(balance)` | 借贷相抵后的净额 |
+| `debit_total` | `biz_dwd_aux_balance_personal.balance` | `SUM(balance WHERE balance_direction = 'debit')` | 只累计正数余额 |
+| `credit_total` | `biz_dwd_aux_balance_personal.abs_balance` | `SUM(abs_balance WHERE balance_direction = 'credit')` | 贷方转绝对值后累计 |
+| `employee_count` | `biz_dwd_aux_balance_personal.employee_name` | `COUNT(DISTINCT employee_name)` | 职工去重数 |
+| `subject_count` | `biz_dwd_aux_balance_personal.subject_code` | `COUNT(DISTINCT subject_code)` | 科目去重数 |
+| `dept_count` | `biz_dwd_aux_balance_personal.employee_dept` | `COUNT(DISTINCT employee_dept)` | 部门去重数 |
+| `record_count` | `biz_dwd_aux_balance_personal.*` | `COUNT(*)` | 明细行数 |
+
+### 3.7 `biz_ads_own_fund_kpi`
+
+来源：`biz_dws_own_fund_yearly`
+
+这张表不是重新发明一套公式，而是把 `DWS` 已经算好的年度基金指标“平铺成看板直出字段”，并额外补几个状态字段。
+
+继承自 `biz_dws_own_fund_yearly` 的核心字段：
+
+- `opening_amount`
+- `increase_amount`
+- `usage_amount`
+- `derived_balance AS year_end_balance`
+- `usage_rate`
+- `net_change_rate`
+- `year_over_year_growth_rate`
+- `source_count`
+- `record_count`
+- `is_complete_sources`
+
+ADS 层新增/转译字段：
+
+- `year_end_balance = derived_balance`
+- `usage_rate_level`
+  - `danger`：`usage_rate > 95`
+  - `warning`：`usage_rate > 80 AND usage_rate <= 95`
+  - `healthy`：`usage_rate <= 80`
+- `net_change_direction`
+  - `positive`：`net_change_rate > 0`
+  - `negative`：`net_change_rate < 0`
+  - `flat`：`net_change_rate = 0`
+
+所以 `biz_ads_own_fund_kpi` 的完整计算链是：
+
+```text
+ods_finance_own_fund
+-> stg_fin__own_fund
+-> biz_dwd_own_fund
+-> biz_dws_own_fund_yearly
+   opening_amount       = SUM(年初)
+   increase_amount      = SUM(预计增加)
+   usage_amount         = SUM(预计使用)
+   derived_balance      = opening_amount + increase_amount - usage_amount
+   usage_rate           = usage_amount / (opening_amount + increase_amount) * 100
+   net_change_rate      = (derived_balance - opening_amount) / opening_amount * 100
+   year_over_year_growth_rate
+                        = (本年 derived_balance - 上年 derived_balance) / 上年 derived_balance * 100
+-> biz_ads_own_fund_kpi
+   year_end_balance     = derived_balance
+   usage_rate_level     = CASE usage_rate ...
+   net_change_direction = CASE net_change_rate ...
+```
+
+这张 ADS 表是 `fin-own-fund` 的核心来源，尤其顶部 KPI、趋势图、类别对比图、结构图都直接或间接依赖它。
+
+#### 3.7.1 先看 `opening_amount` 的完整来路
+
+以你关心的 `opening_amount` 为例，完整链路是这样的：
+
+```text
+ods_finance_own_fund.year_num
+ods_finance_own_fund.fund_source
+ods_finance_own_fund.fund_category
+ods_finance_own_fund.amount
+    ->
+stg_fin__own_fund.year_num / fund_source / fund_category / amount
+    ->
+biz_dwd_own_fund.year_num / fund_source_code / fund_category_code / amount
+    ->
+biz_dws_own_fund_yearly.opening_amount
+    = SUM(amount WHERE fund_source_code = '年初')
+      GROUP BY year_num, fund_category_code
+    ->
+year_totals 行（fund_category_code = '全部'）
+    = SUM(各基金类别 opening_amount)
+    ->
+biz_ads_own_fund_kpi.opening_amount
+    = 直接透传 biz_dws_own_fund_yearly.opening_amount
+    ->
+大屏组件 of-kpi-open
+```
+
+如果按 `selectedYear = 2026`、`fund_category_code = '全部'` 来看，实际等价于：
+
+```sql
+SELECT SUM(amount) AS opening_amount
+FROM public.biz_dwd_own_fund
+WHERE year_num = 2026
+  AND fund_source_code = '年初';
+```
+
+之所以这里不再加 `fund_category_code = '全部'`，是因为“全部基金”这一行不是 ODS/DWD 里天然存在的，而是 `biz_dws_own_fund_yearly.year_totals` 这一步把各基金类别加总后生成的。
+
+也就是说：
+
+1. `事业基金`、`职工福利基金`、`安全生产基金` 会各自产生一行 `opening_amount`。
+2. 然后 DWS 再额外产出一行 `fund_category_code = '全部'`。
+3. ADS 直接把这行复制出来。
+4. 大屏 `of-kpi-open` 再按 `year_num = selectedYear AND fund_category_code = '全部'` 取值。
+
+#### 3.7.2 `biz_ads_own_fund_kpi` 字段级血缘
+
+| ADS 字段 | 直接来源 | 计算方式 | 层级说明 | 当前大屏使用点 |
+| --- | --- | --- | --- | --- |
+| `year_num` | `biz_dws_own_fund_yearly.year_num` | 直接透传 | 分组键 | 全屏 |
+| `fund_category_code` | `biz_dws_own_fund_yearly.fund_category_code` | 直接透传 | 分组键 | 全屏 |
+| `fund_category_label` | `biz_dws_own_fund_yearly.fund_category_label` | 直接透传 | 展示标签 | 类别图、汇总表 |
+| `opening_amount` | `biz_dws_own_fund_yearly.opening_amount` | `SUM(amount WHERE fund_source_code='年初')` | DWS 聚合后 ADS 透传 | `of-kpi-open`、`of-chart-category`、`of-summary` |
+| `increase_amount` | `biz_dws_own_fund_yearly.increase_amount` | `SUM(amount WHERE fund_source_code='预计增加')` | DWS 聚合后 ADS 透传 | `of-kpi-increase`、`of-chart-category`、`of-summary` |
+| `usage_amount` | `biz_dws_own_fund_yearly.usage_amount` | `SUM(amount WHERE fund_source_code='预计使用')` | DWS 聚合后 ADS 透传 | `of-kpi-use`、`of-chart-trend`、`of-chart-category`、`of-summary` |
+| `year_end_balance` | `biz_dws_own_fund_yearly.derived_balance` | `opening_amount + increase_amount - usage_amount` | ADS 仅改名，不重算 | `of-kpi-balance`、`of-chart-trend`、`of-chart-category`、`of-chart-structure` |
+| `usage_rate` | `biz_dws_own_fund_yearly.usage_rate` | `usage_amount / (opening_amount + increase_amount) * 100` | DWS 算好 | `of-status` |
+| `net_change_rate` | `biz_dws_own_fund_yearly.net_change_rate` | `(derived_balance - opening_amount) / opening_amount * 100` | DWS 算好 | 当前模板未直接展示 |
+| `year_over_year_growth_rate` | `biz_dws_own_fund_yearly.year_over_year_growth_rate` | `(本年 derived_balance - 上年 derived_balance) / 上年 derived_balance * 100` | DWS 用窗口函数 `lag` 算好 | `of-kpi-yoy`、`of-summary` |
+| `source_count` | `biz_dws_own_fund_yearly.source_count` | `COUNT(DISTINCT fund_source_code)` | DWS 算好 | `of-status` |
+| `record_count` | `biz_dws_own_fund_yearly.record_count` | `COUNT(*)` | DWS 算好 | 当前模板未直接展示 |
+| `is_complete_sources` | `biz_dws_own_fund_yearly.is_complete_sources` | `source_count = 3` | DWS 算好 | `of-status` |
+| `usage_rate_level` | `biz_ads_own_fund_kpi.usage_rate_level` | `CASE WHEN usage_rate > 95 THEN 'danger' WHEN usage_rate > 80 THEN 'warning' ELSE 'healthy' END` | ADS 新增状态字段 | 当前模板未直接展示 |
+| `net_change_direction` | `biz_ads_own_fund_kpi.net_change_direction` | `CASE WHEN net_change_rate > 0 THEN 'positive' WHEN net_change_rate < 0 THEN 'negative' ELSE 'flat' END` | ADS 新增状态字段 | 当前模板未直接展示 |
+
+#### 3.7.3 `biz_dws_own_fund_yearly` 中“全部基金”怎么来的
+
+这是自有资金最容易误解的点。
+
+`biz_dws_own_fund_yearly` 先做两步：
+
+1. `pivot_by_category`
+   - 按 `year_num + fund_category_code` 聚合
+   - 每个基金类别各出一行
+2. `year_totals`
+   - 再按 `year_num` 汇总一次
+   - 额外生成：
+     - `fund_category_code = '全部'`
+     - `fund_category_label = '全部基金'`
+
+所以：
+
+- 类别行是真实分类聚合
+- “全部基金”行是 DWS 二次汇总生成的总计行
+
+#### 3.7.4 自有资金字段核对 SQL
+
+如果你要单独核 `opening_amount`，最直接是跑这三层：
+
+1. 先核 DWD 明细：
+
+```sql
+SELECT year_num, fund_category_code, fund_source_code, amount
+FROM public.biz_dwd_own_fund
+WHERE year_num = 2026
+ORDER BY fund_category_sort, fund_source_sort;
+```
+
+2. 再核 DWS 分类行：
+
+```sql
+SELECT year_num, fund_category_code, opening_amount, increase_amount, usage_amount, derived_balance
+FROM public.biz_dws_own_fund_yearly
+WHERE year_num = 2026
+ORDER BY fund_category_sort;
+```
+
+3. 最后核 ADS：
+
+```sql
+SELECT year_num, fund_category_code, opening_amount, increase_amount, usage_amount, year_end_balance
+FROM public.biz_ads_own_fund_kpi
+WHERE year_num = 2026
+ORDER BY fund_category_sort;
+```
+
+你会看到：
+
+- `ADS.opening_amount = DWS.opening_amount`
+- `DWS.opening_amount = DWD 中 fund_source_code='年初' 的金额汇总`
+
+### 3.8 `biz_ads_project_fund_kpi`
 
 来源：`biz_dws_project_fund_summary`
 
@@ -132,9 +386,133 @@ ODS -> STG -> DWD -> DWS -> ADS
 - `overall_direct_rate = sum_direct_spent / sum_direct_ctrl * 100`
 - `overall_total_rate = sum_total_spent / sum_total_fund * 100`
 
+这张表的完整计算链是：
+
+```text
+ods_finance_project_fund
+-> stg_fin__project_fund
+-> biz_dwd_project_fund
+   total_spent      = direct_spent + indirect_spent
+   remaining_fund   = total_fund - total_spent
+   total_rate       = total_spent / total_fund * 100
+   indirect_rate    = indirect_spent / reserve_indirect * 100
+   received_rate    = received_fund / total_fund * 100
+-> biz_dws_project_fund_summary
+   sum_total_fund        = SUM(total_fund)
+   sum_total_spent       = SUM(total_spent)
+   sum_remaining_fund    = SUM(remaining_fund WHERE remaining_fund > 0)
+   sum_overspend_amount  = SUM(ABS(remaining_fund) WHERE remaining_fund < 0)
+   sum_received_fund     = SUM(received_fund)
+   sum_receivable_fund   = SUM(receivable_fund)
+-> biz_ads_project_fund_kpi
+   overall_direct_rate   = sum_direct_spent / sum_direct_ctrl * 100
+   overall_total_rate    = sum_total_spent / sum_total_fund * 100
+   overall_indirect_rate = sum_indirect_spent / sum_reserve_indirect * 100
+   overall_received_rate = sum_received_fund / sum_total_fund * 100
+   overall_receivable_rate
+                        = sum_receivable_fund / sum_total_fund * 100
+```
+
+#### 3.8.1 `biz_ads_project_fund_kpi` 字段级血缘
+
+| ADS 字段 | 直接来源 | 计算方式 | 当前大屏使用点 |
+| --- | --- | --- | --- |
+| `sum_total_fund` | `biz_dws_project_fund_summary.sum_total_fund` | `SUM(total_fund)` | `pf-kpi-budget` |
+| `sum_total_spent` | `biz_dws_project_fund_summary.sum_total_spent` | `SUM(total_spent)` | `pf-kpi-spent` |
+| `sum_remaining_fund` | `biz_dws_project_fund_summary.sum_remaining_fund` | `SUM(remaining_fund WHERE remaining_fund > 0)` | `pf-kpi-remaining` |
+| `sum_overspend_amount` | `biz_dws_project_fund_summary.sum_overspend_amount` | `SUM(ABS(remaining_fund) WHERE remaining_fund < 0)` | 当前模板未直接取此字段，而是自己在 `pf-kpi-overspend` 现算 |
+| `sum_received_fund` | `biz_dws_project_fund_summary.sum_received_fund` | `SUM(received_fund)` | `pf-kpi-received` |
+| `sum_receivable_fund` | `biz_dws_project_fund_summary.sum_receivable_fund` | `SUM(receivable_fund)` | `pf-kpi-receivable` |
+| `overall_direct_rate` | ADS 自身派生 | `sum_direct_spent / sum_direct_ctrl * 100` | `pf-status` |
+| `overall_total_rate` | ADS 自身派生 | `sum_total_spent / sum_total_fund * 100` | `pf-status` |
+| `overall_indirect_rate` | ADS 自身派生 | `sum_indirect_spent / sum_reserve_indirect * 100` | 当前模板未直接展示 |
+| `overall_received_rate` | ADS 自身派生 | `sum_received_fund / sum_total_fund * 100` | 当前模板未直接展示 |
+| `overall_receivable_rate` | ADS 自身派生 | `sum_receivable_fund / sum_total_fund * 100` | 当前模板未直接展示，模板自己又算了一次“待收占比” |
+| `project_count` | `biz_dws_project_fund_summary.project_count` | `COUNT(DISTINCT project_id)` | 当前模板未直接展示 |
+| `major_project_count` | `biz_dws_project_fund_summary.major_project_count` | `COUNT(DISTINCT project_id WHERE is_major_project = TRUE)` | 当前模板未直接展示 |
+| `completed_project_count` | `biz_dws_project_fund_summary.completed_project_count` | `COUNT(DISTINCT project_id WHERE project_is_completed = TRUE)` | 当前模板未直接展示 |
+
+#### 3.8.2 项目经费里一个容易踩坑的点
+
+`pf-kpi-overspend` 没有直接取 `biz_ads_project_fund_kpi.sum_overspend_amount`，而是自己查了：
+
+```sql
+SELECT COALESCE(SUM(GREATEST(-remaining_fund, 0)), 0) AS value
+FROM public.biz_dwd_project_fund
+```
+
+理论上它和 `ADS.sum_overspend_amount` 应该一致，但核数时你要知道：
+
+- 这个组件当前走的是 `DWD` 现算
+- 不是直接读 `ADS`
+
+### 3.9 维度映射表在链路中的作用
+
+这部分不是大屏直接查的表，但会直接影响大屏结果分组是否正确。
+
+#### 3.9.1 自有资金维度
+
+- `dim_fund_source`
+  - `年初`
+  - `预计增加`
+  - `预计使用`
+- `dim_fund_category`
+  - `事业基金`
+  - `职工福利基金`
+  - `安全生产基金`
+
+它们决定了 `biz_dwd_own_fund` 和后续 `DWS/ADS` 的分类轴。
+
+#### 3.9.2 项目经费状态维度
+
+- `dim_project_status`
+  - `在研`
+  - `支出待处理`
+  - `已完成待收款`
+  - `已完成审计`
+
+它决定了 `biz_dws_project_fund_summary` 里 `by_status` 这类 scope 的分组规则。
+
+#### 3.9.3 辅助余额前缀映射
+
+- `dim_expense_code_prefix`
+  - `5001 -> 原材料/设备`
+  - `5101 -> 外协/服务`
+  - `5201 -> 折旧`
+  - `5301 -> 检测试验`
+  - `5401 -> 设计咨询`
+  - `5501 -> 租赁`
+  - `5601 -> 培训`
+
+它决定了 `biz_dwd_aux_balance.expense_category / expense_category_label`，从而影响费用结构饼图和状态卡。
+
+#### 3.9.4 个人辅助余额前缀映射
+
+- `dim_personal_subject_code_prefix`
+  - `1122 -> 其他应收-借款`
+  - `2211 -> 应付职工薪酬`
+
+它决定了 `biz_dwd_aux_balance_personal.subject_category`，从而影响个人往来口径解释。
+
 ## 4. 大屏一：辅助余额大屏
 
 模板 ID：`fin-auxiliary-balance`
+
+### 4.0 完整数据链
+
+```text
+ods_finance_aux_balance
+-> stg_fin__aux_balance
+-> biz_dwd_aux_balance
+-> biz_dws_aux_balance_by_dept
+-> biz_ads_aux_balance_kpi
+-> fin-auxiliary-balance
+```
+
+说明：
+
+- 当前模板实际展示时，主要直接查询 `biz_dwd_aux_balance`
+- `biz_dws_aux_balance_by_dept` / `biz_ads_aux_balance_kpi` 是这条链路里的汇总资产，但当前模板没有直接引用
 
 ### 4.1 实际筛选
 
@@ -205,6 +583,23 @@ SELECT expense_category_label, SUM(balance) AS category_balance FROM base GROUP 
 
 模板 ID：`fin-own-fund`
 
+### 5.0 完整数据链
+
+```text
+ods_finance_own_fund
+-> stg_fin__own_fund
+-> biz_dwd_own_fund
+-> biz_dws_own_fund_yearly
+-> biz_ads_own_fund_kpi
+-> fin-own-fund
+```
+
+说明：
+
+- 当前模板的 KPI 和图表主要查 `biz_ads_own_fund_kpi`
+- 汇总表 `of-summary` 直接查 `biz_dws_own_fund_yearly`
+- 所以这张屏是四张里最标准的 `DWS -> ADS -> 大屏` 用法
+
 ### 5.1 实际筛选
 
 只有 `selectedYear` 真正进入 SQL。
@@ -274,6 +669,22 @@ ORDER BY year_num, fund_category_sort;
 ## 6. 大屏三：辅助余额表_个人维度
 
 模板 ID：`fin-personal-balance`
+
+### 6.0 完整数据链
+
+```text
+ods_finance_aux_balance_personal
+-> stg_fin__aux_balance_personal
+-> biz_dwd_aux_balance_personal
+-> biz_dws_aux_balance_personal_by_dept
+-> biz_ads_aux_balance_personal_kpi
+-> fin-personal-balance
+```
+
+说明：
+
+- 当前模板实际展示时，主要直接查询 `biz_dwd_aux_balance_personal`
+- `DWS/ADS` 已经具备，但当前模板没有直接吃这两层
 
 ### 6.1 实际筛选
 
@@ -353,6 +764,23 @@ SELECT * FROM employee_balance ORDER BY ABS(net_balance) DESC;
 ## 7. 大屏四：项目经费表
 
 模板 ID：`fin-project-fund`
+
+### 7.0 完整数据链
+
+```text
+ods_finance_project_fund
+-> stg_fin__project_fund
+-> biz_dwd_project_fund
+-> biz_dws_project_fund_summary
+-> biz_ads_project_fund_kpi
+-> fin-project-fund
+```
+
+说明：
+
+- 当前模板顶部 KPI 和状态卡主要查 `biz_ads_project_fund_kpi`
+- 图表、明细、排行主要查 `biz_dwd_project_fund`
+- 所以它是 `ADS + DWD` 混合用法
 
 ### 7.1 实际筛选
 
@@ -457,4 +885,3 @@ ORDER BY project_id;
 2. 现场使用的库是否就是 `databaseId = 1` 对应的财务库。
 3. 页面显示的筛选条是否被误认为真实筛选，但模板里其实没有参数绑定。
 4. dbt 跑数时间与大屏缓存刷新时间是否一致。
-

@@ -45,6 +45,7 @@
         "version": "1.0.0",
         "fields": [
           { "key": "title", "label": "标题", "type": "string", "defaultValue": "辅助余额表_项目维度" },
+          { "key": "titleFontSize", "label": "标题字号", "type": "number", "defaultValue": 24, "min": 12, "max": 48, "step": 1 },
           { "key": "subtitle", "label": "副标题", "type": "string", "defaultValue": "Financial Operations Dashboard" },
           { "key": "orgName", "label": "机构名称", "type": "string", "defaultValue": "BI数据平台" },
           { "key": "dateText", "label": "日期文案", "type": "string", "defaultValue": "数据日期：2026-03-30" }
@@ -138,6 +139,7 @@
         "version": "1.0.0",
         "fields": [
           { "key": "title", "label": "标题", "type": "string", "defaultValue": "TOP 排名" },
+          { "key": "titleFontSize", "label": "标题字号", "type": "number", "defaultValue": 15, "min": 12, "max": 36, "step": 1 },
           { "key": "maxItems", "label": "显示条数", "type": "number", "defaultValue": 8, "min": 1, "max": 20, "step": 1 },
           { "key": "items", "label": "排行数据", "type": "array", "defaultValue": [
             { "name": "项目A", "value": "1,250.00", "extra": "同比 +8.2%" },
@@ -166,6 +168,17 @@
         "version": "1.0.0",
         "fields": [
           { "key": "title", "label": "标题", "type": "string", "defaultValue": "财务明细" },
+          { "key": "titleFontSize", "label": "标题字号", "type": "number", "defaultValue": 15, "min": 12, "max": 36, "step": 1 },
+          {
+            "key": "headerSourceMode",
+            "label": "表头来源",
+            "type": "select",
+            "defaultValue": "data",
+            "options": [
+              { "label": "数据", "value": "data" },
+              { "label": "手工", "value": "manual" }
+            ]
+          },
           { "key": "maxRows", "label": "显示行数", "type": "number", "defaultValue": 6, "min": 1, "max": 20, "step": 1 },
           { "key": "headers", "label": "表头", "type": "array", "defaultValue": ["项目", "预算", "执行", "余额"] },
           { "key": "rows", "label": "表格数据", "type": "array", "defaultValue": [
@@ -194,6 +207,7 @@
         "version": "1.0.0",
         "fields": [
           { "key": "title", "label": "标题", "type": "string", "defaultValue": "口径说明" },
+          { "key": "titleFontSize", "label": "标题字号", "type": "number", "defaultValue": 15, "min": 12, "max": 36, "step": 1 },
           { "key": "notes", "label": "说明列表", "type": "array", "defaultValue": [
             "金额单位默认按万元展示。",
             "模板块支持拖拽和二次编辑。"
@@ -220,6 +234,7 @@
         "version": "1.0.0",
         "fields": [
           { "key": "title", "label": "标题", "type": "string", "defaultValue": "状态总览" },
+          { "key": "titleFontSize", "label": "标题字号", "type": "number", "defaultValue": 15, "min": 12, "max": 36, "step": 1 },
           { "key": "items", "label": "状态项", "type": "array", "defaultValue": [
             { "title": "执行健康", "value": "良好", "hint": "执行率 82%", "tone": "success" },
             { "title": "预警项目", "value": "3", "hint": "需重点关注", "tone": "warning" }

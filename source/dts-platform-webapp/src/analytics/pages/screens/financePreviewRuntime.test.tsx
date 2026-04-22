@@ -214,3 +214,38 @@ test('finance kpi-card honors editable number-card prefix and suffix fields', ()
     assert.match(html, /万/);
     assert.doesNotMatch(html, />元</);
 });
+
+test('finance summary-table honors manual headers and title font size overrides', () => {
+    const summaryPlugin = createSummaryTablePlugin();
+    const component: ScreenComponent = {
+        id: 'summary-manual-header',
+        type: 'table',
+        name: '汇总表',
+        x: 0,
+        y: 0,
+        width: 640,
+        height: 240,
+        zIndex: 1,
+        locked: false,
+        visible: true,
+        config: {
+            title: '财务明细',
+            titleFontSize: 22,
+            headerSourceMode: 'manual',
+            headers: ['旧表头'],
+            header: ['新表头'],
+            data: [['示例值']],
+            headerBackground: '#ddeeff',
+            headerColor: '#123456',
+            headerFontSize: 18,
+        },
+    };
+
+    const html = renderToStaticMarkup(<React.Fragment>{summaryPlugin.render(buildRenderContext(component))}</React.Fragment>);
+
+    assert.match(html, /新表头/);
+    assert.doesNotMatch(html, /旧表头/);
+    assert.match(html, /font-size:22px/);
+    assert.match(html, /font-size:18px/);
+    assert.match(html, /#ddeeff/i);
+});

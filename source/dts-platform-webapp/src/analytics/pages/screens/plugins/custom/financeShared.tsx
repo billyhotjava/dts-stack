@@ -38,6 +38,66 @@ function rawText(value: unknown, fallback = ''): string {
     return String(value);
 }
 
+function titleFontSize(config: Record<string, unknown>, fallback: number): number {
+    return px(config.titleFontSize, fallback);
+}
+
+function titleColor(config: Record<string, unknown>, fallback: string): string {
+    return text(config.titleColor, fallback);
+}
+
+function sectionTitleStyle(config: Record<string, unknown>, fallbackSize = 15): CSSProperties {
+    return {
+        marginBottom: 12,
+        fontSize: titleFontSize(config, fallbackSize),
+        fontWeight: 800,
+        color: titleColor(config, COLORS.text),
+    };
+}
+
+function panelStyle(config: Record<string, unknown> = {}): CSSProperties {
+    return {
+        width: '100%',
+        height: '100%',
+        padding: 16,
+        borderRadius: px(config.borderRadius, 18),
+        background: text(config.backgroundColor, COLORS.card),
+        border: `1px solid ${text(config.borderColor, COLORS.border)}`,
+        boxShadow: '0 10px 24px rgba(21,35,59,0.05)',
+        fontFamily: text(config.fontFamily, FONT_STACK),
+        color: COLORS.text,
+        overflow: 'hidden',
+    };
+}
+
+function tableHeaderStyle(config: Record<string, unknown>): CSSProperties {
+    return {
+        padding: '12px 14px',
+        fontSize: px(config.headerFontSize, 12),
+        fontWeight: 800,
+        color: text(config.headerColor, COLORS.text),
+        borderBottom: `1px solid ${text(config.borderColor, COLORS.border)}`,
+    };
+}
+
+function tableRowBackground(config: Record<string, unknown>, index: number): string {
+    const fallback = index % 2 === 0 ? COLORS.card : '#f9fbfe';
+    if (index % 2 === 0) {
+        return text(config.oddRowBackground, fallback);
+    }
+    return text(config.evenRowBackground, fallback);
+}
+
+function tableCellStyle(config: Record<string, unknown>, isFirstColumn: boolean): CSSProperties {
+    return {
+        padding: '12px 14px',
+        fontSize: px(config.fontSize, 12),
+        color: text(config.bodyColor, isFirstColumn ? COLORS.text : COLORS.muted),
+        fontWeight: isFirstColumn ? 700 : 600,
+        borderBottom: `1px solid ${text(config.borderColor, COLORS.border)}`,
+    };
+}
+
 function valueText(value: unknown, fallback = '', precision?: number): string {
     if (typeof value === 'string' && value.trim()) return value.trim();
     if (typeof value === 'number' && Number.isFinite(value)) {
@@ -196,7 +256,7 @@ export function FinanceHeaderBar(context: RendererPluginRenderContext): ReactNod
             }}
         >
             <div style={{ minWidth: 0 }}>
-                <div style={{ fontSize: 24, fontWeight: 800, letterSpacing: 0.5 }}>{title}</div>
+                <div style={{ fontSize: titleFontSize(context.config, 24), fontWeight: 800, letterSpacing: 0.5 }}>{title}</div>
                 <div style={{ marginTop: 6, fontSize: 13, opacity: 0.88 }}>{subtitle}</div>
             </div>
             <div style={{ textAlign: 'right', whiteSpace: 'nowrap' }}>
@@ -337,8 +397,8 @@ export function FinanceRankingList(context: RendererPluginRenderContext): ReactN
                 { name: '项目C', value: '640.00', extra: '同比 -2.1%' },
             ];
     return (
-        <section style={panelStyle()}>
-            <div style={sectionTitleStyle()}>{title}</div>
+        <section style={panelStyle(context.config)}>
+            <div style={sectionTitleStyle(context.config)}>{title}</div>
             <div style={{ display: 'grid', gap: 10 }}>
                 {list.slice(0, maxItems).map((item, index) => (
                     <div
@@ -385,7 +445,14 @@ export function FinanceSummaryTable(context: RendererPluginRenderContext): React
     const title = text(context.config.title, context.component.name || '财务明细');
     const mappedHeaders = stringArray(context.config.header);
     const rawHeaders = cardDataHeaders(context);
-    const headers = stringArray(context.config.headers, mappedHeaders.length > 0 ? mappedHeaders : rawHeaders.length > 0 ? rawHeaders : ['项目', '预算', '执行', '余额']);
+    const pluginHeaders = stringArray(context.config.headers);
+    const headers = mappedHeaders.length > 0
+        ? mappedHeaders
+        : pluginHeaders.length > 0
+            ? pluginHeaders
+            : rawHeaders.length > 0
+                ? rawHeaders
+                : ['项目', '预算', '执行', '余额'];
     const rows = rowArray(context.config.rows);
     const dataRows = matrixArray(context.config.data).map((row) =>
         headers.reduce<Record<string, unknown>>((out, _, index) => {
@@ -395,10 +462,10 @@ export function FinanceSummaryTable(context: RendererPluginRenderContext): React
     );
     const rawRows = cardDataRows(context);
     const maxRows = px(context.config.maxRows, 6);
-    const data = rows.length > 0
-        ? rows
-        : dataRows.length > 0
-            ? dataRows
+    const data = dataRows.length > 0
+        ? dataRows
+        : rows.length > 0
+            ? rows
             : rawRows.length > 0
                 ? rawRows
                 : [
@@ -407,12 +474,18 @@ export function FinanceSummaryTable(context: RendererPluginRenderContext): React
                     { col1: '科研项目C', col2: '760', col3: '540', col4: '220' },
                 ];
     return (
-        <section style={panelStyle()}>
-            <div style={sectionTitleStyle()}>{title}</div>
-            <div style={{ overflow: 'hidden', borderRadius: 14, border: `1px solid ${COLORS.border}` }}>
-                <div style={{ display: 'grid', gridTemplateColumns: `repeat(${headers.length}, minmax(0, 1fr))`, background: COLORS.headerSoft }}>
+        <section style={panelStyle(context.config)}>
+            <div style={sectionTitleStyle(context.config)}>{title}</div>
+            <div style={{ overflow: 'hidden', borderRadius: 14, border: `1px solid ${text(context.config.borderColor, COLORS.border)}` }}>
+                <div
+                    style={{
+                        display: 'grid',
+                        gridTemplateColumns: `repeat(${headers.length}, minmax(0, 1fr))`,
+                        background: text(context.config.headerBackground, COLORS.headerSoft),
+                    }}
+                >
                     {headers.map((header) => (
-                        <div key={header} style={tableHeaderStyle()}>{header}</div>
+                        <div key={header} style={tableHeaderStyle(context.config)}>{header}</div>
                     ))}
                 </div>
                 {data.slice(0, maxRows).map((row, index) => (
@@ -421,11 +494,11 @@ export function FinanceSummaryTable(context: RendererPluginRenderContext): React
                         style={{
                             display: 'grid',
                             gridTemplateColumns: `repeat(${headers.length}, minmax(0, 1fr))`,
-                            background: index % 2 === 0 ? COLORS.card : '#f9fbfe',
+                            background: tableRowBackground(context.config, index),
                         }}
                     >
                         {headers.map((_, headerIndex) => (
-                            <div key={`cell-${headerIndex}`} style={tableCellStyle(headerIndex === 0)}>
+                            <div key={`cell-${headerIndex}`} style={tableCellStyle(context.config, headerIndex === 0)}>
                                 {valueText(row[`col${headerIndex + 1}`], '--')}
                             </div>
                         ))}
@@ -444,8 +517,8 @@ export function FinanceNotePanel(context: RendererPluginRenderContext): ReactNod
         '模板块均可拖拽、替换和二次编辑，不锁定布局。',
     ]);
     return (
-        <section style={panelStyle()}>
-            <div style={sectionTitleStyle()}>{title}</div>
+        <section style={panelStyle(context.config)}>
+            <div style={sectionTitleStyle(context.config)}>{title}</div>
             <div style={{ display: 'grid', gap: 10 }}>
                 {notes.map((item, index) => (
                     <div
@@ -489,8 +562,8 @@ export function FinanceStatusGrid(context: RendererPluginRenderContext): ReactNo
                 { title: '风险状态', value: '可控', hint: '无新增风险', tone: 'success' },
             ];
     return (
-        <section style={panelStyle()}>
-            <div style={sectionTitleStyle()}>{title}</div>
+        <section style={panelStyle(context.config)}>
+            <div style={sectionTitleStyle(context.config)}>{title}</div>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: 12 }}>
                 {list.slice(0, 6).map((item, index) => {
                     const toneColor = resolveToneColor(text(item.tone, 'accent'));
@@ -538,50 +611,6 @@ function createPlaceholderTiles(labels: string[]): ReactNode[] {
             {item}
         </div>
     ));
-}
-
-function panelStyle(): CSSProperties {
-    return {
-        width: '100%',
-        height: '100%',
-        padding: 16,
-        borderRadius: 18,
-        background: COLORS.card,
-        border: `1px solid ${COLORS.border}`,
-        boxShadow: '0 10px 24px rgba(21,35,59,0.05)',
-        fontFamily: FONT_STACK,
-        color: COLORS.text,
-        overflow: 'hidden',
-    };
-}
-
-function sectionTitleStyle(): CSSProperties {
-    return {
-        marginBottom: 12,
-        fontSize: 15,
-        fontWeight: 800,
-        color: COLORS.text,
-    };
-}
-
-function tableHeaderStyle(): CSSProperties {
-    return {
-        padding: '12px 14px',
-        fontSize: 12,
-        fontWeight: 800,
-        color: COLORS.text,
-        borderBottom: `1px solid ${COLORS.border}`,
-    };
-}
-
-function tableCellStyle(isFirstColumn: boolean): CSSProperties {
-    return {
-        padding: '12px 14px',
-        fontSize: 12,
-        color: isFirstColumn ? COLORS.text : COLORS.muted,
-        fontWeight: isFirstColumn ? 700 : 600,
-        borderBottom: `1px solid ${COLORS.border}`,
-    };
 }
 
 function resolveToneColor(tone: string): string {

@@ -10,10 +10,10 @@ const TEMPLATE_IDS = [
 ] as const;
 
 const REQUIRED_COMPONENTS: Record<(typeof TEMPLATE_IDS)[number], string[]> = {
-    'fin-auxiliary-balance': ['header-bar', 'filter-strip', 'kpi-card', 'summary-table', 'ranking-list', 'status-grid', 'note-panel'],
-    'fin-own-fund': ['header-bar', 'filter-strip', 'kpi-card', 'summary-table', 'status-grid', 'note-panel'],
-    'fin-personal-balance': ['header-bar', 'filter-strip', 'kpi-card', 'summary-table', 'ranking-list', 'status-grid', 'note-panel'],
-    'fin-project-fund': ['header-bar', 'filter-strip', 'kpi-card', 'summary-table', 'ranking-list', 'status-grid', 'note-panel'],
+    'fin-auxiliary-balance': ['header-bar', 'filter-strip', 'kpi-card', 'status-grid', 'note-panel'],
+    'fin-own-fund': ['header-bar', 'filter-strip', 'kpi-card', 'status-grid', 'note-panel'],
+    'fin-personal-balance': ['header-bar', 'filter-strip', 'kpi-card', 'status-grid', 'note-panel'],
+    'fin-project-fund': ['header-bar', 'filter-strip', 'kpi-card', 'status-grid', 'note-panel'],
 };
 
 const DISALLOWED_COMPONENT_TYPES = new Set(['gauge-chart', 'waterfall-chart', 'treemap-chart']);
@@ -24,7 +24,25 @@ const SQL_BOUND_COMPONENTS: Record<(typeof TEMPLATE_IDS)[number], string[]> = {
     'fin-project-fund': ['pf-kpi-budget', 'pf-kpi-spent', 'pf-kpi-remaining', 'pf-kpi-overspend', 'pf-kpi-received', 'pf-kpi-receivable', 'pf-chart-budget', 'pf-chart-collection', 'pf-status', 'pf-summary', 'pf-ranking'],
 };
 
-test('finance templates are rebuilt on top of finance-kit plugin components', () => {
+const TABLE_COMPONENTS: Record<(typeof TEMPLATE_IDS)[number], Record<string, string[]>> = {
+    'fin-auxiliary-balance': {
+        'ab-ranking': ['合同名称', '余额(元)', '部门名称'],
+        'ab-summary': ['科目编号', '科目名称', '部门名称', '合同名称', '余额(元)'],
+    },
+    'fin-own-fund': {
+        'of-summary': ['年度', '基金类别', '年初余额(万)', '预计增加(万)', '预计使用(万)', '年末余额(万)', '同比增长率'],
+    },
+    'fin-personal-balance': {
+        'pb-ranking': ['职工姓名', '贷方净额(元)', '部门名称'],
+        'pb-summary': ['职工姓名', '部门名称', '借方余额(元)', '贷方余额(元)', '净余额(元)', '财务关注'],
+    },
+    'fin-project-fund': {
+        'pf-summary': ['项目编号', '研究室', '总经费(万)', '总支出(万)', '剩余经费(万)', '已收款(万)', '待收经费(万)', '项目属性'],
+        'pf-ranking': ['项目编号', '待收经费(万)', '研究室'],
+    },
+};
+
+test('finance templates keep finance-kit only for non-table finance blocks', () => {
     for (const templateId of TEMPLATE_IDS) {
         const template = getTemplateById(templateId);
         assert.ok(template, `expected template ${templateId} to exist`);
@@ -49,6 +67,9 @@ test('finance templates are rebuilt on top of finance-kit plugin components', ()
                 `expected ${templateId} to include finance-kit:${requiredComponent}`,
             );
         }
+
+        assert.ok(!pluginComponentIds.has('summary-table'), `expected ${templateId} to stop using finance-kit:summary-table`);
+        assert.ok(!pluginComponentIds.has('ranking-list'), `expected ${templateId} to stop using finance-kit:ranking-list`);
     }
 });
 
@@ -64,6 +85,25 @@ test('finance templates bind live SQL data sources instead of static example val
             assert.equal(component?.dataSource?.sourceType, 'sql', `expected ${templateId}:${componentId} to use sql sourceType`);
             assert.equal(component?.dataSource?.sqlConfig?.databaseId, 1, `expected ${templateId}:${componentId} to target finance warehouse`);
             assert.match(component?.dataSource?.sqlConfig?.query ?? '', /public\.biz_(ads|dws|dwd)_/, `expected ${templateId}:${componentId} query to read finance marts`);
+        }
+    }
+});
+
+test('finance templates use native table components with Chinese headers', () => {
+    for (const templateId of TEMPLATE_IDS) {
+        const template = getTemplateById(templateId);
+        assert.ok(template, `expected template ${templateId} to exist`);
+
+        for (const [componentId, expectedHeaders] of Object.entries(TABLE_COMPONENTS[templateId])) {
+            const component = template?.config.components.find((item) => item.id === componentId);
+            assert.ok(component, `expected ${templateId}:${componentId} to exist`);
+            assert.equal(component?.type, 'table', `expected ${templateId}:${componentId} to use native table`);
+            assert.equal(component?.config?.__plugin, undefined, `expected ${templateId}:${componentId} to avoid plugin table wrappers`);
+
+            const aliases = Array.isArray(component?.config?.columns)
+                ? component!.config.columns.map((item: { alias?: string }) => item.alias ?? '')
+                : [];
+            assert.deepEqual(aliases, expectedHeaders, `expected ${templateId}:${componentId} to expose Chinese table headers`);
         }
     }
 });

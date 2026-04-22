@@ -242,6 +242,71 @@ function createStaticTableComponent(
     });
 }
 
+function createFinanceSectionTitle(
+    id: string,
+    name: string,
+    text: string,
+    x: number,
+    y: number,
+    width: number,
+): ScreenComponent {
+    return createTextTitle(id, name, text, x, y, width, 28, {
+        fontSize: 20,
+        color: LIGHT_TEXT,
+        fontWeight: '700',
+    });
+}
+
+function createFinanceDataTable(
+    id: string,
+    name: string,
+    x: number,
+    y: number,
+    width: number,
+    height: number,
+    columns: Array<{
+        source: string;
+        alias: string;
+        align?: 'left' | 'center' | 'right';
+        wrap?: boolean;
+    }>,
+    options?: {
+        fontSize?: number;
+        headerFontSize?: number;
+        enableSort?: boolean;
+        enablePagination?: boolean;
+        pageSize?: number;
+        minColumnWidth?: number;
+    },
+): ScreenComponent {
+    return createComponent(id, 'table', name, x, y, width, height, 15, {
+        title: name,
+        fields: columns.map((item) => item.source),
+        columns: columns.map((item) => ({
+            source: item.source,
+            alias: item.alias,
+            align: item.align ?? (item.wrap ? 'left' : 'center'),
+            wrap: item.wrap ?? false,
+        })),
+        header: columns.map((item) => item.alias),
+        data: [],
+        fontSize: options?.fontSize ?? 12,
+        headerFontSize: options?.headerFontSize ?? 13,
+        headerColor: LIGHT_TEXT,
+        headerBackground: LIGHT_HEADER_BACKGROUND,
+        bodyColor: '#566573',
+        bodyBackground: LIGHT_SURFACE,
+        oddRowBackground: LIGHT_SURFACE,
+        evenRowBackground: LIGHT_ALT_ROW,
+        borderColor: LIGHT_BORDER,
+        enableSort: options?.enableSort ?? false,
+        enablePagination: options?.enablePagination ?? false,
+        pageSize: options?.pageSize ?? 8,
+        freezeHeader: true,
+        minColumnWidth: options?.minColumnWidth ?? 100,
+    });
+}
+
 /**
  * 内置模板：科技数据中心
  * 深蓝科技风格大屏，适合展示核心业务指标
@@ -1838,6 +1903,7 @@ const FINANCE_PLUGIN_PROPERTY_SCHEMAS: Record<string, Record<string, unknown>> =
         version: '1.0.0',
         fields: [
             { key: 'title', label: '标题', type: 'string', defaultValue: '财务专题大屏' },
+            { key: 'titleFontSize', label: '标题字号', type: 'number', defaultValue: 24, min: 12, max: 48, step: 1 },
             { key: 'subtitle', label: '副标题', type: 'string', defaultValue: 'Financial dashboard' },
             { key: 'orgName', label: '机构名称', type: 'string', defaultValue: 'BI数据平台' },
             { key: 'dateText', label: '日期文案', type: 'string', defaultValue: '数据日期：2026-03-30' },
@@ -1886,6 +1952,7 @@ const FINANCE_PLUGIN_PROPERTY_SCHEMAS: Record<string, Record<string, unknown>> =
         version: '1.0.0',
         fields: [
             { key: 'title', label: '标题', type: 'string', defaultValue: '口径说明' },
+            { key: 'titleFontSize', label: '标题字号', type: 'number', defaultValue: 15, min: 12, max: 36, step: 1 },
             { key: 'notes', label: '说明列表', type: 'array', defaultValue: ['说明一', '说明二'] },
         ],
     },
@@ -1893,6 +1960,7 @@ const FINANCE_PLUGIN_PROPERTY_SCHEMAS: Record<string, Record<string, unknown>> =
         version: '1.0.0',
         fields: [
             { key: 'title', label: '标题', type: 'string', defaultValue: 'TOP 排名' },
+            { key: 'titleFontSize', label: '标题字号', type: 'number', defaultValue: 15, min: 12, max: 36, step: 1 },
             { key: 'maxItems', label: '显示条数', type: 'number', defaultValue: 8, min: 1, max: 20, step: 1 },
             {
                 key: 'items',
@@ -1909,6 +1977,17 @@ const FINANCE_PLUGIN_PROPERTY_SCHEMAS: Record<string, Record<string, unknown>> =
         version: '1.0.0',
         fields: [
             { key: 'title', label: '标题', type: 'string', defaultValue: '财务明细' },
+            { key: 'titleFontSize', label: '标题字号', type: 'number', defaultValue: 15, min: 12, max: 36, step: 1 },
+            {
+                key: 'headerSourceMode',
+                label: '表头来源',
+                type: 'select',
+                defaultValue: 'data',
+                options: [
+                    { label: '数据', value: 'data' },
+                    { label: '手工', value: 'manual' },
+                ],
+            },
             { key: 'maxRows', label: '显示行数', type: 'number', defaultValue: 6, min: 1, max: 20, step: 1 },
             { key: 'headers', label: '表头', type: 'array', defaultValue: ['项目', '预算', '执行', '余额'] },
             {
@@ -1926,6 +2005,7 @@ const FINANCE_PLUGIN_PROPERTY_SCHEMAS: Record<string, Record<string, unknown>> =
         version: '1.0.0',
         fields: [
             { key: 'title', label: '标题', type: 'string', defaultValue: '状态总览' },
+            { key: 'titleFontSize', label: '标题字号', type: 'number', defaultValue: 15, min: 12, max: 36, step: 1 },
             {
                 key: 'items',
                 label: '状态项',
@@ -2199,31 +2279,39 @@ const auxiliaryBalanceDashboardTemplate: ScreenTemplate = {
                        COALESCE((SELECT TO_CHAR(category_balance, '${FINANCE_AMOUNT_PATTERN}') || ' 元' FROM top_category), '暂无数据'),
                        'accent'
             `, { maxRows: 4, parameterBindings: auxBalanceBindings })),
-            withDataSource(createFinancePluginComponent('ab-ranking', 'table', 'ranking-list', '合同TOP', 1500, 394, 396, 286, 20, {
-                title: '合同余额 TOP 5',
-                maxItems: 5,
-                nameField: 'name',
-                valueField: 'value',
-                extraField: 'extra',
+            createFinanceSectionTitle('ab-ranking-title', '合同排行标题', '合同余额 TOP 5', 1500, 394, 396),
+            withDataSource(createFinanceDataTable('ab-ranking', '合同余额排行表', 1500, 430, 396, 250, [
+                { source: 'contract_name', alias: '合同名称', align: 'left', wrap: true },
+                { source: 'balance_amount', alias: '余额(元)', align: 'right' },
+                { source: 'dept_name', alias: '部门名称', align: 'left', wrap: true },
+            ], {
+                pageSize: 5,
+                minColumnWidth: 112,
             }), createFinanceSqlDataSource(`
                 WITH base AS (
                   SELECT *
                   FROM public.biz_dwd_aux_balance
                   ${AUX_BALANCE_FILTER_SQL}
                 )
-                SELECT contract_name_norm AS name,
-                       TO_CHAR(SUM(balance), '${FINANCE_AMOUNT_PATTERN}') AS value,
-                       dept_name AS extra
+                SELECT contract_name_norm AS contract_name,
+                       TO_CHAR(SUM(balance), '${FINANCE_AMOUNT_PATTERN}') AS balance_amount,
+                       dept_name
                 FROM base
                 WHERE has_contract = TRUE
                 GROUP BY contract_name_norm, dept_name
                 ORDER BY SUM(balance) DESC
                 LIMIT 5
             `, { maxRows: 5, parameterBindings: auxBalanceBindings })),
-            withDataSource(createFinancePluginComponent('ab-summary', 'table', 'summary-table', '余额明细表', 24, 700, 1260, 336, 15, {
-                title: '辅助余额明细',
-                maxRows: 8,
-                headers: ['科目编号', '科目名称', '部门名称', '合同名称', '余额(元)'],
+            createFinanceSectionTitle('ab-summary-title', '余额明细标题', '辅助余额明细', 24, 700, 1260),
+            withDataSource(createFinanceDataTable('ab-summary', '辅助余额明细表', 24, 736, 1260, 300, [
+                { source: 'subject_code', alias: '科目编号', align: 'center' },
+                { source: 'subject_name', alias: '科目名称', align: 'left', wrap: true },
+                { source: 'dept_name', alias: '部门名称', align: 'left', wrap: true },
+                { source: 'contract_name', alias: '合同名称', align: 'left', wrap: true },
+                { source: 'balance', alias: '余额(元)', align: 'right' },
+            ], {
+                pageSize: 8,
+                minColumnWidth: 120,
             }), createFinanceSqlDataSource(`
                 WITH base AS (
                   SELECT *
@@ -2392,10 +2480,18 @@ const ownFundDashboardTemplate: ScreenTemplate = {
                   AND year_num = CAST({{selectedYear}} AS INTEGER)
                 ORDER BY fund_category_sort
             `, { parameterBindings: ownFundBindings })),
-            withDataSource(createFinancePluginComponent('of-summary', 'table', 'summary-table', '基金汇总表', 24, 700, 1040, 336, 15, {
-                title: '年度与类别资金汇总',
-                maxRows: 5,
-                headers: ['年度', '基金类别', '年初', '增加', '使用', '年末', '同比'],
+            createFinanceSectionTitle('of-summary-title', '基金汇总标题', '年度与类别资金汇总', 24, 700, 1040),
+            withDataSource(createFinanceDataTable('of-summary', '基金汇总表', 24, 736, 1040, 300, [
+                { source: 'year_label', alias: '年度', align: 'center' },
+                { source: 'fund_category_label', alias: '基金类别', align: 'left', wrap: true },
+                { source: 'opening_amount', alias: '年初余额(万)', align: 'right' },
+                { source: 'increase_amount', alias: '预计增加(万)', align: 'right' },
+                { source: 'usage_amount', alias: '预计使用(万)', align: 'right' },
+                { source: 'derived_balance', alias: '年末余额(万)', align: 'right' },
+                { source: 'year_over_year_growth_rate', alias: '同比增长率', align: 'right' },
+            ], {
+                pageSize: 5,
+                minColumnWidth: 120,
             }), createFinanceSqlDataSource(`
                 WITH selected_year AS (
                   SELECT CAST({{selectedYear}} AS INTEGER) AS year_num
@@ -2623,12 +2719,14 @@ const personalBalanceDashboardTemplate: ScreenTemplate = {
                        COALESCE(SUM(CASE WHEN balance < 0 THEN ABS(balance) ELSE 0 END), 0) AS value
                 FROM base
             `, { maxRows: 2, parameterBindings: personalBalanceBindings })),
-            withDataSource(createFinancePluginComponent('pb-ranking', 'table', 'ranking-list', '贷方净额排行', 1184, 394, 356, 286, 20, {
-                title: '贷方净额 TOP 5',
-                maxItems: 5,
-                nameField: 'name',
-                valueField: 'value',
-                extraField: 'extra',
+            createFinanceSectionTitle('pb-ranking-title', '贷方净额排行标题', '贷方净额 TOP 5', 1184, 394, 356),
+            withDataSource(createFinanceDataTable('pb-ranking', '贷方净额排行表', 1184, 430, 356, 250, [
+                { source: 'employee_name', alias: '职工姓名', align: 'left', wrap: true },
+                { source: 'credit_net_amount', alias: '贷方净额(元)', align: 'right' },
+                { source: 'employee_dept', alias: '部门名称', align: 'left', wrap: true },
+            ], {
+                pageSize: 5,
+                minColumnWidth: 112,
             }), createFinanceSqlDataSource(`
                 WITH employee_balance AS (
                   SELECT employee_name,
@@ -2638,9 +2736,9 @@ const personalBalanceDashboardTemplate: ScreenTemplate = {
                   ${PERSONAL_BALANCE_FILTER_SQL}
                   GROUP BY employee_name, employee_dept
                 )
-                SELECT employee_name AS name,
-                       TO_CHAR(net_balance, '${FINANCE_AMOUNT_PATTERN}') AS value,
-                       employee_dept AS extra
+                SELECT employee_name,
+                       TO_CHAR(net_balance, '${FINANCE_AMOUNT_PATTERN}') AS credit_net_amount,
+                       employee_dept
                 FROM employee_balance
                 WHERE net_balance < 0
                 ORDER BY net_balance ASC, employee_name
@@ -2704,10 +2802,17 @@ const personalBalanceDashboardTemplate: ScreenTemplate = {
                        COALESCE((SELECT TO_CHAR(debit_total, '${FINANCE_AMOUNT_PATTERN}') || ' 元借方' FROM debit_focus), '暂无数据'),
                        'accent'
             `, { maxRows: 4, parameterBindings: personalBalanceBindings })),
-            withDataSource(createFinancePluginComponent('pb-summary', 'table', 'summary-table', '个人余额明细', 24, 700, 1260, 336, 15, {
-                title: '个人借贷明细',
-                maxRows: 8,
-                headers: ['职工', '部门', '借方余额(元)', '贷方余额(元)', '净余额(元)', '财务关注'],
+            createFinanceSectionTitle('pb-summary-title', '个人余额明细标题', '个人借贷明细', 24, 700, 1260),
+            withDataSource(createFinanceDataTable('pb-summary', '个人余额明细表', 24, 736, 1260, 300, [
+                { source: 'employee_name', alias: '职工姓名', align: 'left', wrap: true },
+                { source: 'employee_dept', alias: '部门名称', align: 'left', wrap: true },
+                { source: 'debit_total', alias: '借方余额(元)', align: 'right' },
+                { source: 'credit_total', alias: '贷方余额(元)', align: 'right' },
+                { source: 'net_balance', alias: '净余额(元)', align: 'right' },
+                { source: 'finance_focus', alias: '财务关注', align: 'left', wrap: true },
+            ], {
+                pageSize: 8,
+                minColumnWidth: 118,
             }), createFinanceSqlDataSource(`
                 WITH employee_balance AS (
                   SELECT employee_name,
@@ -2926,10 +3031,19 @@ const projectFundDashboardTemplate: ScreenTemplate = {
                        COALESCE((SELECT TO_CHAR(overspend_amount, '${FINANCE_AMOUNT_PATTERN}') || ' 万元' FROM overspend), '0.00 万元'),
                        CASE WHEN COALESCE((SELECT overspend_project_count FROM overspend), 0) > 0 THEN 'danger' ELSE 'success' END
             `, { maxRows: 4 })),
-            withDataSource(createFinancePluginComponent('pf-summary', 'table', 'summary-table', '项目经费明细', 24, 700, 1260, 336, 15, {
-                title: '项目经费明细',
-                maxRows: 8,
-                headers: ['项目编号', '研究室', '总经费(万)', '总支出(万)', '剩余经费(万)', '已收款(万)', '待收经费(万)', '项目属性'],
+            createFinanceSectionTitle('pf-summary-title', '项目经费明细标题', '项目经费明细', 24, 700, 1260),
+            withDataSource(createFinanceDataTable('pf-summary', '项目经费明细表', 24, 736, 1260, 300, [
+                { source: 'project_id', alias: '项目编号', align: 'left', wrap: true },
+                { source: 'research_dept', alias: '研究室', align: 'left', wrap: true },
+                { source: 'total_fund', alias: '总经费(万)', align: 'right' },
+                { source: 'total_spent', alias: '总支出(万)', align: 'right' },
+                { source: 'remaining_fund', alias: '剩余经费(万)', align: 'right' },
+                { source: 'received_fund', alias: '已收款(万)', align: 'right' },
+                { source: 'receivable_fund', alias: '待收经费(万)', align: 'right' },
+                { source: 'project_attr', alias: '项目属性', align: 'center' },
+            ], {
+                pageSize: 8,
+                minColumnWidth: 118,
             }), createFinanceSqlDataSource(`
                 SELECT project_id,
                        research_dept,
@@ -2947,16 +3061,18 @@ const projectFundDashboardTemplate: ScreenTemplate = {
                 ORDER BY project_id
                 LIMIT 8
             `, { maxRows: 8 })),
-            withDataSource(createFinancePluginComponent('pf-ranking', 'table', 'ranking-list', '待收经费排行', 1304, 700, 592, 160, 15, {
-                title: '待收经费 TOP 4',
-                maxItems: 4,
-                nameField: 'name',
-                valueField: 'value',
-                extraField: 'extra',
+            createFinanceSectionTitle('pf-ranking-title', '待收经费排行标题', '待收经费 TOP 4', 1304, 700, 592),
+            withDataSource(createFinanceDataTable('pf-ranking', '待收经费排行表', 1304, 736, 592, 124, [
+                { source: 'project_id', alias: '项目编号', align: 'left', wrap: true },
+                { source: 'receivable_amount', alias: '待收经费(万)', align: 'right' },
+                { source: 'research_dept', alias: '研究室', align: 'left', wrap: true },
+            ], {
+                pageSize: 4,
+                minColumnWidth: 140,
             }), createFinanceSqlDataSource(`
-                SELECT project_id AS name,
-                       TO_CHAR(receivable_fund, '${FINANCE_AMOUNT_PATTERN}') AS value,
-                       research_dept AS extra
+                SELECT project_id,
+                       TO_CHAR(receivable_fund, '${FINANCE_AMOUNT_PATTERN}') AS receivable_amount,
+                       research_dept
                 FROM public.biz_dwd_project_fund
                 ORDER BY receivable_fund DESC, project_id
                 LIMIT 4
