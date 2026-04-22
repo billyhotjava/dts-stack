@@ -29942,3 +29942,147 @@
 2026-04-21T19:56:27.219+08:00 DEBUG 156 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = true 
 2026-04-21T19:56:37.461+08:00 DEBUG 156 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = false 
 2026-04-21T19:56:37.462+08:00 DEBUG 156 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = true 
+2026-04-21T19:56:46.017+08:00 DEBUG 156 --- [onnection adder] org.postgresql.Driver                    : Connecting with URL: jdbc:postgresql://dts-pg:5432/dts_platform 
+2026-04-21T19:56:46.018+08:00 DEBUG 156 --- [onnection adder] org.postgresql.jdbc.PgConnection         : PostgreSQL JDBC Driver 42.7.5 
+2026-04-21T19:56:46.018+08:00 DEBUG 156 --- [onnection adder] org.postgresql.jdbc.PgConnection         :   setDefaultFetchSize = 0 
+2026-04-21T19:56:46.018+08:00 DEBUG 156 --- [onnection adder] org.postgresql.jdbc.PgConnection         :   setPrepareThreshold = 5 
+2026-04-21T19:56:46.018+08:00 DEBUG 156 --- [onnection adder] o.p.core.v3.ConnectionFactoryImpl        : Trying to establish a protocol version 3 connection to dts-pg:5432 
+2026-04-21T19:56:46.019+08:00 DEBUG 156 --- [onnection adder] o.p.core.v3.ConnectionFactoryImpl        : Receive Buffer Size is 65,536 
+2026-04-21T19:56:46.020+08:00 DEBUG 156 --- [onnection adder] o.p.core.v3.ConnectionFactoryImpl        : Send Buffer Size is 43,520 
+2026-04-21T19:56:52.463+08:00 DEBUG 156 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = false 
+2026-04-21T19:56:52.464+08:00 DEBUG 156 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = true 
+2026-04-21T19:56:57.220+08:00 DEBUG 156 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = false 
+2026-04-21T19:56:57.222+08:00 DEBUG 156 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = true 
+2026-04-21T19:56:58.193+08:00 DEBUG 156 --- [  XNIO-1 I/O-13] io.undertow.request                      : Timing out idle connection from /172.19.0.16:39164 
+2026-04-21T19:56:59.498+08:00 DEBUG 156 --- [  XNIO-1 task-3] io.undertow.request.security             : Attempting to authenticate /api/ingestion/tasks/list, authentication required: false 
+2026-04-21T19:56:59.499+08:00 DEBUG 156 --- [  XNIO-1 task-3] io.undertow.request.security             : Authentication outcome was NOT_ATTEMPTED with method io.undertow.security.impl.CachedAuthenticatedSessionMechanism@cf0a224 for /api/ingestion/tasks/list 
+2026-04-21T19:56:59.499+08:00 DEBUG 156 --- [  XNIO-1 task-3] io.undertow.request.security             : Authentication result was ATTEMPTED for /api/ingestion/tasks/list 
+2026-04-21T19:56:59.501+08:00 DEBUG 156 --- [  XNIO-1 task-3] org.postgresql.jdbc.PgConnection         :   setReadOnly = true 
+2026-04-21T19:56:59.502+08:00 DEBUG 156 --- [  XNIO-1 task-3] org.postgresql.jdbc.PgConnection         :   setAutoCommit = false 
+2026-04-21T19:56:59.514+08:00 DEBUG 156 --- [  XNIO-1 task-3] org.postgresql.jdbc.PgConnection         :   setAutoCommit = true 
+2026-04-21T19:56:59.514+08:00 DEBUG 156 --- [  XNIO-1 task-3] org.postgresql.jdbc.PgConnection         :   setReadOnly = false 
+2026-04-21T19:56:59.516+08:00 DEBUG 156 --- [  XNIO-1 task-3] io.undertow.request.security             : Attempting to authenticate /api/ingestion/tasks/1/executions, authentication required: false 
+2026-04-21T19:56:59.516+08:00 DEBUG 156 --- [  XNIO-1 task-3] io.undertow.request.security             : Authentication outcome was NOT_ATTEMPTED with method io.undertow.security.impl.CachedAuthenticatedSessionMechanism@cf0a224 for /api/ingestion/tasks/1/executions 
+2026-04-21T19:56:59.516+08:00 DEBUG 156 --- [  XNIO-1 task-3] io.undertow.request.security             : Authentication result was ATTEMPTED for /api/ingestion/tasks/1/executions 
+2026-04-21T19:56:59.516+08:00 DEBUG 156 --- [  XNIO-1 task-3] org.postgresql.jdbc.PgConnection         :   setAutoCommit = false 
+2026-04-21T19:56:59.518+08:00 DEBUG 156 --- [  XNIO-1 task-3] org.postgresql.jdbc.PgConnection         :   setAutoCommit = true 
+2026-04-21T19:56:59.525+08:00 DEBUG 156 --- [  XNIO-1 task-3] io.undertow.request.security             : Attempting to authenticate /api/ingestion/tasks/2/executions, authentication required: false 
+2026-04-21T19:56:59.525+08:00 DEBUG 156 --- [  XNIO-1 task-3] io.undertow.request.security             : Authentication outcome was NOT_ATTEMPTED with method io.undertow.security.impl.CachedAuthenticatedSessionMechanism@cf0a224 for /api/ingestion/tasks/2/executions 
+2026-04-21T19:56:59.525+08:00 DEBUG 156 --- [  XNIO-1 task-3] io.undertow.request.security             : Authentication result was ATTEMPTED for /api/ingestion/tasks/2/executions 
+2026-04-21T19:56:59.525+08:00 DEBUG 156 --- [  XNIO-1 task-3] org.postgresql.jdbc.PgConnection         :   setAutoCommit = false 
+2026-04-21T19:56:59.527+08:00 DEBUG 156 --- [  XNIO-1 task-3] org.postgresql.jdbc.PgConnection         :   setAutoCommit = true 
+2026-04-21T19:56:59.530+08:00 DEBUG 156 --- [  XNIO-1 task-3] io.undertow.request.security             : Attempting to authenticate /api/ingestion/tasks/3/executions, authentication required: false 
+2026-04-21T19:56:59.530+08:00 DEBUG 156 --- [  XNIO-1 task-3] io.undertow.request.security             : Authentication outcome was NOT_ATTEMPTED with method io.undertow.security.impl.CachedAuthenticatedSessionMechanism@cf0a224 for /api/ingestion/tasks/3/executions 
+2026-04-21T19:56:59.530+08:00 DEBUG 156 --- [  XNIO-1 task-3] io.undertow.request.security             : Authentication result was ATTEMPTED for /api/ingestion/tasks/3/executions 
+2026-04-21T19:56:59.531+08:00 DEBUG 156 --- [  XNIO-1 task-3] org.postgresql.jdbc.PgConnection         :   setAutoCommit = false 
+2026-04-21T19:56:59.532+08:00 DEBUG 156 --- [  XNIO-1 task-3] org.postgresql.jdbc.PgConnection         :   setAutoCommit = true 
+2026-04-21T19:56:59.535+08:00 DEBUG 156 --- [  XNIO-1 task-3] io.undertow.request.security             : Attempting to authenticate /api/ingestion/tasks/4/executions, authentication required: false 
+2026-04-21T19:56:59.535+08:00 DEBUG 156 --- [  XNIO-1 task-3] io.undertow.request.security             : Authentication outcome was NOT_ATTEMPTED with method io.undertow.security.impl.CachedAuthenticatedSessionMechanism@cf0a224 for /api/ingestion/tasks/4/executions 
+2026-04-21T19:56:59.535+08:00 DEBUG 156 --- [  XNIO-1 task-3] io.undertow.request.security             : Authentication result was ATTEMPTED for /api/ingestion/tasks/4/executions 
+2026-04-21T19:56:59.536+08:00 DEBUG 156 --- [  XNIO-1 task-3] org.postgresql.jdbc.PgConnection         :   setAutoCommit = false 
+2026-04-21T19:56:59.537+08:00 DEBUG 156 --- [  XNIO-1 task-3] org.postgresql.jdbc.PgConnection         :   setAutoCommit = true 
+2026-04-21T19:56:59.540+08:00 DEBUG 156 --- [  XNIO-1 task-3] io.undertow.request.security             : Attempting to authenticate /api/ingestion/tasks/7/executions, authentication required: false 
+2026-04-21T19:56:59.540+08:00 DEBUG 156 --- [  XNIO-1 task-3] io.undertow.request.security             : Authentication outcome was NOT_ATTEMPTED with method io.undertow.security.impl.CachedAuthenticatedSessionMechanism@cf0a224 for /api/ingestion/tasks/7/executions 
+2026-04-21T19:56:59.541+08:00 DEBUG 156 --- [  XNIO-1 task-3] io.undertow.request.security             : Authentication result was ATTEMPTED for /api/ingestion/tasks/7/executions 
+2026-04-21T19:56:59.541+08:00 DEBUG 156 --- [  XNIO-1 task-3] org.postgresql.jdbc.PgConnection         :   setAutoCommit = false 
+2026-04-21T19:56:59.542+08:00 DEBUG 156 --- [  XNIO-1 task-3] org.postgresql.jdbc.PgConnection         :   setAutoCommit = true 
+2026-04-21T19:56:59.546+08:00 DEBUG 156 --- [  XNIO-1 task-3] io.undertow.request.security             : Attempting to authenticate /api/ingestion/tasks/6/executions, authentication required: false 
+2026-04-21T19:56:59.546+08:00 DEBUG 156 --- [  XNIO-1 task-3] io.undertow.request.security             : Authentication outcome was NOT_ATTEMPTED with method io.undertow.security.impl.CachedAuthenticatedSessionMechanism@cf0a224 for /api/ingestion/tasks/6/executions 
+2026-04-21T19:56:59.546+08:00 DEBUG 156 --- [  XNIO-1 task-3] io.undertow.request.security             : Authentication result was ATTEMPTED for /api/ingestion/tasks/6/executions 
+2026-04-21T19:56:59.546+08:00 DEBUG 156 --- [  XNIO-1 task-3] org.postgresql.jdbc.PgConnection         :   setAutoCommit = false 
+2026-04-21T19:56:59.547+08:00 DEBUG 156 --- [  XNIO-1 task-3] org.postgresql.jdbc.PgConnection         :   setAutoCommit = true 
+2026-04-21T19:56:59.551+08:00 DEBUG 156 --- [  XNIO-1 task-3] io.undertow.request.security             : Attempting to authenticate /api/ingestion/tasks/11/executions, authentication required: false 
+2026-04-21T19:56:59.551+08:00 DEBUG 156 --- [  XNIO-1 task-3] io.undertow.request.security             : Authentication outcome was NOT_ATTEMPTED with method io.undertow.security.impl.CachedAuthenticatedSessionMechanism@cf0a224 for /api/ingestion/tasks/11/executions 
+2026-04-21T19:56:59.551+08:00 DEBUG 156 --- [  XNIO-1 task-3] io.undertow.request.security             : Authentication result was ATTEMPTED for /api/ingestion/tasks/11/executions 
+2026-04-21T19:56:59.551+08:00 DEBUG 156 --- [  XNIO-1 task-3] org.postgresql.jdbc.PgConnection         :   setAutoCommit = false 
+2026-04-21T19:56:59.553+08:00 DEBUG 156 --- [  XNIO-1 task-3] org.postgresql.jdbc.PgConnection         :   setAutoCommit = true 
+2026-04-21T19:56:59.556+08:00 DEBUG 156 --- [  XNIO-1 task-3] io.undertow.request.security             : Attempting to authenticate /api/ingestion/tasks/14/executions, authentication required: false 
+2026-04-21T19:56:59.556+08:00 DEBUG 156 --- [  XNIO-1 task-3] io.undertow.request.security             : Authentication outcome was NOT_ATTEMPTED with method io.undertow.security.impl.CachedAuthenticatedSessionMechanism@cf0a224 for /api/ingestion/tasks/14/executions 
+2026-04-21T19:56:59.556+08:00 DEBUG 156 --- [  XNIO-1 task-3] io.undertow.request.security             : Authentication result was ATTEMPTED for /api/ingestion/tasks/14/executions 
+2026-04-21T19:56:59.557+08:00 DEBUG 156 --- [  XNIO-1 task-3] org.postgresql.jdbc.PgConnection         :   setAutoCommit = false 
+2026-04-21T19:56:59.558+08:00 DEBUG 156 --- [  XNIO-1 task-3] org.postgresql.jdbc.PgConnection         :   setAutoCommit = true 
+2026-04-21T19:56:59.561+08:00 DEBUG 156 --- [  XNIO-1 task-3] io.undertow.request.security             : Attempting to authenticate /api/ingestion/tasks/8/executions, authentication required: false 
+2026-04-21T19:56:59.561+08:00 DEBUG 156 --- [  XNIO-1 task-3] io.undertow.request.security             : Authentication outcome was NOT_ATTEMPTED with method io.undertow.security.impl.CachedAuthenticatedSessionMechanism@cf0a224 for /api/ingestion/tasks/8/executions 
+2026-04-21T19:56:59.561+08:00 DEBUG 156 --- [  XNIO-1 task-3] io.undertow.request.security             : Authentication result was ATTEMPTED for /api/ingestion/tasks/8/executions 
+2026-04-21T19:56:59.562+08:00 DEBUG 156 --- [  XNIO-1 task-3] org.postgresql.jdbc.PgConnection         :   setAutoCommit = false 
+2026-04-21T19:56:59.563+08:00 DEBUG 156 --- [  XNIO-1 task-3] org.postgresql.jdbc.PgConnection         :   setAutoCommit = true 
+2026-04-21T19:56:59.566+08:00 DEBUG 156 --- [  XNIO-1 task-3] io.undertow.request.security             : Attempting to authenticate /api/ingestion/tasks/9/executions, authentication required: false 
+2026-04-21T19:56:59.566+08:00 DEBUG 156 --- [  XNIO-1 task-3] io.undertow.request.security             : Authentication outcome was NOT_ATTEMPTED with method io.undertow.security.impl.CachedAuthenticatedSessionMechanism@cf0a224 for /api/ingestion/tasks/9/executions 
+2026-04-21T19:56:59.566+08:00 DEBUG 156 --- [  XNIO-1 task-3] io.undertow.request.security             : Authentication result was ATTEMPTED for /api/ingestion/tasks/9/executions 
+2026-04-21T19:56:59.567+08:00 DEBUG 156 --- [  XNIO-1 task-3] org.postgresql.jdbc.PgConnection         :   setAutoCommit = false 
+2026-04-21T19:56:59.568+08:00 DEBUG 156 --- [  XNIO-1 task-3] org.postgresql.jdbc.PgConnection         :   setAutoCommit = true 
+2026-04-21T19:56:59.571+08:00 DEBUG 156 --- [  XNIO-1 task-3] io.undertow.request.security             : Attempting to authenticate /api/ingestion/tasks/10/executions, authentication required: false 
+2026-04-21T19:56:59.571+08:00 DEBUG 156 --- [  XNIO-1 task-3] io.undertow.request.security             : Authentication outcome was NOT_ATTEMPTED with method io.undertow.security.impl.CachedAuthenticatedSessionMechanism@cf0a224 for /api/ingestion/tasks/10/executions 
+2026-04-21T19:56:59.571+08:00 DEBUG 156 --- [  XNIO-1 task-3] io.undertow.request.security             : Authentication result was ATTEMPTED for /api/ingestion/tasks/10/executions 
+2026-04-21T19:56:59.572+08:00 DEBUG 156 --- [  XNIO-1 task-3] org.postgresql.jdbc.PgConnection         :   setAutoCommit = false 
+2026-04-21T19:56:59.573+08:00 DEBUG 156 --- [  XNIO-1 task-3] org.postgresql.jdbc.PgConnection         :   setAutoCommit = true 
+2026-04-21T19:56:59.577+08:00 DEBUG 156 --- [  XNIO-1 task-3] io.undertow.request.security             : Attempting to authenticate /api/ingestion/tasks/12/executions, authentication required: false 
+2026-04-21T19:56:59.577+08:00 DEBUG 156 --- [  XNIO-1 task-3] io.undertow.request.security             : Authentication outcome was NOT_ATTEMPTED with method io.undertow.security.impl.CachedAuthenticatedSessionMechanism@cf0a224 for /api/ingestion/tasks/12/executions 
+2026-04-21T19:56:59.577+08:00 DEBUG 156 --- [  XNIO-1 task-3] io.undertow.request.security             : Authentication result was ATTEMPTED for /api/ingestion/tasks/12/executions 
+2026-04-21T19:56:59.578+08:00 DEBUG 156 --- [  XNIO-1 task-3] org.postgresql.jdbc.PgConnection         :   setAutoCommit = false 
+2026-04-21T19:56:59.579+08:00 DEBUG 156 --- [  XNIO-1 task-3] org.postgresql.jdbc.PgConnection         :   setAutoCommit = true 
+2026-04-21T19:56:59.583+08:00 DEBUG 156 --- [  XNIO-1 task-3] io.undertow.request.security             : Attempting to authenticate /api/ingestion/tasks/13/executions, authentication required: false 
+2026-04-21T19:56:59.583+08:00 DEBUG 156 --- [  XNIO-1 task-3] io.undertow.request.security             : Authentication outcome was NOT_ATTEMPTED with method io.undertow.security.impl.CachedAuthenticatedSessionMechanism@cf0a224 for /api/ingestion/tasks/13/executions 
+2026-04-21T19:56:59.583+08:00 DEBUG 156 --- [  XNIO-1 task-3] io.undertow.request.security             : Authentication result was ATTEMPTED for /api/ingestion/tasks/13/executions 
+2026-04-21T19:56:59.584+08:00 DEBUG 156 --- [  XNIO-1 task-3] org.postgresql.jdbc.PgConnection         :   setAutoCommit = false 
+2026-04-21T19:56:59.585+08:00 DEBUG 156 --- [  XNIO-1 task-3] org.postgresql.jdbc.PgConnection         :   setAutoCommit = true 
+2026-04-21T19:57:01.178+08:00 DEBUG 156 --- [onnection adder] org.postgresql.Driver                    : Connecting with URL: jdbc:postgresql://dts-pg:5432/dts_platform 
+2026-04-21T19:57:01.178+08:00 DEBUG 156 --- [onnection adder] org.postgresql.jdbc.PgConnection         : PostgreSQL JDBC Driver 42.7.5 
+2026-04-21T19:57:01.178+08:00 DEBUG 156 --- [onnection adder] org.postgresql.jdbc.PgConnection         :   setDefaultFetchSize = 0 
+2026-04-21T19:57:01.178+08:00 DEBUG 156 --- [onnection adder] org.postgresql.jdbc.PgConnection         :   setPrepareThreshold = 5 
+2026-04-21T19:57:01.178+08:00 DEBUG 156 --- [onnection adder] o.p.core.v3.ConnectionFactoryImpl        : Trying to establish a protocol version 3 connection to dts-pg:5432 
+2026-04-21T19:57:01.179+08:00 DEBUG 156 --- [onnection adder] o.p.core.v3.ConnectionFactoryImpl        : Receive Buffer Size is 65,536 
+2026-04-21T19:57:01.179+08:00 DEBUG 156 --- [onnection adder] o.p.core.v3.ConnectionFactoryImpl        : Send Buffer Size is 43,520 
+2026-04-21T19:57:04.992+08:00 DEBUG 156 --- [onnection adder] org.postgresql.Driver                    : Connecting with URL: jdbc:postgresql://dts-pg:5432/dts_platform 
+2026-04-21T19:57:04.992+08:00 DEBUG 156 --- [onnection adder] org.postgresql.jdbc.PgConnection         : PostgreSQL JDBC Driver 42.7.5 
+2026-04-21T19:57:04.992+08:00 DEBUG 156 --- [onnection adder] org.postgresql.jdbc.PgConnection         :   setDefaultFetchSize = 0 
+2026-04-21T19:57:04.992+08:00 DEBUG 156 --- [onnection adder] org.postgresql.jdbc.PgConnection         :   setPrepareThreshold = 5 
+2026-04-21T19:57:04.992+08:00 DEBUG 156 --- [onnection adder] o.p.core.v3.ConnectionFactoryImpl        : Trying to establish a protocol version 3 connection to dts-pg:5432 
+2026-04-21T19:57:04.993+08:00 DEBUG 156 --- [onnection adder] o.p.core.v3.ConnectionFactoryImpl        : Receive Buffer Size is 65,536 
+2026-04-21T19:57:04.993+08:00 DEBUG 156 --- [onnection adder] o.p.core.v3.ConnectionFactoryImpl        : Send Buffer Size is 43,520 
+2026-04-21T19:57:07.465+08:00 DEBUG 156 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = false 
+2026-04-21T19:57:07.468+08:00 DEBUG 156 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = true 
+2026-04-21T19:57:17.891+08:00 DEBUG 156 --- [onnection adder] org.postgresql.Driver                    : Connecting with URL: jdbc:postgresql://dts-pg:5432/dts_platform 
+2026-04-21T19:57:17.891+08:00 DEBUG 156 --- [onnection adder] org.postgresql.jdbc.PgConnection         : PostgreSQL JDBC Driver 42.7.5 
+2026-04-21T19:57:17.891+08:00 DEBUG 156 --- [onnection adder] org.postgresql.jdbc.PgConnection         :   setDefaultFetchSize = 0 
+2026-04-21T19:57:17.891+08:00 DEBUG 156 --- [onnection adder] org.postgresql.jdbc.PgConnection         :   setPrepareThreshold = 5 
+2026-04-21T19:57:17.892+08:00 DEBUG 156 --- [onnection adder] o.p.core.v3.ConnectionFactoryImpl        : Trying to establish a protocol version 3 connection to dts-pg:5432 
+2026-04-21T19:57:17.893+08:00 DEBUG 156 --- [onnection adder] o.p.core.v3.ConnectionFactoryImpl        : Receive Buffer Size is 65,536 
+2026-04-21T19:57:17.893+08:00 DEBUG 156 --- [onnection adder] o.p.core.v3.ConnectionFactoryImpl        : Send Buffer Size is 43,520 
+2026-04-21T19:57:22.469+08:00 DEBUG 156 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = false 
+2026-04-21T19:57:22.471+08:00 DEBUG 156 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = true 
+2026-04-21T19:57:27.222+08:00 DEBUG 156 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = false 
+2026-04-21T19:57:27.224+08:00 DEBUG 156 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = true 
+2026-04-21T19:57:37.472+08:00 DEBUG 156 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = false 
+2026-04-21T19:57:37.474+08:00 DEBUG 156 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = true 
+2026-04-21T19:57:46.876+08:00 DEBUG 156 --- [onnection adder] org.postgresql.Driver                    : Connecting with URL: jdbc:postgresql://dts-pg:5432/dts_platform 
+2026-04-21T19:57:46.876+08:00 DEBUG 156 --- [onnection adder] org.postgresql.jdbc.PgConnection         : PostgreSQL JDBC Driver 42.7.5 
+2026-04-21T19:57:46.876+08:00 DEBUG 156 --- [onnection adder] org.postgresql.jdbc.PgConnection         :   setDefaultFetchSize = 0 
+2026-04-21T19:57:46.876+08:00 DEBUG 156 --- [onnection adder] org.postgresql.jdbc.PgConnection         :   setPrepareThreshold = 5 
+2026-04-21T19:57:46.876+08:00 DEBUG 156 --- [onnection adder] o.p.core.v3.ConnectionFactoryImpl        : Trying to establish a protocol version 3 connection to dts-pg:5432 
+2026-04-21T19:57:46.876+08:00 DEBUG 156 --- [onnection adder] o.p.core.v3.ConnectionFactoryImpl        : Receive Buffer Size is 65,536 
+2026-04-21T19:57:46.876+08:00 DEBUG 156 --- [onnection adder] o.p.core.v3.ConnectionFactoryImpl        : Send Buffer Size is 43,520 
+2026-04-21T19:57:52.475+08:00 DEBUG 156 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = false 
+2026-04-21T19:57:52.478+08:00 DEBUG 156 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = true 
+2026-04-21T19:57:57.224+08:00 DEBUG 156 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = false 
+2026-04-21T19:57:57.226+08:00 DEBUG 156 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = true 
+2026-04-21T19:58:07.479+08:00 DEBUG 156 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = false 
+2026-04-21T19:58:07.480+08:00 DEBUG 156 --- [   scheduling-1] org.postgresql.jdbc.PgConnection         :   setAutoCommit = true 
+2026-04-21T19:58:15.035+08:00 DEBUG 156 --- [onnection adder] org.postgresql.Driver                    : Connecting with URL: jdbc:postgresql://dts-pg:5432/dts_platform 
+2026-04-21T19:58:15.035+08:00 DEBUG 156 --- [onnection adder] org.postgresql.jdbc.PgConnection         : PostgreSQL JDBC Driver 42.7.5 
+2026-04-21T19:58:15.035+08:00 DEBUG 156 --- [onnection adder] org.postgresql.jdbc.PgConnection         :   setDefaultFetchSize = 0 
+2026-04-21T19:58:15.035+08:00 DEBUG 156 --- [onnection adder] org.postgresql.jdbc.PgConnection         :   setPrepareThreshold = 5 
+2026-04-21T19:58:15.035+08:00 DEBUG 156 --- [onnection adder] o.p.core.v3.ConnectionFactoryImpl        : Trying to establish a protocol version 3 connection to dts-pg:5432 
+2026-04-21T19:58:15.036+08:00 DEBUG 156 --- [onnection adder] o.p.core.v3.ConnectionFactoryImpl        : Receive Buffer Size is 65,536 
+2026-04-21T19:58:15.036+08:00 DEBUG 156 --- [onnection adder] o.p.core.v3.ConnectionFactoryImpl        : Send Buffer Size is 43,520 
+2026-04-21T19:58:20.339+08:00 DEBUG 156 --- [SIGTERM handler] java.lang.Runtime                        : Runtime.exit() called with status: 143 
+
+java.lang.Throwable: Runtime.exit(143)
+	at java.base/java.lang.Shutdown.logRuntimeExit(Shutdown.java:179)
+	at java.base/java.lang.Shutdown.exit(Shutdown.java:160)
+	at java.base/java.lang.Terminator$1.handle(Terminator.java:51)
+	at java.base/jdk.internal.misc.Signal$1.run(Signal.java:218)
+	at java.base/java.lang.Thread.run(Thread.java:1583)
+
+2026-04-21T19:58:20.352+08:00  INFO 156 --- [ionShutdownHook] io.undertow                              : stopping server: Undertow - 2.3.18.Final 
+2026-04-21T19:58:20.356+08:00  INFO 156 --- [ionShutdownHook] io.undertow.servlet                      : Destroying Spring FrameworkServlet 'dispatcherServlet' 

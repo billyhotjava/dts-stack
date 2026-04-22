@@ -22,7 +22,8 @@
         "version": "1.0.0",
         "fields": [
           { "key": "title", "label": "主标题", "type": "string", "defaultValue": "财务分析中心" },
-          { "key": "subtitle", "label": "副标题", "type": "string", "defaultValue": "Financial cockpit" }
+          { "key": "subtitle", "label": "副标题", "type": "string", "defaultValue": "Financial cockpit" },
+          { "key": "sections", "label": "占位分区", "type": "array", "defaultValue": ["筛选区", "指标区", "明细区"] }
         ]
       }
     },
@@ -114,9 +115,21 @@
       "defaultWidth": 460,
       "defaultHeight": 420,
       "defaultConfig": {
+        "title": "TOP 排名",
         "items": [
           { "name": "项目A", "value": "1,250.00", "extra": "同比 +8.2%" },
           { "name": "项目B", "value": "930.50", "extra": "同比 +5.7%" }
+        ]
+      },
+      "propertySchema": {
+        "version": "1.0.0",
+        "fields": [
+          { "key": "title", "label": "标题", "type": "string", "defaultValue": "TOP 排名" },
+          { "key": "maxItems", "label": "显示条数", "type": "number", "defaultValue": 8, "min": 1, "max": 20, "step": 1 },
+          { "key": "items", "label": "排行数据", "type": "array", "defaultValue": [
+            { "name": "项目A", "value": "1,250.00", "extra": "同比 +8.2%" },
+            { "name": "项目B", "value": "930.50", "extra": "同比 +5.7%" }
+          ] }
         ]
       }
     },
@@ -129,10 +142,23 @@
       "defaultWidth": 900,
       "defaultHeight": 420,
       "defaultConfig": {
+        "title": "财务明细",
         "headers": ["项目", "预算", "执行", "余额"],
         "rows": [
           { "col1": "科研项目A", "col2": "1,200", "col3": "860", "col4": "340" },
           { "col1": "科研项目B", "col2": "980", "col3": "760", "col4": "220" }
+        ]
+      },
+      "propertySchema": {
+        "version": "1.0.0",
+        "fields": [
+          { "key": "title", "label": "标题", "type": "string", "defaultValue": "财务明细" },
+          { "key": "maxRows", "label": "显示行数", "type": "number", "defaultValue": 6, "min": 1, "max": 20, "step": 1 },
+          { "key": "headers", "label": "表头", "type": "array", "defaultValue": ["项目", "预算", "执行", "余额"] },
+          { "key": "rows", "label": "表格数据", "type": "array", "defaultValue": [
+            { "col1": "科研项目A", "col2": "1,200", "col3": "860", "col4": "340" },
+            { "col1": "科研项目B", "col2": "980", "col3": "760", "col4": "220" }
+          ] }
         ]
       }
     },
@@ -150,6 +176,16 @@
           "金额单位默认按万元展示。",
           "模板块支持拖拽和二次编辑。"
         ]
+      },
+      "propertySchema": {
+        "version": "1.0.0",
+        "fields": [
+          { "key": "title", "label": "标题", "type": "string", "defaultValue": "口径说明" },
+          { "key": "notes", "label": "说明列表", "type": "array", "defaultValue": [
+            "金额单位默认按万元展示。",
+            "模板块支持拖拽和二次编辑。"
+          ] }
+        ]
       }
     },
     {
@@ -161,9 +197,20 @@
       "defaultWidth": 520,
       "defaultHeight": 300,
       "defaultConfig": {
+        "title": "状态总览",
         "items": [
           { "title": "执行健康", "value": "良好", "hint": "执行率 82%", "tone": "success" },
           { "title": "预警项目", "value": "3", "hint": "需重点关注", "tone": "warning" }
+        ]
+      },
+      "propertySchema": {
+        "version": "1.0.0",
+        "fields": [
+          { "key": "title", "label": "标题", "type": "string", "defaultValue": "状态总览" },
+          { "key": "items", "label": "状态项", "type": "array", "defaultValue": [
+            { "title": "执行健康", "value": "良好", "hint": "执行率 82%", "tone": "success" },
+            { "title": "预警项目", "value": "3", "hint": "需重点关注", "tone": "warning" }
+          ] }
         ]
       }
     }

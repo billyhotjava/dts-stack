@@ -67,20 +67,19 @@ cd worklog/v2.2.3/s10/v4/finance/test
 psql -d <your_db> -f load_test_data.sql
 ```
 
-## ⚠️ dbt 模型待同步调整
+## dbt 模型状态
 
-当前 dbt 模型链路基于**旧表结构**编写，本次 ODS 变更后需同步调整：
+当前 `dbt_model/` 已按本批 ODS 字段定义同步完成，核心口径如下：
 
-| 模型 | 调整点 |
-|---|---|
-| `stg_fin__own_fund` | 字段全部重写（`year_period` → `year_num`/`fund_source`/`fund_category`） |
-| `biz_dwd_own_fund` | 去掉 `dim_year_period_suffix` 后缀解析；period_type 直接来自 `fund_source`；聚合口径按 `年初/预计增加/预计使用` 三类重新定义（无"余额"） |
-| `dim_own_fund_period_type` | 枚举重建：`opening/increase/usage`（移除 `balance`） |
-| `dim_year_period_suffix` | 可删除（不再需要） |
-| `biz_dws_own_fund_yearly` | 汇总口径改为 按 `year_num × fund_category` 的二维聚合，而不是原四类 period_type × 四类基金 |
-| `biz_ads_own_fund_kpi` | KPI 派生逻辑（`余额`来源删掉，改为 `年初 + 预计增加 − 预计使用` 推算年末余额） |
-| `stg_fin__project_fund` | 新增 `is_major_project/research_dept/project_status/direct_spent/received_fund/receivable_fund` 字段 |
-| `biz_dwd_project_fund` | `direct_spent` 改为直读 ODS 而不是由 `direct_ctrl × direct_rate / 100` 推算；新增收款类指标 |
-| `biz_dws_project_fund_summary` / `biz_ads_project_fund_kpi` | 汇总新增维度（重大项目口径、已收/待收口径） |
+- 年度基金：按 `year_num × fund_category` 聚合，`year_end_balance = 年初 + 预计增加 - 预计使用`
+- 年度基金 KPI：`net_change_rate` 表示相对年初余额的净变动率，不再使用歧义较大的“增长率”命名
+- 项目经费：`direct_spent` 直读 ODS；`remaining_fund` 允许为负，负值表示项目超支
+- 项目经费 KPI：`receivable_fund` 作为唯一未收口径，不再重复派生 `outstanding_fund`
+- 项目汇总：项目计数按 `project_id` 去重，避免后续一项目多行时指标膨胀
 
-是否现在一起更新 dbt 模型？如同意我即刻推进。
+建议在加载测试数据后执行：
+
+```bash
+cd worklog/v2.2.3/s10/v4/finance/dbt_model
+dbt parse --profile dts --profiles-dir /opt/prod/s10/v2.2.3/services/dts-dbt/profiles
+```

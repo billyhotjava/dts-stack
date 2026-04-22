@@ -2,7 +2,9 @@
 
 SELECT
   md5(
-    coalesce(cast(project_id as text), '')
+    coalesce(cast(row_no as text), '')
+    || '|'
+    || coalesce(cast(project_id as text), '')
     || '|'
     || coalesce(cast(cycle as text), '')
   ) AS source_row_id,
@@ -22,7 +24,7 @@ SELECT
   {{ nullif_placeholder("research_dept") }} AS research_dept,
 
   cast(project_status as text) AS project_status_raw,
-  nullif(btrim(cast(project_status as text)), '') AS project_status,
+  {{ nullif_placeholder("project_status") }} AS project_status,
 
   {{ parse_numeric_safe("direct_ctrl") }}::numeric(15,2) AS direct_ctrl,
   {{ parse_numeric_safe("reserve_indirect") }}::numeric(15,2) AS reserve_indirect,
@@ -32,4 +34,4 @@ SELECT
   {{ parse_numeric_safe("received_fund") }}::numeric(15,2) AS received_fund,
   {{ parse_numeric_safe("receivable_fund") }}::numeric(15,2) AS receivable_fund
 FROM {{ source('fin_ods', 'project_fund') }}
-WHERE project_id IS NOT NULL
+WHERE {{ nullif_placeholder("project_id") }} IS NOT NULL

@@ -21,4 +21,4 @@ SELECT
 
   {{ parse_numeric_safe("balance") }}::numeric(15,2) AS balance
 FROM {{ source('fin_ods', 'aux_balance_personal') }}
-WHERE subject_code IS NOT NULL
+WHERE {{ nullif_placeholder("subject_code") }} IS NOT NULL

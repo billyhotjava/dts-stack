@@ -32,6 +32,10 @@ test('finance plugin adapters register all builtin finance renderer plugins', ()
             components: FINANCE_COMPONENTS.map((component) => ({
                 ...component,
                 name: component.id,
+                propertySchema: {
+                    version: '1.0.0',
+                    fields: [{ key: `${component.id}-field`, label: component.id, type: 'string', defaultValue: component.id }],
+                },
             })),
         },
     ];
@@ -58,6 +62,9 @@ test('finance plugin adapters register all builtin finance renderer plugins', ()
         assert.ok(plugin, `expected renderer plugin ${runtimeId} to be registered`);
         assert.equal(plugin?.baseType, component.baseType);
         assert.equal(plugin?.id, runtimeId);
+        assert.ok(plugin?.propertySchema, `expected propertySchema for ${runtimeId}`);
+        assert.equal(plugin?.propertySchema?.version, '1.0.0');
+        assert.equal(plugin?.propertySchema?.fields?.[0]?.key, `${component.id}-field`);
     }
 });
 

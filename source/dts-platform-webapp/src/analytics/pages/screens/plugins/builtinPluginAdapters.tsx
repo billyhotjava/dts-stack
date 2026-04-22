@@ -45,7 +45,12 @@ export function installBuiltinPluginAdaptersFromModules(
             const adapterKey = `${pluginId}:${componentId}`;
             const factory = adapters[adapterKey];
             if (!factory) continue;
-            registerRendererPlugin(factory(pluginId, componentId, version));
+            const plugin = factory(pluginId, componentId, version);
+            registerRendererPlugin({
+                ...plugin,
+                propertySchema: plugin.propertySchema ?? component.propertySchema,
+                dataContract: plugin.dataContract ?? component.dataContract,
+            });
         }
     }
 }

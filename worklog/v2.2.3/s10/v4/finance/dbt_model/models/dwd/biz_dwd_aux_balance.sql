@@ -21,11 +21,9 @@ derived AS (
       WHEN n.balance < 0 THEN 'negative'
       ELSE 'zero'
     END AS balance_sign,
+    n.contract_name AS contract_name_norm,
     CASE
-      WHEN n.contract_name IS NOT NULL AND n.contract_name <> '—' THEN n.contract_name
-    END AS contract_name_norm,
-    CASE
-      WHEN n.contract_name IS NOT NULL AND n.contract_name <> '—' THEN true
+      WHEN n.contract_name IS NOT NULL THEN true
       ELSE false
     END AS has_contract
   FROM normalized n

@@ -28,6 +28,22 @@ function text(value: unknown, fallback = ''): string {
     return typeof value === 'string' && value.trim() ? value.trim() : fallback;
 }
 
+function valueText(value: unknown, fallback = '', precision?: number): string {
+    if (typeof value === 'string' && value.trim()) return value.trim();
+    if (typeof value === 'number' && Number.isFinite(value)) {
+        const resolvedPrecision = Number.isInteger(precision as number)
+            ? Number(precision)
+            : Number.isInteger(value)
+                ? 0
+                : 2;
+        return value.toLocaleString('zh-CN', {
+            minimumFractionDigits: resolvedPrecision,
+            maximumFractionDigits: resolvedPrecision,
+        });
+    }
+    return fallback;
+}
+
 function stringArray(value: unknown, fallback: string[] = []): string[] {
     if (!Array.isArray(value)) return fallback;
     return value
@@ -38,6 +54,50 @@ function stringArray(value: unknown, fallback: string[] = []): string[] {
 function rowArray(value: unknown): Array<Record<string, unknown>> {
     if (!Array.isArray(value)) return [];
     return value.filter((item): item is Record<string, unknown> => !!item && typeof item === 'object');
+}
+
+function matrixArray(value: unknown): unknown[][] {
+    if (!Array.isArray(value)) return [];
+    return value.filter((item): item is unknown[] => Array.isArray(item));
+}
+
+function cardDataRows(context: RendererPluginRenderContext): Array<Record<string, unknown>> {
+    const cols = context.data?.cols ?? [];
+    const rows = context.data?.rows ?? [];
+    if (!cols.length || !rows.length) return [];
+    return rows.map((row) =>
+        cols.reduce<Record<string, unknown>>((out, col, index) => {
+            const displayName = typeof col.display_name === 'string' && col.display_name.trim()
+                ? col.display_name.trim()
+                : col.name;
+            out[col.name] = row[index];
+            out[displayName] = row[index];
+            out[`col${index + 1}`] = row[index];
+            return out;
+        }, {}),
+    );
+}
+
+function cardDataHeaders(context: RendererPluginRenderContext): string[] {
+    const cols = context.data?.cols ?? [];
+    if (!cols.length) return [];
+    return cols.map((col) => {
+        if (typeof col.display_name === 'string' && col.display_name.trim()) {
+            return col.display_name.trim();
+        }
+        return col.name;
+    });
+}
+
+function resolveFieldValue(
+    row: Record<string, unknown>,
+    explicitField: unknown,
+    fallbackIndex: number,
+): unknown {
+    const fieldName = typeof explicitField === 'string' && explicitField.trim()
+        ? explicitField.trim()
+        : `col${fallbackIndex + 1}`;
+    return row[fieldName];
 }
 
 export function createFinanceRendererPlugin(options: {
@@ -181,7 +241,11 @@ export function FinanceFilterStrip(context: RendererPluginRenderContext): ReactN
 
 export function FinanceKpiCard(context: RendererPluginRenderContext): ReactNode {
     const title = text(context.config.title, context.component.name || '指标卡');
-    const value = text(context.config.value, '12,580.00');
+    const value = valueText(
+        context.config.value,
+        '12,580.00',
+        typeof context.config.precision === 'number' ? context.config.precision : undefined,
+    );
     const unit = text(context.config.unit, '万元');
     const hint = text(context.config.hint, '较上期 +12.6%');
     const tone = text(context.config.tone, 'accent');
@@ -224,17 +288,28 @@ export function FinanceKpiCard(context: RendererPluginRenderContext): ReactNode 
 }
 
 export function FinanceRankingList(context: RendererPluginRenderContext): ReactNode {
+    const title = text(context.config.title, context.component.name || 'TOP 排名');
     const rows = rowArray(context.config.items);
-    const list = rows.length > 0 ? rows : [
-        { name: '项目A', value: '1,250.00', extra: '同比 +8.2%' },
-        { name: '项目B', value: '930.50', extra: '同比 +5.7%' },
-        { name: '项目C', value: '640.00', extra: '同比 -2.1%' },
-    ];
+    const dataRows = cardDataRows(context);
+    const maxItems = px(context.config.maxItems, 8);
+    const list = rows.length > 0
+        ? rows
+        : dataRows.length > 0
+            ? dataRows.map((row) => ({
+                name: resolveFieldValue(row, context.config.nameField, 0),
+                value: resolveFieldValue(row, context.config.valueField, 1),
+                extra: resolveFieldValue(row, context.config.extraField, 2),
+            }))
+            : [
+                { name: '项目A', value: '1,250.00', extra: '同比 +8.2%' },
+                { name: '项目B', value: '930.50', extra: '同比 +5.7%' },
+                { name: '项目C', value: '640.00', extra: '同比 -2.1%' },
+            ];
     return (
         <section style={panelStyle()}>
-            <div style={sectionTitleStyle()}>TOP 排名</div>
+            <div style={sectionTitleStyle()}>{title}</div>
             <div style={{ display: 'grid', gap: 10 }}>
-                {list.slice(0, 8).map((item, index) => (
+                {list.slice(0, maxItems).map((item, index) => (
                     <div
                         key={`${item.name ?? 'row'}-${index}`}
                         style={{
@@ -264,10 +339,10 @@ export function FinanceRankingList(context: RendererPluginRenderContext): ReactN
                             {index + 1}
                         </div>
                         <div style={{ minWidth: 0 }}>
-                            <div style={{ fontSize: 13, fontWeight: 700, color: COLORS.text }}>{text(item.name, `项目${index + 1}`)}</div>
-                            <div style={{ marginTop: 4, fontSize: 11, color: COLORS.muted }}>{text(item.extra, '本月累计')}</div>
+                            <div style={{ fontSize: 13, fontWeight: 700, color: COLORS.text }}>{valueText(item.name, `项目${index + 1}`)}</div>
+                            <div style={{ marginTop: 4, fontSize: 11, color: COLORS.muted }}>{valueText(item.extra, '本月累计')}</div>
                         </div>
-                        <div style={{ fontSize: 15, fontWeight: 800, color: COLORS.header }}>{text(item.value, '--')}</div>
+                        <div style={{ fontSize: 15, fontWeight: 800, color: COLORS.header }}>{valueText(item.value, '--')}</div>
                     </div>
                 ))}
             </div>
@@ -276,23 +351,40 @@ export function FinanceRankingList(context: RendererPluginRenderContext): ReactN
 }
 
 export function FinanceSummaryTable(context: RendererPluginRenderContext): ReactNode {
-    const headers = stringArray(context.config.headers, ['项目', '预算', '执行', '余额']);
+    const title = text(context.config.title, context.component.name || '财务明细');
+    const mappedHeaders = stringArray(context.config.header);
+    const rawHeaders = cardDataHeaders(context);
+    const headers = stringArray(context.config.headers, mappedHeaders.length > 0 ? mappedHeaders : rawHeaders.length > 0 ? rawHeaders : ['项目', '预算', '执行', '余额']);
     const rows = rowArray(context.config.rows);
-    const data = rows.length > 0 ? rows : [
-        { col1: '科研项目A', col2: '1,200', col3: '860', col4: '340' },
-        { col1: '科研项目B', col2: '980', col3: '760', col4: '220' },
-        { col1: '科研项目C', col2: '760', col3: '540', col4: '220' },
-    ];
+    const dataRows = matrixArray(context.config.data).map((row) =>
+        headers.reduce<Record<string, unknown>>((out, _, index) => {
+            out[`col${index + 1}`] = row[index];
+            return out;
+        }, {}),
+    );
+    const rawRows = cardDataRows(context);
+    const maxRows = px(context.config.maxRows, 6);
+    const data = rows.length > 0
+        ? rows
+        : dataRows.length > 0
+            ? dataRows
+            : rawRows.length > 0
+                ? rawRows
+                : [
+                    { col1: '科研项目A', col2: '1,200', col3: '860', col4: '340' },
+                    { col1: '科研项目B', col2: '980', col3: '760', col4: '220' },
+                    { col1: '科研项目C', col2: '760', col3: '540', col4: '220' },
+                ];
     return (
         <section style={panelStyle()}>
-            <div style={sectionTitleStyle()}>财务明细</div>
+            <div style={sectionTitleStyle()}>{title}</div>
             <div style={{ overflow: 'hidden', borderRadius: 14, border: `1px solid ${COLORS.border}` }}>
                 <div style={{ display: 'grid', gridTemplateColumns: `repeat(${headers.length}, minmax(0, 1fr))`, background: COLORS.headerSoft }}>
                     {headers.map((header) => (
                         <div key={header} style={tableHeaderStyle()}>{header}</div>
                     ))}
                 </div>
-                {data.slice(0, 6).map((row, index) => (
+                {data.slice(0, maxRows).map((row, index) => (
                     <div
                         key={`table-row-${index}`}
                         style={{
@@ -303,7 +395,7 @@ export function FinanceSummaryTable(context: RendererPluginRenderContext): React
                     >
                         {headers.map((_, headerIndex) => (
                             <div key={`cell-${headerIndex}`} style={tableCellStyle(headerIndex === 0)}>
-                                {text(row[`col${headerIndex + 1}`], '--')}
+                                {valueText(row[`col${headerIndex + 1}`], '--')}
                             </div>
                         ))}
                     </div>
@@ -347,16 +439,27 @@ export function FinanceNotePanel(context: RendererPluginRenderContext): ReactNod
 }
 
 export function FinanceStatusGrid(context: RendererPluginRenderContext): ReactNode {
+    const title = text(context.config.title, context.component.name || '状态总览');
     const cards = rowArray(context.config.items);
-    const list = cards.length > 0 ? cards : [
-        { title: '执行健康', value: '良好', hint: '执行率 82%', tone: 'success' },
-        { title: '预警项目', value: '3', hint: '需重点关注', tone: 'warning' },
-        { title: '预算偏差', value: '1.8%', hint: '低于阈值', tone: 'accent' },
-        { title: '风险状态', value: '可控', hint: '无新增风险', tone: 'success' },
-    ];
+    const dataRows = cardDataRows(context);
+    const list = cards.length > 0
+        ? cards
+        : dataRows.length > 0
+            ? dataRows.map((row) => ({
+                title: resolveFieldValue(row, context.config.titleField, 0),
+                value: resolveFieldValue(row, context.config.valueField, 1),
+                hint: resolveFieldValue(row, context.config.hintField, 2),
+                tone: resolveFieldValue(row, context.config.toneField, 3),
+            }))
+            : [
+                { title: '执行健康', value: '良好', hint: '执行率 82%', tone: 'success' },
+                { title: '预警项目', value: '3', hint: '需重点关注', tone: 'warning' },
+                { title: '预算偏差', value: '1.8%', hint: '低于阈值', tone: 'accent' },
+                { title: '风险状态', value: '可控', hint: '无新增风险', tone: 'success' },
+            ];
     return (
         <section style={panelStyle()}>
-            <div style={sectionTitleStyle()}>状态总览</div>
+            <div style={sectionTitleStyle()}>{title}</div>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: 12 }}>
                 {list.slice(0, 6).map((item, index) => {
                     const toneColor = resolveToneColor(text(item.tone, 'accent'));
@@ -371,9 +474,9 @@ export function FinanceStatusGrid(context: RendererPluginRenderContext): ReactNo
                                 boxShadow: `inset 0 0 0 1px ${alpha(toneColor, 0.08)}`,
                             }}
                         >
-                            <div style={{ fontSize: 12, color: COLORS.muted, fontWeight: 700 }}>{text(item.title, `状态${index + 1}`)}</div>
-                            <div style={{ marginTop: 8, fontSize: 24, fontWeight: 800, color: COLORS.text }}>{text(item.value, '--')}</div>
-                            <div style={{ marginTop: 6, fontSize: 12, color: toneColor, fontWeight: 700 }}>{text(item.hint, '')}</div>
+                            <div style={{ fontSize: 12, color: COLORS.muted, fontWeight: 700 }}>{valueText(item.title, `状态${index + 1}`)}</div>
+                            <div style={{ marginTop: 8, fontSize: 24, fontWeight: 800, color: COLORS.text }}>{valueText(item.value, '--')}</div>
+                            <div style={{ marginTop: 6, fontSize: 12, color: toneColor, fontWeight: 700 }}>{valueText(item.hint, '')}</div>
                         </div>
                     );
                 })}

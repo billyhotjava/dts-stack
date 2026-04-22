@@ -1,4 +1,4 @@
-import type { ScreenConfig, ScreenComponent, ScreenGlobalVariable } from './types';
+import type { CardParameterBinding, DataSourceConfig, ScreenConfig, ScreenComponent, ScreenGlobalVariable } from './types';
 import { SCREEN_SCHEMA_VERSION } from './specV2';
 import { projectManagementCommandCenterTemplate } from './projectManagementCommandCenterTemplate';
 import {
@@ -1819,8 +1819,21 @@ const financeExecutionTemplate: ScreenTemplate = {
 
 const FINANCE_PLUGIN_ID = 'finance-kit';
 const FINANCE_PLUGIN_VERSION = '1.0.0';
+const FINANCE_SQL_DATABASE_ID = 1;
+const FINANCE_SQL_REFRESH_INTERVAL = 300;
+const FINANCE_SQL_TIMEOUT_SECONDS = 60;
+const FINANCE_AMOUNT_PATTERN = 'FM999,999,999,990.00';
+const FINANCE_PERCENT_PATTERN = 'FM990.00';
 
 const FINANCE_PLUGIN_PROPERTY_SCHEMAS: Record<string, Record<string, unknown>> = {
+    shell: {
+        version: '1.0.0',
+        fields: [
+            { key: 'title', label: '主标题', type: 'string', defaultValue: '财务分析中心' },
+            { key: 'subtitle', label: '副标题', type: 'string', defaultValue: 'Financial cockpit' },
+            { key: 'sections', label: '占位分区', type: 'array', defaultValue: ['筛选区', '指标区', '明细区'] },
+        ],
+    },
     'header-bar': {
         version: '1.0.0',
         fields: [
@@ -1864,6 +1877,54 @@ const FINANCE_PLUGIN_PROPERTY_SCHEMAS: Record<string, Record<string, unknown>> =
             { key: 'notes', label: '说明列表', type: 'array', defaultValue: ['说明一', '说明二'] },
         ],
     },
+    'ranking-list': {
+        version: '1.0.0',
+        fields: [
+            { key: 'title', label: '标题', type: 'string', defaultValue: 'TOP 排名' },
+            { key: 'maxItems', label: '显示条数', type: 'number', defaultValue: 8, min: 1, max: 20, step: 1 },
+            {
+                key: 'items',
+                label: '排行数据',
+                type: 'array',
+                defaultValue: [
+                    { name: '项目A', value: '1,250.00', extra: '同比 +8.2%' },
+                    { name: '项目B', value: '930.50', extra: '同比 +5.7%' },
+                ],
+            },
+        ],
+    },
+    'summary-table': {
+        version: '1.0.0',
+        fields: [
+            { key: 'title', label: '标题', type: 'string', defaultValue: '财务明细' },
+            { key: 'maxRows', label: '显示行数', type: 'number', defaultValue: 6, min: 1, max: 20, step: 1 },
+            { key: 'headers', label: '表头', type: 'array', defaultValue: ['项目', '预算', '执行', '余额'] },
+            {
+                key: 'rows',
+                label: '表格数据',
+                type: 'array',
+                defaultValue: [
+                    { col1: '科研项目A', col2: '1,200', col3: '860', col4: '340' },
+                    { col1: '科研项目B', col2: '980', col3: '760', col4: '220' },
+                ],
+            },
+        ],
+    },
+    'status-grid': {
+        version: '1.0.0',
+        fields: [
+            { key: 'title', label: '标题', type: 'string', defaultValue: '状态总览' },
+            {
+                key: 'items',
+                label: '状态项',
+                type: 'array',
+                defaultValue: [
+                    { title: '执行健康', value: '良好', hint: '执行率 82%', tone: 'success' },
+                    { title: '预警项目', value: '3', hint: '需重点关注', tone: 'warning' },
+                ],
+            },
+        ],
+    },
 };
 
 function createFinancePluginComponent(
@@ -1891,12 +1952,75 @@ function createFinancePluginComponent(
     });
 }
 
-function financeRow(...values: string[]): Record<string, unknown> {
-    return values.reduce<Record<string, unknown>>((out, value, index) => {
-        out[`col${index + 1}`] = value;
-        return out;
-    }, {});
+function financeVariableBinding(name: string, variableKey: string): CardParameterBinding {
+    return { name, variableKey };
 }
+
+function createFinanceSqlDataSource(
+    query: string,
+    options: {
+        maxRows?: number;
+        refreshInterval?: number;
+        parameterBindings?: CardParameterBinding[];
+    } = {},
+): DataSourceConfig {
+    return {
+        type: 'sql',
+        sourceType: 'sql',
+        refreshInterval: options.refreshInterval ?? FINANCE_SQL_REFRESH_INTERVAL,
+        sqlConfig: {
+            databaseId: FINANCE_SQL_DATABASE_ID,
+            query,
+            queryTimeoutSeconds: FINANCE_SQL_TIMEOUT_SECONDS,
+            maxRows: options.maxRows ?? 2000,
+            parameterBindings: options.parameterBindings ?? [],
+        },
+    };
+}
+
+function withDataSource(component: ScreenComponent, dataSource: DataSourceConfig): ScreenComponent {
+    return {
+        ...component,
+        dataSource,
+    };
+}
+
+const AUX_BALANCE_FILTER_SQL = `
+WHERE 1 = 1
+  [[ AND dept_name = {{filterDept}} ]]
+  [[ AND (
+    subject_code ILIKE '%' || {{searchText}} || '%'
+    OR subject_name ILIKE '%' || {{searchText}} || '%'
+    OR COALESCE(contract_name, '') ILIKE '%' || {{searchText}} || '%'
+    OR expense_category_label ILIKE '%' || {{searchText}} || '%'
+  ) ]]
+`;
+
+const PERSONAL_BALANCE_FILTER_SQL = `
+WHERE 1 = 1
+  [[ AND employee_dept = {{filterDept}} ]]
+  [[ AND employee_name = {{filterEmployee}} ]]
+  [[ AND (
+    employee_name ILIKE '%' || {{searchText}} || '%'
+    OR employee_dept ILIKE '%' || {{searchText}} || '%'
+    OR subject_name ILIKE '%' || {{searchText}} || '%'
+  ) ]]
+`;
+
+const auxBalanceBindings: CardParameterBinding[] = [
+    financeVariableBinding('filterDept', 'filterDept'),
+    financeVariableBinding('searchText', 'searchText'),
+];
+
+const ownFundBindings: CardParameterBinding[] = [
+    financeVariableBinding('selectedYear', 'selectedYear'),
+];
+
+const personalBalanceBindings: CardParameterBinding[] = [
+    financeVariableBinding('filterDept', 'filterDept'),
+    financeVariableBinding('filterEmployee', 'filterEmployee'),
+    financeVariableBinding('searchText', 'searchText'),
+];
 
 const auxBalanceVariables: ScreenGlobalVariable[] = [
     createGlobalVariable('filterDept', '部门筛选', 'string', ''),
@@ -1906,10 +2030,10 @@ const auxBalanceVariables: ScreenGlobalVariable[] = [
 const auxiliaryBalanceDashboardTemplate: ScreenTemplate = {
     id: 'fin-auxiliary-balance',
     name: '辅助余额大屏',
-    description: '辅助余额驾驶舱：部门分布、科目TOP、费用结构、余额明细与合同排行。',
+    description: '辅助余额驾驶舱：余额总量、费用结构、部门分布、合同排行与明细清单。',
     thumbnail: '💼',
     category: 'finance',
-    tags: ['辅助余额', '部门', '合同', '余额', '财务'],
+    tags: ['辅助余额', '费用结构', '合同', '部门', '财务'],
     recommendedVariables: auxBalanceVariables.map((v) => v.key),
     config: {
         name: '辅助余额大屏',
@@ -1927,92 +2051,185 @@ const auxiliaryBalanceDashboardTemplate: ScreenTemplate = {
                 dateText: '数据日期：2026-03-30',
             }),
             createFinancePluginComponent('ab-filters', 'container', 'filter-strip', '财务筛选条', 24, 142, 1872, 74, 35, {
-                filters: ['部门: 全部', '关键词: 科目/合同'],
+                filters: ['部门: 全部', '费用类别: 全部', '合同状态: 全部'],
             }),
-            createFinancePluginComponent('ab-kpi-total', 'number-card', 'kpi-card', '余额合计', 24, 236, 282, 138, 30, {
+            withDataSource(createFinancePluginComponent('ab-kpi-total', 'number-card', 'kpi-card', '余额合计', 24, 236, 456, 138, 30, {
                 title: '余额合计',
-                value: '4,476.00',
-                unit: '万元',
-                hint: '全部筛选项汇总',
+                unit: '元',
+                precision: 2,
+                hint: '全部辅助余额汇总',
                 tone: 'accent',
-            }),
-            createFinancePluginComponent('ab-kpi-subject', 'number-card', 'kpi-card', '科目数量', 322, 236, 282, 138, 30, {
+            }), createFinanceSqlDataSource(`
+                SELECT COALESCE(SUM(balance), 0) AS value
+                FROM public.biz_dwd_aux_balance
+                ${AUX_BALANCE_FILTER_SQL}
+            `, { parameterBindings: auxBalanceBindings })),
+            withDataSource(createFinancePluginComponent('ab-kpi-subject', 'number-card', 'kpi-card', '科目数量', 496, 236, 456, 138, 30, {
                 title: '科目数量',
-                value: '25',
                 unit: '个',
-                hint: '含合同与费用明细',
+                precision: 0,
+                hint: '当前筛选范围内的科目数',
                 tone: 'accent',
-            }),
-            createFinancePluginComponent('ab-kpi-contract', 'number-card', 'kpi-card', '合同数量', 620, 236, 282, 138, 30, {
+            }), createFinanceSqlDataSource(`
+                SELECT COUNT(DISTINCT subject_code) AS value
+                FROM public.biz_dwd_aux_balance
+                ${AUX_BALANCE_FILTER_SQL}
+            `, { parameterBindings: auxBalanceBindings })),
+            withDataSource(createFinancePluginComponent('ab-kpi-contract', 'number-card', 'kpi-card', '合同数量', 968, 236, 456, 138, 30, {
                 title: '合同数量',
-                value: '24',
                 unit: '份',
-                hint: '关联合同总数',
-                tone: 'warning',
-            }),
-            createFinancePluginComponent('ab-kpi-dept', 'number-card', 'kpi-card', '部门数量', 918, 236, 282, 138, 30, {
-                title: '部门数量',
-                value: '8',
-                unit: '个',
-                hint: '涉及部门总数',
+                precision: 0,
+                hint: '“无合同”不计入合同数',
                 tone: 'success',
-            }),
-            createComponent('ab-chart-subject', 'bar-chart', '按科目分布TOP10', 24, 394, 596, 286, 20, {
-                title: '科目余额 TOP 10',
-                xAxisData: ['自动化设备', '外协加工费', '网络设备', '原材料-钢材', '原材料-铝合金', '安装调试费', '服务器', '设备折旧', '检测试验费', '机房租赁费'],
-                series: [{ name: '余额(万)', data: [680, 215, 156, 128, 86, 72, 65, 43, 38, 32] }],
+            }), createFinanceSqlDataSource(`
+                SELECT COUNT(DISTINCT contract_name_norm) AS value
+                FROM public.biz_dwd_aux_balance
+                ${AUX_BALANCE_FILTER_SQL}
+                  [[ AND has_contract = TRUE ]]
+            `, { parameterBindings: auxBalanceBindings })),
+            withDataSource(createFinancePluginComponent('ab-kpi-dept', 'number-card', 'kpi-card', '涉及部门', 1440, 236, 456, 138, 30, {
+                title: '涉及部门',
+                unit: '个',
+                precision: 0,
+                hint: '余额分布部门数',
+                tone: 'success',
+            }), createFinanceSqlDataSource(`
+                SELECT COUNT(DISTINCT dept_name) AS value
+                FROM public.biz_dwd_aux_balance
+                ${AUX_BALANCE_FILTER_SQL}
+            `, { parameterBindings: auxBalanceBindings })),
+            withDataSource(createComponent('ab-chart-dept', 'bar-chart', '部门余额分布', 24, 394, 720, 286, 20, {
+                title: '部门余额分布',
+                xAxisField: 'dept_name',
+                series: [{ name: '余额(元)', field: 'dept_balance' }],
                 seriesColors: ['#2e73d6'],
                 backgroundColor: '#ffffff',
-            }),
-            createComponent('ab-chart-dept', 'pie-chart', '按部门占比', 640, 394, 410, 286, 20, {
-                title: '部门余额占比',
-                data: [
-                    { name: '制造部', value: 1511 },
-                    { name: 'IT部', value: 1389 },
-                    { name: '电力部', value: 1120 },
-                    { name: '采购部', value: 267 },
-                    { name: '研发部', value: 157 },
-                ],
+            }), createFinanceSqlDataSource(`
+                SELECT dept_name, SUM(balance) AS dept_balance
+                FROM public.biz_dwd_aux_balance
+                ${AUX_BALANCE_FILTER_SQL}
+                GROUP BY dept_name
+                ORDER BY dept_balance DESC
+                LIMIT 8
+            `, { maxRows: 8, parameterBindings: auxBalanceBindings })),
+            withDataSource(createComponent('ab-chart-structure', 'pie-chart', '费用结构分布', 760, 394, 420, 286, 20, {
+                title: '费用结构分布',
+                nameField: 'expense_category_label',
+                valueField: 'category_balance',
                 seriesColors: ['#2e73d6', '#62a0ff', '#1f9d8b', '#f59e0b', '#8b5cf6'],
                 backgroundColor: '#ffffff',
-            }),
-            createComponent('ab-chart-structure', 'treemap-chart', '费用结构', 1070, 394, 410, 286, 20, {
-                title: '费用结构分析',
-                data: [
-                    { name: '原材料/设备', value: 2549 },
-                    { name: '外协/服务', value: 1083 },
-                    { name: '租赁', value: 240 },
-                    { name: '折旧', value: 43 },
-                    { name: '检测', value: 88 },
-                    { name: '设计', value: 68 },
-                    { name: '培训', value: 44 },
-                ],
-                backgroundColor: '#ffffff',
-            }),
-            createFinancePluginComponent('ab-ranking', 'table', 'ranking-list', '合同TOP', 1500, 394, 396, 286, 20, {
-                items: [
-                    { name: '产线设备采购合同', value: '680.00', extra: '制造部' },
-                    { name: '变压器采购合同', value: '520.00', extra: '电力部' },
-                    { name: '服务器采购合同', value: '410.00', extra: 'IT部' },
-                    { name: 'ERP软件许可合同', value: '320.00', extra: 'IT部' },
-                ],
-            }),
-            createFinancePluginComponent('ab-summary', 'table', 'summary-table', '余额明细表', 24, 700, 1260, 336, 15, {
-                headers: ['科目编号', '科目名称', '部门名称', '合同名称', '余额(万)'],
-                rows: [
-                    financeRow('5001.01', '原材料-钢材', '制造部', '钢材采购合同-2025A', '128.00'),
-                    financeRow('5001.02', '原材料-铝合金', '制造部', '铝合金采购协议', '86.00'),
-                    financeRow('5101.01', '外协加工费', '电力部', '精密加工服务合同', '215.00'),
-                    financeRow('5001.06', '网络设备', 'IT部', '服务器采购合同', '156.00'),
-                    financeRow('5001.07', '自动化设备', '制造部', '产线设备采购合同', '680.00'),
-                ],
-            }),
+            }), createFinanceSqlDataSource(`
+                SELECT expense_category_label, SUM(balance) AS category_balance
+                FROM public.biz_dwd_aux_balance
+                ${AUX_BALANCE_FILTER_SQL}
+                GROUP BY expense_category_label
+                ORDER BY category_balance DESC
+            `, { parameterBindings: auxBalanceBindings })),
+            withDataSource(createFinancePluginComponent('ab-status', 'container', 'status-grid', '余额状态卡', 1200, 394, 300, 286, 20, {
+                title: '财务关注点',
+                titleField: 'title',
+                valueField: 'value',
+                hintField: 'hint',
+                toneField: 'tone',
+            }), createFinanceSqlDataSource(`
+                WITH base AS (
+                  SELECT *
+                  FROM public.biz_dwd_aux_balance
+                  ${AUX_BALANCE_FILTER_SQL}
+                ),
+                top_dept AS (
+                  SELECT dept_name, SUM(balance) AS dept_balance
+                  FROM base
+                  GROUP BY dept_name
+                  ORDER BY dept_balance DESC
+                  LIMIT 1
+                ),
+                top_contract AS (
+                  SELECT contract_name_norm, dept_name, SUM(balance) AS contract_balance
+                  FROM base
+                  WHERE has_contract = TRUE
+                  GROUP BY contract_name_norm, dept_name
+                  ORDER BY contract_balance DESC
+                  LIMIT 1
+                ),
+                no_contract AS (
+                  SELECT COUNT(DISTINCT subject_code) AS no_contract_subject_count
+                  FROM base
+                  WHERE COALESCE(has_contract, FALSE) = FALSE
+                ),
+                top_category AS (
+                  SELECT expense_category_label, SUM(balance) AS category_balance
+                  FROM base
+                  GROUP BY expense_category_label
+                  ORDER BY category_balance DESC
+                  LIMIT 1
+                )
+                SELECT '最大余额部门' AS title,
+                       COALESCE((SELECT dept_name FROM top_dept), '暂无数据') AS value,
+                       COALESCE((SELECT TO_CHAR(dept_balance, '${FINANCE_AMOUNT_PATTERN}') || ' 元' FROM top_dept), '暂无数据') AS hint,
+                       'accent' AS tone
+                UNION ALL
+                SELECT '最大合同',
+                       COALESCE((SELECT contract_name_norm FROM top_contract), '暂无数据'),
+                       COALESCE((SELECT dept_name || ' / ' || TO_CHAR(contract_balance, '${FINANCE_AMOUNT_PATTERN}') || ' 元' FROM top_contract), '暂无数据'),
+                       'success'
+                UNION ALL
+                SELECT '无合同科目',
+                       COALESCE((SELECT no_contract_subject_count::text || ' 项' FROM no_contract), '0 项'),
+                       '需关注挂账依据',
+                       'warning'
+                UNION ALL
+                SELECT '主要费用类别',
+                       COALESCE((SELECT expense_category_label FROM top_category), '暂无数据'),
+                       COALESCE((SELECT TO_CHAR(category_balance, '${FINANCE_AMOUNT_PATTERN}') || ' 元' FROM top_category), '暂无数据'),
+                       'accent'
+            `, { maxRows: 4, parameterBindings: auxBalanceBindings })),
+            withDataSource(createFinancePluginComponent('ab-ranking', 'table', 'ranking-list', '合同TOP', 1500, 394, 396, 286, 20, {
+                title: '合同余额 TOP 5',
+                maxItems: 5,
+                nameField: 'name',
+                valueField: 'value',
+                extraField: 'extra',
+            }), createFinanceSqlDataSource(`
+                WITH base AS (
+                  SELECT *
+                  FROM public.biz_dwd_aux_balance
+                  ${AUX_BALANCE_FILTER_SQL}
+                )
+                SELECT contract_name_norm AS name,
+                       TO_CHAR(SUM(balance), '${FINANCE_AMOUNT_PATTERN}') AS value,
+                       dept_name AS extra
+                FROM base
+                WHERE has_contract = TRUE
+                GROUP BY contract_name_norm, dept_name
+                ORDER BY SUM(balance) DESC
+                LIMIT 5
+            `, { maxRows: 5, parameterBindings: auxBalanceBindings })),
+            withDataSource(createFinancePluginComponent('ab-summary', 'table', 'summary-table', '余额明细表', 24, 700, 1260, 336, 15, {
+                title: '辅助余额明细',
+                maxRows: 8,
+                headers: ['科目编号', '科目名称', '部门名称', '合同名称', '余额(元)'],
+            }), createFinanceSqlDataSource(`
+                WITH base AS (
+                  SELECT *
+                  FROM public.biz_dwd_aux_balance
+                  ${AUX_BALANCE_FILTER_SQL}
+                )
+                SELECT subject_code,
+                       subject_name,
+                       dept_name,
+                       COALESCE(contract_name_norm, '无合同') AS contract_name,
+                       TO_CHAR(balance, '${FINANCE_AMOUNT_PATTERN}') AS balance
+                FROM base
+                ORDER BY balance DESC, subject_code
+                LIMIT 8
+            `, { maxRows: 8, parameterBindings: auxBalanceBindings })),
             createFinancePluginComponent('ab-note', 'markdown-text', 'note-panel', '口径说明', 1304, 700, 592, 336, 15, {
                 title: '余额与口径说明',
                 notes: [
-                    '辅助余额按部门、科目、合同三条主线展开分析。',
-                    '筛选条和 KPI 卡可在设计器中自由拖拽重排。',
-                    '排行与表格块保持财务白底视觉，便于二次替换为实时数据源。',
+                    '辅助余额直接展示科目余额，不再引入复杂派生指标。',
+                    '合同数量不统计“—”占位值，无合同科目单独在状态卡提示。',
+                    '模板优先保留金额、部门、合同三个财务核心视角，便于接真实数据源替换。',
                 ],
             }),
         ],
@@ -2026,7 +2243,7 @@ const ownFundVariables: ScreenGlobalVariable[] = [
 const ownFundDashboardTemplate: ScreenTemplate = {
     id: 'fin-own-fund',
     name: '自有资金表',
-    description: '自有资金驾驶舱：年初/增加/使用/年末余额、基金结构、变化趋势与口径说明。',
+    description: '自有资金驾驶舱：年初、增加、使用、年末余额、同比增长与基金结构。',
     thumbnail: '🏦',
     category: 'finance',
     tags: ['自有资金', '基金', '年度', '余额'],
@@ -2047,79 +2264,223 @@ const ownFundDashboardTemplate: ScreenTemplate = {
                 dateText: '统计年度：2026',
             }),
             createFinancePluginComponent('of-filters', 'container', 'filter-strip', '财务筛选条', 24, 142, 1872, 74, 35, {
-                filters: ['年度: 2026', '基金类型: 全部', '统计口径: 年末余额'],
+                filters: ['年度: 2026', '基金类别: 全部', '统计口径: 年末余额 / 同比'],
             }),
-            createFinancePluginComponent('of-kpi-open', 'number-card', 'kpi-card', '年初合计', 24, 236, 282, 138, 30, {
-                title: '年初合计',
-                value: '2,550',
+            withDataSource(createFinancePluginComponent('of-kpi-open', 'number-card', 'kpi-card', '年初余额', 24, 236, 360, 138, 30, {
+                title: '年初余额',
                 unit: '万元',
-                hint: '资金基线',
+                precision: 2,
+                hint: '当前统计年度基线',
                 tone: 'accent',
-            }),
-            createFinancePluginComponent('of-kpi-increase', 'number-card', 'kpi-card', '预计增加', 322, 236, 282, 138, 30, {
-                title: '预计增加',
-                value: '1,325',
+            }), createFinanceSqlDataSource(`
+                SELECT opening_amount AS value
+                FROM public.biz_ads_own_fund_kpi
+                WHERE fund_category_code = '全部'
+                  AND year_num = CAST({{selectedYear}} AS INTEGER)
+                LIMIT 1
+            `, { parameterBindings: ownFundBindings })),
+            withDataSource(createFinancePluginComponent('of-kpi-increase', 'number-card', 'kpi-card', '本年预计增加', 396, 236, 360, 138, 30, {
+                title: '本年预计增加',
                 unit: '万元',
-                hint: '收入与划拨',
+                precision: 2,
+                hint: '计提与收益转入',
                 tone: 'success',
-            }),
-            createFinancePluginComponent('of-kpi-use', 'number-card', 'kpi-card', '预计使用', 620, 236, 282, 138, 30, {
-                title: '预计使用',
-                value: '1,290',
+            }), createFinanceSqlDataSource(`
+                SELECT increase_amount AS value
+                FROM public.biz_ads_own_fund_kpi
+                WHERE fund_category_code = '全部'
+                  AND year_num = CAST({{selectedYear}} AS INTEGER)
+                LIMIT 1
+            `, { parameterBindings: ownFundBindings })),
+            withDataSource(createFinancePluginComponent('of-kpi-use', 'number-card', 'kpi-card', '本年预计使用', 768, 236, 360, 138, 30, {
+                title: '本年预计使用',
                 unit: '万元',
-                hint: '执行支出',
+                precision: 2,
+                hint: '项目投入与专项使用',
                 tone: 'warning',
-            }),
-            createFinancePluginComponent('of-kpi-balance', 'number-card', 'kpi-card', '年末余额', 918, 236, 282, 138, 30, {
+            }), createFinanceSqlDataSource(`
+                SELECT usage_amount AS value
+                FROM public.biz_ads_own_fund_kpi
+                WHERE fund_category_code = '全部'
+                  AND year_num = CAST({{selectedYear}} AS INTEGER)
+                LIMIT 1
+            `, { parameterBindings: ownFundBindings })),
+            withDataSource(createFinancePluginComponent('of-kpi-balance', 'number-card', 'kpi-card', '年末余额', 1140, 236, 360, 138, 30, {
                 title: '年末余额',
-                value: '2,585',
                 unit: '万元',
-                hint: '较期初 +1.4%',
+                precision: 2,
+                hint: '年初 + 增加 - 使用',
                 tone: 'accent',
-            }),
-            createComponent('of-chart-structure', 'pie-chart', '基金余额构成', 24, 394, 560, 286, 20, {
-                title: '年末余额构成',
-                data: [
-                    { name: '事业基金', value: 1350 },
-                    { name: '折旧基金', value: 810 },
-                    { name: '职工福利基金', value: 270 },
-                    { name: '安全生产基金', value: 155 },
-                ],
-                seriesColors: ['#2e73d6', '#62a0ff', '#1f9d8b', '#f59e0b'],
-                backgroundColor: '#ffffff',
-            }),
-            createComponent('of-chart-waterfall', 'waterfall-chart', '基金年度变动', 604, 394, 640, 286, 20, {
-                title: '年度变动瀑布',
-                xAxisData: ['年初', '新增', '支出', '调整', '年末'],
-                series: [{ name: '金额(万)', data: [2550, 1325, -1290, 0, 2585] }],
-                seriesColors: ['#2e73d6'],
-                backgroundColor: '#ffffff',
-            }),
-            createComponent('of-chart-trend', 'bar-chart', '基金趋势对比', 1264, 394, 632, 286, 20, {
-                title: '四类基金对比',
-                xAxisData: ['事业基金', '折旧基金', '职工福利基金', '安全生产基金'],
+            }), createFinanceSqlDataSource(`
+                SELECT year_end_balance AS value
+                FROM public.biz_ads_own_fund_kpi
+                WHERE fund_category_code = '全部'
+                  AND year_num = CAST({{selectedYear}} AS INTEGER)
+                LIMIT 1
+            `, { parameterBindings: ownFundBindings })),
+            withDataSource(createFinancePluginComponent('of-kpi-yoy', 'number-card', 'kpi-card', '同比增长率', 1512, 236, 360, 138, 30, {
+                title: '同比增长率',
+                unit: '%',
+                precision: 2,
+                hint: '较上年年末余额',
+                tone: 'success',
+            }), createFinanceSqlDataSource(`
+                SELECT year_over_year_growth_rate AS value
+                FROM public.biz_ads_own_fund_kpi
+                WHERE fund_category_code = '全部'
+                  AND year_num = CAST({{selectedYear}} AS INTEGER)
+                LIMIT 1
+            `, { parameterBindings: ownFundBindings })),
+            withDataSource(createComponent('of-chart-trend', 'line-chart', '年度余额趋势', 24, 394, 560, 286, 20, {
+                title: '年度余额趋势',
+                xAxisField: 'year_num',
                 series: [
-                    { name: '年初', data: [1260, 735, 240, 145] },
-                    { name: '年末', data: [1350, 810, 270, 155] },
+                    { name: '年末余额', field: 'year_end_balance' },
+                    { name: '预计使用', field: 'usage_amount' },
                 ],
                 seriesColors: ['#9dbcf8', '#2e73d6'],
                 backgroundColor: '#ffffff',
-            }),
-            createFinancePluginComponent('of-summary', 'table', 'summary-table', '基金汇总表', 24, 700, 1040, 336, 15, {
-                headers: ['年度', '事业基金', '折旧基金', '职工福利基金', '安全生产基金', '合计'],
-                rows: [
-                    financeRow('2026年初', '1,200', '850', '320', '180', '2,550'),
-                    financeRow('2026年预计增加', '600', '480', '150', '95', '1,325'),
-                    financeRow('2026年预计使用', '450', '520', '200', '120', '1,290'),
-                    financeRow('2026年余额', '1,350', '810', '270', '155', '2,585'),
+            }), createFinanceSqlDataSource(`
+                SELECT year_num, year_end_balance, usage_amount
+                FROM public.biz_ads_own_fund_kpi
+                WHERE fund_category_code = '全部'
+                ORDER BY year_num
+            `)),
+            withDataSource(createComponent('of-chart-category', 'bar-chart', '基金类别对比', 604, 394, 720, 286, 20, {
+                title: '基金类别对比',
+                xAxisField: 'fund_category_label',
+                series: [
+                    { name: '年初余额', field: 'opening_amount' },
+                    { name: '预计增加', field: 'increase_amount' },
+                    { name: '预计使用', field: 'usage_amount' },
+                    { name: '年末余额', field: 'year_end_balance' },
                 ],
-            }),
-            createFinancePluginComponent('of-note', 'markdown-text', 'note-panel', '口径说明', 1084, 700, 812, 336, 15, {
-                title: '自有资金口径说明',
+                seriesColors: ['#9dbcf8', '#62a0ff', '#f59e0b', '#2e73d6'],
+                backgroundColor: '#ffffff',
+            }), createFinanceSqlDataSource(`
+                SELECT fund_category_label, opening_amount, increase_amount, usage_amount, year_end_balance
+                FROM public.biz_ads_own_fund_kpi
+                WHERE fund_category_code <> '全部'
+                  AND year_num = CAST({{selectedYear}} AS INTEGER)
+                ORDER BY fund_category_sort
+            `, { parameterBindings: ownFundBindings })),
+            withDataSource(createComponent('of-chart-structure', 'pie-chart', '基金余额构成', 1364, 394, 532, 286, 20, {
+                title: '年末余额构成',
+                nameField: 'fund_category_label',
+                valueField: 'year_end_balance',
+                seriesColors: ['#2e73d6', '#1f9d8b', '#f59e0b'],
+                backgroundColor: '#ffffff',
+            }), createFinanceSqlDataSource(`
+                SELECT fund_category_label, year_end_balance
+                FROM public.biz_ads_own_fund_kpi
+                WHERE fund_category_code <> '全部'
+                  AND year_num = CAST({{selectedYear}} AS INTEGER)
+                ORDER BY fund_category_sort
+            `, { parameterBindings: ownFundBindings })),
+            withDataSource(createFinancePluginComponent('of-summary', 'table', 'summary-table', '基金汇总表', 24, 700, 1040, 336, 15, {
+                title: '年度与类别资金汇总',
+                maxRows: 5,
+                headers: ['年度', '基金类别', '年初', '增加', '使用', '年末', '同比'],
+            }), createFinanceSqlDataSource(`
+                WITH selected_year AS (
+                  SELECT CAST({{selectedYear}} AS INTEGER) AS year_num
+                ),
+                summary_rows AS (
+                  SELECT year_num,
+                         fund_category_code,
+                         fund_category_sort,
+                         fund_category_label,
+                         opening_amount,
+                         increase_amount,
+                         usage_amount,
+                         derived_balance,
+                         year_over_year_growth_rate
+                  FROM public.biz_dws_own_fund_yearly
+                  WHERE year_num = (SELECT year_num FROM selected_year)
+                  UNION ALL
+                  SELECT year_num,
+                         fund_category_code,
+                         fund_category_sort,
+                         fund_category_label,
+                         opening_amount,
+                         increase_amount,
+                         usage_amount,
+                         derived_balance,
+                         year_over_year_growth_rate
+                  FROM public.biz_dws_own_fund_yearly
+                  WHERE fund_category_code = '全部'
+                    AND year_num = (SELECT year_num - 1 FROM selected_year)
+                )
+                SELECT year_num::text AS year_label,
+                       fund_category_label,
+                       TO_CHAR(opening_amount, '${FINANCE_AMOUNT_PATTERN}') AS opening_amount,
+                       TO_CHAR(increase_amount, '${FINANCE_AMOUNT_PATTERN}') AS increase_amount,
+                       TO_CHAR(usage_amount, '${FINANCE_AMOUNT_PATTERN}') AS usage_amount,
+                       TO_CHAR(derived_balance, '${FINANCE_AMOUNT_PATTERN}') AS derived_balance,
+                       CASE
+                         WHEN year_over_year_growth_rate IS NULL THEN '--'
+                         ELSE TO_CHAR(year_over_year_growth_rate, '${FINANCE_PERCENT_PATTERN}') || '%'
+                       END AS year_over_year_growth_rate
+                FROM summary_rows
+                ORDER BY
+                  CASE
+                    WHEN fund_category_code = '全部'
+                     AND year_num = (SELECT year_num - 1 FROM selected_year) THEN 0
+                    ELSE 1
+                  END,
+                  year_num,
+                  fund_category_sort
+            `, { maxRows: 5, parameterBindings: ownFundBindings })),
+            withDataSource(createFinancePluginComponent('of-status', 'container', 'status-grid', '资金状态卡', 1084, 700, 812, 160, 15, {
+                title: '年度资金摘要',
+                titleField: 'title',
+                valueField: 'value',
+                hintField: 'hint',
+                toneField: 'tone',
+            }), createFinanceSqlDataSource(`
+                WITH current_year AS (
+                  SELECT *
+                  FROM public.biz_ads_own_fund_kpi
+                  WHERE year_num = CAST({{selectedYear}} AS INTEGER)
+                ),
+                total_fund AS (
+                  SELECT *
+                  FROM current_year
+                  WHERE fund_category_code = '全部'
+                ),
+                top_category AS (
+                  SELECT fund_category_label, year_end_balance
+                  FROM current_year
+                  WHERE fund_category_code <> '全部'
+                  ORDER BY year_end_balance DESC
+                  LIMIT 1
+                )
+                SELECT '数据完整性' AS title,
+                       CASE WHEN COALESCE((SELECT is_complete_sources FROM total_fund), FALSE) THEN '完整' ELSE '待核验' END AS value,
+                       COALESCE((SELECT source_count::text || ' 类来源齐全' FROM total_fund), '暂无数据') AS hint,
+                       CASE WHEN COALESCE((SELECT is_complete_sources FROM total_fund), FALSE) THEN 'success' ELSE 'warning' END AS tone
+                UNION ALL
+                SELECT '净增加额',
+                       COALESCE((SELECT TO_CHAR(year_end_balance - opening_amount, '${FINANCE_AMOUNT_PATTERN}') || ' 万元' FROM total_fund), '暂无数据'),
+                       '年末余额较年初余额变化',
+                       'accent'
+                UNION ALL
+                SELECT '使用率',
+                       COALESCE((SELECT TO_CHAR(usage_rate, '${FINANCE_PERCENT_PATTERN}') || '%' FROM total_fund), '暂无数据'),
+                       '预计使用 ÷ (年初 + 增加)',
+                       'warning'
+                UNION ALL
+                SELECT '主体基金',
+                       COALESCE((SELECT fund_category_label FROM top_category), '暂无数据'),
+                       COALESCE((SELECT TO_CHAR(year_end_balance, '${FINANCE_AMOUNT_PATTERN}') || ' 万元' FROM top_category), '暂无数据'),
+                       'accent'
+            `, { maxRows: 4, parameterBindings: ownFundBindings })),
+            createFinancePluginComponent('of-note', 'markdown-text', 'note-panel', '口径说明', 1084, 876, 812, 160, 15, {
+                title: '自有资金口径',
                 notes: [
-                    '年末余额 = 年初余额 + 预计增加 − 预计使用，合计列直接取自数据表。',
-                    '资金使用率 = 预计使用 ÷（年初 + 预计增加）× 100%。',
-                    '余额增长率 =（年末余额 − 年初）÷ 年初 × 100%，正值=扩大，负值=净消耗。',
+                    '年末余额 = 年初余额 + 预计增加 - 预计使用。',
+                    '净变动率反映相对年初余额的变化，同比增长率单独按上年年末余额计算。',
+                    '模板只保留年初、增加、使用、年末和同比等财务常用指标。',
                 ],
             }),
         ],
@@ -2135,7 +2496,7 @@ const personalBalanceVariables: ScreenGlobalVariable[] = [
 const personalBalanceDashboardTemplate: ScreenTemplate = {
     id: 'fin-personal-balance',
     name: '辅助余额表_个人维度',
-    description: '个人维度辅助余额驾驶舱：借贷分布、人员排行、部门结构和个人明细。',
+    description: '个人维度辅助余额驾驶舱：借贷结构、个人净额排行、重点风险与人员明细。',
     thumbnail: '👤',
     category: 'finance',
     tags: ['个人辅助余额', '借款', '职工', '余额'],
@@ -2156,87 +2517,214 @@ const personalBalanceDashboardTemplate: ScreenTemplate = {
                 dateText: '数据日期：2026-03-30',
             }),
             createFinancePluginComponent('pb-filters', 'container', 'filter-strip', '财务筛选条', 24, 142, 1872, 74, 35, {
-                filters: ['年度: 2026', '职工: 全部', '部门: 全部', '关键词: 借款/备用金'],
+                filters: ['部门: 全部', '职工: 全部', '科目: 借款 / 应付薪酬'],
             }),
-            createFinancePluginComponent('pb-kpi-net', 'number-card', 'kpi-card', '净余额', 24, 236, 282, 138, 30, {
+            withDataSource(createFinancePluginComponent('pb-kpi-net', 'number-card', 'kpi-card', '净余额', 24, 236, 360, 138, 30, {
                 title: '净余额',
-                value: '52.71',
-                unit: '万元',
-                hint: '借方净额',
-                tone: 'accent',
-            }),
-            createFinancePluginComponent('pb-kpi-debit', 'number-card', 'kpi-card', '借方合计', 322, 236, 282, 138, 30, {
-                title: '借方合计',
-                value: '60.29',
-                unit: '万元',
-                hint: '主要来自备用金/借款',
+                unit: '元',
+                precision: 2,
+                hint: '正数为借方净额，负数为贷方净额',
+                tone: 'danger',
+            }), createFinanceSqlDataSource(`
+                SELECT COALESCE(SUM(balance), 0) AS value
+                FROM public.biz_dwd_aux_balance_personal
+                ${PERSONAL_BALANCE_FILTER_SQL}
+            `, { parameterBindings: personalBalanceBindings })),
+            withDataSource(createFinancePluginComponent('pb-kpi-debit', 'number-card', 'kpi-card', '借方余额', 396, 236, 360, 138, 30, {
+                title: '借方余额',
+                unit: '元',
+                precision: 2,
+                hint: '借方余额合计',
                 tone: 'warning',
-            }),
-            createFinancePluginComponent('pb-kpi-credit', 'number-card', 'kpi-card', '贷方合计', 620, 236, 282, 138, 30, {
-                title: '贷方合计',
-                value: '7.58',
-                unit: '万元',
-                hint: '贷方冲减',
+            }), createFinanceSqlDataSource(`
+                SELECT COALESCE(SUM(CASE WHEN balance > 0 THEN balance ELSE 0 END), 0) AS value
+                FROM public.biz_dwd_aux_balance_personal
+                ${PERSONAL_BALANCE_FILTER_SQL}
+            `, { parameterBindings: personalBalanceBindings })),
+            withDataSource(createFinancePluginComponent('pb-kpi-credit', 'number-card', 'kpi-card', '贷方余额', 768, 236, 360, 138, 30, {
+                title: '贷方余额',
+                unit: '元',
+                precision: 2,
+                hint: '贷方余额合计',
                 tone: 'success',
-            }),
-            createFinancePluginComponent('pb-kpi-employee', 'number-card', 'kpi-card', '涉及职工', 918, 236, 282, 138, 30, {
+            }), createFinanceSqlDataSource(`
+                SELECT COALESCE(SUM(CASE WHEN balance < 0 THEN ABS(balance) ELSE 0 END), 0) AS value
+                FROM public.biz_dwd_aux_balance_personal
+                ${PERSONAL_BALANCE_FILTER_SQL}
+            `, { parameterBindings: personalBalanceBindings })),
+            withDataSource(createFinancePluginComponent('pb-kpi-employee', 'number-card', 'kpi-card', '涉及职工', 1140, 236, 360, 138, 30, {
                 title: '涉及职工',
-                value: '12',
                 unit: '人',
-                hint: '覆盖 8 个部门',
+                precision: 0,
+                hint: '存在借贷往来记录',
                 tone: 'accent',
-            }),
-            createComponent('pb-chart-employee', 'bar-chart', '职工余额分布', 24, 394, 596, 286, 20, {
-                title: '职工余额分布',
-                xAxisData: ['王强', '赵敏', '吴杰', '郑华', '孙磊', '钱波', '李工', '张工'],
-                series: [{ name: '净余额(万)', data: [18.34, 9.46, 9.02, 5.45, 3.4, 4.62, 2.7, 1.78] }],
+            }), createFinanceSqlDataSource(`
+                SELECT COUNT(DISTINCT employee_name) AS value
+                FROM public.biz_dwd_aux_balance_personal
+                ${PERSONAL_BALANCE_FILTER_SQL}
+            `, { parameterBindings: personalBalanceBindings })),
+            withDataSource(createFinancePluginComponent('pb-kpi-dept', 'number-card', 'kpi-card', '涉及部门', 1512, 236, 360, 138, 30, {
+                title: '涉及部门',
+                unit: '个',
+                precision: 0,
+                hint: '存在个人往来记录的部门',
+                tone: 'accent',
+            }), createFinanceSqlDataSource(`
+                SELECT COUNT(DISTINCT employee_dept) AS value
+                FROM public.biz_dwd_aux_balance_personal
+                ${PERSONAL_BALANCE_FILTER_SQL}
+            `, { parameterBindings: personalBalanceBindings })),
+            withDataSource(createComponent('pb-chart-employee', 'bar-chart', '职工净额分布', 24, 394, 760, 286, 20, {
+                title: '职工净余额分布',
+                xAxisField: 'employee_name',
+                series: [{ name: '净余额(元)', field: 'net_balance' }],
                 seriesColors: ['#2e73d6'],
                 backgroundColor: '#ffffff',
-            }),
-            createComponent('pb-chart-dept', 'pie-chart', '部门余额占比', 640, 394, 410, 286, 20, {
-                title: '部门分布',
-                data: [
-                    { name: 'IT部', value: 23.44 },
-                    { name: '采购部', value: 13.54 },
-                    { name: '研发部', value: 13.64 },
-                    { name: '电力部', value: 6.90 },
-                    { name: '营销部', value: 5.45 },
-                ],
-                seriesColors: ['#2e73d6', '#62a0ff', '#1f9d8b', '#f59e0b', '#8b5cf6'],
+            }), createFinanceSqlDataSource(`
+                SELECT employee_name, SUM(balance) AS net_balance
+                FROM public.biz_dwd_aux_balance_personal
+                ${PERSONAL_BALANCE_FILTER_SQL}
+                GROUP BY employee_name
+                ORDER BY net_balance ASC, employee_name
+                LIMIT 8
+            `, { maxRows: 8, parameterBindings: personalBalanceBindings })),
+            withDataSource(createComponent('pb-chart-subject', 'pie-chart', '借贷结构', 804, 394, 360, 286, 20, {
+                title: '借贷结构',
+                nameField: 'name',
+                valueField: 'value',
+                seriesColors: ['#2e73d6', '#f59e0b'],
                 backgroundColor: '#ffffff',
-            }),
-            createFinancePluginComponent('pb-ranking', 'table', 'ranking-list', '借款TOP', 1070, 394, 410, 286, 20, {
-                items: [
-                    { name: '王强', value: '18.34', extra: 'IT部 / 备用金' },
-                    { name: '赵敏', value: '9.46', extra: '采购部 / 采购预付款' },
-                    { name: '吴杰', value: '9.02', extra: '研发部 / 试验借款' },
-                    { name: '郑华', value: '5.45', extra: '营销部 / 差旅借款' },
-                ],
-            }),
-            createFinancePluginComponent('pb-note', 'markdown-text', 'note-panel', '借贷口径说明', 1500, 394, 396, 286, 20, {
-                title: '借贷口径说明',
+            }), createFinanceSqlDataSource(`
+                WITH base AS (
+                  SELECT *
+                  FROM public.biz_dwd_aux_balance_personal
+                  ${PERSONAL_BALANCE_FILTER_SQL}
+                )
+                SELECT '借方余额' AS name,
+                       COALESCE(SUM(CASE WHEN balance > 0 THEN balance ELSE 0 END), 0) AS value
+                FROM base
+                UNION ALL
+                SELECT '贷方余额' AS name,
+                       COALESCE(SUM(CASE WHEN balance < 0 THEN ABS(balance) ELSE 0 END), 0) AS value
+                FROM base
+            `, { maxRows: 2, parameterBindings: personalBalanceBindings })),
+            withDataSource(createFinancePluginComponent('pb-ranking', 'table', 'ranking-list', '贷方净额排行', 1184, 394, 356, 286, 20, {
+                title: '贷方净额 TOP 5',
+                maxItems: 5,
+                nameField: 'name',
+                valueField: 'value',
+                extraField: 'extra',
+            }), createFinanceSqlDataSource(`
+                WITH employee_balance AS (
+                  SELECT employee_name,
+                         employee_dept,
+                         SUM(balance) AS net_balance
+                  FROM public.biz_dwd_aux_balance_personal
+                  ${PERSONAL_BALANCE_FILTER_SQL}
+                  GROUP BY employee_name, employee_dept
+                )
+                SELECT employee_name AS name,
+                       TO_CHAR(net_balance, '${FINANCE_AMOUNT_PATTERN}') AS value,
+                       employee_dept AS extra
+                FROM employee_balance
+                WHERE net_balance < 0
+                ORDER BY net_balance ASC, employee_name
+                LIMIT 5
+            `, { maxRows: 5, parameterBindings: personalBalanceBindings })),
+            withDataSource(createFinancePluginComponent('pb-status', 'container', 'status-grid', '个人往来状态卡', 1560, 394, 336, 286, 20, {
+                title: '重点关注',
+                titleField: 'title',
+                valueField: 'value',
+                hintField: 'hint',
+                toneField: 'tone',
+            }), createFinanceSqlDataSource(`
+                WITH base AS (
+                  SELECT *
+                  FROM public.biz_dwd_aux_balance_personal
+                  ${PERSONAL_BALANCE_FILTER_SQL}
+                ),
+                summary AS (
+                  SELECT COALESCE(SUM(balance), 0) AS net_balance
+                  FROM base
+                ),
+                dept_focus AS (
+                  SELECT employee_dept, SUM(balance) AS net_balance
+                  FROM base
+                  GROUP BY employee_dept
+                  ORDER BY ABS(SUM(balance)) DESC, employee_dept
+                  LIMIT 1
+                ),
+                employee_focus AS (
+                  SELECT employee_name, employee_dept, SUM(balance) AS net_balance
+                  FROM base
+                  GROUP BY employee_name, employee_dept
+                  ORDER BY ABS(SUM(balance)) DESC, employee_name
+                  LIMIT 1
+                ),
+                debit_focus AS (
+                  SELECT employee_dept,
+                         SUM(CASE WHEN balance > 0 THEN balance ELSE 0 END) AS debit_total
+                  FROM base
+                  GROUP BY employee_dept
+                  ORDER BY debit_total DESC, employee_dept
+                  LIMIT 1
+                )
+                SELECT '净额方向' AS title,
+                       CASE WHEN COALESCE((SELECT net_balance FROM summary), 0) < 0 THEN '贷方净额' ELSE '借方净额' END AS value,
+                       COALESCE((SELECT TO_CHAR(net_balance, '${FINANCE_AMOUNT_PATTERN}') || ' 元' FROM summary), '暂无数据') AS hint,
+                       CASE WHEN COALESCE((SELECT net_balance FROM summary), 0) < 0 THEN 'danger' ELSE 'accent' END AS tone
+                UNION ALL
+                SELECT '重点部门',
+                       COALESCE((SELECT employee_dept FROM dept_focus), '暂无数据'),
+                       COALESCE((SELECT TO_CHAR(net_balance, '${FINANCE_AMOUNT_PATTERN}') || ' 元' FROM dept_focus), '暂无数据'),
+                       'warning'
+                UNION ALL
+                SELECT '最大单人',
+                       COALESCE((SELECT employee_name FROM employee_focus), '暂无数据'),
+                       COALESCE((SELECT employee_dept || ' / ' || TO_CHAR(net_balance, '${FINANCE_AMOUNT_PATTERN}') || ' 元' FROM employee_focus), '暂无数据'),
+                       'danger'
+                UNION ALL
+                SELECT '借方集中',
+                       COALESCE((SELECT employee_dept FROM debit_focus), '暂无数据'),
+                       COALESCE((SELECT TO_CHAR(debit_total, '${FINANCE_AMOUNT_PATTERN}') || ' 元借方' FROM debit_focus), '暂无数据'),
+                       'accent'
+            `, { maxRows: 4, parameterBindings: personalBalanceBindings })),
+            withDataSource(createFinancePluginComponent('pb-summary', 'table', 'summary-table', '个人余额明细', 24, 700, 1260, 336, 15, {
+                title: '个人借贷明细',
+                maxRows: 8,
+                headers: ['职工', '部门', '借方余额(元)', '贷方余额(元)', '净余额(元)', '财务关注'],
+            }), createFinanceSqlDataSource(`
+                WITH employee_balance AS (
+                  SELECT employee_name,
+                         employee_dept,
+                         SUM(CASE WHEN balance > 0 THEN balance ELSE 0 END) AS debit_total,
+                         SUM(CASE WHEN balance < 0 THEN ABS(balance) ELSE 0 END) AS credit_total,
+                         SUM(balance) AS net_balance
+                  FROM public.biz_dwd_aux_balance_personal
+                  ${PERSONAL_BALANCE_FILTER_SQL}
+                  GROUP BY employee_name, employee_dept
+                )
+                SELECT employee_name,
+                       employee_dept,
+                       TO_CHAR(debit_total, '${FINANCE_AMOUNT_PATTERN}') AS debit_total,
+                       TO_CHAR(credit_total, '${FINANCE_AMOUNT_PATTERN}') AS credit_total,
+                       TO_CHAR(net_balance, '${FINANCE_AMOUNT_PATTERN}') AS net_balance,
+                       CASE
+                         WHEN net_balance <= -10000 THEN '贷方净额较大'
+                         WHEN net_balance < 0 THEN '贷方略高'
+                         WHEN net_balance >= 10000 THEN '借方净额较大'
+                         ELSE '基本平衡'
+                       END AS finance_focus
+                FROM employee_balance
+                ORDER BY ABS(net_balance) DESC, employee_name
+                LIMIT 8
+            `, { maxRows: 8, parameterBindings: personalBalanceBindings })),
+            createFinancePluginComponent('pb-note', 'markdown-text', 'note-panel', '借贷口径说明', 1304, 700, 592, 336, 15, {
+                title: '个人往来口径',
                 notes: [
-                    '个人维度更强调借方/贷方口径和借款排行。',
-                    '说明块保留原型中的业务解释，但采用统一财务白底卡片风格。',
-                    '如需加入搜索框，可在设计器继续拖入标准 filter-input 组件。',
-                ],
-            }),
-            createFinancePluginComponent('pb-summary', 'table', 'summary-table', '个人余额明细', 24, 700, 1260, 336, 15, {
-                headers: ['科目编号', '科目名称', '职工部门', '职工名称', '余额'],
-                rows: [
-                    financeRow('1122.01', '备用金', '制造部', '张工', '8,500'),
-                    financeRow('1122.02', '差旅费借款', 'IT部', '孙磊', '3,200'),
-                    financeRow('1122.03', '采购预付款', '采购部', '赵敏', '12,600'),
-                    financeRow('1122.01', '备用金', '研发部', '钱波', '5,800'),
-                    financeRow('2211.01', '工资应付', '营销部', '郑华', '-15,400'),
-                ],
-            }),
-            createFinancePluginComponent('pb-ranking-side', 'table', 'ranking-list', '部门排行', 1304, 700, 592, 336, 15, {
-                items: [
-                    { name: 'IT部', value: '23.44', extra: '借方净额' },
-                    { name: '研发部', value: '13.64', extra: '借方净额' },
-                    { name: '采购部', value: '13.54', extra: '借方净额' },
-                    { name: '营销部', value: '5.45', extra: '借方净额' },
+                    '个人维度只保留借方、贷方、净额三类财务常用指标。',
+                    '净余额为正表示借方净额，为负表示贷方净额，适合直接做风险筛查。',
+                    '模板把复杂部门拆解收敛到重点关注卡和人员明细表，便于财务复核。',
                 ],
             }),
         ],
@@ -2248,10 +2736,10 @@ const projectFundVariables: ScreenGlobalVariable[] = [];
 const projectFundDashboardTemplate: ScreenTemplate = {
     id: 'fin-project-fund',
     name: '项目经费表',
-    description: '项目经费执行驾驶舱：经费结构分布、直接成本执行率、总经费执行率和项目明细。',
+    description: '项目经费驾驶舱：总经费、总支出、剩余经费、超支金额、收款情况与项目明细。',
     thumbnail: '📊',
     category: 'finance',
-    tags: ['项目经费', '执行率', '预算', '直接成本'],
+    tags: ['项目经费', '收款', '预算执行', '剩余经费'],
     recommendedVariables: projectFundVariables.map((v) => v.key),
     config: {
         name: '项目经费表',
@@ -2269,87 +2757,201 @@ const projectFundDashboardTemplate: ScreenTemplate = {
                 dateText: '数据日期：2026-03-30',
             }),
             createFinancePluginComponent('pf-filters', 'container', 'filter-strip', '财务筛选条', 24, 142, 1872, 74, 35, {
-                filters: ['执行周期: 本年度'],
+                filters: ['研制周期: 全部', '研究室: 全部', '重大项目: 全部'],
             }),
-            createFinancePluginComponent('pf-kpi-budget', 'number-card', 'kpi-card', '总经费', 24, 236, 230, 138, 30, {
+            withDataSource(createFinancePluginComponent('pf-kpi-budget', 'number-card', 'kpi-card', '总经费', 24, 236, 292, 138, 30, {
                 title: '总经费',
-                value: '54,500',
                 unit: '万元',
-                hint: '全部项目合计',
+                precision: 2,
+                hint: '全部项目经费合计',
                 tone: 'accent',
-            }),
-            createFinancePluginComponent('pf-kpi-direct', 'number-card', 'kpi-card', '直接成本控制数', 270, 236, 230, 138, 30, {
-                title: '直接成本控制数',
-                value: '43,600',
+            }), createFinanceSqlDataSource(`
+                SELECT sum_total_fund AS value
+                FROM public.biz_ads_project_fund_kpi
+                WHERE summary_scope = 'all_projects'
+                  AND scope_key = 'all'
+                LIMIT 1
+            `)),
+            withDataSource(createFinancePluginComponent('pf-kpi-spent', 'number-card', 'kpi-card', '总支出', 328, 236, 292, 138, 30, {
+                title: '总支出',
                 unit: '万元',
-                hint: '预算边界',
-                tone: 'accent',
-            }),
-            createFinancePluginComponent('pf-kpi-spent', 'number-card', 'kpi-card', '直接成本已支出', 516, 236, 230, 138, 30, {
-                title: '直接成本已支出',
-                value: '37,200',
-                unit: '万元',
-                hint: '由控制数×执行率推算',
+                precision: 2,
+                hint: '直接 + 间接支出',
                 tone: 'warning',
-            }),
-            createFinancePluginComponent('pf-kpi-drate', 'number-card', 'kpi-card', '直接成本执行率', 762, 236, 230, 138, 30, {
-                title: '直接成本执行率',
-                value: '85.3',
-                unit: '%',
-                hint: '整体加权执行率',
-                tone: 'warning',
-            }),
-            createFinancePluginComponent('pf-kpi-trate', 'number-card', 'kpi-card', '总经费执行率', 1008, 236, 230, 138, 30, {
-                title: '总经费执行率',
-                value: '79.6',
-                unit: '%',
-                hint: '总支出÷总经费',
+            }), createFinanceSqlDataSource(`
+                SELECT sum_total_spent AS value
+                FROM public.biz_ads_project_fund_kpi
+                WHERE summary_scope = 'all_projects'
+                  AND scope_key = 'all'
+                LIMIT 1
+            `)),
+            withDataSource(createFinancePluginComponent('pf-kpi-remaining', 'number-card', 'kpi-card', '剩余经费', 632, 236, 292, 138, 30, {
+                title: '剩余经费',
+                unit: '万元',
+                precision: 2,
+                hint: '仅汇总正余额项目',
+                tone: 'success',
+            }), createFinanceSqlDataSource(`
+                SELECT sum_remaining_fund AS value
+                FROM public.biz_ads_project_fund_kpi
+                WHERE summary_scope = 'all_projects'
+                  AND scope_key = 'all'
+                LIMIT 1
+            `)),
+            withDataSource(createFinancePluginComponent('pf-kpi-overspend', 'number-card', 'kpi-card', '超支金额', 936, 236, 292, 138, 30, {
+                title: '超支金额',
+                unit: '万元',
+                precision: 2,
+                hint: '负剩余经费绝对值汇总',
+                tone: 'danger',
+            }), createFinanceSqlDataSource(`
+                SELECT COALESCE(SUM(GREATEST(-remaining_fund, 0)), 0) AS value
+                FROM public.biz_dwd_project_fund
+            `)),
+            withDataSource(createFinancePluginComponent('pf-kpi-received', 'number-card', 'kpi-card', '已收款', 1240, 236, 292, 138, 30, {
+                title: '已收款',
+                unit: '万元',
+                precision: 2,
+                hint: '已回款金额',
                 tone: 'accent',
-            }),
-            createComponent('pf-chart-structure', 'bar-chart', '经费结构分布', 24, 394, 920, 286, 20, {
-                title: '经费结构分布',
-                xAxisData: ['PRJ-001', 'PRJ-002', 'PRJ-003', 'PRJ-004', 'PRJ-005', 'PRJ-006', 'PRJ-007', 'PRJ-008'],
+            }), createFinanceSqlDataSource(`
+                SELECT sum_received_fund AS value
+                FROM public.biz_ads_project_fund_kpi
+                WHERE summary_scope = 'all_projects'
+                  AND scope_key = 'all'
+                LIMIT 1
+            `)),
+            withDataSource(createFinancePluginComponent('pf-kpi-receivable', 'number-card', 'kpi-card', '待收经费', 1544, 236, 292, 138, 30, {
+                title: '待收经费',
+                unit: '万元',
+                precision: 2,
+                hint: '不依赖项目状态字段',
+                tone: 'warning',
+            }), createFinanceSqlDataSource(`
+                SELECT sum_receivable_fund AS value
+                FROM public.biz_ads_project_fund_kpi
+                WHERE summary_scope = 'all_projects'
+                  AND scope_key = 'all'
+                LIMIT 1
+            `)),
+            withDataSource(createComponent('pf-chart-budget', 'bar-chart', '项目预算与执行', 24, 394, 880, 286, 20, {
+                title: '项目预算与执行',
+                xAxisField: 'project_id',
                 series: [
-                    { name: '直接成本支出', data: [3200, 9800, 4100, 2800, 1350, 5200, 4200, 3800] },
-                    { name: '间接费用支出', data: [520, 1680, 780, 380, 130, 960, 720, 540] },
-                    { name: '剩余', data: [1080, 520, 1620, 20, -30, 1040, 280, 460] },
+                    { name: '总经费', field: 'total_fund' },
+                    { name: '总支出', field: 'total_spent' },
+                    { name: '剩余经费', field: 'remaining_positive' },
                 ],
-                seriesColors: ['#2e73d6', '#8b5cf6', '#e0eaf4'],
+                seriesColors: ['#9dbcf8', '#2e73d6', '#1f9d8b'],
                 backgroundColor: '#ffffff',
-            }),
-            createComponent('pf-gauge-direct', 'gauge-chart', '直接成本执行率仪表', 964, 394, 456, 286, 20, {
-                title: '直接成本执行率',
-                value: 85.3,
-                max: 100,
-                unit: '%',
-                seriesColors: ['#2e73d6'],
-                backgroundColor: '#ffffff',
-            }),
-            createComponent('pf-gauge-total', 'gauge-chart', '总经费执行率仪表', 1440, 394, 456, 286, 20, {
-                title: '总经费执行率',
-                value: 79.6,
-                max: 100,
-                unit: '%',
-                seriesColors: ['#2e73d6'],
-                backgroundColor: '#ffffff',
-            }),
-            createFinancePluginComponent('pf-summary', 'table', 'summary-table', '项目经费明细', 24, 700, 1260, 336, 15, {
-                headers: ['项目编号', '研制周期', '总经费', '直接成本控制数', '预留间接费用和收益', '直接成本执行率', '间接费用支出和收益总额', '总支出', '总执行率'],
-                rows: [
-                    financeRow('PRJ-001', '2026.01-2027.06', '4,800', '3,840', '960', '83.3%', '520', '3,721', '77.5%'),
-                    financeRow('PRJ-002', '2025.03-2026.04', '12,000', '9,600', '2,400', '102.1%', '1,680', '11,472', '95.6%'),
-                    financeRow('PRJ-003', '2025.06-2027.01', '6,500', '5,200', '1,300', '78.8%', '780', '4,878', '75.0%'),
-                    financeRow('PRJ-004', '2025.01-2026.03', '3,200', '2,560', '640', '109.4%', '380', '3,180', '99.4%'),
-                    financeRow('PRJ-005', '2024.12-2026.01', '1,500', '1,200', '300', '112.5%', '130', '1,480', '98.7%'),
+            }), createFinanceSqlDataSource(`
+                SELECT project_id,
+                       total_fund,
+                       total_spent,
+                       GREATEST(remaining_fund, 0) AS remaining_positive
+                FROM public.biz_dwd_project_fund
+                ORDER BY project_id
+            `, { maxRows: 8 })),
+            withDataSource(createComponent('pf-chart-collection', 'bar-chart', '项目收款情况', 924, 394, 560, 286, 20, {
+                title: '项目收款情况',
+                xAxisField: 'project_id',
+                series: [
+                    { name: '已收款', field: 'received_fund' },
+                    { name: '待收经费', field: 'receivable_fund' },
                 ],
-            }),
-            createFinancePluginComponent('pf-note', 'markdown-text', 'note-panel', '预算执行说明', 1304, 700, 592, 336, 15, {
-                title: '指标计算说明',
+                seriesColors: ['#2e73d6', '#f59e0b'],
+                backgroundColor: '#ffffff',
+            }), createFinanceSqlDataSource(`
+                SELECT project_id, received_fund, receivable_fund
+                FROM public.biz_dwd_project_fund
+                ORDER BY receivable_fund DESC, project_id
+                LIMIT 6
+            `, { maxRows: 6 })),
+            withDataSource(createFinancePluginComponent('pf-status', 'container', 'status-grid', '项目经费状态卡', 1504, 394, 392, 286, 20, {
+                title: '执行与回款摘要',
+                titleField: 'title',
+                valueField: 'value',
+                hintField: 'hint',
+                toneField: 'tone',
+            }), createFinanceSqlDataSource(`
+                WITH summary AS (
+                  SELECT *
+                  FROM public.biz_ads_project_fund_kpi
+                  WHERE summary_scope = 'all_projects'
+                    AND scope_key = 'all'
+                ),
+                overspend AS (
+                  SELECT COUNT(*) FILTER (WHERE remaining_fund < 0) AS overspend_project_count,
+                         COALESCE(SUM(GREATEST(-remaining_fund, 0)), 0) AS overspend_amount
+                  FROM public.biz_dwd_project_fund
+                )
+                SELECT '总执行率' AS title,
+                       COALESCE((SELECT TO_CHAR(overall_total_rate, '${FINANCE_PERCENT_PATTERN}') || '%' FROM summary), '暂无数据') AS value,
+                       '总支出 ÷ 总经费' AS hint,
+                       'accent' AS tone
+                UNION ALL
+                SELECT '直接成本执行率',
+                       COALESCE((SELECT TO_CHAR(overall_direct_rate, '${FINANCE_PERCENT_PATTERN}') || '%' FROM summary), '暂无数据'),
+                       '直接支出 ÷ 直接控制数',
+                       'warning'
+                UNION ALL
+                SELECT '待收占比',
+                       COALESCE((
+                         SELECT TO_CHAR(
+                           CASE WHEN sum_total_fund = 0 THEN 0 ELSE sum_receivable_fund * 100.0 / sum_total_fund END,
+                           '${FINANCE_PERCENT_PATTERN}'
+                         ) || '%'
+                         FROM summary
+                       ), '暂无数据'),
+                       '待收经费 ÷ 总经费',
+                       'warning'
+                UNION ALL
+                SELECT '超支项目',
+                       COALESCE((SELECT overspend_project_count::text || ' 个' FROM overspend), '0 个'),
+                       COALESCE((SELECT TO_CHAR(overspend_amount, '${FINANCE_AMOUNT_PATTERN}') || ' 万元' FROM overspend), '0.00 万元'),
+                       CASE WHEN COALESCE((SELECT overspend_project_count FROM overspend), 0) > 0 THEN 'danger' ELSE 'success' END
+            `, { maxRows: 4 })),
+            withDataSource(createFinancePluginComponent('pf-summary', 'table', 'summary-table', '项目经费明细', 24, 700, 1260, 336, 15, {
+                title: '项目经费明细',
+                maxRows: 8,
+                headers: ['项目编号', '研究室', '总经费(万)', '总支出(万)', '剩余经费(万)', '已收款(万)', '待收经费(万)', '项目属性'],
+            }), createFinanceSqlDataSource(`
+                SELECT project_id,
+                       research_dept,
+                       TO_CHAR(total_fund, '${FINANCE_AMOUNT_PATTERN}') AS total_fund,
+                       TO_CHAR(total_spent, '${FINANCE_AMOUNT_PATTERN}') AS total_spent,
+                       TO_CHAR(remaining_fund, '${FINANCE_AMOUNT_PATTERN}') AS remaining_fund,
+                       TO_CHAR(received_fund, '${FINANCE_AMOUNT_PATTERN}') AS received_fund,
+                       TO_CHAR(receivable_fund, '${FINANCE_AMOUNT_PATTERN}') AS receivable_fund,
+                       CASE
+                         WHEN is_major_project = '是' THEN '重大项目'
+                         WHEN is_major_project = '否' THEN '非重大项目'
+                         ELSE '未标注'
+                       END AS project_attr
+                FROM public.biz_dwd_project_fund
+                ORDER BY project_id
+                LIMIT 8
+            `, { maxRows: 8 })),
+            withDataSource(createFinancePluginComponent('pf-ranking', 'table', 'ranking-list', '待收经费排行', 1304, 700, 592, 160, 15, {
+                title: '待收经费 TOP 4',
+                maxItems: 4,
+                nameField: 'name',
+                valueField: 'value',
+                extraField: 'extra',
+            }), createFinanceSqlDataSource(`
+                SELECT project_id AS name,
+                       TO_CHAR(receivable_fund, '${FINANCE_AMOUNT_PATTERN}') AS value,
+                       research_dept AS extra
+                FROM public.biz_dwd_project_fund
+                ORDER BY receivable_fund DESC, project_id
+                LIMIT 4
+            `, { maxRows: 4 })),
+            createFinancePluginComponent('pf-note', 'markdown-text', 'note-panel', '预算执行说明', 1304, 876, 592, 160, 15, {
+                title: '项目经费口径',
                 notes: [
-                    '直接成本已支出 = 直接成本控制数 × 直接成本执行率 / 100（派生字段）。',
-                    '总支出 = 直接成本已支出 + 间接费用支出和收益总额。',
-                    '总经费执行率 = 总支出 ÷ 总经费 × 100%。',
-                    '预留间接费用和收益为原始字段，直接取自数据表。',
+                    '剩余经费只汇总正余额项目，超支金额单独汇总负余额绝对值。',
+                    '模板不依赖 project_status 字段，避免状态缺失时口径失真。',
+                    '项目经费大屏优先保留金额、收款、剩余和超支这类财务常用指标。',
                 ],
             }),
         ],

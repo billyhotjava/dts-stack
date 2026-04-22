@@ -2,7 +2,7 @@
 
 -- 项目经费 KPI
 -- 多 scope：all_projects / by_major / by_status
--- 新增：已收款/待收款比率与金额口径
+-- 输出：已收款/待收经费比率与金额口径
 
 WITH base AS (
   SELECT * FROM {{ ref('biz_dws_project_fund_summary') }}
@@ -25,10 +25,10 @@ SELECT
   sum_indirect_spent,
   sum_total_spent,
   sum_remaining_fund,
+  sum_overspend_amount,
 
   sum_received_fund,
   sum_receivable_fund,
-  sum_outstanding_fund,
 
   CASE
     WHEN sum_direct_ctrl > 0 THEN round(sum_direct_spent * 100.0 / sum_direct_ctrl, 2)
@@ -51,9 +51,9 @@ SELECT
   END AS overall_received_rate,
 
   CASE
-    WHEN sum_total_fund > 0 THEN round(sum_outstanding_fund * 100.0 / sum_total_fund, 2)
+    WHEN sum_total_fund > 0 THEN round(sum_receivable_fund * 100.0 / sum_total_fund, 2)
     ELSE 0
-  END AS overall_outstanding_rate,
+  END AS overall_receivable_rate,
 
   direct_rate_over_100_count,
   total_rate_over_100_count,

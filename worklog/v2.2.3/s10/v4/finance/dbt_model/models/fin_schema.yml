@@ -152,7 +152,7 @@ models:
                 severity: warn
 
   - name: biz_dwd_project_fund
-    description: "项目经费事实表：补全 direct_spent 直读、总支出、执行率、已收/待收口径，关联项目状态字典。"
+    description: "项目经费事实表：补全 direct_spent 直读、总支出、可为负的剩余经费、已收/待收口径，关联项目状态字典。"
     columns:
       - name: project_fund_id
         tests:
@@ -215,7 +215,7 @@ models:
 
   # ─── DWS 汇总 ─────────────────────────────────────────
   - name: biz_dws_own_fund_yearly
-    description: "年度基金汇总表：按 年度 × 基金类别 透视 opening/increase/usage，派生 year_end_balance。同时产出 fund_category='全部' 的年度合计。"
+    description: "年度基金汇总表：按 年度 × 基金类别 透视 opening/increase/usage，派生 year_end_balance、net_change_rate 与真正同比增长率。同时产出 fund_category='全部' 的年度合计。"
     columns:
       - name: year_num
         tests:
@@ -224,7 +224,7 @@ models:
                 severity: warn
 
   - name: biz_dws_project_fund_summary
-    description: "项目经费汇总表：多 scope（all_projects / by_major / by_status），含已收/待收/剩余金额与项目计数。"
+    description: "项目经费汇总表：多 scope（all_projects / by_major / by_status），含已收/待收、正向剩余经费、超支金额与按项目去重计数。"
     columns:
       - name: summary_scope
         tests:
@@ -263,7 +263,7 @@ models:
 
   # ─── ADS KPI ──────────────────────────────────────────
   - name: biz_ads_own_fund_kpi
-    description: "年度基金 KPI：按 年度 × 基金类别 输出金额、年末余额、使用率、增长率、告警等级。"
+    description: "年度基金 KPI：按 年度 × 基金类别 输出金额、年末余额、使用率、净变动率、同比增长率与告警等级。"
     columns:
       - name: year_num
         tests:
@@ -277,16 +277,16 @@ models:
                 values: ['healthy', 'warning', 'danger']
               config:
                 severity: warn
-      - name: growth_direction
+      - name: net_change_direction
         tests:
           - accepted_values:
               arguments:
-                values: ['growth', 'decline', 'flat']
+                values: ['positive', 'negative', 'flat']
               config:
                 severity: warn
 
   - name: biz_ads_project_fund_kpi
-    description: "项目经费 KPI：按 summary_scope × scope_key 输出金额汇总、加权执行率、已收/待收/剩余占比、项目计数。"
+    description: "项目经费 KPI：按 summary_scope × scope_key 输出金额汇总、加权执行率、已收/待收/剩余经费/超支金额、项目计数。待收经费为唯一未收口径。"
     columns:
       - name: summary_scope
         tests:

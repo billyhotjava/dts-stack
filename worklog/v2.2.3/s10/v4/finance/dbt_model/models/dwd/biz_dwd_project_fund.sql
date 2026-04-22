@@ -37,9 +37,8 @@ final AS (
   SELECT
     d.*,
     (coalesce(d.direct_spent, 0) + coalesce(d.indirect_spent, 0))::numeric(15,2) AS total_spent,
-    greatest(
-      coalesce(d.total_fund, 0) - (coalesce(d.direct_spent, 0) + coalesce(d.indirect_spent, 0)),
-      0
+    (
+      coalesce(d.total_fund, 0) - (coalesce(d.direct_spent, 0) + coalesce(d.indirect_spent, 0))
     )::numeric(15,2) AS remaining_fund,
     CASE
       WHEN coalesce(d.total_fund, 0) > 0 THEN
@@ -59,13 +58,19 @@ final AS (
         round(coalesce(d.received_fund, 0) * 100.0 / d.total_fund, 2)
       ELSE 0
     END AS received_rate,
-    (coalesce(d.total_fund, 0) - coalesce(d.received_fund, 0))::numeric(15,2) AS outstanding_fund,
     CASE WHEN coalesce(d.direct_rate, 0) > 100 THEN true ELSE false END AS is_direct_rate_over_100
   FROM derived d
 )
 
 SELECT
-  concat('project_fund:', f.project_id, ':', coalesce(f.cycle, 'unknown')) AS project_fund_id,
+  concat(
+    'project_fund:',
+    coalesce(f.row_no::text, 'unknown'),
+    ':',
+    f.project_id,
+    ':',
+    coalesce(f.cycle, 'unknown')
+  ) AS project_fund_id,
 
   f.source_row_id,
   f.source_table,
@@ -108,7 +113,6 @@ SELECT
 
   f.received_fund,
   f.receivable_fund,
-  f.outstanding_fund,
   f.received_rate,
 
   f.is_direct_rate_over_100,

@@ -19,8 +19,8 @@ SELECT
   {{ nullif_placeholder("dept_name") }} AS dept_name,
 
   cast(contract_name as text) AS contract_name_raw,
-  nullif(btrim(cast(contract_name as text)), '') AS contract_name,
+  {{ nullif_placeholder("contract_name") }} AS contract_name,
 
   {{ parse_numeric_safe("balance") }}::numeric(15,2) AS balance
 FROM {{ source('fin_ods', 'aux_balance') }}
-WHERE subject_code IS NOT NULL
+WHERE {{ nullif_placeholder("subject_code") }} IS NOT NULL

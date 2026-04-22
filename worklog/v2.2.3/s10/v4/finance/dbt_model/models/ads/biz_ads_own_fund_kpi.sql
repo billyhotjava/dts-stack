@@ -16,7 +16,8 @@ SELECT
   derived_balance AS year_end_balance,
 
   usage_rate,
-  growth_rate,
+  net_change_rate,
+  year_over_year_growth_rate,
 
   CASE
     WHEN usage_rate > 95 THEN 'danger'
@@ -25,10 +26,10 @@ SELECT
   END AS usage_rate_level,
 
   CASE
-    WHEN growth_rate > 0 THEN 'growth'
-    WHEN growth_rate < 0 THEN 'decline'
+    WHEN net_change_rate > 0 THEN 'positive'
+    WHEN net_change_rate < 0 THEN 'negative'
     ELSE 'flat'
-  END AS growth_direction,
+  END AS net_change_direction,
 
   source_count,
   record_count,
