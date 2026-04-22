@@ -266,11 +266,10 @@ services:
       # Host-side absolute path mapping to DTS_DBT_PROJECT_DIR. Required when the backend
       # runs in a container and services/dts-dbt is bind-mounted to /opt/dts/dbt. Airflow
       # runs docker with `-v HOST:CONTAINER` bind mounts, so this must resolve to the same
-      # physical directory the backend writes into. 解析优先级：
-      #   1) 调用方 shell 显式 export / .env 显式声明的 DTS_DBT_HOST_PROJECT_DIR
-      #   2) fallback: ${STACK_ROOT}/services/dts-dbt
-      # dev-up.sh / start.sh / stop.sh 都统一 export 这两个变量以保证三入口一致。
-      DTS_DBT_HOST_PROJECT_DIR: ${DTS_DBT_HOST_PROJECT_DIR:-${STACK_ROOT:-}/services/dts-dbt}
+      # physical directory the backend writes into. This value must come from .env or the
+      # startup scripts; do not use nested compose defaults here because old docker-compose
+      # versions mis-parse them and append a literal `}/services/dts-dbt`.
+      DTS_DBT_HOST_PROJECT_DIR: ${DTS_DBT_HOST_PROJECT_DIR}
       DTS_AIRFLOW_BASE_URL: ${DTS_AIRFLOW_BASE_URL:-http://dts-airflow-webserver:8080}
       DTS_AIRFLOW_USERNAME: ${DTS_AIRFLOW_USERNAME:-${AIRFLOW_ADMIN_USERNAME:-airflow}}
       DTS_AIRFLOW_PASSWORD: ${DTS_AIRFLOW_PASSWORD:-${AIRFLOW_ADMIN_PASSWORD:-airflow}}
