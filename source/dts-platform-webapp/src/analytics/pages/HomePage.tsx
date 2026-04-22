@@ -272,7 +272,7 @@ export default function HomePage() {
 			<div style={{ marginTop: "var(--spacing-xl)" }}>
 				<h2 className="text-lg font-semibold text-primary mb-md">{t(locale, "home.quickActions")}</h2>
 				<div className="grid grid-cols-3 gap-md">
-					<Link to="/bi/questions/new" className="quick-action-card">
+					<Link to="/bi/card/new" className="quick-action-card">
 						<div className="quick-action-card__icon">
 							<QuestionIcon />
 						</div>

@@ -22,7 +22,7 @@ import {
 } from "antd";
 import type { ColumnsType } from "antd/es/table";
 import { PlusOutlined, EditOutlined, DeleteOutlined, UploadOutlined } from "@ant-design/icons";
-import { useSearchParams } from "react-router";
+import { useNavigate, useSearchParams } from "react-router";
 import { useGovernanceManageAccess } from "@/hooks/useModuleManageAccess";
 import { PageHeader } from "@/components/page-header";
 import { DatasetPicker } from "@/components/catalog/DatasetPicker";
@@ -163,6 +163,7 @@ const prettyJson = (value: any) => {
 	}
 };
 export default function Page() {
+	const navigate = useNavigate();
 	const [searchParams, setSearchParams] = useSearchParams();
 	const initialTabKey = searchParams.get("tab") === "dimensions" ? "dimensions" : "indicators";
 	const initialIndicatorKeyword = searchParams.get("i_kw") || "";
@@ -1187,7 +1188,7 @@ export default function Page() {
 										/>
 										<Button onClick={runIndicatorSearch}>查询</Button>
 										<Button onClick={resetIndicatorSearch}>重置</Button>
-										<Button type="primary" icon={<PlusOutlined />} onClick={() => openIndicatorModal()} disabled={!canManage}>
+										<Button type="primary" icon={<PlusOutlined />} onClick={() => navigate("/bi/card/new")} disabled={!canManage}>
 											新增指标
 										</Button>
 									</Space>

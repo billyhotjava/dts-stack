@@ -6,6 +6,7 @@ import com.yuzhi.dts.platform.repository.catalog.CatalogDatasetRepository;
 import com.yuzhi.dts.platform.repository.infra.InfraOdsTableMappingRepository;
 import com.yuzhi.dts.platform.repository.modeling.ModelingSqlModelRepository;
 import com.yuzhi.dts.platform.repository.service.InfraDataSourceRepository;
+import com.yuzhi.dts.platform.service.analytics.SemanticContractPublishService;
 import com.yuzhi.dts.platform.service.audit.AuditService;
 import com.yuzhi.dts.platform.service.modeling.DataStandardSecurity;
 import com.yuzhi.dts.platform.service.modeling.ModelGenerationService;
@@ -70,6 +71,7 @@ public class ModelingSqlModelResource {
     private final InfraDataSourceRepository dataSourceRepository;
     private final AuditService auditService;
     private final DataStandardSecurity security;
+    private final SemanticContractPublishService semanticContractPublishService;
 
     public ModelingSqlModelResource(
         ModelingSqlModelService sqlModelService,
@@ -79,7 +81,8 @@ public class ModelingSqlModelResource {
         CatalogDatasetRepository datasetRepository,
         InfraDataSourceRepository dataSourceRepository,
         AuditService auditService,
-        DataStandardSecurity security
+        DataStandardSecurity security,
+        SemanticContractPublishService semanticContractPublishService
     ) {
         this.sqlModelService = sqlModelService;
         this.generationService = generationService;
@@ -89,6 +92,7 @@ public class ModelingSqlModelResource {
         this.dataSourceRepository = dataSourceRepository;
         this.auditService = auditService;
         this.security = security;
+        this.semanticContractPublishService = semanticContractPublishService;
     }
 
     @GetMapping
@@ -293,6 +297,19 @@ public class ModelingSqlModelResource {
             "modeling.sql-model.batch",
             "requested=" + result.requested() + ",deleted=" + result.deleted() + ",failed=" + result.failed()
         );
+        return ApiResponses.ok(result);
+    }
+
+    @PostMapping("/{id}/semantic/publish")
+    @Transactional
+    @PreAuthorize(MODELING_MAINTAINER_EXPRESSION)
+    public ApiResponse<Map<String, Object>> publishSemanticContract(
+        @PathVariable UUID id,
+        @RequestHeader(value = "X-Active-Dept", required = false) String activeDept
+    ) {
+        SqlModelDto dto = sqlModelService.get(id, activeDept);
+        Map<String, Object> result = semanticContractPublishService.publish(dto);
+        auditService.audit("PUBLISH", "modeling.sql-model.semantic", id.toString());
         return ApiResponses.ok(result);
     }
 

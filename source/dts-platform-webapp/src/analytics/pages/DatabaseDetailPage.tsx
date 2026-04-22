@@ -206,7 +206,7 @@ export default function DatabaseDetailPage() {
 													<span className="table-list-item__id text-secondary">ID: {String(tb?.id ?? "-")}</span>
 												</div>
 												{tb?.id && (
-													<Link to={`/bi/questions/new?db=${encodeURIComponent(String(dbId))}&table=${encodeURIComponent(String(tb.id))}`}>
+													<Link to="/bi/card/new">
 														<Button type="text" icon={<PlusIcon />}>
 															{t(locale, "questions.new")}
 														</Button>

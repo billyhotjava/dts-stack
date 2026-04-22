@@ -100,6 +100,87 @@ export type CardQueryResponse = {
 
 export type DashboardQueryResponse = CardQueryResponse;
 
+export type SemanticQueryBody = {
+	base?: string;
+	joins?: Array<{ to: string; via?: string; type?: string }>;
+	measures?: string[];
+	dimensions?: Array<string | { id: string; granularity?: string }>;
+	filters?: Array<{ field: string; op: string; value?: unknown; value_to?: unknown }>;
+	derived_metrics?: Array<{ id: string; label?: string; expression: string; format?: Record<string, unknown> }>;
+	order_by?: Array<{ field: string; direction?: "asc" | "desc" }>;
+	limit?: number;
+	format?: "json" | "arrow_ipc";
+	cache_hint?: string;
+};
+
+export type SemanticColumn = {
+	id?: string;
+	label?: string;
+	type?: string;
+	format?: Record<string, unknown> | null;
+};
+
+export type SemanticModelMeta = {
+	id?: string;
+	label?: string;
+	subject_area?: string | null;
+	security_level?: string | null;
+	grain?: string | null;
+	database_id?: number;
+	schema_name?: string | null;
+	table_name?: string | null;
+	description?: string | null;
+	metrics?: Array<Record<string, unknown>>;
+	dimensions?: Array<Record<string, unknown>>;
+	joins?: Array<Record<string, unknown>>;
+};
+
+export type SemanticMetaResponse = {
+	spec_version?: string;
+	generated_at?: string;
+	models?: SemanticModelMeta[];
+};
+
+export type SemanticGraphResponse = {
+	nodes?: Array<Record<string, unknown>>;
+	edges?: Array<Record<string, unknown>>;
+};
+
+export type SemanticQueryResponse = {
+	status?: string;
+	meta?: {
+		sql_preview?: string;
+		row_count?: number;
+		elapsed_ms?: number;
+		cache_hit?: boolean;
+		security_applied?: string[];
+		warnings?: string[];
+	};
+	columns?: SemanticColumn[];
+	rows?: unknown[][];
+};
+
+export type SemanticVirtualDataset = {
+	id?: number;
+	name?: string;
+	description?: string | null;
+	owner_id?: number;
+	workspace_id?: number | null;
+	base_model?: string | null;
+	archived?: boolean;
+	state?: SemanticQueryBody | Record<string, unknown>;
+	created_at?: string;
+	updated_at?: string;
+};
+
+export type SemanticPromoteResult = {
+	source_virtual_dataset_id?: number;
+	model_name?: string;
+	sql?: string;
+	schema_yml?: string;
+	state?: Record<string, unknown>;
+};
+
 export type Nl2SqlEvalCaseItem = {
 	id?: number | string;
 	name?: string;
@@ -1803,6 +1884,56 @@ export const analyticsApi = {
 	queryCard: (id: string | number, body?: unknown) =>
 		sendJson<CardQueryResponse>(`/bi/api/card/${encodeURIComponent(String(id))}/query`, body ?? {}),
 	runDatasetQuery: (body: unknown) => sendJson<CardQueryResponse>("/bi/api/dataset", body),
+	getSemanticMeta: (params?: {
+		subjectArea?: string;
+		exposedToModeler?: boolean;
+		includeClassificationAbove?: string;
+	}) => {
+		const qs = new URLSearchParams();
+		if (params?.subjectArea) {
+			qs.set("subject_area", params.subjectArea);
+		}
+		if (params?.exposedToModeler !== undefined) {
+			qs.set("exposed_to_modeler", String(params.exposedToModeler));
+		}
+		if (params?.includeClassificationAbove) {
+			qs.set("include_classification_above", params.includeClassificationAbove);
+		}
+		const suffix = qs.toString() ? `?${qs.toString()}` : "";
+		return fetchJson<SemanticMetaResponse>("/bi/api/semantic/meta" + suffix);
+	},
+	getSemanticGraph: () => fetchJson<SemanticGraphResponse>("/bi/api/semantic/graph"),
+	previewSemanticSql: (body: SemanticQueryBody) =>
+		sendJson<SemanticQueryResponse>("/bi/api/semantic/query/preview-sql", body),
+	runSemanticQuery: (body: SemanticQueryBody) =>
+		sendJson<SemanticQueryResponse>("/bi/api/semantic/query", body),
+	listSemanticVirtualDatasets: (params?: { owner?: string; workspace?: number }) => {
+		const qs = new URLSearchParams();
+		if (params?.owner) {
+			qs.set("owner", params.owner);
+		}
+		if (params?.workspace !== undefined) {
+			qs.set("workspace", String(params.workspace));
+		}
+		const suffix = qs.toString() ? `?${qs.toString()}` : "";
+		return fetchJson<SemanticVirtualDataset[]>("/bi/api/semantic/virtual-datasets" + suffix);
+	},
+	getSemanticVirtualDataset: (id: string | number) =>
+		fetchJson<SemanticVirtualDataset>("/bi/api/semantic/virtual-datasets/" + encodeURIComponent(String(id))),
+	createSemanticVirtualDataset: (body: {
+		name: string;
+		description?: string | null;
+		workspace_id?: number | null;
+		state: SemanticQueryBody;
+	}) => sendJson<SemanticVirtualDataset>("/bi/api/semantic/virtual-datasets", body),
+	updateSemanticVirtualDataset: (
+		id: string | number,
+		body: { name?: string; description?: string | null; workspace_id?: number | null; state: SemanticQueryBody },
+	) => requestJson<SemanticVirtualDataset>("/bi/api/semantic/virtual-datasets/" + encodeURIComponent(String(id)), "PUT", body),
+	deleteSemanticVirtualDataset: (id: string | number) =>
+		requestJson<void>("/bi/api/semantic/virtual-datasets/" + encodeURIComponent(String(id)), "DELETE"),
+	promoteSemanticVirtualDataset: (id: string | number) =>
+		sendJson<SemanticPromoteResult>("/bi/api/semantic/virtual-datasets/" + encodeURIComponent(String(id)) + "/promote", {}),
 	getDatasetCacheStats: () => fetchJson<DatasetCacheStats>("/bi/api/dataset/cache/stats"),
 	getDatasetCachePolicy: (databaseId: string | number) =>
 		fetchJson<DatasetCachePolicy>("/bi/api/dataset/cache/policy/" + encodeURIComponent(String(databaseId))),

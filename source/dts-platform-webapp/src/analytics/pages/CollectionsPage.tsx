@@ -170,7 +170,7 @@ export default function CollectionsPage() {
 									size="small"
 									style={{ width: 200 }}
 								/>
-								<Link to="/bi/questions/new">
+								<Link to="/bi/card/new">
 									<Button type="primary" size="small" icon={<PlusOutlined />}>
 										{t(locale, "questions.new")}
 									</Button>

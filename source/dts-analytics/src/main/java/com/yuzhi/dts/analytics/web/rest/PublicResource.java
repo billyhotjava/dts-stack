@@ -22,6 +22,7 @@ import com.yuzhi.dts.analytics.service.QueryExecutionFacade;
 import com.yuzhi.dts.analytics.service.QueryMetricsService;
 import com.yuzhi.dts.analytics.service.QueryTraceService;
 import com.yuzhi.dts.analytics.service.ScreenPermissionService;
+import com.yuzhi.dts.analytics.service.semantic.SemanticQueryService;
 import com.yuzhi.dts.analytics.web.support.MetabaseAuth;
 import com.yuzhi.dts.analytics.web.support.PlatformContext;
 import com.yuzhi.dts.analytics.web.support.RequestContextUtils;
@@ -59,6 +60,7 @@ public class PublicResource {
     private final QueryTraceService queryTraceService;
     private final ProjectCockpitService projectCockpitService;
     private final ScreenPermissionService screenPermissionService;
+    private final SemanticQueryService semanticQueryService;
     private final ObjectMapper objectMapper;
 
     public PublicResource(
@@ -74,6 +76,7 @@ public class PublicResource {
             QueryTraceService queryTraceService,
             ProjectCockpitService projectCockpitService,
             ScreenPermissionService screenPermissionService,
+            SemanticQueryService semanticQueryService,
             ObjectMapper objectMapper) {
         this.sessionService = sessionService;
         this.publicLinkService = publicLinkService;
@@ -87,6 +90,7 @@ public class PublicResource {
         this.queryTraceService = queryTraceService;
         this.projectCockpitService = projectCockpitService;
         this.screenPermissionService = screenPermissionService;
+        this.semanticQueryService = semanticQueryService;
         this.objectMapper = objectMapper;
     }
 
@@ -373,6 +377,46 @@ public class PublicResource {
             long databaseId = 0;
 
             try {
+                if (isSemanticDatasetQuery(datasetQuery)) {
+                    SemanticQueryService.SemanticExecutionResult semanticResult = semanticQueryService.executeForCard(
+                        extractSemanticQuery(datasetQuery),
+                        ctx,
+                        actorUserId
+                    );
+                    databaseId = semanticResult.databaseId();
+                    traceDatabaseId = semanticResult.databaseId();
+                    traceSql = semanticResult.sqlPreview();
+
+                    Map<String, Object> jsonQuery = new LinkedHashMap<>();
+                    jsonQuery.put("database", semanticResult.databaseId());
+                    jsonQuery.put("async?", true);
+                    jsonQuery.put("cache-ttl", null);
+                    jsonQuery.put("type", "semantic");
+                    jsonQuery.put("semantic_query", extractSemanticQuery(datasetQuery));
+                    jsonQuery.put("security_applied", semanticResult.securityApplied());
+                    jsonQuery.put("warnings", semanticResult.warnings());
+
+                    Map<String, Object> data = new LinkedHashMap<>();
+                    data.put("rows", semanticResult.datasetResult().rows());
+                    data.put("cols", semanticResult.datasetResult().cols());
+                    data.put("native_form", Map.of("query", semanticResult.sqlPreview()));
+                    data.put("results_metadata", Map.of("columns", semanticResult.datasetResult().resultsMetadataColumns()));
+                    data.put("rows_truncated", false);
+
+                    Map<String, Object> response = new LinkedHashMap<>();
+                    response.put("status", "completed");
+                    response.put("json_query", jsonQuery);
+                    response.put("data", data);
+                    response.put("row_count", semanticResult.datasetResult().rows().size());
+                    response.put("running_time", semanticResult.elapsedMs());
+                    response.put("started_at", startedAt.toString());
+                    response.put("requestId", resolveRequestId());
+
+                    metricResult = "success";
+                    metricCode = "NONE";
+                    return ResponseEntity.ok(response);
+                }
+
                 QueryExecutionFacade.PreparedQuery prepared = queryExecutionFacade.prepare(
                         datasetQuery,
                         body,
@@ -427,6 +471,13 @@ public class PublicResource {
                         "error", rootCauseMessage(e),
                         "code", metricCode,
                         "requestId", resolveRequestId()));
+            } catch (SemanticQueryService.SemanticAccessDeniedException e) {
+                metricCode = "SEMANTIC_ACCESS_DENIED";
+                metricResult = "rejected";
+                return ResponseEntity.status(422).body(Map.of(
+                        "error", rootCauseMessage(e),
+                        "code", metricCode,
+                        "requestId", resolveRequestId()));
             } catch (SQLException e) {
                 metricCode = classifySqlErrorCode(e);
                 metricResult = "failed";
@@ -470,6 +521,21 @@ public class PublicResource {
                     durationNanos / 1_000_000,
                     tracePayload);
         }
+    }
+
+    private boolean isSemanticDatasetQuery(JsonNode datasetQuery) {
+        if (datasetQuery == null || !datasetQuery.isObject()) {
+            return false;
+        }
+        return "semantic".equalsIgnoreCase(datasetQuery.path("type").asText(null)) || datasetQuery.has("semantic_query");
+    }
+
+    private JsonNode extractSemanticQuery(JsonNode datasetQuery) {
+        JsonNode semantic = datasetQuery == null ? null : datasetQuery.get("semantic_query");
+        if (semantic != null && semantic.isObject()) {
+            return semantic;
+        }
+        return datasetQuery;
     }
 
     private Map<String, Object> toPublicCard(AnalyticsCard card, String publicUuid) {

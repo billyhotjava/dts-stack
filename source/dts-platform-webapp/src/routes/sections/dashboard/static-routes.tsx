@@ -20,7 +20,7 @@ const DashboardDetailPage = lazy(() => import("@/analytics/pages/DashboardDetail
 const DashboardEditorPage = lazy(() => import("@/analytics/pages/DashboardEditorPage"));
 const CardsPage = lazy(() => import("@/analytics/pages/CardsPage"));
 const CardDetailPage = lazy(() => import("@/analytics/pages/CardDetailPage"));
-const CardEditorPage = lazy(() => import("@/analytics/pages/CardEditorPage"));
+const CardEditorRoutePage = lazy(() => import("@/analytics/pages/CardEditorRoutePage"));
 const DataPage = lazy(() => import("@/analytics/pages/DataPage"));
 const DatabaseDetailPage = lazy(() => import("@/analytics/pages/DatabaseDetailPage"));
 const TableDetailPage = lazy(() => import("@/analytics/pages/TableDetailPage"));
@@ -38,6 +38,9 @@ const ExploreSessionsPage = lazy(() => import("@/analytics/pages/ExploreSessions
 const ReportFactoryPage = lazy(() => import("@/analytics/pages/ReportFactoryPage"));
 const MetricLensPage = lazy(() => import("@/analytics/pages/MetricLensPage"));
 const Nl2SqlEvalPage = lazy(() => import("@/analytics/pages/Nl2SqlEvalPage"));
+const SemanticExplorePage = lazy(() => import("@/analytics/pages/semantic/SemanticExplorePage"));
+const SemanticCardEditorPage = lazy(() => import("@/analytics/pages/semantic/SemanticCardEditorPage"));
+const SemanticVirtualDatasetsPage = lazy(() => import("@/analytics/pages/semantic/SemanticVirtualDatasetsPage"));
 
 const S = ({ children }: { children: React.ReactNode }) => (
 	<Suspense fallback={<LineLoading />}>{children}</Suspense>
@@ -65,9 +68,15 @@ export const STATIC_DASHBOARD_ROUTES: RouteObject[] = [
 	{ path: "bi/dashboards/:id", element: <S><DashboardDetailPage /></S> },
 	{ path: "bi/dashboards/:id/edit", element: <S><DashboardEditorPage /></S> },
 	{ path: "bi/questions", element: <S><CardsPage /></S> },
-	{ path: "bi/questions/new", element: <S><CardEditorPage /></S> },
+	{ path: "bi/questions/new", element: <S><SemanticCardEditorPage /></S> },
 	{ path: "bi/questions/:id", element: <S><CardDetailPage /></S> },
-	{ path: "bi/questions/:id/edit", element: <S><CardEditorPage /></S> },
+	{ path: "bi/questions/:id/edit", element: <S><CardEditorRoutePage /></S> },
+	{ path: "bi/explore", element: <S><SemanticExplorePage /></S> },
+	{ path: "bi/card/new", element: <S><SemanticCardEditorPage /></S> },
+	{ path: "bi/card/:id/edit", element: <S><SemanticCardEditorPage /></S> },
+	{ path: "bi/virtual-datasets", element: <S><SemanticVirtualDatasetsPage /></S> },
+	{ path: "bi/virtual-datasets/new", element: <S><SemanticCardEditorPage /></S> },
+	{ path: "bi/virtual-datasets/:id", element: <S><SemanticCardEditorPage /></S> },
 	{ path: "bi/data", element: <S><DataPage /></S> },
 	{ path: "bi/data/:dbId", element: <S><DatabaseDetailPage /></S> },
 	{ path: "bi/data/:dbId/tables/:tableId", element: <S><TableDetailPage /></S> },

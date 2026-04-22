@@ -52,8 +52,7 @@ export default function TableDetailPage() {
 		};
 	}, [tableId]);
 
-	const newQuestionHref =
-		dbId && tableId ? `/bi/questions/new?db=${encodeURIComponent(String(dbId))}&table=${encodeURIComponent(String(tableId))}` : "/bi/questions/new";
+	const newQuestionHref = "/bi/card/new";
 
 	const fieldHref = (id: number) => {
 		if (!dbId || !tableId) return null;

@@ -406,7 +406,7 @@ export default function CardsPage() {
 						<Button icon={<UploadOutlined />} onClick={() => setBatchImportOpen(true)}>
 							批量导入 SQL
 						</Button>
-						<Link to="/bi/questions/new">
+						<Link to="/bi/card/new">
 							<Button type="primary" icon={<PlusOutlined />}>
 								{t(locale, "questions.new")}
 							</Button>

@@ -19,6 +19,7 @@ import com.yuzhi.dts.analytics.service.QueryMetricsService;
 import com.yuzhi.dts.analytics.service.QueryTraceService;
 import com.yuzhi.dts.analytics.service.AssetListFilterService;
 import com.yuzhi.dts.analytics.service.RevisionService;
+import com.yuzhi.dts.analytics.service.semantic.SemanticQueryService;
 import com.yuzhi.dts.analytics.web.support.MetabaseAuth;
 import com.yuzhi.dts.analytics.web.support.PlatformContext;
 import com.yuzhi.dts.analytics.web.support.RequestContextUtils;
@@ -64,6 +65,7 @@ public class CardResource {
     private final QueryMetricsService queryMetricsService;
     private final QueryTraceService queryTraceService;
     private final AssetListFilterService assetListFilterService;
+    private final SemanticQueryService semanticQueryService;
     private final ObjectMapper objectMapper;
 
     public CardResource(
@@ -80,6 +82,7 @@ public class CardResource {
             QueryMetricsService queryMetricsService,
             QueryTraceService queryTraceService,
             AssetListFilterService assetListFilterService,
+            SemanticQueryService semanticQueryService,
             ObjectMapper objectMapper) {
         this.sessionService = sessionService;
         this.cardRepository = cardRepository;
@@ -94,6 +97,7 @@ public class CardResource {
         this.queryMetricsService = queryMetricsService;
         this.queryTraceService = queryTraceService;
         this.assetListFilterService = assetListFilterService;
+        this.semanticQueryService = semanticQueryService;
         this.objectMapper = objectMapper;
     }
 
@@ -168,7 +172,7 @@ public class CardResource {
         card = cardRepository.save(card);
         revisionService.recordCardRevision(card, user.get().getId(), false);
 
-        List<Map<String, Object>> resultMetadata = computeResultMetadata(card);
+        List<Map<String, Object>> resultMetadata = computeResultMetadata(card, PlatformContext.from(request));
         return ResponseEntity.ok(toCardResponse(card, resultMetadata, false));
     }
 
@@ -182,7 +186,7 @@ public class CardResource {
         boolean favorite = bookmarkRepository.findByUserIdAndModelAndModelId(user.get().getId(), "card", id).isPresent();
         return cardRepository.findById(id).map(card -> {
                     activityService.recordView(user.get().getId(), "card", id);
-                    return ResponseEntity.ok(toCardResponse(card, computeResultMetadata(card), favorite));
+                    return ResponseEntity.ok(toCardResponse(card, computeResultMetadata(card, PlatformContext.from(request)), favorite));
                 })
                 .orElseGet(() -> ResponseEntity.notFound().build());
     }
@@ -237,7 +241,7 @@ public class CardResource {
         revisionService.recordCardRevision(card, user.get().getId(), false);
 
         boolean favorite = bookmarkRepository.findByUserIdAndModelAndModelId(user.get().getId(), "card", id).isPresent();
-        return ResponseEntity.ok(toCardResponse(card, computeResultMetadata(card), favorite));
+        return ResponseEntity.ok(toCardResponse(card, computeResultMetadata(card, PlatformContext.from(request)), favorite));
     }
 
     @DeleteMapping(path = "/{id}")
@@ -304,6 +308,50 @@ public class CardResource {
             long databaseId = 0;
 
             try {
+                if (isSemanticDatasetQuery(datasetQuery)) {
+                    SemanticQueryService.SemanticExecutionResult semanticResult = semanticQueryService.executeForCard(
+                        extractSemanticQuery(datasetQuery),
+                        ctx,
+                        actorUserId
+                    );
+                    databaseId = semanticResult.databaseId();
+                    traceDatabaseId = semanticResult.databaseId();
+                    traceSql = semanticResult.sqlPreview();
+
+                    Map<String, Object> jsonQuery = new LinkedHashMap<>();
+                    jsonQuery.put("database", semanticResult.databaseId());
+                    jsonQuery.put("async?", true);
+                    jsonQuery.put("cache-ttl", null);
+                    jsonQuery.put("type", "semantic");
+                    jsonQuery.put("semantic_query", extractSemanticQuery(datasetQuery));
+                    jsonQuery.put("security_applied", semanticResult.securityApplied());
+                    jsonQuery.put("warnings", semanticResult.warnings());
+
+                    Map<String, Object> data = new LinkedHashMap<>();
+                    data.put("rows", semanticResult.datasetResult().rows());
+                    data.put("cols", semanticResult.datasetResult().cols());
+                    data.put("native_form", Map.of("query", semanticResult.sqlPreview()));
+                    data.put("results_timezone", semanticResult.datasetResult().resultsTimezone());
+                    data.put("results_metadata", Map.of("columns", semanticResult.datasetResult().resultsMetadataColumns()));
+                    data.put("insights", null);
+
+                    Map<String, Object> response = new LinkedHashMap<>();
+                    response.put("data", data);
+                    response.put("database_id", semanticResult.databaseId());
+                    response.put("started_at", startedAt);
+                    response.put("json_query", jsonQuery);
+                    response.put("average_execution_time", null);
+                    response.put("status", "completed");
+                    response.put("context", "question");
+                    response.put("row_count", semanticResult.datasetResult().rows().size());
+                    response.put("running_time", semanticResult.elapsedMs());
+                    response.put("requestId", resolveRequestId());
+
+                    metricResult = "success";
+                    metricCode = "NONE";
+                    return ResponseEntity.accepted().body(response);
+                }
+
                 QueryExecutionFacade.PreparedQuery prepared = queryExecutionFacade.prepare(
                         datasetQuery,
                         body,
@@ -357,6 +405,13 @@ public class CardResource {
                 metricCode = "INVALID_ARGUMENT";
                 metricResult = "rejected";
                 return ResponseEntity.status(400).body(Map.of(
+                        "error", e.getMessage(),
+                        "code", metricCode,
+                        "requestId", resolveRequestId()));
+            } catch (SemanticQueryService.SemanticAccessDeniedException e) {
+                metricCode = "SEMANTIC_ACCESS_DENIED";
+                metricResult = "rejected";
+                return ResponseEntity.status(422).body(Map.of(
                         "error", e.getMessage(),
                         "code", metricCode,
                         "requestId", resolveRequestId()));
@@ -481,12 +536,21 @@ public class CardResource {
         try {
             DatasetQueryService.DatasetConstraints exportConstraints =
                     new DatasetQueryService.DatasetConstraints(100000, 300, "UTC");
-            QueryExecutionFacade.PreparedQuery prepared = queryExecutionFacade.prepare(
-                    datasetQuery,
-                    body,
-                    null,
-                    exportConstraints);
-            DatasetQueryService.DatasetResult result = queryExecutionFacade.executeWithCompliance(prepared);
+            DatasetQueryService.DatasetResult result;
+            if (isSemanticDatasetQuery(datasetQuery)) {
+                result = semanticQueryService.executeForCard(
+                    extractSemanticQuery(datasetQuery),
+                    PlatformContext.from(request),
+                    MetabaseAuth.currentUser(sessionService, request).map(AnalyticsUser::getId).orElse(null)
+                ).datasetResult();
+            } else {
+                QueryExecutionFacade.PreparedQuery prepared = queryExecutionFacade.prepare(
+                        datasetQuery,
+                        body,
+                        null,
+                        exportConstraints);
+                result = queryExecutionFacade.executeWithCompliance(prepared);
+            }
 
             // Set response headers
             String filename = sanitizeFilename(card.getName()) + queryExportService.getFileExtension(format);
@@ -507,6 +571,9 @@ public class CardResource {
             }
         } catch (IllegalArgumentException e) {
             response.setStatus(400);
+            response.getWriter().write(e.getMessage());
+        } catch (SemanticQueryService.SemanticAccessDeniedException e) {
+            response.setStatus(422);
             response.getWriter().write(e.getMessage());
         } catch (SQLException e) {
             response.setStatus(500);
@@ -674,9 +741,15 @@ public class CardResource {
         return creator;
     }
 
-    private List<Map<String, Object>> computeResultMetadata(AnalyticsCard card) {
+    private List<Map<String, Object>> computeResultMetadata(AnalyticsCard card, PlatformContext context) {
         try {
             JsonNode datasetQuery = objectMapper.readTree(card.getDatasetQueryJson());
+            if (isSemanticDatasetQuery(datasetQuery)) {
+                return semanticQueryService.previewCardColumns(
+                    extractSemanticQuery(datasetQuery),
+                    context == null ? new PlatformContext(null, "CONFIDENTIAL", null) : context
+                );
+            }
             QueryExecutionFacade.PreparedQuery prepared = queryExecutionFacade.prepare(
                     datasetQuery,
                     null,
@@ -704,6 +777,9 @@ public class CardResource {
         try {
             JsonNode query = objectMapper.readTree(card.getDatasetQueryJson());
             String type = query.path("type").asText("native");
+            if ("semantic".equalsIgnoreCase(type) || query.has("semantic_query")) {
+                return "semantic";
+            }
             if ("query".equalsIgnoreCase(type)) {
                 return "query";
             }
@@ -711,6 +787,21 @@ public class CardResource {
         } catch (Exception e) {
             return "native";
         }
+    }
+
+    private boolean isSemanticDatasetQuery(JsonNode datasetQuery) {
+        if (datasetQuery == null || !datasetQuery.isObject()) {
+            return false;
+        }
+        return "semantic".equalsIgnoreCase(datasetQuery.path("type").asText(null)) || datasetQuery.has("semantic_query");
+    }
+
+    private JsonNode extractSemanticQuery(JsonNode datasetQuery) {
+        JsonNode semantic = datasetQuery == null ? null : datasetQuery.get("semantic_query");
+        if (semantic != null && semantic.isObject()) {
+            return semantic;
+        }
+        return datasetQuery;
     }
 
     private String classifySqlErrorCode(SQLException e) {

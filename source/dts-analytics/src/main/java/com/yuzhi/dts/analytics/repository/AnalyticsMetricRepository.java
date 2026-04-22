@@ -9,5 +9,6 @@ import org.springframework.stereotype.Repository;
 public interface AnalyticsMetricRepository extends JpaRepository<AnalyticsMetric, Long> {
 
     List<AnalyticsMetric> findAllByArchivedFalseOrderByIdAsc();
-}
 
+    List<AnalyticsMetric> findAllByArchivedFalseAndBaseTableIdOrderByIdAsc(Long baseTableId);
+}

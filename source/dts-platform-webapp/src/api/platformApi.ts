@@ -195,6 +195,8 @@ export const listSqlModelColumns = (id: string) =>
 	api.get(withModelingRequestTimeout({ url: `/modeling/sql-models/${id}/columns` }));
 export const getSqlModelContractImpact = (id: string) =>
 	api.get(withModelingRequestTimeout({ url: `/modeling/sql-models/${id}/contract-impact` }));
+export const publishSqlModelSemantic = (id: string) =>
+	api.post(withModelingRequestTimeout({ url: `/modeling/sql-models/${id}/semantic/publish` }));
 export const createSqlModel = (data: any) => api.post(withModelingRequestTimeout({ url: "/modeling/sql-models", data }));
 export const updateSqlModel = (id: string, data: any) =>
 	api.put(withModelingRequestTimeout({ url: `/modeling/sql-models/${id}`, data }));

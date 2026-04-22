@@ -13,6 +13,15 @@ type LoadState<T> =
 	| { state: "loaded"; value: T }
 	| { state: "error"; error: unknown };
 
+function isSemanticCard(card: CardDetail): boolean {
+	const datasetQuery = card?.dataset_query;
+	if (!datasetQuery || typeof datasetQuery !== "object") {
+		return false;
+	}
+	const value = datasetQuery as Record<string, unknown>;
+	return String(value.type ?? "").toLowerCase() === "semantic" || Boolean(value.semantic_query);
+}
+
 export default function CardDetailPage() {
 	const { id } = useParams();
 	const locale: Locale = useMemo(() => getEffectiveLocale(), []);
@@ -134,7 +143,9 @@ export default function CardDetailPage() {
 								>
 									{t(locale, "share.create")}
 								</Button>
-								<Link to={`/bi/questions/${encodeURIComponent(String(state.value.id))}/edit`}>
+								<Link to={isSemanticCard(state.value)
+									? `/bi/card/${encodeURIComponent(String(state.value.id))}/edit`
+									: `/bi/questions/${encodeURIComponent(String(state.value.id))}/edit`}>
 									<Button type="primary" icon={<EditIcon />}>
 										{t(locale, "questions.edit")}
 									</Button>

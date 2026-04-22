@@ -56,6 +56,7 @@ import {
 	listSqlModels,
 	listSqlModelColumns,
 	getSqlModelContractImpact,
+	publishSqlModelSemantic,
 	createSqlModel,
 	updateSqlModel,
 	batchDeleteSqlModels,
@@ -323,6 +324,7 @@ export default function SqlModelingPage() {
 	const [modelColumns, setModelColumns] = useState<ModelColumn[]>([]);
 	const [contractImpactLoading, setContractImpactLoading] = useState(false);
 	const [contractImpact, setContractImpact] = useState<SqlModelContractImpact | null>(null);
+	const [publishingSemantic, setPublishingSemantic] = useState(false);
 	const [bottomTab, setBottomTab] = useState("preview");
 	const [opsSubTab, setOpsSubTab] = useState("compile");
 	const [keyword, setKeyword] = useState("");
@@ -2795,6 +2797,30 @@ export default function SqlModelingPage() {
 														<span className="font-medium">
 															{activeModel.contractVersion || contractImpact?.contractVersion || "-"}
 														</span>
+													</div>
+													<div className="flex justify-between items-center gap-2">
+														<span className="text-muted-foreground">语义发布</span>
+														<Button
+															size="small"
+															icon={<CloudUploadOutlined />}
+															loading={publishingSemantic}
+															disabled={!activeModel.id || !activeModel.semanticContract}
+															onClick={async () => {
+																if (!activeModel.id) return;
+																try {
+																	setPublishingSemantic(true);
+																	await publishSqlModelSemantic(activeModel.id);
+																	toast.success("语义契约已发布到 Analytics");
+																} catch (error) {
+																	const message = error instanceof Error ? error.message : "语义契约发布失败";
+																	toast.error(message || "语义契约发布失败");
+																} finally {
+																	setPublishingSemantic(false);
+																}
+															}}
+														>
+															发布到 Analytics
+														</Button>
 													</div>
 													<div className="flex justify-between">
 														<span className="text-muted-foreground">指标/维度</span>

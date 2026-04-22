@@ -119,7 +119,7 @@ export default function ModelsPage() {
 			<PageHeader
 				title={t(locale, "models.title")}
 				actions={
-					<Link to="/bi/questions/new">
+					<Link to="/bi/card/new">
 						<Button type="primary" icon={<PlusIcon />}>
 							{t(locale, "questions.new")}
 						</Button>
@@ -175,7 +175,7 @@ export default function ModelsPage() {
 					title={t(locale, "common.empty")}
 					description={t(locale, "models.emptyDesc")}
 					actions={
-						<Link to="/bi/questions/new">
+						<Link to="/bi/card/new">
 							<Button type="primary" icon={<PlusIcon />}>
 								{t(locale, "questions.new")}
 							</Button>
