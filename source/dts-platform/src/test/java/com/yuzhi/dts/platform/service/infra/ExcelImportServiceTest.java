@@ -185,6 +185,46 @@ class ExcelImportServiceTest {
             .containsExactly("project_no,remark", "P-002,2026年计划待确认");
     }
 
+    @Test
+    void parseShouldNormalizeNegativeStringVariantsIntoStandardMinusNumber() throws Exception {
+        UUID fileId = UUID.randomUUID();
+        Path source = tempDir.resolve("exchange/excel/negative-string/source.xlsx");
+        Files.createDirectories(source.getParent());
+        try (XSSFWorkbook workbook = new XSSFWorkbook(); OutputStream out = Files.newOutputStream(source)) {
+            var sheet = workbook.createSheet("sheet1");
+            var header = sheet.createRow(0);
+            header.createCell(0).setCellValue("metric");
+
+            sheet.createRow(1).createCell(0, CellType.STRING).setCellValue("{900}");
+            sheet.createRow(2).createCell(0, CellType.STRING).setCellValue("(1,234.50)");
+            sheet.createRow(3).createCell(0, CellType.STRING).setCellValue("－900");
+            sheet.createRow(4).createCell(0, CellType.STRING).setCellValue("−1200");
+            sheet.createRow(5).createCell(0, CellType.STRING).setCellValue("（88）");
+
+            workbook.write(out);
+        }
+
+        InfraExternalExchangeFile file = buildFile(fileId, source, "negative-string.xlsx");
+        when(repository.findById(fileId)).thenReturn(Optional.of(file));
+
+        var response = excelImportService.parse(
+            new ExcelImportParseRequest(fileId, "sheet1", null, 1, 2, ",", 20, true, true, "yyyy-MM-dd HH:mm:ss"),
+            "tester",
+            "信息科",
+            true
+        );
+
+        assertThat(Files.readAllLines(Path.of(response.csvPath())))
+            .containsExactly(
+                "metric",
+                "-900",
+                "-1234.50",
+                "-900",
+                "-1200",
+                "-88"
+            );
+    }
+
     private InfraExternalExchangeFile buildFile(UUID fileId, Path source, String fileName) {
         InfraExternalExchangeFile file = new InfraExternalExchangeFile();
         file.setId(fileId);

@@ -11,6 +11,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.regex.Pattern;
 import org.apache.poi.ss.usermodel.Cell;
 import org.apache.poi.ss.usermodel.CellType;
 import org.apache.poi.ss.usermodel.CellValue;
@@ -35,6 +36,10 @@ public class ExcelParseService {
 
     private static final Logger LOG = LoggerFactory.getLogger(ExcelParseService.class);
     private static final int TYPE_CONFIDENCE_THRESHOLD = 80;
+    private static final String NUMERIC_BODY_REGEX = "(?:\\d{1,3}(?:,\\d{3})+|\\d+)(?:\\.\\d+)?";
+    private static final Pattern SIGNED_NUMBER_PATTERN = Pattern.compile("^[+-]\\s*" + NUMERIC_BODY_REGEX + "$");
+    private static final Pattern WRAPPED_NEGATIVE_NUMBER_PATTERN =
+        Pattern.compile("^[({]\\s*([+-]?\\s*" + NUMERIC_BODY_REGEX + ")\\s*[)}]$");
     /** Maximum file size: 20MB */
     private static final long MAX_FILE_SIZE = 20 * 1024 * 1024;
     /** Maximum rows to parse */
@@ -184,7 +189,7 @@ public class ExcelParseService {
             return null;
         }
         return switch (cell.getCellType()) {
-            case STRING -> cell.getStringCellValue();
+            case STRING -> normalizePotentialNegativeNumberString(cell.getStringCellValue());
             case NUMERIC -> {
                 if (DateUtil.isCellDateFormatted(cell)) {
                     yield formatDateTime(cell.getLocalDateTimeCellValue());
@@ -274,7 +279,7 @@ public class ExcelParseService {
             if (formatted == null || formatted.isBlank()) {
                 return null;
             }
-            return formatted.trim();
+            return normalizePotentialNegativeNumberString(formatted);
         } catch (Exception e) {
             LOG.debug("Formula evaluation failed at row {}, col {}: {}",
                 cell.getRowIndex(), cell.getColumnIndex(), e.getMessage());
@@ -285,7 +290,7 @@ public class ExcelParseService {
     private String getFormulaCachedValue(Cell cell) {
         try {
             return switch (cell.getCachedFormulaResultType()) {
-                case STRING -> cell.getStringCellValue();
+                case STRING -> normalizePotentialNegativeNumberString(cell.getStringCellValue());
                 case NUMERIC -> {
                     if (DateUtil.isCellDateFormatted(cell)) {
                         yield formatDateTime(cell.getLocalDateTimeCellValue());
@@ -307,5 +312,69 @@ public class ExcelParseService {
             row.add(null);
         }
         return row;
+    }
+
+    private String normalizePotentialNegativeNumberString(String value) {
+        if (value == null) {
+            return null;
+        }
+        String trimmed = value.trim();
+        if (trimmed.isEmpty()) {
+            return trimmed;
+        }
+        String normalized = normalizeFullWidthDigits(trimmed)
+            .replace('\u00A0', ' ')
+            .replace('\u3000', ' ')
+            .replace('（', '(')
+            .replace('）', ')')
+            .replace('｛', '{')
+            .replace('｝', '}')
+            .replace('，', ',')
+            .replace('．', '.')
+            .trim();
+        normalized = normalized
+            .replace('－', '-')
+            .replace('﹣', '-')
+            .replace('−', '-')
+            .replace('‒', '-')
+            .replace('–', '-')
+            .replace('—', '-')
+            .replace('―', '-');
+
+        if (SIGNED_NUMBER_PATTERN.matcher(normalized).matches()) {
+            return normalizeSignedNumericCore(normalized, normalized.startsWith("-"));
+        }
+
+        var wrappedMatcher = WRAPPED_NEGATIVE_NUMBER_PATTERN.matcher(normalized);
+        if (!wrappedMatcher.matches()) {
+            return trimmed;
+        }
+
+        return normalizeSignedNumericCore(wrappedMatcher.group(1), true);
+    }
+
+    private String normalizeSignedNumericCore(String value, boolean negative) {
+        String digits = value.trim()
+            .replaceAll("\\s+", "")
+            .replace("+", "")
+            .replace("-", "")
+            .replace(",", "");
+        if (digits.isEmpty()) {
+            return digits;
+        }
+        return negative ? "-" + digits : digits;
+    }
+
+    private String normalizeFullWidthDigits(String value) {
+        StringBuilder sb = new StringBuilder(value.length());
+        for (int i = 0; i < value.length(); i++) {
+            char ch = value.charAt(i);
+            if (ch >= '\uFF10' && ch <= '\uFF19') {
+                sb.append((char) ('0' + (ch - '\uFF10')));
+            } else {
+                sb.append(ch);
+            }
+        }
+        return sb.toString();
     }
 }

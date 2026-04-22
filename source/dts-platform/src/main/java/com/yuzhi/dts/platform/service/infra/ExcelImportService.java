@@ -46,6 +46,7 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
+import java.util.regex.Pattern;
 import org.apache.poi.ss.usermodel.Cell;
 import org.apache.poi.ss.usermodel.CellType;
 import org.apache.poi.ss.usermodel.DataFormatter;
@@ -75,6 +76,10 @@ public class ExcelImportService {
     private static final Duration RETENTION = Duration.ofDays(7);
     private static final String DEFAULT_BASE_DIR = "/opt/airflow/dags";
     private static final String DEFAULT_CONTAINER_DIR = "/opt/addax/jobs";
+    private static final String NUMERIC_BODY_REGEX = "(?:\\d{1,3}(?:,\\d{3})+|\\d+)(?:\\.\\d+)?";
+    private static final Pattern SIGNED_NUMBER_PATTERN = Pattern.compile("^[+-]\\s*" + NUMERIC_BODY_REGEX + "$");
+    private static final Pattern WRAPPED_NEGATIVE_NUMBER_PATTERN =
+        Pattern.compile("^[({]\\s*([+-]?\\s*" + NUMERIC_BODY_REGEX + ")\\s*[)}]$");
 
     private final AirflowProperties airflowProperties;
     private final InfraExternalExchangeFileRepository repository;
@@ -768,8 +773,12 @@ public class ExcelImportService {
                 Object raw = data.get(i);
                 if (raw instanceof ReadCellData<?> cell) {
                     values.add(cellToString(cell, ctx.dateFormat));
+                } else if (raw instanceof Number number) {
+                    values.add(normalizeNumber(number.toString()));
+                } else if (raw instanceof Boolean bool) {
+                    values.add(bool.toString());
                 } else if (raw != null) {
-                    values.add(raw.toString().trim());
+                    values.add(normalizeCellText(raw.toString(), ctx.dateFormat));
                 } else {
                     values.add("");
                 }
@@ -794,7 +803,7 @@ public class ExcelImportService {
                 case STRING:
                 case DIRECT_STRING:
                 case RICH_TEXT_STRING:
-                    return normalizePotentialDateString(safe(cell.getStringValue()), dateFormat);
+                    return normalizeCellText(safe(cell.getStringValue()), dateFormat);
                 case BOOLEAN:
                     return cell.getBooleanValue() == null ? "" : cell.getBooleanValue().toString();
                 case NUMBER:
@@ -807,10 +816,10 @@ public class ExcelImportService {
                 case EMPTY:
                     return "";
                 default:
-                    return normalizePotentialDateString(safe(cell.getStringValue()), dateFormat);
+                    return normalizeCellText(safe(cell.getStringValue()), dateFormat);
             }
         } catch (Exception ex) {
-            return normalizePotentialDateString(safe(cell.getStringValue()), dateFormat);
+            return normalizeCellText(safe(cell.getStringValue()), dateFormat);
         }
     }
 
@@ -848,6 +857,11 @@ public class ExcelImportService {
         return value.trim();
     }
 
+    private String normalizeCellText(String value, String dateFormat) {
+        String normalized = normalizePotentialNegativeNumberString(value);
+        return normalizePotentialDateString(normalized, dateFormat);
+    }
+
     private String normalizePotentialDateString(String value, String dateFormat) {
         String trimmed = safe(value);
         if (!StringUtils.hasText(trimmed)) {
@@ -869,17 +883,7 @@ public class ExcelImportService {
             return null;
         }
         // Pre-process: convert fullwidth digits ０-９ to ASCII 0-9
-        String normalized = value.trim();
-        StringBuilder sb = new StringBuilder(normalized.length());
-        for (int i = 0; i < normalized.length(); i++) {
-            char ch = normalized.charAt(i);
-            if (ch >= '\uFF10' && ch <= '\uFF19') {
-                sb.append((char) ('0' + (ch - '\uFF10')));
-            } else {
-                sb.append(ch);
-            }
-        }
-        normalized = sb.toString();
+        String normalized = normalizeFullWidthDigits(value.trim());
         // Strip 上午/下午/AM/PM (we don't attempt 12h conversion — just remove)
         normalized = normalized.replaceAll("[上下]午\\s*", "").replaceAll("(?i)\\s*[AP]M\\s*", " ").trim();
         normalized = normalized.replace('T', ' ');
@@ -927,5 +931,76 @@ public class ExcelImportService {
             return trimmed;
         }
         return value;
+    }
+
+    private String normalizePotentialNegativeNumberString(String value) {
+        String trimmed = safe(value);
+        if (!StringUtils.hasText(trimmed)) {
+            return "";
+        }
+        String normalized = normalizeFullWidthDigits(trimmed)
+            .replace('\u00A0', ' ')
+            .replace('\u3000', ' ')
+            .replace('（', '(')
+            .replace('）', ')')
+            .replace('｛', '{')
+            .replace('｝', '}')
+            .replace('，', ',')
+            .replace('．', '.')
+            .trim();
+        normalized = normalizeMinusVariants(normalized);
+
+        if (SIGNED_NUMBER_PATTERN.matcher(normalized).matches()) {
+            return normalizeSignedNumericCore(normalized, normalized.startsWith("-"));
+        }
+
+        var wrappedMatcher = WRAPPED_NEGATIVE_NUMBER_PATTERN.matcher(normalized);
+        if (!wrappedMatcher.matches()) {
+            return trimmed;
+        }
+
+        return normalizeSignedNumericCore(wrappedMatcher.group(1), true);
+    }
+
+    private String normalizeSignedNumericCore(String value, boolean negative) {
+        String digits = safe(value)
+            .replaceAll("\\s+", "")
+            .replace("+", "")
+            .replace("-", "")
+            .replace(",", "");
+        if (!StringUtils.hasText(digits)) {
+            return "";
+        }
+        return negative ? "-" + digits : digits;
+    }
+
+    private String normalizeMinusVariants(String value) {
+        if (!StringUtils.hasText(value)) {
+            return "";
+        }
+        return value
+            .replace('－', '-')
+            .replace('﹣', '-')
+            .replace('−', '-')
+            .replace('‒', '-')
+            .replace('–', '-')
+            .replace('—', '-')
+            .replace('―', '-');
+    }
+
+    private String normalizeFullWidthDigits(String value) {
+        if (!StringUtils.hasText(value)) {
+            return "";
+        }
+        StringBuilder sb = new StringBuilder(value.length());
+        for (int i = 0; i < value.length(); i++) {
+            char ch = value.charAt(i);
+            if (ch >= '\uFF10' && ch <= '\uFF19') {
+                sb.append((char) ('0' + (ch - '\uFF10')));
+            } else {
+                sb.append(ch);
+            }
+        }
+        return sb.toString();
     }
 }
