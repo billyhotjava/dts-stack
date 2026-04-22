@@ -2,6 +2,15 @@
 
 **目的**：保证 Sprint-13 交付物端到端正确，而不只是各自单元测试过。
 
+## 当前已完成验证
+
+- [x] `source/dts-analytics` 编译通过
+- [x] `source/dts-platform` 编译通过
+- [x] `source/dts-platform-webapp` 生产构建通过（`LEGACY_BROWSER_BUILD=1 pnpm build`）
+- [x] 新路由已注册：`/bi/explore`、`/bi/card/new`、`/bi/card/:id/edit`、`/bi/virtual-datasets`
+- [x] 旧入口兼容：`/bi/questions/:id/edit` 会按卡片类型自动分流到旧 editor 或新语义 editor
+- [ ] 现场 Chrome 95 录屏、慢查询熔断、使用度统计与 Git PR adapter 仍待补证
+
 ## 任务引用约定
 
 跨 Feature 引用统一使用 `F#/T#`。

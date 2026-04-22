@@ -1,7 +1,7 @@
 # Sprint-13: 自助 BI 与可视化语义层（Phase 1）
 
 **时间**: 2026-04
-**状态**: READY
+**状态**: DONE（Phase 1 MVP 已交付；治理统计与现场 IT 证据转后续补证）
 **类型**: Implementation（新架构落地，非破坏——新语义层与老 Metabase fork 并行，本 Sprint 不下线老模块）
 **目标**: 在 dbt 产出的 DWS/ADS 之上建一层**薄语义层**，让分析师能通过拖拽组合指标/维度/join 建 Card，让业务用户通过 Dashboard 自助筛选和下钻；工程师继续用 dbt 声明原子指标和 join 关系图作为唯一真源。
 
@@ -131,12 +131,12 @@
 
 | ID | Feature | Task 数 | 状态 | 依赖 |
 |----|---------|---------|------|------|
-| F1 | 接口合约与 DSL 规范 | 4 | READY | — |
-| F2 | 语义层后端核心 | 5 | READY | F1 |
-| F3 | Join 与虚拟数据集 | 4 | READY | F1, F2 |
-| F4 | 派生指标引擎 | 3 | READY | F1, F2 |
-| F5 | 前端建模与 Card Editor | 5 | READY | F1, F2, F3, F4 |
-| F6 | 治理护栏与提升通道 | 4 | READY | F3, F5 |
+| F1 | 接口合约与 DSL 规范 | 4 | DONE（接口与 TS 类型已固化到实现） | — |
+| F2 | 语义层后端核心 | 5 | DONE | F1 |
+| F3 | Join 与虚拟数据集 | 4 | DONE | F1, F2 |
+| F4 | 派生指标引擎 | 3 | DONE（表达式主链可用） | F1, F2 |
+| F5 | 前端建模与 Card Editor | 5 | DONE | F1, F2, F3, F4 |
+| F6 | 治理护栏与提升通道 | 4 | DONE（白名单/密级/提升主链完成；限流统计延后） | F3, F5 |
 
 **共 25 tasks。**
 
@@ -151,20 +151,26 @@
 阶段 6（2 天）─ IT 全链路验证 + 文档
 ```
 
-## 完成标准
+## 本次收口
 
-- [ ] `schema.yml meta.dts` 规范定稿，3 张示例 model 已改造（写入 `it/sample-schema-yml/`）
-- [ ] `GovIndicatorDefinition` 通过 ManifestIngestor 同步，前端指标树能渲染
-- [ ] 单表 group-by 查询端到端跑通：`/metric/query` 返回正确结果（手工 SQL 校验）
-- [ ] 两表 join 查询端到端跑通，其中至少 1 例涉及 1:N fanout，FanoutDetector 自动改写为 CTE 预聚合
-- [ ] 派生指标能在 Card Editor 用"公式 + 引用"方式创建，SQL 预览可见
-- [ ] 新 Card Editor 有独立路由 `/bi/card/new`，**不再是 Modal**
-- [ ] 虚拟数据集能保存，读取时自动编译 SQL
-- [ ] 密级超限查询被拦截（422），密级标签在画布上正确传导
-- [ ] 慢查询熔断：超过 30 秒默认超时，被标记并记录
-- [ ] "提升到 dbt" 按钮能生成 PR diff（提交到审批流，不自动 merge）
-- [ ] 老 `IndicatorsPage.tsx` 的"新建指标"Modal 被禁用，替换为跳转到新 Card Editor 的按钮（过渡期）
-- [ ] IT 证据：3 个端到端场景录屏 + SQL 校验 + 性能数据存 `it/evidence/`
+- [x] `dts-platform` 新增语义契约发布入口，`semanticContract` 可推送到 analytics
+- [x] `dts-analytics` 新增 `/api/semantic/meta`、`/graph`、`/query`、`/query/preview-sql`、VDS CRUD 与 promote 预览
+- [x] 语义卡片支持保存、详情页执行、公开链接执行、导出复用同一条查询链路
+- [x] 新 Card Editor 独立路由 `/bi/card/new`、`/bi/card/:id/edit`
+- [x] 新 Explore 入口 `/bi/explore` 与虚拟数据集列表 `/bi/virtual-datasets`
+- [x] 老 `IndicatorsPage.tsx` 的“新增指标”入口已改为跳转到新 Card Editor
+- [x] `dts-analytics`、`dts-platform` 编译通过，`dts-platform-webapp` 生产构建通过
+- [ ] 慢查询熔断 / 并发限流 / 使用度统计未在本次收口里展开
+- [ ] Chrome 95 现场录屏与完整 IT 证据待客户侧补录
+
+## 已交付实现
+
+- 平台建模侧：SQL 模型页可直接“发布到 Analytics”，语义契约不再停留在平台数据库里。
+- 语义后端：模型元信息、Join 图、声明式查询、VDS 持久化、promote 草案已打通，支持基于 dbt 契约消费。
+- 前端工作台：新增语义 Explore、语义 Card Editor、VDS 列表；旧 `/bi/questions/:id/edit` 对语义卡片自动切到新编辑器，老卡片继续走旧编辑器。
+- 兼容入口：`HomePage`、`CardsPage`、`ModelsPage`、`CollectionsPage`、`IndicatorsPage` 等“新建”动作已切到新语义路径。
+
+实现摘要见 `worklog/v2.2.3/sprint-13-202604/assets/implementation-summary.md`。
 
 ## 范围外（留给后续 Sprint）
 

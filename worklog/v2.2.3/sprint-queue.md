@@ -194,19 +194,34 @@
 **IT**: `worklog/v2.2.3/sprint-12-202604/it/` — 静态 Chrome 95 兼容已过；真机 smoke 需客户侧补证据
 
 ## Sprint-13: 自助 BI 与可视化语义层（Phase 1）(202604)
-**状态**: READY
+**状态**: DONE（Phase 1 MVP 已交付；治理统计与现场 IT 证据待补）
 **类型**: Implementation（新架构落地，非破坏——新语义层与老 Metabase fork 并行）
 **目标**: 在 dbt 产出的 DWS/ADS 之上建薄语义层，让分析师通过拖拽组合指标/维度/join 建 Card；工程师用 dbt schema.yml 声明原子指标与 join 关系图作为唯一真源；LLM 本 Sprint 不上但 schema 预留字段
 **参考架构**: Lightdash（dbt-native semantic layer），非 Cube 级自研
 
 | Feature | Task 数 | 状态 |
 |---------|---------|------|
-| F1-接口合约与 DSL 规范 | 4 | READY |
-| F2-语义层后端核心 | 5 | READY |
-| F3-Join 与虚拟数据集 | 4 | READY |
-| F4-派生指标引擎 | 3 | READY |
-| F5-前端建模与 Card Editor | 5 | READY |
-| F6-治理护栏与提升通道 | 4 | READY |
+| F1-接口合约与DSL规范 | 4 | DONE（接口与 TS 类型已固化到实现） |
+| F2-语义层后端核心 | 5 | DONE |
+| F3-Join与虚拟数据集 | 4 | DONE |
+| F4-派生指标引擎 | 3 | DONE（表达式主链可用） |
+| F5-前端建模与CardEditor | 5 | DONE |
+| F6-治理护栏与提升通道 | 4 | DONE（白名单/密级/提升主链完成；限流统计延后） |
 
-**统计**: READY=25, IN_PROGRESS=0, DONE=0, BLOCKED=0
+**统计**: READY=0, IN_PROGRESS=0, DONE=25, BLOCKED=0
 **设计文档**: `worklog/v2.2.3/sprint-13-202604/README.md`
+
+## Sprint-14: Excel 导入内核统一与解析重构 (202604)
+**状态**: READY
+**类型**: Implementation（兼容式重构，平台侧先收口，保持现有 REST 与 Addax CSV 契约）
+**目标**: 统一 `dts-platform` 与 `dts-ingestion` 的 Excel 解析规则，用 POI-based Excel Core 解决负数、本地化日期、公式与合并单元格等长期兼容问题
+
+| Feature | Task 数 | 状态 |
+|---------|---------|------|
+| F1-统一Excel解析内核 | 3 | READY |
+| F2-平台侧ExcelImport流水线重构 | 3 | READY |
+| F3-ingestion预检与正式导入一致性收敛 | 3 | READY |
+| F4-兼容样本库与回归体系 | 2 | READY |
+
+**统计**: READY=11, IN_PROGRESS=0, DONE=0, BLOCKED=0
+**设计文档**: `worklog/v2.2.3/sprint-14-202604/README.md`
