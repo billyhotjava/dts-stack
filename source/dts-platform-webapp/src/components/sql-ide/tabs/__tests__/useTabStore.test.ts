@@ -93,9 +93,101 @@ describe("useTabStore syncDirty", () => {
 
     await vi.waitFor(() => {
       const tab = useTabStore.getState().tabs[0];
-      // Tab's updatedAt was changed by the second updateTab → dirty must remain true
+      // The snapshot that reached the server is stale now, so dirty must remain true
       expect(tab.dirty).toBe(true);
       expect(tab.sqlText).toBe("SELECT 2");
+    });
+  });
+
+  it("rebases stale updatedAt from server after a 409 and retries with the fresh token", async () => {
+    const mockBatch = vi.mocked(api.batchUpsertTabs);
+    const mockListTabs = vi.mocked(api.listTabs);
+    const conflict = Object.assign(new Error("stale updatedAt"), { response: { status: 409 } });
+
+    mockBatch
+      .mockResolvedValueOnce([
+        {
+          id: "server-id-1",
+          title: "Query 1",
+          sqlText: "SELECT 1",
+          engine: "generic",
+          datasourceId: null,
+          schemaCtx: null,
+          cursorLine: null,
+          cursorCol: null,
+          selectionJson: null,
+          lastExecutionId: null,
+          sortOrder: 0,
+          active: false,
+          updatedAt: "2026-04-13T10:00:00.000Z",
+        },
+      ])
+      .mockRejectedValueOnce(conflict)
+      .mockResolvedValueOnce([
+        {
+          id: "server-id-1",
+          title: "Query 1",
+          sqlText: "SELECT 2",
+          engine: "generic",
+          datasourceId: null,
+          schemaCtx: null,
+          cursorLine: null,
+          cursorCol: null,
+          selectionJson: null,
+          lastExecutionId: null,
+          sortOrder: 0,
+          active: false,
+          updatedAt: "2026-04-13T10:05:00.000Z",
+        },
+      ]);
+
+    mockListTabs.mockResolvedValueOnce([
+      {
+        id: "server-id-1",
+        title: "Query 1",
+        sqlText: "SELECT remote",
+        engine: "generic",
+        datasourceId: null,
+        schemaCtx: null,
+        cursorLine: null,
+        cursorCol: null,
+        selectionJson: null,
+        lastExecutionId: null,
+        sortOrder: 0,
+        active: false,
+        updatedAt: "2026-04-13T10:04:00.000Z",
+      },
+    ]);
+
+    useTabStore.getState().openTab();
+    const localId = useTabStore.getState().tabs[0].id;
+
+    useTabStore.getState().updateTab(localId, { sqlText: "SELECT 1" });
+    await vi.advanceTimersByTimeAsync(2100);
+    await vi.waitFor(() => expect(mockBatch).toHaveBeenCalledTimes(1));
+
+    useTabStore.getState().updateTab("server-id-1", { sqlText: "SELECT 2" });
+    await vi.advanceTimersByTimeAsync(2100);
+    await vi.waitFor(() => expect(mockBatch).toHaveBeenCalledTimes(2));
+    await vi.waitFor(() => expect(mockListTabs).toHaveBeenCalledTimes(1));
+
+    await vi.waitFor(() => {
+      const tab = useTabStore.getState().tabs[0];
+      expect(tab.dirty).toBe(true);
+      expect(tab.updatedAt).toBe("2026-04-13T10:04:00.000Z");
+      expect(tab.sqlText).toBe("SELECT 2");
+    });
+
+    expect(mockBatch.mock.calls[1][0][0]?.updatedAt).toBe("2026-04-13T10:00:00.000Z");
+
+    await vi.advanceTimersByTimeAsync(5000);
+    await vi.waitFor(() => expect(mockBatch).toHaveBeenCalledTimes(3));
+    expect(mockBatch.mock.calls[2][0][0]?.updatedAt).toBe("2026-04-13T10:04:00.000Z");
+
+    await vi.waitFor(() => {
+      const tab = useTabStore.getState().tabs[0];
+      expect(tab.dirty).toBe(false);
+      expect(tab.updatedAt).toBe("2026-04-13T10:05:00.000Z");
     });
   });
 

@@ -204,6 +204,21 @@ function scheduleRetry(get: () => TabStore) {
   }, delay);
 }
 
+function getHttpStatus(err: unknown): number | undefined {
+  const status = (err as { response?: { status?: unknown } } | null | undefined)?.response?.status;
+  return typeof status === "number" ? status : undefined;
+}
+
+function rebaseDirtyTabsUpdatedAt(localTabs: TabState[], remoteTabs: TabDto[]): TabState[] {
+  const remoteById = new Map(remoteTabs.map((t) => [t.id, t]));
+  return localTabs.map((t) => {
+    if (!t.dirty || t.createdLocally) return t;
+    const remote = remoteById.get(t.id);
+    if (!remote || remote.updatedAt === t.updatedAt) return t;
+    return { ...t, updatedAt: remote.updatedAt };
+  });
+}
+
 export const useTabStore = create<TabStore>((set, get) => ({
   tabs: [],
   activeTabId: null,
@@ -453,6 +468,19 @@ export const useTabStore = create<TabStore>((set, get) => ({
       set({ tabs, activeTabId: nextActive });
       persistLocal(tabs);
     } catch (err) {
+      // 409 means our optimistic-lock token is stale (another window/session already
+      // updated the same tab). Rebase local dirty tabs onto the latest server token
+      // so the retry does useful work instead of replaying the same stale payload forever.
+      if (getHttpStatus(err) === 409) {
+        try {
+          const remote = await listTabs();
+          const rebased = rebaseDirtyTabsUpdatedAt(get().tabs, remote);
+          set({ tabs: rebased });
+          persistLocal(rebased);
+        } catch {
+          /* ignore — keep the local snapshot and retry later */
+        }
+      }
       // Retry with exponential backoff (up to MAX_RETRIES, then give up until next updateTab)
       scheduleRetry(get);
     }

@@ -830,8 +830,8 @@ ods_finance_project_fund
 - `已收款(万)` = `received_fund`
 - `待收经费(万)` = `receivable_fund`
 - `项目属性`：
-  - `is_major_project = '是'`：`重大项目`
-  - `is_major_project = '否'`：`非重大项目`
+  - `is_major_project IS TRUE`：`重大项目`
+  - `is_major_project IS FALSE`：`非重大项目`
   - 其他：`未标注`
 
 ### 7.5 建议核对 SQL

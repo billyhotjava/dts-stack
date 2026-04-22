@@ -1,0 +1,70 @@
+{
+  "code": "TPL_PJM_COMPOSITE_V1",
+  "name": "PJM 项目综合健康度模板",
+  "description": "基于进度、质量、技术状态三域健康度评分加权计算项目综合健康度，以及风险预警指数。需先计算三域基础指标模板。",
+  "domain": "pjm",
+  "builtin": true,
+  "enabled": true,
+  "displayOrder": 4,
+  "recommendedSnapshot": false,
+  "seedTables": [],
+  "requiredSourceFields": [],
+  "indicatorBlueprints": [
+    {
+      "code": "pjm_composite_health",
+      "name": "项目综合健康度",
+      "category": "综合",
+      "definition": "进度健康度×0.4 + 质量健康度×0.3 + 技术状态健康度×0.3",
+      "aggregationType": "SCORE",
+      "numeratorExpression": null,
+      "denominatorExpression": null,
+      "staticFilter": null,
+      "sourceTable": null,
+      "dimensionFields": [
+        "project_no"
+      ],
+      "dateColumn": null,
+      "timeGrain": "WEEK",
+      "unit": "分",
+      "precisionScale": 1,
+      "direction": "UP",
+      "isDerived": true,
+      "sourceLayer": "ODS",
+      "targetLayer": "ADS",
+      "thresholdMin": 70.0,
+      "dependencyIndicators": [
+        "pjm_prog_health_score",
+        "pjm_qual_health_score",
+        "pjm_tech_health_score"
+      ]
+    },
+    {
+      "code": "pjm_risk_warning_index",
+      "name": "项目风险预警指数",
+      "category": "综合-预警",
+      "definition": "里程碑未完成×3 + 高风险未完成×2 + 超期未完成×1，值越低越好",
+      "aggregationType": "FORMULA",
+      "numeratorExpression": null,
+      "denominatorExpression": null,
+      "staticFilter": null,
+      "sourceTable": "ods_project_subject_domain",
+      "dimensionFields": [
+        "project_no"
+      ],
+      "dateColumn": "plan_date",
+      "timeGrain": "WEEK",
+      "unit": "点",
+      "precisionScale": 1,
+      "direction": "DOWN",
+      "isDerived": true,
+      "sourceLayer": "ODS",
+      "targetLayer": "ADS",
+      "thresholdMax": 10.0,
+      "dependencyIndicators": [
+        "pjm_prog_milestone_incomplete",
+        "pjm_prog_high_risk_incomplete",
+        "pjm_prog_overdue_incomplete"
+      ]
+    }
+  ]
+}

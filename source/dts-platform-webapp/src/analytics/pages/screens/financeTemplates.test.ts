@@ -107,3 +107,17 @@ test('finance templates use native table components with Chinese headers', () =>
         }
     }
 });
+
+test('project fund template maps is_major_project as boolean instead of string labels', () => {
+    const template = getTemplateById('fin-project-fund');
+    assert.ok(template, 'expected fin-project-fund template to exist');
+
+    const summaryComponent = template?.config.components.find((item) => item.id === 'pf-summary');
+    assert.ok(summaryComponent, 'expected fin-project-fund:pf-summary to exist');
+
+    const query = summaryComponent?.dataSource?.sqlConfig?.query ?? '';
+    assert.match(query, /WHEN is_major_project IS true THEN '重大项目'/);
+    assert.match(query, /WHEN is_major_project IS false THEN '非重大项目'/);
+    assert.doesNotMatch(query, /is_major_project\s*=\s*'是'/);
+    assert.doesNotMatch(query, /is_major_project\s*=\s*'否'/);
+});

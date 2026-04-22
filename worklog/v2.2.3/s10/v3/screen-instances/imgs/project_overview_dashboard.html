@@ -1,0 +1,809 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>项目总览看板</title>
+  <style>
+    :root {
+      --bg: #04142f;
+      --bg2: #071d47;
+      --panel: rgba(9, 33, 79, 0.78);
+      --panel-soft: rgba(10, 42, 98, 0.56);
+      --line: rgba(77, 180, 255, 0.55);
+      --line-soft: rgba(77, 180, 255, 0.18);
+      --cyan: #33d6ff;
+      --blue: #2f8cff;
+      --deep-blue: #0d4ca8;
+      --yellow: #ffcb3d;
+      --orange: #ff7a21;
+      --green: #20d17a;
+      --red: #ff4d4f;
+      --text: #e9f4ff;
+      --muted: #9cc7ef;
+      --white-soft: rgba(255,255,255,0.08);
+      --shadow: 0 0 0 1px rgba(90, 185, 255, 0.12) inset, 0 10px 40px rgba(0, 0, 0, 0.35);
+    }
+
+    * { box-sizing: border-box; }
+    html, body { height: 100%; }
+    body {
+      margin: 0;
+      font-family: "Microsoft YaHei", "PingFang SC", "Noto Sans SC", sans-serif;
+      color: var(--text);
+      background:
+        radial-gradient(circle at 50% -10%, rgba(52,134,255,0.35), transparent 30%),
+        radial-gradient(circle at 50% 120%, rgba(44,150,255,0.20), transparent 26%),
+        linear-gradient(180deg, #06142e 0%, #031025 45%, #020a19 100%);
+      overflow-x: auto;
+    }
+
+    body::before {
+      content: "";
+      position: fixed;
+      inset: 0;
+      background:
+        linear-gradient(rgba(38,127,255,0.06) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(38,127,255,0.06) 1px, transparent 1px);
+      background-size: 60px 60px;
+      pointer-events: none;
+      opacity: .45;
+    }
+
+    body::after {
+      content: "";
+      position: fixed;
+      left: 0;
+      right: 0;
+      bottom: -8vh;
+      height: 42vh;
+      background:
+        radial-gradient(ellipse at center, rgba(74,175,255,0.20), transparent 60%);
+      transform: perspective(900px) rotateX(74deg);
+      pointer-events: none;
+    }
+
+    .dashboard {
+      width: 1680px;
+      margin: 0 auto;
+      padding: 18px 22px 24px;
+      position: relative;
+      z-index: 1;
+    }
+
+    .topbar {
+      display: grid;
+      grid-template-columns: 240px 1fr 240px;
+      align-items: center;
+      margin-bottom: 16px;
+      gap: 20px;
+    }
+
+    .tab-group {
+      display: flex;
+      gap: 12px;
+      align-items: center;
+    }
+
+    .tab {
+      min-width: 96px;
+      text-align: center;
+      padding: 10px 16px;
+      color: #dff3ff;
+      font-weight: 700;
+      letter-spacing: 1px;
+      background: linear-gradient(180deg, rgba(75,122,255,0.55), rgba(27,77,159,0.6));
+      border: 1px solid rgba(120,190,255,0.42);
+      clip-path: polygon(10px 0, 100% 0, calc(100% - 10px) 100%, 0 100%);
+      box-shadow: 0 0 18px rgba(49, 140, 255, .22), inset 0 0 18px rgba(255,255,255,.06);
+    }
+
+    .title-wrap {
+      position: relative;
+      text-align: center;
+      padding: 2px 20px 18px;
+    }
+
+    .title-wrap::before,
+    .title-wrap::after {
+      content: "";
+      position: absolute;
+      top: 34px;
+      width: 32%;
+      height: 2px;
+      background: linear-gradient(90deg, transparent, rgba(96,195,255,.9), transparent);
+    }
+
+    .title-wrap::before { left: 0; }
+    .title-wrap::after { right: 0; }
+
+    .title {
+      margin: 0;
+      font-size: 58px;
+      line-height: 1;
+      letter-spacing: 6px;
+      font-weight: 900;
+      color: #f2fbff;
+      text-shadow: 0 0 10px rgba(117,194,255,0.7), 0 0 25px rgba(61,143,255,0.4);
+    }
+
+    .title-underline {
+      width: 260px;
+      height: 10px;
+      margin: 12px auto 0;
+      border-radius: 999px;
+      background: linear-gradient(90deg, transparent, #f3f7ff 18%, #f9f9ff 50%, #f3f7ff 82%, transparent);
+      box-shadow: 0 0 14px rgba(255,255,255,0.4);
+      opacity: .85;
+    }
+
+    .metric-grid {
+      display: grid;
+      grid-template-columns: repeat(5, 1fr);
+      gap: 14px;
+      margin-bottom: 16px;
+    }
+
+    .metric-card, .panel {
+      background: linear-gradient(180deg, rgba(9,28,68,0.86), rgba(5,22,54,0.72));
+      border: 1px solid rgba(82,178,255,0.25);
+      box-shadow: var(--shadow);
+      position: relative;
+      overflow: hidden;
+    }
+
+    .metric-card {
+      min-height: 110px;
+      padding: 18px 20px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      clip-path: polygon(0 0, calc(100% - 14px) 0, 100% 22px, 100% 100%, 0 100%);
+    }
+
+    .metric-card::before,
+    .panel::before {
+      content: "";
+      position: absolute;
+      inset: 0;
+      background: linear-gradient(135deg, rgba(80,180,255,.08), transparent 35%, rgba(68,120,255,.06));
+      pointer-events: none;
+    }
+
+    .metric-label {
+      color: #dcecff;
+      font-size: 18px;
+      margin-bottom: 10px;
+      letter-spacing: 1px;
+    }
+
+    .metric-value {
+      font-size: 56px;
+      line-height: 1;
+      font-weight: 900;
+      font-style: italic;
+      letter-spacing: 1px;
+      color: #ffffff;
+      text-shadow: 0 0 12px rgba(46,155,255,0.35);
+    }
+
+    .metric-icon {
+      width: 64px;
+      height: 64px;
+      border-radius: 50%;
+      display: grid;
+      place-items: center;
+      border: 2px solid rgba(49, 181, 255, 0.8);
+      box-shadow: inset 0 0 18px rgba(56,196,255,.22), 0 0 15px rgba(56,196,255,.12);
+      color: var(--cyan);
+      font-size: 28px;
+      font-weight: 800;
+      position: relative;
+    }
+
+    .metric-icon::after {
+      content: "";
+      position: absolute;
+      inset: -8px;
+      border-radius: 50%;
+      border: 1px solid rgba(61,180,255,.25);
+      border-top-color: transparent;
+      border-left-color: transparent;
+    }
+
+    .panel-grid.top,
+    .panel-grid.middle {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 14px;
+      margin-bottom: 14px;
+    }
+
+    .panel-grid.bottom {
+      display: grid;
+      grid-template-columns: 1fr;
+    }
+
+    .panel {
+      padding: 0;
+      min-height: 260px;
+      clip-path: polygon(0 16px, 14px 0, 100% 0, 100% 100%, 0 100%);
+    }
+
+    .panel.large {
+      min-height: 330px;
+    }
+
+    .panel-header {
+      height: 44px;
+      display: flex;
+      align-items: center;
+      padding: 0 18px;
+      font-size: 16px;
+      font-weight: 900;
+      letter-spacing: 1px;
+      color: #eef8ff;
+      background: linear-gradient(90deg, rgba(55,120,255,.5), rgba(30,71,153,.26) 52%, transparent 100%);
+      position: relative;
+    }
+
+    .panel-header::before {
+      content: "";
+      width: 22px;
+      height: 8px;
+      margin-right: 10px;
+      border-left: 5px solid #dff6ff;
+      border-top: 2px solid rgba(255,255,255,.85);
+      border-bottom: 2px solid rgba(255,255,255,.15);
+      transform: skewX(-35deg);
+      opacity: .95;
+    }
+
+    .panel-body {
+      padding: 10px 14px 14px;
+      height: calc(100% - 44px);
+    }
+
+    .chart-wrap { width: 100%; height: 100%; }
+    .legend {
+      display: flex;
+      gap: 18px;
+      flex-wrap: wrap;
+      align-items: center;
+      margin: 0 0 8px 6px;
+      color: var(--muted);
+      font-size: 12px;
+    }
+
+    .dot { width: 10px; height: 10px; border-radius: 2px; display: inline-block; margin-right: 6px; }
+
+    svg { width: 100%; height: 100%; display: block; }
+
+    .table-panel {
+      min-height: 260px;
+    }
+
+    .detail-wrap {
+      padding: 10px 18px 18px;
+    }
+
+    .detail-head {
+      display: grid;
+      grid-template-columns: 1.3fr 1.2fr .7fr .8fr repeat(6, 1fr);
+      gap: 10px;
+      color: #d8ebff;
+      font-weight: 700;
+      font-size: 15px;
+      margin-bottom: 12px;
+      align-items: center;
+    }
+
+    .detail-row {
+      display: grid;
+      grid-template-columns: 1.3fr 1.2fr .7fr .8fr repeat(6, 1fr);
+      gap: 10px;
+      align-items: center;
+      background: linear-gradient(180deg, rgba(14,44,98,.55), rgba(7,25,61,.55));
+      border: 1px solid rgba(87,181,255,.14);
+      padding: 12px 14px;
+      margin-bottom: 10px;
+    }
+
+    .project-code {
+      font-size: 18px;
+      font-weight: 900;
+      color: #f4fbff;
+      margin-bottom: 4px;
+    }
+
+    .project-sub {
+      color: #a9c8ea;
+      font-size: 13px;
+    }
+
+    .bar-track {
+      height: 28px;
+      background: rgba(32, 88, 173, 0.28);
+      border: 1px solid rgba(88, 178, 255, 0.18);
+      border-radius: 999px;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .bar-fill {
+      position: absolute;
+      left: 0;
+      top: 0;
+      bottom: 0;
+      border-radius: 999px;
+      background: linear-gradient(90deg, rgba(28,116,255,.55), rgba(64,211,255,.62));
+      box-shadow: inset 0 0 18px rgba(255,255,255,.08), 0 0 18px rgba(54,154,255,.2);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: #eef8ff;
+      font-size: 13px;
+      white-space: nowrap;
+    }
+
+    .muted { color: var(--muted); }
+    .small { font-size: 13px; }
+    .center { text-align: center; }
+
+    @media (max-width: 1720px) {
+      .dashboard { transform-origin: top center; }
+    }
+  </style>
+</head>
+<body>
+  <div class="dashboard">
+    <div class="topbar" style="position:relative; padding-bottom:20px;">
+      <div class="tab-group">
+        <div class="tab">执行监控</div>
+        <div class="tab">质量跟进</div>
+      </div>
+
+      <div class="title-wrap" style="position:relative;">
+        <h1 class="title">项目总览看板</h1>
+
+        <!-- 顶部装饰曲线 -->
+        <svg viewBox="0 0 1200 120" style="position:absolute; left:50%; transform:translateX(-50%); top:20px; width:1000px; height:120px; pointer-events:none;">
+          <path d="M0,60 Q200,0 400,40 T800,40 Q1000,0 1200,60" fill="none" stroke="rgba(120,200,255,0.6)" stroke-width="2"/>
+          <path d="M0,80 Q200,20 400,60 T800,60 Q1000,20 1200,80" fill="none" stroke="rgba(120,200,255,0.3)" stroke-width="1"/>
+        </svg>
+
+        <!-- 中间白色装饰条 -->
+        <div style="width:220px;height:8px;margin:18px auto 0;border-radius:20px;background:linear-gradient(90deg,transparent,#fff,transparent);box-shadow:0 0 10px rgba(255,255,255,.6);"></div>
+      </div>
+
+      <div class="tab-group" style="justify-content:flex-end;">
+        <div class="tab">技术状态</div>
+        <div class="tab">风险预警</div>
+      </div>
+    </div>
+
+    <section class="metric-grid">
+      <div class="metric-card">
+        <div>
+          <div class="metric-label">项目总数</div>
+          <div class="metric-value">2</div>
+        </div>
+        <div class="metric-icon">◉</div>
+      </div>
+      <div class="metric-card">
+        <div>
+          <div class="metric-label">项目完成率</div>
+          <div class="metric-value">66.7%</div>
+        </div>
+        <div class="metric-icon">▣</div>
+      </div>
+      <div class="metric-card">
+        <div>
+          <div class="metric-label">未闭环质量问题</div>
+          <div class="metric-value">0</div>
+        </div>
+        <div class="metric-icon">⚙</div>
+      </div>
+      <div class="metric-card">
+        <div>
+          <div class="metric-label">未落实更改单</div>
+          <div class="metric-value">5</div>
+        </div>
+        <div class="metric-icon">▤</div>
+      </div>
+      <div class="metric-card">
+        <div>
+          <div class="metric-label">高风险数量</div>
+          <div class="metric-value">3</div>
+        </div>
+        <div class="metric-icon">✦</div>
+      </div>
+    </section>
+
+    <section class="panel-grid top">
+      <div class="panel">
+        <div class="panel-header">项目节点统计</div>
+        <div class="panel-body">
+          <div class="legend">
+            <span><i class="dot" style="background:#24d26f"></i>按时完成</span>
+            <span><i class="dot" style="background:#2f8cff"></i>正常待完成</span>
+            <span><i class="dot" style="background:#ffcb3d"></i>超期完成</span>
+            <span><i class="dot" style="background:#ff5b2f"></i>超期未完成</span>
+          </div>
+          <div class="chart-wrap">
+            <svg viewBox="0 0 400 200" aria-label="项目节点统计">
+              <defs>
+                <linearGradient id="gridFade" x1="0" x2="0" y1="0" y2="1">
+                  <stop offset="0%" stop-color="rgba(255,255,255,.10)"/>
+                  <stop offset="100%" stop-color="rgba(255,255,255,.02)"/>
+                </linearGradient>
+              </defs>
+              <g stroke="rgba(121,184,255,.14)" stroke-width="1">
+                <line x1="40" y1="30" x2="40" y2="175"/>
+                <line x1="40" y1="175" x2="380" y2="175"/>
+                <line x1="100" y1="30" x2="100" y2="175"/>
+                <line x1="160" y1="30" x2="160" y2="175"/>
+                <line x1="220" y1="30" x2="220" y2="175"/>
+                <line x1="280" y1="30" x2="280" y2="175"/>
+                <line x1="340" y1="30" x2="340" y2="175"/>
+              </g>
+              <g font-size="12" fill="#9cc7ef">
+                <text x="12" y="52">项目4</text>
+                <text x="12" y="86">项目3</text>
+                <text x="12" y="120">项目2</text>
+                <text x="12" y="154">项目1</text>
+              </g>
+              <g>
+                <rect x="40" y="40" width="50" height="14" fill="#20d17a"/>
+                <rect x="90" y="40" width="35" height="14" fill="#2f8cff"/>
+                <rect x="125" y="40" width="45" height="14" fill="#ffcb3d"/>
+                <rect x="170" y="40" width="40" height="14" fill="#ff5b2f"/>
+
+                <rect x="40" y="74" width="50" height="14" fill="#20d17a"/>
+                <rect x="90" y="74" width="55" height="14" fill="#2f8cff"/>
+                <rect x="145" y="74" width="70" height="14" fill="#ffcb3d"/>
+                <rect x="215" y="74" width="58" height="14" fill="#ff5b2f"/>
+
+                <rect x="40" y="108" width="60" height="14" fill="#20d17a"/>
+                <rect x="100" y="108" width="70" height="14" fill="#2f8cff"/>
+                <rect x="170" y="108" width="78" height="14" fill="#ffcb3d"/>
+                <rect x="248" y="108" width="92" height="14" fill="#ff5b2f"/>
+
+                <rect x="40" y="142" width="82" height="14" fill="#20d17a"/>
+                <rect x="122" y="142" width="58" height="14" fill="#2f8cff"/>
+                <rect x="180" y="142" width="112" height="14" fill="#ffcb3d"/>
+                <rect x="292" y="142" width="88" height="14" fill="#ff5b2f"/>
+              </g>
+            </svg>
+          </div>
+        </div>
+      </div>
+
+      <div class="panel">
+        <div class="panel-header">质量问题趋势（近12个月）</div>
+        <div class="panel-body">
+          <div class="chart-wrap">
+            <svg viewBox="0 0 400 200" aria-label="质量问题趋势">
+              <g stroke="rgba(121,184,255,.14)" stroke-width="1">
+                <line x1="34" y1="25" x2="34" y2="175"/>
+                <line x1="34" y1="175" x2="382" y2="175"/>
+                <line x1="34" y1="145" x2="382" y2="145"/>
+                <line x1="34" y1="115" x2="382" y2="115"/>
+                <line x1="34" y1="85" x2="382" y2="85"/>
+                <line x1="34" y1="55" x2="382" y2="55"/>
+              </g>
+              <g font-size="12" fill="#9cc7ef">
+                <text x="40" y="192">2025-09</text>
+                <text x="95" y="192">2025-10</text>
+                <text x="150" y="192">2025-11</text>
+                <text x="205" y="192">2025-12</text>
+                <text x="260" y="192">2026-01</text>
+                <text x="315" y="192">2026-04</text>
+              </g>
+              <path d="M34 92 Q89 78 144 56 T254 88 T382 62 L382 175 L34 175 Z" fill="rgba(41,138,255,.18)" stroke="none"/>
+              <path d="M34 104 Q90 112 144 126 T254 60 T382 86 L382 175 L34 175 Z" fill="rgba(49,214,255,.18)" stroke="none"/>
+              <polyline points="34,92 89,78 144,56 199,70 254,88 309,82 382,62" fill="none" stroke="#2f8cff" stroke-width="3"/>
+              <polyline points="34,104 89,112 144,126 199,92 254,60 309,70 382,86" fill="none" stroke="#33d6ff" stroke-width="3"/>
+              <circle cx="144" cy="56" r="5" fill="#2f8cff"/>
+              <circle cx="144" cy="126" r="5" fill="#33d6ff"/>
+              <text x="130" y="46" fill="#8fd4ff" font-size="14">40</text>
+              <text x="132" y="116" fill="#8fd4ff" font-size="14">20</text>
+            </svg>
+          </div>
+        </div>
+      </div>
+
+      <div class="panel">
+        <div class="panel-header">技术变更趋势（近12个月）</div>
+        <div class="panel-body">
+          <div class="legend">
+            <span><i class="dot" style="background:#2f8cff"></i>变更总数</span>
+            <span><i class="dot" style="background:#33d6ff"></i>未落实变更</span>
+            <span><i class="dot" style="background:#ff6b2d"></i>未落实实更</span>
+          </div>
+          <div class="chart-wrap">
+            <svg viewBox="0 0 400 200" aria-label="技术变更趋势">
+              <g stroke="rgba(121,184,255,.14)" stroke-width="1">
+                <line x1="34" y1="25" x2="34" y2="175"/>
+                <line x1="34" y1="175" x2="382" y2="175"/>
+                <line x1="34" y1="145" x2="382" y2="145"/>
+                <line x1="34" y1="115" x2="382" y2="115"/>
+                <line x1="34" y1="85" x2="382" y2="85"/>
+                <line x1="34" y1="55" x2="382" y2="55"/>
+              </g>
+              <g font-size="12" fill="#9cc7ef">
+                <text x="40" y="192">2025-09</text>
+                <text x="95" y="192">2025-10</text>
+                <text x="150" y="192">2025-11</text>
+                <text x="205" y="192">2025-12</text>
+                <text x="260" y="192">2026-01</text>
+                <text x="315" y="192">2026-04</text>
+              </g>
+              <polyline points="40,102 96,98 152,46 208,116 264,60 320,112 376,100" fill="none" stroke="#2f8cff" stroke-width="3"/>
+              <polyline points="40,120 96,62 152,112 208,92 264,118 320,142 376,84" fill="none" stroke="#33d6ff" stroke-width="3"/>
+              <polyline points="40,156 96,142 152,152 208,148 264,152 320,158 376,140" fill="none" stroke="#ff6b2d" stroke-width="3"/>
+              <g fill="#2f8cff"><circle cx="152" cy="46" r="5"/><circle cx="264" cy="60" r="5"/></g>
+              <g fill="#33d6ff"><circle cx="96" cy="62" r="5"/><circle cx="376" cy="84" r="5"/></g>
+              <text x="144" y="36" fill="#8fd4ff" font-size="14">46</text>
+              <text x="256" y="50" fill="#8fd4ff" font-size="14">40</text>
+              <text x="144" y="102" fill="#8fd4ff" font-size="14">18</text>
+            </svg>
+          </div>
+        </div>
+      </div>
+
+      <div class="panel">
+        <div class="panel-header">项目风险统计</div>
+        <div class="panel-body">
+          <div class="legend">
+            <span><i class="dot" style="background:#ff5b2f"></i>高风险</span>
+            <span><i class="dot" style="background:#ffcb3d"></i>中风险</span>
+            <span><i class="dot" style="background:#2f8cff"></i>低风险</span>
+          </div>
+          <div class="chart-wrap">
+            <svg viewBox="0 0 400 200" aria-label="项目风险统计">
+              <g stroke="rgba(121,184,255,.14)" stroke-width="1">
+                <line x1="40" y1="30" x2="40" y2="175"/>
+                <line x1="40" y1="175" x2="380" y2="175"/>
+                <line x1="100" y1="30" x2="100" y2="175"/>
+                <line x1="160" y1="30" x2="160" y2="175"/>
+                <line x1="220" y1="30" x2="220" y2="175"/>
+                <line x1="280" y1="30" x2="280" y2="175"/>
+                <line x1="340" y1="30" x2="340" y2="175"/>
+              </g>
+              <g font-size="12" fill="#9cc7ef">
+                <text x="12" y="52">项目4</text>
+                <text x="12" y="86">项目3</text>
+                <text x="12" y="120">项目2</text>
+                <text x="12" y="154">项目1</text>
+              </g>
+              <g>
+                <rect x="40" y="40" width="58" height="14" fill="#ff5b2f"/>
+                <rect x="98" y="40" width="34" height="14" fill="#ffcb3d"/>
+                <rect x="132" y="40" width="62" height="14" fill="#2f8cff"/>
+
+                <rect x="40" y="74" width="44" height="14" fill="#ff5b2f"/>
+                <rect x="84" y="74" width="62" height="14" fill="#ffcb3d"/>
+                <rect x="146" y="74" width="104" height="14" fill="#2f8cff"/>
+
+                <rect x="40" y="108" width="62" height="14" fill="#ff5b2f"/>
+                <rect x="102" y="108" width="52" height="14" fill="#ffcb3d"/>
+                <rect x="154" y="108" width="98" height="14" fill="#2f8cff"/>
+
+                <rect x="40" y="142" width="82" height="14" fill="#ff5b2f"/>
+                <rect x="122" y="142" width="78" height="14" fill="#ffcb3d"/>
+                <rect x="200" y="142" width="150" height="14" fill="#2f8cff"/>
+              </g>
+            </svg>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="panel-grid middle">
+      <div class="panel">
+        <div class="panel-header">科室项目节点统计</div>
+        <div class="panel-body">
+          <div class="legend">
+            <span><i class="dot" style="background:#20d17a"></i>按时完成</span>
+            <span><i class="dot" style="background:#2f8cff"></i>正常待完成</span>
+            <span><i class="dot" style="background:#ffcb3d"></i>超期完成</span>
+            <span><i class="dot" style="background:#ff5b2f"></i>超期未完成</span>
+          </div>
+          <div class="chart-wrap">
+            <svg viewBox="0 0 400 200" aria-label="科室项目节点统计">
+              <g stroke="rgba(121,184,255,.14)" stroke-width="1">
+                <line x1="36" y1="20" x2="36" y2="175"/>
+                <line x1="36" y1="175" x2="382" y2="175"/>
+                <line x1="36" y1="136" x2="382" y2="136"/>
+                <line x1="36" y1="98" x2="382" y2="98"/>
+                <line x1="36" y1="60" x2="382" y2="60"/>
+              </g>
+              <g font-size="12" fill="#9cc7ef">
+                <text x="42" y="192">科室1</text>
+                <text x="104" y="192">科室2</text>
+                <text x="166" y="192">科室3</text>
+                <text x="228" y="192">科室4</text>
+                <text x="290" y="192">科室5</text>
+              </g>
+              <g>
+                <rect x="48" y="128" width="10" height="47" fill="#20d17a"/>
+                <rect x="66" y="20" width="12" height="155" fill="#2f8cff"/>
+                <rect x="86" y="44" width="12" height="131" fill="#ffcb3d"/>
+                <rect x="106" y="72" width="12" height="103" fill="#ff5b2f"/>
+
+                <rect x="110" y="130" width="10" height="45" fill="#20d17a"/>
+                <rect x="128" y="18" width="12" height="157" fill="#2f8cff"/>
+                <rect x="148" y="48" width="12" height="127" fill="#ffcb3d"/>
+                <rect x="168" y="74" width="12" height="101" fill="#ff5b2f"/>
+
+                <rect x="172" y="129" width="10" height="46" fill="#20d17a"/>
+                <rect x="190" y="19" width="12" height="156" fill="#2f8cff"/>
+                <rect x="210" y="47" width="12" height="128" fill="#ffcb3d"/>
+                <rect x="230" y="73" width="12" height="102" fill="#ff5b2f"/>
+
+                <rect x="234" y="130" width="10" height="45" fill="#20d17a"/>
+                <rect x="252" y="18" width="12" height="157" fill="#2f8cff"/>
+                <rect x="272" y="46" width="12" height="129" fill="#ffcb3d"/>
+                <rect x="292" y="74" width="12" height="101" fill="#ff5b2f"/>
+
+                <rect x="296" y="131" width="10" height="44" fill="#20d17a"/>
+                <rect x="314" y="19" width="12" height="156" fill="#2f8cff"/>
+                <rect x="334" y="48" width="12" height="127" fill="#ffcb3d"/>
+                <rect x="354" y="74" width="12" height="101" fill="#ff5b2f"/>
+              </g>
+            </svg>
+          </div>
+        </div>
+      </div>
+
+      <div class="panel">
+        <div class="panel-header">质量问题占比</div>
+        <div class="panel-body">
+          <div class="chart-wrap">
+            <svg viewBox="0 0 400 200" aria-label="质量问题占比">
+              <g transform="translate(120,100)">
+                <circle r="62" fill="none" stroke="#2f8cff" stroke-width="44" stroke-dasharray="70 320" transform="rotate(-90)"/>
+                <circle r="62" fill="none" stroke="#6cbcff" stroke-width="44" stroke-dasharray="48 342" transform="rotate(-11)"/>
+                <circle r="62" fill="none" stroke="#24d26f" stroke-width="44" stroke-dasharray="58 332" transform="rotate(43)"/>
+                <circle r="62" fill="none" stroke="#ffcb3d" stroke-width="44" stroke-dasharray="52 338" transform="rotate(108)"/>
+                <circle r="62" fill="none" stroke="#c9d7e5" stroke-width="44" stroke-dasharray="40 350" transform="rotate(162)"/>
+                <circle r="62" fill="none" stroke="#7247ff" stroke-width="44" stroke-dasharray="44 346" transform="rotate(205)"/>
+              </g>
+              <g font-size="14" fill="#dcecff">
+                <circle cx="246" cy="48" r="5" fill="#2f8cff"/><text x="258" y="53">设计</text><text x="336" y="53" fill="#33d6ff">472</text>
+                <circle cx="246" cy="78" r="5" fill="#6cbcff"/><text x="258" y="83">工艺</text><text x="336" y="83" fill="#33d6ff">321</text>
+                <circle cx="246" cy="108" r="5" fill="#24d26f"/><text x="258" y="113">操作</text><text x="336" y="113" fill="#33d6ff">345</text>
+                <circle cx="246" cy="138" r="5" fill="#ffcb3d"/><text x="258" y="143">管理</text><text x="336" y="143" fill="#33d6ff">245</text>
+                <circle cx="246" cy="168" r="5" fill="#c9d7e5"/><text x="258" y="173">外协外购</text><text x="336" y="173" fill="#33d6ff">188</text>
+              </g>
+            </svg>
+          </div>
+        </div>
+      </div>
+
+      <div class="panel">
+        <div class="panel-header">科室技术变更</div>
+        <div class="panel-body">
+          <div class="legend">
+            <span><i class="dot" style="background:#2f8cff"></i>未签署</span>
+            <span><i class="dot" style="background:#33d6ff"></i>未落实整改</span>
+          </div>
+          <div class="chart-wrap">
+            <svg viewBox="0 0 400 200" aria-label="科室技术变更">
+              <g stroke="rgba(121,184,255,.14)" stroke-width="1">
+                <line x1="36" y1="20" x2="36" y2="175"/>
+                <line x1="36" y1="175" x2="382" y2="175"/>
+                <line x1="36" y1="136" x2="382" y2="136"/>
+                <line x1="36" y1="98" x2="382" y2="98"/>
+                <line x1="36" y1="60" x2="382" y2="60"/>
+              </g>
+              <g font-size="12" fill="#9cc7ef">
+                <text x="46" y="192">科室1</text>
+                <text x="108" y="192">科室2</text>
+                <text x="170" y="192">科室3</text>
+                <text x="232" y="192">科室4</text>
+                <text x="294" y="192">科室5</text>
+              </g>
+              <g>
+                <rect x="56" y="30" width="18" height="145" fill="#2f8cff"/>
+                <rect x="82" y="58" width="18" height="117" fill="#33d6ff"/>
+
+                <rect x="118" y="44" width="18" height="131" fill="#2f8cff"/>
+                <rect x="144" y="70" width="18" height="105" fill="#33d6ff"/>
+
+                <rect x="180" y="52" width="18" height="123" fill="#2f8cff"/>
+                <rect x="206" y="84" width="18" height="91" fill="#33d6ff"/>
+
+                <rect x="242" y="58" width="18" height="117" fill="#2f8cff"/>
+                <rect x="268" y="112" width="18" height="63" fill="#33d6ff"/>
+
+                <rect x="304" y="66" width="18" height="109" fill="#2f8cff"/>
+                <rect x="330" y="114" width="18" height="61" fill="#33d6ff"/>
+              </g>
+            </svg>
+          </div>
+        </div>
+      </div>
+
+      <div class="panel">
+        <div class="panel-header">风险类型占比</div>
+        <div class="panel-body">
+          <div class="chart-wrap">
+            <svg viewBox="0 0 400 200" aria-label="风险类型占比">
+              <g transform="translate(120,100)">
+                <circle r="58" fill="none" stroke="#33d6ff" stroke-width="22" stroke-dasharray="40 325" transform="rotate(-90)"/>
+                <circle r="58" fill="none" stroke="#2f8cff" stroke-width="22" stroke-dasharray="95 270" transform="rotate(-50)"/>
+                <circle r="58" fill="none" stroke="#ffcb3d" stroke-width="22" stroke-dasharray="80 285" transform="rotate(45)"/>
+                <circle r="58" fill="none" stroke="#20d17a" stroke-width="22" stroke-dasharray="72 293" transform="rotate(123)"/>
+                <circle r="58" fill="none" stroke="#d8dee8" stroke-width="22" stroke-dasharray="45 320" transform="rotate(192)"/>
+                <circle r="34" fill="#081d43" stroke="rgba(98,182,255,.25)"/>
+              </g>
+              <g font-size="14" fill="#dcecff">
+                <circle cx="250" cy="48" r="5" fill="#33d6ff"/><text x="262" y="53">风险类型一</text><text x="356" y="53" fill="#33d6ff">430</text>
+                <circle cx="250" cy="78" r="5" fill="#2f8cff"/><text x="262" y="83">风险类型二</text><text x="356" y="83" fill="#33d6ff">350</text>
+                <circle cx="250" cy="108" r="5" fill="#ffcb3d"/><text x="262" y="113">风险类型三</text><text x="356" y="113" fill="#33d6ff">120</text>
+                <circle cx="250" cy="138" r="5" fill="#20d17a"/><text x="262" y="143">风险类型四</text><text x="356" y="143" fill="#33d6ff">70</text>
+                <circle cx="250" cy="168" r="5" fill="#d8dee8"/><text x="262" y="173">风险类型五</text><text x="356" y="173" fill="#33d6ff">50</text>
+              </g>
+            </svg>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="panel-grid bottom">
+      <div class="panel table-panel large">
+        <div class="panel-header">项目进度详情</div>
+        <div class="detail-wrap">
+          <div class="detail-head">
+            <div>重大项目</div>
+            <div>责任科室/经理</div>
+            <div>完成率</div>
+            <div>交付日期</div>
+            <div class="center">Q1</div>
+            <div class="center">2025 Q2</div>
+            <div class="center">2025 Q3</div>
+            <div class="center">2025 Q4</div>
+            <div class="center">2026 Q1</div>
+            <div class="center">2026 Q2</div>
+          </div>
+
+          <div class="detail-row">
+            <div>
+              <div class="project-code">PJ-2025-001</div>
+              <div class="project-sub">4子项目-8任务</div>
+            </div>
+            <div class="small muted">热控室内 - ZZQ</div>
+            <div>50%</div>
+            <div>2026-04-30</div>
+            <div></div>
+            <div style="grid-column: span 2;">
+              <div class="bar-track"><div class="bar-fill" style="width: 82%;">4子项目-8任务</div></div>
+            </div>
+            <div></div>
+            <div></div>
+            <div></div>
+          </div>
+
+          <div class="detail-row">
+            <div>
+              <div class="project-code">PJ-2025-001</div>
+              <div class="project-sub">4子项目-8任务</div>
+            </div>
+            <div class="small muted">热控室内 - ZZQ</div>
+            <div>50%</div>
+            <div>2026-04-30</div>
+            <div></div>
+            <div></div>
+            <div style="grid-column: span 3;">
+              <div class="bar-track"><div class="bar-fill" style="width: 92%;">5子项目-7任务</div></div>
+            </div>
+            <div></div>
+          </div>
+        </div>
+      </div>
+    </section>
+  </div>
+</body>
+</html>

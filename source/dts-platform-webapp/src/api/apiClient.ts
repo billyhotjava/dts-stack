@@ -363,6 +363,11 @@ axiosInstance.interceptors.response.use(
 				break;
 		}
 		const combinedMsg = hint ? `${errMsg}（${hint}）` : errMsg;
+		const isSqlTabOptimisticConflict =
+			typeof requestUrl === "string" &&
+			requestUrl.includes("/sql/v2/tabs") &&
+			response?.status === 409 &&
+			/stale updatedAt/i.test(combinedMsg);
 		(error as any).message = combinedMsg;
 		const sessionErrorByMessage =
 			typeof combinedMsg === "string" && /已在其他位置登录|会话已超时|重新登录|session/i.test(combinedMsg);
@@ -435,7 +440,7 @@ axiosInstance.interceptors.response.use(
 		} else if (shouldForceLogout && !TEST_SESSION_ENABLED) {
 			forceLogoutToLogin();
 		} else {
-			if (!shouldSuppressAuthHandling && !isLoginRequest && !isSqlTabRaceCondition) {
+			if (!shouldSuppressAuthHandling && !isLoginRequest && !isSqlTabRaceCondition && !isSqlTabOptimisticConflict) {
 				const isServiceUnavailable = !response || SERVICE_UNAVAILABLE_STATUSES.has(response.status ?? 0);
 				if (isServiceUnavailable) {
 					toast.error(combinedMsg, { id: "service-error", duration: 5000, position: "top-center" });

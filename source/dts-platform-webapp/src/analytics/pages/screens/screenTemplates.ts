@@ -3053,8 +3053,8 @@ const projectFundDashboardTemplate: ScreenTemplate = {
                        TO_CHAR(received_fund, '${FINANCE_AMOUNT_PATTERN}') AS received_fund,
                        TO_CHAR(receivable_fund, '${FINANCE_AMOUNT_PATTERN}') AS receivable_fund,
                        CASE
-                         WHEN is_major_project = '是' THEN '重大项目'
-                         WHEN is_major_project = '否' THEN '非重大项目'
+                         WHEN is_major_project IS true THEN '重大项目'
+                         WHEN is_major_project IS false THEN '非重大项目'
                          ELSE '未标注'
                        END AS project_attr
                 FROM public.biz_dwd_project_fund
