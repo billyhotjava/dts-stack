@@ -31,11 +31,11 @@ public class PortalSessionRegistry {
     private final boolean allowTakeover;
 
     public PortalSessionRegistry(
-        @Value("${dts.platform.session.timeout-minutes:10}") long timeoutMinutes,
+        @Value("${dts.platform.session.timeout-minutes:30}") long timeoutMinutes,
         @Value("${dts.platform.session.allow-takeover:true}") boolean allowTakeover,
         PortalSessionRepository sessionRepository
     ) {
-        long minutes = timeoutMinutes <= 0 ? 10 : timeoutMinutes;
+        long minutes = timeoutMinutes <= 0 ? 30 : timeoutMinutes;
         this.sessionTtl = Duration.ofMinutes(minutes);
         this.sessionRepository = sessionRepository;
         this.allowTakeover = allowTakeover;

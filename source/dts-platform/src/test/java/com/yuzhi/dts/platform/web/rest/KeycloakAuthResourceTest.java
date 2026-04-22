@@ -48,12 +48,12 @@ class KeycloakAuthResourceTest {
         AdminAuthGateway gateway = mock(AdminAuthGateway.class);
         PkiSessionTicketService ticketService = mock(PkiSessionTicketService.class);
         when(gateway.pkiLogin(any())).thenReturn(Map.of("user", Map.of("username", "alice", "roles", List.of("ROLE_USER"))));
-        when(ticketService.issue(eq("alice"), any()))
+        when(ticketService.issue(eq("alice"), any(), any()))
             .thenReturn(ResponseCookie.from("pki_session_ticket", "ticket-1").path("/").httpOnly(true).build());
 
         KeycloakAuthResource resource = newResource(gateway, mock(PortalSessionRegistry.class), mock(KeycloakAuthService.class), ticketService);
 
-        ResponseEntity<ApiResponse<Map<String, Object>>> response = resource.pkiLogin(Map.of("challengeId", "c-1"));
+        ResponseEntity<ApiResponse<Map<String, Object>>> response = resource.pkiLogin(Map.of("challengeId", "c-1"), new MockHttpServletRequest());
 
         assertThat(response.getStatusCode().value()).isEqualTo(200);
         assertThat(response.getHeaders().get(HttpHeaders.SET_COOKIE)).contains("pki_session_ticket=ticket-1; Path=/; HttpOnly");
@@ -65,8 +65,8 @@ class KeycloakAuthResourceTest {
     void pkiSessionShouldRejectMissingOrExpiredTicket() {
         AdminAuthGateway gateway = mock(AdminAuthGateway.class);
         PkiSessionTicketService ticketService = mock(PkiSessionTicketService.class);
-        when(ticketService.consume(any(), anyString())).thenReturn(null);
-        when(ticketService.clearTicketCookie()).thenReturn(ResponseCookie.from("pki_session_ticket", "").path("/").maxAge(0).build());
+        when(ticketService.resolve(any(), anyString())).thenReturn(null);
+        when(ticketService.clearTicketCookie(any())).thenReturn(ResponseCookie.from("pki_session_ticket", "").path("/").maxAge(0).build());
 
         KeycloakAuthResource resource = newResource(gateway, mock(PortalSessionRegistry.class), mock(KeycloakAuthService.class), ticketService);
 
@@ -87,9 +87,9 @@ class KeycloakAuthResourceTest {
         PortalSessionRegistry registry = mock(PortalSessionRegistry.class);
         KeycloakAuthService keycloakAuthService = mock(KeycloakAuthService.class);
         PkiSessionTicketService ticketService = mock(PkiSessionTicketService.class);
-        when(ticketService.consume(any(), eq("alice")))
+        when(ticketService.resolve(any(), eq("alice")))
             .thenReturn(new PkiSessionTicketService.VerifiedPkiPrincipal("alice", Map.of("username", "alice", "roles", List.of("ROLE_USER"))));
-        when(ticketService.clearTicketCookie()).thenReturn(ResponseCookie.from("pki_session_ticket", "").path("/").maxAge(0).build());
+        when(ticketService.clearTicketCookie(any())).thenReturn(ResponseCookie.from("pki_session_ticket", "").path("/").maxAge(0).build());
         when(keycloakAuthService.loginByTokenExchange("alice")).thenThrow(new IllegalStateException("kc unavailable"));
         when(registry.hasActiveSession("alice")).thenReturn(false);
         when(registry.createSession(eq("alice"), anyList(), anyList(), eq(null), eq(null), eq("alice"), eq(null)))

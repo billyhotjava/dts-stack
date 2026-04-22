@@ -54,6 +54,12 @@ export type PortalRefreshResult = {
 	adminRefreshTokenExpiresAt?: string;
 };
 
+type PortalSessionProbe = {
+	authenticated?: boolean;
+	remainingSeconds?: number | null;
+	reason?: "CONCURRENT" | "EXPIRED" | "LOGOUT";
+};
+
 // Token refresh coordination to avoid stampedes
 let refreshingPromise: Promise<PortalRefreshResult | null> | null = null;
 
@@ -79,6 +85,33 @@ export function isWithinLoginProbeGrace(): boolean {
 		return loginTs > 0 && Date.now() - loginTs < 5000;
 	} catch {
 		return false;
+	}
+}
+
+function isDefinitivePortalSessionInactive(status?: PortalSessionProbe | null): boolean {
+	if (!status || status.authenticated !== false) {
+		return false;
+	}
+	return (
+		status.reason === "CONCURRENT" ||
+		status.reason === "EXPIRED" ||
+		status.reason === "LOGOUT" ||
+		status.remainingSeconds === 0
+	);
+}
+
+async function probePortalSessionStatus(accessToken?: string): Promise<PortalSessionProbe | null> {
+	const token = String(accessToken || "").trim();
+	if (!token) {
+		return null;
+	}
+	try {
+		return await axiosInstance.get("/session/status", {
+			headers: { "X-Portal-Access-Token": token },
+			_skipAuth: true,
+		} as any);
+	} catch {
+		return null;
 	}
 }
 
@@ -395,12 +428,12 @@ axiosInstance.interceptors.response.use(
 		// Attempt silent refresh on 401 (non-auth endpoints) and retry once
 		if (response?.status === 401 && !shouldSuppressAuthHandling && !isLoginRequest && !isRefreshRequest) {
 			const cfg = response.config || {};
+			const requestAuth = String((cfg.headers as any)?.Authorization || "");
+			const requestToken = requestAuth.startsWith("Bearer ") ? requestAuth.slice(7).trim() : "";
 			// prevent infinite loop
 			if (!(cfg as any)._retry) {
 				// Race-safe: SessionManager may have already refreshed (or is about to).
 				// Check if the store has a different token than what this request used.
-				const requestAuth = String((cfg.headers as any)?.Authorization || "");
-				const requestToken = requestAuth.startsWith("Bearer ") ? requestAuth.slice(7).trim() : "";
 				const checkStoreForNewerToken = (): string | null => {
 					const current = String(userStore.getState().userToken?.accessToken || "").trim();
 					return requestToken && current && requestToken !== current ? current : null;
@@ -440,11 +473,13 @@ axiosInstance.interceptors.response.use(
 				console.warn("[auth] Suppressing auto-logout due to grace window after login");
 				return Promise.reject(error);
 			}
-			if (!TEST_SESSION_ENABLED || shouldForceLogout) {
-				forceLogoutToLogin();
-			} else {
-				console.warn("[DEV/TEST] 401 after refresh; skipping auto logout");
+			const currentAccessToken = String(userStore.getState().userToken?.accessToken || requestToken || "").trim();
+			const portalStatus = await probePortalSessionStatus(currentAccessToken);
+			const mustForceLogout = shouldForceLogout || isDefinitivePortalSessionInactive(portalStatus);
+			if (!mustForceLogout) {
+				return Promise.reject(error);
 			}
+			forceLogoutToLogin();
 		} else if (shouldForceLogout && !TEST_SESSION_ENABLED) {
 			forceLogoutToLogin();
 		} else {

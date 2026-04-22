@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef } from "react";
 import { toast } from "sonner";
 import { isWithinLoginProbeGrace, refreshPortalSessionIfPossible } from "@/api/apiClient";
-import { getPortalSessionStatus } from "@/api/platformApi";
+import { getPortalSessionStatus, type PortalSessionStatus } from "@/api/platformApi";
 import { resolveCurrentAppPath, resolveLoginHref } from "@/routes/constants";
 import useUserStore, { useUserActions, useUserInfo, useUserToken } from "@/store/userStore";
 import {
@@ -22,7 +22,7 @@ const STORAGE_KEYS = {
 
 const SESSION_TIMEOUT_MINUTES = Math.max(
 	1,
-	Number(import.meta.env.VITE_SESSION_TIMEOUT_MINUTES ?? import.meta.env.VITE_PORTAL_SESSION_TIMEOUT ?? "10"),
+	Number(import.meta.env.VITE_SESSION_TIMEOUT_MINUTES ?? import.meta.env.VITE_PORTAL_SESSION_TIMEOUT ?? "30"),
 );
 const SESSION_TIMEOUT_MS = SESSION_TIMEOUT_MINUTES * 60 * 1000;
 const SESSION_IDLE_GRACE_MS = 30 * 1000;
@@ -50,6 +50,28 @@ function decodeJwtExp(token?: string): number | null {
 	} catch {
 		return null;
 	}
+}
+
+function resolveSessionEndReason(status?: PortalSessionStatus): "CONCURRENT" | "EXPIRED" | "LOGOUT" {
+	if (status?.reason === "CONCURRENT") return "CONCURRENT";
+	if (status?.reason === "LOGOUT") return "LOGOUT";
+	return "EXPIRED";
+}
+
+function isDefinitiveInactiveStatus(status?: PortalSessionStatus | null): boolean {
+	if (!status || status.authenticated !== false) {
+		return false;
+	}
+	return (
+		status.reason === "CONCURRENT" ||
+		status.reason === "EXPIRED" ||
+		status.reason === "LOGOUT" ||
+		status.remainingSeconds === 0
+	);
+}
+
+function nextRefreshRetryDelayMs(attempt: number): number {
+	return Math.min(30_000, Math.max(10_000, attempt * 10_000));
 }
 
 function nextRefreshDelayMs(accessToken?: string, tokenExpiresAt?: number): number {
@@ -313,18 +335,8 @@ export default function SessionManager() {
 						cancelled = true;
 						return;
 					}
-					const reason =
-						status?.reason === "CONCURRENT"
-							? "CONCURRENT"
-							: status?.reason === "LOGOUT"
-								? "LOGOUT"
-								: "EXPIRED";
-					const isDefinitiveInactive =
-						reason === "CONCURRENT" ||
-						status?.reason === "EXPIRED" ||
-						status?.reason === "LOGOUT" ||
-						status?.remainingSeconds === 0;
-					if (isDefinitiveInactive) {
+					const reason = resolveSessionEndReason(status);
+					if (isDefinitiveInactiveStatus(status)) {
 						finishSession(clearUserInfoAndToken, logoutInProgressRef, reason);
 						cancelled = true;
 						return;
@@ -402,6 +414,7 @@ export default function SessionManager() {
 		if (!isLoggedIn || !token?.refreshToken) return;
 		let cancelled = false;
 		let timer: number | undefined;
+		let consecutiveRefreshFailures = 0;
 
 		const schedule = (delay: number) => {
 			if (cancelled) return;
@@ -410,7 +423,8 @@ export default function SessionManager() {
 
 		const run = async () => {
 			if (cancelled) return;
-			const currentRefreshToken = token?.refreshToken;
+			const currentToken = useUserStore.getState().userToken || token;
+			const currentRefreshToken = currentToken?.refreshToken;
 			if (!currentRefreshToken) {
 				cancelled = true;
 				return;
@@ -441,15 +455,16 @@ export default function SessionManager() {
 				if (!refreshed?.accessToken) {
 					throw new Error("portal_refresh_failed");
 				}
+				consecutiveRefreshFailures = 0;
 				broadcastTokenSync(refreshed);
 				if (!cancelled) {
 					const refreshDelay = nextRefreshDelayMs(
-						refreshed.accessToken || token.accessToken,
-						refreshed.tokenExpiresAt ?? token.tokenExpiresAt,
+						refreshed.accessToken || currentToken.accessToken,
+						refreshed.tokenExpiresAt ?? currentToken.tokenExpiresAt,
 					);
 					schedule(refreshDelay);
 				}
-			} catch {
+			} catch (error) {
 				// Don't immediately logout — another tab may have already refreshed.
 				// Check if we received a synced token recently.
 				try {
@@ -458,13 +473,14 @@ export default function SessionManager() {
 						const parsed = JSON.parse(synced);
 						if (parsed?.ts && Date.now() - parsed.ts < 30_000 && parsed.accessToken) {
 							// Another tab refreshed recently — adopt its token and retry later
+							consecutiveRefreshFailures = 0;
 							setUserToken({
-								...token,
+								...currentToken,
 								accessToken: parsed.accessToken,
-								refreshToken: parsed.refreshToken || token.refreshToken,
-								tokenExpiresAt: parsed.tokenExpiresAt || token.tokenExpiresAt,
-								adminAccessToken: parsed.adminAccessToken || token.adminAccessToken,
-								adminRefreshToken: parsed.adminRefreshToken || token.adminRefreshToken,
+								refreshToken: parsed.refreshToken || currentToken.refreshToken,
+								tokenExpiresAt: parsed.tokenExpiresAt || currentToken.tokenExpiresAt,
+								adminAccessToken: parsed.adminAccessToken || currentToken.adminAccessToken,
+								adminRefreshToken: parsed.adminRefreshToken || currentToken.adminRefreshToken,
 							});
 							if (!cancelled) {
 								schedule(nextRefreshDelayMs(parsed.accessToken, parsed.tokenExpiresAt));
@@ -477,10 +493,25 @@ export default function SessionManager() {
 					cancelled = true;
 					return;
 				}
-				if (!logoutInProgressRef.current) {
-					finishSession(clearUserInfoAndToken, logoutInProgressRef, "EXPIRED");
+				let status: PortalSessionStatus | null = null;
+				try {
+					const currentAccessToken = useUserStore.getState().userToken?.accessToken || currentToken.accessToken;
+					status = await getPortalSessionStatus(currentAccessToken);
+				} catch (statusError) {
+					console.warn("[session] refresh follow-up status probe failed", statusError);
 				}
-				cancelled = true;
+				if (cancelled || logoutInProgressRef.current) {
+					return;
+				}
+				if (isDefinitiveInactiveStatus(status)) {
+					finishSession(clearUserInfoAndToken, logoutInProgressRef, resolveSessionEndReason(status ?? undefined));
+					cancelled = true;
+					return;
+				}
+				consecutiveRefreshFailures += 1;
+				const retryDelay = nextRefreshRetryDelayMs(consecutiveRefreshFailures);
+				console.warn(`[session] refresh failed (attempt ${consecutiveRefreshFailures}), retrying`, error);
+				schedule(retryDelay);
 			}
 		};
 

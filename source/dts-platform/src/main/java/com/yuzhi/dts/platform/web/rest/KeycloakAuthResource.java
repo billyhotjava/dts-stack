@@ -458,7 +458,10 @@ public class KeycloakAuthResource {
     }
 
     @PostMapping("/pki-login")
-    public ResponseEntity<ApiResponse<Map<String, Object>>> pkiLogin(@RequestBody(required = false) Map<String, Object> payload) {
+    public ResponseEntity<ApiResponse<Map<String, Object>>> pkiLogin(
+        @RequestBody(required = false) Map<String, Object> payload,
+        HttpServletRequest request
+    ) {
         Map<String, Object> data = adminAuthGateway.pkiLogin(payload);
         Map<String, Object> user = extractVerifiedPkiUser(data);
         String username = resolveVerifiedPkiUsername(user);
@@ -468,14 +471,14 @@ public class KeycloakAuthResource {
         }
         return ResponseEntity
             .ok()
-            .header(org.springframework.http.HttpHeaders.SET_COOKIE, pkiSessionTicketService.issue(username, user).toString())
+            .header(org.springframework.http.HttpHeaders.SET_COOKIE, pkiSessionTicketService.issue(username, user, request).toString())
             .body(ApiResponses.ok(data));
     }
 
     /**
      * Establish a portal session after upstream PKI login succeeded on admin service.
-     * This endpoint does NOT perform certificate verification; it only converts a verified identity
-     * (provided via 'username' and optional 'user' profile from admin) into platform session tokens.
+     * This endpoint does NOT perform certificate verification; it only converts the verified identity
+     * bound to the short-lived signed ticket from /pki-login into platform session tokens.
      */
     @PostMapping("/pki-session")
     public ResponseEntity<ApiResponse<Map<String, Object>>> createPkiSession(
@@ -483,11 +486,11 @@ public class KeycloakAuthResource {
         HttpServletRequest request
     ) {
         String requestedUsername = payload == null ? null : payload.username();
-        PkiSessionTicketService.VerifiedPkiPrincipal verifiedPrincipal = pkiSessionTicketService.consume(request, requestedUsername);
+        PkiSessionTicketService.VerifiedPkiPrincipal verifiedPrincipal = pkiSessionTicketService.resolve(request, requestedUsername);
         if (verifiedPrincipal == null) {
             return ResponseEntity
                 .status(HttpStatus.UNAUTHORIZED)
-                .header(org.springframework.http.HttpHeaders.SET_COOKIE, pkiSessionTicketService.clearTicketCookie().toString())
+                .header(org.springframework.http.HttpHeaders.SET_COOKIE, pkiSessionTicketService.clearTicketCookie(request).toString())
                 .body(ApiResponses.error("PKI 登录凭证已失效，请重新使用 USB-Key 登录"));
         }
         String username = verifiedPrincipal.username();
@@ -654,7 +657,7 @@ public class KeycloakAuthResource {
             }
             return ResponseEntity
                 .ok()
-                .header(org.springframework.http.HttpHeaders.SET_COOKIE, pkiSessionTicketService.clearTicketCookie().toString())
+                .header(org.springframework.http.HttpHeaders.SET_COOKIE, pkiSessionTicketService.clearTicketCookie(request).toString())
                 .body(ApiResponses.ok(data));
         } catch (Exception ex) {
             String msg = ex.getMessage() == null || ex.getMessage().isBlank() ? "登录失败，请稍后重试" : ex.getMessage();
@@ -679,10 +682,7 @@ public class KeycloakAuthResource {
                     metadata
                 );
             }
-            return ResponseEntity
-                .status(HttpStatus.INTERNAL_SERVER_ERROR)
-                .header(org.springframework.http.HttpHeaders.SET_COOKIE, pkiSessionTicketService.clearTicketCookie().toString())
-                .body(ApiResponses.error(msg));
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(ApiResponses.error(msg));
         }
     }
 
