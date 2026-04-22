@@ -165,6 +165,7 @@ export function StatCardBasic({
 
     const title = String(c.title || "指标");
     const value = String(c.value || "0");
+    const prefix = String(c.prefix || "");
     const suffix = String(c.suffix || "");
     const trend = String(c.trend || "none");
     const trendValue = String(c.trendValue || "");
@@ -262,6 +263,7 @@ export function StatCardBasic({
                     </span>
                 </div>
                 <div style={{ display: "flex", alignItems: "baseline", gap: 6 }}>
+                    {prefix && <span style={{ fontSize: Math.max(12, titleFontSize + 1), color: titleColor }}>{prefix}</span>}
                     <span
                         style={{
                             fontSize: valueFontSize,

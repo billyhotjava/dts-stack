@@ -258,6 +258,12 @@ export interface FieldEditorProps {
   themeDefault?: string;
 }
 
+function toInputString(value: unknown): string {
+  if (typeof value === 'string') return value;
+  if (value == null) return '';
+  return String(value);
+}
+
 const FieldEditor: React.FC<FieldEditorProps> = ({ field, value, onChange, themeDefault }) => {
   const placeholder = field.placeholder ?? (themeDefault ? `主题默认: ${themeDefault}` : undefined);
 
@@ -266,7 +272,7 @@ const FieldEditor: React.FC<FieldEditorProps> = ({ field, value, onChange, theme
       return (
         <Input
           size="small"
-          value={value as string}
+          value={toInputString(value)}
           onChange={(e) => onChange(e.target.value)}
           allowClear
           placeholder={placeholder}
@@ -278,7 +284,7 @@ const FieldEditor: React.FC<FieldEditorProps> = ({ field, value, onChange, theme
         <Input.TextArea
           size="small"
           rows={3}
-          value={value as string}
+          value={toInputString(value)}
           onChange={(e) => onChange(e.target.value)}
           placeholder={placeholder}
         />
@@ -360,7 +366,7 @@ const FieldEditor: React.FC<FieldEditorProps> = ({ field, value, onChange, theme
       return (
         <Input
           size="small"
-          value={value as string}
+          value={toInputString(value)}
           onChange={(e) => onChange(e.target.value)}
           placeholder={placeholder}
         />
@@ -395,7 +401,7 @@ const FieldEditor: React.FC<FieldEditorProps> = ({ field, value, onChange, theme
       return (
         <Input
           size="small"
-          value={value as string}
+          value={toInputString(value)}
           onChange={(e) => onChange(e.target.value)}
           placeholder={placeholder}
         />

@@ -13,6 +13,7 @@ const statCardSchema: ComponentConfigSchema = {
         // Content
         { key: 'title',          label: '标题',       type: 'text',    group: 'content', defaultValue: '指标' },
         { key: 'value',          label: '数值',       type: 'text',    group: 'content', defaultValue: '0' },
+        { key: 'prefix',         label: '前缀',       type: 'text',    group: 'content' },
         { key: 'suffix',         label: '后缀',       type: 'text',    group: 'content' },
         { key: 'icon',           label: '图标',       type: 'text',    group: 'content' },
         { key: 'trend',          label: '趋势',       type: 'select',  group: 'content', options: [

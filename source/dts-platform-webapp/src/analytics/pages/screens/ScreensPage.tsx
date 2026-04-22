@@ -404,7 +404,7 @@ export default function ScreensPage() {
 	};
 
 	const handleEdit = (id: string | number) => {
-		navigate(`/bi/screens/${id}/edit`);
+		window.open(resolveRouteForOpen(`/bi/screens/${id}/edit`), '_blank', 'noopener,noreferrer');
 	};
 
 	const handlePreview = (id: string | number) => {
