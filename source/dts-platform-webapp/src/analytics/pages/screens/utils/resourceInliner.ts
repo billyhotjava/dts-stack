@@ -3,6 +3,8 @@
  * inline Base64 data URIs. External URLs and already-inlined data: URIs are skipped.
  */
 
+import { fetchWithPlatformAuth } from '@/analytics/api/analyticsApi';
+
 const IMAGE_URL_PATTERN = /\.(png|jpe?g|gif|svg|webp)(\?.*)?$/i;
 const INTERNAL_URL_PATTERN = /^(\/analytics\/|\/api\/|\/?uploads\/)/;
 
@@ -15,7 +17,7 @@ function isInternalImageUrl(value: unknown): value is string {
 }
 
 async function fetchAsDataUrl(url: string): Promise<string> {
-	const response = await fetch(url);
+	const response = await fetchWithPlatformAuth(url);
 	if (!response.ok) throw new Error(`Failed to fetch ${url}: ${response.status}`);
 	const blob = await response.blob();
 	return new Promise<string>((resolve, reject) => {

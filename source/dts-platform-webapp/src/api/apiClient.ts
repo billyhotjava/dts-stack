@@ -7,6 +7,7 @@ import { t } from "@/locales/i18n";
 import { isLoginRouteActive, resolveCurrentAppPath, resolveLoginHref } from "@/routes/constants";
 import useContextStore from "@/store/contextStore";
 import userStore from "@/store/userStore";
+import { resolvePortalTokenExpiresAt } from "@/utils/sessionExpiry";
 
 const axiosInstance = axios.create({
 	baseURL: GLOBAL_CONFIG.apiBaseUrl,
@@ -45,6 +46,8 @@ export type PortalRefreshResult = {
 	refreshToken: string;
 	tokenExpiresAt?: number;
 	expiresIn?: number;
+	portalExpiresAt?: string;
+	portalExpiresIn?: number;
 	adminAccessToken?: string;
 	adminRefreshToken?: string;
 	adminAccessTokenExpiresAt?: string;
@@ -120,7 +123,17 @@ export async function refreshPortalSessionIfPossible(): Promise<PortalRefreshRes
 				const adminAccessToken = String(resp?.adminAccessToken || resp?.data?.adminAccessToken || "").trim();
 				const adminRefreshToken = String(resp?.adminRefreshToken || resp?.data?.adminRefreshToken || "").trim();
 				const expiresIn = Number(resp?.expiresIn ?? resp?.data?.expiresIn ?? 0);
-				const tokenExpiresAt = expiresIn > 0 ? Date.now() + expiresIn * 1000 : userToken?.tokenExpiresAt;
+				const portalExpiresAt = normalizeDate(resp?.portalExpiresAt ?? resp?.data?.portalExpiresAt);
+				const portalExpiresIn = Number(resp?.portalExpiresIn ?? resp?.data?.portalExpiresIn ?? 0);
+				const tokenExpiresAt = resolvePortalTokenExpiresAt(
+					{
+						portalExpiresAt,
+						portalExpiresIn,
+						expiresIn,
+						tokenExpiresAt: userToken?.tokenExpiresAt,
+					},
+					userToken?.tokenExpiresAt,
+				);
 				const adminAccessTokenExpiresAt =
 					normalizeDate(resp?.adminAccessTokenExpiresAt ?? resp?.data?.adminAccessTokenExpiresAt) ??
 					userToken?.adminAccessTokenExpiresAt;
@@ -140,7 +153,9 @@ export async function refreshPortalSessionIfPossible(): Promise<PortalRefreshRes
 				actions.setUserToken(nextUserToken);
 				return {
 					...nextUserToken,
-					expiresIn: expiresIn > 0 ? expiresIn : undefined,
+					expiresIn: portalExpiresIn > 0 ? portalExpiresIn : expiresIn > 0 ? expiresIn : undefined,
+					portalExpiresAt,
+					portalExpiresIn: portalExpiresIn > 0 ? portalExpiresIn : undefined,
 				};
 			} catch {
 				return null;
@@ -373,15 +388,8 @@ axiosInstance.interceptors.response.use(
 			typeof combinedMsg === "string" && /已在其他位置登录|会话已超时|重新登录|session/i.test(combinedMsg);
 		const shouldForceLogout = sessionExpiredHeader || sessionConflictHeader || sessionErrorByMessage;
 		if (response?.status === 401 && !shouldSuppressAuthHandling && isRefreshRequest) {
-			if (hasRecentLoginGraceWindow()) {
-				console.warn("[auth] Suppressing refresh logout due to grace window after login");
-				return Promise.reject(error);
-			}
-			if (!TEST_SESSION_ENABLED || shouldForceLogout) {
-				forceLogoutToLogin();
-			} else {
-				console.warn("[DEV/TEST] refresh 401 received; skipping auto logout");
-			}
+			// Let SessionManager / route guards make the final decision for refresh failures.
+			// This avoids a single transient upstream refresh error forcing the SPA into a dead state.
 			return Promise.reject(error);
 		}
 		// Attempt silent refresh on 401 (non-auth endpoints) and retry once

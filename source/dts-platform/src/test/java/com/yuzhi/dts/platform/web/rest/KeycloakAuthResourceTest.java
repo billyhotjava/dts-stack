@@ -3,23 +3,23 @@ package com.yuzhi.dts.platform.web.rest;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyList;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
-import static org.mockito.ArgumentMatchers.anyMap;
 import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
+import com.yuzhi.dts.platform.security.session.PkiSessionTicketService;
 import com.yuzhi.dts.platform.security.session.PortalSessionRegistry;
 import com.yuzhi.dts.platform.security.session.PortalSessionRegistry.PortalSession;
-import com.yuzhi.dts.platform.security.session.PortalSessionCookieService;
 import com.yuzhi.dts.platform.service.admin.gateway.auth.AdminAuthGateway;
 import com.yuzhi.dts.platform.service.audit.AuditService;
 import com.yuzhi.dts.platform.service.infra.InceptorDataSourceRegistry;
+import com.yuzhi.dts.platform.service.keycloak.KeycloakAuthService;
 import java.time.Instant;
 import java.util.List;
 import java.util.Map;
-import java.util.Optional;
 import org.junit.jupiter.api.Test;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.ResponseCookie;
@@ -44,104 +44,104 @@ class KeycloakAuthResourceTest {
     }
 
     @Test
-    void pkiLoginShouldProxyPayloadThroughPlatformApi() {
+    void pkiLoginShouldIssueTicketCookieAfterVerifiedLogin() {
         AdminAuthGateway gateway = mock(AdminAuthGateway.class);
-        when(gateway.pkiLogin(anyMap())).thenReturn(Map.of("user", Map.of("username", "alice")));
+        PkiSessionTicketService ticketService = mock(PkiSessionTicketService.class);
+        when(gateway.pkiLogin(any())).thenReturn(Map.of("user", Map.of("username", "alice", "roles", List.of("ROLE_USER"))));
+        when(ticketService.issue(eq("alice"), any()))
+            .thenReturn(ResponseCookie.from("pki_session_ticket", "ticket-1").path("/").httpOnly(true).build());
 
-        KeycloakAuthResource resource = newResource(gateway);
+        KeycloakAuthResource resource = newResource(gateway, mock(PortalSessionRegistry.class), mock(KeycloakAuthService.class), ticketService);
 
         ResponseEntity<ApiResponse<Map<String, Object>>> response = resource.pkiLogin(Map.of("challengeId", "c-1"));
 
         assertThat(response.getStatusCode().value()).isEqualTo(200);
+        assertThat(response.getHeaders().get(HttpHeaders.SET_COOKIE)).contains("pki_session_ticket=ticket-1; Path=/; HttpOnly");
         assertThat(response.getBody()).isNotNull();
         assertThat(response.getBody().getData()).containsKey("user");
     }
 
     @Test
-    void loginShouldIssueBrowserIdCookieAndPassBrowserIdToSessionRegistry() {
+    void pkiSessionShouldRejectMissingOrExpiredTicket() {
+        AdminAuthGateway gateway = mock(AdminAuthGateway.class);
+        PkiSessionTicketService ticketService = mock(PkiSessionTicketService.class);
+        when(ticketService.consume(any(), anyString())).thenReturn(null);
+        when(ticketService.clearTicketCookie()).thenReturn(ResponseCookie.from("pki_session_ticket", "").path("/").maxAge(0).build());
+
+        KeycloakAuthResource resource = newResource(gateway, mock(PortalSessionRegistry.class), mock(KeycloakAuthService.class), ticketService);
+
+        ResponseEntity<ApiResponse<Map<String, Object>>> response = resource.createPkiSession(
+            new KeycloakAuthResource.PkiSessionPayload("alice", Map.of("roles", List.of("ROLE_OP_ADMIN"))),
+            new MockHttpServletRequest()
+        );
+
+        assertThat(response.getStatusCode().value()).isEqualTo(401);
+        assertThat(response.getHeaders().get(HttpHeaders.SET_COOKIE)).contains("pki_session_ticket=; Path=/; Max-Age=0");
+        assertThat(response.getBody()).isNotNull();
+        assertThat(response.getBody().getMessage()).contains("USB-Key");
+    }
+
+    @Test
+    void pkiSessionShouldOnlyTrustVerifiedUserFromTicket() {
         AdminAuthGateway gateway = mock(AdminAuthGateway.class);
         PortalSessionRegistry registry = mock(PortalSessionRegistry.class);
-        PortalSessionCookieService cookieService = mock(PortalSessionCookieService.class);
-        when(gateway.login("alice", "secret"))
-            .thenReturn(new AdminAuthGateway.LoginResult(Map.of("username", "alice", "roles", List.of("ROLE_USER")), "admin-access", "admin-refresh", 300L, 600L));
-        when(cookieService.resolveBrowserId(any())).thenReturn("browser-1");
-        when(registry.hasActiveSession("alice", "browser-1")).thenReturn(false);
-        when(cookieService.buildBrowserIdCookie("browser-1"))
-            .thenReturn(ResponseCookie.from("browser_id", "browser-1").path("/").build());
-        // Cookie now stores the Keycloak JWT access token (result.accessToken()),
-        // not the portal session's opaque token.
-        when(cookieService.buildPortalSessionCookie("admin-access"))
-            .thenReturn(ResponseCookie.from("portal_session", "admin-access").path("/").httpOnly(true).build());
-        when(registry.createSession(eq("alice"), anyList(), anyList(), any(), any(), any(), eq("browser-1"), any()))
+        KeycloakAuthService keycloakAuthService = mock(KeycloakAuthService.class);
+        PkiSessionTicketService ticketService = mock(PkiSessionTicketService.class);
+        when(ticketService.consume(any(), eq("alice")))
+            .thenReturn(new PkiSessionTicketService.VerifiedPkiPrincipal("alice", Map.of("username", "alice", "roles", List.of("ROLE_USER"))));
+        when(ticketService.clearTicketCookie()).thenReturn(ResponseCookie.from("pki_session_ticket", "").path("/").maxAge(0).build());
+        when(keycloakAuthService.loginByTokenExchange("alice")).thenThrow(new IllegalStateException("kc unavailable"));
+        when(registry.hasActiveSession("alice")).thenReturn(false);
+        when(registry.createSession(eq("alice"), anyList(), anyList(), eq(null), eq(null), eq("alice"), eq(null)))
             .thenReturn(
                 new PortalSession(
                     "session-1",
                     "alice",
-                    "Alice",
+                    "alice",
                     List.of("ROLE_USER"),
                     List.of("portal.view"),
                     null,
                     null,
-                    "browser-1",
                     "access-1",
                     "refresh-1",
-                    Instant.parse("2026-04-02T00:30:00Z"),
+                    Instant.parse("2026-04-22T12:00:00Z"),
                     null
                 )
             );
 
-        KeycloakAuthResource resource = newResource(gateway, registry, cookieService);
+        KeycloakAuthResource resource = newResource(gateway, registry, keycloakAuthService, ticketService);
 
-        ResponseEntity<ApiResponse<Map<String, Object>>> response = resource.login(
-            new KeycloakAuthResource.LoginPayload("alice", "secret"),
+        ResponseEntity<ApiResponse<Map<String, Object>>> response = resource.createPkiSession(
+            new KeycloakAuthResource.PkiSessionPayload("alice", Map.of("username", "alice", "roles", List.of("ROLE_OP_ADMIN"))),
             new MockHttpServletRequest()
         );
 
         assertThat(response.getStatusCode().value()).isEqualTo(200);
-        assertThat(response.getHeaders().get(HttpHeaders.SET_COOKIE)).contains(
-            "browser_id=browser-1; Path=/",
-            "portal_session=admin-access; Path=/; HttpOnly"
-        );
+        assertThat(response.getHeaders().get(HttpHeaders.SET_COOKIE)).contains("pki_session_ticket=; Path=/; Max-Age=0");
         assertThat(response.getBody()).isNotNull();
-        // JWT migration: accessToken and refreshToken are now included in the response
-        assertThat(response.getBody().getData()).containsKey("accessToken");
-        assertThat(response.getBody().getData()).containsKey("refreshToken");
-        verify(registry).hasActiveSession("alice", "browser-1");
-        verify(registry).createSession(eq("alice"), anyList(), anyList(), any(), any(), any(), eq("browser-1"), any());
-        verify(cookieService).buildPortalSessionCookie("admin-access");
-    }
-
-    @Test
-    void refreshShouldRejectBrowserRefreshRequests() {
-        AdminAuthGateway gateway = mock(AdminAuthGateway.class);
-        PortalSessionRegistry registry = mock(PortalSessionRegistry.class);
-        PortalSessionCookieService cookieService = mock(PortalSessionCookieService.class);
-
-        KeycloakAuthResource resource = newResource(gateway, registry, cookieService);
-
-        ResponseEntity<ApiResponse<Map<String, String>>> response = resource.refresh(
-            new KeycloakAuthResource.RefreshPayload("refresh-1", "alice")
-        );
-
-        assertThat(response.getStatusCode().value()).isEqualTo(410);
-        assertThat(response.getBody()).isNotNull();
-        assertThat(response.getBody().getMessage()).contains("停用");
-        verify(registry, never()).refreshSession(eq("refresh-1"), any());
+        assertThat(response.getBody().getData()).containsEntry("accessToken", "access-1");
+        @SuppressWarnings("unchecked")
+        Map<String, Object> user = (Map<String, Object>) response.getBody().getData().get("user");
+        assertThat(user.get("roles")).isEqualTo(List.of("ROLE_USER"));
+        verify(registry).createSession(eq("alice"), eq(List.of("ROLE_USER")), eq(List.of("portal.view")), eq(null), eq(null), eq("alice"), eq(null));
+        verifyNoInteractions(gateway);
     }
 
     private KeycloakAuthResource newResource(AdminAuthGateway gateway) {
-        return newResource(gateway, mock(PortalSessionRegistry.class), mock(PortalSessionCookieService.class));
+        return newResource(gateway, mock(PortalSessionRegistry.class), mock(KeycloakAuthService.class), mock(PkiSessionTicketService.class));
     }
 
     private KeycloakAuthResource newResource(
         AdminAuthGateway gateway,
         PortalSessionRegistry registry,
-        PortalSessionCookieService cookieService
+        KeycloakAuthService keycloakAuthService,
+        PkiSessionTicketService ticketService
     ) {
         return new KeycloakAuthResource(
             registry,
+            keycloakAuthService,
             gateway,
-            cookieService,
+            ticketService,
             mock(AuditService.class),
             mock(InceptorDataSourceRegistry.class),
             false,

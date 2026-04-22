@@ -24,7 +24,7 @@ export interface UserInfo {
 export interface UserToken {
     accessToken?: string;
     refreshToken?: string;
-    /** Epoch ms when the access token expires (derived from Keycloak expiresIn at login/refresh time). */
+    /** Epoch ms when the current portal session should be refreshed/considered expired. */
     tokenExpiresAt?: number;
     adminAccessToken?: string;
     adminRefreshToken?: string;

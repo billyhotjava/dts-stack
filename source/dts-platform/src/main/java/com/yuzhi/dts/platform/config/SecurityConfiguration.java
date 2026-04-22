@@ -53,8 +53,16 @@ public class SecurityConfiguration {
                     .requestMatchers(mvc.pattern("/api/authenticate")).permitAll()
                     .requestMatchers(mvc.pattern("/api/auth-info")).permitAll()
                     .requestMatchers(mvc.pattern("/api/session/status")).permitAll()
-                    // Allow platform login/logout/refresh endpoints without prior auth
-                    .requestMatchers(mvc.pattern("/api/keycloak/auth/**")).permitAll()
+                    // Allow explicit platform auth endpoints without prior auth.
+                    .requestMatchers(
+                        mvc.pattern("/api/keycloak/auth/login"),
+                        mvc.pattern("/api/keycloak/auth/platform/login"),
+                        mvc.pattern("/api/keycloak/auth/logout"),
+                        mvc.pattern("/api/keycloak/auth/refresh"),
+                        mvc.pattern("/api/keycloak/auth/pki-challenge"),
+                        mvc.pattern("/api/keycloak/auth/pki-login"),
+                        mvc.pattern("/api/keycloak/auth/pki-session")
+                    ).permitAll()
                     // Allow localization resources without auth (used at boot)
                     .requestMatchers(mvc.pattern("/api/keycloak/localization/**")).permitAll()
                     // Traefik forward-auth probe endpoint must be reachable without prior auth.

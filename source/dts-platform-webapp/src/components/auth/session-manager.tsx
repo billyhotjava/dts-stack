@@ -22,7 +22,7 @@ const STORAGE_KEYS = {
 
 const SESSION_TIMEOUT_MINUTES = Math.max(
 	1,
-	Number(import.meta.env.VITE_SESSION_TIMEOUT_MINUTES ?? import.meta.env.VITE_PORTAL_SESSION_TIMEOUT ?? "30"),
+	Number(import.meta.env.VITE_SESSION_TIMEOUT_MINUTES ?? import.meta.env.VITE_PORTAL_SESSION_TIMEOUT ?? "10"),
 );
 const SESSION_TIMEOUT_MS = SESSION_TIMEOUT_MINUTES * 60 * 1000;
 const SESSION_IDLE_GRACE_MS = 30 * 1000;
@@ -52,12 +52,12 @@ function decodeJwtExp(token?: string): number | null {
 	}
 }
 
-function nextRefreshDelayMs(accessToken?: string): number {
+function nextRefreshDelayMs(accessToken?: string, tokenExpiresAt?: number): number {
 	const MIN_DELAY = 60 * 1000; // 1 min
-	// For non-JWT tokens, refresh at half the session timeout minus 1 min skew
+	// For opaque portal tokens, refresh at half the portal session timeout minus 1 min skew.
 	const DEFAULT_DELAY = Math.max(MIN_DELAY, Math.floor(SESSION_TIMEOUT_MS / 2) - 60_000);
 	const SKEW = 60 * 1000; // refresh 60s before expiry
-	const expMs = decodeJwtExp(accessToken);
+	const expMs = typeof tokenExpiresAt === "number" && tokenExpiresAt > 0 ? tokenExpiresAt : decodeJwtExp(accessToken);
 	if (!expMs) return DEFAULT_DELAY;
 	const now = Date.now();
 	const ms = Math.max(MIN_DELAY, expMs - now - SKEW);
@@ -190,6 +190,7 @@ export default function SessionManager() {
 							...token,
 							accessToken: synced.accessToken,
 							refreshToken: synced.refreshToken,
+							tokenExpiresAt: synced.tokenExpiresAt || token?.tokenExpiresAt,
 							adminAccessToken: synced.adminAccessToken || token?.adminAccessToken,
 							adminRefreshToken: synced.adminRefreshToken || token?.adminRefreshToken,
 							adminAccessTokenExpiresAt: synced.adminAccessTokenExpiresAt || token?.adminAccessTokenExpiresAt,
@@ -277,10 +278,8 @@ export default function SessionManager() {
 		let cancelled = false;
 		let timer: number | undefined;
 		let probing = false;
-		// 连续失败阈值：单次 /session/status 返回 authenticated=false 不立即踢人，
-		// 需连续 2 次确认；探活在并发刷新、事务可见性切换或短暂网络抖动时
-		// 仍可能出现瞬时假阴性。CONCURRENT（被顶号）是后端明确信号，
-		// 不走阈值，收到即立即失效。
+		// 对明确的 EXPIRED / CONCURRENT / LOGOUT 立即失效；
+		// 只有无原因的 authenticated=false 才走 2 次确认阈值，避免短暂探活抖动误杀。
 		let consecutiveExpiredFails = 0;
 
 		const schedule = (delay = SESSION_STATUS_POLL_MS) => {
@@ -314,9 +313,18 @@ export default function SessionManager() {
 						cancelled = true;
 						return;
 					}
-					const reason = status?.reason === "CONCURRENT" ? "CONCURRENT" : "EXPIRED";
-					if (reason === "CONCURRENT") {
-						// 并发顶号是后端明确信号，立即结束会话，不等第二次确认。
+					const reason =
+						status?.reason === "CONCURRENT"
+							? "CONCURRENT"
+							: status?.reason === "LOGOUT"
+								? "LOGOUT"
+								: "EXPIRED";
+					const isDefinitiveInactive =
+						reason === "CONCURRENT" ||
+						status?.reason === "EXPIRED" ||
+						status?.reason === "LOGOUT" ||
+						status?.remainingSeconds === 0;
+					if (isDefinitiveInactive) {
 						finishSession(clearUserInfoAndToken, logoutInProgressRef, reason);
 						cancelled = true;
 						return;
@@ -435,11 +443,10 @@ export default function SessionManager() {
 				}
 				broadcastTokenSync(refreshed);
 				if (!cancelled) {
-					// Use expiresIn from Keycloak for precise scheduling
-					const refreshDelay =
-						typeof refreshed.expiresIn === "number" && refreshed.expiresIn > 0
-							? Math.max(60_000, refreshed.expiresIn * 1000 - 60_000)
-							: nextRefreshDelayMs(refreshed.accessToken || token.accessToken);
+					const refreshDelay = nextRefreshDelayMs(
+						refreshed.accessToken || token.accessToken,
+						refreshed.tokenExpiresAt ?? token.tokenExpiresAt,
+					);
 					schedule(refreshDelay);
 				}
 			} catch {
@@ -455,11 +462,12 @@ export default function SessionManager() {
 								...token,
 								accessToken: parsed.accessToken,
 								refreshToken: parsed.refreshToken || token.refreshToken,
+								tokenExpiresAt: parsed.tokenExpiresAt || token.tokenExpiresAt,
 								adminAccessToken: parsed.adminAccessToken || token.adminAccessToken,
 								adminRefreshToken: parsed.adminRefreshToken || token.adminRefreshToken,
 							});
 							if (!cancelled) {
-								schedule(nextRefreshDelayMs(parsed.accessToken));
+								schedule(nextRefreshDelayMs(parsed.accessToken, parsed.tokenExpiresAt));
 							}
 							return;
 						}
@@ -476,16 +484,7 @@ export default function SessionManager() {
 			}
 		};
 
-		// Use tokenExpiresAt (from Keycloak expiresIn) for precise initial scheduling.
-		// For opaque tokens without expiresIn, fall back to heuristic.
-		const initialDelay = (() => {
-			if (token.tokenExpiresAt && token.tokenExpiresAt > 0) {
-				const msUntilExpiry = token.tokenExpiresAt - Date.now();
-				// Refresh 60s before expiry, minimum 30s
-				return Math.max(30_000, msUntilExpiry - 60_000);
-			}
-			return nextRefreshDelayMs(token.accessToken);
-		})();
+		const initialDelay = nextRefreshDelayMs(token.accessToken, token.tokenExpiresAt);
 		schedule(initialDelay);
 
 		return () => {

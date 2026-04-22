@@ -52,6 +52,8 @@ public class PortalSessionStatusResource {
         Optional<PortalSessionEntity> session = sessionRepository.findByAccessToken(token);
         if (session.isEmpty()) {
             data.put("authenticated", false);
+            appendReason(data, PortalSessionCloseReason.EXPIRED);
+            data.put("remainingSeconds", 0L);
             return ApiResponses.ok(data);
         }
         PortalSessionEntity entity = session.orElseThrow();

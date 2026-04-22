@@ -162,7 +162,6 @@ const FontFamilyField: React.FC<FontFamilyFieldProps> = ({ value, onChange }) =>
         // 注意: 之前这里写成 apiClient.post({ ..., method: 'GET' }) —— apiClient.post 内部强制 method=POST,
         // 会导致后端返回 405。用 apiClient.get 才是正确 GET 请求。
         apiClient.get<any>({ url: '/infra/screen-fonts' })
-            .catch(() => fetch('/api/infra/screen-fonts').then((r) => r.json()))
             .then((res: any) => {
                 if (cancelled) return;
                 const list = res?.data ?? res ?? [];

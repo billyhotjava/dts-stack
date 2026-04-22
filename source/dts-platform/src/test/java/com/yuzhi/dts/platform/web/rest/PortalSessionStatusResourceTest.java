@@ -122,4 +122,25 @@ class PortalSessionStatusResourceTest {
         assertThat(response.getData()).containsEntry("authenticated", false).containsEntry("serverNow", "2026-04-09T10:00:00Z");
         verifyNoMoreInteractions(sessionRepository);
     }
+
+    @Test
+    void statusShouldReportExpiredWhenTokenDoesNotResolveToSession() {
+        PortalSessionRepository sessionRepository = mock(PortalSessionRepository.class);
+        when(sessionRepository.findByAccessToken("missing-token")).thenReturn(Optional.empty());
+        PortalSessionStatusResource resource = new PortalSessionStatusResource(
+            sessionRepository,
+            Clock.fixed(Instant.parse("2026-04-09T10:00:00Z"), ZoneOffset.UTC)
+        );
+        MockHttpServletRequest request = new MockHttpServletRequest();
+        request.addHeader("X-Portal-Access-Token", "missing-token");
+
+        ApiResponse<Map<String, Object>> response = resource.status(request);
+
+        assertThat(response.getData())
+            .containsEntry("authenticated", false)
+            .containsEntry("reason", "EXPIRED")
+            .containsEntry("remainingSeconds", 0L);
+        verify(sessionRepository).findByAccessToken("missing-token");
+        verifyNoMoreInteractions(sessionRepository);
+    }
 }

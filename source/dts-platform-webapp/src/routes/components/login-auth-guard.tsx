@@ -51,9 +51,8 @@ export default function LoginAuthGuard({ children }: Props) {
 	const { roles = [] } = useUserInfo();
 	const [sessionChecked, setSessionChecked] = useState(false);
 	const [sessionAuthenticated, setSessionAuthenticated] = useState(false);
-	// 连续失败阈值：首次 probe 返回 authenticated=false 不立即踢，等下次 30s interval
-	// 再确认一次（与 SessionManager 的 2 次阈值对齐），避免并发刷新或短暂探活异常
-	// 造成瞬时假阴后直接误杀用户。
+	// 对明确的 EXPIRED / CONCURRENT / LOGOUT 立即失效；
+	// 只有网络抖动或无原因的 authenticated=false 才走 2 次确认阈值。
 	const failCountRef = useRef(0);
 
 	const needsBackendSessionCheck = requiresBackendSessionValidation(accessToken);
@@ -87,9 +86,13 @@ export default function LoginAuthGuard({ children }: Props) {
 				setSessionChecked(true);
 				return;
 			}
-			// CONCURRENT（被顶号）是后端明确信号，立即失效；其他原因走连续 2 次阈值。
 			const reason = (status as any)?.reason;
-			if (reason === "CONCURRENT") {
+			const isDefinitiveInactive =
+				reason === "CONCURRENT" ||
+				reason === "EXPIRED" ||
+				reason === "LOGOUT" ||
+				(status as any)?.remainingSeconds === 0;
+			if (isDefinitiveInactive) {
 				setSessionAuthenticated(false);
 				setSessionChecked(true);
 				forceLogout();
@@ -222,7 +225,7 @@ export default function LoginAuthGuard({ children }: Props) {
 	}
 
 	if (needsBackendSessionCheck && !sessionChecked) {
-		return null;
+		return <div className="flex min-h-screen items-center justify-center text-sm text-muted-foreground">会话校验中...</div>;
 	}
 
 	if (needsBackendSessionCheck && !sessionAuthenticated) {

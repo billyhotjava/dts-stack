@@ -1,6 +1,7 @@
 // @ts-nocheck — migrated from analytics-webapp, pending unused-import cleanup
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useDrop } from 'react-dnd';
+import apiClient from '@/api/apiClient';
 import { useScreen } from '../ScreenContext';
 import { generateId } from '../ScreenContext';
 import { CanvasComponent } from './CanvasComponent';
@@ -38,8 +39,7 @@ export function DesignerCanvas() {
     // Inject @font-face for uploaded custom fonts so they're available everywhere
     useEffect(() => {
         const styleId = 'screen-custom-fonts';
-        fetch('/api/infra/screen-fonts')
-            .then(r => r.ok ? r.json() : null)
+        apiClient.get<any>({ url: '/infra/screen-fonts' })
             .then(res => {
                 const fonts = res?.data ?? res ?? [];
                 if (!Array.isArray(fonts) || fonts.length === 0) return;

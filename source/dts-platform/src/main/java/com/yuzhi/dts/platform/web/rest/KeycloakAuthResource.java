@@ -1,11 +1,13 @@
 package com.yuzhi.dts.platform.web.rest;
 
 import com.yuzhi.dts.platform.security.AuthoritiesConstants;
+import com.yuzhi.dts.platform.security.session.PkiSessionTicketService;
 import com.yuzhi.dts.platform.security.session.PortalSessionRegistry;
 import com.yuzhi.dts.platform.security.session.PortalSessionRegistry.AdminTokens;
 import com.yuzhi.dts.platform.security.session.PortalSessionRegistry.PortalSession;
 import com.yuzhi.dts.platform.service.admin.gateway.auth.AdminAuthGateway;
 import com.yuzhi.dts.platform.service.keycloak.KeycloakAuthService;
+import jakarta.servlet.http.HttpServletRequest;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -30,6 +32,7 @@ public class KeycloakAuthResource {
     private final PortalSessionRegistry sessionRegistry;
     private final KeycloakAuthService keycloakAuthService;
     private final AdminAuthGateway adminAuthGateway;
+    private final PkiSessionTicketService pkiSessionTicketService;
     private final com.yuzhi.dts.platform.service.audit.AuditService audit;
     private final com.yuzhi.dts.platform.service.infra.InceptorDataSourceRegistry inceptorRegistry;
     private final boolean portalAuditEnabled;
@@ -39,6 +42,7 @@ public class KeycloakAuthResource {
         PortalSessionRegistry sessionRegistry,
         KeycloakAuthService keycloakAuthService,
         AdminAuthGateway adminAuthGateway,
+        PkiSessionTicketService pkiSessionTicketService,
         com.yuzhi.dts.platform.service.audit.AuditService audit,
         com.yuzhi.dts.platform.service.infra.InceptorDataSourceRegistry inceptorRegistry,
         @Value("${auditing.portal-auth.enabled:true}") boolean portalAuditEnabled,
@@ -47,6 +51,7 @@ public class KeycloakAuthResource {
         this.sessionRegistry = sessionRegistry;
         this.keycloakAuthService = keycloakAuthService;
         this.adminAuthGateway = adminAuthGateway;
+        this.pkiSessionTicketService = pkiSessionTicketService;
         this.audit = audit;
         this.inceptorRegistry = inceptorRegistry;
         this.portalAuditEnabled = portalAuditEnabled;
@@ -266,6 +271,7 @@ public class KeycloakAuthResource {
             if (kcTokens.refreshExpiresIn() != null) {
                 data.put("refreshExpiresIn", kcTokens.refreshExpiresIn());
             }
+            appendPortalSessionLifetime(data, session);
             data.put("user", userOut);
             if (log.isInfoEnabled()) {
                 if (takeover && sessionRegistry.isTakeoverAllowed()) {
@@ -453,7 +459,17 @@ public class KeycloakAuthResource {
 
     @PostMapping("/pki-login")
     public ResponseEntity<ApiResponse<Map<String, Object>>> pkiLogin(@RequestBody(required = false) Map<String, Object> payload) {
-        return ResponseEntity.ok(ApiResponses.ok(adminAuthGateway.pkiLogin(payload)));
+        Map<String, Object> data = adminAuthGateway.pkiLogin(payload);
+        Map<String, Object> user = extractVerifiedPkiUser(data);
+        String username = resolveVerifiedPkiUsername(user);
+        if (!StringUtils.hasText(username)) {
+            log.error("[pki-login] upstream response missing verified username");
+            return ResponseEntity.status(HttpStatus.BAD_GATEWAY).body(ApiResponses.error("PKI 登录响应缺少已验证用户信息"));
+        }
+        return ResponseEntity
+            .ok()
+            .header(org.springframework.http.HttpHeaders.SET_COOKIE, pkiSessionTicketService.issue(username, user).toString())
+            .body(ApiResponses.ok(data));
     }
 
     /**
@@ -463,17 +479,23 @@ public class KeycloakAuthResource {
      */
     @PostMapping("/pki-session")
     public ResponseEntity<ApiResponse<Map<String, Object>>> createPkiSession(
-        @RequestBody PkiSessionPayload payload
+        @RequestBody(required = false) PkiSessionPayload payload,
+        HttpServletRequest request
     ) {
-        String username = payload == null ? null : (payload.username() == null ? null : payload.username().trim());
-        if (!org.springframework.util.StringUtils.hasText(username)) {
-            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(ApiResponses.error("缺少用户名"));
+        String requestedUsername = payload == null ? null : payload.username();
+        PkiSessionTicketService.VerifiedPkiPrincipal verifiedPrincipal = pkiSessionTicketService.consume(request, requestedUsername);
+        if (verifiedPrincipal == null) {
+            return ResponseEntity
+                .status(HttpStatus.UNAUTHORIZED)
+                .header(org.springframework.http.HttpHeaders.SET_COOKIE, pkiSessionTicketService.clearTicketCookie().toString())
+                .body(ApiResponses.error("PKI 登录凭证已失效，请重新使用 USB-Key 登录"));
         }
+        String username = verifiedPrincipal.username();
         String auditActor = sanitizeActor(username);
 
         String displayName = null;
         try {
-            Map<String, Object> user = payload.user() == null ? java.util.Collections.emptyMap() : new java.util.LinkedHashMap<>(payload.user());
+            Map<String, Object> user = new java.util.LinkedHashMap<>(verifiedPrincipal.user());
             displayName = resolveUserDisplayName(user);
             // Normalize and map roles from upstream into platform authorities
             java.util.List<String> rawRoles = toStringList(user.get("roles"));
@@ -603,6 +625,7 @@ public class KeycloakAuthResource {
             if (kcTokens != null && kcTokens.refreshExpiresIn() != null) {
                 data.put("refreshExpiresIn", kcTokens.refreshExpiresIn());
             }
+            appendPortalSessionLifetime(data, session);
             data.put("user", userOut);
             if (takeover && sessionRegistry.isTakeoverAllowed()) {
                 data.put("sessionNotice", "已切换到当前登录，其他会话已下线");
@@ -629,7 +652,10 @@ public class KeycloakAuthResource {
                     metadata
                 );
             }
-            return ResponseEntity.ok(ApiResponses.ok(data));
+            return ResponseEntity
+                .ok()
+                .header(org.springframework.http.HttpHeaders.SET_COOKIE, pkiSessionTicketService.clearTicketCookie().toString())
+                .body(ApiResponses.ok(data));
         } catch (Exception ex) {
             String msg = ex.getMessage() == null || ex.getMessage().isBlank() ? "登录失败，请稍后重试" : ex.getMessage();
             if (shouldRecordPortalLoginAudit() && auditActor != null) {
@@ -653,7 +679,10 @@ public class KeycloakAuthResource {
                     metadata
                 );
             }
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(ApiResponses.error(msg));
+            return ResponseEntity
+                .status(HttpStatus.INTERNAL_SERVER_ERROR)
+                .header(org.springframework.http.HttpHeaders.SET_COOKIE, pkiSessionTicketService.clearTicketCookie().toString())
+                .body(ApiResponses.error(msg));
         }
     }
 
@@ -703,6 +732,7 @@ public class KeycloakAuthResource {
                     data.put("refreshExpiresIn", refreshExpiresInSec);
                 }
             }
+            appendPortalSessionLifetime(data, refreshed);
             String refreshedActor = sanitizeActor(refreshed.username());
             if (refreshedActor != null) {
                 actor = refreshedActor;
@@ -749,6 +779,45 @@ public class KeycloakAuthResource {
             }
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(ApiResponses.error("会话已过期，请重新登录"));
         }
+    }
+
+    @SuppressWarnings("unchecked")
+    private Map<String, Object> extractVerifiedPkiUser(Map<String, Object> data) {
+        if (data == null || data.isEmpty()) {
+            return Map.of();
+        }
+        Object user = data.get("user");
+        if (user instanceof Map<?, ?> map) {
+            Map<String, Object> out = new LinkedHashMap<>();
+            for (Map.Entry<?, ?> entry : map.entrySet()) {
+                if (entry.getKey() != null) {
+                    out.put(String.valueOf(entry.getKey()), entry.getValue());
+                }
+            }
+            return out;
+        }
+        return Map.of();
+    }
+
+    private String resolveVerifiedPkiUsername(Map<String, Object> user) {
+        if (user == null || user.isEmpty()) {
+            return null;
+        }
+        return firstNonBlank(
+            stringValue(user.get("username")),
+            stringValue(user.get("preferred_username")),
+            stringValue(user.get("loginName"))
+        );
+    }
+
+    private void appendPortalSessionLifetime(Map<String, Object> data, PortalSession session) {
+        if (data == null || session == null || session.expiresAt() == null) {
+            return;
+        }
+        Instant expiresAt = session.expiresAt();
+        data.put("portalExpiresAt", expiresAt.toString());
+        long expiresInSec = Math.max(0, expiresAt.getEpochSecond() - Instant.now().getEpochSecond());
+        data.put("portalExpiresIn", expiresInSec);
     }
 
     private Map<String, Object> authAuditPayload(String username, Object... kvPairs) {

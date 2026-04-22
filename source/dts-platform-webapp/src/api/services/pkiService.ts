@@ -46,12 +46,12 @@ export async function pkiLogin(payload: PkiLoginPayload): Promise<any> {
   return data;
 }
 
-// Exchange verified PKI identity for platform portal session tokens.
-export async function createPortalSessionFromPki(username: string, user: any): Promise<any> {
+// Exchange the verified PKI identity for platform portal session tokens.
+export async function createPortalSessionFromPki(username: string): Promise<any> {
   const data = await apiClient.post<any>({
     // Use platform base URL (default apiClient base)
     url: "/keycloak/auth/pki-session",
-    data: { username, user },
+    data: { username },
   });
   return data;
 }

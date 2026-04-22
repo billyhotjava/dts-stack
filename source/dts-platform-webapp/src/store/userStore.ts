@@ -9,6 +9,7 @@ import type { KeycloakTranslations } from "#/keycloak";
 import { KeycloakLocalizationService } from "@/api/services/keycloakLocalizationService";
 import userService, { type SignInReq } from "@/api/services/userService";
 import { GLOBAL_CONFIG } from "@/global-config";
+import { resolvePortalTokenExpiresAt } from "@/utils/sessionExpiry";
 import { updateLocalTranslations } from "@/utils/translation";
 import { useMenuStore } from "./menuStore";
 import useContextStore from "./contextStore";
@@ -204,9 +205,11 @@ export const useSignIn = () => {
 				}
 			}
 
-			// Compute tokenExpiresAt from Keycloak expiresIn (seconds)
-			const expiresInSec = Number((res as any)?.expiresIn ?? 0);
-			const tokenExpiresAt = expiresInSec > 0 ? Date.now() + expiresInSec * 1000 : undefined;
+			const tokenExpiresAt = resolvePortalTokenExpiresAt({
+				portalExpiresAt: (res as any)?.portalExpiresAt,
+				portalExpiresIn: (res as any)?.portalExpiresIn,
+				expiresIn: (res as any)?.expiresIn,
+			});
 
 			setUserToken({
 				accessToken,

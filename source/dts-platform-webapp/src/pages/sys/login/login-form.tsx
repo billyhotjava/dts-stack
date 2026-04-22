@@ -18,6 +18,7 @@ import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "
 import { Input } from "@/ui/input";
 import { RadioGroup, RadioGroupItem } from "@/ui/radio-group";
 import { cn } from "@/utils";
+import { resolvePortalTokenExpiresAt } from "@/utils/sessionExpiry";
 import { updateLocalTranslations } from "@/utils/translation";
 import { LoginStateEnum, useLoginStateContext } from "./providers/login-provider";
 
@@ -359,14 +360,24 @@ export function LoginForm({ className, ...props }: React.ComponentPropsWithoutRe
 				return;
 			}
 
-			const portal = await createPortalSessionFromPki(username, rawUser);
+			const portal = await createPortalSessionFromPki(username);
 			const portalUser = portal?.user ?? rawUser;
 			const accessToken = String(portal?.accessToken || portal?.token || "").trim();
 			const refreshToken = String(portal?.refreshToken || "").trim();
+			const tokenExpiresAt = resolvePortalTokenExpiresAt({
+				portalExpiresAt: portal?.portalExpiresAt,
+				portalExpiresIn: portal?.portalExpiresIn,
+				expiresIn: portal?.expiresIn,
+			});
 			if (!accessToken) throw new Error("登录响应缺少访问令牌");
 
-			setUserToken({ accessToken, refreshToken });
+			setUserToken({ accessToken, refreshToken, tokenExpiresAt });
 			setUserInfo(portalUser);
+			try {
+				localStorage.setItem("dts.platform.session.loginTs", String(Date.now()));
+			} catch {
+				// ignore
+			}
 
 			try {
 				contextActions.initDefaults();
