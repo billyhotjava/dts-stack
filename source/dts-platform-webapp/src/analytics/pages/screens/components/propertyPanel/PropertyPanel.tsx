@@ -1199,7 +1199,27 @@ export function PropertyPanel({ activeTab = 'style' }: { activeTab?: PropertyPan
                             if (!selectedComponent) return null;
                             const schema = COMPONENT_CONFIG_SCHEMAS[selectedComponent.type];
                             if (!schema) {
-                                return <div className="text-xs text-center py-4 opacity-60">暂无可配置项</div>;
+                                // 兜底:Schema 缺失通常意味着组件类型注册了渲染器但忘记注册 schema。
+                                // 用 console.warn 让开发期立刻发现,运行期给操作员一个明确提示而不是空白。
+                                if (typeof window !== 'undefined' && !((window as { __dtsSchemaWarned__?: Record<string, boolean> }).__dtsSchemaWarned__?.[selectedComponent.type])) {
+                                    console.warn(
+                                        `[PropertyPanel] missing config schema for component type "${selectedComponent.type}";`
+                                            + ' add an entry under analytics/pages/screens/configSchema/schemas to enable editing.',
+                                    );
+                                    const w = window as { __dtsSchemaWarned__?: Record<string, boolean> };
+                                    w.__dtsSchemaWarned__ = w.__dtsSchemaWarned__ ?? {};
+                                    w.__dtsSchemaWarned__[selectedComponent.type] = true;
+                                }
+                                return (
+                                    <div className="text-xs py-3 px-2 rounded bg-warning/10 text-warning border border-warning/30">
+                                        <div className="font-medium mb-1">该组件类型暂无可配置项</div>
+                                        <div className="opacity-80">
+                                            类型: <code>{selectedComponent.type}</code>
+                                            <br />
+                                            如需在此处编辑,请在 <code>configSchema/schemas</code> 中补一份 schema。
+                                        </div>
+                                    </div>
+                                );
                             }
                             return (
                                 <SchemaConfigRenderer

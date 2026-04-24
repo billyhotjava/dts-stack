@@ -46,6 +46,9 @@ function V1LegacyBanner() {
         setConverting(true);
         try {
             const { config: v2Config, warnings } = migrateV1ToV2(config);
+            // migrationFrom 让后端把这次创建审计为 "screen.migrate" 而不是 "screen.create",
+            // 同时把原 v1 大屏 id 写入审计 detail,便于后续做新旧关联与回溯。
+            const sourceScreenId = (config as { id?: number | string | null }).id ?? null;
             const payload = {
                 name: `${config.name || '大屏'} (v2)`,
                 description: config.description,
@@ -56,13 +59,14 @@ function V1LegacyBanner() {
                 backgroundImage: v2Config.backgroundImage,
                 components: v2Config.components,
                 globalVariables: v2Config.globalVariables ?? [],
-                pages: [],
+                pages: v2Config.pages ?? [],
                 carouselConfig: v2Config.carouselConfig,
                 v2Spec: {
                     schemaVersion: 2,
                     layout: v2Config.layout,
                     referenceViewport: v2Config.referenceViewport,
                 },
+                ...(sourceScreenId != null ? { migrationFrom: String(sourceScreenId) } : {}),
             };
             const created = await analyticsApi.createScreen(payload);
             if (warnings.length > 0) {

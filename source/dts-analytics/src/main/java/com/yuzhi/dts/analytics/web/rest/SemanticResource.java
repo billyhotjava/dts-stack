@@ -3,11 +3,13 @@ package com.yuzhi.dts.analytics.web.rest;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.yuzhi.dts.analytics.domain.AnalyticsUser;
 import com.yuzhi.dts.analytics.service.AnalyticsSessionService;
+import com.yuzhi.dts.analytics.service.SemanticAuditService;
 import com.yuzhi.dts.analytics.service.semantic.SemanticQueryService;
 import com.yuzhi.dts.analytics.web.support.MetabaseAuth;
 import com.yuzhi.dts.analytics.web.support.PlatformContext;
 import jakarta.servlet.http.HttpServletRequest;
 import java.sql.SQLException;
+import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Optional;
 import org.springframework.http.HttpStatus;
@@ -31,10 +33,16 @@ public class SemanticResource {
 
     private final AnalyticsSessionService sessionService;
     private final SemanticQueryService semanticQueryService;
+    private final SemanticAuditService semanticAuditService;
 
-    public SemanticResource(AnalyticsSessionService sessionService, SemanticQueryService semanticQueryService) {
+    public SemanticResource(
+        AnalyticsSessionService sessionService,
+        SemanticQueryService semanticQueryService,
+        SemanticAuditService semanticAuditService
+    ) {
         this.sessionService = sessionService;
         this.semanticQueryService = semanticQueryService;
+        this.semanticAuditService = semanticAuditService;
     }
 
     @GetMapping(path = "/meta", produces = MediaType.APPLICATION_JSON_VALUE)
@@ -48,9 +56,16 @@ public class SemanticResource {
         if (auth.isPresent()) {
             return auth.get();
         }
+        AnalyticsUser actor = MetabaseAuth.currentUser(sessionService, request).orElse(null);
         PlatformContext ctx = PlatformContext.from(request);
         String maxLevel = includeClassificationAbove != null ? includeClassificationAbove : ctx.classification();
-        return ResponseEntity.ok(semanticQueryService.getMeta(subjectArea, exposedToModeler, maxLevel));
+        Object result = semanticQueryService.getMeta(subjectArea, exposedToModeler, maxLevel);
+        Map<String, Object> attrs = new LinkedHashMap<>();
+        if (subjectArea != null) attrs.put("subjectArea", subjectArea);
+        if (exposedToModeler != null) attrs.put("exposedToModeler", exposedToModeler);
+        if (maxLevel != null) attrs.put("classificationCeiling", maxLevel);
+        semanticAuditService.logSuccess("SEMANTIC_META_VIEW", "查看语义元信息", actor, request, null, attrs);
+        return ResponseEntity.ok(result);
     }
 
     @GetMapping(path = "/graph", produces = MediaType.APPLICATION_JSON_VALUE)
@@ -59,7 +74,10 @@ public class SemanticResource {
         if (auth.isPresent()) {
             return auth.get();
         }
-        return ResponseEntity.ok(semanticQueryService.getGraph(PlatformContext.from(request).classification()));
+        AnalyticsUser actor = MetabaseAuth.currentUser(sessionService, request).orElse(null);
+        Object result = semanticQueryService.getGraph(PlatformContext.from(request).classification());
+        semanticAuditService.logSuccess("SEMANTIC_GRAPH_VIEW", "查看语义 Join 图", actor, request, null, null);
+        return ResponseEntity.ok(result);
     }
 
     @PostMapping(path = "/query/preview-sql", consumes = MediaType.APPLICATION_JSON_VALUE, produces = MediaType.APPLICATION_JSON_VALUE)
@@ -68,11 +86,17 @@ public class SemanticResource {
         if (auth.isPresent()) {
             return auth.get();
         }
+        AnalyticsUser actor = MetabaseAuth.currentUser(sessionService, request).orElse(null);
+        Map<String, Object> attrs = queryAttributes(body);
         try {
-            return ResponseEntity.ok(semanticQueryService.previewSql(body, PlatformContext.from(request)));
+            Object result = semanticQueryService.previewSql(body, PlatformContext.from(request));
+            semanticAuditService.logSuccess("SEMANTIC_QUERY_PREVIEW", "预览语义查询 SQL", actor, request, null, attrs);
+            return ResponseEntity.ok(result);
         } catch (IllegalArgumentException ex) {
+            semanticAuditService.logFailure("SEMANTIC_QUERY_PREVIEW", "预览语义查询 SQL", actor, request, null, attrs, ex.getMessage());
             return ResponseEntity.badRequest().body(Map.of("error", ex.getMessage(), "status", "error"));
         } catch (SemanticQueryService.SemanticAccessDeniedException ex) {
+            semanticAuditService.logFailure("SEMANTIC_QUERY_PREVIEW", "预览语义查询 SQL", actor, request, null, attrs, "DENY:" + ex.getMessage());
             return ResponseEntity.status(HttpStatus.UNPROCESSABLE_ENTITY).body(Map.of("error", ex.getMessage(), "status", "error"));
         }
     }
@@ -83,14 +107,21 @@ public class SemanticResource {
         if (auth.isPresent()) {
             return auth.get();
         }
+        AnalyticsUser actor = MetabaseAuth.currentUser(sessionService, request).orElse(null);
+        Map<String, Object> attrs = queryAttributes(body);
         try {
-            Long userId = MetabaseAuth.getUserId(sessionService, request).orElse(null);
-            return ResponseEntity.ok(semanticQueryService.runQuery(body, PlatformContext.from(request), userId));
+            Long userId = actor != null ? actor.getId() : null;
+            Object result = semanticQueryService.runQuery(body, PlatformContext.from(request), userId);
+            semanticAuditService.logSuccess("SEMANTIC_QUERY_EXECUTE", "执行语义查询", actor, request, null, attrs);
+            return ResponseEntity.ok(result);
         } catch (IllegalArgumentException ex) {
+            semanticAuditService.logFailure("SEMANTIC_QUERY_EXECUTE", "执行语义查询", actor, request, null, attrs, ex.getMessage());
             return ResponseEntity.badRequest().body(Map.of("error", ex.getMessage(), "status", "error"));
         } catch (SemanticQueryService.SemanticAccessDeniedException ex) {
+            semanticAuditService.logFailure("SEMANTIC_QUERY_EXECUTE", "执行语义查询", actor, request, null, attrs, "DENY:" + ex.getMessage());
             return ResponseEntity.status(HttpStatus.UNPROCESSABLE_ENTITY).body(Map.of("error", ex.getMessage(), "status", "error"));
         } catch (SQLException ex) {
+            semanticAuditService.logFailure("SEMANTIC_QUERY_EXECUTE", "执行语义查询", actor, request, null, attrs, "SQL:" + ex.getMessage());
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
                 .body(Map.of("error", "语义查询执行失败: " + ex.getMessage(), "status", "error"));
         }
@@ -106,7 +137,13 @@ public class SemanticResource {
         if (user.isEmpty()) {
             return ResponseEntity.status(401).contentType(MediaType.TEXT_PLAIN).body("Unauthenticated");
         }
-        return ResponseEntity.ok(semanticQueryService.listVirtualDatasets(user.get(), owner, workspaceId));
+        AnalyticsUser actor = user.orElseThrow();
+        Object result = semanticQueryService.listVirtualDatasets(actor, owner, workspaceId);
+        Map<String, Object> attrs = new LinkedHashMap<>();
+        if (owner != null) attrs.put("owner", owner);
+        if (workspaceId != null) attrs.put("workspaceId", workspaceId);
+        semanticAuditService.logSuccess("SEMANTIC_VDS_LIST", "查看虚拟数据集列表", actor, request, null, attrs);
+        return ResponseEntity.ok(result);
     }
 
     @GetMapping(path = "/virtual-datasets/{id}", produces = MediaType.APPLICATION_JSON_VALUE)
@@ -115,9 +152,13 @@ public class SemanticResource {
         if (user.isEmpty()) {
             return ResponseEntity.status(401).contentType(MediaType.TEXT_PLAIN).body("Unauthenticated");
         }
+        AnalyticsUser actor = user.orElseThrow();
         try {
-            return ResponseEntity.ok(semanticQueryService.getVirtualDataset(id, user.get()));
+            Object result = semanticQueryService.getVirtualDataset(id, actor);
+            semanticAuditService.logSuccess("SEMANTIC_VDS_VIEW", "查看虚拟数据集", actor, request, id, null);
+            return ResponseEntity.ok(result);
         } catch (IllegalArgumentException ex) {
+            semanticAuditService.logFailure("SEMANTIC_VDS_VIEW", "查看虚拟数据集", actor, request, id, null, ex.getMessage());
             return ResponseEntity.status(HttpStatus.NOT_FOUND).body(Map.of("error", ex.getMessage()));
         }
     }
@@ -128,9 +169,14 @@ public class SemanticResource {
         if (user.isEmpty()) {
             return ResponseEntity.status(401).contentType(MediaType.TEXT_PLAIN).body("Unauthenticated");
         }
+        AnalyticsUser actor = user.orElseThrow();
         try {
-            return ResponseEntity.ok(semanticQueryService.createVirtualDataset(body, user.get()));
+            Object result = semanticQueryService.createVirtualDataset(body, actor);
+            Object newId = extractId(result);
+            semanticAuditService.logSuccess("SEMANTIC_VDS_CREATE", "创建虚拟数据集", actor, request, newId, vdsAttributes(body));
+            return ResponseEntity.ok(result);
         } catch (IllegalArgumentException ex) {
+            semanticAuditService.logFailure("SEMANTIC_VDS_CREATE", "创建虚拟数据集", actor, request, null, vdsAttributes(body), ex.getMessage());
             return ResponseEntity.badRequest().body(Map.of("error", ex.getMessage()));
         }
     }
@@ -145,9 +191,13 @@ public class SemanticResource {
         if (user.isEmpty()) {
             return ResponseEntity.status(401).contentType(MediaType.TEXT_PLAIN).body("Unauthenticated");
         }
+        AnalyticsUser actor = user.orElseThrow();
         try {
-            return ResponseEntity.ok(semanticQueryService.updateVirtualDataset(id, body, user.get()));
+            Object result = semanticQueryService.updateVirtualDataset(id, body, actor);
+            semanticAuditService.logSuccess("SEMANTIC_VDS_UPDATE", "更新虚拟数据集", actor, request, id, vdsAttributes(body));
+            return ResponseEntity.ok(result);
         } catch (IllegalArgumentException ex) {
+            semanticAuditService.logFailure("SEMANTIC_VDS_UPDATE", "更新虚拟数据集", actor, request, id, vdsAttributes(body), ex.getMessage());
             return ResponseEntity.badRequest().body(Map.of("error", ex.getMessage()));
         }
     }
@@ -158,10 +208,13 @@ public class SemanticResource {
         if (user.isEmpty()) {
             return ResponseEntity.status(401).contentType(MediaType.TEXT_PLAIN).body("Unauthenticated");
         }
+        AnalyticsUser actor = user.orElseThrow();
         try {
-            semanticQueryService.deleteVirtualDataset(id, user.get());
+            semanticQueryService.deleteVirtualDataset(id, actor);
+            semanticAuditService.logSuccess("SEMANTIC_VDS_DELETE", "删除虚拟数据集", actor, request, id, null);
             return ResponseEntity.noContent().build();
         } catch (IllegalArgumentException ex) {
+            semanticAuditService.logFailure("SEMANTIC_VDS_DELETE", "删除虚拟数据集", actor, request, id, null, ex.getMessage());
             return ResponseEntity.status(HttpStatus.NOT_FOUND).body(Map.of("error", ex.getMessage()));
         }
     }
@@ -172,10 +225,64 @@ public class SemanticResource {
         if (user.isEmpty()) {
             return ResponseEntity.status(401).contentType(MediaType.TEXT_PLAIN).body("Unauthenticated");
         }
+        AnalyticsUser actor = user.orElseThrow();
         try {
-            return ResponseEntity.ok(semanticQueryService.promoteVirtualDataset(id, user.get()));
+            Object result = semanticQueryService.promoteVirtualDataset(id, actor);
+            semanticAuditService.logSuccess("SEMANTIC_VDS_PROMOTE", "提升虚拟数据集到 dbt", actor, request, id, null);
+            return ResponseEntity.ok(result);
         } catch (IllegalArgumentException ex) {
+            semanticAuditService.logFailure("SEMANTIC_VDS_PROMOTE", "提升虚拟数据集到 dbt", actor, request, id, null, ex.getMessage());
             return ResponseEntity.status(HttpStatus.NOT_FOUND).body(Map.of("error", ex.getMessage()));
         }
+    }
+
+    private static Map<String, Object> queryAttributes(JsonNode body) {
+        Map<String, Object> attrs = new LinkedHashMap<>();
+        if (body == null || body.isMissingNode() || body.isNull()) {
+            return attrs;
+        }
+        if (body.hasNonNull("model")) {
+            attrs.put("model", body.path("model").asText());
+        }
+        if (body.path("metrics").isArray()) {
+            attrs.put("metricsCount", body.path("metrics").size());
+        }
+        if (body.path("dimensions").isArray()) {
+            attrs.put("dimensionsCount", body.path("dimensions").size());
+        }
+        if (body.path("filters").isArray()) {
+            attrs.put("filtersCount", body.path("filters").size());
+        }
+        if (body.hasNonNull("limit")) {
+            attrs.put("limit", body.path("limit").asInt());
+        }
+        return attrs;
+    }
+
+    private static Map<String, Object> vdsAttributes(JsonNode body) {
+        Map<String, Object> attrs = new LinkedHashMap<>();
+        if (body == null || body.isMissingNode() || body.isNull()) {
+            return attrs;
+        }
+        if (body.hasNonNull("name")) {
+            attrs.put("name", body.path("name").asText());
+        }
+        if (body.hasNonNull("baseModel")) {
+            attrs.put("baseModel", body.path("baseModel").asText());
+        }
+        if (body.hasNonNull("workspaceId")) {
+            attrs.put("workspaceId", body.path("workspaceId").asLong());
+        }
+        return attrs;
+    }
+
+    private static Object extractId(Object result) {
+        if (result instanceof Map<?, ?> map) {
+            Object id = map.get("id");
+            if (id != null) {
+                return id;
+            }
+        }
+        return null;
     }
 }

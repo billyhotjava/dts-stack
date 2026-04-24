@@ -923,10 +923,68 @@ public class SemanticQueryService {
         return rendered;
     }
 
+    private static final Set<String> JOIN_CLAUSE_ALLOWED_KEYWORDS = Set.of(
+        "AND", "OR", "NOT", "IS", "NULL", "TRUE", "FALSE", "ON"
+    );
+    /**
+     * Tokens permitted between {{this}}/{{to}} substitutions in a Join on_clause.
+     * <p>Allowed:
+     * <ul>
+     *   <li>identifiers matching {@link #IDENTIFIER_PATTERN}</li>
+     *   <li>operators {@code = != <> < <= > >= ( ) , .}</li>
+     *   <li>boolean keywords above</li>
+     * </ul>
+     * Explicitly rejected: comments ({@code -- /* *\/}), semicolons, quotes, function calls,
+     * subqueries, and any token that would let a malicious dbt schema.yml inject SQL.
+     */
+    private static final Pattern JOIN_CLAUSE_TOKEN_PATTERN = Pattern.compile(
+        "\\s+|[A-Za-z_][A-Za-z0-9_]*|[=().,]|<>|!=|<=|>=|<|>|\\b\\d+\\b"
+    );
+
     private String renderJoinOnClause(String template, String fromAlias, String toAlias) {
-        String rendered = defaultText(template, "").replace("{{this}}", fromAlias).replace("{{to}}", toAlias);
-        if (!StringUtils.hasText(rendered)) {
+        String raw = defaultText(template, "");
+        if (!StringUtils.hasText(raw)) {
             throw new IllegalArgumentException("Join on_clause 不能为空");
+        }
+        // Reject obviously dangerous constructs before substitution so that an attacker
+        // cannot smuggle them via a single schema.yml change. The dbt contract is that
+        // on_clause is a simple equality predicate using {{this}} and {{to}} placeholders.
+        if (raw.contains(";") || raw.contains("--") || raw.contains("/*") || raw.contains("*/")
+            || raw.contains("'") || raw.contains("\"") || raw.contains("`")) {
+            throw new IllegalArgumentException(
+                "Join on_clause 含有未授权字符（;/注释/引号）: " + raw
+            );
+        }
+        String rendered = raw.replace("{{this}}", fromAlias).replace("{{to}}", toAlias);
+        // Tokenize and enforce a strict whitelist. Anything that does not parse as a
+        // recognized token (e.g. a function call like NOW(), or an unexpected keyword
+        // like SELECT/UNION/INSERT) blows up the request rather than reaching the DB.
+        Matcher tokenMatcher = JOIN_CLAUSE_TOKEN_PATTERN.matcher(rendered);
+        int cursor = 0;
+        while (tokenMatcher.find()) {
+            if (tokenMatcher.start() != cursor) {
+                String stray = rendered.substring(cursor, tokenMatcher.start());
+                throw new IllegalArgumentException("Join on_clause 含有未授权字符: " + stray);
+            }
+            cursor = tokenMatcher.end();
+            String token = tokenMatcher.group().trim();
+            if (token.isEmpty()) continue;
+            if (IDENTIFIER_PATTERN.matcher(token).matches()) {
+                String upper = token.toUpperCase(Locale.ROOT);
+                // Reject reserved words that have no business in a join predicate.
+                if (!JOIN_CLAUSE_ALLOWED_KEYWORDS.contains(upper)
+                    && (upper.equals("SELECT") || upper.equals("UNION") || upper.equals("INSERT")
+                        || upper.equals("UPDATE") || upper.equals("DELETE") || upper.equals("DROP")
+                        || upper.equals("EXEC") || upper.equals("CALL") || upper.equals("WHERE")
+                        || upper.equals("FROM") || upper.equals("JOIN") || upper.equals("CASE"))) {
+                    throw new IllegalArgumentException("Join on_clause 不允许关键字: " + token);
+                }
+            }
+        }
+        if (cursor != rendered.length()) {
+            throw new IllegalArgumentException(
+                "Join on_clause 含有未授权字符: " + rendered.substring(cursor)
+            );
         }
         return rendered;
     }

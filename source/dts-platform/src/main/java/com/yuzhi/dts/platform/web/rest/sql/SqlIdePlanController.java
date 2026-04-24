@@ -1,5 +1,6 @@
 package com.yuzhi.dts.platform.web.rest.sql;
 
+import com.yuzhi.dts.common.audit.AuditStage;
 import com.yuzhi.dts.platform.service.audit.AuditService;
 import com.yuzhi.dts.platform.service.audit.SqlIdeAuditActions;
 import com.yuzhi.dts.platform.service.sql.SqlPlanService;
@@ -37,19 +38,15 @@ public class SqlIdePlanController {
         PlanResultDto result = planService.explain(req);
         String operator = result.root() == null ? null : result.root().operator();
         boolean failed = "ExplainError".equals(operator) || "ParseError".equals(operator);
-        String outcome = failed ? "FAILED" : "SUCCESS";
+        AuditStage stage = failed ? AuditStage.FAIL : AuditStage.SUCCESS;
         String sqlHash = Integer.toHexString(req.sql() == null ? 0 : req.sql().hashCode());
         Map<String, Object> payload = new LinkedHashMap<>();
         payload.put("engine", req.engine());
         payload.put("sqlHash", sqlHash);
-        payload.put("actionCode", SqlIdeAuditActions.SQL_PLAN_VIEW);
         if (failed && result.rawText() != null) {
             payload.put("errorSnippet", result.rawText().substring(0, Math.min(200, result.rawText().length())));
         }
-        auditService.record(
-            "READ", "sql.ide.plan", "sql.explain",
-            "sqlHash:" + sqlHash, outcome, payload
-        );
+        auditService.auditAction(SqlIdeAuditActions.CODE_PLAN_VIEW, stage, "sqlHash:" + sqlHash, payload);
         return ApiResponses.ok(result);
     }
 }

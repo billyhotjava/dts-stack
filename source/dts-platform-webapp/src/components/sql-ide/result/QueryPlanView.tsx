@@ -1,3 +1,5 @@
+// Chrome 95 兼容:@xyflow/react v12 内部使用 structuredClone,polyfill 通过入口已注入。
+import "@/polyfills/legacy-browser";
 import { Background, Controls, ReactFlow, type Edge, type Node } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
 import { useQuery } from "@tanstack/react-query";

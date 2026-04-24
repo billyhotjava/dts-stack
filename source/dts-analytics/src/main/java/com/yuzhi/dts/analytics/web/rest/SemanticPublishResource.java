@@ -14,6 +14,8 @@ import com.yuzhi.dts.analytics.repository.AnalyticsMetricRepository;
 import com.yuzhi.dts.analytics.repository.AnalyticsSemanticJoinRepository;
 import com.yuzhi.dts.analytics.repository.AnalyticsSemanticModelRepository;
 import com.yuzhi.dts.analytics.repository.AnalyticsTableRepository;
+import com.yuzhi.dts.analytics.service.SemanticAuditService;
+import jakarta.servlet.http.HttpServletRequest;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -47,6 +49,7 @@ public class SemanticPublishResource {
     private final AnalyticsSemanticModelRepository semanticModelRepository;
     private final AnalyticsSemanticJoinRepository semanticJoinRepository;
     private final ObjectMapper objectMapper;
+    private final SemanticAuditService semanticAuditService;
 
     public SemanticPublishResource(
         AnalyticsDatabaseRepository databaseRepository,
@@ -55,7 +58,8 @@ public class SemanticPublishResource {
         AnalyticsMetricRepository metricRepository,
         AnalyticsSemanticModelRepository semanticModelRepository,
         AnalyticsSemanticJoinRepository semanticJoinRepository,
-        ObjectMapper objectMapper
+        ObjectMapper objectMapper,
+        SemanticAuditService semanticAuditService
     ) {
         this.databaseRepository = databaseRepository;
         this.tableRepository = tableRepository;
@@ -64,12 +68,22 @@ public class SemanticPublishResource {
         this.semanticModelRepository = semanticModelRepository;
         this.semanticJoinRepository = semanticJoinRepository;
         this.objectMapper = objectMapper;
+        this.semanticAuditService = semanticAuditService;
     }
 
     @PostMapping(path = "/publish", consumes = MediaType.APPLICATION_JSON_VALUE, produces = MediaType.APPLICATION_JSON_VALUE)
     @Transactional
-    public ResponseEntity<?> publish(@RequestBody JsonNode body) {
+    public ResponseEntity<?> publish(@RequestBody JsonNode body, HttpServletRequest request) {
         if (body == null || body.isEmpty()) {
+            semanticAuditService.logFailure(
+                "SEMANTIC_CONTRACT_PUBLISH",
+                "推送语义契约",
+                null,
+                request,
+                null,
+                null,
+                "Empty request body"
+            );
             return ResponseEntity.badRequest().body(Map.of("error", "Empty request body"));
         }
 
@@ -80,6 +94,15 @@ public class SemanticPublishResource {
         String description = textOrNull(body, "description");
 
         if (tableName == null) {
+            semanticAuditService.logFailure(
+                "SEMANTIC_CONTRACT_PUBLISH",
+                "推送语义契约",
+                null,
+                request,
+                modelName,
+                Map.of("dataSourceName", dataSourceName == null ? "" : dataSourceName),
+                "tableName is required"
+            );
             return ResponseEntity.badRequest().body(Map.of("error", "tableName is required"));
         }
         if (schemaName == null) {
@@ -90,6 +113,15 @@ public class SemanticPublishResource {
 
         AnalyticsDatabase database = resolveDatabase(dataSourceName);
         if (database == null) {
+            semanticAuditService.logFailure(
+                "SEMANTIC_CONTRACT_PUBLISH",
+                "推送语义契约",
+                null,
+                request,
+                modelName,
+                Map.of("dataSourceName", dataSourceName == null ? "" : dataSourceName, "tableName", tableName),
+                "datasource not found"
+            );
             return ResponseEntity.badRequest().body(Map.of(
                 "error", "No analytics database found for dataSourceName: " + dataSourceName,
                 "hint", "Ensure the data source is registered in dts-analytics before publishing."
@@ -144,6 +176,22 @@ public class SemanticPublishResource {
             metricsUpdated.size(),
             dimensionsUpdated.size(),
             joinsUpdated.size()
+        );
+
+        Map<String, Object> auditAttrs = new LinkedHashMap<>();
+        auditAttrs.put("modelName", semanticModel.getModelName());
+        auditAttrs.put("tableId", table.getId());
+        auditAttrs.put("metricsCreated", metricsCreated.size());
+        auditAttrs.put("metricsUpdated", metricsUpdated.size());
+        auditAttrs.put("dimensionsAnnotated", dimensionsUpdated.size());
+        auditAttrs.put("joinsUpdated", joinsUpdated.size());
+        semanticAuditService.logSuccess(
+            "SEMANTIC_CONTRACT_PUBLISH",
+            "推送语义契约",
+            null,
+            request,
+            semanticModel.getModelName(),
+            auditAttrs
         );
 
         return ResponseEntity.ok(summary);

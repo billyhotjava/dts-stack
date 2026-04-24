@@ -1,5 +1,6 @@
 package com.yuzhi.dts.platform.web.rest.sql;
 
+import com.yuzhi.dts.common.audit.AuditStage;
 import com.yuzhi.dts.platform.service.audit.AuditService;
 import com.yuzhi.dts.platform.service.audit.SqlIdeAuditActions;
 import com.yuzhi.dts.platform.service.sql.SqlSubqueryService;
@@ -35,14 +36,23 @@ public class SqlIdeSubqueryController {
 
     @PostMapping
     public ApiResponse<TempViewDto> create(@RequestParam("executionId") UUID executionId) {
-        TempViewDto v = service.createTempView(executionId);
-        Map<String, Object> payload = new LinkedHashMap<>();
-        payload.put("viewName", v.viewName());
-        payload.put("rowCount", v.rowCount());
-        payload.put("actionCode", SqlIdeAuditActions.SQL_TEMP_VIEW_CREATE);
-        auditService.record("CREATE", "sql.ide.temp_view", "sql.execution",
-            executionId.toString(), "SUCCESS", payload);
-        return ApiResponses.ok(v);
+        try {
+            TempViewDto v = service.createTempView(executionId);
+            Map<String, Object> payload = new LinkedHashMap<>();
+            payload.put("executionId", executionId.toString());
+            payload.put("viewName", v.viewName());
+            payload.put("rowCount", v.rowCount());
+            auditService.auditAction(SqlIdeAuditActions.CODE_TEMP_VIEW_CREATE, AuditStage.SUCCESS, executionId.toString(), payload);
+            return ApiResponses.ok(v);
+        } catch (RuntimeException ex) {
+            auditService.auditAction(
+                SqlIdeAuditActions.CODE_TEMP_VIEW_CREATE,
+                AuditStage.FAIL,
+                executionId.toString(),
+                Map.of("reason", String.valueOf(ex.getMessage()))
+            );
+            throw ex;
+        }
     }
 
     @PostMapping("/{name}/query")
@@ -52,30 +62,37 @@ public class SqlIdeSubqueryController {
         Map<String, Object> payload = new LinkedHashMap<>();
         payload.put("viewName", name);
         payload.put("sqlHash", sqlHash);
-        payload.put("actionCode", SqlIdeAuditActions.SQL_SUBQUERY_EXECUTE);
         try {
             Map<String, Object> result = service.executeOnView(name, req.sql());
-            auditService.record("EXECUTE", "sql.ide.subquery", "sql.temp_view",
-                name, "SUCCESS", payload);
+            auditService.auditAction(SqlIdeAuditActions.CODE_SUBQUERY_EXECUTE, AuditStage.SUCCESS, name, payload);
             return ApiResponses.ok(result);
-        } catch (RuntimeException e) {
-            payload.put("error", e.getMessage());
-            auditService.record("EXECUTE", "sql.ide.subquery", "sql.temp_view",
-                name, "FAILED", payload);
-            throw e;
+        } catch (RuntimeException ex) {
+            payload.put("reason", String.valueOf(ex.getMessage()));
+            auditService.auditAction(SqlIdeAuditActions.CODE_SUBQUERY_EXECUTE, AuditStage.FAIL, name, payload);
+            throw ex;
         }
     }
 
     @DeleteMapping("/{name}")
     public ApiResponse<Void> delete(@PathVariable String name) {
-        // Fix 5: audit DELETE operation
-        service.dropView(name);
-        Map<String, Object> payload = new LinkedHashMap<>();
-        payload.put("viewName", name);
-        payload.put("actionCode", SqlIdeAuditActions.SQL_TEMP_VIEW_DROP);
-        auditService.record("DELETE", "sql.ide.temp_view", "sql.temp_view",
-            name, "SUCCESS", payload);
-        return ApiResponses.ok(null);
+        try {
+            service.dropView(name);
+            auditService.auditAction(
+                SqlIdeAuditActions.CODE_TEMP_VIEW_DROP,
+                AuditStage.SUCCESS,
+                name,
+                Map.of("viewName", name)
+            );
+            return ApiResponses.ok(null);
+        } catch (RuntimeException ex) {
+            auditService.auditAction(
+                SqlIdeAuditActions.CODE_TEMP_VIEW_DROP,
+                AuditStage.FAIL,
+                name,
+                Map.of("viewName", name, "reason", String.valueOf(ex.getMessage()))
+            );
+            throw ex;
+        }
     }
 
     /** Fix 6: SHA-256 first 8 bytes as hex — useful for audit forensics. */

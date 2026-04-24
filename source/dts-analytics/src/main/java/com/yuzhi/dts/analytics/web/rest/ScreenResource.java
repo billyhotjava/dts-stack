@@ -777,7 +777,19 @@ public class ScreenResource {
         ObjectNode detail = toDetailResponse(screen, null, null, "draft", permissions);
         applySpecWarnings(detail, specValidation.warnings());
 
-        screenAuditService.log(screen.getId(), user.orElseThrow().getId(), "screen.create", null, detail, requestIdFrom(request));
+        // Sprint-12 follow-up: distinguish v1→v2 migration from a regular create.
+        // The frontend V1LegacyBanner posts the source screen id under `migrationFrom` so that
+        // the audit trail records "screen.migrate" for the new copy and downstream tooling can
+        // join the old/new pair.
+        boolean isMigration = body != null && body.has("migrationFrom") && !body.path("migrationFrom").isNull();
+        String createAction = isMigration ? "screen.migrate" : "screen.create";
+        ObjectNode auditDetail = detail.deepCopy();
+        if (isMigration) {
+            auditDetail.put("migrationFrom", body.path("migrationFrom").asText());
+            auditDetail.put("schemaVersionFrom", 1);
+            auditDetail.put("schemaVersionTo", 2);
+        }
+        screenAuditService.log(screen.getId(), user.orElseThrow().getId(), createAction, null, auditDetail, requestIdFrom(request));
 
         return ResponseEntity.ok(detail);
     }

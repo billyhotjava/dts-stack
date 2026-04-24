@@ -189,6 +189,7 @@ public class ScreenAuditService {
             case "screen.delete" -> "SCREEN_DELETE";
             case "screen.publish" -> "SCREEN_PUBLISH";
             case "screen.rollback" -> "SCREEN_ROLLBACK";
+            case "screen.migrate" -> "SCREEN_MIGRATE";
             case "screen.export.json" -> "SCREEN_EXPORT_JSON";
             case "screen.export.image" -> "SCREEN_EXPORT_IMAGE";
             case "screen.export.pdf" -> "SCREEN_EXPORT_PDF";

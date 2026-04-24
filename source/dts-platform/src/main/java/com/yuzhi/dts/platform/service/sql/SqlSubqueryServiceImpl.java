@@ -17,15 +17,30 @@ import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import javax.sql.DataSource;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
+import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 import org.springframework.web.server.ResponseStatusException;
 
 @Service
 public class SqlSubqueryServiceImpl implements SqlSubqueryService {
 
+    private static final Logger LOG = LoggerFactory.getLogger(SqlSubqueryServiceImpl.class);
     private static final Duration TTL = Duration.ofMinutes(30);
     private static final int MAX_VIEW_ROWS = 100_000;
+    /**
+     * Sweep period for expired temp-view cleanup.
+     * <p>Picked to be < TTL/3 so an expired view never lingers more than ~10 min after TTL.
+     */
+    private static final long CLEANUP_FIXED_DELAY_MS = 10L * 60L * 1000L;
+    /**
+     * Sweep period for orphan-table reconciliation. Drops {@code sqlide_view_*} UNLOGGED
+     * tables whose name no longer appears in the in-memory registry — these are typically
+     * left over from process crashes or from a previous instance that owned the schema.
+     */
+    private static final long ORPHAN_SWEEP_FIXED_DELAY_MS = 60L * 60L * 1000L;
 
     private record ViewState(String ownerLogin, Instant expiresAt) {}
 
@@ -179,5 +194,55 @@ public class SqlSubqueryServiceImpl implements SqlSubqueryService {
             }
         }
         return dropped;
+    }
+
+    /**
+     * Periodic sweep of expired temp views. Runs at a fixed delay so that even a busy
+     * IDE tenant cannot accumulate more than a few extra minutes of stale UNLOGGED tables
+     * after their 30-minute TTL elapses.
+     */
+    @Scheduled(fixedDelay = CLEANUP_FIXED_DELAY_MS, initialDelay = CLEANUP_FIXED_DELAY_MS)
+    public void scheduledCleanupExpired() {
+        try {
+            int dropped = cleanupExpired();
+            if (dropped > 0) {
+                LOG.info("[sql-ide] expired temp-view cleanup dropped {} table(s)", dropped);
+            }
+        } catch (Exception ex) {
+            LOG.warn("[sql-ide] expired temp-view cleanup failed: {}", ex.getMessage());
+        }
+    }
+
+    /**
+     * Reconciles the in-memory registry against the database every hour: drops any
+     * {@code sqlide_view_*} UNLOGGED table that has no entry in {@link #views}. This
+     * catches tables left behind by a previous JVM instance (process crash, redeploy)
+     * that the live registry does not know about.
+     */
+    @Scheduled(fixedDelay = ORPHAN_SWEEP_FIXED_DELAY_MS, initialDelay = ORPHAN_SWEEP_FIXED_DELAY_MS)
+    public void scheduledOrphanSweep() {
+        List<String> orphans = new ArrayList<>();
+        try (Connection conn = dataSource.getConnection()) {
+            try (PreparedStatement ps = conn.prepareStatement(
+                "SELECT tablename FROM pg_tables WHERE tablename LIKE 'sqlide_view_%'"
+            ); ResultSet rs = ps.executeQuery()) {
+                while (rs.next()) {
+                    String name = rs.getString(1);
+                    if (name != null && !views.containsKey(name)) {
+                        orphans.add(name);
+                    }
+                }
+            }
+        } catch (SQLException ex) {
+            // Probably running on a non-PostgreSQL backend; skip orphan sweep silently.
+            LOG.debug("[sql-ide] orphan sweep skipped: {}", ex.getMessage());
+            return;
+        }
+        for (String name : orphans) {
+            dropViewInternal(name);
+        }
+        if (!orphans.isEmpty()) {
+            LOG.info("[sql-ide] orphan temp-view sweep dropped {} table(s)", orphans.size());
+        }
     }
 }

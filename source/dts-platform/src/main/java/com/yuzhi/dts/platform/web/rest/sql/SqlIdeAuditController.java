@@ -1,5 +1,6 @@
 package com.yuzhi.dts.platform.web.rest.sql;
 
+import com.yuzhi.dts.common.audit.AuditStage;
 import com.yuzhi.dts.platform.service.audit.AuditService;
 import com.yuzhi.dts.platform.service.audit.SqlIdeAuditActions;
 import com.yuzhi.dts.platform.web.rest.ApiResponse;
@@ -44,15 +45,8 @@ public class SqlIdeAuditController {
         }
         java.util.Map<String, Object> payload = new java.util.LinkedHashMap<>();
         payload.put("cells", req.cellCount());
-        payload.put("actionCode", SqlIdeAuditActions.SQL_RESULT_COPY);
-        auditService.record(
-            "READ",
-            "sql.ide.result",
-            "sql.execution",
-            req.executionId(),
-            "SUCCESS",
-            payload
-        );
+        payload.put("executionId", req.executionId());
+        auditService.auditAction(SqlIdeAuditActions.CODE_RESULT_COPY, AuditStage.SUCCESS, req.executionId(), payload);
         return ApiResponses.ok(null);
     }
 }

@@ -286,6 +286,62 @@
             { "code": "EXPLORE_RESULTSET_EXPORT", "display": "导出结果集", "phases": ["BEGIN", "SUCCESS", "FAIL"], "supportsFlow": true },
             { "code": "EXPLORE_RESULTSET_PURGE", "display": "清理结果集", "phases": ["BEGIN", "SUCCESS", "FAIL"], "supportsFlow": true }
           ]
+        },
+        {
+          "key": "explore.sqlIde",
+          "title": "SQL IDE 工作台",
+          "actions": [
+            { "code": "SQL_IDE_TAB_LIST", "display": "查看 SQL Tab 列表", "phases": ["SUCCESS"], "supportsFlow": false },
+            { "code": "SQL_IDE_TAB_CREATE", "display": "创建 SQL Tab", "phases": ["BEGIN", "SUCCESS", "FAIL"], "supportsFlow": true },
+            { "code": "SQL_IDE_TAB_UPDATE", "display": "更新 SQL Tab", "phases": ["BEGIN", "SUCCESS", "FAIL"], "supportsFlow": true },
+            { "code": "SQL_IDE_TAB_DELETE", "display": "删除 SQL Tab", "phases": ["BEGIN", "SUCCESS", "FAIL"], "supportsFlow": true },
+            { "code": "SQL_IDE_TAB_BATCH_SAVE", "display": "批量保存 SQL Tab", "phases": ["BEGIN", "SUCCESS", "FAIL"], "supportsFlow": true },
+            { "code": "SQL_IDE_CATALOG_BROWSE", "display": "浏览数据源目录", "phases": ["SUCCESS"], "supportsFlow": false },
+            { "code": "SQL_IDE_CATALOG_SEARCH", "display": "搜索数据源目录", "phases": ["SUCCESS"], "supportsFlow": false },
+            { "code": "SQL_IDE_EXECUTION_META_VIEW", "display": "查看执行结果元信息", "phases": ["SUCCESS"], "supportsFlow": false },
+            { "code": "SQL_IDE_EXECUTION_PAGE_VIEW", "display": "分页查看执行结果", "phases": ["SUCCESS"], "supportsFlow": false },
+            { "code": "SQL_IDE_RESULT_EXPORT", "display": "导出 SQL 执行结果", "phases": ["BEGIN", "SUCCESS", "FAIL"], "supportsFlow": true },
+            { "code": "SQL_IDE_RESULT_COPY", "display": "复制 SQL 执行结果", "phases": ["SUCCESS"], "supportsFlow": false },
+            { "code": "SQL_IDE_PLAN_VIEW", "display": "查看 SQL 执行计划", "phases": ["SUCCESS"], "supportsFlow": false },
+            { "code": "SQL_IDE_TEMP_VIEW_CREATE", "display": "创建结果集临时视图", "phases": ["BEGIN", "SUCCESS", "FAIL"], "supportsFlow": true },
+            { "code": "SQL_IDE_TEMP_VIEW_DROP", "display": "删除结果集临时视图", "phases": ["BEGIN", "SUCCESS", "FAIL"], "supportsFlow": true },
+            { "code": "SQL_IDE_SUBQUERY_EXECUTE", "display": "执行二次查询", "phases": ["BEGIN", "SUCCESS", "FAIL"], "supportsFlow": true }
+          ]
+        }
+      ]
+    },
+    {
+      "module": "semantic",
+      "title": "自助 BI 与语义层",
+      "entries": [
+        {
+          "key": "semantic.metadata",
+          "title": "语义元信息",
+          "actions": [
+            { "code": "SEMANTIC_META_VIEW", "display": "查看语义元信息", "phases": ["SUCCESS"], "supportsFlow": false },
+            { "code": "SEMANTIC_GRAPH_VIEW", "display": "查看语义 Join 图", "phases": ["SUCCESS"], "supportsFlow": false },
+            { "code": "SEMANTIC_CONTRACT_PUBLISH", "display": "推送语义契约", "phases": ["BEGIN", "SUCCESS", "FAIL"], "supportsFlow": true }
+          ]
+        },
+        {
+          "key": "semantic.queries",
+          "title": "语义查询",
+          "actions": [
+            { "code": "SEMANTIC_QUERY_PREVIEW", "display": "预览语义查询 SQL", "phases": ["BEGIN", "SUCCESS", "FAIL"], "supportsFlow": true },
+            { "code": "SEMANTIC_QUERY_EXECUTE", "display": "执行语义查询", "phases": ["BEGIN", "SUCCESS", "FAIL"], "supportsFlow": true }
+          ]
+        },
+        {
+          "key": "semantic.virtualDatasets",
+          "title": "虚拟数据集",
+          "actions": [
+            { "code": "SEMANTIC_VDS_LIST", "display": "查看虚拟数据集列表", "phases": ["SUCCESS"], "supportsFlow": false },
+            { "code": "SEMANTIC_VDS_VIEW", "display": "查看虚拟数据集", "phases": ["SUCCESS"], "supportsFlow": false },
+            { "code": "SEMANTIC_VDS_CREATE", "display": "创建虚拟数据集", "phases": ["BEGIN", "SUCCESS", "FAIL"], "supportsFlow": true },
+            { "code": "SEMANTIC_VDS_UPDATE", "display": "更新虚拟数据集", "phases": ["BEGIN", "SUCCESS", "FAIL"], "supportsFlow": true },
+            { "code": "SEMANTIC_VDS_DELETE", "display": "删除虚拟数据集", "phases": ["BEGIN", "SUCCESS", "FAIL"], "supportsFlow": true },
+            { "code": "SEMANTIC_VDS_PROMOTE", "display": "提升虚拟数据集到 dbt", "phases": ["BEGIN", "SUCCESS", "FAIL"], "supportsFlow": true }
+          ]
         }
       ]
     },
@@ -299,7 +355,13 @@
           "actions": [
             { "code": "VIS_DASHBOARD_VIEW", "display": "查看仪表盘", "phases": ["SUCCESS"], "supportsFlow": false },
             { "code": "VIS_DASHBOARD_EDIT", "display": "编辑仪表盘", "phases": ["BEGIN", "SUCCESS", "FAIL"], "supportsFlow": true },
-            { "code": "VIS_DASHBOARD_PUBLISH", "display": "发布仪表盘", "phases": ["BEGIN", "SUCCESS", "FAIL"], "supportsFlow": true }
+            { "code": "VIS_DASHBOARD_PUBLISH", "display": "发布仪表盘", "phases": ["BEGIN", "SUCCESS", "FAIL"], "supportsFlow": true },
+            { "code": "SCREEN_CREATE", "display": "新建大屏", "phases": ["BEGIN", "SUCCESS", "FAIL"], "supportsFlow": true },
+            { "code": "SCREEN_UPDATE", "display": "更新大屏", "phases": ["BEGIN", "SUCCESS", "FAIL"], "supportsFlow": true },
+            { "code": "SCREEN_DELETE", "display": "删除大屏", "phases": ["BEGIN", "SUCCESS", "FAIL"], "supportsFlow": true },
+            { "code": "SCREEN_PUBLISH", "display": "发布大屏", "phases": ["BEGIN", "SUCCESS", "FAIL"], "supportsFlow": true },
+            { "code": "SCREEN_ROLLBACK", "display": "回滚大屏版本", "phases": ["BEGIN", "SUCCESS", "FAIL"], "supportsFlow": true },
+            { "code": "SCREEN_MIGRATE", "display": "大屏 v1→v2 迁移", "phases": ["BEGIN", "SUCCESS", "FAIL"], "supportsFlow": true }
           ]
         },
         {
