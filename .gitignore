@@ -1,3 +1,6 @@
+# Brainstorming companion scratch (Superpowers Visual Companion)
+.superpowers/
+
 # Ignore persistent service data directories
 services/dts-minio/data/
 services/dts-pg/data/
