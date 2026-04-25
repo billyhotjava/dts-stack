@@ -1,0 +1,4 @@
+interface:
+  display_name: "DTS DevOps Runbook"
+  short_description: "Diagnose DTS compose and runtime issues"
+  default_prompt: "Use $dts-devops-runbook to diagnose this DTS environment or container issue."

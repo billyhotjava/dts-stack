@@ -46,6 +46,32 @@ function isHiddenDefaultRole(roleName?: string): boolean {
 	return KEYCLOAK_DEFAULT_ROLE_PATTERN.test(raw);
 }
 
+const HIDDEN_SYNTHETIC_PERMISSIONS = new Set(["portal.view"]);
+const PERMISSION_LABELS: Record<string, string> = {
+	"portal.manage": "平台管理",
+	"catalog.manage": "目录管理",
+	"governance.manage": "治理管理",
+	"iam.manage": "权限管理",
+};
+
+function normalizeText(value: unknown): string {
+	if (Array.isArray(value)) return normalizeText(value[0]);
+	return typeof value === "string" ? value.trim() : "";
+}
+
+function readAttribute(attributes: Record<string, string[]> | undefined, keys: string[]): string {
+	return pickAttributeValue(attributes, keys);
+}
+
+function deptMatches(dept: DeptDto, code: string): boolean {
+	const normalized = code.trim();
+	if (!normalized) return false;
+	const candidates = [dept.code, String(dept.id ?? ""), ...(dept.aliases || [])]
+		.map((item) => String(item || "").trim())
+		.filter(Boolean);
+	return candidates.some((item) => item === normalized);
+}
+
 export default function ProfilePage() {
 	const userInfo = useUserInfo();
 	const [departments, setDepartments] = useState<DeptDto[]>([]);
@@ -74,13 +100,20 @@ export default function ProfilePage() {
 		pickAttributeValue,
 	});
 
-	const deptCode = pickAttributeValue(attributes, ["dept_code", "deptCode", "department"]);
-	const personnelLevel = pickAttributeValue(attributes, [
-		"personnel_security_level",
-		"personnel_level",
-		"person_security_level",
-		"person_level",
-	]);
+	const deptCode =
+		readAttribute(attributes, ["dept_code", "deptCode", "department"]) ||
+		normalizeText((userInfo as any)?.deptCode) ||
+		normalizeText((userInfo as any)?.dept_code) ||
+		normalizeText((userInfo as any)?.department);
+	const personnelLevel =
+		readAttribute(attributes, [
+			"personnel_security_level",
+			"personnel_level",
+			"person_security_level",
+			"person_level",
+		]) ||
+		normalizeText((userInfo as any)?.personnel_level) ||
+		normalizeText((userInfo as any)?.person_security_level);
 
 	useEffect(() => {
 		let alive = true;
@@ -111,8 +144,8 @@ export default function ProfilePage() {
 		if (directoryUser?.deptName) return directoryUser.deptName;
 		const effectiveDeptCode = directoryUser?.deptCode || deptCode;
 		if (!effectiveDeptCode) return "";
-		const matched = departments.find((item) => String(item.code || "").trim() === effectiveDeptCode);
-		return matched?.nameZh || matched?.nameEn || effectiveDeptCode;
+		const matched = departments.find((item) => deptMatches(item, effectiveDeptCode));
+		return matched?.nameZh || matched?.nameEn || "";
 	}, [departments, deptCode, directoryUser]);
 	const effectiveDeptCode = directoryUser?.deptCode || deptCode;
 
@@ -136,6 +169,17 @@ export default function ProfilePage() {
 			})
 			.filter((item): item is { key: string; label: string } => Boolean(item));
 	}, [roleCatalog, roles]);
+	const visiblePermissions = useMemo(
+		() =>
+			permissions
+				.map((permission) => String(permission || "").trim())
+				.filter((permission) => permission && !HIDDEN_SYNTHETIC_PERMISSIONS.has(permission))
+				.map((permission) => ({
+					key: permission,
+					label: PERMISSION_LABELS[permission] || permission,
+				})),
+		[permissions],
+	);
 
 	return (
 		<div className="mx-auto max-w-3xl space-y-6 p-6">
@@ -166,7 +210,7 @@ export default function ProfilePage() {
 					</Descriptions.Item>
 					{effectiveDeptCode && (
 						<Descriptions.Item label="部门">
-							{deptName || effectiveDeptCode}
+							{deptName || "-"}
 						</Descriptions.Item>
 					)}
 					{personnelLevel && (
@@ -192,13 +236,13 @@ export default function ProfilePage() {
 							}
 						</div>
 					</div>
-					{permissions.length > 0 && (
+					{visiblePermissions.length > 0 && (
 						<div>
 							<div className="mb-2 text-sm font-medium text-foreground">权限</div>
 							<div className="flex flex-wrap gap-2">
-								{permissions.map((perm) => (
-									<Tag key={perm} color="green">
-										{perm}
+								{visiblePermissions.map((perm) => (
+									<Tag key={perm.key} color="green">
+										{perm.label}
 									</Tag>
 								))}
 							</div>

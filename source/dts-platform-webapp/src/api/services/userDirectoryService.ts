@@ -1,6 +1,4 @@
-import axios from "axios";
-import { GLOBAL_CONFIG } from "@/global-config";
-import useContextStore from "@/store/contextStore";
+import apiClient from "../apiClient";
 
 export interface UserDirectoryEntry {
 	id: string;
@@ -10,21 +8,6 @@ export interface UserDirectoryEntry {
 	deptCode?: string;
 	deptName?: string;
 }
-
-const API_BASE = GLOBAL_CONFIG.apiBaseUrl.replace(/\/+$/, "");
-
-const buildHeaders = (): Record<string, string> => {
-	const headers: Record<string, string> = { "Content-Type": "application/json" };
-	try {
-		const ctx = useContextStore.getState();
-		if (ctx.activeDept) {
-			headers["X-Active-Dept"] = String(ctx.activeDept);
-		}
-	} catch {
-		// ignore store access issues
-	}
-	return headers;
-};
 
 const unwrap = (payload: any): any[] => {
 	if (Array.isArray(payload)) return payload;
@@ -38,12 +21,8 @@ export async function searchUsers(keyword?: string): Promise<UserDirectoryEntry[
 		if (keyword && keyword.trim()) {
 			params.keyword = keyword.trim();
 		}
-		const { data } = await axios.get(`${API_BASE}/directory/users`, {
-			headers: buildHeaders(),
-			params,
-			withCredentials: true,
-		});
-		const list = unwrap(data);
+		const payload = await apiClient.get<any>({ url: "/directory/users", params });
+		const list = unwrap(payload);
 		return list
 			.map((item: any) => {
 				const id = String(item?.id ?? item?.userId ?? item?.username ?? "").trim();

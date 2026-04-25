@@ -1,0 +1,4 @@
+interface:
+  display_name: "DTS Skill Router"
+  short_description: "Choose the right DTS specialist skill"
+  default_prompt: "Use $dts-skill-router to choose the right DTS skills for this task."

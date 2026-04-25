@@ -1,0 +1,4 @@
+interface:
+  display_name: "DTS Observability SRE"
+  short_description: "Collect DTS diagnostics and SRE signals"
+  default_prompt: "Use $dts-observability-sre to triage this DTS production stability issue."

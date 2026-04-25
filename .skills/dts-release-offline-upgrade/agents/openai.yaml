@@ -1,0 +1,4 @@
+interface:
+  display_name: "DTS Release Offline Upgrade"
+  short_description: "Plan DTS offline releases and upgrades"
+  default_prompt: "Use $dts-release-offline-upgrade to prepare this DTS offline release or upgrade."
