@@ -25,10 +25,10 @@ public interface BiReportLinkRepository extends JpaRepository<BiReportLink, UUID
     @Query(
         "select count(r) from BiReportLink r " +
         "where r.enabled = true " +
-        "  and (:deptCode is null or r.deptCodes like concat('%', :deptCode, '%')) " +
-        "  and (:bizDomain is null or r.bizDomain = :bizDomain) " +
-        "  and (:createdFrom is null or r.createdDate >= :createdFrom) " +
-        "  and (:createdTo is null or r.createdDate < :createdTo)"
+        "  and (cast(:deptCode as text) is null or r.deptCodes like concat('%', :deptCode, '%')) " +
+        "  and (cast(:bizDomain as text) is null or r.bizDomain = :bizDomain) " +
+        "  and (cast(:createdFrom as java.time.Instant) is null or r.createdDate >= :createdFrom) " +
+        "  and (cast(:createdTo as java.time.Instant) is null or r.createdDate < :createdTo)"
     )
     long countForDept(
         @Param("deptCode") String deptCode,
@@ -43,9 +43,9 @@ public interface BiReportLinkRepository extends JpaRepository<BiReportLink, UUID
     @Query(
         "select count(r) from BiReportLink r " +
         "where r.enabled = true " +
-        "  and (:bizDomain is null or r.bizDomain = :bizDomain) " +
-        "  and (:createdFrom is null or r.createdDate >= :createdFrom) " +
-        "  and (:createdTo is null or r.createdDate < :createdTo)"
+        "  and (cast(:bizDomain as text) is null or r.bizDomain = :bizDomain) " +
+        "  and (cast(:createdFrom as java.time.Instant) is null or r.createdDate >= :createdFrom) " +
+        "  and (cast(:createdTo as java.time.Instant) is null or r.createdDate < :createdTo)"
     )
     long countForAll(
         @Param("bizDomain") String bizDomain,
@@ -61,8 +61,8 @@ public interface BiReportLinkRepository extends JpaRepository<BiReportLink, UUID
     @Query(
         "select count(distinct v.reportId) from BiReportVisit v " +
         "where v.userLogin = :userLogin " +
-        "  and (:createdFrom is null or v.visitedAt >= :createdFrom) " +
-        "  and (:createdTo is null or v.visitedAt < :createdTo)"
+        "  and (cast(:createdFrom as java.time.Instant) is null or v.visitedAt >= :createdFrom) " +
+        "  and (cast(:createdTo as java.time.Instant) is null or v.visitedAt < :createdTo)"
     )
     long countDistinctReportsVisitedByUser(
         @Param("userLogin") String userLogin,

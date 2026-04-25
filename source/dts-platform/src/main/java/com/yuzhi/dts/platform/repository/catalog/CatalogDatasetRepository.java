@@ -79,10 +79,10 @@ public interface CatalogDatasetRepository extends JpaRepository<CatalogDataset, 
     @Query(
         "select count(d) from CatalogDataset d left join d.domain dom " +
         "where d.enabled = true " +
-        "  and (:deptCode is null or d.ownerDept = :deptCode) " +
-        "  and (:bizDomain is null or dom.code = :bizDomain) " +
-        "  and (:createdFrom is null or d.createdDate >= :createdFrom) " +
-        "  and (:createdTo is null or d.createdDate < :createdTo)"
+        "  and (cast(:deptCode as text) is null or d.ownerDept = :deptCode) " +
+        "  and (cast(:bizDomain as text) is null or dom.code = :bizDomain) " +
+        "  and (cast(:createdFrom as java.time.Instant) is null or d.createdDate >= :createdFrom) " +
+        "  and (cast(:createdTo as java.time.Instant) is null or d.createdDate < :createdTo)"
     )
     long countAssets(
         @Param("deptCode") String deptCode,
@@ -94,8 +94,8 @@ public interface CatalogDatasetRepository extends JpaRepository<CatalogDataset, 
     @Query(
         "select count(d) from CatalogDataset d left join d.domain dom " +
         "where d.enabled = true " +
-        "  and (:deptCode is null or d.ownerDept = :deptCode) " +
-        "  and (:bizDomain is null or dom.code = :bizDomain) " +
+        "  and (cast(:deptCode as text) is null or d.ownerDept = :deptCode) " +
+        "  and (cast(:bizDomain as text) is null or dom.code = :bizDomain) " +
         "  and upper(d.classification) in :classifications"
     )
     long countAssetsByClassifications(
@@ -115,8 +115,8 @@ public interface CatalogDatasetRepository extends JpaRepository<CatalogDataset, 
     @Query(
         "select d from CatalogDataset d left join fetch d.domain dom " +
         "where d.enabled = true " +
-        "  and (:deptCode is null or d.ownerDept = :deptCode) " +
-        "  and (:bizDomain is null or dom.code = :bizDomain) " +
+        "  and (cast(:deptCode as text) is null or d.ownerDept = :deptCode) " +
+        "  and (cast(:bizDomain as text) is null or dom.code = :bizDomain) " +
         "order by case upper(d.classification) " +
         "           when 'TOP_SECRET' then 4 " +
         "           when 'SECRET' then 3 " +

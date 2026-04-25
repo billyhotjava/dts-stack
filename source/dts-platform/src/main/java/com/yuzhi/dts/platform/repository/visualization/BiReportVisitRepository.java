@@ -36,7 +36,7 @@ public interface BiReportVisitRepository extends JpaRepository<BiReportVisit, UU
         "select count(v) from BiReportVisit v " +
         "where v.deptCode = :deptCode " +
         "  and v.visitedAt >= :start and v.visitedAt < :end " +
-        "  and (:bizDomain is null or v.bizDomain = :bizDomain)"
+        "  and (cast(:bizDomain as text) is null or v.bizDomain = :bizDomain)"
     )
     long countVisitsForDept(
         @Param("deptCode") String deptCode,
@@ -49,8 +49,8 @@ public interface BiReportVisitRepository extends JpaRepository<BiReportVisit, UU
     @Query(
         "select count(v) from BiReportVisit v " +
         "where v.visitedAt >= :start and v.visitedAt < :end " +
-        "  and (:deptCode is null or v.deptCode = :deptCode) " +
-        "  and (:bizDomain is null or v.bizDomain = :bizDomain)"
+        "  and (cast(:deptCode as text) is null or v.deptCode = :deptCode) " +
+        "  and (cast(:bizDomain as text) is null or v.bizDomain = :bizDomain)"
     )
     long countVisitsForAll(
         @Param("deptCode") String deptCode,
@@ -86,7 +86,7 @@ public interface BiReportVisitRepository extends JpaRepository<BiReportVisit, UU
         "from BiReportVisit v join BiReportLink r on r.id = v.reportId " +
         "where v.visitedAt >= :start and v.visitedAt < :end " +
         "  and v.deptCode = :deptCode " +
-        "  and (:bizDomain is null or r.bizDomain = :bizDomain) " +
+        "  and (cast(:bizDomain as text) is null or r.bizDomain = :bizDomain) " +
         "group by v.reportId, r.title, r.bizDomain, r.classification " +
         "order by count(v) desc"
     )
@@ -104,7 +104,7 @@ public interface BiReportVisitRepository extends JpaRepository<BiReportVisit, UU
         "  v.reportId, r.title, count(v), r.bizDomain, r.classification, max(v.visitedAt)) " +
         "from BiReportVisit v join BiReportLink r on r.id = v.reportId " +
         "where v.visitedAt >= :start and v.visitedAt < :end " +
-        "  and (:bizDomain is null or r.bizDomain = :bizDomain) " +
+        "  and (cast(:bizDomain as text) is null or r.bizDomain = :bizDomain) " +
         "group by v.reportId, r.title, r.bizDomain, r.classification " +
         "order by count(v) desc"
     )
@@ -127,8 +127,8 @@ public interface BiReportVisitRepository extends JpaRepository<BiReportVisit, UU
         "  r.bizDomain, count(v)) " +
         "from BiReportVisit v join BiReportLink r on r.id = v.reportId " +
         "where v.visitedAt >= :start and v.visitedAt < :end " +
-        "  and (:deptCode is null or v.deptCode = :deptCode) " +
-        "  and (:bizDomain is null or r.bizDomain = :bizDomain) " +
+        "  and (cast(:deptCode as text) is null or v.deptCode = :deptCode) " +
+        "  and (cast(:bizDomain as text) is null or r.bizDomain = :bizDomain) " +
         "group by r.bizDomain"
     )
     List<DomainAggregateRow> aggregateByBizDomain(
