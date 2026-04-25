@@ -5,9 +5,17 @@
  * and transition state for fade/slide animations.
  */
 import { useState, useEffect, useCallback, useRef } from 'react';
-import type { CarouselConfig, ScreenPage, ScreenComponent } from '../types';
+import type { CarouselConfig } from '../types';
 
-export interface CarouselState {
+export interface CarouselPageLike<TComponent> {
+    id: string;
+    name: string;
+    components: TComponent[];
+    backgroundColor?: string;
+    backgroundImage?: string;
+}
+
+export interface CarouselState<TComponent> {
     /** Current page index */
     pageIndex: number;
     /** Previous page index (for transition direction) */
@@ -15,7 +23,7 @@ export interface CarouselState {
     /** Whether a transition is currently active */
     transitioning: boolean;
     /** Components for the current page */
-    currentPageComponents: ScreenComponent[];
+    currentPageComponents: TComponent[];
     /** Current page background color override */
     currentPageBgColor?: string;
     /** Current page background image override */
@@ -44,10 +52,10 @@ export interface CarouselState {
  * Resolve the effective pages list.
  * When pages is empty/undefined, wraps top-level components as a single page (backward compat).
  */
-function resolvePages(
-    pages: ScreenPage[] | undefined,
-    components: ScreenComponent[],
-): ScreenPage[] {
+function resolvePages<TComponent>(
+    pages: CarouselPageLike<TComponent>[] | undefined,
+    components: TComponent[],
+): CarouselPageLike<TComponent>[] {
     if (pages && pages.length > 0) return pages;
     return [{
         id: '__default__',
@@ -56,11 +64,11 @@ function resolvePages(
     }];
 }
 
-export function useScreenCarousel(
-    pages: ScreenPage[] | undefined,
-    components: ScreenComponent[],
+export function useScreenCarousel<TComponent>(
+    pages: CarouselPageLike<TComponent>[] | undefined,
+    components: TComponent[],
     carouselConfig: CarouselConfig | undefined,
-): CarouselState {
+): CarouselState<TComponent> {
     const resolvedPages = resolvePages(pages, components);
     const pageCount = resolvedPages.length;
     const enabled = carouselConfig?.enabled === true && pageCount > 1;

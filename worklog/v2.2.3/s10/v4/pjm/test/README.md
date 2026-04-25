@@ -1,77 +1,74 @@
 # 项目管理 v2 测试数据
 
-覆盖 **8 个重大项目**，时间跨度 2025-2026，用于 dbt v2 模型链路验证。
+覆盖 **10 个项目、10 个科室**，时间跨度 **2026-2027**，用于 `worklog/v2.2.3/s10/v4/pjm/dbt_model` 的 ODS → STG → DWD → DWS → ADS 链路验证。
 
-## 8 个重大项目
+- CSV 是 `load_test_data.sql` 的权威输入
+- XLSX 由同一脚本同步生成，便于 Excel 侧核对
+- 可重复生成脚本：`generate_test_data.py`
 
-| 项目编号 | 主题 | 启动时间 | 当前阶段 |
-|---|---|---|---|
-| `XM-2025-A01` | 综合控制系统 | 2025-01 | 初样 → 正样设计（2026） |
-| `XM-2025-A02` | 发动机控制系统 | 2025-01 | 初样热试车（含振动归零） |
-| `XM-2026-B01` | 制导系统 | 2026-01 | 初样研制（算法+硬件） |
-| `XM-2026-B02` | 遥测遥控系统 | 2026-01 | 初样研制（天线+协议） |
-| `XM-2026-B03` | 电源系统 | 2026-01 | 初样研制（蓄电池+配电） |
-| `XM-2026-B04` | 结构系统 | 2026-02 | 初样研制（主承力） |
-| `XM-2026-B05` | 测控系统 | 2026-02 | 初样研制（主机+软件） |
-| `XM-2026-B06` | 综合试验系统 | 2026-03 | 鉴定阶段（EMC+可靠性） |
+## 10 个项目 / 10 个科室
+
+| 项目编号 | 主题 | 责任科室 | 计划区间 | 备注 |
+|---|---|---|---|---|
+| `XM-2026-C01` | 综合统筹平台 | 总体室 | 2026-02 ~ 2026-08 | 总体需求与联试统筹 |
+| `XM-2026-C02` | 飞控执行机构 | 控制室 | 2026-03 ~ 2026-09 | 控制器与执行机构联调 |
+| `XM-2026-C03` | 姿轨动力系统 | 动力室 | 2026-04 ~ 2026-10 | 动力控制与姿轨协同 |
+| `XM-2026-C04` | 惯导制导系统 | 制导室 | 2026-05 ~ 2026-11 | 算法与板卡联动 |
+| `XM-2026-C05` | 实时软件平台 | 软件室 | 2026-06 ~ 2026-12 | 实时构件与长稳运行 |
+| `XM-2026-C06` | 复合结构组件 | 结构室 | 2026-07 ~ 2027-01 | 结构件交付与联调准备 |
+| `XM-2026-C07` | 高可靠电源系统 | 电源室 | 2026-08 ~ 2027-02 | 电源管理单元验证 |
+| `XM-2026-C08` | 电子载荷组件 | 电子室 | 2026-09 ~ 2027-03 | 载荷处理模块集成 |
+| `XM-2026-C09` | 测控链路系统 | 测控室 | 2026-10 ~ 2027-04 | 测控主机与链路验证 |
+| `XM-2026-C10` | 环境试验保障平台 | 试验室 | 2026-11 ~ 2027-05 | 试验工装与综合试验 |
 
 ## 文件清单
 
 | 文件 | 对应 ODS 表 | 行数 | 作用 |
-|---|---|---|---|
-| `ods_project_subject_domain_v2.csv` | `ods_project_subject_domain_v2` | 39 | **进度事实**（DWD 核心） |
-| `ods_progress_measure_v2.csv` | `ods_progress_measure_v2` | 8 | 进度跟进措施 |
-| `ods_quality_issue_v2.csv` | `ods_quality_issue_v2` | 15 | **质量事实**（DWD 核心） |
-| `ods_quality_measure_v2.csv` | `ods_quality_measure_v2` | 8 | 质量跟进措施 |
-| `ods_tech_state_v2.csv` | `ods_tech_state_v2` | 14 | **技术状态事实**（DWD 核心） |
-| `ods_tech_state_measure_v2.csv` | `ods_tech_state_measure_v2` | 8 | 技术状态跟进措施 |
-| `ods_risk_info_v2.csv` | `ods_risk_info_v2` | 18 | **风险事实**（DWD 核心） |
-| `ods_risk_measure_v2.csv` | `ods_risk_measure_v2` | 8 | 风险跟进措施 |
-| `ods_material_info_v2.csv` | `ods_material_info_v2` | 10 | 重要物料 |
+|---|---|---:|---|
+| `ods_project_subject_domain_v2.csv` / `.xlsx` | `ods_project_subject_domain_v2` | 50 | 进度事实，5 个节点/项目 |
+| `ods_progress_measure_v2.csv` / `.xlsx` | `ods_progress_measure_v2` | 10 | 进度跟进措施，1 条/项目 |
+| `ods_quality_issue_v2.csv` / `.xlsx` | `ods_quality_issue_v2` | 10 | 质量问题事实，1 条/项目 |
+| `ods_quality_measure_v2.csv` / `.xlsx` | `ods_quality_measure_v2` | 10 | 质量跟进措施，1 条/项目 |
+| `ods_tech_state_v2.csv` / `.xlsx` | `ods_tech_state_v2` | 10 | 技术状态事实，1 条/项目 |
+| `ods_tech_state_measure_v2.csv` / `.xlsx` | `ods_tech_state_measure_v2` | 10 | 技术状态跟进措施，1 条/项目 |
+| `ods_risk_info_v2.csv` / `.xlsx` | `ods_risk_info_v2` | 10 | 风险事实，1 条/项目 |
+| `ods_risk_measure_v2.csv` / `.xlsx` | `ods_risk_measure_v2` | 10 | 风险跟进措施，1 条/项目 |
+| `ods_material_info_v2.csv` / `.xlsx` | `ods_material_info_v2` | 10 | 重要物料，1 条/项目 |
 
-## 数据语义约定
+## 数据设计摘要
 
-**枚举值（DWD 字典映射）**
-- `completion_status`（完成情况）：`按时完成` / `正常待完成` / `超期已完成未变更` / `超期已完成已变更` / `超期未完成未变更` / `超期未完成已变更` / `不正常待变更`
-- `node_type`（节点类型）：`一般节点` / `重要节点` / `重大节点` / `里程碑`
-- `risk_level`（风险等级）：`高` / `中` / `低`
-- `risk_category`（风险分类）：`技术` / `进度` / `成本` / `设计` / `质量` / `其他`（供应链/管理/资源会归入 `进度`）
-- `change_category`（更改类别）：`I` / `II` / `III`
-- `file_signature_status`（签署状态）：依赖 `change_category` 上下文
-  - I/II 类：`已提出需求，未评估评审` / `已评估评审，未签署` / `已评估评审，已签署`
+- **进度域**：每个项目固定 5 个节点，覆盖 `按时完成`、`正常待完成`、`超期已完成未变更`、`超期已完成已变更`、`超期未完成未变更`、`超期未完成已变更`、`不正常待变更`
+- **质量域**：覆盖 9 类质量原因，归零状态覆盖 `未完成归零` / `已完成技术归零` / `已完成管理归零` / `已完成技术和管理归零`
+- **技术状态域**：覆盖 I / II / III 三类更改，文件签署状态覆盖 5 种标准枚举，整改状态覆盖 `已落实整改` / `整改中` / `不涉及`
+- **风险域**：覆盖 `技术 / 进度 / 成本 / 设计 / 质量 / 其他` 六类风险，风险等级覆盖 `高 / 中 / 低`，释放状态同时包含 `已释放` 和 `未释放`
+- **物料域**：覆盖自研 / 外协、长周期 / 非长周期、已到货 / 未到货等场景，并与风险台账保持一对一联动
+
+## 枚举值约定
+
+- `completion_status`：`按时完成` / `正常待完成` / `超期已完成未变更` / `超期已完成已变更` / `超期未完成未变更` / `超期未完成已变更` / `不正常待变更`
+- `node_type`：`一般节点` / `重要节点` / `重大节点` / `里程碑`
+- `risk_level`：`高` / `中` / `低`
+- `risk_category`：`技术` / `进度` / `成本` / `设计` / `质量` / `其他`
+- `change_category`：`I` / `II` / `III`
+- `file_signature_status`：
+  - I / II 类：`已提出需求，未评估评审` / `已评估评审，未签署` / `已评估评审，已签署`
   - III 类：`已提出需求，未签署` / `已提出需求，已签署`
-- `reform_status`（整改状态）：`已落实整改` / `整改中` / `不涉及`
-- `issue_category`（质量原因）：`设计` / `工艺` / `管理` / `元器件` / `操作` / `外协` / `软件` / `环境` / `其他`
+- `reform_status`：`已落实整改` / `整改中` / `不涉及`
+- `issue_category`：`设计` / `工艺` / `管理` / `元器件` / `操作` / `外协` / `软件` / `环境` / `其他`
 - `status`（质量归零状态）：`未完成归零` / `已完成技术归零` / `已完成管理归零` / `已完成技术和管理归零`
-- `risk_status`（风险状态）：`已释放` / `未释放`（未命中默认 `未释放`）
+- `risk_status`：`已释放` / `未释放`
 
-**日期**
-- 日期字段固定 `YYYY-MM-DD` 格式
-- 周数字段是整数（1-52）
-
-**项目间联动关系（便于端到端验证）**
-- `XM-2025-A02` 热试车异常 → 同时生成 `risk_info_v2`、`quality_issue_v2`、`tech_state_v2`、`progress`、`material_info_v2` 关联记录
-- `XM-2026-B01` 元器件失效 → `quality_issue` + `risk_info` + `tech_state` + `material_info` 形成闭环
-- `XM-2026-B06` 可靠性与 EMC 问题 → 覆盖鉴定阶段重大风险情景
-
-## 加载方式
+## 生成与加载
 
 ```bash
 cd worklog/v2.2.3/s10/v4/pjm/test
-psql -d <your_db> -f load_test_data.sql
+python3 generate_test_data.py
+psql -d <your_db> -v ON_ERROR_STOP=1 -f load_test_data.sql
 ```
 
-## 运行 dbt 链路
+## 关键联动场景
 
-```bash
-cd worklog/v2.2.3/s10/v4/pjm/dbt_model
-dbt run --select pm_analytics_v3
-dbt test --select pm_analytics_v3
-```
-
-## 关键验证场景
-
-- **进度域**：`biz_ads_progress_kpi_v2` 应该能产出按时完成率/超期率等 33 个指标；`XM-2025-A02` 的热试车节点会进入 `is_overdue_incomplete_effective = true` 分支
-- **质量域**：`biz_ads_quality_kpi_v2` 覆盖各项目的归零率；`XM-2025-A01` 软件崩溃问题已完成双归零
-- **技术状态域**：`biz_ads_tech_state_kpi_v2` 按 I/II/III 分类统计签署与整改；`XM-2026-B02` 遥控协议尚未签署，落在未签署分支
-- **风险域**：`biz_ads_risk_kpi_v2` 统计释放率；`XM-2026-B06` 可靠性失效风险尚未释放
+- `XM-2026-C02`：进度超期完成已变更 + 工艺质量问题 + II 类技术状态 + 未释放进度风险
+- `XM-2026-C05`：软件类质量问题闭环 + I 类技术状态已签署 + 已释放技术风险
+- `XM-2026-C08`：电子载荷组件未到货，物料、风险、进度延误场景串联
+- `XM-2026-C10`：综合联试前进入 `不正常待变更`，用于验证异常待变更与未释放风险联动

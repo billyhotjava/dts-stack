@@ -102,6 +102,57 @@ describe('normalizeScreenConfigV2', () => {
         expect(config.components[0].layout.x).toBe(0);
         expect(config.components[0].layout.y).toBe(0);
     });
+
+    it('normalizes v2 pages and keeps their components', () => {
+        const { config } = normalizeScreenConfigV2({
+            schemaVersion: 2,
+            layout: { cols: 12, rowHeight: 'auto', gap: 12 },
+            components: [],
+            pages: [
+                {
+                    id: 'page-a',
+                    name: '第一页',
+                    components: [{ id: 'p1', type: 'text', config: {}, layout: { x: 1, y: 2, w: 3, h: 2 } }],
+                    backgroundColor: '#123456',
+                },
+            ],
+        });
+        expect(config.pages).toHaveLength(1);
+        expect(config.pages?.[0].id).toBe('page-a');
+        expect(config.pages?.[0].components[0].layout).toEqual(expect.objectContaining({ x: 1, y: 2, w: 3, h: 2 }));
+        expect(config.pages?.[0].backgroundColor).toBe('#123456');
+    });
+
+    it('preserves component dataSource and interaction fields', () => {
+        const { config } = normalizeScreenConfigV2({
+            schemaVersion: 2,
+            components: [
+                {
+                    id: 'chart-1',
+                    type: 'line-chart',
+                    config: {},
+                    layout: { x: 0, y: 0, w: 4, h: 3 },
+                    dataSource: {
+                        type: 'sql',
+                        sourceType: 'sql',
+                        sqlConfig: { query: 'select 1', databaseId: 9 },
+                    },
+                    interaction: {
+                        enabled: true,
+                        mappings: [{ variableKey: 'dept', sourcePath: 'name' }],
+                    },
+                },
+            ],
+        });
+        expect(config.components[0].dataSource).toEqual(expect.objectContaining({
+            type: 'sql',
+            sqlConfig: expect.objectContaining({ query: 'select 1', databaseId: 9 }),
+        }));
+        expect(config.components[0].interaction).toEqual(expect.objectContaining({
+            enabled: true,
+            mappings: expect.any(Array),
+        }));
+    });
 });
 
 describe('validateScreenConfigV2', () => {
@@ -148,5 +199,21 @@ describe('validateScreenConfigV2', () => {
         });
         const errs = validateScreenConfigV2(c);
         expect(errs.some((e) => e.includes('layout.w'))).toBe(true);
+    });
+
+    it('reports invalid page component layouts', () => {
+        const c = createEmptyScreenV2({
+            pages: [
+                {
+                    id: 'page-a',
+                    name: '第一页',
+                    components: [
+                        { id: 'a', type: 'k', config: {}, layout: { x: 11, y: 0, w: 3, h: 2 } },
+                    ],
+                },
+            ],
+        });
+        const errs = validateScreenConfigV2(c);
+        expect(errs.some((e) => e.includes('pages[0].components[0]'))).toBe(true);
     });
 });

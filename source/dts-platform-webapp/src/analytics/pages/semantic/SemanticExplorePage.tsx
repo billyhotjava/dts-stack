@@ -1,17 +1,22 @@
+import { BranchesOutlined, PlusOutlined } from "@ant-design/icons";
+import { Button, Card, Space, Spin, Table, Tag, Typography } from "antd";
+import type { ColumnsType } from "antd/es/table";
 import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router";
-import { Button, Card, Empty, Space, Spin, Table, Tag, Typography } from "antd";
-import type { ColumnsType } from "antd/es/table";
-import { PlusOutlined, BranchesOutlined } from "@ant-design/icons";
 import { PageHeader } from "@/components/page-header";
-import { analyticsApi, type SemanticGraphResponse, type SemanticMetaResponse, type SemanticModelMeta } from "../../api/analyticsApi";
+import { useMenuStore } from "@/store/menuStore";
+import {
+	analyticsApi,
+	type SemanticGraphResponse,
+	type SemanticMetaResponse,
+	type SemanticModelMeta,
+} from "../../api/analyticsApi";
 import { ErrorNotice } from "../../components/ErrorNotice";
 import { getEffectiveLocale, type Locale } from "../../i18n";
+import SemanticModelingEmptyState from "./SemanticModelingEmptyState";
+import { hasSemanticModelingMenuAccess } from "./semanticAccess";
 
-type LoadState<T> =
-	| { state: "loading" }
-	| { state: "loaded"; value: T }
-	| { state: "error"; error: unknown };
+type LoadState<T> = { state: "loading" } | { state: "loaded"; value: T } | { state: "error"; error: unknown };
 
 function safeArray<T>(value: T[] | undefined | null): T[] {
 	return Array.isArray(value) ? value : [];
@@ -19,6 +24,8 @@ function safeArray<T>(value: T[] | undefined | null): T[] {
 
 export default function SemanticExplorePage() {
 	const locale: Locale = useMemo(() => getEffectiveLocale(), []);
+	const menus = useMenuStore((state) => state.menus);
+	const canModel = useMemo(() => hasSemanticModelingMenuAccess(menus), [menus]);
 	const [metaState, setMetaState] = useState<LoadState<SemanticMetaResponse>>({ state: "loading" });
 	const [graphState, setGraphState] = useState<LoadState<SemanticGraphResponse>>({ state: "loading" });
 
@@ -57,8 +64,12 @@ export default function SemanticExplorePage() {
 			key: "label",
 			render: (_value, record) => (
 				<div className="flex flex-col">
-					<Link to={`/bi/card/new?base=${encodeURIComponent(String(record.id ?? ""))}`}>{record.label || record.id || "-"}</Link>
-					<span className="text-xs text-secondary">{record.schema_name || "public"}.{record.table_name || record.id || "-"}</span>
+					<Link to={`/bi/card/new?base=${encodeURIComponent(String(record.id ?? ""))}`}>
+						{record.label || record.id || "-"}
+					</Link>
+					<span className="text-xs text-secondary">
+						{record.schema_name || "public"}.{record.table_name || record.id || "-"}
+					</span>
 				</div>
 			),
 		},
@@ -74,7 +85,11 @@ export default function SemanticExplorePage() {
 			dataIndex: "security_level",
 			key: "security_level",
 			width: 120,
-			render: (value) => <Tag color={value === "CONFIDENTIAL" ? "red" : value === "SECRET" ? "orange" : "blue"}>{String(value || "INTERNAL")}</Tag>,
+			render: (value) => (
+				<Tag color={value === "CONFIDENTIAL" ? "red" : value === "SECRET" ? "orange" : "blue"}>
+					{String(value || "INTERNAL")}
+				</Tag>
+			),
 		},
 		{
 			title: "指标 / 维度",
@@ -88,14 +103,18 @@ export default function SemanticExplorePage() {
 			width: 220,
 			render: (_value, record) => (
 				<Space>
-					<Link to={`/bi/card/new?base=${encodeURIComponent(String(record.id ?? ""))}`}>
-						<Button type="primary" size="small" icon={<PlusOutlined />}>
-							新建卡片
-						</Button>
-					</Link>
-					<Link to={`/bi/virtual-datasets/new?base=${encodeURIComponent(String(record.id ?? ""))}`}>
-						<Button size="small">新建 VDS</Button>
-					</Link>
+					{canModel && (
+						<>
+							<Link to={`/bi/card/new?base=${encodeURIComponent(String(record.id ?? ""))}`}>
+								<Button type="primary" size="small" icon={<PlusOutlined />}>
+									新建卡片
+								</Button>
+							</Link>
+							<Link to={`/bi/virtual-datasets/new?base=${encodeURIComponent(String(record.id ?? ""))}`}>
+								<Button size="small">新建 VDS</Button>
+							</Link>
+						</>
+					)}
 				</Space>
 			),
 		},
@@ -110,9 +129,13 @@ export default function SemanticExplorePage() {
 						<Link to="/bi/virtual-datasets">
 							<Button icon={<BranchesOutlined />}>虚拟数据集</Button>
 						</Link>
-						<Link to="/bi/card/new">
-							<Button type="primary" icon={<PlusOutlined />}>新建语义卡片</Button>
-						</Link>
+						{canModel && (
+							<Link to="/bi/card/new">
+								<Button type="primary" icon={<PlusOutlined />}>
+									新建语义卡片
+								</Button>
+							</Link>
+						)}
 					</Space>
 				}
 			/>
@@ -140,13 +163,15 @@ export default function SemanticExplorePage() {
 						</Card>
 						<Card>
 							<Typography.Text type="secondary">主题域</Typography.Text>
-							<div style={{ fontSize: 28, fontWeight: 600 }}>{new Set(models.map((item) => item.subject_area || "未分域")).size}</div>
+							<div style={{ fontSize: 28, fontWeight: 600 }}>
+								{new Set(models.map((item) => item.subject_area || "未分域")).size}
+							</div>
 						</Card>
 					</div>
 
 					<Card title="已开放的语义模型">
 						{models.length === 0 ? (
-							<Empty description="当前还没有开放给分析师的语义模型" />
+							<SemanticModelingEmptyState title="当前还没有开放给分析师的语义模型" compact />
 						) : (
 							<Table
 								rowKey={(record) => String(record.id ?? Math.random())}

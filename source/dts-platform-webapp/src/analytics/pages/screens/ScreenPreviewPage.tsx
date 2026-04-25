@@ -12,7 +12,7 @@ import { applyThemeCssVariables } from './themes/screenCssVariables';
 import { normalizeScreenConfig } from './specV2';
 import { tryLoadV2 } from './v2/loader';
 import type { ScreenConfigV2 } from './v2/types';
-import { ResponsiveScreenLayout } from './v2/ResponsiveScreenLayout';
+import { V2ScreenRuntime } from './v2/V2ScreenRuntime';
 import { buildComponentMap, isComponentEffectivelyVisible } from './componentHierarchy';
 import { safeCssBackgroundUrl } from './sanitize';
 import { useScreenCarousel } from './hooks/useScreenCarousel';
@@ -463,9 +463,11 @@ export default function ScreenPreviewPage() {
 	// Sprint-12 F1/T03: v2 响应式大屏走 ResponsiveScreenLayout，跳过 v1 scale 逻辑。
 	if (v2Config) {
 		return (
-			<div className="fixed inset-0 overflow-hidden p-0 box-border" data-testid="analytics-screen-preview-v2">
-				<ResponsiveScreenLayout screen={v2Config} theme={v2Config.theme} />
-			</div>
+			<V2ScreenRuntime
+				screen={v2Config}
+				runtimeMeta={{ accessMode: 'private' }}
+				dataTestId="analytics-screen-preview-v2"
+			/>
 		);
 	}
 

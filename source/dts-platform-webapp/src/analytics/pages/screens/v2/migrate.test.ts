@@ -138,4 +138,51 @@ describe("migrateV1ToV2", () => {
         const { config } = migrateV1ToV2(v1);
         expect(config.referenceViewport).toEqual({ width: 2560, height: 1440 });
     });
+
+    it("preserves v1 pages when migrating to v2", () => {
+        const v1 = makeConfig({
+            components: [makeComponent({ id: "root", x: 0, y: 0, width: 320, height: 160 })],
+            pages: [
+                {
+                    id: "page-1",
+                    name: "第一页",
+                    backgroundColor: "#102030",
+                    components: [makeComponent({ id: "page-comp", x: 480, y: 80, width: 640, height: 240 })],
+                },
+            ],
+        });
+        const { config } = migrateV1ToV2(v1);
+        expect(config.pages).toHaveLength(1);
+        expect(config.pages?.[0].id).toBe("page-1");
+        expect(config.pages?.[0].backgroundColor).toBe("#102030");
+        expect(config.pages?.[0].components[0].layout).toEqual(expect.objectContaining({ x: 3, y: 2, w: 4, h: 6 }));
+    });
+
+    it("preserves v1 dataSource and interaction fields", () => {
+        const v1 = makeConfig({
+            components: [
+                makeComponent({
+                    id: "with-data",
+                    dataSource: {
+                        type: "sql",
+                        sourceType: "sql",
+                        sqlConfig: { query: "select * from demo", databaseId: 3 },
+                    },
+                    interaction: {
+                        enabled: true,
+                        mappings: [{ variableKey: "dept", sourcePath: "name" }],
+                    },
+                }),
+            ],
+        });
+        const { config } = migrateV1ToV2(v1);
+        expect(config.components[0].dataSource).toEqual(expect.objectContaining({
+            type: "sql",
+            sqlConfig: expect.objectContaining({ query: "select * from demo", databaseId: 3 }),
+        }));
+        expect(config.components[0].interaction).toEqual(expect.objectContaining({
+            enabled: true,
+            mappings: expect.any(Array),
+        }));
+    });
 });

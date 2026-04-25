@@ -22,6 +22,7 @@ interface LooseScreenResponse {
     backgroundImage?: unknown;
     components?: unknown;
     globalVariables?: unknown;
+    pages?: unknown;
     carouselConfig?: unknown;
     v2Spec?: {
         schemaVersion?: unknown;
@@ -54,6 +55,7 @@ export function tryLoadV2(raw: unknown): ScreenConfigV2 | null {
         referenceViewport: v2Spec.referenceViewport,
         components: resp.components,
         globalVariables: resp.globalVariables,
+        pages: resp.pages,
         carouselConfig: resp.carouselConfig,
     };
 

@@ -13,6 +13,7 @@ import {
     type ComponentV2,
     type GridLayoutCell,
     type ScreenLayoutV2,
+    type ScreenPageV2,
 } from './types';
 
 export interface NormalizeResult {
@@ -37,6 +38,16 @@ function toFiniteInt(value: unknown, fallback: number): number {
         if (Number.isFinite(parsed)) return Math.floor(parsed);
     }
     return fallback;
+}
+
+function cloneStructuredValue<T>(value: T): T {
+	if (value == null) {
+		return value;
+	}
+	if (typeof structuredClone === 'function') {
+		return structuredClone(value);
+	}
+	return JSON.parse(JSON.stringify(value)) as T;
 }
 
 function normalizeLayoutParams(raw: unknown, warnings: string[]): ScreenLayoutV2 {
@@ -128,6 +139,10 @@ function normalizeComponent(
         config: (src.config && typeof src.config === 'object') ? { ...src.config } : {},
     };
     if (src.name !== undefined) comp.name = String(src.name);
+    if (typeof src.groupId === 'string' && src.groupId.length > 0) comp.groupId = src.groupId;
+    if (typeof src.parentContainerId === 'string' && src.parentContainerId.length > 0) {
+        comp.parentContainerId = src.parentContainerId;
+    }
     comp.visible = src.visible !== false;
     if (src.static === true) comp.static = true;
     if (src.visibleByDevice && typeof src.visibleByDevice === 'object') {
@@ -136,7 +151,62 @@ function normalizeComponent(
     if (typeof src.zIndex === 'number' && Number.isFinite(src.zIndex)) {
         comp.zIndex = Math.floor(src.zIndex);
     }
+    if (src.dataSource && typeof src.dataSource === 'object') {
+        comp.dataSource = cloneStructuredValue(src.dataSource);
+    }
+    if (src.drillDown && typeof src.drillDown === 'object') {
+        comp.drillDown = cloneStructuredValue(src.drillDown);
+    }
+    if (Array.isArray(src.actions)) {
+        comp.actions = cloneStructuredValue(src.actions);
+    }
+    if (src.interaction && typeof src.interaction === 'object') {
+        comp.interaction = cloneStructuredValue(src.interaction);
+    }
     return comp;
+}
+
+function normalizeComponents(
+    rawComponents: unknown,
+    cols: number,
+    warnings: string[],
+    ctxPrefix: string,
+): ComponentV2[] {
+    const seenIds = new Set<string>();
+    if (!Array.isArray(rawComponents)) {
+        warnings.push(`${ctxPrefix}components 缺失或非数组，视作空`);
+        return [];
+    }
+    const components: ComponentV2[] = [];
+    rawComponents.forEach((c, i) => {
+        const normalized = normalizeComponent(c, cols, i, seenIds, warnings);
+        if (normalized) components.push(normalized);
+    });
+    return components;
+}
+
+function normalizePage(
+    raw: unknown,
+    cols: number,
+    index: number,
+    warnings: string[],
+): ScreenPageV2 | null {
+    if (raw === null || typeof raw !== 'object') {
+        warnings.push(`pages[${index}]: 非对象，跳过`);
+        return null;
+    }
+    const src = raw as Partial<ScreenPageV2>;
+    const id = typeof src.id === 'string' && src.id.length > 0 ? src.id : `page_${index + 1}`;
+    const name = typeof src.name === 'string' && src.name.length > 0 ? src.name : `页面 ${index + 1}`;
+    const components = normalizeComponents(src.components, cols, warnings, `pages[${index}].`);
+
+    return {
+        id,
+        name,
+        components,
+        backgroundColor: typeof src.backgroundColor === 'string' ? src.backgroundColor : undefined,
+        backgroundImage: typeof src.backgroundImage === 'string' ? src.backgroundImage : undefined,
+    };
 }
 
 /**
@@ -152,17 +222,15 @@ export function normalizeScreenConfigV2(raw: unknown, opts?: { id?: string }): N
     }
 
     const layout = normalizeLayoutParams(src.layout, warnings);
-
-    const seenIds = new Set<string>();
-    const rawComponents = Array.isArray(src.components) ? src.components : [];
-    if (!Array.isArray(src.components)) {
-        warnings.push('components 缺失或非数组，视作空');
+    const components = normalizeComponents(src.components, layout.cols, warnings, '');
+    const pages = Array.isArray(src.pages)
+        ? src.pages
+            .map((page, index) => normalizePage(page, layout.cols, index, warnings))
+            .filter((page): page is ScreenPageV2 => page !== null)
+        : [];
+    if (src.pages !== undefined && !Array.isArray(src.pages)) {
+        warnings.push('pages 缺失或非数组，视作空');
     }
-    const components: ComponentV2[] = [];
-    rawComponents.forEach((c, i) => {
-        const normalized = normalizeComponent(c, layout.cols, i, seenIds, warnings);
-        if (normalized) components.push(normalized);
-    });
 
     const config: ScreenConfigV2 = {
         schemaVersion: 2,
@@ -176,6 +244,7 @@ export function normalizeScreenConfigV2(raw: unknown, opts?: { id?: string }): N
         layout,
         components,
         globalVariables: Array.isArray(src.globalVariables) ? [...src.globalVariables] : undefined,
+        pages,
         carouselConfig: src.carouselConfig,
         referenceViewport: src.referenceViewport,
     };
@@ -189,6 +258,35 @@ export function normalizeScreenConfigV2(raw: unknown, opts?: { id?: string }): N
  */
 export function validateScreenConfigV2(config: ScreenConfigV2): string[] {
     const errors: string[] = [];
+
+    const validateComponents = (components: ComponentV2[], cols: number, ctxPrefix = '') => {
+        const seenIds = new Set<string>();
+        components.forEach((c, i) => {
+            const ctx = `${ctxPrefix}components[${i}]`;
+            if (typeof c.id !== 'string' || c.id.length === 0) {
+                errors.push(`${ctx}: id 必须为非空字符串`);
+            } else if (seenIds.has(c.id)) {
+                errors.push(`${ctx}: id 重复 "${c.id}"`);
+            } else {
+                seenIds.add(c.id);
+            }
+            if (typeof c.type !== 'string' || c.type.length === 0) {
+                errors.push(`${ctx}: type 必须为非空字符串`);
+            }
+            if (!c.layout) {
+                errors.push(`${ctx}: layout 缺失`);
+            } else {
+                const { x, y, w, h } = c.layout;
+                if (!Number.isInteger(x) || x < 0) errors.push(`${ctx}: layout.x 必须为非负整数`);
+                if (!Number.isInteger(y) || y < 0) errors.push(`${ctx}: layout.y 必须为非负整数`);
+                if (!Number.isInteger(w) || w <= 0) errors.push(`${ctx}: layout.w 必须为正整数`);
+                if (!Number.isInteger(h) || h <= 0) errors.push(`${ctx}: layout.h 必须为正整数`);
+                if (Number.isInteger(x) && Number.isInteger(w) && x + w > cols) {
+                    errors.push(`${ctx}: layout.x + w (${x + w}) 超过 cols (${cols})`);
+                }
+            }
+        });
+    };
 
     if (config.schemaVersion !== 2) {
         errors.push(`schemaVersion 必须为 2，收到 ${String(config.schemaVersion)}`);
@@ -214,31 +312,28 @@ export function validateScreenConfigV2(config: ScreenConfigV2): string[] {
     }
 
     const cols = config.layout?.cols ?? 12;
-    const seenIds = new Set<string>();
-    config.components.forEach((c, i) => {
-        const ctx = `components[${i}]`;
-        if (typeof c.id !== 'string' || c.id.length === 0) {
-            errors.push(`${ctx}: id 必须为非空字符串`);
-        } else if (seenIds.has(c.id)) {
-            errors.push(`${ctx}: id 重复 "${c.id}"`);
-        } else {
-            seenIds.add(c.id);
+    validateComponents(config.components, cols);
+
+    if (config.pages !== undefined && !Array.isArray(config.pages)) {
+        errors.push('pages 必须为数组');
+        return errors;
+    }
+    config.pages?.forEach((page, pageIndex) => {
+        if (!page || typeof page !== 'object') {
+            errors.push(`pages[${pageIndex}] 必须为对象`);
+            return;
         }
-        if (typeof c.type !== 'string' || c.type.length === 0) {
-            errors.push(`${ctx}: type 必须为非空字符串`);
+        if (typeof page.id !== 'string' || page.id.length === 0) {
+            errors.push(`pages[${pageIndex}]: id 必须为非空字符串`);
         }
-        if (!c.layout) {
-            errors.push(`${ctx}: layout 缺失`);
-        } else {
-            const { x, y, w, h } = c.layout;
-            if (!Number.isInteger(x) || x < 0) errors.push(`${ctx}: layout.x 必须为非负整数`);
-            if (!Number.isInteger(y) || y < 0) errors.push(`${ctx}: layout.y 必须为非负整数`);
-            if (!Number.isInteger(w) || w <= 0) errors.push(`${ctx}: layout.w 必须为正整数`);
-            if (!Number.isInteger(h) || h <= 0) errors.push(`${ctx}: layout.h 必须为正整数`);
-            if (Number.isInteger(x) && Number.isInteger(w) && x + w > cols) {
-                errors.push(`${ctx}: layout.x + w (${x + w}) 超过 cols (${cols})`);
-            }
+        if (typeof page.name !== 'string' || page.name.length === 0) {
+            errors.push(`pages[${pageIndex}]: name 必须为非空字符串`);
         }
+        if (!Array.isArray(page.components)) {
+            errors.push(`pages[${pageIndex}].components 必须为数组`);
+            return;
+        }
+        validateComponents(page.components, cols, `pages[${pageIndex}].`);
     });
 
     return errors;

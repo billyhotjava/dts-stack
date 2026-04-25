@@ -6,6 +6,7 @@ import static org.mockito.Mockito.when;
 import com.yuzhi.dts.platform.domain.visualization.BiReportLink;
 import com.yuzhi.dts.platform.repository.explore.QueryDatasetAssetRepository;
 import com.yuzhi.dts.platform.repository.visualization.BiReportLinkRepository;
+import com.yuzhi.dts.platform.repository.visualization.BiReportVisitRepository;
 import com.yuzhi.dts.platform.security.ClassificationUtils;
 import com.yuzhi.dts.platform.service.visualization.dto.BiReportLinkDto;
 import java.util.List;
@@ -25,6 +26,9 @@ class BiReportLinkServiceTest {
 
     @Mock
     private BiReportLinkRepository reportLinkRepository;
+
+    @Mock
+    private BiReportVisitRepository reportVisitRepository;
 
     @Mock
     private QueryDatasetAssetRepository queryDatasetAssetRepository;
@@ -56,7 +60,7 @@ class BiReportLinkServiceTest {
         when(classificationUtils.canAccess("INTERNAL")).thenReturn(true);
         when(classificationUtils.canAccess("SECRET")).thenReturn(false);
 
-        List<BiReportLinkDto> result = service.listPublished(null, null, null, null, null);
+        List<BiReportLinkDto> result = service.listPublished(null, null, null, null, null, null);
 
         assertThat(result).extracting(BiReportLinkDto::code).containsExactly("internal_dashboard");
     }
@@ -78,7 +82,7 @@ class BiReportLinkServiceTest {
         );
         when(classificationUtils.canAccess("INTERNAL")).thenReturn(true);
 
-        List<BiReportLinkDto> result = service.listPublished(null, null, null, null, null);
+        List<BiReportLinkDto> result = service.listPublished(null, null, null, null, null, null);
 
         assertThat(result).extracting(BiReportLinkDto::code).containsExactly("open_to_all");
     }

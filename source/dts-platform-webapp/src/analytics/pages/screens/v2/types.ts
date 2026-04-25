@@ -10,7 +10,15 @@
  * 共存期沿用 `ScreenConfig` 的 `schemaVersion` 字段，避免后端 DTO 改字段名。
  */
 
-import type { ScreenTheme, CarouselConfig, ScreenGlobalVariable } from '../types';
+import type {
+	ScreenTheme,
+	CarouselConfig,
+	ScreenGlobalVariable,
+	DataSourceConfig,
+	DrillDownConfig,
+	ScreenComponentAction,
+	ComponentInteractionConfig,
+} from '../types';
 
 /** 网格布局全局参数 */
 export interface ScreenLayoutV2 {
@@ -52,10 +60,20 @@ export interface ComponentV2 {
     type: string;
     /** 可选显示名，仅编辑态显示 */
     name?: string;
+    groupId?: string;
+    parentContainerId?: string;
     /** 网格位置 */
     layout: GridLayoutCell;
     /** 组件自身配置，保持与 v1 `ScreenComponent['config']` 同 shape */
     config: Record<string, unknown>;
+    /** 数据源配置，与 v1 共享 */
+    dataSource?: DataSourceConfig;
+    /** 下钻配置，与 v1 共享 */
+    drillDown?: DrillDownConfig;
+    /** 动作配置，与 v1 共享 */
+    actions?: ScreenComponentAction[];
+    /** 交互配置，与 v1 共享 */
+    interaction?: ComponentInteractionConfig;
     /** 是否可见（默认 true） */
     visible?: boolean;
     /** 编辑态禁用拖放/resize */
@@ -64,6 +82,15 @@ export interface ComponentV2 {
     visibleByDevice?: VisibilityByDevice;
     /** grid layout 本身不依赖 zIndex；保留此字段用于组件重叠时的渲染顺序 */
     zIndex?: number;
+}
+
+/** v2 多页定义，组件也使用 v2 grid layout */
+export interface ScreenPageV2 {
+    id: string;
+    name: string;
+    components: ComponentV2[];
+    backgroundColor?: string;
+    backgroundImage?: string;
 }
 
 /** v2 大屏配置 */
@@ -80,6 +107,7 @@ export interface ScreenConfigV2 {
     layout: ScreenLayoutV2;
     components: ComponentV2[];
     globalVariables?: ScreenGlobalVariable[];
+    pages?: ScreenPageV2[];
     carouselConfig?: CarouselConfig;
     /**
      * 设计时的参考 viewport（仅作提示，不约束运行时）。
@@ -104,6 +132,7 @@ export function createEmptyScreenV2(overrides?: Partial<ScreenConfigV2>): Screen
         backgroundColor: '#1e1f26',
         layout: { ...DEFAULT_SCREEN_LAYOUT_V2 },
         components: [],
+        pages: [],
         ...overrides,
     };
 }

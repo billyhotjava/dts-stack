@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<databaseChangeLog xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+                   xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+                   xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+                                       http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.22.xsd">
+
+    <changeSet id="20260425-01-api-data-source-props-text" author="codex">
+        <preConditions onFail="MARK_RAN">
+            <tableExists tableName="infra_data_source"/>
+            <columnExists tableName="infra_data_source" columnName="props"/>
+        </preConditions>
+        <modifyDataType tableName="infra_data_source" columnName="props" newDataType="text"/>
+    </changeSet>
+
+</databaseChangeLog>

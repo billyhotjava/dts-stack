@@ -5,10 +5,14 @@
  * Allows creating, deleting, duplicating, reordering, and renaming pages.
  */
 import { useState, useCallback, useRef, useEffect } from 'react';
-import type { ScreenPage } from '../types';
+
+export interface PageManagerItem {
+	id: string;
+	name: string;
+}
 
 interface PageManagerPanelProps {
-	pages: ScreenPage[];
+	pages: PageManagerItem[];
 	currentPageIndex: number;
 	onSwitchPage: (index: number) => void;
 	onAddPage: () => void;

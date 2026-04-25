@@ -45,9 +45,10 @@ public class ReportsResource {
         @RequestParam(required = false, name = "type") String reportType,
         @RequestParam(required = false) String keyword,
         @RequestParam(required = false) UUID queryDatasetId,
+        @RequestParam(required = false) String bizDomain,
         @RequestHeader(value = "X-Active-Dept", required = false) String activeDept
     ) {
-        List<BiReportLinkDto> list = reports.listPublished(deptCode, reportType, keyword, activeDept, queryDatasetId);
+        List<BiReportLinkDto> list = reports.listPublished(deptCode, reportType, keyword, activeDept, queryDatasetId, bizDomain);
         audit.audit("READ", "vis.reports.published", "size=" + list.size());
         return ApiResponses.ok(list);
     }
@@ -84,9 +85,10 @@ public class ReportsResource {
         @RequestParam(required = false) String keyword,
         @RequestParam(required = false, defaultValue = "false") boolean enabledOnly,
         @RequestParam(required = false) UUID queryDatasetId,
+        @RequestParam(required = false) String bizDomain,
         @RequestHeader(value = "X-Active-Dept", required = false) String activeDept
     ) {
-        List<BiReportLinkDto> list = reports.listAll(deptCode, reportType, keyword, enabledOnly, activeDept, queryDatasetId);
+        List<BiReportLinkDto> list = reports.listAll(deptCode, reportType, keyword, enabledOnly, activeDept, queryDatasetId, bizDomain);
         audit.audit("READ", "vis.reports.manage.list", "size=" + list.size());
         return ApiResponses.ok(list);
     }

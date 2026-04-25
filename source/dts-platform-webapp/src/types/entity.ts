@@ -14,6 +14,8 @@ export interface UserInfo {
     // Optional Keycloak-style attributes map
     attributes?: Record<string, string[]>;
     department?: string;
+    /** Normalized department code inferred from attributes.department / attributes.dept_code / raw deptCode. */
+    deptCode?: string;
     enabled?: boolean;
     roles?: Role[] | string[]; // 支持两种格式：对象数组或字符串数组
     status?: BasicStatus;

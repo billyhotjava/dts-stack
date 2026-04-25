@@ -2,25 +2,34 @@ package com.yuzhi.dts.platform.web.rest;
 
 import com.yuzhi.dts.platform.security.SecurityUtils;
 import com.yuzhi.dts.platform.service.audit.AuditService;
+import com.yuzhi.dts.platform.service.workbench.WorkbenchAuditRateLimiter;
+import com.yuzhi.dts.platform.service.workbench.WorkbenchLeaderOverviewService;
 import com.yuzhi.dts.platform.service.workbench.WorkbenchService;
-import com.yuzhi.dts.platform.domain.portal.PortalUserFavorite;
+import com.yuzhi.dts.platform.service.workbench.dto.LeaderOverviewResponse;
 import java.util.List;
 import java.util.Map;
-import java.util.UUID;
-import org.springframework.transaction.annotation.Transactional;
+import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 @RestController
 @RequestMapping("/api/workbench")
-@Transactional
 public class WorkbenchResource {
 
     private final WorkbenchService workbenchService;
+    private final WorkbenchLeaderOverviewService leaderOverviewService;
     private final AuditService auditService;
+    private final WorkbenchAuditRateLimiter auditRateLimiter;
 
-    public WorkbenchResource(WorkbenchService workbenchService, AuditService auditService) {
+    public WorkbenchResource(
+        WorkbenchService workbenchService,
+        WorkbenchLeaderOverviewService leaderOverviewService,
+        AuditService auditService,
+        WorkbenchAuditRateLimiter auditRateLimiter
+    ) {
         this.workbenchService = workbenchService;
+        this.leaderOverviewService = leaderOverviewService;
         this.auditService = auditService;
+        this.auditRateLimiter = auditRateLimiter;
     }
 
     @GetMapping("/overview")
@@ -40,38 +49,61 @@ public class WorkbenchResource {
         return ApiResponses.ok(items);
     }
 
-    @GetMapping("/favorites")
-    public ApiResponse<List<PortalUserFavorite>> favorites() {
-        String user = SecurityUtils.getCurrentUserLogin().orElse("anonymous");
-        List<PortalUserFavorite> list = workbenchService.listFavorites(user);
-        auditService.audit("READ", "workbench.favorites", "count=" + list.size());
-        return ApiResponses.ok(list);
-    }
-
-    @PostMapping("/favorites")
-    public ApiResponse<PortalUserFavorite> createFavorite(@RequestBody WorkbenchService.FavoriteRequest request) {
-        String user = SecurityUtils.getCurrentUserLogin().orElse("anonymous");
-        PortalUserFavorite saved = workbenchService.createFavorite(user, request);
-        auditService.audit("CREATE", "workbench.favorites", saved.getId() != null ? saved.getId().toString() : "create");
-        return ApiResponses.ok(saved);
-    }
-
-    @PutMapping("/favorites/{id}")
-    public ApiResponse<PortalUserFavorite> updateFavorite(
-        @PathVariable UUID id,
-        @RequestBody WorkbenchService.FavoriteRequest request
+    @GetMapping("/leader-overview")
+    public ApiResponse<LeaderOverviewResponse> leaderOverview(
+        @RequestParam(value = "scope", required = false) String scope,
+        @RequestParam(value = "deptCode", required = false) String deptCode,
+        @RequestParam(value = "bizDomain", required = false) String bizDomain,
+        @RequestParam(value = "timeRange", required = false, defaultValue = "MONTH") String timeRange
     ) {
-        String user = SecurityUtils.getCurrentUserLogin().orElse("anonymous");
-        PortalUserFavorite saved = workbenchService.updateFavorite(id, user, request);
-        auditService.audit("UPDATE", "workbench.favorites", id.toString());
-        return ApiResponses.ok(saved);
+        String user = SecurityUtils.getCurrentUserLogin().orElseThrow();
+        List<String> roles = SecurityUtils.getCurrentUserAuthorities();
+        String userDept = SecurityUtils.getCurrentUserDept().orElse(null);
+        LeaderOverviewResponse payload = leaderOverviewService.build(
+            user,
+            roles,
+            userDept,
+            scope,
+            deptCode,
+            bizDomain,
+            timeRange
+        );
+        auditService.audit(
+            "READ",
+            "workbench.leader-overview",
+            "requested=" + scope + ",effective=" + payload.scope() + ",dept=" + payload.effectiveDeptCode()
+        );
+        return ApiResponses.ok(payload);
     }
 
-    @DeleteMapping("/favorites/{id}")
-    public ApiResponse<Boolean> deleteFavorite(@PathVariable UUID id) {
+    /**
+     * Sprint-15 F6/T01 — Receive front-end client-side audit events (e.g.
+     * WORKBENCH_OVERVIEW_VIEW, WORKBENCH_FILTER_CHANGE). Untrusted payloads
+     * are coerced to string and truncated before being forwarded to the
+     * shared {@link AuditService}, so we record evidence without introducing
+     * a generic "audit anything" ingest endpoint.
+     */
+    @PostMapping("/audit")
+    public ResponseEntity<?> recordClientAudit(@RequestBody(required = false) Map<String, Object> body) {
         String user = SecurityUtils.getCurrentUserLogin().orElse("anonymous");
-        workbenchService.deleteFavorite(id, user);
-        auditService.audit("DELETE", "workbench.favorites", id.toString());
-        return ApiResponses.ok(Boolean.TRUE);
+        if (!auditRateLimiter.tryAcquire(user)) {
+            return ResponseEntity.status(429).body(Map.of("ok", false, "reason", "rate_limited"));
+        }
+        String event = body == null ? null : String.valueOf(body.get("event"));
+        if (event == null || event.isBlank() || "null".equalsIgnoreCase(event)) {
+            return ResponseEntity.ok(ApiResponses.ok(Map.of("ok", false)));
+        }
+        // Whitelist: only accept our WORKBENCH_* prefix to keep the endpoint
+        // from degrading into a generic audit sink.
+        if (!event.startsWith("WORKBENCH_")) {
+            return ResponseEntity.ok(ApiResponses.ok(Map.of("ok", false)));
+        }
+        Object payload = body.get("payload");
+        String payloadStr = payload == null ? "" : String.valueOf(payload);
+        if (payloadStr.length() > 512) {
+            payloadStr = payloadStr.substring(0, 512);
+        }
+        auditService.audit("READ", "workbench.client-event", event + (payloadStr.isEmpty() ? "" : (":" + payloadStr)));
+        return ResponseEntity.ok(ApiResponses.ok(Map.of("ok", true)));
     }
 }

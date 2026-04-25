@@ -225,3 +225,20 @@
 
 **统计**: READY=11, IN_PROGRESS=0, DONE=0, BLOCKED=0
 **设计文档**: `worklog/v2.2.3/sprint-14-202604/README.md`
+
+## Sprint-15: 平台工作台 · 领导视角重构 (202604)
+**状态**: READY
+**类型**: Implementation（UI 重构 + 后端聚合端点新增 + 遗弃功能清理）
+**目标**: 把 `dts-platform-webapp` 工作台首页从"数据治理 / 资产沉淀"通用视角重构为**领导视角概览**，只保留**报表**与**数据资产**两块，按登录人角色（员工 / 部门领导 / 所领导）自适应默认范围；同时彻底清理已失联的收藏功能
+
+| Feature | Task 数 | 状态 |
+|---------|---------|------|
+| F1-后端聚合端点与业务域过滤 | 7 | READY |
+| F2-收藏功能彻底清理 | 5 | READY |
+| F3-前端角色与筛选器 | 5 | READY |
+| F4-前端KPI与业务域矩阵 | 4 | READY |
+| F5-前端报表块与核心资产块 | 5 | READY |
+| F6-埋点与E2E | 4 | READY |
+
+**统计**: READY=30, IN_PROGRESS=0, DONE=0, BLOCKED=0
+**设计文档**: `worklog/v2.2.3/sprint-15-202604/README.md` + `docs/superpowers/specs/2026-04-24-platform-workbench-leader-overview-design.md`

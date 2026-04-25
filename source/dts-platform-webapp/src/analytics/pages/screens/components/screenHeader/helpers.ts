@@ -1,4 +1,5 @@
 // @ts-nocheck — migrated from analytics-webapp, pending unused-import cleanup
+import type { ScreenUpdateConflictMeta } from '../../contracts';
 import type { ScreenConfig, ScreenTheme } from '../../types';
 
 export type PublishInfo = {
@@ -75,7 +76,7 @@ export function buildPublishNoticeStorageKey(screenId: string | number): string 
     return `dts.analytics.screen.publishNotice.${screenId}`;
 }
 
-export function buildComponentConflictMeta(baseline: ScreenConfig): Record<string, unknown> {
+export function buildComponentConflictMeta(baseline: ScreenConfig): ScreenUpdateConflictMeta {
     const baseComponents = (baseline.components ?? []).map((item) => ({
         id: item.id,
         component: item,

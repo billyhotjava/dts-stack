@@ -69,7 +69,16 @@ class ReportsResourceWebMvcTest {
     @Test
     @WithMockUser(authorities = {"ROLE_EMPLOYEE", "ROLE_INTERNAL"})
     void employeeShouldReadPublishedOnly() throws Exception {
-        when(reports.listPublished(nullable(String.class), nullable(String.class), nullable(String.class), nullable(String.class), any())).thenReturn(
+        when(
+            reports.listPublished(
+                nullable(String.class),
+                nullable(String.class),
+                nullable(String.class),
+                nullable(String.class),
+                any(),
+                nullable(String.class)
+            )
+        ).thenReturn(
             List.of(
                 new BiReportLinkDto(
                     UUID.randomUUID(),
@@ -89,7 +98,8 @@ class ReportsResourceWebMvcTest {
                     null,
                     null,
                     "system",
-                    Instant.now()
+                    Instant.now(),
+                    null
                 )
             )
         );
@@ -157,7 +167,8 @@ class ReportsResourceWebMvcTest {
                     null,
                     null,
                     "owner",
-                    Instant.now()
+                    Instant.now(),
+                    null
                 )
             );
 

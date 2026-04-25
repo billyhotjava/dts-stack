@@ -116,6 +116,64 @@ public final class SecurityUtils {
         return Optional.empty();
     }
 
+    /**
+     * Returns the raw authority strings attached to the current authentication.
+     * Used by workbench role resolution to keep the decision outside SecurityUtils
+     * (see {@code WorkbenchRoleResolver}).
+     */
+    public static List<String> getCurrentUserAuthorities() {
+        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+        if (authentication == null) {
+            return List.of();
+        }
+        Collection<? extends GrantedAuthority> authorities = authentication instanceof JwtAuthenticationToken token
+            ? extractAuthorityFromClaims(token.getToken().getClaims())
+            : authentication.getAuthorities();
+        if (authorities == null) {
+            return List.of();
+        }
+        return authorities.stream().map(GrantedAuthority::getAuthority).filter(java.util.Objects::nonNull).toList();
+    }
+
+    /**
+     * Returns the {@code dept_code} claim for the current user when available.
+     * Supports both JWT (Keycloak) and opaque-token (portal session) principals.
+     */
+    public static Optional<String> getCurrentUserDept() {
+        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+        if (authentication == null) {
+            return Optional.empty();
+        }
+        try {
+            if (authentication instanceof JwtAuthenticationToken token) {
+                String dept = token.getToken().getClaimAsString("dept_code");
+                if (hasText(dept)) {
+                    return Optional.of(dept.trim());
+                }
+            }
+            Object principal = authentication.getPrincipal();
+            if (principal instanceof org.springframework.security.oauth2.jwt.Jwt jwt) {
+                String dept = jwt.getClaimAsString("dept_code");
+                if (hasText(dept)) {
+                    return Optional.of(dept.trim());
+                }
+            }
+            if (principal instanceof DefaultOidcUser oidcUser) {
+                Object attr = oidcUser.getAttributes().get("dept_code");
+                if (attr != null && hasText(String.valueOf(attr))) {
+                    return Optional.of(String.valueOf(attr).trim());
+                }
+            }
+            if (principal instanceof org.springframework.security.oauth2.core.OAuth2AuthenticatedPrincipal opaque) {
+                String dept = opaque.getAttribute("dept_code");
+                if (hasText(dept)) {
+                    return Optional.of(dept.trim());
+                }
+            }
+        } catch (Exception ignored) {}
+        return Optional.empty();
+    }
+
     public static boolean isOpAdminAccount() {
         // Prefer role-based check
         if (hasCurrentUserAnyOfAuthorities(AuthoritiesConstants.OP_ADMIN)) {

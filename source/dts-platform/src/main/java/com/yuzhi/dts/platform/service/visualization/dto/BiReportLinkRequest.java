@@ -35,6 +35,8 @@ public class BiReportLinkRequest {
 
     private String expiresAt;
 
+    private String bizDomain;
+
     public String getCode() {
         return code;
     }
@@ -137,5 +139,13 @@ public class BiReportLinkRequest {
 
     public void setExpiresAt(String expiresAt) {
         this.expiresAt = expiresAt;
+    }
+
+    public String getBizDomain() {
+        return bizDomain;
+    }
+
+    public void setBizDomain(String bizDomain) {
+        this.bizDomain = bizDomain;
     }
 }

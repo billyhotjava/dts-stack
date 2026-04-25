@@ -61,6 +61,9 @@ public class BiReportLink extends AbstractAuditingEntity<UUID> implements Serial
     @Column(name = "last_visited_at")
     private Instant lastVisitedAt;
 
+    @Column(name = "biz_domain", length = 64)
+    private String bizDomain;
+
     @Override
     public UUID getId() {
         return id;
@@ -180,5 +183,13 @@ public class BiReportLink extends AbstractAuditingEntity<UUID> implements Serial
 
     public void setLastVisitedAt(Instant lastVisitedAt) {
         this.lastVisitedAt = lastVisitedAt;
+    }
+
+    public String getBizDomain() {
+        return bizDomain;
+    }
+
+    public void setBizDomain(String bizDomain) {
+        this.bizDomain = bizDomain;
     }
 }

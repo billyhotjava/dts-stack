@@ -1,0 +1,67 @@
+<?xml version="1.0" encoding="utf-8"?>
+<databaseChangeLog xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+                   xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+                   xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+                                       http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.22.xsd">
+
+    <!--
+        Sprint-15 / F1 — Leader-overview workbench aggregation schema.
+
+        1. Adds a `biz_domain` tag column to `bi_report_link` so reports can
+           be grouped into business domains for the leader-overview domain
+           matrix and KPI filters.
+        2. Introduces a new `bi_report_visit` table (one row per visit) that
+           replaces the single `last_visited_at` timestamp on `bi_report_link`
+           as the source of truth for visit-count aggregations. The old
+           timestamp is kept for backwards compatibility with existing UI
+           "最近访问" badges; the new table is appended to on each visit.
+    -->
+
+    <changeSet id="20260424-1100-add-biz-domain-to-bi-report-link" author="billy">
+        <preConditions onFail="MARK_RAN">
+            <not><columnExists tableName="bi_report_link" columnName="biz_domain"/></not>
+        </preConditions>
+        <addColumn tableName="bi_report_link">
+            <column name="biz_domain" type="varchar(64)"/>
+        </addColumn>
+        <createIndex tableName="bi_report_link" indexName="idx_bi_report_link_biz_domain">
+            <column name="biz_domain"/>
+        </createIndex>
+    </changeSet>
+
+    <changeSet id="20260424-1100-create-bi-report-visit" author="billy">
+        <preConditions onFail="MARK_RAN">
+            <not><tableExists tableName="bi_report_visit"/></not>
+        </preConditions>
+        <createTable tableName="bi_report_visit">
+            <column name="id" type="uuid">
+                <constraints primaryKey="true" nullable="false"/>
+            </column>
+            <column name="report_id" type="uuid">
+                <constraints nullable="false"/>
+            </column>
+            <column name="user_login" type="varchar(128)"/>
+            <column name="dept_code" type="varchar(64)"/>
+            <column name="biz_domain" type="varchar(64)"/>
+            <column name="visited_at" type="timestamp with time zone">
+                <constraints nullable="false"/>
+            </column>
+        </createTable>
+        <createIndex tableName="bi_report_visit" indexName="idx_bi_report_visit_report_id">
+            <column name="report_id"/>
+        </createIndex>
+        <createIndex tableName="bi_report_visit" indexName="idx_bi_report_visit_user_login">
+            <column name="user_login"/>
+        </createIndex>
+        <createIndex tableName="bi_report_visit" indexName="idx_bi_report_visit_visited_at">
+            <column name="visited_at"/>
+        </createIndex>
+        <createIndex tableName="bi_report_visit" indexName="idx_bi_report_visit_dept_code">
+            <column name="dept_code"/>
+        </createIndex>
+        <createIndex tableName="bi_report_visit" indexName="idx_bi_report_visit_biz_domain">
+            <column name="biz_domain"/>
+        </createIndex>
+    </changeSet>
+
+</databaseChangeLog>

@@ -12,6 +12,7 @@ import com.yuzhi.dts.ingestion.service.etl.AirflowAdapter;
 import com.yuzhi.dts.ingestion.service.etl.ConnectorCapabilityService;
 import com.yuzhi.dts.ingestion.service.etl.RealtimeTaskStatusService;
 import com.yuzhi.dts.ingestion.service.etl.JdbcMetadataService;
+import com.yuzhi.dts.ingestion.service.etl.api.ApiConnectorTypes;
 import com.yuzhi.dts.ingestion.config.AirflowProperties;
 import com.yuzhi.dts.ingestion.service.openmetadata.OpenMetadataAdapter;
 import com.yuzhi.dts.ingestion.service.IngestionTaskChangeLogService;
@@ -275,6 +276,10 @@ public class IngestionTaskResource {
                 request.source() == null ? null : request.source().type()
             );
             validateSyncModeCapability(connectorType, syncMode);
+            boolean isApiSource = ApiConnectorTypes.CONNECTOR_TYPE.equals(connectorType);
+            if (isApiSource && !isDraft) {
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "API 数据接入运行时尚未启用，请先保存草稿");
+            }
             List<String> streamTables = resolveStreamTables(request.streams());
             com.yuzhi.dts.ingestion.service.etl.IngestionSourceResolver.ResolvedSource resolvedSource =
                 isFileSource ? null : sourceResolver.resolve(request.source().dataSourceId(), streamTables);
@@ -1488,6 +1493,9 @@ public class IngestionTaskResource {
         String normalized = normalize(sourceType);
         if ("airbyte".equalsIgnoreCase(normalized)) {
             return "airbyte";
+        }
+        if (ApiConnectorTypes.isApiSourceType(normalized)) {
+            return ApiConnectorTypes.CONNECTOR_TYPE;
         }
         return "addax";
     }

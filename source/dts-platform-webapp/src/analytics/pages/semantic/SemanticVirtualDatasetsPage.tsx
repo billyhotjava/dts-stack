@@ -5,20 +5,21 @@ import type { ColumnsType } from "antd/es/table";
 import { PlusOutlined, DeploymentUnitOutlined, EditOutlined } from "@ant-design/icons";
 import { toast } from "sonner";
 import { PageHeader } from "@/components/page-header";
+import { useMenuStore } from "@/store/menuStore";
 import { useUserRoles } from "@/store/userStore";
 import { analyticsApi, type SemanticPromoteResult, type SemanticVirtualDataset } from "../../api/analyticsApi";
 import { ErrorNotice } from "../../components/ErrorNotice";
 import { getEffectiveLocale, type Locale } from "../../i18n";
+import { hasSemanticModelingMenuAccess } from "./semanticAccess";
 
-type LoadState<T> =
-	| { state: "loading" }
-	| { state: "loaded"; value: T }
-	| { state: "error"; error: unknown };
+type LoadState<T> = { state: "loading" } | { state: "loaded"; value: T } | { state: "error"; error: unknown };
 
 function formatDateTime(value?: string): string {
 	if (!value) return "-";
 	const date = new Date(value);
-	return Number.isNaN(date.getTime()) ? value : `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")} ${String(date.getHours()).padStart(2, "0")}:${String(date.getMinutes()).padStart(2, "0")}`;
+	return Number.isNaN(date.getTime())
+		? value
+		: `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")} ${String(date.getHours()).padStart(2, "0")}:${String(date.getMinutes()).padStart(2, "0")}`;
 }
 
 function baseModelOf(item: SemanticVirtualDataset): string {
@@ -27,8 +28,16 @@ function baseModelOf(item: SemanticVirtualDataset): string {
 
 export default function SemanticVirtualDatasetsPage() {
 	const locale: Locale = useMemo(() => getEffectiveLocale(), []);
+	const menus = useMenuStore((state) => state.menus);
 	const roles = useUserRoles();
-	const roleSet = new Set((roles || []).map((role) => String(role || "").trim().toUpperCase()));
+	const roleSet = new Set(
+		(roles || []).map((role) =>
+			String(role || "")
+				.trim()
+				.toUpperCase(),
+		),
+	);
+	const canModel = useMemo(() => hasSemanticModelingMenuAccess(menus), [menus]);
 	const canPromote = roleSet.has("BI_DATA_ENGINEER") || roleSet.has("OP_ADMIN");
 	const [state, setState] = useState<LoadState<SemanticVirtualDataset[]>>({ state: "loading" });
 	const [promoteState, setPromoteState] = useState<LoadState<SemanticPromoteResult> | null>(null);
@@ -52,7 +61,9 @@ export default function SemanticVirtualDatasetsPage() {
 			key: "name",
 			render: (_value, record) => (
 				<div className="flex flex-col">
-					<Link to={`/bi/virtual-datasets/${encodeURIComponent(String(record.id ?? ""))}`}>{record.name || `VDS #${record.id}`}</Link>
+					<Link to={`/bi/virtual-datasets/${encodeURIComponent(String(record.id ?? ""))}`}>
+						{record.name || `VDS #${record.id}`}
+					</Link>
 					<span className="text-xs text-secondary">{record.description || "未填写描述"}</span>
 				</div>
 			),
@@ -83,11 +94,15 @@ export default function SemanticVirtualDatasetsPage() {
 			render: (_value, record) => (
 				<Space>
 					<Link to={`/bi/virtual-datasets/${encodeURIComponent(String(record.id ?? ""))}`}>
-						<Button size="small" icon={<EditOutlined />}>编辑</Button>
+						<Button size="small" icon={<EditOutlined />}>
+							编辑
+						</Button>
 					</Link>
-					<Link to={`/bi/card/new?vds=${encodeURIComponent(String(record.id ?? ""))}`}>
-						<Button size="small">生成卡片</Button>
-					</Link>
+					{canModel && (
+						<Link to={`/bi/card/new?vds=${encodeURIComponent(String(record.id ?? ""))}`}>
+							<Button size="small">生成卡片</Button>
+						</Link>
+					)}
 					{canPromote && record.id != null && (
 						<Popconfirm
 							title="生成提升到 dbt 的草案？"
@@ -103,7 +118,9 @@ export default function SemanticVirtualDatasetsPage() {
 								}
 							}}
 						>
-							<Button size="small" icon={<DeploymentUnitOutlined />}>提升</Button>
+							<Button size="small" icon={<DeploymentUnitOutlined />}>
+								提升
+							</Button>
 						</Popconfirm>
 					)}
 				</Space>
@@ -116,9 +133,13 @@ export default function SemanticVirtualDatasetsPage() {
 			<PageHeader
 				title="虚拟数据集"
 				actions={
-					<Link to="/bi/virtual-datasets/new">
-						<Button type="primary" icon={<PlusOutlined />}>新建虚拟数据集</Button>
-					</Link>
+					canModel ? (
+						<Link to="/bi/virtual-datasets/new">
+							<Button type="primary" icon={<PlusOutlined />}>
+								新建虚拟数据集
+							</Button>
+						</Link>
+					) : undefined
 				}
 			/>
 

@@ -1,10 +1,31 @@
+import {
+	DatabaseOutlined,
+	DeploymentUnitOutlined,
+	PlayCircleOutlined,
+	PlusOutlined,
+	SaveOutlined,
+} from "@ant-design/icons";
+import {
+	Alert,
+	Breadcrumb,
+	Button,
+	Card,
+	Empty,
+	Input,
+	Modal,
+	Select,
+	Space,
+	Spin,
+	Table,
+	Tag,
+	Typography,
+} from "antd";
+import type { ColumnsType } from "antd/es/table";
 import { useEffect, useMemo, useState } from "react";
 import { Link, useLocation, useNavigate, useParams } from "react-router";
-import { Alert, Breadcrumb, Button, Card, Empty, Input, Modal, Select, Space, Spin, Table, Tag, Typography } from "antd";
-import type { ColumnsType } from "antd/es/table";
-import { PlusOutlined, SaveOutlined, DatabaseOutlined, DeploymentUnitOutlined, PlayCircleOutlined } from "@ant-design/icons";
 import { toast } from "sonner";
 import { PageHeader } from "@/components/page-header";
+import { useMenuStore } from "@/store/menuStore";
 import { useUserRoles } from "@/store/userStore";
 import {
 	analyticsApi,
@@ -17,14 +38,16 @@ import {
 	type SemanticQueryResponse,
 	type SemanticVirtualDataset,
 } from "../../api/analyticsApi";
-import { ErrorNotice } from "../../components/ErrorNotice";
 import { ChartRenderer, type VisualizationType } from "../../components/charts";
+import { ErrorNotice } from "../../components/ErrorNotice";
 import { getEffectiveLocale, type Locale } from "../../i18n";
+import SemanticFieldExplorer from "./SemanticFieldExplorer";
+import SemanticModelCanvas from "./SemanticModelCanvas";
+import SemanticModelingEmptyState from "./SemanticModelingEmptyState";
+import { hasSemanticModelingMenuAccess } from "./semanticAccess";
+import { buildSemanticJoinOptions } from "./semanticCanvas.helpers";
 
-type LoadState<T> =
-	| { state: "loading" }
-	| { state: "loaded"; value: T }
-	| { state: "error"; error: unknown };
+type LoadState<T> = { state: "loading" } | { state: "loaded"; value: T } | { state: "error"; error: unknown };
 
 type QueryFilter = { field: string; op: string; value: string };
 type DerivedMetricDraft = { id: string; label: string; expression: string };
@@ -112,12 +135,16 @@ function applySemanticDraft(
 ) {
 	if (!state) return;
 	setBaseModelId(String(state.base ?? ""));
-	setSelectedJoinTargets(asArray<Record<string, unknown>>(state.joins).map((item) => readId(item.to)).filter(Boolean));
+	setSelectedJoinTargets(
+		asArray<Record<string, unknown>>(state.joins)
+			.map((item) => readId(item.to))
+			.filter(Boolean),
+	);
 	setSelectedMeasures(asArray<string>(state.measures).map((item) => String(item)));
 	setSelectedDimensions(
-		asArray<string | Record<string, unknown>>(state.dimensions).map((item) =>
-			typeof item === "string" ? item : readId(item.id),
-		).filter(Boolean),
+		asArray<string | Record<string, unknown>>(state.dimensions)
+			.map((item) => (typeof item === "string" ? item : readId(item.id)))
+			.filter(Boolean),
 	);
 	setFilters(
 		asArray<Record<string, unknown>>(state.filters).map((item) => ({
@@ -141,9 +168,16 @@ export default function SemanticCardEditorPage() {
 	const navigate = useNavigate();
 	const location = useLocation();
 	const params = useParams();
+	const menus = useMenuStore((state) => state.menus);
 	const roles = useUserRoles();
-	const roleSet = new Set((roles || []).map((role) => String(role || "").trim().toUpperCase()));
-	const canModel = roleSet.has("BI_ANALYST") || roleSet.has("BI_DATA_ENGINEER") || roleSet.has("OP_ADMIN");
+	const roleSet = new Set(
+		(roles || []).map((role) =>
+			String(role || "")
+				.trim()
+				.toUpperCase(),
+		),
+	);
+	const canModel = useMemo(() => hasSemanticModelingMenuAccess(menus), [menus]);
 	const canPromote = roleSet.has("BI_DATA_ENGINEER") || roleSet.has("OP_ADMIN");
 	const isVirtualDatasetMode = location.pathname.includes("/virtual-datasets");
 	const recordId = params.id ? String(params.id) : null;
@@ -151,7 +185,9 @@ export default function SemanticCardEditorPage() {
 
 	const [metaState, setMetaState] = useState<LoadState<SemanticMetaResponse>>({ state: "loading" });
 	const [collectionsState, setCollectionsState] = useState<LoadState<CollectionListItem[]>>({ state: "loading" });
-	const [recordState, setRecordState] = useState<LoadState<CardDetail | SemanticVirtualDataset> | null>(recordId || vdsFromSearch ? { state: "loading" } : null);
+	const [recordState, setRecordState] = useState<LoadState<CardDetail | SemanticVirtualDataset> | null>(
+		recordId || vdsFromSearch ? { state: "loading" } : null,
+	);
 	const [queryState, setQueryState] = useState<LoadState<SemanticQueryResponse> | null>(null);
 	const [previewState, setPreviewState] = useState<LoadState<SemanticQueryResponse> | null>(null);
 	const [promoteState, setPromoteState] = useState<LoadState<SemanticPromoteResult> | null>(null);
@@ -252,7 +288,8 @@ export default function SemanticCardEditorPage() {
 		};
 	}, [isVirtualDatasetMode, recordId, vdsFromSearch]);
 
-	const models = metaState.state === "loaded" ? metaState.value.models ?? [] : [];
+	const models = metaState.state === "loaded" ? (metaState.value.models ?? []) : [];
+	const noSemanticModels = metaState.state === "loaded" && models.length === 0;
 	const modelMap = useMemo(() => {
 		const map = new Map<string, SemanticModelMeta>();
 		for (const model of models) {
@@ -265,11 +302,11 @@ export default function SemanticCardEditorPage() {
 	}, [models]);
 
 	const baseModel = modelMap.get(baseModelId);
-	const joinOptions = asArray<Record<string, unknown>>(baseModel?.joins).map((join) => ({
-		value: readId(join.to),
-		label: `${readLabel(join, readId(join.to))} · ${String(join.type ?? "many_to_one")}`,
-		join,
-	}));
+	const joinOptions = useMemo(
+		() => buildSemanticJoinOptions(models, baseModelId, selectedJoinTargets),
+		[baseModelId, models, selectedJoinTargets],
+	);
+	const joinOptionMap = useMemo(() => new Map(joinOptions.map((option) => [option.targetId, option])), [joinOptions]);
 
 	const selectedModelIds = [baseModelId, ...selectedJoinTargets].filter(Boolean);
 	const availableModels = models.filter((model) => selectedModelIds.includes(readId(model.id)));
@@ -287,6 +324,11 @@ export default function SemanticCardEditorPage() {
 			raw: dimension,
 		})),
 	);
+	const metricOptionMap = useMemo(() => new Map(metricOptions.map((item) => [item.value, item])), [metricOptions]);
+	const dimensionOptionMap = useMemo(
+		() => new Map(dimensionOptions.map((item) => [item.value, item])),
+		[dimensionOptions],
+	);
 
 	useEffect(() => {
 		if (metaState.state !== "loaded") return;
@@ -303,7 +345,7 @@ export default function SemanticCardEditorPage() {
 	}, [baseModelId, location.search, metaState.state, modelMap, models]);
 
 	useEffect(() => {
-		const joinSet = new Set(joinOptions.map((item) => item.value));
+		const joinSet = new Set(joinOptions.map((item) => item.targetId));
 		setSelectedJoinTargets((current) => current.filter((item) => joinSet.has(item)));
 	}, [joinOptions]);
 
@@ -315,7 +357,12 @@ export default function SemanticCardEditorPage() {
 	useEffect(() => {
 		const dimensionSet = new Set(dimensionOptions.map((item) => item.value));
 		setSelectedDimensions((current) => current.filter((item) => dimensionSet.has(item)));
-		setFilters((current) => current.filter((item) => !item.field || dimensionSet.has(item.field) || metricOptions.some((metric) => metric.value === item.field)));
+		setFilters((current) =>
+			current.filter(
+				(item) =>
+					!item.field || dimensionSet.has(item.field) || metricOptions.some((metric) => metric.value === item.field),
+			),
+		);
 	}, [dimensionOptions, metricOptions]);
 
 	useEffect(() => {
@@ -364,11 +411,11 @@ export default function SemanticCardEditorPage() {
 	const buildSemanticQuery = (): SemanticQueryBody => ({
 		base: baseModelId || undefined,
 		joins: selectedJoinTargets.map((target) => {
-			const matched = joinOptions.find((item) => item.value === target)?.join;
+			const matched = joinOptionMap.get(target);
 			return {
 				to: target,
-				via: typeof matched?.path === "string" ? matched.path : undefined,
-				type: typeof matched?.type === "string" ? String(matched.type) : undefined,
+				via: matched?.path,
+				type: matched?.joinType,
 			};
 		}),
 		measures: selectedMeasures,
@@ -378,7 +425,13 @@ export default function SemanticCardEditorPage() {
 			.map((item) => ({
 				field: item.field,
 				op: item.op,
-				value: item.op === "in" ? item.value.split(",").map((value) => value.trim()).filter(Boolean) : item.value,
+				value:
+					item.op === "in"
+						? item.value
+								.split(",")
+								.map((value) => value.trim())
+								.filter(Boolean)
+						: item.value,
 			})),
 		derived_metrics: derivedMetrics
 			.filter((item) => item.expression.trim())
@@ -387,22 +440,51 @@ export default function SemanticCardEditorPage() {
 		format: "json",
 	});
 
+	const toggleJoinTarget = (targetId: string) => {
+		setSelectedJoinTargets((current) => {
+			if (current.includes(targetId)) {
+				return current.filter((item) => item !== targetId);
+			}
+			return [...current, targetId];
+		});
+	};
+
+	const toggleMeasure = (measureId: string) => {
+		setSelectedMeasures((current) => {
+			if (current.includes(measureId)) {
+				return current.filter((item) => item !== measureId);
+			}
+			return [...current, measureId];
+		});
+	};
+
+	const toggleDimension = (dimensionId: string) => {
+		setSelectedDimensions((current) => {
+			if (current.includes(dimensionId)) {
+				return current.filter((item) => item !== dimensionId);
+			}
+			return [...current, dimensionId];
+		});
+	};
+
 	const currentQuery = buildSemanticQuery();
 	const currentDatabaseId = typeof baseModel?.database_id === "number" ? baseModel.database_id : null;
 	const currentChartData =
 		queryState?.state === "loaded"
 			? {
-				rows: queryState.value.rows ?? [],
-				cols: (queryState.value.columns ?? []).map((column) => ({
-					name: column.id ?? column.label ?? "col",
-					display_name: column.label ?? column.id ?? "col",
-					base_type: toBaseType(column.type),
-				})),
-			}
+					rows: queryState.value.rows ?? [],
+					cols: (queryState.value.columns ?? []).map((column) => ({
+						name: column.id ?? column.label ?? "col",
+						display_name: column.label ?? column.id ?? "col",
+						base_type: toBaseType(column.type),
+					})),
+				}
 			: null;
 
 	const fieldFilterOptions = [...metricOptions, ...dimensionOptions];
-	const resultColumns: ColumnsType<Record<string, unknown>> = (queryState?.state === "loaded" ? (queryState.value.columns ?? []) : []).map((column, index) => ({
+	const resultColumns: ColumnsType<Record<string, unknown>> = (
+		queryState?.state === "loaded" ? (queryState.value.columns ?? []) : []
+	).map((column, index) => ({
 		title: column.label ?? column.id ?? `列${index + 1}`,
 		dataIndex: String(index),
 		key: String(column.id ?? index),
@@ -411,12 +493,12 @@ export default function SemanticCardEditorPage() {
 	const resultRows =
 		queryState?.state === "loaded"
 			? (queryState.value.rows ?? []).map((row, rowIndex) => {
-				const record: Record<string, unknown> = { key: rowIndex };
-				(row ?? []).forEach((value, colIndex) => {
-					record[String(colIndex)] = value;
-				});
-				return record;
-			})
+					const record: Record<string, unknown> = { key: rowIndex };
+					(row ?? []).forEach((value, colIndex) => {
+						record[String(colIndex)] = value;
+					});
+					return record;
+				})
 			: [];
 
 	const runQuery = async () => {
@@ -449,7 +531,7 @@ export default function SemanticCardEditorPage() {
 
 	const saveCard = async () => {
 		if (!canModel) {
-			toast.error("当前角色无权创建分析卡片");
+			toast.error("当前账号未分配语义建模菜单权限");
 			return;
 		}
 		if (!name.trim() || !currentDatabaseId || !currentQuery.base) {
@@ -475,9 +557,10 @@ export default function SemanticCardEditorPage() {
 					},
 				},
 			};
-			const saved = recordId && !isVirtualDatasetMode
-				? await analyticsApi.updateCard(recordId, body)
-				: await analyticsApi.createCard(body);
+			const saved =
+				recordId && !isVirtualDatasetMode
+					? await analyticsApi.updateCard(recordId, body)
+					: await analyticsApi.createCard(body);
 			toast.success("语义卡片已保存");
 			navigate(`/bi/questions/${encodeURIComponent(String(saved.id))}`);
 		} catch (error) {
@@ -488,6 +571,10 @@ export default function SemanticCardEditorPage() {
 	};
 
 	const saveVirtualDataset = async () => {
+		if (!canModel) {
+			toast.error("当前账号未分配语义建模菜单权限");
+			return;
+		}
 		if (!currentQuery.base) {
 			toast.error("请先选择基础模型");
 			return;
@@ -503,9 +590,10 @@ export default function SemanticCardEditorPage() {
 				description: description.trim() || null,
 				state: currentQuery,
 			};
-			const saved = isVirtualDatasetMode && recordId
-				? await analyticsApi.updateSemanticVirtualDataset(recordId, body)
-				: await analyticsApi.createSemanticVirtualDataset(body);
+			const saved =
+				isVirtualDatasetMode && recordId
+					? await analyticsApi.updateSemanticVirtualDataset(recordId, body)
+					: await analyticsApi.createSemanticVirtualDataset(body);
 			toast.success("虚拟数据集已保存");
 			setVdsModalOpen(false);
 			if (!isVirtualDatasetMode) {
@@ -533,37 +621,69 @@ export default function SemanticCardEditorPage() {
 		}
 	};
 
-	const semanticRecord = !isVirtualDatasetMode && recordState?.state === "loaded" && "dataset_query" in recordState.value
-		? extractSemanticQuery(recordState.value.dataset_query)
-		: null;
+	const semanticRecord =
+		!isVirtualDatasetMode && recordState?.state === "loaded" && "dataset_query" in recordState.value
+			? extractSemanticQuery(recordState.value.dataset_query)
+			: null;
 	const legacyCardDetected =
-		!isVirtualDatasetMode
-		&& recordId
-		&& recordState?.state === "loaded"
-		&& "dataset_query" in recordState.value
-		&& !semanticRecord;
+		!isVirtualDatasetMode &&
+		recordId &&
+		recordState?.state === "loaded" &&
+		"dataset_query" in recordState.value &&
+		!semanticRecord;
 
 	return (
 		<div className="space-y-4">
 			<Breadcrumb
 				items={[
 					{ title: <Link to="/bi">BI</Link> },
-					{ title: isVirtualDatasetMode ? <Link to="/bi/virtual-datasets">虚拟数据集</Link> : <Link to="/bi/explore">语义探索</Link> },
-					{ title: isVirtualDatasetMode ? (recordId ? `VDS #${recordId}` : "新建虚拟数据集") : (recordId ? `Card #${recordId}` : "新建卡片") },
+					{
+						title: isVirtualDatasetMode ? (
+							<Link to="/bi/virtual-datasets">虚拟数据集</Link>
+						) : (
+							<Link to="/bi/explore">语义探索</Link>
+						),
+					},
+					{
+						title: isVirtualDatasetMode
+							? recordId
+								? `VDS #${recordId}`
+								: "新建虚拟数据集"
+							: recordId
+								? `Card #${recordId}`
+								: "新建卡片",
+					},
 				]}
 			/>
 
 			<PageHeader
-				title={isVirtualDatasetMode ? (recordId ? "编辑虚拟数据集" : "新建虚拟数据集") : (recordId ? "编辑语义卡片" : "新建语义卡片")}
+				title={
+					isVirtualDatasetMode
+						? recordId
+							? "编辑虚拟数据集"
+							: "新建虚拟数据集"
+						: recordId
+							? "编辑语义卡片"
+							: "新建语义卡片"
+				}
 				actions={
 					<Space wrap>
 						{!isVirtualDatasetMode && (
-							<Button icon={<DatabaseOutlined />} onClick={() => setVdsModalOpen(true)}>
+							<Button
+								icon={<DatabaseOutlined />}
+								onClick={() => setVdsModalOpen(true)}
+								disabled={!canModel || noSemanticModels}
+							>
 								保存为 VDS
 							</Button>
 						)}
 						{isVirtualDatasetMode && (
-							<Button icon={<SaveOutlined />} loading={savingVds} onClick={saveVirtualDataset}>
+							<Button
+								icon={<SaveOutlined />}
+								loading={savingVds}
+								onClick={saveVirtualDataset}
+								disabled={!canModel || noSemanticModels}
+							>
 								保存 VDS
 							</Button>
 						)}
@@ -573,7 +693,13 @@ export default function SemanticCardEditorPage() {
 							</Button>
 						)}
 						{!isVirtualDatasetMode && (
-							<Button type="primary" icon={<SaveOutlined />} loading={saving} onClick={saveCard}>
+							<Button
+								type="primary"
+								icon={<SaveOutlined />}
+								loading={saving}
+								onClick={saveCard}
+								disabled={!canModel || noSemanticModels}
+							>
 								保存卡片
 							</Button>
 						)}
@@ -586,7 +712,7 @@ export default function SemanticCardEditorPage() {
 					type="warning"
 					showIcon
 					message="当前账号没有建模权限"
-					description="需要 BI_ANALYST、BI_DATA_ENGINEER 或 OP_ADMIN 角色才能创建和编辑语义卡片。"
+					description="当前账号未分配语义探索、分析卡片或虚拟数据集相关菜单；只要所在角色具备对应菜单入口，就可以创建和编辑语义卡片。"
 				/>
 			)}
 
@@ -607,196 +733,118 @@ export default function SemanticCardEditorPage() {
 				/>
 			)}
 
-			{metaState.state === "loaded" && !legacyCardDetected && (
+			{metaState.state === "loaded" && !legacyCardDetected && noSemanticModels && <SemanticModelingEmptyState />}
+
+			{metaState.state === "loaded" && !legacyCardDetected && !noSemanticModels && (
 				<>
-					<div style={{ display: "grid", gridTemplateColumns: "minmax(360px, 460px) minmax(0, 1fr)", gap: 16 }}>
-						<Card title="建模画布" extra={baseModel ? <Tag color="blue">{baseModel.security_level || "INTERNAL"}</Tag> : null}>
-							<Space direction="vertical" size={12} style={{ width: "100%" }}>
-								<div>
-									<div className="mb-1 text-xs text-secondary">名称</div>
-									<Input value={name} onChange={(event) => setName(event.target.value)} placeholder={isVirtualDatasetMode ? "输入虚拟数据集名称" : "输入卡片名称"} />
-								</div>
-								<div>
-									<div className="mb-1 text-xs text-secondary">描述</div>
-									<Input.TextArea value={description} onChange={(event) => setDescription(event.target.value)} autoSize={{ minRows: 2, maxRows: 4 }} />
-								</div>
-								{!isVirtualDatasetMode && collectionsState.state === "loaded" && (
+					<div className="grid gap-4 xl:grid-cols-[300px_minmax(0,1fr)_340px]">
+						<Space direction="vertical" size={16} style={{ width: "100%" }}>
+							<Card
+								title="基础设置"
+								extra={baseModel ? <Tag color="blue">{baseModel.security_level || "INTERNAL"}</Tag> : null}
+							>
+								<Space direction="vertical" size={12} style={{ width: "100%" }}>
 									<div>
-										<div className="mb-1 text-xs text-secondary">集合</div>
+										<div className="mb-1 text-xs text-secondary">名称</div>
+										<Input
+											value={name}
+											onChange={(event) => setName(event.target.value)}
+											placeholder={isVirtualDatasetMode ? "输入虚拟数据集名称" : "输入卡片名称"}
+										/>
+									</div>
+									<div>
+										<div className="mb-1 text-xs text-secondary">描述</div>
+										<Input.TextArea
+											value={description}
+											onChange={(event) => setDescription(event.target.value)}
+											autoSize={{ minRows: 2, maxRows: 4 }}
+										/>
+									</div>
+									{!isVirtualDatasetMode && collectionsState.state === "loaded" && (
+										<div>
+											<div className="mb-1 text-xs text-secondary">集合</div>
+											<Select
+												allowClear
+												style={{ width: "100%" }}
+												value={collectionId ?? undefined}
+												onChange={(value) => setCollectionId(typeof value === "number" ? value : null)}
+												options={collectionsState.value
+													.filter((item) => item.id !== "root")
+													.map((item) => ({
+														value: item.id,
+														label: item.name || `集合 ${item.id}`,
+													}))}
+											/>
+										</div>
+									)}
+									<div>
+										<div className="mb-1 text-xs text-secondary">基础模型</div>
 										<Select
-											allowClear
+											showSearch
 											style={{ width: "100%" }}
-											value={collectionId ?? undefined}
-											onChange={(value) => setCollectionId(typeof value === "number" ? value : null)}
-											options={collectionsState.value.filter((item) => item.id !== "root").map((item) => ({
-												value: item.id,
-												label: item.name || `集合 ${item.id}`,
+											value={baseModelId || undefined}
+											onChange={(value) => {
+												setBaseModelId(String(value));
+												setSelectedJoinTargets([]);
+											}}
+											options={models.map((model) => ({
+												value: readId(model.id),
+												label: `${model.label || model.id} · ${model.subject_area || "未分域"}`,
 											}))}
 										/>
 									</div>
-								)}
-								<div>
-									<div className="mb-1 text-xs text-secondary">基础模型</div>
-									<Select
-										showSearch
-										style={{ width: "100%" }}
-										value={baseModelId || undefined}
-										onChange={(value) => {
-											setBaseModelId(String(value));
-											setSelectedJoinTargets([]);
-										}}
-										options={models.map((model) => ({
-											value: readId(model.id),
-											label: `${model.label || model.id} · ${model.subject_area || "未分域"}`,
-										}))}
-									/>
-								</div>
-								<div>
-									<div className="mb-1 text-xs text-secondary">允许 Join 的模型</div>
-									<Select
-										mode="multiple"
-										style={{ width: "100%" }}
-										placeholder={joinOptions.length ? "选择 join 目标" : "当前模型未开放 join"}
-										value={selectedJoinTargets}
-										onChange={(value) => setSelectedJoinTargets((value ?? []).map((item) => String(item)))}
-										options={joinOptions}
-									/>
-								</div>
-								<div>
-									<div className="mb-1 text-xs text-secondary">指标</div>
-									<Select
-										mode="multiple"
-										style={{ width: "100%" }}
-										value={selectedMeasures}
-										onChange={(value) => setSelectedMeasures((value ?? []).map((item) => String(item)))}
-										options={metricOptions}
-									/>
-								</div>
-								<div>
-									<div className="mb-1 text-xs text-secondary">维度</div>
-									<Select
-										mode="multiple"
-										style={{ width: "100%" }}
-										value={selectedDimensions}
-										onChange={(value) => setSelectedDimensions((value ?? []).map((item) => String(item)))}
-										options={dimensionOptions}
-									/>
-								</div>
-								<div>
-									<div className="mb-1 text-xs text-secondary">筛选器</div>
-									<Space direction="vertical" style={{ width: "100%" }}>
-										{filters.map((item, index) => (
-											<Space key={`${item.field}-${index}`} style={{ width: "100%" }} align="start">
-												<Select
-													showSearch
-													style={{ width: 180 }}
-													value={item.field || undefined}
-													onChange={(value) =>
-														setFilters((current) => current.map((row, rowIndex) => rowIndex === index ? { ...row, field: String(value) } : row))
-													}
-													options={fieldFilterOptions}
-												/>
-												<Select
-													style={{ width: 100 }}
-													value={item.op}
-													onChange={(value) =>
-														setFilters((current) => current.map((row, rowIndex) => rowIndex === index ? { ...row, op: String(value) } : row))
-													}
-													options={FILTER_OP_OPTIONS}
-												/>
-												<Input
-													style={{ flex: 1 }}
-													value={item.value}
-													onChange={(event) =>
-														setFilters((current) => current.map((row, rowIndex) => rowIndex === index ? { ...row, value: event.target.value } : row))
-													}
-													placeholder={item.op === "in" ? "多个值用逗号分隔" : "输入筛选值"}
-												/>
-												<Button danger onClick={() => setFilters((current) => current.filter((_, rowIndex) => rowIndex !== index))}>
-													删除
-												</Button>
-											</Space>
-										))}
-										<Button icon={<PlusOutlined />} onClick={() => setFilters((current) => [...current, { field: "", op: "=", value: "" }])}>
-											新增筛选
-										</Button>
-									</Space>
-								</div>
-								<div>
-									<div className="mb-1 text-xs text-secondary">派生指标</div>
-									<Space direction="vertical" style={{ width: "100%" }}>
-										{derivedMetrics.map((item, index) => (
-											<Card key={item.id} size="small">
-												<Space direction="vertical" style={{ width: "100%" }}>
-													<Input
-														value={item.label}
-														onChange={(event) =>
-															setDerivedMetrics((current) => current.map((row, rowIndex) => rowIndex === index ? { ...row, label: event.target.value } : row))
-														}
-														placeholder="指标名称"
-													/>
-													<Input.TextArea
-														autoSize={{ minRows: 2, maxRows: 4 }}
-														value={item.expression}
-														onChange={(event) =>
-															setDerivedMetrics((current) => current.map((row, rowIndex) => rowIndex === index ? { ...row, expression: event.target.value } : row))
-														}
-														placeholder="例如: [ads_sales_daily.revenue] / [ads_sales_daily.order_count]"
-													/>
-													<Button danger onClick={() => setDerivedMetrics((current) => current.filter((_, rowIndex) => rowIndex !== index))}>
-														删除派生指标
-													</Button>
-												</Space>
-											</Card>
-										))}
-										<Button
-											icon={<PlusOutlined />}
-											onClick={() => setDerivedMetrics((current) => [...current, {
-												id: `derived_${current.length + 1}`,
-												label: `派生指标 ${current.length + 1}`,
-												expression: "",
-											}])}
-										>
-											新增派生指标
-										</Button>
-									</Space>
-								</div>
-								<div>
-									<div className="mb-1 text-xs text-secondary">结果限制</div>
-									<Input
-										type="number"
-										min={1}
-										max={5000}
-										value={limit}
-										onChange={(event) => setLimit(Number.parseInt(event.target.value || "200", 10) || 200)}
-									/>
-								</div>
-								{baseModel && (
-									<Alert
-										type="info"
-										showIcon
-										message={`${baseModel.label || baseModel.id} · ${baseModel.subject_area || "未分域"}`}
-										description={baseModel.description || `粒度：${baseModel.grain || "未声明"}，底表：${baseModel.schema_name || "public"}.${baseModel.table_name || baseModel.id}`}
-									/>
-								)}
-							</Space>
-						</Card>
+									{baseModel && (
+										<Alert
+											type="info"
+											showIcon
+											message={`${baseModel.label || baseModel.id} · ${baseModel.subject_area || "未分域"}`}
+											description={
+												baseModel.description ||
+												`粒度：${baseModel.grain || "未声明"}，底表：${baseModel.schema_name || "public"}.${baseModel.table_name || baseModel.id}`
+											}
+										/>
+									)}
+								</Space>
+							</Card>
+
+							<Card title="指标树与维度树" extra={<Tag>{selectedModelIds.length} 个模型</Tag>}>
+								<SemanticFieldExplorer
+									models={models}
+									baseModelId={baseModelId}
+									selectedModelIds={selectedModelIds}
+									selectedMeasures={selectedMeasures}
+									selectedDimensions={selectedDimensions}
+									canEdit={canModel}
+									onToggleMeasure={toggleMeasure}
+									onToggleDimension={toggleDimension}
+								/>
+							</Card>
+						</Space>
 
 						<Space direction="vertical" size={16} style={{ width: "100%" }}>
+							<Card
+								title="模型画布"
+								extra={
+									selectedJoinTargets.length > 0 ? <Tag color="green">{selectedJoinTargets.length} 条 Join</Tag> : null
+								}
+							>
+								<SemanticModelCanvas
+									models={models}
+									baseModelId={baseModelId}
+									selectedJoinTargets={selectedJoinTargets}
+									canEdit={canModel}
+									onToggleJoin={toggleJoinTarget}
+								/>
+							</Card>
+
 							<Card
 								title="查询预览"
 								extra={
 									<Space>
-										<Select
-											style={{ width: 120 }}
-											value={displayType}
-											onChange={(value) => setDisplayType(value)}
-											options={DISPLAY_OPTIONS}
-										/>
-										<Button icon={<DatabaseOutlined />} onClick={previewSql}>
+										<Button icon={<DatabaseOutlined />} onClick={previewSql} disabled={noSemanticModels}>
 											预览 SQL
 										</Button>
-										<Button type="primary" icon={<PlayCircleOutlined />} onClick={runQuery}>
+										<Button type="primary" icon={<PlayCircleOutlined />} onClick={runQuery} disabled={noSemanticModels}>
 											运行查询
 										</Button>
 									</Space>
@@ -807,26 +855,49 @@ export default function SemanticCardEditorPage() {
 								<Input.TextArea
 									readOnly
 									autoSize={{ minRows: 10, maxRows: 18 }}
-									value={previewState?.state === "loaded"
-										? String(previewState.value.meta?.sql_preview ?? "")
-										: queryState?.state === "loaded"
-											? String(queryState.value.meta?.sql_preview ?? "")
-											: ""}
+									value={
+										previewState?.state === "loaded"
+											? String(previewState.value.meta?.sql_preview ?? "")
+											: queryState?.state === "loaded"
+												? String(queryState.value.meta?.sql_preview ?? "")
+												: ""
+									}
 									placeholder="点击“预览 SQL”后在这里查看编译结果"
 								/>
 								{(previewState?.state === "loaded" || queryState?.state === "loaded") && (
 									<div className="mt-3 flex flex-wrap gap-2">
-										{(previewState?.state === "loaded" ? previewState.value.meta?.security_applied : queryState?.state === "loaded" ? queryState.value.meta?.security_applied : [])?.map((item) => (
-											<Tag key={item} color="processing">{item}</Tag>
+										{(previewState?.state === "loaded"
+											? previewState.value.meta?.security_applied
+											: queryState?.state === "loaded"
+												? queryState.value.meta?.security_applied
+												: []
+										)?.map((item) => (
+											<Tag key={item} color="processing">
+												{item}
+											</Tag>
 										))}
-										{(previewState?.state === "loaded" ? previewState.value.meta?.warnings : queryState?.state === "loaded" ? queryState.value.meta?.warnings : [])?.map((item) => (
-											<Tag key={item} color="warning">{item}</Tag>
+										{(previewState?.state === "loaded"
+											? previewState.value.meta?.warnings
+											: queryState?.state === "loaded"
+												? queryState.value.meta?.warnings
+												: []
+										)?.map((item) => (
+											<Tag key={item} color="warning">
+												{item}
+											</Tag>
 										))}
 									</div>
 								)}
 							</Card>
 
-							<Card title="结果渲染" extra={queryState?.state === "loaded" ? <Tag color="green">{queryState.value.meta?.row_count ?? 0} 行</Tag> : null}>
+							<Card
+								title="结果渲染"
+								extra={
+									queryState?.state === "loaded" ? (
+										<Tag color="green">{queryState.value.meta?.row_count ?? 0} 行</Tag>
+									) : null
+								}
+							>
 								{queryState?.state === "error" && <ErrorNotice locale={locale} error={queryState.error} />}
 								{queryState?.state === "loading" && (
 									<div className="loading-container" style={{ padding: 32 }}>
@@ -836,7 +907,7 @@ export default function SemanticCardEditorPage() {
 								{queryState == null && <Empty description="运行查询后显示结果" />}
 								{queryState?.state === "loaded" && currentChartData && (
 									<Space direction="vertical" size={16} style={{ width: "100%" }}>
-											<ChartRenderer display={displayType} data={currentChartData} />
+										<ChartRenderer display={displayType} data={currentChartData} />
 										<Table
 											size="small"
 											pagination={resultRows.length > 20 ? { pageSize: 20 } : false}
@@ -857,14 +928,207 @@ export default function SemanticCardEditorPage() {
 									<Typography.Paragraph>
 										<Typography.Text strong>SQL：</Typography.Text>
 									</Typography.Paragraph>
-									<Input.TextArea readOnly autoSize={{ minRows: 8, maxRows: 16 }} value={String(promoteState.value.sql ?? "")} />
+									<Input.TextArea
+										readOnly
+										autoSize={{ minRows: 8, maxRows: 16 }}
+										value={String(promoteState.value.sql ?? "")}
+									/>
 									<Typography.Paragraph style={{ marginTop: 12 }}>
 										<Typography.Text strong>schema.yml：</Typography.Text>
 									</Typography.Paragraph>
-									<Input.TextArea readOnly autoSize={{ minRows: 8, maxRows: 16 }} value={String(promoteState.value.schema_yml ?? "")} />
+									<Input.TextArea
+										readOnly
+										autoSize={{ minRows: 8, maxRows: 16 }}
+										value={String(promoteState.value.schema_yml ?? "")}
+									/>
 								</Card>
 							)}
 							{promoteState?.state === "error" && <ErrorNotice locale={locale} error={promoteState.error} />}
+						</Space>
+
+						<Space direction="vertical" size={16} style={{ width: "100%" }}>
+							<Card title="属性面板">
+								<Space direction="vertical" size={16} style={{ width: "100%" }}>
+									<div>
+										<div className="mb-1 text-xs text-secondary">图形</div>
+										<Select
+											style={{ width: "100%" }}
+											value={displayType}
+											onChange={(value) => setDisplayType(value)}
+											options={DISPLAY_OPTIONS}
+										/>
+									</div>
+									<div>
+										<div className="mb-1 text-xs text-secondary">已选指标</div>
+										{selectedMeasures.length > 0 ? (
+											<Space wrap>
+												{selectedMeasures.map((measureId) => (
+													<Tag
+														key={measureId}
+														color="processing"
+														closable={canModel}
+														onClose={(event) => {
+															event.preventDefault();
+															toggleMeasure(measureId);
+														}}
+													>
+														{metricOptionMap.get(measureId)?.label ?? measureId}
+													</Tag>
+												))}
+											</Space>
+										) : (
+											<Typography.Text type="secondary">从左侧指标树选择需要聚合的字段</Typography.Text>
+										)}
+									</div>
+									<div>
+										<div className="mb-1 text-xs text-secondary">已选维度</div>
+										{selectedDimensions.length > 0 ? (
+											<Space wrap>
+												{selectedDimensions.map((dimensionId) => (
+													<Tag
+														key={dimensionId}
+														color="geekblue"
+														closable={canModel}
+														onClose={(event) => {
+															event.preventDefault();
+															toggleDimension(dimensionId);
+														}}
+													>
+														{dimensionOptionMap.get(dimensionId)?.label ?? dimensionId}
+													</Tag>
+												))}
+											</Space>
+										) : (
+											<Typography.Text type="secondary">从左侧维度树选择切片字段</Typography.Text>
+										)}
+									</div>
+									<div>
+										<div className="mb-1 text-xs text-secondary">筛选器</div>
+										<Space direction="vertical" style={{ width: "100%" }}>
+											{filters.map((item, index) => (
+												<Space key={`${item.field}-${index}`} style={{ width: "100%" }} align="start">
+													<Select
+														showSearch
+														style={{ width: 160 }}
+														value={item.field || undefined}
+														onChange={(value) =>
+															setFilters((current) =>
+																current.map((row, rowIndex) =>
+																	rowIndex === index ? { ...row, field: String(value) } : row,
+																),
+															)
+														}
+														options={fieldFilterOptions}
+													/>
+													<Select
+														style={{ width: 90 }}
+														value={item.op}
+														onChange={(value) =>
+															setFilters((current) =>
+																current.map((row, rowIndex) =>
+																	rowIndex === index ? { ...row, op: String(value) } : row,
+																),
+															)
+														}
+														options={FILTER_OP_OPTIONS}
+													/>
+													<Input
+														style={{ flex: 1 }}
+														value={item.value}
+														onChange={(event) =>
+															setFilters((current) =>
+																current.map((row, rowIndex) =>
+																	rowIndex === index ? { ...row, value: event.target.value } : row,
+																),
+															)
+														}
+														placeholder={item.op === "in" ? "多个值用逗号分隔" : "输入筛选值"}
+													/>
+													<Button
+														danger
+														onClick={() => setFilters((current) => current.filter((_, rowIndex) => rowIndex !== index))}
+													>
+														删除
+													</Button>
+												</Space>
+											))}
+											<Button
+												icon={<PlusOutlined />}
+												onClick={() => setFilters((current) => [...current, { field: "", op: "=", value: "" }])}
+											>
+												新增筛选
+											</Button>
+										</Space>
+									</div>
+									<div>
+										<div className="mb-1 text-xs text-secondary">派生指标</div>
+										<Space direction="vertical" style={{ width: "100%" }}>
+											{derivedMetrics.map((item, index) => (
+												<Card key={item.id} size="small">
+													<Space direction="vertical" style={{ width: "100%" }}>
+														<Input
+															value={item.label}
+															onChange={(event) =>
+																setDerivedMetrics((current) =>
+																	current.map((row, rowIndex) =>
+																		rowIndex === index ? { ...row, label: event.target.value } : row,
+																	),
+																)
+															}
+															placeholder="指标名称"
+														/>
+														<Input.TextArea
+															autoSize={{ minRows: 2, maxRows: 4 }}
+															value={item.expression}
+															onChange={(event) =>
+																setDerivedMetrics((current) =>
+																	current.map((row, rowIndex) =>
+																		rowIndex === index ? { ...row, expression: event.target.value } : row,
+																	),
+																)
+															}
+															placeholder="例如: [ads_sales_daily.revenue] / [ads_sales_daily.order_count]"
+														/>
+														<Button
+															danger
+															onClick={() =>
+																setDerivedMetrics((current) => current.filter((_, rowIndex) => rowIndex !== index))
+															}
+														>
+															删除派生指标
+														</Button>
+													</Space>
+												</Card>
+											))}
+											<Button
+												icon={<PlusOutlined />}
+												onClick={() =>
+													setDerivedMetrics((current) => [
+														...current,
+														{
+															id: `derived_${current.length + 1}`,
+															label: `派生指标 ${current.length + 1}`,
+															expression: "",
+														},
+													])
+												}
+											>
+												新增派生指标
+											</Button>
+										</Space>
+									</div>
+									<div>
+										<div className="mb-1 text-xs text-secondary">结果限制</div>
+										<Input
+											type="number"
+											min={1}
+											max={5000}
+											value={limit}
+											onChange={(event) => setLimit(Number.parseInt(event.target.value || "200", 10) || 200)}
+										/>
+									</div>
+								</Space>
+							</Card>
 						</Space>
 					</div>
 
@@ -877,7 +1141,11 @@ export default function SemanticCardEditorPage() {
 					>
 						<Space direction="vertical" style={{ width: "100%" }}>
 							<Input value={name} onChange={(event) => setName(event.target.value)} placeholder="虚拟数据集名称" />
-							<Input.TextArea value={description} onChange={(event) => setDescription(event.target.value)} autoSize={{ minRows: 2, maxRows: 4 }} />
+							<Input.TextArea
+								value={description}
+								onChange={(event) => setDescription(event.target.value)}
+								autoSize={{ minRows: 2, maxRows: 4 }}
+							/>
 						</Space>
 					</Modal>
 				</>

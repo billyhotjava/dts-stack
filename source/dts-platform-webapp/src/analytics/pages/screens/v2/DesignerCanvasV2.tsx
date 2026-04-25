@@ -57,6 +57,8 @@ function toRGLLayout(c: ComponentV2): RGLLayout {
 function v2ToV1Component(c: ComponentV2): ScreenComponent {
     return {
         id: c.id,
+        groupId: c.groupId,
+        parentContainerId: c.parentContainerId,
         type: c.type as ScreenComponent["type"],
         name: c.name ?? c.id,
         x: 0,
@@ -67,6 +69,10 @@ function v2ToV1Component(c: ComponentV2): ScreenComponent {
         locked: c.static === true,
         visible: c.visible !== false,
         config: c.config,
+        dataSource: c.dataSource,
+        drillDown: c.drillDown,
+        actions: c.actions,
+        interaction: c.interaction,
     };
 }
 

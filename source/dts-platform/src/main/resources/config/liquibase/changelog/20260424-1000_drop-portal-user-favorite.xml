@@ -1,0 +1,42 @@
+<?xml version="1.0" encoding="utf-8"?>
+<databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+                        http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.22.xsd">
+
+    <!--
+        Sprint-15 / F2 — Drop the legacy `portal_user_favorite` table.
+
+        The workbench "我的收藏" entry was removed from the menu long ago, and the
+        backend entity / repository / REST endpoints are being deleted alongside
+        this changeset. The data-rollback material (full schema + data dump) is
+        stored at:
+
+            worklog/v2.2.3/sprint-15-202604/assets/portal_user_favorite_full.sql
+            worklog/v2.2.3/sprint-15-202604/assets/portal_user_favorite_dump.sql
+            worklog/v2.2.3/sprint-15-202604/assets/dump.checksum
+
+        Operations must replace the placeholder dumps with a real
+        `pg_dump -t portal_user_favorite ...` export before production rollout.
+        See `worklog/v2.2.3/sprint-15-202604/assets/README.md` for the runbook.
+    -->
+    <changeSet id="20260424-1000-drop-portal-user-favorite" author="billy">
+        <preConditions onFail="MARK_RAN">
+            <tableExists tableName="portal_user_favorite"/>
+        </preConditions>
+
+        <dropTable tableName="portal_user_favorite"/>
+
+        <rollback>
+            <!--
+                Rollback is NOT automated on purpose. To restore data, operators
+                must run the dumps at
+                `worklog/v2.2.3/sprint-15-202604/assets/portal_user_favorite_full.sql`
+                and `.../portal_user_favorite_dump.sql` manually against the target
+                database. See assets/README.md for the full procedure.
+            -->
+            <sql>SELECT 1; -- placeholder: operators must restore the table manually from the stored dump</sql>
+        </rollback>
+    </changeSet>
+</databaseChangeLog>

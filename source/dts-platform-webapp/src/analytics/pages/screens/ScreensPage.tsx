@@ -8,6 +8,7 @@ import { PageContainer } from '../../components/PageContainer/PageContainer';
 import { writeTextToClipboard } from '../../hooks/clipboard';
 import { TemplateGallery, ScreenAclPanel, type TemplateSelection } from './components';
 import { ImportPreviewModal } from './components/ImportPreviewModal';
+import type { ScreenWritePayload } from './contracts';
 import { createConfigFromTemplate } from './screenTemplates';
 import { buildScreenPayload, normalizeScreenConfig, validateScreenPayload } from './specV2';
 import { inlineResources } from './utils/resourceInliner';
@@ -210,7 +211,8 @@ export default function ScreensPage() {
 				width: window.innerWidth,
 				height: window.innerHeight,
 			};
-			const payload = {
+			const payload: ScreenWritePayload = {
+				schemaVersion: 2,
 				name: '新建自适应大屏',
 				description: '响应式布局，按浏览器尺寸自动铺满',
 				// v1 字段给默认值以满足后端 non-null 约束（v2 渲染时无视）

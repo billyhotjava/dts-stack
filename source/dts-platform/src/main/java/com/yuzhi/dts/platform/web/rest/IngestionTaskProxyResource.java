@@ -356,6 +356,18 @@ public class IngestionTaskProxyResource {
         return ResponseEntity.ok(ingestionClient.getConnectorCapability(connectorType));
     }
 
+    @GetMapping("/api/contract")
+    @PreAuthorize(INFRA_MAINTAINER_EXPRESSION)
+    public ResponseEntity<ApiResponse<Object>> getApiConnectorContract() {
+        return ResponseEntity.ok(ingestionClient.getApiConnectorContract());
+    }
+
+    @GetMapping("/api/auth-providers")
+    @PreAuthorize(INFRA_MAINTAINER_EXPRESSION)
+    public ResponseEntity<ApiResponse<Object>> listApiAuthProviders() {
+        return ResponseEntity.ok(ingestionClient.listApiAuthProviders());
+    }
+
     @GetMapping("/tasks/{id}/realtime-status")
     @PreAuthorize(INFRA_MAINTAINER_EXPRESSION)
     public ResponseEntity<ApiResponse<Object>> getRealtimeStatus(@PathVariable("id") Long id) {

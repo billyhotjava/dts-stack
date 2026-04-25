@@ -156,6 +156,25 @@ export const useSignIn = () => {
 			const takeoverFlag = Boolean((res as any)?.sessionTakeover);
 			const takeoverMessage = rawNotice || (takeoverFlag ? "已切换到当前登录，其他会话已下线" : "");
 
+			// 解析部门代码：rawUser.deptCode 优先；
+			// 否则从 attributes.department / attributes.dept_code（可能为数组）中取首项。
+			const resolveDeptCodeFromRaw = (raw: Record<string, unknown>): string | undefined => {
+				const direct = raw.deptCode;
+				if (typeof direct === "string" && direct.trim()) return direct.trim();
+				const attrs = raw.attributes;
+				if (attrs && typeof attrs === "object") {
+					const attrMap = attrs as Record<string, unknown>;
+					const candidate = attrMap.department ?? attrMap.dept_code;
+					if (Array.isArray(candidate)) {
+						const first = candidate[0];
+						if (typeof first === "string" && first.trim()) return first.trim();
+					} else if (typeof candidate === "string" && candidate.trim()) {
+						return candidate.trim();
+					}
+				}
+				return undefined;
+			};
+
 			// 适配后端数据格式：处理角色和权限信息
 			const adaptedUser = {
 				...rawUser,
@@ -166,6 +185,7 @@ export const useSignIn = () => {
 					typeof rawUser.department === "string" && rawUser.department.trim()
 						? rawUser.department.trim()
 						: undefined,
+				deptCode: resolveDeptCodeFromRaw(rawUser as Record<string, unknown>),
 				// 为用户设置默认头像（使用 public 目录下的静态资源路径，兼容生产环境）
 				avatar: resolveAvatar(rawUser.avatar),
 				// 确保必要的字段存在
@@ -256,12 +276,13 @@ export const useSignIn = () => {
 				notice: takeoverMessage || undefined,
 				takeover: takeoverFlag,
 			};
-		} catch (err) {
+		} catch (err: unknown) {
 			const fallback = handleDevFallback({ error: err, payload: data, setUserToken, setUserInfo });
 			if (fallback) {
 				return fallback;
 			}
-			toast.error(err.message, {
+			const msg = err instanceof Error ? err.message : "登录失败，请重试";
+			toast.error(msg, {
 				position: "top-center",
 			});
 			throw err;

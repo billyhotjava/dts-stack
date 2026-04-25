@@ -1,4 +1,5 @@
 import type { CarouselConfig, ScreenComponent, ScreenConfig, ScreenGlobalVariable, ScreenPage, ScreenTheme } from './types';
+import type { ScreenWritePayload } from './contracts';
 
 export const SCREEN_SCHEMA_VERSION = 2;
 
@@ -343,7 +344,7 @@ export function normalizeScreenConfig(
     return { config, warnings };
 }
 
-export function buildScreenPayload(config: ScreenConfig): Record<string, unknown> {
+export function buildScreenPayload(config: ScreenConfig): ScreenWritePayload {
     return {
         schemaVersion: SCREEN_SCHEMA_VERSION,
         name: config.name,

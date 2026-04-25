@@ -622,11 +622,13 @@ public class InfraManagementService {
     private void applyDataSource(InfraDataSource entity, DataSourceRequest request, String username) {
         entity.setName(request.name());
         entity.setType(request.type());
-        entity.setJdbcUrl(request.jdbcUrl());
+        entity.setJdbcUrl(ApiDataSourceSupport.isApiType(request.type()) ? null : request.jdbcUrl());
         entity.setUsername(request.username());
         entity.setDescription(request.description());
         Map<String, Object> props = request.props() == null ? new LinkedHashMap<>() : new LinkedHashMap<>(request.props());
-        if (isJdbcRequest(request)) {
+        if (ApiDataSourceSupport.isApiType(request.type())) {
+            props = ApiDataSourceSupport.normalizeProps(props);
+        } else if (isJdbcRequest(request)) {
             String readerType = extractReaderType(props);
             if (!StringUtils.hasText(readerType)) {
                 String resolved = resolveJdbcReaderType(request, props);
@@ -946,6 +948,10 @@ public class InfraManagementService {
     private void validateRequest(DataSourceRequest request, InfraDataSource existing) {
         if (request == null) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "请求参数不能为空");
+        }
+        if (ApiDataSourceSupport.isApiType(request.type())) {
+            ApiDataSourceSupport.validateRequest(request);
+            return;
         }
         if (isJdbcRequest(request)) {
             if (!StringUtils.hasText(request.jdbcUrl())) {
@@ -1356,6 +1362,16 @@ public class InfraManagementService {
             return;
         }
         boolean enabled = shouldSyncCatalogOnDataSource();
+        if (ApiDataSourceSupport.isApiType(request.type())) {
+            auditCatalogSync(
+                dataSource,
+                operator,
+                new CatalogSyncSummary(enabled, true, "api-preview-required", null, null, null, 0, false),
+                AuditStage.SUCCESS,
+                null
+            );
+            return;
+        }
         if (isJdbcRequest(request)) {
             if (!enabled) {
                 auditJdbcCatalogSync(

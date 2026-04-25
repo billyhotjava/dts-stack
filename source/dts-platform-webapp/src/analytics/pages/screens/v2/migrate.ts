@@ -12,7 +12,7 @@
  */
 
 import type { ScreenComponent, ScreenConfig } from "../types";
-import type { ComponentV2, ScreenConfigV2 } from "./types";
+import type { ComponentV2, ScreenConfigV2, ScreenPageV2 } from "./types";
 
 const DEFAULT_COLS = 12;
 const DEFAULT_ROW_HEIGHT_PX = 40;
@@ -34,22 +34,16 @@ function clampGrid(value: number, min: number, max: number): number {
     return Math.max(min, Math.min(max, value));
 }
 
-export function migrateV1ToV2(
-    v1: ScreenConfig,
-    options: MigrateV1ToV2Options = {},
-): MigrateV1ToV2Result {
-    const warnings: string[] = [];
-    const cols = Math.max(1, Math.floor(options.cols ?? DEFAULT_COLS));
-    const rowHeightPx = Math.max(8, Math.floor(options.rowHeightPx ?? DEFAULT_ROW_HEIGHT_PX));
-    const gap = Math.max(0, Math.floor(options.gap ?? DEFAULT_GAP));
-
-    const designWidth = Math.max(1, v1.width || 1920);
-    const designHeight = Math.max(1, v1.height || 1080);
+function migrateComponents(
+    components: ScreenComponent[],
+    designWidth: number,
+    cols: number,
+    rowHeightPx: number,
+    warnings: string[],
+): ComponentV2[] {
     const colWidthPx = designWidth / cols;
 
-    const v1Components: ScreenComponent[] = Array.isArray(v1.components) ? v1.components : [];
-
-    const v2Components: ComponentV2[] = v1Components.map((c) => {
+    return components.map((c) => {
         const name = c.name || c.id;
 
         const rawX = Number.isFinite(c.x) ? c.x : 0;
@@ -85,6 +79,8 @@ export function migrateV1ToV2(
             id: c.id,
             type: c.type,
             name,
+            groupId: c.groupId,
+            parentContainerId: c.parentContainerId,
             layout: {
                 x,
                 y,
@@ -94,10 +90,45 @@ export function migrateV1ToV2(
                 minH: 1,
             },
             config: c.config ?? {},
+            dataSource: c.dataSource,
+            drillDown: c.drillDown,
+            actions: c.actions,
+            interaction: c.interaction,
             visible: c.visible !== false,
             zIndex: typeof c.zIndex === "number" ? c.zIndex : undefined,
         } satisfies ComponentV2;
     });
+}
+
+export function migrateV1ToV2(
+    v1: ScreenConfig,
+    options: MigrateV1ToV2Options = {},
+): MigrateV1ToV2Result {
+    const warnings: string[] = [];
+    const cols = Math.max(1, Math.floor(options.cols ?? DEFAULT_COLS));
+    const rowHeightPx = Math.max(8, Math.floor(options.rowHeightPx ?? DEFAULT_ROW_HEIGHT_PX));
+    const gap = Math.max(0, Math.floor(options.gap ?? DEFAULT_GAP));
+
+    const designWidth = Math.max(1, v1.width || 1920);
+    const designHeight = Math.max(1, v1.height || 1080);
+
+    const v1Components: ScreenComponent[] = Array.isArray(v1.components) ? v1.components : [];
+    const v2Components = migrateComponents(v1Components, designWidth, cols, rowHeightPx, warnings);
+    const v2Pages: ScreenPageV2[] = Array.isArray(v1.pages)
+        ? v1.pages.map((page, index) => ({
+            id: page.id || `page_${index + 1}`,
+            name: page.name || `页面 ${index + 1}`,
+            components: migrateComponents(
+                Array.isArray(page.components) ? page.components : [],
+                designWidth,
+                cols,
+                rowHeightPx,
+                warnings,
+            ),
+            backgroundColor: page.backgroundColor,
+            backgroundImage: page.backgroundImage,
+        }))
+        : [];
 
     const config: ScreenConfigV2 = {
         schemaVersion: 2,
@@ -114,6 +145,7 @@ export function migrateV1ToV2(
         },
         components: v2Components,
         globalVariables: v1.globalVariables,
+        pages: v2Pages,
         carouselConfig: v1.carouselConfig,
         referenceViewport: { width: designWidth, height: designHeight },
     };

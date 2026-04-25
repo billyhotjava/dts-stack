@@ -7,6 +7,7 @@ import { ConfigProvider, theme as antdTheme } from 'antd';
 import { ScreenProvider, useScreen } from './ScreenContext';
 import { ScreenRuntimeProvider } from './ScreenRuntimeContext';
 import { analyticsApi } from '../../api/analyticsApi';
+import type { ScreenWritePayload } from './contracts';
 import { resolveScreenTheme } from './screenThemes';
 import { normalizeScreenConfig } from './specV2';
 import { commitScreenPageDraft, materializeScreenPage, resolveScreenPages, switchScreenPage } from './screenPageState';
@@ -49,7 +50,8 @@ function V1LegacyBanner() {
             // migrationFrom 让后端把这次创建审计为 "screen.migrate" 而不是 "screen.create",
             // 同时把原 v1 大屏 id 写入审计 detail,便于后续做新旧关联与回溯。
             const sourceScreenId = (config as { id?: number | string | null }).id ?? null;
-            const payload = {
+            const payload: ScreenWritePayload = {
+                schemaVersion: 2,
                 name: `${config.name || '大屏'} (v2)`,
                 description: config.description,
                 width: config.width,

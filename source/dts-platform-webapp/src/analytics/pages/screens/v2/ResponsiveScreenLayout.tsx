@@ -25,6 +25,9 @@ export interface ResponsiveScreenLayoutProps {
     className?: string;
     /** 额外包裹 className / style，用于外部 fullscreen 容器定制背景 */
     rootStyle?: React.CSSProperties;
+    components?: ComponentV2[];
+    backgroundColor?: string;
+    backgroundImage?: string;
 }
 
 function toRGLLayout(c: ComponentV2): RGLLayout {
@@ -49,6 +52,8 @@ function toRGLLayout(c: ComponentV2): RGLLayout {
 function v2ToV1Component(c: ComponentV2): ScreenComponent {
     return {
         id: c.id,
+        groupId: c.groupId,
+        parentContainerId: c.parentContainerId,
         type: c.type as ScreenComponent['type'],
         name: c.name ?? c.id,
         x: 0,
@@ -59,6 +64,10 @@ function v2ToV1Component(c: ComponentV2): ScreenComponent {
         locked: c.static === true,
         visible: c.visible !== false,
         config: c.config,
+        dataSource: c.dataSource,
+        drillDown: c.drillDown,
+        actions: c.actions,
+        interaction: c.interaction,
     };
 }
 
@@ -78,6 +87,9 @@ export const ResponsiveScreenLayout = memo(function ResponsiveScreenLayout({
     theme,
     className,
     rootStyle,
+    components,
+    backgroundColor,
+    backgroundImage,
 }: ResponsiveScreenLayoutProps) {
     const containerRef = useRef<HTMLDivElement | null>(null);
     const [containerWidth, setContainerWidth] = useState(() => window.innerWidth);
@@ -102,8 +114,8 @@ export const ResponsiveScreenLayout = memo(function ResponsiveScreenLayout({
     }, [updateSize]);
 
     const visibleComponents = useMemo(
-        () => screen.components.filter((c) => c.visible !== false),
-        [screen.components],
+        () => (components ?? screen.components).filter((c) => c.visible !== false),
+        [components, screen.components],
     );
 
     const layout = useMemo<RGLLayout[]>(
@@ -128,7 +140,8 @@ export const ResponsiveScreenLayout = memo(function ResponsiveScreenLayout({
         return Math.max(MIN_ROW_HEIGHT_PX, Math.floor(cfg));
     }, [screen.layout?.rowHeight, visibleComponents, containerHeight, gap]);
 
-    const rootBackground = screen.backgroundColor || '#1e1f26';
+    const rootBackground = backgroundColor ?? screen.backgroundColor ?? '#1e1f26';
+    const rootBackgroundImage = backgroundImage ?? screen.backgroundImage;
 
     // 空配置兜底：给一个提示，避免白屏。
     const hasContent = visibleComponents.length > 0;
@@ -139,7 +152,7 @@ export const ResponsiveScreenLayout = memo(function ResponsiveScreenLayout({
             className={['v2-screen-root', className].filter(Boolean).join(' ')}
             style={{
                 background: rootBackground,
-                backgroundImage: screen.backgroundImage ? `url(${CSS.escape(screen.backgroundImage)})` : undefined,
+                backgroundImage: rootBackgroundImage ? `url(${CSS.escape(rootBackgroundImage)})` : undefined,
                 backgroundSize: 'cover',
                 backgroundPosition: 'center',
                 backgroundRepeat: 'no-repeat',

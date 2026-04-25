@@ -7,6 +7,7 @@ import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.yuzhi.dts.ingestion.domain.IngestionConnectorCapability;
 import com.yuzhi.dts.ingestion.repository.IngestionConnectorCapabilityRepository;
 import com.yuzhi.dts.ingestion.service.dto.IngestionConnectorCapabilityDTO;
+import com.yuzhi.dts.ingestion.service.etl.api.ApiConnectorTypes;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
@@ -52,7 +53,7 @@ public class ConnectorCapabilityService {
         if (!StringUtils.hasText(connectorType)) {
             return Optional.empty();
         }
-        return repository.findByConnectorTypeIgnoreCase(connectorType.trim()).map(this::toDto);
+        return repository.findByConnectorTypeIgnoreCase(normalizeConnectorType(connectorType)).map(this::toDto);
     }
 
     public void ensureDefaults() {
@@ -140,6 +141,12 @@ public class ConnectorCapabilityService {
                 )
             )
         );
+        seedConnector(
+            ApiConnectorTypes.CONNECTOR_TYPE,
+            List.of("FULL", "INCREMENTAL"),
+            "contract-1",
+            apiConnectorConstraints()
+        );
     }
 
     @Transactional(readOnly = true)
@@ -211,6 +218,46 @@ public class ConnectorCapabilityService {
         repository.save(entity);
     }
 
+    private Map<String, Object> apiConnectorConstraints() {
+        Map<String, Object> constraints = new LinkedHashMap<>();
+        constraints.put("contractVersion", "1.0.0");
+        constraints.put("supportsFile", false);
+        constraints.put("supportsJdbc", false);
+        constraints.put("supportsApi", true);
+        constraints.put("supportsCdc", false);
+        constraints.put("supportsSchemaPreview", true);
+        constraints.put("supportsCursorCheckpoint", true);
+        constraints.put("supportsRateLimit", true);
+        constraints.put("defaultReaderType", ApiConnectorTypes.DEFAULT_READER_TYPE);
+        constraints.put("authProviders", List.of("none", "apiKey", "bearerToken", "basic", "oauth2ClientCredentials", "customSignature", "mtls"));
+        constraints.put(
+            "features",
+            Map.of(
+                "pagination",
+                List.of("page", "offset", "nextToken", "nextUrl"),
+                "schemaDiscovery",
+                List.of("jsonRecordPath", "sampleInference"),
+                "errorClasses",
+                List.of("AUTH", "HTTP_4XX", "HTTP_5XX", "RATE_LIMIT", "TIMEOUT", "PARSE", "PAGINATION", "SCHEMA_DRIFT")
+            )
+        );
+        constraints.put("fallbackSyncMode", "full_refresh");
+        constraints.put(
+            "syncModes",
+            Map.of(
+                "full_refresh",
+                Map.of("enabled", true, "label", "全量同步"),
+                "incremental",
+                Map.of("enabled", true, "label", "增量同步", "requires", List.of("cursor")),
+                "cdc",
+                Map.of("enabled", false, "label", "实时同步(CDC)"),
+                "backfill",
+                Map.of("enabled", false, "label", "历史回灌")
+            )
+        );
+        return constraints;
+    }
+
     private IngestionConnectorCapabilityDTO toDto(IngestionConnectorCapability entity) {
         return new IngestionConnectorCapabilityDTO(
             entity.getConnectorType(),
@@ -271,7 +318,9 @@ public class ConnectorCapabilityService {
         if (!StringUtils.hasText(connectorType)) {
             return "addax";
         }
-        return connectorType.trim().toLowerCase(Locale.ROOT);
+        String normalized = connectorType.trim().toLowerCase(Locale.ROOT);
+        String apiType = ApiConnectorTypes.normalizeConnectorType(normalized);
+        return StringUtils.hasText(apiType) ? apiType : normalized;
     }
 
     private List<String> extractModesFromContract(Map<String, Object> constraints) {
@@ -325,6 +374,9 @@ public class ConnectorCapabilityService {
         }
         if ("airbyte".equals(normalized)) {
             return List.of("full_refresh", "incremental", "cdc", "backfill");
+        }
+        if (ApiConnectorTypes.CONNECTOR_TYPE.equals(normalized)) {
+            return List.of("full_refresh", "incremental");
         }
         return List.of("full_refresh", "incremental");
     }

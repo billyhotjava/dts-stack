@@ -597,7 +597,7 @@ export function ScreenHeader({
 
         setIsSaving(true);
         try {
-            const payload = buildScreenPayload(persistedConfig) as Record<string, unknown>;
+            const payload = buildScreenPayload(persistedConfig);
             const baseline = state.baselineConfig;
             if (id && baseline?.updatedAt) {
                 payload._conflict = buildComponentConflictMeta(baseline);

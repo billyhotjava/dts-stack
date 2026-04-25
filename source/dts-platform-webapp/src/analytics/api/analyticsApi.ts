@@ -1,5 +1,6 @@
 import { resolveCurrentAppPath, resolveLoginHref } from "@/routes/constants";
 import userStore from "@/store/userStore";
+import type { ScreenWritePayload } from "../pages/screens/contracts";
 import { withPlatformAuthorization } from "./platform-auth-header";
 
 export type CollectionListItem = {
@@ -2221,7 +2222,7 @@ export const analyticsApi = {
 		requestBinary(`/bi/api/screens/${encodeURIComponent(String(id))}/export-render`, "POST", body ?? {}),
 	validateScreenSpec: (body: unknown) =>
 		sendJson<ScreenSpecValidationResponse>("/bi/api/screens/validate-spec", body),
-	createScreen: (body: unknown) => sendJson<ScreenDetail>("/bi/api/screens", body),
+	createScreen: (body: ScreenWritePayload) => sendJson<ScreenDetail>("/bi/api/screens", body),
 	listScreenVersions: (id: string | number) =>
 		fetchJson<ScreenVersion[]>(`/bi/api/screens/${encodeURIComponent(String(id))}/versions`),
 	compareScreenVersions: (id: string | number, fromVersionId: string | number, toVersionId: string | number) =>
@@ -2240,7 +2241,7 @@ export const analyticsApi = {
 			`/bi/api/screens/${encodeURIComponent(String(id))}/rollback/${encodeURIComponent(String(versionId))}`,
 			{},
 		),
-	updateScreen: (id: string | number, body: unknown) =>
+	updateScreen: (id: string | number, body: ScreenWritePayload) =>
 		requestJson<ScreenDetail>(`/bi/api/screens/${encodeURIComponent(String(id))}`, "PUT", body),
 	deleteScreen: (id: string | number) =>
 		requestJson<void>(`/bi/api/screens/${encodeURIComponent(String(id))}`, "DELETE"),

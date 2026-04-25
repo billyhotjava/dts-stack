@@ -2,8 +2,10 @@ package com.yuzhi.dts.platform.service.visualization;
 
 import com.yuzhi.dts.platform.domain.explore.QueryDatasetAsset;
 import com.yuzhi.dts.platform.domain.visualization.BiReportLink;
+import com.yuzhi.dts.platform.domain.visualization.BiReportVisit;
 import com.yuzhi.dts.platform.repository.explore.QueryDatasetAssetRepository;
 import com.yuzhi.dts.platform.repository.visualization.BiReportLinkRepository;
+import com.yuzhi.dts.platform.repository.visualization.BiReportVisitRepository;
 import com.yuzhi.dts.platform.security.AuthoritiesConstants;
 import com.yuzhi.dts.platform.security.ClassificationUtils;
 import com.yuzhi.dts.platform.security.DepartmentUtils;
@@ -27,6 +29,7 @@ import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationToken;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
 
@@ -35,27 +38,38 @@ import org.springframework.util.StringUtils;
 public class BiReportLinkService {
 
     private final BiReportLinkRepository repo;
+    private final BiReportVisitRepository visitRepo;
     private final QueryDatasetAssetRepository queryDatasetAssetRepository;
     private final ClassificationUtils classificationUtils;
 
     public BiReportLinkService(
         BiReportLinkRepository repo,
+        BiReportVisitRepository visitRepo,
         QueryDatasetAssetRepository queryDatasetAssetRepository,
         ClassificationUtils classificationUtils
     ) {
         this.repo = repo;
+        this.visitRepo = visitRepo;
         this.queryDatasetAssetRepository = queryDatasetAssetRepository;
         this.classificationUtils = classificationUtils;
     }
 
     @Transactional(readOnly = true)
-    public List<BiReportLinkDto> listPublished(String deptCode, String reportType, String keyword, String activeDeptHeader, UUID queryDatasetId) {
+    public List<BiReportLinkDto> listPublished(
+        String deptCode,
+        String reportType,
+        String keyword,
+        String activeDeptHeader,
+        UUID queryDatasetId,
+        String bizDomain
+    ) {
         List<BiReportLink> all = repo.findByEnabledTrueOrderBySortOrderAscLastModifiedDateDesc();
         Map<UUID, QueryDatasetAsset> datasetCache = loadDatasetCache(all);
 
         String dept = trimToNull(deptCode);
         String type = trimToNull(reportType);
         String kw = trimToNull(keyword);
+        String biz = trimToNull(bizDomain);
         String queryDept = resolveActiveDept(activeDeptHeader);
         String userDept = currentClaim("dept_code");
         String effectiveDept = StringUtils.hasText(queryDept) ? queryDept : userDept;
@@ -77,6 +91,7 @@ public class BiReportLinkService {
             if (!matchDeptFilter(dept, r.getDeptCodes())) continue;
             if (!matchType(type, r.getReportType())) continue;
             if (!matchKeyword(kw, r.getTitle(), r.getCode())) continue;
+            if (!matchBizDomain(biz, r.getBizDomain())) continue;
 
             QueryDatasetAsset dataset = r.getQueryDatasetId() == null ? null : datasetCache.get(r.getQueryDatasetId());
             if (!datasetVisibleInScope(dataset, effectiveDept, superAdmin)) continue;
@@ -92,11 +107,13 @@ public class BiReportLinkService {
         String keyword,
         Boolean enabledOnly,
         String activeDeptHeader,
-        UUID queryDatasetId
+        UUID queryDatasetId,
+        String bizDomain
     ) {
         String dept = trimToNull(deptCode);
         String type = trimToNull(reportType);
         String kw = trimToNull(keyword);
+        String biz = trimToNull(bizDomain);
         boolean onlyEnabled = Boolean.TRUE.equals(enabledOnly);
         String activeDept = resolveActiveDept(activeDeptHeader);
         boolean superAdmin = hasGlobalManageScope();
@@ -114,6 +131,7 @@ public class BiReportLinkService {
             if (!matchDeptFilter(dept, r.getDeptCodes())) continue;
             if (!matchType(type, r.getReportType())) continue;
             if (!matchKeyword(kw, r.getTitle(), r.getCode())) continue;
+            if (!matchBizDomain(biz, r.getBizDomain())) continue;
 
             QueryDatasetAsset dataset = r.getQueryDatasetId() == null ? null : datasetCache.get(r.getQueryDatasetId());
             if (!datasetVisibleInScope(dataset, activeDept, superAdmin)) continue;
@@ -158,6 +176,8 @@ public class BiReportLinkService {
         repo.delete(link);
     }
 
+    // Always own its tx so a readOnly caller cannot block the visit-log write.
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
     public void touchVisit(UUID id, String code) {
         BiReportLink link = null;
         if (id != null) {
@@ -169,8 +189,20 @@ public class BiReportLinkService {
         if (link == null) {
             return;
         }
-        link.setLastVisitedAt(Instant.now());
+        Instant now = Instant.now();
+        link.setLastVisitedAt(now);
         repo.save(link);
+
+        // Append a per-visit log row so leader-overview aggregations can
+        // compute visits-in-period KPIs, top-N by count, and the domain
+        // matrix (Sprint-15 F1).
+        BiReportVisit visit = new BiReportVisit();
+        visit.setReportId(link.getId());
+        visit.setUserLogin(SecurityUtils.getCurrentUserLogin().orElse(null));
+        visit.setDeptCode(SecurityUtils.getCurrentUserDept().orElse(null));
+        visit.setBizDomain(link.getBizDomain());
+        visit.setVisitedAt(now);
+        visitRepo.save(visit);
     }
 
     private void apply(BiReportLink target, BiReportLinkRequest req, boolean creating, String activeDeptHeader) {
@@ -193,6 +225,7 @@ public class BiReportLinkService {
         target.setQueryDatasetId(resolveDatasetId(req.getQueryDatasetId(), activeDeptHeader));
         target.setQueryDatasetVersion(req.getQueryDatasetVersion());
         target.setExpiresAt(parseInstant(req.getExpiresAt()));
+        target.setBizDomain(trimToNull(req.getBizDomain()));
         if (req.getEnabled() != null) {
             target.setEnabled(Boolean.TRUE.equals(req.getEnabled()));
         } else if (creating) {
@@ -222,7 +255,8 @@ public class BiReportLinkService {
             r.getExpiresAt(),
             r.getLastVisitedAt(),
             r.getCreatedBy(),
-            r.getLastModifiedDate()
+            r.getLastModifiedDate(),
+            r.getBizDomain()
         );
     }
 
@@ -289,6 +323,12 @@ public class BiReportLinkService {
             (title != null && title.toLowerCase(Locale.ROOT).contains(needle)) ||
             (code != null && code.toLowerCase(Locale.ROOT).contains(needle))
         );
+    }
+
+    private boolean matchBizDomain(String bizDomainFilter, String bizDomainValue) {
+        if (!StringUtils.hasText(bizDomainFilter)) return true;
+        if (!StringUtils.hasText(bizDomainValue)) return false;
+        return bizDomainFilter.trim().equalsIgnoreCase(bizDomainValue.trim());
     }
 
     private boolean matchType(String typeFilter, String reportType) {

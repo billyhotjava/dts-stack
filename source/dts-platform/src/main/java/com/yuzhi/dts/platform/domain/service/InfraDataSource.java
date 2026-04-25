@@ -31,7 +31,7 @@ public class InfraDataSource extends AbstractAuditingEntity<UUID> implements Ser
     @Column(name = "username", length = 128)
     private String username;
 
-    @Column(name = "props", length = 2048)
+    @Column(name = "props", columnDefinition = "text")
     private String props; // JSON or k=v
 
     @Column(name = "description", length = 512)

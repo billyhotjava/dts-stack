@@ -22,5 +22,6 @@ public record BiReportLinkDto(
     Instant expiresAt,
     Instant lastVisitedAt,
     String owner,
-    Instant updatedAt
+    Instant updatedAt,
+    String bizDomain
 ) {}

@@ -183,6 +183,14 @@ public class IngestionServiceClient {
         return exchangeObject("/api/ingestion/connectors/capabilities/" + connectorType, HttpMethod.GET, null, null, restTemplate);
     }
 
+    public ApiResponse<Object> getApiConnectorContract() {
+        return exchangeObject("/api/ingestion/api/contract", HttpMethod.GET, null, null, restTemplate);
+    }
+
+    public ApiResponse<Object> listApiAuthProviders() {
+        return exchangeObject("/api/ingestion/api/auth-providers", HttpMethod.GET, null, null, restTemplate);
+    }
+
     public ApiResponse<Object> getRealtimeStatus(Long taskId) {
         return exchangeObject("/api/ingestion/tasks/" + taskId + "/realtime-status", HttpMethod.GET, null, null, restTemplate);
     }

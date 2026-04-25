@@ -12,7 +12,7 @@ import { applyThemeCssVariables } from './themes/screenCssVariables';
 import { normalizeScreenConfig } from './specV2';
 import { tryLoadV2 } from './v2/loader';
 import type { ScreenConfigV2 } from './v2/types';
-import { ResponsiveScreenLayout } from './v2/ResponsiveScreenLayout';
+import { V2ScreenRuntime } from './v2/V2ScreenRuntime';
 import { buildComponentMap, isComponentEffectivelyVisible } from './componentHierarchy';
 import { safeCssBackgroundUrl } from './sanitize';
 import { useScreenCarousel } from './hooks/useScreenCarousel';
@@ -349,9 +349,15 @@ export default function PublicScreenPage() {
 		return resolveRuntimeCanvasScaleStyle(scale, components);
 	}, [useStretchFill, autoScaleX, autoScaleY, scale, components]);
 
+	const rawTheme = screen?.theme as ScreenTheme | undefined;
+	const screenTheme = resolveScreenTheme(rawTheme, screen?.backgroundColor);
+	const publicCanvasRef = useRef<HTMLDivElement>(null);
+	useEffect(() => {
+		if (publicCanvasRef.current) applyThemeCssVariables(publicCanvasRef.current, screenTheme);
+	}, [screenTheme]);
+
 	const isDark = useMemo(() => {
 		if (!screen) return true; // default dark for loading/error states
-		const rawTheme = screen.theme as ScreenTheme | undefined;
 		return resolveScreenTheme(rawTheme, screen.backgroundColor) !== 'glacier';
 	}, [screen]);
 
@@ -431,9 +437,13 @@ export default function PublicScreenPage() {
 	// Sprint-12 F1/T03: v2 响应式大屏走 ResponsiveScreenLayout，跳过 v1 scale 逻辑。
 	if (v2Config) {
 		return (
-			<div className="fixed inset-0 overflow-hidden p-0 box-border" data-testid="analytics-public-screen-v2">
-				<ResponsiveScreenLayout screen={v2Config} theme={v2Config.theme} />
-			</div>
+			<V2ScreenRuntime
+				screen={v2Config}
+				runtimeMeta={uuid ? { accessMode: 'public', publicScreenUuid: uuid } : { accessMode: 'public' }}
+				urlVariableOverrides={urlVariableOverrides}
+				showVariablePanel={!hideControls}
+				dataTestId="analytics-public-screen-v2"
+			/>
 		);
 	}
 
@@ -441,13 +451,6 @@ export default function PublicScreenPage() {
 	if (!screen) {
 		return null;
 	}
-
-	const rawTheme = screen.theme as ScreenTheme | undefined;
-	const screenTheme = resolveScreenTheme(rawTheme, screen.backgroundColor);
-	const publicCanvasRef = useRef<HTMLDivElement>(null);
-	useEffect(() => {
-		if (publicCanvasRef.current) applyThemeCssVariables(publicCanvasRef.current, screenTheme);
-	}, [screenTheme]);
 	const carouselTransition = screen.carouselConfig?.transition ?? 'fade';
 	const carouselDuration = screen.carouselConfig?.transitionDuration ?? 800;
 	const screenWidth = contentBounds.width;
