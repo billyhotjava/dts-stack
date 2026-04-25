@@ -244,24 +244,35 @@ public class WorkbenchLeaderOverviewService {
         // Sprint-17 hotfix: when MINE-scope has no visit history yet (typical first-time user),
         // fall back to reconcile-synced screens so "我常用的报表" is not permanently empty.
         // visits is reported as 0 to signal "not yet visited" — UI shows the relativeTime as "—".
+        // Defensive: if the production DB schema is missing the bi_report_link.source column
+        // (Liquibase changeset 20260425_02_bi_report_link_source.xml not yet applied), the
+        // fallback query throws — degrade gracefully so the rest of the overview still loads.
         if ("MINE".equals(scope) && mapped.isEmpty()) {
-            List<BiReportLink> fallback = reportRepo.findRecentBySourceForFallback(
-                ScreenReportLinkSyncService.SOURCE_TAG,
-                topNPageable()
-            );
-            return fallback
-                .stream()
-                .map(link -> new TopReport(
-                    link.getId() != null ? link.getId().toString() : null,
-                    link.getTitle(),
-                    0L,
-                    link.getBizDomain(),
-                    ClassificationMapper.toApiCode(link.getClassification()),
-                    link.getLastVisitedAt(),
-                    link.getUrl(),
-                    link.getEngine()
-                ))
-                .toList();
+            try {
+                List<BiReportLink> fallback = reportRepo.findRecentBySourceForFallback(
+                    ScreenReportLinkSyncService.SOURCE_TAG,
+                    topNPageable()
+                );
+                return fallback
+                    .stream()
+                    .map(link -> new TopReport(
+                        link.getId() != null ? link.getId().toString() : null,
+                        link.getTitle(),
+                        0L,
+                        link.getBizDomain(),
+                        ClassificationMapper.toApiCode(link.getClassification()),
+                        link.getLastVisitedAt(),
+                        link.getUrl(),
+                        link.getEngine()
+                    ))
+                    .toList();
+            } catch (Exception e) {
+                log.warn(
+                    "MINE topReports fallback query failed (likely missing bi_report_link.source column — run hotfix-add-bi-report-link-source.sql): {}",
+                    e.getMessage()
+                );
+                return List.of();
+            }
         }
         return mapped;
     }
