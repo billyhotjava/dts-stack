@@ -20,6 +20,7 @@ import com.yuzhi.dts.ingestion.service.etl.AirflowDagService;
 import com.yuzhi.dts.ingestion.service.etl.DagPreheatService;
 import com.yuzhi.dts.ingestion.service.etl.IncrementalSyncService;
 import com.yuzhi.dts.ingestion.service.etl.ExecutionFailureClassifier;
+import com.yuzhi.dts.ingestion.service.etl.api.ApiConnectorTypes;
 import com.yuzhi.dts.ingestion.service.mapper.IngestionExecutionMapper;
 import com.yuzhi.dts.ingestion.service.mapper.IngestionTaskMapper;
 import com.yuzhi.dts.common.audit.AuditStage;
@@ -239,6 +240,10 @@ public class IngestionTaskService {
                 if (dto.getSyncConfig() != null) {
                     existingTask.setSyncConfig(dto.getSyncConfig());
                 }
+                boolean apiSourceTask = isApiSourceTask(existingTask);
+                if (apiSourceTask) {
+                    existingTask.setStatus("draft");
+                }
                 // 如果配置改变，重新生成Addax Job JSON
                 boolean sourceChanged = !java.util.Objects.equals(before.getSourceDataSourceId(), existingTask.getSourceDataSourceId());
                 boolean configChanged = sourceChanged
@@ -250,7 +255,10 @@ public class IngestionTaskService {
                     || !java.util.Objects.equals(before.getTableMapping(), existingTask.getTableMapping())
                     || !java.util.Objects.equals(before.getAddaxConfig(), existingTask.getAddaxConfig());
 
-                if (configChanged) {
+                if (configChanged && apiSourceTask) {
+                    existingTask.setStatus("draft");
+                    existingTask.setAddaxJobPath(null);
+                } else if (configChanged) {
                     try {
                         com.yuzhi.dts.ingestion.service.etl.IngestionSourceResolver.ResolvedSource source = resolveSource(existingTask, null);
                         AddaxJobService.AddaxJobResult jobResult = source == null
@@ -267,7 +275,9 @@ public class IngestionTaskService {
                 }
 
                 IngestionTask updatedTask = taskRepository.save(existingTask);
-                updatedTask = ensureAirflowDag(updatedTask);
+                if (!isApiSourceTask(updatedTask)) {
+                    updatedTask = ensureAirflowDag(updatedTask);
+                }
                 log.info("Updated ingestion task ID: {} by user: {}", id, updatedTask.getLastModifiedBy());
 
                 try {
@@ -277,7 +287,7 @@ public class IngestionTaskService {
                 }
 
                 // Preheat: asynchronously poll Airflow so the DAG is registered before the user clicks execute
-                if (StringUtils.hasText(updatedTask.getAirflowDagId())) {
+                if (!isApiSourceTask(updatedTask) && StringUtils.hasText(updatedTask.getAirflowDagId())) {
                     dagPreheatService.preheatDag(updatedTask.getAirflowDagId());
                 }
 
@@ -707,6 +717,9 @@ public class IngestionTaskService {
 
         if (!"active".equals(task.getStatus()) && !"draft".equals(task.getStatus())) {
             throw new IllegalStateException("Task is not in executable status: " + task.getStatus());
+        }
+        if (isApiSourceTask(task)) {
+            throw new IllegalStateException("API 数据接入运行时尚未启用，请先保存草稿");
         }
         GovernancePolicy policy = resolveGovernancePolicy(task);
         if (!isWithinExecutionWindow(policy)) {
@@ -2054,6 +2067,10 @@ public class IngestionTaskService {
         if (!org.springframework.util.StringUtils.hasText(sourceType)) return false;
         String lower = sourceType.toLowerCase(java.util.Locale.ROOT);
         return "excel".equals(lower) || "csv".equals(lower) || "excelreader".equals(lower) || "txtfilereader".equals(lower);
+    }
+
+    private boolean isApiSourceTask(IngestionTask task) {
+        return task != null && ApiConnectorTypes.isApiSourceType(task.getSourceType());
     }
 
     private Map<String, Integer> resolveTaskTryHints(String dagId, String dagRunId) {

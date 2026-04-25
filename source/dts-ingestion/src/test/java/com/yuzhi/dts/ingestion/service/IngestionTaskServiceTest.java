@@ -35,6 +35,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Collections;
+import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.any;
@@ -48,6 +49,8 @@ import static org.mockito.Mockito.*;
  */
 @ExtendWith(MockitoExtension.class)
 class IngestionTaskServiceTest {
+
+    private static final UUID TEST_SOURCE_ID = UUID.fromString("00000000-0000-0000-0000-000000000101");
 
     @Mock
     private IngestionTaskRepository taskRepository;
@@ -371,6 +374,65 @@ class IngestionTaskServiceTest {
     }
 
     @Test
+    void execute_shouldRejectApiSourceTaskUntilRuntimeIsEnabled() {
+        Long taskId = 1L;
+        IngestionTask task = createTestTaskEntity();
+        task.setId(taskId);
+        task.setStatus("draft");
+        task.setSourceType("httpreader");
+
+        when(taskRepository.findById(taskId)).thenReturn(Optional.of(task));
+
+        assertThatThrownBy(() -> ingestionTaskService.execute(taskId))
+            .isInstanceOf(IllegalStateException.class)
+            .hasMessageContaining("API 数据接入运行时尚未启用");
+    }
+
+    @Test
+    void update_shouldKeepApiTaskDraftAndSkipRuntimeAssetGeneration() {
+        Long taskId = 1L;
+        UUID sourceId = UUID.randomUUID();
+        IngestionTaskDTO dto = createTestTaskDTO();
+        dto.setId(taskId);
+        dto.setSourceType("httpreader");
+        dto.setSourceDataSourceId(sourceId);
+        dto.setStatus("active");
+        ObjectNode nextSourceConfig = objectMapper.createObjectNode();
+        nextSourceConfig.put("path", "/orders");
+        dto.setSourceConfig(nextSourceConfig);
+
+        IngestionTask existingTask = createTestTaskEntity();
+        existingTask.setId(taskId);
+        existingTask.setSourceType("httpreader");
+        existingTask.setSourceDataSourceId(sourceId);
+        existingTask.setStatus("active");
+        existingTask.setAirflowEnabled(true);
+        existingTask.setAddaxJobPath("/tmp/old-api-job.json");
+
+        when(taskRepository.findById(taskId)).thenReturn(Optional.of(existingTask));
+        doAnswer(inv -> {
+            IngestionTask target = inv.getArgument(0);
+            IngestionTaskDTO update = inv.getArgument(1);
+            target.setSourceType(update.getSourceType());
+            target.setSourceDataSourceId(update.getSourceDataSourceId());
+            target.setSourceConfig(update.getSourceConfig());
+            target.setStatus(update.getStatus());
+            return null;
+        }).when(taskMapper).partialUpdate(existingTask, dto);
+        when(taskRepository.save(existingTask)).thenReturn(existingTask);
+        when(taskMapper.toDto(existingTask)).thenReturn(dto);
+
+        IngestionTaskDTO result = ingestionTaskService.update(taskId, dto);
+
+        assertThat(result).isNotNull();
+        assertThat(existingTask.getStatus()).isEqualTo("draft");
+        assertThat(existingTask.getAddaxJobPath()).isNull();
+        verify(addaxJobService, never()).createJobFromTask(any(IngestionTask.class));
+        verify(airflowAdapter, never()).isEnabled();
+        verify(airflowDagService, never()).ensureDagForTask(any(), any());
+    }
+
+    @Test
     void shouldGetExecutionHistory() {
         // Given
         Long taskId = 1L;
@@ -477,6 +539,7 @@ class IngestionTaskServiceTest {
         IngestionTaskDTO dto = new IngestionTaskDTO();
         dto.setName("test-task");
         dto.setSourceType("mysqlreader");
+        dto.setSourceDataSourceId(TEST_SOURCE_ID);
         dto.setDestinationType("postgresqlwriter");
         dto.setSyncMode("full_refresh");
 

@@ -1,6 +1,8 @@
 package com.yuzhi.dts.platform.service.infra;
 
 import com.yuzhi.dts.platform.service.infra.dto.DataSourceRequest;
+import java.net.URI;
+import java.net.URISyntaxException;
 import java.util.LinkedHashMap;
 import java.util.Locale;
 import java.util.Map;
@@ -14,7 +16,7 @@ final class ApiDataSourceSupport {
     static final String CONNECTOR_TYPE = "api";
     static final String DEFAULT_READER_TYPE = "httpreader";
 
-    private static final Set<String> API_TYPES = Set.of("api", "http", "http_api", "api_http", "rest", "rest_api");
+    private static final Set<String> API_TYPES = Set.of("api", "http", "https", "http_api", "api_http", "rest", "rest_api", "httpreader");
     private static final Set<String> SENSITIVE_KEYS = Set.of(
         "authorization",
         "apikey",
@@ -53,6 +55,7 @@ final class ApiDataSourceSupport {
         if (!StringUtils.hasText(baseUrl)) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "API 数据源 baseUrl 不能为空");
         }
+        validateBaseUrl(baseUrl);
         String leakedKey = findSensitivePlaintextKey(props);
         if (StringUtils.hasText(leakedKey)) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "敏感字段 " + leakedKey + " 必须保存到 secrets，不能写入 props");
@@ -100,9 +103,38 @@ final class ApiDataSourceSupport {
         }
         Object auth = props.get("auth");
         if (auth instanceof Map<?, ?> map) {
-            return asText(map.get("provider"));
+            String provider = asText(map.get("provider"));
+            if (StringUtils.hasText(provider)) {
+                return provider;
+            }
+        }
+        Object api = props.get("api");
+        if (api instanceof Map<?, ?> apiMap) {
+            Object nestedDirect = apiMap.get("authProvider");
+            if (StringUtils.hasText(asText(nestedDirect))) {
+                return asText(nestedDirect);
+            }
+            Object nestedAuth = apiMap.get("auth");
+            if (nestedAuth instanceof Map<?, ?> authMap) {
+                return asText(authMap.get("provider"));
+            }
         }
         return null;
+    }
+
+    private static void validateBaseUrl(String baseUrl) {
+        try {
+            URI uri = new URI(baseUrl.trim());
+            String scheme = uri.getScheme();
+            if (!"http".equalsIgnoreCase(scheme) && !"https".equalsIgnoreCase(scheme)) {
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "API 数据源 baseUrl 仅支持 http/https");
+            }
+            if (!StringUtils.hasText(uri.getHost())) {
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "API 数据源 baseUrl host 不能为空");
+            }
+        } catch (URISyntaxException ex) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "API 数据源 baseUrl 格式不合法");
+        }
     }
 
     private static String findSensitivePlaintextKey(Object value) {
@@ -148,10 +180,22 @@ final class ApiDataSourceSupport {
         if (normalizedPath != null && normalizedPath.contains("secretrefs")) {
             return false;
         }
-        if ("value".equals(normalized) && normalizedPath != null && normalizedPath.startsWith("auth")) {
+        if ("value".equals(normalized) && pathHasSegment(normalizedPath, "auth")) {
             return true;
         }
         return SENSITIVE_KEYS.contains(normalized);
+    }
+
+    private static boolean pathHasSegment(String normalizedPath, String segment) {
+        if (!StringUtils.hasText(normalizedPath) || !StringUtils.hasText(segment)) {
+            return false;
+        }
+        for (String part : normalizedPath.split("[.\\[\\]]+")) {
+            if (segment.equals(part)) {
+                return true;
+            }
+        }
+        return false;
     }
 
     private static String normalize(String value) {

@@ -10,6 +10,8 @@ class ApiConnectorTypesTest {
     void isApiSourceType_acceptsHttpAliases() {
         assertThat(ApiConnectorTypes.isApiSourceType("api")).isTrue();
         assertThat(ApiConnectorTypes.isApiSourceType("HTTP_API")).isTrue();
+        assertThat(ApiConnectorTypes.isApiSourceType("https")).isTrue();
+        assertThat(ApiConnectorTypes.isApiSourceType("api_http")).isTrue();
         assertThat(ApiConnectorTypes.isApiSourceType("httpreader")).isTrue();
     }
 
@@ -19,5 +21,10 @@ class ApiConnectorTypesTest {
         assertThat(ApiConnectorTypes.normalizeConnectorType("rest_api")).isEqualTo("api");
         assertThat(ApiConnectorTypes.normalizeConnectorType("addax")).isEqualTo("addax");
     }
-}
 
+    @Test
+    void supportedSourceTypes_exposesAllAcceptedAliases() {
+        assertThat(ApiConnectorTypes.supportedSourceTypes())
+            .containsExactly("api", "http", "https", "http_api", "api_http", "rest", "rest_api", "httpreader");
+    }
+}

@@ -35,7 +35,7 @@ public class ApiConnectorContractResource {
                 "connectorType",
                 ApiConnectorTypes.CONNECTOR_TYPE,
                 "sourceTypes",
-                List.of("api", "http", "http_api", "rest_api"),
+                ApiConnectorTypes.supportedSourceTypes(),
                 "defaultReaderType",
                 ApiConnectorTypes.DEFAULT_READER_TYPE,
                 "syncModes",
@@ -52,4 +52,3 @@ public class ApiConnectorContractResource {
         return ResponseEntity.ok(authProviderRegistry.listDescriptors());
     }
 }
-

@@ -22,6 +22,9 @@ class ApiConnectorContractResourceTest {
         @SuppressWarnings("unchecked")
         List<String> syncModes = (List<String>) contract.get("syncModes");
         assertThat(syncModes).contains("full_refresh", "incremental");
+        @SuppressWarnings("unchecked")
+        List<String> sourceTypes = (List<String>) contract.get("sourceTypes");
+        assertThat(sourceTypes).contains("api_http", "https", "httpreader");
         assertThat((List<?>) contract.get("authProviders")).hasSizeGreaterThanOrEqualTo(3);
     }
 }

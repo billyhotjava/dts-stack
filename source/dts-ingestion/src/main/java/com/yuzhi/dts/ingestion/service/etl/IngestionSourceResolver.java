@@ -36,6 +36,12 @@ public class IngestionSourceResolver {
         Map.entry("json", "jsonreader"),
         Map.entry("api", "httpreader"),
         Map.entry("http", "httpreader"),
+        Map.entry("https", "httpreader"),
+        Map.entry("http_api", "httpreader"),
+        Map.entry("api_http", "httpreader"),
+        Map.entry("rest", "httpreader"),
+        Map.entry("rest_api", "httpreader"),
+        Map.entry("httpreader", "httpreader"),
         Map.entry("file", "txtfilereader")
     );
 
