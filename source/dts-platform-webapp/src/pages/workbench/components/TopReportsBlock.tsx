@@ -1,7 +1,9 @@
 import type { ReactNode } from "react";
+import { toast } from "sonner";
 import { Card, Empty, List, Skeleton, Tag } from "antd";
 import type { LeaderOverviewResponse } from "@/api/services/workbenchService";
 import reportsService from "@/api/services/reportsService";
+import { resolveBiLinkForOpen } from "@/utils/biLinkUrl";
 import type { WorkbenchRole } from "../hooks/useWorkbenchRole";
 import { classificationColor } from "../hooks/classification";
 import { relativeTime } from "../hooks/relativeTime";
@@ -46,17 +48,27 @@ export function TopReportsBlock({ role, items, loading, onEmpty }: TopReportsBlo
 	const title = titleFor(role);
 
 	const handleRowClick = async (item: TopReportItem): Promise<void> => {
+		// Sprint-17 hotfix: was hardcoded to `/reports/${id}` which does not exist as a
+		// frontend route. Now mirrors BiLinksPage by resolving the original BiReportLink
+		// URL (e.g. `/bi/screens/{id}/preview` for SCREEN_SYNC rows, or HETU links for
+		// classic reports) through `resolveBiLinkForOpen`.
+		const target = resolveBiLinkForOpen(item.url ?? "", item.engine ?? "");
+		if (!target) {
+			toast.error("未配置跳转地址");
+			return;
+		}
+		window.open(target, "_blank", "noopener,noreferrer");
 		try {
 			await reportsService.visit({
 				id: item.id,
 				title: item.title,
+				url: target,
+				engine: item.engine ?? undefined,
 				classification: item.classification,
 			});
 		} catch {
 			// Best-effort logging — do not block navigation on audit failure.
 		}
-		// TODO: align with `resolveRouteForOpen` once a canonical report-open helper ships.
-		window.open(`/reports/${item.id}`, "_blank", "noopener,noreferrer");
 	};
 
 	return (

@@ -16,6 +16,8 @@ export interface UserInfo {
     department?: string;
     /** Normalized department code inferred from attributes.department / attributes.dept_code / raw deptCode. */
     deptCode?: string;
+    /** Sprint-17 hotfix — human-readable department name (机构名称) inferred from attributes.dept_name / dept_name / org_name. */
+    deptName?: string;
     enabled?: boolean;
     roles?: Role[] | string[]; // 支持两种格式：对象数组或字符串数组
     status?: BasicStatus;

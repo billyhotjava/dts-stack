@@ -16,6 +16,8 @@ export type WorkbenchRole = "EMP" | "DEPT_LEADER" | "INST_LEADER";
 export interface WorkbenchRoleInfo {
 	role: WorkbenchRole;
 	deptCode: string | null;
+	/** Sprint-17 hotfix — human-readable department label; falls back to deptCode in UI. */
+	deptName: string | null;
 	isInstLeader: boolean;
 	isDeptLeader: boolean;
 	isEmp: boolean;
@@ -48,6 +50,25 @@ function resolveDeptCode(userInfo: unknown): string | null {
 	return null;
 }
 
+function resolveDeptName(userInfo: unknown): string | null {
+	if (!userInfo || typeof userInfo !== "object") return null;
+	const info = userInfo as Record<string, unknown>;
+	if (typeof info.deptName === "string" && info.deptName.trim()) {
+		return info.deptName.trim();
+	}
+	const attrs = info.attributes;
+	if (attrs && typeof attrs === "object") {
+		const attrMap = attrs as Record<string, unknown>;
+		const cand = attrMap.dept_name ?? attrMap.deptName ?? attrMap.org_name ?? attrMap.orgName;
+		if (Array.isArray(cand)) {
+			const first = cand[0];
+			if (typeof first === "string" && first.trim()) return first.trim();
+		}
+		if (typeof cand === "string" && cand.trim()) return cand.trim();
+	}
+	return null;
+}
+
 export function useWorkbenchRole(): WorkbenchRoleInfo {
 	const userInfo = useUserInfo();
 	const rawRoles = useUserRoles();
@@ -56,9 +77,11 @@ export function useWorkbenchRole(): WorkbenchRoleInfo {
 		const roles = Array.isArray(rawRoles) ? (rawRoles as string[]) : [];
 		const role = resolveRole(roles);
 		const deptCode = resolveDeptCode(userInfo);
+		const deptName = resolveDeptName(userInfo);
 		return {
 			role,
 			deptCode,
+			deptName,
 			isInstLeader: role === "INST_LEADER",
 			isDeptLeader: role === "DEPT_LEADER",
 			isEmp: role === "EMP",

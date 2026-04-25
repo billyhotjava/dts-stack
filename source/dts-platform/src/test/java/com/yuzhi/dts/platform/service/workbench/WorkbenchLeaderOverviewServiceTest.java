@@ -265,7 +265,8 @@ class WorkbenchLeaderOverviewServiceTest {
         UUID rid = UUID.randomUUID();
         when(visitRepo.findTopRecentByUser(eq("alice"), any(), any()))
             .thenReturn(List.of(new ReportVisitAggregateRow(
-                rid, "Monthly Report", 5L, "finance", "TOP_SECRET", Instant.parse("2026-04-01T00:00:00Z")
+                rid, "Monthly Report", 5L, "finance", "TOP_SECRET", Instant.parse("2026-04-01T00:00:00Z"),
+                "/bi/screens/42/preview", "DTS_BI"
             )));
 
         LeaderOverviewResponse res = service.build(

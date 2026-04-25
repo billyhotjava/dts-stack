@@ -75,14 +75,24 @@ function toTreeSelectData(nodes: DeptTreeNode[]): TreeSelectOption[] {
 	});
 }
 
+function flattenDeptNames(nodes: DeptTreeNode[], out: Map<string, string>): void {
+	for (const n of nodes) {
+		if (n.code && n.name && !out.has(n.code)) out.set(n.code, n.name);
+		if (n.children?.length) flattenDeptNames(n.children, out);
+	}
+}
+
 export function DeptSelect({ value, onChange }: DeptSelectProps) {
-	const { isInstLeader, deptCode } = useWorkbenchRole();
+	const { isInstLeader, deptCode, deptName } = useWorkbenchRole();
 	const [tree, setTree] = useState<DeptTreeNode[]>([]);
 	const [apiFailed, setApiFailed] = useState(false);
 	const [loading, setLoading] = useState(false);
 
 	useEffect(() => {
-		if (!isInstLeader) return;
+		// Sprint-17 hotfix: also fetch the org tree for non-INST_LEADER users when their
+		// session payload didn't include `deptName`, so the locked label can still resolve
+		// to a human-readable name instead of falling back to the bare code.
+		if (!isInstLeader && deptName) return;
 		let cancelled = false;
 		setLoading(true);
 		fetchOrgTree()
@@ -103,9 +113,17 @@ export function DeptSelect({ value, onChange }: DeptSelectProps) {
 		return () => {
 			cancelled = true;
 		};
-	}, [isInstLeader]);
+	}, [isInstLeader, deptName]);
 
 	if (!isInstLeader) {
+		// Prefer session-supplied deptName; otherwise look it up from the org tree (best-effort).
+		let resolvedName = deptName ?? null;
+		if (!resolvedName && deptCode && tree.length) {
+			const flat = new Map<string, string>();
+			flattenDeptNames(tree, flat);
+			resolvedName = flat.get(deptCode) ?? null;
+		}
+		const label = resolvedName ?? deptCode ?? "（未绑定）";
 		return (
 			<div
 				data-testid="dept-select-locked"
@@ -118,16 +136,21 @@ export function DeptSelect({ value, onChange }: DeptSelectProps) {
 					display: "inline-flex",
 					alignItems: "center",
 				}}
+				title={deptCode ?? undefined}
 			>
-				本部门：{deptCode ?? "（未绑定）"}
+				本部门：{label}
 			</div>
 		);
 	}
 
+	const flat = new Map<string, string>();
+	flattenDeptNames(tree, flat);
+	const selfName = deptName ?? (deptCode ? flat.get(deptCode) : undefined);
+	const selfLabel = selfName && deptCode ? `本部门：${selfName}` : `本部门：${deptCode ?? ""}`;
 	const treeData: TreeSelectOption[] = apiFailed
 		? [
 				{ value: "ALL", title: "全所（默认）" },
-				...(deptCode ? [{ value: deptCode, title: `本部门：${deptCode}` }] : []),
+				...(deptCode ? [{ value: deptCode, title: selfLabel }] : []),
 			]
 		: [{ value: "ALL", title: "全所（默认）" }, ...toTreeSelectData(tree)];
 

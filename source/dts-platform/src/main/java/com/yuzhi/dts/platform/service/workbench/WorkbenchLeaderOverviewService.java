@@ -2,10 +2,12 @@ package com.yuzhi.dts.platform.service.workbench;
 
 import com.yuzhi.dts.platform.domain.catalog.CatalogDataset;
 import com.yuzhi.dts.platform.domain.catalog.CatalogDomain;
+import com.yuzhi.dts.platform.domain.visualization.BiReportLink;
 import com.yuzhi.dts.platform.repository.catalog.CatalogDatasetRepository;
 import com.yuzhi.dts.platform.repository.catalog.CatalogDomainRepository;
 import com.yuzhi.dts.platform.repository.visualization.BiReportLinkRepository;
 import com.yuzhi.dts.platform.repository.visualization.BiReportVisitRepository;
+import com.yuzhi.dts.platform.service.integration.ScreenReportLinkSyncService;
 import com.yuzhi.dts.platform.service.workbench.WorkbenchRoleResolver.Role;
 import com.yuzhi.dts.platform.service.workbench.dto.DomainAggregateRow;
 import com.yuzhi.dts.platform.service.workbench.dto.LeaderOverviewResponse;
@@ -225,7 +227,7 @@ public class WorkbenchLeaderOverviewService {
             default -> List.<ReportVisitAggregateRow>of();
         };
 
-        return rows
+        List<TopReport> mapped = rows
             .stream()
             .map(row -> new TopReport(
                 row.reportId() != null ? row.reportId().toString() : null,
@@ -233,9 +235,35 @@ public class WorkbenchLeaderOverviewService {
                 row.visits(),
                 row.bizDomain(),
                 ClassificationMapper.toApiCode(row.classification()),
-                row.lastVisitedAt()
+                row.lastVisitedAt(),
+                row.url(),
+                row.engine()
             ))
             .toList();
+
+        // Sprint-17 hotfix: when MINE-scope has no visit history yet (typical first-time user),
+        // fall back to reconcile-synced screens so "我常用的报表" is not permanently empty.
+        // visits is reported as 0 to signal "not yet visited" — UI shows the relativeTime as "—".
+        if ("MINE".equals(scope) && mapped.isEmpty()) {
+            List<BiReportLink> fallback = reportRepo.findRecentBySourceForFallback(
+                ScreenReportLinkSyncService.SOURCE_TAG,
+                topNPageable()
+            );
+            return fallback
+                .stream()
+                .map(link -> new TopReport(
+                    link.getId() != null ? link.getId().toString() : null,
+                    link.getTitle(),
+                    0L,
+                    link.getBizDomain(),
+                    ClassificationMapper.toApiCode(link.getClassification()),
+                    link.getLastVisitedAt(),
+                    link.getUrl(),
+                    link.getEngine()
+                ))
+                .toList();
+        }
+        return mapped;
     }
 
     // =============================================================================================

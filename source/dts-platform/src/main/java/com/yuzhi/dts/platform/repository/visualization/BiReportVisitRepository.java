@@ -73,11 +73,11 @@ public interface BiReportVisitRepository extends JpaRepository<BiReportVisit, UU
      */
     @Query(
         "select new com.yuzhi.dts.platform.service.workbench.dto.ReportVisitAggregateRow(" +
-        "  v.reportId, r.title, count(v), v.bizDomain, r.classification, max(v.visitedAt)) " +
+        "  v.reportId, r.title, count(v), v.bizDomain, r.classification, max(v.visitedAt), r.url, r.engine) " +
         "from BiReportVisit v join BiReportLink r on r.id = v.reportId " +
         "where v.userLogin = :userLogin " +
         "  and v.visitedAt >= :start " +
-        "group by v.reportId, r.title, v.bizDomain, r.classification " +
+        "group by v.reportId, r.title, v.bizDomain, r.classification, r.url, r.engine " +
         "order by max(v.visitedAt) desc, v.reportId asc"
     )
     List<ReportVisitAggregateRow> findTopRecentByUser(
@@ -89,12 +89,12 @@ public interface BiReportVisitRepository extends JpaRepository<BiReportVisit, UU
     /** DEPT: top reports by visit count in window, scoped to a single department. */
     @Query(
         "select new com.yuzhi.dts.platform.service.workbench.dto.ReportVisitAggregateRow(" +
-        "  v.reportId, r.title, count(v), v.bizDomain, r.classification, max(v.visitedAt)) " +
+        "  v.reportId, r.title, count(v), v.bizDomain, r.classification, max(v.visitedAt), r.url, r.engine) " +
         "from BiReportVisit v join BiReportLink r on r.id = v.reportId " +
         "where v.visitedAt >= :start and v.visitedAt < :end " +
         "  and v.deptCode = :deptCode " +
         "  and (cast(:bizDomain as text) is null or v.bizDomain = :bizDomain) " +
-        "group by v.reportId, r.title, v.bizDomain, r.classification " +
+        "group by v.reportId, r.title, v.bizDomain, r.classification, r.url, r.engine " +
         "order by count(v) desc, v.reportId asc"
     )
     List<ReportVisitAggregateRow> aggregateTopReportsForDept(
@@ -108,11 +108,11 @@ public interface BiReportVisitRepository extends JpaRepository<BiReportVisit, UU
     /** ALL: top reports by visit count in window, unscoped (optionally filtered by bizDomain). */
     @Query(
         "select new com.yuzhi.dts.platform.service.workbench.dto.ReportVisitAggregateRow(" +
-        "  v.reportId, r.title, count(v), v.bizDomain, r.classification, max(v.visitedAt)) " +
+        "  v.reportId, r.title, count(v), v.bizDomain, r.classification, max(v.visitedAt), r.url, r.engine) " +
         "from BiReportVisit v join BiReportLink r on r.id = v.reportId " +
         "where v.visitedAt >= :start and v.visitedAt < :end " +
         "  and (cast(:bizDomain as text) is null or v.bizDomain = :bizDomain) " +
-        "group by v.reportId, r.title, v.bizDomain, r.classification " +
+        "group by v.reportId, r.title, v.bizDomain, r.classification, r.url, r.engine " +
         "order by count(v) desc, v.reportId asc"
     )
     List<ReportVisitAggregateRow> aggregateTopReportsAll(

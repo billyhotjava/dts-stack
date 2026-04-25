@@ -61,9 +61,36 @@ async function flush() {
 }
 
 const sample: TopReportItem[] = [
-	{ id: "r1", title: "销售月报", visits: 120, bizDomain: "SALES", classification: "S1", lastVisitedAt: new Date().toISOString() },
-	{ id: "r2", title: "财务季报", visits: 80, bizDomain: null, classification: "S2", lastVisitedAt: null },
-	{ id: "r3", title: "HR 分析", visits: 60, bizDomain: "HR", classification: "S3", lastVisitedAt: null },
+	{
+		id: "r1",
+		title: "销售月报",
+		visits: 120,
+		bizDomain: "SALES",
+		classification: "S1",
+		lastVisitedAt: new Date().toISOString(),
+		url: "/bi/screens/1/preview",
+		engine: "DTS_BI",
+	},
+	{
+		id: "r2",
+		title: "财务季报",
+		visits: 80,
+		bizDomain: null,
+		classification: "S2",
+		lastVisitedAt: null,
+		url: "/bi/screens/2/preview",
+		engine: "DTS_BI",
+	},
+	{
+		id: "r3",
+		title: "HR 分析",
+		visits: 60,
+		bizDomain: "HR",
+		classification: "S3",
+		lastVisitedAt: null,
+		url: "/bi/screens/3/preview",
+		engine: "DTS_BI",
+	},
 ];
 
 describe("TopReportsBlock", () => {
@@ -134,16 +161,20 @@ describe("TopReportsBlock", () => {
 			firstItem.click();
 		});
 		await flush();
-		expect(visitMock).toHaveBeenCalledWith({
-			id: "r1",
-			title: "销售月报",
-			classification: "S1",
-		});
+		// Sprint-17 hotfix: now uses resolveBiLinkForOpen(item.url, item.engine).
+		// engine !== "HETU", so the URL passes through toAbsolute (jsdom origin = "http://localhost").
 		expect(windowOpenMock).toHaveBeenCalledWith(
-			"/reports/r1",
+			"http://localhost:3000/bi/screens/1/preview",
 			"_blank",
 			"noopener,noreferrer",
 		);
+		expect(visitMock).toHaveBeenCalledWith({
+			id: "r1",
+			title: "销售月报",
+			url: "http://localhost:3000/bi/screens/1/preview",
+			engine: "DTS_BI",
+			classification: "S1",
+		});
 		unmount();
 	});
 

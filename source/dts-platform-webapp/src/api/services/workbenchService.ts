@@ -52,6 +52,10 @@ export interface LeaderOverviewTopReport {
 	bizDomain: string | null;
 	classification: string;
 	lastVisitedAt: string | null;
+	/** Sprint-17 hotfix — original BiReportLink.url for resolveBiLinkForOpen. */
+	url: string | null;
+	/** Sprint-17 hotfix — engine ("HETU"/"DTS_BI"/...) controls URL normalization. */
+	engine: string | null;
 }
 
 export interface LeaderOverviewTopAsset {

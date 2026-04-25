@@ -18,6 +18,24 @@ public interface BiReportLinkRepository extends JpaRepository<BiReportLink, UUID
     List<BiReportLink> findAllBySource(String source);
 
     /**
+     * Sprint-17 hotfix — MINE-scope fallback when a user has no visits yet:
+     * surface enabled reconcile rows so "我常用的报表" stops being permanently 0
+     * for users who haven't opened any 大屏 preview (visit log empty).
+     * Sorted by lastVisitedAt desc (newly synced rows have null and naturally
+     * fall to the bottom), then code asc as a stable tie-breaker.
+     */
+    @Query(
+        "select r from BiReportLink r " +
+        "where r.enabled = true and r.source = :source " +
+        "order by case when r.lastVisitedAt is null then 1 else 0 end asc, " +
+        "         r.lastVisitedAt desc, r.code asc"
+    )
+    List<BiReportLink> findRecentBySourceForFallback(
+        @Param("source") String source,
+        org.springframework.data.domain.Pageable pageable
+    );
+
+    /**
      * Counts enabled reports scoped to a department. {@code deptCode} is
      * matched as a CSV element inside {@code deptCodes} — we wrap both
      * sides with separators to avoid prefix collisions (P0-6: previously

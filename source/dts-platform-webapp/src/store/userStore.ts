@@ -175,6 +175,27 @@ export const useSignIn = () => {
 				return undefined;
 			};
 
+			// Sprint-17 hotfix — same precedence as deptCode, but for the human-readable name.
+			const resolveDeptNameFromRaw = (raw: Record<string, unknown>): string | undefined => {
+				const direct =
+					(raw as { deptName?: unknown; dept_name?: unknown }).deptName ??
+					(raw as { dept_name?: unknown }).dept_name;
+				if (typeof direct === "string" && direct.trim()) return direct.trim();
+				const attrs = raw.attributes;
+				if (attrs && typeof attrs === "object") {
+					const attrMap = attrs as Record<string, unknown>;
+					const candidate =
+						attrMap.dept_name ?? attrMap.deptName ?? attrMap.org_name ?? attrMap.orgName;
+					if (Array.isArray(candidate)) {
+						const first = candidate[0];
+						if (typeof first === "string" && first.trim()) return first.trim();
+					} else if (typeof candidate === "string" && candidate.trim()) {
+						return candidate.trim();
+					}
+				}
+				return undefined;
+			};
+
 			// 适配后端数据格式：处理角色和权限信息
 			const adaptedUser = {
 				...rawUser,
@@ -186,6 +207,7 @@ export const useSignIn = () => {
 						? rawUser.department.trim()
 						: undefined,
 				deptCode: resolveDeptCodeFromRaw(rawUser as Record<string, unknown>),
+				deptName: resolveDeptNameFromRaw(rawUser as Record<string, unknown>),
 				// 为用户设置默认头像（使用 public 目录下的静态资源路径，兼容生产环境）
 				avatar: resolveAvatar(rawUser.avatar),
 				// 确保必要的字段存在

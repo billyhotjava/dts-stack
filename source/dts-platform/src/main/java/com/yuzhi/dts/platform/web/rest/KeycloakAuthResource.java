@@ -118,6 +118,7 @@ public class KeycloakAuthResource {
 
             // Extract optional attributes for ABAC (dept_code/personnel_level)
             String deptCode = resolveDeptCode(user);
+            String deptName = resolveDeptName(user);
             String personnelLevel = normalizePersonnelLevel(extractUserAttribute(user, "personnel_level", "person_security_level", "person_level"));
 
             // Issue a portal session (opaque tokens) for platform API access
@@ -239,6 +240,9 @@ public class KeycloakAuthResource {
             if (deptCode != null && !deptCode.isBlank()) {
                 userOut.put("dept_code", deptCode);
             }
+            if (deptName != null && !deptName.isBlank()) {
+                userOut.put("dept_name", deptName);
+            }
             if (personnelLevel != null && !personnelLevel.isBlank()) {
                 userOut.put("personnel_level", personnelLevel);
             }
@@ -252,6 +256,9 @@ public class KeycloakAuthResource {
                 }
                 if (deptCode != null && !deptCode.isBlank()) {
                     attrs.put("dept_code", java.util.List.of(deptCode));
+                }
+                if (deptName != null && !deptName.isBlank()) {
+                    attrs.put("dept_name", java.util.List.of(deptName));
                 }
                 if (personnelLevel != null && !personnelLevel.isBlank()) {
                     attrs.put("personnel_level", java.util.List.of(personnelLevel));
@@ -516,6 +523,7 @@ public class KeycloakAuthResource {
 
             // Extract optional attributes for ABAC (dept_code/personnel_level)
             String deptCode = resolveDeptCode(user);
+            String deptName = resolveDeptName(user);
             String personnelLevel = normalizePersonnelLevel(extractUserAttribute(user, "personnel_level", "person_security_level", "person_level"));
 
             // Issue a portal session (opaque tokens) for platform API access (no admin tokens needed for PKI path)
@@ -605,6 +613,7 @@ public class KeycloakAuthResource {
                 userOut.put("name", displayName);
             }
             if (deptCode != null && !deptCode.isBlank()) userOut.put("dept_code", deptCode);
+            if (deptName != null && !deptName.isBlank()) userOut.put("dept_name", deptName);
             if (personnelLevel != null && !personnelLevel.isBlank()) userOut.put("personnel_level", personnelLevel);
             try {
                 Object existingAttrs = userOut.get("attributes");
@@ -615,6 +624,7 @@ public class KeycloakAuthResource {
                     }
                 }
                 if (deptCode != null && !deptCode.isBlank()) attrs.put("dept_code", java.util.List.of(deptCode));
+                if (deptName != null && !deptName.isBlank()) attrs.put("dept_name", java.util.List.of(deptName));
                 if (personnelLevel != null && !personnelLevel.isBlank()) attrs.put("personnel_level", java.util.List.of(personnelLevel));
                 if (!attrs.isEmpty()) userOut.put("attributes", attrs);
             } catch (Exception ignore) {}
@@ -971,6 +981,27 @@ public class KeycloakAuthResource {
         );
         if (StringUtils.hasText(dept)) {
             return dept.trim();
+        }
+        return null;
+    }
+
+    /**
+     * Sprint-17 hotfix — surface the department display name alongside the code.
+     * Falls back to a small set of common attribute keys (Keycloak is free to put
+     * the human-readable label under any of them depending on the IdP mapping).
+     */
+    private String resolveDeptName(Map<String, Object> user) {
+        String name = extractUserAttribute(
+            user,
+            "dept_name",
+            "deptName",
+            "department_name",
+            "departmentName",
+            "org_name",
+            "orgName"
+        );
+        if (StringUtils.hasText(name)) {
+            return name.trim();
         }
         return null;
     }

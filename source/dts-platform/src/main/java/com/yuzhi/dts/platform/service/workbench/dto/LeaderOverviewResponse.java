@@ -40,7 +40,9 @@ public record LeaderOverviewResponse(
         long visits,
         String bizDomain,          // 可为 null
         String classification,
-        Instant lastVisitedAt      // 可为 null
+        Instant lastVisitedAt,     // 可为 null
+        String url,                // BiReportLink.url；前端用 resolveBiLinkForOpen 跳转
+        String engine              // BiReportLink.engine；resolveBiLinkForOpen 需要它判定 HETU
     ) {}
 
     public record TopAsset(

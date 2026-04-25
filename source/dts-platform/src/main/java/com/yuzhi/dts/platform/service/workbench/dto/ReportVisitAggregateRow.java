@@ -18,5 +18,7 @@ public record ReportVisitAggregateRow(
     long visits,
     String bizDomain,
     String classification,
-    Instant lastVisitedAt
+    Instant lastVisitedAt,
+    String url,
+    String engine
 ) {}
