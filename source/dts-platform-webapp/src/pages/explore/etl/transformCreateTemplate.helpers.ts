@@ -1,9 +1,9 @@
 import type { IngestionTaskTemplateDTO, IngestionTemplateRenderDTO } from "@/api/ingestion";
 import { normalizeText } from "@/utils/textUtils";
 
-const normalizeSourceCategory = (value?: string): "file" | "database" | undefined => {
+const normalizeSourceCategory = (value?: string): "file" | "database" | "api" | undefined => {
 	const text = normalizeText(value).toLowerCase();
-	if (text === "file" || text === "database") {
+	if (text === "file" || text === "database" || text === "api") {
 		return text;
 	}
 	return undefined;
@@ -21,7 +21,7 @@ export type TemplateApplyOutcome = {
 	infoMessage?: string;
 	warningMessage?: string;
 	errorMessage?: string;
-	sourceCategory?: "file" | "database";
+	sourceCategory?: "file" | "database" | "api";
 	successMessage: string;
 };
 

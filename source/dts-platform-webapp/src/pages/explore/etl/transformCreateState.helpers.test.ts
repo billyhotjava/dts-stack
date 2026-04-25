@@ -61,5 +61,5 @@ test("resolveTemplateSourceCategory prefers current form value and normalizes te
 	assert.equal(resolveTemplateSourceCategory("file", { sourceCategory: "database" }, "database"), "file");
 	assert.equal(resolveTemplateSourceCategory("", { sourceCategory: "FILE" }, "database"), "file");
 	assert.equal(resolveTemplateSourceCategory("", {}, "DATABASE"), "database");
-	assert.equal(resolveTemplateSourceCategory("", { sourceCategory: "api" }, "api"), undefined);
+	assert.equal(resolveTemplateSourceCategory("", { sourceCategory: "api" }, "api"), "api");
 });

@@ -42,6 +42,7 @@ import {
 import { useTransformAsyncRunProgress } from "./useTransformAsyncRunProgress";
 import {
 	buildAutoSyncPrefix,
+	buildApiReaderConfig,
 	DRAFT_STORAGE_KEY,
 	GENERIC_JDBC_READER,
 	SYNC_MODE_LABELS,
@@ -66,6 +67,7 @@ import {
 	extractWriterTables,
 	hasConnectionOverride,
 	hasTableEntries,
+	isApiDataSource,
 	isJdbcSource,
 	isSourceAlignedTables,
 	isSameTableList,
@@ -495,12 +497,14 @@ export default function TransformCreatePage() {
 	}, [currentStep, selectedTableKeys, form]);
 
 	const isFileFlow = sourceCategory === "file";
+	const isApiFlow = sourceCategory === "api";
 	const resolvedConnectorType = useMemo(() => {
 		if (isFileFlow) return "file";
+		if (isApiFlow || isApiDataSource(selectedDataSource)) return "api";
 		const sourceType = normalizeType(selectedDataSource?.type);
 		if (sourceType === "airbyte") return "airbyte";
 		return "addax";
-	}, [isFileFlow, selectedDataSource?.type]);
+	}, [isApiFlow, isFileFlow, selectedDataSource]);
 	const activeConnectorCapability = useMemo(
 		() =>
 			connectorCapabilities.find(
@@ -708,6 +712,7 @@ export default function TransformCreatePage() {
 				throw new Error("请填写任务名称");
 			}
 			const isFileDraft = values.sourceCategory === "file";
+			const isApiDraft = values.sourceCategory === "api";
 			const sourceDataSourceId = normalizeText(values.sourceDataSourceId);
 			if (!isFileDraft && !sourceDataSourceId) {
 				throw new Error("请选择数据源连接");
@@ -715,6 +720,8 @@ export default function TransformCreatePage() {
 			let resolvedReaderType = normalizeReaderType(values.readerType);
 			if (isFileDraft && fileUploadResult) {
 				resolvedReaderType = "txtfilereader";
+			} else if (isApiDraft) {
+				resolvedReaderType = "httpreader";
 			} else {
 				if (!resolvedReaderType) {
 					resolvedReaderType = resolveReaderTypeFromValues(values);
@@ -750,6 +757,8 @@ export default function TransformCreatePage() {
 					_originalName: fileUploadResult.originalName,
 					_autoId: Boolean(values?.fileAutoId ?? true),
 				};
+			} else if (isApiDraft) {
+				readerConfig = buildApiReaderConfig(values);
 			} else if (isJsonMode) {
 				readerConfig = safeParse(values.readerConfig, "Reader 配置");
 				writerConfig = safeParse(values.writerConfig, "Writer 配置");
@@ -773,15 +782,22 @@ export default function TransformCreatePage() {
 				resolveSelectedTables(values)
 			);
 			let selectionMode = normalizeText(values.tableSelectionMode) || "all";
-			if (selectedTables.length) {
+			if (isApiDraft) {
+				selectionMode = "manual";
+			} else if (selectedTables.length) {
 				selectionMode = "manual";
 			}
+			const apiResourceId = normalizeText((readerConfig?.resource as any)?.resourceId);
 			const includeTables =
-				selectionMode === "manual"
+				isApiDraft
+					? apiResourceId
+						? [apiResourceId]
+						: []
+					: selectionMode === "manual"
 					? mergeTableSelections(selectedTables, selectedTableKeysRef.current)
 					: [];
-			const excludeTables = selectionMode === "all" ? splitLines(values.tableExclude) : [];
-			if (selectionMode === "manual" && includeTables.length) {
+			const excludeTables = !isApiDraft && selectionMode === "all" ? splitLines(values.tableExclude) : [];
+			if (!isApiDraft && selectionMode === "manual" && includeTables.length) {
 				readerConfig = applyTablesToConfig(readerConfig, includeTables);
 				if (shouldApplyWriterTables(writerConfig, values)) {
 					writerConfig = applyTablesToConfig(writerConfig, includeTables);
@@ -808,9 +824,9 @@ export default function TransformCreatePage() {
 				excludeTables,
 				readerSchema: normalizeText(values.readerSchema) || undefined,
 				readerTablePattern: normalizeText(values.readerTablePattern) || undefined,
-				airflowEnabled: values.airflowEnabled ?? true,
-				dbtModelSelector: normalizeText(values.dbtModelSelector) || undefined,
-				dbtDagSelector: normalizeText(values.dbtDagSelector) || undefined,
+				airflowEnabled: isApiDraft ? false : values.airflowEnabled ?? true,
+				dbtModelSelector: isApiDraft ? undefined : normalizeText(values.dbtModelSelector) || undefined,
+				dbtDagSelector: isApiDraft ? undefined : normalizeText(values.dbtDagSelector) || undefined,
 				jobConfig: jobConfig || undefined,
 			});
 			const draftResult: any = await createIngestionTask(draftPayload);
@@ -1064,6 +1080,16 @@ export default function TransformCreatePage() {
 					return [];
 			}
 		}
+		if (values?.sourceCategory === "api") {
+			switch (stepIndex) {
+				case 0:
+					return ["name", "ownerDept", "sourceDataSourceId", "readerType", "apiResourcePath", "apiMethod"];
+				case 1:
+					return [];
+				default:
+					return [];
+			}
+		}
 		switch (stepIndex) {
 			case 0:
 				return isJsonMode
@@ -1148,12 +1174,48 @@ export default function TransformCreatePage() {
 			}
 			mergedValues.name = taskName;
 			const isFileSource = mergedValues.sourceCategory === "file" && fileUploadResult;
+			const isApiSource = mergedValues.sourceCategory === "api";
 			const sourceDataSourceId = normalizeText(mergedValues.sourceDataSourceId);
 			if (!isFileSource && !sourceDataSourceId) {
 				throw new Error("请选择数据源连接");
 			}
 			if (isFileSource && !fileUploadResult) {
 				throw new Error("请先上传文件");
+			}
+			if (isApiSource) {
+				const readerConfig = buildApiReaderConfig(mergedValues);
+				applyReaderTypeToConfig(readerConfig, "httpreader");
+				if (isEdit && editId) {
+					const governanceSyncFields = buildGovernanceSyncFields(mergedValues);
+					const updatePayload: IngestionTaskDTO = {
+						...(editingTask || {}),
+						id: editId,
+						name: taskName,
+						description: normalizeText(mergedValues.description) || undefined,
+						sourceType: "httpreader",
+						sourceDataSourceId,
+						sourceConfig: readerConfig,
+						destinationType: undefined,
+						destinationConfig: undefined,
+						syncMode: mergedValues.syncMode || editingTask?.syncMode || "full_refresh",
+						syncSchedule: buildSyncScheduleText(mergedValues),
+						syncConfig: Object.keys(governanceSyncFields).length ? { governance: governanceSyncFields } : undefined,
+						syncPrefix: undefined,
+						addaxJobPath: undefined,
+						addaxConfig: undefined,
+						airflowEnabled: false,
+						airflowDagId: undefined,
+						dbtModelSelector: undefined,
+						dbtDagSelector: undefined,
+						status: "DRAFT",
+					};
+					await ingestionTaskAPI.updateTask(editId, updatePayload);
+					toast.success("API 入湖草稿已更新");
+					router.push(`/explore/etl/transform/${editId}`);
+				} else {
+					await handleSaveDraft();
+				}
+				return;
 			}
 			const syncConfig = buildSyncConfigFromValues(mergedValues, Boolean(isFileSource));
 			let resolvedReaderType = normalizeReaderType(mergedValues.readerType);
@@ -1495,6 +1557,29 @@ export default function TransformCreatePage() {
 				2
 			);
 		}
+		if (mergedValues.sourceCategory === "api") {
+			try {
+				const readerConfig = buildApiReaderConfig(mergedValues);
+				return {
+					config: {
+						source: {
+							dataSourceId: normalizeText(mergedValues.sourceDataSourceId) || undefined,
+							type: "httpreader",
+							config: readerConfig,
+						},
+						sync: {
+							mode: normalizeText(mergedValues.syncMode) || "full_refresh",
+							schedule: buildSyncScheduleSpec(mergedValues),
+						},
+						airflow: { enabled: false },
+						draft: true,
+					},
+					error: "",
+				};
+			} catch (error: any) {
+				return { config: null, error: error?.message || "无法生成 API 预览" };
+			}
+		}
 		if (!normalizeText(mergedValues.readerType) && selectedDataSource) {
 			const inferredReader = resolveReaderTypeFromDataSource(selectedDataSource);
 			if (inferredReader) {
@@ -1742,6 +1827,7 @@ export default function TransformCreatePage() {
 								<UnifiedReviewStep
 									form={form}
 									isFileFlow={true}
+									isApiFlow={false}
 									defaultDestinationStatus={defaultDestinationStatus}
 									extraColumns={extraColumns}
 									setExtraColumns={setExtraColumns}
@@ -1796,6 +1882,7 @@ export default function TransformCreatePage() {
 								<UnifiedReviewStep
 									form={form}
 									isFileFlow={false}
+									isApiFlow={isApiFlow}
 									defaultDestinationStatus={defaultDestinationStatus}
 									extraColumns={extraColumns}
 									setExtraColumns={setExtraColumns}
@@ -1823,7 +1910,7 @@ export default function TransformCreatePage() {
 							</Button>
 						) : (
 							<Button type="primary" loading={saving} onClick={() => form.submit()} disabled={loadingTask}>
-								{isEdit ? "保存修改" : "提交任务"}
+								{isApiFlow ? "保存 API 草稿" : isEdit ? "保存修改" : "提交任务"}
 							</Button>
 						)}
 					</Space>

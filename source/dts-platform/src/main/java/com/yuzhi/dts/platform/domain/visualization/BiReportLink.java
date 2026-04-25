@@ -64,6 +64,9 @@ public class BiReportLink extends AbstractAuditingEntity<UUID> implements Serial
     @Column(name = "biz_domain", length = 64)
     private String bizDomain;
 
+    @Column(name = "source", length = 32, nullable = false)
+    private String source = "MANUAL";
+
     @Override
     public UUID getId() {
         return id;
@@ -191,5 +194,13 @@ public class BiReportLink extends AbstractAuditingEntity<UUID> implements Serial
 
     public void setBizDomain(String bizDomain) {
         this.bizDomain = bizDomain;
+    }
+
+    public String getSource() {
+        return source;
+    }
+
+    public void setSource(String source) {
+        this.source = source;
     }
 }

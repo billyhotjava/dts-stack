@@ -36,6 +36,9 @@ services/dts-airflow/**/__pycache__/
 services/dts-airflow/**/*.pyc
 services/dts-airflow/**/*.pyo
 services/dts-airflow/**/*.pyd
+.skills/**/__pycache__/
+.skills/**/*.pyc
+.skills/**/*.pyo
 builds/offline/
 # Local Maven cache used by dts-admin dev container
 source/dts-admin/.m2/

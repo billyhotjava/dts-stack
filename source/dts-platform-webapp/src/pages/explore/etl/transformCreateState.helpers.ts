@@ -23,15 +23,15 @@ export type ParsedTransformCreateDraft = {
 export type TransformEditRestoreState = {
 	formValues: Record<string, any>;
 	fileUploadResult: FileUploadResult | null;
-	sourceCategory?: "file" | "database";
+	sourceCategory?: "file" | "database" | "api";
 	forceReaderType?: string;
 	extraColumns: ExtraColumnDef[];
 	mappingTables: string[];
 };
 
-const normalizeSourceCategory = (value?: string): "file" | "database" | undefined => {
+const normalizeSourceCategory = (value?: string): "file" | "database" | "api" | undefined => {
 	const text = normalizeText(value).toLowerCase();
-	if (text === "file" || text === "database") {
+	if (text === "file" || text === "database" || text === "api") {
 		return text;
 	}
 	return undefined;
@@ -83,7 +83,7 @@ export function resolveTemplateSourceCategory(
 	currentValue: unknown,
 	templateDefaults?: Record<string, any>,
 	templateSourceCategory?: string
-): "file" | "database" | undefined {
+): "file" | "database" | "api" | undefined {
 	return (
 		normalizeSourceCategory(typeof currentValue === "string" ? currentValue : undefined) ||
 		normalizeSourceCategory(templateDefaults?.sourceCategory) ||

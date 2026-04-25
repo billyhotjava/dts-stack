@@ -51,6 +51,8 @@ export const FILE_READER_BY_TYPE: Record<string, string> = {
 	file: "txtfilereader",
 };
 
+export const API_SOURCE_TYPES = new Set(["api", "http", "https", "http_api", "api_http", "rest", "rest_api", "httpreader"]);
+
 export const GENERIC_JDBC_READER = "rdbmsreader";
 
 export const JDBC_READER_BY_URL: Record<string, string> = {
@@ -178,6 +180,24 @@ export const normalizeReaderType = (value?: string) => {
 export const normalizeType = (value?: string) => normalizeText(value).toLowerCase();
 
 export const normalizeTag = (value?: string) => normalizeText(value).toLowerCase().replace(/[^a-z0-9-]+/g, "-").replace(/^-+|-+$/g, "");
+
+export const isApiSourceType = (value?: string) => {
+	const type = normalizeType(value);
+	return Boolean(type && API_SOURCE_TYPES.has(type));
+};
+
+export const isApiReaderType = (value?: string) => isApiSourceType(value) || normalizeType(value) === "httpreader";
+
+export const isApiDataSource = (source?: InfraDataSource | null) => {
+	if (!source) return false;
+	const type = normalizeType(source.type);
+	const props = source.props || {};
+	return (
+		isApiSourceType(type) ||
+		normalizeType(String(props.connectorType || "")) === "api" ||
+		normalizeType(String(props.sourceCategory || "")) === "api"
+	);
+};
 
 export type SyncModeValue = "full_refresh" | "incremental" | "cdc" | "backfill";
 export type SyncModeOption = { value: SyncModeValue; label: string; disabled?: boolean };
@@ -688,6 +708,9 @@ export const tryParseJson = (value: any) => {
 	return value;
 };
 
+const asRecord = (value: any): Record<string, any> | undefined =>
+	value && typeof value === "object" && !Array.isArray(value) ? value : undefined;
+
 export const extractWriterFromAddax = (config?: Record<string, any>) =>
 	config?.job?.content?.[0]?.writer?.parameter;
 
@@ -823,6 +846,68 @@ export const buildReaderConfig = (values: Record<string, any>) => {
 	if (tables.length) config.table = tables;
 	if (querySql.length) config.querySql = querySql;
 	return mergeConfig(config, extra);
+};
+
+const parseOptionalJson = (value: any, label: string) => {
+	const text = normalizeText(value);
+	if (!text) return undefined;
+	return parseJson(text, label);
+};
+
+const parseOptionalJsonObject = (value: any, label: string) => {
+	const parsed = parseOptionalJson(value, label);
+	if (parsed === undefined) return undefined;
+	if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+		throw new Error(`${label} 必须是 JSON Object`);
+	}
+	return parsed as Record<string, any>;
+};
+
+const parseOptionalJsonArray = (value: any, label: string) => {
+	const parsed = parseOptionalJson(value, label);
+	if (parsed === undefined) return undefined;
+	if (!Array.isArray(parsed)) {
+		throw new Error(`${label} 必须是 JSON Array`);
+	}
+	return parsed;
+};
+
+export const buildApiReaderConfig = (values: Record<string, any>) => {
+	const path = normalizeText(values.apiResourcePath);
+	if (!path) {
+		throw new Error("请填写 API 资源路径");
+	}
+	const method = normalizeText(values.apiMethod).toUpperCase() || "GET";
+	const resourceId =
+		normalizeText(values.apiResourceId) ||
+		normalizeIdentifier(path.replace(/^\//, "").replace(/[/?#].*$/, "")) ||
+		"api_resource";
+	const resource: Record<string, any> = {
+		resourceId,
+		path,
+		method,
+	};
+	const displayName = normalizeText(values.apiResourceDisplayName);
+	const recordPath = normalizeText(values.apiRecordPath);
+	if (displayName) resource.displayName = displayName;
+	if (recordPath) resource.recordPath = recordPath;
+	const query = parseOptionalJsonObject(values.apiQueryJson, "API Query 参数");
+	const pagination = parseOptionalJsonObject(values.apiPaginationJson, "API 分页配置");
+	const cursor = parseOptionalJsonObject(values.apiCursorJson, "API 增量游标");
+	const fields = parseOptionalJsonArray(values.apiFieldsJson, "API 字段映射");
+	const bodyTemplate = parseOptionalJson(values.apiBodyTemplateJson, "API Body 模板");
+	if (query) resource.query = query;
+	if (bodyTemplate !== undefined) resource.bodyTemplate = bodyTemplate;
+	if (pagination) resource.pagination = pagination;
+	if (cursor) resource.cursor = cursor;
+	if (fields) resource.fields = fields;
+	return {
+		readerType: "httpreader",
+		connectorType: "api",
+		sourceCategory: "api",
+		resource,
+		resources: [resource],
+	};
 };
 
 export const buildWriterConfig = (values: Record<string, any>) => {
@@ -1037,6 +1122,14 @@ export const mapTaskToForm = (task: IngestionTaskDTO) => {
 		normalizeReaderType(task.sourceType) || readerTypeFromConfig || readerTypeFromAddax || undefined;
 	const isFileReader =
 		resolvedReaderType && ["txtfilereader", "excelreader", "csv", "excel"].includes(resolvedReaderType.toLowerCase());
+	const isApiReader =
+		isApiReaderType(resolvedReaderType) ||
+		isApiSourceType(task.sourceType) ||
+		normalizeType(String(sourceConfig.connectorType || sourceConfig.sourceCategory || "")) === "api";
+	const apiResource =
+		(asRecord(sourceConfig.resource) as Record<string, any> | undefined) ||
+		(Array.isArray(sourceConfig.resources) ? (sourceConfig.resources[0] as Record<string, any> | undefined) : undefined) ||
+		{};
 	const syncPrefix =
 		normalizeText(
 			destinationConfig.tablePrefix ||
@@ -1073,8 +1166,8 @@ export const mapTaskToForm = (task: IngestionTaskDTO) => {
 	const scheduleState = parseSyncSchedule(task.syncSchedule);
 	return {
 		ownerDept: (task as any).ownerDept || undefined,
-		editorMode: isFileReader ? "visual" : "json",
-		sourceCategory: isFileReader ? "file" : "database",
+		editorMode: isFileReader || isApiReader ? "visual" : "json",
+		sourceCategory: isFileReader ? "file" : isApiReader ? "api" : "database",
 		syncMode: task.syncMode || "full_refresh",
 		incrementalColumn: normalizeText(syncConfig.incrementalColumn) || undefined,
 		incrementalType: normalizeText(syncConfig.incrementalType) || "datetime",
@@ -1093,6 +1186,16 @@ export const mapTaskToForm = (task: IngestionTaskDTO) => {
 		sourceDataSourceId: task.sourceDataSourceId,
 		readerType: resolvedReaderType,
 		readerConfig: JSON.stringify(sourceConfig, null, 2),
+		apiResourceId: normalizeText(apiResource.resourceId) || undefined,
+		apiResourceDisplayName: normalizeText(apiResource.displayName) || undefined,
+		apiResourcePath: normalizeText(apiResource.path) || undefined,
+		apiMethod: normalizeText(apiResource.method) || "GET",
+		apiRecordPath: normalizeText(apiResource.recordPath) || undefined,
+		apiQueryJson: apiResource.query ? JSON.stringify(apiResource.query, null, 2) : undefined,
+		apiBodyTemplateJson: apiResource.bodyTemplate ? JSON.stringify(apiResource.bodyTemplate, null, 2) : undefined,
+		apiPaginationJson: apiResource.pagination ? JSON.stringify(apiResource.pagination, null, 2) : undefined,
+		apiCursorJson: apiResource.cursor ? JSON.stringify(apiResource.cursor, null, 2) : undefined,
+		apiFieldsJson: apiResource.fields ? JSON.stringify(apiResource.fields, null, 2) : undefined,
 		fileAutoId: fileAutoId,
 		fileTableName: isFileReader && writerTables.length ? writerTables[0] : undefined,
 		selectedTables: mappingTables.length ? mappingTables.join("\n") : undefined,

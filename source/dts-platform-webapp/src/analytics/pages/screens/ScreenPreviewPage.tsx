@@ -16,6 +16,7 @@ import { V2ScreenRuntime } from './v2/V2ScreenRuntime';
 import { buildComponentMap, isComponentEffectivelyVisible } from './componentHierarchy';
 import { safeCssBackgroundUrl } from './sanitize';
 import { useScreenCarousel } from './hooks/useScreenCarousel';
+import { useScreenVisitTracker } from './hooks/useScreenVisitTracker';
 import { resolveRuntimeScale } from './runtimeScale';
 import { resolveRuntimeCanvasScaleStyle } from './runtimeCanvasStyle';
 import { ScaleAdapter, type ScaleMode } from './renderers/ScaleAdapter';
@@ -138,6 +139,15 @@ export default function ScreenPreviewPage() {
 	const [v2Config, setV2Config] = useState<ScreenConfigV2 | null>(null);
 	const [loading, setLoading] = useState(true);
 	const [error, setError] = useState<string | null>(null);
+	// Sprint-17/F2 — record a leader-overview visit once the user has stayed
+	// on this preview for STAY_MS (3s). enabled=true only after data loads
+	// so a quick mis-click on the route doesn't pollute "我常用的报表".
+	useScreenVisitTracker({
+		screenId: id,
+		title: screen?.name ?? v2Config?.name,
+		enabled: !loading && !error && (screen != null || v2Config != null),
+	});
+
 	const [scale, setScale] = useState(1);
 	const [autoScale, setAutoScale] = useState(1);
 	const [manualScale, setManualScale] = useState<number | null>(null);

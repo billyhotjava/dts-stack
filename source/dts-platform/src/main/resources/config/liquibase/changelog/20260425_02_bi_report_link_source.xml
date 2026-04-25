@@ -1,0 +1,48 @@
+<?xml version="1.0" encoding="utf-8"?>
+<databaseChangeLog xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+                   xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+                   xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+                                       http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.22.xsd">
+
+    <!--
+        Sprint-17 / F1 — bi_report_link.source column.
+
+        Distinguishes manually-registered BI links (default `MANUAL`) from
+        rows synced in from dts-analytics screens (`SCREEN_SYNC`). The
+        screen reconcile job only touches rows where source = `SCREEN_SYNC`,
+        so administrators' manual entries cannot be mass-deleted by sync.
+    -->
+
+    <changeSet id="20260425-1000-add-source-to-bi-report-link" author="billy">
+        <preConditions onFail="MARK_RAN">
+            <and>
+                <tableExists tableName="bi_report_link"/>
+                <not><columnExists tableName="bi_report_link" columnName="source"/></not>
+            </and>
+        </preConditions>
+        <addColumn tableName="bi_report_link">
+            <column name="source" type="varchar(32)" defaultValue="MANUAL">
+                <constraints nullable="false"/>
+            </column>
+        </addColumn>
+        <rollback>
+            <dropColumn tableName="bi_report_link" columnName="source"/>
+        </rollback>
+    </changeSet>
+
+    <changeSet id="20260425-1000-create-bi-report-link-source-index" author="billy">
+        <preConditions onFail="MARK_RAN">
+            <and>
+                <columnExists tableName="bi_report_link" columnName="source"/>
+                <not><indexExists indexName="idx_bi_report_link_source"/></not>
+            </and>
+        </preConditions>
+        <createIndex tableName="bi_report_link" indexName="idx_bi_report_link_source">
+            <column name="source"/>
+        </createIndex>
+        <rollback>
+            <dropIndex tableName="bi_report_link" indexName="idx_bi_report_link_source"/>
+        </rollback>
+    </changeSet>
+
+</databaseChangeLog>

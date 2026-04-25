@@ -14,6 +14,9 @@ public interface BiReportLinkRepository extends JpaRepository<BiReportLink, UUID
 
     Optional<BiReportLink> findFirstByCodeIgnoreCase(String code);
 
+    /** Sprint-17/F1 — used by ScreenReportLinkSyncService to scope reconcile to auto-synced rows only. */
+    List<BiReportLink> findAllBySource(String source);
+
     /**
      * Counts enabled reports scoped to a department. {@code deptCode} is
      * matched as a CSV element inside {@code deptCodes} — we wrap both

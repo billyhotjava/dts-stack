@@ -299,6 +299,33 @@ export interface IngestionRealtimeStatusDTO {
 	updatedAt?: string;
 }
 
+export interface ApiAuthProviderFieldDTO {
+	name: string;
+	label: string;
+	type: string;
+	required?: boolean;
+	sensitive?: boolean;
+	description?: string;
+	metadata?: Record<string, any>;
+}
+
+export interface ApiAuthProviderDescriptorDTO {
+	id: string;
+	label: string;
+	description?: string;
+	fields?: ApiAuthProviderFieldDTO[];
+	supportsRotation?: boolean;
+}
+
+export interface ApiConnectorContractDTO {
+	contractVersion?: string;
+	connectorType?: string;
+	sourceTypes?: string[];
+	defaultReaderType?: string;
+	syncModes?: string[];
+	authProviders?: ApiAuthProviderDescriptorDTO[];
+}
+
 const DEFAULT_EXECUTION_POLL_INTERVAL_MS = (() => {
 	const raw = Number((import.meta as any)?.env?.VITE_INGESTION_EXECUTION_POLL_MS ?? 3000);
 	if (!Number.isFinite(raw)) return 3000;
@@ -570,6 +597,32 @@ class IngestionTaskAPI {
 			if (error?.response?.status === 404) return null;
 			throw error;
 		}
+	}
+
+	async getApiConnectorContract(): Promise<ApiConnectorContractDTO | null> {
+		try {
+			const payload: any = await api.get({ url: "/ingestion/api/contract" });
+			if (!payload) return null;
+			if (payload && typeof payload === "object" && "defaultReaderType" in payload) {
+				return payload as ApiConnectorContractDTO;
+			}
+			if (payload && typeof payload === "object" && (payload as any).data) {
+				return (payload as any).data as ApiConnectorContractDTO;
+			}
+			return null;
+		} catch (error: any) {
+			if (error?.response?.status === 404) return null;
+			throw error;
+		}
+	}
+
+	async getApiAuthProviders(): Promise<ApiAuthProviderDescriptorDTO[]> {
+		const payload: any = await api.get({ url: "/ingestion/api/auth-providers" });
+		if (Array.isArray(payload)) return payload as ApiAuthProviderDescriptorDTO[];
+		if (payload && typeof payload === "object" && Array.isArray((payload as any).data)) {
+			return (payload as any).data as ApiAuthProviderDescriptorDTO[];
+		}
+		return [];
 	}
 
 	async getRealtimeStatus(taskId: number): Promise<IngestionRealtimeStatusDTO | null> {

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import {
 	Alert,
 	Button,
@@ -18,6 +18,7 @@ import {
 import type { TableInfo } from "@/api/ingestion";
 import type { IngestionFormContext } from "./types";
 import { normalizeText } from "@/utils/textUtils";
+import { isApiDataSource, normalizeType } from "../ingestionFormHelpers";
 
 const { Text } = Typography;
 
@@ -54,8 +55,38 @@ const jsonValidator = (label: string) => (_: any, value: string) => {
 	}
 };
 
+const jsonObjectValidator = (label: string) => (_: any, value: string) => {
+	if (!normalizeText(value)) return Promise.resolve();
+	try {
+		const parsed = JSON.parse(value);
+		if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+			return Promise.reject(new Error(`${label} 必须是 JSON Object`));
+		}
+		return Promise.resolve();
+	} catch {
+		return Promise.reject(new Error(`${label} JSON 格式错误`));
+	}
+};
+
+const jsonArrayValidator = (label: string) => (_: any, value: string) => {
+	if (!normalizeText(value)) return Promise.resolve();
+	try {
+		const parsed = JSON.parse(value);
+		if (!Array.isArray(parsed)) {
+			return Promise.reject(new Error(`${label} 必须是 JSON Array`));
+		}
+		return Promise.resolve();
+	} catch {
+		return Promise.reject(new Error(`${label} JSON 格式错误`));
+	}
+};
+
 const buildTableKey = (table: TableInfo) =>
 	normalizeText(table.schema) ? `${table.schema}.${table.name}` : table.name;
+
+const FILE_SOURCE_TYPES = new Set(["excel", "csv", "json", "file"]);
+
+const isFileDataSource = (source: { type?: string }) => FILE_SOURCE_TYPES.has(normalizeType(source.type));
 
 /* ── props ── */
 
@@ -99,7 +130,7 @@ export function DbUnifiedStep({
 	editorMode,
 	setEditorMode: _setEditorMode,
 	syncModeOptions,
-	sourceCategory: _sourceCategory,
+	sourceCategory,
 	setSourceCategory,
 	selectedTableKeys,
 	setSelectedTableKeys,
@@ -127,17 +158,58 @@ export function DbUnifiedStep({
 	const scheduleType = Form.useWatch("scheduleType", form);
 	const tableSelectionMode = Form.useWatch("tableSelectionMode", form);
 	const [tablePageSize, setTablePageSize] = useState(8);
+	const apiFlow = sourceCategory === "api";
+	const dataSourceOptions = useMemo(
+		() =>
+			dataSources
+				.filter((item) => {
+					if (sourceCategory === "api") return isApiDataSource(item);
+					if (sourceCategory === "database") return !isApiDataSource(item) && !isFileDataSource(item);
+					return true;
+				})
+				.map((item) => ({
+					label: `${item.name} (${item.type || "unknown"})`,
+					value: item.id,
+				})),
+		[dataSources, sourceCategory]
+	);
+	const handleSourceCategoryChange = (next: string) => {
+		setSourceCategory(next);
+		setSelectedTableKeys([]);
+		form.setFieldsValue({
+			sourceCategory: next,
+			sourceDataSourceId: undefined,
+			readerType: next === "api" ? "httpreader" : undefined,
+			tableSelectionMode: next === "api" ? "manual" : "all",
+			selectedTables: "",
+			readerTables: "",
+			writerTables: "",
+			airflowEnabled: next === "api" ? false : form.getFieldValue("airflowEnabled"),
+			runNow: next === "api" ? false : form.getFieldValue("runNow"),
+			syncMode: next === "api" ? "full_refresh" : form.getFieldValue("syncMode"),
+		});
+	};
 
 	return (
 		<>
 			{/* ─── 数据来源切换 ─── */}
 			<Divider orientation="left">数据来源切换</Divider>
 			<Form.Item name="sourceCategory" label="数据来源">
-				<Radio.Group onChange={(e) => setSourceCategory(e.target.value)}>
+				<Radio.Group onChange={(e) => handleSourceCategoryChange(e.target.value)}>
 					<Radio.Button value="database">数据库</Radio.Button>
 					<Radio.Button value="file">文件上传</Radio.Button>
+					<Radio.Button value="api">API 接入</Radio.Button>
 				</Radio.Group>
 			</Form.Item>
+			{apiFlow ? (
+				<Alert
+					type="warning"
+					showIcon
+					className="mb-4"
+					message="API 入湖运行时尚未启用"
+					description="当前页面先支持 API 数据源选择和接口资源配置，并保存为草稿；不会生成 Addax/Airflow 作业，也不会立即执行。"
+				/>
+			) : null}
 
 			{/* ─── 基础信息 ─── */}
 			<Divider orientation="left">基础信息</Divider>
@@ -174,16 +246,13 @@ export function DbUnifiedStep({
 			<div className="grid gap-4 md:grid-cols-2">
 				<Form.Item
 					name="sourceDataSourceId"
-					label="数据源连接"
+					label={apiFlow ? "API 数据源连接" : "数据源连接"}
 					rules={[{ required: true, message: "请选择数据源连接" }]}
 				>
 					<Select
 						loading={loadingDataSources}
 						placeholder={loadingDataSources ? "加载中..." : "请选择数据源连接"}
-						options={dataSources.map((item) => ({
-							label: `${item.name} (${item.type || "unknown"})`,
-							value: item.id,
-						}))}
+						options={dataSourceOptions}
 						showSearch
 						optionFilterProp="label"
 					/>
@@ -196,76 +265,131 @@ export function DbUnifiedStep({
 					<Input placeholder="将根据数据源自动生成" disabled />
 				</Form.Item>
 			</div>
-			<Form.Item name="tableSelectionMode" label="入湖表选择">
-				<Radio.Group
-					onChange={(e) => {
-						const next = normalizeText(e.target?.value) || "all";
-						if (next === "all") {
-							syncSelectedTablesToForm([], { silent: true });
-						}
-					}}
-				>
-					<Radio.Button value="all">全部表（默认）</Radio.Button>
-					<Radio.Button value="manual">手动选择</Radio.Button>
-				</Radio.Group>
-			</Form.Item>
-			{tableSelectionMode === "all" ? (
-				<div className="grid gap-4 md:grid-cols-2">
-					<Form.Item name="tableExclude" label="排除表（每行一个，可选）">
-						<Input.TextArea rows={2} placeholder="schema.table 或 table_name" />
-					</Form.Item>
-				</div>
-			) : null}
-			{editorMode === "json" ? (
-				<Form.Item
-					name="readerConfig"
-					label="Reader 配置 (JSON)"
-					rules={[
-						{ required: true, message: "请输入 Reader 配置" },
-						{ validator: jsonValidator("Reader 配置") },
-					]}
-				>
-					<Input.TextArea rows={6} placeholder='{"column":["*"],"table":["table_a"]}' />
-				</Form.Item>
+			{apiFlow ? (
+				<>
+					<Divider orientation="left">API 资源配置</Divider>
+					<div className="grid gap-4 md:grid-cols-3">
+						<Form.Item name="apiResourceId" label="资源标识">
+							<Input placeholder="orders" />
+						</Form.Item>
+						<Form.Item
+							name="apiResourcePath"
+							label="接口路径"
+							rules={[{ required: true, message: "请输入接口路径" }]}
+						>
+							<Input placeholder="/v1/orders" />
+						</Form.Item>
+						<Form.Item name="apiMethod" label="请求方法" initialValue="GET">
+							<Select
+								options={["GET", "POST", "PUT", "PATCH", "DELETE"].map((method) => ({
+									label: method,
+									value: method,
+								}))}
+							/>
+						</Form.Item>
+					</div>
+					<div className="grid gap-4 md:grid-cols-2">
+						<Form.Item name="apiResourceDisplayName" label="资源显示名">
+							<Input placeholder="订单列表" />
+						</Form.Item>
+						<Form.Item name="apiRecordPath" label="记录路径">
+							<Input placeholder="data.items 或 $.data.items" />
+						</Form.Item>
+					</div>
+					<div className="grid gap-4 md:grid-cols-2">
+						<Form.Item name="apiQueryJson" label="Query 参数 JSON" rules={[{ validator: jsonObjectValidator("Query 参数") }]}>
+							<Input.TextArea rows={4} placeholder='{"page":1,"size":100}' />
+						</Form.Item>
+						<Form.Item name="apiBodyTemplateJson" label="Body 模板 JSON" rules={[{ validator: jsonValidator("Body 模板") }]}>
+							<Input.TextArea rows={4} placeholder='{"startTime":"${watermark}"}' />
+						</Form.Item>
+					</div>
+					<div className="grid gap-4 md:grid-cols-3">
+						<Form.Item name="apiPaginationJson" label="分页配置 JSON" rules={[{ validator: jsonObjectValidator("分页配置") }]}>
+							<Input.TextArea rows={4} placeholder='{"type":"page","pageParam":"page","sizeParam":"size","pageSize":100}' />
+						</Form.Item>
+						<Form.Item name="apiCursorJson" label="增量游标 JSON" rules={[{ validator: jsonObjectValidator("增量游标") }]}>
+							<Input.TextArea rows={4} placeholder='{"type":"field","field":"updatedAt","injectInto":"query","parameterName":"updatedAfter"}' />
+						</Form.Item>
+						<Form.Item name="apiFieldsJson" label="字段映射 JSON Array" rules={[{ validator: jsonArrayValidator("字段映射") }]}>
+							<Input.TextArea rows={4} placeholder='[{"sourceField":"id","targetColumn":"id","targetType":"string"}]' />
+						</Form.Item>
+					</div>
+				</>
 			) : (
 				<>
-					<div className="grid gap-4 md:grid-cols-2">
-						<Form.Item
-							name="readerTables"
-							label="Reader 表（每行一个）"
-							dependencies={["tableSelectionMode"]}
-							rules={[{ validator: readerTablesValidator }]}
+					<Form.Item name="tableSelectionMode" label="入湖表选择">
+						<Radio.Group
+							onChange={(e) => {
+								const next = normalizeText(e.target?.value) || "all";
+								if (next === "all") {
+									syncSelectedTablesToForm([], { silent: true });
+								}
+							}}
 						>
-							<Input.TextArea rows={3} placeholder="source_table" />
+							<Radio.Button value="all">全部表（默认）</Radio.Button>
+							<Radio.Button value="manual">手动选择</Radio.Button>
+						</Radio.Group>
+					</Form.Item>
+					{tableSelectionMode === "all" ? (
+						<div className="grid gap-4 md:grid-cols-2">
+							<Form.Item name="tableExclude" label="排除表（每行一个，可选）">
+								<Input.TextArea rows={2} placeholder="schema.table 或 table_name" />
+							</Form.Item>
+						</div>
+					) : null}
+					{editorMode === "json" ? (
+						<Form.Item
+							name="readerConfig"
+							label="Reader 配置 (JSON)"
+							rules={[
+								{ required: true, message: "请输入 Reader 配置" },
+								{ validator: jsonValidator("Reader 配置") },
+							]}
+						>
+							<Input.TextArea rows={6} placeholder='{"column":["*"],"table":["table_a"]}' />
 						</Form.Item>
-						<Form.Item name="readerColumns" label="Reader 字段（逗号分隔）">
-							<Input placeholder="* 或 id,name,created_at" />
-						</Form.Item>
-					</div>
-					<div className="grid gap-4 md:grid-cols-2">
-						<Form.Item name="readerWhere" label="Reader 过滤条件">
-							<Input placeholder="可选，例如：status = 1" />
-						</Form.Item>
-					</div>
-					<Collapse
-						ghost
-						items={[
-							{
-								key: "reader-advanced",
-								label: "Reader 高级参数",
-								children: (
-									<div className="space-y-4">
-										<Form.Item name="readerQuerySql" label="Reader 查询 SQL（每行一条）">
-											<Input.TextArea rows={3} placeholder="select * from t where ..." />
-										</Form.Item>
-										<Form.Item name="readerExtraConfig" label="Reader 扩展配置 JSON">
-											<Input.TextArea rows={4} placeholder='{"splitPk":"id"}' />
-										</Form.Item>
-									</div>
-								),
-							},
-						]}
-					/>
+					) : (
+						<>
+							<div className="grid gap-4 md:grid-cols-2">
+								<Form.Item
+									name="readerTables"
+									label="Reader 表（每行一个）"
+									dependencies={["tableSelectionMode"]}
+									rules={[{ validator: readerTablesValidator }]}
+								>
+									<Input.TextArea rows={3} placeholder="source_table" />
+								</Form.Item>
+								<Form.Item name="readerColumns" label="Reader 字段（逗号分隔）">
+									<Input placeholder="* 或 id,name,created_at" />
+								</Form.Item>
+							</div>
+							<div className="grid gap-4 md:grid-cols-2">
+								<Form.Item name="readerWhere" label="Reader 过滤条件">
+									<Input placeholder="可选，例如：status = 1" />
+								</Form.Item>
+							</div>
+							<Collapse
+								ghost
+								items={[
+									{
+										key: "reader-advanced",
+										label: "Reader 高级参数",
+										children: (
+											<div className="space-y-4">
+												<Form.Item name="readerQuerySql" label="Reader 查询 SQL（每行一条）">
+													<Input.TextArea rows={3} placeholder="select * from t where ..." />
+												</Form.Item>
+												<Form.Item name="readerExtraConfig" label="Reader 扩展配置 JSON">
+													<Input.TextArea rows={4} placeholder='{"splitPk":"id"}' />
+												</Form.Item>
+											</div>
+										),
+									},
+								]}
+							/>
+						</>
+					)}
 				</>
 			)}
 			<div className="grid gap-4 md:grid-cols-2">
@@ -275,8 +399,10 @@ export function DbUnifiedStep({
 			</div>
 
 			{/* ─── 源端表发现 ─── */}
-			<Divider orientation="left">源端表发现</Divider>
-			<Card type="inner">
+			{!apiFlow ? (
+				<>
+				<Divider orientation="left">源端表发现</Divider>
+				<Card type="inner">
 				<div className="grid gap-4 md:grid-cols-3">
 					<Form.Item name="readerSchema" label="Schema（可选）">
 						<Input placeholder="例如 public" />
@@ -343,7 +469,9 @@ export function DbUnifiedStep({
 				<Text type="secondary" className="block mt-2">
 					已发现 {availableTables.length} 张表，已选择 {selectedTableKeys.length} 张表
 				</Text>
-			</Card>
+				</Card>
+				</>
+			) : null}
 
 			{/* ─── 同步设置 ─── */}
 			<Divider orientation="left">同步设置</Divider>
@@ -397,7 +525,15 @@ export function DbUnifiedStep({
 				{supportsBackfill ? <Text type="secondary">已支持历史回灌模式</Text> : null}
 				{capabilityLoadFailed ? <Text type="warning">能力探测失败，已使用保守降级策略</Text> : null}
 			</Space>
-			{(normalizeSyncModeValue(syncMode) || "full_refresh") === "incremental" ? (
+			{apiFlow && (normalizeSyncModeValue(syncMode) || "full_refresh") === "incremental" ? (
+				<Alert
+					type="info"
+					showIcon
+					className="mb-3"
+					message="API 增量同步将使用上方“增量游标 JSON”配置，暂不要求填写数据库增量列。"
+				/>
+			) : null}
+			{!apiFlow && (normalizeSyncModeValue(syncMode) || "full_refresh") === "incremental" ? (
 				<div className="grid gap-4 md:grid-cols-3">
 					<Form.Item
 						name="incrementalColumn"

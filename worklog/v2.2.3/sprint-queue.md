@@ -242,3 +242,17 @@
 
 **统计**: READY=30, IN_PROGRESS=0, DONE=0, BLOCKED=0
 **设计文档**: `worklog/v2.2.3/sprint-15-202604/README.md` + `docs/superpowers/specs/2026-04-24-platform-workbench-leader-overview-design.md`
+
+## Sprint-17: 大屏访问对接 Leader-Overview (202604)
+**状态**: IN_PROGRESS
+**类型**: Implementation（跨服务对接 + 前端埋点 + 数据同步）
+**目标**: 让 dts-bi 的"大屏管理"中的大屏访问能体现在工作台"我的概览"的"我常用的报表"中，闭环 Sprint-15 上线后用户实际看到列表为空的设计断层。
+
+| Feature | Task 数 | 状态 |
+|---------|---------|------|
+| F1-后端Screen同步与配置 | 5 | READY |
+| F2-前端Preview埋点 | 3 | READY |
+| F3-验证与回归 | 2 | READY |
+
+**统计**: READY=10, IN_PROGRESS=0, DONE=0, BLOCKED=0
+**设计文档**: `worklog/v2.2.3/sprint-17-202604/README.md`

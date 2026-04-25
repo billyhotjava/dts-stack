@@ -45,6 +45,7 @@ export type UnifiedReviewStepProps = Pick<
 	| "setExtraColumns"
 	| "editorMode"
 > & {
+	isApiFlow?: boolean;
 	previewState: PreviewState;
 	sqlModels: SqlModel[];
 	loadingSqlModels: boolean;
@@ -72,6 +73,7 @@ const jsonValidator = (label: string) => (_: any, value: string) => {
 export function UnifiedReviewStep({
 	form: _form,
 	isFileFlow,
+	isApiFlow = false,
 	defaultDestinationStatus,
 	extraColumns,
 	setExtraColumns,
@@ -87,7 +89,18 @@ export function UnifiedReviewStep({
 }: UnifiedReviewStepProps) {
 	/* ── 表映射预览 ── */
 
-	const tableMappingSection = (
+	const tableMappingSection = isApiFlow ? (
+		<>
+			<Divider orientation="left">API 资源预览</Divider>
+			<Alert
+				type="warning"
+				showIcon
+				message="API 任务当前仅保存草稿"
+				description="后端已预留 API 数据源、鉴权与资源配置结构，但运行时未启用，因此不会生成目标表映射。"
+				className="mb-4"
+			/>
+		</>
+	) : (
 		<>
 			<Divider orientation="left">表映射预览</Divider>
 			{loadingDefaultDestination ? (
@@ -147,7 +160,17 @@ export function UnifiedReviewStep({
 
 	/* ── 执行选项 ── */
 
-	const executionSection = (
+	const executionSection = isApiFlow ? (
+		<>
+			<Divider orientation="left">执行选项</Divider>
+			<Alert
+				type="info"
+				showIcon
+				message="API 运行入口暂不开放"
+				description="保存后任务保持草稿状态；待 API runtime、鉴权插件和目标落表策略确认后再开放执行。"
+			/>
+		</>
+	) : (
 		<>
 			<Divider orientation="left">执行选项</Divider>
 			<Card type="inner" title="Airflow 触发">
@@ -166,7 +189,7 @@ export function UnifiedReviewStep({
 
 	/* ── dbt 模型关联 (DB flow only) ── */
 
-	const dbtSection = !isFileFlow ? (
+	const dbtSection = !isFileFlow && !isApiFlow ? (
 		<Collapse
 			ghost
 			className="mb-4"
@@ -213,7 +236,29 @@ export function UnifiedReviewStep({
 
 	/* ── 作业参数 ── */
 
-	const jobConfigSection = (
+	const jobConfigSection = isApiFlow ? (
+		<Collapse
+			ghost
+			className="mb-4"
+			items={[
+				{
+					key: "api-preview",
+					label: "API 草稿预览",
+					children: (
+						<Card type="inner" title="API 任务预览">
+							{previewState.error ? (
+								<Alert type="warning" message={previewState.error} showIcon />
+							) : (
+								<pre className="bg-muted p-4 rounded overflow-auto">
+									{JSON.stringify(previewState.config, null, 2)}
+								</pre>
+							)}
+						</Card>
+					),
+				},
+			]}
+		/>
+	) : (
 		<Collapse
 			ghost
 			className="mb-4"
@@ -494,8 +539,8 @@ export function UnifiedReviewStep({
 			{executionSection}
 			{dbtSection}
 			{jobConfigSection}
-			{writerOverrideSection}
-			{columnRulesSection}
+			{isApiFlow ? null : writerOverrideSection}
+			{isApiFlow ? null : columnRulesSection}
 		</>
 	);
 }

@@ -29,6 +29,12 @@ import dataSourcesService, {
 	type ExcelImportPrepareResponse,
 	type InfraDataSource,
 } from "@/api/services/dataSourcesService";
+import {
+	ingestionTaskAPI,
+	type ApiAuthProviderDescriptorDTO,
+	type ApiAuthProviderFieldDTO,
+	type ApiConnectorContractDTO,
+} from "@/api/ingestion";
 import jdbcDriversService, { type InfraJdbcDriver } from "@/api/services/jdbcDriversService";
 import { formatTime } from "@/utils/textUtils";
 type UploadRequestOption = Parameters<NonNullable<import("antd").UploadProps["customRequest"]>>[0];
@@ -85,6 +91,13 @@ const isFileSource = (type?: string) => {
 	return normalized === "excel" || normalized === "csv";
 };
 
+const API_TYPES = new Set(["api", "http", "https", "http_api", "api_http", "rest", "rest_api", "httpreader"]);
+
+const isApiSourceType = (type?: string) => {
+	const normalized = normalizeType(type);
+	return Boolean(normalized && API_TYPES.has(normalized));
+};
+
 const isAdminManagedSource = (source?: InfraDataSource | null) => {
 	if (!source) return false;
 	// Check props flag (set by BiadminDataSourceInitializer)
@@ -100,10 +113,131 @@ const parseJson = (value?: string) => {
 	return JSON.parse(text);
 };
 
+const asRecord = (value: any): Record<string, any> | undefined =>
+	value && typeof value === "object" && !Array.isArray(value) ? value : undefined;
+
+const stringifyJson = (value: any) => {
+	if (!value || typeof value !== "object" || Array.isArray(value)) return "";
+	return JSON.stringify(value, null, 2);
+};
+
+const cleanRecord = (value: any): Record<string, any> | undefined => {
+	const input = asRecord(value);
+	if (!input) return undefined;
+	const output: Record<string, any> = {};
+	Object.entries(input).forEach(([key, raw]) => {
+		if (raw === undefined || raw === null) return;
+		if (typeof raw === "string" && !raw.trim()) return;
+		output[key] = typeof raw === "string" ? raw.trim() : raw;
+	});
+	return Object.keys(output).length ? output : undefined;
+};
+
 const omitReaderType = (props?: Record<string, any>) => {
 	if (!props) return undefined;
-	const { readerType, reader, driverClass, driverVersion, ...rest } = props;
+	const {
+		readerType,
+		reader,
+		driverClass,
+		driverVersion,
+		baseUrl,
+		baseURL,
+		authProvider,
+		auth,
+		api,
+		readerConfig,
+		defaultHeaders,
+		requestPolicy,
+		rateLimit,
+		tls,
+		connectorType,
+		sourceCategory,
+		contractVersion,
+		...rest
+	} = props;
 	return rest;
+};
+
+const firstRecord = (...values: any[]) => values.map(asRecord).find(Boolean);
+
+const readApiNode = (props?: Record<string, any>) => firstRecord(props?.api, props?.readerConfig);
+
+const readApiAuth = (props?: Record<string, any>) => {
+	const apiNode = readApiNode(props);
+	return firstRecord(props?.auth, apiNode?.auth);
+};
+
+const readApiBaseUrl = (props?: Record<string, any>) => {
+	const apiNode = readApiNode(props);
+	return String(props?.baseUrl || props?.baseURL || apiNode?.baseUrl || apiNode?.baseURL || "").trim();
+};
+
+const readApiAuthProvider = (props?: Record<string, any>) => {
+	const apiNode = readApiNode(props);
+	const auth = readApiAuth(props);
+	return String(props?.authProvider || apiNode?.authProvider || auth?.provider || "none").trim() || "none";
+};
+
+const readApiAuthConfig = (props?: Record<string, any>) => {
+	const auth = readApiAuth(props);
+	const config = { ...(asRecord(auth?.config) || {}) };
+	Object.entries(auth || {}).forEach(([key, value]) => {
+		if (["provider", "config", "secretRefs"].includes(key)) return;
+		config[key] = value;
+	});
+	return cleanRecord(config) || {};
+};
+
+const readApiAuthSecretRefs = (props?: Record<string, any>) => cleanRecord(readApiAuth(props)?.secretRefs) || {};
+
+const readApiConfigPart = (props: Record<string, any> | undefined, key: string) => {
+	const apiNode = readApiNode(props);
+	return asRecord(props?.[key]) || asRecord(apiNode?.[key]);
+};
+
+const parseObjectJson = (value: string | undefined, label: string) => {
+	const parsed = parseJson(value);
+	if (parsed === undefined) return undefined;
+	if (!asRecord(parsed)) {
+		throw new Error(`${label} 必须是 JSON Object`);
+	}
+	return parsed as Record<string, any>;
+};
+
+const buildApiAuthFieldInput = (field: ApiAuthProviderFieldDTO) => {
+	const type = String(field.type || "text").toLowerCase();
+	const placeholder = field.description || field.label || field.name;
+	if (field.name === "location") {
+		return (
+			<Select
+				placeholder={placeholder}
+				options={[
+					{ label: "Header", value: "header" },
+					{ label: "Query", value: "query" },
+				]}
+			/>
+		);
+	}
+	if (field.sensitive && type !== "secretref") {
+		return <Input.Password placeholder={placeholder} />;
+	}
+	if (type === "select") {
+		return <Input placeholder={placeholder} />;
+	}
+	if (type === "url") {
+		return <Input placeholder="https://example.com/oauth/token" />;
+	}
+	return <Input placeholder={placeholder} />;
+};
+
+const jsonObjectValidator = (label: string) => (_: any, value: string) => {
+	if (!value) return Promise.resolve();
+	try {
+		parseObjectJson(value, label);
+		return Promise.resolve();
+	} catch (error: any) {
+		return Promise.reject(new Error(error?.message || `${label} JSON 格式错误`));
+	}
 };
 
 export default function DataSourcesPage() {
@@ -131,6 +265,8 @@ export default function DataSourcesPage() {
 	const [rollbackOpen, setRollbackOpen] = useState(false);
 	const [rollbackRequest, setRollbackRequest] = useState<RollbackRequest | null>(null);
 	const [deptOptions, setDeptOptions] = useState<{ label: string; value: string }[]>([]);
+	const [apiContract, setApiContract] = useState<ApiConnectorContractDTO | null>(null);
+	const [apiContractLoading, setApiContractLoading] = useState(false);
 	const [form] = Form.useForm();
 
 	const loadDepts = useCallback(async () => {
@@ -193,6 +329,24 @@ export default function DataSourcesPage() {
 		}
 	};
 
+	const loadApiContract = useCallback(async () => {
+		if (apiContract || apiContractLoading) return;
+		setApiContractLoading(true);
+		try {
+			const contract = await ingestionTaskAPI.getApiConnectorContract();
+			if (contract?.authProviders?.length) {
+				setApiContract(contract);
+				return;
+			}
+			const authProviders = await ingestionTaskAPI.getApiAuthProviders();
+			setApiContract({ ...(contract || {}), authProviders });
+		} catch {
+			setApiContract(null);
+		} finally {
+			setApiContractLoading(false);
+		}
+	}, [apiContract, apiContractLoading]);
+
 	useEffect(() => {
 		loadList();
 		loadDrivers();
@@ -213,6 +367,26 @@ export default function DataSourcesPage() {
 		setExcelParseResult(null);
 		setModalOpen(true);
 		loadDrivers();
+	};
+
+	const handleTypeChange = (type: string) => {
+		if (isApiSourceType(type)) {
+			form.setFieldsValue({
+				driverId: undefined,
+				driverClass: undefined,
+				driverVersion: undefined,
+				jdbcUrl: undefined,
+				username: undefined,
+				password: undefined,
+				readerType: apiContract?.defaultReaderType || "httpreader",
+				apiAuthProvider: form.getFieldValue("apiAuthProvider") || "none",
+			});
+			void loadApiContract();
+			return;
+		}
+		if (!isJdbcType(type, form.getFieldValue("jdbcUrl"))) {
+			form.setFieldsValue({ readerType: form.getFieldValue("readerType") || "" });
+		}
 	};
 
 	const resolveDriverMatch = (record: InfraDataSource | null, driverList: InfraJdbcDriver[]) => {
@@ -239,6 +413,8 @@ export default function DataSourcesPage() {
 			message.info("默认数据湖由系统管理端维护，平台侧不支持编辑");
 			return;
 		}
+		const props = record.props || {};
+		const apiSource = isApiSourceType(record.type);
 		setEditing(record);
 		form.setFieldsValue({
 			name: record.name,
@@ -250,7 +426,19 @@ export default function DataSourcesPage() {
 			driverClass: record.props?.driverClass,
 			driverVersion: record.props?.driverVersion,
 			propsJson: record.props ? JSON.stringify(omitReaderType(record.props), null, 2) : "",
+			apiBaseUrl: apiSource ? readApiBaseUrl(props) : undefined,
+			apiAuthProvider: apiSource ? readApiAuthProvider(props) : undefined,
+			apiAuthConfig: apiSource ? readApiAuthConfig(props) : undefined,
+			apiAuthSecrets: {},
+			apiAuthSecretRefs: apiSource ? readApiAuthSecretRefs(props) : undefined,
+			apiDefaultHeadersJson: apiSource ? stringifyJson(readApiConfigPart(props, "defaultHeaders")) : "",
+			apiRequestPolicyJson: apiSource ? stringifyJson(readApiConfigPart(props, "requestPolicy")) : "",
+			apiRateLimitJson: apiSource ? stringifyJson(readApiConfigPart(props, "rateLimit")) : "",
+			apiTlsJson: apiSource ? stringifyJson(readApiConfigPart(props, "tls")) : "",
 		});
+		if (apiSource) {
+			void loadApiContract();
+		}
 		const match = resolveDriverMatch(record, drivers);
 		if (match?.id) {
 			form.setFieldsValue({ driverId: match.id });
@@ -348,13 +536,107 @@ export default function DataSourcesPage() {
 		form.setFieldsValue(next);
 	};
 
+	const buildApiSecrets = (values: Record<string, any>, descriptor?: ApiAuthProviderDescriptorDTO) => {
+		const secrets: Record<string, any> = {};
+		const secretValues = asRecord(values.apiAuthSecrets) || {};
+		(descriptor?.fields || []).forEach((field) => {
+			if (!field.sensitive || String(field.type || "").toLowerCase() === "secretref") return;
+			const value = secretValues[field.name];
+			if (typeof value === "string" ? value.trim() : value != null) {
+				secrets[field.name] = typeof value === "string" ? value.trim() : value;
+			}
+		});
+		return Object.keys(secrets).length ? secrets : undefined;
+	};
+
+	const buildApiProps = (
+		values: Record<string, any>,
+		baseProps: Record<string, any> | undefined,
+		descriptor?: ApiAuthProviderDescriptorDTO,
+	) => {
+		const baseUrl = String(values.apiBaseUrl || "").trim();
+		const authProvider = String(values.apiAuthProvider || "none").trim() || "none";
+		const defaultHeaders = parseObjectJson(values.apiDefaultHeadersJson, "默认请求头");
+		const requestPolicy = parseObjectJson(values.apiRequestPolicyJson, "请求策略");
+		const rateLimit = parseObjectJson(values.apiRateLimitJson, "限流策略");
+		const tls = parseObjectJson(values.apiTlsJson, "TLS 策略");
+		const rawAuthConfig = cleanRecord(values.apiAuthConfig);
+		const configFieldNames = new Set(
+			(descriptor?.fields || [])
+				.filter((field) => !field.sensitive || String(field.type || "").toLowerCase() === "secretref")
+				.map((field) => field.name)
+		);
+		const authConfig = cleanRecord(
+			configFieldNames.size
+				? Object.fromEntries(Object.entries(rawAuthConfig || {}).filter(([key]) => configFieldNames.has(key)))
+				: rawAuthConfig
+		);
+		const secretFieldNames = new Set(
+			(descriptor?.fields || [])
+				.filter((field) => field.sensitive && String(field.type || "").toLowerCase() !== "secretref")
+				.map((field) => field.name)
+		);
+		const existingSecretRefs = cleanRecord(
+			Object.fromEntries(
+				Object.entries(cleanRecord(values.apiAuthSecretRefs) || {}).filter(([key]) => !secretFieldNames.size || secretFieldNames.has(key))
+			)
+		) || {};
+		const nextSecretRefs: Record<string, string> = {};
+		(descriptor?.fields || []).forEach((field) => {
+			if (!field.sensitive || String(field.type || "").toLowerCase() === "secretref") return;
+			const value = asRecord(values.apiAuthSecrets)?.[field.name];
+			if (typeof value === "string" ? value.trim() : value != null) {
+				nextSecretRefs[field.name] = field.name;
+			}
+		});
+		const secretRefs = cleanRecord({ ...existingSecretRefs, ...nextSecretRefs });
+		const auth =
+			authProvider === "none"
+				? { provider: "none" }
+				: {
+						provider: authProvider,
+						...(authConfig ? { config: authConfig } : {}),
+						...(secretRefs ? { secretRefs } : {}),
+					};
+		const apiNode = {
+			baseUrl,
+			...(defaultHeaders ? { defaultHeaders } : {}),
+			...(requestPolicy ? { requestPolicy } : {}),
+			...(rateLimit ? { rateLimit } : {}),
+			...(tls ? { tls } : {}),
+			auth,
+		};
+		const props = {
+			...(baseProps || {}),
+			baseUrl,
+			authProvider,
+			auth,
+			api: apiNode,
+			readerConfig: {
+				...(asRecord(baseProps?.readerConfig) || {}),
+				...apiNode,
+			},
+			connectorType: "api",
+			readerType: apiContract?.defaultReaderType || "httpreader",
+			sourceCategory: "api",
+			contractVersion: apiContract?.contractVersion || baseProps?.contractVersion || "1.0.0",
+		};
+		return props;
+	};
+
 	const handleSave = async () => {
 		try {
 			const values = await form.validateFields();
 			setSaving(true);
-			const jdbc = isJdbcType(values.type, values.jdbcUrl);
+			const apiSource = isApiSourceType(values.type);
+			const jdbc = !apiSource && isJdbcType(values.type, values.jdbcUrl);
 			let props = values.propsJson ? parseJson(values.propsJson) : undefined;
-			if (values.readerType) {
+			const selectedApiDescriptor = (apiContract?.authProviders || []).find(
+				(item) => String(item.id).toLowerCase() === String(values.apiAuthProvider || "none").toLowerCase()
+			);
+			if (apiSource) {
+				props = buildApiProps(values, asRecord(props), selectedApiDescriptor);
+			} else if (values.readerType) {
 				props = { ...(props || {}), readerType: values.readerType };
 			}
 			const selectedDriver = drivers.find((item) => item.id === values.driverId);
@@ -368,6 +650,7 @@ export default function DataSourcesPage() {
 			if (resolvedDriverVersion) {
 				props = { ...(props || {}), driverVersion: resolvedDriverVersion };
 			}
+			const apiSecrets = apiSource ? buildApiSecrets(values, selectedApiDescriptor) : undefined;
 			const payload: DataSourceUpsertPayload = {
 				name: String(values.name).trim(),
 				type: String(values.type).trim(),
@@ -375,7 +658,7 @@ export default function DataSourcesPage() {
 				username: jdbc ? String(values.username || "").trim() || undefined : undefined,
 				description: String(values.description || "").trim() || undefined,
 				props: props && Object.keys(props).length ? props : undefined,
-				secrets: values.password ? { password: values.password } : undefined,
+				secrets: apiSource ? apiSecrets : values.password ? { password: values.password } : undefined,
 			};
 			if (editing) {
 				const impact = await dataSourcesService.updateWithImpact(editing.id, payload);
@@ -484,10 +767,17 @@ export default function DataSourcesPage() {
 	};
 
 	const columns = useMemo(
-		() => [
-			{ title: "名称", dataIndex: "name", key: "name", width: 180 },
-			{ title: "类型", dataIndex: "type", key: "type", width: 120 },
-			{ title: "JDBC URL", dataIndex: "jdbcUrl", key: "jdbcUrl", ellipsis: true },
+			() => [
+				{ title: "名称", dataIndex: "name", key: "name", width: 180 },
+				{ title: "类型", dataIndex: "type", key: "type", width: 120 },
+			{
+				title: "连接地址",
+				dataIndex: "jdbcUrl",
+				key: "jdbcUrl",
+				ellipsis: true,
+				render: (value: string, record: InfraDataSource) =>
+					isApiSourceType(record.type) ? readApiBaseUrl(record.props) || "-" : value || "-",
+			},
 			{ title: "用户名", dataIndex: "username", key: "username", width: 140 },
 			{
 				title: "状态",
@@ -547,8 +837,30 @@ export default function DataSourcesPage() {
 
 	const typeValue = Form.useWatch("type", form);
 	const jdbcValue = Form.useWatch("jdbcUrl", form);
-	const jdbcRequired = isJdbcType(typeValue, jdbcValue);
+	const apiSource = isApiSourceType(typeValue);
+	const jdbcRequired = !apiSource && isJdbcType(typeValue, jdbcValue);
 	const fileSource = isFileSource(typeValue);
+	const apiAuthProviderValue = Form.useWatch("apiAuthProvider", form);
+	const apiAuthProviders = useMemo(
+		() =>
+			apiContract?.authProviders?.length
+				? apiContract.authProviders
+				: [{ id: "none", label: "无鉴权", description: "不向请求注入任何鉴权信息", fields: [] }],
+		[apiContract]
+	);
+	const selectedApiAuthProvider = useMemo(
+		() =>
+			apiAuthProviders.find(
+				(item) => String(item.id).toLowerCase() === String(apiAuthProviderValue || "none").toLowerCase()
+			),
+		[apiAuthProviderValue, apiAuthProviders]
+	);
+
+	useEffect(() => {
+		if (modalOpen && apiSource) {
+			void loadApiContract();
+		}
+	}, [apiSource, loadApiContract, modalOpen]);
 
 	return (
 		<Card
@@ -588,8 +900,121 @@ export default function DataSourcesPage() {
 						<Input placeholder="例如：ERP 数据库" />
 					</Form.Item>
 					<Form.Item name="type" label="类型" rules={[{ required: true, message: "请选择类型" }]}>
-						<Select options={TYPE_OPTIONS} placeholder="请选择数据源类型" />
+						<Select options={TYPE_OPTIONS} placeholder="请选择数据源类型" onChange={(value) => handleTypeChange(value)} />
 					</Form.Item>
+					{apiSource && (
+						<>
+							<Alert
+								type="info"
+								showIcon
+								className="mb-4"
+								message="API 数据源配置"
+								description="鉴权机制仍可扩展；敏感值只会写入 secrets，props 中仅保存 provider/config/secretRefs。当前 API 入湖运行时未启用，入湖任务会先保存为草稿。"
+							/>
+							<Form.Item
+								name="apiBaseUrl"
+								label="API Base URL"
+								rules={[
+									{ required: true, message: "请输入 API Base URL" },
+									{
+										validator: async (_: any, value: string) => {
+											if (!value) return Promise.resolve();
+											try {
+												const url = new URL(String(value).trim());
+												if (url.protocol !== "http:" && url.protocol !== "https:") {
+													return Promise.reject(new Error("仅支持 http/https"));
+												}
+												return Promise.resolve();
+											} catch {
+												return Promise.reject(new Error("URL 格式不合法"));
+											}
+										},
+									},
+								]}
+							>
+								<Input placeholder="https://api.example.com" />
+							</Form.Item>
+							<div className="grid gap-4 md:grid-cols-2">
+								<Form.Item
+									name="readerType"
+									label="Reader 类型"
+									initialValue="httpreader"
+									rules={[{ required: true, message: "请输入 Reader 类型" }]}
+								>
+									<Input disabled placeholder="httpreader" />
+								</Form.Item>
+								<Form.Item name="apiAuthProvider" label="鉴权方式" initialValue="none">
+									<Select
+										loading={apiContractLoading}
+										options={apiAuthProviders.map((item) => ({ label: item.label || item.id, value: item.id }))}
+										placeholder="选择鉴权方式"
+									/>
+								</Form.Item>
+							</div>
+							{selectedApiAuthProvider?.description ? (
+								<Text type="secondary" className="block -mt-2 mb-3">
+									{selectedApiAuthProvider.description}
+								</Text>
+							) : null}
+							{selectedApiAuthProvider?.fields?.length ? (
+								<div className="grid gap-4 md:grid-cols-2">
+									{selectedApiAuthProvider.fields.map((field) => {
+										const secretField = Boolean(field.sensitive) && String(field.type || "").toLowerCase() !== "secretref";
+										return (
+											<Form.Item
+												key={field.name}
+												name={secretField ? ["apiAuthSecrets", field.name] : ["apiAuthConfig", field.name]}
+												label={field.label || field.name}
+												extra={
+													secretField && editing
+														? "留空保持已有密钥不变"
+														: field.description || undefined
+												}
+												rules={[
+													{
+														required: Boolean(field.required) && (!secretField || !editing),
+														message: `请输入${field.label || field.name}`,
+													},
+												]}
+											>
+												{buildApiAuthFieldInput(field)}
+											</Form.Item>
+										);
+									})}
+								</div>
+							) : null}
+							<Form.Item
+								name="apiDefaultHeadersJson"
+								label="默认请求头 JSON（可选）"
+								rules={[{ validator: jsonObjectValidator("默认请求头") }]}
+							>
+								<Input.TextArea rows={3} placeholder='{"Accept":"application/json"}' />
+							</Form.Item>
+							<div className="grid gap-4 md:grid-cols-3">
+								<Form.Item
+									name="apiRequestPolicyJson"
+									label="请求策略 JSON"
+									rules={[{ validator: jsonObjectValidator("请求策略") }]}
+								>
+									<Input.TextArea rows={3} placeholder='{"connectTimeoutMillis":5000,"readTimeoutMillis":30000}' />
+								</Form.Item>
+								<Form.Item
+									name="apiRateLimitJson"
+									label="限流策略 JSON"
+									rules={[{ validator: jsonObjectValidator("限流策略") }]}
+								>
+									<Input.TextArea rows={3} placeholder='{"requestsPerSecond":5,"maxConcurrency":2}' />
+								</Form.Item>
+								<Form.Item
+									name="apiTlsJson"
+									label="TLS 策略 JSON"
+									rules={[{ validator: jsonObjectValidator("TLS 策略") }]}
+								>
+									<Input.TextArea rows={3} placeholder='{"verifyTls":true}' />
+								</Form.Item>
+							</div>
+						</>
+					)}
 					{jdbcRequired && (
 						<Form.Item name="driverId" label="JDBC 驱动">
 							<Select
@@ -613,28 +1038,32 @@ export default function DataSourcesPage() {
 							<Input placeholder="可填 jar 文件名或版本号" />
 						</Form.Item>
 					)}
-					<Form.Item
-						name="jdbcUrl"
-						label="JDBC URL"
-						rules={[{ required: jdbcRequired, message: "请输入 JDBC URL" }]}
-					>
-						<Input placeholder="jdbc:xxx://host:port/db" />
-					</Form.Item>
-					<Form.Item
-						name="username"
-						label="用户名"
-						rules={[{ required: jdbcRequired, message: "请输入用户名" }]}
-					>
-						<Input placeholder="数据库账号" />
-					</Form.Item>
-					<Form.Item
-						name="password"
-						label={editing ? "密码（留空保持不变）" : "密码"}
-						rules={[{ required: jdbcRequired && !editing, message: "请输入密码" }]}
-					>
-						<Input.Password placeholder="******" />
-					</Form.Item>
-					{!jdbcRequired && (
+					{!apiSource && (
+						<>
+							<Form.Item
+								name="jdbcUrl"
+								label="JDBC URL"
+								rules={[{ required: jdbcRequired, message: "请输入 JDBC URL" }]}
+							>
+								<Input placeholder="jdbc:xxx://host:port/db" />
+							</Form.Item>
+							<Form.Item
+								name="username"
+								label="用户名"
+								rules={[{ required: jdbcRequired, message: "请输入用户名" }]}
+							>
+								<Input placeholder="数据库账号" />
+							</Form.Item>
+							<Form.Item
+								name="password"
+								label={editing ? "密码（留空保持不变）" : "密码"}
+								rules={[{ required: jdbcRequired && !editing, message: "请输入密码" }]}
+							>
+								<Input.Password placeholder="******" />
+							</Form.Item>
+						</>
+					)}
+					{!jdbcRequired && !apiSource && (
 						<Form.Item
 							name="readerType"
 							label="Reader 类型"

@@ -13,4 +13,7 @@ public interface AnalyticsScreenRepository extends JpaRepository<AnalyticsScreen
 
     @Query("SELECT s.id FROM AnalyticsScreen s WHERE s.creatorId = :creatorId AND s.archived = false")
     List<Long> findIdsByCreatorIdAndArchivedFalse(@Param("creatorId") Long creatorId);
+
+    /** Sprint-17: includes archived rows so dts-platform reconcile can flip enabled=false. */
+    List<AnalyticsScreen> findAllByOrderByIdDesc();
 }
