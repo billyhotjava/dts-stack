@@ -58,6 +58,7 @@ public class WorkbenchLeaderOverviewService {
     private final CatalogDatasetRepository datasetRepo;
     private final CatalogDomainRepository catalogDomainRepo;
     private final WorkbenchLeaderOverviewProperties props;
+    private final TopReportsFallbackService fallbackService;
 
     public WorkbenchLeaderOverviewService(
         WorkbenchRoleResolver roleResolver,
@@ -65,7 +66,8 @@ public class WorkbenchLeaderOverviewService {
         BiReportVisitRepository visitRepo,
         CatalogDatasetRepository datasetRepo,
         CatalogDomainRepository catalogDomainRepo,
-        WorkbenchLeaderOverviewProperties props
+        WorkbenchLeaderOverviewProperties props,
+        TopReportsFallbackService fallbackService
     ) {
         this.roleResolver = roleResolver;
         this.reportRepo = reportRepo;
@@ -73,6 +75,7 @@ public class WorkbenchLeaderOverviewService {
         this.datasetRepo = datasetRepo;
         this.catalogDomainRepo = catalogDomainRepo;
         this.props = props;
+        this.fallbackService = fallbackService;
     }
 
     private Pageable topNPageable() {
@@ -244,12 +247,13 @@ public class WorkbenchLeaderOverviewService {
         // Sprint-17 hotfix: when MINE-scope has no visit history yet (typical first-time user),
         // fall back to reconcile-synced screens so "我常用的报表" is not permanently empty.
         // visits is reported as 0 to signal "not yet visited" — UI shows the relativeTime as "—".
-        // Defensive: if the production DB schema is missing the bi_report_link.source column
-        // (Liquibase changeset 20260425_02_bi_report_link_source.xml not yet applied), the
-        // fallback query throws — degrade gracefully so the rest of the overview still loads.
+        // The fallback runs in its own REQUIRES_NEW sub-transaction (TopReportsFallbackService),
+        // so a schema mismatch (missing bi_report_link.source column when the Liquibase
+        // changeset has not been applied) only rolls back the sub-tx — the outer @Transactional
+        // stays usable and computeTopAssets / computeDomainMatrix below can still succeed.
         if ("MINE".equals(scope) && mapped.isEmpty()) {
             try {
-                List<BiReportLink> fallback = reportRepo.findRecentBySourceForFallback(
+                List<BiReportLink> fallback = fallbackService.tryFetchFallback(
                     ScreenReportLinkSyncService.SOURCE_TAG,
                     topNPageable()
                 );
@@ -268,7 +272,7 @@ public class WorkbenchLeaderOverviewService {
                     .toList();
             } catch (Exception e) {
                 log.warn(
-                    "MINE topReports fallback query failed (likely missing bi_report_link.source column — run hotfix-add-bi-report-link-source.sql): {}",
+                    "MINE topReports fallback query failed (likely missing bi_report_link.source column — run worklog/v2.2.3/sprint-17-202604/hotfix-add-bi-report-link-source.sql): {}",
                     e.getMessage()
                 );
                 return List.of();

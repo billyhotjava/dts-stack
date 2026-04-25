@@ -35,6 +35,7 @@ class WorkbenchLeaderOverviewServiceTest {
     @Mock BiReportVisitRepository visitRepo;
     @Mock CatalogDatasetRepository datasetRepo;
     @Mock CatalogDomainRepository catalogDomainRepo;
+    @Mock TopReportsFallbackService fallbackService;
 
     private WorkbenchLeaderOverviewService service;
 
@@ -46,7 +47,8 @@ class WorkbenchLeaderOverviewServiceTest {
             visitRepo,
             datasetRepo,
             catalogDomainRepo,
-            new WorkbenchLeaderOverviewProperties()
+            new WorkbenchLeaderOverviewProperties(),
+            fallbackService
         );
         // Make stubs lenient so tests that only care about scope/deptCode
         // still work when downstream queries return defaults.
@@ -63,6 +65,7 @@ class WorkbenchLeaderOverviewServiceTest {
         lenient().when(visitRepo.aggregateTopReportsAll(any(), any(), any(), any())).thenReturn(List.of());
         lenient().when(datasetRepo.findTopByClassification(any(), any(), any())).thenReturn(List.of());
         lenient().when(datasetRepo.findTopForUser(anyString(), any())).thenReturn(List.of());
+        lenient().when(fallbackService.tryFetchFallback(any(), any())).thenReturn(List.of());
         lenient().when(visitRepo.aggregateByBizDomain(any(), any(), any(), any())).thenReturn(List.of());
         lenient().when(catalogDomainRepo.findAll()).thenReturn(List.of());
     }
