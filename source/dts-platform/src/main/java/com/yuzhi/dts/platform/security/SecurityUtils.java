@@ -175,17 +175,12 @@ public final class SecurityUtils {
     }
 
     public static boolean isOpAdminAccount() {
-        // Prefer role-based check
-        if (hasCurrentUserAnyOfAuthorities(AuthoritiesConstants.OP_ADMIN)) {
-            return true;
-        }
-        // Backward-compatible fallback: legacy username special-case
-        return getCurrentUserLogin()
-            .map(String::trim)
-            .filter(s -> !s.isEmpty())
-            .map(String::toLowerCase)
-            .filter("opadmin"::equals)
-            .isPresent();
+        // P2-3: the legacy "username == opadmin" username fallback was removed
+        // in Sprint-15. Operations administrators must now hold the
+        // {@link AuthoritiesConstants#OP_ADMIN} role. The username heuristic
+        // was a soft-spot for any deployment that ever provisioned a non-admin
+        // account named "opadmin".
+        return hasCurrentUserAnyOfAuthorities(AuthoritiesConstants.OP_ADMIN);
     }
 
     private static String extractPrincipal(Authentication authentication) {

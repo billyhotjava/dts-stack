@@ -1,5 +1,6 @@
 import { Card, Col, Row, Skeleton, Statistic } from "antd";
 import type { LeaderOverviewKpis } from "@/api/services/workbenchService";
+import type { WorkbenchRole } from "../hooks/useWorkbenchRole";
 import { timeRangeLabel } from "./TimeRangeSelect";
 import type { WorkbenchFilterState } from "./WorkbenchFilterBar";
 import { MoMSecondary, RatioSecondary, StaticSecondary } from "./KpiSecondary";
@@ -23,13 +24,25 @@ type CardDef =
 	| { key: string; title: string; value: number; kind: "none" };
 
 export interface KpiRowProps {
-	role: "EMP" | "DEPT_LEADER" | "INST_LEADER";
+	// P1-9: single source of truth — `WorkbenchRole` is exported from the
+	// hook so adding a 4th role only requires updating one literal.
+	role: WorkbenchRole;
 	filter: WorkbenchFilterState;
 	kpis: LeaderOverviewKpis | null;
 	loading: boolean;
+	/** P0-14: surface the page-level fetch error so KPI cards do not display
+	 *  fake "0" values that mask the retry-able Alert above us. */
+	error?: boolean;
 }
 
-export function KpiRow({ role, filter, kpis, loading }: KpiRowProps) {
+export function KpiRow({ role, filter, kpis, loading, error }: KpiRowProps) {
+	// P0-14: error state must NOT render the skeleton (which suggests work in
+	// progress) nor the placeholders (whose hard-coded "0" reads as real data).
+	// Returning null lets the page-level <Alert> own the failure surface.
+	if (error && !loading) {
+		return null;
+	}
+
 	const cards = buildCards(role, filter, kpis);
 	const span = role === "INST_LEADER" ? 6 : 8;
 	const showSkeleton = loading || !kpis;

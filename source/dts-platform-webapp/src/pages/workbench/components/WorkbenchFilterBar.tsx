@@ -13,6 +13,16 @@ export interface WorkbenchFilterState {
 	/** null == ALL business domains. */
 	bizDomain: string | null;
 	timeRange: TimeRange;
+	/**
+	 * P2-5 — runtime soft-dependency flag. Mirrors `BizDomainSelect`'s
+	 * availability check so consumer pages can decide whether to render
+	 * downstream blocks (e.g. {@code DomainMatrix}). The flag is intentionally
+	 * carried in `WorkbenchFilterState` rather than a sibling state because
+	 * downstream components (page-level effects, audit hooks) must observe
+	 * the same toggle that drives the filter bar's UI; splitting them
+	 * historically led to one half being stale during the load cycle.
+	 * The bar itself debounces toggle propagation in {@code handleBizAvailability}.
+	 */
 	bizDomainAvailable: boolean;
 }
 
@@ -55,28 +65,43 @@ export function initialFilterState(roleInfo: WorkbenchRoleInfo): WorkbenchFilter
 	};
 }
 
+/**
+ * P1-6 — Pure derivation helper for the dept-change path. Extracted from the
+ * component callback so unit tests can exercise the rule directly instead
+ * of asserting locally re-implemented copies of the logic. INST_LEADERs may
+ * drill into any dept (or "ALL"); other roles get scope/dept locked to
+ * their server-side identity regardless of the requested value.
+ */
+export function deriveFilterAfterDeptChange(
+	prev: WorkbenchFilterState,
+	roleInfo: WorkbenchRoleInfo,
+	deptSelected: string | "ALL",
+): WorkbenchFilterState {
+	const nextScope: WorkbenchFilterState["scope"] = roleInfo.isInstLeader
+		? "ALL"
+		: roleInfo.isDeptLeader
+			? "DEPT"
+			: "MINE";
+	const nextDeptCode: string | null = roleInfo.isInstLeader
+		? deptSelected === "ALL"
+			? null
+			: deptSelected
+		: roleInfo.isDeptLeader
+			? roleInfo.deptCode
+			: null;
+	return {
+		...prev,
+		scope: nextScope,
+		deptCode: nextDeptCode,
+	};
+}
+
 export function WorkbenchFilterBar({ value, onChange }: WorkbenchFilterBarProps) {
 	const roleInfo = useWorkbenchRole();
 
 	const handleDeptChange = useCallback(
 		(deptSelected: string | "ALL") => {
-			const nextScope: WorkbenchFilterState["scope"] = roleInfo.isInstLeader
-				? "ALL"
-				: roleInfo.isDeptLeader
-					? "DEPT"
-					: "MINE";
-			const nextDeptCode: string | null = roleInfo.isInstLeader
-				? deptSelected === "ALL"
-					? null
-					: deptSelected
-				: roleInfo.isDeptLeader
-					? roleInfo.deptCode
-					: null;
-			const next: WorkbenchFilterState = {
-				...value,
-				scope: nextScope,
-				deptCode: nextDeptCode,
-			};
+			const next = deriveFilterAfterDeptChange(value, roleInfo, deptSelected);
 			auditLog("WORKBENCH_FILTER_CHANGE", {
 				dim: "dept",
 				value: deptSelected,
@@ -144,7 +169,12 @@ export function WorkbenchFilterBar({ value, onChange }: WorkbenchFilterBarProps)
 			}}
 		>
 			<Space size="middle" wrap>
-				<DeptSelect value={deptSelectValue} onChange={handleDeptChange} />
+				{/* P0-review HIGH: only attach onChange for INST_LEADER. Non-leaders see a
+				    locked dept and must not be able to mutate scope from the dept widget. */}
+				<DeptSelect
+					value={deptSelectValue}
+					onChange={roleInfo.isInstLeader ? handleDeptChange : undefined}
+				/>
 				<BizDomainSelect
 					value={value.bizDomain ?? "ALL"}
 					onChange={handleDomainChange}

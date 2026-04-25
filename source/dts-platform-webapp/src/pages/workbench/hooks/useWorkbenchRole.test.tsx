@@ -92,4 +92,29 @@ describe("useWorkbenchRole", () => {
 		const info = await invokeHook();
 		expect(info.deptCode).toBeNull();
 	});
+
+	// P1-6 — `attributes.dept_code` is a legacy alias still emitted by some
+	// realms; resolveDeptCode supports it but had no test coverage, masking
+	// regressions if the alias branch is ever removed.
+	it("extracts_deptCode_from_attributes_dept_code_alias", async () => {
+		mockState.userInfo = { attributes: { dept_code: "D-ALIAS" } };
+		const info = await invokeHook();
+		expect(info.deptCode).toBe("D-ALIAS");
+	});
+
+	it("extracts_deptCode_from_attributes_dept_code_array_alias", async () => {
+		mockState.userInfo = { attributes: { dept_code: ["D-ALIAS-2"] } };
+		const info = await invokeHook();
+		expect(info.deptCode).toBe("D-ALIAS-2");
+	});
+
+	// P1-6 — userInfo from the store may legitimately be undefined when
+	// a request fires before login state hydrates. The resolver must not
+	// crash and must report deptCode=null.
+	it("handles_undefined_userInfo_gracefully", async () => {
+		mockState.userInfo = undefined;
+		const info = await invokeHook();
+		expect(info.deptCode).toBeNull();
+		expect(info.role).toBe("EMP");
+	});
 });

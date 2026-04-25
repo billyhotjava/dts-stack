@@ -45,7 +45,8 @@ class WorkbenchLeaderOverviewServiceTest {
             reportRepo,
             visitRepo,
             datasetRepo,
-            catalogDomainRepo
+            catalogDomainRepo,
+            new WorkbenchLeaderOverviewProperties()
         );
         // Make stubs lenient so tests that only care about scope/deptCode
         // still work when downstream queries return defaults.
@@ -57,7 +58,7 @@ class WorkbenchLeaderOverviewServiceTest {
         lenient().when(visitRepo.countVisitsForUser(any(), any(), any())).thenReturn(0L);
         lenient().when(datasetRepo.countAssets(any(), any(), any(), any())).thenReturn(0L);
         lenient().when(datasetRepo.countAssetsByClassifications(any(), any(), anyList())).thenReturn(0L);
-        lenient().when(visitRepo.findTopRecentByUser(anyString(), any())).thenReturn(List.of());
+        lenient().when(visitRepo.findTopRecentByUser(anyString(), any(), any())).thenReturn(List.of());
         lenient().when(visitRepo.aggregateTopReportsForDept(anyString(), any(), any(), any(), any())).thenReturn(List.of());
         lenient().when(visitRepo.aggregateTopReportsAll(any(), any(), any(), any())).thenReturn(List.of());
         lenient().when(datasetRepo.findTopByClassification(any(), any(), any())).thenReturn(List.of());
@@ -198,12 +199,71 @@ class WorkbenchLeaderOverviewServiceTest {
         assertThat(res.kpis().visitsMoM().doubleValue()).isEqualTo(0.25);
     }
 
+    // P1-3 — DEPT scope KPI flow with concrete value asserts. Previously
+    // tests verified only that aggregateTopReportsForDept was called; the
+    // KPI numbers themselves were never asserted, so a regression that
+    // mis-routed DEPT to ALL would have been invisible.
+    @Test
+    void computeKpis_DEPT_returns_dept_scoped_visit_counts_and_mom() {
+        // countVisitsForDept is called twice (current period, previous period).
+        when(visitRepo.countVisitsForDept(eq("D001"), any(), any(), any()))
+            .thenReturn(120L, 60L);
+        when(reportRepo.countForDept(eq("D001"), any(), any(), any()))
+            .thenReturn(15L, 3L);
+
+        LeaderOverviewResponse res = service.build(
+            "bob", List.of("ROLE_DEPT_LEADER"), "D001", "DEPT", null, null, "MONTH"
+        );
+        assertThat(res.scope()).isEqualTo("DEPT");
+        assertThat(res.effectiveDeptCode()).isEqualTo("D001");
+        assertThat(res.kpis().visitsInPeriod()).isEqualTo(120L);
+        // (120-60)/60 = 1.0 (100% growth)
+        assertThat(res.kpis().visitsMoM()).isNotNull();
+        assertThat(res.kpis().visitsMoM().doubleValue()).isEqualTo(1.0);
+        assertThat(res.kpis().reportsTotal()).isEqualTo(15L);
+        assertThat(res.kpis().reportsNewInPeriod()).isEqualTo(3L);
+        // ALL/MINE-only repos must not be touched by the DEPT path.
+        verify(visitRepo, never()).countVisitsForAll(any(), any(), any(), any());
+        verify(visitRepo, never()).countVisitsForUser(any(), any(), any());
+        verify(reportRepo, never()).countForAll(any(), any(), any());
+    }
+
+    // P1-3 — ALL+bizDomain drill-down asserts the bizDomain is forwarded.
+    @Test
+    void computeKpis_ALL_with_bizDomain_passes_filter_to_all_aggregates() {
+        when(visitRepo.countVisitsForAll(any(), eq("finance"), any(), any())).thenReturn(7L, 0L);
+        when(reportRepo.countForAll(eq("finance"), any(), any())).thenReturn(2L);
+
+        LeaderOverviewResponse res = service.build(
+            "dan", List.of("ROLE_INST_LEADER"), "D001", "ALL", null, "finance", "MONTH"
+        );
+        assertThat(res.scope()).isEqualTo("ALL");
+        assertThat(res.kpis().visitsInPeriod()).isEqualTo(7L);
+        assertThat(res.kpis().reportsTotal()).isEqualTo(2L);
+        verify(visitRepo).countVisitsForAll(any(), eq("finance"), any(), any());
+    }
+
+    // P0-5 — assetScopeFallback flag flips for MINE only.
+    @Test
+    void computeKpis_MINE_marks_asset_scope_fallback_true() {
+        LeaderOverviewResponse mine = service.build(
+            "alice", List.of("ROLE_EMPLOYEE"), "D001", null, null, null, "MONTH"
+        );
+        assertThat(mine.scope()).isEqualTo("MINE");
+        assertThat(mine.kpis().assetScopeFallback()).isTrue();
+
+        LeaderOverviewResponse all = service.build(
+            "dan", List.of("ROLE_INST_LEADER"), "D001", "ALL", null, null, "MONTH"
+        );
+        assertThat(all.kpis().assetScopeFallback()).isFalse();
+    }
+
     // =========================================================== T04: TOP reports
 
     @Test
     void computeTopReports_MINE_uses_findTopRecentByUser() {
         UUID rid = UUID.randomUUID();
-        when(visitRepo.findTopRecentByUser(eq("alice"), any()))
+        when(visitRepo.findTopRecentByUser(eq("alice"), any(), any()))
             .thenReturn(List.of(new ReportVisitAggregateRow(
                 rid, "Monthly Report", 5L, "finance", "TOP_SECRET", Instant.parse("2026-04-01T00:00:00Z")
             )));
@@ -215,7 +275,7 @@ class WorkbenchLeaderOverviewServiceTest {
         assertThat(res.topReports()).hasSize(1);
         assertThat(res.topReports().get(0).id()).isEqualTo(rid.toString());
         assertThat(res.topReports().get(0).classification()).isEqualTo("S1");  // mapped
-        verify(visitRepo).findTopRecentByUser(eq("alice"), any());
+        verify(visitRepo).findTopRecentByUser(eq("alice"), any(), any());
         verify(visitRepo, never()).aggregateTopReportsForDept(any(), any(), any(), any(), any());
         verify(visitRepo, never()).aggregateTopReportsAll(any(), any(), any(), any());
     }

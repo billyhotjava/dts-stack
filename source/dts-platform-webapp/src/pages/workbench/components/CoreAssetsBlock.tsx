@@ -1,7 +1,9 @@
 import { Card, Empty, List, Skeleton, Tag } from "antd";
 import type { LeaderOverviewResponse } from "@/api/services/workbenchService";
+import type { WorkbenchRole } from "../hooks/useWorkbenchRole";
 import { classificationColor } from "../hooks/classification";
 import { relativeTime } from "../hooks/relativeTime";
+import { humanizeBizDomain } from "../hooks/bizDomain";
 
 /**
  * Sprint-15 F5/T02 — Right 1-column core-assets block.
@@ -13,7 +15,7 @@ import { relativeTime } from "../hooks/relativeTime";
 export type CoreAssetItem = LeaderOverviewResponse["topAssets"][number];
 
 export interface CoreAssetsBlockProps {
-	role: "EMP" | "DEPT_LEADER" | "INST_LEADER";
+	role: WorkbenchRole;
 	items: CoreAssetItem[];
 	loading: boolean;
 }
@@ -49,20 +51,23 @@ export function CoreAssetsBlock({ role, items, loading }: CoreAssetsBlockProps) 
 						<List.Item style={{ cursor: "pointer" }} onClick={() => handleRowClick(a)}>
 							<List.Item.Meta
 								title={a.name}
-								description={
-									<span>
-										{a.updatedAt ? relativeTime(a.updatedAt) : "—"}
-										{a.bizDomain ? (
-											<>
-												{" "}
-												·{" "}
-												<Tag color="geekblue" style={{ marginLeft: 4 }}>
-													{a.bizDomain}
-												</Tag>
-											</>
-										) : null}
-									</span>
-								}
+								description={(() => {
+									const label = humanizeBizDomain(a.bizDomain);
+									return (
+										<span>
+											{a.updatedAt ? relativeTime(a.updatedAt) : "—"}
+											{label ? (
+												<>
+													{" "}
+													·{" "}
+													<Tag color="geekblue" style={{ marginLeft: 4 }}>
+														{label}
+													</Tag>
+												</>
+											) : null}
+										</span>
+									);
+								})()}
 							/>
 							<Tag color={classificationColor(a.classification)}>{a.classification}</Tag>
 						</List.Item>

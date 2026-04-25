@@ -37,6 +37,12 @@ export interface LeaderOverviewKpis {
 	assetsS1: number;
 	assetsS1S2: number;
 	assetsS1Ratio: number | null;
+	/**
+	 * P0-5: when true, `assetsTotal` / `assetsS1` / `assetsS1S2` reflect the
+	 * institute-wide totals because the user-scoped asset access log is not
+	 * yet wired up. UI should disclose "机构合计" instead of "我的资产".
+	 */
+	assetScopeFallback?: boolean;
 }
 
 export interface LeaderOverviewTopReport {

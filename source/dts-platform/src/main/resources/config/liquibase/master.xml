@@ -139,7 +139,7 @@
     <include file="config/liquibase/changelog/20260413_03_query_execution_chunk.xml" relativeToChangelogFile="false"/>
     <include file="config/liquibase/changelog/20260413_04_chunk_jsonb.xml" relativeToChangelogFile="false"/>
     <include file="config/liquibase/changelog/20260421_01_catalog_lineage_direction_widen.xml" relativeToChangelogFile="false"/>
-    <include file="config/liquibase/changelog/20260424-1000_drop-portal-user-favorite.xml" relativeToChangelogFile="false"/>
-    <include file="config/liquibase/changelog/20260424-1100_workbench-leader-overview-schema.xml" relativeToChangelogFile="false"/>
+    <include file="config/liquibase/changelog/20260424_01_drop-portal-user-favorite.xml" relativeToChangelogFile="false"/>
+    <include file="config/liquibase/changelog/20260424_02_workbench-leader-overview-schema.xml" relativeToChangelogFile="false"/>
     <include file="config/liquibase/changelog/20260425_01_api_data_source_props_text.xml" relativeToChangelogFile="false"/>
 </databaseChangeLog>

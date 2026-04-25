@@ -7,6 +7,7 @@ import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.jpa.repository.EntityGraph;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
 import org.springframework.data.jpa.repository.Query;
@@ -111,9 +112,18 @@ public interface CatalogDatasetRepository extends JpaRepository<CatalogDataset, 
      * > INTERNAL > PUBLIC) then by {@code lastModifiedDate} desc. Used
      * for both DEPT and ALL scopes — pass {@code deptCode = null} for
      * the institute-wide variant.
+     *
+     * <p>P0-11: drops the {@code fetch} keyword from the JPQL join so
+     * Pageable can be applied at the SQL level (Hibernate refuses to push
+     * limit/offset down when fetch joins are present, falling back to
+     * in-memory pagination — HHH90003004). The {@code domain} association
+     * is now eagerly loaded via {@link EntityGraph} which Hibernate
+     * implements as a separate batch round-trip rather than a join, so
+     * pagination keys stay in SQL.
      */
+    @EntityGraph(attributePaths = {"domain"})
     @Query(
-        "select d from CatalogDataset d left join fetch d.domain dom " +
+        "select d from CatalogDataset d left join d.domain dom " +
         "where d.enabled = true " +
         "  and (cast(:deptCode as text) is null or d.ownerDept = :deptCode) " +
         "  and (cast(:bizDomain as text) is null or dom.code = :bizDomain) " +
@@ -124,7 +134,8 @@ public interface CatalogDatasetRepository extends JpaRepository<CatalogDataset, 
         "           when 'PUBLIC' then 1 " +
         "           else 0 " +
         "         end desc, " +
-        "         d.lastModifiedDate desc"
+        "         d.lastModifiedDate desc, " +
+        "         d.id asc"
     )
     List<CatalogDataset> findTopByClassification(
         @Param("deptCode") String deptCode,
@@ -136,11 +147,12 @@ public interface CatalogDatasetRepository extends JpaRepository<CatalogDataset, 
      * MINE fallback: when there is no catalog-access-log table, surface
      * the TOP-N assets that the user created or last modified.
      */
+    @EntityGraph(attributePaths = {"domain"})
     @Query(
-        "select d from CatalogDataset d left join fetch d.domain dom " +
+        "select d from CatalogDataset d " +
         "where d.enabled = true " +
         "  and (d.createdBy = :userLogin or d.lastModifiedBy = :userLogin) " +
-        "order by d.lastModifiedDate desc"
+        "order by d.lastModifiedDate desc, d.id asc"
     )
     List<CatalogDataset> findTopForUser(
         @Param("userLogin") String userLogin,

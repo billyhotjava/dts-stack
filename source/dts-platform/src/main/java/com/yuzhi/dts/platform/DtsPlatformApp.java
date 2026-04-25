@@ -49,6 +49,7 @@ import tech.jhipster.config.JHipsterConstants;
     DtsIngestionProperties.class,
     DtsAnalyticsProperties.class,
     SqlIdeFeatureProperties.class,
+    com.yuzhi.dts.platform.service.workbench.WorkbenchLeaderOverviewProperties.class,
 })
 public class DtsPlatformApp {
 

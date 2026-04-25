@@ -1,6 +1,8 @@
 package com.yuzhi.dts.platform.service.visualization;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.Mockito.when;
 
 import com.yuzhi.dts.platform.domain.visualization.BiReportLink;
@@ -56,7 +58,7 @@ class BiReportLinkServiceTest {
 
         BiReportLink internal = buildLink("internal_dashboard", "INTERNAL", "ROLE_EMPLOYEE");
         BiReportLink secret = buildLink("secret_dashboard", "SECRET", "ROLE_EMPLOYEE");
-        when(reportLinkRepository.findByEnabledTrueOrderBySortOrderAscLastModifiedDateDesc()).thenReturn(List.of(internal, secret));
+        when(reportLinkRepository.findCandidatesForListing(anyBoolean(), any(), any(), any(), any(), any())).thenReturn(List.of(internal, secret));
         when(classificationUtils.canAccess("INTERNAL")).thenReturn(true);
         when(classificationUtils.canAccess("SECRET")).thenReturn(false);
 
@@ -77,7 +79,7 @@ class BiReportLinkServiceTest {
 
         BiReportLink byOwnerRole = buildLink("owner_only", "INTERNAL", "ROLE_DEPT_DATA_OWNER");
         BiReportLink noRoleConstraint = buildLink("open_to_all", "INTERNAL", null);
-        when(reportLinkRepository.findByEnabledTrueOrderBySortOrderAscLastModifiedDateDesc()).thenReturn(
+        when(reportLinkRepository.findCandidatesForListing(anyBoolean(), any(), any(), any(), any(), any())).thenReturn(
             List.of(byOwnerRole, noRoleConstraint)
         );
         when(classificationUtils.canAccess("INTERNAL")).thenReturn(true);

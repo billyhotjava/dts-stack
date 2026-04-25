@@ -126,6 +126,7 @@ export function LeaderOverviewPage() {
 						filter={filter}
 						kpis={data?.kpis ?? null}
 						loading={loading}
+						error={Boolean(error)}
 					/>
 
 					{roleInfo.isInstLeader && (

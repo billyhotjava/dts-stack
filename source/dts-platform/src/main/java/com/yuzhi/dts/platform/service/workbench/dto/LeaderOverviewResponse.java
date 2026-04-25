@@ -25,12 +25,13 @@ public record LeaderOverviewResponse(
         long reportsTotal,
         long reportsNewInPeriod,
         long visitsInPeriod,
-        BigDecimal visitsMoM,      // 环比，可为 null
+        BigDecimal visitsMoM,      // 环比（等长滑动窗口口径），可为 null
         long assetsTotal,
         long assetsNewInPeriod,
         long assetsS1,
         long assetsS1S2,           // 部门领导卡"核心资产 S1+S2"直接用
-        BigDecimal assetsS1Ratio   // 可为 null
+        BigDecimal assetsS1Ratio,  // 可为 null
+        boolean assetScopeFallback // P0-5: MINE 视角资产数为机构合计的回退值（仍未实现 user→asset 直接归属）
     ) {}
 
     public record TopReport(

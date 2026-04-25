@@ -47,31 +47,34 @@ public class WorkbenchLeaderOverviewService {
 
     private static final Logger log = LoggerFactory.getLogger(WorkbenchLeaderOverviewService.class);
 
-    private static final Pageable TOP_N = PageRequest.of(0, 10);
-    private static final int DOMAIN_MATRIX_TOP = 6;
     /** Defense-in-depth: reject deptCode containing LIKE wildcards or other injection chars. */
     private static final Pattern DEPT_CODE_ALLOWLIST = Pattern.compile("^[A-Za-z0-9._-]{1,64}$");
-    /** MINE scope look-back window for counting reports a user has visited. */
-    private static final int MINE_REPORTS_LOOKBACK_DAYS = 30;
 
     private final WorkbenchRoleResolver roleResolver;
     private final BiReportLinkRepository reportRepo;
     private final BiReportVisitRepository visitRepo;
     private final CatalogDatasetRepository datasetRepo;
     private final CatalogDomainRepository catalogDomainRepo;
+    private final WorkbenchLeaderOverviewProperties props;
 
     public WorkbenchLeaderOverviewService(
         WorkbenchRoleResolver roleResolver,
         BiReportLinkRepository reportRepo,
         BiReportVisitRepository visitRepo,
         CatalogDatasetRepository datasetRepo,
-        CatalogDomainRepository catalogDomainRepo
+        CatalogDomainRepository catalogDomainRepo,
+        WorkbenchLeaderOverviewProperties props
     ) {
         this.roleResolver = roleResolver;
         this.reportRepo = reportRepo;
         this.visitRepo = visitRepo;
         this.datasetRepo = datasetRepo;
         this.catalogDomainRepo = catalogDomainRepo;
+        this.props = props;
+    }
+
+    private Pageable topNPageable() {
+        return PageRequest.of(0, props.getTopN());
     }
 
     public LeaderOverviewResponse build(
@@ -118,7 +121,7 @@ public class WorkbenchLeaderOverviewService {
 
         switch (scope) {
             case "MINE" -> {
-                Instant lookback = w.end().minusSeconds(MINE_REPORTS_LOOKBACK_DAYS * 86400L);
+                Instant lookback = w.end().minusSeconds(props.getMineReportsLookbackDays() * 86400L);
                 reportsTotal = reportRepo.countDistinctReportsVisitedByUser(userLogin, lookback, w.end());
                 reportsNewInPeriod = reportRepo.countDistinctReportsVisitedByUser(userLogin, w.start(), w.end());
                 visitsInPeriod = visitRepo.countVisitsForUser(userLogin, w.start(), w.end());
@@ -156,8 +159,11 @@ public class WorkbenchLeaderOverviewService {
 
         // Asset counts: MINE scope uses the user as owner (createdBy) proxy; DEPT/ALL use deptCode.
         String assetDept = "MINE".equals(scope) ? null : effectiveDept;
-        // For MINE, we don't (yet) scope asset totals to the user — fallback to institute totals
-        // so the card still shows something meaningful. A future task can wire an access-log.
+        // P0-5: For MINE, we don't (yet) scope asset totals to the user — fallback to
+        // institute totals so the card still shows something meaningful. We surface
+        // the fallback flag so the UI can disclose "机构合计" to the user instead of
+        // implying the count is "我创建的".
+        boolean assetScopeFallback = "MINE".equals(scope);
         long assetsTotal = datasetRepo.countAssets(assetDept, bizDomain, null, null);
         long assetsNewInPeriod = datasetRepo.countAssets(assetDept, bizDomain, w.start(), w.end());
         long assetsS1 = datasetRepo.countAssetsByClassifications(
@@ -165,10 +171,15 @@ public class WorkbenchLeaderOverviewService {
             bizDomain,
             ClassificationMapper.toDbValues("S1")
         );
+        // P2-4: route both legs through ClassificationMapper so the DB vocabulary
+        // ("TOP_SECRET", "SECRET") only lives in one place.
+        List<String> s1s2DbValues = new ArrayList<>();
+        s1s2DbValues.addAll(ClassificationMapper.toDbValues("S1"));
+        s1s2DbValues.addAll(ClassificationMapper.toDbValues("S2"));
         long assetsS1S2 = datasetRepo.countAssetsByClassifications(
             assetDept,
             bizDomain,
-            List.of("TOP_SECRET", "SECRET")
+            s1s2DbValues
         );
         BigDecimal s1Ratio = assetsTotal == 0
             ? null
@@ -183,7 +194,8 @@ public class WorkbenchLeaderOverviewService {
             assetsNewInPeriod,
             assetsS1,
             assetsS1S2,
-            s1Ratio
+            s1Ratio,
+            assetScopeFallback
         );
     }
 
@@ -199,13 +211,17 @@ public class WorkbenchLeaderOverviewService {
         String userLogin
     ) {
         List<ReportVisitAggregateRow> rows = switch (scope) {
-            case "MINE" -> visitRepo.findTopRecentByUser(userLogin, TOP_N);
+            case "MINE" -> visitRepo.findTopRecentByUser(
+                userLogin,
+                w.end().minusSeconds(props.getMineTopReportsLookbackDays() * 86400L),
+                topNPageable()
+            );
             case "DEPT" -> hasText(effectiveDept)
-                ? visitRepo.aggregateTopReportsForDept(effectiveDept, bizDomain, w.start(), w.end(), TOP_N)
+                ? visitRepo.aggregateTopReportsForDept(effectiveDept, bizDomain, w.start(), w.end(), topNPageable())
                 : List.<ReportVisitAggregateRow>of();
             case "ALL" -> hasText(effectiveDept)
-                ? visitRepo.aggregateTopReportsForDept(effectiveDept, bizDomain, w.start(), w.end(), TOP_N)
-                : visitRepo.aggregateTopReportsAll(bizDomain, w.start(), w.end(), TOP_N);
+                ? visitRepo.aggregateTopReportsForDept(effectiveDept, bizDomain, w.start(), w.end(), topNPageable())
+                : visitRepo.aggregateTopReportsAll(bizDomain, w.start(), w.end(), topNPageable());
             default -> List.<ReportVisitAggregateRow>of();
         };
 
@@ -229,11 +245,11 @@ public class WorkbenchLeaderOverviewService {
     List<TopAsset> computeTopAssets(String scope, String effectiveDept, String bizDomain, String userLogin) {
         List<CatalogDataset> rows;
         if ("MINE".equals(scope)) {
-            rows = datasetRepo.findTopForUser(userLogin, TOP_N);
+            rows = datasetRepo.findTopForUser(userLogin, topNPageable());
         } else {
             // DEPT and ALL share the same filter: effectiveDept already encodes the null
             // (ALL+no drill-down) vs scoped (DEPT, or ALL+deptCode) cases upstream.
-            rows = datasetRepo.findTopByClassification(effectiveDept, bizDomain, TOP_N);
+            rows = datasetRepo.findTopByClassification(effectiveDept, bizDomain, topNPageable());
         }
         return rows
             .stream()
@@ -270,13 +286,14 @@ public class WorkbenchLeaderOverviewService {
             .sorted(Comparator.comparingLong(DomainAggregateRow::visits).reversed())
             .toList();
 
-        List<DomainAggregateRow> top = sorted.size() > DOMAIN_MATRIX_TOP
-            ? sorted.subList(0, DOMAIN_MATRIX_TOP)
+        int matrixTop = props.getDomainMatrixTop();
+        List<DomainAggregateRow> top = sorted.size() > matrixTop
+            ? sorted.subList(0, matrixTop)
             : sorted;
 
         long otherSum = sorted
             .stream()
-            .skip(DOMAIN_MATRIX_TOP)
+            .skip(matrixTop)
             .mapToLong(DomainAggregateRow::visits)
             .sum();
 
@@ -338,11 +355,21 @@ public class WorkbenchLeaderOverviewService {
             default -> "MINE";
         };
         if ("ALL".equals(normalized) && role != Role.INST_LEADER) {
-            log.warn("user={} role={} requested scope=ALL, downgraded to DEPT", userLogin, role);
+            // P1-2: drop user-identifying string from the log line. Keeping
+            // a short stable hash of the login lets ops correlate repeated
+            // attempts without persisting the username in plain text.
+            log.info(
+                "workbench.scope.downgrade userHash={} role={} requested=ALL effective=DEPT",
+                userLoginHash(userLogin),
+                role
+            );
             normalized = "DEPT";
         }
         if ("DEPT".equals(normalized) && role == Role.EMP) {
-            log.warn("user={} role=EMP requested scope=DEPT, downgraded to MINE", userLogin);
+            log.info(
+                "workbench.scope.downgrade userHash={} role=EMP requested=DEPT effective=MINE",
+                userLoginHash(userLogin)
+            );
             normalized = "MINE";
         }
         return normalized;
@@ -393,42 +420,29 @@ public class WorkbenchLeaderOverviewService {
     public record TimeWindow(Instant start, Instant end, Instant prevStart, Instant prevEnd) {}
 
     TimeWindow windowOf(String range) {
-        ZoneId zone = ZoneId.systemDefault();
+        // P2-2: timezone is configurable so MoM/quarter boundaries do not
+        // depend on the JVM default (which can drift between dev / prod).
+        ZoneId zone = ZoneId.of(props.getTimezone());
         LocalDate today = LocalDate.now(zone);
-        return switch (range) {
-            case "MONTH" -> {
-                LocalDate s = today.withDayOfMonth(1);
-                LocalDate ps = s.minusMonths(1);
-                yield new TimeWindow(
-                    s.atStartOfDay(zone).toInstant(),
-                    today.plusDays(1).atStartOfDay(zone).toInstant(),
-                    ps.atStartOfDay(zone).toInstant(),
-                    s.atStartOfDay(zone).toInstant()
-                );
-            }
+        // P0-4: previous window is an EQUAL-LENGTH sliding window
+        // immediately preceding the current one. Using "上一个完整周期"
+        // (e.g. full April vs partial May) made MoM permanently negative
+        // at month start because the windows were unequal lengths.
+        LocalDate currentStart = switch (range) {
+            case "MONTH" -> today.withDayOfMonth(1);
             case "QUARTER" -> {
                 int q = (today.getMonthValue() - 1) / 3;
-                LocalDate s = LocalDate.of(today.getYear(), q * 3 + 1, 1);
-                LocalDate ps = s.minusMonths(3);
-                yield new TimeWindow(
-                    s.atStartOfDay(zone).toInstant(),
-                    today.plusDays(1).atStartOfDay(zone).toInstant(),
-                    ps.atStartOfDay(zone).toInstant(),
-                    s.atStartOfDay(zone).toInstant()
-                );
+                yield LocalDate.of(today.getYear(), q * 3 + 1, 1);
             }
-            case "YEAR" -> {
-                LocalDate s = today.withDayOfYear(1);
-                LocalDate ps = s.minusYears(1);
-                yield new TimeWindow(
-                    s.atStartOfDay(zone).toInstant(),
-                    today.plusDays(1).atStartOfDay(zone).toInstant(),
-                    ps.atStartOfDay(zone).toInstant(),
-                    s.atStartOfDay(zone).toInstant()
-                );
-            }
+            case "YEAR" -> today.withDayOfYear(1);
             default -> throw new IllegalArgumentException("unknown timeRange: " + range);
         };
+        Instant start = currentStart.atStartOfDay(zone).toInstant();
+        Instant end = today.plusDays(1).atStartOfDay(zone).toInstant();
+        long durationSeconds = (end.getEpochSecond() - start.getEpochSecond());
+        Instant prevEnd = start;
+        Instant prevStart = prevEnd.minusSeconds(durationSeconds);
+        return new TimeWindow(start, end, prevStart, prevEnd);
     }
 
     private static boolean hasText(String s) {
@@ -439,5 +453,25 @@ public class WorkbenchLeaderOverviewService {
         if (value == null) return null;
         String trimmed = value.trim();
         return trimmed.isEmpty() ? null : trimmed;
+    }
+
+    /**
+     * Stable, short, irreversible identifier for a user login — used in scope
+     * downgrade logs so ops can correlate repeated attempts without leaking
+     * the raw username into log files (P1-2). Returns 8 hex chars of SHA-256.
+     */
+    private static String userLoginHash(String userLogin) {
+        if (userLogin == null || userLogin.isBlank()) return "anon";
+        try {
+            java.security.MessageDigest md = java.security.MessageDigest.getInstance("SHA-256");
+            byte[] digest = md.digest(userLogin.getBytes(java.nio.charset.StandardCharsets.UTF_8));
+            StringBuilder sb = new StringBuilder(8);
+            for (int i = 0; i < 4; i++) {
+                sb.append(String.format("%02x", digest[i]));
+            }
+            return sb.toString();
+        } catch (java.security.NoSuchAlgorithmException ex) {
+            return "n/a";
+        }
     }
 }

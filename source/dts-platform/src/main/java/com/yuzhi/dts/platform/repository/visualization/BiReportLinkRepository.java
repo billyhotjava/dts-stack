@@ -16,16 +16,18 @@ public interface BiReportLinkRepository extends JpaRepository<BiReportLink, UUID
 
     /**
      * Counts enabled reports scoped to a department. {@code deptCode} is
-     * searched inside the CSV-packed {@code deptCodes} column using
-     * {@code like %,deptCode,%} semantics. Optional {@code bizDomain}
-     * filters by exact match; optional time window filters by
-     * {@code createdDate}. All params may be null except the ones
-     * required by the scope (caller's responsibility).
+     * matched as a CSV element inside {@code deptCodes} — we wrap both
+     * sides with separators to avoid prefix collisions (P0-6: previously
+     * "D1" matched "D10/D100" because of the unbounded LIKE pattern).
+     * Optional {@code bizDomain} filters by exact match; optional time
+     * window filters by {@code createdDate}. All params may be null except
+     * the ones required by the scope (caller's responsibility).
      */
     @Query(
         "select count(r) from BiReportLink r " +
         "where r.enabled = true " +
-        "  and (cast(:deptCode as text) is null or r.deptCodes like concat('%', :deptCode, '%')) " +
+        "  and (cast(:deptCode as text) is null " +
+        "       or concat(',', r.deptCodes, ',') like concat('%,', :deptCode, ',%')) " +
         "  and (cast(:bizDomain as text) is null or r.bizDomain = :bizDomain) " +
         "  and (cast(:createdFrom as java.time.Instant) is null or r.createdDate >= :createdFrom) " +
         "  and (cast(:createdTo as java.time.Instant) is null or r.createdDate < :createdTo)"
@@ -68,5 +70,42 @@ public interface BiReportLinkRepository extends JpaRepository<BiReportLink, UUID
         @Param("userLogin") String userLogin,
         @Param("createdFrom") Instant createdFrom,
         @Param("createdTo") Instant createdTo
+    );
+
+    /**
+     * P0-10: SQL-pushdown candidate query backing {@code listPublished}
+     * and {@code listAll}. Filters that we can safely express in JPQL
+     * (enabled / queryDatasetId / bizDomain / reportType /
+     * deptCode CSV / not-yet-expired) are applied here so the service
+     * layer no longer reads the entire table into the JVM. Filters that
+     * depend on the caller's identity or full-text search (role check,
+     * keyword, dataset visibility, classification clearance) are still
+     * evaluated in memory because they cannot be pushed without
+     * surfacing the security model in JPQL.
+     *
+     * <p>The dept CSV match wraps both sides with separators (same idiom
+     * as {@link #countForDept}) to avoid prefix collisions. The order
+     * matches the previous in-memory sort:
+     * {@code sortOrder asc, lastModifiedDate desc} for the published
+     * listing; callers wanting the {@code listAll} order can re-sort.
+     */
+    @Query(
+        "select r from BiReportLink r " +
+        "where (:enabledOnly = false or r.enabled = true) " +
+        "  and (:queryDatasetId is null or r.queryDatasetId = :queryDatasetId) " +
+        "  and (cast(:reportType as text) is null or upper(r.reportType) = upper(:reportType)) " +
+        "  and (cast(:bizDomain as text) is null or upper(r.bizDomain) = upper(:bizDomain)) " +
+        "  and (cast(:deptCode as text) is null " +
+        "       or concat(',', r.deptCodes, ',') like concat('%,', :deptCode, ',%')) " +
+        "  and (r.expiresAt is null or r.expiresAt >= :now) " +
+        "order by r.sortOrder asc, r.lastModifiedDate desc"
+    )
+    List<BiReportLink> findCandidatesForListing(
+        @Param("enabledOnly") boolean enabledOnly,
+        @Param("queryDatasetId") UUID queryDatasetId,
+        @Param("reportType") String reportType,
+        @Param("bizDomain") String bizDomain,
+        @Param("deptCode") String deptCode,
+        @Param("now") Instant now
     );
 }

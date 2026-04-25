@@ -139,8 +139,9 @@ describe("WorkbenchFilterBar", () => {
 		};
 	}
 
+	// P1-6 — exercise the production helper directly (no shadow re-implementation).
 	it("INST_LEADER_selecting_dept_sets_scope_ALL_with_deptCode", async () => {
-		mockState.role = {
+		const role: WorkbenchRoleInfo = {
 			role: "INST_LEADER",
 			deptCode: "HQ",
 			isInstLeader: true,
@@ -148,32 +149,33 @@ describe("WorkbenchFilterBar", () => {
 			isEmp: false,
 			roleLabel: "所领导",
 		};
-		const { WorkbenchFilterBar, initialFilterState } = await import("./WorkbenchFilterBar");
-		let captured: WorkbenchFilterState = initialFilterState(mockState.role);
-		const onChange = (next: WorkbenchFilterState) => {
-			captured = next;
-		};
-		const { container, unmount } = await renderAndFlush(
-			<WorkbenchFilterBar value={captured} onChange={onChange} />,
-		);
-		// Simulate the DeptSelect onChange path by calling WorkbenchFilterBar via remount.
-		// Since we cannot easily drive the inner TreeSelect UI, we directly exercise the
-		// exposed helper by simulating the expected scope derivation.
-		expect(container.querySelector(".ant-tree-select")).not.toBeNull();
+		const { initialFilterState, deriveFilterAfterDeptChange } = await import("./WorkbenchFilterBar");
+		const next = deriveFilterAfterDeptChange(initialFilterState(role), role, "FIN");
+		expect(next.scope).toBe("ALL");
+		expect(next.deptCode).toBe("FIN");
+	});
 
-		// Confirm the derivation rule holds via initialFilterState + manual override:
-		const derived: WorkbenchFilterState = {
-			...captured,
-			scope: "ALL",
+	it("INST_LEADER_clearing_dept_to_ALL_resets_deptCode_to_null", async () => {
+		const role: WorkbenchRoleInfo = {
+			role: "INST_LEADER",
+			deptCode: "HQ",
+			isInstLeader: true,
+			isDeptLeader: false,
+			isEmp: false,
+			roleLabel: "所领导",
+		};
+		const { initialFilterState, deriveFilterAfterDeptChange } = await import("./WorkbenchFilterBar");
+		const prev: WorkbenchFilterState = {
+			...initialFilterState(role),
 			deptCode: "FIN",
 		};
-		expect(derived.scope).toBe("ALL");
-		expect(derived.deptCode).toBe("FIN");
-		unmount();
+		const next = deriveFilterAfterDeptChange(prev, role, "ALL");
+		expect(next.scope).toBe("ALL");
+		expect(next.deptCode).toBeNull();
 	});
 
 	it("DEPT_LEADER_dept_change_ignored_self_dept_kept", async () => {
-		mockState.role = {
+		const role: WorkbenchRoleInfo = {
 			role: "DEPT_LEADER",
 			deptCode: "FIN",
 			isInstLeader: false,
@@ -181,18 +183,27 @@ describe("WorkbenchFilterBar", () => {
 			isEmp: false,
 			roleLabel: "部门领导",
 		};
-		const { initialFilterState } = await import("./WorkbenchFilterBar");
-		const state = initialFilterState(mockState.role);
-		// For DEPT_LEADER, the derivation forces deptCode back to self regardless of input.
-		// The bar's `handleDeptChange` applies this rule — re-derive it via a manual spread
-		// mirroring the production logic to guard against regressions.
-		const afterChange: WorkbenchFilterState = {
-			...state,
-			scope: "DEPT",
-			deptCode: mockState.role.deptCode,
+		const { initialFilterState, deriveFilterAfterDeptChange } = await import("./WorkbenchFilterBar");
+		// P1-6: even if a malformed input requests "D999", the derivation
+		// must clamp to the user's own dept and force scope=DEPT.
+		const next = deriveFilterAfterDeptChange(initialFilterState(role), role, "D999");
+		expect(next.scope).toBe("DEPT");
+		expect(next.deptCode).toBe("FIN");
+	});
+
+	it("EMP_dept_change_locks_scope_to_MINE_with_null_dept", async () => {
+		const role: WorkbenchRoleInfo = {
+			role: "EMP",
+			deptCode: null,
+			isInstLeader: false,
+			isDeptLeader: false,
+			isEmp: true,
+			roleLabel: "员工",
 		};
-		expect(afterChange.scope).toBe("DEPT");
-		expect(afterChange.deptCode).toBe("FIN");
+		const { initialFilterState, deriveFilterAfterDeptChange } = await import("./WorkbenchFilterBar");
+		const next = deriveFilterAfterDeptChange(initialFilterState(role), role, "ANY");
+		expect(next.scope).toBe("MINE");
+		expect(next.deptCode).toBeNull();
 	});
 
 	it("bizDomain_availability_false_clears_selected_bizDomain", async () => {

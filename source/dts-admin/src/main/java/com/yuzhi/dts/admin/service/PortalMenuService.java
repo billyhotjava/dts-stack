@@ -76,7 +76,9 @@ public class PortalMenuService {
     private static final Map<String, String> MENU_COMPONENTS = Map.ofEntries(
         Map.entry("workbench.overview", "/pages/workbench"),
         Map.entry("workbench.todo", "/pages/workbench/WorkflowCenterPage"),
-        Map.entry("workbench.favorites", "/pages/workbench"),
+        // P1-7: workbench.favorites removed in Sprint-15 / F2 alongside the
+        // portal_user_favorite table. Keeping the menu key alive surfaced an
+        // orphan menu item even though the front-end page was deleted.
         Map.entry("resource.sources", "/pages/foundation/DataSourcesPage"),
         Map.entry("resource.jdbcDrivers", "/pages/foundation/JdbcDriversPage"),
         Map.entry("resource.metadata", "/pages/catalog/MetadataPage"),

@@ -62,33 +62,40 @@ public interface BiReportVisitRepository extends JpaRepository<BiReportVisit, UU
     // ------------------------------------------------------------------ T04: TOP reports
 
     /**
-     * MINE: most recently visited reports by a user. {@code visits} in
-     * the projection is {@code count(v)} of the user's visits per
-     * report; primary ordering is {@code max(visitedAt)} desc.
+     * MINE: most recently visited reports by a user.
+     * <p>
+     * P0-9: requires a {@code start} look-back to avoid scanning the user's
+     * full visit history as the table grows. P0-7: groups on
+     * {@code v.bizDomain} (visit-time snapshot) so the bucket label stays
+     * consistent with the {@code countVisitsForDept} aggregation. P0-8: adds
+     * {@code v.reportId} as a stable tie-breaker so paginated results don't
+     * shuffle when two reports share the same {@code max(visitedAt)}.
      */
     @Query(
         "select new com.yuzhi.dts.platform.service.workbench.dto.ReportVisitAggregateRow(" +
-        "  v.reportId, r.title, count(v), r.bizDomain, r.classification, max(v.visitedAt)) " +
+        "  v.reportId, r.title, count(v), v.bizDomain, r.classification, max(v.visitedAt)) " +
         "from BiReportVisit v join BiReportLink r on r.id = v.reportId " +
         "where v.userLogin = :userLogin " +
-        "group by v.reportId, r.title, r.bizDomain, r.classification " +
-        "order by max(v.visitedAt) desc"
+        "  and v.visitedAt >= :start " +
+        "group by v.reportId, r.title, v.bizDomain, r.classification " +
+        "order by max(v.visitedAt) desc, v.reportId asc"
     )
     List<ReportVisitAggregateRow> findTopRecentByUser(
         @Param("userLogin") String userLogin,
+        @Param("start") Instant start,
         Pageable pageable
     );
 
     /** DEPT: top reports by visit count in window, scoped to a single department. */
     @Query(
         "select new com.yuzhi.dts.platform.service.workbench.dto.ReportVisitAggregateRow(" +
-        "  v.reportId, r.title, count(v), r.bizDomain, r.classification, max(v.visitedAt)) " +
+        "  v.reportId, r.title, count(v), v.bizDomain, r.classification, max(v.visitedAt)) " +
         "from BiReportVisit v join BiReportLink r on r.id = v.reportId " +
         "where v.visitedAt >= :start and v.visitedAt < :end " +
         "  and v.deptCode = :deptCode " +
-        "  and (cast(:bizDomain as text) is null or r.bizDomain = :bizDomain) " +
-        "group by v.reportId, r.title, r.bizDomain, r.classification " +
-        "order by count(v) desc"
+        "  and (cast(:bizDomain as text) is null or v.bizDomain = :bizDomain) " +
+        "group by v.reportId, r.title, v.bizDomain, r.classification " +
+        "order by count(v) desc, v.reportId asc"
     )
     List<ReportVisitAggregateRow> aggregateTopReportsForDept(
         @Param("deptCode") String deptCode,
@@ -101,12 +108,12 @@ public interface BiReportVisitRepository extends JpaRepository<BiReportVisit, UU
     /** ALL: top reports by visit count in window, unscoped (optionally filtered by bizDomain). */
     @Query(
         "select new com.yuzhi.dts.platform.service.workbench.dto.ReportVisitAggregateRow(" +
-        "  v.reportId, r.title, count(v), r.bizDomain, r.classification, max(v.visitedAt)) " +
+        "  v.reportId, r.title, count(v), v.bizDomain, r.classification, max(v.visitedAt)) " +
         "from BiReportVisit v join BiReportLink r on r.id = v.reportId " +
         "where v.visitedAt >= :start and v.visitedAt < :end " +
-        "  and (cast(:bizDomain as text) is null or r.bizDomain = :bizDomain) " +
-        "group by v.reportId, r.title, r.bizDomain, r.classification " +
-        "order by count(v) desc"
+        "  and (cast(:bizDomain as text) is null or v.bizDomain = :bizDomain) " +
+        "group by v.reportId, r.title, v.bizDomain, r.classification " +
+        "order by count(v) desc, v.reportId asc"
     )
     List<ReportVisitAggregateRow> aggregateTopReportsAll(
         @Param("bizDomain") String bizDomain,
@@ -120,16 +127,19 @@ public interface BiReportVisitRepository extends JpaRepository<BiReportVisit, UU
     /**
      * Group visits by biz-domain for the ALL scope. Optional deptCode
      * drills down; optional bizDomain collapses the matrix to a single
-     * row (useful when the user has already filtered by domain).
+     * row (useful when the user has already filtered by domain). P0-7:
+     * uses the visit-time snapshot {@code v.bizDomain} to keep counts
+     * consistent with {@code countVisitsForDept} even when reports change
+     * domain after a visit was recorded.
      */
     @Query(
         "select new com.yuzhi.dts.platform.service.workbench.dto.DomainAggregateRow(" +
-        "  r.bizDomain, count(v)) " +
-        "from BiReportVisit v join BiReportLink r on r.id = v.reportId " +
+        "  v.bizDomain, count(v)) " +
+        "from BiReportVisit v " +
         "where v.visitedAt >= :start and v.visitedAt < :end " +
         "  and (cast(:deptCode as text) is null or v.deptCode = :deptCode) " +
-        "  and (cast(:bizDomain as text) is null or r.bizDomain = :bizDomain) " +
-        "group by r.bizDomain"
+        "  and (cast(:bizDomain as text) is null or v.bizDomain = :bizDomain) " +
+        "group by v.bizDomain"
     )
     List<DomainAggregateRow> aggregateByBizDomain(
         @Param("deptCode") String deptCode,

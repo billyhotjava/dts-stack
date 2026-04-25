@@ -2,8 +2,10 @@ import type { ReactNode } from "react";
 import { Card, Empty, List, Skeleton, Tag } from "antd";
 import type { LeaderOverviewResponse } from "@/api/services/workbenchService";
 import reportsService from "@/api/services/reportsService";
+import type { WorkbenchRole } from "../hooks/useWorkbenchRole";
 import { classificationColor } from "../hooks/classification";
 import { relativeTime } from "../hooks/relativeTime";
+import { humanizeBizDomain } from "../hooks/bizDomain";
 
 /**
  * Sprint-15 F5/T01 — Left 2-column TOP reports block.
@@ -16,7 +18,7 @@ import { relativeTime } from "../hooks/relativeTime";
 export type TopReportItem = LeaderOverviewResponse["topReports"][number];
 
 export interface TopReportsBlockProps {
-	role: "EMP" | "DEPT_LEADER" | "INST_LEADER";
+	role: WorkbenchRole;
 	items: TopReportItem[];
 	loading: boolean;
 	onEmpty?: () => ReactNode;
@@ -82,7 +84,10 @@ export function TopReportsBlock({ role, items, loading, onEmpty }: TopReportsBlo
 								}
 							/>
 							<div>
-								{r.bizDomain ? <Tag color="geekblue">{r.bizDomain}</Tag> : null}
+								{(() => {
+									const label = humanizeBizDomain(r.bizDomain);
+									return label ? <Tag color="geekblue">{label}</Tag> : null;
+								})()}
 								<Tag color={classificationColor(r.classification)}>{r.classification}</Tag>
 							</div>
 						</List.Item>

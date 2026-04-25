@@ -3,9 +3,12 @@ import { useEffect, useState } from "react";
 import apiClient from "@/api/apiClient";
 import { useWorkbenchRole } from "../hooks/useWorkbenchRole";
 
+/** P0-review HIGH: `onChange` is optional. The non-INST_LEADER render path
+ *  is read-only, and callers should not supply an onChange there to keep the
+ *  read-only intent explicit at the type level. */
 export interface DeptSelectProps {
 	value: string | "ALL" | null;
-	onChange: (value: string | "ALL") => void;
+	onChange?: (value: string | "ALL") => void;
 }
 
 interface OrgNode {
@@ -131,7 +134,7 @@ export function DeptSelect({ value, onChange }: DeptSelectProps) {
 	return (
 		<TreeSelect
 			value={value ?? "ALL"}
-			onChange={(v) => onChange(typeof v === "string" && v ? v : "ALL")}
+			onChange={(v) => onChange?.(typeof v === "string" && v ? v : "ALL")}
 			treeData={treeData}
 			loading={loading}
 			style={{ minWidth: 220 }}

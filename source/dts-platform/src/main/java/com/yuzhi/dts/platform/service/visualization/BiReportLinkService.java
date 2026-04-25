@@ -63,9 +63,6 @@ public class BiReportLinkService {
         UUID queryDatasetId,
         String bizDomain
     ) {
-        List<BiReportLink> all = repo.findByEnabledTrueOrderBySortOrderAscLastModifiedDateDesc();
-        Map<UUID, QueryDatasetAsset> datasetCache = loadDatasetCache(all);
-
         String dept = trimToNull(deptCode);
         String type = trimToNull(reportType);
         String kw = trimToNull(keyword);
@@ -79,19 +76,20 @@ public class BiReportLinkService {
         boolean superAdmin = hasGlobalManageScope();
         Instant now = Instant.now();
 
+        // P0-10: enabled / queryDatasetId / bizDomain / reportType /
+        // deptCode-CSV / expiry are pushed to SQL via findCandidatesForListing.
+        // Identity-bound filters (classification clearance, role match,
+        // dataset visibility, free-text keyword) remain in memory.
+        List<BiReportLink> rows = repo.findCandidatesForListing(true, queryDatasetId, type, biz, dept, now);
+        Map<UUID, QueryDatasetAsset> datasetCache = loadDatasetCache(rows);
+
         List<BiReportLinkDto> out = new ArrayList<>();
-        for (BiReportLink r : all) {
+        for (BiReportLink r : rows) {
             if (r == null) continue;
             if (!classificationUtils.canAccess(r.getClassification())) continue;
-            if (r.getExpiresAt() != null && r.getExpiresAt().isBefore(now)) continue;
-            if (queryDatasetId != null && !queryDatasetId.equals(r.getQueryDatasetId())) continue;
-
             if (!matchRole(userRoles, r.getRoleCodes())) continue;
             if (!matchDept(userDept, r.getDeptCodes(), institutePrivileged)) continue;
-            if (!matchDeptFilter(dept, r.getDeptCodes())) continue;
-            if (!matchType(type, r.getReportType())) continue;
             if (!matchKeyword(kw, r.getTitle(), r.getCode())) continue;
-            if (!matchBizDomain(biz, r.getBizDomain())) continue;
 
             QueryDatasetAsset dataset = r.getQueryDatasetId() == null ? null : datasetCache.get(r.getQueryDatasetId());
             if (!datasetVisibleInScope(dataset, effectiveDept, superAdmin)) continue;
@@ -117,21 +115,17 @@ public class BiReportLinkService {
         boolean onlyEnabled = Boolean.TRUE.equals(enabledOnly);
         String activeDept = resolveActiveDept(activeDeptHeader);
         boolean superAdmin = hasGlobalManageScope();
-
-        List<BiReportLink> rows = repo.findAll();
-        Map<UUID, QueryDatasetAsset> datasetCache = loadDatasetCache(rows);
         Instant now = Instant.now();
+
+        // P0-10: same SQL-pushdown idea as listPublished. The admin-listing
+        // form may include disabled rows when {@code enabledOnly=false}.
+        List<BiReportLink> rows = repo.findCandidatesForListing(onlyEnabled, queryDatasetId, type, biz, dept, now);
+        Map<UUID, QueryDatasetAsset> datasetCache = loadDatasetCache(rows);
 
         List<BiReportLinkDto> out = new ArrayList<>();
         for (BiReportLink r : rows) {
             if (r == null) continue;
-            if (onlyEnabled && !r.isEnabled()) continue;
-            if (r.getExpiresAt() != null && r.getExpiresAt().isBefore(now)) continue;
-            if (queryDatasetId != null && !queryDatasetId.equals(r.getQueryDatasetId())) continue;
-            if (!matchDeptFilter(dept, r.getDeptCodes())) continue;
-            if (!matchType(type, r.getReportType())) continue;
             if (!matchKeyword(kw, r.getTitle(), r.getCode())) continue;
-            if (!matchBizDomain(biz, r.getBizDomain())) continue;
 
             QueryDatasetAsset dataset = r.getQueryDatasetId() == null ? null : datasetCache.get(r.getQueryDatasetId());
             if (!datasetVisibleInScope(dataset, activeDept, superAdmin)) continue;

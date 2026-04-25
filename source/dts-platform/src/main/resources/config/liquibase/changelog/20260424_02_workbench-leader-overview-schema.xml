@@ -64,4 +64,44 @@
         </createIndex>
     </changeSet>
 
+    <!--
+        P0-3 — Composite indexes covering the leader-overview hot queries.
+        Single-column indexes on dept_code / report_id / visited_at force
+        Postgres into bitmap-AND scans on KPI / TOP-N aggregations; the
+        composite (dept_code, visited_at) and (report_id, visited_at)
+        indexes let the planner satisfy the predicates with a single
+        index range scan plus the count.
+    -->
+    <changeSet id="20260424-1100-create-bi-report-visit-composite-indexes" author="billy">
+        <preConditions onFail="MARK_RAN">
+            <and>
+                <tableExists tableName="bi_report_visit"/>
+                <not><indexExists indexName="idx_bi_report_visit_dept_visited"/></not>
+            </and>
+        </preConditions>
+        <createIndex tableName="bi_report_visit" indexName="idx_bi_report_visit_dept_visited">
+            <column name="dept_code"/>
+            <column name="visited_at"/>
+        </createIndex>
+        <rollback>
+            <dropIndex tableName="bi_report_visit" indexName="idx_bi_report_visit_dept_visited"/>
+        </rollback>
+    </changeSet>
+
+    <changeSet id="20260424-1100-create-bi-report-visit-report-visited-index" author="billy">
+        <preConditions onFail="MARK_RAN">
+            <and>
+                <tableExists tableName="bi_report_visit"/>
+                <not><indexExists indexName="idx_bi_report_visit_report_visited"/></not>
+            </and>
+        </preConditions>
+        <createIndex tableName="bi_report_visit" indexName="idx_bi_report_visit_report_visited">
+            <column name="report_id"/>
+            <column name="visited_at"/>
+        </createIndex>
+        <rollback>
+            <dropIndex tableName="bi_report_visit" indexName="idx_bi_report_visit_report_visited"/>
+        </rollback>
+    </changeSet>
+
 </databaseChangeLog>

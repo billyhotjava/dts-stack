@@ -43,9 +43,26 @@ function shadeColor(weight: number): string {
 	return `rgb(${r}, ${g}, ${b})`;
 }
 
-function weightOf(visits: number, min: number, max: number): number {
+function weightOf(visits: number, min: number, max: number, totalCells: number): number {
+	// P0-15 (HIGH): when only one real cell exists, return full saturation
+	// instead of the 0.5 mid-tint — a single non-zero cell should read as
+	// "most-visited", not a noncommittal mid color.
+	if (totalCells <= 1) return 1;
 	if (max <= min) return 0.5;
 	return Math.max(0.1, Math.min(1, (visits - min) / (max - min)));
+}
+
+/**
+ * P0-15 (HIGH) — WCAG AA: white text on the lighter shades of the matrix
+ * (weight < ~0.5) drops below the 4.5:1 minimum contrast ratio. Switch to
+ * dark ink on pale backgrounds so labels remain legible without changing the
+ * design intent (saturated cells stay solid blue with white text).
+ * Synthetic neutral-gray cells (`OTHER_COLOR=#bfbfbf`) likewise fall under
+ * 4.5:1 against white, so they always render with dark text.
+ */
+function textColorFor(weight: number, isSynthetic: boolean): string {
+	if (isSynthetic) return "#1d1d1f";
+	return weight >= 0.55 ? "#fff" : "#1d1d1f";
 }
 
 function isSyntheticBucket(domain: string): boolean {
@@ -55,9 +72,9 @@ function isSyntheticBucket(domain: string): boolean {
 export function DomainMatrix({ visible, cells, activeDomain, onSelect }: DomainMatrixProps) {
 	const stats = useMemo(() => {
 		const realCells = cells.filter((c) => !isSyntheticBucket(c.domain));
-		if (realCells.length === 0) return { min: 0, max: 0 };
+		if (realCells.length === 0) return { min: 0, max: 0, count: 0 };
 		const visits = realCells.map((c) => c.visits);
-		return { min: Math.min(...visits), max: Math.max(...visits) };
+		return { min: Math.min(...visits), max: Math.max(...visits), count: realCells.length };
 	}, [cells]);
 
 	if (!visible || cells.length === 0) return null;
@@ -77,22 +94,21 @@ export function DomainMatrix({ visible, cells, activeDomain, onSelect }: DomainM
 					gap: 8,
 				}}
 			>
-				{cells.map((c) => {
+				{cells.map((c, idx) => {
 					const synthetic = isSyntheticBucket(c.domain);
 					const isActive = c.domain === activeDomain;
-					const bg = synthetic
-						? OTHER_COLOR
-						: shadeColor(weightOf(c.visits, stats.min, stats.max));
+					const weight = synthetic ? 0 : weightOf(c.visits, stats.min, stats.max, stats.count);
+					const bg = synthetic ? OTHER_COLOR : shadeColor(weight);
 					const cursor = synthetic ? "default" : "pointer";
 					return (
-						<Tooltip key={c.domain} title={`${c.domainName} · 访问 ${c.visits}`}>
+						<Tooltip key={`${c.domain}-${idx}`} title={`${c.domainName} · 访问 ${c.visits}`}>
 							<div
 								onClick={() => handleClick(c)}
 								style={{
 									background: bg,
 									padding: 16,
 									borderRadius: 8,
-									color: "#fff",
+									color: textColorFor(weight, synthetic),
 									cursor,
 									textAlign: "center",
 									border: isActive ? "2px solid #faad14" : "2px solid transparent",

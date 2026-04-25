@@ -3,10 +3,12 @@ package com.yuzhi.dts.platform.web.rest;
 import com.yuzhi.dts.platform.service.audit.AuditService;
 import com.yuzhi.dts.platform.service.visualization.BiReportLinkService;
 import com.yuzhi.dts.platform.service.visualization.dto.BiReportLinkDto;
+import com.yuzhi.dts.platform.service.workbench.ClassificationMapper;
 import java.time.Instant;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -34,7 +36,13 @@ public class DashboardResource {
     }
 
     @GetMapping("/dashboards")
+    @PreAuthorize("isAuthenticated()")
     public ApiResponse<List<Map<String, Object>>> list() {
+        // P0-12: BiReportLinkService.listPublished already filters out
+        // dashboards the user is not cleared to see (via classificationUtils.canAccess);
+        // we additionally translate the raw DB classification ("TOP_SECRET" /
+        // "SECRET" / "INTERNAL" / "PUBLIC") to the public-facing API codes
+        // (S1-S4) so we don't leak the internal vocabulary to consumers.
         List<BiReportLinkDto> list = reports.listPublished(null, null, null, null, null, null);
         List<Map<String, Object>> dashboards = list
             .stream()
@@ -43,7 +51,7 @@ public class DashboardResource {
                 Map<String, Object> m = new LinkedHashMap<>();
                 m.put("code", r.code());
                 m.put("name", r.title());
-                m.put("level", r.classification());
+                m.put("level", ClassificationMapper.toApiCode(r.classification()));
                 m.put("url", r.url());
                 m.put("engine", r.engine());
                 return m;
@@ -55,6 +63,7 @@ public class DashboardResource {
     }
 
     @PostMapping("/dashboards/visit")
+    @PreAuthorize("isAuthenticated()")
     public ApiResponse<Map<String, Object>> visit(@RequestBody(required = false) Map<String, Object> body) {
         Map<String, Object> payload = new LinkedHashMap<>();
         if (body != null) {
