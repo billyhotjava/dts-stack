@@ -143,4 +143,5 @@
     <include file="config/liquibase/changelog/20260424_02_workbench-leader-overview-schema.xml" relativeToChangelogFile="false"/>
     <include file="config/liquibase/changelog/20260425_01_api_data_source_props_text.xml" relativeToChangelogFile="false"/>
     <include file="config/liquibase/changelog/20260425_02_bi_report_link_source.xml" relativeToChangelogFile="false"/>
+    <include file="config/liquibase/changelog/20260426_01_bi_report_link_source_retry.xml" relativeToChangelogFile="false"/>
 </databaseChangeLog>

@@ -32,6 +32,25 @@ UAT 反馈"我的概览"页面链接基本不可用、机构显示编码而非�
 2. "我常用的报表"在用户从未访问大屏时，应直接显示 reconcile 出的大屏标题（visits 显示 0）
 3. 点击列表中任一行，应在新窗口打开 `/bi/screens/{id}/preview` 而非 404
 
+## 2026-04-26 后续 hotfix（无需 SQL，重建容器即可）
+
+UAT 重建容器后仍报错 `column bi_report_link.source does not exist` →
+原 changeset `20260425_02_bi_report_link_source.xml` 因 precondition 评估
+被 `onFail=MARK_RAN` 吞掉、databasechangelog 已记录但 column 没建。
+两层修复让"重建容器即恢复"成立：
+
+| 层 | 措施 |
+|---|---|
+| **Liquibase** | 新增 `20260426_01_bi_report_link_source_retry.xml`，新 changeset id 不会被旧记录拦截，使用 PostgreSQL `ADD COLUMN IF NOT EXISTS` / `CREATE INDEX IF NOT EXISTS` 幂等 raw SQL，无 precondition |
+| **Code 兜底** | `BiReportLink.source` 字段保持 `@Transient`（不参与 SELECT/INSERT），reconcile + fallback 用 `code LIKE 'screen-%'` 识别同步行，所以即使 retry changeset 也失败，应用仍能工作 |
+
+**部署路径**：
+1. 拉新镜像
+2. 重建容器（Liquibase 启动时自动跑 retry changeset 建出 source 列）
+3. 完毕
+
+`hotfix-add-bi-report-link-source.sql` 仍保留作为应急后备。
+
 ## （以下保留 sprint-17 原始 IT 证据）
 
 # Sprint-17 集成测试证据（原始）
