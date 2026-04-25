@@ -14,8 +14,17 @@ public interface BiReportLinkRepository extends JpaRepository<BiReportLink, UUID
 
     Optional<BiReportLink> findFirstByCodeIgnoreCase(String code);
 
-    /** Sprint-17/F1 — used by ScreenReportLinkSyncService to scope reconcile to auto-synced rows only. */
-    List<BiReportLink> findAllBySource(String source);
+    /**
+     * Sprint-17/F1 — used by ScreenReportLinkSyncService to scope reconcile to auto-synced
+     * rows only. Sprint-17.1 hotfix: matches by code prefix (e.g. {@code screen-}) instead
+     * of the {@code source} column so older databases without the
+     * `20260425_02_bi_report_link_source.xml` Liquibase changeset still work.
+     */
+    @Query(
+        "select r from BiReportLink r " +
+        "where lower(r.code) like lower(concat(:prefix, '%'))"
+    )
+    List<BiReportLink> findAllByCodePrefix(@Param("prefix") String prefix);
 
     /**
      * Sprint-17 hotfix — MINE-scope fallback when a user has no visits yet:
@@ -23,15 +32,17 @@ public interface BiReportLinkRepository extends JpaRepository<BiReportLink, UUID
      * for users who haven't opened any 大屏 preview (visit log empty).
      * Sorted by lastVisitedAt desc (newly synced rows have null and naturally
      * fall to the bottom), then code asc as a stable tie-breaker.
+     *
+     * <p>Sprint-17.1: matches by code prefix (see {@link #findAllByCodePrefix}).
      */
     @Query(
         "select r from BiReportLink r " +
-        "where r.enabled = true and r.source = :source " +
+        "where r.enabled = true and lower(r.code) like lower(concat(:prefix, '%')) " +
         "order by case when r.lastVisitedAt is null then 1 else 0 end asc, " +
         "         r.lastVisitedAt desc, r.code asc"
     )
-    List<BiReportLink> findRecentBySourceForFallback(
-        @Param("source") String source,
+    List<BiReportLink> findRecentByCodePrefixForFallback(
+        @Param("prefix") String prefix,
         org.springframework.data.domain.Pageable pageable
     );
 

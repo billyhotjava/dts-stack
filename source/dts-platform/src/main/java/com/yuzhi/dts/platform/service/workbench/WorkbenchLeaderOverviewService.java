@@ -253,8 +253,10 @@ public class WorkbenchLeaderOverviewService {
         // stays usable and computeTopAssets / computeDomainMatrix below can still succeed.
         if ("MINE".equals(scope) && mapped.isEmpty()) {
             try {
+                // Sprint-17.1: identify reconcile rows by code prefix instead of `source`
+                // column — keeps fallback functional on older DBs without the new column.
                 List<BiReportLink> fallback = fallbackService.tryFetchFallback(
-                    ScreenReportLinkSyncService.SOURCE_TAG,
+                    ScreenReportLinkSyncService.CODE_PREFIX,
                     topNPageable()
                 );
                 return fallback
@@ -271,10 +273,7 @@ public class WorkbenchLeaderOverviewService {
                     ))
                     .toList();
             } catch (Exception e) {
-                log.warn(
-                    "MINE topReports fallback query failed (likely missing bi_report_link.source column — run worklog/v2.2.3/sprint-17-202604/hotfix-add-bi-report-link-source.sql): {}",
-                    e.getMessage()
-                );
+                log.warn("MINE topReports fallback query failed: {}", e.getMessage());
                 return List.of();
             }
         }

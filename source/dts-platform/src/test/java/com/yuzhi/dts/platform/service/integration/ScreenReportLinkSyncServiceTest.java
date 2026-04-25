@@ -43,7 +43,7 @@ class ScreenReportLinkSyncServiceTest {
         when(client.listScreens()).thenReturn(List.of(
             new ScreenSummary(7L, "Sales", "desc", "INTERNAL", "DEPT_A", false, Instant.now())
         ));
-        when(repo.findAllBySource(ScreenReportLinkSyncService.SOURCE_TAG)).thenReturn(List.of());
+        when(repo.findAllByCodePrefix(ScreenReportLinkSyncService.CODE_PREFIX)).thenReturn(List.of());
 
         SyncResult r = service.reconcileOnce();
 
@@ -73,7 +73,7 @@ class ScreenReportLinkSyncServiceTest {
         when(client.listScreens()).thenReturn(List.of(
             new ScreenSummary(7L, "New Name", null, "SECRET", "DEPT_A", false, Instant.now())
         ));
-        when(repo.findAllBySource(ScreenReportLinkSyncService.SOURCE_TAG)).thenReturn(List.of(existing));
+        when(repo.findAllByCodePrefix(ScreenReportLinkSyncService.CODE_PREFIX)).thenReturn(List.of(existing));
 
         SyncResult r = service.reconcileOnce();
 
@@ -91,7 +91,7 @@ class ScreenReportLinkSyncServiceTest {
         when(client.listScreens()).thenReturn(List.of(
             new ScreenSummary(7L, "Sales", null, "INTERNAL", "DEPT_A", true, Instant.now())
         ));
-        when(repo.findAllBySource(ScreenReportLinkSyncService.SOURCE_TAG)).thenReturn(List.of(existing));
+        when(repo.findAllByCodePrefix(ScreenReportLinkSyncService.CODE_PREFIX)).thenReturn(List.of(existing));
 
         SyncResult r = service.reconcileOnce();
 
@@ -104,7 +104,7 @@ class ScreenReportLinkSyncServiceTest {
     void disablesStale() {
         BiReportLink stale = mirrorOf(99L, "Gone", "INTERNAL", "DEPT_A", true);
         when(client.listScreens()).thenReturn(List.of()); // upstream returned nothing
-        when(repo.findAllBySource(ScreenReportLinkSyncService.SOURCE_TAG)).thenReturn(List.of(stale));
+        when(repo.findAllByCodePrefix(ScreenReportLinkSyncService.CODE_PREFIX)).thenReturn(List.of(stale));
 
         SyncResult r = service.reconcileOnce();
 
@@ -119,9 +119,9 @@ class ScreenReportLinkSyncServiceTest {
         when(client.listScreens()).thenReturn(List.of(
             new ScreenSummary(7L, "Sales", null, "INTERNAL", "DEPT_A", false, Instant.now())
         ));
-        // findAllBySource("SCREEN_SYNC") deliberately returns NO rows; manual rows
+        // findAllByCodePrefix("screen-") deliberately returns NO rows; manual rows
         // never enter reconcile's view, so they cannot be updated or deleted.
-        when(repo.findAllBySource(ScreenReportLinkSyncService.SOURCE_TAG)).thenReturn(List.of());
+        when(repo.findAllByCodePrefix(ScreenReportLinkSyncService.CODE_PREFIX)).thenReturn(List.of());
 
         service.reconcileOnce();
 

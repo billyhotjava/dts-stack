@@ -35,7 +35,7 @@ public class TopReportsFallbackService {
     }
 
     @Transactional(propagation = Propagation.REQUIRES_NEW, readOnly = true)
-    public List<BiReportLink> tryFetchFallback(String source, Pageable pageable) {
-        return repo.findRecentBySourceForFallback(source, pageable);
+    public List<BiReportLink> tryFetchFallback(String codePrefix, Pageable pageable) {
+        return repo.findRecentByCodePrefixForFallback(codePrefix, pageable);
     }
 }

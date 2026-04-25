@@ -6,6 +6,7 @@ import jakarta.persistence.Entity;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
+import jakarta.persistence.Transient;
 import java.io.Serializable;
 import java.time.Instant;
 import java.util.UUID;
@@ -64,7 +65,15 @@ public class BiReportLink extends AbstractAuditingEntity<UUID> implements Serial
     @Column(name = "biz_domain", length = 64)
     private String bizDomain;
 
-    @Column(name = "source", length = 32, nullable = false)
+    /**
+     * Sprint-17: marker for rows synced from dts-analytics screens vs manual ones.
+     * Sprint-17.1 hotfix: marked @Transient because the corresponding column may
+     * not exist in older databases that haven't applied
+     * `20260425_02_bi_report_link_source.xml`. Reconcile/fallback now identify
+     * sync rows by `code LIKE 'screen-%'` instead of relying on this column,
+     * so the field is kept only as a transient hint for in-memory consumers.
+     */
+    @Transient
     private String source = "MANUAL";
 
     @Override

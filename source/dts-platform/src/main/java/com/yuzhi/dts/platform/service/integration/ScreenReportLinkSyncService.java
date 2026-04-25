@@ -64,7 +64,10 @@ public class ScreenReportLinkSyncService {
         }
 
         Map<String, BiReportLink> existing = new HashMap<>();
-        for (BiReportLink link : repo.findAllBySource(SOURCE_TAG)) {
+        // Sprint-17.1: identify reconcile rows by code prefix rather than the `source`
+        // column — the column may not exist in older DBs (Liquibase 20260425_02 not yet
+        // applied) and we want the reconcile to remain functional regardless.
+        for (BiReportLink link : repo.findAllByCodePrefix(CODE_PREFIX)) {
             existing.put(link.getCode(), link);
         }
 
@@ -107,6 +110,8 @@ public class ScreenReportLinkSyncService {
         l.setDeptCodes(s.ownerDeptCode());
         l.setEnabled(!s.archived());
         l.setSortOrder(0);
+        // Sprint-17.1: source is now @Transient; the in-memory tag stays for any
+        // consumer that introspects it but the DB no longer needs the column.
         l.setSource(SOURCE_TAG);
         return l;
     }
