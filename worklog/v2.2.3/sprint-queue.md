@@ -256,3 +256,20 @@
 
 **统计**: READY=10, IN_PROGRESS=0, DONE=0, BLOCKED=0
 **设计文档**: `worklog/v2.2.3/sprint-17-202604/README.md`
+
+## Sprint-18: 企业级数据接入中心 Phase 1 (202604)
+**状态**: READY
+**类型**: Implementation（接入中心主链路收敛 + ODS 契约固化 + 离线文件接入）
+**目标**: 在不引入 Airbyte 的前提下，把 DTS 数据接入中心第一阶段做成可交付能力：数据库、Excel、CSV 均统一落 ODS，源数据不做业务计算，允许追加 DTS 技术血缘字段，后续所有清洗、映射、标准化和业务口径都从 dbt `stg` 开始。
+
+| Feature | Task 数 | 状态 |
+|---------|---------|------|
+| F1-ODS原样落地契约与技术字段 | 5 | READY |
+| F2-数据库接入自动建ODS收敛 | 5 | READY |
+| F3-Excel/CSV离线文件接入 | 5 | READY |
+| F4-执行批次血缘与运行观测 | 4 | READY |
+| F5-dbt stg建模入口与source元数据 | 5 | READY |
+| F6-前端向导与验收门禁 | 4 | READY |
+
+**统计**: READY=28, IN_PROGRESS=0, DONE=0, BLOCKED=0
+**设计文档**: `worklog/v2.2.3/sprint-18-202604/README.md`
