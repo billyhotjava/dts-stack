@@ -1,7 +1,13 @@
 package com.yuzhi.dts.platform.service.etl;
 
 import com.yuzhi.dts.platform.config.DbtProperties;
+import com.yuzhi.dts.platform.domain.catalog.CatalogColumnSchema;
+import com.yuzhi.dts.platform.domain.catalog.CatalogDataset;
+import com.yuzhi.dts.platform.domain.catalog.CatalogTableSchema;
 import com.yuzhi.dts.platform.domain.infra.InfraOdsTableMapping;
+import com.yuzhi.dts.platform.repository.catalog.CatalogColumnSchemaRepository;
+import com.yuzhi.dts.platform.repository.catalog.CatalogDatasetRepository;
+import com.yuzhi.dts.platform.repository.catalog.CatalogTableSchemaRepository;
 import com.yuzhi.dts.platform.repository.infra.InfraOdsTableMappingRepository;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
@@ -11,7 +17,9 @@ import java.nio.file.StandardOpenOption;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
+import java.util.Optional;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
@@ -25,11 +33,24 @@ public class DbtSourceService {
     private final DbtProperties properties;
     private final DbtConfigService configService;
     private final InfraOdsTableMappingRepository mappingRepository;
+    private final CatalogDatasetRepository datasetRepository;
+    private final CatalogTableSchemaRepository tableRepository;
+    private final CatalogColumnSchemaRepository columnRepository;
 
-    public DbtSourceService(DbtProperties properties, DbtConfigService configService, InfraOdsTableMappingRepository mappingRepository) {
+    public DbtSourceService(
+        DbtProperties properties,
+        DbtConfigService configService,
+        InfraOdsTableMappingRepository mappingRepository,
+        CatalogDatasetRepository datasetRepository,
+        CatalogTableSchemaRepository tableRepository,
+        CatalogColumnSchemaRepository columnRepository
+    ) {
         this.properties = properties;
         this.configService = configService;
         this.mappingRepository = mappingRepository;
+        this.datasetRepository = datasetRepository;
+        this.tableRepository = tableRepository;
+        this.columnRepository = columnRepository;
     }
 
     public DbtSourceRefreshResult refreshOdsSources() {
@@ -82,6 +103,10 @@ public class DbtSourceService {
                 if (StringUtils.hasText(mapping.getDescription())) {
                     table.put("description", mapping.getDescription());
                 }
+                List<Map<String, Object>> columns = buildColumns(mapping);
+                if (!columns.isEmpty()) {
+                    table.put("columns", columns);
+                }
                 Map<String, Object> meta = new LinkedHashMap<>();
                 putIfText(meta, "system", mapping.getSystemCode());
                 putIfText(meta, "biz", mapping.getBizCode());
@@ -102,6 +127,84 @@ public class DbtSourceService {
         root.put("version", 2);
         root.put("sources", sources);
         return new SourceBuildResult(root, emittedTables);
+    }
+
+    private List<Map<String, Object>> buildColumns(InfraOdsTableMapping mapping) {
+        CatalogTableSchema table = resolveCatalogTable(mapping).orElse(null);
+        if (table == null) {
+            return List.of();
+        }
+        List<CatalogColumnSchema> catalogColumns = columnRepository.findByTable(table);
+        if (catalogColumns == null || catalogColumns.isEmpty()) {
+            return List.of();
+        }
+        List<Map<String, Object>> columns = new ArrayList<>();
+        for (CatalogColumnSchema column : catalogColumns) {
+            if (column == null || !StringUtils.hasText(column.getName())) {
+                continue;
+            }
+            Map<String, Object> item = new LinkedHashMap<>();
+            item.put("name", column.getName());
+            putIfText(item, "data_type", column.getDataType());
+            putIfText(item, "description", column.getComment());
+
+            Map<String, Object> meta = new LinkedHashMap<>();
+            if (isDtsTechnicalColumn(column.getName())) {
+                meta.put("dts_technical", true);
+            }
+            if (column.getNullable() != null) {
+                meta.put("nullable", column.getNullable());
+            }
+            putIfText(meta, "status", column.getStatus());
+            putIfText(meta, "tags", column.getTags());
+            putIfText(meta, "sensitive_tags", column.getSensitiveTags());
+            if (!meta.isEmpty()) {
+                item.put("meta", meta);
+            }
+            columns.add(item);
+        }
+        return columns;
+    }
+
+    private Optional<CatalogTableSchema> resolveCatalogTable(InfraOdsTableMapping mapping) {
+        if (mapping == null || !StringUtils.hasText(mapping.getOdsTable())) {
+            return Optional.empty();
+        }
+        Optional<CatalogDataset> dataset = resolveDataset(mapping);
+        if (dataset.isEmpty()) {
+            return Optional.empty();
+        }
+        Optional<CatalogTableSchema> table = tableRepository.findFirstByDatasetAndNameIgnoreCase(dataset.get(), mapping.getOdsTable());
+        return table == null ? Optional.empty() : table;
+    }
+
+    private Optional<CatalogDataset> resolveDataset(InfraOdsTableMapping mapping) {
+        if (mapping == null) {
+            return Optional.empty();
+        }
+        if (mapping.getDatasetId() != null) {
+            Optional<CatalogDataset> byId = datasetRepository.findById(mapping.getDatasetId());
+            if (byId != null && byId.isPresent()) {
+                return byId;
+            }
+        }
+        String schema = StringUtils.hasText(mapping.getOdsSchema()) ? mapping.getOdsSchema() : "ods";
+        String table = mapping.getOdsTable();
+        if (!StringUtils.hasText(table)) {
+            return Optional.empty();
+        }
+        Optional<CatalogDataset> byConnection = mapping.getConnectionId() == null
+            ? Optional.empty()
+            : datasetRepository.findFirstBySourceIdAndHiveDatabaseIgnoreCaseAndHiveTableIgnoreCase(mapping.getConnectionId(), schema, table);
+        if (byConnection != null && byConnection.isPresent()) {
+            return byConnection;
+        }
+        Optional<CatalogDataset> byName = datasetRepository.findFirstByHiveDatabaseIgnoreCaseAndHiveTableIgnoreCase(schema, table);
+        return byName == null ? Optional.empty() : byName;
+    }
+
+    private boolean isDtsTechnicalColumn(String name) {
+        return StringUtils.hasText(name) && name.trim().toLowerCase(Locale.ROOT).startsWith("_dts_");
     }
 
     private void putIfText(Map<String, Object> target, String key, String value) {
