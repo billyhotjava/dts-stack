@@ -108,6 +108,24 @@ describe("useWorkbenchRole", () => {
 		expect(info.deptCode).toBe("D-ALIAS-2");
 	});
 
+	it("extracts_deptCode_from_top_level_dept_code_alias", async () => {
+		mockState.userInfo = { dept_code: "D-TOP-ALIAS" };
+		const info = await invokeHook();
+		expect(info.deptCode).toBe("D-TOP-ALIAS");
+	});
+
+	it("extracts_deptName_from_top_level_dept_name_alias", async () => {
+		mockState.userInfo = { dept_name: "财务处" };
+		const info = await invokeHook();
+		expect(info.deptName).toBe("财务处");
+	});
+
+	it("extracts_deptName_from_attributes_department_name_alias", async () => {
+		mockState.userInfo = { attributes: { department_name: ["科研管理部"] } };
+		const info = await invokeHook();
+		expect(info.deptName).toBe("科研管理部");
+	});
+
 	// P1-6 — userInfo from the store may legitimately be undefined when
 	// a request fires before login state hydrates. The resolver must not
 	// crash and must report deptCode=null.

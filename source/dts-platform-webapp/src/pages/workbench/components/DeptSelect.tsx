@@ -1,6 +1,8 @@
 import { TreeSelect } from "antd";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import apiClient from "@/api/apiClient";
+import { searchUsers } from "@/api/services/userDirectoryService";
+import { useUserInfo } from "@/store/userStore";
 import { useWorkbenchRole } from "../hooks/useWorkbenchRole";
 
 /** P0-review HIGH: `onChange` is optional. The non-INST_LEADER render path
@@ -14,7 +16,19 @@ export interface DeptSelectProps {
 interface OrgNode {
 	id?: number | string;
 	name?: string;
+	label?: string;
+	title?: string;
+	code?: string;
 	deptCode?: string;
+	dept_code?: string;
+	deptName?: string;
+	dept_name?: string;
+	orgName?: string;
+	org_name?: string;
+	departmentName?: string;
+	department_name?: string;
+	value?: string;
+	key?: string;
 	parentId?: number | string;
 	children?: OrgNode[];
 	isRoot?: boolean;
@@ -32,10 +46,32 @@ interface TreeSelectOption {
 	children?: TreeSelectOption[];
 }
 
-function resolveOrgCode(node: OrgNode): string {
-	if (typeof node.deptCode === "string" && node.deptCode.trim()) return node.deptCode.trim();
-	if (node.id != null) return String(node.id);
+function readString(...values: unknown[]): string {
+	for (const value of values) {
+		if (typeof value === "string" && value.trim()) return value.trim();
+		if (typeof value === "number" && Number.isFinite(value)) return String(value);
+	}
 	return "";
+}
+
+function resolveOrgCode(node: OrgNode): string {
+	return readString(node.deptCode, node.dept_code, node.code, node.value, node.key, node.id);
+}
+
+function resolveOrgName(node: OrgNode, fallbackCode: string): string {
+	return (
+		readString(
+			node.name,
+			node.deptName,
+			node.dept_name,
+			node.departmentName,
+			node.department_name,
+			node.orgName,
+			node.org_name,
+			node.label,
+			node.title,
+		) || fallbackCode
+	);
 }
 
 function mapOrgToDept(nodes: OrgNode[] | undefined): DeptTreeNode[] {
@@ -43,7 +79,7 @@ function mapOrgToDept(nodes: OrgNode[] | undefined): DeptTreeNode[] {
 	const out: DeptTreeNode[] = [];
 	for (const raw of nodes) {
 		const code = resolveOrgCode(raw);
-		const name = typeof raw.name === "string" && raw.name.trim() ? raw.name.trim() : code;
+		const name = resolveOrgName(raw, code);
 		if (!code) continue;
 		const children = mapOrgToDept(raw.children);
 		out.push(children.length ? { code, name, children } : { code, name });
@@ -56,6 +92,15 @@ function extractOrgList(raw: unknown): OrgNode[] {
 	if (raw && typeof raw === "object") {
 		const obj = raw as Record<string, unknown>;
 		if (Array.isArray(obj.data)) return obj.data as OrgNode[];
+		if (Array.isArray(obj.records)) return obj.records as OrgNode[];
+		if (Array.isArray(obj.items)) return obj.items as OrgNode[];
+		if (Array.isArray(obj.children)) return obj.children as OrgNode[];
+		if (obj.data && typeof obj.data === "object") {
+			const data = obj.data as Record<string, unknown>;
+			if (Array.isArray(data.records)) return data.records as OrgNode[];
+			if (Array.isArray(data.items)) return data.items as OrgNode[];
+			if (Array.isArray(data.children)) return data.children as OrgNode[];
+		}
 	}
 	return [];
 }
@@ -68,7 +113,7 @@ async function fetchOrgTree(): Promise<DeptTreeNode[]> {
 function toTreeSelectData(nodes: DeptTreeNode[]): TreeSelectOption[] {
 	return nodes.map((n) => {
 		const base: TreeSelectOption = { value: n.code, title: n.name };
-		if (n.children && n.children.length) {
+		if (n.children?.length) {
 			return { ...base, children: toTreeSelectData(n.children) };
 		}
 		return base;
@@ -84,9 +129,21 @@ function flattenDeptNames(nodes: DeptTreeNode[], out: Map<string, string>): void
 
 export function DeptSelect({ value, onChange }: DeptSelectProps) {
 	const { isInstLeader, deptCode, deptName } = useWorkbenchRole();
+	const userInfo = useUserInfo();
 	const [tree, setTree] = useState<DeptTreeNode[]>([]);
+	const [directoryDeptName, setDirectoryDeptName] = useState<string | null>(null);
 	const [apiFailed, setApiFailed] = useState(false);
 	const [loading, setLoading] = useState(false);
+	const flatDeptNames = useMemo(() => {
+		const flat = new Map<string, string>();
+		flattenDeptNames(tree, flat);
+		return flat;
+	}, [tree]);
+	const userKeyword = useMemo(() => {
+		if (!userInfo || typeof userInfo !== "object") return "";
+		const info = userInfo as Record<string, unknown>;
+		return readString(info.username, info.login, info.email, info.id);
+	}, [userInfo]);
 
 	useEffect(() => {
 		// Sprint-17 hotfix: also fetch the org tree for non-INST_LEADER users when their
@@ -115,15 +172,37 @@ export function DeptSelect({ value, onChange }: DeptSelectProps) {
 		};
 	}, [isInstLeader, deptName]);
 
-	if (!isInstLeader) {
-		// Prefer session-supplied deptName; otherwise look it up from the org tree (best-effort).
-		let resolvedName = deptName ?? null;
-		if (!resolvedName && deptCode && tree.length) {
-			const flat = new Map<string, string>();
-			flattenDeptNames(tree, flat);
-			resolvedName = flat.get(deptCode) ?? null;
+	useEffect(() => {
+		if (isInstLeader || deptName || !deptCode || !userKeyword) {
+			setDirectoryDeptName(null);
+			return;
 		}
-		const label = resolvedName ?? deptCode ?? "（未绑定）";
+		let cancelled = false;
+		searchUsers(userKeyword)
+			.then((users) => {
+				if (cancelled) return;
+				const normalizedKeyword = userKeyword.toLowerCase();
+				const matched =
+					users.find((user) => String(user.username || "").toLowerCase() === normalizedKeyword) ??
+					users.find((user) => user.deptCode === deptCode) ??
+					(users.length === 1 ? users[0] : undefined);
+				setDirectoryDeptName(matched?.deptName?.trim() || null);
+			})
+			.catch(() => {
+				if (!cancelled) setDirectoryDeptName(null);
+			});
+		return () => {
+			cancelled = true;
+		};
+	}, [isInstLeader, deptName, deptCode, userKeyword]);
+
+	if (!isInstLeader) {
+		// Prefer session-supplied deptName; otherwise look it up from user/org directory (best-effort).
+		let resolvedName = deptName ?? directoryDeptName;
+		if (!resolvedName && deptCode) {
+			resolvedName = flatDeptNames.get(deptCode) ?? null;
+		}
+		const label = resolvedName ?? (loading && deptCode ? "加载中..." : (deptCode ?? "（未绑定）"));
 		return (
 			<div
 				data-testid="dept-select-locked"
@@ -143,15 +222,10 @@ export function DeptSelect({ value, onChange }: DeptSelectProps) {
 		);
 	}
 
-	const flat = new Map<string, string>();
-	flattenDeptNames(tree, flat);
-	const selfName = deptName ?? (deptCode ? flat.get(deptCode) : undefined);
+	const selfName = deptName ?? (deptCode ? flatDeptNames.get(deptCode) : undefined);
 	const selfLabel = selfName && deptCode ? `本部门：${selfName}` : `本部门：${deptCode ?? ""}`;
 	const treeData: TreeSelectOption[] = apiFailed
-		? [
-				{ value: "ALL", title: "全所（默认）" },
-				...(deptCode ? [{ value: deptCode, title: selfLabel }] : []),
-			]
+		? [{ value: "ALL", title: "全所（默认）" }, ...(deptCode ? [{ value: deptCode, title: selfLabel }] : [])]
 		: [{ value: "ALL", title: "全所（默认）" }, ...toTreeSelectData(tree)];
 
 	return (

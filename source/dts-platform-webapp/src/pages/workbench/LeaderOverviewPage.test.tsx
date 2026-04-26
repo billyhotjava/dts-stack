@@ -1,17 +1,12 @@
 // @vitest-environment jsdom
-import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
+
 import type { ReactElement, ReactNode } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { act } from "react-dom/test-utils";
-import type {
-	LeaderOverviewParams,
-	LeaderOverviewResponse,
-} from "@/api/services/workbenchService";
+import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
+import type { LeaderOverviewParams, LeaderOverviewResponse } from "@/api/services/workbenchService";
+import type { WorkbenchFilterBarProps } from "./components/WorkbenchFilterBar";
 import type { WorkbenchRoleInfo } from "./hooks/useWorkbenchRole";
-import type {
-	WorkbenchFilterBarProps,
-	WorkbenchFilterState,
-} from "./components/WorkbenchFilterBar";
 import { LeaderOverviewPage } from "./LeaderOverviewPage";
 
 /**
@@ -46,6 +41,7 @@ beforeAll(() => {
 const defaultInstLeader: WorkbenchRoleInfo = {
 	role: "INST_LEADER",
 	deptCode: null,
+	deptName: null,
 	isInstLeader: true,
 	isDeptLeader: false,
 	isEmp: false,
@@ -81,10 +77,9 @@ vi.mock("./components/WorkbenchFilterBar", async () => {
 		return (
 			<div data-testid="filter-bar">
 				<span data-testid="filter-time-range">{value.timeRange}</span>
-				<span data-testid="filter-biz-domain-available">
-					{String(value.bizDomainAvailable)}
-				</span>
+				<span data-testid="filter-biz-domain-available">{String(value.bizDomainAvailable)}</span>
 				<button
+					type="button"
 					data-testid="filter-flip-time"
 					onClick={() =>
 						onChange({
@@ -96,10 +91,9 @@ vi.mock("./components/WorkbenchFilterBar", async () => {
 					flip-time
 				</button>
 				<button
+					type="button"
 					data-testid="filter-enable-biz-domain"
-					onClick={() =>
-						onChange({ ...value, bizDomainAvailable: !value.bizDomainAvailable })
-					}
+					onClick={() => onChange({ ...value, bizDomainAvailable: !value.bizDomainAvailable })}
 				>
 					enable-biz-domain
 				</button>
@@ -114,27 +108,13 @@ vi.mock("./components/WorkbenchFilterBar", async () => {
 });
 
 vi.mock("./components/KpiRow", () => ({
-	KpiRow: ({ loading }: { loading: boolean }) => (
-		<div data-testid="kpi-row">kpi:{String(loading)}</div>
-	),
-	default: ({ loading }: { loading: boolean }) => (
-		<div data-testid="kpi-row">kpi:{String(loading)}</div>
-	),
+	KpiRow: ({ loading }: { loading: boolean }) => <div data-testid="kpi-row">kpi:{String(loading)}</div>,
+	default: ({ loading }: { loading: boolean }) => <div data-testid="kpi-row">kpi:{String(loading)}</div>,
 }));
 
 vi.mock("./components/DomainMatrix", () => ({
-	DomainMatrix: ({
-		visible,
-		cells,
-	}: {
-		visible: boolean;
-		cells: ReadonlyArray<unknown>;
-	}) => (
-		<div
-			data-testid="domain-matrix"
-			data-visible={String(visible)}
-			data-cells={cells.length}
-		/>
+	DomainMatrix: ({ visible, cells }: { visible: boolean; cells: ReadonlyArray<unknown> }) => (
+		<div data-testid="domain-matrix" data-visible={String(visible)} data-cells={cells.length} />
 	),
 	default: () => null,
 }));
@@ -158,7 +138,8 @@ vi.mock("./components/ScreenStrip", () => ({
 // the full antd bundle through the vitest module graph.
 vi.mock("antd", () => {
 	type ElProps = { children?: ReactNode; [k: string]: unknown };
-	const Wrap = (tag: string) =>
+	const Wrap =
+		(_tag: string) =>
 		({ children, ...rest }: ElProps) => {
 			const props: Record<string, unknown> = {};
 			for (const [k, v] of Object.entries(rest)) {
@@ -343,10 +324,7 @@ describe("LeaderOverviewPage", () => {
 	});
 
 	it("debounces_rapid_filter_changes", async () => {
-		const { container, unmount } = await mountPage([
-			() => makeResponse(),
-			() => makeResponse(),
-		]);
+		const { container, unmount } = await mountPage([() => makeResponse(), () => makeResponse()]);
 		expect(leaderOverviewMock).toHaveBeenCalledTimes(1);
 		// Three flips within the debounce window must collapse into a single fetch.
 		click(container.querySelector('[data-testid="filter-flip-time"]'));
@@ -364,19 +342,14 @@ describe("LeaderOverviewPage", () => {
 	});
 
 	it("shows_error_alert_on_api_failure", async () => {
-		const { container, unmount } = await mountPage([
-			() => Promise.reject(new Error("boom")),
-		]);
+		const { container, unmount } = await mountPage([() => Promise.reject(new Error("boom"))]);
 		expect(container.textContent ?? "").toContain("暂时拿不到数据");
 		expect(container.querySelector('[data-testid="leader-overview-retry"]')).not.toBeNull();
 		unmount();
 	});
 
 	it("error_retry_refetches", async () => {
-		const { container, unmount } = await mountPage([
-			() => Promise.reject(new Error("boom")),
-			() => makeResponse(),
-		]);
+		const { container, unmount } = await mountPage([() => Promise.reject(new Error("boom")), () => makeResponse()]);
 		expect(leaderOverviewMock).toHaveBeenCalledTimes(1);
 		click(container.querySelector('[data-testid="leader-overview-retry"]'));
 		await advanceAndFlush(0);
@@ -390,6 +363,7 @@ describe("LeaderOverviewPage", () => {
 		mockRole.current = {
 			role: "DEPT_LEADER",
 			deptCode: "FIN",
+			deptName: null,
 			isInstLeader: false,
 			isDeptLeader: true,
 			isEmp: false,
@@ -426,6 +400,7 @@ describe("LeaderOverviewPage", () => {
 		mockRole.current = {
 			role: "DEPT_LEADER",
 			deptCode: "FIN",
+			deptName: null,
 			isInstLeader: false,
 			isDeptLeader: true,
 			isEmp: false,
@@ -458,14 +433,13 @@ describe("LeaderOverviewPage", () => {
 		mockRole.current = {
 			role: "EMP",
 			deptCode: null,
+			deptName: null,
 			isInstLeader: false,
 			isDeptLeader: false,
 			isEmp: true,
 			roleLabel: "员工",
 		};
-		const { container, unmount } = await mountPage([
-			() => makeResponse({ scope: "MINE", effectiveDeptCode: null }),
-		]);
+		const { container, unmount } = await mountPage([() => makeResponse({ scope: "MINE", effectiveDeptCode: null })]);
 		expect(container.querySelector('[data-testid="kpi-row"]')).not.toBeNull();
 		expect(container.querySelector('[data-testid="domain-matrix"]')).toBeNull();
 		expect(leaderOverviewMock.mock.calls[0][0].scope).toBe("MINE");
@@ -509,10 +483,7 @@ describe("LeaderOverviewPage", () => {
 		await advanceAndFlush(200);
 		expect(leaderOverviewMock).toHaveBeenCalledTimes(2);
 		// After the state update, the stub renders bizDomainAvailable=true.
-		expect(
-			container.querySelector('[data-testid="filter-biz-domain-available"]')
-				?.textContent,
-		).toBe("true");
+		expect(container.querySelector('[data-testid="filter-biz-domain-available"]')?.textContent).toBe("true");
 		// Matrix should now be visible for INST_LEADER with cells and flag enabled.
 		const matrix = container.querySelector('[data-testid="domain-matrix"]');
 		expect(matrix?.getAttribute("data-visible")).toBe("true");

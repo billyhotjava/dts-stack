@@ -2,6 +2,7 @@ import { Skeleton, Space, Tag } from "antd";
 import { Monitor } from "lucide-react";
 import { useEffect, useState } from "react";
 import { analyticsApi } from "@/analytics/api/analyticsApi";
+import { resolveRouteForOpen } from "@/analytics/helpers/resolveAnalyticsUrl";
 
 /**
  * Sprint-15 F5/T03 — Compact published-screens chip strip.
@@ -85,8 +86,7 @@ export function ScreenStrip() {
 	const hasMore = screens.length > MAX_SHOWN;
 
 	const handleChipClick = (id: PublishedScreen["id"]) => {
-		// TODO: align with ScreensPage's resolveRouteForOpen once reachable without coupling.
-		window.open(`/bi/screens/${id}/preview`, "_blank", "noopener,noreferrer");
+		window.open(resolveRouteForOpen(`/bi/screens/${id}/preview`), "_blank", "noopener,noreferrer");
 	};
 
 	return (
@@ -114,7 +114,7 @@ export function ScreenStrip() {
 				))}
 			</Space>
 			{hasMore ? (
-				<a href="/bi/screens" style={{ marginLeft: "auto" }}>
+				<a href={resolveRouteForOpen("/bi/screens")} style={{ marginLeft: "auto" }}>
 					更多 →
 				</a>
 			) : null}

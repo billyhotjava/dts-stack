@@ -1,3 +1,5 @@
+import { resolveAppHref } from "@/routes/constants";
+
 const isIpv4 = (host: string) => {
 	if (!host) return false;
 	const parts = host.split(".");
@@ -45,6 +47,8 @@ const toAbsolute = (path: string) => {
 	return `${origin}${path}`;
 };
 
+const toAppHref = (path: string) => resolveAppHref(path);
+
 const extractPathLike = (raw: string) => {
 	const trimmed = raw.trim();
 	if (!trimmed) return "";
@@ -57,8 +61,34 @@ const extractPathLike = (raw: string) => {
 	}
 };
 
+const isAppRoutePath = (rawPath: string) => {
+	const plainPath =
+		String(rawPath || "")
+			.split("#")[0]
+			.split("?")[0] || "";
+	const path = plainPath.toLowerCase().replace(/\/+$/, "") || "/";
+	return path === "/bi" || path.startsWith("/bi/");
+};
+
+const sameRuntimeOrigin = (url: URL) => {
+	if (typeof window === "undefined") return false;
+	const origin = getOrigin();
+	if (!origin) return url.origin === window.location.origin;
+	return url.origin === origin || url.origin === window.location.origin;
+};
+
+const resolveAppRouteForOpen = (raw: string) => {
+	const pathLike = extractPathLike(raw);
+	const normalized = pathLike.startsWith("/") ? pathLike : `/${pathLike}`;
+	if (isAppRoutePath(normalized)) return toAppHref(normalized);
+	return "";
+};
+
 const shouldRedirectHetuEntryToAnalytics = (rawPath: string) => {
-	const plainPath = String(rawPath || "").split("#")[0].split("?")[0] || "";
+	const plainPath =
+		String(rawPath || "")
+			.split("#")[0]
+			.split("?")[0] || "";
 	const path = plainPath.toLowerCase().replace(/\/+$/, "");
 	// Only convert Hetu entry pages to /bi.
 	// Keep deep links (e.g. /screen/share/...) untouched.
@@ -83,7 +113,7 @@ const normalizeHetuUrl = (raw: string, preferAbsolute: boolean) => {
 		const url = new URL(trimmed);
 		if (isIpv4(url.hostname)) {
 			const path = `${url.pathname || ""}${url.search || ""}${url.hash || ""}`;
-			return preferAbsolute ? toAbsolute(path || "/") : (path || "/");
+			return preferAbsolute ? toAbsolute(path || "/") : path || "/";
 		}
 		return trimmed;
 	} catch {
@@ -94,7 +124,9 @@ const normalizeHetuUrl = (raw: string, preferAbsolute: boolean) => {
 export const normalizeBiLinkForSave = (raw?: string | null, engine?: string | null) => {
 	const text = String(raw || "").trim();
 	if (!text) return "";
-	const normalizedEngine = String(engine || "").trim().toUpperCase();
+	const normalizedEngine = String(engine || "")
+		.trim()
+		.toUpperCase();
 	if (normalizedEngine !== "HETU") return text;
 	const resolved = normalizeHetuUrl(text, true);
 	if (shouldRedirectHetuEntryToAnalytics(extractPathLike(resolved))) {
@@ -106,13 +138,37 @@ export const normalizeBiLinkForSave = (raw?: string | null, engine?: string | nu
 export const resolveBiLinkForOpen = (raw?: string | null, engine?: string | null) => {
 	const text = String(raw || "").trim();
 	if (!text) return "";
-	const normalizedEngine = String(engine || "").trim().toUpperCase();
+	const normalizedEngine = String(engine || "")
+		.trim()
+		.toUpperCase();
 	if (normalizedEngine !== "HETU") {
-		return text.startsWith("/") ? toAbsolute(text) : text;
+		if (text.startsWith("/")) {
+			return resolveAppRouteForOpen(text) || toAbsolute(text);
+		}
+		const appRoute = resolveAppRouteForOpen(text);
+		if (appRoute) return appRoute;
+		try {
+			const url = new URL(text);
+			const path = `${url.pathname || ""}${url.search || ""}${url.hash || ""}`;
+			if (sameRuntimeOrigin(url) && isAppRoutePath(path)) return toAppHref(path);
+			return text;
+		} catch {
+			return text;
+		}
 	}
 	const resolved = normalizeHetuUrl(text, true);
 	if (shouldRedirectHetuEntryToAnalytics(extractPathLike(resolved))) {
-		return toAbsolute("/bi");
+		return toAppHref("/bi");
 	}
-	return resolved.startsWith("/") ? toAbsolute(resolved) : resolved;
+	if (resolved.startsWith("/")) {
+		return resolveAppRouteForOpen(resolved) || toAbsolute(resolved);
+	}
+	try {
+		const url = new URL(resolved);
+		const path = `${url.pathname || ""}${url.search || ""}${url.hash || ""}`;
+		if (sameRuntimeOrigin(url) && isAppRoutePath(path)) return toAppHref(path);
+	} catch {
+		// Keep the original resolved value for non-URL HETU deep links.
+	}
+	return resolved;
 };

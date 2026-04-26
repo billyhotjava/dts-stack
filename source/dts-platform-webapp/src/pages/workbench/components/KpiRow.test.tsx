@@ -70,12 +70,10 @@ describe("KpiRow", () => {
 	});
 
 	it("renders_3_cards_for_EMP", () => {
-		const { container, unmount } = render(
-			<KpiRow role="EMP" filter={baseFilter} kpis={baseKpis} loading={false} />,
-		);
+		const { container, unmount } = render(<KpiRow role="EMP" filter={baseFilter} kpis={baseKpis} loading={false} />);
 		const cards = container.querySelectorAll(".ant-card");
 		expect(cards.length).toBe(3);
-		expect(container.textContent).toContain("我常用的报表");
+		expect(container.textContent).toContain("我常用的大屏");
 		expect(container.textContent).toContain("我常用的资产");
 		unmount();
 	});
@@ -86,7 +84,7 @@ describe("KpiRow", () => {
 		);
 		const cards = container.querySelectorAll(".ant-card");
 		expect(cards.length).toBe(3);
-		expect(container.textContent).toContain("本部门报表");
+		expect(container.textContent).toContain("本部门大屏");
 		expect(container.textContent).toContain("部门核心资产");
 		expect(container.textContent).toContain("S1 + S2 总数");
 		// assetsS1S2 = 18 should show up
@@ -100,19 +98,14 @@ describe("KpiRow", () => {
 		);
 		const cards = container.querySelectorAll(".ant-card");
 		expect(cards.length).toBe(4);
-		expect(container.textContent).toContain("所内报表");
+		expect(container.textContent).toContain("所内大屏");
 		expect(container.textContent).toContain("核心资产（S1）");
 		unmount();
 	});
 
 	it("period_label_follows_timeRange_MONTH", () => {
 		const { container, unmount } = render(
-			<KpiRow
-				role="INST_LEADER"
-				filter={{ ...baseFilter, timeRange: "MONTH" }}
-				kpis={baseKpis}
-				loading={false}
-			/>,
+			<KpiRow role="INST_LEADER" filter={{ ...baseFilter, timeRange: "MONTH" }} kpis={baseKpis} loading={false} />,
 		);
 		expect(container.textContent).toContain("本月访问");
 		expect(container.textContent).toContain("本月新发布");
@@ -121,12 +114,7 @@ describe("KpiRow", () => {
 
 	it("period_label_follows_timeRange_QUARTER", () => {
 		const { container, unmount } = render(
-			<KpiRow
-				role="INST_LEADER"
-				filter={{ ...baseFilter, timeRange: "QUARTER" }}
-				kpis={baseKpis}
-				loading={false}
-			/>,
+			<KpiRow role="INST_LEADER" filter={{ ...baseFilter, timeRange: "QUARTER" }} kpis={baseKpis} loading={false} />,
 		);
 		expect(container.textContent).toContain("本季访问");
 		unmount();
@@ -134,21 +122,14 @@ describe("KpiRow", () => {
 
 	it("period_label_follows_timeRange_YEAR", () => {
 		const { container, unmount } = render(
-			<KpiRow
-				role="INST_LEADER"
-				filter={{ ...baseFilter, timeRange: "YEAR" }}
-				kpis={baseKpis}
-				loading={false}
-			/>,
+			<KpiRow role="INST_LEADER" filter={{ ...baseFilter, timeRange: "YEAR" }} kpis={baseKpis} loading={false} />,
 		);
 		expect(container.textContent).toContain("本年访问");
 		unmount();
 	});
 
 	it("shows_skeleton_when_loading", () => {
-		const { container, unmount } = render(
-			<KpiRow role="EMP" filter={baseFilter} kpis={baseKpis} loading={true} />,
-		);
+		const { container, unmount } = render(<KpiRow role="EMP" filter={baseFilter} kpis={baseKpis} loading={true} />);
 		expect(container.querySelectorAll(".ant-skeleton").length).toBe(3);
 		unmount();
 	});

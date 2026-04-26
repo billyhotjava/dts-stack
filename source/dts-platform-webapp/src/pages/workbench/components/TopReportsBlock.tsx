@@ -1,13 +1,14 @@
+import { Card, Empty, List, Skeleton, Tag } from "antd";
 import type { ReactNode } from "react";
 import { toast } from "sonner";
-import { Card, Empty, List, Skeleton, Tag } from "antd";
-import type { LeaderOverviewResponse } from "@/api/services/workbenchService";
 import reportsService from "@/api/services/reportsService";
+import type { LeaderOverviewResponse } from "@/api/services/workbenchService";
+import { resolveAppHref } from "@/routes/constants";
 import { resolveBiLinkForOpen } from "@/utils/biLinkUrl";
-import type { WorkbenchRole } from "../hooks/useWorkbenchRole";
+import { humanizeBizDomain } from "../hooks/bizDomain";
 import { classificationColor } from "../hooks/classification";
 import { relativeTime } from "../hooks/relativeTime";
-import { humanizeBizDomain } from "../hooks/bizDomain";
+import type { WorkbenchRole } from "../hooks/useWorkbenchRole";
 
 /**
  * Sprint-15 F5/T01 — Left 2-column TOP reports block.
@@ -27,21 +28,21 @@ export interface TopReportsBlockProps {
 }
 
 function titleFor(role: TopReportsBlockProps["role"]): string {
-	if (role === "EMP") return "我常用的报表";
-	if (role === "DEPT_LEADER") return "本部门 TOP 报表";
-	return "全所 TOP 报表";
+	if (role === "EMP") return "我常用的大屏";
+	if (role === "DEPT_LEADER") return "本部门 TOP 大屏";
+	return "全所 TOP 大屏";
 }
 
 function emptyNodeFor(role: TopReportsBlockProps["role"]): ReactNode {
 	if (role === "EMP") {
 		return (
 			<div>
-				还没有访问过任何报表，
-				<a href="/reports">去报表中心看看</a>
+				还没有访问过任何大屏，
+				<a href={resolveAppHref("/bi/screens")}>去大屏看看</a>
 			</div>
 		);
 	}
-	return <div>暂无已发布报表</div>;
+	return <div>暂无已发布大屏</div>;
 }
 
 export function TopReportsBlock({ role, items, loading, onEmpty }: TopReportsBlockProps) {
@@ -72,7 +73,7 @@ export function TopReportsBlock({ role, items, loading, onEmpty }: TopReportsBlo
 	};
 
 	return (
-		<Card title={title} extra={<a href="/reports">查看全部 →</a>}>
+		<Card title={title} extra={<a href={resolveAppHref("/bi/screens")}>查看全部 →</a>}>
 			{loading ? (
 				<Skeleton active paragraph={{ rows: 6 }} />
 			) : items.length === 0 ? (

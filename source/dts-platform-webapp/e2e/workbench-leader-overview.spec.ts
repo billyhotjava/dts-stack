@@ -41,7 +41,7 @@ test.describe("workbench · leader overview", () => {
 		await initialResponse;
 
 		// 4 KPI titles for INST_LEADER
-		await expect(page.getByText("所内报表").first()).toBeVisible({ timeout: 10_000 });
+		await expect(page.getByText("所内大屏").first()).toBeVisible({ timeout: 10_000 });
 		await expect(page.getByText("数据资产").first()).toBeVisible();
 		await expect(page.getByText("核心资产（S1）").first()).toBeVisible();
 		// "本月访问" is the visit-related KPI title under MONTH range
@@ -81,14 +81,14 @@ test.describe("workbench · leader overview", () => {
 		);
 
 		await page.goto("/#/workbench");
-		await expect(page.getByText("所内报表").first()).toBeVisible({ timeout: 15_000 });
+		await expect(page.getByText("所内大屏").first()).toBeVisible({ timeout: 15_000 });
 
 		// BizDomainSelect renders nothing → its "全部业务域" placeholder must be absent
 		await expect(page.getByText("全部业务域")).toHaveCount(0);
 		// DomainMatrix gates on bizDomainAvailable, so its interactive cells must not render
 		await expect(page.locator('[role="button"][aria-pressed]')).toHaveCount(0);
-		// TopReports block still renders (verifies KPI/reports survive the soft-dep failure)
-		await expect(page.getByText(/报表/).first()).toBeVisible();
+		// TopReports block still renders (verifies KPI/screens survive the soft-dep failure)
+		await expect(page.getByText(/大屏/).first()).toBeVisible();
 	});
 
 	test("DEPT_LEADER scope 锁定（dept selector locked）", async ({ browser }) => {
@@ -102,8 +102,8 @@ test.describe("workbench · leader overview", () => {
 			// Locked dept indicator from DeptSelect's non-INST_LEADER branch
 			await expect(p.getByTestId("dept-select-locked")).toBeVisible({ timeout: 15_000 });
 			await expect(p.getByText(/本部门：/)).toBeVisible();
-			// DEPT_LEADER sees 3 KPI cards — "本部门报表" replaces "所内报表"
-			await expect(p.getByText("本部门报表").first()).toBeVisible();
+			// DEPT_LEADER sees 3 KPI cards — "本部门大屏" replaces "所内大屏"
+			await expect(p.getByText("本部门大屏").first()).toBeVisible();
 		} finally {
 			await ctx.close();
 		}
@@ -136,11 +136,13 @@ test.describe("workbench · leader overview", () => {
 			topReports: [
 				{
 					id: reportId,
-					title: "Sprint-15 测试报表",
+					title: "Sprint-15 测试大屏",
 					visits: 99,
 					bizDomain: "finance",
 					classification: "S2",
 					lastVisitedAt: "2026-04-24T08:00:00Z",
+					url: "/bi/screens/1/preview",
+					engine: "DTS_BI",
 				},
 			],
 			topAssets: [],
@@ -181,7 +183,7 @@ test.describe("workbench · leader overview", () => {
 		);
 
 		await page.goto("/#/workbench");
-		await expect(page.getByText("Sprint-15 测试报表").first()).toBeVisible({ timeout: 15_000 });
+		await expect(page.getByText("Sprint-15 测试大屏").first()).toBeVisible({ timeout: 15_000 });
 
 		// Step 1 — click the "财务" matrix cell (drives bizDomain into the URL).
 		const drilldown = page.waitForResponse(
@@ -206,7 +208,7 @@ test.describe("workbench · leader overview", () => {
 		// Step 3 — open the TOP report (best-effort visit + window.open).
 		const [openedTab] = await Promise.all([
 			page.context().waitForEvent("page", { timeout: 10_000 }).catch(() => null),
-			page.getByText("Sprint-15 测试报表").first().click(),
+			page.getByText("Sprint-15 测试大屏").first().click(),
 		]);
 		// We do not assert on the opened tab content (URL is internal); the
 		// existence of the navigation event is sufficient for chain coverage.
@@ -214,6 +216,6 @@ test.describe("workbench · leader overview", () => {
 
 		// Step 4 — return to the workbench URL and verify state still renders.
 		await page.goto("/#/workbench");
-		await expect(page.getByText("Sprint-15 测试报表").first()).toBeVisible({ timeout: 15_000 });
+		await expect(page.getByText("Sprint-15 测试大屏").first()).toBeVisible({ timeout: 15_000 });
 	});
 });

@@ -1,18 +1,18 @@
 import { Card, Col, Row, Skeleton, Statistic } from "antd";
 import type { LeaderOverviewKpis } from "@/api/services/workbenchService";
 import type { WorkbenchRole } from "../hooks/useWorkbenchRole";
+import { MoMSecondary, RatioSecondary, StaticSecondary } from "./KpiSecondary";
 import { timeRangeLabel } from "./TimeRangeSelect";
 import type { WorkbenchFilterState } from "./WorkbenchFilterBar";
-import { MoMSecondary, RatioSecondary, StaticSecondary } from "./KpiSecondary";
 
 /**
  * Sprint-15 F4/T01 + T02 — Role-differentiated KPI row.
  *
  * | Role          | Cards | Semantics                                                           |
  * | ------------- | ----- | ------------------------------------------------------------------- |
- * | EMP           | 3     | 我常用的报表 / 本期访问（个人） / 我常用的资产                      |
- * | DEPT_LEADER   | 3     | 本部门报表 / 本期访问（部门） / 部门核心资产（S1+S2）               |
- * | INST_LEADER   | 4     | 所内报表 / 本期访问（全所） / 数据资产 / 核心资产 S1                |
+ * | EMP           | 3     | 我常用的大屏 / 本期访问（个人） / 我常用的资产                      |
+ * | DEPT_LEADER   | 3     | 本部门大屏 / 本期访问（部门） / 部门核心资产（S1+S2）               |
+ * | INST_LEADER   | 4     | 所内大屏 / 本期访问（全所） / 数据资产 / 核心资产 S1                |
  *
  * "本期" follows `filter.timeRange` (本月 / 本季 / 本年).
  */
@@ -90,7 +90,7 @@ function buildCards(
 
 	if (role === "EMP") {
 		return [
-			{ key: "myReports", title: "我常用的报表", value: kpis.reportsTotal, kind: "static", text: "近 30 天访问过" },
+			{ key: "myReports", title: "我常用的大屏", value: kpis.reportsTotal, kind: "static", text: "近 30 天访问过" },
 			{ key: "myVisits", title: `${periodLabel}访问`, value: kpis.visitsInPeriod, kind: "none" },
 			{ key: "myAssets", title: "我常用的资产", value: kpis.assetsTotal, kind: "static", text: "近 30 天访问过" },
 		];
@@ -100,7 +100,7 @@ function buildCards(
 		return [
 			{
 				key: "deptReports",
-				title: "本部门报表",
+				title: "本部门大屏",
 				value: kpis.reportsTotal,
 				kind: "static",
 				text: `${periodLabel}新发布 ${kpis.reportsNewInPeriod}`,
@@ -126,7 +126,7 @@ function buildCards(
 	return [
 		{
 			key: "instReports",
-			title: "所内报表",
+			title: "所内大屏",
 			value: kpis.reportsTotal,
 			kind: "static",
 			text: `${periodLabel}新发布 ${kpis.reportsNewInPeriod}`,
@@ -157,12 +157,15 @@ function buildCards(
 
 function placeholders(role: KpiRowProps["role"]): CardDef[] {
 	const count = role === "INST_LEADER" ? 4 : 3;
-	return Array.from({ length: count }, (_, i): CardDef => ({
-		key: `ph-${i}`,
-		title: "",
-		value: 0,
-		kind: "none",
-	}));
+	return Array.from(
+		{ length: count },
+		(_, i): CardDef => ({
+			key: `ph-${i}`,
+			title: "",
+			value: 0,
+			kind: "none",
+		}),
+	);
 }
 
 export default KpiRow;

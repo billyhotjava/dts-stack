@@ -15,6 +15,7 @@ type MockState = {
 const defaultEmp: WorkbenchRoleInfo = {
 	role: "EMP",
 	deptCode: null,
+	deptName: null,
 	isInstLeader: false,
 	isDeptLeader: false,
 	isEmp: true,
@@ -88,6 +89,7 @@ describe("initialFilterState", () => {
 		const state = initialFilterState({
 			role: "DEPT_LEADER",
 			deptCode: "FIN",
+			deptName: null,
 			isInstLeader: false,
 			isDeptLeader: true,
 			isEmp: false,
@@ -102,6 +104,7 @@ describe("initialFilterState", () => {
 		const state = initialFilterState({
 			role: "INST_LEADER",
 			deptCode: "HQ",
+			deptName: null,
 			isInstLeader: true,
 			isDeptLeader: false,
 			isEmp: false,
@@ -144,6 +147,7 @@ describe("WorkbenchFilterBar", () => {
 		const role: WorkbenchRoleInfo = {
 			role: "INST_LEADER",
 			deptCode: "HQ",
+			deptName: null,
 			isInstLeader: true,
 			isDeptLeader: false,
 			isEmp: false,
@@ -159,6 +163,7 @@ describe("WorkbenchFilterBar", () => {
 		const role: WorkbenchRoleInfo = {
 			role: "INST_LEADER",
 			deptCode: "HQ",
+			deptName: null,
 			isInstLeader: true,
 			isDeptLeader: false,
 			isEmp: false,
@@ -178,6 +183,7 @@ describe("WorkbenchFilterBar", () => {
 		const role: WorkbenchRoleInfo = {
 			role: "DEPT_LEADER",
 			deptCode: "FIN",
+			deptName: null,
 			isInstLeader: false,
 			isDeptLeader: true,
 			isEmp: false,
@@ -195,6 +201,7 @@ describe("WorkbenchFilterBar", () => {
 		const role: WorkbenchRoleInfo = {
 			role: "EMP",
 			deptCode: null,
+			deptName: null,
 			isInstLeader: false,
 			isDeptLeader: false,
 			isEmp: true,

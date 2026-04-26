@@ -37,10 +37,13 @@ function resolveDeptCode(userInfo: unknown): string | null {
 	if (typeof info.deptCode === "string" && info.deptCode.trim()) {
 		return info.deptCode.trim();
 	}
+	if (typeof info.dept_code === "string" && info.dept_code.trim()) {
+		return info.dept_code.trim();
+	}
 	const attrs = info.attributes;
 	if (attrs && typeof attrs === "object") {
 		const attrMap = attrs as Record<string, unknown>;
-		const dept = attrMap.department ?? attrMap.dept_code;
+		const dept = attrMap.department ?? attrMap.dept_code ?? attrMap.deptCode;
 		if (Array.isArray(dept)) {
 			const first = dept[0];
 			if (typeof first === "string" && first.trim()) return first.trim();
@@ -56,10 +59,20 @@ function resolveDeptName(userInfo: unknown): string | null {
 	if (typeof info.deptName === "string" && info.deptName.trim()) {
 		return info.deptName.trim();
 	}
+	const direct = info.dept_name ?? info.departmentName ?? info.department_name ?? info.orgName ?? info.org_name;
+	if (typeof direct === "string" && direct.trim()) {
+		return direct.trim();
+	}
 	const attrs = info.attributes;
 	if (attrs && typeof attrs === "object") {
 		const attrMap = attrs as Record<string, unknown>;
-		const cand = attrMap.dept_name ?? attrMap.deptName ?? attrMap.org_name ?? attrMap.orgName;
+		const cand =
+			attrMap.dept_name ??
+			attrMap.deptName ??
+			attrMap.department_name ??
+			attrMap.departmentName ??
+			attrMap.org_name ??
+			attrMap.orgName;
 		if (Array.isArray(cand)) {
 			const first = cand[0];
 			if (typeof first === "string" && first.trim()) return first.trim();

@@ -1,18 +1,22 @@
 // @vitest-environment jsdom
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+
 import type { ReactElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { act } from "react-dom/test-utils";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { WorkbenchRoleInfo } from "../hooks/useWorkbenchRole";
 
 type MockState = {
 	role: WorkbenchRoleInfo;
+	userInfo: unknown;
 	orgResponse: Promise<unknown> | null;
+	userResponse: Promise<unknown> | null;
 };
 
 const defaultInstLeader: WorkbenchRoleInfo = {
 	role: "INST_LEADER",
 	deptCode: null,
+	deptName: null,
 	isInstLeader: true,
 	isDeptLeader: false,
 	isEmp: false,
@@ -21,7 +25,9 @@ const defaultInstLeader: WorkbenchRoleInfo = {
 
 const mockState: MockState = {
 	role: defaultInstLeader,
+	userInfo: {},
 	orgResponse: null,
+	userResponse: null,
 };
 
 vi.mock("../hooks/useWorkbenchRole", () => ({
@@ -34,6 +40,14 @@ vi.mock("@/api/apiClient", () => ({
 	},
 }));
 
+vi.mock("@/store/userStore", () => ({
+	useUserInfo: () => mockState.userInfo,
+}));
+
+vi.mock("@/api/services/userDirectoryService", () => ({
+	searchUsers: () => mockState.userResponse ?? Promise.resolve([]),
+}));
+
 async function renderAndFlush(element: ReactElement): Promise<{ container: HTMLElement; unmount: () => void }> {
 	const container = document.createElement("div");
 	document.body.appendChild(container);
@@ -43,6 +57,8 @@ async function renderAndFlush(element: ReactElement): Promise<{ container: HTMLE
 		root.render(element);
 	});
 	await act(async () => {
+		await Promise.resolve();
+		await Promise.resolve();
 		await Promise.resolve();
 		await Promise.resolve();
 		await Promise.resolve();
@@ -61,7 +77,30 @@ async function renderAndFlush(element: ReactElement): Promise<{ container: HTMLE
 describe("DeptSelect", () => {
 	beforeEach(() => {
 		mockState.role = defaultInstLeader;
+		mockState.userInfo = {};
 		mockState.orgResponse = null;
+		mockState.userResponse = null;
+	});
+
+	it("renders_locked_dept_name_from_current_user_directory", async () => {
+		mockState.role = {
+			role: "DEPT_LEADER",
+			deptCode: "1502",
+			deptName: null,
+			isInstLeader: false,
+			isDeptLeader: true,
+			isEmp: false,
+			roleLabel: "部门领导",
+		};
+		mockState.userInfo = { username: "test1" };
+		mockState.orgResponse = Promise.resolve([]);
+		mockState.userResponse = Promise.resolve([{ username: "test1", deptCode: "1502", deptName: "财务处" }]);
+		const { DeptSelect } = await import("./DeptSelect");
+		const { container, unmount } = await renderAndFlush(<DeptSelect value={null} />);
+		const locked = container.querySelector("[data-testid='dept-select-locked']");
+		expect(locked?.textContent).toContain("财务处");
+		expect(locked?.textContent).not.toContain("1502");
+		unmount();
 	});
 
 	afterEach(() => {
@@ -72,6 +111,7 @@ describe("DeptSelect", () => {
 		mockState.role = {
 			role: "EMP",
 			deptCode: "D-99",
+			deptName: null,
 			isInstLeader: false,
 			isDeptLeader: false,
 			isEmp: true,
@@ -91,6 +131,7 @@ describe("DeptSelect", () => {
 		mockState.role = {
 			role: "DEPT_LEADER",
 			deptCode: "FIN",
+			deptName: null,
 			isInstLeader: false,
 			isDeptLeader: true,
 			isEmp: false,
@@ -100,6 +141,27 @@ describe("DeptSelect", () => {
 		const { container, unmount } = await renderAndFlush(<DeptSelect value={null} onChange={() => {}} />);
 		const locked = container.querySelector("[data-testid='dept-select-locked']");
 		expect(locked?.textContent).toContain("FIN");
+		unmount();
+	});
+
+	it("renders_locked_dept_name_from_org_tree_alias_fields", async () => {
+		mockState.role = {
+			role: "DEPT_LEADER",
+			deptCode: "FIN",
+			deptName: null,
+			isInstLeader: false,
+			isDeptLeader: true,
+			isEmp: false,
+			roleLabel: "部门领导",
+		};
+		mockState.orgResponse = Promise.resolve({
+			data: [{ code: "FIN", label: "财务处" }],
+		});
+		const { DeptSelect } = await import("./DeptSelect");
+		const { container, unmount } = await renderAndFlush(<DeptSelect value={null} />);
+		const locked = container.querySelector("[data-testid='dept-select-locked']");
+		expect(locked?.textContent).toContain("财务处");
+		expect(locked?.textContent).not.toContain("FIN");
 		unmount();
 	});
 

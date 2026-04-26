@@ -3,10 +3,7 @@ import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vite
 import type { ReactElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { act } from "react-dom/test-utils";
-import type {
-	LeaderOverviewParams,
-	LeaderOverviewResponse,
-} from "@/api/services/workbenchService";
+import type { LeaderOverviewParams, LeaderOverviewResponse } from "@/api/services/workbenchService";
 import type { WorkbenchRoleInfo } from "./hooks/useWorkbenchRole";
 import { LeaderOverviewPage } from "./LeaderOverviewPage";
 
@@ -42,6 +39,7 @@ beforeAll(() => {
 const defaultInstLeader: WorkbenchRoleInfo = {
 	role: "INST_LEADER",
 	deptCode: null,
+	deptName: null,
 	isInstLeader: true,
 	isDeptLeader: false,
 	isEmp: false,
@@ -84,9 +82,7 @@ vi.mock("@/api/apiClient", () => ({
 	},
 }));
 
-const recordAuditMock = vi.fn<(input: { event: string; payload?: unknown }) => Promise<void>>(
-	() => Promise.resolve(),
-);
+const recordAuditMock = vi.fn<(input: { event: string; payload?: unknown }) => Promise<void>>(() => Promise.resolve());
 vi.mock("@/api/services/workbenchAuditService", () => ({
 	recordClientAudit: (input: { event: string; payload?: unknown }) => recordAuditMock(input),
 	default: {
@@ -121,6 +117,8 @@ function makeResponse(overrides: Partial<LeaderOverviewResponse> = {}): LeaderOv
 				bizDomain: "FIN",
 				classification: "S2",
 				lastVisitedAt: "2026-04-23T09:00:00.000Z",
+				url: "/bi/screens/1/preview",
+				engine: "DTS_BI",
 			},
 		],
 		topAssets: [
@@ -211,7 +209,7 @@ describe("LeaderOverviewPage (integration, real children)", () => {
 		const { container, unmount } = await mount([() => makeResponse()]);
 		const text = container.textContent ?? "";
 		// 4 INST KPI titles all present
-		expect(text).toContain("所内报表");
+		expect(text).toContain("所内大屏");
 		expect(text).toContain("数据资产");
 		expect(text).toContain("核心资产（S1）");
 		expect(text).toContain("本月访问");
@@ -236,18 +234,17 @@ describe("LeaderOverviewPage (integration, real children)", () => {
 		mockRole.current = {
 			role: "DEPT_LEADER",
 			deptCode: "FIN",
+			deptName: "财务处",
 			isInstLeader: false,
 			isDeptLeader: true,
 			isEmp: false,
 			roleLabel: "部门领导",
 		};
-		const { container, unmount } = await mount([
-			() => makeResponse({ scope: "DEPT", effectiveDeptCode: "FIN" }),
-		]);
+		const { container, unmount } = await mount([() => makeResponse({ scope: "DEPT", effectiveDeptCode: "FIN" })]);
 		// Locked dept indicator (non-INST_LEADER branch in DeptSelect)
 		const locked = container.querySelector('[data-testid="dept-select-locked"]');
 		expect(locked).not.toBeNull();
-		expect(locked?.textContent ?? "").toContain("FIN");
+		expect(locked?.textContent ?? "").toContain("财务处");
 		// DomainMatrix is gated on isInstLeader, so it must not render
 		expect(container.querySelectorAll('[role="button"][aria-pressed]')).toHaveLength(0);
 		// Service called with DEPT scope
@@ -267,7 +264,7 @@ describe("LeaderOverviewPage (integration, real children)", () => {
 		// Matrix is gated on bizDomainAvailable=true; with soft-dep failed it stays hidden
 		expect(container.querySelectorAll('[role="button"][aria-pressed]')).toHaveLength(0);
 		// KPI / TOP reports / core assets still render despite the soft-dep failure
-		expect(text).toContain("所内报表");
+		expect(text).toContain("所内大屏");
 		expect(text).toContain("月度财务月报");
 		expect(text).toContain("核心客户表");
 		unmount();

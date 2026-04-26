@@ -110,40 +110,32 @@ describe("TopReportsBlock", () => {
 	});
 
 	it("shows_skeleton_when_loading", () => {
-		const { container, unmount } = render(
-			<TopReportsBlock role="EMP" items={[]} loading={true} />,
-		);
+		const { container, unmount } = render(<TopReportsBlock role="EMP" items={[]} loading={true} />);
 		expect(container.querySelector(".ant-skeleton")).not.toBeNull();
 		unmount();
 	});
 
 	it("shows_empty_for_EMP_with_link", () => {
-		const { container, unmount } = render(
-			<TopReportsBlock role="EMP" items={[]} loading={false} />,
-		);
+		const { container, unmount } = render(<TopReportsBlock role="EMP" items={[]} loading={false} />);
 		const anchors = container.querySelectorAll("a");
 		// One is the "查看全部" extra, another is inside the empty-state description.
-		const anyLinkTo = Array.from(anchors).some((a) => a.textContent?.includes("报表中心"));
+		const anyLinkTo = Array.from(anchors).some((a) => a.textContent?.includes("大屏"));
 		expect(anyLinkTo).toBe(true);
 		unmount();
 	});
 
 	it("shows_empty_for_DEPT_LEADER", () => {
-		const { container, unmount } = render(
-			<TopReportsBlock role="DEPT_LEADER" items={[]} loading={false} />,
-		);
-		expect(container.textContent).toContain("暂无已发布报表");
-		const hasReportCenterLink = Array.from(container.querySelectorAll("a")).some(
-			(a) => a.textContent?.includes("报表中心"),
+		const { container, unmount } = render(<TopReportsBlock role="DEPT_LEADER" items={[]} loading={false} />);
+		expect(container.textContent).toContain("暂无已发布大屏");
+		const hasReportCenterLink = Array.from(container.querySelectorAll("a")).some((a) =>
+			a.textContent?.includes("去大屏"),
 		);
 		expect(hasReportCenterLink).toBe(false);
 		unmount();
 	});
 
 	it("renders_items_when_non_empty", () => {
-		const { container, unmount } = render(
-			<TopReportsBlock role="INST_LEADER" items={sample} loading={false} />,
-		);
+		const { container, unmount } = render(<TopReportsBlock role="INST_LEADER" items={sample} loading={false} />);
 		expect(container.textContent).toContain("销售月报");
 		expect(container.textContent).toContain("财务季报");
 		expect(container.textContent).toContain("HR 分析");
@@ -153,25 +145,19 @@ describe("TopReportsBlock", () => {
 	});
 
 	it("calls_reportsService_visit_on_row_click", async () => {
-		const { container, unmount } = render(
-			<TopReportsBlock role="INST_LEADER" items={sample} loading={false} />,
-		);
+		const { container, unmount } = render(<TopReportsBlock role="INST_LEADER" items={sample} loading={false} />);
 		const firstItem = container.querySelector(".ant-list-item") as HTMLElement;
 		act(() => {
 			firstItem.click();
 		});
 		await flush();
 		// Sprint-17 hotfix: now uses resolveBiLinkForOpen(item.url, item.engine).
-		// engine !== "HETU", so the URL passes through toAbsolute (jsdom origin = "http://localhost").
-		expect(windowOpenMock).toHaveBeenCalledWith(
-			"http://localhost:3000/bi/screens/1/preview",
-			"_blank",
-			"noopener,noreferrer",
-		);
+		// engine !== "HETU", so the app-internal URL follows the current router mode.
+		expect(windowOpenMock).toHaveBeenCalledWith("/bi/screens/1/preview", "_blank", "noopener,noreferrer");
 		expect(visitMock).toHaveBeenCalledWith({
 			id: "r1",
 			title: "销售月报",
-			url: "http://localhost:3000/bi/screens/1/preview",
+			url: "/bi/screens/1/preview",
 			engine: "DTS_BI",
 			classification: "S1",
 		});
@@ -180,9 +166,7 @@ describe("TopReportsBlock", () => {
 
 	it("still_opens_when_visit_fails", async () => {
 		visitMock.mockRejectedValueOnce(new Error("boom"));
-		const { container, unmount } = render(
-			<TopReportsBlock role="INST_LEADER" items={sample} loading={false} />,
-		);
+		const { container, unmount } = render(<TopReportsBlock role="INST_LEADER" items={sample} loading={false} />);
 		const firstItem = container.querySelector(".ant-list-item") as HTMLElement;
 		act(() => {
 			firstItem.click();
@@ -193,9 +177,7 @@ describe("TopReportsBlock", () => {
 	});
 
 	it("renders_bizDomain_tag_only_when_not_null", () => {
-		const { container, unmount } = render(
-			<TopReportsBlock role="INST_LEADER" items={sample} loading={false} />,
-		);
+		const { container, unmount } = render(<TopReportsBlock role="INST_LEADER" items={sample} loading={false} />);
 		const geekblueTags = container.querySelectorAll(".ant-tag-geekblue");
 		// Only two items have bizDomain (SALES, HR)
 		expect(geekblueTags.length).toBe(2);
@@ -203,9 +185,7 @@ describe("TopReportsBlock", () => {
 	});
 
 	it("renders_classification_tag_with_correct_color_for_S1", () => {
-		const { container, unmount } = render(
-			<TopReportsBlock role="INST_LEADER" items={[sample[0]!]} loading={false} />,
-		);
+		const { container, unmount } = render(<TopReportsBlock role="INST_LEADER" items={[sample[0]!]} loading={false} />);
 		// ant-tag with "red" class for S1
 		expect(container.querySelector(".ant-tag-red")).not.toBeNull();
 		unmount();
