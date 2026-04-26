@@ -9,6 +9,10 @@ final class DtsOdsTechnicalColumns {
 
     static final String SOURCE_SYSTEM = "_dts_source_system";
     static final String SOURCE_TABLE = "_dts_source_table";
+    static final String SOURCE_FILE = "_dts_source_file";
+    static final String SOURCE_SHEET = "_dts_source_sheet";
+    static final String FILE_HASH = "_dts_file_hash";
+    static final String ROW_NUMBER = "_dts_row_number";
     static final String IMPORT_TIME = "_dts_import_time";
     static final String BATCH_ID = "_dts_batch_id";
     static final String EXECUTION_ID = "_dts_execution_id";
@@ -23,10 +27,25 @@ final class DtsOdsTechnicalColumns {
         TASK_ID
     );
 
+    private static final Set<String> FILE_NAMES = Set.of(
+        SOURCE_FILE,
+        SOURCE_SHEET,
+        FILE_HASH,
+        ROW_NUMBER
+    );
+
     private DtsOdsTechnicalColumns() {}
 
     static boolean isCommonTechnicalColumn(String name) {
         return name != null && COMMON_NAMES.contains(name.toLowerCase(Locale.ROOT));
+    }
+
+    static boolean isTechnicalColumn(String name) {
+        if (name == null) {
+            return false;
+        }
+        String lower = name.toLowerCase(Locale.ROOT);
+        return COMMON_NAMES.contains(lower) || FILE_NAMES.contains(lower);
     }
 
     static List<JdbcMetadataService.ColumnMeta> commonJdbcColumns() {
@@ -37,6 +56,15 @@ final class DtsOdsTechnicalColumns {
             varchar(BATCH_ID, 128),
             varchar(EXECUTION_ID, 128),
             varchar(TASK_ID, 64)
+        );
+    }
+
+    static List<JdbcMetadataService.ColumnMeta> fileJdbcColumns() {
+        return List.of(
+            varchar(SOURCE_FILE, 500),
+            varchar(SOURCE_SHEET, 200),
+            varchar(FILE_HASH, 128),
+            new JdbcMetadataService.ColumnMeta(ROW_NUMBER, Types.INTEGER, "INTEGER", null, null)
         );
     }
 

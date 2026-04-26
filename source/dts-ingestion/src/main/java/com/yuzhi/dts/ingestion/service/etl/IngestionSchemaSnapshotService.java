@@ -111,7 +111,7 @@ public class IngestionSchemaSnapshotService {
         int sourceIndex = 0;
         for (int i = 0; i < safeOds.size(); i++) {
             JdbcMetadataService.ColumnMeta ods = safeOds.get(i);
-            boolean technical = DtsOdsTechnicalColumns.isCommonTechnicalColumn(ods.name());
+            boolean technical = DtsOdsTechnicalColumns.isTechnicalColumn(ods.name());
             JdbcMetadataService.ColumnMeta source = null;
             if (!technical && sourceIndex < safeSource.size()) {
                 source = safeSource.get(sourceIndex++);

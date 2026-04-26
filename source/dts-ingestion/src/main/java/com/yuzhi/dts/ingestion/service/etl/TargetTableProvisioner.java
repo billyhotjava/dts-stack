@@ -104,7 +104,7 @@ public class TargetTableProvisioner {
                 if (isPostgres(targetInfo.jdbcUrl())) {
                     columns = lowercaseColumnNames(columns);
                 }
-                columns = appendDtsTechnicalColumns(columns);
+                columns = appendDtsTechnicalColumns(columns, task, readerConfig);
                 IngestionSchemaSnapshot snapshot = saveSchemaSnapshot(
                     task,
                     execution,
@@ -520,24 +520,49 @@ public class TargetTableProvisioner {
             .toList();
     }
 
-    private List<JdbcMetadataService.ColumnMeta> appendDtsTechnicalColumns(List<JdbcMetadataService.ColumnMeta> columns) {
+    private List<JdbcMetadataService.ColumnMeta> appendDtsTechnicalColumns(
+        List<JdbcMetadataService.ColumnMeta> columns,
+        IngestionTask task,
+        Map<String, Object> readerConfig
+    ) {
+        List<JdbcMetadataService.ColumnMeta> technicalColumns = new ArrayList<>(DtsOdsTechnicalColumns.commonJdbcColumns());
+        if (isFileSource(task, readerConfig)) {
+            technicalColumns.addAll(DtsOdsTechnicalColumns.fileJdbcColumns());
+        }
         if (columns == null || columns.isEmpty()) {
-            return DtsOdsTechnicalColumns.commonJdbcColumns();
+            return technicalColumns;
         }
         java.util.Set<String> names = columns.stream()
             .map(JdbcMetadataService.ColumnMeta::name)
             .filter(StringUtils::hasText)
             .map(name -> name.toLowerCase(Locale.ROOT))
             .collect(java.util.stream.Collectors.toCollection(java.util.LinkedHashSet::new));
-        for (JdbcMetadataService.ColumnMeta technical : DtsOdsTechnicalColumns.commonJdbcColumns()) {
+        for (JdbcMetadataService.ColumnMeta technical : technicalColumns) {
             String name = technical.name();
             if (names.contains(name.toLowerCase(Locale.ROOT))) {
                 throw new IllegalStateException("源字段与 DTS 技术字段冲突: " + name);
             }
         }
         List<JdbcMetadataService.ColumnMeta> merged = new ArrayList<>(columns);
-        merged.addAll(DtsOdsTechnicalColumns.commonJdbcColumns());
+        merged.addAll(technicalColumns);
         return merged;
+    }
+
+    private boolean isFileSource(IngestionTask task, Map<String, Object> readerConfig) {
+        String sourceType = task == null ? null : normalizeText(task.getSourceType());
+        if (StringUtils.hasText(sourceType)) {
+            String lower = sourceType.toLowerCase(Locale.ROOT);
+            if ("excel".equals(lower) || "csv".equals(lower) || "excelreader".equals(lower) || "txtfilereader".equals(lower) || "file".equals(lower)) {
+                return true;
+            }
+        }
+        if (readerConfig == null || readerConfig.isEmpty()) {
+            return false;
+        }
+        return readerConfig.containsKey("_fileColumns")
+            || readerConfig.containsKey("_filePath")
+            || readerConfig.containsKey("_containerPath")
+            || readerConfig.containsKey("_fileType");
     }
 
     private List<JdbcMetadataService.ColumnMeta> applyColumnPrefixSuffix(

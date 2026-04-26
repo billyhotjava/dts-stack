@@ -9,7 +9,9 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.nio.file.StandardCopyOption;
+import java.security.MessageDigest;
 import java.util.ArrayList;
+import java.util.HexFormat;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
@@ -43,7 +45,17 @@ public class FileUploadService {
         this.settingsService = settingsService;
     }
 
-    public record FileUploadResult(String hostPath, String containerPath, String fileType, List<FileColumn> columns, String originalName) {}
+    public record FileUploadResult(
+        String hostPath,
+        String containerPath,
+        String fileType,
+        List<FileColumn> columns,
+        String originalName,
+        String fileHash,
+        Long fileSize,
+        String sheetName,
+        Integer sheetIndex
+    ) {}
 
     public record FileColumn(String name, String type, String label) {}
 
@@ -77,10 +89,16 @@ public class FileUploadService {
         }
 
         String containerPath = ADDAX_CONTAINER_DIR + "/" + UPLOADS_SUBDIR + "/" + storedName;
+        String fileHash = sha256(hostPath);
+        Long fileSize = fileSize(hostPath);
+        String sheetName = null;
+        Integer sheetIndex = null;
 
         List<FileColumn> columns;
         try {
             if ("excel".equals(fileType)) {
+                sheetName = firstSheetName(hostPath);
+                sheetIndex = 0;
                 columns = parseExcelHeaders(hostPath);
             } else {
                 columns = parseCsvHeaders(hostPath);
@@ -91,7 +109,43 @@ public class FileUploadService {
         }
 
         LOG.info("Uploaded file: {} -> {} ({} columns detected)", originalName, hostPath, columns.size());
-        return new FileUploadResult(hostPath.toString(), containerPath, fileType, columns, originalName);
+        return new FileUploadResult(hostPath.toString(), containerPath, fileType, columns, originalName, fileHash, fileSize, sheetName, sheetIndex);
+    }
+
+    private String firstSheetName(Path filePath) {
+        try (Workbook workbook = WorkbookFactory.create(filePath.toFile())) {
+            Sheet sheet = workbook.getSheetAt(0);
+            return sheet == null ? null : sheet.getSheetName();
+        } catch (Exception ex) {
+            return null;
+        }
+    }
+
+    private Long fileSize(Path filePath) {
+        try {
+            return Files.size(filePath);
+        } catch (Exception ex) {
+            return null;
+        }
+    }
+
+    private String sha256(Path filePath) {
+        try {
+            MessageDigest digest = MessageDigest.getInstance("SHA-256");
+            byte[] buffer = new byte[8192];
+            try (InputStream input = Files.newInputStream(filePath)) {
+                int read;
+                while ((read = input.read(buffer)) >= 0) {
+                    if (read > 0) {
+                        digest.update(buffer, 0, read);
+                    }
+                }
+            }
+            return HexFormat.of().formatHex(digest.digest());
+        } catch (Exception ex) {
+            LOG.warn("Failed to calculate file hash for {}: {}", filePath, ex.getMessage());
+            return null;
+        }
     }
 
     private List<FileColumn> parseExcelHeaders(Path filePath) throws Exception {

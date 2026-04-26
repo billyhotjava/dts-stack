@@ -474,6 +474,56 @@ class AddaxJobServiceTest {
 
     @Test
     @SuppressWarnings("unchecked")
+    void shouldInjectFileLineageColumnsIntoFileSourceJob() throws Exception {
+        Map<String, Object> readerConfig = Map.of(
+            "_fileColumns", java.util.List.of(
+                Map.of("safeName", "project_code", "type", "string"),
+                Map.of("safeName", "plan_date", "type", "date")
+            ),
+            "_originalName", "项目计划.xlsx",
+            "_sheetName", "计划表",
+            "_fileHash", "sha256-demo",
+            "path", java.util.List.of("/opt/airflow/dags/exchange/excel/demo/source.xlsx")
+        );
+        Map<String, Object> writerConfig = Map.of(
+            "jdbcUrl", "jdbc:postgresql://127.0.0.1:5432/biadmin",
+            "username", "biadmin",
+            "password", "Devops123@",
+            "table", "ods_project_plan"
+        );
+
+        AddaxJobService.AddaxJobResult result = addaxJobService.createJob(
+            "file-lineage-test",
+            "excelreader",
+            readerConfig,
+            "postgresqlwriter",
+            writerConfig,
+            null
+        );
+
+        Map<String, Object> job = (Map<String, Object>) result.jobConfig().get("job");
+        Map<String, Object> content = (Map<String, Object>) ((java.util.List<?>) job.get("content")).get(0);
+        Map<String, Object> writer = (Map<String, Object>) content.get("writer");
+        Map<String, Object> writerParams = (Map<String, Object>) writer.get("parameter");
+        java.util.List<String> preSql = (java.util.List<String>) writerParams.get("preSql");
+        java.util.List<String> postSql = (java.util.List<String>) writerParams.get("postSql");
+        String createSql = preSql.stream()
+            .filter(sql -> sql.startsWith("CREATE TABLE IF NOT EXISTS"))
+            .findFirst()
+            .orElseThrow();
+
+        assertThat(createSql).contains("\"_dts_source_file\" VARCHAR(500) DEFAULT '项目计划.xlsx'");
+        assertThat(createSql).contains("\"_dts_source_sheet\" VARCHAR(500) DEFAULT '计划表'");
+        assertThat(createSql).contains("\"_dts_file_hash\" VARCHAR(500) DEFAULT 'sha256-demo'");
+        assertThat(createSql).contains("\"_dts_row_number\" INTEGER");
+        assertThat(postSql).anyMatch(sql -> sql.contains("\"_dts_source_file\" = '项目计划.xlsx'"));
+        assertThat(postSql).anyMatch(sql -> sql.contains("\"_dts_source_sheet\" = '计划表'"));
+        assertThat(postSql).anyMatch(sql -> sql.contains("\"_dts_file_hash\" = 'sha256-demo'"));
+        assertThat(postSql).anyMatch(sql -> sql.contains("row_number() OVER (ORDER BY ctid) + 1"));
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
     void shouldKeepDropAndCreatePreSqlForFileSourceFullRefresh() throws Exception {
         // Given
         Map<String, Object> readerConfig = Map.of(

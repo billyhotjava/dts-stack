@@ -4,9 +4,12 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.yuzhi.dts.ingestion.config.AddaxProperties;
 import com.yuzhi.dts.ingestion.service.infra.IngestionSettingsService;
+import java.io.InputStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.security.MessageDigest;
+import java.util.HexFormat;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
@@ -228,7 +231,9 @@ public class AddaxJobService {
     }
 
     private static final List<String> FILE_METADATA_KEYS = List.of(
-        "_filePath", "_containerPath", "_fileType", "_fileColumns", "_originalName", "_autoId"
+        "_filePath", "_containerPath", "_fileType", "_fileColumns", "_originalName", "_autoId",
+        "_fileHash", "fileHash", "_fileSize", "fileSize", "_sheetName", "sheetName", "sheetIndex",
+        "_sourceSheet", "sourceSheet", "_rowNumberOffset"
     );
 
     private static final List<String> COLUMN_RULE_KEYS = List.of(
@@ -1576,6 +1581,7 @@ public class AddaxJobService {
                 : quoteIdentifier(tableName);
 
             StringBuilder updateSet = new StringBuilder();
+            Integer rowNumberOffset = null;
             for (Object item : extraList) {
                 if (!(item instanceof Map<?, ?> colMap)) continue;
                 String colName = normalizeText(colMap.get("name"));
@@ -1584,6 +1590,9 @@ public class AddaxJobService {
                 if (!StringUtils.hasText(colName)) continue;
                 String sqlType = mapExtraColumnType(colType, colMap);
                 String quotedCol = quoteIdentifier(colName.toLowerCase(Locale.ROOT));
+                if (DtsOdsTechnicalColumns.ROW_NUMBER.equalsIgnoreCase(colName)) {
+                    rowNumberOffset = toInt(colMap.get("rowNumberOffset"), 0);
+                }
 
                 postSql.add("ALTER TABLE " + qualifiedTable
                     + " ADD COLUMN IF NOT EXISTS " + quotedCol + " " + sqlType);
@@ -1597,12 +1606,26 @@ public class AddaxJobService {
             if (!updateSet.isEmpty()) {
                 postSql.add("UPDATE " + qualifiedTable + " SET " + updateSet + " WHERE TRUE");
             }
+            if (rowNumberOffset != null) {
+                postSql.add(buildRowNumberUpdateSql(qualifiedTable, rowNumberOffset));
+            }
         }
 
         if (!postSql.isEmpty()) {
             writerConfig.put("postSql", postSql);
             LOG.info("Injected extra columns postSql: {}", postSql);
         }
+    }
+
+    private String buildRowNumberUpdateSql(String qualifiedTable, int rowNumberOffset) {
+        String expression = "row_number() OVER (ORDER BY ctid)";
+        if (rowNumberOffset > 0) {
+            expression = expression + " + " + rowNumberOffset;
+        }
+        String column = quoteIdentifier(DtsOdsTechnicalColumns.ROW_NUMBER);
+        return "WITH numbered AS (SELECT ctid, " + expression + " AS dts_row_number FROM " + qualifiedTable + ") "
+            + "UPDATE " + qualifiedTable + " t SET " + column + " = numbered.dts_row_number "
+            + "FROM numbered WHERE t.ctid = numbered.ctid";
     }
 
     @SuppressWarnings("unchecked")
@@ -1698,6 +1721,47 @@ public class AddaxJobService {
             "string",
             quoteSqlString(normalizeRuntimeValue(runtimeContext, RUNTIME_TASK_ID, "unknown"))
         );
+        if (fileSource) {
+            Map<String, Object> fileMetadataConfig = rawReaderConfig != null ? rawReaderConfig : readerConfig;
+            changed |= upsertExtraColumn(
+                extras,
+                indexByName,
+                DtsOdsTechnicalColumns.SOURCE_FILE,
+                "DTS来源文件",
+                "string",
+                quoteSqlString(resolveFileSourceSystem(fileMetadataConfig))
+            );
+            changed |= upsertExtraColumn(
+                extras,
+                indexByName,
+                DtsOdsTechnicalColumns.SOURCE_SHEET,
+                "DTS来源Sheet",
+                "string",
+                quoteOptionalSqlString(resolveFileSourceSheet(fileMetadataConfig))
+            );
+            changed |= upsertExtraColumn(
+                extras,
+                indexByName,
+                DtsOdsTechnicalColumns.FILE_HASH,
+                "DTS文件Hash",
+                "string",
+                quoteOptionalSqlString(resolveFileHash(fileMetadataConfig))
+            );
+            changed |= upsertExtraColumn(
+                extras,
+                indexByName,
+                DtsOdsTechnicalColumns.ROW_NUMBER,
+                "DTS文件行号",
+                "integer",
+                null
+            );
+            changed |= putExtraColumnValue(
+                indexByName,
+                DtsOdsTechnicalColumns.ROW_NUMBER,
+                "rowNumberOffset",
+                resolveFileRowNumberOffset(fileMetadataConfig, readerType)
+            );
+        }
 
         if (changed) {
             writerConfig.put("_extraColumns", extras);
@@ -1738,6 +1802,27 @@ public class AddaxJobService {
             changed = true;
         }
         return changed;
+    }
+
+    private boolean putExtraColumnValue(
+        Map<String, Map<String, Object>> indexByName,
+        String name,
+        String key,
+        Object value
+    ) {
+        if (indexByName == null || !StringUtils.hasText(name) || !StringUtils.hasText(key)) {
+            return false;
+        }
+        Map<String, Object> column = indexByName.get(name.toLowerCase(Locale.ROOT));
+        if (column == null) {
+            return false;
+        }
+        Object existing = column.get(key);
+        if (java.util.Objects.equals(existing, value)) {
+            return false;
+        }
+        column.put(key, value);
+        return true;
     }
 
     private String normalizeRuntimeValue(Map<String, Object> runtimeContext, String key, String fallback) {
@@ -1836,6 +1921,96 @@ public class AddaxJobService {
         return StringUtils.hasText(source) ? source : "uploaded_file";
     }
 
+    private String resolveFileSourceSheet(Map<String, Object> readerConfig) {
+        if (readerConfig == null || readerConfig.isEmpty()) {
+            return null;
+        }
+        for (String key : List.of("_sheetName", "sheetName", "_sourceSheet", "sourceSheet", "sheet")) {
+            String sheet = firstStringValue(readerConfig.get(key));
+            if (StringUtils.hasText(sheet)) {
+                return sheet;
+            }
+        }
+        return null;
+    }
+
+    private String resolveFileHash(Map<String, Object> readerConfig) {
+        if (readerConfig == null || readerConfig.isEmpty()) {
+            return null;
+        }
+        for (String key : List.of("_fileHash", "fileHash", "hash", "sha256")) {
+            String hash = firstStringValue(readerConfig.get(key));
+            if (StringUtils.hasText(hash)) {
+                return hash;
+            }
+        }
+        String filePath = firstStringValue(readerConfig.get("_filePath"));
+        if (!StringUtils.hasText(filePath)) {
+            filePath = firstStringValue(readerConfig.get("path"));
+        }
+        if (!StringUtils.hasText(filePath)) {
+            return null;
+        }
+        return sha256IfReadable(filePath);
+    }
+
+    private int resolveFileRowNumberOffset(Map<String, Object> readerConfig, String readerType) {
+        if (readerConfig == null) {
+            return 1;
+        }
+        String lower = StringUtils.hasText(readerType) ? readerType.toLowerCase(Locale.ROOT) : "";
+        Object configuredOffset = readerConfig.get("_rowNumberOffset");
+        if (configuredOffset instanceof Number number) {
+            return Math.max(number.intValue(), 0);
+        }
+        if (configuredOffset != null) {
+            try {
+                return Math.max(Integer.parseInt(configuredOffset.toString().trim()), 0);
+            } catch (NumberFormatException ignored) {
+                // Fall through to reader defaults.
+            }
+        }
+        Object header = lower.contains("txtfile") || "csv".equals(lower)
+            ? readerConfig.get("skipHeader")
+            : readerConfig.get("header");
+        if (header instanceof Boolean flag) {
+            return flag ? 1 : 0;
+        }
+        if (header != null) {
+            String text = header.toString().trim();
+            if ("false".equalsIgnoreCase(text)) {
+                return 0;
+            }
+            if ("true".equalsIgnoreCase(text)) {
+                return 1;
+            }
+        }
+        return 1;
+    }
+
+    private String sha256IfReadable(String filePath) {
+        try {
+            Path path = Paths.get(filePath);
+            if (!Files.isRegularFile(path) || !Files.isReadable(path)) {
+                return null;
+            }
+            MessageDigest digest = MessageDigest.getInstance("SHA-256");
+            byte[] buffer = new byte[8192];
+            try (InputStream input = Files.newInputStream(path)) {
+                int read;
+                while ((read = input.read(buffer)) >= 0) {
+                    if (read > 0) {
+                        digest.update(buffer, 0, read);
+                    }
+                }
+            }
+            return HexFormat.of().formatHex(digest.digest());
+        } catch (Exception ex) {
+            LOG.debug("Could not calculate file hash for {}: {}", filePath, ex.getMessage());
+            return null;
+        }
+    }
+
     private String extractFileName(String value) {
         String normalized = normalizeText(value);
         if (!StringUtils.hasText(normalized)) {
@@ -1899,6 +2074,10 @@ public class AddaxJobService {
     private String quoteSqlString(String value) {
         String resolved = StringUtils.hasText(value) ? value : "unknown";
         return "'" + resolved.replace("'", "''") + "'";
+    }
+
+    private String quoteOptionalSqlString(String value) {
+        return StringUtils.hasText(value) ? quoteSqlString(value) : null;
     }
 
     private String mapExtraColumnType(String type, Map<?, ?> colMap) {
@@ -2529,7 +2708,7 @@ public class AddaxJobService {
                 List<String> columnNames = columns.stream()
                     .map(JdbcMetadataService.ColumnMeta::name)
                     .map(name -> name != null ? name.toLowerCase(Locale.ROOT) : name)
-                    .filter(name -> !DtsOdsTechnicalColumns.isCommonTechnicalColumn(name))
+                    .filter(name -> !DtsOdsTechnicalColumns.isTechnicalColumn(name))
                     .toList();
                 // Replace ["*"] with actual column names
                 ((Map<String, Object>) paramMap).put("column", columnNames);
