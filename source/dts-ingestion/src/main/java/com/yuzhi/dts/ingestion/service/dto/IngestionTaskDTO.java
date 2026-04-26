@@ -55,6 +55,12 @@ public class IngestionTaskDTO {
 
     private String dbtDagSelector;
 
+    private Boolean qualityPreCheckEnabled;
+
+    private String stagingTableName;
+
+    private String preCheckStatus;
+
     private String status;
 
     private Instant lastExecutedAt;
@@ -221,6 +227,30 @@ public class IngestionTaskDTO {
 
     public void setDbtDagSelector(String dbtDagSelector) {
         this.dbtDagSelector = dbtDagSelector;
+    }
+
+    public Boolean getQualityPreCheckEnabled() {
+        return qualityPreCheckEnabled;
+    }
+
+    public void setQualityPreCheckEnabled(Boolean qualityPreCheckEnabled) {
+        this.qualityPreCheckEnabled = qualityPreCheckEnabled;
+    }
+
+    public String getStagingTableName() {
+        return stagingTableName;
+    }
+
+    public void setStagingTableName(String stagingTableName) {
+        this.stagingTableName = stagingTableName;
+    }
+
+    public String getPreCheckStatus() {
+        return preCheckStatus;
+    }
+
+    public void setPreCheckStatus(String preCheckStatus) {
+        this.preCheckStatus = preCheckStatus;
     }
 
     public String getStatus() {

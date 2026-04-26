@@ -34,10 +34,13 @@ public class IngestionTaskMapper {
         dto.setAirflowDagId(entity.getAirflowDagId());
         dto.setDbtModelSelector(entity.getDbtModelSelector());
         dto.setDbtDagSelector(entity.getDbtDagSelector());
+        dto.setQualityPreCheckEnabled(entity.getQualityPreCheckEnabled());
+        dto.setStagingTableName(entity.getStagingTableName());
+        dto.setPreCheckStatus(entity.getPreCheckStatus());
         dto.setStatus(entity.getStatus());
         dto.setLastExecutedAt(entity.getLastExecutedAt());
         dto.setLastExecutionStatus(entity.getLastExecutionStatus());
-        
+
         // 审计字段
         dto.setCreatedBy(entity.getCreatedBy());
         dto.setCreatedDate(entity.getCreatedDate());
@@ -71,6 +74,9 @@ public class IngestionTaskMapper {
         entity.setAirflowDagId(dto.getAirflowDagId());
         entity.setDbtModelSelector(dto.getDbtModelSelector());
         entity.setDbtDagSelector(dto.getDbtDagSelector());
+        entity.setQualityPreCheckEnabled(dto.getQualityPreCheckEnabled());
+        entity.setStagingTableName(dto.getStagingTableName());
+        entity.setPreCheckStatus(dto.getPreCheckStatus());
         entity.setStatus(dto.getStatus());
         entity.setLastExecutedAt(dto.getLastExecutedAt());
         entity.setLastExecutionStatus(dto.getLastExecutionStatus());
@@ -126,6 +132,15 @@ public class IngestionTaskMapper {
         }
         if (dto.getDbtDagSelector() != null) {
             entity.setDbtDagSelector(dto.getDbtDagSelector());
+        }
+        if (dto.getQualityPreCheckEnabled() != null) {
+            entity.setQualityPreCheckEnabled(dto.getQualityPreCheckEnabled());
+        }
+        if (dto.getStagingTableName() != null) {
+            entity.setStagingTableName(dto.getStagingTableName());
+        }
+        if (dto.getPreCheckStatus() != null) {
+            entity.setPreCheckStatus(dto.getPreCheckStatus());
         }
         if (dto.getStatus() != null) {
             entity.setStatus(dto.getStatus());

@@ -315,6 +315,12 @@ axiosInstance.interceptors.response.use(
 	(res: AxiosResponse<Result<any>>) => {
 		console.log("API Response:", res.status, res.config.url, res.data);
 
+		const isBlobResponse =
+			(res.config as any)?.responseType === "blob" || (typeof Blob !== "undefined" && res.data instanceof Blob);
+		if (isBlobResponse) {
+			return res.data as any;
+		}
+
 		if (!res.data) throw new Error(t("sys.api.apiRequestFailed"));
 
 		// 特殊处理Keycloak API

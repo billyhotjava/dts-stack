@@ -20,6 +20,9 @@ export interface IngestionTaskDTO {
 	airflowDagId?: string;
 	dbtModelSelector?: string;
 	dbtDagSelector?: string;
+	qualityPreCheckEnabled?: boolean;
+	stagingTableName?: string;
+	preCheckStatus?: string;
 	status?: string;
 	lastExecutedAt?: string;
 	lastExecutionStatus?: string;

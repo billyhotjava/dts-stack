@@ -29,6 +29,7 @@ import {
 	FileTextOutlined,
 	ReloadOutlined,
 	DeleteOutlined,
+	DownloadOutlined,
 } from "@ant-design/icons";
 import { useRouter } from "@/routes/hooks";
 import {
@@ -38,6 +39,8 @@ import {
 	type IngestionExecutionLog,
 	type IngestionIncrementalStateDTO,
 	type IngestionRealtimeStatusDTO,
+	type StagingErrorSummary,
+	type StagingRuleErrorSummary,
 } from "@/api/ingestion";
 import dataSourcesService, { type InfraDataSource } from "@/api/services/dataSourcesService";
 import { listSqlModels } from "@/api/platformApi";
@@ -80,6 +83,9 @@ export default function TransformDetailPage() {
 	const [incrementalStatesLoading, setIncrementalStatesLoading] = useState(false);
 	const [realtimeStatus, setRealtimeStatus] = useState<IngestionRealtimeStatusDTO | null>(null);
 	const [realtimeStatusLoading, setRealtimeStatusLoading] = useState(false);
+	const [badRowSummary, setBadRowSummary] = useState<StagingErrorSummary | null>(null);
+	const [badRowSummaryLoading, setBadRowSummaryLoading] = useState(false);
+	const [badRowDownloading, setBadRowDownloading] = useState(false);
 	const [incrementalStale, setIncrementalStale] = useState(false);
 	const [realtimeStale, setRealtimeStale] = useState(false);
 	const [executeProgressOpen, setExecuteProgressOpen] = useState(false);
@@ -124,6 +130,14 @@ export default function TransformDetailPage() {
 		}
 		void loadRealtimeStatus(Number(task.id), true);
 	}, [task?.id, task?.syncMode]);
+
+	useEffect(() => {
+		if (!task?.id || !normalizeText(task.stagingTableName)) {
+			setBadRowSummary(null);
+			return;
+		}
+		void loadBadRowSummary(Number(task.id), true);
+	}, [task?.id, task?.stagingTableName]);
 
 	useEffect(() => {
 		return () => {
@@ -224,6 +238,44 @@ export default function TransformDetailPage() {
 		}
 	};
 
+	const loadBadRowSummary = async (taskId: number, silent?: boolean) => {
+		try {
+			if (!silent) {
+				setBadRowSummaryLoading(true);
+			}
+			const summary = await ingestionTaskAPI.getStagingErrorSummary(taskId, 10);
+			setBadRowSummary(summary);
+		} catch {
+			setBadRowSummary(null);
+			// error already shown by global interceptor
+		} finally {
+			if (!silent) {
+				setBadRowSummaryLoading(false);
+			}
+		}
+	};
+
+	const downloadBadRows = async () => {
+		if (!task?.id) return;
+		setBadRowDownloading(true);
+		try {
+			const blob = await ingestionTaskAPI.downloadStagingErrors(Number(task.id));
+			const url = URL.createObjectURL(blob);
+			const anchor = document.createElement("a");
+			anchor.href = url;
+			anchor.download = `ingestion-task-${task.id}-bad-rows.csv`;
+			document.body.appendChild(anchor);
+			anchor.click();
+			anchor.remove();
+			URL.revokeObjectURL(url);
+			message.success("坏行 CSV 已下载");
+		} catch (error: any) {
+			message.error(error?.message || "坏行 CSV 下载失败");
+		} finally {
+			setBadRowDownloading(false);
+		}
+	};
+
 	const openLatestLog = async () => {
 		if (!task?.id) return;
 		setLogVisible(true);
@@ -252,6 +304,19 @@ export default function TransformDetailPage() {
 	};
 
 	const showRealtimeStatusCard = normalizeText(task?.syncMode).toLowerCase() === "cdc";
+	const showBadRowsCard = Boolean(normalizeText(task?.stagingTableName));
+
+	const renderPreCheckStatus = (status?: string) => {
+		const normalized = normalizeText(status).toUpperCase();
+		const statusMap: Record<string, { color: string; text: string }> = {
+			PENDING: { color: "default", text: "待预检" },
+			CHECKING: { color: "processing", text: "预检中" },
+			PASSED: { color: "success", text: "通过" },
+			FAILED: { color: "error", text: "未通过" },
+		};
+		const config = statusMap[normalized] ?? { color: "default", text: status || "-" };
+		return <Tag color={config.color}>{config.text}</Tag>;
+	};
 
 	const parseModelNames = (selector?: string) => {
 		const raw = normalizeText(selector);
@@ -641,6 +706,96 @@ export default function TransformDetailPage() {
 										</div>
 									</Card>
 								</div>
+
+								{showBadRowsCard ? (
+									<Card
+										title="文件预检"
+										extra={
+											<Space wrap>
+												<Button
+													icon={<ReloadOutlined />}
+													onClick={() => task?.id && loadBadRowSummary(Number(task.id))}
+													loading={badRowSummaryLoading}
+												>
+													刷新摘要
+												</Button>
+												<Button
+													icon={<DownloadOutlined />}
+													onClick={downloadBadRows}
+													loading={badRowDownloading}
+													disabled={!badRowSummary || !badRowSummary.errorRows}
+												>
+													下载坏行
+												</Button>
+											</Space>
+										}
+									>
+										{badRowSummaryLoading && !badRowSummary ? (
+											<div className="flex h-24 items-center justify-center">
+												<Spin />
+											</div>
+										) : (
+											<>
+												<Descriptions column={4} bordered>
+													<Descriptions.Item label="预检开关">
+														{task.qualityPreCheckEnabled ? <Tag color="success">已启用</Tag> : <Tag>未启用</Tag>}
+													</Descriptions.Item>
+													<Descriptions.Item label="预检状态">
+														{renderPreCheckStatus(task.preCheckStatus)}
+													</Descriptions.Item>
+													<Descriptions.Item label="总行数">{badRowSummary?.totalRows ?? "-"}</Descriptions.Item>
+													<Descriptions.Item label="坏行数">
+														{!badRowSummary ? (
+															"-"
+														) : badRowSummary.errorRows ? (
+															<Tag color="error">{badRowSummary.errorRows}</Tag>
+														) : (
+															<Tag color="success">0</Tag>
+														)}
+													</Descriptions.Item>
+													<Descriptions.Item label="暂存表" span={4}>
+														<Text code>{task.stagingTableName}</Text>
+													</Descriptions.Item>
+												</Descriptions>
+												{!badRowSummary ? (
+													<Alert className="mt-4" type="warning" showIcon message="暂无预检摘要" />
+												) : badRowSummary.errorRows ? (
+													<>
+														<Table<StagingRuleErrorSummary>
+															className="mt-4"
+															rowKey={(record) => record.ruleName}
+															size="small"
+															pagination={false}
+															dataSource={badRowSummary.errorsByRule || []}
+															columns={[
+																{
+																	title: "规则",
+																	dataIndex: "ruleName",
+																	key: "ruleName",
+																	render: (value?: string) => value || "-",
+																},
+																{
+																	title: "坏行数",
+																	dataIndex: "failCount",
+																	key: "failCount",
+																	width: 140,
+																	render: (value?: number) => <Tag color="error">{value ?? 0}</Tag>,
+																},
+															]}
+														/>
+														{badRowSummary.sampleRows?.length ? (
+															<pre className="mt-4 max-h-64 overflow-auto rounded-[16px] bg-muted/35 p-4 text-xs leading-6">
+																{JSON.stringify(badRowSummary.sampleRows.slice(0, 5), null, 2)}
+															</pre>
+														) : null}
+													</>
+												) : (
+													<Alert className="mt-4" type="success" showIcon message="暂无坏行" />
+												)}
+											</>
+										)}
+									</Card>
+								) : null}
 
 								<div className="grid gap-6 xl:grid-cols-2">
 									<Card title="源端覆盖参数">
