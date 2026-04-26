@@ -1,8 +1,10 @@
 package com.yuzhi.dts.ingestion.service;
 
 import com.yuzhi.dts.ingestion.domain.IngestionExecution;
+import com.yuzhi.dts.ingestion.domain.IngestionSchemaSnapshot;
 import com.yuzhi.dts.ingestion.domain.IngestionTask;
 import com.yuzhi.dts.ingestion.repository.IngestionExecutionRepository;
+import com.yuzhi.dts.ingestion.repository.IngestionSchemaSnapshotRepository;
 import com.yuzhi.dts.ingestion.repository.IngestionTaskRepository;
 import com.yuzhi.dts.ingestion.service.etl.AirflowAdapter;
 import com.yuzhi.dts.ingestion.service.etl.AirflowClient;
@@ -21,6 +23,7 @@ public class IngestionExecutionQueryService {
 
     private final IngestionTaskRepository taskRepository;
     private final IngestionExecutionRepository executionRepository;
+    private final IngestionSchemaSnapshotRepository schemaSnapshotRepository;
     private final AirflowAdapter airflowAdapter;
     private final AirflowClient airflowClient;
     private final AirflowDagService airflowDagService;
@@ -28,15 +31,99 @@ public class IngestionExecutionQueryService {
     public IngestionExecutionQueryService(
         IngestionTaskRepository taskRepository,
         IngestionExecutionRepository executionRepository,
+        IngestionSchemaSnapshotRepository schemaSnapshotRepository,
         AirflowAdapter airflowAdapter,
         AirflowClient airflowClient,
         AirflowDagService airflowDagService
     ) {
         this.taskRepository = taskRepository;
         this.executionRepository = executionRepository;
+        this.schemaSnapshotRepository = schemaSnapshotRepository;
         this.airflowAdapter = airflowAdapter;
         this.airflowClient = airflowClient;
         this.airflowDagService = airflowDagService;
+    }
+
+    public Map<String, Object> traceExecution(String batchId, String dtsExecutionId) {
+        String normalizedBatchId = toText(batchId);
+        String normalizedExecutionId = toText(dtsExecutionId);
+        if (!StringUtils.hasText(normalizedBatchId) && !StringUtils.hasText(normalizedExecutionId)) {
+            throw new IllegalArgumentException("batchId or executionId is required");
+        }
+        IngestionExecution execution = resolveTraceExecution(normalizedBatchId, normalizedExecutionId);
+        IngestionTask task = execution.getTask();
+        List<IngestionSchemaSnapshot> snapshots = schemaSnapshotRepository.findByExecution_IdOrderByCreatedDateDesc(execution.getId());
+        if (snapshots.isEmpty() && task != null) {
+            snapshots = schemaSnapshotRepository.findByTask_IdOrderByCreatedDateDesc(task.getId());
+        }
+
+        Map<String, Object> result = new LinkedHashMap<>();
+        result.put("batchId", execution.getBatchId());
+        result.put("executionId", execution.getId());
+        result.put("airflowRunId", execution.getExecutionId());
+        result.put("status", execution.getStatus());
+        result.put("startTime", execution.getStartTime());
+        result.put("endTime", execution.getEndTime());
+        result.put("rowsRead", execution.getRowsRead());
+        result.put("rowsWritten", execution.getRowsWritten());
+        result.put("logPath", execution.getLogPath());
+        if (StringUtils.hasText(execution.getErrorMessage())) {
+            result.put("errorMessage", execution.getErrorMessage());
+        }
+        if (task != null) {
+            Map<String, Object> taskPayload = new LinkedHashMap<>();
+            taskPayload.put("id", task.getId());
+            taskPayload.put("name", task.getName());
+            taskPayload.put("sourceType", task.getSourceType());
+            taskPayload.put("syncMode", task.getSyncMode());
+            taskPayload.put("status", task.getStatus());
+            result.put("task", taskPayload);
+        }
+        result.put("sources", snapshots.stream().map(this::toSnapshotTrace).toList());
+        return result;
+    }
+
+    private IngestionExecution resolveTraceExecution(String batchId, String dtsExecutionId) {
+        if (StringUtils.hasText(batchId)) {
+            return executionRepository.findByBatchId(batchId)
+                .orElseThrow(() -> new IllegalArgumentException("Execution not found by batchId: " + batchId));
+        }
+        Long numericId = parseLong(dtsExecutionId);
+        if (numericId != null) {
+            return executionRepository.findById(numericId)
+                .orElseThrow(() -> new IllegalArgumentException("Execution not found: " + dtsExecutionId));
+        }
+        return executionRepository.findByExecutionId(dtsExecutionId)
+            .orElseThrow(() -> new IllegalArgumentException("Execution not found: " + dtsExecutionId));
+    }
+
+    private Map<String, Object> toSnapshotTrace(IngestionSchemaSnapshot snapshot) {
+        Map<String, Object> item = new LinkedHashMap<>();
+        item.put("snapshotId", snapshot.getId());
+        item.put("sourceType", snapshot.getSourceType());
+        item.put("sourceSystem", snapshot.getSourceSystem());
+        item.put("sourceSchema", snapshot.getSourceSchema());
+        item.put("sourceTable", snapshot.getSourceTable());
+        item.put("sourceResource", snapshot.getSourceResource());
+        item.put("odsSchema", snapshot.getOdsSchema());
+        item.put("odsTable", snapshot.getOdsTable());
+        item.put("schemaFingerprint", snapshot.getSchemaFingerprint());
+        int columnCount = snapshot.getColumnsJson() != null && snapshot.getColumnsJson().isArray()
+            ? snapshot.getColumnsJson().size()
+            : 0;
+        long technicalColumnCount = 0;
+        if (snapshot.getColumnsJson() != null && snapshot.getColumnsJson().isArray()) {
+            for (var column : snapshot.getColumnsJson()) {
+                if (column.has("technical") && column.get("technical").asBoolean(false)) {
+                    technicalColumnCount++;
+                }
+            }
+        }
+        item.put("columnCount", columnCount);
+        item.put("technicalColumnCount", technicalColumnCount);
+        item.put("primaryKeyColumns", snapshot.getPrimaryKeyColumns());
+        item.put("warnings", snapshot.getWarningsJson());
+        return item;
     }
 
     public Map<String, Object> fetchExecutionLog(Long taskId, Long executionId, Integer tryNumber, String keyword, String scope) {
@@ -317,5 +404,16 @@ public class IngestionExecutionQueryService {
         }
         String text = value.toString().trim();
         return StringUtils.hasText(text) ? text : null;
+    }
+
+    private Long parseLong(String value) {
+        if (!StringUtils.hasText(value)) {
+            return null;
+        }
+        try {
+            return Long.parseLong(value.trim());
+        } catch (NumberFormatException ex) {
+            return null;
+        }
     }
 }

@@ -2254,6 +2254,25 @@ public class IngestionTaskResource {
     }
 
     /**
+     * GET /api/ingestion/tasks/executions/trace : 通过 ODS 技术字段反查执行记录
+     */
+    @GetMapping("/tasks/executions/trace")
+    @PreAuthorize(INFRA_MAINTAINER_EXPRESSION)
+    public ResponseEntity<Map<String, Object>> traceExecution(
+        @RequestParam(value = "batchId", required = false) String batchId,
+        @RequestParam(value = "executionId", required = false) String executionId
+    ) {
+        if (!StringUtils.hasText(batchId) && !StringUtils.hasText(executionId)) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "batchId or executionId is required");
+        }
+        try {
+            return ResponseEntity.ok(ingestionExecutionQueryService.traceExecution(batchId, executionId));
+        } catch (IllegalArgumentException e) {
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, e.getMessage());
+        }
+    }
+
+    /**
      * GET /api/ingestion/tasks/{id}/executions/latest : 获取最新执行记录
      */
     @GetMapping("/tasks/{id}/executions/latest")

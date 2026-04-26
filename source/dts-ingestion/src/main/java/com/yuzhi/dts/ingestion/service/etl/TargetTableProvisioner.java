@@ -2,6 +2,8 @@ package com.yuzhi.dts.ingestion.service.etl;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.yuzhi.dts.ingestion.domain.IngestionExecution;
+import com.yuzhi.dts.ingestion.domain.IngestionSchemaSnapshot;
 import com.yuzhi.dts.ingestion.domain.IngestionTask;
 import java.sql.Connection;
 import java.sql.DatabaseMetaData;
@@ -26,10 +28,16 @@ public class TargetTableProvisioner {
 
     private final JdbcMetadataService metadataService;
     private final ObjectMapper objectMapper;
+    private final IngestionSchemaSnapshotService schemaSnapshotService;
 
-    public TargetTableProvisioner(JdbcMetadataService metadataService, ObjectMapper objectMapper) {
+    public TargetTableProvisioner(
+        JdbcMetadataService metadataService,
+        ObjectMapper objectMapper,
+        IngestionSchemaSnapshotService schemaSnapshotService
+    ) {
         this.metadataService = metadataService;
         this.objectMapper = objectMapper;
+        this.schemaSnapshotService = schemaSnapshotService;
     }
 
     public void ensureTargetTables(IngestionTask task) {
@@ -37,6 +45,10 @@ public class TargetTableProvisioner {
     }
 
     public void ensureTargetTables(IngestionTask task, Map<String, Object> readerConfigOverride) {
+        ensureTargetTables(task, readerConfigOverride, null);
+    }
+
+    public void ensureTargetTables(IngestionTask task, Map<String, Object> readerConfigOverride, IngestionExecution execution) {
         if (task == null) {
             return;
         }
@@ -78,21 +90,35 @@ public class TargetTableProvisioner {
                         continue;
                     }
                 }
-                List<JdbcMetadataService.ColumnMeta> columns = resolveColumns(sourceInfo, mapping.source(), readerConfig);
-                if (columns.isEmpty()) {
+                List<JdbcMetadataService.ColumnMeta> sourceColumns = resolveColumns(sourceInfo, mapping.source(), readerConfig);
+                if (sourceColumns.isEmpty()) {
                     // For file sources, _fileColumns may provide columns
                     LOG.warn("无法获取源表字段信息: {} — 尝试使用文件列元数据", mapping.source());
-                    columns = resolveFileColumns(readerConfig);
+                    sourceColumns = resolveFileColumns(readerConfig);
                 }
-                if (columns.isEmpty()) {
+                if (sourceColumns.isEmpty()) {
                     throw new IllegalStateException("无法获取源表字段信息: " + mapping.source());
                 }
                 // Apply column prefix/suffix rules if configured
-                columns = applyColumnPrefixSuffix(columns, writerConfig);
+                List<JdbcMetadataService.ColumnMeta> columns = applyColumnPrefixSuffix(sourceColumns, writerConfig);
                 if (isPostgres(targetInfo.jdbcUrl())) {
                     columns = lowercaseColumnNames(columns);
                 }
                 columns = appendDtsTechnicalColumns(columns);
+                IngestionSchemaSnapshot snapshot = saveSchemaSnapshot(
+                    task,
+                    execution,
+                    mapping,
+                    target,
+                    readerConfig,
+                    sourceInfo,
+                    sourceColumns,
+                    columns
+                );
+                List<JdbcMetadataService.ColumnMeta> snapshotColumns = schemaSnapshotService.toOdsColumns(snapshot);
+                if (!snapshotColumns.isEmpty()) {
+                    columns = snapshotColumns;
+                }
                 createSchemaIfNeeded(connection, target.schema());
                 createTable(connection, target, columns);
                 LOG.info("Auto-created table {} for task {}", target.qualifiedName(), task.getId());
@@ -205,13 +231,38 @@ public class TargetTableProvisioner {
         return Map.of();
     }
 
-    private List<JdbcMetadataService.ColumnMeta> resolveColumns(
+    List<JdbcMetadataService.ColumnMeta> resolveColumns(
         JdbcMetadataService.JdbcConnectionInfo sourceInfo,
         String sourceTable,
         Map<String, Object> readerConfig
     ) {
         List<String> configured = extractColumns(readerConfig);
         if (!configured.isEmpty()) {
+            List<JdbcMetadataService.ColumnMeta> discovered = StringUtils.hasText(sourceInfo.jdbcUrl())
+                ? metadataService.getTableColumns(sourceInfo, sourceTable)
+                : List.of();
+            if (!discovered.isEmpty()) {
+                Map<String, JdbcMetadataService.ColumnMeta> byName = new LinkedHashMap<>();
+                for (JdbcMetadataService.ColumnMeta col : discovered) {
+                    String name = normalizeText(col.name());
+                    if (StringUtils.hasText(name)) {
+                        byName.put(name.toLowerCase(Locale.ROOT), col);
+                    }
+                }
+                List<JdbcMetadataService.ColumnMeta> typed = new ArrayList<>();
+                for (String name : configured) {
+                    String key = normalizeText(name);
+                    JdbcMetadataService.ColumnMeta col = StringUtils.hasText(key)
+                        ? byName.get(key.toLowerCase(Locale.ROOT))
+                        : null;
+                    if (col != null) {
+                        typed.add(col);
+                    }
+                }
+                if (!typed.isEmpty()) {
+                    return typed;
+                }
+            }
             List<JdbcMetadataService.ColumnMeta> cols = new ArrayList<>();
             for (String name : configured) {
                 if (StringUtils.hasText(name)) {
@@ -229,6 +280,46 @@ public class TargetTableProvisioner {
             return List.of();
         }
         return metadataService.getTableColumns(sourceInfo, sourceTable);
+    }
+
+    private IngestionSchemaSnapshot saveSchemaSnapshot(
+        IngestionTask task,
+        IngestionExecution execution,
+        TableMapping mapping,
+        TableId target,
+        Map<String, Object> readerConfig,
+        JdbcMetadataService.JdbcConnectionInfo sourceInfo,
+        List<JdbcMetadataService.ColumnMeta> sourceColumns,
+        List<JdbcMetadataService.ColumnMeta> odsColumns
+    ) {
+        TableId source = TableId.parse(mapping.source());
+        String sourceSchema = StringUtils.hasText(source.schema()) ? source.schema() : resolveSchema(readerConfig);
+        String sourceTable = StringUtils.hasText(source.table()) ? source.table() : mapping.source();
+        List<String> warnings = new ArrayList<>();
+        List<String> primaryKeyColumns = List.of();
+        List<JdbcMetadataService.IndexMeta> indexes = List.of();
+        if (StringUtils.hasText(sourceInfo.jdbcUrl()) && StringUtils.hasText(mapping.source())) {
+            primaryKeyColumns = metadataService.getPrimaryKeyColumns(sourceInfo, mapping.source());
+            indexes = metadataService.getTableIndexes(sourceInfo, mapping.source());
+        } else {
+            warnings.add("source_jdbc_metadata_unavailable");
+        }
+        return schemaSnapshotService.saveSnapshot(
+            task,
+            execution,
+            task == null ? null : task.getSourceType(),
+            resolveSourceSystem(readerConfig),
+            sourceSchema,
+            sourceTable,
+            resolveSourceResource(readerConfig, mapping.source()),
+            target.schema(),
+            target.table(),
+            sourceColumns,
+            odsColumns,
+            primaryKeyColumns,
+            indexes,
+            warnings
+        );
     }
 
     @SuppressWarnings("unchecked")
@@ -425,10 +516,7 @@ public class TargetTableProvisioner {
             return columns;
         }
         return columns.stream()
-            .map(col -> new JdbcMetadataService.ColumnMeta(
-                col.name() != null ? col.name().toLowerCase(Locale.ROOT) : col.name(),
-                col.jdbcType(), col.typeName(), col.columnSize(), col.decimalDigits()
-            ))
+            .map(col -> col.withName(col.name() != null ? col.name().toLowerCase(Locale.ROOT) : col.name()))
             .toList();
     }
 
@@ -467,10 +555,7 @@ public class TargetTableProvisioner {
         String safePrefix = StringUtils.hasText(prefix) ? prefix : "";
         String safeSuffix = StringUtils.hasText(suffix) ? suffix : "";
         return columns.stream()
-            .map(col -> new JdbcMetadataService.ColumnMeta(
-                safePrefix + col.name() + safeSuffix,
-                col.jdbcType(), col.typeName(), col.columnSize(), col.decimalDigits()
-            ))
+            .map(col -> col.withName(safePrefix + col.name() + safeSuffix))
             .toList();
     }
 
@@ -592,11 +677,24 @@ public class TargetTableProvisioner {
         }
         if (value instanceof Iterable<?> iterable) {
             for (Object entry : iterable) {
-                String text = normalizeText(entry);
-                if (StringUtils.hasText(text)) {
-                    return text;
+                String candidate = firstStringValue(entry);
+                if (StringUtils.hasText(candidate)) {
+                    return candidate;
                 }
             }
+            return null;
+        }
+        if (value instanceof Map<?, ?> map) {
+            for (String key : List.of("name", "filename", "fileName", "path", "value")) {
+                if (!map.containsKey(key)) {
+                    continue;
+                }
+                String candidate = firstStringValue(map.get(key));
+                if (StringUtils.hasText(candidate)) {
+                    return candidate;
+                }
+            }
+            return null;
         }
         return normalizeText(value);
     }
@@ -821,6 +919,31 @@ public class TargetTableProvisioner {
             return Boolean.parseBoolean(s.trim());
         }
         return null;
+    }
+
+    private String resolveSourceSystem(Map<String, Object> readerConfig) {
+        if (readerConfig == null || readerConfig.isEmpty()) {
+            return "unknown";
+        }
+        for (String key : List.of("sourceSystem", "sourceApp", "appCode", "system", "name", "_originalName")) {
+            String value = firstStringValue(readerConfig.get(key));
+            if (StringUtils.hasText(value)) {
+                return value;
+            }
+        }
+        return "unknown";
+    }
+
+    private String resolveSourceResource(Map<String, Object> readerConfig, String fallback) {
+        if (readerConfig != null && !readerConfig.isEmpty()) {
+            for (String key : List.of("_originalName", "_filePath", "_containerPath", "path")) {
+                String value = firstStringValue(readerConfig.get(key));
+                if (StringUtils.hasText(value)) {
+                    return value;
+                }
+            }
+        }
+        return fallback;
     }
 
     private String normalizeText(Object value) {

@@ -166,7 +166,7 @@ class IngestionTaskFullRefreshExecutionTest {
         org.springframework.transaction.support.TransactionSynchronizationManager.getSynchronizations()
             .forEach(org.springframework.transaction.support.TransactionSynchronization::afterCommit);
 
-        verify(targetTableProvisioner).ensureTargetTables(eq(task), eq(null));
+        verify(targetTableProvisioner).ensureTargetTables(eq(task), eq(null), any(IngestionExecution.class));
 
         ArgumentCaptor<IngestionExecution> captor = ArgumentCaptor.forClass(IngestionExecution.class);
         verify(executionRepository, org.mockito.Mockito.atLeast(2)).save(captor.capture());
@@ -190,7 +190,7 @@ class IngestionTaskFullRefreshExecutionTest {
         org.springframework.transaction.support.TransactionSynchronizationManager.getSynchronizations()
             .forEach(org.springframework.transaction.support.TransactionSynchronization::afterCommit);
 
-        verify(targetTableProvisioner, never()).ensureTargetTables(any(), any());
+        verify(targetTableProvisioner, never()).ensureTargetTables(any(), any(), any());
     }
 
     @Test

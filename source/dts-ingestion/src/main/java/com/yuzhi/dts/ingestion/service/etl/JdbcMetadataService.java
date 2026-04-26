@@ -13,6 +13,9 @@ import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.SQLFeatureNotSupportedException;
 import java.util.ArrayList;
+import java.util.Comparator;
+import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -42,9 +45,39 @@ public class JdbcMetadataService {
         Map<String, String> jdbcProperties
     ) {}
 
-    public record ColumnMeta(String name, int jdbcType, String typeName, Integer columnSize, Integer decimalDigits) {}
+    public record ColumnMeta(
+        String name,
+        int jdbcType,
+        String typeName,
+        Integer columnSize,
+        Integer decimalDigits,
+        Boolean nullable,
+        String defaultValue,
+        String comment,
+        Integer ordinalPosition
+    ) {
+        public ColumnMeta(String name, int jdbcType, String typeName, Integer columnSize, Integer decimalDigits) {
+            this(name, jdbcType, typeName, columnSize, decimalDigits, null, null, null, null);
+        }
+
+        public ColumnMeta withName(String newName) {
+            return new ColumnMeta(
+                newName,
+                jdbcType,
+                typeName,
+                columnSize,
+                decimalDigits,
+                nullable,
+                defaultValue,
+                comment,
+                ordinalPosition
+            );
+        }
+    }
 
     public record TableMeta(String schema, String name, String type) {}
+
+    public record IndexMeta(String name, boolean unique, List<String> columns) {}
 
     public List<TableMeta> listTables(JdbcConnectionInfo info, String schemaPattern, String tablePattern, Integer limit) {
         if (info == null || !StringUtils.hasText(info.jdbcUrl())) {
@@ -101,6 +134,48 @@ public class JdbcMetadataService {
         }
     }
 
+    public List<String> getPrimaryKeyColumns(JdbcConnectionInfo info, String tableName) {
+        if (info == null || !StringUtils.hasText(info.jdbcUrl()) || !StringUtils.hasText(tableName)) {
+            return List.of();
+        }
+        TableId tableId = TableId.parse(tableName);
+        try (Connection connection = openConnection(info)) {
+            DatabaseMetaData meta = connection.getMetaData();
+            List<String> columns = readPrimaryKeyColumns(meta, tableId.schema(), tableId.table());
+            if (columns.isEmpty()) {
+                columns = readPrimaryKeyColumns(meta, tableId.schema(), tableId.table().toUpperCase(Locale.ROOT));
+            }
+            if (columns.isEmpty()) {
+                columns = readPrimaryKeyColumns(meta, tableId.schema(), tableId.table().toLowerCase(Locale.ROOT));
+            }
+            return columns;
+        } catch (Exception ex) {
+            LOG.warn("Failed to fetch primary key for {}: {}", tableName, ex.getMessage());
+            return List.of();
+        }
+    }
+
+    public List<IndexMeta> getTableIndexes(JdbcConnectionInfo info, String tableName) {
+        if (info == null || !StringUtils.hasText(info.jdbcUrl()) || !StringUtils.hasText(tableName)) {
+            return List.of();
+        }
+        TableId tableId = TableId.parse(tableName);
+        try (Connection connection = openConnection(info)) {
+            DatabaseMetaData meta = connection.getMetaData();
+            List<IndexMeta> indexes = readIndexes(meta, tableId.schema(), tableId.table());
+            if (indexes.isEmpty()) {
+                indexes = readIndexes(meta, tableId.schema(), tableId.table().toUpperCase(Locale.ROOT));
+            }
+            if (indexes.isEmpty()) {
+                indexes = readIndexes(meta, tableId.schema(), tableId.table().toLowerCase(Locale.ROOT));
+            }
+            return indexes;
+        } catch (Exception ex) {
+            LOG.warn("Failed to fetch indexes for {}: {}", tableName, ex.getMessage());
+            return List.of();
+        }
+    }
+
     public Connection openConnection(JdbcConnectionInfo info) throws Exception {
         if (info == null || !StringUtils.hasText(info.jdbcUrl())) {
             throw new IllegalArgumentException("JDBC url is required");
@@ -146,12 +221,84 @@ public class JdbcMetadataService {
                 String typeName = rs.getString("TYPE_NAME");
                 Integer size = rs.getInt("COLUMN_SIZE");
                 Integer scale = rs.getInt("DECIMAL_DIGITS");
+                int nullableValue = rs.getInt("NULLABLE");
+                Boolean nullable = rs.wasNull() ? null : nullableValue == DatabaseMetaData.columnNullable;
+                String defaultValue = rs.getString("COLUMN_DEF");
+                String comment = rs.getString("REMARKS");
+                Integer ordinal = rs.getInt("ORDINAL_POSITION");
+                if (rs.wasNull()) {
+                    ordinal = null;
+                }
                 if (StringUtils.hasText(name)) {
-                    columns.add(new ColumnMeta(name, jdbcType, typeName, size, scale));
+                    columns.add(new ColumnMeta(name, jdbcType, typeName, size, scale, nullable, defaultValue, comment, ordinal));
                 }
             }
         }
         return columns;
+    }
+
+    private List<String> readPrimaryKeyColumns(DatabaseMetaData meta, String schema, String table) throws SQLException {
+        List<KeyColumn> columns = new ArrayList<>();
+        try (ResultSet rs = meta.getPrimaryKeys(null, schema, table)) {
+            while (rs.next()) {
+                String column = rs.getString("COLUMN_NAME");
+                short seq = rs.getShort("KEY_SEQ");
+                if (StringUtils.hasText(column)) {
+                    columns.add(new KeyColumn(seq, column));
+                }
+            }
+        }
+        return columns.stream()
+            .sorted(Comparator.comparingInt(KeyColumn::sequence))
+            .map(KeyColumn::name)
+            .toList();
+    }
+
+    private List<IndexMeta> readIndexes(DatabaseMetaData meta, String schema, String table) throws SQLException {
+        Map<String, IndexBuilder> builders = new LinkedHashMap<>();
+        try (ResultSet rs = meta.getIndexInfo(null, schema, table, false, false)) {
+            while (rs.next()) {
+                String indexName = rs.getString("INDEX_NAME");
+                String columnName = rs.getString("COLUMN_NAME");
+                if (!StringUtils.hasText(indexName) || !StringUtils.hasText(columnName)) {
+                    continue;
+                }
+                boolean nonUnique = rs.getBoolean("NON_UNIQUE");
+                short ordinal = rs.getShort("ORDINAL_POSITION");
+                IndexBuilder builder = builders.computeIfAbsent(indexName, key -> new IndexBuilder(indexName, !nonUnique));
+                builder.columns.add(new KeyColumn(ordinal, columnName));
+            }
+        }
+        return builders.values().stream()
+            .map(IndexBuilder::toMeta)
+            .filter(index -> !index.columns().isEmpty())
+            .toList();
+    }
+
+    private record KeyColumn(int sequence, String name) {}
+
+    private static final class IndexBuilder {
+        private final String name;
+        private final boolean unique;
+        private final List<KeyColumn> columns = new ArrayList<>();
+
+        private IndexBuilder(String name, boolean unique) {
+            this.name = name;
+            this.unique = unique;
+        }
+
+        private IndexMeta toMeta() {
+            return new IndexMeta(
+                name,
+                unique,
+                columns.stream()
+                    .sorted(Comparator.comparingInt(KeyColumn::sequence))
+                    .map(KeyColumn::name)
+                    .collect(java.util.stream.Collectors.toCollection(LinkedHashSet::new))
+                    .stream()
+                    .toList()
+            );
+        }
     }
 
     private List<TableMeta> readTables(DatabaseMetaData meta, String schema, String table, int limit) throws SQLException {

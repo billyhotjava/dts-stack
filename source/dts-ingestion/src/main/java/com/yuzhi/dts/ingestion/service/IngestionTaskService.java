@@ -543,7 +543,7 @@ public class IngestionTaskService {
             task = ensureAddaxJobExists(task, source, runtimeReaderOverrides, runtimeContext);
             execution.setDroppedTables(resolveDroppedTables(task));
             if (!isFileSourceType(task.getSourceType())) {
-                targetTableProvisioner.ensureTargetTables(task, source == null ? null : source.readerConfig());
+                targetTableProvisioner.ensureTargetTables(task, source == null ? null : source.readerConfig(), execution);
             }
             addaxJobService.resolveWriterColumnsIfNeeded(task.getAddaxJobPath());
             if (airflowEnabled && task.getAirflowEnabled() == null) {

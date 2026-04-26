@@ -24,5 +24,6 @@
     <include file="config/liquibase/changelog/20260403_01_ingestion_task_pre_check.xml"/>
     <include file="config/liquibase/changelog/20260405_01_staging_table_metadata.xml"/>
     <include file="config/liquibase/changelog/20260426_01_ingestion_execution_batch_id.xml"/>
+    <include file="config/liquibase/changelog/20260427_01_ingestion_schema_snapshot.xml"/>
 
 </databaseChangeLog>

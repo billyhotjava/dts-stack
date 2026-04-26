@@ -65,6 +65,8 @@ public interface IngestionExecutionRepository extends JpaRepository<IngestionExe
      */
     Optional<IngestionExecution> findByExecutionId(String executionId);
 
+    Optional<IngestionExecution> findByBatchId(String batchId);
+
     /**
      * 根据任务和执行ID查找
      */

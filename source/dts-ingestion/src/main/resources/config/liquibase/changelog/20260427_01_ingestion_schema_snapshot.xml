@@ -1,0 +1,60 @@
+<?xml version="1.0" encoding="utf-8"?>
+<databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+    http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
+
+    <changeSet id="20260427-01-ingestion-schema-snapshot" author="system">
+        <comment>Create schema snapshot table for ODS DDL, drift detection and dbt source metadata</comment>
+        <preConditions onFail="MARK_RAN">
+            <not>
+                <tableExists tableName="ingestion_schema_snapshot"/>
+            </not>
+        </preConditions>
+        <createTable tableName="ingestion_schema_snapshot">
+            <column name="id" type="bigserial">
+                <constraints primaryKey="true" nullable="false"/>
+            </column>
+            <column name="task_id" type="bigint">
+                <constraints nullable="false" foreignKeyName="fk_ingestion_schema_snapshot_task" references="ingestion_task(id)"/>
+            </column>
+            <column name="ingestion_execution_id" type="bigint">
+                <constraints foreignKeyName="fk_ingestion_schema_snapshot_execution" references="ingestion_execution(id)"/>
+            </column>
+            <column name="snapshot_version" type="int" defaultValueNumeric="1"/>
+            <column name="source_type" type="varchar(50)"/>
+            <column name="source_system" type="varchar(200)"/>
+            <column name="source_schema" type="varchar(200)"/>
+            <column name="source_table" type="varchar(300)"/>
+            <column name="source_resource" type="varchar(500)"/>
+            <column name="ods_schema" type="varchar(200)"/>
+            <column name="ods_table" type="varchar(300)"/>
+            <column name="schema_fingerprint" type="varchar(128)"/>
+            <column name="columns_json" type="jsonb">
+                <constraints nullable="false"/>
+            </column>
+            <column name="primary_key_columns" type="jsonb"/>
+            <column name="indexes_json" type="jsonb"/>
+            <column name="warnings_json" type="jsonb"/>
+            <column name="created_by" type="varchar(50)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="created_date" type="timestamp" defaultValueComputed="CURRENT_TIMESTAMP">
+                <constraints nullable="false"/>
+            </column>
+            <column name="last_modified_by" type="varchar(50)"/>
+            <column name="last_modified_date" type="timestamp"/>
+        </createTable>
+        <createIndex tableName="ingestion_schema_snapshot" indexName="idx_ingestion_schema_snapshot_task_table">
+            <column name="task_id"/>
+            <column name="source_table"/>
+            <column name="ods_table"/>
+            <column name="created_date"/>
+        </createIndex>
+        <createIndex tableName="ingestion_schema_snapshot" indexName="idx_ingestion_schema_snapshot_execution">
+            <column name="ingestion_execution_id"/>
+        </createIndex>
+    </changeSet>
+
+</databaseChangeLog>
