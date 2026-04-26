@@ -11,6 +11,7 @@ import com.yuzhi.dts.ingestion.service.dto.ColumnInfo;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
+import java.util.LinkedHashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -43,6 +44,16 @@ public class StagingTableService {
     private final JdbcTemplate jdbcTemplate;
     private final ObjectMapper objectMapper;
     private final StagingTableMetadataRepository metadataRepository;
+
+    public record RuleErrorSummary(String ruleName, long failCount) {}
+
+    public record StagingErrorSummary(
+        int totalRows,
+        long cleanRows,
+        long errorRows,
+        List<RuleErrorSummary> errorsByRule,
+        List<Map<String, Object>> sampleRows
+    ) {}
 
     public StagingTableService(JdbcTemplate jdbcTemplate, ObjectMapper objectMapper,
             StagingTableMetadataRepository metadataRepository) {
@@ -287,6 +298,108 @@ public class StagingTableService {
         Long count = jdbcTemplate.queryForObject(
             "SELECT COUNT(*) FROM " + tableName + " WHERE _status = 'ERROR'", Long.class);
         return count != null ? count : 0;
+    }
+
+    public StagingErrorSummary summarizeErrors(String tableName, int sampleLimit) {
+        validateTableName(tableName);
+        int totalRows = countRows(tableName);
+        long errorRows = countErrors(tableName);
+        int safeLimit = Math.max(0, Math.min(sampleLimit, 200));
+        List<RuleErrorSummary> errorsByRule = errorRows == 0
+            ? List.of()
+            : queryErrorsByRule(tableName);
+        List<Map<String, Object>> sampleRows = errorRows == 0 || safeLimit == 0
+            ? List.of()
+            : jdbcTemplate.queryForList(
+                "SELECT * FROM " + tableName + " WHERE _status = 'ERROR' ORDER BY _row_num LIMIT ?",
+                safeLimit
+            );
+        return new StagingErrorSummary(
+            totalRows,
+            Math.max(0, totalRows - errorRows),
+            errorRows,
+            errorsByRule,
+            sampleRows
+        );
+    }
+
+    public byte[] exportErrorRowsCsv(String tableName) {
+        validateTableName(tableName);
+        List<Map<String, Object>> rows = jdbcTemplate.queryForList(
+            "SELECT * FROM " + tableName + " WHERE _status = 'ERROR' ORDER BY _row_num"
+        );
+        if (rows.isEmpty()) {
+            return new byte[0];
+        }
+        LinkedHashSet<String> headers = new LinkedHashSet<>();
+        for (Map<String, Object> row : rows) {
+            headers.addAll(row.keySet());
+        }
+        StringBuilder csv = new StringBuilder();
+        appendCsvLine(csv, new ArrayList<>(headers));
+        for (Map<String, Object> row : rows) {
+            List<Object> values = headers.stream().map(row::get).toList();
+            appendCsvLine(csv, values);
+        }
+        return csv.toString().getBytes(java.nio.charset.StandardCharsets.UTF_8);
+    }
+
+    private List<RuleErrorSummary> queryErrorsByRule(String tableName) {
+        String sql = "SELECT err->>'rule' AS rule_name, COUNT(*) AS fail_count "
+            + "FROM " + tableName + ", LATERAL jsonb_array_elements(_errors) err "
+            + "WHERE _status = 'ERROR' "
+            + "GROUP BY err->>'rule' "
+            + "ORDER BY fail_count DESC, rule_name";
+        return jdbcTemplate.queryForList(sql).stream()
+            .map(row -> new RuleErrorSummary(
+                normalizeRuleName(row.get("rule_name")),
+                toLong(row.get("fail_count"))
+            ))
+            .toList();
+    }
+
+    private String normalizeRuleName(Object value) {
+        if (value == null) {
+            return "UNKNOWN";
+        }
+        String text = String.valueOf(value).trim();
+        return text.isEmpty() ? "UNKNOWN" : text;
+    }
+
+    private void appendCsvLine(StringBuilder csv, List<?> values) {
+        for (int i = 0; i < values.size(); i++) {
+            if (i > 0) {
+                csv.append(',');
+            }
+            csv.append(escapeCsv(values.get(i)));
+        }
+        csv.append('\n');
+    }
+
+    private String escapeCsv(Object value) {
+        if (value == null) {
+            return "";
+        }
+        String text = String.valueOf(value);
+        boolean quote = text.contains(",") || text.contains("\"") || text.contains("\n") || text.contains("\r");
+        if (!quote) {
+            return text;
+        }
+        return "\"" + text.replace("\"", "\"\"") + "\"";
+    }
+
+    private long toLong(Object value) {
+        if (value instanceof Number number) {
+            return number.longValue();
+        }
+        if (value == null) {
+            return 0L;
+        }
+        try {
+            return Long.parseLong(String.valueOf(value));
+        } catch (NumberFormatException ex) {
+            return 0L;
+        }
     }
 
     /**

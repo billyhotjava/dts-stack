@@ -731,6 +731,17 @@ class IngestionTaskAPI {
 	): Promise<StagingPage> {
 		return api.get({ url: `/ingestion/tasks/${taskId}/staging`, params });
 	}
+
+	async getStagingErrorSummary(taskId: number, limit = 20): Promise<StagingErrorSummary> {
+		return api.get({ url: `/ingestion/tasks/${taskId}/staging/errors/summary`, params: { limit } });
+	}
+
+	async downloadStagingErrors(taskId: number): Promise<Blob> {
+		return api.get({
+			url: `/ingestion/tasks/${taskId}/staging/errors/download`,
+			responseType: "blob",
+		} as any);
+	}
 }
 
 export interface ParseResult {
@@ -752,6 +763,19 @@ export interface StagingPage {
 	totalElements: number;
 	totalPages: number;
 	number: number;
+}
+
+export interface StagingRuleErrorSummary {
+	ruleName: string;
+	failCount: number;
+}
+
+export interface StagingErrorSummary {
+	totalRows: number;
+	cleanRows: number;
+	errorRows: number;
+	errorsByRule: StagingRuleErrorSummary[];
+	sampleRows: Record<string, any>[];
 }
 
 export const ingestionTaskAPI = new IngestionTaskAPI();

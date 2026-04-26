@@ -12,6 +12,7 @@ import com.yuzhi.dts.ingestion.repository.IngestionTaskRepository;
 import com.yuzhi.dts.ingestion.service.etl.AirflowAdapter;
 import com.yuzhi.dts.ingestion.service.etl.AirflowClient;
 import com.yuzhi.dts.ingestion.service.etl.AirflowDagService;
+import com.yuzhi.dts.ingestion.service.etl.StagingTableService;
 import java.util.Map;
 import java.util.List;
 import java.util.Optional;
@@ -42,6 +43,9 @@ class IngestionExecutionQueryServiceTest {
     @Mock
     private AirflowDagService airflowDagService;
 
+    @Mock
+    private StagingTableService stagingTableService;
+
     private IngestionExecutionQueryService queryService;
 
     @BeforeEach
@@ -52,7 +56,8 @@ class IngestionExecutionQueryServiceTest {
             schemaSnapshotRepository,
             airflowAdapter,
             airflowClient,
-            airflowDagService
+            airflowDagService,
+            stagingTableService
         );
     }
 
@@ -113,5 +118,36 @@ class IngestionExecutionQueryServiceTest {
         List<Map<String, Object>> sources = (List<Map<String, Object>>) result.get("sources");
         assertThat(sources).hasSize(1);
         assertThat(sources.get(0)).containsEntry("sourceSystem", "ERP").containsEntry("odsTable", "ods_customer");
+    }
+
+    @Test
+    void shouldIncludeBadRowSummaryWhenTaskHasStagingTable() {
+        IngestionTask task = new IngestionTask();
+        task.setId(8L);
+        task.setName("file-import");
+        task.setSourceType("excelreader");
+        task.setStagingTableName("tmp_ingestion_1234567890abcdef1234567890abcdef");
+        IngestionExecution execution = new IngestionExecution();
+        execution.setId(16L);
+        execution.setTask(task);
+        execution.setBatchId("batch-task-8-abc");
+        execution.setExecutionId("manual-file-run");
+        execution.setStatus("success");
+        StagingTableService.StagingErrorSummary summary = new StagingTableService.StagingErrorSummary(
+            3,
+            1,
+            2,
+            List.of(new StagingTableService.RuleErrorSummary("[内置]空行检测", 2)),
+            List.of(Map.of("_row_num", 2, "_status", "ERROR"))
+        );
+
+        when(executionRepository.findByBatchId("batch-task-8-abc")).thenReturn(Optional.of(execution));
+        when(schemaSnapshotRepository.findByExecution_IdOrderByCreatedDateDesc(16L)).thenReturn(List.of());
+        when(schemaSnapshotRepository.findByTask_IdOrderByCreatedDateDesc(8L)).thenReturn(List.of());
+        when(stagingTableService.summarizeErrors("tmp_ingestion_1234567890abcdef1234567890abcdef", 20)).thenReturn(summary);
+
+        Map<String, Object> result = queryService.traceExecution("batch-task-8-abc", null);
+
+        assertThat(result.get("badRows")).isEqualTo(summary);
     }
 }

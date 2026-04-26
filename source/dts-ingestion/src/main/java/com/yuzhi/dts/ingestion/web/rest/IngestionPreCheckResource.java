@@ -17,17 +17,23 @@ import java.nio.file.Paths;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
+import org.springframework.http.HttpHeaders;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.bind.annotation.DeleteMapping;
+import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.server.ResponseStatusException;
 
@@ -230,6 +236,50 @@ public class IngestionPreCheckResource {
     }
 
     /**
+     * GET /api/ingestion/tasks/{id}/staging
+     * Query parsed staging rows. Use errorsOnly=true to list bad rows.
+     */
+    @GetMapping("/{id}/staging")
+    public ResponseEntity<Page<Map<String, Object>>> getStagingRows(
+        @PathVariable Long id,
+        @RequestParam(value = "errorsOnly", defaultValue = "false") boolean errorsOnly,
+        Pageable pageable
+    ) {
+        IngestionTask task = findTaskOrThrow(id);
+        String tableName = requireStagingTable(task);
+        return ResponseEntity.ok(stagingTableService.query(tableName, errorsOnly, pageable));
+    }
+
+    /**
+     * GET /api/ingestion/tasks/{id}/staging/errors/summary
+     * Return bad-row counts and samples for the execution/detail page.
+     */
+    @GetMapping("/{id}/staging/errors/summary")
+    public ResponseEntity<StagingTableService.StagingErrorSummary> getBadRowSummary(
+        @PathVariable Long id,
+        @RequestParam(value = "limit", defaultValue = "20") int limit
+    ) {
+        IngestionTask task = findTaskOrThrow(id);
+        String tableName = requireStagingTable(task);
+        return ResponseEntity.ok(stagingTableService.summarizeErrors(tableName, limit));
+    }
+
+    /**
+     * GET /api/ingestion/tasks/{id}/staging/errors/download
+     * Download current bad rows as CSV for offline fix and re-import.
+     */
+    @GetMapping(value = "/{id}/staging/errors/download", produces = "text/csv")
+    public ResponseEntity<byte[]> downloadBadRows(@PathVariable Long id) {
+        IngestionTask task = findTaskOrThrow(id);
+        String tableName = requireStagingTable(task);
+        byte[] csv = stagingTableService.exportErrorRowsCsv(tableName);
+        return ResponseEntity.ok()
+            .contentType(new MediaType("text", "csv", java.nio.charset.StandardCharsets.UTF_8))
+            .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"bad_rows_task_" + id + ".csv\"")
+            .body(csv);
+    }
+
+    /**
      * POST /api/ingestion/tasks/{id}/re-check
      * Re-run pre-check on edited staging data (same flow as pre-check).
      * After user fixes cells via PUT /staging/{rowNum}, this re-validates
@@ -311,6 +361,14 @@ public class IngestionPreCheckResource {
     private IngestionTask findTaskOrThrow(Long id) {
         return taskRepository.findById(id)
             .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Task not found: " + id));
+    }
+
+    private String requireStagingTable(IngestionTask task) {
+        String tableName = task.getStagingTableName();
+        if (tableName == null || tableName.isBlank()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "暂存表不存在，请先执行文件解析");
+        }
+        return tableName;
     }
 
     private int countStagingRows(String tableName) {

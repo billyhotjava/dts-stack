@@ -9,6 +9,7 @@ import com.yuzhi.dts.ingestion.repository.IngestionTaskRepository;
 import com.yuzhi.dts.ingestion.service.etl.AirflowAdapter;
 import com.yuzhi.dts.ingestion.service.etl.AirflowClient;
 import com.yuzhi.dts.ingestion.service.etl.AirflowDagService;
+import com.yuzhi.dts.ingestion.service.etl.StagingTableService;
 import com.yuzhi.dts.ingestion.service.etl.ExecutionFailureClassifier;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -27,6 +28,7 @@ public class IngestionExecutionQueryService {
     private final AirflowAdapter airflowAdapter;
     private final AirflowClient airflowClient;
     private final AirflowDagService airflowDagService;
+    private final StagingTableService stagingTableService;
 
     public IngestionExecutionQueryService(
         IngestionTaskRepository taskRepository,
@@ -34,7 +36,8 @@ public class IngestionExecutionQueryService {
         IngestionSchemaSnapshotRepository schemaSnapshotRepository,
         AirflowAdapter airflowAdapter,
         AirflowClient airflowClient,
-        AirflowDagService airflowDagService
+        AirflowDagService airflowDagService,
+        StagingTableService stagingTableService
     ) {
         this.taskRepository = taskRepository;
         this.executionRepository = executionRepository;
@@ -42,6 +45,7 @@ public class IngestionExecutionQueryService {
         this.airflowAdapter = airflowAdapter;
         this.airflowClient = airflowClient;
         this.airflowDagService = airflowDagService;
+        this.stagingTableService = stagingTableService;
     }
 
     public Map<String, Object> traceExecution(String batchId, String dtsExecutionId) {
@@ -78,9 +82,24 @@ public class IngestionExecutionQueryService {
             taskPayload.put("syncMode", task.getSyncMode());
             taskPayload.put("status", task.getStatus());
             result.put("task", taskPayload);
+            addBadRowSummary(result, task);
         }
         result.put("sources", snapshots.stream().map(this::toSnapshotTrace).toList());
         return result;
+    }
+
+    private void addBadRowSummary(Map<String, Object> result, IngestionTask task) {
+        if (task == null || !StringUtils.hasText(task.getStagingTableName())) {
+            return;
+        }
+        try {
+            result.put("badRows", stagingTableService.summarizeErrors(task.getStagingTableName(), 20));
+        } catch (Exception ex) {
+            result.put("badRows", Map.of(
+                "stagingTable", task.getStagingTableName(),
+                "message", "坏行摘要暂不可用: " + ex.getMessage()
+            ));
+        }
     }
 
     private IngestionExecution resolveTraceExecution(String batchId, String dtsExecutionId) {
