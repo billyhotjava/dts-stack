@@ -181,7 +181,7 @@ class IngestionTaskFullRefreshExecutionTest {
         task.setAddaxJobPath(null);
 
         when(taskRepository.findById(102L)).thenReturn(Optional.of(task));
-        when(addaxJobService.createJobFromTask(eq(task), eq(null), eq(null), any(Map.class)))
+        when(addaxJobService.createJobFromTask(eq(task), eq(null), eq(null), any(Map.class), any(Map.class)))
             .thenReturn(new AddaxJobService.AddaxJobResult("job.json", "/tmp/file-job.json", Map.of()));
         when(executionMapper.toDto(any(IngestionExecution.class))).thenReturn(new IngestionExecutionDTO());
 

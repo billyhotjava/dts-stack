@@ -31,6 +31,10 @@ public class IngestionExecution {
     @Column(name = "execution_id", length = 200)
     private String executionId; // Addax或Airflow的执行ID
 
+    @Size(max = 128)
+    @Column(name = "batch_id", length = 128)
+    private String batchId; // DTS入湖批次ID，同一次执行内保持一致
+
     @Size(max = 50)
     @Column(name = "status", length = 50)
     private String status; // running, success, failed
@@ -123,6 +127,14 @@ public class IngestionExecution {
 
     public void setExecutionId(String executionId) {
         this.executionId = executionId;
+    }
+
+    public String getBatchId() {
+        return batchId;
+    }
+
+    public void setBatchId(String batchId) {
+        this.batchId = batchId;
     }
 
     public String getStatus() {
@@ -287,6 +299,7 @@ public class IngestionExecution {
         return "IngestionExecution{" +
             "id=" + id +
             ", executionId='" + executionId + '\'' +
+            ", batchId='" + batchId + '\'' +
             ", status='" + status + '\'' +
             ", startTime=" + startTime +
             '}';

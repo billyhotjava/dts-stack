@@ -99,7 +99,21 @@ public class AddaxJobService {
         String syncMode,
         Map<String, Object> runtimeReaderOverrides
     ) {
-        Map<String, Object> resolvedJob = resolveJobConfig(readerType, readerConfig, writerType, writerConfig, jobConfig);
+        return createJob(taskName, readerType, readerConfig, writerType, writerConfig, jobConfig, syncMode, runtimeReaderOverrides, null);
+    }
+
+    public AddaxJobResult createJob(
+        String taskName,
+        String readerType,
+        Map<String, Object> readerConfig,
+        String writerType,
+        Map<String, Object> writerConfig,
+        Map<String, Object> jobConfig,
+        String syncMode,
+        Map<String, Object> runtimeReaderOverrides,
+        Map<String, Object> runtimeContext
+    ) {
+        Map<String, Object> resolvedJob = resolveJobConfig(readerType, readerConfig, writerType, writerConfig, jobConfig, runtimeContext);
         if ("full_refresh".equalsIgnoreCase(syncMode)) {
             applyFullRefreshPreSql(resolvedJob);
         }
@@ -220,8 +234,10 @@ public class AddaxJobService {
     private static final List<String> COLUMN_RULE_KEYS = List.of(
         "_columnPrefix", "_columnSuffix", "_extraColumns"
     );
-    private static final String EXTRA_COL_SOURCE_SYSTEM = "source_system";
-    private static final String EXTRA_COL_IMPORT_TIME = "import_time";
+    private static final String RUNTIME_BATCH_ID = "batchId";
+    private static final String RUNTIME_EXECUTION_ID = "executionId";
+    private static final String RUNTIME_TASK_ID = "taskId";
+    private static final String SOURCE_TABLE_VALUE_PLACEHOLDER = "${source_table}";
 
     private Map<String, Object> resolveJobConfig(
         String readerType,
@@ -229,6 +245,17 @@ public class AddaxJobService {
         String writerType,
         Map<String, Object> writerConfig,
         Map<String, Object> jobConfig
+    ) {
+        return resolveJobConfig(readerType, readerConfig, writerType, writerConfig, jobConfig, null);
+    }
+
+    private Map<String, Object> resolveJobConfig(
+        String readerType,
+        Map<String, Object> readerConfig,
+        String writerType,
+        Map<String, Object> writerConfig,
+        Map<String, Object> jobConfig,
+        Map<String, Object> runtimeContext
     ) {
         if (jobConfig != null && !jobConfig.isEmpty()) {
             Map<String, Object> normalized = new LinkedHashMap<>(jobConfig);
@@ -260,24 +287,24 @@ public class AddaxJobService {
             resolvedWriter.put("username", springEnv.getProperty("spring.datasource.username", "postgres"));
         }
         ensureWriterConnection(writerType, resolvedWriter);
-        ensureDefaultExtraColumns(readerConfig, resolvedReader, resolvedWriter, readerType, writerType);
+        ensureDefaultExtraColumns(readerConfig, resolvedReader, resolvedWriter, readerType, writerType, runtimeContext);
         if (isFileReaderType(readerType) && !fileColumns.isEmpty()) {
-            injectFileSourceCreateTablePreSql(resolvedWriter, fileColumns, fileAutoId, writerType);
+            injectFileSourceCreateTablePreSql(
+                resolvedWriter,
+                fileColumns,
+                fileAutoId,
+                writerType,
+                resolveSourceTableForExtra(readerConfig, resolvedReader, resolvedWriter)
+            );
         }
         if (!isFileReaderType(readerType)) {
             replaceWriterTablePlaceholders(resolvedReader, resolvedWriter);
         }
 
-        // Inject extra columns via postSql (ALTER TABLE + UPDATE) if configured
-        injectExtraColumnsPostSql(resolvedWriter, writerType);
-
-        // Strip column rule metadata keys from writer config
-        for (String key : COLUMN_RULE_KEYS) {
-            resolvedWriter.remove(key);
-        }
-
         // Split into per-table content blocks to avoid Addax multi-table writer bugs
         List<Map<String, Object>> contentList = splitPerTable(readerType, resolvedReader, writerType, resolvedWriter);
+        applyPerContentExtraColumns(contentList, writerType);
+        stripColumnRuleKeys(contentList);
 
         Map<String, Object> job = new LinkedHashMap<>();
         job.put("setting", Map.of("speed", Map.of("channel", 1)));
@@ -342,6 +369,52 @@ public class AddaxJobService {
         } else {
             writerConfig.put("postSql", filteredPostSql);
         }
+    }
+
+    private void applyPerContentExtraColumns(List<Map<String, Object>> contentList, String writerType) {
+        if (contentList == null || contentList.isEmpty()) {
+            return;
+        }
+        for (Map<String, Object> content : contentList) {
+            Map<String, Object> readerParams = contentParameters(content, "reader");
+            Map<String, Object> writerParams = contentParameters(content, "writer");
+            if (writerParams == null) {
+                continue;
+            }
+            String sourceTable = resolveSourceTableForExtra(readerParams, readerParams, writerParams);
+            injectExtraColumnsPostSql(writerParams, writerType, sourceTable);
+        }
+    }
+
+    private void stripColumnRuleKeys(List<Map<String, Object>> contentList) {
+        if (contentList == null || contentList.isEmpty()) {
+            return;
+        }
+        for (Map<String, Object> content : contentList) {
+            Map<String, Object> writerParams = contentParameters(content, "writer");
+            if (writerParams == null) {
+                continue;
+            }
+            for (String key : COLUMN_RULE_KEYS) {
+                writerParams.remove(key);
+            }
+        }
+    }
+
+    @SuppressWarnings("unchecked")
+    private Map<String, Object> contentParameters(Map<String, Object> content, String key) {
+        if (content == null || !StringUtils.hasText(key)) {
+            return null;
+        }
+        Object nodeObj = content.get(key);
+        if (!(nodeObj instanceof Map<?, ?> nodeMap)) {
+            return null;
+        }
+        Object parameterObj = nodeMap.get("parameter");
+        if (parameterObj instanceof Map<?, ?> parameterMap) {
+            return (Map<String, Object>) parameterMap;
+        }
+        return null;
     }
 
     private List<String> filterSqlListForTable(Object sqlObj, String currentTable, List<String> allTables) {
@@ -1219,6 +1292,16 @@ public class AddaxJobService {
         Map<String, Object> readerConfigOverride,
         Map<String, Object> runtimeReaderOverrides
     ) {
+        return createJobFromTask(task, readerTypeOverride, readerConfigOverride, runtimeReaderOverrides, null);
+    }
+
+    public AddaxJobResult createJobFromTask(
+        com.yuzhi.dts.ingestion.domain.IngestionTask task,
+        String readerTypeOverride,
+        Map<String, Object> readerConfigOverride,
+        Map<String, Object> runtimeReaderOverrides,
+        Map<String, Object> runtimeContext
+    ) {
         if (task == null) {
             throw new IllegalArgumentException("IngestionTask cannot be null");
         }
@@ -1257,7 +1340,8 @@ public class AddaxJobService {
             writerConfig,
             jobConfig,
             task.getSyncMode(),
-            runtimeReaderOverrides
+            runtimeReaderOverrides,
+            runtimeContext
         );
     }
 
@@ -1353,7 +1437,8 @@ public class AddaxJobService {
         Map<String, Object> writerConfig,
         List<Map<String, Object>> fileColumns,
         boolean autoId,
-        String writerType
+        String writerType,
+        String sourceTableName
     ) {
         if (writerConfig == null || fileColumns == null || fileColumns.isEmpty()) return;
         List<String> tables = extractTables(writerConfig);
@@ -1417,8 +1502,9 @@ public class AddaxJobService {
                 first = false;
                 ddl.append(quoteIdentifier(extraName.toLowerCase(Locale.ROOT)))
                    .append(" ").append(mapExtraColumnType(extraType, (Map<?, ?>) item));
-                if (StringUtils.hasText(extraDefault)) {
-                    ddl.append(" DEFAULT ").append(extraDefault);
+                String renderedDefault = renderExtraDefaultValue(extraDefault, tableName, sourceTableName);
+                if (StringUtils.hasText(renderedDefault)) {
+                    ddl.append(" DEFAULT ").append(renderedDefault);
                 }
             }
         }
@@ -1458,7 +1544,7 @@ public class AddaxJobService {
      * Extra columns are added AFTER data load to avoid column count mismatch with the reader.
      */
     @SuppressWarnings("unchecked")
-    private void injectExtraColumnsPostSql(Map<String, Object> writerConfig, String writerType) {
+    private void injectExtraColumnsPostSql(Map<String, Object> writerConfig, String writerType, String sourceTableName) {
         if (writerConfig == null) return;
         Object extraObj = writerConfig.get("_extraColumns");
         if (!(extraObj instanceof List<?> extraList) || extraList.isEmpty()) return;
@@ -1502,9 +1588,10 @@ public class AddaxJobService {
                 postSql.add("ALTER TABLE " + qualifiedTable
                     + " ADD COLUMN IF NOT EXISTS " + quotedCol + " " + sqlType);
 
-                if (StringUtils.hasText(defaultVal)) {
+                String renderedDefault = renderExtraDefaultValue(defaultVal, rawTable, sourceTableName);
+                if (StringUtils.hasText(renderedDefault)) {
                     if (!updateSet.isEmpty()) updateSet.append(", ");
-                    updateSet.append(quotedCol).append(" = ").append(defaultVal);
+                    updateSet.append(quotedCol).append(" = ").append(renderedDefault);
                 }
             }
             if (!updateSet.isEmpty()) {
@@ -1524,7 +1611,8 @@ public class AddaxJobService {
         Map<String, Object> readerConfig,
         Map<String, Object> writerConfig,
         String readerType,
-        String writerType
+        String writerType,
+        Map<String, Object> runtimeContext
     ) {
         if (writerConfig == null) {
             return;
@@ -1552,65 +1640,154 @@ public class AddaxJobService {
             }
         }
 
-        java.util.Set<String> names = new java.util.HashSet<>();
-        for (Map<String, Object> extra : extras) {
-            String name = normalizeText(extra.get("name"));
-            if (StringUtils.hasText(name)) {
-                names.add(name.toLowerCase(Locale.ROOT));
-            }
-        }
-
         boolean changed = false;
         boolean fileSource = isFileReaderType(readerType);
         String sourceSystem = resolveSourceSystemForExtra(
             fileSource && rawReaderConfig != null ? rawReaderConfig : readerConfig,
             fileSource
         );
-        String sourceSystemValue = quoteSqlString(sourceSystem);
-        Map<String, Object> sourceSystemCol = indexByName.get(EXTRA_COL_SOURCE_SYSTEM);
-        if (sourceSystemCol == null) {
-            sourceSystemCol = new LinkedHashMap<>();
-            sourceSystemCol.put("name", EXTRA_COL_SOURCE_SYSTEM);
-            extras.add(sourceSystemCol);
-            changed = true;
-        }
-        if (!"来源系统".equals(normalizeText(sourceSystemCol.get("label")))) {
-            sourceSystemCol.put("label", "来源系统");
-            changed = true;
-        }
-        if (!"string".equalsIgnoreCase(normalizeText(sourceSystemCol.get("type")))) {
-            sourceSystemCol.put("type", "string");
-            changed = true;
-        }
-        if (!sourceSystemValue.equals(normalizeText(sourceSystemCol.get("defaultValue")))) {
-            sourceSystemCol.put("defaultValue", sourceSystemValue);
-            changed = true;
-        }
-
+        String sourceTableDefault = fileSource
+            ? quoteSqlString(resolveSourceTableForExtra(rawReaderConfig, readerConfig, writerConfig))
+            : SOURCE_TABLE_VALUE_PLACEHOLDER;
         String importTimeExpr = resolveImportTimeDefault(writerType);
-        Map<String, Object> importTimeCol = indexByName.get(EXTRA_COL_IMPORT_TIME);
-        if (importTimeCol == null) {
-            importTimeCol = new LinkedHashMap<>();
-            importTimeCol.put("name", EXTRA_COL_IMPORT_TIME);
-            extras.add(importTimeCol);
-            changed = true;
-        }
-        if (!"导入时间".equals(normalizeText(importTimeCol.get("label")))) {
-            importTimeCol.put("label", "导入时间");
-            changed = true;
-        }
-        if (!"timestamp".equalsIgnoreCase(normalizeText(importTimeCol.get("type")))) {
-            importTimeCol.put("type", "timestamp");
-            changed = true;
-        }
-        if (!importTimeExpr.equals(normalizeText(importTimeCol.get("defaultValue")))) {
-            importTimeCol.put("defaultValue", importTimeExpr);
-            changed = true;
-        }
+        changed |= upsertExtraColumn(
+            extras,
+            indexByName,
+            DtsOdsTechnicalColumns.SOURCE_SYSTEM,
+            "DTS来源系统",
+            "string",
+            quoteSqlString(sourceSystem)
+        );
+        changed |= upsertExtraColumn(
+            extras,
+            indexByName,
+            DtsOdsTechnicalColumns.SOURCE_TABLE,
+            "DTS来源表",
+            "string",
+            sourceTableDefault
+        );
+        changed |= upsertExtraColumn(
+            extras,
+            indexByName,
+            DtsOdsTechnicalColumns.IMPORT_TIME,
+            "DTS导入时间",
+            "timestamp",
+            importTimeExpr
+        );
+        changed |= upsertExtraColumn(
+            extras,
+            indexByName,
+            DtsOdsTechnicalColumns.BATCH_ID,
+            "DTS批次ID",
+            "string",
+            quoteSqlString(normalizeRuntimeValue(runtimeContext, RUNTIME_BATCH_ID, "unknown"))
+        );
+        changed |= upsertExtraColumn(
+            extras,
+            indexByName,
+            DtsOdsTechnicalColumns.EXECUTION_ID,
+            "DTS执行ID",
+            "string",
+            quoteSqlString(normalizeRuntimeValue(runtimeContext, RUNTIME_EXECUTION_ID, "unknown"))
+        );
+        changed |= upsertExtraColumn(
+            extras,
+            indexByName,
+            DtsOdsTechnicalColumns.TASK_ID,
+            "DTS任务ID",
+            "string",
+            quoteSqlString(normalizeRuntimeValue(runtimeContext, RUNTIME_TASK_ID, "unknown"))
+        );
 
         if (changed) {
             writerConfig.put("_extraColumns", extras);
         }
+    }
+
+    private boolean upsertExtraColumn(
+        java.util.List<Map<String, Object>> extras,
+        Map<String, Map<String, Object>> indexByName,
+        String name,
+        String label,
+        String type,
+        String defaultValue
+    ) {
+        if (!StringUtils.hasText(name)) {
+            return false;
+        }
+        boolean changed = false;
+        String key = name.toLowerCase(Locale.ROOT);
+        Map<String, Object> column = indexByName.get(key);
+        if (column == null) {
+            column = new LinkedHashMap<>();
+            column.put("name", name);
+            extras.add(column);
+            indexByName.put(key, column);
+            changed = true;
+        }
+        if (!label.equals(normalizeText(column.get("label")))) {
+            column.put("label", label);
+            changed = true;
+        }
+        if (!type.equalsIgnoreCase(normalizeText(column.get("type")))) {
+            column.put("type", type);
+            changed = true;
+        }
+        if (StringUtils.hasText(defaultValue) && !defaultValue.equals(normalizeText(column.get("defaultValue")))) {
+            column.put("defaultValue", defaultValue);
+            changed = true;
+        }
+        return changed;
+    }
+
+    private String normalizeRuntimeValue(Map<String, Object> runtimeContext, String key, String fallback) {
+        if (runtimeContext == null || runtimeContext.isEmpty()) {
+            return fallback;
+        }
+        String value = normalizeText(runtimeContext.get(key));
+        return StringUtils.hasText(value) ? value : fallback;
+    }
+
+    private String resolveSourceTableForExtra(
+        Map<String, Object> rawReaderConfig,
+        Map<String, Object> readerConfig,
+        Map<String, Object> writerConfig
+    ) {
+        String sourceTable = resolveSourceTableFromConfig(rawReaderConfig);
+        if (!StringUtils.hasText(sourceTable) && rawReaderConfig != readerConfig) {
+            sourceTable = resolveSourceTableFromConfig(readerConfig);
+        }
+        if (!StringUtils.hasText(sourceTable)) {
+            sourceTable = extractTables(writerConfig).stream().findFirst().orElse(null);
+        }
+        return StringUtils.hasText(sourceTable) ? sourceTable : "unknown";
+    }
+
+    private String resolveSourceTableFromConfig(Map<String, Object> config) {
+        if (config == null || config.isEmpty()) {
+            return null;
+        }
+        String sourceTable = extractTables(config).stream().findFirst().orElse(null);
+        if (StringUtils.hasText(sourceTable)) {
+            return sourceTable;
+        }
+        String fileName = resolveFileSourceSystem(config);
+        return !"uploaded_file".equals(fileName) ? fileName : null;
+    }
+
+    private String renderExtraDefaultValue(String defaultValue, String rawTable, String sourceTableName) {
+        if (!StringUtils.hasText(defaultValue)) {
+            return null;
+        }
+        String trimmed = defaultValue.trim();
+        if (SOURCE_TABLE_VALUE_PLACEHOLDER.equals(trimmed)) {
+            String value = StringUtils.hasText(sourceTableName) ? sourceTableName : rawTable;
+            return quoteSqlString(stripSchema(value));
+        }
+        if (TABLE_PLACEHOLDER.equals(trimmed)) {
+            return quoteSqlString(stripSchema(rawTable));
+        }
+        return defaultValue;
     }
 
     private String resolveSourceSystemForExtra(Map<String, Object> readerConfig, boolean fileSource) {
@@ -2352,6 +2529,7 @@ public class AddaxJobService {
                 List<String> columnNames = columns.stream()
                     .map(JdbcMetadataService.ColumnMeta::name)
                     .map(name -> name != null ? name.toLowerCase(Locale.ROOT) : name)
+                    .filter(name -> !DtsOdsTechnicalColumns.isCommonTechnicalColumn(name))
                     .toList();
                 // Replace ["*"] with actual column names
                 ((Map<String, Object>) paramMap).put("column", columnNames);

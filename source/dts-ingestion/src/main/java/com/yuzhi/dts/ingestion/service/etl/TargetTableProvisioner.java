@@ -92,6 +92,7 @@ public class TargetTableProvisioner {
                 if (isPostgres(targetInfo.jdbcUrl())) {
                     columns = lowercaseColumnNames(columns);
                 }
+                columns = appendDtsTechnicalColumns(columns);
                 createSchemaIfNeeded(connection, target.schema());
                 createTable(connection, target, columns);
                 LOG.info("Auto-created table {} for task {}", target.qualifiedName(), task.getId());
@@ -429,6 +430,26 @@ public class TargetTableProvisioner {
                 col.jdbcType(), col.typeName(), col.columnSize(), col.decimalDigits()
             ))
             .toList();
+    }
+
+    private List<JdbcMetadataService.ColumnMeta> appendDtsTechnicalColumns(List<JdbcMetadataService.ColumnMeta> columns) {
+        if (columns == null || columns.isEmpty()) {
+            return DtsOdsTechnicalColumns.commonJdbcColumns();
+        }
+        java.util.Set<String> names = columns.stream()
+            .map(JdbcMetadataService.ColumnMeta::name)
+            .filter(StringUtils::hasText)
+            .map(name -> name.toLowerCase(Locale.ROOT))
+            .collect(java.util.stream.Collectors.toCollection(java.util.LinkedHashSet::new));
+        for (JdbcMetadataService.ColumnMeta technical : DtsOdsTechnicalColumns.commonJdbcColumns()) {
+            String name = technical.name();
+            if (names.contains(name.toLowerCase(Locale.ROOT))) {
+                throw new IllegalStateException("源字段与 DTS 技术字段冲突: " + name);
+            }
+        }
+        List<JdbcMetadataService.ColumnMeta> merged = new ArrayList<>(columns);
+        merged.addAll(DtsOdsTechnicalColumns.commonJdbcColumns());
+        return merged;
     }
 
     private List<JdbcMetadataService.ColumnMeta> applyColumnPrefixSuffix(

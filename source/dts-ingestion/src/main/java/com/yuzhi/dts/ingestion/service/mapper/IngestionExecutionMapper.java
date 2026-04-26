@@ -24,6 +24,7 @@ public class IngestionExecutionMapper {
         dto.setTaskId(entity.getTask() != null ? entity.getTask().getId() : null);
         dto.setTaskName(entity.getTask() != null ? entity.getTask().getName() : null);
         dto.setExecutionId(entity.getExecutionId());
+        dto.setBatchId(entity.getBatchId());
         dto.setStatus(entity.getStatus());
         dto.setStartTime(entity.getStartTime());
         dto.setEndTime(entity.getEndTime());
@@ -60,6 +61,7 @@ public class IngestionExecutionMapper {
         IngestionExecution entity = new IngestionExecution();
         entity.setId(dto.getId());
         entity.setExecutionId(dto.getExecutionId());
+        entity.setBatchId(dto.getBatchId());
         entity.setStatus(dto.getStatus());
         entity.setStartTime(dto.getStartTime());
         entity.setEndTime(dto.getEndTime());

@@ -15,6 +15,8 @@ public class IngestionExecutionDTO {
 
     private String executionId;
 
+    private String batchId;
+
     private String status;
 
     private Instant startTime;
@@ -73,6 +75,14 @@ public class IngestionExecutionDTO {
 
     public void setExecutionId(String executionId) {
         this.executionId = executionId;
+    }
+
+    public String getBatchId() {
+        return batchId;
+    }
+
+    public void setBatchId(String batchId) {
+        this.batchId = batchId;
     }
 
     public String getStatus() {
@@ -193,6 +203,7 @@ public class IngestionExecutionDTO {
             "id=" + id +
             ", taskId=" + taskId +
             ", executionId='" + executionId + '\'' +
+            ", batchId='" + batchId + '\'' +
             ", status='" + status + '\'' +
             '}';
     }

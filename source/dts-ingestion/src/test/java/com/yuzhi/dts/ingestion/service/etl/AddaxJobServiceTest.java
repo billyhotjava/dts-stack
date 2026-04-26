@@ -370,6 +370,7 @@ class AddaxJobServiceTest {
         assertThat(firstPreSql).noneMatch(sql -> sql.toLowerCase(java.util.Locale.ROOT).contains("ods_employee"));
         assertThat(firstPostSql).allMatch(sql -> sql.toLowerCase(java.util.Locale.ROOT).contains("ods_customer"));
         assertThat(firstPostSql).noneMatch(sql -> sql.toLowerCase(java.util.Locale.ROOT).contains("ods_employee"));
+        assertThat(firstPostSql).anyMatch(sql -> sql.contains("\"_dts_source_table\" = 'CUSTOMER'"));
 
         Map<String, Object> secondWriter = (Map<String, Object>) contentList.get(1).get("writer");
         Map<String, Object> secondParams = (Map<String, Object>) secondWriter.get("parameter");
@@ -379,6 +380,7 @@ class AddaxJobServiceTest {
         assertThat(secondPreSql).noneMatch(sql -> sql.toLowerCase(java.util.Locale.ROOT).contains("ods_customer"));
         assertThat(secondPostSql).allMatch(sql -> sql.toLowerCase(java.util.Locale.ROOT).contains("ods_employee"));
         assertThat(secondPostSql).noneMatch(sql -> sql.toLowerCase(java.util.Locale.ROOT).contains("ods_customer"));
+        assertThat(secondPostSql).anyMatch(sql -> sql.contains("\"_dts_source_table\" = 'EMPLOYEE'"));
     }
 
     @Test
@@ -415,9 +417,59 @@ class AddaxJobServiceTest {
         java.util.List<String> postSql = (java.util.List<String>) writerParams.get("postSql");
 
         assertThat(postSql)
-            .anyMatch(sql -> sql.contains("source_system") && sql.contains("'专利测试数据_三年1000条.xlsx'"));
+            .anyMatch(sql -> sql.contains("_dts_source_system") && sql.contains("'专利测试数据_三年1000条.xlsx'"));
         assertThat(postSql)
-            .noneMatch(sql -> sql.contains("'unknown'"));
+            .anyMatch(sql -> sql.contains("\"_dts_source_table\" = '专利测试数据_三年1000条.xlsx'"));
+        assertThat(postSql)
+            .noneMatch(sql -> sql.contains("_dts_source_system\" = 'unknown'"));
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void shouldInjectDtsRuntimeColumnsIntoPostSql() throws Exception {
+        Map<String, Object> readerConfig = Map.of(
+            "connection", Map.of(
+                "jdbcUrl", "jdbc:dm://10.0.0.1:5236/ERPDEMO",
+                "table", java.util.List.of("ERPDEMO.CUSTOMER")
+            ),
+            "sourceSystem", "ERP"
+        );
+        Map<String, Object> writerConfig = Map.of(
+            "username", "biadmin",
+            "password", "Devops123@",
+            "connection", Map.of(
+                "jdbcUrl", "jdbc:postgresql://127.0.0.1:5432/biadmin",
+                "table", java.util.List.of("ods_customer")
+            )
+        );
+        Map<String, Object> runtimeContext = Map.of(
+            "batchId", "batch-task-1-abc",
+            "executionId", "101",
+            "taskId", "1"
+        );
+
+        AddaxJobService.AddaxJobResult result = addaxJobService.createJob(
+            "runtime-column-test",
+            "rdbmsreader",
+            readerConfig,
+            "postgresqlwriter",
+            writerConfig,
+            null,
+            "full_refresh",
+            null,
+            runtimeContext
+        );
+
+        Map<String, Object> job = (Map<String, Object>) result.jobConfig().get("job");
+        Map<String, Object> content = (Map<String, Object>) ((java.util.List<?>) job.get("content")).get(0);
+        Map<String, Object> writer = (Map<String, Object>) content.get("writer");
+        Map<String, Object> writerParams = (Map<String, Object>) writer.get("parameter");
+        java.util.List<String> postSql = (java.util.List<String>) writerParams.get("postSql");
+
+        assertThat(postSql).anyMatch(sql -> sql.contains("_dts_batch_id") && sql.contains("'batch-task-1-abc'"));
+        assertThat(postSql).anyMatch(sql -> sql.contains("_dts_execution_id") && sql.contains("'101'"));
+        assertThat(postSql).anyMatch(sql -> sql.contains("_dts_task_id") && sql.contains("'1'"));
+        assertThat(postSql).anyMatch(sql -> sql.contains("\"_dts_source_table\" = 'CUSTOMER'"));
     }
 
     @Test

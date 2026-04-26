@@ -456,6 +456,7 @@ public class IngestionTaskService {
         execution.setCreatedAt(Instant.now());
         execution.setReplaceMode(resolveReplaceMode(task));
         execution.setTriggerMode(normalizeTriggerMode(triggerMode));
+        execution.setBatchId(generateBatchId(taskId));
         execution.setExecutionId("preparing-" + UUID.randomUUID().toString().substring(0, 8));
         execution = executionRepository.save(execution);
 
@@ -538,7 +539,8 @@ public class IngestionTaskService {
             boolean airflowEnabled = isAirflowEnabled(task);
             com.yuzhi.dts.ingestion.service.etl.IngestionSourceResolver.ResolvedSource source = resolveSource(task, null);
             Map<String, Object> runtimeReaderOverrides = incrementalSyncService.buildReaderRuntimeOverrides(task, source);
-            task = ensureAddaxJobExists(task, source, runtimeReaderOverrides);
+            Map<String, Object> runtimeContext = buildExecutionRuntimeContext(task, execution);
+            task = ensureAddaxJobExists(task, source, runtimeReaderOverrides, runtimeContext);
             execution.setDroppedTables(resolveDroppedTables(task));
             if (!isFileSourceType(task.getSourceType())) {
                 targetTableProvisioner.ensureTargetTables(task, source == null ? null : source.readerConfig());
@@ -563,6 +565,8 @@ public class IngestionTaskService {
                 conf.put("job_path", airflowJobPath);
                 conf.put("task_id", taskId);
                 conf.put("task_name", StringUtils.hasText(task.getName()) ? task.getName() : ("task-" + taskId));
+                conf.put("batch_id", execution.getBatchId());
+                conf.put("ingestion_execution_id", execution.getId());
                 if (StringUtils.hasText(policy.priority())) conf.put("priority", policy.priority());
                 if (StringUtils.hasText(policy.rejectPolicy())) conf.put("reject_policy", policy.rejectPolicy());
                 if (StringUtils.hasText(policy.projectKey())) conf.put("project_key", policy.projectKey());
@@ -601,7 +605,7 @@ public class IngestionTaskService {
             log.info("Started execution {} for task ID: {}", execution.getExecutionId(), taskId);
 
             auditService.auditAction("INGESTION_TASK_EXECUTE", AuditStage.SUCCESS, task.getName(),
-                Map.of("taskId", taskId, "executionId", execution.getId(), "operator", resolveOperator(task)));
+                Map.of("taskId", taskId, "executionId", execution.getId(), "batchId", execution.getBatchId(), "operator", resolveOperator(task)));
 
         } catch (Exception e) {
             if (airflowTriggered) {
@@ -645,6 +649,25 @@ public class IngestionTaskService {
             if (StringUtils.hasText(failureMessage)) meta.put("error", failureMessage);
             auditService.auditAction("INGESTION_TASK_EXECUTE", AuditStage.FAIL, task.getName(), meta);
         }
+    }
+
+    private String generateBatchId(Long taskId) {
+        String taskPart = taskId == null ? "task" : "task-" + taskId;
+        return "batch-" + taskPart + "-" + UUID.randomUUID().toString().replace("-", "");
+    }
+
+    private Map<String, Object> buildExecutionRuntimeContext(IngestionTask task, IngestionExecution execution) {
+        Map<String, Object> context = new java.util.LinkedHashMap<>();
+        if (execution != null && StringUtils.hasText(execution.getBatchId())) {
+            context.put("batchId", execution.getBatchId());
+        }
+        if (execution != null && execution.getId() != null) {
+            context.put("executionId", execution.getId().toString());
+        }
+        if (task != null && task.getId() != null) {
+            context.put("taskId", task.getId().toString());
+        }
+        return context;
     }
 
 
@@ -807,16 +830,25 @@ public class IngestionTaskService {
         com.yuzhi.dts.ingestion.service.etl.IngestionSourceResolver.ResolvedSource resolvedSource,
         Map<String, Object> runtimeReaderOverrides
     ) {
+        return ensureAddaxJobExists(task, resolvedSource, runtimeReaderOverrides, null);
+    }
+
+    private IngestionTask ensureAddaxJobExists(
+        IngestionTask task,
+        com.yuzhi.dts.ingestion.service.etl.IngestionSourceResolver.ResolvedSource resolvedSource,
+        Map<String, Object> runtimeReaderOverrides,
+        Map<String, Object> runtimeContext
+    ) {
         if (task == null) {
             return task;
         }
         if (resolvedSource != null || task.getSourceDataSourceId() != null) {
-            return rebuildAddaxJob(task, resolvedSource, runtimeReaderOverrides);
+            return rebuildAddaxJob(task, resolvedSource, runtimeReaderOverrides, runtimeContext);
         }
         // File source tasks always rebuild to ensure preSql CREATE TABLE and
         // explicit writer columns are up-to-date with current file metadata.
         if (isFileSourceType(task.getSourceType())) {
-            return rebuildAddaxJob(task, null, runtimeReaderOverrides);
+            return rebuildAddaxJob(task, null, runtimeReaderOverrides, runtimeContext);
         }
         String jobPath = task.getAddaxJobPath();
         if (StringUtils.hasText(jobPath)) {
@@ -827,7 +859,7 @@ public class IngestionTaskService {
                 return task;
             }
         }
-        return rebuildAddaxJob(task, null, runtimeReaderOverrides);
+        return rebuildAddaxJob(task, null, runtimeReaderOverrides, runtimeContext);
     }
 
     private IngestionTask rebuildAddaxJob(
@@ -842,13 +874,22 @@ public class IngestionTaskService {
         com.yuzhi.dts.ingestion.service.etl.IngestionSourceResolver.ResolvedSource resolvedSource,
         Map<String, Object> runtimeReaderOverrides
     ) {
+        return rebuildAddaxJob(task, resolvedSource, runtimeReaderOverrides, null);
+    }
+
+    private IngestionTask rebuildAddaxJob(
+        IngestionTask task,
+        com.yuzhi.dts.ingestion.service.etl.IngestionSourceResolver.ResolvedSource resolvedSource,
+        Map<String, Object> runtimeReaderOverrides,
+        Map<String, Object> runtimeContext
+    ) {
         String operator = resolveOperator(task);
         try {
             com.yuzhi.dts.ingestion.service.etl.IngestionSourceResolver.ResolvedSource source =
                 resolveSource(task, resolvedSource);
             AddaxJobService.AddaxJobResult jobResult = source == null
-                ? addaxJobService.createJobFromTask(task, null, null, runtimeReaderOverrides)
-                : addaxJobService.createJobFromTask(task, source.readerType(), source.readerConfig(), runtimeReaderOverrides);
+                ? addaxJobService.createJobFromTask(task, null, null, runtimeReaderOverrides, runtimeContext)
+                : addaxJobService.createJobFromTask(task, source.readerType(), source.readerConfig(), runtimeReaderOverrides, runtimeContext);
             if (source != null && StringUtils.hasText(source.readerType())) {
                 task.setSourceType(source.readerType());
             }
