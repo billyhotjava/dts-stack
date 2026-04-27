@@ -12,6 +12,8 @@
 - `services/dts-dbt`
 - `services/dts-keycloak/realm-dts.json`
 - `services/certs`
+- `bin/dts-upgrade-lite`
+- `docs/release/v2.2.2/upgrade-lite-operations-kylin-kunpeng.md`
 - `docs/release/v2.2.2/offline-upgrade-guide-kylin-kunpeng.md`
 - `docs/release/v2.2.2/offline-upgrade-checklist-kylin-kunpeng.md`
 
@@ -34,16 +36,18 @@ Expected release package categories:
 - Certificates or certificate generation instructions.
 - dbt project assets and drivers.
 - Upgrade, verification, rollback, and known-issues notes.
+- Pure shell upgrade reports for legacy sites without Python.
 
 ## Upgrade Sequence
 
 1. Record current versions and service status.
 2. Back up database, Keycloak, uploaded files, dbt project, env, compose files, and certificates.
 3. Load images into the offline registry or local Docker daemon.
-4. Apply config changes and compose/image version updates.
-5. Start base services, then app services.
-6. Run smoke checks for login, platform API, dbt parse, data source connection, and key dashboards.
-7. Keep rollback artifacts until acceptance is complete.
+4. Generate a `dts-upgrade-lite plan` report and review env/compose/config risks.
+5. Apply image version updates while preserving customer compose/config values.
+6. Start base services, then app services.
+7. Run smoke checks for login, platform API, dbt parse, data source connection, and key dashboards.
+8. Keep rollback artifacts until acceptance is complete.
 
 ## Rollback
 

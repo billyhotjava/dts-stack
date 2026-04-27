@@ -11,16 +11,21 @@ legacy 现场已知版本：
 - `docker 18.09.0`
 - `docker-compose 1.29.2`
 
+完整操作说明：
+
+- [upgrade-lite-operations-kylin-kunpeng.md](upgrade-lite-operations-kylin-kunpeng.md)
+
 要求：
 
 - 现场人工命令统一使用 `docker-compose`
-- 升级脚本会自动从 `docker compose` 回退到 `docker-compose`
+- `dts-upgrade-lite` 会优先使用 `docker-compose`，若环境提供新版插件再使用 `docker compose`
+- 推荐使用纯 shell 的 `bin/dts-upgrade-lite`，不依赖现场 Python
 
 ---
 
-## 1. 停机确认
+## 1. 容器状态确认
 
-先确认旧容器已经停掉。
+先确认旧容器当前状态。
 
 普通模式检查：
 
@@ -38,7 +43,8 @@ docker-compose -f docker-compose.legacy.yml ps
 
 要求：
 
-- 不能再有运行中的 DTS 容器
+- `plan` 阶段允许容器运行
+- `apply` 阶段会由 `dts-upgrade-lite` 自动停机、冷备和重启
 
 ---
 
@@ -71,12 +77,12 @@ docker images | grep -E 'dts-(admin|platform|ingestion|admin-webapp|platform-web
 
 要求：
 
-- `stack_old/.env` 中的 `IMAGE_*` 必须和本机这次新镜像 tag 一致
+- 新包 `.env` 或 `imgversion.conf` 中的 `IMAGE_*` 必须是本次目标 tag
 
 注意：
 
-- 升级器对 `.env` 是旧值优先
-- 如果旧目录里还是旧 tag，升级后会继续起旧镜像
+- `dts-upgrade-lite apply` 会刷新旧目录 `.env` 中的 `IMAGE_*`
+- 非 `IMAGE_*` 的现场业务配置仍默认保留现场值
 
 ---
 
@@ -133,7 +139,7 @@ cd /data/s10_stack
 
 - 如果镜像已经手工 `docker load` 或已在本机 build 完成，升级时允许 `images/`、`extra/` 不存在或为空
 - 升级器会自动跳过镜像包校验和 `docker load`
-- 升级器仍会自动写入 `rollback-manifest.json`
+- 升级器仍会生成 `logs/upgrade-lite-*/summary.md`、`report.html` 和 `backup/`
 
 如果需要连镜像 tar 一起打包：
 
@@ -173,6 +179,7 @@ find /tmp/dts-upgrade -maxdepth 2 -type f | sort
 
 至少应看到：
 
+- `dts-stack/bin/dts-upgrade-lite`
 - `dts-stack/bin/dts-upgrade`
 - `dts-stack/bin/dts-upgrade-rollback`
 
@@ -185,12 +192,33 @@ find /tmp/dts-upgrade -maxdepth 2 -type f | sort
 
 ## 9. 执行升级
 
+先生成报告，不修改现场配置：
+
 ```bash
 cd /tmp/dts-upgrade/dts-stack
-./bin/dts-upgrade \
+./bin/dts-upgrade-lite plan \
   --target /data/stack_old \
+  --source /tmp/dts-upgrade/dts-stack \
   --images-dir /tmp/dts-upgrade/images \
   --extra-dir /tmp/dts-upgrade/extra
+```
+
+打开或查看：
+
+```bash
+ls -1d /data/stack_old/logs/upgrade-lite-*
+cat /data/stack_old/logs/upgrade-lite-*/summary.md
+```
+
+确认 `report.html` 中 compose、`.env`、镜像和风险项后执行：
+
+```bash
+./bin/dts-upgrade-lite apply \
+  --target /data/stack_old \
+  --source /tmp/dts-upgrade/dts-stack \
+  --images-dir /tmp/dts-upgrade/images \
+  --extra-dir /tmp/dts-upgrade/extra \
+  --yes
 ```
 
 ---
@@ -200,8 +228,8 @@ cd /tmp/dts-upgrade/dts-stack
 查看升级日志和摘要：
 
 ```bash
-ls -1 /data/stack_old/logs/upgrade-*
-cat /data/stack_old/logs/upgrade-*.summary.md
+ls -1d /data/stack_old/logs/upgrade-lite-*
+cat /data/stack_old/logs/upgrade-lite-*/summary.md
 ```
 
 检查容器：
@@ -223,7 +251,7 @@ docker-compose -f docker-compose.legacy.yml ps
 检查数据库冷备：
 
 ```bash
-find /data/stack_old/backups -path '*/services/dts-pg/data' -type d | sort
+find /data/stack_old/logs -path '*/backup/services/dts-pg/data' -type d | sort
 ```
 
 检查项：
@@ -243,9 +271,9 @@ find /data/stack_old/backups -path '*/services/dts-pg/data' -type d | sort
 
 ```bash
 cd /tmp/dts-upgrade/dts-stack
-./bin/dts-upgrade-rollback \
+./bin/dts-upgrade-lite rollback \
   --target /data/stack_old \
-  --backup-dir /data/stack_old/backups/upgrade-时间戳
+  --backup-dir /data/stack_old/logs/upgrade-lite-时间戳/backup
 ```
 
 适用：
@@ -257,9 +285,9 @@ cd /tmp/dts-upgrade/dts-stack
 
 ```bash
 cd /tmp/dts-upgrade/dts-stack
-./bin/dts-upgrade-rollback \
+./bin/dts-upgrade-lite rollback \
   --target /data/stack_old \
-  --backup-dir /data/stack_old/backups/upgrade-时间戳 \
+  --backup-dir /data/stack_old/logs/upgrade-lite-时间戳/backup \
   --restore-db
 ```
 
@@ -278,8 +306,8 @@ cd /tmp/dts-upgrade/dts-stack
 2. 关键容器正常
 3. 数据库可连接
 4. 业务库和核心表可见
-5. `logs/upgrade-*.summary.md` 已保存
-6. `backups/upgrade-*` 已生成
+5. `logs/upgrade-lite-*/summary.md` 和 `report.html` 已保存
+6. `logs/upgrade-lite-*/backup` 已生成
 
 ---
 

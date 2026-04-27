@@ -17,6 +17,7 @@ mkdir -p \
   "${TEST_REPO}/services/dts-airflow/config" \
   "${TEST_REPO}/builds/airflow" \
   "${TEST_REPO}/config" \
+  "${TEST_REPO}/docs/release/v2.2.2" \
   "${TEST_REPO}/tools" \
   "${FAKE_BIN}"
 
@@ -90,6 +91,12 @@ echo upgrade
 EOF_FILE
 chmod +x "${TEST_REPO}/bin/dts-upgrade"
 
+cat > "${TEST_REPO}/bin/dts-upgrade-lite" <<'EOF_FILE'
+#!/usr/bin/env bash
+echo upgrade-lite
+EOF_FILE
+chmod +x "${TEST_REPO}/bin/dts-upgrade-lite"
+
 cat > "${TEST_REPO}/bin/dts-upgrade-rollback" <<'EOF_FILE'
 #!/usr/bin/env bash
 echo rollback
@@ -101,6 +108,18 @@ cat > "${TEST_REPO}/bin/lib/dts-upgrade-common.sh" <<'EOF_FILE'
 echo common
 EOF_FILE
 chmod +x "${TEST_REPO}/bin/lib/dts-upgrade-common.sh"
+
+cat > "${TEST_REPO}/docs/release/v2.2.2/upgrade-lite-operations-kylin-kunpeng.md" <<'EOF_FILE'
+# ops
+EOF_FILE
+
+cat > "${TEST_REPO}/docs/release/v2.2.2/offline-upgrade-checklist-kylin-kunpeng.md" <<'EOF_FILE'
+# checklist
+EOF_FILE
+
+cat > "${TEST_REPO}/docs/release/v2.2.2/offline-upgrade-guide-kylin-kunpeng.md" <<'EOF_FILE'
+# guide
+EOF_FILE
 
 cat > "${FAKE_BIN}/docker" <<'EOF_DOCKER'
 #!/usr/bin/env bash
@@ -162,6 +181,11 @@ if ! grep -qx 'dts-stack/bin/dts-upgrade' <<<"${ARCHIVE_CONTENTS}"; then
   exit 1
 fi
 
+if ! grep -qx 'dts-stack/bin/dts-upgrade-lite' <<<"${ARCHIVE_CONTENTS}"; then
+  echo "expected packaged archive to include bin/dts-upgrade-lite" >&2
+  exit 1
+fi
+
 if ! grep -qx 'dts-stack/bin/dts-upgrade-rollback' <<<"${ARCHIVE_CONTENTS}"; then
   echo "expected packaged archive to include bin/dts-upgrade-rollback" >&2
   exit 1
@@ -169,6 +193,11 @@ fi
 
 if ! grep -qx 'dts-stack/bin/lib/dts-upgrade-common.sh' <<<"${ARCHIVE_CONTENTS}"; then
   echo "expected packaged archive to include bin/lib/dts-upgrade-common.sh" >&2
+  exit 1
+fi
+
+if ! grep -qx 'dts-stack/docs/release/v2.2.2/upgrade-lite-operations-kylin-kunpeng.md' <<<"${ARCHIVE_CONTENTS}"; then
+  echo "expected packaged archive to include upgrade lite operation guide" >&2
   exit 1
 fi
 

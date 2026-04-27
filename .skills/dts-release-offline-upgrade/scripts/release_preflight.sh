@@ -33,6 +33,7 @@ check_file docker-compose.dev.yml
 check_file docker-compose.legacy.yml
 check_file imgversion.conf
 check_file builds/dts-build.sh
+check_file bin/dts-upgrade-lite
 check_dir builds
 check_dir services
 check_dir services/dts-dbt

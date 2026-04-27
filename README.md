@@ -62,6 +62,15 @@
 - 放到 `tools/docker-compose/`（文件名例如 `docker-compose-Linux-aarch64`），并 `chmod +x`；
 - `./init.sh` 会自动探测并使用它（legacy 模式同样适用）。
 
+现场 legacy 就地升级优先使用纯 Shell 升级器，不依赖 Python：
+
+```bash
+./bin/dts-upgrade-lite plan --target /data/stack_old --source /tmp/dts-upgrade/dts-stack
+./bin/dts-upgrade-lite apply --target /data/stack_old --source /tmp/dts-upgrade/dts-stack --yes
+```
+
+操作说明见 `docs/release/v2.2.2/upgrade-lite-operations-kylin-kunpeng.md`。
+
 【openEuler 适配说明】
 - 已在 Compose 清单中为所有本地目录挂载添加了 SELinux 友好配置（z/Z 标签）。
 - 在 openEuler 上的安装与注意事项，请参考 docs/openeuler.md。

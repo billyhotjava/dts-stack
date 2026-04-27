@@ -1009,6 +1009,19 @@ pack_deployment() {
   cp "${REPO_ROOT}/builds/pull-images.sh" "${pack_dir}/builds/" 2>/dev/null || true
   echo "[dts-build]   + builds/dts-build.sh"
 
+  # Copy field operation docs needed in offline packages.
+  mkdir -p "${pack_dir}/docs/release/v2.2.2"
+  for doc_file in \
+    "docs/release/v2.2.2/upgrade-lite-operations-kylin-kunpeng.md" \
+    "docs/release/v2.2.2/offline-upgrade-checklist-kylin-kunpeng.md" \
+    "docs/release/v2.2.2/offline-upgrade-guide-kylin-kunpeng.md"
+  do
+    if [[ -f "${REPO_ROOT}/${doc_file}" ]]; then
+      cp "${REPO_ROOT}/${doc_file}" "${pack_dir}/${doc_file}"
+      echo "[dts-build]   + ${doc_file}"
+    fi
+  done
+
   # Copy image tarballs if requested
   if [[ "${include_images}" == "true" ]]; then
     if [[ -d "${REPO_ROOT}/builds/dist" ]] && [[ -n "$(ls -A "${REPO_ROOT}/builds/dist" 2>/dev/null)" ]]; then
@@ -1101,8 +1114,22 @@ ENV_TEMPLATE
 
 If images were not included in the package, load them:
 ```bash
-for tar in builds/dist/*.tar; do docker load -i "$tar"; done
+for tar in ../images/*.tar; do docker load -i "$tar"; done
 ```
+
+## In-place Upgrade
+
+For an existing customer-site deployment, prefer the pure shell lite upgrader:
+```bash
+./bin/dts-upgrade-lite plan --target /data/stack_old --source "$(pwd)" --images-dir ../images --extra-dir ../extra
+./bin/dts-upgrade-lite apply --target /data/stack_old --source "$(pwd)" --images-dir ../images --extra-dir ../extra --yes
+```
+
+Open `/data/stack_old/logs/upgrade-lite-*/report.html` before apply to review
+compose, env, image, and config differences.
+
+Detailed field instructions are included at:
+`docs/release/v2.2.2/upgrade-lite-operations-kylin-kunpeng.md`.
 
 ## Directory Structure
 
@@ -1129,13 +1156,13 @@ DEPLOY_README
 RELEASE_MANIFEST
   echo "[dts-build]   + extra/release-manifest.json"
 
-  cat > "${extra_dir}/merge-rules.yml" <<'MERGE_RULES'
+cat > "${extra_dir}/merge-rules.yml" <<'MERGE_RULES'
 env:
-  strategy: old-values-win
+  strategy: preserve-site-values-update-image-keys
 compose:
-  strategy: old-values-win
+  strategy: preserve-site-compose
 config:
-  strategy: old-values-win
+  strategy: add-missing-files-preserve-existing
 MERGE_RULES
   echo "[dts-build]   + extra/merge-rules.yml"
 

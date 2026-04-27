@@ -9,11 +9,14 @@
 - 目标环境为内网离线环境
 - 旧版本运行目录为 `stack_old`
 - 新版本源码目录为 `s10_stack`
-- 旧版本容器已经人工停止
 - 新版本代码已经在 `s10_stack` 中完成拉取
 - 新版本应用镜像已经在当前服务器本地重新编译完成
 
 本文档只说明 **原目录就地升级**，不说明新机部署。
+
+现场执行时可优先使用更短的操作手册：
+
+- [upgrade-lite-operations-kylin-kunpeng.md](upgrade-lite-operations-kylin-kunpeng.md)
 
 当前 legacy 现场已知版本如下：
 
@@ -25,9 +28,8 @@
 
 - 现场人工运维命令统一使用 `docker-compose`
 - `docker compose` 子命令在该环境下默认不可用
-- 当前升级脚本已兼容：
-  - 优先使用 `docker compose`
-  - 若不可用则自动回退到 `docker-compose`
+- `dts-upgrade-lite` 会优先使用 `docker-compose`，若环境提供新版插件再使用 `docker compose`
+- 推荐使用 `bin/dts-upgrade-lite`，该脚本为纯 shell 实现，不依赖现场 Python
 
 ---
 
@@ -38,10 +40,12 @@
 1. 以旧目录 `stack_old` 为升级目标目录，不新建运行目录。
 2. 以新目录 `s10_stack` 作为升级包来源和升级脚本来源。
 3. 旧目录 `.env` 中的现场自定义配置优先保留。
-4. 新版本新增的环境变量会从新目录补入旧目录。
-5. `services/dts-pg/data` 是数据库状态目录，不允许被新包覆盖。
-6. 如果 PostgreSQL 主版本不兼容，升级会直接阻断。
-7. `legacy` 模式和普通 `single` 模式使用不同的 compose 主文件。
+4. `.env` 中 `IMAGE_*` 会按新包刷新，避免镜像已 load 但仍启动旧 tag。
+5. 新版本新增的环境变量会从新目录补入旧目录。
+6. 现场 `docker-compose.legacy.yml` 默认不覆盖，只生成差异报告。
+7. `services/dts-pg/data` 是数据库状态目录，不允许被新包覆盖。
+8. 如果 PostgreSQL 主版本不兼容，升级会直接阻断。
+9. `legacy` 模式和普通 `single` 模式使用不同的 compose 主文件。
 
 ---
 
@@ -59,7 +63,7 @@
 
 ## 4. 升级前检查
 
-### 4.1 确认旧容器已经停掉
+### 4.1 确认当前容器状态
 
 先进入旧目录：
 
@@ -81,9 +85,8 @@ docker-compose -f docker-compose.legacy.yml ps
 
 要求：
 
-- 不再有运行中的 DTS 容器
-
-如果容器未停干净，请先停掉，再继续升级。
+- `plan` 阶段允许容器仍在运行
+- `apply` 阶段会由 `dts-upgrade-lite` 自动执行 `docker-compose down` 和 `up -d --force-recreate`
 
 ### 4.2 确认旧目录模式
 
@@ -98,7 +101,7 @@ grep -E '^(LEGACY_STACK|DEPLOY_MODE)=' /data/stack_old/.env
 - 如果 `LEGACY_STACK=true`，按 **legacy 模式** 升级
 - 否则按 **single 模式** 升级
 
-### 4.3 确认镜像标签
+### 4.3 确认镜像标签来源
 
 旧目录 `.env` 中通常包含镜像变量：
 
@@ -112,15 +115,12 @@ grep -E '^(IMAGE_DTS_|IMAGE_POSTGRES|IMAGE_DBT|IMAGE_AIRFLOW|IMAGE_ADDAX)=' /dat
 docker images | grep -E 'dts-(admin|platform|ingestion|admin-webapp|platform-webapp|analytics|analytics-webapp-modern|dbt|airflow|addax)'
 ```
 
-必须确认下面二选一成立：
-
-1. `stack_old/.env` 里的 `IMAGE_*` 和你本地重新编译后的镜像 tag 一致
-2. 或者你已经手动把 `stack_old/.env` 中相关 `IMAGE_*` 改成新 tag
+必须确认新包里的 `.env` 或 `imgversion.conf` 包含本次目标 `IMAGE_*`。
 
 注意：
 
-- 当前升级器对 `.env` 是“旧值优先”
-- 如果旧目录 `.env` 里还保留旧镜像 tag，升级后仍会按旧 tag 启动
+- `dts-upgrade-lite apply` 会刷新旧目录 `.env` 中的 `IMAGE_*`
+- 非 `IMAGE_*` 的现场业务配置仍默认保留现场值
 
 ### 4.4 确认 PostgreSQL 主版本兼容
 
@@ -199,14 +199,14 @@ cd /data/s10_stack
 - 在这种情况下，升级器会自动进入“镜像已预装”模式：
   - 跳过 `release-manifest.json` / `checksums.txt` 校验
   - 跳过 `docker load`
-  - 仍会继续写入 `rollback-manifest.json`
+  - 仍会生成 `logs/upgrade-lite-*/summary.md`、`report.html` 和 `backup/`
 
 ### 5.3 确认脚本兼容 `docker-compose`
 
-当前升级脚本已经支持：
+`dts-upgrade-lite` 已经支持：
 
-1. 优先尝试 `docker compose`
-2. 如果当前环境不支持，再自动回退到 `docker-compose`
+1. 优先使用现场常见的 `docker-compose`
+2. 如果没有 `docker-compose`，再尝试 `docker compose`
 
 所以在这台 legacy 现场，不再需要手工准备兼容包装器。
 
@@ -248,6 +248,7 @@ find /tmp/dts-upgrade -maxdepth 2 -type f | sort
 
 至少应包含：
 
+- `dts-stack/bin/dts-upgrade-lite`
 - `dts-stack/bin/dts-upgrade`
 - `dts-stack/bin/dts-upgrade-rollback`
 
@@ -266,32 +267,56 @@ find /tmp/dts-upgrade -maxdepth 2 -type f | sort
 cd /tmp/dts-upgrade/dts-stack
 ```
 
-执行升级：
+先生成升级报告。该步骤只写入 `/data/stack_old/logs/upgrade-lite-*` 报告目录，不修改 `.env`、compose 或配置文件：
 
 ```bash
-./bin/dts-upgrade \
+./bin/dts-upgrade-lite plan \
   --target /data/stack_old \
+  --source /tmp/dts-upgrade/dts-stack \
   --images-dir /tmp/dts-upgrade/images \
   --extra-dir /tmp/dts-upgrade/extra
 ```
 
-升级器会自动执行以下动作：
+重点查看：
+
+```bash
+ls -1d /data/stack_old/logs/upgrade-lite-*
+```
+
+可在现场浏览器打开 `report.html`，重点确认：
+
+- `docker-compose.legacy.yml` 差异
+- `.env` 中 `IMAGE_*` 更新计划
+- 现场自定义 key 的保留情况
+- `config/` 和运行文件冲突清单
+- PostgreSQL 主版本兼容性
+
+确认后执行升级：
+
+```bash
+./bin/dts-upgrade-lite apply \
+  --target /data/stack_old \
+  --source /tmp/dts-upgrade/dts-stack \
+  --images-dir /tmp/dts-upgrade/images \
+  --extra-dir /tmp/dts-upgrade/extra \
+  --yes
+```
+
+lite 升级器会自动执行以下动作：
 
 1. 识别 `legacy` / `single` 模式
-2. 检查旧容器是否已停
-3. 检查 PostgreSQL 主版本兼容
-4. 创建升级锁
-5. 备份旧目录关键文件
-6. 冷备 `services/dts-pg/data`
-7. 校验离线包 manifest 和 checksums
-8. 导入镜像（如果 `images/` 中有镜像 tar）
-9. 合并 `.env`
-10. 合并 compose 文件
-11. 合并 `config/`
-12. 同步新包中的运行文件和脚本
-13. 生成升级摘要和回滚清单
-14. 启动新版本容器
-15. 执行 postcheck
+2. 检查 PostgreSQL 主版本兼容
+3. 创建升级锁
+4. 校验 checksums（如果提供）
+5. 导入镜像（如果 `images/` 中有镜像 tar）
+6. 自动停止旧容器
+7. 备份 `.env` 并冷备 `services/dts-pg/data`
+8. 刷新 `.env` 中 `IMAGE_*`，追加新包新增 key，保留现场业务 key
+9. 保留现场 `docker-compose.legacy.yml`，只生成 diff 报告，不覆盖
+10. `config/` 已有文件不覆盖，差异另存到报告目录；缺失文件才补入
+11. 运行文件和脚本只补缺失文件，已有文件不覆盖
+12. 使用 `docker-compose -f docker-compose.legacy.yml up -d --force-recreate` 启动
+13. 执行 postcheck 并生成静态 HTML 报告
 
 ---
 
@@ -300,13 +325,13 @@ cd /tmp/dts-upgrade/dts-stack
 ### 8.1 查看升级日志
 
 ```bash
-ls -1 /data/stack_old/logs/upgrade-*
+ls -1d /data/stack_old/logs/upgrade-lite-*
 ```
 
 重点查看：
 
 ```bash
-cat /data/stack_old/logs/upgrade-*.summary.md
+cat /data/stack_old/logs/upgrade-lite-*/summary.md
 ```
 
 必须重点确认：
@@ -389,9 +414,9 @@ find /data/stack_old/backups -path '*/services/dts-pg/data' -type d | sort
 
 ```bash
 cd /tmp/dts-upgrade/dts-stack
-./bin/dts-upgrade-rollback \
+./bin/dts-upgrade-lite rollback \
   --target /data/stack_old \
-  --backup-dir /data/stack_old/backups/upgrade-时间戳
+  --backup-dir /data/stack_old/logs/upgrade-lite-时间戳/backup
 ```
 
 ### 9.2 何时必须连数据库一起回滚
@@ -407,9 +432,9 @@ cd /tmp/dts-upgrade/dts-stack
 
 ```bash
 cd /tmp/dts-upgrade/dts-stack
-./bin/dts-upgrade-rollback \
+./bin/dts-upgrade-lite rollback \
   --target /data/stack_old \
-  --backup-dir /data/stack_old/backups/upgrade-时间戳 \
+  --backup-dir /data/stack_old/logs/upgrade-lite-时间戳/backup \
   --restore-db
 ```
 
@@ -440,13 +465,15 @@ cd /tmp/dts-upgrade/dts-stack
 
 常见原因：
 
-- `stack_old/.env` 中仍保留旧的 `IMAGE_*`
-- 当前升级器对 `.env` 是旧值优先
+- 新包 `.env` / `imgversion.conf` 中的 `IMAGE_*` 不是本次目标 tag
+- 容器没有被重建
+- 本机没有成功 `docker load` 对应镜像 tar
 
 处理方式：
 
-- 先修正 `stack_old/.env` 中镜像 tag
-- 然后重新执行升级
+- 检查 `upgrade-lite-*/image-plan.txt`
+- 检查 `upgrade-lite-*/summary.md` 中的 `docker load` 记录
+- 确认启动命令包含 `up -d --force-recreate`
 
 ### 10.2 为什么 legacy 环境不能用普通 compose 启动
 
@@ -484,17 +511,16 @@ cd /tmp/dts-upgrade/dts-stack
 
 现场建议严格按下面顺序执行：
 
-1. 停掉旧容器
-2. 确认 `stack_old/.env` 中 `IMAGE_*` 正确
+1. 在 `s10_stack` 生成升级包
+2. 解压升级包
 3. 确认 `stack_old/.env` 中 `LEGACY_STACK` / `DEPLOY_MODE`
-4. 确认 PostgreSQL 主版本兼容
-5. 在 `s10_stack` 生成升级包
-6. 解压升级包
-7. 执行 `bin/dts-upgrade`
-8. 检查 `upgrade-*.summary.md`
-9. 检查容器状态
-10. 检查业务可用性
-11. 如失败，按情况执行配置回滚或数据库整目录回滚
+4. 执行 `bin/dts-upgrade-lite plan`，打开 `report.html` 查看差异
+5. 确认 PostgreSQL 主版本兼容、compose 差异和 `.env` 镜像更新计划
+6. 执行 `bin/dts-upgrade-lite apply --yes`
+7. 检查 `upgrade-lite-*/summary.md` 和 `report.html`
+8. 检查容器状态
+9. 检查业务可用性
+10. 如失败，按情况执行配置回滚或数据库整目录回滚
 
 ---
 
@@ -502,10 +528,8 @@ cd /tmp/dts-upgrade/dts-stack
 
 - 新版本源码目录：`/data/s10_stack`
 - 旧版本运行目录：`/data/stack_old`
-- 升级脚本：`/tmp/dts-upgrade/dts-stack/bin/dts-upgrade`
-- 回滚脚本：`/tmp/dts-upgrade/dts-stack/bin/dts-upgrade-rollback`
-- 升级日志：`/data/stack_old/logs/upgrade-*.log`
-- 升级摘要：`/data/stack_old/logs/upgrade-*.summary.md`
-- 回滚日志：`/data/stack_old/logs/rollback-*.log`
-- 回滚摘要：`/data/stack_old/logs/rollback-*.summary.md`
-- 升级备份目录：`/data/stack_old/backups/upgrade-*`
+- lite 升级脚本：`/tmp/dts-upgrade/dts-stack/bin/dts-upgrade-lite`
+- 兼容旧升级脚本：`/tmp/dts-upgrade/dts-stack/bin/dts-upgrade`
+- lite 报告：`/data/stack_old/logs/upgrade-lite-*/report.html`
+- lite 摘要：`/data/stack_old/logs/upgrade-lite-*/summary.md`
+- lite 回滚备份目录：`/data/stack_old/logs/upgrade-lite-*/backup`

@@ -1,0 +1,779 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
+DEFAULT_SOURCE_ROOT="$(cd -- "${SCRIPT_DIR}/.." && pwd)"
+
+ACTION="${1:-}"
+[[ -n "${ACTION}" ]] && shift || true
+
+TARGET_DIR=""
+SOURCE_ROOT="${DTS_UPGRADE_SOURCE_ROOT:-${DEFAULT_SOURCE_ROOT}}"
+IMAGES_DIR=""
+EXTRA_DIR=""
+REPORT_DIR=""
+BACKUP_DIR=""
+YES=0
+RESTORE_DB=0
+SKIP_DB_BACKUP=0
+
+info() {
+  echo "[dts-upgrade-lite] $*"
+}
+
+warn() {
+  printf '\033[0;33m[dts-upgrade-lite] WARNING: %s\033[0m\n' "$*" >&2
+}
+
+die() {
+  printf '\033[0;31m[dts-upgrade-lite] ERROR: %s\033[0m\n' "$*" >&2
+  exit 1
+}
+
+usage() {
+  cat <<'EOF'
+Usage:
+  dts-upgrade-lite plan --target <old-dts-dir> [--source <new-dts-stack-dir>] [--images-dir <dir>] [--extra-dir <dir>]
+  dts-upgrade-lite apply --target <old-dts-dir> [--source <new-dts-stack-dir>] [--images-dir <dir>] [--extra-dir <dir>] --yes
+  dts-upgrade-lite rollback --target <dts-dir> --backup-dir <backup-dir> [--restore-db]
+
+Pure shell legacy-safe upgrader. It preserves customer compose customizations,
+updates IMAGE_* values in .env, appends missing env keys, writes a static HTML
+diff report, and uses docker-compose/docker only for runtime actions.
+EOF
+}
+
+timestamp() {
+  date +%Y%m%d-%H%M%S
+}
+
+trim_cr() {
+  printf '%s' "${1%$'\r'}"
+}
+
+env_key_from_line() {
+  local line="$1"
+  if [[ "${line}" =~ ^[[:space:]]*(export[[:space:]]+)?([A-Za-z_][A-Za-z0-9_]*)= ]]; then
+    printf '%s\n' "${BASH_REMATCH[2]}"
+    return 0
+  fi
+  return 1
+}
+
+env_value_from_line() {
+  local line="$1"
+  line="${line#"${line%%[![:space:]]*}"}"
+  if [[ "${line}" =~ ^export[[:space:]]+(.+)$ ]]; then
+    line="${BASH_REMATCH[1]}"
+  fi
+  trim_cr "${line#*=}"
+}
+
+env_get() {
+  local file="$1"
+  local wanted="$2"
+  local line key
+  [[ -f "${file}" ]] || return 1
+  while IFS= read -r line || [[ -n "${line}" ]]; do
+    key="$(env_key_from_line "${line}" || true)"
+    [[ "${key}" == "${wanted}" ]] || continue
+    env_value_from_line "${line}"
+    return 0
+  done < "${file}"
+  return 1
+}
+
+html_escape_file() {
+  local file="$1"
+  if [[ ! -f "${file}" ]]; then
+    return 0
+  fi
+  sed \
+    -e 's/&/\&amp;/g' \
+    -e 's/</\&lt;/g' \
+    -e 's/>/\&gt;/g' \
+    -e 's/"/\&quot;/g' \
+    "${file}"
+}
+
+append_line() {
+  local file="$1"
+  shift
+  printf '%s\n' "$*" >> "${file}"
+}
+
+init_report() {
+  local target_dir="$1"
+  local action_name="$2"
+  local ts="${UPGRADE_TS:-$(timestamp)}"
+  REPORT_DIR="${REPORT_DIR:-${target_dir}/logs/upgrade-lite-${ts}}"
+  BACKUP_DIR="${BACKUP_DIR:-${REPORT_DIR}/backup}"
+  mkdir -p "${REPORT_DIR}" "${BACKUP_DIR}"
+  SUMMARY_FILE="${REPORT_DIR}/summary.md"
+  RISK_FILE="${REPORT_DIR}/risk-list.txt"
+  ENV_PLAN_FILE="${REPORT_DIR}/env-plan.tsv"
+  IMAGE_PLAN_FILE="${REPORT_DIR}/image-plan.txt"
+  COMPOSE_DIFF_FILE="${REPORT_DIR}/compose.diff"
+  ENV_DIFF_FILE="${REPORT_DIR}/env.diff"
+  RUNTIME_CONFLICT_DIR="${REPORT_DIR}/runtime-conflicts"
+  CONFIG_CONFLICT_DIR="${REPORT_DIR}/config-conflicts"
+  : > "${RISK_FILE}"
+  : > "${ENV_PLAN_FILE}"
+  : > "${IMAGE_PLAN_FILE}"
+  : > "${COMPOSE_DIFF_FILE}"
+  : > "${ENV_DIFF_FILE}"
+  cat > "${SUMMARY_FILE}" <<EOF_SUMMARY
+# DTS Upgrade Lite Summary
+
+- timestamp: ${ts}
+- action: ${action_name}
+- target: ${target_dir}
+- source: ${SOURCE_ROOT}
+EOF_SUMMARY
+}
+
+parse_args() {
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+      --target)
+        TARGET_DIR="${2:-}"
+        shift 2
+        ;;
+      --source)
+        SOURCE_ROOT="${2:-}"
+        shift 2
+        ;;
+      --images-dir)
+        IMAGES_DIR="${2:-}"
+        shift 2
+        ;;
+      --extra-dir)
+        EXTRA_DIR="${2:-}"
+        shift 2
+        ;;
+      --report-dir)
+        REPORT_DIR="${2:-}"
+        shift 2
+        ;;
+      --backup-dir)
+        BACKUP_DIR="${2:-}"
+        shift 2
+        ;;
+      --yes)
+        YES=1
+        shift
+        ;;
+      --restore-db)
+        RESTORE_DB=1
+        shift
+        ;;
+      --skip-db-backup)
+        SKIP_DB_BACKUP=1
+        shift
+        ;;
+      -h|--help)
+        usage
+        exit 0
+        ;;
+      *)
+        die "unknown option: $1"
+        ;;
+    esac
+  done
+}
+
+normalize_paths() {
+  [[ -n "${TARGET_DIR}" ]] || die "--target is required"
+  [[ -d "${TARGET_DIR}" ]] || die "target directory not found: ${TARGET_DIR}"
+  if [[ "${ACTION}" != "rollback" ]]; then
+    [[ -d "${SOURCE_ROOT}" ]] || die "source directory not found: ${SOURCE_ROOT}"
+    if [[ -z "${IMAGES_DIR}" ]]; then
+      if [[ -d "${SOURCE_ROOT}/../images" ]]; then
+        IMAGES_DIR="$(cd -- "${SOURCE_ROOT}/../images" && pwd)"
+      else
+        IMAGES_DIR="${SOURCE_ROOT}/images"
+      fi
+    fi
+    if [[ -z "${EXTRA_DIR}" ]]; then
+      if [[ -d "${SOURCE_ROOT}/../extra" ]]; then
+        EXTRA_DIR="$(cd -- "${SOURCE_ROOT}/../extra" && pwd)"
+      else
+        EXTRA_DIR="${SOURCE_ROOT}/extra"
+      fi
+    fi
+  fi
+}
+
+load_source_env() {
+  SOURCE_KEYS=()
+  declare -gA SOURCE_VALUES=()
+  declare -gA SOURCE_FROM=()
+  declare -gA SOURCE_SEEN=()
+  local file line key value rel
+  for file in "${SOURCE_ROOT}/imgversion.conf" "${SOURCE_ROOT}/.env"; do
+    [[ -f "${file}" ]] || continue
+    rel="${file#${SOURCE_ROOT}/}"
+    while IFS= read -r line || [[ -n "${line}" ]]; do
+      key="$(env_key_from_line "${line}" || true)"
+      [[ -n "${key}" ]] || continue
+      value="$(env_value_from_line "${line}")"
+      if [[ -z "${SOURCE_SEEN[${key}]+x}" ]]; then
+        SOURCE_KEYS+=("${key}")
+        SOURCE_SEEN["${key}"]=1
+      fi
+      SOURCE_VALUES["${key}"]="${value}"
+      SOURCE_FROM["${key}"]="${rel}"
+    done < "${file}"
+  done
+}
+
+load_target_env() {
+  TARGET_KEYS=()
+  declare -gA TARGET_VALUES=()
+  declare -gA TARGET_SEEN=()
+  local file="${TARGET_DIR}/.env"
+  local line key value
+  [[ -f "${file}" ]] || return 0
+  while IFS= read -r line || [[ -n "${line}" ]]; do
+    key="$(env_key_from_line "${line}" || true)"
+    [[ -n "${key}" ]] || continue
+    value="$(env_value_from_line "${line}")"
+    if [[ -z "${TARGET_SEEN[${key}]+x}" ]]; then
+      TARGET_KEYS+=("${key}")
+      TARGET_SEEN["${key}"]=1
+    fi
+    TARGET_VALUES["${key}"]="${value}"
+  done < "${file}"
+}
+
+detect_mode() {
+  local target_env="${TARGET_DIR}/.env"
+  local legacy_stack deploy_mode
+  legacy_stack="$(env_get "${target_env}" "LEGACY_STACK" || true)"
+  deploy_mode="$(env_get "${target_env}" "DEPLOY_MODE" || true)"
+  UPGRADE_MODE="app"
+  COMPOSE_FILE="docker-compose-app.yml"
+  if [[ "${legacy_stack}" == "true" ]]; then
+    UPGRADE_MODE="legacy"
+    COMPOSE_FILE="docker-compose.legacy.yml"
+  else
+    case "${deploy_mode:-app}" in
+      ""|single|app)
+        UPGRADE_MODE="app"
+        COMPOSE_FILE="docker-compose-app.yml"
+        ;;
+      *)
+        die "unsupported DEPLOY_MODE: ${deploy_mode}"
+        ;;
+    esac
+  fi
+  append_line "${SUMMARY_FILE}" "- mode: ${UPGRADE_MODE}"
+  append_line "${SUMMARY_FILE}" "- compose file: ${COMPOSE_FILE}"
+  [[ -f "${TARGET_DIR}/${COMPOSE_FILE}" ]] || die "target compose file not found: ${TARGET_DIR}/${COMPOSE_FILE}"
+}
+
+detect_compose_runner() {
+  if [[ -n "${COMPOSE_RUNNER:-}" ]]; then
+    return 0
+  fi
+  if command -v docker-compose >/dev/null 2>&1 && docker-compose version >/dev/null 2>&1; then
+    COMPOSE_RUNNER="docker-compose"
+  elif command -v docker >/dev/null 2>&1 && docker compose version >/dev/null 2>&1; then
+    COMPOSE_RUNNER="docker compose"
+  else
+    die "neither docker-compose nor docker compose is available"
+  fi
+  append_line "${SUMMARY_FILE}" "- compose runner: ${COMPOSE_RUNNER}"
+}
+
+run_compose() {
+  local target_dir="$1"
+  shift
+  detect_compose_runner
+  (
+    cd "${target_dir}"
+    if [[ "${COMPOSE_RUNNER}" == "docker-compose" ]]; then
+      docker-compose "$@"
+    else
+      docker compose "$@"
+    fi
+  )
+}
+
+postgres_target_major() {
+  local image_postgres="${SOURCE_VALUES[IMAGE_POSTGRES]-}"
+  [[ -n "${image_postgres}" ]] || return 1
+  if [[ "${image_postgres}" =~ :([0-9]+)(\.[0-9]+)? ]]; then
+    printf '%s\n' "${BASH_REMATCH[1]}"
+    return 0
+  fi
+  return 1
+}
+
+check_postgres_major() {
+  local pg_version_file="${TARGET_DIR}/services/dts-pg/data/pgdata/PG_VERSION"
+  local current_major target_major
+  if [[ ! -f "${pg_version_file}" ]]; then
+    append_line "${SUMMARY_FILE}" "- postgres compatibility: skipped (no PG_VERSION)"
+    return 0
+  fi
+  current_major="$(tr -d '[:space:]' < "${pg_version_file}")"
+  target_major="$(postgres_target_major || true)"
+  if [[ -z "${target_major}" ]]; then
+    append_line "${RISK_FILE}" "无法从新包 IMAGE_POSTGRES 判断目标 PostgreSQL 主版本。"
+    append_line "${SUMMARY_FILE}" "- postgres compatibility: unknown"
+    return 0
+  fi
+  if [[ "${current_major}" != "${target_major}" ]]; then
+    append_line "${RISK_FILE}" "PostgreSQL 主版本不一致：current=${current_major}, target=${target_major}。"
+    die "postgres major version mismatch: current=${current_major} target=${target_major}"
+  fi
+  append_line "${SUMMARY_FILE}" "- postgres compatibility: ok (${current_major} -> ${target_major})"
+}
+
+write_env_plan() {
+  local key source_value target_value action
+  printf 'action\tkey\ttarget\tsource\tfrom\n' > "${ENV_PLAN_FILE}"
+  : > "${IMAGE_PLAN_FILE}"
+  for key in "${SOURCE_KEYS[@]}"; do
+    source_value="${SOURCE_VALUES[${key}]}"
+    if [[ -n "${TARGET_SEEN[${key}]+x}" ]]; then
+      target_value="${TARGET_VALUES[${key}]}"
+      if [[ "${key}" == IMAGE_* ]]; then
+        if [[ "${target_value}" == "${source_value}" ]]; then
+          action="KEEP_IMAGE"
+        else
+          action="UPDATE_IMAGE"
+        fi
+      elif [[ "${target_value}" == "${source_value}" ]]; then
+        action="KEEP_SITE"
+      else
+        action="KEEP_SITE_CONFLICT"
+      fi
+    else
+      target_value=""
+      if [[ "${key}" == IMAGE_* ]]; then
+        action="ADD_IMAGE"
+      else
+        action="ADD_KEY"
+      fi
+    fi
+    printf '%s\t%s\t%s\t%s\t%s\n' "${action}" "${key}" "${target_value}" "${source_value}" "${SOURCE_FROM[${key}]}" >> "${ENV_PLAN_FILE}"
+    if [[ "${key}" == IMAGE_* ]]; then
+      printf '%s %s -> %s\n' "${key}" "${target_value:-<missing>}" "${source_value}" >> "${IMAGE_PLAN_FILE}"
+    fi
+    if [[ "${action}" == "KEEP_SITE_CONFLICT" ]]; then
+      append_line "${RISK_FILE}" ".env ${key} 两边不同，默认保留现场值。"
+    fi
+  done
+}
+
+write_diffs() {
+  local source_compose="${SOURCE_ROOT}/${COMPOSE_FILE}"
+  if [[ -f "${source_compose}" ]]; then
+    diff -u "${TARGET_DIR}/${COMPOSE_FILE}" "${source_compose}" > "${COMPOSE_DIFF_FILE}" || true
+    if [[ -s "${COMPOSE_DIFF_FILE}" ]]; then
+      append_line "${RISK_FILE}" "${COMPOSE_FILE} 与新包不同；lite apply 默认不覆盖现场 compose。"
+    fi
+  else
+    append_line "${RISK_FILE}" "新包缺少 ${COMPOSE_FILE}，无法生成 compose diff。"
+  fi
+  if [[ -f "${SOURCE_ROOT}/.env" && -f "${TARGET_DIR}/.env" ]]; then
+    diff -u "${TARGET_DIR}/.env" "${SOURCE_ROOT}/.env" > "${ENV_DIFF_FILE}" || true
+  fi
+}
+
+write_runtime_checks() {
+  append_line "${SUMMARY_FILE}" ""
+  append_line "${SUMMARY_FILE}" "## Runtime"
+  if command -v docker >/dev/null 2>&1; then
+    append_line "${SUMMARY_FILE}" "- docker: $(docker version --format '{{.Server.Version}}' 2>/dev/null || docker version 2>/dev/null | head -n 1 || true)"
+  else
+    append_line "${SUMMARY_FILE}" "- docker: missing"
+    append_line "${RISK_FILE}" "现场 PATH 中没有 docker。"
+  fi
+  if command -v docker-compose >/dev/null 2>&1; then
+    append_line "${SUMMARY_FILE}" "- docker-compose: $(docker-compose version 2>/dev/null | head -n 1 || true)"
+  elif command -v docker >/dev/null 2>&1 && docker compose version >/dev/null 2>&1; then
+    append_line "${SUMMARY_FILE}" "- docker compose: $(docker compose version 2>/dev/null | head -n 1 || true)"
+  else
+    append_line "${SUMMARY_FILE}" "- compose: missing"
+    append_line "${RISK_FILE}" "现场没有可用 docker-compose/docker compose。"
+  fi
+}
+
+write_image_package_plan() {
+  append_line "${SUMMARY_FILE}" ""
+  append_line "${SUMMARY_FILE}" "## Images"
+  if [[ ! -d "${IMAGES_DIR}" ]]; then
+    append_line "${SUMMARY_FILE}" "- image tar directory: missing (${IMAGES_DIR}); images assumed preloaded"
+    return 0
+  fi
+  if find "${IMAGES_DIR}" -maxdepth 1 -type f -name '*.tar' | grep -q .; then
+    append_line "${SUMMARY_FILE}" "- image tar directory: ${IMAGES_DIR}"
+    find "${IMAGES_DIR}" -maxdepth 1 -type f -name '*.tar' -printf '%f\n' | sort | while IFS= read -r image_tar; do
+      append_line "${SUMMARY_FILE}" "  - ${image_tar}"
+    done
+  else
+    append_line "${SUMMARY_FILE}" "- image tar directory: empty (${IMAGES_DIR}); images assumed preloaded"
+  fi
+}
+
+write_html_report() {
+  local report_html="${REPORT_DIR}/report.html"
+  cat > "${report_html}" <<'EOF_HTML_HEAD'
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>DTS Upgrade Lite Report</title>
+  <style>
+    body { margin: 0; font-family: Arial, "Microsoft YaHei", sans-serif; color: #172033; background: #f6f8fb; }
+    main { max-width: 1440px; margin: 0 auto; padding: 24px; }
+    h1 { font-size: 24px; margin: 0 0 16px; }
+    h2 { font-size: 18px; margin: 24px 0 10px; }
+    pre { overflow: auto; background: #fff; border: 1px solid #d8e0ea; border-radius: 6px; padding: 14px; line-height: 1.45; }
+    .grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
+    @media (max-width: 900px) { .grid { grid-template-columns: 1fr; } }
+  </style>
+</head>
+<body>
+<main>
+<h1>DTS Upgrade Lite Report</h1>
+EOF_HTML_HEAD
+  {
+    echo "<h2>Summary</h2><pre>"
+    html_escape_file "${SUMMARY_FILE}"
+    echo "</pre>"
+    echo "<h2>Risks</h2><pre>"
+    if [[ -s "${RISK_FILE}" ]]; then html_escape_file "${RISK_FILE}"; else echo "No blocking risks detected by lite plan."; fi
+    echo "</pre>"
+    echo "<h2>Env Plan</h2><pre>"
+    html_escape_file "${ENV_PLAN_FILE}"
+    echo "</pre>"
+    echo "<div class=\"grid\">"
+    echo "<section><h2>Image Plan</h2><pre>"
+    html_escape_file "${IMAGE_PLAN_FILE}"
+    echo "</pre></section>"
+    echo "<section><h2>.env Diff</h2><pre>"
+    html_escape_file "${ENV_DIFF_FILE}"
+    echo "</pre></section>"
+    echo "</div>"
+    echo "<h2>Compose Diff</h2><pre>"
+    html_escape_file "${COMPOSE_DIFF_FILE}"
+    echo "</pre>"
+    echo "</main></body></html>"
+  } >> "${report_html}"
+}
+
+run_plan() {
+  init_report "${TARGET_DIR}" "plan"
+  load_source_env
+  load_target_env
+  detect_mode
+  check_postgres_major
+  write_runtime_checks
+  write_env_plan
+  write_diffs
+  write_image_package_plan
+  write_html_report
+  info "plan written: ${REPORT_DIR}"
+  info "report: ${REPORT_DIR}/report.html"
+}
+
+backup_file() {
+  local target_file="$1"
+  local rel="${target_file#${TARGET_DIR}/}"
+  [[ -f "${target_file}" ]] || return 0
+  if [[ -f "${BACKUP_DIR}/${rel}" ]]; then
+    return 0
+  fi
+  mkdir -p "$(dirname "${BACKUP_DIR}/${rel}")"
+  cp -p "${target_file}" "${BACKUP_DIR}/${rel}"
+  append_line "${BACKUP_DIR}/.rollback-files.list" "${rel}"
+}
+
+record_added_file() {
+  local target_file="$1"
+  local rel="${target_file#${TARGET_DIR}/}"
+  append_line "${BACKUP_DIR}/.added-files.list" "${rel}"
+}
+
+backup_postgres_data() {
+  local rel="services/dts-pg/data"
+  local source_dir="${TARGET_DIR}/${rel}"
+  [[ "${SKIP_DB_BACKUP}" -eq 0 ]] || return 0
+  [[ -d "${source_dir}" ]] || return 0
+  mkdir -p "$(dirname "${BACKUP_DIR}/${rel}")"
+  cp -a "${source_dir}" "${BACKUP_DIR}/${rel}"
+  append_line "${BACKUP_DIR}/.backed-up-data-dirs.list" "${rel}"
+  append_line "${SUMMARY_FILE}" "- postgres cold backup: ${BACKUP_DIR}/${rel}"
+}
+
+verify_checksums() {
+  local checksums_file="${EXTRA_DIR}/checksums.txt"
+  if [[ ! -d "${IMAGES_DIR}" || ! -s "${checksums_file}" ]]; then
+    append_line "${SUMMARY_FILE}" "- checksums: skipped"
+    return 0
+  fi
+  (cd "${IMAGES_DIR}" && sha256sum -c "${checksums_file}" >/dev/null)
+  append_line "${SUMMARY_FILE}" "- checksums: ok"
+}
+
+load_images() {
+  if [[ ! -d "${IMAGES_DIR}" ]] || ! find "${IMAGES_DIR}" -maxdepth 1 -type f -name '*.tar' | grep -q .; then
+    append_line "${SUMMARY_FILE}" "- docker load: skipped (no image tar)"
+    return 0
+  fi
+  command -v docker >/dev/null 2>&1 || die "docker is required to load images"
+  find "${IMAGES_DIR}" -maxdepth 1 -type f -name '*.tar' | sort | while IFS= read -r image_tar; do
+    append_line "${SUMMARY_FILE}" "- docker load: $(basename "${image_tar}")"
+    docker load -i "${image_tar}" >/dev/null
+  done
+}
+
+write_updated_env() {
+  local target_env="${TARGET_DIR}/.env"
+  local tmp_env="${target_env}.upgrade-lite-tmp"
+  local line key source_value
+  local wrote_block=0
+  backup_file "${target_env}"
+  if [[ ! -f "${target_env}" ]]; then
+    : > "${target_env}"
+  fi
+  : > "${tmp_env}"
+  while IFS= read -r line || [[ -n "${line}" ]]; do
+    key="$(env_key_from_line "${line}" || true)"
+    if [[ -n "${key}" && "${key}" == IMAGE_* && -n "${SOURCE_VALUES[${key}]+x}" ]]; then
+      source_value="${SOURCE_VALUES[${key}]}"
+      printf '%s=%s\n' "${key}" "${source_value}" >> "${tmp_env}"
+    else
+      printf '%s\n' "${line}" >> "${tmp_env}"
+    fi
+  done < "${target_env}"
+
+  for key in "${SOURCE_KEYS[@]}"; do
+    if [[ -z "${TARGET_SEEN[${key}]+x}" ]]; then
+      if [[ "${wrote_block}" -eq 0 ]]; then
+        {
+          echo ""
+          echo "# Added by dts-upgrade-lite ${UPGRADE_TS}"
+        } >> "${tmp_env}"
+        wrote_block=1
+      fi
+      printf '%s=%s\n' "${key}" "${SOURCE_VALUES[${key}]}" >> "${tmp_env}"
+    fi
+  done
+  mv "${tmp_env}" "${target_env}"
+  append_line "${SUMMARY_FILE}" "- env updated: IMAGE_* refreshed, missing keys appended"
+}
+
+should_skip_source_file() {
+  local rel="$1"
+  case "${rel}" in
+    .env|docker-compose*.yml|docker-compose*.yaml)
+      return 0
+      ;;
+    config/*|logs/*|backups/*|.git/*|services/dts-pg/data|services/dts-pg/data/*)
+      return 0
+      ;;
+    *)
+      return 1
+      ;;
+  esac
+}
+
+sync_config_tree() {
+  local source_file rel target_file conflict_file
+  [[ -d "${SOURCE_ROOT}/config" ]] || return 0
+  find "${SOURCE_ROOT}/config" -type f | sort | while IFS= read -r source_file; do
+    rel="${source_file#${SOURCE_ROOT}/}"
+    target_file="${TARGET_DIR}/${rel}"
+    if [[ -f "${target_file}" ]]; then
+      if ! cmp -s "${source_file}" "${target_file}"; then
+        conflict_file="${CONFIG_CONFLICT_DIR}/${rel}.new"
+        mkdir -p "$(dirname "${conflict_file}")"
+        cp -p "${source_file}" "${conflict_file}"
+        append_line "${SUMMARY_FILE}" "- config conflict preserved: ${rel} -> ${conflict_file}"
+      fi
+      continue
+    fi
+    mkdir -p "$(dirname "${target_file}")"
+    cp -p "${source_file}" "${target_file}"
+    record_added_file "${target_file}"
+    append_line "${SUMMARY_FILE}" "- config added: ${rel}"
+  done
+}
+
+sync_new_runtime_files() {
+  local source_file rel target_file conflict_file
+  find "${SOURCE_ROOT}" -type f | sort | while IFS= read -r source_file; do
+    rel="${source_file#${SOURCE_ROOT}/}"
+    [[ "${rel}" != "${source_file}" ]] || continue
+    if should_skip_source_file "${rel}"; then
+      continue
+    fi
+    target_file="${TARGET_DIR}/${rel}"
+    if [[ -f "${target_file}" ]]; then
+      if ! cmp -s "${source_file}" "${target_file}"; then
+        conflict_file="${RUNTIME_CONFLICT_DIR}/${rel}.new"
+        mkdir -p "$(dirname "${conflict_file}")"
+        cp -p "${source_file}" "${conflict_file}"
+      fi
+      continue
+    fi
+    mkdir -p "$(dirname "${target_file}")"
+    cp -p "${source_file}" "${target_file}"
+    record_added_file "${target_file}"
+  done
+  append_line "${SUMMARY_FILE}" "- runtime sync: added missing files only; existing files preserved"
+}
+
+stop_stack() {
+  run_compose "${TARGET_DIR}" -f "${COMPOSE_FILE}" down --remove-orphans >/dev/null || true
+  append_line "${SUMMARY_FILE}" "- stack stopped"
+}
+
+start_stack() {
+  run_compose "${TARGET_DIR}" -f "${COMPOSE_FILE}" up -d --force-recreate >/dev/null
+  append_line "${SUMMARY_FILE}" "- stack started"
+}
+
+postcheck() {
+  local running
+  running="$(run_compose "${TARGET_DIR}" -f "${COMPOSE_FILE}" ps --services 2>/dev/null || true)"
+  if [[ -z "${running//[$'\t\r\n ']/}" ]]; then
+    warn "postcheck found no services from compose ps"
+    append_line "${SUMMARY_FILE}" "- postcheck: no services returned by compose ps"
+    return 0
+  fi
+  append_line "${SUMMARY_FILE}" "- postcheck services: ${running//$'\n'/, }"
+}
+
+write_lock() {
+  local lock_file="${TARGET_DIR}/.upgrade-lite-lock"
+  [[ ! -e "${lock_file}" ]] || die "upgrade lock already exists: ${lock_file}"
+  cat > "${lock_file}" <<EOF_LOCK
+timestamp=${UPGRADE_TS}
+report_dir=${REPORT_DIR}
+EOF_LOCK
+}
+
+remove_lock() {
+  rm -f "${TARGET_DIR}/.upgrade-lite-lock"
+}
+
+run_apply() {
+  [[ "${YES}" -eq 1 ]] || die "apply requires --yes"
+  init_report "${TARGET_DIR}" "apply"
+  : > "${BACKUP_DIR}/.rollback-files.list"
+  : > "${BACKUP_DIR}/.added-files.list"
+  : > "${BACKUP_DIR}/.backed-up-data-dirs.list"
+  load_source_env
+  load_target_env
+  detect_mode
+  check_postgres_major
+  write_runtime_checks
+  write_env_plan
+  write_diffs
+  write_image_package_plan
+  verify_checksums
+  load_images
+  write_lock
+  stop_stack
+  backup_postgres_data
+  write_updated_env
+  sync_config_tree
+  sync_new_runtime_files
+  start_stack
+  postcheck
+  remove_lock
+  append_line "${SUMMARY_FILE}" "- final status: success"
+  write_html_report
+  info "apply completed"
+  info "report: ${REPORT_DIR}/report.html"
+  info "backup: ${BACKUP_DIR}"
+}
+
+restore_files() {
+  local list_file="${BACKUP_DIR}/.rollback-files.list"
+  local rel source_file target_file
+  [[ -f "${list_file}" ]] || return 0
+  while IFS= read -r rel || [[ -n "${rel}" ]]; do
+    [[ -n "${rel}" ]] || continue
+    source_file="${BACKUP_DIR}/${rel}"
+    target_file="${TARGET_DIR}/${rel}"
+    [[ -f "${source_file}" ]] || die "backup file missing: ${rel}"
+    mkdir -p "$(dirname "${target_file}")"
+    cp -p "${source_file}" "${target_file}"
+    append_line "${SUMMARY_FILE}" "- restored file: ${rel}"
+  done < "${list_file}"
+}
+
+remove_added_files() {
+  local list_file="${BACKUP_DIR}/.added-files.list"
+  local rel target_file
+  [[ -f "${list_file}" ]] || return 0
+  while IFS= read -r rel || [[ -n "${rel}" ]]; do
+    [[ -n "${rel}" ]] || continue
+    target_file="${TARGET_DIR}/${rel}"
+    if [[ -f "${target_file}" ]]; then
+      rm -f "${target_file}"
+      append_line "${SUMMARY_FILE}" "- removed added file: ${rel}"
+    fi
+  done < "${list_file}"
+}
+
+restore_data_dirs() {
+  local list_file="${BACKUP_DIR}/.backed-up-data-dirs.list"
+  local rel source_dir target_path
+  [[ "${RESTORE_DB}" -eq 1 ]] || return 0
+  [[ -f "${list_file}" ]] || return 0
+  while IFS= read -r rel || [[ -n "${rel}" ]]; do
+    [[ -n "${rel}" ]] || continue
+    source_dir="${BACKUP_DIR}/${rel}"
+    target_path="${TARGET_DIR}/${rel}"
+    [[ -d "${source_dir}" ]] || die "backup data dir missing: ${rel}"
+    rm -rf "${target_path}"
+    mkdir -p "$(dirname "${target_path}")"
+    cp -a "${source_dir}" "${target_path}"
+    append_line "${SUMMARY_FILE}" "- restored data dir: ${rel}"
+  done < "${list_file}"
+}
+
+run_rollback() {
+  [[ -n "${BACKUP_DIR}" ]] || die "--backup-dir is required"
+  [[ -d "${BACKUP_DIR}" ]] || die "backup directory not found: ${BACKUP_DIR}"
+  SOURCE_ROOT="${TARGET_DIR}"
+  init_report "${TARGET_DIR}" "rollback"
+  detect_mode
+  stop_stack
+  restore_files
+  remove_added_files
+  restore_data_dirs
+  remove_lock
+  load_source_env
+  load_target_env
+  start_stack
+  postcheck
+  append_line "${SUMMARY_FILE}" "- final status: success"
+  write_html_report
+  info "rollback completed"
+  info "report: ${REPORT_DIR}/report.html"
+}
+
+case "${ACTION}" in
+  plan|apply|rollback)
+    parse_args "$@"
+    normalize_paths
+    UPGRADE_TS="$(timestamp)"
+    "run_${ACTION}"
+    ;;
+  -h|--help|"")
+    usage
+    ;;
+  *)
+    die "unknown action: ${ACTION}"
+    ;;
+esac
