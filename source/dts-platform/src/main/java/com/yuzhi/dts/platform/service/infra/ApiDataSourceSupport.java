@@ -64,6 +64,9 @@ final class ApiDataSourceSupport {
 
     static Map<String, Object> normalizeProps(Map<String, Object> props) {
         Map<String, Object> normalized = props == null ? new LinkedHashMap<>() : new LinkedHashMap<>(props);
+        // Sidecar metadata is owned by the platform; strip whatever the caller supplied
+        // and let ApiSecretMetadataService re-derive it from the encrypted secrets blob.
+        normalized.remove(ApiSecretMetadataService.PROPS_METADATA_KEY);
         normalized.put("connectorType", CONNECTOR_TYPE);
         normalized.putIfAbsent("readerType", DEFAULT_READER_TYPE);
         normalized.putIfAbsent("sourceCategory", CONNECTOR_TYPE);
@@ -72,6 +75,10 @@ final class ApiDataSourceSupport {
             normalized.put("authProvider", "none");
         }
         return normalized;
+    }
+
+    static String extractAuthProviderId(Map<String, Object> props) {
+        return extractAuthProvider(props);
     }
 
     private static String extractBaseUrl(Map<String, Object> props) {

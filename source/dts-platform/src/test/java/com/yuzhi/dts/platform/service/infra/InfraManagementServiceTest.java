@@ -15,10 +15,16 @@ import com.yuzhi.dts.platform.repository.service.InfraDataStorageRepository;
 import com.yuzhi.dts.platform.service.audit.AuditService;
 import com.yuzhi.dts.platform.service.catalog.CatalogColumnSyncService;
 import com.yuzhi.dts.platform.service.ingestion.IngestionServiceClient;
+import com.yuzhi.dts.platform.service.infra.dto.ApiSecretSummary;
+import com.yuzhi.dts.platform.service.infra.dto.InfraDataSourceDetailDto;
 import com.yuzhi.dts.platform.service.infra.dto.InfraDataSourceDto;
+import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
+import java.time.ZoneOffset;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 import org.junit.jupiter.api.AfterEach;
@@ -26,6 +32,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
+import org.mockito.Spy;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.security.core.context.SecurityContextHolder;
 
@@ -46,6 +53,9 @@ class InfraManagementServiceTest {
 
     @Mock
     private InfraSecurityProperties securityProperties;
+
+    @Spy
+    private ObjectMapper objectMapper = new ObjectMapper();
 
     @Mock
     private org.springframework.context.ApplicationEventPublisher eventPublisher;
@@ -76,6 +86,11 @@ class InfraManagementServiceTest {
 
     @Mock
     private AdminInfraClient adminInfraClient;
+
+    @Spy
+    private ApiSecretMetadataService apiSecretMetadataService = new ApiSecretMetadataService(
+        Clock.fixed(Instant.parse("2026-04-26T12:00:00Z"), ZoneOffset.UTC)
+    );
 
     @InjectMocks
     private InfraManagementService service;
@@ -157,5 +172,73 @@ class InfraManagementServiceTest {
         } catch (ReflectiveOperationException ex) {
             throw new IllegalStateException("Failed to set field " + name, ex);
         }
+    }
+
+    @Test
+    void getDataSourceDetail_apiType_masksPlaintextSecretsAndExposesSummaries() throws Exception {
+        UUID id = UUID.randomUUID();
+        InfraDataSource entity = new InfraDataSource();
+        entity.setId(id);
+        entity.setName("crm-api");
+        entity.setType("api");
+        entity.setStatus("ACTIVE");
+
+        Map<String, Object> meta = new LinkedHashMap<>();
+        meta.put("providerId", "apiKey");
+        meta.put(
+            "fields",
+            List.of(
+                Map.of(
+                    "fieldName", "value",
+                    "maskedDisplay", "sk***wxyz",
+                    "secretVersion", "v2",
+                    "rotatedAt", "2026-04-20T08:00:00Z",
+                    "status", "ACTIVE"
+                )
+            )
+        );
+        Map<String, Object> props = new LinkedHashMap<>();
+        props.put("baseUrl", "https://crm.example.com");
+        props.put("authProvider", "apiKey");
+        props.put(ApiSecretMetadataService.PROPS_METADATA_KEY, meta);
+        ObjectMapper mapper = new ObjectMapper();
+        entity.setProps(mapper.writeValueAsString(props));
+
+        when(dataSourceRepository.findById(id)).thenReturn(Optional.of(entity));
+
+        InfraDataSourceDetailDto detail = service.getDataSourceDetail(id);
+
+        // Plaintext secrets must never leak through detail for API data sources
+        assertThat(detail.secrets()).isEmpty();
+        // secretSummaries derived from sidecar metadata
+        assertThat(detail.secretSummaries()).hasSize(1);
+        ApiSecretSummary summary = detail.secretSummaries().get(0);
+        assertThat(summary.providerId()).isEqualTo("apiKey");
+        assertThat(summary.fieldName()).isEqualTo("value");
+        assertThat(summary.maskedDisplay()).isEqualTo("sk***wxyz");
+        assertThat(summary.secretVersion()).isEqualTo("v2");
+        assertThat(summary.status()).isEqualTo("ACTIVE");
+        // secretService should not be consulted for API data sources in detail flow
+        org.mockito.Mockito.verify(secretService, org.mockito.Mockito.never()).readSecrets(entity);
+    }
+
+    @Test
+    void getDataSourceDetail_jdbcType_stillReturnsPlaintextSecretsForCompatibility() {
+        UUID id = UUID.randomUUID();
+        InfraDataSource entity = new InfraDataSource();
+        entity.setId(id);
+        entity.setName("erp-db");
+        entity.setType("postgresql");
+        entity.setStatus("ACTIVE");
+        entity.setProps("{}");
+
+        when(dataSourceRepository.findById(id)).thenReturn(Optional.of(entity));
+        when(secretService.readSecrets(entity)).thenReturn(Map.of("password", "p@ssw0rd"));
+
+        InfraDataSourceDetailDto detail = service.getDataSourceDetail(id);
+
+        // JDBC datasources keep existing behaviour — caller still sees plaintext (used by /test endpoint)
+        assertThat(detail.secrets()).containsEntry("password", "p@ssw0rd");
+        assertThat(detail.secretSummaries()).isEmpty();
     }
 }

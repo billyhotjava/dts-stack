@@ -863,15 +863,6 @@ const parseOptionalJsonObject = (value: any, label: string) => {
 	return parsed as Record<string, any>;
 };
 
-const parseOptionalJsonArray = (value: any, label: string) => {
-	const parsed = parseOptionalJson(value, label);
-	if (parsed === undefined) return undefined;
-	if (!Array.isArray(parsed)) {
-		throw new Error(`${label} 必须是 JSON Array`);
-	}
-	return parsed;
-};
-
 export const buildApiReaderConfig = (values: Record<string, any>) => {
 	const path = normalizeText(values.apiResourcePath);
 	if (!path) {
@@ -894,13 +885,11 @@ export const buildApiReaderConfig = (values: Record<string, any>) => {
 	const query = parseOptionalJsonObject(values.apiQueryJson, "API Query 参数");
 	const pagination = parseOptionalJsonObject(values.apiPaginationJson, "API 分页配置");
 	const cursor = parseOptionalJsonObject(values.apiCursorJson, "API 增量游标");
-	const fields = parseOptionalJsonArray(values.apiFieldsJson, "API 字段映射");
 	const bodyTemplate = parseOptionalJson(values.apiBodyTemplateJson, "API Body 模板");
 	if (query) resource.query = query;
 	if (bodyTemplate !== undefined) resource.bodyTemplate = bodyTemplate;
 	if (pagination) resource.pagination = pagination;
 	if (cursor) resource.cursor = cursor;
-	if (fields) resource.fields = fields;
 	return {
 		readerType: "httpreader",
 		connectorType: "api",
@@ -1195,7 +1184,6 @@ export const mapTaskToForm = (task: IngestionTaskDTO) => {
 		apiBodyTemplateJson: apiResource.bodyTemplate ? JSON.stringify(apiResource.bodyTemplate, null, 2) : undefined,
 		apiPaginationJson: apiResource.pagination ? JSON.stringify(apiResource.pagination, null, 2) : undefined,
 		apiCursorJson: apiResource.cursor ? JSON.stringify(apiResource.cursor, null, 2) : undefined,
-		apiFieldsJson: apiResource.fields ? JSON.stringify(apiResource.fields, null, 2) : undefined,
 		fileAutoId: fileAutoId,
 		fileTableName: isFileReader && writerTables.length ? writerTables[0] : undefined,
 		selectedTables: mappingTables.length ? mappingTables.join("\n") : undefined,

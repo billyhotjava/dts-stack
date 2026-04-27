@@ -12,11 +12,13 @@
 
 | ID | Task | 优先级 | 状态 |
 |---|---|---|---|
-| T01 | API 数据源 CRUD 与后端校验 | P0 | DRAFT |
+| T01 | API 数据源 CRUD 与后端校验 | P0 | IN_PROGRESS |
 | T02 | 鉴权 dry-run 与连接测试 | P0 | DRAFT |
 | T03 | 请求模板校验与安全 preview | P0 | DRAFT |
-| T04 | Secret 写入、脱敏回显与轮换入口 | P0 | DRAFT |
+| T04 | Secret 写入、脱敏回显与轮换入口 | P0 | DRAFT（等待 F1/T05 secret 表落地） |
 | T05 | Mock API fixtures 与契约测试 | P1 | DRAFT |
+
+> 状态语义：见 F1/README。
 
 ## 完成标准
 

@@ -112,6 +112,8 @@ public class InfraManagementService {
         "db2"
     );
 
+    private final ApiSecretMetadataService apiSecretMetadataService;
+
     public InfraManagementService(
         InfraDataSourceRepository dataSourceRepository,
         InfraDataStorageRepository storageRepository,
@@ -128,7 +130,8 @@ public class InfraManagementService {
         JdbcCatalogSyncService jdbcCatalogSyncService,
         InfraCatalogSyncRunRepository syncRunRepository,
         AuditService auditService,
-        AdminInfraClient adminInfraClient
+        AdminInfraClient adminInfraClient,
+        ApiSecretMetadataService apiSecretMetadataService
     ) {
         this.dataSourceRepository = dataSourceRepository;
         this.storageRepository = storageRepository;
@@ -146,6 +149,7 @@ public class InfraManagementService {
         this.syncRunRepository = syncRunRepository;
         this.auditService = auditService;
         this.adminInfraClient = adminInfraClient;
+        this.apiSecretMetadataService = apiSecretMetadataService;
     }
 
     public List<InfraDataSourceDto> listDataSources(String activeDeptHeader) {
@@ -427,8 +431,14 @@ public class InfraManagementService {
     public com.yuzhi.dts.platform.service.infra.dto.InfraDataSourceDetailDto getDataSourceDetail(UUID id) {
         InfraDataSource entity = dataSourceRepository.findById(id).orElse(null);
         if (entity != null) {
-            Map<String, Object> secrets = secretService.readSecrets(entity);
             Map<String, Object> props = readProps(entity.getProps());
+            boolean apiType = ApiDataSourceSupport.isApiType(entity.getType());
+            // API data sources never expose plaintext secrets via the detail endpoint;
+            // callers see the masked summary derived from sidecar metadata instead.
+            Map<String, Object> secrets = apiType ? Map.of() : secretService.readSecrets(entity);
+            List<com.yuzhi.dts.platform.service.infra.dto.ApiSecretSummary> summaries = apiType
+                ? apiSecretMetadataService.toSummaries(apiSecretMetadataService.readFromProps(props))
+                : List.of();
             return new com.yuzhi.dts.platform.service.infra.dto.InfraDataSourceDetailDto(
                 entity.getId(),
                 entity.getName(),
@@ -439,6 +449,7 @@ public class InfraManagementService {
                 entity.getOwnerDept(),
                 props,
                 secrets,
+                summaries,
                 entity.getStatus(),
                 entity.getLastVerifiedAt()
             );
@@ -626,8 +637,16 @@ public class InfraManagementService {
         entity.setUsername(request.username());
         entity.setDescription(request.description());
         Map<String, Object> props = request.props() == null ? new LinkedHashMap<>() : new LinkedHashMap<>(request.props());
-        if (ApiDataSourceSupport.isApiType(request.type())) {
+        boolean apiType = ApiDataSourceSupport.isApiType(request.type());
+        if (apiType) {
             props = ApiDataSourceSupport.normalizeProps(props);
+            ApiSecretMetadata previousMetadata = apiSecretMetadataService.readFromProps(readProps(entity.getProps()));
+            ApiSecretMetadata nextMetadata = apiSecretMetadataService.computeMetadata(
+                ApiDataSourceSupport.extractAuthProviderId(props),
+                request.secrets(),
+                previousMetadata
+            );
+            apiSecretMetadataService.writeIntoProps(props, nextMetadata);
         } else if (isJdbcRequest(request)) {
             String readerType = extractReaderType(props);
             if (!StringUtils.hasText(readerType)) {
@@ -1331,6 +1350,7 @@ public class InfraManagementService {
             null,
             props,
             secrets,
+            List.of(),
             StringUtils.hasText(lake.getStatus()) ? lake.getStatus() : STATUS_ACTIVE,
             lake.getLastVerifiedAt()
         );

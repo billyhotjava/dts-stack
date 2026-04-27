@@ -40,6 +40,27 @@ public class ApiConnectorContractResource {
                 ApiConnectorTypes.DEFAULT_READER_TYPE,
                 "syncModes",
                 List.of("full_refresh", "incremental"),
+                "odsLanding",
+                Map.of(
+                    "mode",
+                    "raw_record",
+                    "rawRecordColumn",
+                    "_dts_raw_record",
+                    "technicalColumns",
+                    List.of(
+                        "_dts_source_system",
+                        "_dts_source_resource",
+                        "_dts_endpoint",
+                        "_dts_import_time",
+                        "_dts_batch_id",
+                        "_dts_execution_id",
+                        "_dts_page_no",
+                        "_dts_record_no",
+                        "_dts_cursor_value"
+                    ),
+                    "normalizationLayer",
+                    "stg"
+                ),
                 "authProviders",
                 authProviderRegistry.listDescriptors()
             )

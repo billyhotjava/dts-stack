@@ -68,19 +68,6 @@ const jsonObjectValidator = (label: string) => (_: any, value: string) => {
 	}
 };
 
-const jsonArrayValidator = (label: string) => (_: any, value: string) => {
-	if (!normalizeText(value)) return Promise.resolve();
-	try {
-		const parsed = JSON.parse(value);
-		if (!Array.isArray(parsed)) {
-			return Promise.reject(new Error(`${label} 必须是 JSON Array`));
-		}
-		return Promise.resolve();
-	} catch {
-		return Promise.reject(new Error(`${label} JSON 格式错误`));
-	}
-};
-
 const buildTableKey = (table: TableInfo) =>
 	normalizeText(table.schema) ? `${table.schema}.${table.name}` : table.name;
 
@@ -304,15 +291,19 @@ export function DbUnifiedStep({
 							<Input.TextArea rows={4} placeholder='{"startTime":"${watermark}"}' />
 						</Form.Item>
 					</div>
-					<div className="grid gap-4 md:grid-cols-3">
+					<Alert
+						type="info"
+						showIcon
+						className="mb-4"
+						message="API ODS 只保存原始记录和技术字段"
+						description="字段重命名、类型标准化、敏感标记和质量规则从 schema snapshot 进入 stg 层处理，不在 ODS 阶段编辑。"
+					/>
+					<div className="grid gap-4 md:grid-cols-2">
 						<Form.Item name="apiPaginationJson" label="分页配置 JSON" rules={[{ validator: jsonObjectValidator("分页配置") }]}>
 							<Input.TextArea rows={4} placeholder='{"type":"page","pageParam":"page","sizeParam":"size","pageSize":100}' />
 						</Form.Item>
 						<Form.Item name="apiCursorJson" label="增量游标 JSON" rules={[{ validator: jsonObjectValidator("增量游标") }]}>
 							<Input.TextArea rows={4} placeholder='{"type":"field","field":"updatedAt","injectInto":"query","parameterName":"updatedAfter"}' />
-						</Form.Item>
-						<Form.Item name="apiFieldsJson" label="字段映射 JSON Array" rules={[{ validator: jsonArrayValidator("字段映射") }]}>
-							<Input.TextArea rows={4} placeholder='[{"sourceField":"id","targetColumn":"id","targetType":"string"}]' />
 						</Form.Item>
 					</div>
 				</>

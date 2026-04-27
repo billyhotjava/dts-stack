@@ -8,6 +8,7 @@ import com.yuzhi.dts.ingestion.domain.IngestionConnectorCapability;
 import com.yuzhi.dts.ingestion.repository.IngestionConnectorCapabilityRepository;
 import com.yuzhi.dts.ingestion.service.dto.IngestionConnectorCapabilityDTO;
 import com.yuzhi.dts.ingestion.service.etl.api.ApiConnectorTypes;
+import com.yuzhi.dts.ingestion.service.etl.api.ApiSourceContracts;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
@@ -220,7 +221,7 @@ public class ConnectorCapabilityService {
 
     private Map<String, Object> apiConnectorConstraints() {
         Map<String, Object> constraints = new LinkedHashMap<>();
-        constraints.put("contractVersion", "1.0.0");
+        constraints.put("contractVersion", ApiSourceContracts.CONTRACT_VERSION);
         constraints.put("supportsFile", false);
         constraints.put("supportsJdbc", false);
         constraints.put("supportsApi", true);
@@ -229,6 +230,17 @@ public class ConnectorCapabilityService {
         constraints.put("supportsCursorCheckpoint", true);
         constraints.put("supportsRateLimit", true);
         constraints.put("defaultReaderType", ApiConnectorTypes.DEFAULT_READER_TYPE);
+        constraints.put(
+            "odsLanding",
+            Map.of(
+                "mode",
+                "raw_record",
+                "rawRecordColumn",
+                "_dts_raw_record",
+                "normalizationLayer",
+                "stg"
+            )
+        );
         constraints.put("authProviders", List.of("none", "apiKey", "bearerToken", "basic", "oauth2ClientCredentials", "customSignature", "mtls"));
         constraints.put(
             "features",

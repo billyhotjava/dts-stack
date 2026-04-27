@@ -5,7 +5,7 @@ import java.util.Map;
 
 public final class ApiSourceContracts {
 
-    public static final String CONTRACT_VERSION = "1.0.0";
+    public static final String CONTRACT_VERSION = "1.1.0";
 
     private ApiSourceContracts() {}
 
@@ -26,9 +26,11 @@ public final class ApiSourceContracts {
         Map<String, Object> query,
         Object bodyTemplate,
         String recordPath,
+        ApiLandingPolicy landing,
         PaginationPolicy pagination,
         CursorPolicy cursor,
-        List<ApiFieldMapping> fields
+        SchemaSnapshotPolicy schemaSnapshot,
+        List<ApiStagingFieldMapping> stagingFields
     ) {}
 
     public record RequestPolicy(Integer connectTimeoutMillis, Integer readTimeoutMillis, Integer maxResponseBytes, Boolean followRedirects) {}
@@ -43,13 +45,16 @@ public final class ApiSourceContracts {
 
     public record CursorPolicy(String type, String field, String injectInto, String parameterName, String initialValue, Integer lookbackSeconds) {}
 
-    public record ApiFieldMapping(
-        String sourceField,
-        String targetColumn,
+    public record ApiLandingPolicy(String mode, String rawRecordColumn, List<String> technicalColumns) {}
+
+    public record SchemaSnapshotPolicy(Boolean enabled, String snapshotRef, String driftPolicy) {}
+
+    public record ApiStagingFieldMapping(
+        String jsonPath,
+        String stgColumn,
         String targetType,
         Boolean nullable,
         Boolean primaryKey,
         Boolean sensitive
     ) {}
 }
-
