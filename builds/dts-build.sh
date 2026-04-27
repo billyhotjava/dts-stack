@@ -1010,11 +1010,11 @@ pack_deployment() {
   echo "[dts-build]   + builds/dts-build.sh"
 
   # Copy field operation docs needed in offline packages.
-  mkdir -p "${pack_dir}/docs/release/v2.2.2"
+  mkdir -p "${pack_dir}/docs/release/v2.2.3"
   for doc_file in \
-    "docs/release/v2.2.2/upgrade-lite-operations-kylin-kunpeng.md" \
-    "docs/release/v2.2.2/offline-upgrade-checklist-kylin-kunpeng.md" \
-    "docs/release/v2.2.2/offline-upgrade-guide-kylin-kunpeng.md"
+    "docs/release/v2.2.3/upgrade-lite-operations-kylin-kunpeng.md" \
+    "docs/release/v2.2.3/offline-upgrade-checklist-kylin-kunpeng.md" \
+    "docs/release/v2.2.3/offline-upgrade-guide-kylin-kunpeng.md"
   do
     if [[ -f "${REPO_ROOT}/${doc_file}" ]]; then
       cp "${REPO_ROOT}/${doc_file}" "${pack_dir}/${doc_file}"
@@ -1129,7 +1129,7 @@ Open `/data/stack_old/logs/upgrade-lite-*/report.html` before apply to review
 compose, env, image, and config differences.
 
 Detailed field instructions are included at:
-`docs/release/v2.2.2/upgrade-lite-operations-kylin-kunpeng.md`.
+`docs/release/v2.2.3/upgrade-lite-operations-kylin-kunpeng.md`.
 
 ## Directory Structure
 

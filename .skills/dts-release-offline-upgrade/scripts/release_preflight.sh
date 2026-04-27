@@ -34,6 +34,9 @@ check_file docker-compose.legacy.yml
 check_file imgversion.conf
 check_file builds/dts-build.sh
 check_file bin/dts-upgrade-lite
+check_file docs/release/v2.2.3/upgrade-lite-operations-kylin-kunpeng.md
+check_file docs/release/v2.2.3/offline-upgrade-checklist-kylin-kunpeng.md
+check_file docs/release/v2.2.3/offline-upgrade-guide-kylin-kunpeng.md
 check_dir builds
 check_dir services
 check_dir services/dts-dbt

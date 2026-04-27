@@ -69,7 +69,7 @@
 ./bin/dts-upgrade-lite apply --target /data/stack_old --source /tmp/dts-upgrade/dts-stack --yes
 ```
 
-操作说明见 `docs/release/v2.2.2/upgrade-lite-operations-kylin-kunpeng.md`。
+操作说明见 `docs/release/v2.2.3/upgrade-lite-operations-kylin-kunpeng.md`。
 
 【openEuler 适配说明】
 - 已在 Compose 清单中为所有本地目录挂载添加了 SELinux 友好配置（z/Z 标签）。

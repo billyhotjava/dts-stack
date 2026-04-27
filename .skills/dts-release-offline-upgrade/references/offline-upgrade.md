@@ -13,9 +13,9 @@
 - `services/dts-keycloak/realm-dts.json`
 - `services/certs`
 - `bin/dts-upgrade-lite`
-- `docs/release/v2.2.2/upgrade-lite-operations-kylin-kunpeng.md`
-- `docs/release/v2.2.2/offline-upgrade-guide-kylin-kunpeng.md`
-- `docs/release/v2.2.2/offline-upgrade-checklist-kylin-kunpeng.md`
+- `docs/release/v2.2.3/upgrade-lite-operations-kylin-kunpeng.md`
+- `docs/release/v2.2.3/offline-upgrade-guide-kylin-kunpeng.md`
+- `docs/release/v2.2.3/offline-upgrade-checklist-kylin-kunpeng.md`
 
 ## Build Notes
 

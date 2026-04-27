@@ -17,7 +17,7 @@ mkdir -p \
   "${TEST_REPO}/services/dts-airflow/config" \
   "${TEST_REPO}/builds/airflow" \
   "${TEST_REPO}/config" \
-  "${TEST_REPO}/docs/release/v2.2.2" \
+  "${TEST_REPO}/docs/release/v2.2.3" \
   "${TEST_REPO}/tools" \
   "${FAKE_BIN}"
 
@@ -109,15 +109,15 @@ echo common
 EOF_FILE
 chmod +x "${TEST_REPO}/bin/lib/dts-upgrade-common.sh"
 
-cat > "${TEST_REPO}/docs/release/v2.2.2/upgrade-lite-operations-kylin-kunpeng.md" <<'EOF_FILE'
+cat > "${TEST_REPO}/docs/release/v2.2.3/upgrade-lite-operations-kylin-kunpeng.md" <<'EOF_FILE'
 # ops
 EOF_FILE
 
-cat > "${TEST_REPO}/docs/release/v2.2.2/offline-upgrade-checklist-kylin-kunpeng.md" <<'EOF_FILE'
+cat > "${TEST_REPO}/docs/release/v2.2.3/offline-upgrade-checklist-kylin-kunpeng.md" <<'EOF_FILE'
 # checklist
 EOF_FILE
 
-cat > "${TEST_REPO}/docs/release/v2.2.2/offline-upgrade-guide-kylin-kunpeng.md" <<'EOF_FILE'
+cat > "${TEST_REPO}/docs/release/v2.2.3/offline-upgrade-guide-kylin-kunpeng.md" <<'EOF_FILE'
 # guide
 EOF_FILE
 
@@ -196,7 +196,7 @@ if ! grep -qx 'dts-stack/bin/lib/dts-upgrade-common.sh' <<<"${ARCHIVE_CONTENTS}"
   exit 1
 fi
 
-if ! grep -qx 'dts-stack/docs/release/v2.2.2/upgrade-lite-operations-kylin-kunpeng.md' <<<"${ARCHIVE_CONTENTS}"; then
+if ! grep -qx 'dts-stack/docs/release/v2.2.3/upgrade-lite-operations-kylin-kunpeng.md' <<<"${ARCHIVE_CONTENTS}"; then
   echo "expected packaged archive to include upgrade lite operation guide" >&2
   exit 1
 fi
