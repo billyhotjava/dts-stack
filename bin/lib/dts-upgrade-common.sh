@@ -202,7 +202,7 @@ upgrade_detect_mode() {
   local legacy_stack
   local deploy_mode
 
-  UPGRADE_MODE="single"
+  UPGRADE_MODE="app"
   UPGRADE_PRECHECK_COMPOSE_FILES=()
   UPGRADE_RUNTIME_COMPOSE_FILES=()
 
@@ -215,16 +215,10 @@ upgrade_detect_mode() {
     UPGRADE_RUNTIME_COMPOSE_FILES=("docker-compose.legacy.yml")
   else
     case "${deploy_mode:-single}" in
-      ""|single)
-        UPGRADE_MODE="single"
-        UPGRADE_PRECHECK_COMPOSE_FILES=("docker-compose.yml")
-        if [[ -f "${target_dir}/docker-compose-app.yml" ]]; then
-          UPGRADE_PRECHECK_COMPOSE_FILES+=("docker-compose-app.yml")
-        fi
-        UPGRADE_RUNTIME_COMPOSE_FILES=("docker-compose.yml")
-        if [[ -f "${target_dir}/docker-compose-app.yml" || -f "${source_root}/docker-compose-app.yml" ]]; then
-          UPGRADE_RUNTIME_COMPOSE_FILES+=("docker-compose-app.yml")
-        fi
+      ""|single|app)
+        UPGRADE_MODE="app"
+        UPGRADE_PRECHECK_COMPOSE_FILES=("docker-compose-app.yml")
+        UPGRADE_RUNTIME_COMPOSE_FILES=("docker-compose-app.yml")
         ;;
       *)
         upgrade_die "unsupported DEPLOY_MODE for in-place upgrade: ${deploy_mode}"
@@ -665,12 +659,12 @@ upgrade_compose_files_from_source() {
 upgrade_should_merge_compose_file() {
   local file_name="$1"
 
-  case "${UPGRADE_MODE:-single}" in
+  case "${UPGRADE_MODE:-app}" in
     legacy)
       [[ "${file_name}" == "docker-compose.legacy.yml" ]]
       ;;
-    single)
-      [[ "${file_name}" == "docker-compose.yml" || "${file_name}" == "docker-compose-app.yml" ]]
+    app|single)
+      [[ "${file_name}" == "docker-compose-app.yml" ]]
       ;;
     *)
       return 1

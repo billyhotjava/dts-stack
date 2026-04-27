@@ -33,7 +33,7 @@ The old directory `src/pages/management/system/user` has been removed.
 
 1) Start services
 - Local dev: `./dev-up.sh --mode local`
-- Packaged: `docker compose -f docker-compose.yml -f docker-compose-app.yml up -d`
+- Packaged: `docker compose -f docker-compose-app.yml up -d`
 
 2) UI checks (as a sysadmin role)
 - Open `https://biadmin.${BASE_DOMAIN}`

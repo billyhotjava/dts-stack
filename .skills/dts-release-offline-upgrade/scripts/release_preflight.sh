@@ -4,6 +4,9 @@ set -euo pipefail
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
 cd "$REPO_ROOT"
 
+export DTS_DBT_HOST_PROJECT_DIR="${DTS_DBT_HOST_PROJECT_DIR:-${REPO_ROOT}/services/dts-dbt}"
+export STACK_ROOT="${STACK_ROOT:-${REPO_ROOT}}"
+
 failures=0
 
 check_file() {
@@ -25,10 +28,11 @@ check_dir() {
 }
 
 echo "DTS release preflight"
-check_file docker-compose.yml
 check_file docker-compose-app.yml
+check_file docker-compose.dev.yml
+check_file docker-compose.legacy.yml
 check_file imgversion.conf
-check_file builds/buildAll.sh
+check_file builds/dts-build.sh
 check_dir builds
 check_dir services
 check_dir services/dts-dbt
@@ -50,7 +54,9 @@ done
 if command -v docker >/dev/null 2>&1; then
   echo
   echo "Compose config check"
-  docker compose -f docker-compose.yml -f docker-compose-app.yml config >/dev/null || failures=$((failures + 1))
+  docker compose -f docker-compose-app.yml config >/dev/null || failures=$((failures + 1))
+  docker compose -f docker-compose.dev.yml config >/dev/null || failures=$((failures + 1))
+  docker compose -f docker-compose.legacy.yml config >/dev/null || failures=$((failures + 1))
 fi
 
 echo

@@ -11,7 +11,7 @@ RESET_PG_DATA=false
 RESET_ENV=false
 FORCE_PG_ENSURE=true
 
-usage(){ echo "Usage: $0 [legacy] [--reset-pg] [--reset-env] [--no-force-pg-ensure] [single|ha2|cluster] [unified-password] [base-domain]"; }
+usage(){ echo "Usage: $0 [legacy] [--reset-pg] [--reset-env] [--no-force-pg-ensure] [app|single] [unified-password] [base-domain]"; }
 
 looks_like_domain(){
   local candidate="${1:-}"
@@ -56,7 +56,7 @@ prompt_base_domain(){
 }
 
 #------------ helpers ------------
-pick_mode(){ echo "1) single  2) ha2  3) cluster"; read -rp "Choice: " c; case "$c" in 1) MODE=single;;2) MODE=ha2;;3) MODE=cluster;;*) exit 1;; esac; }
+pick_mode(){ echo "1) app"; read -rp "Choice: " c; case "$c" in 1|"") MODE=app;;*) exit 1;; esac; }
 read_secret(){ while true; do read -rsp "Password: " p1; echo; read -rsp "Confirm: " p2; echo; [[ "$p1" == "$p2" ]] || { echo "Mismatch"; continue; }; [[ ${#p1} -ge 10 && "$p1" =~ [A-Z] && "$p1" =~ [a-z] && "$p1" =~ [0-9] && "$p1" =~ [^A-Za-z0-9] ]] || { echo "Weak"; continue; }; SECRET="$p1"; break; done; }
 ensure_env(){ k="$1"; shift; v="$*"; if grep -qE "^${k}=" .env 2>/dev/null; then sed -i -E "s|^${k}=.*|${k}=${v}|g" .env; else echo "${k}=${v}" >> .env; fi; }
 load_img_versions(){
@@ -636,7 +636,7 @@ generate_env_base(){
   : "${BASE_DOMAIN:=dts.local}"
   : "${TLS_PORT:=443}"
 
-  if [[ "${MODE}" == "single" ]]; then
+  if [[ "${MODE}" == "app" ]]; then
     : "${TRAEFIK_DASHBOARD:=true}"
   else
     : "${TRAEFIK_DASHBOARD:=false}"
@@ -1276,7 +1276,7 @@ while (($#)); do
     --no-force-pg-ensure)
       FORCE_PG_ENSURE=false
       ;;
-    single|ha2|cluster) [[ -z "$MODE" ]] || { echo "[init.sh] ERROR: deployment mode already specified as '${MODE}'." >&2; exit 1; }; MODE="$1";;
+    app|single) [[ -z "$MODE" ]] || { echo "[init.sh] ERROR: deployment mode already specified as '${MODE}'." >&2; exit 1; }; MODE=app;;
     *)
       if [[ -z "$BASE_DOMAIN_ARG" ]] && looks_like_domain "$1"; then BASE_DOMAIN_ARG="$1"
       elif [[ -z "$SECRET" ]]; then SECRET="$1"
@@ -1305,36 +1305,26 @@ BASE_DOMAIN="$(normalize_base_domain "$BASE_DOMAIN")"
 if ! validate_base_domain "$BASE_DOMAIN"; then echo "[init.sh] ERROR: invalid base domain '${BASE_DOMAIN}'." >&2; exit 1; fi
 
 if [[ "${LEGACY_STACK}" == "true" && -z "${MODE}" ]]; then
-  MODE="single"
+  MODE="app"
 fi
 
-if [[ -z "${MODE}" ]]; then pick_mode; else case "$MODE" in single|ha2|cluster) ;; *) usage; exit 1;; esac; fi
+if [[ -z "${MODE}" ]]; then pick_mode; else case "$MODE" in app) ;; *) usage; exit 1;; esac; fi
 
-if [[ "${LEGACY_STACK}" == "true" && "${MODE}" != "single" ]]; then
-  echo "[init.sh] ERROR: legacy stack currently supports only 'single' mode." >&2
+if [[ "${LEGACY_STACK}" == "true" && "${MODE}" != "app" ]]; then
+  echo "[init.sh] ERROR: legacy stack currently supports only app mode." >&2
   exit 1
 fi
 if [[ -z "${SECRET}" ]]; then read_secret; else [[ ${#SECRET} -ge 10 && "$SECRET" =~ [A-Z] && "$SECRET" =~ [a-z] && "$SECRET" =~ [0-9] && "$SECRET" =~ [^A-Za-z0-9] ]] || { echo "Weak password"; exit 1; } fi
 
 PG_MODE="${PG_MODE:-}"
 PG_HOST="${PG_HOST:-}"
-COMPOSE_FILE="docker-compose.yml"
+COMPOSE_FILE="docker-compose-app.yml"
 
 case "$MODE" in
-  single)
-    COMPOSE_FILE="docker-compose.yml"
+  app)
+    COMPOSE_FILE="docker-compose-app.yml"
     PG_MODE="${PG_MODE:-embedded}"
     PG_HOST="${PG_HOST:-dts-pg}"
-    ;;
-  ha2)
-    COMPOSE_FILE="docker-compose.ha2.yml"
-    PG_MODE="${PG_MODE:-external}"
-    PG_HOST="${PG_HOST:-your-external-pg-host}"
-    ;;
-  cluster)
-    COMPOSE_FILE="docker-compose.cluster.yml"
-    PG_MODE="${PG_MODE:-external}"
-    PG_HOST="${PG_HOST:-your-external-pg-host}"
     ;;
 esac
 
@@ -1409,7 +1399,7 @@ warn_if_ima_appraise
 if [[ -n "${MODE}" ]]; then ensure_env DEPLOY_MODE "${MODE}"; fi
 
 # 证书
-if [[ "${MODE}" == "single" ]]; then
+if [[ "${MODE}" == "app" ]]; then
   if ! BASE_DOMAIN="${BASE_DOMAIN}" TRUSTSTORE_PASSWORD="${TRUSTSTORE_PASSWORD:-changeit}" bash services/certs/gen-certs.sh; then
     echo "[init.sh] ERROR: Failed to generate TLS certificates/truststores." >&2
     exit 1

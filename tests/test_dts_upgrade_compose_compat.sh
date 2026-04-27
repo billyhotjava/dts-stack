@@ -102,19 +102,19 @@ IMAGE_POSTGRES=postgres:17.6
 IMAGE_DTS_ADMIN=dts-admin:test
 EOF_TARGET_ENV
 
-cat > "${SOURCE_ROOT}/docker-compose.yml" <<'EOF_SOURCE_COMPOSE'
+cat > "${SOURCE_ROOT}/docker-compose-app.yml" <<'EOF_SOURCE_COMPOSE'
 services: {}
 EOF_SOURCE_COMPOSE
-cat > "${SOURCE_ROOT}/docker-compose.yml.yaml" <<'EOF_SOURCE_YAML'
+cat > "${SOURCE_ROOT}/docker-compose-app.yml.yaml" <<'EOF_SOURCE_YAML'
 name: s10-stack
 services:
   source-service:
     image: source:1
 EOF_SOURCE_YAML
-cat > "${TARGET_DIR}/docker-compose.yml" <<'EOF_TARGET_COMPOSE'
+cat > "${TARGET_DIR}/docker-compose-app.yml" <<'EOF_TARGET_COMPOSE'
 services: {}
 EOF_TARGET_COMPOSE
-cat > "${TARGET_DIR}/docker-compose.yml.yaml" <<'EOF_TARGET_YAML'
+cat > "${TARGET_DIR}/docker-compose-app.yml.yaml" <<'EOF_TARGET_YAML'
 name: s10-stack
 services:
   target-service:
@@ -150,7 +150,7 @@ if [[ ${STATUS} -ne 0 ]]; then
   exit 1
 fi
 
-if ! grep -Fqx 'up:docker-compose.yml' "${EVENTS_FILE}"; then
+if ! grep -Fqx 'up:docker-compose-app.yml' "${EVENTS_FILE}"; then
   echo "expected docker-compose fallback to start target stack" >&2
   cat "${EVENTS_FILE}" >&2
   exit 1

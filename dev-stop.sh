@@ -47,10 +47,10 @@ services=(dts-admin dts-platform dts-ingestion dts-analytics dts-admin-webapp dt
 
 if [[ "$MODE" == "local" ]]; then
   echo "[dev-stop] Stopping local-dev services (core stack stays running) ..."
-  "${compose_cmd[@]}" -f docker-compose.yml -f docker-compose.dev.yml stop "${services[@]}"
+  "${compose_cmd[@]}" -f docker-compose.dev.yml stop "${services[@]}"
 else
   echo "[dev-stop] Stopping source dev services (core stack stays running) ..."
-  "${compose_cmd[@]}" -f docker-compose.yml -f docker-compose-app.yml stop "${services[@]}"
+  "${compose_cmd[@]}" -f docker-compose-app.yml stop "${services[@]}"
 fi
 
 echo "[dev-stop] Done. Restart with: ./dev-up.sh [--mode images|local]"

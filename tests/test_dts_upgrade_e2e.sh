@@ -77,10 +77,10 @@ cat > "${TARGET_DIR}/.env" <<'EOF_TARGET_ENV'
 BASE_DOMAIN=bi.site.local
 EOF_TARGET_ENV
 
-cat > "${SOURCE_ROOT}/docker-compose.yml" <<'EOF_SOURCE_COMPOSE'
+cat > "${SOURCE_ROOT}/docker-compose-app.yml" <<'EOF_SOURCE_COMPOSE'
 services: {}
 EOF_SOURCE_COMPOSE
-cat > "${SOURCE_ROOT}/docker-compose.yml.json" <<'EOF_SOURCE_JSON'
+cat > "${SOURCE_ROOT}/docker-compose-app.yml.json" <<'EOF_SOURCE_JSON'
 {
   "services": {
     "platform": {
@@ -90,10 +90,10 @@ cat > "${SOURCE_ROOT}/docker-compose.yml.json" <<'EOF_SOURCE_JSON'
 }
 EOF_SOURCE_JSON
 
-cat > "${TARGET_DIR}/docker-compose.yml" <<'EOF_TARGET_COMPOSE'
+cat > "${TARGET_DIR}/docker-compose-app.yml" <<'EOF_TARGET_COMPOSE'
 services: {}
 EOF_TARGET_COMPOSE
-cat > "${TARGET_DIR}/docker-compose.yml.json" <<'EOF_TARGET_JSON'
+cat > "${TARGET_DIR}/docker-compose-app.yml.json" <<'EOF_TARGET_JSON'
 {
   "services": {
     "platform": {
@@ -131,13 +131,13 @@ PATH="${FAKE_BIN}:${PATH}" \
   --images-dir "${IMAGES_DIR}" \
   --extra-dir "${EXTRA_DIR}" >/dev/null
 
-if ! grep -Fq 'down:docker-compose.yml' "${EVENTS_FILE}"; then
+if ! grep -Fq 'down:docker-compose-app.yml' "${EVENTS_FILE}"; then
   echo "expected upgrade flow to clean stale containers before start" >&2
   cat "${EVENTS_FILE}" >&2
   exit 1
 fi
 
-if ! grep -Fq 'up:docker-compose.yml' "${EVENTS_FILE}"; then
+if ! grep -Fq 'up:docker-compose-app.yml' "${EVENTS_FILE}"; then
   echo "expected upgrade flow to start target stack" >&2
   cat "${EVENTS_FILE}" >&2
   exit 1

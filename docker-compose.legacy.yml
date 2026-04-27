@@ -1,8 +1,7 @@
 version: "2.4"
 
 ## Combined stack for legacy docker-compose 1.22 deployments.
-## Mirrors docker-compose.yml + docker-compose-app.yml so older CLIs
-## can run with a single manifest.
+## Self-contained ARM/Kylin runtime manifest for older Compose CLIs.
 
 x-hc: &hc
   interval: 10s

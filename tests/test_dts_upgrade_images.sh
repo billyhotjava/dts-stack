@@ -72,7 +72,7 @@ ensure_no_docker_loads() {
 prepare_target() {
   local target_dir="$1"
   mkdir -p "${target_dir}"
-  cat > "${target_dir}/docker-compose.yml" <<'EOF_COMPOSE'
+  cat > "${target_dir}/docker-compose-app.yml" <<'EOF_COMPOSE'
 services: {}
 EOF_COMPOSE
   cat > "${target_dir}/.env" <<'EOF_ENV'

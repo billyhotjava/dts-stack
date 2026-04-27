@@ -48,7 +48,7 @@ exit 0
 EOF_DOCKER
 chmod +x "${FAKE_BIN}/docker"
 
-cat > "${TARGET_DIR}/docker-compose.yml" <<'EOF_COMPOSE'
+cat > "${TARGET_DIR}/docker-compose-app.yml" <<'EOF_COMPOSE'
 services: {}
 EOF_COMPOSE
 

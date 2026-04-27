@@ -87,7 +87,7 @@ prepare_manifest() {
   "backedUpFiles": [
     ".env",
     "config/app.properties",
-    "docker-compose.yml"
+    "docker-compose-app.yml"
   ],
   "protectedDataDirs": [
     "services/dts-pg/data"
@@ -102,19 +102,19 @@ mkdir -p "${NORMAL_TARGET}/config" "${NORMAL_TARGET}/services/dts-pg/data" "${NO
 
 cat > "${NORMAL_TARGET}/.env" <<'EOF_TARGET_ENV'
 LEGACY_STACK=false
-DEPLOY_MODE=single
+DEPLOY_MODE=app
 BASE_DOMAIN=broken.local
 EOF_TARGET_ENV
 cat > "${NORMAL_BACKUP}/.env" <<'EOF_BACKUP_ENV'
 LEGACY_STACK=false
-DEPLOY_MODE=single
+DEPLOY_MODE=app
 BASE_DOMAIN=stable.local
 EOF_BACKUP_ENV
 
-cat > "${NORMAL_TARGET}/docker-compose.yml" <<'EOF_TARGET_COMPOSE'
+cat > "${NORMAL_TARGET}/docker-compose-app.yml" <<'EOF_TARGET_COMPOSE'
 services: {}
 EOF_TARGET_COMPOSE
-cat > "${NORMAL_BACKUP}/docker-compose.yml" <<'EOF_BACKUP_COMPOSE'
+cat > "${NORMAL_BACKUP}/docker-compose-app.yml" <<'EOF_BACKUP_COMPOSE'
 services: {}
 EOF_BACKUP_COMPOSE
 
@@ -146,13 +146,13 @@ if ! grep -Fq 'current-data' "${NORMAL_TARGET}/services/dts-pg/data/state.txt"; 
   exit 1
 fi
 
-if ! grep -Fqx 'down:docker-compose.yml' "${TMP_DIR}/docker-events.log"; then
+if ! grep -Fqx 'down:docker-compose-app.yml' "${TMP_DIR}/docker-events.log"; then
   echo "expected rollback to stop current stack before restore" >&2
   cat "${TMP_DIR}/docker-events.log" >&2
   exit 1
 fi
 
-if ! grep -Fqx 'up:docker-compose.yml' "${TMP_DIR}/docker-events.log"; then
+if ! grep -Fqx 'up:docker-compose-app.yml' "${TMP_DIR}/docker-events.log"; then
   echo "expected rollback to start restored stack after restore" >&2
   cat "${TMP_DIR}/docker-events.log" >&2
   exit 1

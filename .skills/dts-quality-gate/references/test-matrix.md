@@ -50,7 +50,9 @@
 
 Root compose files, `builds/`, `services/`
 
-- `docker compose -f docker-compose.yml -f docker-compose-app.yml config`
+- `docker compose -f docker-compose-app.yml config`
+- `docker compose -f docker-compose.dev.yml config`
+- `docker compose -f docker-compose.legacy.yml config`
 - Targeted `docker build` for changed image definitions.
 - `.skills/dts-devops-runbook/scripts/dts_healthcheck.sh` for environment sanity.
 

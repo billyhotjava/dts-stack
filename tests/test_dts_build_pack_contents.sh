@@ -43,15 +43,15 @@ cat > "${TEST_REPO}/encry.sh" <<'EOF_FILE'
 EOF_FILE
 chmod +x "${TEST_REPO}/encry.sh"
 
-cat > "${TEST_REPO}/docker-compose.yml" <<'EOF_FILE'
+cat > "${TEST_REPO}/docker-compose-app.yml" <<'EOF_FILE'
+services: {}
+EOF_FILE
+
+cat > "${TEST_REPO}/docker-compose.dev.yml" <<'EOF_FILE'
 services: {}
 EOF_FILE
 
 cat > "${TEST_REPO}/docker-compose.legacy.yml" <<'EOF_FILE'
-services: {}
-EOF_FILE
-
-cat > "${TEST_REPO}/docker-compose-app.yml" <<'EOF_FILE'
 services: {}
 EOF_FILE
 

@@ -70,7 +70,7 @@ cd /data/stack_old
 如果是普通模式，检查：
 
 ```bash
-docker-compose -f docker-compose.yml -f docker-compose-app.yml ps
+docker-compose -f docker-compose-app.yml ps
 ```
 
 如果是 legacy 模式，检查：
@@ -324,7 +324,7 @@ cat /data/stack_old/logs/upgrade-*.summary.md
 
 ```bash
 cd /data/stack_old
-docker-compose -f docker-compose.yml -f docker-compose-app.yml ps
+docker-compose -f docker-compose-app.yml ps
 ```
 
 如果是 legacy 模式：
@@ -456,7 +456,7 @@ cd /tmp/dts-upgrade/dts-stack
 
 不能在现场重新按：
 
-- `docker-compose.yml + docker-compose-app.yml`
+- `docker-compose-app.yml`
 
 去拼装替代。
 

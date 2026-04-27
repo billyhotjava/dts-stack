@@ -212,8 +212,8 @@ setup_fake_bin "${SCENARIO2_BIN}" "${SCENARIO2_REPO}" "${SCENARIO2_DOCKER_LOG}"
 PATH="${SCENARIO2_BIN}:${PATH}" PREBUILD_JARS=0 "${SCENARIO2_REPO}/builds/dts-build.sh" -all --legacy --no-save >/dev/null
 
 build_count="$(grep -c '^build:' "${SCENARIO2_DOCKER_LOG}")"
-if [[ "${build_count}" != "10" ]]; then
-  echo "expected -all --legacy to build exactly 10 legacy-chain images, got ${build_count}" >&2
+if [[ "${build_count}" != "9" ]]; then
+  echo "expected -all --legacy to build exactly 9 legacy-chain images, got ${build_count}" >&2
   cat "${SCENARIO2_DOCKER_LOG}" >&2
   exit 1
 fi

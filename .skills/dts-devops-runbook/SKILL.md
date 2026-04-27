@@ -16,7 +16,7 @@ Use this skill for operational tasks in the DTS workspace.
    - `./init.sh single 'Strong@2025!' dts.local`
    - `./dev-up.sh --mode local`
    - `./dev-stop.sh --mode local`
-   - `docker compose -f docker-compose.yml -f docker-compose-app.yml up -d`
+   - `docker compose -f docker-compose-app.yml up -d`
 5. When a command fails due to sandbox, permissions, or network, request escalation instead of inventing an alternate write path.
 6. Record any operationally relevant change: env key, port, domain, cert, image tag, mount path, or persistent data directory.
 

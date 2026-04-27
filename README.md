@@ -24,22 +24,21 @@
   - `IMAGE_DTS_PLATFORM_WEBAPP=...`
 - 启动（同域、无 CORS）：
   - `./init.sh single 'Strong@2025!' dts.local`
-  - `docker compose -f docker-compose.yml -f docker-compose-app.yml up -d`
+  - `docker compose -f docker-compose-app.yml up -d`
 - 访问：
   - Admin：`https://biadmin.${BASE_DOMAIN}`（同域 `/api` → dts-admin）
   - Platform：`https://bi.${BASE_DOMAIN}`（同域 `/api` → dts-platform）
 - 更新代码后：
   - 仅重建改动服务镜像并重启该服务（示例）：
-    - `docker build -t dts-admin:NEW_TAG -f builds/dts-admin/Dockerfile . && docker compose -f docker-compose.yml -f docker-compose-app.yml up -d dts-admin`
-    - `docker build -t dts-platform:NEW_TAG -f builds/dts-platform/Dockerfile . && docker compose -f docker-compose.yml -f docker-compose-app.yml up -d dts-platform`
-    - `docker build -t dts-admin-webapp:NEW_TAG -f builds/dts-admin-webapp/Dockerfile . && docker compose -f docker-compose.yml -f docker-compose-app.yml up -d dts-admin-webapp`
+    - `docker build -t dts-admin:NEW_TAG -f builds/dts-admin/Dockerfile . && docker compose -f docker-compose-app.yml up -d dts-admin`
+    - `docker build -t dts-platform:NEW_TAG -f builds/dts-platform/Dockerfile . && docker compose -f docker-compose-app.yml up -d dts-platform`
+    - `docker build -t dts-admin-webapp:NEW_TAG -f builds/dts-admin-webapp/Dockerfile . && docker compose -f docker-compose-app.yml up -d dts-admin-webapp`
     - `docker build -t dts-admin:NEW_TAG -f builds/dts-admin/Dockerfile .` 与 `docker build -t dts-platform:NEW_TAG -f builds/dts-platform/Dockerfile .` 均可用；如未包含 `dts-common`，Dockerfile 将自动注入轻量版审计依赖，仅影响容器内构建。
     - 代理/离线环境：前端镜像在执行 `npm install -g pnpm` 与 `pnpm install` 时，可通过 `--build-arg NPM_HTTP_PROXY=http://proxy:port --build-arg NPM_HTTPS_PROXY=http://proxy:port --build-arg NPM_REGISTRY=https://npm-mirror.local` 指定出口或私有源；RUN 结束后会清理这些环境变量，不影响离线运行。Alpine 包依旧使用 `APK_HTTP_PROXY`/`APK_HTTPS_PROXY` build-arg，二者互不干扰。
   - 使用固定标签时可：`up -d --force-recreate <服务名>`（不推荐长期使用）
 
 【说明】
-- 基础依赖（Traefik/Keycloak/Postgres/MinIO/Nessie/Trino）由 `docker-compose.yml` 管理；
-  应用由 `docker-compose-app.yml` 管理；开发联调由 `docker-compose.dev.yml` 管理。
+- 运行态只保留三个自包含 Compose 文件：`docker-compose-app.yml`（x86 部署）、`docker-compose.dev.yml`（源码开发）、`docker-compose.legacy.yml`（鲲鹏 ARM + 麒麟 legacy）。
 - 当前版本默认使用河图（Hetu）；`dts-analytics` 作为自研 BI 模块已合并到开发/部署栈中，默认挂载在 `https://bi.${BASE_DOMAIN}/analytics`。
 - 如需变更域名，修改 `.env` 的 `BASE_DOMAIN` 后可重跑 `./init.sh`。
 - 认证预留：Admin 侧已加入可配置的 PKI 登录占位入口（默认关闭，不影响现有用户名/密码登录）。详见 `docs/pki-auth.md`。

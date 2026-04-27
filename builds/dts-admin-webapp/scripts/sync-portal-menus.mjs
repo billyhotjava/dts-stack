@@ -10,7 +10,7 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 const SEED_ENV_KEY = "DTS_PORTAL_MENU_SEED_PATH";
-const REPO_MARKERS = ["docker-compose.yml", "pnpm-workspace.yaml", "pnpm-lock.yaml", "package.json"];
+const REPO_MARKERS = ["docker-compose-app.yml", "pnpm-workspace.yaml", "pnpm-lock.yaml", "package.json"];
 
 const isDir = (candidate) => {
 	try {

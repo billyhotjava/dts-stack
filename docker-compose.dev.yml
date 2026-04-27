@@ -1,178 +1,9 @@
-## Dev overlay: run services from source via bind mounts and live reload
-
-x-hc: &hc
-  interval: 10s
-  timeout: 5s
-  retries: 30
-  start_period: 20s
-
+networks:
+  dts-core:
+    driver: bridge
+    name: dts-core
 services:
-
-  # Traefik overlay (Hetu reverse proxy via path prefixes).
-  # Merged into `dts-proxy` from `docker-compose.yml`.
-  dts-proxy:
-    extra_hosts:
-      - "host.docker.internal:${HOST_GATEWAY_IP:-172.17.0.1}"
-      - "hetu.upstream:${HETU_UPSTREAM_IP:-172.17.0.1}"
-    labels:
-      # NOTE: docker-compose merges `labels` as a list by replacement (not append);
-      # keep `traefik.enable=true` here or Traefik will ignore these routers.
-      - "traefik.enable=true"
-      - "traefik.http.routers.hetu-dashboards.rule=Host(`${HOST_PLATFORM_UI}`) && PathPrefix(`/dashboards`)"
-      - "traefik.http.routers.hetu-dashboards.entrypoints=websecure"
-      - "traefik.http.routers.hetu-dashboards.tls=true"
-      - "traefik.http.routers.hetu-dashboards.priority=200"
-      - "traefik.http.routers.hetu-dashboards.service=hetu@file"
-      - "traefik.http.middlewares.hetu-strip-dashboards.stripprefixregex.regex=/dashboards"
-      - "traefik.http.middlewares.hetu-allow-anonymous.headers.customrequestheaders.tui-allow-anonymous=true"
-      - "traefik.http.middlewares.hetu-upstream-host.headers.customrequestheaders.Host=${HETU_UPSTREAM_IP:-172.17.0.1}:7778"
-      - "traefik.http.routers.hetu-dashboards.middlewares=hetu-strip-dashboards@docker,hetu-upstream-host@docker,hetu-allow-anonymous@docker,security-headers@file"
-      - "traefik.http.routers.hetu-dashboard-hetu.rule=Host(`${HOST_PLATFORM_UI}`) && PathPrefix(`/dashboard/hetu`)"
-      - "traefik.http.routers.hetu-dashboard-hetu.entrypoints=websecure"
-      - "traefik.http.routers.hetu-dashboard-hetu.tls=true"
-      - "traefik.http.routers.hetu-dashboard-hetu.priority=210"
-      - "traefik.http.routers.hetu-dashboard-hetu.service=hetu@file"
-      - "traefik.http.middlewares.hetu-strip-dashboard-hetu.stripprefixregex.regex=/dashboard/hetu"
-      - "traefik.http.routers.hetu-dashboard-hetu.middlewares=hetu-strip-dashboard-hetu@docker,hetu-upstream-host@docker,hetu-allow-anonymous@docker,security-headers@file"
-      - "traefik.http.routers.hetu-screen.rule=Host(`${HOST_PLATFORM_UI}`) && PathPrefix(`/screen`)"
-      - "traefik.http.routers.hetu-screen.entrypoints=websecure"
-      - "traefik.http.routers.hetu-screen.tls=true"
-      - "traefik.http.routers.hetu-screen.priority=190"
-      - "traefik.http.routers.hetu-screen.service=hetu@file"
-      - "traefik.http.routers.hetu-screen.middlewares=hetu-upstream-host@docker,hetu-allow-anonymous@docker,security-headers@file"
-      - "traefik.http.routers.hetu-system.rule=Host(`${HOST_PLATFORM_UI}`) && PathPrefix(`/system`)"
-      - "traefik.http.routers.hetu-system.entrypoints=websecure"
-      - "traefik.http.routers.hetu-system.tls=true"
-      - "traefik.http.routers.hetu-system.priority=185"
-      - "traefik.http.routers.hetu-system.service=hetu@file"
-      - "traefik.http.routers.hetu-system.middlewares=hetu-upstream-host@docker,hetu-allow-anonymous@docker,security-headers@file"
-      - "traefik.http.routers.hetu-tdv.rule=Host(`${HOST_PLATFORM_UI}`) && PathPrefix(`/tdv`)"
-      - "traefik.http.routers.hetu-tdv.entrypoints=websecure"
-      - "traefik.http.routers.hetu-tdv.tls=true"
-      - "traefik.http.routers.hetu-tdv.priority=220"
-      - "traefik.http.routers.hetu-tdv.service=hetu@file"
-      - "traefik.http.routers.hetu-tdv.middlewares=hetu-upstream-host@docker,hetu-allow-anonymous@docker,security-headers@file"
-      - "traefik.http.routers.hetu-account.rule=Host(`${HOST_PLATFORM_UI}`) && PathPrefix(`/account`)"
-      - "traefik.http.routers.hetu-account.entrypoints=websecure"
-      - "traefik.http.routers.hetu-account.tls=true"
-      - "traefik.http.routers.hetu-account.priority=186"
-      - "traefik.http.routers.hetu-account.service=hetu@file"
-      - "traefik.http.routers.hetu-account.middlewares=hetu-upstream-host@docker,hetu-allow-anonymous@docker,security-headers@file"
-      - "traefik.http.routers.hetu-hetu.rule=Host(`${HOST_PLATFORM_UI}`) && PathPrefix(`/hetu`)"
-      - "traefik.http.routers.hetu-hetu.entrypoints=websecure"
-      - "traefik.http.routers.hetu-hetu.tls=true"
-      - "traefik.http.routers.hetu-hetu.priority=185"
-      - "traefik.http.routers.hetu-hetu.service=hetu@file"
-      - "traefik.http.routers.hetu-hetu.middlewares=hetu-upstream-host@docker,hetu-allow-anonymous@docker,security-headers@file"
-      - "traefik.http.routers.hetu-static.rule=Host(`${HOST_PLATFORM_UI}`) && PathPrefix(`/static`)"
-      - "traefik.http.routers.hetu-static.entrypoints=websecure"
-      - "traefik.http.routers.hetu-static.tls=true"
-      - "traefik.http.routers.hetu-static.priority=195"
-      - "traefik.http.routers.hetu-static.service=hetu@file"
-      - "traefik.http.routers.hetu-static.middlewares=hetu-upstream-host@docker,hetu-allow-anonymous@docker,security-headers@file"
-      - "traefik.http.routers.hetu-root-assets.rule=Host(`${HOST_PLATFORM_UI}`) && (PathPrefix(`/core`) || PathPrefix(`/screen-`) || PathPrefix(`/default~`) || PathPrefix(`/vendors~`) || PathPrefix(`/runtime~`))"
-      - "traefik.http.routers.hetu-root-assets.entrypoints=websecure"
-      - "traefik.http.routers.hetu-root-assets.tls=true"
-      - "traefik.http.routers.hetu-root-assets.priority=205"
-      - "traefik.http.routers.hetu-root-assets.service=hetu@file"
-      - "traefik.http.routers.hetu-root-assets.middlewares=hetu-upstream-host@docker,hetu-allow-anonymous@docker,security-headers@file"
-
-  # Java backend: dts-admin (Spring Boot)
   dts-admin:
-    image: ${IMAGE_MAVEN}
-    working_dir: /workspace-src/dts-admin
-    depends_on:
-      dts-pg:
-        condition: service_healthy
-      dts-keycloak:
-        condition: service_started
-      dts-proxy:
-        condition: service_started
-    environment:
-      TZ: ${TZ:-Asia/Shanghai}
-      SPRING_PROFILES_ACTIVE: ${DTS_PROFILE:-dev}
-      # Test / API-debug switches (see init.sh; 生产务必 false)
-      APP_API_DOCS_PUBLIC: "${APP_API_DOCS_PUBLIC:-false}"
-      APP_TEST_API_ENABLED: "${APP_TEST_API_ENABLED:-false}"
-      APP_TEST_API_TOKEN: "${APP_TEST_API_TOKEN:-}"
-      SPRING_DATASOURCE_URL: jdbc:postgresql://dts-pg:5432/${PG_DB_DTADMIN:-dts_admin}
-      SPRING_DATASOURCE_USERNAME: ${PG_USER_DTADMIN:-dts_admin}
-      SPRING_DATASOURCE_PASSWORD: ${PG_PWD_DTADMIN:-dts_admin}
-      SPRING_LIQUIBASE_ENABLED: ${SPRING_LIQUIBASE_ENABLED:-true}
-      EUREKA_CLIENT_ENABLED: ${EUREKA_CLIENT_ENABLED:-false}
-      SPRING_CLOUD_CONFIG_ENABLED: ${SPRING_CLOUD_CONFIG_ENABLED:-false}
-      SPRING_SECURITY_OAUTH2_CLIENT_PROVIDER_OIDC_ISSUER_URI: ${OIDC_ISSUER_URI}
-      SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_ISSUER_URI: ${OIDC_ISSUER_URI}
-      SPRING_SECURITY_OAUTH2_CLIENT_REGISTRATION_OIDC_CLIENT_ID: "${OAUTH2_ADMIN_CLIENT_ID:-dts-admin}"
-      SPRING_SECURITY_OAUTH2_CLIENT_REGISTRATION_OIDC_CLIENT_SECRET: "${OAUTH2_ADMIN_CLIENT_SECRET:-}"
-      DTS_KEYCLOAK_ADMIN_CLIENT_ID: "${OAUTH2_ADMIN_CLIENT_ID:-dts-admin}"
-      DTS_KEYCLOAK_ADMIN_CLIENT_SECRET: "${OAUTH2_ADMIN_CLIENT_SECRET:-}"
-      # Target client that holds data roles (client roles). Default matches our realm seeds.
-      DTS_KEYCLOAK_TARGET_CLIENT_ID: "${OAUTH2_PLATFORM_CLIENT_ID:-dts-platform}"
-      DTS_KEYCLOAK_USE_CLIENT_ROLES: "${DTS_KEYCLOAK_USE_CLIENT_ROLES:-false}"
-      # Enable org<->Keycloak group provisioning in dev; requires KC admin privileges on the client above
-      DTS_KEYCLOAK_GROUP_PROVISIONING_ENABLED: "${DTS_KEYCLOAK_GROUP_PROVISIONING_ENABLED:-true}"
-      # Ensure root org creation has a default data level in dev
-      DTS_ORG_UNASSIGNED_DATA_LEVEL: "${DTS_ORG_UNASSIGNED_DATA_LEVEL:-INTERNAL}"
-      JHIPSTER_CORS_ALLOWED_ORIGINS: "http://localhost:3001,http://127.0.0.1:3001,http://localhost:5173,http://127.0.0.1:5173,http://localhost:18011,http://127.0.0.1:18011,http://localhost:18012,http://127.0.0.1:18012,https://${HOST_ADMIN_UI},https://${HOST_PLATFORM_UI},https://${HOST_API},https://${HOST_SSO},https://192.168.8.150,http://192.168.8.150:18011,http://192.168.8.150:18012"
-      JHIPSTER_CORS_ALLOWED_METHODS: "GET,POST,PUT,PATCH,DELETE,OPTIONS"
-      JHIPSTER_CORS_ALLOWED_HEADERS: "*"
-      JHIPSTER_CORS_ALLOW_CREDENTIALS: "true"
-      SPRINGDOC_API_DOCS_ENABLED: "true"
-      SPRINGDOC_SWAGGER_UI_ENABLED: "true"
-      # Debug SQL parameter binding types (to confirm lower(:deptCode) binding)
-      LOGGING_LEVEL_ORG_HIBERNATE_SQL: "DEBUG"
-      LOGGING_LEVEL_ORG_HIBERNATE_ORM_JDBC_BIND: "TRACE"
-      JAVA_TOOL_OPTIONS: "${JAVA_TOOL_OPTIONS:-} ${DTS_ADMIN_JAVA_TOOL_OPTIONS_EXTRA:-}"
-      # Optional PKI login integration (align with app overlay)
-      DTS_PKI_ENABLED: "${DTS_PKI_ENABLED:-true}"
-      DTS_PKI_MODE: "${DTS_PKI_MODE:-disabled}"
-      DTS_PKI_ACCEPT_FORWARDED_CERT: "${DTS_PKI_ACCEPT_FORWARDED_CERT:-false}"
-      DTS_PKI_CLIENT_CERT_HEADER: "${DTS_PKI_CLIENT_CERT_HEADER:-X-Forwarded-Tls-Client-Cert}"
-      DTS_PKI_ISSUER_CN: "${DTS_PKI_ISSUER_CN:-}"
-      DTS_PKI_API_BASE: "${DTS_PKI_API_BASE:-}"
-      DTS_PKI_API_TOKEN: "${DTS_PKI_API_TOKEN:-}"
-      DTS_PKI_API_TIMEOUT: "${DTS_PKI_API_TIMEOUT:-3000}"
-      DTS_PKI_ALLOW_MOCK: "${DTS_PKI_ALLOW_MOCK:-false}"
-      DTS_PKI_GATEWAY_HOST: "${DTS_PKI_GATEWAY_HOST:-}"
-      DTS_PKI_GATEWAY_PORT: "${DTS_PKI_GATEWAY_PORT:-0}"
-      DTS_PKI_DIGEST: "${DTS_PKI_DIGEST:-SHA1}"
-      DTS_PKI_VENDOR_JAR: "${DTS_PKI_VENDOR_JAR:-}"
-      SPRING_CONFIG_IMPORT: "optional:file:/workspace-src/dts-admin/config/mdm/mdm-gateway.yml,optional:file:/workspace-src/dts-admin/config/mdm/"
-      DTS_SECURITY_IP_ALLOWLIST_ENABLED: "${DTS_SECURITY_IP_ALLOWLIST_ENABLED:-true}"
-      DTS_SECURITY_IP_ALLOWLIST_TRIAD_USERNAMES: "${DTS_SECURITY_IP_ALLOWLIST_TRIAD_USERNAMES:-sysadmin,authadmin,auditadmin}"
-      # MDM Gateway
-      DTS_MDM_GATEWAY_ENABLED: "${DTS_MDM_GATEWAY_ENABLED:-true}"
-      # 存储/日志路径与 .env 同级（仓库根目录的 data/mdm、logs）
-      DTS_MDM_GATEWAY_STORAGE_PATH: "${DTS_MDM_GATEWAY_STORAGE_PATH:-data/mdm}"
-      DTS_MDM_GATEWAY_LOG_PATH: "${DTS_MDM_GATEWAY_LOG_PATH:-/workspace/logs/dts-admin/mdm-gateway.log}"
-      DTS_PERSONNEL_LOG_PATH: "${DTS_PERSONNEL_LOG_PATH:-/workspace/logs/dts-admin/personnel-operations.log}"
-      LOG_ROOT: "${LOG_ROOT:-/workspace/logs}"
-      DTS_MDM_GATEWAY_UPSTREAM_BASE_URL: "${DTS_MDM_GATEWAY_UPSTREAM_BASE_URL:-http://localhost:28080}"
-      DTS_MDM_GATEWAY_UPSTREAM_PULL_PATH: "${DTS_MDM_GATEWAY_UPSTREAM_PULL_PATH:-/api/mdm/pull}"
-      DTS_MDM_GATEWAY_UPSTREAM_AUTH_TOKEN: "${DTS_MDM_GATEWAY_UPSTREAM_AUTH_TOKEN:-}"
-      DTS_MDM_GATEWAY_UPSTREAM_USE_MULTIPART: "${DTS_MDM_GATEWAY_UPSTREAM_USE_MULTIPART:-true}"
-      DTS_MDM_GATEWAY_UPSTREAM_FILE_PART_NAME: "${DTS_MDM_GATEWAY_UPSTREAM_FILE_PART_NAME:-file}"
-      DTS_MDM_GATEWAY_UPSTREAM_FILE_PREFIX: "${DTS_MDM_GATEWAY_UPSTREAM_FILE_PREFIX:-orgItDemand}"
-      DTS_MDM_GATEWAY_UPSTREAM_FILE_SUFFIX: "${DTS_MDM_GATEWAY_UPSTREAM_FILE_SUFFIX:-.txt}"
-      DTS_MDM_GATEWAY_UPSTREAM_CONNECT_TIMEOUT: "${DTS_MDM_GATEWAY_UPSTREAM_CONNECT_TIMEOUT:-5s}"
-      DTS_MDM_GATEWAY_UPSTREAM_READ_TIMEOUT: "${DTS_MDM_GATEWAY_UPSTREAM_READ_TIMEOUT:-30s}"
-      DTS_MDM_GATEWAY_CALLBACK_URL: "${DTS_MDM_GATEWAY_CALLBACK_URL:-http://localhost:38012/api/mdm/receive}"
-      DTS_MDM_GATEWAY_CALLBACK_AUTH_TOKEN: "${DTS_MDM_GATEWAY_CALLBACK_AUTH_TOKEN:-}"
-      DTS_MDM_GATEWAY_CALLBACK_SIGNATURE_HEADER: "${DTS_MDM_GATEWAY_CALLBACK_SIGNATURE_HEADER:-X-Signature}"
-      DTS_MDM_GATEWAY_CALLBACK_ALLOWED_IPS: "${DTS_MDM_GATEWAY_CALLBACK_ALLOWED_IPS:-}"
-      DTS_MDM_GATEWAY_REGISTRY_SYSTEM_CODE: "${DTS_MDM_GATEWAY_REGISTRY_SYSTEM_CODE:-10XT}"
-      DTS_MDM_GATEWAY_REGISTRY_DATA_RANGE: "${DTS_MDM_GATEWAY_REGISTRY_DATA_RANGE:-9010}"
-      DTS_MDM_GATEWAY_REGISTRY_AREA_SECURITY: "${DTS_MDM_GATEWAY_REGISTRY_AREA_SECURITY:-9001}"
-      DTS_MDM_GATEWAY_REGISTRY_AREA_BUSINESS: "${DTS_MDM_GATEWAY_REGISTRY_AREA_BUSINESS:-B}"
-      DTS_MDM_GATEWAY_REGISTRY_DATA_TYPE: "${DTS_MDM_GATEWAY_REGISTRY_DATA_TYPE:-sync-demand}"
-      DTS_MDM_GATEWAY_REQUIRED_FIELDS: "${DTS_MDM_GATEWAY_REQUIRED_FIELDS:-orgCode,deptCode,status}"
-      DTS_MDM_GATEWAY_REQUIRED_USERS: "${DTS_MDM_GATEWAY_REQUIRED_USERS:-userCode,userName,deptCode}"
-      DTS_MDM_GATEWAY_REQUIRED_DEPTS: "${DTS_MDM_GATEWAY_REQUIRED_DEPTS:-deptCode,deptName}"
-      DTS_MDM_GATEWAY_ROOT_CODE: "${DTS_MDM_GATEWAY_ROOT_CODE:-90}"
-      DTS_MDM_GATEWAY_AUTO_PROVISION_USERS: "${DTS_MDM_GATEWAY_AUTO_PROVISION_USERS:-true}"
-      DTS_MDM_GATEWAY_AUTO_PROVISION_ROLES: "${DTS_MDM_GATEWAY_AUTO_PROVISION_ROLES:-EMPLOYEE}"
-      DTS_MDM_GATEWAY_AUTO_PROVISION_ENABLE_LOGIN: "${DTS_MDM_GATEWAY_AUTO_PROVISION_ENABLE_LOGIN:-true}"
     command:
       - bash
       - -lc
@@ -209,130 +40,1222 @@ services:
         mvn -q -Pdev -DskipTests -Dmodernizer.skip=true spring-boot:run \
           -Dspring-boot.run.jvmArguments="-agentlib:jdwp=transport=dt_socket,server=y,suspend=n,address=*:5005 -Djavax.net.ssl.trustStore=/etc/dts/truststore.p12 -Djavax.net.ssl.trustStorePassword=${TRUSTSTORE_PASSWORD:-changeit} -Djavax.net.ssl.trustStoreType=PKCS12" \
           -Dspring-boot.run.arguments="--spring.datasource.url=$${SPRING_DATASOURCE_URL} --spring.datasource.username=$${SPRING_DATASOURCE_USERNAME} --spring.datasource.password=$${SPRING_DATASOURCE_PASSWORD}"
-    ports:
-      - "18081:8081"
-      - "5005:5005"
-    volumes:
-      - ./source:/workspace-src:z
-      - dts-admin-target:/workspace-src/dts-admin/target
-      - dts-common-target:/workspace-src/dts-common/target
-      - ./data:/workspace-src/dts-admin/data:z
-      - ./config:/workspace-src/dts-admin/config:ro,z
-      - ./logs/dts-admin:/workspace/logs/dts-admin:z
-      - maven-cache:/root/.m2
-      - ./services/certs/truststore.p12:/etc/dts/truststore.p12:ro,z
-      # Mount vendor PKI client jar(s) like svs-uk_custom.jar into /opt/dts/vendor
-      - ./services/dts-admin/vendor:/opt/dts/vendor:ro,z
-      - ./services/dts-platform/drivers:/opt/dts/drivers:z
-      - ./builds/patch-app-dev-yml.sh:/patches/patch-app-dev-yml.sh:ro,z
-    security_opt:
-      - seccomp=unconfined
+    depends_on:
+      dts-keycloak:
+        condition: service_started
+        required: true
+      dts-pg:
+        condition: service_healthy
+        required: true
+      dts-proxy:
+        condition: service_started
+        required: true
+    environment:
+      APP_API_DOCS_PUBLIC: ${APP_API_DOCS_PUBLIC:-false}
+      APP_TEST_API_ENABLED: ${APP_TEST_API_ENABLED:-false}
+      APP_TEST_API_TOKEN: ${APP_TEST_API_TOKEN:-}
+      DTS_KEYCLOAK_ADMIN_CLIENT_ID: ${OAUTH2_ADMIN_CLIENT_ID:-dts-admin}
+      DTS_KEYCLOAK_ADMIN_CLIENT_SECRET: ${OAUTH2_ADMIN_CLIENT_SECRET:-}
+      DTS_KEYCLOAK_GROUP_PROVISIONING_ENABLED: ${DTS_KEYCLOAK_GROUP_PROVISIONING_ENABLED:-true}
+      DTS_KEYCLOAK_TARGET_CLIENT_ID: ${OAUTH2_PLATFORM_CLIENT_ID:-dts-platform}
+      DTS_KEYCLOAK_USE_CLIENT_ROLES: ${DTS_KEYCLOAK_USE_CLIENT_ROLES:-false}
+      DTS_MDM_GATEWAY_AUTO_PROVISION_ENABLE_LOGIN: ${DTS_MDM_GATEWAY_AUTO_PROVISION_ENABLE_LOGIN:-true}
+      DTS_MDM_GATEWAY_AUTO_PROVISION_ROLES: ${DTS_MDM_GATEWAY_AUTO_PROVISION_ROLES:-EMPLOYEE}
+      DTS_MDM_GATEWAY_AUTO_PROVISION_USERS: ${DTS_MDM_GATEWAY_AUTO_PROVISION_USERS:-true}
+      DTS_MDM_GATEWAY_CALLBACK_ALLOWED_IPS: ${DTS_MDM_GATEWAY_CALLBACK_ALLOWED_IPS:-}
+      DTS_MDM_GATEWAY_CALLBACK_AUTH_TOKEN: ${DTS_MDM_GATEWAY_CALLBACK_AUTH_TOKEN:-}
+      DTS_MDM_GATEWAY_CALLBACK_SIGNATURE_HEADER: ${DTS_MDM_GATEWAY_CALLBACK_SIGNATURE_HEADER:-X-Signature}
+      DTS_MDM_GATEWAY_CALLBACK_URL: ${DTS_MDM_GATEWAY_CALLBACK_URL:-http://localhost:38012/api/mdm/receive}
+      DTS_MDM_GATEWAY_ENABLED: ${DTS_MDM_GATEWAY_ENABLED:-true}
+      DTS_MDM_GATEWAY_LOG_PATH: ${DTS_MDM_GATEWAY_LOG_PATH:-/workspace/logs/dts-admin/mdm-gateway.log}
+      DTS_MDM_GATEWAY_REGISTRY_AREA_BUSINESS: ${DTS_MDM_GATEWAY_REGISTRY_AREA_BUSINESS:-B}
+      DTS_MDM_GATEWAY_REGISTRY_AREA_SECURITY: ${DTS_MDM_GATEWAY_REGISTRY_AREA_SECURITY:-9001}
+      DTS_MDM_GATEWAY_REGISTRY_DATA_RANGE: ${DTS_MDM_GATEWAY_REGISTRY_DATA_RANGE:-9010}
+      DTS_MDM_GATEWAY_REGISTRY_DATA_TYPE: ${DTS_MDM_GATEWAY_REGISTRY_DATA_TYPE:-sync-demand}
+      DTS_MDM_GATEWAY_REGISTRY_SYSTEM_CODE: ${DTS_MDM_GATEWAY_REGISTRY_SYSTEM_CODE:-10XT}
+      DTS_MDM_GATEWAY_REQUIRED_DEPTS: ${DTS_MDM_GATEWAY_REQUIRED_DEPTS:-deptCode,deptName}
+      DTS_MDM_GATEWAY_REQUIRED_FIELDS: ${DTS_MDM_GATEWAY_REQUIRED_FIELDS:-orgCode,deptCode,status}
+      DTS_MDM_GATEWAY_REQUIRED_USERS: ${DTS_MDM_GATEWAY_REQUIRED_USERS:-userCode,userName,deptCode}
+      DTS_MDM_GATEWAY_ROOT_CODE: ${DTS_MDM_GATEWAY_ROOT_CODE:-90}
+      DTS_MDM_GATEWAY_STORAGE_PATH: ${DTS_MDM_GATEWAY_STORAGE_PATH:-data/mdm}
+      DTS_MDM_GATEWAY_UPSTREAM_AUTH_TOKEN: ${DTS_MDM_GATEWAY_UPSTREAM_AUTH_TOKEN:-}
+      DTS_MDM_GATEWAY_UPSTREAM_BASE_URL: ${DTS_MDM_GATEWAY_UPSTREAM_BASE_URL:-http://localhost:28080}
+      DTS_MDM_GATEWAY_UPSTREAM_CONNECT_TIMEOUT: ${DTS_MDM_GATEWAY_UPSTREAM_CONNECT_TIMEOUT:-5s}
+      DTS_MDM_GATEWAY_UPSTREAM_FILE_PART_NAME: ${DTS_MDM_GATEWAY_UPSTREAM_FILE_PART_NAME:-file}
+      DTS_MDM_GATEWAY_UPSTREAM_FILE_PREFIX: ${DTS_MDM_GATEWAY_UPSTREAM_FILE_PREFIX:-orgItDemand}
+      DTS_MDM_GATEWAY_UPSTREAM_FILE_SUFFIX: ${DTS_MDM_GATEWAY_UPSTREAM_FILE_SUFFIX:-.txt}
+      DTS_MDM_GATEWAY_UPSTREAM_PULL_PATH: ${DTS_MDM_GATEWAY_UPSTREAM_PULL_PATH:-/api/mdm/pull}
+      DTS_MDM_GATEWAY_UPSTREAM_READ_TIMEOUT: ${DTS_MDM_GATEWAY_UPSTREAM_READ_TIMEOUT:-30s}
+      DTS_MDM_GATEWAY_UPSTREAM_USE_MULTIPART: ${DTS_MDM_GATEWAY_UPSTREAM_USE_MULTIPART:-true}
+      DTS_ORG_UNASSIGNED_DATA_LEVEL: ${DTS_ORG_UNASSIGNED_DATA_LEVEL:-INTERNAL}
+      DTS_PERSONNEL_LOG_PATH: ${DTS_PERSONNEL_LOG_PATH:-/workspace/logs/dts-admin/personnel-operations.log}
+      DTS_PKI_ACCEPT_FORWARDED_CERT: ${DTS_PKI_ACCEPT_FORWARDED_CERT:-false}
+      DTS_PKI_ALLOW_MOCK: ${DTS_PKI_ALLOW_MOCK:-false}
+      DTS_PKI_API_BASE: ${DTS_PKI_API_BASE:-}
+      DTS_PKI_API_TIMEOUT: ${DTS_PKI_API_TIMEOUT:-3000}
+      DTS_PKI_API_TOKEN: ${DTS_PKI_API_TOKEN:-}
+      DTS_PKI_CLIENT_CERT_HEADER: ${DTS_PKI_CLIENT_CERT_HEADER:-X-Forwarded-Tls-Client-Cert}
+      DTS_PKI_DIGEST: ${DTS_PKI_DIGEST:-SHA1}
+      DTS_PKI_ENABLED: ${DTS_PKI_ENABLED:-true}
+      DTS_PKI_GATEWAY_HOST: ${DTS_PKI_GATEWAY_HOST:-}
+      DTS_PKI_GATEWAY_PORT: ${DTS_PKI_GATEWAY_PORT:-0}
+      DTS_PKI_ISSUER_CN: ${DTS_PKI_ISSUER_CN:-}
+      DTS_PKI_MODE: ${DTS_PKI_MODE:-disabled}
+      DTS_PKI_VENDOR_JAR: ${DTS_PKI_VENDOR_JAR:-}
+      DTS_SECURITY_IP_ALLOWLIST_ENABLED: ${DTS_SECURITY_IP_ALLOWLIST_ENABLED:-true}
+      DTS_SECURITY_IP_ALLOWLIST_TRIAD_USERNAMES: ${DTS_SECURITY_IP_ALLOWLIST_TRIAD_USERNAMES:-sysadmin,authadmin,auditadmin}
+      EUREKA_CLIENT_ENABLED: ${EUREKA_CLIENT_ENABLED:-false}
+      JAVA_TOOL_OPTIONS: ${JAVA_TOOL_OPTIONS:-} ${DTS_ADMIN_JAVA_TOOL_OPTIONS_EXTRA:-}
+      JHIPSTER_CORS_ALLOW_CREDENTIALS: "true"
+      JHIPSTER_CORS_ALLOWED_HEADERS: '*'
+      JHIPSTER_CORS_ALLOWED_METHODS: GET,POST,PUT,PATCH,DELETE,OPTIONS
+      JHIPSTER_CORS_ALLOWED_ORIGINS: http://localhost:3001,http://127.0.0.1:3001,http://localhost:5173,http://127.0.0.1:5173,http://localhost:18011,http://127.0.0.1:18011,http://localhost:18012,http://127.0.0.1:18012,https://${HOST_ADMIN_UI},https://${HOST_PLATFORM_UI},https://${HOST_API},https://${HOST_SSO},https://192.168.8.150,http://192.168.8.150:18011,http://192.168.8.150:18012
+      LOG_ROOT: ${LOG_ROOT:-/workspace/logs}
+      LOGGING_LEVEL_ORG_HIBERNATE_ORM_JDBC_BIND: TRACE
+      LOGGING_LEVEL_ORG_HIBERNATE_SQL: DEBUG
+      SPRING_CLOUD_CONFIG_ENABLED: ${SPRING_CLOUD_CONFIG_ENABLED:-false}
+      SPRING_CONFIG_IMPORT: optional:file:/workspace-src/dts-admin/config/mdm/mdm-gateway.yml,optional:file:/workspace-src/dts-admin/config/mdm/
+      SPRING_DATASOURCE_PASSWORD: ${PG_PWD_DTADMIN:-dts_admin}
+      SPRING_DATASOURCE_URL: jdbc:postgresql://dts-pg:5432/${PG_DB_DTADMIN:-dts_admin}
+      SPRING_DATASOURCE_USERNAME: ${PG_USER_DTADMIN:-dts_admin}
+      SPRING_LIQUIBASE_ENABLED: ${SPRING_LIQUIBASE_ENABLED:-true}
+      SPRING_PROFILES_ACTIVE: ${DTS_PROFILE:-dev}
+      SPRING_SECURITY_OAUTH2_CLIENT_PROVIDER_OIDC_ISSUER_URI: ${OIDC_ISSUER_URI}
+      SPRING_SECURITY_OAUTH2_CLIENT_REGISTRATION_OIDC_CLIENT_ID: ${OAUTH2_ADMIN_CLIENT_ID:-dts-admin}
+      SPRING_SECURITY_OAUTH2_CLIENT_REGISTRATION_OIDC_CLIENT_SECRET: ${OAUTH2_ADMIN_CLIENT_SECRET:-}
+      SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_ISSUER_URI: ${OIDC_ISSUER_URI}
+      SPRINGDOC_API_DOCS_ENABLED: "true"
+      SPRINGDOC_SWAGGER_UI_ENABLED: "true"
+      TZ: ${TZ:-Asia/Shanghai}
     extra_hosts:
-      # For Docker < 20.10, 'host-gateway' is unsupported; fall back to default bridge gateway IP.
-      - "${HOST_SSO}:${HOST_GATEWAY_IP:-172.17.0.1}"
+      - ${HOST_SSO}:${HOST_GATEWAY_IP:-172.17.0.1}
     healthcheck:
-      test: ["CMD-SHELL","curl -fsS http://127.0.0.1:8081/management/health >/dev/null || wget -qO- http://127.0.0.1:8081/management/health >/dev/null"]
       interval: 10s
-      timeout: 10s
       retries: 60
       start_period: 120s
-    networks:
-      - dts-core
-    labels:
-      - "traefik.enable=true"
-      - "traefik.docker.network=dts-core"
-      - "traefik.http.routers.dts-admin.rule=Host(`${HOST_API}`) && PathPrefix(`/admin`)"
-      - "traefik.http.routers.dts-admin.entrypoints=websecure"
-      - "traefik.http.routers.dts-admin.tls=true"
-      - "traefik.http.services.dts-admin.loadbalancer.server.port=8081"
-      - "traefik.http.middlewares.dts-strip-admin.stripprefixregex.regex=/admin"
-      - "traefik.http.routers.dts-admin.middlewares=dts-strip-admin@docker,cors-allow@file,security-headers@file"
-      - "traefik.http.routers.dts-admin-uiapi.rule=Host(`${HOST_ADMIN_UI}`) && PathPrefix(`/api`)"
-      - "traefik.http.routers.dts-admin-uiapi.entrypoints=websecure"
-      - "traefik.http.routers.dts-admin-uiapi.tls=true"
-      - "traefik.http.routers.dts-admin-uiapi.service=dts-admin"
-      - "traefik.http.routers.dts-admin-uiapi.middlewares=cors-allow@file,security-headers@file"
-      - "traefik.http.routers.dts-admin-platformapi.rule=Host(`${HOST_PLATFORM_UI}`) && PathPrefix(`/admin/api`)"
-      - "traefik.http.routers.dts-admin-platformapi.entrypoints=websecure"
-      - "traefik.http.routers.dts-admin-platformapi.tls=true"
-      - "traefik.http.routers.dts-admin-platformapi.service=dts-admin"
-      - "traefik.http.routers.dts-admin-platformapi.middlewares=dts-strip-admin@docker,cors-allow@file,security-headers@file"
-      # Swagger UI + OpenAPI JSON on admin UI domain (springdoc serves at /swagger-ui.html, /swagger-ui/*, /v3/api-docs, /webjars/*)
-      - "traefik.http.routers.dts-admin-swagger.rule=Host(`${HOST_ADMIN_UI}`) && (Path(`/swagger-ui.html`) || PathPrefix(`/swagger-ui/`) || PathPrefix(`/v3/api-docs`) || PathPrefix(`/webjars/`))"
-      - "traefik.http.routers.dts-admin-swagger.entrypoints=websecure"
-      - "traefik.http.routers.dts-admin-swagger.tls=true"
-      - "traefik.http.routers.dts-admin-swagger.service=dts-admin"
-      - "traefik.http.routers.dts-admin-swagger.priority=200"
-      - "traefik.http.routers.dts-admin-swagger.middlewares=cors-allow@file,security-headers@file"
-
-  # Java backend: dts-platform (Spring Boot)
-  dts-platform:
+      test:
+        - CMD-SHELL
+        - curl -fsS http://127.0.0.1:8081/management/health >/dev/null || wget -qO- http://127.0.0.1:8081/management/health >/dev/null
+      timeout: 10s
     image: ${IMAGE_MAVEN}
-    working_dir: /workspace-src/dts-platform
+    labels:
+      - traefik.enable=true
+      - traefik.docker.network=dts-core
+      - traefik.http.routers.dts-admin.rule=Host(`${HOST_API}`) && PathPrefix(`/admin`)
+      - traefik.http.routers.dts-admin.entrypoints=websecure
+      - traefik.http.routers.dts-admin.tls=true
+      - traefik.http.services.dts-admin.loadbalancer.server.port=8081
+      - traefik.http.middlewares.dts-strip-admin.stripprefixregex.regex=/admin
+      - traefik.http.routers.dts-admin.middlewares=dts-strip-admin@docker,cors-allow@file,security-headers@file
+      - traefik.http.routers.dts-admin-uiapi.rule=Host(`${HOST_ADMIN_UI}`) && PathPrefix(`/api`)
+      - traefik.http.routers.dts-admin-uiapi.entrypoints=websecure
+      - traefik.http.routers.dts-admin-uiapi.tls=true
+      - traefik.http.routers.dts-admin-uiapi.service=dts-admin
+      - traefik.http.routers.dts-admin-uiapi.middlewares=cors-allow@file,security-headers@file
+      - traefik.http.routers.dts-admin-platformapi.rule=Host(`${HOST_PLATFORM_UI}`) && PathPrefix(`/admin/api`)
+      - traefik.http.routers.dts-admin-platformapi.entrypoints=websecure
+      - traefik.http.routers.dts-admin-platformapi.tls=true
+      - traefik.http.routers.dts-admin-platformapi.service=dts-admin
+      - traefik.http.routers.dts-admin-platformapi.middlewares=dts-strip-admin@docker,cors-allow@file,security-headers@file
+      - traefik.http.routers.dts-admin-swagger.rule=Host(`${HOST_ADMIN_UI}`) && (Path(`/swagger-ui.html`) || PathPrefix(`/swagger-ui/`) || PathPrefix(`/v3/api-docs`) || PathPrefix(`/webjars/`))
+      - traefik.http.routers.dts-admin-swagger.entrypoints=websecure
+      - traefik.http.routers.dts-admin-swagger.tls=true
+      - traefik.http.routers.dts-admin-swagger.service=dts-admin
+      - traefik.http.routers.dts-admin-swagger.priority=200
+      - traefik.http.routers.dts-admin-swagger.middlewares=cors-allow@file,security-headers@file
+    networks:
+      dts-core: null
+    ports:
+      - mode: ingress
+        protocol: tcp
+        published: "18081"
+        target: 8081
+      - mode: ingress
+        protocol: tcp
+        published: "5005"
+        target: 5005
+    security_opt:
+      - seccomp=unconfined
+    volumes:
+      - bind:
+          create_host_path: true
+          selinux: z
+        source: ./source
+        target: /workspace-src
+        type: bind
+      - source: dts-admin-target
+        target: /workspace-src/dts-admin/target
+        type: volume
+        volume: {}
+      - source: dts-common-target
+        target: /workspace-src/dts-common/target
+        type: volume
+        volume: {}
+      - bind:
+          create_host_path: true
+          selinux: z
+        source: ./data
+        target: /workspace-src/dts-admin/data
+        type: bind
+      - bind:
+          create_host_path: true
+          selinux: z
+        read_only: true
+        source: ./config
+        target: /workspace-src/dts-admin/config
+        type: bind
+      - bind:
+          create_host_path: true
+          selinux: z
+        source: ./logs/dts-admin
+        target: /workspace/logs/dts-admin
+        type: bind
+      - source: maven-cache
+        target: /root/.m2
+        type: volume
+        volume: {}
+      - bind:
+          create_host_path: true
+          selinux: z
+        read_only: true
+        source: ./services/certs/truststore.p12
+        target: /etc/dts/truststore.p12
+        type: bind
+      - bind:
+          create_host_path: true
+          selinux: z
+        read_only: true
+        source: ./services/dts-admin/vendor
+        target: /opt/dts/vendor
+        type: bind
+      - bind:
+          create_host_path: true
+          selinux: z
+        source: ./services/dts-platform/drivers
+        target: /opt/dts/drivers
+        type: bind
+      - bind:
+          create_host_path: true
+          selinux: z
+        read_only: true
+        source: ./builds/patch-app-dev-yml.sh
+        target: /patches/patch-app-dev-yml.sh
+        type: bind
+    working_dir: /workspace-src/dts-admin
+  dts-admin-webapp:
+    command:
+      - sh
+      - -lc
+      - if [ -f package.json ]; then corepack enable; pnpm install --store-dir /pnpm-store --frozen-lockfile --ignore-scripts || pnpm install --store-dir /pnpm-store --no-frozen-lockfile --ignore-scripts; sh /patches/patch-vite-env.sh || true; pnpm run dev -- --host 0.0.0.0 --port ${PORT:-3001} --strictPort --open=false; else echo no\ package.json\ found; tail -f /dev/null; fi
+    depends_on:
+      dts-admin:
+        condition: service_started
+        required: true
+    environment:
+      BROWSER: none
+      CHOKIDAR_INTERVAL: "1000"
+      CHOKIDAR_USEPOLLING: "true"
+      HOST: 0.0.0.0
+      PNPM_STORE_DIR: /pnpm-store
+      PORT: "3001"
+      TZ: ${TZ:-Asia/Shanghai}
+      VITE_API_PROXY_TARGET: http://dts-admin:8081
+      VITE_ENABLE_MOCK: "false"
+      VITE_HIDE_PASSWORD_LOGIN: ${ADMIN_VITE_HIDE_PASSWORD_LOGIN:-}
+      VITE_OPEN: "false"
+      WEBAPP_PASSWORD_LOGIN_ENABLED: ${ADMIN_WEBAPP_PASSWORD_LOGIN_ENABLED:-}
+    healthcheck:
+      interval: 10s
+      retries: 30
+      start_period: 60s
+      test:
+        - CMD-SHELL
+        - curl -fsS http://127.0.0.1:$${PORT:-3001} >/dev/null || wget -qO- http://127.0.0.1:$${PORT:-3001} >/dev/null
+      timeout: 5s
+    image: node:22-bookworm
+    labels:
+      - traefik.enable=true
+      - traefik.docker.network=dts-core
+      - traefik.http.routers.admin-ui.rule=Host(`${HOST_ADMIN_UI}`)
+      - traefik.http.routers.admin-ui.entrypoints=websecure
+      - traefik.http.routers.admin-ui.tls=true
+      - traefik.http.services.admin-ui.loadbalancer.server.port=3001
+      - traefik.http.routers.admin-ui.middlewares=security-headers@file
+    networks:
+      dts-core: null
+    ports:
+      - mode: ingress
+        protocol: tcp
+        published: "18011"
+        target: 3001
+    volumes:
+      - bind:
+          create_host_path: true
+          selinux: z
+        source: ./source
+        target: /workspace-src
+        type: bind
+      - bind:
+          create_host_path: true
+          selinux: z
+        read_only: true
+        source: ./builds
+        target: /builds
+        type: bind
+      - bind:
+          create_host_path: true
+          selinux: z
+        read_only: true
+        source: ./builds/patch-vite-env.sh
+        target: /patches/patch-vite-env.sh
+        type: bind
+      - source: pnpm-store
+        target: /pnpm-store
+        type: volume
+        volume: {}
+      - target: /workspace-src/dts-admin-webapp/node_modules
+        type: volume
+        volume: {}
+    working_dir: /workspace-src/dts-admin-webapp
+  dts-airflow-init:
+    command:
+      - -c
+      - |
+        find /opt/airflow/dags /opt/airflow/plugins /opt/airflow/extra /opt/airflow/config -type f ! -perm /o+r -exec chmod o+r {} + 2>/dev/null || true
+        find /opt/airflow/dags /opt/airflow/plugins /opt/airflow/extra /opt/airflow/config -type d ! -perm /o+rx -exec chmod o+rx {} + 2>/dev/null || true
+        airflow db migrate
+        airflow users create --username "${AIRFLOW_ADMIN_USERNAME}" --password "${AIRFLOW_ADMIN_PASSWORD}" --firstname "${AIRFLOW_ADMIN_FIRSTNAME}" --lastname "${AIRFLOW_ADMIN_LASTNAME}" --role Admin --email "${AIRFLOW_ADMIN_EMAIL}" || true
+    container_name: dts-airflow-init
     depends_on:
       dts-pg:
         condition: service_healthy
-      # dts-trino:
-      #   condition: service_started
-      dts-ingestion:
-        condition: service_started
+        required: true
+    entrypoint: /bin/bash
     environment:
-      TZ: ${TZ:-Asia/Shanghai}
+      - ADDAX_DOCKER_NETWORK=${ADDAX_DOCKER_NETWORK:-dts-core}
+      - ADDAX_DRIVER_DIR=${STACK_ROOT}/services/dts-platform/drivers
+      - ADDAX_DRIVER_JARS=${ADDAX_DRIVER_JARS:-DmJdbcDriver11.jar,postgresql-42.7.9.jar}
+      - ADDAX_IMAGE=${IMAGE_ADDAX:-dts-addax:6.0.8}
+      - ADDAX_JOB_DIR=${STACK_ROOT}/services/dts-airflow/dags
+      - ADDAX_LOG_DIR=${STACK_ROOT}/logs/addax
+      - AIRFLOW_HOME=/opt/airflow
+      - AIRFLOW__API__AUTH_BACKENDS=airflow.api.auth.backend.basic_auth
+      - AIRFLOW__API__BASE_URL=https://${HOST_FLOW}
+      - AIRFLOW__CORE__DAG_IGNORE_FILE_SYNTAX=regexp
+      - AIRFLOW__CORE__EXECUTOR=LocalExecutor
+      - AIRFLOW__CORE__FERNET_KEY=${AIRFLOW_FERNET_KEY}
+      - AIRFLOW__CORE__LOAD_EXAMPLES=false
+      - AIRFLOW__CORE__SQL_ALCHEMY_CONN=postgresql+psycopg2://${PG_USER_AIRFLOW}:${PG_PWD_AIRFLOW_URLENCODED:-${PG_PWD_AIRFLOW}}@${PG_HOST}:${PG_PORT}/${PG_DB_AIRFLOW}
+      - AIRFLOW__DATABASE__SQL_ALCHEMY_CONN=postgresql+psycopg2://${PG_USER_AIRFLOW}:${PG_PWD_AIRFLOW_URLENCODED:-${PG_PWD_AIRFLOW}}@${PG_HOST}:${PG_PORT}/${PG_DB_AIRFLOW}
+      - AIRFLOW__SCHEDULER__DAG_DIR_LIST_INTERVAL=${AIRFLOW_DAG_DIR_LIST_INTERVAL:-3}
+      - AIRFLOW__SCHEDULER__MIN_FILE_PROCESS_INTERVAL=${AIRFLOW_MIN_FILE_PROCESS_INTERVAL:-3}
+      - AIRFLOW__WEBSERVER__BASE_URL=${AIRFLOW_WEBSERVER_BASE_URL:-https://${HOST_FLOW}}
+      - AIRFLOW__WEBSERVER__ENABLE_PROXY_FIX=true
+      - AIRFLOW__WEBSERVER__EXPOSE_CONFIG=true
+      - AIRFLOW__WEBSERVER__SESSION_COOKIE_SECURE=${AIRFLOW_SESSION_COOKIE_SECURE:-false}
+      - DBT_IMAGE=${IMAGE_DBT:-dts-dbt:1.10.0}
+      - DBT_PROFILES_DIR=${DBT_PROFILES_DIR}
+      - DBT_PROJECT_DIR=${DBT_PROJECT_DIR}
+      - OPENMETADATA_API_ENDPOINT=${DTS_PLATFORM_OPENMETADATA_BASE_URL}/api/v1
+      - OPENMETADATA_AUTH_TOKEN=${DTS_PLATFORM_OPENMETADATA_AUTH_TOKEN}
+      - OPENMETADATA_DBT_SERVICE=${DTS_PLATFORM_OPENMETADATA_SERVICE_NAME:-hive}
+      - OPENMETADATA_INGEST_CONFIG_DIR=${OPENMETADATA_INGEST_CONFIG_DIR}
+      - OPENMETADATA_INGEST_IMAGE=${IMAGE_OPENMETADATA_INGESTION}
+      - PIP_ADDITIONAL_REQUIREMENTS=${AIRFLOW_PIP_ADDITIONAL_REQUIREMENTS:-openmetadata-managed-apis==${OPENMETADATA_MANAGED_APIS_VERSION:-1.11.5.0} openmetadata-ingestion==${OPENMETADATA_INGESTION_VERSION:-1.11.5.0}}
+      - PYTHONPATH=/opt/airflow/extra:${PYTHONPATH:-}
+      - TZ=${TZ:-Asia/Shanghai}
+    image: ${IMAGE_AIRFLOW}
+    networks:
+      dts-core: null
+    restart: "no"
+    volumes:
+      - bind:
+          create_host_path: true
+        source: ./services/dts-airflow/dags
+        target: /opt/airflow/dags
+        type: bind
+      - bind:
+          create_host_path: true
+        source: ./logs/airflow
+        target: /opt/airflow/logs
+        type: bind
+      - bind:
+          create_host_path: true
+        source: ./services/dts-airflow/plugins
+        target: /opt/airflow/plugins
+        type: bind
+      - bind:
+          create_host_path: true
+          selinux: z
+        read_only: true
+        source: ./services/dts-airflow/extra
+        target: /opt/airflow/extra
+        type: bind
+      - bind:
+          create_host_path: true
+        source: ./services/dts-airflow/config
+        target: /opt/airflow/config
+        type: bind
+      - bind:
+          create_host_path: true
+          selinux: z
+        read_only: true
+        source: ./services/dts-platform/drivers
+        target: ${STACK_ROOT}/services/dts-platform/drivers
+        type: bind
+      - bind:
+          create_host_path: true
+        source: /var/run/docker.sock
+        target: /var/run/docker.sock
+        type: bind
+  dts-airflow-scheduler:
+    command: scheduler
+    container_name: dts-airflow-scheduler
+    depends_on:
+      dts-airflow-init:
+        condition: service_completed_successfully
+        required: true
+    environment:
+      - ADDAX_DOCKER_NETWORK=${ADDAX_DOCKER_NETWORK:-dts-core}
+      - ADDAX_DRIVER_DIR=${STACK_ROOT}/services/dts-platform/drivers
+      - ADDAX_DRIVER_JARS=${ADDAX_DRIVER_JARS:-DmJdbcDriver11.jar,postgresql-42.7.9.jar}
+      - ADDAX_IMAGE=${IMAGE_ADDAX:-dts-addax:6.0.8}
+      - ADDAX_JOB_DIR=${STACK_ROOT}/services/dts-airflow/dags
+      - AIRFLOW_HOME=/opt/airflow
+      - AIRFLOW__API__AUTH_BACKENDS=airflow.api.auth.backend.basic_auth
+      - AIRFLOW__CORE__DAG_IGNORE_FILE_SYNTAX=regexp
+      - AIRFLOW__CORE__EXECUTOR=LocalExecutor
+      - AIRFLOW__CORE__FERNET_KEY=${AIRFLOW_FERNET_KEY}
+      - AIRFLOW__CORE__LOAD_EXAMPLES=false
+      - AIRFLOW__CORE__SQL_ALCHEMY_CONN=postgresql+psycopg2://${PG_USER_AIRFLOW}:${PG_PWD_AIRFLOW_URLENCODED:-${PG_PWD_AIRFLOW}}@${PG_HOST}:${PG_PORT}/${PG_DB_AIRFLOW}
+      - AIRFLOW__DATABASE__SQL_ALCHEMY_CONN=postgresql+psycopg2://${PG_USER_AIRFLOW}:${PG_PWD_AIRFLOW_URLENCODED:-${PG_PWD_AIRFLOW}}@${PG_HOST}:${PG_PORT}/${PG_DB_AIRFLOW}
+      - AIRFLOW__SCHEDULER__DAG_DIR_LIST_INTERVAL=${AIRFLOW_DAG_DIR_LIST_INTERVAL:-3}
+      - AIRFLOW__SCHEDULER__MIN_FILE_PROCESS_INTERVAL=${AIRFLOW_MIN_FILE_PROCESS_INTERVAL:-3}
+      - DBT_IMAGE=${IMAGE_DBT:-dts-dbt:1.10.0}
+      - DBT_PROFILES_DIR=${DBT_PROFILES_DIR}
+      - DBT_PROJECT_DIR=${DBT_PROJECT_DIR}
+      - OPENMETADATA_API_ENDPOINT=${DTS_PLATFORM_OPENMETADATA_BASE_URL}/api/v1
+      - OPENMETADATA_AUTH_TOKEN=${DTS_PLATFORM_OPENMETADATA_AUTH_TOKEN}
+      - OPENMETADATA_DBT_SERVICE=${DTS_PLATFORM_OPENMETADATA_SERVICE_NAME:-hive}
+      - OPENMETADATA_INGEST_CONFIG_DIR=${OPENMETADATA_INGEST_CONFIG_DIR}
+      - OPENMETADATA_INGEST_IMAGE=${IMAGE_OPENMETADATA_INGESTION}
+      - PIP_ADDITIONAL_REQUIREMENTS=${AIRFLOW_PIP_ADDITIONAL_REQUIREMENTS:-openmetadata-managed-apis==${OPENMETADATA_MANAGED_APIS_VERSION:-1.11.5.0} openmetadata-ingestion==${OPENMETADATA_INGESTION_VERSION:-1.11.5.0}}
+      - PYTHONPATH=/opt/airflow/extra:${PYTHONPATH:-}
+      - TZ=${TZ:-Asia/Shanghai}
+      - ADDAX_LOG_DIR=${STACK_ROOT}/logs/addax
+    group_add:
+      - ${DOCKER_GID:-0}
+    image: ${IMAGE_AIRFLOW}
+    networks:
+      dts-core: null
+    restart: unless-stopped
+    volumes:
+      - bind:
+          create_host_path: true
+        source: ./services/dts-airflow/dags
+        target: /opt/airflow/dags
+        type: bind
+      - bind:
+          create_host_path: true
+        source: ./logs/airflow
+        target: /opt/airflow/logs
+        type: bind
+      - bind:
+          create_host_path: true
+        source: ./services/dts-airflow/plugins
+        target: /opt/airflow/plugins
+        type: bind
+      - bind:
+          create_host_path: true
+          selinux: z
+        read_only: true
+        source: ./services/dts-airflow/extra
+        target: /opt/airflow/extra
+        type: bind
+      - bind:
+          create_host_path: true
+        source: ./services/dts-airflow/config
+        target: /opt/airflow/config
+        type: bind
+      - bind:
+          create_host_path: true
+          selinux: z
+        read_only: true
+        source: ./services/dts-platform/drivers
+        target: ${STACK_ROOT}/services/dts-platform/drivers
+        type: bind
+      - bind:
+          create_host_path: true
+        source: /var/run/docker.sock
+        target: /var/run/docker.sock
+        type: bind
+  dts-airflow-triggerer:
+    command: triggerer
+    container_name: dts-airflow-triggerer
+    depends_on:
+      dts-airflow-init:
+        condition: service_completed_successfully
+        required: true
+    environment:
+      - ADDAX_DOCKER_NETWORK=${ADDAX_DOCKER_NETWORK:-dts-core}
+      - ADDAX_DRIVER_DIR=${STACK_ROOT}/services/dts-platform/drivers
+      - ADDAX_DRIVER_JARS=${ADDAX_DRIVER_JARS:-DmJdbcDriver11.jar,postgresql-42.7.9.jar}
+      - ADDAX_IMAGE=${IMAGE_ADDAX:-dts-addax:6.0.8}
+      - ADDAX_JOB_DIR=${STACK_ROOT}/services/dts-airflow/dags
+      - AIRFLOW_HOME=/opt/airflow
+      - AIRFLOW__API__AUTH_BACKENDS=airflow.api.auth.backend.basic_auth
+      - AIRFLOW__CORE__DAG_IGNORE_FILE_SYNTAX=regexp
+      - AIRFLOW__CORE__EXECUTOR=LocalExecutor
+      - AIRFLOW__CORE__FERNET_KEY=${AIRFLOW_FERNET_KEY}
+      - AIRFLOW__CORE__LOAD_EXAMPLES=false
+      - AIRFLOW__CORE__SQL_ALCHEMY_CONN=postgresql+psycopg2://${PG_USER_AIRFLOW}:${PG_PWD_AIRFLOW_URLENCODED:-${PG_PWD_AIRFLOW}}@${PG_HOST}:${PG_PORT}/${PG_DB_AIRFLOW}
+      - AIRFLOW__DATABASE__SQL_ALCHEMY_CONN=postgresql+psycopg2://${PG_USER_AIRFLOW}:${PG_PWD_AIRFLOW_URLENCODED:-${PG_PWD_AIRFLOW}}@${PG_HOST}:${PG_PORT}/${PG_DB_AIRFLOW}
+      - DBT_IMAGE=${IMAGE_DBT:-dts-dbt:1.10.0}
+      - DBT_PROFILES_DIR=${DBT_PROFILES_DIR}
+      - DBT_PROJECT_DIR=${DBT_PROJECT_DIR}
+      - OPENMETADATA_API_ENDPOINT=${DTS_PLATFORM_OPENMETADATA_BASE_URL}/api/v1
+      - OPENMETADATA_AUTH_TOKEN=${DTS_PLATFORM_OPENMETADATA_AUTH_TOKEN}
+      - OPENMETADATA_DBT_SERVICE=${DTS_PLATFORM_OPENMETADATA_SERVICE_NAME:-hive}
+      - OPENMETADATA_INGEST_CONFIG_DIR=${OPENMETADATA_INGEST_CONFIG_DIR}
+      - OPENMETADATA_INGEST_IMAGE=${IMAGE_OPENMETADATA_INGESTION}
+      - PIP_ADDITIONAL_REQUIREMENTS=${AIRFLOW_PIP_ADDITIONAL_REQUIREMENTS:-openmetadata-managed-apis==${OPENMETADATA_MANAGED_APIS_VERSION:-1.11.5.0} openmetadata-ingestion==${OPENMETADATA_INGESTION_VERSION:-1.11.5.0}}
+      - PYTHONPATH=/opt/airflow/extra:${PYTHONPATH:-}
+      - TZ=${TZ:-Asia/Shanghai}
+      - ADDAX_LOG_DIR=${STACK_ROOT}/logs/addax
+    image: ${IMAGE_AIRFLOW}
+    networks:
+      dts-core: null
+    restart: unless-stopped
+    volumes:
+      - bind:
+          create_host_path: true
+        source: ./services/dts-airflow/dags
+        target: /opt/airflow/dags
+        type: bind
+      - bind:
+          create_host_path: true
+        source: ./logs/airflow
+        target: /opt/airflow/logs
+        type: bind
+      - bind:
+          create_host_path: true
+        source: ./services/dts-airflow/plugins
+        target: /opt/airflow/plugins
+        type: bind
+      - bind:
+          create_host_path: true
+          selinux: z
+        read_only: true
+        source: ./services/dts-airflow/extra
+        target: /opt/airflow/extra
+        type: bind
+      - bind:
+          create_host_path: true
+        source: ./services/dts-airflow/config
+        target: /opt/airflow/config
+        type: bind
+      - bind:
+          create_host_path: true
+          selinux: z
+        read_only: true
+        source: ./services/dts-platform/drivers
+        target: ${STACK_ROOT}/services/dts-platform/drivers
+        type: bind
+      - bind:
+          create_host_path: true
+        source: /var/run/docker.sock
+        target: /var/run/docker.sock
+        type: bind
+  dts-airflow-webserver:
+    command: webserver
+    container_name: dts-airflow-webserver
+    depends_on:
+      dts-airflow-init:
+        condition: service_completed_successfully
+        required: true
+    environment:
+      - ADDAX_DOCKER_NETWORK=${ADDAX_DOCKER_NETWORK:-dts-core}
+      - ADDAX_DRIVER_DIR=${STACK_ROOT}/services/dts-platform/drivers
+      - ADDAX_DRIVER_JARS=${ADDAX_DRIVER_JARS:-DmJdbcDriver11.jar,postgresql-42.7.9.jar}
+      - ADDAX_IMAGE=${IMAGE_ADDAX:-dts-addax:6.0.8}
+      - ADDAX_JOB_DIR=${STACK_ROOT}/services/dts-airflow/dags
+      - AIRFLOW_HOME=/opt/airflow
+      - AIRFLOW__API__AUTH_BACKENDS=airflow.api.auth.backend.basic_auth
+      - AIRFLOW__API__BASE_URL=https://${HOST_FLOW}
+      - AIRFLOW__CORE__DAG_IGNORE_FILE_SYNTAX=regexp
+      - AIRFLOW__CORE__EXECUTOR=LocalExecutor
+      - AIRFLOW__CORE__FERNET_KEY=${AIRFLOW_FERNET_KEY}
+      - AIRFLOW__CORE__LOAD_EXAMPLES=false
+      - AIRFLOW__CORE__SQL_ALCHEMY_CONN=postgresql+psycopg2://${PG_USER_AIRFLOW}:${PG_PWD_AIRFLOW_URLENCODED:-${PG_PWD_AIRFLOW}}@${PG_HOST}:${PG_PORT}/${PG_DB_AIRFLOW}
+      - AIRFLOW__DATABASE__SQL_ALCHEMY_CONN=postgresql+psycopg2://${PG_USER_AIRFLOW}:${PG_PWD_AIRFLOW_URLENCODED:-${PG_PWD_AIRFLOW}}@${PG_HOST}:${PG_PORT}/${PG_DB_AIRFLOW}
+      - AIRFLOW__WEBSERVER__ENABLE_PROXY_FIX=true
+      - AIRFLOW__WEBSERVER__EXPOSE_CONFIG=true
+      - DBT_IMAGE=${IMAGE_DBT:-dts-dbt:1.10.0}
+      - DBT_PROFILES_DIR=${DBT_PROFILES_DIR}
+      - DBT_PROJECT_DIR=${DBT_PROJECT_DIR}
+      - OPENMETADATA_API_ENDPOINT=${DTS_PLATFORM_OPENMETADATA_BASE_URL}/api/v1
+      - OPENMETADATA_AUTH_TOKEN=${DTS_PLATFORM_OPENMETADATA_AUTH_TOKEN}
+      - OPENMETADATA_DBT_SERVICE=${DTS_PLATFORM_OPENMETADATA_SERVICE_NAME:-hive}
+      - OPENMETADATA_INGEST_CONFIG_DIR=${OPENMETADATA_INGEST_CONFIG_DIR}
+      - OPENMETADATA_INGEST_IMAGE=${IMAGE_OPENMETADATA_INGESTION}
+      - PIP_ADDITIONAL_REQUIREMENTS=${AIRFLOW_PIP_ADDITIONAL_REQUIREMENTS:-openmetadata-managed-apis==${OPENMETADATA_MANAGED_APIS_VERSION:-1.11.5.0} openmetadata-ingestion==${OPENMETADATA_INGESTION_VERSION:-1.11.5.0}}
+      - PYTHONPATH=/opt/airflow/extra:${PYTHONPATH:-}
+      - TZ=${TZ:-Asia/Shanghai}
+      - ADDAX_LOG_DIR=${STACK_ROOT}/logs/addax
+    healthcheck:
+      interval: 10s
+      retries: 10
+      start_period: 20s
+      test:
+        - CMD-SHELL
+        - curl -fsS http://127.0.0.1:8080/api/v1/health >/dev/null || exit 1
+      timeout: 5s
+    image: ${IMAGE_AIRFLOW}
+    labels:
+      - traefik.enable=true
+      - traefik.docker.network=dts-core
+      - traefik.http.routers.dts-airflow.rule=Host(`${HOST_FLOW}`)
+      - traefik.http.routers.dts-airflow.entrypoints=websecure
+      - traefik.http.routers.dts-airflow.tls=true
+      - traefik.http.services.dts-airflow.loadbalancer.server.port=8080
+      - traefik.http.routers.dts-airflow.middlewares=platform-forward-auth@file,security-headers@file
+    networks:
+      dts-core: null
+    ports:
+      - ${AIRFLOW_WEBSERVER_PORT:-18090}:8080
+    restart: unless-stopped
+    volumes:
+      - bind:
+          create_host_path: true
+        source: ./services/dts-airflow/dags
+        target: /opt/airflow/dags
+        type: bind
+      - bind:
+          create_host_path: true
+        source: ./logs/airflow
+        target: /opt/airflow/logs
+        type: bind
+      - bind:
+          create_host_path: true
+        source: ./services/dts-airflow/plugins
+        target: /opt/airflow/plugins
+        type: bind
+      - bind:
+          create_host_path: true
+          selinux: z
+        read_only: true
+        source: ./services/dts-airflow/extra
+        target: /opt/airflow/extra
+        type: bind
+      - bind:
+          create_host_path: true
+        source: ./services/dts-airflow/config
+        target: /opt/airflow/config
+        type: bind
+      - bind:
+          create_host_path: true
+          selinux: z
+        read_only: true
+        source: ./services/dts-platform/drivers
+        target: ${STACK_ROOT}/services/dts-platform/drivers
+        type: bind
+      - bind:
+          create_host_path: true
+        source: /var/run/docker.sock
+        target: /var/run/docker.sock
+        type: bind
+  dts-analytics:
+    command:
+      - bash
+      - -lc
+      - |
+        set -e
+        raw_java_tool_options="$${JAVA_TOOL_OPTIONS:-}"
+        clean_java_tool_options="$$(printf '%s' "$${raw_java_tool_options}" | sed 's/^[[:space:]\"]*//; s/[[:space:]\"]*$$//')"
+        if [ "$${clean_java_tool_options}" != "$${raw_java_tool_options}" ]; then
+          echo "[dts-analytics] sanitized wrapping quotes in JAVA_TOOL_OPTIONS"
+        fi
+        export JAVA_TOOL_OPTIONS="$${clean_java_tool_options}"
+        mvn -q -DskipTests package
+        mvn -q -DskipTests spring-boot:run \
+          -Dspring-boot.run.jvmArguments="-agentlib:jdwp=transport=dt_socket,server=y,suspend=n,address=*:5007" \
+          -Dspring-boot.run.arguments="--spring.datasource.url=$${SPRING_DATASOURCE_URL} --spring.datasource.username=$${SPRING_DATASOURCE_USERNAME} --spring.datasource.password=$${SPRING_DATASOURCE_PASSWORD}"
+    depends_on:
+      dts-pg:
+        condition: service_healthy
+        required: true
+    environment:
+      ANALYTICS_JDBC_DRIVERS_DIR: /opt/dts/jdbc
+      DTS_ANALYTICS_PROJECT_COCKPIT_WAREHOUSE_ENABLED: ${DTS_ANALYTICS_PROJECT_COCKPIT_WAREHOUSE_ENABLED:-true}
+      EUREKA_CLIENT_ENABLED: ${EUREKA_CLIENT_ENABLED:-false}
+      JAVA_TOOL_OPTIONS: ${JAVA_TOOL_OPTIONS:-} ${ANALYTICS_JAVA_TOOL_OPTIONS:-}
+      LOG_ROOT: ${LOG_ROOT:-/workspace/logs}
+      PG_DB_BIADMIN: ${PG_DB_BIADMIN:-biadmin}
+      PG_PWD_BIADMIN: ${PG_PWD_BIADMIN:-}
+      PG_USER_BIADMIN: ${PG_USER_BIADMIN:-biadmin}
+      SPRING_CLOUD_CONFIG_ENABLED: ${SPRING_CLOUD_CONFIG_ENABLED:-false}
+      SPRING_DATASOURCE_PASSWORD: ${PG_PWD_ANALYTICS:-dts_analytics}
+      SPRING_DATASOURCE_URL: jdbc:postgresql://dts-pg:5432/${PG_DB_ANALYTICS:-dts_analytics}
+      SPRING_DATASOURCE_USERNAME: ${PG_USER_ANALYTICS:-dts_analytics}
+      SPRING_LIQUIBASE_ENABLED: ${SPRING_LIQUIBASE_ENABLED:-true}
       SPRING_PROFILES_ACTIVE: ${DTS_PROFILE:-dev}
-      # Test / API-debug switches (see init.sh; 生产务必 false)
-      APP_API_DOCS_PUBLIC: "${APP_API_DOCS_PUBLIC:-false}"
-      APP_TEST_API_ENABLED: "${APP_TEST_API_ENABLED:-false}"
-      APP_TEST_API_TOKEN: "${APP_TEST_API_TOKEN:-}"
-      DTS_PLATFORM_CATALOG_MULTI_SOURCE_ENABLED: "true"
-      DTS_PLATFORM_CATALOG_DEFAULT_SOURCE_TYPE: "POSTGRES"
+      TZ: ${TZ:-Asia/Shanghai}
+    healthcheck:
+      interval: 10s
+      retries: 60
+      start_period: 120s
+      test:
+        - CMD-SHELL
+        - curl -fsS http://127.0.0.1:3000/api/health >/dev/null || wget -qO- http://127.0.0.1:3000/api/health >/dev/null
+      timeout: 10s
+    image: ${IMAGE_MAVEN}
+    labels:
+      - traefik.enable=true
+      - traefik.docker.network=dts-core
+      - traefik.http.routers.dts-analytics-public.rule=Host(`${HOST_PLATFORM_UI}`) && PathPrefix(`/analytics/api/public`)
+      - traefik.http.routers.dts-analytics-public.entrypoints=websecure
+      - traefik.http.routers.dts-analytics-public.tls=true
+      - traefik.http.routers.dts-analytics-public.priority=245
+      - traefik.http.routers.dts-analytics-public.service=dts-analytics-api
+      - traefik.http.routers.dts-analytics-public.middlewares=dts-strip-analytics-api@docker,cors-allow@file,security-headers@file
+      - traefik.http.routers.dts-analytics-embed.rule=Host(`${HOST_PLATFORM_UI}`) && PathPrefix(`/analytics/api/embed/`)
+      - traefik.http.routers.dts-analytics-embed.entrypoints=websecure
+      - traefik.http.routers.dts-analytics-embed.tls=true
+      - traefik.http.routers.dts-analytics-embed.priority=244
+      - traefik.http.routers.dts-analytics-embed.service=dts-analytics-api
+      - traefik.http.routers.dts-analytics-embed.middlewares=platform-forward-auth@file,dts-strip-analytics-api@docker,cors-allow@file,security-headers@file
+      - traefik.http.routers.dts-analytics-api-cors.rule=Host(`${HOST_PLATFORM_UI}`) && PathPrefix(`/analytics/api`) && Method(`OPTIONS`)
+      - traefik.http.routers.dts-analytics-api-cors.entrypoints=websecure
+      - traefik.http.routers.dts-analytics-api-cors.tls=true
+      - traefik.http.routers.dts-analytics-api-cors.priority=241
+      - traefik.http.routers.dts-analytics-api-cors.service=dts-analytics-api
+      - traefik.http.routers.dts-analytics-api-cors.middlewares=dts-strip-analytics-api@docker,cors-allow@file,security-headers@file
+      - traefik.http.routers.dts-analytics-api.rule=Host(`${HOST_PLATFORM_UI}`) && PathPrefix(`/analytics/api`)
+      - traefik.http.routers.dts-analytics-api.entrypoints=websecure
+      - traefik.http.routers.dts-analytics-api.tls=true
+      - traefik.http.routers.dts-analytics-api.priority=240
+      - traefik.http.services.dts-analytics-api.loadbalancer.server.port=3000
+      - traefik.http.middlewares.dts-strip-analytics-api.stripprefix.prefixes=/analytics
+      - traefik.http.routers.dts-analytics-api.middlewares=platform-forward-auth@file,dts-strip-analytics-api@docker,cors-allow@file,security-headers@file
+      - traefik.http.middlewares.dts-strip-bi-api.stripprefix.prefixes=/bi
+      - traefik.http.routers.dts-analytics-bi.rule=Host(`${HOST_PLATFORM_UI}`) && PathPrefix(`/bi/api`)
+      - traefik.http.routers.dts-analytics-bi.entrypoints=websecure
+      - traefik.http.routers.dts-analytics-bi.tls=true
+      - traefik.http.routers.dts-analytics-bi.priority=250
+      - traefik.http.routers.dts-analytics-bi.service=dts-analytics-api
+      - traefik.http.routers.dts-analytics-bi.middlewares=platform-forward-auth@file,dts-strip-bi-api@docker,cors-allow@file,security-headers@file
+    networks:
+      dts-core: null
+    ports:
+      - host_ip: 127.0.0.1
+        mode: ingress
+        protocol: tcp
+        published: "3000"
+        target: 3000
+      - mode: ingress
+        protocol: tcp
+        published: "5007"
+        target: 5007
+    volumes:
+      - bind:
+          create_host_path: true
+          selinux: z
+        source: ./source
+        target: /workspace-src
+        type: bind
+      - source: dts-analytics-target
+        target: /workspace-src/dts-analytics/target
+        type: volume
+        volume: {}
+      - source: maven-cache
+        target: /root/.m2
+        type: volume
+        volume: {}
+      - bind:
+          create_host_path: true
+          selinux: z
+        read_only: true
+        source: ./services/dts-platform/drivers
+        target: /opt/dts/jdbc
+        type: bind
+      - bind:
+          create_host_path: true
+          selinux: z
+        source: ./logs/dts-analytics
+        target: /workspace/logs/dts-analytics
+        type: bind
+    working_dir: /workspace-src/dts-analytics
+  dts-dbt:
+    command:
+      - -lc
+      - sleep infinity
+    container_name: dts-dbt
+    entrypoint: /bin/bash
+    environment:
+      - DBT_LOG_PATH=/opt/dbt-logs
+      - TZ=${TZ:-Asia/Shanghai}
+    image: ${IMAGE_DBT:-dts-dbt:1.10.0}
+    networks:
+      dts-core: null
+    restart: unless-stopped
+    volumes:
+      - bind:
+          create_host_path: true
+        source: ./services/dts-dbt
+        target: /opt/dbt
+        type: bind
+      - bind:
+          create_host_path: true
+        source: ./services/dts-dbt/profiles
+        target: /root/.dbt
+        type: bind
+      - bind:
+          create_host_path: true
+          selinux: z
+        source: ./logs/dbt
+        target: /opt/dbt-logs
+        type: bind
+    working_dir: /opt/dbt
+  dts-elasticsearch:
+    container_name: dts-elasticsearch
+    environment:
+      - ES_JAVA_OPTS=-Xms512m -Xmx512m
+      - TZ=${TZ:-Asia/Shanghai}
+      - discovery.type=single-node
+      - xpack.security.enabled=false
+    healthcheck:
+      interval: 10s
+      retries: 30
+      start_period: 20s
+      test:
+        - CMD-SHELL
+        - curl -fsS http://127.0.0.1:9200 >/dev/null || exit 1
+      timeout: 5s
+    image: ${IMAGE_ELASTICSEARCH}
+    networks:
+      dts-core: null
+    restart: unless-stopped
+    volumes:
+      - source: elasticsearch-data
+        target: /usr/share/elasticsearch/data
+        type: volume
+        volume: {}
+      - bind:
+          create_host_path: true
+          selinux: z
+        source: ./logs/elasticsearch
+        target: /usr/share/elasticsearch/logs
+        type: bind
+  dts-ingestion:
+    command:
+      - bash
+      - -lc
+      - |
+        set -e
+        mvn -q -f /workspace-src/dts-common/pom.xml -DskipTests install
+        mvn -q -DskipTests spring-boot:run \
+          -Dspring-boot.run.arguments="--spring.datasource.url=$${SPRING_DATASOURCE_URL} --spring.datasource.username=$${SPRING_DATASOURCE_USERNAME} --spring.datasource.password=$${SPRING_DATASOURCE_PASSWORD}"
+    depends_on:
+      dts-pg:
+        condition: service_healthy
+        required: true
+    environment:
+      ADDAX_DOCKER_NETWORK: ${ADDAX_DOCKER_NETWORK:-dts-core}
+      ADDAX_DRIVER_DIR: ${STACK_ROOT}/services/dts-platform/drivers
+      ADDAX_DRIVER_JARS: ${ADDAX_DRIVER_JARS:-DmJdbcDriver11.jar,postgresql-42.7.9.jar}
+      ADDAX_LOG_DIR: ${STACK_ROOT}/logs/addax
+      DTS_ADDAX_DAG_ID: ${DTS_ADDAX_DAG_ID:-addax_job}
+      DTS_ADDAX_ENABLED: ${DTS_ADDAX_ENABLED:-true}
+      DTS_ADDAX_IMAGE: ${IMAGE_ADDAX:-dts-addax:6.0.8}
+      DTS_ADDAX_JOB_DIR: ${DTS_AIRFLOW_DAGS_DIR:-/opt/airflow/dags}
+      DTS_AIRFLOW_API_PATH: ${DTS_AIRFLOW_API_PATH:-/api/v1}
+      DTS_AIRFLOW_BASE_URL: ${DTS_AIRFLOW_BASE_URL:-http://dts-airflow-webserver:8080}
+      DTS_AIRFLOW_DAG_ID: ${DTS_AIRFLOW_DAG_ID:-dbt_load}
+      DTS_AIRFLOW_DAG_NOT_FOUND_RETRY_WAIT_SECONDS: ${DTS_AIRFLOW_DAG_NOT_FOUND_RETRY_WAIT_SECONDS:-20}
+      DTS_AIRFLOW_DAG_READY_POLL_SECONDS: ${DTS_AIRFLOW_DAG_READY_POLL_SECONDS:-2}
+      DTS_AIRFLOW_DAG_READY_WAIT_SECONDS: ${DTS_AIRFLOW_DAG_READY_WAIT_SECONDS:-15}
+      DTS_AIRFLOW_DAG_TRIGGER_RETRY_SECONDS: ${DTS_AIRFLOW_DAG_TRIGGER_RETRY_SECONDS:-6}
+      DTS_AIRFLOW_DAGS_DIR: ${DTS_AIRFLOW_DAGS_DIR:-/opt/airflow/dags}
+      DTS_AIRFLOW_ENABLED: ${DTS_AIRFLOW_ENABLED:-true}
+      DTS_AIRFLOW_PASSWORD: ${DTS_AIRFLOW_PASSWORD:-airflow}
+      DTS_AIRFLOW_USERNAME: ${DTS_AIRFLOW_USERNAME:-airflow}
+      DTS_INFRA_ENCRYPTION_KEY: ${DTS_INFRA_ENCRYPTION_KEY:-}
+      DTS_INFRA_KEY_VERSION: ${DTS_INFRA_KEY_VERSION:-v1}
+      DTS_INGESTION_TRUSTED_SERVICE_NAME: ${DTS_INGESTION_TRUSTED_SERVICE_NAME:-dts-platform}
+      DTS_OPENMETADATA_API_PATH: ${DTS_OPENMETADATA_API_PATH:-/api/v1}
+      DTS_OPENMETADATA_AUTH_TOKEN: ${DTS_OPENMETADATA_AUTH_TOKEN:-}
+      DTS_OPENMETADATA_BASE_URL: ${DTS_OPENMETADATA_BASE_URL:-}
+      DTS_OPENMETADATA_DESTINATION_DATABASE: ${DTS_OPENMETADATA_DESTINATION_DATABASE:-}
+      DTS_OPENMETADATA_DESTINATION_SCHEMA: ${DTS_OPENMETADATA_DESTINATION_SCHEMA:-}
+      DTS_OPENMETADATA_DESTINATION_SERVICE_NAME: ${DTS_OPENMETADATA_DESTINATION_SERVICE_NAME:-}
+      DTS_OPENMETADATA_DESTINATION_SERVICE_TYPE: ${DTS_OPENMETADATA_DESTINATION_SERVICE_TYPE:-}
+      DTS_OPENMETADATA_ENABLED: ${DTS_OPENMETADATA_ENABLED:-}
+      DTS_OPENMETADATA_INGESTION_ENABLED: ${DTS_OPENMETADATA_INGESTION_ENABLED:-true}
+      DTS_OPENMETADATA_INGESTION_PREFIX: ${DTS_OPENMETADATA_INGESTION_PREFIX:-dts_ingest}
+      DTS_OPENMETADATA_INGESTION_SCHEDULE: ${DTS_OPENMETADATA_INGESTION_SCHEDULE:-0 * * * *}
+      DTS_OPENMETADATA_SOURCE_DATABASE: ${DTS_OPENMETADATA_SOURCE_DATABASE:-}
+      DTS_OPENMETADATA_SOURCE_SCHEMA: ${DTS_OPENMETADATA_SOURCE_SCHEMA:-}
+      DTS_OPENMETADATA_SOURCE_SERVICE_NAME: ${DTS_OPENMETADATA_SOURCE_SERVICE_NAME:-}
+      DTS_OPENMETADATA_SOURCE_SERVICE_TYPE: ${DTS_OPENMETADATA_SOURCE_SERVICE_TYPE:-}
+      DTS_OPENMETADATA_TABLE_FIELDS: ${DTS_OPENMETADATA_TABLE_FIELDS:-}
+      DTS_PLATFORM_OPENMETADATA_AUTH_TOKEN: ${DTS_PLATFORM_OPENMETADATA_AUTH_TOKEN:-}
+      DTS_PLATFORM_OPENMETADATA_BASE_URL: ${DTS_PLATFORM_OPENMETADATA_BASE_URL}
+      DTS_PLATFORM_OPENMETADATA_DEFAULT_DATABASE: ${DTS_PLATFORM_OPENMETADATA_DEFAULT_DATABASE:-}
+      DTS_PLATFORM_OPENMETADATA_DEFAULT_SCHEMA: ${DTS_PLATFORM_OPENMETADATA_DEFAULT_SCHEMA:-}
+      DTS_PLATFORM_OPENMETADATA_ENABLED: ${DTS_PLATFORM_OPENMETADATA_ENABLED:-true}
+      DTS_PLATFORM_OPENMETADATA_SERVICE_NAME: ${DTS_PLATFORM_OPENMETADATA_SERVICE_NAME:-}
+      DTS_PLATFORM_OPENMETADATA_TABLE_FIELDS: ${DTS_PLATFORM_OPENMETADATA_TABLE_FIELDS:-}
+      LOG_ROOT: ${LOG_ROOT:-/workspace/logs}
+      SPRING_DATASOURCE_PASSWORD: ${PG_PWD_DTPS:-dts_platform}
       SPRING_DATASOURCE_URL: jdbc:postgresql://dts-pg:5432/${PG_DB_DTPS:-dts_platform}
       SPRING_DATASOURCE_USERNAME: ${PG_USER_DTPS:-dts_platform}
-      SPRING_DATASOURCE_PASSWORD: ${PG_PWD_DTPS:-dts_platform}
-      SPRING_LIQUIBASE_ENABLED: ${SPRING_LIQUIBASE_ENABLED_PLATFORM:-true}
-      EUREKA_CLIENT_ENABLED: ${EUREKA_CLIENT_ENABLED:-false}
-      SPRING_CLOUD_CONFIG_ENABLED: ${SPRING_CLOUD_CONFIG_ENABLED:-false}
-      SPRING_SECURITY_OAUTH2_CLIENT_PROVIDER_OIDC_ISSUER_URI: ${OIDC_ISSUER_URI}
-      SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_ISSUER_URI: ${OIDC_ISSUER_URI}
-      SPRING_SECURITY_OAUTH2_CLIENT_REGISTRATION_OIDC_CLIENT_ID: "${OAUTH2_PLATFORM_CLIENT_ID:-dts-platform}"
-      SPRING_SECURITY_OAUTH2_CLIENT_REGISTRATION_OIDC_CLIENT_SECRET: "${OAUTH2_PLATFORM_CLIENT_SECRET:-}"
-      JHIPSTER_CORS_ALLOWED_ORIGINS: "http://localhost:3001,http://127.0.0.1:3001,http://localhost:5173,http://127.0.0.1:5173,http://localhost:18011,http://127.0.0.1:18011,http://localhost:18012,http://127.0.0.1:18012,https://${HOST_ADMIN_UI},https://${HOST_PLATFORM_UI},https://${HOST_API},https://${HOST_SSO},https://192.168.8.150,http://192.168.8.150:18011,http://192.168.8.150:18012"
-      JHIPSTER_CORS_ALLOWED_METHODS: "GET,POST,PUT,PATCH,DELETE,OPTIONS"
-      JHIPSTER_CORS_ALLOWED_HEADERS: "*"
-      JHIPSTER_CORS_ALLOW_CREDENTIALS: "true"
-      SPRINGDOC_API_DOCS_ENABLED: "true"
-      SPRINGDOC_SWAGGER_UI_ENABLED: "true"
-      DTS_JDBC_LOAD_EXTERNAL_DRIVERS: "true"
-      DTS_JDBC_DRIVER_CLASS: "org.apache.hive.jdbc.HiveDriver"
-      DTS_JDBC_DRIVER_JAR: "quark-driver-8.37.3.jar"
-      DTS_PLATFORM_HIVE_TEST_PRESERVE_ARTIFACTS: "true"
-      # Enable lightweight HTTP access logging in dev to diagnose 401s and routing
-      DTS_HTTP_ACCESS_LOG: "true"
-      DTS_FEATURE_PLATFORM_KC_LOCALIZATION: "true"
-      DTS_PLATFORM_SESSION_COOKIE_SECURE: "false"
-      DTS_DBT_PROJECT_DIR: /opt/dts/dbt
-      DTS_DBT_PROFILES_DIR: /opt/dts/dbt-profiles
-      DTS_DBT_CONFIG_PATH: /opt/dts/upload/dbt-config.json
-      # Host-side absolute path mapping to DTS_DBT_PROJECT_DIR. Airflow uses this as the HOST
-      # part of `docker -v HOST:CONTAINER`, so it must resolve to the same physical directory
-      # the backend writes into. This value must come from .env or the startup scripts; do not
-      # use nested compose defaults here because old docker-compose versions mis-parse them and
-      # append a literal `}/services/dts-dbt`.
-      DTS_DBT_HOST_PROJECT_DIR: ${DTS_DBT_HOST_PROJECT_DIR}
-      DTS_AIRFLOW_BASE_URL: ${DTS_AIRFLOW_BASE_URL:-http://dts-airflow-webserver:8080}
-      DTS_AIRFLOW_USERNAME: ${DTS_AIRFLOW_USERNAME:-${AIRFLOW_ADMIN_USERNAME:-airflow}}
-      DTS_AIRFLOW_PASSWORD: ${DTS_AIRFLOW_PASSWORD:-${AIRFLOW_ADMIN_PASSWORD:-airflow}}
-      DTS_AIRFLOW_DAG_ID: ${DTS_AIRFLOW_DAG_ID:-dbt_load}
-      DTS_INGESTION_BASE_URL: ${DTS_INGESTION_BASE_URL:-http://dts-ingestion:8083}
-      DTS_INGESTION_SERVICE_NAME: ${DTS_INGESTION_SERVICE_NAME:-dts-platform}
-      DTS_PLATFORM_PUBLIC_BASE_URL: "https://${HOST_PLATFORM_UI}"
-      # Encrypted filesystem storage for Data Standard attachments
-      DATA_STANDARD_ATTACHMENT_STORAGE_STRATEGY: "filesystem"
-      DATA_STANDARD_STORAGE_DIR: "/opt/dts/upload"
-      # Base64 key for AES-GCM (16 bytes here for dev; replace in prod)
-      # Decodes to ASCII: 0123456789abcdef (16 bytes)
-      DATA_STANDARD_ENCRYPTION_KEY: "MDEyMzQ1Njc4OWFiY2RlZg=="
-      # Centralize audit logs to admin in dev as well
-      LOG_ROOT: "${LOG_ROOT:-/workspace/logs}"
+      STACK_ROOT: ${STACK_ROOT}
+      TZ: ${TZ:-Asia/Shanghai}
+    image: ${IMAGE_MAVEN}
+    networks:
+      dts-core: null
+    ports:
+      - mode: ingress
+        protocol: tcp
+        published: "18083"
+        target: 8083
+    security_opt:
+      - seccomp=unconfined
+    volumes:
+      - bind:
+          create_host_path: true
+          selinux: z
+        source: ./source
+        target: /workspace-src
+        type: bind
+      - source: maven-cache
+        target: /root/.m2
+        type: volume
+        volume: {}
+      - bind:
+          create_host_path: true
+          selinux: z
+        source: ./logs/dts-ingestion
+        target: /workspace/logs/dts-ingestion
+        type: bind
+      - bind:
+          create_host_path: true
+          selinux: z
+        source: ./services/dts-airflow/dags
+        target: /opt/airflow/dags
+        type: bind
+      - bind:
+          create_host_path: true
+          selinux: Z
+        source: ${STACK_ROOT}/services/dts-platform/drivers
+        target: ${STACK_ROOT}/services/dts-platform/drivers
+        type: bind
+    working_dir: /workspace-src/dts-ingestion
+  dts-keycloak:
+    command:
+      - start
+      - --hostname=${HOST_SSO}
+      - --proxy-headers=xforwarded
+    container_name: dts-keycloak
+    depends_on:
+      dts-pg:
+        condition: service_healthy
+        required: true
+    environment:
+      JAVA_OPTS_APPEND: -Xms256m -Xmx512m -XX:MetaspaceSize=96m -XX:MaxMetaspaceSize=256m -XX:+UseG1GC
+      KC_DB: postgres
+      KC_DB_PASSWORD: ${PG_PWD_KEYCLOAK}
+      KC_DB_URL: jdbc:postgresql://${PG_HOST}:${PG_PORT}/${PG_DB_KEYCLOAK}
+      KC_DB_URL_PROPERTIES: sslmode=disable
+      KC_DB_USERNAME: ${PG_USER_KEYCLOAK}
+      KC_FEATURES: scripts,token-exchange
+      KC_HOSTNAME: ${KC_HOSTNAME}
+      KC_HOSTNAME_ADMIN_URL: ${KC_HOSTNAME_ADMIN_URL}
+      KC_HOSTNAME_PORT: ${KC_HOSTNAME_PORT}
+      KC_HOSTNAME_STRICT: ${KC_HOSTNAME_STRICT}
+      KC_HOSTNAME_STRICT_HTTPS: ${KC_HOSTNAME_STRICT_HTTPS}
+      KC_HOSTNAME_URL: ${KC_HOSTNAME_URL}
+      KC_HTTP_ENABLED: ${KC_HTTP_ENABLED}
+      KC_LOG: console,file
+      KC_LOG_FILE: /opt/keycloak/data/log/keycloak.log
+      KC_PROXY: edge
+      KC_SPI_TOKEN_EXCHANGE_ACCEPT_REQUESTED_SUBJECT: "true"
+      KEYCLOAK_ADMIN: ${KC_ADMIN}
+      KEYCLOAK_ADMIN_PASSWORD: ${KC_ADMIN_PWD}
+      TZ: ${TZ:-Asia/Shanghai}
+    image: ${IMAGE_KEYCLOAK}
+    labels:
+      - traefik.enable=true
+      - traefik.http.routers.kc-redirect.rule=Host(`${HOST_SSO}`)
+      - traefik.http.routers.kc-redirect.entrypoints=web
+      - traefik.http.routers.kc-redirect.middlewares=redirect-to-https
+      - traefik.http.middlewares.redirect-to-https.redirectscheme.scheme=https
+      - traefik.http.routers.kc.rule=Host(`${HOST_SSO}`)
+      - traefik.http.routers.kc.entrypoints=websecure
+      - traefik.http.routers.kc.tls=true
+      - traefik.http.routers.kc.service=kc
+      - traefik.http.services.kc.loadbalancer.server.port=8080
+      - traefik.http.services.kc.loadbalancer.passhostheader=true
+      - traefik.http.middlewares.kc-headers.headers.customrequestheaders.X-Forwarded-Proto=https
+      - traefik.http.middlewares.kc-headers.headers.customrequestheaders.X-Forwarded-Host=${HOST_SSO}
+      - traefik.http.routers.kc.middlewares=kc-headers
+    mem_limit: 1g
+    networks:
+      dts-core: null
+    platform: ${DTS_RUNTIME_PLATFORM:-linux/amd64}
+    restart: unless-stopped
+    volumes:
+      - bind:
+          create_host_path: true
+          selinux: z
+        source: ./logs/keycloak
+        target: /opt/keycloak/data/log
+        type: bind
+  dts-openmetadata:
+    container_name: dts-openmetadata
+    depends_on:
+      dts-airflow-webserver:
+        condition: service_healthy
+        required: true
+      dts-elasticsearch:
+        condition: service_healthy
+        required: true
+      dts-openmetadata-init:
+        condition: service_completed_successfully
+        required: true
+      dts-pg:
+        condition: service_healthy
+        required: true
+    environment:
+      - AIRFLOW_PASSWORD=${DTS_AIRFLOW_PASSWORD:-airflow}
+      - AIRFLOW_USERNAME=${DTS_AIRFLOW_USERNAME:-airflow}
+      - DB_DATABASE=${PG_DB_OPENMETADATA}
+      - DB_DRIVER_CLASS=org.postgresql.Driver
+      - DB_HOST=${PG_HOST}
+      - DB_PARAMS=sslmode=disable
+      - DB_PORT=${PG_PORT}
+      - DB_SCHEME=postgresql
+      - DB_USER=${PG_USER_OPENMETADATA}
+      - DB_USER_PASSWORD=${PG_PWD_OPENMETADATA}
+      - ELASTICSEARCH_HOST=dts-elasticsearch
+      - ELASTICSEARCH_PORT=9200
+      - ELASTICSEARCH_SCHEME=http
+      - JAVA_TOOL_OPTIONS=-Duser.timezone=Asia/Shanghai
+      - OM_DATABASE=${PG_DB_OPENMETADATA}
+      - OPENMETADATA_CLUSTER_NAME=dts-openmetadata
+      - OPENMETADATA_JWT_SECRET=${OPENMETADATA_JWT_SECRET}
+      - OPENMETADATA_SERVER_PORT=8585
+      - PIPELINE_SERVICE_CLIENT_ENDPOINT=${DTS_AIRFLOW_BASE_URL:-http://dts-airflow-webserver:8080}
+      - SERVER_HOST_API_URL=http://dts-openmetadata:8585/api
+      - TZ=${TZ:-Asia/Shanghai}
+    image: ${IMAGE_OPENMETADATA}
+    labels:
+      - traefik.enable=true
+      - traefik.docker.network=dts-core
+      - traefik.http.routers.dts-openmetadata.rule=Host(`${HOST_META}`)
+      - traefik.http.routers.dts-openmetadata.entrypoints=websecure
+      - traefik.http.routers.dts-openmetadata.tls=true
+      - traefik.http.services.dts-openmetadata.loadbalancer.server.port=8585
+      - traefik.http.routers.dts-openmetadata.middlewares=platform-forward-auth@file,security-headers@file
+    networks:
+      dts-core: null
+    ports:
+      - ${OPENMETADATA_HTTP_PORT:-8585}:8585
+    restart: unless-stopped
+    volumes:
+      - bind:
+          create_host_path: true
+        read_only: true
+        source: /etc/localtime
+        target: /etc/localtime
+        type: bind
+      - bind:
+          create_host_path: true
+          selinux: z
+        source: ./logs/openmetadata
+        target: /opt/openmetadata/logs
+        type: bind
+  dts-openmetadata-ingestion:
+    command:
+      - -c
+      - /opt/openmetadata/ingestion/run-dbt-ingestion.sh
+    container_name: dts-openmetadata-ingestion
+    depends_on:
+      dts-openmetadata:
+        condition: service_started
+        required: true
+    entrypoint: /bin/sh
+    environment:
+      - OPENMETADATA_API_ENDPOINT=http://dts-openmetadata:8585/api/v1
+      - OPENMETADATA_AUTH_TOKEN=${DTS_PLATFORM_OPENMETADATA_AUTH_TOKEN:-}
+      - OPENMETADATA_DBT_SERVICE=${DTS_PLATFORM_OPENMETADATA_SERVICE_NAME:-hive}
+      - OPENMETADATA_DB_SERVICE=${DTS_PLATFORM_OPENMETADATA_SERVICE_NAME:-hive}
+      - OPENMETADATA_HOST_PORT=http://dts-openmetadata:8585/api
+      - PG_DB_DTPS=${PG_DB_DTPS}
+      - PG_HOST=${PG_HOST}
+      - PG_PORT=${PG_PORT}
+      - PG_SUPER_PASSWORD=${PG_SUPER_PASSWORD}
+      - PG_SUPER_USER=${PG_SUPER_USER}
+      - TZ=${TZ:-Asia/Shanghai}
+    image: ${IMAGE_OPENMETADATA_INGESTION}
+    networks:
+      dts-core: null
+    restart: "no"
+    volumes:
+      - bind:
+          create_host_path: true
+        read_only: true
+        source: /etc/localtime
+        target: /etc/localtime
+        type: bind
+      - bind:
+          create_host_path: true
+          selinux: z
+        read_only: true
+        source: ./services/dts-openmetadata/ingestion
+        target: /opt/openmetadata/ingestion
+        type: bind
+      - bind:
+          create_host_path: true
+          selinux: z
+        read_only: true
+        source: ./services/dts-dbt
+        target: /opt/dbt
+        type: bind
+  dts-openmetadata-init:
+    command:
+      - -lc
+      - |
+        /opt/openmetadata/bootstrap/openmetadata-ops.sh migrate
+    container_name: dts-openmetadata-init
+    depends_on:
+      dts-elasticsearch:
+        condition: service_healthy
+        required: true
+      dts-pg:
+        condition: service_healthy
+        required: true
+    entrypoint: /bin/bash
+    environment:
+      - DB_DATABASE=${PG_DB_OPENMETADATA}
+      - DB_DRIVER_CLASS=org.postgresql.Driver
+      - DB_HOST=${PG_HOST}
+      - DB_PARAMS=sslmode=disable
+      - DB_PORT=${PG_PORT}
+      - DB_SCHEME=postgresql
+      - DB_USER=${PG_USER_OPENMETADATA}
+      - DB_USER_PASSWORD=${PG_PWD_OPENMETADATA}
+      - ELASTICSEARCH_HOST=dts-elasticsearch
+      - ELASTICSEARCH_PORT=9200
+      - ELASTICSEARCH_SCHEME=http
+      - JAVA_TOOL_OPTIONS=-Duser.timezone=Asia/Shanghai
+      - OM_DATABASE=${PG_DB_OPENMETADATA}
+      - OPENMETADATA_CLUSTER_NAME=dts-openmetadata
+      - OPENMETADATA_JWT_SECRET=${OPENMETADATA_JWT_SECRET}
+      - OPENMETADATA_SERVER_PORT=8585
+      - TZ=${TZ:-Asia/Shanghai}
+    image: ${IMAGE_OPENMETADATA}
+    networks:
+      dts-core: null
+    restart: "no"
+    volumes:
+      - bind:
+          create_host_path: true
+        read_only: true
+        source: /etc/localtime
+        target: /etc/localtime
+        type: bind
+      - bind:
+          create_host_path: true
+          selinux: z
+        source: ./logs/openmetadata
+        target: /opt/openmetadata/logs
+        type: bind
+  dts-pg:
+    command:
+      - postgres
+      - -c
+      - shared_preload_libraries=pg_stat_statements
+      - -c
+      - max_connections=300
+      - -c
+      - logging_collector=on
+      - -c
+      - log_directory=/var/lib/postgresql/data/log
+      - -c
+      - log_filename=postgresql-%Y-%m-%d.log
+      - -c
+      - log_rotation_age=1d
+      - -c
+      - log_rotation_size=0
+    environment:
+      PG_DB_AIRFLOW: ${PG_DB_AIRFLOW:-airflow}
+      PG_DB_ANALYTICS: ${PG_DB_ANALYTICS:-dts_analytics}
+      PG_DB_DTADMIN: ${PG_DB_DTADMIN}
+      PG_DB_DTCOMMON: ${PG_DB_DTCOMMON}
+      PG_DB_DTPS: ${PG_DB_DTPS}
+      PG_DB_KEYCLOAK: ${PG_DB_KEYCLOAK}
+      PG_DB_OPENMETADATA: ${PG_DB_OPENMETADATA:-openmetadata}
+      PG_DB_RANGER: ${PG_DB_RANGER}
+      PG_PWD_AIRFLOW: ${PG_PWD_AIRFLOW:-airflow}
+      PG_PWD_ANALYTICS: ${PG_PWD_ANALYTICS:-dts_analytics}
+      PG_PWD_DTADMIN: ${PG_PWD_DTADMIN}
+      PG_PWD_DTCOMMON: ${PG_PWD_DTCOMMON}
+      PG_PWD_DTPS: ${PG_PWD_DTPS}
+      PG_PWD_KEYCLOAK: ${PG_PWD_KEYCLOAK}
+      PG_PWD_OPENMETADATA: ${PG_PWD_OPENMETADATA:-openmetadata}
+      PG_PWD_RANGER: ${PG_PWD_RANGER}
+      PG_USER_AIRFLOW: ${PG_USER_AIRFLOW:-airflow}
+      PG_USER_ANALYTICS: ${PG_USER_ANALYTICS:-dts_analytics}
+      PG_USER_DTADMIN: ${PG_USER_DTADMIN}
+      PG_USER_DTCOMMON: ${PG_USER_DTCOMMON}
+      PG_USER_DTPS: ${PG_USER_DTPS}
+      PG_USER_KEYCLOAK: ${PG_USER_KEYCLOAK}
+      PG_USER_OPENMETADATA: ${PG_USER_OPENMETADATA:-openmetadata}
+      PG_USER_RANGER: ${PG_USER_RANGER}
+      PGDATA: /var/lib/postgresql/data/pgdata
+      POSTGRES_PASSWORD: ${PG_SUPER_PASSWORD}
+      POSTGRES_USER: ${PG_SUPER_USER}
+      TZ: ${TZ:-Asia/Shanghai}
+    healthcheck:
+      interval: 10s
+      retries: 10
+      start_period: 30s
+      test:
+        - CMD-SHELL
+        - pg_isready -h 127.0.0.1 -p 5432 -U ${PG_SUPER_USER} -d postgres && psql -v ON_ERROR_STOP=1 -h 127.0.0.1 -p 5432 -U ${PG_SUPER_USER} -d postgres -c 'SELECT 1' >/dev/null
+      timeout: 30s
+    image: ${IMAGE_POSTGRES}
+    networks:
+      dts-core: null
+    platform: ${DTS_RUNTIME_PLATFORM:-linux/amd64}
+    ports:
+      - mode: ingress
+        protocol: tcp
+        published: "5432"
+        target: 5432
+    restart: unless-stopped
+    security_opt:
+      - label=disable
+    volumes:
+      - bind:
+          create_host_path: true
+        source: ./services/dts-pg/data
+        target: /var/lib/postgresql/data
+        type: bind
+      - bind:
+          create_host_path: true
+        read_only: true
+        source: ./services/dts-pg/init
+        target: /docker-entrypoint-initdb.d
+        type: bind
+      - bind:
+          create_host_path: true
+          selinux: z
+        source: ./logs/postgresql
+        target: /var/lib/postgresql/data/log
+        type: bind
+  dts-platform:
     command:
       - bash
       - -lc
@@ -365,719 +1288,394 @@ services:
         mvn -q -Pdev -DskipTests -Dmodernizer.skip=true spring-boot:run \
           -Dspring-boot.run.jvmArguments="-agentlib:jdwp=transport=dt_socket,server=y,suspend=n,address=*:5006 -Djavax.net.ssl.trustStore=/etc/dts/truststore.p12 -Djavax.net.ssl.trustStorePassword=${TRUSTSTORE_PASSWORD:-changeit} -Djavax.net.ssl.trustStoreType=PKCS12" \
           -Dspring-boot.run.arguments="--spring.datasource.url=$${SPRING_DATASOURCE_URL} --spring.datasource.username=$${SPRING_DATASOURCE_USERNAME} --spring.datasource.password=$${SPRING_DATASOURCE_PASSWORD}"
-    ports:
-      - "18082:8081"
-      - "5006:5006"
-    volumes:
-      - ./source:/workspace-src:z
-      - dts-platform-target:/workspace-src/dts-platform/target
-      - dts-common-target:/workspace-src/dts-common/target
-      - maven-cache:/root/.m2
-      - ./services/certs/truststore.p12:/etc/dts/truststore.p12:ro,z
-      - ./services/dts-platform/drivers:/opt/dts/drivers:z
-      - ./services/dts-platform/upload:/opt/dts/upload:Z
-      - ./services/dts-dbt:/opt/dts/dbt:Z
-      - ./services/dts-dbt/profiles:/opt/dts/dbt-profiles:Z
-      - ./services/dts-airflow/dags:/opt/airflow/dags:Z
-      - ./builds/patch-app-dev-yml.sh:/patches/patch-app-dev-yml.sh:ro,z
-      - ./logs/dts-platform:/workspace/logs/dts-platform:z
-    security_opt:
-      - seccomp=unconfined
-    extra_hosts:
-      - "${HOST_SSO}:${HOST_GATEWAY_IP:-172.17.0.1}"
-      - "tdh01:172.16.0.154"
-    healthcheck:
-      test: ["CMD-SHELL","curl -fsS http://127.0.0.1:8081/management/health >/dev/null || wget -qO- http://127.0.0.1:8081/management/health >/dev/null"]
-      interval: 10s
-      timeout: 10s
-      retries: 60
-      start_period: 120s
-    networks:
-      - dts-core
-    labels:
-      - "traefik.enable=true"
-      - "traefik.docker.network=dts-core"
-      - "traefik.http.routers.dts-platform.rule=Host(`${HOST_API}`) && PathPrefix(`/platform`)"
-      - "traefik.http.routers.dts-platform.entrypoints=websecure"
-      - "traefik.http.routers.dts-platform.tls=true"
-      - "traefik.http.services.dts-platform.loadbalancer.server.port=8081"
-      - "traefik.http.middlewares.dts-strip-platform.stripprefixregex.regex=/platform"
-      - "traefik.http.routers.dts-platform.middlewares=dts-strip-platform@docker,cors-allow@file,security-headers@file"
-      # Swagger UI + OpenAPI JSON on platform UI domain
-      - "traefik.http.routers.dts-platform-swagger.rule=Host(`${HOST_PLATFORM_UI}`) && (Path(`/swagger-ui.html`) || PathPrefix(`/swagger-ui/`) || PathPrefix(`/v3/api-docs`) || PathPrefix(`/webjars/`))"
-      - "traefik.http.routers.dts-platform-swagger.entrypoints=websecure"
-      - "traefik.http.routers.dts-platform-swagger.tls=true"
-      - "traefik.http.routers.dts-platform-swagger.service=dts-platform"
-      - "traefik.http.routers.dts-platform-swagger.priority=200"
-      - "traefik.http.routers.dts-platform-swagger.middlewares=cors-allow@file,security-headers@file"
-
-  # Java backend: dts-ingestion (Spring Boot)
-  dts-ingestion:
-    image: ${IMAGE_MAVEN}
-    working_dir: /workspace-src/dts-ingestion
     depends_on:
+      dts-ingestion:
+        condition: service_started
+        required: true
       dts-pg:
         condition: service_healthy
+        required: true
     environment:
-      TZ: ${TZ:-Asia/Shanghai}
+      APP_API_DOCS_PUBLIC: ${APP_API_DOCS_PUBLIC:-false}
+      APP_TEST_API_ENABLED: ${APP_TEST_API_ENABLED:-false}
+      APP_TEST_API_TOKEN: ${APP_TEST_API_TOKEN:-}
+      DATA_STANDARD_ATTACHMENT_STORAGE_STRATEGY: filesystem
+      DATA_STANDARD_ENCRYPTION_KEY: MDEyMzQ1Njc4OWFiY2RlZg==
+      DATA_STANDARD_STORAGE_DIR: /opt/dts/upload
+      DTS_AIRFLOW_BASE_URL: ${DTS_AIRFLOW_BASE_URL:-http://dts-airflow-webserver:8080}
+      DTS_AIRFLOW_DAG_ID: ${DTS_AIRFLOW_DAG_ID:-dbt_load}
+      DTS_AIRFLOW_PASSWORD: ${DTS_AIRFLOW_PASSWORD:-${AIRFLOW_ADMIN_PASSWORD:-airflow}}
+      DTS_AIRFLOW_USERNAME: ${DTS_AIRFLOW_USERNAME:-${AIRFLOW_ADMIN_USERNAME:-airflow}}
+      DTS_DBT_CONFIG_PATH: /opt/dts/upload/dbt-config.json
+      DTS_DBT_HOST_PROJECT_DIR: ${DTS_DBT_HOST_PROJECT_DIR:-${DBT_PROJECT_DIR}}
+      DTS_DBT_PROFILES_DIR: /opt/dts/dbt-profiles
+      DTS_DBT_PROJECT_DIR: /opt/dts/dbt
+      DTS_FEATURE_PLATFORM_KC_LOCALIZATION: "true"
+      DTS_HTTP_ACCESS_LOG: "true"
+      DTS_INGESTION_BASE_URL: ${DTS_INGESTION_BASE_URL:-http://dts-ingestion:8083}
+      DTS_INGESTION_SERVICE_NAME: ${DTS_INGESTION_SERVICE_NAME:-dts-platform}
+      DTS_JDBC_DRIVER_CLASS: org.apache.hive.jdbc.HiveDriver
+      DTS_JDBC_DRIVER_JAR: quark-driver-8.37.3.jar
+      DTS_JDBC_LOAD_EXTERNAL_DRIVERS: "true"
+      DTS_PLATFORM_CATALOG_DEFAULT_SOURCE_TYPE: POSTGRES
+      DTS_PLATFORM_CATALOG_MULTI_SOURCE_ENABLED: "true"
+      DTS_PLATFORM_HIVE_TEST_PRESERVE_ARTIFACTS: "true"
+      DTS_PLATFORM_PUBLIC_BASE_URL: https://${HOST_PLATFORM_UI}
+      DTS_PLATFORM_SESSION_COOKIE_SECURE: "false"
+      EUREKA_CLIENT_ENABLED: ${EUREKA_CLIENT_ENABLED:-false}
+      JHIPSTER_CORS_ALLOW_CREDENTIALS: "true"
+      JHIPSTER_CORS_ALLOWED_HEADERS: '*'
+      JHIPSTER_CORS_ALLOWED_METHODS: GET,POST,PUT,PATCH,DELETE,OPTIONS
+      JHIPSTER_CORS_ALLOWED_ORIGINS: http://localhost:3001,http://127.0.0.1:3001,http://localhost:5173,http://127.0.0.1:5173,http://localhost:18011,http://127.0.0.1:18011,http://localhost:18012,http://127.0.0.1:18012,https://${HOST_ADMIN_UI},https://${HOST_PLATFORM_UI},https://${HOST_API},https://${HOST_SSO},https://192.168.8.150,http://192.168.8.150:18011,http://192.168.8.150:18012
+      LOG_ROOT: ${LOG_ROOT:-/workspace/logs}
+      SPRING_CLOUD_CONFIG_ENABLED: ${SPRING_CLOUD_CONFIG_ENABLED:-false}
+      SPRING_DATASOURCE_PASSWORD: ${PG_PWD_DTPS:-dts_platform}
       SPRING_DATASOURCE_URL: jdbc:postgresql://dts-pg:5432/${PG_DB_DTPS:-dts_platform}
       SPRING_DATASOURCE_USERNAME: ${PG_USER_DTPS:-dts_platform}
-      SPRING_DATASOURCE_PASSWORD: ${PG_PWD_DTPS:-dts_platform}
-      DTS_ADDAX_ENABLED: ${DTS_ADDAX_ENABLED:-true}
-      DTS_ADDAX_JOB_DIR: ${DTS_AIRFLOW_DAGS_DIR:-/opt/airflow/dags}
-      DTS_ADDAX_IMAGE: ${IMAGE_ADDAX:-dts-addax:6.0.8}
-      DTS_ADDAX_DAG_ID: ${DTS_ADDAX_DAG_ID:-addax_job}
-      ADDAX_DRIVER_DIR: ${STACK_ROOT}/services/dts-platform/drivers
-      ADDAX_DRIVER_JARS: ${ADDAX_DRIVER_JARS:-DmJdbcDriver11.jar,postgresql-42.7.9.jar}
-      ADDAX_LOG_DIR: ${STACK_ROOT}/logs/addax
-      ADDAX_DOCKER_NETWORK: ${ADDAX_DOCKER_NETWORK:-dts-core}
-      DTS_AIRFLOW_ENABLED: ${DTS_AIRFLOW_ENABLED:-true}
-      DTS_AIRFLOW_BASE_URL: ${DTS_AIRFLOW_BASE_URL:-http://dts-airflow-webserver:8080}
-      DTS_AIRFLOW_API_PATH: ${DTS_AIRFLOW_API_PATH:-/api/v1}
-      DTS_AIRFLOW_USERNAME: ${DTS_AIRFLOW_USERNAME:-airflow}
-      DTS_AIRFLOW_PASSWORD: ${DTS_AIRFLOW_PASSWORD:-airflow}
-      DTS_AIRFLOW_DAG_ID: ${DTS_AIRFLOW_DAG_ID:-dbt_load}
-      DTS_AIRFLOW_DAGS_DIR: ${DTS_AIRFLOW_DAGS_DIR:-/opt/airflow/dags}
-      DTS_AIRFLOW_DAG_READY_WAIT_SECONDS: ${DTS_AIRFLOW_DAG_READY_WAIT_SECONDS:-15}
-      DTS_AIRFLOW_DAG_READY_POLL_SECONDS: ${DTS_AIRFLOW_DAG_READY_POLL_SECONDS:-2}
-      DTS_AIRFLOW_DAG_TRIGGER_RETRY_SECONDS: ${DTS_AIRFLOW_DAG_TRIGGER_RETRY_SECONDS:-6}
-      DTS_AIRFLOW_DAG_NOT_FOUND_RETRY_WAIT_SECONDS: ${DTS_AIRFLOW_DAG_NOT_FOUND_RETRY_WAIT_SECONDS:-20}
-      DTS_OPENMETADATA_ENABLED: ${DTS_OPENMETADATA_ENABLED:-}
-      DTS_OPENMETADATA_BASE_URL: ${DTS_OPENMETADATA_BASE_URL:-}
-      DTS_OPENMETADATA_API_PATH: ${DTS_OPENMETADATA_API_PATH:-/api/v1}
-      DTS_OPENMETADATA_AUTH_TOKEN: ${DTS_OPENMETADATA_AUTH_TOKEN:-}
-      DTS_OPENMETADATA_TABLE_FIELDS: ${DTS_OPENMETADATA_TABLE_FIELDS:-}
-      DTS_OPENMETADATA_SOURCE_SERVICE_NAME: ${DTS_OPENMETADATA_SOURCE_SERVICE_NAME:-}
-      DTS_OPENMETADATA_SOURCE_SERVICE_TYPE: ${DTS_OPENMETADATA_SOURCE_SERVICE_TYPE:-}
-      DTS_OPENMETADATA_DESTINATION_SERVICE_NAME: ${DTS_OPENMETADATA_DESTINATION_SERVICE_NAME:-}
-      DTS_OPENMETADATA_DESTINATION_SERVICE_TYPE: ${DTS_OPENMETADATA_DESTINATION_SERVICE_TYPE:-}
-      DTS_OPENMETADATA_DESTINATION_DATABASE: ${DTS_OPENMETADATA_DESTINATION_DATABASE:-}
-      DTS_OPENMETADATA_DESTINATION_SCHEMA: ${DTS_OPENMETADATA_DESTINATION_SCHEMA:-}
-      DTS_OPENMETADATA_SOURCE_DATABASE: ${DTS_OPENMETADATA_SOURCE_DATABASE:-}
-      DTS_OPENMETADATA_SOURCE_SCHEMA: ${DTS_OPENMETADATA_SOURCE_SCHEMA:-}
-      DTS_OPENMETADATA_INGESTION_ENABLED: ${DTS_OPENMETADATA_INGESTION_ENABLED:-true}
-      DTS_OPENMETADATA_INGESTION_PREFIX: ${DTS_OPENMETADATA_INGESTION_PREFIX:-dts_ingest}
-      DTS_OPENMETADATA_INGESTION_SCHEDULE: ${DTS_OPENMETADATA_INGESTION_SCHEDULE:-0 * * * *}
-      DTS_PLATFORM_OPENMETADATA_ENABLED: ${DTS_PLATFORM_OPENMETADATA_ENABLED:-true}
-      DTS_PLATFORM_OPENMETADATA_BASE_URL: ${DTS_PLATFORM_OPENMETADATA_BASE_URL}
-      DTS_PLATFORM_OPENMETADATA_AUTH_TOKEN: ${DTS_PLATFORM_OPENMETADATA_AUTH_TOKEN:-}
-      DTS_PLATFORM_OPENMETADATA_TABLE_FIELDS: ${DTS_PLATFORM_OPENMETADATA_TABLE_FIELDS:-}
-      DTS_PLATFORM_OPENMETADATA_SERVICE_NAME: ${DTS_PLATFORM_OPENMETADATA_SERVICE_NAME:-}
-      DTS_PLATFORM_OPENMETADATA_DEFAULT_DATABASE: ${DTS_PLATFORM_OPENMETADATA_DEFAULT_DATABASE:-}
-      DTS_PLATFORM_OPENMETADATA_DEFAULT_SCHEMA: ${DTS_PLATFORM_OPENMETADATA_DEFAULT_SCHEMA:-}
-      DTS_INGESTION_TRUSTED_SERVICE_NAME: ${DTS_INGESTION_TRUSTED_SERVICE_NAME:-dts-platform}
-      DTS_INFRA_ENCRYPTION_KEY: ${DTS_INFRA_ENCRYPTION_KEY:-}
-      DTS_INFRA_KEY_VERSION: ${DTS_INFRA_KEY_VERSION:-v1}
-      LOG_ROOT: "${LOG_ROOT:-/workspace/logs}"
-      STACK_ROOT: ${STACK_ROOT}
-    command:
-      - bash
-      - -lc
-      - |
-        set -e
-        mvn -q -f /workspace-src/dts-common/pom.xml -DskipTests install
-        mvn -q -DskipTests spring-boot:run \
-          -Dspring-boot.run.arguments="--spring.datasource.url=$${SPRING_DATASOURCE_URL} --spring.datasource.username=$${SPRING_DATASOURCE_USERNAME} --spring.datasource.password=$${SPRING_DATASOURCE_PASSWORD}"
-    ports:
-      - "18083:8083"
-    volumes:
-      - ./source:/workspace-src:z
-      - maven-cache:/root/.m2
-      - ./logs/dts-ingestion:/workspace/logs/dts-ingestion:z
-      - ./services/dts-airflow/dags:/opt/airflow/dags:z
-      - ${STACK_ROOT}/services/dts-platform/drivers:${STACK_ROOT}/services/dts-platform/drivers:Z
-    security_opt:
-      - seccomp=unconfined
-    networks:
-      - dts-core
-
-
-  # Java backend: dts-analytics (Spring Boot)
-  dts-analytics:
-    image: ${IMAGE_MAVEN}
-    working_dir: /workspace-src/dts-analytics
-    depends_on:
-      dts-pg:
-        condition: service_healthy
-    environment:
-      TZ: ${TZ:-Asia/Shanghai}
+      SPRING_LIQUIBASE_ENABLED: ${SPRING_LIQUIBASE_ENABLED_PLATFORM:-true}
       SPRING_PROFILES_ACTIVE: ${DTS_PROFILE:-dev}
-      SPRING_DATASOURCE_URL: jdbc:postgresql://dts-pg:5432/${PG_DB_ANALYTICS:-dts_analytics}
-      SPRING_DATASOURCE_USERNAME: ${PG_USER_ANALYTICS:-dts_analytics}
-      SPRING_DATASOURCE_PASSWORD: ${PG_PWD_ANALYTICS:-dts_analytics}
-      PG_DB_BIADMIN: ${PG_DB_BIADMIN:-biadmin}
-      PG_USER_BIADMIN: ${PG_USER_BIADMIN:-biadmin}
-      PG_PWD_BIADMIN: ${PG_PWD_BIADMIN:-}
-      DTS_ANALYTICS_PROJECT_COCKPIT_WAREHOUSE_ENABLED: ${DTS_ANALYTICS_PROJECT_COCKPIT_WAREHOUSE_ENABLED:-true}
-      # External JDBC drivers (e.g., Dameng). Mount jars to /opt/dts/jdbc.
-      ANALYTICS_JDBC_DRIVERS_DIR: /opt/dts/jdbc
-      SPRING_LIQUIBASE_ENABLED: ${SPRING_LIQUIBASE_ENABLED:-true}
-      SPRING_CLOUD_CONFIG_ENABLED: ${SPRING_CLOUD_CONFIG_ENABLED:-false}
-      EUREKA_CLIENT_ENABLED: ${EUREKA_CLIENT_ENABLED:-false}
-      LOG_ROOT: "${LOG_ROOT:-/workspace/logs}"
-      JAVA_TOOL_OPTIONS: "${JAVA_TOOL_OPTIONS:-} ${ANALYTICS_JAVA_TOOL_OPTIONS:-}"
-    command:
-      - bash
-      - -lc
-      - |
-        set -e
-        raw_java_tool_options="$${JAVA_TOOL_OPTIONS:-}"
-        clean_java_tool_options="$$(printf '%s' "$${raw_java_tool_options}" | sed 's/^[[:space:]\"]*//; s/[[:space:]\"]*$$//')"
-        if [ "$${clean_java_tool_options}" != "$${raw_java_tool_options}" ]; then
-          echo "[dts-analytics] sanitized wrapping quotes in JAVA_TOOL_OPTIONS"
-        fi
-        export JAVA_TOOL_OPTIONS="$${clean_java_tool_options}"
-        mvn -q -DskipTests package
-        mvn -q -DskipTests spring-boot:run \
-          -Dspring-boot.run.jvmArguments="-agentlib:jdwp=transport=dt_socket,server=y,suspend=n,address=*:5007" \
-          -Dspring-boot.run.arguments="--spring.datasource.url=$${SPRING_DATASOURCE_URL} --spring.datasource.username=$${SPRING_DATASOURCE_USERNAME} --spring.datasource.password=$${SPRING_DATASOURCE_PASSWORD}"
-    ports:
-      - "127.0.0.1:3000:3000"
-      - "5007:5007"
-    volumes:
-      - ./source:/workspace-src:z
-      - dts-analytics-target:/workspace-src/dts-analytics/target
-      - maven-cache:/root/.m2
-      - ./services/dts-platform/drivers:/opt/dts/jdbc:ro,z
-      - ./logs/dts-analytics:/workspace/logs/dts-analytics:z
+      SPRING_SECURITY_OAUTH2_CLIENT_PROVIDER_OIDC_ISSUER_URI: ${OIDC_ISSUER_URI}
+      SPRING_SECURITY_OAUTH2_CLIENT_REGISTRATION_OIDC_CLIENT_ID: ${OAUTH2_PLATFORM_CLIENT_ID:-dts-platform}
+      SPRING_SECURITY_OAUTH2_CLIENT_REGISTRATION_OIDC_CLIENT_SECRET: ${OAUTH2_PLATFORM_CLIENT_SECRET:-}
+      SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_ISSUER_URI: ${OIDC_ISSUER_URI}
+      SPRINGDOC_API_DOCS_ENABLED: "true"
+      SPRINGDOC_SWAGGER_UI_ENABLED: "true"
+      TZ: ${TZ:-Asia/Shanghai}
+    extra_hosts:
+      - ${HOST_SSO}:${HOST_GATEWAY_IP:-172.17.0.1}
+      - tdh01:172.16.0.154
     healthcheck:
-      test: ["CMD-SHELL","curl -fsS http://127.0.0.1:3000/api/health >/dev/null || wget -qO- http://127.0.0.1:3000/api/health >/dev/null"]
       interval: 10s
-      timeout: 10s
       retries: 60
       start_period: 120s
-    networks:
-      - dts-core
+      test:
+        - CMD-SHELL
+        - curl -fsS http://127.0.0.1:8081/management/health >/dev/null || wget -qO- http://127.0.0.1:8081/management/health >/dev/null
+      timeout: 10s
+    image: ${IMAGE_MAVEN}
     labels:
-      - "traefik.enable=true"
-      - "traefik.docker.network=dts-core"
-      # Public endpoints: /analytics/api/public/* -> dts-analytics /api/public/* (anonymous share links)
-      - "traefik.http.routers.dts-analytics-public.rule=Host(`${HOST_PLATFORM_UI}`) && PathPrefix(`/analytics/api/public`)"
-      - "traefik.http.routers.dts-analytics-public.entrypoints=websecure"
-      - "traefik.http.routers.dts-analytics-public.tls=true"
-      - "traefik.http.routers.dts-analytics-public.priority=245"
-      - "traefik.http.routers.dts-analytics-public.service=dts-analytics-api"
-      - "traefik.http.routers.dts-analytics-public.middlewares=dts-strip-analytics-api@docker,cors-allow@file,security-headers@file"
-      # Embed runtime endpoints: /analytics/api/embed/* (token-gated; requires platform login)
-      - "traefik.http.routers.dts-analytics-embed.rule=Host(`${HOST_PLATFORM_UI}`) && PathPrefix(`/analytics/api/embed/`)"
-      - "traefik.http.routers.dts-analytics-embed.entrypoints=websecure"
-      - "traefik.http.routers.dts-analytics-embed.tls=true"
-      - "traefik.http.routers.dts-analytics-embed.priority=244"
-      - "traefik.http.routers.dts-analytics-embed.service=dts-analytics-api"
-      - "traefik.http.routers.dts-analytics-embed.middlewares=platform-forward-auth@file,dts-strip-analytics-api@docker,cors-allow@file,security-headers@file"
-      # CORS preflight: OPTIONS /analytics/api/* bypasses forward-auth (browsers never send auth on preflight)
-      - "traefik.http.routers.dts-analytics-api-cors.rule=Host(`${HOST_PLATFORM_UI}`) && PathPrefix(`/analytics/api`) && Method(`OPTIONS`)"
-      - "traefik.http.routers.dts-analytics-api-cors.entrypoints=websecure"
-      - "traefik.http.routers.dts-analytics-api-cors.tls=true"
-      - "traefik.http.routers.dts-analytics-api-cors.priority=241"
-      - "traefik.http.routers.dts-analytics-api-cors.service=dts-analytics-api"
-      - "traefik.http.routers.dts-analytics-api-cors.middlewares=dts-strip-analytics-api@docker,cors-allow@file,security-headers@file"
-      # /analytics/api/* -> dts-analytics /api/*
-      - "traefik.http.routers.dts-analytics-api.rule=Host(`${HOST_PLATFORM_UI}`) && PathPrefix(`/analytics/api`)"
-      - "traefik.http.routers.dts-analytics-api.entrypoints=websecure"
-      - "traefik.http.routers.dts-analytics-api.tls=true"
-      - "traefik.http.routers.dts-analytics-api.priority=240"
-      - "traefik.http.services.dts-analytics-api.loadbalancer.server.port=3000"
-      - "traefik.http.middlewares.dts-strip-analytics-api.stripprefix.prefixes=/analytics"
-      - "traefik.http.routers.dts-analytics-api.middlewares=platform-forward-auth@file,dts-strip-analytics-api@docker,cors-allow@file,security-headers@file"
-      # Frontend /bi/api/* route: platform-webapp uses this path for analytics API calls.
-      # Must go through forward-auth so X-DTS-Roles header is injected for role-based grants.
-      - "traefik.http.middlewares.dts-strip-bi-api.stripprefix.prefixes=/bi"
-      - "traefik.http.routers.dts-analytics-bi.rule=Host(`${HOST_PLATFORM_UI}`) && PathPrefix(`/bi/api`)"
-      - "traefik.http.routers.dts-analytics-bi.entrypoints=websecure"
-      - "traefik.http.routers.dts-analytics-bi.tls=true"
-      - "traefik.http.routers.dts-analytics-bi.priority=250"
-      - "traefik.http.routers.dts-analytics-bi.service=dts-analytics-api"
-      - "traefik.http.routers.dts-analytics-bi.middlewares=platform-forward-auth@file,dts-strip-bi-api@docker,cors-allow@file,security-headers@file"
-  # Frontend: dts-admin-webapp (optional dev server)
-  # If your project uses Vite/React/Angular dev server, adjust command/port below.
-  dts-admin-webapp:
-    image: node:22-bookworm
-    working_dir: /workspace-src/dts-admin-webapp
-    depends_on:
-      - dts-admin
-    environment:
-      TZ: ${TZ:-Asia/Shanghai}
-      PNPM_STORE_DIR: /pnpm-store
-      BROWSER: none
-      VITE_OPEN: "false"
-      VITE_ENABLE_MOCK: "false"
-      # Avoid ENOSPC (inotify watchers limit) in containerized dev.
-      CHOKIDAR_USEPOLLING: "true"
-      CHOKIDAR_INTERVAL: "1000"
-      HOST: 0.0.0.0
-      PORT: "3001"
-      # Vite dev proxy target for admin webapp: call dts-admin directly
-      VITE_API_PROXY_TARGET: http://dts-admin:8081
-      # Toggle password login UI for admin webapp during dev builds
-      WEBAPP_PASSWORD_LOGIN_ENABLED: ${ADMIN_WEBAPP_PASSWORD_LOGIN_ENABLED:-}
-      VITE_HIDE_PASSWORD_LOGIN: ${ADMIN_VITE_HIDE_PASSWORD_LOGIN:-}
-    command: ["sh","-lc","if [ -f package.json ]; then corepack enable; pnpm install --store-dir /pnpm-store --frozen-lockfile --ignore-scripts || pnpm install --store-dir /pnpm-store --no-frozen-lockfile --ignore-scripts; sh /patches/patch-vite-env.sh || true; pnpm run dev -- --host 0.0.0.0 --port ${PORT:-3001} --strictPort --open=false; else echo no\\ package.json\\ found; tail -f /dev/null; fi"]
+      - traefik.enable=true
+      - traefik.docker.network=dts-core
+      - traefik.http.routers.dts-platform.rule=Host(`${HOST_API}`) && PathPrefix(`/platform`)
+      - traefik.http.routers.dts-platform.entrypoints=websecure
+      - traefik.http.routers.dts-platform.tls=true
+      - traefik.http.services.dts-platform.loadbalancer.server.port=8081
+      - traefik.http.middlewares.dts-strip-platform.stripprefixregex.regex=/platform
+      - traefik.http.routers.dts-platform.middlewares=dts-strip-platform@docker,cors-allow@file,security-headers@file
+      - traefik.http.routers.dts-platform-swagger.rule=Host(`${HOST_PLATFORM_UI}`) && (Path(`/swagger-ui.html`) || PathPrefix(`/swagger-ui/`) || PathPrefix(`/v3/api-docs`) || PathPrefix(`/webjars/`))
+      - traefik.http.routers.dts-platform-swagger.entrypoints=websecure
+      - traefik.http.routers.dts-platform-swagger.tls=true
+      - traefik.http.routers.dts-platform-swagger.service=dts-platform
+      - traefik.http.routers.dts-platform-swagger.priority=200
+      - traefik.http.routers.dts-platform-swagger.middlewares=cors-allow@file,security-headers@file
+    networks:
+      dts-core: null
     ports:
-      - "18011:3001"
+      - mode: ingress
+        protocol: tcp
+        published: "18082"
+        target: 8081
+      - mode: ingress
+        protocol: tcp
+        published: "5006"
+        target: 5006
+    security_opt:
+      - seccomp=unconfined
     volumes:
-      - ./source:/workspace-src:z
-      - ./builds:/builds:ro,z
-      - ./builds/patch-vite-env.sh:/patches/patch-vite-env.sh:ro,z
-      - pnpm-store:/pnpm-store
-      - /workspace-src/dts-admin-webapp/node_modules
-    networks:
-      - dts-core
-    labels:
-      - "traefik.enable=true"
-      - "traefik.docker.network=dts-core"
-      - "traefik.http.routers.admin-ui.rule=Host(`${HOST_ADMIN_UI}`)"
-      - "traefik.http.routers.admin-ui.entrypoints=websecure"
-      - "traefik.http.routers.admin-ui.tls=true"
-      - "traefik.http.services.admin-ui.loadbalancer.server.port=3001"
-      - "traefik.http.routers.admin-ui.middlewares=security-headers@file"
-    healthcheck:
-      test: ["CMD-SHELL","curl -fsS http://127.0.0.1:$${PORT:-3001} >/dev/null || wget -qO- http://127.0.0.1:$${PORT:-3001} >/dev/null"]
-      interval: 10s
-      timeout: 5s
-      retries: 30
-      start_period: 60s
-
-  # Frontend: dts-platform-webapp (optional dev server)
+      - bind:
+          create_host_path: true
+          selinux: z
+        source: ./source
+        target: /workspace-src
+        type: bind
+      - source: dts-platform-target
+        target: /workspace-src/dts-platform/target
+        type: volume
+        volume: {}
+      - source: dts-common-target
+        target: /workspace-src/dts-common/target
+        type: volume
+        volume: {}
+      - source: maven-cache
+        target: /root/.m2
+        type: volume
+        volume: {}
+      - bind:
+          create_host_path: true
+          selinux: z
+        read_only: true
+        source: ./services/certs/truststore.p12
+        target: /etc/dts/truststore.p12
+        type: bind
+      - bind:
+          create_host_path: true
+          selinux: z
+        source: ./services/dts-platform/drivers
+        target: /opt/dts/drivers
+        type: bind
+      - bind:
+          create_host_path: true
+          selinux: Z
+        source: ./services/dts-platform/upload
+        target: /opt/dts/upload
+        type: bind
+      - bind:
+          create_host_path: true
+          selinux: Z
+        source: ./services/dts-dbt
+        target: /opt/dts/dbt
+        type: bind
+      - bind:
+          create_host_path: true
+          selinux: Z
+        source: ./services/dts-dbt/profiles
+        target: /opt/dts/dbt-profiles
+        type: bind
+      - bind:
+          create_host_path: true
+          selinux: Z
+        source: ./services/dts-airflow/dags
+        target: /opt/airflow/dags
+        type: bind
+      - bind:
+          create_host_path: true
+          selinux: z
+        read_only: true
+        source: ./builds/patch-app-dev-yml.sh
+        target: /patches/patch-app-dev-yml.sh
+        type: bind
+      - bind:
+          create_host_path: true
+          selinux: z
+        source: ./logs/dts-platform
+        target: /workspace/logs/dts-platform
+        type: bind
+    working_dir: /workspace-src/dts-platform
   dts-platform-webapp:
-    image: node:22-bookworm
-    working_dir: /workspace-src/dts-platform-webapp
+    command:
+      - sh
+      - -lc
+      - if [ -f package.json ]; then corepack enable; pnpm install --store-dir /pnpm-store --frozen-lockfile --ignore-scripts || pnpm install --store-dir /pnpm-store --no-frozen-lockfile --ignore-scripts; sh /patches/patch-vite-env.sh || true; pnpm run dev -- --host 0.0.0.0 --port ${PORT:-3001} --strictPort --open=false; else echo no\ package.json\ found; tail -f /dev/null; fi
     depends_on:
-      - dts-platform
+      dts-platform:
+        condition: service_started
+        required: true
     environment:
-      TZ: ${TZ:-Asia/Shanghai}
-      PNPM_STORE_DIR: /pnpm-store
+      ALLOWED_EXTERNAL_REDIRECT_HOSTS: ${HOST_PLATFORM_UI},${HOST_META},${HOST_FLOW}
       BROWSER: none
-      VITE_OPEN: "false"
-      VITE_ENABLE_MOCK: "false"
-      # Avoid ENOSPC (inotify watchers limit) in containerized dev.
-      CHOKIDAR_USEPOLLING: "true"
       CHOKIDAR_INTERVAL: "1000"
+      CHOKIDAR_USEPOLLING: "true"
       HOST: 0.0.0.0
+      PLATFORM_PUBLIC_BASE_URL: https://${HOST_PLATFORM_UI}
+      PNPM_STORE_DIR: /pnpm-store
       PORT: "3001"
-      # Vite dev proxy target for platform webapp: call dts-platform directly
-      VITE_API_PROXY_TARGET: http://dts-platform:8081
-      # Ensure no prefix rewrite in dev; backend already serves at /api
-      VITE_API_PROXY_PREFIX: ""
-      # Enforce FE guard consistently (dev == prod)
-      VITE_ENABLE_FE_GUARD: "true"
-      # Allow all authenticated users to sign in (empty → allow all; triad still governed by backend policy)
+      TZ: ${TZ:-Asia/Shanghai}
+      VITE_ADMIN_API_BASE_URL: /admin/api
+      VITE_ADMIN_PROXY_TARGET: http://dts-admin:8081
       VITE_ALLOWED_LOGIN_ROLES: ""
+      VITE_ANALYTICS_API_PROXY_TARGET: http://dts-analytics:3000
+      VITE_API_PROXY_PREFIX: ""
+      VITE_API_PROXY_TARGET: http://dts-platform:8081
       VITE_DEV_LOGIN_FALLBACK: "false"
-      # Admin API base URL used by the frontend code. Use same-origin path to avoid browser CORS in dev,
-      # and let Vite proxy '/admin/api' to the real admin service (see VITE_ADMIN_PROXY_TARGET below).
-      VITE_ADMIN_API_BASE_URL: "/admin/api"
-      # Preferred public domain for BI links (used to rewrite Hetu IP links)
-      PLATFORM_PUBLIC_BASE_URL: "https://${HOST_PLATFORM_UI}"
-      ALLOWED_EXTERNAL_REDIRECT_HOSTS: "${HOST_PLATFORM_UI},${HOST_META},${HOST_FLOW}"
-      # Vite dev proxy target for admin API; use direct container address in dev to avoid TLS and Traefik
-      # Note: vite.config rewrites '/admin/api' -> '/api' for the target, so do NOT include '/api' suffix here.
-      VITE_ADMIN_PROXY_TARGET: "http://dts-admin:8081"
-      VITE_ANALYTICS_API_PROXY_TARGET: "http://dts-analytics:3000"
-      # Enable experimental SQL workbench by default (can be overridden in .env)
+      VITE_ENABLE_FE_GUARD: "true"
+      VITE_ENABLE_MOCK: "false"
       VITE_ENABLE_SQL_WORKBENCH: ${VITE_ENABLE_SQL_WORKBENCH:-true}
-      # Toggle password login UI for platform webapp during dev builds
-      WEBAPP_PASSWORD_LOGIN_ENABLED: ${PLATFORM_WEBAPP_PASSWORD_LOGIN_ENABLED:-}
       VITE_HIDE_PASSWORD_LOGIN: ${PLATFORM_VITE_HIDE_PASSWORD_LOGIN:-}
-    command: ["sh","-lc","if [ -f package.json ]; then corepack enable; pnpm install --store-dir /pnpm-store --frozen-lockfile --ignore-scripts || pnpm install --store-dir /pnpm-store --no-frozen-lockfile --ignore-scripts; sh /patches/patch-vite-env.sh || true; pnpm run dev -- --host 0.0.0.0 --port ${PORT:-3001} --strictPort --open=false; else echo no\\ package.json\\ found; tail -f /dev/null; fi"]
-    ports:
-      - "18012:3001"
-    volumes:
-      - ./source:/workspace-src:z
-      - ./builds/patch-vite-env.sh:/patches/patch-vite-env.sh:ro,z
-      - pnpm-store:/pnpm-store
-      - /workspace-src/dts-platform-webapp/node_modules
-    networks:
-      - dts-core
-    labels:
-      - "traefik.enable=true"
-      - "traefik.docker.network=dts-core"
-      # Avoid swallowing analytics mount path (/analytics) which is served by dts-analytics,
-      # and avoid taking over Hetu reverse-proxy prefixes (screen/dashboards/system/tdv/...).
-      - "traefik.http.routers.platform-ui.rule=Host(`${HOST_PLATFORM_UI}`) && !PathPrefix(`/analytics`) && !PathPrefix(`/bi/api`) && !PathPrefix(`/screen`) && !PathPrefix(`/dashboards`) && !PathPrefix(`/system`) && !PathPrefix(`/tdv`) && !PathPrefix(`/account`) && !PathPrefix(`/hetu`) && !PathPrefix(`/static`)"
-      # Ensure Hetu reverse-proxy routers (/screen,/dashboards,/system,/tdv,...) win over the SPA catch-all.
-      - "traefik.http.routers.platform-ui.priority=100"
-      - "traefik.http.routers.platform-ui.entrypoints=websecure"
-      - "traefik.http.routers.platform-ui.tls=true"
-      - "traefik.http.services.platform-ui.loadbalancer.server.port=${PORT:-3001}"
-      - "traefik.http.routers.platform-ui.middlewares=security-headers@file"
+      VITE_OPEN: "false"
+      WEBAPP_PASSWORD_LOGIN_ENABLED: ${PLATFORM_WEBAPP_PASSWORD_LOGIN_ENABLED:-}
     healthcheck:
-      test: ["CMD-SHELL","curl -fsS http://127.0.0.1:$${PORT:-3001} >/dev/null || wget -qO- http://127.0.0.1:$${PORT:-3001} >/dev/null"]
       interval: 10s
-      timeout: 5s
       retries: 30
       start_period: 60s
-
-  dts-elasticsearch:
-    image: ${IMAGE_ELASTICSEARCH}
-    container_name: dts-elasticsearch
-    environment:
-      TZ: ${TZ:-Asia/Shanghai}
-      discovery.type: single-node
-      xpack.security.enabled: "false"
-      ES_JAVA_OPTS: "-Xms512m -Xmx512m"
-    volumes:
-      - elasticsearch-data:/usr/share/elasticsearch/data
-      - ./logs/elasticsearch:/usr/share/elasticsearch/logs:z
-    healthcheck:
-      test: ["CMD-SHELL", "curl -fsS http://127.0.0.1:9200 >/dev/null || exit 1"]
-      <<: *hc
-    restart: unless-stopped
-    networks:
-      - dts-core
-
-  dts-openmetadata:
-    image: ${IMAGE_OPENMETADATA}
-    container_name: dts-openmetadata
-    depends_on:
-      dts-openmetadata-init:
-        condition: service_completed_successfully
-      dts-pg:
-        condition: service_healthy
-      dts-elasticsearch:
-        condition: service_healthy
-      dts-airflow-webserver:
-        condition: service_healthy
-    environment:
-      TZ: ${TZ:-Asia/Shanghai}
-      JAVA_TOOL_OPTIONS: "-Duser.timezone=Asia/Shanghai"
-      OPENMETADATA_CLUSTER_NAME: dts-openmetadata
-      OPENMETADATA_SERVER_PORT: 8585
-      OPENMETADATA_JWT_SECRET: ${OPENMETADATA_JWT_SECRET}
-      DB_HOST: ${PG_HOST}
-      DB_PORT: ${PG_PORT}
-      DB_USER: ${PG_USER_OPENMETADATA}
-      DB_USER_PASSWORD: ${PG_PWD_OPENMETADATA}
-      DB_DATABASE: ${PG_DB_OPENMETADATA}
-      OM_DATABASE: ${PG_DB_OPENMETADATA}
-      DB_SCHEME: postgresql
-      DB_DRIVER_CLASS: org.postgresql.Driver
-      DB_PARAMS: "sslmode=disable"
-      ELASTICSEARCH_HOST: dts-elasticsearch
-      ELASTICSEARCH_PORT: 9200
-      ELASTICSEARCH_SCHEME: http
-      PIPELINE_SERVICE_CLIENT_ENDPOINT: ${DTS_AIRFLOW_BASE_URL:-http://dts-airflow-webserver:8080}
-      AIRFLOW_USERNAME: ${DTS_AIRFLOW_USERNAME:-airflow}
-      AIRFLOW_PASSWORD: ${DTS_AIRFLOW_PASSWORD:-airflow}
-      SERVER_HOST_API_URL: "http://dts-openmetadata:8585/api"
-    ports:
-      - "${OPENMETADATA_HTTP_PORT:-8585}:8585"
-    volumes:
-      - /etc/localtime:/etc/localtime:ro
-      - ./logs/openmetadata:/opt/openmetadata/logs:z
-    labels:
-      - "traefik.enable=true"
-      - "traefik.docker.network=dts-core"
-      - "traefik.http.routers.dts-openmetadata.rule=Host(`${HOST_META}`)"
-      - "traefik.http.routers.dts-openmetadata.entrypoints=websecure"
-      - "traefik.http.routers.dts-openmetadata.tls=true"
-      - "traefik.http.services.dts-openmetadata.loadbalancer.server.port=8585"
-      - "traefik.http.routers.dts-openmetadata.middlewares=platform-forward-auth@file,security-headers@file"
-    restart: unless-stopped
-    networks:
-      - dts-core
-
-  dts-openmetadata-init:
-    image: ${IMAGE_OPENMETADATA}
-    container_name: dts-openmetadata-init
-    entrypoint: /bin/bash
-    command:
-      - -lc
-      - |
-        /opt/openmetadata/bootstrap/openmetadata-ops.sh migrate
-    depends_on:
-      dts-pg:
-        condition: service_healthy
-      dts-elasticsearch:
-        condition: service_healthy
-    environment:
-      TZ: ${TZ:-Asia/Shanghai}
-      JAVA_TOOL_OPTIONS: "-Duser.timezone=Asia/Shanghai"
-      OPENMETADATA_CLUSTER_NAME: dts-openmetadata
-      OPENMETADATA_SERVER_PORT: 8585
-      OPENMETADATA_JWT_SECRET: ${OPENMETADATA_JWT_SECRET}
-      DB_HOST: ${PG_HOST}
-      DB_PORT: ${PG_PORT}
-      DB_USER: ${PG_USER_OPENMETADATA}
-      DB_USER_PASSWORD: ${PG_PWD_OPENMETADATA}
-      DB_DATABASE: ${PG_DB_OPENMETADATA}
-      OM_DATABASE: ${PG_DB_OPENMETADATA}
-      DB_SCHEME: postgresql
-      DB_DRIVER_CLASS: org.postgresql.Driver
-      DB_PARAMS: "sslmode=disable"
-      ELASTICSEARCH_HOST: dts-elasticsearch
-      ELASTICSEARCH_PORT: 9200
-      ELASTICSEARCH_SCHEME: http
-    volumes:
-      - /etc/localtime:/etc/localtime:ro
-      - ./logs/openmetadata:/opt/openmetadata/logs:z
-    restart: "no"
-    networks:
-      - dts-core
-
-  dts-openmetadata-ingestion:
-    image: ${IMAGE_OPENMETADATA_INGESTION}
-    container_name: dts-openmetadata-ingestion
-    depends_on:
-      dts-openmetadata:
-        condition: service_started
-    environment:
-      TZ: ${TZ:-Asia/Shanghai}
-      OPENMETADATA_API_ENDPOINT: "http://dts-openmetadata:8585/api/v1"
-      OPENMETADATA_HOST_PORT: "http://dts-openmetadata:8585/api"
-      OPENMETADATA_AUTH_TOKEN: ${DTS_PLATFORM_OPENMETADATA_AUTH_TOKEN:-}
-      OPENMETADATA_DBT_SERVICE: ${DTS_PLATFORM_OPENMETADATA_SERVICE_NAME:-hive}
-      OPENMETADATA_DB_SERVICE: ${DTS_PLATFORM_OPENMETADATA_SERVICE_NAME:-hive}
-      PG_SUPER_USER: ${PG_SUPER_USER}
-      PG_SUPER_PASSWORD: ${PG_SUPER_PASSWORD}
-      PG_HOST: ${PG_HOST}
-      PG_PORT: ${PG_PORT}
-      PG_DB_DTPS: ${PG_DB_DTPS}
-    volumes:
-      - /etc/localtime:/etc/localtime:ro
-      - ./services/dts-openmetadata/ingestion:/opt/openmetadata/ingestion:ro,z
-      - ./services/dts-dbt:/opt/dbt:ro,z
-    entrypoint: /bin/sh
-    command: ["-c", "/opt/openmetadata/ingestion/run-dbt-ingestion.sh"]
-    restart: "no"
-    networks:
-      - dts-core
-
-  dts-airflow-init:
-    image: ${IMAGE_AIRFLOW}
-    container_name: dts-airflow-init
-    entrypoint: /bin/bash
-    command:
-      - -c
-      - |
-        find /opt/airflow/dags /opt/airflow/plugins /opt/airflow/extra /opt/airflow/config -type f ! -perm /o+r -exec chmod o+r {} + 2>/dev/null || true
-        find /opt/airflow/dags /opt/airflow/plugins /opt/airflow/extra /opt/airflow/config -type d ! -perm /o+rx -exec chmod o+rx {} + 2>/dev/null || true
-        airflow db migrate
-        airflow users create --username "${AIRFLOW_ADMIN_USERNAME}" --password "${AIRFLOW_ADMIN_PASSWORD}" --firstname "${AIRFLOW_ADMIN_FIRSTNAME}" --lastname "${AIRFLOW_ADMIN_LASTNAME}" --role Admin --email "${AIRFLOW_ADMIN_EMAIL}" || true
-    environment:
-      TZ: ${TZ:-Asia/Shanghai}
-      AIRFLOW__CORE__EXECUTOR: LocalExecutor
-      AIRFLOW__CORE__LOAD_EXAMPLES: "false"
-      AIRFLOW__CORE__DAG_IGNORE_FILE_SYNTAX: "regexp"
-      AIRFLOW__SCHEDULER__DAG_DIR_LIST_INTERVAL: ${AIRFLOW_DAG_DIR_LIST_INTERVAL:-3}
-      AIRFLOW__SCHEDULER__MIN_FILE_PROCESS_INTERVAL: ${AIRFLOW_MIN_FILE_PROCESS_INTERVAL:-3}
-      AIRFLOW__CORE__FERNET_KEY: ${AIRFLOW_FERNET_KEY}
-      PIP_ADDITIONAL_REQUIREMENTS: "${AIRFLOW_PIP_ADDITIONAL_REQUIREMENTS:-openmetadata-managed-apis==${OPENMETADATA_MANAGED_APIS_VERSION:-1.11.5.0} openmetadata-ingestion==${OPENMETADATA_INGESTION_VERSION:-1.11.5.0}}"
-      AIRFLOW__API__AUTH_BACKENDS: "airflow.api.auth.backend.basic_auth"
-      PYTHONPATH: "/opt/airflow/extra:${PYTHONPATH:-}"
-      AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: "postgresql+psycopg2://${PG_USER_AIRFLOW}:${PG_PWD_AIRFLOW_URLENCODED:-${PG_PWD_AIRFLOW}}@${PG_HOST}:${PG_PORT}/${PG_DB_AIRFLOW}"
-      AIRFLOW__CORE__SQL_ALCHEMY_CONN: "postgresql+psycopg2://${PG_USER_AIRFLOW}:${PG_PWD_AIRFLOW_URLENCODED:-${PG_PWD_AIRFLOW}}@${PG_HOST}:${PG_PORT}/${PG_DB_AIRFLOW}"
-      AIRFLOW__WEBSERVER__ENABLE_PROXY_FIX: "true"
-      AIRFLOW__API__BASE_URL: "https://${HOST_FLOW}"
-      AIRFLOW__WEBSERVER__EXPOSE_CONFIG: "true"
-      AIRFLOW_HOME: /opt/airflow
-      DBT_PROJECT_DIR: ${DBT_PROJECT_DIR}
-      DBT_PROFILES_DIR: ${DBT_PROFILES_DIR}
-      DBT_IMAGE: ${IMAGE_DBT:-dts-dbt:1.10.0}
-      OPENMETADATA_INGEST_IMAGE: ${IMAGE_OPENMETADATA_INGESTION}
-      OPENMETADATA_INGEST_CONFIG_DIR: ${OPENMETADATA_INGEST_CONFIG_DIR}
-      OPENMETADATA_API_ENDPOINT: ${DTS_PLATFORM_OPENMETADATA_BASE_URL}/api/v1
-      OPENMETADATA_AUTH_TOKEN: ${DTS_PLATFORM_OPENMETADATA_AUTH_TOKEN}
-      OPENMETADATA_DBT_SERVICE: ${DTS_PLATFORM_OPENMETADATA_SERVICE_NAME:-hive}
-      ADDAX_IMAGE: ${IMAGE_ADDAX:-dts-addax:6.0.8}
-      ADDAX_JOB_DIR: ${STACK_ROOT}/services/dts-airflow/dags
-      ADDAX_DRIVER_DIR: ${STACK_ROOT}/services/dts-platform/drivers
-      ADDAX_DRIVER_JARS: ${ADDAX_DRIVER_JARS:-DmJdbcDriver11.jar,postgresql-42.7.9.jar}
-      ADDAX_LOG_DIR: ${STACK_ROOT}/logs/addax
-      ADDAX_DOCKER_NETWORK: ${ADDAX_DOCKER_NETWORK:-dts-core}
-    depends_on:
-      dts-pg:
-        condition: service_healthy
-    volumes:
-      - ./services/dts-airflow/dags:/opt/airflow/dags
-      - ./logs/airflow:/opt/airflow/logs
-      - ./services/dts-airflow/plugins:/opt/airflow/plugins
-      - ./services/dts-airflow/extra:/opt/airflow/extra:ro,z
-      - ./services/dts-airflow/config:/opt/airflow/config
-      - ./services/dts-platform/drivers:${STACK_ROOT}/services/dts-platform/drivers:ro,z
-      - /var/run/docker.sock:/var/run/docker.sock
-    restart: "no"
-    networks:
-      - dts-core
-
-  dts-airflow-webserver:
-    image: ${IMAGE_AIRFLOW}
-    container_name: dts-airflow-webserver
-    command: webserver
-    depends_on:
-      dts-airflow-init:
-        condition: service_completed_successfully
-    environment:
-      TZ: ${TZ:-Asia/Shanghai}
-      AIRFLOW__CORE__EXECUTOR: LocalExecutor
-      AIRFLOW__CORE__LOAD_EXAMPLES: "false"
-      AIRFLOW__CORE__DAG_IGNORE_FILE_SYNTAX: "regexp"
-      AIRFLOW__CORE__FERNET_KEY: ${AIRFLOW_FERNET_KEY}
-      PIP_ADDITIONAL_REQUIREMENTS: "${AIRFLOW_PIP_ADDITIONAL_REQUIREMENTS:-openmetadata-managed-apis==${OPENMETADATA_MANAGED_APIS_VERSION:-1.11.5.0} openmetadata-ingestion==${OPENMETADATA_INGESTION_VERSION:-1.11.5.0}}"
-      AIRFLOW__API__AUTH_BACKENDS: "airflow.api.auth.backend.basic_auth"
-      PYTHONPATH: "/opt/airflow/extra:${PYTHONPATH:-}"
-      AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: "postgresql+psycopg2://${PG_USER_AIRFLOW}:${PG_PWD_AIRFLOW_URLENCODED:-${PG_PWD_AIRFLOW}}@${PG_HOST}:${PG_PORT}/${PG_DB_AIRFLOW}"
-      AIRFLOW__CORE__SQL_ALCHEMY_CONN: "postgresql+psycopg2://${PG_USER_AIRFLOW}:${PG_PWD_AIRFLOW_URLENCODED:-${PG_PWD_AIRFLOW}}@${PG_HOST}:${PG_PORT}/${PG_DB_AIRFLOW}"
-      AIRFLOW__WEBSERVER__ENABLE_PROXY_FIX: "true"
-      AIRFLOW__API__BASE_URL: "https://${HOST_FLOW}"
-      AIRFLOW__WEBSERVER__EXPOSE_CONFIG: "true"
-      AIRFLOW_HOME: /opt/airflow
-      DBT_PROJECT_DIR: ${DBT_PROJECT_DIR}
-      DBT_PROFILES_DIR: ${DBT_PROFILES_DIR}
-      DBT_IMAGE: ${IMAGE_DBT:-dts-dbt:1.10.0}
-      OPENMETADATA_INGEST_IMAGE: ${IMAGE_OPENMETADATA_INGESTION}
-      OPENMETADATA_INGEST_CONFIG_DIR: ${OPENMETADATA_INGEST_CONFIG_DIR}
-      OPENMETADATA_API_ENDPOINT: ${DTS_PLATFORM_OPENMETADATA_BASE_URL}/api/v1
-      OPENMETADATA_AUTH_TOKEN: ${DTS_PLATFORM_OPENMETADATA_AUTH_TOKEN}
-      OPENMETADATA_DBT_SERVICE: ${DTS_PLATFORM_OPENMETADATA_SERVICE_NAME:-hive}
-      ADDAX_IMAGE: ${IMAGE_ADDAX:-dts-addax:6.0.8}
-      ADDAX_JOB_DIR: ${STACK_ROOT}/services/dts-airflow/dags
-      ADDAX_DRIVER_DIR: ${STACK_ROOT}/services/dts-platform/drivers
-      ADDAX_DRIVER_JARS: ${ADDAX_DRIVER_JARS:-DmJdbcDriver11.jar,postgresql-42.7.9.jar}
-      ADDAX_LOG_DIR: ${STACK_ROOT}/logs/addax
-      ADDAX_DOCKER_NETWORK: ${ADDAX_DOCKER_NETWORK:-dts-core}
-    ports:
-      - "${AIRFLOW_WEBSERVER_PORT:-18090}:8080"
-    volumes:
-      - ./services/dts-airflow/dags:/opt/airflow/dags
-      - ./logs/airflow:/opt/airflow/logs
-      - ./services/dts-airflow/plugins:/opt/airflow/plugins
-      - ./services/dts-airflow/extra:/opt/airflow/extra:ro,z
-      - ./services/dts-airflow/config:/opt/airflow/config
-      - ./services/dts-platform/drivers:${STACK_ROOT}/services/dts-platform/drivers:ro,z
-      - /var/run/docker.sock:/var/run/docker.sock
-    labels:
-      - "traefik.enable=true"
-      - "traefik.docker.network=dts-core"
-      - "traefik.http.routers.dts-airflow.rule=Host(`${HOST_FLOW}`)"
-      - "traefik.http.routers.dts-airflow.entrypoints=websecure"
-      - "traefik.http.routers.dts-airflow.tls=true"
-      - "traefik.http.services.dts-airflow.loadbalancer.server.port=8080"
-      - "traefik.http.routers.dts-airflow.middlewares=platform-forward-auth@file,security-headers@file"
-    restart: unless-stopped
-    healthcheck:
-      test: ["CMD-SHELL", "curl -fsS http://127.0.0.1:8080/api/v1/health >/dev/null || exit 1"]
-      interval: 10s
+      test:
+        - CMD-SHELL
+        - curl -fsS http://127.0.0.1:$${PORT:-3001} >/dev/null || wget -qO- http://127.0.0.1:$${PORT:-3001} >/dev/null
       timeout: 5s
-      retries: 10
-      start_period: 20s
+    image: node:22-bookworm
+    labels:
+      - traefik.enable=true
+      - traefik.docker.network=dts-core
+      - traefik.http.routers.platform-ui.rule=Host(`${HOST_PLATFORM_UI}`) && !PathPrefix(`/analytics`) && !PathPrefix(`/bi/api`) && !PathPrefix(`/screen`) && !PathPrefix(`/dashboards`) && !PathPrefix(`/system`) && !PathPrefix(`/tdv`) && !PathPrefix(`/account`) && !PathPrefix(`/hetu`) && !PathPrefix(`/static`)
+      - traefik.http.routers.platform-ui.priority=100
+      - traefik.http.routers.platform-ui.entrypoints=websecure
+      - traefik.http.routers.platform-ui.tls=true
+      - traefik.http.services.platform-ui.loadbalancer.server.port=${PORT:-3001}
+      - traefik.http.routers.platform-ui.middlewares=security-headers@file
     networks:
-      - dts-core
-
-  dts-airflow-scheduler:
-    image: ${IMAGE_AIRFLOW}
-    container_name: dts-airflow-scheduler
-    command: scheduler
-    depends_on:
-      dts-airflow-init:
-        condition: service_completed_successfully
-    environment:
-      TZ: ${TZ:-Asia/Shanghai}
-      AIRFLOW__CORE__EXECUTOR: LocalExecutor
-      AIRFLOW__CORE__LOAD_EXAMPLES: "false"
-      AIRFLOW__CORE__DAG_IGNORE_FILE_SYNTAX: "regexp"
-      AIRFLOW__CORE__FERNET_KEY: ${AIRFLOW_FERNET_KEY}
-      AIRFLOW__SCHEDULER__DAG_DIR_LIST_INTERVAL: ${AIRFLOW_DAG_DIR_LIST_INTERVAL:-3}
-      AIRFLOW__SCHEDULER__MIN_FILE_PROCESS_INTERVAL: ${AIRFLOW_MIN_FILE_PROCESS_INTERVAL:-3}
-      PIP_ADDITIONAL_REQUIREMENTS: "${AIRFLOW_PIP_ADDITIONAL_REQUIREMENTS:-openmetadata-managed-apis==${OPENMETADATA_MANAGED_APIS_VERSION:-1.11.5.0} openmetadata-ingestion==${OPENMETADATA_INGESTION_VERSION:-1.11.5.0}}"
-      AIRFLOW__API__AUTH_BACKENDS: "airflow.api.auth.backend.basic_auth"
-      PYTHONPATH: "/opt/airflow/extra:${PYTHONPATH:-}"
-      AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: "postgresql+psycopg2://${PG_USER_AIRFLOW}:${PG_PWD_AIRFLOW_URLENCODED:-${PG_PWD_AIRFLOW}}@${PG_HOST}:${PG_PORT}/${PG_DB_AIRFLOW}"
-      AIRFLOW__CORE__SQL_ALCHEMY_CONN: "postgresql+psycopg2://${PG_USER_AIRFLOW}:${PG_PWD_AIRFLOW_URLENCODED:-${PG_PWD_AIRFLOW}}@${PG_HOST}:${PG_PORT}/${PG_DB_AIRFLOW}"
-      AIRFLOW_HOME: /opt/airflow
-      DBT_PROJECT_DIR: ${DBT_PROJECT_DIR}
-      DBT_PROFILES_DIR: ${DBT_PROFILES_DIR}
-      DBT_IMAGE: ${IMAGE_DBT:-dts-dbt:1.10.0}
-      OPENMETADATA_INGEST_IMAGE: ${IMAGE_OPENMETADATA_INGESTION}
-      OPENMETADATA_INGEST_CONFIG_DIR: ${OPENMETADATA_INGEST_CONFIG_DIR}
-      OPENMETADATA_API_ENDPOINT: ${DTS_PLATFORM_OPENMETADATA_BASE_URL}/api/v1
-      OPENMETADATA_AUTH_TOKEN: ${DTS_PLATFORM_OPENMETADATA_AUTH_TOKEN}
-      OPENMETADATA_DBT_SERVICE: ${DTS_PLATFORM_OPENMETADATA_SERVICE_NAME:-hive}
-      ADDAX_IMAGE: ${IMAGE_ADDAX:-dts-addax:6.0.8}
-      ADDAX_JOB_DIR: ${STACK_ROOT}/services/dts-airflow/dags
-      ADDAX_DRIVER_DIR: ${STACK_ROOT}/services/dts-platform/drivers
-      ADDAX_DRIVER_JARS: ${ADDAX_DRIVER_JARS:-DmJdbcDriver11.jar,postgresql-42.7.9.jar}
-      ADDAX_LOG_DIR: ${STACK_ROOT}/logs/addax
-      ADDAX_DOCKER_NETWORK: ${ADDAX_DOCKER_NETWORK:-dts-core}
+      dts-core: null
+    ports:
+      - mode: ingress
+        protocol: tcp
+        published: "18012"
+        target: 3001
     volumes:
-      - ./services/dts-airflow/dags:/opt/airflow/dags
-      - ./logs/airflow:/opt/airflow/logs
-      - ./services/dts-airflow/plugins:/opt/airflow/plugins
-      - ./services/dts-airflow/extra:/opt/airflow/extra:ro,z
-      - ./services/dts-airflow/config:/opt/airflow/config
-      - ./services/dts-platform/drivers:${STACK_ROOT}/services/dts-platform/drivers:ro,z
-      - /var/run/docker.sock:/var/run/docker.sock
-    restart: unless-stopped
-    networks:
-      - dts-core
-
-  dts-airflow-triggerer:
-    image: ${IMAGE_AIRFLOW}
-    container_name: dts-airflow-triggerer
-    command: triggerer
-    depends_on:
-      dts-airflow-init:
-        condition: service_completed_successfully
+      - bind:
+          create_host_path: true
+          selinux: z
+        source: ./source
+        target: /workspace-src
+        type: bind
+      - bind:
+          create_host_path: true
+          selinux: z
+        read_only: true
+        source: ./builds/patch-vite-env.sh
+        target: /patches/patch-vite-env.sh
+        type: bind
+      - source: pnpm-store
+        target: /pnpm-store
+        type: volume
+        volume: {}
+      - target: /workspace-src/dts-platform-webapp/node_modules
+        type: volume
+        volume: {}
+    working_dir: /workspace-src/dts-platform-webapp
+  dts-proxy:
+    command:
+      - --api.dashboard=${TRAEFIK_DASHBOARD}
+      - --api.insecure=${TRAEFIK_DASHBOARD}
+      - --providers.docker=true
+      - --providers.docker.exposedbydefault=false
+      - --providers.docker.network=dts-core
+      - --providers.file.filename=/etc/traefik/dynamic/traefik-dynamic.yml
+      - --entrypoints.web.address=:80
+      - --entrypoints.web.http.redirections.entrypoint.to=websecure
+      - --entrypoints.web.http.redirections.entrypoint.scheme=https
+      - --entrypoints.websecure.address=:443
+      - --entrypoints.web.forwardedHeaders.trustedIPs=${TRUSTED_PROXY_CIDRS:-127.0.0.1/32}
+      - --entrypoints.websecure.forwardedHeaders.trustedIPs=${TRUSTED_PROXY_CIDRS:-127.0.0.1/32}
+      - --ping=${TRAEFIK_ENABLE_PING}
+      - --entrypoints.metrics.address=:${TRAEFIK_METRICS_PORT}
+      - --accesslog=true
+      - --accesslog.filepath=/var/log/traefik/access.log
+      - --log.filepath=/var/log/traefik/traefik.log
+      - --serversTransport.insecureSkipVerify=true
+      - --log.level=INFO
+      - --metrics.prometheus=true
+      - --metrics.prometheus.entryPoint=metrics
+      - --metrics.prometheus.addEntryPointsLabels=true
+      - --metrics.prometheus.addServicesLabels=true
+    container_name: dts-proxy
     environment:
-      TZ: ${TZ:-Asia/Shanghai}
-      AIRFLOW__CORE__EXECUTOR: LocalExecutor
-      AIRFLOW__CORE__LOAD_EXAMPLES: "false"
-      AIRFLOW__CORE__DAG_IGNORE_FILE_SYNTAX: "regexp"
-      AIRFLOW__CORE__FERNET_KEY: ${AIRFLOW_FERNET_KEY}
-      PIP_ADDITIONAL_REQUIREMENTS: "${AIRFLOW_PIP_ADDITIONAL_REQUIREMENTS:-openmetadata-managed-apis==${OPENMETADATA_MANAGED_APIS_VERSION:-1.11.5.0} openmetadata-ingestion==${OPENMETADATA_INGESTION_VERSION:-1.11.5.0}}"
-      AIRFLOW__API__AUTH_BACKENDS: "airflow.api.auth.backend.basic_auth"
-      PYTHONPATH: "/opt/airflow/extra:${PYTHONPATH:-}"
-      AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: "postgresql+psycopg2://${PG_USER_AIRFLOW}:${PG_PWD_AIRFLOW_URLENCODED:-${PG_PWD_AIRFLOW}}@${PG_HOST}:${PG_PORT}/${PG_DB_AIRFLOW}"
-      AIRFLOW__CORE__SQL_ALCHEMY_CONN: "postgresql+psycopg2://${PG_USER_AIRFLOW}:${PG_PWD_AIRFLOW_URLENCODED:-${PG_PWD_AIRFLOW}}@${PG_HOST}:${PG_PORT}/${PG_DB_AIRFLOW}"
-      AIRFLOW_HOME: /opt/airflow
-      DBT_PROJECT_DIR: ${DBT_PROJECT_DIR}
-      DBT_PROFILES_DIR: ${DBT_PROFILES_DIR}
-      DBT_IMAGE: ${IMAGE_DBT:-dts-dbt:1.10.0}
-      OPENMETADATA_INGEST_IMAGE: ${IMAGE_OPENMETADATA_INGESTION}
-      OPENMETADATA_INGEST_CONFIG_DIR: ${OPENMETADATA_INGEST_CONFIG_DIR}
-      OPENMETADATA_API_ENDPOINT: ${DTS_PLATFORM_OPENMETADATA_BASE_URL}/api/v1
-      OPENMETADATA_AUTH_TOKEN: ${DTS_PLATFORM_OPENMETADATA_AUTH_TOKEN}
-      OPENMETADATA_DBT_SERVICE: ${DTS_PLATFORM_OPENMETADATA_SERVICE_NAME:-hive}
-      ADDAX_IMAGE: ${IMAGE_ADDAX:-dts-addax:6.0.8}
-      ADDAX_JOB_DIR: ${STACK_ROOT}/services/dts-airflow/dags
-      ADDAX_DRIVER_DIR: ${STACK_ROOT}/services/dts-platform/drivers
-      ADDAX_DRIVER_JARS: ${ADDAX_DRIVER_JARS:-DmJdbcDriver11.jar,postgresql-42.7.9.jar}
-      ADDAX_LOG_DIR: ${STACK_ROOT}/logs/addax
-    volumes:
-      - ./services/dts-airflow/dags:/opt/airflow/dags
-      - ./logs/airflow:/opt/airflow/logs
-      - ./services/dts-airflow/plugins:/opt/airflow/plugins
-      - ./services/dts-airflow/extra:/opt/airflow/extra:ro,z
-      - ./services/dts-airflow/config:/opt/airflow/config
-      - ./services/dts-platform/drivers:${STACK_ROOT}/services/dts-platform/drivers:ro,z
-      - /var/run/docker.sock:/var/run/docker.sock
-    restart: unless-stopped
+      - TZ=${TZ:-Asia/Shanghai}
+      - DOCKER_API_VERSION=${DOCKER_API_VERSION:-1.52}
+    extra_hosts:
+      - host.docker.internal:${HOST_GATEWAY_IP:-172.17.0.1}
+      - hetu.upstream:${HETU_UPSTREAM_IP:-172.17.0.1}
+    image: ${IMAGE_TRAEFIK}
+    labels:
+      - traefik.enable=true
+      - traefik.http.routers.hetu-dashboards.rule=Host(`${HOST_PLATFORM_UI}`) && PathPrefix(`/dashboards`)
+      - traefik.http.routers.hetu-dashboards.entrypoints=websecure
+      - traefik.http.routers.hetu-dashboards.tls=true
+      - traefik.http.routers.hetu-dashboards.priority=200
+      - traefik.http.routers.hetu-dashboards.service=hetu@file
+      - traefik.http.middlewares.hetu-strip-dashboards.stripprefixregex.regex=/dashboards
+      - traefik.http.middlewares.hetu-upstream-host.headers.customrequestheaders.Host=${HETU_UPSTREAM_IP:-172.17.0.1}:7778
+      - traefik.http.middlewares.hetu-allow-anonymous.headers.customrequestheaders.tui-allow-anonymous=true
+      - traefik.http.routers.hetu-dashboards.middlewares=hetu-strip-dashboards@docker,hetu-upstream-host@docker,hetu-allow-anonymous@docker,security-headers@file
+      - traefik.http.routers.hetu-dashboard-hetu.rule=Host(`${HOST_PLATFORM_UI}`) && PathPrefix(`/dashboard/hetu`)
+      - traefik.http.routers.hetu-dashboard-hetu.entrypoints=websecure
+      - traefik.http.routers.hetu-dashboard-hetu.tls=true
+      - traefik.http.routers.hetu-dashboard-hetu.priority=210
+      - traefik.http.routers.hetu-dashboard-hetu.service=hetu@file
+      - traefik.http.middlewares.hetu-strip-dashboard-hetu.stripprefixregex.regex=/dashboard/hetu
+      - traefik.http.routers.hetu-dashboard-hetu.middlewares=hetu-strip-dashboard-hetu@docker,hetu-upstream-host@docker,hetu-allow-anonymous@docker,security-headers@file
+      - traefik.http.routers.hetu-screen.rule=Host(`${HOST_PLATFORM_UI}`) && PathPrefix(`/screen`)
+      - traefik.http.routers.hetu-screen.entrypoints=websecure
+      - traefik.http.routers.hetu-screen.tls=true
+      - traefik.http.routers.hetu-screen.priority=190
+      - traefik.http.routers.hetu-screen.service=hetu@file
+      - traefik.http.routers.hetu-screen.middlewares=hetu-upstream-host@docker,hetu-allow-anonymous@docker,security-headers@file
+      - traefik.http.routers.hetu-system.rule=Host(`${HOST_PLATFORM_UI}`) && PathPrefix(`/system`)
+      - traefik.http.routers.hetu-system.entrypoints=websecure
+      - traefik.http.routers.hetu-system.tls=true
+      - traefik.http.routers.hetu-system.priority=185
+      - traefik.http.routers.hetu-system.service=hetu@file
+      - traefik.http.routers.hetu-system.middlewares=hetu-upstream-host@docker,hetu-allow-anonymous@docker,security-headers@file
+      - traefik.http.routers.hetu-tdv.rule=Host(`${HOST_PLATFORM_UI}`) && PathPrefix(`/tdv`)
+      - traefik.http.routers.hetu-tdv.entrypoints=websecure
+      - traefik.http.routers.hetu-tdv.tls=true
+      - traefik.http.routers.hetu-tdv.priority=220
+      - traefik.http.routers.hetu-tdv.service=hetu@file
+      - traefik.http.routers.hetu-tdv.middlewares=hetu-upstream-host@docker,hetu-allow-anonymous@docker,security-headers@file
+      - traefik.http.routers.hetu-account.rule=Host(`${HOST_PLATFORM_UI}`) && PathPrefix(`/account`)
+      - traefik.http.routers.hetu-account.entrypoints=websecure
+      - traefik.http.routers.hetu-account.tls=true
+      - traefik.http.routers.hetu-account.priority=186
+      - traefik.http.routers.hetu-account.service=hetu@file
+      - traefik.http.routers.hetu-account.middlewares=hetu-upstream-host@docker,hetu-allow-anonymous@docker,security-headers@file
+      - traefik.http.routers.hetu-hetu.rule=Host(`${HOST_PLATFORM_UI}`) && PathPrefix(`/hetu`)
+      - traefik.http.routers.hetu-hetu.entrypoints=websecure
+      - traefik.http.routers.hetu-hetu.tls=true
+      - traefik.http.routers.hetu-hetu.priority=185
+      - traefik.http.routers.hetu-hetu.service=hetu@file
+      - traefik.http.routers.hetu-hetu.middlewares=hetu-upstream-host@docker,hetu-allow-anonymous@docker,security-headers@file
+      - traefik.http.routers.hetu-static.rule=Host(`${HOST_PLATFORM_UI}`) && PathPrefix(`/static`)
+      - traefik.http.routers.hetu-static.entrypoints=websecure
+      - traefik.http.routers.hetu-static.tls=true
+      - traefik.http.routers.hetu-static.priority=195
+      - traefik.http.routers.hetu-static.service=hetu@file
+      - traefik.http.routers.hetu-static.middlewares=hetu-upstream-host@docker,hetu-allow-anonymous@docker,security-headers@file
+      - traefik.http.routers.hetu-root-assets.rule=Host(`${HOST_PLATFORM_UI}`) && (PathPrefix(`/core`) || PathPrefix(`/screen-`) || PathPrefix(`/default~`) || PathPrefix(`/vendors~`) || PathPrefix(`/runtime~`))
+      - traefik.http.routers.hetu-root-assets.entrypoints=websecure
+      - traefik.http.routers.hetu-root-assets.tls=true
+      - traefik.http.routers.hetu-root-assets.priority=205
+      - traefik.http.routers.hetu-root-assets.service=hetu@file
+      - traefik.http.routers.hetu-root-assets.middlewares=hetu-upstream-host@docker,hetu-allow-anonymous@docker,security-headers@file
     networks:
-      - dts-core
-
-  dts-dbt:
-    image: ${IMAGE_DBT:-dts-dbt:1.10.0}
-    container_name: dts-dbt
-    entrypoint: /bin/bash
-    command: ["-lc", "sleep infinity"]
-    working_dir: /opt/dbt
-    environment:
-      TZ: ${TZ:-Asia/Shanghai}
-      DBT_LOG_PATH: /opt/dbt-logs
-    volumes:
-      - ./services/dts-dbt:/opt/dbt
-      - ./services/dts-dbt/profiles:/root/.dbt
-      - ./logs/dbt:/opt/dbt-logs:z
+      dts-core: null
+    platform: ${DTS_RUNTIME_PLATFORM:-linux/amd64}
+    ports:
+      - 80:80
+      - ${TLS_PORT}:443
+      - 127.0.0.1:${TRAEFIK_DASHBOARD_PORT}:8080
+      - 127.0.0.1:${TRAEFIK_METRICS_PORT}:${TRAEFIK_METRICS_PORT}
     restart: unless-stopped
-    networks:
-      - dts-core
-
+    volumes:
+      - bind:
+          create_host_path: true
+        read_only: true
+        source: /var/run/docker.sock
+        target: /var/run/docker.sock
+        type: bind
+      - bind:
+          create_host_path: true
+          selinux: z
+        read_only: true
+        source: ./services/dts-proxy/dynamic
+        target: /etc/traefik/dynamic
+        type: bind
+      - bind:
+          create_host_path: true
+          selinux: z
+        read_only: true
+        source: ./services/certs
+        target: /etc/traefik/certs
+        type: bind
+      - bind:
+          create_host_path: true
+          selinux: z
+        read_only: true
+        source: ./services/certs
+        target: /certs
+        type: bind
+      - bind:
+          create_host_path: true
+          selinux: z
+        source: ./logs/traefik
+        target: /var/log/traefik
+        type: bind
 volumes:
-  pnpm-store:
-  dts-admin-target:
-  dts-platform-target:
-  dts-common-target:
-  dts-analytics-target:
-  elasticsearch-data:
-
-## Note: top-level networks may also be defined in docker-compose.yml
+  dts-admin-target: null
+  dts-analytics-target: null
+  dts-common-target: null
+  dts-platform-target: null
+  elasticsearch-data: null
+  maven-cache: null
+  pnpm-store: null
+x-hc:
+  interval: 10s
+  retries: 30
+  start_period: 20s
+  timeout: 5s

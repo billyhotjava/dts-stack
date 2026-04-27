@@ -67,16 +67,16 @@ cat > "${TARGET_DIR}/.env" <<'EOF_TARGET_ENV'
 IMAGE_POSTGRES=postgres:17.6
 EOF_TARGET_ENV
 
-cat > "${SOURCE_ROOT}/docker-compose.yml" <<'EOF_SOURCE_COMPOSE'
+cat > "${SOURCE_ROOT}/docker-compose-app.yml" <<'EOF_SOURCE_COMPOSE'
 services: {}
 EOF_SOURCE_COMPOSE
-cat > "${SOURCE_ROOT}/docker-compose.yml.json" <<'EOF_SOURCE_JSON'
+cat > "${SOURCE_ROOT}/docker-compose-app.yml.json" <<'EOF_SOURCE_JSON'
 {"services":{}}
 EOF_SOURCE_JSON
-cat > "${TARGET_DIR}/docker-compose.yml" <<'EOF_TARGET_COMPOSE'
+cat > "${TARGET_DIR}/docker-compose-app.yml" <<'EOF_TARGET_COMPOSE'
 services: {}
 EOF_TARGET_COMPOSE
-cat > "${TARGET_DIR}/docker-compose.yml.json" <<'EOF_TARGET_JSON'
+cat > "${TARGET_DIR}/docker-compose-app.yml.json" <<'EOF_TARGET_JSON'
 {"services":{}}
 EOF_TARGET_JSON
 

@@ -114,7 +114,7 @@ pnpm build
 
 ```
 ./dev-up.sh --mode local
-docker compose -f docker-compose.yml -f docker-compose-app.yml up -d
+docker compose -f docker-compose-app.yml up -d
 ```
 
 访问管理端 UI：`https://biadmin.${BASE_DOMAIN}`。

@@ -1,45 +1,57 @@
 #!/usr/bin/env bash
 set -euo pipefail
+
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 cd "$SCRIPT_DIR"
 
-if [[ $# -gt 0 && "$1" =~ ^(single|ha2|cluster|legacy)$ ]]; then
-  MODE="$1"
-  shift
+usage() {
+  echo "Usage: $0 [app|dev|legacy] [docker compose down options]" >&2
+}
+
+normalize_mode() {
+  case "${1:-}" in
+    app|single|images|"") echo "app" ;;
+    dev|local) echo "dev" ;;
+    legacy) echo "legacy" ;;
+    *) return 1 ;;
+  esac
+}
+
+mode_from_env() {
+  local legacy_stack=""
+  local deploy_mode=""
+  if [[ -f ./.env ]]; then
+    legacy_stack="$(grep -E '^LEGACY_STACK=' ./.env | head -n1 | cut -d= -f2- | tr -d '\r' || true)"
+    deploy_mode="$(grep -E '^DEPLOY_MODE=' ./.env | head -n1 | cut -d= -f2- | tr -d '\r' || true)"
+  fi
+  if [[ "${legacy_stack}" == "true" ]]; then
+    echo "legacy"
+  else
+    normalize_mode "${deploy_mode:-app}"
+  fi
+}
+
+mode=""
+if [[ $# -gt 0 ]]; then
+  if [[ "$1" == "-h" || "$1" == "--help" ]]; then
+    usage
+    exit 0
+  elif mode="$(normalize_mode "$1" 2>/dev/null)"; then
+    shift
+  else
+    mode="$(mode_from_env)"
+  fi
 else
-  MODE=""
+  mode="$(mode_from_env)"
 fi
 
-if [[ -z "${MODE}" && -f ./.env ]]; then
-  MODE="$(grep -E '^DEPLOY_MODE=' ./.env | head -n1 | cut -d= -f2- | tr -d '\r')"
-fi
-
-if [[ -z "${MODE}" ]]; then
-  MODE="single"
-fi
-
-case "$MODE" in
-  single)
-    COMPOSE_FILE="docker-compose.yml"
-    ;;
-  ha2)
-    COMPOSE_FILE="docker-compose.ha2.yml"
-    ;;
-  cluster)
-    COMPOSE_FILE="docker-compose.cluster.yml"
-    ;;
-  legacy)
-    COMPOSE_FILE="docker-compose.legacy.yml"
-    ;;
-  *)
-    echo "[stop.sh] Unknown mode '${MODE}'." >&2
-    echo "Usage: $0 [single|ha2|cluster|legacy] [docker compose down options]" >&2
-    exit 1
-    ;;
+case "$mode" in
+  app) compose_file="docker-compose-app.yml" ;;
+  dev) compose_file="docker-compose.dev.yml" ;;
+  legacy) compose_file="docker-compose.legacy.yml" ;;
+  *) usage; exit 1 ;;
 esac
 
-# 即使是 stop/down，docker compose 仍要 resolve compose 文件里的变量，
-# 避免 "variable is not set" 警告；与 start.sh / dev-up.sh 保持一致。
 export DTS_DBT_HOST_PROJECT_DIR="${DTS_DBT_HOST_PROJECT_DIR:-${SCRIPT_DIR}/services/dts-dbt}"
 export STACK_ROOT="${STACK_ROOT:-${SCRIPT_DIR}}"
 
@@ -57,5 +69,5 @@ if [[ ${#extra_args[@]} -eq 0 ]]; then
   extra_args=(--remove-orphans)
 fi
 
-echo "[stop.sh] Using ${COMPOSE_FILE} (mode: ${MODE})."
-"${compose_cmd[@]}" -f "${COMPOSE_FILE}" down "${extra_args[@]}"
+echo "[stop.sh] Using ${compose_file} (mode: ${mode})."
+"${compose_cmd[@]}" -f "${compose_file}" down "${extra_args[@]}"

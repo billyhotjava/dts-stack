@@ -34,7 +34,7 @@ Usage:
   ${0##*/} --bg -all              (run in background, safe for SSH)
 
 Options:
-  -all, --all           Build all images (same as legacy buildAll.sh behavior).
+  -all, --all           Build all images.
   --image <name...>     Build one or more images. Supports repeated --image or multiple names after one --image.
   --legacy              Build only the legacy image set or legacy variant of a single image.
   --no-save             Build images but skip docker save tarball export (reduces disk pressure).
@@ -937,9 +937,9 @@ pack_deployment() {
     "stop.sh"
     "encry.sh"
     # Compose files
-    "docker-compose.yml"
-    "docker-compose.legacy.yml"
     "docker-compose-app.yml"
+    "docker-compose.dev.yml"
+    "docker-compose.legacy.yml"
     # Config files
     "imgversion.conf"
     "imgversion.dts-source.conf"

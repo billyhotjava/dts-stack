@@ -114,7 +114,7 @@ From repo root:
 
 ```
 ./dev-up.sh --mode local
-docker compose -f docker-compose.yml -f docker-compose-app.yml up -d
+docker compose -f docker-compose-app.yml up -d
 ```
 
 Access the admin UI at `https://biadmin.${BASE_DOMAIN}`.

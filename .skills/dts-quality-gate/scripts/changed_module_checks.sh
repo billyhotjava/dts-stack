@@ -60,7 +60,11 @@ for file in "${files[@]}"; do
       add_cmd "cd source/dts-analytics-webapp/modern && pnpm build"
       ;;
     services/dts-dbt/*) add_cmd ".skills/dts-dbt-modeling-governance/scripts/dbt_guard.sh" ;;
-    docker-compose*.yml|builds/*|services/*) add_cmd "docker compose -f docker-compose.yml -f docker-compose-app.yml config" ;;
+    docker-compose*.yml|builds/*|services/*)
+      add_cmd "docker compose -f docker-compose-app.yml config"
+      add_cmd "docker compose -f docker-compose.dev.yml config"
+      add_cmd "docker compose -f docker-compose.legacy.yml config"
+      ;;
     tests/api-e2e-java/*) add_cmd "cd tests/api-e2e-java && mvn test" ;;
     tests/web-e2e/*) add_cmd "cd tests/web-e2e && pnpm test" ;;
   esac

@@ -3,9 +3,9 @@
 ## Root
 
 - `AGENTS.md`: repository operating rules.
-- `docker-compose.yml`: base services.
-- `docker-compose-app.yml`: application services.
-- `docker-compose.dev.yml`: local development mounts.
+- `docker-compose-app.yml`: self-contained x86 deployment stack.
+- `docker-compose.dev.yml`: self-contained local development stack with source mounts.
+- `docker-compose.legacy.yml`: self-contained ARM/Kylin legacy deployment stack.
 - `builds/`: Dockerfiles and product image build scripts.
 - `services/`: runtime assets, certificates, dbt workspace, drivers, Airflow DAGs, OpenMetadata ingestion, Keycloak realm.
 - `docs/`: architecture, implementation, integration, release, and plan documents.

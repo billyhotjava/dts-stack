@@ -90,7 +90,7 @@ expect_success() {
 expect_failure "target directory not found"
 
 mkdir -p "${OLD_DIR}"
-cat > "${OLD_DIR}/docker-compose.yml" <<'EOF_COMPOSE'
+cat > "${OLD_DIR}/docker-compose-app.yml" <<'EOF_COMPOSE'
 services: {}
 EOF_COMPOSE
 printf 'placeholder' > "${IMAGES_DIR}/placeholder.tar"

@@ -164,7 +164,6 @@ IMAGE_POSTGRES=postgres:17.6
 EOF_TARGET_ENV
 
 prepare_empty_compose_json "${SOURCE_ROOT}/docker-compose.legacy.yml"
-prepare_empty_compose_json "${SOURCE_ROOT}/docker-compose.yml"
 prepare_empty_compose_json "${SOURCE_ROOT}/docker-compose-app.yml"
 prepare_empty_compose_json "${LEGACY_TARGET}/docker-compose.legacy.yml"
 
@@ -177,7 +176,7 @@ if ! grep -Fqx "up:docker-compose.legacy.yml" "${EVENTS_FILE}"; then
   exit 1
 fi
 
-if [[ -e "${LEGACY_TARGET}/docker-compose.yml" || -e "${LEGACY_TARGET}/docker-compose-app.yml" ]]; then
+if [[ -e "${LEGACY_TARGET}/docker-compose-app.yml" ]]; then
   echo "expected legacy upgrade not to copy normal compose files into target" >&2
   find "${LEGACY_TARGET}" -maxdepth 1 -type f -name 'docker-compose*.yml' | sort >&2
   exit 1
@@ -193,19 +192,18 @@ prepare_package "${NORMAL_IMAGES}" "${NORMAL_EXTRA}"
 
 cat > "${NORMAL_TARGET}/.env" <<'EOF_NORMAL_TARGET_ENV'
 LEGACY_STACK=false
-DEPLOY_MODE=single
+DEPLOY_MODE=app
 IMAGE_POSTGRES=postgres:17.6
 EOF_NORMAL_TARGET_ENV
 
-prepare_empty_compose_json "${SOURCE_ROOT}/docker-compose.yml"
 prepare_empty_compose_json "${SOURCE_ROOT}/docker-compose-app.yml"
-prepare_empty_compose_json "${NORMAL_TARGET}/docker-compose.yml"
+prepare_empty_compose_json "${NORMAL_TARGET}/docker-compose-app.yml"
 
 : > "${EVENTS_FILE}"
 expect_success "${NORMAL_TARGET}" "${NORMAL_IMAGES}" "${NORMAL_EXTRA}"
 
-if ! grep -Fqx "up:docker-compose.yml,docker-compose-app.yml" "${EVENTS_FILE}"; then
-  echo "expected normal single upgrade to start with docker-compose.yml and docker-compose-app.yml" >&2
+if ! grep -Fqx "up:docker-compose-app.yml" "${EVENTS_FILE}"; then
+  echo "expected normal app upgrade to start with docker-compose-app.yml" >&2
   cat "${EVENTS_FILE}" >&2
   exit 1
 fi
@@ -223,8 +221,8 @@ LEGACY_STACK=false
 IMAGE_POSTGRES=postgres:17.6
 EOF_PG_TARGET_ENV
 
-prepare_empty_compose_json "${PG_TARGET}/docker-compose.yml"
-prepare_empty_compose_json "${SOURCE_ROOT}/docker-compose.yml"
+prepare_empty_compose_json "${PG_TARGET}/docker-compose-app.yml"
+prepare_empty_compose_json "${SOURCE_ROOT}/docker-compose-app.yml"
 
 printf '16\n' > "${PG_TARGET}/services/dts-pg/data/pgdata/PG_VERSION"
 

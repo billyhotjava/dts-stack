@@ -4,7 +4,7 @@
 
 - Local development: `./dev-up.sh --mode local`
 - Local stop: `./dev-stop.sh --mode local`
-- Deploy mode: `docker compose -f docker-compose.yml -f docker-compose-app.yml up -d`
+- Deploy mode: `docker compose -f docker-compose-app.yml up -d`
 - Build image: `docker build -t dts-admin:TAG -f builds/dts-admin/Dockerfile .`
 
 ## First Checks

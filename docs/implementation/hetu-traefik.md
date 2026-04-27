@@ -13,7 +13,7 @@
 ## 当前实现（已落地到本仓库）
 
 - Traefik 上游：`services/dts-proxy/dynamic/traefik-dynamic.yml` 定义 `http.services.hetu`，指向 `http://host.docker.internal:7778`
-- Traefik 路由：`docker-compose.yml` 在 `dts-proxy` 上增加两个 router
+- Traefik 路由：`docker-compose-app.yml` / `docker-compose.dev.yml` / `docker-compose.legacy.yml` 在 `dts-proxy` 上增加 router
   - `https://$HOST_PLATFORM_UI/dashboards/*` -> **StripPrefix `/dashboards`** -> 转发到河图
   - `https://$HOST_PLATFORM_UI/screen/*` -> 直接转发到河图（兼容河图前端可能使用的绝对路径 `/screen/...`）
 
@@ -34,5 +34,5 @@
 如果页面能打开但有资源 404，通常是河图引用了其它绝对路径前缀（不止 `/screen`）。做法：
 
 - 打开浏览器 DevTools -> Network，看失败的 URL 前缀（例如 `/static/`、`/assets/`、`/api/` 等）
-- 若前缀不与平台冲突，可按同样方式在 `docker-compose.yml` 增加一个 `PathPrefix(...)` router 指向 `hetu@file`
+- 若前缀不与平台冲突，可按同样方式在对应运行态 compose 文件增加一个 `PathPrefix(...)` router 指向 `hetu@file`
 - 若前缀会与平台冲突（最常见是 `/api`），建议改用 **独立子域名**（例如 `hetu.xxx.com`）承载河图，避免路径争用

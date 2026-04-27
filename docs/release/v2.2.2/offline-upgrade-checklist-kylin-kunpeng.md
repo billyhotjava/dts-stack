@@ -26,7 +26,7 @@ legacy 现场已知版本：
 
 ```bash
 cd /data/stack_old
-docker-compose -f docker-compose.yml -f docker-compose-app.yml ps
+docker-compose -f docker-compose-app.yml ps
 ```
 
 legacy 模式检查：
@@ -210,7 +210,7 @@ cat /data/stack_old/logs/upgrade-*.summary.md
 
 ```bash
 cd /data/stack_old
-docker-compose -f docker-compose.yml -f docker-compose-app.yml ps
+docker-compose -f docker-compose-app.yml ps
 ```
 
 legacy 模式：

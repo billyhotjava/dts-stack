@@ -331,9 +331,9 @@ set -a
 set +a
 
 if [[ "$MODE" == "local" ]]; then
-  compose_files=(-f docker-compose.yml -f docker-compose.dev.yml)
+  compose_files=(-f docker-compose.dev.yml)
 else
-  compose_files=(-f docker-compose.yml -f docker-compose-app.yml)
+  compose_files=(-f docker-compose-app.yml)
 fi
 
 # Ensure required builder image defaults for local dev
@@ -355,10 +355,10 @@ fi
 
 # Ensure Postgres from core stack is running and healthy
 echo "[dev-up] Ensuring Postgres (dts-pg) is running ..."
-pg_cid=$("${compose_cmd[@]}" -f docker-compose.yml ps -q dts-pg || true)
+pg_cid=$("${compose_cmd[@]}" "${compose_files[@]}" ps -q dts-pg || true)
 if [[ -z "${pg_cid}" ]]; then
-  "${compose_cmd[@]}" -f docker-compose.yml up -d dts-pg
-  pg_cid=$("${compose_cmd[@]}" -f docker-compose.yml ps -q dts-pg || true)
+  "${compose_cmd[@]}" "${compose_files[@]}" up -d dts-pg
+  pg_cid=$("${compose_cmd[@]}" "${compose_files[@]}" ps -q dts-pg || true)
 fi
 
 echo "[dev-up] Waiting for dts-pg to become healthy ..."
@@ -396,7 +396,7 @@ if [[ -n "${pg_cid}" ]]; then
   if docker exec -i "${pg_cid}" bash -lc "${exports} bash /docker-entrypoint-initdb.d/99-ensure-users-runtime.sh" >/dev/null 2>&1; then
     echo "[dev-up] Postgres roles/databases ensured."
   else
-    "${compose_cmd[@]}" -f docker-compose.yml exec -T dts-pg bash -lc "${exports} bash /docker-entrypoint-initdb.d/99-ensure-users-runtime.sh" >/dev/null || \
+    "${compose_cmd[@]}" "${compose_files[@]}" exec -T dts-pg bash -lc "${exports} bash /docker-entrypoint-initdb.d/99-ensure-users-runtime.sh" >/dev/null || \
       echo "[dev-up] WARNING: Failed to run ensure script for Postgres (continuing)." >&2
   fi
 else
@@ -405,10 +405,10 @@ fi
 
 if [[ "$MODE" == "local" ]]; then
   echo "[dev-up] Ensuring Traefik (dts-proxy) and Keycloak are running ..."
-  proxy_cid=$("${compose_cmd[@]}" -f docker-compose.yml ps -q dts-proxy || true)
-  kc_cid=$("${compose_cmd[@]}" -f docker-compose.yml ps -q dts-keycloak || true)
+  proxy_cid=$("${compose_cmd[@]}" "${compose_files[@]}" ps -q dts-proxy || true)
+  kc_cid=$("${compose_cmd[@]}" "${compose_files[@]}" ps -q dts-keycloak || true)
   if [[ -z "${proxy_cid}" || -z "${kc_cid}" ]]; then
-    "${compose_cmd[@]}" -f docker-compose.yml up -d dts-proxy dts-keycloak
+    "${compose_cmd[@]}" "${compose_files[@]}" up -d dts-proxy dts-keycloak
   fi
 fi
 

@@ -56,10 +56,10 @@ exit 0
 EOF_DOCKER
 chmod +x "${FAKE_BIN}/docker"
 
-cat > "${SOURCE_ROOT}/docker-compose.yml" <<'EOF_SOURCE_COMPOSE'
+cat > "${SOURCE_ROOT}/docker-compose-app.yml" <<'EOF_SOURCE_COMPOSE'
 services: {}
 EOF_SOURCE_COMPOSE
-cat > "${SOURCE_ROOT}/docker-compose.yml.json" <<'EOF_SOURCE_JSON'
+cat > "${SOURCE_ROOT}/docker-compose-app.yml.json" <<'EOF_SOURCE_JSON'
 {
   "services": {
     "existing": {
@@ -93,10 +93,10 @@ cat > "${SOURCE_ROOT}/docker-compose.yml.json" <<'EOF_SOURCE_JSON'
 }
 EOF_SOURCE_JSON
 
-cat > "${TARGET_DIR}/docker-compose.yml" <<'EOF_TARGET_COMPOSE'
+cat > "${TARGET_DIR}/docker-compose-app.yml" <<'EOF_TARGET_COMPOSE'
 services: {}
 EOF_TARGET_COMPOSE
-cat > "${TARGET_DIR}/docker-compose.yml.json" <<'EOF_TARGET_JSON'
+cat > "${TARGET_DIR}/docker-compose-app.yml.json" <<'EOF_TARGET_JSON'
 {
   "services": {
     "existing": {
@@ -148,7 +148,7 @@ PATH="${FAKE_BIN}:${PATH}" \
   --images-dir "${IMAGES_DIR}" \
   --extra-dir "${EXTRA_DIR}" >/dev/null
 
-python3 - <<'PY' "${TARGET_DIR}/docker-compose.yml"
+python3 - <<'PY' "${TARGET_DIR}/docker-compose-app.yml"
 import json
 import sys
 
