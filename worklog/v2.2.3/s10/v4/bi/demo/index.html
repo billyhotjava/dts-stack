@@ -1,0 +1,1720 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>领导驾驶舱大屏套件｜BI Demo</title>
+  <style>
+    :root {
+      --page: #f2f6fb;
+      --paper: #ffffff;
+      --paper-glass: rgba(255, 255, 255, 0.88);
+      --ink: #0f172a;
+      --muted: #64748b;
+      --subtle: #94a3b8;
+      --line: #dbe4ef;
+      --line-soft: #edf2f7;
+      --blue: #1d4ed8;
+      --blue-2: #38bdf8;
+      --blue-soft: #e0f2fe;
+      --green: #16a34a;
+      --green-soft: #dcfce7;
+      --amber: #d97706;
+      --amber-soft: #fef3c7;
+      --red: #dc2626;
+      --red-soft: #fee2e2;
+      --slate: #475569;
+      --slate-soft: #f1f5f9;
+      --violet: #6d28d9;
+      --violet-soft: #ede9fe;
+      --shadow: 0 22px 60px rgba(15, 23, 42, 0.09);
+      --shadow-sm: 0 10px 26px rgba(15, 23, 42, 0.07);
+      --radius-xl: 26px;
+      --radius-lg: 20px;
+      --radius-md: 14px;
+      --font: "PingFang SC", "Microsoft YaHei", "Noto Sans CJK SC", "Source Han Sans SC", sans-serif;
+    }
+
+    * { box-sizing: border-box; }
+
+    html,
+    body {
+      margin: 0;
+      min-height: 100%;
+      color: var(--ink);
+      font-family: var(--font);
+      background:
+        radial-gradient(circle at 8% 2%, rgba(56, 189, 248, 0.18), transparent 26%),
+        radial-gradient(circle at 90% 12%, rgba(29, 78, 216, 0.16), transparent 28%),
+        linear-gradient(135deg, #f8fbff 0%, var(--page) 52%, #eef5ff 100%);
+    }
+
+    body { overflow-x: hidden; }
+
+    button,
+    input,
+    select { font: inherit; }
+
+    .shell {
+      width: min(1880px, calc(100vw - 40px));
+      margin: 20px auto;
+      min-height: calc(100vh - 40px);
+    }
+
+    .topbar {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
+      gap: 20px;
+      align-items: center;
+      padding: 18px 22px;
+      background: var(--paper-glass);
+      border: 1px solid rgba(255, 255, 255, 0.9);
+      border-radius: var(--radius-xl);
+      box-shadow: var(--shadow-sm);
+      backdrop-filter: blur(18px);
+    }
+
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      min-width: 0;
+    }
+
+    .brand-mark {
+      width: 54px;
+      height: 54px;
+      border-radius: 18px;
+      display: grid;
+      place-items: center;
+      color: #fff;
+      background:
+        linear-gradient(135deg, rgba(255, 255, 255, 0.2), transparent 42%),
+        linear-gradient(135deg, #0f5bd8, #38bdf8);
+      box-shadow: 0 14px 30px rgba(29, 78, 216, 0.24);
+      flex: 0 0 auto;
+    }
+
+    .brand-eyebrow {
+      display: flex;
+      gap: 8px;
+      align-items: center;
+      margin-bottom: 4px;
+      color: var(--blue);
+      font-size: 12px;
+      font-weight: 800;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+    }
+
+    .brand h1 {
+      margin: 0;
+      font-size: clamp(22px, 1.6vw, 30px);
+      line-height: 1.15;
+      letter-spacing: -0.03em;
+      font-weight: 860;
+    }
+
+    .brand p {
+      margin: 6px 0 0;
+      color: var(--muted);
+      font-size: 13px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .toolbar {
+      display: flex;
+      justify-content: flex-end;
+      align-items: center;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+
+    .pill,
+    .nav-tab,
+    .chip,
+    .status {
+      display: inline-flex;
+      align-items: center;
+      gap: 7px;
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      background: #fff;
+      color: #334155;
+      padding: 8px 12px;
+      font-size: 12px;
+      line-height: 1;
+      white-space: nowrap;
+      user-select: none;
+    }
+
+    .pill strong { color: var(--ink); font-weight: 800; }
+
+    .nav {
+      display: flex;
+      gap: 7px;
+      padding: 6px;
+      background: rgba(241, 245, 249, 0.86);
+      border: 1px solid #e2e8f0;
+      border-radius: 999px;
+      box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.88);
+    }
+
+    .nav-tab {
+      border: 0;
+      background: transparent;
+      color: var(--muted);
+      cursor: pointer;
+      transition: all 0.18s ease;
+    }
+
+    .nav-tab:hover { color: var(--blue); }
+
+    .nav-tab.active {
+      color: var(--blue);
+      background: #fff;
+      box-shadow: 0 8px 18px rgba(15, 23, 42, 0.08);
+      font-weight: 800;
+    }
+
+    .dashboard {
+      display: grid;
+      gap: 16px;
+      margin-top: 16px;
+    }
+
+    .screen {
+      display: none;
+      animation: rise 0.32s ease both;
+    }
+
+    .screen.active { display: grid; gap: 16px; }
+
+    @keyframes rise {
+      from { opacity: 0; transform: translateY(8px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    .card {
+      position: relative;
+      overflow: hidden;
+      background: var(--paper-glass);
+      border: 1px solid rgba(219, 228, 239, 0.95);
+      border-radius: var(--radius-lg);
+      box-shadow: var(--shadow-sm);
+    }
+
+    .card::before {
+      content: "";
+      position: absolute;
+      inset: 0;
+      pointer-events: none;
+      background: linear-gradient(180deg, rgba(255, 255, 255, 0.72), rgba(255, 255, 255, 0));
+      opacity: 0.78;
+    }
+
+    .card > * { position: relative; }
+
+    .section-head,
+    .panel-head {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      gap: 16px;
+      margin-bottom: 14px;
+    }
+
+    .section-title,
+    .panel-title {
+      margin: 0;
+      color: var(--ink);
+      font-size: 18px;
+      font-weight: 850;
+      letter-spacing: -0.02em;
+    }
+
+    .section-sub,
+    .panel-sub {
+      margin: 5px 0 0;
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 1.55;
+    }
+
+    .panel {
+      padding: 18px;
+      min-height: 0;
+    }
+
+    .kpi-grid {
+      display: grid;
+      grid-template-columns: 1.45fr repeat(4, minmax(150px, 1fr));
+      gap: 16px;
+    }
+
+    .kpi {
+      min-height: 134px;
+      padding: 18px;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+    }
+
+    .health {
+      min-height: 134px;
+      padding: 18px 20px;
+    }
+
+    .health-layout {
+      display: grid;
+      grid-template-columns: auto 1fr;
+      gap: 18px;
+      align-items: center;
+      height: 100%;
+    }
+
+    .ring {
+      --percent: 82;
+      width: 104px;
+      height: 104px;
+      border-radius: 50%;
+      display: grid;
+      place-items: center;
+      background: conic-gradient(var(--blue) calc(var(--percent) * 1%), #e6edf7 0);
+      box-shadow: inset 0 0 0 1px rgba(29, 78, 216, 0.08);
+      position: relative;
+    }
+
+    .ring::after {
+      content: "";
+      position: absolute;
+      inset: 11px;
+      border-radius: 50%;
+      background: #fff;
+      box-shadow: inset 0 0 0 1px var(--line-soft);
+    }
+
+    .ring b {
+      position: relative;
+      z-index: 1;
+      display: block;
+      font-size: 30px;
+      line-height: 0.95;
+      letter-spacing: -0.06em;
+    }
+
+    .ring span {
+      position: relative;
+      z-index: 1;
+      color: var(--muted);
+      font-size: 11px;
+    }
+
+    .health h2 {
+      margin: 0;
+      font-size: 17px;
+      font-weight: 850;
+    }
+
+    .health p {
+      margin: 8px 0 12px;
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 1.6;
+    }
+
+    .mini-stats,
+    .summary-row,
+    .legend {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+
+    .mini-stat {
+      min-width: 74px;
+      padding: 8px 10px;
+      border: 1px solid var(--line-soft);
+      border-radius: 13px;
+      background: #fbfdff;
+    }
+
+    .mini-stat b {
+      display: block;
+      font-size: 16px;
+      line-height: 1;
+    }
+
+    .mini-stat span {
+      display: block;
+      margin-top: 4px;
+      color: var(--muted);
+      font-size: 11px;
+    }
+
+    .kpi-label {
+      display: flex;
+      justify-content: space-between;
+      gap: 10px;
+      color: var(--muted);
+      font-size: 13px;
+      white-space: nowrap;
+    }
+
+    .kpi-icon {
+      width: 34px;
+      height: 34px;
+      border-radius: 12px;
+      display: grid;
+      place-items: center;
+      color: var(--blue);
+      background: var(--blue-soft);
+      font-weight: 900;
+      flex: 0 0 auto;
+    }
+
+    .kpi-value {
+      display: flex;
+      align-items: flex-end;
+      gap: 7px;
+      margin-top: 8px;
+    }
+
+    .kpi-value b {
+      font-size: 35px;
+      line-height: 0.95;
+      letter-spacing: -0.06em;
+    }
+
+    .kpi-value span {
+      padding-bottom: 3px;
+      color: var(--muted);
+      font-size: 13px;
+    }
+
+    .delta {
+      display: inline-flex;
+      width: fit-content;
+      align-items: center;
+      gap: 5px;
+      margin-top: 10px;
+      padding: 5px 8px;
+      border-radius: 999px;
+      color: var(--green);
+      background: var(--green-soft);
+      font-size: 12px;
+      font-weight: 800;
+    }
+
+    .delta.blue { color: var(--blue); background: var(--blue-soft); }
+    .delta.warn { color: var(--amber); background: var(--amber-soft); }
+    .delta.danger { color: var(--red); background: var(--red-soft); }
+    .delta.gray { color: var(--slate); background: var(--slate-soft); }
+
+    .tag,
+    .state {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      border-radius: 999px;
+      padding: 5px 9px;
+      color: var(--blue);
+      background: var(--blue-soft);
+      font-size: 11px;
+      font-weight: 850;
+      line-height: 1;
+      white-space: nowrap;
+    }
+
+    .tag.green,
+    .state.green { color: var(--green); background: var(--green-soft); }
+    .tag.amber,
+    .state.amber { color: var(--amber); background: var(--amber-soft); }
+    .tag.red,
+    .state.red { color: var(--red); background: var(--red-soft); }
+    .tag.gray,
+    .state.gray { color: var(--slate); background: var(--slate-soft); }
+    .tag.violet,
+    .state.violet { color: var(--violet); background: var(--violet-soft); }
+
+    .main-grid {
+      display: grid;
+      grid-template-columns: minmax(0, 1.85fr) minmax(360px, 0.85fr);
+      gap: 16px;
+    }
+
+    .split-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 16px;
+    }
+
+    .three-grid {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 16px;
+    }
+
+    .four-grid {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 16px;
+    }
+
+    .delivery-map {
+      display: grid;
+      grid-template-columns: minmax(540px, 1.04fr) minmax(420px, 0.96fr);
+      gap: 16px;
+      align-items: stretch;
+    }
+
+    .table-wrap {
+      border: 1px solid var(--line-soft);
+      border-radius: 16px;
+      overflow: auto;
+      background: #fff;
+    }
+
+    table {
+      width: 100%;
+      min-width: 760px;
+      border-collapse: collapse;
+      font-size: 12px;
+    }
+
+    th,
+    td {
+      padding: 12px 14px;
+      text-align: left;
+      border-bottom: 1px solid var(--line-soft);
+      vertical-align: middle;
+    }
+
+    th {
+      color: var(--muted);
+      background: #f8fafc;
+      font-weight: 800;
+      white-space: nowrap;
+    }
+
+    tr:last-child td { border-bottom: 0; }
+
+    .project {
+      display: flex;
+      align-items: center;
+      gap: 9px;
+      min-width: 145px;
+      font-weight: 850;
+    }
+
+    .dot {
+      width: 9px;
+      height: 9px;
+      border-radius: 50%;
+      background: var(--green);
+      box-shadow: 0 0 0 4px rgba(22, 163, 74, 0.11);
+      flex: 0 0 auto;
+    }
+
+    .dot.blue { background: var(--blue); box-shadow: 0 0 0 4px rgba(29, 78, 216, 0.11); }
+    .dot.amber { background: var(--amber); box-shadow: 0 0 0 4px rgba(217, 119, 6, 0.13); }
+    .dot.red { background: var(--red); box-shadow: 0 0 0 4px rgba(220, 38, 38, 0.11); }
+
+    .owner {
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+      min-width: 72px;
+    }
+
+    .owner b { font-size: 12px; }
+    .owner span { color: var(--subtle); font-size: 11px; }
+
+    .progress-cell { min-width: 150px; }
+
+    .progress-line,
+    .barline,
+    .dept-bar {
+      height: 8px;
+      border-radius: 999px;
+      background: #edf2f7;
+      overflow: hidden;
+    }
+
+    .progress-fill,
+    .bar-fill,
+    .dept-fill {
+      height: 100%;
+      border-radius: inherit;
+      background: linear-gradient(90deg, #7dd3fc, var(--blue));
+    }
+
+    .progress-fill.green,
+    .bar-fill.green,
+    .dept-fill.green { background: linear-gradient(90deg, #86efac, var(--green)); }
+    .progress-fill.amber,
+    .bar-fill.amber,
+    .dept-fill.amber { background: linear-gradient(90deg, #fcd34d, var(--amber)); }
+    .progress-fill.red,
+    .bar-fill.red,
+    .dept-fill.red { background: linear-gradient(90deg, #fca5a5, var(--red)); }
+    .progress-fill.violet,
+    .bar-fill.violet,
+    .dept-fill.violet { background: linear-gradient(90deg, #c4b5fd, var(--violet)); }
+
+    .progress-meta {
+      display: flex;
+      justify-content: space-between;
+      gap: 10px;
+      margin-top: 6px;
+      color: var(--muted);
+      font-size: 11px;
+    }
+
+    .timeline-card {
+      border: 1px solid var(--line-soft);
+      border-radius: 16px;
+      background: linear-gradient(180deg, #fff, #fbfdff);
+      overflow: hidden;
+      min-height: 100%;
+    }
+
+    .timeline-head {
+      display: grid;
+      grid-template-columns: 90px repeat(6, 1fr);
+      color: var(--muted);
+      background: #f8fafc;
+      border-bottom: 1px solid var(--line-soft);
+      font-size: 11px;
+      font-weight: 800;
+    }
+
+    .timeline-head div {
+      padding: 10px 8px;
+      text-align: center;
+      border-right: 1px solid var(--line-soft);
+    }
+
+    .timeline-head div:last-child { border-right: 0; }
+
+    .tl-row {
+      display: grid;
+      grid-template-columns: 90px 1fr;
+      min-height: 50px;
+      border-bottom: 1px solid var(--line-soft);
+    }
+
+    .tl-row:last-child { border-bottom: 0; }
+
+    .tl-label {
+      padding: 12px 10px;
+      color: #334155;
+      background: rgba(248, 250, 252, 0.6);
+      border-right: 1px solid var(--line-soft);
+      font-size: 12px;
+      font-weight: 850;
+    }
+
+    .tl-label small {
+      display: block;
+      margin-top: 3px;
+      color: var(--subtle);
+      font-size: 10px;
+      font-weight: 650;
+    }
+
+    .tl-track {
+      position: relative;
+      overflow: hidden;
+      background: repeating-linear-gradient(90deg, transparent 0, transparent calc(16.66% - 1px), var(--line-soft) calc(16.66% - 1px), var(--line-soft) 16.66%);
+    }
+
+    .tl-bar {
+      position: absolute;
+      top: 18px;
+      height: 13px;
+      border-radius: 999px;
+      background: linear-gradient(90deg, #7dd3fc, var(--blue));
+      box-shadow: 0 5px 14px rgba(29, 78, 216, 0.18);
+    }
+
+    .tl-bar.green { background: linear-gradient(90deg, #86efac, var(--green)); box-shadow: 0 5px 14px rgba(22, 163, 74, 0.16); }
+    .tl-bar.amber { background: linear-gradient(90deg, #fcd34d, var(--amber)); box-shadow: 0 5px 14px rgba(217, 119, 6, 0.16); }
+    .tl-bar.red { background: linear-gradient(90deg, #fca5a5, var(--red)); box-shadow: 0 5px 14px rgba(220, 38, 38, 0.16); }
+
+    .today {
+      position: absolute;
+      top: 0;
+      bottom: 0;
+      left: 57%;
+      z-index: 2;
+      border-left: 2px dashed rgba(29, 78, 216, 0.72);
+    }
+
+    .today span {
+      position: absolute;
+      top: 3px;
+      left: 7px;
+      padding: 3px 6px;
+      border-radius: 999px;
+      color: var(--blue);
+      background: #fff;
+      border: 1px solid #bfdbfe;
+      font-size: 10px;
+      font-weight: 850;
+    }
+
+    .action-footer {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 12px;
+      margin-top: 14px;
+      padding: 12px 14px;
+      color: var(--muted);
+      background: #f8fafc;
+      border: 1px solid var(--line-soft);
+      border-radius: 16px;
+      font-size: 12px;
+      line-height: 1.55;
+    }
+
+    .action-footer b { color: var(--ink); }
+
+    .primary-btn,
+    .ghost-btn {
+      border: 0;
+      border-radius: 999px;
+      padding: 9px 13px;
+      color: #fff;
+      background: var(--blue);
+      font-size: 12px;
+      font-weight: 850;
+      cursor: pointer;
+      box-shadow: 0 10px 18px rgba(29, 78, 216, 0.18);
+      white-space: nowrap;
+    }
+
+    .ghost-btn {
+      color: var(--blue);
+      background: #fff;
+      border: 1px solid #bfdbfe;
+      box-shadow: none;
+    }
+
+    .focus-summary {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 8px;
+      margin-bottom: 12px;
+    }
+
+    .focus-stat {
+      padding: 11px 10px;
+      border: 1px solid var(--line-soft);
+      border-radius: 14px;
+      background: #fbfdff;
+    }
+
+    .focus-stat b {
+      display: block;
+      font-size: 21px;
+      line-height: 1;
+      letter-spacing: -0.04em;
+    }
+
+    .focus-stat span {
+      display: block;
+      margin-top: 5px;
+      color: var(--muted);
+      font-size: 11px;
+    }
+
+    .issue-list {
+      display: grid;
+      gap: 10px;
+    }
+
+    .issue {
+      display: grid;
+      grid-template-columns: 38px 1fr auto;
+      gap: 10px;
+      align-items: center;
+      padding: 12px;
+      border: 1px solid var(--line-soft);
+      border-radius: 16px;
+      background: #fff;
+    }
+
+    .issue-rank {
+      width: 34px;
+      height: 34px;
+      border-radius: 12px;
+      display: grid;
+      place-items: center;
+      color: var(--red);
+      background: var(--red-soft);
+      font-size: 12px;
+      font-weight: 900;
+    }
+
+    .issue-rank.amber { color: var(--amber); background: var(--amber-soft); }
+    .issue-rank.blue { color: var(--blue); background: var(--blue-soft); }
+    .issue-rank.green { color: var(--green); background: var(--green-soft); }
+
+    .issue-title {
+      font-size: 13px;
+      font-weight: 850;
+      line-height: 1.35;
+    }
+
+    .issue-meta {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+      margin-top: 6px;
+      color: var(--muted);
+      font-size: 11px;
+    }
+
+    .issue-action {
+      min-width: 50px;
+      text-align: right;
+    }
+
+    .issue-action b {
+      display: block;
+      font-size: 13px;
+    }
+
+    .issue-action span {
+      color: var(--subtle);
+      font-size: 10px;
+    }
+
+    .chart-area {
+      min-height: 188px;
+      display: grid;
+      place-items: center;
+      border: 1px solid var(--line-soft);
+      border-radius: 16px;
+      background: #fff;
+      overflow: hidden;
+    }
+
+    .chart-svg {
+      width: 100%;
+      height: 100%;
+      min-height: 188px;
+    }
+
+    .legend {
+      justify-content: flex-start;
+      margin-top: 10px;
+      color: var(--muted);
+      font-size: 11px;
+    }
+
+    .legend-item {
+      display: inline-flex;
+      gap: 6px;
+      align-items: center;
+    }
+
+    .swatch {
+      width: 9px;
+      height: 9px;
+      border-radius: 999px;
+      background: var(--blue);
+    }
+
+    .swatch.green { background: var(--green); }
+    .swatch.amber { background: var(--amber); }
+    .swatch.red { background: var(--red); }
+    .swatch.violet { background: var(--violet); }
+
+    .risk-matrix {
+      width: min(100%, 340px);
+      display: grid;
+      grid-template-columns: 20px 1fr;
+      grid-template-rows: 1fr 22px;
+      gap: 8px;
+      align-items: stretch;
+    }
+
+    .matrix {
+      position: relative;
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      grid-template-rows: repeat(3, 1fr);
+      min-height: 156px;
+      border-radius: 14px;
+      overflow: hidden;
+      border: 1px solid var(--line-soft);
+    }
+
+    .cell { border-right: 1px solid #fff; border-bottom: 1px solid #fff; background: #f0fdf4; }
+    .cell.mid { background: #fffbeb; }
+    .cell.high { background: #fef2f2; }
+
+    .bubble {
+      position: absolute;
+      width: 30px;
+      height: 30px;
+      transform: translate(-50%, -50%);
+      border-radius: 50%;
+      display: grid;
+      place-items: center;
+      color: #fff;
+      background: var(--blue);
+      font-size: 12px;
+      font-weight: 900;
+      box-shadow: 0 8px 18px rgba(15, 23, 42, 0.16);
+    }
+
+    .bubble.red { background: var(--red); }
+    .bubble.amber { background: var(--amber); }
+    .bubble.green { background: var(--green); }
+
+    .axis-y,
+    .axis-x {
+      color: var(--muted);
+      font-size: 11px;
+      font-weight: 800;
+      text-align: center;
+    }
+
+    .axis-y {
+      writing-mode: vertical-rl;
+      transform: rotate(180deg);
+    }
+
+    .dept-list,
+    .stack-list,
+    .todo-list {
+      display: grid;
+      gap: 10px;
+    }
+
+    .dept-row,
+    .stack-row {
+      display: grid;
+      grid-template-columns: 70px 1fr 44px;
+      gap: 10px;
+      align-items: center;
+      font-size: 12px;
+    }
+
+    .dept-name,
+    .stack-name { color: #334155; font-weight: 800; }
+
+    .num {
+      text-align: right;
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 800;
+    }
+
+    .topic-hero {
+      display: grid;
+      grid-template-columns: minmax(0, 1.1fr) minmax(380px, 0.9fr);
+      gap: 16px;
+    }
+
+    .score-card {
+      padding: 22px;
+      min-height: 286px;
+      display: grid;
+      grid-template-columns: auto 1fr;
+      gap: 24px;
+      align-items: center;
+    }
+
+    .large-ring {
+      --percent: 76;
+      width: 158px;
+      height: 158px;
+      border-radius: 50%;
+      display: grid;
+      place-items: center;
+      background: conic-gradient(var(--blue) calc(var(--percent) * 1%), #e6edf7 0);
+      position: relative;
+    }
+
+    .large-ring::after {
+      content: "";
+      position: absolute;
+      inset: 15px;
+      border-radius: 50%;
+      background: #fff;
+      box-shadow: inset 0 0 0 1px var(--line-soft);
+    }
+
+    .large-ring b {
+      position: relative;
+      z-index: 1;
+      font-size: 42px;
+      letter-spacing: -0.07em;
+    }
+
+    .large-ring span {
+      position: relative;
+      z-index: 1;
+      color: var(--muted);
+      font-size: 12px;
+    }
+
+    .score-copy h2 {
+      margin: 0;
+      font-size: 23px;
+      letter-spacing: -0.03em;
+    }
+
+    .score-copy p {
+      margin: 10px 0 16px;
+      color: var(--muted);
+      font-size: 13px;
+      line-height: 1.75;
+    }
+
+    .score-grid {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 10px;
+    }
+
+    .score-item {
+      padding: 11px;
+      border: 1px solid var(--line-soft);
+      border-radius: 14px;
+      background: #fbfdff;
+    }
+
+    .score-item b {
+      display: block;
+      font-size: 18px;
+      line-height: 1;
+    }
+
+    .score-item span {
+      display: block;
+      margin-top: 6px;
+      color: var(--muted);
+      font-size: 11px;
+    }
+
+    .route {
+      display: grid;
+      gap: 10px;
+    }
+
+    .route-step {
+      display: grid;
+      grid-template-columns: 34px 1fr auto;
+      gap: 10px;
+      align-items: center;
+      padding: 12px;
+      border: 1px solid var(--line-soft);
+      border-radius: 16px;
+      background: #fff;
+    }
+
+    .route-step .step {
+      width: 32px;
+      height: 32px;
+      border-radius: 12px;
+      display: grid;
+      place-items: center;
+      color: var(--blue);
+      background: var(--blue-soft);
+      font-size: 12px;
+      font-weight: 900;
+    }
+
+    .route-step b {
+      display: block;
+      font-size: 13px;
+    }
+
+    .route-step span {
+      display: block;
+      margin-top: 4px;
+      color: var(--muted);
+      font-size: 11px;
+    }
+
+    .kanban-row {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) 330px;
+      gap: 16px;
+    }
+
+    .board-card {
+      padding: 16px;
+      display: grid;
+      gap: 14px;
+    }
+
+    .board-list {
+      display: grid;
+      gap: 10px;
+    }
+
+    .board-item {
+      display: grid;
+      grid-template-columns: 1fr 104px 80px;
+      gap: 12px;
+      align-items: center;
+      padding: 12px;
+      border: 1px solid var(--line-soft);
+      border-radius: 15px;
+      background: #fff;
+    }
+
+    .board-item h4 {
+      margin: 0;
+      font-size: 13px;
+    }
+
+    .board-item p {
+      margin: 5px 0 0;
+      color: var(--muted);
+      font-size: 11px;
+    }
+
+    .heat-grid {
+      display: grid;
+      grid-template-columns: repeat(5, minmax(0, 1fr));
+      gap: 8px;
+      width: 100%;
+    }
+
+    .heat-cell {
+      min-height: 72px;
+      padding: 10px;
+      border-radius: 14px;
+      border: 1px solid var(--line-soft);
+      background: #fff;
+    }
+
+    .heat-cell b {
+      display: block;
+      font-size: 18px;
+      line-height: 1;
+    }
+
+    .heat-cell span {
+      display: block;
+      margin-top: 6px;
+      color: var(--muted);
+      font-size: 11px;
+    }
+
+    .heat-cell.hot { background: #fff7ed; border-color: #fed7aa; }
+    .heat-cell.danger { background: #fef2f2; border-color: #fecaca; }
+    .heat-cell.ok { background: #f0fdf4; border-color: #bbf7d0; }
+
+    .detail-head {
+      display: grid;
+      grid-template-columns: 1fr auto;
+      gap: 16px;
+      align-items: end;
+      padding: 18px;
+    }
+
+    .breadcrumb {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+      margin-bottom: 8px;
+      color: var(--muted);
+      font-size: 12px;
+    }
+
+    .detail-head h2 {
+      margin: 0;
+      font-size: 24px;
+      letter-spacing: -0.04em;
+    }
+
+    .filter-bar {
+      display: flex;
+      justify-content: flex-end;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+
+    .filter-bar .chip {
+      background: #fff;
+      cursor: pointer;
+    }
+
+    .timeline-steps {
+      display: grid;
+      grid-template-columns: repeat(5, minmax(0, 1fr));
+      gap: 10px;
+    }
+
+    .timeline-step {
+      position: relative;
+      min-height: 112px;
+      padding: 14px;
+      border: 1px solid var(--line-soft);
+      border-radius: 16px;
+      background: #fff;
+    }
+
+    .timeline-step::after {
+      content: "";
+      position: absolute;
+      left: 24px;
+      right: -24px;
+      top: 28px;
+      height: 2px;
+      background: #dbeafe;
+      z-index: 0;
+    }
+
+    .timeline-step:last-child::after { display: none; }
+
+    .timeline-step i {
+      position: relative;
+      z-index: 1;
+      display: grid;
+      place-items: center;
+      width: 30px;
+      height: 30px;
+      border-radius: 50%;
+      color: #fff;
+      background: var(--blue);
+      font-style: normal;
+      font-size: 12px;
+      font-weight: 900;
+    }
+
+    .timeline-step b {
+      display: block;
+      margin-top: 12px;
+      font-size: 13px;
+    }
+
+    .timeline-step span {
+      display: block;
+      margin-top: 5px;
+      color: var(--muted);
+      font-size: 11px;
+      line-height: 1.5;
+    }
+
+    .watermark {
+      margin: 14px 0 4px;
+      color: var(--subtle);
+      text-align: center;
+      font-size: 11px;
+    }
+
+    @media (max-width: 1380px) {
+      .topbar,
+      .main-grid,
+      .topic-hero,
+      .kanban-row,
+      .delivery-map { grid-template-columns: 1fr; }
+      .kpi-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      .health { grid-column: 1 / -1; }
+      .three-grid,
+      .four-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      .toolbar { justify-content: flex-start; }
+    }
+
+    @media (max-width: 860px) {
+      .shell { width: min(100vw - 20px, 1880px); margin: 10px auto; }
+      .topbar { padding: 16px; border-radius: 20px; }
+      .brand { align-items: flex-start; }
+      .brand p { white-space: normal; }
+      .nav { overflow-x: auto; max-width: calc(100vw - 36px); justify-content: flex-start; border-radius: 18px; }
+      .nav-tab { flex: 0 0 auto; }
+      .kpi-grid,
+      .split-grid,
+      .three-grid,
+      .four-grid,
+      .score-card,
+      .score-grid,
+      .timeline-steps { grid-template-columns: 1fr; }
+      .health-layout { grid-template-columns: 1fr; }
+      .large-ring,
+      .ring { margin: 0 auto; }
+      .issue { grid-template-columns: 34px 1fr; }
+      .issue-action { grid-column: 2; text-align: left; }
+      .board-item { grid-template-columns: 1fr; }
+      .heat-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    }
+  </style>
+</head>
+<body>
+  <div class="shell">
+    <header class="topbar">
+      <div class="brand">
+        <div class="brand-mark" aria-hidden="true">
+          <svg width="29" height="29" viewBox="0 0 24 24" fill="none">
+            <path d="M4 5.8C4 4.8 4.8 4 5.8 4h12.4C19.2 4 20 4.8 20 5.8v12.4c0 1-.8 1.8-1.8 1.8H5.8C4.8 20 4 19.2 4 18.2V5.8Z" stroke="currentColor" stroke-width="1.8"/>
+            <path d="M8 15.5V11m4 4.5V8m4 7.5v-6" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
+          </svg>
+        </div>
+        <div>
+          <div class="brand-eyebrow">BI COMMAND CENTER</div>
+          <h1>领导驾驶舱大屏套件</h1>
+          <p>从经营总览到中层专题，再到底层事项明细的统一管理视图。</p>
+        </div>
+      </div>
+      <div class="toolbar">
+        <nav class="nav" aria-label="大屏视图切换">
+          <button class="nav-tab active" type="button" data-screen="overview">L0 总览</button>
+          <button class="nav-tab" type="button" data-screen="delivery">交付</button>
+          <button class="nav-tab" type="button" data-screen="risk">风险</button>
+          <button class="nav-tab" type="button" data-screen="quality">质量</button>
+          <button class="nav-tab" type="button" data-screen="change">技术变更</button>
+          <button class="nav-tab" type="button" data-screen="detail">L2 明细</button>
+        </nav>
+        <div class="pill">周期：<strong>2026-01-01 至 2026-12-31</strong></div>
+        <div class="pill" id="clock">--</div>
+      </div>
+    </header>
+
+    <main class="dashboard">
+      <section class="screen active" id="screen-overview">
+        <div class="kpi-grid">
+          <article class="card health">
+            <div class="health-layout">
+              <div class="ring" style="--percent:82"><div><b>82</b><span>健康分</span></div></div>
+              <div>
+                <h2>集团经营与项目组合健康度</h2>
+                <p>综合交付、风险、质量、技术变更、资源与成本偏差。当前整体可控，但 4 个事项需要领导层本周协调。</p>
+                <div class="mini-stats">
+                  <div class="mini-stat"><b>4</b><span>待决策</span></div>
+                  <div class="mini-stat"><b>7</b><span>跨部门协调</span></div>
+                  <div class="mini-stat"><b>3</b><span>临界窗口</span></div>
+                </div>
+              </div>
+            </div>
+          </article>
+          <article class="card kpi">
+            <div class="kpi-label"><span>项目完成率</span><span class="kpi-icon">✓</span></div>
+            <div><div class="kpi-value"><b>91.7</b><span>%</span></div><div class="delta blue">较上月 +3.4%</div></div>
+          </article>
+          <article class="card kpi">
+            <div class="kpi-label"><span>关键里程碑按期率</span><span class="kpi-icon">M</span></div>
+            <div><div class="kpi-value"><b>86.2</b><span>%</span></div><div class="delta warn">30天压力 6 项</div></div>
+          </article>
+          <article class="card kpi">
+            <div class="kpi-label"><span>高风险事项</span><span class="kpi-icon">!</span></div>
+            <div><div class="kpi-value"><b>8</b><span>项</span></div><div class="delta danger">3 项需拍板</div></div>
+          </article>
+          <article class="card kpi">
+            <div class="kpi-label"><span>未闭环问题</span><span class="kpi-icon">C</span></div>
+            <div><div class="kpi-value"><b>12</b><span>项</span></div><div class="delta warn">质量 7 · 变更 5</div></div>
+          </article>
+        </div>
+
+        <div class="main-grid">
+          <article class="card panel">
+            <div class="panel-head">
+              <div>
+                <h2 class="panel-title">项目组合交付地图</h2>
+                <p class="panel-sub">首页只展示影响交付的关键项目和阻塞原因，避免把所有专业图表平铺到领导层。</p>
+              </div>
+              <div class="summary-row">
+                <span class="tag red">异常优先</span>
+                <span class="tag gray">支持下钻</span>
+              </div>
+            </div>
+            <div class="delivery-map">
+              <div class="table-wrap">
+                <table>
+                  <thead>
+                    <tr><th>项目</th><th>责任</th><th>进度</th><th>主要阻塞</th><th>交付窗口</th></tr>
+                  </thead>
+                  <tbody>
+                    <tr>
+                      <td><div class="project"><span class="dot red"></span>XM-A02 动力分系统</div></td>
+                      <td><div class="owner"><b>赵PM</b><span>动力室</span></div></td>
+                      <td class="progress-cell"><div class="progress-line"><div class="progress-fill red" style="width:60%"></div></div><div class="progress-meta"><span>实际 60%</span><span>计划 76%</span></div></td>
+                      <td><span class="state red">联调偏差</span></td>
+                      <td>2026-04-30</td>
+                    </tr>
+                    <tr>
+                      <td><div class="project"><span class="dot amber"></span>XM-B06 试验验证</div></td>
+                      <td><div class="owner"><b>柳PM</b><span>试验室</span></div></td>
+                      <td class="progress-cell"><div class="progress-line"><div class="progress-fill amber" style="width:50%"></div></div><div class="progress-meta"><span>实际 50%</span><span>计划 62%</span></div></td>
+                      <td><span class="state amber">资源冲突</span></td>
+                      <td>2026-06-18</td>
+                    </tr>
+                    <tr>
+                      <td><div class="project"><span class="dot red"></span>XM-C11 设计冻结</div></td>
+                      <td><div class="owner"><b>王PM</b><span>设计室</span></div></td>
+                      <td class="progress-cell"><div class="progress-line"><div class="progress-fill red" style="width:73%"></div></div><div class="progress-meta"><span>实际 73%</span><span>计划 80%</span></div></td>
+                      <td><span class="state red">质量阻塞</span></td>
+                      <td>2026-08-30</td>
+                    </tr>
+                    <tr>
+                      <td><div class="project"><span class="dot green"></span>XM-D03 电子交付</div></td>
+                      <td><div class="owner"><b>陈PM</b><span>电子室</span></div></td>
+                      <td class="progress-cell"><div class="progress-line"><div class="progress-fill green" style="width:94%"></div></div><div class="progress-meta"><span>实际 94%</span><span>计划 92%</span></div></td>
+                      <td><span class="state green">按期</span></td>
+                      <td>2026-05-26</td>
+                    </tr>
+                    <tr>
+                      <td><div class="project"><span class="dot blue"></span>XM-E08 软件集成</div></td>
+                      <td><div class="owner"><b>孙PM</b><span>软件室</span></div></td>
+                      <td class="progress-cell"><div class="progress-line"><div class="progress-fill" style="width:88%"></div></div><div class="progress-meta"><span>实际 88%</span><span>计划 86%</span></div></td>
+                      <td><span class="state">受控</span></td>
+                      <td>2026-09-18</td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+              <div class="timeline-card">
+                <div class="timeline-head"><div>对象</div><div>2月</div><div>3月</div><div>4月</div><div>5月</div><div>6月</div><div>7月</div></div>
+                <div class="tl-row"><div class="tl-label">A02<small>高风险</small></div><div class="tl-track"><div class="today"><span>当前</span></div><span class="tl-bar red" style="left:4%;width:72%"></span></div></div>
+                <div class="tl-row"><div class="tl-label">B06<small>延期预警</small></div><div class="tl-track"><span class="tl-bar amber" style="left:18%;width:58%"></span></div></div>
+                <div class="tl-row"><div class="tl-label">C11<small>质量阻塞</small></div><div class="tl-track"><span class="tl-bar red" style="left:12%;width:45%"></span></div></div>
+                <div class="tl-row"><div class="tl-label">D03<small>正常</small></div><div class="tl-track"><span class="tl-bar green" style="left:7%;width:50%"></span></div></div>
+                <div class="tl-row"><div class="tl-label">E08<small>受控</small></div><div class="tl-track"><span class="tl-bar" style="left:31%;width:48%"></span></div></div>
+              </div>
+            </div>
+            <div class="action-footer">
+              <div><b>下钻规则：</b>点击项目、阻塞类型或时间窗口进入 L1 专题；点击具体事项进入 L2 明细。</div>
+              <button class="primary-btn" type="button" data-jump="delivery">查看交付专题</button>
+            </div>
+          </article>
+
+          <aside class="card panel">
+            <div class="panel-head">
+              <div>
+                <h2 class="panel-title">管理层关注</h2>
+                <p class="panel-sub">把指标转成责任人、截止日期和下一步动作。</p>
+              </div>
+              <span class="tag red">Top 5</span>
+            </div>
+            <div class="focus-summary">
+              <div class="focus-stat"><b>3</b><span>需决策</span></div>
+              <div class="focus-stat"><b>5</b><span>需协调</span></div>
+              <div class="focus-stat"><b>4</b><span>临期关闭</span></div>
+            </div>
+            <div class="issue-list">
+              <div class="issue"><div class="issue-rank">01</div><div><div class="issue-title">A02 动力分系统联调偏差，影响 4 月交付窗口</div><div class="issue-meta"><span>责任：赵PM</span><span>动作：确认替代方案</span></div></div><div class="issue-action"><b>04-30</b><span>截止</span></div></div>
+              <div class="issue"><div class="issue-rank amber">02</div><div><div class="issue-title">B06 试验资源冲突，需协调试验室排期</div><div class="issue-meta"><span>责任：柳PM</span><span>动作：释放工位</span></div></div><div class="issue-action"><b>05-06</b><span>截止</span></div></div>
+              <div class="issue"><div class="issue-rank">03</div><div><div class="issue-title">C11 未闭环质量问题 3 项，阻塞设计冻结</div><div class="issue-meta"><span>责任：王PM</span><span>动作：评审关闭</span></div></div><div class="issue-action"><b>05-10</b><span>截止</span></div></div>
+              <div class="issue"><div class="issue-rank blue">04</div><div><div class="issue-title">5 份技术更改单待签，需明确签审优先级</div><div class="issue-meta"><span>责任：技术办</span><span>动作：完成会签</span></div></div><div class="issue-action"><b>05-12</b><span>截止</span></div></div>
+              <div class="issue"><div class="issue-rank amber">05</div><div><div class="issue-title">动力室负荷 86%，存在跨项目资源挤兑</div><div class="issue-meta"><span>责任：部门主管</span><span>动作：调整人员</span></div></div><div class="issue-action"><b>本周</b><span>处理</span></div></div>
+            </div>
+          </aside>
+        </div>
+
+        <div class="four-grid">
+          <article class="card panel">
+            <div class="panel-head"><div><h3 class="panel-title">里程碑到期分布</h3><p class="panel-sub">未来 30/60/90 天交付压力。</p></div><span class="tag amber">30天 6项</span></div>
+            <div class="chart-area">
+              <svg class="chart-svg" viewBox="0 0 320 180" role="img" aria-label="里程碑到期分布">
+                <line x1="36" y1="142" x2="296" y2="142" stroke="#dbe4ef"/>
+                <rect x="58" y="82" width="40" height="60" rx="9" fill="#1d4ed8"/><rect x="120" y="50" width="40" height="92" rx="9" fill="#d97706"/><rect x="182" y="98" width="40" height="44" rx="9" fill="#16a34a"/><rect x="244" y="114" width="40" height="28" rx="9" fill="#6d28d9"/>
+                <text x="78" y="74" text-anchor="middle" font-size="12" font-weight="800" fill="#1d4ed8">6</text><text x="140" y="42" text-anchor="middle" font-size="12" font-weight="800" fill="#d97706">9</text><text x="202" y="90" text-anchor="middle" font-size="12" font-weight="800" fill="#16a34a">4</text><text x="264" y="106" text-anchor="middle" font-size="12" font-weight="800" fill="#6d28d9">2</text>
+                <text x="78" y="164" text-anchor="middle" font-size="11" fill="#64748b">30天</text><text x="140" y="164" text-anchor="middle" font-size="11" fill="#64748b">60天</text><text x="202" y="164" text-anchor="middle" font-size="11" fill="#64748b">90天</text><text x="264" y="164" text-anchor="middle" font-size="11" fill="#64748b">以后</text>
+              </svg>
+            </div>
+          </article>
+          <article class="card panel">
+            <div class="panel-head"><div><h3 class="panel-title">质量闭环趋势</h3><p class="panel-sub">新增、关闭、存量变化。</p></div><span class="tag red">存量 7</span></div>
+            <div class="chart-area">
+              <svg class="chart-svg" viewBox="0 0 320 180" role="img" aria-label="质量闭环趋势">
+                <g stroke="#edf2f7"><line x1="34" y1="40" x2="296" y2="40"/><line x1="34" y1="82" x2="296" y2="82"/><line x1="34" y1="124" x2="296" y2="124"/></g>
+                <path d="M44 122 L84 108 L124 114 L164 88 L204 78 L244 92 L286 66" fill="none" stroke="#1d4ed8" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
+                <path d="M44 110 L84 116 L124 96 L164 94 L204 100 L244 84 L286 88" fill="none" stroke="#16a34a" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
+              </svg>
+            </div>
+            <div class="legend"><span class="legend-item"><i class="swatch"></i>新增</span><span class="legend-item"><i class="swatch green"></i>关闭</span></div>
+          </article>
+          <article class="card panel">
+            <div class="panel-head"><div><h3 class="panel-title">风险矩阵</h3><p class="panel-sub">概率乘影响，右上角优先。</p></div><span class="tag red">高风险 8</span></div>
+            <div class="chart-area">
+              <div class="risk-matrix">
+                <div class="axis-y">影响</div>
+                <div class="matrix">
+                  <div class="cell mid"></div><div class="cell high"></div><div class="cell high"></div>
+                  <div class="cell"></div><div class="cell mid"></div><div class="cell high"></div>
+                  <div class="cell"></div><div class="cell"></div><div class="cell mid"></div>
+                  <div class="bubble red" style="left:82%;top:25%">3</div><div class="bubble amber" style="left:64%;top:51%">5</div><div class="bubble green" style="left:28%;top:70%">4</div><div class="bubble" style="left:44%;top:34%">2</div>
+                </div>
+                <div></div><div class="axis-x">概率</div>
+              </div>
+            </div>
+          </article>
+          <article class="card panel">
+            <div class="panel-head"><div><h3 class="panel-title">资源负荷</h3><p class="panel-sub">按部门看阻塞来源。</p></div><span class="tag amber">动力室 86%</span></div>
+            <div class="dept-list">
+              <div class="dept-row"><div class="dept-name">动力室</div><div class="dept-bar"><div class="dept-fill red" style="width:86%"></div></div><div class="num">86%</div></div>
+              <div class="dept-row"><div class="dept-name">设计室</div><div class="dept-bar"><div class="dept-fill amber" style="width:74%"></div></div><div class="num">74%</div></div>
+              <div class="dept-row"><div class="dept-name">试验室</div><div class="dept-bar"><div class="dept-fill amber" style="width:71%"></div></div><div class="num">71%</div></div>
+              <div class="dept-row"><div class="dept-name">电子室</div><div class="dept-bar"><div class="dept-fill" style="width:68%"></div></div><div class="num">68%</div></div>
+              <div class="dept-row"><div class="dept-name">软件室</div><div class="dept-bar"><div class="dept-fill green" style="width:55%"></div></div><div class="num">55%</div></div>
+            </div>
+          </article>
+        </div>
+      </section>
+
+      <section class="screen" id="screen-delivery">
+        <div class="topic-hero">
+          <article class="card score-card">
+            <div class="large-ring" style="--percent:76"><div><b>76</b><span>交付分</span></div></div>
+            <div class="score-copy">
+              <h2>交付执行专题看板</h2>
+              <p>关注里程碑、任务节点、延期趋势和跨部门资源冲突。中层看板的重点不是看总数，而是定位交付滑坡来自哪里。</p>
+              <div class="score-grid">
+                <div class="score-item"><b>43</b><span>关键节点</span></div>
+                <div class="score-item"><b>6</b><span>30天到期</span></div>
+                <div class="score-item"><b>5</b><span>超期任务</span></div>
+              </div>
+            </div>
+          </article>
+          <article class="card panel">
+            <div class="panel-head"><div><h2 class="panel-title">交付下钻路径</h2><p class="panel-sub">从专题到具体任务清单。</p></div></div>
+            <div class="route">
+              <div class="route-step"><div class="step">1</div><div><b>识别延期项目</b><span>按偏差、风险等级和交付窗口排序。</span></div><span class="tag red">A02</span></div>
+              <div class="route-step"><div class="step">2</div><div><b>定位关键节点</b><span>查看影响主计划的里程碑和责任部门。</span></div><span class="tag amber">6项</span></div>
+              <div class="route-step"><div class="step">3</div><div><b>进入 L2 清单</b><span>对任务、负责人、截止日期和处理动作落责。</span></div><button class="ghost-btn" type="button" data-jump="detail">查看</button></div>
+            </div>
+          </article>
+        </div>
+        <div class="kanban-row">
+          <article class="card panel">
+            <div class="panel-head"><div><h2 class="panel-title">关键节点推进</h2><p class="panel-sub">按项目展示任务偏差，红色代表已影响关键路径。</p></div><span class="tag red">异常 5</span></div>
+            <div class="timeline-card">
+              <div class="timeline-head"><div>节点</div><div>2月</div><div>3月</div><div>4月</div><div>5月</div><div>6月</div><div>7月</div></div>
+              <div class="tl-row"><div class="tl-label">方案冻结<small>A02</small></div><div class="tl-track"><div class="today"><span>当前</span></div><span class="tl-bar red" style="left:6%;width:56%"></span></div></div>
+              <div class="tl-row"><div class="tl-label">试验排期<small>B06</small></div><div class="tl-track"><span class="tl-bar amber" style="left:24%;width:38%"></span></div></div>
+              <div class="tl-row"><div class="tl-label">设计评审<small>C11</small></div><div class="tl-track"><span class="tl-bar red" style="left:16%;width:42%"></span></div></div>
+              <div class="tl-row"><div class="tl-label">电子交付<small>D03</small></div><div class="tl-track"><span class="tl-bar green" style="left:9%;width:48%"></span></div></div>
+              <div class="tl-row"><div class="tl-label">软件联调<small>E08</small></div><div class="tl-track"><span class="tl-bar" style="left:34%;width:47%"></span></div></div>
+            </div>
+          </article>
+          <aside class="card board-card">
+            <div class="panel-head"><div><h2 class="panel-title">延期处置队列</h2><p class="panel-sub">面向中层的每日动作池。</p></div></div>
+            <div class="board-list">
+              <div class="board-item"><div><h4>A02 联调偏差复核</h4><p>动力室 · 影响 4 月窗口</p></div><span class="state red">阻塞</span><b>04-30</b></div>
+              <div class="board-item"><div><h4>B06 试验工位协调</h4><p>试验室 · 资源冲突</p></div><span class="state amber">预警</span><b>05-06</b></div>
+              <div class="board-item"><div><h4>C11 设计冻结评审</h4><p>设计室 · 质量问题未关</p></div><span class="state red">阻塞</span><b>05-10</b></div>
+              <div class="board-item"><div><h4>E08 联调环境准备</h4><p>软件室 · 依赖接口</p></div><span class="state">受控</span><b>05-18</b></div>
+            </div>
+          </aside>
+        </div>
+      </section>
+
+      <section class="screen" id="screen-risk">
+        <div class="kpi-grid">
+          <article class="card health"><div class="health-layout"><div class="ring" style="--percent:68"><div><b>68</b><span>风险分</span></div></div><div><h2>风险预警专题看板</h2><p>风险专题关注风险暴露、释放进度和跨项目传导。页面优先展示未释放高风险和新增风险。</p><div class="mini-stats"><div class="mini-stat"><b>22</b><span>风险总数</span></div><div class="mini-stat"><b>8</b><span>高风险</span></div><div class="mini-stat"><b>9</b><span>未释放</span></div></div></div></div></article>
+          <article class="card kpi"><div class="kpi-label"><span>高风险数</span><span class="kpi-icon">H</span></div><div><div class="kpi-value"><b>8</b><span>项</span></div><div class="delta danger">新增 2</div></div></article>
+          <article class="card kpi"><div class="kpi-label"><span>风险释放率</span><span class="kpi-icon">R</span></div><div><div class="kpi-value"><b>59</b><span>%</span></div><div class="delta warn">低于目标</div></div></article>
+          <article class="card kpi"><div class="kpi-label"><span>跨部门风险</span><span class="kpi-icon">X</span></div><div><div class="kpi-value"><b>7</b><span>项</span></div><div class="delta warn">需协调</div></div></article>
+          <article class="card kpi"><div class="kpi-label"><span>临期关闭</span><span class="kpi-icon">D</span></div><div><div class="kpi-value"><b>4</b><span>项</span></div><div class="delta danger">本周</div></div></article>
+        </div>
+        <div class="main-grid">
+          <article class="card panel">
+            <div class="panel-head"><div><h2 class="panel-title">风险热区</h2><p class="panel-sub">按风险类型和责任部门定位风险聚集区域。</p></div><button class="ghost-btn" type="button" data-jump="detail">下钻风险明细</button></div>
+            <div class="heat-grid">
+              <div class="heat-cell danger"><b>3</b><span>进度延期 · 动力室</span></div>
+              <div class="heat-cell hot"><b>2</b><span>资源冲突 · 试验室</span></div>
+              <div class="heat-cell danger"><b>3</b><span>质量阻塞 · 设计室</span></div>
+              <div class="heat-cell hot"><b>2</b><span>技术变更 · 技术办</span></div>
+              <div class="heat-cell ok"><b>1</b><span>外协交付 · 采购</span></div>
+              <div class="heat-cell ok"><b>0</b><span>成本偏差 · 财务</span></div>
+              <div class="heat-cell hot"><b>2</b><span>接口依赖 · 软件室</span></div>
+              <div class="heat-cell ok"><b>1</b><span>测试环境 · 电子室</span></div>
+              <div class="heat-cell danger"><b>4</b><span>审批滞后 · 综合办</span></div>
+              <div class="heat-cell ok"><b>1</b><span>供应延期 · 外协</span></div>
+            </div>
+          </article>
+          <aside class="card panel">
+            <div class="panel-head"><div><h2 class="panel-title">风险释放排行</h2><p class="panel-sub">优先看未释放和逾期风险。</p></div></div>
+            <div class="dept-list">
+              <div class="dept-row"><div class="dept-name">动力室</div><div class="dept-bar"><div class="dept-fill red" style="width:35%"></div></div><div class="num">35%</div></div>
+              <div class="dept-row"><div class="dept-name">设计室</div><div class="dept-bar"><div class="dept-fill amber" style="width:48%"></div></div><div class="num">48%</div></div>
+              <div class="dept-row"><div class="dept-name">试验室</div><div class="dept-bar"><div class="dept-fill amber" style="width:52%"></div></div><div class="num">52%</div></div>
+              <div class="dept-row"><div class="dept-name">技术办</div><div class="dept-bar"><div class="dept-fill" style="width:66%"></div></div><div class="num">66%</div></div>
+              <div class="dept-row"><div class="dept-name">软件室</div><div class="dept-bar"><div class="dept-fill green" style="width:78%"></div></div><div class="num">78%</div></div>
+            </div>
+          </aside>
+        </div>
+      </section>
+
+      <section class="screen" id="screen-quality">
+        <div class="topic-hero">
+          <article class="card score-card">
+            <div class="large-ring" style="--percent:72"><div><b>72</b><span>质量分</span></div></div>
+            <div class="score-copy">
+              <h2>质量闭环专题看板</h2>
+              <p>将质量问题从统计项转成闭环过程：新增、归零、复发、阻塞节点和责任部门一起呈现。</p>
+              <div class="score-grid"><div class="score-item"><b>31</b><span>问题总数</span></div><div class="score-item"><b>7</b><span>未闭环</span></div><div class="score-item"><b>77%</b><span>闭环率</span></div></div>
+            </div>
+          </article>
+          <article class="card panel">
+            <div class="panel-head"><div><h2 class="panel-title">闭环阶段漏斗</h2><p class="panel-sub">定位问题卡在哪个阶段。</p></div><span class="tag red">评审滞后</span></div>
+            <div class="dept-list">
+              <div class="dept-row"><div class="dept-name">新增</div><div class="dept-bar"><div class="dept-fill" style="width:100%"></div></div><div class="num">31</div></div>
+              <div class="dept-row"><div class="dept-name">分析</div><div class="dept-bar"><div class="dept-fill" style="width:84%"></div></div><div class="num">26</div></div>
+              <div class="dept-row"><div class="dept-name">整改</div><div class="dept-bar"><div class="dept-fill amber" style="width:71%"></div></div><div class="num">22</div></div>
+              <div class="dept-row"><div class="dept-name">验证</div><div class="dept-bar"><div class="dept-fill amber" style="width:61%"></div></div><div class="num">19</div></div>
+              <div class="dept-row"><div class="dept-name">归零</div><div class="dept-bar"><div class="dept-fill green" style="width:77%"></div></div><div class="num">24</div></div>
+            </div>
+          </article>
+        </div>
+        <div class="split-grid">
+          <article class="card panel">
+            <div class="panel-head"><div><h2 class="panel-title">质量问题趋势</h2><p class="panel-sub">新增高于关闭时需要升层协调。</p></div></div>
+            <div class="chart-area">
+              <svg class="chart-svg" viewBox="0 0 620 230" role="img" aria-label="质量趋势">
+                <g stroke="#edf2f7"><line x1="42" y1="44" x2="590" y2="44"/><line x1="42" y1="92" x2="590" y2="92"/><line x1="42" y1="140" x2="590" y2="140"/><line x1="42" y1="188" x2="590" y2="188"/></g>
+                <path d="M54 172 L128 148 L202 156 L276 116 L350 98 L424 112 L498 86 L572 74" fill="none" stroke="#1d4ed8" stroke-width="4" stroke-linecap="round"/>
+                <path d="M54 158 L128 166 L202 134 L276 126 L350 138 L424 104 L498 112 L572 96" fill="none" stroke="#16a34a" stroke-width="4" stroke-linecap="round"/>
+                <path d="M54 190 L128 182 L202 176 L276 168 L350 156 L424 148 L498 142 L572 130" fill="none" stroke="#dc2626" stroke-width="4" stroke-linecap="round"/>
+              </svg>
+            </div>
+            <div class="legend"><span class="legend-item"><i class="swatch"></i>新增</span><span class="legend-item"><i class="swatch green"></i>关闭</span><span class="legend-item"><i class="swatch red"></i>存量</span></div>
+          </article>
+          <article class="card panel">
+            <div class="panel-head"><div><h2 class="panel-title">质量问题 Top 项目</h2><p class="panel-sub">用于中层会议逐项跟进。</p></div><button class="ghost-btn" type="button" data-jump="detail">进入明细</button></div>
+            <div class="board-list">
+              <div class="board-item"><div><h4>XM-C11 设计冻结</h4><p>未闭环 3 · 复发 1</p></div><span class="state red">阻塞</span><b>王PM</b></div>
+              <div class="board-item"><div><h4>XM-A02 动力分系统</h4><p>未闭环 2 · 验证中</p></div><span class="state amber">预警</span><b>赵PM</b></div>
+              <div class="board-item"><div><h4>XM-B06 试验验证</h4><p>未闭环 1 · 等待排期</p></div><span class="state amber">预警</span><b>柳PM</b></div>
+              <div class="board-item"><div><h4>XM-E08 软件集成</h4><p>未闭环 1 · 可控</p></div><span class="state">受控</span><b>孙PM</b></div>
+            </div>
+          </article>
+        </div>
+      </section>
+
+      <section class="screen" id="screen-change">
+        <div class="kpi-grid">
+          <article class="card health"><div class="health-layout"><div class="ring" style="--percent:74"><div><b>74</b><span>变更分</span></div></div><div><h2>技术状态与变更专题</h2><p>技术变更关注签审、整改和影响范围。重点不是变更数量，而是变更是否阻塞交付。</p><div class="mini-stats"><div class="mini-stat"><b>18</b><span>变更单</span></div><div class="mini-stat"><b>5</b><span>待签署</span></div><div class="mini-stat"><b>4</b><span>未整改</span></div></div></div></div></article>
+          <article class="card kpi"><div class="kpi-label"><span>签署率</span><span class="kpi-icon">S</span></div><div><div class="kpi-value"><b>72</b><span>%</span></div><div class="delta warn">待签 5</div></div></article>
+          <article class="card kpi"><div class="kpi-label"><span>整改完成率</span><span class="kpi-icon">F</span></div><div><div class="kpi-value"><b>78</b><span>%</span></div><div class="delta blue">改善中</div></div></article>
+          <article class="card kpi"><div class="kpi-label"><span>影响项目</span><span class="kpi-icon">P</span></div><div><div class="kpi-value"><b>6</b><span>个</span></div><div class="delta danger">2 个关键</div></div></article>
+          <article class="card kpi"><div class="kpi-label"><span>平均签审周期</span><span class="kpi-icon">T</span></div><div><div class="kpi-value"><b>4.8</b><span>天</span></div><div class="delta warn">目标 3 天</div></div></article>
+        </div>
+        <div class="main-grid">
+          <article class="card panel">
+            <div class="panel-head"><div><h2 class="panel-title">变更签审状态</h2><p class="panel-sub">按项目和责任部门查看签署、评审、整改状态。</p></div><button class="ghost-btn" type="button" data-jump="detail">变更明细</button></div>
+            <div class="table-wrap">
+              <table>
+                <thead><tr><th>变更单</th><th>关联项目</th><th>责任部门</th><th>签审</th><th>整改</th><th>影响</th></tr></thead>
+                <tbody>
+                  <tr><td>ECN-26018</td><td>XM-A02</td><td>技术办</td><td><span class="state red">待签</span></td><td><span class="state amber">整改中</span></td><td>交付窗口</td></tr>
+                  <tr><td>ECN-26015</td><td>XM-C11</td><td>设计室</td><td><span class="state amber">评审中</span></td><td><span class="state red">未开始</span></td><td>设计冻结</td></tr>
+                  <tr><td>ECN-26012</td><td>XM-B06</td><td>试验室</td><td><span class="state">会签中</span></td><td><span class="state amber">整改中</span></td><td>试验排期</td></tr>
+                  <tr><td>ECN-26009</td><td>XM-D03</td><td>电子室</td><td><span class="state green">已签</span></td><td><span class="state green">已完成</span></td><td>无关键影响</td></tr>
+                  <tr><td>ECN-26006</td><td>XM-E08</td><td>软件室</td><td><span class="state green">已签</span></td><td><span class="state">验证中</span></td><td>接口联调</td></tr>
+                </tbody>
+              </table>
+            </div>
+          </article>
+          <aside class="card panel">
+            <div class="panel-head"><div><h2 class="panel-title">签审瓶颈</h2><p class="panel-sub">识别签审超期部门。</p></div></div>
+            <div class="dept-list">
+              <div class="dept-row"><div class="dept-name">技术办</div><div class="dept-bar"><div class="dept-fill red" style="width:82%"></div></div><div class="num">5.6天</div></div>
+              <div class="dept-row"><div class="dept-name">设计室</div><div class="dept-bar"><div class="dept-fill amber" style="width:74%"></div></div><div class="num">4.9天</div></div>
+              <div class="dept-row"><div class="dept-name">试验室</div><div class="dept-bar"><div class="dept-fill amber" style="width:65%"></div></div><div class="num">4.1天</div></div>
+              <div class="dept-row"><div class="dept-name">电子室</div><div class="dept-bar"><div class="dept-fill green" style="width:48%"></div></div><div class="num">2.8天</div></div>
+              <div class="dept-row"><div class="dept-name">软件室</div><div class="dept-bar"><div class="dept-fill" style="width:52%"></div></div><div class="num">3.2天</div></div>
+            </div>
+          </aside>
+        </div>
+      </section>
+
+      <section class="screen" id="screen-detail">
+        <article class="card detail-head">
+          <div>
+            <div class="breadcrumb"><span>领导总览</span><span>/</span><span>风险专题</span><span>/</span><strong>事项明细</strong></div>
+            <h2>L2 明细看板模板</h2>
+            <p class="panel-sub">用于承接所有下钻：项目、风险、质量、变更、里程碑和部门责任明细。</p>
+          </div>
+          <div class="filter-bar">
+            <span class="chip">项目：全部</span>
+            <span class="chip">状态：未闭环</span>
+            <span class="chip">风险等级：高/中</span>
+            <span class="chip">周期：本年</span>
+          </div>
+        </article>
+        <div class="three-grid">
+          <article class="card kpi"><div class="kpi-label"><span>明细事项</span><span class="kpi-icon">I</span></div><div><div class="kpi-value"><b>24</b><span>项</span></div><div class="delta gray">筛选后</div></div></article>
+          <article class="card kpi"><div class="kpi-label"><span>逾期事项</span><span class="kpi-icon">O</span></div><div><div class="kpi-value"><b>6</b><span>项</span></div><div class="delta danger">需升级</div></div></article>
+          <article class="card kpi"><div class="kpi-label"><span>本周应关闭</span><span class="kpi-icon">W</span></div><div><div class="kpi-value"><b>9</b><span>项</span></div><div class="delta warn">责任到人</div></div></article>
+        </div>
+        <article class="card panel">
+          <div class="panel-head"><div><h2 class="panel-title">事项处理链路</h2><p class="panel-sub">明细页统一展示状态流转，保证从大屏看到责任闭环。</p></div></div>
+          <div class="timeline-steps">
+            <div class="timeline-step"><i>1</i><b>发现</b><span>由指标异常、手工上报或会议纪要触发。</span></div>
+            <div class="timeline-step"><i>2</i><b>分派</b><span>明确责任部门、责任人和计划关闭日期。</span></div>
+            <div class="timeline-step"><i>3</i><b>处理</b><span>记录措施、资源需求和跨部门协同事项。</span></div>
+            <div class="timeline-step"><i>4</i><b>验证</b><span>验证结果、证据材料和是否影响交付。</span></div>
+            <div class="timeline-step"><i>5</i><b>关闭</b><span>形成闭环结论，并回写 L0/L1 指标。</span></div>
+          </div>
+        </article>
+        <article class="card panel">
+          <div class="panel-head"><div><h2 class="panel-title">明细清单</h2><p class="panel-sub">字段靠近后续真实数据模型，可直接映射到项目、风险、质量和变更表。</p></div></div>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>事项编号</th><th>来源</th><th>关联项目</th><th>问题描述</th><th>责任人</th><th>状态</th><th>截止日期</th><th>下一动作</th></tr></thead>
+              <tbody>
+                <tr><td>ITEM-001</td><td>风险</td><td>XM-A02</td><td>动力分系统联调偏差，影响交付窗口</td><td>赵PM</td><td><span class="state red">阻塞</span></td><td>2026-04-30</td><td>确认替代方案并提交评审</td></tr>
+                <tr><td>ITEM-002</td><td>交付</td><td>XM-B06</td><td>试验资源冲突，排期无法满足计划节点</td><td>柳PM</td><td><span class="state amber">预警</span></td><td>2026-05-06</td><td>协调试验室释放工位</td></tr>
+                <tr><td>ITEM-003</td><td>质量</td><td>XM-C11</td><td>未闭环质量问题阻塞设计冻结</td><td>王PM</td><td><span class="state red">阻塞</span></td><td>2026-05-10</td><td>组织设计评审并完成归零</td></tr>
+                <tr><td>ITEM-004</td><td>变更</td><td>XM-A02</td><td>技术更改单未完成签审和整改确认</td><td>技术办</td><td><span class="state amber">处理中</span></td><td>2026-05-12</td><td>明确签审优先级</td></tr>
+                <tr><td>ITEM-005</td><td>资源</td><td>组合</td><td>动力室跨项目资源挤兑，负荷达到 86%</td><td>部门主管</td><td><span class="state amber">协调中</span></td><td>2026-05-15</td><td>调整人员投入计划</td></tr>
+                <tr><td>ITEM-006</td><td>交付</td><td>XM-E08</td><td>软件联调环境准备依赖接口确认</td><td>孙PM</td><td><span class="state">受控</span></td><td>2026-05-18</td><td>完成接口联调清单</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </article>
+      </section>
+    </main>
+
+    <div class="watermark">BI 驾驶舱大屏套件 · 单文件 HTML 原型 · 无外部依赖 · 可按 L0/L1/L2 拆分落地</div>
+  </div>
+
+  <script>
+    (function () {
+      const pad = (value) => String(value).padStart(2, "0");
+      const clock = document.getElementById("clock");
+
+      function tick() {
+        const now = new Date();
+        const text = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())} ${pad(now.getHours())}:${pad(now.getMinutes())}`;
+        if (clock) clock.textContent = text;
+      }
+
+      function activateScreen(key) {
+        document.querySelectorAll(".nav-tab").forEach((tab) => {
+          tab.classList.toggle("active", tab.dataset.screen === key);
+        });
+        document.querySelectorAll(".screen").forEach((screen) => {
+          screen.classList.toggle("active", screen.id === `screen-${key}`);
+        });
+      }
+
+      tick();
+      setInterval(tick, 30000);
+
+      document.querySelectorAll("[data-screen]").forEach((button) => {
+        button.addEventListener("click", () => activateScreen(button.dataset.screen));
+      });
+
+      document.querySelectorAll("[data-jump]").forEach((button) => {
+        button.addEventListener("click", () => {
+          activateScreen(button.dataset.jump);
+          window.scrollTo({ top: 0, behavior: "smooth" });
+        });
+      });
+    })();
+  </script>
+</body>
+</html>
