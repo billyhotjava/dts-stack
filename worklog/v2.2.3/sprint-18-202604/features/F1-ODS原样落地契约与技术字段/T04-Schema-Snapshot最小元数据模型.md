@@ -1,7 +1,7 @@
 # T04: Schema Snapshot v1 与 Phase 2 扩展边界
 
 **优先级**: P0  
-**状态**: READY  
+**状态**: DONE
 **依赖**: T01
 
 ## 目标
@@ -19,7 +19,7 @@
 
 ## 完成标准
 
-- [ ] 自动建表不再只依赖临时 reader config。
-- [ ] dbt source 可从 snapshot 获取列信息。
-- [ ] schema drift 后续可基于 snapshot 比对。
-- [ ] snapshot 模型覆盖字段顺序、nullable、default、comment、PK/index 的存储或预留。
+- [x] 自动建表不再只依赖临时 reader config。
+- [x] dbt source 可从 snapshot 获取列信息。
+- [x] schema drift 后续可基于 snapshot 比对。
+- [x] snapshot 模型覆盖字段顺序、nullable、default、comment、PK/index 的存储或预留。

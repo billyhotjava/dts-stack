@@ -1299,13 +1299,6 @@ export default function TransformCreatePage() {
 					fileConn.jdbcUrl = splitLines(fileWriterJdbc);
 				}
 				writerConfig.connection = [fileConn];
-				// Inject column rules into file writer config
-				const fileColumnPrefix = normalizeText(mergedValues.columnPrefix);
-				const fileColumnSuffix = normalizeText(mergedValues.columnSuffix);
-				const fileExtraCols = extraColumns.filter((c) => normalizeText(c.name));
-				if (fileColumnPrefix) writerConfig._columnPrefix = fileColumnPrefix;
-				if (fileColumnSuffix) writerConfig._columnSuffix = fileColumnSuffix;
-				if (fileExtraCols.length) writerConfig._extraColumns = fileExtraCols;
 				const jobConfig = parseJson(mergedValues.jobConfig, "作业参数");
 				const modelSelector = normalizeText(mergedValues.dbtModelSelector) || buildModelSelectorFromNames(mergedValues.dbtModels || []);
 				const dagSelector = normalizeText(mergedValues.dbtDagSelector);
@@ -1384,16 +1377,6 @@ export default function TransformCreatePage() {
 			let writerConfig = isJsonMode
 				? parseJson(mergedValues.writerConfig, "Writer 配置")
 				: buildWriterConfig(mergedValues);
-			// Inject column rules into writer config
-			const columnPrefix = normalizeText(mergedValues.columnPrefix);
-			const columnSuffix = normalizeText(mergedValues.columnSuffix);
-			const validExtraCols = extraColumns.filter((c) => normalizeText(c.name));
-			if (columnPrefix || columnSuffix || validExtraCols.length) {
-				if (!writerConfig || typeof writerConfig !== "object") writerConfig = {};
-				if (columnPrefix) (writerConfig as Record<string, any>)._columnPrefix = columnPrefix;
-				if (columnSuffix) (writerConfig as Record<string, any>)._columnSuffix = columnSuffix;
-				if (validExtraCols.length) (writerConfig as Record<string, any>)._extraColumns = validExtraCols;
-			}
 			const inferredManualTables = mergeTableSelections(
 				selectedTables,
 				extractReaderTables(readerConfig),
@@ -1830,7 +1813,6 @@ export default function TransformCreatePage() {
 									isApiFlow={false}
 									defaultDestinationStatus={defaultDestinationStatus}
 									extraColumns={extraColumns}
-									setExtraColumns={setExtraColumns}
 									editorMode={editorMode}
 									previewState={previewState}
 									sqlModels={sqlModels}
@@ -1885,7 +1867,6 @@ export default function TransformCreatePage() {
 									isApiFlow={isApiFlow}
 									defaultDestinationStatus={defaultDestinationStatus}
 									extraColumns={extraColumns}
-									setExtraColumns={setExtraColumns}
 									editorMode={editorMode}
 									previewState={previewState}
 									sqlModels={sqlModels}

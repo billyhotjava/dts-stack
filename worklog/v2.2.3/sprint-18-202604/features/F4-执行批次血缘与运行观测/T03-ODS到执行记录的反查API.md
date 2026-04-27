@@ -1,7 +1,7 @@
 # T03: ODS 到执行记录的反查 API
 
 **优先级**: P1  
-**状态**: READY  
+**状态**: DONE
 **依赖**: T01, F2, F3
 
 ## 目标
@@ -16,6 +16,6 @@
 
 ## 完成标准
 
-- [ ] 输入 `_dts_batch_id` 可找到 execution。
-- [ ] 输入 `_dts_execution_id` 可找到任务和日志。
-- [ ] 前端或 API 文档给出排障查询示例。
+- [x] 输入 `_dts_batch_id` 可找到 execution。
+- [x] 输入 `_dts_execution_id` 可找到任务和日志。
+- [x] 前端或 API 文档给出排障查询示例。

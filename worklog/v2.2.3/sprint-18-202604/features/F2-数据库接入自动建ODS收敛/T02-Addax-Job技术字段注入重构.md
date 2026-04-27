@@ -1,7 +1,7 @@
 # T02: Addax Job 技术字段注入重构
 
 **优先级**: P0  
-**状态**: READY  
+**状态**: DONE
 **依赖**: F4/T01
 
 ## 目标
@@ -17,6 +17,6 @@
 
 ## 完成标准
 
-- [ ] 同一次执行所有表 `_dts_batch_id` 一致。
-- [ ] `_dts_execution_id` 可回查 `IngestionExecution`。
-- [ ] 技术字段注入有单测覆盖。
+- [x] 同一次执行所有表 `_dts_batch_id` 一致。
+- [x] `_dts_execution_id` 可回查 `IngestionExecution`。
+- [x] 技术字段注入有单测覆盖。

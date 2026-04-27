@@ -1,7 +1,7 @@
 # T01: dbt source 列级元数据生成
 
 **优先级**: P1  
-**状态**: READY  
+**状态**: DONE
 **依赖**: F1/T04
 
 ## 目标
@@ -16,6 +16,6 @@
 
 ## 完成标准
 
-- [ ] `DbtSourceService` 支持列级输出。
-- [ ] dbt parse 能通过。
-- [ ] 单测覆盖表级和列级 source 生成。
+- [x] `DbtSourceService` 支持列级输出。
+- [x] dbt parse 能通过。
+- [x] 单测覆盖表级和列级 source 生成。

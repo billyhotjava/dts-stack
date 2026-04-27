@@ -1,7 +1,7 @@
 # T02: Addax/Airflow 参数透传
 
 **优先级**: P0  
-**状态**: READY  
+**状态**: DONE
 **依赖**: T01
 
 ## 目标
@@ -16,6 +16,6 @@
 
 ## 完成标准
 
-- [ ] Airflow DAGRun 可在日志中看到 batch_id。
-- [ ] ODS 技术字段与 execution 记录一致。
-- [ ] Airflow disabled 时不会出现永远 running 的假执行。
+- [x] Airflow DAGRun 可在日志中看到 batch_id。
+- [x] ODS 技术字段与 execution 记录一致。
+- [x] Airflow disabled 时不会出现永远 running 的假执行。

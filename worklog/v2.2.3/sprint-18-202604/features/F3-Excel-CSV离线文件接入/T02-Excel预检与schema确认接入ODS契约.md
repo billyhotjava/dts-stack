@@ -1,7 +1,7 @@
 # T02: Excel 预检与 schema 确认接入 ODS 契约
 
 **优先级**: P0  
-**状态**: READY  
+**状态**: DONE
 **依赖**: T01
 
 ## 目标
@@ -17,6 +17,6 @@
 
 ## 完成标准
 
-- [ ] Excel 预检与正式导入使用同一 schema。
-- [ ] 合并单元格、日期、负数、公式值至少有样本覆盖。
-- [ ] sheet 名写入 `_dts_source_sheet`。
+- [x] Excel 预检与正式导入使用同一 schema。
+- [x] 合并单元格、日期、负数、公式值至少有样本覆盖。
+- [x] sheet 名写入 `_dts_source_sheet`。

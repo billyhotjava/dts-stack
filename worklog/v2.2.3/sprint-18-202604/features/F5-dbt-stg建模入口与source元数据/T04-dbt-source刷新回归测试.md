@@ -1,7 +1,7 @@
 # T04: dbt source 刷新回归测试
 
 **优先级**: P1  
-**状态**: READY  
+**状态**: DONE
 **依赖**: T01
 
 ## 目标
@@ -17,6 +17,6 @@
 
 ## 完成标准
 
-- [ ] 单测覆盖 `DbtSourceService` 列级输出。
-- [ ] 集成验证包含 `dbt parse`。
-- [ ] `it/README.md` 留存 source diff。
+- [x] 单测覆盖 `DbtSourceService` 列级输出。
+- [x] 集成验证包含 `dbt parse`。
+- [x] `it/README.md` 留存 source diff。

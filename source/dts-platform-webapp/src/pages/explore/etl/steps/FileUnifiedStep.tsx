@@ -17,7 +17,7 @@ import {
 	Tag,
 	Typography,
 } from "antd";
-import { InboxOutlined, PlusOutlined, DeleteOutlined } from "@ant-design/icons";
+import { DeleteOutlined, InboxOutlined, PlusOutlined } from "@ant-design/icons";
 import { Upload } from "@/components/upload";
 import { toast } from "sonner";
 import type { FormInstance } from "antd/es/form";
@@ -30,6 +30,7 @@ import {
 	normalizeTableName,
 	buildFileBaseName,
 } from "../ingestionFormHelpers";
+import OdsLandingContractCard from "./OdsLandingContractCard";
 
 const { Text } = Typography;
 
@@ -134,7 +135,6 @@ export default function FileUnifiedStep({
 	unmatchedOdsFields,
 	validateCronExpression,
 	extraColumns,
-	setExtraColumns,
 	deptOptions,
 	loadingDeptOptions,
 }: FileUnifiedStepProps) {
@@ -687,148 +687,11 @@ export default function FileUnifiedStep({
 				{capabilityLoadFailed ? <Text type="warning">能力探测失败，已使用保守降级策略</Text> : null}
 			</Space>
 
-			{/* ─── [Collapse] 列规则 ─── */}
-			<Collapse
-				ghost
-				className="mb-4"
-				items={[
-					{
-						key: "file-column-rules",
-						label: "列规则（可选）",
-						children: (
-							<div className="space-y-4">
-								<div className="grid gap-4 md:grid-cols-2">
-									<Form.Item name="columnPrefix" label="字段名前缀">
-										<Input placeholder="例如：src_" />
-									</Form.Item>
-									<Form.Item name="columnSuffix" label="字段名后缀">
-										<Input placeholder="例如：_raw" />
-									</Form.Item>
-								</div>
-								<Text type="secondary" className="block -mt-2 mb-2">
-									对目标表所有字段统一添加前缀/后缀。留空则使用文件原始字段名。
-								</Text>
-								<Divider orientation="left" plain>
-									追加字段
-								</Divider>
-								<Table
-									size="small"
-									dataSource={extraColumns}
-									rowKey={(_: any, index: any) => String(index)}
-									pagination={false}
-									locale={{ emptyText: "暂无追加字段" }}
-									columns={[
-										{
-											title: "字段名",
-											dataIndex: "name",
-											render: (value: string, _: any, index: number) => (
-												<Input
-													size="small"
-													value={value}
-													placeholder="英文字段名"
-													onChange={(e) => {
-														const cols = [...extraColumns];
-														cols[index] = { ...cols[index], name: e.target.value };
-														setExtraColumns(cols);
-													}}
-												/>
-											),
-										},
-										{
-											title: "显示名称",
-											dataIndex: "label",
-											render: (value: string, _: any, index: number) => (
-												<Input
-													size="small"
-													value={value}
-													placeholder="中文名"
-													onChange={(e) => {
-														const cols = [...extraColumns];
-														cols[index] = { ...cols[index], label: e.target.value };
-														setExtraColumns(cols);
-													}}
-												/>
-											),
-										},
-										{
-											title: "数据类型",
-											dataIndex: "type",
-											width: 160,
-											render: (value: string, _: any, index: number) => (
-												<Select
-													size="small"
-													value={value}
-													style={{ width: "100%" }}
-													onChange={(v) => {
-														const cols = [...extraColumns];
-														cols[index] = { ...cols[index], type: v };
-														setExtraColumns(cols);
-													}}
-													options={[
-														{ label: "VARCHAR", value: "string" },
-														{ label: "TEXT", value: "text" },
-														{ label: "INTEGER", value: "integer" },
-														{ label: "BIGINT", value: "long" },
-														{ label: "TIMESTAMP", value: "timestamp" },
-														{ label: "BOOLEAN", value: "boolean" },
-													]}
-												/>
-											),
-										},
-										{
-											title: "默认值 (SQL)",
-											dataIndex: "defaultValue",
-											width: 180,
-											render: (value: string, _: any, index: number) => (
-												<Input
-													size="small"
-													value={value}
-													placeholder="CURRENT_TIMESTAMP"
-													onChange={(e) => {
-														const cols = [...extraColumns];
-														cols[index] = { ...cols[index], defaultValue: e.target.value };
-														setExtraColumns(cols);
-													}}
-												/>
-											),
-										},
-										{
-											title: "操作",
-											width: 50,
-											align: "center" as const,
-											render: (_: any, __: any, index: number) => (
-												<Button
-													type="text"
-													danger
-													size="small"
-													icon={<DeleteOutlined />}
-													onClick={() => {
-														const cols = [...extraColumns];
-														cols.splice(index, 1);
-														setExtraColumns(cols);
-													}}
-												/>
-											),
-										},
-									]}
-								/>
-								<Button
-									type="dashed"
-									size="small"
-									icon={<PlusOutlined />}
-									onClick={() => {
-										setExtraColumns([
-											...extraColumns,
-											{ name: "", label: "", type: "string", defaultValue: "" },
-										]);
-									}}
-								>
-									添加字段
-								</Button>
-							</div>
-						),
-					},
-				]}
+			<OdsLandingContractCard
+				sourceKind="file"
+				columnPrefix={form.getFieldValue("columnPrefix")}
+				columnSuffix={form.getFieldValue("columnSuffix")}
+				extraColumns={extraColumns}
 			/>
 
 			{/* ─── [Collapse] 运行治理策略 ─── */}

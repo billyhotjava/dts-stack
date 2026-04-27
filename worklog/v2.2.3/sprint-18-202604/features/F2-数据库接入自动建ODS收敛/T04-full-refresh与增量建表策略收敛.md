@@ -1,7 +1,7 @@
 # T04: full_refresh 与增量建表策略收敛
 
 **优先级**: P1  
-**状态**: READY  
+**状态**: DONE
 **依赖**: T01
 
 ## 目标
@@ -17,6 +17,6 @@
 
 ## 完成标准
 
-- [ ] full_refresh 行为有明确配置和测试。
-- [ ] incremental 不静默删除表或字段。
-- [ ] schema drift 会进入失败或待确认状态。
+- [x] full_refresh 行为有明确配置和测试。
+- [x] incremental 不静默删除表或字段。
+- [x] schema drift 会进入失败或待确认状态。

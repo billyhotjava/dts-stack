@@ -4,12 +4,30 @@
 
 | 场景 | 覆盖点 | 状态 |
 |---|---|---|
-| 数据库全量接入 | 自动建 ODS、源字段复制、`_dts_*` 技术字段、batch 一致性 | TODO |
-| 数据库增量接入 | watermark、批次字段、重复运行、checkpoint 审计 | TODO |
-| Excel 上传接入 | sheet/header/schema 预检、文件血缘字段、坏行记录 | TODO |
-| CSV 上传接入 | 编码、分隔符、schema 确认、行号与 hash | TODO |
-| dbt source 刷新 | ODS source 表级/列级元数据生成 | TODO |
-| 前端向导 | ODS 不提供业务计算配置，stg 边界提示 | TODO |
+| 数据库全量接入 | 自动建 ODS、源字段复制、`_dts_*` 技术字段、batch 一致性 | AUTO PASS |
+| 数据库增量接入 | watermark、批次字段、重复运行、checkpoint 审计 | AUTO PARTIAL |
+| Excel 上传接入 | sheet/header/schema 预检、文件血缘字段、坏行记录 | AUTO PASS |
+| CSV 上传接入 | 编码、分隔符、schema 确认、行号与 hash | AUTO PARTIAL |
+| dbt source 刷新 | ODS source 表级/列级元数据生成 | AUTO PASS |
+| 前端向导 | ODS 不提供业务计算配置，stg 边界提示 | AUTO PASS |
+
+## 自动化证据（2026-04-27）
+
+| 命令 | 结果 |
+|---|---|
+| `source/dts-platform/mvnw -q -Dmaven.repo.local=/tmp/codex-m2 -f source/dts-ingestion/pom.xml -DskipTests compile` | PASS |
+| `source/dts-platform/mvnw -q -Dmaven.repo.local=/tmp/codex-m2 -f source/dts-ingestion/pom.xml -Dtest=IngestionTaskMapperTest test` | PASS |
+| `source/dts-platform/mvnw -q -Dmaven.repo.local=/tmp/codex-m2 -f source/dts-ingestion/pom.xml -Dtest=StagingTableServiceTest,IngestionExecutionQueryServiceTest test` | PASS |
+| `source/dts-platform/mvnw -q -Dmaven.repo.local=/tmp/codex-m2 -DskipTests compile` | PASS |
+| `source/dts-platform/mvnw -q -Dmaven.repo.local=/tmp/codex-m2 -Dtest=DbtSourceServiceTest test` | PASS |
+| `pnpm exec tsc --noEmit`（`source/dts-platform-webapp`） | PASS |
+
+## 待补现场证据
+
+- 数据库全量/增量实际执行后的 ODS 抽样 SQL。
+- Excel/CSV 样本文件导入后的坏行下载截图或 CSV 留存。
+- `dbt parse` 在现场 dbt 项目目录中的执行结果。
+- 浏览器 E2E 覆盖数据库、Excel、CSV 三条 happy path。
 
 ## 手工验收步骤
 
