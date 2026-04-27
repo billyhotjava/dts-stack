@@ -52,6 +52,18 @@ export const FILE_READER_BY_TYPE: Record<string, string> = {
 };
 
 export const API_SOURCE_TYPES = new Set(["api", "http", "https", "http_api", "api_http", "rest", "rest_api", "httpreader"]);
+export const API_RAW_RECORD_COLUMN = "_dts_raw_record";
+export const API_TECHNICAL_COLUMNS = [
+	"_dts_source_system",
+	"_dts_source_resource",
+	"_dts_endpoint",
+	"_dts_import_time",
+	"_dts_batch_id",
+	"_dts_execution_id",
+	"_dts_page_no",
+	"_dts_record_no",
+	"_dts_cursor_value",
+];
 
 export const GENERIC_JDBC_READER = "rdbmsreader";
 
@@ -162,6 +174,12 @@ export const buildFileBaseName = (filename?: string) => {
 	const base = normalizeText(filename || "file").replace(/\.[^.]+$/, "");
 	const safe = normalizeIdentifier(base);
 	return safe || "file";
+};
+
+export const buildApiOdsTableName = (sourceSystem?: string, resourceId?: string) => {
+	const source = normalizeIdentifier(sourceSystem) || "api";
+	const resource = normalizeIdentifier(resourceId) || "resource";
+	return `ods_api_${source}_${resource}`;
 };
 
 export const normalizeReaderType = (value?: string) => {
@@ -868,15 +886,26 @@ export const buildApiReaderConfig = (values: Record<string, any>) => {
 	if (!path) {
 		throw new Error("请填写 API 资源路径");
 	}
+	const sourceSystem = normalizeText(values.sourceSystem);
 	const method = normalizeText(values.apiMethod).toUpperCase() || "GET";
 	const resourceId =
 		normalizeText(values.apiResourceId) ||
-		normalizeIdentifier(path.replace(/^\//, "").replace(/[/?#].*$/, "")) ||
+		normalizeIdentifier(path.replace(/^\//, "").replace(/[?#].*$/, "")) ||
 		"api_resource";
 	const resource: Record<string, any> = {
 		resourceId,
 		path,
 		method,
+		targetTable: buildApiOdsTableName(sourceSystem, resourceId),
+		landing: {
+			mode: "raw_record",
+			rawRecordColumn: API_RAW_RECORD_COLUMN,
+			technicalColumns: API_TECHNICAL_COLUMNS,
+		},
+		schemaSnapshot: {
+			enabled: true,
+			driftPolicy: "notify",
+		},
 	};
 	const displayName = normalizeText(values.apiResourceDisplayName);
 	const recordPath = normalizeText(values.apiRecordPath);
@@ -894,6 +923,7 @@ export const buildApiReaderConfig = (values: Record<string, any>) => {
 		readerType: "httpreader",
 		connectorType: "api",
 		sourceCategory: "api",
+		sourceSystem: sourceSystem || undefined,
 		resource,
 		resources: [resource],
 	};

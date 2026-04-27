@@ -23,6 +23,6 @@
 ## 后续仍需完成
 
 - API preview/inference 服务需要真正落 schema snapshot。
-- API ODS 建表器需要按 raw record + `_dts_*` 固定契约实现。
+- API ODS 建表器需要按 raw record + `_dts_*` 固定契约实现；当前已完成 resource 配置和 execution plan 层面的 raw landing contract。
 - stg 自动生成需要读取 API schema snapshot，而不是读取 `resource.fields`。
 - E2E 需要断言 ODS/stg 边界，防止后续重新把业务字段写入 ODS。

@@ -161,6 +161,10 @@ F6 不是收尾文档任务，安全、审计、脱敏、观测和测试门禁�
 - `ApiSourceContracts` 移除 ODS 语义的 `ApiFieldMapping`，改为 `ApiLandingPolicy`、`SchemaSnapshotPolicy`、`ApiStagingFieldMapping`。
 - `dts-platform-webapp` API 接入分支移除 `apiFieldsJson` / `resource.fields` 提交入口，避免把字段重命名和类型标准化写入 ODS。
 - Sprint-16 文档将 F3/F5 从“ODS 字段映射”调整为“schema snapshot + stg 映射”，并移除 Airbyte 作为当前方案候选。
+- 代码补齐 `ApiSourceConfigNormalizer`，统一为 API resource 注入 `landing`、`schemaSnapshot`、`targetTable`，并清理历史 `fields`。
+- API draft 创建 / 更新路径会生成 `tableMapping`：`resourceId -> ods_api_<source>_<resource>`，但不生成业务字段映射。
+- API execution plan payload 增加 `odsLanding`、`odsMappings`，并从 resource cursor 中带出 checkpoint cursor field。
+- 前端 API 接入向导在 review 阶段展示“API 资源 -> ODS 原始记录表”，与后端 raw landing 契约一致。
 
 ## 风险
 

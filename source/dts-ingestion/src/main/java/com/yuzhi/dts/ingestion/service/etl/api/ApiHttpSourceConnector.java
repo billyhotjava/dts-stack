@@ -39,17 +39,30 @@ public class ApiHttpSourceConnector implements SourceConnector {
     @Override
     public ExecutionPlan buildExecutionPlan(SourceConnectorContext context) {
         validate(context);
+        Map<String, Object> sourceConfig = ApiSourceConfigNormalizer.normalize(
+            context.sourceConfig(),
+            context.sourceDataSourceId(),
+            context.taskName()
+        );
+        List<String> streams = context.streams() == null || context.streams().isEmpty()
+            ? ApiSourceConfigNormalizer.resolveResourceIds(sourceConfig)
+            : context.streams();
         Map<String, Object> payload = new LinkedHashMap<>();
         payload.put("sourceDataSourceId", context.sourceDataSourceId().toString());
         payload.put("sourceType", ApiConnectorTypes.CONNECTOR_TYPE);
-        payload.put("sourceConfig", context.sourceConfig() == null ? Map.of() : context.sourceConfig());
+        payload.put("sourceConfig", sourceConfig);
         payload.put("syncMode", StringUtils.hasText(context.syncMode()) ? context.syncMode() : "full_refresh");
         payload.put("syncConfig", context.syncConfig() == null ? Map.of() : context.syncConfig());
-        payload.put("streams", context.streams() == null ? List.of() : context.streams());
+        payload.put("streams", streams);
+        payload.put("odsLanding", ApiSourceContracts.odsLandingDescriptor());
+        payload.put(
+            "odsMappings",
+            ApiSourceConfigNormalizer.deriveOdsMappings(sourceConfig, context.sourceDataSourceId(), context.taskName())
+        );
 
         ExecutionPlan.CheckpointPolicy checkpointPolicy = new ExecutionPlan.CheckpointPolicy(
             "incremental".equalsIgnoreCase(String.valueOf(payload.get("syncMode"))) ? "cursor" : "none",
-            null,
+            resolveCursorField(sourceConfig),
             "task_success"
         );
         return new ExecutionPlan(
@@ -63,5 +76,17 @@ public class ApiHttpSourceConnector implements SourceConnector {
             Map.of("connectorType", ApiConnectorTypes.CONNECTOR_TYPE, "engine", "api-http")
         );
     }
-}
 
+    private String resolveCursorField(Map<String, Object> sourceConfig) {
+        Object resource = sourceConfig == null ? null : sourceConfig.get("resource");
+        if (!(resource instanceof Map<?, ?> resourceMap)) {
+            return null;
+        }
+        Object cursor = resourceMap.get("cursor");
+        if (!(cursor instanceof Map<?, ?> cursorMap)) {
+            return null;
+        }
+        Object field = cursorMap.get("field");
+        return field == null || !StringUtils.hasText(field.toString()) ? null : field.toString().trim();
+    }
+}

@@ -29,10 +29,24 @@ class ApiHttpSourceConnectorTest {
             "api-task",
             sourceId,
             "api",
-            Map.of("resourceId", "orders"),
+            Map.of(
+                "sourceSystem",
+                "CRM",
+                "resource",
+                Map.of(
+                    "resourceId",
+                    "orders",
+                    "path",
+                    "/orders",
+                    "fields",
+                    List.of(Map.of("sourceField", "id", "targetColumn", "id")),
+                    "cursor",
+                    Map.of("field", "updatedAt")
+                )
+            ),
             "incremental",
             Map.of("cursor", Map.of("field", "updatedAt")),
-            List.of("orders")
+            List.of()
         );
 
         ExecutionPlan plan = connector.buildExecutionPlan(context);
@@ -40,7 +54,20 @@ class ApiHttpSourceConnectorTest {
         assertThat(plan.engine()).isEqualTo("api-http");
         assertThat(plan.connectorType()).isEqualTo("api");
         assertThat(plan.checkpointPolicy().type()).isEqualTo("cursor");
+        assertThat(plan.checkpointPolicy().cursorField()).isEqualTo("updatedAt");
         assertThat(plan.payload()).containsEntry("sourceDataSourceId", sourceId.toString());
+        assertThat(plan.payload()).containsEntry("streams", List.of("orders"));
+        @SuppressWarnings("unchecked")
+        Map<String, Object> sourceConfig = (Map<String, Object>) plan.payload().get("sourceConfig");
+        @SuppressWarnings("unchecked")
+        Map<String, Object> resource = (Map<String, Object>) sourceConfig.get("resource");
+        assertThat(resource)
+            .containsEntry("targetTable", "ods_api_crm_orders")
+            .doesNotContainKey("fields");
+        @SuppressWarnings("unchecked")
+        List<Map<String, String>> mappings = (List<Map<String, String>>) plan.payload().get("odsMappings");
+        assertThat(mappings).hasSize(1);
+        assertThat(mappings.get(0)).containsEntry("source", "orders").containsEntry("target", "ods_api_crm_orders");
     }
 
     @Test
@@ -52,4 +79,3 @@ class ApiHttpSourceConnectorTest {
             .hasMessageContaining("API 数据源不能为空");
     }
 }
-

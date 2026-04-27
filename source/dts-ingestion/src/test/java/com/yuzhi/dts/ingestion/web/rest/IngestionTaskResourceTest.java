@@ -1,9 +1,13 @@
 package com.yuzhi.dts.ingestion.web.rest;
 
 import static org.mockito.Mockito.verify;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyList;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.when;
 import static org.mockito.Mockito.doThrow;
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -23,6 +27,10 @@ import com.yuzhi.dts.ingestion.service.etl.JdbcMetadataService;
 import com.yuzhi.dts.ingestion.service.etl.RealtimeTaskStatusService;
 import com.yuzhi.dts.ingestion.service.openmetadata.OpenMetadataAdapter;
 import com.yuzhi.dts.ingestion.config.AirflowProperties;
+import com.yuzhi.dts.ingestion.service.infra.PlatformInfraClient;
+import java.util.Map;
+import java.util.UUID;
+import org.mockito.ArgumentCaptor;
 import org.junit.jupiter.api.Test;
 import org.springframework.core.task.TaskRejectedException;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -77,6 +85,67 @@ class IngestionTaskResourceTest {
 
     @MockBean
     private AirflowProperties airflowProperties;
+
+    @Test
+    void createTask_apiDraftNormalizesRawOdsLandingAndTableMapping() throws Exception {
+        UUID sourceId = UUID.fromString("11111111-2222-3333-4444-555555555555");
+        PlatformInfraClient.DataSourceDetail detail = new PlatformInfraClient.DataSourceDetail(
+            sourceId,
+            "CRM API",
+            "api",
+            null,
+            null,
+            null,
+            null,
+            Map.of("readerType", "httpreader", "connectorType", "api"),
+            Map.of(),
+            "ACTIVE"
+        );
+        when(ingestionSourceResolver.resolve(eq(sourceId), anyList()))
+            .thenReturn(new IngestionSourceResolver.ResolvedSource("httpreader", Map.of("readerType", "httpreader"), detail));
+        IngestionTaskDTO created = new IngestionTaskDTO();
+        created.setId(99L);
+        created.setName("crm-orders");
+        when(ingestionTaskService.create(any(IngestionTaskDTO.class), any(), eq(true))).thenReturn(created);
+
+        mockMvc.perform(post("/api/ingestion/tasks")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                    {
+                      "draft": true,
+                      "name": "crm-orders",
+                      "source": {
+                        "dataSourceId": "11111111-2222-3333-4444-555555555555",
+                        "type": "api",
+                        "config": {
+                          "sourceSystem": "CRM",
+                          "resource": {
+                            "path": "/v1/orders",
+                            "fields": [{"sourceField": "id", "targetColumn": "id"}]
+                          }
+                        }
+                      },
+                      "sync": {"mode": "full_refresh"},
+                      "streams": {"selection": "manual", "include": ["orders"]},
+                      "airflow": {"enabled": false}
+                    }
+                    """))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.status").value(200))
+            .andExpect(jsonPath("$.data.task.id").value(99));
+
+        ArgumentCaptor<IngestionTaskDTO> captor = ArgumentCaptor.forClass(IngestionTaskDTO.class);
+        verify(ingestionTaskService).create(captor.capture(), any(), eq(true));
+        IngestionTaskDTO task = captor.getValue();
+        assertThat(task.getSourceType()).isEqualTo("httpreader");
+        assertThat(task.getAirflowEnabled()).isFalse();
+        assertThat(task.getSourceConfig().get("resource").has("fields")).isFalse();
+        assertThat(task.getSourceConfig().get("resource").get("targetTable").asText()).isEqualTo("ods_api_crm_v1_orders");
+        assertThat(task.getSourceConfig().get("resource").get("landing").get("rawRecordColumn").asText()).isEqualTo("_dts_raw_record");
+        assertThat(task.getTableMapping()).hasSize(1);
+        assertThat(task.getTableMapping().get(0).get("source").asText()).isEqualTo("v1_orders");
+        assertThat(task.getTableMapping().get(0).get("target").asText()).isEqualTo("ods_api_crm_v1_orders");
+    }
 
     @Test
     void discoverTables_requiresSourceConfig() throws Exception {

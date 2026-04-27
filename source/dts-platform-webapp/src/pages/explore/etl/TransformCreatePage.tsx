@@ -242,6 +242,17 @@ export default function TransformCreatePage() {
 
 	const tableMappingPreview = useMemo(() => {
 		const vals = form.getFieldsValue(true);
+		if (vals?.sourceCategory === "api") {
+			try {
+				const apiConfig = buildApiReaderConfig(vals);
+				const resource = (apiConfig.resource || {}) as Record<string, any>;
+				const source = normalizeText(resource.resourceId);
+				const target = normalizeText(resource.targetTable);
+				return source && target ? [{ source, target }] : [];
+			} catch {
+				return [];
+			}
+		}
 		const prefix = normalizeText(vals?.syncPrefix);
 		const tables = mergeTableSelections(
 			selectedTableKeys,

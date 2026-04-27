@@ -230,17 +230,7 @@ public class ConnectorCapabilityService {
         constraints.put("supportsCursorCheckpoint", true);
         constraints.put("supportsRateLimit", true);
         constraints.put("defaultReaderType", ApiConnectorTypes.DEFAULT_READER_TYPE);
-        constraints.put(
-            "odsLanding",
-            Map.of(
-                "mode",
-                "raw_record",
-                "rawRecordColumn",
-                "_dts_raw_record",
-                "normalizationLayer",
-                "stg"
-            )
-        );
+        constraints.put("odsLanding", ApiSourceContracts.odsLandingDescriptor());
         constraints.put("authProviders", List.of("none", "apiKey", "bearerToken", "basic", "oauth2ClientCredentials", "customSignature", "mtls"));
         constraints.put(
             "features",

@@ -94,9 +94,23 @@ export function UnifiedReviewStep({
 				type="warning"
 				showIcon
 				message="API 任务当前仅保存草稿"
-				description="后端已预留 API 数据源、鉴权与资源配置结构，但运行时未启用，因此不会生成目标表映射。"
+				description="运行时未启用；草稿会保存 API 资源、ODS 原始记录落地契约和 schema snapshot 入口。"
 				className="mb-4"
 			/>
+			{tableMappingPreview.length > 0 ? (
+				<Table
+					size="small"
+					dataSource={tableMappingPreview}
+					rowKey="source"
+					pagination={false}
+					columns={[
+						{ title: "API 资源", dataIndex: "source", key: "source" },
+						{ title: "ODS 原始记录表", dataIndex: "target", key: "target" },
+					]}
+				/>
+			) : (
+				<Text type="secondary">填写 API 资源路径后生成 ODS 原始记录表名</Text>
+			)}
 		</>
 	) : (
 		<>

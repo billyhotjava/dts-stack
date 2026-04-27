@@ -13,6 +13,7 @@ import com.yuzhi.dts.ingestion.service.etl.ConnectorCapabilityService;
 import com.yuzhi.dts.ingestion.service.etl.RealtimeTaskStatusService;
 import com.yuzhi.dts.ingestion.service.etl.JdbcMetadataService;
 import com.yuzhi.dts.ingestion.service.etl.api.ApiConnectorTypes;
+import com.yuzhi.dts.ingestion.service.etl.api.ApiSourceConfigNormalizer;
 import com.yuzhi.dts.ingestion.config.AirflowProperties;
 import com.yuzhi.dts.ingestion.service.openmetadata.OpenMetadataAdapter;
 import com.yuzhi.dts.ingestion.service.IngestionTaskChangeLogService;
@@ -304,12 +305,22 @@ public class IngestionTaskResource {
                 readerType = resolveFileReaderType(normalize(request.source().type()));
             }
             readerType = normalizeAddaxPlugin(readerType, true);
+            if (isApiSource) {
+                readerType = ApiConnectorTypes.DEFAULT_READER_TYPE;
+            }
             if (!StringUtils.hasText(readerType)) {
                 throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "缺少 Addax Reader 类型");
             }
             Map<String, Object> sourceOverrides = isFileSource
                 ? safeMap(request.source().config())
                 : sanitizeSourceOverrides(request.source().config());
+            if (isApiSource) {
+                sourceOverrides = ApiSourceConfigNormalizer.normalize(
+                    sourceOverrides,
+                    request.source().dataSourceId(),
+                    request.name()
+                );
+            }
             Map<String, Object> resolvedReaderConfig = resolvedSource != null ? resolvedSource.readerConfig() : safeMap(request.source().config());
             Map<String, Object> mergedReaderConfig = mergeReaderOverrides(safeMap(resolvedReaderConfig), sourceOverrides);
             if (StringUtils.hasText(readerType)) {
@@ -358,6 +369,16 @@ public class IngestionTaskResource {
                 if (request.dbt() != null) {
                     taskDTO.setDbtModelSelector(normalize(request.dbt().modelSelector()));
                     taskDTO.setDbtDagSelector(normalize(request.dbt().dagSelector()));
+                }
+                if (isApiSource) {
+                    List<Map<String, String>> apiTableMapping = ApiSourceConfigNormalizer.deriveOdsMappings(
+                        sourceOverrides,
+                        request.source().dataSourceId(),
+                        request.name()
+                    );
+                    if (!apiTableMapping.isEmpty()) {
+                        taskDTO.setTableMapping(toJsonNode(apiTableMapping));
+                    }
                 }
 
                 com.yuzhi.dts.ingestion.service.dto.IngestionTaskDTO createdTask =
@@ -1787,6 +1808,7 @@ public class IngestionTaskResource {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "请选择数据源连接");
         }
         String connectorType = resolveConnectorType(isFileSourceUpdate, taskDTO.getSourceType());
+        boolean isApiSourceUpdate = ApiConnectorTypes.CONNECTOR_TYPE.equals(connectorType);
         validateSyncModeCapability(connectorType, syncMode);
         Map<String, Object> syncConfig = safeMap(jsonNodeToMap(taskDTO.getSyncConfig()));
         if ("incremental".equalsIgnoreCase(syncMode)) {
@@ -1803,6 +1825,13 @@ public class IngestionTaskResource {
         Map<String, Object> sourceOverrides = isFileSourceUpdate
             ? safeMap(jsonNodeToMap(taskDTO.getSourceConfig()))
             : sanitizeSourceOverrides(jsonNodeToMap(taskDTO.getSourceConfig()));
+        if (isApiSourceUpdate) {
+            sourceOverrides = ApiSourceConfigNormalizer.normalize(
+                sourceOverrides,
+                taskDTO.getSourceDataSourceId(),
+                taskDTO.getName()
+            );
+        }
         if (!isFileSourceUpdate && hasConnectionOverride(jsonNodeToMap(taskDTO.getSourceConfig()))) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "入湖任务必须使用已配置的数据源连接");
         }
@@ -1824,7 +1853,7 @@ public class IngestionTaskResource {
         }
         com.yuzhi.dts.ingestion.service.etl.IngestionSourceResolver.ResolvedSource resolvedSource = null;
         if ((!StringUtils.hasText(taskDTO.getSourceType()) || rebuildMapping)
-                && !isFileSourceUpdate && taskDTO.getSourceDataSourceId() != null) {
+                && !isFileSourceUpdate && !isApiSourceUpdate && taskDTO.getSourceDataSourceId() != null) {
             resolvedSource = sourceResolver.resolve(taskDTO.getSourceDataSourceId(), List.of());
         }
         if (!StringUtils.hasText(taskDTO.getSourceType())) {
@@ -1848,10 +1877,25 @@ public class IngestionTaskResource {
         if (StringUtils.hasText(taskDTO.getSourceType())) {
             taskDTO.setSourceType(normalizeAddaxPlugin(taskDTO.getSourceType(), true));
         }
+        if (isApiSourceUpdate) {
+            taskDTO.setSourceType(ApiConnectorTypes.DEFAULT_READER_TYPE);
+        }
         if (StringUtils.hasText(taskDTO.getDestinationType())) {
             taskDTO.setDestinationType(normalizeAddaxPlugin(taskDTO.getDestinationType(), false));
         }
-        if (rebuildMapping) {
+        if (isApiSourceUpdate) {
+            List<Map<String, String>> tableMapping = ApiSourceConfigNormalizer.deriveOdsMappings(
+                sourceOverrides,
+                taskDTO.getSourceDataSourceId(),
+                taskDTO.getName()
+            );
+            taskDTO.setTableMapping(tableMapping.isEmpty() ? null : toJsonNode(tableMapping));
+            taskDTO.setDestinationType(null);
+            taskDTO.setDestinationConfig(null);
+            taskDTO.setAirflowEnabled(false);
+            taskDTO.setDbtModelSelector(null);
+            taskDTO.setDbtDagSelector(null);
+        } else if (rebuildMapping) {
             com.yuzhi.dts.ingestion.service.etl.IngestionSourceResolver.ResolvedSource resolved =
                 (resolvedSource != null) ? resolvedSource
                 : (!isFileSourceUpdate && taskDTO.getSourceDataSourceId() != null)
