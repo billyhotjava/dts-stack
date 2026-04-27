@@ -70,8 +70,9 @@ public class ReportsResource {
         put(payload, "engine", engine);
         put(payload, "classification", classification);
         payload.put("ts", Instant.now().toString());
+        UUID reportId = parseUuid(id);
         try {
-            reports.touchVisit(id != null ? UUID.fromString(id) : null, code);
+            reports.touchVisit(reportId, code, title, url, engine, classification);
         } catch (Exception ignored) {}
         audit.recordAuxiliary("OPEN", "vis", "report", code != null ? code : (id != null ? id : "unknown"), payload);
         return ApiResponses.ok(Map.of("ok", true));
@@ -136,6 +137,15 @@ public class ReportsResource {
         if (raw == null) return null;
         String s = String.valueOf(raw).trim();
         return s.isEmpty() ? null : s;
+    }
+
+    private UUID parseUuid(String raw) {
+        if (!StringUtils.hasText(raw)) return null;
+        try {
+            return UUID.fromString(raw);
+        } catch (Exception ignored) {
+            return null;
+        }
     }
 
     private void put(Map<String, Object> out, String key, String value) {

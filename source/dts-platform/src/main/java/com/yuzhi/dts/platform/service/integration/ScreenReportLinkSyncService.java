@@ -15,7 +15,7 @@ import org.springframework.web.client.RestClientException;
 
 /**
  * Sprint-17 / F1 — reconciles dts-analytics screens into platform-side
- * {@code bi_report_link} so leader-overview ("我常用的报表") can include
+ * {@code bi_report_link} so leader-overview ("我常用的大屏") can include
  * dashboard ("大屏") visits without touching dts-bi internals.
  *
  * <p>Safety model:

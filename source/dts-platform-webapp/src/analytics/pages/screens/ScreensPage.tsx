@@ -16,6 +16,43 @@ import { countInlinedResources } from './utils/resourceRestorer';
 import type { ScreenConfig } from './types';
 const SCREEN_LIST_PREF_KEY = 'dts.analytics.screens.listPref.v1';
 
+type ScreenRowPermissions = {
+	canRead: boolean;
+	canEdit: boolean;
+	canManage: boolean;
+	canDelete: boolean;
+	isOwner: boolean;
+};
+
+function resolveScreenRowPermissions(screen: ScreenListItem): ScreenRowPermissions {
+	const hasExplicitPermissions = [
+		screen.canRead,
+		screen.canEdit,
+		screen.canPublish,
+		screen.canManage,
+		screen.canDelete,
+		screen.isOwner,
+	].some((value) => typeof value === 'boolean');
+
+	if (!hasExplicitPermissions) {
+		return {
+			canRead: true,
+			canEdit: true,
+			canManage: true,
+			canDelete: true,
+			isOwner: true,
+		};
+	}
+
+	return {
+		canRead: screen.canRead === true,
+		canEdit: screen.canEdit === true,
+		canManage: screen.canManage === true,
+		canDelete: screen.canDelete === true,
+		isOwner: screen.isOwner === true,
+	};
+}
+
 export default function ScreensPage() {
 	const navigate = useNavigate();
 	const [screens, setScreens] = useState<ScreenListItem[]>([]);
@@ -168,6 +205,13 @@ export default function ScreensPage() {
 		[screens],
 	);
 	const draftCount = Math.max(0, screens.length - publishedCount);
+	const aclScreenPermissions = useMemo(() => {
+		if (aclScreenId == null) {
+			return null;
+		}
+		const screen = screens.find((item) => String(item.id) === String(aclScreenId));
+		return screen ? resolveScreenRowPermissions(screen) : null;
+	}, [aclScreenId, screens]);
 	const visibleScreens = useMemo(() => {
 		const keyword = searchKeyword.trim().toLowerCase();
 		const filtered = screens.filter((item) => {
@@ -718,107 +762,123 @@ export default function ScreensPage() {
 									</tr>
 								</thead>
 								<tbody>
-									{visibleScreens.map((screen) => (
-										<tr
-											key={screen.id}
-											className="border-t border-border-default bg-surface-card hover:bg-brand/5 transition-colors duration-150"
-											data-testid={`analytics-screen-row-${screen.id}`}
-										>
-											<td className="px-4 py-3 font-medium text-text-primary max-w-[200px]">
-												<span className="block overflow-hidden text-ellipsis whitespace-nowrap">{screen.name || '未命名大屏'}</span>
-											</td>
-											<td className="px-4 py-3 text-text-secondary max-w-[240px]">
-												<span className="block overflow-hidden text-ellipsis whitespace-nowrap">{screen.description || '无描述'}</span>
-											</td>
-											<td className="px-4 py-3 text-text-secondary whitespace-nowrap text-xs">
-												{screen.width || 1920} × {screen.height || 1080}
-											</td>
-											<td className="px-4 py-3 whitespace-nowrap">
-												<span className={`inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-semibold border border-transparent ${screen.publishedVersionNo ? 'text-[#166534] bg-success/10 border-success/30' : 'text-[#9a3412] bg-warning/10 border-warning/30'}`}>
-													{screen.publishedVersionNo ? `已发布 v${screen.publishedVersionNo}` : '未发布'}
-												</span>
-											</td>
-											<td className="px-4 py-3 text-text-secondary whitespace-nowrap text-xs">
-												{formatDate(screen.updatedAt)}
-											</td>
-											<td className="px-4 py-3 text-right whitespace-nowrap">
-												<div className="inline-flex items-center gap-1.5">
-													<button
-														className="px-2.5 py-1 border border-border-default rounded-md bg-surface-card cursor-pointer text-xs font-medium transition-all duration-200 hover:border-brand hover:bg-brand/10 text-text-primary"
-														data-testid={`analytics-screen-preview-${screen.id}`}
-														onClick={() => handlePreview(screen.id)}
-													>
-														查看
-													</button>
-													<button
-														className="px-2.5 py-1 border border-border-default rounded-md bg-surface-card cursor-pointer text-xs font-medium transition-all duration-200 hover:border-brand hover:bg-brand/10 text-text-primary"
-														data-testid={`analytics-screen-edit-button-${screen.id}`}
-														onClick={() => handleEdit(screen.id)}
-													>
-														编辑
-													</button>
-													<button
-														className="px-2.5 py-1 border border-border-default rounded-md bg-surface-card cursor-pointer text-xs font-medium transition-all duration-200 hover:border-brand hover:bg-brand/10 text-text-primary"
-														onClick={() => {
-															if (!screen.publishedVersionNo) {
-																message.warning('只有已经发布的大屏才能进行权限设置');
-																return;
-															}
-															setAclScreenId(screen.id);
-														}}
-													>
-														权限
-													</button>
-													<div className="screen-card-menu relative">
+									{visibleScreens.map((screen) => {
+										const rowPermissions = resolveScreenRowPermissions(screen);
+										const showMoreMenu = rowPermissions.canEdit || rowPermissions.canDelete;
+										return (
+											<tr
+												key={screen.id}
+												className="border-t border-border-default bg-surface-card hover:bg-brand/5 transition-colors duration-150"
+												data-testid={`analytics-screen-row-${screen.id}`}
+											>
+												<td className="px-4 py-3 font-medium text-text-primary max-w-[200px]">
+													<span className="block overflow-hidden text-ellipsis whitespace-nowrap">{screen.name || '未命名大屏'}</span>
+												</td>
+												<td className="px-4 py-3 text-text-secondary max-w-[240px]">
+													<span className="block overflow-hidden text-ellipsis whitespace-nowrap">{screen.description || '无描述'}</span>
+												</td>
+												<td className="px-4 py-3 text-text-secondary whitespace-nowrap text-xs">
+													{screen.width || 1920} × {screen.height || 1080}
+												</td>
+												<td className="px-4 py-3 whitespace-nowrap">
+													<span className={`inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-semibold border border-transparent ${screen.publishedVersionNo ? 'text-[#166534] bg-success/10 border-success/30' : 'text-[#9a3412] bg-warning/10 border-warning/30'}`}>
+														{screen.publishedVersionNo ? `已发布 v${screen.publishedVersionNo}` : '未发布'}
+													</span>
+												</td>
+												<td className="px-4 py-3 text-text-secondary whitespace-nowrap text-xs">
+													{formatDate(screen.updatedAt)}
+												</td>
+												<td className="px-4 py-3 text-right whitespace-nowrap">
+													<div className="inline-flex items-center gap-1.5">
 														<button
-															className={`px-2.5 py-1 border border-border-default rounded-md bg-surface-card cursor-pointer text-xs font-medium transition-all duration-200 hover:border-brand hover:bg-brand/10 text-text-primary ${activeCardMenuId === screen.id ? 'border-brand bg-brand/10' : ''}`}
-															onClick={() => setActiveCardMenuId((prev) => (prev === screen.id ? null : screen.id))}
+															className="px-2.5 py-1 border border-border-default rounded-md bg-surface-card cursor-pointer text-xs font-medium transition-all duration-200 hover:border-brand hover:bg-brand/10 text-text-primary"
+															data-testid={`analytics-screen-preview-${screen.id}`}
+															onClick={() => handlePreview(screen.id)}
 														>
-															更多
+															查看
 														</button>
-														{activeCardMenuId === screen.id ? (
-															<div className="absolute right-0 top-[calc(100%+4px)] min-w-[160px] z-[900] bg-surface-card text-text-primary border border-border-default rounded-lg shadow-[0_8px_24px_rgba(15,23,42,0.2)] p-1.5 grid gap-0.5">
+														{rowPermissions.canEdit ? (
+															<button
+																className="px-2.5 py-1 border border-border-default rounded-md bg-surface-card cursor-pointer text-xs font-medium transition-all duration-200 hover:border-brand hover:bg-brand/10 text-text-primary"
+																data-testid={`analytics-screen-edit-button-${screen.id}`}
+																onClick={() => handleEdit(screen.id)}
+															>
+																编辑
+															</button>
+														) : null}
+														{rowPermissions.canManage ? (
+															<button
+																className="px-2.5 py-1 border border-border-default rounded-md bg-surface-card cursor-pointer text-xs font-medium transition-all duration-200 hover:border-brand hover:bg-brand/10 text-text-primary"
+																onClick={() => {
+																	if (!screen.publishedVersionNo) {
+																		message.warning('只有已经发布的大屏才能进行权限设置');
+																		return;
+																	}
+																	setAclScreenId(screen.id);
+																}}
+															>
+																权限
+															</button>
+														) : null}
+														{showMoreMenu ? (
+															<div className="screen-card-menu relative">
 																<button
-																	type="button"
-																	className="border border-transparent rounded-md px-3 py-[7px] bg-transparent text-text-primary text-xs text-left cursor-pointer hover:border-brand hover:bg-brand/10 disabled:opacity-55 disabled:cursor-not-allowed"
-																	data-testid={`analytics-screen-export-${screen.id}`}
-																	onClick={() => {
-																		setActiveCardMenuId(null);
-																		void handleExportJson(screen);
-																	}}
-																	disabled={exportingId === screen.id}
-																	title="导出当前大屏为 JSON（含内联资源）"
+																	className={`px-2.5 py-1 border border-border-default rounded-md bg-surface-card cursor-pointer text-xs font-medium transition-all duration-200 hover:border-brand hover:bg-brand/10 text-text-primary ${activeCardMenuId === screen.id ? 'border-brand bg-brand/10' : ''}`}
+																	onClick={() => setActiveCardMenuId((prev) => (prev === screen.id ? null : screen.id))}
 																>
-																	{exportingId === screen.id ? '导出中...' : '导出 JSON'}
+																	更多
 																</button>
-																<button
-																	type="button"
-																	className="border border-transparent rounded-md px-3 py-[7px] bg-transparent text-text-primary text-xs text-left cursor-pointer hover:border-brand hover:bg-brand/10 disabled:opacity-55 disabled:cursor-not-allowed"
-																	onClick={() => {
-																		setActiveCardMenuId(null);
-																		void handleSaveAsTemplate(screen.id, screen.name);
-																	}}
-																	disabled={savingTemplateId === screen.id}
-																>
-																	{savingTemplateId === screen.id ? '保存中...' : '保存为模板'}
-																</button>
-																<button
-																	type="button"
-																	className="border border-transparent rounded-md px-3 py-[7px] bg-transparent text-xs text-left cursor-pointer hover:border-error hover:bg-error/10 text-error"
-																	onClick={() => {
-																		setActiveCardMenuId(null);
-																		void handleDelete(screen.id);
-																	}}
-																>
-																	删除
-																</button>
+																{activeCardMenuId === screen.id ? (
+																	<div className="absolute right-0 top-[calc(100%+4px)] min-w-[160px] z-[900] bg-surface-card text-text-primary border border-border-default rounded-lg shadow-[0_8px_24px_rgba(15,23,42,0.2)] p-1.5 grid gap-0.5">
+																		{rowPermissions.canEdit ? (
+																			<>
+																				<button
+																					type="button"
+																					className="border border-transparent rounded-md px-3 py-[7px] bg-transparent text-text-primary text-xs text-left cursor-pointer hover:border-brand hover:bg-brand/10 disabled:opacity-55 disabled:cursor-not-allowed"
+																					data-testid={`analytics-screen-export-${screen.id}`}
+																					onClick={() => {
+																						setActiveCardMenuId(null);
+																						void handleExportJson(screen);
+																					}}
+																					disabled={exportingId === screen.id}
+																					title="导出当前大屏为 JSON（含内联资源）"
+																				>
+																					{exportingId === screen.id ? '导出中...' : '导出 JSON'}
+																				</button>
+																				<button
+																					type="button"
+																					className="border border-transparent rounded-md px-3 py-[7px] bg-transparent text-text-primary text-xs text-left cursor-pointer hover:border-brand hover:bg-brand/10 disabled:opacity-55 disabled:cursor-not-allowed"
+																					onClick={() => {
+																						setActiveCardMenuId(null);
+																						void handleSaveAsTemplate(screen.id, screen.name);
+																					}}
+																					disabled={savingTemplateId === screen.id}
+																				>
+																					{savingTemplateId === screen.id ? '保存中...' : '保存为模板'}
+																				</button>
+																			</>
+																		) : null}
+																		{rowPermissions.canDelete ? (
+																			<button
+																				type="button"
+																				className="border border-transparent rounded-md px-3 py-[7px] bg-transparent text-xs text-left cursor-pointer hover:border-error hover:bg-error/10 text-error"
+																				onClick={() => {
+																					setActiveCardMenuId(null);
+																					void handleDelete(screen.id);
+																				}}
+																			>
+																				删除
+																			</button>
+																		) : null}
+																	</div>
+																) : null}
 															</div>
 														) : null}
 													</div>
-												</div>
-											</td>
-										</tr>
-									))}
+												</td>
+											</tr>
+										);
+									})}
 								</tbody>
 							</table>
 						</div>
@@ -1002,7 +1062,7 @@ export default function ScreensPage() {
 				open={aclScreenId != null}
 				screenId={aclScreenId ?? undefined}
 				onClose={() => setAclScreenId(null)}
-				isOwner={true}
+				isOwner={aclScreenPermissions?.canManage === true}
 			/>
 			{importPreview && (
 				<ImportPreviewModal

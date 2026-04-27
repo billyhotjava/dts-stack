@@ -18,6 +18,7 @@ import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "
 import { Input } from "@/ui/input";
 import { RadioGroup, RadioGroupItem } from "@/ui/radio-group";
 import { cn } from "@/utils";
+import { markPortalSessionLogin } from "@/utils/portalSessionStorage";
 import { resolvePortalTokenExpiresAt } from "@/utils/sessionExpiry";
 import { updateLocalTranslations } from "@/utils/translation";
 import { LoginStateEnum, useLoginStateContext } from "./providers/login-provider";
@@ -371,13 +372,9 @@ export function LoginForm({ className, ...props }: React.ComponentPropsWithoutRe
 			});
 			if (!accessToken) throw new Error("登录响应缺少访问令牌");
 
+			markPortalSessionLogin();
 			setUserToken({ accessToken, refreshToken, tokenExpiresAt });
 			setUserInfo(portalUser);
-			try {
-				localStorage.setItem("dts.platform.session.loginTs", String(Date.now()));
-			} catch {
-				// ignore
-			}
 
 			try {
 				contextActions.initDefaults();

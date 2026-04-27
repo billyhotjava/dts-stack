@@ -9,6 +9,7 @@ import type { KeycloakTranslations } from "#/keycloak";
 import { KeycloakLocalizationService } from "@/api/services/keycloakLocalizationService";
 import userService, { type SignInReq } from "@/api/services/userService";
 import { GLOBAL_CONFIG } from "@/global-config";
+import { clearPortalSessionLoginMarkers, markPortalSessionLogin } from "@/utils/portalSessionStorage";
 import { resolvePortalTokenExpiresAt } from "@/utils/sessionExpiry";
 import { updateLocalTranslations } from "@/utils/translation";
 import { useMenuStore } from "./menuStore";
@@ -76,9 +77,8 @@ const useUserStore = create<UserStore>()(
 						useMenuStore.getState().clearMenus();
 						// Reset scoped context so the next user doesn't inherit prior dept/scope
 						const ctx = useContextStore.getState();
-					ctx.actions.setActiveDept(undefined);
-						localStorage.removeItem("dts.platform.session.loginTs");
-						localStorage.removeItem("dts.platform.session.lastActivity");
+						ctx.actions.setActiveDept(undefined);
+						clearPortalSessionLoginMarkers();
 					} catch {
 						// ignore store access errors (e.g., during SSR)
 					}
@@ -253,6 +253,7 @@ export const useSignIn = () => {
 				expiresIn: (res as any)?.expiresIn,
 			});
 
+			markPortalSessionLogin();
 			setUserToken({
 				accessToken,
 				refreshToken,
@@ -270,11 +271,6 @@ export const useSignIn = () => {
 					closeButton: true,
 				});
 			}
-
-			// Mark login timestamp for downstream grace handling on initial 401s
-			try {
-				localStorage.setItem("dts.platform.session.loginTs", String(Date.now()));
-			} catch {}
 
 			// 登录成功后获取并更新Keycloak翻译词条
 			try {

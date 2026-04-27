@@ -245,7 +245,7 @@ public class WorkbenchLeaderOverviewService {
             .toList();
 
         // Sprint-17 hotfix: when MINE-scope has no visit history yet (typical first-time user),
-        // fall back to reconcile-synced screens so "我常用的报表" is not permanently empty.
+        // fall back to reconcile-synced screens so "我常用的大屏" is not permanently empty.
         // visits is reported as 0 to signal "not yet visited" — UI shows the relativeTime as "—".
         // The fallback runs in its own REQUIRES_NEW sub-transaction (TopReportsFallbackService),
         // so a schema mismatch (missing bi_report_link.source column when the Liquibase

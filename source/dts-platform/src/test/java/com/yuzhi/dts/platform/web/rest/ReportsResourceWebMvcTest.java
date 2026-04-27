@@ -2,6 +2,7 @@ package com.yuzhi.dts.platform.web.rest;
 
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.nullable;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -25,6 +26,7 @@ import java.util.Map;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.autoconfigure.security.oauth2.client.servlet.OAuth2ClientAutoConfiguration;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
 import org.springframework.boot.test.context.TestConfiguration;
@@ -41,7 +43,13 @@ import org.springframework.security.test.context.support.WithMockUser;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.test.web.servlet.MockMvc;
 
-@WebMvcTest(ReportsResource.class)
+@WebMvcTest(
+    value = ReportsResource.class,
+    excludeAutoConfiguration = OAuth2ClientAutoConfiguration.class,
+    properties = {
+        "spring.autoconfigure.exclude=org.springframework.boot.autoconfigure.security.oauth2.client.servlet.OAuth2ClientAutoConfiguration"
+    }
+)
 @AutoConfigureMockMvc
 @Import(ReportsResourceWebMvcTest.MethodSecurityConfig.class)
 class ReportsResourceWebMvcTest {
@@ -185,6 +193,40 @@ class ReportsResourceWebMvcTest {
             .andExpect(jsonPath("$.data.code").value("owner_create"));
 
         verify(reports).create(any(), nullable(String.class));
+    }
+
+    @Test
+    @WithMockUser(authorities = {"ROLE_EMPLOYEE", "ROLE_INTERNAL"})
+    void visitShouldForwardScreenMetadataToService() throws Exception {
+        UUID id = UUID.randomUUID();
+        Map<String, Object> payload = Map.of(
+            "id",
+            id.toString(),
+            "code",
+            "screen-7",
+            "title",
+            "预算大屏",
+            "url",
+            "/bi/screens/7/preview",
+            "engine",
+            "DTS_BI",
+            "classification",
+            "INTERNAL"
+        );
+
+        mockMvc
+            .perform(post("/api/reports/visit").contentType(MediaType.APPLICATION_JSON).content(objectMapper.writeValueAsBytes(payload)))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.data.ok").value(true));
+
+        verify(reports).touchVisit(
+            eq(id),
+            eq("screen-7"),
+            eq("预算大屏"),
+            eq("/bi/screens/7/preview"),
+            eq("DTS_BI"),
+            eq("INTERNAL")
+        );
     }
 
     @TestConfiguration

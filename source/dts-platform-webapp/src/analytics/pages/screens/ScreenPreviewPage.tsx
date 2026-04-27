@@ -141,7 +141,7 @@ export default function ScreenPreviewPage() {
 	const [error, setError] = useState<string | null>(null);
 	// Sprint-17/F2 — record a leader-overview visit once the user has stayed
 	// on this preview for STAY_MS (3s). enabled=true only after data loads
-	// so a quick mis-click on the route doesn't pollute "我常用的报表".
+	// so a quick mis-click on the route doesn't pollute "我常用的大屏".
 	useScreenVisitTracker({
 		screenId: id,
 		title: screen?.name ?? v2Config?.name,

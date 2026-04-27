@@ -33,8 +33,8 @@ describe("platform session management source contract", () => {
 		expect(sessionManagerSource.includes("logoutDueToIdle")).toBe(false);
 		expect(sessionManagerSource.includes("window.setTimeout(logoutDueToIdle")).toBe(false);
 		expect(sessionManagerSource.includes("backend remains")).toBe(true);
-		expect(sessionManagerSource.includes('REFRESH_LEADER: "dts.platform.session.refreshLeader"')).toBe(true);
-		expect(sessionManagerSource.includes('SESSION_ID: "dts.platform.session.id"')).toBe(true);
+		expect(sessionManagerSource.includes("PORTAL_SESSION_STORAGE_KEYS")).toBe(true);
+		expect(sessionManagerSource.includes("wasPortalLogoutBroadcastRecently")).toBe(true);
 		expect(sessionManagerSource.includes("FOLLOWER_RECHECK_MS")).toBe(true);
 		expect(sessionManagerSource.includes("refreshPortalSessionIfPossible")).toBe(true);
 		expect(guardSource.includes("tokenExpiresAt - 10_000")).toBe(false);

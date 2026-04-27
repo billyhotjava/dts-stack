@@ -1,5 +1,6 @@
 import { resolveCurrentAppPath, resolveLoginHref } from "@/routes/constants";
 import userStore from "@/store/userStore";
+import { markPortalSessionLogout } from "@/utils/portalSessionStorage";
 import type { ScreenWritePayload } from "../pages/screens/contracts";
 import { withPlatformAuthorization } from "./platform-auth-header";
 
@@ -578,6 +579,8 @@ export type ScreenListItem = {
 	canEdit?: boolean;
 	canPublish?: boolean;
 	canManage?: boolean;
+	canDelete?: boolean;
+	isOwner?: boolean;
 };
 
 export type ScreenDetail = ScreenListItem & {
@@ -1264,10 +1267,9 @@ function isPublicAnalyticsUrl(url: string): boolean {
 }
 
 function redirectToLoginWithCurrentPath() {
+	const accessToken = userStore.getState().userToken?.accessToken;
 	userStore.getState().actions.clearUserInfoAndToken();
-	try {
-		localStorage.setItem("dts.platform.session.logoutTs", String(Date.now()));
-	} catch {}
+	markPortalSessionLogout(Date.now(), accessToken);
 	window.location.replace(resolveLoginHref(resolveCurrentAppPath()));
 }
 

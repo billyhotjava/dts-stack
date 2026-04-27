@@ -10,6 +10,7 @@ import { GLOBAL_CONFIG } from "@/global-config";
 import { useBilingualText } from "@/hooks/useBilingualText";
 import SettingButton from "@/layouts/components/setting-button";
 import { useUserActions, useUserToken } from "@/store/userStore";
+import { wasPortalLogoutBroadcastRecently } from "@/utils/portalSessionStorage";
 import LoginForm from "./login-form";
 import { LoginProvider } from "./providers/login-provider";
 import RegisterForm from "./register-form";
@@ -73,17 +74,14 @@ function LoginPage() {
 				return;
 			}
 
-			try {
-				const lastLogoutTs = Number(localStorage.getItem("dts.platform.session.logoutTs") || "0");
-				if (lastLogoutTs > 0 && Date.now() - lastLogoutTs < 15_000) {
-					clearUserInfoAndToken();
-					if (alive) {
-						setSessionAuthenticated(false);
-						setSessionChecked(true);
-					}
-					return;
+			if (wasPortalLogoutBroadcastRecently(15_000, Date.now(), token.accessToken)) {
+				clearUserInfoAndToken();
+				if (alive) {
+					setSessionAuthenticated(false);
+					setSessionChecked(true);
 				}
-			} catch {}
+				return;
+			}
 
 			// 登录后 grace window：portal_session 刚 save 可能还未对新请求可见，
 			// 直接信任本地 token 跳转主页，让后续 SessionManager probe 继续负责失效感知。

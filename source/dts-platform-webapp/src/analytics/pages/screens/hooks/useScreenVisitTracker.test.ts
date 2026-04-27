@@ -1,8 +1,9 @@
 // @vitest-environment jsdom
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+
 import { createElement, type FC } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { act } from "react-dom/test-utils";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import reportsService from "@/api/services/reportsService";
 import { useScreenVisitTracker } from "./useScreenVisitTracker";
 
@@ -64,6 +65,8 @@ describe("useScreenVisitTracker", () => {
 		expect(visitMock).toHaveBeenCalledWith({
 			code: "screen-1",
 			title: "Sales",
+			engine: "DTS_BI",
+			classification: "INTERNAL",
 			url: "/bi/screens/1/preview",
 		});
 		unmount(root, container);

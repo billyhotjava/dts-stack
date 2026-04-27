@@ -7,6 +7,12 @@ import { t } from "@/locales/i18n";
 import { isLoginRouteActive, resolveCurrentAppPath, resolveLoginHref } from "@/routes/constants";
 import useContextStore from "@/store/contextStore";
 import userStore from "@/store/userStore";
+import {
+	isWithinPortalLoginGrace,
+	markPortalSessionLogout,
+	readPortalSessionTimestamp,
+	PORTAL_SESSION_STORAGE_KEYS,
+} from "@/utils/portalSessionStorage";
 import { resolvePortalTokenExpiresAt } from "@/utils/sessionExpiry";
 
 const axiosInstance = axios.create({
@@ -39,7 +45,6 @@ const TEST_SESSION_ENABLED =
 	"true";
 const TEST_SESSION_REFRESH_MS = Number(import.meta.env.VITE_TEST_SESSION_PING_MS ?? 5 * 60 * 1000);
 const TEST_SESSION_MAX_AGE_MS = Number(import.meta.env.VITE_TEST_SESSION_MAX_AGE_MS ?? 4 * 60 * 60 * 1000);
-const LOGOUT_TS_KEY = "dts.platform.session.logoutTs";
 
 export type PortalRefreshResult = {
 	accessToken: string;
@@ -64,12 +69,7 @@ type PortalSessionProbe = {
 let refreshingPromise: Promise<PortalRefreshResult | null> | null = null;
 
 function hasRecentLoginGraceWindow(): boolean {
-	try {
-		const loginTs = Number(localStorage.getItem("dts.platform.session.loginTs") || "0");
-		return loginTs > 0 && Date.now() - loginTs < 2000;
-	} catch {
-		return false;
-	}
+	return isWithinPortalLoginGrace(2000);
 }
 
 /**
@@ -80,12 +80,7 @@ function hasRecentLoginGraceWindow(): boolean {
  * 此窗口外才会让探活正常工作以支持异地登录顶掉、session 失效等场景。
  */
 export function isWithinLoginProbeGrace(): boolean {
-	try {
-		const loginTs = Number(localStorage.getItem("dts.platform.session.loginTs") || "0");
-		return loginTs > 0 && Date.now() - loginTs < 5000;
-	} catch {
-		return false;
-	}
+	return isWithinPortalLoginGrace(5000);
 }
 
 function isDefinitivePortalSessionInactive(status?: PortalSessionProbe | null): boolean {
@@ -116,10 +111,9 @@ async function probePortalSessionStatus(accessToken?: string): Promise<PortalSes
 }
 
 function forceLogoutToLogin() {
+	const accessToken = userStore.getState().userToken?.accessToken;
 	userStore.getState().actions.clearUserInfoAndToken();
-	try {
-		localStorage.setItem(LOGOUT_TS_KEY, String(Date.now()));
-	} catch {}
+	markPortalSessionLogout(Date.now(), accessToken);
 	if (typeof window !== "undefined" && !isLoginRouteActive()) {
 		redirectToLoginWithCurrentPath();
 	}
@@ -222,7 +216,7 @@ function ensureKeepAliveTimer() {
 		if (!userToken?.refreshToken) {
 			return;
 		}
-		const loginTs = Number(localStorage.getItem("dts.platform.session.loginTs") || "0");
+		const loginTs = readPortalSessionTimestamp(PORTAL_SESSION_STORAGE_KEYS.LOGIN_TS);
 		if (loginTs > 0 && Date.now() - loginTs > TEST_SESSION_MAX_AGE_MS) {
 			return;
 		}

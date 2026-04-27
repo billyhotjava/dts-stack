@@ -10,6 +10,7 @@ import com.yuzhi.dts.platform.security.AuthoritiesConstants;
 import com.yuzhi.dts.platform.security.ClassificationUtils;
 import com.yuzhi.dts.platform.security.DepartmentUtils;
 import com.yuzhi.dts.platform.security.SecurityUtils;
+import com.yuzhi.dts.platform.service.integration.ScreenReportLinkSyncService;
 import com.yuzhi.dts.platform.service.visualization.dto.BiReportLinkDto;
 import com.yuzhi.dts.platform.service.visualization.dto.BiReportLinkRequest;
 import java.lang.reflect.Array;
@@ -25,6 +26,7 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
+import java.util.regex.Pattern;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationToken;
@@ -36,6 +38,8 @@ import org.springframework.util.StringUtils;
 @Service
 @Transactional
 public class BiReportLinkService {
+
+    private static final Pattern SAFE_SCREEN_ID = Pattern.compile("[A-Za-z0-9_-]+");
 
     private final BiReportLinkRepository repo;
     private final BiReportVisitRepository visitRepo;
@@ -173,19 +177,32 @@ public class BiReportLinkService {
     // Always own its tx so a readOnly caller cannot block the visit-log write.
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     public void touchVisit(UUID id, String code) {
+        touchVisit(id, code, null, null, null, null);
+    }
+
+    // Always own its tx so a readOnly caller cannot block the visit-log write.
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public void touchVisit(UUID id, String code, String title, String url, String engine, String classification) {
+        String normalizedCode = normalizeCode(code);
         BiReportLink link = null;
         if (id != null) {
             link = repo.findById(id).orElse(null);
         }
-        if (link == null && StringUtils.hasText(code)) {
-            link = repo.findFirstByCodeIgnoreCase(code.trim()).orElse(null);
+        if (link == null && StringUtils.hasText(normalizedCode)) {
+            link = repo.findFirstByCodeIgnoreCase(normalizedCode).orElse(null);
         }
         if (link == null) {
-            return;
+            link = newScreenVisitLink(normalizedCode, title, engine, classification);
+            if (link == null) {
+                return;
+            }
         }
         Instant now = Instant.now();
         link.setLastVisitedAt(now);
-        repo.save(link);
+        link = repo.save(link);
+        if (link.getId() == null) {
+            return;
+        }
 
         // Append a per-visit log row so leader-overview aggregations can
         // compute visits-in-period KPIs, top-N by count, and the domain
@@ -197,6 +214,48 @@ public class BiReportLinkService {
         visit.setBizDomain(link.getBizDomain());
         visit.setVisitedAt(now);
         visitRepo.save(visit);
+    }
+
+    private BiReportLink newScreenVisitLink(String code, String title, String engine, String classification) {
+        String screenId = screenIdFromCode(code);
+        if (screenId == null) {
+            return null;
+        }
+
+        String canonicalCode = ScreenReportLinkSyncService.CODE_PREFIX + screenId;
+        BiReportLink link = new BiReportLink();
+        link.setCode(canonicalCode);
+        link.setTitle(Optional.ofNullable(trimToNull(title)).orElse(canonicalCode));
+        link.setEngine(upperOrDefault(engine, ScreenReportLinkSyncService.ENGINE));
+        link.setReportType(ScreenReportLinkSyncService.REPORT_TYPE);
+        link.setUrl("/bi/screens/" + screenId + "/preview");
+        link.setClassification(upperOrDefault(classification, ScreenReportLinkSyncService.DEFAULT_CLASSIFICATION));
+        link.setDeptCodes(SecurityUtils.getCurrentUserDept().orElse(null));
+        link.setEnabled(true);
+        link.setSortOrder(0);
+        link.setSource(ScreenReportLinkSyncService.SOURCE_TAG);
+        return link;
+    }
+
+    private String screenIdFromCode(String rawCode) {
+        String code = normalizeCode(rawCode);
+        if (code == null) {
+            return null;
+        }
+        String lower = code.toLowerCase(Locale.ROOT);
+        if (!lower.startsWith(ScreenReportLinkSyncService.CODE_PREFIX)) {
+            return null;
+        }
+        String screenId = code.substring(ScreenReportLinkSyncService.CODE_PREFIX.length()).trim();
+        if (!StringUtils.hasText(screenId) || !SAFE_SCREEN_ID.matcher(screenId).matches()) {
+            return null;
+        }
+        return screenId;
+    }
+
+    private String upperOrDefault(String value, String defaultValue) {
+        String text = trimToNull(value);
+        return text == null ? defaultValue : text.toUpperCase(Locale.ROOT);
     }
 
     private void apply(BiReportLink target, BiReportLinkRequest req, boolean creating, String activeDeptHeader) {

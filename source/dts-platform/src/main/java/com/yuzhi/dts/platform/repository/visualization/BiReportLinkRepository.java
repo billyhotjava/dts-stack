@@ -28,7 +28,7 @@ public interface BiReportLinkRepository extends JpaRepository<BiReportLink, UUID
 
     /**
      * Sprint-17 hotfix — MINE-scope fallback when a user has no visits yet:
-     * surface enabled reconcile rows so "我常用的报表" stops being permanently 0
+     * surface enabled reconcile rows so "我常用的大屏" stops being permanently 0
      * for users who haven't opened any 大屏 preview (visit log empty).
      * Sorted by lastVisitedAt desc (newly synced rows have null and naturally
      * fall to the bottom), then code asc as a stable tie-breaker.

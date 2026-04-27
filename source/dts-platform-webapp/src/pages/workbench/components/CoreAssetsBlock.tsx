@@ -1,9 +1,10 @@
 import { Card, Empty, List, Skeleton, Tag } from "antd";
 import type { LeaderOverviewResponse } from "@/api/services/workbenchService";
-import type { WorkbenchRole } from "../hooks/useWorkbenchRole";
+import { resolveAppHref } from "@/routes/constants";
+import { humanizeBizDomain } from "../hooks/bizDomain";
 import { classificationColor } from "../hooks/classification";
 import { relativeTime } from "../hooks/relativeTime";
-import { humanizeBizDomain } from "../hooks/bizDomain";
+import type { WorkbenchRole } from "../hooks/useWorkbenchRole";
 
 /**
  * Sprint-15 F5/T02 — Right 1-column core-assets block.
@@ -34,12 +35,15 @@ export function CoreAssetsBlock({ role, items, loading }: CoreAssetsBlockProps) 
 	const title = titleFor(role);
 
 	const handleRowClick = (item: CoreAssetItem) => {
-		// TODO: align with canonical catalog-detail route helper if one emerges.
-		window.open(`/catalog/datasets/${item.id}`, "_blank", "noopener,noreferrer");
+		window.open(
+			resolveAppHref(`/catalog/datasets/${encodeURIComponent(String(item.id))}`),
+			"_blank",
+			"noopener,noreferrer",
+		);
 	};
 
 	return (
-		<Card title={title} extra={<a href="/catalog/datasets">查看全部 →</a>}>
+		<Card title={title} extra={<a href={resolveAppHref("/catalog/assets")}>查看全部 →</a>}>
 			{loading ? (
 				<Skeleton active paragraph={{ rows: 6 }} />
 			) : items.length === 0 ? (

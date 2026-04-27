@@ -5,20 +5,19 @@ import { getPortalSessionStatus, type PortalSessionStatus } from "@/api/platform
 import { resolveCurrentAppPath, resolveLoginHref } from "@/routes/constants";
 import useUserStore, { useUserActions, useUserInfo, useUserToken } from "@/store/userStore";
 import {
+	PORTAL_SESSION_STORAGE_KEYS,
+	markPortalSessionLogout,
+	readPortalSessionTimestamp,
+	wasPortalLogoutBroadcastRecently,
+} from "@/utils/portalSessionStorage";
+import {
 	buildSessionLeaderLease,
 	isSessionLeaderActive,
 	parseSessionLeaderLease,
 	shouldAcquireSessionLeadership,
 } from "./sessionLeadership.helpers";
 
-const STORAGE_KEYS = {
-	SESSION_ID: "dts.platform.session.id",
-	SESSION_USER: "dts.platform.session.user",
-	LOGOUT_TS: "dts.platform.session.logoutTs",
-	LAST_ACTIVITY: "dts.platform.session.lastActivity",
-	TOKEN_SYNC: "dts.platform.session.tokenSync",
-	REFRESH_LEADER: "dts.platform.session.refreshLeader",
-} as const;
+const STORAGE_KEYS = PORTAL_SESSION_STORAGE_KEYS;
 
 const SESSION_TIMEOUT_MINUTES = Math.max(
 	1,
@@ -87,25 +86,11 @@ function nextRefreshDelayMs(accessToken?: string, tokenExpiresAt?: number): numb
 }
 
 function readLastActivity(): number {
-	try {
-		const stored = localStorage.getItem(STORAGE_KEYS.LAST_ACTIVITY);
-		if (stored) {
-			const ts = Number(stored);
-			if (ts > 0) return ts;
-		}
-	} catch {}
-	return Date.now();
+	return readPortalSessionTimestamp(STORAGE_KEYS.LAST_ACTIVITY) || Date.now();
 }
 
 function resolveSharedLastActivity(fallback: number): number {
-	try {
-		const stored = localStorage.getItem(STORAGE_KEYS.LAST_ACTIVITY);
-		if (stored) {
-			const ts = Number(stored);
-			if (ts > 0) return ts;
-		}
-	} catch {}
-	return fallback;
+	return readPortalSessionTimestamp(STORAGE_KEYS.LAST_ACTIVITY) || fallback;
 }
 
 function readLeaderLease() {
@@ -133,12 +118,8 @@ function broadcastTokenSync(tokens: Record<string, unknown>) {
 }
 
 function wasLogoutTriggeredRecently(): boolean {
-	try {
-		const logoutTs = Number(localStorage.getItem(STORAGE_KEYS.LOGOUT_TS) || "0");
-		return logoutTs > 0 && Date.now() - logoutTs < 5000;
-	} catch {
-		return false;
-	}
+	const accessToken = useUserStore.getState().userToken?.accessToken;
+	return wasPortalLogoutBroadcastRecently(5000, Date.now(), accessToken);
 }
 
 function finishSession(
@@ -152,14 +133,13 @@ function finishSession(
 	}
 	logoutInProgressRef.current = true;
 	const isConcurrent = reason === "CONCURRENT";
+	const accessToken = useUserStore.getState().userToken?.accessToken;
 	toast.error(isConcurrent ? "账号已在其他位置登录，当前会话已失效" : "会话已过期，请重新登录", {
 		id: isConcurrent ? "session-conflict" : "session-expired",
 	});
 	clearUserInfoAndToken();
 	if (broadcast) {
-		try {
-			localStorage.setItem(STORAGE_KEYS.LOGOUT_TS, String(Date.now()));
-		} catch {}
+		markPortalSessionLogout(Date.now(), accessToken);
 	}
 	window.location.replace(resolveLoginHref(resolveCurrentAppPath()));
 }
@@ -235,7 +215,12 @@ export default function SessionManager() {
 				return;
 			}
 			if (e.key === STORAGE_KEYS.LOGOUT_TS && e.newValue) {
-				if (isLoggedIn && !logoutInProgressRef.current) {
+				const currentAccessToken = useUserStore.getState().userToken?.accessToken;
+				if (
+					isLoggedIn &&
+					!logoutInProgressRef.current &&
+					wasPortalLogoutBroadcastRecently(5000, Date.now(), currentAccessToken)
+				) {
 					logoutInProgressRef.current = true;
 					toast.error("当前会话已失效，请重新登录", { id: "session-expired" });
 					clearUserInfoAndToken();
