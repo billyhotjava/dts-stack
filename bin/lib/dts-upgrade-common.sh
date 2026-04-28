@@ -151,7 +151,7 @@ upgrade_backup_target_file() {
   fi
 
   mkdir -p "$(dirname "${backup_file}")"
-  cp "${target_file}" "${backup_file}"
+  cp -a "${target_file}" "${backup_file}"
   upgrade_append_unique_line "${UPGRADE_ROLLBACK_FILES_LIST}" "${relative_path}"
   upgrade_append_log "backup created ${relative_path}"
 }
@@ -237,9 +237,20 @@ upgrade_detect_compose_runner() {
     return 0
   fi
 
-  if command -v docker >/dev/null 2>&1 && docker compose version >/dev/null 2>&1; then
+  local prefer_v1=0
+  if [[ "${UPGRADE_MODE:-}" == "legacy" ]]; then
+    prefer_v1=1
+  fi
+
+  local has_v1=0 has_v2=0
+  command -v docker-compose >/dev/null 2>&1 && docker-compose version >/dev/null 2>&1 && has_v1=1
+  command -v docker >/dev/null 2>&1 && docker compose version >/dev/null 2>&1 && has_v2=1
+
+  if [[ "${prefer_v1}" -eq 1 && "${has_v1}" -eq 1 ]]; then
+    UPGRADE_COMPOSE_RUNNER="docker-compose"
+  elif [[ "${has_v2}" -eq 1 ]]; then
     UPGRADE_COMPOSE_RUNNER="docker compose"
-  elif command -v docker-compose >/dev/null 2>&1 && docker-compose version >/dev/null 2>&1; then
+  elif [[ "${has_v1}" -eq 1 ]]; then
     UPGRADE_COMPOSE_RUNNER="docker-compose"
   else
     upgrade_die "neither 'docker compose' nor 'docker-compose' is available"
@@ -303,7 +314,7 @@ upgrade_postgres_target_major() {
     image_postgres="$(grep -E '^IMAGE_POSTGRES=' "${source_root}/imgversion.conf" | head -n1 | cut -d= -f2- | tr -d '\r' || true)"
   fi
   [[ -n "${image_postgres}" ]] || return 1
-  if [[ "${image_postgres}" =~ :([0-9]+)(\.[0-9]+)?$ ]]; then
+  if [[ "${image_postgres}" =~ :([0-9]+)(\.[0-9]+)? ]]; then
     printf '%s\n' "${BASH_REMATCH[1]}"
     return 0
   fi
@@ -325,7 +336,11 @@ upgrade_check_postgres_compatibility() {
 
   current_major="$(tr -d '[:space:]' < "${pg_version_file}")"
   target_major="$(upgrade_postgres_target_major "${source_root}" || true)"
-  [[ -n "${target_major}" ]] || upgrade_die "unable to determine target postgres major version"
+  if [[ -z "${target_major}" ]]; then
+    upgrade_append_log "postgres compatibility unknown: cannot parse target IMAGE_POSTGRES"
+    upgrade_append_summary "- postgres compatibility: unknown (cannot parse target IMAGE_POSTGRES tag)"
+    return 0
+  fi
 
   if [[ "${current_major}" != "${target_major}" ]]; then
     upgrade_die "postgres major version mismatch: current=${current_major} target=${target_major}"
@@ -410,7 +425,7 @@ upgrade_restore_backed_up_files() {
     target_file="${target_dir}/${relative_path}"
     [[ -f "${source_file}" ]] || upgrade_die "backup file missing for rollback: ${relative_path}"
     mkdir -p "$(dirname "${target_file}")"
-    cp "${source_file}" "${target_file}"
+    cp -a "${source_file}" "${target_file}"
     upgrade_append_log "rollback restored file ${relative_path}"
     upgrade_append_summary "- rollback restored file: ${relative_path}"
   done < <(upgrade_manifest_list_field "${manifest_file}" "backedUpFiles")
@@ -1091,22 +1106,34 @@ upgrade_should_sync_relative_path() {
   local relative_path="$1"
 
   case "${relative_path}" in
-    .env|.upgrade-lock)
+    .env|.upgrade-lock|.upgrade-lite-lock)
       return 1
       ;;
     docker-compose*.yml|docker-compose*.yaml)
       return 1
       ;;
-    config/*)
+    config/*|logs/*|backups/*)
+      return 1
+      ;;
+    .git|.git/*|.gitignore|.gitattributes|.gitkeep)
       return 1
       ;;
     services/dts-pg/data|services/dts-pg/data/*)
       return 1
       ;;
-    logs/*|backups/*)
+    services/*/data|services/*/data/*)
       return 1
       ;;
-    .git/*|.gitignore)
+    tests|tests/*|tools|tools/*|playwright|playwright/*)
+      return 1
+      ;;
+    source|source/*|builds|builds/*|reports|reports/*|worklog|worklog/*|docs|docs/*|data|data/*)
+      return 1
+      ;;
+    dev-up.sh|dev-stop.sh|enable-devtools.sh|encry.sh)
+      return 1
+      ;;
+    AGENTS.md|CLAUDE.md|lefthook.yml|README.md)
       return 1
       ;;
     *)

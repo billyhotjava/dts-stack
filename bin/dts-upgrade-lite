@@ -16,6 +16,11 @@ BACKUP_DIR=""
 YES=0
 RESTORE_DB=0
 SKIP_DB_BACKUP=0
+FORCE=0
+LOCK_OWNED=0
+REMOVE_ORPHANS=0
+FORCE_RECREATE=0
+HAS_IMAGE_CHANGE=0
 
 info() {
   echo "[dts-upgrade-lite] $*"
@@ -34,8 +39,14 @@ usage() {
   cat <<'EOF'
 Usage:
   dts-upgrade-lite plan --target <old-dts-dir> [--source <new-dts-stack-dir>] [--images-dir <dir>] [--extra-dir <dir>]
-  dts-upgrade-lite apply --target <old-dts-dir> [--source <new-dts-stack-dir>] [--images-dir <dir>] [--extra-dir <dir>] --yes
+  dts-upgrade-lite apply --target <old-dts-dir> [--source <new-dts-stack-dir>] [--images-dir <dir>] [--extra-dir <dir>] --yes [--force] [--skip-db-backup]
   dts-upgrade-lite rollback --target <dts-dir> --backup-dir <backup-dir> [--restore-db]
+
+Flags:
+  --force            break stale .upgrade-lite-lock left by a previous failed run
+  --skip-db-backup   skip cold-copy of services/dts-pg/data (faster, no DB rollback)
+  --remove-orphans   pass --remove-orphans to compose down/up (off by default)
+  --force-recreate   force recreate all containers regardless of image diff
 
 Pure shell legacy-safe upgrader. It preserves customer compose customizations,
 updates IMAGE_* values in .env, appends missing env keys, writes a static HTML
@@ -171,6 +182,18 @@ parse_args() {
         SKIP_DB_BACKUP=1
         shift
         ;;
+      --force)
+        FORCE=1
+        shift
+        ;;
+      --remove-orphans)
+        REMOVE_ORPHANS=1
+        shift
+        ;;
+      --force-recreate)
+        FORCE_RECREATE=1
+        shift
+        ;;
       -h|--help)
         usage
         exit 0
@@ -180,6 +203,26 @@ parse_args() {
         ;;
     esac
   done
+}
+
+validate_args_for_action() {
+  case "${ACTION}" in
+    plan)
+      [[ "${YES}" -eq 0 ]]            || die "--yes is only valid for 'apply'"
+      [[ "${RESTORE_DB}" -eq 0 ]]     || die "--restore-db is only valid for 'rollback'"
+      [[ "${SKIP_DB_BACKUP}" -eq 0 ]] || die "--skip-db-backup is only valid for 'apply'"
+      [[ "${FORCE}" -eq 0 ]]          || die "--force is only valid for 'apply'"
+      [[ "${FORCE_RECREATE}" -eq 0 ]] || die "--force-recreate is only valid for 'apply'/'rollback'"
+      ;;
+    apply)
+      [[ "${RESTORE_DB}" -eq 0 ]] || die "--restore-db is only valid for 'rollback'"
+      ;;
+    rollback)
+      [[ "${YES}" -eq 0 ]]            || die "--yes is only valid for 'apply'"
+      [[ "${SKIP_DB_BACKUP}" -eq 0 ]] || die "--skip-db-backup is only valid for 'apply'"
+      [[ "${FORCE}" -eq 0 ]]          || die "--force is only valid for 'apply'"
+      ;;
+  esac
 }
 
 normalize_paths() {
@@ -276,10 +319,19 @@ detect_compose_runner() {
   if [[ -n "${COMPOSE_RUNNER:-}" ]]; then
     return 0
   fi
-  if command -v docker-compose >/dev/null 2>&1 && docker-compose version >/dev/null 2>&1; then
+  local prefer_v1=0
+  if [[ "${UPGRADE_MODE:-}" == "legacy" ]]; then
+    prefer_v1=1
+  fi
+  local has_v1=0 has_v2=0
+  command -v docker-compose >/dev/null 2>&1 && docker-compose version >/dev/null 2>&1 && has_v1=1
+  command -v docker >/dev/null 2>&1 && docker compose version >/dev/null 2>&1 && has_v2=1
+  if [[ "${prefer_v1}" -eq 1 && "${has_v1}" -eq 1 ]]; then
     COMPOSE_RUNNER="docker-compose"
-  elif command -v docker >/dev/null 2>&1 && docker compose version >/dev/null 2>&1; then
+  elif [[ "${has_v2}" -eq 1 ]]; then
     COMPOSE_RUNNER="docker compose"
+  elif [[ "${has_v1}" -eq 1 ]]; then
+    COMPOSE_RUNNER="docker-compose"
   else
     die "neither docker-compose nor docker compose is available"
   fi
@@ -333,6 +385,7 @@ check_postgres_major() {
 
 write_env_plan() {
   local key source_value target_value action
+  HAS_IMAGE_CHANGE=0
   printf 'action\tkey\ttarget\tsource\tfrom\n' > "${ENV_PLAN_FILE}"
   : > "${IMAGE_PLAN_FILE}"
   for key in "${SOURCE_KEYS[@]}"; do
@@ -344,6 +397,7 @@ write_env_plan() {
           action="KEEP_IMAGE"
         else
           action="UPDATE_IMAGE"
+          HAS_IMAGE_CHANGE=1
         fi
       elif [[ "${target_value}" == "${source_value}" ]]; then
         action="KEEP_SITE"
@@ -354,6 +408,7 @@ write_env_plan() {
       target_value=""
       if [[ "${key}" == IMAGE_* ]]; then
         action="ADD_IMAGE"
+        HAS_IMAGE_CHANGE=1
       else
         action="ADD_KEY"
       fi
@@ -490,7 +545,7 @@ backup_file() {
     return 0
   fi
   mkdir -p "$(dirname "${BACKUP_DIR}/${rel}")"
-  cp -p "${target_file}" "${BACKUP_DIR}/${rel}"
+  cp -a "${target_file}" "${BACKUP_DIR}/${rel}"
   append_line "${BACKUP_DIR}/.rollback-files.list" "${rel}"
 }
 
@@ -513,9 +568,12 @@ backup_postgres_data() {
 
 verify_checksums() {
   local checksums_file="${EXTRA_DIR}/checksums.txt"
-  if [[ ! -d "${IMAGES_DIR}" || ! -s "${checksums_file}" ]]; then
-    append_line "${SUMMARY_FILE}" "- checksums: skipped"
+  if [[ ! -d "${IMAGES_DIR}" || ! -e "${checksums_file}" ]]; then
+    append_line "${SUMMARY_FILE}" "- checksums: skipped (assumed preloaded)"
     return 0
+  fi
+  if [[ ! -s "${checksums_file}" ]]; then
+    die "checksums.txt is empty: ${checksums_file} (offline package likely corrupt)"
   fi
   (cd "${IMAGES_DIR}" && sha256sum -c "${checksums_file}" >/dev/null)
   append_line "${SUMMARY_FILE}" "- checksums: ok"
@@ -575,7 +633,28 @@ should_skip_source_file() {
     .env|docker-compose*.yml|docker-compose*.yaml)
       return 0
       ;;
-    config/*|logs/*|backups/*|.git/*|services/dts-pg/data|services/dts-pg/data/*)
+    config/*|logs/*|backups/*)
+      return 0
+      ;;
+    .git|.git/*|.gitignore|.gitattributes|.gitkeep)
+      return 0
+      ;;
+    services/dts-pg/data|services/dts-pg/data/*)
+      return 0
+      ;;
+    services/*/data|services/*/data/*)
+      return 0
+      ;;
+    tests|tests/*|tools|tools/*|playwright|playwright/*)
+      return 0
+      ;;
+    source|source/*|builds|builds/*|reports|reports/*|worklog|worklog/*|docs|docs/*|data|data/*)
+      return 0
+      ;;
+    dev-up.sh|dev-stop.sh|enable-devtools.sh|encry.sh)
+      return 0
+      ;;
+    AGENTS.md|CLAUDE.md|lefthook.yml|README.md)
       return 0
       ;;
     *)
@@ -631,13 +710,26 @@ sync_new_runtime_files() {
 }
 
 stop_stack() {
-  run_compose "${TARGET_DIR}" -f "${COMPOSE_FILE}" down --remove-orphans >/dev/null || true
-  append_line "${SUMMARY_FILE}" "- stack stopped"
+  local -a args=(-f "${COMPOSE_FILE}" down)
+  if [[ "${REMOVE_ORPHANS}" -eq 1 ]]; then
+    args+=(--remove-orphans)
+  fi
+  run_compose "${TARGET_DIR}" "${args[@]}" >/dev/null || true
+  append_line "${SUMMARY_FILE}" "- stack stopped (remove_orphans=${REMOVE_ORPHANS})"
 }
 
 start_stack() {
-  run_compose "${TARGET_DIR}" -f "${COMPOSE_FILE}" up -d --force-recreate >/dev/null
-  append_line "${SUMMARY_FILE}" "- stack started"
+  local -a args=(-f "${COMPOSE_FILE}" up -d)
+  local force_recreate=0
+  if [[ "${HAS_IMAGE_CHANGE:-0}" -eq 1 || "${FORCE_RECREATE}" -eq 1 ]]; then
+    force_recreate=1
+    args+=(--force-recreate)
+  fi
+  if [[ "${REMOVE_ORPHANS}" -eq 1 ]]; then
+    args+=(--remove-orphans)
+  fi
+  run_compose "${TARGET_DIR}" "${args[@]}" >/dev/null
+  append_line "${SUMMARY_FILE}" "- stack started (force_recreate=${force_recreate}, remove_orphans=${REMOVE_ORPHANS})"
 }
 
 postcheck() {
@@ -653,15 +745,38 @@ postcheck() {
 
 write_lock() {
   local lock_file="${TARGET_DIR}/.upgrade-lite-lock"
-  [[ ! -e "${lock_file}" ]] || die "upgrade lock already exists: ${lock_file}"
+  if [[ -e "${lock_file}" ]]; then
+    if [[ "${FORCE}" -eq 1 ]]; then
+      warn "stale upgrade lock present, --force breaking it: ${lock_file}"
+      rm -f "${lock_file}"
+    else
+      die "upgrade lock already exists: ${lock_file} (rerun with --force to break)"
+    fi
+  fi
   cat > "${lock_file}" <<EOF_LOCK
 timestamp=${UPGRADE_TS}
 report_dir=${REPORT_DIR}
+pid=$$
 EOF_LOCK
+  LOCK_OWNED=1
 }
 
 remove_lock() {
   rm -f "${TARGET_DIR}/.upgrade-lite-lock"
+  LOCK_OWNED=0
+}
+
+apply_failure_trap() {
+  local exit_code=$?
+  if [[ "${LOCK_OWNED}" -eq 1 ]]; then
+    rm -f "${TARGET_DIR}/.upgrade-lite-lock" 2>/dev/null || true
+    if [[ -n "${SUMMARY_FILE:-}" ]]; then
+      append_line "${SUMMARY_FILE}" "- final status: FAILED (exit=${exit_code}); lock auto-cleared"
+    fi
+    warn "apply failed (exit=${exit_code}); lock auto-cleared. Inspect ${REPORT_DIR:-?} and consider rollback."
+  fi
+  trap - EXIT
+  exit "${exit_code}"
 }
 
 run_apply() {
@@ -678,9 +793,10 @@ run_apply() {
   write_env_plan
   write_diffs
   write_image_package_plan
+  write_lock
+  trap apply_failure_trap EXIT INT TERM
   verify_checksums
   load_images
-  write_lock
   stop_stack
   backup_postgres_data
   write_updated_env
@@ -689,6 +805,7 @@ run_apply() {
   start_stack
   postcheck
   remove_lock
+  trap - EXIT INT TERM
   append_line "${SUMMARY_FILE}" "- final status: success"
   write_html_report
   info "apply completed"
@@ -706,7 +823,7 @@ restore_files() {
     target_file="${TARGET_DIR}/${rel}"
     [[ -f "${source_file}" ]] || die "backup file missing: ${rel}"
     mkdir -p "$(dirname "${target_file}")"
-    cp -p "${source_file}" "${target_file}"
+    cp -a "${source_file}" "${target_file}"
     append_line "${SUMMARY_FILE}" "- restored file: ${rel}"
   done < "${list_file}"
 }
@@ -753,8 +870,10 @@ run_rollback() {
   remove_added_files
   restore_data_dirs
   remove_lock
+  detect_mode
   load_source_env
   load_target_env
+  FORCE_RECREATE=1
   start_stack
   postcheck
   append_line "${SUMMARY_FILE}" "- final status: success"
@@ -766,6 +885,7 @@ run_rollback() {
 case "${ACTION}" in
   plan|apply|rollback)
     parse_args "$@"
+    validate_args_for_action
     normalize_paths
     UPGRADE_TS="$(timestamp)"
     "run_${ACTION}"
