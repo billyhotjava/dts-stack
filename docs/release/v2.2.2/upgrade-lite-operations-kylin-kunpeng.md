@@ -4,7 +4,7 @@
 
 ## 适用前提
 
-- 现场运行目录示例：`/data/stack_old`
+- 现场运行目录示例：`/data/dts-stack`
 - 升级包解压目录示例：`/tmp/dts-upgrade`
 - 现场使用 legacy 模式：`.env` 中 `LEGACY_STACK=true`
 - 现场有 `bash`、`tar`、`diff`、`sha256sum`、`docker`、`docker-compose`
@@ -40,7 +40,7 @@ test -x ./bin/dts-upgrade-lite
 
 ```bash
 ./bin/dts-upgrade-lite plan \
-  --target /data/stack_old \
+  --target /data/dts-stack \
   --source /tmp/dts-upgrade/dts-stack \
   --images-dir /tmp/dts-upgrade/images \
   --extra-dir /tmp/dts-upgrade/extra
@@ -49,14 +49,14 @@ test -x ./bin/dts-upgrade-lite
 查看报告目录：
 
 ```bash
-ls -1d /data/stack_old/logs/upgrade-lite-*
-cat /data/stack_old/logs/upgrade-lite-*/summary.md
+ls -1d /data/dts-stack/logs/upgrade-lite-*
+cat /data/dts-stack/logs/upgrade-lite-*/summary.md
 ```
 
 现场可打开：
 
 ```text
-/data/stack_old/logs/upgrade-lite-*/report.html
+/data/dts-stack/logs/upgrade-lite-*/report.html
 ```
 
 重点确认：
@@ -74,7 +74,7 @@ cat /data/stack_old/logs/upgrade-lite-*/summary.md
 
 ```bash
 ./bin/dts-upgrade-lite apply \
-  --target /data/stack_old \
+  --target /data/dts-stack \
   --source /tmp/dts-upgrade/dts-stack \
   --images-dir /tmp/dts-upgrade/images \
   --extra-dir /tmp/dts-upgrade/extra \
@@ -94,7 +94,7 @@ cat /data/stack_old/logs/upgrade-lite-*/summary.md
 ## 4. 升级后检查
 
 ```bash
-cd /data/stack_old
+cd /data/dts-stack
 docker-compose -f docker-compose.legacy.yml ps
 cat logs/upgrade-lite-*/summary.md
 ```
@@ -114,16 +114,16 @@ cat logs/upgrade-lite-*/summary.md
 ```bash
 cd /tmp/dts-upgrade/dts-stack
 ./bin/dts-upgrade-lite rollback \
-  --target /data/stack_old \
-  --backup-dir /data/stack_old/logs/upgrade-lite-时间戳/backup
+  --target /data/dts-stack \
+  --backup-dir /data/dts-stack/logs/upgrade-lite-时间戳/backup
 ```
 
 如果数据库目录也必须恢复，才使用：
 
 ```bash
 ./bin/dts-upgrade-lite rollback \
-  --target /data/stack_old \
-  --backup-dir /data/stack_old/logs/upgrade-lite-时间戳/backup \
+  --target /data/dts-stack \
+  --backup-dir /data/dts-stack/logs/upgrade-lite-时间戳/backup \
   --restore-db
 ```
 

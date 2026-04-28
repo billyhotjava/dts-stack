@@ -3,6 +3,7 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 DEFAULT_SOURCE_ROOT="$(cd -- "${SCRIPT_DIR}/.." && pwd)"
+DEFAULT_TARGET_DIR="${DTS_UPGRADE_LITE_DEFAULT_TARGET:-/data/dts-stack}"
 
 ACTION="${1:-}"
 [[ -n "${ACTION}" ]] && shift || true
@@ -38,9 +39,14 @@ die() {
 usage() {
   cat <<'EOF'
 Usage:
-  dts-upgrade-lite plan --target <old-dts-dir> [--source <new-dts-stack-dir>] [--images-dir <dir>] [--extra-dir <dir>]
-  dts-upgrade-lite apply --target <old-dts-dir> [--source <new-dts-stack-dir>] [--images-dir <dir>] [--extra-dir <dir>] --yes [--force] [--skip-db-backup]
-  dts-upgrade-lite rollback --target <dts-dir> --backup-dir <backup-dir> [--restore-db]
+  dts-upgrade-lite plan [--target <dir, default /data/dts-stack>] [--source <new-dts-stack-dir>] [--images-dir <dir>] [--extra-dir <dir>]
+  dts-upgrade-lite apply [--target <dir, default /data/dts-stack>] [--source <new-dts-stack-dir>] [--images-dir <dir>] [--extra-dir <dir>] --yes [--force] [--skip-db-backup]
+  dts-upgrade-lite rollback [--target <dir, default /data/dts-stack>] --backup-dir <backup-dir> [--restore-db]
+
+Target contract:
+  - Default --target is /data/dts-stack (operator may override).
+  - The target directory's path and inode are NOT renamed/moved during upgrade.
+  - services/*/data persistent dirs are never written to.
 
 Flags:
   --force            break stale .upgrade-lite-lock left by a previous failed run
@@ -225,8 +231,20 @@ validate_args_for_action() {
   esac
 }
 
+resolve_default_target() {
+  if [[ -n "${TARGET_DIR}" ]]; then
+    return 0
+  fi
+  if [[ -d "${DEFAULT_TARGET_DIR}" ]]; then
+    TARGET_DIR="${DEFAULT_TARGET_DIR}"
+    info "no --target provided; using default ${TARGET_DIR}"
+    return 0
+  fi
+  die "--target is required (default ${DEFAULT_TARGET_DIR} does not exist)"
+}
+
 normalize_paths() {
-  [[ -n "${TARGET_DIR}" ]] || die "--target is required"
+  resolve_default_target
   [[ -d "${TARGET_DIR}" ]] || die "target directory not found: ${TARGET_DIR}"
   if [[ "${ACTION}" != "rollback" ]]; then
     [[ -d "${SOURCE_ROOT}" ]] || die "source directory not found: ${SOURCE_ROOT}"
@@ -523,6 +541,8 @@ EOF_HTML_HEAD
 }
 
 run_plan() {
+  snapshot_target_identity
+  print_target_banner "plan"
   init_report "${TARGET_DIR}" "plan"
   load_source_env
   load_target_env
@@ -532,6 +552,7 @@ run_plan() {
   write_env_plan
   write_diffs
   write_image_package_plan
+  assert_target_unchanged
   write_html_report
   info "plan written: ${REPORT_DIR}"
   info "report: ${REPORT_DIR}/report.html"
@@ -779,8 +800,38 @@ apply_failure_trap() {
   exit "${exit_code}"
 }
 
+snapshot_target_identity() {
+  TARGET_INODE_AT_START="$(stat -c %i "${TARGET_DIR}" 2>/dev/null || true)"
+  TARGET_REALPATH_AT_START="$(readlink -f "${TARGET_DIR}" 2>/dev/null || printf '%s' "${TARGET_DIR}")"
+}
+
+assert_target_unchanged() {
+  local now_inode now_real
+  [[ -n "${TARGET_INODE_AT_START:-}" ]] || return 0
+  now_inode="$(stat -c %i "${TARGET_DIR}" 2>/dev/null || true)"
+  now_real="$(readlink -f "${TARGET_DIR}" 2>/dev/null || printf '%s' "${TARGET_DIR}")"
+  if [[ "${now_inode}" != "${TARGET_INODE_AT_START}" || "${now_real}" != "${TARGET_REALPATH_AT_START}" ]]; then
+    die "target directory identity changed (inode ${TARGET_INODE_AT_START} -> ${now_inode}, path ${TARGET_REALPATH_AT_START} -> ${now_real})"
+  fi
+}
+
+print_target_banner() {
+  local action_name="$1"
+  local inode_str="${TARGET_INODE_AT_START:-?}"
+  info "=========================================================="
+  info "${action_name}  target: ${TARGET_DIR}"
+  info "${action_name}  realpath: ${TARGET_REALPATH_AT_START:-${TARGET_DIR}} (inode=${inode_str})"
+  info "${action_name}  contract: target path will not be renamed/moved during ${action_name}"
+  if [[ -n "${SOURCE_ROOT:-}" && "${action_name}" != "rollback" ]]; then
+    info "${action_name}  source: ${SOURCE_ROOT}"
+  fi
+  info "=========================================================="
+}
+
 run_apply() {
   [[ "${YES}" -eq 1 ]] || die "apply requires --yes"
+  snapshot_target_identity
+  print_target_banner "apply"
   init_report "${TARGET_DIR}" "apply"
   : > "${BACKUP_DIR}/.rollback-files.list"
   : > "${BACKUP_DIR}/.added-files.list"
@@ -802,8 +853,10 @@ run_apply() {
   write_updated_env
   sync_config_tree
   sync_new_runtime_files
+  assert_target_unchanged
   start_stack
   postcheck
+  assert_target_unchanged
   remove_lock
   trap - EXIT INT TERM
   append_line "${SUMMARY_FILE}" "- final status: success"
@@ -863,6 +916,8 @@ run_rollback() {
   [[ -n "${BACKUP_DIR}" ]] || die "--backup-dir is required"
   [[ -d "${BACKUP_DIR}" ]] || die "backup directory not found: ${BACKUP_DIR}"
   SOURCE_ROOT="${TARGET_DIR}"
+  snapshot_target_identity
+  print_target_banner "rollback"
   init_report "${TARGET_DIR}" "rollback"
   detect_mode
   stop_stack
@@ -874,8 +929,10 @@ run_rollback() {
   load_source_env
   load_target_env
   FORCE_RECREATE=1
+  assert_target_unchanged
   start_stack
   postcheck
+  assert_target_unchanged
   append_line "${SUMMARY_FILE}" "- final status: success"
   write_html_report
   info "rollback completed"

@@ -2,7 +2,7 @@
 
 适用目录示例：
 
-- 旧目录：`/data/stack_old`
+- 旧目录：`/data/dts-stack`
 - 新目录：`/data/s10_stack`
 - 升级包临时目录：`/tmp/dts-upgrade`
 
@@ -30,14 +30,14 @@ legacy 现场已知版本：
 普通模式检查：
 
 ```bash
-cd /data/stack_old
+cd /data/dts-stack
 docker-compose -f docker-compose-app.yml ps
 ```
 
 legacy 模式检查：
 
 ```bash
-cd /data/stack_old
+cd /data/dts-stack
 docker-compose -f docker-compose.legacy.yml ps
 ```
 
@@ -51,7 +51,7 @@ docker-compose -f docker-compose.legacy.yml ps
 ## 2. 模式确认
 
 ```bash
-grep -E '^(LEGACY_STACK|DEPLOY_MODE)=' /data/stack_old/.env
+grep -E '^(LEGACY_STACK|DEPLOY_MODE)=' /data/dts-stack/.env
 ```
 
 判断：
@@ -66,7 +66,7 @@ grep -E '^(LEGACY_STACK|DEPLOY_MODE)=' /data/stack_old/.env
 检查旧目录 `.env` 中的镜像变量：
 
 ```bash
-grep -E '^(IMAGE_DTS_|IMAGE_POSTGRES|IMAGE_DBT|IMAGE_AIRFLOW|IMAGE_ADDAX)=' /data/stack_old/.env
+grep -E '^(IMAGE_DTS_|IMAGE_POSTGRES|IMAGE_DBT|IMAGE_AIRFLOW|IMAGE_ADDAX)=' /data/dts-stack/.env
 ```
 
 检查本机已有镜像：
@@ -91,7 +91,7 @@ docker images | grep -E 'dts-(admin|platform|ingestion|admin-webapp|platform-web
 检查旧数据库版本：
 
 ```bash
-cat /data/stack_old/services/dts-pg/data/pgdata/PG_VERSION
+cat /data/dts-stack/services/dts-pg/data/pgdata/PG_VERSION
 ```
 
 检查新版本目标 PostgreSQL：
@@ -116,7 +116,7 @@ grep '^IMAGE_POSTGRES=' /data/s10_stack/.env /data/s10_stack/imgversion.conf 2>/
 如果新目录还没有 `.env`：
 
 ```bash
-cp /data/stack_old/.env /data/s10_stack/.env
+cp /data/dts-stack/.env /data/s10_stack/.env
 ```
 
 然后确认：
@@ -197,7 +197,7 @@ find /tmp/dts-upgrade -maxdepth 2 -type f | sort
 ```bash
 cd /tmp/dts-upgrade/dts-stack
 ./bin/dts-upgrade-lite plan \
-  --target /data/stack_old \
+  --target /data/dts-stack \
   --source /tmp/dts-upgrade/dts-stack \
   --images-dir /tmp/dts-upgrade/images \
   --extra-dir /tmp/dts-upgrade/extra
@@ -206,15 +206,15 @@ cd /tmp/dts-upgrade/dts-stack
 打开或查看：
 
 ```bash
-ls -1d /data/stack_old/logs/upgrade-lite-*
-cat /data/stack_old/logs/upgrade-lite-*/summary.md
+ls -1d /data/dts-stack/logs/upgrade-lite-*
+cat /data/dts-stack/logs/upgrade-lite-*/summary.md
 ```
 
 确认 `report.html` 中 compose、`.env`、镜像和风险项后执行：
 
 ```bash
 ./bin/dts-upgrade-lite apply \
-  --target /data/stack_old \
+  --target /data/dts-stack \
   --source /tmp/dts-upgrade/dts-stack \
   --images-dir /tmp/dts-upgrade/images \
   --extra-dir /tmp/dts-upgrade/extra \
@@ -228,8 +228,8 @@ cat /data/stack_old/logs/upgrade-lite-*/summary.md
 查看升级日志和摘要：
 
 ```bash
-ls -1d /data/stack_old/logs/upgrade-lite-*
-cat /data/stack_old/logs/upgrade-lite-*/summary.md
+ls -1d /data/dts-stack/logs/upgrade-lite-*
+cat /data/dts-stack/logs/upgrade-lite-*/summary.md
 ```
 
 检查容器：
@@ -237,21 +237,21 @@ cat /data/stack_old/logs/upgrade-lite-*/summary.md
 普通模式：
 
 ```bash
-cd /data/stack_old
+cd /data/dts-stack
 docker-compose -f docker-compose-app.yml ps
 ```
 
 legacy 模式：
 
 ```bash
-cd /data/stack_old
+cd /data/dts-stack
 docker-compose -f docker-compose.legacy.yml ps
 ```
 
 检查数据库冷备：
 
 ```bash
-find /data/stack_old/logs -path '*/backup/services/dts-pg/data' -type d | sort
+find /data/dts-stack/logs -path '*/backup/services/dts-pg/data' -type d | sort
 ```
 
 检查项：
@@ -272,8 +272,8 @@ find /data/stack_old/logs -path '*/backup/services/dts-pg/data' -type d | sort
 ```bash
 cd /tmp/dts-upgrade/dts-stack
 ./bin/dts-upgrade-lite rollback \
-  --target /data/stack_old \
-  --backup-dir /data/stack_old/logs/upgrade-lite-时间戳/backup
+  --target /data/dts-stack \
+  --backup-dir /data/dts-stack/logs/upgrade-lite-时间戳/backup
 ```
 
 适用：
@@ -286,8 +286,8 @@ cd /tmp/dts-upgrade/dts-stack
 ```bash
 cd /tmp/dts-upgrade/dts-stack
 ./bin/dts-upgrade-lite rollback \
-  --target /data/stack_old \
-  --backup-dir /data/stack_old/logs/upgrade-lite-时间戳/backup \
+  --target /data/dts-stack \
+  --backup-dir /data/dts-stack/logs/upgrade-lite-时间戳/backup \
   --restore-db
 ```
 

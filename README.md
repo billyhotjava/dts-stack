@@ -62,11 +62,18 @@
 - 放到 `tools/docker-compose/`（文件名例如 `docker-compose-Linux-aarch64`），并 `chmod +x`；
 - `./init.sh` 会自动探测并使用它（legacy 模式同样适用）。
 
-现场 legacy 就地升级优先使用纯 Shell 升级器，不依赖 Python：
+现场 legacy 就地升级优先使用纯 Shell 升级器，不依赖 Python。
+
+**目录契约**：升级目标目录默认为 `/data/dts-stack`，`--target` 不传时自动使用；该目录的路径与 inode 在升级过程中不会被改变；`services/*/data` 持久化目录不会被写入。
 
 ```bash
-./bin/dts-upgrade-lite plan --target /data/stack_old --source /tmp/dts-upgrade/dts-stack
-./bin/dts-upgrade-lite apply --target /data/stack_old --source /tmp/dts-upgrade/dts-stack --yes
+# --target 不传则默认 /data/dts-stack
+./bin/dts-upgrade-lite plan  --source /tmp/dts-upgrade/dts-stack
+./bin/dts-upgrade-lite apply --source /tmp/dts-upgrade/dts-stack --yes
+
+# 显式指定目标目录（仅当客户路径不是 /data/dts-stack 时）
+./bin/dts-upgrade-lite plan  --target /data/dts-stack --source /tmp/dts-upgrade/dts-stack
+./bin/dts-upgrade-lite apply --target /data/dts-stack --source /tmp/dts-upgrade/dts-stack --yes
 ```
 
 操作说明见 `docs/release/v2.2.3/upgrade-lite-operations-kylin-kunpeng.md`。

@@ -2,9 +2,16 @@
 
 本文面向麒麟 OS + 鲲鹏 ARM64 现场，用于替代“手动停容器、Portainer 删除容器、手工 load 镜像、手工 `docker-compose up -d`”的流程。
 
+## 目录契约
+
+- 升级目标目录默认为 `/data/dts-stack`（脚本默认值，可省略 `--target`）
+- 升级与回滚不会改变目标目录的路径与 inode
+- `services/*/data` 持久化数据目录在升级期间不会被脚本写入
+- 升级产物：`${target}/logs/upgrade-lite-${timestamp}/`
+
 ## 适用前提
 
-- 现场运行目录示例：`/data/stack_old`
+- 现场运行目录默认：`/data/dts-stack`（如需覆盖可显式 `--target`）
 - 升级包解压目录示例：`/tmp/dts-upgrade`
 - 现场使用 legacy 模式：`.env` 中 `LEGACY_STACK=true`
 - 现场有 `bash`、`tar`、`diff`、`sha256sum`、`docker`、`docker-compose`
@@ -40,7 +47,7 @@ test -x ./bin/dts-upgrade-lite
 
 ```bash
 ./bin/dts-upgrade-lite plan \
-  --target /data/stack_old \
+  --target /data/dts-stack \
   --source /tmp/dts-upgrade/dts-stack \
   --images-dir /tmp/dts-upgrade/images \
   --extra-dir /tmp/dts-upgrade/extra
@@ -49,14 +56,14 @@ test -x ./bin/dts-upgrade-lite
 查看报告目录：
 
 ```bash
-ls -1d /data/stack_old/logs/upgrade-lite-*
-cat /data/stack_old/logs/upgrade-lite-*/summary.md
+ls -1d /data/dts-stack/logs/upgrade-lite-*
+cat /data/dts-stack/logs/upgrade-lite-*/summary.md
 ```
 
 现场可打开：
 
 ```text
-/data/stack_old/logs/upgrade-lite-*/report.html
+/data/dts-stack/logs/upgrade-lite-*/report.html
 ```
 
 重点确认：
@@ -74,7 +81,7 @@ cat /data/stack_old/logs/upgrade-lite-*/summary.md
 
 ```bash
 ./bin/dts-upgrade-lite apply \
-  --target /data/stack_old \
+  --target /data/dts-stack \
   --source /tmp/dts-upgrade/dts-stack \
   --images-dir /tmp/dts-upgrade/images \
   --extra-dir /tmp/dts-upgrade/extra \
@@ -94,7 +101,7 @@ cat /data/stack_old/logs/upgrade-lite-*/summary.md
 ## 4. 升级后检查
 
 ```bash
-cd /data/stack_old
+cd /data/dts-stack
 docker-compose -f docker-compose.legacy.yml ps
 cat logs/upgrade-lite-*/summary.md
 ```
@@ -114,16 +121,16 @@ cat logs/upgrade-lite-*/summary.md
 ```bash
 cd /tmp/dts-upgrade/dts-stack
 ./bin/dts-upgrade-lite rollback \
-  --target /data/stack_old \
-  --backup-dir /data/stack_old/logs/upgrade-lite-时间戳/backup
+  --target /data/dts-stack \
+  --backup-dir /data/dts-stack/logs/upgrade-lite-时间戳/backup
 ```
 
 如果数据库目录也必须恢复，才使用：
 
 ```bash
 ./bin/dts-upgrade-lite rollback \
-  --target /data/stack_old \
-  --backup-dir /data/stack_old/logs/upgrade-lite-时间戳/backup \
+  --target /data/dts-stack \
+  --backup-dir /data/dts-stack/logs/upgrade-lite-时间戳/backup \
   --restore-db
 ```
 

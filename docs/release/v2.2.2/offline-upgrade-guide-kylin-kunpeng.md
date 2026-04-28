@@ -7,7 +7,7 @@
 - 操作系统为麒麟 OS
 - 服务器为鲲鹏架构
 - 目标环境为内网离线环境
-- 旧版本运行目录为 `stack_old`
+- 旧版本运行目录为 `dts-stack`
 - 新版本源码目录为 `s10_stack`
 - 新版本代码已经在 `s10_stack` 中完成拉取
 - 新版本应用镜像已经在当前服务器本地重新编译完成
@@ -37,7 +37,7 @@
 
 本次升级的原则如下：
 
-1. 以旧目录 `stack_old` 为升级目标目录，不新建运行目录。
+1. 以旧目录 `dts-stack` 为升级目标目录，不新建运行目录。
 2. 以新目录 `s10_stack` 作为升级包来源和升级脚本来源。
 3. 旧目录 `.env` 中的现场自定义配置优先保留。
 4. `.env` 中 `IMAGE_*` 会按新包刷新，避免镜像已 load 但仍启动旧 tag。
@@ -53,7 +53,7 @@
 
 以下命令以这组目录为例：
 
-- 旧版本目录：`/data/stack_old`
+- 旧版本目录：`/data/dts-stack`
 - 新版本目录：`/data/s10_stack`
 - 升级包临时解压目录：`/tmp/dts-upgrade`
 
@@ -68,7 +68,7 @@
 先进入旧目录：
 
 ```bash
-cd /data/stack_old
+cd /data/dts-stack
 ```
 
 如果是普通模式，检查：
@@ -93,7 +93,7 @@ docker-compose -f docker-compose.legacy.yml ps
 执行：
 
 ```bash
-grep -E '^(LEGACY_STACK|DEPLOY_MODE)=' /data/stack_old/.env
+grep -E '^(LEGACY_STACK|DEPLOY_MODE)=' /data/dts-stack/.env
 ```
 
 判断规则：
@@ -106,7 +106,7 @@ grep -E '^(LEGACY_STACK|DEPLOY_MODE)=' /data/stack_old/.env
 旧目录 `.env` 中通常包含镜像变量：
 
 ```bash
-grep -E '^(IMAGE_DTS_|IMAGE_POSTGRES|IMAGE_DBT|IMAGE_AIRFLOW|IMAGE_ADDAX)=' /data/stack_old/.env
+grep -E '^(IMAGE_DTS_|IMAGE_POSTGRES|IMAGE_DBT|IMAGE_AIRFLOW|IMAGE_ADDAX)=' /data/dts-stack/.env
 ```
 
 再检查当前服务器本地已有镜像：
@@ -127,7 +127,7 @@ docker images | grep -E 'dts-(admin|platform|ingestion|admin-webapp|platform-web
 检查旧数据库目录版本：
 
 ```bash
-cat /data/stack_old/services/dts-pg/data/pgdata/PG_VERSION
+cat /data/dts-stack/services/dts-pg/data/pgdata/PG_VERSION
 ```
 
 检查新版本目标 PostgreSQL 镜像：
@@ -154,7 +154,7 @@ grep '^IMAGE_POSTGRES=' /data/s10_stack/.env /data/s10_stack/imgversion.conf 2>/
 如果新目录中还没有 `.env`，先复制一份旧目录：
 
 ```bash
-cp /data/stack_old/.env /data/s10_stack/.env
+cp /data/dts-stack/.env /data/s10_stack/.env
 ```
 
 然后根据新版本要求，确认新目录 `.env` 中包含：
@@ -165,7 +165,7 @@ cp /data/stack_old/.env /data/s10_stack/.env
 说明：
 
 - 升级时会用 `s10_stack/.env` 补充新增键
-- 升级时会保留 `stack_old/.env` 中已有现场值
+- 升级时会保留 `dts-stack/.env` 中已有现场值
 
 ### 5.2 选择升级包方式
 
@@ -267,11 +267,11 @@ find /tmp/dts-upgrade -maxdepth 2 -type f | sort
 cd /tmp/dts-upgrade/dts-stack
 ```
 
-先生成升级报告。该步骤只写入 `/data/stack_old/logs/upgrade-lite-*` 报告目录，不修改 `.env`、compose 或配置文件：
+先生成升级报告。该步骤只写入 `/data/dts-stack/logs/upgrade-lite-*` 报告目录，不修改 `.env`、compose 或配置文件：
 
 ```bash
 ./bin/dts-upgrade-lite plan \
-  --target /data/stack_old \
+  --target /data/dts-stack \
   --source /tmp/dts-upgrade/dts-stack \
   --images-dir /tmp/dts-upgrade/images \
   --extra-dir /tmp/dts-upgrade/extra
@@ -280,7 +280,7 @@ cd /tmp/dts-upgrade/dts-stack
 重点查看：
 
 ```bash
-ls -1d /data/stack_old/logs/upgrade-lite-*
+ls -1d /data/dts-stack/logs/upgrade-lite-*
 ```
 
 可在现场浏览器打开 `report.html`，重点确认：
@@ -295,7 +295,7 @@ ls -1d /data/stack_old/logs/upgrade-lite-*
 
 ```bash
 ./bin/dts-upgrade-lite apply \
-  --target /data/stack_old \
+  --target /data/dts-stack \
   --source /tmp/dts-upgrade/dts-stack \
   --images-dir /tmp/dts-upgrade/images \
   --extra-dir /tmp/dts-upgrade/extra \
@@ -325,13 +325,13 @@ lite 升级器会自动执行以下动作：
 ### 8.1 查看升级日志
 
 ```bash
-ls -1d /data/stack_old/logs/upgrade-lite-*
+ls -1d /data/dts-stack/logs/upgrade-lite-*
 ```
 
 重点查看：
 
 ```bash
-cat /data/stack_old/logs/upgrade-lite-*/summary.md
+cat /data/dts-stack/logs/upgrade-lite-*/summary.md
 ```
 
 必须重点确认：
@@ -348,14 +348,14 @@ cat /data/stack_old/logs/upgrade-lite-*/summary.md
 如果是普通模式：
 
 ```bash
-cd /data/stack_old
+cd /data/dts-stack
 docker-compose -f docker-compose-app.yml ps
 ```
 
 如果是 legacy 模式：
 
 ```bash
-cd /data/stack_old
+cd /data/dts-stack
 docker-compose -f docker-compose.legacy.yml ps
 ```
 
@@ -367,7 +367,7 @@ docker-compose -f docker-compose.legacy.yml ps
 ### 8.3 检查 `.env`
 
 ```bash
-grep -E '^(BASE_DOMAIN|HOST_|IMAGE_DTS_|IMAGE_POSTGRES|IMAGE_DBT|IMAGE_AIRFLOW)=' /data/stack_old/.env
+grep -E '^(BASE_DOMAIN|HOST_|IMAGE_DTS_|IMAGE_POSTGRES|IMAGE_DBT|IMAGE_AIRFLOW)=' /data/dts-stack/.env
 ```
 
 要求：
@@ -379,8 +379,8 @@ grep -E '^(BASE_DOMAIN|HOST_|IMAGE_DTS_|IMAGE_POSTGRES|IMAGE_DBT|IMAGE_AIRFLOW)=
 ### 8.4 检查数据库目录
 
 ```bash
-ls -ld /data/stack_old/services/dts-pg/data
-find /data/stack_old/backups -path '*/services/dts-pg/data' -type d | sort
+ls -ld /data/dts-stack/services/dts-pg/data
+find /data/dts-stack/backups -path '*/services/dts-pg/data' -type d | sort
 ```
 
 要求：
@@ -415,8 +415,8 @@ find /data/stack_old/backups -path '*/services/dts-pg/data' -type d | sort
 ```bash
 cd /tmp/dts-upgrade/dts-stack
 ./bin/dts-upgrade-lite rollback \
-  --target /data/stack_old \
-  --backup-dir /data/stack_old/logs/upgrade-lite-时间戳/backup
+  --target /data/dts-stack \
+  --backup-dir /data/dts-stack/logs/upgrade-lite-时间戳/backup
 ```
 
 ### 9.2 何时必须连数据库一起回滚
@@ -433,8 +433,8 @@ cd /tmp/dts-upgrade/dts-stack
 ```bash
 cd /tmp/dts-upgrade/dts-stack
 ./bin/dts-upgrade-lite rollback \
-  --target /data/stack_old \
-  --backup-dir /data/stack_old/logs/upgrade-lite-时间戳/backup \
+  --target /data/dts-stack \
+  --backup-dir /data/dts-stack/logs/upgrade-lite-时间戳/backup \
   --restore-db
 ```
 
@@ -442,7 +442,7 @@ cd /tmp/dts-upgrade/dts-stack
 
 数据库目录：
 
-- `/data/stack_old/services/dts-pg/data`
+- `/data/dts-stack/services/dts-pg/data`
 
 必须按整目录恢复，原因是 PostgreSQL 数据目录内部文件是强一致整体，不能按普通配置文件逐个拼接恢复。
 
@@ -513,7 +513,7 @@ cd /tmp/dts-upgrade/dts-stack
 
 1. 在 `s10_stack` 生成升级包
 2. 解压升级包
-3. 确认 `stack_old/.env` 中 `LEGACY_STACK` / `DEPLOY_MODE`
+3. 确认 `dts-stack/.env` 中 `LEGACY_STACK` / `DEPLOY_MODE`
 4. 执行 `bin/dts-upgrade-lite plan`，打开 `report.html` 查看差异
 5. 确认 PostgreSQL 主版本兼容、compose 差异和 `.env` 镜像更新计划
 6. 执行 `bin/dts-upgrade-lite apply --yes`
@@ -527,9 +527,9 @@ cd /tmp/dts-upgrade/dts-stack
 ## 12. 相关文件
 
 - 新版本源码目录：`/data/s10_stack`
-- 旧版本运行目录：`/data/stack_old`
+- 旧版本运行目录：`/data/dts-stack`
 - lite 升级脚本：`/tmp/dts-upgrade/dts-stack/bin/dts-upgrade-lite`
 - 兼容旧升级脚本：`/tmp/dts-upgrade/dts-stack/bin/dts-upgrade`
-- lite 报告：`/data/stack_old/logs/upgrade-lite-*/report.html`
-- lite 摘要：`/data/stack_old/logs/upgrade-lite-*/summary.md`
-- lite 回滚备份目录：`/data/stack_old/logs/upgrade-lite-*/backup`
+- lite 报告：`/data/dts-stack/logs/upgrade-lite-*/report.html`
+- lite 摘要：`/data/dts-stack/logs/upgrade-lite-*/summary.md`
+- lite 回滚备份目录：`/data/dts-stack/logs/upgrade-lite-*/backup`

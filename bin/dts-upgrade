@@ -6,13 +6,19 @@ SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 source "${SCRIPT_DIR}/lib/dts-upgrade-common.sh"
 SOURCE_ROOT="${DTS_UPGRADE_SOURCE_ROOT:-$(cd -- "${SCRIPT_DIR}/.." && pwd)}"
 
+DEFAULT_TARGET_DIR="${DTS_UPGRADE_DEFAULT_TARGET:-/data/dts-stack}"
+
 usage() {
-  cat <<'EOF'
+  cat <<EOF
 Usage:
-  dts-upgrade --target <old-dts-dir> --images-dir <dir> --extra-dir <dir>
+  dts-upgrade [--target <dir, default ${DEFAULT_TARGET_DIR}>] --images-dir <dir> --extra-dir <dir>
 
 This command upgrades an existing DTS deployment in place using an offline
 update package. Containers must already be stopped before running it.
+
+Target contract:
+  - Default --target is ${DEFAULT_TARGET_DIR} (operator may override).
+  - The target directory is NOT renamed/moved during upgrade.
 EOF
 }
 
@@ -44,7 +50,14 @@ while [[ $# -gt 0 ]]; do
   esac
 done
 
-[[ -n "${TARGET_DIR}" ]] || upgrade_die "--target is required"
+if [[ -z "${TARGET_DIR}" ]]; then
+  if [[ -d "${DEFAULT_TARGET_DIR}" ]]; then
+    TARGET_DIR="${DEFAULT_TARGET_DIR}"
+    upgrade_info "no --target provided; using default ${TARGET_DIR}"
+  else
+    upgrade_die "--target is required (default ${DEFAULT_TARGET_DIR} does not exist)"
+  fi
+fi
 [[ -n "${IMAGES_DIR}" ]] || upgrade_die "--images-dir is required"
 [[ -n "${EXTRA_DIR}" ]] || upgrade_die "--extra-dir is required"
 
