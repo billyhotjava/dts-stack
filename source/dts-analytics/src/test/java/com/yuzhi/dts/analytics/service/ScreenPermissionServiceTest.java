@@ -181,4 +181,149 @@ class ScreenPermissionServiceTest {
         PermissionSnapshot snap = service.snapshot(screen(10L), null, List.of());
         assertThat(snap.canRead()).isFalse();
     }
+
+    // -----------------------------------------------------------------
+    // Sprint-18 密级闸门 + 越级共享
+    // -----------------------------------------------------------------
+
+    private AnalyticsScreen screenWithLevel(long id, String classification) {
+        AnalyticsScreen s = screen(id);
+        s.setClassification(classification);
+        return s;
+    }
+
+    private AnalyticsScreenAccess viewerAccess(long screenId, String granteeId, boolean override) {
+        AnalyticsScreenAccess a = access(screenId, "USER", granteeId, "VIEWER");
+        a.setLevelOverride(override);
+        return a;
+    }
+
+    private PlatformContext ctx(String classification) {
+        return new PlatformContext(null, classification, null);
+    }
+
+    @Test
+    void viewer_with_clearance_meets_screen_classification_returns_readOnly() {
+        AnalyticsUser u = user(11L, false);
+        when(repo.findGrantsForUser(eq(10L), eq("11"), any()))
+            .thenReturn(List.of(viewerAccess(10L, "11", false)));
+
+        PermissionSnapshot snap = service.snapshot(screenWithLevel(10L, "SECRET"), u, ctx("SECRET"));
+
+        assertThat(snap.canRead()).isTrue();
+        assertThat(snap.canEdit()).isFalse();
+        assertThat(snap.overrideUsed()).isFalse();
+    }
+
+    @Test
+    void viewer_with_insufficient_clearance_no_override_returns_none() {
+        AnalyticsUser u = user(12L, false);
+        when(repo.findGrantsForUser(eq(10L), eq("12"), any()))
+            .thenReturn(List.of(viewerAccess(10L, "12", false)));
+
+        PermissionSnapshot snap = service.snapshot(screenWithLevel(10L, "CONFIDENTIAL"), u, ctx("INTERNAL"));
+
+        assertThat(snap.canRead()).isFalse();
+        assertThat(snap.overrideUsed()).isFalse();
+    }
+
+    @Test
+    void viewer_with_insufficient_clearance_but_override_grant_returns_readOnlyOverride() {
+        AnalyticsUser u = user(13L, false);
+        when(repo.findGrantsForUser(eq(10L), eq("13"), any()))
+            .thenReturn(List.of(viewerAccess(10L, "13", true)));
+
+        PermissionSnapshot snap = service.snapshot(screenWithLevel(10L, "CONFIDENTIAL"), u, ctx("INTERNAL"));
+
+        assertThat(snap.canRead()).isTrue();
+        assertThat(snap.canEdit()).isFalse();
+        assertThat(snap.isOwner()).isFalse();
+        assertThat(snap.overrideUsed()).isTrue();
+    }
+
+    @Test
+    void screen_classification_null_treated_as_public_allows_viewer() {
+        AnalyticsUser u = user(14L, false);
+        when(repo.findGrantsForUser(eq(10L), eq("14"), any()))
+            .thenReturn(List.of(viewerAccess(10L, "14", false)));
+
+        PermissionSnapshot snap = service.snapshot(screenWithLevel(10L, null), u, ctx(null));
+
+        assertThat(snap.canRead()).isTrue();
+        assertThat(snap.overrideUsed()).isFalse();
+    }
+
+    @Test
+    void caller_classification_null_with_screen_classified_denies_viewer() {
+        AnalyticsUser u = user(15L, false);
+        when(repo.findGrantsForUser(eq(10L), eq("15"), any()))
+            .thenReturn(List.of(viewerAccess(10L, "15", false)));
+
+        PermissionSnapshot snap = service.snapshot(screenWithLevel(10L, "SECRET"), u, ctx(null));
+
+        assertThat(snap.canRead()).isFalse();
+    }
+
+    @Test
+    void clearance_below_one_step_denies() {
+        AnalyticsUser u = user(16L, false);
+        when(repo.findGrantsForUser(eq(10L), eq("16"), any()))
+            .thenReturn(List.of(viewerAccess(10L, "16", false)));
+
+        PermissionSnapshot snap = service.snapshot(screenWithLevel(10L, "SECRET"), u, ctx("INTERNAL"));
+
+        assertThat(snap.canRead()).isFalse();
+    }
+
+    @Test
+    void clearance_above_screen_level_allows() {
+        AnalyticsUser u = user(17L, false);
+        when(repo.findGrantsForUser(eq(10L), eq("17"), any()))
+            .thenReturn(List.of(viewerAccess(10L, "17", false)));
+
+        PermissionSnapshot snap = service.snapshot(screenWithLevel(10L, "INTERNAL"), u, ctx("CONFIDENTIAL"));
+
+        assertThat(snap.canRead()).isTrue();
+    }
+
+    @Test
+    void owner_grant_bypasses_classification_gate() {
+        // OWNER grant 即便 caller 密级低于 screen 密级也应放行，与既有 bypass 语义一致。
+        AnalyticsUser u = user(18L, false);
+        when(repo.findGrantsForUser(eq(10L), eq("18"), any()))
+            .thenReturn(List.of(access(10L, "USER", "18", "OWNER")));
+
+        PermissionSnapshot snap = service.snapshot(screenWithLevel(10L, "CONFIDENTIAL"), u, ctx("PUBLIC"));
+
+        assertThat(snap.canRead()).isTrue();
+        assertThat(snap.canEdit()).isTrue();
+        assertThat(snap.isOwner()).isTrue();
+        assertThat(snap.overrideUsed()).isFalse();
+    }
+
+    @Test
+    void manager_grant_bypasses_classification_gate() {
+        AnalyticsUser u = user(19L, false);
+        when(repo.findGrantsForUser(eq(10L), eq("19"), any()))
+            .thenReturn(List.of(access(10L, "USER", "19", "MANAGER")));
+
+        PermissionSnapshot snap = service.snapshot(screenWithLevel(10L, "CONFIDENTIAL"), u, ctx("PUBLIC"));
+
+        assertThat(snap.canRead()).isTrue();
+        assertThat(snap.canEdit()).isTrue();
+        assertThat(snap.overrideUsed()).isFalse();
+    }
+
+    @Test
+    void creator_bypasses_classification_gate() {
+        AnalyticsUser u = user(20L, false);
+        AnalyticsScreen s = screenWithLevel(10L, "CONFIDENTIAL");
+        s.setCreatorId(20L);
+
+        PermissionSnapshot snap = service.snapshot(s, u, ctx("PUBLIC"));
+
+        assertThat(snap.canRead()).isTrue();
+        assertThat(snap.isOwner()).isTrue();
+        Mockito.verifyNoInteractions(repo);
+    }
 }

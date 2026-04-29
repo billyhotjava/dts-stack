@@ -51,4 +51,5 @@
     <include file="config/liquibase/changelog/0044_normalize_screen_access_grantee.xml" relativeToChangelogFile="false"/>
     <include file="config/liquibase/changelog/0045_screen_v2_spec.xml" relativeToChangelogFile="false"/>
     <include file="config/liquibase/changelog/0046_semantic_layer.xml" relativeToChangelogFile="false"/>
+    <include file="config/liquibase/changelog/0047_screen_access_level_override.xml" relativeToChangelogFile="false"/>
 </databaseChangeLog>

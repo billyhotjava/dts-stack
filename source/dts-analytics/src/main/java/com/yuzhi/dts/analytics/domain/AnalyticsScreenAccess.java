@@ -40,6 +40,15 @@ public class AnalyticsScreenAccess implements Serializable {
     @Column(name = "granted_at", nullable = false)
     private Instant grantedAt;
 
+    /**
+     * Sprint-18 大屏密级越级共享：true 表示授予 grantee 越级查看权限——当 caller
+     * 人员密级低于 screen.classification 时仍允许通过 ScreenPermissionService.snapshot()。
+     * 仅对 VIEWER 类 grant 有意义（OWNER/MANAGER 本就豁免密级，业务层强制 false）。
+     * 默认 false 不影响历史数据。
+     */
+    @Column(name = "level_override", nullable = false)
+    private boolean levelOverride = false;
+
     @PrePersist
     void onCreate() {
         if (grantedAt == null) {
@@ -67,4 +76,7 @@ public class AnalyticsScreenAccess implements Serializable {
 
     public Instant getGrantedAt() { return grantedAt; }
     public void setGrantedAt(Instant grantedAt) { this.grantedAt = grantedAt; }
+
+    public boolean isLevelOverride() { return levelOverride; }
+    public void setLevelOverride(boolean levelOverride) { this.levelOverride = levelOverride; }
 }
