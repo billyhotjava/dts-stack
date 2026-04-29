@@ -11,6 +11,7 @@ import com.yuzhi.dts.platform.security.ClassificationUtils;
 import com.yuzhi.dts.platform.security.DepartmentUtils;
 import com.yuzhi.dts.platform.security.SecurityUtils;
 import com.yuzhi.dts.platform.service.integration.ScreenReportLinkSyncService;
+import com.yuzhi.dts.platform.service.permission.DashboardAccessGuard;
 import com.yuzhi.dts.platform.service.visualization.dto.BiReportLinkDto;
 import com.yuzhi.dts.platform.service.visualization.dto.BiReportLinkRequest;
 import java.lang.reflect.Array;
@@ -45,17 +46,20 @@ public class BiReportLinkService {
     private final BiReportVisitRepository visitRepo;
     private final QueryDatasetAssetRepository queryDatasetAssetRepository;
     private final ClassificationUtils classificationUtils;
+    private final DashboardAccessGuard accessGuard;
 
     public BiReportLinkService(
         BiReportLinkRepository repo,
         BiReportVisitRepository visitRepo,
         QueryDatasetAssetRepository queryDatasetAssetRepository,
-        ClassificationUtils classificationUtils
+        ClassificationUtils classificationUtils,
+        DashboardAccessGuard accessGuard
     ) {
         this.repo = repo;
         this.visitRepo = visitRepo;
         this.queryDatasetAssetRepository = queryDatasetAssetRepository;
         this.classificationUtils = classificationUtils;
+        this.accessGuard = accessGuard;
     }
 
     @Transactional(readOnly = true)
@@ -74,25 +78,26 @@ public class BiReportLinkService {
         String queryDept = resolveActiveDept(activeDeptHeader);
         String userDept = currentClaim("dept_code");
         String effectiveDept = StringUtils.hasText(queryDept) ? queryDept : userDept;
-        Set<String> userRoles = currentAuthorities();
 
-        boolean institutePrivileged = SecurityUtils.hasCurrentUserAnyOfAuthorities(AuthoritiesConstants.INSTITUTE_PRIVILEGED_ROLES);
         boolean superAdmin = hasGlobalManageScope();
         Instant now = Instant.now();
+        // Sprint-18：原先 listPublished 在 line 93-95 inline 跑 classification / role / dept
+        // 三个 filter，现在统一交给 DashboardAccessGuard.canView()。Guard 在 role/dept
+        // 维度的 fallback 行为（空 csv = 不限制；institutePrivileged 仅豁免部门）跟原
+        // listPublished 一致；额外覆盖 owner / MANAGE / VIEW grant / level_override 共享。
+        DashboardAccessGuard.Caller caller = buildCaller();
 
         // P0-10: enabled / queryDatasetId / bizDomain / reportType /
         // deptCode-CSV / expiry are pushed to SQL via findCandidatesForListing.
-        // Identity-bound filters (classification clearance, role match,
-        // dataset visibility, free-text keyword) remain in memory.
+        // Identity-bound filters (Guard, dataset visibility, free-text keyword)
+        // remain in memory.
         List<BiReportLink> rows = repo.findCandidatesForListing(true, queryDatasetId, type, biz, dept, now);
         Map<UUID, QueryDatasetAsset> datasetCache = loadDatasetCache(rows);
 
         List<BiReportLinkDto> out = new ArrayList<>();
         for (BiReportLink r : rows) {
             if (r == null) continue;
-            if (!classificationUtils.canAccess(r.getClassification())) continue;
-            if (!matchRole(userRoles, r.getRoleCodes())) continue;
-            if (!matchDept(userDept, r.getDeptCodes(), institutePrivileged)) continue;
+            if (!accessGuard.canView(r, caller).allow()) continue;
             if (!matchKeyword(kw, r.getTitle(), r.getCode())) continue;
 
             QueryDatasetAsset dataset = r.getQueryDatasetId() == null ? null : datasetCache.get(r.getQueryDatasetId());
@@ -100,6 +105,23 @@ public class BiReportLinkService {
             out.add(toDto(r, dataset != null ? trimToNull(dataset.getName()) : null));
         }
         return out;
+    }
+
+    /**
+     * 从 SecurityContext 拼装 DashboardAccessGuard.Caller。allowedClassifications 直接
+     * 复用 ClassificationUtils.currentAllowedClassifications()，保留 personnel_level claim
+     * → ROLE_xxx fallback → property default 三级解析与现网 listPublished 行为完全一致。
+     */
+    private DashboardAccessGuard.Caller buildCaller() {
+        String username = SecurityUtils.getCurrentUserLogin().orElse(null);
+        Set<String> allowed = classificationUtils.currentAllowedClassifications();
+        Set<String> roles = currentAuthorities();
+        String dept = currentClaim("dept_code");
+        boolean institutePrivileged = SecurityUtils.hasCurrentUserAnyOfAuthorities(
+            AuthoritiesConstants.INSTITUTE_PRIVILEGED_ROLES
+        );
+        boolean superAdmin = hasGlobalManageScope();
+        return new DashboardAccessGuard.Caller(username, allowed, roles, dept, institutePrivileged, superAdmin);
     }
 
     @Transactional(readOnly = true)

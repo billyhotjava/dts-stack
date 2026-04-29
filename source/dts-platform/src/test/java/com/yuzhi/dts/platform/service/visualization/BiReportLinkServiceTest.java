@@ -3,6 +3,7 @@ package com.yuzhi.dts.platform.service.visualization;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyBoolean;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -14,6 +15,8 @@ import com.yuzhi.dts.platform.repository.visualization.BiReportLinkRepository;
 import com.yuzhi.dts.platform.repository.visualization.BiReportVisitRepository;
 import com.yuzhi.dts.platform.security.ClassificationUtils;
 import com.yuzhi.dts.platform.service.integration.ScreenReportLinkSyncService;
+import com.yuzhi.dts.platform.service.permission.DashboardAccessGuard;
+import com.yuzhi.dts.platform.service.permission.DashboardAccessGuard.AccessDecision;
 import com.yuzhi.dts.platform.service.visualization.dto.BiReportLinkDto;
 import java.util.List;
 import java.util.Optional;
@@ -46,6 +49,9 @@ class BiReportLinkServiceTest {
     @Mock
     private ClassificationUtils classificationUtils;
 
+    @Mock
+    private DashboardAccessGuard accessGuard;
+
     @InjectMocks
     private BiReportLinkService service;
 
@@ -55,7 +61,10 @@ class BiReportLinkServiceTest {
     }
 
     @Test
-    void listPublishedShouldFilterByClassification() {
+    void listPublishedShouldFilterByGuardDecision() {
+        // Sprint-18：listPublished 已不再 inline 跑 classification/role/dept 三道 filter，
+        // 这部分逻辑统一交给 DashboardAccessGuard。本测试只验证：
+        //   service 把每个候选行问一次 Guard，Guard 拒绝的行不出现在结果里。
         SecurityContextHolder.getContext().setAuthentication(
             new UsernamePasswordAuthenticationToken(
                 "employee",
@@ -67,8 +76,9 @@ class BiReportLinkServiceTest {
         BiReportLink internal = buildLink("internal_dashboard", "INTERNAL", "ROLE_EMPLOYEE");
         BiReportLink secret = buildLink("secret_dashboard", "SECRET", "ROLE_EMPLOYEE");
         when(reportLinkRepository.findCandidatesForListing(anyBoolean(), any(), any(), any(), any(), any())).thenReturn(List.of(internal, secret));
-        when(classificationUtils.canAccess("INTERNAL")).thenReturn(true);
-        when(classificationUtils.canAccess("SECRET")).thenReturn(false);
+        when(classificationUtils.currentAllowedClassifications()).thenReturn(java.util.Set.of("PUBLIC", "INTERNAL"));
+        when(accessGuard.canView(eq(internal), any())).thenReturn(AccessDecision.allow("BASE_ACCESS_PLUS_LEVEL"));
+        when(accessGuard.canView(eq(secret), any())).thenReturn(AccessDecision.deny("DENY_LEVEL_BLOCKED"));
 
         List<BiReportLinkDto> result = service.listPublished(null, null, null, null, null, null);
 
@@ -76,7 +86,8 @@ class BiReportLinkServiceTest {
     }
 
     @Test
-    void listPublishedShouldRespectRoleCodes() {
+    void listPublishedShouldDelegateRoleCheckToGuard() {
+        // 历史语义：roleCodes=ROLE_DEPT_DATA_OWNER 大屏需要 caller 持有该角色；现在交给 Guard。
         SecurityContextHolder.getContext().setAuthentication(
             new UsernamePasswordAuthenticationToken(
                 "employee",
@@ -90,7 +101,9 @@ class BiReportLinkServiceTest {
         when(reportLinkRepository.findCandidatesForListing(anyBoolean(), any(), any(), any(), any(), any())).thenReturn(
             List.of(byOwnerRole, noRoleConstraint)
         );
-        when(classificationUtils.canAccess("INTERNAL")).thenReturn(true);
+        when(classificationUtils.currentAllowedClassifications()).thenReturn(java.util.Set.of("PUBLIC", "INTERNAL"));
+        when(accessGuard.canView(eq(byOwnerRole), any())).thenReturn(AccessDecision.deny("DENY_NO_BASE_ACCESS"));
+        when(accessGuard.canView(eq(noRoleConstraint), any())).thenReturn(AccessDecision.allow("BASE_ACCESS_PLUS_LEVEL"));
 
         List<BiReportLinkDto> result = service.listPublished(null, null, null, null, null, null);
 

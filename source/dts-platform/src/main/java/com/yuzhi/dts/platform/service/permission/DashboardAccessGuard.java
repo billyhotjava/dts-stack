@@ -3,7 +3,6 @@ package com.yuzhi.dts.platform.service.permission;
 import com.yuzhi.dts.platform.domain.permission.AssetGrant;
 import com.yuzhi.dts.platform.domain.visualization.BiReportLink;
 import com.yuzhi.dts.platform.repository.permission.AssetGrantRepository;
-import com.yuzhi.dts.platform.security.policy.PersonnelLevel;
 import java.time.Instant;
 import java.util.HashSet;
 import java.util.List;
@@ -14,14 +13,19 @@ import org.springframework.stereotype.Service;
 /**
  * Sprint-18 大屏密级与共享门禁。集中决定一个用户能不能查看 / 管理 / 共享指定大屏。
  *
- * 决策树（canView）：
+ * 决策树（canView）—— 与 BiReportLinkService.listPublished 历史语义对齐：
  *   1. superAdmin / report.createdBy == caller / 持有 MANAGE grant → ALLOW
- *   2. institutePrivileged 角色 → ALLOW（机构特权保留语义，与既有 listPublished 一致）
- *   3. baseAccess = roleCodes / deptCodes 命中 OR 持有 VIEW grant
+ *   2. roleOk = roleCodes 为空 OR roleCodes 命中 caller.roles
+ *      deptOk = deptCodes 为空 OR caller.institutePrivileged OR deptCodes 命中 caller.deptCode
+ *      baseAccess = (roleOk AND deptOk) OR 持有 VIEW grant
  *      若 baseAccess=false → DENY (DENY_NO_BASE_ACCESS)
- *   4. 用户人员密级允许 report.classification → ALLOW (BASE_ACCESS_PLUS_LEVEL)
- *   5. 否则若持有 level_override=true 的 VIEW grant → ALLOW (OVERRIDE_USED)
+ *   3. 用户人员密级允许 report.classification → ALLOW (BASE_ACCESS_PLUS_LEVEL)
+ *   4. 否则若持有 level_override=true 的 VIEW grant → ALLOW (OVERRIDE_USED)
  *      否则 DENY (DENY_LEVEL_BLOCKED)
+ *
+ * 重要：roleCodes/deptCodes 为 null/空字符串时视为"该维度不限制"，与 listPublished
+ * 历史行为一致（裸大屏=任何已登录用户密级达标即可见）。institutePrivileged
+ * 仅豁免 dept 维度，不豁免 role 维度。
  *
  * canManage：owner / superAdmin / 持有 MANAGE grant。
  * canGrant：策略 1（不传递）—— 授 MANAGE 仅 owner / superAdmin；授 VIEW 任何 manager。
@@ -56,19 +60,20 @@ public class DashboardAccessGuard {
         if (hasManageGrant(grants)) {
             return AccessDecision.allow("MANAGE_GRANT");
         }
-        if (caller.institutePrivileged()) {
-            return AccessDecision.allow("INSTITUTE_PRIVILEGED");
-        }
 
-        boolean roleMatch = matchRole(report.getRoleCodes(), caller.roles());
-        boolean deptMatch = matchDept(report.getDeptCodes(), caller.deptCode());
+        // role/dept 维度对齐 BiReportLinkService.listPublished 历史语义：
+        // 限制为空视作不设限；institutePrivileged 仅豁免部门门禁。
+        boolean roleOk = isBlank(report.getRoleCodes()) || matchRole(report.getRoleCodes(), caller.roles());
+        boolean deptOk = isBlank(report.getDeptCodes())
+            || caller.institutePrivileged()
+            || matchDept(report.getDeptCodes(), caller.deptCode());
         boolean viewGrant = hasViewGrant(grants);
-        boolean baseAccess = roleMatch || deptMatch || viewGrant;
+        boolean baseAccess = (roleOk && deptOk) || viewGrant;
         if (!baseAccess) {
             return AccessDecision.deny("DENY_NO_BASE_ACCESS");
         }
 
-        if (hasLevelClearance(caller.level(), report.getClassification())) {
+        if (hasLevelClearance(caller.allowedClassifications(), report.getClassification())) {
             return AccessDecision.allow("BASE_ACCESS_PLUS_LEVEL");
         }
 
@@ -141,22 +146,42 @@ public class DashboardAccessGuard {
             .anyMatch(g -> PERM_VIEW.equalsIgnoreCase(g.getPermission()) && g.isValid() && g.isLevelOverride());
     }
 
+    private boolean isBlank(String value) {
+        return value == null || value.isBlank();
+    }
+
+    /**
+     * roleCodes 非空才进来：检查 caller.roles 是否命中其中任一。
+     * 角色串都自动加上 ROLE_ 前缀（与 BiReportLinkService.normalizeRole 一致）。
+     */
     private boolean matchRole(String roleCodesCsv, Set<String> userRoles) {
-        if (roleCodesCsv == null || roleCodesCsv.isBlank()) return false;
         if (userRoles == null || userRoles.isEmpty()) return false;
-        Set<String> required = parseCsv(roleCodesCsv);
+        Set<String> required = new HashSet<>();
+        for (String token : roleCodesCsv.split("[,;\\s]")) {
+            String normalized = normalizeRole(token);
+            if (normalized != null) required.add(normalized);
+        }
         if (required.isEmpty()) return false;
         for (String r : userRoles) {
-            if (r != null && required.contains(r.trim().toUpperCase(Locale.ROOT))) return true;
+            String normalized = normalizeRole(r);
+            if (normalized != null && required.contains(normalized)) return true;
         }
         return false;
     }
 
+    /**
+     * deptCodes 非空才进来：检查 caller.deptCode 是否命中其中任一。
+     */
     private boolean matchDept(String deptCodesCsv, String userDept) {
-        if (deptCodesCsv == null || deptCodesCsv.isBlank()) return false;
         if (userDept == null || userDept.isBlank()) return false;
         Set<String> allowed = parseCsv(deptCodesCsv);
         return allowed.contains(userDept.trim().toUpperCase(Locale.ROOT));
+    }
+
+    private String normalizeRole(String role) {
+        if (role == null || role.isBlank()) return null;
+        String upper = role.trim().toUpperCase(Locale.ROOT);
+        return upper.startsWith("ROLE_") ? upper : "ROLE_" + upper;
     }
 
     private Set<String> parseCsv(String csv) {
@@ -171,22 +196,30 @@ public class DashboardAccessGuard {
 
     /**
      * Null classification 视同 PUBLIC（不限制）。
-     * Null personnelLevel 视同 GENERAL（最严）。
+     * caller.allowedClassifications 由 ClassificationUtils.currentAllowedClassifications() 注入，
+     * 已经融合 personnel_level claim → ROLE_xxx fallback 等三级解析，与原 canAccess 行为一致。
      */
-    private boolean hasLevelClearance(PersonnelLevel level, String classification) {
+    private boolean hasLevelClearance(Set<String> allowed, String classification) {
         if (classification == null || classification.isBlank()) return true;
-        PersonnelLevel effective = level != null ? level : PersonnelLevel.GENERAL;
+        if (allowed == null || allowed.isEmpty()) return false;
         String normalized = classification.trim().toUpperCase(Locale.ROOT);
-        return effective.allowedClassifications().contains(normalized);
+        return allowed.contains(normalized);
     }
 
     // ---------------------------------------------------------------------
     // value types
     // ---------------------------------------------------------------------
 
+    /**
+     * Caller 把"用户的密级清单 + 角色 + 部门 + 特权位"打包成纯数据，让 Guard 与
+     * SecurityContext 解耦、易于单元测试。
+     *
+     * @param allowedClassifications 用户允许访问的 classification 集合（由 ClassificationUtils
+     *                               注入）。null/empty 视为最严，仅 PUBLIC 也得不到。
+     */
     public record Caller(
         String username,
-        PersonnelLevel level,
+        Set<String> allowedClassifications,
         Set<String> roles,
         String deptCode,
         boolean institutePrivileged,
@@ -194,10 +227,13 @@ public class DashboardAccessGuard {
     ) {
         public Caller {
             roles = roles == null ? Set.of() : Set.copyOf(roles);
+            allowedClassifications = allowedClassifications == null
+                ? Set.of()
+                : Set.copyOf(allowedClassifications);
         }
 
-        public static Caller of(String username, PersonnelLevel level, Set<String> roles, String deptCode) {
-            return new Caller(username, level, roles, deptCode, false, false);
+        public static Caller of(String username, Set<String> allowedClassifications, Set<String> roles, String deptCode) {
+            return new Caller(username, allowedClassifications, roles, deptCode, false, false);
         }
     }
 
