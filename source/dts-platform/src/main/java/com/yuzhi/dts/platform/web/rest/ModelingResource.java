@@ -1,6 +1,7 @@
 package com.yuzhi.dts.platform.web.rest;
 
 import com.yuzhi.dts.common.audit.AuditStage;
+import com.yuzhi.dts.common.security.SecurityLevelCatalog;
 import com.yuzhi.dts.platform.domain.modeling.DataSecurityLevel;
 import com.yuzhi.dts.platform.domain.modeling.DataStandardStatus;
 import com.yuzhi.dts.platform.service.audit.AuditService;
@@ -439,11 +440,8 @@ public class ModelingResource {
         if (!StringUtils.hasText(level)) {
             return null;
         }
-        try {
-            return DataSecurityLevel.valueOf(level.trim().toUpperCase(Locale.ROOT));
-        } catch (IllegalArgumentException ex) {
-            return null;
-        }
+        SecurityLevelCatalog.DataSecurityLevel parsed = SecurityLevelCatalog.DataSecurityLevel.parse(level);
+        return parsed == null ? null : DataSecurityLevel.valueOf(parsed.code());
     }
 
     private MediaType resolveMediaType(String contentType) {

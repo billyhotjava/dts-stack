@@ -2,6 +2,7 @@ package com.yuzhi.dts.platform.service.ops;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.yuzhi.dts.common.security.SecurityLevelCatalog;
 import com.yuzhi.dts.platform.domain.infra.InfraExternalRunLog;
 import com.yuzhi.dts.platform.repository.infra.InfraExternalRunLogRepository;
 import java.nio.charset.StandardCharsets;
@@ -262,7 +263,7 @@ public class ExternalRunLogService {
         if (StringUtils.hasText(ownerDept)) {
             log.setOwnerDept(ownerDept);
         }
-        log.setClassification("INTERNAL");
+        log.setClassification(SecurityLevelCatalog.DEFAULT_DATA_SECURITY_LEVEL.code());
         log.setDurationMs(computeDuration(log.getStartedAt(), log.getFinishedAt(), log.getDurationMs()));
         return repository.save(log);
     }

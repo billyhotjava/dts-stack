@@ -3,6 +3,7 @@ package com.yuzhi.dts.admin.service.auditv2;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.yuzhi.dts.common.audit.ChangeSnapshot;
+import com.yuzhi.dts.common.security.SecurityLevelCatalog;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.LinkedHashMap;
@@ -102,17 +103,8 @@ public class ChangeSnapshotFormatter {
         map.put("icon", FieldMeta.label("菜单图标"));
         map.put("sortOrder", FieldMeta.label("排序值"));
         map.put("metadata", FieldMeta.label("扩展配置"));
-        map.put("securityLevel", FieldMeta.mapping("访问密级", Map.of(
-            "GENERAL", "一般",
-            "IMPORTANT", "重要",
-            "CORE", "核心"
-        )));
-        map.put("maxDataLevel", FieldMeta.mapping("最大数据密级", Map.of(
-            "PUBLIC", "公开",
-            "INTERNAL", "内部",
-            "SECRET", "秘密",
-            "CONFIDENTIAL", "机密"
-        )));
+        map.put("securityLevel", FieldMeta.mapping("访问密级", SecurityLevelCatalog.personnelLabelsZh()));
+        map.put("maxDataLevel", FieldMeta.mapping("最大数据密级", SecurityLevelCatalog.dataLabelsZh()));
         map.put("deleted", FieldMeta.mapping("是否禁用", Map.of(
             "true", "是",
             "false", "否"
@@ -134,11 +126,7 @@ public class ChangeSnapshotFormatter {
         map.put("fullName", FieldMeta.label("姓名"));
         map.put("email", FieldMeta.label("邮箱"));
         map.put("phone", FieldMeta.label("手机号"));
-        map.put("personSecurityLevel", FieldMeta.mapping("人员密级", Map.of(
-            "GENERAL", "一般",
-            "IMPORTANT", "重要",
-            "CORE", "核心"
-        )));
+        map.put("personSecurityLevel", FieldMeta.mapping("人员密级", SecurityLevelCatalog.personnelLabelsZh()));
         map.put("enabled", FieldMeta.mapping("启用状态", Map.of(
             "true", "启用",
             "false", "停用"
@@ -190,12 +178,7 @@ public class ChangeSnapshotFormatter {
         map.put("ownerDept", FieldMeta.label("归属部门"));
         map.put("departmentName", FieldMeta.label("归属部门"));
         map.put("securityLevel", FieldMeta.label("访问密级"));
-        map.put("classification", FieldMeta.mapping("数据密级", Map.of(
-            "PUBLIC", "公开",
-            "INTERNAL", "内部",
-            "SECRET", "秘密",
-            "CONFIDENTIAL", "机密"
-        )));
+        map.put("classification", FieldMeta.mapping("数据密级", SecurityLevelCatalog.dataLabelsZh()));
         map.put("tags", FieldMeta.label("标签"));
         map.put("domainId", FieldMeta.label("所属数据域ID"));
         map.put("domainName", FieldMeta.label("所属数据域"));

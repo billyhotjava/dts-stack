@@ -4,6 +4,7 @@ import com.yuzhi.dts.platform.domain.modeling.DataSecurityLevel;
 import com.yuzhi.dts.platform.domain.modeling.MetadataStandard;
 import com.yuzhi.dts.platform.repository.modeling.MetadataStandardRepository;
 import com.yuzhi.dts.platform.service.modeling.dto.MetadataStandardImportResultDto;
+import com.yuzhi.dts.common.security.SecurityLevelCatalog;
 import java.io.BufferedReader;
 import java.io.InputStreamReader;
 import java.nio.charset.StandardCharsets;
@@ -239,12 +240,8 @@ public class MetadataStandardImportService {
 
     private DataSecurityLevel parseSecurityLevel(String raw) {
         if (!StringUtils.hasText(raw)) return DataSecurityLevel.INTERNAL;
-        String normalized = raw.trim().toUpperCase(Locale.ROOT).replace('-', '_');
-        try {
-            return DataSecurityLevel.valueOf(normalized);
-        } catch (Exception ex) {
-            return DataSecurityLevel.INTERNAL;
-        }
+        SecurityLevelCatalog.DataSecurityLevel parsed = SecurityLevelCatalog.DataSecurityLevel.parse(raw);
+        return parsed == null ? DataSecurityLevel.INTERNAL : DataSecurityLevel.valueOf(parsed.code());
     }
 
     private TypeParts parseTypeParts(String raw) {

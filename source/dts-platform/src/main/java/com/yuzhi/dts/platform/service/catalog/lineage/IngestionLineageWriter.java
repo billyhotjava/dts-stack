@@ -3,10 +3,12 @@ package com.yuzhi.dts.platform.service.catalog.lineage;
 import com.yuzhi.dts.common.audit.AuditStage;
 import com.yuzhi.dts.platform.domain.catalog.CatalogDataset;
 import com.yuzhi.dts.platform.domain.catalog.CatalogDatasetLineage;
+import com.yuzhi.dts.platform.domain.catalog.CatalogLineageJob;
 import com.yuzhi.dts.platform.domain.infra.InfraOdsTableMapping;
 import com.yuzhi.dts.platform.domain.service.InfraDataSource;
 import com.yuzhi.dts.platform.repository.catalog.CatalogDatasetLineageRepository;
 import com.yuzhi.dts.platform.repository.catalog.CatalogDatasetRepository;
+import com.yuzhi.dts.platform.repository.catalog.CatalogLineageJobRepository;
 import com.yuzhi.dts.platform.repository.infra.InfraOdsTableMappingRepository;
 import com.yuzhi.dts.platform.repository.service.InfraDataSourceRepository;
 import com.yuzhi.dts.platform.service.audit.AuditService;
@@ -33,6 +35,7 @@ public class IngestionLineageWriter {
 
     private final CatalogDatasetRepository datasetRepository;
     private final CatalogDatasetLineageRepository lineageRepository;
+    private final CatalogLineageJobRepository lineageJobRepository;
     private final InfraOdsTableMappingRepository mappingRepository;
     private final InfraDataSourceRepository dataSourceRepository;
     private final AuditService auditService;
@@ -40,12 +43,14 @@ public class IngestionLineageWriter {
     public IngestionLineageWriter(
         CatalogDatasetRepository datasetRepository,
         CatalogDatasetLineageRepository lineageRepository,
+        CatalogLineageJobRepository lineageJobRepository,
         InfraOdsTableMappingRepository mappingRepository,
         InfraDataSourceRepository dataSourceRepository,
         AuditService auditService
     ) {
         this.datasetRepository = datasetRepository;
         this.lineageRepository = lineageRepository;
+        this.lineageJobRepository = lineageJobRepository;
         this.mappingRepository = mappingRepository;
         this.dataSourceRepository = dataSourceRepository;
         this.auditService = auditService;
@@ -110,6 +115,7 @@ public class IngestionLineageWriter {
         if (sourceDataset.dataset().getId().equals(odsDataset.dataset().getId())) {
             return LineageWriteResult.skipped("same-dataset");
         }
+        CatalogLineageJob lineageJob = upsertAddaxJob(mapping, source, effectiveObservation);
         Optional<CatalogDatasetLineage> existing = lineageRepository.findFirstByUpstreamDatasetIdAndDownstreamDatasetId(
             sourceDataset.dataset().getId(),
             odsDataset.dataset().getId()
@@ -124,6 +130,9 @@ public class IngestionLineageWriter {
             link.setDownstreamAssetType("DATASET");
             link.setDirection("UPSTREAM_TO_DOWNSTREAM");
             link.setProjectName(resolveTaskName(mapping));
+            if (lineageJob != null) {
+                link.setLineageJobId(lineageJob.getId());
+            }
             applyObservation(link, effectiveObservation);
             lineageRepository.save(link);
             return new LineageWriteResult(0, 1, 0, sourceDataset.created() + odsDataset.created(), 1, "updated");
@@ -137,6 +146,9 @@ public class IngestionLineageWriter {
         link.setDownstreamAssetType("DATASET");
         link.setDirection("UPSTREAM_TO_DOWNSTREAM");
         link.setProjectName(resolveTaskName(mapping));
+        if (lineageJob != null) {
+            link.setLineageJobId(lineageJob.getId());
+        }
         link.setNotes(buildNotes(mapping, source, effectiveObservation));
         applyObservation(link, effectiveObservation);
         lineageRepository.save(link);
@@ -162,7 +174,71 @@ public class IngestionLineageWriter {
             return 0;
         }
         lineageRepository.delete(link);
+        removeAddaxJob(mapping);
         return 1;
+    }
+
+    private CatalogLineageJob upsertAddaxJob(InfraOdsTableMapping mapping, InfraDataSource source, LineageObservation observation) {
+        String jobKey = addaxJobKey(mapping);
+        if (!StringUtils.hasText(jobKey)) {
+            return null;
+        }
+        CatalogLineageJob job = lineageJobRepository.findByJobKey(jobKey).orElseGet(CatalogLineageJob::new);
+        job.setJobKey(jobKey);
+        job.setName(truncate(defaultIfBlank(resolveTaskName(mapping), mappingLabel(mapping)), 256));
+        job.setJobType("ADDAX_TASK");
+        job.setEngine(RELATION_ADDAX);
+        job.setRelationType(RELATION_ADDAX);
+        job.setProjectName(resolveTaskName(mapping));
+        job.setSourceId(mapping.getConnectionId());
+        job.setOwnerDept(firstNonBlank(mapping.getOwnerDept(), source != null ? source.getOwnerDept() : null));
+        job.setExternalId(mapping.getId() != null ? mapping.getId().toString() : null);
+        applyJobObservation(job, observation);
+        job.setDetailPayload(buildJobDetail(mapping, source));
+        return lineageJobRepository.save(job);
+    }
+
+    private void removeAddaxJob(InfraOdsTableMapping mapping) {
+        String jobKey = addaxJobKey(mapping);
+        if (!StringUtils.hasText(jobKey)) {
+            return;
+        }
+        lineageJobRepository.findByJobKey(jobKey).ifPresent(lineageJobRepository::delete);
+    }
+
+    private void applyJobObservation(CatalogLineageJob job, LineageObservation observation) {
+        LineageObservation effective = observation == null ? LineageObservation.declared() : observation;
+        Instant observedAt = effective.observedAt() == null ? Instant.now() : effective.observedAt();
+        String executionStatus = StringUtils.hasText(effective.executionStatus())
+            ? effective.executionStatus().trim().toLowerCase(Locale.ROOT)
+            : null;
+        if (StringUtils.hasText(executionStatus)) {
+            job.setStatus(truncate(executionStatus, 32));
+        } else if (!StringUtils.hasText(job.getStatus())) {
+            job.setStatus(normalizeStatus(effective.verificationStatus()).toLowerCase(Locale.ROOT));
+        }
+        if (StringUtils.hasText(effective.executionId())) {
+            job.setLastExecutionId(truncate(effective.executionId().trim(), 128));
+        }
+        if (StringUtils.hasText(executionStatus)) {
+            job.setLastExecutionStatus(truncate(executionStatus, 32));
+        }
+        job.setLastObservedAt(observedAt);
+        if (STATUS_VERIFIED.equals(normalizeStatus(effective.verificationStatus()))) {
+            job.setLastVerifiedAt(observedAt);
+        }
+    }
+
+    private String buildJobDetail(InfraOdsTableMapping mapping, InfraDataSource source) {
+        Map<String, Object> data = new LinkedHashMap<>();
+        data.put("engine", RELATION_ADDAX);
+        data.put("mappingId", mapping.getId() != null ? mapping.getId().toString() : null);
+        data.put("sourceDataSourceId", mapping.getConnectionId() != null ? mapping.getConnectionId().toString() : null);
+        data.put("sourceName", source != null ? source.getName() : null);
+        data.put("sourceTable", physicalName(mapping.getStreamNamespace(), mapping.getStreamName()));
+        data.put("targetTable", physicalName(mapping.getOdsSchema(), mapping.getOdsTable()));
+        data.values().removeIf(value -> value == null || !StringUtils.hasText(String.valueOf(value)));
+        return data.toString();
     }
 
     private DatasetResolveResult ensureSourceDataset(InfraOdsTableMapping mapping, InfraDataSource source) {
@@ -332,6 +408,42 @@ public class IngestionLineageWriter {
             return truncate(description.substring(0, colon), 128);
         }
         return null;
+    }
+
+    private String mappingLabel(InfraOdsTableMapping mapping) {
+        String taskName = resolveTaskName(mapping);
+        if (StringUtils.hasText(taskName)) {
+            return taskName;
+        }
+        if (mapping == null) {
+            return "Addax task";
+        }
+        String source = StringUtils.hasText(mapping.getStreamName()) ? mapping.getStreamName() : "source";
+        String target = StringUtils.hasText(mapping.getOdsTable()) ? mapping.getOdsTable() : "ods";
+        return source + " -> " + target;
+    }
+
+    private String addaxJobKey(InfraOdsTableMapping mapping) {
+        if (mapping == null) {
+            return null;
+        }
+        if (mapping.getId() != null) {
+            return "ADDAX:" + mapping.getId();
+        }
+        return truncate(
+            "ADDAX:" +
+            safeKeyPart(mapping.getConnectionId() != null ? mapping.getConnectionId().toString() : "unknown") + ":" +
+            safeKeyPart(physicalName(mapping.getStreamNamespace(), mapping.getStreamName())) + "->" +
+            safeKeyPart(physicalName(mapping.getOdsSchema(), mapping.getOdsTable())),
+            256
+        );
+    }
+
+    private String safeKeyPart(String value) {
+        if (!StringUtils.hasText(value)) {
+            return "_";
+        }
+        return value.trim().replaceAll("[^A-Za-z0-9_.:-]", "_");
     }
 
     private String sourceLabel(InfraOdsTableMapping mapping, InfraDataSource source) {

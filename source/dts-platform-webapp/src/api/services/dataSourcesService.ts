@@ -7,12 +7,18 @@ export type ConnectionTestResult = {
 	engineVersion?: string;
 	driverVersion?: string;
 	warnings?: string[];
+	errorType?: string;
+	suggestion?: string;
 };
 
 export type InfraDataSource = {
 	id: string;
 	name: string;
 	type: string;
+	connectorKey?: string;
+	connectorName?: string;
+	connectorCategory?: string;
+	defaultEngine?: string;
 	jdbcUrl?: string;
 	username?: string;
 	description?: string;
@@ -35,6 +41,7 @@ export type InfraDataSource = {
 export type DataSourceUpsertPayload = {
 	name: string;
 	type: string;
+	connectorKey?: string;
 	jdbcUrl?: string;
 	username?: string;
 	description?: string;
@@ -108,6 +115,174 @@ export type ExcelImportErrorPreviewResponse = {
 	rows: ExcelImportErrorRow[];
 };
 
+export type SchemaDiscoverColumn = {
+	name: string;
+	dataType?: string;
+	nativeType?: string;
+	nullable?: boolean;
+	defaultValue?: string;
+	comment?: string;
+	ordinalPosition?: number;
+	primaryKey?: boolean;
+	indexed?: boolean;
+	incrementalCandidate?: boolean;
+};
+
+export type SchemaDiscoverIndex = {
+	name: string;
+	unique?: boolean;
+	columns?: string[];
+};
+
+export type SchemaDiscoverTable = {
+	schema?: string;
+	name: string;
+	type?: string;
+	comment?: string;
+	view?: boolean;
+	columns?: SchemaDiscoverColumn[];
+	primaryKeys?: string[];
+	indexes?: SchemaDiscoverIndex[];
+	incrementalCandidates?: string[];
+	sampleRows?: Record<string, any>[];
+};
+
+export type SchemaDiscoverResponse = {
+	dataSourceId: string;
+	dataSourceName?: string;
+	connectorKey?: string;
+	databaseProduct?: string;
+	databaseVersion?: string;
+	schemas?: string[];
+	tables?: SchemaDiscoverTable[];
+	elapsedMs?: number;
+	status?: string;
+	error?: string;
+	discoveredAt?: string;
+	cached?: boolean;
+	cacheKey?: string;
+	drift?: {
+		addedTables?: number;
+		removedTables?: number;
+		changedTables?: number;
+		detailsJson?: string;
+	};
+};
+
+export type SchemaDiscoverRequest = {
+	schema?: string;
+	tablePattern?: string;
+	maxTables?: number;
+	sampleLimit?: number;
+	includeColumns?: boolean;
+	includeIndexes?: boolean;
+	includeSample?: boolean;
+	useCache?: boolean;
+	forceRefresh?: boolean;
+};
+
+export type OdsSourceColumnRequest = {
+	name: string;
+	targetName?: string;
+	dataType?: string;
+	nativeType?: string;
+	targetDataType?: string;
+	nullable?: boolean;
+	comment?: string;
+	primaryKey?: boolean;
+	indexed?: boolean;
+	incrementalCandidate?: boolean;
+};
+
+export type OdsSourceTableRequest = {
+	schema?: string;
+	name: string;
+	comment?: string;
+	primaryKeys?: string[];
+	incrementalCandidates?: string[];
+	columns?: OdsSourceColumnRequest[];
+};
+
+export type OdsGenerationRequest = {
+	odsSchema?: string;
+	systemCode?: string;
+	bizCode?: string;
+	entityCode?: string;
+	includeTechnicalColumns?: boolean;
+	includeRawJson?: boolean;
+	syncMode?: string;
+	tables: OdsSourceTableRequest[];
+};
+
+export type OdsColumnPlan = {
+	sourceName: string;
+	targetName: string;
+	sourceType?: string;
+	odsType?: string;
+	comment?: string;
+	nullable?: boolean;
+	primaryKey?: boolean;
+	indexed?: boolean;
+	incrementalCandidate?: boolean;
+	overrideRequired?: boolean;
+};
+
+export type OdsTechnicalColumn = {
+	name: string;
+	dataType: string;
+	comment?: string;
+};
+
+export type OdsTablePlan = {
+	sourceSchema?: string;
+	sourceTable: string;
+	odsSchema: string;
+	odsTable: string;
+	systemCode?: string;
+	bizCode?: string;
+	entityCode?: string;
+	primaryKeys?: string[];
+	incrementalCandidates?: string[];
+	columns?: OdsColumnPlan[];
+	technicalColumns?: OdsTechnicalColumn[];
+	createTableSql?: string;
+	dbtSourceYaml?: string;
+	addaxJobDraft?: Record<string, any>;
+	airflowDagDraft?: Record<string, any>;
+	warnings?: string[];
+};
+
+export type OdsGenerationPreviewResponse = {
+	dataSourceId: string;
+	dataSourceName?: string;
+	odsSchema?: string;
+	tables?: OdsTablePlan[];
+	dbtSourceYaml?: string;
+	warnings?: string[];
+};
+
+export type OdsGenerationApplyResult = {
+	dataSourceId: string;
+	dataSourceName?: string;
+	mappingsUpserted?: number;
+	columnsUpserted?: number;
+	lineageCreated?: number;
+	lineageUpdated?: number;
+	lineageSkipped?: number;
+	dbtMessage?: string;
+	tables?: OdsTablePlan[];
+	warnings?: string[];
+};
+
+export type OdsSyncTaskDraftResponse = {
+	dataSourceId: string;
+	dataSourceName?: string;
+	taskName?: string;
+	payload?: Record<string, any>;
+	tables?: OdsTablePlan[];
+	warnings?: string[];
+};
+
 export default {
 	list: () => apiClient.get<InfraDataSource[]>({ url: "/infra/data-sources" }),
 	detail: (id: string) => apiClient.get<InfraDataSource>({ url: `/infra/data-sources/${id}` }),
@@ -128,4 +303,12 @@ export default {
 		apiClient.post<ExcelImportParseResponse>({ url: "/infra/excel-import/parse", data: payload }),
 	excelErrors: (params: { fileId: string; limit?: number }) =>
 		apiClient.get<ExcelImportErrorPreviewResponse>({ url: "/infra/excel-import/errors", params }),
+	schemaDiscover: (id: string, payload?: SchemaDiscoverRequest) =>
+		apiClient.post<SchemaDiscoverResponse>({ url: `/infra/data-sources/${id}/schema-discover`, data: payload || {} }),
+	odsPreview: (id: string, payload: OdsGenerationRequest) =>
+		apiClient.post<OdsGenerationPreviewResponse>({ url: `/infra/data-sources/${id}/ods-preview`, data: payload }),
+	odsApply: (id: string, payload: OdsGenerationRequest) =>
+		apiClient.post<OdsGenerationApplyResult>({ url: `/infra/data-sources/${id}/ods-apply`, data: payload }),
+	syncTaskDraft: (id: string, payload: OdsGenerationRequest) =>
+		apiClient.post<OdsSyncTaskDraftResponse>({ url: `/infra/data-sources/${id}/sync-task-draft`, data: payload }),
 };

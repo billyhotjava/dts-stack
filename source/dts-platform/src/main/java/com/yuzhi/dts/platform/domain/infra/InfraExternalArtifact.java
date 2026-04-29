@@ -1,5 +1,6 @@
 package com.yuzhi.dts.platform.domain.infra;
 
+import com.yuzhi.dts.common.security.SecurityLevelCatalog;
 import com.yuzhi.dts.platform.domain.AbstractAuditingEntity;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
@@ -35,7 +36,7 @@ public class InfraExternalArtifact extends AbstractAuditingEntity<UUID> implemen
     private String externalUrl;
 
     @Column(name = "classification", length = 32, nullable = false)
-    private String classification = "INTERNAL";
+    private String classification = SecurityLevelCatalog.DEFAULT_DATA_SECURITY_LEVEL.code();
 
     @Column(name = "owner_dept", length = 64)
     private String ownerDept;
@@ -171,4 +172,3 @@ public class InfraExternalArtifact extends AbstractAuditingEntity<UUID> implemen
         this.props = props;
     }
 }
-

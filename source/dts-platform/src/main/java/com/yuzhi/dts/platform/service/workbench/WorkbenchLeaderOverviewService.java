@@ -291,7 +291,15 @@ public class WorkbenchLeaderOverviewService {
         } else {
             // DEPT and ALL share the same filter: effectiveDept already encodes the null
             // (ALL+no drill-down) vs scoped (DEPT, or ALL+deptCode) cases upstream.
-            rows = datasetRepo.findTopByClassification(effectiveDept, bizDomain, topNPageable());
+            rows = datasetRepo.findTopByClassification(
+                effectiveDept,
+                bizDomain,
+                ClassificationMapper.toDbValues("S1"),
+                ClassificationMapper.toDbValues("S2"),
+                ClassificationMapper.toDbValues("S3"),
+                ClassificationMapper.toDbValues("S4"),
+                topNPageable()
+            );
         }
         return rows
             .stream()

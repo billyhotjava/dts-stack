@@ -22,6 +22,7 @@ import com.yuzhi.dts.ingestion.service.etl.DagPreheatService;
 import com.yuzhi.dts.ingestion.service.etl.IncrementalSyncService;
 import com.yuzhi.dts.ingestion.service.etl.IngestionRetryService;
 import com.yuzhi.dts.ingestion.service.etl.TargetTableProvisioner;
+import com.yuzhi.dts.ingestion.service.infra.PlatformInfraClient;
 import com.yuzhi.dts.ingestion.service.mapper.IngestionExecutionMapper;
 import com.yuzhi.dts.ingestion.service.mapper.IngestionTaskMapper;
 import java.nio.file.Files;
@@ -85,6 +86,9 @@ class IngestionTaskFullRefreshExecutionTest {
     private DagPreheatService dagPreheatService;
 
     @Mock
+    private PlatformInfraClient platformInfraClient;
+
+    @Mock
     private org.springframework.transaction.PlatformTransactionManager transactionManager;
 
     private IngestionTaskService service;
@@ -109,6 +113,7 @@ class IngestionTaskFullRefreshExecutionTest {
             changeLogService,
             retryService,
             dagPreheatService,
+            platformInfraClient,
             transactionManager,
             Runnable::run
         );

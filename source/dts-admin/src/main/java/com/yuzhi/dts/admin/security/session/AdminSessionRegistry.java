@@ -106,6 +106,29 @@ public class AdminSessionRegistry {
         Instant accessExpiresAt,
         Instant refreshExpiresAt
     ) {
+        AdminSessionEntity entity = requireRefreshSession(refreshToken);
+
+        String nextAccessHash = hash(nextAccessToken);
+        if (!StringUtils.hasText(nextAccessHash)) {
+            throw new IllegalArgumentException("access token 缺失");
+        }
+        Instant now = Instant.now();
+        entity.setAccessTokenHash(nextAccessHash);
+        if (StringUtils.hasText(nextRefreshToken)) {
+            entity.setRefreshTokenHash(hash(nextRefreshToken));
+        }
+        entity.setSessionState(clean(sessionState));
+        entity.setLastSeenAt(now);
+        entity.setExpiresAt(resolveExpiry(now, accessExpiresAt));
+        repository.save(entity);
+        return entity;
+    }
+
+    public AdminSessionEntity assertRefreshTokenUsable(String refreshToken) {
+        return requireRefreshSession(refreshToken);
+    }
+
+    private AdminSessionEntity requireRefreshSession(String refreshToken) {
         String refreshHash = hash(refreshToken);
         if (!StringUtils.hasText(refreshHash)) {
             throw new IllegalArgumentException("refresh token 缺失");
@@ -122,19 +145,6 @@ public class AdminSessionRegistry {
             revoke(entity, AdminSessionCloseReason.EXPIRED, null, now);
             throw new IllegalStateException("session_expired");
         }
-
-        String nextAccessHash = hash(nextAccessToken);
-        if (!StringUtils.hasText(nextAccessHash)) {
-            throw new IllegalArgumentException("access token 缺失");
-        }
-        entity.setAccessTokenHash(nextAccessHash);
-        if (StringUtils.hasText(nextRefreshToken)) {
-            entity.setRefreshTokenHash(hash(nextRefreshToken));
-        }
-        entity.setSessionState(clean(sessionState));
-        entity.setLastSeenAt(now);
-        entity.setExpiresAt(resolveExpiry(now, accessExpiresAt));
-        repository.save(entity);
         return entity;
     }
 

@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { Alert, Button, Card, Modal, Progress, Space, Table, Tag, message } from "antd";
+import { Alert, Button, Card, Modal, Progress, Space, Table, Tag, Typography, message } from "antd";
 import {
 	PlayCircleOutlined,
 	EditOutlined,
@@ -9,10 +9,19 @@ import {
 	SyncOutlined,
 } from "@ant-design/icons";
 import { useRouter } from "@/routes/hooks";
-import { ingestionTaskAPI, type IngestionTaskDTO, type IngestionExecutionDTO } from "@/api/ingestion";
+import {
+	ingestionTaskAPI,
+	type IngestionExecutionDTO,
+	type IngestionExecutionLog,
+	type IngestionExecutionObservabilityDTO,
+	type IngestionGovernanceOverviewDTO,
+	type IngestionTaskDTO,
+	type PreCheckResult,
+} from "@/api/ingestion";
 import { resolveAsyncRunSubmitFeedback, mapExecutionToProgressView } from "./transformCreateAsyncRun.helpers";
 import { formatTimestamp } from "@/utils/format";
 
+const { Text } = Typography;
 
 type ExecutionProgressView = {
 	percent: number;
@@ -26,6 +35,16 @@ export default function TransformPage() {
 	const router = useRouter();
 	const [tasks, setTasks] = useState<IngestionTaskDTO[]>([]);
 	const [loading, setLoading] = useState(false);
+	const [overviewLoading, setOverviewLoading] = useState(false);
+	const [preCheckingId, setPreCheckingId] = useState<number | null>(null);
+	const [retryingKey, setRetryingKey] = useState<string | null>(null);
+	const [latestExecutions, setLatestExecutions] = useState<Record<number, IngestionExecutionDTO | null>>({});
+	const [observability, setObservability] = useState<IngestionExecutionObservabilityDTO | null>(null);
+	const [governanceOverview, setGovernanceOverview] = useState<IngestionGovernanceOverviewDTO | null>(null);
+	const [logOpen, setLogOpen] = useState(false);
+	const [logLoading, setLogLoading] = useState(false);
+	const [logTitle, setLogTitle] = useState("");
+	const [logDetail, setLogDetail] = useState<IngestionExecutionLog | null>(null);
 	const [pagination, setPagination] = useState({ current: 1, pageSize: 20, total: 0 });
 	const [statusFilter, setStatusFilter] = useState<string | undefined>(undefined);
 	const [executeProgressOpen, setExecuteProgressOpen] = useState(false);
@@ -43,6 +62,7 @@ export default function TransformPage() {
 
 	useEffect(() => {
 		void loadTasks();
+		void loadRunCenterOverview();
 	}, [pagination.current, statusFilter]);
 
 	useEffect(() => {
@@ -80,6 +100,7 @@ export default function TransformPage() {
 			const allContent = Array.isArray(result?.content) ? result.content : [];
 			const content = statusFilter ? allContent : allContent.filter((t: any) => t.status !== "deleted");
 			setTasks(content);
+			void loadLatestExecutions(content);
 			const total = typeof result?.totalElements === "number" ? result.totalElements : content.length;
 			setPagination((prev) => ({ ...prev, total }));
 		} catch {
@@ -87,6 +108,43 @@ export default function TransformPage() {
 		} finally {
 			setLoading(false);
 		}
+	};
+
+	const loadRunCenterOverview = async () => {
+		setOverviewLoading(true);
+		try {
+			const [nextObservability, nextGovernance] = await Promise.all([
+				ingestionTaskAPI.getExecutionsObservability({ days: 7 }),
+				ingestionTaskAPI.getGovernanceOverview({ hours: 24 }),
+			]);
+			setObservability(nextObservability);
+			setGovernanceOverview(nextGovernance);
+		} catch {
+			setObservability(null);
+			setGovernanceOverview(null);
+		} finally {
+			setOverviewLoading(false);
+		}
+	};
+
+	const loadLatestExecutions = async (items: IngestionTaskDTO[]) => {
+		const pairs = await Promise.all(
+			items
+				.filter((task) => task.id)
+				.map(async (task) => {
+					try {
+						const latest = await ingestionTaskAPI.getLatestExecution(task.id!);
+						return [task.id!, latest] as const;
+					} catch {
+						return [task.id!, null] as const;
+					}
+				})
+		);
+		const next: Record<number, IngestionExecutionDTO | null> = {};
+		pairs.forEach(([taskId, execution]) => {
+			next[taskId] = execution;
+		});
+		setLatestExecutions(next);
 	};
 
 	const mapExecutionProgress = (execution: IngestionExecutionDTO | null, elapsedMs: number): ExecutionProgressView => {
@@ -129,6 +187,7 @@ export default function TransformPage() {
 				if (next.terminal) {
 					stopExecutePolling();
 					void loadTasks();
+					void loadRunCenterOverview();
 					return;
 				}
 			} catch {
@@ -151,6 +210,7 @@ export default function TransformPage() {
 					message.success("任务已提交，后台正在触发执行");
 					startExecuteProgressPolling(id, name, submit?.pollIntervalMs);
 					void loadTasks();
+					void loadRunCenterOverview();
 				} catch (error: any) {
 					const feedback = resolveAsyncRunSubmitFeedback(error, "execute");
 					if (feedback.level === "warning") {
@@ -160,6 +220,55 @@ export default function TransformPage() {
 					message.error(feedback.message);
 				}
 			},
+		});
+	};
+
+	const submitLatestRetry = async (record: IngestionTaskDTO, mode: "FAILED_ONLY" | "FULL_RERUN") => {
+		if (!record.id) return;
+		let latest = latestExecutions[record.id];
+		if (!latest) {
+			latest = await ingestionTaskAPI.getLatestExecution(record.id);
+		}
+		if (!latest?.id) {
+			message.info("该任务暂无可重跑的执行记录");
+			return;
+		}
+		const status = String(latest.status || "").toLowerCase();
+		if (status === "running" || status === "preparing") {
+			message.warning("最新执行仍在运行中，暂不能重跑");
+			return;
+		}
+		const key = `${record.id}:${mode}`;
+		setRetryingKey(key);
+		try {
+			const submit = await ingestionTaskAPI.retryExecutionAsync(record.id, latest.id, { mode });
+			message.success(mode === "FULL_RERUN" ? "已提交整批重跑任务" : "已提交失败重试任务");
+			startExecuteProgressPolling(record.id, record.name, submit?.pollIntervalMs);
+			void loadTasks();
+			void loadRunCenterOverview();
+		} catch (error: any) {
+			const feedback = resolveAsyncRunSubmitFeedback(error, "retry");
+			if (feedback.level === "warning") {
+				message.warning(feedback.message);
+				return;
+			}
+			message.error(feedback.message);
+		} finally {
+			setRetryingKey(null);
+		}
+	};
+
+	const handleRetryLatest = (record: IngestionTaskDTO, mode: "FAILED_ONLY" | "FULL_RERUN") => {
+		const title = mode === "FULL_RERUN" ? "确认整批重跑" : "确认失败重试";
+		const content =
+			mode === "FULL_RERUN"
+				? `将按当前配置重新执行任务 "${record.name}" 的整批作业，确认继续？`
+				: `将基于任务 "${record.name}" 的最新失败执行提交失败重试，确认继续？`;
+		Modal.confirm({
+			title,
+			content,
+			okText: mode === "FULL_RERUN" ? "确认重跑" : "确认重试",
+			onOk: () => submitLatestRetry(record, mode),
 		});
 	};
 
@@ -198,6 +307,77 @@ export default function TransformPage() {
 		});
 	};
 
+	const handleViewLog = async (record: IngestionTaskDTO) => {
+		if (!record.id) return;
+		let latest = latestExecutions[record.id];
+		if (!latest) {
+			latest = await ingestionTaskAPI.getLatestExecution(record.id);
+		}
+		if (!latest?.id) {
+			message.info("该任务暂无执行日志");
+			return;
+		}
+		setLogTitle(`${record.name} · 执行 #${latest.id}`);
+		setLogDetail(null);
+		setLogOpen(true);
+		setLogLoading(true);
+		try {
+			const log = await ingestionTaskAPI.getExecutionLog(record.id, latest.id, { scope: "all" });
+			setLogDetail(log);
+		} catch {
+			setLogDetail({
+				taskId: record.id,
+				executionId: latest.id,
+				message: latest.errorMessage || "日志读取失败",
+				failureCategory: latest.failureCategory,
+				failureAdvice: latest.failureAdvice,
+				log: latest.errorMessage,
+			});
+		} finally {
+			setLogLoading(false);
+		}
+	};
+
+	const handlePreCheck = async (record: IngestionTaskDTO) => {
+		if (!record.id) return;
+		setPreCheckingId(record.id);
+		try {
+			const result: PreCheckResult = await ingestionTaskAPI.preCheck(record.id);
+			const failedRows = result?.failedRows || 0;
+			const totalRows = result?.totalRows || 0;
+			const status = failedRows > 0 ? "WARN" : "PASS";
+			const details = (result?.errorsByRule || [])
+				.slice(0, 5)
+				.map((item) => `${item.ruleName || item.ruleType}: ${item.failCount}`)
+				.join("；");
+			Modal[failedRows > 0 ? "warning" : "success"]({
+				title: `预检 ${status}`,
+				content: (
+					<div className="space-y-2">
+						<div>
+							总行数 {totalRows.toLocaleString()}，通过 {(result?.passedRows || 0).toLocaleString()}，失败 {failedRows.toLocaleString()}。
+						</div>
+						{details ? <div className="text-xs text-slate-500">{details}</div> : null}
+					</div>
+				),
+			});
+			void loadTasks();
+		} catch (error: any) {
+			message.error(error?.message || "预检执行失败");
+		} finally {
+			setPreCheckingId(null);
+		}
+	};
+
+	const renderPreCheckStatus = (status?: string) => {
+		const normalized = String(status || "").trim().toUpperCase();
+		if (!normalized) return <Tag>未预检</Tag>;
+		if (["PASS", "PASSED", "SUCCESS"].includes(normalized)) return <Tag color="success">PASS</Tag>;
+		if (["WARN", "WARNING"].includes(normalized)) return <Tag color="warning">WARN</Tag>;
+		if (["FAIL", "FAILED", "ERROR"].includes(normalized)) return <Tag color="error">FAIL</Tag>;
+		return <Tag>{status}</Tag>;
+	};
+
 	const renderStatus = (status?: string) => {
 		const statusMap: Record<string, { color: string; text: string }> = {
 			draft: { color: "default", text: "草稿" },
@@ -218,6 +398,25 @@ export default function TransformPage() {
 		};
 		const config = statusMap[status || ""];
 		return config ? <Tag color={config.color}>{config.text}</Tag> : <span>-</span>;
+	};
+
+	const renderNumber = (value?: number) => (typeof value === "number" ? value.toLocaleString() : "-");
+
+	const renderDuration = (execution?: IngestionExecutionDTO | null) => {
+		if (!execution?.startTime || !execution?.endTime) return "-";
+		const start = new Date(execution.startTime).getTime();
+		const end = new Date(execution.endTime).getTime();
+		if (!Number.isFinite(start) || !Number.isFinite(end) || end < start) return "-";
+		const seconds = Math.round((end - start) / 1000);
+		if (seconds < 60) return `${seconds}s`;
+		return `${Math.floor(seconds / 60)}m ${seconds % 60}s`;
+	};
+
+	const renderTargets = (mapping?: IngestionTaskDTO["tableMapping"]) => {
+		if (!Array.isArray(mapping) || mapping.length === 0) return "-";
+		const targets = mapping.map((item) => item.target || item.source).filter(Boolean);
+		if (targets.length <= 2) return targets.join(", ");
+		return `${targets.slice(0, 2).join(", ")} 等 ${targets.length} 表`;
 	};
 
 	/** Whether a task is currently in a non-interruptible execution phase. */
@@ -243,6 +442,13 @@ export default function TransformPage() {
 			width: 150,
 		},
 		{
+			title: "目标表",
+			dataIndex: "tableMapping",
+			key: "tableMapping",
+			width: 220,
+			render: renderTargets,
+		},
+		{
 			title: "同步模式",
 			dataIndex: "syncMode",
 			key: "syncMode",
@@ -252,6 +458,13 @@ export default function TransformPage() {
 				if (mode === "incremental") return <Tag color="green">增量</Tag>;
 				return <Tag>{mode || "-"}</Tag>;
 			},
+		},
+		{
+			title: "预检",
+			dataIndex: "preCheckStatus",
+			key: "preCheckStatus",
+			width: 100,
+			render: renderPreCheckStatus,
 		},
 		{
 			title: "状态",
@@ -275,6 +488,36 @@ export default function TransformPage() {
 			render: (text: string) => (text ? formatTimestamp(text) : "-"),
 		},
 		{
+			title: "行数",
+			key: "rows",
+			width: 150,
+			render: (_: any, record: IngestionTaskDTO) => {
+				const latest = record.id ? latestExecutions[record.id] : null;
+				return `${renderNumber(latest?.rowsRead)} / ${renderNumber(latest?.rowsWritten)}`;
+			},
+		},
+		{
+			title: "耗时",
+			key: "duration",
+			width: 100,
+			render: (_: any, record: IngestionTaskDTO) => renderDuration(record.id ? latestExecutions[record.id] : null),
+		},
+		{
+			title: "错误摘要",
+			key: "errorSummary",
+			width: 240,
+			render: (_: any, record: IngestionTaskDTO) => {
+				const latest = record.id ? latestExecutions[record.id] : null;
+				if (!latest?.errorMessage && !latest?.failureCategory) return "-";
+				return (
+					<div className="max-w-[220px]">
+						{latest.failureCategory ? <Tag color="error">{latest.failureCategory}</Tag> : null}
+						<div className="truncate text-xs text-slate-500">{latest.failureAdvice || latest.errorMessage}</div>
+					</div>
+				);
+			},
+		},
+		{
 			title: "创建时间",
 			dataIndex: "createdDate",
 			key: "createdDate",
@@ -287,60 +530,98 @@ export default function TransformPage() {
 			key: "createdBy",
 			width: 120,
 		},
-		{
-			title: "操作",
-			key: "action",
-			width: 420,
-			render: (_: any, record: IngestionTaskDTO) => (
-				<Space size="small">
-					<Button
-						size="small"
-						type="primary"
-						icon={<PlayCircleOutlined />}
-						onClick={() => handleExecute(record.id!, record.name)}
-						loading={isTaskBusy(record) && !executeProgress.terminal}
-						disabled={record.status === "deleted" || isTaskBusy(record)}
-					>
-						{isTaskBusy(record)
-							? (record.lastExecutionStatus || "").toLowerCase() === "preparing" ? "准备中" : "执行中"
-							: "执行"}
-					</Button>
-					<Button
-						size="small"
-						icon={<HistoryOutlined />}
-						onClick={() => router.push(`/explore/etl/transform/${record.id}/executions`)}
-					>
-						历史
-					</Button>
-					<Button
-						size="small"
-						icon={<EditOutlined />}
-						onClick={() => router.push(`/explore/etl/transform/${record.id}/edit`)}
-						disabled={record.status === "deleted" || isTaskBusy(record)}
-					>
-						编辑
-					</Button>
-					<Button
-						size="small"
-						icon={<SyncOutlined />}
-						onClick={() => handleRebuildDag(record.id!, record.name)}
-						disabled={record.status === "deleted" || record.airflowEnabled === false || isTaskBusy(record)}
-					>
-						重建 DAG
-					</Button>
-					<Button
-						size="small"
-						danger
-						icon={<DeleteOutlined />}
-						onClick={() => handleDelete(record.id!, record.name)}
-						disabled={record.status === "deleted"}
-					>
-						删除
-					</Button>
-				</Space>
-			),
-		},
-	];
+			{
+				title: "操作",
+				key: "action",
+				width: 560,
+				render: (_: any, record: IngestionTaskDTO) => {
+					const latest = record.id ? latestExecutions[record.id] : null;
+					const latestStatus = String(latest?.status || "").toLowerCase();
+					const canRetryFailed = latestStatus === "failed";
+					const canFullRerun = Boolean(latest?.id) && !["running", "preparing"].includes(latestStatus);
+					return (
+						<Space size="small" wrap>
+							<Button
+								size="small"
+								type="primary"
+								icon={<PlayCircleOutlined />}
+								onClick={() => handleExecute(record.id!, record.name)}
+								loading={isTaskBusy(record) && !executeProgress.terminal}
+								disabled={record.status === "deleted" || isTaskBusy(record)}
+							>
+								{isTaskBusy(record)
+									? (record.lastExecutionStatus || "").toLowerCase() === "preparing" ? "准备中" : "执行中"
+									: "执行"}
+							</Button>
+							<Button
+								size="small"
+								loading={preCheckingId === record.id}
+								onClick={() => handlePreCheck(record)}
+								disabled={record.status === "deleted" || isTaskBusy(record)}
+							>
+								预检
+							</Button>
+							{canRetryFailed ? (
+								<Button
+									size="small"
+									loading={retryingKey === `${record.id}:FAILED_ONLY`}
+									onClick={() => handleRetryLatest(record, "FAILED_ONLY")}
+									disabled={record.status === "deleted" || isTaskBusy(record)}
+								>
+									失败重试
+								</Button>
+							) : null}
+							<Button
+								size="small"
+								loading={retryingKey === `${record.id}:FULL_RERUN`}
+								onClick={() => handleRetryLatest(record, "FULL_RERUN")}
+								disabled={record.status === "deleted" || isTaskBusy(record) || !canFullRerun}
+							>
+								整批重跑
+							</Button>
+							<Button
+								size="small"
+								icon={<HistoryOutlined />}
+								onClick={() => router.push(`/explore/etl/transform/${record.id}/executions`)}
+							>
+								历史
+							</Button>
+							<Button size="small" onClick={() => handleViewLog(record)}>
+								日志
+							</Button>
+							<Button size="small" onClick={() => router.push("/catalog/lineage")}>
+								血缘
+							</Button>
+							<Button
+								size="small"
+								icon={<EditOutlined />}
+								onClick={() => router.push(`/explore/etl/transform/${record.id}/edit`)}
+								disabled={record.status === "deleted" || isTaskBusy(record)}
+							>
+								编辑
+							</Button>
+							<Button
+								size="small"
+								icon={<SyncOutlined />}
+								onClick={() => handleRebuildDag(record.id!, record.name)}
+								disabled={record.status === "deleted" || record.airflowEnabled === false || isTaskBusy(record)}
+							>
+								重建 DAG
+							</Button>
+							<Button
+								size="small"
+								danger
+								icon={<DeleteOutlined />}
+								onClick={() => handleDelete(record.id!, record.name)}
+								disabled={record.status === "deleted"}
+							>
+								删除
+							</Button>
+						</Space>
+					);
+				},
+			},
+		];
 
 	return (
 		<div className="space-y-4" data-testid="platform-transform-page">
@@ -364,13 +645,16 @@ export default function TransformPage() {
 								{item.label}
 							</Button>
 						))}
-						<Button
-							className="rounded-2xl"
-							icon={<ReloadOutlined />}
-							onClick={() => void loadTasks()}
-							loading={loading}
-							data-testid="platform-transform-refresh"
-						>
+							<Button
+								className="rounded-2xl"
+								icon={<ReloadOutlined />}
+								onClick={() => {
+									void loadTasks();
+									void loadRunCenterOverview();
+								}}
+								loading={loading || overviewLoading}
+								data-testid="platform-transform-refresh"
+							>
 							刷新
 						</Button>
 						<Button
@@ -386,6 +670,36 @@ export default function TransformPage() {
 			/>
 
 			<Card title="任务清单" extra={<Tag color="blue">{pagination.total || tasks.length} 条任务</Tag>}>
+				<div className="mb-4 grid gap-3 md:grid-cols-4">
+					<div className="rounded border border-slate-200 p-3">
+						<Text type="secondary">7日执行</Text>
+						<div className="mt-1 text-xl font-semibold">{renderNumber(observability?.total)}</div>
+						<div className="text-xs text-slate-500">
+							成功率 {observability?.successRate != null ? `${Math.round(observability.successRate)}%` : "-"}
+						</div>
+					</div>
+					<div className="rounded border border-slate-200 p-3">
+						<Text type="secondary">失败 / 运行中</Text>
+						<div className="mt-1 text-xl font-semibold">
+							{renderNumber(observability?.failed)} / {renderNumber(observability?.running)}
+						</div>
+						<div className="text-xs text-slate-500">
+							平均耗时 {observability?.avgDurationSeconds != null ? `${Math.round(observability.avgDurationSeconds)}s` : "-"}
+						</div>
+					</div>
+					<div className="rounded border border-slate-200 p-3">
+						<Text type="secondary">调度状态</Text>
+						<div className="mt-1 text-xl font-semibold">
+							{renderNumber(governanceOverview?.running)} / {renderNumber(governanceOverview?.preparing)}
+						</div>
+						<div className="text-xs text-slate-500">运行中 / 准备中</div>
+					</div>
+					<div className="rounded border border-slate-200 p-3">
+						<Text type="secondary">治理阻塞</Text>
+						<div className="mt-1 text-xl font-semibold">{renderNumber(governanceOverview?.blockedByPolicy)}</div>
+						<div className="text-xs text-slate-500">队列 {renderNumber(governanceOverview?.queueLength)}</div>
+					</div>
+				</div>
 				<div data-testid="platform-transform-table">
 					<Table
 						columns={columns}
@@ -455,6 +769,36 @@ export default function TransformPage() {
 						showIcon
 					/>
 				</Space>
+			</Modal>
+
+			<Modal
+				open={logOpen}
+				title={logTitle || "执行日志"}
+				width={900}
+				onCancel={() => setLogOpen(false)}
+				footer={[
+					<Button key="close" onClick={() => setLogOpen(false)}>
+						关闭
+					</Button>,
+				]}
+			>
+				{logLoading ? (
+					<Progress percent={30} status="active" />
+				) : (
+					<div className="space-y-3">
+						{logDetail?.failureCategory || logDetail?.failureAdvice ? (
+							<Alert
+								type="error"
+								showIcon
+								message={logDetail?.failureCategory || "执行失败"}
+								description={logDetail?.failureAdvice || logDetail?.message}
+							/>
+						) : null}
+						<pre className="max-h-[520px] overflow-auto rounded bg-slate-950 p-3 text-xs text-slate-50">
+							{logDetail?.log || logDetail?.message || "暂无日志内容"}
+						</pre>
+					</div>
+				)}
 			</Modal>
 		</div>
 	);

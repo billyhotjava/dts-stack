@@ -308,3 +308,22 @@
 
 **统计**: READY=26, IN_PROGRESS=0, DONE=0, BLOCKED=0
 **设计文档**: `worklog/v2.2.3/sprint-20-202604/README.md`
+
+## Sprint-21: DTS Connector Center 工业级数据接入中心 (202604)
+**状态**: IN_PROGRESS
+**类型**: Implementation（接入中心 Phase 2，产品化接入内核 + 运行治理）
+**目标**: 在 Sprint-18 已完成数据库/文件入 ODS 主链路、Sprint-20 正在打通血缘可视化的基础上，把 DTS 数据接入能力升级为工业级 Connector Center：连接器可治理、数据源可管理、Schema 可探测、任务可向导生成、运行可观测、质量可预检、权限和审计可交付。
+
+| Feature | Task 数 | 状态 |
+|---------|---------|------|
+| F1-Connector Registry 连接器目录 | 4 | DONE |
+| F2-数据源中心与凭据治理 | 4 | DONE |
+| F3-Schema Discover 探测服务 | 5 | DONE |
+| F4-ODS 与 dbt source 自动生成 | 4 | IN_PROGRESS |
+| F5-同步任务向导与批量建任务 | 5 | IN_PROGRESS |
+| F6-接入任务运行中心与可观测 | 5 | IN_PROGRESS |
+| F7-质量预检与增量治理 | 5 | IN_PROGRESS |
+| F8-安全审计、验收与发布材料 | 4 | IN_PROGRESS |
+
+**统计**: READY=4, IN_PROGRESS=7, DONE=25, BLOCKED=0
+**设计文档**: `worklog/v2.2.3/sprint-21-202604/README.md`

@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="utf-8"?>
+<databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+    http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
+
+    <changeSet id="20260429-12-infra-data-source-connector-key" author="codex">
+        <preConditions onFail="MARK_RAN">
+            <and>
+                <tableExists tableName="infra_data_source"/>
+                <not>
+                    <columnExists tableName="infra_data_source" columnName="connector_key"/>
+                </not>
+            </and>
+        </preConditions>
+        <addColumn tableName="infra_data_source">
+            <column name="connector_key" type="varchar(64)"/>
+        </addColumn>
+        <createIndex tableName="infra_data_source" indexName="idx_infra_data_source_connector_key">
+            <column name="connector_key"/>
+        </createIndex>
+    </changeSet>
+</databaseChangeLog>

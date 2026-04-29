@@ -39,6 +39,17 @@ export const ECHARTS_COMMON_FIELDS: ConfigField[] = [
         ],
         defaultValue: 'auto',
     },
+    {
+        key: 'seriesLabelFontSize',
+        label: '标签字号',
+        type: 'number',
+        group: 'chart',
+        min: 10,
+        max: 28,
+        step: 1,
+        defaultValue: 12,
+        showIf: (config) => String(config.seriesLabelPosition ?? 'auto') !== 'none',
+    },
     // Chart body padding overrides — let users precisely tune space around the plot area,
     // useful when legend position makes chart body sit too far from legend.
     { key: 'chartPaddingTop',    label: '图形上边距',   type: 'number', group: 'layout', min: 0, max: 300, step: 2, placeholder: '自动' },
@@ -51,4 +62,34 @@ export const ECHARTS_COMMON_FIELDS: ConfigField[] = [
 export const AXIS_CHART_FIELDS: ConfigField[] = [
     { key: 'xAxis', label: 'X 轴', type: 'axis-config', group: 'chart' },
     { key: 'yAxis', label: 'Y 轴', type: 'axis-config', group: 'chart' },
+    // Series-value label strategy. ComponentRenderer.tsx already implements the
+    // density-aware "auto" branch (see axisSeriesLabelAutoHide / resolvedAxisSeriesLabelStrategy);
+    // this field just exposes the switch in the editor. "auto" is the requested
+    // "show when bars are sparse, hide when crowded" behaviour.
+    {
+        key: 'axisSeriesLabelStrategy',
+        label: '数值标签',
+        type: 'select',
+        group: 'chart',
+        options: [
+            { label: '自动（密集时隐藏）', value: 'auto' },
+            { label: '全部显示',           value: 'all' },
+            { label: '仅首个系列',         value: 'first' },
+            { label: '关闭',               value: 'none' },
+        ],
+        defaultValue: 'auto',
+    },
+    // Optional override for the auto-computed label step (every Nth category).
+    // Leave blank to defer to the renderer's auto algorithm.
+    {
+        key: 'axisSeriesLabelStep',
+        label: '标签间隔',
+        type: 'number',
+        group: 'chart',
+        min: 1,
+        max: 50,
+        step: 1,
+        placeholder: '自动',
+        showIf: (config) => String(config.axisSeriesLabelStrategy ?? 'auto') !== 'none',
+    },
 ];

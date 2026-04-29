@@ -6,10 +6,18 @@ import com.yuzhi.dts.platform.security.SecurityUtils;
 import com.yuzhi.dts.platform.service.audit.AuditService;
 import com.yuzhi.dts.platform.service.infra.HiveConnectionTestResult;
 import com.yuzhi.dts.platform.service.infra.InfraManagementService;
+import com.yuzhi.dts.platform.service.infra.JdbcCatalogSyncService;
 import com.yuzhi.dts.platform.service.infra.JdbcConnectionTestService;
+import com.yuzhi.dts.platform.service.infra.OdsGenerationService;
 import com.yuzhi.dts.platform.service.infra.dto.DataSourceRequest;
 import com.yuzhi.dts.platform.service.infra.dto.InfraDataSourceDetailDto;
 import com.yuzhi.dts.platform.service.infra.dto.InfraDataSourceDto;
+import com.yuzhi.dts.platform.service.infra.dto.OdsGenerationDtos.OdsGenerationApplyResult;
+import com.yuzhi.dts.platform.service.infra.dto.OdsGenerationDtos.OdsGenerationPreviewResponse;
+import com.yuzhi.dts.platform.service.infra.dto.OdsGenerationDtos.OdsGenerationRequest;
+import com.yuzhi.dts.platform.service.infra.dto.OdsGenerationDtos.OdsSyncTaskDraftResponse;
+import com.yuzhi.dts.platform.service.infra.dto.SchemaDiscoverDtos.SchemaDiscoverRequest;
+import com.yuzhi.dts.platform.service.infra.dto.SchemaDiscoverDtos.SchemaDiscoverResponse;
 import com.yuzhi.dts.platform.web.rest.ApiResponse;
 import com.yuzhi.dts.platform.web.rest.ApiResponses;
 import jakarta.validation.Valid;
@@ -41,15 +49,21 @@ public class InfraDataSourceResource {
     private final InfraManagementService infraManagementService;
     private final AuditService auditService;
     private final JdbcConnectionTestService jdbcConnectionTestService;
+    private final JdbcCatalogSyncService jdbcCatalogSyncService;
+    private final OdsGenerationService odsGenerationService;
 
     public InfraDataSourceResource(
         InfraManagementService infraManagementService,
         AuditService auditService,
-        JdbcConnectionTestService jdbcConnectionTestService
+        JdbcConnectionTestService jdbcConnectionTestService,
+        JdbcCatalogSyncService jdbcCatalogSyncService,
+        OdsGenerationService odsGenerationService
     ) {
         this.infraManagementService = infraManagementService;
         this.auditService = auditService;
         this.jdbcConnectionTestService = jdbcConnectionTestService;
+        this.jdbcCatalogSyncService = jdbcCatalogSyncService;
+        this.odsGenerationService = odsGenerationService;
     }
 
     @GetMapping
@@ -124,7 +138,16 @@ public class InfraDataSourceResource {
                 "FOUNDATION_DATASOURCE_REGISTER",
                 AuditStage.SUCCESS,
                 dto.id() != null ? dto.id().toString() : "create",
-                Map.of("summary", "新增数据源", "name", dto.name(), "operator", operator)
+                Map.of(
+                    "summary",
+                    "新增数据源",
+                    "name",
+                    dto.name(),
+                    "connectorKey",
+                    dto.connectorKey(),
+                    "operator",
+                    operator
+                )
             );
             return ApiResponses.ok(dto);
         } catch (RuntimeException ex) {
@@ -157,6 +180,7 @@ public class InfraDataSourceResource {
             Map<String, Object> meta = new LinkedHashMap<>();
             meta.put("summary", "更新数据源");
             meta.put("name", dto.name());
+            meta.put("connectorKey", dto.connectorKey());
             meta.put("operator", operator);
             meta.put("connectionChanged", impact.connectionChanged());
             meta.put("affectedTasks", impact.affectedTasks());
@@ -199,6 +223,7 @@ public class InfraDataSourceResource {
             Map<String, Object> meta = new LinkedHashMap<>();
             meta.put("summary", "更新数据源");
             meta.put("name", dto.name());
+            meta.put("connectorKey", dto.connectorKey());
             meta.put("operator", operator);
             meta.put("connectionChanged", impact.connectionChanged());
             meta.put("affectedTasks", impact.affectedTasks());
@@ -294,5 +319,104 @@ public class InfraDataSourceResource {
             Map.of("summary", "测试数据源连接", "id", id.toString(), "result", result.success() ? "SUCCESS" : "FAILED")
         );
         return ApiResponses.ok(result);
+    }
+
+    @PostMapping("/{id}/schema-discover")
+    @PreAuthorize(INFRA_MAINTAINER_EXPRESSION)
+    public ApiResponse<SchemaDiscoverResponse> discoverSchema(
+        @PathVariable UUID id,
+        @RequestBody(required = false) SchemaDiscoverRequest request,
+        @RequestHeader(value = "X-Active-Dept", required = false) String activeDept
+    ) {
+        InfraDataSourceDto dto = infraManagementService.getDataSource(id, activeDept);
+        if (!StringUtils.hasText(dto.jdbcUrl())) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "非 JDBC 数据源不支持 JDBC Schema Discover");
+        }
+        SchemaDiscoverResponse response = jdbcCatalogSyncService.discover(infraManagementService.findEntity(id), request);
+        auditService.auditAction(
+            "FOUNDATION_SCHEMA_DISCOVER",
+            "SUCCESS".equalsIgnoreCase(response.status()) ? AuditStage.SUCCESS : AuditStage.FAIL,
+            id.toString(),
+            Map.of(
+                "summary",
+                "探测数据源 Schema",
+                "id",
+                id.toString(),
+                "schemaCount",
+                response.schemas() != null ? response.schemas().size() : 0,
+                "tableCount",
+                response.tables() != null ? response.tables().size() : 0,
+                "status",
+                response.status()
+            )
+        );
+        return ApiResponses.ok(response);
+    }
+
+    @PostMapping("/{id}/ods-preview")
+    @PreAuthorize(INFRA_MAINTAINER_EXPRESSION)
+    public ApiResponse<OdsGenerationPreviewResponse> previewOdsGeneration(
+        @PathVariable UUID id,
+        @RequestBody OdsGenerationRequest request,
+        @RequestHeader(value = "X-Active-Dept", required = false) String activeDept
+    ) {
+        InfraDataSourceDto dto = infraManagementService.getDataSource(id, activeDept);
+        if (!StringUtils.hasText(dto.jdbcUrl())) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "非 JDBC 数据源暂不支持 ODS 预览生成");
+        }
+        OdsGenerationPreviewResponse response = odsGenerationService.preview(infraManagementService.findEntity(id), request);
+        Map<String, Object> meta = new LinkedHashMap<>();
+        meta.put("summary", "预览 ODS/dbt source 生成");
+        meta.put("id", id.toString());
+        meta.put("tables", response.tables() != null ? response.tables().size() : 0);
+        meta.put("odsSchema", response.odsSchema());
+        auditService.auditAction("FOUNDATION_ODS_PREVIEW", AuditStage.SUCCESS, id.toString(), meta);
+        return ApiResponses.ok(response);
+    }
+
+    @PostMapping("/{id}/ods-apply")
+    @PreAuthorize(INFRA_MAINTAINER_EXPRESSION)
+    public ApiResponse<OdsGenerationApplyResult> applyOdsGeneration(
+        @PathVariable UUID id,
+        @RequestBody OdsGenerationRequest request,
+        @RequestHeader(value = "X-Active-Dept", required = false) String activeDept
+    ) {
+        InfraDataSourceDto dto = infraManagementService.getDataSource(id, activeDept);
+        if (!StringUtils.hasText(dto.jdbcUrl())) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "非 JDBC 数据源暂不支持 ODS 映射生成");
+        }
+        OdsGenerationApplyResult result = odsGenerationService.apply(infraManagementService.findEntity(id), request);
+        Map<String, Object> meta = new LinkedHashMap<>();
+        meta.put("summary", "生成 ODS 映射和 dbt source");
+        meta.put("id", id.toString());
+        meta.put("mappingsUpserted", result.mappingsUpserted());
+        meta.put("columnsUpserted", result.columnsUpserted());
+        meta.put("lineageCreated", result.lineageCreated());
+        meta.put("lineageUpdated", result.lineageUpdated());
+        meta.put("lineageSkipped", result.lineageSkipped());
+        meta.put("dbt", result.dbtMessage());
+        auditService.auditAction("FOUNDATION_ODS_APPLY", AuditStage.SUCCESS, id.toString(), meta);
+        return ApiResponses.ok(result);
+    }
+
+    @PostMapping("/{id}/sync-task-draft")
+    @PreAuthorize(INFRA_MAINTAINER_EXPRESSION)
+    public ApiResponse<OdsSyncTaskDraftResponse> buildSyncTaskDraft(
+        @PathVariable UUID id,
+        @RequestBody OdsGenerationRequest request,
+        @RequestHeader(value = "X-Active-Dept", required = false) String activeDept
+    ) {
+        InfraDataSourceDto dto = infraManagementService.getDataSource(id, activeDept);
+        if (!StringUtils.hasText(dto.jdbcUrl())) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "非 JDBC 数据源暂不支持同步任务生成");
+        }
+        OdsSyncTaskDraftResponse response = odsGenerationService.buildSyncTaskDraft(infraManagementService.findEntity(id), request);
+        Map<String, Object> meta = new LinkedHashMap<>();
+        meta.put("summary", "生成同步任务草稿");
+        meta.put("id", id.toString());
+        meta.put("taskName", response.taskName());
+        meta.put("tables", response.tables() != null ? response.tables().size() : 0);
+        auditService.auditAction("FOUNDATION_SYNC_TASK_DRAFT", AuditStage.SUCCESS, id.toString(), meta);
+        return ApiResponses.ok(response);
     }
 }

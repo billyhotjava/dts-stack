@@ -46,7 +46,7 @@ public class JdbcConnectionTestService {
         long start = System.nanoTime();
         String url = StringUtils.trimWhitespace(request.getJdbcUrl());
         if (!StringUtils.hasText(url)) {
-            return HiveConnectionTestResult.failure("JDBC URL 不能为空", 0L);
+            return HiveConnectionTestResult.failure("JDBC URL 不能为空", 0L, "VALIDATION", "填写 JDBC URL 后重新测试。");
         }
 
         ClassLoader previousCl = Thread.currentThread().getContextClassLoader();
@@ -122,7 +122,8 @@ public class JdbcConnectionTestService {
             }
         } catch (Exception ex) {
             LOG.debug("JDBC connection test failed. url={}, driverClass={}", url, request.getDriverClass(), ex);
-            return HiveConnectionTestResult.failure(sanitizeMessage(ex), elapsedMillis(start));
+            String message = sanitizeMessage(ex);
+            return HiveConnectionTestResult.failure(message, elapsedMillis(start), classifyError(ex, message), suggestFix(ex, message));
         } finally {
             Thread.currentThread().setContextClassLoader(previousCl);
         }
@@ -284,6 +285,42 @@ public class JdbcConnectionTestService {
         }
         String msg = sb.toString();
         return msg.length() > 900 ? msg.substring(0, 900) : msg;
+    }
+
+    private String classifyError(Throwable throwable, String message) {
+        String text = (message == null ? "" : message).toLowerCase(Locale.ROOT);
+        if (throwable instanceof ClassNotFoundException || text.contains("no suitable driver") || text.contains("classnotfound")) {
+            return "DRIVER";
+        }
+        if (text.contains("connection refused") || text.contains("timeout") || text.contains("unknown host") || text.contains("network")) {
+            return "NETWORK";
+        }
+        if (text.contains("password") || text.contains("authentication") || text.contains("access denied") || text.contains("login failed")) {
+            return "AUTH";
+        }
+        if (throwable instanceof SQLException se) {
+            String state = se.getSQLState();
+            if (state != null && state.startsWith("28")) {
+                return "AUTH";
+            }
+            if (state != null && state.startsWith("08")) {
+                return "NETWORK";
+            }
+            return "SQL";
+        }
+        return "UNKNOWN";
+    }
+
+    private String suggestFix(Throwable throwable, String message) {
+        String type = classifyError(throwable, message);
+        return switch (type) {
+            case "DRIVER" -> "检查 JDBC 驱动是否已上传，并确认驱动主类和驱动文件/版本填写正确。";
+            case "NETWORK" -> "检查主机、端口、防火墙、容器网络和数据库监听状态。";
+            case "AUTH" -> "检查用户名、密码、认证方式和账号访问权限。";
+            case "SQL" -> "检查测试 SQL、默认库/schema 权限以及数据库兼容性。";
+            case "VALIDATION" -> "补齐必填连接参数后重新测试。";
+            default -> "查看错误摘要并确认网络、驱动、账号和目标库状态。";
+        };
     }
 
     private static String oneLine(Throwable t) {

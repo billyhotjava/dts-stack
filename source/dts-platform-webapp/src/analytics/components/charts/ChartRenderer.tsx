@@ -3,6 +3,7 @@ import React, { useState, useEffect, useMemo, useCallback, lazy, Suspense } from
 import { DataTable } from '../DataTable';
 import { Spin } from 'antd';
 import type { ReferenceLine } from './LineChart';
+import { formatChartValue } from './chartColors';
 
 // Lazy load ECharts to avoid blocking initial bundle
 const EChartsRuntime = lazy(() => import('./EChartsRuntime'));
@@ -207,23 +208,77 @@ export function ChartRenderer({
 			case 'bar':
 			case 'row': {
 				const isHorizontal = display === 'row';
+				const isStacked = settings['stackable.stack_type'] === 'stacked';
+				const showValues = !!settings['graph.show_values'];
+				// Decide the bar-top label position once: stacked stays inside the segment
+				// to avoid being eclipsed by the next stack; horizontal goes to the bar's
+				// right end; vertical sits above the bar.
+				const labelPosition: 'inside' | 'right' | 'top' = isStacked
+					? 'inside'
+					: isHorizontal
+						? 'right'
+						: 'top';
+
 				const series = yAxisIndices.map((yIdx, si) => ({
 					name: data.cols[yIdx]?.display_name || data.cols[yIdx]?.name || `Series ${si + 1}`,
 					type: 'bar' as const,
-					data: data.rows.map(row => Number(row[yIdx]) || 0),
-					...(settings['stackable.stack_type'] === 'stacked' ? { stack: 'total' } : {}),
-					label: settings['graph.show_values'] ? { show: true, position: 'top' as const, fontSize: 11 } : undefined,
+					// Preserve null/empty/NaN as null so ECharts skips both the bar and its label
+					// (otherwise a phantom "0" label crowds out neighbouring real labels).
+					data: data.rows.map(row => {
+						const raw = row[yIdx];
+						if (raw === null || raw === undefined || raw === '') return null;
+						const n = Number(raw);
+						return Number.isFinite(n) ? n : null;
+					}),
+					...(isStacked ? { stack: 'total' } : {}),
+					label: showValues
+						? {
+							show: true,
+							position: labelPosition,
+							fontSize: 11,
+							distance: 4,
+							formatter: (p: { value: unknown }) =>
+								p.value === null || p.value === undefined
+									? ''
+									: formatChartValue(Number(p.value), { compact: true }),
+						}
+						: undefined,
+					// shiftY/shiftX nudges overlapping labels instead of dropping them, which is
+					// what fixes the "some bars show, some don't" symptom.
+					labelLayout: showValues
+						? isHorizontal
+							? { hideOverlap: false, moveOverlap: 'shiftX' as const }
+							: { hideOverlap: false, moveOverlap: 'shiftY' as const }
+						: undefined,
 					itemStyle: { color: colors[si % colors.length] },
 				}));
 
-				const categoryAxis = { type: 'category' as const, data: labels, axisLabel: { fontSize: 11 } };
+				const xRotate = settings['graph.x_axis.label_rotate'] || 0;
+				const categoryAxis = {
+					type: 'category' as const,
+					data: labels,
+					axisLabel: {
+						fontSize: 11,
+						interval: 0,
+						rotate: xRotate,
+						hideOverlap: true,
+						overflow: 'truncate' as const,
+					},
+				};
 				const valueAxis = { type: 'value' as const, axisLabel: { fontSize: 11 } };
 
 				const option = {
 					color: colors,
 					tooltip: { trigger: 'axis' },
 					legend: { data: series.map(s => s.name), bottom: 0, textStyle: { fontSize: 12 } },
-					grid: { left: isHorizontal ? 80 : 50, right: 20, top: 20, bottom: 40 },
+					// Vertical bars need extra top padding when value labels are on so the
+					// label of the tallest bar doesn't get clipped by the canvas edge.
+					grid: {
+						left: isHorizontal ? 80 : 50,
+						right: 20,
+						top: !isHorizontal && showValues ? 40 : 20,
+						bottom: 40,
+					},
 					xAxis: isHorizontal ? valueAxis : categoryAxis,
 					yAxis: isHorizontal ? categoryAxis : valueAxis,
 					series,

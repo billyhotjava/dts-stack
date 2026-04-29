@@ -3,6 +3,7 @@ package com.yuzhi.dts.platform.web.rest;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.yuzhi.dts.common.audit.AuditStage;
+import com.yuzhi.dts.common.security.SecurityLevelCatalog;
 import com.yuzhi.dts.platform.domain.catalog.CatalogDataset;
 import com.yuzhi.dts.platform.domain.explore.ExecEnums;
 import com.yuzhi.dts.platform.domain.explore.ExploreSavedQuery;
@@ -1662,15 +1663,10 @@ public class ExploreResource {
 
     private String translateClassification(String classification) {
         if (classification == null) {
-            return "内部";
+            return SecurityLevelCatalog.DEFAULT_DATA_SECURITY_LEVEL.labelZh();
         }
-        return switch (classification.toUpperCase(Locale.ROOT)) {
-            case "PUBLIC" -> "公开";
-            case "INTERNAL", "GENERAL" -> "内部";
-            case "SECRET" -> "秘密";
-            case "TOP_SECRET", "CONFIDENTIAL" -> "机密";
-            default -> classification;
-        };
+        SecurityLevelCatalog.DataSecurityLevel level = SecurityLevelCatalog.DataSecurityLevel.parse(classification);
+        return level == null ? classification : level.labelZh();
     }
 
     private String datasetIdentifier(CatalogDataset dataset, Object raw) {

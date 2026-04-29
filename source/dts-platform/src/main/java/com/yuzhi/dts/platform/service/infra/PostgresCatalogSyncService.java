@@ -1,5 +1,6 @@
 package com.yuzhi.dts.platform.service.infra;
 
+import com.yuzhi.dts.common.security.SecurityLevelCatalog;
 import com.yuzhi.dts.platform.config.CatalogFeatureProperties;
 import com.yuzhi.dts.platform.domain.catalog.CatalogColumnSchema;
 import com.yuzhi.dts.platform.domain.catalog.CatalogDataset;
@@ -44,7 +45,7 @@ public class PostgresCatalogSyncService {
     private static final Logger LOG = LoggerFactory.getLogger(PostgresCatalogSyncService.class);
     private static final String TYPE_POSTGRES = "POSTGRES";
     private static final String STATUS_ACTIVE = "ACTIVE";
-    private static final String DEFAULT_CLASSIFICATION = "INTERNAL";
+    private static final String DEFAULT_CLASSIFICATION = SecurityLevelCatalog.DEFAULT_DATA_SECURITY_LEVEL.code();
     private static final String DEFAULT_OWNER = "system";
     private static final String DEFAULT_EXPOSED_BY = "VIEW";
 

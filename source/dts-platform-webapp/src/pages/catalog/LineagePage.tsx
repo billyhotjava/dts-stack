@@ -31,7 +31,10 @@ type ImpactNode = {
 	table?: string;
 	type?: string;
 	assetType?: string;
+	lineageJobId?: string;
+	jobKey?: string;
 	jobType?: string;
+	engine?: string;
 	relationType?: string;
 	sourceName?: string;
 	projectName?: string;
@@ -39,6 +42,11 @@ type ImpactNode = {
 	ownerDept?: string;
 	owner?: string;
 	sourceId?: string;
+	status?: string;
+	lastExecutionId?: string;
+	lastExecutionStatus?: string;
+	lastObservedAt?: string;
+	lastVerifiedAt?: string;
 	lastModifiedAt?: string;
 	snapshotTime?: string;
 };
@@ -49,6 +57,7 @@ type ImpactEdge = {
 	fromId?: string;
 	toId?: string;
 	relationType?: string;
+	lineageJobId?: string;
 	upstreamDatasetId?: string;
 	downstreamDatasetId?: string;
 	upstreamName?: string;
@@ -68,12 +77,32 @@ type ImpactEdge = {
 	lastModifiedAt?: string;
 };
 
+type ColumnLineage = {
+	id?: string;
+	datasetLineageId?: string;
+	upstreamDatasetId?: string;
+	downstreamDatasetId?: string;
+	upstreamColumnId?: string;
+	downstreamColumnId?: string;
+	upstreamColumn?: string;
+	downstreamColumn?: string;
+	relationType?: string;
+	lineageType?: string;
+	expression?: string;
+	confidence?: string;
+	projectName?: string;
+	lineageJobId?: string;
+	lastObservedAt?: string;
+	lastModifiedAt?: string;
+};
+
 type ImpactStats = {
 	layerNodeCounts?: Record<string, number>;
 	relationTypeCounts?: Record<string, number>;
 	verificationStatusCounts?: Record<string, number>;
 	kindNodeCounts?: Record<string, number>;
 	changedNodeCount?: number;
+	columnLineageCount?: number;
 };
 
 type ImpactResult = {
@@ -86,9 +115,11 @@ type ImpactResult = {
 	layers?: string[];
 	changedWithinHours?: number;
 	sourceId?: string;
+	withColumns?: boolean;
 	impactStats?: ImpactStats;
 	nodes?: ImpactNode[];
 	edges?: ImpactEdge[];
+	columnLineages?: ColumnLineage[];
 };
 
 const layerColor = (layer?: string) => {
@@ -120,6 +151,23 @@ const csvEscape = (value: unknown) => {
 	return text;
 };
 
+const svgEscape = (value: unknown) =>
+	String(value ?? "")
+		.replaceAll("&", "&amp;")
+		.replaceAll("<", "&lt;")
+		.replaceAll(">", "&gt;")
+		.replaceAll("\"", "&quot;");
+
+const downloadBlob = (name: string, content: BlobPart, type: string) => {
+	const blob = new Blob([content], { type });
+	const url = URL.createObjectURL(blob);
+	const anchor = document.createElement("a");
+	anchor.href = url;
+	anchor.download = name;
+	anchor.click();
+	URL.revokeObjectURL(url);
+};
+
 const downloadCsv = (name: string, rows: Array<Record<string, unknown>>) => {
 	if (!rows.length) {
 		return;
@@ -129,13 +177,7 @@ const downloadCsv = (name: string, rows: Array<Record<string, unknown>>) => {
 	const body = rows
 		.map((row) => keys.map((key) => csvEscape(row[key])).join(","))
 		.join("\n");
-	const blob = new Blob([`${header}\n${body}`], { type: "text/csv;charset=utf-8;" });
-	const url = URL.createObjectURL(blob);
-	const anchor = document.createElement("a");
-	anchor.href = url;
-	anchor.download = name;
-	anchor.click();
-	URL.revokeObjectURL(url);
+	downloadBlob(name, `${header}\n${body}`, "text/csv;charset=utf-8;");
 };
 
 const NODE_SIZE = { width: 190, height: 64 };
@@ -341,6 +383,7 @@ export default function LineagePage() {
 				layers: layers.length ? layers.join(",") : undefined,
 				changedWithinHours: changedHours > 0 ? changedHours : undefined,
 				withJobs: true,
+				withColumns: true,
 			});
 			setImpact(resp || null);
 		} catch {
@@ -353,6 +396,10 @@ export default function LineagePage() {
 
 	const nodesRaw = useMemo(() => (Array.isArray(impact?.nodes) ? (impact?.nodes ?? []) : []), [impact?.nodes]);
 	const edgesRaw = useMemo(() => (Array.isArray(impact?.edges) ? (impact?.edges ?? []) : []), [impact?.edges]);
+	const columnLineagesRaw = useMemo(
+		() => (Array.isArray(impact?.columnLineages) ? (impact?.columnLineages ?? []) : []),
+		[impact?.columnLineages],
+	);
 
 	const keywordLower = keyword.trim().toLowerCase();
 	const nodes = useMemo(() => {
@@ -360,7 +407,9 @@ export default function LineagePage() {
 			return nodesRaw;
 		}
 		return nodesRaw.filter((node) => {
-			const text = `${node.name || ""} ${node.db || ""}.${node.table || ""} ${node.owner || ""} ${node.ownerDept || ""}`.toLowerCase();
+			const text =
+				`${node.name || ""} ${node.db || ""}.${node.table || ""} ${node.owner || ""} ${node.ownerDept || ""} ${node.jobType || ""} ${node.status || ""} ${node.lastExecutionStatus || ""}`
+					.toLowerCase();
 			return text.includes(keywordLower);
 		});
 	}, [nodesRaw, keywordLower]);
@@ -381,6 +430,17 @@ export default function LineagePage() {
 			return Boolean(byText || byNode);
 		});
 	}, [edgesRaw, keywordLower, nodeIdSet]);
+
+	const columnLineages = useMemo(() => {
+		if (!keywordLower) {
+			return columnLineagesRaw;
+		}
+		return columnLineagesRaw.filter((row) =>
+			`${row.upstreamColumn || ""} ${row.downstreamColumn || ""} ${row.relationType || ""} ${row.lineageType || ""} ${row.confidence || ""} ${row.projectName || ""} ${row.expression || ""}`
+				.toLowerCase()
+				.includes(keywordLower),
+		);
+	}, [columnLineagesRaw, keywordLower]);
 
 	const rfNodes: Node[] = useMemo(() => {
 		if (!nodes.length) return [];
@@ -551,6 +611,12 @@ export default function LineagePage() {
 			render: (_, row) => row.owner || row.ownerDept || "-",
 		},
 		{
+			title: "状态",
+			key: "status",
+			width: 130,
+			render: (_, row) => row.status || row.lastExecutionStatus || "-",
+		},
+		{
 			title: "最近变更",
 			key: "lastModifiedAt",
 			render: (_, row) => formatTs(row.lastModifiedAt),
@@ -600,6 +666,54 @@ export default function LineagePage() {
 		},
 	];
 
+	const columnLineageColumns: ColumnsType<ColumnLineage> = [
+		{
+			title: "上游字段",
+			key: "upstreamColumn",
+			render: (_, row) => row.upstreamColumn || row.upstreamColumnId || "-",
+		},
+		{
+			title: "下游字段",
+			key: "downstreamColumn",
+			render: (_, row) => row.downstreamColumn || row.downstreamColumnId || "-",
+		},
+		{
+			title: "关系",
+			dataIndex: "relationType",
+			width: 120,
+			render: (value) => (value ? <Tag color="blue">{value}</Tag> : "-"),
+		},
+		{
+			title: "类型",
+			dataIndex: "lineageType",
+			width: 140,
+			render: (value) => value || "-",
+		},
+		{
+			title: "置信",
+			dataIndex: "confidence",
+			width: 120,
+			render: (value) => (value ? <Tag color={String(value).toUpperCase() === "INFERRED" ? "gold" : "green"}>{value}</Tag> : "-"),
+		},
+		{
+			title: "项目",
+			dataIndex: "projectName",
+			width: 150,
+			render: (value) => value || "-",
+		},
+		{
+			title: "表达式",
+			dataIndex: "expression",
+			render: (value) => value || "-",
+		},
+		{
+			title: "最近观测",
+			dataIndex: "lastObservedAt",
+			width: 190,
+			render: (value) => formatTs(value),
+		},
+	];
+
 	const handleExport = () => {
 		if (!impact) {
 			toast.warning("当前无可导出的数据");
@@ -617,6 +731,11 @@ export default function LineagePage() {
 				owner: row.owner || "",
 				owner_dept: row.ownerDept || "",
 				source_id: row.sourceId || "",
+				lineage_job_id: row.lineageJobId || "",
+				job_type: row.jobType || "",
+				job_status: row.status || "",
+				last_execution_status: row.lastExecutionStatus || "",
+				last_observed_at: row.lastObservedAt || "",
 				last_modified_at: row.lastModifiedAt || "",
 			})),
 		);
@@ -627,6 +746,7 @@ export default function LineagePage() {
 				upstream: row.upstreamName || row.upstreamDatasetId || "",
 				downstream: row.downstreamName || row.downstreamDatasetId || "",
 				relation_type: row.relationType || "",
+				lineage_job_id: row.lineageJobId || "",
 				verification_status: row.verificationStatus || "",
 				last_execution_status: row.lastExecutionStatus || "",
 				last_observed_at: row.lastObservedAt || "",
@@ -635,7 +755,85 @@ export default function LineagePage() {
 				last_modified_at: row.lastModifiedAt || "",
 			})),
 		);
-		toast.success("已导出节点与关系 CSV");
+		downloadCsv(
+			`lineage-columns-${stamp}.csv`,
+			columnLineages.map((row) => ({
+				id: row.id,
+				dataset_lineage_id: row.datasetLineageId || "",
+				upstream_dataset_id: row.upstreamDatasetId || "",
+				downstream_dataset_id: row.downstreamDatasetId || "",
+				upstream_column: row.upstreamColumn || "",
+				downstream_column: row.downstreamColumn || "",
+				relation_type: row.relationType || "",
+				lineage_type: row.lineageType || "",
+				confidence: row.confidence || "",
+				expression: row.expression || "",
+				project_name: row.projectName || "",
+				lineage_job_id: row.lineageJobId || "",
+				last_observed_at: row.lastObservedAt || "",
+				last_modified_at: row.lastModifiedAt || "",
+			})),
+		);
+		toast.success("已导出节点、关系与字段血缘 CSV");
+	};
+
+	const handleExportSvg = () => {
+		if (!nodes.length) {
+			toast.warning("当前无可导出的图");
+			return;
+		}
+		const positions = applyLayeredLayout(nodes, edges, layoutDirection);
+		const padding = 48;
+		const positionedNodes = nodes
+			.filter((node) => node.id)
+			.map((node, index) => ({
+				node,
+				position: positions.get(node.id!) ?? { x: index * 220, y: 0 },
+			}));
+		const maxX = Math.max(...positionedNodes.map((item) => item.position.x + NODE_SIZE.width), NODE_SIZE.width);
+		const maxY = Math.max(...positionedNodes.map((item) => item.position.y + NODE_SIZE.height), NODE_SIZE.height);
+		const width = maxX + padding * 2;
+		const height = maxY + padding * 2;
+		const positionById = new Map(positionedNodes.map((item) => [item.node.id, item.position]));
+		const svgEdges = edges
+			.map((edge) => {
+				const from = edgeEndpoint(edge, "from");
+				const to = edgeEndpoint(edge, "to");
+				const source = from ? positionById.get(from) : undefined;
+				const target = to ? positionById.get(to) : undefined;
+				if (!source || !target) return "";
+				const x1 = source.x + NODE_SIZE.width + padding;
+				const y1 = source.y + NODE_SIZE.height / 2 + padding;
+				const x2 = target.x + padding;
+				const y2 = target.y + NODE_SIZE.height / 2 + padding;
+				const color = RELATION_STROKE[String(edge.relationType || "").toUpperCase()] ?? "#8c8c8c";
+				const dash = String(edge.verificationStatus || "").toUpperCase() === "KNOWN_UNVERIFIED" || edge.relationType === "MANUAL"
+					? " stroke-dasharray=\"5 5\""
+					: "";
+				const labelX = (x1 + x2) / 2;
+				const labelY = (y1 + y2) / 2 - 6;
+				return `<path d="M ${x1} ${y1} L ${x2} ${y2}" fill="none" stroke="${color}" stroke-width="1.8"${dash} marker-end="url(#arrow)"/><text x="${labelX}" y="${labelY}" text-anchor="middle" font-size="10" fill="#595959">${svgEscape(edgeLabel(edge))}</text>`;
+			})
+			.join("\n");
+		const svgNodes = positionedNodes
+			.map(({ node, position }) => {
+				const tone = nodeTone(node);
+				const x = position.x + padding;
+				const y = position.y + padding;
+				const title = svgEscape(node.name || node.table || "未知节点");
+				const detail = svgEscape(node.kind === "job" ? node.jobType || node.relationType || "JOB" : node.layer || node.assetType || node.type || "DATASET");
+				return `<rect x="${x}" y="${y}" width="${NODE_SIZE.width}" height="${NODE_SIZE.height}" rx="${node.kind === "job" ? 12 : 6}" fill="${tone.bg}" stroke="${tone.border}"/><text x="${x + 12}" y="${y + 22}" font-size="10" fill="#64748b">${svgEscape(String(node.kind || "dataset").toUpperCase())} · ${detail}</text><text x="${x + 12}" y="${y + 44}" font-size="13" font-weight="600" fill="#0f172a">${title}</text>`;
+			})
+			.join("\n");
+		const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}">
+<defs><marker id="arrow" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto" markerUnits="strokeWidth"><path d="M0,0 L0,6 L9,3 z" fill="#8c8c8c"/></marker></defs>
+<rect width="100%" height="100%" fill="#ffffff"/>
+${svgEdges}
+${svgNodes}
+</svg>`;
+		const stamp = new Date().toISOString().slice(0, 19).replaceAll(":", "-");
+		downloadBlob(`lineage-graph-${stamp}.svg`, svg, "image/svg+xml;charset=utf-8;");
+		toast.success("已导出血缘图 SVG");
 	};
 
 	return (
@@ -652,7 +850,10 @@ export default function LineagePage() {
 								导入 dbt 血缘
 							</Button>
 						</Upload>
-						<Button className="rounded-2xl" icon={<DownloadOutlined />} onClick={handleExport} disabled={!nodes.length && !edges.length}>
+						<Button className="rounded-2xl" icon={<DownloadOutlined />} onClick={handleExportSvg} disabled={!nodes.length}>
+							导出SVG
+						</Button>
+						<Button className="rounded-2xl" icon={<DownloadOutlined />} onClick={handleExport} disabled={!nodes.length && !edges.length && !columnLineages.length}>
 							导出结果
 						</Button>
 					</Space>
@@ -761,6 +962,7 @@ export default function LineagePage() {
 											<Statistic title="变更节点" value={Number(impact?.impactStats?.changedNodeCount || 0)} />
 											<Statistic title="数据源" value={Number(impact?.impactStats?.kindNodeCounts?.source || 0)} />
 											<Statistic title="任务节点" value={Number(impact?.impactStats?.kindNodeCounts?.job || 0)} />
+											<Statistic title="字段血缘" value={Number(impact?.impactStats?.columnLineageCount || columnLineages.length)} />
 											<Statistic title="方向" value={impact?.direction || direction} />
 											<Statistic title="深度" value={Number(impact?.depth || depth)} />
 										</Space>
@@ -805,6 +1007,21 @@ export default function LineagePage() {
 											/>
 										) : (
 											<EmptyState title="暂无关系边" description="当前条件下未检索到血缘关系。" />
+										)}
+									</Card>
+
+									<Card title="字段血缘">
+										{columnLineages.length ? (
+											<Table
+												rowKey={(row, idx) => row.id || `${row.upstreamColumn || "up"}-${row.downstreamColumn || "down"}-${idx}`}
+												columns={columnLineageColumns}
+												dataSource={columnLineages}
+												loading={loading}
+												scroll={{ x: 1200 }}
+												pagination={{ pageSize: 10 }}
+											/>
+										) : (
+											<EmptyState title="暂无字段血缘" description="当前条件下未检索到字段级血缘。" />
 										)}
 									</Card>
 								</div>
@@ -853,6 +1070,11 @@ export default function LineagePage() {
 						<Descriptions.Item label="负责人">{selectedNode.owner || "-"}</Descriptions.Item>
 						<Descriptions.Item label="所属部门">{selectedNode.ownerDept || "-"}</Descriptions.Item>
 						<Descriptions.Item label="来源数据源 ID">{selectedNode.sourceId || "-"}</Descriptions.Item>
+						<Descriptions.Item label="任务类型">{selectedNode.jobType || selectedNode.engine || "-"}</Descriptions.Item>
+						<Descriptions.Item label="任务状态">{selectedNode.status || selectedNode.lastExecutionStatus || "-"}</Descriptions.Item>
+						<Descriptions.Item label="最近执行 ID">{selectedNode.lastExecutionId || "-"}</Descriptions.Item>
+						<Descriptions.Item label="最近观测">{formatTs(selectedNode.lastObservedAt)}</Descriptions.Item>
+						<Descriptions.Item label="最近验证">{formatTs(selectedNode.lastVerifiedAt)}</Descriptions.Item>
 						<Descriptions.Item label="最近变更">{formatTs(selectedNode.lastModifiedAt)}</Descriptions.Item>
 						<Descriptions.Item label="最近采集">{formatTs(selectedNode.snapshotTime)}</Descriptions.Item>
 					</Descriptions>

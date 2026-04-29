@@ -209,7 +209,7 @@ public class CatalogMaskingResource {
                 conflict.put("row", rowNo);
                 conflict.put("code", "INVALID_ROW");
                 conflict.put("message", "来源系统、来源级别、平台级别不能为空，且平台级别必须合法。");
-                conflict.put("suggestion", "请补全字段并将平台级别修正为 PUBLIC/INTERNAL/SECRET/CONFIDENTIAL。");
+                conflict.put("suggestion", "请补全字段并将平台级别修正为 " + supportedClassificationText() + "。");
                 conflicts.add(conflict);
                 continue;
             }
@@ -218,7 +218,7 @@ public class CatalogMaskingResource {
                 conflict.put("row", rowNo);
                 conflict.put("code", "INVALID_PLATFORM_LEVEL");
                 conflict.put("message", "平台级别不合法：" + platformLevel);
-                conflict.put("suggestion", "平台级别仅支持 PUBLIC/INTERNAL/SECRET/CONFIDENTIAL。");
+                conflict.put("suggestion", "平台级别仅支持 " + supportedClassificationText() + "。");
                 conflicts.add(conflict);
                 continue;
             }
@@ -284,6 +284,10 @@ public class CatalogMaskingResource {
             warnings.add(warning);
         }
         return new CatalogResourceHelper.MappingValidationResult(normalized, conflicts, warnings);
+    }
+
+    private static String supportedClassificationText() {
+        return String.join("/", CatalogResourceHelper.CLASSIFICATION_LEVEL_ORDER);
     }
 
     private Map<String, Object> toMappingValidationPayload(CatalogResourceHelper.MappingValidationResult validation) {

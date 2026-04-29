@@ -17,6 +17,7 @@ import com.yuzhi.dts.ingestion.service.etl.DagPreheatService;
 import com.yuzhi.dts.ingestion.service.etl.TargetTableProvisioner;
 import com.yuzhi.dts.ingestion.service.etl.IncrementalSyncService;
 import com.yuzhi.dts.ingestion.service.etl.IngestionRetryService;
+import com.yuzhi.dts.ingestion.service.infra.PlatformInfraClient;
 import com.yuzhi.dts.ingestion.service.mapper.IngestionExecutionMapper;
 import com.yuzhi.dts.ingestion.service.mapper.IngestionTaskMapper;
 import org.junit.jupiter.api.AfterEach;
@@ -98,6 +99,9 @@ class IngestionTaskServiceTest {
     private DagPreheatService dagPreheatService;
 
     @Mock
+    private PlatformInfraClient platformInfraClient;
+
+    @Mock
     private org.springframework.transaction.PlatformTransactionManager transactionManager;
 
     private IngestionTaskService ingestionTaskService;
@@ -122,6 +126,7 @@ class IngestionTaskServiceTest {
             changeLogService,
             retryService,
             dagPreheatService,
+            platformInfraClient,
             transactionManager,
             Runnable::run
         );
@@ -371,6 +376,7 @@ class IngestionTaskServiceTest {
         boolean hasFailed = captor.getAllValues().stream()
             .anyMatch(e -> "failed".equals(e.getStatus()));
         assertThat(hasFailed).isTrue();
+        verify(platformInfraClient).syncIngestionExecutionLineage(eq(task), any(IngestionExecution.class));
     }
 
     @Test

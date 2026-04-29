@@ -37,18 +37,33 @@ class ClassificationMapperTest {
     }
 
     @Test
-    void toApiCode_passes_through_unknown() {
-        assertThat(ClassificationMapper.toApiCode("CONFIDENTIAL")).isEqualTo("CONFIDENTIAL");
+    void toApiCode_maps_CONFIDENTIAL_to_S1() {
+        assertThat(ClassificationMapper.toApiCode("CONFIDENTIAL")).isEqualTo("S1");
     }
 
     @Test
-    void toDbValues_maps_S1_to_TOP_SECRET() {
-        assertThat(ClassificationMapper.toDbValues("S1")).containsExactly("TOP_SECRET");
+    void toApiCode_passes_through_unknown() {
+        assertThat(ClassificationMapper.toApiCode("CUSTOM")).isEqualTo("CUSTOM");
+    }
+
+    @Test
+    void toDbValues_maps_S1_to_canonical_and_legacy_tokens() {
+        assertThat(ClassificationMapper.toDbValues("S1")).containsExactly(
+            "CONFIDENTIAL",
+            "DATA_CONFIDENTIAL",
+            "TOP_SECRET",
+            "DATA_TOP_SECRET"
+        );
     }
 
     @Test
     void toDbValues_maps_S4_to_PUBLIC() {
-        assertThat(ClassificationMapper.toDbValues("S4")).containsExactly("PUBLIC");
+        assertThat(ClassificationMapper.toDbValues("S4")).containsExactly(
+            "PUBLIC",
+            "DATA_PUBLIC",
+            "NON_SECRET",
+            "NONE_SECRET"
+        );
     }
 
     @Test

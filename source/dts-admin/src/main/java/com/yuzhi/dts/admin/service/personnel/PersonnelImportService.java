@@ -20,6 +20,7 @@ import com.yuzhi.dts.admin.config.MdmGatewayProperties;
 import com.yuzhi.dts.admin.domain.AdminKeycloakUser;
 import com.yuzhi.dts.admin.repository.AdminKeycloakUserRepository;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.yuzhi.dts.common.security.SecurityLevelCatalog;
 import java.time.Instant;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
@@ -300,7 +301,7 @@ public class PersonnelImportService {
         }
         String level = normalizeSecurityLevel(secLevelObj == null ? null : String.valueOf(secLevelObj));
         if (StringUtils.isBlank(level)) {
-            level = "GENERAL";
+            level = SecurityLevelCatalog.DEFAULT_PERSONNEL_SECURITY_LEVEL.code();
         }
         AdminKeycloakUser snapshot = adminKeycloakUserRepository
             .findByKeycloakId(keycloakUserId)
@@ -368,19 +369,7 @@ public class PersonnelImportService {
     }
 
     private String normalizeSecurityLevel(String level) {
-        if (level == null) {
-            return null;
-        }
-        String normalized = level.trim().toUpperCase(Locale.ROOT).replace('-', '_').replace(' ', '_');
-        // 与 AdminUserService 的映射保持一致，补充数字密级到平台枚举
-        return switch (normalized) {
-            case "0" -> "GENERAL"; // 院方：0=一般
-            case "1", "IMPORTANT", "IM", "I" -> "IMPORTANT"; // 院方：1=重要
-            case "2", "CORE", "CO", "C" -> "CORE"; // 院方：2=核心
-            case "GENERAL", "GN", "GE", "G" -> "GENERAL";
-            case "NONE_SECRET", "NON_SECRET", "NS" -> "GENERAL"; // 兼容旧值，收敛为 GENERAL
-            default -> normalized;
-        };
+        return SecurityLevelCatalog.normalizePersonnelCode(level);
     }
 
     private String firstNonBlank(String... values) {

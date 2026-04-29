@@ -1,5 +1,6 @@
 package com.yuzhi.dts.admin.domain;
 
+import com.yuzhi.dts.common.security.SecurityLevelCatalog;
 import jakarta.persistence.*;
 import java.io.Serializable;
 import java.util.ArrayList;
@@ -34,7 +35,7 @@ public class PortalMenu extends AbstractAuditingEntity<Long> implements Serializ
     private String metadata;
 
     @Column(name = "security_level", length = 32, nullable = false)
-    private String securityLevel = "GENERAL";
+    private String securityLevel = SecurityLevelCatalog.DEFAULT_PERSONNEL_SECURITY_LEVEL.code();
 
     @Column(name = "deleted", nullable = false)
     private boolean deleted = false;

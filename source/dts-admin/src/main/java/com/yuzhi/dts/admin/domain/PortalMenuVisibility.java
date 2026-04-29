@@ -1,5 +1,6 @@
 package com.yuzhi.dts.admin.domain;
 
+import com.yuzhi.dts.common.security.SecurityLevelCatalog;
 import jakarta.persistence.*;
 import java.io.Serializable;
 
@@ -23,7 +24,7 @@ public class PortalMenuVisibility extends AbstractAuditingEntity<Long> implement
     private String permissionCode;
 
     @Column(name = "data_level", nullable = false, length = 32)
-    private String dataLevel = "INTERNAL";
+    private String dataLevel = SecurityLevelCatalog.DEFAULT_DATA_SECURITY_LEVEL.code();
 
     @Override
     public Long getId() {

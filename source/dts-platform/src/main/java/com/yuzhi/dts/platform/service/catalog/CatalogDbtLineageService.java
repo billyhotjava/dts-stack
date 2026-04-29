@@ -2,13 +2,16 @@ package com.yuzhi.dts.platform.service.catalog;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.yuzhi.dts.platform.domain.catalog.CatalogDatasetLineage;
+import com.yuzhi.dts.platform.domain.catalog.CatalogLineageJob;
 import com.yuzhi.dts.platform.repository.catalog.CatalogDatasetLineageRepository;
 import com.yuzhi.dts.platform.repository.catalog.CatalogDatasetRepository;
+import com.yuzhi.dts.platform.repository.catalog.CatalogLineageJobRepository;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.io.IOException;
+import java.time.Instant;
 import java.util.*;
 import java.util.stream.Collectors;
 
@@ -17,15 +20,18 @@ public class CatalogDbtLineageService {
 
 	private final CatalogDatasetRepository datasetRepo;
 	private final CatalogDatasetLineageRepository lineageRepo;
+	private final CatalogLineageJobRepository lineageJobRepo;
 	private final ObjectMapper objectMapper;
 
 	public CatalogDbtLineageService(
 		CatalogDatasetRepository datasetRepo,
 		CatalogDatasetLineageRepository lineageRepo,
+		CatalogLineageJobRepository lineageJobRepo,
 		ObjectMapper objectMapper
 	) {
 		this.datasetRepo = datasetRepo;
 		this.lineageRepo = lineageRepo;
+		this.lineageJobRepo = lineageJobRepo;
 		this.objectMapper = objectMapper;
 	}
 
@@ -98,6 +104,7 @@ public class CatalogDbtLineageService {
 				skipped++;
 				continue;
 			}
+			CatalogLineageJob lineageJob = upsertDbtJob(nodeKey, modelName, node);
 
 			for (String parentKey : parentKeys) {
 				String parentName = parentKey.contains(".")
@@ -116,6 +123,9 @@ public class CatalogDbtLineageService {
 					lineage.setRelationType("DBT");
 					lineage.setDirection("UPSTREAM_TO_DOWNSTREAM");
 					lineage.setNotes("Imported from dbt manifest");
+					if (lineageJob != null) {
+						lineage.setLineageJobId(lineageJob.getId());
+					}
 					toCreate.add(lineage);
 					toCreateKeys.add(pairKey);
 				}
@@ -125,5 +135,59 @@ public class CatalogDbtLineageService {
 		lineageRepo.saveAll(toCreate);
 		int created = toCreate.size();
 		return Map.of("created", created, "skipped", skipped, "total", nodes.size());
+	}
+
+	private CatalogLineageJob upsertDbtJob(String nodeKey, String modelName, Map<String, Object> node) {
+		if (nodeKey == null || nodeKey.isBlank()) {
+			return null;
+		}
+		String jobKey = truncate("DBT:" + nodeKey.trim(), 256);
+		CatalogLineageJob job = lineageJobRepo.findByJobKey(jobKey).orElseGet(CatalogLineageJob::new);
+		job.setJobKey(jobKey);
+		job.setName(truncate(modelName != null && !modelName.isBlank() ? modelName : nodeKey, 256));
+		job.setJobType("DBT_MODEL");
+		job.setEngine("DBT");
+		job.setRelationType("DBT");
+		job.setProjectName(resolveDbtProjectName(nodeKey));
+		job.setExternalId(truncate(nodeKey, 256));
+		if (job.getStatus() == null || job.getStatus().isBlank()) {
+			job.setStatus("declared");
+		}
+		job.setLastObservedAt(Instant.now());
+		Map<String, Object> detail = new LinkedHashMap<>();
+		detail.put("engine", "DBT");
+		detail.put("uniqueId", nodeKey);
+		detail.put("schema", text(node.get("schema")));
+		detail.put("table", modelName);
+		detail.put("originalFilePath", text(node.get("original_file_path")));
+		detail.values().removeIf(value -> value == null || String.valueOf(value).isBlank());
+		job.setDetailPayload(detail.toString());
+		return lineageJobRepo.save(job);
+	}
+
+	private String resolveDbtProjectName(String uniqueId) {
+		if (uniqueId == null || uniqueId.isBlank()) {
+			return null;
+		}
+		String[] parts = uniqueId.split("\\.");
+		if (parts.length < 3) {
+			return null;
+		}
+		return parts[1] == null || parts[1].isBlank() ? null : parts[1];
+	}
+
+	private String text(Object value) {
+		if (value == null) {
+			return null;
+		}
+		String text = String.valueOf(value).trim();
+		return text.isEmpty() ? null : text;
+	}
+
+	private String truncate(String value, int maxLength) {
+		if (value == null || value.length() <= maxLength) {
+			return value;
+		}
+		return value.substring(0, Math.max(0, maxLength));
 	}
 }

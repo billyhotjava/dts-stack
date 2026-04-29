@@ -204,7 +204,23 @@ public class DbtSourceService {
     }
 
     private boolean isDtsTechnicalColumn(String name) {
-        return StringUtils.hasText(name) && name.trim().toLowerCase(Locale.ROOT).startsWith("_dts_");
+        if (!StringUtils.hasText(name)) {
+            return false;
+        }
+        String normalized = name.trim().toLowerCase(Locale.ROOT);
+        return normalized.startsWith("_dts_") ||
+            List.of(
+                "ods_id",
+                "source_system",
+                "source_table",
+                "source_pk",
+                "extract_time",
+                "batch_id",
+                "is_deleted",
+                "raw_json",
+                "created_at",
+                "updated_at"
+            ).contains(normalized);
     }
 
     private void putIfText(Map<String, Object> target, String key, String value) {

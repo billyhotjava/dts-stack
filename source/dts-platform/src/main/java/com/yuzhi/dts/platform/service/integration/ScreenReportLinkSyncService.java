@@ -1,5 +1,6 @@
 package com.yuzhi.dts.platform.service.integration;
 
+import com.yuzhi.dts.common.security.SecurityLevelCatalog;
 import com.yuzhi.dts.platform.domain.visualization.BiReportLink;
 import com.yuzhi.dts.platform.repository.visualization.BiReportLinkRepository;
 import com.yuzhi.dts.platform.service.integration.dto.ScreenSummary;
@@ -41,7 +42,7 @@ public class ScreenReportLinkSyncService {
     public static final String REPORT_TYPE = "SCREEN";
     public static final String ENGINE = "DTS_BI";
     /** Default classification when the upstream screen has none — leader-overview prefers a value. */
-    public static final String DEFAULT_CLASSIFICATION = "INTERNAL";
+    public static final String DEFAULT_CLASSIFICATION = SecurityLevelCatalog.DEFAULT_DATA_SECURITY_LEVEL.code();
 
     private final ScreenSyncClient client;
     private final BiReportLinkRepository repo;

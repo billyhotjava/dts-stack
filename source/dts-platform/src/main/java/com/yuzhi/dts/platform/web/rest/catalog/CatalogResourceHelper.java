@@ -1,5 +1,6 @@
 package com.yuzhi.dts.platform.web.rest.catalog;
 
+import com.yuzhi.dts.common.security.SecurityLevelCatalog;
 import com.yuzhi.dts.platform.config.CatalogFeatureProperties;
 import com.yuzhi.dts.platform.domain.catalog.*;
 import com.yuzhi.dts.platform.domain.modeling.DataStandard;
@@ -37,7 +38,7 @@ public class CatalogResourceHelper {
 
     public static final String TYPE_INCEPTOR = "INCEPTOR";
     public static final Pattern STD_CODE_PATTERN = Pattern.compile("(?i)(?:\\bSTD\\b|标准)\\s*[:：]\\s*([A-Za-z0-9_\\-\\.]+)");
-    public static final List<String> CLASSIFICATION_LEVEL_ORDER = List.of("PUBLIC", "INTERNAL", "SECRET", "CONFIDENTIAL");
+    public static final List<String> CLASSIFICATION_LEVEL_ORDER = SecurityLevelCatalog.dataCodesInOrder();
     public static final Set<String> SUPPORTED_CLASSIFICATION_LEVELS = Set.copyOf(CLASSIFICATION_LEVEL_ORDER);
     public static final List<String> ISSUE_OPEN_STATUSES = List.of("OPEN", "NEW", "IN_PROGRESS", "PROCESSING", "REOPENED");
     public static final List<String> ISSUE_CLOSED_STATUSES = List.of("CLOSED", "RESOLVED");
@@ -521,7 +522,7 @@ public class CatalogResourceHelper {
         if (value != null && !value.isBlank()) {
             dataset.setClassification(value.trim().toUpperCase(Locale.ROOT));
         } else {
-            dataset.setClassification("INTERNAL");
+            dataset.setClassification(SecurityLevelCatalog.DEFAULT_DATA_SECURITY_LEVEL.code());
         }
     }
 

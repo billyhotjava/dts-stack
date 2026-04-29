@@ -3,29 +3,33 @@ package com.yuzhi.dts.platform.security.policy;
 import com.yuzhi.dts.common.security.SecurityLevelCatalog;
 import java.util.Collections;
 import java.util.List;
-import java.util.Locale;
+import java.util.Objects;
 import java.util.stream.Collectors;
 
 public enum PersonnelLevel {
-    // Rule (current system supports up to CONFIDENTIAL):
-    // GENERAL -> PUBLIC/INTERNAL/SECRET
-    // IMPORTANT -> PUBLIC/INTERNAL/SECRET/CONFIDENTIAL
-    // CORE -> capped at CONFIDENTIAL for now
-    GENERAL(List.of(DataLevel.DATA_PUBLIC, DataLevel.DATA_INTERNAL, DataLevel.DATA_SECRET), "SECRET"),
-    IMPORTANT(List.of(DataLevel.DATA_PUBLIC, DataLevel.DATA_INTERNAL, DataLevel.DATA_SECRET, DataLevel.DATA_CONFIDENTIAL), "CONFIDENTIAL"),
-    CORE(List.of(DataLevel.DATA_PUBLIC, DataLevel.DATA_INTERNAL, DataLevel.DATA_SECRET, DataLevel.DATA_CONFIDENTIAL), "CONFIDENTIAL");
+    GENERAL(SecurityLevelCatalog.PersonnelSecurityLevel.GENERAL),
+    IMPORTANT(SecurityLevelCatalog.PersonnelSecurityLevel.IMPORTANT),
+    CORE(SecurityLevelCatalog.PersonnelSecurityLevel.CORE);
 
+    private final SecurityLevelCatalog.PersonnelSecurityLevel catalogLevel;
     private final List<DataLevel> allowedDataLevels;
     private final List<String> allowedClassifications;
     private final String highestClassification;
 
-    PersonnelLevel(List<DataLevel> allowedDataLevels, String highestClassification) {
-        this.allowedDataLevels = List.copyOf(allowedDataLevels);
+    PersonnelLevel(SecurityLevelCatalog.PersonnelSecurityLevel catalogLevel) {
+        this.catalogLevel = catalogLevel;
+        this.allowedDataLevels = SecurityLevelCatalog
+            .allowedDataLevelsForPersonnel(catalogLevel)
+            .stream()
+            .map(DataLevel::fromCatalog)
+            .filter(Objects::nonNull)
+            .collect(Collectors.toUnmodifiableList());
         this.allowedClassifications = this.allowedDataLevels
             .stream()
             .map(DataLevel::classification)
             .collect(Collectors.toUnmodifiableList());
-        this.highestClassification = highestClassification;
+        SecurityLevelCatalog.DataSecurityLevel max = SecurityLevelCatalog.maxDataLevelForPersonnel(catalogLevel);
+        this.highestClassification = max == null ? null : max.code();
     }
 
     /** Maximum rank corresponds to the most sensitive data level the personnel category may access. */
@@ -38,7 +42,11 @@ public enum PersonnelLevel {
         return Collections.unmodifiableList(allowedDataLevels);
     }
 
-    /** Ordered list of classification strings (PUBLIC/INTERNAL/SECRET/CONFIDENTIAL). */
+    public String code() {
+        return catalogLevel.code();
+    }
+
+    /** Ordered list of canonical data classification strings from the shared catalog. */
     public List<String> allowedClassifications() {
         return allowedClassifications;
     }

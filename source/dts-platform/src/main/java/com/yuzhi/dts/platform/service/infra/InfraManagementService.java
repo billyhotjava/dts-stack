@@ -5,12 +5,14 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.yuzhi.dts.platform.config.InfraSecurityProperties;
 import com.yuzhi.dts.platform.domain.catalog.CatalogDataset;
 import com.yuzhi.dts.platform.domain.catalog.CatalogTableSchema;
+import com.yuzhi.dts.platform.domain.infra.InfraConnector;
 import com.yuzhi.dts.platform.domain.service.InfraConnectionTestLog;
 import com.yuzhi.dts.platform.domain.service.InfraDataSource;
 import com.yuzhi.dts.platform.domain.service.InfraDataStorage;
 import com.yuzhi.dts.platform.repository.catalog.CatalogDatasetRepository;
 import com.yuzhi.dts.platform.repository.catalog.CatalogTableSchemaRepository;
 import com.yuzhi.dts.platform.repository.infra.InfraCatalogSyncRunRepository;
+import com.yuzhi.dts.platform.repository.infra.InfraConnectorRepository;
 import com.yuzhi.dts.platform.repository.service.InfraConnectionTestLogRepository;
 import com.yuzhi.dts.platform.repository.service.InfraDataSourceRepository;
 import com.yuzhi.dts.platform.repository.service.InfraDataStorageRepository;
@@ -82,6 +84,7 @@ public class InfraManagementService {
     private final CatalogColumnSyncService columnSyncService;
     private final JdbcCatalogSyncService jdbcCatalogSyncService;
     private final InfraCatalogSyncRunRepository syncRunRepository;
+    private final InfraConnectorRepository connectorRepository;
     private final AuditService auditService;
     private final AdminInfraClient adminInfraClient;
 
@@ -105,6 +108,8 @@ public class InfraManagementService {
         "mariadb",
         "oracle",
         "dm",
+        "kingbase",
+        "gbase",
         "sqlserver",
         "clickhouse",
         "hive",
@@ -129,6 +134,7 @@ public class InfraManagementService {
         CatalogColumnSyncService columnSyncService,
         JdbcCatalogSyncService jdbcCatalogSyncService,
         InfraCatalogSyncRunRepository syncRunRepository,
+        InfraConnectorRepository connectorRepository,
         AuditService auditService,
         AdminInfraClient adminInfraClient,
         ApiSecretMetadataService apiSecretMetadataService
@@ -147,6 +153,7 @@ public class InfraManagementService {
         this.columnSyncService = columnSyncService;
         this.jdbcCatalogSyncService = jdbcCatalogSyncService;
         this.syncRunRepository = syncRunRepository;
+        this.connectorRepository = connectorRepository;
         this.auditService = auditService;
         this.adminInfraClient = adminInfraClient;
         this.apiSecretMetadataService = apiSecretMetadataService;
@@ -324,6 +331,7 @@ public class InfraManagementService {
         entity.setName(StringUtils.hasText(entity.getName()) ? entity.getName() : "平台 PostgreSQL");
         entity.setDescription("Hive 不可用时的临时数据源，指向平台自用的 PostgreSQL。");
         entity.setType(TYPE_POSTGRES);
+        entity.setConnectorKey("postgresql");
         entity.setJdbcUrl(result.jdbcUrl());
         entity.setUsername(result.username());
         entity.setProps(writeProps(result.props()));
@@ -381,6 +389,9 @@ public class InfraManagementService {
         String beforeJdbcUrl = entity.getJdbcUrl();
         String beforeUsername = entity.getUsername();
         Map<String, Object> beforeProps = readProps(entity.getProps());
+        if (StringUtils.hasText(entity.getConnectorKey())) {
+            beforeProps.putIfAbsent("connectorKey", entity.getConnectorKey());
+        }
         Map<String, Object> beforeSecrets = secretService.readSecrets(entity);
         applyDataSource(entity, request, username);
         applyOwnerDept(entity, activeDeptHeader);
@@ -443,6 +454,7 @@ public class InfraManagementService {
                 entity.getId(),
                 entity.getName(),
                 entity.getType(),
+                resolveConnectorKey(entity, props),
                 entity.getJdbcUrl(),
                 entity.getUsername(),
                 entity.getDescription(),
@@ -595,6 +607,7 @@ public class InfraManagementService {
             Map<String, Object> safe = new LinkedHashMap<>();
             safe.put("name", request.name());
             safe.put("type", request.type());
+            safe.put("connectorKey", resolveConnectorKey(request));
             safe.put("jdbcUrl", request.jdbcUrl());
             safe.put("username", request.username());
             safe.put("description", request.description());
@@ -633,10 +646,15 @@ public class InfraManagementService {
     private void applyDataSource(InfraDataSource entity, DataSourceRequest request, String username) {
         entity.setName(request.name());
         entity.setType(request.type());
+        String connectorKey = resolveConnectorKey(request);
+        entity.setConnectorKey(connectorKey);
         entity.setJdbcUrl(ApiDataSourceSupport.isApiType(request.type()) ? null : request.jdbcUrl());
         entity.setUsername(request.username());
         entity.setDescription(request.description());
         Map<String, Object> props = request.props() == null ? new LinkedHashMap<>() : new LinkedHashMap<>(request.props());
+        if (StringUtils.hasText(connectorKey)) {
+            props.put("connectorKey", connectorKey);
+        }
         boolean apiType = ApiDataSourceSupport.isApiType(request.type());
         if (apiType) {
             props = ApiDataSourceSupport.normalizeProps(props);
@@ -671,6 +689,9 @@ public class InfraManagementService {
         String type = normalizeType(request == null ? null : request.type());
         if (StringUtils.hasText(type)) {
             if (type.contains("dm")) {
+                return "rdbmsreader";
+            }
+            if (type.contains("kingbase") || type.contains("gbase")) {
                 return "rdbmsreader";
             }
             if (type.contains("postgres")) {
@@ -796,6 +817,7 @@ public class InfraManagementService {
     ) {
         Map<String, Object> signature = new LinkedHashMap<>();
         signature.put("type", normalizeText(type));
+        signature.put("connectorKey", normalizeText(props.get("connectorKey")));
         signature.put("jdbcUrl", normalizeText(jdbcUrl));
         signature.put("username", normalizeText(username));
         signature.put("host", normalizeText(props.get("host")));
@@ -968,6 +990,13 @@ public class InfraManagementService {
         if (request == null) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "请求参数不能为空");
         }
+        String connectorKey = resolveConnectorKey(request);
+        if (!StringUtils.hasText(connectorKey)) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "请选择连接器");
+        }
+        if (connectorRepository.findByConnectorKeyIgnoreCase(connectorKey).isEmpty()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "连接器不存在或未启用: " + connectorKey);
+        }
         if (ApiDataSourceSupport.isApiType(request.type())) {
             ApiDataSourceSupport.validateRequest(request);
             return;
@@ -1052,10 +1081,82 @@ public class InfraManagementService {
         return type == null ? "" : type.trim().toLowerCase(Locale.ROOT);
     }
 
+    private String resolveConnectorKey(DataSourceRequest request) {
+        if (request == null) {
+            return null;
+        }
+        String explicit = normalizeConnectorKey(request.connectorKey());
+        if (StringUtils.hasText(explicit)) {
+            return explicit;
+        }
+        Map<String, Object> props = request.props();
+        if (props != null) {
+            explicit = normalizeConnectorKey(props.get("connectorKey"));
+            if (StringUtils.hasText(explicit)) {
+                return explicit;
+            }
+        }
+        return inferConnectorKey(request.type());
+    }
+
+    private String resolveConnectorKey(InfraDataSource entity, Map<String, Object> props) {
+        if (entity == null) {
+            return null;
+        }
+        String explicit = normalizeConnectorKey(entity.getConnectorKey());
+        if (StringUtils.hasText(explicit)) {
+            return explicit;
+        }
+        if (props != null) {
+            explicit = normalizeConnectorKey(props.get("connectorKey"));
+            if (StringUtils.hasText(explicit)) {
+                return explicit;
+            }
+        }
+        return inferConnectorKey(entity.getType());
+    }
+
+    private String inferConnectorKey(String type) {
+        String normalized = normalizeType(type);
+        if (!StringUtils.hasText(normalized)) {
+            return null;
+        }
+        return switch (normalized) {
+            case "postgres", "postgresql", "pg", "postgre" -> "postgresql";
+            case "mysql", "mariadb" -> "mysql";
+            case "mssql", "sqlserver", "sql_server" -> "sqlserver";
+            case "dameng", "dm8" -> "dm";
+            case "kingbase8", "kingbasees" -> "kingbase";
+            case "api", "http", "https", "http_api", "api_http", "rest", "rest_api", "httpreader" -> "http-api";
+            default -> normalized.replace('_', '-');
+        };
+    }
+
+    private String normalizeConnectorKey(Object value) {
+        if (value == null) {
+            return null;
+        }
+        String text = value.toString().trim().toLowerCase(Locale.ROOT).replace('_', '-');
+        return text.isEmpty() ? null : text;
+    }
+
+    private Optional<InfraConnector> loadConnector(String connectorKey) {
+        if (!StringUtils.hasText(connectorKey)) {
+            return Optional.empty();
+        }
+        try {
+            return connectorRepository.findByConnectorKeyIgnoreCase(connectorKey);
+        } catch (RuntimeException ex) {
+            LOG.debug("Failed to load connector {}: {}", connectorKey, ex.getMessage());
+            return Optional.empty();
+        }
+    }
+
     private void applyInceptorDataSource(InfraDataSource entity, HiveConnectionPersistRequest request, String username) {
         entity.setName(request.getName());
         entity.setDescription(request.getDescription());
         entity.setType(TYPE_INCEPTOR);
+        entity.setConnectorKey("inceptor");
         entity.setJdbcUrl(request.getJdbcUrl());
         entity.setUsername(request.getLoginPrincipal());
         entity.setOwnerDept(null); // institute/global
@@ -1262,10 +1363,16 @@ public class InfraManagementService {
 
     private InfraDataSourceDto toDto(InfraDataSource entity) {
         Map<String, Object> props = readProps(entity.getProps());
+        String connectorKey = resolveConnectorKey(entity, props);
+        InfraConnector connector = loadConnector(connectorKey).orElse(null);
         return new InfraDataSourceDto(
             entity.getId(),
             entity.getName(),
             entity.getType(),
+            connectorKey,
+            connector != null ? connector.getName() : null,
+            connector != null ? connector.getCategory() : null,
+            connector != null ? connector.getDefaultEngine() : null,
             entity.getJdbcUrl(),
             entity.getUsername(),
             entity.getDescription(),
@@ -1299,10 +1406,16 @@ public class InfraManagementService {
         if (StringUtils.hasText(lake.getDriverVersion())) {
             props.put("driverVersion", lake.getDriverVersion());
         }
+        String connectorKey = inferConnectorKey(lake.getType());
+        InfraConnector connector = loadConnector(connectorKey).orElse(null);
         return new InfraDataSourceDto(
             lake.getId(),
             StringUtils.hasText(lake.getName()) ? lake.getName() : "默认数据湖",
             StringUtils.hasText(lake.getType()) ? lake.getType() : "DATA_LAKE",
+            connectorKey,
+            connector != null ? connector.getName() : null,
+            connector != null ? connector.getCategory() : null,
+            connector != null ? connector.getDefaultEngine() : null,
             lake.getJdbcUrl(),
             lake.getUsername(),
             StringUtils.hasText(lake.getDescription()) ? lake.getDescription() : "由管理员在系统管理中配置的默认数据湖",
@@ -1344,6 +1457,7 @@ public class InfraManagementService {
             lake.getId(),
             StringUtils.hasText(lake.getName()) ? lake.getName() : "默认数据湖",
             StringUtils.hasText(lake.getType()) ? lake.getType() : "DATA_LAKE",
+            inferConnectorKey(lake.getType()),
             lake.getJdbcUrl(),
             lake.getUsername(),
             StringUtils.hasText(lake.getDescription()) ? lake.getDescription() : "由管理员在系统管理中配置的默认数据湖",

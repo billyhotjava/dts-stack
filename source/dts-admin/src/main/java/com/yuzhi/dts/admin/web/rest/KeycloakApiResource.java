@@ -26,6 +26,7 @@ import com.yuzhi.dts.admin.security.session.AdminSessionCloseReason;
 import com.yuzhi.dts.admin.security.session.AdminSessionRegistry;
 import com.yuzhi.dts.admin.web.rest.dto.PkiChallengeView;
 import com.yuzhi.dts.common.net.IpAddressUtils;
+import com.yuzhi.dts.common.security.SecurityLevelCatalog;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.time.Duration;
@@ -107,7 +108,7 @@ public class KeycloakApiResource {
     private String ipAllowTriadCsv;
     private java.util.Set<String> triadConfigured;
 
-    private static final String DEFAULT_PERSON_LEVEL = "GENERAL";
+    private static final String DEFAULT_PERSON_LEVEL = SecurityLevelCatalog.DEFAULT_PERSONNEL_SECURITY_LEVEL.code();
     private static final Set<String> PROTECTED_USERNAMES = Set.of("sysadmin", "authadmin", "auditadmin", "opadmin");
     private static final Set<String> TRIAD_AUTHORITIES = Set.of(
         AuthoritiesConstants.SYS_ADMIN,
@@ -713,8 +714,8 @@ public class KeycloakApiResource {
     ) {
         String username = resolveUsername(id, null, adminAccessToken());
         if (username == null) return ResponseEntity.status(404).body(ApiResponse.error("用户不存在"));
-        String level = String.valueOf(body.getOrDefault("person_level", "")).toUpperCase();
-        if (!List.of("GENERAL", "IMPORTANT", "CORE").contains(level)) {
+        String level = SecurityLevelCatalog.normalizePersonnelCode(body.get("person_level"));
+        if (level == null) {
             return ResponseEntity.badRequest().body(ApiResponse.error("无效的人员密级"));
         }
         String actor = currentUser();
@@ -776,7 +777,12 @@ public class KeycloakApiResource {
             );
             return ResponseEntity.status(404).body(ApiResponse.error("用户不存在"));
         }
-        String person = u.getAttributes().getOrDefault("person_level", List.of("GENERAL")).stream().findFirst().orElse("GENERAL");
+        String person = u
+            .getAttributes()
+            .getOrDefault("person_level", List.of(DEFAULT_PERSON_LEVEL))
+            .stream()
+            .findFirst()
+            .orElse(DEFAULT_PERSON_LEVEL);
         List<String> levels = List.of();
         Map<String, Object> detail = new LinkedHashMap<>();
         detail.put("personLevel", person);
@@ -912,7 +918,7 @@ public class KeycloakApiResource {
         if (value == null) {
             return DEFAULT_PERSON_LEVEL;
         }
-        return value.trim().toUpperCase().replace('-', '_');
+        return SecurityLevelCatalog.normalizePersonnelCodeOrDefault(value);
     }
 
     private List<String> attributeList(Map<String, List<String>> attributes, String... keys) {
@@ -2938,6 +2944,34 @@ public class KeycloakApiResource {
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(ApiResponse.error(message));
         }
     }
+
+    @PostMapping("/keycloak/auth/platform/profile")
+    public ResponseEntity<ApiResponse<Map<String, Object>>> platformProfile(@RequestBody(required = false) Map<String, Object> body) {
+        String username = Optional.ofNullable(body).map(b -> Objects.toString(b.getOrDefault("username", ""), "")).map(String::trim).orElse("");
+        if (username.isBlank()) {
+            return ResponseEntity.badRequest().body(ApiResponse.error("用户名不能为空"));
+        }
+
+        String authenticatedUser = sanitizeActor(currentUserLogin().orElse(null));
+        if (!StringUtils.hasText(authenticatedUser)) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(ApiResponse.error("缺少已认证的 Keycloak 用户令牌"));
+        }
+        if (!authenticatedUser.equalsIgnoreCase(username)) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN).body(ApiResponse.error("用户令牌与请求账号不一致"));
+        }
+
+        String normalized = username.toLowerCase(Locale.ROOT);
+        boolean isProtected = PROTECTED_USERNAMES.contains(normalized);
+        Optional<AdminKeycloakUser> snapshot = adminUserService.findSnapshotByUsername(username);
+        if (!isProtected && !snapshot.map(AdminKeycloakUser::isEnabled).orElse(false)) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(ApiResponse.error("用户尚未审批启用，请联系授权管理员"));
+        }
+
+        Map<String, Object> data = new LinkedHashMap<>();
+        data.put("user", buildPlatformProfile(username, extractPayloadMap(body, "user"), snapshot.orElse(null)));
+        return ResponseEntity.ok(ApiResponse.ok(data));
+    }
+
     @PostMapping("/keycloak/auth/login")
     public ResponseEntity<ApiResponse<Map<String, Object>>> login(@RequestBody Map<String, String> body, HttpServletRequest request) {
         String username = Optional.ofNullable(body).map(b -> b.getOrDefault("username", "")).map(String::trim).orElse("");
@@ -3152,6 +3186,7 @@ public class KeycloakApiResource {
             return ResponseEntity.badRequest().body(ApiResponse.error("缺少 refreshToken"));
         }
         try {
+            adminSessionRegistry.assertRefreshTokenUsable(refreshToken);
             KeycloakAuthService.TokenResponse tokens = keycloakAuthService.refreshTokens(refreshToken);
             adminSessionRegistry.refreshSession(
                 refreshToken,
@@ -3192,6 +3227,21 @@ public class KeycloakApiResource {
                 "刷新系统端令牌成功"
             );
             return ResponseEntity.ok(ApiResponse.ok(data));
+        } catch (IllegalArgumentException | IllegalStateException ex) {
+            if (!isLocalRefreshSessionFailure(ex)) {
+                throw ex;
+            }
+            recordAuthActionV2(
+                resolveActorForRefresh(refreshToken),
+                ButtonCodes.AUTH_ADMIN_REFRESH,
+                AuditResultStatus.FAILED,
+                Map.of("error", ex.getMessage()),
+                request,
+                Optional.ofNullable(request).map(HttpServletRequest::getRequestURI).orElse("/api/keycloak/auth/refresh"),
+                request != null ? request.getMethod() : "POST",
+                "刷新系统端令牌失败（本地会话已失效）"
+            );
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(ApiResponse.error("登录状态已失效，请重新登录"));
         } catch (BadCredentialsException ex) {
             recordAuthActionV2(
                 resolveActorForRefresh(refreshToken),

@@ -1,0 +1,59 @@
+<?xml version="1.0" encoding="utf-8"?>
+<databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+    http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
+
+    <changeSet id="20260429-11-infra-connector-registry" author="codex">
+        <preConditions onFail="MARK_RAN">
+            <not>
+                <tableExists tableName="infra_connector"/>
+            </not>
+        </preConditions>
+        <createTable tableName="infra_connector">
+            <column name="id" type="${uuidType}">
+                <constraints primaryKey="true" nullable="false"/>
+            </column>
+            <column name="connector_key" type="varchar(64)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="name" type="varchar(128)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="category" type="varchar(32)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="source_type" type="varchar(64)"/>
+            <column name="default_engine" type="varchar(64)"/>
+            <column name="status" type="varchar(32)" defaultValue="ACTIVE">
+                <constraints nullable="false"/>
+            </column>
+            <column name="display_order" type="int" defaultValueNumeric="1000"/>
+            <column name="description" type="varchar(512)"/>
+            <column name="capabilities_payload" type="text"/>
+            <column name="config_schema_payload" type="text"/>
+            <column name="sensitive_fields_payload" type="text"/>
+            <column name="compatibility_payload" type="text"/>
+            <column name="created_by" type="varchar(50)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="created_date" type="timestamp"/>
+            <column name="last_modified_by" type="varchar(50)"/>
+            <column name="last_modified_date" type="timestamp"/>
+        </createTable>
+        <addUniqueConstraint
+            tableName="infra_connector"
+            columnNames="connector_key"
+            constraintName="uk_infra_connector_key"/>
+        <createIndex tableName="infra_connector" indexName="idx_infra_connector_category_status">
+            <column name="category"/>
+            <column name="status"/>
+            <column name="display_order"/>
+        </createIndex>
+        <createIndex tableName="infra_connector" indexName="idx_infra_connector_engine">
+            <column name="default_engine"/>
+            <column name="source_type"/>
+        </createIndex>
+    </changeSet>
+</databaseChangeLog>

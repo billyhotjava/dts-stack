@@ -493,9 +493,15 @@
           "key": "foundation.dataSources",
           "title": "数据源",
           "actions": [
+            { "code": "INFRA_CONNECTOR_REGISTRY_VIEW", "display": "查看连接器目录", "phases": ["SUCCESS"], "supportsFlow": false },
+            { "code": "INFRA_CONNECTOR_REGISTRY_REFRESH", "display": "刷新连接器目录", "phases": ["SUCCESS", "FAIL"], "supportsFlow": false },
             { "code": "FOUNDATION_DATASOURCE_REGISTER", "display": "登记数据源", "phases": ["BEGIN", "SUCCESS", "FAIL"], "supportsFlow": true },
             { "code": "FOUNDATION_DATASOURCE_TEST", "display": "测试数据源连接", "phases": ["BEGIN", "SUCCESS", "FAIL"], "supportsFlow": true },
-            { "code": "FOUNDATION_DATASOURCE_DISABLE", "display": "停用数据源", "phases": ["BEGIN", "SUCCESS", "FAIL"], "supportsFlow": true }
+            { "code": "FOUNDATION_DATASOURCE_DISABLE", "display": "停用数据源", "phases": ["BEGIN", "SUCCESS", "FAIL"], "supportsFlow": true },
+            { "code": "FOUNDATION_SCHEMA_DISCOVER", "display": "探测数据源 Schema", "phases": ["SUCCESS", "FAIL"], "supportsFlow": false },
+            { "code": "FOUNDATION_ODS_PREVIEW", "display": "预览 ODS 与 dbt source", "phases": ["SUCCESS", "FAIL"], "supportsFlow": false },
+            { "code": "FOUNDATION_ODS_APPLY", "display": "生成 ODS 映射与 dbt source", "phases": ["SUCCESS", "FAIL"], "supportsFlow": false },
+            { "code": "FOUNDATION_SYNC_TASK_DRAFT", "display": "生成同步任务草稿", "phases": ["SUCCESS", "FAIL"], "supportsFlow": false }
           ]
         },
         {

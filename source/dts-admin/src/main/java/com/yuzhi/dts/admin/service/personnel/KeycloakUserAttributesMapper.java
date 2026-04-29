@@ -1,9 +1,9 @@
 package com.yuzhi.dts.admin.service.personnel;
 
 import com.yuzhi.dts.admin.service.dto.personnel.PersonnelPayload;
+import com.yuzhi.dts.common.security.SecurityLevelCatalog;
 import java.util.HashMap;
 import java.util.List;
-import java.util.Locale;
 import java.util.Map;
 import org.apache.commons.lang3.StringUtils;
 
@@ -22,7 +22,7 @@ public final class KeycloakUserAttributesMapper {
         );
         String secLevel = normalizeSecurityLevel(secLevelRaw);
         if (StringUtils.isBlank(secLevel)) {
-            secLevel = "GENERAL";
+            secLevel = SecurityLevelCatalog.DEFAULT_PERSONNEL_SECURITY_LEVEL.code();
         }
         putNonBlank(attrs, "person_security_level", secLevel);
         putNonBlank(attrs, "person_code", payload.personCode());
@@ -55,17 +55,6 @@ public final class KeycloakUserAttributesMapper {
     }
 
     static String normalizeSecurityLevel(String level) {
-        if (level == null) {
-            return null;
-        }
-        String normalized = level.trim().toUpperCase(Locale.ROOT).replace('-', '_').replace(' ', '_');
-        return switch (normalized) {
-            case "0" -> "GENERAL";
-            case "1", "IMPORTANT", "IM", "I" -> "IMPORTANT";
-            case "2", "CORE", "CO", "C" -> "CORE";
-            case "GENERAL", "GN", "GE", "G" -> "GENERAL";
-            case "NONE_SECRET", "NON_SECRET", "NS" -> "GENERAL";
-            default -> normalized;
-        };
+        return SecurityLevelCatalog.normalizePersonnelCode(level);
     }
 }

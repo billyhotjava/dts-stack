@@ -18,7 +18,16 @@ import {
 	Typography,
 	message,
 } from "antd";
-import { PlusOutlined, ReloadOutlined, EditOutlined, DeleteOutlined, ExperimentOutlined, CheckCircleOutlined, CloseCircleOutlined } from "@ant-design/icons";
+import {
+	AppstoreOutlined,
+	PlusOutlined,
+	ReloadOutlined,
+	EditOutlined,
+	DeleteOutlined,
+	ExperimentOutlined,
+	CheckCircleOutlined,
+	CloseCircleOutlined,
+} from "@ant-design/icons";
 import { Upload } from "@/components/upload";
 import RollbackImpactModal, { type RollbackRequest } from "@/components/rollback/RollbackImpactModal";
 import dataSourcesService, {
@@ -28,13 +37,20 @@ import dataSourcesService, {
 	type ExcelImportParseResponse,
 	type ExcelImportPrepareResponse,
 	type InfraDataSource,
+	type OdsGenerationPreviewResponse,
+	type OdsGenerationRequest,
+	type OdsTablePlan,
+	type SchemaDiscoverResponse,
+	type SchemaDiscoverTable,
 } from "@/api/services/dataSourcesService";
+import connectorsService, { type InfraConnector } from "@/api/services/connectorsService";
 import {
 	ingestionTaskAPI,
 	type ApiAuthProviderDescriptorDTO,
 	type ApiAuthProviderFieldDTO,
 	type ApiConnectorContractDTO,
 } from "@/api/ingestion";
+import { createIngestionTask } from "@/api/platformApi";
 import jdbcDriversService, { type InfraJdbcDriver } from "@/api/services/jdbcDriversService";
 import { formatTime } from "@/utils/textUtils";
 type UploadRequestOption = Parameters<NonNullable<import("antd").UploadProps["customRequest"]>>[0];
@@ -44,6 +60,8 @@ const { Text } = Typography;
 const JDBC_TYPES = new Set([
 	"dm",
 	"dameng",
+	"kingbase",
+	"gbase",
 	"postgresql",
 	"postgres",
 	"pg",
@@ -67,6 +85,8 @@ const TYPE_OPTIONS = [
 	{ label: "MySQL / MariaDB", value: "mysql" },
 	{ label: "Oracle", value: "oracle" },
 	{ label: "SQLServer", value: "sqlserver" },
+	{ label: "人大金仓", value: "kingbase" },
+	{ label: "GBase", value: "gbase" },
 	{ label: "Hive", value: "hive" },
 	{ label: "Inceptor", value: "inceptor" },
 	{ label: "Excel", value: "excel" },
@@ -77,6 +97,20 @@ const TYPE_OPTIONS = [
 ];
 
 const normalizeType = (value?: string) => String(value || "").trim().toLowerCase();
+
+const normalizeConnectorKey = (value?: string) => String(value || "").trim().toLowerCase().replace(/_/g, "-");
+
+const inferConnectorKey = (type?: string, props?: Record<string, any>) => {
+	const explicit = normalizeConnectorKey(props?.connectorKey);
+	if (explicit) return explicit;
+	const normalized = normalizeType(type);
+	if (!normalized) return "";
+	if (["postgres", "postgresql", "pg"].includes(normalized)) return "postgresql";
+	if (["mssql", "sqlserver", "sql_server"].includes(normalized)) return "sqlserver";
+	if (["dameng", "dm8"].includes(normalized)) return "dm";
+	if (["api", "http", "https", "http_api", "api_http", "rest", "rest_api", "httpreader"].includes(normalized)) return "http-api";
+	return normalized.replace(/_/g, "-");
+};
 
 const isJdbcType = (type?: string, jdbcUrl?: string) => {
 	if (jdbcUrl) return true;
@@ -240,15 +274,67 @@ const jsonObjectValidator = (label: string) => (_: any, value: string) => {
 	}
 };
 
+const normalizeOdsCode = (value?: string, fallback = "src") => {
+	const text = String(value || "").trim().toLowerCase();
+	const safe = text.replace(/[^a-z0-9_]+/g, "_").replace(/_+/g, "_").replace(/^_|_$/g, "");
+	if (!safe) return fallback;
+	return /^\d/.test(safe) ? `c_${safe}` : safe;
+};
+
+const toOdsSourceTable = (table: SchemaDiscoverTable) => ({
+	schema: table.schema,
+	name: table.name,
+	comment: table.comment,
+	primaryKeys: table.primaryKeys || [],
+	incrementalCandidates: table.incrementalCandidates || [],
+	columns: (table.columns || []).map((column) => ({
+		name: column.name,
+		dataType: column.dataType,
+		nativeType: column.nativeType,
+		nullable: column.nullable,
+		comment: column.comment,
+		primaryKey: column.primaryKey,
+		indexed: column.indexed,
+		incrementalCandidate: column.incrementalCandidate,
+	})),
+});
+
+type OdsWizardConfig = {
+	odsSchema: string;
+	systemCode: string;
+	bizCode: string;
+	syncMode: string;
+	entityCode?: string;
+};
+
+const defaultOdsWizardConfig = (record?: InfraDataSource | null): OdsWizardConfig => ({
+	odsSchema: "ods",
+	systemCode: normalizeOdsCode(record?.connectorKey || record?.type || record?.name),
+	bizCode: "default",
+	syncMode: "full_refresh",
+});
+
 export default function DataSourcesPage() {
 	const navigate = useNavigate();
 	const [list, setList] = useState<InfraDataSource[]>([]);
 	const [loading, setLoading] = useState(false);
+	const [connectors, setConnectors] = useState<InfraConnector[]>([]);
+	const [connectorsLoading, setConnectorsLoading] = useState(false);
 	const [drivers, setDrivers] = useState<InfraJdbcDriver[]>([]);
 	const [driversLoading, setDriversLoading] = useState(false);
 	const [modalOpen, setModalOpen] = useState(false);
 	const [saving, setSaving] = useState(false);
 	const [testingId, setTestingId] = useState<string | null>(null);
+	const [schemaDiscoveringId, setSchemaDiscoveringId] = useState<string | null>(null);
+	const [schemaModalOpen, setSchemaModalOpen] = useState(false);
+	const [schemaDiscoverSource, setSchemaDiscoverSource] = useState<InfraDataSource | null>(null);
+	const [schemaDiscoverResult, setSchemaDiscoverResult] = useState<SchemaDiscoverResponse | null>(null);
+	const [odsPreviewingKey, setOdsPreviewingKey] = useState<string | null>(null);
+	const [odsApplying, setOdsApplying] = useState(false);
+	const [syncTaskCreating, setSyncTaskCreating] = useState(false);
+	const [odsPreview, setOdsPreview] = useState<OdsGenerationPreviewResponse | null>(null);
+	const [odsRequest, setOdsRequest] = useState<OdsGenerationRequest | null>(null);
+	const [odsConfig, setOdsConfig] = useState<OdsWizardConfig>(defaultOdsWizardConfig());
 	const [editing, setEditing] = useState<InfraDataSource | null>(null);
 	const [excelModalOpen, setExcelModalOpen] = useState(false);
 	const [excelUploading, setExcelUploading] = useState(false);
@@ -317,6 +403,18 @@ export default function DataSourcesPage() {
 		}
 	};
 
+	const loadConnectors = async () => {
+		setConnectorsLoading(true);
+		try {
+			const data = await connectorsService.list();
+			setConnectors(Array.isArray(data) ? data : []);
+		} catch {
+			setConnectors([]);
+		} finally {
+			setConnectorsLoading(false);
+		}
+	};
+
 	const loadDrivers = async () => {
 		setDriversLoading(true);
 		try {
@@ -349,6 +447,7 @@ export default function DataSourcesPage() {
 
 	useEffect(() => {
 		loadList();
+		loadConnectors();
 		loadDrivers();
 		loadDepts();
 	}, []);
@@ -366,7 +465,24 @@ export default function DataSourcesPage() {
 		form.resetFields();
 		setExcelParseResult(null);
 		setModalOpen(true);
+		loadConnectors();
 		loadDrivers();
+	};
+
+	const applyConnectorDefaults = (connectorKey?: string) => {
+		const connector = connectors.find((item) => item.connectorKey === connectorKey);
+		const fallback = TYPE_OPTIONS.find((option) => inferConnectorKey(option.value) === connectorKey);
+		if (!connector && !fallback) return;
+		const nextType = connector?.sourceType || fallback?.value || connectorKey;
+		if (!nextType) return;
+		form.setFieldsValue({
+			type: nextType,
+			readerType:
+				connectorKey === "http-api"
+					? apiContract?.defaultReaderType || "httpreader"
+					: form.getFieldValue("readerType"),
+		});
+		handleTypeChange(nextType);
 	};
 
 	const handleTypeChange = (type: string) => {
@@ -418,6 +534,7 @@ export default function DataSourcesPage() {
 		setEditing(record);
 		form.setFieldsValue({
 			name: record.name,
+			connectorKey: record.connectorKey || inferConnectorKey(record.type, props),
 			type: record.type,
 			jdbcUrl: record.jdbcUrl,
 			username: record.username,
@@ -475,6 +592,8 @@ export default function DataSourcesPage() {
 		if (result.elapsedMillis != null) details.push(`耗时：${result.elapsedMillis} ms`);
 		if (result.engineVersion) details.push(`数据库版本：${result.engineVersion}`);
 		if (result.driverVersion) details.push(`驱动版本：${result.driverVersion}`);
+		if (result.errorType) details.push(`失败类型：${result.errorType}`);
+		if (result.suggestion) details.push(`处理建议：${result.suggestion}`);
 		if (result.warnings?.length) details.push(`警告：${result.warnings.join("; ")}`);
 
 		Modal[isOk ? "success" : "error"]({
@@ -518,6 +637,182 @@ export default function DataSourcesPage() {
 			});
 		} finally {
 			setTestingId(null);
+		}
+	};
+
+	const showSchemaDiscoverResult = (record: InfraDataSource, result: SchemaDiscoverResponse) => {
+		setSchemaDiscoverSource(record);
+		setSchemaDiscoverResult(result);
+		setOdsConfig(defaultOdsWizardConfig(record));
+		setOdsPreview(null);
+		setOdsRequest(null);
+		setSchemaModalOpen(true);
+	};
+
+	const updateOdsConfig = (patch: Partial<OdsWizardConfig>) => {
+		setOdsConfig((prev) => ({ ...prev, ...patch }));
+		setOdsPreview(null);
+		setOdsRequest(null);
+	};
+
+	const buildOdsRequest = (record: InfraDataSource, tables: SchemaDiscoverTable[]): OdsGenerationRequest => ({
+		odsSchema: normalizeOdsCode(odsConfig.odsSchema, "ods"),
+		systemCode: normalizeOdsCode(odsConfig.systemCode || record.connectorKey || record.type || record.name),
+		bizCode: normalizeOdsCode(odsConfig.bizCode || "default", "default"),
+		entityCode: tables.length === 1 && odsConfig.entityCode ? normalizeOdsCode(odsConfig.entityCode, tables[0].name) : undefined,
+		includeTechnicalColumns: true,
+		includeRawJson: true,
+		syncMode: odsConfig.syncMode || "full_refresh",
+		tables: tables.map(toOdsSourceTable),
+	});
+
+	const resolveCommonIncrementalCandidate = (tables?: OdsGenerationRequest["tables"]) => {
+		if (!tables?.length) return "";
+		const originalNames = new Map<string, string>();
+		const normalizeCandidates = (table: OdsGenerationRequest["tables"][number]) =>
+			(table.incrementalCandidates || [])
+				.filter(Boolean)
+				.map((candidate) => {
+					const normalized = String(candidate).trim().toLowerCase();
+					originalNames.set(normalized, String(candidate).trim());
+					return normalized;
+				});
+		let commonKeys = normalizeCandidates(tables[0]);
+		for (const table of tables.slice(1)) {
+			const candidates = normalizeCandidates(table);
+			commonKeys = commonKeys.filter((candidate) => candidates.includes(candidate));
+		}
+		if (!commonKeys?.length) return "";
+		for (const preferred of ["updated_at", "update_time", "modified_at", "modify_time", "last_updated_at"]) {
+			if (commonKeys.includes(preferred)) return originalNames.get(preferred) || preferred;
+		}
+		const first = commonKeys[0];
+		return originalNames.get(first) || first;
+	};
+
+	const handleOdsPreview = async (record: InfraDataSource, tables: SchemaDiscoverTable[], loadingKey?: string) => {
+		if (!tables.length) {
+			message.warning("请选择至少一张表");
+			return;
+		}
+		const request = buildOdsRequest(record, tables);
+		const key = loadingKey || tables.map((table) => `${table.schema || ""}.${table.name}`).join("|");
+		setOdsPreviewingKey(key);
+		try {
+			const result = await dataSourcesService.odsPreview(record.id, request);
+			setOdsRequest(request);
+			setOdsPreview(result);
+		} catch {
+			// handled by global interceptor
+		} finally {
+			setOdsPreviewingKey(null);
+		}
+	};
+
+	const handleOdsApply = async () => {
+		if (!schemaDiscoverSource || !odsRequest) {
+			message.warning("请先预览 ODS 生成结果");
+			return;
+		}
+		setOdsApplying(true);
+		try {
+			const result = await dataSourcesService.odsApply(schemaDiscoverSource.id, odsRequest);
+			message.success(
+				`已生成 ${result?.mappingsUpserted || 0} 个 ODS 映射，写入 ${result?.columnsUpserted || 0} 个字段`
+			);
+			setOdsPreview((prev) => (prev ? { ...prev, warnings: result?.warnings || prev.warnings } : prev));
+		} catch {
+			// handled by global interceptor
+		} finally {
+			setOdsApplying(false);
+		}
+	};
+
+	const handleCreateSyncTask = async () => {
+		if (!schemaDiscoverSource || !odsRequest) {
+			message.warning("请先预览 ODS 生成结果");
+			return;
+		}
+		if (odsRequest.syncMode === "incremental" && !resolveCommonIncrementalCandidate(odsRequest.tables)) {
+			message.warning("增量同步需要所选表存在相同的增量字段候选");
+			return;
+		}
+		setSyncTaskCreating(true);
+		try {
+			const applyResult = await dataSourcesService.odsApply(schemaDiscoverSource.id, odsRequest);
+			const draft = await dataSourcesService.syncTaskDraft(schemaDiscoverSource.id, odsRequest);
+			if (!draft?.payload) {
+				throw new Error("未生成同步任务配置");
+			}
+			const createResult: any = await createIngestionTask(draft.payload);
+			const task = createResult?.task || createResult?.data?.task || createResult?.data;
+			const taskId = task?.id ? ` #${task.id}` : "";
+			message.success(`已生成同步任务${taskId}：${draft.taskName || task?.name || "未命名任务"}`);
+			setOdsPreview((prev) => (prev ? { ...prev, warnings: applyResult?.warnings || prev.warnings } : prev));
+		} catch (error: any) {
+			message.error(error?.message || "生成同步任务失败");
+		} finally {
+			setSyncTaskCreating(false);
+		}
+	};
+
+	const renderOdsPlan = (plan: OdsTablePlan) => (
+		<div key={`${plan.odsSchema}.${plan.odsTable}`} className="rounded border border-slate-200 p-3">
+			<div className="mb-2 flex flex-wrap items-center gap-2">
+				<Text strong>{plan.odsSchema}.{plan.odsTable}</Text>
+				<Tag color="blue">{plan.columns?.length || 0} 源字段</Tag>
+				<Tag>{plan.technicalColumns?.length || 0} 技术字段</Tag>
+			</div>
+			<div className="mb-2 text-xs text-slate-500">
+				{plan.sourceSchema ? `${plan.sourceSchema}.` : ""}{plan.sourceTable}
+				{plan.incrementalCandidates?.length ? ` · 增量候选：${plan.incrementalCandidates.join(", ")}` : ""}
+			</div>
+			{plan.warnings?.length ? (
+				<Alert type="warning" showIcon className="mb-2" message={plan.warnings.join("；")} />
+			) : null}
+			<div className="mb-2 text-xs text-slate-500">
+				{(plan.columns || [])
+					.slice(0, 10)
+					.map((column) => `${column.targetName}:${column.odsType || "text"}`)
+					.join(" · ") || "未生成字段"}
+			</div>
+			<details>
+				<summary className="cursor-pointer text-xs text-slate-600">查看 DDL / dbt source 片段</summary>
+				<pre className="mt-2 max-h-64 overflow-auto rounded bg-slate-950 p-3 text-xs text-slate-50">
+					{`${plan.createTableSql || ""}\n\n${plan.dbtSourceYaml || ""}`}
+				</pre>
+			</details>
+		</div>
+	);
+
+	const handleSchemaDiscover = async (record: InfraDataSource, forceRefresh = false) => {
+		if (!record.jdbcUrl) {
+			message.warning("非 JDBC 数据源暂不支持 JDBC Schema Discover");
+			return;
+		}
+		setSchemaDiscoveringId(record.id);
+		try {
+			const result = await dataSourcesService.schemaDiscover(record.id, {
+				maxTables: 100,
+				sampleLimit: 0,
+				includeColumns: true,
+				includeIndexes: true,
+				includeSample: false,
+				useCache: true,
+				forceRefresh,
+			});
+			if (!result || result.status === "FAILED") {
+				Modal.error({
+					title: `${record.name} Schema 探测失败`,
+					content: result?.error || "未获取到探测结果",
+				});
+				return;
+			}
+			showSchemaDiscoverResult(record, result);
+		} catch {
+			// handled by global interceptor
+		} finally {
+			setSchemaDiscoveringId(null);
 		}
 	};
 
@@ -654,6 +949,7 @@ export default function DataSourcesPage() {
 			const payload: DataSourceUpsertPayload = {
 				name: String(values.name).trim(),
 				type: String(values.type).trim(),
+				connectorKey: normalizeConnectorKey(values.connectorKey) || inferConnectorKey(values.type, props),
 				jdbcUrl: jdbc ? String(values.jdbcUrl || "").trim() || undefined : undefined,
 				username: jdbc ? String(values.username || "").trim() || undefined : undefined,
 				description: String(values.description || "").trim() || undefined,
@@ -769,6 +1065,13 @@ export default function DataSourcesPage() {
 	const columns = useMemo(
 			() => [
 				{ title: "名称", dataIndex: "name", key: "name", width: 180 },
+				{
+					title: "连接器",
+					dataIndex: "connectorName",
+					key: "connectorName",
+					width: 180,
+					render: (value: string, record: InfraDataSource) => value || record.connectorKey || inferConnectorKey(record.type, record.props) || "-",
+				},
 				{ title: "类型", dataIndex: "type", key: "type", width: 120 },
 			{
 				title: "连接地址",
@@ -804,6 +1107,13 @@ export default function DataSourcesPage() {
 					const adminManaged = isAdminManagedSource(record);
 					return (
 						<Space>
+							<Button
+								size="small"
+								loading={schemaDiscoveringId === record.id}
+								onClick={() => handleSchemaDiscover(record)}
+							>
+								探测
+							</Button>
 							<Button size="small" icon={<ExperimentOutlined />} loading={testingId === record.id} onClick={() => handleTest(record)}>
 								测试
 							</Button>
@@ -823,7 +1133,7 @@ export default function DataSourcesPage() {
 				},
 			},
 		],
-		[testingId]
+		[schemaDiscoveringId, testingId]
 	);
 
 	const driverOptions = useMemo(
@@ -835,8 +1145,23 @@ export default function DataSourcesPage() {
 		[drivers]
 	);
 
+	const connectorOptions = useMemo(() => {
+		if (!connectors.length) {
+			return TYPE_OPTIONS.map((option) => ({ ...option, value: inferConnectorKey(option.value) || option.value }));
+		}
+		return connectors.map((connector) => ({
+			value: connector.connectorKey,
+			label: `${connector.name}${connector.defaultEngine ? ` · ${connector.defaultEngine}` : ""}`,
+		}));
+	}, [connectors]);
+
+	const connectorValue = Form.useWatch("connectorKey", form);
 	const typeValue = Form.useWatch("type", form);
 	const jdbcValue = Form.useWatch("jdbcUrl", form);
+	const selectedConnector = useMemo(
+		() => connectors.find((item) => item.connectorKey === connectorValue),
+		[connectorValue, connectors]
+	);
 	const apiSource = isApiSourceType(typeValue);
 	const jdbcRequired = !apiSource && isJdbcType(typeValue, jdbcValue);
 	const fileSource = isFileSource(typeValue);
@@ -870,6 +1195,9 @@ export default function DataSourcesPage() {
 					<Button icon={<ReloadOutlined />} onClick={loadList} disabled={loading}>
 						刷新
 					</Button>
+					<Button icon={<AppstoreOutlined />} onClick={() => navigate("/foundation/connectors")}>
+						连接器目录
+					</Button>
 					<Button onClick={() => navigate("/foundation/jdbc-drivers")}>JDBC 驱动管理</Button>
 					<Button type="primary" icon={<PlusOutlined />} onClick={openCreate}>
 						新增数据源
@@ -887,6 +1215,171 @@ export default function DataSourcesPage() {
 			/>
 
 			<Modal
+				title={`${schemaDiscoverSource?.name || "数据源"} Schema 探测`}
+				open={schemaModalOpen}
+				onCancel={() => setSchemaModalOpen(false)}
+				width={920}
+				footer={[
+					<Button
+						key="refresh"
+						loading={Boolean(schemaDiscoverSource && schemaDiscoveringId === schemaDiscoverSource.id)}
+						onClick={() => schemaDiscoverSource && handleSchemaDiscover(schemaDiscoverSource, true)}
+					>
+						重新探测
+					</Button>,
+					<Button key="close" onClick={() => setSchemaModalOpen(false)}>
+						关闭
+					</Button>,
+					<Button
+						key="apply"
+						type="primary"
+						disabled={!odsPreview}
+						loading={odsApplying}
+						onClick={handleOdsApply}
+					>
+						生成 ODS 映射与 dbt source
+					</Button>,
+					<Button
+						key="task"
+						type="primary"
+						disabled={!odsPreview}
+						loading={syncTaskCreating}
+						onClick={handleCreateSyncTask}
+					>
+						生成同步任务
+					</Button>,
+				]}
+			>
+				<div className="space-y-4">
+					<div className="flex flex-wrap items-center gap-2 text-xs text-slate-500">
+						<span>
+							{schemaDiscoverResult?.databaseProduct || "未知数据库"} · {schemaDiscoverResult?.tables?.length || 0} 张表 · {schemaDiscoverResult?.elapsedMs ?? 0} ms
+						</span>
+						{schemaDiscoverResult?.cached ? <Tag color="gold">缓存</Tag> : <Tag color="green">实时</Tag>}
+					</div>
+					{schemaDiscoverResult?.drift ? (
+						<Alert
+							type="warning"
+							showIcon
+							message={`Schema drift：新增 ${schemaDiscoverResult.drift.addedTables || 0} 表，删除 ${schemaDiscoverResult.drift.removedTables || 0} 表，变更 ${schemaDiscoverResult.drift.changedTables || 0} 表`}
+							description={schemaDiscoverResult.drift.detailsJson ? (
+								<details>
+									<summary className="cursor-pointer">查看差异详情</summary>
+									<pre className="mt-2 max-h-48 overflow-auto text-xs">{schemaDiscoverResult.drift.detailsJson}</pre>
+								</details>
+							) : undefined}
+						/>
+					) : null}
+					<div className="rounded border border-slate-200 p-3">
+						<div className="mb-3 flex flex-wrap items-center gap-2">
+							<Text strong>任务生成配置</Text>
+							{odsConfig.syncMode === "incremental" && odsRequest ? (
+								<Tag color={resolveCommonIncrementalCandidate(odsRequest.tables) ? "green" : "red"}>
+									增量字段：{resolveCommonIncrementalCandidate(odsRequest.tables) || "未识别"}
+								</Tag>
+							) : null}
+						</div>
+						<div className="grid gap-3 md:grid-cols-4">
+							<label className="space-y-1">
+								<Text type="secondary">ODS Schema</Text>
+								<Input
+									value={odsConfig.odsSchema}
+									onChange={(event) => updateOdsConfig({ odsSchema: event.target.value })}
+								/>
+							</label>
+							<label className="space-y-1">
+								<Text type="secondary">来源系统编码</Text>
+								<Input
+									value={odsConfig.systemCode}
+									onChange={(event) => updateOdsConfig({ systemCode: event.target.value })}
+								/>
+							</label>
+							<label className="space-y-1">
+								<Text type="secondary">业务编码</Text>
+								<Input
+									value={odsConfig.bizCode}
+									onChange={(event) => updateOdsConfig({ bizCode: event.target.value })}
+								/>
+							</label>
+							<label className="space-y-1">
+								<Text type="secondary">同步模式</Text>
+								<Select
+									className="w-full"
+									value={odsConfig.syncMode}
+									options={[
+										{ label: "全量覆盖", value: "full_refresh" },
+										{ label: "时间戳增量", value: "incremental" },
+									]}
+									onChange={(value) => updateOdsConfig({ syncMode: value })}
+								/>
+							</label>
+						</div>
+					</div>
+					<div className="max-h-[360px] overflow-auto">
+						{(schemaDiscoverResult?.tables || []).slice(0, 20).map((table) => {
+							const key = `${table.schema || ""}.${table.name}`;
+							return (
+								<div key={key} className="mb-3 rounded border border-slate-200 p-3">
+									<div className="mb-2 flex flex-wrap items-center gap-2">
+										<Text strong>
+											{table.schema ? `${table.schema}.` : ""}
+											{table.name}
+										</Text>
+										<Tag>{table.view ? "VIEW" : table.type || "TABLE"}</Tag>
+										<Tag color="blue">{table.columns?.length || 0} 列</Tag>
+										<Button
+											size="small"
+											loading={odsPreviewingKey === key}
+											onClick={() => schemaDiscoverSource && handleOdsPreview(schemaDiscoverSource, [table])}
+										>
+											预览 ODS
+										</Button>
+									</div>
+									{table.primaryKeys?.length ? (
+										<div className="mb-1 text-xs">主键：{table.primaryKeys.join(", ")}</div>
+									) : null}
+									{table.incrementalCandidates?.length ? (
+										<div className="mb-1 text-xs">增量候选：{table.incrementalCandidates.join(", ")}</div>
+									) : null}
+									<div className="text-xs text-slate-500">
+										{(table.columns || [])
+											.slice(0, 8)
+											.map((column) => `${column.name}:${column.dataType || column.nativeType || "unknown"}`)
+											.join(" · ") || "未读取字段"}
+									</div>
+								</div>
+							);
+						})}
+						{(schemaDiscoverResult?.tables || []).length > 20 ? <Text type="secondary">仅展示前 20 张表。</Text> : null}
+					</div>
+					{schemaDiscoverSource && (schemaDiscoverResult?.tables || []).length > 1 ? (
+						<Button
+							loading={odsPreviewingKey === "__all__"}
+							onClick={() => {
+								const tables = (schemaDiscoverResult?.tables || []).filter((table) => !table.view).slice(0, 20);
+								void handleOdsPreview(schemaDiscoverSource, tables, "__all__");
+							}}
+						>
+							批量预览前 20 张表
+						</Button>
+					) : null}
+					{odsPreview?.tables?.length ? (
+						<div className="space-y-3">
+							<Divider />
+							<div className="flex flex-wrap items-center gap-2">
+								<Text strong>ODS 生成预览</Text>
+								<Tag color="green">{odsPreview.tables.length} 张表</Tag>
+							</div>
+							{odsPreview.warnings?.length ? (
+								<Alert type="warning" showIcon message={odsPreview.warnings.join("；")} />
+							) : null}
+							<div className="space-y-3">{odsPreview.tables.map(renderOdsPlan)}</div>
+						</div>
+					) : null}
+				</div>
+			</Modal>
+
+			<Modal
 				title={editing ? "编辑数据源" : "新增数据源"}
 				open={modalOpen}
 				onCancel={() => setModalOpen(false)}
@@ -899,8 +1392,28 @@ export default function DataSourcesPage() {
 					<Form.Item name="name" label="名称" rules={[{ required: true, message: "请输入名称" }]}>
 						<Input placeholder="例如：ERP 数据库" />
 					</Form.Item>
-					<Form.Item name="type" label="类型" rules={[{ required: true, message: "请选择类型" }]}>
-						<Select options={TYPE_OPTIONS} placeholder="请选择数据源类型" onChange={(value) => handleTypeChange(value)} />
+					<Form.Item name="connectorKey" label="连接器" rules={[{ required: true, message: "请选择连接器" }]}>
+						<Select
+							options={connectorOptions}
+							placeholder={connectorsLoading ? "连接器加载中..." : "请选择连接器"}
+							loading={connectorsLoading}
+							showSearch
+							optionFilterProp="label"
+							onChange={(value) => applyConnectorDefaults(value)}
+						/>
+					</Form.Item>
+					{selectedConnector?.description ? (
+						<Text type="secondary" className="block -mt-2 mb-3">
+							{selectedConnector.description}
+						</Text>
+					) : null}
+					<Form.Item name="type" label="源类型" rules={[{ required: true, message: "请选择源类型" }]}>
+						<Select
+							options={TYPE_OPTIONS}
+							placeholder="由连接器自动填充"
+							disabled={Boolean(connectorValue)}
+							onChange={(value) => handleTypeChange(value)}
+						/>
 					</Form.Item>
 					{apiSource && (
 						<>

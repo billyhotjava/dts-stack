@@ -722,6 +722,7 @@ export const getCatalogLineageImpact = (
     changedWithinHours?: number;
     sourceId?: string;
     withJobs?: boolean;
+    withColumns?: boolean;
   } = {},
 ) => api.get({ url: "/catalog/lineage/impact", params: { datasetId, ...params } });
 export const createCatalogLineage = (data: any) => api.post({ url: "/catalog/lineage", data });

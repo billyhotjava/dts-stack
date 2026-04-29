@@ -108,8 +108,8 @@ public interface CatalogDatasetRepository extends JpaRepository<CatalogDataset, 
     // ------------------------------------------------------------------ Sprint-15 F1/T05: TOP assets
 
     /**
-     * TOP-N assets ordered by classification weight (TOP_SECRET > SECRET
-     * > INTERNAL > PUBLIC) then by {@code lastModifiedDate} desc. Used
+     * TOP-N assets ordered by caller-provided classification buckets
+     * then by {@code lastModifiedDate} desc. Used
      * for both DEPT and ALL scopes — pass {@code deptCode = null} for
      * the institute-wide variant.
      *
@@ -127,11 +127,11 @@ public interface CatalogDatasetRepository extends JpaRepository<CatalogDataset, 
         "where d.enabled = true " +
         "  and (cast(:deptCode as text) is null or d.ownerDept = :deptCode) " +
         "  and (cast(:bizDomain as text) is null or dom.code = :bizDomain) " +
-        "order by case upper(d.classification) " +
-        "           when 'TOP_SECRET' then 4 " +
-        "           when 'SECRET' then 3 " +
-        "           when 'INTERNAL' then 2 " +
-        "           when 'PUBLIC' then 1 " +
+        "order by case " +
+        "           when upper(d.classification) in :confidentialClassifications then 4 " +
+        "           when upper(d.classification) in :secretClassifications then 3 " +
+        "           when upper(d.classification) in :internalClassifications then 2 " +
+        "           when upper(d.classification) in :publicClassifications then 1 " +
         "           else 0 " +
         "         end desc, " +
         "         d.lastModifiedDate desc, " +
@@ -140,6 +140,10 @@ public interface CatalogDatasetRepository extends JpaRepository<CatalogDataset, 
     List<CatalogDataset> findTopByClassification(
         @Param("deptCode") String deptCode,
         @Param("bizDomain") String bizDomain,
+        @Param("confidentialClassifications") List<String> confidentialClassifications,
+        @Param("secretClassifications") List<String> secretClassifications,
+        @Param("internalClassifications") List<String> internalClassifications,
+        @Param("publicClassifications") List<String> publicClassifications,
         Pageable pageable
     );
 

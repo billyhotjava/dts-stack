@@ -22,6 +22,7 @@ import com.yuzhi.dts.ingestion.service.etl.IncrementalSyncService;
 import com.yuzhi.dts.ingestion.service.etl.ExecutionFailureClassifier;
 import com.yuzhi.dts.ingestion.service.etl.IngestionExecutionLineageSnapshot;
 import com.yuzhi.dts.ingestion.service.etl.api.ApiConnectorTypes;
+import com.yuzhi.dts.ingestion.service.infra.PlatformInfraClient;
 import com.yuzhi.dts.ingestion.service.mapper.IngestionExecutionMapper;
 import com.yuzhi.dts.ingestion.service.mapper.IngestionTaskMapper;
 import com.yuzhi.dts.common.audit.AuditStage;
@@ -93,6 +94,7 @@ public class IngestionTaskService {
     private final IngestionTaskChangeLogService changeLogService;
     private final com.yuzhi.dts.ingestion.service.etl.IngestionRetryService retryService;
     private final DagPreheatService dagPreheatService;
+    private final PlatformInfraClient platformInfraClient;
     private final TransactionTemplate txTemplate;
     private final Executor ingestionTaskExecutor;
 
@@ -112,6 +114,7 @@ public class IngestionTaskService {
         IngestionTaskChangeLogService changeLogService,
         @org.springframework.context.annotation.Lazy com.yuzhi.dts.ingestion.service.etl.IngestionRetryService retryService,
         DagPreheatService dagPreheatService,
+        PlatformInfraClient platformInfraClient,
         PlatformTransactionManager transactionManager,
         @org.springframework.beans.factory.annotation.Qualifier("ingestionTaskExecutor") Executor ingestionTaskExecutor
     ) {
@@ -130,6 +133,7 @@ public class IngestionTaskService {
         this.changeLogService = changeLogService;
         this.retryService = retryService;
         this.dagPreheatService = dagPreheatService;
+        this.platformInfraClient = platformInfraClient;
         this.txTemplate = new TransactionTemplate(transactionManager);
         this.ingestionTaskExecutor = ingestionTaskExecutor;
     }
@@ -607,6 +611,9 @@ public class IngestionTaskService {
             task.setLastExecutedAt(Instant.now());
             task.setLastExecutionStatus("running");
             taskRepository.save(task);
+            if (!airflowEnabled) {
+                syncExecutionLineageQuietly(task, execution);
+            }
             log.info("Started execution {} for task ID: {}", execution.getExecutionId(), taskId);
 
             auditService.auditAction("INGESTION_TASK_EXECUTE", AuditStage.SUCCESS, task.getName(),
@@ -634,6 +641,9 @@ public class IngestionTaskService {
         execution.setErrorMessage(failureMessage);
         execution.setFailureCategory(failureCategory);
         execution.setFailureAdvice(failureAdvice);
+        if (task != null) {
+            IngestionExecutionLineageSnapshot.applyIfMissing(execution, task);
+        }
         executionRepository.save(execution);
 
         try {
@@ -653,6 +663,18 @@ public class IngestionTaskService {
             meta.put("failureAdvice", failureAdvice);
             if (StringUtils.hasText(failureMessage)) meta.put("error", failureMessage);
             auditService.auditAction("INGESTION_TASK_EXECUTE", AuditStage.FAIL, task.getName(), meta);
+            syncExecutionLineageQuietly(task, execution);
+        }
+    }
+
+    private void syncExecutionLineageQuietly(IngestionTask task, IngestionExecution execution) {
+        if (task == null || execution == null) {
+            return;
+        }
+        try {
+            platformInfraClient.syncIngestionExecutionLineage(task, execution);
+        } catch (Exception ex) {
+            log.warn("Failed to sync ingestion execution lineage for task {} execution {}: {}", task.getId(), execution.getId(), ex.getMessage());
         }
     }
 

@@ -82,8 +82,7 @@ public class AdminUserService {
         "ADMIN_ROLE_CREATE"
     );
 
-    // 人员密级：GENERAL/IMPORTANT/CORE（NON_SECRET 等旧值会在 normalizeSecurityLevel 中收敛为 GENERAL）
-    private static final Set<String> SUPPORTED_SECURITY_LEVELS = Set.of("GENERAL", "IMPORTANT", "CORE");
+    private static final Set<String> SUPPORTED_SECURITY_LEVELS = SecurityLevelCatalog.personnelCodes();
     private static final Set<String> FORBIDDEN_SECURITY_LEVELS = Set.of();
     private static final Set<String> KEYCLOAK_DEFAULT_REALM_ROLE_NAMES = Set.of("offline_access", "uma_authorization");
 
@@ -108,7 +107,7 @@ public class AdminUserService {
     private final ThreadLocal<Boolean> suppressAuditFailure = ThreadLocal.withInitial(() -> Boolean.FALSE);
 
     private static final TypeReference<Map<String, Object>> MAP_TYPE = new TypeReference<>() {};
-    private static final String DEFAULT_PERSON_LEVEL = "GENERAL";
+    private static final String DEFAULT_PERSON_LEVEL = SecurityLevelCatalog.DEFAULT_PERSONNEL_SECURITY_LEVEL.code();
     private static final String DEFAULT_INITIAL_PASSWORD = "sa";
     private static final Map<String, String> BUILTIN_DISPLAY_NAMES = Map.ofEntries(
         Map.entry("sysadmin", "系统管理员"),
@@ -269,7 +268,7 @@ public class AdminUserService {
                     snapshot.setEmail(StringUtils.defaultIfBlank(dto.getEmail(), snapshot.getEmail()));
                     snapshot.setPhone(StringUtils.defaultIfBlank(extractSingle(dto, "phone"), snapshot.getPhone()));
                     String secLevel = normalizeSecurityLevel(extractSingle(dto, "person_security_level"));
-                    snapshot.setPersonSecurityLevel(StringUtils.defaultIfBlank(secLevel, "GENERAL"));
+                    snapshot.setPersonSecurityLevel(StringUtils.defaultIfBlank(secLevel, DEFAULT_PERSON_LEVEL));
                     snapshot.setEnabled(Boolean.TRUE.equals(dto.getEnabled()));
                     if (dto.getRealmRoles() != null) {
                         snapshot.setRealmRoles(dto.getRealmRoles());
@@ -2052,8 +2051,7 @@ public class AdminUserService {
     }
 
     private String normalizeSecurityLevel(String level) {
-        SecurityLevelCatalog.PersonnelSecurityLevel parsed = SecurityLevelCatalog.PersonnelSecurityLevel.parse(level);
-        return parsed != null ? parsed.code() : null;
+        return SecurityLevelCatalog.normalizePersonnelCode(level);
     }
 
     private AdminKeycloakUser ensureSnapshot(String username) {

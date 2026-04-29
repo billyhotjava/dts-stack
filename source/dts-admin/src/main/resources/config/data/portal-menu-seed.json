@@ -77,6 +77,14 @@
       "title": "数据接入中心",
       "children": [
         {
+          "key": "connectors",
+          "path": "connectors",
+          "icon": "solar:widget-add-bold-duotone",
+          "titleKey": "sys.nav.portal.resourceConnectors",
+          "title": "连接器目录",
+          "externalLink": "/foundation/connectors"
+        },
+        {
           "key": "sources",
           "path": "sources",
           "icon": "solar:server-2-bold-duotone",

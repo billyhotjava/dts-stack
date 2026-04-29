@@ -9,6 +9,7 @@ import com.yuzhi.dts.admin.repository.PortalMenuRepository;
 import com.yuzhi.dts.admin.repository.PortalMenuVisibilityRepository;
 import com.yuzhi.dts.admin.repository.SystemConfigRepository;
 import com.yuzhi.dts.admin.security.AuthoritiesConstants;
+import com.yuzhi.dts.common.security.SecurityLevelCatalog;
 import java.io.IOException;
 import java.io.InputStream;
 import java.security.MessageDigest;
@@ -79,6 +80,7 @@ public class PortalMenuService {
         // P1-7: workbench.favorites removed in Sprint-15 / F2 alongside the
         // portal_user_favorite table. Keeping the menu key alive surfaced an
         // orphan menu item even though the front-end page was deleted.
+        Map.entry("resource.connectors", "/pages/foundation/ConnectorRegistryPage"),
         Map.entry("resource.sources", "/pages/foundation/DataSourcesPage"),
         Map.entry("resource.jdbcDrivers", "/pages/foundation/JdbcDriversPage"),
         Map.entry("resource.metadata", "/pages/catalog/MetadataPage"),
@@ -101,7 +103,7 @@ public class PortalMenuService {
         Map.entry("governance.classification", "/pages/security/data-security"),
         Map.entry("portal.map", "/pages/catalog/DatasetsPage"),
         Map.entry("portal.search", "/pages/catalog/DataSearchPage"),
-        Map.entry("portal.detail", "/pages/catalog/DatasetsPage"),
+        Map.entry("portal.detail", "/pages/catalog/AssetDetailPage"),
         Map.entry("portal.lineage", "/pages/catalog/LineagePage"),
         Map.entry("portal.permission", "/pages/security/DatasetAccessApprovalPage"),
         Map.entry("ops.overview", "/pages/ops/OpsOverviewPage"),
@@ -408,7 +410,10 @@ public class PortalMenuService {
     }
 
     private boolean matchesDataLevel(PortalMenuVisibility visibility, String maxDataLevel) {
-        if (!StringUtils.hasText(visibility.getDataLevel()) || visibility.getDataLevel().equalsIgnoreCase("INTERNAL")) {
+        if (
+            !StringUtils.hasText(visibility.getDataLevel()) ||
+            visibility.getDataLevel().equalsIgnoreCase(SecurityLevelCatalog.DEFAULT_DATA_SECURITY_LEVEL.code())
+        ) {
             return true;
         }
         if (!StringUtils.hasText(maxDataLevel)) {
@@ -418,13 +423,8 @@ public class PortalMenuService {
     }
 
     private int dataLevelPriority(String level) {
-        return switch (level == null ? "" : level.toUpperCase(Locale.ROOT)) {
-            case "PUBLIC", "NON_SECRET", "NONE_SECRET" -> 1;
-            case "INTERNAL", "GENERAL" -> 2;
-            case "SECRET", "IMPORTANT" -> 3;
-            case "CONFIDENTIAL", "CORE", "TOP_SECRET", "DATA_TOP_SECRET", "CORE_SECRET" -> 4;
-            default -> 0;
-        };
+        String normalized = SecurityLevelCatalog.normalizeMaxDataCode(level);
+        return normalized == null ? -1 : SecurityLevelCatalog.dataRank(normalized);
     }
 
     private PortalMenu cloneMenu(PortalMenu source) {
@@ -532,7 +532,7 @@ public class PortalMenuService {
         menu.setIcon(node.icon());
         menu.setSortOrder(sortOrder);
         menu.setMetadata(writeMetadata(node, parent == null, sectionKey));
-        menu.setSecurityLevel("GENERAL");
+        menu.setSecurityLevel(SecurityLevelCatalog.DEFAULT_PERSONNEL_SECURITY_LEVEL.code());
         menu.setDeleted(false);
         if (parent != null) {
             menu.setParent(parent);
@@ -900,10 +900,10 @@ public class PortalMenuService {
                 }
                 // Recurse to ensure deeper nodes exist.
                 ensureChildrenFromSeed(existing, child.children(), 1, nextCompositeKey, sectionKey);
-                // Ensure leaf component is present when seed defines a leaf but existing has none
-                if ((child.children() == null || child.children().isEmpty()) && !StringUtils.hasText(existing.getComponent())) {
+                // Keep seed-managed leaf components aligned with the current route mapping.
+                if (child.children() == null || child.children().isEmpty()) {
                     String component = resolveComponent(nextCompositeKey);
-                    if (StringUtils.hasText(component)) {
+                    if (StringUtils.hasText(component) && !component.equals(existing.getComponent())) {
                         existing.setComponent(component);
                         menuRepo.save(existing);
                     }
@@ -1004,7 +1004,7 @@ public class PortalMenuService {
                         PortalMenuVisibility v = new PortalMenuVisibility();
                         v.setMenu(m);
                         v.setRoleCode(roleCode);
-                        v.setDataLevel("INTERNAL");
+                        v.setDataLevel(SecurityLevelCatalog.DEFAULT_DATA_SECURITY_LEVEL.code());
                         existing.add(v);
                         dirty = true;
                     }
@@ -1283,7 +1283,7 @@ public class PortalMenuService {
         PortalMenuVisibility op = new PortalMenuVisibility();
         op.setMenu(menu);
         op.setRoleCode(AuthoritiesConstants.OP_ADMIN);
-        op.setDataLevel("INTERNAL");
+        op.setDataLevel(SecurityLevelCatalog.DEFAULT_DATA_SECURITY_LEVEL.code());
         defaults.add(op);
         return defaults;
     }
@@ -1344,7 +1344,7 @@ public class PortalMenuService {
             PortalMenuVisibility visibility = new PortalMenuVisibility();
             visibility.setMenu(menu);
             visibility.setRoleCode(normalizedRole);
-            visibility.setDataLevel("INTERNAL");
+            visibility.setDataLevel(SecurityLevelCatalog.DEFAULT_DATA_SECURITY_LEVEL.code());
             menu.addVisibility(visibility);
             visibilityRepo.save(visibility);
         }

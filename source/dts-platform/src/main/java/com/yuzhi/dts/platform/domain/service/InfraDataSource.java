@@ -25,6 +25,9 @@ public class InfraDataSource extends AbstractAuditingEntity<UUID> implements Ser
     @Column(name = "type", length = 32)
     private String type; // hive/jdbc/kafka/etc
 
+    @Column(name = "connector_key", length = 64)
+    private String connectorKey;
+
     @Column(name = "jdbc_url", length = 512)
     private String jdbcUrl;
 
@@ -65,6 +68,8 @@ public class InfraDataSource extends AbstractAuditingEntity<UUID> implements Ser
     public void setName(String name) { this.name = name; }
     public String getType() { return type; }
     public void setType(String type) { this.type = type; }
+    public String getConnectorKey() { return connectorKey; }
+    public void setConnectorKey(String connectorKey) { this.connectorKey = connectorKey; }
     public String getJdbcUrl() { return jdbcUrl; }
     public void setJdbcUrl(String jdbcUrl) { this.jdbcUrl = jdbcUrl; }
     public String getUsername() { return username; }

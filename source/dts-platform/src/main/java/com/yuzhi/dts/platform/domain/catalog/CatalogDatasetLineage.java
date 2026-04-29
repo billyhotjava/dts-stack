@@ -44,6 +44,9 @@ public class CatalogDatasetLineage extends AbstractAuditingEntity<UUID> implemen
     @Column(name = "project_name", length = 128)
     private String projectName;
 
+    @Column(name = "lineage_job_id", columnDefinition = "uuid")
+    private UUID lineageJobId;
+
     @Column(name = "verification_status", length = 32)
     private String verificationStatus;
 
@@ -130,6 +133,14 @@ public class CatalogDatasetLineage extends AbstractAuditingEntity<UUID> implemen
 
     public void setProjectName(String projectName) {
         this.projectName = projectName;
+    }
+
+    public UUID getLineageJobId() {
+        return lineageJobId;
+    }
+
+    public void setLineageJobId(UUID lineageJobId) {
+        this.lineageJobId = lineageJobId;
     }
 
     public String getVerificationStatus() {

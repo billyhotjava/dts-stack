@@ -34,6 +34,7 @@ const PATH_COMPONENT_OVERRIDES: Record<string, string> = {
 	"/catalog/quality": "/pages/catalog/QualityPage",
 	"/catalog/data-products": "/pages/catalog/DataProductsPage",
 	"/foundation/access-changes": "/pages/foundation/AccessChangesPage",
+	"/foundation/connectors": "/pages/foundation/ConnectorRegistryPage",
 	"/foundation/data-sources": "/pages/foundation/DataSourcesPage",
 	"/foundation/jdbc-drivers": "/pages/foundation/JdbcDriversPage",
 	"/explore/etl/scripts": "/pages/explore/etl/ScriptStudioPage",

@@ -9,6 +9,7 @@ import com.alibaba.excel.event.AnalysisEventListener;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.yuzhi.dts.common.audit.AuditStage;
+import com.yuzhi.dts.common.security.SecurityLevelCatalog;
 import com.yuzhi.dts.platform.config.AirflowProperties;
 import com.yuzhi.dts.platform.domain.infra.InfraExternalExchangeFile;
 import com.yuzhi.dts.platform.repository.infra.InfraExternalExchangeFileRepository;
@@ -144,7 +145,7 @@ public class ExcelImportService {
         entity.setReceivedAt(Instant.now());
         entity.setProcessedAt(null);
         entity.setEnabled(Boolean.TRUE);
-        entity.setClassification("INTERNAL");
+        entity.setClassification(SecurityLevelCatalog.DEFAULT_DATA_SECURITY_LEVEL.code());
         entity.setProps(writeProps(Map.of("format", ext, "sheets", sheets)));
         InfraExternalExchangeFile saved = repository.save(entity);
         auditService.auditAction(

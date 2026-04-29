@@ -1,5 +1,6 @@
 package com.yuzhi.dts.platform.service.infra;
 
+import com.yuzhi.dts.common.security.SecurityLevelCatalog;
 import com.yuzhi.dts.platform.domain.catalog.CatalogColumnSchema;
 import com.yuzhi.dts.platform.domain.catalog.CatalogDataset;
 import com.yuzhi.dts.platform.domain.catalog.CatalogSchemaDriftEvent;
@@ -46,7 +47,7 @@ public class InceptorCatalogSyncService {
 
     private static final Logger LOG = LoggerFactory.getLogger(InceptorCatalogSyncService.class);
     private static final String DATASET_TYPE = "INCEPTOR";
-    private static final String DEFAULT_CLASSIFICATION = "INTERNAL";
+    private static final String DEFAULT_CLASSIFICATION = SecurityLevelCatalog.DEFAULT_DATA_SECURITY_LEVEL.code();
     private static final String DEFAULT_OWNER = "system";
     private static final String DEFAULT_EXPOSED_BY = "VIEW";
 

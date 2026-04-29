@@ -7,6 +7,7 @@ import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -63,7 +64,9 @@ class WorkbenchLeaderOverviewServiceTest {
         lenient().when(visitRepo.findTopRecentByUser(anyString(), any(), any())).thenReturn(List.of());
         lenient().when(visitRepo.aggregateTopReportsForDept(anyString(), any(), any(), any(), any())).thenReturn(List.of());
         lenient().when(visitRepo.aggregateTopReportsAll(any(), any(), any(), any())).thenReturn(List.of());
-        lenient().when(datasetRepo.findTopByClassification(any(), any(), any())).thenReturn(List.of());
+        lenient()
+            .when(datasetRepo.findTopByClassification(any(), any(), anyList(), anyList(), anyList(), anyList(), any()))
+            .thenReturn(List.of());
         lenient().when(datasetRepo.findTopForUser(anyString(), any())).thenReturn(List.of());
         lenient().when(fallbackService.tryFetchFallback(any(), any())).thenReturn(List.of());
         lenient().when(visitRepo.aggregateByBizDomain(any(), any(), any(), any())).thenReturn(List.of());
@@ -243,7 +246,7 @@ class WorkbenchLeaderOverviewServiceTest {
         assertThat(res.scope()).isEqualTo("ALL");
         assertThat(res.kpis().visitsInPeriod()).isEqualTo(7L);
         assertThat(res.kpis().reportsTotal()).isEqualTo(2L);
-        verify(visitRepo).countVisitsForAll(any(), eq("finance"), any(), any());
+        verify(visitRepo, times(2)).countVisitsForAll(any(), eq("finance"), any(), any());
     }
 
     // P0-5 — assetScopeFallback flag flips for MINE only.
@@ -317,7 +320,8 @@ class WorkbenchLeaderOverviewServiceTest {
         dom.setCode("finance");
         dom.setName("Finance");
         d.setDomain(dom);
-        when(datasetRepo.findTopByClassification(any(), any(), any())).thenReturn(List.of(d));
+        when(datasetRepo.findTopByClassification(any(), any(), anyList(), anyList(), anyList(), anyList(), any()))
+            .thenReturn(List.of(d));
 
         LeaderOverviewResponse res = service.build(
             "dan", List.of("ROLE_INST_LEADER"), "D001", "ALL", null, null, "MONTH"
@@ -331,7 +335,8 @@ class WorkbenchLeaderOverviewServiceTest {
     void computeTopAssets_MINE_falls_back_to_findTopForUser() {
         service.build("alice", List.of("ROLE_EMPLOYEE"), "D001", null, null, null, "MONTH");
         verify(datasetRepo).findTopForUser(eq("alice"), any());
-        verify(datasetRepo, never()).findTopByClassification(any(), any(), any());
+        verify(datasetRepo, never())
+            .findTopByClassification(any(), any(), anyList(), anyList(), anyList(), anyList(), any());
     }
 
     // =========================================================== T06: Domain matrix

@@ -8,6 +8,7 @@ import com.yuzhi.dts.admin.service.auditv2.AuditV2Service;
 import com.yuzhi.dts.admin.service.auditv2.ButtonCodes;
 import com.yuzhi.dts.admin.service.dto.menu.MenuTreeDTO;
 import com.yuzhi.dts.admin.web.rest.api.ApiResponse;
+import com.yuzhi.dts.common.security.SecurityLevelCatalog;
 import io.swagger.v3.oas.annotations.Operation;
 import java.util.*;
 import java.util.stream.Collectors;
@@ -159,7 +160,7 @@ public class BasicApiResource {
         if (!StringUtils.hasText(dataLevel)) {
             return null;
         }
-        return dataLevel.trim().toUpperCase(Locale.ROOT);
+        return SecurityLevelCatalog.normalizeMaxDataCode(dataLevel);
     }
 
     private Set<String> rolesFromSecurityContext() {

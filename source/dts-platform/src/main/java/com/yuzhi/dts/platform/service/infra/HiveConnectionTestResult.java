@@ -11,7 +11,9 @@ public record HiveConnectionTestResult(
     long elapsedMillis,
     String engineVersion,
     String driverVersion,
-    List<String> warnings
+    List<String> warnings,
+    String errorType,
+    String suggestion
 ) {
 
     public HiveConnectionTestResult {
@@ -20,12 +22,26 @@ public record HiveConnectionTestResult(
         }
     }
 
+    public HiveConnectionTestResult(
+        boolean success,
+        String message,
+        long elapsedMillis,
+        String engineVersion,
+        String driverVersion,
+        List<String> warnings
+    ) {
+        this(success, message, elapsedMillis, engineVersion, driverVersion, warnings, null, null);
+    }
+
     public static HiveConnectionTestResult success(String message, long elapsedMillis, String engineVersion, String driverVersion, List<String> warnings) {
-        return new HiveConnectionTestResult(true, message, elapsedMillis, engineVersion, driverVersion, warnings);
+        return new HiveConnectionTestResult(true, message, elapsedMillis, engineVersion, driverVersion, warnings, null, null);
     }
 
     public static HiveConnectionTestResult failure(String message, long elapsedMillis) {
-        return new HiveConnectionTestResult(false, message, elapsedMillis, null, null, Collections.emptyList());
+        return failure(message, elapsedMillis, "UNKNOWN", "查看错误摘要并确认网络、驱动、账号和目标库状态。");
+    }
+
+    public static HiveConnectionTestResult failure(String message, long elapsedMillis, String errorType, String suggestion) {
+        return new HiveConnectionTestResult(false, message, elapsedMillis, null, null, Collections.emptyList(), errorType, suggestion);
     }
 }
-

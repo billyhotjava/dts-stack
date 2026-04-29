@@ -1,16 +1,17 @@
 package com.yuzhi.dts.platform.service.workbench;
 
+import com.yuzhi.dts.common.security.SecurityLevelCatalog;
 import java.util.List;
 import java.util.Locale;
 
 /**
  * Maps between the database-level {@code classification} vocabulary
- * ({@code PUBLIC / INTERNAL / SECRET / TOP_SECRET}) and the public-facing
+ * ({@code PUBLIC / INTERNAL / SECRET / CONFIDENTIAL}, with legacy aliases) and the public-facing
  * Sprint-15 API codes ({@code S1 / S2 / S3 / S4}).
  *
  * <p>Mapping table:
  * <pre>
- *   TOP_SECRET -> S1
+ *   CONFIDENTIAL -> S1
  *   SECRET     -> S2
  *   INTERNAL   -> S3
  *   PUBLIC     -> S4
@@ -27,25 +28,37 @@ public final class ClassificationMapper {
         if (dbClassification == null) {
             return null;
         }
-        return switch (dbClassification.trim().toUpperCase(Locale.ROOT)) {
-            case "TOP_SECRET" -> "S1";
-            case "SECRET" -> "S2";
-            case "INTERNAL" -> "S3";
-            case "PUBLIC" -> "S4";
-            default -> dbClassification;
+        SecurityLevelCatalog.DataSecurityLevel level = SecurityLevelCatalog.DataSecurityLevel.parse(dbClassification);
+        if (level == null) {
+            return dbClassification;
+        }
+        return switch (level) {
+            case CONFIDENTIAL -> "S1";
+            case SECRET -> "S2";
+            case INTERNAL -> "S3";
+            case PUBLIC -> "S4";
         };
     }
 
     public static List<String> toDbValues(String apiCode) {
-        if (apiCode == null) {
+        String normalized = normalizeApiCode(apiCode);
+        if (normalized.isEmpty()) {
             return List.of();
         }
-        return switch (apiCode.trim().toUpperCase(Locale.ROOT)) {
-            case "S1" -> List.of("TOP_SECRET");
-            case "S2" -> List.of("SECRET");
-            case "S3" -> List.of("INTERNAL");
-            case "S4" -> List.of("PUBLIC");
-            default -> List.of(apiCode);
+        SecurityLevelCatalog.DataSecurityLevel level = switch (normalized) {
+            case "S1" -> SecurityLevelCatalog.DataSecurityLevel.CONFIDENTIAL;
+            case "S2" -> SecurityLevelCatalog.DataSecurityLevel.SECRET;
+            case "S3" -> SecurityLevelCatalog.DataSecurityLevel.INTERNAL;
+            case "S4" -> SecurityLevelCatalog.DataSecurityLevel.PUBLIC;
+            default -> null;
         };
+        if (level == null) {
+            return List.of(apiCode);
+        }
+        return SecurityLevelCatalog.dataStorageTokens(level);
+    }
+
+    private static String normalizeApiCode(String apiCode) {
+        return apiCode == null ? "" : apiCode.trim().toUpperCase(Locale.ROOT);
     }
 }

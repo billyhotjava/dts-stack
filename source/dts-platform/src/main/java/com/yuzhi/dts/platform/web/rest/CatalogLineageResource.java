@@ -1,12 +1,16 @@
 package com.yuzhi.dts.platform.web.rest;
 
 import com.yuzhi.dts.common.audit.AuditStage;
+import com.yuzhi.dts.platform.domain.catalog.CatalogColumnLineage;
 import com.yuzhi.dts.platform.domain.catalog.CatalogDataset;
 import com.yuzhi.dts.platform.domain.catalog.CatalogDatasetLineage;
+import com.yuzhi.dts.platform.domain.catalog.CatalogLineageJob;
 import com.yuzhi.dts.platform.domain.infra.InfraOdsTableMapping;
 import com.yuzhi.dts.platform.domain.service.InfraDataSource;
+import com.yuzhi.dts.platform.repository.catalog.CatalogColumnLineageRepository;
 import com.yuzhi.dts.platform.repository.catalog.CatalogDatasetLineageRepository;
 import com.yuzhi.dts.platform.repository.catalog.CatalogDatasetRepository;
+import com.yuzhi.dts.platform.repository.catalog.CatalogLineageJobRepository;
 import com.yuzhi.dts.platform.repository.infra.InfraOdsTableMappingRepository;
 import com.yuzhi.dts.platform.repository.service.InfraDataSourceRepository;
 import com.yuzhi.dts.platform.service.audit.AuditService;
@@ -50,6 +54,8 @@ public class CatalogLineageResource {
 
     private final CatalogDatasetRepository datasetRepo;
     private final CatalogDatasetLineageRepository lineageRepo;
+    private final CatalogColumnLineageRepository columnLineageRepo;
+    private final CatalogLineageJobRepository lineageJobRepo;
     private final InfraOdsTableMappingRepository odsMappingRepo;
     private final InfraDataSourceRepository dataSourceRepo;
     private final IngestionLineageWriter ingestionLineageWriter;
@@ -60,6 +66,8 @@ public class CatalogLineageResource {
     public CatalogLineageResource(
         CatalogDatasetRepository datasetRepo,
         CatalogDatasetLineageRepository lineageRepo,
+        CatalogColumnLineageRepository columnLineageRepo,
+        CatalogLineageJobRepository lineageJobRepo,
         InfraOdsTableMappingRepository odsMappingRepo,
         InfraDataSourceRepository dataSourceRepo,
         IngestionLineageWriter ingestionLineageWriter,
@@ -69,6 +77,8 @@ public class CatalogLineageResource {
     ) {
         this.datasetRepo = datasetRepo;
         this.lineageRepo = lineageRepo;
+        this.columnLineageRepo = columnLineageRepo;
+        this.lineageJobRepo = lineageJobRepo;
         this.odsMappingRepo = odsMappingRepo;
         this.dataSourceRepo = dataSourceRepo;
         this.ingestionLineageWriter = ingestionLineageWriter;
@@ -143,6 +153,7 @@ public class CatalogLineageResource {
         @RequestParam(name = "changedWithinHours", required = false) Integer changedWithinHours,
         @RequestParam(name = "sourceId", required = false) UUID sourceId,
         @RequestParam(name = "withJobs", required = false, defaultValue = "false") boolean withJobs,
+        @RequestParam(name = "withColumns", required = false, defaultValue = "false") boolean withColumns,
         @RequestHeader(value = "X-Active-Dept", required = false) String activeDept
     ) {
         CatalogDataset root = datasetRepo.findById(datasetId).orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "dataset not found"));
@@ -254,6 +265,7 @@ public class CatalogLineageResource {
             .filter(Objects::nonNull)
             .toList();
 
+        List<Map<String, Object>> columnLineages = withColumns ? loadColumnLineageDtos(datasetEdges) : List.of();
         List<Map<String, Object>> nodeDtos = filteredNodes.values().stream().map(this::toDatasetNodeDto).toList();
         List<Map<String, Object>> edgeDtos = datasetEdges;
         if (withJobs) {
@@ -311,6 +323,7 @@ public class CatalogLineageResource {
         payload.put("changedWithinHours", normalizeChangedWindow(changedWithinHours));
         payload.put("sourceId", sourceId != null ? sourceId.toString() : null);
         payload.put("withJobs", withJobs);
+        payload.put("withColumns", withColumns);
         payload.put("nodeCount", nodeDtos.size());
         payload.put("edgeCount", edgeDtos.size());
         payload.put(
@@ -325,11 +338,14 @@ public class CatalogLineageResource {
                 "kindNodeCounts",
                 countByString(nodeDtos, "kind"),
                 "changedNodeCount",
-                changedNodeCount
+                changedNodeCount,
+                "columnLineageCount",
+                columnLineages.size()
             )
         );
         payload.put("nodes", nodeDtos);
         payload.put("edges", edgeDtos);
+        payload.put("columnLineages", columnLineages);
         audit.auditAction(
             "CATALOG_LINEAGE_IMPACT_VIEW",
             AuditStage.SUCCESS,
@@ -337,6 +353,46 @@ public class CatalogLineageResource {
             Map.of("summary", "查看影响分析", "direction", dir, "depth", safeDepth)
         );
         return ApiResponses.ok(payload);
+    }
+
+    private List<Map<String, Object>> loadColumnLineageDtos(List<Map<String, Object>> datasetEdges) {
+        if (datasetEdges == null || datasetEdges.isEmpty()) {
+            return List.of();
+        }
+        Set<UUID> edgeIds = datasetEdges
+            .stream()
+            .map(edge -> parseUuid(edge != null ? stringValue(edge.get("id")) : null))
+            .filter(Objects::nonNull)
+            .collect(Collectors.toCollection(LinkedHashSet::new));
+        if (edgeIds.isEmpty()) {
+            return List.of();
+        }
+        return columnLineageRepo
+            .findByDatasetLineageIdIn(edgeIds)
+            .stream()
+            .map(this::toColumnLineageDto)
+            .toList();
+    }
+
+    private Map<String, Object> toColumnLineageDto(CatalogColumnLineage lineage) {
+        Map<String, Object> dto = new LinkedHashMap<>();
+        dto.put("id", lineage.getId() != null ? lineage.getId().toString() : null);
+        dto.put("datasetLineageId", lineage.getDatasetLineageId() != null ? lineage.getDatasetLineageId().toString() : null);
+        dto.put("upstreamDatasetId", lineage.getUpstreamDatasetId() != null ? lineage.getUpstreamDatasetId().toString() : null);
+        dto.put("downstreamDatasetId", lineage.getDownstreamDatasetId() != null ? lineage.getDownstreamDatasetId().toString() : null);
+        dto.put("upstreamColumnId", lineage.getUpstreamColumnId() != null ? lineage.getUpstreamColumnId().toString() : null);
+        dto.put("downstreamColumnId", lineage.getDownstreamColumnId() != null ? lineage.getDownstreamColumnId().toString() : null);
+        dto.put("upstreamColumn", lineage.getUpstreamColumn());
+        dto.put("downstreamColumn", lineage.getDownstreamColumn());
+        dto.put("relationType", lineage.getRelationType());
+        dto.put("lineageType", lineage.getLineageType());
+        dto.put("expression", lineage.getExpression());
+        dto.put("confidence", lineage.getConfidence());
+        dto.put("projectName", lineage.getProjectName());
+        dto.put("lineageJobId", lineage.getLineageJobId() != null ? lineage.getLineageJobId().toString() : null);
+        dto.put("lastObservedAt", lineage.getLastObservedAt());
+        dto.put("lastModifiedAt", lineage.getLastModifiedDate());
+        return dto;
     }
 
     private GraphExpansion expandWithVirtualJobs(
@@ -355,6 +411,7 @@ public class CatalogLineageResource {
                 nodes.put(id, node);
             }
         }
+        Map<UUID, CatalogLineageJob> jobsById = loadLineageJobs(datasetEdges);
         for (Map<String, Object> edge : datasetEdges) {
             String upstreamId = stringValue(edge.get("upstreamDatasetId"));
             String downstreamId = stringValue(edge.get("downstreamDatasetId"));
@@ -362,9 +419,16 @@ public class CatalogLineageResource {
                 continue;
             }
             String relationType = stringValue(edge.get("relationType"));
-            String jobType = jobTypeForRelation(relationType);
-            String jobId = "job:" + normalizedRelation(relationType) + ":" + downstreamId;
-            nodes.putIfAbsent(jobId, buildJobNode(jobId, edge, jobType, relationType));
+            CatalogLineageJob persistedJob = resolveLineageJob(edge, jobsById);
+            String jobId;
+            if (persistedJob != null) {
+                jobId = "job:" + persistedJob.getId();
+                nodes.putIfAbsent(jobId, buildPersistedJobNode(jobId, persistedJob));
+            } else {
+                String jobType = jobTypeForRelation(relationType);
+                jobId = "job:" + normalizedRelation(relationType) + ":" + downstreamId;
+                nodes.putIfAbsent(jobId, buildJobNode(jobId, edge, jobType, relationType));
+            }
             edges.add(buildVirtualEdge(edge, upstreamId, jobId, "DATASET_TO_JOB"));
             edges.add(buildVirtualEdge(edge, jobId, downstreamId, "JOB_TO_DATASET"));
         }
@@ -372,6 +436,30 @@ public class CatalogLineageResource {
             addOdsIngestionNodes(nodes, edges, datasets, sourceId, effDept);
         }
         return new GraphExpansion(List.copyOf(nodes.values()), edges);
+    }
+
+    private Map<UUID, CatalogLineageJob> loadLineageJobs(List<Map<String, Object>> datasetEdges) {
+        if (datasetEdges == null || datasetEdges.isEmpty()) {
+            return Map.of();
+        }
+        Set<UUID> ids = datasetEdges
+            .stream()
+            .map(edge -> parseUuid(edge != null ? stringValue(edge.get("lineageJobId")) : null))
+            .filter(Objects::nonNull)
+            .collect(Collectors.toCollection(LinkedHashSet::new));
+        if (ids.isEmpty()) {
+            return Map.of();
+        }
+        return lineageJobRepo
+            .findByIdIn(ids)
+            .stream()
+            .filter(job -> job.getId() != null)
+            .collect(Collectors.toMap(CatalogLineageJob::getId, job -> job, (a, b) -> a, LinkedHashMap::new));
+    }
+
+    private CatalogLineageJob resolveLineageJob(Map<String, Object> edge, Map<UUID, CatalogLineageJob> jobsById) {
+        UUID jobId = parseUuid(edge != null ? stringValue(edge.get("lineageJobId")) : null);
+        return jobId != null && jobsById != null ? jobsById.get(jobId) : null;
     }
 
     private void addOdsIngestionNodes(
@@ -436,9 +524,11 @@ public class CatalogLineageResource {
                 }
                 String sourceNodeId = "source:" + (mapping.getConnectionId() != null ? mapping.getConnectionId() : "unknown") + ":" +
                     safeNodePart(mapping.getStreamNamespace()) + ":" + safeNodePart(mapping.getStreamName());
-                String jobNodeId = "job:ADDAX:" + mapping.getId();
+                CatalogLineageJob persistedJob = findAddaxLineageJob(mapping);
+                String jobNodeId = persistedJob != null ? "job:" + persistedJob.getId() : "job:ADDAX:" + mapping.getId();
+                Map<String, Object> jobEdgeBase = persistedJob != null ? jobEdgeBase(persistedJob) : Map.of();
                 nodes.putIfAbsent(sourceNodeId, buildSourceNode(sourceNodeId, mapping, source));
-                nodes.putIfAbsent(jobNodeId, buildAddaxJobNode(jobNodeId, mapping, source));
+                nodes.putIfAbsent(jobNodeId, persistedJob != null ? buildPersistedJobNode(jobNodeId, persistedJob) : buildAddaxJobNode(jobNodeId, mapping, source));
                 edges.add(buildSyntheticEdge(
                     "edge:" + sourceNodeId + ":" + jobNodeId,
                     sourceNodeId,
@@ -446,7 +536,8 @@ public class CatalogLineageResource {
                     "SOURCE_TO_JOB",
                     "ADDAX",
                     sourceLabel(mapping, source),
-                    mappingLabel(mapping)
+                    mappingLabel(mapping),
+                    jobEdgeBase
                 ));
                 edges.add(buildSyntheticEdge(
                     "edge:" + jobNodeId + ":" + datasetId,
@@ -455,7 +546,8 @@ public class CatalogLineageResource {
                     "JOB_TO_DATASET",
                     "ADDAX",
                     mappingLabel(mapping),
-                    dataset.getName()
+                    dataset.getName(),
+                    jobEdgeBase
                 ));
             }
         }
@@ -489,6 +581,29 @@ public class CatalogLineageResource {
         node.put("projectName", edge.get("projectName"));
         node.put("layer", "JOB");
         node.put("lastModifiedAt", edge.get("lastModifiedAt"));
+        return node;
+    }
+
+    private Map<String, Object> buildPersistedJobNode(String nodeId, CatalogLineageJob job) {
+        Map<String, Object> node = new LinkedHashMap<>();
+        node.put("kind", "job");
+        node.put("id", nodeId);
+        node.put("lineageJobId", job.getId() != null ? job.getId().toString() : null);
+        node.put("jobKey", job.getJobKey());
+        node.put("name", job.getName());
+        node.put("jobType", job.getJobType());
+        node.put("engine", job.getEngine());
+        node.put("relationType", job.getRelationType());
+        node.put("projectName", job.getProjectName());
+        node.put("layer", "JOB");
+        node.put("sourceId", job.getSourceId() != null ? job.getSourceId().toString() : null);
+        node.put("ownerDept", job.getOwnerDept());
+        node.put("status", job.getStatus());
+        node.put("lastExecutionId", job.getLastExecutionId());
+        node.put("lastExecutionStatus", job.getLastExecutionStatus());
+        node.put("lastObservedAt", job.getLastObservedAt());
+        node.put("lastVerifiedAt", job.getLastVerifiedAt());
+        node.put("lastModifiedAt", job.getLastModifiedDate());
         return node;
     }
 
@@ -566,6 +681,7 @@ public class CatalogLineageResource {
         edge.put("fromId", fromId);
         edge.put("toId", toId);
         edge.put("relationType", relationType);
+        edge.put("lineageJobId", base.get("lineageJobId"));
         edge.put("upstreamDatasetId", fromId);
         edge.put("downstreamDatasetId", toId);
         edge.put("upstreamName", upstreamName);
@@ -677,11 +793,54 @@ public class CatalogLineageResource {
         return source + " -> " + target;
     }
 
+    private CatalogLineageJob findAddaxLineageJob(InfraOdsTableMapping mapping) {
+        String jobKey = addaxJobKey(mapping);
+        return StringUtils.hasText(jobKey) ? lineageJobRepo.findByJobKey(jobKey).orElse(null) : null;
+    }
+
+    private Map<String, Object> jobEdgeBase(CatalogLineageJob job) {
+        if (job == null) {
+            return Map.of();
+        }
+        Map<String, Object> data = new LinkedHashMap<>();
+        data.put("lineageJobId", job.getId() != null ? job.getId().toString() : null);
+        data.put("projectName", job.getProjectName());
+        data.put("lastExecutionId", job.getLastExecutionId());
+        data.put("lastExecutionStatus", job.getLastExecutionStatus());
+        data.put("lastObservedAt", job.getLastObservedAt());
+        data.put("lastVerifiedAt", job.getLastVerifiedAt());
+        data.put("lastModifiedAt", job.getLastModifiedDate());
+        return data;
+    }
+
+    private String addaxJobKey(InfraOdsTableMapping mapping) {
+        if (mapping == null) {
+            return null;
+        }
+        if (mapping.getId() != null) {
+            return "ADDAX:" + mapping.getId();
+        }
+        return truncate(
+            "ADDAX:" +
+            safeNodePart(mapping.getConnectionId() != null ? mapping.getConnectionId().toString() : "unknown") + ":" +
+            safeNodePart(tableKey(mapping.getStreamNamespace(), mapping.getStreamName())) + "->" +
+            safeNodePart(tableKey(mapping.getOdsSchema(), mapping.getOdsTable())),
+            256
+        );
+    }
+
     private String safeNodePart(String value) {
         if (!StringUtils.hasText(value)) {
             return "_";
         }
         return value.trim().replaceAll("[^A-Za-z0-9_.-]", "_");
+    }
+
+    private String truncate(String value, int maxLength) {
+        if (value == null || value.length() <= maxLength) {
+            return value;
+        }
+        return value.substring(0, Math.max(0, maxLength));
     }
 
     private String defaultString(Object value, String fallback) {
@@ -695,6 +854,17 @@ public class CatalogLineageResource {
         }
         String text = String.valueOf(value).trim();
         return text.isEmpty() ? null : text;
+    }
+
+    private UUID parseUuid(String value) {
+        if (!StringUtils.hasText(value)) {
+            return null;
+        }
+        try {
+            return UUID.fromString(value.trim());
+        } catch (RuntimeException ex) {
+            return null;
+        }
     }
 
     private Map<String, Object> payloadMap(Object value) {
@@ -876,6 +1046,7 @@ public class CatalogLineageResource {
         dto.put("downstreamAssetType", link.getDownstreamAssetType());
         dto.put("direction", link.getDirection());
         dto.put("projectName", link.getProjectName());
+        dto.put("lineageJobId", link.getLineageJobId() != null ? link.getLineageJobId().toString() : null);
         dto.put("verificationStatus", link.getVerificationStatus());
         dto.put("lastExecutionId", link.getLastExecutionId());
         dto.put("lastExecutionStatus", link.getLastExecutionStatus());

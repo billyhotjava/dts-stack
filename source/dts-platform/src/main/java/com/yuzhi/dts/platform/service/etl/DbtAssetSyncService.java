@@ -4,12 +4,18 @@ import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.yuzhi.dts.common.audit.AuditStage;
 import com.yuzhi.dts.platform.config.DbtProperties;
+import com.yuzhi.dts.platform.domain.catalog.CatalogColumnLineage;
+import com.yuzhi.dts.platform.domain.catalog.CatalogColumnSchema;
 import com.yuzhi.dts.platform.domain.catalog.CatalogDataset;
 import com.yuzhi.dts.platform.domain.catalog.CatalogDatasetLineage;
+import com.yuzhi.dts.platform.domain.catalog.CatalogLineageJob;
 import com.yuzhi.dts.platform.domain.catalog.CatalogTableSchema;
 import com.yuzhi.dts.platform.domain.infra.InfraOdsTableMapping;
+import com.yuzhi.dts.platform.repository.catalog.CatalogColumnLineageRepository;
+import com.yuzhi.dts.platform.repository.catalog.CatalogColumnSchemaRepository;
 import com.yuzhi.dts.platform.repository.catalog.CatalogDatasetLineageRepository;
 import com.yuzhi.dts.platform.repository.catalog.CatalogDatasetRepository;
+import com.yuzhi.dts.platform.repository.catalog.CatalogLineageJobRepository;
 import com.yuzhi.dts.platform.repository.catalog.CatalogTableSchemaRepository;
 import com.yuzhi.dts.platform.repository.infra.InfraOdsTableMappingRepository;
 import com.yuzhi.dts.platform.service.audit.AuditService;
@@ -18,13 +24,16 @@ import com.yuzhi.dts.platform.service.catalog.CatalogColumnSyncService.ColumnSpe
 import java.io.File;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -41,7 +50,10 @@ public class DbtAssetSyncService {
     private final DbtConfigService configService;
     private final CatalogDatasetRepository datasetRepository;
     private final CatalogDatasetLineageRepository lineageRepository;
+    private final CatalogColumnLineageRepository columnLineageRepository;
+    private final CatalogLineageJobRepository lineageJobRepository;
     private final CatalogTableSchemaRepository tableRepository;
+    private final CatalogColumnSchemaRepository columnRepository;
     private final CatalogColumnSyncService columnSyncService;
     private final InfraOdsTableMappingRepository mappingRepository;
     private final AuditService auditService;
@@ -52,7 +64,10 @@ public class DbtAssetSyncService {
         DbtConfigService configService,
         CatalogDatasetRepository datasetRepository,
         CatalogDatasetLineageRepository lineageRepository,
+        CatalogColumnLineageRepository columnLineageRepository,
+        CatalogLineageJobRepository lineageJobRepository,
         CatalogTableSchemaRepository tableRepository,
+        CatalogColumnSchemaRepository columnRepository,
         CatalogColumnSyncService columnSyncService,
         InfraOdsTableMappingRepository mappingRepository,
         AuditService auditService
@@ -62,7 +77,10 @@ public class DbtAssetSyncService {
         this.configService = configService;
         this.datasetRepository = datasetRepository;
         this.lineageRepository = lineageRepository;
+        this.columnLineageRepository = columnLineageRepository;
+        this.lineageJobRepository = lineageJobRepository;
         this.tableRepository = tableRepository;
+        this.columnRepository = columnRepository;
         this.columnSyncService = columnSyncService;
         this.mappingRepository = mappingRepository;
         this.auditService = auditService;
@@ -155,6 +173,10 @@ public class DbtAssetSyncService {
             stats.lineageCreated = lineageStats.created();
             stats.lineageRemoved = lineageStats.removed();
             stats.columnsUpdated = syncColumnsForModels(modelNodes, tableByUniqueId, projectDir);
+            ColumnLineageSyncStats columnLineageStats = syncColumnLineage(modelNodes, datasetByUniqueId, tableByUniqueId);
+            stats.columnLineageCreated = columnLineageStats.created();
+            stats.columnLineageUpdated = columnLineageStats.updated();
+            stats.columnLineageRemoved = columnLineageStats.removed();
             auditService.auditAction(
                 "DBT_MODEL_SYNC",
                 AuditStage.SUCCESS,
@@ -171,7 +193,13 @@ public class DbtAssetSyncService {
                     "lineageRemoved",
                     stats.lineageRemoved,
                     "columnsUpdated",
-                    stats.columnsUpdated
+                    stats.columnsUpdated,
+                    "columnLineageCreated",
+                    stats.columnLineageCreated,
+                    "columnLineageUpdated",
+                    stats.columnLineageUpdated,
+                    "columnLineageRemoved",
+                    stats.columnLineageRemoved
                 )
             );
             return DbtAssetSyncResult.success(stats, manifestPath.toString());
@@ -225,6 +253,7 @@ public class DbtAssetSyncService {
                     desired.add(upstream);
                 }
             }
+            CatalogLineageJob lineageJob = upsertDbtJob(model);
             List<CatalogDatasetLineage> existing =
                 lineageRepository.findByDownstreamDatasetIdAndRelationTypeIgnoreCase(downstream, "DBT");
             for (CatalogDatasetLineage link : existing) {
@@ -241,6 +270,12 @@ public class DbtAssetSyncService {
                 Optional<CatalogDatasetLineage> present =
                     lineageRepository.findFirstByUpstreamDatasetIdAndDownstreamDatasetId(upstream, downstream);
                 if (present.isPresent()) {
+                    CatalogDatasetLineage link = present.orElseThrow();
+                    if ("DBT".equalsIgnoreCase(link.getRelationType()) && lineageJob != null && !lineageJob.getId().equals(link.getLineageJobId())) {
+                        link.setLineageJobId(lineageJob.getId());
+                        link.setProjectName(resolveDbtProjectName(model.uniqueId));
+                        lineageRepository.save(link);
+                    }
                     continue;
                 }
                 CatalogDatasetLineage link = new CatalogDatasetLineage();
@@ -251,11 +286,434 @@ public class DbtAssetSyncService {
                 link.setDownstreamAssetType("MODEL");
                 link.setDirection("FORWARD");
                 link.setProjectName(resolveDbtProjectName(model.uniqueId));
+                if (lineageJob != null) {
+                    link.setLineageJobId(lineageJob.getId());
+                }
                 lineageRepository.save(link);
                 created++;
             }
         }
         return new LineageSyncStats(created, removed);
+    }
+
+    private ColumnLineageSyncStats syncColumnLineage(
+        Map<String, ModelMeta> modelNodes,
+        Map<String, UUID> datasetByUniqueId,
+        Map<String, CatalogTableSchema> tableByUniqueId
+    ) {
+        if (modelNodes == null || modelNodes.isEmpty()) {
+            return new ColumnLineageSyncStats(0, 0, 0);
+        }
+        int created = 0;
+        int updated = 0;
+        int removed = 0;
+        Instant observedAt = Instant.now();
+        for (ModelMeta model : modelNodes.values()) {
+            UUID downstream = datasetByUniqueId.get(model.uniqueId);
+            CatalogTableSchema downstreamTable = tableByUniqueId.get(model.uniqueId);
+            if (downstream == null || downstreamTable == null) {
+                continue;
+            }
+            Map<String, CatalogColumnSchema> downstreamColumns = columnsByName(columnRepository.findByTable(downstreamTable));
+            if (downstreamColumns.isEmpty()) {
+                continue;
+            }
+            Map<String, String> expressionsByAlias = selectExpressionsByAlias(model.compiledCode);
+            Map<String, CatalogColumnLineage> existing = existingColumnLineageByKey(downstream);
+            Set<String> desiredKeys = new LinkedHashSet<>();
+            for (String upstreamUniqueId : model.dependsOn) {
+                UUID upstream = datasetByUniqueId.get(upstreamUniqueId);
+                CatalogTableSchema upstreamTable = tableByUniqueId.get(upstreamUniqueId);
+                if (upstream == null || upstreamTable == null) {
+                    continue;
+                }
+                CatalogDatasetLineage tableLineage = lineageRepository
+                    .findFirstByUpstreamDatasetIdAndDownstreamDatasetId(upstream, downstream)
+                    .filter(link -> "DBT".equalsIgnoreCase(link.getRelationType()))
+                    .orElse(null);
+                if (tableLineage == null || tableLineage.getId() == null) {
+                    continue;
+                }
+                Map<String, CatalogColumnSchema> upstreamColumns = columnsByName(columnRepository.findByTable(upstreamTable));
+                if (upstreamColumns.isEmpty()) {
+                    continue;
+                }
+                for (Map.Entry<String, CatalogColumnSchema> downstreamEntry : downstreamColumns.entrySet()) {
+                    CatalogColumnSchema downstreamColumn = downstreamEntry.getValue();
+                    String expression = expressionsByAlias.get(downstreamEntry.getKey());
+                    Set<String> matchedUpstreamColumns = new LinkedHashSet<>();
+                    if (StringUtils.hasText(expression)) {
+                        for (CatalogColumnSchema upstreamColumn : upstreamColumns.values()) {
+                            if (!expressionReferencesColumn(expression, upstreamColumn.getName())) {
+                                continue;
+                            }
+                            matchedUpstreamColumns.add(normalizeColumnName(upstreamColumn.getName()));
+                            boolean isNew = writeColumnLineage(
+                                existing,
+                                desiredKeys,
+                                tableLineage,
+                                upstream,
+                                downstream,
+                                upstreamColumn,
+                                downstreamColumn,
+                                resolveDbtProjectName(model.uniqueId),
+                                "SQL_EXPRESSION",
+                                expression,
+                                "PARSED",
+                                observedAt
+                            );
+                            if (isNew) {
+                                created++;
+                            } else {
+                                updated++;
+                            }
+                        }
+                    }
+                    CatalogColumnSchema sameNameUpstreamColumn = upstreamColumns.get(downstreamEntry.getKey());
+                    if (sameNameUpstreamColumn == null || matchedUpstreamColumns.contains(normalizeColumnName(sameNameUpstreamColumn.getName()))) {
+                        continue;
+                    }
+                    boolean isNew = writeColumnLineage(
+                        existing,
+                        desiredKeys,
+                        tableLineage,
+                        upstream,
+                        downstream,
+                        sameNameUpstreamColumn,
+                        downstreamColumn,
+                        resolveDbtProjectName(model.uniqueId),
+                        "SAME_NAME",
+                        "same-name projection: " + sameNameUpstreamColumn.getName(),
+                        "INFERRED",
+                        observedAt
+                    );
+                    if (isNew) {
+                        created++;
+                    } else {
+                        updated++;
+                    }
+                }
+            }
+            for (Map.Entry<String, CatalogColumnLineage> entry : existing.entrySet()) {
+                if (!desiredKeys.contains(entry.getKey())) {
+                    columnLineageRepository.delete(entry.getValue());
+                    removed++;
+                }
+            }
+        }
+        return new ColumnLineageSyncStats(created, updated, removed);
+    }
+
+    private boolean writeColumnLineage(
+        Map<String, CatalogColumnLineage> existing,
+        Set<String> desiredKeys,
+        CatalogDatasetLineage tableLineage,
+        UUID upstream,
+        UUID downstream,
+        CatalogColumnSchema upstreamColumn,
+        CatalogColumnSchema downstreamColumn,
+        String projectName,
+        String lineageType,
+        String expression,
+        String confidence,
+        Instant observedAt
+    ) {
+        String key = columnLineageKey(upstream, downstream, upstreamColumn.getName(), downstreamColumn.getName());
+        desiredKeys.add(key);
+        CatalogColumnLineage columnLineage = existing.get(key);
+        boolean isNew = columnLineage == null;
+        if (isNew) {
+            columnLineage = new CatalogColumnLineage();
+        }
+        columnLineage.setDatasetLineageId(tableLineage.getId());
+        columnLineage.setUpstreamDatasetId(upstream);
+        columnLineage.setDownstreamDatasetId(downstream);
+        columnLineage.setUpstreamColumnId(upstreamColumn.getId());
+        columnLineage.setDownstreamColumnId(downstreamColumn.getId());
+        columnLineage.setUpstreamColumn(upstreamColumn.getName());
+        columnLineage.setDownstreamColumn(downstreamColumn.getName());
+        columnLineage.setRelationType("DBT");
+        columnLineage.setLineageType(lineageType);
+        columnLineage.setExpression(expression);
+        columnLineage.setConfidence(confidence);
+        columnLineage.setProjectName(projectName);
+        columnLineage.setLineageJobId(tableLineage.getLineageJobId());
+        columnLineage.setLastObservedAt(observedAt);
+        columnLineageRepository.save(columnLineage);
+        return isNew;
+    }
+
+    private Map<String, CatalogColumnLineage> existingColumnLineageByKey(UUID downstream) {
+        Map<String, CatalogColumnLineage> result = new LinkedHashMap<>();
+        if (downstream == null) {
+            return result;
+        }
+        for (CatalogColumnLineage lineage : columnLineageRepository.findByDownstreamDatasetIdAndRelationTypeIgnoreCase(downstream, "DBT")) {
+            if (lineage == null) {
+                continue;
+            }
+            String key = columnLineageKey(
+                lineage.getUpstreamDatasetId(),
+                lineage.getDownstreamDatasetId(),
+                lineage.getUpstreamColumn(),
+                lineage.getDownstreamColumn()
+            );
+            if (StringUtils.hasText(key)) {
+                result.putIfAbsent(key, lineage);
+            }
+        }
+        return result;
+    }
+
+    private Map<String, CatalogColumnSchema> columnsByName(List<CatalogColumnSchema> columns) {
+        Map<String, CatalogColumnSchema> result = new LinkedHashMap<>();
+        if (columns == null || columns.isEmpty()) {
+            return result;
+        }
+        for (CatalogColumnSchema column : columns) {
+            String key = normalizeColumnName(column != null ? column.getName() : null);
+            if (StringUtils.hasText(key)) {
+                result.putIfAbsent(key, column);
+            }
+        }
+        return result;
+    }
+
+    private String columnLineageKey(UUID upstreamDatasetId, UUID downstreamDatasetId, String upstreamColumn, String downstreamColumn) {
+        String upstream = normalizeColumnName(upstreamColumn);
+        String downstream = normalizeColumnName(downstreamColumn);
+        if (upstreamDatasetId == null || downstreamDatasetId == null || !StringUtils.hasText(upstream) || !StringUtils.hasText(downstream)) {
+            return null;
+        }
+        return upstreamDatasetId + ">" + downstreamDatasetId + ":" + upstream + ">" + downstream;
+    }
+
+    private String normalizeColumnName(String value) {
+        if (!StringUtils.hasText(value)) {
+            return null;
+        }
+        return value.trim().toLowerCase(Locale.ROOT);
+    }
+
+    private Map<String, String> selectExpressionsByAlias(String sql) {
+        if (!StringUtils.hasText(sql)) {
+            return Map.of();
+        }
+        String selectClause = extractTopLevelSelectClause(sql);
+        if (!StringUtils.hasText(selectClause)) {
+            return Map.of();
+        }
+        Map<String, String> result = new LinkedHashMap<>();
+        for (String expression : splitTopLevel(selectClause, ',')) {
+            String trimmed = trimToNull(expression);
+            if (trimmed == null) {
+                continue;
+            }
+            String alias = resolveSelectAlias(trimmed);
+            String key = normalizeColumnName(alias);
+            if (StringUtils.hasText(key)) {
+                result.putIfAbsent(key, trimmed);
+            }
+        }
+        return result;
+    }
+
+    private String extractTopLevelSelectClause(String sql) {
+        String normalized = stripSqlComments(sql);
+        int selectStart = findTopLevelKeyword(normalized, "select", 0);
+        if (selectStart < 0) {
+            return null;
+        }
+        int fromStart = findTopLevelKeyword(normalized, "from", selectStart + "select".length());
+        if (fromStart < 0 || fromStart <= selectStart) {
+            return null;
+        }
+        return normalized.substring(selectStart + "select".length(), fromStart);
+    }
+
+    private int findTopLevelKeyword(String sql, String keyword, int startIndex) {
+        if (!StringUtils.hasText(sql) || !StringUtils.hasText(keyword)) {
+            return -1;
+        }
+        String lowerKeyword = keyword.toLowerCase(Locale.ROOT);
+        int depth = 0;
+        char quote = 0;
+        for (int index = Math.max(0, startIndex); index <= sql.length() - keyword.length(); index++) {
+            char ch = sql.charAt(index);
+            if (quote != 0) {
+                if (ch == quote) {
+                    quote = 0;
+                }
+                continue;
+            }
+            if (ch == '\'' || ch == '"' || ch == '`') {
+                quote = ch;
+                continue;
+            }
+            if (ch == '(') {
+                depth++;
+                continue;
+            }
+            if (ch == ')' && depth > 0) {
+                depth--;
+                continue;
+            }
+            if (depth != 0) {
+                continue;
+            }
+            if (sql.regionMatches(true, index, lowerKeyword, 0, lowerKeyword.length()) && isKeywordBoundary(sql, index, lowerKeyword.length())) {
+                return index;
+            }
+        }
+        return -1;
+    }
+
+    private boolean isKeywordBoundary(String text, int start, int length) {
+        char before = start > 0 ? text.charAt(start - 1) : ' ';
+        char after = start + length < text.length() ? text.charAt(start + length) : ' ';
+        return !isIdentifierChar(before) && !isIdentifierChar(after);
+    }
+
+    private List<String> splitTopLevel(String text, char delimiter) {
+        if (!StringUtils.hasText(text)) {
+            return List.of();
+        }
+        List<String> parts = new ArrayList<>();
+        int depth = 0;
+        char quote = 0;
+        int start = 0;
+        for (int index = 0; index < text.length(); index++) {
+            char ch = text.charAt(index);
+            if (quote != 0) {
+                if (ch == quote) {
+                    quote = 0;
+                }
+                continue;
+            }
+            if (ch == '\'' || ch == '"' || ch == '`') {
+                quote = ch;
+                continue;
+            }
+            if (ch == '(') {
+                depth++;
+                continue;
+            }
+            if (ch == ')' && depth > 0) {
+                depth--;
+                continue;
+            }
+            if (ch == delimiter && depth == 0) {
+                parts.add(text.substring(start, index));
+                start = index + 1;
+            }
+        }
+        parts.add(text.substring(start));
+        return parts;
+    }
+
+    private String resolveSelectAlias(String expression) {
+        String trimmed = trimToNull(expression);
+        if (trimmed == null) {
+            return null;
+        }
+        java.util.regex.Matcher asMatcher = java.util.regex.Pattern
+            .compile("(?is)\\s+as\\s+([\"`\\[]?[A-Za-z_][A-Za-z0-9_]*[\"`\\]]?)\\s*$")
+            .matcher(trimmed);
+        if (asMatcher.find()) {
+            return unquoteIdentifier(asMatcher.group(1));
+        }
+        List<String> tokens = splitTopLevel(trimmed, ' ');
+        for (int index = tokens.size() - 1; index >= 0; index--) {
+            String token = trimToNull(tokens.get(index));
+            if (token == null) {
+                continue;
+            }
+            String alias = unquoteIdentifier(token);
+            if (alias != null && alias.matches("[A-Za-z_][A-Za-z0-9_]*") && !isSqlKeyword(alias)) {
+                return alias;
+            }
+            break;
+        }
+        String simpleColumn = trimmed.replace("\"", "").replace("`", "");
+        int dot = simpleColumn.lastIndexOf('.');
+        if (dot >= 0 && dot + 1 < simpleColumn.length()) {
+            simpleColumn = simpleColumn.substring(dot + 1);
+        }
+        simpleColumn = trimToNull(simpleColumn);
+        return simpleColumn != null && simpleColumn.matches("[A-Za-z_][A-Za-z0-9_]*") ? simpleColumn : null;
+    }
+
+    private boolean expressionReferencesColumn(String expression, String columnName) {
+        String column = trimToNull(columnName);
+        if (!StringUtils.hasText(expression) || column == null) {
+            return false;
+        }
+        String pattern = "(?i)(^|[^A-Za-z0-9_])([\"`\\[]?)" + java.util.regex.Pattern.quote(column) + "([\"`\\]]?)([^A-Za-z0-9_]|$)";
+        return java.util.regex.Pattern.compile(pattern).matcher(expression).find();
+    }
+
+    private String stripSqlComments(String sql) {
+        if (!StringUtils.hasText(sql)) {
+            return sql;
+        }
+        return sql.replaceAll("(?m)--.*?$", " ").replaceAll("(?s)/\\*.*?\\*/", " ");
+    }
+
+    private String trimToNull(String value) {
+        if (!StringUtils.hasText(value)) {
+            return null;
+        }
+        String trimmed = value.trim();
+        return trimmed.isEmpty() ? null : trimmed;
+    }
+
+    private String unquoteIdentifier(String value) {
+        String text = trimToNull(value);
+        if (text == null) {
+            return null;
+        }
+        if ((text.startsWith("\"") && text.endsWith("\"")) || (text.startsWith("`") && text.endsWith("`"))) {
+            return text.substring(1, text.length() - 1);
+        }
+        if (text.startsWith("[") && text.endsWith("]")) {
+            return text.substring(1, text.length() - 1);
+        }
+        return text;
+    }
+
+    private boolean isIdentifierChar(char ch) {
+        return Character.isLetterOrDigit(ch) || ch == '_';
+    }
+
+    private boolean isSqlKeyword(String value) {
+        if (!StringUtils.hasText(value)) {
+            return false;
+        }
+        return switch (value.trim().toUpperCase(Locale.ROOT)) {
+            case "CASE", "WHEN", "THEN", "ELSE", "END", "NULL", "TRUE", "FALSE", "FROM", "WHERE", "GROUP", "ORDER" -> true;
+            default -> false;
+        };
+    }
+
+    private CatalogLineageJob upsertDbtJob(ModelMeta model) {
+        if (model == null || !StringUtils.hasText(model.uniqueId)) {
+            return null;
+        }
+        String jobKey = truncate("DBT:" + model.uniqueId.trim(), 256);
+        CatalogLineageJob job = lineageJobRepository.findByJobKey(jobKey).orElseGet(CatalogLineageJob::new);
+        job.setJobKey(jobKey);
+        job.setName(truncate(defaultIfBlank(model.table, model.uniqueId), 256));
+        job.setJobType("DBT_MODEL");
+        job.setEngine("DBT");
+        job.setRelationType("DBT");
+        job.setProjectName(resolveDbtProjectName(model.uniqueId));
+        job.setExternalId(truncate(model.uniqueId, 256));
+        if (!StringUtils.hasText(job.getStatus())) {
+            job.setStatus("declared");
+        }
+        job.setLastObservedAt(Instant.now());
+        job.setDetailPayload(buildDbtJobDetail(model));
+        return lineageJobRepository.save(job);
     }
 
     private CatalogDataset upsertDataset(NodeMeta meta, DbtConfigService.DbtConfigView view, String layer, SyncStats stats) {
@@ -394,6 +852,18 @@ public class DbtAssetSyncService {
         return StringUtils.hasText(project) ? project : null;
     }
 
+    private String buildDbtJobDetail(ModelMeta model) {
+        Map<String, Object> data = new LinkedHashMap<>();
+        data.put("engine", "DBT");
+        data.put("uniqueId", model.uniqueId);
+        data.put("database", model.database);
+        data.put("schema", model.schema);
+        data.put("table", model.table);
+        data.put("originalFilePath", model.originalFilePath);
+        data.values().removeIf(value -> value == null || !StringUtils.hasText(String.valueOf(value)));
+        return data.toString();
+    }
+
     private String resolveDatasetType(DbtConfigService.DbtConfigView view) {
         if (view != null && view.target() != null && StringUtils.hasText(view.target().type())) {
             return view.target().type().toUpperCase(Locale.ROOT);
@@ -411,7 +881,8 @@ public class DbtAssetSyncService {
         String description = text(node.get("description"));
         Map<String, Object> columns = asMap(node.get("columns"));
         String filePath = text(node.get("original_file_path"));
-        return new ModelMeta(uniqueId, database, schema, table, dependsOn, description, columns, filePath);
+        String compiledCode = defaultIfBlank(text(node.get("compiled_code")), defaultIfBlank(text(node.get("compiled_sql")), text(node.get("raw_code"))));
+        return new ModelMeta(uniqueId, database, schema, table, dependsOn, description, columns, filePath, compiledCode);
     }
 
     private NodeMeta toNodeMeta(String uniqueId, Map<String, Object> node) {
@@ -474,6 +945,13 @@ public class DbtAssetSyncService {
         return fallback;
     }
 
+    private String truncate(String value, int maxLength) {
+        if (value == null || value.length() <= maxLength) {
+            return value;
+        }
+        return value.substring(0, Math.max(0, maxLength));
+    }
+
     private String inferLayer(String table) {
         if (!StringUtils.hasText(table)) {
             return null;
@@ -497,6 +975,9 @@ public class DbtAssetSyncService {
         int lineageRemoved = 0;
         int odsUpdated = 0;
         int columnsUpdated = 0;
+        int columnLineageCreated = 0;
+        int columnLineageUpdated = 0;
+        int columnLineageRemoved = 0;
 
         public int getCreated() {
             return created;
@@ -520,6 +1001,18 @@ public class DbtAssetSyncService {
 
         public int getColumnsUpdated() {
             return columnsUpdated;
+        }
+
+        public int getColumnLineageCreated() {
+            return columnLineageCreated;
+        }
+
+        public int getColumnLineageUpdated() {
+            return columnLineageUpdated;
+        }
+
+        public int getColumnLineageRemoved() {
+            return columnLineageRemoved;
         }
     }
 
@@ -555,8 +1048,11 @@ public class DbtAssetSyncService {
         List<String> dependsOn,
         String description,
         Map<String, Object> columns,
-        String originalFilePath
+        String originalFilePath,
+        String compiledCode
     ) {}
 
     private record LineageSyncStats(int created, int removed) {}
+
+    private record ColumnLineageSyncStats(int created, int updated, int removed) {}
 }

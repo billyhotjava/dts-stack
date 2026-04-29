@@ -7,6 +7,7 @@ import com.yuzhi.dts.admin.config.MdmGatewayProperties;
 import com.yuzhi.dts.admin.service.dto.keycloak.KeycloakGroupDTO;
 import com.yuzhi.dts.admin.service.keycloak.KeycloakAdminClient;
 import com.yuzhi.dts.admin.service.keycloak.KeycloakAuthService;
+import com.yuzhi.dts.common.security.SecurityLevelCatalog;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -713,7 +714,7 @@ public class OrganizationService {
         if (StringUtils.isBlank(value)) {
             return null;
         }
-        return value.trim().toUpperCase(Locale.ROOT).replace('-', '_');
+        return SecurityLevelCatalog.normalizePrefixedDataCode(value);
     }
 
     private void markProvisioningHealthy() {

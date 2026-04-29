@@ -31,7 +31,7 @@ public class CatalogDataset extends AbstractAuditingEntity<UUID> implements Seri
     private UUID sourceId;
 
     @Column(name = "classification", length = 32)
-    private String classification; // PUBLIC/INTERNAL/SECRET/CONFIDENTIAL
+    private String classification; // canonical data classification code from SecurityLevelCatalog
 
     @Column(name = "owner_dept", length = 64)
     private String ownerDept; // owning department code
