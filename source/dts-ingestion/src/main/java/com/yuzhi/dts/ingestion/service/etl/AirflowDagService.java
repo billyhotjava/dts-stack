@@ -393,9 +393,10 @@ public class AirflowDagService {
             if (StringUtils.hasText(createTableDdl)) {
                 FileSourceDbInfo dbInfo = extractFileSourceDbInfo(task);
                 extraImports = "\nfrom airflow.operators.python import PythonOperator\nimport os\n";
-                // Use environment variables for DB credentials (set via docker-compose or Airflow connections)
-                // to avoid embedding plaintext passwords in DAG files.
-                // Fallback: credentials can also be passed through Airflow Variables if env vars are not set.
+                // Security: password MUST be supplied via env var DTS_TARGET_DB_PASSWORD at runtime.
+                // No fallback string is embedded — KeyError fails the task fast if the env var is missing.
+                // Provision the env var via docker-compose service definition or Airflow Connections.
+                // host/port/dbname/user retain non-sensitive fallbacks for local debugging convenience.
                 initTableBlock = """
 
     def _init_target_table():
@@ -405,7 +406,7 @@ public class AirflowDagService {
             port=int(os.getenv("DTS_TARGET_DB_PORT", "%d")),
             dbname=os.getenv("DTS_TARGET_DB_NAME", "%s"),
             user=os.getenv("DTS_TARGET_DB_USER", "%s"),
-            password=os.getenv("DTS_TARGET_DB_PASSWORD", "%s"),
+            password=os.environ["DTS_TARGET_DB_PASSWORD"],
         )
         try:
             cur = conn.cursor()
@@ -424,7 +425,6 @@ public class AirflowDagService {
                     dbInfo.port,
                     escapePythonString(dbInfo.dbname),
                     escapePythonString(dbInfo.username),
-                    escapePythonString(dbInfo.password),
                     escapePythonString(createTableDdl)
                 );
                 dependencyBlock = "\n    init_table >> addax_run\n";
@@ -678,16 +678,18 @@ public class AirflowDagService {
             || "excelreader".equals(lower) || "txtfilereader".equals(lower);
     }
 
-    private record FileSourceDbInfo(String host, int port, String dbname, String username, String password) {}
+    private record FileSourceDbInfo(String host, int port, String dbname, String username) {}
 
     /**
-     * Extract PostgreSQL connection info from the task's destination config.
-     * Parses JDBC URL like jdbc:postgresql://host:port/dbname
+     * Extract non-sensitive PostgreSQL connection info from the task's destination config.
+     * Parses JDBC URL like jdbc:postgresql://host:port/dbname.
+     * Password is intentionally NOT returned — credentials must be provisioned via env var
+     * DTS_TARGET_DB_PASSWORD at runtime to prevent plaintext leakage into DAG files.
      */
     private FileSourceDbInfo extractFileSourceDbInfo(IngestionTask task) {
         JsonNode destConfig = task.getDestinationConfig();
         if (destConfig == null || destConfig.isNull()) {
-            return new FileSourceDbInfo("localhost", 5432, "postgres", "postgres", "");
+            return new FileSourceDbInfo("localhost", 5432, "postgres", "postgres");
         }
         String jdbcUrl = firstText(destConfig, "jdbcUrl");
         if (!StringUtils.hasText(jdbcUrl)) {
@@ -700,10 +702,10 @@ public class AirflowDagService {
             }
         }
         String username = firstText(destConfig, "username");
-        String password = firstText(destConfig, "password");
-        // Fallback: try to read credentials from connection[0] (Addax writer config
-        // stores them there when the top-level fields are missing).
-        if (!StringUtils.hasText(username) || !StringUtils.hasText(password)) {
+        // Fallback: try to read username from connection[0] (Addax writer config
+        // stores it there when the top-level fields are missing). Password is intentionally
+        // never extracted — it must be supplied via DTS_TARGET_DB_PASSWORD env var at runtime.
+        if (!StringUtils.hasText(username)) {
             JsonNode conn = destConfig.get("connection");
             JsonNode connEntry = null;
             if (conn != null && conn.isArray() && conn.size() > 0) {
@@ -712,21 +714,15 @@ public class AirflowDagService {
                 connEntry = conn;
             }
             if (connEntry != null) {
-                if (!StringUtils.hasText(username)) {
-                    username = firstText(connEntry, "username");
-                }
-                if (!StringUtils.hasText(password)) {
-                    password = firstText(connEntry, "password");
-                }
+                username = firstText(connEntry, "username");
             }
         }
-        // Last resort: read credentials from the Addax job JSON file (writer.parameter)
-        if (!StringUtils.hasText(jdbcUrl) || !StringUtils.hasText(username) || !StringUtils.hasText(password)) {
+        // Last resort: read username/jdbcUrl from the Addax job JSON file (writer.parameter)
+        if (!StringUtils.hasText(jdbcUrl) || !StringUtils.hasText(username)) {
             JsonNode writerParam = readWriterParamFromJob(task.getAddaxJobPath());
             if (writerParam != null) {
                 if (!StringUtils.hasText(jdbcUrl)) jdbcUrl = firstText(writerParam, "jdbcUrl");
                 if (!StringUtils.hasText(username)) username = firstText(writerParam, "username");
-                if (!StringUtils.hasText(password)) password = firstText(writerParam, "password");
                 // Also check nested connection[0]
                 JsonNode wpConn = writerParam.get("connection");
                 JsonNode wpEntry = null;
@@ -735,16 +731,12 @@ public class AirflowDagService {
                 if (wpEntry != null) {
                     if (!StringUtils.hasText(jdbcUrl)) jdbcUrl = firstText(wpEntry, "jdbcUrl");
                     if (!StringUtils.hasText(username)) username = firstText(wpEntry, "username");
-                    if (!StringUtils.hasText(password)) password = firstText(wpEntry, "password");
                 }
             }
         }
-        // Fallback: use spring.datasource credentials (data lake is typically the platform's own PG)
+        // Fallback: use spring.datasource username (data lake is typically the platform's own PG)
         if (!StringUtils.hasText(username)) {
             username = springEnv.getProperty("spring.datasource.username", "postgres");
-        }
-        if (!StringUtils.hasText(password)) {
-            password = springEnv.getProperty("spring.datasource.password", "");
         }
 
         // Fallback: use spring.datasource URL if no JDBC URL found
@@ -782,7 +774,7 @@ public class AirflowDagService {
                 host = hostPort;
             }
         }
-        return new FileSourceDbInfo(host, port, dbname, username, password);
+        return new FileSourceDbInfo(host, port, dbname, username);
     }
 
     private static final ObjectMapper JOB_MAPPER = new ObjectMapper();

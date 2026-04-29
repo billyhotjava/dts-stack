@@ -49,7 +49,7 @@ export type FileUnifiedStepProps = {
 	scheduleType: string;
 	activeCapabilitySet: Set<string>;
 	capabilityLoadFailed: boolean;
-	setSourceCategory: (cat: string) => void;
+	onSourceCategoryChange: (next: string) => void;
 
 	/* file upload */
 	uploadingFile: boolean;
@@ -112,7 +112,7 @@ export default function FileUnifiedStep({
 	scheduleType,
 	activeCapabilitySet,
 	capabilityLoadFailed,
-	setSourceCategory,
+	onSourceCategoryChange,
 	uploadingFile,
 	onFileUpload,
 	onSheetChange,
@@ -195,9 +195,10 @@ export default function FileUnifiedStep({
 			{/* ─── 数据来源切换 ─── */}
 			<Divider orientation="left">数据来源切换</Divider>
 			<Form.Item name="sourceCategory" label="数据来源">
-				<Radio.Group onChange={(e) => setSourceCategory(e.target.value)}>
+				<Radio.Group onChange={(e) => onSourceCategoryChange(e.target.value)}>
 					<Radio.Button value="database">数据库</Radio.Button>
 					<Radio.Button value="file">文件上传</Radio.Button>
+					<Radio.Button value="api">API 接入</Radio.Button>
 				</Radio.Group>
 			</Form.Item>
 

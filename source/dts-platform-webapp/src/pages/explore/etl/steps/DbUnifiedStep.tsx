@@ -91,6 +91,7 @@ export type DbUnifiedStepProps = Pick<
 	| "selectedDataSource"
 	| "dataSources"
 > & {
+	onSourceCategoryChange: (next: string) => void;
 	activeCapabilitySet: Set<string>;
 	supportsIncremental: boolean;
 	supportsCdc: boolean;
@@ -118,7 +119,8 @@ export function DbUnifiedStep({
 	setEditorMode: _setEditorMode,
 	syncModeOptions,
 	sourceCategory,
-	setSourceCategory,
+	setSourceCategory: _setSourceCategory,
+	onSourceCategoryChange,
 	selectedTableKeys,
 	setSelectedTableKeys,
 	selectedDataSource: _selectedDataSource,
@@ -160,29 +162,13 @@ export function DbUnifiedStep({
 				})),
 		[dataSources, sourceCategory]
 	);
-	const handleSourceCategoryChange = (next: string) => {
-		setSourceCategory(next);
-		setSelectedTableKeys([]);
-		form.setFieldsValue({
-			sourceCategory: next,
-			sourceDataSourceId: undefined,
-			readerType: next === "api" ? "httpreader" : undefined,
-			tableSelectionMode: next === "api" ? "manual" : "all",
-			selectedTables: "",
-			readerTables: "",
-			writerTables: "",
-			airflowEnabled: next === "api" ? false : form.getFieldValue("airflowEnabled"),
-			runNow: next === "api" ? false : form.getFieldValue("runNow"),
-			syncMode: next === "api" ? "full_refresh" : form.getFieldValue("syncMode"),
-		});
-	};
 
 	return (
 		<>
 			{/* ─── 数据来源切换 ─── */}
 			<Divider orientation="left">数据来源切换</Divider>
 			<Form.Item name="sourceCategory" label="数据来源">
-				<Radio.Group onChange={(e) => handleSourceCategoryChange(e.target.value)}>
+				<Radio.Group onChange={(e) => onSourceCategoryChange(e.target.value)}>
 					<Radio.Button value="database">数据库</Radio.Button>
 					<Radio.Button value="file">文件上传</Radio.Button>
 					<Radio.Button value="api">API 接入</Radio.Button>

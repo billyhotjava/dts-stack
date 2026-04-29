@@ -174,7 +174,7 @@ public class DbtSourceService {
         if (dataset.isEmpty()) {
             return Optional.empty();
         }
-        Optional<CatalogTableSchema> table = tableRepository.findFirstByDatasetAndNameIgnoreCase(dataset.get(), mapping.getOdsTable());
+        Optional<CatalogTableSchema> table = tableRepository.findFirstByDatasetAndNameIgnoreCase(dataset.orElseThrow(), mapping.getOdsTable());
         return table == null ? Optional.empty() : table;
     }
 

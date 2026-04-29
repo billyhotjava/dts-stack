@@ -177,6 +177,25 @@ export default function TransformCreatePage() {
 	const userInfo = useUserInfo() as any;
 	const editorMode = Form.useWatch("editorMode", form);
 	const [sourceCategory, setSourceCategory] = useState<string>("database");
+	const handleSourceCategoryChange = useCallback(
+		(next: string) => {
+			setSourceCategory(next);
+			setSelectedTableKeys([]);
+			form.setFieldsValue({
+				sourceCategory: next,
+				sourceDataSourceId: undefined,
+				readerType: next === "api" ? "httpreader" : undefined,
+				tableSelectionMode: next === "api" ? "manual" : "all",
+				selectedTables: "",
+				readerTables: "",
+				writerTables: "",
+				airflowEnabled: next === "api" ? false : form.getFieldValue("airflowEnabled"),
+				runNow: next === "api" ? false : form.getFieldValue("runNow"),
+				syncMode: next === "api" ? "full_refresh" : form.getFieldValue("syncMode"),
+			});
+		},
+		[form]
+	);
 	const syncMode = Form.useWatch("syncMode", form);
 	const scheduleType = Form.useWatch("scheduleType", form);
 	const tableSelectionMode = Form.useWatch("tableSelectionMode", form);
@@ -1704,7 +1723,7 @@ export default function TransformCreatePage() {
 									scheduleType={scheduleType}
 									activeCapabilitySet={activeCapabilitySet}
 									capabilityLoadFailed={capabilityLoadFailed}
-									setSourceCategory={setSourceCategory}
+									onSourceCategoryChange={handleSourceCategoryChange}
 									uploadingFile={uploadingFile}
 									onFileUpload={async (file, onSuccess, onError) => {
 										try {
@@ -1848,6 +1867,7 @@ export default function TransformCreatePage() {
 									syncModeOptions={syncModeOptions}
 									sourceCategory={sourceCategory}
 									setSourceCategory={setSourceCategory}
+									onSourceCategoryChange={handleSourceCategoryChange}
 									selectedTableKeys={selectedTableKeys}
 									setSelectedTableKeys={setSelectedTableKeys}
 									selectedDataSource={selectedDataSource ?? null}

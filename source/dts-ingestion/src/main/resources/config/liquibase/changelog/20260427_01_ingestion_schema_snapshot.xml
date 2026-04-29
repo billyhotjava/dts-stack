@@ -6,12 +6,12 @@
     http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
 
     <changeSet id="20260427-01-ingestion-schema-snapshot" author="system">
-        <comment>Create schema snapshot table for ODS DDL, drift detection and dbt source metadata</comment>
         <preConditions onFail="MARK_RAN">
             <not>
                 <tableExists tableName="ingestion_schema_snapshot"/>
             </not>
         </preConditions>
+        <comment>Create schema snapshot table for ODS DDL, drift detection and dbt source metadata</comment>
         <createTable tableName="ingestion_schema_snapshot">
             <column name="id" type="bigserial">
                 <constraints primaryKey="true" nullable="false"/>
