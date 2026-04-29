@@ -10,8 +10,10 @@ import com.yuzhi.dts.platform.security.AuthoritiesConstants;
 import com.yuzhi.dts.platform.security.ClassificationUtils;
 import com.yuzhi.dts.platform.security.DepartmentUtils;
 import com.yuzhi.dts.platform.security.SecurityUtils;
+import com.yuzhi.dts.platform.service.audit.AuditService;
 import com.yuzhi.dts.platform.service.integration.ScreenReportLinkSyncService;
 import com.yuzhi.dts.platform.service.permission.DashboardAccessGuard;
+import com.yuzhi.dts.platform.service.permission.DashboardCallerResolver;
 import com.yuzhi.dts.platform.service.visualization.dto.BiReportLinkDto;
 import com.yuzhi.dts.platform.service.visualization.dto.BiReportLinkRequest;
 import java.lang.reflect.Array;
@@ -47,19 +49,25 @@ public class BiReportLinkService {
     private final QueryDatasetAssetRepository queryDatasetAssetRepository;
     private final ClassificationUtils classificationUtils;
     private final DashboardAccessGuard accessGuard;
+    private final DashboardCallerResolver callerResolver;
+    private final AuditService audit;
 
     public BiReportLinkService(
         BiReportLinkRepository repo,
         BiReportVisitRepository visitRepo,
         QueryDatasetAssetRepository queryDatasetAssetRepository,
         ClassificationUtils classificationUtils,
-        DashboardAccessGuard accessGuard
+        DashboardAccessGuard accessGuard,
+        DashboardCallerResolver callerResolver,
+        AuditService audit
     ) {
         this.repo = repo;
         this.visitRepo = visitRepo;
         this.queryDatasetAssetRepository = queryDatasetAssetRepository;
         this.classificationUtils = classificationUtils;
         this.accessGuard = accessGuard;
+        this.callerResolver = callerResolver;
+        this.audit = audit;
     }
 
     @Transactional(readOnly = true)
@@ -85,7 +93,7 @@ public class BiReportLinkService {
         // 三个 filter，现在统一交给 DashboardAccessGuard.canView()。Guard 在 role/dept
         // 维度的 fallback 行为（空 csv = 不限制；institutePrivileged 仅豁免部门）跟原
         // listPublished 一致；额外覆盖 owner / MANAGE / VIEW grant / level_override 共享。
-        DashboardAccessGuard.Caller caller = buildCaller();
+        DashboardAccessGuard.Caller caller = callerResolver.current();
 
         // P0-10: enabled / queryDatasetId / bizDomain / reportType /
         // deptCode-CSV / expiry are pushed to SQL via findCandidatesForListing.
@@ -105,23 +113,6 @@ public class BiReportLinkService {
             out.add(toDto(r, dataset != null ? trimToNull(dataset.getName()) : null));
         }
         return out;
-    }
-
-    /**
-     * 从 SecurityContext 拼装 DashboardAccessGuard.Caller。allowedClassifications 直接
-     * 复用 ClassificationUtils.currentAllowedClassifications()，保留 personnel_level claim
-     * → ROLE_xxx fallback → property default 三级解析与现网 listPublished 行为完全一致。
-     */
-    private DashboardAccessGuard.Caller buildCaller() {
-        String username = SecurityUtils.getCurrentUserLogin().orElse(null);
-        Set<String> allowed = classificationUtils.currentAllowedClassifications();
-        Set<String> roles = currentAuthorities();
-        String dept = currentClaim("dept_code");
-        boolean institutePrivileged = SecurityUtils.hasCurrentUserAnyOfAuthorities(
-            AuthoritiesConstants.INSTITUTE_PRIVILEGED_ROLES
-        );
-        boolean superAdmin = hasGlobalManageScope();
-        return new DashboardAccessGuard.Caller(username, allowed, roles, dept, institutePrivileged, superAdmin);
     }
 
     @Transactional(readOnly = true)
@@ -213,10 +204,38 @@ public class BiReportLinkService {
         if (link == null && StringUtils.hasText(normalizedCode)) {
             link = repo.findFirstByCodeIgnoreCase(normalizedCode).orElse(null);
         }
+        boolean createdJustNow = false;
         if (link == null) {
             link = newScreenVisitLink(normalizedCode, title, engine, classification);
             if (link == null) {
                 return;
+            }
+            createdJustNow = true;
+        }
+        // Sprint-18：对已存在的大屏镜像做 Guard 校验。
+        // - DENY → 不写 visit，写审计 failure（信息泄露考虑：不返 error 给前端，
+        //   静默丢弃 + 留审计便于追溯）
+        // - OVERRIDE_USED → 写一条独立审计；越级访问的合规留痕
+        // 新建 mirror 路径跳过 Guard，让 upstream 自动建表语义不被破坏，
+        // 后续访问会正常进入 Guard 分支。
+        if (!createdJustNow) {
+            DashboardAccessGuard.Caller caller = callerResolver.current();
+            DashboardAccessGuard.AccessDecision decision = accessGuard.canView(link, caller);
+            if (!decision.allow()) {
+                audit.auditFailure(
+                    "VISIT",
+                    "vis.dashboard.access",
+                    link.getCode(),
+                    "reason=" + decision.reason()
+                );
+                return;
+            }
+            if (decision.overrideUsed()) {
+                audit.audit(
+                    "VISIT_OVERRIDE",
+                    "vis.dashboard.access",
+                    link.getCode() + "; reason=" + decision.reason()
+                );
             }
         }
         Instant now = Instant.now();

@@ -2,6 +2,9 @@ package com.yuzhi.dts.platform.web.rest;
 
 import com.yuzhi.dts.platform.security.AuthoritiesConstants;
 import com.yuzhi.dts.platform.service.audit.AuditService;
+import com.yuzhi.dts.platform.service.permission.DashboardShareService;
+import com.yuzhi.dts.platform.service.permission.dto.AssetGrantDto;
+import com.yuzhi.dts.platform.service.permission.dto.DashboardShareRequest;
 import com.yuzhi.dts.platform.service.visualization.BiReportLinkService;
 import com.yuzhi.dts.platform.service.visualization.dto.BiReportLinkDto;
 import com.yuzhi.dts.platform.service.visualization.dto.BiReportLinkRequest;
@@ -10,9 +13,12 @@ import java.time.Instant;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import org.springframework.http.HttpStatus;
+import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -22,6 +28,7 @@ import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.server.ResponseStatusException;
 
 @RestController
 @RequestMapping("/api/reports")
@@ -33,10 +40,16 @@ public class ReportsResource {
 
     private final BiReportLinkService reports;
     private final AuditService audit;
+    private final DashboardShareService shareService;
 
-    public ReportsResource(BiReportLinkService reports, AuditService audit) {
+    public ReportsResource(
+        BiReportLinkService reports,
+        AuditService audit,
+        DashboardShareService shareService
+    ) {
         this.reports = reports;
         this.audit = audit;
+        this.shareService = shareService;
     }
 
     @GetMapping("/published")
@@ -125,12 +138,62 @@ public class ReportsResource {
         return ApiResponses.ok(Map.of("ok", true));
     }
 
-    @org.springframework.web.bind.annotation.DeleteMapping("/{id}/purge")
+    @DeleteMapping("/{id}/purge")
     @PreAuthorize("hasAuthority('" + AuthoritiesConstants.OP_ADMIN + "')")
     public ApiResponse<Map<String, Object>> purge(@PathVariable UUID id) {
         reports.purge(id);
         audit.audit("PURGE", "vis.reports.manage.purge", id.toString());
         return ApiResponses.ok(Map.of("ok", true));
+    }
+
+    // ------------------------------------------------------------------
+    // Sprint-18 大屏共享 API
+    // ------------------------------------------------------------------
+    // 鉴权完全交给 DashboardShareService（→ DashboardAccessGuard）。
+    // 这里只做 (a) 异常→HTTP 状态码映射；(b) 路径参数转发。
+    // - GET    /api/reports/{id}/grants            列出当前所有 grant（仅 manager 可见）
+    // - POST   /api/reports/{id}/grants            授予 VIEW / MANAGE，含越级共享
+    // - DELETE /api/reports/{id}/grants/{grantId}  撤销
+
+    @GetMapping("/{id}/grants")
+    public ApiResponse<List<AssetGrantDto>> listGrants(@PathVariable UUID id) {
+        try {
+            List<AssetGrantDto> grants = shareService.listGrants(id);
+            return ApiResponses.ok(grants);
+        } catch (AccessDeniedException ex) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, ex.getMessage());
+        } catch (IllegalArgumentException ex) {
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, ex.getMessage());
+        }
+    }
+
+    @PostMapping("/{id}/grants")
+    public ApiResponse<AssetGrantDto> shareGrant(
+        @PathVariable UUID id,
+        @RequestBody DashboardShareRequest request
+    ) {
+        try {
+            return ApiResponses.ok(shareService.share(id, request));
+        } catch (AccessDeniedException ex) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, ex.getMessage());
+        } catch (IllegalArgumentException ex) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, ex.getMessage());
+        }
+    }
+
+    @DeleteMapping("/{id}/grants/{grantId}")
+    public ApiResponse<Map<String, Object>> revokeGrant(
+        @PathVariable UUID id,
+        @PathVariable Long grantId
+    ) {
+        try {
+            shareService.revoke(id, grantId);
+            return ApiResponses.ok(Map.of("ok", true));
+        } catch (AccessDeniedException ex) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, ex.getMessage());
+        } catch (IllegalArgumentException ex) {
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, ex.getMessage());
+        }
     }
 
     private String text(Object raw) {

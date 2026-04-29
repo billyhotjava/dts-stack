@@ -14,9 +14,11 @@ import com.yuzhi.dts.platform.repository.explore.QueryDatasetAssetRepository;
 import com.yuzhi.dts.platform.repository.visualization.BiReportLinkRepository;
 import com.yuzhi.dts.platform.repository.visualization.BiReportVisitRepository;
 import com.yuzhi.dts.platform.security.ClassificationUtils;
+import com.yuzhi.dts.platform.service.audit.AuditService;
 import com.yuzhi.dts.platform.service.integration.ScreenReportLinkSyncService;
 import com.yuzhi.dts.platform.service.permission.DashboardAccessGuard;
 import com.yuzhi.dts.platform.service.permission.DashboardAccessGuard.AccessDecision;
+import com.yuzhi.dts.platform.service.permission.DashboardCallerResolver;
 import com.yuzhi.dts.platform.service.visualization.dto.BiReportLinkDto;
 import java.util.List;
 import java.util.Optional;
@@ -52,6 +54,12 @@ class BiReportLinkServiceTest {
     @Mock
     private DashboardAccessGuard accessGuard;
 
+    @Mock
+    private DashboardCallerResolver callerResolver;
+
+    @Mock
+    private AuditService audit;
+
     @InjectMocks
     private BiReportLinkService service;
 
@@ -76,7 +84,15 @@ class BiReportLinkServiceTest {
         BiReportLink internal = buildLink("internal_dashboard", "INTERNAL", "ROLE_EMPLOYEE");
         BiReportLink secret = buildLink("secret_dashboard", "SECRET", "ROLE_EMPLOYEE");
         when(reportLinkRepository.findCandidatesForListing(anyBoolean(), any(), any(), any(), any(), any())).thenReturn(List.of(internal, secret));
-        when(classificationUtils.currentAllowedClassifications()).thenReturn(java.util.Set.of("PUBLIC", "INTERNAL"));
+        // callerResolver 现在统一拼装 Caller；具体内容不影响断言（Guard 已 mock）。
+        when(callerResolver.current()).thenReturn(new DashboardAccessGuard.Caller(
+            "employee",
+            java.util.Set.of("PUBLIC", "INTERNAL"),
+            java.util.Set.of("ROLE_EMPLOYEE", "ROLE_INTERNAL"),
+            null,
+            false,
+            false
+        ));
         when(accessGuard.canView(eq(internal), any())).thenReturn(AccessDecision.allow("BASE_ACCESS_PLUS_LEVEL"));
         when(accessGuard.canView(eq(secret), any())).thenReturn(AccessDecision.deny("DENY_LEVEL_BLOCKED"));
 
@@ -101,7 +117,15 @@ class BiReportLinkServiceTest {
         when(reportLinkRepository.findCandidatesForListing(anyBoolean(), any(), any(), any(), any(), any())).thenReturn(
             List.of(byOwnerRole, noRoleConstraint)
         );
-        when(classificationUtils.currentAllowedClassifications()).thenReturn(java.util.Set.of("PUBLIC", "INTERNAL"));
+        // callerResolver 现在统一拼装 Caller；具体内容不影响断言（Guard 已 mock）。
+        when(callerResolver.current()).thenReturn(new DashboardAccessGuard.Caller(
+            "employee",
+            java.util.Set.of("PUBLIC", "INTERNAL"),
+            java.util.Set.of("ROLE_EMPLOYEE", "ROLE_INTERNAL"),
+            null,
+            false,
+            false
+        ));
         when(accessGuard.canView(eq(byOwnerRole), any())).thenReturn(AccessDecision.deny("DENY_NO_BASE_ACCESS"));
         when(accessGuard.canView(eq(noRoleConstraint), any())).thenReturn(AccessDecision.allow("BASE_ACCESS_PLUS_LEVEL"));
 
@@ -164,6 +188,55 @@ class BiReportLinkServiceTest {
 
         verify(reportLinkRepository, never()).save(any(BiReportLink.class));
         verify(reportVisitRepository, never()).save(any(BiReportVisit.class));
+    }
+
+    @Test
+    void touchVisitOnExistingMirrorShouldDenyWhenGuardDenies() {
+        // Sprint-18：已存在 mirror 且 Guard 拒绝时，不更新 lastVisitedAt 也不写 visit log；
+        // 但应写一条 audit failure 留痕。
+        UUID existingId = UUID.randomUUID();
+        BiReportLink existing = buildLink("screen-99", "CONFIDENTIAL", null);
+        existing.setId(existingId);
+        when(reportLinkRepository.findById(existingId)).thenReturn(java.util.Optional.of(existing));
+        when(callerResolver.current()).thenReturn(new DashboardAccessGuard.Caller(
+            "low_clearance",
+            java.util.Set.of("PUBLIC"),
+            java.util.Set.of("ROLE_EMPLOYEE"),
+            null,
+            false,
+            false
+        ));
+        when(accessGuard.canView(eq(existing), any())).thenReturn(AccessDecision.deny("DENY_LEVEL_BLOCKED"));
+
+        service.touchVisit(existingId, "screen-99", null, null, null, null);
+
+        verify(reportLinkRepository, never()).save(any(BiReportLink.class));
+        verify(reportVisitRepository, never()).save(any(BiReportVisit.class));
+        verify(audit).auditFailure(eq("VISIT"), eq("vis.dashboard.access"), eq("screen-99"), org.mockito.ArgumentMatchers.contains("DENY_LEVEL_BLOCKED"));
+    }
+
+    @Test
+    void touchVisitOnExistingMirrorWithOverrideShouldWriteSeparateAudit() {
+        // Sprint-18：越级访问允许通过，但需要单独审计留痕，便于合规回溯。
+        UUID existingId = UUID.randomUUID();
+        BiReportLink existing = buildLink("screen-77", "CONFIDENTIAL", null);
+        existing.setId(existingId);
+        when(reportLinkRepository.findById(existingId)).thenReturn(java.util.Optional.of(existing));
+        when(callerResolver.current()).thenReturn(new DashboardAccessGuard.Caller(
+            "shared_user",
+            java.util.Set.of("PUBLIC"),
+            java.util.Set.of("ROLE_EMPLOYEE"),
+            null,
+            false,
+            false
+        ));
+        when(accessGuard.canView(eq(existing), any())).thenReturn(AccessDecision.allowOverride("OVERRIDE_USED"));
+        when(reportLinkRepository.save(any(BiReportLink.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        service.touchVisit(existingId, "screen-77", null, null, null, null);
+
+        verify(reportLinkRepository).save(any(BiReportLink.class));
+        verify(audit).audit(eq("VISIT_OVERRIDE"), eq("vis.dashboard.access"), org.mockito.ArgumentMatchers.contains("OVERRIDE_USED"));
     }
 
     private BiReportLink buildLink(String code, String classification, String roleCodes) {
