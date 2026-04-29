@@ -10,6 +10,7 @@ import com.yuzhi.dts.platform.service.admin.gateway.support.AdminGatewayTarget;
 import com.yuzhi.dts.platform.service.admin.gateway.support.AdminGatewayTransport;
 import java.util.Map;
 import org.springframework.core.ParameterizedTypeReference;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpMethod;
 import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.stereotype.Component;
@@ -57,6 +58,39 @@ public class AdminAuthGateway {
                 throw new BadCredentialsException(messageFrom(ex.getMessage(), "auth failed"));
             }
             throw new IllegalStateException(messageFrom(ex.getMessage(), "auth failed"), ex);
+        }
+    }
+
+    public ProfileResult profile(String username, Map<String, Object> keycloakUser, String keycloakAccessToken) {
+        ensureEnabled();
+        try {
+            AdminGatewayRequestOptions.Builder options = AdminGatewayRequestOptions
+                .builder()
+                .auditSilent(true)
+                .includeServiceAuthorization(false);
+            if (StringUtils.hasText(keycloakAccessToken)) {
+                String bearer = keycloakAccessToken.trim();
+                options.header(HttpHeaders.AUTHORIZATION, bearer.startsWith("Bearer ") ? bearer : "Bearer " + bearer);
+            }
+            Map<String, Object> data = transport.exchangeEnvelopeData(
+                AdminGatewayTarget.API,
+                HttpMethod.POST,
+                "/keycloak/auth/platform/profile?auditSilent=true",
+                Map.of("username", username == null ? "" : username, "user", keycloakUser == null ? Map.of() : keycloakUser),
+                MAP_ENVELOPE,
+                options.build()
+            );
+            @SuppressWarnings("unchecked")
+            Map<String, Object> user = data == null ? Map.of() : (Map<String, Object>) data.getOrDefault("user", Map.of());
+            return new ProfileResult(user);
+        } catch (AdminGatewayException ex) {
+            if (ex.getUpstreamStatus() != null && (ex.getUpstreamStatus() == 401 || ex.getUpstreamStatus() == 403)) {
+                throw new BadCredentialsException(messageFrom(ex.getMessage(), "user profile rejected"));
+            }
+            if (ex.getUpstreamStatus() != null && ex.getUpstreamStatus() == 400) {
+                throw new IllegalArgumentException(messageFrom(ex.getMessage(), "user profile rejected"), ex);
+            }
+            throw new IllegalStateException(messageFrom(ex.getMessage(), "user profile unavailable"), ex);
         }
     }
 
@@ -175,4 +209,6 @@ public class AdminAuthGateway {
     public record RefreshResult(String accessToken, String refreshToken, Long accessTokenExpiresIn, Long refreshTokenExpiresIn) {}
 
     public record PkiChallengeView(String challengeId, String nonce, String aud, Long ts, Long exp) {}
+
+    public record ProfileResult(Map<String, Object> user) {}
 }

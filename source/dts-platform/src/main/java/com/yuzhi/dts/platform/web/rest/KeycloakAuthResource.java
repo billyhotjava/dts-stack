@@ -96,11 +96,13 @@ public class KeycloakAuthResource {
             // Authentication is already done via Keycloak; admin call is only for business data.
             Map<String, Object> user;
             try {
-                var adminResult = adminAuthGateway.login(username, password);
+                var adminResult = adminAuthGateway.profile(username, kcResult.user(), kcTokens.accessToken());
                 user = adminResult.user();
+            } catch (org.springframework.security.authentication.BadCredentialsException ex) {
+                throw ex;
             } catch (Exception ex) {
-                log.warn("[login] admin user data unavailable, falling back to Keycloak profile: {}", ex.getMessage());
-                user = kcResult.user();
+                log.warn("[login] admin user profile unavailable username={} reason={}", username, ex.getMessage());
+                throw new IllegalStateException("无法获取用户授权信息，请稍后重试", ex);
             }
             String displayName = resolveUserDisplayName(user);
             List<String> rawRoles = toStringList(user.get("roles"));
@@ -343,6 +345,9 @@ public class KeycloakAuthResource {
             if (isRelationMissing(ex, "portal_sessions")) {
                 status = HttpStatus.SERVICE_UNAVAILABLE;
                 msg = "平台数据库未初始化或升级未完成（缺少 portal_sessions 表），请先执行初始化/升级脚本后重试";
+            } else if (containsMessage(ex, "无法获取用户授权信息")) {
+                status = HttpStatus.SERVICE_UNAVAILABLE;
+                msg = "无法获取用户授权信息，请稍后重试";
             } else {
                 status = HttpStatus.INTERNAL_SERVER_ERROR;
                 msg = ex.getMessage() == null || ex.getMessage().isBlank() ? "登录失败，请稍后重试" : ex.getMessage();
@@ -368,6 +373,22 @@ public class KeycloakAuthResource {
             }
             return ResponseEntity.status(status).body(ApiResponses.error(msg));
         }
+    }
+
+    private boolean containsMessage(Throwable ex, String expected) {
+        if (ex == null || !StringUtils.hasText(expected)) {
+            return false;
+        }
+        Throwable cur = ex;
+        int depth = 0;
+        while (cur != null && depth++ < 15) {
+            String msg = cur.getMessage();
+            if (msg != null && msg.contains(expected)) {
+                return true;
+            }
+            cur = cur.getCause();
+        }
+        return false;
     }
 
     private boolean isRelationMissing(Throwable ex, String relation) {

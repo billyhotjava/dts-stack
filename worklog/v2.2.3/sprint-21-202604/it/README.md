@@ -11,6 +11,7 @@
   -> 连接测试
   -> Schema Discover
   -> 选择表字段
+  -> 提交前预检
   -> 生成 ODS / Addax Job / Airflow DAG / dbt source
   -> 执行同步
   -> Run Center 查看状态和日志
@@ -48,6 +49,7 @@ git diff --check
 
 - `POST /api/infra/data-sources/{id}/schema-discover`：探测 schema/table/column/key/index，并支持缓存与强制刷新。
 - `POST /api/infra/data-sources/{id}/ods-preview`：预览 ODS DDL、dbt source YAML、Addax/Airflow 草稿。
+- `POST /api/infra/data-sources/{id}/ods-precheck`：建任务前预检 ODS/同步任务草稿基础规则，返回 PASS/WARN/FAIL、规则明细和修复建议。
 - `POST /api/infra/data-sources/{id}/ods-apply`：写入 ODS 映射、catalog 字段、dbt source 和接入血缘。
 - `POST /api/infra/data-sources/{id}/sync-task-draft`：生成 ingestion task payload。
 - `POST /api/ingestion/tasks`：创建同步任务并生成 Addax Job / Airflow DAG。

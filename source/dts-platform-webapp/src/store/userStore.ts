@@ -86,7 +86,7 @@ const useUserStore = create<UserStore>()(
 			},
 		}),
 		{
-			name: "userStore", // name of the item in the storage (must be unique)
+			name: "dts.platform.userStore", // name of the item in the storage (must be unique)
 			storage: createJSONStorage(() => localStorage), // (optional) by default, 'localStorage' is used
 			partialize: (state) => ({
 				[StorageEnum.UserInfo]: state.userInfo,

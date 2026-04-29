@@ -72,6 +72,28 @@ public final class OdsGenerationDtos {
         List<String> warnings
     ) {}
 
+    public record OdsPrecheckResponse(
+        UUID dataSourceId,
+        String dataSourceName,
+        String status,
+        int totalRules,
+        int passedRules,
+        int warningRules,
+        int failedRules,
+        List<OdsPrecheckRuleResult> rules,
+        List<OdsTablePlanDto> tables,
+        List<String> warnings
+    ) {}
+
+    public record OdsPrecheckRuleResult(
+        String code,
+        String level,
+        String status,
+        String target,
+        String message,
+        String suggestion
+    ) {}
+
     public record OdsTablePlanDto(
         String sourceSchema,
         String sourceTable,

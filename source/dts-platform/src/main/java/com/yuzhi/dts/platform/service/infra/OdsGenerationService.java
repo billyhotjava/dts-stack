@@ -16,6 +16,8 @@ import com.yuzhi.dts.platform.service.infra.dto.OdsGenerationDtos.OdsColumnPlanD
 import com.yuzhi.dts.platform.service.infra.dto.OdsGenerationDtos.OdsGenerationApplyResult;
 import com.yuzhi.dts.platform.service.infra.dto.OdsGenerationDtos.OdsGenerationPreviewResponse;
 import com.yuzhi.dts.platform.service.infra.dto.OdsGenerationDtos.OdsGenerationRequest;
+import com.yuzhi.dts.platform.service.infra.dto.OdsGenerationDtos.OdsPrecheckResponse;
+import com.yuzhi.dts.platform.service.infra.dto.OdsGenerationDtos.OdsPrecheckRuleResult;
 import com.yuzhi.dts.platform.service.infra.dto.OdsGenerationDtos.OdsSyncTaskDraftResponse;
 import com.yuzhi.dts.platform.service.infra.dto.OdsGenerationDtos.OdsSourceColumnRequest;
 import com.yuzhi.dts.platform.service.infra.dto.OdsGenerationDtos.OdsSourceTableRequest;
@@ -131,10 +133,163 @@ public class OdsGenerationService {
 
     public OdsSyncTaskDraftResponse buildSyncTaskDraft(InfraDataSource source, OdsGenerationRequest request) {
         List<OdsTablePlanDto> plans = buildPlans(source, request);
+        OdsPrecheckResponse precheck = precheck(source, request, plans);
+        if ("FAIL".equalsIgnoreCase(precheck.status())) {
+            String firstFailure = precheck.rules().stream()
+                .filter(rule -> "FAIL".equalsIgnoreCase(rule.status()))
+                .map(OdsPrecheckRuleResult::message)
+                .findFirst()
+                .orElse("同步任务预检失败");
+            throw new IllegalArgumentException(firstFailure);
+        }
         String taskName = buildSyncTaskName(source, plans);
         Map<String, Object> payload = buildSyncTaskPayload(source, request, plans, taskName);
         List<String> warnings = plans.stream().flatMap(plan -> plan.warnings().stream()).distinct().toList();
         return new OdsSyncTaskDraftResponse(source.getId(), source.getName(), taskName, payload, plans, warnings);
+    }
+
+    public OdsPrecheckResponse precheck(InfraDataSource source, OdsGenerationRequest request) {
+        return precheck(source, request, buildPlans(source, request));
+    }
+
+    private OdsPrecheckResponse precheck(InfraDataSource source, OdsGenerationRequest request, List<OdsTablePlanDto> plans) {
+        List<OdsPrecheckRuleResult> rules = new ArrayList<>();
+        addRule(
+            rules,
+            "DATASOURCE_JDBC",
+            "ERROR",
+            StringUtils.hasText(source.getJdbcUrl()),
+            source.getName(),
+            "数据源具备 JDBC 连接信息",
+            "请补充 JDBC URL 后重新测试连接"
+        );
+        addRule(
+            rules,
+            "DATASOURCE_VERIFIED",
+            "WARN",
+            source.getLastVerifiedAt() != null,
+            source.getName(),
+            "数据源已完成连接测试",
+            "建议先执行连接测试，确认凭据和网络仍可用"
+        );
+        addRule(
+            rules,
+            "SOURCE_TABLE_SELECTED",
+            "ERROR",
+            plans != null && !plans.isEmpty(),
+            source.getName(),
+            "已选择至少一张源表",
+            "请先通过 Schema Discover 选择源表"
+        );
+
+        Set<String> targetNames = new LinkedHashSet<>();
+        Set<String> duplicateTargets = new LinkedHashSet<>();
+        List<String> planWarnings = new ArrayList<>();
+        for (OdsTablePlanDto plan : plans) {
+            String sourceName = physicalName(plan.sourceSchema(), plan.sourceTable());
+            String targetName = physicalName(plan.odsSchema(), plan.odsTable());
+            String targetKey = targetName.toLowerCase(Locale.ROOT);
+            if (!targetNames.add(targetKey)) {
+                duplicateTargets.add(targetName);
+            }
+            boolean hasColumns = plan.columns() != null && !plan.columns().isEmpty();
+            addRule(
+                rules,
+                "SOURCE_COLUMNS",
+                "ERROR",
+                hasColumns,
+                sourceName,
+                "源表字段已读取",
+                "请重新执行 Schema Discover，并确认 includeColumns=true"
+            );
+            boolean hasPrimaryKey = plan.primaryKeys() != null && !plan.primaryKeys().isEmpty();
+            addRule(
+                rules,
+                "PRIMARY_KEY_CANDIDATE",
+                "WARN",
+                hasPrimaryKey,
+                sourceName,
+                "已识别主键或业务唯一键候选",
+                "建议维护主键/业务键，提升幂等写入、审计追踪和删除识别能力"
+            );
+            InfraOdsTableMapping existing = mappingRepository
+                .findFirstByOdsSchemaIgnoreCaseAndOdsTableIgnoreCase(plan.odsSchema(), plan.odsTable())
+                .orElse(null);
+            boolean targetAvailable = existing == null || isSameSourceMapping(existing, source, plan);
+            addRule(
+                rules,
+                "ODS_TARGET_OWNERSHIP",
+                "ERROR",
+                targetAvailable,
+                targetName,
+                "ODS 目标表未被其他接入映射占用",
+                "请调整 system/biz/entity 命名，或先确认既有 ODS 映射归属"
+            );
+            if (plan.warnings() != null) {
+                planWarnings.addAll(plan.warnings());
+            }
+        }
+        addRule(
+            rules,
+            "ODS_TARGET_DUPLICATE",
+            "ERROR",
+            duplicateTargets.isEmpty(),
+            duplicateTargets.isEmpty() ? "ods" : String.join(", ", duplicateTargets),
+            "本次生成的 ODS 目标表名不重复",
+            "请为单表设置实体编码，或调整系统/业务编码避免多个源表落到同一 ODS 表"
+        );
+
+        String syncMode = firstNonBlank(request == null ? null : request.syncMode(), "full_refresh");
+        if ("incremental".equalsIgnoreCase(syncMode)) {
+            boolean incrementalOk = true;
+            String incrementalMessage = "已识别多表共同增量字段";
+            String incrementalSuggestion = "增量任务会使用共同候选字段推进 watermark";
+            try {
+                String incrementalColumn = resolveIncrementalColumn(plans, syncMode);
+                incrementalMessage = "已识别增量字段：" + incrementalColumn;
+            } catch (IllegalArgumentException ex) {
+                incrementalOk = false;
+                incrementalMessage = ex.getMessage();
+                incrementalSuggestion = "请改为全量模式，或为所有表选择同名时间戳增量字段";
+            }
+            addRule(rules, "INCREMENTAL_WATERMARK", "ERROR", incrementalOk, syncMode, incrementalMessage, incrementalSuggestion);
+        } else {
+            addRule(
+                rules,
+                "SYNC_MODE",
+                "INFO",
+                true,
+                syncMode,
+                "同步模式为全量覆盖",
+                "可在增量字段明确后切换为时间戳增量"
+            );
+        }
+
+        for (String warning : planWarnings.stream().filter(StringUtils::hasText).distinct().toList()) {
+            rules.add(new OdsPrecheckRuleResult("TYPE_REVIEW", "WARN", "WARN", "columns", warning, "请在字段 override 能力补齐后确认精度映射"));
+        }
+
+        int failed = (int) rules.stream().filter(rule -> "FAIL".equalsIgnoreCase(rule.status())).count();
+        int warned = (int) rules.stream().filter(rule -> "WARN".equalsIgnoreCase(rule.status())).count();
+        int passed = (int) rules.stream().filter(rule -> "PASS".equalsIgnoreCase(rule.status())).count();
+        String status = failed > 0 ? "FAIL" : warned > 0 ? "WARN" : "PASS";
+        List<String> warnings = rules.stream()
+            .filter(rule -> "WARN".equalsIgnoreCase(rule.status()))
+            .map(OdsPrecheckRuleResult::message)
+            .distinct()
+            .toList();
+        return new OdsPrecheckResponse(
+            source.getId(),
+            source.getName(),
+            status,
+            rules.size(),
+            passed,
+            warned,
+            failed,
+            rules,
+            plans,
+            warnings
+        );
     }
 
     private List<OdsTablePlanDto> buildPlans(InfraDataSource source, OdsGenerationRequest request) {
@@ -588,6 +743,48 @@ public class OdsGenerationService {
             }
         }
         return commonCandidates.values().iterator().next();
+    }
+
+    private void addRule(
+        List<OdsPrecheckRuleResult> rules,
+        String code,
+        String level,
+        boolean passed,
+        String target,
+        String message,
+        String suggestion
+    ) {
+        String normalizedLevel = firstNonBlank(level, "ERROR").toUpperCase(Locale.ROOT);
+        String status;
+        if (passed) {
+            status = "PASS";
+        } else if ("ERROR".equals(normalizedLevel)) {
+            status = "FAIL";
+        } else if ("INFO".equals(normalizedLevel)) {
+            status = "PASS";
+        } else {
+            status = "WARN";
+        }
+        rules.add(new OdsPrecheckRuleResult(code, normalizedLevel, status, target, message, suggestion));
+    }
+
+    private boolean isSameSourceMapping(InfraOdsTableMapping existing, InfraDataSource source, OdsTablePlanDto plan) {
+        if (existing == null) {
+            return true;
+        }
+        if (source == null || plan == null || source.getId() == null) {
+            return false;
+        }
+        String namespace = plan.sourceSchema() == null ? "" : plan.sourceSchema();
+        return source.getId().equals(existing.getConnectionId()) &&
+            equalsIgnoreCase(plan.sourceTable(), existing.getStreamName()) &&
+            equalsIgnoreCase(namespace, existing.getStreamNamespace());
+    }
+
+    private boolean equalsIgnoreCase(String left, String right) {
+        String a = left == null ? "" : left.trim();
+        String b = right == null ? "" : right.trim();
+        return a.equalsIgnoreCase(b);
     }
 
     private String resolveOdsSchema(OdsGenerationRequest request) {

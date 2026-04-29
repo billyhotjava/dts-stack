@@ -31,9 +31,9 @@
 - `OdsGenerationService.buildSyncTaskDraft` 根据 ODS 方案生成 ingestion task payload，包括 source、destination、streams、sync、Airflow、dbt 和 lineage 配置。
 - 前端“生成同步任务”复用 `/ingestion/tasks`，由平台代理注入默认数据湖目标端，ingestion 服务生成 Addax Job 和 Airflow DAG。
 - 前端已开放 ODS schema、来源系统编码、业务编码和同步模式配置，支持 `full_refresh` 与时间戳增量主链；增量模式会校验所选表存在共同增量候选字段，避免批量任务生成后出现不可解释的 watermark。
+- 前端生成同步任务前会自动执行 F7 `ods-precheck`；失败阻断提交，警告需二次确认后才继续 `ods-apply`、`sync-task-draft` 和 `/ingestion/tasks`。
 
 ## 待补
 
 - 独立三步式任务向导页面、草稿恢复和字段级选择/重命名 UI。
 - 增量策略配置还需要补全全量追加、主键增量、覆盖模式细分和字段级人工指定。
-- 任务生成前还需要接入 F7 precheck。

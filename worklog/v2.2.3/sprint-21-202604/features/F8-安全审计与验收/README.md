@@ -38,7 +38,8 @@
 
 - 平台侧 `audit-action-catalog.json` 已补齐 Connector Center 相关动作：连接器目录、数据源登记/测试/停用、Schema Discover、ODS 预览/落库、同步任务草稿生成和调度任务动作。
 - `dts-common` 默认 audit catalog 同步补齐同一批 Foundation 动作，避免不同服务加载默认目录时出现 unknown action fallback。
-- 数据源 Resource 已显式记录数据源查看、创建、更新、删除、连接测试、Schema Discover、ODS preview/apply 和 sync-task-draft 审计事件。
+- 数据源 Resource 已显式记录数据源查看、创建、更新、删除、连接测试、Schema Discover、ODS preview/apply、ODS precheck 和 sync-task-draft 审计事件。
+- 新增 `FOUNDATION_ODS_PRECHECK` 审计动作，用于区分建任务前 dry-run/precheck 与真正落库/创建任务。
 - Run Center 已提供最新失败执行的失败重试与整批重跑入口，任务执行/重跑仍需继续确认 ingestion 服务侧审计闭环。
 
 ## 端到端验收路径
@@ -47,12 +48,13 @@
 1. 新增 PostgreSQL/MySQL 数据源，完成连接测试。
 2. 执行 Schema Discover，确认表、字段、主键、索引、增量候选和缓存/漂移状态。
 3. 配置 ODS schema、系统编码、业务编码、同步模式，预览 ODS DDL / dbt source / Addax / Airflow 草稿。
-4. 生成 ODS 映射与 dbt source，并检查 catalog 表字段和 Sprint-20 lineage graph。
-5. 生成同步任务，执行一次全量同步。
-6. 在 Run Center 查看行数、耗时、错误分类、日志和血缘入口。
-7. 制造一次失败执行，验证失败重试、整批重跑和日志建议。
-8. 切换源端 schema，强制刷新 discover，验证 schema drift 摘要。
-9. 在审计日志中核对数据源、discover、ODS、任务草稿、执行/重跑相关事件。
+4. 执行提交前预检，确认 PASS/WARN/FAIL、规则明细和审计事件。
+5. 生成 ODS 映射与 dbt source，并检查 catalog 表字段和 Sprint-20 lineage graph。
+6. 生成同步任务，执行一次全量同步。
+7. 在 Run Center 查看行数、耗时、错误分类、日志和血缘入口。
+8. 制造一次失败执行，验证失败重试、整批重跑和日志建议。
+9. 切换源端 schema，强制刷新 discover，验证 schema drift 摘要。
+10. 在审计日志中核对数据源、discover、ODS precheck、ODS apply、任务草稿、执行/重跑相关事件。
 ```
 
 ## 待补

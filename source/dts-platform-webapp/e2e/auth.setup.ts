@@ -2,7 +2,7 @@
  * Global auth setup for the SQL IDE smoke suite.
  *
  * Strategy: POST to the platform login API, extract the JWT, then write a
- * Playwright storageState JSON that seeds localStorage with `userStore` so
+ * Playwright storageState JSON that seeds localStorage with `dts.platform.userStore` so
  * every test starts already authenticated — no UI login flow required.
  *
  * Credentials come from environment variables:
@@ -91,8 +91,7 @@ async function globalSetup(): Promise<void> {
       {
         origin,
         localStorage: [
-          { name: "userStore", value: storeJson },
-          { name: "platformUserStore", value: storeJson },
+          { name: "dts.platform.userStore", value: storeJson },
           { name: "dts.platform.session.loginTs", value: now },
           { name: "dts.platform.session.lastActivity", value: now },
         ],

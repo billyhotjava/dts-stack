@@ -500,6 +500,7 @@
             { "code": "FOUNDATION_DATASOURCE_DISABLE", "display": "停用数据源", "phases": ["BEGIN", "SUCCESS", "FAIL"], "supportsFlow": true },
             { "code": "FOUNDATION_SCHEMA_DISCOVER", "display": "探测数据源 Schema", "phases": ["SUCCESS", "FAIL"], "supportsFlow": false },
             { "code": "FOUNDATION_ODS_PREVIEW", "display": "预览 ODS 与 dbt source", "phases": ["SUCCESS", "FAIL"], "supportsFlow": false },
+            { "code": "FOUNDATION_ODS_PRECHECK", "display": "执行 ODS 同步任务预检", "phases": ["SUCCESS", "FAIL"], "supportsFlow": false },
             { "code": "FOUNDATION_ODS_APPLY", "display": "生成 ODS 映射与 dbt source", "phases": ["SUCCESS", "FAIL"], "supportsFlow": false },
             { "code": "FOUNDATION_SYNC_TASK_DRAFT", "display": "生成同步任务草稿", "phases": ["SUCCESS", "FAIL"], "supportsFlow": false }
           ]

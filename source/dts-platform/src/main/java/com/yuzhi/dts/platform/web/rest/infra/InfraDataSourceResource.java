@@ -15,6 +15,7 @@ import com.yuzhi.dts.platform.service.infra.dto.InfraDataSourceDto;
 import com.yuzhi.dts.platform.service.infra.dto.OdsGenerationDtos.OdsGenerationApplyResult;
 import com.yuzhi.dts.platform.service.infra.dto.OdsGenerationDtos.OdsGenerationPreviewResponse;
 import com.yuzhi.dts.platform.service.infra.dto.OdsGenerationDtos.OdsGenerationRequest;
+import com.yuzhi.dts.platform.service.infra.dto.OdsGenerationDtos.OdsPrecheckResponse;
 import com.yuzhi.dts.platform.service.infra.dto.OdsGenerationDtos.OdsSyncTaskDraftResponse;
 import com.yuzhi.dts.platform.service.infra.dto.SchemaDiscoverDtos.SchemaDiscoverRequest;
 import com.yuzhi.dts.platform.service.infra.dto.SchemaDiscoverDtos.SchemaDiscoverResponse;
@@ -397,6 +398,34 @@ public class InfraDataSourceResource {
         meta.put("dbt", result.dbtMessage());
         auditService.auditAction("FOUNDATION_ODS_APPLY", AuditStage.SUCCESS, id.toString(), meta);
         return ApiResponses.ok(result);
+    }
+
+    @PostMapping("/{id}/ods-precheck")
+    @PreAuthorize(INFRA_MAINTAINER_EXPRESSION)
+    public ApiResponse<OdsPrecheckResponse> precheckOdsGeneration(
+        @PathVariable UUID id,
+        @RequestBody OdsGenerationRequest request,
+        @RequestHeader(value = "X-Active-Dept", required = false) String activeDept
+    ) {
+        InfraDataSourceDto dto = infraManagementService.getDataSource(id, activeDept);
+        if (!StringUtils.hasText(dto.jdbcUrl())) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "非 JDBC 数据源暂不支持 ODS 预检");
+        }
+        OdsPrecheckResponse response = odsGenerationService.precheck(infraManagementService.findEntity(id), request);
+        Map<String, Object> meta = new LinkedHashMap<>();
+        meta.put("summary", "同步任务生成前预检");
+        meta.put("id", id.toString());
+        meta.put("status", response.status());
+        meta.put("tables", response.tables() != null ? response.tables().size() : 0);
+        meta.put("failedRules", response.failedRules());
+        meta.put("warningRules", response.warningRules());
+        auditService.auditAction(
+            "FOUNDATION_ODS_PRECHECK",
+            response.failedRules() > 0 ? AuditStage.FAIL : AuditStage.SUCCESS,
+            id.toString(),
+            meta
+        );
+        return ApiResponses.ok(response);
     }
 
     @PostMapping("/{id}/sync-task-draft")

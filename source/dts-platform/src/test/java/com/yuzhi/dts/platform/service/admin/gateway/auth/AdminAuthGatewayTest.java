@@ -1,6 +1,9 @@
 package com.yuzhi.dts.platform.service.admin.gateway.auth;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.hamcrest.Matchers.containsString;
+import static org.hamcrest.Matchers.not;
+import static org.springframework.test.web.client.match.MockRestRequestMatchers.content;
 import static org.springframework.http.HttpMethod.GET;
 import static org.springframework.http.HttpMethod.POST;
 import static org.springframework.test.web.client.match.MockRestRequestMatchers.method;
@@ -10,6 +13,7 @@ import static org.springframework.test.web.client.response.MockRestResponseCreat
 import com.yuzhi.dts.platform.config.DtsAdminProperties;
 import com.yuzhi.dts.platform.service.admin.gateway.support.AdminGatewayHeaders;
 import com.yuzhi.dts.platform.service.admin.gateway.support.AdminGatewayTransport;
+import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -42,6 +46,37 @@ class AdminAuthGatewayTest {
         gateway = new AdminAuthGateway(transport, properties);
         RestTemplate restTemplate = (RestTemplate) ReflectionTestUtils.getField(transport, "restTemplate");
         server = MockRestServiceServer.bindTo(restTemplate).ignoreExpectOrder(true).build();
+    }
+
+    @Test
+    void profileShouldUseAuthenticatedProfileEndpointWithoutPassword() {
+        server
+            .expect(requestTo("http://dts-admin.test:8081/api/keycloak/auth/platform/profile?auditSilent=true"))
+            .andExpect(method(POST))
+            .andExpect(request -> assertThat(request.getHeaders().getFirst(HttpHeaders.AUTHORIZATION)).isEqualTo("Bearer kc-access"))
+            .andExpect(content().string(not(containsString("secret"))))
+            .andRespond(
+                withSuccess(
+                    """
+                    {
+                      "status":"SUCCESS",
+                      "data":{
+                        "user":{"username":"alice","roles":["ROLE_USER","ROLE_DEPT_DATA_OWNER"]}
+                      }
+                    }
+                    """,
+                    MediaType.APPLICATION_JSON
+                )
+            );
+
+        AdminAuthGateway.ProfileResult result = gateway.profile(
+            "alice",
+            Map.of("username", "alice", "roles", List.of("ROLE_USER")),
+            "kc-access"
+        );
+
+        assertThat(result.user()).containsEntry("username", "alice");
+        assertThat(result.user().get("roles")).asList().contains("ROLE_DEPT_DATA_OWNER");
     }
 
     @Test

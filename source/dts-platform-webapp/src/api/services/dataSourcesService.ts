@@ -283,6 +283,28 @@ export type OdsSyncTaskDraftResponse = {
 	warnings?: string[];
 };
 
+export type OdsPrecheckRuleResult = {
+	code: string;
+	level: "INFO" | "WARN" | "ERROR" | string;
+	status: "PASS" | "WARN" | "FAIL" | string;
+	target?: string;
+	message?: string;
+	suggestion?: string;
+};
+
+export type OdsPrecheckResponse = {
+	dataSourceId: string;
+	dataSourceName?: string;
+	status: "PASS" | "WARN" | "FAIL" | string;
+	totalRules: number;
+	passedRules: number;
+	warningRules: number;
+	failedRules: number;
+	rules?: OdsPrecheckRuleResult[];
+	tables?: OdsTablePlan[];
+	warnings?: string[];
+};
+
 export default {
 	list: () => apiClient.get<InfraDataSource[]>({ url: "/infra/data-sources" }),
 	detail: (id: string) => apiClient.get<InfraDataSource>({ url: `/infra/data-sources/${id}` }),
@@ -309,6 +331,8 @@ export default {
 		apiClient.post<OdsGenerationPreviewResponse>({ url: `/infra/data-sources/${id}/ods-preview`, data: payload }),
 	odsApply: (id: string, payload: OdsGenerationRequest) =>
 		apiClient.post<OdsGenerationApplyResult>({ url: `/infra/data-sources/${id}/ods-apply`, data: payload }),
+	odsPrecheck: (id: string, payload: OdsGenerationRequest) =>
+		apiClient.post<OdsPrecheckResponse>({ url: `/infra/data-sources/${id}/ods-precheck`, data: payload }),
 	syncTaskDraft: (id: string, payload: OdsGenerationRequest) =>
 		apiClient.post<OdsSyncTaskDraftResponse>({ url: `/infra/data-sources/${id}/sync-task-draft`, data: payload }),
 };

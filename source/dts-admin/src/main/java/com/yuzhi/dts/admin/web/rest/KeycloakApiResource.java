@@ -2962,7 +2962,7 @@ public class KeycloakApiResource {
 
         String normalized = username.toLowerCase(Locale.ROOT);
         boolean isProtected = PROTECTED_USERNAMES.contains(normalized);
-        Optional<AdminKeycloakUser> snapshot = adminUserService.findSnapshotByUsername(username);
+        Optional<AdminKeycloakUser> snapshot = Optional.ofNullable(adminUserService.findSnapshotByUsername(username)).orElse(Optional.empty());
         if (!isProtected && !snapshot.map(AdminKeycloakUser::isEnabled).orElse(false)) {
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(ApiResponse.error("用户尚未审批启用，请联系授权管理员"));
         }
@@ -3620,6 +3620,131 @@ public class KeycloakApiResource {
             upper = "ROLE_" + upper;
         }
         return upper;
+    }
+
+    private boolean isLocalRefreshSessionFailure(Exception ex) {
+        if (ex == null || !StringUtils.hasText(ex.getMessage())) {
+            return false;
+        }
+        String message = ex.getMessage();
+        return (
+            "unknown_refresh_token".equals(message) ||
+            "session_revoked".equals(message) ||
+            "session_expired".equals(message) ||
+            message.contains("refresh token 缺失")
+        );
+    }
+
+    private Map<String, Object> buildPlatformProfile(String username, Map<String, Object> keycloakUser, AdminKeycloakUser snapshot) {
+        Map<String, Object> userOut = new LinkedHashMap<>(keycloakUser == null ? Map.of() : keycloakUser);
+        userOut.put("username", username);
+        userOut.putIfAbsent("preferred_username", username);
+        userOut.putIfAbsent("enabled", Boolean.TRUE);
+        if (snapshot != null) {
+            if (StringUtils.hasText(snapshot.getKeycloakId())) {
+                userOut.put("id", snapshot.getKeycloakId());
+            }
+            userOut.put("enabled", snapshot.isEnabled());
+            putIfText(userOut, "fullName", snapshot.getFullName());
+            putIfText(userOut, "displayName", snapshot.getFullName());
+            putIfText(userOut, "name", snapshot.getFullName());
+            putIfText(userOut, "email", snapshot.getEmail());
+            putIfText(userOut, "phone", snapshot.getPhone());
+            putIfText(userOut, "person_security_level", snapshot.getPersonSecurityLevel());
+            putIfText(userOut, "personnel_level", snapshot.getPersonSecurityLevel());
+            putAttribute(userOut, "person_security_level", snapshot.getPersonSecurityLevel());
+            putAttribute(userOut, "personnel_level", snapshot.getPersonSecurityLevel());
+        }
+
+        LinkedHashSet<String> roles = new LinkedHashSet<>();
+        for (String authority : currentUserAuthorities()) {
+            String normalized = normalizeAuthority(authority);
+            if (normalized != null) {
+                roles.add(normalized);
+            }
+        }
+        for (String role : toTextList(userOut.get("roles"))) {
+            String normalized = normalizeAuthority(role);
+            if (normalized != null) {
+                roles.add(normalized);
+            }
+        }
+        if (snapshot != null) {
+            for (String role : snapshot.getRealmRoles()) {
+                String normalized = normalizeAuthority(role);
+                if (normalized != null) {
+                    roles.add(normalized);
+                }
+            }
+        }
+        try {
+            for (AdminRoleAssignment assignment : roleAssignRepo.findByUsernameIgnoreCase(username)) {
+                String authority = normalizeAuthority(assignment.getRole());
+                if (authority != null) {
+                    roles.add(authority);
+                }
+            }
+            for (AdminRoleMember member : roleMemberRepo.findByUsernameIgnoreCase(username)) {
+                String authority = normalizeAuthority(member.getRole());
+                if (authority != null) {
+                    roles.add(authority);
+                }
+            }
+        } catch (Exception ex) {
+            if (LOG.isDebugEnabled()) LOG.debug("DB role enrichment failed for {}: {}", username, ex.getMessage());
+        }
+        userOut.put("roles", List.copyOf(roles));
+        return userOut;
+    }
+
+    private Map<String, Object> extractPayloadMap(Map<String, Object> body, String key) {
+        if (body == null || key == null) {
+            return Map.of();
+        }
+        Object raw = body.get(key);
+        if (!(raw instanceof Map<?, ?> rawMap)) {
+            return Map.of();
+        }
+        Map<String, Object> result = new LinkedHashMap<>();
+        for (Map.Entry<?, ?> entry : rawMap.entrySet()) {
+            if (entry.getKey() != null) {
+                result.put(String.valueOf(entry.getKey()), entry.getValue());
+            }
+        }
+        return result;
+    }
+
+    private List<String> toTextList(Object value) {
+        if (value instanceof Collection<?> collection) {
+            return normalizeList(collection);
+        }
+        if (value instanceof String text && StringUtils.hasText(text)) {
+            return List.of(text.trim());
+        }
+        return List.of();
+    }
+
+    private void putAttribute(Map<String, Object> userOut, String key, String value) {
+        if (!StringUtils.hasText(key) || !StringUtils.hasText(value)) {
+            return;
+        }
+        Map<String, Object> attrs = new LinkedHashMap<>();
+        Object existing = userOut.get("attributes");
+        if (existing instanceof Map<?, ?> map) {
+            for (Map.Entry<?, ?> entry : map.entrySet()) {
+                if (entry.getKey() != null) {
+                    attrs.put(String.valueOf(entry.getKey()), entry.getValue());
+                }
+            }
+        }
+        attrs.put(key, List.of(value.trim()));
+        userOut.put("attributes", attrs);
+    }
+
+    private void putIfText(Map<String, Object> target, String key, String value) {
+        if (StringUtils.hasText(value)) {
+            target.put(key, value.trim());
+        }
     }
 
     private static String extractFromDn(String dn, String... keys) {

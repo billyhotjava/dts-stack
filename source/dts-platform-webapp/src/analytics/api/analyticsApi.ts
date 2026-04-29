@@ -1012,6 +1012,11 @@ export type ScreenAclEntry = {
 	subjectType: "USER" | "ROLE";
 	subjectId: string;
 	perm: "READ" | "MANAGE" | "OWNER";
+	/**
+	 * Sprint-18 大屏密级越级共享。仅对 perm=READ（后端 VIEWER）有意义；
+	 * 表示授予被分享人在自身密级低于大屏密级时仍可访问的权限。
+	 */
+	levelOverride?: boolean;
 	creatorId?: number | string;
 	createdAt?: string;
 	updatedAt?: string;
