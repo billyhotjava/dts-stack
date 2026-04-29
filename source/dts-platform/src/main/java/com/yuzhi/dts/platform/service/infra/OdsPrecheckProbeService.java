@@ -18,6 +18,7 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Properties;
 import java.util.Set;
+import java.util.UUID;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
@@ -33,15 +34,18 @@ public class OdsPrecheckProbeService {
 
     private final InfraSecretService secretService;
     private final HiveConnectionService hiveConnectionService;
+    private final DefaultDestinationSyncService destinationSyncService;
     private final ObjectMapper objectMapper;
 
     public OdsPrecheckProbeService(
         InfraSecretService secretService,
         HiveConnectionService hiveConnectionService,
+        DefaultDestinationSyncService destinationSyncService,
         ObjectMapper objectMapper
     ) {
         this.secretService = secretService;
         this.hiveConnectionService = hiveConnectionService;
+        this.destinationSyncService = destinationSyncService;
         this.objectMapper = objectMapper;
     }
 
@@ -97,7 +101,154 @@ public class OdsPrecheckProbeService {
                 )
             );
         }
+
+        rules.addAll(probeTarget(source, plans, props));
         return rules;
+    }
+
+    private List<OdsPrecheckRuleResult> probeTarget(
+        InfraDataSource source,
+        List<OdsTablePlanDto> plans,
+        Map<String, Object> sourceProps
+    ) {
+        if (boolProp(sourceProps, "precheckTargetWriteProbeDisabled", false)) {
+            return List.of(
+                rule(
+                    "TARGET_WRITE_PROBE_DISABLED",
+                    "INFO",
+                    true,
+                    source.getName(),
+                    "目标端写入预检已按数据源配置跳过",
+                    "移除 props.precheckTargetWriteProbeDisabled 后可启用目标 ODS schema 写入权限探测"
+                )
+            );
+        }
+        if (destinationSyncService == null) {
+            return List.of(
+                rule(
+                    "TARGET_DESTINATION_CONFIG",
+                    "WARN",
+                    false,
+                    source.getName(),
+                    "目标端预检服务不可用",
+                    "请确认 DefaultDestinationSyncService 已在平台服务中启用"
+                )
+            );
+        }
+        DefaultDestinationSyncService.DefaultDestinationSnapshot destination = destinationSyncService.ensureDefaultDestination();
+        if (destination == null || destination.isEmpty()) {
+            return List.of(
+                rule(
+                    "TARGET_DESTINATION_CONFIG",
+                    "ERROR",
+                    false,
+                    source.getName(),
+                    "默认目标数据湖未配置",
+                    "请先配置默认数据湖目标端，否则生成的同步任务无法落 ODS"
+                )
+            );
+        }
+
+        Map<String, Object> targetConfig = destination.destinationConfig();
+        String jdbcUrl = firstNonBlank(
+            stringProp(targetConfig, "jdbcUrl"),
+            stringProp(targetConfig, "jdbc_url"),
+            stringProp(targetConfig, "url"),
+            stringProp(targetConfig, "jdbc"),
+            stringProp(targetConfig, "jdbcURL")
+        );
+        String writerType = firstNonBlank(
+            destination.destinationDefinitionId(),
+            stringProp(targetConfig, "writerType"),
+            stringProp(targetConfig, "writer"),
+            stringProp(targetConfig, "type")
+        );
+        if (!StringUtils.hasText(jdbcUrl)) {
+            return List.of(
+                rule(
+                    "TARGET_WRITE_PERMISSION",
+                    "WARN",
+                    false,
+                    firstNonBlank(destination.destinationName(), writerType, source.getName()),
+                    "目标端未提供可解析 JDBC URL，无法执行写入权限探测",
+                    "如目标端为 JDBC/数据库写入器，请补齐 jdbcUrl；非 JDBC 写入器需提供对应引擎的权限探测适配器"
+                )
+            );
+        }
+
+        int timeoutSeconds = clamp(intProp(sourceProps, "precheckQueryTimeoutSeconds", DEFAULT_QUERY_TIMEOUT_SECONDS), 1, MAX_QUERY_TIMEOUT_SECONDS);
+        List<OdsPrecheckRuleResult> rules = new ArrayList<>();
+        try (Connection connection = openTargetConnection(jdbcUrl, targetConfig, sourceProps)) {
+            rules.add(
+                rule(
+                    "TARGET_PROBE_CONNECT",
+                    "INFO",
+                    true,
+                    firstNonBlank(destination.destinationName(), writerType, "default-destination"),
+                    "目标端 JDBC 连接可用于提交前预检",
+                    "继续执行 ODS schema 写入权限探测"
+                )
+            );
+            for (String schema : targetSchemas(plans)) {
+                probeTargetSchemaWrite(connection, schema, timeoutSeconds, rules);
+            }
+        } catch (Exception ex) {
+            LOG.debug("ODS target probe failed for {}: {}", destination.destinationName(), ex.getMessage(), ex);
+            rules.add(
+                rule(
+                    "TARGET_PROBE_CONNECT",
+                    "ERROR",
+                    false,
+                    firstNonBlank(destination.destinationName(), writerType, "default-destination"),
+                    "目标端 JDBC 连接无法执行提交前预检：" + safeMessage(ex),
+                    "请确认默认数据湖目标端 JDBC、凭据、网络和驱动配置"
+                )
+            );
+        }
+        return rules;
+    }
+
+    private void probeTargetSchemaWrite(
+        Connection connection,
+        String schema,
+        int timeoutSeconds,
+        List<OdsPrecheckRuleResult> rules
+    ) {
+        String normalizedSchema = StringUtils.hasText(schema) ? schema.trim() : "";
+        String tempTable = "__dts_precheck_write_" + UUID.randomUUID().toString().replace("-", "").substring(0, 12);
+        String qualified = qualifiedName(connection, normalizedSchema, tempTable);
+        String target = StringUtils.hasText(normalizedSchema) ? normalizedSchema : "default-schema";
+        boolean created = false;
+        try (Statement statement = connection.createStatement()) {
+            statement.setQueryTimeout(timeoutSeconds);
+            statement.execute("CREATE TABLE " + qualified + " (id integer)");
+            created = true;
+            rules.add(
+                rule(
+                    "TARGET_SCHEMA_WRITE_PERMISSION",
+                    "ERROR",
+                    true,
+                    target,
+                    "目标 ODS schema 可创建临时预检表：" + target,
+                    "目标端具备 ODS 建表权限"
+                )
+            );
+        } catch (SQLException ex) {
+            rules.add(
+                rule(
+                    "TARGET_SCHEMA_WRITE_PERMISSION",
+                    "ERROR",
+                    false,
+                    target,
+                    "目标 ODS schema 写入权限探测失败：" + safeMessage(ex),
+                    "请创建目标 schema，并授予同步账号 CREATE/ALTER/INSERT 权限"
+                )
+            );
+        } finally {
+            if (created) {
+                dropQuietly(connection, qualified, timeoutSeconds);
+            }
+        }
     }
 
     private void probeTable(
@@ -372,6 +523,67 @@ public class OdsPrecheckProbeService {
         }
     }
 
+    private Connection openTargetConnection(String jdbcUrl, Map<String, Object> targetConfig, Map<String, Object> sourceProps) throws SQLException {
+        Properties jdbcProps = new Properties();
+        String username = firstNonBlank(stringProp(targetConfig, "username"), stringProp(targetConfig, "user"));
+        String password = stringProp(targetConfig, "password");
+        if (StringUtils.hasText(username)) {
+            jdbcProps.setProperty("user", username);
+        }
+        if (StringUtils.hasText(password)) {
+            jdbcProps.setProperty("password", password);
+        }
+        Object jdbcProperties = targetConfig.get("jdbcProperties");
+        if (jdbcProperties instanceof Map<?, ?> map) {
+            for (Map.Entry<?, ?> entry : map.entrySet()) {
+                String key = entry.getKey() == null ? null : entry.getKey().toString();
+                String value = entry.getValue() == null ? null : entry.getValue().toString();
+                if (StringUtils.hasText(key) && value != null) {
+                    jdbcProps.setProperty(key.trim(), value);
+                }
+            }
+        }
+
+        ClassLoader previousCl = Thread.currentThread().getContextClassLoader();
+        ClassLoader jdbcLoader = hiveConnectionService != null ? hiveConnectionService.getJdbcDriverLoader() : null;
+        if (jdbcLoader != null) {
+            Thread.currentThread().setContextClassLoader(jdbcLoader);
+        }
+        try {
+            String driverClass = firstNonBlank(
+                stringProp(targetConfig, "driverClass"),
+                stringProp(targetConfig, "driver_class"),
+                inferDriverClass(jdbcUrl)
+            );
+            if (StringUtils.hasText(driverClass)) {
+                try {
+                    if (jdbcLoader != null) {
+                        Class.forName(driverClass, true, jdbcLoader);
+                    } else {
+                        Class.forName(driverClass);
+                    }
+                } catch (Throwable ex) {
+                    LOG.debug("Failed to load JDBC driver class {} for ODS target precheck: {}", driverClass, ex.getMessage());
+                }
+            }
+            try {
+                DriverManager.setLoginTimeout(clamp(intProp(sourceProps, "precheckLoginTimeoutSeconds", DEFAULT_LOGIN_TIMEOUT_SECONDS), 1, MAX_QUERY_TIMEOUT_SECONDS));
+            } catch (Throwable ignored) {}
+            return DriverManager.getConnection(jdbcUrl.trim(), jdbcProps);
+        } finally {
+            Thread.currentThread().setContextClassLoader(previousCl);
+        }
+    }
+
+    private void dropQuietly(Connection connection, String qualifiedTable, int timeoutSeconds) {
+        try (Statement statement = connection.createStatement()) {
+            statement.setQueryTimeout(timeoutSeconds);
+            statement.execute("DROP TABLE " + qualifiedTable);
+        } catch (SQLException ex) {
+            LOG.warn("Failed to cleanup ODS target precheck table {}: {}", qualifiedTable, ex.getMessage());
+        }
+    }
+
     private String qualifiedName(Connection connection, String schema, String table) {
         String quotedTable = quoteIdentifier(connection, table);
         if (!StringUtils.hasText(schema)) {
@@ -407,6 +619,18 @@ public class OdsPrecheckProbeService {
             }
         }
         return List.copyOf(seen);
+    }
+
+    private List<String> targetSchemas(List<OdsTablePlanDto> plans) {
+        Set<String> schemas = new LinkedHashSet<>();
+        if (plans != null) {
+            for (OdsTablePlanDto plan : plans) {
+                if (plan != null && StringUtils.hasText(plan.odsSchema())) {
+                    schemas.add(plan.odsSchema().trim());
+                }
+            }
+        }
+        return schemas.isEmpty() ? List.of("") : List.copyOf(schemas);
     }
 
     private String findColumn(OdsTablePlanDto plan, String columnName) {

@@ -34,10 +34,12 @@
 - 当前规则覆盖 JDBC 数据源、连接测试状态、源表/字段完整性、ODS 目标映射冲突、重复目标表、增量字段可用性和类型转换警告。
 - `OdsPrecheckProbeService` 新增源端只读探测：实际连接源端并校验源表 SELECT 权限、当前行数、主键空值/重复分组、增量字段空值；源表查询权限失败会阻断，质量探测失败或超时降级为 WARN。
 - 数据源可通过 `props.precheckQueryTimeoutSeconds` 调整深度探测超时时间，也可用 `props.precheckProbeDisabled=true` 跳过源端深度探测。
+- `OdsPrecheckProbeService` 继续补齐目标端写入探测：读取平台默认数据湖目标端，连接目标 JDBC，并对每个 ODS schema 尝试创建/删除临时预检表；默认目标端缺失、连接失败或 schema 写入失败会阻断提交。
+- 数据源可通过 `props.precheckTargetWriteProbeDisabled=true` 跳过目标端写入探测，用于非 JDBC 目标端或现场临时降级。
 - 增量 watermark 状态和审计沿用现有 `/incremental-states`、`/incremental-audits`，详情页和执行历史页已可查看。
 - Schema Discover 缓存刷新会产生 drift 摘要，支持新增/删除表和字段类型/nullable 变化识别。
 
 ## 待补
 
-- 目标端写入权限和深度类型兼容需要接入统一规则框架。
+- 深度类型兼容需要接入统一规则框架。
 - 数据量波动检测需要接入执行行数基线和告警阈值。

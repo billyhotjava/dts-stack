@@ -12,6 +12,7 @@ import { LineLoading } from "@/components/loading";
 import userService from "@/api/services/userService";
 
 type GuardState = "idle" | "refreshing" | "redirecting" | "forbidden";
+const ADMIN_SESSION_POLL_MS = 15_000;
 
 const extractRequestToken = (err: unknown): string | null => {
 	if (!isAxiosError(err)) return null;
@@ -77,6 +78,8 @@ export default function AdminGuard({ children }: Props) {
 		retryDelay: (attemptIndex) => Math.min(10_000, 1000 * 2 ** attemptIndex),
 		refetchOnReconnect: true,
 		refetchOnWindowFocus: true,
+		refetchInterval: guardState === "idle" && token?.accessToken ? ADMIN_SESSION_POLL_MS : false,
+		refetchIntervalInBackground: true,
 		// Only fetch when we have a token AND guard is idle — prevents 401 on login page
 		enabled: guardState === "idle" && Boolean(token?.accessToken),
 	});

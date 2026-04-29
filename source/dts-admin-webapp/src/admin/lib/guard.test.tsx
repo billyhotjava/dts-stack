@@ -11,6 +11,8 @@ describe("AdminGuard session resilience contract", () => {
 		expect(guardSource.includes("isRecoverableWhoamiError")).toBe(true);
 		expect(guardSource.includes("refetchOnReconnect: true")).toBe(true);
 		expect(guardSource.includes("refetchOnWindowFocus: true")).toBe(true);
+		expect(guardSource.includes("ADMIN_SESSION_POLL_MS")).toBe(true);
+		expect(guardSource.includes("refetchIntervalInBackground: true")).toBe(true);
 		expect(guardSource.includes("invalidateQueries")).toBe(true);
 		expect(guardSource.includes("管理服务连接中")).toBe(true);
 		expect(guardSource.includes("retry: false")).toBe(false);
