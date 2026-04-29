@@ -44,6 +44,27 @@ public class ScreenOwnershipService {
     @Transactional
     public AnalyticsScreenAccess createGrant(Long screenId, String granteeType, String granteeId,
                                               String permission, Long grantedBy) {
+        return createGrant(screenId, granteeType, granteeId, permission, grantedBy, false);
+    }
+
+    /**
+     * Sprint-18: create / update grant with explicit level_override flag.
+     *
+     * <p>Semantics:
+     * <ul>
+     *   <li>{@code levelOverride=true} only carries meaning for VIEWER grants.
+     *       OWNER / MANAGER bypass the classification gate by definition, so this
+     *       method silently coerces {@code levelOverride} to {@code false} for those
+     *       perms — keeps the table from carrying noise that could mislead an
+     *       auditor.</li>
+     *   <li>UPSERT semantics by (screenId, granteeType, granteeId) preserved. When
+     *       updating an existing grant, the new {@code levelOverride} replaces the
+     *       prior value.</li>
+     * </ul>
+     */
+    @Transactional
+    public AnalyticsScreenAccess createGrant(Long screenId, String granteeType, String granteeId,
+                                              String permission, Long grantedBy, boolean levelOverride) {
         Optional<AnalyticsScreenAccess> existing =
                 accessRepository.findByScreenIdAndGranteeTypeAndGranteeId(screenId, granteeType, granteeId);
 
@@ -53,6 +74,7 @@ public class ScreenOwnershipService {
         record.setGranteeId(granteeId);
         record.setPermission(permission);
         record.setGrantedBy(grantedBy);
+        record.setLevelOverride(levelOverride && "VIEWER".equalsIgnoreCase(permission));
         if (record.getGrantedAt() == null) {
             record.setGrantedAt(Instant.now());
         }
@@ -91,6 +113,7 @@ public class ScreenOwnershipService {
         map.put("granteeType", a.getGranteeType());
         map.put("granteeId", a.getGranteeId());
         map.put("permission", a.getPermission());
+        map.put("levelOverride", a.isLevelOverride());
         map.put("grantedBy", a.getGrantedBy());
         map.put("grantedAt", a.getGrantedAt());
         return map;

@@ -1191,10 +1191,16 @@ public class ScreenResource {
         ScreenPermissionService.PermissionSnapshot perms = screenPermissionService.snapshot(screen, user.orElseThrow(), context);
         if (!perms.isOwner()) return forbidden();
 
-        // Parse body: { granteeType: "USER"|"ROLE", granteeId: "...", permission: "VIEWER"|"MANAGER"|"READ"|"EDIT" }
+        // Parse body: {
+        //   granteeType: "USER"|"ROLE",
+        //   granteeId: "...",
+        //   permission: "VIEWER"|"MANAGER"|"READ"|"EDIT",
+        //   levelOverride: boolean (Sprint-18, optional, only meaningful for VIEWER)
+        // }
         String granteeType = body != null ? trimToNull(body.path("granteeType").asText(null)) : null;
         String granteeId = body != null ? trimToNull(body.path("granteeId").asText(null)) : null;
         String permission = body != null ? trimToNull(body.path("permission").asText(null)) : null;
+        boolean levelOverride = body != null && body.path("levelOverride").asBoolean(false);
 
         if (granteeType == null || granteeId == null || permission == null) {
             return ResponseEntity.badRequest().body(Map.of("error", "granteeType, granteeId, and permission are required"));
@@ -1215,16 +1221,22 @@ public class ScreenResource {
         if (!Set.of("VIEWER", "MANAGER").contains(resolvedPermission)) {
             return ResponseEntity.badRequest().body(Map.of("error", "permission must be VIEWER or MANAGER"));
         }
+        // Sprint-18：仅 VIEWER 类 grant 才能携带 level_override；MANAGER 本就豁免密级。
+        // service 层也会兜底强制（双重保险）；这里直接拒绝以给前端清晰错误信息。
+        if (levelOverride && !"VIEWER".equals(resolvedPermission)) {
+            return ResponseEntity.badRequest().body(Map.of("error", "levelOverride is only allowed on VIEWER grants"));
+        }
         try {
             Long grantedById = user.orElseThrow().getId();
             AnalyticsScreenAccess grant = screenOwnershipService.createGrant(
-                screen.getId(), granteeType.toUpperCase(), granteeId, resolvedPermission, grantedById);
+                screen.getId(), granteeType.toUpperCase(), granteeId, resolvedPermission, grantedById, levelOverride);
             java.util.LinkedHashMap<String, Object> grantMap = new java.util.LinkedHashMap<>();
             grantMap.put("id", grant.getId());
             grantMap.put("screenId", grant.getScreenId());
             grantMap.put("granteeType", grant.getGranteeType());
             grantMap.put("granteeId", grant.getGranteeId());
             grantMap.put("permission", grant.getPermission());
+            grantMap.put("levelOverride", grant.isLevelOverride());
             grantMap.put("grantedBy", grant.getGrantedBy() != null ? grant.getGrantedBy() : "");
             grantMap.put("grantedAt", grant.getGrantedAt() != null ? grant.getGrantedAt().toString() : "");
             screenAuditService.log(screen.getId(), user.orElseThrow().getId(), "grant.add", null,
