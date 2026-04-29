@@ -63,6 +63,7 @@ public class OdsGenerationService {
     private final CatalogColumnSyncService columnSyncService;
     private final DbtSourceService dbtSourceService;
     private final IngestionLineageWriter lineageWriter;
+    private final OdsPrecheckProbeService precheckProbeService;
 
     public OdsGenerationService(
         InfraOdsTableMappingRepository mappingRepository,
@@ -70,7 +71,8 @@ public class OdsGenerationService {
         CatalogTableSchemaRepository tableRepository,
         CatalogColumnSyncService columnSyncService,
         DbtSourceService dbtSourceService,
-        IngestionLineageWriter lineageWriter
+        IngestionLineageWriter lineageWriter,
+        OdsPrecheckProbeService precheckProbeService
     ) {
         this.mappingRepository = mappingRepository;
         this.datasetRepository = datasetRepository;
@@ -78,6 +80,7 @@ public class OdsGenerationService {
         this.columnSyncService = columnSyncService;
         this.dbtSourceService = dbtSourceService;
         this.lineageWriter = lineageWriter;
+        this.precheckProbeService = precheckProbeService;
     }
 
     public OdsGenerationPreviewResponse preview(InfraDataSource source, OdsGenerationRequest request) {
@@ -240,12 +243,14 @@ public class OdsGenerationService {
         );
 
         String syncMode = firstNonBlank(request == null ? null : request.syncMode(), "full_refresh");
+        String resolvedIncrementalColumn = null;
         if ("incremental".equalsIgnoreCase(syncMode)) {
             boolean incrementalOk = true;
             String incrementalMessage = "已识别多表共同增量字段";
             String incrementalSuggestion = "增量任务会使用共同候选字段推进 watermark";
             try {
                 String incrementalColumn = resolveIncrementalColumn(plans, syncMode);
+                resolvedIncrementalColumn = incrementalColumn;
                 incrementalMessage = "已识别增量字段：" + incrementalColumn;
             } catch (IllegalArgumentException ex) {
                 incrementalOk = false;
@@ -263,6 +268,10 @@ public class OdsGenerationService {
                 "同步模式为全量覆盖",
                 "可在增量字段明确后切换为时间戳增量"
             );
+        }
+
+        if (precheckProbeService != null) {
+            rules.addAll(precheckProbeService.probe(source, plans, syncMode, resolvedIncrementalColumn));
         }
 
         for (String warning : planWarnings.stream().filter(StringUtils::hasText).distinct().toList()) {

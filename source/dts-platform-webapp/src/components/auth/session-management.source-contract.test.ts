@@ -38,6 +38,8 @@ describe("platform session management source contract", () => {
 		expect(sessionManagerSource.includes("FOLLOWER_RECHECK_MS")).toBe(true);
 		expect(sessionManagerSource.includes("refreshPortalSessionIfPossible")).toBe(true);
 		expect(guardSource.includes("tokenExpiresAt - 10_000")).toBe(false);
+		expect(guardSource.includes("backend session probe unavailable, preserving local session")).toBe(true);
+		expect(guardSource.includes("forceLogout();\n\t\t\t\treturn;\n\t\t\t}\n\t\t\tsetSessionAuthenticated(true);")).toBe(false);
 		expect(loginPageSource.includes("tokenExpiresAt - 10_000")).toBe(false);
 		expect(guardSource.includes("getPortalSessionStatus(currentAccessToken)")).toBe(true);
 	});

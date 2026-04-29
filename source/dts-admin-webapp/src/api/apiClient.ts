@@ -133,6 +133,63 @@ axiosInstance.interceptors.request.use(
 
 let isRefreshing = false;
 let pendingQueue: Array<() => void> = [];
+const ADMIN_TOKEN_SYNC_KEY = "dts.admin.session.tokenSync";
+const SERVICE_UNAVAILABLE = new Set([502, 503, 504]);
+
+const parseRefreshTokenFromRequest = (config: AxiosRequestConfig | undefined): string | null => {
+	const data = config?.data;
+	if (!data) return null;
+	if (typeof data === "string") {
+		try {
+			const parsed = JSON.parse(data);
+			const token = typeof parsed?.refreshToken === "string" ? parsed.refreshToken.trim() : "";
+			return token || null;
+		} catch {
+			return null;
+		}
+	}
+	if (typeof data === "object") {
+		const token = typeof (data as any).refreshToken === "string" ? (data as any).refreshToken.trim() : "";
+		return token || null;
+	}
+	return null;
+};
+
+const adoptRecentSyncedTokenAfterRefreshRace = (failedRefreshToken: string | null): boolean => {
+	const state = userStore.getState() as any;
+	const currentToken = state.userToken || {};
+	const currentAccessToken = String(currentToken.accessToken || "").trim();
+	const currentRefreshToken = String(currentToken.refreshToken || "").trim();
+	if (failedRefreshToken && currentAccessToken && currentRefreshToken && currentRefreshToken !== failedRefreshToken) {
+		return true;
+	}
+	if (typeof localStorage === "undefined") {
+		return false;
+	}
+	try {
+		const raw = localStorage.getItem(ADMIN_TOKEN_SYNC_KEY);
+		if (!raw) return false;
+		const synced = JSON.parse(raw);
+		const syncedAt = Number(synced?.ts || 0);
+		const syncedAccessToken = String(synced?.accessToken || "").trim();
+		const syncedRefreshToken = String(synced?.refreshToken || "").trim();
+		if (!syncedAccessToken || !syncedRefreshToken || !syncedAt || Date.now() - syncedAt > 30_000) {
+			return false;
+		}
+		const differsFromFailedSession =
+			!failedRefreshToken || syncedRefreshToken !== failedRefreshToken || syncedAccessToken !== currentAccessToken;
+		if (!differsFromFailedSession) {
+			return false;
+		}
+		state.actions.setUserToken({
+			accessToken: syncedAccessToken,
+			refreshToken: syncedRefreshToken,
+		});
+		return true;
+	} catch {
+		return false;
+	}
+};
 
 axiosInstance.interceptors.response.use(
 	(res: AxiosResponse<Result<any>>) => {
@@ -230,6 +287,7 @@ axiosInstance.interceptors.response.use(
 					normalizedMessage === "network error" ||
 					normalizedMessage === "net::err_network_changed");
 			const offline = typeof navigator !== "undefined" && navigator.onLine === false;
+			const isTransientTransportError = isTimeout || isNetworkError || offline;
 			const toastMsg = isTimeout
 				? t("sys.api.apiTimeoutMessage")
 				: offline
@@ -238,11 +296,6 @@ axiosInstance.interceptors.response.use(
 			(error as any).message = toastMsg;
 			if (!shouldSuppressAuthHandling && !isLoginRequest) {
 				toast.error(toastMsg, { id: "api-network-error", position: "top-center" });
-				if (!isNetworkError && typeof window !== "undefined" && !window.location.pathname.includes("/auth/login")) {
-					setTimeout(() => {
-						window.location.replace("/auth/login");
-					}, 3000);
-				}
 			}
 			console.error("API Network Error:", {
 				code,
@@ -253,7 +306,7 @@ axiosInstance.interceptors.response.use(
 			});
 			const original = config as (AxiosRequestConfig & { _networkRetry?: boolean }) | undefined;
 			if (
-				isNetworkError &&
+				isTransientTransportError &&
 				original &&
 				!original._networkRetry &&
 				["get", "head", "options"].includes(String(original.method || "get").toLowerCase())
@@ -292,7 +345,6 @@ axiosInstance.interceptors.response.use(
 			Boolean(userStore.getState().userToken?.refreshToken) &&
 			!(error.config as any)?._retry;
 
-		const SERVICE_UNAVAILABLE = new Set([502, 503, 504]);
 		const isServiceUnavailable = SERVICE_UNAVAILABLE.has(response?.status ?? 0);
 
 		// session-expired / session-conflict 场景由 AdminGuard 统一弹 toast 并跳转，避免双 toast
@@ -300,12 +352,6 @@ axiosInstance.interceptors.response.use(
 			hasHeaderFlag(headers, "x-session-conflict") || hasHeaderFlag(headers, "x-session-expired");
 		if (!shouldSuppressAuthHandling && !isLoginRequest && !canSilentRefresh && !hasSessionSignalHeader) {
 			toast.error(errMsg, { id: "api-error", position: "top-center" });
-		}
-
-		if (isServiceUnavailable && typeof window !== "undefined" && !window.location.pathname.includes("/auth/login")) {
-			setTimeout(() => {
-				window.location.replace("/auth/login");
-			}, 3000);
 		}
 
 		if (is401) {
@@ -368,6 +414,11 @@ axiosInstance.interceptors.response.use(
 				// Only force logout for definite auth failures (refresh failure)
 				// Do NOT auto-logout for login failures or Keycloak admin endpoints that may 401/403 by design
 				if (isRefreshRequest) {
+					const failedRefreshToken = parseRefreshTokenFromRequest(error.config);
+					if (adoptRecentSyncedTokenAfterRefreshRace(failedRefreshToken)) {
+						console.warn("[admin-session] refresh 401 raced with another tab; preserved synced session");
+						return Promise.reject(error);
+					}
 					userStore.getState().actions.clearUserInfoAndToken();
 				} else if (isLoginRequest || isKeycloakAdminEndpoint || shouldSuppressAuthHandling) {
 					console.warn("[PROD] 401 on non-auth admin endpoint; session preserved");

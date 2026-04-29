@@ -703,96 +703,96 @@ export default function DataSourcesPage() {
 		const request = buildOdsRequest(record, tables);
 		const key = loadingKey || tables.map((table) => `${table.schema || ""}.${table.name}`).join("|");
 		setOdsPreviewingKey(key);
-			try {
-				const result = await dataSourcesService.odsPreview(record.id, request);
-				setOdsRequest(request);
-				setOdsPreview(result);
-				setOdsPrecheck(null);
-			} catch {
-				// handled by global interceptor
-			} finally {
-				setOdsPreviewingKey(null);
-			}
-		};
+		try {
+			const result = await dataSourcesService.odsPreview(record.id, request);
+			setOdsRequest(request);
+			setOdsPreview(result);
+			setOdsPrecheck(null);
+		} catch {
+			// handled by global interceptor
+		} finally {
+			setOdsPreviewingKey(null);
+		}
+	};
 
-		const renderOdsPrecheckSummary = (result: OdsPrecheckResponse) => {
-			const failed = (result.rules || []).filter((rule) => String(rule.status).toUpperCase() === "FAIL");
-			const warned = (result.rules || []).filter((rule) => String(rule.status).toUpperCase() === "WARN");
-			const rows = [...failed, ...warned].slice(0, 6);
-			return (
-				<div className="space-y-2">
-					<div>
-						规则 {result.totalRules || 0} 条，通过 {result.passedRules || 0}，警告 {result.warningRules || 0}，失败 {result.failedRules || 0}。
-					</div>
-					{rows.length ? (
-						<div className="space-y-1 text-xs text-slate-500">
-							{rows.map((rule) => (
-								<div key={`${rule.code}.${rule.target}`}>
-									<Tag color={String(rule.status).toUpperCase() === "FAIL" ? "red" : "gold"}>{rule.status}</Tag>
-									{rule.target ? `${rule.target}：` : ""}
-									{rule.message}
-									{rule.suggestion ? `；建议：${rule.suggestion}` : ""}
-								</div>
-							))}
-						</div>
-					) : null}
+	const renderOdsPrecheckSummary = (result: OdsPrecheckResponse) => {
+		const failed = (result.rules || []).filter((rule) => String(rule.status).toUpperCase() === "FAIL");
+		const warned = (result.rules || []).filter((rule) => String(rule.status).toUpperCase() === "WARN");
+		const rows = [...failed, ...warned].slice(0, 6);
+		return (
+			<div className="space-y-2">
+				<div>
+					规则 {result.totalRules || 0} 条，通过 {result.passedRules || 0}，警告 {result.warningRules || 0}，失败 {result.failedRules || 0}。
 				</div>
-			);
-		};
+				{rows.length ? (
+					<div className="space-y-1 text-xs text-slate-500">
+						{rows.map((rule) => (
+							<div key={`${rule.code}.${rule.target}`}>
+								<Tag color={String(rule.status).toUpperCase() === "FAIL" ? "red" : "gold"}>{rule.status}</Tag>
+								{rule.target ? `${rule.target}：` : ""}
+								{rule.message}
+								{rule.suggestion ? `；建议：${rule.suggestion}` : ""}
+							</div>
+						))}
+					</div>
+				) : null}
+			</div>
+		);
+	};
 
-		const runOdsPrecheck = async (silent = false) => {
-			if (!schemaDiscoverSource || !odsRequest) {
-				message.warning("请先预览 ODS 生成结果");
-				return null;
-			}
-			setOdsPrechecking(true);
-			try {
-				const result = await dataSourcesService.odsPrecheck(schemaDiscoverSource.id, odsRequest);
-				setOdsPrecheck(result);
-				if (!silent) {
-					const status = String(result?.status || "").toUpperCase();
-					if (status === "FAIL") {
-						Modal.error({ title: "提交前预检失败", content: renderOdsPrecheckSummary(result), width: 640 });
-					} else if (status === "WARN") {
-						Modal.warning({ title: "提交前预检存在警告", content: renderOdsPrecheckSummary(result), width: 640 });
-					} else {
-						Modal.success({ title: "提交前预检通过", content: renderOdsPrecheckSummary(result), width: 640 });
-					}
+	const runOdsPrecheck = async (silent = false) => {
+		if (!schemaDiscoverSource || !odsRequest) {
+			message.warning("请先预览 ODS 生成结果");
+			return null;
+		}
+		setOdsPrechecking(true);
+		try {
+			const result = await dataSourcesService.odsPrecheck(schemaDiscoverSource.id, odsRequest);
+			setOdsPrecheck(result);
+			if (!silent) {
+				const status = String(result?.status || "").toUpperCase();
+				if (status === "FAIL") {
+					Modal.error({ title: "提交前预检失败", content: renderOdsPrecheckSummary(result), width: 640 });
+				} else if (status === "WARN") {
+					Modal.warning({ title: "提交前预检存在警告", content: renderOdsPrecheckSummary(result), width: 640 });
+				} else {
+					Modal.success({ title: "提交前预检通过", content: renderOdsPrecheckSummary(result), width: 640 });
 				}
-				return result;
-			} catch {
-				return null;
-			} finally {
-				setOdsPrechecking(false);
 			}
-		};
+			return result;
+		} catch {
+			return null;
+		} finally {
+			setOdsPrechecking(false);
+		}
+	};
 
-		const confirmWarnPrecheck = (result: OdsPrecheckResponse) =>
-			new Promise<boolean>((resolve) => {
-				Modal.confirm({
-					title: "预检存在警告，是否继续生成同步任务？",
-					content: renderOdsPrecheckSummary(result),
-					okText: "继续生成",
-					cancelText: "返回调整",
-					width: 680,
-					onOk: () => resolve(true),
-					onCancel: () => resolve(false),
-				});
+	const confirmWarnPrecheck = (result: OdsPrecheckResponse) =>
+		new Promise<boolean>((resolve) => {
+			Modal.confirm({
+				title: "预检存在警告，是否继续生成同步任务？",
+				content: renderOdsPrecheckSummary(result),
+				okText: "继续生成",
+				cancelText: "返回调整",
+				width: 680,
+				onOk: () => resolve(true),
+				onCancel: () => resolve(false),
 			});
+		});
 
-		const ensureOdsPrecheckBeforeCreate = async () => {
-			const result = await runOdsPrecheck(true);
-			if (!result) return false;
-			const status = String(result.status || "").toUpperCase();
-			if (status === "FAIL") {
-				Modal.error({ title: "提交前预检失败", content: renderOdsPrecheckSummary(result), width: 640 });
-				return false;
-			}
-			if (status === "WARN") {
-				return confirmWarnPrecheck(result);
-			}
-			return true;
-		};
+	const ensureOdsPrecheckBeforeCreate = async () => {
+		const result = await runOdsPrecheck(true);
+		if (!result) return false;
+		const status = String(result.status || "").toUpperCase();
+		if (status === "FAIL") {
+			Modal.error({ title: "提交前预检失败", content: renderOdsPrecheckSummary(result), width: 640 });
+			return false;
+		}
+		if (status === "WARN") {
+			return confirmWarnPrecheck(result);
+		}
+		return true;
+	};
 
 	const handleOdsApply = async () => {
 		if (!schemaDiscoverSource || !odsRequest) {
@@ -818,16 +818,16 @@ export default function DataSourcesPage() {
 			message.warning("请先预览 ODS 生成结果");
 			return;
 		}
-			if (odsRequest.syncMode === "incremental" && !resolveCommonIncrementalCandidate(odsRequest.tables)) {
-				message.warning("增量同步需要所选表存在相同的增量字段候选");
-				return;
-			}
-			setSyncTaskCreating(true);
-			try {
-				const precheckOk = await ensureOdsPrecheckBeforeCreate();
-				if (!precheckOk) return;
-				const applyResult = await dataSourcesService.odsApply(schemaDiscoverSource.id, odsRequest);
-				const draft = await dataSourcesService.syncTaskDraft(schemaDiscoverSource.id, odsRequest);
+		if (odsRequest.syncMode === "incremental" && !resolveCommonIncrementalCandidate(odsRequest.tables)) {
+			message.warning("增量同步需要所选表存在相同的增量字段候选");
+			return;
+		}
+		setSyncTaskCreating(true);
+		try {
+			const precheckOk = await ensureOdsPrecheckBeforeCreate();
+			if (!precheckOk) return;
+			const applyResult = await dataSourcesService.odsApply(schemaDiscoverSource.id, odsRequest);
+			const draft = await dataSourcesService.syncTaskDraft(schemaDiscoverSource.id, odsRequest);
 			if (!draft?.payload) {
 				throw new Error("未生成同步任务配置");
 			}
@@ -1314,20 +1314,20 @@ export default function DataSourcesPage() {
 					>
 						重新探测
 					</Button>,
-						<Button key="close" onClick={() => setSchemaModalOpen(false)}>
-							关闭
-						</Button>,
-						<Button
-							key="precheck"
-							disabled={!odsPreview}
-							loading={odsPrechecking}
-							onClick={() => void runOdsPrecheck(false)}
-						>
-							提交前预检
-						</Button>,
-						<Button
-							key="apply"
-							type="primary"
+					<Button key="close" onClick={() => setSchemaModalOpen(false)}>
+						关闭
+					</Button>,
+					<Button
+						key="precheck"
+						disabled={!odsPreview}
+						loading={odsPrechecking}
+						onClick={() => void runOdsPrecheck(false)}
+					>
+						提交前预检
+					</Button>,
+					<Button
+						key="apply"
+						type="primary"
 						disabled={!odsPreview}
 						loading={odsApplying}
 						onClick={handleOdsApply}
@@ -1352,9 +1352,9 @@ export default function DataSourcesPage() {
 						</span>
 						{schemaDiscoverResult?.cached ? <Tag color="gold">缓存</Tag> : <Tag color="green">实时</Tag>}
 					</div>
-						{schemaDiscoverResult?.drift ? (
-							<Alert
-								type="warning"
+					{schemaDiscoverResult?.drift ? (
+						<Alert
+							type="warning"
 							showIcon
 							message={`Schema drift：新增 ${schemaDiscoverResult.drift.addedTables || 0} 表，删除 ${schemaDiscoverResult.drift.removedTables || 0} 表，变更 ${schemaDiscoverResult.drift.changedTables || 0} 表`}
 							description={schemaDiscoverResult.drift.detailsJson ? (
@@ -1363,23 +1363,23 @@ export default function DataSourcesPage() {
 									<pre className="mt-2 max-h-48 overflow-auto text-xs">{schemaDiscoverResult.drift.detailsJson}</pre>
 								</details>
 							) : undefined}
-							/>
-						) : null}
-						{odsPrecheck ? (
-							<Alert
-								type={
-									String(odsPrecheck.status).toUpperCase() === "FAIL"
-										? "error"
-										: String(odsPrecheck.status).toUpperCase() === "WARN"
-											? "warning"
-											: "success"
-								}
-								showIcon
-								message={`提交前预检：${odsPrecheck.status}`}
-								description={`规则 ${odsPrecheck.totalRules || 0} 条，通过 ${odsPrecheck.passedRules || 0}，警告 ${odsPrecheck.warningRules || 0}，失败 ${odsPrecheck.failedRules || 0}`}
-							/>
-						) : null}
-						<div className="rounded border border-slate-200 p-3">
+						/>
+					) : null}
+					{odsPrecheck ? (
+						<Alert
+							type={
+								String(odsPrecheck.status).toUpperCase() === "FAIL"
+									? "error"
+									: String(odsPrecheck.status).toUpperCase() === "WARN"
+										? "warning"
+										: "success"
+							}
+							showIcon
+							message={`提交前预检：${odsPrecheck.status}`}
+							description={`规则 ${odsPrecheck.totalRules || 0} 条，通过 ${odsPrecheck.passedRules || 0}，警告 ${odsPrecheck.warningRules || 0}，失败 ${odsPrecheck.failedRules || 0}`}
+						/>
+					) : null}
+					<div className="rounded border border-slate-200 p-3">
 						<div className="mb-3 flex flex-wrap items-center gap-2">
 							<Text strong>任务生成配置</Text>
 							{odsConfig.syncMode === "incremental" && odsRequest ? (

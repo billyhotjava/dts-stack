@@ -112,15 +112,10 @@ export default function LoginAuthGuard({ children }: Props) {
 			setSessionAuthenticated(true);
 			setSessionChecked(true);
 		} catch (err) {
-			// 网络/异常也走阈值，避免网络抖动误杀。
-			failCountRef.current += 1;
-			console.warn(`[LoginAuthGuard] backend session probe error (attempt ${failCountRef.current}/2)`, err);
-			if (failCountRef.current >= 2) {
-				setSessionAuthenticated(false);
-				setSessionChecked(true);
-				forceLogout();
-				return;
-			}
+			// Backend restart / container replacement can make the status probe temporarily fail.
+			// Keep the local session and let the periodic probe recover; only explicit inactive
+			// statuses are allowed to force logout.
+			console.warn("[LoginAuthGuard] backend session probe unavailable, preserving local session", err);
 			setSessionAuthenticated(true);
 			setSessionChecked(true);
 		}

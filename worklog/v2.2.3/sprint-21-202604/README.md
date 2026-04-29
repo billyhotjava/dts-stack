@@ -180,12 +180,13 @@ Sprint-20 血缘模型 ──────────────────┘
 - 2026-04-29：推进 F7 质量预检与增量治理，任务中心新增列表级预检入口和预检状态列，复用现有 pre-check、watermark state/audit 与 schema drift 能力。
 - 2026-04-29：启动 F8 安全审计与验收，补齐平台侧 audit catalog 中 Connector Center 相关动作，登记连接器目录、数据源、Schema Discover、ODS 生成和同步任务草稿审计语义，并沉淀权限矩阵/验收路径。
 - 2026-04-29：继续推进 F7/F8，新增 `POST /api/infra/data-sources/{id}/ods-precheck`，在数据源页生成同步任务前执行 ODS/任务草稿预检，覆盖 JDBC 连接类型、连接测试状态、源表字段、目标 ODS 映射冲突、增量 watermark 字段和类型转换警告，并记录 `FOUNDATION_ODS_PRECHECK` 审计事件。
+- 2026-04-29：继续推进 F7 深度预检，新增源端只读探测服务，预检会实际验证源表 SELECT 权限，并尝试输出行数、主键空值/重复分组、增量字段空值规则；支持 `precheckQueryTimeoutSeconds` 和 `precheckProbeDisabled` 做现场降级。
 
 ## 仍待工业级补齐
 
 - 独立三步式同步任务向导、草稿恢复、字段选择/重命名和类型 override UI。
 - F6 Run Center 还需要把时间范围补数和 watermark 审计提升为列表级入口。
-- F7 precheck 已前置到建任务向导，后续还需要补齐源端权限探测、目标端写入探测、主键唯一性采样和行数波动规则。
+- F7 precheck 已前置到建任务向导并覆盖源端查询权限、主键唯一性和增量字段非空率，后续还需要补齐目标端写入探测、深度类型兼容和行数波动规则。
 - F8 需要继续补端到端验收脚本、样例数据、任务执行/重跑审计闭环和发布材料。
 
 ## 相关 Sprint

@@ -47,6 +47,14 @@ const hasResponseHeader = (err: unknown, header: string): boolean => {
 	return Boolean(value);
 };
 
+const isRecoverableWhoamiError = (err: unknown): boolean => {
+	if (!err) return false;
+	if (!isAxiosError(err)) return true;
+	const status = err.response?.status;
+	if (!status) return true;
+	return status >= 500 || status === 408 || status === 429;
+};
+
 interface Props {
 	children: React.ReactNode;
 }
@@ -65,7 +73,10 @@ export default function AdminGuard({ children }: Props) {
 	const { data, isLoading, isError, error } = useQuery({
 		queryKey: ["admin", "whoami"],
 		queryFn: adminApi.getWhoami,
-		retry: false,
+		retry: (failureCount, err) => isRecoverableWhoamiError(err) && failureCount < 6,
+		retryDelay: (attemptIndex) => Math.min(10_000, 1000 * 2 ** attemptIndex),
+		refetchOnReconnect: true,
+		refetchOnWindowFocus: true,
 		// Only fetch when we have a token AND guard is idle — prevents 401 on login page
 		enabled: guardState === "idle" && Boolean(token?.accessToken),
 	});
@@ -139,6 +150,10 @@ export default function AdminGuard({ children }: Props) {
 			return;
 		}
 
+		if (isError && isRecoverableWhoamiError(error)) {
+			return;
+		}
+
 		const shouldTryRefresh = !triedRefresh && token?.refreshToken && status === 401;
 
 		if (shouldTryRefresh) {
@@ -194,6 +209,16 @@ export default function AdminGuard({ children }: Props) {
 		queryClient,
 	]);
 
+	useEffect(() => {
+		if (guardState !== "idle" || !token?.accessToken || !isError || !isRecoverableWhoamiError(error)) {
+			return;
+		}
+		const timer = window.setTimeout(() => {
+			void queryClient.invalidateQueries({ queryKey: ["admin", "whoami"] });
+		}, 10_000);
+		return () => window.clearTimeout(timer);
+	}, [error, guardState, isError, queryClient, token?.accessToken]);
+
 	const session = useMemo(() => {
 		if (!data?.allowed) return null;
 		const normalizedRole = normalizeAdminRole(data.role);
@@ -205,10 +230,12 @@ export default function AdminGuard({ children }: Props) {
 		};
 	}, [data]);
 
-	if (isLoading && !session && guardState === "idle") {
+	const isRecovering = guardState === "idle" && isError && isRecoverableWhoamiError(error);
+	if ((isLoading || isRecovering) && !session && guardState === "idle") {
 		return (
-			<div className="flex h-full min-h-60 items-center justify-center">
+			<div className="flex h-full min-h-60 flex-col items-center justify-center gap-3 text-sm text-muted-foreground">
 				<LineLoading />
+				<span>管理服务连接中...</span>
 			</div>
 		);
 	}

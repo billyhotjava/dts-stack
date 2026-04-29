@@ -325,5 +325,5 @@
 | F7-质量预检与增量治理 | 5 | IN_PROGRESS |
 | F8-安全审计、验收与发布材料 | 4 | IN_PROGRESS |
 
-**统计**: READY=4, IN_PROGRESS=6, DONE=26, BLOCKED=0
+**统计**: READY=3, IN_PROGRESS=6, DONE=27, BLOCKED=0
 **设计文档**: `worklog/v2.2.3/sprint-21-202604/README.md`
