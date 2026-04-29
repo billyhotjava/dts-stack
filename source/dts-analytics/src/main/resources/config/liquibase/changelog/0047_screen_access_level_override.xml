@@ -6,7 +6,7 @@
         http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.22.xsd">
 
     <!--
-        Sprint-18 大屏密级越级共享：在 analytics_screen_access 上加 level_override。
+        大屏密级越级共享：在 analytics_screen_access 上加 level_override。
         - 用于标记 owner 给 grantee 授予的"越级查看"权限：当 caller 的人员密级低于
           screen.classification 时，仅对 levelOverride=true 的 VIEWER grant 放行。
         - 默认 false，对历史数据不构成行为变化（已有 grant 维持非越级语义）。

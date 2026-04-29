@@ -48,7 +48,7 @@ public class ScreenOwnershipService {
     }
 
     /**
-     * Sprint-18: create / update grant with explicit level_override flag.
+     * create / update grant with explicit level_override flag.
      *
      * <p>Semantics:
      * <ul>

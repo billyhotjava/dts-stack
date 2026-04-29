@@ -1196,7 +1196,7 @@ public class ScreenResource {
         //   granteeType: "USER"|"ROLE",
         //   granteeId: "...",
         //   permission: "VIEWER"|"MANAGER"|"READ"|"EDIT",
-        //   levelOverride: boolean (Sprint-18, optional, only meaningful for VIEWER)
+        //   levelOverride: boolean (optional, only meaningful for VIEWER)
         // }
         String granteeType = body != null ? trimToNull(body.path("granteeType").asText(null)) : null;
         String granteeId = body != null ? trimToNull(body.path("granteeId").asText(null)) : null;
@@ -1222,7 +1222,7 @@ public class ScreenResource {
         if (!Set.of("VIEWER", "MANAGER").contains(resolvedPermission)) {
             return ResponseEntity.badRequest().body(Map.of("error", "permission must be VIEWER or MANAGER"));
         }
-        // Sprint-18：仅 VIEWER 类 grant 才能携带 level_override；MANAGER 本就豁免密级。
+        // 仅 VIEWER 类 grant 才能携带 level_override；MANAGER 本就豁免密级。
         // service 层也会兜底强制（双重保险）；这里直接拒绝以给前端清晰错误信息。
         if (levelOverride && !"VIEWER".equals(resolvedPermission)) {
             return ResponseEntity.badRequest().body(Map.of("error", "levelOverride is only allowed on VIEWER grants"));
@@ -1249,7 +1249,7 @@ public class ScreenResource {
     }
 
     /**
-     * Sprint-18 大屏密级独立修改入口。
+     * 大屏密级独立修改入口。
      *
      * <p>大屏 PUT /{id} 只接受 ScreenWritePayload（结构 / 主题 / 组件等），不含
      * classification；publish endpoint 虽然能改 classification 但会触发版本切换，

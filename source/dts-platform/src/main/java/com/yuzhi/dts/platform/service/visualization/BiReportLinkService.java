@@ -89,7 +89,7 @@ public class BiReportLinkService {
 
         boolean superAdmin = hasGlobalManageScope();
         Instant now = Instant.now();
-        // Sprint-18：原先 listPublished 在 line 93-95 inline 跑 classification / role / dept
+        // 原先 listPublished 在 line 93-95 inline 跑 classification / role / dept
         // 三个 filter，现在统一交给 DashboardAccessGuard.canView()。Guard 在 role/dept
         // 维度的 fallback 行为（空 csv = 不限制；institutePrivileged 仅豁免部门）跟原
         // listPublished 一致；额外覆盖 owner / MANAGE / VIEW grant / level_override 共享。
@@ -212,7 +212,7 @@ public class BiReportLinkService {
             }
             createdJustNow = true;
         }
-        // Sprint-18：对已存在的大屏镜像做 Guard 校验。
+        // 对已存在的大屏镜像做 Guard 校验。
         // - DENY → 不写 visit，写审计 failure（信息泄露考虑：不返 error 给前端，
         //   静默丢弃 + 留审计便于追溯）
         // - OVERRIDE_USED → 写一条独立审计；越级访问的合规留痕

@@ -16,7 +16,7 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
 
 /**
- * 大屏共享服务（Sprint-18）。封装授予 / 撤销 / 列出 grant 的业务逻辑：
+ * 大屏共享服务。封装授予 / 撤销 / 列出 grant 的业务逻辑：
  * - 授予 / 撤销前由 DashboardAccessGuard 决定 caller 是否有权限
  * - 所有成功 / 拒绝结果都写审计（AuditService）
  * - 严格策略 1：MANAGE 不能再传递（仅 owner / superAdmin 能授 MANAGE）

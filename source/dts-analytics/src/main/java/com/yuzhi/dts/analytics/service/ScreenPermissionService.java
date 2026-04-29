@@ -29,7 +29,7 @@ import org.springframework.stereotype.Service;
  * Original creator bypass: {@code screen.creator_id == user.id} → full access.
  * Both bypasses ignore classification clearance.
  *
- * <p>Sprint-18 classification gate: callers without OWNER/MANAGER perms also need their
+ * <p>classification gate: callers without OWNER/MANAGER perms also need their
  * personnel-level clearance ≥ {@code screen.classification}. The clearance ladder is
  * PUBLIC &lt; INTERNAL &lt; SECRET &lt; CONFIDENTIAL, sourced from the X-DTS-Classification
  * header (see PlatformContext). When clearance is insufficient, only a VIEWER grant with
@@ -84,7 +84,7 @@ public class ScreenPermissionService {
         }
 
         /**
-         * Sprint-18: VIEWER admitted only because grantee holds a level_override grant
+         * VIEWER admitted only because grantee holds a level_override grant
          * while their personnel-level clearance is below screen.classification.
          */
         public static PermissionSnapshot readOnlyOverride() {
@@ -101,7 +101,7 @@ public class ScreenPermissionService {
     /**
      * Build a permission snapshot by querying the local access table.
      *
-     * <p>Sprint-18: this overload does <strong>not</strong> apply the classification gate
+     * <p>this overload does <strong>not</strong> apply the classification gate
      * because caller's personnel-level is unknown without {@link PlatformContext}.
      * Treated as "callerClassification = null" → no clearance check (caller's
      * responsibility to use the {@link PlatformContext} overload when classification
@@ -122,7 +122,7 @@ public class ScreenPermissionService {
     }
 
     /**
-     * Sprint-18 core: snapshot with explicit caller classification. Used internally;
+     * core: snapshot with explicit caller classification. Used internally;
      * also exposed for callers that source classification from somewhere other than
      * {@link PlatformContext}.
      */

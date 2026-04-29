@@ -50,7 +50,7 @@ public class ClassificationUtils {
     }
 
     /**
-     * Sprint-18: 返回当前用户允许访问的所有 classification 取值（PUBLIC/INTERNAL/SECRET/CONFIDENTIAL）。
+     * 返回当前用户允许访问的所有 classification 取值（PUBLIC/INTERNAL/SECRET/CONFIDENTIAL）。
      * 用于 DashboardAccessGuard 等需要把"密级判定"以纯数据形式注入的场景。复用 getCurrentUserMaxLevel
      * 已有的 personnel_level claim → ROLE_xxx fallback → property default 三级解析，
      * 与 canAccess 完全等价，行为不分叉。

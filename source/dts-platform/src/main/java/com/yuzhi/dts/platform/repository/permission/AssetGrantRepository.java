@@ -64,7 +64,7 @@ public interface AssetGrantRepository extends JpaRepository<AssetGrant, Long> {
 
     /**
      * 单资产 / 单用户的有效 grant 列表（仅 grantee_type=USER）。
-     * Sprint-18 大屏密级共享：DashboardAccessGuard 通过本查询判定
+     * 大屏密级共享：DashboardAccessGuard 通过本查询判定
      * 用户是否拥有 MANAGE / VIEW / level_override 等权限。
      */
     @Query("""

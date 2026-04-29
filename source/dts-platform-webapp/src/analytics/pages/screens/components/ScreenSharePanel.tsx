@@ -29,7 +29,7 @@ export function ScreenSharePanel({ open, screenId, onClose, isOwner = false }: S
 	const [error, setError] = useState<string | null>(null);
 	const [entries, setEntries] = useState<ScreenAclEntry[]>([]);
 	const [userNameMap, setUserNameMap] = useState<Record<string, string>>({});
-	// Sprint-18 大屏密级 — 仅 owner 可改；非 owner 只展示。
+	// 大屏密级 — 仅 owner 可改；非 owner 只展示。
 	const [classification, setClassification] = useState<string>('');
 	const [classificationSaving, setClassificationSaving] = useState(false);
 
@@ -39,7 +39,7 @@ export function ScreenSharePanel({ open, screenId, onClose, isOwner = false }: S
 	const [searching, setSearching] = useState(false);
 	const [selectedUserIds, setSelectedUserIds] = useState<Set<string>>(new Set());
 	const [addPerm, setAddPerm] = useState<'READ' | 'MANAGE'>('READ');
-	// Sprint-18 大屏密级越级共享 — 仅对 READ（VIEWER）grant 有意义。
+	// 大屏密级越级共享 — 仅对 READ（VIEWER）grant 有意义。
 	const [addLevelOverride, setAddLevelOverride] = useState(false);
 	const searchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -77,7 +77,7 @@ export function ScreenSharePanel({ open, screenId, onClose, isOwner = false }: S
 		setUserNameMap((prev) => ({ ...prev, ...nameMap }));
 	}, []);
 
-	// Load ACL entries + screen classification (Sprint-18)
+	// Load ACL entries + screen classification
 	const loadAcl = useCallback(async () => {
 		if (!screenId) return;
 		setLoading(true);
@@ -100,7 +100,7 @@ export function ScreenSharePanel({ open, screenId, onClose, isOwner = false }: S
 		}
 	}, [screenId, resolveUserNames]);
 
-	// Sprint-18：原地修改大屏密级（仅 owner）
+	// 原地修改大屏密级（仅 owner）
 	const handleClassificationChange = useCallback(
 		async (next: string) => {
 			if (!screenId || !next) return;
@@ -299,7 +299,7 @@ export function ScreenSharePanel({ open, screenId, onClose, isOwner = false }: S
 			)}
 
 			{/*
-				Sprint-18 大屏密级 — 仅 owner 可改；非 owner 只读展示。
+				大屏密级 — 仅 owner 可改；非 owner 只读展示。
 				密级决定哪些人员密级可见本大屏；选择"密级越级共享"会绕过此限制。
 			*/}
 			{screenId && (
@@ -583,7 +583,7 @@ export function ScreenSharePanel({ open, screenId, onClose, isOwner = false }: S
 						</Button>
 					</div>
 					{/*
-						Sprint-18：仅当授予 READ（查看者）时才允许"密级越级"。
+						仅当授予 READ（查看者）时才允许"密级越级"。
 						勾选后被分享人即便密级低于大屏密级也能看到，请确认其工作需要。
 						后端仍会校验：MANAGE/OWNER 跟 levelOverride 组合时直接 400。
 					*/}

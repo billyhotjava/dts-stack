@@ -183,7 +183,7 @@ class ScreenPermissionServiceTest {
     }
 
     // -----------------------------------------------------------------
-    // Sprint-18 密级闸门 + 越级共享
+    // 密级闸门 + 越级共享
     // -----------------------------------------------------------------
 
     private AnalyticsScreen screenWithLevel(long id, String classification) {

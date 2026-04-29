@@ -70,7 +70,7 @@ class BiReportLinkServiceTest {
 
     @Test
     void listPublishedShouldFilterByGuardDecision() {
-        // Sprint-18：listPublished 已不再 inline 跑 classification/role/dept 三道 filter，
+        // listPublished 已不再 inline 跑 classification/role/dept 三道 filter，
         // 这部分逻辑统一交给 DashboardAccessGuard。本测试只验证：
         //   service 把每个候选行问一次 Guard，Guard 拒绝的行不出现在结果里。
         SecurityContextHolder.getContext().setAuthentication(
@@ -192,7 +192,7 @@ class BiReportLinkServiceTest {
 
     @Test
     void touchVisitOnExistingMirrorShouldDenyWhenGuardDenies() {
-        // Sprint-18：已存在 mirror 且 Guard 拒绝时，不更新 lastVisitedAt 也不写 visit log；
+        // 已存在 mirror 且 Guard 拒绝时，不更新 lastVisitedAt 也不写 visit log；
         // 但应写一条 audit failure 留痕。
         UUID existingId = UUID.randomUUID();
         BiReportLink existing = buildLink("screen-99", "CONFIDENTIAL", null);
@@ -217,7 +217,7 @@ class BiReportLinkServiceTest {
 
     @Test
     void touchVisitOnExistingMirrorWithOverrideShouldWriteSeparateAudit() {
-        // Sprint-18：越级访问允许通过，但需要单独审计留痕，便于合规回溯。
+        // 越级访问允许通过，但需要单独审计留痕，便于合规回溯。
         UUID existingId = UUID.randomUUID();
         BiReportLink existing = buildLink("screen-77", "CONFIDENTIAL", null);
         existing.setId(existingId);

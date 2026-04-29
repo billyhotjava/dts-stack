@@ -49,7 +49,7 @@ public class AssetGrant extends AbstractAuditingEntity<Long> implements Serializ
     private String grantReason;
 
     /**
-     * 大屏密级越级共享标志位（Sprint-18）。
+     * 大屏密级越级共享标志位。
      * 当 grantee 的人员密级低于资产密级时，必须置为 true，
      * DashboardAccessGuard 据此放行越级访问；默认 false 不影响普通授权。
      */

@@ -11,7 +11,7 @@ import java.util.Set;
 import org.springframework.stereotype.Service;
 
 /**
- * Sprint-18 大屏密级与共享门禁。集中决定一个用户能不能查看 / 管理 / 共享指定大屏。
+ * 大屏密级与共享门禁。集中决定一个用户能不能查看 / 管理 / 共享指定大屏。
  *
  * 决策树（canView）—— 与 BiReportLinkService.listPublished 历史语义对齐：
  *   1. superAdmin / report.createdBy == caller / 持有 MANAGE grant → ALLOW

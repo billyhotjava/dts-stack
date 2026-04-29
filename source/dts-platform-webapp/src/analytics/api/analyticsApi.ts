@@ -1013,7 +1013,7 @@ export type ScreenAclEntry = {
 	subjectId: string;
 	perm: "READ" | "MANAGE" | "OWNER";
 	/**
-	 * Sprint-18 大屏密级越级共享。仅对 perm=READ（后端 VIEWER）有意义；
+	 * 大屏密级越级共享。仅对 perm=READ（后端 VIEWER）有意义；
 	 * 表示授予被分享人在自身密级低于大屏密级时仍可访问的权限。
 	 */
 	levelOverride?: boolean;
@@ -2271,7 +2271,7 @@ export const analyticsApi = {
 		body: { granteeType: string; granteeId: string; permission: string; levelOverride?: boolean },
 	) => requestJson<Record<string, unknown>>(`/bi/api/screens/${encodeURIComponent(String(id))}/grants`, "PUT", body),
 	/**
-	 * Sprint-18：原地更新大屏密级（PUBLIC/INTERNAL/SECRET/CONFIDENTIAL）。
+	 * 原地更新大屏密级（PUBLIC/INTERNAL/SECRET/CONFIDENTIAL）。
 	 * 仅 owner 可调；后端会写一条 screen.classification.update 审计。
 	 */
 	updateScreenClassification: (id: string | number, classification: string) =>
