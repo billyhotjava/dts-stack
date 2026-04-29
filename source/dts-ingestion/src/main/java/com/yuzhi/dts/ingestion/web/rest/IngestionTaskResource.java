@@ -278,8 +278,11 @@ public class IngestionTaskResource {
             );
             validateSyncModeCapability(connectorType, syncMode);
             boolean isApiSource = ApiConnectorTypes.CONNECTOR_TYPE.equals(connectorType);
-            if (isApiSource && !isDraft) {
-                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "API 数据接入运行时尚未启用，请先保存草稿");
+            // API ingestion uses a self-contained PythonOperator DAG (no Addax writer config).
+            // Force the create path through the draft branch; executing the task is done via the
+            // dedicated execute endpoint which knows how to skip Addax for API tasks.
+            if (isApiSource) {
+                isDraft = true;
             }
             List<String> streamTables = resolveStreamTables(request.streams());
             com.yuzhi.dts.ingestion.service.etl.IngestionSourceResolver.ResolvedSource resolvedSource =
@@ -519,7 +522,7 @@ public class IngestionTaskResource {
                     prefix,
                     safeMap(readerConfig),
                     safeMap(writerConfig),
-                    List.of()
+                    toLineageStreams(tableMapping)
                 )
             );
             if (lineageResult != null && !lineageResult.isEmpty()) {
@@ -1075,6 +1078,41 @@ public class IngestionTaskResource {
         }
         return mappings;
     }
+
+    private List<OpenMetadataAdapter.StreamRef> toLineageStreams(List<Map<String, String>> tableMapping) {
+        if (tableMapping == null || tableMapping.isEmpty()) {
+            return List.of();
+        }
+        List<OpenMetadataAdapter.StreamRef> streams = new ArrayList<>();
+        for (Map<String, String> mapping : tableMapping) {
+            if (mapping == null || mapping.isEmpty()) {
+                continue;
+            }
+            TableRef source = parseTableRef(mapping.get("source"));
+            TableRef target = parseTableRef(mapping.get("target"));
+            if (!StringUtils.hasText(source.name())) {
+                continue;
+            }
+            streams.add(new OpenMetadataAdapter.StreamRef(source.name(), source.namespace(), target.name(), target.namespace()));
+        }
+        return streams;
+    }
+
+    private TableRef parseTableRef(String raw) {
+        String value = normalize(raw);
+        if (!StringUtils.hasText(value)) {
+            return new TableRef(null, null);
+        }
+        String[] parts = value.split("\\.");
+        if (parts.length == 1) {
+            return new TableRef(parts[0], null);
+        }
+        String table = parts[parts.length - 1];
+        String namespace = parts.length >= 3 ? parts[parts.length - 2] : parts[0];
+        return new TableRef(table, namespace);
+    }
+
+    private record TableRef(String name, String namespace) {}
 
     private void applyTables(Map<String, Object> config, List<String> tables) {
         if (config == null || tables == null || tables.isEmpty()) {

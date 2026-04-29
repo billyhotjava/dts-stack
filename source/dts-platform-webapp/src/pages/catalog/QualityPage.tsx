@@ -39,6 +39,8 @@ type QualityResult = {
 	found?: boolean;
 	message?: string;
 	fqn?: string;
+	metadataSource?: string;
+	fallbackReason?: string;
 	snapshot?: {
 		summary?: QualitySummary;
 		cases?: QualityCase[];
@@ -71,6 +73,19 @@ const ABORTED_STATUSES = new Set(["SKIPPED", "ABORTED", "CANCELED"]);
 const normalizeStatus = (value?: string) => String(value || "").trim().toUpperCase();
 
 const latestTime = (run: GovernanceQualityRun) => run.finishedAt || run.startedAt || run.createdDate;
+
+const metadataSourceLabel = (value?: string) => {
+	const normalized = String(value || "").toLowerCase();
+	if (normalized === "catalog") return "本地 Catalog";
+	if (normalized === "openmetadata") return "OpenMetadata";
+	if (normalized === "disabled") return "未启用";
+	return "未知来源";
+};
+
+const qualitySourceLabel = (quality?: QualityResult | null) => {
+	if (quality?.source === "governance") return "治理运行结果";
+	return metadataSourceLabel(quality?.metadataSource || "openmetadata");
+};
 
 const toNumber = (value: unknown): number => {
 	const n = Number(value);
@@ -124,6 +139,7 @@ const toGovernanceQuality = (runs: GovernanceQualityRun[]): QualityResult => {
 		enabled: true,
 		found: true,
 		message: "已使用治理质量运行结果",
+		metadataSource: "catalog",
 		snapshot: {
 			summary: {
 				total: sorted.length,
@@ -205,11 +221,11 @@ export default function QualityPage() {
 				return;
 			}
 			const resp: any = await getDatasetQuality(id);
-			setQuality(resp ? ({ ...resp, source: "openmetadata" } as QualityResult) : null);
+			setQuality(resp ? ({ ...resp, source: "openmetadata", metadataSource: resp?.metadataSource || "openmetadata" } as QualityResult) : null);
 		} catch (error: any) {
 			try {
 				const resp: any = await getDatasetQuality(id);
-				setQuality(resp ? ({ ...resp, source: "openmetadata" } as QualityResult) : null);
+				setQuality(resp ? ({ ...resp, source: "openmetadata", metadataSource: resp?.metadataSource || "openmetadata" } as QualityResult) : null);
 			} catch {
 				// error toast handled by global interceptor
 				setQuality(null);
@@ -290,11 +306,12 @@ export default function QualityPage() {
 			) : quality?.found === false ? (
 				<Alert type="info" message={quality?.message || "未找到质量结果"} showIcon />
 			) : null}
-			{quality?.found !== false ? (
+			{quality ? (
 				<Alert
-					type="info"
+					type={quality.fallbackReason ? "warning" : "info"}
 					showIcon
-					message={`当前数据来源：${quality?.source === "governance" ? "治理运行结果" : "OpenMetadata 快照"}`}
+					message={`当前数据来源：${qualitySourceLabel(quality)}`}
+					description={quality.fallbackReason || undefined}
 				/>
 			) : null}
 

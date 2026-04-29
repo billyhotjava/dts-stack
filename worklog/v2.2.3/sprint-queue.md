@@ -275,18 +275,36 @@
 **设计文档**: `worklog/v2.2.3/sprint-18-202604/README.md`
 
 ## Sprint-19: OpenMetadata 元数据采集闭环修复 (202604)
-**状态**: READY
+**状态**: DONE
 **类型**: Implementation（OpenMetadata 集成修复 + 元数据采集闭环 + 运维验收）
 **目标**: 把现有 OpenMetadata 相关配置、采集、血缘、质量和平台查询能力从“部分接入但不稳定”收敛为可交付闭环：服务可用、采集可触发、FQN 可解析、血缘可注册、失败可观测、本地 catalog 回退边界清晰。
 
 | Feature | Task 数 | 状态 |
 |---------|---------|------|
-| F1-配置与部署基线 | 4 | READY |
-| F2-Ingestion适配层 | 4 | READY |
-| F3-血缘注册与标签治理 | 4 | READY |
-| F4-OpenMetadata采集作业运维化 | 4 | READY |
-| F5-平台读路径与本地回退 | 4 | READY |
-| F6-测试验收与发布材料 | 3 | READY |
+| F1-配置与部署基线 | 4 | DONE |
+| F2-Ingestion适配层 | 4 | DONE |
+| F3-血缘注册与标签治理 | 4 | DONE |
+| F4-OpenMetadata采集作业运维化 | 4 | DONE |
+| F5-平台读路径与本地回退 | 4 | DONE |
+| F6-测试验收与发布材料 | 3 | DONE |
 
-**统计**: READY=23, IN_PROGRESS=0, DONE=0, BLOCKED=0
+**统计**: READY=0, IN_PROGRESS=0, DONE=23, BLOCKED=0
 **设计文档**: `worklog/v2.2.3/sprint-19-202604/README.md`
+
+## Sprint-20: Data Lineage 端到端可视化打通 (202604)
+**状态**: READY
+**类型**: Implementation（跨 dts-ingestion / dts-platform / dts-platform-webapp 三模块）
+**目标**: 把"采集 → 编排 → 加工 → 资产 → 可视化"主链路上散落的 lineage 信号收敛成统一血缘图，前端 LineagePage 能从源系统追到 BI 报表，支持影响分析、列级追溯、时间旅行。基于 ELT 链路 review 的 8 个断点（Addax 入湖未回写血缘、Airflow DAG 无 inlets/outlets、IngestionExecution 不记 source/target、列级缺失、无 job 节点维度、前端固定栅格、无时间旅行、API 缺 includeColumns 等）。
+
+| Feature | Task 数 | 状态 |
+|---------|---------|------|
+| F1-Addax入湖血缘自动回写 | 4 | READY |
+| F2-Airflow执行级血缘 | 4 | READY |
+| F3-列级血缘 | 4 | READY |
+| F4-Job节点与Pipeline维度 | 3 | READY |
+| F5-前端可视化重做 | 5 | READY |
+| F6-时间旅行与Diff | 3 | READY |
+| F7-集成验收 | 3 | READY |
+
+**统计**: READY=26, IN_PROGRESS=0, DONE=0, BLOCKED=0
+**设计文档**: `worklog/v2.2.3/sprint-20-202604/README.md`

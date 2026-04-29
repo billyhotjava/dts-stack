@@ -241,9 +241,6 @@ public class IngestionTaskService {
                     existingTask.setSyncConfig(dto.getSyncConfig());
                 }
                 boolean apiSourceTask = isApiSourceTask(existingTask);
-                if (apiSourceTask) {
-                    existingTask.setStatus("draft");
-                }
                 // 如果配置改变，重新生成Addax Job JSON
                 boolean sourceChanged = !java.util.Objects.equals(before.getSourceDataSourceId(), existingTask.getSourceDataSourceId());
                 boolean configChanged = sourceChanged
@@ -256,7 +253,8 @@ public class IngestionTaskService {
                     || !java.util.Objects.equals(before.getAddaxConfig(), existingTask.getAddaxConfig());
 
                 if (configChanged && apiSourceTask) {
-                    existingTask.setStatus("draft");
+                    // API tasks don't generate Addax JSON; clear any stale path so the
+                    // API DAG branch (PythonOperator) can be regenerated from latest config.
                     existingTask.setAddaxJobPath(null);
                 } else if (configChanged) {
                     try {
@@ -275,9 +273,7 @@ public class IngestionTaskService {
                 }
 
                 IngestionTask updatedTask = taskRepository.save(existingTask);
-                if (!isApiSourceTask(updatedTask)) {
-                    updatedTask = ensureAirflowDag(updatedTask);
-                }
+                updatedTask = ensureAirflowDag(updatedTask);
                 log.info("Updated ingestion task ID: {} by user: {}", id, updatedTask.getLastModifiedBy());
 
                 try {
@@ -287,7 +283,7 @@ public class IngestionTaskService {
                 }
 
                 // Preheat: asynchronously poll Airflow so the DAG is registered before the user clicks execute
-                if (!isApiSourceTask(updatedTask) && StringUtils.hasText(updatedTask.getAirflowDagId())) {
+                if (StringUtils.hasText(updatedTask.getAirflowDagId())) {
                     dagPreheatService.preheatDag(updatedTask.getAirflowDagId());
                 }
 
@@ -542,10 +538,15 @@ public class IngestionTaskService {
             Map<String, Object> runtimeContext = buildExecutionRuntimeContext(task, execution);
             task = ensureAddaxJobExists(task, source, runtimeReaderOverrides, runtimeContext);
             execution.setDroppedTables(resolveDroppedTables(task));
-            if (!isFileSourceType(task.getSourceType())) {
+            boolean apiTask = isApiSourceTask(task);
+            // API tasks provision their ODS landing table inside the DAG (raw_record + technical columns),
+            // and they don't have an Addax job to resolve writer columns from.
+            if (!isFileSourceType(task.getSourceType()) && !apiTask) {
                 targetTableProvisioner.ensureTargetTables(task, source == null ? null : source.readerConfig(), execution);
             }
-            addaxJobService.resolveWriterColumnsIfNeeded(task.getAddaxJobPath());
+            if (!apiTask) {
+                addaxJobService.resolveWriterColumnsIfNeeded(task.getAddaxJobPath());
+            }
             if (airflowEnabled && task.getAirflowEnabled() == null) {
                 task.setAirflowEnabled(true);
                 task = taskRepository.save(task);
@@ -557,12 +558,14 @@ public class IngestionTaskService {
             execution.setStartTime(Instant.now());
 
             if (airflowEnabled) {
-                String airflowJobPath = addaxJobService.toContainerJobPath(task.getAddaxJobPath());
-                if (!StringUtils.hasText(airflowJobPath)) {
-                    throw new IllegalStateException("Addax 作业路径无效，请先重建作业");
-                }
                 Map<String, Object> conf = new java.util.LinkedHashMap<>();
-                conf.put("job_path", airflowJobPath);
+                if (!apiTask) {
+                    String airflowJobPath = addaxJobService.toContainerJobPath(task.getAddaxJobPath());
+                    if (!StringUtils.hasText(airflowJobPath)) {
+                        throw new IllegalStateException("Addax 作业路径无效，请先重建作业");
+                    }
+                    conf.put("job_path", airflowJobPath);
+                }
                 conf.put("task_id", taskId);
                 conf.put("task_name", StringUtils.hasText(task.getName()) ? task.getName() : ("task-" + taskId));
                 conf.put("batch_id", execution.getBatchId());
@@ -741,9 +744,6 @@ public class IngestionTaskService {
         if (!"active".equals(task.getStatus()) && !"draft".equals(task.getStatus())) {
             throw new IllegalStateException("Task is not in executable status: " + task.getStatus());
         }
-        if (isApiSourceTask(task)) {
-            throw new IllegalStateException("API 数据接入运行时尚未启用，请先保存草稿");
-        }
         GovernancePolicy policy = resolveGovernancePolicy(task);
         if (!isWithinExecutionWindow(policy)) {
             throw new IllegalStateException("不在允许执行窗口内，当前策略窗口: " + policy.windowDisplay());
@@ -840,6 +840,15 @@ public class IngestionTaskService {
         Map<String, Object> runtimeContext
     ) {
         if (task == null) {
+            return task;
+        }
+        // API tasks don't use Addax; their execution is encoded directly in a PythonOperator-based DAG.
+        // Skip Addax job generation entirely so we don't write malformed JSON for httpreader.
+        if (isApiSourceTask(task)) {
+            if (StringUtils.hasText(task.getAddaxJobPath())) {
+                task.setAddaxJobPath(null);
+                task = taskRepository.save(task);
+            }
             return task;
         }
         if (resolvedSource != null || task.getSourceDataSourceId() != null) {

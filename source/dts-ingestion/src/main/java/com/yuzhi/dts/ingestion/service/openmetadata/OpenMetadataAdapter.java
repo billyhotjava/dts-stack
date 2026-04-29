@@ -2,9 +2,12 @@ package com.yuzhi.dts.ingestion.service.openmetadata;
 
 import com.yuzhi.dts.ingestion.config.OpenMetadataProperties;
 import com.yuzhi.dts.ingestion.service.infra.IngestionSettingsService;
+import java.net.URI;
+import java.net.URISyntaxException;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -28,7 +31,11 @@ public class OpenMetadataAdapter {
 
     public record LineageRequest(Boolean enabled, String domain, List<String> tags, String owner) {}
 
-    public record StreamRef(String name, String namespace) {}
+    public record StreamRef(String name, String namespace, String destinationName, String destinationNamespace) {
+        public StreamRef(String name, String namespace) {
+            this(name, namespace, null, null);
+        }
+    }
 
     public record LineageContext(
         String taskName,
@@ -57,14 +64,27 @@ public class OpenMetadataAdapter {
             return result;
         }
         result.put("enabled", true);
+        Map<String, Object> governance = summarizeGovernanceHints(request);
+        if (!governance.isEmpty()) {
+            result.put("governance", governance);
+        }
         if (context == null || context.streams() == null || context.streams().isEmpty()) {
             result.put("status", "skipped");
             result.put("message", "未发现可用于血缘的表");
             return result;
         }
 
-        String sourceService = firstNonEmpty(settings.getString("sourceServiceName", null), properties.getSourceServiceName(), context.sourceType());
-        String destinationService = firstNonEmpty(settings.getString("destinationServiceName", null), properties.getDestinationServiceName());
+        String sourceService = firstNonEmpty(
+            settings.getString("sourceServiceName", null),
+            getConfigValue(context.sourceConfig(), List.of("serviceName", "openmetadataServiceName", "sourceServiceName")),
+            properties.getSourceServiceName(),
+            context.sourceType()
+        );
+        String destinationService = firstNonEmpty(
+            settings.getString("destinationServiceName", null),
+            getConfigValue(context.destinationConfig(), List.of("serviceName", "openmetadataServiceName", "destinationServiceName")),
+            properties.getDestinationServiceName()
+        );
         String sourceDatabase = firstNonEmpty(
             resolveDatabase(context.sourceConfig()),
             settings.getString("sourceDatabase", null),
@@ -96,7 +116,7 @@ public class OpenMetadataAdapter {
                 settings.getString("destinationSchema", properties.getDestinationSchema())
             );
             String sourceTable = stream.name();
-            String destinationTable = buildDestinationTable(context.prefix(), stream.name());
+            String destinationTable = firstNonEmpty(stream.destinationName(), buildDestinationTable(context.prefix(), stream.name()));
             String sourceFqn = buildFqn(sourceService, sourceDatabase, sourceSchema, sourceTable);
             String destinationFqn = buildFqn(destinationService, destinationDatabase, destinationSchema, destinationTable);
             if (!StringUtils.hasText(sourceFqn) || !StringUtils.hasText(destinationFqn)) {
@@ -123,6 +143,31 @@ public class OpenMetadataAdapter {
         result.put("skipped", skipped);
         result.put("edges", edges);
         return result;
+    }
+
+    private Map<String, Object> summarizeGovernanceHints(LineageRequest request) {
+        if (request == null) {
+            return Map.of();
+        }
+        Map<String, Object> hints = new LinkedHashMap<>();
+        if (StringUtils.hasText(request.owner())) {
+            hints.put("owner", request.owner().trim());
+        }
+        if (StringUtils.hasText(request.domain())) {
+            hints.put("domain", request.domain().trim());
+        }
+        if (request.tags() != null && !request.tags().isEmpty()) {
+            List<String> tags = request.tags().stream().map(this::normalize).filter(StringUtils::hasText).toList();
+            if (!tags.isEmpty()) {
+                hints.put("tags", tags);
+            }
+        }
+        if (hints.isEmpty()) {
+            return Map.of();
+        }
+        hints.put("status", "not_supported");
+        hints.put("message", "owner/domain/tags 暂未写入 OpenMetadata，已在本次响应中显式回传");
+        return hints;
     }
 
     public Map<String, Object> ensureMetadataIngestion(IngestionContext context) {
@@ -152,13 +197,15 @@ public class OpenMetadataAdapter {
 
         String serviceType = resolveServiceType(
             settings.getString("destinationServiceType", properties.getDestinationServiceType()),
-            null
+            resolveDestinationType(context.destinationConfig())
         );
-        Map<String, Object> connectionConfig = buildConnectionConfig(serviceType, context.destinationConfig());
+        ConnectionDetails connectionDetails = resolveConnectionDetails(context.destinationConfig());
+        Map<String, Object> connectionConfig = buildConnectionConfig(serviceType, connectionDetails);
         if (connectionConfig == null || connectionConfig.isEmpty()) {
             result.put("enabled", true);
             result.put("status", "skipped");
             result.put("message", "目标端连接信息不完整");
+            result.put("missing", connectionDetails.missingRequiredFields());
             return result;
         }
 
@@ -234,6 +281,9 @@ public class OpenMetadataAdapter {
         String fallback
     ) {
         String namespace = normalize(template);
+        if (StringUtils.hasText(stream.destinationNamespace())) {
+            return stream.destinationNamespace().trim();
+        }
         if (StringUtils.hasText(namespace)) {
             String resolved = namespace.replace("${source}", StringUtils.hasText(stream.namespace()) ? stream.namespace() : sourceSchema);
             resolved = resolved.replace("${schema}", StringUtils.hasText(stream.namespace()) ? stream.namespace() : sourceSchema);
@@ -247,8 +297,7 @@ public class OpenMetadataAdapter {
     }
 
     private String resolveDatabase(Map<String, Object> config) {
-        String database = getConfigValue(config, List.of("database", "db", "dbname"));
-        return normalize(database);
+        return normalize(resolveConnectionDetails(config).database());
     }
 
     private String resolveSchemaFromConfig(Map<String, Object> config) {
@@ -278,31 +327,26 @@ public class OpenMetadataAdapter {
     }
 
     private String buildFqn(String service, String database, String schema, String table) {
-        if (!StringUtils.hasText(service) || !StringUtils.hasText(database) || !StringUtils.hasText(schema) || !StringUtils.hasText(table)) {
+        if (!StringUtils.hasText(service) || !StringUtils.hasText(database) || !StringUtils.hasText(table)) {
             return null;
         }
-        return String.join(".", service.trim(), database.trim(), schema.trim(), table.trim());
+        if (StringUtils.hasText(schema)) {
+            return String.join(".", service.trim(), database.trim(), schema.trim(), table.trim());
+        }
+        return String.join(".", service.trim(), database.trim(), table.trim());
     }
 
-    private Map<String, Object> buildConnectionConfig(String serviceType, Map<String, Object> config) {
-        if (!StringUtils.hasText(serviceType) || config == null || config.isEmpty()) {
-            return Map.of();
-        }
-        String host = getConfigValue(config, List.of("host", "hostname"));
-        String port = getConfigValue(config, List.of("port"));
-        String database = getConfigValue(config, List.of("database", "db", "dbname"));
-        String username = getConfigValue(config, List.of("username", "user"));
-        String password = getConfigValue(config, List.of("password", "pass"));
-        if (!StringUtils.hasText(host) || !StringUtils.hasText(port) || !StringUtils.hasText(database) || !StringUtils.hasText(username)) {
+    private Map<String, Object> buildConnectionConfig(String serviceType, ConnectionDetails details) {
+        if (!StringUtils.hasText(serviceType) || details == null || !details.isComplete()) {
             return Map.of();
         }
         Map<String, Object> connection = new LinkedHashMap<>();
         connection.put("type", serviceType);
-        connection.put("hostPort", host.trim() + ":" + port.trim());
-        connection.put("database", database.trim());
-        connection.put("username", username.trim());
-        if (StringUtils.hasText(password)) {
-            connection.put("authType", Map.of("password", password));
+        connection.put("hostPort", details.hostPort());
+        connection.put("database", details.database().trim());
+        connection.put("username", details.username().trim());
+        if (StringUtils.hasText(details.password())) {
+            connection.put("authType", Map.of("password", details.password()));
         }
         connection.put("sslMode", "disable");
         return connection;
@@ -336,10 +380,160 @@ public class OpenMetadataAdapter {
         return StringUtils.hasText(fallback) ? fallback.trim() : null;
     }
 
+    private String resolveDestinationType(Map<String, Object> config) {
+        String explicit = getConfigValue(config, List.of("serviceType", "destinationServiceType", "writerType", "type", "name"));
+        if (StringUtils.hasText(explicit)) {
+            return explicit;
+        }
+        String driver = getConfigValue(config, List.of("driver", "driverClass", "driverClassName"));
+        if (StringUtils.hasText(driver)) {
+            return driver;
+        }
+        return getConfigValue(config, List.of("jdbcUrl", "jdbc_url", "url"));
+    }
+
+    private ConnectionDetails resolveConnectionDetails(Map<String, Object> config) {
+        String jdbcUrl = getConfigValue(config, List.of("jdbcUrl", "jdbc_url", "url"));
+        JdbcParts jdbcParts = parseJdbcUrl(jdbcUrl);
+        String hostPort = getConfigValue(config, List.of("hostPort", "hostport"));
+        String host = firstNonEmpty(getConfigValue(config, List.of("host", "hostname", "server")), splitHost(hostPort), jdbcParts.host());
+        String port = firstNonEmpty(getConfigValue(config, List.of("port")), splitPort(hostPort), jdbcParts.port());
+        if (StringUtils.hasText(host) && host.contains(":") && !StringUtils.hasText(port)) {
+            port = splitPort(host);
+            host = splitHost(host);
+        }
+        String serviceType = resolveServiceType(null, resolveDestinationType(config));
+        if (!StringUtils.hasText(port)) {
+            port = defaultPort(serviceType);
+        }
+        String database = firstNonEmpty(
+            getConfigValue(config, List.of("database", "db", "dbname", "databaseName", "schema")),
+            jdbcParts.database()
+        );
+        String username = getConfigValue(config, List.of("username", "user", "userName"));
+        String password = getConfigValue(config, List.of("password", "pass"));
+        String schema = getConfigValue(config, List.of("schema"));
+        return new ConnectionDetails(host, port, database, username, password, schema);
+    }
+
+    private JdbcParts parseJdbcUrl(String rawUrl) {
+        String url = normalize(rawUrl);
+        if (!StringUtils.hasText(url)) {
+            return JdbcParts.empty();
+        }
+        String lower = url.toLowerCase(Locale.ROOT);
+        if (!lower.startsWith("jdbc:")) {
+            return JdbcParts.empty();
+        }
+        int schemeEnd = url.indexOf(':', "jdbc:".length());
+        if (schemeEnd < 0 || schemeEnd >= url.length() - 1) {
+            return JdbcParts.empty();
+        }
+        String scheme = url.substring("jdbc:".length(), schemeEnd).toLowerCase(Locale.ROOT);
+        String rest = url.substring(schemeEnd + 1);
+        if ("sqlserver".equals(scheme)) {
+            return parseSqlServerJdbc(rest);
+        }
+        if ("oracle".equals(scheme)) {
+            return parseOracleJdbc(rest);
+        }
+        if (rest.startsWith("//")) {
+            return parseUriJdbc(rest);
+        }
+        return JdbcParts.empty();
+    }
+
+    private JdbcParts parseUriJdbc(String rest) {
+        try {
+            URI uri = new URI(rest);
+            String database = normalize(uri.getPath());
+            if (StringUtils.hasText(database) && database.startsWith("/")) {
+                database = database.substring(1);
+            }
+            return new JdbcParts(uri.getHost(), uri.getPort() > 0 ? String.valueOf(uri.getPort()) : null, database);
+        } catch (URISyntaxException ex) {
+            return JdbcParts.empty();
+        }
+    }
+
+    private JdbcParts parseSqlServerJdbc(String rest) {
+        String text = rest.startsWith("//") ? rest.substring(2) : rest;
+        String[] parts = text.split(";", -1);
+        String hostPart = parts.length > 0 ? parts[0] : null;
+        String host = splitHost(hostPart);
+        String port = splitPort(hostPart);
+        String database = null;
+        for (String part : parts) {
+            int idx = part.indexOf('=');
+            if (idx <= 0) {
+                continue;
+            }
+            String key = part.substring(0, idx).trim();
+            if ("database".equalsIgnoreCase(key) || "databaseName".equalsIgnoreCase(key)) {
+                database = part.substring(idx + 1).trim();
+                break;
+            }
+        }
+        return new JdbcParts(host, port, database);
+    }
+
+    private JdbcParts parseOracleJdbc(String rest) {
+        String marker = "@//";
+        int idx = rest.indexOf(marker);
+        if (idx < 0) {
+            return JdbcParts.empty();
+        }
+        return parseUriJdbc("//" + rest.substring(idx + marker.length()));
+    }
+
+    private String defaultPort(String serviceType) {
+        String normalized = normalize(serviceType);
+        if (!StringUtils.hasText(normalized)) {
+            return null;
+        }
+        return switch (normalized.toLowerCase(Locale.ROOT)) {
+            case "postgres", "postgresql" -> "5432";
+            case "mysql", "mariadb" -> "3306";
+            case "mssql", "sqlserver" -> "1433";
+            case "oracle" -> "1521";
+            case "clickhouse" -> "8123";
+            case "hive" -> "10000";
+            default -> null;
+        };
+    }
+
+    private String splitHost(String hostPort) {
+        String value = normalize(hostPort);
+        if (!StringUtils.hasText(value)) {
+            return null;
+        }
+        int idx = value.indexOf(':');
+        return idx > 0 ? value.substring(0, idx) : value;
+    }
+
+    private String splitPort(String hostPort) {
+        String value = normalize(hostPort);
+        if (!StringUtils.hasText(value)) {
+            return null;
+        }
+        int idx = value.indexOf(':');
+        return idx > -1 && idx < value.length() - 1 ? value.substring(idx + 1) : null;
+    }
+
     private String getConfigValue(Map<String, Object> config, List<String> keys) {
         if (config == null || config.isEmpty()) {
             return null;
         }
+        for (Map<String, Object> candidateMap : configCandidates(config)) {
+            String value = getDirectConfigValue(candidateMap, keys);
+            if (StringUtils.hasText(value)) {
+                return value;
+            }
+        }
+        return null;
+    }
+
+    private String getDirectConfigValue(Map<String, Object> config, List<String> keys) {
         for (String key : keys) {
             Object value = config.get(key);
             if (value != null && StringUtils.hasText(value.toString())) {
@@ -355,6 +549,42 @@ public class OpenMetadataAdapter {
             }
         }
         return null;
+    }
+
+    private List<Map<String, Object>> configCandidates(Map<String, Object> config) {
+        if (config == null || config.isEmpty()) {
+            return List.of();
+        }
+        List<Map<String, Object>> candidates = new ArrayList<>();
+        candidates.add(config);
+        Object connection = config.get("connection");
+        if (connection instanceof Map<?, ?> map) {
+            candidates.add(toStringObjectMap(map));
+        } else if (connection instanceof List<?> list) {
+            for (Object item : list) {
+                if (item instanceof Map<?, ?> map) {
+                    candidates.add(toStringObjectMap(map));
+                }
+            }
+        }
+        Object parameter = config.get("parameter");
+        if (parameter instanceof Map<?, ?> map) {
+            candidates.add(toStringObjectMap(map));
+        }
+        return candidates;
+    }
+
+    private Map<String, Object> toStringObjectMap(Map<?, ?> map) {
+        Map<String, Object> copy = new LinkedHashMap<>();
+        if (map == null) {
+            return copy;
+        }
+        for (Map.Entry<?, ?> entry : map.entrySet()) {
+            if (entry.getKey() != null) {
+                copy.put(entry.getKey().toString(), entry.getValue());
+            }
+        }
+        return copy;
     }
 
     private String normalize(String value) {
@@ -382,5 +612,38 @@ public class OpenMetadataAdapter {
             }
         }
         return null;
+    }
+
+    private record JdbcParts(String host, String port, String database) {
+        static JdbcParts empty() {
+            return new JdbcParts(null, null, null);
+        }
+    }
+
+    private record ConnectionDetails(String host, String port, String database, String username, String password, String schema) {
+        boolean isComplete() {
+            return StringUtils.hasText(hostPort()) && StringUtils.hasText(database) && StringUtils.hasText(username);
+        }
+
+        String hostPort() {
+            if (!StringUtils.hasText(host)) {
+                return null;
+            }
+            return StringUtils.hasText(port) ? host.trim() + ":" + port.trim() : host.trim();
+        }
+
+        List<String> missingRequiredFields() {
+            List<String> missing = new ArrayList<>();
+            if (!StringUtils.hasText(hostPort())) {
+                missing.add("hostPort");
+            }
+            if (!StringUtils.hasText(database)) {
+                missing.add("database");
+            }
+            if (!StringUtils.hasText(username)) {
+                missing.add("username");
+            }
+            return missing;
+        }
     }
 }

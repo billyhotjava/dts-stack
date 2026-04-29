@@ -14,11 +14,19 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
 
 @Service
 public class OpenMetadataService {
+
+    private static final Logger LOG = LoggerFactory.getLogger(OpenMetadataService.class);
+    private static final String DEFAULT_TABLE_FQN_PATTERN = "{service}.{database}.{table}";
+    public static final String SOURCE_OPENMETADATA = "openmetadata";
+    public static final String SOURCE_CATALOG = "catalog";
+    public static final String SOURCE_DISABLED = "disabled";
 
     private final OpenMetadataClient client;
     private final OpenMetadataProperties props;
@@ -65,7 +73,20 @@ public class OpenMetadataService {
 
     public OpenMetadataSummary summarize(OpenMetadataResult result) {
         if (result == null) {
-            return new OpenMetadataSummary(false, false, null, null, "-", "-", "-", "-", 0, null);
+            return new OpenMetadataSummary(
+                false,
+                false,
+                null,
+                null,
+                "-",
+                "-",
+                "-",
+                "-",
+                0,
+                null,
+                SOURCE_DISABLED,
+                "元数据服务未启用"
+            );
         }
         Map<String, Object> entity = result.entity();
         String owner = resolveOwner(entity);
@@ -84,7 +105,9 @@ public class OpenMetadataService {
             tags,
             description,
             columnCount,
-            usage
+            usage,
+            result.metadataSource(),
+            result.fallbackReason()
         );
     }
 
@@ -99,7 +122,7 @@ public class OpenMetadataService {
         if (usedSearch) {
             Optional<Map<String, Object>> response = client.searchTables(keyword.trim(), limit);
             if (response.isEmpty()) {
-                return new OpenMetadataTablePage(true, List.of(), 0, keyword, true, "暂无元数据");
+                return OpenMetadataTablePage.empty(keyword, true, SOURCE_OPENMETADATA, "暂无元数据");
             }
             SearchEnvelope envelope = parseSearchEnvelope(response.orElseThrow());
             entities = envelope.entities();
@@ -107,7 +130,7 @@ public class OpenMetadataService {
         } else {
             Optional<Map<String, Object>> response = client.listTables(limit, props.getTableFields());
             if (response.isEmpty()) {
-                return new OpenMetadataTablePage(true, List.of(), 0, null, false, "暂无元数据");
+                return OpenMetadataTablePage.empty(null, false, SOURCE_OPENMETADATA, "暂无元数据");
             }
             List<Map<String, Object>> data = parseListData(response.orElseThrow());
             entities = data;
@@ -124,7 +147,7 @@ public class OpenMetadataService {
             }
         }
         summaries.sort(Comparator.comparing(OpenMetadataTableSummary::name, Comparator.nullsLast(String::compareTo)));
-        return new OpenMetadataTablePage(true, summaries, total, keyword, usedSearch, null);
+        return new OpenMetadataTablePage(true, summaries, total, keyword, usedSearch, null, SOURCE_OPENMETADATA, null);
     }
 
     public OpenMetadataLineageResult fetchLineageForDataset(CatalogDataset dataset, int upstreamDepth, int downstreamDepth) {
@@ -133,7 +156,12 @@ public class OpenMetadataService {
             return OpenMetadataLineageResult.disabled();
         }
         if (!result.found()) {
-            return OpenMetadataLineageResult.notFound(result.fqn(), result.message());
+            return OpenMetadataLineageResult.notFound(
+                result.fqn(),
+                result.message(),
+                result.metadataSource(),
+                result.fallbackReason()
+            );
         }
         String entityId = extractEntityId(result.entity());
         if (!StringUtils.hasText(entityId)) {
@@ -153,7 +181,12 @@ public class OpenMetadataService {
             return OpenMetadataQualityResult.disabled();
         }
         if (!result.found()) {
-            return OpenMetadataQualityResult.notFound(result.fqn(), result.message());
+            return OpenMetadataQualityResult.notFound(
+                result.fqn(),
+                result.message(),
+                result.metadataSource(),
+                result.fallbackReason()
+            );
         }
         String fqn = result.fqn();
         String entityLink = buildEntityLink(fqn);
@@ -187,7 +220,9 @@ public class OpenMetadataService {
                 0,
                 null,
                 null,
-                result.message() == null ? "暂无质量结果" : result.message()
+                result.message() == null ? "暂无质量结果" : result.message(),
+                result.metadataSource(),
+                result.fallbackReason()
             );
         }
         QualitySummary summary = result.snapshot() != null ? result.snapshot().summary() : null;
@@ -209,7 +244,9 @@ public class OpenMetadataService {
             missing,
             passRate,
             lastRunAt,
-            null
+            null,
+            result.metadataSource(),
+            result.fallbackReason()
         );
     }
 
@@ -238,8 +275,11 @@ public class OpenMetadataService {
 
         List<String> fqns = new ArrayList<>();
         String pattern = trim(props.getTableFqnPattern());
-        if (!StringUtils.hasText(pattern)) {
-            pattern = "{service}.{database}.{table}";
+        if (!isValidFqnPattern(pattern)) {
+            if (StringUtils.hasText(pattern)) {
+                LOG.warn("Invalid OpenMetadata table FQN pattern '{}'; fallback to {}", pattern, DEFAULT_TABLE_FQN_PATTERN);
+            }
+            pattern = DEFAULT_TABLE_FQN_PATTERN;
         }
         String formatted = formatPattern(pattern, service, database, schema, table);
         if (StringUtils.hasText(formatted)) {
@@ -270,7 +310,22 @@ public class OpenMetadataService {
             formatted = formatted.replace("..", ".");
         }
         formatted = formatted.replaceAll("^\\.+", "").replaceAll("\\.+$", "");
+        if (formatted.contains("{") || formatted.contains("}")) {
+            return null;
+        }
         return StringUtils.hasText(formatted) ? formatted : null;
+    }
+
+    private boolean isValidFqnPattern(String pattern) {
+        if (!StringUtils.hasText(pattern)) {
+            return false;
+        }
+        String remaining = pattern
+            .replace("{service}", "")
+            .replace("{database}", "")
+            .replace("{schema}", "")
+            .replace("{table}", "");
+        return !remaining.contains("{") && !remaining.contains("}") && pattern.contains("{table}");
     }
 
     private String resolveUiBaseUrl() {
@@ -774,6 +829,10 @@ public class OpenMetadataService {
         return List.of();
     }
 
+    private static String defaultMetadataSource(String metadataSource) {
+        return StringUtils.hasText(metadataSource) ? metadataSource : SOURCE_OPENMETADATA;
+    }
+
     public record OpenMetadataResult(
         boolean enabled,
         boolean found,
@@ -781,18 +840,77 @@ public class OpenMetadataService {
         String uiBaseUrl,
         String message,
         Instant resolvedAt,
-        Map<String, Object> entity
+        Map<String, Object> entity,
+        String metadataSource,
+        String fallbackReason
     ) {
         public static OpenMetadataResult disabled() {
-            return new OpenMetadataResult(false, false, null, null, "元数据服务未启用", Instant.now(), Map.of());
+            return new OpenMetadataResult(
+                false,
+                false,
+                null,
+                null,
+                "元数据服务未启用",
+                Instant.now(),
+                Map.of(),
+                SOURCE_DISABLED,
+                "元数据服务未启用"
+            );
         }
 
         public static OpenMetadataResult notFound(String fqn, String message) {
-            return new OpenMetadataResult(true, false, fqn, null, message, Instant.now(), Map.of());
+            return notFound(fqn, message, SOURCE_OPENMETADATA, message);
+        }
+
+        public static OpenMetadataResult notFound(
+            String fqn,
+            String message,
+            String metadataSource,
+            String fallbackReason
+        ) {
+            return new OpenMetadataResult(
+                true,
+                false,
+                fqn,
+                null,
+                message,
+                Instant.now(),
+                Map.of(),
+                defaultMetadataSource(metadataSource),
+                fallbackReason
+            );
         }
 
         public static OpenMetadataResult found(String fqn, Map<String, Object> entity, String uiBaseUrl) {
-            return new OpenMetadataResult(true, true, fqn, uiBaseUrl, null, Instant.now(), entity);
+            return new OpenMetadataResult(true, true, fqn, uiBaseUrl, null, Instant.now(), entity, SOURCE_OPENMETADATA, null);
+        }
+
+        public static OpenMetadataResult localFound(String fqn, Map<String, Object> entity, String fallbackReason) {
+            return new OpenMetadataResult(
+                true,
+                true,
+                fqn,
+                null,
+                null,
+                Instant.now(),
+                entity,
+                SOURCE_CATALOG,
+                fallbackReason
+            );
+        }
+
+        public OpenMetadataResult withFallbackReason(String fallbackReason) {
+            return new OpenMetadataResult(
+                enabled,
+                found,
+                fqn,
+                uiBaseUrl,
+                message,
+                resolvedAt,
+                entity,
+                metadataSource,
+                fallbackReason
+            );
         }
     }
 
@@ -806,7 +924,9 @@ public class OpenMetadataService {
         String tags,
         String description,
         int columnCount,
-        UsageSummary usage
+        UsageSummary usage,
+        String metadataSource,
+        String fallbackReason
     ) {}
 
     public record OpenMetadataTablePage(
@@ -815,10 +935,52 @@ public class OpenMetadataService {
         int total,
         String keyword,
         boolean searched,
-        String message
+        String message,
+        String metadataSource,
+        String fallbackReason
     ) {
         public static OpenMetadataTablePage disabled() {
-            return new OpenMetadataTablePage(false, List.of(), 0, null, false, "元数据服务未启用");
+            return new OpenMetadataTablePage(
+                false,
+                List.of(),
+                0,
+                null,
+                false,
+                "元数据服务未启用",
+                SOURCE_DISABLED,
+                "元数据服务未启用"
+            );
+        }
+
+        public static OpenMetadataTablePage empty(
+            String keyword,
+            boolean searched,
+            String metadataSource,
+            String fallbackReason
+        ) {
+            return new OpenMetadataTablePage(
+                true,
+                List.of(),
+                0,
+                keyword,
+                searched,
+                fallbackReason,
+                defaultMetadataSource(metadataSource),
+                fallbackReason
+            );
+        }
+
+        public OpenMetadataTablePage withFallbackReason(String fallbackReason) {
+            return new OpenMetadataTablePage(
+                enabled,
+                items,
+                total,
+                keyword,
+                searched,
+                message,
+                metadataSource,
+                fallbackReason
+            );
         }
     }
 
@@ -842,18 +1004,47 @@ public class OpenMetadataService {
         String fqn,
         String message,
         Instant resolvedAt,
-        LineageGraph graph
+        LineageGraph graph,
+        String metadataSource,
+        String fallbackReason
     ) {
         public static OpenMetadataLineageResult disabled() {
-            return new OpenMetadataLineageResult(false, false, null, "元数据服务未启用", Instant.now(), null);
+            return new OpenMetadataLineageResult(
+                false,
+                false,
+                null,
+                "元数据服务未启用",
+                Instant.now(),
+                null,
+                SOURCE_DISABLED,
+                "元数据服务未启用"
+            );
         }
 
         public static OpenMetadataLineageResult notFound(String fqn, String message) {
-            return new OpenMetadataLineageResult(true, false, fqn, message, Instant.now(), null);
+            return notFound(fqn, message, SOURCE_OPENMETADATA, message);
+        }
+
+        public static OpenMetadataLineageResult notFound(
+            String fqn,
+            String message,
+            String metadataSource,
+            String fallbackReason
+        ) {
+            return new OpenMetadataLineageResult(
+                true,
+                false,
+                fqn,
+                message,
+                Instant.now(),
+                null,
+                defaultMetadataSource(metadataSource),
+                fallbackReason
+            );
         }
 
         public static OpenMetadataLineageResult found(String fqn, LineageGraph graph) {
-            return new OpenMetadataLineageResult(true, true, fqn, null, Instant.now(), graph);
+            return new OpenMetadataLineageResult(true, true, fqn, null, Instant.now(), graph, SOURCE_OPENMETADATA, null);
         }
     }
 
@@ -886,18 +1077,47 @@ public class OpenMetadataService {
         String fqn,
         String message,
         Instant resolvedAt,
-        QualitySnapshot snapshot
+        QualitySnapshot snapshot,
+        String metadataSource,
+        String fallbackReason
     ) {
         public static OpenMetadataQualityResult disabled() {
-            return new OpenMetadataQualityResult(false, false, null, "元数据服务未启用", Instant.now(), null);
+            return new OpenMetadataQualityResult(
+                false,
+                false,
+                null,
+                "元数据服务未启用",
+                Instant.now(),
+                null,
+                SOURCE_DISABLED,
+                "元数据服务未启用"
+            );
         }
 
         public static OpenMetadataQualityResult notFound(String fqn, String message) {
-            return new OpenMetadataQualityResult(true, false, fqn, message, Instant.now(), null);
+            return notFound(fqn, message, SOURCE_OPENMETADATA, message);
+        }
+
+        public static OpenMetadataQualityResult notFound(
+            String fqn,
+            String message,
+            String metadataSource,
+            String fallbackReason
+        ) {
+            return new OpenMetadataQualityResult(
+                true,
+                false,
+                fqn,
+                message,
+                Instant.now(),
+                null,
+                defaultMetadataSource(metadataSource),
+                fallbackReason
+            );
         }
 
         public static OpenMetadataQualityResult found(String fqn, QualitySnapshot snapshot) {
-            return new OpenMetadataQualityResult(true, true, fqn, null, Instant.now(), snapshot);
+            return new OpenMetadataQualityResult(true, true, fqn, null, Instant.now(), snapshot, SOURCE_OPENMETADATA, null);
         }
     }
 
@@ -929,10 +1149,26 @@ public class OpenMetadataService {
         int missing,
         Integer passRate,
         Instant lastRunAt,
-        String message
+        String message,
+        String metadataSource,
+        String fallbackReason
     ) {
         public static OpenMetadataQualitySummary empty(String message) {
-            return new OpenMetadataQualitySummary(false, false, null, 0, 0, 0, 0, 0, null, null, message);
+            return new OpenMetadataQualitySummary(
+                false,
+                false,
+                null,
+                0,
+                0,
+                0,
+                0,
+                0,
+                null,
+                null,
+                message,
+                SOURCE_DISABLED,
+                message
+            );
         }
     }
 

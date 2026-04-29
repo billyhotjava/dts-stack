@@ -311,7 +311,7 @@ public class CatalogDatasetResource {
         auditPayload.put("datasetId", id.toString());
         helper.putIfHasText(auditPayload, "activeDept", effDept);
         audit.auditAction("CATALOG_ASSET_VIEW", AuditStage.SUCCESS, id.toString(), auditPayload);
-        return ApiResponses.ok(openMetadataService.fetchTableForDataset(dataset));
+        return ApiResponses.ok(resolveDatasetMetadata(dataset, effDept));
     }
 
     @GetMapping("/metadata/tables")
@@ -331,7 +331,7 @@ public class CatalogDatasetResource {
         if (!sourceScoped && !useLocal && (disabled || page.items() == null || page.items().isEmpty())) {
             OpenMetadataService.OpenMetadataTablePage fallback = catalogMetadataService.listLocalTables(keyword, size, effDept, null);
             if (fallback != null && fallback.items() != null && !fallback.items().isEmpty()) {
-                page = fallback;
+                page = fallback.withFallbackReason(openMetadataFallbackReason(page));
                 useLocal = true;
                 disabled = false;
             }
@@ -345,7 +345,7 @@ public class CatalogDatasetResource {
         if (sourceId != null) {
             auditPayload.put("sourceId", sourceId.toString());
         }
-        auditPayload.put("source", useLocal ? "catalog" : (disabled ? "disabled" : "openmetadata"));
+        auditPayload.put("source", page != null ? page.metadataSource() : (useLocal ? "catalog" : (disabled ? "disabled" : "openmetadata")));
         audit.auditAction("CATALOG_ASSET_VIEW", AuditStage.SUCCESS, "tech-metadata", auditPayload);
         return ApiResponses.ok(page);
     }
@@ -367,7 +367,7 @@ public class CatalogDatasetResource {
             if (disabled || (result != null && !result.found())) {
                 OpenMetadataService.OpenMetadataResult local = catalogMetadataService.fetchLocalTableDetail(fqn, effDept);
                 if (local != null && local.found()) {
-                    result = local;
+                    result = local.withFallbackReason(openMetadataFallbackReason(result));
                     useLocal = true;
                 }
             }
@@ -376,7 +376,7 @@ public class CatalogDatasetResource {
         Map<String, Object> auditPayload = new LinkedHashMap<>();
         auditPayload.put("summary", "查看元数据详情");
         auditPayload.put("fqn", fqn);
-        auditPayload.put("source", useLocal ? "catalog" : (disabled ? "disabled" : "openmetadata"));
+        auditPayload.put("source", result != null ? result.metadataSource() : (useLocal ? "catalog" : (disabled ? "disabled" : "openmetadata")));
         audit.auditAction("CATALOG_ASSET_VIEW", AuditStage.SUCCESS, "tech-metadata-detail", auditPayload);
         return ApiResponses.ok(result);
     }
@@ -480,7 +480,7 @@ public class CatalogDatasetResource {
             if (dataset.getEnabled() != null && !dataset.getEnabled().booleanValue() && !SecurityUtils.isOpAdminAccount()) {
                 continue;
             }
-            OpenMetadataService.OpenMetadataResult result = openMetadataService.fetchTableForDataset(dataset);
+            OpenMetadataService.OpenMetadataResult result = resolveDatasetMetadata(dataset, effDept);
             payload.put(dataset.getId().toString(), openMetadataService.summarize(result));
         }
         Map<String, Object> auditPayload = new LinkedHashMap<>();
@@ -489,6 +489,37 @@ public class CatalogDatasetResource {
         helper.putIfHasText(auditPayload, "activeDept", effDept);
         audit.auditAction("CATALOG_ASSET_VIEW", AuditStage.SUCCESS, "batch-openmetadata", auditPayload);
         return ApiResponses.ok(payload);
+    }
+
+    private OpenMetadataService.OpenMetadataResult resolveDatasetMetadata(CatalogDataset dataset, String activeDept) {
+        OpenMetadataService.OpenMetadataResult remote = openMetadataService.fetchTableForDataset(dataset);
+        if (remote == null || !remote.enabled() || !remote.found()) {
+            OpenMetadataService.OpenMetadataResult local = catalogMetadataService.fetchLocalTableDetail(localFqn(dataset), activeDept);
+            if (local != null && local.found()) {
+                return local.withFallbackReason(openMetadataFallbackReason(remote));
+            }
+        }
+        return remote;
+    }
+
+    private String localFqn(CatalogDataset dataset) {
+        return dataset != null && dataset.getId() != null ? "catalog:" + dataset.getId() : null;
+    }
+
+    private String openMetadataFallbackReason(OpenMetadataService.OpenMetadataResult result) {
+        if (result == null) {
+            return "OpenMetadata 未返回结果";
+        }
+        String message = result.message();
+        return message != null && !message.isBlank() ? "OpenMetadata: " + message : "OpenMetadata 未命中";
+    }
+
+    private String openMetadataFallbackReason(OpenMetadataService.OpenMetadataTablePage page) {
+        if (page == null) {
+            return "OpenMetadata 未返回结果";
+        }
+        String message = page.message();
+        return message != null && !message.isBlank() ? "OpenMetadata: " + message : "OpenMetadata 未命中";
     }
 
     @PostMapping("/datasets")

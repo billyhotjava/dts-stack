@@ -1,7 +1,7 @@
 # T01: dbt/OpenMetadata Ingestion 脚本修复
 
-**优先级**: P0  
-**状态**: READY  
+**优先级**: P0
+**状态**: DONE
 **依赖**: F1
 
 ## 目标

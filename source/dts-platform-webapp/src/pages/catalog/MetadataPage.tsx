@@ -91,13 +91,24 @@ type TableSummary = {
 	tags?: string;
 	description?: string;
 	columnCount?: number;
+	metadataSource?: string;
+	fallbackReason?: string;
 };
 
 type TableDetail = {
 	enabled?: boolean;
 	found?: boolean;
+	fqn?: string;
 	message?: string;
+	metadataSource?: string;
+	fallbackReason?: string;
 	entity?: Record<string, any>;
+};
+
+type TablePageMeta = {
+	metadataSource?: string;
+	fallbackReason?: string;
+	message?: string;
 };
 
 type ColumnRow = {
@@ -146,6 +157,22 @@ const driftTicketTag = (value?: string) => {
 	return <Tag>{value || "待处理"}</Tag>;
 };
 
+const metadataSourceLabel = (value?: string) => {
+	const normalized = String(value || "").toLowerCase();
+	if (normalized === "catalog") return "本地 Catalog";
+	if (normalized === "openmetadata") return "OpenMetadata";
+	if (normalized === "disabled") return "未启用";
+	return "未知来源";
+};
+
+const metadataSourceTag = (value?: string) => {
+	const normalized = String(value || "").toLowerCase();
+	if (normalized === "catalog") return <Tag color="blue">{metadataSourceLabel(value)}</Tag>;
+	if (normalized === "openmetadata") return <Tag color="green">{metadataSourceLabel(value)}</Tag>;
+	if (normalized === "disabled") return <Tag color="orange">{metadataSourceLabel(value)}</Tag>;
+	return <Tag>{metadataSourceLabel(value)}</Tag>;
+};
+
 const buildColumnRows = (detail?: TableDetail | null): ColumnRow[] => {
 	if (!detail?.entity) return [];
 	const columns = Array.isArray(detail.entity.columns) ? detail.entity.columns : [];
@@ -176,6 +203,7 @@ export default function MetadataPage() {
 	const [tables, setTables] = useState<TableSummary[]>([]);
 	const [selectedFqn, setSelectedFqn] = useState<string | undefined>();
 	const [tableDetail, setTableDetail] = useState<TableDetail | null>(null);
+	const [tablePageMeta, setTablePageMeta] = useState<TablePageMeta | null>(null);
 	const [loadingPipelines, setLoadingPipelines] = useState(false);
 	const [loadingRuns, setLoadingRuns] = useState(false);
 	const [loadingTables, setLoadingTables] = useState(false);
@@ -237,6 +265,7 @@ export default function MetadataPage() {
 	useEffect(() => {
 		if (!selectedPipeline) {
 			setTables([]);
+			setTablePageMeta(null);
 			setSelectedFqn(undefined);
 			return;
 		}
@@ -367,6 +396,11 @@ export default function MetadataPage() {
 			});
 			const items = Array.isArray(resp?.items) ? resp.items : [];
 			setTables(items as TableSummary[]);
+			setTablePageMeta({
+				metadataSource: resp?.metadataSource,
+				fallbackReason: resp?.fallbackReason,
+				message: resp?.message,
+			});
 			setSelectedFqn((prev) => {
 				if (!items.length) return undefined;
 				if (prev && items.some((item: TableSummary) => item.fqn === prev)) return prev;
@@ -375,6 +409,7 @@ export default function MetadataPage() {
 		} catch {
 			// error toast handled by global interceptor
 			setTables([]);
+			setTablePageMeta(null);
 			setSelectedFqn(undefined);
 		} finally {
 			setLoadingTables(false);
@@ -787,6 +822,21 @@ export default function MetadataPage() {
 								/>
 								<Button onClick={() => void loadTables(keyword)}>搜索</Button>
 							</Space>
+							{tablePageMeta ? (
+								<Space direction="vertical" className="w-full" size={8}>
+									<Space size={8} wrap>
+										<Text type="secondary">数据来源</Text>
+										{metadataSourceTag(tablePageMeta.metadataSource)}
+									</Space>
+									{tablePageMeta.fallbackReason || tablePageMeta.message ? (
+										<Alert
+											type={tablePageMeta.metadataSource === "catalog" ? "warning" : "info"}
+											showIcon
+											message={tablePageMeta.fallbackReason || tablePageMeta.message}
+										/>
+									) : null}
+								</Space>
+							) : null}
 							{tables.length ? (
 								<>
 									<Form layout="vertical">
@@ -806,6 +856,10 @@ export default function MetadataPage() {
 										</Form.Item>
 									</Form>
 									<Descriptions size="small" bordered column={1}>
+										<Descriptions.Item label="详情来源">
+											{metadataSourceTag(tableDetail?.metadataSource || tablePageMeta?.metadataSource)}
+										</Descriptions.Item>
+										<Descriptions.Item label="FQN">{tableDetail?.fqn || selectedSummary?.fqn || "-"}</Descriptions.Item>
 										<Descriptions.Item label="服务">{selectedSummary?.service || "-"}</Descriptions.Item>
 										<Descriptions.Item label="库/Schema">
 											{[selectedSummary?.database, selectedSummary?.schema].filter(Boolean).join(".") || "-"}
@@ -814,6 +868,13 @@ export default function MetadataPage() {
 										<Descriptions.Item label="描述">{selectedSummary?.description || "-"}</Descriptions.Item>
 										<Descriptions.Item label="字段数">{selectedSummary?.columnCount ?? "-"}</Descriptions.Item>
 									</Descriptions>
+									{tableDetail?.fallbackReason || tableDetail?.message ? (
+										<Alert
+											type={tableDetail?.metadataSource === "catalog" ? "warning" : "info"}
+											showIcon
+											message={tableDetail?.fallbackReason || tableDetail?.message}
+										/>
+									) : null}
 									{columnRows.length ? (
 										<Space size={6} className="mt-3 flex flex-wrap">
 											<Tag color="orange">草稿 {columnStatusStats.draft}</Tag>

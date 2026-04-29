@@ -8,7 +8,7 @@ source:
       authType:
         password: ${PG_SUPER_PASSWORD}
       hostPort: ${PG_HOST}:${PG_PORT}
-      database: ${PG_DB_DTPS}
+      database: ${OPENMETADATA_INGEST_DATABASE}
       sslMode: disable
   sourceConfig:
     config:

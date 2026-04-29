@@ -1,7 +1,7 @@
 # T02: Source/Target FQN Builder
 
-**优先级**: P0  
-**状态**: READY  
+**优先级**: P0
+**状态**: DONE
 **依赖**: T01, F1
 
 ## 目标

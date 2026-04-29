@@ -373,6 +373,9 @@ public class AirflowDagService {
         if (perTableJobs != null && perTableJobs.size() > 1) {
             return buildMultiTaskDagSource(dagId, task, perTableJobs);
         }
+        if (task != null && com.yuzhi.dts.ingestion.service.etl.api.ApiConnectorTypes.isApiSourceType(task.getSourceType())) {
+            return buildApiDagSource(dagId, task);
+        }
         String sourceTag = sanitizeTag(task == null ? null : task.getSourceType(), "source");
         String nameTag = sanitizeTag(task == null ? null : task.getName(), "ingestion");
         String addaxImage = escapePythonString(resolveAddaxImage());
@@ -906,5 +909,216 @@ public class AirflowDagService {
         String tag = NON_SAFE.matcher(value.trim().toLowerCase()).replaceAll("-");
         tag = tag.replaceAll("^-+", "").replaceAll("-+$", "");
         return StringUtils.hasText(tag) ? tag : fallback;
+    }
+
+    /**
+     * Build a self-contained Airflow DAG for an API ingestion task.
+     * Uses a single PythonOperator that performs HTTP fetch and lands raw records into a Postgres ODS table
+     * (raw_record JSONB column + technical columns per ApiSourceContracts).
+     *
+     * Limitations of this mock implementation:
+     *   - Single resource only (no multi-resource tasks)
+     *   - GET method only (no POST body)
+     *   - No pagination (single request)
+     *   - No cursor / incremental sync (full_refresh only)
+     *   - Auth: anonymous + Bearer token from DTS_API_BEARER_TOKEN env var
+     */
+    private String buildApiDagSource(String dagId, IngestionTask task) {
+        String sourceConfigJson;
+        try {
+            JsonNode src = task.getSourceConfig();
+            sourceConfigJson = src == null || src.isNull() ? "{}" : JOB_MAPPER.writeValueAsString(src);
+        } catch (Exception ex) {
+            LOG.warn("[airflow] failed to serialize source_config for api task {}: {}", task.getId(), ex.getMessage());
+            sourceConfigJson = "{}";
+        }
+        String taskName = task.getName() == null ? "" : task.getName();
+        String scheduleLiteral = buildScheduleExpression(task.getSyncSchedule());
+        String taskIdLiteral = resolveTaskId(task);
+        long ingestionTaskId = task.getId() == null ? 0L : task.getId();
+
+        return """
+            from __future__ import annotations
+
+            import json
+            import os
+            import uuid
+            from datetime import datetime, timedelta
+
+            from airflow import DAG
+            from airflow.operators.python import PythonOperator
+
+            INGESTION_TASK_ID = %d
+            INGESTION_TASK_NAME = "%s"
+            SOURCE_CONFIG_JSON = \"\"\"%s\"\"\"
+
+
+            def _run_api_ingestion(**context):
+                import urllib.parse
+                import urllib.request
+                import psycopg2
+                from psycopg2.extras import Json
+
+                cfg = json.loads(SOURCE_CONFIG_JSON or "{}")
+                resource = cfg.get("resource") or {}
+                base_url = (cfg.get("baseUrl") or "").rstrip("/")
+                path = (resource.get("path") or "").lstrip("/")
+                if not base_url or not path:
+                    raise RuntimeError("baseUrl and resource.path are required")
+
+                method = (resource.get("method") or "GET").upper()
+                if method != "GET":
+                    raise RuntimeError("mock httpreader supports GET only; got: " + method)
+
+                # Build URL with query params (string values only — flatten dict if needed)
+                query = resource.get("query") or {}
+                query_pairs = []
+                if isinstance(query, dict):
+                    for k, v in query.items():
+                        if v is None:
+                            continue
+                        if isinstance(v, (dict, list)):
+                            v = json.dumps(v, ensure_ascii=False)
+                        query_pairs.append((str(k), str(v)))
+                url = base_url + "/" + path
+                if query_pairs:
+                    url = url + ("&" if "?" in url else "?") + urllib.parse.urlencode(query_pairs)
+
+                # Headers + auth (anonymous or Bearer via env)
+                headers = dict(cfg.get("defaultHeaders") or {})
+                auth = cfg.get("auth") or {}
+                provider = (auth.get("provider") or "none").lower()
+                if provider == "bearer":
+                    token = os.environ.get("DTS_API_BEARER_TOKEN")
+                    if not token:
+                        raise RuntimeError("DTS_API_BEARER_TOKEN env var required for bearer auth")
+                    headers["Authorization"] = "Bearer " + token
+                elif provider not in ("", "none", "anonymous"):
+                    raise RuntimeError("mock httpreader supports anonymous/bearer only; got: " + provider)
+
+                tls = cfg.get("tls") or {}
+                verify_tls = tls.get("verifyTls", True)
+
+                req = urllib.request.Request(url, method=method, headers=headers)
+                # Note: urllib doesn't honor verify_tls flag; production runner should switch to requests with verify=verify_tls
+                _ = verify_tls
+                with urllib.request.urlopen(req, timeout=60) as resp:
+                    body = resp.read().decode("utf-8")
+                payload = json.loads(body) if body else {}
+
+                # Extract records using recordPath (e.g., "data.items"); fallback to whole payload as single record
+                record_path = (resource.get("recordPath") or "").strip()
+                records = payload
+                if record_path:
+                    for segment in record_path.replace("$.", "").split("."):
+                        segment = segment.strip()
+                        if not segment:
+                            continue
+                        if isinstance(records, dict):
+                            records = records.get(segment)
+                        else:
+                            records = None
+                            break
+                if records is None:
+                    records = []
+                elif isinstance(records, dict):
+                    records = [records]
+                if not isinstance(records, list):
+                    raise RuntimeError("recordPath did not resolve to a list/object: " + record_path)
+
+                target_table = resource.get("targetTable") or ("ods_api_" + (resource.get("resourceId") or "default"))
+
+                conn = psycopg2.connect(
+                    host=os.getenv("DTS_TARGET_DB_HOST", "dts-pg"),
+                    port=int(os.getenv("DTS_TARGET_DB_PORT", "5432")),
+                    dbname=os.getenv("DTS_TARGET_DB_NAME", "biadmin"),
+                    user=os.getenv("DTS_TARGET_DB_USER", "biadmin"),
+                    password=os.environ["DTS_TARGET_DB_PASSWORD"],
+                )
+                try:
+                    cur = conn.cursor()
+                    # ODS landing table: raw_record JSONB + technical columns + autoincrement id
+                    cur.execute(
+                        \"\"\"
+                        CREATE TABLE IF NOT EXISTS \"\"\" + target_table + \"\"\" (
+                            id BIGSERIAL PRIMARY KEY,
+                            _dts_raw_record JSONB NOT NULL,
+                            _dts_source_system TEXT,
+                            _dts_source_resource TEXT,
+                            _dts_endpoint TEXT,
+                            _dts_import_time TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now(),
+                            _dts_batch_id TEXT,
+                            _dts_execution_id TEXT,
+                            _dts_page_no INTEGER,
+                            _dts_record_no INTEGER,
+                            _dts_cursor_value TEXT
+                        )
+                        \"\"\"
+                    )
+                    batch_id = str(uuid.uuid4())
+                    execution_id = context.get("run_id", batch_id) if isinstance(context, dict) else batch_id
+                    insert_sql = (
+                        "INSERT INTO " + target_table + " "
+                        "(_dts_raw_record, _dts_source_system, _dts_source_resource, _dts_endpoint, "
+                        "_dts_batch_id, _dts_execution_id, _dts_page_no, _dts_record_no) "
+                        "VALUES (%%s, %%s, %%s, %%s, %%s, %%s, %%s, %%s)"
+                    )
+                    for idx, record in enumerate(records, start=1):
+                        cur.execute(
+                            insert_sql,
+                            (
+                                Json(record),
+                                "api",
+                                resource.get("resourceId"),
+                                url,
+                                batch_id,
+                                str(execution_id),
+                                1,
+                                idx,
+                            ),
+                        )
+                    conn.commit()
+                    print("[api-ingestion] task=%%d table=%%s records=%%d" %% (INGESTION_TASK_ID, target_table, len(records)))
+                finally:
+                    conn.close()
+
+
+            with DAG(
+                dag_id="%s",
+                description="API ingestion (mock httpreader): " + INGESTION_TASK_NAME,
+                start_date=datetime(2024, 1, 1),
+                schedule=%s,
+                catchup=False,
+                max_active_runs=1,
+                default_args={
+                    "owner": "dts-ingestion",
+                    "retries": 0,
+                    "execution_timeout": timedelta(minutes=15),
+                },
+                tags=["dts", "ingestion", "api"],
+            ) as dag:
+                api_run = PythonOperator(
+                    task_id="%s",
+                    python_callable=_run_api_ingestion,
+                )
+            """.formatted(
+                ingestionTaskId,
+                escapePythonString(taskName),
+                escapeTripleQuotedJson(sourceConfigJson),
+                escapePythonString(dagId),
+                scheduleLiteral,
+                escapePythonString(taskIdLiteral)
+            );
+    }
+
+    /** Make a JSON string safe to embed inside a Python triple-quoted string. */
+    private String escapeTripleQuotedJson(String json) {
+        if (json == null) return "{}";
+        // Escape backslashes first, then any sequence of three or more double quotes,
+        // and finally avoid trailing-quote-followed-by-closer ambiguity.
+        return json
+            .replace("\\", "\\\\")
+            .replace("\"\"\"", "\\\"\\\"\\\"")
+            .replace("\\u", "\\\\u");
     }
 }

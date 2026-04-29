@@ -113,8 +113,8 @@ public class CatalogDbtLineageService {
 					CatalogDatasetLineage lineage = new CatalogDatasetLineage();
 					lineage.setUpstreamDatasetId(upstreamId);
 					lineage.setDownstreamDatasetId(downstreamId);
-					lineage.setRelationType("DBT_MODEL");
-					lineage.setDirection("DOWNSTREAM");
+					lineage.setRelationType("DBT");
+					lineage.setDirection("UPSTREAM_TO_DOWNSTREAM");
 					lineage.setNotes("Imported from dbt manifest");
 					toCreate.add(lineage);
 					toCreateKeys.add(pairKey);

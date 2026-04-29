@@ -102,6 +102,46 @@ class AirflowDagServiceTest {
         assertThat(dagSource).doesNotContain("schedule=\"interval:90\"");
     }
 
+    @Test
+    void shouldGenerateApiDagWithoutPlaintextPasswordAndWithPythonOperator() throws Exception {
+        IngestionTask task = new IngestionTask();
+        task.setId(99L);
+        task.setName("api-orders-mock");
+        task.setSourceType("api");
+        task.setSyncSchedule("manual");
+        task.setAirflowDagId("ods_api_orders_mock");
+        com.fasterxml.jackson.databind.ObjectMapper mapper = new com.fasterxml.jackson.databind.ObjectMapper();
+        task.setSourceConfig(mapper.readTree(
+            "{\"baseUrl\":\"https://api.example.com\","
+            + "\"defaultHeaders\":{\"Accept\":\"application/json\"},"
+            + "\"auth\":{\"provider\":\"none\"},"
+            + "\"resource\":{\"resourceId\":\"orders\",\"path\":\"/v1/orders\","
+            + "\"method\":\"GET\",\"recordPath\":\"data.items\","
+            + "\"query\":{\"page\":1,\"size\":50},\"targetTable\":\"ods_api_orders\"}}"
+        ));
+
+        dagService.rebuildDagForTask(task);
+
+        String dag = readDag("ods_api_orders_mock");
+        // No plaintext password embedded (regression guard for AirflowDagService password leak)
+        assertThat(dag).doesNotContain("Devops123");
+        assertThat(dag).doesNotContain("password=os.getenv(\"DTS_TARGET_DB_PASSWORD\",");
+        // Strict env-only password lookup
+        assertThat(dag).contains("os.environ[\"DTS_TARGET_DB_PASSWORD\"]");
+        // API DAG uses PythonOperator (not Addax DockerOperator)
+        assertThat(dag).contains("from airflow.operators.python import PythonOperator");
+        assertThat(dag).contains("python_callable=_run_api_ingestion");
+        assertThat(dag).doesNotContain("from airflow.providers.docker.operators.docker import DockerOperator");
+        // Source config is embedded as JSON literal so the worker can parse it
+        assertThat(dag).contains("SOURCE_CONFIG_JSON");
+        assertThat(dag).contains("\"baseUrl\":\"https://api.example.com\"");
+        // Schedule expression is "None" for manual
+        assertThat(dag).contains("schedule=None");
+        // ODS landing table includes raw_record + technical columns
+        assertThat(dag).contains("_dts_raw_record JSONB");
+        assertThat(dag).contains("_dts_batch_id");
+    }
+
     private IngestionTask task(String syncSchedule, String dagId) {
         IngestionTask task = new IngestionTask();
         task.setName("dm8test");

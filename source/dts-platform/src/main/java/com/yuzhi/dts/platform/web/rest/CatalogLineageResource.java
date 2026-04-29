@@ -3,12 +3,17 @@ package com.yuzhi.dts.platform.web.rest;
 import com.yuzhi.dts.common.audit.AuditStage;
 import com.yuzhi.dts.platform.domain.catalog.CatalogDataset;
 import com.yuzhi.dts.platform.domain.catalog.CatalogDatasetLineage;
+import com.yuzhi.dts.platform.domain.infra.InfraOdsTableMapping;
+import com.yuzhi.dts.platform.domain.service.InfraDataSource;
 import com.yuzhi.dts.platform.repository.catalog.CatalogDatasetLineageRepository;
 import com.yuzhi.dts.platform.repository.catalog.CatalogDatasetRepository;
+import com.yuzhi.dts.platform.repository.infra.InfraOdsTableMappingRepository;
+import com.yuzhi.dts.platform.repository.service.InfraDataSourceRepository;
 import com.yuzhi.dts.platform.service.audit.AuditService;
 import com.yuzhi.dts.platform.service.security.AccessChecker;
 import jakarta.validation.Valid;
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -43,17 +48,23 @@ public class CatalogLineageResource {
 
     private final CatalogDatasetRepository datasetRepo;
     private final CatalogDatasetLineageRepository lineageRepo;
+    private final InfraOdsTableMappingRepository odsMappingRepo;
+    private final InfraDataSourceRepository dataSourceRepo;
     private final AccessChecker accessChecker;
     private final AuditService audit;
 
     public CatalogLineageResource(
         CatalogDatasetRepository datasetRepo,
         CatalogDatasetLineageRepository lineageRepo,
+        InfraOdsTableMappingRepository odsMappingRepo,
+        InfraDataSourceRepository dataSourceRepo,
         AccessChecker accessChecker,
         AuditService audit
     ) {
         this.datasetRepo = datasetRepo;
         this.lineageRepo = lineageRepo;
+        this.odsMappingRepo = odsMappingRepo;
+        this.dataSourceRepo = dataSourceRepo;
         this.accessChecker = accessChecker;
         this.audit = audit;
     }
@@ -123,6 +134,7 @@ public class CatalogLineageResource {
         @RequestParam(name = "layers", required = false) String layers,
         @RequestParam(name = "changedWithinHours", required = false) Integer changedWithinHours,
         @RequestParam(name = "sourceId", required = false) UUID sourceId,
+        @RequestParam(name = "withJobs", required = false, defaultValue = "false") boolean withJobs,
         @RequestHeader(value = "X-Active-Dept", required = false) String activeDept
     ) {
         CatalogDataset root = datasetRepo.findById(datasetId).orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "dataset not found"));
@@ -211,7 +223,7 @@ public class CatalogLineageResource {
         }
 
         Set<UUID> filteredIds = filteredNodes.keySet();
-        List<Map<String, Object>> edgeDtos = edges
+        List<Map<String, Object>> datasetEdges = edges
             .stream()
             .filter(edge -> {
                 if (edge == null) {
@@ -233,6 +245,29 @@ public class CatalogLineageResource {
             .map(edge -> toEdgeDto(edge, effDept))
             .filter(Objects::nonNull)
             .toList();
+
+        List<Map<String, Object>> nodeDtos = filteredNodes.values().stream().map(this::toDatasetNodeDto).toList();
+        List<Map<String, Object>> edgeDtos = datasetEdges;
+        if (withJobs) {
+            GraphExpansion expansion = expandWithVirtualJobs(
+                nodeDtos,
+                datasetEdges,
+                filteredNodes,
+                upstreamEnabled,
+                sourceId,
+                effDept
+            );
+            nodeDtos = expansion.nodes();
+            edgeDtos = expansion.edges();
+        } else {
+            edgeDtos = datasetEdges.stream().map(edge -> {
+                Map<String, Object> dto = new LinkedHashMap<>(edge);
+                dto.put("kind", "DATASET_TO_DATASET");
+                dto.put("fromId", dto.get("upstreamDatasetId"));
+                dto.put("toId", dto.get("downstreamDatasetId"));
+                return dto;
+            }).toList();
+        }
 
         Map<String, Long> layerStats = filteredNodes
             .values()
@@ -267,27 +302,23 @@ public class CatalogLineageResource {
         payload.put("layers", layerFilters);
         payload.put("changedWithinHours", normalizeChangedWindow(changedWithinHours));
         payload.put("sourceId", sourceId != null ? sourceId.toString() : null);
-        payload.put("nodeCount", filteredNodes.size());
+        payload.put("withJobs", withJobs);
+        payload.put("nodeCount", nodeDtos.size());
         payload.put("edgeCount", edgeDtos.size());
-        payload.put("impactStats", Map.of("layerNodeCounts", layerStats, "relationTypeCounts", relationStats, "changedNodeCount", changedNodeCount));
         payload.put(
-            "nodes",
-            filteredNodes.values().stream().map(ds -> {
-                Map<String, Object> dto = new LinkedHashMap<>();
-                dto.put("id", ds.getId() != null ? ds.getId().toString() : null);
-                dto.put("name", ds.getName());
-                dto.put("db", ds.getHiveDatabase());
-                dto.put("table", ds.getHiveTable());
-                dto.put("type", ds.getType());
-                dto.put("layer", ds.getWarehouseLayer());
-                dto.put("ownerDept", ds.getOwnerDept());
-                dto.put("owner", ds.getOwner());
-                dto.put("sourceId", ds.getSourceId() != null ? ds.getSourceId().toString() : null);
-                dto.put("lastModifiedAt", ds.getLastModifiedDate());
-                dto.put("snapshotTime", ds.getSnapshotTime());
-                return dto;
-            }).toList()
+            "impactStats",
+            Map.of(
+                "layerNodeCounts",
+                layerStats,
+                "relationTypeCounts",
+                relationStats,
+                "kindNodeCounts",
+                countByString(nodeDtos, "kind"),
+                "changedNodeCount",
+                changedNodeCount
+            )
         );
+        payload.put("nodes", nodeDtos);
         payload.put("edges", edgeDtos);
         audit.auditAction(
             "CATALOG_LINEAGE_IMPACT_VIEW",
@@ -297,6 +328,351 @@ public class CatalogLineageResource {
         );
         return ApiResponses.ok(payload);
     }
+
+    private GraphExpansion expandWithVirtualJobs(
+        List<Map<String, Object>> datasetNodes,
+        List<Map<String, Object>> datasetEdges,
+        Map<UUID, CatalogDataset> datasets,
+        boolean includeUpstreamIngestion,
+        UUID sourceId,
+        String effDept
+    ) {
+        Map<String, Map<String, Object>> nodes = new LinkedHashMap<>();
+        List<Map<String, Object>> edges = new ArrayList<>();
+        for (Map<String, Object> node : datasetNodes) {
+            String id = stringValue(node.get("id"));
+            if (StringUtils.hasText(id)) {
+                nodes.put(id, node);
+            }
+        }
+        for (Map<String, Object> edge : datasetEdges) {
+            String upstreamId = stringValue(edge.get("upstreamDatasetId"));
+            String downstreamId = stringValue(edge.get("downstreamDatasetId"));
+            if (!StringUtils.hasText(upstreamId) || !StringUtils.hasText(downstreamId)) {
+                continue;
+            }
+            String relationType = stringValue(edge.get("relationType"));
+            String jobType = jobTypeForRelation(relationType);
+            String jobId = "job:" + normalizedRelation(relationType) + ":" + downstreamId;
+            nodes.putIfAbsent(jobId, buildJobNode(jobId, edge, jobType, relationType));
+            edges.add(buildVirtualEdge(edge, upstreamId, jobId, "DATASET_TO_JOB"));
+            edges.add(buildVirtualEdge(edge, jobId, downstreamId, "JOB_TO_DATASET"));
+        }
+        if (includeUpstreamIngestion) {
+            addOdsIngestionNodes(nodes, edges, datasets, sourceId, effDept);
+        }
+        return new GraphExpansion(List.copyOf(nodes.values()), edges);
+    }
+
+    private void addOdsIngestionNodes(
+        Map<String, Map<String, Object>> nodes,
+        List<Map<String, Object>> edges,
+        Map<UUID, CatalogDataset> datasets,
+        UUID sourceId,
+        String effDept
+    ) {
+        if (datasets == null || datasets.isEmpty()) {
+            return;
+        }
+        List<InfraOdsTableMapping> mappings = odsMappingRepo.findByEnabledTrueOrderByOdsSchemaAscOdsTableAsc();
+        if (mappings == null || mappings.isEmpty()) {
+            return;
+        }
+        Map<String, List<InfraOdsTableMapping>> mappingsByOds = new LinkedHashMap<>();
+        for (InfraOdsTableMapping mapping : mappings) {
+            if (mapping == null || mapping.getEnabled() == null || !mapping.getEnabled()) {
+                continue;
+            }
+            if (sourceId != null && !sourceId.equals(mapping.getConnectionId())) {
+                continue;
+            }
+            String key = tableKey(mapping.getOdsSchema(), mapping.getOdsTable());
+            mappingsByOds.computeIfAbsent(key, ignored -> new ArrayList<>()).add(mapping);
+        }
+        Map<UUID, InfraDataSource> dataSources = new LinkedHashMap<>();
+        for (CatalogDataset dataset : datasets.values()) {
+            if (dataset == null || !StringUtils.hasText(dataset.getHiveTable())) {
+                continue;
+            }
+            String layer = normalizeLayer(dataset.getWarehouseLayer());
+            if (!"ODS".equals(layer)) {
+                continue;
+            }
+            List<InfraOdsTableMapping> matched = mappingsByOds.get(tableKey(dataset.getHiveDatabase(), dataset.getHiveTable()));
+            if (matched == null || matched.isEmpty()) {
+                continue;
+            }
+            String datasetId = dataset.getId() != null ? dataset.getId().toString() : null;
+            if (!StringUtils.hasText(datasetId)) {
+                continue;
+            }
+            for (InfraOdsTableMapping mapping : matched) {
+                InfraDataSource source = null;
+                if (mapping.getConnectionId() != null) {
+                    source = dataSources.computeIfAbsent(mapping.getConnectionId(), id -> dataSourceRepo.findById(id).orElse(null));
+                }
+                if (source != null && !departmentAllowed(source.getOwnerDept(), effDept)) {
+                    continue;
+                }
+                String sourceNodeId = "source:" + (mapping.getConnectionId() != null ? mapping.getConnectionId() : "unknown") + ":" +
+                    safeNodePart(mapping.getStreamNamespace()) + ":" + safeNodePart(mapping.getStreamName());
+                String jobNodeId = "job:ADDAX:" + mapping.getId();
+                nodes.putIfAbsent(sourceNodeId, buildSourceNode(sourceNodeId, mapping, source));
+                nodes.putIfAbsent(jobNodeId, buildAddaxJobNode(jobNodeId, mapping, source));
+                edges.add(buildSyntheticEdge(
+                    "edge:" + sourceNodeId + ":" + jobNodeId,
+                    sourceNodeId,
+                    jobNodeId,
+                    "SOURCE_TO_JOB",
+                    "ADDAX",
+                    sourceLabel(mapping, source),
+                    mappingLabel(mapping)
+                ));
+                edges.add(buildSyntheticEdge(
+                    "edge:" + jobNodeId + ":" + datasetId,
+                    jobNodeId,
+                    datasetId,
+                    "JOB_TO_DATASET",
+                    "ADDAX",
+                    mappingLabel(mapping),
+                    dataset.getName()
+                ));
+            }
+        }
+    }
+
+    private Map<String, Object> toDatasetNodeDto(CatalogDataset ds) {
+        Map<String, Object> dto = new LinkedHashMap<>();
+        dto.put("kind", "dataset");
+        dto.put("id", ds.getId() != null ? ds.getId().toString() : null);
+        dto.put("name", ds.getName());
+        dto.put("db", ds.getHiveDatabase());
+        dto.put("table", ds.getHiveTable());
+        dto.put("type", ds.getType());
+        dto.put("assetType", resolveDatasetAssetType(ds));
+        dto.put("layer", ds.getWarehouseLayer());
+        dto.put("ownerDept", ds.getOwnerDept());
+        dto.put("owner", ds.getOwner());
+        dto.put("sourceId", ds.getSourceId() != null ? ds.getSourceId().toString() : null);
+        dto.put("lastModifiedAt", ds.getLastModifiedDate());
+        dto.put("snapshotTime", ds.getSnapshotTime());
+        return dto;
+    }
+
+    private Map<String, Object> buildJobNode(String jobId, Map<String, Object> edge, String jobType, String relationType) {
+        Map<String, Object> node = new LinkedHashMap<>();
+        node.put("kind", "job");
+        node.put("id", jobId);
+        node.put("name", defaultString(edge.get("downstreamName"), relationType));
+        node.put("jobType", jobType);
+        node.put("relationType", relationType);
+        node.put("projectName", edge.get("projectName"));
+        node.put("layer", "JOB");
+        node.put("lastModifiedAt", edge.get("lastModifiedAt"));
+        return node;
+    }
+
+    private Map<String, Object> buildSourceNode(String nodeId, InfraOdsTableMapping mapping, InfraDataSource source) {
+        Map<String, Object> node = new LinkedHashMap<>();
+        node.put("kind", "source");
+        node.put("id", nodeId);
+        node.put("name", sourceLabel(mapping, source));
+        node.put("db", mapping.getStreamNamespace());
+        node.put("table", mapping.getStreamName());
+        node.put("type", source != null ? source.getType() : null);
+        node.put("assetType", "EXTERNAL_TABLE");
+        node.put("layer", "SOURCE");
+        node.put("ownerDept", source != null ? source.getOwnerDept() : mapping.getOwnerDept());
+        node.put("owner", mapping.getOwner());
+        node.put("sourceId", mapping.getConnectionId() != null ? mapping.getConnectionId().toString() : null);
+        node.put("lastModifiedAt", mapping.getLastModifiedDate());
+        return node;
+    }
+
+    private Map<String, Object> buildAddaxJobNode(String nodeId, InfraOdsTableMapping mapping, InfraDataSource source) {
+        Map<String, Object> node = new LinkedHashMap<>();
+        node.put("kind", "job");
+        node.put("id", nodeId);
+        node.put("name", mappingLabel(mapping));
+        node.put("jobType", "ADDAX_TASK");
+        node.put("relationType", "ADDAX");
+        node.put("layer", "JOB");
+        node.put("sourceId", mapping.getConnectionId() != null ? mapping.getConnectionId().toString() : null);
+        node.put("sourceName", source != null ? source.getName() : null);
+        node.put("lastModifiedAt", mapping.getLastModifiedDate());
+        return node;
+    }
+
+    private Map<String, Object> buildVirtualEdge(Map<String, Object> base, String fromId, String toId, String kind) {
+        String relationType = stringValue(base.get("relationType"));
+        String edgeId = stringValue(base.get("id")) + ":" + kind;
+        return buildSyntheticEdge(
+            edgeId,
+            fromId,
+            toId,
+            kind,
+            relationType,
+            defaultString(base.get("upstreamName"), fromId),
+            defaultString(base.get("downstreamName"), toId),
+            base
+        );
+    }
+
+    private Map<String, Object> buildSyntheticEdge(
+        String id,
+        String fromId,
+        String toId,
+        String kind,
+        String relationType,
+        String upstreamName,
+        String downstreamName
+    ) {
+        return buildSyntheticEdge(id, fromId, toId, kind, relationType, upstreamName, downstreamName, Map.of());
+    }
+
+    private Map<String, Object> buildSyntheticEdge(
+        String id,
+        String fromId,
+        String toId,
+        String kind,
+        String relationType,
+        String upstreamName,
+        String downstreamName,
+        Map<String, Object> base
+    ) {
+        Map<String, Object> edge = new LinkedHashMap<>();
+        edge.put("id", id);
+        edge.put("kind", kind);
+        edge.put("fromId", fromId);
+        edge.put("toId", toId);
+        edge.put("relationType", relationType);
+        edge.put("upstreamDatasetId", fromId);
+        edge.put("downstreamDatasetId", toId);
+        edge.put("upstreamName", upstreamName);
+        edge.put("downstreamName", downstreamName);
+        edge.put("projectName", base.get("projectName"));
+        edge.put("notes", base.get("notes"));
+        edge.put("lastModifiedAt", base.get("lastModifiedAt"));
+        return edge;
+    }
+
+    private Map<String, Long> countByString(List<Map<String, Object>> rows, String key) {
+        if (rows == null || rows.isEmpty()) {
+            return Map.of();
+        }
+        return rows
+            .stream()
+            .collect(
+                Collectors.groupingBy(
+                    row -> {
+                        String value = row == null ? null : stringValue(row.get(key));
+                        return StringUtils.hasText(value) ? value.toLowerCase(Locale.ROOT) : "unknown";
+                    },
+                    LinkedHashMap::new,
+                    Collectors.counting()
+                )
+            );
+    }
+
+    private String jobTypeForRelation(String relationType) {
+        String relation = normalizedRelation(relationType);
+        if ("DBT".equals(relation) || "DBT_MODEL".equals(relation)) {
+            return "DBT_MODEL";
+        }
+        if ("ADDAX".equals(relation)) {
+            return "ADDAX_TASK";
+        }
+        if ("AIRFLOW".equals(relation)) {
+            return "AIRFLOW_DAG";
+        }
+        if ("AUTO_VIEW".equals(relation)) {
+            return "VIEW_DEFINITION";
+        }
+        return "LINEAGE_JOB";
+    }
+
+    private String normalizedRelation(String relationType) {
+        if (!StringUtils.hasText(relationType)) {
+            return "UNKNOWN";
+        }
+        return relationType.trim().toUpperCase(Locale.ROOT);
+    }
+
+    private String resolveDatasetAssetType(CatalogDataset dataset) {
+        if (dataset == null) {
+            return "DATASET";
+        }
+        String type = stringValue(dataset.getType());
+        if (StringUtils.hasText(type) && type.toUpperCase(Locale.ROOT).contains("VIEW")) {
+            return "VIEW";
+        }
+        String layer = normalizeLayer(dataset.getWarehouseLayer());
+        if ("SOURCE".equals(layer)) {
+            return "EXTERNAL_TABLE";
+        }
+        return "DATASET";
+    }
+
+    private boolean departmentAllowed(String ownerDept, String effDept) {
+        if (!StringUtils.hasText(effDept) || !StringUtils.hasText(ownerDept)) {
+            return true;
+        }
+        return ownerDept.trim().equalsIgnoreCase(effDept.trim());
+    }
+
+    private String tableKey(String schema, String table) {
+        String normalizedSchema = StringUtils.hasText(schema) ? schema.trim().toLowerCase(Locale.ROOT) : "";
+        String normalizedTable = StringUtils.hasText(table) ? table.trim().toLowerCase(Locale.ROOT) : "";
+        return normalizedSchema + "." + normalizedTable;
+    }
+
+    private String sourceLabel(InfraOdsTableMapping mapping, InfraDataSource source) {
+        String table = mapping == null ? null : mapping.getStreamName();
+        String namespace = mapping == null ? null : mapping.getStreamNamespace();
+        String sourceName = source != null ? source.getName() : null;
+        String physical = StringUtils.hasText(namespace) ? namespace.trim() + "." + defaultString(table, "unknown") : defaultString(table, "unknown");
+        return StringUtils.hasText(sourceName) ? sourceName.trim() + "/" + physical : physical;
+    }
+
+    private String mappingLabel(InfraOdsTableMapping mapping) {
+        if (mapping == null) {
+            return "Addax task";
+        }
+        String description = trimToNull(mapping.getDescription());
+        if (description != null) {
+            int taskEnd = description.indexOf("] ");
+            String withoutTask = taskEnd >= 0 ? description.substring(taskEnd + 2) : description;
+            int colon = withoutTask.indexOf(": ");
+            if (colon > 0) {
+                return withoutTask.substring(0, colon);
+            }
+        }
+        String source = StringUtils.hasText(mapping.getStreamName()) ? mapping.getStreamName() : "source";
+        String target = StringUtils.hasText(mapping.getOdsTable()) ? mapping.getOdsTable() : "ods";
+        return source + " -> " + target;
+    }
+
+    private String safeNodePart(String value) {
+        if (!StringUtils.hasText(value)) {
+            return "_";
+        }
+        return value.trim().replaceAll("[^A-Za-z0-9_.-]", "_");
+    }
+
+    private String defaultString(Object value, String fallback) {
+        String text = stringValue(value);
+        return StringUtils.hasText(text) ? text : fallback;
+    }
+
+    private String stringValue(Object value) {
+        if (value == null) {
+            return null;
+        }
+        String text = String.valueOf(value).trim();
+        return text.isEmpty() ? null : text;
+    }
+
+    private record GraphExpansion(List<Map<String, Object>> nodes, List<Map<String, Object>> edges) {}
 
     @PostMapping
     @PreAuthorize(CATALOG_MAINTAINER_EXPRESSION)

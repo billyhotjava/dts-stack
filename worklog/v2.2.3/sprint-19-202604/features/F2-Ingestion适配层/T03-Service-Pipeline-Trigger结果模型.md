@@ -1,7 +1,7 @@
 # T03: Service/Pipeline/Trigger 结果模型
 
-**优先级**: P0  
-**状态**: READY  
+**优先级**: P0
+**状态**: DONE
 **依赖**: T01, T02
 
 ## 目标

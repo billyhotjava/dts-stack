@@ -72,7 +72,12 @@ public class CatalogMetadataService {
         }
 
         if (visible.isEmpty()) {
-            return new OpenMetadataService.OpenMetadataTablePage(true, List.of(), 0, keyword, searched, "暂无元数据");
+            return OpenMetadataService.OpenMetadataTablePage.empty(
+                keyword,
+                searched,
+                OpenMetadataService.SOURCE_CATALOG,
+                "暂无本地元数据"
+            );
         }
 
         List<CatalogTableSchema> tables = tableRepository.findByDatasetIn(visible);
@@ -119,13 +124,27 @@ public class CatalogMetadataService {
             summaries = summaries.subList(0, limit);
         }
 
-        return new OpenMetadataService.OpenMetadataTablePage(true, summaries, total, keyword, searched, null);
+        return new OpenMetadataService.OpenMetadataTablePage(
+            true,
+            summaries,
+            total,
+            keyword,
+            searched,
+            null,
+            OpenMetadataService.SOURCE_CATALOG,
+            null
+        );
     }
 
     public OpenMetadataService.OpenMetadataResult fetchLocalTableDetail(String fqn, String activeDept) {
         UUID id = parseLocalId(fqn);
         if (id == null) {
-            return OpenMetadataService.OpenMetadataResult.notFound(fqn, "未找到本地元数据");
+            return OpenMetadataService.OpenMetadataResult.notFound(
+                fqn,
+                "未找到本地元数据",
+                OpenMetadataService.SOURCE_CATALOG,
+                "未找到本地元数据"
+            );
         }
         CatalogTableSchema table = tableRepository.findById(id).orElse(null);
         CatalogDataset dataset = null;
@@ -139,10 +158,20 @@ public class CatalogMetadataService {
         }
 
         if (dataset == null) {
-            return OpenMetadataService.OpenMetadataResult.notFound(fqn, "未找到本地元数据");
+            return OpenMetadataService.OpenMetadataResult.notFound(
+                fqn,
+                "未找到本地元数据",
+                OpenMetadataService.SOURCE_CATALOG,
+                "未找到本地元数据"
+            );
         }
         if (Boolean.FALSE.equals(dataset.getEnabled())) {
-            return OpenMetadataService.OpenMetadataResult.notFound(fqn, "元数据已失效，请重新采集");
+            return OpenMetadataService.OpenMetadataResult.notFound(
+                fqn,
+                "元数据已失效，请重新采集",
+                OpenMetadataService.SOURCE_CATALOG,
+                "元数据已失效，请重新采集"
+            );
         }
         if (!accessChecker.canRead(dataset) || !accessChecker.departmentAllowed(dataset, activeDept)) {
             throw new ResponseStatusException(HttpStatus.NOT_FOUND, "数据集不存在或无权访问");
@@ -161,7 +190,7 @@ public class CatalogMetadataService {
         entity.put("service", dataset.getType());
         entity.put("tags", dataset.getTags());
         entity.put("columns", buildColumnPayload(columns));
-        return OpenMetadataService.OpenMetadataResult.found(fqn, entity, null);
+        return OpenMetadataService.OpenMetadataResult.localFound(fqn, entity, null);
     }
 
     public boolean isLocalFqn(String fqn) {

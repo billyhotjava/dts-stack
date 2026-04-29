@@ -1,8 +1,8 @@
 # Sprint-19: OpenMetadata 元数据采集闭环修复
 
-**时间**: 2026-04  
-**状态**: READY  
-**类型**: Implementation（OpenMetadata 集成修复 + 元数据采集闭环 + 运维验收）  
+**时间**: 2026-04
+**状态**: DONE
+**类型**: Implementation（OpenMetadata 集成修复 + 元数据采集闭环 + 运维验收）
 **目标**: 把现有 OpenMetadata 相关配置、采集、血缘、质量和平台查询能力从“部分接入但不稳定”收敛为可交付闭环：服务可用、采集可触发、FQN 可解析、血缘可注册、失败可观测、本地 catalog 回退边界清晰。
 
 ## 背景
@@ -13,7 +13,7 @@
 - `docker-compose-app.yml` 定义 `dts-openmetadata` 与 `dts-openmetadata-ingestion`。
 - `dts-platform` 通过 `OpenMetadataClient` / `OpenMetadataService` 查询表元数据、血缘和质量测试。
 - `dts-ingestion` 通过 `OpenMetadataAdapter` / `OpenMetadataClient` 尝试创建 service、创建 ingestion pipeline、触发 pipeline 和注册血缘。
-- 当前运行时 `dts-openmetadata` 已启动，但 `dts-openmetadata-ingestion` 因 `OPENMETADATA_AUTH_TOKEN` 为空而跳过采集。
+- 当前运行时 `dts-openmetadata` 已启动；`dts-openmetadata-ingestion` 已通过 token 模式完成 PostgreSQL 与 dbt one-shot 冒烟。
 
 当前主要问题不是“没有 OpenMetadata”，而是已有集成没有形成稳定闭环：
 
@@ -30,18 +30,19 @@
 3. **FQN 规则可配置但必须安全默认**：默认 pattern 要覆盖当前 service/database/schema/table 口径，并对坏 pattern 做诊断。
 4. **接入任务产出真实血缘**：血缘来源于 reader/writer/tableMapping/schema snapshot，而不是空 streams 或静态占位。
 5. **治理字段要么落库，要么显式不支持**：owner/domain/tags 不能悄悄丢弃。
-6. **运维可验收**：OpenMetadata server、ingestion 容器、API、pipeline trigger、日志和重试都要有现场验收步骤。
+6. **采集范围必须隔离业务运行库**：OpenMetadata PostgreSQL 采集只允许采集数仓/分析侧资产，禁止 `dts_platform`、`dts_admin`、`dts_common`、`dts_analytics` 等平台业务/内部库进入数仓分析平台。
+7. **运维可验收**：OpenMetadata server、ingestion 容器、API、pipeline trigger、日志和重试都要有现场验收步骤。
 
 ## Feature 列表
 
 | ID | Feature | Task 数 | 优先级 | 状态 |
 |----|---------|--------:|--------|------|
-| F1 | 配置与部署基线 | 4 | P0 | READY |
-| F2 | Ingestion 适配层 | 4 | P0 | READY |
-| F3 | 血缘注册与标签治理 | 4 | P0 | READY |
-| F4 | OpenMetadata 采集作业运维化 | 4 | P0 | READY |
-| F5 | 平台读路径与本地回退 | 4 | P1 | READY |
-| F6 | 测试验收与发布材料 | 3 | P1 | READY |
+| F1 | 配置与部署基线 | 4 | P0 | DONE |
+| F2 | Ingestion 适配层 | 4 | P0 | DONE |
+| F3 | 血缘注册与标签治理 | 4 | P0 | DONE |
+| F4 | OpenMetadata 采集作业运维化 | 4 | P0 | DONE |
+| F5 | 平台读路径与本地回退 | 4 | P1 | DONE |
+| F6 | 测试验收与发布材料 | 3 | P1 | DONE |
 
 **合计 23 个 task。**
 
@@ -60,15 +61,16 @@ F1 先修正 `.env`、`init.sh` 和部署开关，避免后续功能建立在错
 
 ## 完成标准
 
-- [ ] 新安装和已有环境的 `DTS_PLATFORM_OPENMETADATA_TABLE_FQN_PATTERN` 不再生成 `{service` 这类截断值。
-- [ ] OpenMetadata server、ingestion 容器、API、认证/no-auth 策略有一致配置和启动前检查。
-- [ ] `OpenMetadataAdapter` 能解析当前接入任务的目标库配置，包括 nested `connection`、`jdbcUrl` 和顶层连接字段。
-- [ ] 创建 service、创建 pipeline、触发 pipeline、注册 lineage 都有结构化结果和可观测失败原因。
-- [ ] 接入任务完成后能基于真实 table mapping / stream mapping 注册表级血缘。
-- [ ] owner/domain/tags 至少完成表级写入；暂不支持的维度有明确字段和文档说明。
-- [ ] 平台侧元数据、血缘、质量查询能用正确 FQN 命中 OpenMetadata；未命中时能说明回退来源。
-- [ ] OpenMetadata ingestion 的一键/定时采集可在现场执行并留存日志证据。
-- [ ] Java 单测、集成冒烟、compose 运行检查和发布回滚说明齐备。
+- [x] 新安装和已有环境的 `DTS_PLATFORM_OPENMETADATA_TABLE_FQN_PATTERN` 不再生成 `{service` 这类截断值。
+- [x] OpenMetadata server、ingestion 容器、API、认证/no-auth 策略有一致配置和启动前检查。
+- [x] `OpenMetadataAdapter` 能解析当前接入任务的目标库配置，包括 nested `connection`、`jdbcUrl` 和顶层连接字段。
+- [x] 创建 service、创建 pipeline、触发 pipeline、注册 lineage 都有结构化结果和可观测失败原因。
+- [x] 接入任务完成后能基于真实 table mapping / stream mapping 注册表级血缘。
+- [x] owner/domain/tags 暂不写入 OpenMetadata，但以 `not_supported` 显式回传并记录在发布说明中。
+- [x] 平台侧元数据、血缘、质量查询能用正确 FQN 命中 OpenMetadata；未命中时能说明回退来源。
+- [x] OpenMetadata ingestion 的一键/定时采集可在现场执行并留存日志证据。
+- [x] OpenMetadata PostgreSQL ingestion 默认采集库与平台业务库解耦，并对禁止库做启动前阻断。
+- [x] Java 单测、集成冒烟、compose 运行检查和发布回滚说明齐备。
 
 ## 非目标
 

@@ -3,8 +3,16 @@ import { toast } from "sonner";
 import { Alert, Button, Card, Collapse, Descriptions, Drawer, Input, Select, Space, Statistic, Table, Tabs, Tag, Upload } from "antd";
 import type { ColumnsType } from "antd/es/table";
 import type { UploadProps } from "antd";
-import { DownloadOutlined, UploadOutlined } from "@ant-design/icons";
-import { ReactFlow, Background, Controls, type Node, type Edge } from "@xyflow/react";
+import {
+	ApiOutlined,
+	CodeOutlined,
+	DatabaseOutlined,
+	DownloadOutlined,
+	EyeOutlined,
+	FunctionOutlined,
+	UploadOutlined,
+} from "@ant-design/icons";
+import { ReactFlow, Background, Controls, MiniMap, MarkerType, type Node, type Edge } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
 import { EmptyState } from "@/components/empty-state";
 import { getCatalogLineageImpact, importDbtManifest, listDatasets } from "@/api/platformApi";
@@ -15,11 +23,17 @@ type DatasetOption = {
 };
 
 type ImpactNode = {
+	kind?: "dataset" | "job" | "source" | string;
 	id?: string;
 	name?: string;
 	db?: string;
 	table?: string;
 	type?: string;
+	assetType?: string;
+	jobType?: string;
+	relationType?: string;
+	sourceName?: string;
+	projectName?: string;
 	layer?: string;
 	ownerDept?: string;
 	owner?: string;
@@ -30,6 +44,9 @@ type ImpactNode = {
 
 type ImpactEdge = {
 	id?: string;
+	kind?: string;
+	fromId?: string;
+	toId?: string;
 	relationType?: string;
 	upstreamDatasetId?: string;
 	downstreamDatasetId?: string;
@@ -48,6 +65,7 @@ type ImpactEdge = {
 type ImpactStats = {
 	layerNodeCounts?: Record<string, number>;
 	relationTypeCounts?: Record<string, number>;
+	kindNodeCounts?: Record<string, number>;
 	changedNodeCount?: number;
 };
 
@@ -68,6 +86,8 @@ type ImpactResult = {
 
 const layerColor = (layer?: string) => {
 	const key = String(layer || "").toUpperCase();
+	if (key === "SOURCE") return "magenta";
+	if (key === "JOB") return "orange";
 	if (key === "ODS") return "default";
 	if (key === "DWD") return "blue";
 	if (key === "DWS") return "cyan";
@@ -111,12 +131,125 @@ const downloadCsv = (name: string, rows: Array<Record<string, unknown>>) => {
 	URL.revokeObjectURL(url);
 };
 
-const LAYER_BG: Record<string, string> = {
-	ODS: "#f5f5f5",
-	DWD: "#e6f4ff",
-	DWS: "#e6fffb",
-	ADS: "#f6ffed",
-	DIM: "#f9f0ff",
+const NODE_SIZE = { width: 190, height: 64 };
+const LAYER_RANK: Record<string, number> = {
+	SOURCE: 0,
+	JOB: 1,
+	ODS: 2,
+	STG: 3,
+	DWD: 4,
+	DIM: 4,
+	DWS: 5,
+	ADS: 6,
+};
+const RELATION_STROKE: Record<string, string> = {
+	ADDAX: "#389e0d",
+	DBT: "#d46b08",
+	DBT_MODEL: "#d46b08",
+	AIRFLOW: "#08979c",
+	AUTO_VIEW: "#1677ff",
+	MANUAL: "#8c8c8c",
+};
+
+const nodeIcon = (node: ImpactNode) => {
+	const kind = String(node.kind || "").toLowerCase();
+	const jobType = String(node.jobType || "").toUpperCase();
+	const assetType = String(node.assetType || node.type || "").toUpperCase();
+	if (kind === "source") return <ApiOutlined />;
+	if (kind === "job" && jobType.includes("ADDAX")) return <UploadOutlined />;
+	if (kind === "job" && jobType.includes("DBT")) return <CodeOutlined />;
+	if (kind === "job") return <FunctionOutlined />;
+	if (assetType.includes("VIEW")) return <EyeOutlined />;
+	return <DatabaseOutlined />;
+};
+
+const nodeTone = (node: ImpactNode) => {
+	const kind = String(node.kind || "").toLowerCase();
+	if (kind === "source") return { bg: "#fff0f6", border: "#ffadd2", color: "#9e1068" };
+	if (kind === "job") return { bg: "#fff7e6", border: "#ffd591", color: "#ad4e00" };
+	const layer = String(node.layer || "").toUpperCase();
+	if (layer === "ADS") return { bg: "#f6ffed", border: "#b7eb8f", color: "#237804" };
+	if (layer === "DWS") return { bg: "#e6fffb", border: "#87e8de", color: "#006d75" };
+	if (layer === "DWD") return { bg: "#e6f4ff", border: "#91caff", color: "#0958d9" };
+	if (layer === "DIM") return { bg: "#f9f0ff", border: "#d3adf7", color: "#531dab" };
+	return { bg: "#ffffff", border: "#d9d9d9", color: "#262626" };
+};
+
+const edgeEndpoint = (edge: ImpactEdge, side: "from" | "to") => {
+	if (side === "from") return edge.fromId || edge.upstreamDatasetId;
+	return edge.toId || edge.downstreamDatasetId;
+};
+
+const nodeRank = (node: ImpactNode) => {
+	const kind = String(node.kind || "").toLowerCase();
+	const jobType = String(node.jobType || "").toUpperCase();
+	const layer = String(node.layer || "").toUpperCase();
+	if (kind === "source") return 0;
+	if (kind === "job" && jobType.includes("ADDAX")) return 1;
+	if (kind === "job") return Math.max(3, LAYER_RANK[layer] ?? 3);
+	return LAYER_RANK[layer] ?? 7;
+};
+
+const applyLayeredLayout = (nodes: ImpactNode[], edges: ImpactEdge[], direction: "LR" | "TB") => {
+	const rankById = new Map<string, number>();
+	for (const node of nodes) {
+		if (node.id) rankById.set(node.id, nodeRank(node));
+	}
+	for (let i = 0; i < 8; i += 1) {
+		let changed = false;
+		for (const edge of edges) {
+			const from = edgeEndpoint(edge, "from");
+			const to = edgeEndpoint(edge, "to");
+			if (!from || !to) continue;
+			const fromRank = rankById.get(from);
+			const toRank = rankById.get(to);
+			if (fromRank == null || toRank == null) continue;
+			if (toRank <= fromRank) {
+				rankById.set(to, fromRank + 1);
+				changed = true;
+			}
+		}
+		if (!changed) break;
+	}
+	const groups = new Map<number, ImpactNode[]>();
+	for (const node of nodes) {
+		const rank = node.id ? (rankById.get(node.id) ?? nodeRank(node)) : nodeRank(node);
+		groups.set(rank, [...(groups.get(rank) ?? []), node]);
+	}
+	const sortedRanks = [...groups.keys()].sort((a, b) => a - b);
+	const positions = new Map<string, { x: number; y: number }>();
+	for (const rank of sortedRanks) {
+		const group = groups.get(rank) ?? [];
+		group
+			.sort((a, b) => String(a.name || a.table || a.id).localeCompare(String(b.name || b.table || b.id)))
+			.forEach((node, index) => {
+				if (!node.id) return;
+				const main = rank * 260;
+				const cross = index * 96;
+				positions.set(node.id, direction === "LR" ? { x: main, y: cross } : { x: cross, y: main });
+			});
+	}
+	return positions;
+};
+
+const renderNodeLabel = (node: ImpactNode) => {
+	const tone = nodeTone(node);
+	const title = node.name || node.table || "未知节点";
+	const subTitle = String(node.kind || "dataset").toUpperCase();
+	const detail = node.kind === "job"
+		? node.jobType || node.relationType || "JOB"
+		: node.kind === "source"
+			? node.type || "SOURCE"
+			: node.layer || node.assetType || node.type || "DATASET";
+	return (
+		<div className="flex w-[170px] items-center gap-2 overflow-hidden text-left">
+			<span style={{ color: tone.color }} className="shrink-0 text-base">{nodeIcon(node)}</span>
+			<span className="min-w-0 flex-1">
+				<span className="block text-[10px] uppercase leading-4 text-slate-500">{subTitle} · {detail}</span>
+				<span className="block truncate text-xs font-semibold leading-5 text-slate-900">{title}</span>
+			</span>
+		</div>
+	);
 };
 
 export default function LineagePage() {
@@ -131,6 +264,7 @@ export default function LineagePage() {
 	const [layerFilters, setLayerFilters] = useState<string[]>([]);
 	const [changedWithinHours, setChangedWithinHours] = useState<number>(0);
 	const [keyword, setKeyword] = useState<string>("");
+	const [layoutDirection, setLayoutDirection] = useState<"LR" | "TB">("LR");
 
 	useEffect(() => {
 		void loadDatasets();
@@ -179,6 +313,7 @@ export default function LineagePage() {
 				projectName: project.trim() || undefined,
 				layers: layers.length ? layers.join(",") : undefined,
 				changedWithinHours: changedHours > 0 ? changedHours : undefined,
+				withJobs: true,
 			});
 			setImpact(resp || null);
 		} catch {
@@ -212,47 +347,68 @@ export default function LineagePage() {
 			const byText =
 				`${edge.upstreamName || ""} ${edge.downstreamName || ""} ${edge.relationType || ""} ${edge.notes || ""}`.toLowerCase().includes(keywordLower);
 			const byNode =
-				(edge.upstreamDatasetId && nodeIdSet.has(edge.upstreamDatasetId)) ||
-				(edge.downstreamDatasetId && nodeIdSet.has(edge.downstreamDatasetId));
+				(edgeEndpoint(edge, "from") && nodeIdSet.has(edgeEndpoint(edge, "from")!)) ||
+				(edgeEndpoint(edge, "to") && nodeIdSet.has(edgeEndpoint(edge, "to")!));
 			return Boolean(byText || byNode);
 		});
 	}, [edgesRaw, keywordLower, nodeIdSet]);
 
 	const rfNodes: Node[] = useMemo(() => {
-		if (!impact?.nodes) return [];
-		const layerX: Record<string, number> = { ODS: 0, DWD: 250, DWS: 500, ADS: 750, DIM: 1000 };
-		const layerCount: Record<string, number> = {};
-		return impact.nodes.map((n, idx) => {
-			const layer = n.layer?.toUpperCase() ?? "UNKNOWN";
-			const x = layerX[layer] ?? 1100;
-			layerCount[layer] = (layerCount[layer] ?? 0) + 1;
-			const y = (layerCount[layer] - 1) * 80;
+		if (!nodes.length) return [];
+		const positions = applyLayeredLayout(nodes, edges, layoutDirection);
+		const selectedId = selectedNode?.id;
+		const adjacent = new Set<string>();
+		if (selectedId) {
+			for (const edge of edges) {
+				const from = edgeEndpoint(edge, "from");
+				const to = edgeEndpoint(edge, "to");
+				if (from === selectedId && to) adjacent.add(to);
+				if (to === selectedId && from) adjacent.add(from);
+			}
+		}
+		return nodes.map((n, idx) => {
+			const position = n.id ? positions.get(n.id) : undefined;
+			const tone = nodeTone(n);
+			const isDimmed = Boolean(selectedId) && n.id !== selectedId && !adjacent.has(n.id || "");
 			return {
 				id: n.id ?? (n.db && n.table ? `${n.db}.${n.table}` : `node-${idx}`),
-				position: { x, y },
-				data: { label: n.name ?? n.table ?? "未知" },
+				position: position ?? { x: idx * 220, y: 0 },
+				data: { label: renderNodeLabel(n) },
 				style: {
-					background: LAYER_BG[layer] ?? "#fff",
-					border: "1px solid #d9d9d9",
-					borderRadius: 6,
-					fontSize: 11,
-					padding: "4px 8px",
+					width: NODE_SIZE.width,
+					minHeight: NODE_SIZE.height,
+					background: tone.bg,
+					border: `1px solid ${tone.border}`,
+					borderRadius: n.kind === "job" ? 12 : 6,
+					padding: "6px 8px",
+					opacity: isDimmed ? 0.35 : 1,
+					boxShadow: n.id === selectedId ? `0 0 0 2px ${tone.border}` : "none",
 				},
 			};
 		});
-	}, [impact?.nodes]);
+	}, [edges, layoutDirection, nodes, selectedNode?.id]);
 
 	const rfEdges: Edge[] = useMemo(() =>
-		(impact?.edges ?? [])
-			.filter((e) => e.upstreamDatasetId && e.downstreamDatasetId)
+		edges
+			.filter((e) => edgeEndpoint(e, "from") && edgeEndpoint(e, "to"))
 			.map((e, i) => ({
 				id: e.id ?? `e-${i}`,
-				source: e.upstreamDatasetId!,
-				target: e.downstreamDatasetId!,
+				source: edgeEndpoint(e, "from")!,
+				target: edgeEndpoint(e, "to")!,
+				type: "smoothstep",
 				animated: false,
-				style: { stroke: "#bfbfbf" },
+				label: e.relationType,
+				labelStyle: { fontSize: 10, fill: "#595959", fontWeight: 600 },
+				labelBgPadding: [6, 3] as [number, number],
+				labelBgBorderRadius: 4,
+				style: {
+					stroke: RELATION_STROKE[String(e.relationType || "").toUpperCase()] ?? "#bfbfbf",
+					strokeWidth: e.relationType === "MANUAL" ? 1.2 : 1.8,
+					strokeDasharray: e.relationType === "MANUAL" ? "4 4" : undefined,
+				},
+				markerEnd: { type: MarkerType.ArrowClosed, width: 16, height: 16 },
 			})),
-		[impact?.edges],
+		[edges],
 	);
 
 	const dbtUploadProps: UploadProps = {
@@ -316,6 +472,21 @@ export default function LineagePage() {
 			render: (value, row) => value || `${row.db || "-"}.${row.table || "-"}`,
 		},
 		{
+			title: "类型",
+			key: "kind",
+			width: 120,
+			render: (_, row) => {
+				const kind = String(row.kind || "dataset").toUpperCase();
+				const detail = row.jobType || row.assetType || row.type || "-";
+				return (
+					<Space size={4}>
+						<Tag color={row.kind === "job" ? "orange" : row.kind === "source" ? "magenta" : "blue"}>{kind}</Tag>
+						<span className="text-xs text-slate-500">{detail}</span>
+					</Space>
+				);
+			},
+		},
+		{
 			title: "分层",
 			dataIndex: "layer",
 			width: 120,
@@ -323,12 +494,6 @@ export default function LineagePage() {
 				if (!value) return "-";
 				return <Tag color={layerColor(value)}>{String(value).toUpperCase()}</Tag>;
 			},
-		},
-		{
-			title: "类型",
-			dataIndex: "type",
-			width: 130,
-			render: (value) => (value ? <Tag>{String(value).toUpperCase()}</Tag> : "-"),
 		},
 		{
 			title: "模式.表",
@@ -494,6 +659,15 @@ export default function LineagePage() {
 						]}
 						onChange={(value) => setChangedWithinHours(value)}
 					/>
+					<Select
+						style={{ width: 140 }}
+						value={layoutDirection}
+						options={[
+							{ label: "横向布局", value: "LR" },
+							{ label: "纵向布局", value: "TB" },
+						]}
+						onChange={(value) => setLayoutDirection(value)}
+					/>
 					<Input
 						style={{ width: 220 }}
 						placeholder="项目名过滤（可选）"
@@ -528,6 +702,8 @@ export default function LineagePage() {
 											<Statistic title="节点数" value={Number(impact?.nodeCount || 0)} />
 											<Statistic title="边数" value={Number(impact?.edgeCount || 0)} />
 											<Statistic title="变更节点" value={Number(impact?.impactStats?.changedNodeCount || 0)} />
+											<Statistic title="数据源" value={Number(impact?.impactStats?.kindNodeCounts?.source || 0)} />
+											<Statistic title="任务节点" value={Number(impact?.impactStats?.kindNodeCounts?.job || 0)} />
 											<Statistic title="方向" value={impact?.direction || direction} />
 											<Statistic title="深度" value={Number(impact?.depth || depth)} />
 										</Space>
@@ -582,9 +758,25 @@ export default function LineagePage() {
 							label: "血缘图",
 							children: (
 								<div style={{ height: 500, border: "1px solid #e8e8e8", borderRadius: 8, overflow: "hidden" }}>
-									<ReactFlow nodes={rfNodes} edges={rfEdges} fitView>
+									<ReactFlow
+										nodes={rfNodes}
+										edges={rfEdges}
+										fitView
+										onNodeClick={(_, node) => {
+											const matched = nodes.find((item) => (item.id || "") === node.id);
+											if (matched) setSelectedNode(matched);
+										}}
+									>
 										<Background />
 										<Controls />
+										<MiniMap
+											position="bottom-right"
+											nodeStrokeWidth={2}
+											nodeColor={(node) => {
+												const matched = nodes.find((item) => (item.id || "") === node.id);
+												return nodeTone(matched || {}).bg;
+											}}
+										/>
 									</ReactFlow>
 								</div>
 							),
