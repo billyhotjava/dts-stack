@@ -1402,7 +1402,7 @@ async function sendJson<T>(url: string, body: unknown): Promise<T> {
 	return await requestJson<T>(url, "POST", body);
 }
 
-async function requestJson<T>(url: string, method: "POST" | "PUT" | "DELETE", body?: unknown): Promise<T> {
+async function requestJson<T>(url: string, method: "POST" | "PUT" | "PATCH" | "DELETE", body?: unknown): Promise<T> {
 	const init: RequestInit = {
 		method,
 		headers: {
@@ -2253,7 +2253,7 @@ export const analyticsApi = {
 	deleteScreen: (id: string | number) =>
 		requestJson<void>(`/bi/api/screens/${encodeURIComponent(String(id))}`, "DELETE"),
 	getScreenAcl: async (id: string | number): Promise<ScreenAclEntry[]> => {
-		type PlatformGrant = { id?: number; granteeType?: string; granteeId?: string; permission?: string; grantedBy?: string; createdDate?: string; lastModifiedDate?: string };
+		type PlatformGrant = { id?: number; granteeType?: string; granteeId?: string; permission?: string; levelOverride?: boolean; grantedBy?: string; createdDate?: string; lastModifiedDate?: string };
 		const grants = await fetchJson<PlatformGrant[]>(`/bi/api/screens/${encodeURIComponent(String(id))}/grants`);
 		return (grants || []).map((g) => ({
 			id: g.id,
@@ -2261,12 +2261,25 @@ export const analyticsApi = {
 			subjectType: (g.granteeType === "ROLE" ? "ROLE" : "USER") as ScreenAclEntry["subjectType"],
 			subjectId: g.granteeId || "",
 			perm: (g.permission === "OWNER" ? "OWNER" : g.permission === "MANAGER" || g.permission === "EDIT" ? "MANAGE" : "READ") as ScreenAclEntry["perm"],
+			levelOverride: g.levelOverride === true,
 			createdAt: g.createdDate,
 			updatedAt: g.lastModifiedDate,
 		}));
 	},
-	addScreenGrant: (id: string | number, body: { granteeType: string; granteeId: string; permission: string }) =>
-		requestJson<Record<string, unknown>>(`/bi/api/screens/${encodeURIComponent(String(id))}/grants`, "PUT", body),
+	addScreenGrant: (
+		id: string | number,
+		body: { granteeType: string; granteeId: string; permission: string; levelOverride?: boolean },
+	) => requestJson<Record<string, unknown>>(`/bi/api/screens/${encodeURIComponent(String(id))}/grants`, "PUT", body),
+	/**
+	 * Sprint-18：原地更新大屏密级（PUBLIC/INTERNAL/SECRET/CONFIDENTIAL）。
+	 * 仅 owner 可调；后端会写一条 screen.classification.update 审计。
+	 */
+	updateScreenClassification: (id: string | number, classification: string) =>
+		requestJson<{ classification: string; changed: boolean }>(
+			`/bi/api/screens/${encodeURIComponent(String(id))}/classification`,
+			"PATCH",
+			{ classification },
+		),
 	revokeScreenGrant: (screenId: string | number, grantId: string | number) =>
 		requestJson<void>(`/bi/api/screens/${encodeURIComponent(String(screenId))}/grants/${encodeURIComponent(String(grantId))}`, "DELETE"),
 	getScreenEditLock: (id: string | number) =>

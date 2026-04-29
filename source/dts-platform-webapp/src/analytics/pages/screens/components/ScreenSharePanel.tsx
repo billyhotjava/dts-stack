@@ -29,6 +29,9 @@ export function ScreenSharePanel({ open, screenId, onClose, isOwner = false }: S
 	const [error, setError] = useState<string | null>(null);
 	const [entries, setEntries] = useState<ScreenAclEntry[]>([]);
 	const [userNameMap, setUserNameMap] = useState<Record<string, string>>({});
+	// Sprint-18 大屏密级 — 仅 owner 可改；非 owner 只展示。
+	const [classification, setClassification] = useState<string>('');
+	const [classificationSaving, setClassificationSaving] = useState(false);
 
 	// User search state
 	const [searchQuery, setSearchQuery] = useState('');
@@ -36,6 +39,8 @@ export function ScreenSharePanel({ open, screenId, onClose, isOwner = false }: S
 	const [searching, setSearching] = useState(false);
 	const [selectedUserIds, setSelectedUserIds] = useState<Set<string>>(new Set());
 	const [addPerm, setAddPerm] = useState<'READ' | 'MANAGE'>('READ');
+	// Sprint-18 大屏密级越级共享 — 仅对 READ（VIEWER）grant 有意义。
+	const [addLevelOverride, setAddLevelOverride] = useState(false);
 	const searchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
 	// Share link state
@@ -72,16 +77,21 @@ export function ScreenSharePanel({ open, screenId, onClose, isOwner = false }: S
 		setUserNameMap((prev) => ({ ...prev, ...nameMap }));
 	}, []);
 
-	// Load ACL entries
+	// Load ACL entries + screen classification (Sprint-18)
 	const loadAcl = useCallback(async () => {
 		if (!screenId) return;
 		setLoading(true);
 		setError(null);
 		try {
-			const acl = await analyticsApi.getScreenAcl(screenId);
+			const [acl, screen] = await Promise.all([
+				analyticsApi.getScreenAcl(screenId),
+				analyticsApi.getScreen(screenId).catch(() => null),
+			]);
 			const normalized = (acl || []).map(normalizeEntry);
 			setEntries(normalized);
 			resolveUserNames(normalized);
+			const rawClassification = (screen as { classification?: string } | null)?.classification;
+			setClassification(typeof rawClassification === 'string' ? rawClassification.toUpperCase() : '');
 		} catch (e) {
 			setError(e instanceof Error ? e.message : '加载权限失败');
 			setEntries([]);
@@ -89,6 +99,29 @@ export function ScreenSharePanel({ open, screenId, onClose, isOwner = false }: S
 			setLoading(false);
 		}
 	}, [screenId, resolveUserNames]);
+
+	// Sprint-18：原地修改大屏密级（仅 owner）
+	const handleClassificationChange = useCallback(
+		async (next: string) => {
+			if (!screenId || !next) return;
+			const previous = classification;
+			if (previous === next) return;
+			setClassification(next);
+			setClassificationSaving(true);
+			try {
+				await analyticsApi.updateScreenClassification(screenId, next);
+				message.success(`大屏密级已更新为 ${next}`);
+			} catch (e) {
+				setClassification(previous);
+				const msg = e instanceof Error ? e.message : '更新密级失败';
+				message.error(msg);
+				setError(msg);
+			} finally {
+				setClassificationSaving(false);
+			}
+		},
+		[screenId, classification],
+	);
 
 	useEffect(() => {
 		if (!open || !screenId) return;
@@ -162,18 +195,22 @@ export function ScreenSharePanel({ open, screenId, onClose, isOwner = false }: S
 		setError(null);
 		try {
 			const backendPerm = addPerm === 'MANAGE' ? 'MANAGER' : 'VIEWER';
+			// 越级标记仅对 READ grant 有意义，service 层会再次兜底
+			const levelOverride = addPerm === 'READ' && addLevelOverride;
 			for (const uid of selectedUserIds) {
 				await analyticsApi.addScreenGrant(screenId, {
 					granteeType: 'USER',
 					granteeId: uid,
 					permission: backendPerm,
+					levelOverride,
 				});
 			}
 			await reloadEntries();
 			setSelectedUserIds(new Set());
 			setSearchQuery('');
 			setSearchResults([]);
-			message.success(`已添加 ${selectedUserIds.size} 位用户`);
+			setAddLevelOverride(false);
+			message.success(`已添加 ${selectedUserIds.size} 位用户${levelOverride ? '（含密级越级）' : ''}`);
 		} catch (e) {
 			setError(e instanceof Error ? e.message : '添加用户失败');
 		} finally {
@@ -258,6 +295,64 @@ export function ScreenSharePanel({ open, screenId, onClose, isOwner = false }: S
 					whiteSpace: 'pre-wrap',
 				}}>
 					{error}
+				</div>
+			)}
+
+			{/*
+				Sprint-18 大屏密级 — 仅 owner 可改；非 owner 只读展示。
+				密级决定哪些人员密级可见本大屏；选择"密级越级共享"会绕过此限制。
+			*/}
+			{screenId && (
+				<div
+					style={{
+						marginBottom: 16,
+						padding: '10px 12px',
+						borderRadius: 8,
+						border: '1px solid var(--color-border, rgba(255,255,255,0.1))',
+						background: 'var(--color-surface-raised, rgba(255,255,255,0.03))',
+					}}
+				>
+					<div
+						style={{
+							fontSize: 13,
+							fontWeight: 600,
+							marginBottom: 6,
+							color: 'var(--color-text-primary, #e5e7eb)',
+						}}
+					>
+						大屏密级
+					</div>
+					{isOwner ? (
+						<div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+							<Select
+								value={classification || undefined}
+								placeholder="选择密级"
+								onChange={(val) => handleClassificationChange(val as string)}
+								disabled={classificationSaving}
+								loading={classificationSaving}
+								size="small"
+								style={{ width: 160 }}
+								options={[
+									{ label: '公开 (PUBLIC)', value: 'PUBLIC' },
+									{ label: '内部 (INTERNAL)', value: 'INTERNAL' },
+									{ label: '秘密 (SECRET)', value: 'SECRET' },
+									{ label: '机密 (CONFIDENTIAL)', value: 'CONFIDENTIAL' },
+								]}
+							/>
+							<span style={{ fontSize: 12, color: 'var(--color-text-secondary, #9ca3af)' }}>
+								修改后仅高于或等于此密级的用户可访问；可对个别用户授予越级共享。
+							</span>
+						</div>
+					) : (
+						<div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+							<Tag color="blue" style={{ margin: 0 }}>
+								{classification || '未设置'}
+							</Tag>
+							<span style={{ fontSize: 12, color: 'var(--color-text-secondary, #9ca3af)' }}>
+								仅大屏所有者可修改密级
+							</span>
+						</div>
+					)}
 				</div>
 			)}
 
@@ -359,6 +454,11 @@ export function ScreenSharePanel({ open, screenId, onClose, isOwner = false }: S
 										<Tag color={PERM_COLORS[entry.perm] || 'default'} style={{ margin: 0 }}>
 											{PERM_LABELS[entry.perm] || entry.perm}
 										</Tag>
+										{entry.levelOverride && (
+											<Tag color="orange" style={{ margin: 0 }} title="该用户密级低于大屏密级，已被授予越级访问">
+												密级越级
+											</Tag>
+										)}
 										<Button
 											type="text"
 											size="small"
@@ -457,13 +557,17 @@ export function ScreenSharePanel({ open, screenId, onClose, isOwner = false }: S
 							未找到匹配的用户
 						</div>
 					)}
-					<div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+					<div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
 						<span style={{ fontSize: 12, color: 'var(--color-text-secondary, #9ca3af)' }}>
 							权限:
 						</span>
 						<Select
 							value={addPerm}
-							onChange={(val) => setAddPerm(val)}
+							onChange={(val) => {
+								setAddPerm(val);
+								// 切到 MANAGE 时清空越级标记 — 后端只允许 VIEWER + override
+								if (val !== 'READ') setAddLevelOverride(false);
+							}}
 							size="small"
 							style={{ width: 100 }}
 							options={availablePerms}
@@ -478,6 +582,42 @@ export function ScreenSharePanel({ open, screenId, onClose, isOwner = false }: S
 							添加选中用户 {selectedUserIds.size > 0 ? `(${selectedUserIds.size})` : ''}
 						</Button>
 					</div>
+					{/*
+						Sprint-18：仅当授予 READ（查看者）时才允许"密级越级"。
+						勾选后被分享人即便密级低于大屏密级也能看到，请确认其工作需要。
+						后端仍会校验：MANAGE/OWNER 跟 levelOverride 组合时直接 400。
+					*/}
+					{addPerm === 'READ' && (
+						<div
+							style={{
+								marginTop: 8,
+								padding: '6px 10px',
+								borderRadius: 4,
+								backgroundColor: 'var(--color-warning-bg, rgba(250,173,20,0.08))',
+								border: '1px dashed var(--color-warning, rgba(250,173,20,0.4))',
+								display: 'flex',
+								alignItems: 'flex-start',
+								gap: 8,
+							}}
+						>
+							<input
+								type="checkbox"
+								id="screen-share-level-override"
+								checked={addLevelOverride}
+								onChange={(e) => setAddLevelOverride(e.target.checked)}
+								style={{ marginTop: 3 }}
+							/>
+							<label
+								htmlFor="screen-share-level-override"
+								style={{ fontSize: 12, lineHeight: 1.5, cursor: 'pointer' }}
+							>
+								<strong style={{ color: 'var(--color-warning, #faad14)' }}>密级越级共享</strong>
+								<span style={{ color: 'var(--color-text-secondary, #9ca3af)', marginLeft: 6 }}>
+									被分享人即便人员密级低于大屏密级也可访问，请确认其工作需要。每次越级访问都会写审计。
+								</span>
+							</label>
+						</div>
+					)}
 				</div>
 			)}
 
@@ -531,6 +671,7 @@ function normalizeEntry(row: Partial<ScreenAclEntry>): ScreenAclEntry {
 		subjectType: row.subjectType === 'ROLE' ? 'ROLE' : 'USER',
 		subjectId: String(row.subjectId || '').trim(),
 		perm: (validPerms.includes(row.perm as ScreenAclEntry['perm']) ? row.perm : 'READ') as ScreenAclEntry['perm'],
+		levelOverride: row.levelOverride === true,
 		id: row.id,
 		screenId: row.screenId,
 		creatorId: row.creatorId,

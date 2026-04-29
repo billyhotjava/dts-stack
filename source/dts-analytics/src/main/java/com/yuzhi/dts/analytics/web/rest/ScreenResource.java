@@ -44,6 +44,7 @@ import org.springframework.http.HttpHeaders;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
@@ -1245,6 +1246,53 @@ public class ScreenResource {
         } catch (Exception ex) {
             return ResponseEntity.status(503).body(Map.of("error", "Failed to create grant: " + ex.getMessage()));
         }
+    }
+
+    /**
+     * Sprint-18 大屏密级独立修改入口。
+     *
+     * <p>大屏 PUT /{id} 只接受 ScreenWritePayload（结构 / 主题 / 组件等），不含
+     * classification；publish endpoint 虽然能改 classification 但会触发版本切换，
+     * 不适合日常调整。本端点提供轻量原地修改，仅 owner 可调，写审计。
+     */
+    @PatchMapping(path = "/{id}/classification", consumes = MediaType.APPLICATION_JSON_VALUE, produces = MediaType.APPLICATION_JSON_VALUE)
+    public ResponseEntity<?> updateClassification(
+            @PathVariable("id") long id,
+            @RequestBody(required = false) JsonNode body,
+            HttpServletRequest request) {
+        Optional<AnalyticsUser> user = MetabaseAuth.currentUser(sessionService, request);
+        if (user.isEmpty()) return unauthorized();
+
+        AnalyticsScreen screen = screenRepository.findById(id).orElse(null);
+        if (screen == null || screen.isArchived()) return ResponseEntity.notFound().build();
+
+        PlatformContext context = PlatformContext.from(request);
+        ScreenPermissionService.PermissionSnapshot perms = screenPermissionService.snapshot(screen, user.orElseThrow(), context);
+        if (!perms.isOwner()) return forbidden();
+
+        String classification = body == null ? null : trimToNull(body.path("classification").asText(null));
+        if (classification == null) {
+            return ResponseEntity.badRequest().body(Map.of("error", "classification is required"));
+        }
+        String upper = classification.toUpperCase(java.util.Locale.ROOT);
+        if (!java.util.Set.of("PUBLIC", "INTERNAL", "SECRET", "CONFIDENTIAL").contains(upper)) {
+            return ResponseEntity.badRequest()
+                .body(Map.of("error", "classification must be PUBLIC, INTERNAL, SECRET, or CONFIDENTIAL"));
+        }
+        String before = screen.getClassification();
+        if (upper.equals(before)) {
+            return ResponseEntity.ok(Map.of("classification", upper, "changed", false));
+        }
+        screen.setClassification(upper);
+        screenRepository.save(screen);
+        screenAuditService.log(
+            screen.getId(),
+            user.orElseThrow().getId(),
+            "screen.classification.update",
+            Map.of("before", before == null ? "" : before),
+            Map.of("after", upper),
+            requestIdFrom(request));
+        return ResponseEntity.ok(Map.of("classification", upper, "changed", true));
     }
 
     @DeleteMapping(path = "/{id}/grants/{grantId}")
