@@ -61,4 +61,25 @@ public interface AssetGrantRepository extends JpaRepository<AssetGrant, Long> {
     Page<AssetGrant> findGrantsForUser(@Param("username") String username, Pageable pageable);
 
     Page<AssetGrant> findByGrantedByOrderByCreatedDateDesc(String grantedBy, Pageable pageable);
+
+    /**
+     * 单资产 / 单用户的有效 grant 列表（仅 grantee_type=USER）。
+     * Sprint-18 大屏密级共享：DashboardAccessGuard 通过本查询判定
+     * 用户是否拥有 MANAGE / VIEW / level_override 等权限。
+     */
+    @Query("""
+        select g from AssetGrant g
+        where g.assetType = :assetType
+          and g.assetId = :assetId
+          and g.granteeType = 'USER'
+          and lower(g.granteeId) = lower(:username)
+          and (g.validFrom is null or g.validFrom <= :now)
+          and (g.validTo is null or g.validTo >= :now)
+    """)
+    List<AssetGrant> findActiveUserGrants(
+        @Param("assetType") String assetType,
+        @Param("assetId") String assetId,
+        @Param("username") String username,
+        @Param("now") Instant now
+    );
 }

@@ -48,6 +48,14 @@ public class AssetGrant extends AbstractAuditingEntity<Long> implements Serializ
     @Column(name = "grant_reason", length = 512)
     private String grantReason;
 
+    /**
+     * 大屏密级越级共享标志位（Sprint-18）。
+     * 当 grantee 的人员密级低于资产密级时，必须置为 true，
+     * DashboardAccessGuard 据此放行越级访问；默认 false 不影响普通授权。
+     */
+    @Column(name = "level_override", nullable = false)
+    private boolean levelOverride = false;
+
     @Override
     public Long getId() {
         return id;
@@ -127,6 +135,14 @@ public class AssetGrant extends AbstractAuditingEntity<Long> implements Serializ
 
     public void setGrantReason(String grantReason) {
         this.grantReason = grantReason;
+    }
+
+    public boolean isLevelOverride() {
+        return levelOverride;
+    }
+
+    public void setLevelOverride(boolean levelOverride) {
+        this.levelOverride = levelOverride;
     }
 
     public boolean isValid() {

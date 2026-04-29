@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="utf-8"?>
+<databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+    http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
+
+    <!--
+        Sprint-18 / 大屏密级共享：在 asset_grant 上加 level_override 标志位。
+        当大屏所有者要把一个用户密级低于大屏密级的用户授予 VIEW 权限时，
+        必须把 level_override 设为 true，DashboardAccessGuard 据此放行越级访问。
+        默认 false，对历史数据不构成行为变化。
+    -->
+    <changeSet id="20260429-06-asset-grant-level-override" author="codex">
+        <preConditions onFail="MARK_RAN">
+            <and>
+                <tableExists tableName="asset_grant"/>
+                <not>
+                    <columnExists tableName="asset_grant" columnName="level_override"/>
+                </not>
+            </and>
+        </preConditions>
+        <addColumn tableName="asset_grant">
+            <column name="level_override" type="boolean" defaultValueBoolean="false">
+                <constraints nullable="false"/>
+            </column>
+        </addColumn>
+    </changeSet>
+</databaseChangeLog>

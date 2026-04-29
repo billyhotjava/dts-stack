@@ -145,4 +145,9 @@
     <include file="config/liquibase/changelog/20260425_02_bi_report_link_source.xml" relativeToChangelogFile="false"/>
     <include file="config/liquibase/changelog/20260426_01_bi_report_link_source_retry.xml" relativeToChangelogFile="false"/>
     <include file="config/liquibase/changelog/20260429_01_catalog_lineage_verification_status.xml" relativeToChangelogFile="false"/>
+    <include file="config/liquibase/changelog/20260429_02_catalog_lineage_job.xml" relativeToChangelogFile="false"/>
+    <include file="config/liquibase/changelog/20260429_03_catalog_column_lineage.xml" relativeToChangelogFile="false"/>
+    <include file="config/liquibase/changelog/20260429_04_infra_connector_registry.xml" relativeToChangelogFile="false"/>
+    <include file="config/liquibase/changelog/20260429_05_infra_data_source_connector_key.xml" relativeToChangelogFile="false"/>
+    <include file="config/liquibase/changelog/20260429_06_asset_grant_level_override.xml" relativeToChangelogFile="false"/>
 </databaseChangeLog>
