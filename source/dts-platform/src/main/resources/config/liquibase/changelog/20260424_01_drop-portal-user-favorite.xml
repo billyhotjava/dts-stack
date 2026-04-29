@@ -29,12 +29,19 @@
         succeed in fresh environments where the table never existed.
     -->
     <changeSet id="20260424-1000-portal-user-favorite-empty-check" author="billy">
-        <preConditions onFail="MARK_RAN" onFailMessage="portal_user_favorite already absent — empty-check skipped.">
-            <tableExists tableName="portal_user_favorite"/>
-        </preConditions>
+        <!--
+            A single preConditions block (XSD allows only one per changeSet).
+            Pass when EITHER the table is already gone OR it still exists but has 0 rows.
+            Otherwise HALT with the operator runbook message.
+        -->
         <preConditions onFail="HALT"
                        onFailMessage="portal_user_favorite still has rows. BEFORE running this migration: (1) replace placeholder dumps in worklog/v2.2.3/sprint-15-202604/assets/ with a real pg_dump; (2) update assets/dump.checksum; (3) verify rollback runbook in assets/README.md. Re-run liquibase update only after dump is real.">
-            <sqlCheck expectedResult="0">SELECT count(*) FROM portal_user_favorite</sqlCheck>
+            <or>
+                <not>
+                    <tableExists tableName="portal_user_favorite"/>
+                </not>
+                <sqlCheck expectedResult="0">SELECT count(*) FROM portal_user_favorite</sqlCheck>
+            </or>
         </preConditions>
         <!-- No-op: this changeSet exists purely to guard the destructive drop in step 2. -->
         <sql>SELECT 1</sql>
