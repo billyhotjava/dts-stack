@@ -297,6 +297,11 @@ services:
       ADDAX_DRIVER_JARS: ${ADDAX_DRIVER_JARS:-DmJdbcDriver11.jar,postgresql-42.7.9.jar}
       ADDAX_IMAGE: ${IMAGE_ADDAX:-dts-addax:6.0.8}
       ADDAX_JOB_DIR: ${STACK_ROOT}/services/dts-airflow/dags
+      DTS_TARGET_DB_HOST: ${PG_HOST:-dts-pg}
+      DTS_TARGET_DB_PORT: ${PG_PORT:-5432}
+      DTS_TARGET_DB_NAME: ${PG_DB_BIADMIN:-biadmin}
+      DTS_TARGET_DB_USER: ${PG_USER_BIADMIN:-biadmin}
+      DTS_TARGET_DB_PASSWORD: ${PG_PWD_BIADMIN}
       AIRFLOW__API__AUTH_BACKENDS: airflow.api.auth.backend.basic_auth
       AIRFLOW__CORE__DAG_IGNORE_FILE_SYNTAX: regexp
       AIRFLOW__CORE__EXECUTOR: LocalExecutor
@@ -377,6 +382,11 @@ services:
       ADDAX_DRIVER_JARS: ${ADDAX_DRIVER_JARS:-DmJdbcDriver11.jar,postgresql-42.7.9.jar}
       ADDAX_IMAGE: ${IMAGE_ADDAX:-dts-addax:6.0.8}
       ADDAX_JOB_DIR: ${STACK_ROOT}/services/dts-airflow/dags
+      DTS_TARGET_DB_HOST: ${PG_HOST:-dts-pg}
+      DTS_TARGET_DB_PORT: ${PG_PORT:-5432}
+      DTS_TARGET_DB_NAME: ${PG_DB_BIADMIN:-biadmin}
+      DTS_TARGET_DB_USER: ${PG_USER_BIADMIN:-biadmin}
+      DTS_TARGET_DB_PASSWORD: ${PG_PWD_BIADMIN}
       AIRFLOW__API__AUTH_BACKENDS: airflow.api.auth.backend.basic_auth
       AIRFLOW__CORE__DAG_IGNORE_FILE_SYNTAX: regexp
       AIRFLOW__CORE__EXECUTOR: LocalExecutor
@@ -453,6 +463,11 @@ services:
       ADDAX_DRIVER_JARS: ${ADDAX_DRIVER_JARS:-DmJdbcDriver11.jar,postgresql-42.7.9.jar}
       ADDAX_IMAGE: ${IMAGE_ADDAX:-dts-addax:6.0.8}
       ADDAX_JOB_DIR: ${STACK_ROOT}/services/dts-airflow/dags
+      DTS_TARGET_DB_HOST: ${PG_HOST:-dts-pg}
+      DTS_TARGET_DB_PORT: ${PG_PORT:-5432}
+      DTS_TARGET_DB_NAME: ${PG_DB_BIADMIN:-biadmin}
+      DTS_TARGET_DB_USER: ${PG_USER_BIADMIN:-biadmin}
+      DTS_TARGET_DB_PASSWORD: ${PG_PWD_BIADMIN}
       AIRFLOW__API__AUTH_BACKENDS: airflow.api.auth.backend.basic_auth
       AIRFLOW__API__BASE_URL: https://${HOST_FLOW}
       AIRFLOW__CORE__DAG_IGNORE_FILE_SYNTAX: regexp

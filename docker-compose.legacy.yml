@@ -941,6 +941,11 @@ services:
         condition: service_completed_successfully
     environment:
       TZ: ${TZ:-Asia/Shanghai}
+      DTS_TARGET_DB_HOST: ${PG_HOST:-dts-pg}
+      DTS_TARGET_DB_PORT: ${PG_PORT:-5432}
+      DTS_TARGET_DB_NAME: ${PG_DB_BIADMIN:-biadmin}
+      DTS_TARGET_DB_USER: ${PG_USER_BIADMIN:-biadmin}
+      DTS_TARGET_DB_PASSWORD: ${PG_PWD_BIADMIN}
       AIRFLOW__CORE__EXECUTOR: LocalExecutor
       AIRFLOW__CORE__LOAD_EXAMPLES: "false"
       AIRFLOW__CORE__DAG_IGNORE_FILE_SYNTAX: "regexp"
@@ -1009,6 +1014,11 @@ services:
         condition: service_completed_successfully
     environment:
       TZ: ${TZ:-Asia/Shanghai}
+      DTS_TARGET_DB_HOST: ${PG_HOST:-dts-pg}
+      DTS_TARGET_DB_PORT: ${PG_PORT:-5432}
+      DTS_TARGET_DB_NAME: ${PG_DB_BIADMIN:-biadmin}
+      DTS_TARGET_DB_USER: ${PG_USER_BIADMIN:-biadmin}
+      DTS_TARGET_DB_PASSWORD: ${PG_PWD_BIADMIN}
       AIRFLOW__CORE__EXECUTOR: LocalExecutor
       AIRFLOW__CORE__LOAD_EXAMPLES: "false"
       AIRFLOW__CORE__DAG_IGNORE_FILE_SYNTAX: "regexp"
@@ -1056,6 +1066,11 @@ services:
         condition: service_completed_successfully
     environment:
       TZ: ${TZ:-Asia/Shanghai}
+      DTS_TARGET_DB_HOST: ${PG_HOST:-dts-pg}
+      DTS_TARGET_DB_PORT: ${PG_PORT:-5432}
+      DTS_TARGET_DB_NAME: ${PG_DB_BIADMIN:-biadmin}
+      DTS_TARGET_DB_USER: ${PG_USER_BIADMIN:-biadmin}
+      DTS_TARGET_DB_PASSWORD: ${PG_PWD_BIADMIN}
       AIRFLOW__CORE__EXECUTOR: LocalExecutor
       AIRFLOW__CORE__LOAD_EXAMPLES: "false"
       AIRFLOW__CORE__DAG_IGNORE_FILE_SYNTAX: "regexp"

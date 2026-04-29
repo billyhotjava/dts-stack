@@ -273,3 +273,20 @@
 
 **统计**: READY=1, IN_PROGRESS=0, DONE=27, BLOCKED=0
 **设计文档**: `worklog/v2.2.3/sprint-18-202604/README.md`
+
+## Sprint-19: OpenMetadata 元数据采集闭环修复 (202604)
+**状态**: READY
+**类型**: Implementation（OpenMetadata 集成修复 + 元数据采集闭环 + 运维验收）
+**目标**: 把现有 OpenMetadata 相关配置、采集、血缘、质量和平台查询能力从“部分接入但不稳定”收敛为可交付闭环：服务可用、采集可触发、FQN 可解析、血缘可注册、失败可观测、本地 catalog 回退边界清晰。
+
+| Feature | Task 数 | 状态 |
+|---------|---------|------|
+| F1-配置与部署基线 | 4 | READY |
+| F2-Ingestion适配层 | 4 | READY |
+| F3-血缘注册与标签治理 | 4 | READY |
+| F4-OpenMetadata采集作业运维化 | 4 | READY |
+| F5-平台读路径与本地回退 | 4 | READY |
+| F6-测试验收与发布材料 | 3 | READY |
+
+**统计**: READY=23, IN_PROGRESS=0, DONE=0, BLOCKED=0
+**设计文档**: `worklog/v2.2.3/sprint-19-202604/README.md`
