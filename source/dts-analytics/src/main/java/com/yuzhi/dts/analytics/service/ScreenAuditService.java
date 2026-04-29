@@ -73,7 +73,14 @@ public class ScreenAuditService {
     }
 
     public void log(Long screenId, Long actorId, String action, Object before, Object after, String requestId) {
-        logAndReturn(screenId, actorId, action, before, after, requestId);
+        // 容错：audit 永远不应让业务崩。本地 INSERT 失败（表缺失 / 约束冲突 / DB 故障）时
+        // 仅 WARN，业务调用方继续正常返回。dts-platform AuditService 使用同样的防御策略。
+        try {
+            logAndReturn(screenId, actorId, action, before, after, requestId);
+        } catch (Exception ex) {
+            LOG.warn("Screen audit log write failed action={} screenId={}: {}",
+                action, screenId, ex.getMessage());
+        }
     }
 
     public AnalyticsScreenAuditLog logAndReturn(
