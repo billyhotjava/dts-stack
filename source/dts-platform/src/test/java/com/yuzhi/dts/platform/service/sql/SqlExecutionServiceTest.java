@@ -63,6 +63,9 @@ class SqlExecutionServiceTest {
     @Mock
     private InfraDataSourceRepository infraDataSourceRepository;
 
+    @Mock
+    private DataSourceAccessGuard accessGuard;
+
     private SqlExecutionService service;
 
     @BeforeEach
@@ -81,7 +84,8 @@ class SqlExecutionServiceTest {
             validationService,
             new ObjectMapper(),
             transactionManager,
-            infraDataSourceRepository
+            infraDataSourceRepository,
+            accessGuard
         );
     }
 

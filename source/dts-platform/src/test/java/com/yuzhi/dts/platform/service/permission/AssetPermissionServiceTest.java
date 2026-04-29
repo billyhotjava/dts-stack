@@ -66,7 +66,7 @@ class AssetPermissionServiceTest {
 
     @Test
     void instDataOwner_shouldHaveManageOnAnyAsset() {
-        PermissionResult result = service.check("owner", List.of("ROLE_INST_DATA_OWNER"), "DEPT_A", "SCREEN", "5");
+        PermissionResult result = service.check("owner", List.of("ROLE_INST_DATA_OWNER"), "DEPT_A", "TABLE", "5");
         assertThat(result.allowed()).isTrue();
         assertThat(result.permission()).isEqualTo("MANAGE");
         assertThat(result.reason()).isEqualTo("inst_manage");

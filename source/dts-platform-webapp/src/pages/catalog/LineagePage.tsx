@@ -10,12 +10,13 @@ import {
 	DownloadOutlined,
 	EyeOutlined,
 	FunctionOutlined,
+	SyncOutlined,
 	UploadOutlined,
 } from "@ant-design/icons";
 import { ReactFlow, Background, Controls, MiniMap, MarkerType, type Node, type Edge } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
 import { EmptyState } from "@/components/empty-state";
-import { getCatalogLineageImpact, importDbtManifest, listDatasets } from "@/api/platformApi";
+import { getCatalogLineageImpact, importDbtManifest, listDatasets, syncAddaxLineage } from "@/api/platformApi";
 
 type DatasetOption = {
 	id: string;
@@ -59,12 +60,18 @@ type ImpactEdge = {
 	direction?: string;
 	projectName?: string;
 	notes?: string;
+	verificationStatus?: string;
+	lastExecutionId?: string;
+	lastExecutionStatus?: string;
+	lastObservedAt?: string;
+	lastVerifiedAt?: string;
 	lastModifiedAt?: string;
 };
 
 type ImpactStats = {
 	layerNodeCounts?: Record<string, number>;
 	relationTypeCounts?: Record<string, number>;
+	verificationStatusCounts?: Record<string, number>;
 	kindNodeCounts?: Record<string, number>;
 	changedNodeCount?: number;
 };
@@ -151,11 +158,29 @@ const RELATION_STROKE: Record<string, string> = {
 	MANUAL: "#8c8c8c",
 };
 
+const verificationColor = (status?: string) => {
+	const key = String(status || "").toUpperCase();
+	if (key === "VERIFIED") return "green";
+	if (key === "KNOWN_UNVERIFIED") return "gold";
+	if (key === "DECLARED") return "default";
+	return "default";
+};
+
+const edgeLabel = (edge: ImpactEdge) => {
+	const relation = edge.relationType || "";
+	const status = String(edge.verificationStatus || "").toUpperCase();
+	if (!status || status === "VERIFIED") {
+		return relation;
+	}
+	return relation ? `${relation}/${status}` : status;
+};
+
 const nodeIcon = (node: ImpactNode) => {
 	const kind = String(node.kind || "").toLowerCase();
 	const jobType = String(node.jobType || "").toUpperCase();
 	const assetType = String(node.assetType || node.type || "").toUpperCase();
 	if (kind === "source") return <ApiOutlined />;
+	if (assetType.includes("EXTERNAL")) return <ApiOutlined />;
 	if (kind === "job" && jobType.includes("ADDAX")) return <UploadOutlined />;
 	if (kind === "job" && jobType.includes("DBT")) return <CodeOutlined />;
 	if (kind === "job") return <FunctionOutlined />;
@@ -168,6 +193,7 @@ const nodeTone = (node: ImpactNode) => {
 	if (kind === "source") return { bg: "#fff0f6", border: "#ffadd2", color: "#9e1068" };
 	if (kind === "job") return { bg: "#fff7e6", border: "#ffd591", color: "#ad4e00" };
 	const layer = String(node.layer || "").toUpperCase();
+	if (layer === "SOURCE") return { bg: "#fff0f6", border: "#ffadd2", color: "#9e1068" };
 	if (layer === "ADS") return { bg: "#f6ffed", border: "#b7eb8f", color: "#237804" };
 	if (layer === "DWS") return { bg: "#e6fffb", border: "#87e8de", color: "#006d75" };
 	if (layer === "DWD") return { bg: "#e6f4ff", border: "#91caff", color: "#0958d9" };
@@ -265,6 +291,7 @@ export default function LineagePage() {
 	const [changedWithinHours, setChangedWithinHours] = useState<number>(0);
 	const [keyword, setKeyword] = useState<string>("");
 	const [layoutDirection, setLayoutDirection] = useState<"LR" | "TB">("LR");
+	const [syncingAddax, setSyncingAddax] = useState(false);
 
 	useEffect(() => {
 		void loadDatasets();
@@ -345,7 +372,9 @@ export default function LineagePage() {
 		}
 		return edgesRaw.filter((edge) => {
 			const byText =
-				`${edge.upstreamName || ""} ${edge.downstreamName || ""} ${edge.relationType || ""} ${edge.notes || ""}`.toLowerCase().includes(keywordLower);
+				`${edge.upstreamName || ""} ${edge.downstreamName || ""} ${edge.relationType || ""} ${edge.verificationStatus || ""} ${edge.lastExecutionStatus || ""} ${edge.notes || ""}`
+					.toLowerCase()
+					.includes(keywordLower);
 			const byNode =
 				(edgeEndpoint(edge, "from") && nodeIdSet.has(edgeEndpoint(edge, "from")!)) ||
 				(edgeEndpoint(edge, "to") && nodeIdSet.has(edgeEndpoint(edge, "to")!));
@@ -397,14 +426,15 @@ export default function LineagePage() {
 				target: edgeEndpoint(e, "to")!,
 				type: "smoothstep",
 				animated: false,
-				label: e.relationType,
+				label: edgeLabel(e),
 				labelStyle: { fontSize: 10, fill: "#595959", fontWeight: 600 },
 				labelBgPadding: [6, 3] as [number, number],
 				labelBgBorderRadius: 4,
 				style: {
 					stroke: RELATION_STROKE[String(e.relationType || "").toUpperCase()] ?? "#bfbfbf",
 					strokeWidth: e.relationType === "MANUAL" ? 1.2 : 1.8,
-					strokeDasharray: e.relationType === "MANUAL" ? "4 4" : undefined,
+					strokeDasharray:
+						String(e.verificationStatus || "").toUpperCase() === "KNOWN_UNVERIFIED" || e.relationType === "MANUAL" ? "4 4" : undefined,
 				},
 				markerEnd: { type: MarkerType.ArrowClosed, width: 16, height: 16 },
 			})),
@@ -426,6 +456,21 @@ export default function LineagePage() {
 			}
 			return false;
 		},
+	};
+
+	const handleSyncAddaxLineage = async () => {
+		setSyncingAddax(true);
+		try {
+			const result: any = await syncAddaxLineage();
+			toast.success(`Addax 血缘同步完成：新增 ${result?.created ?? 0}，更新 ${result?.updated ?? 0}，跳过 ${result?.skipped ?? 0}`);
+			if (selectedId) {
+				void loadImpact(selectedId, direction, depth, projectName, layerFilters, changedWithinHours);
+			}
+		} catch {
+			// global interceptor handles error toast
+		} finally {
+			setSyncingAddax(false);
+		}
 	};
 
 	const layerGroupItems = useMemo(() => {
@@ -530,6 +575,12 @@ export default function LineagePage() {
 			render: (value) => (value ? <Tag color="blue">{value}</Tag> : "-"),
 		},
 		{
+			title: "验证",
+			dataIndex: "verificationStatus",
+			width: 150,
+			render: (value) => (value ? <Tag color={verificationColor(value)}>{value}</Tag> : "-"),
+		},
+		{
 			title: "分层",
 			key: "layerFlow",
 			width: 180,
@@ -576,6 +627,9 @@ export default function LineagePage() {
 				upstream: row.upstreamName || row.upstreamDatasetId || "",
 				downstream: row.downstreamName || row.downstreamDatasetId || "",
 				relation_type: row.relationType || "",
+				verification_status: row.verificationStatus || "",
+				last_execution_status: row.lastExecutionStatus || "",
+				last_observed_at: row.lastObservedAt || "",
 				layer_flow: `${row.upstreamLayer || ""}->${row.downstreamLayer || ""}`,
 				project_name: row.projectName || "",
 				last_modified_at: row.lastModifiedAt || "",
@@ -590,6 +644,9 @@ export default function LineagePage() {
 				title="血缘影响分析"
 				extra={
 					<Space>
+						<Button className="rounded-2xl" icon={<SyncOutlined />} loading={syncingAddax} onClick={handleSyncAddaxLineage}>
+							同步 Addax 血缘
+						</Button>
 						<Upload {...dbtUploadProps}>
 							<Button className="rounded-2xl" icon={<UploadOutlined />}>
 								导入 dbt 血缘

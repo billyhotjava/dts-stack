@@ -65,6 +65,11 @@ const PATH_COMPONENT_OVERRIDES: Record<string, string> = {
 	// Analytics pages are statically registered in static-routes.tsx — no overrides needed.
 };
 
+export const resolveDashboardComponentOverride = (path?: string) => {
+	const normalized = normalizeMenuPath(path || "");
+	return normalized ? PATH_COMPONENT_OVERRIDES[normalized] : "";
+};
+
 export function DynamicMenuResolver({ base }: Props) {
 	const location = useLocation();
 	const menus = useMenuStore((s) => s.menus);
@@ -108,10 +113,9 @@ export function DynamicMenuResolver({ base }: Props) {
 
 	const resolvedPath = resolveMenuPath(match, meta);
 	const componentPath = typeof match.component === "string" ? match.component.trim() : "";
-	const overridePath =
-		!componentPath && resolvedPath && !isExternalPath(resolvedPath) ? PATH_COMPONENT_OVERRIDES[resolvedPath] : "";
+	const overridePath = resolvedPath && !isExternalPath(resolvedPath) ? resolveDashboardComponentOverride(resolvedPath) : "";
 	if (componentPath || overridePath) {
-		return <>{Component(componentPath || overridePath)}</>;
+		return <>{Component(overridePath || componentPath)}</>;
 	}
 
 	const redirectPath = firstAccessibleChildPath(match);

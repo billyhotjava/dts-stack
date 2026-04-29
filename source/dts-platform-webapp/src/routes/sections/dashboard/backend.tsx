@@ -5,7 +5,7 @@ import type { MenuMetaInfo, MenuTree } from "@/types/entity";
 import { PermissionType } from "@/types/enum";
 import { parseMenuMetadata } from "@/utils/menuTree";
 import { convertFlatToTree } from "@/utils/tree";
-import { DynamicMenuResolver } from "./dynamic-resolver";
+import { DynamicMenuResolver, resolveDashboardComponentOverride } from "./dynamic-resolver";
 import { Component } from "./utils";
 
 /**
@@ -95,10 +95,11 @@ const convertToRoute = (items: MenuTree[], parent?: MenuTree): RouteObject[] => 
 		// if menu, create route
 		if (item.type === PermissionType.MENU) {
 			const props = generateProps(item);
+			const component = resolveDashboardComponentOverride(item.path) || item.component;
 
 			routes.push({
 				path: getRoutePath(item.path, parent?.path),
-				element: Component(item.component, props),
+				element: Component(component, props),
 			});
 		}
 	};

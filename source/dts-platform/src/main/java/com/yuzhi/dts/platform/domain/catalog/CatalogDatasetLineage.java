@@ -7,6 +7,7 @@ import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
 import java.io.Serializable;
+import java.time.Instant;
 import java.util.UUID;
 
 @Entity
@@ -42,6 +43,21 @@ public class CatalogDatasetLineage extends AbstractAuditingEntity<UUID> implemen
 
     @Column(name = "project_name", length = 128)
     private String projectName;
+
+    @Column(name = "verification_status", length = 32)
+    private String verificationStatus;
+
+    @Column(name = "last_execution_id", length = 128)
+    private String lastExecutionId;
+
+    @Column(name = "last_execution_status", length = 32)
+    private String lastExecutionStatus;
+
+    @Column(name = "last_observed_at")
+    private Instant lastObservedAt;
+
+    @Column(name = "last_verified_at")
+    private Instant lastVerifiedAt;
 
     @Override
     public UUID getId() {
@@ -115,5 +131,44 @@ public class CatalogDatasetLineage extends AbstractAuditingEntity<UUID> implemen
     public void setProjectName(String projectName) {
         this.projectName = projectName;
     }
-}
 
+    public String getVerificationStatus() {
+        return verificationStatus;
+    }
+
+    public void setVerificationStatus(String verificationStatus) {
+        this.verificationStatus = verificationStatus;
+    }
+
+    public String getLastExecutionId() {
+        return lastExecutionId;
+    }
+
+    public void setLastExecutionId(String lastExecutionId) {
+        this.lastExecutionId = lastExecutionId;
+    }
+
+    public String getLastExecutionStatus() {
+        return lastExecutionStatus;
+    }
+
+    public void setLastExecutionStatus(String lastExecutionStatus) {
+        this.lastExecutionStatus = lastExecutionStatus;
+    }
+
+    public Instant getLastObservedAt() {
+        return lastObservedAt;
+    }
+
+    public void setLastObservedAt(Instant lastObservedAt) {
+        this.lastObservedAt = lastObservedAt;
+    }
+
+    public Instant getLastVerifiedAt() {
+        return lastVerifiedAt;
+    }
+
+    public void setLastVerifiedAt(Instant lastVerifiedAt) {
+        this.lastVerifiedAt = lastVerifiedAt;
+    }
+}

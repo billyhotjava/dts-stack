@@ -20,6 +20,7 @@ import com.yuzhi.dts.ingestion.service.etl.AirflowDagService;
 import com.yuzhi.dts.ingestion.service.etl.DagPreheatService;
 import com.yuzhi.dts.ingestion.service.etl.IncrementalSyncService;
 import com.yuzhi.dts.ingestion.service.etl.ExecutionFailureClassifier;
+import com.yuzhi.dts.ingestion.service.etl.IngestionExecutionLineageSnapshot;
 import com.yuzhi.dts.ingestion.service.etl.api.ApiConnectorTypes;
 import com.yuzhi.dts.ingestion.service.mapper.IngestionExecutionMapper;
 import com.yuzhi.dts.ingestion.service.mapper.IngestionTaskMapper;
@@ -454,6 +455,7 @@ public class IngestionTaskService {
         execution.setTriggerMode(normalizeTriggerMode(triggerMode));
         execution.setBatchId(generateBatchId(taskId));
         execution.setExecutionId("preparing-" + UUID.randomUUID().toString().substring(0, 8));
+        IngestionExecutionLineageSnapshot.apply(execution, task);
         execution = executionRepository.save(execution);
 
         task.setLastExecutionStatus("preparing");
@@ -985,6 +987,7 @@ public class IngestionTaskService {
             execution.setTask(task);
             execution.setExecutionId(runId);
             execution.setStatus(mapAirflowState(toText(run.get("state"))));
+            IngestionExecutionLineageSnapshot.apply(execution, task);
             execution.setStartTime(parseAirflowInstant(firstNonBlank(run.get("start_date"), run.get("execution_date"), run.get("logical_date"))));
             execution.setEndTime(parseAirflowInstant(run.get("end_date")));
             if (execution.getStartTime() == null) {

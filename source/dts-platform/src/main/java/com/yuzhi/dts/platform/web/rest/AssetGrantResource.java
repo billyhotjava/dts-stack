@@ -5,6 +5,7 @@ import com.yuzhi.dts.platform.domain.permission.AssetOwnership;
 import com.yuzhi.dts.platform.repository.permission.AssetGrantRepository;
 import com.yuzhi.dts.platform.repository.permission.AssetOwnershipRepository;
 import com.yuzhi.dts.platform.security.AuthoritiesConstants;
+import com.yuzhi.dts.platform.security.DepartmentUtils;
 import com.yuzhi.dts.platform.security.SecurityUtils;
 import com.yuzhi.dts.platform.service.permission.AssetPermissionAuditService;
 import java.time.Instant;
@@ -19,6 +20,7 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.util.StringUtils;
 import org.springframework.web.bind.annotation.*;
 
 @RestController
@@ -150,10 +152,13 @@ public class AssetGrantResource {
     }
 
     private boolean isCrossDepartment(AssetOwnership ownership) {
-        // Compare asset's dept with current user's dept from SecurityContext
-        // For now we rely on the @PreAuthorize to enforce role-based checks
-        // A more refined check would extract dept from JWT claims
-        return false; // TODO: implement dept comparison when user dept is available in SecurityContext
+        if (ownership == null || !StringUtils.hasText(ownership.getOwnerDeptCode())) {
+            return false;
+        }
+        return SecurityUtils
+            .getCurrentUserDept()
+            .map(currentDept -> !DepartmentUtils.matches(ownership.getOwnerDeptCode(), currentDept))
+            .orElse(true);
     }
 
     public record CreateGrantRequest(

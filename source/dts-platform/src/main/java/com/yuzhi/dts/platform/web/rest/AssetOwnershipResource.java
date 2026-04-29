@@ -67,7 +67,7 @@ public class AssetOwnershipResource {
     public ResponseEntity<BatchResult> batchUpdate(@RequestBody BatchOwnershipRequest request) {
         int updated = 0;
         for (Long id : request.ids()) {
-            ownershipRepository.findById(id).ifPresent(ownership -> {
+            boolean changed = ownershipRepository.findById(id).map(ownership -> {
                 String oldDept = ownership.getOwnerDeptCode();
                 ownership.setOwnerDeptCode(request.ownerDeptCode());
                 ownership.setAssignedBy(request.assignedBy());
@@ -75,8 +75,11 @@ public class AssetOwnershipResource {
                 auditService.recordOwnershipChange(
                     ownership.getAssetType(), ownership.getAssetId(), oldDept, request.ownerDeptCode()
                 );
-            });
-            updated++;
+                return true;
+            }).orElse(false);
+            if (changed) {
+                updated++;
+            }
         }
         return ResponseEntity.ok(new BatchResult(updated));
     }

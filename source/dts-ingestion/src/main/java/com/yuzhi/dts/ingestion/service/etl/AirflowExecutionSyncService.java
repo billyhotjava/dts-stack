@@ -244,6 +244,7 @@ public class AirflowExecutionSyncService {
         }
         execution.setStatus(status);
         execution.setEndTime(Instant.now());
+        IngestionExecutionLineageSnapshot.applyIfMissing(execution, task);
         if (StringUtils.hasText(errorMessage)) {
             String normalizedMessage = truncate(errorMessage, MAX_FAILURE_MSG_LEN);
             execution.setErrorMessage(normalizedMessage);
@@ -268,6 +269,7 @@ public class AirflowExecutionSyncService {
         }
         taskRepository.save(task);
         LOG.info("[airflow] synced execution {} status={}", execution.getId(), status);
+        platformInfraClient.syncIngestionExecutionLineage(task, execution);
         if ("success".equalsIgnoreCase(status)) {
             incrementalSyncService.updateCheckpointOnSuccess(task, execution);
             triggerDbtIfConfigured(task, execution);

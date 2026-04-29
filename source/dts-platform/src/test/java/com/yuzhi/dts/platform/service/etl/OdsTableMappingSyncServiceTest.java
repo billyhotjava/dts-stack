@@ -11,6 +11,7 @@ import com.yuzhi.dts.platform.repository.infra.InfraOdsTableMappingRepository;
 import com.yuzhi.dts.platform.repository.service.InfraDataSourceRepository;
 import com.yuzhi.dts.platform.service.audit.AuditService;
 import com.yuzhi.dts.platform.service.catalog.CatalogColumnSyncService;
+import com.yuzhi.dts.platform.service.catalog.lineage.IngestionLineageWriter;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -45,6 +46,9 @@ class OdsTableMappingSyncServiceTest {
     private DbtSourceService dbtSourceService;
 
     @Mock
+    private IngestionLineageWriter ingestionLineageWriter;
+
+    @Mock
     private AuditService auditService;
 
     @Captor
@@ -61,6 +65,7 @@ class OdsTableMappingSyncServiceTest {
             tableRepository,
             columnSyncService,
             dbtSourceService,
+            ingestionLineageWriter,
             auditService,
             new ObjectMapper()
         );
@@ -74,6 +79,13 @@ class OdsTableMappingSyncServiceTest {
         when(mappingRepository.findByConnectionIdOrderByCreatedDateDesc(sourceDataSourceId)).thenReturn(List.of());
         when(dbtSourceService.refreshOdsSources()).thenReturn(DbtSourceService.DbtSourceRefreshResult.success("/tmp/ods_sources.yml", 1));
         when(mappingRepository.save(mappingCaptor.capture())).thenAnswer(invocation -> invocation.getArgument(0));
+        when(
+            ingestionLineageWriter.writeAddaxLineage(
+                org.mockito.ArgumentMatchers.any(InfraOdsTableMapping.class),
+                org.mockito.ArgumentMatchers.any(IngestionLineageWriter.LineageObservation.class)
+            )
+        )
+            .thenReturn(new IngestionLineageWriter.LineageWriteResult(1, 0, 0, 0, 1, "created"));
 
         Map<String, Object> payload = Map.of(
             "task",

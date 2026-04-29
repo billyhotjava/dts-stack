@@ -1,12 +1,19 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Alert, Button, Card, Collapse, Input, Layout, Select, Space, Spin, Tag, Tree } from "antd";
-import { EmptyState } from "@/components/empty-state";
+import type { ReactNode } from "react";
+import { Alert, Button, Card, Collapse, Input, Layout, Pagination, Progress, Select, Space, Spin, Tag, Tooltip, Tree } from "antd";
 import {
-	getCatalogReconciliation,
-	getDomainTree,
-	listDatasets,
-	listDomains,
-} from "@/api/platformApi";
+	ApartmentOutlined,
+	BranchesOutlined,
+	DatabaseOutlined,
+	ProfileOutlined,
+	ReloadOutlined,
+	SafetyCertificateOutlined,
+	SearchOutlined,
+	TableOutlined,
+	WarningOutlined,
+} from "@ant-design/icons";
+import { EmptyState } from "@/components/empty-state";
+import { getCatalogReconciliation, getDomainTree, listDatasets, listDomains } from "@/api/platformApi";
 import { useRouter } from "@/routes/hooks";
 
 type AssetRow = {
@@ -18,6 +25,14 @@ type AssetRow = {
 	classification?: string;
 	warehouseLayer?: string;
 	status?: string;
+	lifecycleStatus?: string;
+	owner?: string;
+	ownerDept?: string;
+	description?: string;
+	hiveDatabase?: string;
+	hiveTable?: string;
+	updatedAt?: string;
+	snapshotTime?: string;
 };
 
 type DomainNode = { id?: string; name?: string; code?: string; children?: DomainNode[] };
@@ -39,8 +54,11 @@ const CLASSIFICATION_OPTIONS = [
 
 const LAYER_OPTIONS = [
 	{ label: "全部分层", value: "ALL" },
+	{ label: "SOURCE", value: "SOURCE" },
 	{ label: "ODS", value: "ODS" },
+	{ label: "STG", value: "STG" },
 	{ label: "DWD", value: "DWD" },
+	{ label: "DIM", value: "DIM" },
 	{ label: "DWS", value: "DWS" },
 	{ label: "ADS", value: "ADS" },
 ];
@@ -53,6 +71,19 @@ const CLASSIFICATION_LABEL: Record<string, string> = {
 	SECRET: "秘密",
 	CONFIDENTIAL: "机密",
 };
+
+const LAYER_META: Record<string, { label: string; color: string; tone: string }> = {
+	SOURCE: { label: "来源", color: "magenta", tone: "border-pink-200 bg-pink-50/60" },
+	ODS: { label: "ODS", color: "default", tone: "border-slate-200 bg-slate-50/70" },
+	STG: { label: "STG", color: "geekblue", tone: "border-indigo-200 bg-indigo-50/60" },
+	DWD: { label: "DWD", color: "blue", tone: "border-blue-200 bg-blue-50/60" },
+	DIM: { label: "DIM", color: "purple", tone: "border-purple-200 bg-purple-50/60" },
+	DWS: { label: "DWS", color: "cyan", tone: "border-cyan-200 bg-cyan-50/60" },
+	ADS: { label: "ADS", color: "green", tone: "border-green-200 bg-green-50/60" },
+	OTHER: { label: "未分层", color: "default", tone: "border-slate-200 bg-white" },
+};
+
+const LAYER_ORDER = ["SOURCE", "ODS", "STG", "DWD", "DIM", "DWS", "ADS", "OTHER"];
 
 type ReconciliationAssertion = {
 	code?: string;
@@ -73,12 +104,54 @@ type ReconciliationResult = {
 	regressionChecklist?: Array<{ code?: string; name?: string; route?: string; description?: string }>;
 };
 
-const LAYER_TAG_COLORS: Record<string, string> = {
-	ODS: "default",
-	DWD: "blue",
-	DWS: "cyan",
-	ADS: "green",
+const normalizeLayer = (value?: string) => {
+	const normalized = String(value || "").trim().toUpperCase();
+	return normalized && LAYER_META[normalized] ? normalized : "OTHER";
 };
+
+const classificationText = (value?: string) => {
+	const normalized = String(value || "").trim().toUpperCase();
+	return normalized ? CLASSIFICATION_LABEL[normalized] || normalized : "未设定";
+};
+
+const formatTime = (value?: string) => {
+	if (!value) return "-";
+	try {
+		return new Date(value).toLocaleString();
+	} catch {
+		return value;
+	}
+};
+
+const buildTreeNodes = (nodes: DomainNode[], prefix = "domain"): any[] =>
+	nodes.map((node, index) => ({
+		key: node.id || `fallback-${prefix}-${index}`,
+		title: node.name ?? node.code ?? "未命名",
+		children: node.children?.length ? buildTreeNodes(node.children, `${prefix}-${index}`) : undefined,
+	}));
+
+const MetricTile = ({
+	icon,
+	label,
+	value,
+	footnote,
+	tone = "text-slate-700",
+}: {
+	icon: ReactNode;
+	label: string;
+	value: ReactNode;
+	footnote?: string;
+	tone?: string;
+}) => (
+	<div className="rounded-lg border border-slate-200 bg-white px-4 py-3">
+		<div className="flex items-center justify-between gap-3">
+			<div className="text-xs text-slate-500">{label}</div>
+			<div className={`text-lg ${tone}`}>{icon}</div>
+		</div>
+		<div className="mt-2 text-2xl font-semibold leading-none text-slate-900">{value}</div>
+		{footnote ? <div className="mt-2 truncate text-xs text-slate-500">{footnote}</div> : null}
+	</div>
+);
 
 export default function Page() {
 	const router = useRouter();
@@ -89,7 +162,7 @@ export default function Page() {
 	const [warehouseLayer, setWarehouseLayer] = useState<string>("ALL");
 	const [loading, setLoading] = useState(false);
 	const [records, setRecords] = useState<AssetRow[]>([]);
-	const [pageState, setPageState] = useState({ page: 1, size: 10, total: 0 });
+	const [pageState, setPageState] = useState({ page: 1, size: 18, total: 0 });
 	const [domains, setDomains] = useState<{ id: string; name: string }[]>([]);
 	const [reconciliation, setReconciliation] = useState<ReconciliationResult | null>(null);
 	const [reconciliationLoading, setReconciliationLoading] = useState(false);
@@ -120,8 +193,8 @@ export default function Page() {
 		void (async () => {
 			setTreeLoading(true);
 			try {
-				const tree = await getDomainTree() as any;
-				const data = Array.isArray(tree) ? tree : (Array.isArray(tree?.data) ? tree.data : []);
+				const tree = (await getDomainTree()) as any;
+				const data = Array.isArray(tree) ? tree : Array.isArray(tree?.data) ? tree.data : [];
 				setDomainTree(data);
 			} catch {
 				// error toast handled by global interceptor
@@ -153,9 +226,7 @@ export default function Page() {
 		localStorage.setItem(DATASET_FILTER_STORAGE_KEY, JSON.stringify(payload));
 	}, [keyword, domain, assetType, classification, warehouseLayer]);
 
-	const domainMap = useMemo(() => {
-		return new Map(domains.map((item) => [item.id, item.name]));
-	}, [domains]);
+	const domainMap = useMemo(() => new Map(domains.map((item) => [item.id, item.name])), [domains]);
 
 	const loadDomains = async () => {
 		try {
@@ -184,7 +255,7 @@ export default function Page() {
 		}
 	};
 
-	const loadDatasets = async (page = 1, size = 10) => {
+	const loadDatasets = async (page = 1, size = 18) => {
 		const reqId = ++requestSeqRef.current;
 		setLoading(true);
 		try {
@@ -213,6 +284,14 @@ export default function Page() {
 					classification: item.classification || undefined,
 					warehouseLayer: item.warehouseLayer || undefined,
 					status: item.enabled === false ? "停用" : "启用",
+					lifecycleStatus: item.lifecycleStatus || undefined,
+					owner: item.owner || undefined,
+					ownerDept: item.ownerDept || undefined,
+					description: item.description || undefined,
+					hiveDatabase: item.hiveDatabase || undefined,
+					hiveTable: item.hiveTable || undefined,
+					updatedAt: item.lastModifiedDate || item.createdDate || undefined,
+					snapshotTime: item.snapshotTime || undefined,
 				})),
 			);
 			setPageState({
@@ -233,90 +312,87 @@ export default function Page() {
 		}
 	};
 
-	// 按类型统计
+	const selectedDomainName = domain ? domainMap.get(domain) || "当前主题域" : "全部主题域";
+
+	const layerLanes = useMemo(() => {
+		const grouped = new Map<string, AssetRow[]>();
+		for (const key of LAYER_ORDER) {
+			grouped.set(key, []);
+		}
+		for (const row of records) {
+			const key = normalizeLayer(row.warehouseLayer);
+			grouped.set(key, [...(grouped.get(key) || []), row]);
+		}
+		return LAYER_ORDER.map((key) => ({ key, meta: LAYER_META[key], items: grouped.get(key) || [] }));
+	}, [records]);
+
 	const typeStats = useMemo(() => {
 		const map = new Map<string, number>();
-		records.forEach((r) => {
-			const t = r.type || "未知";
-			map.set(t, (map.get(t) || 0) + 1);
+		records.forEach((row) => {
+			const key = row.type || "未知";
+			map.set(key, (map.get(key) || 0) + 1);
 		});
-		return Array.from(map.entries()).sort((a, b) => b[1] - a[1]);
+		return [...map.entries()].sort((a, b) => b[1] - a[1]);
 	}, [records]);
 
-	// 按分层统计
-	const layerStats = useMemo(() => {
+	const domainStats = useMemo(() => {
 		const map = new Map<string, number>();
-		records.forEach((r) => {
-			const l = r.warehouseLayer || "未分层";
-			map.set(l, (map.get(l) || 0) + 1);
+		records.forEach((row) => {
+			const key = row.domain || (row.domainId ? domainMap.get(row.domainId) : undefined) || "未归域";
+			map.set(key, (map.get(key) || 0) + 1);
 		});
-		return Array.from(map.entries()).sort((a, b) => b[1] - a[1]);
-	}, [records]);
+		return [...map.entries()].sort((a, b) => b[1] - a[1]).slice(0, 6);
+	}, [records, domainMap]);
 
-	// 按密级统计
-	const classificationStats = useMemo(() => {
-		const map = new Map<string, number>();
-		records.forEach((r) => {
-			const c = r.classification ? (CLASSIFICATION_LABEL[r.classification.toUpperCase()] || r.classification) : "未设定";
-			map.set(c, (map.get(c) || 0) + 1);
-		});
-		return Array.from(map.entries()).sort((a, b) => b[1] - a[1]);
-	}, [records]);
+	const unclassifiedCount = records.filter((row) => !row.classification).length;
+	const missingDomainCount = records.filter((row) => !row.domain && !row.domainId).length;
+	const staleCount = records.filter((row) => String(row.lifecycleStatus || "").toUpperCase() === "STALE" || row.status === "停用").length;
+	const activeCount = records.filter((row) => row.status === "启用").length;
+	const governanceCoverage = records.length ? Math.round(((records.length - unclassifiedCount - missingDomainCount) / Math.max(records.length, 1)) * 100) : 0;
 
-	const buildTreeNodes = (nodes: DomainNode[], prefix = "domain"): any[] =>
-		nodes.map((n, i) => ({
-			key: n.id || `fallback-${prefix}-${i}`,
-			title: n.name ?? n.code ?? "未命名",
-			children: n.children?.length ? buildTreeNodes(n.children, `${prefix}-${i}`) : undefined,
-		}));
+	const treeData = useMemo(
+		() => [
+			{
+				key: "ALL",
+				title: "全部资产",
+				children: buildTreeNodes(domainTree),
+			},
+		],
+		[domainTree],
+	);
 
-	const treeData = [
-		{
-			key: "ALL",
-			title: "全部资产",
-			children: buildTreeNodes(domainTree),
-		},
-	];
+	const failedAssertions = Array.isArray(reconciliation?.assertions)
+		? reconciliation.assertions.filter((item) => item.passed === false)
+		: [];
 
 	const reconciliationContent = reconciliation ? (
 		<Space direction="vertical" size={12} className="w-full">
 			<div className="grid gap-3 md:grid-cols-4">
-				<Card size="small" title="断言总数">
-					<div className="text-lg font-semibold">{Number(reconciliation.assertionCount || 0)}</div>
-				</Card>
-				<Card size="small" title="失败项">
-					<div className="text-lg font-semibold text-red-600">{Number(reconciliation.failedCount || 0)}</div>
-				</Card>
-				<Card size="small" title="错误级">
-					<div className="text-lg font-semibold text-red-600">{Number(reconciliation.errorCount || 0)}</div>
-				</Card>
-				<Card size="small" title="告警级">
-					<div className="text-lg font-semibold text-amber-600">{Number(reconciliation.warningCount || 0)}</div>
-				</Card>
+				<MetricTile icon={<SafetyCertificateOutlined />} label="断言总数" value={Number(reconciliation.assertionCount || 0)} />
+				<MetricTile icon={<WarningOutlined />} label="失败项" value={Number(reconciliation.failedCount || 0)} tone="text-red-600" />
+				<MetricTile icon={<WarningOutlined />} label="错误级" value={Number(reconciliation.errorCount || 0)} tone="text-red-600" />
+				<MetricTile icon={<WarningOutlined />} label="告警级" value={Number(reconciliation.warningCount || 0)} tone="text-amber-600" />
 			</div>
-			{Array.isArray(reconciliation.assertions) && reconciliation.assertions.some((item) => item.passed === false) ? (
-				<div className="rounded border border-amber-200 bg-amber-50 p-3 text-xs text-amber-700">
-					{reconciliation.assertions
-						.filter((item) => item.passed === false)
-						.slice(0, 6)
-						.map((item) => (
-							<div key={item.code || item.name}>
-								[{item.code || "-"}] {item.name || "未命名检查"}：{item.detail || "-"}；建议：{item.suggestion || "-"}
-							</div>
-						))}
+			{failedAssertions.length ? (
+				<div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs text-amber-800">
+					{failedAssertions.slice(0, 6).map((item) => (
+						<div key={item.code || item.name}>
+							[{item.code || "-"}] {item.name || "未命名检查"}：{item.detail || "-"}；建议：{item.suggestion || "-"}
+						</div>
+					))}
 				</div>
 			) : (
 				<Alert type="success" showIcon message="一致性断言通过，未发现阻断项。" />
 			)}
-			<div className="rounded border border-slate-200 bg-slate-50 p-3">
+			<div className="rounded-lg border border-slate-200 bg-slate-50 p-3">
 				<div className="mb-2 text-sm font-medium text-slate-700">核心页面回归清单</div>
 				<Space direction="vertical" size={6} className="w-full">
 					{Array.isArray(reconciliation.regressionChecklist) && reconciliation.regressionChecklist.length > 0 ? (
 						reconciliation.regressionChecklist.map((item) => (
 							<div key={item.code || item.name} className="flex items-center justify-between gap-3 text-xs text-slate-700">
-								<div>
+								<div className="min-w-0">
 									<span className="font-medium">[{item.code || "-"}] {item.name || "-"}</span>
-									<div className="text-slate-500">{item.description || "-"}</div>
+									<div className="truncate text-slate-500">{item.description || "-"}</div>
 								</div>
 								<Button
 									size="small"
@@ -338,23 +414,79 @@ export default function Page() {
 		<EmptyState title="暂无核对结果" description="当前账号无权限或尚未执行核对。" />
 	);
 
+	const resetFilters = () => {
+		setKeyword("");
+		setDomain(undefined);
+		setAssetType("ALL");
+		setClassification("ALL");
+		setWarehouseLayer("ALL");
+	};
+
+	const renderAssetCard = (row: AssetRow) => {
+		const layer = normalizeLayer(row.warehouseLayer);
+		const meta = LAYER_META[layer];
+		const isStale = String(row.lifecycleStatus || "").toUpperCase() === "STALE" || row.status === "停用";
+		return (
+			<button
+				key={row.id}
+				type="button"
+				className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-left shadow-sm transition hover:border-blue-300 hover:shadow-md"
+				onClick={() => router.push(`/catalog/datasets/${row.id}`)}
+			>
+				<div className="flex items-start justify-between gap-2">
+					<Tooltip title={row.name}>
+						<div className="min-w-0 flex-1 truncate text-sm font-semibold text-slate-900">{row.name}</div>
+					</Tooltip>
+					<Tag color={isStale ? "red" : meta.color}>{isStale ? "失效" : row.status || "启用"}</Tag>
+				</div>
+				<div className="mt-1 flex items-center gap-1 truncate text-xs text-slate-500">
+					<DatabaseOutlined />
+					<span className="truncate">{row.hiveDatabase && row.hiveTable ? `${row.hiveDatabase}.${row.hiveTable}` : row.type || "未知类型"}</span>
+				</div>
+				<div className="mt-2 flex flex-wrap gap-1">
+					<Tag style={{ fontSize: 11 }}>{row.type || "未知"}</Tag>
+					<Tag color={row.classification ? "orange" : "default"} style={{ fontSize: 11 }}>
+						{classificationText(row.classification)}
+					</Tag>
+					{row.domain || row.domainId ? (
+						<Tag color="blue" style={{ fontSize: 11 }}>
+							{row.domain || (row.domainId ? domainMap.get(row.domainId) : undefined) || "主题域"}
+						</Tag>
+					) : null}
+				</div>
+				<div className="mt-2 flex items-center justify-between gap-2 text-[11px] text-slate-500">
+					<span className="truncate">{row.owner || row.ownerDept || "未指定负责人"}</span>
+					<span className="shrink-0">{formatTime(row.snapshotTime || row.updatedAt)}</span>
+				</div>
+			</button>
+		);
+	};
+
 	return (
 		<Layout className="min-h-full" style={{ background: "transparent" }}>
 			<Layout.Sider
-				width={240}
+				width={248}
 				theme="light"
-				style={{ background: "#fff", borderRight: "1px solid #f0f0f0", padding: "12px 8px", overflowY: "auto", height: "calc(100vh - 64px)" }}
+				style={{
+					background: "#fff",
+					borderRight: "1px solid #f0f0f0",
+					padding: "12px 8px",
+					overflowY: "auto",
+					height: "calc(100vh - 64px)",
+				}}
 			>
-				<div className="mb-2 px-2 text-xs font-semibold text-slate-500">主题域</div>
+				<div className="mb-3 flex items-center gap-2 px-2 text-sm font-semibold text-slate-700">
+					<ApartmentOutlined />
+					主题域
+				</div>
 				<Spin spinning={treeLoading}>
 					<Tree
 						showLine
 						defaultExpandAll
 						treeData={treeData}
-						defaultSelectedKeys={["ALL"]}
+						selectedKeys={[domain || "ALL"]}
 						onSelect={(keys) => {
 							const selected = String(keys?.[0] ?? "ALL");
-							// key is either "ALL" or n.id (UUID); fallback-* keys have no valid id
 							setDomain(selected === "ALL" || selected.startsWith("fallback-") ? undefined : selected);
 						}}
 					/>
@@ -363,23 +495,31 @@ export default function Page() {
 			<Layout.Content style={{ padding: "0 16px" }}>
 				<div className="space-y-4">
 					<Card
-						title="资产地图"
+						title={
+							<Space size={8}>
+								<BranchesOutlined />
+								<span>资产地图</span>
+							</Space>
+						}
 						extra={
-							<div className="flex flex-wrap items-center gap-2">
-								<Button className="rounded-2xl" onClick={() => void loadDatasets(1, pageState.size)} loading={loading}>
+							<Space wrap>
+								<Button icon={<ProfileOutlined />} onClick={() => router.push("/catalog/asset-detail")}>
+									明细台账
+								</Button>
+								<Button icon={<ReloadOutlined />} onClick={() => void loadDatasets(1, pageState.size)} loading={loading}>
 									刷新资产
 								</Button>
-								<Button className="rounded-2xl" onClick={() => void loadReconciliation()} loading={reconciliationLoading}>
+								<Button icon={<SafetyCertificateOutlined />} onClick={() => void loadReconciliation()} loading={reconciliationLoading}>
 									刷新核对
 								</Button>
-							</div>
+							</Space>
 						}
 					>
-						<div className="mb-3 flex flex-wrap items-center gap-2">
+						<div className="flex flex-wrap items-center gap-2">
 							<Select
 								allowClear
 								placeholder="资产类型"
-								style={{ minWidth: 180 }}
+								style={{ minWidth: 160 }}
 								value={assetType}
 								onChange={(value) => setAssetType(value || "ALL")}
 								options={TYPE_OPTIONS}
@@ -387,7 +527,7 @@ export default function Page() {
 							<Select
 								allowClear
 								placeholder="密级"
-								style={{ minWidth: 160 }}
+								style={{ minWidth: 150 }}
 								value={classification}
 								onChange={(value) => setClassification(value || "ALL")}
 								options={CLASSIFICATION_OPTIONS}
@@ -395,116 +535,131 @@ export default function Page() {
 							<Select
 								allowClear
 								placeholder="分层"
-								style={{ minWidth: 160 }}
+								style={{ minWidth: 150 }}
 								value={warehouseLayer}
 								onChange={(value) => setWarehouseLayer(value || "ALL")}
 								options={LAYER_OPTIONS}
 							/>
 							<Input
+								prefix={<SearchOutlined />}
 								placeholder="搜索资产名称 / 描述"
 								style={{ width: 260 }}
 								value={keyword}
 								onChange={(event) => setKeyword(event.target.value)}
 								allowClear
 							/>
-							<Button
-								onClick={() => {
-									setKeyword("");
-									setDomain(undefined);
-									setAssetType("ALL");
-									setClassification("ALL");
-									setWarehouseLayer("ALL");
-								}}
-							>
-								重置筛选
-							</Button>
+							<Button onClick={resetFilters}>重置筛选</Button>
 						</div>
 					</Card>
 
-					<Card title="资产概览">
-						{records.length ? (
-							<div className="space-y-4">
-								<div className="grid gap-3 md:grid-cols-4">
-									<Card size="small" title="资产总量">
-										<div className="text-2xl font-semibold">{pageState.total}</div>
-										<div className="text-xs text-gray-500">已纳入治理的资产记录</div>
-									</Card>
-									<Card size="small" title="主题域">
-										<div className="text-2xl font-semibold">{domains.length}</div>
-										<div className="text-xs text-gray-500">已配置主题域数量</div>
-									</Card>
-									<Card size="small" title="活跃资产">
-										<div className="text-2xl font-semibold">
-											{records.filter((item) => item.status === "启用").length}
-										</div>
-										<div className="text-xs text-gray-500">当前页启用资产</div>
-									</Card>
-									<Card size="small" title="资产详情">
-										<Button type="link" onClick={() => router.push("/catalog/asset-detail")} className="p-0">
-											查看全部资产 →
-										</Button>
-										<div className="text-xs text-gray-500">进入资产列表查看详情</div>
-									</Card>
-								</div>
+					<div className="grid gap-3 md:grid-cols-4">
+						<MetricTile icon={<DatabaseOutlined />} label="资产总量" value={pageState.total} footnote={selectedDomainName} />
+						<MetricTile icon={<TableOutlined />} label="当前页资产" value={records.length} footnote={`启用 ${activeCount} 个`} />
+						<MetricTile icon={<ApartmentOutlined />} label="主题域覆盖" value={domains.length} footnote={`未归域 ${missingDomainCount} 个`} />
+						<MetricTile
+							icon={<SafetyCertificateOutlined />}
+							label="治理覆盖率"
+							value={`${Math.max(0, governanceCoverage)}%`}
+							footnote={`未定密 ${unclassifiedCount} 个 / 失效 ${staleCount} 个`}
+							tone={governanceCoverage >= 80 ? "text-green-600" : "text-amber-600"}
+						/>
+					</div>
 
-								<div className="grid gap-3 md:grid-cols-3">
-									<Card size="small" title="按类型分布">
-										<div className="flex flex-wrap gap-1.5">
-											{typeStats.map(([type, count]) => (
-												<Tag key={type}>{type}: {count}</Tag>
+					<Card
+						title={
+							<Space size={8}>
+								<BranchesOutlined />
+								<span>{selectedDomainName}资产分布</span>
+							</Space>
+						}
+						extra={
+							<Pagination
+								size="small"
+								current={pageState.page}
+								pageSize={pageState.size}
+								total={pageState.total}
+								showSizeChanger
+								pageSizeOptions={[12, 18, 30, 48]}
+								onChange={(page, size) => void loadDatasets(page, size)}
+							/>
+						}
+					>
+						{records.length ? (
+							<div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_300px]">
+								<div className="overflow-x-auto">
+									<div className="grid min-w-[1120px] grid-cols-8 gap-3">
+										{layerLanes.map((lane) => (
+											<div key={lane.key} className={`rounded-lg border px-2 py-2 ${lane.meta.tone}`}>
+												<div className="mb-2 flex items-center justify-between gap-2">
+													<Tag color={lane.meta.color}>{lane.meta.label}</Tag>
+													<span className="text-xs font-semibold text-slate-600">{lane.items.length}</span>
+												</div>
+												<div className="min-h-[360px] space-y-2">
+													{lane.items.length ? (
+														lane.items.map(renderAssetCard)
+													) : (
+														<div className="rounded-lg border border-dashed border-slate-200 bg-white/70 px-2 py-6 text-center text-xs text-slate-400">
+															暂无资产
+														</div>
+													)}
+												</div>
+											</div>
+										))}
+									</div>
+								</div>
+								<div className="space-y-3">
+									<div className="rounded-lg border border-slate-200 bg-white p-3">
+										<div className="mb-3 text-sm font-semibold text-slate-800">类型分布</div>
+										<Space direction="vertical" size={10} className="w-full">
+											{typeStats.length ? (
+												typeStats.map(([type, count]) => (
+													<div key={type}>
+														<div className="mb-1 flex items-center justify-between text-xs text-slate-600">
+															<span>{type}</span>
+															<span>{count}</span>
+														</div>
+														<Progress percent={Math.round((count / Math.max(records.length, 1)) * 100)} size="small" showInfo={false} />
+													</div>
+												))
+											) : (
+												<div className="text-xs text-slate-500">暂无类型分布</div>
+											)}
+										</Space>
+									</div>
+									<div className="rounded-lg border border-slate-200 bg-white p-3">
+										<div className="mb-3 text-sm font-semibold text-slate-800">主题域热点</div>
+										<Space direction="vertical" size={8} className="w-full">
+											{domainStats.map(([name, count]) => (
+												<div key={name} className="flex items-center justify-between gap-3 text-xs">
+													<span className="min-w-0 truncate text-slate-600">{name}</span>
+													<Tag color="blue">{count}</Tag>
+												</div>
 											))}
-										</div>
-									</Card>
-									<Card size="small" title="按分层分布">
-										<div className="flex flex-wrap gap-1.5">
-											{layerStats.map(([layer, count]) => (
-												<Tag key={layer}>{layer}: {count}</Tag>
-											))}
-										</div>
-									</Card>
-									<Card size="small" title="按密级分布">
-										<div className="flex flex-wrap gap-1.5">
-											{classificationStats.map(([cls, count]) => (
-												<Tag key={cls}>{cls}: {count}</Tag>
-											))}
-										</div>
-									</Card>
+										</Space>
+									</div>
+									<div className="rounded-lg border border-slate-200 bg-white p-3">
+										<div className="mb-2 text-sm font-semibold text-slate-800">治理缺口</div>
+										<Space direction="vertical" size={8} className="w-full">
+											<div className="flex items-center justify-between text-xs text-slate-600">
+												<span>未归域</span>
+												<Tag color={missingDomainCount ? "orange" : "green"}>{missingDomainCount}</Tag>
+											</div>
+											<div className="flex items-center justify-between text-xs text-slate-600">
+												<span>未定密</span>
+												<Tag color={unclassifiedCount ? "orange" : "green"}>{unclassifiedCount}</Tag>
+											</div>
+											<div className="flex items-center justify-between text-xs text-slate-600">
+												<span>同步失效</span>
+												<Tag color={staleCount ? "red" : "green"}>{staleCount}</Tag>
+											</div>
+										</Space>
+									</div>
 								</div>
 							</div>
 						) : (
 							<EmptyState title="暂无资产地图" description="请先完成元数据采集或同步资产数据。" />
 						)}
 					</Card>
-
-					{records.length > 0 && (
-						<div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3">
-							{records.map((row) => (
-								<div
-									key={row.id}
-									className="cursor-pointer rounded-[20px] border border-slate-200 bg-white px-4 py-3 transition-all hover:border-blue-300 hover:shadow-sm"
-									onClick={() => router.push(`/catalog/datasets/${row.id}`)}
-								>
-									<div className="flex items-start justify-between gap-2">
-										<div className="flex-1 truncate text-sm font-semibold text-slate-900">{row.name}</div>
-										{row.warehouseLayer && (
-											<Tag color={LAYER_TAG_COLORS[row.warehouseLayer] ?? "default"}>
-												{row.warehouseLayer}
-											</Tag>
-										)}
-									</div>
-									<div className="mt-1 text-xs text-slate-500">{row.domain ?? "未归域"}</div>
-									<div className="mt-2 flex flex-wrap gap-1">
-										{row.classification && (
-											<Tag color="orange" style={{ fontSize: 11 }}>
-												{CLASSIFICATION_LABEL[row.classification.toUpperCase()] ?? row.classification}
-											</Tag>
-										)}
-										<Tag style={{ fontSize: 11 }}>{row.type ?? "未知"}</Tag>
-									</div>
-								</div>
-							))}
-						</div>
-					)}
 
 					<Collapse
 						defaultActiveKey={[]}
@@ -515,9 +670,10 @@ export default function Page() {
 								extra: (
 									<Button
 										size="small"
+										icon={<ReloadOutlined />}
 										loading={reconciliationLoading}
-										onClick={(e) => {
-											e.stopPropagation();
+										onClick={(event) => {
+											event.stopPropagation();
 											void loadReconciliation();
 										}}
 									>

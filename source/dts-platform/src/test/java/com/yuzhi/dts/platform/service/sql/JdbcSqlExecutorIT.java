@@ -80,6 +80,8 @@ class JdbcSqlExecutorIT {
             assertThat(result.columns()).hasSize(2);
             assertThat(result.columns().get(0).name()).isEqualTo("id");
             assertThat(result.columns().get(1).name()).isEqualTo("val");
+            assertThat(result.rows()).hasSize(3);
+            assertThat(result.rows().get(0)).containsEntry("id", 1);
             assertThat(result.elapsedMs()).isGreaterThanOrEqualTo(0);
         } finally {
             dropTable(tableName);

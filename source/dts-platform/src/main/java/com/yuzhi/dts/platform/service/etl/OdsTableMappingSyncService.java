@@ -12,6 +12,7 @@ import com.yuzhi.dts.platform.repository.catalog.CatalogTableSchemaRepository;
 import com.yuzhi.dts.platform.repository.infra.InfraOdsTableMappingRepository;
 import com.yuzhi.dts.platform.repository.service.InfraDataSourceRepository;
 import com.yuzhi.dts.platform.service.audit.AuditService;
+import com.yuzhi.dts.platform.service.catalog.lineage.IngestionLineageWriter;
 import com.yuzhi.dts.platform.service.catalog.CatalogColumnSyncService;
 import com.yuzhi.dts.platform.service.catalog.CatalogColumnSyncService.ColumnSpec;
 import java.nio.charset.StandardCharsets;
@@ -44,6 +45,7 @@ public class OdsTableMappingSyncService {
     private final CatalogTableSchemaRepository tableRepository;
     private final CatalogColumnSyncService columnSyncService;
     private final DbtSourceService dbtSourceService;
+    private final IngestionLineageWriter ingestionLineageWriter;
     private final AuditService auditService;
     private final ObjectMapper objectMapper;
 
@@ -54,6 +56,7 @@ public class OdsTableMappingSyncService {
         CatalogTableSchemaRepository tableRepository,
         CatalogColumnSyncService columnSyncService,
         DbtSourceService dbtSourceService,
+        IngestionLineageWriter ingestionLineageWriter,
         AuditService auditService,
         ObjectMapper objectMapper
     ) {
@@ -63,12 +66,18 @@ public class OdsTableMappingSyncService {
         this.tableRepository = tableRepository;
         this.columnSyncService = columnSyncService;
         this.dbtSourceService = dbtSourceService;
+        this.ingestionLineageWriter = ingestionLineageWriter;
         this.auditService = auditService;
         this.objectMapper = objectMapper;
     }
 
     @Transactional
     public SyncResult syncFromIngestionPayload(Map<String, Object> payload) {
+        return syncFromIngestionPayload(payload, IngestionLineageWriter.LineageObservation.declared());
+    }
+
+    @Transactional
+    public SyncResult syncFromIngestionPayload(Map<String, Object> payload, IngestionLineageWriter.LineageObservation observation) {
         Map<String, Object> task = unwrapTask(payload);
         if (task == null || task.isEmpty()) {
             return SyncResult.empty("未发现任务数据");
@@ -85,6 +94,9 @@ public class OdsTableMappingSyncService {
         int removed = pruneStaleTaskMappings(connectionId, incomingSourceKeys, taskName, taskId);
         Instant snapshotTime = Instant.now();
         int updated = 0;
+        int lineageCreated = 0;
+        int lineageUpdated = 0;
+        int lineageSkipped = 0;
         List<ColumnSpec> columnSpecs = resolveColumnSpecs(connectionId);
         for (Map<String, String> mapping : mappings) {
             String source = normalize(mapping.get("source"));
@@ -116,8 +128,12 @@ public class OdsTableMappingSyncService {
             if (!StringUtils.hasText(entity.getDescription()) || isManagedByTask(entity, taskName, taskId)) {
                 entity.setDescription(nextDescription);
             }
-            mappingRepository.save(entity);
+            InfraOdsTableMapping savedMapping = mappingRepository.save(entity);
             updated++;
+            IngestionLineageWriter.LineageWriteResult lineage = ingestionLineageWriter.writeAddaxLineage(savedMapping, observation);
+            lineageCreated += lineage.created();
+            lineageUpdated += lineage.updated();
+            lineageSkipped += lineage.skipped();
             if (!columnSpecs.isEmpty()) {
                 syncColumns(entity, targetRef, columnSpecs, connectionId, snapshotTime);
             }
@@ -130,9 +146,27 @@ public class OdsTableMappingSyncService {
             "INGESTION_MAPPING_SYNC",
             AuditStage.SUCCESS,
             taskName,
-            Map.of("summary", "同步 ODS 映射", "task", taskName, "tables", updated, "removed", removed, "dbt", refresh.message())
+            Map.of(
+                "summary",
+                "同步 ODS 映射",
+                "task",
+                taskName,
+                "tables",
+                updated,
+                "removed",
+                removed,
+                "lineageCreated",
+                lineageCreated,
+                "lineageUpdated",
+                lineageUpdated,
+                "lineageSkipped",
+                lineageSkipped,
+                "dbt",
+                refresh.message()
+            )
         );
-        return SyncResult.success(updated + removed, refresh.message());
+        String message = refresh.message() + "；ADDAX 血缘 +" + lineageCreated + " / 更新 " + lineageUpdated + " / 跳过 " + lineageSkipped;
+        return SyncResult.success(updated + removed, message);
     }
 
     @Transactional
@@ -151,6 +185,7 @@ public class OdsTableMappingSyncService {
         }
         String taskName = normalize(task.get("name"));
         int deleted = 0;
+        int lineageRemoved = 0;
         for (Map<String, String> mapping : mappings) {
             String source = normalize(mapping.get("source"));
             if (!StringUtils.hasText(source)) {
@@ -163,9 +198,11 @@ public class OdsTableMappingSyncService {
                     connectionId,
                     sourceRef.name(),
                     namespace
-                );
+            );
             if (existing.isPresent()) {
-                mappingRepository.delete(existing.orElseThrow());
+                InfraOdsTableMapping existingMapping = existing.orElseThrow();
+                lineageRemoved += ingestionLineageWriter.removeAddaxLineage(existingMapping);
+                mappingRepository.delete(existingMapping);
                 deleted++;
             }
         }
@@ -177,9 +214,9 @@ public class OdsTableMappingSyncService {
             "INGESTION_MAPPING_DELETE",
             AuditStage.SUCCESS,
             taskName,
-            Map.of("summary", "删除 ODS 映射", "task", taskName, "tables", deleted, "dbt", refresh.message())
+            Map.of("summary", "删除 ODS 映射", "task", taskName, "tables", deleted, "lineageRemoved", lineageRemoved, "dbt", refresh.message())
         );
-        return SyncResult.success(deleted, refresh.message());
+        return SyncResult.success(deleted, refresh.message() + "；ADDAX 血缘删除 " + lineageRemoved);
     }
 
     private Map<String, Object> unwrapTask(Map<String, Object> payload) {

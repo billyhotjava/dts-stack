@@ -90,10 +90,11 @@ public class JdbcQueryGateway implements QueryGateway {
 
             Map<String, Object> payload = new LinkedHashMap<>();
             payload.put("headers", headers);
-            // JdbcSqlExecutor already persisted chunks when executionId != null.
-            // Return empty rows list so SqlExecutionService does not double-write chunk records,
-            // but headers must be non-empty so SqlExecutionService creates the ResultSet metadata.
-            payload.put("rows", List.of());
+            boolean chunksPrePersisted = executionId != null;
+            // SQL IDE executions pass a tracked executionId, so JdbcSqlExecutor persists chunks
+            // directly and the service must not double-write rows. Legacy synchronous callers
+            // (asset preview, service API, indicator preview) pass null and need inline rows.
+            payload.put("rows", chunksPrePersisted ? List.of() : result.rows());
             payload.put("rowCount", result.rowCount());
             payload.put("truncated", result.truncated());
             payload.put("connectMillis", 0L);   // JdbcSqlExecutor bundles connect+query in elapsedMs
@@ -103,7 +104,7 @@ public class JdbcQueryGateway implements QueryGateway {
             // Signal to SqlExecutionService that JdbcSqlExecutor already persisted chunks directly —
             // the service must NOT double-write them.  Checked explicitly instead of inferring from
             // finalRows.isEmpty() (which would conflate empty result sets from the legacy Hive path).
-            payload.put("chunksPrePersisted", true);
+            payload.put("chunksPrePersisted", chunksPrePersisted);
             payload.put("executionContext", Map.of(
                 "database", ds.getName() != null ? ds.getName() : ds.getJdbcUrl(),
                 "timestamp", Instant.now()

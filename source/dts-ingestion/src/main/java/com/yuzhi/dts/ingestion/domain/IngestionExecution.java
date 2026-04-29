@@ -1,10 +1,12 @@
 package com.yuzhi.dts.ingestion.domain;
 
+import com.fasterxml.jackson.databind.JsonNode;
+import io.hypersistence.utils.hibernate.type.json.JsonType;
 import jakarta.persistence.*;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
-
 import java.time.Instant;
+import org.hibernate.annotations.Type;
 
 /**
  * 数据入湖任务执行历史实体
@@ -76,6 +78,14 @@ public class IngestionExecution {
 
     @Column(name = "dropped_tables", columnDefinition = "TEXT")
     private String droppedTables;
+
+    @Type(JsonType.class)
+    @Column(name = "source_tables", columnDefinition = "jsonb")
+    private JsonNode sourceTables;
+
+    @Type(JsonType.class)
+    @Column(name = "target_tables", columnDefinition = "jsonb")
+    private JsonNode targetTables;
 
     @Column(name = "retry_count", nullable = false)
     private int retryCount = 0;
@@ -223,6 +233,22 @@ public class IngestionExecution {
 
     public void setDroppedTables(String droppedTables) {
         this.droppedTables = droppedTables;
+    }
+
+    public JsonNode getSourceTables() {
+        return sourceTables;
+    }
+
+    public void setSourceTables(JsonNode sourceTables) {
+        this.sourceTables = sourceTables;
+    }
+
+    public JsonNode getTargetTables() {
+        return targetTables;
+    }
+
+    public void setTargetTables(JsonNode targetTables) {
+        this.targetTables = targetTables;
     }
 
     public String getTriggerMode() {

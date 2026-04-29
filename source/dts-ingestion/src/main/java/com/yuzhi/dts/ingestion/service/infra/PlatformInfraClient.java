@@ -1,6 +1,8 @@
 package com.yuzhi.dts.ingestion.service.infra;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.yuzhi.dts.ingestion.domain.IngestionExecution;
+import com.yuzhi.dts.ingestion.domain.IngestionTask;
 import java.net.URI;
 import java.time.Duration;
 import java.util.LinkedHashMap;
@@ -182,6 +184,51 @@ public class PlatformInfraClient {
             throw ex;
         } catch (Exception ex) {
             throw new IllegalStateException("质量检测触发失败: " + ex.getMessage(), ex);
+        }
+    }
+
+    public void syncIngestionExecutionLineage(IngestionTask task, IngestionExecution execution) {
+        if (task == null || execution == null) {
+            return;
+        }
+        URI uri = buildUri("/catalog/lineage/ingestion-executions");
+        Map<String, Object> taskPayload = new LinkedHashMap<>();
+        taskPayload.put("id", task.getId());
+        taskPayload.put("name", task.getName());
+        taskPayload.put("sourceType", task.getSourceType());
+        taskPayload.put("sourceDataSourceId", task.getSourceDataSourceId() == null ? null : task.getSourceDataSourceId().toString());
+        taskPayload.put("destinationType", task.getDestinationType());
+        taskPayload.put("destinationConfig", task.getDestinationConfig());
+        taskPayload.put("tableMapping", task.getTableMapping());
+
+        Map<String, Object> executionPayload = new LinkedHashMap<>();
+        executionPayload.put("id", execution.getId());
+        executionPayload.put("executionId", execution.getExecutionId());
+        executionPayload.put("batchId", execution.getBatchId());
+        executionPayload.put("status", execution.getStatus());
+        executionPayload.put("startTime", execution.getStartTime() == null ? null : execution.getStartTime().toString());
+        executionPayload.put("endTime", execution.getEndTime() == null ? null : execution.getEndTime().toString());
+        executionPayload.put("sourceTables", execution.getSourceTables());
+        executionPayload.put("targetTables", execution.getTargetTables());
+
+        Map<String, Object> payload = new LinkedHashMap<>();
+        payload.put("task", taskPayload);
+        payload.put("execution", executionPayload);
+        payload.values().removeIf(value -> value == null);
+
+        HttpHeaders headers = new HttpHeaders();
+        headers.setAccept(java.util.List.of(MediaType.APPLICATION_JSON));
+        headers.setContentType(MediaType.APPLICATION_JSON);
+        headers.set(SERVICE_HEADER, SERVICE_NAME);
+        try {
+            ResponseEntity<Map> response = restTemplate.exchange(uri, HttpMethod.POST, new HttpEntity<>(payload, headers), Map.class);
+            if (!response.getStatusCode().is2xxSuccessful()) {
+                LOG.warn("Platform ingestion lineage sync returned status={}", response.getStatusCode().value());
+            }
+        } catch (HttpStatusCodeException ex) {
+            LOG.warn("Platform ingestion lineage sync failed status={} body={}", ex.getStatusCode().value(), ex.getResponseBodyAsString());
+        } catch (Exception ex) {
+            LOG.warn("Platform ingestion lineage sync failed: {}", ex.getMessage());
         }
     }
 

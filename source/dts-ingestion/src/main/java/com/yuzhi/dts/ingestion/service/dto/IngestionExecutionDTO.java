@@ -1,5 +1,6 @@
 package com.yuzhi.dts.ingestion.service.dto;
 
+import com.fasterxml.jackson.databind.JsonNode;
 import java.time.Instant;
 
 /**
@@ -40,6 +41,10 @@ public class IngestionExecutionDTO {
     private String triggerMode;
 
     private String droppedTables;
+
+    private JsonNode sourceTables;
+
+    private JsonNode targetTables;
 
     private Long queueWaitSeconds;
 
@@ -171,6 +176,22 @@ public class IngestionExecutionDTO {
 
     public void setDroppedTables(String droppedTables) {
         this.droppedTables = droppedTables;
+    }
+
+    public JsonNode getSourceTables() {
+        return sourceTables;
+    }
+
+    public void setSourceTables(JsonNode sourceTables) {
+        this.sourceTables = sourceTables;
+    }
+
+    public JsonNode getTargetTables() {
+        return targetTables;
+    }
+
+    public void setTargetTables(JsonNode targetTables) {
+        this.targetTables = targetTables;
     }
 
     public String getTriggerMode() {

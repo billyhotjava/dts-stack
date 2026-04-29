@@ -1,0 +1,74 @@
+<?xml version="1.0" encoding="utf-8"?>
+<databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+    http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
+
+    <changeSet id="20260429-01-catalog-lineage-verification-status" author="codex">
+        <preConditions onFail="MARK_RAN">
+            <not>
+                <columnExists tableName="catalog_dataset_lineage" columnName="verification_status"/>
+            </not>
+        </preConditions>
+        <addColumn tableName="catalog_dataset_lineage">
+            <column name="verification_status" type="varchar(32)"/>
+        </addColumn>
+    </changeSet>
+
+    <changeSet id="20260429-02-catalog-lineage-last-execution-id" author="codex">
+        <preConditions onFail="MARK_RAN">
+            <not>
+                <columnExists tableName="catalog_dataset_lineage" columnName="last_execution_id"/>
+            </not>
+        </preConditions>
+        <addColumn tableName="catalog_dataset_lineage">
+            <column name="last_execution_id" type="varchar(128)"/>
+        </addColumn>
+    </changeSet>
+
+    <changeSet id="20260429-03-catalog-lineage-last-execution-status" author="codex">
+        <preConditions onFail="MARK_RAN">
+            <not>
+                <columnExists tableName="catalog_dataset_lineage" columnName="last_execution_status"/>
+            </not>
+        </preConditions>
+        <addColumn tableName="catalog_dataset_lineage">
+            <column name="last_execution_status" type="varchar(32)"/>
+        </addColumn>
+    </changeSet>
+
+    <changeSet id="20260429-04-catalog-lineage-last-observed-at" author="codex">
+        <preConditions onFail="MARK_RAN">
+            <not>
+                <columnExists tableName="catalog_dataset_lineage" columnName="last_observed_at"/>
+            </not>
+        </preConditions>
+        <addColumn tableName="catalog_dataset_lineage">
+            <column name="last_observed_at" type="timestamp"/>
+        </addColumn>
+    </changeSet>
+
+    <changeSet id="20260429-05-catalog-lineage-last-verified-at" author="codex">
+        <preConditions onFail="MARK_RAN">
+            <not>
+                <columnExists tableName="catalog_dataset_lineage" columnName="last_verified_at"/>
+            </not>
+        </preConditions>
+        <addColumn tableName="catalog_dataset_lineage">
+            <column name="last_verified_at" type="timestamp"/>
+        </addColumn>
+    </changeSet>
+
+    <changeSet id="20260429-06-catalog-lineage-verification-indexes" author="codex">
+        <preConditions onFail="MARK_RAN">
+            <not>
+                <indexExists tableName="catalog_dataset_lineage" indexName="idx_catalog_dataset_lineage_verification"/>
+            </not>
+        </preConditions>
+        <createIndex tableName="catalog_dataset_lineage" indexName="idx_catalog_dataset_lineage_verification">
+            <column name="verification_status"/>
+            <column name="last_observed_at"/>
+        </createIndex>
+    </changeSet>
+</databaseChangeLog>

@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import { Alert, Button, Card, Form, Input, Modal, Select, Space, Table, Tabs, Tag, Typography } from "antd";
 import type { ColumnsType } from "antd/es/table";
-import { EyeOutlined } from "@ant-design/icons";
+import { BranchesOutlined, EyeOutlined, ProfileOutlined, ReloadOutlined } from "@ant-design/icons";
 import { EmptyState } from "@/components/empty-state";
 import {
 	getCatalogLineageImpact,
@@ -570,7 +570,7 @@ export default function AssetDetailPage() {
 			dataIndex: "actions",
 			render: (_, row) => (
 				<Button type="link" size="small" icon={<EyeOutlined />} onClick={() => void openDetail(row)}>
-					详情
+					查看画像
 				</Button>
 			),
 		},
@@ -579,11 +579,21 @@ export default function AssetDetailPage() {
 	return (
 		<div className="space-y-4">
 			<Card
-				title="资产详情"
+				title={
+					<Space size={8}>
+						<ProfileOutlined />
+						<span>资产明细台账</span>
+					</Space>
+				}
 				extra={
-					<Button className="rounded-2xl" onClick={() => void loadDatasets(1, pageState.size)} loading={loading}>
-						刷新
-					</Button>
+					<Space wrap>
+						<Button icon={<BranchesOutlined />} onClick={() => router.push("/catalog/assets")}>
+							资产地图
+						</Button>
+						<Button icon={<ReloadOutlined />} onClick={() => void loadDatasets(1, pageState.size)} loading={loading}>
+							刷新
+						</Button>
+					</Space>
 				}
 			>
 				<div className="mb-3 flex flex-wrap items-center gap-2">
@@ -663,7 +673,7 @@ export default function AssetDetailPage() {
 			</Card>
 
 			<Modal
-				title="资产字段详情"
+				title="资产画像与字段详情"
 				open={detailOpen}
 				onCancel={closeDetail}
 				footer={<Button onClick={closeDetail}>关闭</Button>}

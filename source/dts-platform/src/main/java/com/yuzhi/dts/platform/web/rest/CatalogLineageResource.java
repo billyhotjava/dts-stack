@@ -10,6 +10,8 @@ import com.yuzhi.dts.platform.repository.catalog.CatalogDatasetRepository;
 import com.yuzhi.dts.platform.repository.infra.InfraOdsTableMappingRepository;
 import com.yuzhi.dts.platform.repository.service.InfraDataSourceRepository;
 import com.yuzhi.dts.platform.service.audit.AuditService;
+import com.yuzhi.dts.platform.service.catalog.lineage.IngestionLineageWriter;
+import com.yuzhi.dts.platform.service.etl.OdsTableMappingSyncService;
 import com.yuzhi.dts.platform.service.security.AccessChecker;
 import jakarta.validation.Valid;
 import java.time.Instant;
@@ -50,6 +52,8 @@ public class CatalogLineageResource {
     private final CatalogDatasetLineageRepository lineageRepo;
     private final InfraOdsTableMappingRepository odsMappingRepo;
     private final InfraDataSourceRepository dataSourceRepo;
+    private final IngestionLineageWriter ingestionLineageWriter;
+    private final OdsTableMappingSyncService odsTableMappingSyncService;
     private final AccessChecker accessChecker;
     private final AuditService audit;
 
@@ -58,6 +62,8 @@ public class CatalogLineageResource {
         CatalogDatasetLineageRepository lineageRepo,
         InfraOdsTableMappingRepository odsMappingRepo,
         InfraDataSourceRepository dataSourceRepo,
+        IngestionLineageWriter ingestionLineageWriter,
+        OdsTableMappingSyncService odsTableMappingSyncService,
         AccessChecker accessChecker,
         AuditService audit
     ) {
@@ -65,6 +71,8 @@ public class CatalogLineageResource {
         this.lineageRepo = lineageRepo;
         this.odsMappingRepo = odsMappingRepo;
         this.dataSourceRepo = dataSourceRepo;
+        this.ingestionLineageWriter = ingestionLineageWriter;
+        this.odsTableMappingSyncService = odsTableMappingSyncService;
         this.accessChecker = accessChecker;
         this.audit = audit;
     }
@@ -312,6 +320,8 @@ public class CatalogLineageResource {
                 layerStats,
                 "relationTypeCounts",
                 relationStats,
+                "verificationStatusCounts",
+                countByString(edgeDtos, "verificationStatus"),
                 "kindNodeCounts",
                 countByString(nodeDtos, "kind"),
                 "changedNodeCount",
@@ -378,6 +388,13 @@ public class CatalogLineageResource {
         if (mappings == null || mappings.isEmpty()) {
             return;
         }
+        Set<String> addaxCoveredTargets = edges
+            .stream()
+            .filter(edge -> "ADDAX".equalsIgnoreCase(stringValue(edge.get("relationType"))))
+            .filter(edge -> "JOB_TO_DATASET".equalsIgnoreCase(stringValue(edge.get("kind"))))
+            .map(edge -> stringValue(edge.get("toId")))
+            .filter(StringUtils::hasText)
+            .collect(Collectors.toCollection(LinkedHashSet::new));
         Map<String, List<InfraOdsTableMapping>> mappingsByOds = new LinkedHashMap<>();
         for (InfraOdsTableMapping mapping : mappings) {
             if (mapping == null || mapping.getEnabled() == null || !mapping.getEnabled()) {
@@ -404,6 +421,9 @@ public class CatalogLineageResource {
             }
             String datasetId = dataset.getId() != null ? dataset.getId().toString() : null;
             if (!StringUtils.hasText(datasetId)) {
+                continue;
+            }
+            if (addaxCoveredTargets.contains(datasetId)) {
                 continue;
             }
             for (InfraOdsTableMapping mapping : matched) {
@@ -552,6 +572,11 @@ public class CatalogLineageResource {
         edge.put("downstreamName", downstreamName);
         edge.put("projectName", base.get("projectName"));
         edge.put("notes", base.get("notes"));
+        edge.put("verificationStatus", base.get("verificationStatus"));
+        edge.put("lastExecutionId", base.get("lastExecutionId"));
+        edge.put("lastExecutionStatus", base.get("lastExecutionStatus"));
+        edge.put("lastObservedAt", base.get("lastObservedAt"));
+        edge.put("lastVerifiedAt", base.get("lastVerifiedAt"));
         edge.put("lastModifiedAt", base.get("lastModifiedAt"));
         return edge;
     }
@@ -672,6 +697,30 @@ public class CatalogLineageResource {
         return text.isEmpty() ? null : text;
     }
 
+    private Map<String, Object> payloadMap(Object value) {
+        if (value instanceof Map<?, ?> raw) {
+            Map<String, Object> result = new LinkedHashMap<>();
+            raw.forEach((key, item) -> {
+                if (key != null) {
+                    result.put(String.valueOf(key), item);
+                }
+            });
+            return result;
+        }
+        return Map.of();
+    }
+
+    private Instant parseInstant(String value) {
+        if (!StringUtils.hasText(value)) {
+            return null;
+        }
+        try {
+            return Instant.parse(value.trim());
+        } catch (RuntimeException ex) {
+            return null;
+        }
+    }
+
     private record GraphExpansion(List<Map<String, Object>> nodes, List<Map<String, Object>> edges) {}
 
     @PostMapping
@@ -727,6 +776,56 @@ public class CatalogLineageResource {
         return ApiResponses.ok(Map.of("id", saved.getId().toString(), "created", true));
     }
 
+    @PostMapping("/sync-addax")
+    @PreAuthorize(CATALOG_MAINTAINER_EXPRESSION)
+    public ApiResponse<IngestionLineageWriter.LineageWriteResult> syncAddaxLineage() {
+        IngestionLineageWriter.LineageWriteResult result = ingestionLineageWriter.syncEnabledOdsMappings();
+        audit.auditAction(
+            "LINEAGE_INGEST_WRITE",
+            AuditStage.SUCCESS,
+            "ADDAX",
+            Map.of("summary", "手动同步 Addax 入湖血缘", "created", result.created(), "updated", result.updated(), "skipped", result.skipped())
+        );
+        return ApiResponses.ok(result);
+    }
+
+    @PostMapping("/ingestion-executions")
+    @PreAuthorize(CATALOG_MAINTAINER_EXPRESSION)
+    public ApiResponse<OdsTableMappingSyncService.SyncResult> syncIngestionExecutionLineage(@RequestBody Map<String, Object> payload) {
+        Map<String, Object> execution = payloadMap(payload == null ? null : payload.get("execution"));
+        String status = stringValue(execution.get("status"));
+        String executionId = defaultString(execution.get("id"), defaultString(execution.get("executionId"), "unknown"));
+        String batchId = stringValue(execution.get("batchId"));
+        Instant observedAt = parseInstant(defaultString(execution.get("endTime"), stringValue(execution.get("startTime"))));
+        IngestionLineageWriter.LineageObservation observation = IngestionLineageWriter.LineageObservation.fromExecution(
+            status,
+            executionId,
+            batchId,
+            observedAt
+        );
+        OdsTableMappingSyncService.SyncResult result = odsTableMappingSyncService.syncFromIngestionPayload(payload, observation);
+        audit.auditAction(
+            "LINEAGE_INGEST_EXECUTION_SYNC",
+            AuditStage.SUCCESS,
+            executionId,
+            Map.of(
+                "summary",
+                "入湖执行后回写 Addax 血缘状态",
+                "executionId",
+                executionId,
+                "status",
+                defaultString(status, "unknown"),
+                "verificationStatus",
+                observation.verificationStatus(),
+                "tables",
+                result.tables(),
+                "synced",
+                result.synced()
+            )
+        );
+        return ApiResponses.ok(result);
+    }
+
     @DeleteMapping("/{id}")
     @PreAuthorize(CATALOG_MAINTAINER_EXPRESSION)
     public ApiResponse<Boolean> delete(@PathVariable UUID id, @RequestParam(name = "force", required = false, defaultValue = "false") boolean force) {
@@ -777,6 +876,11 @@ public class CatalogLineageResource {
         dto.put("downstreamAssetType", link.getDownstreamAssetType());
         dto.put("direction", link.getDirection());
         dto.put("projectName", link.getProjectName());
+        dto.put("verificationStatus", link.getVerificationStatus());
+        dto.put("lastExecutionId", link.getLastExecutionId());
+        dto.put("lastExecutionStatus", link.getLastExecutionStatus());
+        dto.put("lastObservedAt", link.getLastObservedAt());
+        dto.put("lastVerifiedAt", link.getLastVerifiedAt());
         dto.put("lastModifiedAt", link.getLastModifiedDate());
         return dto;
     }

@@ -107,6 +107,7 @@ class AirflowExecutionSyncServiceTest {
             metaCaptor.capture()
         );
         assertThat(metaCaptor.getValue()).containsEntry("failureCategory", ExecutionFailureClassifier.CATEGORY_PERMISSION);
+        verify(platformInfraClient).syncIngestionExecutionLineage(any(IngestionTask.class), any(IngestionExecution.class));
         verify(incrementalSyncService, never()).updateCheckpointOnSuccess(any(), any());
     }
 
@@ -120,6 +121,7 @@ class AirflowExecutionSyncServiceTest {
 
         syncService.syncRunningExecutions();
 
+        verify(platformInfraClient).syncIngestionExecutionLineage(any(IngestionTask.class), any(IngestionExecution.class));
         verify(incrementalSyncService).updateCheckpointOnSuccess(any(IngestionTask.class), any(IngestionExecution.class));
         verify(auditService, never()).auditAction(eq("INGESTION_TASK_EXECUTE"), eq(AuditStage.FAIL), any(), any());
     }

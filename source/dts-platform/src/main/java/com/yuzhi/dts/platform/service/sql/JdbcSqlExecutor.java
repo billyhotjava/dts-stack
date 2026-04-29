@@ -123,7 +123,9 @@ public class JdbcSqlExecutor {
                 conn.setAutoCommit(false);
             }
 
+            boolean persistChunks = executionId != null;
             List<ColumnMeta> columns = List.of();
+            List<Map<String, Object>> inlineRows = persistChunks ? List.of() : new ArrayList<>();
             long totalRows = 0;
             boolean truncated = false;
             int chunkIndex = 0;
@@ -154,7 +156,7 @@ public class JdbcSqlExecutor {
                         columns = buildColumnMeta(meta, colCount);
                         List<String> headers = columns.stream().map(ColumnMeta::name).toList();
 
-                        List<Map<String, Object>> buffer = new ArrayList<>(STREAM_CHUNK_SIZE);
+                        List<Map<String, Object>> buffer = persistChunks ? new ArrayList<>(STREAM_CHUNK_SIZE) : List.of();
 
                         while (rs.next()) {
                             // Check cancel flag at row boundary
@@ -169,7 +171,11 @@ public class JdbcSqlExecutor {
                             for (int i = 1; i <= colCount; i++) {
                                 row.put(headers.get(i - 1), readValue(rs, i));
                             }
-                            buffer.add(row);
+                            if (persistChunks) {
+                                buffer.add(row);
+                            } else {
+                                inlineRows.add(row);
+                            }
                             totalRows++;
 
                             // Enforce rowLimit (stop early rather than after-the-fact filter)
@@ -178,17 +184,19 @@ public class JdbcSqlExecutor {
                                 break;
                             }
 
-                            if (buffer.size() >= STREAM_CHUNK_SIZE) {
+                            if (persistChunks && buffer.size() >= STREAM_CHUNK_SIZE) {
                                 flushChunk(executionId, chunkIndex++, buffer, totalRows, headers);
                                 if (progressHook != null) {
                                     progressHook.accept((int) Math.min(totalRows, Integer.MAX_VALUE));
                                 }
                                 buffer.clear();
+                            } else if (!persistChunks && progressHook != null && totalRows % STREAM_CHUNK_SIZE == 0) {
+                                progressHook.accept((int) Math.min(totalRows, Integer.MAX_VALUE));
                             }
                         }
 
                         // Flush remaining
-                        if (!buffer.isEmpty()) {
+                        if (persistChunks && !buffer.isEmpty()) {
                             flushChunk(executionId, chunkIndex++, buffer, totalRows, headers);
                         }
                     }
@@ -228,7 +236,7 @@ public class JdbcSqlExecutor {
                 "JdbcSqlExecutor.execute done executionId={} rows={} truncated={} connect={}ms query={}ms",
                 executionId, totalRows, truncated, connectMs, queryMs
             );
-            return new ExecutionResult(columns, totalRows, truncated, connectMs + queryMs, chunkIndex);
+            return new ExecutionResult(columns, inlineRows, totalRows, truncated, connectMs + queryMs, chunkIndex);
         }
     }
 
@@ -299,6 +307,7 @@ public class JdbcSqlExecutor {
 
     public record ExecutionResult(
         List<ColumnMeta> columns,
+        List<Map<String, Object>> rows,
         long rowCount,
         boolean truncated,
         long elapsedMs,
