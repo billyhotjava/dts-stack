@@ -109,28 +109,8 @@ public class KeycloakApiResource {
     private java.util.Set<String> triadConfigured;
 
     private static final String DEFAULT_PERSON_LEVEL = SecurityLevelCatalog.DEFAULT_PERSONNEL_SECURITY_LEVEL.code();
-    private static final Set<String> PROTECTED_USERNAMES = Set.of("sysadmin", "authadmin", "auditadmin", "opadmin");
-    private static final Set<String> TRIAD_AUTHORITIES = Set.of(
-        AuthoritiesConstants.SYS_ADMIN,
-        AuthoritiesConstants.AUTH_ADMIN,
-        AuthoritiesConstants.AUDITOR_ADMIN
-    );
-    private static final Set<String> PROTECTED_AUTHORITIES = Set.of(
-        AuthoritiesConstants.SYS_ADMIN,
-        AuthoritiesConstants.AUTH_ADMIN,
-        AuthoritiesConstants.AUDITOR_ADMIN,
-        AuthoritiesConstants.OP_ADMIN
-    );
-    private static final Map<String, String> BUILTIN_ADMIN_LABELS = Map.of(
-        "sysadmin",
-        "系统管理员",
-        "authadmin",
-        "授权管理员",
-        "auditadmin",
-        "安全审计员",
-        "opadmin",
-        "运维管理员"
-    );
+
+    private final com.yuzhi.dts.admin.security.TriadAccountRegistry triadAccountRegistry;
 
     public KeycloakApiResource(
         InMemoryStores stores,
@@ -141,7 +121,8 @@ public class KeycloakApiResource {
         AdminRoleAssignmentRepository roleAssignRepo,
         AdminRoleMemberRepository roleMemberRepo,
         AdminSessionRegistry adminSessionRegistry,
-        AdminKeycloakUserRepository userRepository
+        AdminKeycloakUserRepository userRepository,
+        com.yuzhi.dts.admin.security.TriadAccountRegistry triadAccountRegistry
     ) {
         this.stores = stores;
         this.auditV2Service = auditV2Service;
@@ -152,6 +133,7 @@ public class KeycloakApiResource {
         this.roleMemberRepo = roleMemberRepo;
         this.adminSessionRegistry = adminSessionRegistry;
         this.userRepository = userRepository;
+        this.triadAccountRegistry = triadAccountRegistry;
     }
 
     // ---- Users ----
@@ -943,7 +925,7 @@ public class KeycloakApiResource {
                     return true;
                 }
                 String normalized = username.trim().toLowerCase();
-                return !PROTECTED_USERNAMES.contains(normalized);
+                return !triadAccountRegistry.isProtectedUsername(normalized);
             })
             .toList();
     }
@@ -1552,7 +1534,7 @@ public class KeycloakApiResource {
             return null;
         }
         String trimmed = actor.trim();
-        String builtin = BUILTIN_ADMIN_LABELS.get(trimmed.toLowerCase(Locale.ROOT));
+        String builtin = triadAccountRegistry.displayLabelFor(trimmed.toLowerCase(Locale.ROOT)).orElse(null);
         try {
             Map<String, String> resolved = adminUserService.resolveDisplayNames(List.of(trimmed));
             String display = resolved.get(trimmed);
@@ -2837,7 +2819,7 @@ public class KeycloakApiResource {
 
             // Gate login: built-ins may always log in; others must exist and be enabled in admin snapshot
             String uname = username.toLowerCase();
-            boolean isProtected = PROTECTED_USERNAMES.contains(uname);
+            boolean isProtected = triadAccountRegistry.isProtectedUsername(uname);
             if (!isProtected) {
                 boolean allowed = adminUserService
                     .findSnapshotByUsername(username)
@@ -2961,7 +2943,7 @@ public class KeycloakApiResource {
         }
 
         String normalized = username.toLowerCase(Locale.ROOT);
-        boolean isProtected = PROTECTED_USERNAMES.contains(normalized);
+        boolean isProtected = triadAccountRegistry.isProtectedUsername(normalized);
         Optional<AdminKeycloakUser> snapshot = Optional.ofNullable(adminUserService.findSnapshotByUsername(username)).orElse(Optional.empty());
         if (!isProtected && !snapshot.map(AdminKeycloakUser::isEnabled).orElse(false)) {
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(ApiResponse.error("用户尚未审批启用，请联系授权管理员"));
@@ -3527,8 +3509,8 @@ public class KeycloakApiResource {
             }
             userOut.put("roles", java.util.List.copyOf(roles));
 
-            boolean hasTriadRole = roles.stream().anyMatch(TRIAD_AUTHORITIES::contains);
-            boolean hasProtectedRole = roles.stream().anyMatch(PROTECTED_AUTHORITIES::contains);
+            boolean hasTriadRole = roles.stream().anyMatch(triadAccountRegistry::isTriadAuthority);
+            boolean hasProtectedRole = roles.stream().anyMatch(triadAccountRegistry::isProtectedAuthority);
 
             if (!adminAudience) {
                 if (hasTriadRole) {

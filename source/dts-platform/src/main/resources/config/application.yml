@@ -372,6 +372,15 @@ jhipster:
 
 auditing:
   enabled: true
+  dictionary:
+    # HMAC verification of legacy-action-mappings.json. When verify-signatures=true and hmac-key
+    # is empty, audit dictionary loading fails closed — intentional fail-secure behaviour.
+    # The HMAC key MUST be held by the authorization administrator (authadmin), not the platform
+    # system administrator. See dts-admin/.../AuditDictionaryProperties for parallel admin-side config.
+    verify-signatures: ${AUDIT_DICT_VERIFY_SIG:false}
+    hmac-key: ${AUDIT_DICT_HMAC_KEY:}
+    legacy-keys: ${AUDIT_DICT_HMAC_LEGACY_KEYS:}
+    signature-suffix: ${AUDIT_DICT_SIG_SUFFIX:.sig}
 
 dts:
   platform:

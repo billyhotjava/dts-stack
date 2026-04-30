@@ -2,6 +2,7 @@ package com.yuzhi.dts.admin.web.rest;
 
 import com.yuzhi.dts.admin.security.AuthoritiesConstants;
 import com.yuzhi.dts.admin.security.SecurityUtils;
+import com.yuzhi.dts.admin.security.TriadAccountRegistry;
 import com.yuzhi.dts.admin.service.audit.AuditEntryQueryService;
 import com.yuzhi.dts.admin.service.audit.AuditEntryView;
 import com.yuzhi.dts.admin.service.audit.AuditEntryViewMapper;
@@ -66,12 +67,7 @@ public class AuditEntryResource {
     private final AdminUserService adminUserService;
     private final AuditEntryViewMapper viewMapper;
     private final AuditEntryActionRecorder actionRecorder;
-    /**
-     * Username → role-label mapping for the 4 governance accounts. Keys are case-insensitive
-     * (lower-cased on lookup). Configuration overrides allow operators to rename the canonical
-     * accounts (e.g. {@code dts_sys_a}) without losing their role-label display in audit views.
-     */
-    private final Map<String, String> builtinDisplayNames;
+    private final TriadAccountRegistry triadAccountRegistry;
 
     public AuditEntryResource(
         AuditEntryQueryService auditQueryService,
@@ -80,10 +76,7 @@ public class AuditEntryResource {
         AdminUserService adminUserService,
         AuditEntryViewMapper viewMapper,
         AuditEntryActionRecorder actionRecorder,
-        @Value("${dts.security.triad-display.sys-admin:sysadmin}") String sysAdminAccount,
-        @Value("${dts.security.triad-display.auth-admin:authadmin}") String authAdminAccount,
-        @Value("${dts.security.triad-display.auditor-admin:auditadmin}") String auditorAdminAccount,
-        @Value("${dts.security.triad-display.op-admin:opadmin}") String opAdminAccount
+        TriadAccountRegistry triadAccountRegistry
     ) {
         this.auditQueryService = auditQueryService;
         this.opMappingEngine = opMappingEngine;
@@ -91,33 +84,7 @@ public class AuditEntryResource {
         this.adminUserService = adminUserService;
         this.viewMapper = viewMapper;
         this.actionRecorder = actionRecorder;
-        this.builtinDisplayNames = buildTriadDisplayNames(
-            sysAdminAccount, authAdminAccount, auditorAdminAccount, opAdminAccount
-        );
-    }
-
-    static Map<String, String> buildTriadDisplayNames(
-        String sysAdminAccount,
-        String authAdminAccount,
-        String auditorAdminAccount,
-        String opAdminAccount
-    ) {
-        Map<String, String> map = new java.util.LinkedHashMap<>();
-        addTriadName(map, sysAdminAccount, "系统管理员");
-        addTriadName(map, authAdminAccount, "授权管理员");
-        addTriadName(map, auditorAdminAccount, "安全审计员");
-        addTriadName(map, opAdminAccount, "运维管理员");
-        return java.util.Collections.unmodifiableMap(map);
-    }
-
-    private static void addTriadName(Map<String, String> map, String account, String label) {
-        if (account == null) {
-            return;
-        }
-        String trimmed = account.trim().toLowerCase(Locale.ROOT);
-        if (!trimmed.isEmpty()) {
-            map.put(trimmed, label);
-        }
+        this.triadAccountRegistry = triadAccountRegistry;
     }
 
     @GetMapping
@@ -614,7 +581,7 @@ public class AuditEntryResource {
                     continue;
                 }
                 String normalized = actor.trim().toLowerCase(Locale.ROOT);
-                String builtin = builtinDisplayNames.get(normalized);
+                String builtin = triadAccountRegistry.displayLabelFor(normalized).orElse(null);
                 if (org.springframework.util.StringUtils.hasText(builtin)) {
                     overrides.put(normalized, builtin);
                 }

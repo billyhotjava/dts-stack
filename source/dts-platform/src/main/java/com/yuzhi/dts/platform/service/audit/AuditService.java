@@ -7,7 +7,6 @@ import com.yuzhi.dts.common.audit.AuditActionCatalog;
 import com.yuzhi.dts.common.audit.AuditActionDefinition;
 import com.yuzhi.dts.common.audit.AuditStage;
 import com.yuzhi.dts.platform.security.SecurityUtils;
-import com.yuzhi.dts.common.net.IpAddressUtils;
 import jakarta.servlet.http.HttpServletRequest;
 import java.io.IOException;
 import java.io.InputStream;
@@ -79,6 +78,8 @@ public class AuditService {
     private final AuditActionCatalog actionCatalog;
     private final PortalSessionRegistry portalSessionRegistry;
     private final ObjectMapper objectMapper;
+    private final OperationTypeNormalizer operationTypeNormalizer;
+    private final PkiContextEnricher pkiContextEnricher;
     private final Map<String, LegacyActionMapping> legacyActions;
 
     public AuditService(
@@ -86,6 +87,8 @@ public class AuditService {
         AuditActionCatalog actionCatalog,
         PortalSessionRegistry portalSessionRegistry,
         ObjectMapper objectMapper,
+        OperationTypeNormalizer operationTypeNormalizer,
+        PkiContextEnricher pkiContextEnricher,
         ResourceLoader resourceLoader,
         AuditDictionarySignatureGuard signatureGuard,
         @Value("${auditing.legacy-actions.config-location:" + DEFAULT_LEGACY_ACTIONS_LOCATION + "}") String legacyActionsLocation
@@ -94,6 +97,8 @@ public class AuditService {
         this.actionCatalog = actionCatalog;
         this.portalSessionRegistry = portalSessionRegistry;
         this.objectMapper = objectMapper;
+        this.operationTypeNormalizer = operationTypeNormalizer;
+        this.pkiContextEnricher = pkiContextEnricher;
         this.legacyActions = loadLegacyActions(resourceLoader, objectMapper, signatureGuard, legacyActionsLocation);
         log.info("Loaded {} legacy audit action mappings from {}", legacyActions.size(), legacyActionsLocation);
     }
@@ -216,14 +221,31 @@ public class AuditService {
         record(actionDisplay, module, resourceType, resourceId, result, payload, tags);
     }
 
+    /**
+     * Legacy 3-arg form. Use {@link #auditAction(String, AuditStage, String, Object)} with a
+     * canonical {@code actionCode} from {@code audit-action-catalog.json} for new call sites —
+     * this overload performs free-form action-string matching against legacy-action-mappings,
+     * which is fuzzier and harder to evolve.
+     */
+    @Deprecated
     public void audit(String action, String targetKind, String targetRef) {
         record(action, targetKind, targetKind, targetRef, "SUCCESS", null, null);
     }
 
+    /**
+     * Legacy failure-shortcut. Use {@link #auditAction(String, AuditStage, String, Object)}
+     * with {@code AuditStage.FAIL} for new call sites.
+     */
+    @Deprecated
     public void auditFailure(String action, String targetKind, String targetRef, Object payload) {
         record(action, targetKind, targetKind, targetRef, "FAILED", payload, null);
     }
 
+    /**
+     * Legacy 6-arg form. New code should call {@link #auditAction(String, AuditStage, String, Object)}
+     * to benefit from the curated catalog metadata (display label, supportsFlow, module/entry title).
+     */
+    @Deprecated
     public void record(
         String action,
         String module,
@@ -235,6 +257,10 @@ public class AuditService {
         record(action, module, resourceType, resourceId, result, payload, null);
     }
 
+    /**
+     * Legacy 7-arg form retained because submitAuditInternal still has callers that pass extraTags.
+     * Treated as an internal-only writer at this point — public callers should migrate to auditAction.
+     */
     public void record(
         String action,
         String module,
@@ -256,6 +282,8 @@ public class AuditService {
         );
     }
 
+    /** Legacy auxiliary writer; entries are not persisted to admin (see AuditForwarderService). */
+    @Deprecated
     public void recordAuxiliary(
         String action,
         String module,
@@ -266,6 +294,8 @@ public class AuditService {
         recordAuxiliary(action, module, resourceType, resourceId, "SUCCESS", payload, null);
     }
 
+    /** @see #recordAuxiliary(String, String, String, String, Object) */
+    @Deprecated
     public void recordAuxiliary(
         String action,
         String module,
@@ -277,6 +307,8 @@ public class AuditService {
         recordAuxiliary(action, module, resourceType, resourceId, result, payload, null);
     }
 
+    /** @see #recordAuxiliary(String, String, String, String, Object) */
+    @Deprecated
     public void recordAuxiliary(
         String action,
         String module,
@@ -449,7 +481,7 @@ public class AuditService {
         if (StringUtils.hasText(overrideOperationType)) {
             event.operationType = overrideOperationType;
         } else {
-            event.operationType = deriveOperationType(event.action, payloadMap);
+            event.operationType = operationTypeNormalizer.deriveOperationType(event.action, payloadMap);
         }
 
         Map<String, Object> attributes = extractNestedAttributes(payloadMap);
@@ -469,11 +501,11 @@ public class AuditService {
             ServletRequestAttributes attrs = (ServletRequestAttributes) RequestContextHolder.getRequestAttributes();
             if (attrs != null && attrs.getRequest() != null) {
                 var req = attrs.getRequest();
-                event.clientIp = resolveClientIp(req);
+                event.clientIp = pkiContextEnricher.resolveClientIp(req);
                 event.clientAgent = req.getHeader("User-Agent");
                 event.requestUri = req.getRequestURI();
                 event.httpMethod = req.getMethod();
-                enrichWithPkiContext(req, payloadMap, effectiveExtraTags);
+                pkiContextEnricher.enrichWithPkiContext(req, payloadMap, effectiveExtraTags);
             }
         } catch (Exception ignore) {}
         markDomainAuditSafe();
@@ -624,123 +656,7 @@ public class AuditService {
         return text.isEmpty() ? null : text;
     }
 
-    private String deriveOperationType(String action, Map<String, Object> payload) {
-        String direct = extractText(payload, "operationType");
-        if (!StringUtils.hasText(direct)) {
-            direct = extractText(payload, "operation_type");
-        }
-        if (StringUtils.hasText(direct)) {
-            return canonicalOperationType(direct);
-        }
-        if (StringUtils.hasText(action)) {
-            return canonicalOperationType(action);
-        }
-        String summary = extractText(payload, "summary");
-        if (StringUtils.hasText(summary)) {
-            return canonicalOperationType(summary);
-        }
-        return "READ";
-    }
 
-    private String canonicalOperationType(String candidate) {
-        if (!StringUtils.hasText(candidate)) {
-            return "READ";
-        }
-        String trimmed = candidate.trim();
-        String upper = trimmed.toUpperCase(Locale.ROOT);
-        String lower = trimmed.toLowerCase(Locale.ROOT);
-        if (upper.contains("LOGIN") || containsAny(lower, "登录", "登入")) {
-            return "LOGIN";
-        }
-        if (upper.contains("LOGOUT") || containsAny(lower, "登出", "退出登录", "注销登录")) {
-            return "LOGOUT";
-        }
-        if (upper.contains("DOWNLOAD") || containsAny(lower, "下载", "download")) {
-            return "DOWNLOAD";
-        }
-        if (upper.contains("UPLOAD") || containsAny(lower, "上传", "upload")) {
-            return "UPLOAD";
-        }
-        if (upper.contains("EXPORT") || containsAny(lower, "导出", "export")) {
-            return "EXPORT";
-        }
-        if (upper.contains("IMPORT") || containsAny(lower, "导入", "import")) {
-            return "IMPORT";
-        }
-        if (upper.contains("GRANT") || containsAny(lower, "授权", "共享", "grant")) {
-            return "GRANT";
-        }
-        if (upper.contains("REVOKE") || containsAny(lower, "撤销授权", "取消授权", "收回", "回收", "revoke")) {
-            return "REVOKE";
-        }
-        if (upper.contains("ENABLE") || containsAny(lower, "启用", "开启", "激活", "enable")) {
-            return "ENABLE";
-        }
-        if (upper.contains("DISABLE") || containsAny(lower, "禁用", "停用", "关闭", "失效", "disable")) {
-            return "DISABLE";
-        }
-        if (
-            upper.contains("CLEAN") ||
-            upper.contains("PURGE") ||
-            containsAny(lower, "清理", "清除", "清空", "清扫", "purge", "cleanup")
-        ) {
-            return "CLEAN";
-        }
-        if (upper.contains("ARCHIVE") || containsAny(lower, "归档", "封存", "archive")) {
-            return "ARCHIVE";
-        }
-        if (upper.contains("PUBLISH") || containsAny(lower, "发布", "publish")) {
-            return "PUBLISH";
-        }
-        if (upper.contains("APPROVE") || containsAny(lower, "批准", "审批通过")) {
-            return "APPROVE";
-        }
-        if (upper.contains("REJECT") || containsAny(lower, "拒绝", "驳回")) {
-            return "REJECT";
-        }
-        if (
-            upper.contains("EXECUTE") ||
-            upper.contains("RUN") ||
-            containsAny(lower, "执行", "运行", "run", "apply")
-        ) {
-            return "EXECUTE";
-        }
-        if (upper.contains("REFRESH") || containsAny(lower, "刷新", "refresh")) {
-            return "REFRESH";
-        }
-        if (upper.contains("TEST") || containsAny(lower, "测试", "校验", "验证", "test")) {
-            return "TEST";
-        }
-        if (
-            upper.contains("CREATE") ||
-            upper.contains("ADD") ||
-            upper.contains("NEW") ||
-            containsAny(lower, "新增", "新建", "创建", "提交", "申请")
-        ) {
-            return "CREATE";
-        }
-        if (upper.contains("DELETE") || containsAny(lower, "删除", "移除", "下线", "注销")) {
-            return "DELETE";
-        }
-        if (
-            upper.contains("UPDATE") ||
-            upper.contains("MODIFY") ||
-            upper.contains("EDIT") ||
-            upper.contains("SAVE") ||
-            containsAny(lower, "修改", "更新", "调整", "保存", "编辑", "配置")
-        ) {
-            return "UPDATE";
-        }
-        if (
-            upper.contains("READ") ||
-            upper.contains("QUERY") ||
-            upper.contains("GET") ||
-            containsAny(lower, "查看", "查询", "预览", "浏览", "列表", "检索")
-        ) {
-            return "READ";
-        }
-        return "READ";
-    }
 
     private AuditStage resolveStageFromResult(String result, AuditStage defaultStage) {
         String normalized = result == null ? "" : result.trim().toUpperCase(Locale.ROOT);
@@ -788,17 +704,6 @@ public class AuditService {
         return normalizedModule + ":" + normalizedAction;
     }
 
-    private boolean containsAny(String source, String... needles) {
-        if (!StringUtils.hasText(source) || needles == null) {
-            return false;
-        }
-        for (String needle : needles) {
-            if (needle != null && source.contains(needle)) {
-                return true;
-            }
-        }
-        return false;
-    }
 
     private String resolveActorName(Map<String, Object> payload, String actorId) {
         String fromPayload = extractText(payload, "actorName");
@@ -815,49 +720,7 @@ public class AuditService {
         return null;
     }
 
-    private String resolveClientIp(HttpServletRequest request) {
-        if (request == null) {
-            return null;
-        }
-        return IpAddressUtils.resolveClientIp(
-            request.getHeader("X-Forwarded-For"),
-            request.getHeader("X-Real-IP"),
-            request.getRemoteAddr()
-        );
-    }
 
-    private void enrichWithPkiContext(HttpServletRequest request, Map<String, Object> payload, Map<String, Object> extraTags) {
-        if (request == null) {
-            return;
-        }
-        try {
-            com.yuzhi.dts.platform.service.security.pki.PkiClientCert cert =
-                com.yuzhi.dts.platform.service.security.pki.PkiClientCert.fromRequest(request);
-            if (!cert.present()) {
-                return;
-            }
-            payload.putIfAbsent("pkiCertPresent", true);
-            payload.putIfAbsent("pkiCertVerified", cert.verified());
-            if (StringUtils.hasText(cert.serial())) {
-                payload.putIfAbsent("pkiCertSerial", cert.serial());
-            }
-            if (StringUtils.hasText(cert.subjectDn())) {
-                payload.putIfAbsent("pkiCertSubjectDn", cert.subjectDn());
-            }
-            if (StringUtils.hasText(cert.issuerDn())) {
-                payload.putIfAbsent("pkiCertIssuerDn", cert.issuerDn());
-            }
-            if (cert.notAfter() != null) {
-                payload.putIfAbsent("pkiCertNotAfter", cert.notAfter().toString());
-            }
-            if (extraTags != null) {
-                extraTags.putIfAbsent("pkiCertVerified", cert.verified());
-                if (StringUtils.hasText(cert.serial())) {
-                    extraTags.putIfAbsent("pkiCertSerial", cert.serial());
-                }
-            }
-        } catch (Exception ignored) {}
-    }
 
 
     private String serializeTags(Map<String, Object> tags) {

@@ -123,40 +123,54 @@ class AuditEntryResourceVisibilityScopeTest {
     }
 
     @Test
-    @DisplayName("buildTriadDisplayNames 默认四个内置账号映射")
-    void buildTriadDisplayNamesDefaults() {
-        java.util.Map<String, String> map = AuditEntryResource.buildTriadDisplayNames(
-            "sysadmin", "authadmin", "auditadmin", "opadmin"
-        );
+    @DisplayName("TriadAccountRegistry 默认四个内置账号映射")
+    void triadRegistryDefaults() {
+        com.yuzhi.dts.admin.security.TriadAccountRegistry registry =
+            new com.yuzhi.dts.admin.security.TriadAccountRegistry("sysadmin", "authadmin", "auditadmin", "opadmin");
 
-        assertThat(map).containsEntry("sysadmin", "系统管理员");
-        assertThat(map).containsEntry("authadmin", "授权管理员");
-        assertThat(map).containsEntry("auditadmin", "安全审计员");
-        assertThat(map).containsEntry("opadmin", "运维管理员");
+        assertThat(registry.displayLabels()).containsEntry("sysadmin", "系统管理员");
+        assertThat(registry.displayLabels()).containsEntry("authadmin", "授权管理员");
+        assertThat(registry.displayLabels()).containsEntry("auditadmin", "安全审计员");
+        assertThat(registry.displayLabels()).containsEntry("opadmin", "运维管理员");
+        assertThat(registry.displayLabelFor("SYSADMIN")).contains("系统管理员");
+        assertThat(registry.isProtectedUsername("opadmin")).isTrue();
     }
 
     @Test
-    @DisplayName("buildTriadDisplayNames 接受自定义账号名（含大小写规范化）")
-    void buildTriadDisplayNamesAcceptsCustom() {
-        java.util.Map<String, String> map = AuditEntryResource.buildTriadDisplayNames(
-            "DTS_SYS_A", " dts_auth_b ", "dts_audit_c", null
-        );
+    @DisplayName("TriadAccountRegistry 接受自定义账号名（含大小写规范化）")
+    void triadRegistryAcceptsCustom() {
+        com.yuzhi.dts.admin.security.TriadAccountRegistry registry =
+            new com.yuzhi.dts.admin.security.TriadAccountRegistry("DTS_SYS_A", " dts_auth_b ", "dts_audit_c", null);
 
-        assertThat(map).containsEntry("dts_sys_a", "系统管理员");
-        assertThat(map).containsEntry("dts_auth_b", "授权管理员");
-        assertThat(map).containsEntry("dts_audit_c", "安全审计员");
-        assertThat(map).doesNotContainKey("opadmin");
-        assertThat(map).hasSize(3);
+        assertThat(registry.displayLabels()).containsEntry("dts_sys_a", "系统管理员");
+        assertThat(registry.displayLabels()).containsEntry("dts_auth_b", "授权管理员");
+        assertThat(registry.displayLabels()).containsEntry("dts_audit_c", "安全审计员");
+        assertThat(registry.displayLabels()).doesNotContainKey("opadmin");
+        assertThat(registry.displayLabels()).hasSize(3);
     }
 
     @Test
-    @DisplayName("buildTriadDisplayNames 跳过空白账号名")
-    void buildTriadDisplayNamesSkipsBlanks() {
-        java.util.Map<String, String> map = AuditEntryResource.buildTriadDisplayNames(
-            "", "  ", null, "opadmin"
-        );
+    @DisplayName("TriadAccountRegistry 跳过空白账号名 + 暴露 protectedUsernames")
+    void triadRegistrySkipsBlanks() {
+        com.yuzhi.dts.admin.security.TriadAccountRegistry registry =
+            new com.yuzhi.dts.admin.security.TriadAccountRegistry("", "  ", null, "opadmin");
 
-        assertThat(map).hasSize(1).containsEntry("opadmin", "运维管理员");
+        assertThat(registry.displayLabels()).hasSize(1).containsEntry("opadmin", "运维管理员");
+        assertThat(registry.protectedUsernames()).containsExactly("opadmin");
+    }
+
+    @Test
+    @DisplayName("TriadAccountRegistry triadAuthorities/protectedAuthorities 角色集")
+    void triadRegistryAuthoritySets() {
+        com.yuzhi.dts.admin.security.TriadAccountRegistry registry =
+            new com.yuzhi.dts.admin.security.TriadAccountRegistry("sysadmin", "authadmin", "auditadmin", "opadmin");
+
+        assertThat(registry.isTriadAuthority("ROLE_SYS_ADMIN")).isTrue();
+        assertThat(registry.isTriadAuthority("ROLE_AUTH_ADMIN")).isTrue();
+        assertThat(registry.isTriadAuthority("ROLE_SECURITY_AUDITOR")).isTrue();
+        assertThat(registry.isTriadAuthority("ROLE_OP_ADMIN")).isFalse();
+        assertThat(registry.isProtectedAuthority("ROLE_OP_ADMIN")).isTrue();
+        assertThat(registry.isProtectedAuthority("ROLE_USER")).isFalse();
     }
 
     private static HttpStatus thrownStatus(Runnable r) {

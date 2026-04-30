@@ -8,6 +8,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.yuzhi.dts.admin.repository.AdminKeycloakUserRepository;
+import com.yuzhi.dts.admin.security.TriadAccountRegistry;
 import com.yuzhi.dts.admin.repository.AdminRoleAssignmentRepository;
 import com.yuzhi.dts.admin.repository.AdminRoleMemberRepository;
 import com.yuzhi.dts.admin.domain.AdminKeycloakUser;
@@ -51,7 +52,8 @@ class KeycloakApiResourceRefreshContractTest {
             mock(AdminRoleAssignmentRepository.class),
             mock(AdminRoleMemberRepository.class),
             mock(AdminSessionRegistry.class),
-            mock(AdminKeycloakUserRepository.class)
+            mock(AdminKeycloakUserRepository.class),
+            mock(TriadAccountRegistry.class)
         );
         SecurityContextHolder
             .getContext()
@@ -90,7 +92,8 @@ class KeycloakApiResourceRefreshContractTest {
             mock(AdminRoleAssignmentRepository.class),
             mock(AdminRoleMemberRepository.class),
             sessionRegistry,
-            mock(AdminKeycloakUserRepository.class)
+            mock(AdminKeycloakUserRepository.class),
+            mock(TriadAccountRegistry.class)
         );
 
         ResponseEntity<ApiResponse<Map<String, Object>>> response = resource.refresh(
