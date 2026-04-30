@@ -1289,6 +1289,10 @@ public class ScreenResource {
      * <p>大屏 PUT /{id} 只接受 ScreenWritePayload（结构 / 主题 / 组件等），不含
      * classification；publish endpoint 虽然能改 classification 但会触发版本切换，
      * 不适合日常调整。本端点提供轻量原地修改，仅 owner 可调，写审计。
+     *
+     * <p>Sprint-24 F5：降级路径（next_rank &lt; before_rank）必须带 reason 字段
+     * （&gt;=10 字符），reason 写入审计 payload，便于合规回溯。升级和同级路径
+     * reason 可选——避免日常操作变重。
      */
     @PatchMapping(path = "/{id}/classification", consumes = MediaType.APPLICATION_JSON_VALUE, produces = MediaType.APPLICATION_JSON_VALUE)
     public ResponseEntity<?> updateClassification(
@@ -1318,16 +1322,66 @@ public class ScreenResource {
         if (upper.equals(before)) {
             return ResponseEntity.ok(Map.of("classification", upper, "changed", false));
         }
+        // Sprint-24 F5：降级路径强制 reason >=10 字符。
+        // before 为 null（裸屏）时视为最低级 PUBLIC，所以任何修改都不算降级，
+        // 鼓励 owner 尽快补登而不被 reason 流程阻塞。
+        String reason = body == null ? null : trimToNull(body.path("reason").asText(null));
+        boolean isDowngrade = isDowngrade(before, upper);
+        if (isDowngrade) {
+            if (reason == null) {
+                return ResponseEntity
+                    .badRequest()
+                    .body(Map.of("error", "reason is required when downgrading classification (>=10 chars)"));
+            }
+            if (reason.length() < 10) {
+                return ResponseEntity
+                    .badRequest()
+                    .body(Map.of("error", "reason must be at least 10 characters when downgrading"));
+            }
+        }
+
         screen.setClassification(upper);
         screenRepository.save(screen);
+
+        // 审计 payload 含 before / after / reason / direction，便于合规回溯。
+        Map<String, Object> auditAfter = new LinkedHashMap<>();
+        auditAfter.put("after", upper);
+        auditAfter.put("direction", isDowngrade ? "DOWNGRADE" : "UPGRADE_OR_SET");
+        if (reason != null) {
+            auditAfter.put("reason", reason);
+        }
         screenAuditService.log(
             screen.getId(),
             user.orElseThrow().getId(),
             "screen.classification.update",
             Map.of("before", before == null ? "" : before),
-            Map.of("after", upper),
+            auditAfter,
             requestIdFrom(request));
         return ResponseEntity.ok(Map.of("classification", upper, "changed", true));
+    }
+
+    /**
+     * Sprint-24 F5：判定密级修改是否为"降级"。
+     *
+     * 阶梯：PUBLIC(0) &lt; INTERNAL(1) &lt; SECRET(2) &lt; CONFIDENTIAL(3)。
+     * before 为 null/blank（历史裸屏）视作 PUBLIC（最低）→ 任何修改都不算降级，
+     * 鼓励 owner 补登；不在阶梯里的值视作 PUBLIC（保守）。
+     *
+     * 抽 package-private static 便于单元测试。
+     */
+    static boolean isDowngrade(String before, String after) {
+        return classificationRank(after) < classificationRank(before);
+    }
+
+    private static int classificationRank(String value) {
+        if (value == null) return 0;
+        return switch (value.trim().toUpperCase(java.util.Locale.ROOT)) {
+            case "PUBLIC" -> 0;
+            case "INTERNAL" -> 1;
+            case "SECRET" -> 2;
+            case "CONFIDENTIAL" -> 3;
+            default -> 0;
+        };
     }
 
     @DeleteMapping(path = "/{id}/grants/{grantId}")
