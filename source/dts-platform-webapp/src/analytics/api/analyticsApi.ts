@@ -582,6 +582,10 @@ export type ScreenListItem = {
 	canManage?: boolean;
 	canDelete?: boolean;
 	isOwner?: boolean;
+	// Sprint-24 F2：后端 toListResponse 已经回吐 classification，
+	// 列表卡片密级 Tag 直接消费。null 表示历史"裸屏"。
+	classification?: string | null;
+	ownerDeptCode?: string | null;
 };
 
 export type ScreenDetail = ScreenListItem & {

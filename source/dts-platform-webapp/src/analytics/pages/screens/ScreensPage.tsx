@@ -7,6 +7,7 @@ import { resolveRouteForOpen } from '../../helpers/resolveAnalyticsUrl';
 import { PageContainer } from '../../components/PageContainer/PageContainer';
 import { writeTextToClipboard } from '../../hooks/clipboard';
 import { TemplateGallery, ScreenAclPanel, type TemplateSelection } from './components';
+import { ClassificationTag } from './components/ClassificationTag';
 import { ImportPreviewModal } from './components/ImportPreviewModal';
 import type { ScreenWritePayload } from './contracts';
 import { createConfigFromTemplate } from './screenTemplates';
@@ -756,6 +757,8 @@ export default function ScreensPage() {
 										<th className="text-left font-medium px-4 py-3">名称</th>
 										<th className="text-left font-medium px-4 py-3">描述</th>
 										<th className="text-left font-medium px-4 py-3 whitespace-nowrap">分辨率</th>
+										{/* Sprint-24 F2/T02：密级列，便于一眼扫到 classification=null 的裸屏 */}
+										<th className="text-left font-medium px-4 py-3 whitespace-nowrap">密级</th>
 										<th className="text-left font-medium px-4 py-3 whitespace-nowrap">状态</th>
 										<th className="text-left font-medium px-4 py-3 whitespace-nowrap">更新时间</th>
 										<th className="text-right font-medium px-4 py-3 whitespace-nowrap">操作</th>
@@ -779,6 +782,10 @@ export default function ScreensPage() {
 												</td>
 												<td className="px-4 py-3 text-text-secondary whitespace-nowrap text-xs">
 													{screen.width || 1920} × {screen.height || 1080}
+												</td>
+												{/* Sprint-24 F2/T02：密级 Tag，null 显示橙色「未设密级」 */}
+												<td className="px-4 py-3 whitespace-nowrap">
+													<ClassificationTag value={screen.classification ?? null} size="small" />
 												</td>
 												<td className="px-4 py-3 whitespace-nowrap">
 													<span className={`inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-semibold border border-transparent ${screen.publishedVersionNo ? 'text-[#166534] bg-success/10 border-success/30' : 'text-[#9a3412] bg-warning/10 border-warning/30'}`}>
