@@ -85,6 +85,59 @@ public class ScreenAuditService {
         }
     }
 
+    /**
+     * Sprint-24 F4：跨大屏的合规事件审计（如「裸屏盘点」端点访问），没有具体 screen
+     * 上下文。`analytics_screen_audit_log.screen_id` 是 NOT NULL，所以这条不进本地表，
+     * 仅同步到 dts-admin 中央审计中心，那里 sourceSystem=analytics+module=SCREEN+
+     * action 已能唯一定位事件。
+     */
+    public void logCrossScreenEvent(Long actorId, String action, Object payload, String requestId) {
+        if (action == null || action.isBlank()) {
+            return;
+        }
+        if (ingestEndpoint == null) {
+            // 没配置中央审计端点时仅 log 一行，不阻塞业务
+            LOG.info("[cross-screen audit skipped: no admin endpoint] action={} actor={}", action, actorId);
+            return;
+        }
+        try {
+            String clientIp = resolveCurrentClientIp();
+            Instant occurredAt = Instant.now();
+            String actor = resolveActorUsername(actorId);
+            String buttonCode = mapActionToButtonCode(action);
+
+            Map<String, Object> body = new HashMap<>();
+            body.put("sourceSystem", SOURCE_SYSTEM);
+            body.put("occurredAt", occurredAt.toString());
+            body.put("actor", actor);
+            body.put("module", "SCREEN");
+            body.put("action", action);
+            body.put("resourceType", "SCREEN_COMPLIANCE");
+            body.put("resourceId", "*");
+            body.put("targetIds", List.of("*"));
+            body.put("targetTable", "analytics_screen");
+            body.put("result", "SUCCESS");
+            if (buttonCode != null) {
+                body.put("buttonCode", buttonCode);
+                body.put("operationCode", buttonCode);
+            }
+            String payloadJson = toJson(payload);
+            if (payloadJson != null) {
+                body.put("payload", payloadJson);
+            }
+            String reqId = trimToNull(requestId);
+            if (reqId != null) {
+                body.put("requestId", reqId);
+            }
+            if (StringUtils.hasText(clientIp)) {
+                body.put("clientIp", clientIp);
+            }
+            postEvent(body);
+        } catch (Exception ex) {
+            LOG.warn("Failed to forward cross-screen audit event action={}: {}", action, ex.getMessage());
+        }
+    }
+
     public AnalyticsScreenAuditLog logAndReturn(
             Long screenId,
             Long actorId,

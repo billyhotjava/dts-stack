@@ -3,6 +3,7 @@ import { analyticsApi, type ScreenAclEntry, type UserSearchItem } from '../../..
 import { writeTextToClipboard } from '../../../hooks/clipboard';
 import { resolveRouteHref } from '../../../helpers/resolveAnalyticsUrl';
 import { Modal, Input, Select, Button, Tag, message } from 'antd';
+import { ClassificationSelect } from './ClassificationSelect';
 
 interface ScreenSharePanelProps {
 	open: boolean;
@@ -29,9 +30,10 @@ export function ScreenSharePanel({ open, screenId, onClose, isOwner = false }: S
 	const [error, setError] = useState<string | null>(null);
 	const [entries, setEntries] = useState<ScreenAclEntry[]>([]);
 	const [userNameMap, setUserNameMap] = useState<Record<string, string>>({});
-	// 大屏密级 — 仅 owner 可改；非 owner 只展示。
+	// 大屏密级 — Sprint-24 F1/T03：改用 ClassificationSelect 共享组件。
+	// 保留本地 state 是为了在 loadAcl 时和 getScreen 一起拿到 classification，
+	// 避免 ClassificationSelect 再发一次重复请求；走受控模式同步给共享组件。
 	const [classification, setClassification] = useState<string>('');
-	const [classificationSaving, setClassificationSaving] = useState(false);
 
 	// User search state
 	const [searchQuery, setSearchQuery] = useState('');
@@ -99,29 +101,6 @@ export function ScreenSharePanel({ open, screenId, onClose, isOwner = false }: S
 			setLoading(false);
 		}
 	}, [screenId, resolveUserNames]);
-
-	// 原地修改大屏密级（仅 owner）
-	const handleClassificationChange = useCallback(
-		async (next: string) => {
-			if (!screenId || !next) return;
-			const previous = classification;
-			if (previous === next) return;
-			setClassification(next);
-			setClassificationSaving(true);
-			try {
-				await analyticsApi.updateScreenClassification(screenId, next);
-				message.success(`大屏密级已更新为 ${next}`);
-			} catch (e) {
-				setClassification(previous);
-				const msg = e instanceof Error ? e.message : '更新密级失败';
-				message.error(msg);
-				setError(msg);
-			} finally {
-				setClassificationSaving(false);
-			}
-		},
-		[screenId, classification],
-	);
 
 	useEffect(() => {
 		if (!open || !screenId) return;
@@ -322,35 +301,25 @@ export function ScreenSharePanel({ open, screenId, onClose, isOwner = false }: S
 					>
 						大屏密级
 					</div>
-					{isOwner ? (
-						<div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-							<Select
-								value={classification || undefined}
-								placeholder="选择密级"
-								onChange={(val) => handleClassificationChange(val as string)}
-								disabled={classificationSaving}
-								loading={classificationSaving}
-								size="small"
-								style={{ width: 160 }}
-								options={[
-									{ label: '公开 (PUBLIC)', value: 'PUBLIC' },
-									{ label: '内部 (INTERNAL)', value: 'INTERNAL' },
-									{ label: '秘密 (SECRET)', value: 'SECRET' },
-									{ label: '机密 (CONFIDENTIAL)', value: 'CONFIDENTIAL' },
-								]}
-							/>
-							<span style={{ fontSize: 12, color: 'var(--color-text-secondary, #9ca3af)' }}>
-								修改后仅高于或等于此密级的用户可访问；可对个别用户授予越级共享。
-							</span>
-						</div>
-					) : (
-						<div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-							<Tag color="blue" style={{ margin: 0 }}>
-								{classification || '未设置'}
-							</Tag>
-							<span style={{ fontSize: 12, color: 'var(--color-text-secondary, #9ca3af)' }}>
-								仅大屏所有者可修改密级
-							</span>
+					{/* Sprint-24 F1/T03：改用 ClassificationSelect 共享组件，
+						与编辑器属性面板单一真源，避免行为分叉。 */}
+					<ClassificationSelect
+						screenId={screenId}
+						value={classification}
+						isOwner={isOwner}
+						onChange={(next) => setClassification(next)}
+						onUpdated={(next) => setClassification(next)}
+						autoFetch={false}
+					/>
+					{isOwner && (
+						<div
+							style={{
+								fontSize: 12,
+								color: 'var(--color-text-secondary, #9ca3af)',
+								marginTop: 6,
+							}}
+						>
+							修改后仅高于或等于此密级的用户可访问；可对个别用户授予越级共享。
 						</div>
 					)}
 				</div>

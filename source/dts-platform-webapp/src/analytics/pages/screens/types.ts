@@ -304,6 +304,8 @@ export interface ScreenConfig {
     /** Multi-page support. When empty/undefined, uses top-level components (single-page mode). */
     pages?: ScreenPage[];
     carouselConfig?: CarouselConfig;
+    /** Sprint-24 F3：从 intake / 模板透传到 buildScreenPayload */
+    classification?: 'PUBLIC' | 'INTERNAL' | 'SECRET' | 'CONFIDENTIAL';
 }
 
 export interface ScreenState {

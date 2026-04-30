@@ -19,3 +19,13 @@ export { ScreenSharePolicyPanel } from './ScreenSharePolicyPanel';
 export { ScreenSharePanel } from './ScreenSharePanel';
 export { ScreenHealthPanel } from './ScreenHealthPanel';
 export { InteractionDebugPanel } from './InteractionDebugPanel';
+
+// Sprint-24 大屏密级管理 UX 修复
+export { ClassificationSelect } from './ClassificationSelect';
+export type { ClassificationSelectProps } from './ClassificationSelect';
+export { ClassificationTag } from './ClassificationTag';
+export type { ClassificationTagProps } from './ClassificationTag';
+export { CreateScreenIntakeModal } from './CreateScreenIntakeModal';
+export type { CreateScreenIntakePayload, CreateScreenIntakeModalProps } from './CreateScreenIntakeModal';
+export { UnclassifiedScreensModal } from './UnclassifiedScreensModal';
+export type { UnclassifiedScreensModalProps } from './UnclassifiedScreensModal';

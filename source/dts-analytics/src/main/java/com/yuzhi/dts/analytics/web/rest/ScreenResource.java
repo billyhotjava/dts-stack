@@ -31,6 +31,7 @@ import java.security.MessageDigest;
 import java.time.Instant;
 import java.time.format.DateTimeParseException;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
@@ -743,8 +744,19 @@ public class ScreenResource {
             name = "未命名大屏";
         }
 
+        // Sprint-24 F3/T03：创建大屏强制选择密级，从源头消除 classification=null 裸屏。
+        // 历史数据通过 F4 盘点入口暴露 + owner 主动补登，不在此回填。
+        String rawClassification = body == null ? null : body.path("classification").asText(null);
+        String classificationUpper;
+        try {
+            classificationUpper = normalizeRequiredClassification(rawClassification);
+        } catch (IllegalArgumentException ex) {
+            return ResponseEntity.badRequest().body(Map.of("error", ex.getMessage()));
+        }
+
         AnalyticsScreen screen = new AnalyticsScreen();
         screen.setName(name);
+        screen.setClassification(classificationUpper);
         screen.setDescription(body != null && body.has("description") && !body.path("description").isNull()
                 ? body.path("description").asText(null)
                 : null);
@@ -2381,6 +2393,33 @@ public class ScreenResource {
         return screen.getCreatorId().equals(caller.getId());
     }
 
+    /**
+     * Sprint-24 F3/T03：校验创建大屏请求中的 classification 字段。
+     *
+     * 创建路径强制必填，从源头消除 classification=null 裸屏；老数据走 F4 盘点回收。
+     * 抽成 package-private static 便于单元测试，避免为每条分支启动 Spring 上下文。
+     *
+     * @return normalized 大写值（PUBLIC/INTERNAL/SECRET/CONFIDENTIAL）
+     * @throws IllegalArgumentException 当 raw 为 null/blank 或不在白名单时
+     */
+    static String normalizeRequiredClassification(String raw) {
+        if (raw == null) {
+            throw new IllegalArgumentException(
+                "classification is required: must be one of PUBLIC/INTERNAL/SECRET/CONFIDENTIAL");
+        }
+        String trimmed = raw.trim();
+        if (trimmed.isEmpty()) {
+            throw new IllegalArgumentException(
+                "classification is required: must be one of PUBLIC/INTERNAL/SECRET/CONFIDENTIAL");
+        }
+        String upper = trimmed.toUpperCase(java.util.Locale.ROOT);
+        if (!java.util.Set.of("PUBLIC", "INTERNAL", "SECRET", "CONFIDENTIAL").contains(upper)) {
+            throw new IllegalArgumentException(
+                "classification must be one of PUBLIC/INTERNAL/SECRET/CONFIDENTIAL");
+        }
+        return upper;
+    }
+
     private ResponseEntity<ObjectNode> lockConflict(ScreenEditLockService.LockSnapshot lock) {
         ObjectNode body = objectMapper.createObjectNode();
         body.put("code", "SCREEN_EDIT_LOCKED");
@@ -2409,6 +2448,73 @@ public class ScreenResource {
         node.putPOJO("expireAt", lock.expireAt());
         node.put("ttlSeconds", lock.ttlSeconds());
         return node;
+    }
+
+    /**
+     * Sprint-24 F4：裸屏盘点端点。列出所有 archived=false 且 classification 为 null
+     * 或空白的大屏，供 OP_ADMIN / superuser 通知 owner 去补登密级，收敛存量裸屏。
+     *
+     * 鉴权：复用 MetabaseAuth.requireSuperuser，与同文件下的 backfill-grants 端点
+     * 一致；这是合规盘点工具，仅 superuser 可调。
+     *
+     * 不静默回填默认密级 —— 那会误判真实 SECRET 数据为 INTERNAL。回填由 owner
+     * 在编辑器属性面板（F1 入口）手动完成，每次改动都会写一条
+     * screen.classification.update 审计。
+     *
+     * 响应字段：id / name / creatorId / creatorEmail / createdAt。lastVisitedAt
+     * 暂不查（dts-analytics 本地没有访问日志表，需要跨服务联表，留给后续 sprint）。
+     */
+    @GetMapping(path = "/admin/unclassified", produces = MediaType.APPLICATION_JSON_VALUE)
+    public ResponseEntity<?> listUnclassified(HttpServletRequest request) {
+        Optional<ResponseEntity<String>> authError = MetabaseAuth.requireSuperuser(sessionService, request);
+        if (authError.isPresent()) {
+            return authError.orElseThrow();
+        }
+        Optional<AnalyticsUser> caller = MetabaseAuth.currentUser(sessionService, request);
+        try {
+            List<AnalyticsScreen> rows = screenRepository.findUnclassified();
+            // 一次性 batch 查 creator 信息，避免 N+1。
+            Set<Long> creatorIds = new LinkedHashSet<>();
+            for (AnalyticsScreen s : rows) {
+                if (s.getCreatorId() != null) creatorIds.add(s.getCreatorId());
+            }
+            Map<Long, AnalyticsUser> creatorMap = new HashMap<>();
+            if (!creatorIds.isEmpty()) {
+                userRepository.findAllById(creatorIds).forEach(u -> creatorMap.put(u.getId(), u));
+            }
+
+            List<Map<String, Object>> items = new ArrayList<>();
+            for (AnalyticsScreen s : rows) {
+                AnalyticsUser creator = s.getCreatorId() == null ? null : creatorMap.get(s.getCreatorId());
+                Map<String, Object> item = new LinkedHashMap<>();
+                item.put("id", s.getId());
+                item.put("name", s.getName());
+                item.put("creatorId", s.getCreatorId());
+                item.put("creatorEmail", creator == null ? null : creator.getEmail());
+                item.put("creatorPlatformUsername", creator == null ? null : creator.getPlatformUsername());
+                item.put("createdAt", s.getCreatedAt() == null ? null : s.getCreatedAt().toString());
+                items.add(item);
+            }
+
+            // 端点本身写审计：合规盘点的访问行为本身需要可追溯。
+            // analytics_screen_audit_log.screen_id 是 NOT NULL 不能装"无 screen 上下文"
+            // 的合规事件，因此走 ScreenAuditService.logCrossScreenEvent —— 跳过本地表，
+            // 仅同步到 dts-admin 中央审计。
+            screenAuditService.logCrossScreenEvent(
+                caller.map(AnalyticsUser::getId).orElse(null),
+                "screen.compliance.audit_unclassified",
+                Map.of("count", items.size()),
+                requestIdFrom(request)
+            );
+
+            return ResponseEntity.ok(Map.of("count", items.size(), "items", items));
+        } catch (DataAccessException ex) {
+            LOG.warn("DB error listing unclassified screens: {}", ex.getMessage());
+            return ResponseEntity.status(500).body(Map.of("error", "internal_error"));
+        } catch (Exception ex) {
+            LOG.error("Unexpected error listing unclassified screens", ex);
+            return ResponseEntity.status(500).body(Map.of("error", "internal_error"));
+        }
     }
 
     /**
