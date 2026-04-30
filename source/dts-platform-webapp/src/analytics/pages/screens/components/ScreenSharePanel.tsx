@@ -307,7 +307,6 @@ export function ScreenSharePanel({ open, screenId, onClose, isOwner = false }: S
 						screenId={screenId}
 						value={classification}
 						isOwner={isOwner}
-						onChange={(next) => setClassification(next)}
 						onUpdated={(next) => setClassification(next)}
 						autoFetch={false}
 					/>

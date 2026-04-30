@@ -2271,12 +2271,15 @@ export const analyticsApi = {
 	/**
 	 * 原地更新大屏密级（PUBLIC/INTERNAL/SECRET/CONFIDENTIAL）。
 	 * 仅 owner 可调；后端会写一条 screen.classification.update 审计。
+	 *
+	 * Sprint-24 F5：降级（high → low）时 reason 必填（>=10 字符），后端会
+	 * 校验并写入审计 payload；升级 / 同级 reason 可选。
 	 */
-	updateScreenClassification: (id: string | number, classification: string) =>
+	updateScreenClassification: (id: string | number, classification: string, reason?: string) =>
 		requestJson<{ classification: string; changed: boolean }>(
 			`/bi/api/screens/${encodeURIComponent(String(id))}/classification`,
 			"PATCH",
-			{ classification },
+			reason ? { classification, reason } : { classification },
 		),
 	revokeScreenGrant: (screenId: string | number, grantId: string | number) =>
 		requestJson<void>(`/bi/api/screens/${encodeURIComponent(String(screenId))}/grants/${encodeURIComponent(String(grantId))}`, "DELETE"),

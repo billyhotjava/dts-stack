@@ -1,18 +1,23 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Select, Tag, message } from 'antd';
+import { Modal, Input, Select, Tag, message } from 'antd';
 import { analyticsApi } from '../../../api/analyticsApi';
 
 /**
- * 大屏密级共享组件（Sprint-24 F1/T01）
+ * 大屏密级共享组件（Sprint-24 F1/T01 + F5）
  *
  * 单一真源：编辑器属性面板「画布设置」+ 分享面板「大屏密级」复用本组件，
  * 避免两处独立维护带来的行为分叉。
  *
- * 使用方式：
- * - **受控**：调用方提供 `value` + `onChange`，组件不自己 fetch 也不调 PATCH
- *   （适合分享面板：父组件负责 loadAcl 时同时拿 classification）
- * - **非受控**：调用方仅提供 `screenId`，组件自己 fetch 当前值并调 PATCH
- *   （适合属性面板：减少父组件状态管理负担）
+ * 改密流程统一在组件内部完成（不论受控/非受控）：
+ *   1. 用户选新值
+ *   2. 检测降级方向（next_rank < before_rank）
+ *      - 降级：弹 confirm modal，强制收集 reason（>=10 字符）
+ *      - 升级 / 同级：直接发 PATCH，不打扰用户
+ *   3. 调 PATCH /api/screens/{id}/classification（含 reason 时一并发送）
+ *   4. 成功后通过 onUpdated(next) 通知父组件同步本地状态
+ *
+ * `value` 提供时为受控展示（组件以 value 为准），但 PATCH 仍由组件发起；
+ * `value` 缺失 + autoFetch=true 时组件自己 fetch 当前 screen 拿初始值。
  *
  * isOwner=false 或缺失时显示只读 Tag，与原 ScreenSharePanel 行为一致。
  */
@@ -20,9 +25,7 @@ export interface ClassificationSelectProps {
 	screenId?: string | number;
 	value?: string | null;
 	isOwner?: boolean;
-	/** 受控模式：父组件提供 onChange 时，组件不会自己调 PATCH endpoint */
-	onChange?: (next: string) => void;
-	/** 改完之后的回调（无论受控/非受控都会触发，便于父组件刷新展示） */
+	/** 改完之后的回调（PATCH 成功后触发，便于父组件同步本地展示状态） */
 	onUpdated?: (next: string) => void;
 	size?: 'small' | 'middle' | 'large';
 	/** 默认 true：value 未提供时自动 fetch 当前 screen 拿 classification + isOwner */
@@ -52,11 +55,32 @@ const LEVEL_TAG_LABEL: Record<string, string> = {
 	CONFIDENTIAL: '机密',
 };
 
+/**
+ * Sprint-24 F5：密级阶梯。配合 isDowngrade 判定降级方向。
+ * 与后端 ScreenResource.classificationRank 同序：PUBLIC(0) < INTERNAL(1) < SECRET(2) < CONFIDENTIAL(3)。
+ */
+const LEVEL_RANK: Record<string, number> = {
+	PUBLIC: 0,
+	INTERNAL: 1,
+	SECRET: 2,
+	CONFIDENTIAL: 3,
+};
+
+function rankOf(level: string | null | undefined): number {
+	if (!level) return 0;
+	return LEVEL_RANK[level.trim().toUpperCase()] ?? 0;
+}
+
+function isDowngrade(before: string | null | undefined, next: string): boolean {
+	return rankOf(next) < rankOf(before);
+}
+
+const DOWNGRADE_REASON_MIN_LENGTH = 10;
+
 export function ClassificationSelect({
 	screenId,
 	value,
 	isOwner,
-	onChange,
 	onUpdated,
 	size = 'small',
 	autoFetch = true,
@@ -67,6 +91,11 @@ export function ClassificationSelect({
 	const [internalIsOwner, setInternalIsOwner] = useState<boolean>(isOwner ?? false);
 	const [saving, setSaving] = useState(false);
 	const lastFetchedScreenIdRef = useRef<string | number | null>(null);
+
+	// Sprint-24 F5：降级 reason confirm modal 状态。
+	// pendingDowngrade 保存「即将提交但还在等用户填 reason」的目标值。
+	const [pendingDowngrade, setPendingDowngrade] = useState<string | null>(null);
+	const [downgradeReason, setDowngradeReason] = useState<string>('');
 
 	useEffect(() => {
 		if (isControlled) {
@@ -105,15 +134,13 @@ export function ClassificationSelect({
 		};
 	}, [isControlled, autoFetch, screenId, isOwner]);
 
-	const handleChange = useCallback(
-		async (next: string) => {
-			const normalized = next?.toUpperCase();
-			if (!normalized || normalized === internal) return;
-			if (isControlled && onChange) {
-				onChange(normalized);
-				onUpdated?.(normalized);
-				return;
-			}
+	/**
+	 * 真正发 PATCH 的逻辑。降级路径会先经过 modal 收集 reason，再调到这里。
+	 * 升级 / 同级路径直接调用，reason=undefined。
+	 */
+	const performUpdate = useCallback(
+		async (next: string, reason?: string) => {
+			const normalized = next.toUpperCase();
 			if (!screenId) {
 				message.error('缺少 screenId，无法保存密级');
 				return;
@@ -122,7 +149,7 @@ export function ClassificationSelect({
 			setInternal(normalized);
 			setSaving(true);
 			try {
-				await analyticsApi.updateScreenClassification(screenId, normalized);
+				await analyticsApi.updateScreenClassification(screenId, normalized, reason);
 				message.success(`大屏密级已更新为 ${normalized}`);
 				onUpdated?.(normalized);
 			} catch (e) {
@@ -133,8 +160,41 @@ export function ClassificationSelect({
 				setSaving(false);
 			}
 		},
-		[internal, isControlled, onChange, onUpdated, screenId],
+		[internal, onUpdated, screenId],
 	);
+
+	const handleChange = useCallback(
+		async (next: string) => {
+			const normalized = next?.toUpperCase();
+			if (!normalized || normalized === internal) return;
+			// Sprint-24 F5：降级走 confirm modal；升级 / 同级直接 PATCH。
+			if (isDowngrade(internal, normalized)) {
+				setPendingDowngrade(normalized);
+				setDowngradeReason('');
+				return;
+			}
+			await performUpdate(normalized);
+		},
+		[internal, performUpdate],
+	);
+
+	const cancelDowngrade = useCallback(() => {
+		setPendingDowngrade(null);
+		setDowngradeReason('');
+	}, []);
+
+	const confirmDowngrade = useCallback(async () => {
+		if (!pendingDowngrade) return;
+		const reason = downgradeReason.trim();
+		if (reason.length < DOWNGRADE_REASON_MIN_LENGTH) {
+			message.error(`降级原因至少 ${DOWNGRADE_REASON_MIN_LENGTH} 个字符`);
+			return;
+		}
+		const target = pendingDowngrade;
+		setPendingDowngrade(null);
+		setDowngradeReason('');
+		await performUpdate(target, reason);
+	}, [pendingDowngrade, downgradeReason, performUpdate]);
 
 	const ownerCanEdit = internalIsOwner;
 	const displayValue = internal || '';
@@ -153,24 +213,69 @@ export function ClassificationSelect({
 		);
 	}
 
+	const reasonValid = downgradeReason.trim().length >= DOWNGRADE_REASON_MIN_LENGTH;
+
 	return (
-		<div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-			<Select
-				value={displayValue || undefined}
-				placeholder="选择密级"
-				onChange={(v) => handleChange(v as string)}
-				disabled={saving}
-				loading={saving}
-				size={size}
-				style={{ width: 160 }}
-				options={LEVEL_OPTIONS}
-				status={isUnclassified ? 'warning' : undefined}
-			/>
-			{!compact && isUnclassified && (
-				<span style={{ fontSize: 12, color: 'var(--color-warning, #faad14)' }}>
-					未设密级，对所有登录用户可见
-				</span>
-			)}
-		</div>
+		<>
+			<div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+				<Select
+					value={displayValue || undefined}
+					placeholder="选择密级"
+					onChange={(v) => handleChange(v as string)}
+					disabled={saving}
+					loading={saving}
+					size={size}
+					style={{ width: 160 }}
+					options={LEVEL_OPTIONS}
+					status={isUnclassified ? 'warning' : undefined}
+				/>
+				{!compact && isUnclassified && (
+					<span style={{ fontSize: 12, color: 'var(--color-warning, #faad14)' }}>
+						未设密级，对所有登录用户可见
+					</span>
+				)}
+			</div>
+			{/* Sprint-24 F5：降级 confirm modal — 强制收集 reason，写入审计 */}
+			<Modal
+				open={!!pendingDowngrade}
+				title="确认降低密级"
+				okText="确认降级"
+				cancelText="取消"
+				okType="danger"
+				onCancel={cancelDowngrade}
+				onOk={confirmDowngrade}
+				okButtonProps={{ disabled: !reasonValid || saving, loading: saving }}
+				destroyOnClose
+				maskClosable={false}
+			>
+				<div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+					<div style={{ fontSize: 13 }}>
+						你正在把大屏密级从{' '}
+						<Tag color={LEVEL_TAG_COLOR[displayValue] || 'default'} style={{ margin: 0 }}>
+							{LEVEL_TAG_LABEL[displayValue] || displayValue || '未设'}
+						</Tag>{' '}
+						降低到{' '}
+						<Tag color={LEVEL_TAG_COLOR[pendingDowngrade ?? ''] || 'default'} style={{ margin: 0 }}>
+							{LEVEL_TAG_LABEL[pendingDowngrade ?? ''] || pendingDowngrade}
+						</Tag>
+						。降级会扩大可访问人群，请填写原因，写入审计后留档。
+					</div>
+					<div>
+						<div style={{ fontSize: 12, fontWeight: 500, marginBottom: 4 }}>
+							降级原因 <span style={{ color: '#ff4d4f' }}>*</span>
+						</div>
+						<Input.TextArea
+							value={downgradeReason}
+							onChange={(e) => setDowngradeReason(e.target.value)}
+							placeholder={`请说明为什么需要降低密级，至少 ${DOWNGRADE_REASON_MIN_LENGTH} 个字符`}
+							rows={3}
+							maxLength={500}
+							showCount
+							autoFocus
+						/>
+					</div>
+				</div>
+			</Modal>
+		</>
 	);
 }
