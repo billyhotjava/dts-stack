@@ -85,10 +85,25 @@ public class ReportsResource {
         put(payload, "classification", classification);
         payload.put("ts", Instant.now().toString());
         UUID reportId = parseUuid(id);
+        // 单一真源：让 Guard 决定结果，VIS_OPEN 审计 stage 跟着 outcome 走，
+        // 避免合规视角下出现「access deny + open success」两条互相矛盾的审计。
+        BiReportLinkService.VisitOutcome outcome;
         try {
-            reports.touchVisit(reportId, code, title, url, engine, classification);
-        } catch (Exception ignored) {}
-        audit.auditAction("VIS_OPEN", AuditStage.SUCCESS, code != null ? code : (id != null ? id : "unknown"), payload);
+            outcome = reports.touchVisit(reportId, code, title, url, engine, classification);
+        } catch (Exception ex) {
+            outcome = BiReportLinkService.VisitOutcome.SKIPPED;
+        }
+        if (outcome == null) {
+            outcome = BiReportLinkService.VisitOutcome.SKIPPED;
+        }
+        AuditStage stage = outcome == BiReportLinkService.VisitOutcome.DENIED ? AuditStage.FAIL : AuditStage.SUCCESS;
+        payload.put("outcome", outcome.name());
+        audit.auditAction("VIS_OPEN", stage, code != null ? code : (id != null ? id : "unknown"), payload);
+        if (outcome == BiReportLinkService.VisitOutcome.DENIED) {
+            // HTTP 200 + ok=false：保留与既有前端的兼容（前端以 ok 字段判断），
+            // 同时确保审计反映真实的 deny 决策。reason 不暴露内部细节。
+            return ApiResponses.ok(Map.of("ok", false, "reason", "access_denied"));
+        }
         return ApiResponses.ok(Map.of("ok", true));
     }
 

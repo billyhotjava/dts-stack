@@ -184,8 +184,11 @@ class BiReportLinkServiceTest {
     void touchVisitShouldIgnoreMissingNonScreenLink() {
         when(reportLinkRepository.findFirstByCodeIgnoreCase("manual-report")).thenReturn(Optional.empty());
 
-        service.touchVisit(null, "manual-report", "手工链接", "/manual", null, null);
+        // H1：非大屏 code 找不到镜像时返回 SKIPPED，外层用 SUCCESS 写 VIS_OPEN（保留 fire-and-forget）。
+        BiReportLinkService.VisitOutcome outcome =
+            service.touchVisit(null, "manual-report", "手工链接", "/manual", null, null);
 
+        assertThat(outcome).isEqualTo(BiReportLinkService.VisitOutcome.SKIPPED);
         verify(reportLinkRepository, never()).save(any(BiReportLink.class));
         verify(reportVisitRepository, never()).save(any(BiReportVisit.class));
     }
@@ -208,8 +211,11 @@ class BiReportLinkServiceTest {
         ));
         when(accessGuard.canView(eq(existing), any())).thenReturn(AccessDecision.deny("DENY_LEVEL_BLOCKED"));
 
-        service.touchVisit(existingId, "screen-99", null, null, null, null);
+        BiReportLinkService.VisitOutcome outcome =
+            service.touchVisit(existingId, "screen-99", null, null, null, null);
 
+        // H1 修复：返回 DENIED 让外层 controller 知道要把 VIS_OPEN 标 FAIL。
+        assertThat(outcome).isEqualTo(BiReportLinkService.VisitOutcome.DENIED);
         verify(reportLinkRepository, never()).save(any(BiReportLink.class));
         verify(reportVisitRepository, never()).save(any(BiReportVisit.class));
         verify(audit).auditAction(eq("VIS_DASHBOARD_ACCESS_VISIT"), eq(com.yuzhi.dts.common.audit.AuditStage.FAIL), eq("screen-99"), org.mockito.ArgumentMatchers.contains("DENY_LEVEL_BLOCKED"));
@@ -233,8 +239,11 @@ class BiReportLinkServiceTest {
         when(accessGuard.canView(eq(existing), any())).thenReturn(AccessDecision.allowOverride("OVERRIDE_USED"));
         when(reportLinkRepository.save(any(BiReportLink.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
-        service.touchVisit(existingId, "screen-77", null, null, null, null);
+        BiReportLinkService.VisitOutcome outcome =
+            service.touchVisit(existingId, "screen-77", null, null, null, null);
 
+        // H1 修复：返回 LOGGED_OVERRIDE，外层不再额外写一条 SUCCESS（避免重复）。
+        assertThat(outcome).isEqualTo(BiReportLinkService.VisitOutcome.LOGGED_OVERRIDE);
         verify(reportLinkRepository).save(any(BiReportLink.class));
         verify(audit).auditAction(eq("VIS_DASHBOARD_ACCESS_VISIT_OVERRIDE"), eq(com.yuzhi.dts.common.audit.AuditStage.SUCCESS),
             org.mockito.ArgumentMatchers.contains("OVERRIDE_USED"), eq(null));
