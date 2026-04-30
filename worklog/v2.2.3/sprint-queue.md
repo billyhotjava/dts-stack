@@ -325,7 +325,7 @@
 | F7-质量预检与增量治理 | 5 | DONE |
 | F8-安全审计、验收与发布材料 | 6 | IN_PROGRESS |
 
-**统计**: READY=0, IN_PROGRESS=2, DONE=36, BLOCKED=0
+**统计**: READY=0, IN_PROGRESS=1, DONE=37, BLOCKED=0
 **设计文档**: `worklog/v2.2.3/sprint-21-202604/README.md`
 
 ## Sprint-22: Portal Session 安全架构升级（Admin Token 剥离 + 短 TTL + BFF/HttpOnly Cookie） (202604)

@@ -20,6 +20,7 @@ import com.yuzhi.dts.platform.service.infra.dto.OdsGenerationDtos.OdsPrecheckRes
 import com.yuzhi.dts.platform.service.infra.dto.OdsGenerationDtos.OdsSyncTaskDraftResponse;
 import com.yuzhi.dts.platform.service.infra.dto.SchemaDiscoverDtos.SchemaDiscoverRequest;
 import com.yuzhi.dts.platform.service.infra.dto.SchemaDiscoverDtos.SchemaDiscoverResponse;
+import com.yuzhi.dts.platform.service.services.SvcTokenAuthService;
 import com.yuzhi.dts.platform.web.rest.ApiResponse;
 import com.yuzhi.dts.platform.web.rest.ApiResponses;
 import jakarta.validation.Valid;
@@ -55,6 +56,7 @@ public class InfraDataSourceResource {
     private final JdbcCatalogSyncService jdbcCatalogSyncService;
     private final OdsGenerationService odsGenerationService;
     private final DtsAdminProperties dtsAdminProperties;
+    private final SvcTokenAuthService svcTokenAuthService;
 
     public InfraDataSourceResource(
         InfraManagementService infraManagementService,
@@ -62,7 +64,8 @@ public class InfraDataSourceResource {
         JdbcConnectionTestService jdbcConnectionTestService,
         JdbcCatalogSyncService jdbcCatalogSyncService,
         OdsGenerationService odsGenerationService,
-        DtsAdminProperties dtsAdminProperties
+        DtsAdminProperties dtsAdminProperties,
+        SvcTokenAuthService svcTokenAuthService
     ) {
         this.infraManagementService = infraManagementService;
         this.auditService = auditService;
@@ -70,6 +73,7 @@ public class InfraDataSourceResource {
         this.jdbcCatalogSyncService = jdbcCatalogSyncService;
         this.odsGenerationService = odsGenerationService;
         this.dtsAdminProperties = dtsAdminProperties;
+        this.svcTokenAuthService = svcTokenAuthService;
     }
 
     @GetMapping
@@ -141,7 +145,8 @@ public class InfraDataSourceResource {
         if (!principal.startsWith("service:")) {
             throw new ResponseStatusException(HttpStatus.FORBIDDEN, "运行时凭据详情仅允许内部服务调用");
         }
-        if (!serviceTokenMatches(serviceToken)) {
+        String serviceName = principal.substring("service:".length());
+        if (!serviceTokenMatches(serviceToken, serviceName)) {
             throw new ResponseStatusException(HttpStatus.FORBIDDEN, "运行时凭据详情需要有效服务令牌");
         }
         InfraDataSourceDetailDto detail = infraManagementService.getDataSourceRuntimeDetail(id);
@@ -154,9 +159,16 @@ public class InfraDataSourceResource {
         return ApiResponses.ok(detail);
     }
 
-    private boolean serviceTokenMatches(String supplied) {
+    private boolean serviceTokenMatches(String supplied, String serviceName) {
+        if (!StringUtils.hasText(supplied)) {
+            return false;
+        }
+        String normalized = supplied.trim();
         String expected = dtsAdminProperties != null ? dtsAdminProperties.getServiceToken() : null;
-        return StringUtils.hasText(expected) && StringUtils.hasText(supplied) && expected.trim().equals(supplied.trim());
+        if (StringUtils.hasText(expected) && expected.trim().equals(normalized)) {
+            return true;
+        }
+        return svcTokenAuthService != null && svcTokenAuthService.authenticateService(normalized, serviceName) != null;
     }
 
     @PostMapping

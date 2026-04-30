@@ -37,9 +37,10 @@ public class AuditButtonRegistry {
     public AuditButtonRegistry(
         ResourceLoader resourceLoader,
         ObjectMapper objectMapper,
+        AuditDictionarySignatureGuard signatureGuard,
         @Value("${auditing.buttons.config-location:" + DEFAULT_LOCATION + "}") String configLocation
     ) {
-        this.registry = loadRegistry(resourceLoader, objectMapper, configLocation);
+        this.registry = loadRegistry(resourceLoader, objectMapper, signatureGuard, configLocation);
         log.info("Loaded {} audit button metadata entries from {}", registry.size(), configLocation);
     }
 
@@ -57,13 +58,21 @@ public class AuditButtonRegistry {
     private static Map<String, AuditButtonMetadata> loadRegistry(
         ResourceLoader resourceLoader,
         ObjectMapper objectMapper,
+        AuditDictionarySignatureGuard signatureGuard,
         String location
     ) {
         Resource resource = resourceLoader.getResource(location);
         if (!resource.exists()) {
             throw new IllegalStateException("audit-button-registry config not found: " + location);
         }
+        byte[] content;
         try (InputStream in = resource.getInputStream()) {
+            content = in.readAllBytes();
+        } catch (IOException ex) {
+            throw new IllegalStateException("Failed to load audit-button-registry from " + location, ex);
+        }
+        signatureGuard.verify(location, content);
+        try (InputStream in = new java.io.ByteArrayInputStream(content)) {
             CatalogFile file = objectMapper.readValue(in, CatalogFile.class);
             List<CatalogEntry> entries = file.entries();
             if (entries == null || entries.isEmpty()) {

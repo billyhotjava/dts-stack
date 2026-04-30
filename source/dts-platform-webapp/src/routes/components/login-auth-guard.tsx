@@ -8,6 +8,8 @@ import { isDevFallbackAccessToken } from "@/utils/devAuthTokens";
 import { LOGIN_ROUTE, resolveCurrentAppPath, resolveLoginHref } from "../constants";
 import { useRouter } from "../hooks";
 
+const MENU_RETRY_MS = 3000;
+
 /** Decode JWT exp claim. Returns expiry in ms or null if not a valid JWT. */
 function decodeJwtExp(token?: string): number | null {
 	if (!token) return null;
@@ -233,12 +235,38 @@ export default function LoginAuthGuard({ children }: Props) {
 	// Ensure menus reflect the current identity. Reload on token change even if a previous menu exists.
 	// This fixes a stale-menu issue when switching accounts without a full page reload.
 	useEffect(() => {
-		if (hasSessionMarker && !isDevFallbackAccessToken(accessToken)) {
-			menuService.getMenuTree().catch(() => {
-				/* ignore */
-			});
+		if (!hasSessionMarker || isDevFallbackAccessToken(accessToken)) {
+			return;
 		}
-	}, [accessToken, hasSessionMarker]);
+		if (needsBackendSessionCheck && !sessionAuthenticated) {
+			return;
+		}
+
+		let cancelled = false;
+		let retryTimer: number | undefined;
+
+		const loadMenuTree = async () => {
+			try {
+				await menuService.getMenuTree();
+				if (!cancelled) {
+					setSessionRecovering(false);
+				}
+			} catch {
+				if (cancelled) return;
+				setSessionRecovering(true);
+				retryTimer = window.setTimeout(loadMenuTree, MENU_RETRY_MS);
+			}
+		};
+
+		void loadMenuTree();
+
+		return () => {
+			cancelled = true;
+			if (retryTimer) {
+				window.clearTimeout(retryTimer);
+			}
+		};
+	}, [accessToken, hasSessionMarker, needsBackendSessionCheck, sessionAuthenticated]);
 
 	// Block rendering if the session marker is missing or dev token is expired.
 	if (!hasSessionMarker || isTokenExpired(accessToken)) {

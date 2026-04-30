@@ -3,6 +3,8 @@ set -euo pipefail
 
 BASE_URL="${DTS_BASE_URL:-http://localhost:8080}"
 TOKEN="${DTS_TOKEN:-}"
+COOKIE="${DTS_COOKIE:-}"
+COOKIE_JAR="${DTS_COOKIE_JAR:-}"
 DATA_SOURCE_ID="${DTS_DATA_SOURCE_ID:-}"
 SCHEMA_NAME="${DTS_SCHEMA:-dts_smoke}"
 TABLE_PATTERN="${DTS_TABLE_PATTERN:-erp_project}"
@@ -16,6 +18,13 @@ headers=(-H "Content-Type: application/json")
 if [[ -n "$TOKEN" ]]; then
   headers+=(-H "Authorization: Bearer $TOKEN")
 fi
+if [[ -n "$COOKIE" ]]; then
+  headers+=(-H "Cookie: $COOKIE")
+fi
+cookie_args=()
+if [[ -n "$COOKIE_JAR" ]]; then
+  cookie_args=(-b "$COOKIE_JAR")
+fi
 
 curl_json() {
   local method="$1"
@@ -23,9 +32,9 @@ curl_json() {
   local payload="${3:-}"
   local output="$4"
   if [[ -n "$payload" ]]; then
-    curl -fsS -X "$method" "${headers[@]}" --data "$payload" "$BASE_URL$path" -o "$output"
+    curl -fsS -X "$method" "${headers[@]}" "${cookie_args[@]}" --data "$payload" "$BASE_URL$path" -o "$output"
   else
-    curl -fsS -X "$method" "${headers[@]}" "$BASE_URL$path" -o "$output"
+    curl -fsS -X "$method" "${headers[@]}" "${cookie_args[@]}" "$BASE_URL$path" -o "$output"
   fi
 }
 

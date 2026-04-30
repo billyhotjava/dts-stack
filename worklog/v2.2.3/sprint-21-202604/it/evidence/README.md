@@ -25,7 +25,7 @@ it/evidence/20260430-rc1/
 
 ## 通过口径
 
-- 用户侧接口只返回脱敏数据源详情；运行时明文凭据仅允许 `service:*` 内部服务 principal 携带 `X-DTS-Service-Token` 调用 `runtime-detail`。
+- 用户侧接口只返回脱敏数据源详情；运行时明文凭据仅允许 `service:*` 内部服务 principal 携带匹配服务名的数据库托管 `X-DTS-Service-Token` 调用 `runtime-detail`。
 - 审计 payload 只记录数据源 ID、任务 ID、动作、状态、错误摘要和影响范围，不记录 password/token/accessKey 等明文字段。
 - 数据库源和文件源都必须进入接入运行中心或文件接入台账，且能够关联到 ODS/source/任务或文件批次。
 - 现场未具备某类商业数据库时，必须记录原因、替代验证方式和补测计划，不能直接标记为已完成。

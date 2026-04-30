@@ -70,6 +70,26 @@ describe("platform session management source contract", () => {
 		expect(guardSource.includes("requiresBackendSessionValidation(accessToken, token?.authenticated)")).toBe(true);
 	});
 
+	it("keeps deep-linked platform pages usable while menu bootstrap is recovering", () => {
+		const guardSource = fs.readFileSync(
+			path.resolve(import.meta.dirname, "../../routes/components/login-auth-guard.tsx"),
+			"utf8",
+		);
+		const dynamicResolverSource = fs.readFileSync(
+			path.resolve(import.meta.dirname, "../../routes/sections/dashboard/dynamic-resolver.tsx"),
+			"utf8",
+		);
+
+		expect(guardSource.includes("const MENU_RETRY_MS = 3000;")).toBe(true);
+		expect(guardSource.includes("retryTimer = window.setTimeout(loadMenuTree, MENU_RETRY_MS);")).toBe(true);
+		expect(dynamicResolverSource.includes('"/foundation/connectors": "/pages/foundation/ConnectorRegistryPage"')).toBe(
+			true,
+		);
+		expect(dynamicResolverSource.includes("const directOverridePath =")).toBe(true);
+		expect(dynamicResolverSource.includes("if (directOverridePath)")).toBe(true);
+		expect(dynamicResolverSource.includes("return <>{Component(directOverridePath)}</>;")).toBe(true);
+	});
+
 	it("does not let stale auth responses clear a newer login session", () => {
 		const sessionManagerSource = fs.readFileSync(path.resolve(import.meta.dirname, "./session-manager.tsx"), "utf8");
 		const apiClientSource = fs.readFileSync(path.resolve(import.meta.dirname, "../../api/apiClient.ts"), "utf8");
@@ -107,6 +127,10 @@ describe("platform session management source contract", () => {
 		expect(apiClientSource.includes("logApiResponseError")).toBe(true);
 		expect(apiClientSource.includes("response?.data, error.message")).toBe(false);
 		expect(apiClientSource.includes("isWithinPortalLoginGrace(15_000)")).toBe(true);
+		expect(apiClientSource.includes("LOGIN_REQUEST_SUPPRESS_STALE_MS")).toBe(true);
+		expect(apiClientSource.includes("captureRequestSessionSnapshot(config)")).toBe(true);
+		expect(apiClientSource.includes("shouldIgnoreStaleSessionFailure(response?.config || error?.config)")).toBe(true);
+		expect(apiClientSource.includes("[auth] Ignoring stale session failure from an older request")).toBe(true);
 		expect(apiClientSource.includes('requestUrl.includes("/keycloak/localization/")')).toBe(true);
 		expect(apiClientSource.includes("skipErrorToast")).toBe(true);
 		expect(loginFormSource.includes("clearUserInfoAndToken();\n\t\tsetLoading(true);")).toBe(true);

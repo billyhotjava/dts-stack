@@ -15,7 +15,7 @@
 | T02 | 接入中心审计事件补齐 | P0 | DONE | F2-F6 |
 | T03 | 端到端验收脚本与样例数据 | P0 | DONE | F1-F7 |
 | T04 | 发布、升级、回滚与运维 Runbook | P1 | DONE | T03 |
-| T05 | 凭据脱敏审计抽检脚本与证据模板 | P0 | IN_PROGRESS | T01-T04 |
+| T05 | 凭据脱敏审计抽检脚本与证据模板 | P0 | DONE | T01-T04 |
 | T06 | 数据库源/文件源现场冒烟归档 | P0 | IN_PROGRESS | T03-T05 |
 
 ## 完成标准
@@ -46,10 +46,15 @@
 - 审计动作目录补齐 `INGESTION_TASK_CREATE`、`INGESTION_TASK_UPDATE`、`INGESTION_TASK_DELETE`、`INGESTION_TASK_EXECUTE`、`INGESTION_TASK_RETRY`、`INGESTION_EXECUTION_RETRY` 和 `INGESTION_BACKFILL_RUN`，平台侧与 common 默认 catalog 保持一致。
 - 新增验收样例和脚本：`it/samples/postgres-source.sql`、`it/samples/budget-upload.csv`、`it/samples/ods-request-postgres.json`、`it/scripts/connector-center-smoke.sh`，覆盖 discover、ODS preview/precheck/apply、sync-task-draft、任务创建、执行提交、补数提交和 Run Center 观测。
 - 新增 `it/runbook.md`，沉淀发布前检查、现场冒烟、升级、回滚和常见故障定位。
-- 用户侧 `/api/infra/data-sources/{id}/detail` 已收敛为脱敏详情，不再返回 JDBC/API 明文 secrets；内部执行链路改走 `/runtime-detail`，并要求 `service:*` principal + `X-DTS-Service-Token`。
+- 用户侧 `/api/infra/data-sources/{id}/detail` 已收敛为脱敏详情，不再返回 JDBC/API 明文 secrets；内部执行链路改走 `/runtime-detail`，并要求 `service:*` principal + 匹配服务名的 `X-DTS-Service-Token`。
+- 平台入湖代理已补齐 `/api/ingestion/tasks/{id}/backfill`，保证 Connector Center smoke 和 Run Center 前端都从 platform 统一入口提交补数。
+- 内部服务 token 改为数据库化治理：平台侧创建 `service:dts-ingestion` token 并仅保存 hash，ingestion 侧将明文 token 写入 `platform.serviceToken` 集成配置，走 `infra_service_settings` 加密/脱敏机制；`dev`、`app`、`legacy` 三种模式均不需要改初始化后的 `.env` 或 compose 文件。
 - 新增 `it/scripts/file-source-smoke.sh`，覆盖 CSV/Excel 文件 prepare、parse、错误行预览和文件源摘要输出。
-- 新增 `it/scripts/credential-redaction-audit.sh`，抽检用户侧数据源 API、`runtime-detail` 用户访问拒绝、伪造服务头无 token 拒绝以及 smoke 输出目录中的明文凭据哨兵。
+- 新增 `it/scripts/credential-redaction-audit.sh`，抽检用户侧数据源 API、`runtime-detail` 用户访问拒绝、伪造服务头无 token 拒绝、可选审计导出 CSV 以及 smoke 输出目录中的明文凭据哨兵。
+- 验收脚本已兼容 `DTS_TOKEN`、`DTS_COOKIE` 与 `DTS_COOKIE_JAR` 三种认证方式，适配 sprint-22 后登录响应以 HttpOnly `portal_session` cookie 为主的会话形态。
 - 新增 `it/evidence/` 证据目录模板，包含验收记录模板和 PostgreSQL/MySQL/Oracle/SQL Server/DM8 方言验证矩阵。
+- 新增 `InfraDataSourceResourceTest`，覆盖用户 principal 即使持服务令牌也不能读取 `runtime-detail`、伪造服务 principal 但服务令牌错误被拒绝、内部服务 principal + 数据库托管服务令牌才能读取运行时 secrets。
+- 新增 `PlatformInfraClientTest`，锁定 ingestion 侧读取数据源凭据必须走 `/runtime-detail`，并从 `platform.serviceToken` 集成配置携带 `X-DTS-Service-Token`。
 
 ## 端到端验收路径
 

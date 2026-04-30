@@ -108,6 +108,13 @@ public class KeycloakAuthResource {
             try {
                 var adminResult = adminAuthGateway.profile(username, kcResult.user(), kcTokens.accessToken());
                 user = adminResult.user();
+            } catch (AdminAuthGateway.ProfileEndpointUnavailableException ex) {
+                log.warn(
+                    "[login] admin profile endpoint unavailable, falling back to legacy platform login username={} reason={}",
+                    username,
+                    ex.getMessage()
+                );
+                user = adminAuthGateway.login(username, password).user();
             } catch (org.springframework.security.authentication.BadCredentialsException ex) {
                 throw ex;
             } catch (Exception ex) {

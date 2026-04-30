@@ -55,9 +55,43 @@ public class SvcTokenService {
     }
 
     @Transactional
+    public TokenCreationResultDto createServiceToken(String operator, String serviceName, long ttlDays) {
+        if (!StringUtils.hasText(serviceName)) {
+            throw new IllegalArgumentException("serviceName不能为空");
+        }
+        String normalizedService = serviceName.trim();
+        if (!normalizedService.matches("[A-Za-z0-9._-]+")) {
+            throw new IllegalArgumentException("serviceName格式不合法");
+        }
+        String plain = SvcTokenHasher.generatePlainToken();
+        String hint = SvcTokenHasher.buildHint(plain);
+        String hash = SvcTokenHasher.hashToken(plain);
+
+        SvcToken entity = new SvcToken();
+        entity.setTokenHash(hash);
+        entity.setTokenHint(hint);
+        entity.setExpiresAt(Instant.now().plusSeconds(ttlDays * 24 * 3600));
+        entity.setRevoked(Boolean.FALSE);
+        entity.setCreatedBy("service:" + normalizedService);
+        entity.setLastModifiedBy(StringUtils.hasText(operator) ? operator : "system");
+        SvcToken saved = repository.save(entity);
+        return new TokenCreationResultDto(toDto(saved), plain);
+    }
+
+    @Transactional
     public void revokeToken(String username, UUID id) {
         SvcToken token = repository.findById(id).orElseThrow(EntityNotFoundException::new);
         if (!username.equalsIgnoreCase(valueOrEmpty(token.getCreatedBy()))) {
+            throw new EntityNotFoundException("Token not found");
+        }
+        token.setRevoked(Boolean.TRUE);
+        repository.save(token);
+    }
+
+    @Transactional
+    public void revokeServiceToken(UUID id) {
+        SvcToken token = repository.findById(id).orElseThrow(EntityNotFoundException::new);
+        if (!StringUtils.hasText(token.getCreatedBy()) || !token.getCreatedBy().trim().startsWith("service:")) {
             throw new EntityNotFoundException("Token not found");
         }
         token.setRevoked(Boolean.TRUE);

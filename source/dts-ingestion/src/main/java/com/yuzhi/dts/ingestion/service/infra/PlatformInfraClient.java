@@ -243,9 +243,15 @@ public class PlatformInfraClient {
 
     private void applyServiceHeaders(HttpHeaders headers) {
         headers.set(SERVICE_HEADER, SERVICE_NAME);
-        if (StringUtils.hasText(serviceToken)) {
-            headers.set(SERVICE_TOKEN_HEADER, serviceToken);
+        String token = resolveServiceToken();
+        if (StringUtils.hasText(token)) {
+            headers.set(SERVICE_TOKEN_HEADER, token);
         }
+    }
+
+    private String resolveServiceToken() {
+        IngestionSettingsService.SettingsSnapshot settings = settingsService.getSettings(IngestionSettingsService.SERVICE_PLATFORM);
+        return settings.getString("serviceToken", serviceToken);
     }
 
     private URI buildUri(String path) {

@@ -53,6 +53,7 @@ const TEST_SESSION_ENABLED =
 		"true";
 const TEST_SESSION_REFRESH_MS = Number(import.meta.env.VITE_TEST_SESSION_PING_MS ?? 5 * 60 * 1000);
 const TEST_SESSION_MAX_AGE_MS = Number(import.meta.env.VITE_TEST_SESSION_MAX_AGE_MS ?? 4 * 60 * 60 * 1000);
+const LOGIN_REQUEST_SUPPRESS_STALE_MS = 15_000;
 
 export type PortalRefreshResult = {
 	authenticated: boolean;
@@ -70,6 +71,7 @@ type PortalSessionProbe = {
 
 // Token refresh coordination to avoid stampedes
 let refreshingPromise: Promise<PortalRefreshResult | null> | null = null;
+let loginRequestGraceUntil = 0;
 
 function hasRecentLoginGraceWindow(): boolean {
 	return isWithinPortalLoginGrace(15_000);
@@ -113,6 +115,25 @@ function forceLogoutToLogin() {
 	if (typeof window !== "undefined" && !isLoginRouteActive()) {
 		redirectToLoginWithCurrentPath();
 	}
+}
+
+function captureRequestSessionSnapshot(config: AxiosRequestConfig) {
+	const now = Date.now();
+	(config as any)._portalSessionRequestTs = now;
+	(config as any)._portalSessionLoginTs = readPortalSessionTimestamp(PORTAL_SESSION_STORAGE_KEYS.LOGIN_TS);
+}
+
+function shouldIgnoreStaleSessionFailure(config?: AxiosRequestConfig | null): boolean {
+	const requestTs = Number((config as any)?._portalSessionRequestTs || 0);
+	const requestLoginTs = Number((config as any)?._portalSessionLoginTs || 0);
+	const currentLoginTs = readPortalSessionTimestamp(PORTAL_SESSION_STORAGE_KEYS.LOGIN_TS);
+	if (currentLoginTs > 0 && (requestLoginTs <= 0 || currentLoginTs > requestLoginTs)) {
+		return true;
+	}
+	if (requestTs > 0 && Date.now() < loginRequestGraceUntil) {
+		return true;
+	}
+	return isLoginRouteActive();
 }
 
 function normalizeDate(value: unknown): string | undefined {
@@ -274,6 +295,11 @@ axiosInstance.interceptors.request.use(
 	(config) => {
 		const url = config.url || "";
 		const isAuthPath = url.includes("/keycloak/auth/");
+		const isLoginPath = url.includes("/keycloak/auth/login") || url.includes("/keycloak/auth/platform/login");
+		captureRequestSessionSnapshot(config);
+		if (isLoginPath) {
+			loginRequestGraceUntil = Date.now() + LOGIN_REQUEST_SUPPRESS_STALE_MS;
+		}
 		// For FormData uploads, let the browser set the proper multipart boundary
 		if (typeof FormData !== "undefined" && config.data instanceof FormData) {
 			if (config.headers) {
@@ -443,6 +469,13 @@ axiosInstance.interceptors.response.use(
 		const sessionErrorByMessage =
 			typeof combinedMsg === "string" && /已在其他位置登录|会话已超时|重新登录|session/i.test(combinedMsg);
 		const shouldForceLogout = sessionExpiredHeader || sessionConflictHeader || sessionErrorByMessage;
+		if (shouldForceLogout && !isLoginRequest && shouldIgnoreStaleSessionFailure(response?.config || error?.config)) {
+			console.warn("[auth] Ignoring stale session failure from an older request", {
+				url: requestUrl,
+				status: response?.status,
+			});
+			return Promise.reject(error);
+		}
 		if (response?.status === 401 && !shouldSuppressAuthHandling && isRefreshRequest) {
 			// Let SessionManager / route guards make the final decision for refresh failures.
 			// This avoids a single transient upstream refresh error forcing the SPA into a dead state.

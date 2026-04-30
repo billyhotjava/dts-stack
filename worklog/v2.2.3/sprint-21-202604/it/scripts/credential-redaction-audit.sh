@@ -3,10 +3,13 @@ set -euo pipefail
 
 BASE_URL="${DTS_BASE_URL:-http://localhost:8080}"
 TOKEN="${DTS_TOKEN:-}"
+COOKIE="${DTS_COOKIE:-}"
+COOKIE_JAR="${DTS_COOKIE_JAR:-}"
 DATA_SOURCE_ID="${DTS_DATA_SOURCE_ID:-}"
 SECRET_SENTINEL="${DTS_SECRET_SENTINEL:-}"
 OUT_DIR="${DTS_REDACTION_OUT:-/tmp/dts-sprint21-redaction}"
 SCAN_DIRS="${DTS_REDACTION_SCAN_DIRS:-/tmp/dts-sprint21-smoke:/tmp/dts-sprint21-file-smoke:$OUT_DIR}"
+AUDIT_EXPORT_QUERY="${DTS_AUDIT_EXPORT_QUERY:-}"
 
 mkdir -p "$OUT_DIR"
 
@@ -16,17 +19,25 @@ if [[ -n "$TOKEN" ]]; then
   headers+=(-H "Authorization: Bearer $TOKEN")
   auth_headers+=(-H "Authorization: Bearer $TOKEN")
 fi
+if [[ -n "$COOKIE" ]]; then
+  headers+=(-H "Cookie: $COOKIE")
+  auth_headers+=(-H "Cookie: $COOKIE")
+fi
+cookie_args=()
+if [[ -n "$COOKIE_JAR" ]]; then
+  cookie_args=(-b "$COOKIE_JAR")
+fi
 
 fetch_json() {
   local path="$1"
   local output="$2"
-  curl -fsS -X GET "${headers[@]}" "$BASE_URL$path" -o "$output"
+  curl -fsS -X GET "${headers[@]}" "${cookie_args[@]}" "$BASE_URL$path" -o "$output"
 }
 
 fetch_status() {
   local path="$1"
   local output="$2"
-  curl -sS -X GET "${headers[@]}" "$BASE_URL$path" -o "$output" -w "%{http_code}"
+  curl -sS -X GET "${headers[@]}" "${cookie_args[@]}" "$BASE_URL$path" -o "$output" -w "%{http_code}"
 }
 
 fail_if_contains() {
@@ -71,7 +82,11 @@ if [[ -n "$DATA_SOURCE_ID" ]]; then
     exit 12
   fi
 
-  spoof_status="$(curl -sS -X GET -H "Content-Type: application/json" -H "X-DTS-Service: dts-ingestion" \
+  spoof_headers=(-H "Content-Type: application/json" -H "X-DTS-Service: dts-ingestion")
+  if [[ -n "$COOKIE" ]]; then
+    spoof_headers+=(-H "Cookie: $COOKIE")
+  fi
+  spoof_status="$(curl -sS -X GET "${spoof_headers[@]}" "${cookie_args[@]}" \
     "$BASE_URL/api/infra/data-sources/$DATA_SOURCE_ID/runtime-detail" \
     -o "$OUT_DIR/04b-runtime-detail-spoofed-service-no-token.json" -w "%{http_code}" || true)"
   echo "$spoof_status" > "$OUT_DIR/04b-runtime-detail-spoofed-service-no-token.status"
@@ -88,6 +103,20 @@ fail_if_contains "$SECRET_SENTINEL" "API responses" "$OUT_DIR"
 fail_if_forbidden_secret_shape "API responses" "$OUT_DIR/01-data-source-list.json" "$OUT_DIR/02-data-source-detail.json" "$OUT_DIR/03-data-source-detail-redacted.json"
 
 echo "[4/4] Scan smoke/audit output directories when present"
+if [[ -n "$AUDIT_EXPORT_QUERY" ]]; then
+  audit_status="$(curl -sS -X GET "${auth_headers[@]}" \
+    "${cookie_args[@]}" \
+    "$BASE_URL/api/security/audit-logs/export?$AUDIT_EXPORT_QUERY" \
+    -o "$OUT_DIR/04c-audit-export.csv" -w "%{http_code}" || true)"
+  echo "$audit_status" > "$OUT_DIR/04c-audit-export.status"
+  if [[ ! "$audit_status" =~ ^2 ]]; then
+    echo "audit export returned HTTP $audit_status; check permissions or DTS_AUDIT_EXPORT_QUERY" >&2
+    exit 14
+  fi
+else
+  echo "audit export scan skipped: DTS_AUDIT_EXPORT_QUERY is not set" > "$OUT_DIR/04c-audit-export.status"
+fi
+
 IFS=':' read -r -a scan_dirs <<< "$SCAN_DIRS"
 existing_dirs=()
 for dir in "${scan_dirs[@]}"; do
@@ -105,6 +134,7 @@ fi
   echo "data_source_id=${DATA_SOURCE_ID:-N/A}"
   echo "runtime_detail_user_status=${runtime_status:-SKIPPED}"
   echo "runtime_detail_spoof_status=${spoof_status:-SKIPPED}"
+  echo "audit_export_status=${audit_status:-SKIPPED}"
   echo "scan_dirs=${existing_dirs[*]:-N/A}"
 } > "$OUT_DIR/05-redaction-summary.txt"
 

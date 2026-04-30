@@ -1,0 +1,13 @@
+{
+  "status" : 200,
+  "message" : "任务已提交，正在后台触发执行",
+  "code" : null,
+  "data" : {
+    "taskId" : 18,
+    "taskName" : "ingest_postgresql_to_ods_project",
+    "status" : "submitted",
+    "async" : true,
+    "pollIntervalMs" : 15000,
+    "message" : "任务已提交，正在后台触发执行"
+  }
+}

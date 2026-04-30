@@ -1,0 +1,315 @@
+{
+  "status" : 200,
+  "message" : "OK",
+  "code" : null,
+  "data" : {
+    "dataSourceId" : "a0000000-0000-0000-0000-000000000001",
+    "dataSourceName" : "数据仓库 (biadmin)",
+    "status" : "WARN",
+    "totalRules" : 20,
+    "passedRules" : 18,
+    "warningRules" : 2,
+    "failedRules" : 0,
+    "rules" : [ {
+      "code" : "DATASOURCE_JDBC",
+      "level" : "ERROR",
+      "status" : "PASS",
+      "target" : "数据仓库 (biadmin)",
+      "message" : "数据源具备 JDBC 连接信息",
+      "suggestion" : "请补充 JDBC URL 后重新测试连接"
+    }, {
+      "code" : "DATASOURCE_VERIFIED",
+      "level" : "WARN",
+      "status" : "PASS",
+      "target" : "数据仓库 (biadmin)",
+      "message" : "数据源已完成连接测试",
+      "suggestion" : "建议先执行连接测试，确认凭据和网络仍可用"
+    }, {
+      "code" : "SOURCE_TABLE_SELECTED",
+      "level" : "ERROR",
+      "status" : "PASS",
+      "target" : "数据仓库 (biadmin)",
+      "message" : "已选择至少一张源表",
+      "suggestion" : "请先通过 Schema Discover 选择源表"
+    }, {
+      "code" : "SOURCE_COLUMNS",
+      "level" : "ERROR",
+      "status" : "PASS",
+      "target" : "dts_smoke.erp_project",
+      "message" : "源表字段已读取",
+      "suggestion" : "请重新执行 Schema Discover，并确认 includeColumns=true"
+    }, {
+      "code" : "PRIMARY_KEY_CANDIDATE",
+      "level" : "WARN",
+      "status" : "PASS",
+      "target" : "dts_smoke.erp_project",
+      "message" : "已识别主键或业务唯一键候选",
+      "suggestion" : "建议维护主键/业务键，提升幂等写入、审计追踪和删除识别能力"
+    }, {
+      "code" : "ODS_TARGET_OWNERSHIP",
+      "level" : "ERROR",
+      "status" : "PASS",
+      "target" : "ods.ods_erp_smoke_project",
+      "message" : "ODS 目标表未被其他接入映射占用",
+      "suggestion" : "请调整 system/biz/entity 命名，或先确认既有 ODS 映射归属"
+    }, {
+      "code" : "ODS_TARGET_DUPLICATE",
+      "level" : "ERROR",
+      "status" : "PASS",
+      "target" : "ods",
+      "message" : "本次生成的 ODS 目标表名不重复",
+      "suggestion" : "请为单表设置实体编码，或调整系统/业务编码避免多个源表落到同一 ODS 表"
+    }, {
+      "code" : "INCREMENTAL_WATERMARK",
+      "level" : "ERROR",
+      "status" : "PASS",
+      "target" : "incremental",
+      "message" : "已识别增量字段：update_time",
+      "suggestion" : "增量任务会使用共同候选字段推进 watermark"
+    }, {
+      "code" : "TYPE_COMPATIBILITY_SUMMARY",
+      "level" : "INFO",
+      "status" : "PASS",
+      "target" : "dts_smoke.erp_project",
+      "message" : "字段类型兼容性预检通过",
+      "suggestion" : "可继续生成 ODS 任务"
+    }, {
+      "code" : "SOURCE_PROBE_CONNECT",
+      "level" : "INFO",
+      "status" : "PASS",
+      "target" : "数据仓库 (biadmin)",
+      "message" : "源端 JDBC 连接可用于提交前预检",
+      "suggestion" : "继续执行源表查询权限和数据质量探测"
+    }, {
+      "code" : "SOURCE_QUERY_PERMISSION",
+      "level" : "ERROR",
+      "status" : "PASS",
+      "target" : "dts_smoke.erp_project",
+      "message" : "源表可被当前账号查询：dts_smoke.erp_project",
+      "suggestion" : "请为源端账号授予 SELECT 权限，或调整数据源凭据"
+    }, {
+      "code" : "SOURCE_ROW_COUNT",
+      "level" : "INFO",
+      "status" : "PASS",
+      "target" : "dts_smoke.erp_project",
+      "message" : "源表当前行数：3",
+      "suggestion" : "继续校验数据量基线和波动阈值"
+    }, {
+      "code" : "SOURCE_ROW_VOLUME_BASELINE",
+      "level" : "INFO",
+      "status" : "PASS",
+      "target" : "dts_smoke.erp_project",
+      "message" : "源表当前行数已记录为基线候选：3",
+      "suggestion" : "可在数据源 props.precheckRowCountBaselines 中按表配置 min/max/expected/maxDeviationRatio 启用数据量波动告警"
+    }, {
+      "code" : "PRIMARY_KEY_NULL_RATE",
+      "level" : "WARN",
+      "status" : "PASS",
+      "target" : "dts_smoke.erp_project",
+      "message" : "主键字段无空值：project_id",
+      "suggestion" : "请确认业务主键质量；空主键会影响幂等写入、审计追踪和删除识别"
+    }, {
+      "code" : "PRIMARY_KEY_UNIQUENESS",
+      "level" : "WARN",
+      "status" : "PASS",
+      "target" : "dts_smoke.erp_project",
+      "message" : "主键唯一性探测通过：project_id",
+      "suggestion" : "请修复源端主键重复，或改用更稳定的业务唯一键"
+    }, {
+      "code" : "INCREMENTAL_NON_NULL",
+      "level" : "WARN",
+      "status" : "PASS",
+      "target" : "dts_smoke.erp_project",
+      "message" : "增量字段无空值：update_time",
+      "suggestion" : "请修复增量字段空值；空值行可能无法被时间戳增量稳定捕获"
+    }, {
+      "code" : "TARGET_PROBE_CONNECT",
+      "level" : "INFO",
+      "status" : "PASS",
+      "target" : "数仓 (biadmin)",
+      "message" : "目标端 JDBC 连接可用于提交前预检",
+      "suggestion" : "继续执行 ODS schema 写入权限探测"
+    }, {
+      "code" : "TARGET_SCHEMA_WRITE_PERMISSION",
+      "level" : "ERROR",
+      "status" : "PASS",
+      "target" : "ods",
+      "message" : "目标 ODS schema 可创建临时预检表：ods",
+      "suggestion" : "目标端具备 ODS 建表权限"
+    }, {
+      "code" : "TYPE_REVIEW",
+      "level" : "WARN",
+      "status" : "WARN",
+      "target" : "columns",
+      "message" : "字段 budget_amount 的数值精度需要人工确认",
+      "suggestion" : "请在字段 override 能力补齐后确认精度映射"
+    }, {
+      "code" : "TYPE_REVIEW",
+      "level" : "WARN",
+      "status" : "WARN",
+      "target" : "columns",
+      "message" : "字段 progress_pct 的数值精度需要人工确认",
+      "suggestion" : "请在字段 override 能力补齐后确认精度映射"
+    } ],
+    "tables" : [ {
+      "sourceSchema" : "dts_smoke",
+      "sourceTable" : "erp_project",
+      "odsSchema" : "ods",
+      "odsTable" : "ods_erp_smoke_project",
+      "systemCode" : "erp",
+      "bizCode" : "smoke",
+      "entityCode" : "project",
+      "primaryKeys" : [ "project_id" ],
+      "incrementalCandidates" : [ "update_time" ],
+      "columns" : [ {
+        "sourceName" : "project_id",
+        "targetName" : "project_id",
+        "sourceType" : "varchar",
+        "odsType" : "varchar(32)",
+        "comment" : "Project id",
+        "nullable" : false,
+        "primaryKey" : true,
+        "indexed" : false,
+        "incrementalCandidate" : false,
+        "overrideRequired" : false
+      }, {
+        "sourceName" : "project_name",
+        "targetName" : "project_name",
+        "sourceType" : "varchar",
+        "odsType" : "varchar(128)",
+        "comment" : "Project name",
+        "nullable" : false,
+        "primaryKey" : false,
+        "indexed" : false,
+        "incrementalCandidate" : false,
+        "overrideRequired" : false
+      }, {
+        "sourceName" : "owner_name",
+        "targetName" : "owner_name",
+        "sourceType" : "varchar",
+        "odsType" : "varchar(64)",
+        "comment" : "Owner",
+        "nullable" : true,
+        "primaryKey" : false,
+        "indexed" : false,
+        "incrementalCandidate" : false,
+        "overrideRequired" : false
+      }, {
+        "sourceName" : "budget_amount",
+        "targetName" : "budget_amount",
+        "sourceType" : "numeric",
+        "odsType" : "numeric(18,2)",
+        "comment" : "Budget amount",
+        "nullable" : true,
+        "primaryKey" : false,
+        "indexed" : false,
+        "incrementalCandidate" : false,
+        "overrideRequired" : true
+      }, {
+        "sourceName" : "progress_pct",
+        "targetName" : "progress_pct",
+        "sourceType" : "numeric",
+        "odsType" : "numeric(6,2)",
+        "comment" : "Progress percentage",
+        "nullable" : true,
+        "primaryKey" : false,
+        "indexed" : false,
+        "incrementalCandidate" : false,
+        "overrideRequired" : true
+      }, {
+        "sourceName" : "update_time",
+        "targetName" : "update_time",
+        "sourceType" : "timestamp",
+        "odsType" : "timestamp",
+        "comment" : "Update timestamp",
+        "nullable" : false,
+        "primaryKey" : false,
+        "indexed" : false,
+        "incrementalCandidate" : true,
+        "overrideRequired" : false
+      }, {
+        "sourceName" : "is_active",
+        "targetName" : "is_active",
+        "sourceType" : "boolean",
+        "odsType" : "boolean",
+        "comment" : "Active flag",
+        "nullable" : true,
+        "primaryKey" : false,
+        "indexed" : false,
+        "incrementalCandidate" : false,
+        "overrideRequired" : false
+      } ],
+      "technicalColumns" : [ {
+        "name" : "ods_id",
+        "dataType" : "varchar(64)",
+        "comment" : "ODS 行标识"
+      }, {
+        "name" : "source_system",
+        "dataType" : "varchar(128)",
+        "comment" : "来源系统"
+      }, {
+        "name" : "source_table",
+        "dataType" : "varchar(256)",
+        "comment" : "来源表"
+      }, {
+        "name" : "source_pk",
+        "dataType" : "varchar(512)",
+        "comment" : "来源主键值"
+      }, {
+        "name" : "extract_time",
+        "dataType" : "timestamp",
+        "comment" : "抽取时间"
+      }, {
+        "name" : "batch_id",
+        "dataType" : "varchar(128)",
+        "comment" : "接入批次"
+      }, {
+        "name" : "is_deleted",
+        "dataType" : "boolean",
+        "comment" : "源端删除标记"
+      }, {
+        "name" : "created_at",
+        "dataType" : "timestamp",
+        "comment" : "ODS 创建时间"
+      }, {
+        "name" : "updated_at",
+        "dataType" : "timestamp",
+        "comment" : "ODS 更新时间"
+      }, {
+        "name" : "raw_json",
+        "dataType" : "text",
+        "comment" : "源记录原始 JSON"
+      } ],
+      "createTableSql" : "CREATE TABLE IF NOT EXISTS \"ods\".\"ods_erp_smoke_project\" (\n  \"project_id\" varchar(32),\n  \"project_name\" varchar(128),\n  \"owner_name\" varchar(64),\n  \"budget_amount\" numeric(18,2),\n  \"progress_pct\" numeric(6,2),\n  \"update_time\" timestamp,\n  \"is_active\" boolean,\n  \"ods_id\" varchar(64),\n  \"source_system\" varchar(128),\n  \"source_table\" varchar(256),\n  \"source_pk\" varchar(512),\n  \"extract_time\" timestamp,\n  \"batch_id\" varchar(128),\n  \"is_deleted\" boolean,\n  \"created_at\" timestamp,\n  \"updated_at\" timestamp,\n  \"raw_json\" text\n);",
+      "dbtSourceYaml" : "- name: ods_erp_smoke_project\n  description: \"ODS generated from dts_smoke.erp_project\"\n  meta:\n    source_schema: \"dts_smoke\"\n    source_table: \"erp_project\"\n    system: \"\"\n    biz: \"\"\n    entity: \"\"\n  columns:\n    - name: project_id\n      data_type: \"varchar(32)\"\n      description: \"Project id\"\n    - name: project_name\n      data_type: \"varchar(128)\"\n      description: \"Project name\"\n    - name: owner_name\n      data_type: \"varchar(64)\"\n      description: \"Owner\"\n    - name: budget_amount\n      data_type: \"numeric(18,2)\"\n      description: \"Budget amount\"\n    - name: progress_pct\n      data_type: \"numeric(6,2)\"\n      description: \"Progress percentage\"\n    - name: update_time\n      data_type: \"timestamp\"\n      description: \"Update timestamp\"\n    - name: is_active\n      data_type: \"boolean\"\n      description: \"Active flag\"\n    - name: ods_id\n      data_type: \"varchar(64)\"\n      description: \"ODS 行标识\"\n      meta:\n        dts_technical: true\n    - name: source_system\n      data_type: \"varchar(128)\"\n      description: \"来源系统\"\n      meta:\n        dts_technical: true\n    - name: source_table\n      data_type: \"varchar(256)\"\n      description: \"来源表\"\n      meta:\n        dts_technical: true\n    - name: source_pk\n      data_type: \"varchar(512)\"\n      description: \"来源主键值\"\n      meta:\n        dts_technical: true\n    - name: extract_time\n      data_type: \"timestamp\"\n      description: \"抽取时间\"\n      meta:\n        dts_technical: true\n    - name: batch_id\n      data_type: \"varchar(128)\"\n      description: \"接入批次\"\n      meta:\n        dts_technical: true\n    - name: is_deleted\n      data_type: \"boolean\"\n      description: \"源端删除标记\"\n      meta:\n        dts_technical: true\n    - name: created_at\n      data_type: \"timestamp\"\n      description: \"ODS 创建时间\"\n      meta:\n        dts_technical: true\n    - name: updated_at\n      data_type: \"timestamp\"\n      description: \"ODS 更新时间\"\n      meta:\n        dts_technical: true\n    - name: raw_json\n      data_type: \"text\"\n      description: \"源记录原始 JSON\"\n      meta:\n        dts_technical: true\n",
+      "addaxJobDraft" : {
+        "syncMode" : "incremental",
+        "reader" : {
+          "name" : "postgresqlreader",
+          "parameter" : {
+            "connection" : [ {
+              "jdbcUrl" : "jdbc:postgresql://dts-pg:5432/biadmin",
+              "table" : [ "dts_smoke.erp_project" ]
+            } ]
+          }
+        },
+        "writer" : {
+          "name" : "postgresqlwriter",
+          "parameter" : {
+            "table" : "ods.ods_erp_smoke_project",
+            "column" : [ "project_id", "project_name", "owner_name", "budget_amount", "progress_pct", "update_time", "is_active" ]
+          }
+        },
+        "requiresConfirmation" : true
+      },
+      "airflowDagDraft" : {
+        "dagId" : "dts_ingest_biadmin_ods_erp_smoke_project",
+        "tasks" : [ "generate_addax_job", "ensure_ods_table", "run_addax", "refresh_dbt_sources", "write_lineage" ],
+        "source" : "dts_smoke.erp_project",
+        "target" : "ods.ods_erp_smoke_project"
+      },
+      "warnings" : [ "字段 budget_amount 的数值精度需要人工确认", "字段 progress_pct 的数值精度需要人工确认" ]
+    } ],
+    "warnings" : [ "字段 budget_amount 的数值精度需要人工确认", "字段 progress_pct 的数值精度需要人工确认" ]
+  }
+}

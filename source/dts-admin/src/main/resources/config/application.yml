@@ -264,6 +264,15 @@ auditing:
     service-tokens: ${AUDIT_INGEST_SERVICE_TOKENS:${DTS_ADMIN_SERVICE_TOKEN:}}
     # Optional whitelist of caller-declared sourceSystem values; empty = accept any.
     allowed-source-systems: ${AUDIT_INGEST_ALLOWED_SOURCES:}
+  dictionary:
+    # HMAC verification of audit dictionary files (audit-button-registry.json, legacy-action-mappings.json).
+    # The HMAC key MUST be held by the authorization administrator (authadmin), not the system administrator.
+    # When verify-signatures=true and hmac-key is empty, dictionary loading fails closed (audit subsystem
+    # cannot start) — this is intentional fail-secure.
+    verify-signatures: ${AUDIT_DICT_VERIFY_SIG:false}
+    hmac-key: ${AUDIT_DICT_HMAC_KEY:}
+    legacy-keys: ${AUDIT_DICT_HMAC_LEGACY_KEYS:}
+    signature-suffix: ${AUDIT_DICT_SIG_SUFFIX:.sig}
 
 
 dts:

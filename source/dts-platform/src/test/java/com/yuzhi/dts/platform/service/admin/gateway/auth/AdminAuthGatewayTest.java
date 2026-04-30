@@ -9,6 +9,7 @@ import static org.springframework.http.HttpMethod.POST;
 import static org.springframework.test.web.client.match.MockRestRequestMatchers.method;
 import static org.springframework.test.web.client.match.MockRestRequestMatchers.requestTo;
 import static org.springframework.test.web.client.response.MockRestResponseCreators.withSuccess;
+import static org.springframework.test.web.client.response.MockRestResponseCreators.withStatus;
 
 import com.yuzhi.dts.platform.config.DtsAdminProperties;
 import com.yuzhi.dts.platform.service.admin.gateway.support.AdminGatewayHeaders;
@@ -19,6 +20,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.web.client.RestTemplateBuilder;
 import org.springframework.http.HttpHeaders;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.test.util.ReflectionTestUtils;
 import org.springframework.test.web.client.MockRestServiceServer;
@@ -77,6 +79,31 @@ class AdminAuthGatewayTest {
 
         assertThat(result.user()).containsEntry("username", "alice");
         assertThat(result.user().get("roles")).asList().contains("ROLE_DEPT_DATA_OWNER");
+    }
+
+    @Test
+    void profileShouldExposeMissingEndpointForLegacyAdminFallback() {
+        server
+            .expect(requestTo("http://dts-admin.test:8081/api/keycloak/auth/platform/profile?auditSilent=true"))
+            .andExpect(method(POST))
+            .andRespond(
+                withStatus(HttpStatus.NOT_FOUND)
+                    .contentType(MediaType.APPLICATION_PROBLEM_JSON)
+                    .body(
+                        """
+                        {
+                          "status":404,
+                          "message":"error.http.404",
+                          "detail":"No static resource api/keycloak/auth/platform/profile."
+                        }
+                        """
+                    )
+            );
+
+        org.assertj.core.api.Assertions
+            .assertThatThrownBy(() -> gateway.profile("alice", Map.of("username", "alice"), "kc-access"))
+            .isInstanceOf(AdminAuthGateway.ProfileEndpointUnavailableException.class)
+            .hasMessageContaining("error.http.404");
     }
 
     @Test

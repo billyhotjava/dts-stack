@@ -71,6 +71,11 @@ export const resolveDashboardComponentOverride = (path?: string) => {
 	return normalized ? PATH_COMPONENT_OVERRIDES[normalized] : "";
 };
 
+const isWithinBase = (pathname: string, normalizedBase?: string) => {
+	if (!normalizedBase) return true;
+	return pathname === normalizedBase || pathname.startsWith(`${normalizedBase}/`);
+};
+
 export function DynamicMenuResolver({ base }: Props) {
 	const location = useLocation();
 	const menus = useMenuStore((s) => s.menus);
@@ -78,6 +83,7 @@ export function DynamicMenuResolver({ base }: Props) {
 	const pathname = normalizeMenuPath(location.pathname || "/");
 	const normalizedBase = base ? normalizeMenuPath(base) : "";
 	const menusLoaded = Array.isArray(menus) && menus.length > 0;
+	const directOverridePath = isWithinBase(pathname, normalizedBase) ? resolveDashboardComponentOverride(pathname) : "";
 	const fallbackMenuPath = useMemo(() => firstAccessibleMenuPath(Array.isArray(menus) ? menus : []), [menus]);
 	const defaultRoute = GLOBAL_CONFIG.defaultRoute || "/workbench";
 
@@ -93,13 +99,16 @@ export function DynamicMenuResolver({ base }: Props) {
 
 	const match = useMemo(() => {
 		if (!menusLoaded) return null;
-		if (normalizedBase && pathname && !pathname.startsWith(normalizedBase)) {
+		if (!isWithinBase(pathname, normalizedBase)) {
 			return null;
 		}
 		return findBestMenuMatch(menus || [], pathname);
 	}, [menus, menusLoaded, normalizedBase, pathname]);
 
 	if (!menusLoaded) {
+		if (directOverridePath) {
+			return <>{Component(directOverridePath)}</>;
+		}
 		return <LineLoading />;
 	}
 
@@ -114,7 +123,8 @@ export function DynamicMenuResolver({ base }: Props) {
 
 	const resolvedPath = resolveMenuPath(match, meta);
 	const componentPath = typeof match.component === "string" ? match.component.trim() : "";
-	const overridePath = resolvedPath && !isExternalPath(resolvedPath) ? resolveDashboardComponentOverride(resolvedPath) : "";
+	const overridePath =
+		resolvedPath && !isExternalPath(resolvedPath) ? resolveDashboardComponentOverride(resolvedPath) : "";
 	if (componentPath || overridePath) {
 		return <>{Component(overridePath || componentPath)}</>;
 	}

@@ -119,6 +119,44 @@ class IngestionTaskProxyResourceTest {
     }
 
     @Test
+    void backfillTaskIsExposedViaPlatformProxy() throws Exception {
+        when(ingestionClient.backfillTask(
+                5L,
+                Map.of(
+                    "windowStart", "2026-04-29T00:00:00Z",
+                    "windowEnd", "2026-04-30T00:00:00Z",
+                    "column", "update_time"
+                )
+            ))
+            .thenReturn(
+                new ApiResponse<>(
+                    202,
+                    "补数已提交，正在后台执行",
+                    Map.of("taskId", 5, "executionId", 9, "status", "submitted", "async", true)
+                )
+            );
+
+        mockMvc.perform(post("/api/ingestion/tasks/5/backfill")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"windowStart\":\"2026-04-29T00:00:00Z\",\"windowEnd\":\"2026-04-30T00:00:00Z\",\"column\":\"update_time\"}"))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.status").value(200))
+            .andExpect(jsonPath("$.data.taskId").value(5))
+            .andExpect(jsonPath("$.data.executionId").value(9))
+            .andExpect(jsonPath("$.data.status").value("submitted"))
+            .andExpect(jsonPath("$.data.async").value(true));
+
+        verify(ingestionClient).backfillTask(
+            5L,
+            Map.of(
+                "windowStart", "2026-04-29T00:00:00Z",
+                "windowEnd", "2026-04-30T00:00:00Z",
+                "column", "update_time"
+            )
+        );
+    }
+
+    @Test
     void retryExecutionAsyncIsExposedViaPlatformProxy() throws Exception {
         when(ingestionClient.retryExecutionAsync(1L, 2L, Map.of("mode", "FAILED_ONLY")))
             .thenReturn(new ApiResponse<>(202, "accepted", Map.of("taskId", 1, "executionId", 2, "status", "submitted", "async", true)));

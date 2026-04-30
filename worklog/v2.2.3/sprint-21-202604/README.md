@@ -195,6 +195,11 @@ Sprint-20 血缘模型 ──────────────────┘
 - 2026-04-30：完成 F4/F5 前端收口，Schema Discover 弹窗增加字段包含/排除、目标字段重命名、目标 ODS 类型覆盖表格，并补齐全量追加和主键增量策略控件，预览、预检、ODS apply 和 sync-task-draft 共用同一份 ODS request。
 - 2026-04-30：继续推进 F8 凭据安全收口，用户侧数据源详情不再返回 JDBC/API 明文 secrets，运行时明文凭据切换到仅内部 `service:*` principal + `X-DTS-Service-Token` 可调用的 `runtime-detail`，ingestion 运行链路同步改用内部运行时详情。
 - 2026-04-30：继续推进 F8 工业级验收证据，新增文件源 smoke、凭据脱敏审计脚本、验收记录模板和 PostgreSQL/MySQL/Oracle/SQL Server/DM8 方言验证矩阵。
+- 2026-04-30：补齐 F8 凭据边界单测，覆盖用户 principal、伪造服务头和内部服务令牌三类 `runtime-detail` 访问路径；同步修复审计日志代理测试对 BFF cookie/Authorization fallback 签名的适配。
+- 2026-04-30：补齐 ingestion 侧 `PlatformInfraClientTest`，验证数据源运行时详情必须访问 `/runtime-detail`，并携带 `X-DTS-Service` 与 `X-DTS-Service-Token`。
+- 2026-04-30：验收脚本补齐 `DTS_COOKIE` / `DTS_COOKIE_JAR` 支持，既可用 Bearer token，也可用 HttpOnly cookie 跑 Connector Center、文件源和凭据脱敏 smoke。
+- 2026-04-30：补齐 platform 入湖代理 `/api/ingestion/tasks/{id}/backfill`，让 Run Center 补数能力可通过统一平台 API 被验收脚本和前端调用。
+- 2026-04-30：按 `dev`/`app`/`legacy` 三模式一致原则调整服务令牌方案，不再要求初始化后修改 `.env` 或 compose；平台内部服务 token 由数据库 hash 管理，ingestion 通过 `infra_service_settings.platform.serviceToken` 保存运行时 token 并脱敏/加密。
 
 ## 仍待工业级补齐
 

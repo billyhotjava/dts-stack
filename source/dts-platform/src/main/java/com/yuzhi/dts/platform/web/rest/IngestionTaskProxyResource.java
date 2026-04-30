@@ -249,6 +249,16 @@ public class IngestionTaskProxyResource {
         return buildAsyncProxyResponse(response);
     }
 
+    @PostMapping("/tasks/{id}/backfill")
+    @PreAuthorize(INFRA_MAINTAINER_EXPRESSION)
+    public ResponseEntity<ApiResponse<Map<String, Object>>> backfillTask(
+        @PathVariable("id") Long id,
+        @RequestBody Map<String, Object> payload
+    ) {
+        ApiResponse<Map<String, Object>> response = ingestionClient.backfillTask(id, payload);
+        return buildAsyncProxyResponse(response);
+    }
+
     @PostMapping("/tasks/{id}/executions/{executionId}/retry")
     @PreAuthorize(INFRA_MAINTAINER_EXPRESSION)
     public ResponseEntity<ApiResponse<Map<String, Object>>> retryExecution(

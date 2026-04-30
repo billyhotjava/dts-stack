@@ -147,6 +147,10 @@ public class IngestionServiceClient {
         return exchangeTaskLong("/api/ingestion/tasks/" + id + "/execute/async", HttpMethod.POST, null);
     }
 
+    public ApiResponse<Map<String, Object>> backfillTask(Long id, Object payload) {
+        return exchangeTaskLong("/api/ingestion/tasks/" + id + "/backfill", HttpMethod.POST, payload);
+    }
+
     public ApiResponse<Map<String, Object>> rebuildDag(Long id) {
         return exchangeTask("/api/ingestion/tasks/" + id + "/dag/rebuild", HttpMethod.POST, null, null);
     }

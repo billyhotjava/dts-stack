@@ -84,6 +84,9 @@ public class AdminAuthGateway {
             Map<String, Object> user = data == null ? Map.of() : (Map<String, Object>) data.getOrDefault("user", Map.of());
             return new ProfileResult(user);
         } catch (AdminGatewayException ex) {
+            if (ex.getUpstreamStatus() != null && ex.getUpstreamStatus() == 404) {
+                throw new ProfileEndpointUnavailableException(messageFrom(ex.getMessage(), "user profile endpoint unavailable"), ex);
+            }
             if (ex.getUpstreamStatus() != null && (ex.getUpstreamStatus() == 401 || ex.getUpstreamStatus() == 403)) {
                 throw new BadCredentialsException(messageFrom(ex.getMessage(), "user profile rejected"));
             }
@@ -211,4 +214,11 @@ public class AdminAuthGateway {
     public record PkiChallengeView(String challengeId, String nonce, String aud, Long ts, Long exp) {}
 
     public record ProfileResult(Map<String, Object> user) {}
+
+    public static class ProfileEndpointUnavailableException extends RuntimeException {
+
+        public ProfileEndpointUnavailableException(String message, Throwable cause) {
+            super(message, cause);
+        }
+    }
 }

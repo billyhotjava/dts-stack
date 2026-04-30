@@ -38,10 +38,25 @@ public class SvcTokenAuthService {
         return new TokenPrincipal(username, dept, personnel, token);
     }
 
+    public TokenPrincipal authenticateService(String plainToken, String serviceName) {
+        TokenPrincipal principal = authenticate(plainToken);
+        if (principal == null || principal.token() == null || !StringUtils.hasText(serviceName)) {
+            return null;
+        }
+        String createdBy = principal.token().getCreatedBy();
+        String normalizedService = serviceName.trim();
+        if (
+            StringUtils.hasText(createdBy) &&
+            ("service:" + normalizedService).equalsIgnoreCase(createdBy.trim())
+        ) {
+            return principal;
+        }
+        return null;
+    }
+
     public static boolean isSameUser(TokenPrincipal principal, String expectedUsername) {
         if (principal == null) return false;
         if (!StringUtils.hasText(expectedUsername)) return true;
         return Objects.equals(principal.username(), expectedUsername.trim());
     }
 }
-

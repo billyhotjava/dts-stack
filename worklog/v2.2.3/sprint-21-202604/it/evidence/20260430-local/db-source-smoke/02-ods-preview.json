@@ -1,0 +1,171 @@
+{
+  "status" : 200,
+  "message" : "OK",
+  "code" : null,
+  "data" : {
+    "dataSourceId" : "a0000000-0000-0000-0000-000000000001",
+    "dataSourceName" : "数据仓库 (biadmin)",
+    "odsSchema" : "ods",
+    "tables" : [ {
+      "sourceSchema" : "dts_smoke",
+      "sourceTable" : "erp_project",
+      "odsSchema" : "ods",
+      "odsTable" : "ods_erp_smoke_project",
+      "systemCode" : "erp",
+      "bizCode" : "smoke",
+      "entityCode" : "project",
+      "primaryKeys" : [ "project_id" ],
+      "incrementalCandidates" : [ "update_time" ],
+      "columns" : [ {
+        "sourceName" : "project_id",
+        "targetName" : "project_id",
+        "sourceType" : "varchar",
+        "odsType" : "varchar(32)",
+        "comment" : "Project id",
+        "nullable" : false,
+        "primaryKey" : true,
+        "indexed" : false,
+        "incrementalCandidate" : false,
+        "overrideRequired" : false
+      }, {
+        "sourceName" : "project_name",
+        "targetName" : "project_name",
+        "sourceType" : "varchar",
+        "odsType" : "varchar(128)",
+        "comment" : "Project name",
+        "nullable" : false,
+        "primaryKey" : false,
+        "indexed" : false,
+        "incrementalCandidate" : false,
+        "overrideRequired" : false
+      }, {
+        "sourceName" : "owner_name",
+        "targetName" : "owner_name",
+        "sourceType" : "varchar",
+        "odsType" : "varchar(64)",
+        "comment" : "Owner",
+        "nullable" : true,
+        "primaryKey" : false,
+        "indexed" : false,
+        "incrementalCandidate" : false,
+        "overrideRequired" : false
+      }, {
+        "sourceName" : "budget_amount",
+        "targetName" : "budget_amount",
+        "sourceType" : "numeric",
+        "odsType" : "numeric(18,2)",
+        "comment" : "Budget amount",
+        "nullable" : true,
+        "primaryKey" : false,
+        "indexed" : false,
+        "incrementalCandidate" : false,
+        "overrideRequired" : true
+      }, {
+        "sourceName" : "progress_pct",
+        "targetName" : "progress_pct",
+        "sourceType" : "numeric",
+        "odsType" : "numeric(6,2)",
+        "comment" : "Progress percentage",
+        "nullable" : true,
+        "primaryKey" : false,
+        "indexed" : false,
+        "incrementalCandidate" : false,
+        "overrideRequired" : true
+      }, {
+        "sourceName" : "update_time",
+        "targetName" : "update_time",
+        "sourceType" : "timestamp",
+        "odsType" : "timestamp",
+        "comment" : "Update timestamp",
+        "nullable" : false,
+        "primaryKey" : false,
+        "indexed" : false,
+        "incrementalCandidate" : true,
+        "overrideRequired" : false
+      }, {
+        "sourceName" : "is_active",
+        "targetName" : "is_active",
+        "sourceType" : "boolean",
+        "odsType" : "boolean",
+        "comment" : "Active flag",
+        "nullable" : true,
+        "primaryKey" : false,
+        "indexed" : false,
+        "incrementalCandidate" : false,
+        "overrideRequired" : false
+      } ],
+      "technicalColumns" : [ {
+        "name" : "ods_id",
+        "dataType" : "varchar(64)",
+        "comment" : "ODS 行标识"
+      }, {
+        "name" : "source_system",
+        "dataType" : "varchar(128)",
+        "comment" : "来源系统"
+      }, {
+        "name" : "source_table",
+        "dataType" : "varchar(256)",
+        "comment" : "来源表"
+      }, {
+        "name" : "source_pk",
+        "dataType" : "varchar(512)",
+        "comment" : "来源主键值"
+      }, {
+        "name" : "extract_time",
+        "dataType" : "timestamp",
+        "comment" : "抽取时间"
+      }, {
+        "name" : "batch_id",
+        "dataType" : "varchar(128)",
+        "comment" : "接入批次"
+      }, {
+        "name" : "is_deleted",
+        "dataType" : "boolean",
+        "comment" : "源端删除标记"
+      }, {
+        "name" : "created_at",
+        "dataType" : "timestamp",
+        "comment" : "ODS 创建时间"
+      }, {
+        "name" : "updated_at",
+        "dataType" : "timestamp",
+        "comment" : "ODS 更新时间"
+      }, {
+        "name" : "raw_json",
+        "dataType" : "text",
+        "comment" : "源记录原始 JSON"
+      } ],
+      "createTableSql" : "CREATE TABLE IF NOT EXISTS \"ods\".\"ods_erp_smoke_project\" (\n  \"project_id\" varchar(32),\n  \"project_name\" varchar(128),\n  \"owner_name\" varchar(64),\n  \"budget_amount\" numeric(18,2),\n  \"progress_pct\" numeric(6,2),\n  \"update_time\" timestamp,\n  \"is_active\" boolean,\n  \"ods_id\" varchar(64),\n  \"source_system\" varchar(128),\n  \"source_table\" varchar(256),\n  \"source_pk\" varchar(512),\n  \"extract_time\" timestamp,\n  \"batch_id\" varchar(128),\n  \"is_deleted\" boolean,\n  \"created_at\" timestamp,\n  \"updated_at\" timestamp,\n  \"raw_json\" text\n);",
+      "dbtSourceYaml" : "- name: ods_erp_smoke_project\n  description: \"ODS generated from dts_smoke.erp_project\"\n  meta:\n    source_schema: \"dts_smoke\"\n    source_table: \"erp_project\"\n    system: \"\"\n    biz: \"\"\n    entity: \"\"\n  columns:\n    - name: project_id\n      data_type: \"varchar(32)\"\n      description: \"Project id\"\n    - name: project_name\n      data_type: \"varchar(128)\"\n      description: \"Project name\"\n    - name: owner_name\n      data_type: \"varchar(64)\"\n      description: \"Owner\"\n    - name: budget_amount\n      data_type: \"numeric(18,2)\"\n      description: \"Budget amount\"\n    - name: progress_pct\n      data_type: \"numeric(6,2)\"\n      description: \"Progress percentage\"\n    - name: update_time\n      data_type: \"timestamp\"\n      description: \"Update timestamp\"\n    - name: is_active\n      data_type: \"boolean\"\n      description: \"Active flag\"\n    - name: ods_id\n      data_type: \"varchar(64)\"\n      description: \"ODS 行标识\"\n      meta:\n        dts_technical: true\n    - name: source_system\n      data_type: \"varchar(128)\"\n      description: \"来源系统\"\n      meta:\n        dts_technical: true\n    - name: source_table\n      data_type: \"varchar(256)\"\n      description: \"来源表\"\n      meta:\n        dts_technical: true\n    - name: source_pk\n      data_type: \"varchar(512)\"\n      description: \"来源主键值\"\n      meta:\n        dts_technical: true\n    - name: extract_time\n      data_type: \"timestamp\"\n      description: \"抽取时间\"\n      meta:\n        dts_technical: true\n    - name: batch_id\n      data_type: \"varchar(128)\"\n      description: \"接入批次\"\n      meta:\n        dts_technical: true\n    - name: is_deleted\n      data_type: \"boolean\"\n      description: \"源端删除标记\"\n      meta:\n        dts_technical: true\n    - name: created_at\n      data_type: \"timestamp\"\n      description: \"ODS 创建时间\"\n      meta:\n        dts_technical: true\n    - name: updated_at\n      data_type: \"timestamp\"\n      description: \"ODS 更新时间\"\n      meta:\n        dts_technical: true\n    - name: raw_json\n      data_type: \"text\"\n      description: \"源记录原始 JSON\"\n      meta:\n        dts_technical: true\n",
+      "addaxJobDraft" : {
+        "syncMode" : "incremental",
+        "reader" : {
+          "name" : "postgresqlreader",
+          "parameter" : {
+            "connection" : [ {
+              "jdbcUrl" : "jdbc:postgresql://dts-pg:5432/biadmin",
+              "table" : [ "dts_smoke.erp_project" ]
+            } ]
+          }
+        },
+        "writer" : {
+          "name" : "postgresqlwriter",
+          "parameter" : {
+            "table" : "ods.ods_erp_smoke_project",
+            "column" : [ "project_id", "project_name", "owner_name", "budget_amount", "progress_pct", "update_time", "is_active" ]
+          }
+        },
+        "requiresConfirmation" : true
+      },
+      "airflowDagDraft" : {
+        "dagId" : "dts_ingest_biadmin_ods_erp_smoke_project",
+        "tasks" : [ "generate_addax_job", "ensure_ods_table", "run_addax", "refresh_dbt_sources", "write_lineage" ],
+        "source" : "dts_smoke.erp_project",
+        "target" : "ods.ods_erp_smoke_project"
+      },
+      "warnings" : [ "字段 budget_amount 的数值精度需要人工确认", "字段 progress_pct 的数值精度需要人工确认" ]
+    } ],
+    "dbtSourceYaml" : "version: 2\n\nsources:\n  - name: ods\n    schema: ods\n    tables:\n      - name: ods_erp_smoke_project\n        description: \"ODS generated from dts_smoke.erp_project\"\n        meta:\n          source_schema: \"dts_smoke\"\n          source_table: \"erp_project\"\n          system: \"erp\"\n          biz: \"smoke\"\n          entity: \"project\"\n        columns:\n          - name: project_id\n            data_type: \"varchar(32)\"\n            description: \"Project id\"\n          - name: project_name\n            data_type: \"varchar(128)\"\n            description: \"Project name\"\n          - name: owner_name\n            data_type: \"varchar(64)\"\n            description: \"Owner\"\n          - name: budget_amount\n            data_type: \"numeric(18,2)\"\n            description: \"Budget amount\"\n          - name: progress_pct\n            data_type: \"numeric(6,2)\"\n            description: \"Progress percentage\"\n          - name: update_time\n            data_type: \"timestamp\"\n            description: \"Update timestamp\"\n          - name: is_active\n            data_type: \"boolean\"\n            description: \"Active flag\"\n          - name: ods_id\n            data_type: \"varchar(64)\"\n            description: \"ODS 行标识\"\n            meta:\n              dts_technical: true\n          - name: source_system\n            data_type: \"varchar(128)\"\n            description: \"来源系统\"\n            meta:\n              dts_technical: true\n          - name: source_table\n            data_type: \"varchar(256)\"\n            description: \"来源表\"\n            meta:\n              dts_technical: true\n          - name: source_pk\n            data_type: \"varchar(512)\"\n            description: \"来源主键值\"\n            meta:\n              dts_technical: true\n          - name: extract_time\n            data_type: \"timestamp\"\n            description: \"抽取时间\"\n            meta:\n              dts_technical: true\n          - name: batch_id\n            data_type: \"varchar(128)\"\n            description: \"接入批次\"\n            meta:\n              dts_technical: true\n          - name: is_deleted\n            data_type: \"boolean\"\n            description: \"源端删除标记\"\n            meta:\n              dts_technical: true\n          - name: created_at\n            data_type: \"timestamp\"\n            description: \"ODS 创建时间\"\n            meta:\n              dts_technical: true\n          - name: updated_at\n            data_type: \"timestamp\"\n            description: \"ODS 更新时间\"\n            meta:\n              dts_technical: true\n          - name: raw_json\n            data_type: \"text\"\n            description: \"源记录原始 JSON\"\n            meta:\n              dts_technical: true\n",
+    "warnings" : [ "字段 budget_amount 的数值精度需要人工确认", "字段 progress_pct 的数值精度需要人工确认" ]
+  }
+}
