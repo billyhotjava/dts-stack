@@ -18,6 +18,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.yuzhi.dts.platform.service.audit.AuditService;
 import com.yuzhi.dts.platform.service.audit.AuditFlowManager;
 import com.yuzhi.dts.platform.security.session.PortalSessionActivityService;
+import com.yuzhi.dts.platform.service.permission.DashboardShareService;
 import com.yuzhi.dts.platform.service.visualization.BiReportLinkService;
 import com.yuzhi.dts.platform.service.visualization.dto.BiReportLinkDto;
 import java.time.Instant;
@@ -66,13 +67,18 @@ class ReportsResourceWebMvcTest {
     @MockBean
     private AuditService auditService;
 
-    
+
     @MockBean
     private AuditFlowManager auditFlowManager;
-    
-    
+
+
     @MockBean
     private PortalSessionActivityService portalSessionActivityService;
+
+    // Step 2.2 把 DashboardShareService 加入了 ReportsResource 的依赖；
+    // 测试上下文需要相应 mock 否则 @WebMvcTest 启动失败。
+    @MockBean
+    private DashboardShareService dashboardShareService;
 
     @Test
     @WithMockUser(authorities = {"ROLE_EMPLOYEE", "ROLE_INTERNAL"})
@@ -199,6 +205,8 @@ class ReportsResourceWebMvcTest {
     @WithMockUser(authorities = {"ROLE_EMPLOYEE", "ROLE_INTERNAL"})
     void visitShouldForwardScreenMetadataToService() throws Exception {
         UUID id = UUID.randomUUID();
+        when(reports.touchVisit(any(), any(), any(), any(), any(), any()))
+            .thenReturn(BiReportLinkService.VisitOutcome.LOGGED);
         Map<String, Object> payload = Map.of(
             "id",
             id.toString(),
@@ -226,6 +234,40 @@ class ReportsResourceWebMvcTest {
             eq("/bi/screens/7/preview"),
             eq("DTS_BI"),
             eq("INTERNAL")
+        );
+        verify(auditService).auditAction(
+            eq("VIS_OPEN"),
+            eq(com.yuzhi.dts.common.audit.AuditStage.SUCCESS),
+            eq("screen-7"),
+            any()
+        );
+    }
+
+    @Test
+    @WithMockUser(authorities = {"ROLE_EMPLOYEE", "ROLE_INTERNAL"})
+    void visitShouldReportDenyOnAccessDeniedAndAuditFail() throws Exception {
+        // H1 修复回归：当大屏 Guard 拒绝时，VIS_OPEN 必须落 FAIL 审计，
+        // 响应 body.ok=false，避免审计员看到「access deny + open success」矛盾记录。
+        UUID id = UUID.randomUUID();
+        when(reports.touchVisit(any(), any(), any(), any(), any(), any()))
+            .thenReturn(BiReportLinkService.VisitOutcome.DENIED);
+        Map<String, Object> payload = Map.of(
+            "id", id.toString(),
+            "code", "blocked-screen",
+            "classification", "CONFIDENTIAL"
+        );
+
+        mockMvc
+            .perform(post("/api/reports/visit").contentType(MediaType.APPLICATION_JSON).content(objectMapper.writeValueAsBytes(payload)))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.data.ok").value(false))
+            .andExpect(jsonPath("$.data.reason").value("access_denied"));
+
+        verify(auditService).auditAction(
+            eq("VIS_OPEN"),
+            eq(com.yuzhi.dts.common.audit.AuditStage.FAIL),
+            eq("blocked-screen"),
+            any()
         );
     }
 

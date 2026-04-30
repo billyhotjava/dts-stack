@@ -188,15 +188,30 @@ public class BiReportLinkService {
         repo.delete(link);
     }
 
-    // Always own its tx so a readOnly caller cannot block the visit-log write.
-    @Transactional(propagation = Propagation.REQUIRES_NEW)
-    public void touchVisit(UUID id, String code) {
-        touchVisit(id, code, null, null, null, null);
+    /**
+     * touchVisit 的结果，供外层 controller 决定 VIS_OPEN 审计 stage 与响应 body。
+     *
+     * - LOGGED            正常访问，已更新 lastVisitedAt 并写 visit 行
+     * - LOGGED_OVERRIDE   越级允许，已写 visit + 一条独立的越级审计
+     * - DENIED            Guard 拒绝，未写 visit；已写一条 fail 审计
+     * - SKIPPED           mirror 不存在 / code 非法 / 新建路径，未写 visit 也未 deny
+     */
+    public enum VisitOutcome {
+        LOGGED,
+        LOGGED_OVERRIDE,
+        DENIED,
+        SKIPPED,
     }
 
     // Always own its tx so a readOnly caller cannot block the visit-log write.
     @Transactional(propagation = Propagation.REQUIRES_NEW)
-    public void touchVisit(UUID id, String code, String title, String url, String engine, String classification) {
+    public VisitOutcome touchVisit(UUID id, String code) {
+        return touchVisit(id, code, null, null, null, null);
+    }
+
+    // Always own its tx so a readOnly caller cannot block the visit-log write.
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public VisitOutcome touchVisit(UUID id, String code, String title, String url, String engine, String classification) {
         String normalizedCode = normalizeCode(code);
         BiReportLink link = null;
         if (id != null) {
@@ -209,22 +224,23 @@ public class BiReportLinkService {
         if (link == null) {
             link = newScreenVisitLink(normalizedCode, title, engine, classification);
             if (link == null) {
-                return;
+                return VisitOutcome.SKIPPED;
             }
             createdJustNow = true;
         }
         // 对已存在的大屏镜像做 Guard 校验。
-        // - DENY → 不写 visit，写审计 failure（信息泄露考虑：不返 error 给前端，
-        //   静默丢弃 + 留审计便于追溯）
-        // - OVERRIDE_USED → 写一条独立审计；越级访问的合规留痕
+        // - DENY → 不写 visit，写审计 failure，并向上层报告 DENIED，
+        //   便于 controller 把 VIS_OPEN 的 stage 设成 FAIL
+        // - OVERRIDE_USED → 写一条独立审计；上层用 LOGGED_OVERRIDE 区分语义
         // 新建 mirror 路径跳过 Guard，让 upstream 自动建表语义不被破坏，
         // 后续访问会正常进入 Guard 分支。
+        boolean overrideUsed = false;
         if (!createdJustNow) {
             DashboardAccessGuard.Caller caller = callerResolver.current();
             DashboardAccessGuard.AccessDecision decision = accessGuard.canView(link, caller);
             if (!decision.allow()) {
                 audit.auditAction("VIS_DASHBOARD_ACCESS_VISIT", AuditStage.FAIL, link.getCode(), "reason=" + decision.reason());
-                return;
+                return VisitOutcome.DENIED;
             }
             if (decision.overrideUsed()) {
                 audit.auditAction(
@@ -233,13 +249,14 @@ public class BiReportLinkService {
                     link.getCode() + "; reason=" + decision.reason(),
                     null
                 );
+                overrideUsed = true;
             }
         }
         Instant now = Instant.now();
         link.setLastVisitedAt(now);
         link = repo.save(link);
         if (link.getId() == null) {
-            return;
+            return overrideUsed ? VisitOutcome.LOGGED_OVERRIDE : VisitOutcome.LOGGED;
         }
 
         // Append a per-visit log row so leader-overview aggregations can
@@ -252,6 +269,7 @@ public class BiReportLinkService {
         visit.setBizDomain(link.getBizDomain());
         visit.setVisitedAt(now);
         visitRepo.save(visit);
+        return overrideUsed ? VisitOutcome.LOGGED_OVERRIDE : VisitOutcome.LOGGED;
     }
 
     private BiReportLink newScreenVisitLink(String code, String title, String engine, String classification) {
