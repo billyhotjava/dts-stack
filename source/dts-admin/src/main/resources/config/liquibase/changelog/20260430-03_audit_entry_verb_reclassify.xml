@@ -1,0 +1,98 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog
+        xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.22.xsd">
+
+    <!--
+        FOLLOWUP-A: backfill historical audit_entry rows that were mis-classified by
+        OperationTypeNormalizer due to BUG-A (verb ordering).
+
+        Before BUG-A was fixed (commit 383456053), the rule order checked GRANT before
+        REVOKE and LOGIN before LOGOUT. Since "撤销授权" contains "授权" and "退出登录"
+        contains "登录", every REVOKE-style and LOGOUT-style action was persisted with
+        operation_kind=GRANT / operation_kind=LOGIN.
+
+        This changeset reclassifies those rows in place. Matching is conservative: we
+        require both
+          (a) operation_kind = the wrong value (GRANT or LOGIN), AND
+          (b) at least one of summary / operation_name contains a Chinese keyword that
+              unambiguously means REVOKE or LOGOUT.
+        Anything that genuinely is GRANT/LOGIN is left untouched.
+
+        Idempotent: applying the changeset a second time is a no-op because the WHERE
+        clause filters by the now-incorrect operation_kind, which has been fixed.
+    -->
+    <changeSet id="20260430-03-audit-verb-reclassify-revoke" author="codex">
+        <preConditions onFail="MARK_RAN">
+            <tableExists tableName="audit_entry"/>
+        </preConditions>
+        <sql dbms="postgresql">
+            UPDATE audit_entry
+               SET operation_kind = 'REVOKE'
+             WHERE operation_kind = 'GRANT'
+               AND (
+                    summary ILIKE '%撤销授权%' OR summary ILIKE '%取消授权%' OR summary ILIKE '%回收授权%' OR
+                    operation_name ILIKE '%撤销授权%' OR operation_name ILIKE '%取消授权%' OR operation_name ILIKE '%回收授权%'
+               );
+        </sql>
+        <rollback>
+            <!-- Pure data restoration is not safe (we can't disambiguate which GRANT rows were
+                 the original false-positives without the audit log of this very migration), so
+                 the rollback is intentionally a no-op marker. Restore from DB snapshot if needed. -->
+            <sql>SELECT 1;</sql>
+        </rollback>
+    </changeSet>
+
+    <changeSet id="20260430-03-audit-verb-reclassify-logout" author="codex">
+        <preConditions onFail="MARK_RAN">
+            <tableExists tableName="audit_entry"/>
+        </preConditions>
+        <sql dbms="postgresql">
+            UPDATE audit_entry
+               SET operation_kind = 'LOGOUT'
+             WHERE operation_kind = 'LOGIN'
+               AND (
+                    summary ILIKE '%退出登录%' OR summary ILIKE '%注销登录%' OR summary ILIKE '%登出%' OR
+                    operation_name ILIKE '%退出登录%' OR operation_name ILIKE '%注销登录%' OR operation_name ILIKE '%登出%'
+               );
+        </sql>
+        <rollback>
+            <sql>SELECT 1;</sql>
+        </rollback>
+    </changeSet>
+
+    <!--
+        Audit-the-audit: leave a trace in audit_entry of this very reclassification so
+        auditors can later see that the verb-kind values were rewritten by an automated
+        migration rather than by a human operator. The triplet (sourceSystem=admin,
+        actor=_system:liquibase, button=AUDIT_BACKFILL_VERB_RECLASSIFY) is unique enough
+        to be filtered out in audit reports if needed.
+    -->
+    <changeSet id="20260430-03-audit-verb-reclassify-trace" author="codex">
+        <preConditions onFail="MARK_RAN">
+            <tableExists tableName="audit_entry"/>
+        </preConditions>
+        <sql dbms="postgresql">
+            INSERT INTO audit_entry (
+                occurred_at, source_system, module_key, module_name,
+                operation_code, operation_name, operation_kind,
+                result, summary, actor_id, actor_name, request_uri, http_method
+            ) VALUES (
+                NOW(), 'admin', 'system-admin', '系统管理',
+                'AUDIT_BACKFILL_VERB_RECLASSIFY',
+                'BUG-A 历史数据回填：GRANT→REVOKE / LOGIN→LOGOUT',
+                'EXECUTE',
+                'SUCCESS',
+                'Liquibase 20260430-03 migration replayed BUG-A verb ordering; see commit 383456053',
+                '_system:liquibase', '系统迁移',
+                '/liquibase/changelog/20260430-03_audit_entry_verb_reclassify.xml',
+                'MIGRATION'
+            );
+        </sql>
+        <rollback>
+            <sql>SELECT 1;</sql>
+        </rollback>
+    </changeSet>
+
+</databaseChangeLog>
