@@ -212,7 +212,7 @@ class BiReportLinkServiceTest {
 
         verify(reportLinkRepository, never()).save(any(BiReportLink.class));
         verify(reportVisitRepository, never()).save(any(BiReportVisit.class));
-        verify(audit).auditFailure(eq("VISIT"), eq("vis.dashboard.access"), eq("screen-99"), org.mockito.ArgumentMatchers.contains("DENY_LEVEL_BLOCKED"));
+        verify(audit).auditAction(eq("VIS_DASHBOARD_ACCESS_VISIT"), eq(com.yuzhi.dts.common.audit.AuditStage.FAIL), eq("screen-99"), org.mockito.ArgumentMatchers.contains("DENY_LEVEL_BLOCKED"));
     }
 
     @Test

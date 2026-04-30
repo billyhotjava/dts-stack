@@ -64,12 +64,7 @@ public class DashboardShareService {
 
         // Guard 决定 caller 是否能授予 targetPermission；策略 1 在 Guard 内部生效。
         if (!accessGuard.canGrant(report, caller, permission)) {
-            audit.auditFailure(
-                "GRANT",
-                "vis.dashboard.share",
-                report.getCode(),
-                "permission=" + permission + "; reason=DENIED"
-            );
+            audit.auditAction("VIS_DASHBOARD_SHARE_GRANT", AuditStage.FAIL, report.getCode(), "permission=" + permission + "; reason=DENIED");
             throw new AccessDeniedException("not authorized to grant on dashboard " + report.getCode());
         }
 
@@ -124,12 +119,7 @@ public class DashboardShareService {
 
         DashboardAccessGuard.Caller caller = callerResolver.current();
         if (!accessGuard.canRevoke(report, caller, target)) {
-            audit.auditFailure(
-                "REVOKE",
-                "vis.dashboard.share",
-                report.getCode(),
-                "grantId=" + grantId + "; reason=DENIED"
-            );
+            audit.auditAction("VIS_DASHBOARD_SHARE_REVOKE", AuditStage.FAIL, report.getCode(), "grantId=" + grantId + "; reason=DENIED");
             throw new AccessDeniedException("not authorized to revoke grant " + grantId);
         }
 
@@ -155,12 +145,7 @@ public class DashboardShareService {
         DashboardAccessGuard.Caller caller = callerResolver.current();
         // 列出 grant 视为 MANAGE 操作的一部分。
         if (!accessGuard.canManage(report, caller)) {
-            audit.auditFailure(
-                "READ",
-                "vis.dashboard.share",
-                report.getCode(),
-                "reason=DENIED_MANAGE"
-            );
+            audit.auditAction("VIS_DASHBOARD_SHARE_READ", AuditStage.FAIL, report.getCode(), "reason=DENIED_MANAGE");
             throw new AccessDeniedException("not authorized to view grants on dashboard " + report.getCode());
         }
         return grantRepo.findByAssetTypeAndAssetId(ASSET_TYPE, report.getCode())

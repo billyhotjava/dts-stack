@@ -159,7 +159,7 @@ class DashboardShareServiceTest {
         )).isInstanceOf(AccessDeniedException.class);
 
         verify(grantRepo, never()).save(any(AssetGrant.class));
-        verify(audit).auditFailure(eq("GRANT"), eq("vis.dashboard.share"), eq(CODE), anyString());
+        verify(audit).auditAction(eq("VIS_DASHBOARD_SHARE_GRANT"), eq(AuditStage.FAIL), eq(CODE), anyString());
     }
 
     @Test
@@ -259,7 +259,7 @@ class DashboardShareServiceTest {
             .isInstanceOf(AccessDeniedException.class);
 
         verify(grantRepo, never()).delete(any(AssetGrant.class));
-        verify(audit).auditFailure(eq("REVOKE"), eq("vis.dashboard.share"), eq(CODE), anyString());
+        verify(audit).auditAction(eq("VIS_DASHBOARD_SHARE_REVOKE"), eq(AuditStage.FAIL), eq(CODE), anyString());
     }
 
     // ---------------------------------------------------------------------
@@ -285,7 +285,7 @@ class DashboardShareServiceTest {
 
         assertThat(result).hasSize(2);
         assertThat(result).extracting(AssetGrantDto::granteeId).containsExactly("u1", "u2");
-        verify(audit, never()).auditFailure(anyString(), anyString(), anyString(), any());
+        verify(audit, never()).auditAction(anyString(), eq(AuditStage.FAIL), anyString(), any());
     }
 
     @Test
@@ -299,7 +299,7 @@ class DashboardShareServiceTest {
         assertThatThrownBy(() -> service.listGrants(REPORT_ID))
             .isInstanceOf(AccessDeniedException.class);
 
-        verify(audit, times(1)).auditFailure(eq("READ"), eq("vis.dashboard.share"), eq(CODE), anyString());
+        verify(audit, times(1)).auditAction(eq("VIS_DASHBOARD_SHARE_READ"), eq(AuditStage.FAIL), eq(CODE), anyString());
     }
 
     // ---------------------------------------------------------------------

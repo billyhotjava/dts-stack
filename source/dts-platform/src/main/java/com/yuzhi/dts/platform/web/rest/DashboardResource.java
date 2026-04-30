@@ -73,7 +73,7 @@ public class DashboardResource {
         payload.putIfAbsent("ts", Instant.now().toString());
         String code = body != null ? text(body.get("code")) : null;
         String url = body != null ? text(body.get("url")) : null;
-        audit.recordAuxiliary("OPEN", "vis", "dashboard", code != null ? code : (url != null ? url : "unknown"), payload);
+        audit.auditAction("VIS_OPEN", AuditStage.SUCCESS, code != null ? code : (url != null ? url : "unknown"), payload);
         return ApiResponses.ok(Map.of("ok", true));
     }
 

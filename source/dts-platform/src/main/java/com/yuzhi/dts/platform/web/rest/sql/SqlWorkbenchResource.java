@@ -254,7 +254,7 @@ public class SqlWorkbenchResource {
         if (payload.get("executionId") != null) {
             auditPayload.put("executionId", payload.get("executionId"));
         }
-        auditService.record("EXPORT", "sql.workbench", "sql.result.copy", username, "SUCCESS", auditPayload);
+        auditService.auditAction("SQL_WORKBENCH_EXPORT", AuditStage.SUCCESS, username, auditPayload);
         return ApiResponses.ok(Boolean.TRUE);
     }
 }

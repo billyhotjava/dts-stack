@@ -252,12 +252,10 @@ public class EtlResource {
             }
         }
         auditService.auditAction("ETL_DBT_MODELS_EXECUTE", AuditStage.SUCCESS, "sync", null);
-        auditService.record(
-            "EXECUTE",
-            "etl.dbt.runs",
-            "etl.dbt.runs",
+        auditService.auditAction(
+            "ETL_DBT_RUNS_EXECUTE",
+            runResult.synced() ? AuditStage.SUCCESS : AuditStage.FAIL,
             "sync",
-            runResult.synced() ? "SUCCESS" : "FAILED",
             runResult
         );
         return ApiResponses.ok(assetResult);

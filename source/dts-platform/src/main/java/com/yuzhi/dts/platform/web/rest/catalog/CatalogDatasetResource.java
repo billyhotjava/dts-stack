@@ -93,12 +93,10 @@ public class CatalogDatasetResource {
         payload.put("defaultSourceType", helper.defaultSourceType());
         payload.put("hasPrimarySource", helper.hasPrimarySourceConfigured());
         payload.put("primarySourceType", helper.defaultSourceType());
-        audit.recordAuxiliary(
-            "READ",
-            "catalog.config",
-            "catalog.config",
+        audit.auditAction(
+            "CATALOG_CONFIG_READ",
+            AuditStage.SUCCESS,
             "config",
-            "SUCCESS",
             Map.of("summary", "获取数据目录配置")
         );
         return ApiResponses.ok(payload);
@@ -112,12 +110,10 @@ public class CatalogDatasetResource {
         map.put("datasets", datasetRepo.count());
         map.put("maskingRules", maskingRepo.count());
         map.put("classificationMappings", mappingRepo.count());
-        audit.recordAuxiliary(
-            "READ",
-            "catalog.summary",
-            "catalog.summary",
+        audit.auditAction(
+            "CATALOG_SUMMARY_READ",
+            AuditStage.SUCCESS,
             "summary",
-            "SUCCESS",
             Map.of("summary", "获取数据目录概览")
         );
         return ApiResponses.ok(map);

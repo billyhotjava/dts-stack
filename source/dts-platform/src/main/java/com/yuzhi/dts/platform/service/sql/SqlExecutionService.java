@@ -1,6 +1,7 @@
 package com.yuzhi.dts.platform.service.sql;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.yuzhi.dts.common.audit.AuditStage;
 import com.yuzhi.dts.platform.domain.explore.ExecEnums;
 import com.yuzhi.dts.platform.domain.explore.QueryExecution;
 import com.yuzhi.dts.platform.domain.explore.QueryExecutionChunk;
@@ -341,14 +342,7 @@ public class SqlExecutionService {
             submitPayload.put("sqlHash", rawSqlHash);
             submitPayload.put("rewrittenHash", rewrittenSqlHash);
             submitPayload.put("actionCode", SqlIdeAuditActions.SQL_EXECUTE_SUBMIT);
-            auditService.record(
-                "EXECUTE",
-                "sql.ide.execute",
-                "sql.execution",
-                execution.getId().toString(),
-                "SUCCESS",
-                submitPayload
-            );
+            auditService.auditAction("SQL_IDE_EXECUTE_EXECUTE", AuditStage.SUCCESS, execution.getId().toString(), submitPayload);
 
             UUID datasourceId = parseDatasourceId(request.datasource());
             Map<String, Object> payload = queryGateway.execute(validation.rewrittenSql(), datasourceId, executionId);
@@ -509,7 +503,7 @@ public class SqlExecutionService {
             payload.put("sqlText", sql);
         }
         payload.put("status", execution.getStatus() != null ? execution.getStatus().name() : ExecEnums.ExecStatus.PENDING.name());
-        auditService.record("EXECUTE", "sql.query", "sql.query", execution.getId().toString(), "SUCCESS", payload);
+        auditService.auditAction("EXPLORE_WORKBENCH_QUERY", AuditStage.SUCCESS, execution.getId().toString(), payload);
         // T20: rich SUBMIT audit (with rewrittenHash) is emitted in executeQueued after validation; no duplicate here.
     }
 
@@ -532,19 +526,12 @@ public class SqlExecutionService {
             payload.put("bytesProcessed", execution.getBytesProcessed());
         }
         payload.put("status", execution.getStatus() != null ? execution.getStatus().name() : ExecEnums.ExecStatus.CANCELED.name());
-        auditService.record("CANCEL", "sql.query", "sql.query", execution.getId().toString(), "SUCCESS", payload);
+        auditService.auditAction("EXPLORE_WORKBENCH_QUERY", AuditStage.SUCCESS, execution.getId().toString(), payload);
         // T20: structured action constant + reason for forward-compat with T18 timeout path
         java.util.Map<String, Object> cancelPayload = new java.util.LinkedHashMap<>();
         cancelPayload.put("reason", "user");
         cancelPayload.put("actionCode", SqlIdeAuditActions.SQL_EXECUTE_CANCEL);
-        auditService.record(
-            "CANCEL",
-            "sql.ide.execute",
-            "sql.execution",
-            execution.getId().toString(),
-            "SUCCESS",
-            cancelPayload
-        );
+        auditService.auditAction("SQL_IDE_EXECUTE_CANCEL", AuditStage.SUCCESS, execution.getId().toString(), cancelPayload);
     }
 
     private void recordCompletionAudit(QueryExecution execution, String phase, String message) {
@@ -561,21 +548,14 @@ public class SqlExecutionService {
         if (StringUtils.hasText(message)) {
             payload.put("message", truncate(message, 1024));
         }
-        auditService.record("READ", "sql.query", "sql.query", execution.getId().toString(), "SUCCESS", payload);
+        auditService.auditAction("SQL_QUERY_READ", AuditStage.SUCCESS, execution.getId().toString(), payload);
         // T20: structured action constant with typed fields
         java.util.Map<String, Object> completePayload = new java.util.LinkedHashMap<>();
         completePayload.put("status", phase);
         completePayload.put("rows", execution.getRowCount() == null ? -1L : execution.getRowCount());
         completePayload.put("elapsedMs", execution.getElapsedMs() == null ? -1L : execution.getElapsedMs());
         completePayload.put("actionCode", SqlIdeAuditActions.SQL_EXECUTE_COMPLETE);
-        auditService.record(
-            "EXECUTE",
-            "sql.ide.execute",
-            "sql.execution",
-            execution.getId().toString(),
-            phase,
-            completePayload
-        );
+        auditService.auditAction("SQL_IDE_EXECUTE_EXECUTE", ("FAILED".equals(phase) || "FAIL".equals(phase)) ? AuditStage.FAIL : AuditStage.SUCCESS, execution.getId().toString(), completePayload);
     }
 
     private String truncate(String value, int maxLen) {

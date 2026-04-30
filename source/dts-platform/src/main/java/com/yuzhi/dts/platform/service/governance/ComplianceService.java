@@ -1,6 +1,7 @@
 package com.yuzhi.dts.platform.service.governance;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
+import com.yuzhi.dts.common.audit.AuditStage;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.yuzhi.dts.platform.domain.governance.GovComplianceBatch;
 import com.yuzhi.dts.platform.domain.governance.GovComplianceBatchItem;
@@ -150,14 +151,7 @@ public class ComplianceService {
         auditDetail.put("targetName", batch.getName());
         auditDetail.put("ruleCount", rules.size());
         auditDetail.put("summary", "新建合规批次：" + batch.getName());
-        auditService.record(
-            "CREATE",
-            "governance.compliance.batch",
-            "governance.compliance.batch",
-            batch.getId().toString(),
-            "SUCCESS",
-            auditDetail
-        );
+        auditService.auditAction("GOV_COMPLIANCE_PLAN", AuditStage.SUCCESS, batch.getId().toString(), auditDetail);
         return GovernanceMapper.toDto(batch, items);
     }
 
@@ -221,14 +215,7 @@ public class ComplianceService {
         detail.put("targetName", ruleName);
         detail.put("summary", "处理合规检查项：" + ruleName);
         detail.put("actor", actor);
-        auditService.record(
-            "UPDATE",
-            "governance.compliance.item",
-            "governance.compliance.item",
-            item.getId() + "@" + batch.getId(),
-            "SUCCESS",
-            detail
-        );
+        auditService.auditAction("GOV_COMPLIANCE_REVIEW", AuditStage.SUCCESS, item.getId() + "@" + batch.getId(), detail);
         return GovernanceMapper.toDto(item);
     }
 
@@ -275,14 +262,7 @@ public class ComplianceService {
         detail.put("targetName", batch.getName());
         detail.put("summary", "删除合规批次：" + batch.getName());
         detail.put("actor", actor);
-        auditService.record(
-            "DELETE",
-            "governance.compliance.batch",
-            "governance.compliance.batch",
-            batchId.toString(),
-            "SUCCESS",
-            detail
-        );
+        auditService.auditAction("GOV_COMPLIANCE_PLAN", AuditStage.SUCCESS, batchId.toString(), detail);
     }
 
     private List<String> normalizeStatuses(List<String> statuses) {

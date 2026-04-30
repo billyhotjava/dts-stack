@@ -620,7 +620,7 @@ public class GovernanceResource {
         if (StringUtils.hasText(activeDept)) {
             detail.put("activeDept", activeDept.trim());
         }
-        auditService.record("LIST", "governance.compliance", "governance.compliance.batch", null, "SUCCESS", detail);
+        auditService.auditAction("GOV_COMPLIANCE_RUN", AuditStage.SUCCESS, null, detail);
         return ApiResponses.ok(data);
     }
 
@@ -651,14 +651,7 @@ public class GovernanceResource {
         if (StringUtils.hasText(activeDept)) {
             detail.put("activeDept", activeDept.trim());
         }
-        auditService.record(
-            "READ",
-            "governance.compliance.batch",
-            "governance.compliance.batch",
-            id.toString(),
-            "SUCCESS",
-            detail
-        );
+        auditService.auditAction("GOV_COMPLIANCE_REVIEW", AuditStage.SUCCESS, id.toString(), detail);
         return ApiResponses.ok(dto);
     }
 

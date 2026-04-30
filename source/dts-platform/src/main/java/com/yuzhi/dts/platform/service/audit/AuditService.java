@@ -1,6 +1,5 @@
 package com.yuzhi.dts.platform.service.audit;
 
-import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.yuzhi.dts.common.audit.AuditActionCatalog;
@@ -8,8 +7,6 @@ import com.yuzhi.dts.common.audit.AuditActionDefinition;
 import com.yuzhi.dts.common.audit.AuditStage;
 import com.yuzhi.dts.platform.security.SecurityUtils;
 import jakarta.servlet.http.HttpServletRequest;
-import java.io.IOException;
-import java.io.InputStream;
 import java.time.Instant;
 import java.lang.reflect.Array;
 import java.util.ArrayList;
@@ -28,8 +25,6 @@ import org.slf4j.LoggerFactory;
 import com.yuzhi.dts.platform.security.session.PortalSessionRegistry;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.core.io.Resource;
-import org.springframework.core.io.ResourceLoader;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.core.context.SecurityContextHolder;
@@ -58,7 +53,6 @@ public class AuditService {
         AUDIT_CONTEXT_CLASS = ctxClass;
     }
 
-    private static final String DEFAULT_LEGACY_ACTIONS_LOCATION = "classpath:config/legacy-action-mappings.json";
     private static final Set<String> ACTOR_HINT_KEYS = Set.of(
         "username",
         "user",
@@ -80,7 +74,6 @@ public class AuditService {
     private final ObjectMapper objectMapper;
     private final OperationTypeNormalizer operationTypeNormalizer;
     private final PkiContextEnricher pkiContextEnricher;
-    private final Map<String, LegacyActionMapping> legacyActions;
 
     public AuditService(
         ObjectProvider<AuditForwarderService> auditForwarderServiceProvider,
@@ -88,10 +81,7 @@ public class AuditService {
         PortalSessionRegistry portalSessionRegistry,
         ObjectMapper objectMapper,
         OperationTypeNormalizer operationTypeNormalizer,
-        PkiContextEnricher pkiContextEnricher,
-        ResourceLoader resourceLoader,
-        AuditDictionarySignatureGuard signatureGuard,
-        @Value("${auditing.legacy-actions.config-location:" + DEFAULT_LEGACY_ACTIONS_LOCATION + "}") String legacyActionsLocation
+        PkiContextEnricher pkiContextEnricher
     ) {
         this.auditForwarderServiceProvider = auditForwarderServiceProvider;
         this.actionCatalog = actionCatalog;
@@ -99,76 +89,7 @@ public class AuditService {
         this.objectMapper = objectMapper;
         this.operationTypeNormalizer = operationTypeNormalizer;
         this.pkiContextEnricher = pkiContextEnricher;
-        this.legacyActions = loadLegacyActions(resourceLoader, objectMapper, signatureGuard, legacyActionsLocation);
-        log.info("Loaded {} legacy audit action mappings from {}", legacyActions.size(), legacyActionsLocation);
     }
-
-    private static Map<String, LegacyActionMapping> loadLegacyActions(
-        ResourceLoader resourceLoader,
-        ObjectMapper objectMapper,
-        AuditDictionarySignatureGuard signatureGuard,
-        String location
-    ) {
-        Resource resource = resourceLoader.getResource(location);
-        if (!resource.exists()) {
-            throw new IllegalStateException("legacy-action-mappings config not found: " + location);
-        }
-        byte[] content;
-        try (InputStream in = resource.getInputStream()) {
-            content = in.readAllBytes();
-        } catch (IOException ex) {
-            throw new IllegalStateException("Failed to load legacy-action-mappings from " + location, ex);
-        }
-        signatureGuard.verify(location, content);
-        try (InputStream in = new java.io.ByteArrayInputStream(content)) {
-            LegacyActionsFile file = objectMapper.readValue(in, LegacyActionsFile.class);
-            List<LegacyActionEntry> entries = file.entries();
-            if (entries == null || entries.isEmpty()) {
-                throw new IllegalStateException("legacy-action-mappings file is empty: " + location);
-            }
-            Map<String, LegacyActionMapping> map = new LinkedHashMap<>();
-            for (LegacyActionEntry entry : entries) {
-                AuditStage stage;
-                try {
-                    stage = AuditStage.valueOf(entry.defaultStage());
-                } catch (IllegalArgumentException ex) {
-                    throw new IllegalStateException(
-                        "Unknown defaultStage '" + entry.defaultStage() + "' for module=" + entry.module() + " action=" + entry.action(),
-                        ex
-                    );
-                }
-                LegacyActionMapping mapping = new LegacyActionMapping(
-                    entry.actionCode(),
-                    entry.successSummary(),
-                    entry.failureSummary(),
-                    entry.pendingSummary(),
-                    entry.operationType(),
-                    entry.allowEmptyTargets(),
-                    stage
-                );
-                map.put(legacyKey(entry.module(), entry.action()), mapping);
-            }
-            return Collections.unmodifiableMap(map);
-        } catch (IOException ex) {
-            throw new IllegalStateException("Failed to load legacy-action-mappings from " + location, ex);
-        }
-    }
-
-    @JsonIgnoreProperties(ignoreUnknown = true)
-    private record LegacyActionsFile(String version, String description, List<LegacyActionEntry> entries) {}
-
-    @JsonIgnoreProperties(ignoreUnknown = true)
-    private record LegacyActionEntry(
-        String module,
-        String action,
-        String actionCode,
-        String successSummary,
-        String failureSummary,
-        String pendingSummary,
-        String operationType,
-        boolean allowEmptyTargets,
-        String defaultStage
-    ) {}
 
     public void auditAction(String actionCode, AuditStage stage, String resourceId, Object payload) {
         if (!StringUtils.hasText(actionCode)) {
@@ -222,38 +143,10 @@ public class AuditService {
     }
 
     /**
-     * Legacy 6-arg form. Use {@link #auditAction(String, AuditStage, String, Object)} with a
-     * canonical {@code actionCode} from {@code audit-action-catalog.json} for new call sites —
-     * this overload performs free-form action-string matching against legacy-action-mappings,
-     * which is fuzzier and harder to evolve. Still ~30 call sites in 2026-04 (RE-4 follow-up).
+     * Internal writer used by {@link #auditAction(String, AuditStage, String, Object)}.
+     * Package-private — outside callers must use {@code auditAction}.
      */
-    @Deprecated
-    public void record(
-        String action,
-        String module,
-        String resourceType,
-        String resourceId,
-        String result,
-        Object payload
-    ) {
-        record(action, module, resourceType, resourceId, result, payload, null);
-    }
-
-    /**
-     * Failure-channel shortcut. Use {@link #auditAction(String, AuditStage, String, Object)} with
-     * {@code AuditStage.FAIL} for new call sites.
-     */
-    @Deprecated
-    public void auditFailure(String action, String targetKind, String targetRef, Object payload) {
-        record(action, targetKind, targetKind, targetRef, "FAILED", payload, null);
-    }
-
-    /**
-     * Internal writer used by {@link #auditAction(String, AuditStage, String, Object)} and
-     * the deprecated {@link #record(String, String, String, String, String, Object)} overload.
-     * Not part of the public API — outside callers should use {@code auditAction}.
-     */
-    public void record(
+    void record(
         String action,
         String module,
         String resourceType,
@@ -271,46 +164,6 @@ public class AuditService {
             result,
             payload,
             extraTags
-        );
-    }
-
-    /**
-     * Auxiliary-channel writer: marks the entry as {@code auxiliary=true} so the forwarder
-     * skips pushing it to admin. Used by lightweight UX-tracing events (dashboard open,
-     * report click) that platform wants in its own telemetry but not in central governance
-     * audit. New code should prefer {@link #auditAction(String, AuditStage, String, Object)}
-     * when the event is real audit material; this overload is kept for the legacy 4 UX-trace
-     * call sites.
-     */
-    @Deprecated
-    public void recordAuxiliary(
-        String action,
-        String module,
-        String resourceType,
-        String resourceId,
-        Object payload
-    ) {
-        submitAuditInternal(
-            SecurityUtils.getCurrentUserLogin().orElse("anonymous"),
-            action, module, resourceType, resourceId,
-            "SUCCESS", payload, null, true
-        );
-    }
-
-    /** @see #recordAuxiliary(String, String, String, String, Object) */
-    @Deprecated
-    public void recordAuxiliary(
-        String action,
-        String module,
-        String resourceType,
-        String resourceId,
-        String result,
-        Object payload
-    ) {
-        submitAuditInternal(
-            SecurityUtils.getCurrentUserLogin().orElse("anonymous"),
-            action, module, resourceType, resourceId,
-            result, payload, null, true
         );
     }
 
@@ -366,48 +219,11 @@ public class AuditService {
             return;
         }
         Map<String, Object> effectiveExtraTags = extraTags != null ? new java.util.LinkedHashMap<>(extraTags) : null;
-        LegacyActionMapping legacyMapping = null;
-        AuditActionDefinition legacyDefinition = null;
-        String overrideAction = null;
-        String overrideOperationType = null;
         boolean disableDefaultResourceFallback = auxiliary;
         AuditStage stage = resolveStageFromResult(result, null);
 
-        if (!auxiliary && (effectiveExtraTags == null || !effectiveExtraTags.containsKey("actionCode"))) {
-            legacyMapping = legacyActions.get(legacyKey(module, action));
-            if (legacyMapping != null) {
-                stage = resolveStageFromResult(result, legacyMapping.defaultStage());
-                legacyDefinition = actionCatalog.findByCode(legacyMapping.actionCode()).orElse(null);
-                overrideAction = legacyMapping.summaryForStage(stage);
-                overrideOperationType = legacyMapping.operationType();
-                if (legacyMapping.allowEmptyTargets()) {
-                    disableDefaultResourceFallback = true;
-                }
-                if (legacyDefinition != null) {
-                    module = legacyDefinition.getModuleKey();
-                    if (StringUtils.hasText(legacyDefinition.getEntryKey())) {
-                        resourceType = legacyDefinition.getEntryKey();
-                    }
-                    effectiveExtraTags = new java.util.LinkedHashMap<>();
-                    effectiveExtraTags.put("actionCode", legacyDefinition.getCode());
-                    effectiveExtraTags.put("moduleKey", legacyDefinition.getModuleKey());
-                    effectiveExtraTags.put("moduleTitle", legacyDefinition.getModuleTitle());
-                    effectiveExtraTags.put("entryKey", legacyDefinition.getEntryKey());
-                    effectiveExtraTags.put("entryTitle", legacyDefinition.getEntryTitle());
-                    effectiveExtraTags.put("supportsFlow", legacyDefinition.isSupportsFlow());
-                    effectiveExtraTags.put("stage", stage.name());
-                }
-                if (StringUtils.hasText(overrideAction) && !payloadMap.containsKey("summary")) {
-                    payloadMap.put("summary", overrideAction);
-                }
-                if (StringUtils.hasText(overrideOperationType) && !payloadMap.containsKey("operationType")) {
-                    payloadMap.put("operationType", overrideOperationType);
-                }
-            }
-        }
-
         result = normalizeResultForStage(stage, result);
-        String logAction = StringUtils.hasText(overrideAction) ? overrideAction : action;
+        String logAction = action;
         log.info(
             "AUDIT actor={} action={} module={} resourceType={} resourceId={} result={}",
             safeActor,
@@ -422,9 +238,7 @@ public class AuditService {
         event.actor = safeActor;
         event.actorRole = resolvePrimaryAuthority();
         event.module = StringUtils.hasText(module) ? module : "general";
-        event.action = StringUtils.hasText(overrideAction)
-            ? overrideAction
-            : (StringUtils.hasText(action) ? action : "READ");
+        event.action = StringUtils.hasText(action) ? action : "READ";
         event.resourceType = resourceType;
         event.resourceId = resourceId;
         event.result = StringUtils.hasText(result) ? result : "SUCCESS";
@@ -461,11 +275,7 @@ public class AuditService {
             }
         }
         event.summary = summary;
-        if (StringUtils.hasText(overrideOperationType)) {
-            event.operationType = overrideOperationType;
-        } else {
-            event.operationType = operationTypeNormalizer.deriveOperationType(event.action, payloadMap);
-        }
+        event.operationType = operationTypeNormalizer.deriveOperationType(event.action, payloadMap);
 
         Map<String, Object> attributes = extractNestedAttributes(payloadMap);
         if (!attributes.isEmpty()) {
@@ -681,12 +491,6 @@ public class AuditService {
         };
     }
 
-    private static String legacyKey(String module, String action) {
-        String normalizedModule = StringUtils.hasText(module) ? module.trim() : "";
-        String normalizedAction = StringUtils.hasText(action) ? action.trim() : "";
-        return normalizedModule + ":" + normalizedAction;
-    }
-
 
     private String resolveActorName(Map<String, Object> payload, String actorId) {
         String fromPayload = extractText(payload, "actorName");
@@ -743,62 +547,4 @@ public class AuditService {
         return authority.map(GrantedAuthority::getAuthority).orElse(null);
     }
 
-    private static final class LegacyActionMapping {
-        private final String actionCode;
-        private final String successSummary;
-        private final String failureSummary;
-        private final String pendingSummary;
-        private final String operationType;
-        private final boolean allowEmptyTargets;
-        private final AuditStage defaultStage;
-
-        LegacyActionMapping(
-            String actionCode,
-            String successSummary,
-            String failureSummary,
-            String pendingSummary,
-            String operationType,
-            boolean allowEmptyTargets,
-            AuditStage defaultStage
-        ) {
-            this.actionCode = actionCode;
-            this.successSummary = successSummary;
-            this.failureSummary = failureSummary;
-            this.pendingSummary = pendingSummary;
-            this.operationType = operationType;
-            this.allowEmptyTargets = allowEmptyTargets;
-            this.defaultStage = defaultStage;
-        }
-
-        String actionCode() {
-            return actionCode;
-        }
-
-        boolean allowEmptyTargets() {
-            return allowEmptyTargets;
-        }
-
-        AuditStage defaultStage() {
-            return defaultStage;
-        }
-
-        String operationType() {
-            return operationType;
-        }
-
-        String summaryForStage(AuditStage stage) {
-            if (stage == AuditStage.FAIL) {
-                if (StringUtils.hasText(failureSummary)) {
-                    return failureSummary;
-                }
-                if (StringUtils.hasText(successSummary) && !successSummary.endsWith("失败")) {
-                    return successSummary + "失败";
-                }
-            }
-            if (stage == AuditStage.BEGIN && StringUtils.hasText(pendingSummary)) {
-                return pendingSummary;
-            }
-            return successSummary;
-        }
-    }
 }

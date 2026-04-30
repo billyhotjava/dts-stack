@@ -1,5 +1,6 @@
 package com.yuzhi.dts.platform.web.rest;
 
+import com.yuzhi.dts.common.audit.AuditStage;
 import com.yuzhi.dts.platform.domain.catalog.CatalogDataset;
 import com.yuzhi.dts.platform.domain.catalog.CatalogDatasetAccessRequest;
 import com.yuzhi.dts.platform.domain.catalog.CatalogDatasetAccessTask;
@@ -72,7 +73,7 @@ public class CatalogDatasetAccessApprovalResource {
         }
         meta.put("page", page);
         meta.put("size", size);
-        auditService.record("READ", "catalog.dataset.access.request", "catalog.dataset.access.request", "mine", "SUCCESS", meta);
+        auditService.auditAction("CATALOG_DATASET_ACCESS_REQUEST_READ", AuditStage.SUCCESS, "mine", meta);
         return ApiResponses.ok(paged);
     }
 
@@ -83,17 +84,15 @@ public class CatalogDatasetAccessApprovalResource {
     ) {
         try {
             DatasetDataAccessApprovalService.AccessRequestDetail detail = approvalService.getRequestDetail(id, activeDept);
-            auditService.record("READ", "catalog.dataset.access.request", "catalog.dataset.access.request", id.toString(), "SUCCESS", Map.of());
+            auditService.auditAction(
+            "CATALOG_DATASET_ACCESS_REQUEST_READ",
+            AuditStage.SUCCESS,
+            id.toString(),
+            Map.of()
+        );
             return ApiResponses.ok(detail);
         } catch (RuntimeException ex) {
-            auditService.record(
-                "READ",
-                "catalog.dataset.access.request",
-                "catalog.dataset.access.request",
-                id.toString(),
-                "FAILED",
-                Map.of("error", ex.getMessage())
-            );
+            auditService.auditAction("CATALOG_DATASET_ACCESS_REQUEST_READ", AuditStage.FAIL, id.toString(), Map.of("error", ex.getMessage()));
             return ApiResponses.error(ex.getMessage());
         }
     }
@@ -105,7 +104,12 @@ public class CatalogDatasetAccessApprovalResource {
             return ApiResponses.error("数据集不存在或已被删除");
         }
         DatasetDataAccessApprovalService.WorkflowPreview preview = approvalService.previewWorkflow(dataset);
-        auditService.record("READ", "catalog.dataset.access.workflow", "catalog.dataset.access.workflow", datasetId.toString(), "SUCCESS", Map.of());
+        auditService.auditAction(
+            "CATALOG_DATASET_ACCESS_WORKFLOW_READ",
+            AuditStage.SUCCESS,
+            datasetId.toString(),
+            Map.of()
+        );
         return ApiResponses.ok(preview);
     }
 
@@ -135,33 +139,24 @@ public class CatalogDatasetAccessApprovalResource {
                 body.targetDept(),
                 activeDept
             );
-            auditService.record(
-                "CREATE",
-                "catalog.dataset.access.request",
-                "catalog.dataset.access.request",
-                saved.getId().toString(),
-                "SUCCESS",
-                Map.of(
+            auditService.auditAction("CATALOG_DATASET_ACCESS_REQUEST_CREATE", AuditStage.SUCCESS, saved.getId().toString(), Map.of(
                     "datasetId",
                     body.datasetId() != null ? body.datasetId().toString() : "",
                     "targetUsername",
                     body.targetUsername() != null ? body.targetUsername() : "",
                     "requester",
                     saved.getRequesterUsername() != null ? saved.getRequesterUsername() : ""
-                )
-            );
+                ));
             return ApiResponses.ok(saved);
         } catch (RuntimeException ex) {
             Map<String, Object> meta = new LinkedHashMap<>();
             meta.put("error", ex.getMessage() != null ? ex.getMessage() : ex.getClass().getSimpleName());
-            auditService.record(
-                "CREATE",
-                "catalog.dataset.access.request",
-                "catalog.dataset.access.request",
-                body.datasetId() != null ? body.datasetId().toString() : "unknown",
-                "FAILED",
-                meta
-            );
+            auditService.auditAction(
+            "CATALOG_DATASET_ACCESS_REQUEST_CREATE",
+            AuditStage.FAIL,
+            body.datasetId() != null ? body.datasetId().toString() : "unknown",
+            meta
+        );
             return ApiResponses.error(ex.getMessage());
         }
     }
@@ -195,7 +190,7 @@ public class CatalogDatasetAccessApprovalResource {
         if (keyword != null) {
             meta.put("keyword", keyword);
         }
-        auditService.record("READ", "catalog.dataset.access.task", "catalog.dataset.access.task", "pending", "SUCCESS", meta);
+        auditService.auditAction("CATALOG_DATASET_ACCESS_TASK_READ", AuditStage.SUCCESS, "pending", meta);
         return ApiResponses.ok(paged);
     }
 
@@ -236,7 +231,7 @@ public class CatalogDatasetAccessApprovalResource {
         if (status != null) {
             meta.put("status", status);
         }
-        auditService.record("READ", "catalog.dataset.access.task", "catalog.dataset.access.task", "done", "SUCCESS", meta);
+        auditService.auditAction("CATALOG_DATASET_ACCESS_TASK_READ", AuditStage.SUCCESS, "done", meta);
         return ApiResponses.ok(paged);
     }
 
@@ -248,17 +243,15 @@ public class CatalogDatasetAccessApprovalResource {
     ) {
         try {
             CatalogDatasetAccessRequest request = approvalService.cancelRequest(id, body != null ? body.notes() : null, activeDept);
-            auditService.record("UPDATE", "catalog.dataset.access.request.cancel", "catalog.dataset.access.request", id.toString(), "SUCCESS", Map.of());
+            auditService.auditAction(
+            "CATALOG_DATASET_ACCESS_REQUEST_CANCEL_UPDATE",
+            AuditStage.SUCCESS,
+            id.toString(),
+            Map.of()
+        );
             return ApiResponses.ok(request);
         } catch (RuntimeException ex) {
-            auditService.record(
-                "UPDATE",
-                "catalog.dataset.access.request.cancel",
-                "catalog.dataset.access.request",
-                id.toString(),
-                "FAILED",
-                Map.of("error", ex.getMessage())
-            );
+            auditService.auditAction("CATALOG_DATASET_ACCESS_REQUEST_CANCEL_UPDATE", AuditStage.FAIL, id.toString(), Map.of("error", ex.getMessage()));
             return ApiResponses.error(ex.getMessage());
         }
     }
@@ -277,7 +270,7 @@ public class CatalogDatasetAccessApprovalResource {
             .stream()
             .map(AccessStepDto::fromTask)
             .toList();
-        auditService.record("READ", "catalog.dataset.access.task", "catalog.dataset.access.task", id.toString(), "SUCCESS", Map.of("count", steps.size()));
+        auditService.auditAction("CATALOG_DATASET_ACCESS_TASK_READ", AuditStage.SUCCESS, id.toString(), Map.of("count", steps.size()));
         return ApiResponses.ok(steps);
     }
 
@@ -289,10 +282,15 @@ public class CatalogDatasetAccessApprovalResource {
     ) {
         try {
             CatalogDatasetAccessTask task = approvalService.decideTask(id, true, body != null ? body.notes() : null, activeDept);
-            auditService.record("UPDATE", "catalog.dataset.access.task.approve", "catalog.dataset.access.task", id.toString(), "SUCCESS", Map.of());
+            auditService.auditAction(
+            "CATALOG_DATASET_ACCESS_TASK_APPROVE_UPDATE",
+            AuditStage.SUCCESS,
+            id.toString(),
+            Map.of()
+        );
             return ApiResponses.ok(task);
         } catch (RuntimeException ex) {
-            auditService.record("UPDATE", "catalog.dataset.access.task.approve", "catalog.dataset.access.task", id.toString(), "FAILED", Map.of("error", ex.getMessage()));
+            auditService.auditAction("CATALOG_DATASET_ACCESS_TASK_APPROVE_UPDATE", AuditStage.FAIL, id.toString(), Map.of("error", ex.getMessage()));
             return ApiResponses.error(ex.getMessage());
         }
     }
@@ -305,10 +303,15 @@ public class CatalogDatasetAccessApprovalResource {
     ) {
         try {
             CatalogDatasetAccessTask task = approvalService.decideTask(id, false, body != null ? body.notes() : null, activeDept);
-            auditService.record("UPDATE", "catalog.dataset.access.task.reject", "catalog.dataset.access.task", id.toString(), "SUCCESS", Map.of());
+            auditService.auditAction(
+            "CATALOG_DATASET_ACCESS_TASK_REJECT_UPDATE",
+            AuditStage.SUCCESS,
+            id.toString(),
+            Map.of()
+        );
             return ApiResponses.ok(task);
         } catch (RuntimeException ex) {
-            auditService.record("UPDATE", "catalog.dataset.access.task.reject", "catalog.dataset.access.task", id.toString(), "FAILED", Map.of("error", ex.getMessage()));
+            auditService.auditAction("CATALOG_DATASET_ACCESS_TASK_REJECT_UPDATE", AuditStage.FAIL, id.toString(), Map.of("error", ex.getMessage()));
             return ApiResponses.error(ex.getMessage());
         }
     }
@@ -324,24 +327,10 @@ public class CatalogDatasetAccessApprovalResource {
         }
         try {
             CatalogDatasetAccessTask task = approvalService.decideTask(id, body.approved().booleanValue(), body.notes(), activeDept);
-            auditService.record(
-                "UPDATE",
-                "catalog.dataset.access.task.decide",
-                "catalog.dataset.access.task",
-                id.toString(),
-                "SUCCESS",
-                Map.of("approved", body.approved())
-            );
+            auditService.auditAction("CATALOG_DATASET_ACCESS_TASK_DECIDE_UPDATE", AuditStage.SUCCESS, id.toString(), Map.of("approved", body.approved()));
             return ApiResponses.ok(task);
         } catch (RuntimeException ex) {
-            auditService.record(
-                "UPDATE",
-                "catalog.dataset.access.task.decide",
-                "catalog.dataset.access.task",
-                id.toString(),
-                "FAILED",
-                Map.of("error", ex.getMessage())
-            );
+            auditService.auditAction("CATALOG_DATASET_ACCESS_TASK_DECIDE_UPDATE", AuditStage.FAIL, id.toString(), Map.of("error", ex.getMessage()));
             return ApiResponses.error(ex.getMessage());
         }
     }
@@ -383,14 +372,7 @@ public class CatalogDatasetAccessApprovalResource {
         payload.put("success", success);
         payload.put("failed", failed);
         payload.put("results", results);
-        auditService.record(
-            "UPDATE",
-            "catalog.dataset.access.task.batch.decide",
-            "catalog.dataset.access.task",
-            "batch",
-            failed == 0 ? "SUCCESS" : "PARTIAL",
-            Map.of("approved", body.approved(), "success", success, "failed", failed)
-        );
+        auditService.auditAction("CATALOG_DATASET_ACCESS_TASK_BATCH_DECIDE_UPDATE", ((failed == 0 ? "SUCCESS" : "PARTIAL").equals("FAILED") || (failed == 0 ? "SUCCESS" : "PARTIAL").equals("FAIL")) ? AuditStage.FAIL : AuditStage.SUCCESS, "batch", Map.of("approved", body.approved(), "success", success, "failed", failed));
         return ApiResponses.ok(payload);
     }
 

@@ -309,6 +309,222 @@
               "supportsFlow": false
             }
           ]
+        },
+        {
+          "key": "catalog.dataset",
+          "title": "catalog.dataset",
+          "actions": [
+            {
+              "code": "CATALOG_DATASET_ACCESS_REQUEST_READ",
+              "display": "查看 catalog.dataset.access.request",
+              "phases": [
+                "SUCCESS",
+                "FAIL"
+              ],
+              "supportsFlow": false
+            },
+            {
+              "code": "CATALOG_DATASET_ACCESS_WORKFLOW_READ",
+              "display": "查看 catalog.dataset.access.workflow",
+              "phases": [
+                "SUCCESS",
+                "FAIL"
+              ],
+              "supportsFlow": false
+            },
+            {
+              "code": "CATALOG_DATASET_ACCESS_REQUEST_CREATE",
+              "display": "创建 catalog.dataset.access.request",
+              "phases": [
+                "SUCCESS",
+                "FAIL"
+              ],
+              "supportsFlow": false
+            },
+            {
+              "code": "CATALOG_DATASET_ACCESS_TASK_READ",
+              "display": "查看 catalog.dataset.access.task",
+              "phases": [
+                "SUCCESS",
+                "FAIL"
+              ],
+              "supportsFlow": false
+            },
+            {
+              "code": "CATALOG_DATASET_ACCESS_REQUEST_CANCEL_UPDATE",
+              "display": "更新 catalog.dataset.access.request.cancel",
+              "phases": [
+                "SUCCESS",
+                "FAIL"
+              ],
+              "supportsFlow": false
+            },
+            {
+              "code": "CATALOG_DATASET_ACCESS_TASK_APPROVE_UPDATE",
+              "display": "更新 catalog.dataset.access.task.approve",
+              "phases": [
+                "SUCCESS",
+                "FAIL"
+              ],
+              "supportsFlow": false
+            },
+            {
+              "code": "CATALOG_DATASET_ACCESS_TASK_REJECT_UPDATE",
+              "display": "更新 catalog.dataset.access.task.reject",
+              "phases": [
+                "SUCCESS",
+                "FAIL"
+              ],
+              "supportsFlow": false
+            },
+            {
+              "code": "CATALOG_DATASET_ACCESS_TASK_DECIDE_UPDATE",
+              "display": "更新 catalog.dataset.access.task.decide",
+              "phases": [
+                "SUCCESS",
+                "FAIL"
+              ],
+              "supportsFlow": false
+            },
+            {
+              "code": "CATALOG_DATASET_ACCESS_TASK_BATCH_DECIDE_UPDATE",
+              "display": "更新 catalog.dataset.access.task.batch.decide",
+              "phases": [
+                "SUCCESS",
+                "FAIL"
+              ],
+              "supportsFlow": false
+            }
+          ]
+        },
+        {
+          "key": "catalog.config",
+          "title": "catalog.config",
+          "actions": [
+            {
+              "code": "CATALOG_CONFIG_READ",
+              "display": "查看 catalog.config",
+              "phases": [
+                "SUCCESS",
+                "FAIL"
+              ],
+              "supportsFlow": false
+            }
+          ]
+        },
+        {
+          "key": "catalog.summary",
+          "title": "catalog.summary",
+          "actions": [
+            {
+              "code": "CATALOG_SUMMARY_READ",
+              "display": "查看 catalog.summary",
+              "phases": [
+                "SUCCESS",
+                "FAIL"
+              ],
+              "supportsFlow": false
+            }
+          ]
+        },
+        {
+          "key": "catalog.dataset.access.request",
+          "title": "catalog.dataset.access.request",
+          "actions": [
+            {
+              "code": "CATALOG_DATASET_ACCESS_REQUEST_READ",
+              "display": "查看数据集访问申请",
+              "phases": [
+                "SUCCESS",
+                "FAIL"
+              ],
+              "supportsFlow": false
+            },
+            {
+              "code": "CATALOG_DATASET_ACCESS_REQUEST_CREATE",
+              "display": "提交数据集访问申请",
+              "phases": [
+                "SUCCESS",
+                "FAIL"
+              ],
+              "supportsFlow": false
+            },
+            {
+              "code": "CATALOG_DATASET_ACCESS_REQUEST_CANCEL_UPDATE",
+              "display": "取消数据集访问申请",
+              "phases": [
+                "SUCCESS",
+                "FAIL"
+              ],
+              "supportsFlow": false
+            }
+          ]
+        },
+        {
+          "key": "catalog.dataset.access.workflow",
+          "title": "catalog.dataset.access.workflow",
+          "actions": [
+            {
+              "code": "CATALOG_DATASET_ACCESS_WORKFLOW_READ",
+              "display": "查看数据集访问工作流",
+              "phases": [
+                "SUCCESS",
+                "FAIL"
+              ],
+              "supportsFlow": false
+            }
+          ]
+        },
+        {
+          "key": "catalog.dataset.access.task",
+          "title": "catalog.dataset.access.task",
+          "actions": [
+            {
+              "code": "CATALOG_DATASET_ACCESS_TASK_READ",
+              "display": "查看审批任务",
+              "phases": [
+                "SUCCESS",
+                "FAIL"
+              ],
+              "supportsFlow": false
+            },
+            {
+              "code": "CATALOG_DATASET_ACCESS_TASK_APPROVE_UPDATE",
+              "display": "审批任务-通过",
+              "phases": [
+                "SUCCESS",
+                "FAIL"
+              ],
+              "supportsFlow": false
+            },
+            {
+              "code": "CATALOG_DATASET_ACCESS_TASK_REJECT_UPDATE",
+              "display": "审批任务-拒绝",
+              "phases": [
+                "SUCCESS",
+                "FAIL"
+              ],
+              "supportsFlow": false
+            },
+            {
+              "code": "CATALOG_DATASET_ACCESS_TASK_DECIDE_UPDATE",
+              "display": "审批任务-决议",
+              "phases": [
+                "SUCCESS",
+                "FAIL"
+              ],
+              "supportsFlow": false
+            },
+            {
+              "code": "CATALOG_DATASET_ACCESS_TASK_BATCH_DECIDE_UPDATE",
+              "display": "审批任务-批量决议",
+              "phases": [
+                "SUCCESS",
+                "FAIL"
+              ],
+              "supportsFlow": false
+            }
+          ]
         }
       ]
     },
@@ -3468,6 +3684,15 @@
                 "SUCCESS"
               ],
               "supportsFlow": false
+            },
+            {
+              "code": "ETL_DBT_RUNS_EXECUTE",
+              "display": "执行 etl.dbt.runs",
+              "phases": [
+                "SUCCESS",
+                "FAIL"
+              ],
+              "supportsFlow": false
             }
           ]
         }
@@ -3684,6 +3909,54 @@
                 "SUCCESS"
               ],
               "supportsFlow": false
+            },
+            {
+              "code": "SQL_WORKBENCH_EXPORT",
+              "display": "导出 sql.workbench",
+              "phases": [
+                "SUCCESS",
+                "FAIL"
+              ],
+              "supportsFlow": false
+            }
+          ]
+        },
+        {
+          "key": "sql.ide",
+          "title": "sql.ide",
+          "actions": [
+            {
+              "code": "SQL_IDE_EXECUTE_EXECUTE",
+              "display": "执行 sql.ide.execute",
+              "phases": [
+                "SUCCESS",
+                "FAIL"
+              ],
+              "supportsFlow": false
+            },
+            {
+              "code": "SQL_IDE_EXECUTE_CANCEL",
+              "display": "取消 sql.ide.execute",
+              "phases": [
+                "SUCCESS",
+                "FAIL"
+              ],
+              "supportsFlow": false
+            }
+          ]
+        },
+        {
+          "key": "sql.query",
+          "title": "sql.query",
+          "actions": [
+            {
+              "code": "SQL_QUERY_READ",
+              "display": "查看 sql.query",
+              "phases": [
+                "SUCCESS",
+                "FAIL"
+              ],
+              "supportsFlow": false
             }
           ]
         }
@@ -3862,6 +4135,15 @@
                 "SUCCESS"
               ],
               "supportsFlow": false
+            },
+            {
+              "code": "VIS_DASHBOARD_ACCESS_VISIT",
+              "display": "访问看板（被拒绝）",
+              "phases": [
+                "SUCCESS",
+                "FAIL"
+              ],
+              "supportsFlow": false
             }
           ]
         },
@@ -3881,6 +4163,30 @@
             {
               "code": "VIS_DASHBOARD_SHARE_REVOKE",
               "display": "撤销大屏访问权",
+              "phases": [
+                "SUCCESS",
+                "FAIL"
+              ],
+              "supportsFlow": false
+            }
+          ]
+        },
+        {
+          "key": "vis.dashboard",
+          "title": "vis.dashboard",
+          "actions": [
+            {
+              "code": "VIS_DASHBOARD_SHARE_READ",
+              "display": "查看 vis.dashboard.share",
+              "phases": [
+                "SUCCESS",
+                "FAIL"
+              ],
+              "supportsFlow": false
+            },
+            {
+              "code": "VIS_DASHBOARD_ACCESS_VISIT",
+              "display": "VISIT vis.dashboard.access",
               "phases": [
                 "SUCCESS",
                 "FAIL"

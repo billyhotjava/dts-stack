@@ -88,7 +88,7 @@ public class ReportsResource {
         try {
             reports.touchVisit(reportId, code, title, url, engine, classification);
         } catch (Exception ignored) {}
-        audit.recordAuxiliary("OPEN", "vis", "report", code != null ? code : (id != null ? id : "unknown"), payload);
+        audit.auditAction("VIS_OPEN", AuditStage.SUCCESS, code != null ? code : (id != null ? id : "unknown"), payload);
         return ApiResponses.ok(Map.of("ok", true));
     }
 

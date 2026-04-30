@@ -1838,7 +1838,7 @@ public class ExploreResource {
         if (extra != null && !extra.isEmpty()) {
             payload.putAll(extra);
         }
-        audit.record(action, module, module, resourceId, result, payload);
+        audit.auditAction(((module) + "_" + (action)).toUpperCase().replace('.', '_').replace('-', '_'), ("FAILED".equals(result) || "FAIL".equals(result)) ? AuditStage.FAIL : AuditStage.SUCCESS, resourceId, payload);
     }
 
     private static final class PreviewPayload {

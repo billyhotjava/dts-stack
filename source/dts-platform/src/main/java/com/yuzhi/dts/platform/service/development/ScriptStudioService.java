@@ -1,6 +1,7 @@
 package com.yuzhi.dts.platform.service.development;
 
 import com.yuzhi.dts.platform.domain.development.DevScriptAsset;
+import com.yuzhi.dts.common.audit.AuditStage;
 import com.yuzhi.dts.platform.domain.development.DevScriptRun;
 import com.yuzhi.dts.platform.domain.development.DevScriptVersion;
 import com.yuzhi.dts.platform.security.DepartmentUtils;
@@ -394,7 +395,7 @@ public class ScriptStudioService {
         if (extras != null && !extras.isEmpty()) {
             payload.putAll(extras);
         }
-        auditService.record(action, module, module, subject, "SUCCESS", payload);
+        auditService.auditAction(((module) + "_" + (action)).toUpperCase().replace('.', '_').replace('-', '_'), AuditStage.SUCCESS, subject, payload);
     }
 
     private String resolvePrincipal(Principal principal) {

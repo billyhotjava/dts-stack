@@ -223,12 +223,7 @@ public class BiReportLinkService {
             DashboardAccessGuard.Caller caller = callerResolver.current();
             DashboardAccessGuard.AccessDecision decision = accessGuard.canView(link, caller);
             if (!decision.allow()) {
-                audit.auditFailure(
-                    "VISIT",
-                    "vis.dashboard.access",
-                    link.getCode(),
-                    "reason=" + decision.reason()
-                );
+                audit.auditAction("VIS_DASHBOARD_ACCESS_VISIT", AuditStage.FAIL, link.getCode(), "reason=" + decision.reason());
                 return;
             }
             if (decision.overrideUsed()) {
