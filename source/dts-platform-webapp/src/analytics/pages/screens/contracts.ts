@@ -52,5 +52,7 @@ export interface ScreenWritePayload extends Record<string, unknown> {
     carouselConfig?: CarouselConfig;
     v2Spec?: ScreenV2SpecPayload;
     migrationFrom?: string;
+    // Sprint-24 F3：创建大屏强制必填，老版 update 路径仍可省略。
+    classification?: 'PUBLIC' | 'INTERNAL' | 'SECRET' | 'CONFIDENTIAL';
     _conflict?: ScreenUpdateConflictMeta;
 }

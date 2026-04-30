@@ -345,6 +345,16 @@ export function normalizeScreenConfig(
 }
 
 export function buildScreenPayload(config: ScreenConfig): ScreenWritePayload {
+    // Sprint-24 F3：创建大屏强制必填密级。如果 config.classification 已经
+    // 提供（来自模板 intake / 编辑器），原样透传给后端；否则后端会 400 引导
+    // 用户回到属性面板补登。
+    const classificationRaw = (config as { classification?: string | null }).classification;
+    const classificationUpper = typeof classificationRaw === 'string' && classificationRaw.trim()
+        ? (classificationRaw.trim().toUpperCase() as 'PUBLIC' | 'INTERNAL' | 'SECRET' | 'CONFIDENTIAL')
+        : undefined;
+    const validClassifications = new Set(['PUBLIC', 'INTERNAL', 'SECRET', 'CONFIDENTIAL']);
+    const classification =
+        classificationUpper && validClassifications.has(classificationUpper) ? classificationUpper : undefined;
     return {
         schemaVersion: SCREEN_SCHEMA_VERSION,
         name: config.name,
@@ -358,6 +368,7 @@ export function buildScreenPayload(config: ScreenConfig): ScreenWritePayload {
         globalVariables: config.globalVariables ?? [],
         pages: config.pages ?? [],
         carouselConfig: config.carouselConfig,
+        ...(classification ? { classification } : {}),
     };
 }
 

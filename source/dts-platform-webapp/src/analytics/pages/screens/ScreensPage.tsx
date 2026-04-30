@@ -8,6 +8,7 @@ import { PageContainer } from '../../components/PageContainer/PageContainer';
 import { writeTextToClipboard } from '../../hooks/clipboard';
 import { TemplateGallery, ScreenAclPanel, type TemplateSelection } from './components';
 import { ClassificationTag } from './components/ClassificationTag';
+import { CreateScreenIntakeModal, type CreateScreenIntakePayload } from './components/CreateScreenIntakeModal';
 import { ImportPreviewModal } from './components/ImportPreviewModal';
 import type { ScreenWritePayload } from './contracts';
 import { createConfigFromTemplate } from './screenTemplates';
@@ -61,6 +62,12 @@ export default function ScreensPage() {
 	const [error, setError] = useState<string | null>(null);
 	const [showTemplateGallery, setShowTemplateGallery] = useState(false);
 	const [savingTemplateId, setSavingTemplateId] = useState<string | number | null>(null);
+	// Sprint-24 F3：创建大屏前先收集名称 + 密级。intakeMode 区分两条入口，
+	// 用户提交后根据模式决定走 v2 直接创建还是打开模板库。
+	const [intakeOpen, setIntakeOpen] = useState(false);
+	const [intakeMode, setIntakeMode] = useState<'template' | 'v2'>('template');
+	const [pendingClassification, setPendingClassification] = useState<CreateScreenIntakePayload['classification'] | null>(null);
+	const [pendingScreenName, setPendingScreenName] = useState<string>('');
 
 	const [showAiGenerator, setShowAiGenerator] = useState(false);
 	const [aiPrompt, setAiPrompt] = useState('');
@@ -240,7 +247,9 @@ export default function ScreensPage() {
 	}, [publishFilter, screens, searchKeyword, sortMode]);
 
 	const handleCreate = () => {
-		setShowTemplateGallery(true);
+		// Sprint-24 F3：先弹 intake 收集名称 + 密级，提交后再开模板库。
+		setIntakeMode('template');
+		setIntakeOpen(true);
 	};
 
 	/**
@@ -249,40 +258,60 @@ export default function ScreensPage() {
 	 * 客户不再需要选固定像素尺寸；点一下直接创建空白 v2 大屏，
 	 * 后端 v2_spec_json 字段透传 schemaVersion/layout/referenceViewport。
 	 * 创建后先跳 preview（编辑器在 F3 落地前不支持 v2 编辑）。
+	 *
+	 * Sprint-24 F3：直接创建路径同样要先收集密级，否则后端 400。
 	 */
-	const handleCreateV2 = async () => {
-		try {
-			const viewport = {
-				width: window.innerWidth,
-				height: window.innerHeight,
-			};
-			const payload: ScreenWritePayload = {
-				schemaVersion: 2,
-				name: '新建自适应大屏',
-				description: '响应式布局，按浏览器尺寸自动铺满',
-				// v1 字段给默认值以满足后端 non-null 约束（v2 渲染时无视）
-				width: 1920,
-				height: 1080,
-				theme: 'enterprise-dark',
-				backgroundColor: '#1e1f26',
-				components: [],
-				globalVariables: [],
-				pages: [],
-				// v2 专属
-				v2Spec: {
+	const handleCreateV2 = () => {
+		setIntakeMode('v2');
+		setIntakeOpen(true);
+	};
+
+	/**
+	 * Sprint-24 F3：intake 提交后的真正创建逻辑。从 modal 拿 name + classification，
+	 * 按 intakeMode 走 v2 直接创建或跳模板库。template 路径把 classification 通过
+	 * navigate state 透传到 /bi/screens/new，保存时 buildScreenPayload 一并带上。
+	 */
+	const handleIntakeSubmit = async (payload: CreateScreenIntakePayload) => {
+		setIntakeOpen(false);
+		if (intakeMode === 'v2') {
+			try {
+				const viewport = {
+					width: window.innerWidth,
+					height: window.innerHeight,
+				};
+				const writePayload: ScreenWritePayload = {
 					schemaVersion: 2,
-					layout: { cols: 12, rowHeight: 'auto', gap: 12 },
-					referenceViewport: viewport,
-				},
-			};
-			const created = await analyticsApi.createScreen(payload);
-			toast.success('已创建自适应大屏');
-			// Sprint-12 F3：创建成功后跳进 v2 编辑器
-			navigate(`/bi/screens/${created.id}/designer-v2`);
-		} catch (err) {
-			console.error('Failed to create v2 screen:', err);
-			toast.error(err instanceof Error ? err.message : '创建失败');
+					name: payload.name || '新建自适应大屏',
+					description: '响应式布局，按浏览器尺寸自动铺满',
+					classification: payload.classification,
+					// v1 字段给默认值以满足后端 non-null 约束（v2 渲染时无视）
+					width: 1920,
+					height: 1080,
+					theme: 'enterprise-dark',
+					backgroundColor: '#1e1f26',
+					components: [],
+					globalVariables: [],
+					pages: [],
+					// v2 专属
+					v2Spec: {
+						schemaVersion: 2,
+						layout: { cols: 12, rowHeight: 'auto', gap: 12 },
+						referenceViewport: viewport,
+					},
+				};
+				const created = await analyticsApi.createScreen(writePayload);
+				toast.success('已创建自适应大屏');
+				navigate(`/bi/screens/${created.id}/designer-v2`);
+			} catch (err) {
+				console.error('Failed to create v2 screen:', err);
+				toast.error(err instanceof Error ? err.message : '创建失败');
+			}
+			return;
 		}
+		// template 模式：把名称 + 密级透传给模板库，最终保存路径再带进 createScreen。
+		setPendingClassification(payload.classification);
+		setPendingScreenName(payload.name);
+		setShowTemplateGallery(true);
 	};
 
 	const handleOpenAiGenerator = () => {
@@ -299,12 +328,20 @@ export default function ScreensPage() {
 
 	const handleTemplateSelect = async (selection: TemplateSelection) => {
 		setShowTemplateGallery(false);
+		// Sprint-24 F3：把 intake 收集的密级 + 名称带进后续 flow，
+		// 模板复制（asset）路径继续后再到编辑器属性面板补设；
+		// local 模板路径直接写入 initialConfig，让 designer 保存时透传给后端。
+		const intakeClassification = pendingClassification;
+		const intakeName = pendingScreenName;
+		setPendingClassification(null);
+		setPendingScreenName('');
 
 		try {
 			if (selection.kind === 'asset') {
 				const remoteTemplate = selection.template;
 				const response = await analyticsApi.createScreenFromTemplate(remoteTemplate.id as string | number, {
-					name: (remoteTemplate.name || '未命名模板') + ' 副本',
+					name: intakeName || (remoteTemplate.name || '未命名模板') + ' 副本',
+					classification: intakeClassification ?? undefined,
 				});
 				navigate(`/bi/screens/${response.id}/edit`);
 				return;
@@ -316,6 +353,8 @@ export default function ScreensPage() {
 					initialConfig: {
 						id: '',
 						...config,
+						...(intakeName ? { name: intakeName } : {}),
+						...(intakeClassification ? { classification: intakeClassification } : {}),
 					},
 				},
 			});
@@ -905,6 +944,16 @@ export default function ScreensPage() {
 					onClose={() => setShowTemplateGallery(false)}
 				/>
 			)}
+
+			{/* Sprint-24 F3：新建大屏 intake，强制收集名称 + 密级；
+			    handleCreate / handleCreateV2 都先经过此对话框。 */}
+			<CreateScreenIntakeModal
+				open={intakeOpen}
+				defaultName={intakeMode === 'v2' ? '新建自适应大屏' : ''}
+				okText={intakeMode === 'v2' ? '创建' : '下一步'}
+				onCancel={() => setIntakeOpen(false)}
+				onSubmit={handleIntakeSubmit}
+			/>
 
 			{showAiGenerator && (
 				<div className="fixed inset-0 bg-[rgba(10,18,32,0.6)] flex items-center justify-center z-[1400]" onClick={() => setShowAiGenerator(false)}>

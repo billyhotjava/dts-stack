@@ -743,8 +743,19 @@ public class ScreenResource {
             name = "未命名大屏";
         }
 
+        // Sprint-24 F3/T03：创建大屏强制选择密级，从源头消除 classification=null 裸屏。
+        // 历史数据通过 F4 盘点入口暴露 + owner 主动补登，不在此回填。
+        String rawClassification = body == null ? null : body.path("classification").asText(null);
+        String classificationUpper;
+        try {
+            classificationUpper = normalizeRequiredClassification(rawClassification);
+        } catch (IllegalArgumentException ex) {
+            return ResponseEntity.badRequest().body(Map.of("error", ex.getMessage()));
+        }
+
         AnalyticsScreen screen = new AnalyticsScreen();
         screen.setName(name);
+        screen.setClassification(classificationUpper);
         screen.setDescription(body != null && body.has("description") && !body.path("description").isNull()
                 ? body.path("description").asText(null)
                 : null);
@@ -2379,6 +2390,33 @@ public class ScreenResource {
         if (caller.isSuperuser()) return true;
         if (screen == null || screen.getCreatorId() == null || caller.getId() == null) return false;
         return screen.getCreatorId().equals(caller.getId());
+    }
+
+    /**
+     * Sprint-24 F3/T03：校验创建大屏请求中的 classification 字段。
+     *
+     * 创建路径强制必填，从源头消除 classification=null 裸屏；老数据走 F4 盘点回收。
+     * 抽成 package-private static 便于单元测试，避免为每条分支启动 Spring 上下文。
+     *
+     * @return normalized 大写值（PUBLIC/INTERNAL/SECRET/CONFIDENTIAL）
+     * @throws IllegalArgumentException 当 raw 为 null/blank 或不在白名单时
+     */
+    static String normalizeRequiredClassification(String raw) {
+        if (raw == null) {
+            throw new IllegalArgumentException(
+                "classification is required: must be one of PUBLIC/INTERNAL/SECRET/CONFIDENTIAL");
+        }
+        String trimmed = raw.trim();
+        if (trimmed.isEmpty()) {
+            throw new IllegalArgumentException(
+                "classification is required: must be one of PUBLIC/INTERNAL/SECRET/CONFIDENTIAL");
+        }
+        String upper = trimmed.toUpperCase(java.util.Locale.ROOT);
+        if (!java.util.Set.of("PUBLIC", "INTERNAL", "SECRET", "CONFIDENTIAL").contains(upper)) {
+            throw new IllegalArgumentException(
+                "classification must be one of PUBLIC/INTERNAL/SECRET/CONFIDENTIAL");
+        }
+        return upper;
     }
 
     private ResponseEntity<ObjectNode> lockConflict(ScreenEditLockService.LockSnapshot lock) {
