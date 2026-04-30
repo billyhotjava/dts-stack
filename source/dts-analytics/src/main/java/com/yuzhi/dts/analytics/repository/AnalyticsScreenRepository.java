@@ -16,4 +16,16 @@ public interface AnalyticsScreenRepository extends JpaRepository<AnalyticsScreen
 
     /** Sprint-17: includes archived rows so dts-platform reconcile can flip enabled=false. */
     List<AnalyticsScreen> findAllByOrderByIdDesc();
+
+    /**
+     * Sprint-24 F4：裸屏盘点。返回所有未归档且未设密级的大屏，供 OP_ADMIN
+     * 通过 /admin/unclassified 端点收敛存量裸屏。空字符串视为已设：
+     * 历史 column 类型是 varchar 可能存空串，用 IS NULL OR LENGTH(TRIM())=0 兜底。
+     */
+    @Query(
+        "SELECT s FROM AnalyticsScreen s " +
+        "WHERE s.archived = false AND (s.classification IS NULL OR LENGTH(TRIM(s.classification)) = 0) " +
+        "ORDER BY s.createdAt DESC"
+    )
+    List<AnalyticsScreen> findUnclassified();
 }

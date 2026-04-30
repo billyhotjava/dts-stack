@@ -2280,6 +2280,23 @@ export const analyticsApi = {
 		),
 	revokeScreenGrant: (screenId: string | number, grantId: string | number) =>
 		requestJson<void>(`/bi/api/screens/${encodeURIComponent(String(screenId))}/grants/${encodeURIComponent(String(grantId))}`, "DELETE"),
+	/**
+	 * Sprint-24 F4：裸屏盘点。返回所有 archived=false 且 classification 为 null/空的大屏。
+	 * 仅 superuser / OP_ADMIN 可调，其它角色 403。端点本身写一条
+	 * screen.compliance.audit_unclassified 审计到 dts-admin。
+	 */
+	listUnclassifiedScreens: () =>
+		fetchJson<{
+			count: number;
+			items: Array<{
+				id: number | string;
+				name?: string | null;
+				creatorId?: number | null;
+				creatorEmail?: string | null;
+				creatorPlatformUsername?: string | null;
+				createdAt?: string | null;
+			}>;
+		}>("/bi/api/screens/admin/unclassified"),
 	getScreenEditLock: (id: string | number) =>
 		fetchJson<ScreenEditLock>(`/bi/api/screens/${encodeURIComponent(String(id))}/edit-lock`),
 	acquireScreenEditLock: (id: string | number, body?: { ttlSeconds?: number; forceTakeover?: boolean }) =>

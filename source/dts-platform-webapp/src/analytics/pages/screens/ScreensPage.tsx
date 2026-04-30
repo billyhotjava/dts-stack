@@ -9,7 +9,9 @@ import { writeTextToClipboard } from '../../hooks/clipboard';
 import { TemplateGallery, ScreenAclPanel, type TemplateSelection } from './components';
 import { ClassificationTag } from './components/ClassificationTag';
 import { CreateScreenIntakeModal, type CreateScreenIntakePayload } from './components/CreateScreenIntakeModal';
+import { UnclassifiedScreensModal } from './components/UnclassifiedScreensModal';
 import { ImportPreviewModal } from './components/ImportPreviewModal';
+import { useUserRoles } from '@/store/userStore';
 import type { ScreenWritePayload } from './contracts';
 import { createConfigFromTemplate } from './screenTemplates';
 import { buildScreenPayload, normalizeScreenConfig, validateScreenPayload } from './specV2';
@@ -68,6 +70,20 @@ export default function ScreensPage() {
 	const [intakeMode, setIntakeMode] = useState<'template' | 'v2'>('template');
 	const [pendingClassification, setPendingClassification] = useState<CreateScreenIntakePayload['classification'] | null>(null);
 	const [pendingScreenName, setPendingScreenName] = useState<string>('');
+	// Sprint-24 F4：裸屏盘点入口仅 superuser / OP_ADMIN 可见
+	const [unclassifiedOpen, setUnclassifiedOpen] = useState(false);
+	const userRoles = useUserRoles();
+	const canSeeUnclassifiedAudit = (() => {
+		if (!Array.isArray(userRoles) || userRoles.length === 0) return false;
+		const upper = userRoles.map((r) => String(r).toUpperCase());
+		return upper.some(
+			(r) =>
+				r === 'ROLE_OP_ADMIN' ||
+				r === 'OP_ADMIN' ||
+				r === 'SUPERUSER' ||
+				r === 'ROLE_SUPERUSER',
+		);
+	})();
 
 	const [showAiGenerator, setShowAiGenerator] = useState(false);
 	const [aiPrompt, setAiPrompt] = useState('');
@@ -659,6 +675,15 @@ export default function ScreensPage() {
 				<div className="flex items-center justify-between gap-3 pt-1 flex-wrap">
 					<h1 className="m-0 text-xl font-semibold text-text-primary">大屏管理</h1>
 					<div className="flex gap-2.5">
+						{canSeeUnclassifiedAudit && (
+							<button
+								className="inline-flex items-center justify-center h-8 px-4 text-sm font-normal leading-normal border border-warning rounded-md bg-surface-card text-warning cursor-pointer transition-all duration-200 whitespace-nowrap hover:bg-warning/10"
+								onClick={() => setUnclassifiedOpen(true)}
+								title="盘点 classification 为空的裸屏（仅 OP_ADMIN / superuser）"
+							>
+								裸屏盘点
+							</button>
+						)}
 						<button
 							className="inline-flex items-center justify-center h-8 px-4 text-sm font-normal leading-normal border border-brand rounded-md  bg-brand text-white cursor-pointer transition-all duration-200 whitespace-nowrap hover:opacity-85 disabled:opacity-50 disabled:cursor-not-allowed"
 							data-testid="analytics-screen-import"
@@ -953,6 +978,16 @@ export default function ScreensPage() {
 				okText={intakeMode === 'v2' ? '创建' : '下一步'}
 				onCancel={() => setIntakeOpen(false)}
 				onSubmit={handleIntakeSubmit}
+			/>
+
+			{/* Sprint-24 F4：裸屏盘点入口 */}
+			<UnclassifiedScreensModal
+				open={unclassifiedOpen}
+				onClose={() => setUnclassifiedOpen(false)}
+				onJumpToScreen={(id) => {
+					setUnclassifiedOpen(false);
+					navigate(`/bi/screens/${encodeURIComponent(String(id))}/edit`);
+				}}
 			/>
 
 			{showAiGenerator && (
