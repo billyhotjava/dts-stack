@@ -1,5 +1,6 @@
 package com.yuzhi.dts.platform.service.permission;
 
+import com.yuzhi.dts.common.audit.AuditStage;
 import com.yuzhi.dts.platform.domain.permission.AssetGrant;
 import com.yuzhi.dts.platform.domain.visualization.BiReportLink;
 import com.yuzhi.dts.platform.repository.permission.AssetGrantRepository;
@@ -94,13 +95,14 @@ public class DashboardShareService {
         grant.setGrantReason(trimToNull(req.reason()));
         AssetGrant saved = grantRepo.save(grant);
 
-        audit.audit(
-            "GRANT",
-            "vis.dashboard.share",
+        audit.auditAction(
+            "VIS_DASHBOARD_SHARE_GRANT",
+            AuditStage.SUCCESS,
             report.getCode()
                 + "; grantee=" + grantee
                 + "; permission=" + permission
-                + (levelOverride ? "; levelOverride=true" : "")
+                + (levelOverride ? "; levelOverride=true" : ""),
+            null
         );
         return AssetGrantDto.from(saved);
     }
@@ -135,13 +137,14 @@ public class DashboardShareService {
         String permissionBefore = target.getPermission();
         grantRepo.delete(target);
 
-        audit.audit(
-            "REVOKE",
-            "vis.dashboard.share",
+        audit.auditAction(
+            "VIS_DASHBOARD_SHARE_REVOKE",
+            AuditStage.SUCCESS,
             report.getCode()
                 + "; grantId=" + grantId
                 + "; grantee=" + granteeBefore
-                + "; permission=" + permissionBefore
+                + "; permission=" + permissionBefore,
+            null
         );
     }
 

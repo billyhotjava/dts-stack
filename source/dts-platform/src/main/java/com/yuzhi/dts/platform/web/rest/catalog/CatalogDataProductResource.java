@@ -1,6 +1,7 @@
 package com.yuzhi.dts.platform.web.rest.catalog;
 
 import com.yuzhi.dts.platform.domain.catalog.CatalogDataProduct;
+import com.yuzhi.dts.common.audit.AuditStage;
 import com.yuzhi.dts.platform.repository.catalog.CatalogDataProductRepository;
 import com.yuzhi.dts.platform.service.audit.AuditService;
 import com.yuzhi.dts.platform.web.rest.ApiResponse;
@@ -50,7 +51,7 @@ public class CatalogDataProductResource {
 	public ApiResponse<CatalogDataProduct> create(@RequestBody CatalogDataProduct body) {
 		body.setId(null);  // 防止客户端指定 id
 		CatalogDataProduct saved = repo.save(body);
-		audit.audit("CREATE", "catalog.data-product", saved.getId().toString());
+		audit.auditAction("CATALOG_DATA_PRODUCT_CREATE", AuditStage.SUCCESS, saved.getId().toString(), null);
 		return ApiResponses.ok(saved);
 	}
 
@@ -67,7 +68,7 @@ public class CatalogDataProductResource {
 		existing.setIndicatorCodes(body.getIndicatorCodes());
 		existing.setStatus(body.getStatus());
 		CatalogDataProduct saved = repo.save(existing);
-		audit.audit("UPDATE", "catalog.data-product", id.toString());
+		audit.auditAction("CATALOG_DATA_PRODUCT_UPDATE", AuditStage.SUCCESS, id.toString(), null);
 		return ApiResponses.ok(saved);
 	}
 
@@ -77,7 +78,7 @@ public class CatalogDataProductResource {
 	public ApiResponse<Boolean> delete(@PathVariable UUID id) {
 		repo.findById(id).orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "数据产品不存在"));
 		repo.deleteById(id);
-		audit.audit("DELETE", "catalog.data-product", id.toString());
+		audit.auditAction("CATALOG_DATA_PRODUCT_DELETE", AuditStage.SUCCESS, id.toString(), null);
 		return ApiResponses.ok(Boolean.TRUE);
 	}
 }

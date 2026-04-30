@@ -1,6 +1,7 @@
 package com.yuzhi.dts.platform.web.rest;
 
 import com.yuzhi.dts.platform.domain.modeling.ModelingSqlModel;
+import com.yuzhi.dts.common.audit.AuditStage;
 import com.yuzhi.dts.platform.repository.modeling.ModelingSqlModelRepository;
 import com.yuzhi.dts.platform.service.audit.AuditService;
 import com.yuzhi.dts.platform.service.etl.DbtGitService;
@@ -38,7 +39,7 @@ public class DbtGitResource {
     @GetMapping("/status")
     public ApiResponse<GitStatusResult> getStatus() {
         GitStatusResult result = gitService.getStatus();
-        auditService.audit("READ", "etl.dbt.git", "status");
+        auditService.auditAction("ETL_DBT_GIT_READ", AuditStage.SUCCESS, "status", null);
         return ApiResponses.ok(result);
     }
 
@@ -73,14 +74,14 @@ public class DbtGitResource {
             }
         }
 
-        auditService.audit("CREATE", "etl.dbt.git", "commit: " + result.commitHash());
+        auditService.auditAction("ETL_DBT_GIT_CREATE", AuditStage.SUCCESS, "commit: " + result.commitHash(), null);
         return ApiResponses.ok(result);
     }
 
     @GetMapping("/log")
     public ApiResponse<List<GitLogEntry>> log(@RequestParam(defaultValue = "20") int limit) {
         List<GitLogEntry> entries = gitService.log(limit);
-        auditService.audit("READ", "etl.dbt.git", "log");
+        auditService.auditAction("ETL_DBT_GIT_READ", AuditStage.SUCCESS, "log", null);
         return ApiResponses.ok(entries);
     }
 
@@ -89,10 +90,10 @@ public class DbtGitResource {
         String result;
         if (path != null && !path.isBlank()) {
             result = gitService.diff(path);
-            auditService.audit("READ", "etl.dbt.git", "diff: " + path);
+            auditService.auditAction("ETL_DBT_GIT_READ", AuditStage.SUCCESS, "diff: " + path, null);
         } else {
             result = gitService.diffAll();
-            auditService.audit("READ", "etl.dbt.git", "diff-all");
+            auditService.auditAction("ETL_DBT_GIT_READ", AuditStage.SUCCESS, "diff-all", null);
         }
         return ApiResponses.ok(result);
     }
@@ -100,7 +101,7 @@ public class DbtGitResource {
     @PostMapping("/revert")
     public ApiResponse<Void> revert(@RequestBody GitRevertRequest request) {
         gitService.revertFile(request.path());
-        auditService.audit("UPDATE", "etl.dbt.git", "revert: " + request.path());
+        auditService.auditAction("ETL_DBT_GIT_UPDATE", AuditStage.SUCCESS, "revert: " + request.path(), null);
         return ApiResponses.ok(null);
     }
 
@@ -108,7 +109,7 @@ public class DbtGitResource {
     public ApiResponse<String> fileAtCommit(
             @RequestParam String path, @RequestParam String commitHash) {
         String content = gitService.getFileAtCommit(path, commitHash);
-        auditService.audit("READ", "etl.dbt.git", "file-at-commit: " + path + "@" + commitHash);
+        auditService.auditAction("ETL_DBT_GIT_READ", AuditStage.SUCCESS, "file-at-commit: " + path + "@" + commitHash, null);
         return ApiResponses.ok(content);
     }
 }

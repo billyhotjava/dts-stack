@@ -1,6 +1,7 @@
 package com.yuzhi.dts.platform.web.rest;
 
 import com.yuzhi.dts.platform.domain.catalog.CatalogDataset;
+import com.yuzhi.dts.common.audit.AuditStage;
 import com.yuzhi.dts.platform.repository.catalog.CatalogDatasetRepository;
 import com.yuzhi.dts.platform.service.audit.AuditService;
 import com.yuzhi.dts.platform.service.query.QueryGateway;
@@ -49,7 +50,7 @@ public class SqlResource {
         }
         CatalogDataset ds = datasetRepo.findById(datasetId).orElse(null);
         if (ds == null || !accessChecker.canRead(ds)) {
-            audit.audit("DENY", "sql.query", String.valueOf(datasetId));
+            audit.auditAction("EXPLORE_WORKBENCH_QUERY", AuditStage.FAIL, String.valueOf(datasetId), null);
             return ApiResponses.error("Access denied for dataset");
         }
 
@@ -59,7 +60,7 @@ public class SqlResource {
             activeDept
         );
         if (!dataDecision.allowed()) {
-            audit.audit("DENY", "sql.query", String.valueOf(datasetId));
+            audit.auditAction("EXPLORE_WORKBENCH_QUERY", AuditStage.FAIL, String.valueOf(datasetId), null);
             return ApiResponses.error(dataDecision.code(), dataDecision.message());
         }
 
@@ -67,10 +68,10 @@ public class SqlResource {
         String effectiveSql = sql;
         try {
             Map<String, Object> result = queryGateway.execute(effectiveSql);
-            audit.audit("EXECUTE", "sql.query", String.valueOf(datasetId));
+            audit.auditAction("EXPLORE_WORKBENCH_QUERY", AuditStage.SUCCESS, String.valueOf(datasetId), null);
             return ApiResponses.ok(result);
         } catch (IllegalStateException ex) {
-            audit.audit("ERROR", "sql.query", String.valueOf(datasetId));
+            audit.auditAction("EXPLORE_WORKBENCH_QUERY", AuditStage.FAIL, String.valueOf(datasetId), null);
             return ApiResponses.error(ex.getMessage());
         }
     }

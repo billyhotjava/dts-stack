@@ -159,7 +159,7 @@ public class CatalogSecurityResource {
             .stream()
             .map(helper::toGrantDto)
             .toList();
-        audit.audit("READ", "catalog.dataset.grant", id.toString());
+        audit.auditAction("CATALOG_ASSET_VIEW", AuditStage.SUCCESS, id.toString(), null);
         return ApiResponses.ok(list);
     }
 
@@ -207,7 +207,7 @@ public class CatalogSecurityResource {
         grant.setGranteeName(displayName);
         grant.setGranteeDept(deptCode);
         CatalogDatasetGrant saved = grantRepo.save(grant);
-        audit.audit("CREATE", "catalog.dataset.grant", saved.getId().toString());
+        audit.auditAction("CATALOG_ASSET_EDIT", AuditStage.SUCCESS, saved.getId().toString(), null);
         return ApiResponses.ok(helper.toGrantDto(saved));
     }
 
@@ -225,7 +225,7 @@ public class CatalogSecurityResource {
             throw new ResponseStatusException(HttpStatus.FORBIDDEN, "仅研究所数据管理员可修改访问权限");
         }
         grantRepo.deleteById(grantId);
-        audit.audit("DELETE", "catalog.dataset.grant", grantId.toString());
+        audit.auditAction("CATALOG_ASSET_EDIT", AuditStage.SUCCESS, grantId.toString(), null);
         return ApiResponses.ok(Boolean.TRUE);
     }
 }

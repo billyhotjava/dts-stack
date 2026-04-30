@@ -1,6 +1,7 @@
 package com.yuzhi.dts.platform.web.rest;
 
 import com.yuzhi.dts.platform.domain.catalog.CatalogDataset;
+import com.yuzhi.dts.common.audit.AuditStage;
 import com.yuzhi.dts.platform.domain.explore.ExecEnums;
 import com.yuzhi.dts.platform.domain.explore.QueryExecution;
 import com.yuzhi.dts.platform.domain.explore.ResultSet;
@@ -79,7 +80,7 @@ public class ExploreExecResource {
         if (req.datasetId != null) {
             CatalogDataset ds = datasetRepo.findById(req.datasetId).orElse(null);
             if (!datasetWithinScope(ds, resolveActiveDeptContext(activeDept))) {
-                audit.audit("DENY", "explore.execute", Objects.toString(req.datasetId));
+                audit.auditAction("EXPLORE_WORKBENCH_QUERY", AuditStage.FAIL, Objects.toString(req.datasetId), null);
                 return ApiResponses.error("Access denied for dataset");
             }
             DatasetDataAccessApprovalService.Decision decision = dataAccessApprovalService.checkDataAccess(
@@ -88,7 +89,7 @@ public class ExploreExecResource {
                 activeDept
             );
             if (!decision.allowed()) {
-                audit.audit("DENY", "explore.execute", Objects.toString(req.datasetId));
+                audit.auditAction("EXPLORE_WORKBENCH_QUERY", AuditStage.FAIL, Objects.toString(req.datasetId), null);
                 return ApiResponses.error(decision.code(), decision.message());
             }
         } else {
@@ -98,7 +99,7 @@ public class ExploreExecResource {
                 activeDept
             );
             if (!decision.allowed()) {
-                audit.audit("DENY", "explore.execute", "missing-dataset");
+                audit.auditAction("EXPLORE_WORKBENCH_QUERY", AuditStage.FAIL, "missing-dataset", null);
                 return ApiResponses.error(decision.code(), decision.message());
             }
         }
@@ -106,7 +107,7 @@ public class ExploreExecResource {
         // Simple variable substitution: ${var} and :var
         String effective = applyVariables(sql, req.variables);
         if (!isReadOnlyQuery(effective)) {
-            audit.audit("DENY", "explore.execute", "write-operation");
+            audit.auditAction("EXPLORE_WORKBENCH_QUERY", AuditStage.FAIL, "write-operation", null);
             return ApiResponses.error("Only read-only queries are allowed");
         }
 
@@ -133,20 +134,20 @@ public class ExploreExecResource {
             exec.setStatus(ExecEnums.ExecStatus.FAILED);
             exec.setErrorMessage(ex.getMessage());
             executionRepository.save(exec);
-            audit.audit("ERROR", "explore.execute", exec.getId().toString());
+            audit.auditAction("EXPLORE_WORKBENCH_QUERY", AuditStage.FAIL, exec.getId().toString(), null);
             return ApiResponses.error(ex.getMessage());
         } catch (Exception e) {
             exec.setStatus(ExecEnums.ExecStatus.FAILED);
             exec.setErrorMessage(e.getMessage());
             executionRepository.save(exec);
-            audit.audit("ERROR", "explore.execute", exec.getId().toString());
+            audit.auditAction("EXPLORE_WORKBENCH_QUERY", AuditStage.FAIL, exec.getId().toString(), null);
             return ApiResponses.error("Query execution failed: " + e.getMessage());
         } finally {
             exec.setFinishedAt(Instant.now());
             executionRepository.save(exec);
         }
 
-        audit.audit("EXECUTE", "explore.execute", exec.getId().toString());
+        audit.auditAction("EXPLORE_WORKBENCH_QUERY", AuditStage.SUCCESS, exec.getId().toString(), null);
         Map<String, Object> payload = new LinkedHashMap<>(result);
         payload.put("executionId", exec.getId());
         return ApiResponses.ok(payload);
@@ -167,7 +168,7 @@ public class ExploreExecResource {
             "Plan scan + filter + aggregate",
             "Estimate cost"
         ));
-        audit.audit("READ", "explore.explain", "inline");
+        audit.auditAction("EXPLORE_WORKBENCH_QUERY", AuditStage.SUCCESS, "inline", null);
         return ApiResponses.ok(plan);
     }
 
@@ -185,7 +186,7 @@ public class ExploreExecResource {
         CatalogDataset dataset = exec.getDatasetId() != null ? datasetRepo.findById(exec.getDatasetId()).orElse(null) : null;
         String effDept = resolveActiveDeptContext(activeDept);
         if (dataset != null && !datasetWithinScope(dataset, effDept)) {
-            audit.audit("DENY", "explore.saveResult", executionId.toString());
+            audit.auditAction("EXPLORE_RESULTSET_EXPORT", AuditStage.FAIL, executionId.toString(), null);
             return ApiResponses.error(
                 com.yuzhi.dts.platform.security.policy.PolicyErrorCodes.INVALID_CONTEXT,
                 "Access denied for dataset"
@@ -197,7 +198,7 @@ public class ExploreExecResource {
         try {
             preview = queryGateway.execute(exec.getSqlText());
         } catch (Exception ex) {
-            audit.audit("ERROR", "explore.saveResult", executionId.toString());
+            audit.auditAction("EXPLORE_SAVERESULT_ERROR", AuditStage.FAIL, executionId.toString(), null);
             return ApiResponses.error("执行结果预览失败: " + ex.getMessage());
         }
 
@@ -222,7 +223,7 @@ public class ExploreExecResource {
         exec.setResultSetId(rs.getId());
         executionRepository.save(exec);
 
-        audit.audit("EXPORT", "explore.saveResult", executionId.toString());
+        audit.auditAction("EXPLORE_RESULTSET_EXPORT", AuditStage.SUCCESS, executionId.toString(), null);
         return ApiResponses.ok(rs);
     }
 
@@ -269,7 +270,7 @@ public class ExploreExecResource {
         if (effectiveDatasetId != null) {
             var ds = datasetRepo.findById(effectiveDatasetId).orElse(null);
             if (!datasetWithinScope(ds, effDept)) {
-                audit.audit("DENY", "explore.resultPreview", resultSetId.toString());
+                audit.auditAction("EXPLORE_RESULTSET_VIEW", AuditStage.FAIL, resultSetId.toString(), null);
                 return ApiResponses.error(
                     com.yuzhi.dts.platform.security.policy.PolicyErrorCodes.INVALID_CONTEXT,
                     "Access denied for dataset"
@@ -292,7 +293,7 @@ public class ExploreExecResource {
         result.put("headers", headers);
         result.put("rows", data);
         if (!maskingMeta.isEmpty()) result.put("masking", maskingMeta);
-        audit.audit("READ", "explore.resultPreview", resultSetId.toString());
+        audit.auditAction("EXPLORE_RESULTSET_VIEW", AuditStage.SUCCESS, resultSetId.toString(), null);
         return ApiResponses.ok(result);
     }
 
@@ -316,7 +317,7 @@ public class ExploreExecResource {
             .orElse(null);
         CatalogDataset dataset = datasetId != null ? datasetRepo.findById(datasetId).orElse(null) : null;
         if (dataset != null && !datasetWithinScope(dataset, effDept)) {
-            audit.audit("DENY", "explore.resultSet", id.toString());
+            audit.auditAction("EXPLORE_RESULTSET_PURGE", AuditStage.FAIL, id.toString(), null);
             return ApiResponses.error(
                 com.yuzhi.dts.platform.security.policy.PolicyErrorCodes.INVALID_CONTEXT,
                 "Access denied for dataset"
@@ -325,7 +326,7 @@ public class ExploreExecResource {
         // Remove link from executions then delete result set
         executionRepository.clearResultSetReferences(id);
         resultSetRepository.deleteById(id);
-        audit.audit("DELETE", "explore.resultSet", id.toString());
+        audit.auditAction("EXPLORE_RESULTSET_PURGE", AuditStage.SUCCESS, id.toString(), null);
         return ApiResponses.ok(Boolean.TRUE);
     }
 

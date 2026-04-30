@@ -1,6 +1,7 @@
 package com.yuzhi.dts.platform.web.rest;
 
 import com.yuzhi.dts.platform.service.audit.AuditService;
+import com.yuzhi.dts.common.audit.AuditStage;
 import com.yuzhi.dts.platform.service.visualization.BiReportLinkService;
 import com.yuzhi.dts.platform.service.visualization.dto.BiReportLinkDto;
 import com.yuzhi.dts.platform.service.workbench.ClassificationMapper;
@@ -58,7 +59,7 @@ public class DashboardResource {
             })
             .toList();
 
-        audit.audit("READ", "dashboard.list", "visible=" + dashboards.size());
+        audit.auditAction("VIS_DASHBOARD_VIEW", AuditStage.SUCCESS, "visible=" + dashboards.size(), null);
         return ApiResponses.ok(dashboards);
     }
 

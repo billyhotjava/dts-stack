@@ -172,8 +172,8 @@ public class AuditService {
 
     public void auditAction(String actionCode, AuditStage stage, String resourceId, Object payload) {
         if (!StringUtils.hasText(actionCode)) {
-            log.warn("auditAction invoked without action code; falling back to legacy audit");
-            audit(actionCode, "general", resourceId);
+            log.warn("auditAction invoked without action code; falling back to general audit");
+            record(actionCode, "general", "general", resourceId, "SUCCESS", payload, null);
             return;
         }
         AuditStage effectiveStage = stage == null ? AuditStage.SUCCESS : stage;
@@ -222,28 +222,10 @@ public class AuditService {
     }
 
     /**
-     * Legacy 3-arg form. Use {@link #auditAction(String, AuditStage, String, Object)} with a
+     * Legacy 6-arg form. Use {@link #auditAction(String, AuditStage, String, Object)} with a
      * canonical {@code actionCode} from {@code audit-action-catalog.json} for new call sites —
      * this overload performs free-form action-string matching against legacy-action-mappings,
-     * which is fuzzier and harder to evolve.
-     */
-    @Deprecated
-    public void audit(String action, String targetKind, String targetRef) {
-        record(action, targetKind, targetKind, targetRef, "SUCCESS", null, null);
-    }
-
-    /**
-     * Legacy failure-shortcut. Use {@link #auditAction(String, AuditStage, String, Object)}
-     * with {@code AuditStage.FAIL} for new call sites.
-     */
-    @Deprecated
-    public void auditFailure(String action, String targetKind, String targetRef, Object payload) {
-        record(action, targetKind, targetKind, targetRef, "FAILED", payload, null);
-    }
-
-    /**
-     * Legacy 6-arg form. New code should call {@link #auditAction(String, AuditStage, String, Object)}
-     * to benefit from the curated catalog metadata (display label, supportsFlow, module/entry title).
+     * which is fuzzier and harder to evolve. Still ~30 call sites in 2026-04 (RE-4 follow-up).
      */
     @Deprecated
     public void record(
@@ -258,8 +240,18 @@ public class AuditService {
     }
 
     /**
-     * Legacy 7-arg form retained because submitAuditInternal still has callers that pass extraTags.
-     * Treated as an internal-only writer at this point — public callers should migrate to auditAction.
+     * Failure-channel shortcut. Use {@link #auditAction(String, AuditStage, String, Object)} with
+     * {@code AuditStage.FAIL} for new call sites.
+     */
+    @Deprecated
+    public void auditFailure(String action, String targetKind, String targetRef, Object payload) {
+        record(action, targetKind, targetKind, targetRef, "FAILED", payload, null);
+    }
+
+    /**
+     * Internal writer used by {@link #auditAction(String, AuditStage, String, Object)} and
+     * the deprecated {@link #record(String, String, String, String, String, Object)} overload.
+     * Not part of the public API — outside callers should use {@code auditAction}.
      */
     public void record(
         String action,
@@ -282,7 +274,14 @@ public class AuditService {
         );
     }
 
-    /** Legacy auxiliary writer; entries are not persisted to admin (see AuditForwarderService). */
+    /**
+     * Auxiliary-channel writer: marks the entry as {@code auxiliary=true} so the forwarder
+     * skips pushing it to admin. Used by lightweight UX-tracing events (dashboard open,
+     * report click) that platform wants in its own telemetry but not in central governance
+     * audit. New code should prefer {@link #auditAction(String, AuditStage, String, Object)}
+     * when the event is real audit material; this overload is kept for the legacy 4 UX-trace
+     * call sites.
+     */
     @Deprecated
     public void recordAuxiliary(
         String action,
@@ -290,44 +289,28 @@ public class AuditService {
         String resourceType,
         String resourceId,
         Object payload
-    ) {
-        recordAuxiliary(action, module, resourceType, resourceId, "SUCCESS", payload, null);
-    }
-
-    /** @see #recordAuxiliary(String, String, String, String, Object) */
-    @Deprecated
-    public void recordAuxiliary(
-        String action,
-        String module,
-        String resourceType,
-        String resourceId,
-        String result,
-        Object payload
-    ) {
-        recordAuxiliary(action, module, resourceType, resourceId, result, payload, null);
-    }
-
-    /** @see #recordAuxiliary(String, String, String, String, Object) */
-    @Deprecated
-    public void recordAuxiliary(
-        String action,
-        String module,
-        String resourceType,
-        String resourceId,
-        String result,
-        Object payload,
-        Map<String, Object> extraTags
     ) {
         submitAuditInternal(
             SecurityUtils.getCurrentUserLogin().orElse("anonymous"),
-            action,
-            module,
-            resourceType,
-            resourceId,
-            result,
-            payload,
-            extraTags,
-            true
+            action, module, resourceType, resourceId,
+            "SUCCESS", payload, null, true
+        );
+    }
+
+    /** @see #recordAuxiliary(String, String, String, String, Object) */
+    @Deprecated
+    public void recordAuxiliary(
+        String action,
+        String module,
+        String resourceType,
+        String resourceId,
+        String result,
+        Object payload
+    ) {
+        submitAuditInternal(
+            SecurityUtils.getCurrentUserLogin().orElse("anonymous"),
+            action, module, resourceType, resourceId,
+            result, payload, null, true
         );
     }
 

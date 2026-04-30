@@ -10,6 +10,7 @@ import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import com.yuzhi.dts.common.audit.AuditStage;
 import com.yuzhi.dts.platform.domain.permission.AssetGrant;
 import com.yuzhi.dts.platform.domain.visualization.BiReportLink;
 import com.yuzhi.dts.platform.repository.permission.AssetGrantRepository;
@@ -95,7 +96,7 @@ class DashboardShareServiceTest {
 
         assertThat(dto.id()).isEqualTo(42L);
         assertThat(dto.permission()).isEqualTo("VIEW");
-        verify(audit).audit(eq("GRANT"), eq("vis.dashboard.share"), anyString());
+        verify(audit).auditAction(eq("VIS_DASHBOARD_SHARE_GRANT"), eq(AuditStage.SUCCESS), anyString(), eq(null));
     }
 
     @Test
@@ -223,7 +224,7 @@ class DashboardShareServiceTest {
         service.revoke(REPORT_ID, 99L);
 
         verify(grantRepo).delete(target);
-        verify(audit).audit(eq("REVOKE"), eq("vis.dashboard.share"), anyString());
+        verify(audit).auditAction(eq("VIS_DASHBOARD_SHARE_REVOKE"), eq(AuditStage.SUCCESS), anyString(), eq(null));
     }
 
     @Test

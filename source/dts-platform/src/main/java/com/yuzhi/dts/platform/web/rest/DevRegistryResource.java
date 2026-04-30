@@ -1,6 +1,7 @@
 package com.yuzhi.dts.platform.web.rest;
 
 import com.yuzhi.dts.platform.service.audit.AuditService;
+import com.yuzhi.dts.common.audit.AuditStage;
 import java.time.Instant;
 import java.util.LinkedHashMap;
 import java.util.Map;
@@ -35,7 +36,7 @@ public class DevRegistryResource {
         run.put("submittedAt", Instant.now().toString());
         run.put("note", "Registered only. No computation executed.");
         RUNS.put(runId, run);
-        audit.audit("SUBMIT", "etl.job", id.toString());
+        audit.auditAction("FOUNDATION_SCHEDULE_DEPLOY", AuditStage.SUCCESS, id.toString(), null);
         return ApiResponses.ok(run);
     }
 
@@ -47,7 +48,7 @@ public class DevRegistryResource {
             run.put("id", id);
             run.put("status", "NOT_FOUND");
         }
-        audit.audit("READ", "etl.run.status", id.toString());
+        audit.auditAction("FOUNDATION_SCHEDULE_REGISTER", AuditStage.SUCCESS, id.toString(), null);
         return ApiResponses.ok(run);
     }
 }

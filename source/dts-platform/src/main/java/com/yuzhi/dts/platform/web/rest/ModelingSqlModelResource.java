@@ -1,6 +1,7 @@
 package com.yuzhi.dts.platform.web.rest;
 
 import com.yuzhi.dts.platform.domain.catalog.CatalogDataset;
+import com.yuzhi.dts.common.audit.AuditStage;
 import com.yuzhi.dts.platform.domain.infra.InfraOdsTableMapping;
 import com.yuzhi.dts.platform.repository.catalog.CatalogDatasetRepository;
 import com.yuzhi.dts.platform.repository.infra.InfraOdsTableMappingRepository;
@@ -103,7 +104,7 @@ public class ModelingSqlModelResource {
         @RequestHeader(value = "X-Active-Dept", required = false) String activeDept
     ) {
         List<SqlModelDto> list = sqlModelService.list(planId, keyword, activeDept);
-        auditService.audit("READ", "modeling.sql-model", "list");
+        auditService.auditAction("MODELING_SQL_MODEL_READ", AuditStage.SUCCESS, "list", null);
         return ApiResponses.ok(list);
     }
 
@@ -114,7 +115,7 @@ public class ModelingSqlModelResource {
         @RequestHeader(value = "X-Active-Dept", required = false) String activeDept
     ) {
         SqlModelDto dto = sqlModelService.get(id, activeDept);
-        auditService.audit("READ", "modeling.sql-model", id.toString());
+        auditService.auditAction("MODELING_SQL_MODEL_READ", AuditStage.SUCCESS, id.toString(), null);
         return ApiResponses.ok(dto);
     }
 
@@ -125,7 +126,7 @@ public class ModelingSqlModelResource {
         @RequestHeader(value = "X-Active-Dept", required = false) String activeDept
     ) {
         List<Map<String, Object>> columns = sqlModelService.listColumns(id, activeDept);
-        auditService.audit("READ", "modeling.sql-model.columns", id.toString());
+        auditService.auditAction("MODELING_SQL_MODEL_COLUMNS_READ", AuditStage.SUCCESS, id.toString(), null);
         return ApiResponses.ok(columns);
     }
 
@@ -136,7 +137,7 @@ public class ModelingSqlModelResource {
         @RequestHeader(value = "X-Active-Dept", required = false) String activeDept
     ) {
         SqlModelContractImpact impact = sqlModelService.getContractImpact(id, activeDept);
-        auditService.audit("READ", "modeling.sql-model.contract-impact", id.toString());
+        auditService.auditAction("MODELING_SQL_MODEL_CONTRACT_IMPACT_READ", AuditStage.SUCCESS, id.toString(), null);
         return ApiResponses.ok(impact);
     }
 
@@ -148,7 +149,7 @@ public class ModelingSqlModelResource {
         @RequestHeader(value = "X-Active-Dept", required = false) String activeDept
     ) {
         SqlModelDto dto = sqlModelService.create(request, activeDept);
-        auditService.audit("CREATE", "modeling.sql-model", dto.id().toString());
+        auditService.auditAction("MODELING_SQL_MODEL_CREATE", AuditStage.SUCCESS, dto.id().toString(), null);
         return ApiResponses.ok(dto);
     }
 
@@ -191,7 +192,7 @@ public class ModelingSqlModelResource {
             null
         );
         SqlModelDto dto = generationService.importFromFiles(request, sqlText, csvText, activeDept);
-        auditService.audit("IMPORT", "modeling.sql-model", dto.id().toString());
+        auditService.auditAction("MODELING_SQL_MODEL_IMPORT", AuditStage.SUCCESS, dto.id().toString(), null);
         return ApiResponses.ok(dto);
     }
 
@@ -215,8 +216,7 @@ public class ModelingSqlModelResource {
             ModelingSqlModelService.BatchImportResult result = generationService.batchImportFromArchive(
                 planId, sourceDataSourceId, skipExisting, cleanOldFiles, tempFile, activeDept
             );
-            auditService.audit("BATCH_IMPORT", "modeling.sql-model",
-                "plan=" + planId + " total=" + result.total() + " imported=" + result.imported());
+            auditService.auditAction("MODELING_SQL_MODEL_BATCH_IMPORT", AuditStage.SUCCESS, "plan=" + planId + " total=" + result.total() + " imported=" + result.imported(), null);
             return ApiResponses.ok(result);
         } finally {
             Files.deleteIfExists(tempFile);
@@ -231,7 +231,7 @@ public class ModelingSqlModelResource {
         @RequestHeader(value = "X-Active-Dept", required = false) String activeDept
     ) {
         SqlModelOdsGenerateResult result = generationService.generateFromOds(request, activeDept);
-        auditService.audit("GENERATE", "modeling.sql-model", "ods");
+        auditService.auditAction("MODELING_SQL_MODEL_GENERATE", AuditStage.SUCCESS, "ods", null);
         return ApiResponses.ok(result);
     }
 
@@ -243,7 +243,7 @@ public class ModelingSqlModelResource {
         @RequestHeader(value = "X-Active-Dept", required = false) String activeDept
     ) {
         SqlModelGovernancePreviewResult result = generationService.previewGovernance(request, activeDept);
-        auditService.audit("READ", "modeling.sql-model.governance.preview", request != null && request.planId() != null ? request.planId().toString() : "all");
+        auditService.auditAction("MODELING_SQL_MODEL_GOVERNANCE_PREVIEW_READ", AuditStage.SUCCESS, request != null && request.planId() != null ? request.planId().toString() : "all", null);
         return ApiResponses.ok(result);
     }
 
@@ -255,7 +255,7 @@ public class ModelingSqlModelResource {
         @RequestHeader(value = "X-Active-Dept", required = false) String activeDept
     ) {
         SqlModelGovernanceExecuteResult result = generationService.executeGovernance(request, activeDept);
-        auditService.audit("DELETE", "modeling.sql-model.governance.execute", "requested=" + result.requested() + ",deleted=" + result.deleted());
+        auditService.auditAction("MODELING_SQL_MODEL_GOVERNANCE_EXECUTE_DELETE", AuditStage.SUCCESS, "requested=" + result.requested() + ",deleted=" + result.deleted(), null);
         return ApiResponses.ok(result);
     }
 
@@ -268,7 +268,7 @@ public class ModelingSqlModelResource {
         @RequestHeader(value = "X-Active-Dept", required = false) String activeDept
     ) {
         SqlModelDto dto = sqlModelService.update(id, request, activeDept);
-        auditService.audit("UPDATE", "modeling.sql-model", id.toString());
+        auditService.auditAction("MODELING_SQL_MODEL_UPDATE", AuditStage.SUCCESS, id.toString(), null);
         return ApiResponses.ok(dto);
     }
 
@@ -280,7 +280,7 @@ public class ModelingSqlModelResource {
         @RequestHeader(value = "X-Active-Dept", required = false) String activeDept
     ) {
         sqlModelService.delete(id, activeDept);
-        auditService.audit("DELETE", "modeling.sql-model", id.toString());
+        auditService.auditAction("MODELING_SQL_MODEL_DELETE", AuditStage.SUCCESS, id.toString(), null);
         return ApiResponses.ok(null);
     }
 
@@ -292,11 +292,7 @@ public class ModelingSqlModelResource {
         @RequestHeader(value = "X-Active-Dept", required = false) String activeDept
     ) {
         ModelingSqlModelService.BatchDeleteResult result = sqlModelService.deleteBatch(request, activeDept);
-        auditService.audit(
-            "DELETE",
-            "modeling.sql-model.batch",
-            "requested=" + result.requested() + ",deleted=" + result.deleted() + ",failed=" + result.failed()
-        );
+        auditService.auditAction("MODELING_SQL_MODEL_BATCH_DELETE", AuditStage.SUCCESS, "requested=" + result.requested() + ",deleted=" + result.deleted() + ",failed=" + result.failed(), null);
         return ApiResponses.ok(result);
     }
 
@@ -309,7 +305,7 @@ public class ModelingSqlModelResource {
     ) {
         SqlModelDto dto = sqlModelService.get(id, activeDept);
         Map<String, Object> result = semanticContractPublishService.publish(dto);
-        auditService.audit("PUBLISH", "modeling.sql-model.semantic", id.toString());
+        auditService.auditAction("MODELING_SQL_MODEL_SEMANTIC_PUBLISH", AuditStage.SUCCESS, id.toString(), null);
         return ApiResponses.ok(result);
     }
 
@@ -406,7 +402,7 @@ public class ModelingSqlModelResource {
                 StringUtils.hasText(keyword) ? keyword.trim() : ""
             );
         }
-        auditService.audit("READ", "modeling.sql-model.dbt-sources", "list");
+        auditService.auditAction("MODELING_SQL_MODEL_DBT_SOURCES_READ", AuditStage.SUCCESS, "list", null);
         return ApiResponses.ok(result);
     }
 
@@ -582,7 +578,7 @@ public class ModelingSqlModelResource {
             row.put("refSnippet", "{{ ref('" + model.name() + "') }}");
             result.add(row);
         }
-        auditService.audit("READ", "modeling.sql-model.dbt-refs", "list");
+        auditService.auditAction("MODELING_SQL_MODEL_DBT_REFS_READ", AuditStage.SUCCESS, "list", null);
         return ApiResponses.ok(result);
     }
 

@@ -236,7 +236,8 @@ class BiReportLinkServiceTest {
         service.touchVisit(existingId, "screen-77", null, null, null, null);
 
         verify(reportLinkRepository).save(any(BiReportLink.class));
-        verify(audit).audit(eq("VISIT_OVERRIDE"), eq("vis.dashboard.access"), org.mockito.ArgumentMatchers.contains("OVERRIDE_USED"));
+        verify(audit).auditAction(eq("VIS_DASHBOARD_ACCESS_VISIT_OVERRIDE"), eq(com.yuzhi.dts.common.audit.AuditStage.SUCCESS),
+            org.mockito.ArgumentMatchers.contains("OVERRIDE_USED"), eq(null));
     }
 
     private BiReportLink buildLink(String code, String classification, String roleCodes) {

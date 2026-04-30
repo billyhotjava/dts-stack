@@ -1,6 +1,7 @@
 package com.yuzhi.dts.platform.web.rest;
 
 import com.yuzhi.dts.platform.config.DataStandardProperties;
+import com.yuzhi.dts.common.audit.AuditStage;
 import com.yuzhi.dts.platform.service.audit.AuditService;
 import com.yuzhi.dts.platform.web.rest.dto.DataStandardSettingsDto;
 import com.yuzhi.dts.platform.web.rest.dto.DataStandardHealthDto;
@@ -42,7 +43,7 @@ public class DataStandardSettingsResource {
         DataStandardSettingsDto dto = new DataStandardSettingsDto();
         dto.setMaxFileSize(properties.getAttachment().getMaxFileSize());
         dto.setAllowedExtensions(properties.getAttachment().getAllowedExtensions().stream().toList());
-        audit.audit("READ", "modeling.standard.settings", "attachment" );
+        audit.auditAction("MODELING_STANDARD_VIEW", AuditStage.SUCCESS, "attachment", null);
         return ApiResponses.ok(dto);
     }
 
@@ -66,7 +67,7 @@ public class DataStandardSettingsResource {
         DataStandardSettingsDto response = new DataStandardSettingsDto();
         response.setMaxFileSize(properties.getAttachment().getMaxFileSize());
         response.setAllowedExtensions(properties.getAttachment().getAllowedExtensions().stream().toList());
-        audit.audit("UPDATE", "modeling.standard.settings", "attachment" );
+        audit.auditAction("MODELING_STANDARD_EDIT", AuditStage.SUCCESS, "attachment", null);
         return ApiResponses.ok(response);
     }
 

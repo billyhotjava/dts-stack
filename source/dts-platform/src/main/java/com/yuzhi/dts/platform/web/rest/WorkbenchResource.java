@@ -1,6 +1,7 @@
 package com.yuzhi.dts.platform.web.rest;
 
 import com.yuzhi.dts.platform.security.AuthoritiesConstants;
+import com.yuzhi.dts.common.audit.AuditStage;
 import com.yuzhi.dts.platform.security.SecurityUtils;
 import com.yuzhi.dts.platform.service.audit.AuditService;
 import com.yuzhi.dts.platform.service.workbench.WorkbenchAuditRateLimiter;
@@ -53,7 +54,7 @@ public class WorkbenchResource {
     public ApiResponse<Map<String, Object>> overview() {
         String user = SecurityUtils.getCurrentUserLogin().orElse("anonymous");
         Map<String, Object> payload = workbenchService.overview(user);
-        auditService.audit("READ", "workbench.overview", user);
+        auditService.auditAction("WORKBENCH_OVERVIEW_READ", AuditStage.SUCCESS, user, null);
         return ApiResponses.ok(payload);
     }
 
@@ -66,14 +67,10 @@ public class WorkbenchResource {
         // — we ignore the header and force the user's own dept_code claim.
         String effectiveDept = resolveEffectiveActiveDept(activeDept);
         List<Map<String, Object>> items = workbenchService.todoItems(effectiveDept);
-        auditService.audit(
-            "READ",
-            "workbench.todos",
-            buildAuditDetail(Map.of(
+        auditService.auditAction("WORKBENCH_TODOS_READ", AuditStage.SUCCESS, buildAuditDetail(Map.of(
                 "count", String.valueOf(items.size()),
                 "effectiveDept", effectiveDept == null ? "" : effectiveDept
-            ))
-        );
+            )), null);
         return ApiResponses.ok(items);
     }
 
@@ -96,15 +93,11 @@ public class WorkbenchResource {
             bizDomain,
             timeRange
         );
-        auditService.audit(
-            "READ",
-            "workbench.leader-overview",
-            buildAuditDetail(Map.of(
+        auditService.auditAction("WORKBENCH_LEADER_OVERVIEW_READ", AuditStage.SUCCESS, buildAuditDetail(Map.of(
                 "requested", normalizeScope(scope),
                 "effective", payload.scope() == null ? "" : payload.scope(),
                 "dept", payload.effectiveDeptCode() == null ? "" : payload.effectiveDeptCode()
-            ))
-        );
+            )), null);
         return ApiResponses.ok(payload);
     }
 
@@ -176,11 +169,7 @@ public class WorkbenchResource {
                 safe.put(key, s);
             }
         }
-        auditService.audit(
-            "READ",
-            "workbench.client-event",
-            buildAuditDetail(prepend("event", event, safe))
-        );
+        auditService.auditAction("WORKBENCH_CLIENT_EVENT_READ", AuditStage.SUCCESS, buildAuditDetail(prepend("event", event, safe)), null);
         return ResponseEntity.ok(ApiResponses.ok(Map.of("ok", true)));
     }
 

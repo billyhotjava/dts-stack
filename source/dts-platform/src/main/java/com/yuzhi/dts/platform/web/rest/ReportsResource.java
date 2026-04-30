@@ -1,6 +1,7 @@
 package com.yuzhi.dts.platform.web.rest;
 
 import com.yuzhi.dts.platform.security.AuthoritiesConstants;
+import com.yuzhi.dts.common.audit.AuditStage;
 import com.yuzhi.dts.platform.service.audit.AuditService;
 import com.yuzhi.dts.platform.service.permission.DashboardShareService;
 import com.yuzhi.dts.platform.service.permission.dto.AssetGrantDto;
@@ -62,7 +63,7 @@ public class ReportsResource {
         @RequestHeader(value = "X-Active-Dept", required = false) String activeDept
     ) {
         List<BiReportLinkDto> list = reports.listPublished(deptCode, reportType, keyword, activeDept, queryDatasetId, bizDomain);
-        audit.audit("READ", "vis.reports.published", "size=" + list.size());
+        audit.auditAction("VIS_REPORTS_PUBLISHED_READ", AuditStage.SUCCESS, "size=" + list.size(), null);
         return ApiResponses.ok(list);
     }
 
@@ -103,7 +104,7 @@ public class ReportsResource {
         @RequestHeader(value = "X-Active-Dept", required = false) String activeDept
     ) {
         List<BiReportLinkDto> list = reports.listAll(deptCode, reportType, keyword, enabledOnly, activeDept, queryDatasetId, bizDomain);
-        audit.audit("READ", "vis.reports.manage.list", "size=" + list.size());
+        audit.auditAction("VIS_REPORTS_MANAGE_LIST_READ", AuditStage.SUCCESS, "size=" + list.size(), null);
         return ApiResponses.ok(list);
     }
 
@@ -114,7 +115,7 @@ public class ReportsResource {
         @RequestHeader(value = "X-Active-Dept", required = false) String activeDept
     ) {
         BiReportLinkDto dto = reports.create(req, activeDept);
-        audit.audit("CREATE", "vis.reports.manage.create", dto.code());
+        audit.auditAction("VIS_REPORTS_MANAGE_CREATE_CREATE", AuditStage.SUCCESS, dto.code(), null);
         return ApiResponses.ok(dto);
     }
 
@@ -126,7 +127,7 @@ public class ReportsResource {
         @RequestHeader(value = "X-Active-Dept", required = false) String activeDept
     ) {
         BiReportLinkDto dto = reports.update(id, req, activeDept);
-        audit.audit("UPDATE", "vis.reports.manage.update", dto.code());
+        audit.auditAction("VIS_REPORTS_MANAGE_UPDATE_UPDATE", AuditStage.SUCCESS, dto.code(), null);
         return ApiResponses.ok(dto);
     }
 
@@ -134,7 +135,7 @@ public class ReportsResource {
     @PreAuthorize(REPORT_MAINTAINER_EXPRESSION)
     public ApiResponse<Map<String, Object>> delete(@PathVariable UUID id) {
         reports.delete(id);
-        audit.audit("DELETE", "vis.reports.manage.delete", id.toString());
+        audit.auditAction("VIS_REPORTS_MANAGE_DELETE_DELETE", AuditStage.SUCCESS, id.toString(), null);
         return ApiResponses.ok(Map.of("ok", true));
     }
 
@@ -142,7 +143,7 @@ public class ReportsResource {
     @PreAuthorize("hasAuthority('" + AuthoritiesConstants.OP_ADMIN + "')")
     public ApiResponse<Map<String, Object>> purge(@PathVariable UUID id) {
         reports.purge(id);
-        audit.audit("PURGE", "vis.reports.manage.purge", id.toString());
+        audit.auditAction("VIS_REPORTS_MANAGE_PURGE_PURGE", AuditStage.SUCCESS, id.toString(), null);
         return ApiResponses.ok(Map.of("ok", true));
     }
 

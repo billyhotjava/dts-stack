@@ -1,5 +1,6 @@
 package com.yuzhi.dts.platform.service.visualization;
 
+import com.yuzhi.dts.common.audit.AuditStage;
 import com.yuzhi.dts.platform.domain.explore.QueryDatasetAsset;
 import com.yuzhi.dts.platform.domain.visualization.BiReportLink;
 import com.yuzhi.dts.platform.domain.visualization.BiReportVisit;
@@ -231,10 +232,11 @@ public class BiReportLinkService {
                 return;
             }
             if (decision.overrideUsed()) {
-                audit.audit(
-                    "VISIT_OVERRIDE",
-                    "vis.dashboard.access",
-                    link.getCode() + "; reason=" + decision.reason()
+                audit.auditAction(
+                    "VIS_DASHBOARD_ACCESS_VISIT_OVERRIDE",
+                    AuditStage.SUCCESS,
+                    link.getCode() + "; reason=" + decision.reason(),
+                    null
                 );
             }
         }

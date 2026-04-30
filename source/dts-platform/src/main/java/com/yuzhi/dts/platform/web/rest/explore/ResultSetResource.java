@@ -1,6 +1,7 @@
 package com.yuzhi.dts.platform.web.rest.explore;
 
 import com.yuzhi.dts.platform.domain.explore.ResultSet;
+import com.yuzhi.dts.common.audit.AuditStage;
 import com.yuzhi.dts.platform.repository.explore.ResultSetRepository;
 import com.yuzhi.dts.platform.security.AuthoritiesConstants;
 import com.yuzhi.dts.platform.security.SecurityUtils;
@@ -92,7 +93,7 @@ public class ResultSetResource {
             repository.deleteById(rs.getId());
             count++;
         }
-        if (audit != null) audit.audit("DELETE", "explore.resultSet.cleanup", "count=" + count);
+        if (audit != null) audit.auditAction("EXPLORE_RESULTSET_PURGE", AuditStage.SUCCESS, "count=" + count, null);
         return ApiResponses.ok(java.util.Map.of("deleted", count));
     }
 

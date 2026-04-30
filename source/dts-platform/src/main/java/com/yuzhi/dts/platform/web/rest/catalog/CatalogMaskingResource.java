@@ -53,7 +53,7 @@ public class CatalogMaskingResource {
     @Transactional(readOnly = true)
     public ApiResponse<List<CatalogMaskingRule>> listMaskingRules() {
         List<CatalogMaskingRule> list = maskingRepo.findAll();
-        audit.audit("READ", "catalog.masking", "list");
+        audit.auditAction("CATALOG_ASSET_VIEW", AuditStage.SUCCESS, "list", null);
         return ApiResponses.ok(list);
     }
 
@@ -62,7 +62,7 @@ public class CatalogMaskingResource {
     @PreAuthorize(CATALOG_MAINTAINER_EXPRESSION)
     public ApiResponse<CatalogMaskingRule> createMasking(@Valid @RequestBody CatalogMaskingRule rule) {
         CatalogMaskingRule saved = maskingRepo.save(rule);
-        audit.audit("CREATE", "catalog.masking", saved.getId().toString());
+        audit.auditAction("CATALOG_ASSET_EDIT", AuditStage.SUCCESS, saved.getId().toString(), null);
         return ApiResponses.ok(saved);
     }
 
@@ -75,7 +75,7 @@ public class CatalogMaskingResource {
         existing.setFunction(patch.getFunction());
         existing.setArgs(patch.getArgs());
         CatalogMaskingRule saved = maskingRepo.save(existing);
-        audit.audit("UPDATE", "catalog.masking", id.toString());
+        audit.auditAction("CATALOG_ASSET_EDIT", AuditStage.SUCCESS, id.toString(), null);
         return ApiResponses.ok(saved);
     }
 
@@ -84,7 +84,7 @@ public class CatalogMaskingResource {
     @PreAuthorize(CATALOG_MAINTAINER_EXPRESSION)
     public ApiResponse<Boolean> deleteMasking(@PathVariable UUID id) {
         maskingRepo.deleteById(id);
-        audit.audit("DELETE", "catalog.masking", id.toString());
+        audit.auditAction("CATALOG_ASSET_EDIT", AuditStage.SUCCESS, id.toString(), null);
         return ApiResponses.ok(Boolean.TRUE);
     }
 
@@ -100,7 +100,7 @@ public class CatalogMaskingResource {
             default -> value;
         };
         Map<String, Object> resp = Map.of("input", value, "function", function, "output", result);
-        audit.audit("EXECUTE", "catalog.masking.preview", function);
+        audit.auditAction("CATALOG_ASSET_VIEW", AuditStage.SUCCESS, function, null);
         return ApiResponses.ok(resp);
     }
 
@@ -108,7 +108,7 @@ public class CatalogMaskingResource {
     @Transactional(readOnly = true)
     public ApiResponse<List<CatalogClassificationMapping>> getMapping() {
         List<CatalogClassificationMapping> list = mappingRepo.findAll();
-        audit.audit("READ", "catalog.classificationMapping", "list");
+        audit.auditAction("CATALOG_ASSET_VIEW", AuditStage.SUCCESS, "list", null);
         return ApiResponses.ok(list);
     }
 
@@ -144,7 +144,7 @@ public class CatalogMaskingResource {
     @PreAuthorize(CATALOG_MAINTAINER_EXPRESSION)
     public ApiResponse<Map<String, Object>> importMapping(@RequestBody List<CatalogClassificationMapping> items) {
         List<CatalogClassificationMapping> saved = mappingRepo.saveAll(items);
-        audit.audit("CREATE", "catalog.classificationMapping", "import:" + saved.size());
+        audit.auditAction("CATALOG_ASSET_EDIT", AuditStage.SUCCESS, "import:" + saved.size(), null);
         return ApiResponses.ok(Map.of("imported", saved.size()));
     }
 
@@ -152,7 +152,7 @@ public class CatalogMaskingResource {
     @Transactional(readOnly = true)
     public ApiResponse<List<CatalogClassificationMapping>> exportMapping() {
         List<CatalogClassificationMapping> list = mappingRepo.findAll();
-        audit.audit("READ", "catalog.classificationMapping", "export");
+        audit.auditAction("CATALOG_ASSET_VIEW", AuditStage.SUCCESS, "export", null);
         return ApiResponses.ok(list);
     }
 

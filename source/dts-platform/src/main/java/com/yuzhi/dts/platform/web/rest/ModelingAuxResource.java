@@ -154,7 +154,7 @@ public class ModelingAuxResource {
             .filter(plan -> kw == null || matchKeyword(plan.getName(), kw) || matchKeyword(plan.getDomain(), kw) || matchKeyword(plan.getOwner(), kw))
             .sorted(Comparator.comparing(plan -> String.valueOf(plan.getName()).toLowerCase(Locale.ROOT)))
             .toList();
-        auditService.audit("READ", "modeling.plan", "list");
+        auditService.auditAction("MODELING_PLAN_READ", AuditStage.SUCCESS, "list", null);
         return ApiResponses.ok(list);
     }
 
@@ -169,7 +169,7 @@ public class ModelingAuxResource {
         if (!isOwnerDeptVisible(plan.getOwnerDept(), activeDept, instituteScope)) {
             throw new AccessDeniedException("当前账号无权访问该数据规划");
         }
-        auditService.audit("READ", "modeling.plan", id.toString());
+        auditService.auditAction("MODELING_PLAN_READ", AuditStage.SUCCESS, id.toString(), null);
         return ApiResponses.ok(plan);
     }
 
@@ -185,7 +185,7 @@ public class ModelingAuxResource {
         ensurePlanDefaults(plan);
         ModelingPlan saved = planRepo.save(plan);
         upsertPlanVersionSnapshot(saved, saved.getVersionNotes(), null);
-        auditService.audit("CREATE", "modeling.plan", saved.getId().toString());
+        auditService.auditAction("MODELING_PLAN_CREATE", AuditStage.SUCCESS, saved.getId().toString(), null);
         return ApiResponses.ok(saved);
     }
 
@@ -202,7 +202,7 @@ public class ModelingAuxResource {
         ensurePlanDefaults(plan);
         ModelingPlan saved = planRepo.save(plan);
         upsertPlanVersionSnapshot(saved, saved.getVersionNotes(), null);
-        auditService.audit("UPDATE", "modeling.plan", id.toString());
+        auditService.auditAction("MODELING_PLAN_UPDATE", AuditStage.SUCCESS, id.toString(), null);
         return ApiResponses.ok(saved);
     }
 
@@ -437,7 +437,7 @@ public class ModelingAuxResource {
         planReviewRepo.deleteByPlan(plan);
         planVersionRepo.deleteByPlan(plan);
         planRepo.delete(plan);
-        auditService.audit("DELETE", "modeling.plan", id.toString());
+        auditService.auditAction("MODELING_PLAN_DELETE", AuditStage.SUCCESS, id.toString(), null);
         return ApiResponses.ok(Boolean.TRUE);
     }
 
@@ -456,7 +456,7 @@ public class ModelingAuxResource {
             .filter(term -> kw == null || matchKeyword(term.getName(), kw) || matchKeyword(term.getCode(), kw) || matchKeyword(term.getAliases(), kw))
             .sorted(Comparator.comparing(term -> String.valueOf(term.getName()).toLowerCase(Locale.ROOT)))
             .toList();
-        auditService.audit("READ", "modeling.glossary", "list");
+        auditService.auditAction("MODELING_GLOSSARY_READ", AuditStage.SUCCESS, "list", null);
         return ApiResponses.ok(list);
     }
 
@@ -466,7 +466,7 @@ public class ModelingAuxResource {
         @RequestHeader(value = "X-Active-Dept", required = false) String activeDeptHeader
     ) {
         ModelingGlossaryTerm term = getReadableTerm(id, activeDeptHeader);
-        auditService.audit("READ", "modeling.glossary", id.toString());
+        auditService.auditAction("MODELING_GLOSSARY_READ", AuditStage.SUCCESS, id.toString(), null);
         return ApiResponses.ok(term);
     }
 
@@ -481,7 +481,7 @@ public class ModelingAuxResource {
         ensureGlossaryDefaults(term);
         ModelingGlossaryTerm saved = glossaryRepo.save(term);
         upsertGlossaryVersionSnapshot(saved, saved.getVersionNotes(), null);
-        auditService.audit("CREATE", "modeling.glossary", saved.getId().toString());
+        auditService.auditAction("MODELING_GLOSSARY_CREATE", AuditStage.SUCCESS, saved.getId().toString(), null);
         return ApiResponses.ok(saved);
     }
 
@@ -497,7 +497,7 @@ public class ModelingAuxResource {
         ensureGlossaryDefaults(term);
         ModelingGlossaryTerm saved = glossaryRepo.save(term);
         upsertGlossaryVersionSnapshot(saved, saved.getVersionNotes(), null);
-        auditService.audit("UPDATE", "modeling.glossary", id.toString());
+        auditService.auditAction("MODELING_GLOSSARY_UPDATE", AuditStage.SUCCESS, id.toString(), null);
         return ApiResponses.ok(saved);
     }
 
@@ -707,7 +707,7 @@ public class ModelingAuxResource {
             .stream()
             .sorted(Comparator.comparing(template -> String.valueOf(template.getName()).toLowerCase(Locale.ROOT)))
             .toList();
-        auditService.audit("READ", "modeling.template", "list");
+        auditService.auditAction("MODELING_TEMPLATE_READ", AuditStage.SUCCESS, "list", null);
         return ApiResponses.ok(list);
     }
 
@@ -753,7 +753,7 @@ public class ModelingAuxResource {
             }
         }
 
-        auditService.audit("READ", "modeling.template.layers", "list");
+        auditService.auditAction("MODELING_TEMPLATE_LAYERS_READ", AuditStage.SUCCESS, "list", null);
         return ApiResponses.ok(result);
     }
 
@@ -772,7 +772,7 @@ public class ModelingAuxResource {
     @GetMapping("/templates/{id}")
     public ApiResponse<ModelingTemplate> getTemplate(@PathVariable UUID id) {
         ModelingTemplate template = templateRepo.findById(id).orElseThrow(() -> new EntityNotFoundException("模型模板不存在"));
-        auditService.audit("READ", "modeling.template", id.toString());
+        auditService.auditAction("MODELING_TEMPLATE_READ", AuditStage.SUCCESS, id.toString(), null);
         return ApiResponses.ok(template);
     }
 
@@ -822,7 +822,7 @@ public class ModelingAuxResource {
         ensureTemplateDefaults(template);
         ModelingTemplate saved = templateRepo.save(template);
         upsertTemplateVersionSnapshot(saved, saved.getVersionNotes(), null);
-        auditService.audit("CREATE", "modeling.template", saved.getId().toString());
+        auditService.auditAction("MODELING_TEMPLATE_CREATE", AuditStage.SUCCESS, saved.getId().toString(), null);
         return ApiResponses.ok(saved);
     }
 
@@ -834,7 +834,7 @@ public class ModelingAuxResource {
         ensureTemplateDefaults(template);
         ModelingTemplate saved = templateRepo.save(template);
         upsertTemplateVersionSnapshot(saved, saved.getVersionNotes(), null);
-        auditService.audit("UPDATE", "modeling.template", id.toString());
+        auditService.auditAction("MODELING_TEMPLATE_UPDATE", AuditStage.SUCCESS, id.toString(), null);
         return ApiResponses.ok(saved);
     }
 

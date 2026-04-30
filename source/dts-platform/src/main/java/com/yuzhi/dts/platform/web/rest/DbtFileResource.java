@@ -1,6 +1,7 @@
 package com.yuzhi.dts.platform.web.rest;
 
 import com.yuzhi.dts.platform.service.audit.AuditService;
+import com.yuzhi.dts.common.audit.AuditStage;
 import com.yuzhi.dts.platform.service.etl.DbtFileService;
 import com.yuzhi.dts.platform.service.etl.DbtFileService.DbtArchiveUploadResult;
 import com.yuzhi.dts.platform.service.etl.DbtFileService.DbtFileContent;
@@ -34,42 +35,42 @@ public class DbtFileResource {
     @GetMapping("/tree")
     public ApiResponse<DbtFileNode> getTree() {
         ApiResponse<DbtFileNode> response = ApiResponses.ok(fileService.getTree());
-        auditService.audit("READ", "etl.dbt.files", "tree");
+        auditService.auditAction("ETL_DBT_FILES_READ", AuditStage.SUCCESS, "tree", null);
         return response;
     }
 
     @GetMapping("/content")
     public ApiResponse<DbtFileContent> getContent(@RequestParam String path) {
         ApiResponse<DbtFileContent> response = ApiResponses.ok(fileService.readFile(path));
-        auditService.audit("READ", "etl.dbt.files", path);
+        auditService.auditAction("ETL_DBT_FILES_READ", AuditStage.SUCCESS, path, null);
         return response;
     }
 
     @PutMapping("/content")
     public ApiResponse<Void> saveContent(@RequestBody DbtFileSaveRequest request) {
         fileService.saveFile(request.path(), request.content());
-        auditService.audit("UPDATE", "etl.dbt.files", request.path());
+        auditService.auditAction("ETL_DBT_FILES_UPDATE", AuditStage.SUCCESS, request.path(), null);
         return ApiResponses.ok(null);
     }
 
     @PostMapping
     public ApiResponse<Void> createFile(@RequestBody DbtFileCreateRequest request) {
         fileService.createFile(request.path(), request.type(), request.content());
-        auditService.audit("CREATE", "etl.dbt.files", request.path());
+        auditService.auditAction("ETL_DBT_FILES_CREATE", AuditStage.SUCCESS, request.path(), null);
         return ApiResponses.ok(null);
     }
 
     @DeleteMapping
     public ApiResponse<Void> deleteFile(@RequestParam String path) {
         fileService.deleteFile(path);
-        auditService.audit("DELETE", "etl.dbt.files", path);
+        auditService.auditAction("ETL_DBT_FILES_DELETE", AuditStage.SUCCESS, path, null);
         return ApiResponses.ok(null);
     }
 
     @PutMapping("/rename")
     public ApiResponse<Void> renameFile(@RequestBody DbtFileRenameRequest request) {
         fileService.renameFile(request.oldPath(), request.newPath());
-        auditService.audit("UPDATE", "etl.dbt.files", request.oldPath() + " -> " + request.newPath());
+        auditService.auditAction("ETL_DBT_FILES_UPDATE", AuditStage.SUCCESS, request.oldPath() + " -> " + request.newPath(), null);
         return ApiResponses.ok(null);
     }
 
@@ -79,14 +80,10 @@ public class DbtFileResource {
         @RequestParam(name = "clean", required = false, defaultValue = "false") boolean clean
     ) {
         DbtArchiveUploadResult result = fileService.uploadArchive(archive, clean);
-        auditService.audit(
-            "UPLOAD",
-            "etl.dbt.files",
-            "archive: extracted=" + result.extracted().size()
+        auditService.auditAction("ETL_DBT_FILES_UPLOAD", AuditStage.SUCCESS, "archive: extracted=" + result.extracted().size()
                 + " skipped=" + result.skipped().size()
                 + " cleaned=" + result.cleaned().size()
-                + " clean=" + clean
-        );
+                + " clean=" + clean, null);
         return ApiResponses.ok(result);
     }
 

@@ -1,6 +1,7 @@
 package com.yuzhi.dts.platform.web.rest;
 
 import com.yuzhi.dts.platform.security.ClassificationUtils;
+import com.yuzhi.dts.common.audit.AuditStage;
 import com.yuzhi.dts.platform.service.audit.AuditService;
 import java.time.Instant;
 import java.util.LinkedHashMap;
@@ -39,7 +40,7 @@ public class VisualizationResource {
         payload.put("generatedAt", Instant.now().toString());
         payload.put("total", visible.size());
         payload.put("items", visible);
-        audit.audit("READ", "vis.dashboards", "visible=" + visible.size());
+        audit.auditAction("VIS_DASHBOARD_VIEW", AuditStage.SUCCESS, "visible=" + visible.size(), null);
         return ApiResponses.ok(payload);
     }
 
@@ -67,7 +68,7 @@ public class VisualizationResource {
             )
         );
         data.put("sources", List.of("TDS Hive", "ODS Kafka", "财务 DW"));
-        audit.audit("READ", "vis.cockpit", "metrics");
+        audit.auditAction("VIS_COCKPIT_VIEW", AuditStage.SUCCESS, "metrics", null);
         return ApiResponses.ok(data);
     }
 
@@ -83,7 +84,7 @@ public class VisualizationResource {
             Map.of("stage", "开发实现", "completed", 5, "total", 9),
             Map.of("stage", "上线评估", "completed", 3, "total", 6)
         ));
-        audit.audit("READ", "vis.projects", "summary");
+        audit.auditAction("VIS_PROJECT_VIEW", AuditStage.SUCCESS, "summary", null);
         return ApiResponses.ok(data);
     }
 
@@ -99,7 +100,7 @@ public class VisualizationResource {
             Map.of("name", "零售业", "value", 62_000),
             Map.of("name", "政务", "value", 44_000)
         ));
-        audit.audit("READ", "vis.finance", "summary");
+        audit.auditAction("VIS_FINANCE_VIEW", AuditStage.SUCCESS, "summary", null);
         return ApiResponses.ok(data);
     }
 
@@ -113,7 +114,7 @@ public class VisualizationResource {
             Map.of("supplier", "SZ-001", "severity", "medium", "message", "原材料到货提前 2 天"),
             Map.of("supplier", "WH-008", "severity", "high", "message", "运输延迟 3 天")
         ));
-        audit.audit("READ", "vis.supply", "summary");
+        audit.auditAction("VIS_SUPPLYCHAIN_VIEW", AuditStage.SUCCESS, "summary", null);
         return ApiResponses.ok(data);
     }
 
@@ -132,7 +133,7 @@ public class VisualizationResource {
                 Map.of("name", "业务分析", "coverage", 0.81)
             )
         );
-        audit.audit("READ", "vis.hr", "summary");
+        audit.auditAction("VIS_HR_VIEW", AuditStage.SUCCESS, "summary", null);
         return ApiResponses.ok(data);
     }
 

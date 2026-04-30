@@ -1,6 +1,7 @@
 package com.yuzhi.dts.platform.web.rest;
 
 import com.yuzhi.dts.platform.domain.iam.IamClassification;
+import com.yuzhi.dts.common.audit.AuditStage;
 import com.yuzhi.dts.platform.domain.iam.IamPermission;
 import com.yuzhi.dts.platform.domain.iam.IamRequest;
 import com.yuzhi.dts.platform.repository.iam.IamClassificationRepository;
@@ -43,7 +44,7 @@ public class IamResource {
     @GetMapping("/classifications")
     public ApiResponse<List<IamClassification>> listClassifications() {
         var list = classificationRepo.findAll();
-        audit.audit("READ", "iam.classification", "list");
+        audit.auditAction("IAM_CLASSIFICATION_VIEW", AuditStage.SUCCESS, "list", null);
         return ApiResponses.ok(list);
     }
 
@@ -51,7 +52,7 @@ public class IamResource {
     @PreAuthorize(IAM_MAINTAINER_EXPRESSION)
     public ApiResponse<IamClassification> createClassification(@RequestBody IamClassification item) {
         var saved = classificationRepo.save(item);
-        audit.audit("CREATE", "iam.classification", saved.getId().toString());
+        audit.auditAction("IAM_CLASSIFICATION_SYNC", AuditStage.SUCCESS, saved.getId().toString(), null);
         return ApiResponses.ok(saved);
     }
 
@@ -62,7 +63,7 @@ public class IamResource {
         existing.setCode(patch.getCode());
         existing.setLabel(patch.getLabel());
         var saved = classificationRepo.save(existing);
-        audit.audit("UPDATE", "iam.classification", id.toString());
+        audit.auditAction("IAM_CLASSIFICATION_SYNC", AuditStage.SUCCESS, id.toString(), null);
         return ApiResponses.ok(saved);
     }
 
@@ -70,7 +71,7 @@ public class IamResource {
     @PreAuthorize(IAM_MAINTAINER_EXPRESSION)
     public ApiResponse<Boolean> deleteClassification(@PathVariable UUID id) {
         classificationRepo.deleteById(id);
-        audit.audit("DELETE", "iam.classification", id.toString());
+        audit.auditAction("IAM_CLASSIFICATION_SYNC", AuditStage.SUCCESS, id.toString(), null);
         return ApiResponses.ok(Boolean.TRUE);
     }
 
@@ -78,7 +79,7 @@ public class IamResource {
     @GetMapping("/permissions")
     public ApiResponse<List<IamPermission>> listPermissions() {
         var list = permissionRepo.findAll();
-        audit.audit("READ", "iam.permission", "list");
+        audit.auditAction("IAM_AUTH_GRANT", AuditStage.SUCCESS, "list", null);
         return ApiResponses.ok(list);
     }
 
@@ -86,7 +87,7 @@ public class IamResource {
     @PreAuthorize(IAM_MAINTAINER_EXPRESSION)
     public ApiResponse<IamPermission> createPermission(@RequestBody IamPermission item) {
         var saved = permissionRepo.save(item);
-        audit.audit("CREATE", "iam.permission", saved.getId().toString());
+        audit.auditAction("IAM_AUTH_GRANT", AuditStage.SUCCESS, saved.getId().toString(), null);
         return ApiResponses.ok(saved);
     }
 
@@ -98,7 +99,7 @@ public class IamResource {
         existing.setAction(patch.getAction());
         existing.setScope(patch.getScope());
         var saved = permissionRepo.save(existing);
-        audit.audit("UPDATE", "iam.permission", id.toString());
+        audit.auditAction("IAM_AUTH_GRANT", AuditStage.SUCCESS, id.toString(), null);
         return ApiResponses.ok(saved);
     }
 
@@ -106,7 +107,7 @@ public class IamResource {
     @PreAuthorize(IAM_MAINTAINER_EXPRESSION)
     public ApiResponse<Boolean> deletePermission(@PathVariable UUID id) {
         permissionRepo.deleteById(id);
-        audit.audit("DELETE", "iam.permission", id.toString());
+        audit.auditAction("IAM_AUTH_REVOKE", AuditStage.SUCCESS, id.toString(), null);
         return ApiResponses.ok(Boolean.TRUE);
     }
 
@@ -114,7 +115,7 @@ public class IamResource {
     @GetMapping("/requests")
     public ApiResponse<List<IamRequest>> listRequests() {
         var list = requestRepo.findAll();
-        audit.audit("READ", "iam.request", "list");
+        audit.auditAction("IAM_REQUEST_SUBMIT", AuditStage.SUCCESS, "list", null);
         return ApiResponses.ok(list);
     }
 
@@ -122,7 +123,7 @@ public class IamResource {
     public ApiResponse<IamRequest> createRequest(@RequestBody IamRequest item) {
         item.setStatus("PENDING");
         var saved = requestRepo.save(item);
-        audit.audit("CREATE", "iam.request", saved.getId().toString());
+        audit.auditAction("IAM_REQUEST_SUBMIT", AuditStage.SUCCESS, saved.getId().toString(), null);
         return ApiResponses.ok(saved);
     }
 
@@ -131,7 +132,7 @@ public class IamResource {
         var existing = requestRepo.findById(id).orElseThrow();
         existing.setStatus("APPROVED");
         var saved = requestRepo.save(existing);
-        audit.audit("UPDATE", "iam.request.approve", id.toString());
+        audit.auditAction("IAM_REQUEST_APPROVE", AuditStage.SUCCESS, id.toString(), null);
         return ApiResponses.ok(saved);
     }
 
@@ -140,7 +141,7 @@ public class IamResource {
         var existing = requestRepo.findById(id).orElseThrow();
         existing.setStatus("REJECTED");
         var saved = requestRepo.save(existing);
-        audit.audit("UPDATE", "iam.request.reject", id.toString());
+        audit.auditAction("IAM_REQUEST_REJECT", AuditStage.SUCCESS, id.toString(), null);
         return ApiResponses.ok(saved);
     }
 
@@ -151,7 +152,7 @@ public class IamResource {
         String action = String.valueOf(body.getOrDefault("action", "read"));
         boolean allowed = permissionRepo.findAll().stream().anyMatch(p -> action.equalsIgnoreCase(p.getAction()));
         var resp = Map.<String, Object>of("allowed", allowed, "reason", allowed ? "permission matched" : "no rule matched");
-        audit.audit("EXECUTE", "iam.simulate", action);
+        audit.auditAction("IAM_SIMULATION_RUN", AuditStage.SUCCESS, action, null);
         return ApiResponses.ok(resp);
     }
 }

@@ -81,7 +81,7 @@ public class CatalogSchemaResource {
                 (t.getTags() != null && t.getTags().toLowerCase().contains(keyword.toLowerCase()))
             )
             .toList();
-        audit.audit("READ", "catalog.table", String.valueOf(datasetId));
+        audit.auditAction("CATALOG_ASSET_VIEW", AuditStage.SUCCESS, String.valueOf(datasetId), null);
         return ApiResponses.ok(Map.of("content", filtered, "total", filtered.size()));
     }
 
@@ -92,7 +92,7 @@ public class CatalogSchemaResource {
         @Valid @RequestBody CatalogTableSchema table
     ) {
         var saved = tableRepo.save(table);
-        audit.audit("CREATE", "catalog.table", saved.getId().toString());
+        audit.auditAction("CATALOG_ASSET_EDIT", AuditStage.SUCCESS, saved.getId().toString(), null);
         return ApiResponses.ok(saved);
     }
 
@@ -540,7 +540,7 @@ public class CatalogSchemaResource {
     @PreAuthorize(CATALOG_MAINTAINER_EXPRESSION)
     public ApiResponse<Boolean> deleteTable(@PathVariable UUID id) {
         tableRepo.deleteById(id);
-        audit.audit("DELETE", "catalog.table", id.toString());
+        audit.auditAction("CATALOG_ASSET_EDIT", AuditStage.SUCCESS, id.toString(), null);
         return ApiResponses.ok(Boolean.TRUE);
     }
 
@@ -591,7 +591,7 @@ public class CatalogSchemaResource {
                 }
             }
         }
-        audit.audit("CREATE", "catalog.table.import", "tables=" + importedTables + ", cols=" + importedColumns);
+        audit.auditAction("CATALOG_ASSET_EDIT", AuditStage.SUCCESS, "tables=" + importedTables + ", cols=" + importedColumns, null);
         return ApiResponses.ok(Map.of("tables", importedTables, "columns", importedColumns));
     }
 
@@ -624,7 +624,7 @@ public class CatalogSchemaResource {
             .toList();
         Map<UUID, DataStandard> standards = helper.loadStandardsById(filtered);
         List<Map<String, Object>> content = filtered.stream().map(col -> helper.toColumnDto(col, standards)).toList();
-        audit.audit("READ", "catalog.column", String.valueOf(tableId));
+        audit.auditAction("CATALOG_ASSET_VIEW", AuditStage.SUCCESS, String.valueOf(tableId), null);
         return ApiResponses.ok(Map.of("content", content, "total", filtered.size()));
     }
 
@@ -635,7 +635,7 @@ public class CatalogSchemaResource {
         @Valid @RequestBody CatalogColumnSchema column
     ) {
         var saved = columnRepo.save(column);
-        audit.audit("CREATE", "catalog.column", saved.getId().toString());
+        audit.auditAction("CATALOG_ASSET_EDIT", AuditStage.SUCCESS, saved.getId().toString(), null);
         return ApiResponses.ok(saved);
     }
 
@@ -709,7 +709,7 @@ public class CatalogSchemaResource {
     @PreAuthorize(CATALOG_MAINTAINER_EXPRESSION)
     public ApiResponse<Boolean> deleteColumn(@PathVariable UUID id) {
         columnRepo.deleteById(id);
-        audit.audit("DELETE", "catalog.column", id.toString());
+        audit.auditAction("CATALOG_ASSET_EDIT", AuditStage.SUCCESS, id.toString(), null);
         return ApiResponses.ok(Boolean.TRUE);
     }
 
@@ -720,7 +720,7 @@ public class CatalogSchemaResource {
     public ApiResponse<List<CatalogRowFilterRule>> listRowFilters(@RequestParam UUID datasetId) {
         var ds = datasetRepo.findById(datasetId).orElseThrow();
         var list = rowFilterRepo.findByDataset(ds);
-        audit.audit("READ", "catalog.rowFilter", String.valueOf(datasetId));
+        audit.auditAction("CATALOG_ASSET_VIEW", AuditStage.SUCCESS, String.valueOf(datasetId), null);
         return ApiResponses.ok(list);
     }
 
@@ -731,7 +731,7 @@ public class CatalogSchemaResource {
         @Valid @RequestBody CatalogRowFilterRule rule
     ) {
         var saved = rowFilterRepo.save(rule);
-        audit.audit("CREATE", "catalog.rowFilter", saved.getId().toString());
+        audit.auditAction("CATALOG_ASSET_EDIT", AuditStage.SUCCESS, saved.getId().toString(), null);
         return ApiResponses.ok(saved);
     }
 
@@ -746,7 +746,7 @@ public class CatalogSchemaResource {
         existing.setRoles(patch.getRoles());
         existing.setExpression(patch.getExpression());
         var saved = rowFilterRepo.save(existing);
-        audit.audit("UPDATE", "catalog.rowFilter", id.toString());
+        audit.auditAction("CATALOG_ASSET_EDIT", AuditStage.SUCCESS, id.toString(), null);
         return ApiResponses.ok(saved);
     }
 
@@ -755,7 +755,7 @@ public class CatalogSchemaResource {
     @PreAuthorize(CATALOG_MAINTAINER_EXPRESSION)
     public ApiResponse<Boolean> deleteRowFilter(@PathVariable UUID id) {
         rowFilterRepo.deleteById(id);
-        audit.audit("DELETE", "catalog.rowFilter", id.toString());
+        audit.auditAction("CATALOG_ASSET_EDIT", AuditStage.SUCCESS, id.toString(), null);
         return ApiResponses.ok(Boolean.TRUE);
     }
 }

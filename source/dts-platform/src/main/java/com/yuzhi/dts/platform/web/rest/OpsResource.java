@@ -1,6 +1,7 @@
 package com.yuzhi.dts.platform.web.rest;
 
 import com.yuzhi.dts.platform.domain.ops.OpsBackfillRequest;
+import com.yuzhi.dts.common.audit.AuditStage;
 import com.yuzhi.dts.platform.security.SecurityUtils;
 import com.yuzhi.dts.platform.service.audit.AuditService;
 import com.yuzhi.dts.platform.service.ops.OpsService;
@@ -27,7 +28,7 @@ public class OpsResource {
     @GetMapping("/overview")
     public ApiResponse<Map<String, Object>> overview() {
         Map<String, Object> payload = opsService.overview();
-        auditService.audit("READ", "ops.overview", "summary");
+        auditService.auditAction("OPS_OVERVIEW_READ", AuditStage.SUCCESS, "summary", null);
         return ApiResponses.ok(payload);
     }
 
@@ -39,14 +40,14 @@ public class OpsResource {
         @RequestParam(defaultValue = "50") int limit
     ) {
         List<Map<String, Object>> list = opsService.listInstances(entryKey, status, keyword, limit);
-        auditService.audit("READ", "ops.instances", "count=" + list.size());
+        auditService.auditAction("OPS_INSTANCES_READ", AuditStage.SUCCESS, "count=" + list.size(), null);
         return ApiResponses.ok(list);
     }
 
     @GetMapping("/alerts")
     public ApiResponse<List<Map<String, Object>>> alerts(@RequestParam(defaultValue = "50") int limit) {
         List<Map<String, Object>> list = opsService.listAlerts(limit);
-        auditService.audit("READ", "ops.alerts", "count=" + list.size());
+        auditService.auditAction("OPS_ALERTS_READ", AuditStage.SUCCESS, "count=" + list.size(), null);
         return ApiResponses.ok(list);
     }
 
@@ -60,14 +61,14 @@ public class OpsResource {
         @RequestParam(required = false) UUID planId
     ) {
         Map<String, Object> payload = opsService.devCenterMetrics(days, entryKey, ownerDept, artifactId, artifactName, planId);
-        auditService.audit("READ", "ops.metrics.dev-center", "days=" + days);
+        auditService.auditAction("OPS_METRICS_DEV_CENTER_READ", AuditStage.SUCCESS, "days=" + days, null);
         return ApiResponses.ok(payload);
     }
 
     @GetMapping("/backfills")
     public ApiResponse<List<OpsBackfillRequest>> backfills() {
         List<OpsBackfillRequest> list = opsService.listBackfills();
-        auditService.audit("READ", "ops.backfills", "count=" + list.size());
+        auditService.auditAction("OPS_BACKFILLS_READ", AuditStage.SUCCESS, "count=" + list.size(), null);
         return ApiResponses.ok(list);
     }
 
@@ -75,7 +76,7 @@ public class OpsResource {
     public ApiResponse<OpsBackfillRequest> createBackfill(@RequestBody BackfillRequest request) {
         String user = SecurityUtils.getCurrentUserLogin().orElse("anonymous");
         OpsBackfillRequest saved = opsService.createBackfill(user, request.dagId(), request.dateFrom(), request.dateTo(), request.note());
-        auditService.audit("CREATE", "ops.backfills", saved.getId() != null ? saved.getId().toString() : "create");
+        auditService.auditAction("OPS_BACKFILLS_CREATE", AuditStage.SUCCESS, saved.getId() != null ? saved.getId().toString() : "create", null);
         return ApiResponses.ok(saved);
     }
 

@@ -1,6 +1,7 @@
 package com.yuzhi.dts.platform.service.catalog;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
+import com.yuzhi.dts.common.audit.AuditStage;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.yuzhi.dts.platform.domain.catalog.CatalogDataset;
 import com.yuzhi.dts.platform.domain.catalog.CatalogDatasetJob;
@@ -164,7 +165,7 @@ public class DatasetJobService {
             job.setStartedAt(Instant.now());
             job.setMessage("正在同步表结构");
             jobRepository.save(job);
-            auditService.audit("START", "dataset.schema", job.getDataset().getId() + ":" + job.getId());
+            auditService.auditAction("DATASET_SCHEMA_START", AuditStage.SUCCESS, job.getDataset().getId() + ":" + job.getId(), null);
 
             Map<String, Object> result = new HashMap<>();
             try {
@@ -244,7 +245,7 @@ public class DatasetJobService {
                 job.setFinishedAt(Instant.now());
                 job.setDetailPayload(writeResult(result));
                 jobRepository.save(job);
-                auditService.audit("SUCCESS", "dataset.schema", dataset.getId() + ":" + columns.size());
+                auditService.auditAction("DATASET_SCHEMA_SUCCESS", AuditStage.SUCCESS, dataset.getId() + ":" + columns.size(), null);
             } catch (Exception ex) {
                 workerLog.error("Schema sync job failed: {}", ex.getMessage());
                 job.setStatus(DatasetJobStatus.FAILED.name());
@@ -253,7 +254,7 @@ public class DatasetJobService {
                 result.put("error", truncate(ex.getMessage()));
                 job.setDetailPayload(writeResult(result));
                 jobRepository.save(job);
-                auditService.audit("ERROR", "dataset.schema", job.getDataset().getId() + ":" + truncate(ex.getMessage()));
+                auditService.auditAction("DATASET_SCHEMA_ERROR", AuditStage.SUCCESS, job.getDataset().getId() + ":" + truncate(ex.getMessage()), null);
             }
         }
         private String writeResult(Map<String, Object> result) {

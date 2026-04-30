@@ -1,6 +1,7 @@
 package com.yuzhi.dts.platform.web.rest.catalog;
 
 import com.yuzhi.dts.platform.domain.catalog.CatalogDomain;
+import com.yuzhi.dts.common.audit.AuditStage;
 import com.yuzhi.dts.platform.repository.catalog.CatalogDatasetRepository;
 import com.yuzhi.dts.platform.repository.catalog.CatalogDomainRepository;
 import com.yuzhi.dts.platform.service.audit.AuditService;
@@ -51,7 +52,7 @@ public class CatalogDomainResource {
                 pageable
             );
         Map<String, Object> data = Map.of("content", p.getContent(), "total", p.getTotalElements());
-        audit.audit("READ", "catalog.domain", "page=" + page);
+        audit.auditAction("CATALOG_ASSET_VIEW", AuditStage.SUCCESS, "page=" + page, null);
         return ApiResponses.ok(data);
     }
 
@@ -64,7 +65,7 @@ public class CatalogDomainResource {
             domain.setParent(domainRepo.findById(pid).orElse(null));
         }
         CatalogDomain saved = domainRepo.save(domain);
-        audit.audit("CREATE", "catalog.domain", saved.getId().toString());
+        audit.auditAction("CATALOG_ASSET_EDIT", AuditStage.SUCCESS, saved.getId().toString(), null);
         return ApiResponses.ok(saved);
     }
 
@@ -84,7 +85,7 @@ public class CatalogDomainResource {
             existing.setParent(null);
         }
         CatalogDomain saved = domainRepo.save(existing);
-        audit.audit("UPDATE", "catalog.domain", id.toString());
+        audit.auditAction("CATALOG_ASSET_EDIT", AuditStage.SUCCESS, id.toString(), null);
         return ApiResponses.ok(saved);
     }
 
@@ -93,7 +94,7 @@ public class CatalogDomainResource {
     @PreAuthorize(CATALOG_MAINTAINER_EXPRESSION)
     public ApiResponse<Boolean> deleteDomain(@PathVariable UUID id) {
         domainRepo.deleteById(id);
-        audit.audit("DELETE", "catalog.domain", id.toString());
+        audit.auditAction("CATALOG_ASSET_EDIT", AuditStage.SUCCESS, id.toString(), null);
         return ApiResponses.ok(Boolean.TRUE);
     }
 
@@ -124,7 +125,7 @@ public class CatalogDomainResource {
                 roots.add(m);
             }
         }
-        audit.audit("READ", "catalog.domain.tree", "tree");
+        audit.auditAction("CATALOG_ASSET_VIEW", AuditStage.SUCCESS, "tree", null);
         return ApiResponses.ok(roots);
     }
 
@@ -137,7 +138,7 @@ public class CatalogDomainResource {
         stats.put("datasetCount", datasetCount);
         stats.put("indicatorCount", null);
         stats.put("qualityRuleCount", null);
-        audit.audit("READ", "catalog.domain.asset-stats", id.toString());
+        audit.auditAction("CATALOG_DOMAIN_ASSET_STATS_READ", AuditStage.SUCCESS, id.toString(), null);
         return ApiResponses.ok(stats);
     }
 
@@ -158,7 +159,7 @@ public class CatalogDomainResource {
             }
         }
         CatalogDomain saved = domainRepo.save(d);
-        audit.audit("UPDATE", "catalog.domain.move", id.toString());
+        audit.auditAction("CATALOG_ASSET_EDIT", AuditStage.SUCCESS, id.toString(), null);
         return ApiResponses.ok(saved);
     }
 }

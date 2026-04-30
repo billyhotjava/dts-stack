@@ -1,6 +1,7 @@
 package com.yuzhi.dts.platform.web.rest;
 
 import com.yuzhi.dts.platform.config.AirflowProperties;
+import com.yuzhi.dts.common.audit.AuditStage;
 import com.yuzhi.dts.platform.config.Constants;
 import com.yuzhi.dts.platform.domain.modeling.ModelingSqlModel;
 import com.yuzhi.dts.platform.repository.modeling.ModelingSqlModelRepository;
@@ -112,7 +113,7 @@ public class EtlResource {
     @GetMapping("/dbt/config")
     public ApiResponse<DbtConfigService.DbtConfigView> getDbtConfig() {
         ApiResponse<DbtConfigService.DbtConfigView> response = ApiResponses.ok(dbtConfigService.loadConfig());
-        auditService.audit("READ", "etl.dbt.config", "view");
+        auditService.auditAction("ETL_DBT_CONFIG_READ", AuditStage.SUCCESS, "view", null);
         return response;
     }
 
@@ -121,21 +122,21 @@ public class EtlResource {
         @RequestBody DbtConfigService.DbtWorkspaceConfigRequest request
     ) {
         ApiResponse<DbtConfigService.DbtConfigView> response = ApiResponses.ok(dbtConfigService.saveConfig(request));
-        auditService.audit("UPDATE", "etl.dbt.config", "save");
+        auditService.auditAction("ETL_DBT_CONFIG_UPDATE", AuditStage.SUCCESS, "save", null);
         return response;
     }
 
     @GetMapping("/dbt/models")
     public ApiResponse<DbtManifestService.DbtModelResult> listDbtModels() {
         ApiResponse<DbtManifestService.DbtModelResult> response = ApiResponses.ok(manifestService.listModels());
-        auditService.audit("READ", "etl.dbt.models", "list");
+        auditService.auditAction("ETL_DBT_MODELS_READ", AuditStage.SUCCESS, "list", null);
         return response;
     }
 
     @GetMapping("/dbt/models/{model}/diagnostics")
     public ApiResponse<DbtModelDiagnosticsService.ModelDiagnostics> diagnoseDbtModel(@PathVariable String model) {
         ApiResponse<DbtModelDiagnosticsService.ModelDiagnostics> response = ApiResponses.ok(dbtModelDiagnosticsService.diagnose(model));
-        auditService.audit("READ", "etl.dbt.model.diagnostics", model);
+        auditService.auditAction("ETL_DBT_MODEL_DIAGNOSTICS_READ", AuditStage.SUCCESS, model, null);
         return response;
     }
 
@@ -145,7 +146,7 @@ public class EtlResource {
         @RequestParam(defaultValue = "100") int limit
     ) {
         DbtPreviewService.PreviewResult result = dbtPreviewService.preview(model, Math.min(limit, 500));
-        auditService.audit("READ", "etl.dbt.preview", model);
+        auditService.auditAction("ETL_DBT_PREVIEW_READ", AuditStage.SUCCESS, model, null);
         return ApiResponses.ok(result);
     }
 
@@ -157,7 +158,7 @@ public class EtlResource {
             ApiResponse<DbtOutputRelationService.DbtOutputRelationSummary> response = ApiResponses.ok(
                 dbtOutputRelationService.analyze(modelId)
             );
-            auditService.audit("READ", "etl.dbt.output", String.valueOf(modelId));
+            auditService.auditAction("ETL_DBT_OUTPUT_READ", AuditStage.SUCCESS, String.valueOf(modelId), null);
             return response;
         } catch (IllegalArgumentException | IllegalStateException ex) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, ex.getMessage(), ex);
@@ -186,7 +187,7 @@ public class EtlResource {
             payload.put("selector", selector);
             payload.put("macroName", "truncate_relation");
             payload.put("message", prepare.message());
-            auditService.audit("EXECUTE", "etl.dbt.output.truncate", String.valueOf(request.modelId()));
+            auditService.auditAction("ETL_DBT_OUTPUT_TRUNCATE_EXECUTE", AuditStage.SUCCESS, String.valueOf(request.modelId()), null);
             return ApiResponses.ok(payload);
         } catch (IllegalArgumentException | IllegalStateException ex) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, ex.getMessage(), ex);
@@ -215,7 +216,7 @@ public class EtlResource {
             payload.put("fullRefresh", true);
             payload.put("dropExecuted", prepare.executed());
             payload.put("dropMessage", prepare.message());
-            auditService.audit("EXECUTE", "etl.dbt.output.rebuild", String.valueOf(request.modelId()));
+            auditService.auditAction("ETL_DBT_OUTPUT_REBUILD_EXECUTE", AuditStage.SUCCESS, String.valueOf(request.modelId()), null);
             return ApiResponses.ok(payload);
         } catch (IllegalArgumentException | IllegalStateException ex) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, ex.getMessage(), ex);
@@ -225,7 +226,7 @@ public class EtlResource {
     @PostMapping("/dbt/sources/refresh")
     public ApiResponse<DbtSourceService.DbtSourceRefreshResult> refreshDbtSources() {
         ApiResponse<DbtSourceService.DbtSourceRefreshResult> response = ApiResponses.ok(dbtSourceService.refreshOdsSources());
-        auditService.audit("EXECUTE", "etl.dbt.sources", "refresh");
+        auditService.auditAction("ETL_DBT_SOURCES_EXECUTE", AuditStage.SUCCESS, "refresh", null);
         return response;
     }
 
@@ -250,7 +251,7 @@ public class EtlResource {
                 LOG.warn("Indicator run capture failed: {}", ex.getMessage());
             }
         }
-        auditService.audit("EXECUTE", "etl.dbt.models", "sync");
+        auditService.auditAction("ETL_DBT_MODELS_EXECUTE", AuditStage.SUCCESS, "sync", null);
         auditService.record(
             "EXECUTE",
             "etl.dbt.runs",
@@ -318,7 +319,7 @@ public class EtlResource {
         } catch (RuntimeException ex) {
             // best-effort
         }
-        auditService.audit("READ", "etl.dbt.runs", "list");
+        auditService.auditAction("ETL_DBT_RUNS_READ", AuditStage.SUCCESS, "list", null);
         return ApiResponses.ok(payload);
     }
 
@@ -344,7 +345,7 @@ public class EtlResource {
         result.put("taskId", taskId);
         result.put("tryNumber", safeTryNumber);
         result.put("log", log != null ? log : "");
-        auditService.audit("READ", "etl.dbt.logs", dagRunId);
+        auditService.auditAction("ETL_DBT_LOGS_READ", AuditStage.SUCCESS, dagRunId, null);
         return ApiResponses.ok(result);
     }
 
@@ -357,7 +358,16 @@ public class EtlResource {
         boolean requireSelector = !"docs".equals(operation);
         String selector = resolveSelector(request, requireSelector);
         ApiResponse<Map<String, Object>> response = triggerDbtOperation(operation, request, activeDept, requireSelector);
-        auditService.audit("EXECUTE", "etl.dbt." + operation, selector);
+        // Operation is dynamic ("run" / "test" / "compile" / "docs" / etc.); pick the closest
+        // catalog code per branch instead of generating one synthesised at runtime.
+        String dbtActionCode = switch (operation) {
+            case "test" -> "ETL_DBT_TEST_EXECUTE";
+            case "compile" -> "ETL_DBT_COMPILE_EXECUTE";
+            case "docs" -> "ETL_DBT_DOCS_EXECUTE";
+            case "source" -> "ETL_DBT_SOURCES_EXECUTE";
+            default -> "ETL_DBT_MODELS_EXECUTE";
+        };
+        auditService.auditAction(dbtActionCode, AuditStage.SUCCESS, selector, null);
         return response;
     }
 
@@ -367,7 +377,7 @@ public class EtlResource {
         @RequestHeader(value = "X-Active-Dept", required = false) String activeDept
     ) {
         ApiResponse<Map<String, Object>> response = triggerDbtOperation("compile", request, activeDept, false);
-        auditService.audit("EXECUTE", "etl.dbt.compile", resolveSelector(request, false));
+        auditService.auditAction("ETL_DBT_COMPILE_EXECUTE", AuditStage.SUCCESS, resolveSelector(request, false), null);
         return response;
     }
 
@@ -378,7 +388,7 @@ public class EtlResource {
     ) {
         String selector = resolveSelector(request, false);
         ApiResponse<Map<String, Object>> response = triggerDbtOperation("test", request, activeDept, false);
-        auditService.audit("EXECUTE", "etl.dbt.test", selector);
+        auditService.auditAction("ETL_DBT_TEST_EXECUTE", AuditStage.SUCCESS, selector, null);
         return response;
     }
 
@@ -388,7 +398,7 @@ public class EtlResource {
         @RequestHeader(value = "X-Active-Dept", required = false) String activeDept
     ) {
         ApiResponse<Map<String, Object>> response = triggerDbtOperation("docs", request, activeDept, false);
-        auditService.audit("EXECUTE", "etl.dbt.docs", resolveSelector(request, false));
+        auditService.auditAction("ETL_DBT_DOCS_EXECUTE", AuditStage.SUCCESS, resolveSelector(request, false), null);
         return response;
     }
 
@@ -398,7 +408,7 @@ public class EtlResource {
     ) {
         String selector = request == null ? null : request.models();
         DbtQualityGateService.DbtQualityGateResult result = dbtQualityGateService.evaluate(selector);
-        auditService.audit("READ", "etl.dbt.quality-gate", StringUtils.hasText(selector) ? selector : "all");
+        auditService.auditAction("ETL_DBT_QUALITY_GATE_READ", AuditStage.SUCCESS, StringUtils.hasText(selector) ? selector : "all", null);
         return ApiResponses.ok(result);
     }
 
@@ -415,7 +425,7 @@ public class EtlResource {
             request == null ? null : request.commitSha(),
             request == null ? null : request.strictMode()
         );
-        auditService.audit("READ", "etl.dbt.release-gate", StringUtils.hasText(selector) ? selector : "all");
+        auditService.auditAction("ETL_DBT_RELEASE_GATE_READ", AuditStage.SUCCESS, StringUtils.hasText(selector) ? selector : "all", null);
         return ApiResponses.ok(result);
     }
 
@@ -425,7 +435,7 @@ public class EtlResource {
         @RequestHeader(value = "X-Active-Dept", required = false) String activeDept
     ) {
         DbtReleaseSubmissionService.DbtReleaseSubmitResult result = dbtReleaseSubmissionService.submit(request, activeDept);
-        auditService.audit("EXECUTE", "etl.dbt.release.submit", StringUtils.hasText(result.selector()) ? result.selector() : "all");
+        auditService.auditAction("ETL_DBT_RELEASE_SUBMIT_EXECUTE", AuditStage.SUCCESS, StringUtils.hasText(result.selector()) ? result.selector() : "all", null);
         return ApiResponses.ok(result);
     }
 
@@ -492,7 +502,7 @@ public class EtlResource {
             }
             results.add(row);
         }
-        auditService.audit("READ", "etl.airflow.jobs", "list");
+        auditService.auditAction("ETL_AIRFLOW_JOBS_READ", AuditStage.SUCCESS, "list", null);
         return ApiResponses.ok(results);
     }
 
@@ -508,7 +518,7 @@ public class EtlResource {
         } catch (RuntimeException ex) {
             // best-effort
         }
-        auditService.audit("READ", "etl.airflow.runs", dagId);
+        auditService.auditAction("ETL_AIRFLOW_RUNS_READ", AuditStage.SUCCESS, dagId, null);
         return ApiResponses.ok(payload);
     }
 
@@ -525,7 +535,7 @@ public class EtlResource {
         } catch (RuntimeException ex) {
             // best-effort sync
         }
-        auditService.audit("EXECUTE", "etl.airflow.trigger", dagId);
+        auditService.auditAction("ETL_AIRFLOW_TRIGGER_EXECUTE", AuditStage.SUCCESS, dagId, null);
         return ApiResponses.ok(result);
     }
 
@@ -538,7 +548,7 @@ public class EtlResource {
             return ApiResponses.error("Airflow integration is not enabled");
         }
         com.fasterxml.jackson.databind.JsonNode result = airflowClient.listTaskInstances(dagId, dagRunId);
-        auditService.audit("READ", "etl.airflow.task-instances", dagId + "/" + dagRunId);
+        auditService.auditAction("ETL_AIRFLOW_TASK_INSTANCES_READ", AuditStage.SUCCESS, dagId + "/" + dagRunId, null);
         return ApiResponses.ok(result);
     }
 
@@ -563,7 +573,7 @@ public class EtlResource {
         result.put("taskId", taskId);
         result.put("tryNumber", safeTryNumber);
         result.put("log", log != null ? log : "");
-        auditService.audit("READ", "etl.airflow.task-logs", dagId + "/" + dagRunId + "/" + taskId);
+        auditService.auditAction("ETL_AIRFLOW_TASK_LOGS_READ", AuditStage.SUCCESS, dagId + "/" + dagRunId + "/" + taskId, null);
         return ApiResponses.ok(result);
     }
 

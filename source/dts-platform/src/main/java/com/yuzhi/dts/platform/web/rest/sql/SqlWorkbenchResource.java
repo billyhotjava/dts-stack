@@ -1,6 +1,7 @@
 package com.yuzhi.dts.platform.web.rest.sql;
 
 import com.yuzhi.dts.platform.service.audit.AuditService;
+import com.yuzhi.dts.common.audit.AuditStage;
 import com.yuzhi.dts.platform.service.sql.QueryDatasetService;
 import com.yuzhi.dts.platform.service.sql.SavedQueryService;
 import com.yuzhi.dts.platform.service.sql.SqlCatalogService;
@@ -74,14 +75,14 @@ public class SqlWorkbenchResource {
     @PostMapping("/catalog")
     public ApiResponse<SqlCatalogNode> catalog(@RequestBody SqlCatalogRequest request, Principal principal) {
         ApiResponse<SqlCatalogNode> response = ApiResponses.ok(catalogService.fetchTree(request, principal));
-        auditService.audit("READ", "sql.workbench.catalog", principal != null ? principal.getName() : "anonymous");
+        auditService.auditAction("SQL_WORKBENCH_CATALOG_READ", AuditStage.SUCCESS, principal != null ? principal.getName() : "anonymous", null);
         return response;
     }
 
     @PostMapping("/validate")
     public ApiResponse<SqlValidateResponse> validate(@RequestBody SqlValidateRequest request, Principal principal) {
         ApiResponse<SqlValidateResponse> response = ApiResponses.ok(validationService.validate(request, principal));
-        auditService.audit("READ", "sql.workbench.validate", principal != null ? principal.getName() : "anonymous");
+        auditService.auditAction("SQL_WORKBENCH_VALIDATE_READ", AuditStage.SUCCESS, principal != null ? principal.getName() : "anonymous", null);
         return response;
     }
 
@@ -92,14 +93,14 @@ public class SqlWorkbenchResource {
         Principal principal
     ) {
         ApiResponse<SqlSubmitResponse> response = ApiResponses.ok(executionService.submit(request, principal, activeDept));
-        auditService.audit("EXECUTE", "sql.workbench.submit", principal != null ? principal.getName() : "anonymous");
+        auditService.auditAction("SQL_WORKBENCH_SUBMIT_EXECUTE", AuditStage.SUCCESS, principal != null ? principal.getName() : "anonymous", null);
         return response;
     }
 
     @GetMapping("/status/{id}")
     public ApiResponse<SqlStatusResponse> status(@PathVariable UUID id, Principal principal) {
         ApiResponse<SqlStatusResponse> response = ApiResponses.ok(executionService.status(id, principal));
-        auditService.audit("READ", "sql.workbench.status", principal != null ? principal.getName() : "anonymous");
+        auditService.auditAction("SQL_WORKBENCH_STATUS_READ", AuditStage.SUCCESS, principal != null ? principal.getName() : "anonymous", null);
         return response;
     }
 
@@ -113,14 +114,14 @@ public class SqlWorkbenchResource {
         ApiResponse<SqlResultPageResponse> response = ApiResponses.ok(
             executionService.resultPage(id, page, pageSize, principal)
         );
-        auditService.audit("READ", "sql.workbench.result-page", principal != null ? principal.getName() : "anonymous");
+        auditService.auditAction("SQL_WORKBENCH_RESULT_PAGE_READ", AuditStage.SUCCESS, principal != null ? principal.getName() : "anonymous", null);
         return response;
     }
 
     @PostMapping("/cancel/{id}")
     public ApiResponse<Boolean> cancel(@PathVariable UUID id, Principal principal) {
         executionService.cancel(id, principal);
-        auditService.audit("CANCEL", "sql.workbench.cancel", id.toString());
+        auditService.auditAction("SQL_WORKBENCH_CANCEL_CANCEL", AuditStage.SUCCESS, id.toString(), null);
         return ApiResponses.ok(Boolean.TRUE);
     }
 
@@ -131,7 +132,7 @@ public class SqlWorkbenchResource {
         Principal principal
     ) {
         List<TableInfo> tables = metadataService.listTables(datasourceId, activeDept);
-        auditService.audit("READ", "sql.workbench.tables", principal != null ? principal.getName() : "anonymous");
+        auditService.auditAction("SQL_WORKBENCH_TABLES_READ", AuditStage.SUCCESS, principal != null ? principal.getName() : "anonymous", null);
         return ApiResponses.ok(tables);
     }
 
@@ -144,14 +145,14 @@ public class SqlWorkbenchResource {
         Principal principal
     ) {
         List<Map<String, String>> columns = metadataService.listColumns(datasourceId, schema, table, activeDept);
-        auditService.audit("READ", "sql.workbench.columns", principal != null ? principal.getName() : "anonymous");
+        auditService.auditAction("SQL_WORKBENCH_COLUMNS_READ", AuditStage.SUCCESS, principal != null ? principal.getName() : "anonymous", null);
         return ApiResponses.ok(columns);
     }
 
     @PostMapping("/saved-queries")
     public ApiResponse<SavedQueryResponse> saveQuery(@RequestBody SavedQueryRequest request, Principal principal) {
         SavedQueryResponse response = savedQueryService.save(request, principal);
-        auditService.audit("CREATE", "sql.workbench.saved-query", principal != null ? principal.getName() : "anonymous");
+        auditService.auditAction("SQL_WORKBENCH_SAVED_QUERY_CREATE", AuditStage.SUCCESS, principal != null ? principal.getName() : "anonymous", null);
         return ApiResponses.ok(response);
     }
 
@@ -162,7 +163,7 @@ public class SqlWorkbenchResource {
         Principal principal
     ) {
         SavedQueryResponse response = savedQueryService.update(id, request, principal);
-        auditService.audit("UPDATE", "sql.workbench.saved-query", principal != null ? principal.getName() : "anonymous");
+        auditService.auditAction("SQL_WORKBENCH_SAVED_QUERY_UPDATE", AuditStage.SUCCESS, principal != null ? principal.getName() : "anonymous", null);
         return ApiResponses.ok(response);
     }
 
@@ -181,7 +182,7 @@ public class SqlWorkbenchResource {
     @DeleteMapping("/saved-queries/{id}")
     public ApiResponse<Boolean> deleteSavedQuery(@PathVariable UUID id, Principal principal) {
         savedQueryService.delete(id, principal);
-        auditService.audit("DELETE", "sql.workbench.saved-query", principal != null ? principal.getName() : "anonymous");
+        auditService.auditAction("SQL_WORKBENCH_SAVED_QUERY_DELETE", AuditStage.SUCCESS, principal != null ? principal.getName() : "anonymous", null);
         return ApiResponses.ok(Boolean.TRUE);
     }
 
@@ -207,7 +208,7 @@ public class SqlWorkbenchResource {
         @RequestHeader(value = "X-Active-Dept", required = false) String activeDept
     ) {
         QueryDatasetResponse response = queryDatasetService.createFromExecution(executionId, request, activeDept);
-        auditService.audit("CREATE", "sql.workbench.query-dataset", response.id().toString());
+        auditService.auditAction("SQL_WORKBENCH_QUERY_DATASET_CREATE", AuditStage.SUCCESS, response.id().toString(), null);
         return ApiResponses.ok(response);
     }
 
@@ -218,7 +219,7 @@ public class SqlWorkbenchResource {
         @RequestHeader(value = "X-Active-Dept", required = false) String activeDept
     ) {
         QueryDatasetVersionResponse response = queryDatasetService.createVersion(id, request, activeDept);
-        auditService.audit("UPDATE", "sql.workbench.query-dataset.version", response.id().toString());
+        auditService.auditAction("SQL_WORKBENCH_QUERY_DATASET_VERSION_UPDATE", AuditStage.SUCCESS, response.id().toString(), null);
         return ApiResponses.ok(response);
     }
 
@@ -229,7 +230,7 @@ public class SqlWorkbenchResource {
         @RequestHeader(value = "X-Active-Dept", required = false) String activeDept
     ) {
         QueryDatasetVersionResponse response = queryDatasetService.publish(id, request, activeDept);
-        auditService.audit("PUBLISH", "sql.workbench.query-dataset", response.id().toString());
+        auditService.auditAction("SQL_WORKBENCH_QUERY_DATASET_PUBLISH", AuditStage.SUCCESS, response.id().toString(), null);
         return ApiResponses.ok(response);
     }
 
@@ -239,7 +240,7 @@ public class SqlWorkbenchResource {
         @RequestHeader(value = "X-Active-Dept", required = false) String activeDept
     ) {
         QueryDatasetResponse response = queryDatasetService.archive(id, activeDept);
-        auditService.audit("ARCHIVE", "sql.workbench.query-dataset", response.id().toString());
+        auditService.auditAction("SQL_WORKBENCH_QUERY_DATASET_ARCHIVE", AuditStage.SUCCESS, response.id().toString(), null);
         return ApiResponses.ok(response);
     }
 

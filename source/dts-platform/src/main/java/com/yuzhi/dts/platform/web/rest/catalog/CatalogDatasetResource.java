@@ -574,7 +574,7 @@ public class CatalogDatasetResource {
             prepared.add(item);
         }
         List<CatalogDataset> saved = datasetRepo.saveAll(prepared);
-        audit.audit("CREATE", "catalog.dataset.import", "count=" + saved.size());
+        audit.auditAction("CATALOG_ASSET_EDIT", AuditStage.SUCCESS, "count=" + saved.size(), null);
         return ApiResponses.ok(Map.of("imported", saved.size()));
     }
 
@@ -734,7 +734,7 @@ public class CatalogDatasetResource {
             throw new ResponseStatusException(HttpStatus.PAYLOAD_TOO_LARGE, "manifest.json 文件不能超过 50MB");
         }
         Map<String, Object> result = dbtLineageService.importManifest(file);
-        audit.audit("CREATE", "catalog.lineage.dbt-import", "file=" + file.getOriginalFilename());
+        audit.auditAction("CATALOG_LINEAGE_DBT_IMPORT_CREATE", AuditStage.SUCCESS, "file=" + file.getOriginalFilename(), null);
         return ApiResponses.ok(result);
     }
 }

@@ -36,14 +36,14 @@ public class DataProductsResource {
         @RequestParam(required = false) String status
     ) {
         List<DataProductSummaryDto> items = dataProductService.list(keyword, type, status);
-        auditService.audit("READ", "svc.dataProduct", "list");
+        auditService.auditAction("SVC_DATAPRODUCT_READ", AuditStage.SUCCESS, "list", null);
         return ApiResponses.ok(items);
     }
 
     @GetMapping("/{id}")
     public ApiResponse<DataProductDetailDto> detail(@PathVariable UUID id) {
         DataProductDetailDto dto = dataProductService.detail(id);
-        auditService.audit("READ", "svc.dataProduct", id.toString());
+        auditService.auditAction("SVC_DATAPRODUCT_READ", AuditStage.SUCCESS, id.toString(), null);
         return ApiResponses.ok(dto);
     }
 
