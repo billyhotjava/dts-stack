@@ -33,6 +33,7 @@ import java.util.UUID;
 import org.apache.commons.lang3.StringUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
@@ -58,12 +59,6 @@ import org.springframework.web.server.ResponseStatusException;
 public class AuditLogResource {
 
     private static final Logger log = LoggerFactory.getLogger(AuditLogResource.class);
-    private static final Map<String, String> BUILTIN_DISPLAY_NAMES = Map.of(
-        "sysadmin", "系统管理员",
-        "authadmin", "授权管理员",
-        "auditadmin", "安全审计员",
-        "opadmin", "运维管理员"
-    );
 
     private final AuditEntryQueryService auditQueryService;
     private final OperationMappingEngine opMappingEngine;
@@ -71,6 +66,12 @@ public class AuditLogResource {
     private final AdminUserService adminUserService;
     private final AuditEntryViewMapper viewMapper;
     private final AuditLogActionRecorder actionRecorder;
+    /**
+     * Username → role-label mapping for the 4 governance accounts. Keys are case-insensitive
+     * (lower-cased on lookup). Configuration overrides allow operators to rename the canonical
+     * accounts (e.g. {@code dts_sys_a}) without losing their role-label display in audit views.
+     */
+    private final Map<String, String> builtinDisplayNames;
 
     public AuditLogResource(
         AuditEntryQueryService auditQueryService,
@@ -78,7 +79,11 @@ public class AuditLogResource {
         AuditResourceDictionaryService resourceDictionary,
         AdminUserService adminUserService,
         AuditEntryViewMapper viewMapper,
-        AuditLogActionRecorder actionRecorder
+        AuditLogActionRecorder actionRecorder,
+        @Value("${dts.security.triad-display.sys-admin:sysadmin}") String sysAdminAccount,
+        @Value("${dts.security.triad-display.auth-admin:authadmin}") String authAdminAccount,
+        @Value("${dts.security.triad-display.auditor-admin:auditadmin}") String auditorAdminAccount,
+        @Value("${dts.security.triad-display.op-admin:opadmin}") String opAdminAccount
     ) {
         this.auditQueryService = auditQueryService;
         this.opMappingEngine = opMappingEngine;
@@ -86,6 +91,33 @@ public class AuditLogResource {
         this.adminUserService = adminUserService;
         this.viewMapper = viewMapper;
         this.actionRecorder = actionRecorder;
+        this.builtinDisplayNames = buildTriadDisplayNames(
+            sysAdminAccount, authAdminAccount, auditorAdminAccount, opAdminAccount
+        );
+    }
+
+    static Map<String, String> buildTriadDisplayNames(
+        String sysAdminAccount,
+        String authAdminAccount,
+        String auditorAdminAccount,
+        String opAdminAccount
+    ) {
+        Map<String, String> map = new java.util.LinkedHashMap<>();
+        addTriadName(map, sysAdminAccount, "系统管理员");
+        addTriadName(map, authAdminAccount, "授权管理员");
+        addTriadName(map, auditorAdminAccount, "安全审计员");
+        addTriadName(map, opAdminAccount, "运维管理员");
+        return java.util.Collections.unmodifiableMap(map);
+    }
+
+    private static void addTriadName(Map<String, String> map, String account, String label) {
+        if (account == null) {
+            return;
+        }
+        String trimmed = account.trim().toLowerCase(Locale.ROOT);
+        if (!trimmed.isEmpty()) {
+            map.put(trimmed, label);
+        }
     }
 
     @GetMapping
@@ -106,8 +138,11 @@ public class AuditLogResource {
         @RequestParam(value = "keyword", required = false) String keyword,
         @RequestParam(value = "from", required = false) String from,
         @RequestParam(value = "to", required = false) String to,
+        @RequestParam(value = "changeRequestRef", required = false) String changeRequestRef,
+        @RequestParam(value = "hasChangeRequest", required = false) Boolean hasChangeRequest,
         HttpServletRequest request
     ) {
+        requireAuthenticatedActor();
         Pageable pageable = PageRequest.of(Math.max(page, 0), Math.min(size, 200), parseSort(sort));
         Instant fromDate = parseInstant(from);
         Instant toDate = parseInstant(to);
@@ -115,7 +150,8 @@ public class AuditLogResource {
         AuditSearchCriteria criteria = new AuditSearchCriteria(
             actor, module, operationType, actionCode, operationGroup, sourceSystem, result,
             targetTable, targetId, clientIp, keyword, fromDate, toDate,
-            scope.allowedActors(), scope.excludedActors(), false
+            scope.allowedActors(), scope.excludedActors(), false,
+            changeRequestRef, hasChangeRequest
         );
         Page<AuditEntryView> resultPage = auditQueryService.search(criteria, pageable);
         List<AuditEntryView> views = resultPage.getContent();
@@ -139,6 +175,7 @@ public class AuditLogResource {
 
     @GetMapping("/{id}")
     public ResponseEntity<ApiResponse<Map<String, Object>>> detail(@PathVariable Long id) {
+        requireAuthenticatedActor();
         VisibilityScope scope = resolveVisibilityScope();
         AuditEntryView view = auditQueryService
             .findById(id, true)
@@ -151,6 +188,10 @@ public class AuditLogResource {
 
     @DeleteMapping
     public ResponseEntity<ApiResponse<Map<String, Object>>> purge() {
+        // Purge wipes the audit table — extremely destructive. Beyond requiring a real authenticated user,
+        // it should also gate on triad role. PreAuthorize already restricts to the triad; here we additionally
+        // refuse synthetic actors so a "system" cron call cannot accidentally drop the audit table.
+        requireAuthenticatedActor();
         long removed = auditQueryService.purgeAll();
         return ResponseEntity.ok(ApiResponse.ok(Map.of("removed", removed)));
     }
@@ -170,16 +211,20 @@ public class AuditLogResource {
         @RequestParam(value = "keyword", required = false) String keyword,
         @RequestParam(value = "from", required = false) String from,
         @RequestParam(value = "to", required = false) String to,
+        @RequestParam(value = "changeRequestRef", required = false) String changeRequestRef,
+        @RequestParam(value = "hasChangeRequest", required = false) Boolean hasChangeRequest,
         HttpServletRequest request,
         HttpServletResponse response
     ) throws IOException {
+        requireAuthenticatedActor();
         Instant fromDate = parseInstant(from);
         Instant toDate = parseInstant(to);
         VisibilityScope scope = resolveVisibilityScope();
         AuditSearchCriteria criteria = new AuditSearchCriteria(
             actor, module, operationType, actionCode, operationGroup, sourceSystem, result,
             targetTable, targetId, clientIp, keyword, fromDate, toDate,
-            scope.allowedActors(), scope.excludedActors(), true
+            scope.allowedActors(), scope.excludedActors(), true,
+            changeRequestRef, hasChangeRequest
         );
         Page<AuditEntryView> exportPage = auditQueryService.search(criteria, Pageable.unpaged());
         List<AuditEntryView> views = exportPage.getContent();
@@ -221,6 +266,7 @@ public class AuditLogResource {
 
     @GetMapping("/modules")
     public ResponseEntity<ApiResponse<List<Map<String, Object>>>> modules() {
+        requireAuthenticatedActor();
         List<ModuleOption> options = auditQueryService.listModuleOptions();
         List<Map<String, Object>> out = new ArrayList<>(options.size());
         for (ModuleOption option : options) {
@@ -231,6 +277,7 @@ public class AuditLogResource {
 
     @GetMapping("/groups")
     public ResponseEntity<ApiResponse<List<Map<String, Object>>>> groups() {
+        requireAuthenticatedActor();
         List<RuleSummary> summaries = opMappingEngine.describeRules();
         if (summaries.isEmpty()) {
             return ResponseEntity.ok(ApiResponse.ok(List.of()));
@@ -266,6 +313,7 @@ public class AuditLogResource {
 
     @GetMapping("/categories")
     public ResponseEntity<ApiResponse<List<Map<String, Object>>>> categories() {
+        requireAuthenticatedActor();
         LinkedHashMap<String, ModuleView> modules = collectModulesFromRules();
         LinkedHashMap<String, CategoryView> categories = collectCategoriesFromRules(modules);
         List<Map<String, Object>> out = new ArrayList<>(categories.size());
@@ -325,22 +373,101 @@ public class AuditLogResource {
         }
     }
 
+    /**
+     * Refuses synthetic actors (system / anonymous / unknown) that arise when an unauthenticated
+     * request slips past Spring Security or when a background job calls these endpoints. Audit
+     * queries must be attributable to a real human in the governance triad — otherwise the
+     * "auditing the auditor" loop breaks down.
+     */
+    private String requireAuthenticatedActor() {
+        String login = SecurityUtils.getCurrentUserLogin()
+            .map(value -> value.trim().toLowerCase(Locale.ROOT))
+            .filter(value -> !value.isEmpty())
+            .orElse(null);
+        validateRealActor(login);
+        return login;
+    }
+
+    /** Pure-function form of {@link #requireAuthenticatedActor()} for testing. */
+    static void validateRealActor(String normalizedLogin) {
+        if (normalizedLogin == null || isSyntheticActor(normalizedLogin)) {
+            log.warn("Audit endpoint accessed without a real authenticated user (login={})", normalizedLogin);
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "审计接口要求真实用户登录");
+        }
+    }
+
+    private static boolean isSyntheticActor(String normalizedLogin) {
+        return switch (normalizedLogin) {
+            case "system", "anonymous", "anonymoususer", "unknown" -> true;
+            default -> false;
+        };
+    }
+
     private VisibilityScope resolveVisibilityScope() {
-        Optional<String> login = SecurityUtils.getCurrentUserLogin();
-        String normalized = login.map(value -> value.trim().toLowerCase(Locale.ROOT)).orElse(null);
+        String login = SecurityUtils.getCurrentUserLogin()
+            .map(value -> value.trim().toLowerCase(Locale.ROOT))
+            .orElse(null);
+        // Alias lists kept in sync with KeycloakApiResource triad detection (legacy realms expose unprefixed and underscored variants).
+        boolean hasSysRole = SecurityUtils.hasCurrentUserAnyOfAuthorities(
+            AuthoritiesConstants.SYS_ADMIN, "SYS_ADMIN", "SYSADMIN", "ROLE_SYSADMIN"
+        );
         boolean hasAuthRole = SecurityUtils.hasCurrentUserAnyOfAuthorities(
-            AuthoritiesConstants.AUTH_ADMIN, "AUTHADMIN", "ROLE_AUTHADMIN", "AUTH_ADMIN"
+            AuthoritiesConstants.AUTH_ADMIN, "AUTH_ADMIN", "AUTHADMIN", "ROLE_AUTHADMIN"
         );
         boolean hasAuditRole = SecurityUtils.hasCurrentUserAnyOfAuthorities(
-            AuthoritiesConstants.AUDITOR_ADMIN, "AUDITADMIN", "ROLE_AUDITADMIN", "AUDITOR_ADMIN"
+            AuthoritiesConstants.AUDITOR_ADMIN, "SECURITY_AUDITOR",
+            "ROLE_AUDITOR_ADMIN", "AUDITOR_ADMIN",
+            "ROLE_AUDIT_ADMIN", "AUDIT_ADMIN",
+            "ROLE_AUDITADMIN", "AUDITADMIN"
         );
-        if (hasAuthRole && !hasAuditRole) {
+        return resolveVisibilityScope(login, hasSysRole, hasAuthRole, hasAuditRole);
+    }
+
+    /**
+     * Pure-function form of {@link #resolveVisibilityScope()} for testing — enforces the governance
+     * triad's separation-of-duties rules without depending on {@code SecurityContextHolder}:
+     *
+     * <pre>
+     * Single SYS_ADMIN          → can only see own records (self-audit)
+     * Single AUTH_ADMIN         → can only see auditadmin's records (oversees the auditor)
+     * Single AUDITOR_ADMIN      → can see everyone EXCEPT self (cannot audit self)
+     * Multiple triad roles      → 403 — violates SoD; should never be assigned together
+     * No triad role             → 403 — should never reach here, but fail-secure if @PreAuthorize ever loosens
+     * </pre>
+     */
+    static VisibilityScope resolveVisibilityScope(
+        String normalizedLogin,
+        boolean hasSysRole,
+        boolean hasAuthRole,
+        boolean hasAuditRole
+    ) {
+        int triadCount = (hasSysRole ? 1 : 0) + (hasAuthRole ? 1 : 0) + (hasAuditRole ? 1 : 0);
+        if (triadCount > 1) {
+            log.warn(
+                "Audit visibility denied — user '{}' holds multiple triad roles (sys={}, auth={}, audit={}); SoD violation",
+                normalizedLogin, hasSysRole, hasAuthRole, hasAuditRole
+            );
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "违反职责分离：账号持有多个三元角色，禁止访问审计");
+        }
+        if (triadCount == 0) {
+            log.warn("Audit visibility denied — user '{}' holds no triad role despite passing PreAuthorize", normalizedLogin);
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "无三元角色，禁止访问审计");
+        }
+        if (hasSysRole) {
+            if (normalizedLogin == null) {
+                throw new ResponseStatusException(HttpStatus.FORBIDDEN, "无法识别当前系统管理员账号");
+            }
+            // 系统管理员仅能审视自己的操作（自查），不能看授权管理员或审计员的记录。
+            return new VisibilityScope(Set.of(normalizedLogin), Set.of());
+        }
+        if (hasAuthRole) {
             return new VisibilityScope(Set.of("auditadmin"), Set.of());
         }
-        if (hasAuditRole && normalized != null) {
-            return new VisibilityScope(Set.of(), Set.of(normalized));
+        // 审计员：除自己以外所有人。
+        if (normalizedLogin == null) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "无法识别当前审计员账号");
         }
-        return VisibilityScope.unrestricted();
+        return new VisibilityScope(Set.of(), Set.of(normalizedLogin));
     }
 
     private String resolveGroupKey(RuleSummary summary) {
@@ -487,7 +614,7 @@ public class AuditLogResource {
                     continue;
                 }
                 String normalized = actor.trim().toLowerCase(Locale.ROOT);
-                String builtin = BUILTIN_DISPLAY_NAMES.get(normalized);
+                String builtin = builtinDisplayNames.get(normalized);
                 if (org.springframework.util.StringUtils.hasText(builtin)) {
                     overrides.put(normalized, builtin);
                 }
@@ -582,7 +709,7 @@ public class AuditLogResource {
 
     private record CategoryView(String moduleKey, String moduleTitle, String entryKey, String entryTitle) {}
 
-    private record VisibilityScope(Set<String> allowedActors, Set<String> excludedActors) {
+    record VisibilityScope(Set<String> allowedActors, Set<String> excludedActors) {
         static VisibilityScope unrestricted() {
             return new VisibilityScope(Set.of(), Set.of());
         }

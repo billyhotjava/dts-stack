@@ -82,8 +82,11 @@ class AdminApiResourceChangeAuditTest {
 
     @BeforeEach
     void setUp() {
-        when(changeSnapshotFormatter.format(org.mockito.Mockito.any(), org.mockito.Mockito.anyString())).thenReturn(java.util.List.of());
-        when(changeSnapshotFormatter.format(org.mockito.Mockito.anyMap(), org.mockito.Mockito.anyMap(), org.mockito.Mockito.anyString())).thenReturn(java.util.List.of());
+        // ChangeSnapshotFormatter is no longer pulled by every code path through AdminAuditService —
+        // mark these stubs lenient so unused-stub strict-mode does not fail the test, while
+        // keeping them available for paths that do format change snapshots.
+        org.mockito.Mockito.lenient().when(changeSnapshotFormatter.format(org.mockito.Mockito.any(), org.mockito.Mockito.anyString())).thenReturn(java.util.List.of());
+        org.mockito.Mockito.lenient().when(changeSnapshotFormatter.format(org.mockito.Mockito.anyMap(), org.mockito.Mockito.anyMap(), org.mockito.Mockito.anyString())).thenReturn(java.util.List.of());
         resource = new AdminApiResource(
             auditV2Service,
             organizationService,

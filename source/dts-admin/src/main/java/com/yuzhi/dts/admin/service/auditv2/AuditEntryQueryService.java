@@ -164,6 +164,16 @@ public class AuditEntryQueryService {
                     predicates.add(cb.like(cb.lower(targetJoin.get("targetId")), likePattern(criteria.targetId())));
                 }
             }
+            if (hasText(criteria.changeRequestRef())) {
+                predicates.add(cb.equal(root.get("changeRequestRef"), criteria.changeRequestRef().trim()));
+            }
+            if (criteria.hasChangeRequest() != null) {
+                if (Boolean.TRUE.equals(criteria.hasChangeRequest())) {
+                    predicates.add(cb.isNotNull(root.get("changeRequestRef")));
+                } else {
+                    predicates.add(cb.isNull(root.get("changeRequestRef")));
+                }
+            }
             Set<String> allowed = criteria.allowedActors();
             if (!allowed.isEmpty()) {
                 Predicate byActor = root.get("actorId").in(allowed);

@@ -109,6 +109,10 @@ public class AuditLogActionRecorder {
         putIfHasText(filters, "targetId", criteria.targetId());
         putIfHasText(filters, "clientIp", criteria.clientIp());
         putIfHasText(filters, "keyword", criteria.keyword());
+        putIfHasText(filters, "changeRequestRef", criteria.changeRequestRef());
+        if (criteria.hasChangeRequest() != null) {
+            filters.put("hasChangeRequest", criteria.hasChangeRequest());
+        }
         if (criteria.from() != null) {
             filters.put("from", formatInstant(criteria.from()));
         }

@@ -476,3 +476,10 @@ dts:
       enabled: ${DTS_SECURITY_IP_ALLOWLIST_ENABLED:true}
       # Comma-separated usernames (lowercase) to enforce single-IP allowlist
       triad-usernames: ${DTS_SECURITY_IP_ALLOWLIST_TRIAD_USERNAMES:sysadmin,authadmin,auditadmin}
+    # Maps governance triad usernames to their canonical role label. Audit views look these up
+    # so renamed accounts (e.g. dts_sys_a) still surface as "系统管理员" in the UI.
+    triad-display:
+      sys-admin: ${DTS_SECURITY_TRIAD_SYS_ADMIN:sysadmin}
+      auth-admin: ${DTS_SECURITY_TRIAD_AUTH_ADMIN:authadmin}
+      auditor-admin: ${DTS_SECURITY_TRIAD_AUDITOR_ADMIN:auditadmin}
+      op-admin: ${DTS_SECURITY_TRIAD_OP_ADMIN:opadmin}
