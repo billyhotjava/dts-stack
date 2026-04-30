@@ -1,7 +1,7 @@
 # Sprint-24: 大屏密级管理 UX 修复（入口前移 + 列表可见 + 强制设密 + 裸屏盘点）
 
 **时间**: 2026-05
-**状态**: IN_PROGRESS（F1-F4 已完成，F5 待评估）
+**状态**: DONE（F1-F5 全部完成，待 CI 验证）
 **类型**: UX / Compliance（dts-platform-webapp + dts-analytics + dts-analytics 后端）
 **目标**: 把"大屏密级"从一个隐蔽、可漏填、需要专门去找的设置项，改造成进入即可见、创建即必填、漏填可盘点的合规底线能力。
 
@@ -39,19 +39,22 @@ review 评估这四个问题是相互绑定的：只修入口不强制设密，�
 | F2-列表卡片密级 Tag | 2 | P0 | DONE |
 | F3-创建对话框强制选择密级 | 4 | P0 | DONE |
 | F4-裸屏盘点入口 | 4 | P1 | DONE |
-| F5-降级二次确认（可选） | 3 | P2 | READY |
+| F5-降级二次确认 | 3 | P2 | DONE |
 
-**统计**: READY=1, IN_PROGRESS=0, DONE=4, BLOCKED=0
+**统计**: READY=0, IN_PROGRESS=0, DONE=5, BLOCKED=0
 
 ## 已交付变更
 
-- 分支：`feat/sprint-24-classification-ux`（4 commits）
+- 分支：`feat/sprint-24-classification-ux`（5 commits）
   - `88d00b312` F1 ClassificationSelect 共享组件 + 属性面板入口前移 + ScreenSharePanel 改用共享组件
   - `66b57cead` F2 ClassificationTag + 列表表格新增「密级」列 + ScreenListItem type 补 classification 字段
   - `50c1c462c` F3 normalizeRequiredClassification static helper + 7 单测 + 前端 CreateScreenIntakeModal
   - `ef6940268` F4 GET /admin/unclassified 端点 + ScreenAuditService.logCrossScreenEvent + UnclassifiedScreensModal
-- F1-F4 累计：5 个新 React 组件、1 个新后端端点、1 个新 Repository 方法、1 个新审计方法、1 个 JUnit 测试类（7 个 case）
-- 静态扫描（build-error-resolver）：3 轮 0 阻塞错误
+  - `23bb3429a` F5 isDowngrade static helper + 27 单测 + 前端降级 confirm modal + 顺手修受控模式 PATCH 漏发
+- F1-F5 累计：5 个新 React 组件、1 个新后端端点、1 个新 Repository 方法、1 个新审计方法、2 个 JUnit 测试类（合计 34 个 case）
+- 静态扫描（build-error-resolver）：4 轮 0 阻塞错误
+- bug fix：F5 顺手修了 F1/T03 引入的"受控模式不发 PATCH"隐藏 bug，
+  分享面板和编辑器属性面板的密级修改都得以真正生效
 
 ## 验收标准
 

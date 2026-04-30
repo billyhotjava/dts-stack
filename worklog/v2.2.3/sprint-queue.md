@@ -351,7 +351,7 @@
 **评审研判**: `worklog/v2.2.3/sprint-22-202604/review/session-management-audit.md`
 
 ## Sprint-24: 大屏密级管理 UX 修复（入口前移 + 列表可见 + 强制设密 + 裸屏盘点） (202605)
-**状态**: IN_PROGRESS（F1-F4 已完成，F5 待评估）
+**状态**: DONE（F1-F5 全部完成，待 CI 验证）
 **类型**: UX / Compliance（dts-platform-webapp + dts-analytics）
 **目标**: 把"大屏密级"从一个隐蔽、可漏填、需要专门去找的设置项，改造成进入即可见、创建即必填、漏填可盘点的合规底线能力。源起于 fix/dashboard-access-h1-h3 PR review 时发现的 UX 缺陷链——后端密级控制已完整（Step 1-3），但前端入口埋在分享弹窗顶部、列表不可见、创建可漏填，导致生产中已存在 `classification=null` 的"裸屏"对所有登录用户开放。
 
@@ -361,9 +361,9 @@
 | F2-列表卡片密级 Tag | 2 | P0 | DONE |
 | F3-创建对话框强制选择密级 | 4 | P0 | DONE |
 | F4-裸屏盘点入口 | 4 | P1 | DONE |
-| F5-降级二次确认（可选） | 3 | P2 | READY |
+| F5-降级二次确认 | 3 | P2 | DONE |
 
-**统计**: READY=1, IN_PROGRESS=0, DONE=4, BLOCKED=0
+**统计**: READY=0, IN_PROGRESS=0, DONE=5, BLOCKED=0
 **设计文档**: `worklog/v2.2.3/sprint-24-202605/README.md`
 **集成测试**: `worklog/v2.2.3/sprint-24-202605/it/README.md`
-**实施分支**: `feat/sprint-24-classification-ux`（4 commits）
+**实施分支**: `feat/sprint-24-classification-ux`（5 commits）
