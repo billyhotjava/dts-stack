@@ -38,6 +38,9 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.dao.DataAccessException;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.HttpHeaders;
@@ -61,6 +64,7 @@ import org.springframework.web.bind.annotation.RestController;
 @Transactional
 public class ScreenResource {
 
+    private static final Logger LOG = LoggerFactory.getLogger(ScreenResource.class);
     private static final String SCREEN_VERSION_STATUS_PUBLISHED = "PUBLISHED";
 
     private final AnalyticsSessionService sessionService;
@@ -1168,12 +1172,16 @@ public class ScreenResource {
         ScreenPermissionService.PermissionSnapshot perms = screenPermissionService.snapshot(screen, user.orElseThrow(), context);
         if (!perms.isOwner()) return forbidden();
 
-        // Fetch grants from local table
+        // H3：把异常按类型映射到合适的状态码，避免 raw message 泄露内部信息。
         try {
             List<Map<String, Object>> grants = screenOwnershipService.listGrants(screen.getId());
             return ResponseEntity.ok(grants);
+        } catch (DataAccessException ex) {
+            LOG.warn("DB error listing grants screenId={}: {}", screen.getId(), ex.getMessage());
+            return ResponseEntity.status(500).body(Map.of("error", "internal_error"));
         } catch (Exception ex) {
-            return ResponseEntity.status(503).body(Map.of("error", "Failed to fetch grants: " + ex.getMessage()));
+            LOG.error("Unexpected error listing grants screenId={}", screen.getId(), ex);
+            return ResponseEntity.status(500).body(Map.of("error", "internal_error"));
         }
     }
 
@@ -1227,6 +1235,14 @@ public class ScreenResource {
         if (levelOverride && !"VIEWER".equals(resolvedPermission)) {
             return ResponseEntity.badRequest().body(Map.of("error", "levelOverride is only allowed on VIEWER grants"));
         }
+        // H2：MANAGER 不再传递。授 MANAGER 仅大屏真 owner 或 superuser 可以做，
+        // 与 dts-platform 端 DashboardAccessGuard.canGrant 的策略 1 对齐——避免
+        // 被授权的 MANAGER 互相提权造帝国。VIEWER 仍然允许任何 MANAGER/owner 授予。
+        if ("MANAGER".equals(resolvedPermission) && !isManagerGrantAllowed(screen, user.orElseThrow())) {
+            return ResponseEntity
+                .status(403)
+                .body(Map.of("error", "only screen owner or superuser may grant MANAGER permission"));
+        }
         try {
             Long grantedById = user.orElseThrow().getId();
             AnalyticsScreenAccess grant = screenOwnershipService.createGrant(
@@ -1243,8 +1259,15 @@ public class ScreenResource {
             screenAuditService.log(screen.getId(), user.orElseThrow().getId(), "grant.add", null,
                 objectMapper.valueToTree(grantMap), requestIdFrom(request));
             return ResponseEntity.ok(grantMap);
+        } catch (IllegalArgumentException ex) {
+            // H3：业务校验类异常应当 400 而不是 503，且不暴露内部细节。
+            return ResponseEntity.badRequest().body(Map.of("error", ex.getMessage()));
+        } catch (DataAccessException ex) {
+            LOG.warn("DB error creating grant screenId={}: {}", screen.getId(), ex.getMessage());
+            return ResponseEntity.status(500).body(Map.of("error", "internal_error"));
         } catch (Exception ex) {
-            return ResponseEntity.status(503).body(Map.of("error", "Failed to create grant: " + ex.getMessage()));
+            LOG.error("Unexpected error creating grant screenId={}", screen.getId(), ex);
+            return ResponseEntity.status(500).body(Map.of("error", "internal_error"));
         }
     }
 
@@ -1318,8 +1341,12 @@ public class ScreenResource {
             screenAuditService.log(screen.getId(), user.orElseThrow().getId(), "grant.revoke",
                 Map.of("grantId", grantId), null, requestIdFrom(request));
             return ResponseEntity.ok(Map.of("deleted", true));
+        } catch (DataAccessException ex) {
+            LOG.warn("DB error revoking grant screenId={} grantId={}: {}", screen.getId(), grantId, ex.getMessage());
+            return ResponseEntity.status(500).body(Map.of("error", "internal_error"));
         } catch (Exception ex) {
-            return ResponseEntity.status(503).body(Map.of("error", "Failed to revoke grant: " + ex.getMessage()));
+            LOG.error("Unexpected error revoking grant screenId={} grantId={}", screen.getId(), grantId, ex);
+            return ResponseEntity.status(500).body(Map.of("error", "internal_error"));
         }
     }
 
@@ -2339,6 +2366,19 @@ public class ScreenResource {
 
     private ResponseEntity<String> forbidden() {
         return ResponseEntity.status(403).contentType(MediaType.TEXT_PLAIN).body("Forbidden");
+    }
+
+    /**
+     * H2：判定 caller 是否被允许授予 MANAGER 权限。仅大屏真正的 creator 或 superuser
+     * 才可以；被授权的 MANAGER 即便能管理 ACL，也不得继续授予 MANAGER。
+     * 与 dts-platform 的 DashboardAccessGuard.canGrant 策略 1 对齐。
+     * 抽成 package-private static 便于单元测试。
+     */
+    static boolean isManagerGrantAllowed(AnalyticsScreen screen, AnalyticsUser caller) {
+        if (caller == null) return false;
+        if (caller.isSuperuser()) return true;
+        if (screen == null || screen.getCreatorId() == null || caller.getId() == null) return false;
+        return screen.getCreatorId().equals(caller.getId());
     }
 
     private ResponseEntity<ObjectNode> lockConflict(ScreenEditLockService.LockSnapshot lock) {
