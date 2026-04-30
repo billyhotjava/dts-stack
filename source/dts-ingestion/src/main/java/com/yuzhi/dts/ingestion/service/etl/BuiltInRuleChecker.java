@@ -150,13 +150,13 @@ public class BuiltInRuleChecker {
             String regex;
             String expected;
             if ("TIMESTAMP".equals(inferredType)) {
-                // Accept yyyy-MM-dd HH:mm:ss or yyyy-MM-dd HH:mm
-                regex = "^\\d{4}-\\d{2}-\\d{2} \\d{2}:\\d{2}(:\\d{2})?$";
-                expected = "yyyy-MM-dd HH:mm:ss";
+                // Accept yyyy-MM-dd HH:mm:ss, yyyy-MM-ddTHH:mm:ss, or minute precision variants.
+                regex = "^\\d{4}-\\d{2}-\\d{2}[ T]\\d{2}:\\d{2}(:\\d{2})?$";
+                expected = "yyyy-MM-dd HH:mm:ss 或 ISO yyyy-MM-ddTHH:mm:ss";
             } else {
-                // Accept yyyy-MM-dd (pure date) or yyyy-MM-dd HH:mm:ss (datetime is also acceptable for DATE)
-                regex = "^\\d{4}-\\d{2}-\\d{2}( \\d{2}:\\d{2}(:\\d{2})?)?$";
-                expected = "yyyy-MM-dd 或 yyyy-MM-dd HH:mm:ss";
+                // Accept yyyy-MM-dd (pure date) or date-time values (also acceptable for DATE).
+                regex = "^\\d{4}-\\d{2}-\\d{2}([ T]\\d{2}:\\d{2}(:\\d{2})?)?$";
+                expected = "yyyy-MM-dd、yyyy-MM-dd HH:mm:ss 或 ISO yyyy-MM-ddTHH:mm:ss";
             }
 
             String sql = "SELECT _row_num, \"" + sanitized + "\" AS val FROM " + tableName

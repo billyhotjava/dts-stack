@@ -1,16 +1,16 @@
 # Sprint-18: 企业级数据接入中心 Phase 1
 
 **时间**: 2026-04  
-**状态**: IN_PROGRESS
+**状态**: DONE（API 已拆分到 Sprint-22，Sprint-18 只验收数据库/Excel/CSV）
 **类型**: Implementation（接入中心主链路收敛 + ODS 契约固化 + 离线文件接入）  
-**目标**: 在不引入 Airbyte 的前提下，把 DTS 数据接入中心第一阶段做成可交付能力：数据库、Excel、CSV 均统一落 ODS，源数据不做业务计算，允许追加 DTS 技术血缘字段，后续所有清洗、映射、标准化和业务口径都从 dbt `stg` 开始。
+**目标**: 在不引入 Airbyte 的前提下，把 DTS 数据接入中心第一阶段做成可交付能力：数据库、Excel、CSV 均统一落 ODS，源数据不做业务计算，允许追加 DTS 技术血缘字段，后续所有清洗、映射、标准化和业务口径都从 dbt `stg` 开始。API 入湖运行时不纳入本 Sprint 关闭口径，后续由 Sprint-22 专项实现。
 
 ## 背景
 
 当前 DTS 接入链路已经具备任务创建、数据源绑定、表发现、Addax job 生成、自动建 ODS、增量水位、Airflow 调度、执行记录、ODS 映射同步和 dbt source 刷新等基础能力。问题不在“没有接入功能”，而在产品契约还不够清晰：
 
 - ODS 的定位需要从“可自由规范化的落地区”收敛为“源数据原样落地 + DTS 技术字段”。
-- 数据库、Excel、CSV、后续 API 必须共享一套 ODS、批次、血缘、观测和验收规则。
+- 数据库、Excel、CSV 必须共享一套 ODS、批次、血缘、观测和验收规则；后续 API 只继承该契约，不作为 Sprint-18 已完成能力。
 - dbt 建模边界需要明确：ODS 不做业务计算，`stg` 才做字段重命名、类型修正、枚举翻译、部门编码转名称和口径处理。
 - 源端 schema snapshot 需要成为后续自动建 ODS、变更检测和 dbt source 生成的唯一依据，不能继续散落在 reader config、前端配置和临时 JDBC metadata 中。
 - 现有技术字段 `source_system/import_time` 方向正确，但需要补齐 `batch_id/execution_id/task_id/source_table`，并明确命名、冲突和兼容策略。
@@ -70,7 +70,7 @@ ODS 表由两类字段组成：
 | F3 | Excel/CSV 离线文件接入 | 5 | P0 | DONE |
 | F4 | 执行批次血缘与运行观测 | 4 | P0 | DONE |
 | F5 | dbt stg 建模入口与 source 元数据 | 5 | P1 | DONE |
-| F6 | 前端向导与验收门禁 | 4 | P1 | IN_PROGRESS |
+| F6 | 前端向导与验收门禁 | 4 | P1 | DONE |
 
 **合计 28 个 task。**
 
@@ -98,7 +98,7 @@ F1 是所有实现的边界条件；F4 的 batch/execution 字段必须被 F2/F3
 - [x] dbt `ods_sources.yml` 至少能输出表级和技术字段元数据，stg 模型明确从 ODS source 读取。
 - [x] stg 自动生成蓝图明确字段重命名、类型标准化、技术字段处理、数据质量测试、source freshness 和 DWD/DWS 承接方式。
 - [x] 前端向导明确展示“ODS 原样落地，stg 开始建模”的边界，不允许在 ODS 步骤配置业务计算。
-- [ ] 自动化测试覆盖数据库建表、技术字段注入、文件导入、batch 追踪和 dbt source 刷新。
+- [x] 自动化测试覆盖数据库建表、技术字段注入、文件导入、batch 追踪和 dbt source 刷新。
 
 ## 执行记录
 
@@ -119,6 +119,7 @@ F1 是所有实现的边界条件；F4 的 batch/execution 字段必须被 F2/F3
 - 不要求 ODS 物理 schema 与源库 DDL 逐字符一致。
 - 不在本 Sprint 完成全量 schema drift 工作流；只做最小检测和阻断策略。
 - 不替换 dbt 建模链路，dbt 继续作为 ODS 之后的建模入口。
+- 不在本 Sprint 完成 API 入湖正式运行时；API 数据源配置、草稿任务和 mock DAG 不计入 Sprint-18 验收。
 
 ## 关键代码触点
 

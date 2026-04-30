@@ -2,6 +2,10 @@ package com.yuzhi.dts.platform.service.openmetadata;
 
 import com.yuzhi.dts.platform.config.OpenMetadataProperties;
 import com.yuzhi.dts.platform.domain.catalog.CatalogDataset;
+import com.yuzhi.dts.platform.domain.service.InfraDataSource;
+import com.yuzhi.dts.platform.repository.service.InfraDataSourceRepository;
+import java.net.URI;
+import java.net.URISyntaxException;
 import java.time.Instant;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
@@ -11,9 +15,11 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
@@ -30,10 +36,17 @@ public class OpenMetadataService {
 
     private final OpenMetadataClient client;
     private final OpenMetadataProperties props;
+    private final InfraDataSourceRepository dataSourceRepository;
 
-    public OpenMetadataService(OpenMetadataClient client, OpenMetadataProperties props) {
+    @Autowired
+    public OpenMetadataService(OpenMetadataClient client, OpenMetadataProperties props, InfraDataSourceRepository dataSourceRepository) {
         this.client = client;
         this.props = props;
+        this.dataSourceRepository = dataSourceRepository;
+    }
+
+    public OpenMetadataService(OpenMetadataClient client, OpenMetadataProperties props) {
+        this(client, props, null);
     }
 
     public OpenMetadataResult fetchTableForDataset(CatalogDataset dataset) {
@@ -252,7 +265,8 @@ public class OpenMetadataService {
 
     private List<String> buildCandidateFqns(CatalogDataset dataset) {
         String service = trim(props.getServiceName());
-        String database = trim(dataset.getHiveDatabase());
+        String schema = trim(dataset.getHiveDatabase());
+        String database = firstNonBlank(resolveDatabaseFromSource(dataset), schema);
         String table = trim(dataset.getHiveTable());
         if (!StringUtils.hasText(table)) {
             table = trim(dataset.getName());
@@ -260,7 +274,9 @@ public class OpenMetadataService {
         if (!StringUtils.hasText(database)) {
             database = trim(props.getDefaultDatabase());
         }
-        String schema = trim(props.getDefaultSchema());
+        if (!StringUtils.hasText(schema)) {
+            schema = trim(props.getDefaultSchema());
+        }
 
         if (StringUtils.hasText(table) && table.contains(".") && !StringUtils.hasText(database)) {
             String[] parts = table.split("\\.");
@@ -287,13 +303,77 @@ public class OpenMetadataService {
         }
 
         if (StringUtils.hasText(schema)) {
+            String withSchema = formatPattern("{service}.{database}.{schema}.{table}", service, database, schema, table);
+            addCandidate(fqns, withSchema);
             String noSchema = formatPattern("{service}.{database}.{table}", service, database, null, table);
-            if (StringUtils.hasText(noSchema) && !fqns.contains(noSchema)) {
-                fqns.add(noSchema);
-            }
+            addCandidate(fqns, noSchema);
         }
 
         return fqns;
+    }
+
+    private String resolveDatabaseFromSource(CatalogDataset dataset) {
+        if (dataset == null || dataset.getSourceId() == null || dataSourceRepository == null) {
+            return null;
+        }
+        return dataSourceRepository
+            .findById(dataset.getSourceId())
+            .map(InfraDataSource::getJdbcUrl)
+            .map(this::databaseFromJdbcUrl)
+            .filter(StringUtils::hasText)
+            .orElse(null);
+    }
+
+    private String databaseFromJdbcUrl(String jdbcUrl) {
+        if (!StringUtils.hasText(jdbcUrl)) {
+            return null;
+        }
+        String text = jdbcUrl.trim();
+        String normalized = text.toLowerCase(Locale.ROOT);
+        if (normalized.startsWith("jdbc:postgresql:")) {
+            return databaseFromUri(text.substring("jdbc:".length()));
+        }
+        if (normalized.startsWith("jdbc:mysql:") || normalized.startsWith("jdbc:mariadb:")) {
+            return databaseFromUri(text.substring("jdbc:".length()));
+        }
+        return null;
+    }
+
+    private String databaseFromUri(String uriText) {
+        try {
+            URI uri = new URI(uriText);
+            String path = uri.getPath();
+            if (!StringUtils.hasText(path) || "/".equals(path)) {
+                return null;
+            }
+            String database = path.substring(1);
+            int slash = database.indexOf('/');
+            if (slash >= 0) {
+                database = database.substring(0, slash);
+            }
+            return trim(database);
+        } catch (URISyntaxException ignored) {
+            return null;
+        }
+    }
+
+    private String firstNonBlank(String... values) {
+        if (values == null) {
+            return null;
+        }
+        for (String value : values) {
+            String normalized = trim(value);
+            if (StringUtils.hasText(normalized)) {
+                return normalized;
+            }
+        }
+        return null;
+    }
+
+    private void addCandidate(List<String> fqns, String fqn) {
+        if (StringUtils.hasText(fqn) && !fqns.contains(fqn)) {
+            fqns.add(fqn);
+        }
     }
 
     private String formatPattern(String pattern, String service, String database, String schema, String table) {

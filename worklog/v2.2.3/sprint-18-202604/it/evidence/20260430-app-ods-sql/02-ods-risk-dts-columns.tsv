@@ -1,0 +1,10 @@
+_dts_source_system	character varying
+_dts_source_table	character varying
+_dts_import_time	timestamp without time zone
+_dts_batch_id	character varying
+_dts_execution_id	character varying
+_dts_task_id	character varying
+_dts_source_file	character varying
+_dts_source_sheet	character varying
+_dts_file_hash	character varying
+_dts_row_number	integer

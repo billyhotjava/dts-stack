@@ -1,10 +1,7 @@
 package com.yuzhi.dts.ingestion.service.etl;
 
 import com.yuzhi.dts.ingestion.config.AddaxProperties;
-import java.io.BufferedReader;
 import java.io.InputStream;
-import java.io.InputStreamReader;
-import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
@@ -39,10 +36,16 @@ public class FileUploadService {
 
     private final AddaxProperties properties;
     private final com.yuzhi.dts.ingestion.service.infra.IngestionSettingsService settingsService;
+    private final CsvParseService csvParseService;
 
-    public FileUploadService(AddaxProperties properties, com.yuzhi.dts.ingestion.service.infra.IngestionSettingsService settingsService) {
+    public FileUploadService(
+        AddaxProperties properties,
+        com.yuzhi.dts.ingestion.service.infra.IngestionSettingsService settingsService,
+        CsvParseService csvParseService
+    ) {
         this.properties = properties;
         this.settingsService = settingsService;
+        this.csvParseService = csvParseService;
     }
 
     public record FileUploadResult(
@@ -177,36 +180,9 @@ public class FileUploadService {
     }
 
     private List<FileColumn> parseCsvHeaders(Path filePath) throws Exception {
-        List<FileColumn> columns = new ArrayList<>();
-        try (BufferedReader reader = new BufferedReader(
-            new InputStreamReader(Files.newInputStream(filePath), StandardCharsets.UTF_8))) {
-            String headerLine = reader.readLine();
-            if (!StringUtils.hasText(headerLine)) {
-                return columns;
-            }
-            // Remove BOM if present
-            if (headerLine.startsWith("\uFEFF")) {
-                headerLine = headerLine.substring(1);
-            }
-            String[] headers = headerLine.split(",", -1);
-            String sampleLine = reader.readLine();
-            String[] samples = sampleLine != null ? sampleLine.split(",", -1) : new String[0];
-            Set<String> used = new LinkedHashSet<>();
-            for (int i = 0; i < headers.length; i++) {
-                String label = headers[i].trim();
-                // Strip surrounding quotes
-                if (label.startsWith("\"") && label.endsWith("\"")) {
-                    label = label.substring(1, label.length() - 1);
-                }
-                String name = SqlFieldNameResolver.resolve(label, i, used);
-                String type = "string";
-                if (i < samples.length) {
-                    type = inferTypeFromString(samples[i].trim());
-                }
-                columns.add(new FileColumn(name, type, label));
-            }
+        try (InputStream inputStream = Files.newInputStream(filePath)) {
+            return csvParseService.parseHeaders(inputStream);
         }
-        return columns;
     }
 
     private String inferTypeFromCell(Cell cell) {

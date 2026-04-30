@@ -186,6 +186,7 @@ function buildStoreRecord(session: AuthSession): StoreRecord {
     state: {
       userInfo: session.userInfo,
       userToken: {
+        authenticated: true,
         accessToken: session.accessToken,
         refreshToken: session.refreshToken,
       },
@@ -202,8 +203,7 @@ function buildLocalStorageEntries(app: AuthApp, session: AuthSession): Array<{ n
   const record = JSON.stringify(buildStoreRecord(session));
   const now = String(Date.now());
   return [
-    { name: 'platformUserStore', value: record },
-    { name: 'userStore', value: record },
+    { name: 'dts.platform.userStore', value: record },
     { name: 'dts.platform.session.loginTs', value: now },
     { name: 'dts.platform.session.lastActivity', value: now },
   ];

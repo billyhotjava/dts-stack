@@ -49,6 +49,7 @@ public class AsyncConfiguration implements AsyncConfigurer {
         // the calling thread's SecurityContext. Without this, audits emitted from background
         // workers fall back to anonymous → "_system:dts-platform" actor, masking the real user
         // who triggered the work.
+        executor.initialize();
         return new DelegatingSecurityContextAsyncTaskExecutor(new ExceptionHandlingAsyncTaskExecutor(executor));
     }
 

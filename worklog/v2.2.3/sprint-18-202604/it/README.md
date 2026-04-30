@@ -7,7 +7,7 @@
 | 数据库全量接入 | 自动建 ODS、源字段复制、`_dts_*` 技术字段、batch 一致性 | AUTO PASS |
 | 数据库增量接入 | watermark、批次字段、重复运行、checkpoint 审计 | AUTO PARTIAL |
 | Excel 上传接入 | sheet/header/schema 预检、文件血缘字段、坏行记录 | AUTO PASS |
-| CSV 上传接入 | 编码、分隔符、schema 确认、行号与 hash | AUTO PARTIAL |
+| CSV 上传接入 | 引号/逗号/换行解析、schema 确认、行号与 hash | AUTO PASS |
 | dbt source 刷新 | ODS source 表级/列级元数据生成 | AUTO PASS |
 | 前端向导 | ODS 不提供业务计算配置，stg 边界提示 | AUTO PASS |
 
@@ -21,13 +21,33 @@
 | `source/dts-platform/mvnw -q -Dmaven.repo.local=/tmp/codex-m2 -DskipTests compile` | PASS |
 | `source/dts-platform/mvnw -q -Dmaven.repo.local=/tmp/codex-m2 -Dtest=DbtSourceServiceTest test` | PASS |
 | `pnpm exec tsc --noEmit`（`source/dts-platform-webapp`） | PASS |
+| `source/dts-platform/mvnw -q -Dmaven.repo.local=/tmp/codex-m2 -f source/dts-ingestion/pom.xml -Dtest=CsvParseServiceTest,StagingTableServiceTest,IngestionPreCheckResourceTest test` | PASS（2026-04-30） |
+| `source/dts-platform/mvnw -q -Dmaven.repo.local=/tmp/codex-m2 -f source/dts-ingestion/pom.xml -DskipTests compile` | PASS（2026-04-30） |
+| `source/dts-platform/mvnw -q -Dmaven.repo.local=/tmp/codex-m2 -f source/dts-ingestion/pom.xml -Dtest=IngestionTaskMapperTest,IngestionExecutionQueryServiceTest test` | PASS（2026-04-30） |
+| `source/dts-platform/mvnw -q -Dmaven.repo.local=/tmp/codex-m2 -f source/dts-platform/pom.xml -Dtest=DbtSourceServiceTest test` | PASS（2026-04-30） |
+| `docker exec v223-dts-ingestion-1 sh -lc 'mvn -q -DskipTests compile'` | PASS（app 模式，2026-04-30） |
+| `docker exec dts-dbt dbt parse --project-dir /opt/dbt --profiles-dir /opt/dbt/profiles` | PASS（app 模式，2026-04-30） |
+| `pnpm --dir tests/web-e2e exec playwright test specs/biz/elt-ingestion-center-smoke.spec.ts specs/biz/elt-ingestion-edge-regression.spec.ts --project=chromium --config=playwright.config.ts` | PASS（app web，2026-04-30） |
 
-## 待补现场证据
+## 现场证据（2026-04-30）
 
-- 数据库全量/增量实际执行后的 ODS 抽样 SQL。
-- Excel/CSV 样本文件导入后的坏行下载截图或 CSV 留存。
-- `dbt parse` 在现场 dbt 项目目录中的执行结果。
-- 浏览器 E2E 覆盖数据库、Excel、CSV 三条 happy path。
+| 证据 | 路径 | 结论 |
+|---|---|---|
+| app 模式 CSV 直连预检 | `worklog/v2.2.3/sprint-18-202604/it/evidence/20260430-app-ingestion-direct/` | 上传、任务创建、CSV parse、暂存表、坏行摘要、staging metadata 均通过；`builtInErrorCount=0` |
+| ODS 技术字段 SQL 抽样 | `worklog/v2.2.3/sprint-18-202604/it/evidence/20260430-app-ods-sql/` | `ods_risk_info_v2` 存在 `_dts_*` 技术字段，样本含 batch、execution、task、file hash、row number |
+| execution 反查 | `worklog/v2.2.3/sprint-18-202604/it/evidence/20260430-app-ods-sql/04-execution-trace.json` | task、execution、batch、Airflow run id 可串联 |
+| dbt parse | `worklog/v2.2.3/sprint-18-202604/it/evidence/20260430-app-dbt/` | `dbt parse` exit code 为 0 |
+| 平台前端 E2E | `worklog/v2.2.3/sprint-18-202604/it/evidence/20260430-web-e2e/html-app-expert/index.html` | 接入中心 smoke 与边界回归 2 条用例通过 |
+
+## 模式复核
+
+| 模式 | 复核结论 |
+|---|---|
+| app | 已在 `docker-compose-app.yml` 运行环境验证 ingestion compile、CSV 上传/预检、ODS SQL 抽样、dbt parse 和平台前端 E2E。 |
+| dev | 本次改动未修改 `.env`、`docker-compose.dev.yml` 或 dev mount；代码路径为服务内 Java/web E2E 辅助，按现有 dev 挂载复用。 |
+| legacy | 本次改动未修改 `docker-compose.legacy.yml`、镜像构建参数或架构相关依赖；CSV parser 为纯 Java 实现，不引入平台相关 native 依赖。 |
+
+说明：当前 `v223-dts-platform-1` 容器因非 Sprint-18 的平台后端改动启动失败，未通过 platform backend proxy 做端到端执行；本次 app 现场验证改为 direct ingestion API + ODS SQL + dbt + platform-webapp E2E。失败原因不归属 Sprint-18 接入链路。
 
 ## 手工验收步骤
 

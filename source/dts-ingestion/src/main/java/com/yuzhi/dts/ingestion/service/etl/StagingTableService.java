@@ -67,6 +67,10 @@ public class StagingTableService {
      * Table name: tmp_ingestion_{taskId with dashes removed}
      */
     public String create(UUID taskId, List<ColumnInfo> columns) {
+        return create(taskId, null, columns);
+    }
+
+    public String create(UUID taskId, Long ingestionTaskId, List<ColumnInfo> columns) {
         String taskIdStr = taskId.toString();
         if (!UUID_PATTERN.matcher(taskIdStr).matches()) {
             throw new IllegalArgumentException("Invalid taskId format");
@@ -74,6 +78,7 @@ public class StagingTableService {
 
         String tableName = TABLE_PREFIX + taskIdStr.replace("-", "");
 
+        jdbcTemplate.execute("DROP TABLE IF EXISTS " + tableName);
         StringBuilder sql = new StringBuilder();
         sql.append("CREATE TABLE IF NOT EXISTS ").append(tableName).append(" (");
         sql.append("_row_num SERIAL PRIMARY KEY, ");
@@ -93,11 +98,14 @@ public class StagingTableService {
         jdbcTemplate.execute(sql.toString());
         log.info("Created staging table: {}", tableName);
 
-        // Save metadata record for TTL tracking
-        StagingTableMetadata metadata = new StagingTableMetadata();
-        metadata.setId(UUID.randomUUID());
+        StagingTableMetadata metadata = metadataRepository.findByTableName(tableName).orElseGet(() -> {
+            StagingTableMetadata created = new StagingTableMetadata();
+            created.setId(UUID.randomUUID());
+            created.setTableName(tableName);
+            return created;
+        });
         metadata.setTableName(tableName);
-        metadata.setTaskId(null); // taskId is not directly needed here, could be added if required
+        metadata.setTaskId(ingestionTaskId);
         metadata.setCreatedAt(Instant.now());
         metadata.setLastAccessedAt(Instant.now());
         metadata.setTtlHours(24); // Default 24 hour TTL

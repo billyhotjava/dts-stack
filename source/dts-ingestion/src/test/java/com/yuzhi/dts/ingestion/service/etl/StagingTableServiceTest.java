@@ -2,14 +2,19 @@ package com.yuzhi.dts.ingestion.service.etl;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.argThat;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import com.yuzhi.dts.ingestion.domain.StagingTableMetadata;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.yuzhi.dts.ingestion.repository.StagingTableMetadataRepository;
+import com.yuzhi.dts.ingestion.service.dto.ColumnInfo;
 import java.nio.charset.StandardCharsets;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
+import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -73,5 +78,19 @@ class StagingTableServiceTest {
 
         assertThat(csv).startsWith("_row_num,project_name,_errors\n");
         assertThat(csv).contains("4,\"项目,一期\",\"[{\"\"rule\"\":\"\"x\"\"}]\"");
+    }
+
+    @Test
+    void createShouldRecreateTableAndPersistTaskIdForTraceability() {
+        UUID taskUuid = UUID.fromString("12345678-90ab-cdef-1234-567890abcdef");
+        when(metadataRepository.findByTableName(TABLE)).thenReturn(Optional.empty());
+
+        String table = service.create(taskUuid, 42L, List.of(new ColumnInfo("project_name", "STRING", 100)));
+
+        assertThat(table).isEqualTo(TABLE);
+        verify(jdbcTemplate).execute("DROP TABLE IF EXISTS " + TABLE);
+        verify(metadataRepository).save(argThat((StagingTableMetadata metadata) ->
+            TABLE.equals(metadata.getTableName()) && Long.valueOf(42L).equals(metadata.getTaskId())
+        ));
     }
 }

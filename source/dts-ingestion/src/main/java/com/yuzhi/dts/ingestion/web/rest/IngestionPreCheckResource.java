@@ -7,6 +7,7 @@ import com.yuzhi.dts.ingestion.service.dto.CellError;
 import com.yuzhi.dts.ingestion.service.dto.ColumnInfo;
 import com.yuzhi.dts.ingestion.service.dto.ParseResult;
 import com.yuzhi.dts.ingestion.service.etl.BuiltInRuleChecker;
+import com.yuzhi.dts.ingestion.service.etl.CsvParseService;
 import com.yuzhi.dts.ingestion.service.etl.ExcelParseService;
 import com.yuzhi.dts.ingestion.service.etl.StagingTableService;
 import com.yuzhi.dts.ingestion.service.infra.PlatformInfraClient;
@@ -49,6 +50,7 @@ public class IngestionPreCheckResource {
 
     private final IngestionTaskRepository taskRepository;
     private final ExcelParseService excelParseService;
+    private final CsvParseService csvParseService;
     private final StagingTableService stagingTableService;
     private final BuiltInRuleChecker builtInRuleChecker;
     private final PlatformInfraClient platformInfraClient;
@@ -56,12 +58,14 @@ public class IngestionPreCheckResource {
     public IngestionPreCheckResource(
         IngestionTaskRepository taskRepository,
         ExcelParseService excelParseService,
+        CsvParseService csvParseService,
         StagingTableService stagingTableService,
         BuiltInRuleChecker builtInRuleChecker,
         PlatformInfraClient platformInfraClient
     ) {
         this.taskRepository = taskRepository;
         this.excelParseService = excelParseService;
+        this.csvParseService = csvParseService;
         this.stagingTableService = stagingTableService;
         this.builtInRuleChecker = builtInRuleChecker;
         this.platformInfraClient = platformInfraClient;
@@ -109,15 +113,16 @@ public class IngestionPreCheckResource {
         }
 
         try {
-            // Parse Excel file via InputStream
             ParseResult parseResult;
             try (InputStream is = Files.newInputStream(path)) {
-                parseResult = excelParseService.parse(is);
+                parseResult = isCsvTask(task, path) ? csvParseService.parse(is) : excelParseService.parse(is);
             }
 
-            // Create staging table and bulk insert
+            if (task.getStagingTableName() != null && !task.getStagingTableName().isBlank()) {
+                stagingTableService.drop(task.getStagingTableName());
+            }
             UUID taskUuid = UUID.nameUUIDFromBytes(("ingestion-task-" + id).getBytes());
-            String tableName = stagingTableService.create(taskUuid, parseResult.columns());
+            String tableName = stagingTableService.create(taskUuid, id, parseResult.columns());
             stagingTableService.bulkInsert(tableName, parseResult.columns(), parseResult.rows());
 
             // Run built-in rule checks and write errors to staging table
@@ -361,6 +366,23 @@ public class IngestionPreCheckResource {
     private IngestionTask findTaskOrThrow(Long id) {
         return taskRepository.findById(id)
             .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Task not found: " + id));
+    }
+
+    private boolean isCsvTask(IngestionTask task, Path path) {
+        if (task.getSourceType() != null) {
+            String lower = task.getSourceType().toLowerCase(java.util.Locale.ROOT);
+            if ("csv".equals(lower) || "txtfilereader".equals(lower)) {
+                return true;
+            }
+        }
+        if (task.getSourceConfig() != null) {
+            String fileType = task.getSourceConfig().path("_fileType").asText(null);
+            if ("csv".equalsIgnoreCase(fileType)) {
+                return true;
+            }
+        }
+        String fileName = path.getFileName() == null ? "" : path.getFileName().toString().toLowerCase(java.util.Locale.ROOT);
+        return fileName.endsWith(".csv");
     }
 
     private String requireStagingTable(IngestionTask task) {
