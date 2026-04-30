@@ -5,7 +5,7 @@
         xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.22.xsd">
 
     <!--
-        AuditLogResource.list filters frequently include source_system, result, and button_code,
+        AuditEntryResource.list filters frequently include source_system, result, and button_code,
         which the original schema (20260319-01) did not index. Added now so that the auditor
         dashboard can scan large audit_entry tables without a sequential scan.
         - source_system + occurred_at: composite index for module-scoped time-windowed queries

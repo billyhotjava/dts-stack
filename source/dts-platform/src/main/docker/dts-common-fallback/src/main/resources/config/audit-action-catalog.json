@@ -275,7 +275,8 @@
           "actions": [
             { "code": "EXPLORE_WORKBENCH_QUERY", "display": "执行数据查询", "phases": ["BEGIN", "SUCCESS", "FAIL"], "supportsFlow": true },
             { "code": "EXPLORE_WORKBENCH_SAVE", "display": "保存查询脚本", "phases": ["BEGIN", "SUCCESS", "FAIL"], "supportsFlow": true },
-            { "code": "EXPLORE_WORKBENCH_PREVIEW", "display": "预览查询结果", "phases": ["SUCCESS"], "supportsFlow": false }
+            { "code": "EXPLORE_WORKBENCH_PREVIEW", "display": "预览查询结果", "phases": ["SUCCESS"], "supportsFlow": false },
+            { "code": "EXPLORE_SQL_OPEN", "display": "打开 SQL 工作台", "phases": ["SUCCESS"], "supportsFlow": false }
           ]
         },
         {
@@ -286,6 +287,62 @@
             { "code": "EXPLORE_RESULTSET_EXPORT", "display": "导出结果集", "phases": ["BEGIN", "SUCCESS", "FAIL"], "supportsFlow": true },
             { "code": "EXPLORE_RESULTSET_PURGE", "display": "清理结果集", "phases": ["BEGIN", "SUCCESS", "FAIL"], "supportsFlow": true }
           ]
+        },
+        {
+          "key": "explore.sqlIde",
+          "title": "SQL IDE 工作台",
+          "actions": [
+            { "code": "SQL_IDE_TAB_LIST", "display": "查看 SQL Tab 列表", "phases": ["SUCCESS"], "supportsFlow": false },
+            { "code": "SQL_IDE_TAB_CREATE", "display": "创建 SQL Tab", "phases": ["BEGIN", "SUCCESS", "FAIL"], "supportsFlow": true },
+            { "code": "SQL_IDE_TAB_UPDATE", "display": "更新 SQL Tab", "phases": ["BEGIN", "SUCCESS", "FAIL"], "supportsFlow": true },
+            { "code": "SQL_IDE_TAB_DELETE", "display": "删除 SQL Tab", "phases": ["BEGIN", "SUCCESS", "FAIL"], "supportsFlow": true },
+            { "code": "SQL_IDE_TAB_BATCH_SAVE", "display": "批量保存 SQL Tab", "phases": ["BEGIN", "SUCCESS", "FAIL"], "supportsFlow": true },
+            { "code": "SQL_IDE_CATALOG_BROWSE", "display": "浏览数据源目录", "phases": ["SUCCESS"], "supportsFlow": false },
+            { "code": "SQL_IDE_CATALOG_SEARCH", "display": "搜索数据源目录", "phases": ["SUCCESS"], "supportsFlow": false },
+            { "code": "SQL_IDE_EXECUTION_META_VIEW", "display": "查看执行结果元信息", "phases": ["SUCCESS"], "supportsFlow": false },
+            { "code": "SQL_IDE_EXECUTION_PAGE_VIEW", "display": "分页查看执行结果", "phases": ["SUCCESS"], "supportsFlow": false },
+            { "code": "SQL_IDE_RESULT_EXPORT", "display": "导出 SQL 执行结果", "phases": ["BEGIN", "SUCCESS", "FAIL"], "supportsFlow": true },
+            { "code": "SQL_IDE_RESULT_COPY", "display": "复制 SQL 执行结果", "phases": ["SUCCESS"], "supportsFlow": false },
+            { "code": "SQL_IDE_PLAN_VIEW", "display": "查看 SQL 执行计划", "phases": ["SUCCESS"], "supportsFlow": false },
+            { "code": "SQL_IDE_TEMP_VIEW_CREATE", "display": "创建结果集临时视图", "phases": ["BEGIN", "SUCCESS", "FAIL"], "supportsFlow": true },
+            { "code": "SQL_IDE_TEMP_VIEW_DROP", "display": "删除结果集临时视图", "phases": ["BEGIN", "SUCCESS", "FAIL"], "supportsFlow": true },
+            { "code": "SQL_IDE_SUBQUERY_EXECUTE", "display": "执行二次查询", "phases": ["BEGIN", "SUCCESS", "FAIL"], "supportsFlow": true }
+          ]
+        }
+      ]
+    },
+    {
+      "module": "semantic",
+      "title": "自助 BI 与语义层",
+      "entries": [
+        {
+          "key": "semantic.metadata",
+          "title": "语义元信息",
+          "actions": [
+            { "code": "SEMANTIC_META_VIEW", "display": "查看语义元信息", "phases": ["SUCCESS"], "supportsFlow": false },
+            { "code": "SEMANTIC_GRAPH_VIEW", "display": "查看语义 Join 图", "phases": ["SUCCESS"], "supportsFlow": false },
+            { "code": "SEMANTIC_CONTRACT_PUBLISH", "display": "推送语义契约", "phases": ["BEGIN", "SUCCESS", "FAIL"], "supportsFlow": true }
+          ]
+        },
+        {
+          "key": "semantic.queries",
+          "title": "语义查询",
+          "actions": [
+            { "code": "SEMANTIC_QUERY_PREVIEW", "display": "预览语义查询 SQL", "phases": ["BEGIN", "SUCCESS", "FAIL"], "supportsFlow": true },
+            { "code": "SEMANTIC_QUERY_EXECUTE", "display": "执行语义查询", "phases": ["BEGIN", "SUCCESS", "FAIL"], "supportsFlow": true }
+          ]
+        },
+        {
+          "key": "semantic.virtualDatasets",
+          "title": "虚拟数据集",
+          "actions": [
+            { "code": "SEMANTIC_VDS_LIST", "display": "查看虚拟数据集列表", "phases": ["SUCCESS"], "supportsFlow": false },
+            { "code": "SEMANTIC_VDS_VIEW", "display": "查看虚拟数据集", "phases": ["SUCCESS"], "supportsFlow": false },
+            { "code": "SEMANTIC_VDS_CREATE", "display": "创建虚拟数据集", "phases": ["BEGIN", "SUCCESS", "FAIL"], "supportsFlow": true },
+            { "code": "SEMANTIC_VDS_UPDATE", "display": "更新虚拟数据集", "phases": ["BEGIN", "SUCCESS", "FAIL"], "supportsFlow": true },
+            { "code": "SEMANTIC_VDS_DELETE", "display": "删除虚拟数据集", "phases": ["BEGIN", "SUCCESS", "FAIL"], "supportsFlow": true },
+            { "code": "SEMANTIC_VDS_PROMOTE", "display": "提升虚拟数据集到 dbt", "phases": ["BEGIN", "SUCCESS", "FAIL"], "supportsFlow": true }
+          ]
         }
       ]
     },
@@ -295,21 +352,182 @@
       "entries": [
         {
           "key": "visualization.dashboards",
-          "title": "门户仪表盘",
+          "title": "可视化仪表盘",
           "actions": [
             { "code": "VIS_DASHBOARD_VIEW", "display": "查看仪表盘", "phases": ["SUCCESS"], "supportsFlow": false },
             { "code": "VIS_DASHBOARD_EDIT", "display": "编辑仪表盘", "phases": ["BEGIN", "SUCCESS", "FAIL"], "supportsFlow": true },
-            { "code": "VIS_DASHBOARD_PUBLISH", "display": "发布仪表盘", "phases": ["BEGIN", "SUCCESS", "FAIL"], "supportsFlow": true }
+            { "code": "VIS_DASHBOARD_PUBLISH", "display": "发布仪表盘", "phases": ["BEGIN", "SUCCESS", "FAIL"], "supportsFlow": true },
+            { "code": "SCREEN_CREATE", "display": "新建大屏", "phases": ["BEGIN", "SUCCESS", "FAIL"], "supportsFlow": true },
+            { "code": "SCREEN_UPDATE", "display": "更新大屏", "phases": ["BEGIN", "SUCCESS", "FAIL"], "supportsFlow": true },
+            { "code": "SCREEN_DELETE", "display": "删除大屏", "phases": ["BEGIN", "SUCCESS", "FAIL"], "supportsFlow": true },
+            { "code": "SCREEN_PUBLISH", "display": "发布大屏", "phases": ["BEGIN", "SUCCESS", "FAIL"], "supportsFlow": true },
+            { "code": "SCREEN_ROLLBACK", "display": "回滚大屏版本", "phases": ["BEGIN", "SUCCESS", "FAIL"], "supportsFlow": true },
+            { "code": "SCREEN_MIGRATE", "display": "大屏 v1→v2 迁移", "phases": ["BEGIN", "SUCCESS", "FAIL"], "supportsFlow": true }
           ]
         },
         {
-          "key": "visualization.reports",
-          "title": "报表管理",
+          "key": "visualization.cockpit",
+          "title": "经营驾驶舱",
           "actions": [
-            { "code": "VIS_REPORT_VIEW", "display": "查看报表", "phases": ["SUCCESS"], "supportsFlow": false },
-            { "code": "VIS_REPORT_EDIT", "display": "编辑报表", "phases": ["BEGIN", "SUCCESS", "FAIL"], "supportsFlow": true },
-            { "code": "VIS_REPORT_EXPORT", "display": "导出报表", "phases": ["BEGIN", "SUCCESS", "FAIL"], "supportsFlow": true },
-            { "code": "VIS_REPORT_SHARE", "display": "分享报表", "phases": ["BEGIN", "SUCCESS", "FAIL"], "supportsFlow": true }
+            { "code": "VIS_COCKPIT_VIEW", "display": "查看驾驶舱", "phases": ["SUCCESS"], "supportsFlow": false },
+            { "code": "VIS_COCKPIT_UPDATE", "display": "维护驾驶舱配置", "phases": ["BEGIN", "SUCCESS", "FAIL"], "supportsFlow": true }
+          ]
+        },
+        {
+          "key": "visualization.projects",
+          "title": "项目管理看板",
+          "actions": [
+            { "code": "VIS_PROJECT_VIEW", "display": "查看项目看板", "phases": ["SUCCESS"], "supportsFlow": false },
+            { "code": "VIS_PROJECT_UPDATE", "display": "更新项目看板", "phases": ["BEGIN", "SUCCESS", "FAIL"], "supportsFlow": true }
+          ]
+        },
+        {
+          "key": "visualization.finance",
+          "title": "财务看板",
+          "actions": [
+            { "code": "VIS_FINANCE_VIEW", "display": "查看财务看板", "phases": ["SUCCESS"], "supportsFlow": false },
+            { "code": "VIS_FINANCE_EXPORT", "display": "导出财务指标", "phases": ["BEGIN", "SUCCESS", "FAIL"], "supportsFlow": true }
+          ]
+        },
+        {
+          "key": "visualization.supplyChain",
+          "title": "供应链看板",
+          "actions": [
+            { "code": "VIS_SUPPLYCHAIN_VIEW", "display": "查看供应链看板", "phases": ["SUCCESS"], "supportsFlow": false },
+            { "code": "VIS_SUPPLYCHAIN_ALERT", "display": "触发供应链告警", "phases": ["BEGIN", "SUCCESS", "FAIL"], "supportsFlow": true }
+          ]
+        },
+        {
+          "key": "visualization.hr",
+          "title": "人力看板",
+          "actions": [
+            { "code": "VIS_HR_VIEW", "display": "查看人力看板", "phases": ["SUCCESS"], "supportsFlow": false },
+            { "code": "VIS_HR_EXPORT", "display": "导出人力报表", "phases": ["BEGIN", "SUCCESS", "FAIL"], "supportsFlow": true }
+          ]
+        }
+      ]
+    },
+    {
+      "module": "services",
+      "title": "数据服务",
+      "entries": [
+        {
+          "key": "services.api",
+          "title": "API 服务",
+          "actions": [
+            { "code": "SERVICE_API_LIST", "display": "查看API服务列表", "phases": ["SUCCESS"], "supportsFlow": false },
+            { "code": "SERVICE_API_VIEW", "display": "查看API服务详情", "phases": ["SUCCESS"], "supportsFlow": false },
+            { "code": "SERVICE_API_REGISTER", "display": "登记 API 服务", "phases": ["BEGIN", "SUCCESS", "FAIL"], "supportsFlow": true },
+            { "code": "SERVICE_API_EDIT", "display": "维护API服务", "phases": ["BEGIN", "SUCCESS", "FAIL"], "supportsFlow": true },
+            { "code": "SERVICE_API_TEST", "display": "测试API服务", "phases": ["BEGIN", "SUCCESS", "FAIL"], "supportsFlow": true },
+            { "code": "SERVICE_API_EXECUTE", "display": "调用API服务", "phases": ["BEGIN", "SUCCESS", "FAIL"], "supportsFlow": true },
+            { "code": "SERVICE_API_BATCH_EXECUTE", "display": "批量调用API服务", "phases": ["BEGIN", "SUCCESS", "FAIL"], "supportsFlow": true },
+            { "code": "SERVICE_API_PUBLISH", "display": "发布 API 服务", "phases": ["BEGIN", "SUCCESS", "FAIL"], "supportsFlow": true },
+            { "code": "SERVICE_API_DISABLE", "display": "下线 API 服务", "phases": ["BEGIN", "SUCCESS", "FAIL"], "supportsFlow": true },
+            { "code": "SERVICE_API_METRICS_VIEW", "display": "查看API调用统计", "phases": ["SUCCESS"], "supportsFlow": false }
+          ]
+        },
+        {
+          "key": "services.products",
+          "title": "数据产品",
+          "actions": [
+            { "code": "SERVICE_PRODUCT_CREATE", "display": "创建数据产品", "phases": ["BEGIN", "SUCCESS", "FAIL"], "supportsFlow": true },
+            { "code": "SERVICE_PRODUCT_UPDATE", "display": "维护数据产品", "phases": ["BEGIN", "SUCCESS", "FAIL"], "supportsFlow": true },
+            { "code": "SERVICE_PRODUCT_PUBLISH", "display": "发布数据产品", "phases": ["BEGIN", "SUCCESS", "FAIL"], "supportsFlow": true }
+          ]
+        },
+        {
+          "key": "services.tokens",
+          "title": "令牌与密钥",
+          "actions": [
+            { "code": "SERVICE_TOKEN_ISSUE", "display": "发放访问令牌", "phases": ["BEGIN", "SUCCESS", "FAIL"], "supportsFlow": true },
+            { "code": "SERVICE_TOKEN_ROTATE", "display": "轮换访问令牌", "phases": ["BEGIN", "SUCCESS", "FAIL"], "supportsFlow": true },
+            { "code": "SERVICE_TOKEN_REVOKE", "display": "吊销访问令牌", "phases": ["BEGIN", "SUCCESS", "FAIL"], "supportsFlow": true }
+          ]
+        }
+      ]
+    },
+    {
+      "module": "iam",
+      "title": "权限与策略",
+      "entries": [
+        {
+          "key": "iam.classification",
+          "title": "密级模型映射",
+          "actions": [
+            { "code": "IAM_CLASSIFICATION_VIEW", "display": "查看密级映射", "phases": ["SUCCESS"], "supportsFlow": false },
+            { "code": "IAM_CLASSIFICATION_SYNC", "display": "同步密级映射", "phases": ["BEGIN", "SUCCESS", "FAIL"], "supportsFlow": true }
+          ]
+        },
+        {
+          "key": "iam.authorization",
+          "title": "资源授权",
+          "actions": [
+            { "code": "IAM_AUTH_GRANT", "display": "授予资源权限", "phases": ["BEGIN", "SUCCESS", "FAIL"], "supportsFlow": true },
+            { "code": "IAM_AUTH_REVOKE", "display": "回收资源权限", "phases": ["BEGIN", "SUCCESS", "FAIL"], "supportsFlow": true }
+          ]
+        },
+        {
+          "key": "iam.simulation",
+          "title": "策略模拟与评估",
+          "actions": [
+            { "code": "IAM_SIMULATION_RUN", "display": "执行策略模拟", "phases": ["BEGIN", "SUCCESS", "FAIL"], "supportsFlow": true },
+            { "code": "IAM_SIMULATION_REVIEW", "display": "复核模拟结果", "phases": ["SUCCESS"], "supportsFlow": false }
+          ]
+        },
+        {
+          "key": "iam.requests",
+          "title": "权限申请入口",
+          "actions": [
+            { "code": "IAM_REQUEST_SUBMIT", "display": "提交权限申请", "phases": ["BEGIN", "SUCCESS", "FAIL"], "supportsFlow": true },
+            { "code": "IAM_REQUEST_APPROVE", "display": "审批权限申请", "phases": ["BEGIN", "SUCCESS", "FAIL"], "supportsFlow": true },
+            { "code": "IAM_REQUEST_REJECT", "display": "驳回权限申请", "phases": ["BEGIN", "SUCCESS", "FAIL"], "supportsFlow": true }
+          ]
+        }
+      ]
+    },
+    {
+      "module": "foundation",
+      "title": "基础数据维护",
+      "entries": [
+        {
+          "key": "foundation.dataSources",
+          "title": "数据源",
+          "actions": [
+            { "code": "INFRA_CONNECTOR_REGISTRY_VIEW", "display": "查看连接器目录", "phases": ["SUCCESS"], "supportsFlow": false },
+            { "code": "INFRA_CONNECTOR_REGISTRY_REFRESH", "display": "刷新连接器目录", "phases": ["SUCCESS", "FAIL"], "supportsFlow": false },
+            { "code": "FOUNDATION_DATASOURCE_REGISTER", "display": "登记数据源", "phases": ["BEGIN", "SUCCESS", "FAIL"], "supportsFlow": true },
+            { "code": "FOUNDATION_DATASOURCE_TEST", "display": "测试数据源连接", "phases": ["BEGIN", "SUCCESS", "FAIL"], "supportsFlow": true },
+            { "code": "FOUNDATION_DATASOURCE_DISABLE", "display": "停用数据源", "phases": ["BEGIN", "SUCCESS", "FAIL"], "supportsFlow": true },
+            { "code": "FOUNDATION_SCHEMA_DISCOVER", "display": "探测数据源 Schema", "phases": ["SUCCESS", "FAIL"], "supportsFlow": false },
+            { "code": "FOUNDATION_ODS_PREVIEW", "display": "预览 ODS 与 dbt source", "phases": ["SUCCESS", "FAIL"], "supportsFlow": false },
+            { "code": "FOUNDATION_ODS_PRECHECK", "display": "执行 ODS 同步任务预检", "phases": ["SUCCESS", "FAIL"], "supportsFlow": false },
+            { "code": "FOUNDATION_ODS_APPLY", "display": "生成 ODS 映射与 dbt source", "phases": ["SUCCESS", "FAIL"], "supportsFlow": false },
+            { "code": "FOUNDATION_SYNC_TASK_DRAFT", "display": "生成同步任务草稿", "phases": ["SUCCESS", "FAIL"], "supportsFlow": false },
+            { "code": "INGESTION_TASK_CREATE", "display": "创建入湖任务", "phases": ["SUCCESS", "FAIL"], "supportsFlow": false },
+            { "code": "INGESTION_TASK_UPDATE", "display": "更新入湖任务", "phases": ["SUCCESS", "FAIL"], "supportsFlow": false },
+            { "code": "INGESTION_TASK_DELETE", "display": "删除入湖任务", "phases": ["SUCCESS", "FAIL"], "supportsFlow": false },
+            { "code": "INGESTION_TASK_EXECUTE", "display": "执行入湖任务", "phases": ["SUCCESS", "FAIL"], "supportsFlow": false },
+            { "code": "INGESTION_TASK_RETRY", "display": "重跑入湖任务", "phases": ["SUCCESS", "FAIL"], "supportsFlow": false },
+            { "code": "INGESTION_EXECUTION_RETRY", "display": "重试入湖执行", "phases": ["SUCCESS", "FAIL"], "supportsFlow": false },
+            { "code": "INGESTION_BACKFILL_RUN", "display": "按时间范围补数", "phases": ["SUCCESS", "FAIL"], "supportsFlow": false }
+          ]
+        },
+        {
+          "key": "foundation.dataStorage",
+          "title": "数据存储",
+          "actions": [
+            { "code": "FOUNDATION_STORAGE_REGISTER", "display": "登记数据存储", "phases": ["BEGIN", "SUCCESS", "FAIL"], "supportsFlow": true },
+            { "code": "FOUNDATION_STORAGE_UPDATE", "display": "维护数据存储", "phases": ["BEGIN", "SUCCESS", "FAIL"], "supportsFlow": true }
+          ]
+        },
+        {
+          "key": "foundation.taskScheduling",
+          "title": "任务调度",
+          "actions": [
+            { "code": "FOUNDATION_SCHEDULE_REGISTER", "display": "登记调度任务", "phases": ["BEGIN", "SUCCESS", "FAIL"], "supportsFlow": true },
+            { "code": "FOUNDATION_SCHEDULE_DEPLOY", "display": "发布调度计划", "phases": ["BEGIN", "SUCCESS", "FAIL"], "supportsFlow": true },
+            { "code": "FOUNDATION_SCHEDULE_DISABLE", "display": "停用调度计划", "phases": ["BEGIN", "SUCCESS", "FAIL"], "supportsFlow": true }
           ]
         }
       ]
@@ -345,50 +563,30 @@
       ]
     },
     {
-      "module": "services",
-      "title": "数据服务",
+      "module": "admin",
+      "title": "管理端",
       "entries": [
         {
-          "key": "services.api",
-          "title": "API 服务",
+          "key": "portal.navigation",
+          "title": "门户菜单",
           "actions": [
-            { "code": "SERVICE_API_LIST", "display": "查看API服务列表", "phases": ["SUCCESS"], "supportsFlow": false },
-            { "code": "SERVICE_API_VIEW", "display": "查看API服务详情", "phases": ["SUCCESS"], "supportsFlow": false },
-            { "code": "SERVICE_API_REGISTER", "display": "登记 API 服务", "phases": ["BEGIN", "SUCCESS", "FAIL"], "supportsFlow": true },
-            { "code": "SERVICE_API_EDIT", "display": "维护API服务", "phases": ["BEGIN", "SUCCESS", "FAIL"], "supportsFlow": true },
-            { "code": "SERVICE_API_TEST", "display": "测试API服务", "phases": ["BEGIN", "SUCCESS", "FAIL"], "supportsFlow": true },
-            { "code": "SERVICE_API_EXECUTE", "display": "调用API服务", "phases": ["BEGIN", "SUCCESS", "FAIL"], "supportsFlow": true },
-            { "code": "SERVICE_API_BATCH_EXECUTE", "display": "批量调用API服务", "phases": ["BEGIN", "SUCCESS", "FAIL"], "supportsFlow": true },
-            { "code": "SERVICE_API_PUBLISH", "display": "发布 API 服务", "phases": ["BEGIN", "SUCCESS", "FAIL"], "supportsFlow": true },
-            { "code": "SERVICE_API_DISABLE", "display": "下线 API 服务", "phases": ["BEGIN", "SUCCESS", "FAIL"], "supportsFlow": true },
-            { "code": "SERVICE_API_METRICS_VIEW", "display": "查看API调用统计", "phases": ["SUCCESS"], "supportsFlow": false }
+            { "code": "PORTAL_MENU_FETCH", "display": "获取门户菜单树", "phases": ["SUCCESS"], "supportsFlow": false }
           ]
         },
-        {
-          "key": "services.tokens",
-          "title": "令牌与密钥",
-          "actions": [
-            { "code": "SERVICE_TOKEN_ISSUE", "display": "发放访问令牌", "phases": ["BEGIN", "SUCCESS", "FAIL"], "supportsFlow": true },
-            { "code": "SERVICE_TOKEN_ROTATE", "display": "轮换访问令牌", "phases": ["BEGIN", "SUCCESS", "FAIL"], "supportsFlow": true },
-            { "code": "SERVICE_TOKEN_REVOKE", "display": "吊销访问令牌", "phases": ["BEGIN", "SUCCESS", "FAIL"], "supportsFlow": true }
-          ]
-        }
-      ]
-    },
-    {
-      "module": "admin",
-      "title": "管理门户",
-      "entries": [
         {
           "key": "admin.users",
           "title": "用户管理",
           "actions": [
-            { "code": "ADMIN_USER_VIEW", "display": "查看用户", "phases": ["SUCCESS"], "supportsFlow": false },
-            { "code": "ADMIN_USER_CREATE", "display": "创建用户", "phases": ["BEGIN", "SUCCESS", "FAIL"], "supportsFlow": true },
+            { "code": "ADMIN_USER_VIEW", "display": "查看用户详情", "phases": ["SUCCESS"], "supportsFlow": false },
+            { "code": "ADMIN_USER_CREATE", "display": "新建用户", "phases": ["BEGIN", "SUCCESS", "FAIL"], "supportsFlow": true },
             { "code": "ADMIN_USER_UPDATE", "display": "编辑用户", "phases": ["BEGIN", "SUCCESS", "FAIL"], "supportsFlow": true },
-            { "code": "ADMIN_USER_DISABLE", "display": "停用用户", "phases": ["BEGIN", "SUCCESS", "FAIL"], "supportsFlow": true }
+            { "code": "ADMIN_USER_DISABLE", "display": "停用用户", "phases": ["BEGIN", "SUCCESS", "FAIL"], "supportsFlow": true },
+            { "code": "ADMIN_USER_ENABLE", "display": "启用用户", "phases": ["BEGIN", "SUCCESS", "FAIL"], "supportsFlow": true },
+            { "code": "ADMIN_USER_RESET_PASSWORD", "display": "重置用户口令", "phases": ["BEGIN", "SUCCESS", "FAIL"], "supportsFlow": true },
+            { "code": "ADMIN_USER_ASSIGN_ROLE", "display": "调整用户角色", "phases": ["BEGIN", "SUCCESS", "FAIL"], "supportsFlow": true }
           ]
         },
+        
         {
           "key": "admin.roles",
           "title": "角色管理",
@@ -397,36 +595,10 @@
             { "code": "ADMIN_ROLE_CREATE", "display": "创建角色", "phases": ["BEGIN", "SUCCESS", "FAIL"], "supportsFlow": true },
             { "code": "ADMIN_ROLE_UPDATE", "display": "编辑角色", "phases": ["BEGIN", "SUCCESS", "FAIL"], "supportsFlow": true },
             { "code": "ADMIN_ROLE_DELETE", "display": "删除角色", "phases": ["BEGIN", "SUCCESS", "FAIL"], "supportsFlow": true },
-            { "code": "ADMIN_ROLE_ASSIGN_MENU", "display": "配置角色菜单", "phases": ["BEGIN", "SUCCESS", "FAIL"], "supportsFlow": true }
-          ]
-        },
-        {
-          "key": "admin.role-approvals",
-          "title": "角色审批",
-          "actions": [
-            { "code": "ADMIN_ROLE_APPROVAL_VIEW", "display": "查看角色审批", "phases": ["SUCCESS"], "supportsFlow": false },
-            { "code": "ADMIN_ROLE_APPROVAL_DECIDE", "display": "审批角色申请", "phases": ["BEGIN", "SUCCESS", "FAIL"], "supportsFlow": true }
-          ]
-        },
-        {
-          "key": "admin.role-permissions",
-          "title": "角色权限",
-          "actions": [
-            { "code": "ADMIN_ROLE_PERMISSION_VIEW", "display": "查看角色权限", "phases": ["SUCCESS"], "supportsFlow": false },
-            { "code": "ADMIN_ROLE_PERMISSION_SYNC", "display": "同步角色权限", "phases": ["BEGIN", "SUCCESS", "FAIL"], "supportsFlow": true }
-          ]
-        },
-        {
-          "key": "admin.role-custom",
-          "title": "自定义角色",
-          "actions": [
-            { "code": "ADMIN_ROLE_CUSTOM_MANAGE", "display": "执行自定义角色操作", "phases": ["BEGIN", "SUCCESS", "FAIL"], "supportsFlow": true }
-          ]
-        },
-        {
-          "key": "admin.role-assignments",
-          "title": "角色分配",
-          "actions": [
+            { "code": "ADMIN_ROLE_ASSIGN", "display": "分配角色成员", "phases": ["BEGIN", "SUCCESS", "FAIL"], "supportsFlow": true },
+            { "code": "ADMIN_CUSTOM_ROLE_VIEW", "display": "查看自定义角色", "phases": ["SUCCESS"], "supportsFlow": false },
+            { "code": "ADMIN_CUSTOM_ROLE_REQUEST", "display": "提交自定义角色变更", "phases": ["BEGIN", "SUCCESS", "FAIL"], "supportsFlow": true },
+            { "code": "ADMIN_CUSTOM_ROLE_EXECUTE", "display": "执行自定义角色操作", "phases": ["BEGIN", "SUCCESS", "FAIL"], "supportsFlow": true },
             { "code": "ADMIN_ROLE_ASSIGNMENT_VIEW", "display": "查看角色分配", "phases": ["SUCCESS"], "supportsFlow": false },
             { "code": "ADMIN_ROLE_ASSIGNMENT_CREATE", "display": "提交角色分配", "phases": ["BEGIN", "SUCCESS", "FAIL"], "supportsFlow": true }
           ]
@@ -443,17 +615,6 @@
           ]
         },
         {
-          "key": "admin.groups",
-          "title": "组织与分组管理",
-          "actions": [
-            { "code": "ADMIN_GROUP_VIEW", "display": "查看分组", "phases": ["SUCCESS"], "supportsFlow": false },
-            { "code": "ADMIN_GROUP_CREATE", "display": "创建分组", "phases": ["BEGIN", "SUCCESS", "FAIL"], "supportsFlow": true },
-            { "code": "ADMIN_GROUP_UPDATE", "display": "编辑分组", "phases": ["BEGIN", "SUCCESS", "FAIL"], "supportsFlow": true },
-            { "code": "ADMIN_GROUP_DELETE", "display": "删除分组", "phases": ["BEGIN", "SUCCESS", "FAIL"], "supportsFlow": true },
-            { "code": "ADMIN_GROUP_ASSIGN", "display": "分组成员调整", "phases": ["BEGIN", "SUCCESS", "FAIL"], "supportsFlow": true }
-          ]
-        },
-        {
           "key": "admin.orgs",
           "title": "组织管理",
           "actions": [
@@ -464,36 +625,7 @@
             { "code": "ADMIN_ORG_DELETE", "display": "删除组织节点", "phases": ["BEGIN", "SUCCESS", "FAIL"], "supportsFlow": true }
           ]
         },
-        {
-          "key": "admin.datasets",
-          "title": "资产视图",
-          "actions": [
-            { "code": "ADMIN_DATASET_VIEW", "display": "查看资产列表", "phases": ["SUCCESS"], "supportsFlow": false }
-          ]
-        },
-        {
-          "key": "admin.change-requests",
-          "title": "变更请求",
-          "actions": [
-            { "code": "ADMIN_CHANGE_REQUEST_VIEW", "display": "查看变更请求", "phases": ["SUCCESS"], "supportsFlow": false },
-            { "code": "ADMIN_CHANGE_REQUEST_MANAGE", "display": "处理变更请求", "phases": ["BEGIN", "SUCCESS", "FAIL"], "supportsFlow": true }
-          ]
-        },
-        {
-          "key": "admin.approvals",
-          "title": "任务审批",
-          "actions": [
-            { "code": "ADMIN_APPROVAL_VIEW", "display": "查看审批任务", "phases": ["SUCCESS"], "supportsFlow": false },
-            { "code": "ADMIN_APPROVAL_DECIDE", "display": "审批操作", "phases": ["BEGIN", "SUCCESS", "FAIL"], "supportsFlow": true }
-          ]
-        },
-        {
-          "key": "admin.settings",
-          "title": "系统配置",
-          "actions": [
-            { "code": "ADMIN_SETTING_VIEW", "display": "查看系统配置", "phases": ["SUCCESS"], "supportsFlow": false }
-          ]
-        },
+        
         {
           "key": "admin.audit",
           "title": "审计日志",

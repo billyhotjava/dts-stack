@@ -275,7 +275,8 @@
           "actions": [
             { "code": "EXPLORE_WORKBENCH_QUERY", "display": "执行数据查询", "phases": ["BEGIN", "SUCCESS", "FAIL"], "supportsFlow": true },
             { "code": "EXPLORE_WORKBENCH_SAVE", "display": "保存查询脚本", "phases": ["BEGIN", "SUCCESS", "FAIL"], "supportsFlow": true },
-            { "code": "EXPLORE_WORKBENCH_PREVIEW", "display": "预览查询结果", "phases": ["SUCCESS"], "supportsFlow": false }
+            { "code": "EXPLORE_WORKBENCH_PREVIEW", "display": "预览查询结果", "phases": ["SUCCESS"], "supportsFlow": false },
+            { "code": "EXPLORE_SQL_OPEN", "display": "打开 SQL 工作台", "phases": ["SUCCESS"], "supportsFlow": false }
           ]
         },
         {

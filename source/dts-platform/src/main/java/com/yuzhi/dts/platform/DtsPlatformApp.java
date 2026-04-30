@@ -40,6 +40,7 @@ import tech.jhipster.config.JHipsterConstants;
     HiveExecutionProperties.class,
     CatalogFeatureProperties.class,
     AuditProperties.class,
+    com.yuzhi.dts.platform.config.AuditDictionaryProperties.class,
     DataStandardProperties.class,
     GovernanceProperties.class,
     InfraSecurityProperties.class,

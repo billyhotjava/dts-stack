@@ -1,9 +1,9 @@
 package com.yuzhi.dts.admin.security;
 
-import com.yuzhi.dts.admin.service.auditv2.AuditActionRequest;
-import com.yuzhi.dts.admin.service.auditv2.AuditResultStatus;
-import com.yuzhi.dts.admin.service.auditv2.AuditV2Service;
-import com.yuzhi.dts.admin.service.auditv2.ButtonCodes;
+import com.yuzhi.dts.admin.service.audit.AuditActionRequest;
+import com.yuzhi.dts.admin.service.audit.AuditResultStatus;
+import com.yuzhi.dts.admin.service.audit.AuditV2Service;
+import com.yuzhi.dts.admin.service.audit.ButtonCodes;
 import com.yuzhi.dts.admin.service.user.AdminUserService;
 import com.yuzhi.dts.common.net.IpAddressUtils;
 import jakarta.servlet.http.HttpServletRequest;

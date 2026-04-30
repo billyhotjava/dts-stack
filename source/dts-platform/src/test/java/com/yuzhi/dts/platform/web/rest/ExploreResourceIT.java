@@ -25,7 +25,7 @@ import com.yuzhi.dts.platform.repository.catalog.CatalogDatasetRepository;
 import com.yuzhi.dts.platform.repository.explore.QueryExecutionRepository;
 import com.yuzhi.dts.platform.repository.explore.ResultSetRepository;
 import com.yuzhi.dts.platform.repository.explore.ExploreSavedQueryRepository;
-import com.yuzhi.dts.platform.service.audit.AuditTrailService;
+import com.yuzhi.dts.platform.service.audit.AuditForwarderService;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.List;
@@ -67,7 +67,7 @@ class ExploreResourceIT {
     private ExploreSavedQueryRepository savedQueryRepository;
 
     @MockBean
-    private AuditTrailService auditTrailService;
+    private AuditForwarderService auditForwarderService;
 
     @AfterEach
     void cleanUp() {
@@ -195,7 +195,7 @@ class ExploreResourceIT {
         resultSet.setChunkCount(1);
         ResultSet saved = resultSetRepository.saveAndFlush(resultSet);
 
-        reset(auditTrailService);
+        reset(auditForwarderService);
 
         mockMvc
             .perform(
@@ -208,12 +208,12 @@ class ExploreResourceIT {
             .andExpect(jsonPath("$.status").value(200))
             .andExpect(jsonPath("$.data.name").value("审计结果集"));
 
-        ArgumentCaptor<AuditTrailService.PendingAuditEvent> captor = ArgumentCaptor.forClass(
-            AuditTrailService.PendingAuditEvent.class
+        ArgumentCaptor<AuditForwarderService.PendingAuditEvent> captor = ArgumentCaptor.forClass(
+            AuditForwarderService.PendingAuditEvent.class
         );
-        verify(auditTrailService, atLeastOnce()).record(captor.capture());
+        verify(auditForwarderService, atLeastOnce()).record(captor.capture());
 
-        AuditTrailService.PendingAuditEvent auditEvent = captor
+        AuditForwarderService.PendingAuditEvent auditEvent = captor
             .getAllValues()
             .stream()
             .filter(event -> "explore.saveResult".equals(event.module))

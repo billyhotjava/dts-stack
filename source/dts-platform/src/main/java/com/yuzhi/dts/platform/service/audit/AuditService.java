@@ -75,38 +75,47 @@ public class AuditService {
     );
 
 
-    private final ObjectProvider<AuditTrailService> auditTrailServiceProvider;
+    private final ObjectProvider<AuditForwarderService> auditForwarderServiceProvider;
     private final AuditActionCatalog actionCatalog;
     private final PortalSessionRegistry portalSessionRegistry;
     private final ObjectMapper objectMapper;
     private final Map<String, LegacyActionMapping> legacyActions;
 
     public AuditService(
-        ObjectProvider<AuditTrailService> auditTrailServiceProvider,
+        ObjectProvider<AuditForwarderService> auditForwarderServiceProvider,
         AuditActionCatalog actionCatalog,
         PortalSessionRegistry portalSessionRegistry,
         ObjectMapper objectMapper,
         ResourceLoader resourceLoader,
+        AuditDictionarySignatureGuard signatureGuard,
         @Value("${auditing.legacy-actions.config-location:" + DEFAULT_LEGACY_ACTIONS_LOCATION + "}") String legacyActionsLocation
     ) {
-        this.auditTrailServiceProvider = auditTrailServiceProvider;
+        this.auditForwarderServiceProvider = auditForwarderServiceProvider;
         this.actionCatalog = actionCatalog;
         this.portalSessionRegistry = portalSessionRegistry;
         this.objectMapper = objectMapper;
-        this.legacyActions = loadLegacyActions(resourceLoader, objectMapper, legacyActionsLocation);
+        this.legacyActions = loadLegacyActions(resourceLoader, objectMapper, signatureGuard, legacyActionsLocation);
         log.info("Loaded {} legacy audit action mappings from {}", legacyActions.size(), legacyActionsLocation);
     }
 
     private static Map<String, LegacyActionMapping> loadLegacyActions(
         ResourceLoader resourceLoader,
         ObjectMapper objectMapper,
+        AuditDictionarySignatureGuard signatureGuard,
         String location
     ) {
         Resource resource = resourceLoader.getResource(location);
         if (!resource.exists()) {
             throw new IllegalStateException("legacy-action-mappings config not found: " + location);
         }
+        byte[] content;
         try (InputStream in = resource.getInputStream()) {
+            content = in.readAllBytes();
+        } catch (IOException ex) {
+            throw new IllegalStateException("Failed to load legacy-action-mappings from " + location, ex);
+        }
+        signatureGuard.verify(location, content);
+        try (InputStream in = new java.io.ByteArrayInputStream(content)) {
             LegacyActionsFile file = objectMapper.readValue(in, LegacyActionsFile.class);
             List<LegacyActionEntry> entries = file.entries();
             if (entries == null || entries.isEmpty()) {
@@ -393,7 +402,7 @@ public class AuditService {
             resourceId,
             result
         );
-        AuditTrailService.PendingAuditEvent event = new AuditTrailService.PendingAuditEvent();
+        AuditForwarderService.PendingAuditEvent event = new AuditForwarderService.PendingAuditEvent();
         event.occurredAt = Instant.now();
         event.actor = safeActor;
         event.actorRole = resolvePrimaryAuthority();
@@ -468,11 +477,11 @@ public class AuditService {
             }
         } catch (Exception ignore) {}
         markDomainAuditSafe();
-        AuditTrailService svc = auditTrailServiceProvider.getIfAvailable();
+        AuditForwarderService svc = auditForwarderServiceProvider.getIfAvailable();
         if (svc != null) {
             svc.record(event);
         } else if (log.isDebugEnabled()) {
-            log.debug("AuditTrailService not available; skipping audit record action={} module={} resourceId={}", action, module, resourceId);
+            log.debug("AuditForwarderService not available; skipping audit record action={} module={} resourceId={}", action, module, resourceId);
         }
     }
 

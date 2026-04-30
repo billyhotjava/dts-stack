@@ -35,15 +35,15 @@ public class AdminAuditGateway {
     }
 
     public Object list(Map<String, String> params, String authorization) {
-        return unwrapAdminData(exchange(buildAdminUri("/audit-logs", params), authorization));
+        return unwrapAdminData(exchange(buildAdminUri("/audit-entries", params), authorization));
     }
 
     public Object get(String id, String authorization) {
-        return unwrapAdminData(exchange(buildAdminUri("/audit-logs/" + id, Map.of()), authorization));
+        return unwrapAdminData(exchange(buildAdminUri("/audit-entries/" + id, Map.of()), authorization));
     }
 
     public byte[] export(Map<String, String> params, String authorization) {
-        ResponseEntity<byte[]> response = exchangeBytes(buildAdminUri("/audit-logs/export", params), authorization);
+        ResponseEntity<byte[]> response = exchangeBytes(buildAdminUri("/audit-entries/export", params), authorization);
         if (response == null || !response.getStatusCode().is2xxSuccessful()) {
             throw new ResponseStatusException(org.springframework.http.HttpStatus.BAD_GATEWAY, "审计日志导出失败");
         }

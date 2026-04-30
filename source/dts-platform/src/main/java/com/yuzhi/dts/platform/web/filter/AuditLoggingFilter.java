@@ -6,8 +6,8 @@ import com.yuzhi.dts.common.security.AuthEndpointPaths;
 import com.yuzhi.dts.common.net.IpAddressUtils;
 import com.yuzhi.dts.platform.security.SecurityUtils;
 import com.yuzhi.dts.platform.service.audit.AuditFlowManager;
-import com.yuzhi.dts.platform.service.audit.AuditTrailService;
-import com.yuzhi.dts.platform.service.audit.AuditTrailService.PendingAuditEvent;
+import com.yuzhi.dts.platform.service.audit.AuditForwarderService;
+import com.yuzhi.dts.platform.service.audit.AuditForwarderService.PendingAuditEvent;
 import com.yuzhi.dts.common.audit.AuditStage;
 import org.springframework.beans.factory.ObjectProvider;
 import jakarta.servlet.FilterChain;
@@ -73,12 +73,12 @@ public class AuditLoggingFilter extends OncePerRequestFilter {
         AUDIT_CONTEXT_CLASS = ctxClass;
     }
 
-    private final ObjectProvider<AuditTrailService> auditServiceProvider;
+    private final ObjectProvider<AuditForwarderService> auditServiceProvider;
     private final AuditFlowManager flowManager;
     private final boolean accessLogEnabled;
 
     public AuditLoggingFilter(
-        ObjectProvider<AuditTrailService> auditServiceProvider,
+        ObjectProvider<AuditForwarderService> auditServiceProvider,
         AuditFlowManager flowManager,
         @Value("${dts.http-access-log:false}") boolean accessLogEnabled
     ) {
@@ -151,7 +151,7 @@ public class AuditLoggingFilter extends OncePerRequestFilter {
                     }
                 }
                 if (fallbackRequested && !alreadyAudited && !suppressed) {
-                    AuditTrailService svc = auditServiceProvider.getIfAvailable();
+                    AuditForwarderService svc = auditServiceProvider.getIfAvailable();
                     if (svc != null) {
                         // 仅记录有人为操作上下文：必须是已认证用户，且排除 anonymous/anonymousUser
                         boolean authenticated = com.yuzhi.dts.platform.security.SecurityUtils.isAuthenticated();
@@ -165,7 +165,7 @@ public class AuditLoggingFilter extends OncePerRequestFilter {
                         }
                     } else if (log.isTraceEnabled()) {
                         log.trace(
-                            "AuditTrailService not available or fallback not requested (fallbackRequested={}, alreadyAudited={}, uri={})",
+                            "AuditForwarderService not available or fallback not requested (fallbackRequested={}, alreadyAudited={}, uri={})",
                             fallbackRequested,
                             alreadyAudited,
                             request.getRequestURI()
@@ -830,7 +830,7 @@ public class AuditLoggingFilter extends OncePerRequestFilter {
     }
 
     private void setAction(
-        AuditTrailService.PendingAuditEvent event,
+        AuditForwarderService.PendingAuditEvent event,
         String action,
         String resourceId,
         boolean disableFallback,
