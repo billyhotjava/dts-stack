@@ -2,6 +2,7 @@ package com.yuzhi.dts.analytics.service;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.yuzhi.dts.analytics.config.DtsAdminProperties;
+import com.yuzhi.dts.analytics.service.audit.AdminAuditHttpHeadersFactory;
 import com.yuzhi.dts.analytics.domain.AnalyticsScreenAuditLog;
 import com.yuzhi.dts.analytics.domain.AnalyticsUser;
 import com.yuzhi.dts.analytics.repository.AnalyticsScreenAuditLogRepository;
@@ -21,7 +22,6 @@ import org.slf4j.LoggerFactory;
 import org.springframework.boot.web.client.RestTemplateBuilder;
 import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpHeaders;
-import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.scheduling.annotation.Scheduled;
@@ -47,6 +47,7 @@ public class ScreenAuditService {
     private final ObjectMapper objectMapper;
     private final RestTemplate restTemplate;
     private final URI ingestEndpoint;
+    private final DtsAdminProperties adminProperties;
     private final ConcurrentLinkedQueue<Map<String, Object>> failedEventQueue = new ConcurrentLinkedQueue<>();
     private final AtomicLong droppedEventCount = new AtomicLong(0);
 
@@ -64,6 +65,7 @@ public class ScreenAuditService {
             .setConnectTimeout(Duration.ofSeconds(3))
             .setReadTimeout(Duration.ofSeconds(5))
             .build();
+        this.adminProperties = adminProperties;
         this.ingestEndpoint = resolveEndpoint(adminProperties);
         if (this.ingestEndpoint == null) {
             LOG.warn("dts-admin base URL is not configured; screen audit forwarding to central audit will be disabled");
@@ -212,8 +214,7 @@ public class ScreenAuditService {
     }
 
     private void postEvent(Map<String, Object> body) {
-        HttpHeaders headers = new HttpHeaders();
-        headers.setContentType(MediaType.APPLICATION_JSON);
+        HttpHeaders headers = AdminAuditHttpHeadersFactory.build(adminProperties);
         try {
             ResponseEntity<Void> response = restTemplate.postForEntity(
                 ingestEndpoint, new HttpEntity<>(body, headers), Void.class);
@@ -261,8 +262,7 @@ public class ScreenAuditService {
             batch.add(event);
         }
 
-        HttpHeaders headers = new HttpHeaders();
-        headers.setContentType(MediaType.APPLICATION_JSON);
+        HttpHeaders headers = AdminAuditHttpHeadersFactory.build(adminProperties);
 
         int succeeded = 0;
         for (Map<String, Object> body : batch) {

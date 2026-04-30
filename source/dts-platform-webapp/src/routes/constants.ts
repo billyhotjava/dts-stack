@@ -39,6 +39,16 @@ const sanitizeRedirectPath = (redirect?: string | null) => {
 	return normalized;
 };
 
+const isLoginRedirectTarget = (redirect: string) => {
+	try {
+		const pathname = new URL(redirect, "http://dts.local").pathname.replace(/\/+$/, "") || "/";
+		return pathname === LOGIN_ROUTE || pathname === "/login";
+	} catch {
+		const pathname = redirect.split(/[?#]/)[0].replace(/\/+$/, "") || "/";
+		return pathname === LOGIN_ROUTE || pathname === "/login";
+	}
+};
+
 export const resolveCurrentAppPath = () => {
 	if (typeof window === "undefined") return null;
 	if (GLOBAL_CONFIG.routerHistory === "hash") {
@@ -51,10 +61,27 @@ export const resolveCurrentAppPath = () => {
 
 export const resolveLoginHref = (redirect?: string | null) => {
 	const safeRedirect = sanitizeRedirectPath(redirect);
-	if (!safeRedirect) {
+	if (!safeRedirect || isLoginRedirectTarget(safeRedirect)) {
 		return resolveAppHref(LOGIN_ROUTE);
 	}
 	return resolveAppHref(`${LOGIN_ROUTE}?redirect=${encodeURIComponent(safeRedirect)}`);
+};
+
+export const resolvePostLoginRedirect = (
+	redirect?: string | null,
+	fallback = GLOBAL_CONFIG.defaultRoute || "/workbench",
+) => {
+	const safeRedirect = sanitizeRedirectPath(redirect);
+	if (safeRedirect && !isLoginRedirectTarget(safeRedirect)) {
+		return safeRedirect;
+	}
+
+	const safeFallback = sanitizeRedirectPath(fallback);
+	if (safeFallback && !isLoginRedirectTarget(safeFallback)) {
+		return safeFallback;
+	}
+
+	return "/workbench";
 };
 
 export const isLoginRouteActive = () => {

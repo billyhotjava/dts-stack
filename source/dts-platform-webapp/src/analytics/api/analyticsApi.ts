@@ -1,3 +1,4 @@
+import { refreshPortalSessionIfPossible } from "@/api/apiClient";
 import { resolveCurrentAppPath, resolveLoginHref } from "@/routes/constants";
 import userStore from "@/store/userStore";
 import { markPortalSessionLogout } from "@/utils/portalSessionStorage";
@@ -1272,31 +1273,24 @@ function isPublicAnalyticsUrl(url: string): boolean {
 }
 
 function redirectToLoginWithCurrentPath() {
-	const accessToken = userStore.getState().userToken?.accessToken;
 	userStore.getState().actions.clearUserInfoAndToken();
-	markPortalSessionLogout(Date.now(), accessToken);
+	markPortalSessionLogout(Date.now());
 	window.location.replace(resolveLoginHref(resolveCurrentAppPath()));
 }
 
 async function apiFetch(url: string, init: RequestInit, allowRedirect: boolean): Promise<Response> {
-	const accessToken = userStore.getState().userToken?.accessToken;
-	const headers = withPlatformAuthorization(init.headers, accessToken);
+	const headers = withPlatformAuthorization(init.headers);
 	if (!headers.has("accept")) headers.set("accept", "application/json");
 
 	const response = await fetch(url, { ...init, credentials: "include", headers });
 	if (response.status !== 401 || !allowRedirect || isPublicAnalyticsUrl(url)) {
 		return response;
 	}
-	// Only redirect to login when there is genuinely no valid session.
-	// Check whether SessionManager already refreshed the token while this request was in flight.
-	const currentToken = userStore.getState().userToken?.accessToken;
-	if (currentToken && currentToken !== accessToken) {
-		// Token was refreshed by another request; retry with the new token silently.
-		const retryHeaders = withPlatformAuthorization(init.headers, currentToken);
-		if (!retryHeaders.has("accept")) retryHeaders.set("accept", "application/json");
-		return await fetch(url, { ...init, credentials: "include", headers: retryHeaders });
+	const refreshed = await refreshPortalSessionIfPossible().catch(() => null);
+	if (refreshed?.authenticated) {
+		return await fetch(url, { ...init, credentials: "include", headers });
 	}
-	// No valid token — redirect to login.
+	// Browser auth is cookie-only; redirect only after the shared platform refresh path also fails.
 	redirectToLoginWithCurrentPath();
 	return response;
 }

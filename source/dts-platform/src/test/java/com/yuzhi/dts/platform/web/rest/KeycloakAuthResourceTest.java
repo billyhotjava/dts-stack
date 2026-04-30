@@ -11,6 +11,7 @@ import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 import com.yuzhi.dts.platform.security.session.PkiSessionTicketService;
+import com.yuzhi.dts.platform.security.session.PortalSessionCookieService;
 import com.yuzhi.dts.platform.security.session.PortalSessionRegistry;
 import com.yuzhi.dts.platform.security.session.PortalSessionRegistry.PortalSession;
 import com.yuzhi.dts.platform.service.admin.gateway.auth.AdminAuthGateway;
@@ -91,8 +92,8 @@ class KeycloakAuthResourceTest {
             .thenReturn(new PkiSessionTicketService.VerifiedPkiPrincipal("alice", Map.of("username", "alice", "roles", List.of("ROLE_USER"))));
         when(ticketService.clearTicketCookie(any())).thenReturn(ResponseCookie.from("pki_session_ticket", "").path("/").maxAge(0).build());
         when(keycloakAuthService.loginByTokenExchange("alice")).thenThrow(new IllegalStateException("kc unavailable"));
-        when(registry.hasActiveSession("alice")).thenReturn(false);
-        when(registry.createSession(eq("alice"), anyList(), anyList(), eq(null), eq(null), eq("alice"), eq(null)))
+        when(registry.hasActiveSession(eq("alice"), anyString())).thenReturn(false);
+        when(registry.createSession(eq("alice"), anyList(), anyList(), eq(null), eq(null), eq("alice"), anyString(), eq(null)))
             .thenReturn(
                 new PortalSession(
                     "session-1",
@@ -105,6 +106,7 @@ class KeycloakAuthResourceTest {
                     "access-1",
                     "refresh-1",
                     Instant.parse("2026-04-22T12:00:00Z"),
+                    "browser-1",
                     null
                 )
             );
@@ -118,12 +120,16 @@ class KeycloakAuthResourceTest {
 
         assertThat(response.getStatusCode().value()).isEqualTo(200);
         assertThat(response.getHeaders().get(HttpHeaders.SET_COOKIE)).contains("pki_session_ticket=; Path=/; Max-Age=0");
+        assertThat(response.getHeaders().get(HttpHeaders.SET_COOKIE))
+            .anyMatch(cookie -> cookie.startsWith("portal_session=access-1;"));
+        assertThat(response.getHeaders().get(HttpHeaders.SET_COOKIE)).anyMatch(cookie -> cookie.startsWith("browser_id=browser-1."));
         assertThat(response.getBody()).isNotNull();
-        assertThat(response.getBody().getData()).containsEntry("accessToken", "access-1");
+        assertThat(response.getBody().getData()).containsEntry("authenticated", true).doesNotContainKey("accessToken");
         @SuppressWarnings("unchecked")
         Map<String, Object> user = (Map<String, Object>) response.getBody().getData().get("user");
         assertThat(user.get("roles")).isEqualTo(List.of("ROLE_USER"));
-        verify(registry).createSession(eq("alice"), eq(List.of("ROLE_USER")), eq(List.of("portal.view")), eq(null), eq(null), eq("alice"), eq(null));
+        verify(registry)
+            .createSession(eq("alice"), eq(List.of("ROLE_USER")), eq(List.of("portal.view")), eq(null), eq(null), eq("alice"), anyString(), eq(null));
         verifyNoInteractions(gateway);
     }
 
@@ -142,6 +148,7 @@ class KeycloakAuthResourceTest {
             keycloakAuthService,
             gateway,
             ticketService,
+            new PortalSessionCookieService("browser_id", "portal_session", "/", false, "Lax", "test-secret"),
             mock(AuditService.class),
             mock(InceptorDataSourceRegistry.class),
             false,

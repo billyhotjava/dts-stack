@@ -1,14 +1,14 @@
 import { Eye, EyeOff, Loader2 } from "lucide-react";
 import { useState } from "react";
 import { useForm } from "react-hook-form";
-import { useLocation, useNavigate } from "react-router";
+import { useLocation } from "react-router";
 import { toast } from "sonner";
 import { KeycloakLocalizationService } from "@/api/services/keycloakLocalizationService";
 import { formatKoalError, type KoalCertificate, KoalMiddlewareClient } from "@/api/services/koalPkiClient";
 import { createPortalSessionFromPki, getPkiChallenge, type PkiChallenge, pkiLogin } from "@/api/services/pkiService";
 import type { SignInReq } from "@/api/services/userService";
-import { GLOBAL_CONFIG } from "@/global-config";
 import { useBilingualText } from "@/hooks/useBilingualText";
+import { resolveAppHref, resolvePostLoginRedirect } from "@/routes/constants";
 import { useContextActions } from "@/store/contextStore";
 import { useSignIn, useUserActions } from "@/store/userStore";
 import { Button } from "@/ui/button";
@@ -38,12 +38,11 @@ export function LoginForm({ className, ...props }: React.ComponentPropsWithoutRe
 		challenge: PkiChallenge;
 	} | null>(null);
 	const [pkiSubmitting, setPkiSubmitting] = useState(false);
-	const navigate = useNavigate();
 	const location = useLocation();
 
 	const { loginState } = useLoginStateContext();
 	const signIn = useSignIn();
-	const { setUserToken, setUserInfo } = useUserActions();
+	const { setUserToken, setUserInfo, clearUserInfoAndToken } = useUserActions();
 	const bilingual = useBilingualText();
 	const contextActions = useContextActions();
 
@@ -174,6 +173,11 @@ export function LoginForm({ className, ...props }: React.ComponentPropsWithoutRe
 		}
 	})();
 
+	const redirectAfterLogin = (target?: string | null) => {
+		const route = resolvePostLoginRedirect(target);
+		window.location.replace(resolveAppHref(route));
+	};
+
 	const handleFinish = async (values: SignInReq) => {
 		const trimmedUsername = values.username?.trim() ?? "";
 		const normalizedUsername = trimmedUsername.toLowerCase();
@@ -182,6 +186,7 @@ export function LoginForm({ className, ...props }: React.ComponentPropsWithoutRe
 			return;
 		}
 
+		clearUserInfoAndToken();
 		setLoading(true);
 		try {
 			const signInResult = await signIn({ ...values, username: trimmedUsername });
@@ -189,26 +194,28 @@ export function LoginForm({ className, ...props }: React.ComponentPropsWithoutRe
 			try {
 				contextActions.initDefaults();
 			} catch {}
-			// 登录成功后先尝试加载菜单，再进入工作台，避免偶发 404
+			// 登录成功后后台预热菜单，不阻塞首屏跳转。
 			const usedFallback = signInResult.mode === "fallback";
 			if (!usedFallback) {
 				try {
 					const svc = await import("@/api/services/menuService");
-					await svc.default.getMenuTree().catch(() => undefined);
+					void svc.default.getMenuTree().catch(() => undefined);
 				} catch {}
 			}
 			// If login was triggered by an embedded module (e.g. /analytics), honor the redirect hint.
 			// Keep this safe: only allow same-origin absolute paths, and use hard navigation for cross-app paths.
-			if (safeRedirect?.startsWith("/analytics")) {
-				window.location.assign(safeRedirect);
+			const postLoginRedirect = resolvePostLoginRedirect(safeRedirect);
+			if (postLoginRedirect.startsWith("/analytics")) {
+				window.location.assign(postLoginRedirect);
 				return;
 			}
 			// 登录后回到平台默认首页（由全局配置/菜单决定）。
-			// 注意：Router 已配置 basename=publicPath，这里必须传入“路由内路径”，不要再拼 publicPath。
-			navigate(safeRedirect || GLOBAL_CONFIG.defaultRoute || "/dashboard/workbench", { replace: true });
 			toast.success(bilingual("sys.login.loginSuccessTitle"), {
 				closeButton: true,
 			});
+			// Use a hard same-origin navigation after the BFF cookie is issued. This avoids a race where
+			// LoginPage re-renders and probes session state before React Router completes the SPA navigate.
+			redirectAfterLogin(postLoginRedirect);
 		} catch (error) {
 			// 错误已在signIn中处理，这里不需要额外处理
 			console.error("Login failed:", error);
@@ -218,6 +225,7 @@ export function LoginForm({ className, ...props }: React.ComponentPropsWithoutRe
 	};
 
 	const handlePkiLogin = async () => {
+		clearUserInfoAndToken();
 		setLoading(true);
 		try {
 			const challenge = await getPkiChallenge();
@@ -363,17 +371,14 @@ export function LoginForm({ className, ...props }: React.ComponentPropsWithoutRe
 
 			const portal = await createPortalSessionFromPki(username);
 			const portalUser = portal?.user ?? rawUser;
-			const accessToken = String(portal?.accessToken || portal?.token || "").trim();
-			const refreshToken = String(portal?.refreshToken || "").trim();
 			const tokenExpiresAt = resolvePortalTokenExpiresAt({
 				portalExpiresAt: portal?.portalExpiresAt,
 				portalExpiresIn: portal?.portalExpiresIn,
 				expiresIn: portal?.expiresIn,
 			});
-			if (!accessToken) throw new Error("登录响应缺少访问令牌");
 
 			markPortalSessionLogin();
-			setUserToken({ accessToken, refreshToken, tokenExpiresAt });
+			setUserToken({ authenticated: true, tokenExpiresAt });
 			setUserInfo(portalUser);
 
 			try {
@@ -383,19 +388,21 @@ export function LoginForm({ className, ...props }: React.ComponentPropsWithoutRe
 			}
 			try {
 				const svc = await import("@/api/services/menuService");
-				await svc.default.getMenuTree().catch(() => undefined);
+				void svc.default.getMenuTree().catch(() => undefined);
 			} catch {
 				// ignore
 			}
-			try {
-				const translations = await KeycloakLocalizationService.getChineseTranslations();
-				updateLocalTranslations(translations);
-			} catch {
-				// ignore
-			}
+			void KeycloakLocalizationService.getChineseTranslations()
+				.then((translations) => updateLocalTranslations(translations))
+				.catch(() => undefined);
 
-			navigate(GLOBAL_CONFIG.defaultRoute || "/dashboard/workbench", { replace: true });
 			toast.success(bilingual("sys.login.loginSuccessTitle"), { closeButton: true });
+			const postLoginRedirect = resolvePostLoginRedirect(safeRedirect);
+			if (postLoginRedirect.startsWith("/analytics")) {
+				window.location.assign(postLoginRedirect);
+				return;
+			}
+			redirectAfterLogin(postLoginRedirect);
 
 			await client.logout();
 			loggedOut = true;

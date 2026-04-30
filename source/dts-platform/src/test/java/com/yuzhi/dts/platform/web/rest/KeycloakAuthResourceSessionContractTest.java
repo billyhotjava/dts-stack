@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.ArgumentMatchers.anyMap;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.mock;
@@ -12,6 +13,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.yuzhi.dts.platform.security.session.PkiSessionTicketService;
+import com.yuzhi.dts.platform.security.session.PortalSessionCookieService;
 import com.yuzhi.dts.platform.security.session.PortalSessionRegistry;
 import com.yuzhi.dts.platform.security.session.PortalSessionRegistry.AdminTokens;
 import com.yuzhi.dts.platform.security.session.PortalSessionRegistry.PortalSession;
@@ -23,6 +25,7 @@ import java.time.Instant;
 import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.Test;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.ResponseEntity;
 
 class KeycloakAuthResourceSessionContractTest {
@@ -37,6 +40,7 @@ class KeycloakAuthResourceSessionContractTest {
             keycloakAuthService,
             adminAuthGateway,
             mock(PkiSessionTicketService.class),
+            new PortalSessionCookieService("browser_id", "portal_session", "/", false, "Lax", "test-secret"),
             mock(AuditService.class),
             mock(InceptorDataSourceRegistry.class),
             false,
@@ -60,7 +64,7 @@ class KeycloakAuthResourceSessionContractTest {
                     Map.of("username", "alice", "fullName", "Alice", "roles", List.of("ROLE_DEPT_DATA_OWNER"))
                 )
             );
-        when(registry.hasActiveSession("alice")).thenReturn(false);
+        when(registry.hasActiveSession(eq("alice"), anyString())).thenReturn(false);
         when(
             registry.createSession(
                 eq("alice"),
@@ -69,6 +73,7 @@ class KeycloakAuthResourceSessionContractTest {
                 isNull(),
                 isNull(),
                 eq("Alice"),
+                anyString(),
                 any(AdminTokens.class)
             )
         )
@@ -84,6 +89,7 @@ class KeycloakAuthResourceSessionContractTest {
                     "portal-access",
                     "portal-refresh",
                     Instant.parse("2026-04-29T12:00:00Z"),
+                    "browser-1",
                     null
                 )
             );
@@ -93,8 +99,10 @@ class KeycloakAuthResourceSessionContractTest {
         );
 
         assertThat(response.getStatusCode().value()).isEqualTo(200);
+        assertThat(response.getHeaders().get(HttpHeaders.SET_COOKIE)).contains("portal_session=portal-access; Path=/; HttpOnly; SameSite=Lax");
+        assertThat(response.getHeaders().get(HttpHeaders.SET_COOKIE)).anyMatch(cookie -> cookie.startsWith("browser_id=browser-1."));
         assertThat(response.getBody()).isNotNull();
-        assertThat(response.getBody().getData()).containsEntry("accessToken", "portal-access");
+        assertThat(response.getBody().getData()).containsEntry("authenticated", true).doesNotContainKey("accessToken");
         verify(keycloakAuthService).login("alice", "secret");
         verify(adminAuthGateway).profile(eq("alice"), anyMap(), eq("kc-access"));
         verify(adminAuthGateway, never()).login(any(), any());

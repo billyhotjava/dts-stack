@@ -58,13 +58,13 @@ Security & Audit
 | F1 | Connector Registry 连接器目录 | 4 | P0 | DONE |
 | F2 | 数据源中心与凭据治理 | 4 | P0 | DONE |
 | F3 | Schema Discover 探测服务 | 5 | P0 | DONE |
-| F4 | ODS 与 dbt source 自动生成 | 4 | P0 | IN_PROGRESS |
-| F5 | 同步任务向导与批量建任务 | 5 | P0 | IN_PROGRESS |
-| F6 | 接入任务运行中心与可观测 | 5 | P1 | IN_PROGRESS |
-| F7 | 质量预检与增量治理 | 5 | P1 | IN_PROGRESS |
-| F8 | 安全审计、验收与发布材料 | 4 | P0 | IN_PROGRESS |
+| F4 | ODS 与 dbt source 自动生成 | 4 | P0 | DONE |
+| F5 | 同步任务向导与批量建任务 | 5 | P0 | DONE |
+| F6 | 接入任务运行中心与可观测 | 5 | P1 | DONE |
+| F7 | 质量预检与增量治理 | 5 | P1 | DONE |
+| F8 | 安全审计、验收与发布材料 | 6 | P0 | IN_PROGRESS |
 
-**合计 36 个 task。**
+**合计 38 个 task。**
 
 ## 范围边界
 
@@ -142,9 +142,11 @@ Sprint-20 血缘模型 ──────────────────┘
 - [x] 用户可以批量选择多张表创建同步任务，不需要手写 JSON。
 - [x] 任务执行后，Run Center 展示抽取行数、写入行数、失败行数、耗时、错误摘要、日志和重跑入口。
 - [x] 接入任务写入或更新 Sprint-20 的 Addax/job/source/ODS 血缘。
-- [ ] 接入前预检覆盖连接、权限、字段类型、主键唯一性、增量字段可用性和目标表写入权限；当前已覆盖建任务前基础规则、源端查询权限、目标端写入权限、主键唯一性和增量字段可用性。
+- [x] 接入前预检覆盖连接、权限、字段类型、主键唯一性、增量字段可用性、行数波动和目标表写入权限。
 - [x] 增量任务有 watermark 状态、推进规则、失败不推进、补数和重跑说明。
 - [ ] 安全审计覆盖数据源创建、凭据修改、任务创建、任务执行、任务删除、导出和重跑。
+- [ ] 用户侧 API、日志、审计导出和 smoke 输出中不出现明文数据源凭据。
+- [ ] 至少一条数据库源和一条文件源完成端到端冒烟并归档证据。
 
 ## 风险
 
@@ -182,13 +184,22 @@ Sprint-20 血缘模型 ──────────────────┘
 - 2026-04-29：继续推进 F7/F8，新增 `POST /api/infra/data-sources/{id}/ods-precheck`，在数据源页生成同步任务前执行 ODS/任务草稿预检，覆盖 JDBC 连接类型、连接测试状态、源表字段、目标 ODS 映射冲突、增量 watermark 字段和类型转换警告，并记录 `FOUNDATION_ODS_PRECHECK` 审计事件。
 - 2026-04-29：继续推进 F7 深度预检，新增源端只读探测服务，预检会实际验证源表 SELECT 权限，并尝试输出行数、主键空值/重复分组、增量字段空值规则；支持 `precheckQueryTimeoutSeconds` 和 `precheckProbeDisabled` 做现场降级。
 - 2026-04-30：继续推进 F7 目标端写入预检，基于默认数据湖目标端执行 JDBC 连接和 ODS schema 临时建表/删表探测，提前暴露默认目标端缺失、连接失败、schema 不存在或 CREATE 权限不足问题；支持 `precheckTargetWriteProbeDisabled` 做现场降级。
+- 2026-04-30：完成 F7 类型兼容预检，新增 `TYPE_COMPATIBILITY` 和 `TYPE_COMPATIBILITY_SUMMARY` 规则，覆盖数值精度、时间类型、二进制、JSON、boolean 和字符字段向业务类型转换等风险。
+- 2026-04-30：完成 F7 数据量波动预检，新增 `SOURCE_ROW_VOLUME_BASELINE` 规则，源表行数探测后可按全局或按表 `precheckRowCountBaselines` 校验 min/max/expected/maxDeviationRatio；未配置阈值时返回当前行数作为基线候选。
+- 2026-04-30：继续推进 F8 审计闭环，ingestion 服务侧补齐任务手动/异步执行、失败重试/整批重跑的成功/失败审计，并同步 `INGESTION_TASK_*`、`INGESTION_EXECUTION_RETRY` 动作到平台与 common 审计 catalog。
+- 2026-04-30：补齐 F8 验收与发布材料，新增 PostgreSQL 源表样例、CSV 文件样例、ODS 请求样例、Connector Center smoke 脚本和现场 Runbook，覆盖 discover、预检、ODS/dbt source、建任务、执行和 Run Center 观测。
+- 2026-04-30：继续推进 F4/F5 字段级契约，ODS 生成请求支持 `include=false`、`targetName`、`targetDataType`，后端已具备字段选择、重命名和类型覆盖语义，前端独立向导页可直接复用。
+- 2026-04-30：继续推进 F6 Run Center 补数闭环，新增 `POST /api/ingestion/tasks/{id}/backfill`，执行记录持久化补数窗口和 `BACKFILL_RANGE`，Addax 运行时注入时间范围 where，且补数成功不推进主增量 watermark。
+- 2026-04-30：完成 F5 同步策略后端契约，支持全量覆盖、全量追加、时间戳增量和数值主键增量；主键增量会校验多表共同主键并映射到 ingestion 增量任务。
+- 2026-04-30：完成 F6 Run Center 前端补数入口，任务列表对增量任务露出“回填”入口，执行历史页支持窗口回填弹窗、回填列提交、执行记录窗口展示，并明确回填不推进主增量检查点。
+- 2026-04-30：完成 F4/F5 前端收口，Schema Discover 弹窗增加字段包含/排除、目标字段重命名、目标 ODS 类型覆盖表格，并补齐全量追加和主键增量策略控件，预览、预检、ODS apply 和 sync-task-draft 共用同一份 ODS request。
+- 2026-04-30：继续推进 F8 凭据安全收口，用户侧数据源详情不再返回 JDBC/API 明文 secrets，运行时明文凭据切换到仅内部 `service:*` principal + `X-DTS-Service-Token` 可调用的 `runtime-detail`，ingestion 运行链路同步改用内部运行时详情。
+- 2026-04-30：继续推进 F8 工业级验收证据，新增文件源 smoke、凭据脱敏审计脚本、验收记录模板和 PostgreSQL/MySQL/Oracle/SQL Server/DM8 方言验证矩阵。
 
 ## 仍待工业级补齐
 
-- 独立三步式同步任务向导、草稿恢复、字段选择/重命名和类型 override UI。
-- F6 Run Center 还需要把时间范围补数和 watermark 审计提升为列表级入口。
-- F7 precheck 已前置到建任务向导并覆盖源端查询权限、目标端写入权限、主键唯一性和增量字段非空率，后续还需要补齐深度类型兼容和行数波动规则。
-- F8 需要继续补端到端验收脚本、样例数据、任务执行/重跑审计闭环和发布材料。
+- F8 还需要在真实联调环境执行数据库源/文件源端到端冒烟、凭据脱敏审计抽检，并把输出归档到 `it/evidence/<date>-<rc>/`。
+- F3 的多数据库方言矩阵已提供模板，但 PostgreSQL、MySQL、Oracle、SQL Server、DM8 的现场证据仍需补齐。
 
 ## 相关 Sprint
 

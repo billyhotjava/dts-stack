@@ -15,10 +15,10 @@ export default function Page404() {
 
 	// If user is authenticated, auto-redirect to the unified home
 	useEffect(() => {
-		if (token?.accessToken) {
+		if (token?.authenticated || token?.accessToken) {
 			navigate(homePath, { replace: true });
 		}
-	}, [homePath, navigate, token?.accessToken]);
+	}, [homePath, navigate, token?.authenticated, token?.accessToken]);
 	const svg = (
 		<svg viewBox="0 0 480 360" xmlns="http://www.w3.org/2000/svg" width={400} height={400} className="w-full">
 			<title>404</title>

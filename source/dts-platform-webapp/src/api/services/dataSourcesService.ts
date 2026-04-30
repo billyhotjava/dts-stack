@@ -183,6 +183,7 @@ export type SchemaDiscoverRequest = {
 
 export type OdsSourceColumnRequest = {
 	name: string;
+	include?: boolean;
 	targetName?: string;
 	dataType?: string;
 	nativeType?: string;

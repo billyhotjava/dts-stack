@@ -31,6 +31,7 @@ public class OdsPrecheckProbeService {
     private static final int DEFAULT_LOGIN_TIMEOUT_SECONDS = 10;
     private static final int DEFAULT_QUERY_TIMEOUT_SECONDS = 10;
     private static final int MAX_QUERY_TIMEOUT_SECONDS = 60;
+    private static final double DEFAULT_ROW_COUNT_DEVIATION_RATIO = 0.30d;
 
     private final InfraSecretService secretService;
     private final HiveConnectionService hiveConnectionService;
@@ -86,7 +87,7 @@ public class OdsPrecheckProbeService {
                 )
             );
             for (OdsTablePlanDto plan : plans) {
-                probeTable(connection, plan, syncMode, incrementalColumn, queryTimeoutSeconds, rules);
+                probeTable(connection, plan, syncMode, incrementalColumn, queryTimeoutSeconds, props, rules);
             }
         } catch (Exception ex) {
             LOG.debug("ODS source probe failed for {}: {}", source.getName(), ex.getMessage(), ex);
@@ -257,6 +258,7 @@ public class OdsPrecheckProbeService {
         String syncMode,
         String incrementalColumn,
         int timeoutSeconds,
+        Map<String, Object> sourceProps,
         List<OdsPrecheckRuleResult> rules
     ) {
         if (plan == null || !StringUtils.hasText(plan.sourceTable())) {
@@ -299,15 +301,186 @@ public class OdsPrecheckProbeService {
                     true,
                     sourceName,
                     "源表当前行数：" + totalRows,
-                    "后续可基于运行历史形成行数波动基线"
+                    "继续校验数据量基线和波动阈值"
                 )
             );
+            probeRowVolumeBaseline(plan, sourceName, totalRows, sourceProps, rules);
         }
 
         probePrimaryKey(connection, plan, tableName, sourceName, timeoutSeconds, rules);
         if ("incremental".equalsIgnoreCase(syncMode) && StringUtils.hasText(incrementalColumn)) {
             probeIncrementalColumn(connection, plan, tableName, sourceName, incrementalColumn, totalRows, timeoutSeconds, rules);
         }
+    }
+
+    private void probeRowVolumeBaseline(
+        OdsTablePlanDto plan,
+        String sourceName,
+        Long totalRows,
+        Map<String, Object> sourceProps,
+        List<OdsPrecheckRuleResult> rules
+    ) {
+        RowCountBaseline baseline = resolveRowCountBaseline(plan, sourceName, sourceProps);
+        if (baseline == null || !baseline.configured()) {
+            rules.add(
+                rule(
+                    "SOURCE_ROW_VOLUME_BASELINE",
+                    "INFO",
+                    true,
+                    sourceName,
+                    "源表当前行数已记录为基线候选：" + totalRows,
+                    "可在数据源 props.precheckRowCountBaselines 中按表配置 min/max/expected/maxDeviationRatio 启用数据量波动告警"
+                )
+            );
+            return;
+        }
+
+        RowCountEvaluation evaluation = evaluateRowCountBaseline(totalRows, baseline, sourceProps);
+        rules.add(
+            rule(
+                "SOURCE_ROW_VOLUME_BASELINE",
+                "WARN",
+                evaluation.passed(),
+                sourceName,
+                evaluation.message(),
+                "请确认源端业务是否存在异常批量变更；如属正常波动，请调整 props.precheckRowCountBaselines 的阈值"
+            )
+        );
+    }
+
+    private RowCountEvaluation evaluateRowCountBaseline(
+        Long totalRows,
+        RowCountBaseline baseline,
+        Map<String, Object> sourceProps
+    ) {
+        long rows = totalRows == null ? 0L : totalRows;
+        Long lower = baseline.minRows();
+        Long upper = baseline.maxRows();
+        if (baseline.expectedRows() != null) {
+            double ratio = baseline.maxDeviationRatio() == null
+                ? rowCountDefaultDeviationRatio(sourceProps)
+                : sanitizeRatio(baseline.maxDeviationRatio(), DEFAULT_ROW_COUNT_DEVIATION_RATIO);
+            long expected = Math.max(0L, baseline.expectedRows());
+            long ratioLower = Math.max(0L, (long) Math.floor(expected * (1.0d - ratio)));
+            long ratioUpper = Math.max(ratioLower, (long) Math.ceil(expected * (1.0d + ratio)));
+            lower = lower == null ? ratioLower : Math.max(lower, ratioLower);
+            upper = upper == null ? ratioUpper : Math.min(upper, ratioUpper);
+        }
+
+        if (lower != null && rows < lower) {
+            return new RowCountEvaluation(
+                false,
+                "源表行数低于基线下限：当前 " + rows + "，下限 " + lower + "（" + baseline.configSource() + "）"
+            );
+        }
+        if (upper != null && rows > upper) {
+            return new RowCountEvaluation(
+                false,
+                "源表行数高于基线上限：当前 " + rows + "，上限 " + upper + "（" + baseline.configSource() + "）"
+            );
+        }
+        return new RowCountEvaluation(
+            true,
+            "源表行数处于基线范围内：当前 " + rows + baseline.describeBounds(sourceProps) + "（" + baseline.configSource() + "）"
+        );
+    }
+
+    private RowCountBaseline resolveRowCountBaseline(
+        OdsTablePlanDto plan,
+        String sourceName,
+        Map<String, Object> sourceProps
+    ) {
+        if (sourceProps == null || sourceProps.isEmpty()) {
+            return RowCountBaseline.empty();
+        }
+        Object baselines = sourceProps.get("precheckRowCountBaselines");
+        if (baselines instanceof Map<?, ?> map) {
+            Object tableValue = lookupBaseline(map, sourceName, plan == null ? null : plan.sourceTable());
+            RowCountBaseline tableBaseline = parseRowCountBaseline(tableValue, "precheckRowCountBaselines." + sourceName);
+            if (tableBaseline.configured()) {
+                return tableBaseline;
+            }
+        }
+        RowCountBaseline globalBaseline = new RowCountBaseline(
+            longProp(sourceProps, "precheckRowCountMin"),
+            longProp(sourceProps, "precheckRowCountMax"),
+            longProp(sourceProps, "precheckExpectedRowCount"),
+            doubleProp(sourceProps, "precheckRowCountMaxDeviationRatio"),
+            "global row-count props"
+        );
+        return globalBaseline.configured() ? globalBaseline : RowCountBaseline.empty();
+    }
+
+    private Object lookupBaseline(Map<?, ?> map, String sourceName, String tableName) {
+        if (map == null || map.isEmpty()) {
+            return null;
+        }
+        Set<String> candidates = new LinkedHashSet<>();
+        addCandidate(candidates, sourceName);
+        addCandidate(candidates, tableName);
+        if (StringUtils.hasText(sourceName) && sourceName.contains(".")) {
+            addCandidate(candidates, sourceName.substring(sourceName.indexOf('.') + 1));
+        }
+        for (Map.Entry<?, ?> entry : map.entrySet()) {
+            if (entry.getKey() == null) {
+                continue;
+            }
+            String key = entry.getKey().toString().trim().toLowerCase(Locale.ROOT);
+            if (candidates.contains(key)) {
+                return entry.getValue();
+            }
+        }
+        return null;
+    }
+
+    private void addCandidate(Set<String> candidates, String value) {
+        if (StringUtils.hasText(value)) {
+            candidates.add(value.trim().toLowerCase(Locale.ROOT));
+        }
+    }
+
+    private RowCountBaseline parseRowCountBaseline(Object value, String configSource) {
+        if (value == null) {
+            return RowCountBaseline.empty();
+        }
+        if (value instanceof Number number) {
+            return new RowCountBaseline(null, null, number.longValue(), null, configSource);
+        }
+        if (value instanceof Map<?, ?> map) {
+            return new RowCountBaseline(
+                longValue(firstMapValue(map, "min", "minimum", "minRows", "lower", "lowerBound")),
+                longValue(firstMapValue(map, "max", "maximum", "maxRows", "upper", "upperBound")),
+                longValue(firstMapValue(map, "expected", "baseline", "expectedRows", "baselineRows")),
+                doubleValue(firstMapValue(map, "maxDeviationRatio", "deviationRatio", "maxDeviationPct", "deviationPct")),
+                configSource
+            );
+        }
+        String text = value.toString().trim();
+        if (!StringUtils.hasText(text)) {
+            return RowCountBaseline.empty();
+        }
+        if (text.contains("..") || text.contains(":")) {
+            String delimiter = text.contains("..") ? "\\.\\." : ":";
+            String[] parts = text.split(delimiter, -1);
+            Long min = parts.length > 0 ? longValue(parts[0]) : null;
+            Long max = parts.length > 1 ? longValue(parts[1]) : null;
+            return new RowCountBaseline(min, max, null, null, configSource);
+        }
+        return new RowCountBaseline(null, null, longValue(text), null, configSource);
+    }
+
+    private Object firstMapValue(Map<?, ?> map, String... keys) {
+        if (map == null || keys == null) {
+            return null;
+        }
+        for (String key : keys) {
+            for (Map.Entry<?, ?> entry : map.entrySet()) {
+                if (entry.getKey() != null && key.equalsIgnoreCase(entry.getKey().toString().trim())) {
+                    return entry.getValue();
+                }
+            }
+        }
+        return null;
     }
 
     private void probePrimaryKey(
@@ -680,6 +853,77 @@ public class OdsPrecheckProbeService {
         return value.toString().trim();
     }
 
+    private Long longProp(Map<String, Object> map, String key) {
+        if (map == null || !StringUtils.hasText(key)) {
+            return null;
+        }
+        return longValue(map.get(key));
+    }
+
+    private Double doubleProp(Map<String, Object> map, String key) {
+        if (map == null || !StringUtils.hasText(key)) {
+            return null;
+        }
+        return doubleValue(map.get(key));
+    }
+
+    private Long longValue(Object value) {
+        if (value == null) {
+            return null;
+        }
+        if (value instanceof Number number) {
+            return number.longValue();
+        }
+        String text = value.toString().trim();
+        if (!StringUtils.hasText(text)) {
+            return null;
+        }
+        try {
+            return Long.parseLong(text);
+        } catch (NumberFormatException ex) {
+            try {
+                return (long) Double.parseDouble(text);
+            } catch (NumberFormatException ignored) {
+                return null;
+            }
+        }
+    }
+
+    private Double doubleValue(Object value) {
+        if (value == null) {
+            return null;
+        }
+        if (value instanceof Number number) {
+            return number.doubleValue();
+        }
+        String text = value.toString().trim();
+        if (!StringUtils.hasText(text)) {
+            return null;
+        }
+        try {
+            return Double.parseDouble(text);
+        } catch (NumberFormatException ignored) {
+            return null;
+        }
+    }
+
+    private double rowCountDefaultDeviationRatio(Map<String, Object> sourceProps) {
+        return sanitizeRatio(
+            doubleProp(sourceProps, "precheckRowCountDefaultDeviationRatio"),
+            DEFAULT_ROW_COUNT_DEVIATION_RATIO
+        );
+    }
+
+    private double sanitizeRatio(Double ratio, double fallback) {
+        if (ratio == null || ratio.isNaN() || ratio.isInfinite() || ratio < 0d) {
+            return fallback;
+        }
+        if (ratio > 1d) {
+            return ratio / 100d;
+        }
+        return ratio;
+    }
+
     private boolean boolProp(Map<String, Object> map, String key, boolean fallback) {
         String value = stringProp(map, key);
         if (!StringUtils.hasText(value)) {
@@ -703,6 +947,52 @@ public class OdsPrecheckProbeService {
     private int clamp(int value, int min, int max) {
         return Math.max(min, Math.min(max, value));
     }
+
+    private record RowCountBaseline(
+        Long minRows,
+        Long maxRows,
+        Long expectedRows,
+        Double maxDeviationRatio,
+        String configSource
+    ) {
+        static RowCountBaseline empty() {
+            return new RowCountBaseline(null, null, null, null, null);
+        }
+
+        boolean configured() {
+            return minRows != null || maxRows != null || expectedRows != null;
+        }
+
+        String describeBounds(Map<String, Object> sourceProps) {
+            List<String> bounds = new ArrayList<>();
+            if (minRows != null) {
+                bounds.add("下限 " + minRows);
+            }
+            if (maxRows != null) {
+                bounds.add("上限 " + maxRows);
+            }
+            if (expectedRows != null) {
+                double ratio = maxDeviationRatio == null
+                    ? DEFAULT_ROW_COUNT_DEVIATION_RATIO
+                    : maxDeviationRatio > 1d ? maxDeviationRatio / 100d : maxDeviationRatio;
+                if (sourceProps != null && maxDeviationRatio == null) {
+                    Object override = sourceProps.get("precheckRowCountDefaultDeviationRatio");
+                    if (override instanceof Number number) {
+                        ratio = number.doubleValue() > 1d ? number.doubleValue() / 100d : number.doubleValue();
+                    } else if (override != null) {
+                        try {
+                            double parsed = Double.parseDouble(override.toString().trim());
+                            ratio = parsed > 1d ? parsed / 100d : parsed;
+                        } catch (NumberFormatException ignored) {}
+                    }
+                }
+                bounds.add("期望 " + expectedRows + "±" + Math.round(ratio * 100d) + "%");
+            }
+            return bounds.isEmpty() ? "" : "（" + String.join("，", bounds) + "）";
+        }
+    }
+
+    private record RowCountEvaluation(boolean passed, String message) {}
 
     private String firstNonBlank(String... values) {
         if (values == null) {

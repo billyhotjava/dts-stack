@@ -69,7 +69,7 @@ class PortalSessionRegistryTest {
     }
 
     @Test
-    void sameBrowserCreateSessionReusesExistingSessionWithoutConflict() {
+    void sameBrowserCreateSessionRefreshesExistingSessionWithoutConflict() {
         var repository = newRepository();
         var registry = newRegistry(repository, true);
         var activityService = newActivityService(repository);
@@ -79,14 +79,69 @@ class PortalSessionRegistryTest {
             List.of("portal.view"),
             null,
             null,
-            "Portal User",
+            "Old Portal User",
             "browser-1",
-            null
+            new PortalSessionRegistry.AdminTokens(
+                "kc-access-old",
+                Instant.now().plusSeconds(60),
+                "kc-refresh-old",
+                Instant.now().plusSeconds(600)
+            )
         );
 
         assertThat(registry.hasActiveSession("portaluser", "browser-1")).isFalse();
 
-        var reused = registry.createSession(
+        var refreshed = registry.createSession(
+            "portaluser",
+            List.of("ROLE_OP_ADMIN"),
+            List.of("portal.view", "portal.manage"),
+            "dept-a",
+            "SECRET",
+            "Portal User",
+            "browser-1",
+            new PortalSessionRegistry.AdminTokens(
+                "kc-access-new",
+                Instant.now().plusSeconds(120),
+                "kc-refresh-new",
+                Instant.now().plusSeconds(1200)
+            )
+        );
+
+        assertThat(refreshed.sessionId()).isEqualTo(initial.sessionId());
+        assertThat(refreshed.accessToken()).isEqualTo(initial.accessToken());
+        assertThat(refreshed.refreshToken()).isEqualTo(initial.refreshToken());
+        assertThat(refreshed.displayName()).isEqualTo("Portal User");
+        assertThat(refreshed.roles()).containsExactly("ROLE_OP_ADMIN");
+        assertThat(refreshed.permissions()).containsExactly("portal.view", "portal.manage");
+        assertThat(refreshed.deptCode()).isEqualTo("dept-a");
+        assertThat(refreshed.personnelLevel()).isEqualTo("SECRET");
+        assertThat(refreshed.adminTokens().accessToken()).isEqualTo("kc-access-new");
+        assertThat(refreshed.adminTokens().refreshToken()).isEqualTo("kc-refresh-new");
+        assertThat(activityService.touch(initial.accessToken(), Instant.now().plusSeconds(1))).isEqualTo(ValidationResult.ACTIVE);
+        assertThat(registry.hasActiveSession("PORTALUSER", "browser-2")).isTrue();
+    }
+
+    @Test
+    void sameBrowserCreateSessionClearsStaleAdminTokensWhenNewLoginHasNone() {
+        var repository = newRepository();
+        var registry = newRegistry(repository, true);
+        var initial = registry.createSession(
+            "portaluser",
+            List.of("ROLE_USER"),
+            List.of("portal.view"),
+            null,
+            null,
+            "Portal User",
+            "browser-1",
+            new PortalSessionRegistry.AdminTokens(
+                "kc-access-old",
+                Instant.now().plusSeconds(60),
+                "kc-refresh-old",
+                Instant.now().plusSeconds(600)
+            )
+        );
+
+        var refreshed = registry.createSession(
             "portaluser",
             List.of("ROLE_USER"),
             List.of("portal.view"),
@@ -97,11 +152,8 @@ class PortalSessionRegistryTest {
             null
         );
 
-        assertThat(reused.sessionId()).isEqualTo(initial.sessionId());
-        assertThat(reused.accessToken()).isEqualTo(initial.accessToken());
-        assertThat(reused.refreshToken()).isEqualTo(initial.refreshToken());
-        assertThat(activityService.touch(initial.accessToken(), Instant.now().plusSeconds(1))).isEqualTo(ValidationResult.ACTIVE);
-        assertThat(registry.hasActiveSession("PORTALUSER", "browser-2")).isTrue();
+        assertThat(refreshed.sessionId()).isEqualTo(initial.sessionId());
+        assertThat(refreshed.adminTokens()).isNull();
     }
 
     @Test
@@ -164,10 +216,10 @@ class PortalSessionRegistryTest {
             "browser-1",
             null
         );
-        var reused = registry.createSession(
+        var refreshed = registry.createSession(
             "portaluser",
-            List.of("ROLE_USER"),
-            List.of("portal.view"),
+            List.of("ROLE_OP_ADMIN"),
+            List.of("portal.view", "portal.manage"),
             null,
             null,
             "Portal User",
@@ -175,7 +227,9 @@ class PortalSessionRegistryTest {
             null
         );
 
-        assertThat(reused.sessionId()).isEqualTo(initial.sessionId());
+        assertThat(refreshed.sessionId()).isEqualTo(initial.sessionId());
+        assertThat(refreshed.roles()).containsExactly("ROLE_OP_ADMIN");
+        assertThat(refreshed.permissions()).containsExactly("portal.view", "portal.manage");
         org.assertj.core.api.Assertions
             .assertThatThrownBy(
                 () ->
@@ -249,6 +303,7 @@ class PortalSessionRegistryTest {
                 case "findByAccessToken" -> findByAccessToken((String) args[0]);
                 case "findByRefreshToken" -> findByRefreshToken((String) args[0]);
                 case "findByNormalizedUsernameAndRevokedAtIsNull" -> findActive((String) args[0]);
+                case "findActiveForUpdate" -> findActive((String) args[0]);
                 case "findAllByNormalizedUsernameAndRevokedAtIsNull" -> findAllActive((String) args[0]);
                 case "findAllActiveForUpdate" -> findAllActive((String) args[0]);
                 case "saveAndFlush" -> save((PortalSessionEntity) args[0]);

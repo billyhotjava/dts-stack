@@ -76,6 +76,16 @@ public class IngestionExecution {
     @Column(name = "trigger_mode", length = 32)
     private String triggerMode;
 
+    @Column(name = "backfill_window_start")
+    private Instant backfillWindowStart;
+
+    @Column(name = "backfill_window_end")
+    private Instant backfillWindowEnd;
+
+    @Size(max = 255)
+    @Column(name = "backfill_column", length = 255)
+    private String backfillColumn;
+
     @Column(name = "dropped_tables", columnDefinition = "TEXT")
     private String droppedTables;
 
@@ -257,6 +267,30 @@ public class IngestionExecution {
 
     public void setTriggerMode(String triggerMode) {
         this.triggerMode = triggerMode;
+    }
+
+    public Instant getBackfillWindowStart() {
+        return backfillWindowStart;
+    }
+
+    public void setBackfillWindowStart(Instant backfillWindowStart) {
+        this.backfillWindowStart = backfillWindowStart;
+    }
+
+    public Instant getBackfillWindowEnd() {
+        return backfillWindowEnd;
+    }
+
+    public void setBackfillWindowEnd(Instant backfillWindowEnd) {
+        this.backfillWindowEnd = backfillWindowEnd;
+    }
+
+    public String getBackfillColumn() {
+        return backfillColumn;
+    }
+
+    public void setBackfillColumn(String backfillColumn) {
+        this.backfillColumn = backfillColumn;
     }
 
     public int getRetryCount() {

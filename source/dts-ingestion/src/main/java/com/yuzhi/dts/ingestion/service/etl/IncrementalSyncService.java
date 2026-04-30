@@ -23,6 +23,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.regex.Pattern;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -110,8 +111,89 @@ public class IncrementalSyncService {
         return Map.of("_perTableWhere", perTableWhere);
     }
 
+    public String validateBackfillWindow(IngestionTask task, String column, Instant windowStart, Instant windowEnd) {
+        if (task == null || task.getId() == null) {
+            throw new IllegalArgumentException("任务不存在");
+        }
+        if (!isIncrementalTask(task)) {
+            throw new IllegalStateException("按时间范围补数仅支持增量任务");
+        }
+        if (isFileSourceType(task.getSourceType())) {
+            throw new IllegalStateException("文件源不支持按时间范围补数");
+        }
+        if (windowStart == null || windowEnd == null) {
+            throw new IllegalArgumentException("windowStart and windowEnd are required");
+        }
+        if (!windowStart.isBefore(windowEnd)) {
+            throw new IllegalArgumentException("windowStart must be before windowEnd");
+        }
+        IncrementalConfig config = parseConfig(task);
+        if (!isTimeWindowBackfillType(config.type())) {
+            throw new IllegalStateException("按时间范围补数仅支持时间类型增量列；主键/数值增量请使用整批重跑");
+        }
+        String resolvedColumn = normalize(column);
+        if (!StringUtils.hasText(resolvedColumn)) {
+            resolvedColumn = config.column();
+        }
+        if (!StringUtils.hasText(resolvedColumn)) {
+            throw new IllegalStateException("补数缺少增量列配置");
+        }
+        if (!SAFE_SQL_IDENTIFIER.matcher(resolvedColumn).matches()) {
+            throw new IllegalStateException("补数字段包含非法字符");
+        }
+        return resolvedColumn;
+    }
+
+    public Map<String, Object> buildBackfillReaderRuntimeOverrides(
+        IngestionTask task,
+        IngestionSourceResolver.ResolvedSource resolvedSource,
+        String column,
+        Instant windowStart,
+        Instant windowEnd
+    ) {
+        String resolvedColumn = validateBackfillWindow(task, column, windowStart, windowEnd);
+        if (hasQuerySql(task, resolvedSource)) {
+            throw new IllegalStateException("按时间范围补数暂不支持 querySql，请改为表模式并配置 readerWhere");
+        }
+        IncrementalConfig config = parseConfig(task);
+        List<String> sourceTables = resolveSourceTables(task, resolvedSource);
+        if (sourceTables.isEmpty()) {
+            return Map.of();
+        }
+        String baseWhere = resolveBaseWhere(task, resolvedSource);
+        String lower = resolvedColumn + " >= " + formatLiteral(config.type(), windowStart.toString());
+        String upper = resolvedColumn + " < " + formatLiteral(config.type(), windowEnd.toString());
+        String backfillWhere = "(" + lower + ") AND (" + upper + ")";
+        Map<String, String> perTableWhere = new java.util.LinkedHashMap<>();
+        for (String sourceTable : sourceTables) {
+            String combinedWhere = StringUtils.hasText(baseWhere)
+                ? "(" + baseWhere + ") AND (" + backfillWhere + ")"
+                : backfillWhere;
+            perTableWhere.put(sourceTable, combinedWhere);
+            perTableWhere.put(sourceTable.toLowerCase(Locale.ROOT), combinedWhere);
+            String stripped = stripSchema(sourceTable);
+            if (StringUtils.hasText(stripped)) {
+                perTableWhere.put(stripped, combinedWhere);
+                perTableWhere.put(stripped.toLowerCase(Locale.ROOT), combinedWhere);
+            }
+        }
+        LOG.info(
+            "[backfill] runtime where prepared task={} tables={} column={} window=[{}, {})",
+            task.getId(),
+            sourceTables.size(),
+            resolvedColumn,
+            windowStart,
+            windowEnd
+        );
+        return Map.of("_perTableWhere", perTableWhere);
+    }
+
     public void updateCheckpointOnSuccess(IngestionTask task, IngestionExecution execution) {
         if (!isIncrementalTask(task) || task == null || task.getSourceDataSourceId() == null) {
+            return;
+        }
+        if (execution != null && "BACKFILL_RANGE".equalsIgnoreCase(normalize(execution.getTriggerMode()))) {
+            LOG.info("[incremental] skip checkpoint update for backfill execution task={} execution={}", task.getId(), execution.getId());
             return;
         }
         if (isFileSourceType(task.getSourceType())) {
@@ -526,6 +608,15 @@ public class IncrementalSyncService {
         }
         String lower = normalized.toLowerCase(Locale.ROOT);
         return "excel".equals(lower) || "csv".equals(lower) || "excelreader".equals(lower) || "txtfilereader".equals(lower);
+    }
+
+    private boolean isTimeWindowBackfillType(String type) {
+        String normalized = normalize(type);
+        if (!StringUtils.hasText(normalized)) {
+            return true;
+        }
+        String lower = normalized.toLowerCase(Locale.ROOT);
+        return !Set.of("number", "numeric", "integer", "bigint", "long", "int").contains(lower);
     }
 
     private String normalize(Object value) {

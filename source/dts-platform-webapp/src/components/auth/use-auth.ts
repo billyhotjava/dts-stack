@@ -19,7 +19,7 @@ import { useUserInfo, useUserToken } from "@/store/userStore";
  * checkAll(['admin', 'editor'])
  */
 export const useAuthCheck = (baseOn: "role" | "permission" = "permission") => {
-	const { accessToken } = useUserToken();
+	const token = useUserToken();
 	const { permissions = [], roles = [] } = useUserInfo();
 
 	// depends on baseOn to select resource pool
@@ -28,7 +28,7 @@ export const useAuthCheck = (baseOn: "role" | "permission" = "permission") => {
 	// check if item exists
 	const check = (item: string): boolean => {
 		// if user is not logged in, return false
-		if (!accessToken) {
+		if (!token?.authenticated && !token?.accessToken) {
 			return false;
 		}
 		return resourcePool.some((p) => {

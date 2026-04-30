@@ -1,7 +1,7 @@
 # F4: ODS 与 dbt source 自动生成
 
 **优先级**: P0
-**状态**: IN_PROGRESS
+**状态**: DONE
 
 ## 目标
 
@@ -20,7 +20,7 @@
 
 - [x] 源表 `erp_project` 可预览生成 `ods_erp_project`。
 - [x] ODS 表默认包含 `source_system`、`source_table`、`source_pk`、`extract_time`、`batch_id`、`is_deleted`、`raw_json` 等技术字段。
-- [ ] 字段类型映射可人工覆盖。
+- [x] 字段类型映射可人工覆盖。
 - [x] 自动生成 dbt source，并能被 dbt manifest 血缘识别。
 - [x] Addax Job 和 Airflow DAG 生成不要求用户手写 JSON/Python。
 
@@ -32,7 +32,9 @@
 - 数据源页面的 Schema 探测弹窗新增单表/批量 ODS 预览和“生成 ODS 映射与 dbt source”操作。
 - 数据源页面新增“生成同步任务”，会先 upsert ODS/dbt source/血缘，再创建入湖任务并触发 Addax/Airflow 生成。
 - dbt source 技术字段识别扩展到 `source_system`、`source_table`、`source_pk`、`extract_time`、`batch_id`、`is_deleted`、`raw_json` 等无 `_dts_` 前缀字段。
+- ODS 生成请求支持字段级 `include=false`、`targetName` 和 `targetDataType`，后端已具备字段选择、重命名和目标类型 override 语义。
+- Schema Discover 弹窗新增字段级编辑表格，支持字段包含/排除、目标字段名重命名和目标 ODS 类型覆盖；重新预览后进入 ODS DDL、dbt source、Addax 和 Airflow 草稿链路。
 
 ## 待补
 
-- 字段类型 override 需要前端表格化编辑，而不是仅支持 API payload。
+- 无。

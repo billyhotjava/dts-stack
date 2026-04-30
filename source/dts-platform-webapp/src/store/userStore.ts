@@ -9,11 +9,12 @@ import type { KeycloakTranslations } from "#/keycloak";
 import { KeycloakLocalizationService } from "@/api/services/keycloakLocalizationService";
 import userService, { type SignInReq } from "@/api/services/userService";
 import { GLOBAL_CONFIG } from "@/global-config";
+import { buildDevFallbackToken, isDevFallbackAllowedHost } from "@/utils/devAuthTokens";
 import { clearPortalSessionLoginMarkers, markPortalSessionLogin } from "@/utils/portalSessionStorage";
 import { resolvePortalTokenExpiresAt } from "@/utils/sessionExpiry";
 import { updateLocalTranslations } from "@/utils/translation";
-import { useMenuStore } from "./menuStore";
 import useContextStore from "./contextStore";
+import { useMenuStore } from "./menuStore";
 
 // Normalize possibly mixed arrays (objects or strings) to string[] by picking
 // common identity fields such as `code` or `name` when present.
@@ -103,56 +104,22 @@ export const useUserRoles = () => useUserStore((state) => state.userInfo.roles |
 export const useUserActions = () => useUserStore((state) => state.actions);
 
 export const useSignIn = () => {
-	const { setUserToken, setUserInfo } = useUserActions();
+	const { setUserToken, setUserInfo, clearUserInfoAndToken } = useUserActions();
 
 	const signInMutation = useMutation({
 		mutationFn: userService.signin,
 	});
 
 	const signIn = async (data: SignInReq): Promise<SignInResult> => {
+		clearUserInfoAndToken();
 		try {
 			const res = await signInMutation.mutateAsync(data);
 			const rawUser = (res as any)?.user ?? (res as any)?.userInfo ?? {};
-
-			const pickToken = (value: unknown): string => {
-				if (!value) return "";
-				if (typeof value === "string") return value;
-				if (typeof value === "object") {
-					const obj = value as Record<string, unknown>;
-					for (const key of ["token", "accessToken", "value"]) {
-						const candidate = obj[key];
-						if (typeof candidate === "string" && candidate) {
-							return candidate;
-						}
-					}
-				}
-				return "";
-			};
-
-			const accessToken =
-				pickToken((res as any)?.accessToken) || pickToken((res as any)?.access_token) || pickToken((res as any)?.token);
-			const refreshToken = pickToken((res as any)?.refreshToken) || pickToken((res as any)?.refresh_token);
-			if (!accessToken) {
-				throw new Error("登录响应缺少访问令牌");
+			if ((res as any)?.authenticated === false) {
+				throw new Error("登录失败，请重新登录");
 			}
-			const adminAccessToken = pickToken((res as any)?.adminAccessToken);
-			const adminRefreshToken = pickToken((res as any)?.adminRefreshToken);
-			const normalizeDate = (value: unknown): string | undefined => {
-				if (typeof value === "string" && value.trim()) return value.trim();
-				if (value instanceof Date) return value.toISOString();
-				if (typeof value === "number" && Number.isFinite(value)) {
-					try {
-						return new Date(value).toISOString();
-					} catch {
-						return String(value);
-					}
-				}
-				return undefined;
-			};
-			const adminAccessTokenExpiresAt = normalizeDate((res as any)?.adminAccessTokenExpiresAt);
-			const adminRefreshTokenExpiresAt = normalizeDate((res as any)?.adminRefreshTokenExpiresAt);
-
-			const rawNotice = typeof (res as any)?.sessionNotice === "string" ? ((res as any).sessionNotice as string).trim() : "";
+			const rawNotice =
+				typeof (res as any)?.sessionNotice === "string" ? ((res as any).sessionNotice as string).trim() : "";
 			const takeoverFlag = Boolean((res as any)?.sessionTakeover);
 			const takeoverMessage = rawNotice || (takeoverFlag ? "已切换到当前登录，其他会话已下线" : "");
 
@@ -178,14 +145,12 @@ export const useSignIn = () => {
 			// Sprint-17 hotfix — same precedence as deptCode, but for the human-readable name.
 			const resolveDeptNameFromRaw = (raw: Record<string, unknown>): string | undefined => {
 				const direct =
-					(raw as { deptName?: unknown; dept_name?: unknown }).deptName ??
-					(raw as { dept_name?: unknown }).dept_name;
+					(raw as { deptName?: unknown; dept_name?: unknown }).deptName ?? (raw as { dept_name?: unknown }).dept_name;
 				if (typeof direct === "string" && direct.trim()) return direct.trim();
 				const attrs = raw.attributes;
 				if (attrs && typeof attrs === "object") {
 					const attrMap = attrs as Record<string, unknown>;
-					const candidate =
-						attrMap.dept_name ?? attrMap.deptName ?? attrMap.org_name ?? attrMap.orgName;
+					const candidate = attrMap.dept_name ?? attrMap.deptName ?? attrMap.org_name ?? attrMap.orgName;
 					if (Array.isArray(candidate)) {
 						const first = candidate[0];
 						if (typeof first === "string" && first.trim()) return first.trim();
@@ -203,9 +168,7 @@ export const useSignIn = () => {
 				roles: normalizeToStringArray(rawUser.roles),
 				permissions: normalizeToStringArray(rawUser.permissions),
 				department:
-					typeof rawUser.department === "string" && rawUser.department.trim()
-						? rawUser.department.trim()
-						: undefined,
+					typeof rawUser.department === "string" && rawUser.department.trim() ? rawUser.department.trim() : undefined,
 				deptCode: resolveDeptCodeFromRaw(rawUser as Record<string, unknown>),
 				deptName: resolveDeptNameFromRaw(rawUser as Record<string, unknown>),
 				// 为用户设置默认头像（使用 public 目录下的静态资源路径，兼容生产环境）
@@ -255,13 +218,8 @@ export const useSignIn = () => {
 
 			markPortalSessionLogin();
 			setUserToken({
-				accessToken,
-				refreshToken,
+				authenticated: true,
 				tokenExpiresAt,
-				adminAccessToken,
-				adminRefreshToken,
-				adminAccessTokenExpiresAt,
-				adminRefreshTokenExpiresAt,
 			});
 			setUserInfo(adaptedUser);
 
@@ -272,24 +230,18 @@ export const useSignIn = () => {
 				});
 			}
 
-			// 登录成功后获取并更新Keycloak翻译词条
-			try {
-				const translations: KeycloakTranslations = await KeycloakLocalizationService.getChineseTranslations();
-				updateLocalTranslations(translations);
-			} catch (translationError) {
-				console.warn("Failed to load Keycloak translations:", translationError);
-				// 不阻塞登录流程，即使翻译加载失败也继续
-			}
+			// 登录成功后异步获取并更新 Keycloak 翻译词条，不阻塞跳转。
+			void KeycloakLocalizationService.getChineseTranslations()
+				.then((translations: KeycloakTranslations) => updateLocalTranslations(translations))
+				.catch((translationError) => {
+					console.warn("Failed to load Keycloak translations:", translationError);
+				});
 			return {
 				mode: "backend" as const,
 				user: adaptedUser,
 				token: {
-					accessToken,
-					refreshToken,
-					adminAccessToken,
-					adminRefreshToken,
-					adminAccessTokenExpiresAt,
-					adminRefreshTokenExpiresAt,
+					authenticated: true,
+					tokenExpiresAt,
 				},
 				notice: takeoverMessage || undefined,
 				takeover: takeoverFlag,
@@ -326,13 +278,13 @@ type DevFallbackContext = {
 };
 
 const handleDevFallback = ({ error, payload, setUserToken, setUserInfo }: DevFallbackContext): SignInResult | null => {
-    const enabled = String(import.meta.env.VITE_DEV_LOGIN_FALLBACK || "false").toLowerCase() === "true";
-    if (!enabled) {
-        return null;
-    }
-    if (!(import.meta.env.DEV && isAxiosError(error) && error.response?.status === 401)) {
-        return null;
-    }
+	const enabled = String(import.meta.env.VITE_DEV_LOGIN_FALLBACK || "false").toLowerCase() === "true";
+	if (!enabled) {
+		return null;
+	}
+	if (!(import.meta.env.DEV && isDevFallbackAllowedHost() && isAxiosError(error) && error.response?.status === 401)) {
+		return null;
+	}
 	const username = (payload.username || "").trim();
 	if (!username) {
 		return null;
@@ -370,11 +322,17 @@ const handleDevFallback = ({ error, payload, setUserToken, setUserInfo }: DevFal
 		return null;
 	}
 
-	const accessToken = `dev-access-${normalized}-${Date.now()}`;
-	const refreshToken = `dev-refresh-${normalized}-${Date.now()}`;
-	setUserToken({ accessToken, refreshToken });
+	const accessToken = buildDevFallbackToken("access", normalized);
+	const refreshToken = buildDevFallbackToken("refresh", normalized);
+	setUserToken({ authenticated: true, accessToken, refreshToken });
 	setUserInfo(user);
-	return { mode: "fallback", user, token: { accessToken, refreshToken }, notice: undefined, takeover: false };
+	return {
+		mode: "fallback",
+		user,
+		token: { authenticated: true, accessToken, refreshToken },
+		notice: undefined,
+		takeover: false,
+	};
 };
 
 const buildRoles = (normalizedUsername: string): string[] => {
@@ -408,13 +366,7 @@ const buildPermissions = (normalizedUsername: string): string[] => {
 const resolveUsernameForLogout = (info: Partial<UserInfo> | undefined): string | undefined => {
 	if (!info) return undefined;
 	const bag = info as Record<string, unknown>;
-	const candidates: unknown[] = [
-		info.username,
-		bag["preferredUsername"],
-		bag["preferred_username"],
-		bag["user"],
-		bag["principal"],
-	];
+	const candidates: unknown[] = [info.username, bag.preferredUsername, bag.preferred_username, bag.user, bag.principal];
 	for (const candidate of candidates) {
 		if (typeof candidate === "string") {
 			const trimmed = candidate.trim();
@@ -430,10 +382,9 @@ export const useSignOut = () => {
 	const signOut = async () => {
 		const { userToken, userInfo } = useUserStore.getState();
 		try {
-			// 如果有refreshToken，调用后端登出接口
-			const refreshToken = userToken?.refreshToken;
-			if (refreshToken) {
-				await userService.logout(refreshToken, resolveUsernameForLogout(userInfo));
+			// 后端通过 HttpOnly portal_session cookie 定位并撤销当前会话。
+			if (userToken?.authenticated) {
+				await userService.logout(resolveUsernameForLogout(userInfo));
 			}
 		} catch (error) {
 			console.error("Logout error:", error);

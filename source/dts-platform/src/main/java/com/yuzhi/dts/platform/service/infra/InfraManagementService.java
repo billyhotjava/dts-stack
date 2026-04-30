@@ -440,34 +440,21 @@ public class InfraManagementService {
 
     @Transactional(readOnly = true)
     public com.yuzhi.dts.platform.service.infra.dto.InfraDataSourceDetailDto getDataSourceDetail(UUID id) {
+        return getDataSourceDetail(id, false);
+    }
+
+    @Transactional(readOnly = true)
+    public com.yuzhi.dts.platform.service.infra.dto.InfraDataSourceDetailDto getDataSourceRuntimeDetail(UUID id) {
+        return getDataSourceDetail(id, true);
+    }
+
+    private com.yuzhi.dts.platform.service.infra.dto.InfraDataSourceDetailDto getDataSourceDetail(UUID id, boolean includeSecrets) {
         InfraDataSource entity = dataSourceRepository.findById(id).orElse(null);
         if (entity != null) {
-            Map<String, Object> props = readProps(entity.getProps());
-            boolean apiType = ApiDataSourceSupport.isApiType(entity.getType());
-            // API data sources never expose plaintext secrets via the detail endpoint;
-            // callers see the masked summary derived from sidecar metadata instead.
-            Map<String, Object> secrets = apiType ? Map.of() : secretService.readSecrets(entity);
-            List<com.yuzhi.dts.platform.service.infra.dto.ApiSecretSummary> summaries = apiType
-                ? apiSecretMetadataService.toSummaries(apiSecretMetadataService.readFromProps(props))
-                : List.of();
-            return new com.yuzhi.dts.platform.service.infra.dto.InfraDataSourceDetailDto(
-                entity.getId(),
-                entity.getName(),
-                entity.getType(),
-                resolveConnectorKey(entity, props),
-                entity.getJdbcUrl(),
-                entity.getUsername(),
-                entity.getDescription(),
-                entity.getOwnerDept(),
-                props,
-                secrets,
-                summaries,
-                entity.getStatus(),
-                entity.getLastVerifiedAt()
-            );
+            return toDetailDto(entity, includeSecrets);
         }
         return findAdminDataLakeById(id)
-            .map(this::toDetailDto)
+            .map(lake -> toDetailDto(lake, includeSecrets))
             .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "数据源不存在: " + id));
     }
 
@@ -1436,7 +1423,31 @@ public class InfraManagementService {
         );
     }
 
-    private com.yuzhi.dts.platform.service.infra.dto.InfraDataSourceDetailDto toDetailDto(AdminInfraClient.AdminDataLakeConfig lake) {
+    private com.yuzhi.dts.platform.service.infra.dto.InfraDataSourceDetailDto toDetailDto(InfraDataSource entity, boolean includeSecrets) {
+        Map<String, Object> props = readProps(entity.getProps());
+        boolean apiType = ApiDataSourceSupport.isApiType(entity.getType());
+        Map<String, Object> secrets = includeSecrets ? secretService.readSecrets(entity) : Map.of();
+        List<com.yuzhi.dts.platform.service.infra.dto.ApiSecretSummary> summaries = apiType
+            ? apiSecretMetadataService.toSummaries(apiSecretMetadataService.readFromProps(props))
+            : List.of();
+        return new com.yuzhi.dts.platform.service.infra.dto.InfraDataSourceDetailDto(
+            entity.getId(),
+            entity.getName(),
+            entity.getType(),
+            resolveConnectorKey(entity, props),
+            entity.getJdbcUrl(),
+            entity.getUsername(),
+            entity.getDescription(),
+            entity.getOwnerDept(),
+            props,
+            secrets,
+            summaries,
+            entity.getStatus(),
+            entity.getLastVerifiedAt()
+        );
+    }
+
+    private com.yuzhi.dts.platform.service.infra.dto.InfraDataSourceDetailDto toDetailDto(AdminInfraClient.AdminDataLakeConfig lake, boolean includeSecrets) {
         Map<String, Object> props = new LinkedHashMap<>();
         props.put("source", SOURCE_ADMIN_DATA_LAKE);
         props.put("defaulted", Boolean.TRUE.equals(lake.getDefaulted()));
@@ -1450,7 +1461,7 @@ public class InfraManagementService {
             props.put("driverVersion", lake.getDriverVersion());
         }
         Map<String, Object> secrets = new LinkedHashMap<>();
-        if (StringUtils.hasText(lake.getPassword())) {
+        if (includeSecrets && StringUtils.hasText(lake.getPassword())) {
             secrets.put("password", lake.getPassword());
         }
         return new com.yuzhi.dts.platform.service.infra.dto.InfraDataSourceDetailDto(

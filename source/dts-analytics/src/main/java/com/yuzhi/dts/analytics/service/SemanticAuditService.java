@@ -1,6 +1,7 @@
 package com.yuzhi.dts.analytics.service;
 
 import com.yuzhi.dts.analytics.config.DtsAdminProperties;
+import com.yuzhi.dts.analytics.service.audit.AdminAuditHttpHeadersFactory;
 import com.yuzhi.dts.analytics.domain.AnalyticsUser;
 import com.yuzhi.dts.analytics.web.support.RequestContext;
 import com.yuzhi.dts.analytics.web.support.RequestContextHolder;
@@ -19,7 +20,6 @@ import org.slf4j.LoggerFactory;
 import org.springframework.boot.web.client.RestTemplateBuilder;
 import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpHeaders;
-import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.scheduling.annotation.Scheduled;
@@ -49,6 +49,7 @@ public class SemanticAuditService {
 
     private final RestTemplate restTemplate;
     private final URI ingestEndpoint;
+    private final DtsAdminProperties adminProperties;
     private final ConcurrentLinkedQueue<Map<String, Object>> failedEventQueue = new ConcurrentLinkedQueue<>();
     private final AtomicLong droppedEventCount = new AtomicLong(0);
 
@@ -60,6 +61,7 @@ public class SemanticAuditService {
             .setConnectTimeout(Duration.ofSeconds(3))
             .setReadTimeout(Duration.ofSeconds(5))
             .build();
+        this.adminProperties = adminProperties;
         this.ingestEndpoint = resolveEndpoint(adminProperties);
         if (this.ingestEndpoint == null) {
             LOG.warn("dts-admin base URL is not configured; semantic audit forwarding will be disabled");
@@ -189,8 +191,7 @@ public class SemanticAuditService {
     }
 
     private void postEvent(Map<String, Object> body) {
-        HttpHeaders headers = new HttpHeaders();
-        headers.setContentType(MediaType.APPLICATION_JSON);
+        HttpHeaders headers = AdminAuditHttpHeadersFactory.build(adminProperties);
         try {
             ResponseEntity<Void> response = restTemplate.postForEntity(
                 ingestEndpoint, new HttpEntity<>(body, headers), Void.class);
@@ -235,8 +236,7 @@ public class SemanticAuditService {
             if (event == null) break;
             batch.add(event);
         }
-        HttpHeaders headers = new HttpHeaders();
-        headers.setContentType(MediaType.APPLICATION_JSON);
+        HttpHeaders headers = AdminAuditHttpHeadersFactory.build(adminProperties);
         int succeeded = 0;
         for (Map<String, Object> body : batch) {
             try {

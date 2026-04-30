@@ -46,6 +46,9 @@ public class IngestionExecutionMapper {
         dto.setLogPath(entity.getLogPath());
         dto.setReplaceMode(entity.getReplaceMode());
         dto.setTriggerMode(entity.getTriggerMode());
+        dto.setBackfillWindowStart(entity.getBackfillWindowStart());
+        dto.setBackfillWindowEnd(entity.getBackfillWindowEnd());
+        dto.setBackfillColumn(entity.getBackfillColumn());
         dto.setDroppedTables(entity.getDroppedTables());
         dto.setSourceTables(entity.getSourceTables());
         dto.setTargetTables(entity.getTargetTables());
@@ -75,6 +78,9 @@ public class IngestionExecutionMapper {
         entity.setLogPath(dto.getLogPath());
         entity.setReplaceMode(dto.getReplaceMode());
         entity.setTriggerMode(dto.getTriggerMode());
+        entity.setBackfillWindowStart(dto.getBackfillWindowStart());
+        entity.setBackfillWindowEnd(dto.getBackfillWindowEnd());
+        entity.setBackfillColumn(dto.getBackfillColumn());
         entity.setDroppedTables(dto.getDroppedTables());
         entity.setSourceTables(dto.getSourceTables());
         entity.setTargetTables(dto.getTargetTables());

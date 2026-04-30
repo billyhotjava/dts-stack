@@ -1065,10 +1065,20 @@ public class AuditLogResource {
             return "";
         }
         String str = value.toString();
-        if (str.contains(",") || str.contains("\"")) {
+        // CSV / Excel formula-injection guard. Cells starting with these characters are
+        // interpreted as formulas by Excel and Google Sheets — prefix with a single quote
+        // so the value is rendered as text (the leading quote is stripped on display).
+        if (!str.isEmpty() && isFormulaTriggerChar(str.charAt(0))) {
+            str = "'" + str;
+        }
+        if (str.contains(",") || str.contains("\"") || str.contains("\n") || str.contains("\r")) {
             return '"' + str.replace("\"", "\"\"") + '"';
         }
         return str;
+    }
+
+    private static boolean isFormulaTriggerChar(char first) {
+        return first == '=' || first == '+' || first == '-' || first == '@' || first == '\t' || first == '\r';
     }
 
     private record ModuleView(String key, String title) {}

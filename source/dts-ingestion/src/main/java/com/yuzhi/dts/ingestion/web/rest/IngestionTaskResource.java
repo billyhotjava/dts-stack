@@ -218,6 +218,12 @@ public class IngestionTaskResource {
         String approvalComment
     ) {}
 
+    public record BackfillRequest(
+        Instant windowStart,
+        Instant windowEnd,
+        String column
+    ) {}
+
     public record IngestionTaskTemplateDTO(
         String id,
         String name,
@@ -1545,6 +1551,84 @@ public class IngestionTaskResource {
         return trimmed.length() > 200 ? trimmed.substring(0, 200) : trimmed;
     }
 
+    private void auditRunAction(
+        String action,
+        AuditStage stage,
+        Long taskId,
+        Long executionId,
+        String executionRunId,
+        String mode,
+        boolean async,
+        String operator,
+        String summary,
+        RuntimeException error
+    ) {
+        Map<String, Object> meta = new LinkedHashMap<>();
+        meta.put("summary", summary);
+        meta.put("taskId", taskId);
+        meta.put("async", async);
+        meta.put("operator", operator);
+        if (executionId != null) {
+            meta.put("executionId", executionId);
+        }
+        if (StringUtils.hasText(executionRunId)) {
+            meta.put("executionRunId", executionRunId);
+        }
+        if (StringUtils.hasText(mode)) {
+            meta.put("mode", mode);
+        }
+        String errorMessage = error == null ? null : trimMessage(error.getMessage());
+        if (StringUtils.hasText(errorMessage)) {
+            meta.put("error", errorMessage);
+        }
+        auditService.auditAction(action, stage, taskId == null ? "unknown" : String.valueOf(taskId), meta);
+    }
+
+    private void auditBackfillAction(
+        AuditStage stage,
+        Long taskId,
+        com.yuzhi.dts.ingestion.service.dto.IngestionExecutionDTO execution,
+        BackfillRequest request,
+        String operator,
+        String summary,
+        RuntimeException error
+    ) {
+        Map<String, Object> meta = new LinkedHashMap<>();
+        meta.put("summary", summary);
+        meta.put("taskId", taskId);
+        meta.put("operator", operator);
+        if (execution != null) {
+            meta.put("executionId", execution.getId());
+            if (StringUtils.hasText(execution.getExecutionId())) {
+                meta.put("executionRunId", execution.getExecutionId());
+            }
+            if (StringUtils.hasText(execution.getBackfillColumn())) {
+                meta.put("column", execution.getBackfillColumn());
+            }
+            if (execution.getBackfillWindowStart() != null) {
+                meta.put("windowStart", execution.getBackfillWindowStart().toString());
+            }
+            if (execution.getBackfillWindowEnd() != null) {
+                meta.put("windowEnd", execution.getBackfillWindowEnd().toString());
+            }
+        } else if (request != null) {
+            if (StringUtils.hasText(request.column())) {
+                meta.put("column", request.column());
+            }
+            if (request.windowStart() != null) {
+                meta.put("windowStart", request.windowStart().toString());
+            }
+            if (request.windowEnd() != null) {
+                meta.put("windowEnd", request.windowEnd().toString());
+            }
+        }
+        String errorMessage = error == null ? null : trimMessage(error.getMessage());
+        if (StringUtils.hasText(errorMessage)) {
+            meta.put("error", errorMessage);
+        }
+        auditService.auditAction("INGESTION_BACKFILL_RUN", stage, taskId == null ? "unknown" : String.valueOf(taskId), meta);
+    }
+
     private String resolveConnectorType(boolean isFileSource, String sourceType) {
         if (isFileSource || isFileSourceType(normalize(sourceType))) {
             return "file";
@@ -2159,14 +2243,30 @@ public class IngestionTaskResource {
     public ResponseEntity<com.yuzhi.dts.ingestion.service.dto.IngestionExecutionDTO> executeTask(
         @PathVariable Long id
     ) {
+        String operator = SecurityUtils.getCurrentUserLogin().orElse("system");
         try {
             com.yuzhi.dts.ingestion.service.dto.IngestionExecutionDTO execution = ingestionTaskService.execute(id);
+            auditRunAction(
+                "INGESTION_TASK_EXECUTE",
+                AuditStage.SUCCESS,
+                id,
+                execution.getId(),
+                execution.getExecutionId(),
+                null,
+                false,
+                operator,
+                "手动执行入湖任务",
+                null
+            );
             return ResponseEntity.ok(execution);
         } catch (IllegalArgumentException e) {
+            auditRunAction("INGESTION_TASK_EXECUTE", AuditStage.FAIL, id, null, null, null, false, operator, "手动执行入湖任务失败", e);
             throw new ResponseStatusException(HttpStatus.NOT_FOUND, "任务不存在");
         } catch (IllegalStateException e) {
+            auditRunAction("INGESTION_TASK_EXECUTE", AuditStage.FAIL, id, null, null, null, false, operator, "手动执行入湖任务失败", e);
             throw new ResponseStatusException(HttpStatus.CONFLICT, e.getMessage());
         } catch (TaskRejectedException e) {
+            auditRunAction("INGESTION_TASK_EXECUTE", AuditStage.FAIL, id, null, null, null, false, operator, "手动执行入湖任务失败", e);
             throw new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE, "后台执行队列繁忙，请稍后重试");
         }
     }
@@ -2179,6 +2279,7 @@ public class IngestionTaskResource {
     public ResponseEntity<Map<String, Object>> executeTaskAsync(
         @PathVariable Long id
     ) {
+        String operator = SecurityUtils.getCurrentUserLogin().orElse("system");
         try {
             com.yuzhi.dts.ingestion.service.dto.IngestionTaskDTO task = ingestionTaskService.validateAsyncExecutionRequest(id);
             ingestionTaskService.executeAsync(id);
@@ -2189,12 +2290,73 @@ public class IngestionTaskResource {
             payload.put("async", true);
             payload.put("pollIntervalMs", resolveExecutionPollIntervalMs());
             payload.put("message", "任务已提交，正在后台触发执行");
+            auditRunAction(
+                "INGESTION_TASK_EXECUTE",
+                AuditStage.SUCCESS,
+                id,
+                null,
+                null,
+                null,
+                true,
+                operator,
+                "异步提交入湖任务执行",
+                null
+            );
             return ResponseEntity.accepted().body(payload);
         } catch (IllegalArgumentException e) {
+            auditRunAction("INGESTION_TASK_EXECUTE", AuditStage.FAIL, id, null, null, null, true, operator, "异步提交入湖任务执行失败", e);
             throw new ResponseStatusException(HttpStatus.NOT_FOUND, "任务不存在");
         } catch (IllegalStateException e) {
+            auditRunAction("INGESTION_TASK_EXECUTE", AuditStage.FAIL, id, null, null, null, true, operator, "异步提交入湖任务执行失败", e);
             throw new ResponseStatusException(HttpStatus.CONFLICT, e.getMessage());
         } catch (TaskRejectedException e) {
+            auditRunAction("INGESTION_TASK_EXECUTE", AuditStage.FAIL, id, null, null, null, true, operator, "异步提交入湖任务执行失败", e);
+            throw new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE, "后台执行队列繁忙，请稍后重试");
+        }
+    }
+
+    /**
+     * POST /api/ingestion/tasks/{id}/backfill : 按时间范围补数
+     */
+    @PostMapping("/tasks/{id}/backfill")
+    @PreAuthorize(INFRA_MAINTAINER_EXPRESSION)
+    public ResponseEntity<Map<String, Object>> backfillTask(
+        @PathVariable Long id,
+        @RequestBody BackfillRequest request
+    ) {
+        String operator = SecurityUtils.getCurrentUserLogin().orElse("system");
+        try {
+            if (request == null) {
+                throw new IllegalArgumentException("windowStart and windowEnd are required");
+            }
+            com.yuzhi.dts.ingestion.service.dto.IngestionExecutionDTO execution = ingestionTaskService.backfill(
+                id,
+                request.windowStart(),
+                request.windowEnd(),
+                request.column()
+            );
+            Map<String, Object> payload = new LinkedHashMap<>();
+            payload.put("taskId", id);
+            payload.put("executionId", execution.getId());
+            payload.put("executionRunId", execution.getExecutionId());
+            payload.put("status", "submitted");
+            payload.put("async", true);
+            payload.put("triggerMode", execution.getTriggerMode());
+            payload.put("backfillColumn", execution.getBackfillColumn());
+            payload.put("windowStart", execution.getBackfillWindowStart());
+            payload.put("windowEnd", execution.getBackfillWindowEnd());
+            payload.put("pollIntervalMs", resolveExecutionPollIntervalMs());
+            payload.put("message", "补数已提交，正在后台执行");
+            auditBackfillAction(AuditStage.SUCCESS, id, execution, request, operator, "提交按时间范围补数", null);
+            return ResponseEntity.accepted().body(payload);
+        } catch (IllegalArgumentException e) {
+            auditBackfillAction(AuditStage.FAIL, id, null, request, operator, "提交按时间范围补数失败", e);
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, e.getMessage());
+        } catch (IllegalStateException e) {
+            auditBackfillAction(AuditStage.FAIL, id, null, request, operator, "提交按时间范围补数失败", e);
+            throw new ResponseStatusException(HttpStatus.CONFLICT, e.getMessage());
+        } catch (TaskRejectedException e) {
+            auditBackfillAction(AuditStage.FAIL, id, null, request, operator, "提交按时间范围补数失败", e);
             throw new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE, "后台执行队列繁忙，请稍后重试");
         }
     }
@@ -2209,11 +2371,27 @@ public class IngestionTaskResource {
         @PathVariable Long executionId,
         @RequestParam(value = "mode", required = false, defaultValue = "FAILED_ONLY") String mode
     ) {
+        String operator = SecurityUtils.getCurrentUserLogin().orElse("system");
         try {
-            return ResponseEntity.ok(ingestionTaskService.retryExecution(id, executionId, mode));
+            com.yuzhi.dts.ingestion.service.dto.IngestionExecutionDTO retry = ingestionTaskService.retryExecution(id, executionId, mode);
+            auditRunAction(
+                "INGESTION_EXECUTION_RETRY",
+                AuditStage.SUCCESS,
+                id,
+                executionId,
+                retry.getExecutionId(),
+                mode,
+                false,
+                operator,
+                "重试入湖执行",
+                null
+            );
+            return ResponseEntity.ok(retry);
         } catch (IllegalArgumentException e) {
+            auditRunAction("INGESTION_EXECUTION_RETRY", AuditStage.FAIL, id, executionId, null, mode, false, operator, "重试入湖执行失败", e);
             throw new ResponseStatusException(HttpStatus.NOT_FOUND, e.getMessage());
         } catch (IllegalStateException e) {
+            auditRunAction("INGESTION_EXECUTION_RETRY", AuditStage.FAIL, id, executionId, null, mode, false, operator, "重试入湖执行失败", e);
             throw new ResponseStatusException(HttpStatus.CONFLICT, e.getMessage());
         }
     }
@@ -2228,6 +2406,7 @@ public class IngestionTaskResource {
         @PathVariable Long executionId,
         @RequestParam(value = "mode", required = false, defaultValue = "FAILED_ONLY") String mode
     ) {
+        String operator = SecurityUtils.getCurrentUserLogin().orElse("system");
         try {
             ingestionTaskService.validateAsyncRetryRequest(id, executionId, mode);
             ingestionTaskService.retryExecutionAsync(id, executionId, mode);
@@ -2238,12 +2417,27 @@ public class IngestionTaskResource {
             payload.put("async", true);
             payload.put("pollIntervalMs", resolveExecutionPollIntervalMs());
             payload.put("message", "重试已提交，正在后台执行");
+            auditRunAction(
+                "INGESTION_EXECUTION_RETRY",
+                AuditStage.SUCCESS,
+                id,
+                executionId,
+                null,
+                mode,
+                true,
+                operator,
+                "异步提交入湖执行重试",
+                null
+            );
             return ResponseEntity.accepted().body(payload);
         } catch (IllegalArgumentException e) {
+            auditRunAction("INGESTION_EXECUTION_RETRY", AuditStage.FAIL, id, executionId, null, mode, true, operator, "异步提交入湖执行重试失败", e);
             throw new ResponseStatusException(HttpStatus.NOT_FOUND, e.getMessage());
         } catch (IllegalStateException e) {
+            auditRunAction("INGESTION_EXECUTION_RETRY", AuditStage.FAIL, id, executionId, null, mode, true, operator, "异步提交入湖执行重试失败", e);
             throw new ResponseStatusException(HttpStatus.CONFLICT, e.getMessage());
         } catch (TaskRejectedException e) {
+            auditRunAction("INGESTION_EXECUTION_RETRY", AuditStage.FAIL, id, executionId, null, mode, true, operator, "异步提交入湖执行重试失败", e);
             throw new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE, "后台执行队列繁忙，请稍后重试");
         }
     }

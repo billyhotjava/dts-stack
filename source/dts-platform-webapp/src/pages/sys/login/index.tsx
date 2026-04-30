@@ -2,23 +2,25 @@ import { Star } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { Navigate, useLocation } from "react-router";
 import { isWithinLoginProbeGrace } from "@/api/apiClient";
-import { getPortalSessionStatus } from "@/api/platformApi";
+import { getPortalSessionStatus, type PortalSessionStatus } from "@/api/platformApi";
 import TechDataBackground from "@/assets/images/background/tech-data-platform.svg";
 import TechDataBackgroundLight from "@/assets/images/background/tech-data-platform-light.svg";
 import LocalePicker from "@/components/locale-picker";
-import { GLOBAL_CONFIG } from "@/global-config";
 import { useBilingualText } from "@/hooks/useBilingualText";
 import SettingButton from "@/layouts/components/setting-button";
+import { resolvePostLoginRedirect } from "@/routes/constants";
 import { useUserActions, useUserToken } from "@/store/userStore";
-import { wasPortalLogoutBroadcastRecently } from "@/utils/portalSessionStorage";
+import { isDevFallbackAccessToken } from "@/utils/devAuthTokens";
+import { markPortalSessionLogin, wasPortalLogoutBroadcastRecently } from "@/utils/portalSessionStorage";
+import { resolvePortalTokenExpiresAt } from "@/utils/sessionExpiry";
 import LoginForm from "./login-form";
 import { LoginProvider } from "./providers/login-provider";
 import RegisterForm from "./register-form";
 import ResetForm from "./reset-form";
 
 function isTokenExpired(token?: string): boolean {
-	if (!token) return true;
-	if (token.startsWith("dev-access-")) return false;
+	if (!token) return false;
+	if (isDevFallbackAccessToken(token)) return false;
 	try {
 		const parts = token.split(".");
 		if (parts.length >= 2) {
@@ -34,17 +36,40 @@ function isTokenExpired(token?: string): boolean {
 	return false;
 }
 
+function buildRecoveredUser(status: PortalSessionStatus) {
+	const username = String(status.username || "").trim();
+	const displayName = String(status.displayName || username || "portal-user").trim();
+	const roles = Array.isArray(status.roles) ? status.roles : [];
+	const permissions = Array.isArray(status.permissions) ? status.permissions : ["portal.view"];
+	return {
+		id: username || displayName,
+		email: "",
+		username: username || displayName,
+		firstName: displayName,
+		lastName: "",
+		fullName: displayName,
+		enabled: true,
+		roles,
+		permissions,
+		deptCode: status.deptCode,
+		attributes: {
+			...(status.deptCode ? { dept_code: [status.deptCode] } : {}),
+			...(status.personnelLevel ? { personnel_level: [status.personnelLevel] } : {}),
+		},
+	};
+}
+
 function LoginPage() {
 	const token = useUserToken();
-	const { clearUserInfoAndToken } = useUserActions();
+	const { clearUserInfoAndToken, setUserInfo, setUserToken } = useUserActions();
 	const bilingual = useBilingualText();
 	const location = useLocation();
 	const [sessionChecked, setSessionChecked] = useState(false);
 	const [sessionAuthenticated, setSessionAuthenticated] = useState(false);
 
 	const hasLocallyValidToken = useMemo(
-		() => Boolean(token.accessToken && !isTokenExpired(token.accessToken)),
-		[token.accessToken],
+		() => Boolean((token.authenticated || token.accessToken) && !isTokenExpired(token.accessToken)),
+		[token.authenticated, token.accessToken],
 	);
 
 	const safeRedirect = (() => {
@@ -66,15 +91,41 @@ function LoginPage() {
 		let alive = true;
 
 		const verifySession = async () => {
+			const checkedAccessToken = token.accessToken;
 			if (!hasLocallyValidToken) {
+				try {
+					const status = await getPortalSessionStatus();
+					if (!alive) return;
+					if (status?.authenticated) {
+						const tokenExpiresAt = resolvePortalTokenExpiresAt({
+							portalExpiresAt: status.expiresAt,
+							portalExpiresIn: status.remainingSeconds ?? undefined,
+						});
+						markPortalSessionLogin();
+						setUserToken({ authenticated: true, tokenExpiresAt });
+						setUserInfo(buildRecoveredUser(status));
+						setSessionAuthenticated(true);
+						setSessionChecked(true);
+						return;
+					}
+				} catch {
+					// No cookie-backed session to recover; render the login form.
+				}
 				if (alive) {
 					setSessionAuthenticated(false);
 					setSessionChecked(true);
 				}
 				return;
 			}
+			if (isDevFallbackAccessToken(checkedAccessToken)) {
+				if (alive) {
+					setSessionAuthenticated(true);
+					setSessionChecked(true);
+				}
+				return;
+			}
 
-			if (wasPortalLogoutBroadcastRecently(15_000, Date.now(), token.accessToken)) {
+			if (wasPortalLogoutBroadcastRecently(15_000, Date.now(), checkedAccessToken)) {
 				clearUserInfoAndToken();
 				if (alive) {
 					setSessionAuthenticated(false);
@@ -94,7 +145,7 @@ function LoginPage() {
 			}
 
 			try {
-				const status = await getPortalSessionStatus(token.accessToken);
+				const status = await getPortalSessionStatus();
 				if (!alive) return;
 				const authenticated = Boolean(status?.authenticated);
 				setSessionAuthenticated(authenticated);
@@ -114,20 +165,21 @@ function LoginPage() {
 		return () => {
 			alive = false;
 		};
-	}, [clearUserInfoAndToken, hasLocallyValidToken, token.accessToken]);
+	}, [clearUserInfoAndToken, hasLocallyValidToken, setUserInfo, setUserToken, token.accessToken]);
 
 	if (hasLocallyValidToken && !sessionChecked) {
 		return null;
 	}
 
 	if (hasLocallyValidToken && sessionAuthenticated) {
+		const postLoginRedirect = resolvePostLoginRedirect(safeRedirect);
 		// If we're already authenticated and this page was reached via embedded module redirect,
 		// jump directly to that module with a hard navigation.
-		if (safeRedirect?.startsWith("/analytics")) {
-			window.location.replace(safeRedirect);
+		if (postLoginRedirect.startsWith("/analytics")) {
+			window.location.replace(postLoginRedirect);
 			return null;
 		}
-		return <Navigate to={safeRedirect || GLOBAL_CONFIG.defaultRoute} replace />;
+		return <Navigate to={postLoginRedirect} replace />;
 	}
 
 	const brandLabel = bilingual("sys.login.brandName");

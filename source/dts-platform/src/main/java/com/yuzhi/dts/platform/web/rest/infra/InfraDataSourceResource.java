@@ -1,6 +1,7 @@
 package com.yuzhi.dts.platform.web.rest.infra;
 
 import com.yuzhi.dts.common.audit.AuditStage;
+import com.yuzhi.dts.platform.config.DtsAdminProperties;
 import com.yuzhi.dts.platform.security.AuthoritiesConstants;
 import com.yuzhi.dts.platform.security.SecurityUtils;
 import com.yuzhi.dts.platform.service.audit.AuditService;
@@ -46,25 +47,29 @@ public class InfraDataSourceResource {
 
     private static final String INFRA_MAINTAINER_EXPRESSION =
         "hasAnyAuthority(T(com.yuzhi.dts.platform.security.AuthoritiesConstants).INFRA_MAINTAINERS)";
+    private static final String SERVICE_TOKEN_HEADER = "X-DTS-Service-Token";
 
     private final InfraManagementService infraManagementService;
     private final AuditService auditService;
     private final JdbcConnectionTestService jdbcConnectionTestService;
     private final JdbcCatalogSyncService jdbcCatalogSyncService;
     private final OdsGenerationService odsGenerationService;
+    private final DtsAdminProperties dtsAdminProperties;
 
     public InfraDataSourceResource(
         InfraManagementService infraManagementService,
         AuditService auditService,
         JdbcConnectionTestService jdbcConnectionTestService,
         JdbcCatalogSyncService jdbcCatalogSyncService,
-        OdsGenerationService odsGenerationService
+        OdsGenerationService odsGenerationService,
+        DtsAdminProperties dtsAdminProperties
     ) {
         this.infraManagementService = infraManagementService;
         this.auditService = auditService;
         this.jdbcConnectionTestService = jdbcConnectionTestService;
         this.jdbcCatalogSyncService = jdbcCatalogSyncService;
         this.odsGenerationService = odsGenerationService;
+        this.dtsAdminProperties = dtsAdminProperties;
     }
 
     @GetMapping
@@ -121,9 +126,37 @@ public class InfraDataSourceResource {
             "FOUNDATION_DATASOURCE_REGISTER",
             AuditStage.SUCCESS,
             id.toString(),
-            Map.of("summary", "查看数据源详情(含密文)", "id", id.toString())
+            Map.of("summary", "查看数据源详情(脱敏)", "id", id.toString(), "secretsReturned", false)
         );
         return ApiResponses.ok(detail);
+    }
+
+    @GetMapping("/{id}/runtime-detail")
+    @PreAuthorize("hasAuthority('" + AuthoritiesConstants.OP_ADMIN + "')")
+    public ApiResponse<InfraDataSourceDetailDto> runtimeDetail(
+        @PathVariable UUID id,
+        @RequestHeader(value = SERVICE_TOKEN_HEADER, required = false) String serviceToken
+    ) {
+        String principal = SecurityUtils.getCurrentUserLogin().orElse("");
+        if (!principal.startsWith("service:")) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "运行时凭据详情仅允许内部服务调用");
+        }
+        if (!serviceTokenMatches(serviceToken)) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "运行时凭据详情需要有效服务令牌");
+        }
+        InfraDataSourceDetailDto detail = infraManagementService.getDataSourceRuntimeDetail(id);
+        auditService.auditAction(
+            "FOUNDATION_DATASOURCE_REGISTER",
+            AuditStage.SUCCESS,
+            id.toString(),
+            Map.of("summary", "内部服务读取数据源运行时详情", "id", id.toString(), "service", principal)
+        );
+        return ApiResponses.ok(detail);
+    }
+
+    private boolean serviceTokenMatches(String supplied) {
+        String expected = dtsAdminProperties != null ? dtsAdminProperties.getServiceToken() : null;
+        return StringUtils.hasText(expected) && StringUtils.hasText(supplied) && expected.trim().equals(supplied.trim());
     }
 
     @PostMapping
@@ -301,7 +334,7 @@ public class InfraDataSourceResource {
         if (props.get("schemas") instanceof java.util.List<?> schemas) {
             request.setSchemas(schemas.stream().map(String::valueOf).toList());
         }
-        Map<String, Object> secrets = infraManagementService.getDataSourceDetail(id).secrets();
+        Map<String, Object> secrets = infraManagementService.getDataSourceRuntimeDetail(id).secrets();
         Object password = secrets.get("password");
         if (password != null) {
             request.setPassword(password.toString());

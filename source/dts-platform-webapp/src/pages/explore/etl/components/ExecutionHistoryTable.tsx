@@ -5,6 +5,7 @@ import {
 	Card,
 	DatePicker,
 	Drawer,
+	Form,
 	Input,
 	Modal,
 	Progress,
@@ -80,6 +81,9 @@ export default function ExecutionHistoryTable({ taskId }: ExecutionHistoryTableP
 	const [auditDetailExecution, setAuditDetailExecution] = useState<IngestionExecutionDTO | null>(null);
 	const [auditFrom, setAuditFrom] = useState<string | undefined>();
 	const [auditTo, setAuditTo] = useState<string | undefined>();
+	const [backfillOpen, setBackfillOpen] = useState(false);
+	const [backfillSubmitting, setBackfillSubmitting] = useState(false);
+	const [backfillForm] = Form.useForm();
 	const executePollTimerRef = useRef<number | null>(null);
 	const executeStartedAtRef = useRef<number>(0);
 
@@ -351,6 +355,79 @@ export default function ExecutionHistoryTable({ taskId }: ExecutionHistoryTableP
 		});
 	};
 
+	const parseSyncConfig = (): Record<string, any> => {
+		const config = (task?.syncConfig ?? {}) as any;
+		if (typeof config === "string") {
+			try {
+				return JSON.parse(config) || {};
+			} catch {
+				return {};
+			}
+		}
+		return config && typeof config === "object" ? config : {};
+	};
+
+	const resolveDefaultBackfillColumn = (): string => {
+		const syncConfig = parseSyncConfig();
+		return (
+			normalizeText(syncConfig.incrementalColumn) ||
+			normalizeText(syncConfig.reader?.incrementalColumn) ||
+			normalizeText(syncConfig.backfillColumn)
+		);
+	};
+
+	const isTimeWindowBackfillSupported = (): boolean => {
+		if (normalizeText(task?.syncMode).toLowerCase() !== "incremental") {
+			return false;
+		}
+		const syncConfig = parseSyncConfig();
+		const type = normalizeText(syncConfig.incrementalType).toLowerCase();
+		return !["number", "numeric", "integer", "bigint", "long", "int"].includes(type);
+	};
+
+	const openBackfillModal = () => {
+		if (!isTimeWindowBackfillSupported()) {
+			message.warning("主键/数值增量暂不支持时间窗口回填，请使用整批重跑");
+			return;
+		}
+		backfillForm.setFieldsValue({ column: resolveDefaultBackfillColumn() || undefined, window: undefined });
+		setBackfillOpen(true);
+	};
+
+	const submitBackfill = async () => {
+		if (!task?.id) return;
+		try {
+			const values = await backfillForm.validateFields();
+			const [windowStart, windowEnd] = values.window || [];
+			const start = windowStart?.toISOString?.();
+			const end = windowEnd?.toISOString?.();
+			if (!start || !end) {
+				message.warning("请选择有效的回填窗口");
+				return;
+			}
+			setBackfillSubmitting(true);
+			const submit = await ingestionTaskAPI.backfillTask(Number(task.id), {
+				windowStart: start,
+				windowEnd: end,
+				column: normalizeText(values.column) || undefined,
+			});
+			message.success("窗口回填已提交");
+			setBackfillOpen(false);
+			startExecuteProgressPolling(Number(task.id), submit?.pollIntervalMs);
+			void loadExecutions();
+		} catch (error: any) {
+			if (error?.errorFields) return;
+			const feedback = resolveAsyncRunSubmitFeedback(error, "backfill");
+			if (feedback.level === "warning") {
+				message.warning(feedback.message);
+				return;
+			}
+			message.error(feedback.message);
+		} finally {
+			setBackfillSubmitting(false);
+		}
+	};
+
 	const loadLog = async (record: IngestionExecutionDTO, opts?: { silent?: boolean }) => {
 		try {
 			if (!opts?.silent) {
@@ -395,6 +472,9 @@ export default function ExecutionHistoryTable({ taskId }: ExecutionHistoryTableP
 		}
 		if (normalized === "FULL_RERUN") {
 			return <Tag color="purple">整批重跑</Tag>;
+		}
+		if (normalized === "BACKFILL_RANGE") {
+			return <Tag color="cyan">窗口回填</Tag>;
 		}
 		return <Tag>手动执行</Tag>;
 	};
@@ -512,6 +592,28 @@ export default function ExecutionHistoryTable({ taskId }: ExecutionHistoryTableP
 			key: "triggerMode",
 			width: 120,
 			render: (value: string) => renderTriggerMode(value),
+		},
+		{
+			title: "回填窗口",
+			key: "backfillWindow",
+			width: 280,
+			render: (_: any, record: IngestionExecutionDTO) => {
+				if (!record.backfillWindowStart && !record.backfillWindowEnd && !record.backfillColumn) {
+					return "-";
+				}
+				return (
+					<Space direction="vertical" size={0}>
+						<Space size={4}>
+							<Tag color="cyan">{record.backfillColumn || "默认增量列"}</Tag>
+							<Typography.Text type="secondary">不推进检查点</Typography.Text>
+						</Space>
+						<Typography.Text type="secondary">
+							{record.backfillWindowStart ? formatTimestamp(record.backfillWindowStart) : "-"} ~{" "}
+							{record.backfillWindowEnd ? formatTimestamp(record.backfillWindowEnd) : "-"}
+						</Typography.Text>
+					</Space>
+				);
+			},
 		},
 		{
 			title: "状态",
@@ -681,6 +783,18 @@ export default function ExecutionHistoryTable({ taskId }: ExecutionHistoryTableP
 							{(task?.lastExecutionStatus || "").toLowerCase() === "preparing" ? "准备中" :
 							 (task?.lastExecutionStatus || "").toLowerCase() === "running" ? "执行中" : "执行任务"}
 						</Button>
+						{isTimeWindowBackfillSupported() ? (
+							<Button
+								icon={<ReloadOutlined />}
+								onClick={openBackfillModal}
+								disabled={
+									task?.status === "deleted" ||
+									["preparing", "running"].includes((task?.lastExecutionStatus || "").toLowerCase())
+								}
+							>
+								窗口回填
+							</Button>
+						) : null}
 						<Button icon={<ReloadOutlined />} onClick={loadExecutions} loading={loading}>
 							刷新
 						</Button>
@@ -831,10 +945,37 @@ export default function ExecutionHistoryTable({ taskId }: ExecutionHistoryTableP
 						]}
 					/>
 					<div className="mt-3 text-xs text-muted-foreground">
-						{`该区域是当前最新检查点快照；单次执行的前后水位请看\u201C执行历史 > 水位推进 > 详情\u201D。`}
+						{`该区域是当前最新检查点快照；单次执行的前后水位请看\u201C执行历史 > 水位推进 > 详情\u201D。窗口回填按指定范围补数，不推进当前检查点。`}
 					</div>
 				</Card>
 			) : null}
+			<Modal
+				title="窗口回填"
+				open={backfillOpen}
+				onCancel={() => setBackfillOpen(false)}
+				onOk={submitBackfill}
+				confirmLoading={backfillSubmitting}
+				okText="提交回填"
+				destroyOnClose
+				width={620}
+			>
+				<Space direction="vertical" size="middle" className="w-full">
+					<Alert
+						showIcon
+						type="info"
+						message="按 [开始时间, 结束时间) 提交一次历史回填"
+						description="回填运行会复用当前任务配置和调度链路，执行成功后不会推进主增量检查点。"
+					/>
+					<Form form={backfillForm} layout="vertical">
+						<Form.Item label="回填窗口" name="window" rules={[{ required: true, message: "请选择回填窗口" }]}>
+							<DatePicker.RangePicker showTime className="w-full" />
+						</Form.Item>
+						<Form.Item label="增量列" name="column">
+							<Input placeholder="默认使用任务配置中的增量列" allowClear />
+						</Form.Item>
+					</Form>
+				</Space>
+			</Modal>
 			<Modal
 				title="执行进度"
 				open={executeProgressOpen}

@@ -14,6 +14,12 @@ public class DtsAdminProperties {
     /** Relative path for public API on dts-admin. */
     private String apiPath = "/api";
 
+    /** Optional bearer token presented when calling dts-admin (audit ingest etc.). */
+    private String serviceToken;
+
+    /** Logical service name announced via the X-DTS-Service header. */
+    private String serviceName = "dts-analytics";
+
     public boolean isEnabled() {
         return enabled;
     }
@@ -36,5 +42,21 @@ public class DtsAdminProperties {
 
     public void setApiPath(String apiPath) {
         this.apiPath = apiPath;
+    }
+
+    public String getServiceToken() {
+        return serviceToken;
+    }
+
+    public void setServiceToken(String serviceToken) {
+        this.serviceToken = serviceToken;
+    }
+
+    public String getServiceName() {
+        return serviceName;
+    }
+
+    public void setServiceName(String serviceName) {
+        this.serviceName = serviceName;
     }
 }

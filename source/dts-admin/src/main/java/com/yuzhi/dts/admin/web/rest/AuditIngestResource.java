@@ -1,6 +1,8 @@
 package com.yuzhi.dts.admin.web.rest;
 
 import com.yuzhi.dts.admin.service.auditv2.AuditActionRequest;
+import com.yuzhi.dts.admin.service.auditv2.AuditIngestAuthenticator;
+import com.yuzhi.dts.admin.service.auditv2.AuditIngestAuthenticator.Decision;
 import com.yuzhi.dts.admin.service.auditv2.AuditOperationKind;
 import com.yuzhi.dts.admin.service.auditv2.AuditResultStatus;
 import com.yuzhi.dts.admin.service.auditv2.AuditV2Service;
@@ -39,13 +41,25 @@ public class AuditIngestResource {
     private static final Logger log = LoggerFactory.getLogger(AuditIngestResource.class);
 
     private final AuditV2Service auditV2Service;
+    private final AuditIngestAuthenticator authenticator;
 
-    public AuditIngestResource(AuditV2Service auditV2Service) {
+    public AuditIngestResource(AuditV2Service auditV2Service, AuditIngestAuthenticator authenticator) {
         this.auditV2Service = Objects.requireNonNull(auditV2Service, "auditV2Service required");
+        this.authenticator = Objects.requireNonNull(authenticator, "auditIngestAuthenticator required");
     }
 
     @PostMapping
     public ResponseEntity<Void> ingest(@RequestBody Map<String, Object> body, HttpServletRequest request) {
+        Decision decision = authenticator.authenticate(request);
+        if (!decision.accepted()) {
+            log.warn(
+                "Rejected audit ingest from service={} reason={} ip={}",
+                decision.serviceName(),
+                decision.reason(),
+                request != null ? request.getRemoteAddr() : null
+            );
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
+        }
         try {
             AuditPayload payload = AuditPayload.from(body, request);
             AuditActionRequest.Builder builder = AuditActionRequest
@@ -536,14 +550,18 @@ public class AuditIngestResource {
 
         private static AuditResultStatus resolveResult(String raw) {
             if (StringUtils.isBlank(raw)) {
+                // Absent result → success is the conventional default the API contract has used since v1.
                 return AuditResultStatus.SUCCESS;
             }
             String normalized = raw.trim().toUpperCase(Locale.ROOT);
             return switch (normalized) {
                 case "SUCCESS", "SUCCEEDED", "OK", "PASS", "通过" -> AuditResultStatus.SUCCESS;
-                case "FAIL", "FAILED", "ERROR", "ERR", "拒绝", "异常" -> AuditResultStatus.FAILED;
+                case "FAIL", "FAILED", "ERROR", "ERR", "DENY", "DENIED", "拒绝", "异常" -> AuditResultStatus.FAILED;
                 case "PENDING", "PROCESSING", "IN_PROGRESS", "处理中" -> AuditResultStatus.PENDING;
-                default -> AuditResultStatus.SUCCESS;
+                default -> {
+                    log.warn("Unrecognised audit result '{}' — recorded as UNKNOWN to avoid silent success", raw);
+                    yield AuditResultStatus.UNKNOWN;
+                }
             };
         }
 

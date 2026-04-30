@@ -4,9 +4,10 @@ import { isWithinLoginProbeGrace, refreshPortalSessionIfPossible } from "@/api/a
 import { getPortalSessionStatus, type PortalSessionStatus } from "@/api/platformApi";
 import { resolveCurrentAppPath, resolveLoginHref } from "@/routes/constants";
 import useUserStore, { useUserActions, useUserInfo, useUserToken } from "@/store/userStore";
+import { isDevFallbackAccessToken } from "@/utils/devAuthTokens";
 import {
-	PORTAL_SESSION_STORAGE_KEYS,
 	markPortalSessionLogout,
+	PORTAL_SESSION_STORAGE_KEYS,
 	readPortalSessionTimestamp,
 	wasPortalLogoutBroadcastRecently,
 } from "@/utils/portalSessionStorage";
@@ -122,13 +123,31 @@ function wasLogoutTriggeredRecently(): boolean {
 	return wasPortalLogoutBroadcastRecently(5000, Date.now(), accessToken);
 }
 
+function normalizeAccessToken(accessToken?: string | null): string {
+	const raw = String(accessToken || "").trim();
+	return raw.startsWith("Bearer ") ? raw.slice(7).trim() : raw;
+}
+
+function isStillCurrentAccessToken(expectedAccessToken?: string | null): boolean {
+	const expected = normalizeAccessToken(expectedAccessToken);
+	if (!expected) {
+		return true;
+	}
+	const current = normalizeAccessToken(useUserStore.getState().userToken?.accessToken);
+	return current === expected;
+}
+
 function finishSession(
 	clearUserInfoAndToken: () => void,
 	logoutInProgressRef: { current: boolean },
 	reason: "CONCURRENT" | "EXPIRED" | "LOGOUT" | "UNKNOWN" = "EXPIRED",
 	broadcast = true,
+	expectedAccessToken?: string | null,
 ) {
 	if (logoutInProgressRef.current) {
+		return;
+	}
+	if (!isStillCurrentAccessToken(expectedAccessToken)) {
 		return;
 	}
 	logoutInProgressRef.current = true;
@@ -156,7 +175,11 @@ export default function SessionManager() {
 	const logoutInProgressRef = useRef(false);
 	const isLeaderRef = useRef(false);
 
-	const isLoggedIn = useMemo(() => Boolean(token?.accessToken), [token?.accessToken]);
+	const isLoggedIn = useMemo(
+		() => Boolean(token?.authenticated || token?.accessToken),
+		[token?.authenticated, token?.accessToken],
+	);
+	const isDevFallbackSession = useMemo(() => isDevFallbackAccessToken(token?.accessToken), [token?.accessToken]);
 	const loginName = user?.username || user?.email || "";
 
 	useEffect(() => {
@@ -187,16 +210,11 @@ export default function SessionManager() {
 			if (e.key === STORAGE_KEYS.TOKEN_SYNC && e.newValue && isLoggedIn) {
 				try {
 					const synced = JSON.parse(e.newValue);
-					if (synced?.accessToken && synced?.refreshToken) {
+					if (synced?.authenticated) {
 						setUserToken({
 							...token,
-							accessToken: synced.accessToken,
-							refreshToken: synced.refreshToken,
+							authenticated: true,
 							tokenExpiresAt: synced.tokenExpiresAt || token?.tokenExpiresAt,
-							adminAccessToken: synced.adminAccessToken || token?.adminAccessToken,
-							adminRefreshToken: synced.adminRefreshToken || token?.adminRefreshToken,
-							adminAccessTokenExpiresAt: synced.adminAccessTokenExpiresAt || token?.adminAccessTokenExpiresAt,
-							adminRefreshTokenExpiresAt: synced.adminRefreshTokenExpiresAt || token?.adminRefreshTokenExpiresAt,
 						});
 					}
 				} catch {}
@@ -281,7 +299,7 @@ export default function SessionManager() {
 	// Probe the current portal session while the page is open so takeover is visible
 	// even if the user is idle and no business API is being called.
 	useEffect(() => {
-		if (!isLoggedIn || !token?.accessToken) return;
+		if (!isLoggedIn || isDevFallbackSession) return;
 		let cancelled = false;
 		let timer: number | undefined;
 		let probing = false;
@@ -308,10 +326,7 @@ export default function SessionManager() {
 			}
 			probing = true;
 			try {
-				// 探活前从 store 实时取 token（token 可能被 apiClient silent-refresh 换过，
-				// 闭包里的 token.accessToken 会成旧值 → 后端查旧 token 必然 authenticated=false）。
-				const currentAccessToken = useUserStore.getState().userToken?.accessToken || token.accessToken;
-				const status = await getPortalSessionStatus(currentAccessToken);
+				const status = await getPortalSessionStatus();
 				if (cancelled || logoutInProgressRef.current) {
 					return;
 				}
@@ -368,7 +383,7 @@ export default function SessionManager() {
 			window.removeEventListener("focus", handleForegroundProbe);
 			document.removeEventListener("visibilitychange", handleForegroundProbe);
 		};
-	}, [isLoggedIn, token?.accessToken, clearUserInfoAndToken]);
+	}, [isLoggedIn, isDevFallbackSession, clearUserInfoAndToken]);
 
 	// Track user activity
 	useEffect(() => {
@@ -396,7 +411,7 @@ export default function SessionManager() {
 
 	// Token refresh loop
 	useEffect(() => {
-		if (!isLoggedIn || !token?.refreshToken) return;
+		if (!isLoggedIn || isDevFallbackSession) return;
 		let cancelled = false;
 		let timer: number | undefined;
 		let consecutiveRefreshFailures = 0;
@@ -409,8 +424,7 @@ export default function SessionManager() {
 		const run = async () => {
 			if (cancelled) return;
 			const currentToken = useUserStore.getState().userToken || token;
-			const currentRefreshToken = currentToken?.refreshToken;
-			if (!currentRefreshToken) {
+			if (!currentToken?.authenticated) {
 				cancelled = true;
 				return;
 			}
@@ -437,16 +451,13 @@ export default function SessionManager() {
 			}
 			try {
 				const refreshed = await refreshPortalSessionIfPossible();
-				if (!refreshed?.accessToken) {
+				if (!refreshed?.authenticated) {
 					throw new Error("portal_refresh_failed");
 				}
 				consecutiveRefreshFailures = 0;
 				broadcastTokenSync(refreshed);
 				if (!cancelled) {
-					const refreshDelay = nextRefreshDelayMs(
-						refreshed.accessToken || currentToken.accessToken,
-						refreshed.tokenExpiresAt ?? currentToken.tokenExpiresAt,
-					);
+					const refreshDelay = nextRefreshDelayMs(undefined, refreshed.tokenExpiresAt ?? currentToken.tokenExpiresAt);
 					schedule(refreshDelay);
 				}
 			} catch (error) {
@@ -456,19 +467,16 @@ export default function SessionManager() {
 					const synced = localStorage.getItem(STORAGE_KEYS.TOKEN_SYNC);
 					if (synced) {
 						const parsed = JSON.parse(synced);
-						if (parsed?.ts && Date.now() - parsed.ts < 30_000 && parsed.accessToken) {
-							// Another tab refreshed recently — adopt its token and retry later
+						if (parsed?.ts && Date.now() - parsed.ts < 30_000 && parsed.authenticated) {
+							// Another tab refreshed recently — adopt the fresh expiry and retry later
 							consecutiveRefreshFailures = 0;
 							setUserToken({
 								...currentToken,
-								accessToken: parsed.accessToken,
-								refreshToken: parsed.refreshToken || currentToken.refreshToken,
+								authenticated: true,
 								tokenExpiresAt: parsed.tokenExpiresAt || currentToken.tokenExpiresAt,
-								adminAccessToken: parsed.adminAccessToken || currentToken.adminAccessToken,
-								adminRefreshToken: parsed.adminRefreshToken || currentToken.adminRefreshToken,
 							});
 							if (!cancelled) {
-								schedule(nextRefreshDelayMs(parsed.accessToken, parsed.tokenExpiresAt));
+								schedule(nextRefreshDelayMs(undefined, parsed.tokenExpiresAt));
 							}
 							return;
 						}
@@ -480,8 +488,7 @@ export default function SessionManager() {
 				}
 				let status: PortalSessionStatus | null = null;
 				try {
-					const currentAccessToken = useUserStore.getState().userToken?.accessToken || currentToken.accessToken;
-					status = await getPortalSessionStatus(currentAccessToken);
+					status = await getPortalSessionStatus();
 				} catch (statusError) {
 					console.warn("[session] refresh follow-up status probe failed", statusError);
 				}
@@ -500,14 +507,14 @@ export default function SessionManager() {
 			}
 		};
 
-		const initialDelay = nextRefreshDelayMs(token.accessToken, token.tokenExpiresAt);
+		const initialDelay = nextRefreshDelayMs(undefined, token.tokenExpiresAt);
 		schedule(initialDelay);
 
 		return () => {
 			cancelled = true;
 			if (timer) window.clearTimeout(timer);
 		};
-	}, [isLoggedIn, token, setUserToken, clearUserInfoAndToken]);
+	}, [isLoggedIn, isDevFallbackSession, token, setUserToken, clearUserInfoAndToken]);
 
 	return null;
 }

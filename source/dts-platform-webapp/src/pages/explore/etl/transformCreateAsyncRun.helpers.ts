@@ -35,21 +35,25 @@ export const isDagNotReadySubmitError = (error: any): boolean => {
 
 export const resolveAsyncRunSubmitFeedback = (
 	error: any,
-	action: "execute" | "retry" = "execute",
+	action: "execute" | "retry" | "backfill" = "execute",
 ): { level: "warning" | "error"; message: string } => {
 	if (isDagNotReadySubmitError(error)) {
+		const blockedMessage =
+			action === "retry"
+				? "DAG 正在准备中，暂时还不能重试。请等待约 30 秒后再试。"
+				: action === "backfill"
+					? "DAG 正在准备中，暂时还不能提交回填。请等待约 30 秒后再试。"
+					: "DAG 正在准备中，暂时还不能执行。请等待约 30 秒后再试。";
 		return {
 			level: "warning",
-			message:
-				action === "retry"
-					? "DAG 正在准备中，暂时还不能重试。请等待约 30 秒后再试。"
-					: "DAG 正在准备中，暂时还不能执行。请等待约 30 秒后再试。",
+			message: blockedMessage,
 		};
 	}
 	const fallback = extractAsyncRunSubmitErrorMessage(error) || "未知错误";
+	const actionLabel = action === "retry" ? "重试" : action === "backfill" ? "回填" : "执行";
 	return {
 		level: "error",
-		message: action === "retry" ? `重试失败: ${fallback}` : `执行失败: ${fallback}`,
+		message: `${actionLabel}失败: ${fallback}`,
 	};
 };
 

@@ -254,6 +254,16 @@ auditing:
     enabled: ${AUDIT_RETENTION_CLEANUP_ENABLED:true}
     days: ${AUDIT_RETENTION_DAYS:180}
     batch-size: ${AUDIT_RETENTION_BATCH_SIZE:5000}
+  ingest:
+    # Whether /api/audit-events must validate a bearer service token.
+    # When true and service-tokens is empty, the endpoint accepts traffic but logs a WARN
+    # so existing deployments can roll out the rotation without an outage.
+    require-token: ${AUDIT_INGEST_REQUIRE_TOKEN:true}
+    # Comma-separated list of accepted bearer tokens. By default we reuse the same
+    # DTS_ADMIN_SERVICE_TOKEN that platform/analytics use to call admin.
+    service-tokens: ${AUDIT_INGEST_SERVICE_TOKENS:${DTS_ADMIN_SERVICE_TOKEN:}}
+    # Optional whitelist of caller-declared sourceSystem values; empty = accept any.
+    allowed-source-systems: ${AUDIT_INGEST_ALLOWED_SOURCES:}
 
 
 dts:

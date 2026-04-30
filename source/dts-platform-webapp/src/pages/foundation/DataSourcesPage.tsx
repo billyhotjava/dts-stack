@@ -40,7 +40,9 @@ import dataSourcesService, {
 	type OdsGenerationPreviewResponse,
 	type OdsGenerationRequest,
 	type OdsPrecheckResponse,
+	type OdsSourceColumnRequest,
 	type OdsTablePlan,
+	type SchemaDiscoverColumn,
 	type SchemaDiscoverResponse,
 	type SchemaDiscoverTable,
 } from "@/api/services/dataSourcesService";
@@ -282,22 +284,37 @@ const normalizeOdsCode = (value?: string, fallback = "src") => {
 	return /^\d/.test(safe) ? `c_${safe}` : safe;
 };
 
-const toOdsSourceTable = (table: SchemaDiscoverTable) => ({
+type OdsColumnOverride = Pick<OdsSourceColumnRequest, "include" | "targetName" | "targetDataType">;
+
+type OdsColumnOverrides = Record<string, Record<string, OdsColumnOverride>>;
+
+const resolveTableKey = (table: Pick<SchemaDiscoverTable, "schema" | "name">) => `${table.schema || ""}.${table.name}`;
+
+const toOdsSourceTable = (
+	table: SchemaDiscoverTable,
+	overrides?: Record<string, OdsColumnOverride>
+) => ({
 	schema: table.schema,
 	name: table.name,
 	comment: table.comment,
 	primaryKeys: table.primaryKeys || [],
 	incrementalCandidates: table.incrementalCandidates || [],
-	columns: (table.columns || []).map((column) => ({
-		name: column.name,
-		dataType: column.dataType,
-		nativeType: column.nativeType,
-		nullable: column.nullable,
-		comment: column.comment,
-		primaryKey: column.primaryKey,
-		indexed: column.indexed,
-		incrementalCandidate: column.incrementalCandidate,
-	})),
+	columns: (table.columns || []).map((column) => {
+		const override = overrides?.[column.name] || {};
+		return {
+			name: column.name,
+			include: override.include === false ? false : undefined,
+			targetName: normalizeOdsCode(override.targetName || "", "") || undefined,
+			dataType: column.dataType,
+			nativeType: column.nativeType,
+			targetDataType: String(override.targetDataType || "").trim() || undefined,
+			nullable: column.nullable,
+			comment: column.comment,
+			primaryKey: column.primaryKey,
+			indexed: column.indexed,
+			incrementalCandidate: column.incrementalCandidate,
+		};
+	}),
 });
 
 type OdsWizardConfig = {
@@ -307,6 +324,19 @@ type OdsWizardConfig = {
 	syncMode: string;
 	entityCode?: string;
 };
+
+const ODS_TYPE_OPTIONS = [
+	{ label: "自动映射", value: "" },
+	{ label: "text", value: "text" },
+	{ label: "varchar(255)", value: "varchar(255)" },
+	{ label: "integer", value: "integer" },
+	{ label: "bigint", value: "bigint" },
+	{ label: "numeric(18,2)", value: "numeric(18,2)" },
+	{ label: "boolean", value: "boolean" },
+	{ label: "date", value: "date" },
+	{ label: "timestamp", value: "timestamp" },
+	{ label: "jsonb", value: "jsonb" },
+];
 
 const defaultOdsWizardConfig = (record?: InfraDataSource | null): OdsWizardConfig => ({
 	odsSchema: "ods",
@@ -338,6 +368,7 @@ export default function DataSourcesPage() {
 	const [odsPrecheck, setOdsPrecheck] = useState<OdsPrecheckResponse | null>(null);
 	const [odsRequest, setOdsRequest] = useState<OdsGenerationRequest | null>(null);
 	const [odsConfig, setOdsConfig] = useState<OdsWizardConfig>(defaultOdsWizardConfig());
+	const [odsColumnOverrides, setOdsColumnOverrides] = useState<OdsColumnOverrides>({});
 	const [editing, setEditing] = useState<InfraDataSource | null>(null);
 	const [excelModalOpen, setExcelModalOpen] = useState(false);
 	const [excelUploading, setExcelUploading] = useState(false);
@@ -650,11 +681,33 @@ export default function DataSourcesPage() {
 		setOdsPreview(null);
 		setOdsPrecheck(null);
 		setOdsRequest(null);
+		setOdsColumnOverrides({});
 		setSchemaModalOpen(true);
 	};
 
 	const updateOdsConfig = (patch: Partial<OdsWizardConfig>) => {
 		setOdsConfig((prev) => ({ ...prev, ...patch }));
+		setOdsPreview(null);
+		setOdsPrecheck(null);
+		setOdsRequest(null);
+	};
+
+	const updateOdsColumnOverride = (
+		table: SchemaDiscoverTable,
+		column: SchemaDiscoverColumn,
+		patch: OdsColumnOverride
+	) => {
+		const tableKey = resolveTableKey(table);
+		setOdsColumnOverrides((prev) => {
+			const current = prev[tableKey]?.[column.name] || {};
+			return {
+				...prev,
+				[tableKey]: {
+					...(prev[tableKey] || {}),
+					[column.name]: { ...current, ...patch },
+				},
+			};
+		});
 		setOdsPreview(null);
 		setOdsPrecheck(null);
 		setOdsRequest(null);
@@ -668,7 +721,7 @@ export default function DataSourcesPage() {
 		includeTechnicalColumns: true,
 		includeRawJson: true,
 		syncMode: odsConfig.syncMode || "full_refresh",
-		tables: tables.map(toOdsSourceTable),
+		tables: tables.map((table) => toOdsSourceTable(table, odsColumnOverrides[resolveTableKey(table)])),
 	});
 
 	const resolveCommonIncrementalCandidate = (tables?: OdsGenerationRequest["tables"]) => {
@@ -818,7 +871,10 @@ export default function DataSourcesPage() {
 			message.warning("请先预览 ODS 生成结果");
 			return;
 		}
-		if (odsRequest.syncMode === "incremental" && !resolveCommonIncrementalCandidate(odsRequest.tables)) {
+		if (
+			["incremental", "timestamp_incremental"].includes(String(odsRequest.syncMode || "").toLowerCase()) &&
+			!resolveCommonIncrementalCandidate(odsRequest.tables)
+		) {
 			message.warning("增量同步需要所选表存在相同的增量字段候选");
 			return;
 		}
@@ -841,6 +897,102 @@ export default function DataSourcesPage() {
 		} finally {
 			setSyncTaskCreating(false);
 		}
+	};
+
+	const renderOdsColumnEditor = (table: SchemaDiscoverTable) => {
+		const tableKey = resolveTableKey(table);
+		const overrides = odsColumnOverrides[tableKey] || {};
+		const columns = table.columns || [];
+		if (!columns.length) {
+			return null;
+		}
+		return (
+			<details className="mt-2">
+				<summary className="cursor-pointer text-xs text-slate-600">字段选择、重命名和类型覆盖</summary>
+				<div className="mt-2">
+					<Table<SchemaDiscoverColumn>
+						size="small"
+						rowKey="name"
+						pagination={false}
+						dataSource={columns}
+						scroll={{ x: 840, y: 240 }}
+						columns={[
+							{
+								title: "包含",
+								key: "include",
+								width: 72,
+								render: (_: any, column: SchemaDiscoverColumn) => (
+									<Switch
+										size="small"
+										checked={overrides[column.name]?.include !== false}
+										onChange={(checked) => updateOdsColumnOverride(table, column, { include: checked })}
+									/>
+								),
+							},
+							{
+								title: "源字段",
+								dataIndex: "name",
+								key: "name",
+								width: 180,
+								render: (value: string, column: SchemaDiscoverColumn) => (
+									<Space size={4} wrap>
+										<Text code>{value}</Text>
+										{column.primaryKey ? <Tag color="blue">PK</Tag> : null}
+										{column.incrementalCandidate ? <Tag color="green">增量</Tag> : null}
+									</Space>
+								),
+							},
+							{
+								title: "目标字段",
+								key: "targetName",
+								width: 180,
+								render: (_: any, column: SchemaDiscoverColumn) => (
+									<Input
+										size="small"
+										allowClear
+										disabled={overrides[column.name]?.include === false}
+										placeholder={normalizeOdsCode(column.name, column.name)}
+										value={overrides[column.name]?.targetName}
+										onChange={(event) =>
+											updateOdsColumnOverride(table, column, { targetName: event.target.value })
+										}
+									/>
+								),
+							},
+							{
+								title: "目标类型",
+								key: "targetDataType",
+								width: 170,
+								render: (_: any, column: SchemaDiscoverColumn) => (
+									<Select
+										size="small"
+										className="w-full"
+										showSearch
+										disabled={overrides[column.name]?.include === false}
+										value={overrides[column.name]?.targetDataType || ""}
+										options={ODS_TYPE_OPTIONS}
+										onChange={(value) => updateOdsColumnOverride(table, column, { targetDataType: value })}
+									/>
+								),
+							},
+							{
+								title: "源类型",
+								key: "sourceType",
+								width: 160,
+								render: (_: any, column: SchemaDiscoverColumn) => column.dataType || column.nativeType || "-",
+							},
+							{
+								title: "说明",
+								dataIndex: "comment",
+								key: "comment",
+								ellipsis: true,
+								render: (value?: string) => value || "-",
+							},
+						]}
+					/>
+				</div>
+			</details>
+		);
 	};
 
 	const renderOdsPlan = (plan: OdsTablePlan) => (
@@ -1382,7 +1534,7 @@ export default function DataSourcesPage() {
 					<div className="rounded border border-slate-200 p-3">
 						<div className="mb-3 flex flex-wrap items-center gap-2">
 							<Text strong>任务生成配置</Text>
-							{odsConfig.syncMode === "incremental" && odsRequest ? (
+							{["incremental", "timestamp_incremental"].includes(String(odsConfig.syncMode || "").toLowerCase()) && odsRequest ? (
 								<Tag color={resolveCommonIncrementalCandidate(odsRequest.tables) ? "green" : "red"}>
 									增量字段：{resolveCommonIncrementalCandidate(odsRequest.tables) || "未识别"}
 								</Tag>
@@ -1417,7 +1569,9 @@ export default function DataSourcesPage() {
 									value={odsConfig.syncMode}
 									options={[
 										{ label: "全量覆盖", value: "full_refresh" },
+										{ label: "全量追加", value: "append" },
 										{ label: "时间戳增量", value: "incremental" },
+										{ label: "主键增量", value: "primary_key_incremental" },
 									]}
 									onChange={(value) => updateOdsConfig({ syncMode: value })}
 								/>
@@ -1456,6 +1610,7 @@ export default function DataSourcesPage() {
 											.map((column) => `${column.name}:${column.dataType || column.nativeType || "unknown"}`)
 											.join(" · ") || "未读取字段"}
 									</div>
+									{renderOdsColumnEditor(table)}
 								</div>
 							);
 						})}

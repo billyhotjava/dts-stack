@@ -1,0 +1,55 @@
+<?xml version="1.0" encoding="utf-8"?>
+<databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+    http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
+
+    <changeSet id="20260430-01-add-ingestion-execution-backfill-window-start" author="codex">
+        <preConditions onFail="MARK_RAN">
+            <not>
+                <columnExists tableName="ingestion_execution" columnName="backfill_window_start"/>
+            </not>
+        </preConditions>
+        <addColumn tableName="ingestion_execution">
+            <column name="backfill_window_start" type="timestamp" remarks="Backfill window inclusive start time"/>
+        </addColumn>
+    </changeSet>
+
+    <changeSet id="20260430-02-add-ingestion-execution-backfill-window-end" author="codex">
+        <preConditions onFail="MARK_RAN">
+            <not>
+                <columnExists tableName="ingestion_execution" columnName="backfill_window_end"/>
+            </not>
+        </preConditions>
+        <addColumn tableName="ingestion_execution">
+            <column name="backfill_window_end" type="timestamp" remarks="Backfill window exclusive end time"/>
+        </addColumn>
+    </changeSet>
+
+    <changeSet id="20260430-03-add-ingestion-execution-backfill-column" author="codex">
+        <preConditions onFail="MARK_RAN">
+            <not>
+                <columnExists tableName="ingestion_execution" columnName="backfill_column"/>
+            </not>
+        </preConditions>
+        <addColumn tableName="ingestion_execution">
+            <column name="backfill_column" type="varchar(255)" remarks="Backfill time or cursor column"/>
+        </addColumn>
+    </changeSet>
+
+    <changeSet id="20260430-04-index-ingestion-execution-backfill-window" author="codex">
+        <preConditions onFail="MARK_RAN">
+            <columnExists tableName="ingestion_execution" columnName="backfill_window_start"/>
+            <columnExists tableName="ingestion_execution" columnName="backfill_window_end"/>
+            <not>
+                <indexExists tableName="ingestion_execution" indexName="idx_ingestion_execution_backfill_window"/>
+            </not>
+        </preConditions>
+        <createIndex tableName="ingestion_execution" indexName="idx_ingestion_execution_backfill_window">
+            <column name="backfill_window_start"/>
+            <column name="backfill_window_end"/>
+        </createIndex>
+    </changeSet>
+
+</databaseChangeLog>

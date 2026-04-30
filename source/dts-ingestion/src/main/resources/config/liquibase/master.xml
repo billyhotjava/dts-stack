@@ -26,5 +26,6 @@
     <include file="config/liquibase/changelog/20260426_01_ingestion_execution_batch_id.xml"/>
     <include file="config/liquibase/changelog/20260427_01_ingestion_schema_snapshot.xml"/>
     <include file="config/liquibase/changelog/20260429_01_ingestion_execution_lineage_tables.xml"/>
+    <include file="config/liquibase/changelog/20260430_01_ingestion_execution_backfill_window.xml"/>
 
 </databaseChangeLog>

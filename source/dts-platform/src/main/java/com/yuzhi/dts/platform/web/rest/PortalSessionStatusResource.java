@@ -3,15 +3,16 @@ package com.yuzhi.dts.platform.web.rest;
 import com.yuzhi.dts.platform.domain.security.PortalSessionCloseReason;
 import com.yuzhi.dts.platform.domain.security.PortalSessionEntity;
 import com.yuzhi.dts.platform.repository.security.PortalSessionRepository;
+import com.yuzhi.dts.platform.security.session.PortalSessionCookieService;
 import jakarta.servlet.http.HttpServletRequest;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.util.StringUtils;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -22,19 +23,23 @@ import org.springframework.web.bind.annotation.RestController;
 @RequestMapping("/api/session")
 public class PortalSessionStatusResource {
 
-    private static final String PORTAL_ACCESS_TOKEN_HEADER = "X-Portal-Access-Token";
-
     private final PortalSessionRepository sessionRepository;
     private final Clock clock;
+    private final PortalSessionCookieService cookieService;
 
     @Autowired
-    public PortalSessionStatusResource(PortalSessionRepository sessionRepository) {
-        this(sessionRepository, Clock.systemUTC());
+    public PortalSessionStatusResource(PortalSessionRepository sessionRepository, PortalSessionCookieService cookieService) {
+        this(sessionRepository, Clock.systemUTC(), cookieService);
     }
 
     PortalSessionStatusResource(PortalSessionRepository sessionRepository, Clock clock) {
+        this(sessionRepository, clock, null);
+    }
+
+    PortalSessionStatusResource(PortalSessionRepository sessionRepository, Clock clock, PortalSessionCookieService cookieService) {
         this.sessionRepository = sessionRepository;
         this.clock = clock == null ? Clock.systemUTC() : clock;
+        this.cookieService = cookieService;
     }
 
     @GetMapping(value = "/status", produces = MediaType.APPLICATION_JSON_VALUE)
@@ -78,6 +83,14 @@ public class PortalSessionStatusResource {
         if (displayName != null && !displayName.isBlank()) {
             data.put("displayName", displayName);
         }
+        data.put("roles", entity.getRoles() == null ? List.of() : List.copyOf(entity.getRoles()));
+        data.put("permissions", entity.getPermissions() == null ? List.of() : List.copyOf(entity.getPermissions()));
+        if (StringUtils.hasText(entity.getDeptCode())) {
+            data.put("deptCode", entity.getDeptCode());
+        }
+        if (StringUtils.hasText(entity.getPersonnelLevel())) {
+            data.put("personnelLevel", entity.getPersonnelLevel());
+        }
 
         if (expiresAt != null) {
             data.put("expiresAt", expiresAt.toString());
@@ -100,33 +113,10 @@ public class PortalSessionStatusResource {
         if (request == null) {
             return null;
         }
-        String directToken = request.getHeader(PORTAL_ACCESS_TOKEN_HEADER);
-        if (StringUtils.hasText(directToken)) {
-            return directToken.trim();
+        String cookieToken = cookieService == null ? null : cookieService.resolvePortalSessionToken(request);
+        if (StringUtils.hasText(cookieToken)) {
+            return cookieToken.trim();
         }
-        return extractBearerToken(request);
-    }
-
-    private String extractBearerToken(HttpServletRequest request) {
-        if (request == null) {
-            return null;
-        }
-        String header = request.getHeader(HttpHeaders.AUTHORIZATION);
-        if (header == null || header.isBlank()) {
-            return null;
-        }
-        int idx = header.indexOf(' ');
-        if (idx < 0) {
-            return header.trim().isEmpty() ? null : header.trim();
-        }
-        String scheme = header.substring(0, idx).trim();
-        if (!"Bearer".equalsIgnoreCase(scheme)) {
-            return null;
-        }
-        String token = header.substring(idx + 1).trim();
-        if (token.isEmpty()) {
-            return null;
-        }
-        return token;
+        return null;
     }
 }

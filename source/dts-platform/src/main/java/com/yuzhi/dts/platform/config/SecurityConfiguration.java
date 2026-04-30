@@ -1,10 +1,13 @@
 package com.yuzhi.dts.platform.config;
 
 import static org.springframework.security.config.Customizer.withDefaults;
+import com.yuzhi.dts.common.security.AuthEndpointPaths;
 import com.yuzhi.dts.platform.security.AuthoritiesConstants;
 import com.yuzhi.dts.platform.config.DtsAdminProperties;
 import com.yuzhi.dts.platform.security.ServiceDependencyAuthenticationFilter;
 import com.yuzhi.dts.platform.security.session.PortalOpaqueTokenIntrospector;
+import com.yuzhi.dts.platform.security.session.PortalSessionBearerTokenResolver;
+import com.yuzhi.dts.platform.security.session.PortalSessionCookieService;
 import com.yuzhi.dts.platform.security.session.PortalSessionInactivityFilter;
 import com.yuzhi.dts.platform.web.filter.AuditLoggingFilter;
 import org.springframework.beans.factory.annotation.Value;
@@ -41,7 +44,8 @@ public class SecurityConfiguration {
         PortalOpaqueTokenIntrospector opaqueTokenIntrospector,
         AuditLoggingFilter auditLoggingFilter,
         ServiceDependencyAuthenticationFilter serviceDependencyAuthenticationFilter,
-        PortalSessionInactivityFilter sessionInactivityFilter
+        PortalSessionInactivityFilter sessionInactivityFilter,
+        PortalSessionBearerTokenResolver portalSessionBearerTokenResolver
     )
         throws Exception {
         http
@@ -52,19 +56,11 @@ public class SecurityConfiguration {
                     .requestMatchers(mvc.pattern("/openapi/**")).permitAll()
                     .requestMatchers(mvc.pattern("/api/authenticate")).permitAll()
                     .requestMatchers(mvc.pattern("/api/auth-info")).permitAll()
-                    .requestMatchers(mvc.pattern("/api/session/status")).permitAll()
+                    .requestMatchers(mvc.pattern(AuthEndpointPaths.PORTAL_SESSION_STATUS)).permitAll()
                     // Allow explicit platform auth endpoints without prior auth.
-                    .requestMatchers(
-                        mvc.pattern("/api/keycloak/auth/login"),
-                        mvc.pattern("/api/keycloak/auth/platform/login"),
-                        mvc.pattern("/api/keycloak/auth/logout"),
-                        mvc.pattern("/api/keycloak/auth/refresh"),
-                        mvc.pattern("/api/keycloak/auth/pki-challenge"),
-                        mvc.pattern("/api/keycloak/auth/pki-login"),
-                        mvc.pattern("/api/keycloak/auth/pki-session")
-                    ).permitAll()
+                    .requestMatchers(mvc.pattern(AuthEndpointPaths.KEYCLOAK_AUTH_API_PATTERN)).permitAll()
                     // Allow localization resources without auth (used at boot)
-                    .requestMatchers(mvc.pattern("/api/keycloak/localization/**")).permitAll()
+                    .requestMatchers(mvc.pattern(AuthEndpointPaths.KEYCLOAK_LOCALIZATION_API_PATTERN)).permitAll()
                     // Traefik forward-auth probe endpoint must be reachable without prior auth.
                     // The endpoint itself returns 2xx only when the incoming session/token is valid.
                     .requestMatchers(mvc.pattern("/api/forward-auth")).permitAll()
@@ -99,7 +95,9 @@ public class SecurityConfiguration {
                     .requestMatchers(mvc.pattern("/management/**")).hasAuthority(AuthoritiesConstants.ADMIN)
             )
             .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
-            .oauth2ResourceServer(oauth2 -> oauth2.opaqueToken(opaque -> opaque.introspector(opaqueTokenIntrospector)))
+            .oauth2ResourceServer(oauth2 ->
+                oauth2.bearerTokenResolver(portalSessionBearerTokenResolver).opaqueToken(opaque -> opaque.introspector(opaqueTokenIntrospector))
+            )
             .oauth2Client(withDefaults());
         http.addFilterBefore(serviceDependencyAuthenticationFilter, AnonymousAuthenticationFilter.class);
         http.addFilterAfter(auditLoggingFilter, AnonymousAuthenticationFilter.class);
@@ -115,6 +113,30 @@ public class SecurityConfiguration {
     @Bean
     ServiceDependencyAuthenticationFilter serviceDependencyAuthenticationFilter(DtsAdminProperties adminProperties) {
         return new ServiceDependencyAuthenticationFilter(adminProperties);
+    }
+
+    @Bean
+    PortalSessionCookieService portalSessionCookieService(
+        @Value("${dts.platform.session.browser-cookie-name:browser_id}") String browserCookieName,
+        @Value("${dts.platform.session.cookie-name:portal_session}") String portalSessionCookieName,
+        @Value("${dts.platform.session.cookie-path:/}") String cookiePath,
+        @Value("${dts.platform.session.cookie-secure:false}") boolean cookieSecure,
+        @Value("${dts.platform.session.cookie-same-site:Lax}") String sameSite,
+        @Value("${dts.platform.session.browser-cookie-signing-secret:${DATA_STANDARD_ENCRYPTION_KEY:}}") String browserCookieSigningSecret
+    ) {
+        return new PortalSessionCookieService(
+            browserCookieName,
+            portalSessionCookieName,
+            cookiePath,
+            cookieSecure,
+            sameSite,
+            browserCookieSigningSecret
+        );
+    }
+
+    @Bean
+    PortalSessionBearerTokenResolver portalSessionBearerTokenResolver(PortalSessionCookieService portalSessionCookieService) {
+        return new PortalSessionBearerTokenResolver(portalSessionCookieService);
     }
 
 }

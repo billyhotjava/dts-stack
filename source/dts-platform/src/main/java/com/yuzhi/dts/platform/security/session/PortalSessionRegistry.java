@@ -42,7 +42,7 @@ public class PortalSessionRegistry {
     }
 
     public PortalSession createSession(String username, List<String> roles, List<String> permissions, AdminTokens adminTokens) {
-        return createSessionInternal(username, roles, permissions, null, null, null, adminTokens);
+        return createSessionInternal(username, roles, permissions, null, null, null, null, adminTokens);
     }
 
     public PortalSession createSession(
@@ -52,7 +52,7 @@ public class PortalSessionRegistry {
         String displayName,
         AdminTokens adminTokens
     ) {
-        return createSessionInternal(username, roles, permissions, null, null, displayName, adminTokens);
+        return createSessionInternal(username, roles, permissions, null, null, displayName, null, adminTokens);
     }
 
     public PortalSession createSession(
@@ -63,7 +63,7 @@ public class PortalSessionRegistry {
         String personnelLevel,
         AdminTokens adminTokens
     ) {
-        return createSessionInternal(username, roles, permissions, deptCode, personnelLevel, null, adminTokens);
+        return createSessionInternal(username, roles, permissions, deptCode, personnelLevel, null, null, adminTokens);
     }
 
     public PortalSession createSession(
@@ -75,7 +75,20 @@ public class PortalSessionRegistry {
         String displayName,
         AdminTokens adminTokens
     ) {
-        return createSessionInternal(username, roles, permissions, deptCode, personnelLevel, displayName, adminTokens);
+        return createSessionInternal(username, roles, permissions, deptCode, personnelLevel, displayName, null, adminTokens);
+    }
+
+    public PortalSession createSession(
+        String username,
+        List<String> roles,
+        List<String> permissions,
+        String deptCode,
+        String personnelLevel,
+        String displayName,
+        String browserId,
+        AdminTokens adminTokens
+    ) {
+        return createSessionInternal(username, roles, permissions, deptCode, personnelLevel, displayName, browserId, adminTokens);
     }
 
     public PortalSession refreshSession(String refreshToken, Function<PortalSession, AdminTokens> adminTokenProvider) {
@@ -149,7 +162,25 @@ public class PortalSessionRegistry {
             .orElse(null);
     }
 
+    public PortalSession invalidateByAccessToken(String accessToken) {
+        if (!StringUtils.hasText(accessToken)) {
+            return null;
+        }
+        Instant now = Instant.now();
+        return sessionRepository
+            .findByAccessToken(accessToken)
+            .map(entity -> {
+                revokeSession(entity, PortalSessionCloseReason.LOGOUT, null, now);
+                return toPortalSession(entity);
+            })
+            .orElse(null);
+    }
+
     public boolean hasActiveSession(String username) {
+        return hasActiveSession(username, null);
+    }
+
+    public boolean hasActiveSession(String username, String browserId) {
         String normalized = normalizeUsername(username);
         if (normalized == null) {
             return false;
@@ -161,6 +192,10 @@ public class PortalSessionRegistry {
         }
         if (isExpired(entity, now)) {
             revokeSession(entity, PortalSessionCloseReason.EXPIRED, null, now);
+            return false;
+        }
+        String normalizedBrowserId = normalizeBrowserId(browserId);
+        if (normalizedBrowserId != null && normalizedBrowserId.equals(entity.getBrowserId())) {
             return false;
         }
         return true;
@@ -200,12 +235,14 @@ public class PortalSessionRegistry {
         String deptCode,
         String personnelLevel,
         String displayName,
+        String browserId,
         AdminTokens adminTokens
     ) {
         String sanitizedUsername = requireUsername(username);
         String normalizedUsername = normalizeUsername(sanitizedUsername);
         List<String> normalizedRoles = normalizeRoles(roles);
         String sanitizedDisplayName = displayName == null ? null : displayName.trim();
+        String sanitizedBrowserId = normalizeBrowserId(browserId);
 
         PortalSession session = PortalSession.create(
             sanitizedUsername,
@@ -214,25 +251,70 @@ public class PortalSessionRegistry {
             permissions,
             deptCode,
             personnelLevel,
+            sanitizedBrowserId,
             adminTokens,
             sessionTtl
         );
 
         Instant now = Instant.now();
         UUID newSessionUuid = UUID.fromString(session.sessionId());
+        final PortalSession[] refreshed = new PortalSession[1];
 
         sessionRepository
             .findActiveForUpdate(normalizedUsername)
             .ifPresent(existing -> {
+                if (isExpired(existing, now)) {
+                    revokeSession(existing, PortalSessionCloseReason.EXPIRED, null, now);
+                    return;
+                }
+                if (sanitizedBrowserId != null && sanitizedBrowserId.equals(existing.getBrowserId())) {
+                    refreshed[0] = refreshExistingBrowserSession(existing, session, normalizedUsername, now);
+                    return;
+                }
                 if (!allowTakeover) {
                     throw new ActiveSessionExistsException(normalizedUsername);
                 }
                 handleTakeover(existing, newSessionUuid, now);
             });
 
+        if (refreshed[0] != null) {
+            return refreshed[0];
+        }
         PortalSessionEntity entity = toEntity(session, normalizedUsername, now);
         sessionRepository.save(entity);
         return toPortalSession(entity);
+    }
+
+    private PortalSession refreshExistingBrowserSession(
+        PortalSessionEntity existing,
+        PortalSession session,
+        String normalizedUsername,
+        Instant now
+    ) {
+        existing.setUsername(session.username());
+        existing.setNormalizedUsername(normalizedUsername);
+        existing.setDisplayName(session.displayName());
+        existing.setBrowserId(session.browserId());
+        existing.setRoles(new ArrayList<>(session.roles()));
+        existing.setPermissions(new ArrayList<>(session.permissions()));
+        existing.setDeptCode(session.deptCode());
+        existing.setPersonnelLevel(session.personnelLevel());
+        existing.setExpiresAt(session.expiresAt());
+        existing.setLastSeenAt(now);
+        AdminTokens tokens = session.adminTokens();
+        if (tokens == null) {
+            existing.setAdminAccessToken(null);
+            existing.setAdminAccessTokenExpiresAt(null);
+            existing.setAdminRefreshToken(null);
+            existing.setAdminRefreshTokenExpiresAt(null);
+        } else {
+            existing.setAdminAccessToken(tokens.accessToken());
+            existing.setAdminAccessTokenExpiresAt(tokens.accessExpiresAt());
+            existing.setAdminRefreshToken(tokens.refreshToken());
+            existing.setAdminRefreshTokenExpiresAt(tokens.refreshExpiresAt());
+        }
+        PortalSessionEntity saved = sessionRepository.saveAndFlush(existing);
+        return toPortalSession(saved);
     }
 
     private void handleTakeover(PortalSessionEntity existing, UUID takeoverSessionId, Instant now) {
@@ -277,6 +359,7 @@ public class PortalSessionRegistry {
         entity.setNormalizedUsername(normalizedUsername);
         entity.setSessionId(UUID.fromString(session.sessionId()));
         entity.setDisplayName(session.displayName());
+        entity.setBrowserId(session.browserId());
         entity.setAccessToken(session.accessToken());
         entity.setRefreshToken(session.refreshToken());
         entity.setRoles(new ArrayList<>(session.roles()));
@@ -320,6 +403,7 @@ public class PortalSessionRegistry {
             entity.getAccessToken(),
             entity.getRefreshToken(),
             entity.getExpiresAt(),
+            entity.getBrowserId(),
             adminTokens
         );
     }
@@ -361,6 +445,14 @@ public class PortalSessionRegistry {
         return trimmed.toLowerCase(Locale.ROOT);
     }
 
+    private String normalizeBrowserId(String browserId) {
+        if (browserId == null) {
+            return null;
+        }
+        String trimmed = browserId.trim();
+        return trimmed.isEmpty() ? null : trimmed;
+    }
+
     public record PortalSession(
         String sessionId,
         String username,
@@ -372,8 +464,38 @@ public class PortalSessionRegistry {
         String accessToken,
         String refreshToken,
         Instant expiresAt,
+        String browserId,
         AdminTokens adminTokens
     ) {
+        public PortalSession(
+            String sessionId,
+            String username,
+            String displayName,
+            List<String> roles,
+            List<String> permissions,
+            String deptCode,
+            String personnelLevel,
+            String accessToken,
+            String refreshToken,
+            Instant expiresAt,
+            AdminTokens adminTokens
+        ) {
+            this(
+                sessionId,
+                username,
+                displayName,
+                roles,
+                permissions,
+                deptCode,
+                personnelLevel,
+                accessToken,
+                refreshToken,
+                expiresAt,
+                null,
+                adminTokens
+            );
+        }
+
         private static PortalSession create(
             String username,
             String displayName,
@@ -381,6 +503,7 @@ public class PortalSessionRegistry {
             List<String> permissions,
             String deptCode,
             String personnelLevel,
+            String browserId,
             AdminTokens adminTokens,
             Duration ttl
         ) {
@@ -405,12 +528,13 @@ public class PortalSessionRegistry {
                 accessToken,
                 refreshToken,
                 expiresAt,
+                browserId,
                 tokens
             );
         }
 
         private PortalSession renew(Duration ttl, AdminTokens adminTokens) {
-            return create(username, displayName, roles, permissions, deptCode, personnelLevel, adminTokens, ttl);
+            return create(username, displayName, roles, permissions, deptCode, personnelLevel, browserId, adminTokens, ttl);
         }
     }
 

@@ -425,7 +425,11 @@ public class IngestionTaskService {
      * 创建执行记录并触发Addax任务
      */
     public IngestionExecutionDTO execute(Long taskId) {
-        return execute(taskId, "MANUAL");
+        return execute(taskId, "MANUAL", null);
+    }
+
+    public IngestionExecutionDTO backfill(Long taskId, Instant windowStart, Instant windowEnd, String column) {
+        return execute(taskId, "BACKFILL_RANGE", new BackfillWindow(column, windowStart, windowEnd));
     }
 
     public IngestionTaskDTO validateAsyncExecutionRequest(Long taskId) {
@@ -437,10 +441,24 @@ public class IngestionTaskService {
     }
 
     private IngestionExecutionDTO execute(Long taskId, String triggerMode) {
+        return execute(taskId, triggerMode, null);
+    }
+
+    private IngestionExecutionDTO execute(Long taskId, String triggerMode, BackfillWindow backfillWindow) {
         log.info("Executing ingestion task ID: {}", taskId);
 
         IngestionTask task = loadExecutableTask(taskId);
         GovernancePolicy policy = resolveGovernancePolicy(task);
+        BackfillWindow resolvedBackfill = null;
+        if (backfillWindow != null) {
+            String resolvedColumn = incrementalSyncService.validateBackfillWindow(
+                task,
+                backfillWindow.column(),
+                backfillWindow.windowStart(),
+                backfillWindow.windowEnd()
+            );
+            resolvedBackfill = new BackfillWindow(resolvedColumn, backfillWindow.windowStart(), backfillWindow.windowEnd());
+        }
 
         // Phase 1 (synchronous): validate, governance check, create execution record
         String governanceBlockedReason = evaluateGovernanceBlock(task, policy, null);
@@ -455,8 +473,13 @@ public class IngestionTaskService {
         execution.setTask(task);
         execution.setStatus("preparing");
         execution.setCreatedAt(Instant.now());
-        execution.setReplaceMode(resolveReplaceMode(task));
+        execution.setReplaceMode(resolveReplaceMode(task, triggerMode));
         execution.setTriggerMode(normalizeTriggerMode(triggerMode));
+        if (resolvedBackfill != null) {
+            execution.setBackfillColumn(resolvedBackfill.column());
+            execution.setBackfillWindowStart(resolvedBackfill.windowStart());
+            execution.setBackfillWindowEnd(resolvedBackfill.windowEnd());
+        }
         execution.setBatchId(generateBatchId(taskId));
         execution.setExecutionId("preparing-" + UUID.randomUUID().toString().substring(0, 8));
         IngestionExecutionLineageSnapshot.apply(execution, task);
@@ -540,7 +563,15 @@ public class IngestionTaskService {
 
             boolean airflowEnabled = isAirflowEnabled(task);
             com.yuzhi.dts.ingestion.service.etl.IngestionSourceResolver.ResolvedSource source = resolveSource(task, null);
-            Map<String, Object> runtimeReaderOverrides = incrementalSyncService.buildReaderRuntimeOverrides(task, source);
+            Map<String, Object> runtimeReaderOverrides = isBackfillExecution(execution)
+                ? incrementalSyncService.buildBackfillReaderRuntimeOverrides(
+                    task,
+                    source,
+                    execution.getBackfillColumn(),
+                    execution.getBackfillWindowStart(),
+                    execution.getBackfillWindowEnd()
+                )
+                : incrementalSyncService.buildReaderRuntimeOverrides(task, source);
             Map<String, Object> runtimeContext = buildExecutionRuntimeContext(task, execution);
             task = ensureAddaxJobExists(task, source, runtimeReaderOverrides, runtimeContext);
             execution.setDroppedTables(resolveDroppedTables(task));
@@ -579,6 +610,11 @@ public class IngestionTaskService {
                 if (StringUtils.hasText(policy.priority())) conf.put("priority", policy.priority());
                 if (StringUtils.hasText(policy.rejectPolicy())) conf.put("reject_policy", policy.rejectPolicy());
                 if (StringUtils.hasText(policy.projectKey())) conf.put("project_key", policy.projectKey());
+                if (isBackfillExecution(execution)) {
+                    conf.put("backfill_column", execution.getBackfillColumn());
+                    conf.put("backfill_window_start", execution.getBackfillWindowStart().toString());
+                    conf.put("backfill_window_end", execution.getBackfillWindowEnd().toString());
+                }
 
                 Map<String, Object> airflowResult = airflowAdapter.triggerIfRequested(
                     new AirflowAdapter.AirflowRequest(true, task.getAirflowDagId(), null, null, null),
@@ -694,6 +730,11 @@ public class IngestionTaskService {
         if (task != null && task.getId() != null) {
             context.put("taskId", task.getId().toString());
         }
+        if (isBackfillExecution(execution)) {
+            context.put("backfillColumn", execution.getBackfillColumn());
+            context.put("backfillWindowStart", execution.getBackfillWindowStart().toString());
+            context.put("backfillWindowEnd", execution.getBackfillWindowEnd().toString());
+        }
         return context;
     }
 
@@ -716,6 +757,17 @@ public class IngestionTaskService {
             return CompletableFuture.completedFuture(null);
         } catch (Exception ex) {
             log.error("Async retry failed for task {} execution {}: {}", taskId, executionId, ex.getMessage(), ex);
+            return CompletableFuture.failedFuture(ex);
+        }
+    }
+
+    @Async("ingestionTaskExecutor")
+    public CompletableFuture<Void> backfillAsync(Long taskId, Instant windowStart, Instant windowEnd, String column) {
+        try {
+            backfill(taskId, windowStart, windowEnd, column);
+            return CompletableFuture.completedFuture(null);
+        } catch (Exception ex) {
+            log.error("Async backfill failed for task {}: {}", taskId, ex.getMessage(), ex);
             return CompletableFuture.failedFuture(ex);
         }
     }
@@ -808,19 +860,31 @@ public class IngestionTaskService {
             return "MANUAL";
         }
         String upper = mode.toUpperCase(java.util.Locale.ROOT);
-        if ("FAILED_ONLY".equals(upper) || "FULL_RERUN".equals(upper) || "MANUAL".equals(upper)) {
+        if ("FAILED_ONLY".equals(upper) || "FULL_RERUN".equals(upper) || "MANUAL".equals(upper) || "BACKFILL_RANGE".equals(upper)) {
             return upper;
         }
         return "MANUAL";
     }
 
 
-    private String resolveReplaceMode(IngestionTask task) {
+    private String resolveReplaceMode(IngestionTask task, String triggerMode) {
         if (task == null) {
             return null;
         }
+        if ("BACKFILL_RANGE".equalsIgnoreCase(triggerMode)) {
+            return "BACKFILL_RANGE";
+        }
         return "full_refresh".equalsIgnoreCase(task.getSyncMode()) ? "FULL_REPLACE" : "INCREMENTAL_OR_APPEND";
     }
+
+    private boolean isBackfillExecution(IngestionExecution execution) {
+        return execution != null
+            && "BACKFILL_RANGE".equalsIgnoreCase(execution.getTriggerMode())
+            && execution.getBackfillWindowStart() != null
+            && execution.getBackfillWindowEnd() != null;
+    }
+
+    private record BackfillWindow(String column, Instant windowStart, Instant windowEnd) {}
 
     private String resolveDroppedTables(IngestionTask task) {
         if (task == null) {

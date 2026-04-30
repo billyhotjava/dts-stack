@@ -240,11 +240,14 @@ public class ForwardAuthResource {
     private static String resolveRequestedPath(String forwardedUri, String forwardedPrefix) {
         String normalizedUri = normalizePath(forwardedUri);
         String normalizedPrefix = normalizePath(forwardedPrefix);
+        if (StringUtils.hasText(normalizedPrefix) && StringUtils.hasText(normalizedUri)) {
+            if (normalizedUri.equals(normalizedPrefix) || normalizedUri.startsWith(normalizedPrefix + "/")) {
+                return normalizedUri;
+            }
+            return joinPaths(normalizedPrefix, normalizedUri);
+        }
         if (StringUtils.hasText(normalizedUri) && normalizedUri.startsWith("/")) {
             return normalizedUri;
-        }
-        if (StringUtils.hasText(normalizedPrefix) && StringUtils.hasText(normalizedUri)) {
-            return joinPaths(normalizedPrefix, normalizedUri);
         }
         if (StringUtils.hasText(normalizedPrefix)) {
             return normalizedPrefix;

@@ -10,19 +10,25 @@ import userStore from "@/store/userStore";
 import {
 	isWithinPortalLoginGrace,
 	markPortalSessionLogout,
-	readPortalSessionTimestamp,
 	PORTAL_SESSION_STORAGE_KEYS,
+	readPortalSessionTimestamp,
 } from "@/utils/portalSessionStorage";
 import { resolvePortalTokenExpiresAt } from "@/utils/sessionExpiry";
 
 const axiosInstance = axios.create({
 	baseURL: GLOBAL_CONFIG.apiBaseUrl,
 	timeout: 50000,
+	withCredentials: true,
 	headers: { "Content-Type": "application/json;charset=utf-8" },
 });
 
 /** 后台服务不可用类错误（需要跳登录） */
 const SERVICE_UNAVAILABLE_STATUSES = new Set([502, 503, 504]);
+const IS_PRODUCTION = import.meta.env.PROD;
+const IS_LOCAL_DEV_HOST =
+	typeof window !== "undefined" &&
+	(["localhost", "127.0.0.1", "::1"].includes(window.location.hostname || "") ||
+		(window.location.hostname || "").endsWith(".local"));
 
 const isSuccessStatus = (status: unknown): boolean => {
 	if (status === ResultStatus.SUCCESS) return true;
@@ -41,22 +47,19 @@ const isSuccessStatus = (status: unknown): boolean => {
 };
 
 const TEST_SESSION_ENABLED =
+	!IS_PRODUCTION &&
+	IS_LOCAL_DEV_HOST &&
 	String(import.meta.env.VITE_TEST_LONG_SESSION ?? import.meta.env.VITE_TEST_SESSION ?? "false").toLowerCase() ===
-	"true";
+		"true";
 const TEST_SESSION_REFRESH_MS = Number(import.meta.env.VITE_TEST_SESSION_PING_MS ?? 5 * 60 * 1000);
 const TEST_SESSION_MAX_AGE_MS = Number(import.meta.env.VITE_TEST_SESSION_MAX_AGE_MS ?? 4 * 60 * 60 * 1000);
 
 export type PortalRefreshResult = {
-	accessToken: string;
-	refreshToken: string;
+	authenticated: boolean;
 	tokenExpiresAt?: number;
 	expiresIn?: number;
 	portalExpiresAt?: string;
 	portalExpiresIn?: number;
-	adminAccessToken?: string;
-	adminRefreshToken?: string;
-	adminAccessTokenExpiresAt?: string;
-	adminRefreshTokenExpiresAt?: string;
 };
 
 type PortalSessionProbe = {
@@ -69,13 +72,12 @@ type PortalSessionProbe = {
 let refreshingPromise: Promise<PortalRefreshResult | null> | null = null;
 
 function hasRecentLoginGraceWindow(): boolean {
-	return isWithinPortalLoginGrace(2000);
+	return isWithinPortalLoginGrace(15_000);
 }
 
 /**
- * 登录后的"安全窗"：用于 session/status 探活场景。登录返回的 accessToken 是平台侧
- * opaque token（"demo-<uuid>"），portal_session 刚 save 的瞬间，并发的探活请求
- * 可能在不同事务里查不到它。把前 5 秒视为可信窗口，三处探活（LoginPage、
+ * 登录后的"安全窗"：用于 session/status 探活场景。portal_session 刚写入后，
+ * 并发的探活请求可能在不同事务里查不到它。把前 5 秒视为可信窗口，三处探活（LoginPage、
  * SessionManager、LoginAuthGuard）统一使用本 helper 跳过探活、直接信任本地 token。
  * 此窗口外才会让探活正常工作以支持异地登录顶掉、session 失效等场景。
  */
@@ -95,14 +97,9 @@ function isDefinitivePortalSessionInactive(status?: PortalSessionProbe | null): 
 	);
 }
 
-async function probePortalSessionStatus(accessToken?: string): Promise<PortalSessionProbe | null> {
-	const token = String(accessToken || "").trim();
-	if (!token) {
-		return null;
-	}
+async function probePortalSessionStatus(): Promise<PortalSessionProbe | null> {
 	try {
 		return await axiosInstance.get("/session/status", {
-			headers: { "X-Portal-Access-Token": token },
 			_skipAuth: true,
 		} as any);
 	} catch {
@@ -111,9 +108,8 @@ async function probePortalSessionStatus(accessToken?: string): Promise<PortalSes
 }
 
 function forceLogoutToLogin() {
-	const accessToken = userStore.getState().userToken?.accessToken;
 	userStore.getState().actions.clearUserInfoAndToken();
-	markPortalSessionLogout(Date.now(), accessToken);
+	markPortalSessionLogout(Date.now());
 	if (typeof window !== "undefined" && !isLoginRouteActive()) {
 		redirectToLoginWithCurrentPath();
 	}
@@ -134,24 +130,16 @@ function normalizeDate(value: unknown): string | undefined {
 
 export async function refreshPortalSessionIfPossible(): Promise<PortalRefreshResult | null> {
 	const { userToken, actions } = userStore.getState() as any;
-	const refresh = String(userToken?.refreshToken || "").trim();
-	if (!refresh) return null;
+	if (!userToken?.authenticated && !userToken?.accessToken) return null;
 	// Only one refresh at a time
 	if (!refreshingPromise) {
 		const refreshTask = (async (): Promise<PortalRefreshResult | null> => {
 			try {
-				const resp: any = await axiosInstance.post(
-					"/keycloak/auth/refresh",
-					{ refreshToken: refresh },
-					{ headers: { Authorization: undefined } },
-				);
-				const nextAccess = String(resp?.accessToken || resp?.data?.accessToken || "").trim();
-				const nextRefresh = String(resp?.refreshToken || resp?.data?.refreshToken || "").trim();
-				const adminAccessToken = String(resp?.adminAccessToken || resp?.data?.adminAccessToken || "").trim();
-				const adminRefreshToken = String(resp?.adminRefreshToken || resp?.data?.adminRefreshToken || "").trim();
+				const resp: any = await axiosInstance.post("/keycloak/auth/refresh", {});
 				const expiresIn = Number(resp?.expiresIn ?? resp?.data?.expiresIn ?? 0);
 				const portalExpiresAt = normalizeDate(resp?.portalExpiresAt ?? resp?.data?.portalExpiresAt);
 				const portalExpiresIn = Number(resp?.portalExpiresIn ?? resp?.data?.portalExpiresIn ?? 0);
+				const authenticated = Boolean(resp?.authenticated ?? resp?.data?.authenticated);
 				const tokenExpiresAt = resolvePortalTokenExpiresAt(
 					{
 						portalExpiresAt,
@@ -161,21 +149,10 @@ export async function refreshPortalSessionIfPossible(): Promise<PortalRefreshRes
 					},
 					userToken?.tokenExpiresAt,
 				);
-				const adminAccessTokenExpiresAt =
-					normalizeDate(resp?.adminAccessTokenExpiresAt ?? resp?.data?.adminAccessTokenExpiresAt) ??
-					userToken?.adminAccessTokenExpiresAt;
-				const adminRefreshTokenExpiresAt =
-					normalizeDate(resp?.adminRefreshTokenExpiresAt ?? resp?.data?.adminRefreshTokenExpiresAt) ??
-					userToken?.adminRefreshTokenExpiresAt;
-				if (!nextAccess) throw new Error("no_access_token");
+				if (!authenticated) throw new Error("not_authenticated");
 				const nextUserToken = {
-					accessToken: nextAccess,
-					refreshToken: nextRefresh || refresh,
+					authenticated: true,
 					tokenExpiresAt,
-					adminAccessToken: adminAccessToken || userToken?.adminAccessToken,
-					adminRefreshToken: adminRefreshToken || userToken?.adminRefreshToken,
-					adminAccessTokenExpiresAt,
-					adminRefreshTokenExpiresAt,
 				};
 				actions.setUserToken(nextUserToken);
 				return {
@@ -200,7 +177,7 @@ export async function refreshPortalSessionIfPossible(): Promise<PortalRefreshRes
 
 export async function refreshTokenIfPossible(): Promise<boolean> {
 	const refreshed = await refreshPortalSessionIfPossible();
-	return Boolean(refreshed?.accessToken);
+	return Boolean(refreshed?.authenticated);
 }
 
 let keepAliveTimer: number | null = null;
@@ -213,7 +190,7 @@ function ensureKeepAliveTimer() {
 	}
 	keepAliveTimer = window.setInterval(async () => {
 		const { userToken } = userStore.getState();
-		if (!userToken?.refreshToken) {
+		if (!userToken?.authenticated && !userToken?.accessToken) {
 			return;
 		}
 		const loginTs = readPortalSessionTimestamp(PORTAL_SESSION_STORAGE_KEYS.LOGIN_TS);
@@ -240,23 +217,67 @@ function redirectToLoginWithCurrentPath() {
 	location.replace(resolveLoginHref(resolveCurrentAppPath()));
 }
 
+function sanitizeHeadersForLog(headers: unknown): Record<string, unknown> | undefined {
+	if (!headers || typeof headers !== "object") {
+		return undefined;
+	}
+	const safeHeaders: Record<string, unknown> = {};
+	for (const [key, value] of Object.entries(headers as Record<string, unknown>)) {
+		const normalized = key.toLowerCase();
+		safeHeaders[key] = normalized === "authorization" || normalized === "x-portal-access-token" ? "[redacted]" : value;
+	}
+	return safeHeaders;
+}
+
+function logApiRequest(config: AxiosRequestConfig) {
+	if (IS_PRODUCTION) {
+		return;
+	}
+	console.debug("API Request:", {
+		method: config.method?.toUpperCase(),
+		baseURL: config.baseURL,
+		url: config.url,
+		headers: sanitizeHeadersForLog(config.headers),
+	});
+}
+
+function logApiResponse(res: AxiosResponse<unknown>) {
+	if (IS_PRODUCTION) {
+		return;
+	}
+	console.debug("API Response:", {
+		status: res.status,
+		url: res.config.url,
+	});
+}
+
+function logApiRequestError(error: unknown) {
+	if (IS_PRODUCTION) {
+		return;
+	}
+	const message = error instanceof Error ? error.message : String(error ?? "unknown");
+	console.warn("API Request Error:", message);
+}
+
+function logApiResponseError(error: AxiosError<Result>) {
+	if (IS_PRODUCTION) {
+		return;
+	}
+	console.warn("API Response Error:", {
+		status: error.response?.status,
+		url: error.response?.config?.url ?? error.config?.url,
+		message: error.message,
+	});
+}
+
 axiosInstance.interceptors.request.use(
 	(config) => {
-		const { userToken } = userStore.getState();
 		const url = config.url || "";
 		const isAuthPath = url.includes("/keycloak/auth/");
-		const skipAuth = (config as any)._skipAuth === true;
 		// For FormData uploads, let the browser set the proper multipart boundary
 		if (typeof FormData !== "undefined" && config.data instanceof FormData) {
 			if (config.headers) {
 				delete (config.headers as any)["Content-Type"];
-			}
-		}
-		if (userToken.accessToken && !isAuthPath && !skipAuth) {
-			const raw = String(userToken.accessToken).trim();
-			const token = raw.startsWith("Bearer ") ? raw.slice(7).trim() : raw;
-			if (token) {
-				config.headers.Authorization = `Bearer ${token}`;
 			}
 		}
 
@@ -296,18 +317,18 @@ axiosInstance.interceptors.request.use(
 			}
 		}
 
-		console.log("API Request:", config.method?.toUpperCase(), config.baseURL, config.url, config);
+		logApiRequest(config);
 		return config;
 	},
 	(error) => {
-		console.error("API Request Error:", error);
+		logApiRequestError(error);
 		return Promise.reject(error);
 	},
 );
 
 axiosInstance.interceptors.response.use(
 	(res: AxiosResponse<Result<any>>) => {
-		console.log("API Response:", res.status, res.config.url, res.data);
+		logApiResponse(res);
 
 		const isBlobResponse =
 			(res.config as any)?.responseType === "blob" || (typeof Blob !== "undefined" && res.data instanceof Blob);
@@ -348,6 +369,8 @@ axiosInstance.interceptors.response.use(
 			(requestUrl.includes("/keycloak/auth/login") || requestUrl.includes("/keycloak/auth/platform/login"));
 		const isRefreshRequest = typeof requestUrl === "string" && requestUrl.includes("/keycloak/auth/refresh");
 		const shouldSuppressAuthHandling = typeof requestUrl === "string" && requestUrl.includes("/keycloak/localization/");
+		const skipErrorToast =
+			(response?.config as any)?._skipErrorToast === true || (error?.config as any)?._skipErrorToast === true;
 		// SQL IDE tab race condition: if another window/session already closed the tab,
 		// the backend returns 404 "tab not found". Frontend useTabStore reconciles via
 		// its idRemap chain on the next hydrate; surfacing a toast here only confuses users.
@@ -355,7 +378,7 @@ axiosInstance.interceptors.response.use(
 		const isSqlTabRaceCondition =
 			typeof requestUrl === "string" && requestUrl.includes("/sql/v2/tabs") && response?.status === 404;
 		if (!(isLoginRequest && response?.status === 401)) {
-			console.error("API Response Error:", response?.status, response?.data, error.message);
+			logApiResponseError(error);
 		}
 		const apiBody: any = response?.data || {};
 		const headers = response?.headers || {};
@@ -428,38 +451,13 @@ axiosInstance.interceptors.response.use(
 		// Attempt silent refresh on 401 (non-auth endpoints) and retry once
 		if (response?.status === 401 && !shouldSuppressAuthHandling && !isLoginRequest && !isRefreshRequest) {
 			const cfg = response.config || {};
-			const requestAuth = String((cfg.headers as any)?.Authorization || "");
-			const requestToken = requestAuth.startsWith("Bearer ") ? requestAuth.slice(7).trim() : "";
 			// prevent infinite loop
 			if (!(cfg as any)._retry) {
-				// Race-safe: SessionManager may have already refreshed (or is about to).
-				// Check if the store has a different token than what this request used.
-				const checkStoreForNewerToken = (): string | null => {
-					const current = String(userStore.getState().userToken?.accessToken || "").trim();
-					return requestToken && current && requestToken !== current ? current : null;
-				};
-				// Immediate check
-				let newerToken = checkStoreForNewerToken();
-				// If not yet updated, wait briefly for SessionManager to finish
-				if (!newerToken && (sessionExpiredHeader || sessionConflictHeader)) {
-					await new Promise((r) => setTimeout(r, 500));
-					newerToken = checkStoreForNewerToken();
-				}
-				if (newerToken) {
-					(cfg.headers as any).Authorization = `Bearer ${newerToken}`;
-					(cfg as any)._retry = true;
-					try {
-						return await axiosInstance.request(cfg as any);
-					} catch (_e) {
-						// fallthrough to normal refresh below
-					}
-				}
 				const refreshed = await refreshTokenIfPossible();
 				if (refreshed) {
-					// retry original request with updated access token
-					const { userToken } = userStore.getState();
 					(cfg.headers as any) = (cfg.headers as any) || {};
-					(cfg.headers as any).Authorization = userToken?.accessToken ? `Bearer ${userToken.accessToken}` : undefined;
+					delete (cfg.headers as any).Authorization;
+					delete (cfg.headers as any).authorization;
 					(cfg as any)._retry = true;
 					try {
 						return await axiosInstance.request(cfg as any);
@@ -473,17 +471,26 @@ axiosInstance.interceptors.response.use(
 				console.warn("[auth] Suppressing auto-logout due to grace window after login");
 				return Promise.reject(error);
 			}
-			const currentAccessToken = String(userStore.getState().userToken?.accessToken || requestToken || "").trim();
-			const portalStatus = await probePortalSessionStatus(currentAccessToken);
+			const portalStatus = await probePortalSessionStatus();
 			const mustForceLogout = shouldForceLogout || isDefinitivePortalSessionInactive(portalStatus);
 			if (!mustForceLogout) {
 				return Promise.reject(error);
 			}
 			forceLogoutToLogin();
-		} else if (shouldForceLogout && !TEST_SESSION_ENABLED) {
+		} else if (shouldForceLogout && !TEST_SESSION_ENABLED && !isLoginRequest) {
+			if (hasRecentLoginGraceWindow()) {
+				console.warn("[auth] Suppressing forced logout due to grace window after login");
+				return Promise.reject(error);
+			}
 			forceLogoutToLogin();
 		} else {
-			if (!shouldSuppressAuthHandling && !isLoginRequest && !isSqlTabRaceCondition && !isSqlTabOptimisticConflict) {
+			if (
+				!skipErrorToast &&
+				!shouldSuppressAuthHandling &&
+				!isLoginRequest &&
+				!isSqlTabRaceCondition &&
+				!isSqlTabOptimisticConflict
+			) {
 				const isServiceUnavailable = !response || SERVICE_UNAVAILABLE_STATUSES.has(response.status ?? 0);
 				if (isServiceUnavailable) {
 					toast.error(combinedMsg, { id: "service-error", duration: 5000, position: "top-center" });

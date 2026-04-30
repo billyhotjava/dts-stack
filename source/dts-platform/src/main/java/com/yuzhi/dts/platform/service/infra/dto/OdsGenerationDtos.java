@@ -30,6 +30,7 @@ public final class OdsGenerationDtos {
 
     public record OdsSourceColumnRequest(
         String name,
+        Boolean include,
         String targetName,
         String dataType,
         String nativeType,

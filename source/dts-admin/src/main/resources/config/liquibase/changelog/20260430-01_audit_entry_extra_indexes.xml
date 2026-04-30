@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog
+        xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.22.xsd">
+
+    <!--
+        AuditLogResource.list filters frequently include source_system, result, and button_code,
+        which the original schema (20260319-01) did not index. Added now so that the auditor
+        dashboard can scan large audit_entry tables without a sequential scan.
+        - source_system + occurred_at: composite index for module-scoped time-windowed queries
+        - result: partial index (FAILED/UNKNOWN only) to keep insert overhead minimal while
+          still accelerating "show me errors" queries
+        - button_code: single-column index for auditing by specific UI button
+    -->
+    <changeSet id="20260430-01-audit-entry-extra-indexes" author="codex">
+        <createIndex tableName="audit_entry" indexName="idx_audit_entry_source_time">
+            <column name="source_system"/>
+            <column name="occurred_at"/>
+        </createIndex>
+
+        <createIndex tableName="audit_entry" indexName="idx_audit_entry_button_code">
+            <column name="button_code"/>
+        </createIndex>
+
+        <!-- Partial index limited to non-success outcomes to keep insert cost low. -->
+        <sql dbms="postgresql">
+            CREATE INDEX IF NOT EXISTS idx_audit_entry_result_problem
+                ON audit_entry (occurred_at DESC)
+                WHERE result IN ('FAIL', 'FAILED', 'UNKNOWN', 'PENDING');
+        </sql>
+        <rollback>
+            <sql dbms="postgresql">DROP INDEX IF EXISTS idx_audit_entry_result_problem;</sql>
+        </rollback>
+    </changeSet>
+
+</databaseChangeLog>

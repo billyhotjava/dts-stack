@@ -4,6 +4,7 @@ import { getPortalSessionStatus } from "@/api/platformApi";
 import menuService from "@/api/services/menuService";
 import { GLOBAL_CONFIG } from "@/global-config";
 import useUserStore, { useUserInfo, useUserToken } from "@/store/userStore";
+import { isDevFallbackAccessToken } from "@/utils/devAuthTokens";
 import { LOGIN_ROUTE, resolveCurrentAppPath, resolveLoginHref } from "../constants";
 import { useRouter } from "../hooks";
 
@@ -25,9 +26,9 @@ function decodeJwtExp(token?: string): number | null {
 
 /** Check whether a token is definitely expired based on its own JWT exp claim. */
 function isTokenExpired(token?: string): boolean {
-	if (!token) return true;
+	if (!token) return false;
 	// Dev tokens are not JWTs; treat them as always valid.
-	if (token.startsWith("dev-access-")) return false;
+	if (isDevFallbackAccessToken(token)) return false;
 	const exp = decodeJwtExp(token);
 	if (exp !== null) {
 		return Date.now() > exp - 10_000;
@@ -36,10 +37,9 @@ function isTokenExpired(token?: string): boolean {
 	return false;
 }
 
-function requiresBackendSessionValidation(token?: string): boolean {
-	if (!token) return false;
-	if (token.startsWith("dev-access-")) return false;
-	return decodeJwtExp(token) === null;
+function requiresBackendSessionValidation(accessToken?: string, authenticated?: boolean): boolean {
+	if (accessToken && isDevFallbackAccessToken(accessToken)) return false;
+	return Boolean(authenticated || accessToken);
 }
 
 type Props = {
@@ -47,15 +47,19 @@ type Props = {
 };
 export default function LoginAuthGuard({ children }: Props) {
 	const router = useRouter();
-	const { accessToken } = useUserToken();
+	const token = useUserToken();
+	const accessToken = token?.accessToken;
 	const { roles = [] } = useUserInfo();
 	const [sessionChecked, setSessionChecked] = useState(false);
 	const [sessionAuthenticated, setSessionAuthenticated] = useState(false);
+	const [sessionRecovering, setSessionRecovering] = useState(false);
 	// 对明确的 EXPIRED / CONCURRENT / LOGOUT 立即失效；
 	// 只有网络抖动或无原因的 authenticated=false 才走 2 次确认阈值。
 	const failCountRef = useRef(0);
+	const probeUnavailableCountRef = useRef(0);
 
-	const needsBackendSessionCheck = requiresBackendSessionValidation(accessToken);
+	const hasSessionMarker = Boolean(token?.authenticated || accessToken);
+	const needsBackendSessionCheck = requiresBackendSessionValidation(accessToken, token?.authenticated);
 
 	const forceLogout = useCallback(() => {
 		useUserStore.getState().actions.clearUserInfoAndToken();
@@ -63,8 +67,15 @@ export default function LoginAuthGuard({ children }: Props) {
 	}, []);
 
 	const verifyBackendSession = useCallback(async () => {
-		if (!accessToken || isTokenExpired(accessToken) || !needsBackendSessionCheck) {
-			setSessionAuthenticated(Boolean(accessToken) && !isTokenExpired(accessToken));
+		if (!hasSessionMarker || isTokenExpired(accessToken)) {
+			setSessionAuthenticated(false);
+			setSessionRecovering(false);
+			setSessionChecked(true);
+			return;
+		}
+		if (!needsBackendSessionCheck) {
+			setSessionAuthenticated(true);
+			setSessionRecovering(false);
 			setSessionChecked(true);
 			return;
 		}
@@ -72,13 +83,16 @@ export default function LoginAuthGuard({ children }: Props) {
 		// 周期探活仍会在窗口外命中，不影响异地登录 / session 失效感知。
 		if (isWithinLoginProbeGrace()) {
 			setSessionAuthenticated(true);
+			setSessionRecovering(false);
 			setSessionChecked(true);
 			failCountRef.current = 0;
+			probeUnavailableCountRef.current = 0;
 			return;
 		}
 		try {
-			const currentAccessToken = useUserStore.getState().userToken?.accessToken || accessToken;
-			const status = await getPortalSessionStatus(currentAccessToken);
+			const status = await getPortalSessionStatus();
+			probeUnavailableCountRef.current = 0;
+			setSessionRecovering(false);
 			const authenticated = Boolean(status?.authenticated);
 			if (authenticated) {
 				failCountRef.current = 0;
@@ -93,6 +107,7 @@ export default function LoginAuthGuard({ children }: Props) {
 				reason === "LOGOUT" ||
 				(status as any)?.remainingSeconds === 0;
 			if (isDefinitiveInactive) {
+				setSessionRecovering(false);
 				setSessionAuthenticated(false);
 				setSessionChecked(true);
 				forceLogout();
@@ -116,18 +131,20 @@ export default function LoginAuthGuard({ children }: Props) {
 			// Keep the local session and let the periodic probe recover; only explicit inactive
 			// statuses are allowed to force logout.
 			console.warn("[LoginAuthGuard] backend session probe unavailable, preserving local session", err);
+			probeUnavailableCountRef.current += 1;
+			setSessionRecovering(probeUnavailableCountRef.current >= 2);
 			setSessionAuthenticated(true);
 			setSessionChecked(true);
 		}
-	}, [accessToken, forceLogout, needsBackendSessionCheck]);
+	}, [accessToken, forceLogout, hasSessionMarker, needsBackendSessionCheck]);
 
 	const check = useCallback(() => {
-		if (!accessToken || isTokenExpired(accessToken)) {
-			console.warn("[LoginAuthGuard] redirect: no token or expired", {
-				hasToken: !!accessToken,
+		if (!hasSessionMarker || isTokenExpired(accessToken)) {
+			console.warn("[LoginAuthGuard] redirect: no session marker or expired dev token", {
+				hasToken: !!hasSessionMarker,
 				expired: accessToken ? isTokenExpired(accessToken) : "N/A",
 			});
-			if (accessToken) {
+			if (hasSessionMarker) {
 				useUserStore.getState().actions.clearUserInfoAndToken();
 			}
 			router.replace(LOGIN_ROUTE);
@@ -168,17 +185,26 @@ export default function LoginAuthGuard({ children }: Props) {
 				router.replace(LOGIN_ROUTE);
 			}
 		}
-	}, [router, accessToken, roles, needsBackendSessionCheck, sessionChecked, sessionAuthenticated, forceLogout]);
+	}, [
+		router,
+		accessToken,
+		roles,
+		needsBackendSessionCheck,
+		sessionChecked,
+		sessionAuthenticated,
+		forceLogout,
+		hasSessionMarker,
+	]);
 
 	useEffect(() => {
 		if (!needsBackendSessionCheck) {
-			setSessionAuthenticated(Boolean(accessToken) && !isTokenExpired(accessToken));
+			setSessionAuthenticated(hasSessionMarker && !isTokenExpired(accessToken));
 			setSessionChecked(true);
 			return;
 		}
 		setSessionChecked(false);
 		void verifyBackendSession();
-	}, [accessToken, needsBackendSessionCheck, verifyBackendSession]);
+	}, [accessToken, hasSessionMarker, needsBackendSessionCheck, verifyBackendSession]);
 
 	useEffect(() => {
 		check();
@@ -189,7 +215,7 @@ export default function LoginAuthGuard({ children }: Props) {
 
 	// Periodic auth/session check — catches backend portal session expiry while the page is idle.
 	useEffect(() => {
-		if (!accessToken) return;
+		if (!hasSessionMarker) return;
 		const timer = window.setInterval(() => {
 			const currentToken = useUserStore.getState().userToken;
 			if (isTokenExpired(currentToken?.accessToken)) {
@@ -197,35 +223,46 @@ export default function LoginAuthGuard({ children }: Props) {
 				window.location.replace(resolveLoginHref(resolveCurrentAppPath()));
 				return;
 			}
-			if (requiresBackendSessionValidation(currentToken?.accessToken)) {
+			if (requiresBackendSessionValidation(currentToken?.accessToken, currentToken?.authenticated)) {
 				void verifyRef.current();
 			}
 		}, 30_000);
 		return () => window.clearInterval(timer);
-	}, [accessToken]);
+	}, [hasSessionMarker]);
 
 	// Ensure menus reflect the current identity. Reload on token change even if a previous menu exists.
 	// This fixes a stale-menu issue when switching accounts without a full page reload.
 	useEffect(() => {
-		if (accessToken && !accessToken.startsWith("dev-access-")) {
+		if (hasSessionMarker && !isDevFallbackAccessToken(accessToken)) {
 			menuService.getMenuTree().catch(() => {
 				/* ignore */
 			});
 		}
-	}, [accessToken]);
+	}, [accessToken, hasSessionMarker]);
 
-	// Block rendering if the token is missing or expired — prevents dashboard flash before redirect.
-	if (!accessToken || isTokenExpired(accessToken)) {
+	// Block rendering if the session marker is missing or dev token is expired.
+	if (!hasSessionMarker || isTokenExpired(accessToken)) {
 		return null;
 	}
 
 	if (needsBackendSessionCheck && !sessionChecked) {
-		return <div className="flex min-h-screen items-center justify-center text-sm text-muted-foreground">会话校验中...</div>;
+		return (
+			<div className="flex min-h-screen items-center justify-center text-sm text-muted-foreground">会话校验中...</div>
+		);
 	}
 
 	if (needsBackendSessionCheck && !sessionAuthenticated) {
 		return null;
 	}
 
-	return <>{children}</>;
+	return (
+		<>
+			{sessionRecovering ? (
+				<div className="fixed bottom-4 left-1/2 z-50 -translate-x-1/2 rounded border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900 shadow-sm">
+					正在恢复服务连接...
+				</div>
+			) : null}
+			{children}
+		</>
+	);
 }

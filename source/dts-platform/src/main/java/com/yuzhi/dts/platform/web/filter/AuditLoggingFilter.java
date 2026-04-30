@@ -2,6 +2,7 @@ package com.yuzhi.dts.platform.web.filter;
 
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.yuzhi.dts.common.security.AuthEndpointPaths;
 import com.yuzhi.dts.common.net.IpAddressUtils;
 import com.yuzhi.dts.platform.security.SecurityUtils;
 import com.yuzhi.dts.platform.service.audit.AuditFlowManager;
@@ -48,9 +49,9 @@ public class AuditLoggingFilter extends OncePerRequestFilter {
         "/webjars",
         "/error",
         // auth APIs are domain-audited explicitly; skip generic request log to avoid anonymousUser actor
-        "/api/keycloak/auth",
+        AuthEndpointPaths.KEYCLOAK_AUTH_API_BASE,
         // localization is permitAll and fetched pre-login by FE
-        "/api/keycloak/localization"
+        AuthEndpointPaths.KEYCLOAK_LOCALIZATION_API_BASE
     };
 
     private static final boolean AUDIT_CONTEXT_PRESENT;

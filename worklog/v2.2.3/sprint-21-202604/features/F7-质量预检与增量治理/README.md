@@ -1,7 +1,7 @@
 # F7: 质量预检与增量治理
 
 **优先级**: P1
-**状态**: IN_PROGRESS
+**状态**: DONE
 
 ## 目标
 
@@ -12,10 +12,10 @@
 | ID | Task | 优先级 | 状态 | 依赖 |
 |----|------|--------|------|------|
 | T01 | 接入前 Precheck 规则框架 | P0 | DONE | F3-F5 |
-| T02 | 连接、权限、目标写入与类型兼容校验 | P0 | IN_PROGRESS | T01 |
+| T02 | 连接、权限、目标写入与类型兼容校验 | P0 | DONE | T01 |
 | T03 | 主键唯一性、增量字段非空率与样本校验 | P1 | DONE | T01 |
 | T04 | watermark 状态模型与失败不推进规则 | P1 | DONE | F5 |
-| T05 | schema drift 与数据量波动检测 | P1 | IN_PROGRESS | T01-T04 |
+| T05 | schema drift 与数据量波动检测 | P1 | DONE | T01-T04 |
 
 ## 完成标准
 
@@ -24,6 +24,7 @@
 - [x] 增量任务有可查询 watermark 状态。
 - [x] 失败执行不推进 watermark。
 - [x] schema drift 产生事件，可在任务和数据资产侧查看。
+- [x] 源表行数预检支持配置化基线和波动阈值告警。
 
 ## 当前落地
 
@@ -36,10 +37,11 @@
 - 数据源可通过 `props.precheckQueryTimeoutSeconds` 调整深度探测超时时间，也可用 `props.precheckProbeDisabled=true` 跳过源端深度探测。
 - `OdsPrecheckProbeService` 继续补齐目标端写入探测：读取平台默认数据湖目标端，连接目标 JDBC，并对每个 ODS schema 尝试创建/删除临时预检表；默认目标端缺失、连接失败或 schema 写入失败会阻断提交。
 - 数据源可通过 `props.precheckTargetWriteProbeDisabled=true` 跳过目标端写入探测，用于非 JDBC 目标端或现场临时降级。
+- `OdsGenerationService` 新增字段类型兼容预检，按 `sourceType -> odsType` 判断精度丢失、时间类型错配、二进制错配、JSON 降级和字符到业务类型转换风险；明显会破坏写入或丢失语义的映射返回 FAIL/WARN。
+- `OdsPrecheckProbeService` 新增 `SOURCE_ROW_VOLUME_BASELINE` 规则：源端行数探测后按全局或按表 `props.precheckRowCountBaselines` 校验 min/max/expected/maxDeviationRatio；未配置阈值时返回当前行数作为基线候选。
 - 增量 watermark 状态和审计沿用现有 `/incremental-states`、`/incremental-audits`，详情页和执行历史页已可查看。
 - Schema Discover 缓存刷新会产生 drift 摘要，支持新增/删除表和字段类型/nullable 变化识别。
 
 ## 待补
 
-- 深度类型兼容需要接入统一规则框架。
-- 数据量波动检测需要接入执行行数基线和告警阈值。
+- 无。

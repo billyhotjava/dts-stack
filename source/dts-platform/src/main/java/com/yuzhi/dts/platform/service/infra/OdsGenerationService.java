@@ -242,36 +242,51 @@ public class OdsGenerationService {
             "请为单表设置实体编码，或调整系统/业务编码避免多个源表落到同一 ODS 表"
         );
 
-        String syncMode = firstNonBlank(request == null ? null : request.syncMode(), "full_refresh");
+        String requestedSyncMode = firstNonBlank(request == null ? null : request.syncMode(), "full_refresh");
+        String taskSyncMode = normalizeTaskSyncMode(requestedSyncMode);
         String resolvedIncrementalColumn = null;
-        if ("incremental".equalsIgnoreCase(syncMode)) {
+        if (isTimestampIncrementalMode(requestedSyncMode) || isPrimaryKeyIncrementalMode(requestedSyncMode)) {
             boolean incrementalOk = true;
-            String incrementalMessage = "已识别多表共同增量字段";
-            String incrementalSuggestion = "增量任务会使用共同候选字段推进 watermark";
+            String incrementalMessage = isPrimaryKeyIncrementalMode(requestedSyncMode) ? "已识别多表共同主键增量字段" : "已识别多表共同增量字段";
+            String incrementalSuggestion = isPrimaryKeyIncrementalMode(requestedSyncMode)
+                ? "主键增量任务会使用共同数值主键推进 watermark"
+                : "增量任务会使用共同候选字段推进 watermark";
             try {
-                String incrementalColumn = resolveIncrementalColumn(plans, syncMode);
+                String incrementalColumn = resolveIncrementalColumn(plans, requestedSyncMode);
                 resolvedIncrementalColumn = incrementalColumn;
                 incrementalMessage = "已识别增量字段：" + incrementalColumn;
             } catch (IllegalArgumentException ex) {
                 incrementalOk = false;
                 incrementalMessage = ex.getMessage();
-                incrementalSuggestion = "请改为全量模式，或为所有表选择同名时间戳增量字段";
+                incrementalSuggestion = isPrimaryKeyIncrementalMode(requestedSyncMode)
+                    ? "请改为全量/追加模式，或为所有表维护同名数值主键"
+                    : "请改为全量/追加模式，或为所有表选择同名时间戳增量字段";
             }
-            addRule(rules, "INCREMENTAL_WATERMARK", "ERROR", incrementalOk, syncMode, incrementalMessage, incrementalSuggestion);
+            addRule(
+                rules,
+                isPrimaryKeyIncrementalMode(requestedSyncMode) ? "PRIMARY_KEY_INCREMENTAL" : "INCREMENTAL_WATERMARK",
+                "ERROR",
+                incrementalOk,
+                requestedSyncMode,
+                incrementalMessage,
+                incrementalSuggestion
+            );
         } else {
             addRule(
                 rules,
                 "SYNC_MODE",
                 "INFO",
                 true,
-                syncMode,
-                "同步模式为全量覆盖",
-                "可在增量字段明确后切换为时间戳增量"
+                requestedSyncMode,
+                syncModeMessage(requestedSyncMode),
+                isAppendMode(requestedSyncMode) ? "追加模式不会清空目标表，请确认下游去重或幂等策略" : "可在增量字段明确后切换为时间戳增量或主键增量"
             );
         }
 
+        addTypeCompatibilityRules(rules, plans);
+
         if (precheckProbeService != null) {
-            rules.addAll(precheckProbeService.probe(source, plans, syncMode, resolvedIncrementalColumn));
+            rules.addAll(precheckProbeService.probe(source, plans, taskSyncMode, resolvedIncrementalColumn));
         }
 
         for (String warning : planWarnings.stream().filter(StringUtils::hasText).distinct().toList()) {
@@ -353,6 +368,9 @@ public class OdsGenerationService {
         }
         List<OdsColumnPlanDto> columns = new ArrayList<>();
         for (OdsSourceColumnRequest sourceColumn : table.columns() == null ? List.<OdsSourceColumnRequest>of() : table.columns()) {
+            if (sourceColumn != null && Boolean.FALSE.equals(sourceColumn.include())) {
+                continue;
+            }
             if (sourceColumn == null || !StringUtils.hasText(sourceColumn.name())) {
                 continue;
             }
@@ -642,7 +660,8 @@ public class OdsGenerationService {
         List<String> sourceTables = plans.stream().map(plan -> physicalName(plan.sourceSchema(), plan.sourceTable())).toList();
         List<String> targetTables = plans.stream().map(plan -> physicalName(plan.odsSchema(), plan.odsTable())).toList();
         String readerType = resolveReaderType(source);
-        String syncMode = firstNonBlank(request == null ? null : request.syncMode(), "full_refresh");
+        String requestedSyncMode = firstNonBlank(request == null ? null : request.syncMode(), "full_refresh");
+        String syncMode = normalizeTaskSyncMode(requestedSyncMode);
 
         Map<String, Object> sourceConfig = new LinkedHashMap<>();
         sourceConfig.put("readerType", readerType);
@@ -668,10 +687,13 @@ public class OdsGenerationService {
 
         Map<String, Object> syncSpec = new LinkedHashMap<>();
         syncSpec.put("mode", syncMode);
-        String incrementalColumn = resolveIncrementalColumn(plans, syncMode);
+        if (!requestedSyncMode.equalsIgnoreCase(syncMode)) {
+            syncSpec.put("requestedMode", requestedSyncMode);
+        }
+        String incrementalColumn = resolveIncrementalColumn(plans, requestedSyncMode);
         if (StringUtils.hasText(incrementalColumn)) {
             syncSpec.put("incrementalColumn", incrementalColumn);
-            syncSpec.put("incrementalType", "timestamp");
+            syncSpec.put("incrementalType", isPrimaryKeyIncrementalMode(requestedSyncMode) ? "number" : "timestamp");
         }
         Map<String, Object> schedule = new LinkedHashMap<>();
         schedule.put("type", "manual");
@@ -722,9 +744,16 @@ public class OdsGenerationService {
     }
 
     private String resolveIncrementalColumn(List<OdsTablePlanDto> plans, String syncMode) {
-        if (!"incremental".equalsIgnoreCase(syncMode)) {
-            return null;
+        if (isTimestampIncrementalMode(syncMode)) {
+            return resolveTimestampIncrementalColumn(plans);
         }
+        if (isPrimaryKeyIncrementalMode(syncMode)) {
+            return resolvePrimaryKeyIncrementalColumn(plans);
+        }
+        return null;
+    }
+
+    private String resolveTimestampIncrementalColumn(List<OdsTablePlanDto> plans) {
         Map<String, String> commonCandidates = null;
         for (OdsTablePlanDto plan : plans) {
             if (plan == null || plan.incrementalCandidates() == null || plan.incrementalCandidates().isEmpty()) {
@@ -752,6 +781,287 @@ public class OdsGenerationService {
             }
         }
         return commonCandidates.values().iterator().next();
+    }
+
+    private String resolvePrimaryKeyIncrementalColumn(List<OdsTablePlanDto> plans) {
+        if (plans == null || plans.isEmpty()) {
+            return null;
+        }
+        Map<String, String> commonCandidates = null;
+        for (OdsTablePlanDto plan : plans) {
+            if (plan == null || plan.primaryKeys() == null || plan.primaryKeys().isEmpty()) {
+                throw new IllegalArgumentException("主键增量需要每张源表都有主键或业务唯一键");
+            }
+            Map<String, String> candidates = new LinkedHashMap<>();
+            for (String candidate : plan.primaryKeys()) {
+                if (StringUtils.hasText(candidate)) {
+                    candidates.putIfAbsent(candidate.trim().toLowerCase(Locale.ROOT), candidate.trim());
+                }
+            }
+            if (commonCandidates == null) {
+                commonCandidates = new LinkedHashMap<>(candidates);
+            } else {
+                commonCandidates.keySet().retainAll(candidates.keySet());
+            }
+        }
+        if (commonCandidates == null || commonCandidates.isEmpty()) {
+            throw new IllegalArgumentException("多表主键增量需要存在相同的主键字段");
+        }
+        String column = commonCandidates.values().iterator().next();
+        ensurePrimaryKeyIncrementalType(plans, column);
+        return column;
+    }
+
+    private void ensurePrimaryKeyIncrementalType(List<OdsTablePlanDto> plans, String columnName) {
+        for (OdsTablePlanDto plan : plans) {
+            OdsColumnPlanDto column = findPlanColumn(plan, columnName);
+            if (column == null) {
+                throw new IllegalArgumentException("主键增量字段不在字段清单中：" + columnName);
+            }
+            String family = typeFamily(column.sourceType());
+            if (!Set.of("integer", "bigint", "decimal").contains(family)) {
+                throw new IllegalArgumentException("主键增量字段必须为数值类型：" + columnName + " (" + column.sourceType() + ")");
+            }
+        }
+    }
+
+    private OdsColumnPlanDto findPlanColumn(OdsTablePlanDto plan, String columnName) {
+        if (plan == null || plan.columns() == null || !StringUtils.hasText(columnName)) {
+            return null;
+        }
+        for (OdsColumnPlanDto column : plan.columns()) {
+            if (column != null && column.sourceName() != null && column.sourceName().equalsIgnoreCase(columnName.trim())) {
+                return column;
+            }
+        }
+        return null;
+    }
+
+    private boolean isTimestampIncrementalMode(String syncMode) {
+        String normalized = safeMode(syncMode);
+        return "incremental".equals(normalized) || "timestamp_incremental".equals(normalized);
+    }
+
+    private boolean isPrimaryKeyIncrementalMode(String syncMode) {
+        String normalized = safeMode(syncMode);
+        return "primary_key_incremental".equals(normalized) || "pk_incremental".equals(normalized);
+    }
+
+    private boolean isAppendMode(String syncMode) {
+        String normalized = safeMode(syncMode);
+        return "append".equals(normalized) || "full_append".equals(normalized);
+    }
+
+    private String normalizeTaskSyncMode(String syncMode) {
+        if (isTimestampIncrementalMode(syncMode) || isPrimaryKeyIncrementalMode(syncMode)) {
+            return "incremental";
+        }
+        if (isAppendMode(syncMode)) {
+            return "append";
+        }
+        return "full_refresh";
+    }
+
+    private String syncModeMessage(String syncMode) {
+        if (isAppendMode(syncMode)) {
+            return "同步模式为全量追加";
+        }
+        return "同步模式为全量覆盖";
+    }
+
+    private String safeMode(String syncMode) {
+        return firstNonBlank(syncMode, "full_refresh").trim().toLowerCase(Locale.ROOT);
+    }
+
+    private void addTypeCompatibilityRules(List<OdsPrecheckRuleResult> rules, List<OdsTablePlanDto> plans) {
+        if (plans == null || plans.isEmpty()) {
+            return;
+        }
+        for (OdsTablePlanDto plan : plans) {
+            if (plan == null || plan.columns() == null || plan.columns().isEmpty()) {
+                continue;
+            }
+            int issues = 0;
+            for (OdsColumnPlanDto column : plan.columns()) {
+                TypeCompatibility compatibility = typeCompatibility(column);
+                if (compatibility == null || "PASS".equals(compatibility.status())) {
+                    continue;
+                }
+                issues++;
+                rules.add(
+                    new OdsPrecheckRuleResult(
+                        "TYPE_COMPATIBILITY",
+                        compatibility.level(),
+                        compatibility.status(),
+                        physicalName(plan.sourceSchema(), plan.sourceTable()) + "." + column.sourceName(),
+                        compatibility.message(),
+                        compatibility.suggestion()
+                    )
+                );
+            }
+            addRule(
+                rules,
+                "TYPE_COMPATIBILITY_SUMMARY",
+                "INFO",
+                issues == 0,
+                physicalName(plan.sourceSchema(), plan.sourceTable()),
+                issues == 0 ? "字段类型兼容性预检通过" : "字段类型兼容性存在 " + issues + " 个风险",
+                issues == 0 ? "可继续生成 ODS 任务" : "请检查 TYPE_COMPATIBILITY 规则，并在字段 override 中显式确认目标类型"
+            );
+        }
+    }
+
+    private TypeCompatibility typeCompatibility(OdsColumnPlanDto column) {
+        if (column == null) {
+            return null;
+        }
+        String sourceType = firstNonBlank(column.sourceType(), "");
+        String odsType = firstNonBlank(column.odsType(), "");
+        if (!StringUtils.hasText(sourceType)) {
+            return warn("源字段类型未知，无法判断类型兼容性", "请重新执行 Schema Discover，或手工确认字段类型");
+        }
+        if (!StringUtils.hasText(odsType)) {
+            return fail("ODS 目标字段类型为空", "请为字段 " + column.sourceName() + " 指定目标类型");
+        }
+        String sourceFamily = typeFamily(sourceType);
+        String targetFamily = typeFamily(odsType);
+        if ("unknown".equals(sourceFamily)) {
+            return warn(
+                "源字段类型未被规则识别：" + sourceType + " -> " + odsType,
+                "请人工确认该类型是否能被目标库稳定写入"
+            );
+        }
+        if ("unknown".equals(targetFamily)) {
+            return warn(
+                "ODS 目标类型未被规则识别：" + sourceType + " -> " + odsType,
+                "请确认目标库支持该字段类型"
+            );
+        }
+        if ("text".equals(targetFamily)) {
+            return pass();
+        }
+        if (sourceFamily.equals(targetFamily)) {
+            return pass();
+        }
+        if ("integer".equals(sourceFamily) && Set.of("bigint", "decimal", "floating").contains(targetFamily)) {
+            return pass();
+        }
+        if ("bigint".equals(sourceFamily) && "decimal".equals(targetFamily)) {
+            return pass();
+        }
+        if (Set.of("decimal", "floating").contains(sourceFamily) && Set.of("integer", "bigint").contains(targetFamily)) {
+            return fail(
+                "数值字段映射可能丢失小数或溢出：" + sourceType + " -> " + odsType,
+                "请改用 numeric/double precision，或明确业务允许截断"
+            );
+        }
+        if ("decimal".equals(sourceFamily) && "floating".equals(targetFamily)) {
+            return warn(
+                "高精度数值映射到浮点类型可能产生精度误差：" + sourceType + " -> " + odsType,
+                "金额、指标口径字段建议使用 numeric 并确认精度"
+            );
+        }
+        if ("floating".equals(sourceFamily) && "decimal".equals(targetFamily)) {
+            return warn(
+                "浮点字段映射到 numeric 需要确认精度和舍入规则：" + sourceType + " -> " + odsType,
+                "请确认目标库 numeric 精度足够，避免写入失败"
+            );
+        }
+        if ("timestamp".equals(sourceFamily) && "date".equals(targetFamily)) {
+            return warn(
+                "时间戳映射到日期会丢失时分秒：" + sourceType + " -> " + odsType,
+                "如需用于增量 watermark，请保持 timestamp 类型"
+            );
+        }
+        if ("date".equals(sourceFamily) && "timestamp".equals(targetFamily)) {
+            return pass();
+        }
+        if (Set.of("date", "time", "timestamp").contains(sourceFamily) && Set.of("integer", "bigint", "decimal", "floating", "boolean", "binary").contains(targetFamily)) {
+            return fail(
+                "日期时间字段映射到非时间类型风险较高：" + sourceType + " -> " + odsType,
+                "请改用 date/time/timestamp/text，或显式确认转换逻辑"
+            );
+        }
+        if ("binary".equals(sourceFamily) && !"binary".equals(targetFamily)) {
+            return fail(
+                "二进制字段需要映射到 bytea/blob 或 text：" + sourceType + " -> " + odsType,
+                "请使用 bytea/blob，或在抽取前转换为 base64/text"
+            );
+        }
+        if ("json".equals(sourceFamily) && !"json".equals(targetFamily)) {
+            return warn(
+                "JSON 字段未映射到 JSON 类型：" + sourceType + " -> " + odsType,
+                "如需保留结构化查询能力，建议使用 json/jsonb"
+            );
+        }
+        if ("boolean".equals(sourceFamily) && !"boolean".equals(targetFamily)) {
+            return warn(
+                "布尔字段映射到非 boolean 类型：" + sourceType + " -> " + odsType,
+                "请确认 Addax 写入器和目标库的布尔值转换规则"
+            );
+        }
+        if ("text".equals(sourceFamily) && !"text".equals(targetFamily)) {
+            return warn(
+                "字符字段映射到非字符类型需要数据内容可转换：" + sourceType + " -> " + odsType,
+                "建议保持 text/varchar，业务转换放到 dbt stg 层处理"
+            );
+        }
+        return warn(
+            "字段类型映射需要人工确认：" + sourceType + " -> " + odsType,
+            "请在字段 override 中显式确认目标类型，并保留一次 dry-run 结果"
+        );
+    }
+
+    private String typeFamily(String rawType) {
+        String normalized = rawType == null ? "" : rawType.toLowerCase(Locale.ROOT).trim();
+        if (!StringUtils.hasText(normalized)) return "unknown";
+        if (normalized.contains("json")) return "json";
+        if (
+            normalized.contains("blob") ||
+            normalized.contains("binary") ||
+            normalized.contains("bytea") ||
+            normalized.contains("varbinary") ||
+            normalized.equals("raw") ||
+            normalized.contains(" image")
+        ) return "binary";
+        if (normalized.contains("bool")) return "boolean";
+        if (normalized.equals("bit") || normalized.startsWith("bit(")) return "boolean";
+        if (normalized.contains("timestamp") || normalized.contains("datetime")) return "timestamp";
+        if (normalized.equals("date") || normalized.startsWith("date(") || normalized.contains(" date")) return "date";
+        if (normalized.equals("time") || normalized.startsWith("time(") || normalized.contains(" time")) return "time";
+        if (normalized.contains("double") || normalized.contains("float") || normalized.contains("real")) return "floating";
+        if (normalized.contains("decimal") || normalized.contains("numeric") || normalized.contains("number") || normalized.contains("money")) return "decimal";
+        if (normalized.contains("bigint") || normalized.contains("int8") || normalized.contains("long")) return "bigint";
+        if (
+            normalized.contains("int") ||
+            normalized.contains("serial") ||
+            normalized.contains("smallint") ||
+            normalized.contains("tinyint") ||
+            normalized.contains("int2") ||
+            normalized.contains("int4")
+        ) return "integer";
+        if (
+            normalized.contains("char") ||
+            normalized.contains("text") ||
+            normalized.contains("clob") ||
+            normalized.contains("string") ||
+            normalized.contains("uuid") ||
+            normalized.contains("xml") ||
+            normalized.contains("enum")
+        ) return "text";
+        return "unknown";
+    }
+
+    private TypeCompatibility pass() {
+        return new TypeCompatibility("INFO", "PASS", "", "");
+    }
+
+    private TypeCompatibility warn(String message, String suggestion) {
+        return new TypeCompatibility("WARN", "WARN", message, suggestion);
+    }
+
+    private TypeCompatibility fail(String message, String suggestion) {
+        return new TypeCompatibility("ERROR", "FAIL", message, suggestion);
     }
 
     private void addRule(
@@ -795,6 +1105,8 @@ public class OdsGenerationService {
         String b = right == null ? "" : right.trim();
         return a.equalsIgnoreCase(b);
     }
+
+    private record TypeCompatibility(String level, String status, String message, String suggestion) {}
 
     private String resolveOdsSchema(OdsGenerationRequest request) {
         return safeColumn(firstNonBlank(request == null ? null : request.odsSchema(), DEFAULT_ODS_SCHEMA));

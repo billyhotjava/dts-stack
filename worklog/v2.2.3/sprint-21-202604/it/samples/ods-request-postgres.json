@@ -1,0 +1,85 @@
+{
+  "odsSchema": "ods",
+  "systemCode": "erp",
+  "bizCode": "smoke",
+  "entityCode": "project",
+  "includeTechnicalColumns": true,
+  "includeRawJson": true,
+  "syncMode": "incremental",
+  "tables": [
+    {
+      "schema": "dts_smoke",
+      "name": "erp_project",
+      "comment": "Sprint-21 Connector Center smoke table",
+      "primaryKeys": ["project_id"],
+      "incrementalCandidates": ["update_time"],
+      "columns": [
+        {
+          "name": "project_id",
+          "targetName": "project_id",
+          "dataType": "varchar",
+          "nativeType": "varchar(32)",
+          "targetDataType": "varchar(32)",
+          "nullable": false,
+          "comment": "Project id",
+          "primaryKey": true
+        },
+        {
+          "name": "project_name",
+          "targetName": "project_name",
+          "dataType": "varchar",
+          "nativeType": "varchar(128)",
+          "targetDataType": "varchar(128)",
+          "nullable": false,
+          "comment": "Project name"
+        },
+        {
+          "name": "owner_name",
+          "targetName": "owner_name",
+          "dataType": "varchar",
+          "nativeType": "varchar(64)",
+          "targetDataType": "varchar(64)",
+          "nullable": true,
+          "comment": "Owner"
+        },
+        {
+          "name": "budget_amount",
+          "targetName": "budget_amount",
+          "dataType": "numeric",
+          "nativeType": "numeric(18,2)",
+          "targetDataType": "numeric(18,2)",
+          "nullable": true,
+          "comment": "Budget amount"
+        },
+        {
+          "name": "progress_pct",
+          "targetName": "progress_pct",
+          "dataType": "numeric",
+          "nativeType": "numeric(6,2)",
+          "targetDataType": "numeric(6,2)",
+          "nullable": true,
+          "comment": "Progress percentage"
+        },
+        {
+          "name": "update_time",
+          "targetName": "update_time",
+          "dataType": "timestamp",
+          "nativeType": "timestamp",
+          "targetDataType": "timestamp",
+          "nullable": false,
+          "comment": "Update timestamp",
+          "incrementalCandidate": true
+        },
+        {
+          "name": "is_active",
+          "targetName": "is_active",
+          "dataType": "boolean",
+          "nativeType": "boolean",
+          "targetDataType": "boolean",
+          "nullable": true,
+          "comment": "Active flag"
+        }
+      ]
+    }
+  ]
+}

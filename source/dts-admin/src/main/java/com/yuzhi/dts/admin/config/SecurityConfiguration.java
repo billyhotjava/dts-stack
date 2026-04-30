@@ -3,6 +3,7 @@ package com.yuzhi.dts.admin.config;
 import static org.springframework.security.config.Customizer.withDefaults;
 import static org.springframework.security.oauth2.core.oidc.StandardClaimNames.PREFERRED_USERNAME;
 
+import com.yuzhi.dts.common.security.AuthEndpointPaths;
 import com.yuzhi.dts.admin.security.*;
 import com.yuzhi.dts.admin.security.oauth2.AudienceValidator;
 import com.yuzhi.dts.admin.web.filter.SessionInactivityFilter;
@@ -57,7 +58,7 @@ public class SecurityConfiguration {
                 authz
                     .requestMatchers(mvc.pattern("/api/authenticate")).permitAll()
                     .requestMatchers(mvc.pattern("/api/auth-info")).permitAll()
-                    .requestMatchers(mvc.pattern("/api/keycloak/auth/**")).permitAll()
+                    .requestMatchers(mvc.pattern(AuthEndpointPaths.KEYCLOAK_AUTH_API_PATTERN)).permitAll()
                     // Platform-friendly endpoints (service-to-service without triad token)
                     .requestMatchers(mvc.pattern("/api/platform/**")).permitAll()
                     .requestMatchers(mvc.pattern("/api/keycloak/platform/**")).permitAll()
@@ -69,8 +70,10 @@ public class SecurityConfiguration {
                     .requestMatchers(mvc.pattern("/api/menu/**"))
                         .permitAll()
                     // Localization endpoints are required by the login/UI bootstrap without auth
-                    .requestMatchers(mvc.pattern("/api/keycloak/localization/**")).permitAll()
-                    // Ingest endpoint for platform-forwarded audit logs (token validated inside controller)
+                    .requestMatchers(mvc.pattern(AuthEndpointPaths.KEYCLOAK_LOCALIZATION_API_PATTERN)).permitAll()
+                    // Ingest endpoint for sibling-service audit pushes. The controller (AuditIngestResource)
+                    // validates a shared bearer token via AuditIngestAuthenticator; permitAll here only
+                    // means "skip the OAuth2 resource server filter" because callers are services, not Keycloak users.
                     .requestMatchers(mvc.pattern("/api/audit-events")).permitAll()
                     // MDM 回调/对接无需认证，由网关自身校验签名/令牌
                     .requestMatchers(mvc.pattern("/api/mdm/**")).permitAll()

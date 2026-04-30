@@ -67,6 +67,7 @@ class PortalSessionResourceTest {
         PortalSessionRegistry sessionRegistry = mock(PortalSessionRegistry.class);
         PortalSessionCookieService cookieService = mock(PortalSessionCookieService.class);
         when(cookieService.resolvePortalSessionToken(org.mockito.Mockito.any(HttpServletRequest.class))).thenReturn("cookie-token");
+        when(cookieService.resolveBrowserId(org.mockito.Mockito.any(HttpServletRequest.class))).thenReturn("browser-1");
         when(sessionRegistry.findByAccessToken("cookie-token"))
             .thenReturn(
                 java.util.Optional.of(
@@ -78,7 +79,6 @@ class PortalSessionResourceTest {
                         List.of("portal.view"),
                         null,
                         null,
-                        "browser-1",
                         "cookie-token",
                         "refresh-token",
                         Instant.parse("2026-04-02T00:30:00Z"),

@@ -867,7 +867,24 @@ public class AuditService {
         return switch (stage) {
             case FAIL -> "FAILED";
             case BEGIN -> "PENDING";
-            case SUCCESS -> StringUtils.hasText(normalized) ? normalized : "SUCCESS";
+            case SUCCESS -> {
+                if (!StringUtils.hasText(normalized)) {
+                    yield "SUCCESS";
+                }
+                if (isCanonicalResult(normalized)) {
+                    yield normalized;
+                }
+                log.warn("Unrecognised audit result '{}' for stage SUCCESS — falling back to UNKNOWN", original);
+                yield "UNKNOWN";
+            }
+        };
+    }
+
+    private static boolean isCanonicalResult(String normalized) {
+        return switch (normalized) {
+            case "SUCCESS", "SUCCEEDED", "OK", "PASS", "FAIL", "FAILED", "ERROR", "DENY", "DENIED",
+                "PENDING", "PROCESSING", "IN_PROGRESS", "UNKNOWN" -> true;
+            default -> false;
         };
     }
 

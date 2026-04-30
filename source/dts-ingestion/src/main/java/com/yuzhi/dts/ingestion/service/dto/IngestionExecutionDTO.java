@@ -40,6 +40,12 @@ public class IngestionExecutionDTO {
 
     private String triggerMode;
 
+    private Instant backfillWindowStart;
+
+    private Instant backfillWindowEnd;
+
+    private String backfillColumn;
+
     private String droppedTables;
 
     private JsonNode sourceTables;
@@ -200,6 +206,30 @@ public class IngestionExecutionDTO {
 
     public void setTriggerMode(String triggerMode) {
         this.triggerMode = triggerMode;
+    }
+
+    public Instant getBackfillWindowStart() {
+        return backfillWindowStart;
+    }
+
+    public void setBackfillWindowStart(Instant backfillWindowStart) {
+        this.backfillWindowStart = backfillWindowStart;
+    }
+
+    public Instant getBackfillWindowEnd() {
+        return backfillWindowEnd;
+    }
+
+    public void setBackfillWindowEnd(Instant backfillWindowEnd) {
+        this.backfillWindowEnd = backfillWindowEnd;
+    }
+
+    public String getBackfillColumn() {
+        return backfillColumn;
+    }
+
+    public void setBackfillColumn(String backfillColumn) {
+        this.backfillColumn = backfillColumn;
     }
 
     public Long getQueueWaitSeconds() {

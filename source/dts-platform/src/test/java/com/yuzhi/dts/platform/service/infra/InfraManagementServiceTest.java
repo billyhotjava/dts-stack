@@ -223,7 +223,26 @@ class InfraManagementServiceTest {
     }
 
     @Test
-    void getDataSourceDetail_jdbcType_stillReturnsPlaintextSecretsForCompatibility() {
+    void getDataSourceDetail_jdbcTypeMasksSecretsInUserFacingDetail() {
+        UUID id = UUID.randomUUID();
+        InfraDataSource entity = new InfraDataSource();
+        entity.setId(id);
+        entity.setName("erp-db");
+        entity.setType("postgresql");
+        entity.setStatus("ACTIVE");
+        entity.setProps("{}");
+
+        when(dataSourceRepository.findById(id)).thenReturn(Optional.of(entity));
+
+        InfraDataSourceDetailDto detail = service.getDataSourceDetail(id);
+
+        assertThat(detail.secrets()).isEmpty();
+        assertThat(detail.secretSummaries()).isEmpty();
+        org.mockito.Mockito.verify(secretService, org.mockito.Mockito.never()).readSecrets(entity);
+    }
+
+    @Test
+    void getDataSourceRuntimeDetail_jdbcTypeReturnsPlaintextSecretsForInternalExecution() {
         UUID id = UUID.randomUUID();
         InfraDataSource entity = new InfraDataSource();
         entity.setId(id);
@@ -235,9 +254,8 @@ class InfraManagementServiceTest {
         when(dataSourceRepository.findById(id)).thenReturn(Optional.of(entity));
         when(secretService.readSecrets(entity)).thenReturn(Map.of("password", "p@ssw0rd"));
 
-        InfraDataSourceDetailDto detail = service.getDataSourceDetail(id);
+        InfraDataSourceDetailDto detail = service.getDataSourceRuntimeDetail(id);
 
-        // JDBC datasources keep existing behaviour — caller still sees plaintext (used by /test endpoint)
         assertThat(detail.secrets()).containsEntry("password", "p@ssw0rd");
         assertThat(detail.secretSummaries()).isEmpty();
     }

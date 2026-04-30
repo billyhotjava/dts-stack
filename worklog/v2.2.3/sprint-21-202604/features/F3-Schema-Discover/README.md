@@ -37,4 +37,4 @@
 
 ## 待补
 
-- 对 PostgreSQL、MySQL、Oracle、SQL Server、DM8 做连接级验收矩阵。
+- 方言验证矩阵已落到 `it/evidence/dialect-validation-matrix.md`；仍需要在真实联调环境归档 PostgreSQL、MySQL、Oracle、SQL Server、DM8 的连接测试、Discover、ODS 预览和预检输出。

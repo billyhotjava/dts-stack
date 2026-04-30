@@ -10,6 +10,7 @@ import java.util.Map;
 import java.util.UUID;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.web.client.RestTemplateBuilder;
 import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpHeaders;
@@ -29,27 +30,35 @@ public class PlatformInfraClient {
     private static final String DEFAULT_BASE_URL = "http://dts-platform:8081";
     private static final String DEFAULT_API_PATH = "/api";
     private static final String SERVICE_HEADER = "X-DTS-Service";
+    private static final String SERVICE_TOKEN_HEADER = "X-DTS-Service-Token";
     private static final String SERVICE_NAME = "dts-ingestion";
 
     private final RestTemplate restTemplate;
     private final IngestionSettingsService settingsService;
     private final ObjectMapper objectMapper;
+    private final String serviceToken;
 
-    public PlatformInfraClient(RestTemplateBuilder builder, IngestionSettingsService settingsService, ObjectMapper objectMapper) {
+    public PlatformInfraClient(
+        RestTemplateBuilder builder,
+        IngestionSettingsService settingsService,
+        ObjectMapper objectMapper,
+        @Value("${dts.platform.service-token:}") String serviceToken
+    ) {
         this.restTemplate = builder.setConnectTimeout(Duration.ofSeconds(5)).setReadTimeout(Duration.ofSeconds(10)).build();
         this.settingsService = settingsService;
         this.objectMapper = objectMapper;
+        this.serviceToken = StringUtils.hasText(serviceToken) ? serviceToken.trim() : null;
     }
 
     public DataSourceDetail fetchDataSourceDetail(UUID id) {
         if (id == null) {
             throw new IllegalArgumentException("dataSourceId不能为空");
         }
-        URI uri = buildUri("/infra/data-sources/" + id + "/detail");
+        URI uri = buildUri("/infra/data-sources/" + id + "/runtime-detail");
         HttpHeaders headers = new HttpHeaders();
         headers.setAccept(java.util.List.of(MediaType.APPLICATION_JSON));
         headers.setContentType(MediaType.APPLICATION_JSON);
-        headers.set(SERVICE_HEADER, SERVICE_NAME);
+        applyServiceHeaders(headers);
         try {
             ResponseEntity<Map> response = restTemplate.exchange(uri, HttpMethod.GET, new HttpEntity<>(headers), Map.class);
             if (!response.getStatusCode().is2xxSuccessful()) {
@@ -84,7 +93,7 @@ public class PlatformInfraClient {
         HttpHeaders headers = new HttpHeaders();
         headers.setAccept(java.util.List.of(MediaType.APPLICATION_JSON));
         headers.setContentType(MediaType.APPLICATION_JSON);
-        headers.set(SERVICE_HEADER, SERVICE_NAME);
+        applyServiceHeaders(headers);
         try {
             ResponseEntity<Map> response = restTemplate.exchange(uri, HttpMethod.POST, new HttpEntity<>(payload, headers), Map.class);
             if (!response.getStatusCode().is2xxSuccessful()) {
@@ -125,7 +134,7 @@ public class PlatformInfraClient {
         HttpHeaders headers = new HttpHeaders();
         headers.setAccept(java.util.List.of(MediaType.APPLICATION_JSON));
         headers.setContentType(MediaType.APPLICATION_JSON);
-        headers.set(SERVICE_HEADER, SERVICE_NAME);
+        applyServiceHeaders(headers);
         try {
             ResponseEntity<Map> response = restTemplate.exchange(
                 uri, HttpMethod.POST, new HttpEntity<>(payload, headers), Map.class);
@@ -169,7 +178,7 @@ public class PlatformInfraClient {
         HttpHeaders headers = new HttpHeaders();
         headers.setAccept(java.util.List.of(MediaType.APPLICATION_JSON));
         headers.setContentType(MediaType.APPLICATION_JSON);
-        headers.set(SERVICE_HEADER, SERVICE_NAME);
+        applyServiceHeaders(headers);
         try {
             ResponseEntity<Map> response = restTemplate.exchange(
                 uri, HttpMethod.POST, new HttpEntity<>(payload, headers), Map.class);
@@ -219,7 +228,7 @@ public class PlatformInfraClient {
         HttpHeaders headers = new HttpHeaders();
         headers.setAccept(java.util.List.of(MediaType.APPLICATION_JSON));
         headers.setContentType(MediaType.APPLICATION_JSON);
-        headers.set(SERVICE_HEADER, SERVICE_NAME);
+        applyServiceHeaders(headers);
         try {
             ResponseEntity<Map> response = restTemplate.exchange(uri, HttpMethod.POST, new HttpEntity<>(payload, headers), Map.class);
             if (!response.getStatusCode().is2xxSuccessful()) {
@@ -229,6 +238,13 @@ public class PlatformInfraClient {
             LOG.warn("Platform ingestion lineage sync failed status={} body={}", ex.getStatusCode().value(), ex.getResponseBodyAsString());
         } catch (Exception ex) {
             LOG.warn("Platform ingestion lineage sync failed: {}", ex.getMessage());
+        }
+    }
+
+    private void applyServiceHeaders(HttpHeaders headers) {
+        headers.set(SERVICE_HEADER, SERVICE_NAME);
+        if (StringUtils.hasText(serviceToken)) {
+            headers.set(SERVICE_TOKEN_HEADER, serviceToken);
         }
     }
 

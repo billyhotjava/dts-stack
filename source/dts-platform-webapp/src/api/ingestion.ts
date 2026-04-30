@@ -48,6 +48,9 @@ export interface IngestionExecutionDTO {
 	logPath?: string;
 	replaceMode?: string;
 	triggerMode?: "MANUAL" | "FAILED_ONLY" | "FULL_RERUN" | string;
+	backfillWindowStart?: string;
+	backfillWindowEnd?: string;
+	backfillColumn?: string;
 	droppedTables?: string;
 	queueWaitSeconds?: number;
 	createdAt?: string;
@@ -140,6 +143,23 @@ export interface AsyncExecutionSubmitResult {
 	status: string;
 	async?: boolean;
 	message?: string;
+	pollIntervalMs?: number;
+}
+
+export interface BackfillSubmitRequest {
+	windowStart: string;
+	windowEnd: string;
+	column?: string;
+}
+
+export interface BackfillSubmitResult {
+	taskId: number;
+	executionId?: number;
+	runId?: string;
+	status?: string;
+	backfillColumn?: string;
+	backfillWindowStart?: string;
+	backfillWindowEnd?: string;
 	pollIntervalMs?: number;
 }
 
@@ -407,6 +427,10 @@ class IngestionTaskAPI {
 
 	async executeTaskAsync(id: number): Promise<AsyncExecutionSubmitResult> {
 		return api.post({ url: `/ingestion/tasks/${id}/execute/async`, _skipErrorToast: true } as any);
+	}
+
+	async backfillTask(id: number, data: BackfillSubmitRequest): Promise<BackfillSubmitResult> {
+		return api.post({ url: `/ingestion/tasks/${id}/backfill`, data, _skipErrorToast: true } as any);
 	}
 
 	/**

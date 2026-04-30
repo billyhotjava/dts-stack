@@ -419,6 +419,24 @@ export default function TransformPage() {
 		return `${targets.slice(0, 2).join(", ")} 等 ${targets.length} 表`;
 	};
 
+	const parseTaskSyncConfig = (record: IngestionTaskDTO): Record<string, any> => {
+		const config = (record.syncConfig ?? {}) as any;
+		if (typeof config === "string") {
+			try {
+				return JSON.parse(config) || {};
+			} catch {
+				return {};
+			}
+		}
+		return config && typeof config === "object" ? config : {};
+	};
+
+	const supportsTimeWindowBackfill = (record: IngestionTaskDTO): boolean => {
+		if (String(record.syncMode || "").toLowerCase() !== "incremental") return false;
+		const type = String(parseTaskSyncConfig(record).incrementalType || "").trim().toLowerCase();
+		return !["number", "numeric", "integer", "bigint", "long", "int"].includes(type);
+	};
+
 	/** Whether a task is currently in a non-interruptible execution phase. */
 	const isTaskBusy = (record: IngestionTaskDTO): boolean => {
 		const lastStatus = (record.lastExecutionStatus || "").toLowerCase();
@@ -533,12 +551,13 @@ export default function TransformPage() {
 			{
 				title: "操作",
 				key: "action",
-				width: 560,
+				width: 620,
 				render: (_: any, record: IngestionTaskDTO) => {
 					const latest = record.id ? latestExecutions[record.id] : null;
 					const latestStatus = String(latest?.status || "").toLowerCase();
 					const canRetryFailed = latestStatus === "failed";
 					const canFullRerun = Boolean(latest?.id) && !["running", "preparing"].includes(latestStatus);
+					const canBackfill = supportsTimeWindowBackfill(record);
 					return (
 						<Space size="small" wrap>
 							<Button
@@ -579,6 +598,16 @@ export default function TransformPage() {
 							>
 								整批重跑
 							</Button>
+							{canBackfill ? (
+								<Button
+									size="small"
+									icon={<ReloadOutlined />}
+									onClick={() => router.push(`/explore/etl/transform/${record.id}/executions`)}
+									disabled={record.status === "deleted" || isTaskBusy(record)}
+								>
+									回填
+								</Button>
+							) : null}
 							<Button
 								size="small"
 								icon={<HistoryOutlined />}

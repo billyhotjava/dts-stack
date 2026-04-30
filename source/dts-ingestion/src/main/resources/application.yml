@@ -77,6 +77,7 @@ dts:
     ingestion-pipeline-prefix: ${DTS_OPENMETADATA_INGESTION_PREFIX:dts_ingest}
     ingestion-default-schedule: ${DTS_OPENMETADATA_INGESTION_SCHEDULE:0 * * * *}
   platform:
+    service-token: ${DTS_PLATFORM_SERVICE_TOKEN:${DTS_ADMIN_SERVICE_TOKEN:}}
     infra:
       encryption-key: ${DTS_INFRA_ENCRYPTION_KEY:}
       key-version: ${DTS_INFRA_KEY_VERSION:v1}

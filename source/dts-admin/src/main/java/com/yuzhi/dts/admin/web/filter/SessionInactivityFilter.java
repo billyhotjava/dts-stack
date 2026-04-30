@@ -1,6 +1,7 @@
 package com.yuzhi.dts.admin.web.filter;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.yuzhi.dts.common.security.AuthEndpointPaths;
 import com.yuzhi.dts.admin.security.SecurityUtils;
 import com.yuzhi.dts.admin.security.session.AdminSessionRegistry;
 import com.yuzhi.dts.admin.security.session.AdminSessionRegistry.ValidationResult;
@@ -42,6 +43,10 @@ public class SessionInactivityFilter extends OncePerRequestFilter {
     @Override
     protected boolean shouldNotFilter(HttpServletRequest request) {
         if ("OPTIONS".equalsIgnoreCase(request.getMethod())) {
+            return true;
+        }
+        String uri = Optional.ofNullable(request.getRequestURI()).orElse("");
+        if (AuthEndpointPaths.isKeycloakAuthEndpoint(uri)) {
             return true;
         }
         String header = request.getHeader(HttpHeaders.AUTHORIZATION);

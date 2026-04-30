@@ -307,7 +307,14 @@
             { "code": "FOUNDATION_ODS_PREVIEW", "display": "预览 ODS 与 dbt source", "phases": ["SUCCESS", "FAIL"], "supportsFlow": false },
             { "code": "FOUNDATION_ODS_PRECHECK", "display": "执行 ODS 同步任务预检", "phases": ["SUCCESS", "FAIL"], "supportsFlow": false },
             { "code": "FOUNDATION_ODS_APPLY", "display": "生成 ODS 映射与 dbt source", "phases": ["SUCCESS", "FAIL"], "supportsFlow": false },
-            { "code": "FOUNDATION_SYNC_TASK_DRAFT", "display": "生成同步任务草稿", "phases": ["SUCCESS", "FAIL"], "supportsFlow": false }
+            { "code": "FOUNDATION_SYNC_TASK_DRAFT", "display": "生成同步任务草稿", "phases": ["SUCCESS", "FAIL"], "supportsFlow": false },
+            { "code": "INGESTION_TASK_CREATE", "display": "创建入湖任务", "phases": ["SUCCESS", "FAIL"], "supportsFlow": false },
+            { "code": "INGESTION_TASK_UPDATE", "display": "更新入湖任务", "phases": ["SUCCESS", "FAIL"], "supportsFlow": false },
+            { "code": "INGESTION_TASK_DELETE", "display": "删除入湖任务", "phases": ["SUCCESS", "FAIL"], "supportsFlow": false },
+            { "code": "INGESTION_TASK_EXECUTE", "display": "执行入湖任务", "phases": ["SUCCESS", "FAIL"], "supportsFlow": false },
+            { "code": "INGESTION_TASK_RETRY", "display": "重跑入湖任务", "phases": ["SUCCESS", "FAIL"], "supportsFlow": false },
+            { "code": "INGESTION_EXECUTION_RETRY", "display": "重试入湖执行", "phases": ["SUCCESS", "FAIL"], "supportsFlow": false },
+            { "code": "INGESTION_BACKFILL_RUN", "display": "按时间范围补数", "phases": ["SUCCESS", "FAIL"], "supportsFlow": false }
           ]
         },
         {

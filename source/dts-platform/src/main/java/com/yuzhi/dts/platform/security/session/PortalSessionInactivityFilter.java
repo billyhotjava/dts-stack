@@ -1,6 +1,7 @@
 package com.yuzhi.dts.platform.security.session;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.yuzhi.dts.common.security.AuthEndpointPaths;
 import com.yuzhi.dts.platform.security.session.PortalSessionActivityService.ValidationResult;
 import com.yuzhi.dts.platform.web.rest.ApiResponse;
 import jakarta.servlet.FilterChain;
@@ -13,10 +14,10 @@ import java.time.Instant;
 import java.util.Optional;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.stereotype.Component;
+import org.springframework.util.StringUtils;
 import org.springframework.web.filter.OncePerRequestFilter;
 
 @Component
@@ -33,10 +34,16 @@ public class PortalSessionInactivityFilter extends OncePerRequestFilter {
 
     private final ObjectMapper objectMapper;
     private final PortalSessionActivityService activityService;
+    private final PortalSessionCookieService cookieService;
 
-    public PortalSessionInactivityFilter(ObjectMapper objectMapper, PortalSessionActivityService activityService) {
+    public PortalSessionInactivityFilter(
+        ObjectMapper objectMapper,
+        PortalSessionActivityService activityService,
+        PortalSessionCookieService cookieService
+    ) {
         this.objectMapper = objectMapper;
         this.activityService = activityService;
+        this.cookieService = cookieService;
     }
 
     @Override
@@ -45,21 +52,22 @@ public class PortalSessionInactivityFilter extends OncePerRequestFilter {
             return true;
         }
         String uri = Optional.ofNullable(request.getRequestURI()).orElse("");
-        if (uri.startsWith("/api/keycloak/auth/")) {
+        if (AuthEndpointPaths.isKeycloakAuthEndpoint(uri)) {
             return true;
         }
-        if ("/api/session/status".equals(uri)) {
+        if (AuthEndpointPaths.isKeycloakLocalizationEndpoint(uri)) {
             return true;
         }
-        String header = request.getHeader(HttpHeaders.AUTHORIZATION);
-        return header == null || !header.startsWith("Bearer ");
+        if (AuthEndpointPaths.isPortalSessionStatusEndpoint(uri)) {
+            return true;
+        }
+        return !StringUtils.hasText(resolveSessionToken(request));
     }
 
     @Override
     protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response, FilterChain filterChain)
         throws ServletException, IOException {
-        String header = request.getHeader(HttpHeaders.AUTHORIZATION);
-        String tokenValue = extractTokenValue(header);
+        String tokenValue = resolveSessionToken(request);
         if (tokenValue == null) {
             filterChain.doFilter(request, response);
             return;
@@ -90,15 +98,15 @@ public class PortalSessionInactivityFilter extends OncePerRequestFilter {
         }
     }
 
-    private String extractTokenValue(String header) {
-        if (header == null || header.isBlank()) {
+    private String resolveSessionToken(HttpServletRequest request) {
+        if (request == null) {
             return null;
         }
-        int idx = header.indexOf(' ');
-        if (idx < 0) {
-            return header.trim();
+        String cookieToken = cookieService == null ? null : cookieService.resolvePortalSessionToken(request);
+        if (StringUtils.hasText(cookieToken)) {
+            return cookieToken.trim();
         }
-        return header.substring(idx + 1).trim();
+        return null;
     }
 
     private void respondConflict(HttpServletResponse response) throws IOException {

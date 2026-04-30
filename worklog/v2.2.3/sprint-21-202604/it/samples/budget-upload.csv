@@ -1,0 +1,4 @@
+project_id,project_name,owner_name,budget_amount,progress_pct,update_time,is_active
+P-2001,File connector budget,finance,32000.00,20.00,2026-04-29T09:00:00,true
+P-2002,CSV landing smoke,data,18000.00,45.00,2026-04-29T10:00:00,true
+P-2003,Lineage file sample,ops,51000.00,12.50,2026-04-29T11:00:00,true

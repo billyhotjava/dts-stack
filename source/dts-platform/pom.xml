@@ -525,7 +525,6 @@
                         <exclude>**/KeycloakAuthResourceTest.java</exclude>
                         <exclude>**/PortalSessionResourceTest.java</exclude>
                         <exclude>**/PortalSessionBearerTokenResolverTest.java</exclude>
-                        <exclude>**/PortalSessionInactivityFilterTest.java</exclude>
                         <exclude>**/PortalSessionRegistryTest.java</exclude>
                         <exclude>**/etl/DbtReleaseSubmissionServiceTest.java</exclude>
                         <exclude>**/sql/SqlExecutionServiceTest.java</exclude>

@@ -319,11 +319,33 @@
 | F1-Connector Registry 连接器目录 | 4 | DONE |
 | F2-数据源中心与凭据治理 | 4 | DONE |
 | F3-Schema Discover 探测服务 | 5 | DONE |
-| F4-ODS 与 dbt source 自动生成 | 4 | IN_PROGRESS |
-| F5-同步任务向导与批量建任务 | 5 | IN_PROGRESS |
-| F6-接入任务运行中心与可观测 | 5 | IN_PROGRESS |
-| F7-质量预检与增量治理 | 5 | IN_PROGRESS |
-| F8-安全审计、验收与发布材料 | 4 | IN_PROGRESS |
+| F4-ODS 与 dbt source 自动生成 | 4 | DONE |
+| F5-同步任务向导与批量建任务 | 5 | DONE |
+| F6-接入任务运行中心与可观测 | 5 | DONE |
+| F7-质量预检与增量治理 | 5 | DONE |
+| F8-安全审计、验收与发布材料 | 6 | IN_PROGRESS |
 
-**统计**: READY=3, IN_PROGRESS=6, DONE=27, BLOCKED=0
+**统计**: READY=0, IN_PROGRESS=2, DONE=36, BLOCKED=0
 **设计文档**: `worklog/v2.2.3/sprint-21-202604/README.md`
+
+## Sprint-22: Portal Session 安全架构升级（Admin Token 剥离 + 短 TTL + BFF/HttpOnly Cookie） (202604)
+**状态**: READY
+**类型**: Architecture / Security（dts-platform-webapp + dts-platform + Keycloak realm）
+**目标**: 把当前"前端持有 portal + admin 双套 token、access/refresh 全部明文写 localStorage"的会话模型，分三阶段升级为"凭据由服务端持有、浏览器只见 SID cookie"的 BFF 架构，从根本消除 XSS 直取凭据的可能性，并把"被盗 token 的可重放窗口"从小时级压到分钟级。
+
+| Feature | Task 数 | 状态 |
+|---------|---------|------|
+| F1-Admin Token 前端剥离 | 4 | READY |
+| F2-Portal Token 短 TTL + Refresh Rotation | 5 | READY |
+| F3-Leader 选举切换至 navigator.locks | 3 | READY |
+| F4-生产构建剔除 TEST_SESSION 旁路 + Dev Fallback host allowlist | 3 | READY |
+| F5-移除生产 console 中的 Authorization / 响应体打印 | 2 | READY |
+| F6-BFF 层骨架（Spring Security OAuth2 Client + Session Cookie） | 6 | READY |
+| F7-前端切换：axios withCredentials + 移除 token 持久化 + CSRF 注入 | 5 | READY |
+| F8-Keycloak Backchannel Logout 接入 | 3 | READY |
+| F9-SessionManager 简化（删除 leader/refresh/tokenSync） | 3 | READY |
+| F10-行为级测试与 e2e 闭环 | 5 | READY |
+
+**统计**: READY=39, IN_PROGRESS=0, DONE=0, BLOCKED=0
+**设计文档**: `worklog/v2.2.3/sprint-22-202604/README.md`
+**评审研判**: `worklog/v2.2.3/sprint-22-202604/review/session-management-audit.md`
