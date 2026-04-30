@@ -2,25 +2,18 @@ package com.yuzhi.dts.admin.web.rest;
 
 import com.yuzhi.dts.admin.security.AuthoritiesConstants;
 import com.yuzhi.dts.admin.security.SecurityUtils;
-import com.yuzhi.dts.admin.service.auditv2.AuditActionRequest;
 import com.yuzhi.dts.admin.service.auditv2.AuditEntryQueryService;
 import com.yuzhi.dts.admin.service.auditv2.AuditEntryView;
-import com.yuzhi.dts.admin.service.auditv2.AuditEntryTargetView;
-import com.yuzhi.dts.admin.service.auditv2.AuditSearchCriteria;
-import com.yuzhi.dts.admin.service.auditv2.ModuleOption;
-import com.yuzhi.dts.admin.service.auditv2.AuditOperationKind;
-import com.yuzhi.dts.admin.service.auditv2.AuditOperationType;
+import com.yuzhi.dts.admin.service.auditv2.AuditEntryViewMapper;
+import com.yuzhi.dts.admin.service.auditv2.AuditLogActionRecorder;
 import com.yuzhi.dts.admin.service.auditv2.AuditResourceDictionaryService;
-import com.yuzhi.dts.admin.service.auditv2.AuditResultStatus;
-import com.yuzhi.dts.admin.service.auditv2.AuditV2Service;
+import com.yuzhi.dts.admin.service.auditv2.AuditSearchCriteria;
+import com.yuzhi.dts.admin.service.auditv2.ButtonCodes;
+import com.yuzhi.dts.admin.service.auditv2.ModuleOption;
 import com.yuzhi.dts.admin.service.auditv2.OperationMappingEngine;
 import com.yuzhi.dts.admin.service.auditv2.OperationMappingEngine.RuleSummary;
-import com.yuzhi.dts.admin.service.auditv2.ButtonCodes;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.databind.SerializationFeature;
 import com.yuzhi.dts.admin.service.user.AdminUserService;
 import com.yuzhi.dts.admin.web.rest.api.ApiResponse;
-import com.yuzhi.dts.common.net.IpAddressUtils;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import java.io.IOException;
@@ -65,38 +58,34 @@ import org.springframework.web.server.ResponseStatusException;
 public class AuditLogResource {
 
     private static final Logger log = LoggerFactory.getLogger(AuditLogResource.class);
-    private static final Set<String> DETAIL_KEYS_TO_HIDE = Set.of("attributes", "actionDisplay", "target");
     private static final Map<String, String> BUILTIN_DISPLAY_NAMES = Map.of(
-        "sysadmin",
-        "系统管理员",
-        "authadmin",
-        "授权管理员",
-        "auditadmin",
-        "安全审计员",
-        "opadmin",
-        "运维管理员"
+        "sysadmin", "系统管理员",
+        "authadmin", "授权管理员",
+        "auditadmin", "安全审计员",
+        "opadmin", "运维管理员"
     );
 
     private final AuditEntryQueryService auditQueryService;
     private final OperationMappingEngine opMappingEngine;
     private final AuditResourceDictionaryService resourceDictionary;
-    private final AuditV2Service auditV2Service;
     private final AdminUserService adminUserService;
-    private final ObjectMapper objectMapper;
+    private final AuditEntryViewMapper viewMapper;
+    private final AuditLogActionRecorder actionRecorder;
+
     public AuditLogResource(
         AuditEntryQueryService auditQueryService,
         OperationMappingEngine opMappingEngine,
         AuditResourceDictionaryService resourceDictionary,
-        AuditV2Service auditV2Service,
         AdminUserService adminUserService,
-        ObjectMapper objectMapper
+        AuditEntryViewMapper viewMapper,
+        AuditLogActionRecorder actionRecorder
     ) {
         this.auditQueryService = auditQueryService;
         this.opMappingEngine = opMappingEngine;
         this.resourceDictionary = resourceDictionary;
-        this.auditV2Service = auditV2Service;
         this.adminUserService = adminUserService;
-        this.objectMapper = objectMapper.copy().disable(SerializationFeature.FAIL_ON_EMPTY_BEANS);
+        this.viewMapper = viewMapper;
+        this.actionRecorder = actionRecorder;
     }
 
     @GetMapping
@@ -124,52 +113,27 @@ public class AuditLogResource {
         Instant toDate = parseInstant(to);
         VisibilityScope scope = resolveVisibilityScope();
         AuditSearchCriteria criteria = new AuditSearchCriteria(
-            actor,
-            module,
-            operationType,
-            actionCode,
-            operationGroup,
-            sourceSystem,
-            result,
-            targetTable,
-            targetId,
-            clientIp,
-            keyword,
-            fromDate,
-            toDate,
-            scope.allowedActors(),
-            scope.excludedActors(),
-            false
+            actor, module, operationType, actionCode, operationGroup, sourceSystem, result,
+            targetTable, targetId, clientIp, keyword, fromDate, toDate,
+            scope.allowedActors(), scope.excludedActors(), false
         );
         Page<AuditEntryView> resultPage = auditQueryService.search(criteria, pageable);
         List<AuditEntryView> views = resultPage.getContent();
         Map<String, String> displayOverrides = resolveActorDisplayNames(views);
         List<Map<String, Object>> content = new ArrayList<>(views.size());
         for (AuditEntryView view : views) {
-            Map<String, Object> row = toResponse(view, false);
+            Map<String, Object> row = viewMapper.toResponse(view, false);
             applyDisplayNameOverride(row, displayOverrides);
             content.add(row);
         }
         Map<String, Object> payload = Map.of(
-            "content",
-            content,
-            "page",
-            resultPage.getNumber(),
-            "size",
-            resultPage.getSize(),
-            "totalElements",
-            resultPage.getTotalElements(),
-            "totalPages",
-            resultPage.getTotalPages()
+            "content", content,
+            "page", resultPage.getNumber(),
+            "size", resultPage.getSize(),
+            "totalElements", resultPage.getTotalElements(),
+            "totalPages", resultPage.getTotalPages()
         );
-        recordAuditLogAction(
-            ButtonCodes.AUDIT_LOG_QUERY,
-            criteria,
-            pageable,
-            resultPage.getTotalElements(),
-            content.size(),
-            request
-        );
+        actionRecorder.record(ButtonCodes.AUDIT_LOG_QUERY, criteria, pageable, resultPage.getTotalElements(), content.size(), request);
         return ResponseEntity.ok(ApiResponse.ok(payload));
     }
 
@@ -180,7 +144,7 @@ public class AuditLogResource {
             .findById(id, true)
             .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "审计日志不存在"));
         ensureReadable(scope, view);
-        Map<String, Object> body = toResponse(view, true);
+        Map<String, Object> body = viewMapper.toResponse(view, true);
         applyDisplayNameOverride(body, resolveActorDisplayNames(List.of(view)));
         return ResponseEntity.ok(ApiResponse.ok(body));
     }
@@ -213,29 +177,16 @@ public class AuditLogResource {
         Instant toDate = parseInstant(to);
         VisibilityScope scope = resolveVisibilityScope();
         AuditSearchCriteria criteria = new AuditSearchCriteria(
-            actor,
-            module,
-            operationType,
-            actionCode,
-            operationGroup,
-            sourceSystem,
-            result,
-            targetTable,
-            targetId,
-            clientIp,
-            keyword,
-            fromDate,
-            toDate,
-            scope.allowedActors(),
-            scope.excludedActors(),
-            true
+            actor, module, operationType, actionCode, operationGroup, sourceSystem, result,
+            targetTable, targetId, clientIp, keyword, fromDate, toDate,
+            scope.allowedActors(), scope.excludedActors(), true
         );
         Page<AuditEntryView> exportPage = auditQueryService.search(criteria, Pageable.unpaged());
         List<AuditEntryView> views = exportPage.getContent();
         Map<String, String> displayOverrides = resolveActorDisplayNames(views);
         List<Map<String, Object>> records = new ArrayList<>(views.size());
         for (AuditEntryView view : views) {
-            Map<String, Object> row = toResponse(view, true);
+            Map<String, Object> row = viewMapper.toResponse(view, true);
             applyDisplayNameOverride(row, displayOverrides);
             records.add(row);
         }
@@ -262,14 +213,7 @@ public class AuditLogResource {
                 .append(escapeCsv(record.get("clientAgent")))
                 .append('\n');
         }
-        recordAuditLogAction(
-            ButtonCodes.AUDIT_LOG_EXPORT,
-            criteria,
-            Pageable.unpaged(),
-            exportPage.getTotalElements(),
-            records.size(),
-            request
-        );
+        actionRecorder.record(ButtonCodes.AUDIT_LOG_EXPORT, criteria, Pageable.unpaged(), exportPage.getTotalElements(), records.size(), request);
         response.setHeader(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=audit-logs.csv");
         response.setContentType("text/csv;charset=UTF-8");
         response.getOutputStream().write(sb.toString().getBytes(StandardCharsets.UTF_8));
@@ -312,7 +256,7 @@ public class AuditLogResource {
                 String source = safeTrim(summary.getSourceSystem());
                 if (source != null) {
                     entry.put("sourceSystem", source);
-                    entry.put("sourceSystemLabel", mapSourceSystemText(source));
+                    entry.put("sourceSystemLabel", viewMapper.mapSourceSystemText(source));
                 }
                 return entry;
             });
@@ -330,293 +274,14 @@ public class AuditLogResource {
             .forEach(category ->
                 out.add(
                     Map.of(
-                        "moduleKey",
-                        category.moduleKey(),
-                        "moduleTitle",
-                        category.moduleTitle(),
-                        "entryKey",
-                        category.entryKey(),
-                        "entryTitle",
-                        category.entryTitle()
+                        "moduleKey", category.moduleKey(),
+                        "moduleTitle", category.moduleTitle(),
+                        "entryKey", category.entryKey(),
+                        "entryTitle", category.entryTitle()
                     )
                 )
             );
         return ResponseEntity.ok(ApiResponse.ok(out));
-    }
-
-    private Map<String, Object> toResponse(AuditEntryView view, boolean includeDetails) {
-        Map<String, Object> map = new LinkedHashMap<>();
-        map.put("id", view.id());
-        map.put("occurredAt", view.occurredAt() != null ? view.occurredAt().toString() : null);
-        map.put("sourceSystem", view.sourceSystem());
-        map.put("sourceSystemText", mapSourceSystemText(view.sourceSystem()));
-        String moduleKey = StringUtils.defaultIfBlank(view.moduleKey(), "general");
-        String moduleLabel = StringUtils.isNotBlank(view.moduleName())
-            ? view.moduleName()
-            : resourceDictionary.resolveLabel(moduleKey).orElse(moduleKey);
-        map.put("module", moduleLabel);
-        map.put("moduleKey", moduleKey);
-        map.put("buttonCode", view.buttonCode());
-        map.put("action", StringUtils.defaultIfBlank(view.operationName(), view.operationCode()));
-        map.put("operationCode", view.operationCode());
-        AuditOperationKind kind = view.operationKind();
-        String normalizedCode = normalizeOperationTypeCode(view);
-        map.put("operationTypeCode", normalizedCode);
-        map.put("operationType", mapOperationTypeLabel(normalizedCode));
-        map.put("operationTypeRaw", kind != null ? kind.displayName() : null);
-        map.put("operationContent", StringUtils.defaultIfBlank(view.summary(), view.operationName()));
-        map.put("summary", view.summary());
-        map.put("operationGroup", view.operationGroup());
-        map.put("result", view.result());
-        map.put("resultText", view.resultLabel());
-        map.put("logTypeText", mapLogType(view.sourceSystem()));
-        map.put("eventClass", "AUDIT_ENTRY");
-        map.put("eventType", view.operationKind() != null ? view.operationKind().code() : "OTHER");
-
-        map.put("actor", view.actorId());
-        map.put("actorName", view.actorName());
-        map.put("actorRoles", view.actorRoles());
-        map.put("actorRole", view.actorRoles().isEmpty() ? null : view.actorRoles().get(0));
-        map.put("operatorId", view.actorId());
-        map.put("operatorName", view.actorName());
-        map.put("operatorRoles", toJson(view.actorRoles()));
-        map.put("orgCode", null);
-        map.put("orgName", null);
-        map.put("departmentName", null);
-
-        map.put("clientIp", view.clientIp());
-        map.put("clientAgent", view.clientAgent());
-        map.put("requestUri", view.requestUri());
-        map.put("httpMethod", view.httpMethod());
-
-        map.put("changeRequestRef", view.changeRequestRef());
-
-        String sourceTable = StringUtils.firstNonBlank(
-            extractFromMapLike(view.metadata(), "sourceTable"),
-            extractFromMapLike(view.details(), "sourceTable"),
-            extractFromMapLike(view.extraAttributes(), "sourceTable")
-        );
-        String sourcePrimaryKey = StringUtils.firstNonBlank(
-            extractFromMapLike(view.metadata(), "sourcePrimaryKey"),
-            extractFromMapLike(view.details(), "sourcePrimaryKey"),
-            extractFromMapLike(view.extraAttributes(), "sourcePrimaryKey")
-        );
-        if (StringUtils.isNotBlank(sourceTable)) {
-            map.put("sourceTable", sourceTable);
-        }
-        if (StringUtils.isNotBlank(sourcePrimaryKey)) {
-            map.put("sourcePrimaryKey", sourcePrimaryKey);
-        }
-
-        List<String> targetIds = new ArrayList<>();
-        Map<String, String> targetLabels = new LinkedHashMap<>();
-        String targetTable = null;
-        for (AuditEntryTargetView target : view.targets()) {
-            if (target == null) {
-                continue;
-            }
-            String table = safeTrim(target.table());
-            String id = safeTrim(target.id());
-            String label = safeTrim(target.label());
-            if (targetTable == null && StringUtils.isNotBlank(table)) {
-                targetTable = table;
-            }
-            if (StringUtils.isNotBlank(id)) {
-                targetIds.add(id);
-                targetLabels.put(id, StringUtils.defaultIfBlank(label, id));
-            }
-        }
-        String canonicalResourceType = StringUtils.defaultIfBlank(view.resourceType(), null);
-        map.put("resourceType", StringUtils.defaultIfBlank(canonicalResourceType, targetTable));
-        map.put("resourceId", targetIds.isEmpty() ? null : targetIds.get(0));
-        map.put("targetTable", targetTable);
-        map.put("targetId", targetIds.isEmpty() ? null : targetIds.get(0));
-        map.put("targetIds", targetIds);
-        map.put("targetLabels", targetLabels.isEmpty() ? Map.of() : targetLabels);
-        if (StringUtils.isNotBlank(targetTable)) {
-            map.put("targetTableLabel", resourceDictionary.resolveLabel(targetTable).orElse(targetTable));
-        }
-
-        map.put("metadata", view.metadata());
-        map.put("extraAttributes", view.extraAttributes());
-
-        Map<String, Object> detailPayload;
-        if (includeDetails) {
-            detailPayload = new LinkedHashMap<>();
-            if (view.details() != null) {
-                view
-                    .details()
-                    .forEach((key, value) -> {
-                        if (!DETAIL_KEYS_TO_HIDE.contains(key)) {
-                            detailPayload.put(key, value);
-                        }
-                    });
-            }
-            if (!view.metadata().isEmpty()) {
-                detailPayload.putIfAbsent("metadata", view.metadata());
-            }
-            if (StringUtils.isNotBlank(targetTable)) {
-                detailPayload.putIfAbsent("targetTable", targetTable);
-                detailPayload.putIfAbsent(
-                    "targetTableLabel",
-                    resourceDictionary.resolveLabel(targetTable).orElse(targetTable)
-                );
-            }
-            if (!targetIds.isEmpty()) {
-                detailPayload.putIfAbsent("targetIds", targetIds);
-            }
-            if (StringUtils.isNotBlank(canonicalResourceType)) {
-                detailPayload.putIfAbsent("resourceType", canonicalResourceType);
-            }
-        } else {
-            detailPayload = Map.of();
-        }
-        map.put("details", detailPayload);
-        map.put("payload", detailPayload);
-
-        Object requestId = includeDetails ? detailPayload.getOrDefault("requestId", detailPayload.get("request_id")) : null;
-        if (requestId != null) {
-            map.put("requestId", requestId);
-        }
-        Object approvalSummary = includeDetails ? detailPayload.get("approvalSummary") : null;
-        if (approvalSummary != null) {
-            map.put("approvalSummary", approvalSummary);
-        }
-
-        return map;
-    }
-
-    private void recordAuditLogAction(
-        String buttonCode,
-        AuditSearchCriteria criteria,
-        Pageable pageable,
-        long totalElements,
-        int returnedCount,
-        HttpServletRequest request
-    ) {
-        if (auditV2Service == null) {
-            return;
-        }
-        String actor = SecurityUtils.getCurrentAuditableLogin();
-        AuditActionRequest.Builder builder = AuditActionRequest
-            .builder(actor, buttonCode)
-            .actorName(actor)
-            .actorRoles(SecurityUtils.getCurrentUserAuthorities())
-            .summary(ButtonCodes.AUDIT_LOG_EXPORT.equals(buttonCode) ? "导出审计日志" : "查询审计日志")
-            .result(AuditResultStatus.SUCCESS)
-            .allowEmptyTargets();
-        if ("system".equalsIgnoreCase(actor)) {
-            builder.allowSystemActor();
-        }
-        if (request != null) {
-            builder.client(clientIp(request), request.getHeader("User-Agent"));
-            builder.request(request.getRequestURI(), request.getMethod());
-        } else {
-            builder.request(
-                ButtonCodes.AUDIT_LOG_EXPORT.equals(buttonCode) ? "/api/audit-logs/export" : "/api/audit-logs",
-                "GET"
-            );
-        }
-        Map<String, Object> detail = buildAuditLogDetail(buttonCode, criteria, pageable, totalElements, returnedCount);
-        if (!detail.isEmpty()) {
-            builder.detail("detail", detail);
-        }
-        builder.metadata("totalElements", totalElements);
-        builder.metadata("returnedCount", returnedCount);
-        builder.metadata("export", ButtonCodes.AUDIT_LOG_EXPORT.equals(buttonCode));
-        try {
-            auditV2Service.record(builder.build());
-        } catch (Exception ex) {
-            log.warn("Failed to record audit log action [{}]: {}", buttonCode, ex.getMessage());
-        }
-    }
-
-    private Map<String, Object> buildAuditLogDetail(
-        String buttonCode,
-        AuditSearchCriteria criteria,
-        Pageable pageable,
-        long totalElements,
-        int returnedCount
-    ) {
-        LinkedHashMap<String, Object> detail = new LinkedHashMap<>();
-        Map<String, Object> filters = buildFilterDetail(criteria);
-        if (!filters.isEmpty()) {
-            detail.put("filters", filters);
-        }
-        Map<String, Object> pagination = buildPaginationDetail(pageable, returnedCount, totalElements);
-        if (!pagination.isEmpty()) {
-            detail.put("pagination", pagination);
-        }
-        detail.put("returnedCount", returnedCount);
-        detail.put("totalElements", totalElements);
-        detail.put("actionType", ButtonCodes.AUDIT_LOG_EXPORT.equals(buttonCode) ? "export" : "query");
-        return detail;
-    }
-
-    private Map<String, Object> buildFilterDetail(AuditSearchCriteria criteria) {
-        LinkedHashMap<String, Object> filters = new LinkedHashMap<>();
-        if (criteria == null) {
-            return filters;
-        }
-        putIfHasText(filters, "actor", criteria.actor());
-        putIfHasText(filters, "module", criteria.module());
-        putIfHasText(filters, "operationType", criteria.operationKind());
-        putIfHasText(filters, "actionCode", criteria.action());
-        putIfHasText(filters, "operationGroup", criteria.operationGroup());
-        putIfHasText(filters, "sourceSystem", criteria.sourceSystem());
-        putIfHasText(filters, "result", criteria.result());
-        putIfHasText(filters, "targetTable", criteria.targetTable());
-        putIfHasText(filters, "targetId", criteria.targetId());
-        putIfHasText(filters, "clientIp", criteria.clientIp());
-        putIfHasText(filters, "keyword", criteria.keyword());
-        if (criteria.from() != null) {
-            filters.put("from", formatInstant(criteria.from()));
-        }
-        if (criteria.to() != null) {
-            filters.put("to", formatInstant(criteria.to()));
-        }
-        return filters;
-    }
-
-    private Map<String, Object> buildPaginationDetail(Pageable pageable, int returnedCount, long totalElements) {
-        LinkedHashMap<String, Object> info = new LinkedHashMap<>();
-        info.put("returnedCount", returnedCount);
-        info.put("totalElements", totalElements);
-        if (pageable == null) {
-            info.put("paged", false);
-            return info;
-        }
-        boolean paged = pageable.isPaged();
-        info.put("paged", paged);
-        if (paged) {
-            info.put("page", pageable.getPageNumber());
-            info.put("size", pageable.getPageSize());
-        }
-        if (pageable.getSort() != null && pageable.getSort().isSorted()) {
-            info.put("sort", pageable.getSort().toString());
-        }
-        return info;
-    }
-
-    private void putIfHasText(Map<String, Object> target, String key, String value) {
-        if (StringUtils.isNotBlank(value)) {
-            target.put(key, value.trim());
-        }
-    }
-
-    private String formatInstant(Instant instant) {
-        return instant != null ? instant.toString() : null;
-    }
-
-    private String clientIp(HttpServletRequest request) {
-        if (request == null) {
-            return null;
-        }
-        return IpAddressUtils.resolveClientIp(
-            request.getHeader("X-Forwarded-For"),
-            request.getHeader("X-Real-IP"),
-            request.getRemoteAddr()
-        );
     }
 
     private void ensureReadable(VisibilityScope scope, AuditEntryView view) {
@@ -660,74 +325,14 @@ public class AuditLogResource {
         }
     }
 
-    private String mapSourceSystemText(String sourceSystem) {
-        if (StringUtils.isBlank(sourceSystem)) {
-            return "系统管理";
-        }
-        return switch (sourceSystem.trim().toLowerCase(Locale.ROOT)) {
-            case "platform" -> "业务管理";
-            default -> "系统管理";
-        };
-    }
-
-    private String mapResultText(String result) {
-        if (StringUtils.isBlank(result)) {
-            return "成功";
-        }
-        return switch (result.trim().toUpperCase(Locale.ROOT)) {
-            case "FAILED", "FAIL", "ERROR" -> "失败";
-            case "PENDING" -> "处理中";
-            default -> "成功";
-        };
-    }
-
-    private String mapLogType(String sourceSystem) {
-        return "platform".equalsIgnoreCase(StringUtils.trimToEmpty(sourceSystem)) ? "业务端审计" : "管理端审计";
-    }
-
-    private String normalizeOperationTypeCode(AuditEntryView view) {
-        AuditOperationKind kind = view.operationKind();
-        if (kind != null && kind != AuditOperationKind.OTHER) {
-            return kind.code();
-        }
-        String candidate = StringUtils.firstNonBlank(
-            extractOperationToken(view),
-            view.operationCode(),
-            view.operationName(),
-            view.summary()
-        );
-        AuditOperationType type = AuditOperationType.from(candidate);
-        if (type == AuditOperationType.UNKNOWN) {
-            type = inferOperationType(view, candidate);
-        }
-        if (type == AuditOperationType.UNKNOWN) {
-            type = AuditOperationType.READ;
-        }
-        return type.getCode();
-    }
-
-    private String mapOperationTypeLabel(String normalizedCode) {
-        AuditOperationType type = AuditOperationType.from(normalizedCode);
-        if (type == AuditOperationType.UNKNOWN) {
-            type = AuditOperationType.READ;
-        }
-        return type.getDisplayName();
-    }
-
     private VisibilityScope resolveVisibilityScope() {
         Optional<String> login = SecurityUtils.getCurrentUserLogin();
         String normalized = login.map(value -> value.trim().toLowerCase(Locale.ROOT)).orElse(null);
         boolean hasAuthRole = SecurityUtils.hasCurrentUserAnyOfAuthorities(
-            AuthoritiesConstants.AUTH_ADMIN,
-            "AUTHADMIN",
-            "ROLE_AUTHADMIN",
-            "AUTH_ADMIN"
+            AuthoritiesConstants.AUTH_ADMIN, "AUTHADMIN", "ROLE_AUTHADMIN", "AUTH_ADMIN"
         );
         boolean hasAuditRole = SecurityUtils.hasCurrentUserAnyOfAuthorities(
-            AuthoritiesConstants.AUDITOR_ADMIN,
-            "AUDITADMIN",
-            "ROLE_AUDITADMIN",
-            "AUDITOR_ADMIN"
+            AuthoritiesConstants.AUDITOR_ADMIN, "AUDITADMIN", "ROLE_AUDITADMIN", "AUDITOR_ADMIN"
         );
         if (hasAuthRole && !hasAuditRole) {
             return new VisibilityScope(Set.of("auditadmin"), Set.of());
@@ -762,7 +367,7 @@ public class AuditLogResource {
         String module = safeTrim(summary.getModuleName());
         String groupLabel = safeTrim(summary.getGroupDisplayName());
         String sourceSystem = safeTrim(summary.getSourceSystem());
-        String sourceLabel = mapSourceSystemText(sourceSystem);
+        String sourceLabel = viewMapper.mapSourceSystemText(sourceSystem);
         StringBuilder label = new StringBuilder();
         if (StringUtils.isNotBlank(sourceLabel)) {
             label.append(sourceLabel);
@@ -818,113 +423,6 @@ public class AuditLogResource {
             categories.putIfAbsent(entryKey, new CategoryView(module.key(), module.title(), entryKey, entryTitle));
         }
         return categories;
-    }
-
-    private String extractOperationToken(AuditEntryView view) {
-        if (view == null) {
-            return null;
-        }
-        String direct = StringUtils.firstNonBlank(
-            extractFromMapLike(view.extraAttributes(), "operationType", "operation_type"),
-            extractFromMapLike(view.metadata(), "operationType", "operation_type"),
-            extractFromMapLike(view.details(), "operationType", "operation_type")
-        );
-        if (StringUtils.isNotBlank(direct)) {
-            return direct;
-        }
-        Object payload = view.details() != null ? view.details().get("payload") : null;
-        if (payload instanceof Map<?, ?> map) {
-            return extractFromMapLike(map, "operationType", "operation_type");
-        }
-        return null;
-    }
-
-    private String extractFromMapLike(Object source, String... keys) {
-        if (!(source instanceof Map<?, ?> map) || keys == null) {
-            return null;
-        }
-        for (String key : keys) {
-            if (key == null) {
-                continue;
-            }
-            Object value = map.get(key);
-            if (value == null) {
-                value = map.get(key.toLowerCase(Locale.ROOT));
-            }
-            if (value == null) {
-                value = map.get(key.toUpperCase(Locale.ROOT));
-            }
-            if (value != null) {
-                String text = safeTrim(value.toString());
-                if (StringUtils.isNotBlank(text)) {
-                    return text;
-                }
-            }
-        }
-        return null;
-    }
-
-    private AuditOperationType inferOperationType(AuditEntryView view, String candidate) {
-        List<String> probes = new ArrayList<>();
-        if (StringUtils.isNotBlank(candidate)) {
-            probes.add(candidate);
-        }
-        if (StringUtils.isNotBlank(view.operationName())) {
-            probes.add(view.operationName());
-        }
-        if (StringUtils.isNotBlank(view.summary())) {
-            probes.add(view.summary());
-        }
-        if (StringUtils.isNotBlank(view.operationCode())) {
-            probes.add(view.operationCode());
-        }
-        Map<String, Object> details = view.details();
-        if (details != null) {
-            Object direct = details.get("operationType");
-            if (direct instanceof String s && StringUtils.isNotBlank(s)) {
-                probes.add(s);
-            }
-            Object payload = details.get("payload");
-            if (payload instanceof Map<?, ?> payloadMap) {
-                Object payloadOp = payloadMap.get("operationType");
-                if (payloadOp instanceof String s && StringUtils.isNotBlank(s)) {
-                    probes.add(s);
-                }
-                Object payloadSummary = payloadMap.get("summary");
-                if (payloadSummary instanceof String s && StringUtils.isNotBlank(s)) {
-                    probes.add(s);
-                }
-            }
-        }
-        for (String probe : probes) {
-            String normalized = probe.toLowerCase(Locale.ROOT);
-            if (containsAny(normalized, "下载", "download")) {
-                return AuditOperationType.DOWNLOAD;
-            }
-            if (containsAny(normalized, "上传", "upload")) {
-                return AuditOperationType.UPLOAD;
-            }
-            if (containsAny(normalized, "导出", "export")) {
-                return AuditOperationType.EXPORT;
-            }
-            if (containsAny(normalized, "导入", "import")) {
-                return AuditOperationType.IMPORT;
-            }
-        }
-        return AuditOperationType.UNKNOWN;
-    }
-
-    private boolean containsAny(String text, String... tokens) {
-        if (StringUtils.isBlank(text) || tokens == null || tokens.length == 0) {
-            return false;
-        }
-        String normalized = text.toLowerCase(Locale.ROOT);
-        for (String token : tokens) {
-            if (token != null && normalized.contains(token.toLowerCase(Locale.ROOT))) {
-                return true;
-            }
-        }
-        return false;
     }
 
     private String slugify(String value, String fallback) {
@@ -1022,7 +520,7 @@ public class AuditLogResource {
         if (view == null) {
             return null;
         }
-        String candidate = StringUtils.firstNonBlank(
+        return StringUtils.firstNonBlank(
             valueAsString(view.metadata(), "actorName"),
             valueAsString(view.extraAttributes(), "actorName"),
             valueAsString(view.metadata(), "targetName"),
@@ -1030,7 +528,6 @@ public class AuditLogResource {
             valueAsString(view.metadata(), "resourceName"),
             valueAsString(view.extraAttributes(), "resourceName")
         );
-        return candidate;
     }
 
     private String valueAsString(Map<String, Object> map, String key) {
@@ -1084,17 +581,6 @@ public class AuditLogResource {
     private record ModuleView(String key, String title) {}
 
     private record CategoryView(String moduleKey, String moduleTitle, String entryKey, String entryTitle) {}
-
-    private String toJson(Object value) {
-        if (value == null) {
-            return null;
-        }
-        try {
-            return objectMapper.writeValueAsString(value);
-        } catch (IOException ex) {
-            return value.toString();
-        }
-    }
 
     private record VisibilityScope(Set<String> allowedActors, Set<String> excludedActors) {
         static VisibilityScope unrestricted() {

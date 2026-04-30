@@ -1,5 +1,6 @@
 package com.yuzhi.dts.platform.service.audit;
 
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.yuzhi.dts.common.audit.AuditActionCatalog;
@@ -8,6 +9,8 @@ import com.yuzhi.dts.common.audit.AuditStage;
 import com.yuzhi.dts.platform.security.SecurityUtils;
 import com.yuzhi.dts.common.net.IpAddressUtils;
 import jakarta.servlet.http.HttpServletRequest;
+import java.io.IOException;
+import java.io.InputStream;
 import java.time.Instant;
 import java.lang.reflect.Array;
 import java.util.ArrayList;
@@ -15,6 +18,7 @@ import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.IdentityHashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -24,6 +28,9 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import com.yuzhi.dts.platform.security.session.PortalSessionRegistry;
 import org.springframework.beans.factory.ObjectProvider;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.core.io.Resource;
+import org.springframework.core.io.ResourceLoader;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.core.context.SecurityContextHolder;
@@ -52,7 +59,7 @@ public class AuditService {
         AUDIT_CONTEXT_CLASS = ctxClass;
     }
 
-    private static final Map<String, LegacyActionMapping> LEGACY_ACTIONS = new java.util.HashMap<>();
+    private static final String DEFAULT_LEGACY_ACTIONS_LOCATION = "classpath:config/legacy-action-mappings.json";
     private static final Set<String> ACTOR_HINT_KEYS = Set.of(
         "username",
         "user",
@@ -67,209 +74,87 @@ public class AuditService {
         "requester"
     );
 
-    static {
-        // API catalog actions
-        registerLegacy("api.test", "EXECUTE", legacyMapping("SERVICE_API_REGISTER", "测试 API 服务", "测试 API 服务失败", null, "EXECUTE", false, AuditStage.SUCCESS));
-        registerLegacy("api.publish", "PUBLISH", legacyMapping("SERVICE_API_PUBLISH", "发布 API 服务", "发布 API 服务失败", null, "UPDATE", false, AuditStage.SUCCESS));
-        registerLegacy("api.execute", "EXECUTE", legacyMapping("SERVICE_API_REGISTER", "执行 API 服务", "执行 API 服务失败", null, "EXECUTE", false, AuditStage.SUCCESS));
-
-        // Catalog classification mappings
-        registerLegacy("catalog.classificationMapping", "READ", legacyMapping("CATALOG_ASSET_VIEW", "查看分类映射", null, null, "READ", true, AuditStage.SUCCESS));
-        registerLegacy("catalog.classificationMapping", "CREATE", legacyMapping("CATALOG_ASSET_EDIT", "新增分类映射", "新增分类映射失败", null, "CREATE", false, AuditStage.SUCCESS));
-        registerLegacy("catalog.classificationMapping", "UPDATE", legacyMapping("CATALOG_ASSET_EDIT", "更新分类映射", "更新分类映射失败", null, "UPDATE", false, AuditStage.SUCCESS));
-
-        // Catalog dataset grants
-        registerLegacy("catalog.dataset.grant", "READ", legacyMapping("CATALOG_ASSET_VIEW", "查看数据集授权", null, null, "READ", true, AuditStage.SUCCESS));
-        registerLegacy("catalog.dataset.grant", "CREATE", legacyMapping("CATALOG_ASSET_EDIT", "新增数据集授权", "新增数据集授权失败", null, "GRANT", false, AuditStage.SUCCESS));
-        registerLegacy("catalog.dataset.grant", "DELETE", legacyMapping("CATALOG_ASSET_EDIT", "删除数据集授权", "删除数据集授权失败", null, "REVOKE", false, AuditStage.SUCCESS));
-
-        // Catalog dataset import
-        registerLegacy("catalog.dataset.import", "CREATE", legacyMapping("CATALOG_ASSET_EDIT", "导入数据资产", "导入数据资产失败", null, "IMPORT", false, AuditStage.SUCCESS));
-
-        // Catalog domains
-        registerLegacy("catalog.domain", "READ", legacyMapping("CATALOG_ASSET_VIEW", "查看主题域", null, null, "READ", true, AuditStage.SUCCESS));
-        registerLegacy("catalog.domain", "CREATE", legacyMapping("CATALOG_ASSET_EDIT", "新增主题域", "新增主题域失败", null, "CREATE", false, AuditStage.SUCCESS));
-        registerLegacy("catalog.domain", "UPDATE", legacyMapping("CATALOG_ASSET_EDIT", "更新主题域", "更新主题域失败", null, "UPDATE", false, AuditStage.SUCCESS));
-        registerLegacy("catalog.domain", "DELETE", legacyMapping("CATALOG_ASSET_EDIT", "删除主题域", "删除主题域失败", null, "DELETE", false, AuditStage.SUCCESS));
-        registerLegacy("catalog.domain.move", "UPDATE", legacyMapping("CATALOG_ASSET_EDIT", "调整主题域顺序", "调整主题域顺序失败", null, "UPDATE", false, AuditStage.SUCCESS));
-        registerLegacy("catalog.domain.tree", "READ", legacyMapping("CATALOG_ASSET_VIEW", "查看主题域树", null, null, "READ", true, AuditStage.SUCCESS));
-
-        // Catalog table metadata
-        registerLegacyCrud("catalog.table", "数据表");
-        registerLegacy("catalog.table.import", "CREATE", legacyMapping("CATALOG_ASSET_EDIT", "导入数据表", "导入数据表失败", null, "IMPORT", false, AuditStage.SUCCESS));
-        registerLegacyCrud("catalog.column", "数据字段");
-        registerLegacyCrud("catalog.rowFilter", "数据过滤规则");
-        registerLegacyCrud("catalog.masking", "脱敏规则");
-        registerLegacy("catalog.masking.preview", "EXECUTE", legacyMapping("CATALOG_ASSET_VIEW", "预览脱敏规则效果", "预览脱敏规则效果失败", null, "READ", true, AuditStage.SUCCESS));
-
-        // Catalog domain list / classification mapping read already handled
-        registerLegacy("catalog.classificationMapping", "READ", legacyMapping("CATALOG_ASSET_VIEW", "查看分类映射", null, null, "READ", true, AuditStage.SUCCESS));
-
-        // Catalog dataset grants already handled above
-
-        // Dashboard
-        registerLegacy("dashboard.list", "READ", legacyMapping("VIS_DASHBOARD_VIEW", "查看仪表盘列表", null, null, "READ", true, AuditStage.SUCCESS));
-
-        // ETL / job
-        registerLegacy("etl.job", "SUBMIT", legacyMapping("FOUNDATION_SCHEDULE_DEPLOY", "提交数据集成任务", "提交数据集成任务失败", null, "EXECUTE", false, AuditStage.SUCCESS));
-        registerLegacy("etl.run.status", "READ", legacyMapping("FOUNDATION_SCHEDULE_REGISTER", "查看任务运行状态", null, null, "READ", true, AuditStage.SUCCESS));
-
-        // Explore workbench
-        registerLegacy("explore.execute", "EXECUTE", legacyMapping("EXPLORE_WORKBENCH_QUERY", "执行数据查询", "执行数据查询失败", null, "EXECUTE", false, AuditStage.SUCCESS));
-        registerLegacy("explore.execute", "DENY", legacyMapping("EXPLORE_WORKBENCH_QUERY", "执行数据查询", "执行数据查询被拒绝", null, "EXECUTE", false, AuditStage.FAIL));
-        registerLegacy("explore.execute", "ERROR", legacyMapping("EXPLORE_WORKBENCH_QUERY", "执行数据查询", "执行数据查询失败", null, "EXECUTE", false, AuditStage.FAIL));
-        registerLegacy("explore.explain", "READ", legacyMapping("EXPLORE_WORKBENCH_QUERY", "查看查询执行计划", null, null, "READ", true, AuditStage.SUCCESS));
-        registerLegacy("explore.resultPreview", "READ", legacyMapping("EXPLORE_RESULTSET_VIEW", "预览查询结果", null, null, "READ", true, AuditStage.SUCCESS));
-        registerLegacy("explore.resultPreview", "DENY", legacyMapping("EXPLORE_RESULTSET_VIEW", "预览查询结果", "预览查询结果被拒绝", null, "READ", true, AuditStage.FAIL));
-        registerLegacy("explore.resultSet", "DELETE", legacyMapping("EXPLORE_RESULTSET_PURGE", "删除查询结果集", "删除查询结果集失败", null, "DELETE", false, AuditStage.SUCCESS));
-        registerLegacy("explore.resultSet", "DENY", legacyMapping("EXPLORE_RESULTSET_PURGE", "删除查询结果集", "删除查询结果集被拒绝", null, "DELETE", false, AuditStage.FAIL));
-        registerLegacy("explore.resultSet.cleanup", "DELETE", legacyMapping("EXPLORE_RESULTSET_PURGE", "清理查询结果集", "清理查询结果集失败", null, "DELETE", false, AuditStage.SUCCESS));
-        registerLegacy("explore.saveResult", "EXPORT", legacyMapping("EXPLORE_RESULTSET_EXPORT", "保存查询结果集", "保存查询结果集失败", null, "EXPORT", false, AuditStage.SUCCESS));
-        registerLegacy("explore.saveResult", "DENY", legacyMapping("EXPLORE_RESULTSET_EXPORT", "保存查询结果集", "保存查询结果集被拒绝", null, "EXPORT", false, AuditStage.FAIL));
-
-        // Governance compliance
-        registerLegacy(
-            "governance.compliance",
-            "LIST",
-            legacyMapping("GOV_COMPLIANCE_RUN", "刷新合规批次列表", "刷新合规批次列表失败", null, "READ", true, AuditStage.SUCCESS)
-        );
-        registerLegacy(
-            "governance.compliance.batch",
-            "CREATE",
-            legacyMapping("GOV_COMPLIANCE_PLAN", "新建合规批次", "新建合规批次失败", null, "CREATE", false, AuditStage.SUCCESS)
-        );
-        registerLegacy(
-            "governance.compliance.batch",
-            "READ",
-            legacyMapping("GOV_COMPLIANCE_REVIEW", "查看合规批次", "查看合规批次失败", null, "READ", true, AuditStage.SUCCESS)
-        );
-        registerLegacy(
-            "governance.compliance.batch",
-            "DELETE",
-            legacyMapping("GOV_COMPLIANCE_PLAN", "删除合规批次", "删除合规批次失败", null, "DELETE", false, AuditStage.SUCCESS)
-        );
-        registerLegacy(
-            "governance.compliance.item",
-            "UPDATE",
-            legacyMapping("GOV_COMPLIANCE_REVIEW", "登记合规检查结果", "登记合规检查结果失败", null, "UPDATE", false, AuditStage.SUCCESS)
-        );
-        registerLegacy(
-            "governance.compliance.qualityRun",
-            "READ",
-            legacyMapping("GOV_COMPLIANCE_REVIEW", "查看质量运行详情", "查看质量运行详情失败", null, "READ", true, AuditStage.SUCCESS)
-        );
-
-        // IAM classification
-        registerLegacy("iam.classification", "READ", legacyMapping("IAM_CLASSIFICATION_VIEW", "查看密级映射", null, null, "READ", true, AuditStage.SUCCESS));
-        registerLegacy("iam.classification", "CREATE", legacyMapping("IAM_CLASSIFICATION_SYNC", "新增密级映射", "新增密级映射失败", null, "CREATE", false, AuditStage.SUCCESS));
-        registerLegacy("iam.classification", "UPDATE", legacyMapping("IAM_CLASSIFICATION_SYNC", "更新密级映射", "更新密级映射失败", null, "UPDATE", false, AuditStage.SUCCESS));
-        registerLegacy("iam.classification", "DELETE", legacyMapping("IAM_CLASSIFICATION_SYNC", "删除密级映射", "删除密级映射失败", null, "DELETE", false, AuditStage.SUCCESS));
-
-        // IAM permissions
-        registerLegacy("iam.permission", "READ", legacyMapping("IAM_AUTH_GRANT", "查看权限策略", null, null, "READ", true, AuditStage.SUCCESS));
-        registerLegacy("iam.permission", "CREATE", legacyMapping("IAM_AUTH_GRANT", "新增权限策略", "新增权限策略失败", null, "CREATE", false, AuditStage.SUCCESS));
-        registerLegacy("iam.permission", "UPDATE", legacyMapping("IAM_AUTH_GRANT", "更新权限策略", "更新权限策略失败", null, "UPDATE", false, AuditStage.SUCCESS));
-        registerLegacy("iam.permission", "DELETE", legacyMapping("IAM_AUTH_REVOKE", "删除权限策略", "删除权限策略失败", null, "DELETE", false, AuditStage.SUCCESS));
-
-        // IAM requests
-        registerLegacy("iam.request", "READ", legacyMapping("IAM_REQUEST_SUBMIT", "查看权限申请", null, null, "READ", true, AuditStage.SUCCESS));
-        registerLegacy("iam.request", "CREATE", legacyMapping("IAM_REQUEST_SUBMIT", "提交权限申请", "提交权限申请失败", null, "CREATE", false, AuditStage.SUCCESS));
-        registerLegacy("iam.request.approve", "UPDATE", legacyMapping("IAM_REQUEST_APPROVE", "审批权限申请", "审批权限申请失败", null, "UPDATE", false, AuditStage.SUCCESS));
-        registerLegacy("iam.request.reject", "UPDATE", legacyMapping("IAM_REQUEST_REJECT", "驳回权限申请", "驳回权限申请失败", null, "UPDATE", false, AuditStage.SUCCESS));
-        registerLegacy("iam.simulate", "EXECUTE", legacyMapping("IAM_SIMULATION_RUN", "执行策略模拟", "执行策略模拟失败", null, "EXECUTE", false, AuditStage.SUCCESS));
-
-        // Infra data sources
-        registerLegacy("infra.dataSource", "CREATE", legacyMapping("FOUNDATION_DATASOURCE_REGISTER", "新增数据源", "新增数据源失败", null, "CREATE", false, AuditStage.SUCCESS));
-        registerLegacy("infra.dataSource", "UPDATE", legacyMapping("FOUNDATION_DATASOURCE_REGISTER", "更新数据源", "更新数据源失败", null, "UPDATE", false, AuditStage.SUCCESS));
-        registerLegacy("infra.dataSource", "DELETE", legacyMapping("FOUNDATION_DATASOURCE_DISABLE", "删除数据源", "删除数据源失败", null, "DELETE", false, AuditStage.SUCCESS));
-        registerLegacy("infra.dataSource", "TEST", legacyMapping("FOUNDATION_DATASOURCE_TEST", "测试数据源连接", "测试数据源连接失败", null, "EXECUTE", false, AuditStage.SUCCESS));
-        registerLegacy("infra.dataSource.inceptor", "PUBLISH", legacyMapping("FOUNDATION_DATASOURCE_REGISTER", "发布 Inceptor 数据源", "发布 Inceptor 数据源失败", null, "UPDATE", false, AuditStage.SUCCESS));
-        registerLegacy("infra.dataSource.inceptor", "REFRESH", legacyMapping("FOUNDATION_DATASOURCE_TEST", "刷新 Inceptor 数据源", "刷新 Inceptor 数据源失败", null, "EXECUTE", false, AuditStage.SUCCESS));
-        registerLegacy("infra.dataSource.postgres", "PUBLISH", legacyMapping("FOUNDATION_DATASOURCE_REGISTER", "发布 Postgres 数据源", "发布 Postgres 数据源失败", null, "UPDATE", false, AuditStage.SUCCESS));
-
-        // Infra data storage
-        registerLegacy("infra.dataStorage", "CREATE", legacyMapping("FOUNDATION_STORAGE_REGISTER", "新增数据存储", "新增数据存储失败", null, "CREATE", false, AuditStage.SUCCESS));
-        registerLegacy("infra.dataStorage", "UPDATE", legacyMapping("FOUNDATION_STORAGE_UPDATE", "更新数据存储", "更新数据存储失败", null, "UPDATE", false, AuditStage.SUCCESS));
-        registerLegacy("infra.dataStorage", "DELETE", legacyMapping("FOUNDATION_STORAGE_UPDATE", "删除数据存储", "删除数据存储失败", null, "DELETE", false, AuditStage.SUCCESS));
-
-        // Infra schedule
-        registerLegacy("infra.schedule", "READ", legacyMapping("FOUNDATION_SCHEDULE_REGISTER", "查看调度任务", null, null, "READ", true, AuditStage.SUCCESS));
-        registerLegacy("infra.schedule", "CREATE", legacyMapping("FOUNDATION_SCHEDULE_REGISTER", "创建调度任务", "创建调度任务失败", null, "CREATE", false, AuditStage.SUCCESS));
-        registerLegacy("infra.schedule", "UPDATE", legacyMapping("FOUNDATION_SCHEDULE_DEPLOY", "更新调度任务", "更新调度任务失败", null, "UPDATE", false, AuditStage.SUCCESS));
-        registerLegacy("infra.schedule", "DELETE", legacyMapping("FOUNDATION_SCHEDULE_DISABLE", "删除调度任务", "删除调度任务失败", null, "DELETE", false, AuditStage.SUCCESS));
-
-        // Infra external links (ETL 对接入口)
-        registerLegacy("infra.externalLink", "READ", legacyMapping("INFRA_EXTERNAL_LINK_VIEW", "查看外部链接", null, null, "READ", true, AuditStage.SUCCESS));
-        registerLegacy("infra.externalLink", "UPDATE", legacyMapping("INFRA_EXTERNAL_LINK_EDIT", "更新外部链接", "更新外部链接失败", null, "UPDATE", false, AuditStage.SUCCESS));
-        registerLegacy("infra.externalLink", "DELETE", legacyMapping("INFRA_EXTERNAL_LINK_DELETE", "删除外部链接", "删除外部链接失败", null, "DELETE", false, AuditStage.SUCCESS));
-
-        // Modeling settings
-        registerLegacy("modeling.standard.settings", "READ", legacyMapping("MODELING_STANDARD_VIEW", "查看数据标准设置", null, null, "READ", true, AuditStage.SUCCESS));
-        registerLegacy("modeling.standard.settings", "UPDATE", legacyMapping("MODELING_STANDARD_EDIT", "更新数据标准设置", "更新数据标准设置失败", null, "UPDATE", false, AuditStage.SUCCESS));
-
-        // Modeling - plans / glossary / templates
-        registerLegacy("modeling.plan", "READ", legacyMapping("MODELING_PLAN_VIEW", "查看数据规划", null, null, "READ", true, AuditStage.SUCCESS));
-        registerLegacy("modeling.plan", "CREATE", legacyMapping("MODELING_PLAN_EDIT", "创建数据规划", "创建数据规划失败", null, "CREATE", false, AuditStage.SUCCESS));
-        registerLegacy("modeling.plan", "UPDATE", legacyMapping("MODELING_PLAN_EDIT", "更新数据规划", "更新数据规划失败", null, "UPDATE", false, AuditStage.SUCCESS));
-        registerLegacy("modeling.plan", "DELETE", legacyMapping("MODELING_PLAN_DELETE", "删除数据规划", "删除数据规划失败", null, "DELETE", false, AuditStage.SUCCESS));
-
-        registerLegacy("modeling.glossary", "READ", legacyMapping("MODELING_GLOSSARY_VIEW", "查看术语库", null, null, "READ", true, AuditStage.SUCCESS));
-        registerLegacy("modeling.glossary", "CREATE", legacyMapping("MODELING_GLOSSARY_EDIT", "创建术语", "创建术语失败", null, "CREATE", false, AuditStage.SUCCESS));
-        registerLegacy("modeling.glossary", "UPDATE", legacyMapping("MODELING_GLOSSARY_EDIT", "更新术语", "更新术语失败", null, "UPDATE", false, AuditStage.SUCCESS));
-        registerLegacy("modeling.glossary", "DELETE", legacyMapping("MODELING_GLOSSARY_DELETE", "删除术语", "删除术语失败", null, "DELETE", false, AuditStage.SUCCESS));
-
-        registerLegacy("modeling.template", "READ", legacyMapping("MODELING_TEMPLATE_VIEW", "查看模型模板", null, null, "READ", true, AuditStage.SUCCESS));
-        registerLegacy("modeling.template", "CREATE", legacyMapping("MODELING_TEMPLATE_EDIT", "创建模型模板", "创建模型模板失败", null, "CREATE", false, AuditStage.SUCCESS));
-        registerLegacy("modeling.template", "UPDATE", legacyMapping("MODELING_TEMPLATE_EDIT", "更新模型模板", "更新模型模板失败", null, "UPDATE", false, AuditStage.SUCCESS));
-        registerLegacy("modeling.template", "DELETE", legacyMapping("MODELING_TEMPLATE_DELETE", "删除模型模板", "删除模型模板失败", null, "DELETE", false, AuditStage.SUCCESS));
-
-        // Governance - quality tasks
-        registerLegacy("governance.quality.task", "READ", legacyMapping("GOV_QUALITY_TASK_VIEW", "查看质量巡检计划", null, null, "READ", true, AuditStage.SUCCESS));
-        registerLegacy("governance.quality.task", "CREATE", legacyMapping("GOV_QUALITY_TASK_EDIT", "创建质量巡检计划", "创建质量巡检计划失败", null, "CREATE", false, AuditStage.SUCCESS));
-        registerLegacy("governance.quality.task", "UPDATE", legacyMapping("GOV_QUALITY_TASK_EDIT", "更新质量巡检计划", "更新质量巡检计划失败", null, "UPDATE", false, AuditStage.SUCCESS));
-        registerLegacy("governance.quality.task", "EXECUTE", legacyMapping("GOV_QUALITY_TASK_RUN", "触发质量巡检计划", "触发质量巡检计划失败", null, "EXECUTE", false, AuditStage.SUCCESS));
-        registerLegacy("governance.quality.task", "DELETE", legacyMapping("GOV_QUALITY_TASK_DELETE", "删除质量巡检计划", "删除质量巡检计划失败", null, "DELETE", false, AuditStage.SUCCESS));
-
-        // Security - audit logs query (proxy)
-        registerLegacy("security.auditLogs", "READ", legacyMapping("SECURITY_AUDIT_VIEW", "查看日志审计", null, null, "READ", true, AuditStage.SUCCESS));
-
-        // SQL query fallback
-        registerLegacy("sql.query", "EXECUTE", legacyMapping("EXPLORE_WORKBENCH_QUERY", "执行 SQL 查询", "执行 SQL 查询失败", null, "EXECUTE", false, AuditStage.SUCCESS));
-        registerLegacy("sql.query", "DENY", legacyMapping("EXPLORE_WORKBENCH_QUERY", "执行 SQL 查询", "执行 SQL 查询被拒绝", null, "EXECUTE", false, AuditStage.FAIL));
-        registerLegacy("sql.query", "ERROR", legacyMapping("EXPLORE_WORKBENCH_QUERY", "执行 SQL 查询", "执行 SQL 查询失败", null, "EXECUTE", false, AuditStage.FAIL));
-        registerLegacy("sql.query", "CANCEL", legacyMapping("EXPLORE_WORKBENCH_QUERY", "停止 SQL 查询", "停止 SQL 查询失败", null, "CANCEL", false, AuditStage.SUCCESS));
-
-        // Service tokens
-        registerLegacy("svc.token", "READ", legacyMapping("SERVICE_TOKEN_ISSUE", "查看访问令牌", null, null, "READ", true, AuditStage.SUCCESS));
-        registerLegacy("svc.token", "CREATE", legacyMapping("SERVICE_TOKEN_ISSUE", "发放访问令牌", "发放访问令牌失败", null, "CREATE", false, AuditStage.SUCCESS));
-        registerLegacy("svc.token", "DELETE", legacyMapping("SERVICE_TOKEN_REVOKE", "吊销访问令牌", "吊销访问令牌失败", null, "DELETE", false, AuditStage.SUCCESS));
-
-        // Visualization dashboards
-        registerLegacy("vis.dashboards", "READ", legacyMapping("VIS_DASHBOARD_VIEW", "查看仪表盘", null, null, "READ", true, AuditStage.SUCCESS));
-        registerLegacy("vis.cockpit", "READ", legacyMapping("VIS_COCKPIT_VIEW", "查看驾驶舱", null, null, "READ", true, AuditStage.SUCCESS));
-        registerLegacy("vis.finance", "READ", legacyMapping("VIS_FINANCE_VIEW", "查看财务看板", null, null, "READ", true, AuditStage.SUCCESS));
-        registerLegacy("vis.hr", "READ", legacyMapping("VIS_HR_VIEW", "查看人力看板", null, null, "READ", true, AuditStage.SUCCESS));
-        registerLegacy("vis.projects", "READ", legacyMapping("VIS_PROJECT_VIEW", "查看项目看板", null, null, "READ", true, AuditStage.SUCCESS));
-        registerLegacy("vis.supply", "READ", legacyMapping("VIS_SUPPLYCHAIN_VIEW", "查看供应链看板", null, null, "READ", true, AuditStage.SUCCESS));
-
-    }
 
     private final ObjectProvider<AuditTrailService> auditTrailServiceProvider;
     private final AuditActionCatalog actionCatalog;
     private final PortalSessionRegistry portalSessionRegistry;
     private final ObjectMapper objectMapper;
+    private final Map<String, LegacyActionMapping> legacyActions;
 
     public AuditService(
         ObjectProvider<AuditTrailService> auditTrailServiceProvider,
         AuditActionCatalog actionCatalog,
         PortalSessionRegistry portalSessionRegistry,
-        ObjectMapper objectMapper
+        ObjectMapper objectMapper,
+        ResourceLoader resourceLoader,
+        @Value("${auditing.legacy-actions.config-location:" + DEFAULT_LEGACY_ACTIONS_LOCATION + "}") String legacyActionsLocation
     ) {
         this.auditTrailServiceProvider = auditTrailServiceProvider;
         this.actionCatalog = actionCatalog;
         this.portalSessionRegistry = portalSessionRegistry;
         this.objectMapper = objectMapper;
+        this.legacyActions = loadLegacyActions(resourceLoader, objectMapper, legacyActionsLocation);
+        log.info("Loaded {} legacy audit action mappings from {}", legacyActions.size(), legacyActionsLocation);
     }
+
+    private static Map<String, LegacyActionMapping> loadLegacyActions(
+        ResourceLoader resourceLoader,
+        ObjectMapper objectMapper,
+        String location
+    ) {
+        Resource resource = resourceLoader.getResource(location);
+        if (!resource.exists()) {
+            throw new IllegalStateException("legacy-action-mappings config not found: " + location);
+        }
+        try (InputStream in = resource.getInputStream()) {
+            LegacyActionsFile file = objectMapper.readValue(in, LegacyActionsFile.class);
+            List<LegacyActionEntry> entries = file.entries();
+            if (entries == null || entries.isEmpty()) {
+                throw new IllegalStateException("legacy-action-mappings file is empty: " + location);
+            }
+            Map<String, LegacyActionMapping> map = new LinkedHashMap<>();
+            for (LegacyActionEntry entry : entries) {
+                AuditStage stage;
+                try {
+                    stage = AuditStage.valueOf(entry.defaultStage());
+                } catch (IllegalArgumentException ex) {
+                    throw new IllegalStateException(
+                        "Unknown defaultStage '" + entry.defaultStage() + "' for module=" + entry.module() + " action=" + entry.action(),
+                        ex
+                    );
+                }
+                LegacyActionMapping mapping = new LegacyActionMapping(
+                    entry.actionCode(),
+                    entry.successSummary(),
+                    entry.failureSummary(),
+                    entry.pendingSummary(),
+                    entry.operationType(),
+                    entry.allowEmptyTargets(),
+                    stage
+                );
+                map.put(legacyKey(entry.module(), entry.action()), mapping);
+            }
+            return Collections.unmodifiableMap(map);
+        } catch (IOException ex) {
+            throw new IllegalStateException("Failed to load legacy-action-mappings from " + location, ex);
+        }
+    }
+
+    @JsonIgnoreProperties(ignoreUnknown = true)
+    private record LegacyActionsFile(String version, String description, List<LegacyActionEntry> entries) {}
+
+    @JsonIgnoreProperties(ignoreUnknown = true)
+    private record LegacyActionEntry(
+        String module,
+        String action,
+        String actionCode,
+        String successSummary,
+        String failureSummary,
+        String pendingSummary,
+        String operationType,
+        boolean allowEmptyTargets,
+        String defaultStage
+    ) {}
 
     public void auditAction(String actionCode, AuditStage stage, String resourceId, Object payload) {
         if (!StringUtils.hasText(actionCode)) {
@@ -465,7 +350,7 @@ public class AuditService {
         AuditStage stage = resolveStageFromResult(result, null);
 
         if (!auxiliary && (effectiveExtraTags == null || !effectiveExtraTags.containsKey("actionCode"))) {
-            legacyMapping = LEGACY_ACTIONS.get(legacyKey(module, action));
+            legacyMapping = legacyActions.get(legacyKey(module, action));
             if (legacyMapping != null) {
                 stage = resolveStageFromResult(result, legacyMapping.defaultStage());
                 legacyDefinition = actionCatalog.findByCode(legacyMapping.actionCode()).orElse(null);
@@ -892,56 +777,6 @@ public class AuditService {
         String normalizedModule = StringUtils.hasText(module) ? module.trim() : "";
         String normalizedAction = StringUtils.hasText(action) ? action.trim() : "";
         return normalizedModule + ":" + normalizedAction;
-    }
-
-    private static void registerLegacy(String module, String action, LegacyActionMapping mapping) {
-        if (mapping == null) {
-            return;
-        }
-        LEGACY_ACTIONS.put(legacyKey(module, action), mapping);
-    }
-
-    private static LegacyActionMapping legacyMapping(
-        String actionCode,
-        String successSummary,
-        String failureSummary,
-        String pendingSummary,
-        String operationType,
-        boolean allowEmptyTargets,
-        AuditStage defaultStage
-    ) {
-        return new LegacyActionMapping(
-            actionCode,
-            successSummary,
-            failureSummary,
-            pendingSummary,
-            operationType,
-            allowEmptyTargets,
-            defaultStage
-        );
-    }
-
-    private static void registerLegacyCrud(String module, String label) {
-        registerLegacy(
-            module,
-            "READ",
-            legacyMapping("CATALOG_ASSET_VIEW", "查看" + label, null, null, "READ", true, AuditStage.SUCCESS)
-        );
-        registerLegacy(
-            module,
-            "CREATE",
-            legacyMapping("CATALOG_ASSET_EDIT", "新增" + label, "新增" + label + "失败", null, "CREATE", false, AuditStage.SUCCESS)
-        );
-        registerLegacy(
-            module,
-            "UPDATE",
-            legacyMapping("CATALOG_ASSET_EDIT", "更新" + label, "更新" + label + "失败", null, "UPDATE", false, AuditStage.SUCCESS)
-        );
-        registerLegacy(
-            module,
-            "DELETE",
-            legacyMapping("CATALOG_ASSET_EDIT", "删除" + label, "删除" + label + "失败", null, "DELETE", false, AuditStage.SUCCESS)
-        );
     }
 
     private boolean containsAny(String source, String... needles) {
