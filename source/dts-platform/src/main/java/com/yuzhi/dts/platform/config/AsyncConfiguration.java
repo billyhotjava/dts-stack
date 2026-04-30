@@ -14,6 +14,7 @@ import org.springframework.scheduling.annotation.AsyncConfigurer;
 import org.springframework.scheduling.annotation.EnableAsync;
 import org.springframework.scheduling.annotation.EnableScheduling;
 import org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor;
+import org.springframework.security.task.DelegatingSecurityContextAsyncTaskExecutor;
 import tech.jhipster.async.ExceptionHandlingAsyncTaskExecutor;
 
 @Configuration
@@ -44,7 +45,11 @@ public class AsyncConfiguration implements AsyncConfigurer {
         // they migrate off ForkJoinPool) from being silently dropped and leaving downstream
         // state machines (e.g. QueryExecution rows) stuck in PENDING.
         executor.setRejectedExecutionHandler(new ThreadPoolExecutor.CallerRunsPolicy());
-        return new ExceptionHandlingAsyncTaskExecutor(executor);
+        // BUG-C fix: wrap in DelegatingSecurityContextAsyncTaskExecutor so @Async tasks inherit
+        // the calling thread's SecurityContext. Without this, audits emitted from background
+        // workers fall back to anonymous → "_system:dts-platform" actor, masking the real user
+        // who triggered the work.
+        return new DelegatingSecurityContextAsyncTaskExecutor(new ExceptionHandlingAsyncTaskExecutor(executor));
     }
 
     @Override

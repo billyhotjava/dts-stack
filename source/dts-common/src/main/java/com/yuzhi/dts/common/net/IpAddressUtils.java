@@ -3,91 +3,69 @@ package com.yuzhi.dts.common.net;
 import java.net.Inet6Address;
 import java.net.InetAddress;
 import java.net.UnknownHostException;
-import java.util.ArrayList;
-import java.util.List;
 
 /**
  * Network utility helpers used across admin/platform modules.
+ * <p>
+ * The audit subsystem uses these helpers to capture the real client IP behind a reverse proxy
+ * or k8s ingress chain. Production clusters are typically deployed on private networks where
+ * <em>both</em> the proxy and the client live in 10/8 or 192.168/16, so any logic that treats
+ * private addresses as "proxies to skip" would regress to the container IP — which is exactly
+ * the BUG-B symptom we are fixing.
+ *
+ * <p>The resolution rule is therefore intentionally simple:
+ * <ol>
+ *   <li>Walk the {@code candidates} in declaration order (typically Forwarded → X-Forwarded-For →
+ *       X-Real-IP → request.getRemoteAddr()).</li>
+ *   <li>For the first non-blank candidate, pick the first segment if comma-delimited (the
+ *       outermost client in the {@code X-Forwarded-For} chain — RFC 7239 says left-most is the
+ *       original client).</li>
+ *   <li>Sanitize port / IPv6 brackets / RFC 7239 {@code for=} prefix off and return.</li>
+ * </ol>
+ * If the proxy chain is misconfigured and X-Forwarded-* are missing entirely, the
+ * {@code remoteAddr} fallback is returned — preserving the previous behaviour for direct connections.
  */
 public final class IpAddressUtils {
 
     private IpAddressUtils() {}
 
     public static String resolveClientIp(String... candidates) {
-        if (candidates == null || candidates.length == 0) {
+        if (candidates == null) {
             return null;
         }
-        List<String> chain = new ArrayList<>();
-        boolean sawPublic = false;
         for (String candidate : candidates) {
-            if (candidate == null) {
+            String resolved = firstNonBlankSegment(candidate);
+            if (resolved == null) {
                 continue;
             }
-            String raw = candidate.trim();
-            if (raw.isEmpty() || "unknown".equalsIgnoreCase(raw)) {
+            String sanitized = sanitize(resolved);
+            if (sanitized == null || "unknown".equalsIgnoreCase(sanitized)) {
                 continue;
             }
-            String[] segments = raw.split(",");
-            if (segments.length == 0) {
-                sawPublic |= appendCandidate(chain, raw);
-            } else {
-                for (String segment : segments) {
-                    sawPublic |= appendCandidate(chain, segment);
-                }
-            }
+            return normalize(sanitized);
         }
-        if (chain.isEmpty()) {
-            return null;
-        }
-        if (!sawPublic) {
-            for (int idx = 0; idx < chain.size(); idx++) {
-                String candidate = chain.get(idx);
-                InetAddress address = parseInetAddress(candidate);
-                if (address == null) {
-                    continue;
-                }
-                if (address.isAnyLocalAddress() || address.isLoopbackAddress() || address.isLinkLocalAddress()) {
-                    continue;
-                }
-                return normalize(address, candidate);
-            }
-            return null;
-        }
-        String fallback = chain.get(chain.size() - 1);
-        for (int idx = chain.size() - 1; idx >= 0; idx--) {
-            String candidate = chain.get(idx);
-            InetAddress address = parseInetAddress(candidate);
-            if (address == null) {
-                continue;
-            }
-            if (isLikelyProxy(address, candidate)) {
-                continue;
-            }
-            return normalize(address, candidate);
-        }
-        InetAddress fallbackAddress = parseInetAddress(fallback);
-        if (fallbackAddress != null) {
-            return normalize(fallbackAddress, fallback);
-        }
-        return fallback;
+        return null;
     }
 
-    private static boolean appendCandidate(List<String> chain, String raw) {
-        String sanitized = sanitize(raw);
-        if (sanitized != null) {
-            chain.add(sanitized);
-            InetAddress address = parseInetAddress(sanitized);
-            return address != null && !isPrivateAddress(address, sanitized) && !address.isAnyLocalAddress()
-                && !address.isLinkLocalAddress() && !address.isLoopbackAddress();
+    private static String firstNonBlankSegment(String raw) {
+        if (raw == null) {
+            return null;
         }
-        return false;
-    }
-
-    private static boolean isLikelyProxy(InetAddress address, String literal) {
-        if (address.isAnyLocalAddress() || address.isLoopbackAddress() || address.isLinkLocalAddress()) {
-            return true;
+        String trimmed = raw.trim();
+        if (trimmed.isEmpty() || "unknown".equalsIgnoreCase(trimmed)) {
+            return null;
         }
-        return isPrivateAddress(address, literal);
+        if (!trimmed.contains(",")) {
+            return trimmed;
+        }
+        // X-Forwarded-For can carry multiple hops; the left-most non-empty segment is the original client.
+        for (String segment : trimmed.split(",")) {
+            String s = segment.trim();
+            if (!s.isEmpty() && !"unknown".equalsIgnoreCase(s)) {
+                return s;
+            }
+        }
+        return null;
     }
 
     private static String sanitize(String raw) {
@@ -98,16 +76,26 @@ public final class IpAddressUtils {
         if (trimmed.isEmpty() || "unknown".equalsIgnoreCase(trimmed)) {
             return null;
         }
+        // RFC 7239 Forwarded header format: "for=192.0.2.43" or "for=[2001:db8::1]:47011"
+        if (trimmed.regionMatches(true, 0, "for=", 0, 4)) {
+            trimmed = trimmed.substring(4).trim();
+            if (trimmed.startsWith("\"") && trimmed.endsWith("\"") && trimmed.length() >= 2) {
+                trimmed = trimmed.substring(1, trimmed.length() - 1);
+            }
+        }
+        // Drop trailing comment after a space.
         int space = trimmed.indexOf(' ');
         if (space > 0) {
             trimmed = trimmed.substring(0, space);
         }
+        // Strip [::ipv6]:port wrappers.
         if (trimmed.startsWith("[")) {
-            int idx = trimmed.indexOf(']');
-            if (idx > 0) {
-                trimmed = trimmed.substring(1, idx);
+            int bracket = trimmed.indexOf(']');
+            if (bracket > 0) {
+                trimmed = trimmed.substring(1, bracket);
             }
         }
+        // For "1.2.3.4:5678" strip the port; leave bare IPv6 (multiple colons) untouched.
         int colon = trimmed.indexOf(':');
         if (colon > 0 && trimmed.indexOf(':', colon + 1) == -1) {
             trimmed = trimmed.substring(0, colon);
@@ -115,118 +103,30 @@ public final class IpAddressUtils {
         return trimmed.isEmpty() ? null : trimmed;
     }
 
-    private static InetAddress parseInetAddress(String value) {
-        try {
-            return InetAddress.getByName(value);
-        } catch (UnknownHostException ignored) {
+    /**
+     * Normalises {@code ::ffff:1.2.3.4} → {@code 1.2.3.4} and IPv4-compatible IPv6 addresses to
+     * the dotted-quad form. Any value the runtime cannot parse is returned verbatim — better to
+     * record an unparsed string than throw away client evidence at audit time.
+     */
+    private static String normalize(String literal) {
+        if (literal == null) {
             return null;
         }
-    }
-
-    private static boolean isPublicAddress(InetAddress address, String literal) {
-        if (address instanceof Inet6Address inet6) {
-            if (literal != null && literal.startsWith("::ffff:")) {
-                return isPublicIpv4(literal.substring(7));
+        if (literal.startsWith("::ffff:")) {
+            String tail = literal.substring(7);
+            if (tail.contains(".")) {
+                return tail;
             }
-            if (inet6.isIPv4CompatibleAddress()) {
-                return isPublicIpv4(ipv4FromIpv6(inet6));
-            }
-            return !isPrivateIpv6Literal(literal) && !address.isSiteLocalAddress();
-        }
-        if (literal != null && literal.contains(".")) {
-            return isPublicIpv4(literal);
-        }
-        return !address.isSiteLocalAddress();
-    }
-
-    private static boolean isPrivateAddress(InetAddress address, String literal) {
-        if (address instanceof Inet6Address inet6) {
-            if (literal != null && literal.startsWith("::ffff:")) {
-                return !isPublicIpv4(literal.substring(7));
-            }
-            if (inet6.isIPv4CompatibleAddress()) {
-                return !isPublicIpv4(ipv4FromIpv6(inet6));
-            }
-            return isPrivateIpv6Literal(literal) || address.isSiteLocalAddress();
-        }
-        if (literal != null && literal.contains(".")) {
-            return !isPublicIpv4(literal);
-        }
-        return address.isSiteLocalAddress();
-    }
-
-    private static String ipv4FromIpv6(Inet6Address address) {
-        byte[] addr = address.getAddress();
-        return (addr[12] & 0xFF) + "." + (addr[13] & 0xFF) + "." + (addr[14] & 0xFF) + "." + (addr[15] & 0xFF);
-    }
-
-    private static boolean isPrivateIpv6Literal(String literal) {
-        if (literal == null) {
-            return false;
-        }
-        String value = literal.toLowerCase();
-        return value.startsWith("fc") || value.startsWith("fd");
-    }
-
-    private static boolean isPublicIpv4(String value) {
-        if (value == null) {
-            return false;
-        }
-        String candidate = value.trim();
-        if (candidate.isEmpty()) {
-            return false;
-        }
-        if (candidate.startsWith("::ffff:")) {
-            candidate = candidate.substring(7);
-        }
-        int slash = candidate.indexOf('/');
-        if (slash > 0) {
-            candidate = candidate.substring(0, slash);
-        }
-        int colon = candidate.indexOf(':');
-        if (colon > 0) {
-            candidate = candidate.substring(0, colon);
-        }
-        String[] parts = candidate.split("\\.");
-        if (parts.length != 4) {
-            return false;
         }
         try {
-            int p0 = Integer.parseInt(parts[0]);
-            int p1 = Integer.parseInt(parts[1]);
-            if (p0 == 10 || p0 == 127 || p0 == 0) {
-                return false;
+            InetAddress address = InetAddress.getByName(literal);
+            if (address instanceof Inet6Address inet6 && inet6.isIPv4CompatibleAddress()) {
+                byte[] bytes = inet6.getAddress();
+                return (bytes[12] & 0xFF) + "." + (bytes[13] & 0xFF) + "." + (bytes[14] & 0xFF) + "." + (bytes[15] & 0xFF);
             }
-            if (p0 == 169 && p1 == 254) {
-                return false;
-            }
-            if (p0 == 192 && p1 == 168) {
-                return false;
-            }
-            if (p0 == 172 && p1 >= 16 && p1 <= 31) {
-                return false;
-            }
-            if (p0 == 100 && p1 >= 64 && p1 <= 127) {
-                return false;
-            }
-            if (p0 == 198 && (p1 == 18 || p1 == 19)) {
-                return false;
-            }
-        } catch (NumberFormatException ex) {
-            return false;
+            return address.getHostAddress();
+        } catch (UnknownHostException ex) {
+            return literal;
         }
-        return true;
-    }
-
-    private static String normalize(InetAddress address, String literal) {
-        if (address instanceof Inet6Address inet6) {
-            if (literal != null && literal.startsWith("::ffff:")) {
-                return literal.substring(7);
-            }
-            if (inet6.isIPv4CompatibleAddress()) {
-                return ipv4FromIpv6(inet6);
-            }
-        }
-        return address.getHostAddress();
     }
 }

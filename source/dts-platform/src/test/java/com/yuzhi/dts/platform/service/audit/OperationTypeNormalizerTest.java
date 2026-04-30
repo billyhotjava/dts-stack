@@ -51,7 +51,7 @@ class OperationTypeNormalizerTest {
     }
 
     @ParameterizedTest
-    @DisplayName("中文 verb 映射")
+    @DisplayName("中文 verb 映射（含 BUG-A 修复后的长 verb 优先）")
     @CsvSource({
         "新增数据集,CREATE",
         "删除用户,DELETE",
@@ -60,9 +60,13 @@ class OperationTypeNormalizerTest {
         "导出审计日志,EXPORT",
         "导入数据,IMPORT",
         "授权访问,GRANT",
+        "撤销授权,REVOKE",
+        "取消授权,REVOKE",
         "启用账号,ENABLE",
         "禁用账号,DISABLE",
         "登录系统,LOGIN",
+        "退出登录,LOGOUT",
+        "注销登录,LOGOUT",
         "下载文件,DOWNLOAD",
         "上传文件,UPLOAD",
         "刷新数据,REFRESH"
@@ -71,20 +75,13 @@ class OperationTypeNormalizerTest {
         assertThat(normalizer.canonicalOperationType(input)).isEqualTo(expected);
     }
 
-    /**
-     * Pre-existing prefix-collision: "撤销授权" contains "授权" so the GRANT branch fires before the REVOKE
-     * one; same story for "退出登录" against LOGIN. Capturing as known-behaviour so future RF refactors
-     * cannot silently drift the canonicalisation contract; a follow-up task should reorder the rules so
-     * the more-specific verb (REVOKE / LOGOUT) wins.
-     */
+    /** REMOVE 仍未在英文规则里映射到 DELETE — 单独标记。 */
     @ParameterizedTest
-    @DisplayName("已知顺序歧义：长 verb 被短 verb 抢先（应在 follow-up 修）")
+    @DisplayName("已知遗留：英文 REMOVE 没有 DELETE 别名（如有需要可下次补）")
     @CsvSource({
-        "撤销授权,GRANT",
-        "退出登录,LOGIN",
         "REMOVE,READ"
     })
-    void chineseVerbPrefixCollisionsAreCurrentBehaviour(String input, String currentResult) {
+    void englishRemoveStillFallsThroughToRead(String input, String currentResult) {
         assertThat(normalizer.canonicalOperationType(input)).isEqualTo(currentResult);
     }
 

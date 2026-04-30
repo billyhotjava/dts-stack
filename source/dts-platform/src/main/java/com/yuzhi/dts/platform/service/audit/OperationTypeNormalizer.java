@@ -42,11 +42,15 @@ public class OperationTypeNormalizer {
         String trimmed = candidate.trim();
         String upper = trimmed.toUpperCase(Locale.ROOT);
         String lower = trimmed.toLowerCase(Locale.ROOT);
-        if (upper.contains("LOGIN") || containsAny(lower, "登录", "登入")) {
-            return "LOGIN";
-        }
+        // BUG-A fix: longer/more-specific verbs MUST be checked first so they don't lose
+        // to shorter prefix matches. Examples:
+        //   "退出登录" contains both "登录" (LOGIN) and is itself LOGOUT — LOGOUT must win.
+        //   "撤销授权" contains both "授权" (GRANT) and is itself REVOKE — REVOKE must win.
         if (upper.contains("LOGOUT") || containsAny(lower, "登出", "退出登录", "注销登录")) {
             return "LOGOUT";
+        }
+        if (upper.contains("LOGIN") || containsAny(lower, "登录", "登入")) {
+            return "LOGIN";
         }
         if (upper.contains("DOWNLOAD") || containsAny(lower, "下载", "download")) {
             return "DOWNLOAD";
@@ -60,11 +64,11 @@ public class OperationTypeNormalizer {
         if (upper.contains("IMPORT") || containsAny(lower, "导入", "import")) {
             return "IMPORT";
         }
+        if (upper.contains("REVOKE") || containsAny(lower, "撤销授权", "取消授权", "撤销", "收回", "回收", "revoke")) {
+            return "REVOKE";
+        }
         if (upper.contains("GRANT") || containsAny(lower, "授权", "共享", "grant")) {
             return "GRANT";
-        }
-        if (upper.contains("REVOKE") || containsAny(lower, "撤销授权", "取消授权", "收回", "回收", "revoke")) {
-            return "REVOKE";
         }
         if (upper.contains("ENABLE") || containsAny(lower, "启用", "开启", "激活", "enable")) {
             return "ENABLE";

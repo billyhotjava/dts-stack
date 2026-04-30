@@ -156,7 +156,7 @@ public class AuditIngestResource {
             );
             String moduleName = firstNonBlank(text(sanitizedBody.get("moduleName")), moduleKey);
 
-            String actor = normalizeActor(sanitizedBody);
+            String actor = normalizeActor(sanitizedBody, sourceSystem);
             String actorName = text(sanitizedBody.get("actorName"), actor);
             List<String> actorRoles = extractStringList(
                 sanitizedBody.get("actorRoles"),
@@ -369,7 +369,7 @@ public class AuditIngestResource {
             return List.copyOf(normalized);
         }
 
-        private static String normalizeActor(Map<String, Object> body) {
+        private static String normalizeActor(Map<String, Object> body, String sourceSystem) {
             List<Object> candidates = collectValues(
                 body.get("actor"),
                 body.get("username"),
@@ -395,7 +395,11 @@ public class AuditIngestResource {
                     return text;
                 }
             }
-            return "platform";
+            // BUG-C fix: never return a bare "platform" — that mis-renders as a real account
+            // in the audit UI. Tag the fallback explicitly so auditors can spot async/system
+            // events that lost their SecurityContext (e.g. @Scheduled, event listeners).
+            String origin = sourceSystem != null && !sourceSystem.isBlank() ? sourceSystem.trim() : "unknown";
+            return "_system:" + origin.toLowerCase(Locale.ROOT);
         }
 
         private static boolean isAnonymous(String value) {

@@ -413,10 +413,10 @@ public class OpsConfigService {
         if (request == null) {
             return null;
         }
-        String xff = request.getHeader("X-Forwarded-For");
-        if (StringUtils.hasText(xff)) {
-            return xff.split(",")[0].trim();
-        }
-        return request.getRemoteAddr();
+        return com.yuzhi.dts.common.net.IpAddressUtils.resolveClientIp(
+            request.getHeader("X-Forwarded-For"),
+            request.getHeader("X-Real-IP"),
+            request.getRemoteAddr()
+        );
     }
 }
