@@ -3,7 +3,7 @@ import { analyticsApi, type ScreenAclEntry, type UserSearchItem } from '../../..
 import { writeTextToClipboard } from '../../../hooks/clipboard';
 import { resolveRouteHref } from '../../../helpers/resolveAnalyticsUrl';
 import { Modal, Input, Select, Button, Tag, message } from 'antd';
-import { ClassificationSelect } from './ClassificationSelect';
+import { ClassificationTag } from './ClassificationTag';
 
 interface ScreenSharePanelProps {
 	open: boolean;
@@ -30,9 +30,9 @@ export function ScreenSharePanel({ open, screenId, onClose, isOwner = false }: S
 	const [error, setError] = useState<string | null>(null);
 	const [entries, setEntries] = useState<ScreenAclEntry[]>([]);
 	const [userNameMap, setUserNameMap] = useState<Record<string, string>>({});
-	// 大屏密级 — Sprint-24 F1/T03：改用 ClassificationSelect 共享组件。
-	// 保留本地 state 是为了在 loadAcl 时和 getScreen 一起拿到 classification，
-	// 避免 ClassificationSelect 再发一次重复请求；走受控模式同步给共享组件。
+	// 大屏密级 — Sprint-24 重构后只在分享面板做只读展示。修改入口
+	// 已迁到「权限管理」面板（ScreenAclPanel）。loadAcl 时顺带把
+	// classification 拿过来给 ClassificationTag 渲染。
 	const [classification, setClassification] = useState<string>('');
 
 	// User search state
@@ -278,8 +278,9 @@ export function ScreenSharePanel({ open, screenId, onClose, isOwner = false }: S
 			)}
 
 			{/*
-				大屏密级 — 仅 owner 可改；非 owner 只读展示。
-				密级决定哪些人员密级可见本大屏；选择"密级越级共享"会绕过此限制。
+				Sprint-24 重构：分享面板里只展示当前密级（只读 Tag），不在此修改。
+				「密级」作为权限维度，统一在大屏列表「权限管理」面板设置，
+				避免修改入口分散导致语义混淆。
 			*/}
 			{screenId && (
 				<div
@@ -289,38 +290,25 @@ export function ScreenSharePanel({ open, screenId, onClose, isOwner = false }: S
 						borderRadius: 8,
 						border: '1px solid var(--color-border, rgba(255,255,255,0.1))',
 						background: 'var(--color-surface-raised, rgba(255,255,255,0.03))',
+						display: 'flex',
+						alignItems: 'center',
+						gap: 10,
+						flexWrap: 'wrap',
 					}}
 				>
-					<div
+					<span
 						style={{
 							fontSize: 13,
 							fontWeight: 600,
-							marginBottom: 6,
 							color: 'var(--color-text-primary, #e5e7eb)',
 						}}
 					>
-						大屏密级
-					</div>
-					{/* Sprint-24 F1/T03：改用 ClassificationSelect 共享组件，
-						与编辑器属性面板单一真源，避免行为分叉。 */}
-					<ClassificationSelect
-						screenId={screenId}
-						value={classification}
-						isOwner={isOwner}
-						onUpdated={(next) => setClassification(next)}
-						autoFetch={false}
-					/>
-					{isOwner && (
-						<div
-							style={{
-								fontSize: 12,
-								color: 'var(--color-text-secondary, #9ca3af)',
-								marginTop: 6,
-							}}
-						>
-							修改后仅高于或等于此密级的用户可访问；可对个别用户授予越级共享。
-						</div>
-					)}
+						当前密级：
+					</span>
+					<ClassificationTag value={classification || null} />
+					<span style={{ fontSize: 12, color: 'var(--color-text-tertiary, #9ca3af)' }}>
+						仅高于或等于此密级的用户可访问；改密级请到「权限管理」面板。
+					</span>
 				</div>
 			)}
 

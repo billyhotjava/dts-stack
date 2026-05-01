@@ -1,10 +1,8 @@
 // @ts-nocheck — migrated from analytics-webapp, pending unused-import cleanup
 import { useCallback, useEffect, useState } from 'react';
-import { useParams } from 'react-router';
 import { message } from 'antd';
 import { toast } from 'sonner';
 import { useScreen } from '../../ScreenContext';
-import { ClassificationSelect } from '../ClassificationSelect';
 import type {
     ChartMarkArea,
     ChartMarkLine,
@@ -210,11 +208,8 @@ export function PropertyPanel({ activeTab = 'style' }: { activeTab?: PropertyPan
                     <p className="text-xs text-text-muted mt-1">全局主题与画布属性</p>
                 </div>
                 <div className="property-panel-content flex-1 overflow-y-auto px-4 py-2">
-                    {/* Sprint-24 F1/T02：大屏密级入口前移到属性面板顶部，
-                        让 owner 进编辑器即可见可改，不必再去翻分享弹窗。
-                        组件自包含：自己 fetch 当前 classification + isOwner，
-                        走独立 PATCH endpoint，不污染 ScreenContext。 */}
-                    <ClassificationSection />
+                    {/* Sprint-24 重构：「密级」属于大屏元属性 + 权限维度，不属于
+                        画布视觉配置。已迁出本面板，统一在「权限管理」面板设置。 */}
                     <div className="property-section py-3 border-b border-border-default">
                         <div className="property-section-title text-xs font-semibold text-text-secondary uppercase tracking-wide mb-2">主题</div>
                         <div className="property-row flex items-center mb-3">
@@ -973,31 +968,3 @@ export function PropertyPanel({ activeTab = 'style' }: { activeTab?: PropertyPan
     );
 }
 
-/**
- * Sprint-24 F1/T02：画布设置面板顶部的「大屏密级」section。
- *
- * 独立组件而非 inline 渲染，目的是：
- * 1. 通过 useParams 拿 screenId，与 ScreenContext 中的 visual config 解耦；
- * 2. 让 ClassificationSelect 的 self-fetch 路径生效，不需要把 classification
- *    塞进 ScreenContext.state（密级是大屏 metadata，不是画布配置）。
- *
- * URL 没 id 时（新建未保存路径）整个 section 不渲染，避免迷惑用户——
- * 创建对话框已经在 F3 强制设密。
- */
-function ClassificationSection() {
-    const { id } = useParams<{ id: string }>();
-    if (!id) return null;
-    return (
-        <div className="property-section py-3 border-b border-border-default">
-            <div className="property-section-title text-xs font-semibold text-text-secondary uppercase tracking-wide mb-2">
-                大屏密级
-            </div>
-            <div className="property-row flex items-center mb-1">
-                <ClassificationSelect screenId={id} compact />
-            </div>
-            <div className="text-[11px] text-text-muted mt-1">
-                密级决定哪些人员可访问；可在分享弹窗对个别用户授予越级共享。
-            </div>
-        </div>
-    );
-}
