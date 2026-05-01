@@ -4,7 +4,14 @@ import { Button, Table } from "antd";
 import type { ColumnsType } from "antd/es/table";
 import { adminApi } from "@/admin/api/adminApi";
 import { sanitizeChangePayload } from "@/admin/utils/change-sanitizer";
-import type { AdminUser, ChangeRequest } from "@/admin/types";
+import type {
+	AdminCustomRole,
+	AdminRoleDetail,
+	AdminUser,
+	ChangeRequest,
+	PortalMenuCollection,
+	PortalMenuItem,
+} from "@/admin/types";
 import { AdminSessionContext } from "@/admin/lib/session-context";
 import { Badge } from "@/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/ui/card";
@@ -179,12 +186,76 @@ function resolveOperatorDisplayName(username: string | null | undefined, map: Re
 	return map[key] || map[key.toLowerCase()] || key;
 }
 
-type DiffFormatContext = ChangeRequestFormatContext;
+type DiffFormatContext = ChangeRequestFormatContext & {
+	roleDisplay?: Record<string, string>;
+	menuDisplay?: Record<string, string>;
+};
+
+function lookupDisplay(map: Record<string, string> | undefined, raw: string | null | undefined): string | null {
+	if (!map || !raw) return null;
+	const trimmed = String(raw).trim();
+	if (!trimmed) return null;
+	return (
+		map[trimmed] ||
+		map[trimmed.toLowerCase()] ||
+		map[trimmed.toUpperCase()] ||
+		null
+	);
+}
 
 function resolveTarget(request: ChangeRequest, ctx?: DiffFormatContext): string {
 	const payload = asRecord(parseJson(request.payloadJson));
 	const diff = asRecord(parseJson(request.diffJson));
 	const after = diff && asRecord(diff.after);
+	const before = diff && asRecord(diff.before);
+	const resourceType = (request.resourceType || "").toUpperCase();
+	const isRole = resourceType === "ROLE" || resourceType === "CUSTOM_ROLE";
+	const isMenu = resourceType === "PORTAL_MENU" || resourceType === "MENU";
+
+	const fromRecords = (key: string): string | null =>
+		getStringField(payload, key) ||
+		getStringField(after, key) ||
+		getStringField(before, key);
+
+	if (isRole) {
+		const map = ctx?.roleDisplay;
+		const candidates = [
+			request.resourceId,
+			fromRecords("displayName"),
+			fromRecords("name"),
+			fromRecords("code"),
+			fromRecords("roleId"),
+			request.sourcePrimaryKey != null ? String(request.sourcePrimaryKey) : null,
+		];
+		for (const cand of candidates) {
+			const mapped = lookupDisplay(map, cand);
+			if (mapped) return mapped;
+		}
+		const fallbackName = fromRecords("displayName") || fromRecords("name");
+		if (fallbackName) return fallbackName;
+		const rid = request.resourceId ? String(request.resourceId).trim() : "";
+		return rid || "-";
+	}
+
+	if (isMenu) {
+		const map = ctx?.menuDisplay;
+		const candidates = [
+			request.resourceId,
+			fromRecords("displayName"),
+			fromRecords("name"),
+			fromRecords("path"),
+			request.sourcePrimaryKey != null ? String(request.sourcePrimaryKey) : null,
+		];
+		for (const cand of candidates) {
+			const mapped = lookupDisplay(map, cand);
+			if (mapped) return mapped;
+		}
+		const fallbackName = fromRecords("displayName") || fromRecords("name");
+		if (fallbackName) return fallbackName;
+		const rid = request.resourceId ? String(request.resourceId).trim() : "";
+		return rid || "-";
+	}
+
 	const candidates = [
 		request.resourceId,
 		getStringField(payload, "username"),
@@ -420,6 +491,83 @@ export default function ApprovalCenterView() {
 		return [];
 	}, [adminUsersPage]);
 
+	const { data: rolesData } = useQuery<AdminRoleDetail[]>({
+		queryKey: ["admin", "roles"],
+		queryFn: () => adminApi.getAdminRoles(),
+		staleTime: 5 * 60 * 1000,
+	});
+	const { data: customRolesData } = useQuery<AdminCustomRole[]>({
+		queryKey: ["admin", "custom-roles"],
+		queryFn: () => adminApi.getCustomRoles(),
+		staleTime: 5 * 60 * 1000,
+	});
+	const { data: portalMenusData } = useQuery<PortalMenuCollection>({
+		queryKey: ["admin", "portal-menus"],
+		queryFn: () => adminApi.getPortalMenus(),
+		staleTime: 5 * 60 * 1000,
+	});
+
+	const roleDisplayMap = useMemo<Record<string, string>>(() => {
+		const map: Record<string, string> = {};
+		const register = (key: string | null | undefined, value: string) => {
+			if (!key) return;
+			const trimmed = String(key).trim();
+			if (!trimmed || !value) return;
+			map[trimmed] = value;
+			map[trimmed.toLowerCase()] = value;
+			map[trimmed.toUpperCase()] = value;
+		};
+		for (const role of rolesData ?? []) {
+			const display = (role.displayName || role.name || "").toString().trim();
+			if (!display) continue;
+			register(role.id != null ? String(role.id) : null, display);
+			register(role.name, display);
+			register(role.code, display);
+			register(role.roleId, display);
+			register(role.legacyName, display);
+			if (role.customRoleId != null) {
+				register(String(role.customRoleId), display);
+			}
+		}
+		for (const role of customRolesData ?? []) {
+			const display = (role.displayName || role.name || "").toString().trim();
+			if (!display) continue;
+			register(role.id != null ? String(role.id) : null, display);
+			register(role.name, display);
+		}
+		return map;
+	}, [rolesData, customRolesData]);
+
+	const menuDisplayMap = useMemo<Record<string, string>>(() => {
+		const map: Record<string, string> = {};
+		const register = (key: string | null | undefined, value: string) => {
+			if (!key) return;
+			const trimmed = String(key).trim();
+			if (!trimmed || !value) return;
+			map[trimmed] = value;
+			map[trimmed.toLowerCase()] = value;
+		};
+		const flat: PortalMenuItem[] = [];
+		const visit = (items?: PortalMenuItem[]) => {
+			if (!items) return;
+			for (const item of items) {
+				flat.push(item);
+				if (item.children) visit(item.children);
+			}
+		};
+		visit(portalMenusData?.allMenus);
+		visit(portalMenusData?.menus);
+		for (const menu of flat) {
+			const display = (menu.displayName || menu.name || "").toString().trim();
+			if (!display) continue;
+			register(menu.id != null ? String(menu.id) : null, display);
+			register(menu.name, display);
+			register(menu.path, display);
+		}
+		return map;
+	}, [portalMenusData]);
+
+
 	// 兼容性兜底：若后端仅返回“审批请求”而未返回“变更请求”，
 	// 则从 /approval-requests 拉取并映射为 ChangeRequest 以便列表展示
 	const { data: mappedFromApprovals = [] } = useQuery<ChangeRequest[]>({
@@ -509,6 +657,15 @@ export default function ApprovalCenterView() {
 	const [decisionLoading, setDecisionLoading] = useState(false);
 	const [operatorNameMap, setOperatorNameMap] = useState<Record<string, string>>({ ...OPERATOR_LABELS });
 	const [userDisplayMap, setUserDisplayMap] = useState<Record<string, string>>({});
+
+	const targetContext = useMemo<DiffFormatContext>(
+		() => ({
+			userDisplay: userDisplayMap,
+			roleDisplay: roleDisplayMap,
+			menuDisplay: menuDisplayMap,
+		}),
+		[userDisplayMap, roleDisplayMap, menuDisplayMap],
+	);
 
 	// 收集请求中的用户名，并解析为中文姓名（优先后端接口，其次 Keycloak 搜索）
 	useEffect(() => {
@@ -813,7 +970,7 @@ export default function ApprovalCenterView() {
 				title: "影响对象",
 				dataIndex: "resourceId",
 				width: 180,
-				render: (_: unknown, record) => resolveTarget(record, { userDisplay: userDisplayMap }),
+				render: (_: unknown, record) => resolveTarget(record, targetContext),
 			},
 			{
 				title: "提交人",
@@ -857,7 +1014,7 @@ export default function ApprovalCenterView() {
 				),
 			},
 		],
-		[activeTaskId, decisionLoading, operatorNameMap, userDisplayMap],
+		[activeTaskId, decisionLoading, operatorNameMap, targetContext],
 	);
 
 	const completedColumns = useMemo<ColumnsType<AugmentedChangeRequest>>(
@@ -884,7 +1041,7 @@ export default function ApprovalCenterView() {
 				title: "影响对象",
 				dataIndex: "resourceId",
 				width: 180,
-				render: (_: unknown, record) => resolveTarget(record, { userDisplay: userDisplayMap }),
+				render: (_: unknown, record) => resolveTarget(record, targetContext),
 			},
 			{
 				title: "审批人",
@@ -911,7 +1068,7 @@ export default function ApprovalCenterView() {
 				),
 			},
 		],
-		[operatorNameMap, userDisplayMap],
+		[operatorNameMap, targetContext],
 	);
 
 	const handleDecision = async (status: DecisionStatus) => {
@@ -1031,7 +1188,7 @@ export default function ApprovalCenterView() {
 							<Text variant="body3" className="text-muted-foreground">
 								基础信息
 							</Text>
-							{renderChangeRequestBasics(record, userDisplayMap, operatorNameMap)}
+							{renderChangeRequestBasics(record, targetContext, operatorNameMap)}
 						</div>
 		<div className="md:col-span-2 space-y-3">
 			<section className="space-y-2">
@@ -1085,12 +1242,12 @@ export default function ApprovalCenterView() {
 				</div>
 			);
 	},
-	[operatorNameMap, userDisplayMap],
+	[operatorNameMap, targetContext],
 );
 
 function renderChangeRequestBasics(
 	record: AugmentedChangeRequest,
-	userDisplayMap: Record<string, string>,
+	targetCtx: DiffFormatContext,
 	operatorNameMap: Record<string, string>,
 ): ReactNode {
 	return (
@@ -1105,7 +1262,7 @@ function renderChangeRequestBasics(
 			</div>
 			<div>
 				<span className="text-muted-foreground">影响对象：</span>
-				{resolveTarget(record, { userDisplay: userDisplayMap })}
+				{resolveTarget(record, targetCtx)}
 			</div>
 			{record.sourcePrimaryKey ? (
 				<div>
@@ -1348,7 +1505,7 @@ const handleCloseDialog = () => {
 									<Text variant="body3" className="text-muted-foreground">
 										影响对象
 									</Text>
-									<div className="font-medium">{resolveTarget(activeTask, { userDisplay: userDisplayMap })}</div>
+									<div className="font-medium">{resolveTarget(activeTask, targetContext)}</div>
 								</div>
 								<div className="space-y-1">
 									<Text variant="body3" className="text-muted-foreground">
