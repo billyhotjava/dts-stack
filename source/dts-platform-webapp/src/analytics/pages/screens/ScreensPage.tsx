@@ -1152,7 +1152,11 @@ export default function ScreensPage() {
 			<ScreenAclPanel
 				open={aclScreenId != null}
 				screenId={aclScreenId ?? undefined}
-				onClose={() => setAclScreenId(null)}
+				onClose={() => {
+					setAclScreenId(null);
+					// 关闭权限面板后刷新列表，确保密级 / 共享名单的修改在卡片上立即可见
+					loadScreens();
+				}}
 				isOwner={aclScreenPermissions?.canManage === true}
 			/>
 			{importPreview && (

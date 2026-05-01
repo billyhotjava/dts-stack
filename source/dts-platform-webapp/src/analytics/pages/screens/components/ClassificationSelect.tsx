@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Modal, Input, Select, Tag, message } from 'antd';
+import { Button, Modal, Input, Select, Tag, message } from 'antd';
 import { analyticsApi } from '../../../api/analyticsApi';
 
 /**
@@ -87,7 +87,10 @@ export function ClassificationSelect({
 	compact = false,
 }: ClassificationSelectProps) {
 	const isControlled = value !== undefined;
+	// internal = 已落库（DB 中）的密级；显示在「当前密级 Tag」上
 	const [internal, setInternal] = useState<string>(typeof value === 'string' ? value.toUpperCase() : '');
+	// draft = 用户在 Select 里选了但还没点「确定」的草稿；null 表示草稿与 internal 一致
+	const [draft, setDraft] = useState<string | null>(null);
 	const [internalIsOwner, setInternalIsOwner] = useState<boolean>(isOwner ?? false);
 	const [saving, setSaving] = useState(false);
 	const lastFetchedScreenIdRef = useRef<string | number | null>(null);
@@ -100,6 +103,9 @@ export function ClassificationSelect({
 	useEffect(() => {
 		if (isControlled) {
 			setInternal(typeof value === 'string' ? value.toUpperCase() : '');
+			// 受控模式下外部 value 变化（如父组件重新 fetch）→ 清空草稿，
+			// 避免显示与新真值不一致的旧草稿。
+			setDraft(null);
 		}
 	}, [isControlled, value]);
 
@@ -136,7 +142,7 @@ export function ClassificationSelect({
 
 	/**
 	 * 真正发 PATCH 的逻辑。降级路径会先经过 modal 收集 reason，再调到这里。
-	 * 升级 / 同级路径直接调用，reason=undefined。
+	 * 升级 / 同级路径直接调用，reason=undefined。成功后清空草稿（让 internal 接管显示）。
 	 */
 	const performUpdate = useCallback(
 		async (next: string, reason?: string) => {
@@ -145,42 +151,59 @@ export function ClassificationSelect({
 				message.error('缺少 screenId，无法保存密级');
 				return;
 			}
-			const previous = internal;
-			setInternal(normalized);
 			setSaving(true);
 			try {
 				await analyticsApi.updateScreenClassification(screenId, normalized, reason);
+				setInternal(normalized);
+				setDraft(null);
 				message.success(`大屏密级已更新为 ${normalized}`);
 				onUpdated?.(normalized);
 			} catch (e) {
-				setInternal(previous);
 				const msg = e instanceof Error ? e.message : '更新密级失败';
 				message.error(msg);
+				// 失败时保留草稿让用户重试或自行改回
 			} finally {
 				setSaving(false);
 			}
 		},
-		[internal, onUpdated, screenId],
+		[onUpdated, screenId],
 	);
 
-	const handleChange = useCallback(
-		async (next: string) => {
+	/**
+	 * Select onChange — 用户选了新值，仅更新草稿，不立即 PATCH。
+	 * 让用户必须显式点「确定」才让密级生效；选错可以选回原值（draft 自动清空）。
+	 */
+	const handleSelectChange = useCallback(
+		(next: string) => {
 			const normalized = next?.toUpperCase();
-			if (!normalized || normalized === internal) return;
-			// Sprint-24 F5：降级走 confirm modal；升级 / 同级直接 PATCH。
-			if (isDowngrade(internal, normalized)) {
-				setPendingDowngrade(normalized);
-				setDowngradeReason('');
+			if (!normalized) return;
+			// 草稿与已落库一致 → 视作"恢复原值"，清空草稿
+			if (normalized === internal) {
+				setDraft(null);
 				return;
 			}
-			await performUpdate(normalized);
+			setDraft(normalized);
 		},
-		[internal, performUpdate],
+		[internal],
 	);
+
+	/**
+	 * 用户点「确定」按钮 — 此时根据降级方向决定走 modal 收集 reason 还是直接 PATCH。
+	 */
+	const handleConfirm = useCallback(async () => {
+		if (!draft || draft === internal || saving) return;
+		if (isDowngrade(internal, draft)) {
+			setPendingDowngrade(draft);
+			setDowngradeReason('');
+			return;
+		}
+		await performUpdate(draft);
+	}, [draft, internal, saving, performUpdate]);
 
 	const cancelDowngrade = useCallback(() => {
 		setPendingDowngrade(null);
 		setDowngradeReason('');
+		// 取消降级时不清空 draft，用户可改 select 选其它值或点取消草稿
 	}, []);
 
 	const confirmDowngrade = useCallback(async () => {
@@ -197,8 +220,11 @@ export function ClassificationSelect({
 	}, [pendingDowngrade, downgradeReason, performUpdate]);
 
 	const ownerCanEdit = internalIsOwner;
-	const displayValue = internal || '';
-	const isUnclassified = !displayValue;
+	const savedValue = internal || '';
+	// Select 显示值优先用草稿，否则用已落库值。
+	const selectShown = (draft ?? savedValue) || undefined;
+	const isUnclassified = !savedValue;
+	const hasDraftChange = draft != null && draft !== savedValue;
 
 	if (!ownerCanEdit) {
 		// 非 owner：只读 Tag。null 显示橙色「未设密级」警示。
@@ -207,8 +233,8 @@ export function ClassificationSelect({
 				未设密级
 			</Tag>
 		) : (
-			<Tag color={LEVEL_TAG_COLOR[displayValue] || 'default'} style={{ margin: 0 }}>
-				{LEVEL_TAG_LABEL[displayValue] || displayValue}
+			<Tag color={LEVEL_TAG_COLOR[savedValue] || 'default'} style={{ margin: 0 }}>
+				{LEVEL_TAG_LABEL[savedValue] || savedValue}
 			</Tag>
 		);
 	}
@@ -219,17 +245,31 @@ export function ClassificationSelect({
 		<>
 			<div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
 				<Select
-					value={displayValue || undefined}
+					value={selectShown}
 					placeholder="选择密级"
-					onChange={(v) => handleChange(v as string)}
+					onChange={(v) => handleSelectChange(v as string)}
 					disabled={saving}
-					loading={saving}
 					size={size}
 					style={{ width: 160 }}
 					options={LEVEL_OPTIONS}
-					status={isUnclassified ? 'warning' : undefined}
+					status={isUnclassified || hasDraftChange ? 'warning' : undefined}
 				/>
-				{!compact && isUnclassified && (
+				{/* Sprint-24 重构后：选完密级须点「确定」才生效，避免误改。 */}
+				<Button
+					type="primary"
+					size={size}
+					onClick={handleConfirm}
+					disabled={!hasDraftChange || saving}
+					loading={saving}
+				>
+					确定
+				</Button>
+				{hasDraftChange && (
+					<span style={{ fontSize: 12, color: 'var(--color-warning, #faad14)' }}>
+						未保存，点「确定」生效
+					</span>
+				)}
+				{!compact && isUnclassified && !hasDraftChange && (
 					<span style={{ fontSize: 12, color: 'var(--color-warning, #faad14)' }}>
 						未设密级，对所有登录用户可见
 					</span>
@@ -251,8 +291,8 @@ export function ClassificationSelect({
 				<div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
 					<div style={{ fontSize: 13 }}>
 						你正在把大屏密级从{' '}
-						<Tag color={LEVEL_TAG_COLOR[displayValue] || 'default'} style={{ margin: 0 }}>
-							{LEVEL_TAG_LABEL[displayValue] || displayValue || '未设'}
+						<Tag color={LEVEL_TAG_COLOR[savedValue] || 'default'} style={{ margin: 0 }}>
+							{LEVEL_TAG_LABEL[savedValue] || savedValue || '未设'}
 						</Tag>{' '}
 						降低到{' '}
 						<Tag color={LEVEL_TAG_COLOR[pendingDowngrade ?? ''] || 'default'} style={{ margin: 0 }}>
