@@ -1,6 +1,7 @@
 package com.yuzhi.dts.admin.config;
 
 import java.util.concurrent.Executor;
+import java.util.concurrent.ThreadPoolExecutor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.aop.interceptor.AsyncUncaughtExceptionHandler;
@@ -39,9 +40,11 @@ public class AsyncConfiguration implements AsyncConfigurer {
         executor.setMaxPoolSize(taskExecutionProperties.getPool().getMaxSize());
         executor.setQueueCapacity(taskExecutionProperties.getPool().getQueueCapacity());
         executor.setThreadNamePrefix(taskExecutionProperties.getThreadNamePrefix());
+        executor.setRejectedExecutionHandler(new ThreadPoolExecutor.CallerRunsPolicy());
         // BUG-C fix: wrap to propagate SecurityContext into @Async tasks; otherwise audits
         // emitted from background workers fall back to anonymous actor and the original user
         // is lost.
+        executor.initialize();
         return new DelegatingSecurityContextAsyncTaskExecutor(new ExceptionHandlingAsyncTaskExecutor(executor));
     }
 

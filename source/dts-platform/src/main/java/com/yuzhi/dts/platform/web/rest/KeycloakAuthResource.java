@@ -102,25 +102,8 @@ public class KeycloakAuthResource {
             var kcResult = keycloakAuthService.login(username, password);
             var kcTokens = kcResult.tokens();
 
-            // Step 2: Get enriched user data from admin (roles/permissions/profile from admin DB)
-            // Authentication is already done via Keycloak; admin call is only for business data.
-            Map<String, Object> user;
-            try {
-                var adminResult = adminAuthGateway.profile(username, kcResult.user(), kcTokens.accessToken());
-                user = adminResult.user();
-            } catch (AdminAuthGateway.ProfileEndpointUnavailableException ex) {
-                log.warn(
-                    "[login] admin profile endpoint unavailable, falling back to legacy platform login username={} reason={}",
-                    username,
-                    ex.getMessage()
-                );
-                user = adminAuthGateway.login(username, password).user();
-            } catch (org.springframework.security.authentication.BadCredentialsException ex) {
-                throw ex;
-            } catch (Exception ex) {
-                log.warn("[login] admin user profile unavailable username={} reason={}", username, ex.getMessage());
-                throw new IllegalStateException("无法获取用户授权信息，请稍后重试", ex);
-            }
+            // Step 2: Get enriched user data from admin (roles/permissions/profile from admin DB).
+            Map<String, Object> user = loadAdminUserProfile(username, password, kcResult, kcTokens);
             String displayName = resolveUserDisplayName(user);
             List<String> rawRoles = toStringList(user.get("roles"));
             List<String> mappedRoles = mapRoles(rawRoles);
@@ -427,6 +410,32 @@ public class KeycloakAuthResource {
             cur = cur.getCause();
         }
         return false;
+    }
+
+    private Map<String, Object> loadAdminUserProfile(
+        String username,
+        String password,
+        KeycloakAuthService.LoginResult kcResult,
+        KeycloakAuthService.TokenResponse kcTokens
+    ) {
+        try {
+            var adminResult = adminAuthGateway.profile(username, kcResult.user(), kcTokens.accessToken());
+            return adminResult.user();
+        } catch (Exception profileEx) {
+            log.warn(
+                "[login] admin user profile unavailable, falling back to legacy platform login username={} reason={}",
+                username,
+                profileEx.getMessage()
+            );
+            try {
+                return adminAuthGateway.login(username, password).user();
+            } catch (org.springframework.security.authentication.BadCredentialsException legacyEx) {
+                throw legacyEx;
+            } catch (Exception legacyEx) {
+                profileEx.addSuppressed(legacyEx);
+                throw new IllegalStateException("无法获取用户授权信息，请稍后重试", profileEx);
+            }
+        }
     }
 
     @PostMapping("/logout")

@@ -4,7 +4,16 @@ import { Button, Spin, Table, Tabs, Tag } from "antd";
 import { ReactFlow, Background, Controls, type Node, type Edge } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
 import { useRouter } from "@/routes/hooks";
-import { getDataset, getDatasetFields, getDatasetGovernanceHealth, getDatasetIndicatorDeps, getCatalogLineageImpact } from "@/api/platformApi";
+import {
+	getCatalogAssetV2,
+	getCatalogAssetV2Lineage,
+	getCatalogLineageImpact,
+	getDataset,
+	getDatasetFields,
+	getDatasetGovernanceHealth,
+	getDatasetIndicatorDeps,
+	syncCatalogAssetV2Lineage,
+} from "@/api/platformApi";
 
 export default function DatasetDetailPage() {
 	const { id } = useParams<{ id: string }>();
@@ -17,7 +26,31 @@ export default function DatasetDetailPage() {
 		setLoading(true);
 		void getDataset(id)
 			.then((d: any) => setDataset(d))
-			.catch(() => { /* global interceptor handles */ })
+			.catch(async () => {
+				try {
+					const detail: any = await getCatalogAssetV2(id);
+					const asset = detail?.asset || {};
+					setDataset({
+						id: asset.id || id,
+						name: asset.displayName || asset.table || asset.fqn || "-",
+						type: asset.type || "-",
+						warehouseLayer: asset.warehouseLayer,
+						classification: asset.classification,
+						owner: asset.owner,
+						ownerDept: asset.ownerDept,
+						lifecycleStatus: asset.lifecycleStatus,
+						hiveDatabase: asset.database || asset.schema,
+						hiveTable: asset.table,
+						domainId: asset.domainId,
+						description: asset.fqn,
+						__source: "openmetadata",
+						__legacyDatasetId: asset.legacyDatasetId,
+						__columns: Array.isArray(detail?.columns) ? detail.columns : [],
+					});
+				} catch {
+					setDataset(null);
+				}
+			})
 			.finally(() => setLoading(false));
 	}, [id]);
 
@@ -60,17 +93,27 @@ export default function DatasetDetailPage() {
 					{
 						key: "fields",
 						label: "字段详情",
-						children: <DatasetFieldsTab datasetId={id!} />,
+						children: <DatasetFieldsTab datasetId={String(dataset.__legacyDatasetId || id)} columns={dataset.__columns} />,
 					},
 					{
 						key: "lineage",
 						label: "血缘图",
-						children: <DatasetLineageTab datasetId={id!} />,
+						children: dataset.__legacyDatasetId ? (
+							<DatasetLineageTab datasetId={String(dataset.__legacyDatasetId)} />
+						) : dataset.__source === "openmetadata" ? (
+							<OpenMetadataLineageTab assetId={String(dataset.id)} />
+						) : (
+							<div className="py-4 text-sm text-slate-500">未映射到DTS治理资产，暂无本地血缘图。</div>
+						),
 					},
 					{
 						key: "governance",
 						label: "治理健康",
-						children: <DatasetGovernanceTab datasetId={id!} />,
+						children: dataset.__legacyDatasetId ? (
+							<DatasetGovernanceTab datasetId={String(dataset.__legacyDatasetId)} />
+						) : (
+							<div className="py-4 text-sm text-slate-500">未映射到DTS治理资产，暂无治理健康数据。</div>
+						),
 					},
 					{
 						key: "access",
@@ -90,6 +133,9 @@ export default function DatasetDetailPage() {
 function DatasetOverviewTab({ dataset }: { dataset: Record<string, any> }) {
 	return (
 		<div className="space-y-3 py-2">
+			{dataset.__source === "openmetadata" && (
+				<Tag color="blue">OpenMetadata主目录</Tag>
+			)}
 			<div className="grid grid-cols-2 gap-4 text-sm">
 				<div><span className="text-slate-500">仓库分层：</span>{dataset.warehouseLayer ?? "-"}</div>
 				<div><span className="text-slate-500">密级：</span>{dataset.classification ?? "-"}</div>
@@ -109,16 +155,28 @@ function DatasetOverviewTab({ dataset }: { dataset: Record<string, any> }) {
 	);
 }
 
-function DatasetFieldsTab({ datasetId }: { datasetId: string }) {
+function DatasetFieldsTab({ datasetId, columns }: { datasetId: string; columns?: any[] }) {
 	const [fields, setFields] = useState<any[]>([]);
 	const [loading, setLoading] = useState(true);
 
 	useEffect(() => {
+		if (Array.isArray(columns)) {
+			setFields(
+				columns.map((item) => ({
+					name: item.name,
+					dataType: item.dataType,
+					comment: item.description,
+					tableName: item.omColumnFqn,
+				})),
+			);
+			setLoading(false);
+			return;
+		}
 		void getDatasetFields(datasetId)
 			.then((f: any) => setFields(Array.isArray(f) ? f : []))
 			.catch(() => setFields([]))
 			.finally(() => setLoading(false));
-	}, [datasetId]);
+	}, [datasetId, columns]);
 
 	if (loading) return <div className="py-4"><Spin /></div>;
 	if (!fields.length) {
@@ -200,6 +258,72 @@ function DatasetGovernanceTab({ datasetId }: { datasetId: string }) {
 					/>
 				</div>
 			)}
+		</div>
+	);
+}
+
+function OpenMetadataLineageTab({ assetId }: { assetId: string }) {
+	const [lineage, setLineage] = useState<any>(null);
+	const [loading, setLoading] = useState(true);
+	const [syncing, setSyncing] = useState(false);
+
+	const loadLineage = async () => {
+		setLoading(true);
+		try {
+			const result = await getCatalogAssetV2Lineage(assetId);
+			setLineage(result || null);
+		} catch {
+			setLineage(null);
+		} finally {
+			setLoading(false);
+		}
+	};
+
+	useEffect(() => {
+		void loadLineage();
+	}, [assetId]);
+
+	const syncLineage = async () => {
+		setSyncing(true);
+		try {
+			await syncCatalogAssetV2Lineage(assetId, { upstreamDepth: 2, downstreamDepth: 2 });
+			await loadLineage();
+		} catch {
+			// global interceptor handles
+		} finally {
+			setSyncing(false);
+		}
+	};
+
+	if (loading) return <div className="py-6"><Spin /></div>;
+
+	const edges = Array.isArray(lineage?.edges) ? lineage.edges : [];
+	if (!edges.length) {
+		return (
+			<div className="space-y-3 py-4 text-sm text-slate-500">
+				<div>暂无OpenMetadata血缘缓存。</div>
+				<Button size="small" onClick={() => void syncLineage()} loading={syncing}>同步OpenMetadata血缘</Button>
+			</div>
+		);
+	}
+	return (
+		<div className="space-y-3 py-2">
+			<div className="flex items-center justify-between">
+				<Tag color="blue">OpenMetadata血缘缓存</Tag>
+				<Button size="small" onClick={() => void syncLineage()} loading={syncing}>同步血缘</Button>
+			</div>
+			<Table
+				size="small"
+				rowKey={(row: any, idx) => row.id || `${row.fromFqn}-${row.toFqn}-${idx}`}
+				dataSource={edges}
+				pagination={{ pageSize: 8 }}
+				columns={[
+					{ title: "上游", dataIndex: "fromFqn", render: (v: any) => <span className="font-mono text-xs">{v || "-"}</span> },
+					{ title: "下游", dataIndex: "toFqn", render: (v: any) => <span className="font-mono text-xs">{v || "-"}</span> },
+					{ title: "来源", dataIndex: "source", width: 140, render: (v: any) => <Tag>{v || "openmetadata"}</Tag> },
+					{ title: "类型", dataIndex: "edgeType", width: 120, render: (v: any) => v || "TABLE" },
+				]}
+			/>
 		</div>
 	);
 }

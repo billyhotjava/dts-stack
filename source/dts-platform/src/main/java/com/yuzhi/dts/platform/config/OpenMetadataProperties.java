@@ -1,5 +1,7 @@
 package com.yuzhi.dts.platform.config;
 
+import java.util.ArrayList;
+import java.util.List;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 
 @ConfigurationProperties(prefix = "dts.platform.openmetadata")
@@ -15,6 +17,7 @@ public class OpenMetadataProperties {
     private String defaultSchema;
     private String tableFqnPattern = "{service}.{database}.{table}";
     private String tableFields = "columns,owner,tags,domain,usageSummary,profile";
+    private List<String> forbiddenDatabases = new ArrayList<>();
 
     public boolean isEnabled() {
         return enabled;
@@ -94,5 +97,13 @@ public class OpenMetadataProperties {
 
     public void setTableFields(String tableFields) {
         this.tableFields = tableFields;
+    }
+
+    public List<String> getForbiddenDatabases() {
+        return forbiddenDatabases;
+    }
+
+    public void setForbiddenDatabases(List<String> forbiddenDatabases) {
+        this.forbiddenDatabases = forbiddenDatabases == null ? new ArrayList<>() : forbiddenDatabases;
     }
 }

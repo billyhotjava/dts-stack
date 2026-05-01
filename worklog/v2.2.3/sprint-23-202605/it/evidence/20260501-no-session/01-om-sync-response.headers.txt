@@ -1,0 +1,12 @@
+HTTP/1.1 401 Unauthorized
+Expires: 0
+Cache-Control: no-cache, no-store, max-age=0, must-revalidate
+X-XSS-Protection: 0
+Pragma: no-cache
+X-Frame-Options: DENY
+Date: Thu, 30 Apr 2026 23:35:00 GMT
+Connection: keep-alive
+WWW-Authenticate: Bearer
+X-Content-Type-Options: nosniff
+Content-Length: 0
+

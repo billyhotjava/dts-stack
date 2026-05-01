@@ -190,4 +190,86 @@ class KeycloakAuthResourceSessionContractTest {
         verify(adminAuthGateway).profile(eq("alice"), anyMap(), eq("kc-access"));
         verify(adminAuthGateway).login("alice", "secret");
     }
+
+    @Test
+    void loginFallsBackToLegacyAdminLoginWhenProfileEndpointFails() {
+        PortalSessionRegistry registry = mock(PortalSessionRegistry.class);
+        KeycloakAuthService keycloakAuthService = mock(KeycloakAuthService.class);
+        AdminAuthGateway adminAuthGateway = mock(AdminAuthGateway.class);
+        KeycloakAuthResource resource = new KeycloakAuthResource(
+            registry,
+            keycloakAuthService,
+            adminAuthGateway,
+            mock(PkiSessionTicketService.class),
+            new PortalSessionCookieService("browser_id", "portal_session", "/", false, "Lax", "test-secret"),
+            mock(AuditService.class),
+            mock(InceptorDataSourceRegistry.class),
+            false,
+            false
+        );
+        var kcTokens = new KeycloakAuthService.TokenResponse(
+            "kc-access",
+            "kc-refresh",
+            300L,
+            1800L,
+            "Bearer",
+            null,
+            "kc-session",
+            "openid profile"
+        );
+        when(keycloakAuthService.login("alice", "secret"))
+            .thenReturn(new KeycloakAuthService.LoginResult(kcTokens, Map.of("username", "alice", "roles", List.of("ROLE_USER"))));
+        when(adminAuthGateway.profile(eq("alice"), anyMap(), eq("kc-access"))).thenThrow(new IllegalStateException("profile 401"));
+        when(adminAuthGateway.login("alice", "secret"))
+            .thenReturn(
+                new AdminAuthGateway.LoginResult(
+                    Map.of("username", "alice", "fullName", "Alice", "roles", List.of("ROLE_DEPT_DATA_OWNER")),
+                    "legacy-access",
+                    "legacy-refresh",
+                    300L,
+                    1800L
+                )
+            );
+        when(registry.hasActiveSession(eq("alice"), anyString())).thenReturn(false);
+        when(
+            registry.createSession(
+                eq("alice"),
+                anyList(),
+                anyList(),
+                isNull(),
+                isNull(),
+                eq("Alice"),
+                anyString(),
+                any(AdminTokens.class)
+            )
+        )
+            .thenReturn(
+                new PortalSession(
+                    "session-1",
+                    "alice",
+                    "Alice",
+                    List.of("ROLE_DEPT_DATA_OWNER"),
+                    List.of("portal.view"),
+                    null,
+                    null,
+                    "portal-access",
+                    "portal-refresh",
+                    Instant.parse("2026-04-29T12:00:00Z"),
+                    "browser-1",
+                    null
+                )
+            );
+
+        ResponseEntity<ApiResponse<Map<String, Object>>> response = resource.login(
+            new KeycloakAuthResource.LoginPayload("alice", "secret")
+        );
+
+        assertThat(response.getStatusCode().value()).isEqualTo(200);
+        assertThat(response.getHeaders().get(HttpHeaders.SET_COOKIE)).contains("portal_session=portal-access; Path=/; HttpOnly; SameSite=Lax");
+        assertThat(response.getBody()).isNotNull();
+        assertThat(response.getBody().getData()).containsEntry("authenticated", true).doesNotContainKey("accessToken");
+        verify(keycloakAuthService).login("alice", "secret");
+        verify(adminAuthGateway).profile(eq("alice"), anyMap(), eq("kc-access"));
+        verify(adminAuthGateway).login("alice", "secret");
+    }
 }

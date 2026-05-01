@@ -13,7 +13,15 @@ import {
 	WarningOutlined,
 } from "@ant-design/icons";
 import { EmptyState } from "@/components/empty-state";
-import { getCatalogReconciliation, getDomainTree, listDatasets, listDomains } from "@/api/platformApi";
+import {
+	getCatalogAssetsV2Diagnostics,
+	getCatalogReconciliation,
+	getDomainTree,
+	listCatalogAssetsV2,
+	listDatasets,
+	listDomains,
+	syncCatalogAssetsV2,
+} from "@/api/platformApi";
 import { useRouter } from "@/routes/hooks";
 
 type AssetRow = {
@@ -28,6 +36,8 @@ type AssetRow = {
 	lifecycleStatus?: string;
 	owner?: string;
 	ownerDept?: string;
+	governanceStatus?: string;
+	matchStatus?: string;
 	description?: string;
 	hiveDatabase?: string;
 	hiveTable?: string;
@@ -63,7 +73,24 @@ const LAYER_OPTIONS = [
 	{ label: "ADS", value: "ADS" },
 ];
 
+const GOVERNANCE_OPTIONS = [
+	{ label: "全部治理状态", value: "ALL" },
+	{ label: "已治理", value: "GOVERNED" },
+	{ label: "待认领", value: "PENDING_CLAIM" },
+	{ label: "待定级", value: "PENDING_CLASSIFICATION" },
+	{ label: "待归域", value: "PENDING_DOMAIN" },
+	{ label: "停用", value: "DISABLED" },
+];
+
+const MATCH_OPTIONS = [
+	{ label: "全部映射", value: "ALL" },
+	{ label: "已映射", value: "MATCHED" },
+	{ label: "未匹配", value: "UNMATCHED" },
+	{ label: "人工确认", value: "MANUAL_REVIEW" },
+];
+
 const DATASET_FILTER_STORAGE_KEY = "catalog.asset.filter.v1";
+const ASSET_PORTAL_V2_ENABLED = import.meta.env.VITE_CATALOG_ASSET_PORTAL_V2 !== "false";
 
 const CLASSIFICATION_LABEL: Record<string, string> = {
 	PUBLIC: "公开",
@@ -160,7 +187,12 @@ export default function Page() {
 	const [assetType, setAssetType] = useState<string>("ALL");
 	const [classification, setClassification] = useState<string>("ALL");
 	const [warehouseLayer, setWarehouseLayer] = useState<string>("ALL");
+	const [governanceStatus, setGovernanceStatus] = useState<string>("ALL");
+	const [matchStatus, setMatchStatus] = useState<string>("ALL");
 	const [loading, setLoading] = useState(false);
+	const [syncing, setSyncing] = useState(false);
+	const [diagnosticsLoading, setDiagnosticsLoading] = useState(false);
+	const [diagnostics, setDiagnostics] = useState<any | null>(null);
 	const [records, setRecords] = useState<AssetRow[]>([]);
 	const [pageState, setPageState] = useState({ page: 1, size: 18, total: 0 });
 	const [domains, setDomains] = useState<{ id: string; name: string }[]>([]);
@@ -180,6 +212,8 @@ export default function Page() {
 			setAssetType(typeof saved?.assetType === "string" && saved.assetType ? saved.assetType : "ALL");
 			setClassification(typeof saved?.classification === "string" && saved.classification ? saved.classification : "ALL");
 			setWarehouseLayer(typeof saved?.warehouseLayer === "string" && saved.warehouseLayer ? saved.warehouseLayer : "ALL");
+			setGovernanceStatus(typeof saved?.governanceStatus === "string" && saved.governanceStatus ? saved.governanceStatus : "ALL");
+			setMatchStatus(typeof saved?.matchStatus === "string" && saved.matchStatus ? saved.matchStatus : "ALL");
 		} catch {
 			// ignore malformed cache
 		}
@@ -213,7 +247,7 @@ export default function Page() {
 			void loadDatasets(1, pageState.size);
 		}, 280);
 		return () => window.clearTimeout(timer);
-	}, [keyword, domain, assetType, classification, warehouseLayer, pageState.size]);
+	}, [keyword, domain, assetType, classification, warehouseLayer, governanceStatus, matchStatus, pageState.size]);
 
 	useEffect(() => {
 		const payload = {
@@ -222,9 +256,11 @@ export default function Page() {
 			assetType,
 			classification,
 			warehouseLayer,
+			governanceStatus,
+			matchStatus,
 		};
 		localStorage.setItem(DATASET_FILTER_STORAGE_KEY, JSON.stringify(payload));
-	}, [keyword, domain, assetType, classification, warehouseLayer]);
+	}, [keyword, domain, assetType, classification, warehouseLayer, governanceStatus, matchStatus]);
 
 	const domainMap = useMemo(() => new Map(domains.map((item) => [item.id, item.name])), [domains]);
 
@@ -259,7 +295,17 @@ export default function Page() {
 		const reqId = ++requestSeqRef.current;
 		setLoading(true);
 		try {
-			const resp: any = await listDatasets({
+			const resp: any = ASSET_PORTAL_V2_ENABLED ? await listCatalogAssetsV2({
+				page: page - 1,
+				size,
+				keyword: keyword.trim() || undefined,
+				domainId: domain && domain !== "ALL" ? domain : undefined,
+				type: assetType === "ALL" ? undefined : assetType,
+				classification: classification === "ALL" ? undefined : classification,
+				warehouseLayer: warehouseLayer === "ALL" ? undefined : warehouseLayer,
+				governanceStatus: governanceStatus === "ALL" ? undefined : governanceStatus,
+				matchStatus: matchStatus === "ALL" ? undefined : matchStatus,
+			}) : await listDatasets({
 				page: page - 1,
 				size,
 				keyword: keyword.trim() || undefined,
@@ -277,20 +323,22 @@ export default function Page() {
 			setRecords(
 				content.map((item: any) => ({
 					id: String(item.id || ""),
-					name: item.name || "-",
+					name: item.displayName || item.table || item.name || item.fqn || "-",
 					type: item.type || "-",
 					domainId: item.domainId ? String(item.domainId) : undefined,
 					domain: item.domainName || (item.domainId ? domainMap.get(String(item.domainId)) : undefined),
 					classification: item.classification || undefined,
 					warehouseLayer: item.warehouseLayer || undefined,
-					status: item.enabled === false ? "停用" : "启用",
+					status: item.syncStatus === "ERROR" || item.enabled === false ? "异常" : "启用",
 					lifecycleStatus: item.lifecycleStatus || undefined,
+					governanceStatus: item.governanceStatus || undefined,
+					matchStatus: item.matchStatus || undefined,
 					owner: item.owner || undefined,
 					ownerDept: item.ownerDept || undefined,
 					description: item.description || undefined,
-					hiveDatabase: item.hiveDatabase || undefined,
-					hiveTable: item.hiveTable || undefined,
-					updatedAt: item.lastModifiedDate || item.createdDate || undefined,
+					hiveDatabase: item.database || item.schema || item.hiveDatabase || undefined,
+					hiveTable: item.table || item.hiveTable || undefined,
+					updatedAt: item.lastSyncedAt || item.lastModifiedDate || item.createdDate || undefined,
 					snapshotTime: item.snapshotTime || undefined,
 				})),
 			);
@@ -420,6 +468,34 @@ export default function Page() {
 		setAssetType("ALL");
 		setClassification("ALL");
 		setWarehouseLayer("ALL");
+		setGovernanceStatus("ALL");
+		setMatchStatus("ALL");
+	};
+
+	const syncOpenMetadataAssets = async () => {
+		if (!ASSET_PORTAL_V2_ENABLED) return;
+		setSyncing(true);
+		try {
+			await syncCatalogAssetsV2(500);
+			await loadDatasets(1, pageState.size);
+		} catch {
+			// error toast handled by global interceptor
+		} finally {
+			setSyncing(false);
+		}
+	};
+
+	const loadDiagnostics = async () => {
+		if (!ASSET_PORTAL_V2_ENABLED) return;
+		setDiagnosticsLoading(true);
+		try {
+			const result = await getCatalogAssetsV2Diagnostics();
+			setDiagnostics(result || null);
+		} catch {
+			setDiagnostics(null);
+		} finally {
+			setDiagnosticsLoading(false);
+		}
 	};
 
 	const renderAssetCard = (row: AssetRow) => {
@@ -447,6 +523,12 @@ export default function Page() {
 					<Tag style={{ fontSize: 11 }}>{row.type || "未知"}</Tag>
 					<Tag color={row.classification ? "orange" : "default"} style={{ fontSize: 11 }}>
 						{classificationText(row.classification)}
+					</Tag>
+					<Tag color={row.governanceStatus === "GOVERNED" ? "green" : "gold"} style={{ fontSize: 11 }}>
+						{row.governanceStatus || "待治理"}
+					</Tag>
+					<Tag color={row.matchStatus === "MATCHED" ? "blue" : "volcano"} style={{ fontSize: 11 }}>
+						{row.matchStatus || "UNMATCHED"}
 					</Tag>
 					{row.domain || row.domainId ? (
 						<Tag color="blue" style={{ fontSize: 11 }}>
@@ -509,9 +591,19 @@ export default function Page() {
 								<Button icon={<ReloadOutlined />} onClick={() => void loadDatasets(1, pageState.size)} loading={loading}>
 									刷新资产
 								</Button>
+								{ASSET_PORTAL_V2_ENABLED ? (
+									<Button icon={<DatabaseOutlined />} onClick={() => void syncOpenMetadataAssets()} loading={syncing}>
+										同步OpenMetadata
+									</Button>
+								) : null}
 								<Button icon={<SafetyCertificateOutlined />} onClick={() => void loadReconciliation()} loading={reconciliationLoading}>
 									刷新核对
 								</Button>
+								{ASSET_PORTAL_V2_ENABLED ? (
+									<Button icon={<WarningOutlined />} onClick={() => void loadDiagnostics()} loading={diagnosticsLoading}>
+										映射诊断
+									</Button>
+								) : null}
 							</Space>
 						}
 					>
@@ -540,6 +632,22 @@ export default function Page() {
 								onChange={(value) => setWarehouseLayer(value || "ALL")}
 								options={LAYER_OPTIONS}
 							/>
+							<Select
+								allowClear
+								placeholder="治理状态"
+								style={{ minWidth: 150 }}
+								value={governanceStatus}
+								onChange={(value) => setGovernanceStatus(value || "ALL")}
+								options={GOVERNANCE_OPTIONS}
+							/>
+							<Select
+								allowClear
+								placeholder="映射状态"
+								style={{ minWidth: 150 }}
+								value={matchStatus}
+								onChange={(value) => setMatchStatus(value || "ALL")}
+								options={MATCH_OPTIONS}
+							/>
 							<Input
 								prefix={<SearchOutlined />}
 								placeholder="搜索资产名称 / 描述"
@@ -551,6 +659,19 @@ export default function Page() {
 							<Button onClick={resetFilters}>重置筛选</Button>
 						</div>
 					</Card>
+
+					{diagnostics ? (
+						<Alert
+							type={Number(diagnostics.unmatchedCount || 0) > 0 ? "warning" : "info"}
+							showIcon
+							message={`OpenMetadata映射诊断：资产 ${Number(diagnostics.assetCount || 0)}，已映射 ${Number(diagnostics.matchedCount || 0)}，未匹配 ${Number(diagnostics.unmatchedCount || 0)}，人工确认 ${Number(diagnostics.manualReviewCount || 0)}`}
+							description={
+								Array.isArray(diagnostics.issues) && diagnostics.issues.length > 0
+									? diagnostics.issues.slice(0, 3).map((item: any) => `${item.fqn || "-"}：${item.matchReason || item.matchStatus || "-"}`).join("；")
+									: undefined
+							}
+						/>
+					) : null}
 
 					<div className="grid gap-3 md:grid-cols-4">
 						<MetricTile icon={<DatabaseOutlined />} label="资产总量" value={pageState.total} footnote={selectedDomainName} />

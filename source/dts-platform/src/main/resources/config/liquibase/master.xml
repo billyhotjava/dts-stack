@@ -152,4 +152,5 @@
     <include file="config/liquibase/changelog/20260429_05_infra_data_source_connector_key.xml" relativeToChangelogFile="false"/>
     <include file="config/liquibase/changelog/20260429_06_asset_grant_level_override.xml" relativeToChangelogFile="false"/>
     <include file="config/liquibase/changelog/20260429_07_infra_schema_discover_cache.xml" relativeToChangelogFile="false"/>
+    <include file="config/liquibase/changelog/20260501_01_openmetadata_asset_portal.xml" relativeToChangelogFile="false"/>
 </databaseChangeLog>

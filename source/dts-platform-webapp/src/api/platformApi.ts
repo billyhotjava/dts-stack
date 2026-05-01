@@ -51,6 +51,33 @@ export const getTechMetadataTables = (params?: { keyword?: string; size?: number
 	api.get({ url: "/catalog/metadata/tables", params });
 export const getTechMetadataTableDetail = (fqn: string) =>
 	api.get({ url: "/catalog/metadata/tables/detail", params: { fqn } });
+export type CatalogAssetV2Query = {
+	keyword?: string;
+	service?: string;
+	type?: string;
+	database?: string;
+	schema?: string;
+	syncStatus?: string;
+	classification?: string;
+	warehouseLayer?: string;
+	ownerDept?: string;
+	governanceStatus?: string;
+	matchStatus?: string;
+	domainId?: string;
+	page?: number;
+	size?: number;
+};
+export const listCatalogAssetsV2 = (params: CatalogAssetV2Query = {}) =>
+	api.get({ url: "/catalog/assets-v2", params });
+export const getCatalogAssetV2 = (id: string) => api.get({ url: `/catalog/assets-v2/${id}` });
+export const updateCatalogAssetV2Governance = (id: string, data: any) =>
+	api.patch({ url: `/catalog/assets-v2/${id}/governance`, data });
+export const getCatalogAssetV2Lineage = (id: string) => api.get({ url: `/catalog/assets-v2/${id}/lineage` });
+export const syncCatalogAssetV2Lineage = (id: string, params?: { upstreamDepth?: number; downstreamDepth?: number }) =>
+	api.post({ url: `/catalog/assets-v2/${id}/lineage/sync`, params });
+export const getCatalogAssetsV2Diagnostics = () => api.get({ url: "/catalog/assets-v2/diagnostics" });
+export const syncCatalogAssetsV2 = (limit?: number) =>
+	api.post({ url: "/catalog/assets-v2/sync", params: limit ? { limit } : undefined });
 export type SchemaDriftEvent = {
 	id: string;
 	runId?: string;
