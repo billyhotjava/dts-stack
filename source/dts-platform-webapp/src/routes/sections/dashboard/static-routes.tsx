@@ -11,6 +11,7 @@ const AssetOwnershipPage = lazy(() => import("@/pages/governance/AssetOwnershipP
 const AssetGrantPage = lazy(() => import("@/pages/governance/AssetGrantPage"));
 const MyGrantsPage = lazy(() => import("@/pages/governance/MyGrantsPage"));
 const PermissionAuditPage = lazy(() => import("@/pages/governance/PermissionAuditPage"));
+const SemanticModelingCenterPage = lazy(() => import("@/pages/modeling/SemanticModelingCenterPage"));
 
 // ── Analytics pages (static routes — registered statically for reliability; menu controls visibility) ──
 const AnalyticsHomePage = lazy(() => import("@/analytics/pages/HomePage"));
@@ -58,6 +59,8 @@ export const STATIC_DASHBOARD_ROUTES: RouteObject[] = [
 	{ path: "governance/asset-grants", element: <S><AssetGrantPage /></S> },
 	{ path: "my/asset-grants", element: <S><MyGrantsPage /></S> },
 	{ path: "governance/permission-audit", element: <S><PermissionAuditPage /></S> },
+	{ path: "modeling/semantic-center", element: <S><SemanticModelingCenterPage /></S> },
+	{ path: "bi/semantic-modeling", element: <S><SemanticModelingCenterPage /></S> },
 
 	// ── Analytics (all routes statically registered — no dependency on menu API) ──
 	{ path: "bi", element: <S><AnalyticsHomePage /></S> },

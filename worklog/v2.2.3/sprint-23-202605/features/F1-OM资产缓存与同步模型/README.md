@@ -1,7 +1,7 @@
 # F1: OpenMetadata 资产缓存与同步模型
 
 **优先级**: P0  
-**状态**: IN_PROGRESS
+**状态**: DONE
 
 ## 目标
 
@@ -14,7 +14,7 @@
 | T01 | `om_asset_cache` / `om_column_cache` / `om_lineage_cache` Liquibase 模型 | P0 | DONE | - |
 | T02 | OpenMetadata table list/detail 同步服务 | P0 | DONE | T01 |
 | T03 | column/profile/raw_json 同步与 hash 变更检测 | P0 | DONE | T02 |
-| T04 | lineage/test summary 同步入口 | P0 | IN_PROGRESS | T02 |
+| T04 | lineage/test summary 同步入口 | P0 | DONE | T02 |
 | T05 | 同步状态、失败原因、手动刷新和 forbidden database 过滤 | P0 | DONE | T02-T04 |
 
 ## 完成标准

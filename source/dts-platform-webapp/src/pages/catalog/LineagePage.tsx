@@ -16,7 +16,7 @@ import {
 import { ReactFlow, Background, Controls, MiniMap, MarkerType, type Node, type Edge } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
 import { EmptyState } from "@/components/empty-state";
-import { getCatalogLineageImpact, importDbtManifest, listDatasets, syncAddaxLineage } from "@/api/platformApi";
+import { getCatalogLineageDiff, getCatalogLineageImpact, importDbtManifest, listDatasets, syncAddaxLineage } from "@/api/platformApi";
 
 type DatasetOption = {
 	id: string;
@@ -74,6 +74,8 @@ type ImpactEdge = {
 	lastExecutionStatus?: string;
 	lastObservedAt?: string;
 	lastVerifiedAt?: string;
+	validFrom?: string;
+	validTo?: string;
 	lastModifiedAt?: string;
 };
 
@@ -116,10 +118,23 @@ type ImpactResult = {
 	changedWithinHours?: number;
 	sourceId?: string;
 	withColumns?: boolean;
+	snapshotAt?: string;
+	timeTravel?: boolean;
 	impactStats?: ImpactStats;
 	nodes?: ImpactNode[];
 	edges?: ImpactEdge[];
 	columnLineages?: ColumnLineage[];
+};
+
+type LineageDiffResult = {
+	from?: string;
+	to?: string;
+	addedCount?: number;
+	removedCount?: number;
+	unchangedCount?: number;
+	addedEdges?: ImpactEdge[];
+	removedEdges?: ImpactEdge[];
+	unchangedEdges?: ImpactEdge[];
 };
 
 const layerColor = (layer?: string) => {
@@ -141,6 +156,14 @@ const formatTs = (value?: string) => {
 	} catch {
 		return value;
 	}
+};
+
+const toIsoInstant = (value?: string) => {
+	const text = String(value || "").trim();
+	if (!text) return undefined;
+	const parsed = new Date(text);
+	if (Number.isNaN(parsed.getTime())) return undefined;
+	return parsed.toISOString();
 };
 
 const csvEscape = (value: unknown) => {
@@ -334,6 +357,11 @@ export default function LineagePage() {
 	const [keyword, setKeyword] = useState<string>("");
 	const [layoutDirection, setLayoutDirection] = useState<"LR" | "TB">("LR");
 	const [syncingAddax, setSyncingAddax] = useState(false);
+	const [snapshotAt, setSnapshotAt] = useState<string>("");
+	const [diffFrom, setDiffFrom] = useState<string>("");
+	const [diffTo, setDiffTo] = useState<string>("");
+	const [diffLoading, setDiffLoading] = useState(false);
+	const [diffResult, setDiffResult] = useState<LineageDiffResult | null>(null);
 
 	useEffect(() => {
 		void loadDatasets();
@@ -345,8 +373,8 @@ export default function LineagePage() {
 			setSelectedNode(null);
 			return;
 		}
-		void loadImpact(selectedId, direction, depth, projectName, layerFilters, changedWithinHours);
-	}, [selectedId, direction, depth, projectName, layerFilters, changedWithinHours]);
+		void loadImpact(selectedId, direction, depth, projectName, layerFilters, changedWithinHours, snapshotAt);
+	}, [selectedId, direction, depth, projectName, layerFilters, changedWithinHours, snapshotAt]);
 
 	const datasetOptions = useMemo(() => datasets.map((item) => ({ label: item.name, value: item.id })), [datasets]);
 
@@ -373,6 +401,7 @@ export default function LineagePage() {
 		project: string,
 		layers: string[],
 		changedHours: number,
+		snapshot: string,
 	) => {
 		setLoading(true);
 		try {
@@ -384,6 +413,7 @@ export default function LineagePage() {
 				changedWithinHours: changedHours > 0 ? changedHours : undefined,
 				withJobs: true,
 				withColumns: true,
+				at: toIsoInstant(snapshot),
 			});
 			setImpact(resp || null);
 		} catch {
@@ -509,7 +539,7 @@ export default function LineagePage() {
 				const result = await importDbtManifest(file as File);
 				toast.success(`dbt 血缘导入成功：新建 ${result.created} 条，跳过 ${result.skipped} 条`);
 				if (selectedId) {
-					void loadImpact(selectedId, direction, depth, projectName, layerFilters, changedWithinHours);
+					void loadImpact(selectedId, direction, depth, projectName, layerFilters, changedWithinHours, snapshotAt);
 				}
 			} catch {
 				// global interceptor handles error toast
@@ -524,12 +554,37 @@ export default function LineagePage() {
 			const result: any = await syncAddaxLineage();
 			toast.success(`Addax 血缘同步完成：新增 ${result?.created ?? 0}，更新 ${result?.updated ?? 0}，跳过 ${result?.skipped ?? 0}`);
 			if (selectedId) {
-				void loadImpact(selectedId, direction, depth, projectName, layerFilters, changedWithinHours);
+				void loadImpact(selectedId, direction, depth, projectName, layerFilters, changedWithinHours, snapshotAt);
 			}
 		} catch {
 			// global interceptor handles error toast
 		} finally {
 			setSyncingAddax(false);
+		}
+	};
+
+	const handleLoadDiff = async () => {
+		if (!selectedId) return;
+		const from = toIsoInstant(diffFrom);
+		const to = toIsoInstant(diffTo);
+		if (!from || !to) {
+			toast.error("请选择有效的对比起止时间");
+			return;
+		}
+		setDiffLoading(true);
+		try {
+			const resp: any = await getCatalogLineageDiff(selectedId, {
+				from,
+				to,
+				direction,
+				depth,
+				projectName: projectName.trim() || undefined,
+			});
+			setDiffResult(resp || null);
+		} catch {
+			setDiffResult(null);
+		} finally {
+			setDiffLoading(false);
 		}
 	};
 
@@ -664,6 +719,12 @@ export default function LineagePage() {
 			width: 190,
 			render: (value) => formatTs(value),
 		},
+		{
+			title: "有效期",
+			key: "validity",
+			width: 260,
+			render: (_, row) => `${formatTs(row.validFrom)} -> ${row.validTo ? formatTs(row.validTo) : "当前"}`,
+		},
 	];
 
 	const columnLineageColumns: ColumnsType<ColumnLineage> = [
@@ -777,10 +838,9 @@ export default function LineagePage() {
 		toast.success("已导出节点、关系与字段血缘 CSV");
 	};
 
-	const handleExportSvg = () => {
+	const buildLineageSvg = () => {
 		if (!nodes.length) {
-			toast.warning("当前无可导出的图");
-			return;
+			return null;
 		}
 		const positions = applyLayeredLayout(nodes, edges, layoutDirection);
 		const padding = 48;
@@ -831,9 +891,64 @@ export default function LineagePage() {
 ${svgEdges}
 ${svgNodes}
 </svg>`;
+		return { svg, width, height };
+	};
+
+	const handleExportSvg = () => {
+		const graph = buildLineageSvg();
+		if (!graph) {
+			toast.warning("当前无可导出的图");
+			return;
+		}
 		const stamp = new Date().toISOString().slice(0, 19).replaceAll(":", "-");
-		downloadBlob(`lineage-graph-${stamp}.svg`, svg, "image/svg+xml;charset=utf-8;");
+		downloadBlob(`lineage-graph-${stamp}.svg`, graph.svg, "image/svg+xml;charset=utf-8;");
 		toast.success("已导出血缘图 SVG");
+	};
+
+	const handleExportPng = () => {
+		const graph = buildLineageSvg();
+		if (!graph) {
+			toast.warning("当前无可导出的图");
+			return;
+		}
+		const image = new Image();
+		const svgBlob = new Blob([graph.svg], { type: "image/svg+xml;charset=utf-8" });
+		const url = URL.createObjectURL(svgBlob);
+		image.onload = () => {
+			const canvas = document.createElement("canvas");
+			const scale = Math.max(1, window.devicePixelRatio || 1);
+			canvas.width = Math.ceil(graph.width * scale);
+			canvas.height = Math.ceil(graph.height * scale);
+			const ctx = canvas.getContext("2d");
+			if (!ctx) {
+				URL.revokeObjectURL(url);
+				toast.error("PNG 导出失败：浏览器不支持 Canvas");
+				return;
+			}
+			ctx.fillStyle = "#ffffff";
+			ctx.fillRect(0, 0, canvas.width, canvas.height);
+			ctx.scale(scale, scale);
+			ctx.drawImage(image, 0, 0);
+			canvas.toBlob((blob) => {
+				URL.revokeObjectURL(url);
+				if (!blob) {
+					toast.error("PNG 导出失败");
+					return;
+				}
+				const stamp = new Date().toISOString().slice(0, 19).replaceAll(":", "-");
+				const link = document.createElement("a");
+				link.href = URL.createObjectURL(blob);
+				link.download = `lineage-graph-${stamp}.png`;
+				link.click();
+				URL.revokeObjectURL(link.href);
+				toast.success("已导出血缘图 PNG");
+			}, "image/png");
+		};
+		image.onerror = () => {
+			URL.revokeObjectURL(url);
+			toast.error("PNG 导出失败");
+		};
+		image.src = url;
 	};
 
 	return (
@@ -852,6 +967,9 @@ ${svgNodes}
 						</Upload>
 						<Button className="rounded-2xl" icon={<DownloadOutlined />} onClick={handleExportSvg} disabled={!nodes.length}>
 							导出SVG
+						</Button>
+						<Button className="rounded-2xl" icon={<DownloadOutlined />} onClick={handleExportPng} disabled={!nodes.length}>
+							导出PNG
 						</Button>
 						<Button className="rounded-2xl" icon={<DownloadOutlined />} onClick={handleExport} disabled={!nodes.length && !edges.length && !columnLineages.length}>
 							导出结果
@@ -934,6 +1052,12 @@ ${svgNodes}
 						allowClear
 					/>
 					<Input
+						style={{ width: 220 }}
+						type="datetime-local"
+						value={snapshotAt}
+						onChange={(e) => setSnapshotAt(e.target.value)}
+					/>
+					<Input
 						style={{ width: 240 }}
 						placeholder="链路快速搜索（节点/关系）"
 						value={keyword}
@@ -965,6 +1089,7 @@ ${svgNodes}
 											<Statistic title="字段血缘" value={Number(impact?.impactStats?.columnLineageCount || columnLineages.length)} />
 											<Statistic title="方向" value={impact?.direction || direction} />
 											<Statistic title="深度" value={Number(impact?.depth || depth)} />
+											<Statistic title="快照" value={impact?.timeTravel ? formatTs(impact?.snapshotAt) : "当前"} />
 										</Space>
 										</Card>
 									</Card>
@@ -1026,10 +1151,66 @@ ${svgNodes}
 									</Card>
 								</div>
 							),
-						},
-						{
-							key: "graph",
-							label: "血缘图",
+							},
+							{
+								key: "diff",
+								label: "时间旅行 Diff",
+								children: (
+									<div className="space-y-4">
+										<Card title="快照对比">
+											<Space wrap>
+												<Input
+													style={{ width: 220 }}
+													type="datetime-local"
+													value={diffFrom}
+													onChange={(e) => setDiffFrom(e.target.value)}
+												/>
+												<Input
+													style={{ width: 220 }}
+													type="datetime-local"
+													value={diffTo}
+													onChange={(e) => setDiffTo(e.target.value)}
+												/>
+												<Button type="primary" loading={diffLoading} onClick={handleLoadDiff}>
+													对比
+												</Button>
+											</Space>
+										</Card>
+										<Card title="差异概览" loading={diffLoading}>
+											<Space size={24} wrap>
+												<Statistic title="新增关系" value={Number(diffResult?.addedCount || 0)} />
+												<Statistic title="移除关系" value={Number(diffResult?.removedCount || 0)} />
+												<Statistic title="不变关系" value={Number(diffResult?.unchangedCount || 0)} />
+												<Statistic title="起始快照" value={diffResult?.from ? formatTs(diffResult.from) : "-"} />
+												<Statistic title="目标快照" value={diffResult?.to ? formatTs(diffResult.to) : "-"} />
+											</Space>
+										</Card>
+										<Card title="新增关系">
+											<Table
+												rowKey={(row, idx) => row.id || `added-${idx}`}
+												columns={edgeColumns}
+												dataSource={diffResult?.addedEdges || []}
+												loading={diffLoading}
+												scroll={{ x: 1200 }}
+												pagination={{ pageSize: 8 }}
+											/>
+										</Card>
+										<Card title="移除关系">
+											<Table
+												rowKey={(row, idx) => row.id || `removed-${idx}`}
+												columns={edgeColumns}
+												dataSource={diffResult?.removedEdges || []}
+												loading={diffLoading}
+												scroll={{ x: 1200 }}
+												pagination={{ pageSize: 8 }}
+											/>
+										</Card>
+									</div>
+								),
+							},
+							{
+								key: "graph",
+								label: "血缘图",
 							children: (
 								<div style={{ height: 500, border: "1px solid #e8e8e8", borderRadius: 8, overflow: "hidden" }}>
 									<ReactFlow

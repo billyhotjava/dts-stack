@@ -4,6 +4,7 @@ set -euo pipefail
 BASE_URL="${DTS_BASE_URL:-http://127.0.0.1:18082}"
 COOKIE="${DTS_COOKIE:-}"
 TOKEN="${DTS_TOKEN:-}"
+SERVICE="${DTS_SERVICE_HEADER:-}"
 OUT_DIR="${DTS_SMOKE_OUT:-worklog/v2.2.3/sprint-23-202605/it/evidence/local}"
 LIMIT="${DTS_OM_SYNC_LIMIT:-50}"
 
@@ -15,6 +16,9 @@ if [[ -n "$COOKIE" ]]; then
 fi
 if [[ -n "$TOKEN" ]]; then
   headers+=("-H" "Authorization: Bearer $TOKEN")
+fi
+if [[ -n "$SERVICE" ]]; then
+  headers+=("-H" "X-DTS-Service: $SERVICE")
 fi
 
 request() {

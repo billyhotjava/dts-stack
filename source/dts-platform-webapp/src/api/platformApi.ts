@@ -64,6 +64,7 @@ export type CatalogAssetV2Query = {
 	governanceStatus?: string;
 	matchStatus?: string;
 	domainId?: string;
+	domainUnassigned?: boolean;
 	page?: number;
 	size?: number;
 };
@@ -751,8 +752,19 @@ export const getCatalogLineageImpact = (
     sourceId?: string;
     withJobs?: boolean;
     withColumns?: boolean;
+    at?: string;
   } = {},
 ) => api.get({ url: "/catalog/lineage/impact", params: { datasetId, ...params } });
+export const getCatalogLineageDiff = (
+  datasetId: string,
+  params: {
+    from: string;
+    to: string;
+    direction?: "UPSTREAM" | "DOWNSTREAM" | "BOTH";
+    depth?: number;
+    projectName?: string;
+  },
+) => api.get({ url: "/catalog/lineage/diff", params: { datasetId, ...params } });
 export const createCatalogLineage = (data: any) => api.post({ url: "/catalog/lineage", data });
 export const deleteCatalogLineage = (id: string) => api.delete({ url: `/catalog/lineage/${id}` });
 export const syncAddaxLineage = () => api.post({ url: "/catalog/lineage/sync-addax" });

@@ -89,8 +89,9 @@ const MATCH_OPTIONS = [
 	{ label: "人工确认", value: "MANUAL_REVIEW" },
 ];
 
-const DATASET_FILTER_STORAGE_KEY = "catalog.asset.filter.v1";
+const DATASET_FILTER_STORAGE_KEY = "catalog.asset.filter.v2";
 const ASSET_PORTAL_V2_ENABLED = import.meta.env.VITE_CATALOG_ASSET_PORTAL_V2 !== "false";
+const UNASSIGNED_DOMAIN_KEY = "__UNASSIGNED__";
 
 const CLASSIFICATION_LABEL: Record<string, string> = {
 	PUBLIC: "公开",
@@ -208,7 +209,7 @@ export default function Page() {
 			if (!raw) return;
 			const saved = JSON.parse(raw);
 			setKeyword(typeof saved?.keyword === "string" ? saved.keyword : "");
-			setDomain(typeof saved?.domain === "string" && saved.domain ? saved.domain : undefined);
+			setDomain(undefined);
 			setAssetType(typeof saved?.assetType === "string" && saved.assetType ? saved.assetType : "ALL");
 			setClassification(typeof saved?.classification === "string" && saved.classification ? saved.classification : "ALL");
 			setWarehouseLayer(typeof saved?.warehouseLayer === "string" && saved.warehouseLayer ? saved.warehouseLayer : "ALL");
@@ -252,7 +253,6 @@ export default function Page() {
 	useEffect(() => {
 		const payload = {
 			keyword,
-			domain: domain || "",
 			assetType,
 			classification,
 			warehouseLayer,
@@ -260,7 +260,7 @@ export default function Page() {
 			matchStatus,
 		};
 		localStorage.setItem(DATASET_FILTER_STORAGE_KEY, JSON.stringify(payload));
-	}, [keyword, domain, assetType, classification, warehouseLayer, governanceStatus, matchStatus]);
+	}, [keyword, assetType, classification, warehouseLayer, governanceStatus, matchStatus]);
 
 	const domainMap = useMemo(() => new Map(domains.map((item) => [item.id, item.name])), [domains]);
 
@@ -299,7 +299,8 @@ export default function Page() {
 				page: page - 1,
 				size,
 				keyword: keyword.trim() || undefined,
-				domainId: domain && domain !== "ALL" ? domain : undefined,
+				domainId: domain && domain !== "ALL" && domain !== UNASSIGNED_DOMAIN_KEY ? domain : undefined,
+				domainUnassigned: domain === UNASSIGNED_DOMAIN_KEY || undefined,
 				type: assetType === "ALL" ? undefined : assetType,
 				classification: classification === "ALL" ? undefined : classification,
 				warehouseLayer: warehouseLayer === "ALL" ? undefined : warehouseLayer,
@@ -309,7 +310,7 @@ export default function Page() {
 				page: page - 1,
 				size,
 				keyword: keyword.trim() || undefined,
-				domainId: domain && domain !== "ALL" ? domain : undefined,
+				domainId: domain && domain !== "ALL" && domain !== UNASSIGNED_DOMAIN_KEY ? domain : undefined,
 				type: assetType === "ALL" ? undefined : assetType,
 				classification: classification === "ALL" ? undefined : classification,
 				warehouseLayer: warehouseLayer === "ALL" ? undefined : warehouseLayer,
@@ -360,7 +361,7 @@ export default function Page() {
 		}
 	};
 
-	const selectedDomainName = domain ? domainMap.get(domain) || "当前主题域" : "全部主题域";
+	const selectedDomainName = domain === UNASSIGNED_DOMAIN_KEY ? "未归域" : domain ? domainMap.get(domain) || "当前主题域" : "全部主题域";
 
 	const layerLanes = useMemo(() => {
 		const grouped = new Map<string, AssetRow[]>();
@@ -403,7 +404,13 @@ export default function Page() {
 			{
 				key: "ALL",
 				title: "全部资产",
-				children: buildTreeNodes(domainTree),
+				children: [
+					{
+						key: UNASSIGNED_DOMAIN_KEY,
+						title: "未归域",
+					},
+					...buildTreeNodes(domainTree),
+				],
 			},
 		],
 		[domainTree],

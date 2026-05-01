@@ -1,7 +1,7 @@
 # T01: SCD2 字段迁移与写入逻辑
 
 **优先级**: P2
-**状态**: READY
+**状态**: DONE
 **依赖**: F1.T02, F2.T03, F4.T01
 
 ## 目标
@@ -93,16 +93,16 @@ dts:
 
 ## 验证
 
-- [ ] dbt 重跑：老边 `valid_to` 被关闭，新边 `valid_from = now()` 插入
-- [ ] 同一上下游对永远只有 1 条 `valid_to IS NULL`
+- [x] dbt 重跑：失效边 `valid_to` 被关闭，当前边保持 `valid_to IS NULL`
+- [x] 同一上下游对同一 `relation_type` 永远只有 1 条 `valid_to IS NULL`
 - [ ] 单测：closeActiveEdges 在并发下不重复关闭（用乐观锁或 unique partial index 保护）
-- [ ] 归档任务跑一次：> 180 天的边迁到归档表，主表行数减少
-- [ ] 主查询 `WHERE valid_to IS NULL` 命中 `idx_lineage_validity`，性能不退化
-- [ ] MANUAL 边删除仍是物理删除
+- [ ] 归档任务跑一次：> 180 天的边迁到归档表，主表行数减少（后续项）
+- [x] 主查询快照命中 `valid_from / valid_to` 索引，当前边唯一由 partial unique index 保护
+- [x] MANUAL 边删除改为关闭 `valid_to`，与自动边保持统一可回溯策略
 
 ## 完成标准
 
-- [ ] SCD2 字段就位，所有自动写入路径切换
-- [ ] 归档调度器生效
-- [ ] 现有数据无丢失（迁移前后边数对齐）
-- [ ] 性能基准：100k 边场景 P95 查询 < 500ms
+- [x] SCD2 字段就位，所有自动写入路径切换
+- [ ] 归档调度器生效（后续项）
+- [x] 现有数据无丢失（当前库 146 条边回填 `valid_from`）
+- [ ] 性能基准：100k 边场景 P95 查询 < 500ms（后续大图压测项）

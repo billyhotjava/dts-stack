@@ -62,6 +62,12 @@ public class CatalogDatasetLineage extends AbstractAuditingEntity<UUID> implemen
     @Column(name = "last_verified_at")
     private Instant lastVerifiedAt;
 
+    @Column(name = "valid_from")
+    private Instant validFrom;
+
+    @Column(name = "valid_to")
+    private Instant validTo;
+
     @Override
     public UUID getId() {
         return id;
@@ -181,5 +187,21 @@ public class CatalogDatasetLineage extends AbstractAuditingEntity<UUID> implemen
 
     public void setLastVerifiedAt(Instant lastVerifiedAt) {
         this.lastVerifiedAt = lastVerifiedAt;
+    }
+
+    public Instant getValidFrom() {
+        return validFrom;
+    }
+
+    public void setValidFrom(Instant validFrom) {
+        this.validFrom = validFrom;
+    }
+
+    public Instant getValidTo() {
+        return validTo;
+    }
+
+    public void setValidTo(Instant validTo) {
+        this.validTo = validTo;
     }
 }

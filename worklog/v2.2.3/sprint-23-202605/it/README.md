@@ -51,6 +51,7 @@
 - `scripts/asset-portal-smoke.sh`：执行 OM 资产同步、资产列表和映射诊断 API 验证。
 - `scripts/lineage-quality-smoke.sh`：按 `DTS_OM_ASSET_ID` / `DTS_LEGACY_DATASET_ID` 验证 OM 血缘缓存、DTS 血缘影响和质量结果。
 - `scripts/mapping-report.sql`：输出映射统计和未匹配样例，作为迁移 dry-run / 发布前风险报告。
+- `release-runbook.md`：发布前检查、升级步骤、回滚步骤、故障定位和证据归档口径。
 
 ## 回滚开关
 

@@ -62,7 +62,8 @@ public class CatalogDbtLineageService {
 
 		// Load existing lineage pairs into memory Set to avoid N+1 queries
 		Set<String> existingPairs = lineageRepo.findAll().stream()
-			.filter(l -> l.getUpstreamDatasetId() != null && l.getDownstreamDatasetId() != null)
+			.filter(l -> l.getUpstreamDatasetId() != null && l.getDownstreamDatasetId() != null && l.getValidTo() == null)
+			.filter(l -> "DBT".equalsIgnoreCase(l.getRelationType()))
 			.map(l -> l.getUpstreamDatasetId() + ":" + l.getDownstreamDatasetId())
 			.collect(Collectors.toSet());
 
@@ -123,6 +124,8 @@ public class CatalogDbtLineageService {
 					lineage.setRelationType("DBT");
 					lineage.setDirection("UPSTREAM_TO_DOWNSTREAM");
 					lineage.setNotes("Imported from dbt manifest");
+					lineage.setVerificationStatus("DECLARED");
+					lineage.setValidFrom(Instant.now());
 					if (lineageJob != null) {
 						lineage.setLineageJobId(lineageJob.getId());
 					}

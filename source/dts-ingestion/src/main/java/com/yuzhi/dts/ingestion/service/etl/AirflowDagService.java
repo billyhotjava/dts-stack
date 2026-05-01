@@ -11,9 +11,12 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardOpenOption;
+import java.util.ArrayList;
 import java.util.LinkedHashSet;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.Set;
 import java.util.regex.Pattern;
 import org.slf4j.Logger;
@@ -26,6 +29,7 @@ public class AirflowDagService {
 
     private static final Logger LOG = LoggerFactory.getLogger(AirflowDagService.class);
     private static final Pattern NON_SAFE = Pattern.compile("[^a-z0-9_]+");
+    private static final ObjectMapper JSON = new ObjectMapper();
 
     private final AirflowProperties properties;
     private final AddaxProperties addaxProperties;
@@ -383,6 +387,11 @@ public class AirflowDagService {
         String defaultJobPath = escapePythonString(resolveDefaultJobPath(task));
         String scheduleLiteral = buildScheduleExpression(task == null ? null : task.getSyncSchedule());
         String taskId = resolveTaskId(task);
+        String lineageSupport = buildOpenLineageSupportBlock(task, null);
+        String lineageCallbacks = StringUtils.hasText(lineageSupport)
+            ? "        on_success_callback=make_openlineage_callback(\"COMPLETE\", LINEAGE_DATASETS),\n" +
+            "        on_failure_callback=make_openlineage_callback(\"FAIL\", LINEAGE_DATASETS),\n"
+            : "";
 
         // For file source tasks, add a PythonOperator pre-task to create the target table.
         // Addax 6.0.8 validates table metadata during init (before preSql), so the table
@@ -438,6 +447,8 @@ public class AirflowDagService {
             from __future__ import annotations
 
             import os
+            import json
+            import urllib.request
             from datetime import datetime, timedelta
 
             from airflow import DAG
@@ -451,6 +462,7 @@ public class AirflowDagService {
             ADDAX_DRIVER_DIR = os.getenv("ADDAX_DRIVER_DIR", "")
             ADDAX_DRIVER_JARS = os.getenv("ADDAX_DRIVER_JARS", "")
             DEFAULT_JOB_PATH = os.getenv("ADDAX_JOB_DEFAULT", "%s")
+            %s
 
 
             def build_driver_mounts():
@@ -505,12 +517,13 @@ public class AirflowDagService {
                         *build_driver_mounts(),
                     ],
                     environment={},
+            %s
                     tty=False,
                 )
             %s
-            """.formatted(extraImports, addaxImage, addaxJobDir, defaultJobPath,
+            """.formatted(extraImports, addaxImage, addaxJobDir, defaultJobPath, lineageSupport,
                 dagId, scheduleLiteral, sourceTag, nameTag,
-                defaultJobPath, initTableBlock, taskId, dependencyBlock);
+                defaultJobPath, initTableBlock, taskId, lineageCallbacks, dependencyBlock);
     }
 
     /**
@@ -527,6 +540,8 @@ public class AirflowDagService {
         StringBuilder sb = new StringBuilder();
         sb.append("from __future__ import annotations\n\n");
         sb.append("import os\n");
+        sb.append("import json\n");
+        sb.append("import urllib.request\n");
         sb.append("from datetime import datetime, timedelta\n\n");
         sb.append("from airflow import DAG\n");
         sb.append("from airflow.providers.docker.operators.docker import DockerOperator\n");
@@ -537,6 +552,7 @@ public class AirflowDagService {
         sb.append("ADDAX_DOCKER_NETWORK = os.getenv(\"ADDAX_DOCKER_NETWORK\", \"dts-core\")\n");
         sb.append("ADDAX_DRIVER_DIR = os.getenv(\"ADDAX_DRIVER_DIR\", \"\")\n");
         sb.append("ADDAX_DRIVER_JARS = os.getenv(\"ADDAX_DRIVER_JARS\", \"\")\n\n\n");
+        sb.append(buildOpenLineageSupportBlock(task, null));
         sb.append("def build_driver_mounts():\n");
         sb.append("    mounts = []\n");
         sb.append("    if not ADDAX_DRIVER_DIR or not ADDAX_DRIVER_JARS:\n");
@@ -582,6 +598,7 @@ public class AirflowDagService {
             }
             usedIds.add(opTaskId);
             String jobPath = escapePythonString(job.containerJobPath());
+            String lineageDatasets = pythonJsonLoads(lineageDatasetsJson(task, job.tableName()));
 
             sb.append(String.format("    %s = DockerOperator(\n", opTaskId));
             sb.append(String.format("        task_id=\"%s\",\n", opTaskId));
@@ -599,11 +616,163 @@ public class AirflowDagService {
             sb.append("            *build_driver_mounts(),\n");
             sb.append("        ],\n");
             sb.append("        environment={},\n");
+            if (StringUtils.hasText(lineageDatasets)) {
+                sb.append(String.format("        on_success_callback=make_openlineage_callback(\"COMPLETE\", %s),\n", lineageDatasets));
+                sb.append(String.format("        on_failure_callback=make_openlineage_callback(\"FAIL\", %s),\n", lineageDatasets));
+            }
             sb.append("        tty=False,\n");
             sb.append("    )\n\n");
         }
 
         return sb.toString();
+    }
+
+    private String buildOpenLineageSupportBlock(IngestionTask task, String tableName) {
+        String datasetsJson = lineageDatasetsJson(task, tableName);
+        if (!StringUtils.hasText(datasetsJson)) {
+            return "";
+        }
+        String openLineageUrl = escapePythonString(resolveOpenLineageUrl());
+        return """
+
+            OPENLINEAGE_URL = os.getenv("DTS_OPENLINEAGE_URL", "%s")
+            OPENLINEAGE_SERVICE = os.getenv("DTS_OPENLINEAGE_SERVICE", "dts-airflow")
+            OPENLINEAGE_ENABLED = os.getenv("DTS_OPENLINEAGE_ENABLED", "true").lower() not in ("0", "false", "no")
+            LINEAGE_DATASETS = %s
+
+
+            def emit_openlineage_event(event_type, context, datasets):
+                if not OPENLINEAGE_ENABLED or not OPENLINEAGE_URL:
+                    return
+                inputs = datasets.get("inputs") or []
+                outputs = datasets.get("outputs") or []
+                if not inputs or not outputs:
+                    return
+                dag_run = context.get("dag_run")
+                run_id = getattr(dag_run, "run_id", None) or context.get("run_id") or context.get("ts_nodash")
+                payload = {
+                    "eventType": event_type,
+                    "eventTime": context.get("ts"),
+                    "run": {"runId": run_id},
+                    "job": {"namespace": "airflow", "name": context["dag"].dag_id},
+                    "inputs": inputs,
+                    "outputs": outputs,
+                }
+                data = json.dumps(payload).encode("utf-8")
+                request = urllib.request.Request(
+                    OPENLINEAGE_URL,
+                    data=data,
+                    method="POST",
+                    headers={
+                        "Content-Type": "application/json",
+                        "X-DTS-Service": OPENLINEAGE_SERVICE,
+                    },
+                )
+                try:
+                    urllib.request.urlopen(request, timeout=5).read()
+                except Exception as exc:
+                    print(f"OpenLineage emit failed: {exc}")
+
+
+            def make_openlineage_callback(event_type, datasets):
+                def _callback(context):
+                    emit_openlineage_event(event_type, context, datasets)
+                return _callback
+
+            """.formatted(openLineageUrl, pythonJsonLoads(datasetsJson));
+    }
+
+    private String lineageDatasetsJson(IngestionTask task, String tableName) {
+        JsonNode tableMapping = task == null ? null : task.getTableMapping();
+        if (tableMapping == null || !tableMapping.isArray() || tableMapping.isEmpty()) {
+            return "";
+        }
+        List<Map<String, String>> inputs = new ArrayList<>();
+        List<Map<String, String>> outputs = new ArrayList<>();
+        String tableFilter = stripQualifier(tableName);
+        for (JsonNode mapping : tableMapping) {
+            if (mapping == null || !mapping.isObject()) {
+                continue;
+            }
+            String source = firstText(mapping, "source", "sourceTable", "stream", "table");
+            String target = firstText(mapping, "target", "targetTable", "ods", "dest");
+            if (StringUtils.hasText(tableFilter) && !tableFilter.equalsIgnoreCase(stripQualifier(target)) && !tableFilter.equalsIgnoreCase(stripQualifier(source))) {
+                continue;
+            }
+            Map<String, String> input = lineageDataset(source, "source");
+            Map<String, String> output = lineageDataset(target, "ods");
+            if (!input.isEmpty()) {
+                inputs.add(input);
+            }
+            if (!output.isEmpty()) {
+                outputs.add(output);
+            }
+        }
+        if (inputs.isEmpty() || outputs.isEmpty()) {
+            return "";
+        }
+        Map<String, Object> data = new LinkedHashMap<>();
+        data.put("inputs", inputs);
+        data.put("outputs", outputs);
+        try {
+            return JSON.writeValueAsString(data);
+        } catch (Exception ex) {
+            LOG.warn("[airflow] failed to serialize OpenLineage dataset mapping for task {}: {}", task != null ? task.getId() : null, ex.getMessage());
+            return "";
+        }
+    }
+
+    private Map<String, String> lineageDataset(String qualifiedName, String fallbackNamespace) {
+        String value = StringUtils.hasText(qualifiedName) ? qualifiedName.trim() : null;
+        if (!StringUtils.hasText(value)) {
+            return Map.of();
+        }
+        String namespace = fallbackNamespace;
+        String name = value;
+        int idx = value.lastIndexOf('.');
+        if (idx > 0 && idx < value.length() - 1) {
+            namespace = value.substring(0, idx);
+            name = value.substring(idx + 1);
+        }
+        Map<String, String> dataset = new LinkedHashMap<>();
+        dataset.put("namespace", namespace);
+        dataset.put("name", name);
+        return dataset;
+    }
+
+    private String pythonJsonLoads(String json) {
+        if (!StringUtils.hasText(json)) {
+            return "";
+        }
+        return "json.loads(r'''" + json.replace("'''", "\\'\\'\\'") + "''')";
+    }
+
+    private String resolveOpenLineageUrl() {
+        IngestionSettingsService.SettingsSnapshot settings = settingsService.getSettings(IngestionSettingsService.SERVICE_PLATFORM);
+        String baseUrl = settings.getString("baseUrl", "http://dts-platform:8081");
+        String apiPath = settings.getString("apiPath", "/api");
+        return joinUrl(joinUrl(baseUrl, apiPath), "/internal/lineage/openlineage");
+    }
+
+    private String joinUrl(String left, String right) {
+        String normalizedLeft = StringUtils.hasText(left) ? left.trim() : "";
+        String normalizedRight = StringUtils.hasText(right) ? right.trim() : "";
+        if (!StringUtils.hasText(normalizedLeft)) {
+            return normalizedRight;
+        }
+        if (!StringUtils.hasText(normalizedRight)) {
+            return normalizedLeft;
+        }
+        return normalizedLeft.replaceAll("/+$", "") + "/" + normalizedRight.replaceAll("^/+", "");
+    }
+
+    private String stripQualifier(String value) {
+        if (!StringUtils.hasText(value)) {
+            return null;
+        }
+        String text = value.trim();
+        int idx = text.lastIndexOf('.');
+        return idx >= 0 && idx < text.length() - 1 ? text.substring(idx + 1) : text;
     }
 
     private String buildScheduleExpression(String schedule) {
@@ -936,12 +1105,18 @@ public class AirflowDagService {
         String scheduleLiteral = buildScheduleExpression(task.getSyncSchedule());
         String taskIdLiteral = resolveTaskId(task);
         long ingestionTaskId = task.getId() == null ? 0L : task.getId();
+        String lineageSupport = buildOpenLineageSupportBlock(task, null);
+        String lineageCallbacks = StringUtils.hasText(lineageSupport)
+            ? "                    on_success_callback=make_openlineage_callback(\"COMPLETE\", LINEAGE_DATASETS),\n" +
+            "                    on_failure_callback=make_openlineage_callback(\"FAIL\", LINEAGE_DATASETS),\n"
+            : "";
 
         return """
             from __future__ import annotations
 
             import json
             import os
+            import urllib.request
             import uuid
             from datetime import datetime, timedelta
 
@@ -951,6 +1126,7 @@ public class AirflowDagService {
             INGESTION_TASK_ID = %d
             INGESTION_TASK_NAME = "%s"
             SOURCE_CONFIG_JSON = \"\"\"%s\"\"\"
+            %s
 
 
             def _run_api_ingestion(**context):
@@ -1100,14 +1276,17 @@ public class AirflowDagService {
                 api_run = PythonOperator(
                     task_id="%s",
                     python_callable=_run_api_ingestion,
+            %s
                 )
             """.formatted(
                 ingestionTaskId,
                 escapePythonString(taskName),
                 escapeTripleQuotedJson(sourceConfigJson),
+                lineageSupport,
                 escapePythonString(dagId),
                 scheduleLiteral,
-                escapePythonString(taskIdLiteral)
+                escapePythonString(taskIdLiteral),
+                lineageCallbacks
             );
     }
 

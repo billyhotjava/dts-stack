@@ -19,9 +19,11 @@ import jakarta.persistence.criteria.Predicate;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
+import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
 import org.springframework.data.jpa.domain.Specification;
@@ -67,18 +69,54 @@ public class CatalogAssetPortalService {
         var pageable = PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "lastSyncedAt").and(Sort.by("fqn").ascending()));
         var pageData = assetRepository.findAll(buildSpec(query), pageable);
         List<AssetSummary> items = new ArrayList<>();
+        List<UUID> visibleLegacyIds = new ArrayList<>();
         for (OpenMetadataAssetCache asset : pageData.getContent()) {
             CatalogAssetExtension extension = extensionRepository.findFirstByOmAsset(asset).orElse(null);
             CatalogAssetMapping mapping = mappingRepository.findFirstByFqnIgnoreCase(asset.getFqn()).orElse(null);
             CatalogDataset legacy = extension != null && extension.getLegacyDatasetId() != null
                 ? datasetRepository.findById(extension.getLegacyDatasetId()).orElse(null)
                 : null;
-            if (!canRead(extension, legacy, activeDept)) {
-                continue;
-            }
             items.add(toSummary(asset, extension, mapping, legacy));
+            if (legacy != null && legacy.getId() != null) {
+                visibleLegacyIds.add(legacy.getId());
+            }
         }
-        return new AssetPage(items, pageData.getTotalElements(), page, size, items.size(), "openmetadata-cache");
+        AssetPage legacyPage = listLegacyAssets(query, activeDept, page, size, visibleLegacyIds, Math.max(0, size - items.size()));
+        if (!legacyPage.content().isEmpty()) {
+            items.addAll(legacyPage.content());
+        }
+        long total = pageData.getTotalElements() + legacyPage.total();
+        String source = pageData.getTotalElements() > 0 && legacyPage.total() > 0
+            ? "openmetadata-cache+dts-catalog"
+            : pageData.getTotalElements() > 0 ? "openmetadata-cache" : "dts-catalog";
+        return new AssetPage(items, total, page, size, items.size(), source);
+    }
+
+    private AssetPage listLegacyAssets(
+        AssetQuery query,
+        String activeDept,
+        int page,
+        int size,
+        List<UUID> excludedIds,
+        int remainingSlots
+    ) {
+        if (remainingSlots <= 0) {
+            return new AssetPage(List.of(), datasetRepository.count(buildLegacySpec(query)), page, size, 0, "dts-catalog");
+        }
+        var pageable = PageRequest.of(
+            page,
+            size,
+            Sort.by(Sort.Direction.DESC, "lastModifiedDate").and(Sort.by(Sort.Direction.DESC, "createdDate"))
+        );
+        Page<CatalogDataset> legacyPage = datasetRepository.findAll(buildLegacySpec(query), pageable);
+        List<AssetSummary> items = legacyPage
+            .getContent()
+            .stream()
+            .filter(dataset -> dataset.getId() == null || excludedIds == null || !excludedIds.contains(dataset.getId()))
+            .limit(remainingSlots)
+            .map(this::toLegacySummary)
+            .toList();
+        return new AssetPage(items, legacyPage.getTotalElements(), page, size, items.size(), "dts-catalog");
     }
 
     public AssetDetail getAsset(UUID id, String activeDept) {
@@ -132,6 +170,9 @@ public class CatalogAssetPortalService {
             }
             if (update.enabled() != null) {
                 extension.setEnabled(update.enabled());
+            }
+            if (update.securityPolicyRefs() != null) {
+                extension.setSecurityPolicyRefs(blankToNull(update.securityPolicyRefs()));
             }
         }
         if (legacy != null) {
@@ -231,7 +272,8 @@ public class CatalogAssetPortalService {
                 StringUtils.hasText(query.warehouseLayer()) ||
                 StringUtils.hasText(query.ownerDept()) ||
                 StringUtils.hasText(query.governanceStatus()) ||
-                query.domainId() != null
+                query.domainId() != null ||
+                query.domainUnassigned()
             ) {
                 var extensionSubquery = cq.subquery(UUID.class);
                 var extensionRoot = extensionSubquery.from(CatalogAssetExtension.class);
@@ -249,6 +291,9 @@ public class CatalogAssetPortalService {
                 }
                 if (query.domainId() != null) {
                     extensionPredicates.add(cb.equal(extensionRoot.get("domainId"), query.domainId()));
+                }
+                if (query.domainUnassigned()) {
+                    extensionPredicates.add(cb.isNull(extensionRoot.get("domainId")));
                 }
                 if (StringUtils.hasText(query.ownerDept())) {
                     extensionPredicates.add(cb.equal(extensionRoot.get("ownerDept"), query.ownerDept().trim()));
@@ -273,6 +318,71 @@ public class CatalogAssetPortalService {
                         )
                     );
                 predicates.add(cb.exists(mappingSubquery));
+            }
+            return predicates.isEmpty() ? cb.conjunction() : cb.and(predicates.toArray(Predicate[]::new));
+        };
+    }
+
+    private Specification<CatalogDataset> buildLegacySpec(AssetQuery query) {
+        return (root, cq, cb) -> {
+            List<Predicate> predicates = new ArrayList<>();
+            predicates.add(cb.or(cb.isNull(root.get("enabled")), cb.isTrue(root.get("enabled"))));
+            if (query.domainUnassigned()) {
+                predicates.add(cb.isNull(root.get("domain").get("id")));
+            } else if (query.domainId() != null) {
+                predicates.add(cb.equal(root.get("domain").get("id"), query.domainId()));
+            }
+            if (StringUtils.hasText(query.keyword())) {
+                String like = "%" + query.keyword().trim().toLowerCase(Locale.ROOT) + "%";
+                predicates.add(
+                    cb.or(
+                        cb.like(cb.lower(root.get("name")), like),
+                        cb.like(cb.lower(root.get("owner")), like),
+                        cb.like(cb.lower(root.get("ownerDept")), like),
+                        cb.like(cb.lower(root.get("tags")), like),
+                        cb.like(cb.lower(root.get("description")), like),
+                        cb.like(cb.lower(root.get("hiveDatabase")), like),
+                        cb.like(cb.lower(root.get("hiveTable")), like)
+                    )
+                );
+            }
+            if (StringUtils.hasText(query.type())) {
+                predicates.add(cb.equal(cb.lower(root.get("type")), query.type().trim().toLowerCase(Locale.ROOT)));
+            }
+            if (StringUtils.hasText(query.database())) {
+                predicates.add(cb.equal(cb.lower(root.get("hiveDatabase")), query.database().trim().toLowerCase(Locale.ROOT)));
+            }
+            if (StringUtils.hasText(query.schema())) {
+                predicates.add(cb.equal(cb.lower(root.get("hiveDatabase")), query.schema().trim().toLowerCase(Locale.ROOT)));
+            }
+            if (StringUtils.hasText(query.classification())) {
+                predicates.add(cb.equal(cb.lower(root.get("classification")), query.classification().trim().toLowerCase(Locale.ROOT)));
+            }
+            if (StringUtils.hasText(query.warehouseLayer())) {
+                predicates.add(cb.equal(cb.lower(root.get("warehouseLayer")), query.warehouseLayer().trim().toLowerCase(Locale.ROOT)));
+            }
+            if (StringUtils.hasText(query.ownerDept())) {
+                predicates.add(cb.equal(cb.lower(root.get("ownerDept")), query.ownerDept().trim().toLowerCase(Locale.ROOT)));
+            }
+            if (StringUtils.hasText(query.governanceStatus())) {
+                String expected = query.governanceStatus().trim().toUpperCase(Locale.ROOT);
+                if ("GOVERNED".equals(expected)) {
+                    predicates.add(cb.isNotNull(root.get("classification")));
+                    predicates.add(cb.isNotNull(root.get("domain").get("id")));
+                } else if ("PENDING_CLASSIFICATION".equals(expected)) {
+                    predicates.add(cb.or(cb.isNull(root.get("classification")), cb.equal(root.get("classification"), "")));
+                } else if ("PENDING_DOMAIN".equals(expected)) {
+                    predicates.add(cb.isNull(root.get("domain").get("id")));
+                } else if ("DISABLED".equals(expected)) {
+                    predicates.clear();
+                    predicates.add(cb.isFalse(root.get("enabled")));
+                }
+            }
+            if (StringUtils.hasText(query.matchStatus())) {
+                String expected = query.matchStatus().trim().toUpperCase(Locale.ROOT);
+                if (!"DTS_NATIVE".equals(expected) && !"MATCHED".equals(expected)) {
+                    predicates.add(cb.disjunction());
+                }
             }
             return predicates.isEmpty() ? cb.conjunction() : cb.and(predicates.toArray(Predicate[]::new));
         };
@@ -330,12 +440,76 @@ public class CatalogAssetPortalService {
             matchStatus,
             mapping != null ? mapping.getMatchReason() : null,
             extension != null ? extension.getLegacyDatasetId() : null,
+            extension != null ? extension.getSecurityPolicyRefs() : null,
             asset.getColumnCount(),
             asset.getSyncStatus(),
             asset.getSyncMessage(),
             asset.getLastSyncedAt(),
             "openmetadata-cache"
         );
+    }
+
+    private AssetSummary toLegacySummary(CatalogDataset dataset) {
+        UUID domainId = dataset.getDomain() != null ? dataset.getDomain().getId() : null;
+        String governanceStatus = resolveLegacyGovernanceStatus(dataset);
+        return new AssetSummary(
+            dataset.getId(),
+            null,
+            buildLegacyFqn(dataset),
+            normalizeType(dataset.getType()),
+            null,
+            dataset.getHiveDatabase(),
+            dataset.getHiveDatabase(),
+            dataset.getHiveTable(),
+            firstNonBlank(dataset.getName(), dataset.getHiveTable()),
+            dataset.getClassification(),
+            dataset.getWarehouseLayer(),
+            dataset.getOwnerDept(),
+            dataset.getOwner(),
+            domainId,
+            dataset.getLifecycleStatus(),
+            dataset.getDescription(),
+            governanceStatus,
+            "DTS_NATIVE",
+            "DTS原生资产，尚未与OpenMetadata缓存合并",
+            dataset.getId(),
+            null,
+            null,
+            Boolean.FALSE.equals(dataset.getEnabled()) ? "DISABLED" : "SYNCED",
+            null,
+            dataset.getLastModifiedDate() != null ? dataset.getLastModifiedDate() : dataset.getCreatedDate(),
+            "dts-catalog"
+        );
+    }
+
+    private String buildLegacyFqn(CatalogDataset dataset) {
+        String database = blankToNull(dataset.getHiveDatabase());
+        String table = blankToNull(dataset.getHiveTable());
+        if (database != null && table != null) {
+            return database + "." + table;
+        }
+        return firstNonBlank(table, dataset.getName(), dataset.getId() != null ? dataset.getId().toString() : null);
+    }
+
+    private String normalizeType(String value) {
+        String text = blankToNull(value);
+        return text == null ? "DATASET" : text.toUpperCase(Locale.ROOT);
+    }
+
+    private String resolveLegacyGovernanceStatus(CatalogDataset dataset) {
+        if (dataset == null || Boolean.FALSE.equals(dataset.getEnabled())) {
+            return "DISABLED";
+        }
+        if (!StringUtils.hasText(dataset.getOwner()) && !StringUtils.hasText(dataset.getOwnerDept())) {
+            return "PENDING_CLAIM";
+        }
+        if (!StringUtils.hasText(dataset.getClassification())) {
+            return "PENDING_CLASSIFICATION";
+        }
+        if (dataset.getDomain() == null || dataset.getDomain().getId() == null) {
+            return "PENDING_DOMAIN";
+        }
+        return "GOVERNED";
     }
 
     private ColumnSummary toColumn(OpenMetadataColumnCache column) {
@@ -404,6 +578,7 @@ public class CatalogAssetPortalService {
         String governanceStatus,
         String matchStatus,
         UUID domainId,
+        boolean domainUnassigned,
         int page,
         int size
     ) {}
@@ -431,6 +606,7 @@ public class CatalogAssetPortalService {
         String matchStatus,
         String matchReason,
         UUID legacyDatasetId,
+        String securityPolicyRefs,
         Integer columnCount,
         String syncStatus,
         String syncMessage,
@@ -458,7 +634,8 @@ public class CatalogAssetPortalService {
         String ownerDept,
         String businessOwner,
         String lifecycleStatus,
-        Boolean enabled
+        Boolean enabled,
+        String securityPolicyRefs
     ) {}
 
     public record LineageNode(String id, String omEntityId, String name, String fqn, String kind) {}

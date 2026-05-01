@@ -1,0 +1,259 @@
+<?xml version="1.0" encoding="utf-8"?>
+<databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.22.xsd">
+
+    <changeSet id="20260501_02_semantic_subject_domain" author="platform">
+        <preConditions onFail="MARK_RAN">
+            <not><tableExists tableName="semantic_subject_domain"/></not>
+        </preConditions>
+        <createTable tableName="semantic_subject_domain">
+            <column name="id" type="uuid"><constraints primaryKey="true" nullable="false"/></column>
+            <column name="code" type="varchar(128)"><constraints nullable="false"/></column>
+            <column name="name" type="varchar(128)"><constraints nullable="false"/></column>
+            <column name="description" type="varchar(2048)"/>
+            <column name="status" type="varchar(32)" defaultValue="DRAFT"/>
+            <column name="owner_dept" type="varchar(64)"/>
+            <column name="created_by" type="varchar(50)"/>
+            <column name="created_date" type="timestamp"/>
+            <column name="last_modified_by" type="varchar(50)"/>
+            <column name="last_modified_date" type="timestamp"/>
+        </createTable>
+        <addUniqueConstraint tableName="semantic_subject_domain" columnNames="code" constraintName="uk_semantic_subject_domain_code"/>
+    </changeSet>
+
+    <changeSet id="20260501_02_semantic_business_object" author="platform">
+        <preConditions onFail="MARK_RAN">
+            <not><tableExists tableName="semantic_business_object"/></not>
+        </preConditions>
+        <createTable tableName="semantic_business_object">
+            <column name="id" type="uuid"><constraints primaryKey="true" nullable="false"/></column>
+            <column name="domain_id" type="uuid"/>
+            <column name="code" type="varchar(128)"><constraints nullable="false"/></column>
+            <column name="name" type="varchar(128)"><constraints nullable="false"/></column>
+            <column name="description" type="varchar(2048)"/>
+            <column name="primary_key" type="varchar(128)"/>
+            <column name="main_table" type="varchar(256)"/>
+            <column name="status" type="varchar(32)" defaultValue="DRAFT"/>
+            <column name="owner_dept" type="varchar(64)"/>
+            <column name="created_by" type="varchar(50)"/>
+            <column name="created_date" type="timestamp"/>
+            <column name="last_modified_by" type="varchar(50)"/>
+            <column name="last_modified_date" type="timestamp"/>
+        </createTable>
+        <addUniqueConstraint tableName="semantic_business_object" columnNames="code" constraintName="uk_semantic_business_object_code"/>
+        <addForeignKeyConstraint baseTableName="semantic_business_object" baseColumnNames="domain_id" referencedTableName="semantic_subject_domain" referencedColumnNames="id" constraintName="fk_semantic_object_domain"/>
+        <createIndex tableName="semantic_business_object" indexName="idx_semantic_object_domain"><column name="domain_id"/></createIndex>
+    </changeSet>
+
+    <changeSet id="20260501_02_semantic_object_table_mapping" author="platform">
+        <preConditions onFail="MARK_RAN">
+            <not><tableExists tableName="semantic_object_table_mapping"/></not>
+        </preConditions>
+        <createTable tableName="semantic_object_table_mapping">
+            <column name="id" type="uuid"><constraints primaryKey="true" nullable="false"/></column>
+            <column name="object_id" type="uuid"><constraints nullable="false"/></column>
+            <column name="table_name" type="varchar(256)"><constraints nullable="false"/></column>
+            <column name="table_role" type="varchar(32)" defaultValue="JOINED"/>
+            <column name="join_expression" type="varchar(2048)"/>
+            <column name="sort_order" type="int" defaultValueNumeric="0"/>
+        </createTable>
+        <addForeignKeyConstraint baseTableName="semantic_object_table_mapping" baseColumnNames="object_id" referencedTableName="semantic_business_object" referencedColumnNames="id" constraintName="fk_semantic_table_object"/>
+        <createIndex tableName="semantic_object_table_mapping" indexName="idx_semantic_table_object"><column name="object_id"/></createIndex>
+    </changeSet>
+
+    <changeSet id="20260501_02_semantic_dimension" author="platform">
+        <preConditions onFail="MARK_RAN">
+            <not><tableExists tableName="semantic_dimension"/></not>
+        </preConditions>
+        <createTable tableName="semantic_dimension">
+            <column name="id" type="uuid"><constraints primaryKey="true" nullable="false"/></column>
+            <column name="object_id" type="uuid"/>
+            <column name="code" type="varchar(128)"><constraints nullable="false"/></column>
+            <column name="name" type="varchar(128)"><constraints nullable="false"/></column>
+            <column name="field_name" type="varchar(256)"/>
+            <column name="data_type" type="varchar(64)"/>
+            <column name="semantic_type" type="varchar(64)"/>
+            <column name="status" type="varchar(32)" defaultValue="DRAFT"/>
+            <column name="created_date" type="timestamp"/>
+            <column name="last_modified_date" type="timestamp"/>
+        </createTable>
+        <addForeignKeyConstraint baseTableName="semantic_dimension" baseColumnNames="object_id" referencedTableName="semantic_business_object" referencedColumnNames="id" constraintName="fk_semantic_dimension_object"/>
+        <createIndex tableName="semantic_dimension" indexName="idx_semantic_dimension_object"><column name="object_id"/></createIndex>
+    </changeSet>
+
+    <changeSet id="20260501_02_semantic_metric" author="platform">
+        <preConditions onFail="MARK_RAN">
+            <not><tableExists tableName="semantic_metric"/></not>
+        </preConditions>
+        <createTable tableName="semantic_metric">
+            <column name="id" type="uuid"><constraints primaryKey="true" nullable="false"/></column>
+            <column name="object_id" type="uuid"/>
+            <column name="code" type="varchar(128)"><constraints nullable="false"/></column>
+            <column name="name" type="varchar(128)"><constraints nullable="false"/></column>
+            <column name="formula_type" type="varchar(64)"/>
+            <column name="formula_json" type="text"/>
+            <column name="format" type="varchar(64)"/>
+            <column name="unit" type="varchar(64)"/>
+            <column name="status" type="varchar(32)" defaultValue="DRAFT"/>
+            <column name="created_date" type="timestamp"/>
+            <column name="last_modified_date" type="timestamp"/>
+        </createTable>
+        <addForeignKeyConstraint baseTableName="semantic_metric" baseColumnNames="object_id" referencedTableName="semantic_business_object" referencedColumnNames="id" constraintName="fk_semantic_metric_object"/>
+        <createIndex tableName="semantic_metric" indexName="idx_semantic_metric_object"><column name="object_id"/></createIndex>
+    </changeSet>
+
+    <changeSet id="20260501_02_semantic_model" author="platform">
+        <preConditions onFail="MARK_RAN">
+            <not><tableExists tableName="semantic_model"/></not>
+        </preConditions>
+        <createTable tableName="semantic_model">
+            <column name="id" type="uuid"><constraints primaryKey="true" nullable="false"/></column>
+            <column name="object_id" type="uuid"/>
+            <column name="type" type="varchar(16)"/>
+            <column name="name" type="varchar(128)"><constraints nullable="false"/></column>
+            <column name="table_name" type="varchar(256)"/>
+            <column name="description" type="varchar(2048)"/>
+            <column name="grain" type="varchar(512)"/>
+            <column name="materialization" type="varchar(64)"/>
+            <column name="refresh_cycle" type="varchar(64)"/>
+            <column name="status" type="varchar(32)" defaultValue="DRAFT"/>
+            <column name="created_date" type="timestamp"/>
+            <column name="last_modified_date" type="timestamp"/>
+        </createTable>
+        <addForeignKeyConstraint baseTableName="semantic_model" baseColumnNames="object_id" referencedTableName="semantic_business_object" referencedColumnNames="id" constraintName="fk_semantic_model_object"/>
+        <createIndex tableName="semantic_model" indexName="idx_semantic_model_object"><column name="object_id"/></createIndex>
+        <createIndex tableName="semantic_model" indexName="idx_semantic_model_type"><column name="type"/></createIndex>
+    </changeSet>
+
+    <changeSet id="20260501_02_semantic_generated_artifact" author="platform">
+        <preConditions onFail="MARK_RAN">
+            <not><tableExists tableName="semantic_generated_artifact"/></not>
+        </preConditions>
+        <createTable tableName="semantic_generated_artifact">
+            <column name="id" type="uuid"><constraints primaryKey="true" nullable="false"/></column>
+            <column name="model_id" type="uuid"/>
+            <column name="artifact_type" type="varchar(64)"/>
+            <column name="path" type="varchar(512)"/>
+            <column name="content" type="text"/>
+            <column name="status" type="varchar(32)" defaultValue="DRAFT"/>
+            <column name="created_date" type="timestamp"/>
+            <column name="last_modified_date" type="timestamp"/>
+        </createTable>
+        <addForeignKeyConstraint baseTableName="semantic_generated_artifact" baseColumnNames="model_id" referencedTableName="semantic_model" referencedColumnNames="id" constraintName="fk_semantic_artifact_model"/>
+        <createIndex tableName="semantic_generated_artifact" indexName="idx_semantic_artifact_model"><column name="model_id"/></createIndex>
+    </changeSet>
+
+    <changeSet id="20260501_02_semantic_subject_governance_reference" author="platform">
+        <preConditions onFail="MARK_RAN">
+            <tableExists tableName="semantic_subject_domain"/>
+            <not><columnExists tableName="semantic_subject_domain" columnName="governance_domain_id"/></not>
+        </preConditions>
+        <addColumn tableName="semantic_subject_domain">
+            <column name="governance_domain_id" type="uuid"/>
+            <column name="governance_domain_code" type="varchar(128)"/>
+            <column name="governance_domain_name" type="varchar(128)"/>
+        </addColumn>
+        <createIndex tableName="semantic_subject_domain" indexName="idx_semantic_subject_governance_domain">
+            <column name="governance_domain_id"/>
+        </createIndex>
+    </changeSet>
+
+    <changeSet id="20260501_02_semantic_model_dimension" author="platform">
+        <preConditions onFail="MARK_RAN">
+            <not><tableExists tableName="semantic_model_dimension"/></not>
+        </preConditions>
+        <createTable tableName="semantic_model_dimension">
+            <column name="id" type="uuid"><constraints primaryKey="true" nullable="false"/></column>
+            <column name="model_id" type="uuid"><constraints nullable="false"/></column>
+            <column name="dimension_id" type="uuid"><constraints nullable="false"/></column>
+            <column name="sort_order" type="int" defaultValueNumeric="0"/>
+            <column name="created_date" type="timestamp"/>
+            <column name="last_modified_date" type="timestamp"/>
+        </createTable>
+        <addForeignKeyConstraint baseTableName="semantic_model_dimension" baseColumnNames="model_id" referencedTableName="semantic_model" referencedColumnNames="id" constraintName="fk_semantic_model_dimension_model"/>
+        <addForeignKeyConstraint baseTableName="semantic_model_dimension" baseColumnNames="dimension_id" referencedTableName="semantic_dimension" referencedColumnNames="id" constraintName="fk_semantic_model_dimension_dimension"/>
+        <addUniqueConstraint tableName="semantic_model_dimension" columnNames="model_id, dimension_id" constraintName="uk_semantic_model_dimension"/>
+        <createIndex tableName="semantic_model_dimension" indexName="idx_semantic_model_dimension_model"><column name="model_id"/></createIndex>
+    </changeSet>
+
+    <changeSet id="20260501_02_semantic_model_metric" author="platform">
+        <preConditions onFail="MARK_RAN">
+            <not><tableExists tableName="semantic_model_metric"/></not>
+        </preConditions>
+        <createTable tableName="semantic_model_metric">
+            <column name="id" type="uuid"><constraints primaryKey="true" nullable="false"/></column>
+            <column name="model_id" type="uuid"><constraints nullable="false"/></column>
+            <column name="metric_id" type="uuid"><constraints nullable="false"/></column>
+            <column name="sort_order" type="int" defaultValueNumeric="0"/>
+            <column name="created_date" type="timestamp"/>
+            <column name="last_modified_date" type="timestamp"/>
+        </createTable>
+        <addForeignKeyConstraint baseTableName="semantic_model_metric" baseColumnNames="model_id" referencedTableName="semantic_model" referencedColumnNames="id" constraintName="fk_semantic_model_metric_model"/>
+        <addForeignKeyConstraint baseTableName="semantic_model_metric" baseColumnNames="metric_id" referencedTableName="semantic_metric" referencedColumnNames="id" constraintName="fk_semantic_model_metric_metric"/>
+        <addUniqueConstraint tableName="semantic_model_metric" columnNames="model_id, metric_id" constraintName="uk_semantic_model_metric"/>
+        <createIndex tableName="semantic_model_metric" indexName="idx_semantic_model_metric_model"><column name="model_id"/></createIndex>
+    </changeSet>
+
+    <changeSet id="20260501_02_semantic_model_review_columns" author="platform">
+        <preConditions onFail="MARK_RAN">
+            <tableExists tableName="semantic_model"/>
+            <not><columnExists tableName="semantic_model" columnName="review_status"/></not>
+        </preConditions>
+        <addColumn tableName="semantic_model">
+            <column name="review_status" type="varchar(32)" defaultValue="DRAFT"/>
+            <column name="submitted_by" type="varchar(128)"/>
+            <column name="submitted_at" type="timestamp"/>
+            <column name="reviewed_by" type="varchar(128)"/>
+            <column name="reviewed_at" type="timestamp"/>
+            <column name="review_comment" type="varchar(2048)"/>
+        </addColumn>
+        <createIndex tableName="semantic_model" indexName="idx_semantic_model_review_status">
+            <column name="review_status"/>
+        </createIndex>
+    </changeSet>
+
+    <changeSet id="20260501_02_semantic_model_review_log" author="platform">
+        <preConditions onFail="MARK_RAN">
+            <not><tableExists tableName="semantic_model_review_log"/></not>
+        </preConditions>
+        <createTable tableName="semantic_model_review_log">
+            <column name="id" type="uuid"><constraints primaryKey="true" nullable="false"/></column>
+            <column name="model_id" type="uuid"><constraints nullable="false"/></column>
+            <column name="action" type="varchar(32)"><constraints nullable="false"/></column>
+            <column name="actor" type="varchar(128)"/>
+            <column name="comment" type="varchar(2048)"/>
+            <column name="created_date" type="timestamp"/>
+        </createTable>
+        <addForeignKeyConstraint baseTableName="semantic_model_review_log" baseColumnNames="model_id" referencedTableName="semantic_model" referencedColumnNames="id" constraintName="fk_semantic_review_log_model"/>
+        <createIndex tableName="semantic_model_review_log" indexName="idx_semantic_review_log_model"><column name="model_id"/></createIndex>
+    </changeSet>
+
+    <changeSet id="20260501_02_semantic_model_run" author="platform">
+        <preConditions onFail="MARK_RAN">
+            <not><tableExists tableName="semantic_model_run"/></not>
+        </preConditions>
+        <createTable tableName="semantic_model_run">
+            <column name="id" type="uuid"><constraints primaryKey="true" nullable="false"/></column>
+            <column name="model_id" type="uuid"><constraints nullable="false"/></column>
+            <column name="run_type" type="varchar(32)" defaultValue="DBT_RUN"/>
+            <column name="selector" type="varchar(512)"/>
+            <column name="dag_id" type="varchar(256)"/>
+            <column name="external_run_id" type="varchar(256)"/>
+            <column name="status" type="varchar(32)" defaultValue="SUBMITTED"/>
+            <column name="triggered_by" type="varchar(128)"/>
+            <column name="started_at" type="timestamp"/>
+            <column name="finished_at" type="timestamp"/>
+            <column name="duration_ms" type="bigint"/>
+            <column name="message" type="varchar(2048)"/>
+            <column name="payload_json" type="text"/>
+            <column name="created_date" type="timestamp"/>
+            <column name="last_modified_date" type="timestamp"/>
+        </createTable>
+        <addForeignKeyConstraint baseTableName="semantic_model_run" baseColumnNames="model_id" referencedTableName="semantic_model" referencedColumnNames="id" constraintName="fk_semantic_model_run_model"/>
+        <createIndex tableName="semantic_model_run" indexName="idx_semantic_model_run_model"><column name="model_id"/></createIndex>
+        <createIndex tableName="semantic_model_run" indexName="idx_semantic_model_run_status"><column name="status"/></createIndex>
+        <createIndex tableName="semantic_model_run" indexName="idx_semantic_model_run_external"><column name="external_run_id"/></createIndex>
+    </changeSet>
+</databaseChangeLog>

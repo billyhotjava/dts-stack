@@ -1,7 +1,7 @@
 # Sprint-23: OpenMetadata 主目录与 DTS 治理扩展资产门户
 
 **时间**: 2026-05  
-**状态**: PLANNED  
+**状态**: IN_PROGRESS（主功能已补齐，剩现场截图/发布证据归档）
 **类型**: Implementation（OpenMetadata 技术资产主目录 + DTS 治理扩展层 + 统一血缘身份）
 **目标**: 将数据资产门户从“DTS 弱 catalog 主导、OpenMetadata 旁路预览”升级为“OpenMetadata 技术资产主数据 + DTS 治理扩展与权限控制”的统一资产目录。
 
@@ -38,10 +38,10 @@ DTS = 治理扩展层 + 权限/审计/业务血缘覆盖层
 |----|---------|--------:|--------|------|
 | F1 | OpenMetadata 资产缓存与同步模型 | 5 | P0 | DONE |
 | F2 | DTS 治理扩展层 | 5 | P0 | DONE |
-| F3 | 资产映射、迁移与兼容 | 5 | P0 | IN_PROGRESS |
+| F3 | 资产映射、迁移与兼容 | 5 | P0 | DONE |
 | F4 | 资产聚合 API 与权限过滤 | 5 | P0 | DONE |
-| F5 | 数据资产门户重构 | 5 | P0 | IN_PROGRESS |
-| F6 | 质量、血缘与技术详情融合 | 6 | P0 | IN_PROGRESS |
+| F5 | 数据资产门户重构 | 5 | P0 | DONE |
+| F6 | 质量、血缘与技术详情融合 | 6 | P0 | DONE |
 | F7 | 验收、发布与回滚 | 5 | P0 | IN_PROGRESS |
 
 **合计 36 个 task。**
@@ -135,14 +135,14 @@ Sprint-20 Lineage Graph ──────────────────�
 
 ## 完成标准
 
-- [ ] OpenMetadata 中存在的表能进入 DTS 数据资产列表，即使尚未完成 DTS 治理扩展。
-- [ ] 资产列表可区分 `已治理`、`待认领`、`待定级`、`OpenMetadata 未同步`、`本地遗留` 状态。
-- [ ] 资产详情技术信息来自 OM cache，治理属性来自 DTS extension。
-- [ ] 旧 `catalog_dataset` 数据完成映射，存量密级/部门/生命周期不丢失。
-- [ ] 质量、血缘、字段详情使用同一资产身份解析，不再各自拼 FQN。
-- [ ] 血缘图能展示 OpenMetadata 技术血缘和 DTS 业务/运行节点，并标注来源。
-- [ ] OpenMetadata 不可用时，已同步 cache 仍可支撑资产列表和详情。
-- [ ] 回滚后旧资产列表、旧详情和本地治理属性仍可读取。
+- [x] OpenMetadata 中存在的表能进入 DTS 数据资产列表，即使尚未完成 DTS 治理扩展。
+- [x] 资产列表可区分 `已治理`、`待认领`、`待定级`、`OpenMetadata 未同步`、`本地遗留` 状态。
+- [x] 资产详情技术信息来自 OM cache，治理属性来自 DTS extension。
+- [x] 旧 `catalog_dataset` 数据完成映射，存量密级/部门/生命周期不丢失。
+- [x] 质量、血缘、字段详情使用同一资产身份解析，不再各自拼 FQN。
+- [x] 血缘图能展示 OpenMetadata 技术血缘和 DTS 业务/运行节点，并标注来源。
+- [x] OpenMetadata 不可用时，已同步 cache 仍可支撑资产列表和详情。
+- [x] 回滚后旧资产列表、旧详情和本地治理属性仍可读取。
 
 ## 风险
 
@@ -181,3 +181,9 @@ Sprint-20 Lineage Graph ──────────────────�
 - 2026-04-30：启动 F1/F2/F3/F4 后端基础切片，新增 `om_asset_cache`、`om_column_cache`、`catalog_asset_extension`、`catalog_asset_mapping`、`om_lineage_cache` changelog；新增 JPA 实体和 repository；新增 OpenMetadata table/column cache 同步服务、自动 legacy dataset 映射和 governance extension 初始化；新增 `/api/catalog/assets-v2` 聚合列表/详情和 `/sync` 手动同步入口；前端 API client 预留 `listCatalogAssetsV2`、`getCatalogAssetV2`、`syncCatalogAssetsV2`。
 - 2026-05-01：启动 F5 前端贯通切片，数据资产地图改读 `/api/catalog/assets-v2`，筛选参数透传到聚合 API，新增“同步OpenMetadata”操作；`/catalog/datasets/:id` 详情页保留旧 `catalog_dataset` 优先路径，失败时回退到 OpenMetadata cache 详情，未映射资产可查看 OM 字段，已映射资产继续进入 DTS 血缘和治理健康。
 - 2026-05-01：补齐治理扩展更新、映射诊断、OM lineage cache 同步与查询、资产门户 v2 回退开关、前端待治理/映射异常筛选和 smoke 脚本；`VITE_CATALOG_ASSET_PORTAL_V2=false` 可回退旧 `catalog_dataset` 资产列表主路径。
+- 2026-05-01：补齐资产详情技术页（profile/raw metadata）、OM 资产治理扩展编辑入口和 `securityPolicyRefs` 聚合 DTO；新增发布/回滚 Runbook。`pnpm build` 与 `dts-platform ./mvnw -q -DskipTests compile` 通过。
+
+## 剩余收口项
+
+- F7 仍需在目标环境归档浏览器截图、SQL 映射统计和发布记录。
+- `lineage-quality-smoke.sh` 需要带现场 `DTS_OM_ASSET_ID` / `DTS_LEGACY_DATASET_ID` 执行，归档到 `it/evidence/<date>-<env>/`。

@@ -148,6 +148,14 @@
           "title": "逻辑建模（SQL）"
         },
         {
+          "key": "semantic-modeling",
+          "path": "semantic-modeling",
+          "icon": "solar:chart-square-bold-duotone",
+          "titleKey": "sys.nav.portal.studioSemanticModeling",
+          "title": "指标语义建模",
+          "externalLink": "/modeling/semantic-center"
+        },
+        {
           "key": "scripts",
           "path": "scripts",
           "icon": "local:ic-scripts",

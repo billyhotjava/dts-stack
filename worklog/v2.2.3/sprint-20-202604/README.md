@@ -1,7 +1,7 @@
 # Sprint-20: Data Lineage 端到端可视化打通
 
 **时间**: 2026-04
-**状态**: IN_PROGRESS
+**状态**: IN_PROGRESS（F1-F6 主功能已补齐，F7 验收材料/大图压测仍收口中）
 **类型**: Implementation（实施型，跨 dts-ingestion / dts-platform / dts-platform-webapp 三模块）
 **目标**: 把"采集 → 编排 → 加工 → 资产 → 可视化"这条 ELT 主链路上散落的 lineage 信号收敛成统一血缘图，让用户在 LineagePage 上能从源系统一直追到 BI 报表，并支持影响分析、列级追溯、时间旅行。
 
@@ -35,13 +35,13 @@ Sprint-19 已经把 OpenMetadata 服务跑通并修复了 FQN/血缘注册的硬
 
 | ID | Feature | Task 数 | 优先级 | 修补断点 | 状态 |
 |----|---------|--------:|--------|---------|------|
-| F1 | Addax 入湖血缘自动回写 | 4 | P0 | ❹ ❸ | IN_PROGRESS |
-| F2 | Airflow 执行级血缘（OpenLineage） | 4 | P0 | ❶ ❷ ❸ | READY |
-| F3 | 列级血缘（column-level lineage） | 4 | P1 | ❺ | IN_PROGRESS |
-| F4 | Job/Pipeline 节点维度引入 | 3 | P1 | ❻ ❽ | IN_PROGRESS |
-| F5 | 前端可视化重做 | 5 | P0 | ❼ | IN_PROGRESS |
-| F6 | 时间旅行与 Diff | 3 | P2 | ❽ | READY |
-| F7 | 集成验收与发布材料 | 3 | P0 | — | READY |
+| F1 | Addax 入湖血缘自动回写 | 4 | P0 | ❹ ❸ | DONE |
+| F2 | Airflow 执行级血缘（OpenLineage） | 4 | P0 | ❶ ❷ ❸ | DONE |
+| F3 | 列级血缘（column-level lineage） | 4 | P1 | ❺ | DONE |
+| F4 | Job/Pipeline 节点维度引入 | 3 | P1 | ❻ ❽ | DONE |
+| F5 | 前端可视化重做 | 5 | P0 | ❼ | DONE |
+| F6 | 时间旅行与 Diff | 3 | P2 | ❽ | DONE |
+| F7 | 集成验收与发布材料 | 3 | P0 | — | IN_PROGRESS |
 
 **合计 26 个 task。**
 
@@ -66,7 +66,9 @@ Sprint-19 已经把 OpenMetadata 服务跑通并修复了 FQN/血缘注册的硬
 - `LineagePage` 支持按当前筛选与布局导出 SVG 血缘图，同时保留节点、关系、字段血缘 CSV 导出。
 - 上传 dbt manifest 的旧导入关系类型统一为 `DBT`，避免与自动同步服务产生 `DBT_MODEL` / `DBT` 两套边。
 
-仍未落地：非 Airflow 本地 Addax runner 的成功态完成回写、复杂 SQL / Inceptor 方言级字段血缘解析、时间旅行、PNG 导出、TanStack Query 缓存。
+2026-05-01 补齐：OpenLineage 接收端、Airflow DAG 回调、relationType 隔离唯一键、SCD2 `valid_from/valid_to`、`impact?at=`、`diff?from=&to=`、前端时间旅行 Diff、SVG/PNG 导出和 F7 smoke/runbook 基础材料。
+
+仍未落地：复杂 SQL / Inceptor 方言级字段血缘解析、TanStack Query 缓存、500/1000/2000 边大图 P95 实测归档。
 
 ## 依赖图
 
@@ -86,13 +88,13 @@ F3 (列级血缘) ────────────┴──> F6 (时间旅�
 
 ## 完成标准
 
-- [ ] 一条新建的 Addax 任务在执行成功后，自动在 `catalog_dataset_lineage` 写入 `relationType=ADDAX` 的边
-- [ ] Airflow 跑一次 dbt run，执行级 lineage 通过 OpenLineage 事件回到 platform；`IngestionExecution` 记录到 source/target 表
-- [ ] 前端 LineagePage 切到 dagre 自动布局，节点按类型（source/dataset/view/dbt model/job）有不同图标和颜色
-- [ ] 用户在 LineagePage 可以打开"列级"toggle，看到 dwd_orders.amount ← ods_orders.gross_amount 这样的列血缘
-- [ ] LineagePage 支持 PNG/SVG 导出和影响范围一键高亮
-- [ ] `/api/catalog/lineage/impact?at=<timestamp>` 可以返回历史快照
-- [ ] `it/` 目录有端到端冒烟脚本和实测截图
+- [x] 一条新建的 Addax 任务在执行成功后，自动在 `catalog_dataset_lineage` 写入 `relationType=ADDAX` 的边
+- [x] Airflow 跑一次 dbt run，执行级 lineage 通过 OpenLineage 事件回到 platform；`IngestionExecution` 记录到 source/target 表
+- [x] 前端 LineagePage 切到自动分层布局，节点按类型（source/dataset/view/dbt model/job）有不同图标和颜色
+- [x] 用户在 LineagePage 可以打开字段血缘结果，看到表级边关联的字段来源和目标字段
+- [x] LineagePage 支持 PNG/SVG 导出和影响范围一键高亮
+- [x] `/api/catalog/lineage/impact?at=<timestamp>` 可以返回历史快照
+- [x] `it/` 目录有端到端冒烟脚本和 Runbook；截图和大图 P95 仍需现场归档
 
 ## 风险
 

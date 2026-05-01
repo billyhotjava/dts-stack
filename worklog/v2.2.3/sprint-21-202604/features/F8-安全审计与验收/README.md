@@ -55,6 +55,7 @@
 - 新增 `it/evidence/` 证据目录模板，包含验收记录模板和 PostgreSQL/MySQL/Oracle/SQL Server/DM8 方言验证矩阵。
 - 新增 `InfraDataSourceResourceTest`，覆盖用户 principal 即使持服务令牌也不能读取 `runtime-detail`、伪造服务 principal 但服务令牌错误被拒绝、内部服务 principal + 数据库托管服务令牌才能读取运行时 secrets。
 - 新增 `PlatformInfraClientTest`，锁定 ingestion 侧读取数据源凭据必须走 `/runtime-detail`，并从 `platform.serviceToken` 集成配置携带 `X-DTS-Service-Token`。
+- 2026-05-01 复核：`connector-center-smoke.sh`、`file-source-smoke.sh`、`credential-redaction-audit.sh` 已通过 `bash -n`，证据模板和方言矩阵已存在；T06 仍保留 `IN_PROGRESS`，等待真实数据库源、文件源和凭据哨兵现场输出归档。
 
 ## 端到端验收路径
 

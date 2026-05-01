@@ -60,6 +60,12 @@
     "requiredRoles": ["DEPT_DATA_OWNER", "DEPT_LEADER", "INST_DATA_OWNER", "INST_LEADER", "ADMIN", "OP_ADMIN"]
   },
   {
+    "code": "sys.nav.portal.studioSemanticModeling",
+    "title": "指标语义建模",
+    "route": "/modeling/semantic-center",
+    "requiredRoles": ["DEPT_DATA_OWNER", "DEPT_LEADER", "INST_DATA_OWNER", "INST_LEADER", "ADMIN", "OP_ADMIN"]
+  },
+  {
     "code": "sys.nav.portal.studioScripts",
     "title": "脚本开发（Python/Spark）",
     "route": "/explore/etl/transform",

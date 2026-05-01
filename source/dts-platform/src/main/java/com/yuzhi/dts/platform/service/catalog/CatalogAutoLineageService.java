@@ -7,6 +7,7 @@ import com.yuzhi.dts.platform.repository.catalog.CatalogDatasetRepository;
 import com.yuzhi.dts.platform.service.catalog.lineage.SqlTableReferenceExtractor;
 import com.yuzhi.dts.platform.service.catalog.lineage.SqlTableReferenceExtractor.TableRef;
 import jakarta.transaction.Transactional;
+import java.time.Instant;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
@@ -76,7 +77,11 @@ public class CatalogAutoLineageService {
             if (upstreamId == null) {
                 continue;
             }
-            var existing = lineageRepository.findFirstByUpstreamDatasetIdAndDownstreamDatasetId(upstreamId, downstream.getId());
+            var existing = lineageRepository.findFirstByUpstreamDatasetIdAndDownstreamDatasetIdAndRelationTypeIgnoreCaseAndValidToIsNull(
+                upstreamId,
+                downstream.getId(),
+                RELATION_AUTO_VIEW
+            );
             if (existing.isPresent()) {
                 retained++;
                 continue;
@@ -89,6 +94,8 @@ public class CatalogAutoLineageService {
             link.setDownstreamAssetType("VIEW");
             link.setDirection("UPSTREAM_TO_DOWNSTREAM");
             link.setNotes("auto:view");
+            link.setVerificationStatus("DECLARED");
+            link.setValidFrom(Instant.now());
             lineageRepository.save(link);
             created++;
         }
@@ -111,7 +118,10 @@ public class CatalogAutoLineageService {
         if (downstreamId == null) {
             return 0;
         }
-        List<CatalogDatasetLineage> existingAuto = lineageRepository.findByDownstreamDatasetIdAndRelationTypeIgnoreCase(downstreamId, RELATION_AUTO_VIEW);
+        List<CatalogDatasetLineage> existingAuto = lineageRepository.findCurrentByDownstreamDatasetIdAndRelationTypeIgnoreCase(
+            downstreamId,
+            RELATION_AUTO_VIEW
+        );
         if (existingAuto.isEmpty()) {
             return 0;
         }
@@ -124,7 +134,8 @@ public class CatalogAutoLineageService {
             if (upstream != null && keepUpstreamIds != null && keepUpstreamIds.contains(upstream)) {
                 continue;
             }
-            lineageRepository.delete(link);
+            link.setValidTo(Instant.now());
+            lineageRepository.save(link);
             removed++;
         }
         return removed;

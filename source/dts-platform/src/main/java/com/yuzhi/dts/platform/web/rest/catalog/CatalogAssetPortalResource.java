@@ -59,6 +59,7 @@ public class CatalogAssetPortalResource {
         @RequestParam(value = "governanceStatus", required = false) String governanceStatus,
         @RequestParam(value = "matchStatus", required = false) String matchStatus,
         @RequestParam(value = "domainId", required = false) UUID domainId,
+        @RequestParam(value = "domainUnassigned", required = false, defaultValue = "false") boolean domainUnassigned,
         @RequestParam(value = "page", required = false, defaultValue = "0") int page,
         @RequestParam(value = "size", required = false, defaultValue = "20") int size,
         @RequestHeader(value = "X-Active-Dept", required = false) String activeDept
@@ -78,6 +79,7 @@ public class CatalogAssetPortalResource {
                 governanceStatus,
                 matchStatus,
                 domainId,
+                domainUnassigned,
                 page,
                 size
             ),

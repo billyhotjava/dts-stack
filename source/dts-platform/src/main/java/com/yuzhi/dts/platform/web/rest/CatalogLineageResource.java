@@ -116,7 +116,7 @@ public class CatalogLineageResource {
         Set<String> layerFilters = parseLayerFilters(layers);
         Instant changedSince = resolveChangedSince(changedWithinHours);
         List<CatalogDatasetLineage> links = lineageRepo
-            .findByEitherSide(datasetId)
+            .findByEitherSideAt(datasetId, Instant.now())
             .stream()
             .filter(link -> matchProject(link, projectName) && matchLineageFilters(link, datasetId, layerFilters, sourceId, changedSince, effDept))
             .toList();
@@ -154,6 +154,7 @@ public class CatalogLineageResource {
         @RequestParam(name = "sourceId", required = false) UUID sourceId,
         @RequestParam(name = "withJobs", required = false, defaultValue = "false") boolean withJobs,
         @RequestParam(name = "withColumns", required = false, defaultValue = "false") boolean withColumns,
+        @RequestParam(name = "at", required = false) String at,
         @RequestHeader(value = "X-Active-Dept", required = false) String activeDept
     ) {
         CatalogDataset root = datasetRepo.findById(datasetId).orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "dataset not found"));
@@ -164,6 +165,7 @@ public class CatalogLineageResource {
 
         Set<String> layerFilters = parseLayerFilters(layers);
         Instant changedSince = resolveChangedSince(changedWithinHours);
+        Instant snapshotAt = resolveSnapshotAt(at);
         int safeDepth = Math.max(1, Math.min(depth, 10));
         String dir = StringUtils.hasText(direction) ? direction.trim().toUpperCase(Locale.ROOT) : "BOTH";
         boolean upstreamEnabled = "UPSTREAM".equals(dir) || "BOTH".equals(dir);
@@ -181,7 +183,7 @@ public class CatalogLineageResource {
             }
             Set<UUID> next = new LinkedHashSet<>();
             for (UUID current : frontier) {
-                List<CatalogDatasetLineage> direct = lineageRepo.findByEitherSide(current);
+                List<CatalogDatasetLineage> direct = lineageRepo.findByEitherSideAt(current, snapshotAt);
                 for (CatalogDatasetLineage edge : direct) {
                     if (edge == null || !matchProject(edge, projectName)) {
                         continue;
@@ -324,6 +326,8 @@ public class CatalogLineageResource {
         payload.put("sourceId", sourceId != null ? sourceId.toString() : null);
         payload.put("withJobs", withJobs);
         payload.put("withColumns", withColumns);
+        payload.put("snapshotAt", snapshotAt.toString());
+        payload.put("timeTravel", StringUtils.hasText(at));
         payload.put("nodeCount", nodeDtos.size());
         payload.put("edgeCount", edgeDtos.size());
         payload.put(
@@ -350,9 +354,136 @@ public class CatalogLineageResource {
             "CATALOG_LINEAGE_IMPACT_VIEW",
             AuditStage.SUCCESS,
             datasetId.toString(),
-            Map.of("summary", "查看影响分析", "direction", dir, "depth", safeDepth)
+            Map.of("summary", "查看影响分析", "direction", dir, "depth", safeDepth, "snapshotAt", snapshotAt.toString())
         );
         return ApiResponses.ok(payload);
+    }
+
+    @GetMapping("/diff")
+    public ApiResponse<Map<String, Object>> diff(
+        @RequestParam UUID datasetId,
+        @RequestParam String from,
+        @RequestParam String to,
+        @RequestParam(name = "direction", required = false, defaultValue = "BOTH") String direction,
+        @RequestParam(name = "depth", required = false, defaultValue = "3") int depth,
+        @RequestParam(name = "projectName", required = false) String projectName,
+        @RequestHeader(value = "X-Active-Dept", required = false) String activeDept
+    ) {
+        CatalogDataset root = datasetRepo.findById(datasetId).orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "dataset not found"));
+        String effDept = activeDept != null ? activeDept : claim("dept_code");
+        if (!accessChecker.canRead(root) || !accessChecker.departmentAllowed(root, effDept)) {
+            return ApiResponses.error(com.yuzhi.dts.platform.security.policy.PolicyErrorCodes.RESOURCE_NOT_VISIBLE, "Access denied for dataset");
+        }
+        Instant fromAt = resolveSnapshotAt(from);
+        Instant toAt = resolveSnapshotAt(to);
+        if (fromAt.isAfter(toAt)) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "from must be before or equal to to");
+        }
+        String dir = StringUtils.hasText(direction) ? direction.trim().toUpperCase(Locale.ROOT) : "BOTH";
+        int safeDepth = Math.max(1, Math.min(depth, 10));
+        Map<String, Map<String, Object>> left = edgeMapAt(datasetId, dir, safeDepth, projectName, fromAt, effDept);
+        Map<String, Map<String, Object>> right = edgeMapAt(datasetId, dir, safeDepth, projectName, toAt, effDept);
+
+        List<Map<String, Object>> added = right
+            .entrySet()
+            .stream()
+            .filter(entry -> !left.containsKey(entry.getKey()))
+            .map(Map.Entry::getValue)
+            .toList();
+        List<Map<String, Object>> removed = left
+            .entrySet()
+            .stream()
+            .filter(entry -> !right.containsKey(entry.getKey()))
+            .map(Map.Entry::getValue)
+            .toList();
+        List<Map<String, Object>> unchanged = right
+            .entrySet()
+            .stream()
+            .filter(entry -> left.containsKey(entry.getKey()))
+            .map(Map.Entry::getValue)
+            .toList();
+
+        Map<String, Object> payload = new LinkedHashMap<>();
+        payload.put("datasetId", datasetId.toString());
+        payload.put("from", fromAt.toString());
+        payload.put("to", toAt.toString());
+        payload.put("direction", dir);
+        payload.put("depth", safeDepth);
+        payload.put("projectName", trimToNull(projectName));
+        payload.put("addedCount", added.size());
+        payload.put("removedCount", removed.size());
+        payload.put("unchangedCount", unchanged.size());
+        payload.put("addedEdges", added);
+        payload.put("removedEdges", removed);
+        payload.put("unchangedEdges", unchanged);
+        audit.auditAction(
+            "CATALOG_LINEAGE_DIFF_VIEW",
+            AuditStage.SUCCESS,
+            datasetId.toString(),
+            Map.of("summary", "查看血缘时间差异", "from", fromAt.toString(), "to", toAt.toString(), "direction", dir, "depth", safeDepth)
+        );
+        return ApiResponses.ok(payload);
+    }
+
+    private Map<String, Map<String, Object>> edgeMapAt(
+        UUID datasetId,
+        String dir,
+        int safeDepth,
+        String projectName,
+        Instant snapshotAt,
+        String effDept
+    ) {
+        boolean upstreamEnabled = "UPSTREAM".equals(dir) || "BOTH".equals(dir);
+        boolean downstreamEnabled = "DOWNSTREAM".equals(dir) || "BOTH".equals(dir);
+        Set<UUID> visited = new LinkedHashSet<>();
+        Set<CatalogDatasetLineage> edges = new LinkedHashSet<>();
+        Set<UUID> frontier = new LinkedHashSet<>();
+        visited.add(datasetId);
+        frontier.add(datasetId);
+        for (int level = 0; level < safeDepth; level++) {
+            if (frontier.isEmpty()) {
+                break;
+            }
+            Set<UUID> next = new LinkedHashSet<>();
+            for (UUID current : frontier) {
+                for (CatalogDatasetLineage edge : lineageRepo.findByEitherSideAt(current, snapshotAt)) {
+                    if (edge == null || !matchProject(edge, projectName)) {
+                        continue;
+                    }
+                    UUID up = edge.getUpstreamDatasetId();
+                    UUID down = edge.getDownstreamDatasetId();
+                    boolean include = false;
+                    if (upstreamEnabled && current.equals(down)) {
+                        include = true;
+                    }
+                    if (downstreamEnabled && current.equals(up)) {
+                        include = true;
+                    }
+                    if (!include) {
+                        continue;
+                    }
+                    edges.add(edge);
+                    if (up != null && !visited.contains(up)) {
+                        visited.add(up);
+                        next.add(up);
+                    }
+                    if (down != null && !visited.contains(down)) {
+                        visited.add(down);
+                        next.add(down);
+                    }
+                }
+            }
+            frontier = next;
+        }
+        Map<String, Map<String, Object>> result = new LinkedHashMap<>();
+        for (CatalogDatasetLineage edge : edges) {
+            Map<String, Object> dto = toEdgeDto(edge, effDept);
+            if (dto == null) {
+                continue;
+            }
+            result.put(edgeKey(dto), dto);
+        }
+        return result;
     }
 
     private List<Map<String, Object>> loadColumnLineageDtos(List<Map<String, Object>> datasetEdges) {
@@ -688,7 +819,7 @@ public class CatalogLineageResource {
         edge.put("downstreamName", downstreamName);
         edge.put("projectName", base.get("projectName"));
         edge.put("notes", base.get("notes"));
-        edge.put("verificationStatus", base.get("verificationStatus"));
+        edge.put("verificationStatus", edgeVerificationStatus(base.get("verificationStatus")));
         edge.put("lastExecutionId", base.get("lastExecutionId"));
         edge.put("lastExecutionStatus", base.get("lastExecutionStatus"));
         edge.put("lastObservedAt", base.get("lastObservedAt"));
@@ -713,6 +844,32 @@ public class CatalogLineageResource {
                     Collectors.counting()
                 )
             );
+    }
+
+    private String edgeVerificationStatus(Object value) {
+        String status = stringValue(value);
+        return StringUtils.hasText(status) ? status.trim().toUpperCase(Locale.ROOT) : "DECLARED";
+    }
+
+    private String jobVerificationStatus(CatalogLineageJob job) {
+        if (job == null) {
+            return "DECLARED";
+        }
+        String executionStatus = job.getLastExecutionStatus();
+        if ("success".equalsIgnoreCase(executionStatus)) {
+            return "VERIFIED";
+        }
+        if (StringUtils.hasText(executionStatus)) {
+            return "KNOWN_UNVERIFIED";
+        }
+        String status = job.getStatus();
+        if ("verified".equalsIgnoreCase(status)) {
+            return "VERIFIED";
+        }
+        if ("known_unverified".equalsIgnoreCase(status) || "failed".equalsIgnoreCase(status) || "running".equalsIgnoreCase(status)) {
+            return "KNOWN_UNVERIFIED";
+        }
+        return "DECLARED";
     }
 
     private String jobTypeForRelation(String relationType) {
@@ -805,6 +962,7 @@ public class CatalogLineageResource {
         Map<String, Object> data = new LinkedHashMap<>();
         data.put("lineageJobId", job.getId() != null ? job.getId().toString() : null);
         data.put("projectName", job.getProjectName());
+        data.put("verificationStatus", jobVerificationStatus(job));
         data.put("lastExecutionId", job.getLastExecutionId());
         data.put("lastExecutionStatus", job.getLastExecutionStatus());
         data.put("lastObservedAt", job.getLastObservedAt());
@@ -906,13 +1064,17 @@ public class CatalogLineageResource {
         datasetRepo.findById(body.upstreamDatasetId).orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "upstream dataset not found"));
         datasetRepo.findById(body.downstreamDatasetId).orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "downstream dataset not found"));
 
+        String relationType = trimToNull(body.relationType);
+        String effectiveRelationType = relationType != null ? relationType : "MANUAL";
         CatalogDatasetLineage existingLink = lineageRepo
-            .findFirstByUpstreamDatasetIdAndDownstreamDatasetId(body.upstreamDatasetId, body.downstreamDatasetId)
+            .findFirstByUpstreamDatasetIdAndDownstreamDatasetIdAndRelationTypeIgnoreCaseAndValidToIsNull(
+                body.upstreamDatasetId,
+                body.downstreamDatasetId,
+                effectiveRelationType
+            )
             .orElse(null);
         if (existingLink != null) {
-            if (StringUtils.hasText(body.relationType)) {
-                existingLink.setRelationType(body.relationType.trim());
-            }
+            existingLink.setRelationType(effectiveRelationType);
             if (StringUtils.hasText(body.notes)) {
                 existingLink.setNotes(body.notes.trim());
             }
@@ -934,13 +1096,14 @@ public class CatalogLineageResource {
         CatalogDatasetLineage createdLink = new CatalogDatasetLineage();
         createdLink.setUpstreamDatasetId(body.upstreamDatasetId);
         createdLink.setDownstreamDatasetId(body.downstreamDatasetId);
-        String relationType = trimToNull(body.relationType);
-        createdLink.setRelationType(relationType != null ? relationType : "MANUAL");
+        createdLink.setRelationType(effectiveRelationType);
         createdLink.setNotes(trimToNull(body.notes));
         createdLink.setUpstreamAssetType(trimToNull(body.upstreamAssetType));
         createdLink.setDownstreamAssetType(trimToNull(body.downstreamAssetType));
         createdLink.setDirection(normalizeDirection(body.direction));
         createdLink.setProjectName(trimToNull(body.projectName));
+        createdLink.setVerificationStatus("DECLARED");
+        createdLink.setValidFrom(Instant.now());
         CatalogDatasetLineage saved = lineageRepo.save(createdLink);
         audit.auditAction("CATALOG_LINEAGE_EDIT", AuditStage.SUCCESS, saved.getId().toString(), Map.of("summary", "新增血缘关系"));
         return ApiResponses.ok(Map.of("id", saved.getId().toString(), "created", true));
@@ -1006,8 +1169,9 @@ public class CatalogLineageResource {
                 "AUTO_* lineage is generated by sync and will be rebuilt; use force=true only when you really want to remove it"
             );
         }
-        lineageRepo.delete(link);
-        audit.auditAction("CATALOG_LINEAGE_DELETE", AuditStage.SUCCESS, id.toString(), Map.of("summary", force ? "强制删除血缘关系" : "删除血缘关系"));
+        link.setValidTo(Instant.now());
+        lineageRepo.save(link);
+        audit.auditAction("CATALOG_LINEAGE_DELETE", AuditStage.SUCCESS, id.toString(), Map.of("summary", force ? "关闭血缘关系" : "关闭血缘关系"));
         return ApiResponses.ok(Boolean.TRUE);
     }
 
@@ -1047,13 +1211,23 @@ public class CatalogLineageResource {
         dto.put("direction", link.getDirection());
         dto.put("projectName", link.getProjectName());
         dto.put("lineageJobId", link.getLineageJobId() != null ? link.getLineageJobId().toString() : null);
-        dto.put("verificationStatus", link.getVerificationStatus());
+        dto.put("verificationStatus", edgeVerificationStatus(link.getVerificationStatus()));
         dto.put("lastExecutionId", link.getLastExecutionId());
         dto.put("lastExecutionStatus", link.getLastExecutionStatus());
         dto.put("lastObservedAt", link.getLastObservedAt());
         dto.put("lastVerifiedAt", link.getLastVerifiedAt());
+        dto.put("validFrom", link.getValidFrom());
+        dto.put("validTo", link.getValidTo());
         dto.put("lastModifiedAt", link.getLastModifiedDate());
         return dto;
+    }
+
+    private String edgeKey(Map<String, Object> edge) {
+        return (
+            defaultString(edge.get("upstreamDatasetId"), "_") + "|" +
+            defaultString(edge.get("downstreamDatasetId"), "_") + "|" +
+            defaultString(edge.get("relationType"), "UNKNOWN").toUpperCase(Locale.ROOT)
+        );
     }
 
     private String trimToNull(String value) {
@@ -1108,6 +1282,18 @@ public class CatalogLineageResource {
             return null;
         }
         return Instant.now().minusSeconds((long) hours * 3600L);
+    }
+
+    private Instant resolveSnapshotAt(String value) {
+        String text = trimToNull(value);
+        if (text == null) {
+            return Instant.now();
+        }
+        try {
+            return Instant.parse(text);
+        } catch (RuntimeException ex) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "invalid ISO-8601 instant: " + text);
+        }
     }
 
     private int normalizeChangedWindow(Integer changedWithinHours) {

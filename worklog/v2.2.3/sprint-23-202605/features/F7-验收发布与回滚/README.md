@@ -14,7 +14,7 @@
 | T01 | 迁移前数据检查和风险报告 | P0 | DONE | F1-F3 |
 | T02 | smoke 脚本：OM sync、mapping、asset API、portal、lineage、quality | P0 | DONE | F4-F6 |
 | T03 | feature flag 与旧路径回退 | P0 | DONE | F4,F5 |
-| T04 | 发布说明、升级步骤和回滚步骤 | P0 | IN_PROGRESS | T01-T03 |
+| T04 | 发布说明、升级步骤和回滚步骤 | P0 | DONE | T01-T03 |
 | T05 | 验收证据模板和现场 Runbook | P0 | DONE | T02 |
 
 ## 完成标准

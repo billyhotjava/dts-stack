@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { useParams } from "react-router";
-import { Button, Spin, Table, Tabs, Tag } from "antd";
+import { Alert, Button, Descriptions, Form, Input, Select, Spin, Switch, Table, Tabs, Tag, message } from "antd";
 import { ReactFlow, Background, Controls, type Node, type Edge } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
 import { useRouter } from "@/routes/hooks";
@@ -13,6 +13,7 @@ import {
 	getDatasetGovernanceHealth,
 	getDatasetIndicatorDeps,
 	syncCatalogAssetV2Lineage,
+	updateCatalogAssetV2Governance,
 } from "@/api/platformApi";
 
 export default function DatasetDetailPage() {
@@ -43,9 +44,20 @@ export default function DatasetDetailPage() {
 						hiveTable: asset.table,
 						domainId: asset.domainId,
 						description: asset.fqn,
+						governanceStatus: asset.governanceStatus,
+						matchStatus: asset.matchStatus,
+						matchReason: asset.matchReason,
+						syncStatus: asset.syncStatus,
+						syncMessage: asset.syncMessage,
+						service: asset.service,
+						schema: asset.schema,
+						columnCount: asset.columnCount,
+						securityPolicyRefs: asset.securityPolicyRefs,
 						__source: "openmetadata",
 						__legacyDatasetId: asset.legacyDatasetId,
 						__columns: Array.isArray(detail?.columns) ? detail.columns : [],
+						__rawJson: detail?.rawJson,
+						__profileJson: detail?.profileJson,
 					});
 				} catch {
 					setDataset(null);
@@ -107,12 +119,19 @@ export default function DatasetDetailPage() {
 						),
 					},
 					{
+						key: "technical",
+						label: "技术详情",
+						children: <DatasetTechnicalTab dataset={dataset} />,
+					},
+					{
 						key: "governance",
-						label: "治理健康",
-						children: dataset.__legacyDatasetId ? (
+						label: "治理扩展",
+						children: dataset.__source === "openmetadata" ? (
+							<OpenMetadataGovernanceTab dataset={dataset} onChanged={setDataset} />
+						) : dataset.__legacyDatasetId ? (
 							<DatasetGovernanceTab datasetId={String(dataset.__legacyDatasetId)} />
 						) : (
-							<div className="py-4 text-sm text-slate-500">未映射到DTS治理资产，暂无治理健康数据。</div>
+							<div className="py-4 text-sm text-slate-500">暂无治理健康数据。</div>
 						),
 					},
 					{
@@ -136,20 +155,180 @@ function DatasetOverviewTab({ dataset }: { dataset: Record<string, any> }) {
 			{dataset.__source === "openmetadata" && (
 				<Tag color="blue">OpenMetadata主目录</Tag>
 			)}
-			<div className="grid grid-cols-2 gap-4 text-sm">
-				<div><span className="text-slate-500">仓库分层：</span>{dataset.warehouseLayer ?? "-"}</div>
-				<div><span className="text-slate-500">密级：</span>{dataset.classification ?? "-"}</div>
-				<div><span className="text-slate-500">负责人：</span>{dataset.owner ?? "-"}</div>
-				<div><span className="text-slate-500">所属部门：</span>{dataset.ownerDept ?? "-"}</div>
-				<div><span className="text-slate-500">类型：</span>{dataset.type ?? "-"}</div>
-				<div><span className="text-slate-500">生命周期：</span>{dataset.lifecycleStatus ?? "-"}</div>
-				<div><span className="text-slate-500">Hive 表：</span>{dataset.hiveDatabase && dataset.hiveTable ? `${dataset.hiveDatabase}.${dataset.hiveTable}` : "-"}</div>
-				<div><span className="text-slate-500">主题域：</span>{dataset.domainName ?? dataset.domain ?? "-"}</div>
-			</div>
+			<Descriptions bordered size="small" column={2}>
+				<Descriptions.Item label="仓库分层">{dataset.warehouseLayer ?? "-"}</Descriptions.Item>
+				<Descriptions.Item label="密级">{dataset.classification ?? "-"}</Descriptions.Item>
+				<Descriptions.Item label="负责人">{dataset.owner ?? "-"}</Descriptions.Item>
+				<Descriptions.Item label="所属部门">{dataset.ownerDept ?? "-"}</Descriptions.Item>
+				<Descriptions.Item label="类型">{dataset.type ?? "-"}</Descriptions.Item>
+				<Descriptions.Item label="生命周期">{dataset.lifecycleStatus ?? "-"}</Descriptions.Item>
+				<Descriptions.Item label="技术表">{dataset.hiveDatabase && dataset.hiveTable ? `${dataset.hiveDatabase}.${dataset.hiveTable}` : "-"}</Descriptions.Item>
+				<Descriptions.Item label="主题域">{dataset.domainName ?? dataset.domain ?? "-"}</Descriptions.Item>
+				<Descriptions.Item label="治理状态">{dataset.governanceStatus ?? "-"}</Descriptions.Item>
+				<Descriptions.Item label="映射状态">{dataset.matchStatus ?? "-"}</Descriptions.Item>
+			</Descriptions>
+			{dataset.matchReason ? <Alert type="info" showIcon message="映射说明" description={dataset.matchReason} /> : null}
 			{dataset.description && (
 				<div className="text-sm text-slate-600 rounded border border-slate-100 bg-slate-50 p-3">
 					{dataset.description}
 				</div>
+			)}
+		</div>
+	);
+}
+
+function DatasetTechnicalTab({ dataset }: { dataset: Record<string, any> }) {
+	const metadataRows = [
+		{ key: "service", label: "Service", value: dataset.service },
+		{ key: "database", label: "Database", value: dataset.hiveDatabase },
+		{ key: "schema", label: "Schema", value: dataset.schema },
+		{ key: "table", label: "Table", value: dataset.hiveTable },
+		{ key: "columnCount", label: "字段数", value: dataset.columnCount },
+		{ key: "syncStatus", label: "同步状态", value: dataset.syncStatus },
+		{ key: "syncMessage", label: "同步说明", value: dataset.syncMessage },
+	].filter((item) => item.value !== undefined && item.value !== null && item.value !== "");
+
+	return (
+		<div className="space-y-4 py-2">
+			{metadataRows.length ? (
+				<Descriptions bordered size="small" column={2}>
+					{metadataRows.map((item) => (
+						<Descriptions.Item key={item.key} label={item.label}>
+							{String(item.value)}
+						</Descriptions.Item>
+					))}
+				</Descriptions>
+			) : (
+				<Alert type="info" showIcon message="暂无技术同步摘要" />
+			)}
+			<MetadataJsonBlock title="Profile JSON" value={dataset.__profileJson} />
+			<MetadataJsonBlock title="Raw Metadata JSON" value={dataset.__rawJson} />
+		</div>
+	);
+}
+
+function MetadataJsonBlock({ title, value }: { title: string; value?: string }) {
+	if (!value) {
+		return <Alert type="info" showIcon message={`${title} 未同步`} />;
+	}
+	let text = value;
+	try {
+		text = JSON.stringify(JSON.parse(value), null, 2);
+	} catch {
+		// keep original text
+	}
+	return (
+		<div>
+			<div className="mb-2 text-sm font-medium text-slate-700">{title}</div>
+			<pre className="max-h-72 overflow-auto rounded border border-slate-200 bg-slate-950 p-3 text-xs text-slate-100">
+				{text}
+			</pre>
+		</div>
+	);
+}
+
+function OpenMetadataGovernanceTab({
+	dataset,
+	onChanged,
+}: {
+	dataset: Record<string, any>;
+	onChanged: (next: Record<string, any>) => void;
+}) {
+	const [form] = Form.useForm();
+	const [saving, setSaving] = useState(false);
+
+	useEffect(() => {
+		form.setFieldsValue({
+			classification: dataset.classification,
+			warehouseLayer: dataset.warehouseLayer,
+			ownerDept: dataset.ownerDept,
+			businessOwner: dataset.owner,
+			lifecycleStatus: dataset.lifecycleStatus,
+			enabled: dataset.lifecycleStatus !== "DISABLED",
+			securityPolicyRefs: dataset.securityPolicyRefs,
+		});
+	}, [dataset, form]);
+
+	const save = async () => {
+		const values = await form.validateFields();
+		setSaving(true);
+		try {
+			const detail: any = await updateCatalogAssetV2Governance(String(dataset.id), values);
+			const asset = detail?.asset || {};
+			onChanged({
+				...dataset,
+				classification: asset.classification,
+				warehouseLayer: asset.warehouseLayer,
+				ownerDept: asset.ownerDept,
+				owner: asset.owner,
+				lifecycleStatus: asset.lifecycleStatus,
+				governanceStatus: asset.governanceStatus,
+				securityPolicyRefs: asset.securityPolicyRefs,
+			});
+			message.success("治理扩展已保存");
+		} finally {
+			setSaving(false);
+		}
+	};
+
+	return (
+		<div className="space-y-4 py-2">
+			<Alert
+				type="info"
+				showIcon
+				message="治理属性保存在 DTS 扩展层"
+				description="OpenMetadata 继续作为技术资产主目录；密级、归属部门、生命周期、权限/脱敏/行过滤引用由 DTS 维护。"
+			/>
+			<Form form={form} layout="vertical">
+				<div className="grid gap-3 md:grid-cols-2">
+					<Form.Item label="密级" name="classification">
+						<Select
+							allowClear
+							options={[
+								{ label: "公开", value: "PUBLIC" },
+								{ label: "内部", value: "INTERNAL" },
+								{ label: "秘密", value: "SECRET" },
+								{ label: "机密", value: "CONFIDENTIAL" },
+							]}
+						/>
+					</Form.Item>
+					<Form.Item label="仓库分层" name="warehouseLayer">
+						<Select
+							allowClear
+							options={["SOURCE", "ODS", "STG", "DWD", "DIM", "DWS", "ADS"].map((value) => ({ label: value, value }))}
+						/>
+					</Form.Item>
+					<Form.Item label="归属部门" name="ownerDept">
+						<Input allowClear />
+					</Form.Item>
+					<Form.Item label="业务负责人" name="businessOwner">
+						<Input allowClear />
+					</Form.Item>
+					<Form.Item label="生命周期" name="lifecycleStatus">
+						<Select
+							allowClear
+							options={[
+								{ label: "启用", value: "ACTIVE" },
+								{ label: "观察", value: "STALE" },
+								{ label: "下线", value: "DISABLED" },
+							]}
+						/>
+					</Form.Item>
+					<Form.Item label="资产启用" name="enabled" valuePropName="checked">
+						<Switch />
+					</Form.Item>
+				</div>
+				<Form.Item label="权限 / 脱敏 / 行过滤引用" name="securityPolicyRefs">
+					<Input.TextArea rows={4} placeholder="例如 grant:<id>, masking:<id>, row-filter:<id>，或 JSON 引用清单" />
+				</Form.Item>
+				<Button type="primary" onClick={() => void save()} loading={saving}>
+					保存治理扩展
+				</Button>
+			</Form>
+			{dataset.__legacyDatasetId ? (
+				<DatasetGovernanceTab datasetId={String(dataset.__legacyDatasetId)} />
+			) : (
+				<Alert type="warning" showIcon message="未映射到 legacy dataset，治理健康和权限规则只能展示 DTS 扩展层。" />
 			)}
 		</div>
 	);

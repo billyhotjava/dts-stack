@@ -1,7 +1,7 @@
 # F2: DTS 治理扩展层
 
 **优先级**: P0  
-**状态**: IN_PROGRESS
+**状态**: DONE
 
 ## 目标
 
@@ -14,7 +14,7 @@
 | T01 | `catalog_asset_extension` 模型与字段定义 | P0 | DONE | - |
 | T02 | 密级、归属部门、负责人、生命周期、主题域扩展 API | P0 | DONE | T01 |
 | T03 | 治理状态机：待认领、待定级、待归域、已治理、停用 | P0 | DONE | T01 |
-| T04 | 权限、脱敏、行过滤与 asset extension 关联 | P0 | IN_PROGRESS | T01 |
+| T04 | 权限、脱敏、行过滤与 asset extension 关联 | P0 | DONE | T01 |
 | T05 | 审计动作与变更日志 | P1 | DONE | T02-T04 |
 
 ## 完成标准

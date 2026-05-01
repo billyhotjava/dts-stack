@@ -60,6 +60,8 @@ const PATH_COMPONENT_OVERRIDES: Record<string, string> = {
 	"/services/apis": "/pages/services/ApiServicesPage",
 	"/services/products": "/pages/services/DataProductsPage",
 	"/services/tokens": "/pages/services/TokensPage",
+	"/modeling/semantic-center": "/pages/modeling/SemanticModelingCenterPage",
+	"/bi/semantic-modeling": "/pages/modeling/SemanticModelingCenterPage",
 	"/modeling/dbt-files": "/pages/modeling/DbtFileBrowserPage",
 	"/ops/logs": "/pages/ops/OpsLogCenterPage",
 	"/catalog/datasets/:id": "/pages/catalog/DatasetDetailPage",

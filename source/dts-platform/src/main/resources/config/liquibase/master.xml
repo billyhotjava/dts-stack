@@ -153,4 +153,7 @@
     <include file="config/liquibase/changelog/20260429_06_asset_grant_level_override.xml" relativeToChangelogFile="false"/>
     <include file="config/liquibase/changelog/20260429_07_infra_schema_discover_cache.xml" relativeToChangelogFile="false"/>
     <include file="config/liquibase/changelog/20260501_01_openmetadata_asset_portal.xml" relativeToChangelogFile="false"/>
+    <include file="config/liquibase/changelog/20260501_02_semantic_modeling_center.xml" relativeToChangelogFile="false"/>
+    <include file="config/liquibase/changelog/20260501_03_catalog_lineage_relation_key.xml" relativeToChangelogFile="false"/>
+    <include file="config/liquibase/changelog/20260501_04_catalog_lineage_time_travel.xml" relativeToChangelogFile="false"/>
 </databaseChangeLog>

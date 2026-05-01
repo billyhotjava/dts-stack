@@ -116,15 +116,13 @@ public class IngestionLineageWriter {
             return LineageWriteResult.skipped("same-dataset");
         }
         CatalogLineageJob lineageJob = upsertAddaxJob(mapping, source, effectiveObservation);
-        Optional<CatalogDatasetLineage> existing = lineageRepository.findFirstByUpstreamDatasetIdAndDownstreamDatasetId(
+        Optional<CatalogDatasetLineage> existing = lineageRepository.findFirstByUpstreamDatasetIdAndDownstreamDatasetIdAndRelationTypeIgnoreCaseAndValidToIsNull(
             sourceDataset.dataset().getId(),
-            odsDataset.dataset().getId()
+            odsDataset.dataset().getId(),
+            RELATION_ADDAX
         );
         if (existing.isPresent()) {
             CatalogDatasetLineage link = existing.orElseThrow();
-            if (!RELATION_ADDAX.equalsIgnoreCase(link.getRelationType())) {
-                return new LineageWriteResult(0, 0, 1, sourceDataset.created() + odsDataset.created(), 1, "pair-owned-by-" + link.getRelationType());
-            }
             link.setNotes(buildNotes(mapping, source, effectiveObservation));
             link.setUpstreamAssetType("EXTERNAL_TABLE");
             link.setDownstreamAssetType("DATASET");
@@ -151,6 +149,9 @@ public class IngestionLineageWriter {
         }
         link.setNotes(buildNotes(mapping, source, effectiveObservation));
         applyObservation(link, effectiveObservation);
+        if (link.getValidFrom() == null) {
+            link.setValidFrom(effectiveObservation.observedAt() == null ? Instant.now() : effectiveObservation.observedAt());
+        }
         lineageRepository.save(link);
         return new LineageWriteResult(1, 0, 0, sourceDataset.created() + odsDataset.created(), 1, "created");
     }
@@ -165,16 +166,17 @@ public class IngestionLineageWriter {
         if (sourceDataset == null || sourceDataset.getId() == null || odsDataset == null || odsDataset.getId() == null) {
             return 0;
         }
-        Optional<CatalogDatasetLineage> existing = lineageRepository.findFirstByUpstreamDatasetIdAndDownstreamDatasetId(sourceDataset.getId(), odsDataset.getId());
+        Optional<CatalogDatasetLineage> existing = lineageRepository.findFirstByUpstreamDatasetIdAndDownstreamDatasetIdAndRelationTypeIgnoreCaseAndValidToIsNull(
+            sourceDataset.getId(),
+            odsDataset.getId(),
+            RELATION_ADDAX
+        );
         if (existing.isEmpty()) {
             return 0;
         }
         CatalogDatasetLineage link = existing.orElseThrow();
-        if (!RELATION_ADDAX.equalsIgnoreCase(link.getRelationType())) {
-            return 0;
-        }
-        lineageRepository.delete(link);
-        removeAddaxJob(mapping);
+        link.setValidTo(Instant.now());
+        lineageRepository.save(link);
         return 1;
     }
 

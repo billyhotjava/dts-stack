@@ -1,7 +1,7 @@
 # F3: 资产映射、迁移与兼容
 
 **优先级**: P0  
-**状态**: IN_PROGRESS
+**状态**: DONE
 
 ## 目标
 
@@ -14,7 +14,7 @@
 | T01 | `catalog_asset_mapping` 模型与匹配状态 | P0 | DONE | F1 |
 | T02 | FQN 规则诊断和自动匹配器 | P0 | DONE | T01 |
 | T03 | `catalog_dataset` 存量治理属性迁移 dry-run | P0 | DONE | F2,T02 |
-| T04 | 迁移执行与回滚脚本 | P0 | IN_PROGRESS | T03 |
+| T04 | 迁移执行与回滚脚本 | P0 | DONE | T03 |
 | T05 | 旧 `/catalog/datasets` 路径兼容与 deprecation 标识 | P1 | DONE | T04 |
 
 ## 完成标准

@@ -254,24 +254,24 @@ public class DbtAssetSyncService {
                 }
             }
             CatalogLineageJob lineageJob = upsertDbtJob(model);
-            List<CatalogDatasetLineage> existing =
-                lineageRepository.findByDownstreamDatasetIdAndRelationTypeIgnoreCase(downstream, "DBT");
+            List<CatalogDatasetLineage> existing = lineageRepository.findCurrentByDownstreamDatasetIdAndRelationTypeIgnoreCase(downstream, "DBT");
             for (CatalogDatasetLineage link : existing) {
                 UUID upstreamId = link.getUpstreamDatasetId();
                 if (upstreamId == null) {
                     continue;
                 }
                 if (!desired.contains(upstreamId)) {
-                    lineageRepository.delete(link);
+                    link.setValidTo(Instant.now());
+                    lineageRepository.save(link);
                     removed++;
                 }
             }
             for (UUID upstream : desired) {
                 Optional<CatalogDatasetLineage> present =
-                    lineageRepository.findFirstByUpstreamDatasetIdAndDownstreamDatasetId(upstream, downstream);
+                    lineageRepository.findFirstByUpstreamDatasetIdAndDownstreamDatasetIdAndRelationTypeIgnoreCaseAndValidToIsNull(upstream, downstream, "DBT");
                 if (present.isPresent()) {
                     CatalogDatasetLineage link = present.orElseThrow();
-                    if ("DBT".equalsIgnoreCase(link.getRelationType()) && lineageJob != null && !lineageJob.getId().equals(link.getLineageJobId())) {
+                    if (lineageJob != null && !lineageJob.getId().equals(link.getLineageJobId())) {
                         link.setLineageJobId(lineageJob.getId());
                         link.setProjectName(resolveDbtProjectName(model.uniqueId));
                         lineageRepository.save(link);
@@ -286,6 +286,8 @@ public class DbtAssetSyncService {
                 link.setDownstreamAssetType("MODEL");
                 link.setDirection("FORWARD");
                 link.setProjectName(resolveDbtProjectName(model.uniqueId));
+                link.setVerificationStatus("DECLARED");
+                link.setValidFrom(Instant.now());
                 if (lineageJob != null) {
                     link.setLineageJobId(lineageJob.getId());
                 }
@@ -328,8 +330,7 @@ public class DbtAssetSyncService {
                     continue;
                 }
                 CatalogDatasetLineage tableLineage = lineageRepository
-                    .findFirstByUpstreamDatasetIdAndDownstreamDatasetId(upstream, downstream)
-                    .filter(link -> "DBT".equalsIgnoreCase(link.getRelationType()))
+                    .findFirstByUpstreamDatasetIdAndDownstreamDatasetIdAndRelationTypeIgnoreCaseAndValidToIsNull(upstream, downstream, "DBT")
                     .orElse(null);
                 if (tableLineage == null || tableLineage.getId() == null) {
                     continue;
