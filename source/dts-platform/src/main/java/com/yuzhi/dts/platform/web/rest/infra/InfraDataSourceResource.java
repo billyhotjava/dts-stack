@@ -143,10 +143,26 @@ public class InfraDataSourceResource {
     ) {
         String principal = SecurityUtils.getCurrentUserLogin().orElse("");
         if (!principal.startsWith("service:")) {
+            auditService.auditAction(
+                "SERVICE_AUTH_DENIED",
+                AuditStage.FAIL,
+                id.toString(),
+                Map.of("endpoint", "infra.runtime-detail", "reason", "non_service_principal", "principal", principal)
+            );
             throw new ResponseStatusException(HttpStatus.FORBIDDEN, "运行时凭据详情仅允许内部服务调用");
         }
         String serviceName = principal.substring("service:".length());
         if (!serviceTokenMatches(serviceToken, serviceName)) {
+            auditService.auditAction(
+                "SERVICE_AUTH_DENIED",
+                AuditStage.FAIL,
+                id.toString(),
+                Map.of(
+                    "endpoint", "infra.runtime-detail",
+                    "reason", "token_mismatch",
+                    "service", serviceName
+                )
+            );
             throw new ResponseStatusException(HttpStatus.FORBIDDEN, "运行时凭据详情需要有效服务令牌");
         }
         InfraDataSourceDetailDto detail = infraManagementService.getDataSourceRuntimeDetail(id);

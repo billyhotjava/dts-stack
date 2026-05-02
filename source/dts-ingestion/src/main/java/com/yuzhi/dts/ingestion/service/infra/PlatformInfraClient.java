@@ -1,6 +1,7 @@
 package com.yuzhi.dts.ingestion.service.infra;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.yuzhi.dts.ingestion.config.IngestionOutboundPlatformProperties;
 import com.yuzhi.dts.ingestion.domain.IngestionExecution;
 import com.yuzhi.dts.ingestion.domain.IngestionTask;
 import java.net.URI;
@@ -10,7 +11,6 @@ import java.util.Map;
 import java.util.UUID;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.web.client.RestTemplateBuilder;
 import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpHeaders;
@@ -27,27 +27,24 @@ import org.springframework.web.util.UriComponentsBuilder;
 public class PlatformInfraClient {
 
     private static final Logger LOG = LoggerFactory.getLogger(PlatformInfraClient.class);
-    private static final String DEFAULT_BASE_URL = "http://dts-platform:8081";
-    private static final String DEFAULT_API_PATH = "/api";
     private static final String SERVICE_HEADER = "X-DTS-Service";
     private static final String SERVICE_TOKEN_HEADER = "X-DTS-Service-Token";
-    private static final String SERVICE_NAME = "dts-ingestion";
 
     private final RestTemplate restTemplate;
     private final IngestionSettingsService settingsService;
     private final ObjectMapper objectMapper;
-    private final String serviceToken;
+    private final IngestionOutboundPlatformProperties outboundProps;
 
     public PlatformInfraClient(
         RestTemplateBuilder builder,
         IngestionSettingsService settingsService,
         ObjectMapper objectMapper,
-        @Value("${dts.platform.service-token:}") String serviceToken
+        IngestionOutboundPlatformProperties outboundProps
     ) {
         this.restTemplate = builder.setConnectTimeout(Duration.ofSeconds(5)).setReadTimeout(Duration.ofSeconds(10)).build();
         this.settingsService = settingsService;
         this.objectMapper = objectMapper;
-        this.serviceToken = StringUtils.hasText(serviceToken) ? serviceToken.trim() : null;
+        this.outboundProps = outboundProps;
     }
 
     public DataSourceDetail fetchDataSourceDetail(UUID id) {
@@ -242,27 +239,34 @@ public class PlatformInfraClient {
     }
 
     private void applyServiceHeaders(HttpHeaders headers) {
-        headers.set(SERVICE_HEADER, SERVICE_NAME);
+        headers.set(SERVICE_HEADER, resolveServiceName());
         String token = resolveServiceToken();
         if (StringUtils.hasText(token)) {
             headers.set(SERVICE_TOKEN_HEADER, token);
         }
     }
 
+    private String resolveServiceName() {
+        IngestionSettingsService.SettingsSnapshot settings = settingsService.getSettings(IngestionSettingsService.SERVICE_PLATFORM);
+        String fallback = StringUtils.hasText(outboundProps.getServiceName()) ? outboundProps.getServiceName().trim() : "dts-ingestion";
+        return settings.getString("serviceName", fallback);
+    }
+
     private String resolveServiceToken() {
         IngestionSettingsService.SettingsSnapshot settings = settingsService.getSettings(IngestionSettingsService.SERVICE_PLATFORM);
-        return settings.getString("serviceToken", serviceToken);
+        String envFallback = StringUtils.hasText(outboundProps.getServiceToken()) ? outboundProps.getServiceToken().trim() : null;
+        return settings.getString("serviceToken", envFallback);
     }
 
     private URI buildUri(String path) {
         IngestionSettingsService.SettingsSnapshot settings = settingsService.getSettings(IngestionSettingsService.SERVICE_PLATFORM);
-        String baseUrl = settings.getString("baseUrl", DEFAULT_BASE_URL);
-        String apiPath = settings.getString("apiPath", DEFAULT_API_PATH);
+        String baseUrl = settings.getString("baseUrl", outboundProps.getBaseUrl());
+        String apiPath = settings.getString("apiPath", outboundProps.getApiPath());
         if (!StringUtils.hasText(baseUrl)) {
-            baseUrl = DEFAULT_BASE_URL;
+            baseUrl = "http://dts-platform:8081";
         }
         if (!StringUtils.hasText(apiPath)) {
-            apiPath = DEFAULT_API_PATH;
+            apiPath = "/api";
         }
         return UriComponentsBuilder.fromHttpUrl(baseUrl.trim())
             .path(apiPath)

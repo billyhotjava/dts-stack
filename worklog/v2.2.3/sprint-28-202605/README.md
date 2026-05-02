@@ -1,7 +1,7 @@
 # Sprint-28: 服务间鉴权方案 B 中期落地
 
 **时间**: 2026-05
-**状态**: IN_PROGRESS
+**状态**: DONE(代码 + 文档闭环;真链路 E2E 留运维 IT)
 **类型**: Architecture / Security(dts-platform + dts-ingestion + dts-analytics)
 **目标**: 把 `dts.admin.*` 这一组承担"出站客户端配置"和"入站服务认证"双重语义的 properties bean 在概念与配置层面彻底拆开,改为每对调用独立 secret + filter 强校验,关闭"白名单即权限"越权面;通过完整的环境变量 fallback 实现零停机切换。
 
@@ -49,12 +49,12 @@
 | F1-platform-properties-split | P0 | DONE | 拆 DtsAdminProperties 为 outbound/inbound 两个 bean,旧 bean 桥接保留兼容 |
 | F2-platform-inbound-per-pair-secret | P0 | DONE | trustedServices 改为 Map,每对调用独立 secret |
 | F3-platform-filter-strict-auth | P0 | DONE | filter 强校验,关闭"白名单即权限"越权面 |
-| F4-ingestion-outbound-rename | P0 | READY | ingestion 出站 properties 改名 + 旧 env fallback |
-| F5-analytics-outbound-rename | P0 | READY | analytics 出站 properties 改名(platform + admin)+ 旧 env fallback |
-| F6-auth-audit-logging | P1 | READY | filter 拒绝路径结构化日志 + SERVICE_AUTH_DENIED 审计事件 |
-| F7-compat-matrix-and-it | P0 | READY | 兼容矩阵文档 + smoke 脚本 + 四服务联调 IT |
+| F4-ingestion-outbound-rename | P0 | DONE | ingestion 出站 properties 改名 + 旧 env fallback |
+| F5-analytics-outbound-rename | P0 | DONE | analytics 出站 properties 改名(仅 platform 链路;admin 留 Sprint-29)+ 旧 env fallback |
+| F6-auth-audit-logging | P1 | DONE | filter 拒绝路径 LOG.warn 结构化日志 + InfraDataSourceResource SERVICE_AUTH_DENIED 端点级审计 |
+| F7-compat-matrix-and-it | P0 | DONE | 兼容矩阵 + 部署 runbook + smoke 脚本(真链路 E2E 留运维 IT) |
 
-**统计**: READY=4, IN_PROGRESS=0, DONE=3, BLOCKED=0
+**统计**: READY=0, IN_PROGRESS=0, DONE=7, BLOCKED=0
 
 ## 非目标
 

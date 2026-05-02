@@ -25,38 +25,32 @@ import org.springframework.web.util.UriComponentsBuilder;
 public class ProjectCockpitTopicBindingGateway {
 
     private static final Logger LOG = LoggerFactory.getLogger(ProjectCockpitTopicBindingGateway.class);
-    private static final String DEFAULT_BASE_URL = "http://dts-platform:8081";
-    private static final String DEFAULT_API_PATH = "/api";
     private static final String SERVICE_HEADER = "X-DTS-Service";
+    private static final String SERVICE_TOKEN_HEADER = "X-DTS-Service-Token";
     private static final String PROJECT_MANAGEMENT_SELECTOR = "tag:project-management";
     private static final String PROJECT_MANAGEMENT_ENTITY = "project-management.project_subject_domain";
 
     private final RestTemplate restTemplate;
     private final ObjectMapper objectMapper;
-    private final String baseUrl;
-    private final String apiPath;
-    private final String serviceName;
+    private final com.yuzhi.dts.analytics.config.AnalyticsOutboundPlatformProperties outboundProps;
 
     public ProjectCockpitTopicBindingGateway(
             RestTemplateBuilder builder,
             ObjectMapper objectMapper,
-            @Value("${dts.analytics.platform.base-url:}") String baseUrl,
-            @Value("${dts.analytics.platform.api-path:}") String apiPath,
-            @Value("${dts.analytics.platform.service-name:dts-analytics}") String serviceName,
-            @Value("${dts.analytics.platform.timeout-seconds:10}") long timeoutSeconds) {
-        long timeout = Math.max(2, timeoutSeconds);
+            com.yuzhi.dts.analytics.config.AnalyticsOutboundPlatformProperties outboundProps) {
+        long timeout = Math.max(2, outboundProps.getTimeoutSeconds());
         this.restTemplate = builder
                 .setConnectTimeout(Duration.ofSeconds(timeout))
                 .setReadTimeout(Duration.ofSeconds(timeout))
                 .build();
         this.objectMapper = objectMapper;
-        this.baseUrl = StringUtils.hasText(baseUrl) ? baseUrl.trim() : DEFAULT_BASE_URL;
-        this.apiPath = StringUtils.hasText(apiPath) ? apiPath.trim() : DEFAULT_API_PATH;
-        this.serviceName = StringUtils.hasText(serviceName) ? serviceName.trim() : "dts-analytics";
+        this.outboundProps = outboundProps;
     }
 
     public TopicBindingState currentProjectManagementState() {
         try {
+            String baseUrl = StringUtils.hasText(outboundProps.getBaseUrl()) ? outboundProps.getBaseUrl().trim() : "http://dts-platform:8081";
+            String apiPath = StringUtils.hasText(outboundProps.getApiPath()) ? outboundProps.getApiPath().trim() : "/api";
             URI uri = UriComponentsBuilder.fromHttpUrl(baseUrl)
                     .path(apiPath)
                     .path("/topic-bindings/status")
@@ -98,7 +92,11 @@ public class ProjectCockpitTopicBindingGateway {
         HttpHeaders headers = new HttpHeaders();
         headers.setAccept(List.of(MediaType.APPLICATION_JSON));
         headers.setContentType(MediaType.APPLICATION_JSON);
+        String serviceName = StringUtils.hasText(outboundProps.getServiceName()) ? outboundProps.getServiceName().trim() : "dts-analytics";
         headers.set(SERVICE_HEADER, serviceName);
+        if (StringUtils.hasText(outboundProps.getServiceToken())) {
+            headers.set(SERVICE_TOKEN_HEADER, outboundProps.getServiceToken().trim());
+        }
         return headers;
     }
 

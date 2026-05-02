@@ -2,6 +2,7 @@ package com.yuzhi.dts.ingestion.service.infra;
 
 import com.yuzhi.dts.ingestion.config.AddaxProperties;
 import com.yuzhi.dts.ingestion.config.AirflowProperties;
+import com.yuzhi.dts.ingestion.config.IngestionOutboundPlatformProperties;
 import com.yuzhi.dts.ingestion.config.OpenMetadataProperties;
 import java.util.LinkedHashMap;
 import java.util.Map;
@@ -16,24 +17,25 @@ import org.springframework.util.StringUtils;
 public class IngestionSettingsSeeder implements ApplicationRunner {
 
     private static final Logger LOG = LoggerFactory.getLogger(IngestionSettingsSeeder.class);
-    private static final String DEFAULT_PLATFORM_BASE_URL = "http://dts-platform:8081";
-    private static final String DEFAULT_PLATFORM_API_PATH = "/api";
 
     private final InfraServiceSettingsRepository repository;
     private final AddaxProperties addaxProperties;
     private final AirflowProperties airflowProperties;
     private final OpenMetadataProperties openMetadataProperties;
+    private final IngestionOutboundPlatformProperties outboundPlatformProperties;
 
     public IngestionSettingsSeeder(
         InfraServiceSettingsRepository repository,
         AddaxProperties addaxProperties,
         AirflowProperties airflowProperties,
-        OpenMetadataProperties openMetadataProperties
+        OpenMetadataProperties openMetadataProperties,
+        IngestionOutboundPlatformProperties outboundPlatformProperties
     ) {
         this.repository = repository;
         this.addaxProperties = addaxProperties;
         this.airflowProperties = airflowProperties;
         this.openMetadataProperties = openMetadataProperties;
+        this.outboundPlatformProperties = outboundPlatformProperties;
     }
 
     @Override
@@ -106,8 +108,18 @@ public class IngestionSettingsSeeder implements ApplicationRunner {
     private Map<String, Object> buildPlatformSettings() {
         Map<String, Object> settings = new LinkedHashMap<>();
         settings.put("catalogSyncOnDataSource", Boolean.TRUE);
-        settings.put("baseUrl", DEFAULT_PLATFORM_BASE_URL);
-        settings.put("apiPath", DEFAULT_PLATFORM_API_PATH);
+        String baseUrl = StringUtils.hasText(outboundPlatformProperties.getBaseUrl())
+            ? outboundPlatformProperties.getBaseUrl()
+            : "http://dts-platform:8081";
+        String apiPath = StringUtils.hasText(outboundPlatformProperties.getApiPath())
+            ? outboundPlatformProperties.getApiPath()
+            : "/api";
+        settings.put("baseUrl", baseUrl);
+        settings.put("apiPath", apiPath);
+        // Sprint-28 F4 修复:之前不 seed serviceToken 与 serviceName,导致部署只能靠 @Value env 注入,settings 库里永远空。
+        // 现在 seeder 把启动时 yml/env 解析到的值同步到 settings 表,后台 UI 可见可改,运行时仍走 settings 优先 fallback 链。
+        putIfText(settings, "serviceToken", outboundPlatformProperties.getServiceToken());
+        putIfText(settings, "serviceName", outboundPlatformProperties.getServiceName());
         return settings;
     }
 

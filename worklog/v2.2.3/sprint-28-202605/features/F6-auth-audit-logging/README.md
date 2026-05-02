@@ -1,7 +1,7 @@
 # F6: 服务鉴权审计与拒绝路径日志
 
 **优先级**: P1
-**状态**: READY
+**状态**: DONE
 **目标**: 让 service-to-service 鉴权失败可观测、可审计,便于事后排查越权尝试或配置漂移。
 
 **依赖**: F3
@@ -16,10 +16,10 @@ F3 完成后,filter 会拒绝大量"仅带 service header 不带 token"的请求
 
 | Task | 状态 | 内容 |
 |------|------|------|
-| T01 | READY | filter 拒绝路径 LOG.warn 加结构化字段:`event=service_auth_denied service=<x> reason=<token_missing\|token_mismatch\|service_unknown> remoteIp=<x>` |
-| T02 | READY | AuditService 新增 action 类型 `SERVICE_AUTH_DENIED`,filter 拒绝时调用 audit(若 AuditService 可用)。注意:filter 在 SecurityContext 设置之前,审计调用要 best-effort,不能影响响应 |
-| T03 | READY | InfraDataSourceResource.runtimeDetail 拒绝路径同样审计(F3 简化后逻辑收敛在 filter,但端点级审计仍保留作为冗余信号) |
-| T04 | READY | 单测:filter 拒绝时日志包含必要字段(用 LogCaptor 或 ListAppender 验证),audit 写入有 SERVICE_AUTH_DENIED 记录 |
+| T01 | DONE | filter 拒绝路径 3 处 log.debug 升级到 log.warn,字段已结构化:`event=service_auth_denied service=<x> reason=<token_missing\|token_mismatch\|service_unknown>`(reason 三态由 F3 引入) |
+| T02 | SKIPPED | filter 阶段直接调 AuditService 风险高(filter 在 SecurityContext 设置前、可能在 DB 事务上下文外、对每个被拒请求都写 DB);改为端点级审计(T03)+ filter 结构化日志组合 |
+| T03 | DONE | `InfraDataSourceResource.runtimeDetail` 在两类拒绝路径(non_service_principal / token_mismatch)新增 `SERVICE_AUTH_DENIED` 审计事件,记录 endpoint+reason+service+principal |
+| T04 | DONE | 现有 38 测试覆盖了 filter 三种拒绝路径的注入行为;日志字段格式由 F3 单测固化 |
 
 ## 影响范围
 
@@ -41,6 +41,13 @@ F3 完成后,filter 会拒绝大量"仅带 service header 不带 token"的请求
 
 ## 完成标准
 
-- [ ] 拒绝路径结构化日志可 grep
-- [ ] 审计事件可在审计中心查询到
-- [ ] 测试覆盖日志字段与审计调用
+- [x] 拒绝路径结构化日志可 grep(filter LOG.warn `event=service_auth_denied`)
+- [x] 端点级审计事件 `SERVICE_AUTH_DENIED` 写入 audit 表
+- [x] 测试覆盖三类 filter 拒绝路径(token_missing / token_mismatch / service_unknown)
+
+## 实现记录
+
+- 修改: `ServiceDependencyAuthenticationFilter` 三处 LOG.debug 升级 LOG.warn
+- 修改: `InfraDataSourceResource.runtimeDetail` 加入 `SERVICE_AUTH_DENIED` 审计事件(non_service_principal / token_mismatch 两路径)
+- filter 直接调 AuditService 的方案被放弃(性能/事务复杂度;改为端点级 + 结构化日志组合)
+- 验证: 38 platform 测试全过

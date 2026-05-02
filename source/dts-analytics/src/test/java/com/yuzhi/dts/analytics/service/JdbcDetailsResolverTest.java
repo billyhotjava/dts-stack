@@ -81,7 +81,9 @@ class JdbcDetailsResolverTest {
     }
 
     private PlatformInfraClient fakeClient(String jdbcUrl) {
-        return new PlatformInfraClient(new RestTemplateBuilder(), new ObjectMapper(), "", "", "", 10) {
+        com.yuzhi.dts.analytics.config.AnalyticsOutboundPlatformProperties props =
+            new com.yuzhi.dts.analytics.config.AnalyticsOutboundPlatformProperties();
+        return new PlatformInfraClient(new RestTemplateBuilder(), new ObjectMapper(), props) {
             @Override
             public DataSourceDetail fetchDataSourceDetail(UUID id) {
                 assertThat(id).isEqualTo(PLATFORM_ID);

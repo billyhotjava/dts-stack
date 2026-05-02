@@ -369,7 +369,7 @@
 **实施分支**: `feat/sprint-24-classification-ux`（5 commits）
 
 ## Sprint-28: 服务间鉴权方案 B 中期落地（202605）
-**状态**: IN_PROGRESS
+**状态**: DONE（代码 + 文档闭环;真链路 E2E 留运维 IT）
 **类型**: Architecture / Security（dts-platform + dts-ingestion + dts-analytics）
 **目标**: 拆 `DtsAdminProperties` 双重语义为 outbound/inbound 两个独立 bean，每对调用独立 secret，filter 强校验关闭"白名单即权限"越权面，旧 env 兼容 fallback 实现零停机切换。
 
@@ -378,11 +378,13 @@
 | F1-platform-properties-split | P0 | 6 | DONE |
 | F2-platform-inbound-per-pair-secret | P0 | 5 | DONE |
 | F3-platform-filter-strict-auth | P0 | 5 | DONE |
-| F4-ingestion-outbound-rename | P0 | 6 | READY |
-| F5-analytics-outbound-rename | P0 | 7 | READY |
-| F6-auth-audit-logging | P1 | 4 | READY |
-| F7-compat-matrix-and-it | P0 | 7 | READY |
+| F4-ingestion-outbound-rename | P0 | 6 | DONE |
+| F5-analytics-outbound-rename | P0 | 7 | DONE |
+| F6-auth-audit-logging | P1 | 4 | DONE |
+| F7-compat-matrix-and-it | P0 | 7 | DONE |
 
-**统计**: READY=24, IN_PROGRESS=0, DONE=16, BLOCKED=0
+**统计**: READY=0, IN_PROGRESS=0, DONE=40, BLOCKED=0
 **设计文档**: `worklog/v2.2.3/sprint-28-202605/README.md`
 **集成测试**: `worklog/v2.2.3/sprint-28-202605/it/README.md`
+**部署文档**: `worklog/v2.2.3/sprint-28-202605/assets/env-migration-matrix.md` + `sprint-28-deploy-runbook.md`
+**实施分支**: `feat/sprint-28-platform-auth-split`

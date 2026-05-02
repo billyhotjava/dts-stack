@@ -84,7 +84,7 @@ public class ServiceDependencyAuthenticationFilter extends OncePerRequestFilter 
             return null;
         }
         if (!authProperties.isTrustedServiceName(declared)) {
-            log.debug("event=service_auth_denied service={} reason=service_unknown", declared.trim());
+            log.warn("event=service_auth_denied service={} reason=service_unknown", declared.trim());
             return null;
         }
         String canonical = authProperties.canonicalServiceName(declared);
@@ -96,7 +96,7 @@ public class ServiceDependencyAuthenticationFilter extends OncePerRequestFilter 
 
         String suppliedToken = request.getHeader(SERVICE_TOKEN_HEADER);
         if (!StringUtils.hasText(suppliedToken)) {
-            log.debug("event=service_auth_denied service={} reason=token_missing", canonical);
+            log.warn("event=service_auth_denied service={} reason=token_missing", canonical);
             return null;
         }
         String trimmedToken = suppliedToken.trim();
@@ -107,7 +107,7 @@ public class ServiceDependencyAuthenticationFilter extends OncePerRequestFilter 
         if (svcTokenAuthService != null && svcTokenAuthService.authenticateService(trimmedToken, canonical) != null) {
             return canonical;
         }
-        log.debug("event=service_auth_denied service={} reason=token_mismatch", canonical);
+        log.warn("event=service_auth_denied service={} reason=token_mismatch", canonical);
         return null;
     }
 }

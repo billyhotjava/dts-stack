@@ -28,13 +28,12 @@ import org.springframework.web.util.UriComponentsBuilder;
 public class PlatformPermissionClient {
 
     private static final Logger LOG = LoggerFactory.getLogger(PlatformPermissionClient.class);
-    private static final String DEFAULT_BASE_URL = "http://dts-platform:8081";
     private static final String SERVICE_HEADER = "X-DTS-Service";
+    private static final String SERVICE_TOKEN_HEADER = "X-DTS-Service-Token";
 
     private final RestTemplate restTemplate;
     private final ObjectMapper objectMapper;
-    private final String baseUrl;
-    private final String serviceName;
+    private final com.yuzhi.dts.analytics.config.AnalyticsOutboundPlatformProperties outboundProps;
 
     private final Cache<String, PermissionResult> checkCache;
     private final Cache<String, AccessibleAssetsResult> listCache;
@@ -42,8 +41,7 @@ public class PlatformPermissionClient {
     public PlatformPermissionClient(
         RestTemplateBuilder builder,
         ObjectMapper objectMapper,
-        @Value("${dts.analytics.platform.base-url:}") String baseUrl,
-        @Value("${dts.analytics.platform.service-name:dts-analytics}") String serviceName,
+        com.yuzhi.dts.analytics.config.AnalyticsOutboundPlatformProperties outboundProps,
         @Value("${dts.analytics.platform-permission.connect-timeout-ms:2000}") long connectTimeoutMs,
         @Value("${dts.analytics.platform-permission.read-timeout-ms:5000}") long readTimeoutMs,
         @Value("${dts.analytics.platform-permission.check-cache-ttl-seconds:30}") long checkCacheTtl,
@@ -55,8 +53,7 @@ public class PlatformPermissionClient {
             .setReadTimeout(Duration.ofMillis(readTimeoutMs))
             .build();
         this.objectMapper = objectMapper;
-        this.baseUrl = StringUtils.hasText(baseUrl) ? baseUrl.trim() : DEFAULT_BASE_URL;
-        this.serviceName = StringUtils.hasText(serviceName) ? serviceName.trim() : "dts-analytics";
+        this.outboundProps = outboundProps;
 
         this.checkCache = Caffeine.newBuilder()
             .maximumSize(checkCacheMaxSize)
@@ -215,6 +212,7 @@ public class PlatformPermissionClient {
     }
 
     private URI buildUri(String path) {
+        String baseUrl = StringUtils.hasText(outboundProps.getBaseUrl()) ? outboundProps.getBaseUrl().trim() : "http://dts-platform:8081";
         return UriComponentsBuilder.fromHttpUrl(baseUrl)
             .path(path)
             .build(true)
@@ -225,7 +223,11 @@ public class PlatformPermissionClient {
         HttpHeaders headers = new HttpHeaders();
         headers.setAccept(List.of(MediaType.APPLICATION_JSON));
         headers.setContentType(MediaType.APPLICATION_JSON);
+        String serviceName = StringUtils.hasText(outboundProps.getServiceName()) ? outboundProps.getServiceName().trim() : "dts-analytics";
         headers.set(SERVICE_HEADER, serviceName);
+        if (StringUtils.hasText(outboundProps.getServiceToken())) {
+            headers.set(SERVICE_TOKEN_HEADER, outboundProps.getServiceToken().trim());
+        }
         return headers;
     }
 
