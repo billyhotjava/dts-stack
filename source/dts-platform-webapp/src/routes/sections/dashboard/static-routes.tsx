@@ -4,6 +4,7 @@ import { LineLoading } from "@/components/loading";
 
 // ── Platform pages ──
 const TransformPage = lazy(() => import("@/pages/explore/etl/TransformPage"));
+const EltConsolePage = lazy(() => import("@/pages/explore/etl/EltConsolePage"));
 const TransformCreatePage = lazy(() => import("@/pages/explore/etl/TransformCreatePage"));
 const TransformDetailPage = lazy(() => import("@/pages/explore/etl/TransformDetailPage"));
 const TransformExecutionHistoryPage = lazy(() => import("@/pages/explore/etl/TransformExecutionHistoryPage"));
@@ -11,6 +12,7 @@ const AssetOwnershipPage = lazy(() => import("@/pages/governance/AssetOwnershipP
 const AssetGrantPage = lazy(() => import("@/pages/governance/AssetGrantPage"));
 const MyGrantsPage = lazy(() => import("@/pages/governance/MyGrantsPage"));
 const PermissionAuditPage = lazy(() => import("@/pages/governance/PermissionAuditPage"));
+const MetricOperationsPage = lazy(() => import("@/pages/metrics/MetricOperationsPage"));
 const MetricCenterPage = lazy(() => import("@/pages/metrics/MetricCenterPage"));
 const MetricDictionaryPage = lazy(() => import("@/pages/metrics/MetricDictionaryPage"));
 const SemanticModelingCenterPage = lazy(() => import("@/pages/modeling/SemanticModelingCenterPage"));
@@ -65,6 +67,8 @@ const S = ({ children }: { children: React.ReactNode }) => (
 
 export const STATIC_DASHBOARD_ROUTES: RouteObject[] = [
 	// ── Platform ──
+	{ path: "explore/etl", element: <S><EltConsolePage /></S> },
+	{ path: "explore/etl/console", element: <S><EltConsolePage /></S> },
 	{ path: "explore/etl/transform", element: <S><TransformPage /></S> },
 	{ path: "explore/etl/transform/new", element: <S><TransformCreatePage /></S> },
 	{ path: "explore/etl/transform/:id", element: <S><TransformDetailPage /></S> },
@@ -81,6 +85,8 @@ export const STATIC_DASHBOARD_ROUTES: RouteObject[] = [
 	{ path: "catalog/lineage/columns", element: <S><LineagePage section="columns" /></S> },
 	{ path: "catalog/lineage/import", element: <S><LineagePage section="import" /></S> },
 	{ path: "catalog/lineage/diff", element: <S><LineagePage section="diff" /></S> },
+	{ path: "metrics", element: <S><MetricOperationsPage /></S> },
+	{ path: "metrics/operations", element: <S><MetricOperationsPage /></S> },
 	{ path: "metrics/center", element: <S><MetricCenterPage /></S> },
 	{ path: "metrics/dictionary", element: <S><MetricDictionaryPage /></S> },
 	{ path: "metrics/semantic", element: <S><MetricsSemanticOverviewPage /></S> },

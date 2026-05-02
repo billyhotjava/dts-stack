@@ -1,0 +1,175 @@
+version: 2
+
+models:
+  - name: xycyl_stg_flower_biz_info
+    description: "报花单主表 STG（v2: 列名对齐生产；暴露财务/审批/分类全字段）"
+    columns:
+      - name: source_row_id
+        tests:
+          - unique: { config: { severity: warn } }
+          - not_null: { config: { severity: warn } }
+      - name: biz_id
+        description: "报花单主键 (= source_row_id)"
+        tests:
+          - unique: { config: { severity: warn } }
+          - not_null: { config: { severity: warn } }
+      - name: biz_code
+        description: "业务单据编号"
+      - name: biz_type_raw
+        description: "ODS 原始 bizType（未归一化），实测仅 1/2/3/4/6/7/8/10/11"
+        tests:
+          - accepted_values:
+              values: ['1','2','3','4','6','7','8','10','11','12']
+              config:
+                severity: warn
+      - name: status_raw
+        description: "ODS 原始状态（未归一化），实测 8 值"
+        tests:
+          - accepted_values:
+              values: ['-1','1','2','3','4','5','20','21']
+              config:
+                severity: warn
+      - name: project_id
+        description: "p_project.id 软外键"
+      - name: customer_name
+        description: "客户名称（反范式直挂主表，p_project 没有 customer_id FK）"
+      - name: biz_total_rent
+        description: "报花单总租金，已自带正负号（biz_type=3 全负，4 正负皆有）"
+      - name: biz_total_cost
+        description: "报花单总成本（绝对值口径，不区分方向）"
+      - name: total_amount
+        description: "销售场景金额（仅 biz_type=7 有值，其他场景 NULL）"
+      - name: start_lease_time
+        description: "起租时间（仅 biz_type 2/3/4 有值；可被 t_flower_rent_time_log 修改）"
+      - name: expense_id
+        description: "财务报销单 id（sprint-25 接 a_flower_biz_accounting）"
+      - name: settle_id
+        description: "结算单 id（sprint-25 接 t_settlement_info）"
+
+  - name: xycyl_stg_flower_biz_item
+    description: "报花明细 STG（v2: 62 字段全暴露；rent/cost/plant_number 行级真实数据）"
+    columns:
+      - name: source_row_id
+        tests:
+          - unique: { config: { severity: warn } }
+          - not_null: { config: { severity: warn } }
+      - name: biz_id
+        description: "软外键 → 主表 biz_id（实测 0% 孤儿）"
+        tests:
+          - relationships:
+              to: ref('xycyl_stg_flower_biz_info')
+              field: biz_id
+              config: { severity: warn }
+
+  - name: xycyl_stg_flower_biz_item_detailed
+    description: "报花明细分配表 STG（v2: 真实 8 字段；与 p_project_green_item 关联）"
+    columns:
+      - name: source_row_id
+        tests:
+          - unique: { config: { severity: warn } }
+          - not_null: { config: { severity: warn } }
+      - name: flower_biz_item_id
+        description: "软外键 → 报花明细 biz_item_id（实测 25.5% 孤儿，历史 hard-delete）"
+        tests:
+          - relationships:
+              to: ref('xycyl_stg_flower_biz_item')
+              field: biz_item_id
+              config: { severity: warn }
+
+  - name: xycyl_stg_change_info
+    description: "变更单 STG（v2: 完整 before/after 货物对，无 del_flag）"
+    columns:
+      - name: source_row_id
+        tests:
+          - unique: { config: { severity: warn } }
+          - not_null: { config: { severity: warn } }
+      - name: biz_id
+        description: "软外键 → 主表 biz_id"
+      - name: change_type_raw
+        description: "变更类型：1=纯金额 / 2=货物变更 / 3=同货物比率"
+        tests:
+          - accepted_values:
+              values: ['1','2','3']
+              config: { severity: warn }
+
+  - name: xycyl_stg_recovery_info
+    description: "回收主表 STG（v2: 无 del_flag/code 字段）"
+    columns:
+      - name: source_row_id
+        tests:
+          - unique: { config: { severity: warn } }
+          - not_null: { config: { severity: warn } }
+      - name: status_raw
+        description: "回收状态：1=待回收 / 2=确认入库 / 3=已结束"
+        tests:
+          - accepted_values:
+              values: ['1','2','3']
+              config: { severity: warn }
+
+  - name: xycyl_stg_recovery_info_item
+    description: "回收明细 STG（v2: 无 del_flag；recovery_type 实测仅 1/2/3）"
+    columns:
+      - name: source_row_id
+        tests:
+          - unique: { config: { severity: warn } }
+          - not_null: { config: { severity: warn } }
+      - name: recovery_type_raw
+        description: "回收类型：1=报损 / 2=回购 / 3=留用"
+        tests:
+          - accepted_values:
+              values: ['1','2','3']
+              config: { severity: warn }
+
+  - name: xycyl_stg_flower_biz_log
+    description: "报花单操作日志 STG（v2: log.biz_type 改名 log_biz_type_raw，因为 98% NULL 不应被误用为父表 bizType）"
+    columns:
+      - name: source_row_id
+        tests:
+          - unique: { config: { severity: warn } }
+          - not_null: { config: { severity: warn } }
+      - name: biz_id
+        description: "软外键 → 主表 biz_id"
+
+  - name: xycyl_stg_flower_extra_cost
+    description: "报花额外费用 STG（v2: cost_type 修正语义 1运费/2人工/3其他旧/4其他/5垃圾清理）"
+    columns:
+      - name: source_row_id
+        tests:
+          - unique: { config: { severity: warn } }
+          - not_null: { config: { severity: warn } }
+      - name: cost_type_raw
+        description: "费用类型 (1=运费, 2=人工, 3=其他-旧, 4=其他, 5=垃圾清理)"
+        tests:
+          - accepted_values:
+              values: ['1','2','3','4','5']
+              config: { severity: warn }
+
+  - name: xycyl_stg_flower_rent_time_log
+    description: "起租期变更日志 STG（v2: 无 del_flag/change_reason/update_time）"
+    columns:
+      - name: source_row_id
+        tests:
+          - unique: { config: { severity: warn } }
+          - not_null: { config: { severity: warn } }
+      - name: rent_time_type_raw
+        description: "rent_time_type：1=起租期变更 / 2=减租期"
+        tests:
+          - accepted_values:
+              values: ['1','2']
+              config: { severity: warn }
+
+  - name: xycyl_stg_project
+    description: "项目主数据 STG（v2: 真实字段是 manager_id 不是 project_manager_id；客户经 p_contract 中转）"
+    columns:
+      - name: source_row_id
+        tests:
+          - unique: { config: { severity: warn } }
+          - not_null: { config: { severity: warn } }
+
+  - name: xycyl_stg_customer
+    description: "客户主数据 STG（v2: 暴露 contacts/abbreviation 等字段；customer_type 实际是 type 字段）"
+    columns:
+      - name: source_row_id
+        tests:
+          - unique: { config: { severity: warn } }
+          - not_null: { config: { severity: warn } }
