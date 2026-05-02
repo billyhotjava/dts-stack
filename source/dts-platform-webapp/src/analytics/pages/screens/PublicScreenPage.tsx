@@ -9,10 +9,7 @@ import { ScreenRuntimeProvider } from './ScreenRuntimeContext';
 import type { ScreenConfig, ScreenTheme } from './types';
 import { resolveScreenTheme } from './screenThemes';
 import { applyThemeCssVariables } from './themes/screenCssVariables';
-import { normalizeScreenConfig } from './specV2';
-import { tryLoadV2 } from './v2/loader';
-import type { ScreenConfigV2 } from './v2/types';
-import { V2ScreenRuntime } from './v2/V2ScreenRuntime';
+import { normalizeScreenConfig } from './screenSpec';
 import { buildComponentMap, isComponentEffectivelyVisible } from './componentHierarchy';
 import { safeCssBackgroundUrl } from './sanitize';
 import { useScreenCarousel } from './hooks/useScreenCarousel';
@@ -104,8 +101,6 @@ function fabDividerBg(isDark: boolean): string {
 export default function PublicScreenPage() {
 	const { uuid } = useParams<{ uuid: string }>();
 	const [screen, setScreen] = useState<ScreenConfig | null>(null);
-	/** Sprint-12 F1/T03: v2 响应式大屏走 ResponsiveScreenLayout。 */
-	const [v2Config, setV2Config] = useState<ScreenConfigV2 | null>(null);
 	const [loading, setLoading] = useState(true);
 	const [error, setError] = useState<string | null>(null);
 	const [scale, setScale] = useState(1);
@@ -147,16 +142,9 @@ export default function PublicScreenPage() {
 
 		analyticsApi.getPublicScreen(uuid)
 			.then((data) => {
-				// Sprint-12 F1/T03: 优先尝试 v2 loader。
-				const v2 = tryLoadV2(data);
-				if (v2) {
-					setV2Config(v2);
-					setLoading(false);
-					return;
-				}
 				const normalized = normalizeScreenConfig(data, { id: data.id });
 				if (normalized.warnings.length > 0) {
-					console.warn('[screen-spec-v2] normalized with warnings:', normalized.warnings);
+					console.warn('[screen-spec] normalized with warnings:', normalized.warnings);
 				}
 				setScreen(normalized.config);
 				setLoading(false);
@@ -408,7 +396,7 @@ export default function PublicScreenPage() {
 		);
 	}
 
-	if (error || (!screen && !v2Config)) {
+	if (error || !screen) {
 		return (
 			<div
 				className="fixed inset-0 overflow-hidden p-0 box-border"
@@ -434,23 +422,6 @@ export default function PublicScreenPage() {
 		);
 	}
 
-	// Sprint-12 F1/T03: v2 响应式大屏走 ResponsiveScreenLayout，跳过 v1 scale 逻辑。
-	if (v2Config) {
-		return (
-			<V2ScreenRuntime
-				screen={v2Config}
-				runtimeMeta={uuid ? { accessMode: 'public', publicScreenUuid: uuid } : { accessMode: 'public' }}
-				urlVariableOverrides={urlVariableOverrides}
-				showVariablePanel={!hideControls}
-				dataTestId="analytics-public-screen-v2"
-			/>
-		);
-	}
-
-	// 此处开始是 v1 渲染路径，screen 非 null。
-	if (!screen) {
-		return null;
-	}
 	const carouselTransition = screen.carouselConfig?.transition ?? 'fade';
 	const carouselDuration = screen.carouselConfig?.transitionDuration ?? 800;
 	const screenWidth = contentBounds.width;

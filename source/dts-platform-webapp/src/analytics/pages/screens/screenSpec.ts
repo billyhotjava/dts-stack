@@ -1,7 +1,7 @@
 import type { CarouselConfig, ScreenComponent, ScreenConfig, ScreenGlobalVariable, ScreenPage, ScreenTheme } from './types';
 import type { ScreenWritePayload } from './contracts';
 
-export const SCREEN_SCHEMA_VERSION = 2;
+export const SCREEN_SCHEMA_VERSION = 1;
 
 const COMPONENT_TYPES = new Set<ScreenComponent['type']>([
     'line-chart',

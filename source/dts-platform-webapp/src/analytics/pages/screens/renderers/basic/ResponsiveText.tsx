@@ -20,7 +20,7 @@
 import { useRef, type CSSProperties } from "react";
 import type { ScreenThemeTokens } from "../../screenThemes";
 import { resolveTextColor } from "../shared/chartUtils";
-import { useContainerFontSize } from "../../v2/hooks/useContainerFontSize";
+import { useContainerFontSize } from "../../hooks/useContainerFontSize";
 
 function pickFontSize(
     c: Record<string, unknown>,

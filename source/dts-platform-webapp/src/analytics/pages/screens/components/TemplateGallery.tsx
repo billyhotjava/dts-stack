@@ -9,7 +9,7 @@ import {
     TEMPLATE_CATEGORY_ORDER,
     type ScreenTemplate,
 } from '../screenTemplates';
-import { SCREEN_SCHEMA_VERSION, normalizeScreenConfig, validateScreenPayload, buildScreenPayload } from '../specV2';
+import { SCREEN_SCHEMA_VERSION, normalizeScreenConfig, validateScreenPayload, buildScreenPayload } from '../screenSpec';
 import { resolveRouteForOpen } from '../../../helpers/resolveAnalyticsUrl';
 import { inlineResources } from '../utils/resourceInliner';
 import { ImportPreviewModal } from './ImportPreviewModal';

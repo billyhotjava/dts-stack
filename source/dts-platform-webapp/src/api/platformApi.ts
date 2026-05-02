@@ -126,6 +126,59 @@ export const searchCatalog = (params: {
 export const getDbtConfig = () => api.get(withModelingRequestTimeout({ url: "/etl/dbt/config" }));
 export const updateDbtConfig = (data: any) => api.put({ url: "/etl/dbt/config", data });
 
+export type PlatformEventDto = {
+	id?: string;
+	eventId?: string;
+	eventType?: string;
+	domain?: string;
+	sourceApp?: string;
+	aggregateType?: string;
+	aggregateId?: string;
+	aggregateName?: string;
+	action?: string;
+	severity?: string;
+	status?: string;
+	occurredAt?: string;
+	actor?: string;
+	correlationId?: string;
+	traceId?: string;
+	auditActionCode?: string;
+	policyRef?: string;
+	payload?: Record<string, any>;
+	dispatchStatus?: string;
+	dispatchAttempts?: number;
+	dispatchedAt?: string;
+	dispatchError?: string;
+	createdBy?: string;
+	createdDate?: string;
+};
+
+export type PlatformEventSummary = {
+	total: number;
+	pending: number;
+	sent: number;
+	failed: number;
+	skipped: number;
+	kafkaEnabled?: boolean;
+	kafkaTopic?: string;
+	byDomain?: Record<string, number>;
+	byStatus?: Record<string, number>;
+	bySeverity?: Record<string, number>;
+};
+
+export type PlatformEventPage = {
+	content: PlatformEventDto[];
+	total: number;
+	page: number;
+	size: number;
+	totalPages: number;
+};
+
+export const getPlatformEventSummary = () =>
+	api.get<PlatformEventSummary>({ url: "/platform/events/summary" });
+export const listPlatformEvents = (params: any = {}) =>
+	api.get<PlatformEventPage>({ url: "/platform/events", params });
+
 // dbt project file management
 export const getDbtFileTree = () => api.get({ url: "/etl/dbt/files/tree" });
 export const getDbtFileContent = (path: string) =>

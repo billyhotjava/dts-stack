@@ -2,11 +2,15 @@ version: 2
 
 sources:
   - name: "xycyl_ods"
-    schema: "xycyl_ods"
+    schema: "public"
     description: |
       馨懿诚绿植租摆（xycyl）报花域 ODS 源表声明。
       ODS 镜像来源: rs_cloud_flower（MySQL 业务库）入湖结果。
       ODS 只负责落地与追溯（字段全部 varchar），业务语义统一经 STG 收敛。
+
+      schema: public — 遵循 dts-stack 默认数据湖约定，所有层级（ODS/STG/DWD/DWS/ADS）
+      落同一个 schema，靠表前缀（ods_*/xycyl_stg_*/xycyl_dwd_*/...）区分层次。
+      参考 worklog/v2.2.3/s10/v4/pjm/pm_sources_v2.yml 的 schema=public 约定。
     tables:
       - name: "flower_biz_info"
         identifier: "ods_flower_biz_info"

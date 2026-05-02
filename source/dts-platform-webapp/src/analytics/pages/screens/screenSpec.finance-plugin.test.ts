@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { getTemplateById, createConfigFromTemplate } from './screenTemplates';
-import { buildScreenPayload, normalizeScreenConfig } from './specV2';
+import { buildScreenPayload, normalizeScreenConfig } from './screenSpec';
 import { readComponentPluginMeta } from './plugins/runtime';
 
 test('normalizeScreenConfig preserves light-business finance template theme and plugin metadata after reopen', () => {

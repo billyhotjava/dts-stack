@@ -1,6 +1,6 @@
 import { createContext, useContext, useReducer, ReactNode, useCallback, useState, useMemo } from 'react';
 import type { ScreenState, ScreenAction, ScreenConfig, ScreenComponent } from './types';
-import { SCREEN_SCHEMA_VERSION } from './specV2';
+import { SCREEN_SCHEMA_VERSION } from './screenSpec';
 import { sanitizeParentContainerIds, wouldCreateParentCycle } from './componentHierarchy';
 
 // ── ID generation (crypto.randomUUID for collision-resistance) ──────────────

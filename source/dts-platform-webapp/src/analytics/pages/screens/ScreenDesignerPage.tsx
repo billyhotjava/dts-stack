@@ -7,9 +7,8 @@ import { ConfigProvider, theme as antdTheme } from 'antd';
 import { ScreenProvider, useScreen } from './ScreenContext';
 import { ScreenRuntimeProvider } from './ScreenRuntimeContext';
 import { analyticsApi } from '../../api/analyticsApi';
-import type { ScreenWritePayload } from './contracts';
 import { resolveScreenTheme } from './screenThemes';
-import { normalizeScreenConfig } from './specV2';
+import { normalizeScreenConfig } from './screenSpec';
 import { commitScreenPageDraft, materializeScreenPage, resolveScreenPages, switchScreenPage } from './screenPageState';
 import {
     resolveInitialFocusMode,
@@ -27,104 +26,7 @@ import {
 } from './components';
 import { PageManagerPanel } from './components/PageManagerPanel';
 import type { ScreenPage } from './types';
-import { migrateV1ToV2 } from './v2/migrate';
 import './ScreenDesigner.css';
-
-/**
- * Sprint-12 F5/T02 — v1 旧版大屏在编辑器里显示的升级引导 banner。
- *
- * 做法：读 ScreenContext 的 config（v1 shape），一键调 migrateV1ToV2 生成 v2 payload，
- * 创建副本（原 v1 不动），跳转到 v2 编辑器。warnings 用 toast 展示。
- */
-function V1LegacyBanner() {
-    const { state } = useScreen();
-    const navigate = useNavigate();
-    const [converting, setConverting] = useState(false);
-    const config = state.config;
-
-    const handleConvert = useCallback(async () => {
-        if (converting) return;
-        setConverting(true);
-        try {
-            const { config: v2Config, warnings } = migrateV1ToV2(config);
-            // migrationFrom 让后端把这次创建审计为 "screen.migrate" 而不是 "screen.create",
-            // 同时把原 v1 大屏 id 写入审计 detail,便于后续做新旧关联与回溯。
-            const sourceScreenId = (config as { id?: number | string | null }).id ?? null;
-            const payload: ScreenWritePayload = {
-                schemaVersion: 2,
-                name: `${config.name || '大屏'} (v2)`,
-                description: config.description,
-                width: config.width,
-                height: config.height,
-                theme: v2Config.theme,
-                backgroundColor: v2Config.backgroundColor,
-                backgroundImage: v2Config.backgroundImage,
-                components: v2Config.components,
-                globalVariables: v2Config.globalVariables ?? [],
-                pages: v2Config.pages ?? [],
-                carouselConfig: v2Config.carouselConfig,
-                v2Spec: {
-                    schemaVersion: 2,
-                    layout: v2Config.layout,
-                    referenceViewport: v2Config.referenceViewport,
-                },
-                ...(sourceScreenId != null ? { migrationFrom: String(sourceScreenId) } : {}),
-            };
-            const created = await analyticsApi.createScreen(payload);
-            if (warnings.length > 0) {
-                toast.warning(`已转 v2，${warnings.length} 处位置有调整`, {
-                    description: warnings.slice(0, 3).join('；') + (warnings.length > 3 ? `（还有 ${warnings.length - 3} 条）` : ''),
-                });
-            } else {
-                toast.success('已创建 v2 副本');
-            }
-            navigate(`/bi/screens/${created.id}/designer-v2`);
-        } catch (err) {
-            console.error('Failed to convert screen to v2:', err);
-            toast.error(err instanceof Error ? err.message : '转换失败');
-        } finally {
-            setConverting(false);
-        }
-    }, [config, converting, navigate]);
-
-    return (
-        <div
-            style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: 12,
-                padding: '6px 16px',
-                background: 'rgba(251, 191, 36, 0.12)',
-                borderBottom: '1px solid rgba(251, 191, 36, 0.3)',
-                color: '#fde68a',
-                fontSize: 13,
-            }}
-        >
-            <span style={{ fontWeight: 600 }}>旧版大屏（v1 · 固定像素）</span>
-            <span style={{ opacity: 0.75 }}>
-                建议转换为 v2 自适应大屏：位置按 12 列网格重算，原大屏保留为备份。
-            </span>
-            <div style={{ flex: 1 }} />
-            <button
-                type="button"
-                disabled={converting}
-                onClick={handleConvert}
-                style={{
-                    padding: '4px 12px',
-                    background: '#f59e0b',
-                    color: '#1c1917',
-                    border: 'none',
-                    borderRadius: 4,
-                    fontWeight: 600,
-                    cursor: converting ? 'not-allowed' : 'pointer',
-                    opacity: converting ? 0.6 : 1,
-                }}
-            >
-                {converting ? '转换中…' : '转为 v2 大屏'}
-            </button>
-        </div>
-    );
-}
 
 function ScreenDesignerContent() {
     const { id } = useParams<{ id: string }>();
@@ -282,15 +184,9 @@ function ScreenDesignerContent() {
                         navigate('/bi/screens', { replace: true });
                         return;
                     }
-                    // Sprint-12 F5：v2 大屏自动跳转到 designer-v2 编辑器
-                    const spec = (screen as unknown as { v2Spec?: { schemaVersion?: unknown } } | null)?.v2Spec;
-                    if (spec && spec.schemaVersion === 2) {
-                        navigate(`/bi/screens/${id}/designer-v2`, { replace: true });
-                        return;
-                    }
                     const normalized = normalizeScreenConfig(screen, { id: screen.id });
                     if (normalized.warnings.length > 0) {
-                        console.warn('[screen-spec-v2] normalized with warnings:', normalized.warnings);
+                        console.warn('[screen-spec] normalized with warnings:', normalized.warnings);
                     }
                     const backgroundColor = normalized.config.backgroundColor || '#1e1f26';
                     const resolvedTheme = resolveScreenTheme(
@@ -316,7 +212,7 @@ function ScreenDesignerContent() {
         }
         const normalized = normalizeScreenConfig(initialConfig, { id: '' });
         if (normalized.warnings.length > 0) {
-            console.warn('[screen-spec-v2] initial template config normalized with warnings:', normalized.warnings);
+            console.warn('[screen-spec] initial template config normalized with warnings:', normalized.warnings);
         }
         const backgroundColor = normalized.config.backgroundColor || '#1e1f26';
         const resolvedTheme = resolveScreenTheme(
@@ -494,8 +390,6 @@ function ScreenDesignerContent() {
 
                     <div className="flex-1 flex flex-col min-w-0 min-h-0 relative">
                         <CanvasToolbar />
-                        {/* Sprint-12 F5/T02 — v1 旧版大屏转 v2 引导 banner */}
-                        <V1LegacyBanner />
                         <DesignerCanvas />
                         {(hasMultiPages || pages.length > 0) && (
                             <PageManagerPanel

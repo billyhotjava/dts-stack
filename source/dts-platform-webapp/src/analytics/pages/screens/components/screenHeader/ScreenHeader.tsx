@@ -32,7 +32,7 @@ import { ScreenSnapshotPanel } from '../ScreenSnapshotPanel';
 import { Modal, message } from 'antd';
 import { toast } from 'sonner';
 import { buildExploreSessionSteps } from '../ScreenHeader.helpers';
-import { buildScreenPayload, normalizeScreenConfig, validateScreenPayload } from '../../specV2';
+import { buildScreenPayload, normalizeScreenConfig, validateScreenPayload } from '../../screenSpec';
 import { commitScreenPageDraft, materializeScreenPage } from '../../screenPageState';
 import { resolveScreenTheme, applyThemeToComponents, getThemeTokens, type ThemeComponentApplyMode } from '../../screenThemes';
 import type { ScreenTheme } from '../../types';
@@ -565,7 +565,7 @@ export function ScreenHeader({
     const applyScreenDetail = useCallback((screen: ScreenDetail) => {
         const normalized = normalizeScreenConfig(screen, { id: screen.id });
         if (normalized.warnings.length > 0) {
-            console.warn('[screen-spec-v2] normalized with warnings:', normalized.warnings);
+            console.warn('[screen-spec] normalized with warnings:', normalized.warnings);
         }
         const resolvedTheme = resolveScreenTheme(normalized.config.theme, normalized.config.backgroundColor);
         loadConfig({ ...normalized.config, theme: resolvedTheme });
@@ -607,7 +607,7 @@ export function ScreenHeader({
                 throw new Error(`配置校验失败：${validation.errors.join('；')}`);
             }
             if (validation.warnings.length > 0) {
-                console.warn('[screen-spec-v2] save payload warnings:', validation.warnings);
+                console.warn('[screen-spec] save payload warnings:', validation.warnings);
             }
 
             if (id) {

@@ -195,6 +195,11 @@ spring:
             client-id: ${OAUTH2_PLATFORM_CLIENT_ID:internal}
             client-secret: ${OAUTH2_PLATFORM_CLIENT_SECRET:internal}
             scope: openid, profile, email, offline_access # last one for refresh tokens
+  kafka:
+    bootstrap-servers: ${DTS_KAFKA_BOOTSTRAP_SERVERS:dts-kafka:9092}
+    producer:
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.apache.kafka.common.serialization.StringSerializer
   task:
     execution:
       thread-name-prefix: dts-platform-task-
@@ -279,6 +284,12 @@ dts:
     v2:
       enabled: ${DTS_SQL_IDE_V2_ENABLED:false}
   platform:
+    events:
+      kafka:
+        enabled: ${DTS_PLATFORM_EVENTS_KAFKA_ENABLED:false}
+        topic: ${DTS_PLATFORM_EVENTS_KAFKA_TOPIC:dts.platform.events}
+        batch-size: ${DTS_PLATFORM_EVENTS_KAFKA_BATCH_SIZE:50}
+        dispatch-interval-ms: ${DTS_PLATFORM_EVENTS_KAFKA_DISPATCH_INTERVAL_MS:10000}
     features:
       # Serve Keycloak localization resources from platform to avoid browser TLS trust issues to admin domain in dev
       kc-localization: ${DTS_FEATURE_PLATFORM_KC_LOCALIZATION:true}

@@ -156,4 +156,5 @@
     <include file="config/liquibase/changelog/20260501_02_semantic_modeling_center.xml" relativeToChangelogFile="false"/>
     <include file="config/liquibase/changelog/20260501_03_catalog_lineage_relation_key.xml" relativeToChangelogFile="false"/>
     <include file="config/liquibase/changelog/20260501_04_catalog_lineage_time_travel.xml" relativeToChangelogFile="false"/>
+    <include file="config/liquibase/changelog/20260502_01_platform_event_outbox.xml" relativeToChangelogFile="false"/>
 </databaseChangeLog>

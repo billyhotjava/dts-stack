@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { buildScreenPayload, normalizeScreenConfig } from './specV2';
+import { buildScreenPayload, normalizeScreenConfig } from './screenSpec';
 import type { ScreenConfig } from './types';
 
 const multiPageConfig: ScreenConfig = {

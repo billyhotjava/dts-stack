@@ -87,6 +87,8 @@ const PATH_COMPONENT_OVERRIDES: Record<string, string> = {
 	"/modeling/semantic-center/runs": "/pages/modeling/SemanticRunsPage",
 	"/bi/semantic-modeling": "/pages/modeling/SemanticModelingCenterPage",
 	"/modeling/dbt-files": "/pages/modeling/DbtFileBrowserPage",
+	"/ops/events": "/pages/ops/PlatformEventObservabilityPage",
+	"/platform/events": "/pages/ops/PlatformEventObservabilityPage",
 	"/ops/logs": "/pages/ops/OpsLogCenterPage",
 	"/catalog/datasets/:id": "/pages/catalog/DatasetDetailPage",
 	// Analytics pages are statically registered in static-routes.tsx — no overrides needed.

@@ -1,7 +1,7 @@
 // @ts-nocheck — migrated from analytics-webapp, pending unused-import cleanup
 import type { DataSourceConfig, ScreenComponent, ScreenComponentAction, ScreenGlobalVariable, ScreenPage } from './types';
 import type { ScreenTemplate } from './screenTemplates';
-import { SCREEN_SCHEMA_VERSION } from './specV2';
+import { SCREEN_SCHEMA_VERSION } from './screenSpec';
 
 const SCREEN_WIDTH = 1920;
 const SCREEN_HEIGHT = 1080;

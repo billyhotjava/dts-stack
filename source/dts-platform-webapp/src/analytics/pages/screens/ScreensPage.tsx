@@ -12,9 +12,8 @@ import { CreateScreenIntakeModal, type CreateScreenIntakePayload } from './compo
 import { UnclassifiedScreensModal } from './components/UnclassifiedScreensModal';
 import { ImportPreviewModal } from './components/ImportPreviewModal';
 import { useUserRoles } from '@/store/userStore';
-import type { ScreenWritePayload } from './contracts';
 import { createConfigFromTemplate } from './screenTemplates';
-import { buildScreenPayload, normalizeScreenConfig, validateScreenPayload } from './specV2';
+import { buildScreenPayload, normalizeScreenConfig, validateScreenPayload } from './screenSpec';
 import { inlineResources } from './utils/resourceInliner';
 import { countInlinedResources } from './utils/resourceRestorer';
 import type { ScreenConfig } from './types';
@@ -64,10 +63,8 @@ export default function ScreensPage() {
 	const [error, setError] = useState<string | null>(null);
 	const [showTemplateGallery, setShowTemplateGallery] = useState(false);
 	const [savingTemplateId, setSavingTemplateId] = useState<string | number | null>(null);
-	// Sprint-24 F3：创建大屏前先收集名称 + 密级。intakeMode 区分两条入口，
-	// 用户提交后根据模式决定走 v2 直接创建还是打开模板库。
+	// Sprint-24 F3：创建大屏前先收集名称 + 密级，提交后打开模板库。
 	const [intakeOpen, setIntakeOpen] = useState(false);
-	const [intakeMode, setIntakeMode] = useState<'template' | 'v2'>('template');
 	const [pendingClassification, setPendingClassification] = useState<CreateScreenIntakePayload['classification'] | null>(null);
 	const [pendingScreenName, setPendingScreenName] = useState<string>('');
 	// Sprint-24 F4：裸屏盘点入口仅 superuser / OP_ADMIN 可见
@@ -264,67 +261,15 @@ export default function ScreensPage() {
 
 	const handleCreate = () => {
 		// Sprint-24 F3：先弹 intake 收集名称 + 密级，提交后再开模板库。
-		setIntakeMode('template');
-		setIntakeOpen(true);
-	};
-
-	/**
-	 * Sprint-12 F5/T01: 新建响应式（v2）大屏。
-	 *
-	 * 客户不再需要选固定像素尺寸；点一下直接创建空白 v2 大屏，
-	 * 后端 v2_spec_json 字段透传 schemaVersion/layout/referenceViewport。
-	 * 创建后先跳 preview（编辑器在 F3 落地前不支持 v2 编辑）。
-	 *
-	 * Sprint-24 F3：直接创建路径同样要先收集密级，否则后端 400。
-	 */
-	const handleCreateV2 = () => {
-		setIntakeMode('v2');
 		setIntakeOpen(true);
 	};
 
 	/**
 	 * Sprint-24 F3：intake 提交后的真正创建逻辑。从 modal 拿 name + classification，
-	 * 按 intakeMode 走 v2 直接创建或跳模板库。template 路径把 classification 通过
-	 * navigate state 透传到 /bi/screens/new，保存时 buildScreenPayload 一并带上。
+	 * 把 classification 通过 navigate state 透传到 /bi/screens/new，保存时 buildScreenPayload 一并带上。
 	 */
-	const handleIntakeSubmit = async (payload: CreateScreenIntakePayload) => {
+	const handleIntakeSubmit = (payload: CreateScreenIntakePayload) => {
 		setIntakeOpen(false);
-		if (intakeMode === 'v2') {
-			try {
-				const viewport = {
-					width: window.innerWidth,
-					height: window.innerHeight,
-				};
-				const writePayload: ScreenWritePayload = {
-					schemaVersion: 2,
-					name: payload.name || '新建自适应大屏',
-					description: '响应式布局，按浏览器尺寸自动铺满',
-					classification: payload.classification,
-					// v1 字段给默认值以满足后端 non-null 约束（v2 渲染时无视）
-					width: 1920,
-					height: 1080,
-					theme: 'enterprise-dark',
-					backgroundColor: '#1e1f26',
-					components: [],
-					globalVariables: [],
-					pages: [],
-					// v2 专属
-					v2Spec: {
-						schemaVersion: 2,
-						layout: { cols: 12, rowHeight: 'auto', gap: 12 },
-						referenceViewport: viewport,
-					},
-				};
-				const created = await analyticsApi.createScreen(writePayload);
-				toast.success('已创建自适应大屏');
-				navigate(`/bi/screens/${created.id}/designer-v2`);
-			} catch (err) {
-				console.error('Failed to create v2 screen:', err);
-				toast.error(err instanceof Error ? err.message : '创建失败');
-			}
-			return;
-		}
-		// template 模式：把名称 + 密级透传给模板库，最终保存路径再带进 createScreen。
 		setPendingClassification(payload.classification);
 		setPendingScreenName(payload.name);
 		setShowTemplateGallery(true);
@@ -696,15 +641,8 @@ export default function ScreensPage() {
 						{/* <button className="inline-flex items-center justify-center h-8 px-4 text-sm font-normal leading-normal border border-brand rounded-md bg-brand text-white cursor-pointer transition-all duration-200 whitespace-nowrap hover:opacity-85 disabled:opacity-50 disabled:cursor-not-allowed" onClick={handleOpenAiGenerator}>
 							自动生成
 						</button> */}
-						<button
-							className="inline-flex items-center justify-center h-8 px-4 text-sm font-normal leading-normal border border-brand rounded-md bg-brand-lighter text-brand cursor-pointer transition-all duration-200 whitespace-nowrap hover:opacity-85 disabled:opacity-50 disabled:cursor-not-allowed"
-							data-testid="analytics-screen-create-v2"
-							onClick={handleCreateV2}
-							title="新建响应式大屏，按浏览器尺寸自动铺满（Sprint-12 v2）">
-							自适应大屏
-						</button>
-						<button
-							className="inline-flex items-center justify-center h-8 px-4 text-sm font-normal leading-normal border border-brand rounded-md bg-brand text-white cursor-pointer transition-all duration-200 whitespace-nowrap hover:opacity-85 disabled:opacity-50 disabled:cursor-not-allowed"
+							<button
+								className="inline-flex items-center justify-center h-8 px-4 text-sm font-normal leading-normal border border-brand rounded-md bg-brand text-white cursor-pointer transition-all duration-200 whitespace-nowrap hover:opacity-85 disabled:opacity-50 disabled:cursor-not-allowed"
 							data-testid="analytics-screen-create"
 							onClick={handleCreate}>
 							新建大屏
@@ -970,15 +908,14 @@ export default function ScreensPage() {
 				/>
 			)}
 
-			{/* Sprint-24 F3：新建大屏 intake，强制收集名称 + 密级；
-			    handleCreate / handleCreateV2 都先经过此对话框。 */}
-			<CreateScreenIntakeModal
-				open={intakeOpen}
-				defaultName={intakeMode === 'v2' ? '新建自适应大屏' : ''}
-				okText={intakeMode === 'v2' ? '创建' : '下一步'}
-				onCancel={() => setIntakeOpen(false)}
-				onSubmit={handleIntakeSubmit}
-			/>
+				{/* Sprint-24 F3：新建大屏 intake，强制收集名称 + 密级。 */}
+				<CreateScreenIntakeModal
+					open={intakeOpen}
+					defaultName=""
+					okText="下一步"
+					onCancel={() => setIntakeOpen(false)}
+					onSubmit={handleIntakeSubmit}
+				/>
 
 			{/* Sprint-24 F4：裸屏盘点入口 */}
 			<UnclassifiedScreensModal

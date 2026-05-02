@@ -142,7 +142,7 @@ function rewritePublicScreenProjectCockpitUrl(url: string, queryContext?: Record
     if (accessMode !== 'public' || !publicScreenUuid) {
         return url;
     }
-    const match = url.match(/^\/analytics\/api\/project-cockpit\/screen\/([^/?#]+)$/);
+    const match = url.match(/^\/(?:analytics|bi)\/api\/project-cockpit\/screen\/([^/?#]+)$/);
     if (!match) {
         return url;
     }

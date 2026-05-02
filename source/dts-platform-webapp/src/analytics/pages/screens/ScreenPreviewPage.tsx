@@ -9,10 +9,7 @@ import { SharedStoreProvider } from './hooks/useSharedStore';
 import type { ScreenConfig, ScreenTheme } from './types';
 import { resolveScreenTheme } from './screenThemes';
 import { applyThemeCssVariables } from './themes/screenCssVariables';
-import { normalizeScreenConfig } from './specV2';
-import { tryLoadV2 } from './v2/loader';
-import type { ScreenConfigV2 } from './v2/types';
-import { V2ScreenRuntime } from './v2/V2ScreenRuntime';
+import { normalizeScreenConfig } from './screenSpec';
 import { buildComponentMap, isComponentEffectivelyVisible } from './componentHierarchy';
 import { safeCssBackgroundUrl } from './sanitize';
 import { useScreenCarousel } from './hooks/useScreenCarousel';
@@ -135,8 +132,6 @@ function fabDividerBg(isDark: boolean): string {
 export default function ScreenPreviewPage() {
 	const { id } = useParams<{ id: string }>();
 	const [screen, setScreen] = useState<ScreenConfig | null>(null);
-	/** Sprint-12 F1/T03: v2 响应式大屏走 ResponsiveScreenLayout，与 v1 state 并存。 */
-	const [v2Config, setV2Config] = useState<ScreenConfigV2 | null>(null);
 	const [loading, setLoading] = useState(true);
 	const [error, setError] = useState<string | null>(null);
 	// Sprint-17/F2 — record a leader-overview visit once the user has stayed
@@ -144,8 +139,8 @@ export default function ScreenPreviewPage() {
 	// so a quick mis-click on the route doesn't pollute "我常用的大屏".
 	useScreenVisitTracker({
 		screenId: id,
-		title: screen?.name ?? v2Config?.name,
-		enabled: !loading && !error && (screen != null || v2Config != null),
+		title: screen?.name,
+		enabled: !loading && !error && screen != null,
 	});
 
 	const [scale, setScale] = useState(1);
@@ -175,19 +170,12 @@ export default function ScreenPreviewPage() {
 			return;
 		}
 
-		analyticsApi.getScreen(id, { mode: 'draft' })
-			.then((data) => {
-				// Sprint-12 F1/T03: 优先尝试 v2 loader；不匹配才走 v1 normalizer。
-				const v2 = tryLoadV2(data);
-				if (v2) {
-					setV2Config(v2);
-					setLoading(false);
-					return;
-				}
-				const normalized = normalizeScreenConfig(data, { id: data.id });
-				if (normalized.warnings.length > 0) {
-					console.warn('[screen-spec-v2] normalized with warnings:', normalized.warnings);
-				}
+			analyticsApi.getScreen(id, { mode: 'draft' })
+				.then((data) => {
+					const normalized = normalizeScreenConfig(data, { id: data.id });
+					if (normalized.warnings.length > 0) {
+						console.warn('[screen-spec] normalized with warnings:', normalized.warnings);
+					}
 				setScreen(normalized.config);
 				setLoading(false);
 			})
@@ -444,7 +432,7 @@ export default function ScreenPreviewPage() {
 		);
 	}
 
-	if (error || (!screen && !v2Config)) {
+	if (error || !screen) {
 		return (
 			<div
 				className="fixed inset-0 overflow-hidden p-0 box-border"
@@ -468,22 +456,6 @@ export default function ScreenPreviewPage() {
 				</div>
 			</div>
 		);
-	}
-
-	// Sprint-12 F1/T03: v2 响应式大屏走 ResponsiveScreenLayout，跳过 v1 scale 逻辑。
-	if (v2Config) {
-		return (
-			<V2ScreenRuntime
-				screen={v2Config}
-				runtimeMeta={{ accessMode: 'private' }}
-				dataTestId="analytics-screen-preview-v2"
-			/>
-		);
-	}
-
-	// 从这里开始是 v1 渲染路径（screen 非 null）
-	if (!screen) {
-		return null;
 	}
 
 	const screenWidth = contentBounds.width;

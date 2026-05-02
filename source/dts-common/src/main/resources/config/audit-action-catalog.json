@@ -4196,6 +4196,43 @@
           ]
         }
       ]
+    },
+    {
+      "module": "platform",
+      "title": "平台事件",
+      "entries": [
+        {
+          "key": "platform.events",
+          "title": "平台事件",
+          "actions": [
+            {
+              "code": "PLATFORM_EVENT_LIST",
+              "display": "查看平台事件列表",
+              "phases": [
+                "SUCCESS"
+              ],
+              "supportsFlow": false
+            },
+            {
+              "code": "PLATFORM_EVENT_SUMMARY",
+              "display": "查看平台事件概要",
+              "phases": [
+                "SUCCESS"
+              ],
+              "supportsFlow": false
+            },
+            {
+              "code": "PLATFORM_EVENT_PUBLISH",
+              "display": "发布平台事件",
+              "phases": [
+                "SUCCESS",
+                "FAIL"
+              ],
+              "supportsFlow": false
+            }
+          ]
+        }
+      ]
     }
   ]
 }

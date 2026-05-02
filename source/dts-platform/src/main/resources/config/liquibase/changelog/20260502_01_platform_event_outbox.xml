@@ -1,0 +1,56 @@
+<?xml version="1.0" encoding="utf-8"?>
+<databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.22.xsd">
+
+    <changeSet id="20260502_01_platform_event_outbox" author="platform">
+        <preConditions onFail="MARK_RAN">
+            <not><tableExists tableName="platform_event_outbox"/></not>
+        </preConditions>
+        <createTable tableName="platform_event_outbox">
+            <column name="id" type="uuid"><constraints primaryKey="true" nullable="false"/></column>
+            <column name="event_id" type="varchar(80)"><constraints nullable="false"/></column>
+            <column name="event_type" type="varchar(128)"><constraints nullable="false"/></column>
+            <column name="domain" type="varchar(64)"><constraints nullable="false"/></column>
+            <column name="source_app" type="varchar(64)"><constraints nullable="false"/></column>
+            <column name="aggregate_type" type="varchar(96)"/>
+            <column name="aggregate_id" type="varchar(128)"/>
+            <column name="aggregate_name" type="varchar(256)"/>
+            <column name="action" type="varchar(64)"><constraints nullable="false"/></column>
+            <column name="severity" type="varchar(32)"><constraints nullable="false"/></column>
+            <column name="status" type="varchar(32)"><constraints nullable="false"/></column>
+            <column name="occurred_at" type="timestamp"><constraints nullable="false"/></column>
+            <column name="actor" type="varchar(128)"/>
+            <column name="correlation_id" type="varchar(128)"/>
+            <column name="trace_id" type="varchar(128)"/>
+            <column name="audit_action_code" type="varchar(128)"/>
+            <column name="policy_ref" type="varchar(256)"/>
+            <column name="payload_json" type="text"/>
+            <column name="dispatch_status" type="varchar(32)" defaultValue="PENDING"><constraints nullable="false"/></column>
+            <column name="dispatch_attempts" type="int" defaultValueNumeric="0"><constraints nullable="false"/></column>
+            <column name="dispatched_at" type="timestamp"/>
+            <column name="dispatch_error" type="varchar(2048)"/>
+            <column name="created_by" type="varchar(50)"/>
+            <column name="created_date" type="timestamp"/>
+            <column name="last_modified_by" type="varchar(50)"/>
+            <column name="last_modified_date" type="timestamp"/>
+        </createTable>
+        <addUniqueConstraint tableName="platform_event_outbox" columnNames="event_id" constraintName="uk_platform_event_outbox_event_id"/>
+        <createIndex tableName="platform_event_outbox" indexName="idx_platform_event_domain_time">
+            <column name="domain"/>
+            <column name="occurred_at"/>
+        </createIndex>
+        <createIndex tableName="platform_event_outbox" indexName="idx_platform_event_aggregate">
+            <column name="aggregate_type"/>
+            <column name="aggregate_id"/>
+        </createIndex>
+        <createIndex tableName="platform_event_outbox" indexName="idx_platform_event_dispatch">
+            <column name="dispatch_status"/>
+            <column name="occurred_at"/>
+        </createIndex>
+        <createIndex tableName="platform_event_outbox" indexName="idx_platform_event_correlation">
+            <column name="correlation_id"/>
+        </createIndex>
+    </changeSet>
+</databaseChangeLog>

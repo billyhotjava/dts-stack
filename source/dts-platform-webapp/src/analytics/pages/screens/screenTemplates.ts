@@ -1,5 +1,5 @@
 import type { CardParameterBinding, DataSourceConfig, ScreenConfig, ScreenComponent, ScreenGlobalVariable } from './types';
-import { SCREEN_SCHEMA_VERSION } from './specV2';
+import { SCREEN_SCHEMA_VERSION } from './screenSpec';
 import { projectManagementCommandCenterTemplate } from './projectManagementCommandCenterTemplate';
 import {
     ENTERPRISE, resetIdCounter,

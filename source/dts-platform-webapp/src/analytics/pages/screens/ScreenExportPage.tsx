@@ -8,14 +8,11 @@ import { RuntimeActionPanel } from './components/RuntimeActionPanel';
 import { ScreenRuntimeProvider } from './ScreenRuntimeContext';
 import type { DeviceMode } from './deviceMode';
 import { isVisibleForDevice, resolveDeviceModeByViewport } from './deviceMode';
-import { normalizeScreenConfig, buildScreenPayload } from './specV2';
+import { normalizeScreenConfig, buildScreenPayload } from './screenSpec';
 import { resolveScreenTheme } from './screenThemes';
 import { escapeHtml, safeCssBackgroundUrl } from './sanitize';
 import type { ScreenConfig, ScreenTheme } from './types';
 import { resolveComponentAppearanceStyle } from './componentAppearance';
-import { tryLoadV2 } from './v2/loader';
-import { ResponsiveScreenLayout } from './v2/ResponsiveScreenLayout';
-import type { ScreenConfigV2 } from './v2/types';
 
 function parseFormat(raw: string | null): 'png' | 'pdf' | 'json' {
 	const text = String(raw || '').trim().toLowerCase();
@@ -133,72 +130,27 @@ function badgeStyle(isDark: boolean, variant?: 'info' | 'warning'): React.CSSPro
 		: { background: 'rgba(255, 255, 255, 0.88)', color: 'var(--runtime-control-text-muted)', borderColor: 'var(--runtime-border)' };
 }
 
-type LoadedScreenState =
-	| { kind: 'v1'; config: ScreenConfig }
-	| { kind: 'v2'; config: ScreenConfigV2 };
-
-function buildV2ScreenPayload(config: ScreenConfigV2): Record<string, unknown> {
-	const primaryPage = config.pages?.[0];
-	return {
-		name: config.name,
-		description: config.description,
-		width: config.referenceViewport?.width ?? 1920,
-		height: config.referenceViewport?.height ?? 1080,
-		theme: config.theme,
-		backgroundColor: primaryPage?.backgroundColor ?? config.backgroundColor,
-		backgroundImage: primaryPage?.backgroundImage ?? config.backgroundImage,
-		components: primaryPage?.components ?? config.components,
-		globalVariables: config.globalVariables ?? [],
-		pages: config.pages ?? [],
-		carouselConfig: config.carouselConfig,
-		v2Spec: {
-			schemaVersion: 2,
-			layout: config.layout,
-			referenceViewport: config.referenceViewport,
-		},
-	};
-}
-
-function resolveLoadedScreen(raw: unknown, id: string): LoadedScreenState {
-	const v2 = tryLoadV2(raw);
-	if (v2) {
-		return { kind: 'v2', config: v2 };
-	}
+function resolveLoadedScreen(raw: unknown, id: string): ScreenConfig {
 	const normalized = normalizeScreenConfig(raw, { id });
 	if (normalized.warnings.length > 0) {
 		console.warn('[screen-export] normalized warnings:', normalized.warnings);
 	}
-	return { kind: 'v1', config: normalized.config };
+	return normalized.config;
 }
 
-function resolveV2ExportPage(screen: ScreenConfigV2) {
-	const page = screen.pages?.[0];
-	return {
-		components: page?.components ?? screen.components,
-		backgroundColor: page?.backgroundColor ?? screen.backgroundColor,
-		backgroundImage: page?.backgroundImage ?? screen.backgroundImage,
-	};
-}
-
-function resolveExportViewport(screen: LoadedScreenState | null): { width: number; height: number } {
+function resolveExportViewport(screen: ScreenConfig | null): { width: number; height: number } {
 	if (!screen) {
 		return { width: 1920, height: 1080 };
 	}
-	if (screen.kind === 'v2') {
-		return {
-			width: Math.max(1, Math.round(screen.config.referenceViewport?.width ?? 1920)),
-			height: Math.max(1, Math.round(screen.config.referenceViewport?.height ?? 1080)),
-		};
-	}
 	return {
-		width: Math.max(1, Math.round(screen.config.width || 1920)),
-		height: Math.max(1, Math.round(screen.config.height || 1080)),
+		width: Math.max(1, Math.round(screen.width || 1920)),
+		height: Math.max(1, Math.round(screen.height || 1080)),
 	};
 }
 
 export default function ScreenExportPage() {
 	const { id } = useParams<{ id: string }>();
-	const [screen, setScreen] = useState<LoadedScreenState | null>(null);
+	const [screen, setScreen] = useState<ScreenConfig | null>(null);
 	const [loading, setLoading] = useState(true);
 	const [statusText, setStatusText] = useState('正在准备导出...');
 	const [error, setError] = useState<string | null>(null);
@@ -239,9 +191,8 @@ export default function ScreenExportPage() {
 		}
 		return Number(baseRatio.toFixed(2));
 	}, [effectiveDevice, format, requestedPixelRatio]);
-	const isV2Screen = screen?.kind === 'v2';
 	const exportViewport = useMemo(() => resolveExportViewport(screen), [screen]);
-	const screenName = screen?.config.name || 'screen';
+	const screenName = screen?.name || 'screen';
 
 	useEffect(() => {
 		setEffectiveMode(mode);
@@ -453,13 +404,11 @@ export default function ScreenExportPage() {
 
 			try {
 				if (format === 'json') {
-					const payload = {
-						schema: 'dts.screen.spec',
-						exportedAt: new Date().toISOString(),
-						screenSpec: screen.kind === 'v2'
-							? buildV2ScreenPayload(screen.config)
-							: buildScreenPayload(screen.config),
-					};
+						const payload = {
+							schema: 'dts.screen.spec',
+							exportedAt: new Date().toISOString(),
+							screenSpec: buildScreenPayload(screen),
+						};
 					const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json;charset=utf-8' });
 					const url = URL.createObjectURL(blob);
 					const link = document.createElement('a');
@@ -478,7 +427,6 @@ export default function ScreenExportPage() {
 					if (!id) {
 						throw new Error('未找到大屏 ID');
 					}
-					if (!isV2Screen) {
 						setStatusText('正在执行服务端一致性导出...');
 						try {
 							const rendered = await analyticsApi.renderScreenExport(id, {
@@ -486,7 +434,7 @@ export default function ScreenExportPage() {
 								mode: effectiveMode || mode,
 								device: effectiveDevice,
 								pixelRatio: exportPixelRatio,
-								screenSpec: buildScreenPayload(screen.config),
+								screenSpec: buildScreenPayload(screen),
 							});
 							if (cancelled) return;
 							const ext = format === 'pdf' ? 'pdf' : 'png';
@@ -507,9 +455,6 @@ export default function ScreenExportPage() {
 							console.warn('[screen-export] server render failed, fallback to browser path:', serverError);
 							setStatusText('服务端导出失败，切换浏览器回退导出...');
 						}
-					} else {
-						setStatusText('v2 大屏使用浏览器回退导出...');
-					}
 				}
 
 				setStatusText('正在生成导出文件...');
@@ -577,18 +522,15 @@ export default function ScreenExportPage() {
 		};
 	}, [delayMs, effectiveDevice, effectiveMode, error, exportPixelRatio, format, id, loading, mode, retryNonce, screen]);
 
-	const rawTheme = screen?.config.theme as ScreenTheme | undefined;
-	const screenTheme = resolveScreenTheme(rawTheme, screen?.kind === 'v2'
-		? resolveV2ExportPage(screen.config).backgroundColor
-		: screen?.config.backgroundColor);
+	const rawTheme = screen?.theme as ScreenTheme | undefined;
+	const screenTheme = resolveScreenTheme(rawTheme, screen?.backgroundColor);
 	const isDark = screenTheme !== 'glacier';
-	const components = (screen?.kind === 'v1' ? screen.config.components : [])
+	const components = (screen?.components ?? [])
 		.filter((item) => item.visible && isVisibleForDevice(item, effectiveDevice))
 		.sort((a, b) => a.zIndex - b.zIndex);
-	const v2ExportPage = screen?.kind === 'v2' ? resolveV2ExportPage(screen.config) : null;
 
 	return (
-		<ScreenRuntimeProvider definitions={screen?.config.globalVariables ?? []}>
+		<ScreenRuntimeProvider definitions={screen?.globalVariables ?? []}>
 			<div
 				className="min-h-screen p-6 box-border"
 				style={{ ...themeVars(isDark), background: themeBg(isDark), color: themeColor(isDark) }}
@@ -622,7 +564,7 @@ export default function ScreenExportPage() {
 						className="font-bold leading-none"
 						style={{ fontSize: 'clamp(24px, 2vw, 30px)', letterSpacing: '-0.04em' }}
 					>
-						{screen?.config.name || '导出任务'}
+						{screen?.name || '导出任务'}
 					</div>
 					{/* Meta row */}
 					<div className="flex flex-wrap gap-2">
@@ -766,38 +708,18 @@ export default function ScreenExportPage() {
 						<div
 							ref={canvasRef}
 							className="relative overflow-hidden"
-							style={{
-								width: exportViewport.width,
-								height: exportViewport.height,
-								backgroundColor: screen.kind === 'v2'
-									? (v2ExportPage?.backgroundColor || '#1e1f26')
-									: (screen.config.backgroundColor || '#1e1f26'),
-								backgroundImage: safeCssBackgroundUrl(
-									screen.kind === 'v2' ? v2ExportPage?.backgroundImage : screen.config.backgroundImage,
-								),
+								style={{
+									width: exportViewport.width,
+									height: exportViewport.height,
+									backgroundColor: screen.backgroundColor || '#1e1f26',
+									backgroundImage: safeCssBackgroundUrl(screen.backgroundImage),
 								backgroundSize: 'cover',
 								backgroundPosition: 'center',
 								borderRadius: 28,
 								boxShadow: '0 28px 56px rgba(15, 23, 42, 0.2)',
 							}}
-						>
-							{screen.kind === 'v2' ? (
-								<ResponsiveScreenLayout
-									screen={screen.config}
-									components={v2ExportPage?.components ?? screen.config.components}
-									backgroundColor={v2ExportPage?.backgroundColor}
-									backgroundImage={v2ExportPage?.backgroundImage}
-									theme={screen.config.theme as ScreenTheme | undefined}
-									rootStyle={{
-										width: '100%',
-										height: '100%',
-										position: 'relative',
-										borderRadius: 28,
-										overflow: 'hidden',
-									}}
-								/>
-							) : (
-								components.map((component) => (
+							>
+								{components.map((component) => (
 									<div
 										key={component.id}
 										data-component-id={component.id}
@@ -815,8 +737,7 @@ export default function ScreenExportPage() {
 									>
 										<ComponentRenderer component={component} mode="preview" theme={screenTheme} />
 									</div>
-								))
-							)}
+								))}
 							{watermark.enabled && watermark.text && (
 								<div className="absolute inset-0 pointer-events-none z-[99999] overflow-hidden" style={{ opacity: 0.16 }}>
 									{Array.from({ length: 20 }).map((_, idx) => (
