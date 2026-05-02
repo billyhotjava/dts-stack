@@ -1,6 +1,6 @@
 package com.yuzhi.dts.platform.service.admin.gateway.audit;
 
-import com.yuzhi.dts.platform.config.DtsAdminProperties;
+import com.yuzhi.dts.platform.config.PlatformOutboundAdminProperties;
 import java.net.URI;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
@@ -23,9 +23,9 @@ import org.springframework.web.util.UriComponentsBuilder;
 public class AdminAuditGateway {
 
     private final RestTemplate restTemplate;
-    private final DtsAdminProperties adminProperties;
+    private final PlatformOutboundAdminProperties adminProperties;
 
-    public AdminAuditGateway(RestTemplateBuilder builder, DtsAdminProperties adminProperties) {
+    public AdminAuditGateway(RestTemplateBuilder builder, PlatformOutboundAdminProperties adminProperties) {
         this.restTemplate = builder.setConnectTimeout(Duration.ofSeconds(5)).setReadTimeout(Duration.ofSeconds(15)).build();
         this.adminProperties = adminProperties;
     }

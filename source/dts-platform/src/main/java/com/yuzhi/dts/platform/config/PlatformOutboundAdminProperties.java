@@ -3,32 +3,31 @@ package com.yuzhi.dts.platform.config;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 
 /**
- * @deprecated Sprint-28 起,此 bean 同时承载"出站调 admin"与"入站服务认证"两个语义被识别为设计债。
- * 出站语义已迁至 {@link PlatformOutboundAdminProperties}(prefix=dts.platform.outbound.admin),
- * 入站语义已迁至 {@link PlatformInboundServiceAuthProperties}(prefix=dts.platform.inbound.service-auth)。
- * 本 bean 保留以兼容旧配置,Sprint-29 起从 @EnableConfigurationProperties 移除并最终删除。
+ * 出站客户端配置:platform 调 dts-admin 时携带的 base URL、API path、bearer 凭据与自报身份。
+ * <p>
+ * 与 {@link PlatformInboundServiceAuthProperties} 互不相干 —— 后者描述"谁能调 platform"。
+ * 历史上这两个语义混在 {@link DtsAdminProperties} 中,自 Sprint-28 起分离。
  */
-@Deprecated(since = "2.2.3-sprint-28", forRemoval = true)
-@ConfigurationProperties(prefix = "dts.admin")
-public class DtsAdminProperties {
+@ConfigurationProperties(prefix = "dts.platform.outbound.admin")
+public class PlatformOutboundAdminProperties {
 
-    /** Enable calls to dts-admin service for shared resources. */
+    /** 是否启用对 dts-admin 的出站调用。 */
     private boolean enabled = true;
 
-    /** Base URL to reach dts-admin service, e.g. http://dts-admin:8081. */
+    /** dts-admin 服务的根 URL,例如 http://dts-admin:8081。 */
     private String baseUrl = "http://dts-admin:8081";
 
-    /** Relative path for public portal APIs on dts-admin. */
+    /** 公开门户接口的相对路径。 */
     private String apiPath = "/api";
 
-    /** Relative path for admin APIs on dts-admin. */
+    /** 管理端 admin 接口的相对路径。 */
     private String adminApiPath = "/api/admin";
 
-    /** Optional bearer token when calling dts-admin. */
+    /** platform 出站调 admin 时携带的 bearer 凭据。 */
     private String serviceToken;
 
-    /** Logical service name expected on incoming internal calls. */
-    private String serviceName = "dts-admin";
+    /** platform 出站时通过 X-DTS-Service header 自报的服务名,默认即 platform 自身。 */
+    private String serviceName = "dts-platform";
 
     public boolean isEnabled() {
         return enabled;

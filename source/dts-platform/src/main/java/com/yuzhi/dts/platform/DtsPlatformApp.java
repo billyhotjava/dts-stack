@@ -8,6 +8,8 @@ import com.yuzhi.dts.platform.config.DbtProperties;
 import com.yuzhi.dts.platform.config.DtsAdminProperties;
 import com.yuzhi.dts.platform.config.DtsAnalyticsProperties;
 import com.yuzhi.dts.platform.config.DtsIngestionProperties;
+import com.yuzhi.dts.platform.config.PlatformInboundServiceAuthProperties;
+import com.yuzhi.dts.platform.config.PlatformOutboundAdminProperties;
 import com.yuzhi.dts.platform.config.DataStandardProperties;
 import com.yuzhi.dts.platform.config.GovernanceProperties;
 import com.yuzhi.dts.platform.config.HiveExecutionProperties;
@@ -38,6 +40,8 @@ import tech.jhipster.config.JHipsterConstants;
     LiquibaseProperties.class,
     ApplicationProperties.class,
     DtsAdminProperties.class,
+    PlatformOutboundAdminProperties.class,
+    PlatformInboundServiceAuthProperties.class,
     HiveExecutionProperties.class,
     CatalogFeatureProperties.class,
     AuditProperties.class,

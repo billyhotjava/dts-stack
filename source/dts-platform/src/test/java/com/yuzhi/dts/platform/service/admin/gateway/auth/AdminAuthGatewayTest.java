@@ -11,7 +11,7 @@ import static org.springframework.test.web.client.match.MockRestRequestMatchers.
 import static org.springframework.test.web.client.response.MockRestResponseCreators.withSuccess;
 import static org.springframework.test.web.client.response.MockRestResponseCreators.withStatus;
 
-import com.yuzhi.dts.platform.config.DtsAdminProperties;
+import com.yuzhi.dts.platform.config.PlatformOutboundAdminProperties;
 import com.yuzhi.dts.platform.service.admin.gateway.support.AdminGatewayHeaders;
 import com.yuzhi.dts.platform.service.admin.gateway.support.AdminGatewayTransport;
 import java.util.List;
@@ -33,7 +33,7 @@ class AdminAuthGatewayTest {
 
     @BeforeEach
     void setUp() {
-        DtsAdminProperties properties = new DtsAdminProperties();
+        PlatformOutboundAdminProperties properties = new PlatformOutboundAdminProperties();
         properties.setBaseUrl("http://dts-admin.test:8081");
         properties.setApiPath("/api");
         properties.setAdminApiPath("/api/admin");

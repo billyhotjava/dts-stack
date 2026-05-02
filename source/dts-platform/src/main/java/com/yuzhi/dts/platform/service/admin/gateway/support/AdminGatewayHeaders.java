@@ -1,7 +1,7 @@
 package com.yuzhi.dts.platform.service.admin.gateway.support;
 
 import com.yuzhi.dts.common.net.IpAddressUtils;
-import com.yuzhi.dts.platform.config.DtsAdminProperties;
+import com.yuzhi.dts.platform.config.PlatformOutboundAdminProperties;
 import jakarta.servlet.http.HttpServletRequest;
 import java.util.List;
 import org.springframework.http.HttpHeaders;
@@ -12,9 +12,9 @@ import org.springframework.web.context.request.ServletRequestAttributes;
 
 public class AdminGatewayHeaders {
 
-    private final DtsAdminProperties properties;
+    private final PlatformOutboundAdminProperties properties;
 
-    public AdminGatewayHeaders(DtsAdminProperties properties) {
+    public AdminGatewayHeaders(PlatformOutboundAdminProperties properties) {
         this.properties = properties;
     }
 

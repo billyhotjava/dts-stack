@@ -3,16 +3,20 @@ package com.yuzhi.dts.platform.config;
 import static org.springframework.security.config.Customizer.withDefaults;
 import com.yuzhi.dts.common.security.AuthEndpointPaths;
 import com.yuzhi.dts.platform.security.AuthoritiesConstants;
-import com.yuzhi.dts.platform.config.DtsAdminProperties;
+import com.yuzhi.dts.platform.config.PlatformInboundServiceAuthProperties;
 import com.yuzhi.dts.platform.security.ServiceDependencyAuthenticationFilter;
 import com.yuzhi.dts.platform.security.session.PortalOpaqueTokenIntrospector;
 import com.yuzhi.dts.platform.security.session.PortalSessionBearerTokenResolver;
 import com.yuzhi.dts.platform.security.session.PortalSessionCookieService;
 import com.yuzhi.dts.platform.security.session.PortalSessionInactivityFilter;
 import com.yuzhi.dts.platform.web.filter.AuditLoggingFilter;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.core.env.Environment;
+import tech.jhipster.config.JHipsterConstants;
 import org.springframework.http.HttpMethod;
 import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
@@ -26,6 +30,8 @@ import tech.jhipster.config.JHipsterProperties;
 @Configuration
 @EnableMethodSecurity(securedEnabled = true)
 public class SecurityConfiguration {
+
+    private static final Logger LOG = LoggerFactory.getLogger(SecurityConfiguration.class);
 
     private final JHipsterProperties jHipsterProperties;
 
@@ -111,8 +117,28 @@ public class SecurityConfiguration {
     }
 
     @Bean
-    ServiceDependencyAuthenticationFilter serviceDependencyAuthenticationFilter(DtsAdminProperties adminProperties) {
-        return new ServiceDependencyAuthenticationFilter(adminProperties);
+    ServiceDependencyAuthenticationFilter serviceDependencyAuthenticationFilter(
+        PlatformInboundServiceAuthProperties inboundAuthProperties,
+        org.springframework.beans.factory.ObjectProvider<com.yuzhi.dts.platform.service.services.SvcTokenAuthService> svcTokenAuthServiceProvider,
+        Environment environment
+    ) {
+        if (inboundAuthProperties.isLegacyHeaderOnlyMode()) {
+            boolean isProduction = environment != null
+                && java.util.Arrays.asList(environment.getActiveProfiles()).contains(JHipsterConstants.SPRING_PROFILE_PRODUCTION);
+            if (isProduction) {
+                LOG.warn(
+                    "SECURITY: dts.platform.inbound.service-auth.legacy-header-only-mode=true detected in PRODUCTION profile. " +
+                    "This bypasses X-DTS-Service-Token validation and exposes any OP_ADMIN endpoint to header forgery. " +
+                    "Disable immediately unless this is an explicit emergency rollback."
+                );
+            } else {
+                LOG.warn(
+                    "dts.platform.inbound.service-auth.legacy-header-only-mode=true — Sprint-27 compatibility mode active. " +
+                    "Service auth filter will accept callers with only X-DTS-Service header (no token validation)."
+                );
+            }
+        }
+        return new ServiceDependencyAuthenticationFilter(inboundAuthProperties, svcTokenAuthServiceProvider.getIfAvailable());
     }
 
     @Bean

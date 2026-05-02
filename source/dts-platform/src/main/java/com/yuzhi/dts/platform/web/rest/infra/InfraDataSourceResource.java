@@ -1,7 +1,7 @@
 package com.yuzhi.dts.platform.web.rest.infra;
 
 import com.yuzhi.dts.common.audit.AuditStage;
-import com.yuzhi.dts.platform.config.DtsAdminProperties;
+import com.yuzhi.dts.platform.config.PlatformInboundServiceAuthProperties;
 import com.yuzhi.dts.platform.security.AuthoritiesConstants;
 import com.yuzhi.dts.platform.security.SecurityUtils;
 import com.yuzhi.dts.platform.service.audit.AuditService;
@@ -55,7 +55,7 @@ public class InfraDataSourceResource {
     private final JdbcConnectionTestService jdbcConnectionTestService;
     private final JdbcCatalogSyncService jdbcCatalogSyncService;
     private final OdsGenerationService odsGenerationService;
-    private final DtsAdminProperties dtsAdminProperties;
+    private final PlatformInboundServiceAuthProperties inboundAuthProperties;
     private final SvcTokenAuthService svcTokenAuthService;
 
     public InfraDataSourceResource(
@@ -64,7 +64,7 @@ public class InfraDataSourceResource {
         JdbcConnectionTestService jdbcConnectionTestService,
         JdbcCatalogSyncService jdbcCatalogSyncService,
         OdsGenerationService odsGenerationService,
-        DtsAdminProperties dtsAdminProperties,
+        PlatformInboundServiceAuthProperties inboundAuthProperties,
         SvcTokenAuthService svcTokenAuthService
     ) {
         this.infraManagementService = infraManagementService;
@@ -72,7 +72,7 @@ public class InfraDataSourceResource {
         this.jdbcConnectionTestService = jdbcConnectionTestService;
         this.jdbcCatalogSyncService = jdbcCatalogSyncService;
         this.odsGenerationService = odsGenerationService;
-        this.dtsAdminProperties = dtsAdminProperties;
+        this.inboundAuthProperties = inboundAuthProperties;
         this.svcTokenAuthService = svcTokenAuthService;
     }
 
@@ -164,7 +164,7 @@ public class InfraDataSourceResource {
             return false;
         }
         String normalized = supplied.trim();
-        String expected = dtsAdminProperties != null ? dtsAdminProperties.getServiceToken() : null;
+        String expected = inboundAuthProperties != null ? inboundAuthProperties.resolveExpectedToken(serviceName) : null;
         if (StringUtils.hasText(expected) && expected.trim().equals(normalized)) {
             return true;
         }

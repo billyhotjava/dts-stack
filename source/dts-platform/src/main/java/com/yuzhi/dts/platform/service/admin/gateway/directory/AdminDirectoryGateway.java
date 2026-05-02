@@ -2,7 +2,7 @@ package com.yuzhi.dts.platform.service.admin.gateway.directory;
 
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.JsonProperty;
-import com.yuzhi.dts.platform.config.DtsAdminProperties;
+import com.yuzhi.dts.platform.config.PlatformOutboundAdminProperties;
 import com.yuzhi.dts.platform.service.admin.gateway.support.AdminGatewayEnvelope;
 import com.yuzhi.dts.platform.service.admin.gateway.support.AdminGatewayException;
 import com.yuzhi.dts.platform.service.admin.gateway.support.AdminGatewayRequestOptions;
@@ -42,9 +42,9 @@ public class AdminDirectoryGateway {
         new ParameterizedTypeReference<>() {};
 
     private final AdminGatewayTransport transport;
-    private final DtsAdminProperties properties;
+    private final PlatformOutboundAdminProperties properties;
 
-    public AdminDirectoryGateway(AdminGatewayTransport transport, DtsAdminProperties properties) {
+    public AdminDirectoryGateway(AdminGatewayTransport transport, PlatformOutboundAdminProperties properties) {
         this.transport = transport;
         this.properties = properties;
     }

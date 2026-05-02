@@ -2,7 +2,7 @@ package com.yuzhi.dts.platform.service.admin.gateway.auth;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.yuzhi.dts.platform.config.DtsAdminProperties;
+import com.yuzhi.dts.platform.config.PlatformOutboundAdminProperties;
 import com.yuzhi.dts.platform.service.admin.gateway.support.AdminGatewayEnvelope;
 import com.yuzhi.dts.platform.service.admin.gateway.support.AdminGatewayException;
 import com.yuzhi.dts.platform.service.admin.gateway.support.AdminGatewayRequestOptions;
@@ -25,10 +25,10 @@ public class AdminAuthGateway {
         new ParameterizedTypeReference<>() {};
 
     private final AdminGatewayTransport transport;
-    private final DtsAdminProperties properties;
+    private final PlatformOutboundAdminProperties properties;
     private final ObjectMapper objectMapper = new ObjectMapper();
 
-    public AdminAuthGateway(AdminGatewayTransport transport, DtsAdminProperties properties) {
+    public AdminAuthGateway(AdminGatewayTransport transport, PlatformOutboundAdminProperties properties) {
         this.transport = transport;
         this.properties = properties;
     }

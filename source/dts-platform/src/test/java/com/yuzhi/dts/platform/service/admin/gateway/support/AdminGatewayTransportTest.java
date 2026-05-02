@@ -8,7 +8,7 @@ import static org.springframework.test.web.client.match.MockRestRequestMatchers.
 import static org.springframework.test.web.client.match.MockRestRequestMatchers.requestTo;
 import static org.springframework.test.web.client.response.MockRestResponseCreators.withSuccess;
 
-import com.yuzhi.dts.platform.config.DtsAdminProperties;
+import com.yuzhi.dts.platform.config.PlatformOutboundAdminProperties;
 import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.AfterEach;
@@ -31,7 +31,7 @@ class AdminGatewayTransportTest {
 
     @BeforeEach
     void setUp() {
-        DtsAdminProperties properties = new DtsAdminProperties();
+        PlatformOutboundAdminProperties properties = new PlatformOutboundAdminProperties();
         properties.setBaseUrl("http://dts-admin.test:8081");
         properties.setApiPath("/api");
         properties.setAdminApiPath("/api/admin");

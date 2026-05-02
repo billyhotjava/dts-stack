@@ -2,7 +2,7 @@ package com.yuzhi.dts.platform.service.workflow;
 
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.JsonProperty;
-import com.yuzhi.dts.platform.config.DtsAdminProperties;
+import com.yuzhi.dts.platform.config.PlatformOutboundAdminProperties;
 import com.yuzhi.dts.platform.service.admin.gateway.support.AdminGatewayEnvelope;
 import com.yuzhi.dts.platform.service.admin.gateway.support.AdminGatewayException;
 import com.yuzhi.dts.platform.service.admin.gateway.support.AdminGatewayRequestOptions;
@@ -27,9 +27,9 @@ public class AdminWorkflowConfigClient {
         new ParameterizedTypeReference<>() {};
 
     private final AdminGatewayTransport transport;
-    private final DtsAdminProperties props;
+    private final PlatformOutboundAdminProperties props;
 
-    public AdminWorkflowConfigClient(AdminGatewayTransport transport, DtsAdminProperties props) {
+    public AdminWorkflowConfigClient(AdminGatewayTransport transport, PlatformOutboundAdminProperties props) {
         this.transport = transport;
         this.props = props;
     }

@@ -1,7 +1,8 @@
 package com.yuzhi.dts.platform.security;
 
-import com.yuzhi.dts.platform.config.DtsAdminProperties;
+import com.yuzhi.dts.platform.config.PlatformInboundServiceAuthProperties;
 import com.yuzhi.dts.platform.security.AuthoritiesConstants;
+import com.yuzhi.dts.platform.service.services.SvcTokenAuthService;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
@@ -21,16 +22,36 @@ import org.springframework.web.filter.OncePerRequestFilter;
 
 /**
  * Injects an authenticated service principal when trusted services call platform APIs.
+ * <p>
+ * Sprint-28 F3: 启用 token 强校验,关闭 Sprint-27 的"白名单即权限"越权面。
+ * 注入逻辑:
+ * <ol>
+ *   <li>X-DTS-Service header 必须在 trustedServices Map keys 或 trustedServiceNames List 内,否则拒绝;</li>
+ *   <li>X-DTS-Service-Token header 必须存在,且与 trustedServices.get(serviceName) 或 sharedSecret 完全相等,
+ *       或者通过 {@link SvcTokenAuthService#authenticateService} 命中数据库中动态颁发的 svc_token,缺一不注入。</li>
+ * </ol>
+ * <p>
+ * 兼容开关 {@code legacy-header-only-mode} 开启时退回 Sprint-27 行为(仅看 header)。production 严禁开启。
  */
 public class ServiceDependencyAuthenticationFilter extends OncePerRequestFilter {
 
     private static final Logger log = LoggerFactory.getLogger(ServiceDependencyAuthenticationFilter.class);
     private static final String SERVICE_HEADER = "X-DTS-Service";
+    private static final String SERVICE_TOKEN_HEADER = "X-DTS-Service-Token";
 
-    private final DtsAdminProperties adminProperties;
+    private final PlatformInboundServiceAuthProperties authProperties;
+    private final SvcTokenAuthService svcTokenAuthService;
 
-    public ServiceDependencyAuthenticationFilter(DtsAdminProperties adminProperties) {
-        this.adminProperties = adminProperties;
+    public ServiceDependencyAuthenticationFilter(PlatformInboundServiceAuthProperties authProperties) {
+        this(authProperties, null);
+    }
+
+    public ServiceDependencyAuthenticationFilter(
+        PlatformInboundServiceAuthProperties authProperties,
+        SvcTokenAuthService svcTokenAuthService
+    ) {
+        this.authProperties = authProperties;
+        this.svcTokenAuthService = svcTokenAuthService;
     }
 
     @Override
@@ -55,23 +76,38 @@ public class ServiceDependencyAuthenticationFilter extends OncePerRequestFilter 
     }
 
     private String resolveServiceName(HttpServletRequest request) {
-        if (!adminProperties.isEnabled()) {
+        if (authProperties == null || !authProperties.isEnabled()) {
             return null;
         }
-        String expected = adminProperties.getServiceName();
         String declared = request.getHeader(SERVICE_HEADER);
         if (!StringUtils.hasText(declared)) {
             return null;
         }
-        String normalized = declared.trim();
-        if (!StringUtils.hasText(expected)) {
+        if (!authProperties.isTrustedServiceName(declared)) {
+            log.debug("event=service_auth_denied service={} reason=service_unknown", declared.trim());
             return null;
         }
-        for (String candidate : expected.split(",")) {
-            if (StringUtils.hasText(candidate) && candidate.trim().equalsIgnoreCase(normalized)) {
-                return candidate.trim();
-            }
+        String canonical = authProperties.canonicalServiceName(declared);
+
+        if (authProperties.isLegacyHeaderOnlyMode()) {
+            // Sprint-27 兼容路径,仅 header 即放行。production 严禁开启。
+            return canonical;
         }
+
+        String suppliedToken = request.getHeader(SERVICE_TOKEN_HEADER);
+        if (!StringUtils.hasText(suppliedToken)) {
+            log.debug("event=service_auth_denied service={} reason=token_missing", canonical);
+            return null;
+        }
+        String trimmedToken = suppliedToken.trim();
+        String expected = authProperties.resolveExpectedToken(canonical);
+        if (StringUtils.hasText(expected) && expected.trim().equals(trimmedToken)) {
+            return canonical;
+        }
+        if (svcTokenAuthService != null && svcTokenAuthService.authenticateService(trimmedToken, canonical) != null) {
+            return canonical;
+        }
+        log.debug("event=service_auth_denied service={} reason=token_mismatch", canonical);
         return null;
     }
 }

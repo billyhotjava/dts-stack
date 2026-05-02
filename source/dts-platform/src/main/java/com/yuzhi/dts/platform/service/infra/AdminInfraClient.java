@@ -2,7 +2,7 @@ package com.yuzhi.dts.platform.service.infra;
 
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.JsonProperty;
-import com.yuzhi.dts.platform.config.DtsAdminProperties;
+import com.yuzhi.dts.platform.config.PlatformOutboundAdminProperties;
 import com.yuzhi.dts.platform.service.admin.gateway.support.AdminGatewayException;
 import com.yuzhi.dts.platform.service.admin.gateway.support.AdminGatewayRequestOptions;
 import com.yuzhi.dts.platform.service.admin.gateway.support.AdminGatewayTarget;
@@ -26,9 +26,9 @@ public class AdminInfraClient {
     private static final ParameterizedTypeReference<AdminDataLakeConfig> DATA_LAKE_RESPONSE_TYPE = new ParameterizedTypeReference<>() {};
 
     private final AdminGatewayTransport transport;
-    private final DtsAdminProperties properties;
+    private final PlatformOutboundAdminProperties properties;
 
-    public AdminInfraClient(AdminGatewayTransport transport, DtsAdminProperties properties) {
+    public AdminInfraClient(AdminGatewayTransport transport, PlatformOutboundAdminProperties properties) {
         this.properties = properties;
         this.transport = transport;
     }

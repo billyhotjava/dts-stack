@@ -273,6 +273,9 @@ dts:
       sliding-window-size: ${DTS_INGESTION_CB_WINDOW_SIZE:10}
       wait-duration-in-open-state-seconds: ${DTS_INGESTION_CB_OPEN_WAIT:30}
       permitted-calls-in-half-open-state: ${DTS_INGESTION_CB_HALF_OPEN_CALLS:3}
+  # @deprecated Sprint-28 起,本段仅作为旧 env 兼容入口。
+  # 出站语义已迁至 dts.platform.outbound.admin.*; 入站语义已迁至 dts.platform.inbound.service-auth.*。
+  # Sprint-29 计划移除该段及对应 env(DTS_ADMIN_*),请尽快切换到新 env。
   admin:
     enabled: ${DTS_ADMIN_ENABLED:true}
     base-url: ${DTS_ADMIN_BASE_URL:http://dts-admin:8081}
@@ -284,6 +287,34 @@ dts:
     v2:
       enabled: ${DTS_SQL_IDE_V2_ENABLED:false}
   platform:
+    # Sprint-28 新增:出站客户端配置(platform 调 dts-admin)
+    outbound:
+      admin:
+        enabled: ${DTS_PLATFORM_OUTBOUND_ADMIN_ENABLED:${DTS_ADMIN_ENABLED:true}}
+        base-url: ${DTS_PLATFORM_OUTBOUND_ADMIN_BASE_URL:${DTS_ADMIN_BASE_URL:http://dts-admin:8081}}
+        api-path: ${DTS_PLATFORM_OUTBOUND_ADMIN_API_PATH:${DTS_ADMIN_API_PATH:/api}}
+        admin-api-path: ${DTS_PLATFORM_OUTBOUND_ADMIN_ADMIN_API_PATH:${DTS_ADMIN_ADMIN_API_PATH:/api/admin}}
+        service-token: ${DTS_PLATFORM_TO_ADMIN_TOKEN:${DTS_ADMIN_SERVICE_TOKEN:}}
+        # platform 出站时通过 X-DTS-Service header 自报的服务名,默认 dts-platform。
+        # 注:Sprint-27 之前误用入站白名单字符串(dts-admin,dts-ingestion,...) 作为出站身份,Sprint-28 拆分时修复。
+        service-name: ${DTS_PLATFORM_OUTBOUND_SERVICE_NAME:dts-platform}
+    # Sprint-28 新增:入站服务鉴权配置(谁能调 platform)
+    inbound:
+      service-auth:
+        enabled: ${DTS_PLATFORM_INBOUND_AUTH_ENABLED:true}
+        # F2 之前,所有受信服务统一校验此 secret。F2 起优先用 trusted-services Map 内的独立 secret。
+        shared-secret: ${DTS_PLATFORM_INBOUND_SHARED_SECRET:${DTS_ADMIN_SERVICE_TOKEN:}}
+        # 入站白名单。逗号分隔字符串会被 Spring 自动转 List。
+        trusted-service-names: ${DTS_PLATFORM_INBOUND_TRUSTED_SERVICES:${DTS_ADMIN_SERVICE_NAME:dts-admin,dts-ingestion,dts-airflow,dts-analytics}}
+        # 每对独立 secret(Sprint-28 F2 起启用)。
+        # 单独的 DTS_INBOUND_FROM_<SERVICE> 优先;未设时 fallback 到 DTS_ADMIN_SERVICE_TOKEN,
+        # 若仍为空,会进一步 fallback 到 shared-secret(运维仅迁移到一半时不至于全断)。
+        trusted-services:
+          dts-ingestion: ${DTS_INBOUND_FROM_INGESTION:${DTS_ADMIN_SERVICE_TOKEN:}}
+          dts-airflow:   ${DTS_INBOUND_FROM_AIRFLOW:${DTS_ADMIN_SERVICE_TOKEN:}}
+          dts-analytics: ${DTS_INBOUND_FROM_ANALYTICS:${DTS_ADMIN_SERVICE_TOKEN:}}
+        # 兼容开关:开启后退回 Sprint-27 行为(仅 X-DTS-Service header 即注入 OP_ADMIN)。production 严禁开启。
+        legacy-header-only-mode: ${DTS_PLATFORM_LEGACY_HEADER_ONLY_MODE:false}
     events:
       kafka:
         enabled: ${DTS_PLATFORM_EVENTS_KAFKA_ENABLED:false}

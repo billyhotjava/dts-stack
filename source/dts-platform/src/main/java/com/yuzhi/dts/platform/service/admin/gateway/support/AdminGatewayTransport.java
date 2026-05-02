@@ -1,6 +1,6 @@
 package com.yuzhi.dts.platform.service.admin.gateway.support;
 
-import com.yuzhi.dts.platform.config.DtsAdminProperties;
+import com.yuzhi.dts.platform.config.PlatformOutboundAdminProperties;
 import java.net.URI;
 import java.time.Duration;
 import java.util.List;
@@ -24,15 +24,15 @@ public class AdminGatewayTransport {
     private static final Logger LOG = LoggerFactory.getLogger(AdminGatewayTransport.class);
 
     private final RestTemplate restTemplate;
-    private final DtsAdminProperties properties;
+    private final PlatformOutboundAdminProperties properties;
     private final AdminGatewayHeaders gatewayHeaders;
 
     @Autowired
-    public AdminGatewayTransport(RestTemplateBuilder builder, DtsAdminProperties properties) {
+    public AdminGatewayTransport(RestTemplateBuilder builder, PlatformOutboundAdminProperties properties) {
         this(builder, properties, new AdminGatewayHeaders(properties));
     }
 
-    public AdminGatewayTransport(RestTemplateBuilder builder, DtsAdminProperties properties, AdminGatewayHeaders gatewayHeaders) {
+    public AdminGatewayTransport(RestTemplateBuilder builder, PlatformOutboundAdminProperties properties, AdminGatewayHeaders gatewayHeaders) {
         this.restTemplate = builder.setConnectTimeout(Duration.ofSeconds(5)).setReadTimeout(Duration.ofSeconds(10)).build();
         this.properties = properties;
         this.gatewayHeaders = gatewayHeaders;

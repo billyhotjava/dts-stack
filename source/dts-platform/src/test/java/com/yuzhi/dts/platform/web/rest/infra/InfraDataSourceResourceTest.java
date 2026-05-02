@@ -6,7 +6,7 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-import com.yuzhi.dts.platform.config.DtsAdminProperties;
+import com.yuzhi.dts.platform.config.PlatformInboundServiceAuthProperties;
 import com.yuzhi.dts.platform.security.AuthoritiesConstants;
 import com.yuzhi.dts.platform.service.audit.AuditService;
 import com.yuzhi.dts.platform.service.infra.InfraManagementService;
@@ -53,13 +53,13 @@ class InfraDataSourceResourceTest {
     @Mock
     private SvcTokenAuthService svcTokenAuthService;
 
-    private DtsAdminProperties properties;
+    private PlatformInboundServiceAuthProperties properties;
     private InfraDataSourceResource resource;
 
     @BeforeEach
     void setUp() {
-        properties = new DtsAdminProperties();
-        properties.setServiceToken("svc-secret");
+        properties = new PlatformInboundServiceAuthProperties();
+        properties.setSharedSecret("svc-secret");
         resource = new InfraDataSourceResource(
             infraManagementService,
             auditService,
@@ -132,7 +132,7 @@ class InfraDataSourceResourceTest {
     @Test
     void runtimeDetailAllowsServicePrincipalWithDatabaseManagedServiceToken() {
         UUID id = UUID.randomUUID();
-        properties.setServiceToken(null);
+        properties.setSharedSecret(null);
         authenticate("service:dts-ingestion", AuthoritiesConstants.OP_ADMIN);
         InfraDataSourceDetailDto detail = new InfraDataSourceDetailDto(
             id,

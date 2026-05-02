@@ -2,7 +2,7 @@ package com.yuzhi.dts.platform.service.menu;
 
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.JsonProperty;
-import com.yuzhi.dts.platform.config.DtsAdminProperties;
+import com.yuzhi.dts.platform.config.PlatformOutboundAdminProperties;
 import com.yuzhi.dts.platform.service.admin.gateway.support.AdminGatewayEnvelope;
 import com.yuzhi.dts.platform.service.admin.gateway.support.AdminGatewayException;
 import com.yuzhi.dts.platform.service.admin.gateway.support.AdminGatewayRequestOptions;
@@ -24,7 +24,7 @@ public class PortalMenuClient {
     private static final Logger log = LoggerFactory.getLogger(PortalMenuClient.class);
 
     private final AdminGatewayTransport transport;
-    private final DtsAdminProperties props;
+    private final PlatformOutboundAdminProperties props;
 
     private static final ParameterizedTypeReference<AdminGatewayEnvelope<List<RemoteMenuNode>>> MENU_TREE_TYPE =
         new ParameterizedTypeReference<>() {};
@@ -33,7 +33,7 @@ public class PortalMenuClient {
     private static final ParameterizedTypeReference<AdminGatewayEnvelope<PortalMenuCollection>> MENU_COLLECTION_TYPE =
         new ParameterizedTypeReference<>() {};
 
-    public PortalMenuClient(AdminGatewayTransport transport, DtsAdminProperties props) {
+    public PortalMenuClient(AdminGatewayTransport transport, PlatformOutboundAdminProperties props) {
         this.transport = transport;
         this.props = props;
     }
