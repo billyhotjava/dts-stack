@@ -10,7 +10,7 @@
  */
 import type { ScreenThemeTokens } from '../screenThemes';
 import { getThemeTokens } from '../screenThemes';
-import type { ScreenTheme } from '../types';
+import type { ScreenCustomTheme, ScreenTheme } from '../types';
 
 /**
  * Map ScreenThemeTokens to CSS variable declarations.
@@ -99,8 +99,8 @@ export function themeToCssVariables(tokens: ScreenThemeTokens): Record<string, s
 /**
  * Apply theme CSS variables to a container element.
  */
-export function applyThemeCssVariables(container: HTMLElement, theme?: ScreenTheme): void {
-	const tokens = getThemeTokens(theme);
+export function applyThemeCssVariables(container: HTMLElement, theme?: ScreenTheme, customTheme?: ScreenCustomTheme): void {
+	const tokens = getThemeTokens(theme, customTheme);
 	const vars = themeToCssVariables(tokens);
 	for (const [key, value] of Object.entries(vars)) {
 		container.style.setProperty(key, value);

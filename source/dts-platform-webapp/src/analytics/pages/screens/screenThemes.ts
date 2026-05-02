@@ -1,4 +1,4 @@
-import type { ScreenTheme, ComponentType } from './types';
+import type { ScreenCustomTheme, ScreenTheme, ComponentType } from './types';
 import { COMPONENT_CONFIG_SCHEMAS } from './configSchema/schemas';
 
 export interface ScreenThemeTokens {
@@ -482,9 +482,77 @@ export function resolveScreenTheme(theme?: ScreenTheme, backgroundColor?: string
     return isLightBackgroundColor(backgroundColor) ? 'glacier' : 'legacy-dark';
 }
 
-export function getThemeTokens(theme?: ScreenTheme): ScreenThemeTokens {
+function applyCustomThemeTokens(tokens: ScreenThemeTokens, customTheme?: ScreenCustomTheme): ScreenThemeTokens {
+    if (!customTheme || Object.keys(customTheme).length === 0) {
+        return tokens;
+    }
+    const primary = customTheme.primaryColor || tokens.accentColor;
+    const background = customTheme.backgroundColor || tokens.canvasBackground;
+    const textPrimary = customTheme.textPrimary || tokens.textPrimary;
+    const textSecondary = customTheme.textSecondary || tokens.textSecondary;
+    const borderColor = customTheme.borderColor || tokens.echarts.axisLineColor;
+    const cardBackground = customTheme.cardBackground || tokens.cardBackground;
+    const cardBorder = borderColor.startsWith('1px') ? borderColor : `1px solid ${borderColor}`;
+    return {
+        ...tokens,
+        canvasBackground: background,
+        cardBackground,
+        cardBorder,
+        textPrimary,
+        textSecondary,
+        textMuted: textSecondary,
+        accentColor: primary,
+        echarts: {
+            ...tokens.echarts,
+            axisLabelColor: textSecondary,
+            axisLineColor: borderColor,
+            splitLineColor: borderColor,
+            colorPalette: [primary, ...tokens.echarts.colorPalette.filter((item) => item !== primary)].slice(0, 8),
+        },
+        barGradient: [primary, tokens.barGradient[1]],
+        scatterColor: primary,
+        numberCard: {
+            ...tokens.numberCard,
+            background: cardBackground,
+            border: cardBorder,
+            titleColor: textSecondary,
+            valueColor: textPrimary,
+        },
+        scrollBoard: {
+            ...tokens.scrollBoard,
+            headerBg: cardBackground,
+            textColor: textPrimary,
+        },
+        progressBar: {
+            ...tokens.progressBar,
+            fillGradient: [primary, tokens.progressBar.fillGradient[1]],
+            labelColor: textPrimary,
+        },
+        breadcrumb: {
+            ...tokens.breadcrumb,
+            background: cardBackground,
+            textColor: textSecondary,
+            linkColor: primary,
+        },
+        gauge: {
+            ...tokens.gauge,
+            titleColor: textPrimary,
+            detailColor: primary,
+            axisLabelColor: textSecondary,
+        },
+        radar: {
+            ...tokens.radar,
+            axisNameColor: textSecondary,
+        },
+        pieLabelColor: textPrimary,
+        funnelLabelColor: textPrimary,
+    };
+}
+
+export function getThemeTokens(theme?: ScreenTheme, customTheme?: ScreenCustomTheme): ScreenThemeTokens {
     const resolved = resolveScreenTheme(theme);
-    return themeMap[resolved] ?? legacyDarkTheme;
+    const tokens = themeMap[resolved] ?? legacyDarkTheme;
+    return resolved === 'brand-custom' ? applyCustomThemeTokens(tokens, customTheme) : tokens;
 }
 
 export type ThemeComponentApplyMode = 'safe' | 'force';
@@ -508,8 +576,9 @@ export function applyThemeToComponents(
     components: Array<{ type?: string; config?: Record<string, unknown> }>,
     theme: ScreenTheme | string | undefined,
     mode: 'force' | 'safe' = 'force',
+    customTheme?: ScreenCustomTheme,
 ) {
-    const tokens = getThemeTokens(theme as ScreenTheme);
+    const tokens = getThemeTokens(theme as ScreenTheme, customTheme);
     return components.map((comp) => {
         const schema = COMPONENT_CONFIG_SCHEMAS[comp.type as ComponentType];
         if (!schema || !comp.config) return comp;

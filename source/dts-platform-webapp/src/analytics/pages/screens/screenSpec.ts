@@ -1,4 +1,4 @@
-import type { CarouselConfig, ScreenComponent, ScreenConfig, ScreenGlobalVariable, ScreenPage, ScreenTheme } from './types';
+import type { CarouselConfig, ScreenComponent, ScreenConfig, ScreenCustomTheme, ScreenGlobalVariable, ScreenPage, ScreenTheme } from './types';
 import type { ScreenWritePayload } from './contracts';
 
 export const SCREEN_SCHEMA_VERSION = 1;
@@ -296,6 +296,20 @@ function normalizePages(input: unknown, warnings: string[]): ScreenPage[] | unde
     }, []);
 }
 
+function normalizeCustomTheme(input: unknown): ScreenCustomTheme | undefined {
+    if (!input || typeof input !== 'object' || Array.isArray(input)) {
+        return undefined;
+    }
+    const out: ScreenCustomTheme = {};
+    for (const key of ['primaryColor', 'backgroundColor', 'textPrimary', 'textSecondary', 'borderColor', 'cardBackground'] as const) {
+        const value = asTrimmedString((input as Record<string, unknown>)[key]);
+        if (value) {
+            out[key] = value;
+        }
+    }
+    return Object.keys(out).length > 0 ? out : undefined;
+}
+
 export function normalizeScreenConfig(
     input: unknown,
     options?: { id?: string | number },
@@ -314,6 +328,11 @@ export function normalizeScreenConfig(
     const backgroundColor = asString(row.backgroundColor) || '#1e1f26';
     const themeRaw = asString(row.theme);
     const theme = themeRaw && THEMES.has(themeRaw as ScreenTheme) ? (themeRaw as ScreenTheme) : undefined;
+    const classificationRaw = asTrimmedString(row.classification)?.toUpperCase();
+    const classification = classificationRaw
+        && (classificationRaw === 'PUBLIC' || classificationRaw === 'INTERNAL' || classificationRaw === 'SECRET' || classificationRaw === 'CONFIDENTIAL')
+        ? classificationRaw
+        : undefined;
 
     const rawComponents = Array.isArray(row.components) ? row.components : [];
     const components = rawComponents
@@ -335,6 +354,8 @@ export function normalizeScreenConfig(
         backgroundColor,
         backgroundImage: asTrimmedString(row.backgroundImage),
         theme,
+        customTheme: normalizeCustomTheme(row.customTheme),
+        classification,
         components,
         globalVariables: normalizeGlobalVariables(row.globalVariables),
         pages: normalizePages(row.pages, warnings),
@@ -364,6 +385,7 @@ export function buildScreenPayload(config: ScreenConfig): ScreenWritePayload {
         backgroundColor: config.backgroundColor,
         backgroundImage: config.backgroundImage,
         theme: config.theme,
+        customTheme: config.customTheme,
         components: config.components,
         globalVariables: config.globalVariables ?? [],
         pages: config.pages ?? [],
@@ -543,12 +565,8 @@ export function validateScreenPayload(input: unknown): { errors: string[]; warni
                         }
                         if (actionType === 'open-panel') {
                             const panelTitle = asTrimmedString(actionRow.panelTitle);
-                            const panelBodyTemplate = asTrimmedString(actionRow.panelBodyTemplate);
                             if (!panelTitle) {
                                 errors.push(`${actionPath}.panelTitle 不能为空`);
-                            }
-                            if (!panelBodyTemplate) {
-                                errors.push(`${actionPath}.panelBodyTemplate 不能为空`);
                             }
                         }
                         if (actionType === 'emit-intent') {

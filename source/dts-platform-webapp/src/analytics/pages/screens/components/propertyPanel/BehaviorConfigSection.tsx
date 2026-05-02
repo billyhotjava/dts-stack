@@ -472,7 +472,7 @@ export function renderActionConfig(
                 className="property-input flex-1 px-2.5 py-1.5 border border-border-default rounded bg-surface-card text-text-primary text-xs focus:outline-none focus:border-brand"
                 onClick={() => setActions([
                     ...actions,
-                    { type: 'open-panel', label: '查看详情', panelTitle: '{{name}}', panelBodyTemplate: '' },
+                    { type: 'open-panel', label: '查看详情', panelTitle: '{{name}}', panelBodyTemplate: '{{name}}' },
                 ])}
                 style={{ width: '100%', textAlign: 'center', cursor: 'pointer', color: '#2563eb' }}
             >

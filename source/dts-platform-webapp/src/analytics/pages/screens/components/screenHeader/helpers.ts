@@ -30,12 +30,14 @@ export const VERSION_ACTION_STORAGE_KEY = 'dts.analytics.screen.header.versionAc
 export const QUICK_ACTION_RECENT_STORAGE_KEY = 'dts.analytics.screen.header.quickRecentActions';
 export const PRIMARY_ACTION_STORAGE_KEY = 'dts.analytics.screen.header.primaryAction';
 
-export const THEME_OPTIONS: { value: ScreenTheme | ''; label: string }[] = [
-    { value: '', label: '经典深蓝' },
+export const THEME_OPTIONS: { value: ScreenTheme; label: string }[] = [
+    { value: 'legacy-dark', label: '经典深蓝' },
     { value: 'titanium', label: '钛合金灰' },
     { value: 'glacier', label: '冰川白' },
     { value: 'light-business', label: '商务浅色' },
     { value: 'dark-command', label: '指挥深色' },
+    { value: 'enterprise-light', label: '企业浅色' },
+    { value: 'enterprise-dark', label: '企业深色' },
     { value: 'brand-custom', label: '自定义' },
 ];
 

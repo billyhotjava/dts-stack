@@ -399,9 +399,9 @@ export default function ScreenPreviewPage() {
 	// Inject CSS Variables for theme — ensures theme switching takes effect immediately
 	useEffect(() => {
 		if (canvasRef.current) {
-			applyThemeCssVariables(canvasRef.current, screenTheme);
+			applyThemeCssVariables(canvasRef.current, screenTheme, screen?.customTheme);
 		}
-	}, [screenTheme]);
+	}, [screenTheme, screen?.customTheme]);
 
 	const isDark = screenTheme !== 'glacier';
 

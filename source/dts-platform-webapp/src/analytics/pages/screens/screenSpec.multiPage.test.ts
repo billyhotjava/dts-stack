@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { buildScreenPayload, normalizeScreenConfig } from './screenSpec';
+import { buildScreenPayload, normalizeScreenConfig, validateScreenPayload } from './screenSpec';
 import type { ScreenConfig } from './types';
 
 const multiPageConfig: ScreenConfig = {
@@ -140,4 +140,64 @@ test('normalizeScreenConfig migrates legacy project operations gantt screen comp
     assert.equal(component?.config.endField, 'actualDate');
     assert.equal(component?.config.categoryField, 'majorProjectName');
     assert.equal(component?.config.statusField, 'riskLevel');
+});
+
+test('validateScreenPayload accepts open-panel actions with empty body template', () => {
+    const payload = buildScreenPayload({
+        ...multiPageConfig,
+        components: [
+            {
+                id: 'panel-source-title',
+                type: 'title',
+                name: '可点击标题',
+                x: 40,
+                y: 24,
+                width: 400,
+                height: 48,
+                zIndex: 1,
+                locked: false,
+                visible: true,
+                config: { text: '项目详情' },
+                actions: [
+                    {
+                        type: 'open-panel',
+                        label: '查看详情',
+                        panelTitle: '{{name}}',
+                        panelBodyTemplate: '',
+                    },
+                ],
+            },
+        ],
+        pages: undefined,
+        carouselConfig: undefined,
+    });
+
+    const validation = validateScreenPayload(payload);
+
+    assert.deepEqual(validation.errors, []);
+});
+
+test('screen spec preserves classification and custom theme metadata', () => {
+    const payload = buildScreenPayload({
+        ...multiPageConfig,
+        theme: 'brand-custom',
+        customTheme: {
+            primaryColor: '#0052cc',
+            backgroundColor: '#f8fafc',
+            textPrimary: '#0f172a',
+        },
+        classification: 'SECRET',
+    });
+
+    assert.equal(payload.classification, 'SECRET');
+    assert.deepEqual(payload.customTheme, {
+        primaryColor: '#0052cc',
+        backgroundColor: '#f8fafc',
+        textPrimary: '#0f172a',
+    });
+
+    const normalized = normalizeScreenConfig(payload);
+    assert.equal(normalized.config.classification, 'SECRET');
+    assert.equal(normalized.config.theme, 'brand-custom');
+    assert.equal(normalized.config.customTheme?.primaryColor, '#0052cc');
 });

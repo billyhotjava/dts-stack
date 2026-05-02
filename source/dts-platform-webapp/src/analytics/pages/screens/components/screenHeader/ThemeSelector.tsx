@@ -3,7 +3,7 @@ import type { ScreenTheme } from '../../types';
 import { THEME_OPTIONS } from './helpers';
 
 interface ThemeSelectorProps {
-    value: ScreenTheme | '';
+    value: ScreenTheme;
     onChange: (e: React.ChangeEvent<HTMLSelectElement>) => void;
 }
 

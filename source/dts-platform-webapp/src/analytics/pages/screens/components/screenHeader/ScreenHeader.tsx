@@ -12,17 +12,8 @@ import {
     type ScreenVersionDiff,
 } from '../../../../api/analyticsApi';
 import { GlobalVariableManager } from '../GlobalVariableManager';
-import { CacheObservabilityPanel } from '../CacheObservabilityPanel';
-import { ScreenCompliancePanel } from '../ScreenCompliancePanel';
-import { ScreenAclPanel } from '../ScreenAclPanel';
 import { PublishResultModal } from '../PublishResultModal';
-import { ScreenAuditPanel } from '../ScreenAuditPanel';
-import { ScreenSharePolicyPanel } from '../ScreenSharePolicyPanel';
-import { ScreenSharePanel } from '../ScreenSharePanel';
-import { ScreenHealthPanel } from '../ScreenHealthPanel';
 import { InteractionDebugPanel } from '../InteractionDebugPanel';
-import { ScreenCollaborationPanel } from '../ScreenCollaborationPanel';
-import { ScreenEditLockPanel } from '../ScreenEditLockPanel';
 import { ScreenConflictPanel, type ScreenUpdateConflict } from '../ScreenConflictPanel';
 import { ScreenVersionComparePanel } from '../ScreenVersionComparePanel';
 import { ScreenVersionComparePickerPanel } from '../ScreenVersionComparePickerPanel';
@@ -111,20 +102,10 @@ export function ScreenHeader({
     }, [config, currentPageIndex]);
     const [isEditingName, setIsEditingName] = useState(false);
     const [nameValue, setNameValue] = useState(config.name);
-    const [isSharing, setIsSharing] = useState(false);
     const [isPublishing, setIsPublishing] = useState(false);
     const [isLoadingVersions, setIsLoadingVersions] = useState(false);
     const [showVariableManager, setShowVariableManager] = useState(false);
-    const [showCachePanel, setShowCachePanel] = useState(false);
-    const [showCompliancePanel, setShowCompliancePanel] = useState(false);
-    const [showHealthPanel, setShowHealthPanel] = useState(false);
-    const [showAclPanel, setShowAclPanel] = useState(false);
-    const [showAuditPanel, setShowAuditPanel] = useState(false);
-    const [showSharePolicyPanel, setShowSharePolicyPanel] = useState(false);
-    const [showSharePanel, setShowSharePanel] = useState(false);
     const [showInteractionDebugPanel, setShowInteractionDebugPanel] = useState(false);
-    const [showCollaborationPanel, setShowCollaborationPanel] = useState(false);
-    const [showEditLockPanel, setShowEditLockPanel] = useState(false);
     const [showConflictPanel, setShowConflictPanel] = useState(false);
     const [showVersionComparePanel, setShowVersionComparePanel] = useState(false);
     const [showVersionComparePicker, setShowVersionComparePicker] = useState(false);
@@ -223,17 +204,17 @@ export function ScreenHeader({
     }, [batchAction, selectedIds, clipboard, copyComponents, pasteComponents, deleteComponents, updateSelectedComponents, dispatch, config.components]);
 
     const handleToolbarThemeChange = useCallback((e: React.ChangeEvent<HTMLSelectElement>) => {
-        const value = e.target.value as ScreenTheme | '';
-        const theme = value || undefined;
-        const tokens = getThemeTokens(theme);
-        const updatedComponents = applyThemeToComponents(config.components || [], theme, 'force');
+        const theme = e.target.value as ScreenTheme;
+        const customTheme = theme === 'brand-custom' ? config.customTheme : undefined;
+        const tokens = getThemeTokens(theme, customTheme);
+        const updatedComponents = applyThemeToComponents(config.components || [], theme, 'force', customTheme);
         updateConfig({ theme, backgroundColor: tokens.canvasBackground, components: updatedComponents });
-    }, [config.components, updateConfig]);
+    }, [config.components, config.customTheme, updateConfig]);
 
     const applyThemeToAllComponents = useCallback((mode: ThemeComponentApplyMode) => {
-        const nextComponents = applyThemeToComponents(config.components, config.theme, mode);
+        const nextComponents = applyThemeToComponents(config.components, config.theme, mode, config.customTheme);
         updateConfig({ components: nextComponents });
-    }, [config.components, config.theme, updateConfig]);
+    }, [config.components, config.customTheme, config.theme, updateConfig]);
 
     const handleZoomReset = useCallback(() => dispatch({ type: 'SET_ZOOM', payload: 100 }), [dispatch]);
 
@@ -253,6 +234,7 @@ export function ScreenHeader({
             version: 1,
             name: config.name,
             theme: config.theme || 'legacy-dark',
+            customTheme: config.customTheme || null,
             backgroundColor: config.backgroundColor,
             backgroundImage: config.backgroundImage || null,
             applyToComponents: true,
@@ -268,7 +250,7 @@ export function ScreenHeader({
         a.click();
         a.remove();
         URL.revokeObjectURL(url);
-    }, [config.name, config.theme, config.backgroundColor, config.backgroundImage, themeApplyMode]);
+    }, [config.name, config.theme, config.customTheme, config.backgroundColor, config.backgroundImage, themeApplyMode]);
 
     const handleImportThemePackClick = useCallback(() => themeInputRef.current?.click(), []);
 
@@ -282,14 +264,18 @@ export function ScreenHeader({
             if (!raw || typeof raw !== 'object') { toast.error('主题包格式不正确'); return; }
             if (raw.schema && raw.schema !== 'dts.screen-theme-pack') { toast.error('主题包 schema 不匹配'); return; }
             const normalizeTheme = (t: unknown) => {
-                if (t === 'legacy-dark' || t === 'titanium' || t === 'glacier') return t as ScreenTheme;
+                if (THEME_OPTIONS.some((option) => option.value === t)) return t as ScreenTheme;
                 return undefined;
             };
             const nextTheme = normalizeTheme(raw.theme) || config.theme;
-            const fallbackBg = getThemeTokens(nextTheme).canvasBackground;
+            const nextCustomTheme = raw.customTheme && typeof raw.customTheme === 'object' && !Array.isArray(raw.customTheme)
+                ? raw.customTheme as Record<string, string>
+                : config.customTheme;
+            const fallbackBg = getThemeTokens(nextTheme, nextCustomTheme).canvasBackground;
             const nextBg = typeof raw.backgroundColor === 'string' && raw.backgroundColor.trim().length > 0 ? raw.backgroundColor.trim() : fallbackBg;
             updateConfig({
                 theme: nextTheme,
+                customTheme: nextCustomTheme,
                 backgroundColor: nextBg,
                 backgroundImage: typeof raw.backgroundImage === 'string' && raw.backgroundImage.trim().length > 0 ? raw.backgroundImage.trim() : undefined,
             });
@@ -297,12 +283,12 @@ export function ScreenHeader({
             if (raw.applyToComponents !== false) {
                 const confirmed = window.confirm(`主题包已导入，是否批量应用组件样式？\n策略：${importMode === 'force' ? '强制覆盖' : '仅补缺省'}`);
                 if (confirmed) {
-                    const nextComps = applyThemeToComponents(config.components, nextTheme, importMode as ThemeComponentApplyMode);
+                    const nextComps = applyThemeToComponents(config.components, nextTheme, importMode as ThemeComponentApplyMode, nextCustomTheme);
                     updateConfig({ components: nextComps });
                 }
             }
         } catch { toast.error('主题包解析失败'); }
-    }, [config.theme, config.components, updateConfig]);
+    }, [config.theme, config.customTheme, config.components, updateConfig]);
 
     const handleShortcutHelp = useCallback(() => {
         toast.error([
@@ -329,7 +315,7 @@ export function ScreenHeader({
     const quickInputRef = useRef<HTMLInputElement | null>(null);
     const quickActionRefs = useRef<Array<HTMLButtonElement | null>>([]);
     const menuContainerRef = useRef<HTMLDivElement | null>(null);
-    const [activeMenu, setActiveMenu] = useState<'primary' | 'tools-view' | 'tools-edit' | 'tools-theme' | 'tools-io' | 'tools-release' | 'tools-security' | null>(null);
+    const [activeMenu, setActiveMenu] = useState<'primary' | 'tools-view' | 'tools-edit' | 'tools-theme' | 'tools-io' | 'tools-release' | null>(null);
     const [permissions, setPermissions] = useState({
         canRead: true,
         canEdit: true,
@@ -648,7 +634,6 @@ export function ScreenHeader({
                 void refreshLockState();
                 detail = error.message || fallbackMessage;
             }
-            setShowEditLockPanel(true);
             return detail;
         }
         if (error instanceof Error && error.message) {
@@ -1005,9 +990,7 @@ export function ScreenHeader({
     }, [id, isPublishing, isSaving, lockedByOther, permissions.canEdit, permissions.canPublish, primaryAction]);
 
     const pageCount = Math.max(config.pages?.length ?? 0, 1);
-    const themeLabel = config.theme === 'glacier'
-        ? '冰川白'
-        : (config.theme === 'titanium' ? '钛合金灰' : '经典深蓝');
+    const themeLabel = THEME_OPTIONS.find((item) => item.value === (config.theme || 'legacy-dark'))?.label ?? '经典深蓝';
 
     const executePrimaryAction = useCallback(() => {
         if (primaryAction === 'preview') {
@@ -1301,45 +1284,6 @@ export function ScreenHeader({
         }
     };
 
-    const handleShare = async () => {
-        if (!id || isSharing) return;
-        setIsSharing(true);
-        try {
-            const { uuid } = await analyticsApi.createScreenPublicLink(id, {});
-            if (!uuid) {
-                setHeaderActionNotice({
-                    tone: 'error',
-                    title: '分享链接生成失败',
-                    message: '未获取到分享链接，请稍后重试。',
-                });
-                return;
-            }
-            const baseUrl = resolveRouteHref(`/bi/public/screen/${uuid}`);
-            const embedUrl = `${baseUrl}?embed=1&hideControls=1`;
-            const iframeCode = `<iframe src="${embedUrl}" width="100%" height="600" frameborder="0" allowfullscreen style="border: none;"></iframe>`;
-            const globalVars = config.globalVariables ?? [];
-            const paramHint = globalVars.length > 0
-                ? `\n\n可透传参数：\n${globalVars.map(v => `  ?var_${v.key}=值`).join('\n')}`
-                : '';
-            const shareInfo = `链接分享：\n${baseUrl}\n\n嵌入代码（iframe）：\n${iframeCode}${paramHint}`;
-            const copied = await writeTextToClipboard(baseUrl);
-            setHeaderActionNotice({
-                tone: 'success',
-                title: copied ? '分享链接已复制' : '分享信息已生成',
-                message: shareInfo,
-            });
-        } catch (err) {
-            console.error('Failed to create public link:', err);
-            setHeaderActionNotice({
-                tone: 'error',
-                title: '分享链接生成失败',
-                message: '创建分享链接失败，请先发布版本。',
-            });
-        } finally {
-            setIsSharing(false);
-        }
-    };
-
     const handleCreateExploreSession = useCallback(() => {
         if (!permissions.canRead) {
             setHeaderActionNotice({
@@ -1498,55 +1442,6 @@ export function ScreenHeader({
                 run: () => setShowVariableManager(true),
             },
             {
-                id: 'cache',
-                label: '缓存观测',
-                keywords: '缓存 cache',
-                disabled: false,
-                run: () => setShowCachePanel(true),
-            },
-            {
-                id: 'compliance',
-                label: '合规检查',
-                keywords: '合规 compliance',
-                disabled: false,
-                run: () => setShowCompliancePanel(true),
-            },
-            {
-                id: 'health',
-                label: '体检报告',
-                keywords: '体检 健康 health',
-                disabled: false,
-                run: () => setShowHealthPanel(true),
-            },
-            {
-                id: 'governance-lock',
-                label: '编辑锁状态',
-                keywords: '编辑锁 lock',
-                disabled: !id || !permissions.canRead,
-                run: () => setShowEditLockPanel(true),
-            },
-            {
-                id: 'governance-acl',
-                label: '权限矩阵',
-                keywords: '权限 acl',
-                disabled: !id || !permissions.canManage,
-                run: () => setShowAclPanel(true),
-            },
-            {
-                id: 'governance-audit',
-                label: '审计记录',
-                keywords: '审计 audit',
-                disabled: !id || !permissions.canManage,
-                run: () => setShowAuditPanel(true),
-            },
-            {
-                id: 'share',
-                label: isSharing ? '分享中...' : '分享链接',
-                keywords: '分享 share 链接',
-                disabled: isSharing || !permissions.canPublish || !id,
-                run: handleShare,
-            },
-            {
                 id: 'export-png',
                 label: '导出 PNG',
                 keywords: '导出 export png',
@@ -1576,18 +1471,15 @@ export function ScreenHeader({
         handlePublish,
         handleSave,
         handleSaveAsTemplate,
-        handleShare,
         handleVersionCompare,
         handleVersionHistory,
         id,
         isPublishing,
         isSaving,
         isSavingTemplate,
-        isSharing,
         isLoadingVersions,
         lockedByOther,
         permissions.canEdit,
-        permissions.canManage,
         permissions.canPublish,
         permissions.canRead,
     ]);
@@ -1837,7 +1729,6 @@ export function ScreenHeader({
                             <div className="grid gap-1.5 py-1 pb-2 border-b border-[var(--color-border)] last:border-b-0 last:pb-1">
                                 <div className="text-[11px] font-semibold text-[var(--color-text-secondary)] tracking-[0.04em] uppercase px-1 py-0.5">更多</div>
                                 <button type="button" className="header-btn flex items-center gap-1.5 px-4 py-2 border border-[var(--color-border)] rounded-md bg-[var(--color-surface)] text-[var(--color-text-primary)] text-[13px] font-medium cursor-pointer transition-all duration-200 whitespace-nowrap shrink-0 w-full justify-start py-[7px] px-2.5 hover:border-[var(--color-primary)] hover:bg-[var(--color-primary-light)] disabled:opacity-50 disabled:cursor-not-allowed" onClick={() => executeMenuAction(handleCreateExploreSession)} disabled={!permissions.canRead} title="沉淀分析会话">沉淀会话</button>
-                                <button type="button" className="header-btn flex items-center gap-1.5 px-4 py-2 border border-[var(--color-border)] rounded-md bg-[var(--color-surface)] text-[var(--color-text-primary)] text-[13px] font-medium cursor-pointer transition-all duration-200 whitespace-nowrap shrink-0 w-full justify-start py-[7px] px-2.5 hover:border-[var(--color-primary)] hover:bg-[var(--color-primary-light)] disabled:opacity-50 disabled:cursor-not-allowed" onClick={() => executeMenuAction(() => setShowCollaborationPanel(true))} disabled={!id || !permissions.canRead} title="协作批注">协作批注</button>
                                 <button type="button" className="header-btn flex items-center gap-1.5 px-4 py-2 border border-[var(--color-border)] rounded-md bg-[var(--color-surface)] text-[var(--color-text-primary)] text-[13px] font-medium cursor-pointer transition-all duration-200 whitespace-nowrap shrink-0 w-full justify-start py-[7px] px-2.5 hover:border-[var(--color-primary)] hover:bg-[var(--color-primary-light)] disabled:opacity-50 disabled:cursor-not-allowed" onClick={() => executeMenuAction(handleSaveAsTemplate)} disabled={!permissions.canEdit || isSavingTemplate} title="保存为模板">{isSavingTemplate ? '模板保存中...' : '保存模板'}</button>
                             </div>
                         </HeaderMenu>
@@ -1849,7 +1740,7 @@ export function ScreenHeader({
                         >
                             <div className="grid gap-1.5 py-1 pb-2 border-b border-[var(--color-border)] last:border-b-0 last:pb-1">
                                 <div className="text-[11px] font-semibold text-[var(--color-text-secondary)] tracking-[0.04em] uppercase px-1 py-0.5">主题选择</div>
-                                <ThemeSelector value={config.theme || ''} onChange={handleToolbarThemeChange} />
+                                <ThemeSelector value={config.theme || 'legacy-dark'} onChange={handleToolbarThemeChange} />
                             </div>
                             <div className="grid gap-1.5 py-1 pb-2 border-b border-[var(--color-border)] last:border-b-0 last:pb-1">
                                 <div className="text-[11px] font-semibold text-[var(--color-text-secondary)] tracking-[0.04em] uppercase px-1 py-0.5">应用与主题包</div>
@@ -1909,29 +1800,6 @@ export function ScreenHeader({
                                         </button>
                                     </>
                                 ) : null}
-                            </div>
-                        </HeaderMenu>
-                        {/* --- 5. 安全 (replaces 治理) --- */}
-                        <HeaderMenu
-                            label="安全"
-                            open={activeMenu === 'tools-security'}
-                            onToggle={() => setActiveMenu((prev) => (prev === 'tools-security' ? null : 'tools-security'))}
-                        >
-                            <div className="grid gap-1.5 py-1 pb-2 border-b border-[var(--color-border)] last:border-b-0 last:pb-1">
-                                <div className="text-[11px] font-semibold text-[var(--color-text-secondary)] tracking-[0.04em] uppercase px-1 py-0.5">安全与治理</div>
-                                <button type="button" className="header-btn flex items-center gap-1.5 px-4 py-2 border border-[var(--color-border)] rounded-md bg-[var(--color-surface)] text-[var(--color-text-primary)] text-[13px] font-medium cursor-pointer transition-all duration-200 whitespace-nowrap shrink-0 w-full justify-start py-[7px] px-2.5 hover:border-[var(--color-primary)] hover:bg-[var(--color-primary-light)] disabled:opacity-50 disabled:cursor-not-allowed" onClick={() => executeMenuAction(() => setShowEditLockPanel(true))} disabled={!id || !permissions.canRead} title="查看/管理编辑锁">
-                                    编辑锁{lockedByOther ? '(占用)' : (editLock?.mine ? '(我)' : '')}
-                                </button>
-                                <button type="button" className="header-btn flex items-center gap-1.5 px-4 py-2 border border-[var(--color-border)] rounded-md bg-[var(--color-surface)] text-[var(--color-text-primary)] text-[13px] font-medium cursor-pointer transition-all duration-200 whitespace-nowrap shrink-0 w-full justify-start py-[7px] px-2.5 hover:border-[var(--color-primary)] hover:bg-[var(--color-primary-light)] disabled:opacity-50 disabled:cursor-not-allowed" onClick={() => executeMenuAction(() => setShowCachePanel(true))} title="缓存观测面板">缓存观测</button>
-                                <button type="button" className="header-btn flex items-center gap-1.5 px-4 py-2 border border-[var(--color-border)] rounded-md bg-[var(--color-surface)] text-[var(--color-text-primary)] text-[13px] font-medium cursor-pointer transition-all duration-200 whitespace-nowrap shrink-0 w-full justify-start py-[7px] px-2.5 hover:border-[var(--color-primary)] hover:bg-[var(--color-primary-light)] disabled:opacity-50 disabled:cursor-not-allowed" onClick={() => executeMenuAction(() => setShowAclPanel(true))} disabled={!id || !permissions.canManage} title="权限矩阵(ACL)">权限(ACL)</button>
-                                <button type="button" className="header-btn flex items-center gap-1.5 px-4 py-2 border border-[var(--color-border)] rounded-md bg-[var(--color-surface)] text-[var(--color-text-primary)] text-[13px] font-medium cursor-pointer transition-all duration-200 whitespace-nowrap shrink-0 w-full justify-start py-[7px] px-2.5 hover:border-[var(--color-primary)] hover:bg-[var(--color-primary-light)] disabled:opacity-50 disabled:cursor-not-allowed" onClick={() => executeMenuAction(() => setShowAuditPanel(true))} disabled={!id || !permissions.canManage} title="审计记录">审计</button>
-                                <button type="button" className="header-btn flex items-center gap-1.5 px-4 py-2 border border-[var(--color-border)] rounded-md bg-[var(--color-surface)] text-[var(--color-text-primary)] text-[13px] font-medium cursor-pointer transition-all duration-200 whitespace-nowrap shrink-0 w-full justify-start py-[7px] px-2.5 hover:border-[var(--color-primary)] hover:bg-[var(--color-primary-light)] disabled:opacity-50 disabled:cursor-not-allowed" onClick={() => executeMenuAction(() => setShowSharePanel(true))} disabled={!id || !permissions.canManage} title="分享大屏给其他用户">分享</button>
-                                <button type="button" className="header-btn flex items-center gap-1.5 px-4 py-2 border border-[var(--color-border)] rounded-md bg-[var(--color-surface)] text-[var(--color-text-primary)] text-[13px] font-medium cursor-pointer transition-all duration-200 whitespace-nowrap shrink-0 w-full justify-start py-[7px] px-2.5 hover:border-[var(--color-primary)] hover:bg-[var(--color-primary-light)] disabled:opacity-50 disabled:cursor-not-allowed" onClick={() => executeMenuAction(() => setShowSharePolicyPanel(true))} disabled={!id || !permissions.canPublish} title="分享策略配置">分享策略</button>
-                                <button type="button" className="header-btn flex items-center gap-1.5 px-4 py-2 border border-[var(--color-border)] rounded-md bg-[var(--color-surface)] text-[var(--color-text-primary)] text-[13px] font-medium cursor-pointer transition-all duration-200 whitespace-nowrap shrink-0 w-full justify-start py-[7px] px-2.5 hover:border-[var(--color-primary)] hover:bg-[var(--color-primary-light)] disabled:opacity-50 disabled:cursor-not-allowed" onClick={() => executeMenuAction(handleShare)} disabled={!id || !permissions.canPublish || isSharing} title="生成分享链接">
-                                    {isSharing ? '分享中...' : '分享链接'}
-                                </button>
-                                <button type="button" className="header-btn flex items-center gap-1.5 px-4 py-2 border border-[var(--color-border)] rounded-md bg-[var(--color-surface)] text-[var(--color-text-primary)] text-[13px] font-medium cursor-pointer transition-all duration-200 whitespace-nowrap shrink-0 w-full justify-start py-[7px] px-2.5 hover:border-[var(--color-primary)] hover:bg-[var(--color-primary-light)] disabled:opacity-50 disabled:cursor-not-allowed" onClick={() => executeMenuAction(() => setShowCompliancePanel(true))} title="合规检查">合规</button>
-                                <button type="button" className="header-btn flex items-center gap-1.5 px-4 py-2 border border-[var(--color-border)] rounded-md bg-[var(--color-surface)] text-[var(--color-text-primary)] text-[13px] font-medium cursor-pointer transition-all duration-200 whitespace-nowrap shrink-0 w-full justify-start py-[7px] px-2.5 hover:border-[var(--color-primary)] hover:bg-[var(--color-primary-light)] disabled:opacity-50 disabled:cursor-not-allowed" onClick={() => executeMenuAction(() => setShowHealthPanel(true))} title="体检报告">体检</button>
                             </div>
                         </HeaderMenu>
                         <input ref={themeInputRef} type="file" accept="application/json,.json" style={{ display: 'none' }} onChange={handleThemePackFileChange} />
@@ -2084,7 +1952,7 @@ export function ScreenHeader({
                                     event.preventDefault();
                                     runQuickAction(target.id, target.run);
                                 }}
-                                placeholder="输入关键词：保存 / 预览 / 发布 / 变量 / 缓存 / 合规 / 导出 ..."
+                                placeholder="输入关键词：保存 / 预览 / 发布 / 变量 / 导出 ..."
                             />
                         </div>
                         <div style={{ overflowY: 'auto', padding: '0 12px 12px', display: 'grid', gap: 6 }}>
@@ -2157,70 +2025,11 @@ export function ScreenHeader({
                 onClose={() => setShowInteractionDebugPanel(false)}
             />
 
-            <CacheObservabilityPanel
-                open={showCachePanel}
-                onClose={() => setShowCachePanel(false)}
-            />
-
-            <ScreenCompliancePanel
-                open={showCompliancePanel}
-                screenId={id}
-                onClose={() => setShowCompliancePanel(false)}
-            />
-
-            <ScreenHealthPanel
-                open={showHealthPanel}
-                screenId={id}
-                onClose={() => setShowHealthPanel(false)}
-            />
-
-            <ScreenAclPanel
-                open={showAclPanel}
-                screenId={id}
-                onClose={() => setShowAclPanel(false)}
-                isOwner={permissions.isOwner}
-            />
-
             <PublishResultModal
                 open={publishModalOpen}
                 onClose={() => setPublishModalOpen(false)}
                 publishInfo={publishInfo}
                 isOwner={permissions.isOwner}
-            />
-
-            <ScreenAuditPanel
-                open={showAuditPanel}
-                screenId={id}
-                onClose={() => setShowAuditPanel(false)}
-            />
-
-            <ScreenCollaborationPanel
-                open={showCollaborationPanel}
-                screenId={id}
-                components={config.components ?? []}
-                selectedIds={state.selectedIds ?? []}
-                onLocateComponent={(componentId) => {
-                    const target = String(componentId || '').trim();
-                    if (!target) return;
-                    const exists = (config.components ?? []).some((item) => item.id === target);
-                    if (exists) {
-                        selectComponents([target]);
-                    }
-                }}
-                onClose={() => setShowCollaborationPanel(false)}
-            />
-
-            <ScreenEditLockPanel
-                open={showEditLockPanel}
-                screenId={id}
-                lock={editLock}
-                onChange={(next) => {
-                    setEditLock(next);
-                    if (!next?.active || next.mine) {
-                        setLockErrorText(null);
-                    }
-                }}
-                onClose={() => setShowEditLockPanel(false)}
             />
 
             <ScreenConflictPanel
@@ -2272,19 +2081,6 @@ export function ScreenHeader({
                 open={showSnapshotPanel}
                 screenId={id}
                 onClose={() => setShowSnapshotPanel(false)}
-            />
-
-            <ScreenSharePolicyPanel
-                open={showSharePolicyPanel}
-                screenId={id}
-                onClose={() => setShowSharePolicyPanel(false)}
-            />
-
-            <ScreenSharePanel
-                open={showSharePanel}
-                screenId={id}
-                onClose={() => setShowSharePanel(false)}
-                isOwner={permissions.isOwner}
             />
 
             <Modal

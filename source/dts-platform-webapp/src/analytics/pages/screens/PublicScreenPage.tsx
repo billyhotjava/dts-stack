@@ -341,8 +341,8 @@ export default function PublicScreenPage() {
 	const screenTheme = resolveScreenTheme(rawTheme, screen?.backgroundColor);
 	const publicCanvasRef = useRef<HTMLDivElement>(null);
 	useEffect(() => {
-		if (publicCanvasRef.current) applyThemeCssVariables(publicCanvasRef.current, screenTheme);
-	}, [screenTheme]);
+		if (publicCanvasRef.current) applyThemeCssVariables(publicCanvasRef.current, screenTheme, screen?.customTheme);
+	}, [screenTheme, screen?.customTheme]);
 
 	const isDark = useMemo(() => {
 		if (!screen) return true; // default dark for loading/error states

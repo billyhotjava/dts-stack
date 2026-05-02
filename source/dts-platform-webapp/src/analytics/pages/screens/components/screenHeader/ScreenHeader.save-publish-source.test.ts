@@ -12,3 +12,13 @@ test("ScreenHeader validates and saves the draft before publishing", async () =>
 	assert.match(source, /const screenId = await saveScreen\(\)/);
 	assert.match(source, /await analyticsApi\.publishScreen\(screenId\)/);
 });
+
+test("ScreenHeader does not expose editor security governance placeholders", async () => {
+	const source = await readFile(screenHeaderPath, "utf8");
+
+	assert.equal(source.includes("tools-security"), false);
+	assert.equal(source.includes("安全与治理"), false);
+	assert.equal(source.includes("ScreenSharePanel"), false);
+	assert.equal(source.includes("ScreenAuditPanel"), false);
+	assert.equal(source.includes("ScreenCompliancePanel"), false);
+});

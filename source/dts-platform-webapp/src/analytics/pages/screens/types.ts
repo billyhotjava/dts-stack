@@ -4,6 +4,15 @@ import type { ProjectGanttTask } from '../project-cockpit/components/ProjectGant
 
 export type ScreenTheme = 'legacy-dark' | 'titanium' | 'glacier' | 'light-business' | 'dark-command' | 'brand-custom' | 'enterprise-light' | 'enterprise-dark';
 
+export interface ScreenCustomTheme {
+    primaryColor?: string;
+    backgroundColor?: string;
+    textPrimary?: string;
+    textSecondary?: string;
+    borderColor?: string;
+    cardBackground?: string;
+}
+
 export interface ScreenGlobalVariable {
     key: string;
     label: string;
@@ -299,6 +308,7 @@ export interface ScreenConfig {
     backgroundColor: string;
     backgroundImage?: string;
     theme?: ScreenTheme;
+    customTheme?: ScreenCustomTheme;
     components: ScreenComponent[];
     globalVariables?: ScreenGlobalVariable[];
     /** Multi-page support. When empty/undefined, uses top-level components (single-page mode). */

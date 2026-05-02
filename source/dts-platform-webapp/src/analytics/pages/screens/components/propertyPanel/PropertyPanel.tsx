@@ -23,6 +23,7 @@ import {
 } from '../../chartPresets';
 import { PROVINCE_PRESETS } from '../../renderers/shared/geoJsonCache';
 import { COLOR_SCHEMES, recommendColorSchemes, type ColorScheme } from '../../colorSchemes';
+import { getThemeTokens } from '../../screenThemes';
 
 // Extracted modules (F4-Step3 split)
 import {
@@ -60,6 +61,7 @@ import { ScrollBoardConfig } from './ScrollBoardConfig';
 import { ChartAnnotationConfig } from './ChartAnnotationConfig';
 import { TableConfig } from './TableConfig';
 import { BackgroundImageRow } from './BackgroundImageRow';
+import { THEME_OPTIONS } from '../screenHeader/helpers';
 import type {
     ColumnEntry,
     ExplainState,
@@ -196,9 +198,12 @@ export function PropertyPanel({ activeTab = 'style' }: { activeTab?: PropertyPan
     };
 
     if (selectedComponents.length === 0) {
-        const customTheme = (config as unknown as Record<string, unknown>).customTheme as Record<string, string> | undefined;
+        const customTheme = config.customTheme;
         const handleCustomThemeChange = (key: string, value: string) => {
-            updateConfig({ customTheme: { ...(customTheme || {}), [key]: value } } as Partial<typeof config>);
+            updateConfig({
+                customTheme: { ...(customTheme || {}), [key]: value },
+                ...(key === 'backgroundColor' ? { backgroundColor: value } : {}),
+            } as Partial<typeof config>);
         };
         const isCustom = config.theme === 'brand-custom';
         return (
@@ -208,8 +213,6 @@ export function PropertyPanel({ activeTab = 'style' }: { activeTab?: PropertyPan
                     <p className="text-xs text-text-muted mt-1">全局主题与画布属性</p>
                 </div>
                 <div className="property-panel-content flex-1 overflow-y-auto px-4 py-2">
-                    {/* Sprint-24 重构：「密级」属于大屏元属性 + 权限维度，不属于
-                        画布视觉配置。已迁出本面板，统一在「权限管理」面板设置。 */}
                     <div className="property-section py-3 border-b border-border-default">
                         <div className="property-section-title text-xs font-semibold text-text-secondary uppercase tracking-wide mb-2">主题</div>
                         <div className="property-row flex items-center mb-3">
@@ -217,14 +220,32 @@ export function PropertyPanel({ activeTab = 'style' }: { activeTab?: PropertyPan
                             <select
                                 className="property-input flex-1 px-2.5 py-1.5 border border-border-default rounded bg-surface-card text-text-primary text-xs focus:outline-none focus:border-brand"
                                 value={config.theme || 'legacy-dark'}
-                                onChange={(e) => updateConfig({ theme: e.target.value as typeof config.theme })}
+                                onChange={(e) => {
+                                    const theme = e.target.value as typeof config.theme;
+                                    const tokens = getThemeTokens(theme, theme === 'brand-custom' ? config.customTheme : undefined);
+                                    updateConfig({ theme, backgroundColor: tokens.canvasBackground });
+                                }}
                             >
-                                <option value="legacy-dark">经典暗色</option>
-                                <option value="titanium">钛金属</option>
-                                <option value="glacier">冰川</option>
-                                <option value="light-business">商务浅色</option>
-                                <option value="dark-command">指挥暗色</option>
-                                <option value="brand-custom">自定义</option>
+                                {THEME_OPTIONS.map((option) => (
+                                    <option key={option.value} value={option.value}>{option.label}</option>
+                                ))}
+                            </select>
+                        </div>
+                        <div className="property-row flex items-center mb-3">
+                            <label className="property-label w-20 text-xs text-text-secondary">密级</label>
+                            <select
+                                className="property-input flex-1 px-2.5 py-1.5 border border-border-default rounded bg-surface-card text-text-primary text-xs focus:outline-none focus:border-brand"
+                                value={config.classification || ''}
+                                onChange={(e) => {
+                                    const next = e.target.value as typeof config.classification | '';
+                                    updateConfig({ classification: next || undefined });
+                                }}
+                            >
+                                <option value="">请选择密级</option>
+                                <option value="PUBLIC">公开</option>
+                                <option value="INTERNAL">内部</option>
+                                <option value="SECRET">秘密</option>
+                                <option value="CONFIDENTIAL">机密</option>
                             </select>
                         </div>
                         {isCustom && (
@@ -967,4 +988,3 @@ export function PropertyPanel({ activeTab = 'style' }: { activeTab?: PropertyPan
         </div>
     );
 }
-

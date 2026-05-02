@@ -20,3 +20,11 @@ test("PropertyPanel delegates behavior config sections to the extracted module",
 	assert.match(behaviorConfigSource, /export function renderActionConfig/);
 	assert.match(behaviorConfigSource, /export function renderDrillDownConfig/);
 });
+
+test("default open-panel action is immediately saveable", async () => {
+	const behaviorConfigSource = await readFile(behaviorConfigSectionPath, "utf8");
+
+	assert.match(behaviorConfigSource, /type:\s*'open-panel'/);
+	assert.match(behaviorConfigSource, /panelTitle:\s*'\{\{name\}\}'/);
+	assert.match(behaviorConfigSource, /panelBodyTemplate:\s*'\{\{name\}\}'/);
+});

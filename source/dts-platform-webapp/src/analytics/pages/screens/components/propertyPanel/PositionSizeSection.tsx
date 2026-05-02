@@ -7,6 +7,14 @@ interface PositionSizeSectionOptions {
     toggleSection: (sectionKey: string) => void;
 }
 
+function parseNumberInput(value: string, fallback: number, min?: number): number {
+    const n = Number(value);
+    if (!Number.isFinite(n)) {
+        return fallback;
+    }
+    return typeof min === 'number' ? Math.max(min, n) : n;
+}
+
 export function renderPositionSizeConfig({
     selectedComponent,
     handleChange,
@@ -34,7 +42,7 @@ export function renderPositionSizeConfig({
                             type="number"
                             className="property-input flex-1 px-2.5 py-1.5 border border-border-default rounded bg-surface-card text-text-primary text-xs focus:outline-none focus:border-brand"
                             value={selectedComponent.x}
-                            onChange={(e) => handleChange('x', Number(e.target.value))}
+                            onChange={(e) => handleChange('x', parseNumberInput(e.target.value, selectedComponent.x))}
                         />
                     </div>
 
@@ -44,7 +52,7 @@ export function renderPositionSizeConfig({
                             type="number"
                             className="property-input flex-1 px-2.5 py-1.5 border border-border-default rounded bg-surface-card text-text-primary text-xs focus:outline-none focus:border-brand"
                             value={selectedComponent.y}
-                            onChange={(e) => handleChange('y', Number(e.target.value))}
+                            onChange={(e) => handleChange('y', parseNumberInput(e.target.value, selectedComponent.y))}
                         />
                     </div>
 
@@ -53,8 +61,9 @@ export function renderPositionSizeConfig({
                         <input
                             type="number"
                             className="property-input flex-1 px-2.5 py-1.5 border border-border-default rounded bg-surface-card text-text-primary text-xs focus:outline-none focus:border-brand"
+                            min={1}
                             value={selectedComponent.width}
-                            onChange={(e) => handleChange('width', Number(e.target.value))}
+                            onChange={(e) => handleChange('width', parseNumberInput(e.target.value, selectedComponent.width, 1))}
                         />
                     </div>
 
@@ -63,8 +72,9 @@ export function renderPositionSizeConfig({
                         <input
                             type="number"
                             className="property-input flex-1 px-2.5 py-1.5 border border-border-default rounded bg-surface-card text-text-primary text-xs focus:outline-none focus:border-brand"
+                            min={1}
                             value={selectedComponent.height}
-                            onChange={(e) => handleChange('height', Number(e.target.value))}
+                            onChange={(e) => handleChange('height', parseNumberInput(e.target.value, selectedComponent.height, 1))}
                         />
                     </div>
                 </>

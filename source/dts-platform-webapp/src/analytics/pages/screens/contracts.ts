@@ -1,6 +1,7 @@
 import type {
     CarouselConfig,
     ScreenComponent,
+    ScreenCustomTheme,
     ScreenGlobalVariable,
     ScreenPage,
     ScreenTheme,
@@ -39,6 +40,7 @@ export interface ScreenWritePayload extends Record<string, unknown> {
     backgroundColor?: string;
     backgroundImage?: string;
     theme?: ScreenTheme;
+    customTheme?: ScreenCustomTheme;
     components: ScreenWriteComponent[];
     globalVariables: ScreenGlobalVariable[];
     pages: ScreenWritePage[];
