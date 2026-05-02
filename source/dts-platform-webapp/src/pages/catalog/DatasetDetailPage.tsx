@@ -1,8 +1,8 @@
 import { useEffect, useMemo, useState } from "react";
 import { useParams } from "react-router";
 import { Alert, Button, Descriptions, Form, Input, Select, Spin, Switch, Table, Tabs, Tag, message } from "antd";
-import { ReactFlow, Background, Controls, type Node, type Edge } from "@xyflow/react";
-import "@xyflow/react/dist/style.css";
+import type { Node, Edge } from "@xyflow/react";
+import { VisualFlowCanvas } from "@/components/visual-canvas/VisualFlowCanvas";
 import { useRouter } from "@/routes/hooks";
 import {
 	getCatalogAssetV2,
@@ -574,7 +574,7 @@ function DatasetLineageTab({ datasetId }: { datasetId: string }) {
 		return (
 			<div className="py-4 text-sm text-slate-500 space-y-2">
 				<div>暂无血缘数据。</div>
-				<a href={`/catalog/lineage`} className="text-blue-600 underline text-xs">
+				<a href={`/catalog/lineage/graph`} className="text-blue-600 underline text-xs">
 					前往血缘分析页 →
 				</a>
 			</div>
@@ -583,14 +583,9 @@ function DatasetLineageTab({ datasetId }: { datasetId: string }) {
 
 	return (
 		<div className="space-y-2">
-			<div style={{ height: 400, border: "1px solid #e8e8e8", borderRadius: 8, overflow: "hidden" }}>
-				<ReactFlow nodes={rfNodes} edges={rfEdges} fitView>
-					<Background />
-					<Controls />
-				</ReactFlow>
-			</div>
+			<VisualFlowCanvas nodes={rfNodes} edges={rfEdges} height={400} emptyText="暂无血缘节点" />
 			<div className="text-right">
-				<a href={`/catalog/lineage`} className="text-xs text-blue-500 hover:underline">
+				<a href={`/catalog/lineage/graph`} className="text-xs text-blue-500 hover:underline">
 					查看完整血缘分析 →
 				</a>
 			</div>

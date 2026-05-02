@@ -1,0 +1,4 @@
+Sprint-26 semantic real-page smoke passed
+semantic_dir=/opt/prod/s10/v2.2.3/source/dts-platform-webapp/src/pages/metrics/semantic
+compat=/opt/prod/s10/v2.2.3/source/dts-platform-webapp/src/pages/modeling/SemanticModelingCenterPage.tsx
+evidence=worklog/v2.2.3/sprint-26-202605/it/evidence/20260502-local/semantic-real-page

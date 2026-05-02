@@ -54,14 +54,6 @@ export default function GovernanceCenterPage() {
 					{ title: "资产视图", description: "联动查看数据资产质量", path: "/catalog/quality" },
 				],
 			},
-			{
-				title: "指标中心",
-				entries: [
-					{ title: "指标字典", description: "管理指标与维度定义", path: "/governance/indicators/dictionary" },
-					{ title: "数据资产", description: "按资产回看指标依赖", path: "/catalog/assets" },
-					{ title: "血缘分析", description: "查看指标上下游关系", path: "/catalog/lineage" },
-				],
-			},
 		],
 		[],
 	);
@@ -87,7 +79,7 @@ export default function GovernanceCenterPage() {
 		{
 			label: "治理分区",
 			value: sections.length,
-			note: "标准、质量、指标三条主线",
+			note: "标准、质量两条主线",
 			icon: <BookOpen className="h-5 w-5" />,
 		},
 		{
@@ -123,9 +115,6 @@ export default function GovernanceCenterPage() {
 					</Button>
 					<Button onClick={() => navigate("/governance/standards/glossary")}>
 						术语表
-					</Button>
-					<Button onClick={() => navigate("/governance/indicators/dictionary")}>
-						指标字典
 					</Button>
 				</Space>
 			</div>

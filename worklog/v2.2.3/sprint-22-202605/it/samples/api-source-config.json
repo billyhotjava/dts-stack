@@ -1,0 +1,53 @@
+{
+  "baseUrl": "http://mock-api:8080",
+  "defaultHeaders": {
+    "Accept": "application/json"
+  },
+  "requestPolicy": {
+    "connectTimeoutMillis": 5000,
+    "readTimeoutMillis": 60000,
+    "maxRetries": 2
+  },
+  "rateLimit": {
+    "requestsPerSecond": 5,
+    "burst": 10,
+    "maxConcurrency": 1
+  },
+  "auth": {
+    "provider": "bearerToken",
+    "secretRefs": {
+      "token": "DTS_API_BEARER_TOKEN"
+    }
+  },
+  "resources": [
+    {
+      "resourceId": "orders",
+      "displayName": "Orders",
+      "path": "/api/orders",
+      "method": "GET",
+      "query": {
+        "status": "paid"
+      },
+      "recordPath": "data.items",
+      "targetTable": "ods_api_mock_orders",
+      "pagination": {
+        "type": "page",
+        "pageParam": "page",
+        "sizeParam": "pageSize",
+        "pageSize": 100,
+        "maxPages": 100
+      },
+      "cursor": {
+        "type": "field",
+        "field": "updatedAt",
+        "injectInto": "query",
+        "parameterName": "updatedAfter",
+        "initialValue": "2026-01-01T00:00:00Z"
+      },
+      "schemaSnapshot": {
+        "enabled": true,
+        "driftPolicy": "notify"
+      }
+    }
+  ]
+}

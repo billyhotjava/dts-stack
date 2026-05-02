@@ -148,14 +148,6 @@
           "title": "逻辑建模（SQL）"
         },
         {
-          "key": "semantic-modeling",
-          "path": "semantic-modeling",
-          "icon": "solar:chart-square-bold-duotone",
-          "titleKey": "sys.nav.portal.studioSemanticModeling",
-          "title": "指标语义建模",
-          "externalLink": "/modeling/semantic-center"
-        },
-        {
           "key": "scripts",
           "path": "scripts",
           "icon": "local:ic-scripts",
@@ -186,6 +178,79 @@
           "titleKey": "sys.nav.portal.studioDbtFiles",
           "title": "项目文件浏览",
           "externalLink": "/modeling/dbt-files"
+        }
+      ]
+    },
+    {
+      "key": "metrics",
+      "path": "metrics",
+      "icon": "solar:chart-2-bold-duotone",
+      "titleKey": "sys.nav.portal.metricsCenter",
+      "title": "语义与指标中心",
+      "children": [
+        {
+          "key": "metric-center",
+          "path": "center",
+          "icon": "solar:chart-square-bold-duotone",
+          "titleKey": "sys.nav.portal.metricsWorkbench",
+          "title": "指标工作台",
+          "externalLink": "/metrics/center"
+        },
+        {
+          "key": "metric-dictionary",
+          "path": "dictionary",
+          "icon": "solar:clipboard-list-bold-duotone",
+          "titleKey": "sys.nav.portal.metricsDictionary",
+          "title": "指标字典",
+          "externalLink": "/metrics/dictionary"
+        },
+        {
+          "key": "semantic-subjects",
+          "path": "subjects",
+          "icon": "solar:map-point-bold-duotone",
+          "titleKey": "sys.nav.portal.metricsSubjects",
+          "title": "主题域映射",
+          "externalLink": "/metrics/semantic/subjects"
+        },
+        {
+          "key": "semantic-objects",
+          "path": "objects",
+          "icon": "solar:diagram-up-bold-duotone",
+          "titleKey": "sys.nav.portal.metricsObjects",
+          "title": "业务对象 Join",
+          "externalLink": "/metrics/semantic/objects"
+        },
+        {
+          "key": "semantic-metrics",
+          "path": "metrics",
+          "icon": "solar:function-bold-duotone",
+          "titleKey": "sys.nav.portal.metricsDesigner",
+          "title": "指标可视化配置",
+          "externalLink": "/metrics/semantic/metrics"
+        },
+        {
+          "key": "semantic-models",
+          "path": "models",
+          "icon": "solar:layers-bold-duotone",
+          "titleKey": "sys.nav.portal.metricsModels",
+          "title": "DWS/ADS 数据集",
+          "externalLink": "/metrics/semantic/models"
+        },
+        {
+          "key": "semantic-publish",
+          "path": "publish",
+          "icon": "solar:rocket-bold-duotone",
+          "titleKey": "sys.nav.portal.metricsPublish",
+          "title": "审核发布与血缘",
+          "externalLink": "/metrics/semantic/publish"
+        },
+        {
+          "key": "semantic-runs",
+          "path": "runs",
+          "icon": "solar:play-circle-bold-duotone",
+          "titleKey": "sys.nav.portal.metricsRuns",
+          "title": "模型运行监控",
+          "externalLink": "/metrics/semantic/runs"
         }
       ]
     },
@@ -244,14 +309,6 @@
           "titleKey": "sys.nav.portal.governanceTemplates",
           "title": "标准模板",
           "externalLink": "/governance/templates"
-        },
-        {
-          "key": "indicators",
-          "path": "indicators",
-          "icon": "solar:chart-2-bold-duotone",
-          "titleKey": "sys.nav.portal.governanceIndicators",
-          "title": "指标中心",
-          "externalLink": "/governance/indicators/dictionary"
         },
         {
           "key": "qualityRules",
@@ -315,8 +372,50 @@
           "path": "lineage",
           "icon": "solar:share-circle-bold-duotone",
           "titleKey": "sys.nav.portal.dataPortalLineage",
-          "title": "血缘视图",
-          "externalLink": "/catalog/lineage"
+          "title": "血缘与影响分析",
+          "externalLink": "/catalog/lineage",
+          "children": [
+            {
+              "key": "lineage-impact",
+              "path": "impact",
+              "icon": "solar:chart-bold-duotone",
+              "titleKey": "sys.nav.portal.dataPortalLineageImpact",
+              "title": "影响分析",
+              "externalLink": "/catalog/lineage/impact"
+            },
+            {
+              "key": "lineage-graph",
+              "path": "graph",
+              "icon": "solar:share-circle-bold-duotone",
+              "titleKey": "sys.nav.portal.dataPortalLineageGraph",
+              "title": "血缘图谱",
+              "externalLink": "/catalog/lineage/graph"
+            },
+            {
+              "key": "lineage-columns",
+              "path": "columns",
+              "icon": "solar:database-bold-duotone",
+              "titleKey": "sys.nav.portal.dataPortalLineageColumns",
+              "title": "字段血缘",
+              "externalLink": "/catalog/lineage/columns"
+            },
+            {
+              "key": "lineage-import",
+              "path": "import",
+              "icon": "solar:upload-bold-duotone",
+              "titleKey": "sys.nav.portal.dataPortalLineageImport",
+              "title": "血缘导入",
+              "externalLink": "/catalog/lineage/import"
+            },
+            {
+              "key": "lineage-diff",
+              "path": "diff",
+              "icon": "solar:history-2-bold-duotone",
+              "titleKey": "sys.nav.portal.dataPortalLineageDiff",
+              "title": "快照对比",
+              "externalLink": "/catalog/lineage/diff"
+            }
+          ]
         },
         {
           "key": "permission",

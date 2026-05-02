@@ -1,0 +1,5 @@
+Sprint-25 semantic metrics smoke passed
+routes=/opt/prod/s10/v2.2.3/source/dts-platform-webapp/src/routes/sections/dashboard/static-routes.tsx
+dynamic=/opt/prod/s10/v2.2.3/source/dts-platform-webapp/src/routes/sections/dashboard/dynamic-resolver.tsx
+page=/opt/prod/s10/v2.2.3/source/dts-platform-webapp/src/pages/modeling/SemanticModelingCenterPage.tsx
+evidence=worklog/v2.2.3/sprint-25-202605/it/evidence/20260501-local/semantic-metrics

@@ -618,7 +618,7 @@ export default function TransformPage() {
 							<Button size="small" onClick={() => handleViewLog(record)}>
 								日志
 							</Button>
-							<Button size="small" onClick={() => router.push("/catalog/lineage")}>
+							<Button size="small" onClick={() => router.push("/catalog/lineage/impact")}>
 								血缘
 							</Button>
 							<Button

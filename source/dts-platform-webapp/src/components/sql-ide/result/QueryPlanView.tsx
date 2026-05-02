@@ -1,10 +1,10 @@
 // Chrome 95 兼容:@xyflow/react v12 内部使用 structuredClone,polyfill 通过入口已注入。
 import "@/polyfills/legacy-browser";
-import { Background, Controls, ReactFlow, type Edge, type Node } from "@xyflow/react";
-import "@xyflow/react/dist/style.css";
+import type { Edge, Node } from "@xyflow/react";
 import { useQuery } from "@tanstack/react-query";
 import { Button, Spin, Tabs, message } from "antd";
 import { type FC, useCallback, useMemo, useState } from "react";
+import { VisualFlowCanvas } from "@/components/visual-canvas/VisualFlowCanvas";
 import { getExecutionLog } from "../api/sqlIdeLog";
 import { postExplain, type PlanResult } from "../api/sqlIdePlan";
 import { layoutPlanNodes, type PlanNode } from "./planLayout";
@@ -92,10 +92,7 @@ export const QueryPlanView: FC<QueryPlanViewProps> = ({ executionId, fallbackSql
                 label: "Tree",
                 children: (
                   <div style={{ height: "100%", minHeight: 280 }}>
-                    <ReactFlow nodes={flow.nodes} edges={flow.edges} fitView>
-                      <Background />
-                      <Controls />
-                    </ReactFlow>
+                    <VisualFlowCanvas nodes={flow.nodes} edges={flow.edges} height="100%" />
                   </div>
                 ),
               },

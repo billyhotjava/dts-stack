@@ -1,0 +1,15 @@
+[PASS] lineage page files exist
+[PASS] lineage pages own their API responsibilities
+[PASS] LineagePage is compatibility entry only
+[PASS] lineage sub-pages are not wrapper-only pages
+[FAIL] forbidden mock/sample/demo terms found
+[PASS] lineage page files exist
+[PASS] lineage pages own their API responsibilities
+[PASS] LineagePage is compatibility entry only
+[PASS] lineage sub-pages are not wrapper-only pages
+[PASS] no mock/sample/demo data terms in lineage F3 scope
+[PASS] lineage page files exist
+[PASS] lineage pages own their API responsibilities
+[PASS] LineagePage is compatibility entry only
+[PASS] lineage sub-pages are not wrapper-only pages
+[PASS] no mock/sample/demo data terms in lineage F3 scope
