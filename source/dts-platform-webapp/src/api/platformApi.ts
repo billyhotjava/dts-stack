@@ -174,10 +174,75 @@ export type PlatformEventPage = {
 	totalPages: number;
 };
 
+export type Sprint27SourceStatus = {
+	status: "READY" | "EMPTY" | "ERROR" | string;
+	source?: string;
+	message?: string;
+	checkedAt?: string;
+};
+
+export type Sprint27EltConsole = {
+	sources?: Record<string, Sprint27SourceStatus>;
+	observability?: Record<string, any>;
+	governance?: Record<string, any>;
+	stages?: any[];
+	chainItems?: any[];
+};
+
+export type Sprint27MetricOperations = {
+	sources?: Record<string, Sprint27SourceStatus>;
+	overview?: Record<string, any>;
+	trendRows?: any[];
+	domains?: any[];
+	objects?: any[];
+	metrics?: any[];
+	models?: any[];
+	runs?: any[];
+};
+
+export type Sprint27EventsConsole = {
+	summary?: PlatformEventSummary;
+	page?: PlatformEventPage;
+};
+
+export type Sprint27AuditEvidence = {
+	sources?: Record<string, Sprint27SourceStatus>;
+	events?: PlatformEventDto[];
+	rows?: any[];
+	summary?: Record<string, any>;
+};
+
+export type Sprint27ReleaseGovernance = {
+	sources?: Record<string, Sprint27SourceStatus>;
+	readyForRelease?: boolean;
+	blockerFailed?: number;
+	eventFailed?: number;
+	ingestionFailed?: number;
+	indicatorFailed?: number;
+	dbtBlocked?: boolean;
+	checkedAt?: string;
+	governanceGate?: Record<string, any>;
+	indicatorOverview?: Record<string, any>;
+	ingestionOverview?: Record<string, any>;
+	eventSummary?: PlatformEventSummary;
+	dbtGate?: any;
+	checks?: any[];
+};
+
 export const getPlatformEventSummary = () =>
 	api.get<PlatformEventSummary>({ url: "/platform/events/summary" });
 export const listPlatformEvents = (params: any = {}) =>
 	api.get<PlatformEventPage>({ url: "/platform/events", params });
+export const getSprint27EltConsole = (params: any = {}) =>
+	api.get<Sprint27EltConsole>({ url: "/platform/sprint27/elt-console", params });
+export const getSprint27MetricOperations = (params: any = {}) =>
+	api.get<Sprint27MetricOperations>({ url: "/platform/sprint27/metric-operations", params });
+export const getSprint27EventsConsole = (params: any = {}) =>
+	api.get<Sprint27EventsConsole>({ url: "/platform/sprint27/events-console", params });
+export const getSprint27AuditEvidence = () =>
+	api.get<Sprint27AuditEvidence>({ url: "/platform/sprint27/audit-evidence" });
+export const getSprint27ReleaseGovernance = (params: any = {}) =>
+	api.get<Sprint27ReleaseGovernance>({ url: "/platform/sprint27/release-governance", params });
 
 // dbt project file management
 export const getDbtFileTree = () => api.get({ url: "/etl/dbt/files/tree" });

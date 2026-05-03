@@ -22,6 +22,8 @@ import com.yuzhi.dts.platform.service.governance.dto.IndicatorVersionDto;
 import com.yuzhi.dts.platform.service.governance.request.DimensionUpsertRequest;
 import com.yuzhi.dts.platform.service.governance.request.IndicatorUpsertRequest;
 import com.yuzhi.dts.platform.service.governance.request.TemplateApplyRequest;
+import com.yuzhi.dts.platform.service.event.PlatformEventOutboxService;
+import com.yuzhi.dts.platform.service.event.dto.PlatformEventRequest;
 import java.time.Instant;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -52,6 +54,7 @@ import org.springframework.web.server.ResponseStatusException;
 @RequestMapping("/api/governance")
 @Transactional
 public class GovernanceIndicatorResource {
+    private static final org.slf4j.Logger LOG = org.slf4j.LoggerFactory.getLogger(GovernanceIndicatorResource.class);
 
     private static final String GOVERNANCE_MAINTAINER_EXPRESSION =
         "hasAnyAuthority(T(com.yuzhi.dts.platform.security.AuthoritiesConstants).GOVERNANCE_MAINTAINERS)";
@@ -66,6 +69,7 @@ public class GovernanceIndicatorResource {
     private final DbtIndicatorGenerator dbtGenerator;
     private final GovIndicatorSubscriptionRepository subscriptionRepo;
     private final AuditService audit;
+    private final PlatformEventOutboxService eventOutbox;
 
     public GovernanceIndicatorResource(
         IndicatorService indicators,
@@ -77,7 +81,8 @@ public class GovernanceIndicatorResource {
         IndicatorDashboardService indicatorDashboard,
         DbtIndicatorGenerator dbtGenerator,
         GovIndicatorSubscriptionRepository subscriptionRepo,
-        AuditService audit
+        AuditService audit,
+        PlatformEventOutboxService eventOutbox
     ) {
         this.indicators = indicators;
         this.dimensions = dimensions;
@@ -89,6 +94,7 @@ public class GovernanceIndicatorResource {
         this.dbtGenerator = dbtGenerator;
         this.subscriptionRepo = subscriptionRepo;
         this.audit = audit;
+        this.eventOutbox = eventOutbox;
     }
 
     // Indicators ------------------------------------------------------------
@@ -416,6 +422,7 @@ public class GovernanceIndicatorResource {
         detail.put("targetName", saved.getName());
         detail.put("summary", "发布指标：" + saved.getName());
         audit.auditAction("GOV_INDICATOR_PUBLISH", AuditStage.SUCCESS, id.toString(), detail);
+        publishIndicatorEvent("METRIC.INDICATOR.PUBLISHED", "PUBLISH", "SUCCESS", id, saved.getName(), detail, "GOV_INDICATOR_PUBLISH");
         return ApiResponses.ok(saved);
     }
 
@@ -462,6 +469,7 @@ public class GovernanceIndicatorResource {
         detail.put("targetName", saved.getName());
         detail.put("summary", "废止指标：" + saved.getName());
         audit.auditAction("GOV_INDICATOR_ARCHIVE", AuditStage.SUCCESS, id.toString(), detail);
+        publishIndicatorEvent("METRIC.INDICATOR.ARCHIVED", "ARCHIVE", "SUCCESS", id, saved.getName(), detail, "GOV_INDICATOR_ARCHIVE");
         return ApiResponses.ok(saved);
     }
 
@@ -482,7 +490,52 @@ public class GovernanceIndicatorResource {
             }
         }
         audit.auditAction("GOV_INDICATOR_VALIDATE", AuditStage.SUCCESS, id.toString(), detail);
+        publishIndicatorEvent(
+            "METRIC.INDICATOR.VALIDATED",
+            "VALIDATE",
+            result != null && "FAILED".equalsIgnoreCase(String.valueOf(result.getStatus())) ? "FAILED" : "SUCCESS",
+            id,
+            null,
+            detail,
+            "GOV_INDICATOR_VALIDATE"
+        );
         return ApiResponses.ok(result);
+    }
+
+    private void publishIndicatorEvent(
+        String eventType,
+        String action,
+        String status,
+        UUID indicatorId,
+        String indicatorName,
+        Map<String, Object> payload,
+        String auditActionCode
+    ) {
+        try {
+            eventOutbox.publishInternal(
+                new PlatformEventRequest(
+                    null,
+                    eventType,
+                    "METRICS",
+                    "dts-platform",
+                    "INDICATOR",
+                    indicatorId == null ? null : indicatorId.toString(),
+                    indicatorName,
+                    action,
+                    "INFO",
+                    status,
+                    Instant.now(),
+                    null,
+                    null,
+                    null,
+                    auditActionCode,
+                    null,
+                    payload == null ? Map.of() : new LinkedHashMap<>(payload)
+                )
+            );
+        } catch (RuntimeException ex) {
+            LOG.warn("Failed to publish indicator event {} for {}: {}", eventType, indicatorId, ex.getMessage());
+        }
     }
 
     @PostMapping("/indicators/{id}/preview")

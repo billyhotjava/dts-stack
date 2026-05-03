@@ -123,6 +123,38 @@ export type SemanticModelRun = {
 	createdDate?: string;
 };
 
+export type SemanticWorkbenchStep = {
+	key: string;
+	title: string;
+	path: string;
+	primaryApi?: string;
+	total?: number;
+	ready?: number;
+	blocked?: number;
+	status?: string;
+	nextAction?: string;
+};
+
+export type SemanticMenuDiagnostic = {
+	key: string;
+	title: string;
+	path: string;
+	apis?: string[];
+	status?: string;
+};
+
+export type SemanticWorkbenchOverview = {
+	summary?: Record<string, number>;
+	steps?: SemanticWorkbenchStep[];
+	menus?: SemanticMenuDiagnostic[];
+	generatedAt?: string;
+};
+
+export const getSemanticWorkbenchOverview = () =>
+	quiet<SemanticWorkbenchOverview>({ url: "/semantic/workbench" });
+export const getSemanticMenuDiagnostics = () =>
+	quiet<SemanticMenuDiagnostic[]>({ url: "/semantic/menu-diagnostics" });
+
 export const listSemanticSubjectDomains = () =>
 	quiet<SemanticSubjectDomain[]>({ url: "/semantic/subject-domains" });
 export const createSemanticSubjectDomain = (data: Partial<SemanticSubjectDomain>) =>

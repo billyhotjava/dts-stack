@@ -48,6 +48,14 @@ public class PlatformEventOutboxService {
     }
 
     public PlatformEventDto publish(PlatformEventRequest request) {
+        return publish(request, true);
+    }
+
+    public PlatformEventDto publishInternal(PlatformEventRequest request) {
+        return publish(request, false);
+    }
+
+    private PlatformEventDto publish(PlatformEventRequest request, boolean audit) {
         String eventId = StringUtils.hasText(request.eventId()) ? request.eventId().trim() : UUID.randomUUID().toString();
         PlatformEventOutbox event = repository.findByEventId(eventId).orElseGet(PlatformEventOutbox::new);
         event.setEventId(eventId);
@@ -70,7 +78,9 @@ public class PlatformEventOutboxService {
         event.setDispatchStatus(PlatformEventOutbox.DISPATCH_PENDING);
         event.setDispatchAttempts(event.getDispatchAttempts() == null ? 0 : event.getDispatchAttempts());
         PlatformEventOutbox saved = repository.save(event);
-        auditEvent(saved, request.payload());
+        if (audit) {
+            auditEvent(saved, request.payload());
+        }
         return toDto(saved);
     }
 

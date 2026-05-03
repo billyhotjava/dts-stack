@@ -29,6 +29,10 @@ import com.yuzhi.dts.platform.service.modeling.SemanticModelingService.ReviewAct
 import com.yuzhi.dts.platform.service.modeling.SemanticModelingService.SubjectDomainDto;
 import com.yuzhi.dts.platform.service.modeling.SemanticModelingService.SubjectDomainRequest;
 import com.yuzhi.dts.platform.security.SecurityUtils;
+import com.yuzhi.dts.platform.service.event.PlatformEventOutboxService;
+import com.yuzhi.dts.platform.service.event.dto.PlatformEventRequest;
+import java.time.Instant;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -47,16 +51,23 @@ import org.springframework.web.bind.annotation.RestController;
 @RestController
 @RequestMapping("/api/semantic")
 public class SemanticModelingResource {
+    private static final org.slf4j.Logger LOG = org.slf4j.LoggerFactory.getLogger(SemanticModelingResource.class);
 
     private static final String MODELING_MAINTAINER_EXPRESSION =
         "hasAnyAuthority(T(com.yuzhi.dts.platform.security.AuthoritiesConstants).CATALOG_MAINTAINERS)";
 
     private final SemanticModelingService service;
     private final AuditService audit;
+    private final PlatformEventOutboxService eventOutbox;
 
-    public SemanticModelingResource(SemanticModelingService service, AuditService audit) {
+    public SemanticModelingResource(
+        SemanticModelingService service,
+        AuditService audit,
+        PlatformEventOutboxService eventOutbox
+    ) {
         this.service = service;
         this.audit = audit;
+        this.eventOutbox = eventOutbox;
     }
 
     @GetMapping("/subject-domains")
@@ -64,6 +75,22 @@ public class SemanticModelingResource {
     public ApiResponse<List<SubjectDomainDto>> listSubjectDomains() {
         List<SubjectDomainDto> data = service.listSubjectDomains();
         audit.auditAction("SEMANTIC_SUBJECT_DOMAIN_LIST", AuditStage.SUCCESS, "list", Map.of("count", data.size()));
+        return ApiResponses.ok(data);
+    }
+
+    @GetMapping("/workbench")
+    @Transactional(readOnly = true)
+    public ApiResponse<Map<String, Object>> workbenchOverview() {
+        Map<String, Object> data = service.workbenchOverview();
+        audit.auditAction("SEMANTIC_WORKBENCH_VIEW", AuditStage.SUCCESS, "semantic-workbench", Map.of("summary", "查看语义建模工作台"));
+        return ApiResponses.ok(data);
+    }
+
+    @GetMapping("/menu-diagnostics")
+    @Transactional(readOnly = true)
+    public ApiResponse<List<Map<String, Object>>> menuDiagnostics() {
+        List<Map<String, Object>> data = service.semanticMenuDiagnostics();
+        audit.auditAction("SEMANTIC_MENU_DIAGNOSTICS_VIEW", AuditStage.SUCCESS, "semantic-menu-diagnostics", Map.of("count", data.size()));
         return ApiResponses.ok(data);
     }
 
@@ -252,6 +279,15 @@ public class SemanticModelingResource {
     ) {
         ModelRunDto result = service.triggerModelRun(id, request, currentActor(), activeDept);
         audit.auditAction("SEMANTIC_MODEL_RUN_TRIGGER", AuditStage.SUCCESS, id.toString(), Map.of("runId", result.id().toString(), "status", result.status()));
+        publishSemanticModelEvent(
+            "METRIC.SEMANTIC_MODEL.RUN_TRIGGERED",
+            "EXECUTE",
+            result.status(),
+            id,
+            null,
+            eventPayload("runId", result.id().toString(), "status", result.status(), "selector", result.selector()),
+            "SEMANTIC_MODEL_RUN_TRIGGER"
+        );
         return ApiResponses.ok(result);
     }
 
@@ -264,6 +300,15 @@ public class SemanticModelingResource {
     ) {
         ModelRunDto result = service.updateModelRun(id, runId, request);
         audit.auditAction("SEMANTIC_MODEL_RUN_UPDATE", AuditStage.SUCCESS, runId.toString(), Map.of("modelId", id.toString(), "status", result.status()));
+        publishSemanticModelEvent(
+            "METRIC.SEMANTIC_MODEL.RUN_UPDATED",
+            "UPDATE",
+            result.status(),
+            id,
+            null,
+            eventPayload("runId", runId.toString(), "status", result.status()),
+            "SEMANTIC_MODEL_RUN_UPDATE"
+        );
         return ApiResponses.ok(result);
     }
 
@@ -304,6 +349,15 @@ public class SemanticModelingResource {
     public ApiResponse<PublishArtifactsResult> publishDbt(@PathVariable UUID id) {
         PublishArtifactsResult result = service.publishArtifacts(id);
         audit.auditAction("SEMANTIC_MODEL_PUBLISH_DBT", AuditStage.SUCCESS, id.toString(), Map.of("count", result.publishedPaths().size()));
+        publishSemanticModelEvent(
+            "METRIC.SEMANTIC_MODEL.PUBLISHED_DBT",
+            "PUBLISH",
+            "SUCCESS",
+            id,
+            null,
+            Map.of("count", result.publishedPaths().size(), "paths", result.publishedPaths()),
+            "SEMANTIC_MODEL_PUBLISH_DBT"
+        );
         return ApiResponses.ok(result);
     }
 
@@ -312,6 +366,15 @@ public class SemanticModelingResource {
     public ApiResponse<RegisterBiDatasetResult> registerBiDataset(@PathVariable UUID id) {
         RegisterBiDatasetResult result = service.registerBiDataset(id);
         audit.auditAction("SEMANTIC_MODEL_REGISTER_BI_DATASET", AuditStage.SUCCESS, id.toString(), Map.of("datasetId", result.datasetId().toString()));
+        publishSemanticModelEvent(
+            "METRIC.SEMANTIC_MODEL.REGISTERED_BI_DATASET",
+            "PUBLISH",
+            "SUCCESS",
+            id,
+            result.datasetName(),
+            eventPayload("datasetId", result.datasetId().toString(), "datasetName", result.datasetName(), "versionNo", result.versionNo()),
+            "SEMANTIC_MODEL_REGISTER_BI_DATASET"
+        );
         return ApiResponses.ok(result);
     }
 
@@ -320,7 +383,87 @@ public class SemanticModelingResource {
     public ApiResponse<RegisterLineageResult> registerLineage(@PathVariable UUID id) {
         RegisterLineageResult result = service.registerLineage(id);
         audit.auditAction("SEMANTIC_MODEL_REGISTER_LINEAGE", AuditStage.SUCCESS, id.toString(), Map.of("lineageId", result.lineageId().toString()));
+        publishSemanticModelEvent(
+            "METRIC.SEMANTIC_MODEL.REGISTERED_LINEAGE",
+            "PUBLISH",
+            "SUCCESS",
+            id,
+            null,
+            eventPayload(
+                "lineageId",
+                result.lineageId().toString(),
+                "upstreamDatasetId",
+                result.upstreamDatasetId().toString(),
+                "downstreamDatasetId",
+                result.downstreamDatasetId().toString()
+            ),
+            "SEMANTIC_MODEL_REGISTER_LINEAGE"
+        );
         return ApiResponses.ok(result);
+    }
+
+    private Map<String, Object> eventPayload(Object... values) {
+        Map<String, Object> payload = new LinkedHashMap<>();
+        if (values == null) {
+            return payload;
+        }
+        for (int i = 0; i + 1 < values.length; i += 2) {
+            Object key = values[i];
+            if (key != null) {
+                payload.put(String.valueOf(key), values[i + 1]);
+            }
+        }
+        return payload;
+    }
+
+    private void publishSemanticModelEvent(
+        String eventType,
+        String action,
+        String status,
+        UUID modelId,
+        String aggregateName,
+        Map<String, Object> payload,
+        String auditActionCode
+    ) {
+        try {
+            eventOutbox.publishInternal(
+                new PlatformEventRequest(
+                    null,
+                    eventType,
+                    "METRICS",
+                    "dts-platform",
+                    "SEMANTIC_MODEL",
+                    modelId == null ? null : modelId.toString(),
+                    aggregateName,
+                    action,
+                    "INFO",
+                    normalizeEventStatus(status),
+                    Instant.now(),
+                    currentActor(),
+                    null,
+                    null,
+                    auditActionCode,
+                    null,
+                    payload == null ? Map.of() : new LinkedHashMap<>(payload)
+                )
+            );
+        } catch (RuntimeException ex) {
+            LOG.warn("Failed to publish semantic model event {} for {}: {}", eventType, modelId, ex.getMessage());
+        }
+    }
+
+    private String normalizeEventStatus(String status) {
+        if (status == null || status.isBlank()) {
+            return "SUCCESS";
+        }
+        String upper = status.trim().toUpperCase();
+        if ("SUCCEEDED".equals(upper) || "COMPLETED".equals(upper)) {
+            return "SUCCESS";
+        }
+        if ("ERROR".equals(upper) || "TIMEOUT".equals(upper)) {
+            return "FAILED";
+        }
+        return upper;
     }
 
     private String currentActor() {

@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Alert, Button, Card, Col, Row, Space, Statistic, Steps, Typography } from "antd";
+import { Alert, Button, Card, Col, Progress, Row, Space, Statistic, Steps, Tag, Typography } from "antd";
 import {
 	BranchesOutlined,
 	DashboardOutlined,
@@ -10,18 +10,29 @@ import {
 } from "@ant-design/icons";
 import { PageHeader } from "@/components/page-header";
 import {
+	getSemanticWorkbenchOverview,
 	listSemanticBusinessObjects,
 	listSemanticMetrics,
 	listSemanticSubjectDomains,
 	type SemanticBusinessObject,
 	type SemanticMetric,
 	type SemanticSubjectDomain,
+	type SemanticWorkbenchOverview,
+	type SemanticWorkbenchStep,
 } from "@/api/semanticModelingApi";
 import { useRouter } from "@/routes/hooks";
 import { SemanticSectionNav } from "./SemanticSectionNav";
 import { asArray, semanticSectionMeta, type SemanticModelingSection } from "./semanticModelingShared";
 
 const { Paragraph } = Typography;
+
+const stepStatusColor = (status?: string) => {
+	const value = String(status || "").toUpperCase();
+	if (value === "READY") return "green";
+	if (value === "PARTIAL" || value === "WARN") return "orange";
+	if (value === "EMPTY") return "default";
+	return "blue";
+};
 
 const sectionCards: Record<SemanticModelingSection, { title: string; path: string; description: string }> = {
 	overview: {
@@ -66,17 +77,20 @@ export default function SemanticOverviewPage() {
 	const [domains, setDomains] = useState<SemanticSubjectDomain[]>([]);
 	const [objects, setObjects] = useState<SemanticBusinessObject[]>([]);
 	const [metrics, setMetrics] = useState<SemanticMetric[]>([]);
+	const [workbench, setWorkbench] = useState<SemanticWorkbenchOverview | null>(null);
 	const [loading, setLoading] = useState(false);
 
 	useEffect(() => {
 		let active = true;
 		setLoading(true);
 		Promise.all([
+			getSemanticWorkbenchOverview().catch(() => null),
 			listSemanticSubjectDomains().catch(() => []),
 			listSemanticBusinessObjects().catch(() => []),
 			listSemanticMetrics().catch(() => []),
-		]).then(([domainPayload, objectPayload, metricPayload]) => {
+		]).then(([workbenchPayload, domainPayload, objectPayload, metricPayload]) => {
 			if (!active) return;
+			setWorkbench(workbenchPayload);
 			setDomains(asArray<SemanticSubjectDomain>(domainPayload));
 			setObjects(asArray<SemanticBusinessObject>(objectPayload));
 			setMetrics(asArray<SemanticMetric>(metricPayload));
@@ -87,6 +101,9 @@ export default function SemanticOverviewPage() {
 			active = false;
 		};
 	}, []);
+
+	const workflowSteps = (workbench?.steps || []) as SemanticWorkbenchStep[];
+	const readySteps = workflowSteps.filter((step) => String(step.status || "").toUpperCase() === "READY").length;
 
 	return (
 		<div className="space-y-5 p-5" data-testid="semantic-overview-page">
@@ -134,6 +151,47 @@ export default function SemanticOverviewPage() {
 					</Card>
 				</Col>
 			</Row>
+
+			<Card
+				title="菜单与后端能力诊断"
+				extra={workflowSteps.length ? <Tag color="blue">{readySteps}/{workflowSteps.length} READY</Tag> : null}
+				loading={loading}
+			>
+				{workflowSteps.length ? (
+					<Row gutter={[12, 12]}>
+						{workflowSteps.map((step) => {
+							const total = Number(step.total || 0);
+							const ready = Number(step.ready || 0);
+							const percent = total > 0 ? Math.min(100, Math.round((ready / total) * 100)) : 0;
+							return (
+								<Col xs={24} md={12} xl={8} key={step.key}>
+									<button
+										type="button"
+										onClick={() => router.push(step.path)}
+										className="w-full rounded-md border border-border bg-background p-4 text-left transition hover:border-primary/60 hover:bg-primary/5"
+									>
+										<div className="mb-3 flex items-center justify-between gap-2">
+											<Typography.Text strong>{step.title}</Typography.Text>
+											<Tag color={stepStatusColor(step.status)}>{step.status || "UNKNOWN"}</Tag>
+										</div>
+										<Progress percent={percent} showInfo={false} />
+										<div className="mt-3 text-xs text-muted-foreground">
+											{step.primaryApi || "-"}
+										</div>
+										<div className="mt-1 text-xs text-muted-foreground">
+											{step.nextAction || "-"}
+										</div>
+									</button>
+								</Col>
+							);
+						})}
+					</Row>
+				) : (
+					<Paragraph type="secondary" className="mb-0">
+						后端诊断接口暂无数据，保留静态流程入口。
+					</Paragraph>
+				)}
+			</Card>
 
 			<Row gutter={[16, 16]}>
 				{(["subjects", "objects", "metrics", "models", "publish", "runs"] as SemanticModelingSection[]).map((key, index) => (

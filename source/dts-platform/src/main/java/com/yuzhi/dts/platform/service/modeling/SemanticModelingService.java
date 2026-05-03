@@ -431,6 +431,169 @@ public class SemanticModelingService {
         );
     }
 
+    @Transactional(readOnly = true)
+    public Map<String, Object> workbenchOverview() {
+        long indicatorDefinitions = count("select count(*) from gov_indicator_definition");
+        long domains = count("select count(*) from semantic_subject_domain");
+        long mappedDomains = count("select count(*) from semantic_subject_domain where governance_domain_id is not null");
+        long objects = count("select count(*) from semantic_business_object");
+        long objectsWithMainTable = count("select count(*) from semantic_business_object where main_table is not null and trim(main_table) <> ''");
+        long objectsWithMappings = count("select count(distinct object_id) from semantic_object_table_mapping");
+        long objectsWithJoins = count(
+            """
+            select count(*) from (
+                select object_id
+                from semantic_object_table_mapping
+                group by object_id
+                having count(*) > 1
+            ) t
+            """
+        );
+        long dimensions = count("select count(*) from semantic_dimension");
+        long metrics = count("select count(*) from semantic_metric");
+        long objectsWithVisualConfig = count(
+            """
+            select count(*) from (
+                select object_id from semantic_dimension
+                union
+                select object_id from semantic_metric
+            ) t
+            """
+        );
+        long consumableModels = count("select count(*) from semantic_model where upper(type) in ('DWS','ADS')");
+        long boundModels = count(
+            """
+            select count(*) from semantic_model m
+            where exists (select 1 from semantic_model_metric mm where mm.model_id = m.id)
+            """
+        );
+        long approvedModels = count("select count(*) from semantic_model where upper(coalesce(review_status, status, '')) in ('APPROVED','PUBLISHED')");
+        long publishedModels = count("select count(*) from semantic_model where upper(coalesce(status, '')) = 'PUBLISHED'");
+        long biDatasets = count("select count(*) from semantic_generated_artifact where artifact_type = 'BI_DATASET' and status = 'REGISTERED'");
+        long lineages = count("select count(*) from semantic_generated_artifact where artifact_type = 'LINEAGE' and status = 'REGISTERED'");
+        long runs = count("select count(*) from semantic_model_run");
+        long failedRuns = count("select count(*) from semantic_model_run where upper(status) in ('FAILED','ERROR','BLOCKED','TIMEOUT')");
+        long runningRuns = count("select count(*) from semantic_model_run where upper(status) in ('RUNNING','PENDING','SUBMITTED')");
+        long modelsWithRuns = count("select count(distinct model_id) from semantic_model_run");
+
+        List<Map<String, Object>> steps = List.of(
+            step(
+                "metric-workbench",
+                "指标工作台",
+                "/metrics/center",
+                "/api/governance/indicators",
+                indicatorDefinitions,
+                indicatorDefinitions,
+                0,
+                indicatorDefinitions > 0 ? "READY" : "EMPTY",
+                indicatorDefinitions > 0 ? "指标定义已接入" : "暂无治理指标定义，先在指标字典维护指标口径"
+            ),
+            step(
+                "subject-domain-mapping",
+                "主题域映射",
+                "/metrics/semantic/subjects",
+                "/api/semantic/subject-domains",
+                domains,
+                mappedDomains,
+                domains - mappedDomains,
+                domains > 0 ? "READY" : "EMPTY",
+                domains > 0 ? "主题域已接入语义建模" : "先创建或引用治理主题域"
+            ),
+            step(
+                "business-object-join",
+                "业务对象 JOIN",
+                "/metrics/semantic/objects",
+                "/api/semantic/business-objects",
+                objects,
+                objectsWithMappings,
+                Math.max(0, objects - objectsWithMainTable),
+                objectsWithMappings > 0 ? "READY" : objects > 0 ? "PARTIAL" : "EMPTY",
+                objectsWithJoins > 0 ? "已有多表 JOIN 业务对象" : "至少为业务对象配置主表；多表对象需补 JOIN"
+            ),
+            step(
+                "metric-visual-config",
+                "指标可视化配置",
+                "/metrics/semantic/metrics",
+                "/api/semantic/metrics",
+                metrics,
+                objectsWithVisualConfig,
+                metrics == 0 ? 1 : 0,
+                metrics > 0 ? "READY" : "EMPTY",
+                metrics > 0 ? "指标与维度配置已接入" : "先拖拽或手工创建可视化指标"
+            ),
+            step(
+                "dws-ads-datasets",
+                "DWS/ADS 数据集",
+                "/metrics/semantic/models",
+                "/api/semantic/models",
+                consumableModels,
+                boundModels,
+                Math.max(0, consumableModels - boundModels),
+                consumableModels > 0 ? "READY" : "EMPTY",
+                boundModels > 0 ? "已有可生成 dbt 的模型绑定" : "定义 DWS/ADS 并绑定指标"
+            ),
+            step(
+                "publish-lineage",
+                "审核发布和血缘",
+                "/metrics/semantic/publish",
+                "/api/semantic/models/{id}/publish-dbt",
+                consumableModels,
+                publishedModels,
+                Math.max(0, consumableModels - approvedModels),
+                publishedModels > 0 ? "READY" : approvedModels > 0 ? "PARTIAL" : "EMPTY",
+                lineages > 0 && biDatasets > 0 ? "发布、BI 注册和血缘已形成闭环" : "审核通过后发布 dbt，并注册 BI/血缘"
+            ),
+            step(
+                "model-run-monitoring",
+                "模型运行监控",
+                "/metrics/semantic/runs",
+                "/api/semantic/models/{id}/runs",
+                runs,
+                modelsWithRuns,
+                failedRuns,
+                runs > 0 ? (failedRuns > 0 ? "WARN" : "READY") : "EMPTY",
+                runningRuns > 0 ? "存在运行中模型，关注调度结果" : "发布后触发模型运行形成监控记录"
+            )
+        );
+
+        return map(
+            "summary",
+            map(
+                "indicatorDefinitions", indicatorDefinitions,
+                "domains", domains,
+                "businessObjects", objects,
+                "dimensions", dimensions,
+                "metrics", metrics,
+                "consumableModels", consumableModels,
+                "approvedModels", approvedModels,
+                "publishedModels", publishedModels,
+                "biDatasets", biDatasets,
+                "lineages", lineages,
+                "runs", runs,
+                "failedRuns", failedRuns
+            ),
+            "steps",
+            steps,
+            "menus",
+            semanticMenuDiagnostics(),
+            "generatedAt",
+            Instant.now()
+        );
+    }
+
+    @Transactional(readOnly = true)
+    public List<Map<String, Object>> semanticMenuDiagnostics() {
+        return List.of(
+            menu("metric-workbench", "指标工作台", "/metrics/center", List.of("/api/governance/indicators", "/api/platform/sprint27/metric-operations")),
+            menu("subject-domain-mapping", "主题域映射", "/metrics/semantic/subjects", List.of("/api/semantic/subject-domains", "/api/catalog/domains/tree")),
+            menu("business-object-join", "业务对象 JOIN", "/metrics/semantic/objects", List.of("/api/semantic/business-objects", "/api/semantic/business-objects/{id}/table-mappings")),
+            menu("metric-visual-config", "指标可视化配置", "/metrics/semantic/metrics", List.of("/api/semantic/dimensions", "/api/semantic/metrics")),
+            menu("dws-ads-datasets", "DWS/ADS 数据集", "/metrics/semantic/models", List.of("/api/semantic/models", "/api/semantic/models/{id}/bindings", "/api/semantic/models/{id}/generate-artifacts")),
+            menu("publish-lineage", "审核发布和血缘", "/metrics/semantic/publish", List.of("/api/semantic/models/{id}/submit-review", "/api/semantic/models/{id}/publish-dbt", "/api/semantic/models/{id}/register-lineage")),
+            menu("model-run-monitoring", "模型运行监控", "/metrics/semantic/runs", List.of("/api/semantic/models/{id}/runs"))
+        );
+    }
+
     public ModelDto createModel(ModelRequest request) {
         UUID id = UUID.randomUUID();
         jdbc.update(
@@ -1533,6 +1696,48 @@ public class SemanticModelingService {
             throw new IllegalArgumentException("记录不存在");
         }
         return rows.get(0);
+    }
+
+    private long count(String sql) {
+        Number value = jdbc.queryForObject(sql, params(), Number.class);
+        return value == null ? 0L : value.longValue();
+    }
+
+    private Map<String, Object> step(
+        String key,
+        String title,
+        String path,
+        String primaryApi,
+        long total,
+        long ready,
+        long blocked,
+        String status,
+        String nextAction
+    ) {
+        return map(
+            "key", key,
+            "title", title,
+            "path", path,
+            "primaryApi", primaryApi,
+            "total", total,
+            "ready", ready,
+            "blocked", blocked,
+            "status", status,
+            "nextAction", nextAction
+        );
+    }
+
+    private Map<String, Object> menu(String key, String title, String path, List<String> apis) {
+        return map("key", key, "title", title, "path", path, "apis", apis, "status", "WIRED");
+    }
+
+    private Map<String, Object> map(Object... values) {
+        Map<String, Object> result = new LinkedHashMap<>();
+        if (values == null) return result;
+        for (int i = 0; i + 1 < values.length; i += 2) {
+            result.put(String.valueOf(values[i]), values[i + 1]);
+        }
+        return result;
     }
 
     private MapSqlParameterSource params() {

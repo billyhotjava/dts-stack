@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { Button, Progress, Space, Table, Tag, Timeline, Typography } from "antd";
 import type { ColumnsType } from "antd/es/table";
-import { BarChart3, BookOpenCheck, Boxes, CheckCircle2, Database, GitBranch, RefreshCw, Rocket } from "lucide-react";
+import { BarChart3, BookOpenCheck, Boxes, CheckCircle2, Database, GitBranch, RadioTower, RefreshCw, Rocket } from "lucide-react";
 import { useNavigate } from "react-router";
 import {
 	PlatformPageHero,
@@ -9,15 +9,10 @@ import {
 	PlatformSummaryCards,
 } from "@/components/console-page";
 import {
-	getIndicatorOpsOverview,
-	getIndicatorOpsTrend,
+	getSprint27MetricOperations,
+	type Sprint27SourceStatus,
 } from "@/api/platformApi";
 import {
-	listSemanticBusinessObjects,
-	listSemanticMetrics,
-	listSemanticModelRuns,
-	listSemanticModels,
-	listSemanticSubjectDomains,
 	type SemanticBusinessObject,
 	type SemanticMetric,
 	type SemanticModel,
@@ -112,30 +107,21 @@ export default function MetricOperationsPage() {
 	const [metrics, setMetrics] = useState<SemanticMetric[]>([]);
 	const [models, setModels] = useState<SemanticModel[]>([]);
 	const [runs, setRuns] = useState<SemanticModelRun[]>([]);
+	const [sources, setSources] = useState<Record<string, Sprint27SourceStatus>>({});
 
 	const loadSnapshot = async () => {
 		setLoading(true);
 		try {
-			const [overviewResp, trendResp, domainResp, objectResp, metricResp, modelResp] = await Promise.all([
-				getIndicatorOpsOverview({ hours: 168 }).catch(() => null),
-				getIndicatorOpsTrend({ hours: 168, bucketHours: 24 }).catch(() => []),
-				listSemanticSubjectDomains().catch(() => []),
-				listSemanticBusinessObjects().catch(() => []),
-				listSemanticMetrics().catch(() => []),
-				listSemanticModels().catch(() => []),
-			]);
-			const nextModels = normalizeList<SemanticModel>(modelResp);
-			setOverview(overviewResp ? normalizeOverview(overviewResp) : EMPTY_OVERVIEW);
-			setTrendRows(normalizeList<any>(trendResp));
-			setDomains(normalizeList<SemanticSubjectDomain>(domainResp));
-			setObjects(normalizeList<SemanticBusinessObject>(objectResp));
-			setMetrics(normalizeList<SemanticMetric>(metricResp));
+			const snapshot = await getSprint27MetricOperations({ hours: 168, bucketHours: 24 });
+			const nextModels = normalizeList<SemanticModel>(snapshot?.models);
+			setOverview(snapshot?.overview ? normalizeOverview(snapshot.overview) : EMPTY_OVERVIEW);
+			setTrendRows(normalizeList<any>(snapshot?.trendRows));
+			setDomains(normalizeList<SemanticSubjectDomain>(snapshot?.domains));
+			setObjects(normalizeList<SemanticBusinessObject>(snapshot?.objects));
+			setMetrics(normalizeList<SemanticMetric>(snapshot?.metrics));
 			setModels(nextModels);
-
-			const runGroups = await Promise.all(
-				nextModels.slice(0, 4).map((model) => listSemanticModelRuns(model.id).catch(() => [])),
-			);
-			setRuns(runGroups.flatMap((group) => normalizeList<SemanticModelRun>(group)).slice(0, 8));
+			setRuns(normalizeList<SemanticModelRun>(snapshot?.runs).slice(0, 8));
+			setSources(snapshot?.sources || {});
 		} finally {
 			setLoading(false);
 		}
@@ -229,6 +215,12 @@ export default function MetricOperationsPage() {
 				title="指标运营台"
 				actions={
 					<Space wrap>
+						<Button icon={<RadioTower className="h-4 w-4" />} onClick={() => navigate("/ops/events")}>
+							事件观测
+						</Button>
+						<Button onClick={() => navigate("/ops/release-governance")}>
+							发布治理
+						</Button>
 						<Button icon={<RefreshCw className="h-4 w-4" />} loading={loading} onClick={() => void loadSnapshot()}>
 							刷新
 						</Button>
@@ -240,6 +232,16 @@ export default function MetricOperationsPage() {
 			/>
 
 			<PlatformSummaryCards items={summaryCards} />
+
+			<PlatformSectionCard title="数据源状态">
+				<Space wrap>
+					{Object.entries(sources).length ? Object.entries(sources).map(([key, source]) => (
+						<Tag key={key} color={source.status === "ERROR" ? "red" : source.status === "EMPTY" ? "default" : "green"}>
+							{key}: {source.status}
+						</Tag>
+					)) : <Typography.Text type="secondary">暂无后端数据源状态</Typography.Text>}
+				</Space>
+			</PlatformSectionCard>
 
 			<div className="grid gap-4 xl:grid-cols-[1.2fr_0.8fr]">
 				<PlatformSectionCard
@@ -305,6 +307,9 @@ export default function MetricOperationsPage() {
 						</Button>
 						<Button block icon={<GitBranch className="h-4 w-4" />} onClick={() => navigate("/catalog/lineage/impact")}>
 							血缘影响
+						</Button>
+						<Button block icon={<RadioTower className="h-4 w-4" />} onClick={() => navigate("/ops/audit-evidence")}>
+							审计证据链
 						</Button>
 					</Space>
 				</PlatformSectionCard>

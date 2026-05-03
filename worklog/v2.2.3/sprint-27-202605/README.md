@@ -1,7 +1,7 @@
 # Sprint-27: ELT 与指标可视化企业级补强
 
 **时间**: 2026-05
-**状态**: PLANNED
+**状态**: IN_PROGRESS
 **类型**: Product Capability / Audit Consistency / Event Foundation
 **目标**: 在不提前固化客户审批、端到端权限和脱敏模式的前提下，优先补齐 ELT 可视化、指标可视化和审计一致性；Kafka 仅作为可选基础设施与事件底座预留，不进入核心业务依赖。
 
@@ -17,6 +17,7 @@
 - **审计先统一**: 权限和脱敏策略未定时，不先做强策略闭环；但所有关键操作必须具备一致审计语义。
 - **Kafka 不进关键路径**: Kafka 容器可纳入环境，但业务功能必须在 Kafka 未启用时正常工作。
 - **Outbox 优先**: 事件发布采用 outbox 思路，先保证事件可补发、可追踪，再逐步接 Kafka。
+- **聚合 API 优先**: UI 页面只消费 platform Sprint-27 聚合 API，避免前端直接拼接跨域接口导致空数据不可解释。
 - **策略接口预留**: 端到端权限、脱敏、审批只定义接口、字段、枚举和审计上下文，不固化客户规则。
 - **小步验收**: 每个 feature 都要有页面/API/脚本级验收，不以“架构预研完成”作为交付。
 
@@ -24,13 +25,13 @@
 
 | Feature | 优先级 | 状态 | 目标 |
 |---------|--------|------|------|
-| F1-ELT可视化控制台 | P0 | PLANNED | 展示采集、dbt、质量、血缘、发布状态的一体化链路 |
-| F2-指标可视化运营台 | P0 | PLANNED | 展示指标定义、运行、质量、订阅、消费和异常趋势 |
-| F3-审计一致性与证据链 | P0 | PLANNED | 统一 platform、ingestion、analytics 关键操作审计语义 |
-| F4-事件观测与策略接口预留 | P1 | PLANNED | 定义事件 envelope/outbox/观测指标，Kafka 仅可选接入 |
-| F5-发布治理与验收 | P1 | PLANNED | 建立 ELT/指标发布前检查、回归脚本和证据归档 |
+| F1-ELT可视化控制台 | P0 | IN_PROGRESS | 已切入 `/api/platform/sprint27/elt-console` 聚合 API，展示采集、dbt、质量、血缘、发布状态的一体化链路 |
+| F2-指标可视化运营台 | P0 | IN_PROGRESS | 已切入 `/api/platform/sprint27/metric-operations` 聚合 API，展示指标定义、运行、质量、订阅、消费和异常趋势 |
+| F3-审计一致性与证据链 | P0 | IN_PROGRESS | 已切入 `/api/platform/sprint27/audit-evidence` 聚合 API，统一 platform、ingestion、analytics 关键操作审计语义 |
+| F4-事件观测与策略接口预留 | P1 | IN_PROGRESS | 已切入 `/api/platform/sprint27/events-console` 聚合 API，Kafka 仅可选接入；指标、语义模型、dbt 关键动作开始写入 outbox |
+| F5-发布治理与验收 | P1 | IN_PROGRESS | 已切入 `/api/platform/sprint27/release-governance` 聚合 API，建立 ELT/指标发布前检查、回归脚本和证据归档 |
 
-**统计**: PLANNED=5, IN_PROGRESS=0, DONE=0, BLOCKED=0
+**统计**: PLANNED=0, IN_PROGRESS=5, DONE=0, BLOCKED=0
 
 ## 架构基线
 
@@ -73,3 +74,5 @@ UI 重构前先遵守 [Sprint-27 架构基线设计](./architecture-baseline.md)
 - Kafka 未启用时，核心页面、API、smoke 均可通过。
 - 事件契约和 outbox 设计文档完整，后续可无破坏接入 Kafka。
 - Sprint-27 smoke 脚本能沉淀到 `it/evidence`。
+- Sprint-27 页面空数据必须返回 `sources` 状态，能区分 `READY`、`EMPTY` 和 `ERROR`。
+- 语义建模菜单必须具备后端诊断入口，覆盖指标工作台、主题域映射、业务对象 JOIN、指标可视化配置、DWS/ADS 数据集、审核发布和血缘、模型运行监控，能区分 `READY`、`PARTIAL` 和 `EMPTY`。

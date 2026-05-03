@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { Button, Progress, Space, Table, Tag, Timeline, Typography } from "antd";
 import type { ColumnsType } from "antd/es/table";
-import { Activity, Boxes, CheckCircle2, Clock3, DatabaseZap, GitBranch, RefreshCw, ShieldCheck } from "lucide-react";
+import { Activity, Boxes, CheckCircle2, Clock3, DatabaseZap, GitBranch, RadioTower, RefreshCw, ShieldCheck } from "lucide-react";
 import { useNavigate } from "react-router";
 import {
 	PlatformPageHero,
@@ -9,7 +9,10 @@ import {
 	PlatformSummaryCards,
 } from "@/components/console-page";
 import {
-	ingestionTaskAPI,
+	getSprint27EltConsole,
+	type Sprint27SourceStatus,
+} from "@/api/platformApi";
+import {
 	type IngestionExecutionObservabilityDTO,
 	type IngestionGovernanceOverviewDTO,
 } from "@/api/ingestion";
@@ -83,19 +86,25 @@ export default function EltConsolePage() {
 	const [loading, setLoading] = useState(false);
 	const [observability, setObservability] = useState<IngestionExecutionObservabilityDTO>(FALLBACK_OBSERVABILITY);
 	const [governance, setGovernance] = useState<IngestionGovernanceOverviewDTO>(FALLBACK_GOVERNANCE);
+	const [stages, setStages] = useState<PipelineStage[]>([]);
+	const [chainItems, setChainItems] = useState<ChainItem[]>([]);
+	const [sources, setSources] = useState<Record<string, Sprint27SourceStatus>>({});
 
 	const loadSnapshot = async () => {
 		setLoading(true);
 		try {
-			const [nextObservability, nextGovernance] = await Promise.all([
-				ingestionTaskAPI.getExecutionsObservability({ days: 7 }),
-				ingestionTaskAPI.getGovernanceOverview({ hours: 24 }),
-			]);
-			setObservability(nextObservability || FALLBACK_OBSERVABILITY);
-			setGovernance(nextGovernance || FALLBACK_GOVERNANCE);
+			const snapshot = await getSprint27EltConsole({ days: 7, hours: 24 });
+			setObservability((snapshot?.observability || FALLBACK_OBSERVABILITY) as IngestionExecutionObservabilityDTO);
+			setGovernance((snapshot?.governance || FALLBACK_GOVERNANCE) as IngestionGovernanceOverviewDTO);
+			setStages(Array.isArray(snapshot?.stages) ? snapshot.stages as PipelineStage[] : []);
+			setChainItems(Array.isArray(snapshot?.chainItems) ? snapshot.chainItems as ChainItem[] : []);
+			setSources(snapshot?.sources || {});
 		} catch {
 			setObservability(FALLBACK_OBSERVABILITY);
 			setGovernance(FALLBACK_GOVERNANCE);
+			setStages([]);
+			setChainItems([]);
+			setSources({});
 		} finally {
 			setLoading(false);
 		}
@@ -108,7 +117,7 @@ export default function EltConsolePage() {
 	const successRate = observability.successRate ?? (observability.total ? observability.success / observability.total : 0);
 	const timeoutRate = observability.timeoutRate ?? (observability.total ? observability.timeout / observability.total : 0);
 
-	const stages = useMemo<PipelineStage[]>(
+	const fallbackStages = useMemo<PipelineStage[]>(
 		() => [
 			{ key: "source", title: "数据接入", status: governance.running ? "processing" : "success", count: governance.running, path: "/explore/etl/transform" },
 			{ key: "queue", title: "队列调度", status: governance.queueLength ? "warning" : "success", count: governance.queueLength, path: "/explore/etl/orchestration" },
@@ -119,7 +128,7 @@ export default function EltConsolePage() {
 		[governance, observability],
 	);
 
-	const chainItems = useMemo<ChainItem[]>(
+	const fallbackChainItems = useMemo<ChainItem[]>(
 		() => [
 			{ key: "task", asset: "采集任务", stage: "接入", owner: "dts-ingestion", status: governance.running ? "processing" : "success", path: "/explore/etl/transform" },
 			{ key: "model", asset: "转换模型", stage: "加工", owner: "dts-platform", status: observability.failed ? "warning" : "success", path: "/modeling/dbt-files" },
@@ -195,6 +204,12 @@ export default function EltConsolePage() {
 				title="ELT 控制台"
 				actions={
 					<Space wrap>
+						<Button icon={<RadioTower className="h-4 w-4" />} onClick={() => navigate("/ops/events")}>
+							事件观测
+						</Button>
+						<Button onClick={() => navigate("/ops/release-governance")}>
+							发布治理
+						</Button>
 						<Button icon={<RefreshCw className="h-4 w-4" />} loading={loading} onClick={() => void loadSnapshot()}>
 							刷新
 						</Button>
@@ -207,13 +222,23 @@ export default function EltConsolePage() {
 
 			<PlatformSummaryCards items={summaryCards} />
 
+			<PlatformSectionCard title="数据源状态">
+				<Space wrap>
+					{Object.entries(sources).length ? Object.entries(sources).map(([key, source]) => (
+						<Tag key={key} color={source.status === "ERROR" ? "red" : source.status === "EMPTY" ? "default" : "green"}>
+							{key}: {source.status}
+						</Tag>
+					)) : <Typography.Text type="secondary">暂无后端数据源状态</Typography.Text>}
+				</Space>
+			</PlatformSectionCard>
+
 			<div className="grid gap-4 xl:grid-cols-[1.2fr_0.8fr]">
 				<PlatformSectionCard
 					title="链路态势"
 					action={<Button size="small" onClick={() => navigate("/catalog/lineage/graph")}>血缘图谱</Button>}
 				>
 					<div className="grid gap-3 md:grid-cols-5">
-						{stages.map((stage) => (
+						{(stages.length ? stages : fallbackStages).map((stage) => (
 							<button
 								key={stage.key}
 								type="button"
@@ -272,6 +297,9 @@ export default function EltConsolePage() {
 						<Button block icon={<GitBranch className="h-4 w-4" />} onClick={() => navigate("/catalog/lineage/impact")}>
 							影响分析
 						</Button>
+						<Button block icon={<RadioTower className="h-4 w-4" />} onClick={() => navigate("/ops/audit-evidence")}>
+							审计证据链
+						</Button>
 					</Space>
 				</PlatformSectionCard>
 
@@ -280,7 +308,7 @@ export default function EltConsolePage() {
 						rowKey="key"
 						size="small"
 						columns={chainColumns}
-						dataSource={chainItems}
+						dataSource={chainItems.length ? chainItems : fallbackChainItems}
 						pagination={false}
 					/>
 				</PlatformSectionCard>

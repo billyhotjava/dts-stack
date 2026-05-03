@@ -1,15 +1,15 @@
 import { useEffect, useMemo, useState } from "react";
-import { Button, Input, Select, Space, Table, Tag, Typography } from "antd";
+import { Button, Input, Progress, Select, Space, Table, Tag, Timeline, Typography } from "antd";
 import type { ColumnsType } from "antd/es/table";
-import { AlertTriangle, CheckCircle2, RadioTower, RefreshCw, Send, TimerReset } from "lucide-react";
+import { AlertTriangle, Boxes, CheckCircle2, DatabaseZap, GitBranch, RadioTower, RefreshCw, Send, TimerReset } from "lucide-react";
+import { useNavigate } from "react-router";
 import {
 	PlatformPageHero,
 	PlatformSectionCard,
 	PlatformSummaryCards,
 } from "@/components/console-page";
 import {
-	getPlatformEventSummary,
-	listPlatformEvents,
+	getSprint27EventsConsole,
 	type PlatformEventDto,
 	type PlatformEventPage,
 	type PlatformEventSummary,
@@ -55,6 +55,7 @@ const topEntries = (value?: Record<string, number>) =>
 		.slice(0, 6);
 
 export default function PlatformEventObservabilityPage() {
+	const navigate = useNavigate();
 	const [summary, setSummary] = useState<PlatformEventSummary | null>(null);
 	const [page, setPage] = useState<PlatformEventPage>({ content: [], total: 0, page: 0, size: 20, totalPages: 0 });
 	const [loading, setLoading] = useState(false);
@@ -63,22 +64,32 @@ export default function PlatformEventObservabilityPage() {
 	const [status, setStatus] = useState("");
 	const [dispatchStatus, setDispatchStatus] = useState("");
 
-	const loadData = async (nextPage = 0, nextSize = page.size) => {
+	const loadData = async (
+		nextPage = 0,
+		nextSize = page.size,
+		overrides: Partial<{
+			domain: string;
+			eventType: string;
+			status: string;
+			dispatchStatus: string;
+		}> = {},
+	) => {
+		const nextDomain = overrides.domain ?? domain;
+		const nextEventType = overrides.eventType ?? eventType;
+		const nextStatus = overrides.status ?? status;
+		const nextDispatchStatus = overrides.dispatchStatus ?? dispatchStatus;
 		setLoading(true);
 		try {
-			const [summaryResp, pageResp] = await Promise.all([
-				getPlatformEventSummary().catch(() => null),
-				listPlatformEvents({
-					page: nextPage,
-					size: nextSize,
-					domain: domain.trim() || undefined,
-					eventType: eventType.trim() || undefined,
-					status: status || undefined,
-					dispatchStatus: dispatchStatus || undefined,
-				}),
-			]);
-			if (summaryResp) setSummary(summaryResp);
-			setPage(pageResp || { content: [], total: 0, page: nextPage, size: nextSize, totalPages: 0 });
+			const snapshot = await getSprint27EventsConsole({
+				page: nextPage,
+				size: nextSize,
+				domain: nextDomain.trim() || undefined,
+				eventType: nextEventType.trim() || undefined,
+				status: nextStatus || undefined,
+				dispatchStatus: nextDispatchStatus || undefined,
+			});
+			if (snapshot?.summary) setSummary(snapshot.summary);
+			setPage(snapshot?.page || { content: [], total: 0, page: nextPage, size: nextSize, totalPages: 0 });
 		} finally {
 			setLoading(false);
 		}
@@ -121,6 +132,20 @@ export default function PlatformEventObservabilityPage() {
 
 	const domainRows = useMemo(() => topEntries(summary?.byDomain), [summary?.byDomain]);
 	const statusRows = useMemo(() => topEntries(summary?.byStatus), [summary?.byStatus]);
+	const severityRows = useMemo(() => topEntries(summary?.bySeverity), [summary?.bySeverity]);
+
+	const dispatchTotal = Math.max(1, Number(summary?.pending || 0) + Number(summary?.sent || 0) + Number(summary?.failed || 0) + Number(summary?.skipped || 0));
+	const lifecycleItems = [
+		{ key: "pending", title: "写入 Outbox", count: summary?.pending ?? 0, status: (summary?.pending ?? 0) > 0 ? "processing" : "success" },
+		{ key: "sent", title: "Kafka 外送", count: summary?.sent ?? 0, status: (summary?.sent ?? 0) > 0 ? "success" : "default" },
+		{ key: "failed", title: "失败待查", count: summary?.failed ?? 0, status: (summary?.failed ?? 0) > 0 ? "warning" : "success" },
+		{ key: "skipped", title: "策略跳过", count: summary?.skipped ?? 0, status: (summary?.skipped ?? 0) > 0 ? "default" : "success" },
+	];
+
+	const jumpToDispatchStatus = (value: string) => {
+		setDispatchStatus(value);
+		void loadData(0, page.size, { dispatchStatus: value });
+	};
 
 	const columns: ColumnsType<PlatformEventDto> = [
 		{
@@ -139,6 +164,8 @@ export default function PlatformEventObservabilityPage() {
 		{ title: "状态", dataIndex: "status", key: "status", width: 100, render: (v) => <Tag color={statusColor(v)}>{v || "-"}</Tag> },
 		{ title: "分发", dataIndex: "dispatchStatus", key: "dispatchStatus", width: 100, render: (v) => <Tag color={statusColor(v)}>{v || "-"}</Tag> },
 		{ title: "次数", dataIndex: "dispatchAttempts", key: "dispatchAttempts", width: 80, render: (v) => v ?? 0 },
+		{ title: "动作", dataIndex: "action", key: "action", width: 100, render: (v) => v || "-" },
+		{ title: "审计动作", dataIndex: "auditActionCode", key: "auditActionCode", width: 180, ellipsis: true, render: (v) => v || "-" },
 		{ title: "发生时间", dataIndex: "occurredAt", key: "occurredAt", width: 190, render: formatDateTime },
 		{ title: "错误", dataIndex: "dispatchError", key: "dispatchError", width: 220, ellipsis: true, render: (v) => v || "-" },
 	];
@@ -148,34 +175,125 @@ export default function PlatformEventObservabilityPage() {
 			<PlatformPageHero
 				title="事件观测"
 				actions={
-					<Button icon={<RefreshCw className="h-4 w-4" />} loading={loading} onClick={() => void loadData(page.page)}>
-						刷新
-					</Button>
+					<Space wrap>
+						<Button onClick={() => navigate("/explore/etl")}>ELT 控制台</Button>
+						<Button onClick={() => navigate("/metrics/operations")}>指标运营台</Button>
+						<Button onClick={() => navigate("/ops/audit-evidence")}>审计证据链</Button>
+						<Button onClick={() => navigate("/ops/release-governance")}>发布治理</Button>
+						<Button icon={<RefreshCw className="h-4 w-4" />} loading={loading} onClick={() => void loadData(page.page)}>
+							刷新
+						</Button>
+					</Space>
 				}
 			/>
 
 			<PlatformSummaryCards items={summaryCards} />
 
-			<div className="grid gap-4 xl:grid-cols-[1fr_1fr]">
-				<PlatformSectionCard title="域分布">
-					<Space wrap>
-						{domainRows.length ? domainRows.map(([key, value]) => <Tag key={key}>{`${key}: ${value}`}</Tag>) : <Typography.Text type="secondary">暂无数据</Typography.Text>}
+			<div className="grid gap-4 xl:grid-cols-[1.2fr_0.8fr]">
+				<PlatformSectionCard title="分发生命周期">
+					<div className="grid gap-3 md:grid-cols-4">
+						{lifecycleItems.map((item) => (
+							<button
+								key={item.key}
+								type="button"
+								onClick={() => jumpToDispatchStatus(item.key.toUpperCase())}
+								className="rounded-lg border border-border/70 bg-background p-4 text-left transition hover:border-primary/60 hover:bg-primary/5"
+							>
+								<div className="mb-3 flex items-center justify-between gap-2">
+									<span className="text-sm font-medium text-foreground">{item.title}</span>
+									<Tag color={item.status === "warning" ? "orange" : item.status === "processing" ? "blue" : item.status === "success" ? "green" : "default"}>
+										{item.count}
+									</Tag>
+								</div>
+								<Progress
+									percent={Math.round((Number(item.count || 0) / dispatchTotal) * 100)}
+									showInfo={false}
+									status={item.status === "warning" ? "exception" : item.status === "processing" ? "active" : item.status === "success" ? "success" : "normal"}
+								/>
+							</button>
+						))}
+					</div>
+				</PlatformSectionCard>
+
+				<PlatformSectionCard title="风险分布">
+					{severityRows.length || statusRows.length ? (
+						<Timeline
+							items={[...severityRows, ...statusRows].slice(0, 5).map(([key, value]) => ({
+								color: ["FAILED", "ERROR", "BLOCKED", "HIGH", "CRITICAL"].includes(String(key).toUpperCase()) ? "red" : statusColor(key),
+								children: (
+									<div className="flex items-center justify-between gap-3">
+										<Typography.Text>{key}</Typography.Text>
+										<Tag color={statusColor(key)}>{value}</Tag>
+									</div>
+								),
+							}))}
+						/>
+					) : (
+						<div className="flex min-h-32 items-center justify-center rounded-lg border border-dashed border-border/70 text-sm text-muted-foreground">
+							暂无风险分布
+						</div>
+					)}
+				</PlatformSectionCard>
+			</div>
+
+			<div className="grid gap-4 xl:grid-cols-[0.9fr_1.1fr]">
+				<PlatformSectionCard title="观测入口">
+					<Space direction="vertical" size={12} className="w-full">
+						<Button block icon={<DatabaseZap className="h-4 w-4" />} onClick={() => navigate("/explore/etl")}>
+							ELT 链路
+						</Button>
+						<Button block icon={<Boxes className="h-4 w-4" />} onClick={() => navigate("/metrics/operations")}>
+							指标链路
+						</Button>
+						<Button block icon={<GitBranch className="h-4 w-4" />} onClick={() => navigate("/catalog/lineage/impact")}>
+							血缘影响
+						</Button>
+						<Button block icon={<RadioTower className="h-4 w-4" />} onClick={() => navigate("/ops/release-governance")}>
+							发布治理
+						</Button>
 					</Space>
 				</PlatformSectionCard>
-				<PlatformSectionCard title="状态分布">
+
+				<PlatformSectionCard title="域分布">
 					<Space wrap>
-						{statusRows.length ? statusRows.map(([key, value]) => <Tag color={statusColor(key)} key={key}>{`${key}: ${value}`}</Tag>) : <Typography.Text type="secondary">暂无数据</Typography.Text>}
+						{domainRows.length ? (
+							domainRows.map(([key, value]) => (
+								<Button
+									key={key}
+									size="small"
+									onClick={() => {
+										setDomain(key);
+										void loadData(0, page.size, { domain: key });
+									}}
+								>
+									{`${key}: ${value}`}
+								</Button>
+							))
+						) : (
+							<Typography.Text type="secondary">暂无数据</Typography.Text>
+						)}
 					</Space>
 				</PlatformSectionCard>
 			</div>
 
 			<PlatformSectionCard title="事件列表" bodyClassName="space-y-4">
 				<div className="flex flex-col gap-3 lg:flex-row lg:items-center">
-					<Input allowClear placeholder="domain" value={domain} onChange={(e) => setDomain(e.target.value)} className="lg:max-w-48" />
-					<Input allowClear placeholder="eventType" value={eventType} onChange={(e) => setEventType(e.target.value)} className="lg:max-w-64" />
+					<Input allowClear placeholder="事件域" value={domain} onChange={(e) => setDomain(e.target.value)} className="lg:max-w-48" />
+					<Input allowClear placeholder="事件类型" value={eventType} onChange={(e) => setEventType(e.target.value)} className="lg:max-w-64" />
 					<Select options={STATUS_OPTIONS} value={status} onChange={setStatus} className="lg:w-44" />
 					<Select options={DISPATCH_STATUS_OPTIONS} value={dispatchStatus} onChange={setDispatchStatus} className="lg:w-44" />
-					<Button onClick={() => void loadData(0)}>查询</Button>
+					<Button type="primary" onClick={() => void loadData(0)}>查询</Button>
+					<Button
+						onClick={() => {
+							setDomain("");
+							setEventType("");
+							setStatus("");
+							setDispatchStatus("");
+							void loadData(0, page.size, { domain: "", eventType: "", status: "", dispatchStatus: "" });
+						}}
+					>
+						重置
+					</Button>
 				</div>
 				<Table
 					rowKey={(record) => record.id || record.eventId || ""}

@@ -23,6 +23,8 @@ import com.yuzhi.dts.platform.service.etl.DbtReleaseGateService;
 import com.yuzhi.dts.platform.service.etl.DbtReleaseSubmissionService;
 import com.yuzhi.dts.platform.service.etl.DbtScopedProjectService;
 import com.yuzhi.dts.platform.service.etl.DbtSourceService;
+import com.yuzhi.dts.platform.service.event.PlatformEventOutboxService;
+import com.yuzhi.dts.platform.service.event.dto.PlatformEventRequest;
 import com.yuzhi.dts.platform.service.governance.IndicatorRunTracker;
 import com.yuzhi.dts.platform.service.ops.ExternalRunLogService;
 import java.time.Duration;
@@ -61,6 +63,7 @@ public class EtlResource {
     private final ObjectMapper objectMapper;
     private final ModelingSqlModelRepository sqlModelRepository;
     private final IndicatorRunTracker indicatorRunTracker;
+    private final PlatformEventOutboxService eventOutbox;
 
     private static final org.slf4j.Logger LOG = org.slf4j.LoggerFactory.getLogger(EtlResource.class);
 
@@ -85,7 +88,8 @@ public class EtlResource {
         AuditService auditService,
         ObjectMapper objectMapper,
         ModelingSqlModelRepository sqlModelRepository,
-        IndicatorRunTracker indicatorRunTracker
+        IndicatorRunTracker indicatorRunTracker,
+        PlatformEventOutboxService eventOutbox
     ) {
         this.dbtConfigService = dbtConfigService;
         this.manifestService = manifestService;
@@ -108,6 +112,7 @@ public class EtlResource {
         this.objectMapper = objectMapper;
         this.sqlModelRepository = sqlModelRepository;
         this.indicatorRunTracker = indicatorRunTracker;
+        this.eventOutbox = eventOutbox;
     }
 
     @GetMapping("/dbt/config")
@@ -366,6 +371,20 @@ public class EtlResource {
             default -> "ETL_DBT_MODELS_EXECUTE";
         };
         auditService.auditAction(dbtActionCode, AuditStage.SUCCESS, selector, null);
+        Map<String, Object> eventPayload = new LinkedHashMap<>();
+        eventPayload.put("operation", operation);
+        eventPayload.put("selector", selector);
+        eventPayload.put("result", response.getData());
+        publishEtlEvent(
+            "ELT.DBT.OPERATION_TRIGGERED",
+            "EXECUTE",
+            "SUBMITTED",
+            "DBT_OPERATION",
+            selector,
+            selector,
+            eventPayload,
+            dbtActionCode
+        );
         return response;
     }
 
@@ -434,7 +453,61 @@ public class EtlResource {
     ) {
         DbtReleaseSubmissionService.DbtReleaseSubmitResult result = dbtReleaseSubmissionService.submit(request, activeDept);
         auditService.auditAction("ETL_DBT_RELEASE_SUBMIT_EXECUTE", AuditStage.SUCCESS, StringUtils.hasText(result.selector()) ? result.selector() : "all", null);
+        Map<String, Object> eventPayload = new LinkedHashMap<>();
+        eventPayload.put("selector", StringUtils.hasText(result.selector()) ? result.selector() : "all");
+        eventPayload.put("status", result.status());
+        eventPayload.put("blocking", result.blocking());
+        eventPayload.put("warning", result.warning());
+        eventPayload.put("dagId", result.dagId());
+        eventPayload.put("dagRunId", result.dagRunId());
+        publishEtlEvent(
+            "ELT.DBT.RELEASE_SUBMITTED",
+            "PUBLISH",
+            result.blocking() ? "BLOCKED" : result.warning() ? "WARNING" : "SUCCESS",
+            "DBT_RELEASE",
+            StringUtils.hasText(result.selector()) ? result.selector() : "all",
+            StringUtils.hasText(result.selector()) ? result.selector() : "all",
+            eventPayload,
+            "ETL_DBT_RELEASE_SUBMIT_EXECUTE"
+        );
         return ApiResponses.ok(result);
+    }
+
+    private void publishEtlEvent(
+        String eventType,
+        String action,
+        String status,
+        String aggregateType,
+        String aggregateId,
+        String aggregateName,
+        Map<String, Object> payload,
+        String auditActionCode
+    ) {
+        try {
+            eventOutbox.publishInternal(
+                new PlatformEventRequest(
+                    null,
+                    eventType,
+                    "ELT",
+                    "dts-platform",
+                    aggregateType,
+                    aggregateId,
+                    aggregateName,
+                    action,
+                    "INFO",
+                    status,
+                    Instant.now(),
+                    null,
+                    null,
+                    null,
+                    auditActionCode,
+                    null,
+                    payload == null ? Map.of() : new LinkedHashMap<>(payload)
+                )
+            );
+        } catch (RuntimeException ex) {
+            LOG.warn("Failed to publish ETL event {} for {}: {}", eventType, aggregateId, ex.getMessage());
+        }
     }
 
     private void recordDbtSyncState(

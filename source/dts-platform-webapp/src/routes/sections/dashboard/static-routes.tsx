@@ -31,6 +31,8 @@ const MetricsSemanticPublishPage = lazy(() => import("@/pages/metrics/semantic/S
 const MetricsSemanticRunsPage = lazy(() => import("@/pages/metrics/semantic/SemanticRunsPage"));
 const LineagePage = lazy(() => import("@/pages/catalog/LineagePage"));
 const PlatformEventObservabilityPage = lazy(() => import("@/pages/ops/PlatformEventObservabilityPage"));
+const AuditEvidencePage = lazy(() => import("@/pages/ops/AuditEvidencePage"));
+const ReleaseGovernancePage = lazy(() => import("@/pages/ops/ReleaseGovernancePage"));
 
 // ── Analytics pages (static routes — registered statically for reliability; menu controls visibility) ──
 const AnalyticsHomePage = lazy(() => import("@/analytics/pages/HomePage"));
@@ -99,6 +101,10 @@ export const STATIC_DASHBOARD_ROUTES: RouteObject[] = [
 	{ path: "metrics/semantic/runs", element: <S><MetricsSemanticRunsPage /></S> },
 	{ path: "ops/events", element: <S><PlatformEventObservabilityPage /></S> },
 	{ path: "platform/events", element: <S><PlatformEventObservabilityPage /></S> },
+	{ path: "ops/audit-evidence", element: <S><AuditEvidencePage /></S> },
+	{ path: "platform/audit-evidence", element: <S><AuditEvidencePage /></S> },
+	{ path: "ops/release-governance", element: <S><ReleaseGovernancePage /></S> },
+	{ path: "platform/release-governance", element: <S><ReleaseGovernancePage /></S> },
 	{ path: "modeling/semantic-center", element: <S><SemanticModelingCenterPage /></S> },
 	{ path: "modeling/semantic-center/subjects", element: <S><SemanticSubjectsPage /></S> },
 	{ path: "modeling/semantic-center/objects", element: <S><SemanticObjectsPage /></S> },
