@@ -60,6 +60,22 @@ export default function SemanticPublishPage() {
 	const canApproveReview = Boolean(selectedModelId && selectedModelReviewStatus === "IN_REVIEW");
 	const canRejectReview = canApproveReview;
 	const canPublishModel = Boolean(selectedModelId && selectedModelIsConsumable && ["APPROVED", "PUBLISHED"].includes(selectedModelReviewStatus));
+	const publishedDbtCount = artifacts.filter((item) => String(item.status || "").toUpperCase() === "PUBLISHED").length;
+	const biDatasetRegistered = artifacts.some((item) => String(item.artifactType || "").toUpperCase() === "BI_DATASET" && String(item.status || "").toUpperCase() === "REGISTERED");
+	const lineageRegistered = artifacts.some((item) => String(item.artifactType || "").toUpperCase() === "LINEAGE" && String(item.status || "").toUpperCase() === "REGISTERED");
+	const publishNextAction = !selectedModelId
+		? "先选择 DWS/ADS 模型"
+		: !selectedModelIsConsumable
+			? "请选择 DWS 或 ADS 模型"
+			: !["APPROVED", "PUBLISHED"].includes(selectedModelReviewStatus)
+				? "先提交并审核通过"
+				: !publishedDbtCount
+					? "发布 dbt 产物"
+					: !biDatasetRegistered
+						? "注册 BI 数据集"
+						: !lineageRegistered
+							? "写入血缘"
+							: "发布闭环已完成";
 
 	const loadModels = () => {
 		setLoading(true);
@@ -278,6 +294,17 @@ export default function SemanticPublishPage() {
 					</Card>
 				</Col>
 				<Col xs={24} xl={9}>
+					<Card title="发布闭环检查">
+						<Space direction="vertical" className="w-full">
+							<Space wrap>
+								<Tag color={["APPROVED", "PUBLISHED"].includes(selectedModelReviewStatus) ? "green" : "default"}>审核</Tag>
+								<Tag color={publishedDbtCount ? "green" : "default"}>dbt {publishedDbtCount}</Tag>
+								<Tag color={biDatasetRegistered ? "green" : "default"}>BI</Tag>
+								<Tag color={lineageRegistered ? "green" : "default"}>血缘</Tag>
+							</Space>
+							<Alert type={publishNextAction === "发布闭环已完成" ? "success" : "info"} showIcon message={publishNextAction} />
+						</Space>
+					</Card>
 					<Card title="后续 API 缺口">
 						<Paragraph type="secondary">
 							基础发布接口已接入真实数据；下面能力补齐后，BI 注册可以继续串到远端平台。

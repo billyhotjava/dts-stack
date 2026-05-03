@@ -237,6 +237,17 @@ export const listSemanticModelRuns = (modelId: string) =>
 	quiet<SemanticModelRun[]>({ url: `/semantic/models/${encodeURIComponent(modelId)}/runs` });
 export const triggerSemanticModelRun = (modelId: string, data?: { runType?: string; dagSelector?: string; target?: string; vars?: Record<string, any> }) =>
 	api.post<SemanticModelRun>({ url: `/semantic/models/${encodeURIComponent(modelId)}/runs`, data: data || {} });
+export const updateSemanticModelRun = (modelId: string, runId: string, data: {
+	status?: string;
+	externalRunId?: string;
+	durationMs?: number;
+	message?: string;
+	payload?: Record<string, any>;
+}) =>
+	api.put<SemanticModelRun>({
+		url: `/semantic/models/${encodeURIComponent(modelId)}/runs/${encodeURIComponent(runId)}`,
+		data,
+	});
 export const publishSemanticModelToDbt = (modelId: string) =>
 	api.post<{ modelId: string; publishedPaths: string[] }>({
 		url: `/semantic/models/${encodeURIComponent(modelId)}/publish-dbt`,

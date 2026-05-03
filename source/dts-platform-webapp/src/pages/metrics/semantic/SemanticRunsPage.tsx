@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
-import { Alert, Button, Card, Empty, Select, Space, Table, Tag, message } from "antd";
+import { Alert, Button, Card, Empty, Input, Modal, Select, Space, Table, Tag, message } from "antd";
 import type { ColumnsType } from "antd/es/table";
-import { PlayCircleOutlined, ReloadOutlined } from "@ant-design/icons";
+import { CheckCircleOutlined, CloseCircleOutlined, PlayCircleOutlined, ReloadOutlined, SyncOutlined } from "@ant-design/icons";
 import { PageHeader } from "@/components/page-header";
 import {
 	listSemanticModelRuns,
@@ -9,6 +9,7 @@ import {
 	triggerSemanticModelRun,
 	type SemanticModel,
 	type SemanticModelRun,
+	updateSemanticModelRun,
 } from "@/api/semanticModelingApi";
 import { SemanticSectionNav } from "./SemanticSectionNav";
 import { asArray, semanticSectionMeta } from "./semanticModelingShared";
@@ -27,6 +28,10 @@ export default function SemanticRunsPage() {
 	const [selectedModelId, setSelectedModelId] = useState<string>();
 	const [modelsLoading, setModelsLoading] = useState(false);
 	const [runLoading, setRunLoading] = useState(false);
+	const [statusModalOpen, setStatusModalOpen] = useState(false);
+	const [selectedRun, setSelectedRun] = useState<SemanticModelRun | null>(null);
+	const [nextStatus, setNextStatus] = useState<string>("SUCCESS");
+	const [statusMessage, setStatusMessage] = useState("");
 
 	const loadModels = () => {
 		setModelsLoading(true);
@@ -72,6 +77,35 @@ export default function SemanticRunsPage() {
 		}
 	};
 
+	const openStatusModal = (run: SemanticModelRun, status: string) => {
+		setSelectedRun(run);
+		setNextStatus(status);
+		setStatusMessage(run.message || "");
+		setStatusModalOpen(true);
+	};
+
+	const closeStatusModal = () => {
+		setStatusModalOpen(false);
+		setSelectedRun(null);
+		setStatusMessage("");
+	};
+
+	const submitRunStatus = async () => {
+		if (!selectedModelId || !selectedRun?.id) return;
+		setRunLoading(true);
+		try {
+			await updateSemanticModelRun(selectedModelId, selectedRun.id, {
+				status: nextStatus,
+				message: statusMessage,
+			});
+			message.success("运行状态已更新");
+			closeStatusModal();
+			loadRuns(selectedModelId);
+		} finally {
+			setRunLoading(false);
+		}
+	};
+
 	const columns: ColumnsType<SemanticModelRun> = [
 		{ title: "状态", dataIndex: "status", width: 120, render: (value) => <Tag color={statusColor(value)}>{value || "-"}</Tag> },
 		{ title: "Selector", dataIndex: "selector", render: (value) => value || "-" },
@@ -82,6 +116,18 @@ export default function SemanticRunsPage() {
 		{ title: "结束时间", dataIndex: "finishedAt", width: 190, render: (value) => value || "-" },
 		{ title: "耗时(ms)", dataIndex: "durationMs", width: 110, render: (value) => value ?? "-" },
 		{ title: "消息", dataIndex: "message", render: (value) => value || "-" },
+		{
+			title: "操作",
+			width: 210,
+			fixed: "right",
+			render: (_, row) => (
+				<Space size={4} wrap>
+					<Button size="small" icon={<SyncOutlined />} onClick={() => openStatusModal(row, "RUNNING")}>运行中</Button>
+					<Button size="small" icon={<CheckCircleOutlined />} onClick={() => openStatusModal(row, "SUCCESS")}>成功</Button>
+					<Button size="small" danger icon={<CloseCircleOutlined />} onClick={() => openStatusModal(row, "FAILED")}>失败</Button>
+				</Space>
+			),
+		},
 	];
 
 	return (
@@ -122,11 +168,35 @@ export default function SemanticRunsPage() {
 						pagination={{ pageSize: 10 }}
 						columns={columns}
 						dataSource={runs}
+						scroll={{ x: 1280 }}
 					/>
 				) : (
 					<Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="请选择模型查看运行记录" />
 				)}
 			</Card>
+
+			<Modal
+				open={statusModalOpen}
+				title={`更新运行状态：${nextStatus}`}
+				onCancel={closeStatusModal}
+				onOk={submitRunStatus}
+				confirmLoading={runLoading}
+				destroyOnClose
+			>
+				<Space direction="vertical" className="w-full">
+					<Alert
+						type={nextStatus === "FAILED" ? "warning" : "info"}
+						showIcon
+						message="状态会同步回语义模型，用于发布治理和工作台诊断。"
+					/>
+					<Input.TextArea
+						rows={4}
+						value={statusMessage}
+						onChange={(event) => setStatusMessage(event.target.value)}
+						placeholder="运行说明或失败原因"
+					/>
+				</Space>
+			</Modal>
 		</div>
 	);
 }
