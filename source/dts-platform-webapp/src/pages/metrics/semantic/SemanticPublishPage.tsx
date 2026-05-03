@@ -131,7 +131,7 @@ export default function SemanticPublishPage() {
 			return;
 		}
 		setArtifactLoading(true);
-				try {
+		try {
 			const result = await publishSemanticModelToDbt(selectedModelId);
 			message.success(`已发布 ${((result as any)?.publishedPaths || []).length} 个 dbt 文件`);
 			loadModels();

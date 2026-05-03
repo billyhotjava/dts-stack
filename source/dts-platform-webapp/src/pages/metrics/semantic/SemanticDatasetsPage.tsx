@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import type React from "react";
 import { Alert, Button, Card, Col, Empty, Form, Input, Modal, Row, Segmented, Select, Space, Table, Tag, Typography, message } from "antd";
 import type { ColumnsType } from "antd/es/table";
-import { CodeOutlined, DashboardOutlined, PartitionOutlined, PlayCircleOutlined, PlusOutlined, SaveOutlined } from "@ant-design/icons";
+import { CodeOutlined, DashboardOutlined, EditOutlined, PartitionOutlined, PlayCircleOutlined, PlusOutlined, SaveOutlined } from "@ant-design/icons";
 import type { Node } from "@xyflow/react";
 import { PageHeader } from "@/components/page-header";
 import { VisualFlowCanvas, type VisualFlowDropEvent } from "@/components/visual-canvas/VisualFlowCanvas";
@@ -23,6 +23,7 @@ import {
 	type SemanticMetric,
 	type SemanticModel,
 	type SemanticModelPreview,
+	updateSemanticModel,
 } from "@/api/semanticModelingApi";
 import { SemanticSectionNav } from "./SemanticSectionNav";
 import { asArray, semanticSectionMeta } from "./semanticModelingShared";
@@ -55,6 +56,7 @@ export default function SemanticDatasetsPage() {
 	const [previewLoading, setPreviewLoading] = useState(false);
 	const [previewOpen, setPreviewOpen] = useState(false);
 	const [previewResult, setPreviewResult] = useState<SemanticModelPreview | null>(null);
+	const [editingModel, setEditingModel] = useState<SemanticModel | null>(null);
 
 	const loadSemanticData = () => {
 		setLoading(true);
@@ -210,6 +212,15 @@ export default function SemanticDatasetsPage() {
 		{ title: "类型", dataIndex: "type", width: 90, render: (value) => value || "-" },
 		{ title: "表名", dataIndex: "tableName", render: (value) => value || "-" },
 		{ title: "状态", dataIndex: "status", width: 110, render: (value) => value || "-" },
+		{
+			title: "操作",
+			width: 90,
+			render: (_, row) => (
+				<Button size="small" icon={<EditOutlined />} onClick={() => openModelModal(row)}>
+					编辑
+				</Button>
+			),
+		},
 	];
 
 	const artifactColumns: ColumnsType<SemanticGeneratedArtifact> = [
@@ -229,14 +240,26 @@ export default function SemanticDatasetsPage() {
 		[previewResult?.headers],
 	);
 
-	const openModelModal = () => {
+	const openModelModal = (model?: SemanticModel) => {
 		form.resetFields();
-		form.setFieldsValue({ type: modelType, objectId: selectedObjectId });
+		setEditingModel(model || null);
+		form.setFieldsValue(model ? {
+			objectId: model.objectId,
+			type: model.type,
+			name: model.name,
+			tableName: model.tableName,
+			description: model.description,
+			grain: model.grain,
+			materialization: model.materialization,
+			refreshCycle: model.refreshCycle,
+			status: model.status,
+		} : { type: modelType, objectId: selectedObjectId });
 		setModalOpen(true);
 	};
 
 	const closeModelModal = () => {
 		setModalOpen(false);
+		setEditingModel(null);
 		form.resetFields();
 	};
 
@@ -244,11 +267,13 @@ export default function SemanticDatasetsPage() {
 		const values = await form.validateFields();
 		setSaving(true);
 		try {
-			const created = await createSemanticModel(values);
+			const saved = editingModel?.id
+				? await updateSemanticModel(editingModel.id, values)
+				: await createSemanticModel(values);
 			message.success("语义模型已保存");
 			closeModelModal();
 			loadSemanticData();
-			if ((created as any)?.id) setSelectedModelId((created as any).id);
+			if ((saved as any)?.id) setSelectedModelId((saved as any).id);
 		} finally {
 			setSaving(false);
 		}
@@ -309,7 +334,7 @@ export default function SemanticDatasetsPage() {
 				title={semanticSectionMeta.models.title}
 				actions={(
 					<Space wrap>
-						<Button icon={<PlusOutlined />} onClick={openModelModal}>定义模型</Button>
+						<Button icon={<PlusOutlined />} onClick={() => openModelModal()}>定义模型</Button>
 						<Button icon={<SaveOutlined />} loading={saving} disabled={!selectedModelId} onClick={saveModelCanvas}>保存画布</Button>
 						<Button icon={<PlayCircleOutlined />} loading={previewLoading} disabled={!selectedModelId} onClick={previewModelData}>预览数据</Button>
 						<Button type="primary" icon={<CodeOutlined />} loading={artifactLoading} disabled={!selectedModelId} onClick={generateArtifacts}>生成 dbt</Button>
@@ -458,7 +483,7 @@ export default function SemanticDatasetsPage() {
 
 			<Modal
 				open={modalOpen}
-				title="定义模型"
+				title={editingModel ? "编辑模型" : "定义模型"}
 				onCancel={closeModelModal}
 				onOk={submitModel}
 				confirmLoading={saving}
@@ -482,6 +507,12 @@ export default function SemanticDatasetsPage() {
 					</Form.Item>
 					<Form.Item name="materialization" label="物化方式">
 						<Select allowClear options={["view", "table", "incremental"].map((item) => ({ label: item, value: item }))} />
+					</Form.Item>
+					<Form.Item name="refreshCycle" label="刷新周期">
+						<Select allowClear options={["manual", "hourly", "daily", "weekly"].map((item) => ({ label: item, value: item }))} />
+					</Form.Item>
+					<Form.Item name="status" label="状态">
+						<Select allowClear options={["DRAFT", "ACTIVE", "DISABLED"].map((item) => ({ label: item, value: item }))} />
 					</Form.Item>
 					<Form.Item name="description" label="说明">
 						<Input.TextArea rows={3} />

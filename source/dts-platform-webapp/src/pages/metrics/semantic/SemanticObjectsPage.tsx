@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import type React from "react";
 import { Alert, Button, Card, Col, Empty, Form, Input, Modal, Row, Select, Space, Table, Tag, Typography, message } from "antd";
 import type { ColumnsType } from "antd/es/table";
-import { DatabaseOutlined, DeploymentUnitOutlined, PlusOutlined, SaveOutlined } from "@ant-design/icons";
+import { DatabaseOutlined, DeploymentUnitOutlined, EditOutlined, PlusOutlined, SaveOutlined } from "@ant-design/icons";
 import { MarkerType, type Edge, type Node } from "@xyflow/react";
 import { PageHeader } from "@/components/page-header";
 import { VisualFlowCanvas, type VisualFlowDropEvent } from "@/components/visual-canvas/VisualFlowCanvas";
@@ -16,6 +16,7 @@ import {
 	type SemanticBusinessObject,
 	type SemanticObjectTableMapping,
 	type SemanticSubjectDomain,
+	updateSemanticBusinessObject,
 } from "@/api/semanticModelingApi";
 import { SemanticSectionNav } from "./SemanticSectionNav";
 import { asArray, isDwdSemanticInput, semanticSectionMeta } from "./semanticModelingShared";
@@ -73,6 +74,7 @@ export default function SemanticObjectsPage() {
 	const [mappingsLoading, setMappingsLoading] = useState(false);
 	const [saving, setSaving] = useState(false);
 	const [modalOpen, setModalOpen] = useState(false);
+	const [editingObject, setEditingObject] = useState<SemanticBusinessObject | null>(null);
 
 	const loadDomains = () => {
 		listSemanticSubjectDomains()
@@ -166,6 +168,15 @@ export default function SemanticObjectsPage() {
 		{ title: "编码", dataIndex: "code", render: (value) => value || "-" },
 		{ title: "主表", dataIndex: "mainTable", render: (value) => value || "-" },
 		{ title: "主键", dataIndex: "primaryKey", width: 140, render: (value) => value || "-" },
+		{
+			title: "操作",
+			width: 90,
+			render: (_, row) => (
+				<Button size="small" icon={<EditOutlined />} onClick={() => openModal(row)}>
+					编辑
+				</Button>
+			),
+		},
 	];
 
 	const addDatasetToJoinCanvas = (dataset: DatasetOption) => {
@@ -288,14 +299,27 @@ export default function SemanticObjectsPage() {
 		}
 	};
 
-	const openModal = () => {
+	const openModal = (object?: SemanticBusinessObject) => {
 		form.resetFields();
-		form.setFieldsValue({ mainTable: selectedDataset?.table || selectedDataset?.name });
+		setEditingObject(object || null);
+		if (object) {
+			form.setFieldsValue({
+				domainId: object.domainId,
+				code: object.code,
+				name: object.name,
+				primaryKey: object.primaryKey,
+				mainTable: object.mainTable,
+				description: object.description,
+			});
+		} else {
+			form.setFieldsValue({ mainTable: selectedDataset?.table || selectedDataset?.name });
+		}
 		setModalOpen(true);
 	};
 
 	const closeModal = () => {
 		setModalOpen(false);
+		setEditingObject(null);
 		form.resetFields();
 	};
 
@@ -303,11 +327,13 @@ export default function SemanticObjectsPage() {
 		const values = await form.validateFields();
 		setSaving(true);
 		try {
-			const created = await createSemanticBusinessObject(values);
+			const saved = editingObject?.id
+				? await updateSemanticBusinessObject(editingObject.id, values)
+				: await createSemanticBusinessObject(values);
 			message.success("业务对象已保存");
 			closeModal();
 			await loadObjects();
-			if ((created as any)?.id) setSelectedObjectId((created as any).id);
+			if ((saved as any)?.id) setSelectedObjectId((saved as any).id);
 		} finally {
 			setSaving(false);
 		}
@@ -319,7 +345,7 @@ export default function SemanticObjectsPage() {
 				title={semanticSectionMeta.objects.title}
 				actions={(
 					<Space wrap>
-						<Button icon={<PlusOutlined />} onClick={openModal}>新建业务对象</Button>
+						<Button icon={<PlusOutlined />} onClick={() => openModal()}>新建业务对象</Button>
 						<Button type="primary" icon={<SaveOutlined />} loading={saving} disabled={!selectedObjectId} onClick={saveJoinCanvas}>保存 Join</Button>
 					</Space>
 				)}
@@ -463,7 +489,7 @@ export default function SemanticObjectsPage() {
 
 			<Modal
 				open={modalOpen}
-				title="新建业务对象"
+				title={editingObject ? "编辑业务对象" : "新建业务对象"}
 				onCancel={closeModal}
 				onOk={submitObject}
 				confirmLoading={saving}

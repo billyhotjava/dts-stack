@@ -53,7 +53,9 @@ export type SemanticMetric = {
 	code: string;
 	name: string;
 	formulaType?: string;
+	formulaJson?: string;
 	format?: string;
+	unit?: string;
 	status?: string;
 };
 
@@ -63,6 +65,10 @@ export type SemanticModel = {
 	type?: "DWS" | "ADS" | string;
 	name: string;
 	tableName?: string;
+	description?: string;
+	grain?: string;
+	materialization?: string;
+	refreshCycle?: string;
 	status?: string;
 	reviewStatus?: string;
 	submittedBy?: string;
@@ -159,11 +165,15 @@ export const listSemanticSubjectDomains = () =>
 	quiet<SemanticSubjectDomain[]>({ url: "/semantic/subject-domains" });
 export const createSemanticSubjectDomain = (data: Partial<SemanticSubjectDomain>) =>
 	api.post<SemanticSubjectDomain>({ url: "/semantic/subject-domains", data });
+export const updateSemanticSubjectDomain = (id: string, data: Partial<SemanticSubjectDomain>) =>
+	api.put<SemanticSubjectDomain>({ url: `/semantic/subject-domains/${encodeURIComponent(id)}`, data });
 
 export const listSemanticBusinessObjects = (params?: { domainId?: string }) =>
 	quiet<SemanticBusinessObject[]>({ url: "/semantic/business-objects", params });
 export const createSemanticBusinessObject = (data: Partial<SemanticBusinessObject>) =>
 	api.post<SemanticBusinessObject>({ url: "/semantic/business-objects", data });
+export const updateSemanticBusinessObject = (id: string, data: Partial<SemanticBusinessObject>) =>
+	api.put<SemanticBusinessObject>({ url: `/semantic/business-objects/${encodeURIComponent(id)}`, data });
 export const listSemanticObjectTableMappings = (objectId: string) =>
 	quiet<SemanticObjectTableMapping[]>({ url: `/semantic/business-objects/${encodeURIComponent(objectId)}/table-mappings` });
 export const saveSemanticObjectTableMappings = (objectId: string, mappings: SemanticObjectTableMapping[]) =>
@@ -176,11 +186,15 @@ export const listSemanticDimensions = (params?: { objectId?: string }) =>
 	quiet<SemanticDimension[]>({ url: "/semantic/dimensions", params });
 export const createSemanticDimension = (data: Partial<SemanticDimension>) =>
 	api.post<SemanticDimension>({ url: "/semantic/dimensions", data });
+export const updateSemanticDimension = (id: string, data: Partial<SemanticDimension>) =>
+	api.put<SemanticDimension>({ url: `/semantic/dimensions/${encodeURIComponent(id)}`, data });
 
 export const listSemanticMetrics = (params?: { objectId?: string }) =>
 	quiet<SemanticMetric[]>({ url: "/semantic/metrics", params });
 export const createSemanticMetric = (data: Partial<SemanticMetric> & { formulaJson?: string; unit?: string }) =>
 	api.post<SemanticMetric>({ url: "/semantic/metrics", data });
+export const updateSemanticMetric = (id: string, data: Partial<SemanticMetric> & { formulaJson?: string; unit?: string }) =>
+	api.put<SemanticMetric>({ url: `/semantic/metrics/${encodeURIComponent(id)}`, data });
 
 export const listSemanticModels = (params?: { type?: "DWS" | "ADS" }) =>
 	quiet<SemanticModel[]>({ url: "/semantic/models", params });
@@ -191,6 +205,13 @@ export const createSemanticModel = (data: Partial<SemanticModel> & {
 	materialization?: string;
 	refreshCycle?: string;
 }) => api.post<SemanticModel>({ url: "/semantic/models", data });
+export const updateSemanticModel = (id: string, data: Partial<SemanticModel> & {
+	objectId?: string;
+	description?: string;
+	grain?: string;
+	materialization?: string;
+	refreshCycle?: string;
+}) => api.put<SemanticModel>({ url: `/semantic/models/${encodeURIComponent(id)}`, data });
 export const getSemanticModelBindings = (modelId: string) =>
 	quiet<SemanticModelBinding>({ url: `/semantic/models/${encodeURIComponent(modelId)}/bindings` });
 export const saveSemanticModelBindings = (modelId: string, data: { dimensionIds: string[]; metricIds: string[] }) =>

@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import type React from "react";
 import { Alert, Button, Card, Col, Empty, Form, Input, Modal, Row, Select, Space, Table, Tag, Typography, message } from "antd";
 import type { ColumnsType } from "antd/es/table";
-import { FunctionOutlined, SaveOutlined, TableOutlined } from "@ant-design/icons";
+import { EditOutlined, FunctionOutlined, SaveOutlined, TableOutlined } from "@ant-design/icons";
 import type { Node } from "@xyflow/react";
 import { PageHeader } from "@/components/page-header";
 import { VisualFlowCanvas, type VisualFlowDropEvent } from "@/components/visual-canvas/VisualFlowCanvas";
@@ -16,6 +16,8 @@ import {
 	type SemanticBusinessObject,
 	type SemanticDimension,
 	type SemanticMetric,
+	updateSemanticDimension,
+	updateSemanticMetric,
 } from "@/api/semanticModelingApi";
 import { SemanticSectionNav } from "./SemanticSectionNav";
 import { asArray, isDwdSemanticInput, semanticSectionMeta } from "./semanticModelingShared";
@@ -78,6 +80,8 @@ export default function SemanticMetricDesignerPage() {
 	const [fieldsLoading, setFieldsLoading] = useState(false);
 	const [saving, setSaving] = useState(false);
 	const [modalType, setModalType] = useState<"dimension" | "metric" | null>(null);
+	const [editingDimension, setEditingDimension] = useState<SemanticDimension | null>(null);
+	const [editingMetric, setEditingMetric] = useState<SemanticMetric | null>(null);
 
 	const loadSemanticData = () => {
 		setLoading(true);
@@ -291,6 +295,15 @@ export default function SemanticMetricDesignerPage() {
 		{ title: "维度", dataIndex: "name" },
 		{ title: "字段", dataIndex: "fieldName", render: (value) => value || "-" },
 		{ title: "类型", dataIndex: "semanticType", width: 120, render: (value) => value || "-" },
+		{
+			title: "操作",
+			width: 90,
+			render: (_, row) => (
+				<Button size="small" icon={<EditOutlined />} onClick={() => openModal("dimension", row)}>
+					编辑
+				</Button>
+			),
+		},
 	];
 
 	const metricColumns: ColumnsType<SemanticMetric> = [
@@ -298,16 +311,29 @@ export default function SemanticMetricDesignerPage() {
 		{ title: "公式类型", dataIndex: "formulaType", width: 130, render: (value) => value || "-" },
 		{ title: "格式", dataIndex: "format", width: 110, render: (value) => value || "-" },
 		{ title: "状态", dataIndex: "status", width: 100, render: (value) => value || "-" },
+		{
+			title: "操作",
+			width: 90,
+			render: (_, row) => (
+				<Button size="small" icon={<EditOutlined />} onClick={() => openModal("metric", row)}>
+					编辑
+				</Button>
+			),
+		},
 	];
 
-	const openModal = (type: "dimension" | "metric") => {
+	const openModal = (type: "dimension" | "metric", row?: SemanticDimension | SemanticMetric) => {
 		form.resetFields();
-		form.setFieldsValue({ objectId: selectedObjectId });
+		setEditingDimension(type === "dimension" ? (row as SemanticDimension | undefined) || null : null);
+		setEditingMetric(type === "metric" ? (row as SemanticMetric | undefined) || null : null);
+		form.setFieldsValue(row ? row : { objectId: selectedObjectId });
 		setModalType(type);
 	};
 
 	const closeModal = () => {
 		setModalType(null);
+		setEditingDimension(null);
+		setEditingMetric(null);
 		form.resetFields();
 	};
 
@@ -315,8 +341,14 @@ export default function SemanticMetricDesignerPage() {
 		const values = await form.validateFields();
 		setSaving(true);
 		try {
-			if (modalType === "dimension") await createSemanticDimension(values);
-			if (modalType === "metric") await createSemanticMetric(values);
+			if (modalType === "dimension") {
+				if (editingDimension?.id) await updateSemanticDimension(editingDimension.id, values);
+				else await createSemanticDimension(values);
+			}
+			if (modalType === "metric") {
+				if (editingMetric?.id) await updateSemanticMetric(editingMetric.id, values);
+				else await createSemanticMetric(values);
+			}
 			message.success("已保存");
 			closeModal();
 			loadSemanticData();
@@ -462,7 +494,7 @@ export default function SemanticMetricDesignerPage() {
 
 			<Modal
 				open={Boolean(modalType)}
-				title={modalType === "dimension" ? "新增维度" : "新增指标"}
+				title={modalType === "dimension" ? (editingDimension ? "编辑维度" : "新增维度") : (editingMetric ? "编辑指标" : "新增指标")}
 				onCancel={closeModal}
 				onOk={submitModal}
 				confirmLoading={saving}
@@ -486,6 +518,15 @@ export default function SemanticMetricDesignerPage() {
 							<Form.Item name="dataType" label="数据类型">
 								<Input />
 							</Form.Item>
+							<Form.Item name="semanticType" label="语义类型">
+								<Select
+									allowClear
+									options={["dimension", "time", "organization", "status", "geo"].map((item) => ({ label: item, value: item }))}
+								/>
+							</Form.Item>
+							<Form.Item name="status" label="状态">
+								<Select allowClear options={["DRAFT", "ACTIVE", "DISABLED"].map((item) => ({ label: item, value: item }))} />
+							</Form.Item>
 						</>
 					) : (
 						<>
@@ -500,6 +541,12 @@ export default function SemanticMetricDesignerPage() {
 							</Form.Item>
 							<Form.Item name="format" label="展示格式">
 								<Input />
+							</Form.Item>
+							<Form.Item name="unit" label="单位">
+								<Input />
+							</Form.Item>
+							<Form.Item name="status" label="状态">
+								<Select allowClear options={["DRAFT", "ACTIVE", "DISABLED"].map((item) => ({ label: item, value: item }))} />
 							</Form.Item>
 						</>
 					)}

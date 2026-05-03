@@ -1,13 +1,14 @@
 import { useEffect, useMemo, useState } from "react";
 import { Alert, Button, Card, Col, Empty, Form, Input, Modal, Row, Select, Space, Table, Tag, Typography, message } from "antd";
 import type { ColumnsType } from "antd/es/table";
-import { DatabaseOutlined, ProjectOutlined, ReloadOutlined } from "@ant-design/icons";
+import { DatabaseOutlined, EditOutlined, ProjectOutlined, ReloadOutlined } from "@ant-design/icons";
 import { PageHeader } from "@/components/page-header";
 import { getDomainTree, listDatasets } from "@/api/platformApi";
 import {
 	createSemanticSubjectDomain,
 	listSemanticSubjectDomains,
 	type SemanticSubjectDomain,
+	updateSemanticSubjectDomain,
 } from "@/api/semanticModelingApi";
 import { SemanticSectionNav } from "./SemanticSectionNav";
 import { asArray, isDwdSemanticInput, semanticSectionMeta } from "./semanticModelingShared";
@@ -70,6 +71,7 @@ export default function SemanticSubjectsPage() {
 	const [datasetsLoading, setDatasetsLoading] = useState(false);
 	const [modalOpen, setModalOpen] = useState(false);
 	const [saving, setSaving] = useState(false);
+	const [editingDomain, setEditingDomain] = useState<SemanticSubjectDomain | null>(null);
 
 	const loadDomains = () => {
 		setDomainsLoading(true);
@@ -121,6 +123,15 @@ export default function SemanticSubjectsPage() {
 		},
 		{ title: "状态", dataIndex: "status", width: 100, render: (value) => value || "-" },
 		{ title: "说明", dataIndex: "description", ellipsis: true, render: (value) => value || "-" },
+		{
+			title: "操作",
+			width: 90,
+			render: (_, row) => (
+				<Button size="small" icon={<EditOutlined />} onClick={() => openModal(row)}>
+					编辑
+				</Button>
+			),
+		},
 	];
 
 	const datasetColumns: ColumnsType<DatasetOption> = [
@@ -130,13 +141,23 @@ export default function SemanticSubjectsPage() {
 		{ title: "分层", dataIndex: "layer", width: 100, render: (value) => value || "DWD" },
 	];
 
-	const openModal = () => {
+	const openModal = (domain?: SemanticSubjectDomain) => {
 		form.resetFields();
+		setEditingDomain(domain || null);
+		if (domain) {
+			form.setFieldsValue({
+				governanceDomainId: domain.governanceDomainId,
+				code: domain.code,
+				name: domain.name,
+				description: domain.description,
+			});
+		}
 		setModalOpen(true);
 	};
 
 	const closeModal = () => {
 		setModalOpen(false);
+		setEditingDomain(null);
 		form.resetFields();
 	};
 
@@ -149,7 +170,11 @@ export default function SemanticSubjectsPage() {
 		}
 		setSaving(true);
 		try {
-			await createSemanticSubjectDomain(values);
+			if (editingDomain?.id) {
+				await updateSemanticSubjectDomain(editingDomain.id, values);
+			} else {
+				await createSemanticSubjectDomain(values);
+			}
 			message.success("主题域已保存");
 			closeModal();
 			loadDomains();
@@ -171,7 +196,7 @@ export default function SemanticSubjectsPage() {
 				actions={(
 					<Space wrap>
 						<Button icon={<ReloadOutlined />} onClick={refreshAll}>刷新</Button>
-						<Button type="primary" icon={<ProjectOutlined />} onClick={openModal}>新建主题域</Button>
+						<Button type="primary" icon={<ProjectOutlined />} onClick={() => openModal()}>新建主题域</Button>
 					</Space>
 				)}
 			/>
@@ -237,7 +262,7 @@ export default function SemanticSubjectsPage() {
 
 			<Modal
 				open={modalOpen}
-				title="新建主题域"
+				title={editingDomain ? "编辑主题域" : "新建主题域"}
 				onCancel={closeModal}
 				onOk={submitDomain}
 				confirmLoading={saving}
