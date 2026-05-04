@@ -397,13 +397,13 @@
 | Feature | 优先级 | Task 数 | 状态 |
 |---------|--------|---------|------|
 | F0-chrome95-precondition (structuredClone polyfill) | P0 | 1 | DONE |
-| F1-foundation-canvas (zustand store + 画布壳 + 自定义边/对齐线/工具栏) | P0 | 7 | READY |
+| F1-foundation-canvas (zustand store + 画布壳 + 自定义边/对齐线/工具栏) | P0 | 7 | DONE |
 | F2-block-selector-dnd (节点库面板 + popover + CandidateNode + 自动连边) | P0 | 4 | READY |
 | F3-etl-node-set (BaseNode + 6 类 ETL 节点) | P0 | 7 | READY |
 | F4-panel-and-dsl (NodePanel 抽屉 + 表单 + DSL 序列化 + 后端 graph_dsl 字段 + OrchestrationPage 接入) | P0 | 6 | READY |
 | F5-advanced-features (iteration/loop subflow + 右键菜单 + 快捷键 + 撤销重做 + 便签) | P0 | 6 | READY |
 
-**统计**: READY=30, IN_PROGRESS=0, DONE=1, BLOCKED=0
+**统计**: READY=23, IN_PROGRESS=0, DONE=8, BLOCKED=0
 **设计文档**: `worklog/v2.2.3/sprint-29-202605/README.md`
 **集成测试**: `worklog/v2.2.3/sprint-29-202605/it/README.md`
 **关键决策**: 接入点替代 OrchestrationPage（保留运行实例 Tab）；后端新增 `IngestionTask.graph_dsl jsonb`；F5 保留 iteration（多表批量）+ loop（增量同步），不做嵌套子流程模板复用。
