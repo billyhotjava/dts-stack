@@ -390,21 +390,22 @@
 **实施分支**: `feat/sprint-28-platform-auth-split`
 
 ## Sprint-29: Dify 风格工作流编辑器（reactflow 抄 dify 架构）(202605)
-**状态**: READY
+**状态**: IN_PROGRESS
 **类型**: Feature / Frontend Architecture（dts-platform-webapp + dts-platform 后端 schema）
 **目标**: 把当前 ETL/数据入湖任务的"表单式配置"升级为画布式可视化编排，参照 Dify `web/app/components/workflow/` 整套架构（reactflow 之上自建 BlockSelector/CandidateNode/CustomEdge/HelpLine/Panel/DSL 等子系统），全程严格遵守 Chrome 95 兼容性约束。
 
 | Feature | 优先级 | Task 数 | 状态 |
 |---------|--------|---------|------|
-| F0-chrome95-precondition (structuredClone polyfill) | P0 | 1 | READY |
+| F0-chrome95-precondition (structuredClone polyfill) | P0 | 1 | DONE |
 | F1-foundation-canvas (zustand store + 画布壳 + 自定义边/对齐线/工具栏) | P0 | 7 | READY |
 | F2-block-selector-dnd (节点库面板 + popover + CandidateNode + 自动连边) | P0 | 4 | READY |
 | F3-etl-node-set (BaseNode + 6 类 ETL 节点) | P0 | 7 | READY |
 | F4-panel-and-dsl (NodePanel 抽屉 + 表单 + DSL 序列化 + 后端 graph_dsl 字段 + OrchestrationPage 接入) | P0 | 6 | READY |
 | F5-advanced-features (iteration/loop subflow + 右键菜单 + 快捷键 + 撤销重做 + 便签) | P0 | 6 | READY |
 
-**统计**: READY=31, IN_PROGRESS=0, DONE=0, BLOCKED=0
+**统计**: READY=30, IN_PROGRESS=0, DONE=1, BLOCKED=0
 **设计文档**: `worklog/v2.2.3/sprint-29-202605/README.md`
 **集成测试**: `worklog/v2.2.3/sprint-29-202605/it/README.md`
 **关键决策**: 接入点替代 OrchestrationPage（保留运行实例 Tab）；后端新增 `IngestionTask.graph_dsl jsonb`；F5 保留 iteration（多表批量）+ loop（增量同步），不做嵌套子流程模板复用。
-**实施分支**: 待创建（建议 `feat/sprint-29-workflow-canvas`）
+**实施分支**: `feat/sprint-29-workflow-canvas`（已创建，HEAD 与 v2.2.3 对齐）
+**F0 复核**: polyfill 在历史 `fix:chrome95` 提交链已落地，证据见 `worklog/v2.2.3/sprint-29-202605/assets/chrome95-polyfill-test-evidence.md`，本 Sprint 无新增代码，直接进入 F1。

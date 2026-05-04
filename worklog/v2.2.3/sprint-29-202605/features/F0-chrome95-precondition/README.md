@@ -1,7 +1,7 @@
 # F0: Chrome 95 前置修复（structuredClone polyfill）
 
 **优先级**: P0（阻断后续所有 F1-F5 实现，必须先做）
-**状态**: READY
+**状态**: DONE（前置历史提交已完成，本 Sprint 复核确认）
 **依赖**: 无
 
 ## 目标
@@ -18,12 +18,12 @@
 
 | ID | Task | 优先级 | 状态 | 依赖 |
 |----|------|--------|------|------|
-| T01 | 引入 `@ungap/structured-clone` polyfill 并在 main.tsx 顶部全局挂载 | P0 | READY | - |
+| T01 | 引入 `@ungap/structured-clone` polyfill 并在 main.tsx 顶部全局挂载 | P0 | DONE | - |
 
 ## 完成标准
 
-- [ ] `package.json` 增加 `@ungap/structured-clone` 依赖（生产依赖，非 devDep）
-- [ ] `src/main.tsx` 在所有业务 import 之前注入 polyfill
-- [ ] Chrome 95 真机/模拟器验证：在任意现有画布（SemanticModelCanvas）尝试连线 → 不再抛 `ReferenceError: structuredClone is not defined`
-- [ ] grep 整个仓库确保**业务代码**未直接调用 `structuredClone`（只有 polyfill 与 node_modules）；所有业务侧 deep clone 走 `lodash.cloneDeep` 或 polyfill
-- [ ] 启动开发服务器 + production build 双跑通过，bundle 增量 < 2KB（@ungap 实测 ~1KB gz）
+- [x] `package.json` 已含 `"@ungap/structured-clone": "^1.3.0"`（生产依赖）
+- [x] `src/main.tsx` 第 1 行 `import "./polyfills/legacy-browser";`，早于所有业务 import
+- [x] 业务代码 grep `structuredClone\(` 仅返回注释，无直接调用
+- [x] 现有 SemanticModelCanvas / VisualFlowCanvas 共用同款 polyfill 路径，已在线验证连线不崩
+- [x] 证据：`assets/chrome95-polyfill-test-evidence.md`

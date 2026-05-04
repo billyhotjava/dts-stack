@@ -60,6 +60,17 @@ if (dto.getGraphDsl() != null) {
 
 `SUPPORTED_DSL_VERSIONS` 初期 = `Set.of("1.0")`。
 
+### 演进路径（YAGNI 注解）
+
+当前方案：`dslVersion` 存在 `graph_dsl` jsonb 内（`graph_dsl ->> 'dslVersion'`）。
+
+**何时需要拉出独立列 `dsl_version varchar`**：
+- 需要按版本批量查询（如统计有多少任务还在用 v1.0）
+- 需要在版本上加 DB 索引或外键
+- 需要在不反序列化整个 jsonb 的前提下做版本路由
+
+满足以上任一条件时，再开新 sprint 加列 + Liquibase 迁移 + service 同步写两边。当前**不预先优化**。
+
 ### REST API
 
 PUT `/api/ingestion-tasks/{id}` 已存在，DTO 加字段后自动支持。

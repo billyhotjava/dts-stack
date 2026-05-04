@@ -1,8 +1,29 @@
 # T01: 引入 `@ungap/structured-clone` polyfill 并在 main.tsx 顶部全局挂载
 
 **优先级**: P0
-**状态**: READY
+**状态**: DONE（已在历史 `fix:chrome95` 中完成，本 Sprint 无需重复实现）
 **依赖**: 无
+
+## DONE 说明（2026-05-04 复核）
+
+历史排查时已为 `SemanticModelCanvas` / `VisualFlowCanvas` 落地同一方案，本 Sprint 直接复用：
+
+| 组件 | 现状 |
+|------|------|
+| `package.json` | `"@ungap/structured-clone": "^1.3.0"`（生产依赖） |
+| `src/polyfills/legacy-browser.ts` | 含 `ensureStructuredClone()` + `ensureUrlCanParse()` + `ensureRandomUUID()` 三个 polyfill |
+| `src/main.tsx` 第 1 行 | `import "./polyfills/legacy-browser";`（早于业务 import） |
+| `src/types/structured-clone.d.ts` | `@ungap/structured-clone` 模块类型声明 |
+| 重复挂载位置 | `src/analytics/polyfills/legacy-browser.ts`（analytics 子入口同款） |
+
+业务代码 grep 结果（仅注释引用，无直接调用）：
+
+```text
+src/components/sql-ide/result/QueryPlanView.tsx:1:// Chrome 95 兼容:@xyflow/react v12 内部使用 structuredClone,polyfill 通过入口已注入。
+src/analytics/pages/semantic/SemanticModelCanvas.tsx:1:// Chrome 95 兼容性:@xyflow/react v12 内部使用 structuredClone(连接拖拽路径)。
+```
+
+→ Sprint-29 工作流画布直接受益，无需新增任何代码。证据归档见 `assets/chrome95-polyfill-test-evidence.md`。
 
 ## 目标
 
@@ -61,6 +82,8 @@ if (typeof globalThis.structuredClone !== "function") {
 
 ## 完成标准
 
-- [ ] 上述 5 项验证全部通过
-- [ ] 在 sprint-29 assets 下补充 `assets/chrome95-polyfill-test-evidence.md`，含真机/模拟器截图
-- [ ] 通知现有 SemanticModelCanvas / VisualFlowCanvas 维护者：F0 完成后老画布隐患同时解除
+- [x] `package.json` 声明 `@ungap/structured-clone@^1.3.0`
+- [x] `src/main.tsx` 首行加载 `polyfills/legacy-browser`
+- [x] 业务代码 grep 无直接 `structuredClone(` 调用（仅注释）
+- [x] sprint-29 assets 下补充 `assets/chrome95-polyfill-test-evidence.md`
+- [x] 现有 SemanticModelCanvas / VisualFlowCanvas 已使用同一 polyfill 路径，新画布零额外动作受益

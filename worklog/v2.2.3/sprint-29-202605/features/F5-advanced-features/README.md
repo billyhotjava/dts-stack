@@ -14,6 +14,27 @@
 
 > **本期不做**：嵌套子流程模板库（多 sprint 复用），需要时再单独立项。
 
+## 嵌套限制（v1.0 硬约束，前端 + 后端双拦）
+
+| 场景 | 是否允许 | 拦截位置 |
+|------|---------|---------|
+| 主画布 → Iteration | ✅ | - |
+| 主画布 → Loop | ✅ | - |
+| Iteration 内 → Source/Transform/Validate/Sink/End | ✅ | - |
+| Loop 内 → Source/Transform/Validate/Sink/End | ✅ | - |
+| Iteration 内 → Iteration | ❌ | 前端 BlockSelector 隐藏 + DSL schema 拒 + 后端 service 校验 |
+| Iteration 内 → Loop | ❌ | 同上 |
+| Loop 内 → Iteration | ❌ | 同上 |
+| Loop 内 → Loop | ❌ | 同上 |
+| 任何嵌套 → Note | ✅ | -（便签可放任何地方）|
+
+**为何强约束 1 层**：
+- 实现成本：递归嵌套子画布的 store namespace + DSL 反序列化复杂度指数上升
+- 用户认知：超过 1 层嵌套的 graph 反而难以维护，违背"可视化"初衷
+- YAGNI：用户当前需求只是「批量多表 + 增量同步」，1 层够用
+
+**何时解封**：当用户明确提出"我需要在 Iteration 内做条件循环重试"等场景时，再开 sprint 升级到 v2.0 DSL。
+
 ## Task 列表
 
 | ID | Task | 优先级 | 状态 | 依赖 |
