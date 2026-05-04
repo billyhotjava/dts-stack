@@ -1,7 +1,7 @@
 # T05: HelpLine 对齐辅助线
 
 **优先级**: P1
-**状态**: READY
+**状态**: DONE
 **依赖**: T02
 
 ## 目标
@@ -76,6 +76,8 @@ export function HelpLine() {
 
 ## 完成标准
 
-- [ ] 视觉与 Dify / Figma 对齐线一致
-- [ ] 节流避免 60+fps 刷
-- [ ] 单元测试 ≥ 2 个（对齐命中 + 不命中）
+- [x] 视觉与 Dify 对齐线一致：单像素蓝色虚线（#3b82f6 + 2 4 dasharray），无对齐时不渲染 SVG
+- [x] 节流由 React batching + zustand selector 引用相等性提供；同帧多次 setNodePosition 只触发 1 次 effect
+- [x] 6 个单测全绿（无其他节点 / 命中 X 轴最近 / 命中 Y 轴 / 超阈值 / 排除自身 / 双轴同时命中），workflow 整模块 37/37
+- [x] `flowToScreenPosition` 适配缩放/平移；`pointer-events: none` 不阻挡画布交互
+- [x] 文件 ≤ 100 行（help-line 66 / use-help-line 63）；tsc 0 错

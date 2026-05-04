@@ -22,6 +22,7 @@ import type { WorkflowEdge, WorkflowNode } from "./store/types";
 import { WorkflowContextProvider, type WorkflowContextValue } from "./context";
 import { DEFAULT_EDGE_TYPE, workflowEdgeTypes } from "./custom-edge";
 import { CustomConnectionLine, useIsValidWorkflowConnection } from "./custom-connection-line";
+import { HelpLine } from "./help-line";
 import "./styles/canvas.css";
 
 const MIN_ZOOM = 0.2;
@@ -138,6 +139,7 @@ function WorkflowCanvasInner({
 				<Background variant={BackgroundVariant.Dots} gap={16} size={1} />
 				<MiniMap pannable zoomable />
 				<Controls showInteractive={false} />
+				<HelpLine />
 				{children}
 			</ReactFlow>
 		</div>
