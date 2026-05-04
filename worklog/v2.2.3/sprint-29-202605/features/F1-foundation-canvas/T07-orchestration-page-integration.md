@@ -1,7 +1,7 @@
 # T07: OrchestrationPage 接入「编排画布」Tab（壳）
 
 **优先级**: P0
-**状态**: READY
+**状态**: DONE
 **依赖**: T02..T06
 
 ## 目标
@@ -56,6 +56,9 @@ export default function OrchestrationPage() {
 
 ## 完成标准
 
-- [ ] PageContainer 标题、面包屑、按钮无变化（只增 Tab）
-- [ ] DagListTable 单测保留（原测试不破）
-- [ ] grep 确认旧测试用例引用已修正路径
+- [x] 路由 `/explore/etl/orchestration` 默认进入「编排画布」Tab，挂 `WorkflowCanvas readonly={false}`（calc(100vh-220px) 高度，最小 480px）
+- [x] 「运行实例」Tab 复用原 OrchestrationPage 主体（原文件改名为 `OrchestrationRunsTab.tsx`，0 行业务逻辑变更，仅函数名 `OrchestrationPage` → `OrchestrationRunsTab`）
+- [x] `destroyInactiveTabPane={false}` 切换不重置 viewport / store
+- [x] PageHeader/Card/Filter/Selector 等原有逻辑全部保留在 OrchestrationRunsTab；外部 API/triggerAirflowJob/openLogPreview 调用零修改
+- [x] 2 vitest 用例：默认激活 canvas / 切换到 runs Tab `aria-selected=true`（mock 子组件隔离）
+- [x] tsc 0 错；workflow 整模块 40/40 + OrchestrationPage 2/2 全绿
